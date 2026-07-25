@@ -12,16 +12,7 @@
   use foo::InternalFoo;
   pub use bar::Bar;
   ```
-- Every crate that contains `src/lib.rs` must explicitly declare its library target in `Cargo.toml`:
-
-  ```toml
-  [lib]
-  doctest = false
-  name = "crate_name_with_underscores"
-  path = "src/lib.rs"
-  ```
-
-- Binary-only crates must not add a `[lib]` section.
+- Crates with `src/lib.rs` must declare `[lib]` with `doctest = false`, an underscore-separated `name`, and `path = "src/lib.rs"`; omit it for binary-only crates.
 - Define shared dependency versions and local crate paths in `[workspace.dependencies]`; member crates inherit them with `{ workspace = true }`.
 
 
