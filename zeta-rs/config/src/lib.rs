@@ -5,13 +5,17 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
+pub use zeta_model_provider::ModelProviderConfig;
+pub use zeta_model_provider::ModelRef;
+
 #[derive(Clone, Debug)]
 pub struct ConfigLocation(pub PathBuf);
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Config {
-    pub preferred_model: Option<String>,
+    pub preferred_model: Option<ModelRef>,
+    pub model_provider: Option<ModelProviderConfig>,
     pub theme: Option<Theme>,
 }
 
@@ -77,7 +81,7 @@ impl ConfigStore {
 
 #[derive(Clone, Debug, Default)]
 pub struct ConfigUpdate {
-    pub preferred_model: Option<Option<String>>,
+    pub preferred_model: Option<Option<ModelRef>>,
     pub theme: Option<Option<Theme>>,
 }
 

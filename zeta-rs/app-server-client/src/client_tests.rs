@@ -1,16 +1,20 @@
 use super::*;
 use std::collections::VecDeque;
-use std::fs;
-use std::path::PathBuf;
-use std::time::SystemTime;
-use std::time::UNIX_EPOCH;
+use std::sync::Arc;
+use zeta_app_server::AppServer;
+use zeta_app_server_protocol::CURRENT_PROTOCOL_VERSION;
 use zeta_app_server_protocol::common::ClientInfo;
+use zeta_app_server_protocol::common::{ClientCapabilities, ProtocolVersions};
+use zeta_app_server_protocol::schema_hash_v1;
+use zeta_app_server_protocol::v1::initialize::InitializeParams;
 use zeta_app_server_protocol::v1::thread::ThreadReadParams;
 use zeta_app_server_protocol::v1::thread::ThreadStartParams;
 use zeta_app_server_protocol::v1::thread::TurnStatusDto;
 use zeta_app_server_protocol::v1::turn::InputItem;
 use zeta_app_server_protocol::v1::turn::InputItemKind;
 use zeta_app_server_protocol::v1::turn::TurnStartParams;
+use zeta_core::{InMemoryJournal, ThreadManager};
+use zeta_model_provider::EchoModel;
 
 struct MockTransport(VecDeque<String>);
 impl JsonRpcTransport for MockTransport {
@@ -32,15 +36,26 @@ fn client_rejects_response_for_another_request() {
 
 #[test]
 fn in_process_client_uses_the_same_protocol_and_notifications_as_external_clients() {
-    let state_root = temporary_directory("in-process");
-    let mut client = start_in_process_client(InProcessClientOptions::new(
-        &state_root,
-        ClientInfo {
-            name: "test-client".into(),
-            version: "1".into(),
-        },
-    ))
-    .expect("in-process client starts");
+    let mut client = AppServerClient::new(InProcessTransport::from_server(AppServer::new(
+        Arc::new(ThreadManager::with_journal(Arc::new(
+            InMemoryJournal::default(),
+        ))),
+        Arc::new(EchoModel),
+    )));
+    let initialized = client
+        .initialize(InitializeParams {
+            client_info: ClientInfo {
+                name: "test-client".into(),
+                version: "1".into(),
+            },
+            protocol_versions: ProtocolVersions {
+                min: CURRENT_PROTOCOL_VERSION,
+                max: CURRENT_PROTOCOL_VERSION,
+            },
+            capabilities: ClientCapabilities::default(),
+        })
+        .expect("in-process client initializes");
+    assert_eq!(initialized.schema_hash.0, schema_hash_v1());
     let thread = client
         .start_thread(ThreadStartParams {
             idempotency_key: "thread-one".into(),
@@ -78,18 +93,4 @@ fn in_process_client_uses_the_same_protocol_and_notifications_as_external_client
         )
     }));
     assert_eq!(snapshot.thread.turns[0].status, TurnStatusDto::Completed);
-
-    drop(client);
-    fs::remove_dir_all(state_root).expect("temporary state is removable");
-}
-
-fn temporary_directory(label: &str) -> PathBuf {
-    let nonce = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("clock follows epoch")
-        .as_nanos();
-    std::env::temp_dir().join(format!(
-        "zeta-app-server-client-{label}-{}-{nonce}",
-        std::process::id()
-    ))
 }

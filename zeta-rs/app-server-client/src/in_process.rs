@@ -44,7 +44,11 @@ pub struct InProcessTransport {
 }
 
 impl InProcessTransport {
-    fn new(server: AppServer) -> Self {
+    /// Creates an embedded transport that routes every request through the App Server dispatcher.
+    ///
+    /// Hosts that provide their own composition root can use this instead of the local filesystem
+    /// composition used by [`start_in_process_client`].
+    pub fn from_server(server: AppServer) -> Self {
         let connection = server.connection();
         Self {
             server,
@@ -73,7 +77,7 @@ pub fn start_in_process_client(
 ) -> Result<AppServerClient<InProcessTransport>, ClientError> {
     let server = open_local_app_server(LocalAppServerOptions::new(options.state_root))
         .map_err(|error| ClientError::Transport(error.to_string()))?;
-    let mut client = AppServerClient::new(InProcessTransport::new(server));
+    let mut client = AppServerClient::new(InProcessTransport::from_server(server));
     let initialized = client.initialize(InitializeParams {
         client_info: options.client_info,
         protocol_versions: ProtocolVersions {

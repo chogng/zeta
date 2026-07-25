@@ -9,5 +9,12 @@ doctest = false
 name = "zeta_tui"
 path = "src/lib.rs"
 
+[dependencies]
+crossterm = { workspace = true }
+ratatui = { workspace = true }
+unicode-width = { workspace = true }
+zeta-app-server-client = { workspace = true }
+zeta-app-server-protocol = { workspace = true }
+
 [lints]
 workspace = true

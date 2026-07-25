@@ -517,7 +517,7 @@ Errors: `InvalidParams`, `IdempotencyConflict`, `CoreOperationFailed`.
 
 | Field | Type | Required | Nullable | Meaning |
 |---|---|---:|---:|---|
-| `preferredModel` | string | yes | yes | `null` 表示未设置 |
+| `preferredModel` | `{ "provider": string, "model": string }` | yes | yes | Provider 与其下 Model 的唯一引用；`null` 表示未设置 |
 | `theme` | `"light" \| "dark" \| "system"` | yes | yes | `null` 表示未设置 |
 
 ### 10.2 `config/read`
@@ -555,6 +555,10 @@ Errors: `ConfigUnavailable`.
   "method": "config/update",
   "params": {
     "idempotencyKey": "desktop-config-01",
+    "preferredModel": {
+      "provider": "openai",
+      "model": "gpt-5.6"
+    },
     "theme": "dark"
   }
 }

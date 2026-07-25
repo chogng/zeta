@@ -1,4 +1,5 @@
 use std::env;
+use std::io::IsTerminal;
 use std::path::PathBuf;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
@@ -19,15 +20,14 @@ use zeta_app_server_protocol::v1::turn::TurnStartParams;
 
 fn main() {
     let mut arguments = env::args().skip(1);
-    let Some(command) = arguments.next() else {
-        usage();
-        return;
-    };
-    let outcome = match command.as_str() {
-        "ask" => ask(arguments.collect::<Vec<_>>().join(" ")),
-        "exec" => execute(arguments.collect()),
-        "app-server" => app_server_command(arguments.collect()),
-        _ => Err(format!("unknown command: {command}")),
+    let outcome = match arguments.next() {
+        None => interactive(),
+        Some(command) => match command.as_str() {
+            "ask" => ask(arguments.collect::<Vec<_>>().join(" ")),
+            "exec" => execute(arguments.collect()),
+            "app-server" => app_server_command(arguments.collect()),
+            _ => Err(format!("unknown command: {command}")),
+        },
     };
     if let Err(message) = outcome {
         eprintln!("zeta: {message}");
@@ -40,8 +40,20 @@ fn ask(prompt: String) -> Result<(), String> {
         return Err("ask requires a prompt".into());
     }
     let response = run_prompt(prompt, "CLI conversation")?;
-    println!("{}", zeta_tui::render_response(&response));
+    println!("{response}");
     Ok(())
+}
+
+fn interactive() -> Result<(), String> {
+    if !std::io::stdin().is_terminal() || !std::io::stdout().is_terminal() {
+        return Err(
+            "interactive mode requires a TTY; use `zeta ask` or `zeta exec` instead".into(),
+        );
+    }
+    let client = in_process_client()?;
+    zeta_tui::run(client, zeta_tui::TuiOptions::new("TUI conversation"))
+        .map(|_| ())
+        .map_err(|error| error.to_string())
 }
 
 fn run_app_server(arguments: Vec<String>) -> Result<(), String> {
@@ -151,8 +163,4 @@ fn request_key(prefix: &str) -> String {
         .unwrap_or_default()
         .as_nanos();
     format!("{prefix}-{}-{timestamp}", std::process::id())
-}
-
-fn usage() {
-    eprintln!("usage: zeta <ask|exec|app-server> ...");
 }

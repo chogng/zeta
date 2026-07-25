@@ -10,7 +10,13 @@ name = "zeta_model_provider"
 path = "src/lib.rs"
 
 [dependencies]
+serde = { workspace = true }
+zeta-api = { workspace = true }
 zeta-core = { workspace = true }
+zeta-credentials = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }
 
 [lints]
 workspace = true

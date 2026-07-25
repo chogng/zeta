@@ -2,9 +2,10 @@ use crate::AppServer;
 use std::fmt;
 use std::path::PathBuf;
 use std::sync::Arc;
-use zeta_config::ConfigStore;
-use zeta_core::ThreadManager;
-use zeta_model_provider::EchoModel;
+use zeta_config::{Config, ConfigStore};
+use zeta_core::{AgentModel, ThreadManager};
+use zeta_credentials::MacosKeychainCredentialStore;
+use zeta_model_provider::{ProviderRegistry, UnavailableModel};
 use zeta_storage::FileIdempotencyLedger;
 use zeta_storage::ThreadLeaseDirectory;
 use zeta_storage::ThreadRolloutStore;
@@ -58,10 +59,28 @@ pub fn open_local_app_server(
         ConfigStore::open(options.state_root.join("config.json"))
             .map_err(|error| OpenAppServerError(error.0))?,
     );
-    Ok(
-        AppServer::with_idempotency_ledger(threads, Arc::new(EchoModel), idempotency)
-            .with_config_store(config),
-    )
+    let model = local_model(&config.read().map_err(|error| OpenAppServerError(error.0))?);
+    Ok(AppServer::with_idempotency_ledger(threads, model, idempotency).with_config_store(config))
+}
+
+fn local_model(config: &Config) -> Arc<dyn AgentModel> {
+    let Some(model_ref) = config.preferred_model.as_ref() else {
+        return Arc::new(UnavailableModel::new(
+            "model is not configured; set preferredModel and modelProvider in config.json",
+        ));
+    };
+    let Some(provider) = config.model_provider.as_ref() else {
+        return Arc::new(UnavailableModel::new(
+            "model provider is not configured; set modelProvider in config.json",
+        ));
+    };
+    ProviderRegistry::builtin()
+        .build_model(
+            provider,
+            model_ref,
+            Arc::new(MacosKeychainCredentialStore::new("zeta")),
+        )
+        .unwrap_or_else(|error| Arc::new(UnavailableModel::new(error.to_string())))
 }
 
 fn open_error(error: impl fmt::Display) -> OpenAppServerError {

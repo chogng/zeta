@@ -2,11 +2,14 @@ use crate::resource_store::{ResourceError, ResourceStore};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::collections::BTreeSet;
+use std::io::{BufRead, Write};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use zeta_app_server_protocol::common::{SchemaHash, ServerInfo};
-use zeta_app_server_protocol::v1::config::{ConfigReadResult, ConfigUpdateParams, ThemeDto};
+use zeta_app_server_protocol::v1::config::{
+    ConfigReadResult, ConfigUpdateParams, ModelRefDto, ThemeDto,
+};
 use zeta_app_server_protocol::v1::initialize::{
     InitializeParams, InitializeResult, ServerCapabilities,
 };
@@ -26,6 +29,7 @@ use zeta_core::{
     AgentModel, IdempotencyLedger, IdempotencyRecord, InMemoryIdempotencyLedger, ThreadManager,
     ThreadSnapshot, TurnStatus,
 };
+use zeta_model_provider::{ModelId, ModelRef, ProviderId};
 
 pub struct AppServer {
     threads: Arc<ThreadManager>,
@@ -41,6 +45,7 @@ pub struct ConnectionState {
     connection_id: u64,
     initialized: bool,
     protocol_version: Option<u32>,
+    request_ids: BTreeSet<u64>,
     subscriptions: BTreeSet<zeta_protocol::ThreadId>,
     outbound_notifications: Vec<Value>,
 }
@@ -144,6 +149,13 @@ impl AppServer {
                 return serialize_response(error_response(Value::Null, -32700, "ParseError", None));
             }
         };
+        let request_id = request
+            .id
+            .as_u64()
+            .expect("request ID was validated while parsing the request envelope");
+        if !connection.request_ids.insert(request_id) {
+            return serialize_response(error_response(request.id, -32600, "InvalidRequest", None));
+        }
         let response = match self.dispatch(connection, &request) {
             Ok(result) => json!({ "jsonrpc": "2.0", "id": request.id, "result": result }),
             Err(error) => error_response(request.id, error.code, error.message, error.data),
@@ -155,8 +167,19 @@ impl AppServer {
     pub fn serve_stdio(&self) -> Result<(), std::io::Error> {
         let stdin = std::io::stdin();
         let stdout = std::io::stdout();
-        let mut transport =
-            JsonlTransport::new(stdin.lock(), stdout.lock(), DEFAULT_MAX_MESSAGE_BYTES);
+        self.serve_jsonl(stdin.lock(), stdout.lock())
+    }
+
+    /// Serves one JSON Lines connection, writing each response before its causal notifications.
+    ///
+    /// This uses the same connection state and dispatch path as stdio so non-stdio hosts can
+    /// exercise the complete external-client protocol without a special in-process shortcut.
+    pub fn serve_jsonl<R: BufRead, W: Write>(
+        &self,
+        reader: R,
+        writer: W,
+    ) -> Result<(), std::io::Error> {
+        let mut transport = JsonlTransport::new(reader, writer, DEFAULT_MAX_MESSAGE_BYTES);
         let mut connection = self.connection();
         while let Some(line) = transport.read_message()? {
             let response = self.handle_json(&mut connection, &line);
@@ -310,7 +333,7 @@ impl AppServer {
             .read()
             .map_err(config_error)?;
         result(&ConfigReadResult {
-            preferred_model: config.preferred_model,
+            preferred_model: config.preferred_model.map(model_ref_dto),
             theme: config.theme.map(theme_dto),
         })
     }
@@ -326,12 +349,12 @@ impl AppServer {
         self.idempotent("config/update", idempotency_key, params, move |params| {
             let config = store
                 .update(ConfigUpdate {
-                    preferred_model: params.preferred_model,
+                    preferred_model: model_ref_update_from_dto(params.preferred_model)?,
                     theme: params.theme.map(|theme| theme.map(theme_from_dto)),
                 })
                 .map_err(config_error)?;
             result(&ConfigReadResult {
-                preferred_model: config.preferred_model,
+                preferred_model: config.preferred_model.map(model_ref_dto),
                 theme: config.theme.map(theme_dto),
             })
         })
@@ -589,6 +612,25 @@ fn theme_from_dto(theme: ThemeDto) -> Theme {
         ThemeDto::Dark => Theme::Dark,
         ThemeDto::System => Theme::System,
     }
+}
+fn model_ref_dto(model_ref: ModelRef) -> ModelRefDto {
+    ModelRefDto {
+        provider: model_ref.provider.to_string(),
+        model: model_ref.model.to_string(),
+    }
+}
+fn model_ref_from_dto(model_ref: ModelRefDto) -> Result<ModelRef, RpcError> {
+    Ok(ModelRef::new(
+        ProviderId::new(model_ref.provider).map_err(|_| RpcError::new(-32602, "InvalidParams"))?,
+        ModelId::new(model_ref.model).map_err(|_| RpcError::new(-32602, "InvalidParams"))?,
+    ))
+}
+fn model_ref_update_from_dto(
+    update: Option<Option<ModelRefDto>>,
+) -> Result<Option<Option<ModelRef>>, RpcError> {
+    update
+        .map(|model_ref| model_ref.map(model_ref_from_dto).transpose())
+        .transpose()
 }
 fn resource_error(error: ResourceError) -> String {
     match error {

@@ -1,0 +1,17 @@
+[package]
+name = "zeta-api"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+doctest = false
+name = "zeta_api"
+path = "src/lib.rs"
+
+[dependencies]
+serde_json = { workspace = true }
+ureq = { workspace = true }
+
+[lints]
+workspace = true

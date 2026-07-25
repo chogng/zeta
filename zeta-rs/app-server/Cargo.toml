@@ -15,8 +15,9 @@ serde_json = { workspace = true }
 sha2 = { workspace = true }
 zeta-app-server-protocol = { workspace = true }
 zeta-app-server-transport = { workspace = true }
-zeta-core = { workspace = true }
 zeta-config = { workspace = true }
+zeta-core = { workspace = true }
+zeta-credentials = { workspace = true }
 zeta-model-provider = { workspace = true }
 zeta-protocol = { workspace = true }
 zeta-storage = { workspace = true }

@@ -6,6 +6,10 @@ export type TurnStatus =
   | "created" | "running" | "waitingForApproval" | "waitingForUserInput"
   | "waitingForCapability" | "cancelling" | "completed" | "failed" | "interrupted";
 export type Theme = "light" | "dark" | "system";
+export interface ModelRef {
+  provider: string;
+  model: string;
+}
 export interface BrowserCapability {
   version: number;
   observe: boolean;
@@ -47,12 +51,12 @@ export interface TurnStartParams { idempotencyKey: string; threadId: ThreadId; i
 export interface TurnStartResult { turnId: TurnId; sequence: number; }
 export interface TurnInterruptParams { threadId: ThreadId; turnId: TurnId; }
 export interface ConfigReadResult {
-  preferredModel: string | null;
+  preferredModel: ModelRef | null;
   theme: Theme | null;
 }
 export interface ConfigUpdateParams {
   idempotencyKey: string;
-  preferredModel?: string | null;
+  preferredModel?: ModelRef | null;
   theme?: Theme | null;
 }
 export interface ThreadStartedNotification { threadId: ThreadId; sequence: number; }
@@ -114,6 +118,14 @@ const JSON_SCHEMA_V1: &str = r##"{
       "enum": ["created", "running", "waitingForApproval", "waitingForUserInput", "waitingForCapability", "cancelling", "completed", "failed", "interrupted"]
     },
     "theme": { "type": "string", "enum": ["light", "dark", "system"] },
+    "modelRef": {
+      "type": "object",
+      "required": ["provider", "model"],
+      "properties": {
+        "provider": { "type": "string", "minLength": 1 },
+        "model": { "type": "string", "minLength": 1 }
+      }
+    },
     "initializeParams": {
       "type": "object",
       "required": ["clientInfo", "protocolVersions", "capabilities"],
@@ -216,7 +228,9 @@ const JSON_SCHEMA_V1: &str = r##"{
       "type": "object",
       "required": ["preferredModel", "theme"],
       "properties": {
-        "preferredModel": { "type": ["string", "null"] },
+        "preferredModel": {
+          "anyOf": [{ "$ref": "#/definitions/modelRef" }, { "type": "null" }]
+        },
         "theme": { "anyOf": [{ "$ref": "#/definitions/theme" }, { "type": "null" }] }
       }
     },
@@ -225,7 +239,9 @@ const JSON_SCHEMA_V1: &str = r##"{
       "required": ["idempotencyKey"],
       "properties": {
         "idempotencyKey": { "type": "string", "minLength": 1 },
-        "preferredModel": { "type": ["string", "null"] },
+        "preferredModel": {
+          "anyOf": [{ "$ref": "#/definitions/modelRef" }, { "type": "null" }]
+        },
         "theme": { "anyOf": [{ "$ref": "#/definitions/theme" }, { "type": "null" }] }
       }
     },

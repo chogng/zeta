@@ -18,3 +18,7 @@ zeta-app-server-transport = { workspace = true }
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+zeta-core = { workspace = true }
+zeta-model-provider = { workspace = true }

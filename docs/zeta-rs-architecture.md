@@ -41,6 +41,7 @@ zeta-rs/
 ├── sandboxing/
 ├── built-in-tools/
 ├── model-provider/
+├── zeta-api/
 ├── tui/
 └── cli/
 ```
@@ -99,7 +100,13 @@ initialize、dispatcher、typed response 和 notification 解码。
 zeta-core
   → zeta-protocol
 
-storage/config/credentials/model-provider/exec
+zeta-api
+  → normalized Zeta model protocol + provider-specific wire adapters
+
+model-provider
+  → zeta-api + zeta-core + credentials
+
+storage/config/credentials/exec
   → zeta-core
 
 app-server-protocol

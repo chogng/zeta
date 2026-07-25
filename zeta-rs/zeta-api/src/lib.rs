@@ -1,0 +1,44 @@
+//! Normalized model requests and provider wire-protocol conversions.
+
+mod anthropic;
+mod api;
+mod deepseek;
+mod error;
+mod google;
+mod huggingface;
+mod kimi;
+mod mimo;
+mod minimax;
+mod ollama;
+mod openai;
+mod openai_compatible;
+mod qwen;
+mod request;
+mod response;
+mod transport;
+mod xai;
+mod zai;
+
+pub use api::Api;
+pub use api::ApiProtocol;
+pub use error::ApiError;
+pub use request::ContentPart;
+pub use request::ImageDetail;
+pub use request::InputItem;
+pub use request::Message;
+pub use request::MessageRole;
+pub use request::ModelRequest;
+pub use request::ReasoningConfig;
+pub use request::ReasoningEffort;
+pub use request::ToolCall;
+pub use request::ToolChoice;
+pub use request::ToolDefinition;
+pub use request::ToolResult;
+pub use response::ModelResponse;
+pub use response::ModelUsage;
+pub use response::OutputItem;
+pub use response::StopReason;
+pub use transport::HttpHeader;
+pub use transport::JsonHttpTransport;
+pub use transport::ResolvedApiTarget;
+pub use transport::UreqJsonHttpTransport;

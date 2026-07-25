@@ -4,6 +4,7 @@ use std::fmt;
 pub enum CoreError {
     InvalidTransition { from: String, to: String },
     Journal(String),
+    Model(String),
     NotFound(String),
 }
 
@@ -14,6 +15,7 @@ impl fmt::Display for CoreError {
                 write!(formatter, "cannot transition from {from} to {to}")
             }
             Self::Journal(message) => write!(formatter, "journal error: {message}"),
+            Self::Model(message) => write!(formatter, "model error: {message}"),
             Self::NotFound(value) => write!(formatter, "not found: {value}"),
         }
     }
