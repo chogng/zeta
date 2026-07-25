@@ -1,6 +1,10 @@
 # Rust build products
 zeta-rs/target/
 
+# Bazel creates these workspace-root symlinks for its output tree.
+/bazel-*
+/user.bazelrc
+
 # Per-workspace runtime state
 .zeta/
 

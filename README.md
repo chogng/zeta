@@ -24,3 +24,17 @@ is retained as the historical unified design.
 cargo run --manifest-path zeta-rs/Cargo.toml -p zeta-cli -- ask "explain this repository"
 cargo run --manifest-path zeta-rs/Cargo.toml -p zeta-cli -- exec "summarize the current changes"
 ```
+
+## Bazel
+
+The Rust workspace is also built through Bazel using the Cargo.lock-derived
+dependency graph, matching Codex's Bzlmod and `rules_rs` integration.
+
+```bash
+bazel build //...
+bazel test //...
+bazel run //:zeta -- ask "explain this repository"
+```
+
+Use `user.bazelrc` for machine-specific Bazel settings; it is intentionally not
+tracked.

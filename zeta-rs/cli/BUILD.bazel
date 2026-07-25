@@ -1,0 +1,8 @@
+load("//:defs.bzl", "zeta_rust_binary")
+
+zeta_rust_binary(
+    name = "zeta",
+    crate_name = "zeta",
+    crate_root = "src/main.rs",
+    deps = [],
+)

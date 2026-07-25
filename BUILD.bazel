@@ -1,0 +1,5 @@
+alias(
+    name = "zeta",
+    actual = "//zeta-rs/cli:zeta",
+    visibility = ["//visibility:public"],
+)

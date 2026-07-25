@@ -12,6 +12,8 @@
   use foo::InternalFoo;
   pub use bar::Bar;
   ```
+- Explicitly set `path` under `[lib]`, and use `{ workspace = true }` for dependencies under `[dependencies]`.
+
 
 ## Tests
 
