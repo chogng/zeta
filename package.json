@@ -1,0 +1,10 @@
+{
+  "name": "zeta",
+  "private": true,
+  "packageManager": "pnpm@10.0.0",
+  "scripts": {
+    "build:desktop": "pnpm --dir desktop build",
+    "generate:protocol": "cargo run --quiet --manifest-path zeta-rs/Cargo.toml -p zeta-cli -- app-server generate-ts --protocol-version 1 --out desktop/generated/app-server/v1 && cargo run --quiet --manifest-path zeta-rs/Cargo.toml -p zeta-cli -- app-server generate-json-schema --protocol-version 1 --out schemas/app-server/v1.schema.json",
+    "verify:protocol": "pnpm generate:protocol && git diff --exit-code -- desktop/generated/app-server schemas/app-server"
+  }
+}

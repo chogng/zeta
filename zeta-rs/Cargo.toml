@@ -1,0 +1,27 @@
+[workspace]
+members = [
+    "app-server",
+    "app-server-client",
+    "app-server-protocol",
+    "app-server-transport",
+    "built-in-tools",
+    "cli",
+    "config",
+    "core",
+    "credentials",
+    "exec",
+    "model-provider",
+    "protocol",
+    "sandboxing",
+    "storage",
+    "tui",
+]
+resolver = "3"
+
+[workspace.package]
+edition = "2024"
+license = "Apache-2.0"
+version = "0.1.0"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"

@@ -1,0 +1,11 @@
+[package]
+name = "zeta-built-in-tools"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+zeta-exec = { path = "../exec" }
+
+[lints]
+workspace = true

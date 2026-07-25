@@ -1,0 +1,168 @@
+# `<Capability / Domain>` API
+
+> 使用本模板前请先阅读
+> [Zeta API 接口文档规范](zeta-api-interface-requirements.md)。
+> 删除所有占位说明后再提交评审。
+
+## Metadata
+
+```yaml
+title: <Capability / Domain> API
+status: draft
+protocolVersion: 1
+capabilityVersion: 1
+owner: zeta-rs
+rustOwner: zeta-rs
+requestedBy: desktop
+consumers:
+  - desktop
+  - cli
+lastUpdated: YYYY-MM-DD
+```
+
+## Scope
+
+### In scope
+
+- `<本接口解决的问题>`
+
+### Out of scope
+
+- `<明确不处理的能力>`
+
+### State owner
+
+`<说明权威状态属于 Desktop、zeta-rs、connection、thread、turn 或 capability handle。>`
+
+### Compatibility policy
+
+`<说明兼容范围、废弃周期和升级方式。>`
+
+## Method inventory
+
+| Method | Direction | Consumers | Side effect | Idempotent | Capability | Summary |
+|---|---|---|---:|---:|---|---|
+| `<domain/method>` | `<Client → Server request>` | `<Desktop/CLI/host>` | `<yes/no>` | `<required/n/a>` | `<domain/v1>` | `<用途>` |
+
+## `<domain/method>`
+
+### Semantics
+
+`<准确描述成功语义，以及它不保证什么。>`
+
+### Preconditions
+
+- `<连接、资源、状态或权限前置条件>`
+
+### Params
+
+| Field | Type | Required | Nullable | Constraints | Meaning |
+|---|---|---:|---:|---|---|
+| `<field>` | `<type>` | `<yes/no>` | `<yes/no>` | `<范围/格式>` | `<含义>` |
+
+### Result
+
+| Field | Type | Required | Nullable | Constraints | Meaning |
+|---|---|---:|---:|---|---|
+| `<field>` | `<type>` | `<yes/no>` | `<yes/no>` | `<范围/格式>` | `<含义>` |
+
+### Errors
+
+| Error | Retryable | Client action | Data |
+|---|---:|---|---|
+| `<StableErrorName>` | `<yes/no>` | `<处理方式>` | `<稳定字段>` |
+
+### Routing and ownership
+
+`<说明 connection、thread、turn、capability、resource 或 browser target 的 owner 和路由。>`
+
+### Idempotency
+
+`<副作用请求必须定义 key、ledger scope、request hash、冲突、保留期和重启语义。>`
+
+### Deadline and cancellation
+
+`<定义 deadline 单位、主动取消、断连、Turn 终止和迟到响应处理。>`
+
+### Ordering
+
+`<定义 durable sequence、stream sequence、response/notification 因果顺序和 resync。>`
+
+### Security
+
+`<定义验证、allowlist、审批、action digest、脱敏、host policy 和审计。>`
+
+### Request fixture
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "<domain/method>",
+  "params": {}
+}
+```
+
+### Success fixture
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {}
+}
+```
+
+### Error fixtures
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "error": {
+    "code": -32000,
+    "message": "<StableErrorName>",
+    "data": {}
+  }
+}
+```
+
+## Notifications
+
+`<逐项定义通知字段、顺序、丢弃/合并策略。没有通知时写 None。>`
+
+## Lifecycle and state machine
+
+```text
+<Initial> → <Running> → <Terminal>
+```
+
+`<说明失败、取消、断连和进程重启后的状态。>`
+
+## Resource lifecycle
+
+`<如涉及大对象，定义 ResourceRef、digest、TTL、quota、chunk 和 release；否则写 None。>`
+
+## Compatibility
+
+- Missing new fields: `<默认行为>`
+- Unknown enum values: `<处理方式>`
+- Unknown notifications: `<处理方式>`
+- Unknown requests: `<稳定错误>`
+- Breaking-change threshold: `<何时发布 v2>`
+- Transport parity: `<in-process/stdio/socket/websocket 的一致性或 capability 限制>`
+
+## Acceptance tests
+
+- [ ] Success fixture parses and round-trips.
+- [ ] Every stable error has a fixture.
+- [ ] Lifecycle transitions are covered.
+- [ ] Idempotency replay and conflict are covered.
+- [ ] Deadline, cancellation, disconnect, and late response are covered.
+- [ ] Ordering gap and resync are covered.
+- [ ] Security rejection paths are covered.
+- [ ] Rust DTO and mapper tests pass.
+- [ ] In-process client and external transport use the same dispatcher behavior.
+- [ ] TypeScript generation compiles.
+- [ ] JSON Schema and schema hash are updated.
+- [ ] Contract fixtures pass for every declared consumer.

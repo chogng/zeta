@@ -1,0 +1,18 @@
+[package]
+name = "zeta-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "zeta"
+path = "src/main.rs"
+
+[dependencies]
+zeta-app-server = { path = "../app-server" }
+zeta-app-server-client = { path = "../app-server-client" }
+zeta-app-server-protocol = { path = "../app-server-protocol" }
+zeta-tui = { path = "../tui" }
+
+[lints]
+workspace = true

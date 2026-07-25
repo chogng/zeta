@@ -1,0 +1,11 @@
+[package]
+name = "zeta-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+zeta-protocol = { path = "../protocol" }
+
+[lints]
+workspace = true

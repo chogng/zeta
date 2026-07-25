@@ -1,0 +1,11 @@
+# Rust build products
+zeta-rs/target/
+
+# Per-workspace runtime state
+.zeta/
+
+# Desktop build products
+desktop/node_modules/
+desktop/dist/
+node_modules/
+.pnpm-store/

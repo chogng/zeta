@@ -1,0 +1,11 @@
+[package]
+name = "zeta-model-provider"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+zeta-core = { path = "../core" }
+
+[lints]
+workspace = true

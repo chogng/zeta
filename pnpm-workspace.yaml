@@ -1,0 +1,7 @@
+packages:
+  - desktop
+
+onlyBuiltDependencies:
+  - electron
+allowBuilds:
+  electron: set this to true or false

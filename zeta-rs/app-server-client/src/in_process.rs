@@ -1,0 +1,93 @@
+use crate::AppServerClient;
+use crate::ClientError;
+use crate::JsonRpcTransport;
+use std::path::PathBuf;
+use zeta_app_server::AppServer;
+use zeta_app_server::ConnectionState;
+use zeta_app_server::LocalAppServerOptions;
+use zeta_app_server::open_local_app_server;
+use zeta_app_server_protocol::CURRENT_PROTOCOL_VERSION;
+use zeta_app_server_protocol::common::ClientCapabilities;
+use zeta_app_server_protocol::common::ClientInfo;
+use zeta_app_server_protocol::common::ProtocolVersions;
+use zeta_app_server_protocol::schema_hash_v1;
+use zeta_app_server_protocol::v1::initialize::InitializeParams;
+
+/// Startup inputs for an embedded App Server connection.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct InProcessClientOptions {
+    pub state_root: PathBuf,
+    pub client_info: ClientInfo,
+    pub capabilities: ClientCapabilities,
+}
+
+impl InProcessClientOptions {
+    pub fn new(state_root: impl Into<PathBuf>, client_info: ClientInfo) -> Self {
+        Self {
+            state_root: state_root.into(),
+            client_info,
+            capabilities: ClientCapabilities::default(),
+        }
+    }
+
+    pub fn with_capabilities(mut self, capabilities: ClientCapabilities) -> Self {
+        self.capabilities = capabilities;
+        self
+    }
+}
+
+/// In-memory transport that still exercises the versioned JSON-RPC dispatcher.
+pub struct InProcessTransport {
+    server: AppServer,
+    connection: ConnectionState,
+    notifications: Vec<String>,
+}
+
+impl InProcessTransport {
+    fn new(server: AppServer) -> Self {
+        let connection = server.connection();
+        Self {
+            server,
+            connection,
+            notifications: Vec::new(),
+        }
+    }
+}
+
+impl JsonRpcTransport for InProcessTransport {
+    fn round_trip(&mut self, request: &str) -> Result<String, ClientError> {
+        let response = self.server.handle_json(&mut self.connection, request);
+        self.notifications
+            .extend(self.server.drain_notifications(&mut self.connection));
+        Ok(response)
+    }
+
+    fn drain_notifications(&mut self) -> Result<Vec<String>, ClientError> {
+        Ok(std::mem::take(&mut self.notifications))
+    }
+}
+
+/// Opens, initializes, and schema-checks an embedded App Server client.
+pub fn start_in_process_client(
+    options: InProcessClientOptions,
+) -> Result<AppServerClient<InProcessTransport>, ClientError> {
+    let server = open_local_app_server(LocalAppServerOptions::new(options.state_root))
+        .map_err(|error| ClientError::Transport(error.to_string()))?;
+    let mut client = AppServerClient::new(InProcessTransport::new(server));
+    let initialized = client.initialize(InitializeParams {
+        client_info: options.client_info,
+        protocol_versions: ProtocolVersions {
+            min: CURRENT_PROTOCOL_VERSION,
+            max: CURRENT_PROTOCOL_VERSION,
+        },
+        capabilities: options.capabilities,
+    })?;
+    let expected_schema = schema_hash_v1();
+    if initialized.schema_hash.0 != expected_schema {
+        return Err(ClientError::Protocol(format!(
+            "schema hash mismatch: client expected {expected_schema}, server returned {}",
+            initialized.schema_hash.0
+        )));
+    }
+    Ok(client)
+}
