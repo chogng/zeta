@@ -1,4 +1,4 @@
-import { WebContentsView } from "electron";
+import { WebContentsView } from "electron/main";
 import { randomUUID } from "node:crypto";
 
 export type BrowserTargetId = string;

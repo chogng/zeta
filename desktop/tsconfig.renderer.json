@@ -1,0 +1,15 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["vite/client"]
+  },
+  "include": [
+    "src/base/**/*.ts",
+    "src/code/browser/**/*.ts",
+    "src/code/electron-browser/workbench/**/*.ts",
+    "src/platform/app-server/common/**/*.ts",
+    "src/platform/commands/common/**/*.ts",
+    "src/workbench/**/*.ts",
+    "generated/**/*.ts"
+  ]
+}

@@ -1,0 +1,30 @@
+.zeta-workbench-titlebar {
+  min-height: 35px;
+  flex: 0 0 35px;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px;
+  border-bottom: 1px solid #2b2b2b;
+  background: #181818;
+  -webkit-app-region: drag;
+}
+
+.zeta-workbench-titlebar .zeta-workbench-part-title {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+}
+
+.zeta-workbench-titlebar .zeta-workbench-part-content {
+  flex: 0 0 auto;
+  align-items: center;
+  -webkit-app-region: no-drag;
+}
+
+.zeta-titlebar-label { margin: 0; color: #f0f0f0; font-size: 13px; font-weight: 600; letter-spacing: .1px; }
+.zeta-workbench-titlebar .zeta-action-bar { align-items: center; }
+.zeta-workbench-titlebar .zeta-button { min-height: 26px; color: #d6d6d6; }
+
+[data-platform="windows"] .zeta-workbench-titlebar { padding-right: 150px; }
+[data-platform="mac"] .zeta-workbench-titlebar { padding-left: 76px; }

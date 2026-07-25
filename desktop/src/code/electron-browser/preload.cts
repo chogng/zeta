@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from "electron";
+import { contextBridge, ipcRenderer, type IpcRendererEvent } from "electron";
 import type { ServerNotification } from "../../../generated/app-server/v1/types.js";
 import type { ZetaRendererApi } from "../../platform/app-server/common/renderer-api.js";
 
@@ -13,7 +13,7 @@ const api: ZetaRendererApi = {
   },
   events: {
     subscribe: (listener) => {
-      const handler = (_event: Electron.IpcRendererEvent, notification: ServerNotification) => listener(notification);
+      const handler = (_event: IpcRendererEvent, notification: ServerNotification) => listener(notification);
       ipcRenderer.on("zeta:event", handler);
       return () => ipcRenderer.removeListener("zeta:event", handler);
     },

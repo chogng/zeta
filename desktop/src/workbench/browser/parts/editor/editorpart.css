@@ -1,0 +1,4 @@
+.zeta-workbench-editor { min-width: 0; min-height: 0; background: #1e1e1e; }
+.zeta-workbench-editor .zeta-workbench-part-content { display: grid; place-items: center; padding: 32px; }
+.zeta-workbench-editor .zeta-button { min-width: 154px; color: #ffffff; background: #0078d4; box-shadow: 0 1px 2px #00000033; }
+.zeta-workbench-editor .zeta-button:hover { background: #0086ed; }

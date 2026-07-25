@@ -1,0 +1,2 @@
+.zeta-workbench-statusbar { min-height: 23px; flex: 0 0 23px; color: #ffffff; background: #007acc; font-size: 12px; }
+.zeta-workbench-statusbar .zeta-workbench-part-content { flex-direction: row; align-items: center; padding: 0 10px; }

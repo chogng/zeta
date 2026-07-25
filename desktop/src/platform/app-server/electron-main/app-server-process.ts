@@ -1,7 +1,7 @@
 import { ChildProcessWithoutNullStreams, spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { app } from "electron";
+import { app } from "electron/main";
 import { JsonRpcConnection } from "./json-rpc-connection.js";
 
 /** Starts only the packaged Zeta executable and exposes its typed JSON-RPC connection. */
@@ -11,7 +11,10 @@ export class AppServerProcess {
 
   start(): JsonRpcConnection {
     if (this.#connection) return this.#connection;
-    const executable = join(process.resourcesPath, "bin", "zeta");
+    const executableName = process.platform === "win32" ? "zeta.exe" : "zeta";
+    const executable = app.isPackaged
+      ? join(process.resourcesPath, "bin", executableName)
+      : join(app.getAppPath(), "..", "zeta-rs", "target", "debug", executableName);
     if (!existsSync(executable)) throw new Error(`Packaged Zeta binary is missing: ${executable}`);
     const environment = { PATH: process.env.PATH ?? "", ZETA_STATE_ROOT: join(app.getPath("userData"), "state") };
     this.#process = spawn(executable, ["app-server", "--listen", "stdio://"], { env: environment, shell: false, stdio: "pipe" });

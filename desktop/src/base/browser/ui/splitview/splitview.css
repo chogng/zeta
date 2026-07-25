@@ -1,2 +1,3 @@
-.zeta-split-view { display: flex; min-width: 0; min-height: 0; }
-.zeta-split-view-pane { min-width: 0; min-height: 0; overflow: auto; }
+.zeta-split-view { display: flex; min-width: 0; min-height: 0; overflow: hidden; }
+.zeta-split-view-pane { display: flex; min-width: 0; min-height: 0; overflow: hidden; flex-direction: column; }
+.zeta-split-view-pane > * { flex: 1 1 auto; min-width: 0; min-height: 0; }

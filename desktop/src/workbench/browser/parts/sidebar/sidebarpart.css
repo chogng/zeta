@@ -1,0 +1,3 @@
+.zeta-workbench-sidebar { min-width: 180px; border-right: 1px solid #2b2b2b; background: #181818; }
+.zeta-workbench-sidebar .zeta-workbench-part-content { overflow: auto; }
+.zeta-viewlet::before { display: block; padding: 14px 14px 9px; color: #bbbbbb; content: "EXPLORER"; font-size: 11px; font-weight: 600; letter-spacing: .8px; }

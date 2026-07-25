@@ -1,1 +1,13 @@
-.zeta-button { padding: 4px 8px; font: inherit; }
+.zeta-button {
+  min-height: 28px;
+  padding: 4px 10px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: #cccccc;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+.zeta-button:hover { background: #2a2d2e; }
+.zeta-button:focus-visible { outline: 1px solid #007fd4; outline-offset: -1px; }
+.zeta-button:disabled { opacity: .5; cursor: default; }

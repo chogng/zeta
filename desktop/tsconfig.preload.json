@@ -1,0 +1,13 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "dist/preload",
+    "rootDir": ".",
+    "types": ["node", "electron"]
+  },
+  "include": [
+    "src/code/electron-browser/preload.cts",
+    "src/platform/app-server/common/renderer-api.ts",
+    "generated/**/*.ts"
+  ]
+}

@@ -1,3 +1,4 @@
-.zeta-sash { flex: 0 0 4px; background: color-mix(in srgb, CanvasText 18%, transparent); }
+.zeta-sash { flex: 0 0 1px; z-index: 2; background: #2b2b2b; }
+.zeta-sash:hover, .zeta-sash:active { background: #007acc; }
 .zeta-sash-vertical { cursor: col-resize; }
 .zeta-sash-horizontal { cursor: row-resize; }
