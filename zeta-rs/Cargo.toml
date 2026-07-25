@@ -23,5 +23,22 @@ edition = "2024"
 license = "Apache-2.0"
 version = "0.1.0"
 
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+zeta-app-server = { path = "app-server" }
+zeta-app-server-client = { path = "app-server-client" }
+zeta-app-server-protocol = { path = "app-server-protocol" }
+zeta-app-server-transport = { path = "app-server-transport" }
+zeta-config = { path = "config" }
+zeta-core = { path = "core" }
+zeta-exec = { path = "exec" }
+zeta-model-provider = { path = "model-provider" }
+zeta-protocol = { path = "protocol" }
+zeta-sandboxing = { path = "sandboxing" }
+zeta-storage = { path = "storage" }
+zeta-tui = { path = "tui" }
+
 [workspace.lints.rust]
 unsafe_code = "forbid"

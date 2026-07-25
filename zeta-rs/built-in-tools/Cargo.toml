@@ -5,7 +5,7 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
-zeta-exec = { path = "../exec" }
+zeta-exec = { workspace = true }
 
 [lints]
 workspace = true

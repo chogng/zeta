@@ -5,8 +5,8 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
-zeta-core = { path = "../core" }
-zeta-sandboxing = { path = "../sandboxing" }
+zeta-core = { workspace = true }
+zeta-sandboxing = { workspace = true }
 
 [lints]
 workspace = true

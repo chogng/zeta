@@ -9,10 +9,10 @@ name = "zeta"
 path = "src/main.rs"
 
 [dependencies]
-zeta-app-server = { path = "../app-server" }
-zeta-app-server-client = { path = "../app-server-client" }
-zeta-app-server-protocol = { path = "../app-server-protocol" }
-zeta-tui = { path = "../tui" }
+zeta-app-server = { workspace = true }
+zeta-app-server-client = { workspace = true }
+zeta-app-server-protocol = { workspace = true }
+zeta-tui = { workspace = true }
 
 [lints]
 workspace = true
