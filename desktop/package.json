@@ -2,11 +2,12 @@
   "name": "zeta-desktop",
   "private": true,
   "type": "module",
+  "packageManager": "pnpm@10.0.0",
   "version": "0.1.0",
   "description": "Electron client for the Zeta app-server protocol",
-  "main": "dist/src/main/index.js",
+  "main": "dist/src/code/electron-main/main.js",
   "scripts": {
-    "build": "tsc -p tsconfig.json && node ../scripts/copy-desktop-assets.mjs",
+    "build": "tsc -p tsconfig.json",
     "start": "electron ."
   },
   "devDependencies": {

@@ -1,0 +1,3 @@
+.zeta-sash { flex: 0 0 4px; background: color-mix(in srgb, CanvasText 18%, transparent); }
+.zeta-sash-vertical { cursor: col-resize; }
+.zeta-sash-horizontal { cursor: row-resize; }

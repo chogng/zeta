@@ -1,0 +1,2 @@
+.zeta-split-view { display: flex; min-width: 0; min-height: 0; }
+.zeta-split-view-pane { min-width: 0; min-height: 0; overflow: auto; }

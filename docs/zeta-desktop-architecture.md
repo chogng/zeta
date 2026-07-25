@@ -6,8 +6,7 @@
 
 ## 1. 目标
 
-Desktop 是 Zeta 的 Electron 富客户端，负责窗口、浏览器、系统能力和 UI，不拥有 Agent、
-Thread、Turn、Item、审批策略或持久化状态机。
+Desktop 是 Zeta 的 Electron 富客户端，负责窗口、浏览器、系统能力和 UI，不拥有 Agent、Thread、Turn、Item、审批策略或持久化状态机。
 
 Desktop 只能通过版本化 App Server API 使用 zeta-rs：
 
