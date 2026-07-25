@@ -4,6 +4,11 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 
+[lib]
+doctest = false
+name = "zeta_app_server_transport"
+path = "src/lib.rs"
+
 [dependencies]
 serde_json = { workspace = true }
 zeta-app-server-protocol = { workspace = true }

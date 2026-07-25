@@ -4,6 +4,11 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 
+[lib]
+doctest = false
+name = "zeta_core"
+path = "src/lib.rs"
+
 [dependencies]
 zeta-protocol = { workspace = true }
 
