@@ -98,6 +98,11 @@ Session
 Session 不嵌入 Thread 的 Turn/Item 历史。`ThreadOrigin::Fork` 保存
 `parentThreadId + parentSequence`，表达不可变的分支历史锚点。
 
+当前 canonical `ThreadOrigin` 只有 `Root` 与 `Fork`。Agent spawn、delegation、context seed 和
+跨 Thread message/result 尚未进入本契约；目标语义由
+[`core-multi-agent.md`](core-multi-agent.md) 先行定义，实施时必须同步更新 canonical Rust 类型、
+schema、TypeScript、store 和 App Server contract，不能把 `Fork` 临时复用成 Agent spawn。
+
 长期若 Session shared defaults 需要被多个客户端读取、修改并持久恢复，应以明确的
 `SessionSettings` value 和 typed event 进入本契约；当前代码尚未形成该闭环，不能把 Core
 配置快照直接塞进 `Session`。

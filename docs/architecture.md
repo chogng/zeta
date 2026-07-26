@@ -5,7 +5,11 @@
 - [Zeta 长期架构](zeta-code-architecture-codex-style-v2.md)
 - [zeta-rs 产品内核与对外层](zeta-rs-architecture.md)
 - [`zeta-protocol` 架构与演进方案](protocol.md)
-- [`zeta-core` 架构与演进方案](core.md)
+- [`zeta-core` 架构](core.md)：Core ownership、执行组件、durable boundary、目录与落地顺序。
+- [`zeta-core` Context 与 ContextManager](core-context.md)：per-Thread context ownership、
+  organization、budget、compaction 与恢复。
+- [`zeta-core` 多 Agent 架构](core-multi-agent.md)：delegation、spawn、context inheritance、
+  message/result、cancellation 与 Agent tree budget。
 - [`zeta-config` 架构与 Plugin/MCP/Skill 接入方案](config.md)：Config authority、scope
   resolution、领域 snapshot reconcile 和 runtime safe point。
 - [`zeta-model-provider-config` 架构与演进方案](model-provider-config.md)：Provider
@@ -36,8 +40,8 @@
 
 - [`zeta-exec` 架构与演进方案](exec.md)：无交互 Agent runner、机器输出、远程调度 worker
   与独立 remote execution plane。
-- [Zeta Agent 执行架构与演进方案](zeta-agent-runtime-architecture.md)：后续异步 Agent
-  loop、per-Thread controller、工具循环、上下文、Provider safe point 和多 Agent 执行。
+- [Zeta Agent 执行架构与演进方案](zeta-agent-runtime-architecture.md)：跨 Core、App Server、
+  provider 与 Tool 的异步执行演进和 Provider safe point。
 - [`zeta-models-manager` 架构与演进方案](models-manager.md)：统一管理 provider 模型发现、
   缓存、字段级合并、筛选、解析和 catalog snapshot。
 - [`zeta-mcp` 架构与演进方案](mcp.md)：MCP client session、transport、capability negotiation

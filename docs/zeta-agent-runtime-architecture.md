@@ -11,7 +11,10 @@ Execution 和 Memory 设计稿。Session-first 领域与存储基础已落地；
 异步 Agent 执行演进，不覆盖当前
 [`zeta-app-server-api.md`](zeta-app-server-api.md) 契约，也不重复
 [`zeta-protocol` 架构](protocol.md)。Core 的 ownership 与 crate 内部分层以
-[`core.md`](core.md) 为准；本文保留跨 Core、App Server、provider 和 tool 的演进视角。
+[`core.md`](core.md) 为准；Context/ContextManager 以
+[`core-context.md`](core-context.md) 为准，多 Agent 以
+[`core-multi-agent.md`](core-multi-agent.md) 为准。本文只保留跨 Core、App Server、provider
+和 tool 的演进视角。
 
 ## 1. 结论
 
@@ -79,7 +82,7 @@ SessionCoordinator 已作为产品根 aggregate 落地。
 | 异步 `turn/start` | 采纳，开发期直接修改当前契约 | 高 | 以 contract test 固定 acceptance、通知和取消顺序 |
 | durable context + compaction | 采纳 | 中 | 原始 event log 保留；summary 只作带 provenance 的派生 checkpoint |
 | Provider 切换 | 采纳简化版 | 中 | 下一个 model invocation 重新构造 context 和 invocation snapshot |
-| Provider Lane/Handoff schema | 暂缓 | 中高 | 先用统一 Context Builder；只有评测证明不足时再引入 |
+| Provider Lane/Handoff schema | 暂缓 | 中高 | 先用统一 ContextManager/ContextPlan；只有评测证明不足时再引入 |
 | Tool loop | 采纳 | 高 | 副作用前持久化、明确 approval、unknown outcome 和 per-tool retry |
 | Session aggregate | 采纳，分阶段 | 高 | Session 与 Thread 独立 sequence；跨 stream 创建使用可恢复 saga 或明确的原子事务 |
 | 长期 Memory | 单独 RFC | 高 | 必须先定义 consent、scope、删除、保留期、隐私和质量评测 |
@@ -218,92 +221,31 @@ zeta-model-provider ─────► zeta-api / zeta-client / zeta-http-client
 
 ## 6. 目标目录结构
 
-下面只列本方案涉及的目标结构。`(new)` 表示尚未存在，`(planned)` 表示后续阶段创建。
+Core 内部目标目录不在本文维护，以
+[`core.md`](core.md#13-目标目录与公开-api) 为唯一来源。跨 crate 的长期分层为：
 
 ```text
 zeta/
 ├─ docs/
-│  ├─ architecture.md
+│  ├─ core.md
+│  ├─ core-context.md
+│  ├─ core-multi-agent.md
 │  ├─ zeta-agent-runtime-architecture.md
-│  ├─ zeta-rs-architecture.md
-│  ├─ zeta-desktop-architecture.md
-│  └─ zeta-app-server-api.md
-│
 ├─ zeta-rs/
-│  ├─ protocol/
-│  │  └─ src/
-│  │     ├─ session.rs
-│  │     ├─ session_event.rs
-│  │     ├─ thread.rs
-│  │     ├─ thread_event.rs
-│  │     ├─ thread_update.rs
-│  │     ├─ turn.rs
-│  │     ├─ items.rs
-│  │     ├─ command.rs
-│  │     └─ agent_request.rs
-│  ├─ async-utils/
-│  ├─ core/
-│  │  └─ src/
-│  │     ├─ lib.rs
-│  │     ├─ session/                     (planned)
-│  │     │  ├─ mod.rs
-│  │     │  ├─ coordinator.rs
-│  │     │  ├─ state.rs
-│  │     │  ├─ reducer.rs
-│  │     │  └─ coordinator_tests.rs
-│  │     ├─ thread/
-│  │     │  ├─ mod.rs
-│  │     │  ├─ command.rs
-│  │     │  ├─ phase.rs
-│  │     │  ├─ controller.rs
-│  │     │  ├─ projection.rs
-│  │     │  ├─ controller_tests.rs
-│  │     │  └─ projection_tests.rs
-│  │     ├─ turn/
-│  │     │  ├─ mod.rs
-│  │     │  ├─ executor.rs
-│  │     │  ├─ invocation.rs
-│  │     │  ├─ interaction.rs
-│  │     │  └─ executor_tests.rs
-│  │     ├─ context/
-│  │     │  ├─ mod.rs
-│  │     │  ├─ builder.rs
-│  │     │  ├─ compaction.rs             (planned)
-│  │     │  └─ builder_tests.rs
-│  │     └─ capabilities/
-│  │
+│  ├─ protocol/              canonical values and contracts
+│  ├─ core/                  execution control plane
+│  ├─ session-store/
 │  ├─ thread-store/
 │  ├─ storage/
 │  ├─ model-provider/
 │  ├─ built-in-tools/
-│  ├─ exec/
-│  ├─ sandboxing/
 │  ├─ app-server-protocol/
 │  ├─ app-server-transport/
-│  └─ app-server/
-│     └─ src/
-│        ├─ lib.rs
-│        ├─ connection.rs                (planned)
-│        ├─ dispatcher.rs                (planned)
-│        ├─ processor.rs                 (planned)
-│        ├─ outbound.rs                  (planned)
-│        ├─ serialization.rs             (planned)
-│        └─ local.rs
-│
-└─ desktop/
-   └─ src/
-      ├─ platform/app-server/
-      └─ workbench/
-         ├─ services/app-server-projection-service.ts  (planned)
-         └─ state/                                      (planned)
+│  └─ app-server/            composition root and transport coordination
+└─ desktop/                  client projection and interaction UI
 ```
 
-目录约束：
-
-- 模块默认私有，只从 crate `lib.rs` 显式导出稳定 API；
-- 实现模块目标低于 500 LoC；现有较大文件的新功能进入新模块；
-- 新测试模块使用 sibling `*_tests.rs` 和显式 `#[path = "..._tests.rs"]`；
-- 不创建职责含糊的 `common`、`execution-utils` 或第二个泛化 facade crate。
+本执行文档不再复制各 crate 内部文件树；具体目录由各 crate 架构文档维护。
 
 ## 7. TurnExecutor、SessionCoordinator 与 ThreadController 边界
 
@@ -403,51 +345,8 @@ Turn
 
 ## 9. History、Context 与 Provider 切换
 
-### 9.1 唯一事实来源
-
-不新增 `CanonicalHistory` store。概念映射如下：
-
-```text
-Canonical Session structure = Session event stream
-Canonical Thread history     = Thread event stream
-Readable transcript        = reduced durable Items
-Provider context           = Context Builder 的派生结果
-Compaction summary         = 带 source range/provenance 的派生 checkpoint
-Provider cache             = 可丢弃优化
-```
-
-如果系统没有通过工具或宿主能力观察到文件、Git 或环境变化，就不能把模型声称的变化记录为
-“系统事实”。
-
-### 9.2 Context Builder
-
-每次模型调用从同一输入构造 context：
-
-- system/developer instructions；
-- 当前 Turn 目标和用户输入；
-- 最近 durable Items；
-- 已提交的 compaction checkpoint；
-- 按需检索的旧 Item；
-- 与当前调用相关的 Tool Result；
-- 本次调用的模型和工具定义。
-
-Context Builder 只读取 snapshot，不修改历史。
-
-### 9.3 Compaction
-
-Compaction 不能删除权威日志。一个 checkpoint 至少记录：
-
-- 覆盖的 sequence range；
-- summary 内容；
-- 引用的 Item/Event ID；
-- 生成方式和 schema version；
-- 原始范围 digest；
-- 创建时间和适用的 context policy。
-
-恢复或 Provider 切换时可以使用 checkpoint 加近期 Items；发现 provenance 或 digest 不一致时
-退回原始 Items。
-
-### 9.4 Provider 切换
+Context 的 authority、ContextManager、ContextPlan、budget、compaction 和多 Agent isolation
+统一由 [`core-context.md`](core-context.md) 定义。本文只规定 provider 切换的跨层流程。
 
 Provider change 是“未来调用配置变更”，不是新的事实存储层：
 
@@ -545,18 +444,10 @@ Cross-thread memory
 
 ### 11.2 多 Agent
 
-多 Agent 使用同一 Session 下的独立 Thread 和 lineage：
-
-```text
-Session
-└─ parent Thread
-   ├─ child Thread A
-   └─ child Thread B
-```
-
-每个 Thread 有自己的 sequence、controller、Turn 和 provider context。父子结果通过显式
-message/result Item 合并，不共享可变 `SessionHistory`。Session 只串行 membership、lineage
-和 settings 等结构性提交。
+多 Agent 的 identity、delegation、spawn saga、context seed、message/result delivery、
+cancellation、resource budget 与恢复统一由
+[`core-multi-agent.md`](core-multi-agent.md) 定义。本文只要求 App Server 能订阅多个独立 Thread，
+并把 child lifecycle、interaction 和 result 投影给客户端；App Server 不合并父子 history。
 
 ## 12. App Server 与 Desktop 影响
 
@@ -648,7 +539,8 @@ Session-first 基础迁移已经完成；准确范围和仍未完成的 protocol
 ### Phase 6：Context、compaction 与 Provider 切换（Context 基础完成）
 
 - 已实现统一 ContextAssembler，重建 durable message 与 Tool Call/Result；
-- 加入带 provenance 的 compaction checkpoint；
+- 引入 per-Thread ContextManager 与不可变 ContextPlan；
+- 加入 instruction precedence、budget 与带 provenance 的 compaction checkpoint；
 - Provider change 在 safe point 生效；
 - 建立跨 provider continuity evaluation。
 
@@ -657,7 +549,10 @@ Session-first 基础迁移已经完成；准确范围和仍未完成的 protocol
 ### Phase 7：Projection 与多 Agent
 
 - Renderer projection/resync；
-- 子 Thread result 的显式合并；
+- AgentCoordinator、durable delegation 与 spawn saga；
+- immutable ContextSeed 与 child Thread context isolation；
+- 跨 Thread message/result 的 durable delivery 与 join；
+- Agent tree cancellation 和 resource budget；
 - 根据真实负载决定 controller idle eviction。
 
 ### Phase 8：Memory RFC
