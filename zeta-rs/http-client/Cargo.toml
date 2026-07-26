@@ -1,0 +1,19 @@
+[package]
+name = "zeta-http-client"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+doctest = false
+name = "zeta_http_client"
+path = "src/lib.rs"
+
+[dependencies]
+rustls = { workspace = true }
+rustls-native-certs = { workspace = true }
+ureq = { workspace = true }
+zeroize = { workspace = true }
+
+[lints]
+workspace = true

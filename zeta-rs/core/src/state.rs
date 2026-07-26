@@ -1,48 +1,37 @@
 use crate::CoreError;
+use zeta_protocol::TurnStatus;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum TurnStatus {
-    Created,
-    Running,
-    WaitingForApproval,
-    WaitingForUserInput,
-    WaitingForCapability,
-    Cancelling,
-    Completed,
-    Failed,
-    Interrupted,
-}
-
-impl TurnStatus {
-    pub fn transition(self, next: Self) -> Result<Self, CoreError> {
-        let allowed = matches!(
-            (self, next),
-            (Self::Created, Self::Running)
-                | (
-                    Self::Running,
-                    Self::WaitingForApproval
-                        | Self::WaitingForUserInput
-                        | Self::WaitingForCapability
-                        | Self::Completed
-                        | Self::Failed
-                        | Self::Cancelling
-                )
-                | (
-                    Self::WaitingForApproval
-                        | Self::WaitingForUserInput
-                        | Self::WaitingForCapability,
-                    Self::Running | Self::Cancelling
-                )
-                | (Self::Cancelling, Self::Interrupted)
-        );
-        if allowed {
-            Ok(next)
-        } else {
-            Err(CoreError::InvalidTransition {
-                from: format!("{self:?}"),
-                to: format!("{next:?}"),
-            })
-        }
+pub(crate) fn transition_turn_status(
+    current: TurnStatus,
+    next: TurnStatus,
+) -> Result<TurnStatus, CoreError> {
+    let allowed = matches!(
+        (current, next),
+        (
+            TurnStatus::Created,
+            TurnStatus::Running | TurnStatus::Cancelling
+        ) | (
+            TurnStatus::Running,
+            TurnStatus::WaitingForApproval
+                | TurnStatus::WaitingForUserInput
+                | TurnStatus::WaitingForCapability
+                | TurnStatus::Completed
+                | TurnStatus::Failed
+                | TurnStatus::Cancelling
+        ) | (
+            TurnStatus::WaitingForApproval
+                | TurnStatus::WaitingForUserInput
+                | TurnStatus::WaitingForCapability,
+            TurnStatus::Running | TurnStatus::Cancelling
+        ) | (TurnStatus::Cancelling, TurnStatus::Interrupted)
+    );
+    if allowed {
+        Ok(next)
+    } else {
+        Err(CoreError::InvalidTransition {
+            from: format!("{current:?}"),
+            to: format!("{next:?}"),
+        })
     }
 }
 

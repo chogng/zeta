@@ -1,224 +1,214 @@
 # zeta-rs 产品内核与统一对外层
 
-> 负责人：zeta-rs 开发者  
-> 客户端：Zeta Desktop、Zeta CLI、未来 IDE 插件和 daemon
+> 当前基线：[Zeta 长期架构](zeta-code-architecture-codex-style-v2.md) 与
+> [App Server API](zeta-app-server-api.md)。
 
-## 1. 责任
+## 1. Workspace 职责
 
-`zeta-rs/` 是完整 Rust 产品实现；`zeta-rs/core/` 是领域内核。
+`zeta-rs/` 是完整 Rust 产品实现，`zeta-rs/core/` 是领域运行时。它负责：
 
-zeta-rs 负责：
+- Session、Thread、Turn、ThreadItem 的 reducer、命令与恢复；
+- Agent/model/tool 执行编排；
+- typed SessionStore/ThreadStore 与共享 event-stream adapter；
+- Config、Credential、sandbox 与 resource；
+- App Server、client、transport；
+- Rust、TypeScript 与 JSON Schema contract tests。
 
-- Thread、Turn、Item、Tool Call 状态机；
-- Agent、模型调用和工具循环；
-- sandbox、审批、超时、取消和输出上限；
-- rollout 权威日志、SQLite 投影、恢复和 writer lease；
-- Config 和 Credential Store；
-- App Server 产品 API、dispatcher、client 和 transport；
-- Rust、TypeScript、JSON Schema 生成和 contract tests。
-
-zeta-rs 不负责：
-
-- Desktop UI、窗口或 CDP 具体实现；
-- CLI 参数解析、终端渲染或 shell completion；
-- Renderer 状态和 Electron IPC；
-- 第三方网页 UI。
+Desktop UI、Electron IPC、终端渲染和第三方网页 UI 不属于 Rust Core。
 
 ## 2. Workspace 边界
 
 ```text
 zeta-rs/
-├── core/
-├── protocol/
-├── app-server-protocol/
+├── protocol/             # canonical shared domain contract
+├── session-store/        # Session persistence port + envelope
+├── thread-store/         # Thread persistence port + envelope
+├── core/                 # reducers, coordinators, execution policy and recovery
+├── storage/              # one physical event-stream engine + typed adapters
+├── rollout/              # local rollout repository + recovery composition
+├── rollout-trace/        # read-only export, diagnostics and evaluation artifact
+├── app-server-protocol/  # external RPC wire contract + generators
 ├── app-server-transport/
 ├── app-server-client/
 ├── app-server/
 ├── config/
-├── credentials/
-├── storage/
-├── exec/
-├── sandboxing/
-├── built-in-tools/
+├── secrets/              # provider-neutral secret persistence primitives
+├── login/                # target interactive account-login control plane
+├── codex-app-server/     # target adapter for the external Codex App Server
+├── model-provider-config/
 ├── model-provider/
 ├── zeta-api/
+├── http-client/           # target shared proxy/TLS/HTTP/WebSocket substrate
+├── zeta-client/           # target API operation retry/framing layer
+├── exec/                  # target headless Agent runner
+├── tool-executor/         # target local process execution boundary
 ├── tui/
 └── cli/
 ```
 
-不建立 `zeta-runtime`。也不建立以 `runtime`、`service`、`common` 或 `platform` 命名的泛化
-聚合 crate。
+当前 `exec/` 仍实现 process `ToolExecutor`。它迁移为 `tool-executor/` 后，`exec/` 名称用于
+[`exec.md`](exec.md) 定义的 headless Agent runner；迁移完成前不能把目标目录注释理解为现状。
 
-应用用例由 App Server dispatcher 暴露；本地 adapter 组合位于
-`app-server/src/local.rs` 这一明确的宿主组合入口。该文件只负责装配，不拥有领域规则。
+不建立职责含糊的 `common`、`service` 或总括式执行 crate。Agent loop 先在 Core 内按模块
+分层；只有具备第二个真实消费者、独立 typed port 与测试 vertical slice 时才提取 crate。
 
-## 3. 唯一产品契约
+Direct-provider credential ownership 由 [`model-provider.md`](model-provider.md) 维护；通用 secret
+persistence 由 [`secrets.md`](secrets.md) 维护；interactive login control plane 由
+[`login.md`](login.md) 维护。Workspace 不创建统一 credential/OAuth crate，也不让 Core、API 或
+network client 读取 secret store。
 
-Zeta 只有一个跨产品业务接口：
+ChatGPT/Codex subscription 通过 [`codex-app-server.md`](codex-app-server.md) 接入：
+`zeta-codex-app-server` 启动并适配上游 `codex app-server`，由上游拥有 PKCE、callback、token
+persistence/refresh 和 Codex backend compatibility。Zeta App Server 只组合其 redacted login/account
+状态；`model-provider` 只选择 injected subscription backend。Zeta 不复制 OAuth 实现，也不读取
+`~/.codex/auth.json`。
+
+## 3. Protocol 边界
+
+Canonical 产品模型、command/event/update/request 的分类、ID/cursor 语义、当前缺口和后续迁移
+统一由 [`protocol.md`](protocol.md) 维护。本文件只规定 workspace 依赖关系：
+`zeta-protocol` 是纯共享值层，Core、store、provider adapter 与 App Server wire 可以依赖它，
+它不能反向依赖这些执行或 I/O crate。
+
+## 4. Core
+
+Core 的完整 ownership、执行组件、ports、并发与恢复规则统一由
+[`core.md`](core.md) 维护。本节只保留 workspace 级约束。
+
+SessionCoordinator 与 ThreadController 都通过纯 reducer 维护可重建 projection：
 
 ```text
-zeta-app-server-protocol
+stored event + previous snapshot → next snapshot
 ```
 
-它定义版本化：
-
-- Client → Server requests；
-- Server → Client requests；
-- Server notifications；
-- Params、Result、Resource 和稳定错误；
-- capability 与协议版本协商。
-
-CLI、Desktop、daemon 和远程客户端不得另外建立语义重复的产品 API。
-
-当前 accepted 基线是
-[`zeta-app-server-api-v1.md`](zeta-app-server-api-v1.md)。
-
-## 4. 客户端与 transport
+live commit 与 recovery 必须调用同一 reducer。副作用顺序固定为：
 
 ```text
-CLI/TUI
-  → zeta-app-server-client
-  → InProcess transport
+validate command
+→ build typed events
+→ append atomic batch
+→ update in-memory projection
+→ publish update
+```
+
+append 失败时不能暴露未提交状态。
+
+SessionCoordinator 只序列化 membership、lineage 与 lifecycle。ThreadController 只序列化一个
+Thread 的执行历史。不同 Thread 可并行，不受 Session sequence 阻塞。
+
+## 5. Store ports 与物理 storage
+
+`zeta-session-store` 和 `zeta-thread-store` 分别拥有 storage-neutral trait、stored envelope、
+typed command receipt 与 atomic batch validator。Core 依赖这些 port，不依赖本地文件实现。
+
+`zeta-storage` 只有一个物理 event-stream engine，统一负责：
+
+- typed JSONL batch；
+- format/kind discriminator；
+- checksum；
+- append + fsync；
+- 未终止 tail recovery。
+
+`SessionRolloutStore` 与 `ThreadRolloutStore` 是薄的领域 adapter，不是两套 rollout 引擎。
+它们分别选择 stream kind、path、ID 与 batch validator。
+
+`zeta-rollout` 组合上述 adapters 与 writer lease，负责从一个 state root 恢复可运行的
+SessionCoordinator；它先恢复 Thread，再恢复 Session 以便继续 create/fork saga。App Server 的本地
+composition root 只依赖该 repository，不重复这套恢复流程。
+
+`zeta-rollout-trace` 以两个 store port 为输入，生成只读、可序列化的 Session trace。它适合
+诊断、导出和评测，但不是 authority，也不能成为执行输入。它保留独立 Session/Thread
+sequence，而不把并发 aggregate 拼成伪全局顺序。trace 可能携带用户输入、工具参数和结果，因此
+crate 不提供默认文件写入；持久化或上传必须由调用方显式施加脱敏、访问控制和保留期策略。
+
+当前开发期只读当前 schema。旧记录、implicit Session、kind/payload upcast 和 sidecar ledger
+不进入执行路径。
+
+SQLite 仅为可删除、可重建的查询 projection，不是 authority。
+
+## 6. Sequence 与并发
+
+Sequence、cursor、ID 和 optimistic concurrency 的领域语义统一见
+[`protocol.md`](protocol.md#5-sequencecursor-与-id)。Workspace 实现必须为每个 aggregate
+提供独立 writer lease，使不同 Thread 可以并发且不会占用 Session revision。
+
+Fork 在 Session lineage 中保存 `parentThreadId + parentSequence`。该 parent sequence 是一个
+不可变历史锚点，不是另一套物理日志计数。
+
+创建/fork Thread 使用可恢复 saga：
+
+```text
+Session plan(creating)
+→ Thread create
+→ Session attach(active)
+```
+
+## 7. Typed command replay
+
+Command identity、receipt 和 replay 规则统一见
+[`protocol.md`](protocol.md#41-command请求改变状态)。在 Workspace 内，store adapter 负责把
+typed receipt 与首个业务 event 原子提交，reducer recovery 恢复稳定结果；Config authority
+沿用相同模式。Config、Plugin、MCP 与 Skill 的 authority 分布、snapshot reconcile 和 safe-point
+组合由 [`config.md`](config.md) 统一规定。
+
+## 8. App Server
+
+`zeta-app-server-protocol` 直接引用语义完全一致的 canonical Session/Thread/Turn/ThreadItem、
+events 和 updates，只为真正 wire-specific 的 params/result/error 定义 DTO。
+
+`zeta-app-server` 负责：
+
+- initialize 与 schema hash gate；
+- method dispatch 和 Session/Thread serialization scope；
+- connection subscription cursor；
+- `session/update` / `thread/update`；
+- Resource ownership；
+- Core error 到 stable RPC error 的映射。
+
+它不重建旧事件、不运行 reducer、不推断领域状态，也不拥有持久化模型。
+
+## 9. Client 与 transport
+
+```text
+zeta-exec / TUI
+  → app-server-client::AppServerSession
+  → request handle + event stream
   → App Server dispatcher
 
 Desktop
-  → generated TypeScript client
+  → generated TypeScript contract
   → JSONL / stdio
   → App Server dispatcher
-
-daemon / remote
-  → Unix socket / WebSocket
-  → App Server dispatcher
 ```
 
-进程内 transport 是性能优化，不是语义捷径。它必须经过协议编码、request ID pairing、
-initialize、dispatcher、typed response 和 notification 解码。
+Rust `app-server-client` 是本地 App Server 的共享宿主层：负责启动、initialize、请求/事件
+channel wiring 和显式 shutdown，详细边界见
+[`app-server-client.md`](app-server-client.md)。进程内 typed channel 是性能优化，不是语义
+捷径；Rust 本地路径与 Desktop JSONL 路径都必须经过 typed request/response、initialize、
+dispatcher 和 notification contract。长期可增加相同 contract 的 remote App Server backend。
 
-## 5. 依赖方向
+产品 Session、App Server connection session 与 terminal session 是三种不同生命周期，命名
+时必须带领域限定。
 
-```text
-zeta-core
-  → zeta-protocol
+## 10. Headless exec 与远程执行
 
-zeta-api
-  → normalized Zeta model protocol + provider-specific wire adapters
+`zeta-exec` 是无交互 Agent runner，负责 run-once、机器输出、terminal outcome 和未来 scheduler
+worker adapter。它只通过 App Server Client 工作，不依赖 Core、store、provider、sandbox 或
+process executor。完整架构见 [`exec.md`](exec.md)。
 
-model-provider
-  → zeta-api + zeta-core + credentials
+底层 process execution 从当前同名 crate 迁移为 `zeta-tool-executor`。未来
+`zeta-exec-server` 只负责远程 process/PTY/filesystem execution，不能接收 Agent
+`turn/start`。Remote Agent scheduling 与 remote process execution 使用不同 protocol、
+identity、lease 和 disconnect 语义。
 
-storage/config/credentials/exec
-  → zeta-core
-
-app-server-protocol
-  → zeta-protocol 的稳定叶子类型
-
-app-server
-  → zeta-core + adapters + app-server-protocol + transport
-
-app-server-client
-  → app-server-protocol
-  → app-server（仅进程内宿主实现）
-
-CLI
-  → app-server-client + app-server-protocol + tui
-  → app-server（仅 `zeta app-server` 宿主子命令）
-
-Desktop
-  → JSON-RPC → app-server
-```
-
-Core 不依赖 Storage、Exec、Model Provider、App Server、CLI 或 Desktop。
-
-## 6. 防止职责越界
-
-- Core 保存领域规则，不了解 JSON-RPC、终端或 Electron；
-- App Server handler 负责用例编排、DTO mapper、路由和协议错误；
-- `local.rs` 只选择 adapter 和恢复持久化状态；
-- Client 负责请求配对、通知解码、连接和重连；
-- Transport 只负责有界消息传输；
-- CLI 与 Desktop 只负责各自 presentation 和 host capability；
-- 协议 DTO 不直接复用内部 aggregate；
-- 不能用新的泛化 facade 绕开 App Server。
-
-某段代码如果同时依赖 Core、Storage、Exec、Config、Model Provider 和 UI 类型，应先判断它
-是否确实是 App Server 的组合入口；否则视为边界设计问题。
-
-## 7. App Server API 实现流程
-
-Desktop 或 CLI 开发者提交符合
-[`zeta-api-interface-requirements.md`](zeta-api-interface-requirements.md) 的产品接口需求。
-zeta-rs 是已接受 App Server 契约的最终 owner。
-
-实现顺序：
-
-1. 审核客户端覆盖、方向、所有权、安全和生命周期；
-2. 在 `app-server-protocol/v1` 定义冻结 DTO；
-3. 定义内部模型与 DTO 的显式 mapper；
-4. 实现 dispatcher 和 handler；
-5. 实现 connection、subscription、turn owner 和 capability owner 路由；
-6. 实现 idempotency、deadline、取消和错误码；
-7. 同时扩展进程内 client 和外部 transport contract tests；
-8. 生成 TypeScript 与 JSON Schema；
-9. 交付二进制、生成文件、schema hash 和变更说明。
-
-接口文档未说明的行为不能由 Rust 实现自行猜测。
-
-## 8. 持久化
-
-每个 Thread 使用独立 rollout，记录至少包含 schema version、Thread ID、单调 sequence、
-event ID、recorded time、event kind、payload 和 checksum。
-
-完成 Item、审批决定和 Turn 终态必须先 durable commit，再更新内存投影和通知客户端。
-
-SQLite 只做可重建查询投影。启动时检测不完整尾记录，并把未完成 Turn 标为 Interrupted。
-同一持久化 Thread 同时只允许一个 writer lease。
-
-## 9. App Server 必须保证
-
-- `initialize` 是首个请求；
-- 版本区间无交集时拒绝连接；
-- 同一 Thread 修改串行，不同 Thread 可并发；
-- `thread/read` 不订阅，`thread/resume` 原子返回 snapshot 并订阅；
-- 同一 Thread 可有多个订阅 connection；
-- Server → Client 请求按 turn owner 或 capability owner 路由；
-- 副作用方法使用持久化 idempotency key；
-- durable sequence 和 streamSeq 可检测空洞；
-- transport 队列有界；
-- ResourceRef 有 owner、TTL、digest、quota 和 chunk 上限；
-- 连接断开时清理订阅、pending request 和 resource；
-- 进程内与外部 transport 的可见行为一致。
-
-## 10. Browser Capability
-
-Core 只定义语义 trait 和类型，不依赖 Electron 或 CDP。
-
-App Server 将 Core capability 调用转换为 Server → Client JSON-RPC；Desktop Electron Main
-实现 Browser host。CLI 没有浏览器时通过 initialize 声明 capability 不可用。
-
-## 11. 测试与交付门
+## 11. 验证
 
 ```bash
 cargo fmt --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
+corepack pnpm --dir desktop test:main
+corepack pnpm --dir desktop typecheck:renderer
 ```
 
-协议变更还必须验证：
-
-```text
-进程内 App Server Client contract test
-stdio/JSONL contract test
-TypeScript 重新生成且可编译
-JSON Schema 与 schema hash 更新
-当前与前一兼容版本 fixtures 通过
-Desktop 和 CLI fixture 通过
-```
-
-## 12. 当前优先级
-
-1. 维护 accepted App Server API v1 与实现一致；
-2. 通过新契约 revision 完成 typed notification、双向请求和异步 Turn；
-3. 完成多连接订阅和资源生命周期；
-4. 按 Desktop Browser API 文档实现 host capability；
-5. 扩展 CLI JSON/JSONL 映射与 approval UI；
-6. 再扩展 daemon、WebSocket、PDF 和后台 Turn。
+协议变更还必须重新生成并提交 JSON Schema、TypeScript 与 Desktop 同步产物。

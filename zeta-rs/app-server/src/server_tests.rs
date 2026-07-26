@@ -1,16 +1,36 @@
 use super::*;
 use std::io::Cursor;
 use std::sync::Arc;
-use zeta_core::{InMemoryJournal, ThreadManager};
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::thread;
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use zeta_async_utils::CancellationToken;
+use zeta_config::ConfigStore;
+use zeta_core::{
+    CoreError, InMemorySessionStore, InMemoryThreadStore, ModelService, RequestTurnInteraction,
+    SessionCoordinator, StartTurnRequest, ThreadController,
+};
 use zeta_model_provider::EchoModel;
+use zeta_protocol::{
+    AgentRequest, CommandId, ContentPart, InputItem, ModelRequest, ModelResponse, RequestId,
+    RequestUserInput, ResponseItem, StopReason, TurnStatus, UserInput,
+};
+
+fn server_with_model(model: Arc<dyn ModelService>) -> AppServer {
+    let threads = Arc::new(ThreadController::with_store(Arc::new(
+        InMemoryThreadStore::default(),
+    )));
+    let sessions = Arc::new(SessionCoordinator::with_store(
+        Arc::new(InMemorySessionStore::default()),
+        threads,
+    ));
+    AppServer::new(sessions, model)
+}
 
 fn server() -> AppServer {
-    AppServer::new(
-        Arc::new(ThreadManager::with_journal(Arc::new(
-            InMemoryJournal::default(),
-        ))),
-        Arc::new(EchoModel),
-    )
+    server_with_model(Arc::new(crate::local::ProviderModelService::new(Arc::new(
+        EchoModel,
+    ))))
 }
 
 fn call(
@@ -25,273 +45,578 @@ fn initialize(server: &AppServer, connection: &mut ConnectionState) {
     let response = call(
         server,
         connection,
-        serde_json::json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"clientInfo":{"name":"test","version":"1"},"protocolVersions":{"min":1,"max":1},"capabilities":{}}}),
-    );
-    assert_eq!(response["result"]["protocolVersion"], 1);
-}
-
-#[test]
-fn initialize_must_precede_domain_requests() {
-    let server = server();
-    let response = call(
-        &server,
-        &mut server.connection(),
-        serde_json::json!({"jsonrpc":"2.0","id":1,"method":"thread/list","params":{}}),
-    );
-    assert_eq!(response["error"]["message"], "NotInitialized");
-}
-
-#[test]
-fn request_ids_must_be_positive_integers() {
-    let server = server();
-    let response = call(
-        &server,
-        &mut server.connection(),
-        serde_json::json!({"jsonrpc":"2.0","id":"one","method":"initialize","params":{}}),
-    );
-    assert_eq!(response["error"]["message"], "InvalidRequest");
-}
-
-#[test]
-fn request_ids_must_be_unique_within_a_connection() {
-    let server = server();
-    let mut connection = server.connection();
-    initialize(&server, &mut connection);
-    let response = call(
-        &server,
-        &mut connection,
-        serde_json::json!({"jsonrpc":"2.0","id":1,"method":"thread/list","params":{}}),
-    );
-    assert_eq!(response["error"]["message"], "InvalidRequest");
-}
-
-#[test]
-fn initialize_validates_client_identity_and_version_range() {
-    let server = server();
-    let response = call(
-        &server,
-        &mut server.connection(),
-        serde_json::json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"clientInfo":{"name":"","version":"1"},"protocolVersions":{"min":1,"max":1},"capabilities":{}}}),
-    );
-    assert_eq!(response["error"]["message"], "InvalidParams");
-}
-
-#[test]
-fn idempotent_thread_start_returns_original_result() {
-    let server = server();
-    let mut connection = server.connection();
-    initialize(&server, &mut connection);
-    let request = serde_json::json!({"jsonrpc":"2.0","id":2,"method":"thread/start","params":{"idempotencyKey":"one","title":"test"}});
-    let first = call(&server, &mut connection, request.clone());
-    let mut retry = request;
-    retry["id"] = serde_json::json!(3);
-    let second = call(&server, &mut connection, retry);
-    assert_eq!(first["result"], second["result"]);
-    assert_eq!(server.threads().list_threads().unwrap().len(), 1);
-}
-
-#[test]
-fn side_effecting_requests_reject_empty_idempotency_keys() {
-    let server = server();
-    let mut connection = server.connection();
-    initialize(&server, &mut connection);
-    let response = call(
-        &server,
-        &mut connection,
-        serde_json::json!({"jsonrpc":"2.0","id":2,"method":"thread/start","params":{"idempotencyKey":"","title":"test"}}),
-    );
-    assert_eq!(response["error"]["message"], "InvalidParams");
-}
-
-#[test]
-fn config_methods_round_trip_a_provider_scoped_model_reference() {
-    let path = std::env::temp_dir().join(format!(
-        "zeta-app-server-config-model-ref-{}.json",
-        std::process::id()
-    ));
-    let server =
-        server().with_config_store(Arc::new(zeta_config::ConfigStore::open(&path).unwrap()));
-    let mut connection = server.connection();
-    initialize(&server, &mut connection);
-
-    let updated = call(
-        &server,
-        &mut connection,
         serde_json::json!({
-            "jsonrpc": "2.0",
-            "id": 2,
-            "method": "config/update",
-            "params": {
-                "idempotencyKey": "model-ref",
-                "preferredModel": {
-                    "provider": "openai",
-                    "model": "gpt-5.6"
-                }
-            }
+            "jsonrpc":"2.0",
+            "id":1,
+            "method":"initialize",
+            "params":{"clientInfo":{"name":"test","version":"1"},"capabilities":{}}
         }),
     );
-    assert_eq!(
-        updated["result"]["preferredModel"],
-        serde_json::json!({"provider": "openai", "model": "gpt-5.6"})
-    );
+    assert_eq!(response["result"]["capabilities"]["sessions"], true);
+    assert_eq!(response["result"]["capabilities"]["updateReplay"], true);
+}
 
+fn create_session(
+    server: &AppServer,
+    connection: &mut ConnectionState,
+    request_id: u64,
+    command_id: &str,
+) -> serde_json::Value {
+    call(
+        server,
+        connection,
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":request_id,
+            "method":"session/create",
+            "params":{"commandId":command_id,"title":"task"}
+        }),
+    )
+}
+
+fn create_thread(
+    server: &AppServer,
+    connection: &mut ConnectionState,
+    request_id: u64,
+    command_id: &str,
+    session_id: &str,
+    expected_sequence: u64,
+) -> serde_json::Value {
+    call(
+        server,
+        connection,
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":request_id,
+            "method":"session/thread/create",
+            "params":{
+                "commandId":command_id,
+                "sessionId":session_id,
+                "expectedSequence":expected_sequence,
+                "title":"root"
+            }
+        }),
+    )
+}
+
+fn wait_for_latest_turn(server: &AppServer, thread_id: &str, expected: TurnStatus) {
+    let thread_id = zeta_protocol::ThreadId::new(thread_id).unwrap();
+    let deadline = Instant::now() + Duration::from_secs(1);
+    loop {
+        let snapshot = server.sessions().threads().read_thread(&thread_id).unwrap();
+        if snapshot
+            .turns
+            .last()
+            .is_some_and(|turn| turn.status == expected)
+        {
+            return;
+        }
+        assert!(Instant::now() < deadline, "Turn did not reach {expected:?}");
+        thread::sleep(Duration::from_millis(1));
+    }
+}
+
+#[test]
+fn initialize_is_required_and_request_ids_are_connection_unique() {
+    let server = server();
+    let mut connection = server.connection();
+    let gated = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":1,"method":"session/list","params":{}}),
+    );
+    assert_eq!(gated["error"]["message"], "NotInitialized");
+
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+    let duplicate = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":1,"method":"session/list","params":{}}),
+    );
+    assert_eq!(duplicate["error"]["message"], "InvalidRequest");
+}
+
+#[test]
+fn session_first_flow_exposes_canonical_session_and_thread_models() {
+    let server = server();
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+    let session = create_session(&server, &mut connection, 2, "create-session");
+    let session_id = session["result"]["session"]["sessionId"].as_str().unwrap();
+    assert_eq!(session["result"]["session"]["sequence"], 1);
+    let thread = create_thread(&server, &mut connection, 3, "create-thread", session_id, 1);
+    let thread_id = thread["result"]["threadId"].as_str().unwrap();
+
+    assert_eq!(
+        thread["result"]["session"]["threads"][0]["status"],
+        "active"
+    );
     let read = call(
         &server,
         &mut connection,
-        serde_json::json!({"jsonrpc":"2.0","id":3,"method":"config/read","params":{}}),
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":4,
+            "method":"thread/read",
+            "params":{"threadId":thread_id}
+        }),
     );
-    assert_eq!(
-        read["result"]["preferredModel"],
-        updated["result"]["preferredModel"]
-    );
+    assert_eq!(read["result"]["thread"]["sessionId"], session_id);
+    assert_eq!(read["result"]["thread"]["sequence"], 1);
+}
 
-    let invalid = call(
+#[test]
+fn typed_commands_replay_and_reject_payload_conflicts() {
+    let server = server();
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+    let first = create_session(&server, &mut connection, 2, "same-command");
+    let replayed = create_session(&server, &mut connection, 3, "same-command");
+    assert_eq!(
+        replayed["result"]["session"]["sessionId"],
+        first["result"]["session"]["sessionId"]
+    );
+    let conflict = call(
         &server,
         &mut connection,
         serde_json::json!({
-            "jsonrpc": "2.0",
-            "id": 4,
-            "method": "config/update",
-            "params": {
-                "idempotencyKey": "invalid-model-ref",
-                "preferredModel": {
-                    "provider": "",
-                    "model": "gpt-5.6"
-                }
+            "jsonrpc":"2.0",
+            "id":4,
+            "method":"session/create",
+            "params":{"commandId":"same-command","title":"different"}
+        }),
+    );
+    assert_eq!(conflict["error"]["message"], "CommandConflict");
+}
+
+#[test]
+fn fork_freezes_parent_thread_sequence_in_session_lineage() {
+    let server = server();
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+    let session = create_session(&server, &mut connection, 2, "session");
+    let session_id = session["result"]["session"]["sessionId"].as_str().unwrap();
+    let root = create_thread(&server, &mut connection, 3, "root", session_id, 1);
+    let root_id = root["result"]["threadId"].as_str().unwrap();
+    let fork = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":4,
+            "method":"session/thread/fork",
+            "params":{
+                "commandId":"fork",
+                "sessionId":session_id,
+                "expectedSequence":3,
+                "parentThreadId":root_id,
+                "title":"branch"
             }
         }),
     );
-    assert_eq!(invalid["error"]["message"], "InvalidParams");
-    let _ = std::fs::remove_file(path);
-}
 
-#[test]
-fn initialize_rejects_an_unsupported_version_interval() {
-    let server = server();
-    let response = call(
-        &server,
-        &mut server.connection(),
-        serde_json::json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"clientInfo":{"name":"test","version":"1"},"protocolVersions":{"min":2,"max":3},"capabilities":{}}}),
+    assert_eq!(
+        fork["result"]["session"]["threads"][1]["origin"]["type"],
+        "fork"
     );
-    assert_eq!(response["error"]["message"], "ProtocolVersionUnsupported");
+    assert_eq!(
+        fork["result"]["session"]["threads"][1]["origin"]["parentSequence"],
+        1
+    );
+}
+
+#[derive(Default)]
+struct CountingModel {
+    calls: AtomicUsize,
+}
+
+impl ModelService for CountingModel {
+    fn invoke(
+        &self,
+        request: &ModelRequest,
+        _: &CancellationToken,
+    ) -> Result<ModelResponse, CoreError> {
+        self.calls.fetch_add(1, Ordering::Relaxed);
+        let prompt = request
+            .input
+            .iter()
+            .find_map(|item| match item {
+                InputItem::Message(message) => message.content.iter().find_map(|content| {
+                    let ContentPart::Text(text) = content else {
+                        return None;
+                    };
+                    Some(text.as_str())
+                }),
+                InputItem::ToolResult(_) => None,
+            })
+            .unwrap_or_default();
+        Ok(ModelResponse {
+            output: vec![ResponseItem::Text(format!("answer: {prompt}"))],
+            usage: None,
+            stop_reason: StopReason::Completed,
+        })
+    }
 }
 
 #[test]
-fn resources_are_chunked_and_owned_by_one_connection() {
+fn completed_turn_replays_without_invoking_the_model_twice() {
+    let model = Arc::new(CountingModel::default());
+    let server = server_with_model(model.clone());
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+    let session = create_session(&server, &mut connection, 2, "session");
+    let session_id = session["result"]["session"]["sessionId"].as_str().unwrap();
+    let thread = create_thread(&server, &mut connection, 3, "thread", session_id, 1);
+    let thread_id = thread["result"]["threadId"].as_str().unwrap();
+    let request = |id| {
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":id,
+            "method":"turn/start",
+            "params":{
+                "commandId":"turn",
+                "sessionId":session_id,
+                "threadId":thread_id,
+                "expectedSequence":1,
+                "input":[{"type":"text","text":"hello"}]
+            }
+        })
+    };
+    let first = call(&server, &mut connection, request(4));
+    let replayed = call(&server, &mut connection, request(5));
+
+    assert_eq!(first["result"]["turnId"], replayed["result"]["turnId"]);
+    wait_for_latest_turn(&server, thread_id, TurnStatus::Completed);
+    assert_eq!(model.calls.load(Ordering::Relaxed), 1);
+    let notifications = server.drain_notifications(&mut connection);
+    assert!(notifications.iter().any(|notification| {
+        notification.contains("\"method\":\"thread/update\"")
+            && notification.contains("\"agentMessage\"")
+    }));
+}
+
+#[test]
+fn updates_are_broadcast_to_other_subscribed_connections() {
+    let server = server();
+    let mut writer = server.connection();
+    initialize(&server, &mut writer);
+    let session = create_session(&server, &mut writer, 2, "session");
+    let session_id = session["result"]["session"]["sessionId"].as_str().unwrap();
+    let thread = create_thread(&server, &mut writer, 3, "thread", session_id, 1);
+    let thread_id = thread["result"]["threadId"].as_str().unwrap();
+
+    let mut observer = server.connection();
+    initialize(&server, &mut observer);
+    call(
+        &server,
+        &mut observer,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":2,"method":"session/subscribe",
+            "params":{"sessionId":session_id,"afterSequence":3}
+        }),
+    );
+    call(
+        &server,
+        &mut observer,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":3,"method":"thread/subscribe",
+            "params":{"threadId":thread_id,"afterSequence":1}
+        }),
+    );
+    call(
+        &server,
+        &mut writer,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":4,"method":"session/thread/fork",
+            "params":{
+                "commandId":"fork",
+                "sessionId":session_id,
+                "expectedSequence":3,
+                "parentThreadId":thread_id,
+                "title":"branch"
+            }
+        }),
+    );
+    call(
+        &server,
+        &mut writer,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":5,"method":"turn/start",
+            "params":{
+                "commandId":"turn",
+                "sessionId":session_id,
+                "threadId":thread_id,
+                "expectedSequence":1,
+                "input":[{"type":"text","text":"hello"}]
+            }
+        }),
+    );
+    wait_for_latest_turn(&server, thread_id, TurnStatus::Completed);
+
+    let notifications = server.drain_notifications(&mut observer);
+    assert!(
+        notifications
+            .iter()
+            .any(|value| value.contains("\"method\":\"session/update\""))
+    );
+    assert!(notifications.iter().any(|value| {
+        value.contains("\"method\":\"thread/update\"") && value.contains("\"agentMessage\"")
+    }));
+    assert!(notifications.iter().any(|value| {
+        value.contains("\"method\":\"thread/update\"")
+            && value.contains("\"itemDelta\"")
+            && value.contains("\"streamCursor\"")
+    }));
+}
+
+#[test]
+fn subscribe_returns_durable_gap_for_reconnect() {
+    let server = server();
+    let mut first_connection = server.connection();
+    initialize(&server, &mut first_connection);
+    let session = create_session(&server, &mut first_connection, 2, "session");
+    let session_id = session["result"]["session"]["sessionId"].as_str().unwrap();
+    let thread = create_thread(&server, &mut first_connection, 3, "thread", session_id, 1);
+    let thread_id = thread["result"]["threadId"].as_str().unwrap();
+
+    let mut reconnected = server.connection();
+    initialize(&server, &mut reconnected);
+    let replay = call(
+        &server,
+        &mut reconnected,
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":2,
+            "method":"thread/subscribe",
+            "params":{"threadId":thread_id,"afterSequence":0}
+        }),
+    );
+    assert_eq!(replay["result"]["updates"][0]["durableSequence"], 1);
+    assert_eq!(
+        replay["result"]["updates"][0]["update"]["type"],
+        "committed"
+    );
+}
+
+#[test]
+fn resources_remain_connection_owned_and_chunked() {
     let server = server();
     let mut owner = server.connection();
+    let mut other = server.connection();
     initialize(&server, &mut owner);
+    initialize(&server, &mut other);
     let resource_id = server
         .create_resource(&owner, "text/plain".into(), b"hello".to_vec())
         .unwrap();
-    let read = call(
+    let owner_read = call(
         &server,
         &mut owner,
-        serde_json::json!({"jsonrpc":"2.0","id":2,"method":"resource/read","params":{"resourceId":resource_id,"offset":1,"maxBytes":2}}),
+        serde_json::json!({
+            "jsonrpc":"2.0","id":2,"method":"resource/read",
+            "params":{"resourceId":resource_id,"offset":0,"maxBytes":3}
+        }),
     );
-    assert_eq!(read["result"]["data"], serde_json::json!([101, 108]));
-    let mut other = server.connection();
-    initialize(&server, &mut other);
+    assert_eq!(owner_read["result"]["decodedLength"], 3);
     let denied = call(
         &server,
         &mut other,
-        serde_json::json!({"jsonrpc":"2.0","id":3,"method":"resource/metadata","params":{"resourceId":resource_id}}),
+        serde_json::json!({
+            "jsonrpc":"2.0","id":2,"method":"resource/read",
+            "params":{"resourceId":resource_id,"offset":0,"maxBytes":3}
+        }),
     );
     assert_eq!(denied["error"]["message"], "ResourceNotOwner");
 }
 
 #[test]
-fn thread_start_subscribes_connection_and_emits_notification() {
+fn config_updates_use_typed_command_ids() {
+    let path = std::env::temp_dir().join(format!(
+        "zeta-app-server-config-{}.json",
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    let server = server().with_config_store(Arc::new(ConfigStore::open(&path).unwrap()));
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+    let updated = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":2,"method":"config/update",
+            "params":{"commandId":"theme","expectedRevision":0,"theme":"dark"}
+        }),
+    );
+    assert_eq!(updated["result"]["revision"], 1);
+    assert_eq!(updated["result"]["generation"], 1);
+    assert_eq!(updated["result"]["disposition"], "updated");
+    let read = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":3,"method":"config/read","params":{}}),
+    );
+    assert_eq!(read["result"]["revision"], 1);
+    assert_eq!(read["result"]["theme"], "dark");
+    let mcp = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":4,"method":"mcp/server/upsert",
+            "params":{
+                "commandId":"github-mcp","expectedRevision":1,
+                "server":{
+                    "id":"user:mcp:github",
+                    "displayName":"GitHub",
+                    "transport":{"type":"streamableHttp","url":"https://mcp.github.example"},
+                    "credential":{"type":"reference","credentialRef":"user:credential:github"},
+                    "enablement":"disabled"
+                }
+            }
+        }),
+    );
+    assert_eq!(mcp["result"]["revision"], 2);
+    let skill = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":5,"method":"skill/source/add",
+            "params":{
+                "commandId":"personal-skills","expectedRevision":2,
+                "source":{
+                    "id":"user:skill-source:personal",
+                    "rootReference":"user:skill-root:personal",
+                    "enablement":"disabled"
+                }
+            }
+        }),
+    );
+    assert_eq!(skill["result"]["revision"], 3);
+    let enabled = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":6,"method":"mcp/server/enablement/set",
+            "params":{
+                "commandId":"enable-github-mcp","expectedRevision":3,
+                "serverId":"user:mcp:github","enablement":"enabled"
+            }
+        }),
+    );
+    assert_eq!(enabled["result"]["revision"], 4);
+    let stale = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":7,"method":"skill/source/enablement/set",
+            "params":{
+                "commandId":"stale-skill","expectedRevision":3,
+                "sourceId":"user:skill-source:personal","enablement":"enabled"
+            }
+        }),
+    );
+    assert_eq!(stale["error"]["message"], "ConfigRevisionConflict");
+    let configured = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":8,"method":"config/read","params":{}}),
+    );
+    assert_eq!(configured["result"]["revision"], 4);
+    assert_eq!(
+        configured["result"]["mcpServers"]["user:mcp:github"]["enablement"],
+        "enabled"
+    );
+    assert_eq!(
+        configured["result"]["skillSources"]["user:skill-source:personal"]["rootReference"],
+        "user:skill-root:personal"
+    );
+    let _ = std::fs::remove_file(&path);
+    let _ = std::fs::remove_file(path.with_extension("lock"));
+    let _ = std::fs::remove_file(path.with_extension("tmp"));
+}
+
+#[test]
+fn interaction_resolution_uses_the_durable_request_identity() {
     let server = server();
     let mut connection = server.connection();
     initialize(&server, &mut connection);
-    let start = call(
-        &server,
-        &mut connection,
-        serde_json::json!({"jsonrpc":"2.0","id":2,"method":"thread/start","params":{"idempotencyKey":"notify","title":"test"}}),
-    );
-    let thread_id = start["result"]["threadId"].clone();
-    let notifications: Vec<serde_json::Value> = server
-        .drain_notifications(&mut connection)
-        .into_iter()
-        .map(|message| serde_json::from_str(&message).unwrap())
-        .collect();
-    assert_eq!(notifications[0]["method"], "thread/started");
-    call(
-        &server,
-        &mut connection,
-        serde_json::json!({"jsonrpc":"2.0","id":3,"method":"turn/start","params":{"idempotencyKey":"turn","threadId":thread_id,"input":[{"type":"text","text":"hello"}]}}),
-    );
-    let notifications: Vec<serde_json::Value> = server
-        .drain_notifications(&mut connection)
-        .into_iter()
-        .map(|message| serde_json::from_str(&message).unwrap())
-        .collect();
-    assert_eq!(notifications[0]["method"], "turn/started");
-}
-
-#[test]
-fn thread_read_does_not_subscribe_but_resume_does() {
-    let server = server();
-    let mut owner = server.connection();
-    initialize(&server, &mut owner);
-    let started = call(
-        &server,
-        &mut owner,
-        serde_json::json!({"jsonrpc":"2.0","id":2,"method":"thread/start","params":{"idempotencyKey":"thread","title":"test"}}),
-    );
-    let thread_id = started["result"]["threadId"].clone();
-    let mut reader = server.connection();
-    initialize(&server, &mut reader);
-    call(
-        &server,
-        &mut reader,
-        serde_json::json!({"jsonrpc":"2.0","id":3,"method":"thread/read","params":{"threadId":thread_id}}),
-    );
-    call(
-        &server,
-        &mut owner,
-        serde_json::json!({"jsonrpc":"2.0","id":4,"method":"turn/start","params":{"idempotencyKey":"turn","threadId":started["result"]["threadId"],"input":[{"type":"text","text":"hello"}]}}),
-    );
-    assert!(server.drain_notifications(&mut reader).is_empty());
-    call(
-        &server,
-        &mut reader,
-        serde_json::json!({"jsonrpc":"2.0","id":5,"method":"thread/resume","params":{"threadId":thread_id}}),
-    );
-    assert!(server.drain_notifications(&mut reader).is_empty());
-}
-
-#[test]
-fn jsonl_connection_writes_responses_before_their_notifications() {
-    let server = server();
-    let thread_id = server.threads().start_thread("test").unwrap();
-    let requests = [
-        serde_json::json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"clientInfo":{"name":"test","version":"1"},"protocolVersions":{"min":1,"max":1},"capabilities":{}}}),
-        serde_json::json!({"jsonrpc":"2.0","id":2,"method":"thread/resume","params":{"threadId":thread_id}}),
-        serde_json::json!({"jsonrpc":"2.0","id":3,"method":"turn/start","params":{"idempotencyKey":"turn","threadId":thread_id,"input":[{"type":"text","text":"hello"}]}}),
-    ]
-    .into_iter()
-    .map(|request| request.to_string())
-    .collect::<Vec<_>>()
-    .join("\n");
-    let mut output = Vec::new();
-    server
-        .serve_jsonl(
-            Cursor::new(format!("{requests}\n").into_bytes()),
-            &mut output,
+    let session = create_session(&server, &mut connection, 2, "session");
+    let session_id = session["result"]["session"]["sessionId"].as_str().unwrap();
+    let thread = create_thread(&server, &mut connection, 3, "thread", session_id, 1);
+    let thread_id = thread["result"]["threadId"].as_str().unwrap();
+    let thread_id = zeta_protocol::ThreadId::new(thread_id).unwrap();
+    let session_id = zeta_protocol::SessionId::new(session_id).unwrap();
+    let started = server
+        .sessions()
+        .threads()
+        .start_turn(
+            &thread_id,
+            StartTurnRequest {
+                command_id: CommandId::new("agent-turn").unwrap(),
+                expected_sequence: zeta_core::SequenceExpectation::Exact(1),
+                input: vec![UserInput::Text {
+                    text: "wait".into(),
+                }],
+            },
         )
         .unwrap();
-    let messages = String::from_utf8(output)
-        .unwrap()
-        .lines()
-        .map(|line| serde_json::from_str::<serde_json::Value>(line).unwrap())
-        .collect::<Vec<_>>();
+    server
+        .sessions()
+        .threads()
+        .request_turn_interaction(
+            &thread_id,
+            &started.turn_id,
+            RequestTurnInteraction {
+                request_id: RequestId::new("input-1").unwrap(),
+                item_id: None,
+                request: AgentRequest::UserInput {
+                    request: RequestUserInput {
+                        questions: Vec::new(),
+                    },
+                },
+                deadline: None,
+            },
+        )
+        .unwrap();
 
-    assert_eq!(messages[0]["id"], 1);
-    assert_eq!(messages[1]["id"], 2);
-    assert_eq!(messages[2]["id"], 3);
-    assert_eq!(messages[3]["method"], "turn/started");
-    assert_eq!(messages[4]["method"], "item/agentMessage/completed");
-    assert_eq!(messages[5]["method"], "turn/completed");
+    let resolved = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":4,
+            "method":"turn/interaction/resolve",
+            "params":{
+                "commandId":"resolve-input-1",
+                "sessionId":session_id,
+                "threadId":thread_id,
+                "turnId":started.turn_id,
+                "requestId":"input-1",
+                "expectedSequence":5,
+                "response":{"type":"userInput", "response":{"answers":{}}}
+            }
+        }),
+    );
+
+    assert_eq!(resolved["result"]["sequence"], 6);
+    let snapshot = server.sessions().threads().read_thread(&thread_id).unwrap();
+    assert_eq!(snapshot.turns[0].status, zeta_core::TurnStatus::Running);
+    assert!(snapshot.turns[0].pending_interaction.is_none());
+}
+
+#[test]
+fn jsonl_transport_writes_response_before_causal_updates() {
+    let server = server();
+    let input = concat!(
+        "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"clientInfo\":{\"name\":\"test\",\"version\":\"1\"},\"capabilities\":{}}}\n",
+        "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"session/create\",\"params\":{\"commandId\":\"session\",\"title\":\"task\"}}\n"
+    );
+    let mut output = Vec::new();
+    server
+        .serve_jsonl(Cursor::new(input.as_bytes()), &mut output)
+        .unwrap();
+    let lines = String::from_utf8(output).unwrap();
+    assert_eq!(lines.lines().count(), 2);
+    assert!(lines.lines().all(|line| line.contains("\"id\":")));
 }

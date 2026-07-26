@@ -10,13 +10,14 @@ Team responsibilities and integration contracts are documented separately:
 - [Desktop architecture](docs/zeta-desktop-architecture.md)
 - [CLI architecture](docs/zeta-cli-architecture.md)
 - [zeta-rs architecture and public surfaces](docs/zeta-rs-architecture.md)
-- [Accepted App Server API v1](docs/zeta-app-server-api-v1.md)
+- [Secret storage architecture](docs/secrets.md)
+- [Provider runtime and authentication architecture](docs/model-provider.md)
+- [App Server API](docs/zeta-app-server-api.md)
 - [API contract requirements](docs/zeta-api-interface-requirements.md)
 - [API contract template](docs/zeta-api-interface-template.md)
 
-The original
-[`zeta-code-architecture-codex-style-v2.md`](docs/zeta-code-architecture-codex-style-v2.md)
-is retained as the historical unified design.
+The long-term domain and dependency boundaries are defined in
+[`zeta-code-architecture-codex-style-v2.md`](docs/zeta-code-architecture-codex-style-v2.md).
 
 ## Run
 
@@ -29,12 +30,16 @@ cargo run --manifest-path zeta-rs/Cargo.toml -p zeta-cli -- exec "summarize the 
 
 The local App Server resolves models through a provider registry rather than hard-coding a
 provider into the CLI. The supported providers, endpoint behavior, request authentication, and
-reference documentation live in the [model-provider README](zeta-rs/model-provider/README.md).
-Zeta's normalized model protocol and provider-specific wire adapters live in
-[`zeta-api`](zeta-rs/zeta-api); `zeta-model-provider` owns registration, model catalogs,
-authentication, endpoints, and fixed provider headers.
-Store each API key in macOS Keychain under the `zeta` service and the configured account. Keys
-never belong in `.zeta/config.json` or Thread rollout logs.
+reference documentation live in the [model-provider architecture](docs/model-provider.md).
+Zeta's normalized model contract lives in `zeta-protocol`; endpoint/request/event codecs live in
+[`zeta-api`](zeta-rs/zeta-api). `zeta-model-provider` owns runtime registration, model selection,
+credential binding, Provider auth/login, resolved targets, and fixed runtime headers; opaque secret
+persistence belongs to [`zeta-secrets`](docs/secrets.md). Dynamic catalog policy belongs to
+the proposed `zeta-models-manager`; shared proxy/TLS/HTTP/WebSocket transport belongs to
+[`zeta-http-client`](zeta-rs/http-client/README.md), while operation retry/framing belongs to
+`zeta-client`.
+Production hosts store each API key through a configured `zeta-secrets` OS-keyring backend. Keys
+never belong in `.zeta/config.json`, App Server DTOs, or Thread rollout logs.
 
 Registered providers use their documented default endpoint when `baseUrl` is omitted or empty;
 an explicitly configured `baseUrl` overrides that default. `openai-compatible` has no safe default

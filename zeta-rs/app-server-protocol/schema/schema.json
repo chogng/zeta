@@ -1,0 +1,3837 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Zeta App Server Protocol",
+  "type": "object",
+  "properties": {
+    "clientRequest": {
+      "$ref": "#/$defs/JsonRpcRequest"
+    },
+    "clientResponse": {
+      "$ref": "#/$defs/JsonRpcResponse"
+    },
+    "errorResponse": {
+      "$ref": "#/$defs/JsonRpcFailure"
+    },
+    "serverNotification": {
+      "$ref": "#/$defs/JsonRpcNotification"
+    }
+  },
+  "required": [
+    "clientRequest",
+    "clientResponse",
+    "serverNotification",
+    "errorResponse"
+  ],
+  "$defs": {
+    "AgentInteractionKind": {
+      "type": "string",
+      "enum": [
+        "userInput",
+        "dynamicTool"
+      ]
+    },
+    "AgentRequest": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "request": {
+              "$ref": "#/$defs/RequestUserInput"
+            },
+            "type": {
+              "type": "string",
+              "const": "userInput"
+            }
+          },
+          "required": [
+            "type",
+            "request"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "call": {
+              "$ref": "#/$defs/DynamicToolCall"
+            },
+            "type": {
+              "type": "string",
+              "const": "dynamicTool"
+            }
+          },
+          "required": [
+            "type",
+            "call"
+          ]
+        }
+      ]
+    },
+    "AgentResponse": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "response": {
+              "$ref": "#/$defs/RequestUserInputResponse"
+            },
+            "type": {
+              "type": "string",
+              "const": "userInput"
+            }
+          },
+          "required": [
+            "type",
+            "response"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "response": {
+              "$ref": "#/$defs/DynamicToolResponse"
+            },
+            "type": {
+              "type": "string",
+              "const": "dynamicTool"
+            }
+          },
+          "required": [
+            "type",
+            "response"
+          ]
+        }
+      ]
+    },
+    "AppServerError": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "data": {
+          "type": "null"
+        },
+        "message": {
+          "$ref": "#/$defs/AppServerErrorName"
+        }
+      },
+      "required": [
+        "code",
+        "message",
+        "data"
+      ]
+    },
+    "AppServerErrorName": {
+      "type": "string",
+      "enum": [
+        "ParseError",
+        "InvalidRequest",
+        "MethodNotFound",
+        "InvalidParams",
+        "InternalError",
+        "ServerOverloaded",
+        "NotInitialized",
+        "AlreadyInitialized",
+        "CommandConflict",
+        "CoreOperationFailed",
+        "ResourceNotFound",
+        "ResourceNotOwner",
+        "ResourceTooLarge",
+        "InvalidResourceChunkSize",
+        "InvalidResourceOffset",
+        "ConfigUnavailable",
+        "ConfigRevisionConflict"
+      ]
+    },
+    "BrowserCapability": {
+      "type": "object",
+      "properties": {
+        "input": {
+          "type": "boolean"
+        },
+        "observe": {
+          "type": "boolean"
+        },
+        "version": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "version",
+        "observe",
+        "input"
+      ]
+    },
+    "ClientCapabilities": {
+      "type": "object",
+      "properties": {
+        "browser": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BrowserCapability"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "notifications": {
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "default": null
+        }
+      }
+    },
+    "ClientInfo": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "name",
+        "version"
+      ]
+    },
+    "ClientRequestSchema": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "initialize"
+            },
+            "params": {
+              "$ref": "#/$defs/InitializeParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "session/create"
+            },
+            "params": {
+              "$ref": "#/$defs/SessionCreateParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "session/read"
+            },
+            "params": {
+              "$ref": "#/$defs/SessionReadParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "session/list"
+            },
+            "params": {
+              "$ref": "#/$defs/EmptyParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "session/subscribe"
+            },
+            "params": {
+              "$ref": "#/$defs/SessionSubscribeParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "session/unsubscribe"
+            },
+            "params": {
+              "$ref": "#/$defs/SessionUnsubscribeParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "session/thread/create"
+            },
+            "params": {
+              "$ref": "#/$defs/SessionThreadCreateParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "session/thread/fork"
+            },
+            "params": {
+              "$ref": "#/$defs/SessionThreadForkParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "session/thread/archive"
+            },
+            "params": {
+              "$ref": "#/$defs/SessionThreadArchiveParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "session/complete"
+            },
+            "params": {
+              "$ref": "#/$defs/SessionCommandParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "session/archive"
+            },
+            "params": {
+              "$ref": "#/$defs/SessionCommandParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "thread/read"
+            },
+            "params": {
+              "$ref": "#/$defs/ThreadReadParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "thread/subscribe"
+            },
+            "params": {
+              "$ref": "#/$defs/ThreadSubscribeParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "thread/unsubscribe"
+            },
+            "params": {
+              "$ref": "#/$defs/ThreadUnsubscribeParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "config/read"
+            },
+            "params": {
+              "$ref": "#/$defs/EmptyParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "config/update"
+            },
+            "params": {
+              "$ref": "#/$defs/ConfigUpdateParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "provider/configure"
+            },
+            "params": {
+              "$ref": "#/$defs/ProviderConfigureParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "provider/remove"
+            },
+            "params": {
+              "$ref": "#/$defs/ProviderRemoveParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "mcp/server/upsert"
+            },
+            "params": {
+              "$ref": "#/$defs/McpServerUpsertParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "mcp/server/remove"
+            },
+            "params": {
+              "$ref": "#/$defs/McpServerRemoveParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "mcp/server/enablement/set"
+            },
+            "params": {
+              "$ref": "#/$defs/McpServerSetEnablementParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "skill/source/add"
+            },
+            "params": {
+              "$ref": "#/$defs/SkillSourceAddParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "skill/source/remove"
+            },
+            "params": {
+              "$ref": "#/$defs/SkillSourceRemoveParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "skill/source/enablement/set"
+            },
+            "params": {
+              "$ref": "#/$defs/SkillSourceSetEnablementParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "turn/start"
+            },
+            "params": {
+              "$ref": "#/$defs/TurnStartParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "turn/interrupt"
+            },
+            "params": {
+              "$ref": "#/$defs/TurnInterruptParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "turn/interaction/resolve"
+            },
+            "params": {
+              "$ref": "#/$defs/TurnInteractionResolveParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "resource/metadata"
+            },
+            "params": {
+              "$ref": "#/$defs/ResourceMetadataParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "resource/read"
+            },
+            "params": {
+              "$ref": "#/$defs/ResourceReadParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "resource/release"
+            },
+            "params": {
+              "$ref": "#/$defs/ResourceReleaseParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        }
+      ]
+    },
+    "ClientResultSchema": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "initialize"
+            },
+            "result": {
+              "$ref": "#/$defs/InitializeResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "session/create"
+            },
+            "result": {
+              "$ref": "#/$defs/SessionResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "session/read"
+            },
+            "result": {
+              "$ref": "#/$defs/SessionResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "session/list"
+            },
+            "result": {
+              "$ref": "#/$defs/SessionListResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "session/subscribe"
+            },
+            "result": {
+              "$ref": "#/$defs/SessionSubscribeResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "session/unsubscribe"
+            },
+            "result": {
+              "type": "null"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "session/thread/create"
+            },
+            "result": {
+              "$ref": "#/$defs/SessionThreadResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "session/thread/fork"
+            },
+            "result": {
+              "$ref": "#/$defs/SessionThreadResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "session/thread/archive"
+            },
+            "result": {
+              "$ref": "#/$defs/SessionResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "session/complete"
+            },
+            "result": {
+              "$ref": "#/$defs/SessionResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "session/archive"
+            },
+            "result": {
+              "$ref": "#/$defs/SessionResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "thread/read"
+            },
+            "result": {
+              "$ref": "#/$defs/ThreadReadResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "thread/subscribe"
+            },
+            "result": {
+              "$ref": "#/$defs/ThreadSubscribeResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "thread/unsubscribe"
+            },
+            "result": {
+              "type": "null"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "config/read"
+            },
+            "result": {
+              "$ref": "#/$defs/ConfigReadResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "config/update"
+            },
+            "result": {
+              "$ref": "#/$defs/ConfigCommandResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "provider/configure"
+            },
+            "result": {
+              "$ref": "#/$defs/ConfigCommandResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "provider/remove"
+            },
+            "result": {
+              "$ref": "#/$defs/ConfigCommandResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "mcp/server/upsert"
+            },
+            "result": {
+              "$ref": "#/$defs/ConfigCommandResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "mcp/server/remove"
+            },
+            "result": {
+              "$ref": "#/$defs/ConfigCommandResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "mcp/server/enablement/set"
+            },
+            "result": {
+              "$ref": "#/$defs/ConfigCommandResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "skill/source/add"
+            },
+            "result": {
+              "$ref": "#/$defs/ConfigCommandResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "skill/source/remove"
+            },
+            "result": {
+              "$ref": "#/$defs/ConfigCommandResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "skill/source/enablement/set"
+            },
+            "result": {
+              "$ref": "#/$defs/ConfigCommandResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "turn/start"
+            },
+            "result": {
+              "$ref": "#/$defs/TurnStartResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "turn/interrupt"
+            },
+            "result": {
+              "$ref": "#/$defs/TurnInterruptResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "turn/interaction/resolve"
+            },
+            "result": {
+              "$ref": "#/$defs/TurnInteractionResolveResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "resource/metadata"
+            },
+            "result": {
+              "$ref": "#/$defs/ResourceMetadataResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "resource/read"
+            },
+            "result": {
+              "$ref": "#/$defs/ResourceReadResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "resource/release"
+            },
+            "result": {
+              "type": "null"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        }
+      ]
+    },
+    "CommandId": {
+      "description": "Stable caller-supplied identity for one retry-safe product command.",
+      "type": "string",
+      "minLength": 1
+    },
+    "ConfigCommandDispositionDto": {
+      "type": "string",
+      "enum": [
+        "updated",
+        "replayed"
+      ]
+    },
+    "ConfigCommandResult": {
+      "description": "Compact result of a retry-safe configuration mutation.",
+      "type": "object",
+      "properties": {
+        "disposition": {
+          "$ref": "#/$defs/ConfigCommandDispositionDto"
+        },
+        "generation": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "revision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "revision",
+        "generation",
+        "disposition"
+      ]
+    },
+    "ConfigReadResult": {
+      "description": "Current user configuration snapshot returned by `config/read`.",
+      "type": "object",
+      "properties": {
+        "generation": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "mcpServers": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/McpServerConfigDto"
+          }
+        },
+        "preferredModel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModelRefDto"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "providers": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/ProviderConfigDto"
+          }
+        },
+        "revision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "skillSources": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/SkillSourceConfigDto"
+          }
+        },
+        "theme": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ThemeDto"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "revision",
+        "generation",
+        "providers",
+        "mcpServers",
+        "skillSources"
+      ]
+    },
+    "ConfigUpdateParams": {
+      "description": "Patch for user preferences at one expected Config revision.",
+      "type": "object",
+      "properties": {
+        "commandId": {
+          "$ref": "#/$defs/CommandId"
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "preferredModel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModelRefDto"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "theme": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ThemeDto"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "commandId",
+        "expectedRevision"
+      ]
+    },
+    "DynamicToolCall": {
+      "type": "object",
+      "properties": {
+        "arguments": true,
+        "callId": {
+          "$ref": "#/$defs/ToolCallId"
+        },
+        "name": {
+          "$ref": "#/$defs/ToolName"
+        }
+      },
+      "required": [
+        "callId",
+        "name",
+        "arguments"
+      ]
+    },
+    "DynamicToolOutput": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "text"
+            }
+          },
+          "required": [
+            "type",
+            "text"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "dataUrl": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "image"
+            }
+          },
+          "required": [
+            "type",
+            "dataUrl"
+          ]
+        }
+      ]
+    },
+    "DynamicToolResponse": {
+      "type": "object",
+      "properties": {
+        "callId": {
+          "$ref": "#/$defs/ToolCallId"
+        },
+        "content": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DynamicToolOutput"
+          }
+        },
+        "success": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "callId",
+        "content",
+        "success"
+      ]
+    },
+    "EmptyParams": {
+      "type": "object",
+      "additionalProperties": false
+    },
+    "InitializeParams": {
+      "type": "object",
+      "properties": {
+        "capabilities": {
+          "$ref": "#/$defs/ClientCapabilities",
+          "default": {
+            "browser": null,
+            "notifications": null
+          }
+        },
+        "clientInfo": {
+          "$ref": "#/$defs/ClientInfo"
+        }
+      },
+      "required": [
+        "clientInfo"
+      ]
+    },
+    "InitializeResult": {
+      "type": "object",
+      "properties": {
+        "capabilities": {
+          "$ref": "#/$defs/ServerCapabilities"
+        },
+        "schemaHash": {
+          "$ref": "#/$defs/SchemaHash"
+        },
+        "serverInfo": {
+          "$ref": "#/$defs/ServerInfo"
+        }
+      },
+      "required": [
+        "serverInfo",
+        "schemaHash",
+        "capabilities"
+      ]
+    },
+    "InputItem": {
+      "type": "object",
+      "properties": {
+        "text": {
+          "type": "string"
+        },
+        "type": {
+          "$ref": "#/$defs/InputItemKind"
+        }
+      },
+      "required": [
+        "type",
+        "text"
+      ]
+    },
+    "InputItemKind": {
+      "type": "string",
+      "enum": [
+        "text"
+      ]
+    },
+    "InteractionCancelReason": {
+      "description": "Why a previously outstanding interaction was closed without a response.\n\nThe reason is durable so recovery and clients can distinguish an explicit Turn interruption\nfrom a deadline or delivery failure. The policy deciding which reason applies lives outside\nthis shared contract.",
+      "type": "string",
+      "enum": [
+        "turnInterrupted",
+        "deadlineElapsed",
+        "ownerDisconnected",
+        "serverShutdown"
+      ]
+    },
+    "InteractionDeadline": {
+      "description": "A wall-clock deadline that the interaction owner must enforce.\n\n`expires_at_unix_ms` is persisted as an absolute instant so recovery can determine whether a\nrequest is still actionable after a process restart. The protocol does not prescribe the\ntimeout policy or clock implementation.",
+      "type": "object",
+      "properties": {
+        "expiresAtUnixMs": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "expiresAtUnixMs"
+      ]
+    },
+    "ItemDelta": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "agentMessage"
+            }
+          },
+          "required": [
+            "type",
+            "text"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "reasoning"
+            }
+          },
+          "required": [
+            "type",
+            "text"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "plan"
+            }
+          },
+          "required": [
+            "type",
+            "text"
+          ]
+        }
+      ]
+    },
+    "ItemId": {
+      "description": "Stable identity for one durable transcript item within a Turn.",
+      "type": "string",
+      "minLength": 1
+    },
+    "JsonRpcFailure": {
+      "description": "A failed JSON-RPC response envelope.",
+      "type": "object",
+      "properties": {
+        "error": {
+          "$ref": "#/$defs/AppServerError"
+        },
+        "id": {
+          "$ref": "#/$defs/JsonRpcId"
+        },
+        "jsonrpc": {
+          "$ref": "#/$defs/JsonRpcVersion"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "jsonrpc",
+        "id",
+        "error"
+      ]
+    },
+    "JsonRpcId": {
+      "description": "A JSON-RPC request identifier.\n\nJSON-RPC permits string and number identifiers; `Null` is retained for parse and invalid\nrequest error responses. The App Server dispatcher applies its narrower positive-integer\nrequest-ID policy after decoding this wire representation.",
+      "anyOf": [
+        {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "JsonRpcNotification": {
+      "description": "A JSON-RPC notification envelope, which intentionally has no request identifier.",
+      "type": "object",
+      "properties": {
+        "jsonrpc": {
+          "$ref": "#/$defs/JsonRpcVersion"
+        },
+        "method": {
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/ServerNotificationSchema"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "jsonrpc",
+        "method",
+        "params"
+      ]
+    },
+    "JsonRpcRequest": {
+      "description": "A JSON-RPC request envelope.\n\n`params` is generic so callers can bind it to a concrete protocol DTO. The App Server applies\nits own request-ID policy at its dispatch boundary.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/JsonRpcId"
+        },
+        "jsonrpc": {
+          "$ref": "#/$defs/JsonRpcVersion"
+        },
+        "method": {
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/ClientRequestSchema"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "jsonrpc",
+        "id",
+        "method",
+        "params"
+      ]
+    },
+    "JsonRpcResponse": {
+      "description": "A JSON-RPC response, which contains exactly one success result or error object.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/JsonRpcSuccess"
+        },
+        {
+          "$ref": "#/$defs/JsonRpcFailure"
+        }
+      ]
+    },
+    "JsonRpcSuccess": {
+      "description": "A successful JSON-RPC response envelope.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/JsonRpcId"
+        },
+        "jsonrpc": {
+          "$ref": "#/$defs/JsonRpcVersion"
+        },
+        "result": {
+          "$ref": "#/$defs/ClientResultSchema"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "jsonrpc",
+        "id",
+        "result"
+      ]
+    },
+    "JsonRpcVersion": {
+      "description": "The only JSON-RPC version accepted by the current wire encoding.",
+      "type": "string",
+      "enum": [
+        "2.0"
+      ]
+    },
+    "McpCredentialBindingDto": {
+      "description": "Non-secret credential binding for a standalone MCP server declaration.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "unauthenticated"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "credentialRef": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "reference"
+            }
+          },
+          "required": [
+            "type",
+            "credentialRef"
+          ]
+        }
+      ]
+    },
+    "McpServerConfigDto": {
+      "description": "Desired, runtime-free standalone MCP server configuration.",
+      "type": "object",
+      "properties": {
+        "credential": {
+          "$ref": "#/$defs/McpCredentialBindingDto"
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1
+        },
+        "enablement": {
+          "$ref": "#/$defs/McpServerEnablementDto"
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "transport": {
+          "$ref": "#/$defs/McpTransportDto"
+        }
+      },
+      "required": [
+        "id",
+        "displayName",
+        "transport",
+        "credential",
+        "enablement"
+      ]
+    },
+    "McpServerEnablementDto": {
+      "description": "Desired enablement for a configured MCP server.",
+      "type": "string",
+      "enum": [
+        "disabled",
+        "enabled"
+      ]
+    },
+    "McpServerRemoveParams": {
+      "description": "Removes one standalone MCP server declaration.",
+      "type": "object",
+      "properties": {
+        "commandId": {
+          "$ref": "#/$defs/CommandId"
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "serverId": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "commandId",
+        "expectedRevision",
+        "serverId"
+      ]
+    },
+    "McpServerSetEnablementParams": {
+      "description": "Changes desired enablement for one configured standalone MCP server.",
+      "type": "object",
+      "properties": {
+        "commandId": {
+          "$ref": "#/$defs/CommandId"
+        },
+        "enablement": {
+          "$ref": "#/$defs/McpServerEnablementDto"
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "serverId": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "commandId",
+        "expectedRevision",
+        "serverId",
+        "enablement"
+      ]
+    },
+    "McpServerUpsertParams": {
+      "description": "Creates or replaces one standalone MCP server declaration.",
+      "type": "object",
+      "properties": {
+        "commandId": {
+          "$ref": "#/$defs/CommandId"
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "server": {
+          "$ref": "#/$defs/McpServerConfigDto"
+        }
+      },
+      "required": [
+        "commandId",
+        "expectedRevision",
+        "server"
+      ]
+    },
+    "McpTransportDto": {
+      "description": "Non-secret transport declaration for a standalone MCP server.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "args": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "command": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "stdio"
+            }
+          },
+          "required": [
+            "type",
+            "command",
+            "args"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "streamableHttp"
+            },
+            "url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "url"
+          ]
+        }
+      ]
+    },
+    "ModelRefDto": {
+      "type": "object",
+      "properties": {
+        "model": {
+          "type": "string",
+          "minLength": 1
+        },
+        "provider": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "provider",
+        "model"
+      ]
+    },
+    "PendingInteraction": {
+      "description": "Redaction-safe metadata for a Turn that is waiting on an interaction.\n\nThe full request payload stays in the durable interaction fact so an App Server can redeliver\nit to its selected owner after recovery. Readable Thread snapshots expose only this metadata,\npreventing a broad subscription from becoming an implicit interaction-delivery channel.",
+      "type": "object",
+      "properties": {
+        "deadline": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/InteractionDeadline"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "itemId": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ItemId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "kind": {
+          "$ref": "#/$defs/AgentInteractionKind"
+        },
+        "requestId": {
+          "$ref": "#/$defs/RequestId"
+        }
+      },
+      "required": [
+        "requestId",
+        "kind"
+      ]
+    },
+    "PlanStep": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "$ref": "#/$defs/PlanStepStatus"
+        },
+        "step": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "step",
+        "status"
+      ]
+    },
+    "PlanStepStatus": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "inProgress",
+        "completed"
+      ]
+    },
+    "PlanUpdate": {
+      "type": "object",
+      "properties": {
+        "explanation": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "steps": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PlanStep"
+          }
+        }
+      },
+      "required": [
+        "steps"
+      ]
+    },
+    "ProviderConfigDto": {
+      "description": "Non-secret declarative provider settings exposed through the App Server contract.",
+      "type": "object",
+      "properties": {
+        "baseUrl": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "maxOutputTokens": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "provider": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "provider"
+      ]
+    },
+    "ProviderConfigureParams": {
+      "description": "Creates or replaces one provider entry in the user configuration authority.",
+      "type": "object",
+      "properties": {
+        "commandId": {
+          "$ref": "#/$defs/CommandId"
+        },
+        "config": {
+          "$ref": "#/$defs/ProviderConfigDto"
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "commandId",
+        "expectedRevision",
+        "config"
+      ]
+    },
+    "ProviderRemoveParams": {
+      "description": "Removes one provider entry from the user configuration authority.",
+      "type": "object",
+      "properties": {
+        "commandId": {
+          "$ref": "#/$defs/CommandId"
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "provider": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "commandId",
+        "expectedRevision",
+        "provider"
+      ]
+    },
+    "RequestId": {
+      "description": "Stable identity for one outstanding bidirectional Agent interaction.",
+      "type": "string",
+      "minLength": 1
+    },
+    "RequestUserInput": {
+      "type": "object",
+      "properties": {
+        "questions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/UserInputQuestion"
+          }
+        }
+      },
+      "required": [
+        "questions"
+      ]
+    },
+    "RequestUserInputResponse": {
+      "type": "object",
+      "properties": {
+        "answers": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/UserInputAnswer"
+          }
+        }
+      },
+      "required": [
+        "answers"
+      ]
+    },
+    "ResourceMetadataParams": {
+      "type": "object",
+      "properties": {
+        "resourceId": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "resourceId"
+      ]
+    },
+    "ResourceMetadataResult": {
+      "type": "object",
+      "properties": {
+        "mimeType": {
+          "type": "string"
+        },
+        "resourceId": {
+          "type": "string"
+        },
+        "sha256": {
+          "type": "string"
+        },
+        "size": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "resourceId",
+        "mimeType",
+        "size",
+        "sha256"
+      ]
+    },
+    "ResourceReadParams": {
+      "type": "object",
+      "properties": {
+        "maxBytes": {
+          "type": "integer",
+          "format": "uint",
+          "maximum": 262144,
+          "minimum": 1
+        },
+        "offset": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "resourceId": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "resourceId",
+        "offset",
+        "maxBytes"
+      ]
+    },
+    "ResourceReadResult": {
+      "type": "object",
+      "properties": {
+        "dataBase64": {
+          "type": "string"
+        },
+        "decodedLength": {
+          "type": "integer",
+          "format": "uint",
+          "maximum": 262144,
+          "minimum": 0
+        },
+        "eof": {
+          "type": "boolean"
+        },
+        "offset": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "resourceId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "resourceId",
+        "offset",
+        "dataBase64",
+        "decodedLength",
+        "eof"
+      ]
+    },
+    "ResourceReleaseParams": {
+      "type": "object",
+      "properties": {
+        "resourceId": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "resourceId"
+      ]
+    },
+    "SchemaHash": {
+      "type": "string"
+    },
+    "ServerCapabilities": {
+      "type": "object",
+      "properties": {
+        "resources": {
+          "type": "boolean"
+        },
+        "sessions": {
+          "type": "boolean"
+        },
+        "threads": {
+          "type": "boolean"
+        },
+        "turns": {
+          "type": "boolean"
+        },
+        "updateReplay": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "sessions",
+        "threads",
+        "turns",
+        "resources",
+        "updateReplay"
+      ]
+    },
+    "ServerInfo": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "version"
+      ]
+    },
+    "ServerNotificationSchema": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "session/update"
+            },
+            "params": {
+              "$ref": "#/$defs/SessionUpdateEnvelope"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "thread/update"
+            },
+            "params": {
+              "$ref": "#/$defs/ThreadUpdateEnvelope"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        }
+      ]
+    },
+    "Session": {
+      "description": "Canonical product-level container for a task and its Thread topology.\n\nA Session owns Thread membership and lineage, but not the child Threads' Turn or Item history.\nEach Thread remains an independent ordering, persistence, and execution boundary.",
+      "type": "object",
+      "properties": {
+        "sequence": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "sessionId": {
+          "$ref": "#/$defs/SessionId"
+        },
+        "status": {
+          "$ref": "#/$defs/SessionStatus"
+        },
+        "threads": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SessionThread"
+          }
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "sessionId",
+        "title",
+        "status",
+        "sequence",
+        "threads"
+      ]
+    },
+    "SessionCommandParams": {
+      "type": "object",
+      "properties": {
+        "commandId": {
+          "$ref": "#/$defs/CommandId"
+        },
+        "expectedSequence": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "sessionId": {
+          "$ref": "#/$defs/SessionId"
+        }
+      },
+      "required": [
+        "commandId",
+        "sessionId",
+        "expectedSequence"
+      ]
+    },
+    "SessionCreateParams": {
+      "type": "object",
+      "properties": {
+        "commandId": {
+          "$ref": "#/$defs/CommandId"
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "commandId",
+        "title"
+      ]
+    },
+    "SessionEvent": {
+      "description": "A durable structural fact in one product Session's event stream.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "$ref": "#/$defs/SessionId"
+            },
+            "title": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "sessionCreated"
+            }
+          },
+          "required": [
+            "type",
+            "sessionId",
+            "title"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "$ref": "#/$defs/SessionId"
+            },
+            "thread": {
+              "$ref": "#/$defs/SessionThread"
+            },
+            "title": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "threadCreationPlanned"
+            }
+          },
+          "required": [
+            "type",
+            "sessionId",
+            "thread",
+            "title"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "$ref": "#/$defs/SessionId"
+            },
+            "threadId": {
+              "$ref": "#/$defs/ThreadId"
+            },
+            "type": {
+              "type": "string",
+              "const": "threadAttached"
+            }
+          },
+          "required": [
+            "type",
+            "sessionId",
+            "threadId"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "$ref": "#/$defs/SessionId"
+            },
+            "threadId": {
+              "$ref": "#/$defs/ThreadId"
+            },
+            "type": {
+              "type": "string",
+              "const": "threadArchived"
+            }
+          },
+          "required": [
+            "type",
+            "sessionId",
+            "threadId"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "$ref": "#/$defs/SessionId"
+            },
+            "type": {
+              "type": "string",
+              "const": "sessionCompleted"
+            }
+          },
+          "required": [
+            "type",
+            "sessionId"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "$ref": "#/$defs/SessionId"
+            },
+            "type": {
+              "type": "string",
+              "const": "sessionArchived"
+            }
+          },
+          "required": [
+            "type",
+            "sessionId"
+          ]
+        }
+      ]
+    },
+    "SessionId": {
+      "description": "Stable identity for one product-level Agent session.",
+      "type": "string",
+      "minLength": 1
+    },
+    "SessionListResult": {
+      "type": "object",
+      "properties": {
+        "sessions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Session"
+          }
+        }
+      },
+      "required": [
+        "sessions"
+      ]
+    },
+    "SessionReadParams": {
+      "type": "object",
+      "properties": {
+        "sessionId": {
+          "$ref": "#/$defs/SessionId"
+        }
+      },
+      "required": [
+        "sessionId"
+      ]
+    },
+    "SessionResult": {
+      "type": "object",
+      "properties": {
+        "session": {
+          "$ref": "#/$defs/Session"
+        }
+      },
+      "required": [
+        "session"
+      ]
+    },
+    "SessionStatus": {
+      "type": "string",
+      "enum": [
+        "active",
+        "completed",
+        "archived"
+      ]
+    },
+    "SessionSubscribeParams": {
+      "type": "object",
+      "properties": {
+        "afterSequence": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "sessionId": {
+          "$ref": "#/$defs/SessionId"
+        }
+      },
+      "required": [
+        "sessionId",
+        "afterSequence"
+      ]
+    },
+    "SessionSubscribeResult": {
+      "type": "object",
+      "properties": {
+        "session": {
+          "$ref": "#/$defs/Session"
+        },
+        "updates": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SessionUpdateEnvelope"
+          }
+        }
+      },
+      "required": [
+        "session",
+        "updates"
+      ]
+    },
+    "SessionThread": {
+      "description": "A Session-owned reference to one Thread, its origin, and membership lifecycle.",
+      "type": "object",
+      "properties": {
+        "origin": {
+          "$ref": "#/$defs/ThreadOrigin"
+        },
+        "status": {
+          "$ref": "#/$defs/SessionThreadStatus"
+        },
+        "threadId": {
+          "$ref": "#/$defs/ThreadId"
+        }
+      },
+      "required": [
+        "threadId",
+        "origin",
+        "status"
+      ]
+    },
+    "SessionThreadArchiveParams": {
+      "type": "object",
+      "properties": {
+        "commandId": {
+          "$ref": "#/$defs/CommandId"
+        },
+        "expectedSequence": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "sessionId": {
+          "$ref": "#/$defs/SessionId"
+        },
+        "threadId": {
+          "$ref": "#/$defs/ThreadId"
+        }
+      },
+      "required": [
+        "commandId",
+        "sessionId",
+        "expectedSequence",
+        "threadId"
+      ]
+    },
+    "SessionThreadCreateParams": {
+      "type": "object",
+      "properties": {
+        "commandId": {
+          "$ref": "#/$defs/CommandId"
+        },
+        "expectedSequence": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "sessionId": {
+          "$ref": "#/$defs/SessionId"
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "commandId",
+        "sessionId",
+        "expectedSequence",
+        "title"
+      ]
+    },
+    "SessionThreadForkParams": {
+      "type": "object",
+      "properties": {
+        "commandId": {
+          "$ref": "#/$defs/CommandId"
+        },
+        "expectedSequence": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "parentThreadId": {
+          "$ref": "#/$defs/ThreadId"
+        },
+        "sessionId": {
+          "$ref": "#/$defs/SessionId"
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "commandId",
+        "sessionId",
+        "expectedSequence",
+        "parentThreadId",
+        "title"
+      ]
+    },
+    "SessionThreadResult": {
+      "type": "object",
+      "properties": {
+        "session": {
+          "$ref": "#/$defs/Session"
+        },
+        "threadId": {
+          "$ref": "#/$defs/ThreadId"
+        }
+      },
+      "required": [
+        "session",
+        "threadId"
+      ]
+    },
+    "SessionThreadStatus": {
+      "description": "Session-owned lifecycle for one Thread membership.",
+      "type": "string",
+      "enum": [
+        "creating",
+        "active",
+        "archived"
+      ]
+    },
+    "SessionUnsubscribeParams": {
+      "type": "object",
+      "properties": {
+        "sessionId": {
+          "$ref": "#/$defs/SessionId"
+        }
+      },
+      "required": [
+        "sessionId"
+      ]
+    },
+    "SessionUpdate": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "event": {
+              "$ref": "#/$defs/SessionEvent"
+            },
+            "type": {
+              "type": "string",
+              "const": "committed"
+            }
+          },
+          "required": [
+            "type",
+            "event"
+          ]
+        }
+      ]
+    },
+    "SessionUpdateEnvelope": {
+      "type": "object",
+      "properties": {
+        "durableSequence": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "sessionId": {
+          "$ref": "#/$defs/SessionId"
+        },
+        "update": {
+          "$ref": "#/$defs/SessionUpdate"
+        }
+      },
+      "required": [
+        "sessionId",
+        "durableSequence",
+        "update"
+      ]
+    },
+    "SkillSourceAddParams": {
+      "description": "Adds a user-owned, runtime-free Skill source declaration.",
+      "type": "object",
+      "properties": {
+        "commandId": {
+          "$ref": "#/$defs/CommandId"
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "source": {
+          "$ref": "#/$defs/SkillSourceConfigDto"
+        }
+      },
+      "required": [
+        "commandId",
+        "expectedRevision",
+        "source"
+      ]
+    },
+    "SkillSourceConfigDto": {
+      "description": "Runtime-free declaration for one user-owned Skill source.",
+      "type": "object",
+      "properties": {
+        "enablement": {
+          "$ref": "#/$defs/SkillSourceEnablementDto"
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "rootReference": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "id",
+        "rootReference",
+        "enablement"
+      ]
+    },
+    "SkillSourceEnablementDto": {
+      "description": "Desired enablement for one configured user Skill source.",
+      "type": "string",
+      "enum": [
+        "disabled",
+        "enabled"
+      ]
+    },
+    "SkillSourceRemoveParams": {
+      "description": "Removes one user-owned Skill source declaration.",
+      "type": "object",
+      "properties": {
+        "commandId": {
+          "$ref": "#/$defs/CommandId"
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "sourceId": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "commandId",
+        "expectedRevision",
+        "sourceId"
+      ]
+    },
+    "SkillSourceSetEnablementParams": {
+      "description": "Changes desired enablement for one configured user Skill source.",
+      "type": "object",
+      "properties": {
+        "commandId": {
+          "$ref": "#/$defs/CommandId"
+        },
+        "enablement": {
+          "$ref": "#/$defs/SkillSourceEnablementDto"
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "sourceId": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "commandId",
+        "expectedRevision",
+        "sourceId",
+        "enablement"
+      ]
+    },
+    "StableTurnError": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "$ref": "#/$defs/StableTurnErrorCode"
+        },
+        "message": {
+          "type": "string"
+        },
+        "retryable": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "code",
+        "message",
+        "retryable"
+      ]
+    },
+    "StableTurnErrorCode": {
+      "type": "string",
+      "enum": [
+        "modelInvocationFailed",
+        "completionPersistenceFailed"
+      ]
+    },
+    "StreamCursor": {
+      "description": "Ephemeral ordering cursor for updates that are not part of durable aggregate history.",
+      "type": "object",
+      "properties": {
+        "sequence": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "streamInstanceId": {
+          "$ref": "#/$defs/StreamInstanceId"
+        }
+      },
+      "required": [
+        "streamInstanceId",
+        "sequence"
+      ]
+    },
+    "StreamInstanceId": {
+      "description": "Stable identity for one transient stream-emitter incarnation.\n\nA new value is created whenever the emitter restarts. Its sequence is meaningful only within\nthat instance, so consumers must discard a previous cursor when this value changes.",
+      "type": "string",
+      "minLength": 1
+    },
+    "ThemeDto": {
+      "type": "string",
+      "enum": [
+        "light",
+        "dark",
+        "system"
+      ]
+    },
+    "Thread": {
+      "description": "Canonical readable state for one independently ordered Agent execution branch.",
+      "type": "object",
+      "properties": {
+        "sequence": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "sessionId": {
+          "$ref": "#/$defs/SessionId"
+        },
+        "status": {
+          "$ref": "#/$defs/ThreadStatus"
+        },
+        "threadId": {
+          "$ref": "#/$defs/ThreadId"
+        },
+        "title": {
+          "type": "string"
+        },
+        "turns": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Turn"
+          }
+        }
+      },
+      "required": [
+        "sessionId",
+        "threadId",
+        "title",
+        "status",
+        "sequence",
+        "turns"
+      ]
+    },
+    "ThreadEvent": {
+      "description": "A durable fact in one Thread's authoritative event stream.\n\nThis enum deliberately excludes token deltas, delivery notifications, and client requests so\npersistence adapters cannot accidentally append transient runtime messages.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "$ref": "#/$defs/SessionId"
+            },
+            "threadId": {
+              "$ref": "#/$defs/ThreadId"
+            },
+            "title": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "threadCreated"
+            }
+          },
+          "required": [
+            "type",
+            "sessionId",
+            "threadId",
+            "title"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "threadId": {
+              "$ref": "#/$defs/ThreadId"
+            },
+            "turnId": {
+              "$ref": "#/$defs/TurnId"
+            },
+            "type": {
+              "type": "string",
+              "const": "turnAccepted"
+            }
+          },
+          "required": [
+            "type",
+            "threadId",
+            "turnId"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "threadId": {
+              "$ref": "#/$defs/ThreadId"
+            },
+            "turnId": {
+              "$ref": "#/$defs/TurnId"
+            },
+            "type": {
+              "type": "string",
+              "const": "turnStarted"
+            }
+          },
+          "required": [
+            "type",
+            "threadId",
+            "turnId"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "item": {
+              "$ref": "#/$defs/ThreadItem"
+            },
+            "threadId": {
+              "$ref": "#/$defs/ThreadId"
+            },
+            "turnId": {
+              "$ref": "#/$defs/TurnId"
+            },
+            "type": {
+              "type": "string",
+              "const": "itemCompleted"
+            }
+          },
+          "required": [
+            "type",
+            "threadId",
+            "turnId",
+            "item"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "interaction": {
+              "$ref": "#/$defs/TurnInteraction"
+            },
+            "threadId": {
+              "$ref": "#/$defs/ThreadId"
+            },
+            "turnId": {
+              "$ref": "#/$defs/TurnId"
+            },
+            "type": {
+              "type": "string",
+              "const": "interactionRequested"
+            }
+          },
+          "required": [
+            "type",
+            "threadId",
+            "turnId",
+            "interaction"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "requestId": {
+              "$ref": "#/$defs/RequestId"
+            },
+            "response": {
+              "$ref": "#/$defs/AgentResponse"
+            },
+            "threadId": {
+              "$ref": "#/$defs/ThreadId"
+            },
+            "turnId": {
+              "$ref": "#/$defs/TurnId"
+            },
+            "type": {
+              "type": "string",
+              "const": "interactionResolved"
+            }
+          },
+          "required": [
+            "type",
+            "threadId",
+            "turnId",
+            "requestId",
+            "response"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "reason": {
+              "$ref": "#/$defs/InteractionCancelReason"
+            },
+            "requestId": {
+              "$ref": "#/$defs/RequestId"
+            },
+            "threadId": {
+              "$ref": "#/$defs/ThreadId"
+            },
+            "turnId": {
+              "$ref": "#/$defs/TurnId"
+            },
+            "type": {
+              "type": "string",
+              "const": "interactionCancelled"
+            }
+          },
+          "required": [
+            "type",
+            "threadId",
+            "turnId",
+            "requestId",
+            "reason"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "threadId": {
+              "$ref": "#/$defs/ThreadId"
+            },
+            "turnId": {
+              "$ref": "#/$defs/TurnId"
+            },
+            "type": {
+              "type": "string",
+              "const": "turnCompleted"
+            }
+          },
+          "required": [
+            "type",
+            "threadId",
+            "turnId"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "error": {
+              "$ref": "#/$defs/StableTurnError"
+            },
+            "threadId": {
+              "$ref": "#/$defs/ThreadId"
+            },
+            "turnId": {
+              "$ref": "#/$defs/TurnId"
+            },
+            "type": {
+              "type": "string",
+              "const": "turnFailed"
+            }
+          },
+          "required": [
+            "type",
+            "threadId",
+            "turnId",
+            "error"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "threadId": {
+              "$ref": "#/$defs/ThreadId"
+            },
+            "turnId": {
+              "$ref": "#/$defs/TurnId"
+            },
+            "type": {
+              "type": "string",
+              "const": "turnCancelling"
+            }
+          },
+          "required": [
+            "type",
+            "threadId",
+            "turnId"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "threadId": {
+              "$ref": "#/$defs/ThreadId"
+            },
+            "turnId": {
+              "$ref": "#/$defs/TurnId"
+            },
+            "type": {
+              "type": "string",
+              "const": "turnInterrupted"
+            }
+          },
+          "required": [
+            "type",
+            "threadId",
+            "turnId"
+          ]
+        }
+      ]
+    },
+    "ThreadId": {
+      "description": "Stable identity for one independently ordered Agent execution branch.",
+      "type": "string",
+      "minLength": 1
+    },
+    "ThreadItem": {
+      "description": "A normalized, provider-independent item produced or consumed during one Thread turn.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "itemId": {
+              "$ref": "#/$defs/ItemId"
+            },
+            "text": {
+              "type": "string"
+            },
+            "turnId": {
+              "$ref": "#/$defs/TurnId"
+            },
+            "type": {
+              "type": "string",
+              "const": "userMessage"
+            }
+          },
+          "required": [
+            "type",
+            "itemId",
+            "turnId",
+            "text"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "itemId": {
+              "$ref": "#/$defs/ItemId"
+            },
+            "text": {
+              "type": "string"
+            },
+            "turnId": {
+              "$ref": "#/$defs/TurnId"
+            },
+            "type": {
+              "type": "string",
+              "const": "agentMessage"
+            }
+          },
+          "required": [
+            "type",
+            "itemId",
+            "turnId",
+            "text"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "itemId": {
+              "$ref": "#/$defs/ItemId"
+            },
+            "text": {
+              "type": "string"
+            },
+            "turnId": {
+              "$ref": "#/$defs/TurnId"
+            },
+            "type": {
+              "type": "string",
+              "const": "reasoning"
+            }
+          },
+          "required": [
+            "type",
+            "itemId",
+            "turnId",
+            "text"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "itemId": {
+              "$ref": "#/$defs/ItemId"
+            },
+            "text": {
+              "type": "string"
+            },
+            "turnId": {
+              "$ref": "#/$defs/TurnId"
+            },
+            "type": {
+              "type": "string",
+              "const": "plan"
+            }
+          },
+          "required": [
+            "type",
+            "itemId",
+            "turnId",
+            "text"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "argumentsJson": {
+              "type": "string"
+            },
+            "itemId": {
+              "$ref": "#/$defs/ItemId"
+            },
+            "name": {
+              "$ref": "#/$defs/ToolName"
+            },
+            "toolCallId": {
+              "$ref": "#/$defs/ToolCallId"
+            },
+            "turnId": {
+              "$ref": "#/$defs/TurnId"
+            },
+            "type": {
+              "type": "string",
+              "const": "toolCall"
+            }
+          },
+          "required": [
+            "type",
+            "itemId",
+            "turnId",
+            "toolCallId",
+            "name",
+            "argumentsJson"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "isError": {
+              "type": "boolean"
+            },
+            "itemId": {
+              "$ref": "#/$defs/ItemId"
+            },
+            "text": {
+              "type": "string"
+            },
+            "toolCallId": {
+              "$ref": "#/$defs/ToolCallId"
+            },
+            "turnId": {
+              "$ref": "#/$defs/TurnId"
+            },
+            "type": {
+              "type": "string",
+              "const": "toolResult"
+            }
+          },
+          "required": [
+            "type",
+            "itemId",
+            "turnId",
+            "toolCallId",
+            "text",
+            "isError"
+          ]
+        }
+      ]
+    },
+    "ThreadOrigin": {
+      "description": "How a Thread entered a product Session.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "root"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "parentSequence": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            },
+            "parentThreadId": {
+              "$ref": "#/$defs/ThreadId"
+            },
+            "type": {
+              "type": "string",
+              "const": "fork"
+            }
+          },
+          "required": [
+            "type",
+            "parentThreadId",
+            "parentSequence"
+          ]
+        }
+      ]
+    },
+    "ThreadReadParams": {
+      "type": "object",
+      "properties": {
+        "threadId": {
+          "$ref": "#/$defs/ThreadId"
+        }
+      },
+      "required": [
+        "threadId"
+      ]
+    },
+    "ThreadReadResult": {
+      "type": "object",
+      "properties": {
+        "thread": {
+          "$ref": "#/$defs/Thread"
+        }
+      },
+      "required": [
+        "thread"
+      ]
+    },
+    "ThreadStatus": {
+      "type": "string",
+      "enum": [
+        "active",
+        "archived"
+      ]
+    },
+    "ThreadSubscribeParams": {
+      "type": "object",
+      "properties": {
+        "afterSequence": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "threadId": {
+          "$ref": "#/$defs/ThreadId"
+        }
+      },
+      "required": [
+        "threadId",
+        "afterSequence"
+      ]
+    },
+    "ThreadSubscribeResult": {
+      "type": "object",
+      "properties": {
+        "thread": {
+          "$ref": "#/$defs/Thread"
+        },
+        "updates": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ThreadUpdateEnvelope"
+          }
+        }
+      },
+      "required": [
+        "thread",
+        "updates"
+      ]
+    },
+    "ThreadUnsubscribeParams": {
+      "type": "object",
+      "properties": {
+        "threadId": {
+          "$ref": "#/$defs/ThreadId"
+        }
+      },
+      "required": [
+        "threadId"
+      ]
+    },
+    "ThreadUpdate": {
+      "description": "Consumer-facing update for one Thread.\n\n`Committed` carries a durable fact. The remaining variants are low-latency projections and\nmay be dropped; a later committed Item snapshot remains authoritative.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "event": {
+              "$ref": "#/$defs/ThreadEvent"
+            },
+            "type": {
+              "type": "string",
+              "const": "committed"
+            }
+          },
+          "required": [
+            "type",
+            "event"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "item": {
+              "$ref": "#/$defs/ThreadItem"
+            },
+            "turnId": {
+              "$ref": "#/$defs/TurnId"
+            },
+            "type": {
+              "type": "string",
+              "const": "itemStarted"
+            }
+          },
+          "required": [
+            "type",
+            "turnId",
+            "item"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "delta": {
+              "$ref": "#/$defs/ItemDelta"
+            },
+            "itemId": {
+              "$ref": "#/$defs/ItemId"
+            },
+            "turnId": {
+              "$ref": "#/$defs/TurnId"
+            },
+            "type": {
+              "type": "string",
+              "const": "itemDelta"
+            }
+          },
+          "required": [
+            "type",
+            "turnId",
+            "itemId",
+            "delta"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "plan": {
+              "$ref": "#/$defs/PlanUpdate"
+            },
+            "turnId": {
+              "$ref": "#/$defs/TurnId"
+            },
+            "type": {
+              "type": "string",
+              "const": "planUpdated"
+            }
+          },
+          "required": [
+            "type",
+            "turnId",
+            "plan"
+          ]
+        }
+      ]
+    },
+    "ThreadUpdateEnvelope": {
+      "type": "object",
+      "properties": {
+        "durableSequence": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "sessionId": {
+          "$ref": "#/$defs/SessionId"
+        },
+        "streamCursor": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/StreamCursor"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "threadId": {
+          "$ref": "#/$defs/ThreadId"
+        },
+        "update": {
+          "$ref": "#/$defs/ThreadUpdate"
+        }
+      },
+      "required": [
+        "sessionId",
+        "threadId",
+        "durableSequence",
+        "update"
+      ]
+    },
+    "ToolCallId": {
+      "description": "Stable identity for one model-requested tool call and its eventual result.",
+      "type": "string",
+      "minLength": 1
+    },
+    "ToolName": {
+      "description": "Validated provider-independent name used to register and invoke a tool.",
+      "type": "string"
+    },
+    "Turn": {
+      "description": "Canonical readable state for one user-intent-driven Agent execution.",
+      "type": "object",
+      "properties": {
+        "error": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/StableTurnError"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ThreadItem"
+          }
+        },
+        "pendingInteraction": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PendingInteraction"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "status": {
+          "$ref": "#/$defs/TurnStatus"
+        },
+        "turnId": {
+          "$ref": "#/$defs/TurnId"
+        }
+      },
+      "required": [
+        "turnId",
+        "status",
+        "items"
+      ]
+    },
+    "TurnId": {
+      "description": "Stable identity for one user-intent-driven Agent execution within a Thread.",
+      "type": "string",
+      "minLength": 1
+    },
+    "TurnInteraction": {
+      "description": "One outstanding interaction that pauses a Turn until it is resolved or cancelled.\n\nThe request is durable product state. Selecting a connection that receives it is an App\nServer delivery concern and deliberately does not appear here.",
+      "type": "object",
+      "properties": {
+        "deadline": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/InteractionDeadline"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "itemId": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ItemId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "request": {
+          "$ref": "#/$defs/AgentRequest"
+        },
+        "requestId": {
+          "$ref": "#/$defs/RequestId"
+        }
+      },
+      "required": [
+        "requestId",
+        "request"
+      ]
+    },
+    "TurnInteractionResolveParams": {
+      "type": "object",
+      "properties": {
+        "commandId": {
+          "$ref": "#/$defs/CommandId"
+        },
+        "expectedSequence": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "requestId": {
+          "$ref": "#/$defs/RequestId"
+        },
+        "response": {
+          "$ref": "#/$defs/AgentResponse"
+        },
+        "sessionId": {
+          "$ref": "#/$defs/SessionId"
+        },
+        "threadId": {
+          "$ref": "#/$defs/ThreadId"
+        },
+        "turnId": {
+          "$ref": "#/$defs/TurnId"
+        }
+      },
+      "required": [
+        "commandId",
+        "sessionId",
+        "threadId",
+        "turnId",
+        "requestId",
+        "expectedSequence",
+        "response"
+      ]
+    },
+    "TurnInteractionResolveResult": {
+      "type": "object",
+      "properties": {
+        "sequence": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "sequence"
+      ]
+    },
+    "TurnInterruptParams": {
+      "type": "object",
+      "properties": {
+        "commandId": {
+          "$ref": "#/$defs/CommandId"
+        },
+        "expectedSequence": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "sessionId": {
+          "$ref": "#/$defs/SessionId"
+        },
+        "threadId": {
+          "$ref": "#/$defs/ThreadId"
+        },
+        "turnId": {
+          "$ref": "#/$defs/TurnId"
+        }
+      },
+      "required": [
+        "commandId",
+        "sessionId",
+        "threadId",
+        "turnId",
+        "expectedSequence"
+      ]
+    },
+    "TurnInterruptResult": {
+      "type": "object",
+      "properties": {
+        "sequence": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "sequence"
+      ]
+    },
+    "TurnStartParams": {
+      "type": "object",
+      "properties": {
+        "commandId": {
+          "$ref": "#/$defs/CommandId"
+        },
+        "expectedSequence": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "input": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/InputItem"
+          },
+          "minItems": 1
+        },
+        "sessionId": {
+          "$ref": "#/$defs/SessionId"
+        },
+        "threadId": {
+          "$ref": "#/$defs/ThreadId"
+        }
+      },
+      "required": [
+        "commandId",
+        "sessionId",
+        "threadId",
+        "expectedSequence",
+        "input"
+      ]
+    },
+    "TurnStartResult": {
+      "type": "object",
+      "properties": {
+        "sequence": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "turnId": {
+          "$ref": "#/$defs/TurnId"
+        }
+      },
+      "required": [
+        "turnId",
+        "sequence"
+      ]
+    },
+    "TurnStatus": {
+      "type": "string",
+      "enum": [
+        "created",
+        "running",
+        "waitingForApproval",
+        "waitingForUserInput",
+        "waitingForCapability",
+        "cancelling",
+        "completed",
+        "failed",
+        "interrupted"
+      ]
+    },
+    "UserInputAnswer": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "UserInputOption": {
+      "type": "object",
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "label",
+        "description"
+      ]
+    },
+    "UserInputQuestion": {
+      "type": "object",
+      "properties": {
+        "allowFreeForm": {
+          "type": "boolean",
+          "default": false
+        },
+        "header": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "options": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/UserInputOption"
+          }
+        },
+        "question": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "header",
+        "question"
+      ]
+    }
+  }
+}

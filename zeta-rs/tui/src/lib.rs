@@ -10,17 +10,18 @@ use crossterm::event;
 use crossterm::event::Event;
 use crossterm::event::KeyEventKind;
 use std::fmt;
+use std::time::Duration;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 use zeta_app_server_client::AppServerClient;
 use zeta_app_server_client::ClientError;
 use zeta_app_server_client::JsonRpcTransport;
 use zeta_app_server_client::ServerNotification;
-use zeta_app_server_protocol::common::ThreadId;
-use zeta_app_server_protocol::v1::thread::ThreadStartParams;
-use zeta_app_server_protocol::v1::turn::InputItem;
-use zeta_app_server_protocol::v1::turn::InputItemKind;
-use zeta_app_server_protocol::v1::turn::TurnStartParams;
+use zeta_app_server_protocol::protocol::common::{SessionId, ThreadId};
+use zeta_app_server_protocol::protocol::session::{SessionCreateParams, SessionThreadCreateParams};
+use zeta_app_server_protocol::protocol::thread::ThreadReadParams;
+use zeta_app_server_protocol::protocol::turn::{InputItem, InputItemKind, TurnStartParams};
+use zeta_protocol::{CommandId, ThreadEvent, ThreadItem, ThreadUpdate};
 
 /// Startup values owned by the CLI host rather than by the terminal UI.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -74,22 +75,41 @@ impl From<std::io::Error> for TuiError {
 
 /// Runs one interactive terminal session over an initialized App Server client.
 ///
-/// The current client contract performs a complete request synchronously, so keyboard input is
-/// paused while a turn is executing. The UI owns only presentation state; authoritative Thread
-/// and Turn state remains behind the App Server protocol.
+/// Turn acceptance is asynchronous. The UI polls the product Thread while it is working so an
+/// embedded client can collect notifications without owning execution state.
 pub fn run<T>(mut client: AppServerClient<T>, options: TuiOptions) -> Result<TuiExit, TuiError>
 where
     T: JsonRpcTransport,
 {
-    let thread = client.start_thread(ThreadStartParams {
-        idempotency_key: request_key("thread"),
+    let session = client.create_session(SessionCreateParams {
+        command_id: CommandId::new(request_key("session"))
+            .expect("generated command ID is non-empty"),
+        title: options.thread_title.clone(),
+    })?;
+    let thread = client.create_session_thread(SessionThreadCreateParams {
+        command_id: CommandId::new(request_key("thread"))
+            .expect("generated command ID is non-empty"),
+        session_id: session.session.session_id.clone(),
+        expected_sequence: session.session.sequence,
         title: options.thread_title,
     })?;
+    let mut thread_sequence = 1;
     let mut terminal = terminal::TerminalSession::open()?;
     let mut app = App::new();
 
     loop {
+        if matches!(app.status(), app::Status::Working) {
+            refresh_turn(
+                &mut client,
+                &thread.thread_id,
+                &mut thread_sequence,
+                &mut app,
+            );
+        }
         terminal.draw(|frame| render::draw(frame, &app))?;
+        if !event::poll(Duration::from_millis(25))? {
+            continue;
+        }
         match event::read()? {
             Event::Key(key) if key.kind != KeyEventKind::Release => {
                 if let Some(action) = app.handle_key(key) {
@@ -97,7 +117,14 @@ where
                         Action::Quit => return Ok(TuiExit::UserRequested),
                         Action::Submit(prompt) => {
                             terminal.draw(|frame| render::draw(frame, &app))?;
-                            submit_prompt(&mut client, &thread.thread_id, prompt, &mut app);
+                            submit_prompt(
+                                &mut client,
+                                &session.session.session_id,
+                                &thread.thread_id,
+                                &mut thread_sequence,
+                                prompt,
+                                &mut app,
+                            );
                         }
                     }
                 }
@@ -110,15 +137,19 @@ where
 
 fn submit_prompt<T>(
     client: &mut AppServerClient<T>,
+    session_id: &SessionId,
     thread_id: &ThreadId,
+    thread_sequence: &mut u64,
     prompt: String,
     app: &mut App,
 ) where
     T: JsonRpcTransport,
 {
     let turn = client.start_turn(TurnStartParams {
-        idempotency_key: request_key("turn"),
+        command_id: CommandId::new(request_key("turn")).expect("generated command ID is non-empty"),
+        session_id: session_id.clone(),
         thread_id: thread_id.clone(),
+        expected_sequence: *thread_sequence,
         input: vec![InputItem {
             kind: InputItemKind::Text,
             text: prompt,
@@ -129,6 +160,23 @@ fn submit_prompt<T>(
         return;
     }
 
+    refresh_turn(client, thread_id, thread_sequence, app);
+}
+
+fn refresh_turn<T>(
+    client: &mut AppServerClient<T>,
+    thread_id: &ThreadId,
+    thread_sequence: &mut u64,
+    app: &mut App,
+) where
+    T: JsonRpcTransport,
+{
+    match client.read_thread(ThreadReadParams {
+        thread_id: thread_id.clone(),
+    }) {
+        Ok(snapshot) => *thread_sequence = snapshot.thread.sequence,
+        Err(error) => app.record_error(error.to_string()),
+    }
     match client.drain_notifications() {
         Ok(notifications) => apply_notifications(app, notifications),
         Err(error) => app.record_error(error.to_string()),
@@ -136,22 +184,35 @@ fn submit_prompt<T>(
 }
 
 fn apply_notifications(app: &mut App, notifications: Vec<ServerNotification>) {
-    let mut received_response = false;
     for notification in notifications {
         match notification {
-            ServerNotification::AgentMessageCompleted(message) => {
-                app.record_response(message.text);
-                received_response = true;
-            }
-            ServerNotification::TurnInterrupted(_) => {
-                app.record_error("turn interrupted".into());
-                return;
-            }
-            _ => {}
+            ServerNotification::ThreadUpdate(update) => match update.update {
+                ThreadUpdate::Committed {
+                    event:
+                        ThreadEvent::ItemCompleted {
+                            item: ThreadItem::AgentMessage { text, .. },
+                            ..
+                        },
+                } => {
+                    app.record_response(text);
+                }
+                ThreadUpdate::Committed {
+                    event: ThreadEvent::TurnInterrupted { .. },
+                } => {
+                    app.record_error("turn interrupted".into());
+                    return;
+                }
+                ThreadUpdate::Committed {
+                    event: ThreadEvent::TurnFailed { .. },
+                } => {
+                    app.record_error("turn failed".into());
+                    return;
+                }
+                _ => {}
+            },
+            ServerNotification::SessionUpdate(_) => {}
+            ServerNotification::Unknown { .. } => {}
         }
-    }
-    if !received_response {
-        app.record_error("turn completed without an agent message".into());
     }
 }
 

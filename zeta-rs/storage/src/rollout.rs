@@ -1,280 +1,236 @@
-use std::fs::{self, OpenOptions};
-use std::io::{BufRead, BufReader, Write};
+use crate::event_stream::{append_batch, read_batches};
+use std::collections::{BTreeMap, BTreeSet};
+use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::Mutex;
-use zeta_core::{CoreError, EventJournal};
-use zeta_protocol::{AgentEvent, EventId, ThreadId, Timestamp};
+use zeta_core::CoreError;
+use zeta_protocol::ThreadId;
+use zeta_thread_store::{
+    AppendBatchResult, StoredEvent, ThreadEventBatch, ThreadStore, ThreadStoreError,
+    validate_append_batch,
+};
 
-/// Append-only durable history for all events belonging to one Thread state root.
-pub struct RolloutLog {
-    path: PathBuf,
-    write_lock: Mutex<()>,
-}
+const STREAM_KIND: &str = "thread";
 
-/// Maps each Thread to its own append-only rollout file under a single state root.
-///
-/// This is the production `EventJournal` adapter: every Thread owns an independent sequence and
-/// no file carries events for a different Thread.
+/// Maps each Thread to its own logical stream in the shared rollout format.
 pub struct ThreadRolloutStore {
     root: PathBuf,
+    write_lock: Mutex<()>,
 }
 
 impl ThreadRolloutStore {
     pub fn open(root: impl Into<PathBuf>) -> Result<Self, CoreError> {
-        let root = root.into();
-        fs::create_dir_all(root.join("threads")).map_err(io_error)?;
-        Ok(Self { root })
+        let root = root.into().join("streams").join(STREAM_KIND);
+        fs::create_dir_all(&root).map_err(io_error)?;
+        Ok(Self {
+            root,
+            write_lock: Mutex::new(()),
+        })
     }
 
-    pub fn read_thread(&self, thread_id: &ThreadId) -> Result<Vec<AgentEvent>, CoreError> {
-        let path = self.thread_path(thread_id);
-        if !path.exists() {
-            return Ok(Vec::new());
-        }
-        RolloutLog::open(path)?.read_all()
+    pub fn read_thread(&self, thread_id: &ThreadId) -> Result<Vec<StoredEvent>, CoreError> {
+        self.load(thread_id).map_err(CoreError::ThreadStore)
     }
 
-    /// Reads every non-empty Thread rollout for Thread manager startup recovery.
-    pub fn all_thread_events(&self) -> Result<Vec<Vec<AgentEvent>>, CoreError> {
+    pub fn all_thread_events(&self) -> Result<Vec<Vec<StoredEvent>>, CoreError> {
         let mut rollouts = Vec::new();
-        for entry in fs::read_dir(self.root.join("threads")).map_err(io_error)? {
-            let path = entry.map_err(io_error)?.path();
-            if path
-                .extension()
-                .is_some_and(|extension| extension == "rollout")
-            {
-                let events = RolloutLog::open(path)?.read_all()?;
-                if !events.is_empty() {
-                    rollouts.push(events);
-                }
+        for thread_id in self.list_thread_ids().map_err(CoreError::ThreadStore)? {
+            let events = self.load(&thread_id).map_err(CoreError::ThreadStore)?;
+            if !events.is_empty() {
+                rollouts.push(events);
             }
         }
         Ok(rollouts)
     }
 
-    /// Rebuilds the SQLite projection from every authoritative Thread rollout file.
     pub fn rebuild_sqlite_projection(
         &self,
         database_path: impl AsRef<Path>,
     ) -> Result<(), CoreError> {
         let database_path = database_path.as_ref();
-        if database_path.exists() {
-            fs::remove_file(database_path).map_err(io_error)?;
-        }
-        run_sql(
-            database_path,
-            "CREATE TABLE events (event_id TEXT PRIMARY KEY, sequence INTEGER NOT NULL, thread_id TEXT NOT NULL, kind TEXT NOT NULL, payload TEXT NOT NULL, occurred_at INTEGER NOT NULL);",
-        )?;
-        for entry in fs::read_dir(self.root.join("threads")).map_err(io_error)? {
-            let path = entry.map_err(io_error)?.path();
-            if path
-                .extension()
-                .is_some_and(|extension| extension == "rollout")
-            {
-                for event in RolloutLog::open(path)?.read_all()? {
-                    let sql = format!(
-                        "INSERT INTO events (event_id, sequence, thread_id, kind, payload, occurred_at) VALUES ({}, {}, {}, {}, {}, {});",
-                        quoted(&event.event_id.0),
-                        event.sequence,
-                        quoted(event.thread_id.as_str()),
-                        quoted(&event.kind),
-                        quoted(&event.payload),
-                        event.occurred_at.0
-                    );
-                    run_sql(database_path, &sql)?;
-                }
-            }
+        recreate_projection(database_path)?;
+        for events in self.all_thread_events()? {
+            insert_projection_events(database_path, events)?;
         }
         Ok(())
     }
 
     fn thread_path(&self, thread_id: &ThreadId) -> PathBuf {
         self.root
-            .join("threads")
             .join(format!("{}.rollout", encode_hex(thread_id.as_str())))
     }
 }
 
-impl RolloutLog {
-    pub fn open(path: impl Into<PathBuf>) -> Result<Self, CoreError> {
-        let path = path.into();
-        if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent).map_err(io_error)?;
+impl ThreadStore for ThreadRolloutStore {
+    fn list_thread_ids(&self) -> Result<Vec<ThreadId>, ThreadStoreError> {
+        let mut ids = Vec::new();
+        for entry in fs::read_dir(&self.root)
+            .map_err(|error| ThreadStoreError::Storage(error.to_string()))?
+        {
+            let path = entry
+                .map_err(|error| ThreadStoreError::Storage(error.to_string()))?
+                .path();
+            if path
+                .extension()
+                .is_some_and(|extension| extension == "rollout")
+            {
+                ids.extend(
+                    read_and_validate(&path)?
+                        .into_iter()
+                        .map(|event| event.thread_id),
+                );
+            }
         }
-        OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&path)
-            .map_err(io_error)?;
-        recover_incomplete_tail(&path)?;
-        Ok(Self {
-            path,
-            write_lock: Mutex::new(()),
-        })
+        ids.sort();
+        ids.dedup();
+        Ok(ids)
     }
 
-    pub fn path(&self) -> &Path {
-        &self.path
+    fn load(&self, thread_id: &ThreadId) -> Result<Vec<StoredEvent>, ThreadStoreError> {
+        let path = self.thread_path(thread_id);
+        if !path.exists() {
+            return Ok(Vec::new());
+        }
+        read_and_validate(&path)
     }
 
-    pub fn read_all(&self) -> Result<Vec<AgentEvent>, CoreError> {
-        let file = OpenOptions::new()
-            .read(true)
-            .open(&self.path)
-            .map_err(io_error)?;
-        BufReader::new(file)
-            .lines()
-            .map(|line| parse_event(&line.map_err(io_error)?))
-            .collect()
-    }
-
-    /// Recreates the SQLite query projection solely from durable rollout records.
-    pub fn rebuild_sqlite_projection(
+    fn append_batch(
         &self,
-        database_path: impl AsRef<Path>,
-    ) -> Result<(), CoreError> {
-        let events = self.read_all()?;
-        let database_path = database_path.as_ref();
-        if database_path.exists() {
-            fs::remove_file(database_path).map_err(io_error)?;
-        }
-        let schema = "CREATE TABLE events (event_id TEXT PRIMARY KEY, sequence INTEGER NOT NULL, thread_id TEXT NOT NULL, kind TEXT NOT NULL, occurred_at INTEGER NOT NULL);";
-        run_sql(database_path, schema)?;
-        for event in events {
-            let sql = format!(
-                "INSERT INTO events (event_id, sequence, thread_id, kind, occurred_at) VALUES ({}, {}, {}, {}, {});",
-                quoted(&event.event_id.0),
-                event.sequence,
-                quoted(event.thread_id.as_str()),
-                quoted(&event.kind),
-                event.occurred_at.0
-            );
-            run_sql(database_path, &sql)?;
-        }
-        Ok(())
-    }
-}
-
-impl EventJournal for RolloutLog {
-    fn append(&self, event: &AgentEvent) -> Result<(), CoreError> {
+        batch: &ThreadEventBatch,
+    ) -> Result<AppendBatchResult, ThreadStoreError> {
         let _guard = self
             .write_lock
             .lock()
-            .map_err(|_| CoreError::Journal("rollout write lock poisoned".into()))?;
-        let existing = self.read_all()?;
-        if existing
-            .iter()
-            .rev()
-            .find(|existing| existing.thread_id == event.thread_id)
-            .is_some_and(|last| last.sequence >= event.sequence)
-        {
-            return Err(CoreError::Journal(
-                "rollout sequence must strictly increase".into(),
-            ));
-        }
-        if existing
+            .map_err(|_| ThreadStoreError::Storage("rollout write lock poisoned".into()))?;
+        append_thread_batch(&self.thread_path(&batch.thread_id), batch)
+    }
+}
+
+fn append_thread_batch(
+    path: &Path,
+    batch: &ThreadEventBatch,
+) -> Result<AppendBatchResult, ThreadStoreError> {
+    let existing = if path.exists() {
+        read_and_validate(path)?
+    } else {
+        Vec::new()
+    };
+    let actual_sequence = existing
+        .iter()
+        .rev()
+        .find(|event| event.thread_id == batch.thread_id)
+        .map_or(0, |event| event.sequence);
+    let result = validate_append_batch(batch, actual_sequence)?;
+    let batches =
+        read_batches::<StoredEvent>(path, STREAM_KIND).map_err(ThreadStoreError::Storage)?;
+    if batches
+        .iter()
+        .any(|existing| existing.batch_id == batch.batch_id)
+    {
+        return Err(ThreadStoreError::InvalidBatch(
+            "batch ID already exists".into(),
+        ));
+    }
+    if batch.events.iter().any(|event| {
+        existing
             .iter()
             .any(|existing| existing.event_id == event.event_id)
-        {
-            return Err(CoreError::Journal("rollout event id must be unique".into()));
-        }
-        let mut file = OpenOptions::new()
-            .append(true)
-            .open(&self.path)
-            .map_err(io_error)?;
-        let record = format!(
-            "1\t{}\t{}\t{}\t{}\t{}\t{}",
-            event.sequence,
-            encode_hex(&event.event_id.0),
-            encode_hex(event.thread_id.as_str()),
-            encode_hex(&event.kind),
-            encode_hex(&event.payload),
-            event.occurred_at.0,
-        );
-        writeln!(file, "{record}\t{}", checksum(&record)).map_err(io_error)?;
-        file.sync_data().map_err(io_error)
+    }) {
+        return Err(ThreadStoreError::InvalidBatch(
+            "event ID already exists".into(),
+        ));
     }
+    append_batch(
+        path,
+        STREAM_KIND,
+        &batch.batch_id,
+        batch.thread_id.as_str(),
+        batch.expected_sequence,
+        &batch.events,
+    )
+    .map_err(ThreadStoreError::Storage)?;
+    Ok(result)
 }
 
-impl EventJournal for ThreadRolloutStore {
-    fn append(&self, event: &AgentEvent) -> Result<(), CoreError> {
-        RolloutLog::open(self.thread_path(&event.thread_id))?.append(event)
+fn read_and_validate(path: &Path) -> Result<Vec<StoredEvent>, ThreadStoreError> {
+    let mut all_events = Vec::new();
+    let mut sequences = BTreeMap::<ThreadId, u64>::new();
+    let mut batch_ids = BTreeSet::new();
+    for batch in
+        read_batches::<StoredEvent>(path, STREAM_KIND).map_err(ThreadStoreError::Storage)?
+    {
+        if !batch_ids.insert(batch.batch_id.clone()) {
+            return Err(ThreadStoreError::InvalidBatch(
+                "batch ID already exists".into(),
+            ));
+        }
+        let thread_id = ThreadId::new(batch.stream_id)
+            .map_err(|error| ThreadStoreError::InvalidBatch(error.to_string()))?;
+        let actual = *sequences.get(&thread_id).unwrap_or(&0);
+        let typed = ThreadEventBatch {
+            batch_id: batch.batch_id,
+            thread_id: thread_id.clone(),
+            expected_sequence: batch.expected_sequence,
+            events: batch.events,
+        };
+        validate_append_batch(&typed, actual)?;
+        sequences.insert(thread_id, actual + typed.events.len() as u64);
+        all_events.extend(typed.events);
     }
+    Ok(all_events)
 }
 
-fn parse_event(line: &str) -> Result<AgentEvent, CoreError> {
-    let fields: Vec<_> = line.split('\t').collect();
-    match fields.as_slice() {
-        [
-            schema_version,
-            sequence,
-            event_id,
-            thread_id,
-            kind,
-            payload,
-            recorded_at,
-            record_checksum,
-        ] if *schema_version == "1" => {
-            let record = fields[..7].join("\t");
-            if checksum(&record) != *record_checksum {
-                return Err(CoreError::Journal("rollout checksum mismatch".into()));
-            }
-            Ok(AgentEvent {
-                event_id: EventId(decode_hex(event_id)?),
-                sequence: sequence
-                    .parse()
-                    .map_err(|_| CoreError::Journal("invalid rollout sequence".into()))?,
-                thread_id: ThreadId::new(decode_hex(thread_id)?),
-                kind: decode_hex(kind)?,
-                payload: decode_hex(payload)?,
-                occurred_at: Timestamp(
-                    recorded_at
-                        .parse()
-                        .map_err(|_| CoreError::Journal("invalid rollout timestamp".into()))?,
-                ),
-            })
-        }
-        [event_id, sequence, thread_id, kind, recorded_at] => Ok(AgentEvent {
-            event_id: EventId((*event_id).into()),
-            sequence: sequence
-                .parse()
-                .map_err(|_| CoreError::Journal("invalid rollout sequence".into()))?,
-            thread_id: ThreadId::new(*thread_id),
-            kind: (*kind).into(),
-            payload: String::new(),
-            occurred_at: Timestamp(
-                recorded_at
-                    .parse()
-                    .map_err(|_| CoreError::Journal("invalid rollout timestamp".into()))?,
+fn recreate_projection(database_path: &Path) -> Result<(), CoreError> {
+    if database_path.exists() {
+        fs::remove_file(database_path).map_err(io_error)?;
+    }
+    run_sql(
+        database_path,
+        "CREATE TABLE events (event_id TEXT PRIMARY KEY, sequence INTEGER NOT NULL, thread_id TEXT NOT NULL, kind TEXT NOT NULL, payload TEXT NOT NULL, occurred_at INTEGER NOT NULL);",
+    )
+}
+
+fn insert_projection_events(
+    database_path: &Path,
+    events: Vec<StoredEvent>,
+) -> Result<(), CoreError> {
+    for event in events {
+        let payload = serde_json::to_string(&event.event)
+            .map_err(|error| CoreError::Journal(error.to_string()))?;
+        run_sql(
+            database_path,
+            &format!(
+                "INSERT INTO events (event_id, sequence, thread_id, kind, payload, occurred_at) VALUES ({}, {}, {}, {}, {}, {});",
+                quoted(&event.event_id.0),
+                event.sequence,
+                quoted(event.thread_id.as_str()),
+                quoted(event.event.kind()),
+                quoted(&payload),
+                event.recorded_at.0
             ),
-        }),
-        _ => Err(CoreError::Journal("invalid rollout record".into())),
-    }
-}
-
-fn recover_incomplete_tail(path: &Path) -> Result<(), CoreError> {
-    let bytes = fs::read(path).map_err(io_error)?;
-    let Some(last_newline) = bytes.iter().rposition(|byte| *byte == b'\n') else {
-        if !bytes.is_empty() {
-            OpenOptions::new()
-                .write(true)
-                .open(path)
-                .map_err(io_error)?
-                .set_len(0)
-                .map_err(io_error)?;
-        }
-        return Ok(());
-    };
-    if last_newline + 1 != bytes.len() {
-        OpenOptions::new()
-            .write(true)
-            .open(path)
-            .map_err(io_error)?
-            .set_len((last_newline + 1) as u64)
-            .map_err(io_error)?;
+        )?;
     }
     Ok(())
+}
+
+fn run_sql(database_path: &Path, sql: &str) -> Result<(), CoreError> {
+    let output = Command::new("sqlite3")
+        .arg(database_path)
+        .arg(sql)
+        .output()
+        .map_err(io_error)?;
+    if output.status.success() {
+        Ok(())
+    } else {
+        Err(CoreError::Journal(
+            String::from_utf8_lossy(&output.stderr).trim().into(),
+        ))
+    }
+}
+
+fn quoted(value: &str) -> String {
+    format!("'{}'", value.replace('\'', "''"))
 }
 
 fn encode_hex(value: &str) -> String {
@@ -284,46 +240,7 @@ fn encode_hex(value: &str) -> String {
         .map(|byte| format!("{byte:02x}"))
         .collect()
 }
-fn decode_hex(value: &str) -> Result<String, CoreError> {
-    if !value.len().is_multiple_of(2) {
-        return Err(CoreError::Journal("invalid rollout hex field".into()));
-    }
-    let bytes = (0..value.len())
-        .step_by(2)
-        .map(|index| {
-            u8::from_str_radix(&value[index..index + 2], 16)
-                .map_err(|_| CoreError::Journal("invalid rollout hex field".into()))
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-    String::from_utf8(bytes).map_err(|_| CoreError::Journal("invalid rollout utf-8 field".into()))
-}
-fn checksum(value: &str) -> String {
-    let hash = value
-        .as_bytes()
-        .iter()
-        .fold(0xcbf29ce484222325_u64, |hash, byte| {
-            (hash ^ u64::from(*byte)).wrapping_mul(0x100000001b3)
-        });
-    format!("fnv1a64:{hash:016x}")
-}
 
-fn run_sql(database_path: &Path, sql: &str) -> Result<(), CoreError> {
-    let result = Command::new("sqlite3")
-        .arg(database_path)
-        .arg(sql)
-        .output()
-        .map_err(io_error)?;
-    if result.status.success() {
-        Ok(())
-    } else {
-        Err(CoreError::Journal(
-            String::from_utf8_lossy(&result.stderr).into_owned(),
-        ))
-    }
-}
-fn quoted(value: &str) -> String {
-    format!("'{}'", value.replace('\'', "''"))
-}
 fn io_error(error: impl std::fmt::Display) -> CoreError {
     CoreError::Journal(error.to_string())
 }

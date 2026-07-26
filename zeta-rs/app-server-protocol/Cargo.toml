@@ -10,8 +10,11 @@ name = "zeta_app_server_protocol"
 path = "src/lib.rs"
 
 [dependencies]
+schemars = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+sha2 = { workspace = true }
+ts-rs = { workspace = true }
 zeta-protocol = { workspace = true }
 
 [lints]

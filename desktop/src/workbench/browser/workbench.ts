@@ -15,8 +15,24 @@ export function startWorkbench(api: ZetaRendererApi, container: Element | null):
   workbenchRoot.setAttribute("data-platform", platform);
   const commands = new CommandRegistry();
   commands.register("zeta.startTurn", async () => {
-    const thread = await api.thread.start({ idempotencyKey: crypto.randomUUID(), title: "New conversation" });
-    await api.turn.start({ idempotencyKey: crypto.randomUUID(), threadId: thread.threadId, input: [{ type: "text", text: "Hello" }] });
+    const { session } = await api.session.create({
+      commandId: crypto.randomUUID(),
+      title: "New conversation",
+    });
+    const created = await api.session.createThread({
+      commandId: crypto.randomUUID(),
+      sessionId: session.sessionId,
+      expectedSequence: session.sequence,
+      title: "Main",
+    });
+    const { thread } = await api.thread.read({ threadId: created.threadId });
+    await api.turn.start({
+      commandId: crypto.randomUUID(),
+      sessionId: session.sessionId,
+      threadId: thread.threadId,
+      expectedSequence: thread.sequence,
+      input: [{ type: "text", text: "Hello" }],
+    });
   });
 
   const titlebar = new TitlebarPart("Zeta", [{ id: "zeta.startTurn", label: "New conversation", run: () => commands.execute("zeta.startTurn") }]);

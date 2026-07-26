@@ -1,9 +1,11 @@
 use super::*;
 use std::fs;
 use std::time::{SystemTime, UNIX_EPOCH};
-use zeta_core::EventJournal;
-use zeta_core::{IdempotencyLedger, IdempotencyRecord};
-use zeta_protocol::{AgentEvent, EventId, ThreadId, Timestamp};
+use zeta_protocol::{StableTurnError, ThreadEvent, ThreadId, TurnId};
+use zeta_thread_store::{
+    CURRENT_STORED_EVENT_SCHEMA_VERSION, EventId, StoredEvent, ThreadEventBatch, ThreadStore,
+    ThreadStoreError, Timestamp,
+};
 
 fn temp_path(name: &str) -> std::path::PathBuf {
     std::env::temp_dir().join(format!(
@@ -15,32 +17,109 @@ fn temp_path(name: &str) -> std::path::PathBuf {
     ))
 }
 
+fn batch(batch_id: &str, event: StoredEvent) -> ThreadEventBatch {
+    ThreadEventBatch {
+        batch_id: batch_id.into(),
+        thread_id: event.thread_id.clone(),
+        expected_sequence: event.sequence - 1,
+        events: vec![event],
+    }
+}
+
 #[test]
-fn rollout_rejects_duplicate_event_and_rebuilds_projection() {
+fn thread_store_rejects_duplicate_event_and_rebuilds_projection() {
     let directory = temp_path("rollout");
-    let log = RolloutLog::open(directory.join("history.rollout")).unwrap();
-    let event = AgentEvent {
+    let store = ThreadRolloutStore::open(&directory).unwrap();
+    let event = StoredEvent {
+        schema_version: CURRENT_STORED_EVENT_SCHEMA_VERSION,
         event_id: EventId("event_1".into()),
         sequence: 1,
-        thread_id: ThreadId::new("thread_1"),
-        kind: "thread.started".into(),
-        payload: "test".into(),
-        occurred_at: Timestamp(1),
+        thread_id: ThreadId::new("thread_1").expect("test ID is non-empty"),
+        recorded_at: Timestamp(1),
+        command: None,
+        event: ThreadEvent::ThreadCreated {
+            session_id: zeta_protocol::SessionId::new("session_1").expect("test ID is non-empty"),
+            thread_id: ThreadId::new("thread_1").expect("test ID is non-empty"),
+            title: "test".into(),
+        },
     };
-    log.append(&event).unwrap();
-    let other_thread_event = AgentEvent {
+    store
+        .append_batch(&batch("batch_1", event.clone()))
+        .unwrap();
+    let other_thread_event = StoredEvent {
+        schema_version: CURRENT_STORED_EVENT_SCHEMA_VERSION,
         event_id: EventId("event_2".into()),
         sequence: 1,
-        thread_id: ThreadId::new("thread_2"),
-        kind: "thread.started".into(),
-        payload: "test".into(),
-        occurred_at: Timestamp(2),
+        thread_id: ThreadId::new("thread_2").expect("test ID is non-empty"),
+        recorded_at: Timestamp(2),
+        command: None,
+        event: ThreadEvent::ThreadCreated {
+            session_id: zeta_protocol::SessionId::new("session_1").expect("test ID is non-empty"),
+            thread_id: ThreadId::new("thread_2").expect("test ID is non-empty"),
+            title: "test".into(),
+        },
     };
-    log.append(&other_thread_event).unwrap();
-    assert!(log.append(&event).is_err());
-    log.rebuild_sqlite_projection(directory.join("state.sqlite"))
+    store
+        .append_batch(&batch("batch_2", other_thread_event))
+        .unwrap();
+    let duplicate_batch_id = StoredEvent {
+        schema_version: CURRENT_STORED_EVENT_SCHEMA_VERSION,
+        event_id: EventId("event_3".into()),
+        sequence: 2,
+        thread_id: ThreadId::new("thread_1").expect("test ID is non-empty"),
+        recorded_at: Timestamp(3),
+        command: None,
+        event: ThreadEvent::TurnAccepted {
+            thread_id: ThreadId::new("thread_1").expect("test ID is non-empty"),
+            turn_id: zeta_protocol::TurnId::new("turn_1").expect("test ID is non-empty"),
+        },
+    };
+    assert!(matches!(
+        store.append_batch(&batch("batch_1", duplicate_batch_id)),
+        Err(ThreadStoreError::InvalidBatch(_))
+    ));
+    assert!(matches!(
+        store.append_batch(&batch("batch_3", event.clone())),
+        Err(ThreadStoreError::SequenceConflict {
+            expected: 0,
+            actual: 1
+        })
+    ));
+    store
+        .rebuild_sqlite_projection(directory.join("state.sqlite"))
         .unwrap();
     assert!(directory.join("state.sqlite").exists());
+    fs::remove_dir_all(directory).unwrap();
+}
+
+#[test]
+fn typed_failure_payload_survives_round_trip() {
+    let directory = temp_path("typed-failure");
+    let store = ThreadRolloutStore::open(&directory).unwrap();
+    let event = StoredEvent {
+        schema_version: CURRENT_STORED_EVENT_SCHEMA_VERSION,
+        event_id: EventId("event_1".into()),
+        sequence: 1,
+        thread_id: ThreadId::new("thread_1").expect("test ID is non-empty"),
+        recorded_at: Timestamp(1),
+        command: None,
+        event: ThreadEvent::TurnFailed {
+            thread_id: ThreadId::new("thread_1").expect("test ID is non-empty"),
+            turn_id: TurnId::new("turn_1").expect("test ID is non-empty"),
+            error: StableTurnError::model_invocation_failed(),
+        },
+    };
+
+    store
+        .append_batch(&batch("batch_1", event.clone()))
+        .unwrap();
+
+    assert_eq!(
+        store
+            .load(&ThreadId::new("thread_1").expect("test ID is non-empty"))
+            .unwrap(),
+        vec![event]
+    );
     fs::remove_dir_all(directory).unwrap();
 }
 
@@ -48,47 +127,39 @@ fn rollout_rejects_duplicate_event_and_rebuilds_projection() {
 fn thread_store_uses_independent_rollouts() {
     let directory = temp_path("thread-store");
     let store = ThreadRolloutStore::open(&directory).unwrap();
-    let first = AgentEvent {
+    let first = StoredEvent {
+        schema_version: CURRENT_STORED_EVENT_SCHEMA_VERSION,
         event_id: EventId("event_1".into()),
         sequence: 1,
-        thread_id: ThreadId::new("thread/one"),
-        kind: "thread.started".into(),
-        payload: "first".into(),
-        occurred_at: Timestamp(1),
+        thread_id: ThreadId::new("thread/one").expect("test ID is non-empty"),
+        recorded_at: Timestamp(1),
+        command: None,
+        event: ThreadEvent::ThreadCreated {
+            session_id: zeta_protocol::SessionId::new("session_1").expect("test ID is non-empty"),
+            thread_id: ThreadId::new("thread/one").expect("test ID is non-empty"),
+            title: "first".into(),
+        },
     };
-    let second = AgentEvent {
+    let second = StoredEvent {
+        schema_version: CURRENT_STORED_EVENT_SCHEMA_VERSION,
         event_id: EventId("event_2".into()),
         sequence: 1,
-        thread_id: ThreadId::new("thread/two"),
-        kind: "thread.started".into(),
-        payload: "second".into(),
-        occurred_at: Timestamp(1),
+        thread_id: ThreadId::new("thread/two").expect("test ID is non-empty"),
+        recorded_at: Timestamp(1),
+        command: None,
+        event: ThreadEvent::ThreadCreated {
+            session_id: zeta_protocol::SessionId::new("session_1").expect("test ID is non-empty"),
+            thread_id: ThreadId::new("thread/two").expect("test ID is non-empty"),
+            title: "second".into(),
+        },
     };
-    store.append(&first).unwrap();
-    store.append(&second).unwrap();
+    store
+        .append_batch(&batch("batch_1", first.clone()))
+        .unwrap();
+    store
+        .append_batch(&batch("batch_2", second.clone()))
+        .unwrap();
     assert_eq!(store.read_thread(&first.thread_id).unwrap(), vec![first]);
     assert_eq!(store.read_thread(&second.thread_id).unwrap(), vec![second]);
-    fs::remove_dir_all(directory).unwrap();
-}
-
-#[test]
-fn file_idempotency_ledger_survives_reopen() {
-    let directory = temp_path("idempotency");
-    let path = directory.join("ledger");
-    let ledger = FileIdempotencyLedger::open(&path).unwrap();
-    let record = IdempotencyRecord {
-        method: "thread/start".into(),
-        key: "key".into(),
-        parameters: "{}".into(),
-        result: "{\"threadId\":\"one\"}".into(),
-    };
-    ledger.put(record.clone()).unwrap();
-    assert_eq!(
-        FileIdempotencyLedger::open(path)
-            .unwrap()
-            .get("thread/start", "key")
-            .unwrap(),
-        Some(record)
-    );
     fs::remove_dir_all(directory).unwrap();
 }

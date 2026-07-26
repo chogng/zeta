@@ -1,6 +1,9 @@
 use std::env;
 use std::io::IsTerminal;
 use std::path::PathBuf;
+use std::thread;
+use std::time::Duration;
+use std::time::Instant;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 use zeta_app_server::LocalAppServerOptions;
@@ -8,15 +11,12 @@ use zeta_app_server::open_local_app_server;
 use zeta_app_server_client::AppServerClient;
 use zeta_app_server_client::InProcessClientOptions;
 use zeta_app_server_client::InProcessTransport;
-use zeta_app_server_client::ServerNotification;
 use zeta_app_server_client::start_in_process_client;
-use zeta_app_server_protocol::common::ClientInfo;
-use zeta_app_server_protocol::json_schema_v1;
-use zeta_app_server_protocol::typescript_v1;
-use zeta_app_server_protocol::v1::thread::ThreadStartParams;
-use zeta_app_server_protocol::v1::turn::InputItem;
-use zeta_app_server_protocol::v1::turn::InputItemKind;
-use zeta_app_server_protocol::v1::turn::TurnStartParams;
+use zeta_app_server_protocol::protocol::common::ClientInfo;
+use zeta_app_server_protocol::protocol::session::{SessionCreateParams, SessionThreadCreateParams};
+use zeta_app_server_protocol::protocol::thread::ThreadReadParams;
+use zeta_app_server_protocol::protocol::turn::{InputItem, InputItemKind, TurnStartParams};
+use zeta_protocol::{CommandId, ThreadItem, TurnStatus};
 
 fn main() {
     let mut arguments = env::args().skip(1);
@@ -67,39 +67,7 @@ fn run_app_server(arguments: Vec<String>) -> Result<(), String> {
 }
 
 fn app_server_command(arguments: Vec<String>) -> Result<(), String> {
-    match arguments.first().map(String::as_str) {
-        Some("generate-ts") => generate_protocol(arguments, ProtocolArtifact::TypeScript),
-        Some("generate-json-schema") => generate_protocol(arguments, ProtocolArtifact::JsonSchema),
-        _ => run_app_server(arguments),
-    }
-}
-
-enum ProtocolArtifact {
-    TypeScript,
-    JsonSchema,
-}
-
-fn generate_protocol(arguments: Vec<String>, artifact: ProtocolArtifact) -> Result<(), String> {
-    if arguments.get(1).map(String::as_str) != Some("--protocol-version")
-        || arguments.get(2).map(String::as_str) != Some("1")
-        || arguments.get(3).map(String::as_str) != Some("--out")
-        || arguments.get(4).is_none()
-        || arguments.len() != 5
-    {
-        return Err(
-            "usage: zeta app-server generate-(ts|json-schema) --protocol-version 1 --out <path>"
-                .into(),
-        );
-    }
-    let output = PathBuf::from(&arguments[4]);
-    let (path, contents) = match artifact {
-        ProtocolArtifact::TypeScript => (output.join("types.ts"), typescript_v1()),
-        ProtocolArtifact::JsonSchema => (output, json_schema_v1()),
-    };
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).map_err(|error| error.to_string())?;
-    }
-    std::fs::write(path, contents).map_err(|error| error.to_string())
+    run_app_server(arguments)
 }
 
 fn state_root() -> PathBuf {
@@ -119,31 +87,73 @@ fn execute(arguments: Vec<String>) -> Result<(), String> {
 
 fn run_prompt(prompt: String, title: &str) -> Result<String, String> {
     let mut client = in_process_client()?;
+    let session = client
+        .create_session(SessionCreateParams {
+            command_id: CommandId::new(request_key("session"))
+                .expect("generated command ID is non-empty"),
+            title: title.into(),
+        })
+        .map_err(|error| error.to_string())?;
     let thread = client
-        .start_thread(ThreadStartParams {
-            idempotency_key: request_key("thread"),
+        .create_session_thread(SessionThreadCreateParams {
+            command_id: CommandId::new(request_key("thread"))
+                .expect("generated command ID is non-empty"),
+            session_id: session.session.session_id.clone(),
+            expected_sequence: session.session.sequence,
             title: title.into(),
         })
         .map_err(|error| error.to_string())?;
     client
         .start_turn(TurnStartParams {
-            idempotency_key: request_key("turn"),
-            thread_id: thread.thread_id,
+            command_id: CommandId::new(request_key("turn"))
+                .expect("generated command ID is non-empty"),
+            session_id: session.session.session_id,
+            thread_id: thread.thread_id.clone(),
+            expected_sequence: 1,
             input: vec![InputItem {
                 kind: InputItemKind::Text,
                 text: prompt,
             }],
         })
         .map_err(|error| error.to_string())?;
-    client
-        .drain_notifications()
-        .map_err(|error| error.to_string())?
-        .into_iter()
-        .find_map(|notification| match notification {
-            ServerNotification::AgentMessageCompleted(message) => Some(message.text),
-            _ => None,
-        })
-        .ok_or_else(|| "app server completed without an agent message".into())
+    let deadline = Instant::now() + Duration::from_secs(60);
+    loop {
+        let snapshot = client
+            .read_thread(ThreadReadParams {
+                thread_id: thread.thread_id.clone(),
+            })
+            .map_err(|error| error.to_string())?;
+        let turn = snapshot
+            .thread
+            .turns
+            .last()
+            .ok_or_else(|| "app server did not create a Turn".to_string())?;
+        match turn.status {
+            TurnStatus::Completed => {
+                return turn
+                    .items
+                    .iter()
+                    .find_map(|item| match item {
+                        ThreadItem::AgentMessage { text, .. } => Some(text.clone()),
+                        _ => None,
+                    })
+                    .ok_or_else(|| "app server completed without an agent message".into());
+            }
+            TurnStatus::Failed => return Err("app server failed the Turn".into()),
+            TurnStatus::Interrupted => return Err("app server interrupted the Turn".into()),
+            TurnStatus::Created
+            | TurnStatus::Running
+            | TurnStatus::WaitingForApproval
+            | TurnStatus::WaitingForUserInput
+            | TurnStatus::WaitingForCapability
+            | TurnStatus::Cancelling => {
+                if Instant::now() >= deadline {
+                    return Err("timed out waiting for the Turn to complete".into());
+                }
+                thread::sleep(Duration::from_millis(10));
+            }
+        }
+    }
 }
 
 fn in_process_client() -> Result<AppServerClient<InProcessTransport>, String> {

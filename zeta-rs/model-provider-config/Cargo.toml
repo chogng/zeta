@@ -1,0 +1,21 @@
+[package]
+name = "zeta-model-provider-config"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+doctest = false
+name = "zeta_model_provider_config"
+path = "src/lib.rs"
+
+[dependencies]
+schemars = { workspace = true }
+serde = { workspace = true }
+zeta-protocol = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }
+
+[lints]
+workspace = true

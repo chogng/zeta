@@ -1,14 +1,14 @@
-//! Durable rollout logs, rebuildable SQLite projections, and Thread writer leases.
+//! Durable typed event streams, rebuildable projections, and aggregate writer leases.
 
-mod idempotency;
+mod event_stream;
 mod lease;
 mod rollout;
+mod session_rollout;
 
-pub use idempotency::FileIdempotencyLedger;
-pub use lease::FileThreadLease;
-pub use lease::ThreadLeaseDirectory;
-pub use rollout::RolloutLog;
+pub use lease::FileLease;
+pub use lease::LeaseDirectory;
 pub use rollout::ThreadRolloutStore;
+pub use session_rollout::SessionRolloutStore;
 
 #[cfg(test)]
 #[path = "rollout_tests.rs"]

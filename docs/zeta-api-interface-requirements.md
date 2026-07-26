@@ -4,7 +4,7 @@
 > zeta-rs 是已接受契约的 owner，并据此实现 Rust 协议、handler、typed client、生成类型和测试。
 
 当前已经接受的产品契约见
-[`zeta-app-server-api-v1.md`](zeta-app-server-api-v1.md)。
+[`zeta-app-server-api.md`](zeta-app-server-api.md)。
 
 ## 1. 文档头
 
@@ -13,7 +13,6 @@
 ```yaml
 title: Browser Capability API
 status: draft | review | accepted | deprecated
-protocolVersion: 1
 capabilityVersion: 1
 owner: zeta-rs
 rustOwner: zeta-rs
@@ -28,7 +27,7 @@ lastUpdated: YYYY-MM-DD
 - 不在范围内的能力；
 - 权威状态由哪一端持有；
 - 哪些客户端需要该能力；
-- 兼容性与废弃策略。
+- 当前开发期 breaking-change 与调用方同步更新策略。
 
 ## 2. 方法清单
 
@@ -36,8 +35,8 @@ lastUpdated: YYYY-MM-DD
 
 | Method | Direction | Consumers | Side effect | Idempotent | Capability | Summary |
 |---|---|---|---:|---:|---|---|
-| `thread/start` | Client → Server | Desktop, CLI | yes | required | threads/v1 | 创建 Thread |
-| `browser/observe` | Server → Client | Desktop host | no | n/a | browser/v1 | 观察目标 |
+| `session/thread/create` | Client → Server | Desktop, CLI | yes | required | sessions | 创建 Thread |
+| `browser/observe` | Server → Client | Desktop host | no | n/a | browser | 观察目标 |
 
 Direction 只能使用：
 
@@ -87,8 +86,10 @@ transport 不支持该能力，必须通过 initialize capability 明确声明�
   "id": 42,
   "method": "turn/start",
   "params": {
-    "idempotencyKey": "req_01...",
+    "commandId": "command_01...",
+    "sessionId": "session_123",
     "threadId": "thread_123",
+    "expectedSequence": 17,
     "input": [
       { "type": "text", "text": "分析当前网页" }
     ]
@@ -117,11 +118,8 @@ transport 不支持该能力，必须通过 initialize capability 明确声明�
   "id": 42,
   "error": {
     "code": -32004,
-    "message": "IdempotencyConflict",
-    "data": {
-      "method": "turn/start",
-      "idempotencyKey": "req_01..."
-    }
+    "message": "CommandConflict",
+    "data": null
   }
 }
 ```
@@ -159,19 +157,19 @@ Created → Running → Completed
 - 客户端发现空洞后如何 resync；
 - 哪些通知可以合并，哪些不能丢弃。
 
-## 7. 幂等
+## 7. Typed command replay
 
 所有持久化副作用请求必须说明：
 
-- `idempotencyKey` 是否必填；
-- ledger scope；
-- request hash 包含哪些字段；
-- 相同 key + 相同参数的响应；
-- 相同 key + 不同参数的错误；
-- retention deadline；
-- 重启后是否仍可去重。
+- `commandId` 是否必填；
+- 对应的 typed command payload；
+- receipt 持久化在哪个 aggregate；
+- `expectedSequence` 针对哪个 aggregate；
+- 相同 ID + 相同 command 的稳定结果；
+- 相同 ID + 不同 command 的 `CommandConflict`；
+- 重启恢复后如何重放。
 
-JSON-RPC `id` 只做当前连接的 response pairing，不能代替 idempotency key。
+JSON-RPC `id` 只做当前连接的 response pairing，不能代替 `commandId`。
 
 ## 8. 超时、取消和迟到响应
 
@@ -230,29 +228,30 @@ Server → Client 请求必须定义：
 
 | Error | Retryable | Client action | Data |
 |---|---:|---|---|
-| `ProtocolVersionUnsupported` | no | 升级客户端 | 支持区间 |
 | `ServerOverloaded` | yes | jitter backoff | `retryAfterMs` |
 | `BrowserTargetUnavailable` | no | 刷新目标列表 | `targetId` |
 
 不要只写“失败时返回 error”。
 
-## 13. 兼容性
+## 13. 开发期 breaking change
 
 文档必须标注：
 
-- 新增字段缺失时的默认行为；
-- enum 是否允许 unknown fallback；
-- 未知 notification 是否可忽略；
-- 未知 request 的错误；
-- v1 是否向后兼容；
-- 何种变更必须发布 v2。
+- 哪些 Rust/TypeScript DTO、registry 和 schema 同步改变；
+- Desktop、CLI 与 TUI 哪些调用方必须同一变更迁移；
+- 旧开发数据是否需要清空；
+- 未知 notification/request 的稳定错误行为；
+- schema hash 和 fixtures 是否已重新生成。
+
+当前开发阶段不保留旧 route、deprecated alias、DTO mapper 或 storage upcast。发布后的版本与
+migration 政策必须另立 RFC，不能提前把兼容逻辑放进 Core。
 
 ## 14. Rust 实现验收
 
 API 被视为完成，必须同时具备：
 
-- Rust v1 DTO；
-- internal model ↔ DTO mapper；
+- Rust DTO；
+- wire-specific DTO 与 canonical model 的必要机械映射；
 - handler 与路由；
 - capability/version 校验；
 - error code；
@@ -281,7 +280,6 @@ API 被视为完成，必须同时具备：
 ## Metadata
 
 - Status:
-- Protocol version:
 - Capability version:
 - Owner:
 - Rust owner:

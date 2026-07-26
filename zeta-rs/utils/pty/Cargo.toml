@@ -1,0 +1,43 @@
+[package]
+name = "zeta-utils-pty"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+doctest = false
+name = "zeta_utils_pty"
+path = "src/lib.rs"
+
+[dependencies]
+anyhow = { workspace = true }
+portable-pty = { workspace = true }
+tokio = { workspace = true, features = ["io-util", "macros", "process", "rt-multi-thread", "sync", "time"] }
+
+[dev-dependencies]
+pretty_assertions = { workspace = true }
+
+[target.'cfg(windows)'.dependencies]
+filedescriptor = "0.8.3"
+lazy_static = { workspace = true }
+log = { workspace = true }
+shared_library = "0.1.9"
+winapi = { version = "0.3.9", features = [
+    "handleapi",
+    "jobapi2",
+    "minwinbase",
+    "processthreadsapi",
+    "synchapi",
+    "winbase",
+    "wincon",
+    "winerror",
+    "winnt",
+] }
+
+[target.'cfg(unix)'.dependencies]
+libc = { workspace = true }
+
+# This systems crate is the only local exception to the workspace unsafe ban:
+# its PTY and ConPTY implementation requires audited platform FFI.
+[lints.rust]
+unsafe_code = "allow"

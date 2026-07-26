@@ -1,0 +1,16 @@
+[package]
+name = "zeta-client"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+doctest = false
+name = "zeta_client"
+path = "src/lib.rs"
+
+[dependencies]
+zeta-http-client = { workspace = true }
+
+[lints]
+workspace = true

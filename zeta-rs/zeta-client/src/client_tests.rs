@@ -1,0 +1,184 @@
+use super::*;
+use std::io::{Read, Write};
+use std::net::TcpListener;
+use std::num::NonZeroU8;
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
+use zeta_http_client::{HttpHeader, HttpMethod, UreqHttpClient};
+
+#[test]
+fn target_rejects_a_non_http_base_url() {
+    let target = ResolvedApiTarget::new("file:///tmp/zeta", Vec::new());
+    assert!(matches!(
+        target.endpoint("responses"),
+        Err(ClientError::InvalidRequest(_))
+    ));
+}
+
+#[test]
+fn header_debug_output_redacts_its_value() {
+    let debug = format!("{:?}", HttpHeader::new("Authorization", "Bearer secret"));
+    assert!(debug.contains("Authorization"));
+    assert!(!debug.contains("Bearer secret"));
+}
+
+#[test]
+fn retry_policy_never_replays_inference_by_default() {
+    let policy = RetryPolicy::never();
+    assert_eq!(policy.safety(), RetrySafety::Never);
+    assert_eq!(policy.max_attempts(), NonZeroU8::MIN);
+}
+
+#[test]
+fn retry_backoff_is_bounded() {
+    let backoff = BackoffPolicy::new(Duration::from_millis(50), Duration::from_millis(120));
+    assert_eq!(backoff.delay_before_retry(0), Duration::from_millis(50));
+    assert_eq!(backoff.delay_before_retry(1), Duration::from_millis(100));
+    assert_eq!(backoff.delay_before_retry(2), Duration::from_millis(120));
+}
+
+#[test]
+fn idempotent_request_retries_a_retryable_http_status() {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    let server = std::thread::spawn(move || {
+        for status in [503, 200] {
+            let (mut stream, _) = listener.accept().unwrap();
+            read_headers(&mut stream);
+            let body = if status == 200 { "ok" } else { "retry" };
+            write!(
+                stream,
+                "HTTP/1.1 {status} Test\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                body.len(),
+            )
+            .unwrap();
+        }
+    });
+    let retry_policy = RetryPolicy::replayable(
+        RetrySafety::Idempotent,
+        NonZeroU8::new(2).unwrap(),
+        BackoffPolicy::new(Duration::ZERO, Duration::ZERO),
+    );
+    let request = ClientRequest::new(
+        HttpMethod::Get,
+        format!("http://{address}/catalog"),
+        Vec::new(),
+        Vec::new(),
+        retry_policy,
+    )
+    .unwrap();
+
+    let response = ZetaClient::new(Arc::new(UreqHttpClient::new()))
+        .execute(&request)
+        .unwrap();
+
+    assert_eq!(response.status(), 200);
+    assert_eq!(response.body(), b"ok");
+    server.join().unwrap();
+}
+
+#[test]
+fn sse_decoder_joins_multiline_data_across_chunks() {
+    let mut decoder = SseDecoder::new(1024).unwrap();
+    assert!(
+        decoder
+            .push(b"event: update\r\ndata: first")
+            .unwrap()
+            .is_empty()
+    );
+    let frames = decoder.push(b"\r\ndata: second\r\n\r\n").unwrap();
+
+    assert_eq!(
+        frames,
+        vec![SseFrame::Event(SseEvent {
+            event: Some("update".into()),
+            data: "first\nsecond".into(),
+            id: None,
+            retry: None,
+        })]
+    );
+    decoder.finish().unwrap();
+}
+
+#[test]
+fn sse_decoder_keeps_comments_separate_from_protocol_events() {
+    let mut decoder = SseDecoder::new(1024).unwrap();
+    let frames = decoder.push(b": keep-alive\n\ndata: [DONE]\n\n").unwrap();
+
+    assert_eq!(frames.len(), 2);
+    assert_eq!(frames[0], SseFrame::Comment);
+    assert_eq!(
+        frames[1],
+        SseFrame::Event(SseEvent {
+            event: None,
+            data: "[DONE]".into(),
+            id: None,
+            retry: None,
+        })
+    );
+}
+
+#[test]
+fn telemetry_client_records_only_safe_operation_metadata() {
+    let telemetry = Arc::new(CapturingTelemetry::default());
+    let client = TelemetryOperationClient::new(
+        Arc::new(StaticClient),
+        telemetry.clone(),
+        ClientOperation::new("model.inference.openai_responses"),
+    );
+
+    client
+        .execute(
+            &ClientRequest::post(
+                "https://example.test/responses",
+                vec![HttpHeader::new("Authorization", "Bearer secret")],
+                br#"{"input":"private prompt"}"#.to_vec(),
+                RetryPolicy::never(),
+            )
+            .unwrap(),
+        )
+        .unwrap();
+
+    let event = telemetry.events.lock().unwrap()[0];
+    assert_eq!(event.operation.name(), "model.inference.openai_responses");
+    assert_eq!(event.outcome, ClientTelemetryOutcome::Succeeded);
+}
+
+#[derive(Default)]
+struct CapturingTelemetry {
+    events: Mutex<Vec<ClientTelemetryEvent>>,
+}
+
+impl ClientTelemetry for CapturingTelemetry {
+    fn record(&self, event: ClientTelemetryEvent) {
+        self.events.lock().unwrap().push(event);
+    }
+}
+
+struct StaticClient;
+
+impl OperationClient for StaticClient {
+    fn execute(&self, _: &ClientRequest) -> Result<ClientResponse, ClientError> {
+        Ok(ClientResponse::new(
+            200,
+            Vec::new(),
+            br#"{"ok":true}"#.to_vec(),
+        ))
+    }
+}
+
+fn read_headers(stream: &mut impl Read) {
+    let mut received = Vec::new();
+    let mut buffer = [0; 256];
+    loop {
+        let bytes_read = stream.read(&mut buffer).unwrap();
+        assert_ne!(
+            bytes_read, 0,
+            "client closed before sending request headers"
+        );
+        received.extend_from_slice(&buffer[..bytes_read]);
+        if received.windows(4).any(|window| window == b"\r\n\r\n") {
+            return;
+        }
+    }
+}

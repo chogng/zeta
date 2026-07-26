@@ -1,0 +1,37 @@
+//! Declarative, serializable, and runtime-free model-provider configuration.
+
+mod config;
+mod definition;
+mod error;
+mod providers;
+mod registry;
+
+pub use config::ModelProviderConfig;
+pub use config::NormalizedModelProviderConfig;
+pub use definition::ApiProfile;
+pub use definition::BaseUrlNormalization;
+pub use definition::EndpointPolicy;
+pub use definition::ModelCatalogPolicy;
+pub use definition::ProviderAdapter;
+pub use definition::ProviderDefaults;
+pub use definition::ProviderDefinition;
+pub use error::ProviderConfigError;
+pub use registry::ProviderConfigRegistry;
+pub use registry::RegistryMergePolicy;
+pub use zeta_protocol::Model;
+pub use zeta_protocol::ModelId;
+pub use zeta_protocol::ProviderId;
+
+use schemars::{Schema, schema_for};
+
+pub fn model_provider_config_schema() -> Schema {
+    schema_for!(ModelProviderConfig)
+}
+
+pub fn provider_definition_schema() -> Schema {
+    schema_for!(ProviderDefinition)
+}
+
+#[cfg(test)]
+#[path = "config_tests.rs"]
+mod tests;

@@ -14,11 +14,12 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 zeta-app-server = { workspace = true }
 zeta-app-server-protocol = { workspace = true }
+zeta-protocol = { workspace = true }
 zeta-app-server-transport = { workspace = true }
 
 [lints]
 workspace = true
 
 [dev-dependencies]
+zeta-async-utils = { workspace = true }
 zeta-core = { workspace = true }
-zeta-model-provider = { workspace = true }

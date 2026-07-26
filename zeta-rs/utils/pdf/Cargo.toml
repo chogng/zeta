@@ -1,0 +1,16 @@
+[package]
+name = "zeta-pdf"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+doctest = false
+name = "zeta_pdf"
+path = "src/lib.rs"
+
+[dependencies]
+pdfium-render = { workspace = true }
+
+[lints]
+workspace = true

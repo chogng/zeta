@@ -1,0 +1,17 @@
+[package]
+name = "zeta-thread-store"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+doctest = false
+name = "zeta_thread_store"
+path = "src/lib.rs"
+
+[dependencies]
+serde = { workspace = true }
+zeta-protocol = { workspace = true }
+
+[lints]
+workspace = true

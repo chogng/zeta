@@ -1,0 +1,960 @@
+# `zeta-models-manager` 架构与演进方案
+
+> 计划物理位置：`zeta-rs/models-manager/`
+> Rust crate：`zeta_models_manager`
+> 当前状态：Proposed，尚未创建 crate
+> Canonical model contract：[`protocol.md`](protocol.md#6-provider-independent-model-contract)
+> Provider wire adapter：[`zeta-api.md`](zeta-api.md)
+> Provider runtime：[`model-provider.md`](model-provider.md)
+> Operation client：[`zeta-client.md`](zeta-client.md)
+> 底层网络：[`zeta-http-client` README](../zeta-rs/http-client/README.md)
+
+> 官方资料核对日期：2026-07-25。Provider API 与模型生命周期会持续变化，本文固定架构边界和
+> 合并语义；具体 endpoint、字段映射与内置 metadata 必须以实现时的官方文档和 contract test
+> 为准。
+
+## 1. 结论
+
+`zeta-models-manager` 是 Zeta 的模型目录控制面。它统一管理各个 provider 可用模型的发现、
+缓存、合并、筛选和面向上层的 catalog snapshot，负责决定：
+
+- 何时请求 provider，何时直接使用缓存或静态 metadata；
+- 如何把 provider 动态结果、内置 metadata、用户配置和本地模型状态合并；
+- 如何在“不知道”与“明确不支持”之间保持区别；
+- 如何按 Agent 所需能力、生命周期和用户策略筛选模型；
+- 如何向 App Server、Desktop、CLI、TUI 和 Agent runtime 暴露一致的模型信息。
+
+它不是新的模型调用 client，也不是第二个 provider registry。边界固定为：
+
+```text
+provider adapter 负责“如何向某家服务取回原始模型目录”
+models manager 负责“何时取、如何缓存、如何合并、如何解释和如何发布”
+model provider 负责“如何用已选模型执行一次调用”
+```
+
+模型列表接口不能被当作完整 metadata authority。各家返回信息差异很大：
+
+- OpenAI、DeepSeek 一类接口主要返回 ID、owner、created 等基础信息；
+- Anthropic、Gemini、xAI 能返回部分或较丰富的 capability、token limit、modality、
+  alias 或 pricing metadata；
+- Hugging Face 的 Hub catalog、Inference Providers router 和实际下游 provider 是不同 scope，
+  coverage 需要单独声明；
+- 一些 provider 目前只有官方静态模型矩阵，没有文档化的 runtime catalog endpoint；
+- OpenAI-compatible 自定义服务对 `GET /models` 的支持和字段质量都不能假定。
+
+因此 manager 必须做字段级 merge，并为每个字段保留来源与可信度；禁止因为某次响应没有某个
+字段，就把已有的已知值覆盖成“不支持”，也禁止根据 model ID 字符串猜测工具、推理或上下文
+能力。
+
+## 2. 当前仓库审计
+
+当前模型相关职责分布如下：
+
+| 位置 | 已有职责 | 不应继续扩张的方向 |
+| --- | --- | --- |
+| `zeta-protocol::model::catalog` | `ProviderId`、`ModelId`、`ModelRef`、`ModelInfo`、capability value | 请求调度、缓存、provider DTO、refresh state |
+| `zeta-model-provider-config` | provider definition、endpoint/default、静态 seed models、配置归一化 | HTTP、凭据读取、动态 discovery、TTL |
+| `zeta-model-provider` | provider runtime、adapter 选择、模型调用 | catalog policy、跨 provider merge、UI 查询 |
+| `zeta-api` | endpoint/request/event 的 Provider wire codec | transport、retry、catalog authority、用户筛选 |
+| `zeta-http-client` | HTTP/WebSocket execution、proxy/TLS/pool、transport diagnostics | Provider DTO、catalog policy、模型选择 |
+| `zeta-client` | operation retry、SSE/NDJSON framing、telemetry | Provider DTO、catalog policy、模型选择 |
+| `zeta-config` | 用户配置 authority、patch/merge/persistence | provider 请求和进程内 refresh task |
+| App Server / clients | 组合、RPC、展示与交互 | 各自维护模型表或推断 capability |
+
+`ProviderDefinition.models` 当前可以作为启动 seed 和内置 metadata 的来源，但不能继续兼任动态
+可用性缓存。`ModelProviderRuntime::resolve_model` 当前的 `ListedOnly` / `AllowUnlisted`
+语义仍有价值，但最终应消费 manager 的 resolution，而不是独立维护另一套 catalog 判断。
+
+现有 `ModelInfo` 也存在后续需要修正的语义缺口：
+
+- 一个 `ContextWindow` 无法区分 total context、最大输入和最大输出；
+- capability 只覆盖 tools、reasoning、parallel tools 和 personality，无法表达 input modality、
+  structured output 或 workload kind；
+- 没有 availability、freshness、lifecycle、字段来源和诊断信息；
+- `Option<u32>` 同时可能表示“未知”“未配置”或“不适用”。
+
+这些缺口应通过 protocol value 演进解决，不能在 manager 对外 API 中重新发明一套同名 DTO。
+
+## 3. 职责与非职责
+
+### 3.1 Manager 拥有
+
+- provider catalog scope 的稳定识别；
+- 首次加载、按需 refresh、显式 refresh 和后台 refresh 策略；
+- per-scope cache、TTL、stale-while-revalidate、stale-if-error；
+- per-scope singleflight、并发上限、退避和抖动；
+- provider discovery、内置 metadata、用户 override 和历史 cache 的字段级 merge；
+- model lifecycle、availability、metadata quality 和 freshness projection；
+- capability/workload/visibility filter；
+- `(ProviderId, ModelId)` 的解析、校验和稳定排序；
+- immutable `ModelCatalogSnapshot` 及 generation 变化；
+- cache/refresh/merge 的诊断信息和不含秘密的 telemetry。
+
+### 3.2 Manager 不拥有
+
+- API key、OAuth token、secret persistence 或 credential refresh；
+- provider HTTP DTO、认证 header、endpoint 拼接和分页 wire codec；
+- completions/responses/messages 请求执行；
+- prompt/context KV cache 的创建、breakpoint、TTL、usage 解析或计费语义；
+- SSE/NDJSON/WebSocket 的 ping、空行、注释帧、读超时和断线重连；
+- 本地模型进程的预热、驻留和卸载；
+- Config 文件 authority 或 provider definition registry 的注册事务；
+- 模型价格账单、quota authority 或 rate-limit enforcement；
+- Session、Thread、Turn 的 durable state；
+- UI 中 picker 的布局、搜索输入和用户交互；
+- 通过真实 inference 请求“试探”模型能力。
+
+价格可以将来作为带来源和更新时间的展示 metadata 进入 snapshot，但不能被当作 billing
+authority；实际费用以 provider 账单和调用 usage 为准。
+
+### 3.3 四类不能混用的“缓存/保活”
+
+厂商文档中的 cache、keep-alive 和 heartbeat 不是同一个概念，必须按运行时边界拆开：
+
+| 机制 | 含义 | 所属层 |
+| --- | --- | --- |
+| Catalog cache | Zeta 缓存模型列表、availability 和 metadata observation | `zeta-models-manager` |
+| Prompt/context cache | 厂商复用 prompt prefix/KV tensor，影响推理延迟、费用和 usage | `zeta-api` provider adapter |
+| Stream liveness | raw byte activity/读超时属于 `zeta-http-client`；SSE/NDJSON frame activity 属于 `zeta-client` | Provider event 语义由 `zeta-api` 解释 |
+| Model residency | 本地模型是否继续驻留 CPU/GPU 内存 | `zeta-model-provider` 本地 runtime；wire 参数仍由 `zeta-api` 编码 |
+
+官方行为已经证明这些机制不能抽象成 manager 中的统一 `heartbeat`：
+
+- [Claude streaming](https://platform.claude.com/docs/en/build-with-claude/streaming) 允许在
+  SSE 消息事件之间发送 `ping`；
+- [DeepSeek request keep-alive](https://api-docs.deepseek.com/quick_start/rate_limit/) 对非流式
+  请求发送空行，对流式请求发送 SSE `: keep-alive` 注释；
+- [Ollama streaming](https://docs.ollama.com/api/streaming) 使用
+  `application/x-ndjson`，而请求参数
+  [`keep_alive`](https://docs.ollama.com/api/generate) 表示模型在内存中的驻留时间。
+
+Prompt cache 同样是调用语义而非 catalog cache：
+[OpenAI Prompt Caching](https://developers.openai.com/api/docs/guides/prompt-caching)、
+[Claude Prompt Caching](https://platform.claude.com/docs/en/build-with-claude/prompt-caching) 和
+[Gemini Context Caching](https://ai.google.dev/gemini-api/docs/caching/) 的启用方式、TTL、
+breakpoint 和 usage 字段均不同。Manager 最多把“某模型是否支持某类 prompt cache”作为带来源的
+capability metadata 暴露，不能创建、续期或命中厂商推理 cache。
+
+具体依赖边界固定为：
+
+- `zeta-protocol` 只在确实需要跨 crate/进程表达时定义 provider-independent 的 cache intent、
+  normalized usage 和 stream event value；
+- `zeta-api` 将 canonical request 转成 `prompt_cache_key`、`cache_control`、`cached_content`
+  等 provider wire 字段，解析 cache usage，并过滤/解释 provider-specific 心跳帧；
+- `zeta-model-provider` 选择具体 `zeta-api` endpoint/profile，提供 resolved endpoint、固定 header 和
+  retry policy，但不解释某家厂商的 cache breakpoint、TTL 或 SSE event；
+- `zeta-http-client` 执行 HTTP、transport timeout 和 diagnostics；`zeta-client` 执行 operation
+  retry 与 SSE/NDJSON framing，但都不解释 Provider event；
+- `zeta-models-manager` 只维护模型是否支持相关能力的 catalog metadata，不参与一次调用的
+  cache 生命周期或流式连接。
+
+## 4. 依赖方向与组合
+
+目标依赖关系中，箭头表示“依赖”：
+
+```text
+zeta-models-manager
+  ├──▶ zeta-protocol
+  └──▶ zeta-model-provider-config
+
+zeta-model-provider
+  ├──▶ zeta-model-provider-config
+  ├──▶ zeta-models-manager       # implements ModelCatalogSource
+  ├──▶ zeta-api ───▶ zeta-client
+  ├──▶ zeta-client
+  ├──▶ zeta-http-client
+  └──▶ zeta-secrets             # direct-provider credential only
+
+App Server composition
+  ├──▶ zeta-model-provider
+  └──▶ zeta-models-manager
+
+zeta-codex-app-server
+  └──▶ zeta-model-provider       # subscription runtime/catalog observation adapter
+```
+
+具体规则：
+
+- `zeta-models-manager` 可依赖 `zeta-protocol` 和 `zeta-model-provider-config`；
+- `zeta-models-manager` 不依赖 `zeta-model-provider`、`zeta-api`、`zeta-client`、
+  `zeta-http-client`、`zeta-secrets` 或 App Server；
+- manager 定义并拥有 `ModelCatalogSource` port，因为它是该 port 的消费者；
+- `zeta-model-provider` 实现该 port，复用已有 adapter、normalized endpoint、operation/HTTP
+  clients 和 credential materialization；
+- App Server composition root 将同一个 provider runtime 分别作为模型调用能力和 catalog source
+  注入，不能再建第二个 HTTP client registry；
+- provider-specific discovery DTO 留在 `zeta-api` 或 `zeta-model-provider` 的私有 adapter
+  module，不能进入 protocol。
+
+Google 和 Ollama 说明了为什么 discovery endpoint 不能从调用 base URL 盲目拼接：
+
+- 当前 Google 调用走 `.../v1beta/openai`，但原生模型目录是
+  `generativelanguage.googleapis.com/v1beta/models`；
+- 当前 Ollama OpenAI-compatible 调用走 `http://localhost:11434/v1`，但本地模型目录是
+  `/api/tags`，单模型详情是 `/api/show`。
+
+Provider definition 应显式声明 discovery strategy 或由具体 adapter 解析，禁止 manager 用
+`trim_end_matches("/v1")` 一类字符串启发式生成 endpoint。
+
+## 5. 核心领域模型
+
+以下是目标语义，不要求第一版逐字采用这些 Rust 名称。
+
+### 5.1 Catalog scope
+
+模型可用性不仅取决于 `ProviderId`，还可能取决于：
+
+- normalized base URL 和 region；
+- credential account、organization、project 或 tenant；
+- provider 配置 revision；
+- 本地 Ollama daemon 或自定义 gateway 实例；
+- Hugging Face 的 provider routing/account 权限。
+
+因此 cache key 不能只是 `ProviderId`：
+
+```rust
+pub struct CatalogScopeKey {
+    pub provider: ProviderId,
+    pub source_scope: CatalogSourceScopeId,
+}
+```
+
+`CatalogSourceScopeId` 是由 composition/provider layer 生成的 opaque、稳定 fingerprint。它可以
+包含 endpoint identity、credential reference identity 和 config revision 的 hash，但不得包含、
+记录或向客户端暴露 secret、token、完整认证 header。
+
+凭据内容轮换但 identity 不变时，credential layer 必须提供 revision，使新旧权限不会错误复用
+同一 cache。旧 scope 由 LRU/保留期回收，不做危险的全局 cache clear。
+
+### 5.2 Discovery result
+
+Source port 返回 provider-neutral、带覆盖范围的结果：
+
+```rust
+pub struct DiscoveredCatalog {
+    pub scope: CatalogScopeKey,
+    pub coverage: DiscoveryCoverage,
+    pub models: Vec<DiscoveredModel>,
+    pub validator: Option<CatalogValidator>,
+    pub cache_hint: CatalogCacheHint,
+    pub fetched_at: SystemTime,
+}
+
+pub enum DiscoveryCoverage {
+    CompleteFor(ModelWorkload),
+    Partial,
+}
+
+pub enum CatalogCacheHint {
+    NotSpecified,
+    RevalidateAfter(Duration),
+    ImmutableUntilSourceRevision,
+}
+```
+
+关键语义：
+
+- `CompleteFor(AgentText)` 表示“本响应完整覆盖该 credential/scope 下可用于 Agent text
+  workload 的模型”，此时缺席才可影响 availability；
+- `Partial` 表示搜索结果、单模型补充信息或 provider 明确不保证完整性，缺席不能形成 tombstone；
+- `CatalogValidator` 表达 ETag、Last-Modified 或 provider revision，而不是随意的字符串；
+- `CatalogCacheHint` 只转述官方协议或实际 HTTP 响应给出的证据；manager 会用本地最小/最大
+  freshness、错误退避和用户策略计算最终刷新时间；
+- provider 没有文档化 cache header、revision 或刷新周期时必须返回 `NotSpecified`，不能根据
+  其他 OpenAI-compatible 服务的行为类推；
+- raw response、认证 header 和 provider request ID 不进入 snapshot。
+
+### 5.3 Metadata patch 与 provenance
+
+Discovery、内置 catalog 和配置 override 都转换为 patch，而不是直接构造最终 `ModelInfo`：
+
+```rust
+pub struct SourcedModelPatch {
+    pub model: ModelRef,
+    pub source: MetadataSource,
+    pub fields: ModelMetadataPatch,
+}
+
+pub enum MetadataSource {
+    ProviderLive,
+    UserConfigured,
+    BuiltinCurated,
+    ProviderSeed,
+    PersistedObservation,
+}
+```
+
+每个可合并字段内部保留 `value + source + observed_at`。对外可以压缩为
+`MetadataQuality` 和少量 warnings，但诊断接口必须能解释“这个 200K context 从哪里来”。
+
+`CapabilitySupport::{Supported, Unsupported, Unknown}` 的三态必须保留。`Unknown` 不是
+`Unsupported`，缺失字段也不是否定证据。
+
+### 5.4 Snapshot
+
+所有消费者读取 immutable snapshot：
+
+```rust
+pub struct ModelCatalogSnapshot {
+    pub scope: CatalogScopeKey,
+    pub generation: u64,
+    pub freshness: CatalogFreshness,
+    pub entries: Vec<ModelCatalogEntry>,
+    pub warnings: Vec<CatalogWarning>,
+}
+
+pub enum CatalogFreshness {
+    Fresh,
+    StaleUsable,
+    Expired,
+    StaticOnly,
+}
+```
+
+同一 scope 只有在 consumer-visible 内容变化时才递增 generation。单纯 refresh 得到完全相同的
+结果，只更新内部 observation time，不制造无意义的 `model/updated`。
+
+排序必须确定，snapshot 中 model ID 不得重复。相同 generation 的序列化结果必须稳定，便于
+App Server、Desktop 和 contract tests 比较。
+
+## 6. Provider discovery 策略
+
+### 6.1 官方能力矩阵
+
+`Discovery mode` 描述 Zeta 如何组合实时 availability 与 curated metadata，不代表厂商承诺了
+客户端刷新频率。
+
+| Provider | Discovery mode | 推荐 discovery | 官方响应可提供的信息 | 初始策略 |
+| --- | --- | --- | --- | --- |
+| OpenAI | Hybrid | [`GET /v1/models`](https://developers.openai.com/api/reference/resources/models/methods/list) | ID、created、owner；官方描述为基础信息 | 动态 availability + 内置能力 metadata |
+| Anthropic | Dynamic/Hybrid | [`GET /v1/models`](https://platform.claude.com/docs/en/api/models/list) | ID、display name、token limits，并可返回 thinking、effort、image、structured output 等 capability | 优先使用动态字段，内置补缺 |
+| Google Gemini | Dynamic/Hybrid | [`models.list`](https://ai.google.dev/api/models) | display name、input/output limit、generation methods、thinking 等 | 使用原生 Gemini endpoint，不走 OpenAI-compatible base URL |
+| xAI | Dynamic/Hybrid | [`GET /v1/language-models`](https://docs.x.ai/developers/rest-api-reference/inference/models) | modality、aliases、fingerprint、部分价格；比 `/v1/models` 丰富 | Agent text 使用 language-models |
+| Kimi | Unknown/StaticOnly | 当前可访问的[官方平台文档](https://platform.moonshot.ai/docs/)未确认本设计所需的 authenticated list contract | `Unknown` | 使用 curated metadata；取得官方 reference/fixture 前不猜 `/models` |
+| DeepSeek | Hybrid | [`GET /models`](https://api-docs.deepseek.com/api/list-models) | 基础 ID、owner | 动态 availability + 内置能力 metadata |
+| Ollama | Dynamic local | [`GET /api/tags`](https://docs.ollama.com/api/tags) + 按需 `/api/show` | 本地已安装模型、family、size、quantization；详情可补 template/model info/capability | 高频短 TTL；只对可见候选按需取详情 |
+| Hugging Face | Dynamic/Hybrid | [Router `GET /v1/models`](https://huggingface.co/docs/inference-providers/hub-api) | modality、live provider、context、tools、structured output、价格/延迟等 | 过滤 conversational/live route，限制结果规模 |
+| MiniMax | StaticOnly（待核实） | [官方 models guide](https://platform.minimax.io/docs/guides/models-intro) | 静态模型、feature 和 endpoint 信息 | 未确认 authenticated list API 前不猜 `/models` |
+| Qwen / Model Studio | StaticOnly（待核实） | [官方模型矩阵](https://help.aliyun.com/en/model-studio/models) | region、API surface、模型能力由静态文档描述 | 未确认官方 inference list 前不假定 `/models` |
+| Z.AI | StaticOnly（待核实） | [官方模型矩阵](https://docs.z.ai/guides/overview/overview) | 模型类型、context 和能力由静态文档描述 | 动态 endpoint 需官方文档确认 |
+| Xiaomi MiMo | Unknown/StaticOnly | 当前未找到可访问、可核对的官方网络协议 reference | `Unknown` | 仅使用已审阅的 configured metadata；动态 endpoint 需官方文档确认 |
+| OpenAI-compatible | Unknown/Hybrid | best-effort `GET /models` | 完全取决于 gateway | adapter capability 检测；失败后转静态/用户配置 |
+
+该表只说明“可从哪里发现什么”，不把某个具体 model ID 固化成架构。内置 metadata 需要带
+`reviewed_at` 和官方 source URL，并通过定期维护更新。
+
+上述官方模型列表文档主要规定 endpoint、认证、分页和响应 schema。除非 provider profile
+另外引用了明确的 HTTP cache 文档，否则不得认为厂商承诺 `Cache-Control`、ETag、
+Last-Modified、固定 TTL、catalog push 或 heartbeat。实现时还必须通过不含秘密的 contract test
+记录真实响应头；观察到但未文档化的 header 只能作为优化，不能成为正确性前提。
+
+### 6.2 Provider 验证记录
+
+每个内置 provider 必须维护一份可审阅的 profile，可以是对应 adapter module 的测试 fixture 和
+文档注释，不要求拆成独立 crate。至少记录：
+
+```text
+official_sources
+verified_at
+discovery_endpoint_and_auth
+response_schema_and_pagination
+coverage_semantics
+static / dynamic / hybrid / unknown
+documented_cache_headers_or_revision
+observed_cache_headers
+refresh_triggers
+negative-cache-invalidators
+```
+
+其中“官方未说明”和“尚未验证”必须保持为 `Unknown`，不能填写从相似 provider 推导出的默认值。
+官方文档变化后，先更新 profile/fixture，再调整 adapter 和内置 metadata。
+
+### 6.3 Discovery capability 不是 model capability
+
+Provider definition 需要显式表达目录能力：
+
+```rust
+pub enum ModelDiscoveryStrategy {
+    Native(ProviderDiscoveryKind),
+    OpenAiCompatible,
+    StaticOnly,
+    Disabled,
+}
+```
+
+不能使用 `supports_discovery: bool`，因为 `Native`、best-effort compatible、static-only 和
+明确禁用是不同语义。`ProviderDiscoveryKind` 由 provider runtime 解释，manager 不分支判断
+Anthropic、Gemini 或 Ollama。
+
+Discovery wire strategy 与 refresh mode 也要分开：前者决定 endpoint/codec，后者由 manager 根据
+source profile、HTTP cache hint、本地 policy 和当前错误状态计算。不能因为实现了 `GET /models`
+就自动启动固定周期轮询，也不能因为存在静态 seed 就跳过用户显式 refresh。
+
+### 6.4 禁止 inference probing
+
+Manager 不通过发送“hello”、空 prompt、tool call 或超小 `max_tokens` 请求探测能力，原因是：
+
+- 会产生费用、配额消耗和外部副作用；
+- 失败无法可靠区分“不支持”、参数不兼容、权限或临时故障；
+- 会把 catalog refresh 变成真实模型调用；
+- 可能把用户凭据用于未明确触发的内容生成。
+
+能力只能来自官方 discovery 字段、经过审阅的内置 metadata 或用户显式 trust override。
+
+## 7. 何时请求
+
+### 7.1 Read policy
+
+调用方使用具名策略，不传 `fresh: bool`：
+
+```rust
+pub enum CatalogReadPolicy {
+    CachePreferred,
+    RequireFresh,
+    CacheOnly,
+}
+```
+
+语义固定为：
+
+| 当前状态 | `CachePreferred` | `RequireFresh` | `CacheOnly` |
+| --- | --- | --- | --- |
+| Fresh | 立即返回 | 立即返回，除非调用方显式执行 refresh | 立即返回 |
+| StaleUsable | 立即返回并触发后台 refresh | 等待/join refresh | 返回 stale |
+| Expired | 等待/join refresh；失败按 stale-if-error policy 决定 | 等待 refresh，失败返回错误 | 返回 expired snapshot |
+| 无 cache | 等待首次 discovery | 等待首次 discovery | 返回 cache miss |
+| StaticOnly | 返回静态 snapshot | 返回静态 snapshot 和不可动态刷新的状态 | 返回静态 snapshot |
+
+### 7.2 Refresh trigger
+
+允许触发请求的事件：
+
+- App Server 启动后，对 preferred/current provider 做低优先级 warm-up；
+- 某个 scope 首次执行 `model/list`；
+- cache 从 Fresh 进入 StaleUsable 后的首次读取；
+- 用户显式执行 refresh；
+- provider config、endpoint、credential revision 或 tenant scope 改变；
+- 本地 Ollama picker 打开或本地 daemon 状态恢复；
+- provider adapter 明确发送 catalog invalidation（将来可选）。
+
+不得在以下位置隐式阻塞网络：
+
+- protocol deserialize；
+- Config reducer/commit；
+- Thread reducer 或 rollout recovery；
+- 已开始的模型调用中途；
+- 仅渲染已有 snapshot 的 UI frame。
+
+Turn 创建 `ModelInvocationSnapshot` 时只解析已经选定的 `ModelRef`。普通 TTL refresh 不改变已经
+开始的调用；新 catalog 只影响下一次 picker read 或下一个安全点的 model resolution。
+
+### 7.3 Singleflight 与并发
+
+- 相同 `CatalogScopeKey` 同时最多一个 refresh；
+- `RequireFresh` 和首次读取 join 现有 refresh，不重复请求；
+- 不同 scope 可以并行，但受全局和 per-provider 并发上限约束；
+- 慢 provider 不持有 catalog write lock；网络 I/O 完成后以短临界区 compare-and-swap snapshot；
+- refresh result 必须校验 scope generation，旧配置启动的晚到响应不得覆盖新 scope；
+- shutdown/cancellation 停止 refresh task，不提交半个分页结果。
+
+分页 discovery 要么产生声明为 `CompleteFor` 的完整结果，要么失败/降级为 `Partial`，不能把只取到
+第一页的结果伪装成完整目录。
+
+## 8. Catalog cache 语义
+
+本章只讨论 Zeta 对模型目录 observation 的缓存，不讨论厂商 prompt/context cache、stream
+keep-alive 或本地模型驻留。后三者的 provider-specific 行为分别留在 `zeta-api` codec、
+`zeta-http-client` transport、`zeta-client` framing 和本地 runtime。
+
+### 8.1 两层 cache
+
+第一版至少提供：
+
+1. process-local memory cache：读取热路径、singleflight state 和 immutable snapshots；
+2. 可选 persisted observation cache：改善重启和离线体验，但只是可删除 projection。
+
+持久 cache 通过 `CatalogCacheStore` port 注入。Manager 决定 key、schema、freshness 和写入时机；
+文件/数据库 adapter 决定物理 I/O。持久层不得成为模型可用性的 authority。
+
+持久记录只保存 normalized metadata、scope fingerprint、官方 source revision 和时间，不保存：
+
+- API key、token、cookie、认证 header；
+- raw provider response；
+- 完整 endpoint query 中可能包含的秘密；
+- provider 返回的非必要账号信息。
+
+### 8.2 Freshness policy
+
+使用具名 policy：
+
+```rust
+pub struct CatalogFreshnessPolicy {
+    pub fresh_for: Duration,
+    pub stale_while_revalidate_for: Duration,
+    pub stale_if_error_for: Duration,
+}
+```
+
+以下是 Zeta 的建议默认值，不是厂商官方 TTL，也不是跨 provider 的协议保证：
+
+| Source | Fresh | 后台刷新可用期 | 临时错误最大 stale |
+| --- | --- | --- | --- |
+| 远程 provider | 15 分钟 | 24 小时 | 7 天 |
+| 本地 Ollama | 2 秒 | 30 秒 | 5 分钟 |
+| StaticOnly | 不过期 | 不适用 | 不适用 |
+| Unsupported discovery negative cache | 24 小时 | 不适用 | 配置变化时立即失效 |
+
+这些值由 manager policy/config 调整，不进入 `zeta-protocol`。测试必须使用注入 clock，禁止真实
+sleep。
+
+### 8.3 HTTP validator 与 backoff
+
+- provider 官方文档或实际响应支持 ETag/Last-Modified 时使用 conditional request；
+- `304` 只延长 freshness，不重建 generation；
+- `429`、`5xx`、timeout 和网络错误使用 exponential backoff + jitter；
+- `401/403` 不做长时间自动重试，等待 credential/config revision 或用户显式 refresh；
+- `404/405/501` 可标记 discovery unsupported，并进入 negative cache；
+- 成功请求会清除该 scope 的 transient backoff；
+- 用户显式 refresh 可以绕过 TTL，但仍要 join singleflight 和服从最小防抖间隔。
+
+实际响应中观察到但官方未保证的 validator 可以用于性能优化；服务器停止返回 validator 时必须
+退回普通 discovery，不能导致目录不可刷新。`Cache-Control` 也必须经过 manager 配置的
+minimum/maximum freshness clamp，不能让异常 gateway 无限延长 availability。
+
+### 8.4 Heartbeat 与健康恢复
+
+Models manager 第一版没有通用 heartbeat：
+
+- catalog 请求是有边界的普通 HTTP discovery；transport timeout/cancel 由 `zeta-http-client`
+  执行，operation retry 由 `zeta-client` 执行；
+- completions/messages 的 SSE/NDJSON framing 由 `zeta-client` 完成，Provider heartbeat event
+  由 `zeta-api` decoder 消费，不能进入
+  `DiscoveredCatalog`；
+- Ollama daemon 的存活和模型驻留由本地 provider runtime 管理，manager 只响应
+  `source revision changed` 或显式 invalidation；
+- 不允许通过定期 inference 请求充当 provider 健康探测。
+
+只有当某 provider 官方提供模型目录 watch/change feed 时，未来才增加 provider-specific
+invalidation source。长连接的 transport ping/pong 由 `zeta-http-client` 管理，SSE/NDJSON frame
+activity 由 `zeta-client` 管理；manager 只接收
+`CatalogInvalidated { scope, revision }` 这类领域事件。
+
+## 9. 合并规则
+
+### 9.1 Identity
+
+唯一 identity 始终是：
+
+```text
+(ProviderId, exact ModelId)
+```
+
+- 不把不同 provider 的同名模型合并；
+- 不 lowercase 或改写 provider model ID；
+- alias 仍以调用时的 exact ID 保留；
+- 只有 provider 明确返回 alias target 时，UI 才可分组展示；
+- stable alias 与 dated/pinned version 不自动互换；
+- 历史 Thread 中的 `ModelRef` 即使不再可用也必须可显示。
+
+### 9.2 字段优先级
+
+推荐默认优先级：
+
+```text
+用户显式 trust override
+    > provider live 的明确字段
+    > 内置 curated metadata
+    > ProviderDefinition seed
+    > persisted observation
+    > Unknown
+```
+
+但 availability 与 visibility 不使用这条简单顺序：
+
+- availability 由当前 scope 下最近一次完整 provider observation 决定；
+- user hidden/disabled 是本地 visibility/policy，不伪装成 provider unavailable；
+- 静态 seed 表示“Zeta 知道该模型”，不表示当前 credential 一定有权限；
+- provider 完整列表缺席可把该 scope 的模型标为 `Unavailable`，但不删除 metadata；
+- partial result 缺席不改变 availability；
+- persisted observation 在 live refresh 后只能补缺，不能覆盖更新的 live 字段。
+
+### 9.3 Patch 规则
+
+- `Unknown` 不覆盖 `Supported` 或 `Unsupported`；
+- provider 明确返回 unsupported 可以覆盖旧的 curated supported；
+- 数值 limit 只接受正数并记录其语义类型；
+- 冲突的 total/input/output limit 不互相强行换算，产生 warning；
+- display name 可由用户自定义，但 exact model ID 永不改变；
+- provider 未返回 lifecycle 时，不根据 ID 中是否含 `preview` 直接断言；内置规则可以给出
+  `Inferred` label，但不能当作 provider fact；
+- model 从 live catalog 消失时保留一段 tombstone retention，供历史显示、配置诊断和 UI
+  迁移提示使用。
+
+### 9.4 用户配置分层
+
+用户 override 分为两类，不能混成一个任意 JSON patch：
+
+```text
+Policy override
+  hidden / pinned / display alias / preferred / allowed lifecycle
+
+Trust override
+  context limits / modalities / tools / reasoning / structured output
+```
+
+Policy override 不改变事实 metadata。Trust override 用于自定义 gateway 或 provider 文档缺失场景，
+必须显式标记为 `UserConfigured`，经过静态 validation，并在诊断中可见。
+
+对于 limit，manager 可以允许用户收紧已知值；若用户扩大 provider 已知上限，应产生
+`OverridesProviderLimit` warning，避免静默制造不安全的 context budget。
+
+## 10. 筛选、解析与排序
+
+### 10.1 Filter pipeline
+
+面向 Agent 模型 picker 的顺序固定为：
+
+```text
+scope/provider 选择
+→ workload kind
+→ provider availability
+→ lifecycle / local policy
+→ required capabilities
+→ 用户搜索
+→ 稳定排序
+```
+
+第一步先排除 embedding、image-only、speech-only 等不能处理当前 canonical `ModelRequest` 的模型。
+不能因为 `/models` 返回了某个 ID，就默认它是聊天模型。
+
+Capability query 使用集合与显式 unknown policy：
+
+```rust
+pub struct ModelQuery {
+    pub workload: ModelWorkload,
+    pub required_capabilities: BTreeSet<ModelCapability>,
+    pub unknown_capability: UnknownCapabilityPolicy,
+    pub availability: AvailabilityFilter,
+}
+
+pub enum UnknownCapabilityPolicy {
+    IncludeWithWarning,
+    Exclude,
+}
+```
+
+禁止使用 `tools: bool`、`include_unknown: bool` 等难以扩展的参数组合。
+
+### 10.2 Resolve 不是简单 list lookup
+
+Agent runtime 应调用 manager 的 typed resolution：
+
+```text
+resolve(ModelRef, ModelRequirements, ResolutionPolicy)
+    → ResolvedModel
+```
+
+它需要检查：
+
+- provider/config scope 是否匹配；
+- model 是否满足 `ListedOnly` / `AllowUnlisted`；
+- 当前 workload 和强制 capability 是否满足；
+- model 是否明确 unavailable/retired；
+- 选择使用的 metadata snapshot generation；
+- 是否带有 stale、unknown 或 user-trust warning。
+
+Catalog 不应成为错误的授权替代品：
+
+- `AllowUnlisted` 下，用户显式填写的 model ID 可以继续进入 provider 调用，manager 返回
+  unverified metadata；
+- `ListedOnly` 下，只接受当前可用或本地明确注册的条目；
+- provider 最终仍可能因权限、region 或下线返回错误，runtime 必须保留真实 provider error；
+- manager 不把一次调用失败永久改写为 model unavailable，除非随后完整 refresh 证实。
+
+### 10.3 Stable sort
+
+默认排序建议使用：
+
+1. user pinned/preferred；
+2. provider 配置顺序；
+3. usable availability；
+4. stable/preview/legacy lifecycle；
+5. curated family rank；
+6. case-preserving display name；
+7. exact model ID。
+
+不得通过字符串或语义版本猜测“最大/最新”模型。Provider 的 `latest` alias 作为普通、可能漂移的
+alias 展示，并明确 lifecycle，不自动排在 pinned version 之前。
+
+## 11. 向上暴露
+
+### 11.1 Protocol values
+
+建议在 `zeta-protocol` 演进共享值，而不是在 App Server wire 层复制：
+
+```text
+ModelCatalogSnapshot
+ModelCatalogEntry
+ModelAvailability
+ModelLifecycle
+CatalogFreshness
+MetadataQuality
+CatalogWarning
+TokenLimits
+ModelModality / ModelWorkload
+```
+
+`ModelInfo` 建议收敛为 provider-independent 的模型事实与 Zeta 默认 metadata：
+
+- exact `ModelId`、display name、description；
+- `TokenLimits { context, input, output }`，每项使用 Known/Unknown/NotApplicable；
+- input/output modalities；
+- tools、parallel tool calls、reasoning、structured output 等 capability；
+- supported/default reasoning effort；
+- Zeta personality/default 和 auto-compaction recommendation。
+
+Availability、freshness、source quality 和 warnings 属于 `ModelCatalogEntry/Snapshot`，不塞进
+可跨 scope 复用的 `ModelInfo`。
+
+当前 `effective_auto_compact_token_limit()` 使用 context 的 90% 推导，只能作为临时 fallback。
+长期 context builder 应从明确的 input/context/output limits 和预留策略计算 budget；manager
+提供事实和 recommendation，不执行 compaction。
+
+### 11.2 App Server API
+
+建议增加：
+
+```text
+model/list
+model/refresh
+model/updated
+```
+
+- `model/list` 接受 typed query/read policy，返回 snapshot；
+- `model/refresh` 是显式动作，返回新 snapshot 或带 last-known snapshot 的 typed error；
+- `model/updated` 只在 consumer-visible generation 变化后通知；
+- initialize result 可包含 catalog capability/version，不内嵌完整目录；
+- App Server 负责 connection subscription 和 DTO 映射，不维护第二份 catalog；
+- Desktop、CLI、TUI 都消费同一 snapshot，不自行读取 provider 文档或拼 `/models`。
+
+Provider credential 缺失时，静态模型仍可展示为 `AuthenticationRequired/Unverified`；API 不返回
+credential account 的秘密信息。普通客户端也不需要看到 opaque cache scope fingerprint。
+
+### 11.3 Agent runtime
+
+`ResolvedModel` 在一次 model invocation 开始时进入 immutable `ModelInvocationSnapshot`：
+
+```text
+ModelRef
++ resolved limits/capabilities
++ provider config revision
++ catalog generation
++ warnings/policy decisions
+```
+
+刷新 catalog 不修改 in-flight invocation。下一次调用若发现 selected model 已明确 retired 或不再
+满足强制能力，ThreadRuntime 在安全点返回 typed capability/config error，不能在后台静默切换到
+另一模型。
+
+## 12. 错误与降级
+
+建议错误分类：
+
+| 类别 | 对 cache 的处理 | 对用户的结果 |
+| --- | --- | --- |
+| Authentication / permission | 当前 availability 降为需认证或未验证；保留 metadata | 展示配置提示，不泄露响应 |
+| Discovery unsupported | negative cache；使用 static/config | 正常返回 `StaticOnly` + warning |
+| Rate limited / timeout / network | stale-if-error + backoff | 返回 stale snapshot 和刷新诊断 |
+| Provider 5xx | stale-if-error + backoff | 同上 |
+| Invalid provider payload | 不提交坏 snapshot；保留 last-known | provider schema error |
+| Pagination incomplete | 只可提交 Partial，或整体失败 | 不因缺席下架模型 |
+| Empty complete result | 提交空 live availability，保留 configured/history tombstone | 明确显示当前 scope 无可用模型 |
+| Cache corrupt/schema mismatch | 丢弃可删除 cache，重新发现 | 不影响 Config/Thread recovery |
+| User override invalid | 拒绝该配置事务 | typed config error |
+
+错误对象应携带 provider、scope-safe identity、phase、retryability 和 last-known freshness，但不得
+携带 API key、Authorization header 或未经裁剪的 provider body。
+
+## 13. 安全、隐私与可观测性
+
+### 13.1 安全
+
+- 仅对用户已配置或明确使用的 provider 发起 authenticated discovery；
+- 不在启动时并发扫描所有内置 provider；
+- scope fingerprint 使用抗碰撞 hash，不可由客户端反推出 credential reference；
+- provider raw payload 默认不落盘；
+- response logging 只记录大小、状态码、字段计数和 schema path；
+- 自定义 base URL 继续经过 provider config 的 URL validation 和后续网络 policy；
+- persisted cache 使用与本地配置相同或更严格的文件权限；
+- cache delete 是可恢复操作，不影响 durable Session/Thread。
+
+### 13.2 Telemetry
+
+建议指标：
+
+```text
+catalog_read_total{provider,result=fresh|stale|miss|static}
+catalog_refresh_total{provider,result}
+catalog_refresh_duration_ms{provider}
+catalog_models_observed{provider,coverage}
+catalog_singleflight_join_total{provider}
+catalog_snapshot_generation_total{provider}
+catalog_metadata_conflict_total{provider,field}
+catalog_stale_age_seconds{provider}
+```
+
+禁止把 exact custom endpoint、model ID、credential account 或 provider response text 默认放入
+低基数 telemetry label。详细诊断留在本地、受控日志。
+
+## 14. 目录结构与公开 API
+
+遵守 workspace 的小模块和公开 API 规则，建议：
+
+```text
+zeta-rs/models-manager/
+├── Cargo.toml
+├── README.md
+└── src/
+    ├── lib.rs                 # 只做显式 re-export
+    ├── manager.rs             # read / refresh / resolve orchestration
+    ├── source.rs              # ModelCatalogSource port + discovery values
+    ├── snapshot.rs            # immutable snapshot/generation
+    ├── cache.rs               # cache state + freshness
+    ├── merge.rs               # field-level provenance merge
+    ├── filter.rs              # query/filter/sort
+    ├── policy.rs              # named policies
+    ├── error.rs
+    ├── manager_tests.rs
+    ├── cache_tests.rs
+    ├── merge_tests.rs
+    └── filter_tests.rs
+```
+
+模块默认 private，仅导出调用方真正需要的 manager、port、query、policy 和 error。新增 public
+trait 必须带 doc comments，说明实现者如何处理 scope、分页、coverage、cancellation 和 secret。
+
+`merge.rs`、`filter.rs` 尽量保持纯函数，使用固定 clock/source input，便于 property test 和
+table-driven test。
+
+## 15. 测试要求
+
+### 15.1 Contract tests
+
+每个动态 provider adapter 至少保存经过脱敏和裁剪的官方响应 fixture，验证：
+
+- endpoint 与认证/header 选择；
+- pagination；
+- 文档化及观察到的 cache header/validator 映射，缺失时回到 `NotSpecified`；
+- model ID 保真；
+- coverage 分类；
+- capability/limit mapping；
+- unknown field forward compatibility；
+- 401、429、5xx 和 schema error。
+
+Fixture 不是 provider 当前模型列表的 authority，只用于 wire contract。
+
+### 15.2 Manager tests
+
+必须覆盖：
+
+- fresh/stale/expired/cache miss 状态表；
+- 相同 scope singleflight、不同 scope 并行；
+- refresh 晚到响应不能覆盖新 config revision；
+- partial response 缺席不 tombstone；
+- complete response 缺席改变 availability 但保留 metadata；
+- `Unknown` 不覆盖 known；
+- live/curated/user override 冲突与 provenance；
+- 401、429、5xx、unsupported discovery 的不同退化；
+- deterministic generation 和排序；
+- `ListedOnly` / `AllowUnlisted` resolution；
+- custom compatible provider 无 `/models` 时仍可使用显式模型；
+- persisted cache schema mismatch 可安全丢弃；
+- telemetry/log 不含 secret fixture。
+
+测试 module 放在独立 sibling `*_tests.rs` 文件，并通过显式 `#[path = "..._tests.rs"]` 引入。
+
+### 15.3 集成测试
+
+App Server 使用 fake clock、fake source 和 memory cache 验证：
+
+```text
+model/list(stale)
+→ 立即返回 stale generation N
+→ 后台 refresh
+→ generation N+1
+→ model/updated
+→ 下一次 list 返回 fresh N+1
+```
+
+不在普通 CI 依赖真实 provider 网络或真实 API key。真实 provider smoke test 必须 opt-in、限频且不
+执行 inference。
+
+## 16. 分阶段落地
+
+### Phase 1：纯 catalog core
+
+- 创建 `zeta-models-manager`；
+- 定义 source port、scope、snapshot、read/refresh policy；
+- 从 `ProviderDefinition.models` 读取 seed；
+- 实现 memory cache、singleflight、merge/filter/resolve；
+- 先接 fake source 和完整单元测试；
+- 在 protocol 补齐 snapshot wrapper 和最小必要 metadata 类型。
+
+完成条件：无网络也能从统一 manager 获得确定 catalog，且不再由 UI/provider runtime 各自筛选。
+
+### Phase 2：高价值动态 provider
+
+按 metadata 质量和现有产品价值优先接入：
+
+1. OpenAI、Anthropic；
+2. Gemini、DeepSeek；
+3. Ollama；
+4. xAI、Hugging Face；
+5. Kimi、MiniMax、Qwen、Z.AI、MiMo 等先使用 curated/static source，在有官方、可验证
+   authenticated endpoint 后再接动态 discovery。
+
+每接入一个 provider，先建立第 6.2 节的验证记录，再实现 adapter。同时把 wire DTO/fixture 放到
+正确层，不在 manager 中写 provider switch。
+
+完成条件：动态列表失败时可稳定回退静态 snapshot；各 provider 的 coverage 与 Unknown 语义经过
+contract test；未文档化 cache header 不成为正确性依赖。
+
+### Phase 3：App Server 与客户端
+
+- 增加 `model/list`、`model/refresh`、`model/updated`；
+- Desktop/CLI/TUI picker 迁移到统一 snapshot；
+- provider 配置或凭据 revision 触发新 scope；
+- Agent runtime 在安全点使用 typed resolution。
+
+完成条件：所有产品入口看到相同目录、相同 warning 和相同排序，refresh 不影响 in-flight
+invocation。
+
+### Phase 4：持久 cache 与维护流程
+
+- 增加可删除的 persisted observation cache；
+- 内置 metadata 加 source URL、reviewed_at 和维护校验；
+- 建立官方文档变化的人工/自动审计流程；
+- 根据真实指标调整 TTL、backoff 和 warm-up 范围。
+
+完成条件：重启/离线仍能快速展示 last-known catalog，cache 损坏可删除重建且不影响 durable
+产品状态。
+
+## 17. 固定决策
+
+1. `zeta-models-manager` 是 catalog control plane，不是 provider invocation runtime。
+2. 唯一模型 identity 是 exact `(ProviderId, ModelId)`。
+3. 可用性按 endpoint + credential/tenant + config revision scope 缓存。
+4. Provider list API 只声明它实际返回的字段；缺失字段保持 `Unknown`。
+5. 合并是字段级 patch + provenance，不是整条 `ModelInfo` 后写覆盖前写。
+6. 完整 discovery 的缺席与 partial discovery 的缺席语义不同。
+7. manager 使用 stale-while-revalidate、singleflight 和 typed read policy。
+8. 不用 inference probing 发现模型或能力。
+9. 静态 seed 不证明当前账号可用，动态列表也不一定提供完整能力 metadata。
+10. Catalog refresh 不修改已开始的 model invocation，也不静默替换用户选中的模型。
+11. Persisted catalog 是可删除 projection，不是 Config、Thread 或 billing authority。
+12. Provider runtime/认证留在 `zeta-model-provider`，wire endpoint/codec 留在 `zeta-api`，
+    raw HTTP/network policy 留在 `zeta-http-client`，retry/framing 留在 `zeta-client`。
+13. Prompt/context cache、stream heartbeat 和本地模型驻留不属于 catalog manager。
+14. Catalog TTL 是可配置的 Zeta policy；provider cache hint/validator 只有证据充分时才参与计算。
+15. Provider discovery 必须逐家验证；`../pi` 或 OpenAI-compatible 行为不能作为其他厂商的协议
+    证明。

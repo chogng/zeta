@@ -10,7 +10,11 @@ name = "zeta_core"
 path = "src/lib.rs"
 
 [dependencies]
+serde_json = { workspace = true }
+zeta-async-utils = { workspace = true }
 zeta-protocol = { workspace = true }
+zeta-session-store = { workspace = true }
+zeta-thread-store = { workspace = true }
 
 [lints]
 workspace = true

@@ -1,0 +1,8 @@
+Source provenance only; this crate has no Codex wire-protocol or runtime
+dependency.
+
+The PTY integration layer was copied and adapted from OpenAI Codex revision
+bdd3118c71a29f26b9df3a47f91efea38a0d58bd (2026-07-21), licensed Apache-2.0.
+
+The Windows ConPTY files under src/win/ are derived from WezTerm and remain
+licensed under MIT. See ../../../third_party/wezterm/LICENSE.

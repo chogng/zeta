@@ -1,0 +1,22 @@
+[package]
+name = "zeta-rollout-trace"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+doctest = false
+name = "zeta_rollout_trace"
+path = "src/lib.rs"
+
+[dependencies]
+serde = { workspace = true }
+zeta-protocol = { workspace = true }
+zeta-session-store = { workspace = true }
+zeta-thread-store = { workspace = true }
+
+[dev-dependencies]
+zeta-rollout = { workspace = true }
+
+[lints]
+workspace = true

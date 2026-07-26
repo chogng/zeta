@@ -4,9 +4,9 @@ mod local;
 mod resource_store;
 mod server;
 
-pub use local::LocalAppServerOptions;
 pub use local::OpenAppServerError;
 pub use local::open_local_app_server;
+pub use local::{LocalAppServerOptions, LocalWorkspaceConfigOptions};
 pub use server::AppServer;
 pub use server::ConnectionState;
 

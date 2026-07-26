@@ -1,0 +1,20 @@
+[package]
+name = "zeta-rollout"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+doctest = false
+name = "zeta_rollout"
+path = "src/lib.rs"
+
+[dependencies]
+zeta-core = { workspace = true }
+zeta-protocol = { workspace = true }
+zeta-session-store = { workspace = true }
+zeta-storage = { workspace = true }
+zeta-thread-store = { workspace = true }
+
+[lints]
+workspace = true

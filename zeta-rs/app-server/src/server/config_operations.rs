@@ -1,0 +1,414 @@
+use super::{AppServer, RpcError, decode, result};
+use serde_json::Value;
+use zeta_app_server_protocol::protocol::config::{
+    ConfigCommandDispositionDto, ConfigCommandResult, ConfigReadResult, ConfigUpdateParams,
+    McpCredentialBindingDto, McpServerConfigDto, McpServerEnablementDto, McpServerRemoveParams,
+    McpServerSetEnablementParams, McpServerUpsertParams, McpTransportDto, ModelRefDto,
+    ProviderConfigDto, ProviderConfigureParams, ProviderRemoveParams, SkillSourceAddParams,
+    SkillSourceConfigDto, SkillSourceEnablementDto, SkillSourceRemoveParams,
+    SkillSourceSetEnablementParams, ThemeDto,
+};
+use zeta_app_server_protocol::protocol::error::AppServerErrorName;
+use zeta_config::{
+    ConfigCommandDisposition, ConfigCommandError, ConfigCommandRequest, ConfigRevision,
+    McpCredentialBinding, McpServerConfig, McpServerEnablement, McpServerId, McpTransportConfig,
+    PreferencesUpdate, ResolvedConfigSnapshot, SkillSourceConfig, SkillSourceEnablement,
+    SkillSourceId, Theme, UserConfigCommand,
+};
+use zeta_model_provider::{ModelId, ModelRef, ProviderId};
+use zeta_model_provider_config::ModelProviderConfig;
+use zeta_protocol::Patch;
+
+impl AppServer {
+    pub(super) fn config_read(&self) -> Result<Value, RpcError> {
+        let snapshot = self
+            .config
+            .as_ref()
+            .ok_or_else(|| RpcError::new(-32030, AppServerErrorName::ConfigUnavailable))?
+            .read_snapshot()
+            .map_err(config_error)?;
+        result(&config_read_result(snapshot))
+    }
+
+    pub(super) fn config_update(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: ConfigUpdateParams = decode(params)?;
+        let store = self
+            .config
+            .clone()
+            .ok_or_else(|| RpcError::new(-32030, AppServerErrorName::ConfigUnavailable))?;
+        let outcome = store
+            .apply(ConfigCommandRequest {
+                command_id: params.command_id,
+                expected_revision: ConfigRevision::new(params.expected_revision),
+                command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+                    preferred_model: model_ref_update_from_dto(params.preferred_model)?,
+                    theme: params.theme.map(theme_from_dto),
+                }),
+            })
+            .map_err(config_operation_error)?;
+        result(&config_command_result(outcome))
+    }
+
+    pub(super) fn provider_configure(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: ProviderConfigureParams = decode(params)?;
+        let provider = provider_config_from_dto(params.config)?;
+        let store = self
+            .config
+            .clone()
+            .ok_or_else(|| RpcError::new(-32030, AppServerErrorName::ConfigUnavailable))?;
+        let outcome = store
+            .apply(ConfigCommandRequest {
+                command_id: params.command_id,
+                expected_revision: ConfigRevision::new(params.expected_revision),
+                command: UserConfigCommand::ConfigureProvider {
+                    provider: provider.provider.clone(),
+                    config: provider,
+                },
+            })
+            .map_err(config_operation_error)?;
+        result(&config_command_result(outcome))
+    }
+
+    pub(super) fn provider_remove(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: ProviderRemoveParams = decode(params)?;
+        let provider = ProviderId::new(params.provider)
+            .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
+        let store = self
+            .config
+            .clone()
+            .ok_or_else(|| RpcError::new(-32030, AppServerErrorName::ConfigUnavailable))?;
+        let outcome = store
+            .apply(ConfigCommandRequest {
+                command_id: params.command_id,
+                expected_revision: ConfigRevision::new(params.expected_revision),
+                command: UserConfigCommand::RemoveProvider { provider },
+            })
+            .map_err(config_operation_error)?;
+        result(&config_command_result(outcome))
+    }
+
+    pub(super) fn mcp_server_upsert(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: McpServerUpsertParams = decode(params)?;
+        let server = mcp_server_config_from_dto(params.server)?;
+        let store = self
+            .config
+            .clone()
+            .ok_or_else(|| RpcError::new(-32030, AppServerErrorName::ConfigUnavailable))?;
+        let outcome = store
+            .apply(ConfigCommandRequest {
+                command_id: params.command_id,
+                expected_revision: ConfigRevision::new(params.expected_revision),
+                command: UserConfigCommand::UpsertMcpServer { server },
+            })
+            .map_err(config_operation_error)?;
+        result(&config_command_result(outcome))
+    }
+
+    pub(super) fn mcp_server_remove(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: McpServerRemoveParams = decode(params)?;
+        let server_id = McpServerId::new(params.server_id)
+            .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
+        let store = self
+            .config
+            .clone()
+            .ok_or_else(|| RpcError::new(-32030, AppServerErrorName::ConfigUnavailable))?;
+        let outcome = store
+            .apply(ConfigCommandRequest {
+                command_id: params.command_id,
+                expected_revision: ConfigRevision::new(params.expected_revision),
+                command: UserConfigCommand::RemoveMcpServer { server_id },
+            })
+            .map_err(config_operation_error)?;
+        result(&config_command_result(outcome))
+    }
+
+    pub(super) fn mcp_server_set_enablement(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: McpServerSetEnablementParams = decode(params)?;
+        let server_id = McpServerId::new(params.server_id)
+            .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
+        let store = self
+            .config
+            .clone()
+            .ok_or_else(|| RpcError::new(-32030, AppServerErrorName::ConfigUnavailable))?;
+        let outcome = store
+            .apply(ConfigCommandRequest {
+                command_id: params.command_id,
+                expected_revision: ConfigRevision::new(params.expected_revision),
+                command: UserConfigCommand::SetMcpServerEnablement {
+                    server_id,
+                    enablement: mcp_enablement_from_dto(params.enablement),
+                },
+            })
+            .map_err(config_operation_error)?;
+        result(&config_command_result(outcome))
+    }
+
+    pub(super) fn skill_source_add(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: SkillSourceAddParams = decode(params)?;
+        let source = skill_source_config_from_dto(params.source)?;
+        let store = self
+            .config
+            .clone()
+            .ok_or_else(|| RpcError::new(-32030, AppServerErrorName::ConfigUnavailable))?;
+        let outcome = store
+            .apply(ConfigCommandRequest {
+                command_id: params.command_id,
+                expected_revision: ConfigRevision::new(params.expected_revision),
+                command: UserConfigCommand::AddSkillSource { source },
+            })
+            .map_err(config_operation_error)?;
+        result(&config_command_result(outcome))
+    }
+
+    pub(super) fn skill_source_remove(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: SkillSourceRemoveParams = decode(params)?;
+        let source_id = SkillSourceId::new(params.source_id)
+            .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
+        let store = self
+            .config
+            .clone()
+            .ok_or_else(|| RpcError::new(-32030, AppServerErrorName::ConfigUnavailable))?;
+        let outcome = store
+            .apply(ConfigCommandRequest {
+                command_id: params.command_id,
+                expected_revision: ConfigRevision::new(params.expected_revision),
+                command: UserConfigCommand::RemoveSkillSource { source_id },
+            })
+            .map_err(config_operation_error)?;
+        result(&config_command_result(outcome))
+    }
+
+    pub(super) fn skill_source_set_enablement(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: SkillSourceSetEnablementParams = decode(params)?;
+        let source_id = SkillSourceId::new(params.source_id)
+            .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
+        let store = self
+            .config
+            .clone()
+            .ok_or_else(|| RpcError::new(-32030, AppServerErrorName::ConfigUnavailable))?;
+        let outcome = store
+            .apply(ConfigCommandRequest {
+                command_id: params.command_id,
+                expected_revision: ConfigRevision::new(params.expected_revision),
+                command: UserConfigCommand::SetSkillSourceEnablement {
+                    source_id,
+                    enablement: skill_enablement_from_dto(params.enablement),
+                },
+            })
+            .map_err(config_operation_error)?;
+        result(&config_command_result(outcome))
+    }
+}
+
+fn config_error(_: zeta_config::ConfigError) -> RpcError {
+    RpcError::new(-32030, AppServerErrorName::ConfigUnavailable)
+}
+
+fn config_operation_error(error: ConfigCommandError) -> RpcError {
+    match error {
+        ConfigCommandError::CommandConflict => {
+            RpcError::new(-32004, AppServerErrorName::CommandConflict)
+        }
+        ConfigCommandError::RevisionConflict { .. } => {
+            RpcError::new(-32031, AppServerErrorName::ConfigRevisionConflict)
+        }
+        ConfigCommandError::Config(error) => config_error(error),
+    }
+}
+
+fn config_read_result(snapshot: ResolvedConfigSnapshot) -> ConfigReadResult {
+    ConfigReadResult {
+        revision: snapshot.revision.get(),
+        generation: snapshot.generation.get(),
+        preferred_model: snapshot.values.preferred_model.map(model_ref_dto),
+        theme: snapshot.values.theme.map(theme_dto),
+        providers: snapshot
+            .values
+            .providers
+            .into_iter()
+            .map(|(id, config)| (id.to_string(), provider_config_dto(config)))
+            .collect(),
+        mcp_servers: snapshot
+            .values
+            .mcp
+            .servers
+            .into_iter()
+            .map(|(id, config)| (id.to_string(), mcp_server_config_dto(config)))
+            .collect(),
+        skill_sources: snapshot
+            .values
+            .skills
+            .sources
+            .into_iter()
+            .map(|(id, config)| (id.to_string(), skill_source_config_dto(config)))
+            .collect(),
+    }
+}
+
+fn config_command_result(outcome: zeta_config::ConfigCommandResult) -> ConfigCommandResult {
+    ConfigCommandResult {
+        revision: outcome.revision.get(),
+        generation: outcome.generation.get(),
+        disposition: match outcome.disposition {
+            ConfigCommandDisposition::Updated => ConfigCommandDispositionDto::Updated,
+            ConfigCommandDisposition::Replayed => ConfigCommandDispositionDto::Replayed,
+        },
+    }
+}
+
+fn theme_dto(theme: Theme) -> ThemeDto {
+    match theme {
+        Theme::Light => ThemeDto::Light,
+        Theme::Dark => ThemeDto::Dark,
+        Theme::System => ThemeDto::System,
+    }
+}
+
+fn theme_from_dto(theme: ThemeDto) -> Theme {
+    match theme {
+        ThemeDto::Light => Theme::Light,
+        ThemeDto::Dark => Theme::Dark,
+        ThemeDto::System => Theme::System,
+    }
+}
+
+fn model_ref_dto(model_ref: ModelRef) -> ModelRefDto {
+    ModelRefDto {
+        provider: model_ref.provider.to_string(),
+        model: model_ref.model.to_string(),
+    }
+}
+
+fn model_ref_from_dto(model_ref: ModelRefDto) -> Result<ModelRef, RpcError> {
+    Ok(ModelRef::new(
+        ProviderId::new(model_ref.provider)
+            .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?,
+        ModelId::new(model_ref.model)
+            .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?,
+    ))
+}
+
+fn model_ref_update_from_dto(update: Patch<ModelRefDto>) -> Result<Patch<ModelRef>, RpcError> {
+    match update {
+        Patch::Missing => Ok(Patch::Missing),
+        Patch::Null => Ok(Patch::Null),
+        Patch::Value(model_ref) => model_ref_from_dto(model_ref).map(Patch::Value),
+    }
+}
+
+fn provider_config_dto(config: ModelProviderConfig) -> ProviderConfigDto {
+    ProviderConfigDto {
+        provider: config.provider.to_string(),
+        base_url: config.base_url,
+        max_output_tokens: config.max_output_tokens,
+    }
+}
+
+fn provider_config_from_dto(config: ProviderConfigDto) -> Result<ModelProviderConfig, RpcError> {
+    Ok(ModelProviderConfig {
+        provider: ProviderId::new(config.provider)
+            .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?,
+        base_url: config.base_url,
+        max_output_tokens: config.max_output_tokens,
+    })
+}
+
+fn mcp_server_config_dto(config: McpServerConfig) -> McpServerConfigDto {
+    McpServerConfigDto {
+        id: config.id.to_string(),
+        display_name: config.display_name,
+        transport: mcp_transport_dto(config.transport),
+        credential: mcp_credential_dto(config.credential),
+        enablement: mcp_enablement_dto(config.enablement),
+    }
+}
+
+fn mcp_server_config_from_dto(config: McpServerConfigDto) -> Result<McpServerConfig, RpcError> {
+    Ok(McpServerConfig {
+        id: McpServerId::new(config.id)
+            .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?,
+        display_name: config.display_name,
+        transport: mcp_transport_from_dto(config.transport),
+        credential: mcp_credential_from_dto(config.credential),
+        enablement: mcp_enablement_from_dto(config.enablement),
+    })
+}
+
+fn mcp_transport_dto(transport: McpTransportConfig) -> McpTransportDto {
+    match transport {
+        McpTransportConfig::Stdio { command, args } => McpTransportDto::Stdio { command, args },
+        McpTransportConfig::StreamableHttp { url } => McpTransportDto::StreamableHttp { url },
+    }
+}
+
+fn mcp_transport_from_dto(transport: McpTransportDto) -> McpTransportConfig {
+    match transport {
+        McpTransportDto::Stdio { command, args } => McpTransportConfig::Stdio { command, args },
+        McpTransportDto::StreamableHttp { url } => McpTransportConfig::StreamableHttp { url },
+    }
+}
+
+fn mcp_credential_dto(credential: McpCredentialBinding) -> McpCredentialBindingDto {
+    match credential {
+        McpCredentialBinding::Unauthenticated => McpCredentialBindingDto::Unauthenticated,
+        McpCredentialBinding::Reference { credential_ref } => {
+            McpCredentialBindingDto::Reference { credential_ref }
+        }
+    }
+}
+
+fn mcp_credential_from_dto(credential: McpCredentialBindingDto) -> McpCredentialBinding {
+    match credential {
+        McpCredentialBindingDto::Unauthenticated => McpCredentialBinding::Unauthenticated,
+        McpCredentialBindingDto::Reference { credential_ref } => {
+            McpCredentialBinding::Reference { credential_ref }
+        }
+    }
+}
+
+fn mcp_enablement_dto(enablement: McpServerEnablement) -> McpServerEnablementDto {
+    match enablement {
+        McpServerEnablement::Disabled => McpServerEnablementDto::Disabled,
+        McpServerEnablement::Enabled => McpServerEnablementDto::Enabled,
+    }
+}
+
+fn mcp_enablement_from_dto(enablement: McpServerEnablementDto) -> McpServerEnablement {
+    match enablement {
+        McpServerEnablementDto::Disabled => McpServerEnablement::Disabled,
+        McpServerEnablementDto::Enabled => McpServerEnablement::Enabled,
+    }
+}
+
+fn skill_source_config_dto(config: SkillSourceConfig) -> SkillSourceConfigDto {
+    SkillSourceConfigDto {
+        id: config.id.to_string(),
+        root_reference: config.root_reference,
+        enablement: skill_enablement_dto(config.enablement),
+    }
+}
+
+fn skill_source_config_from_dto(
+    config: SkillSourceConfigDto,
+) -> Result<SkillSourceConfig, RpcError> {
+    Ok(SkillSourceConfig {
+        id: SkillSourceId::new(config.id)
+            .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?,
+        root_reference: config.root_reference,
+        enablement: skill_enablement_from_dto(config.enablement),
+    })
+}
+
+fn skill_enablement_dto(enablement: SkillSourceEnablement) -> SkillSourceEnablementDto {
+    match enablement {
+        SkillSourceEnablement::Disabled => SkillSourceEnablementDto::Disabled,
+        SkillSourceEnablement::Enabled => SkillSourceEnablementDto::Enabled,
+    }
+}
+
+fn skill_enablement_from_dto(enablement: SkillSourceEnablementDto) -> SkillSourceEnablement {
+    match enablement {
+        SkillSourceEnablementDto::Disabled => SkillSourceEnablement::Disabled,
+        SkillSourceEnablementDto::Enabled => SkillSourceEnablement::Enabled,
+    }
+}

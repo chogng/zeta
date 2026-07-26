@@ -1,24 +1,40 @@
-import { app, BrowserWindow, ipcMain, type IpcMainInvokeEvent } from "electron/main";
+import { app, BrowserWindow, ipcMain } from "electron/main";
 import { join } from "node:path";
-import { AppServerProcess } from "../../platform/app-server/electron-main/app-server-process.js";
+import { pathToFileURL } from "node:url";
+import {
+  APP_SERVER_SCHEMA_HASH,
+} from "../../../generated/app-server/types.js";
+import { appServerIpcRoutes } from "../../platform/app-server/electron-main/app-server-ipc.js";
+import { AppServerSupervisor } from "../../platform/app-server/electron-main/app-server-supervisor.js";
+import {
+  normalizeEntryUrl,
+  registerTrustedIpcRoutes,
+} from "../../platform/app-server/electron-main/trusted-ipc-router.js";
 
-const server = new AppServerProcess();
-
-function requireTrustedSender(event: IpcMainInvokeEvent): void {
-  const senderUrl = event.senderFrame?.url;
-  if (senderUrl?.startsWith("file:")) return;
-  const rendererUrl = process.env.ZETA_RENDERER_URL;
-  if (!app.isPackaged && senderUrl && rendererUrl && new URL(senderUrl).origin === new URL(rendererUrl).origin) return;
-  throw new Error("Untrusted renderer IPC sender");
-}
+let supervisor: AppServerSupervisor | undefined;
 
 app.whenReady().then(async () => {
-  const connection = server.start();
-  await connection.request("initialize", {
-    clientInfo: { name: "zeta-desktop", version: app.getVersion() },
-    protocolVersions: { min: 1, max: 1 },
-    capabilities: { notifications: true },
+  const executableName = process.platform === "win32" ? "zeta.exe" : "zeta";
+  const executable = app.isPackaged
+    ? join(process.resourcesPath, "bin", executableName)
+    : join(app.getAppPath(), "..", "zeta-rs", "target", "debug", executableName);
+  supervisor = new AppServerSupervisor({
+    executable,
+    args: ["app-server", "--listen", "stdio://"],
+    environment: {
+      PATH: process.env.PATH ?? "",
+      ZETA_STATE_ROOT: join(app.getPath("userData"), "state"),
+    },
+    session: {
+      clientName: "zeta-desktop",
+      clientVersion: app.getVersion(),
+      schemaHash: APP_SERVER_SCHEMA_HASH,
+      initializeTimeoutMs: 10_000,
+      expectedServerName: "zeta-app-server",
+    },
   });
+  await supervisor.start();
+
   const useWindowsTitleBarOverlay = process.platform === "win32";
   const window = new BrowserWindow({
     frame: !useWindowsTitleBarOverlay,
@@ -31,17 +47,42 @@ app.whenReady().then(async () => {
       preload: join(app.getAppPath(), "dist/preload/src/code/electron-browser/preload.cjs"),
     },
   });
-  connection.onNotification((notification) => window.webContents.send("zeta:event", notification));
-  ipcMain.handle("zeta:thread:start", (event, params) => { requireTrustedSender(event); return connection.request("thread/start", params); });
-  ipcMain.handle("zeta:thread:read", (event, params) => { requireTrustedSender(event); return connection.request("thread/read", params); });
-  ipcMain.handle("zeta:turn:start", (event, params) => { requireTrustedSender(event); return connection.request("turn/start", params); });
-  ipcMain.handle("zeta:turn:interrupt", (event, params) => { requireTrustedSender(event); return connection.request("turn/interrupt", params); });
   const rendererUrl = process.env.ZETA_RENDERER_URL;
+  const rendererFile = join(
+    app.getAppPath(),
+    "dist/renderer/electron-browser/workbench/workbench.html",
+  );
+  const rendererEntryUrl =
+    !app.isPackaged && rendererUrl
+      ? new URL("/electron-browser/workbench/workbench.html", rendererUrl).href
+      : pathToFileURL(rendererFile).href;
+  const disposeRoutes = registerTrustedIpcRoutes(
+    ipcMain,
+    {
+      webContents: window.webContents,
+      allowedEntryUrls: new Set([normalizeEntryUrl(rendererEntryUrl)]),
+    },
+    appServerIpcRoutes(supervisor),
+  );
+  const disposeNotifications = supervisor.onNotification((notification) =>
+    window.webContents.send("zeta:event", notification),
+  );
+  const disposeState = supervisor.onStateChange((state) =>
+    window.webContents.send("zeta:app-server:stateChanged", state),
+  );
+  window.once("closed", () => {
+    disposeRoutes();
+    disposeNotifications();
+    disposeState();
+  });
+
   if (!app.isPackaged && rendererUrl) {
-    await window.loadURL(new URL("/electron-browser/workbench/workbench.html", rendererUrl).href);
+    await window.loadURL(rendererEntryUrl);
   } else {
-    await window.loadFile(join(app.getAppPath(), "dist/renderer/electron-browser/workbench/workbench.html"));
+    await window.loadFile(rendererFile);
   }
 });
 
-app.on("before-quit", () => server.stop());
+app.on("before-quit", () => {
+  void supervisor?.stop();
+});

@@ -6,12 +6,9 @@ use zeta_app_server::AppServer;
 use zeta_app_server::ConnectionState;
 use zeta_app_server::LocalAppServerOptions;
 use zeta_app_server::open_local_app_server;
-use zeta_app_server_protocol::CURRENT_PROTOCOL_VERSION;
-use zeta_app_server_protocol::common::ClientCapabilities;
-use zeta_app_server_protocol::common::ClientInfo;
-use zeta_app_server_protocol::common::ProtocolVersions;
-use zeta_app_server_protocol::schema_hash_v1;
-use zeta_app_server_protocol::v1::initialize::InitializeParams;
+use zeta_app_server_protocol::protocol::common::{ClientCapabilities, ClientInfo};
+use zeta_app_server_protocol::protocol::initialize::InitializeParams;
+use zeta_app_server_protocol::schema_hash;
 
 /// Startup inputs for an embedded App Server connection.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -80,13 +77,9 @@ pub fn start_in_process_client(
     let mut client = AppServerClient::new(InProcessTransport::from_server(server));
     let initialized = client.initialize(InitializeParams {
         client_info: options.client_info,
-        protocol_versions: ProtocolVersions {
-            min: CURRENT_PROTOCOL_VERSION,
-            max: CURRENT_PROTOCOL_VERSION,
-        },
         capabilities: options.capabilities,
     })?;
-    let expected_schema = schema_hash_v1();
+    let expected_schema = schema_hash();
     if initialized.schema_hash.0 != expected_schema {
         return Err(ClientError::Protocol(format!(
             "schema hash mismatch: client expected {expected_schema}, server returned {}",

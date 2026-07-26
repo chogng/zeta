@@ -1,9 +1,11 @@
 use serde_json::{Value, json};
 use std::sync::Mutex;
 use zeta_api::{
-    Api, ApiError, ApiProtocol, HttpHeader, JsonHttpTransport, ModelRequest, ReasoningConfig,
-    ReasoningEffort, ResolvedApiTarget, StopReason, ToolDefinition,
+    ApiEndpoint, ApiProtocol, ModelRequest, ReasoningConfig, ReasoningEffort, StopReason,
+    ToolDefinition, ToolName,
 };
+use zeta_client::{ClientError, ClientRequest, ClientResponse, OperationClient, ResolvedApiTarget};
+use zeta_http_client::HttpHeader;
 
 struct CapturingTransport {
     request: Mutex<Option<(String, Vec<HttpHeader>, Value)>>,
@@ -19,15 +21,15 @@ impl CapturingTransport {
     }
 }
 
-impl JsonHttpTransport for CapturingTransport {
-    fn post_json(
-        &self,
-        endpoint: &str,
-        headers: &[HttpHeader],
-        request: Value,
-    ) -> Result<Value, ApiError> {
-        *self.request.lock().unwrap() = Some((endpoint.into(), headers.to_vec(), request));
-        Ok(self.response.clone())
+impl OperationClient for CapturingTransport {
+    fn execute(&self, request: &ClientRequest) -> Result<ClientResponse, ClientError> {
+        let body = serde_json::from_slice(request.body())
+            .map_err(|_| ClientError::InvalidRequest("API codec did not produce JSON".into()))?;
+        *self.request.lock().unwrap() =
+            Some((request.url().into(), request.headers().to_vec(), body));
+        let response = serde_json::to_vec(&self.response)
+            .map_err(|_| ClientError::InvalidResponse("test response did not encode".into()))?;
+        Ok(ClientResponse::new(200, Vec::new(), response))
     }
 }
 
@@ -42,7 +44,7 @@ fn tool_request() -> ModelRequest {
     let mut request = ModelRequest::text("weather");
     request.instructions = Some("Use tools when needed.".into());
     request.tools.push(ToolDefinition {
-        name: "weather".into(),
+        name: ToolName::new("weather").expect("test tool name is valid"),
         description: "Get weather".into(),
         parameters: json!({
             "type": "object",
@@ -77,8 +79,8 @@ fn openai_responses_converts_tools_reasoning_and_tool_calls() {
             "output_tokens_details": {"reasoning_tokens": 2}
         }
     }));
-    let response = Api::OpenAi
-        .complete_with_transport(&target(), "gpt-test", &tool_request(), &transport)
+    let response = ApiEndpoint::OpenAiResponses
+        .complete_with_client(&target(), "gpt-test", &tool_request(), &transport)
         .unwrap();
 
     let (endpoint, headers, request) = transport.request.lock().unwrap().clone().unwrap();
@@ -96,7 +98,7 @@ fn openai_responses_converts_tools_reasoning_and_tool_calls() {
 }
 
 #[test]
-fn qwen_adapter_reuses_completions_and_converts_tools_and_text() {
+fn chat_completions_endpoint_converts_tools_and_text() {
     let transport = CapturingTransport::new(json!({
         "id": "chatcmpl_1",
         "choices": [{
@@ -107,8 +109,8 @@ fn qwen_adapter_reuses_completions_and_converts_tools_and_text() {
     }));
     let mut request = tool_request();
     request.reasoning = None;
-    let response = Api::Qwen
-        .complete_with_transport(&target(), "qwen-test", &request, &transport)
+    let response = ApiEndpoint::OpenAiChatCompletions
+        .complete_with_client(&target(), "qwen-test", &request, &transport)
         .unwrap();
 
     let (endpoint, _, body) = transport.request.lock().unwrap().clone().unwrap();
@@ -133,8 +135,8 @@ fn anthropic_messages_converts_tools_and_tool_use() {
     }));
     let mut request = tool_request();
     request.reasoning = None;
-    let response = Api::Anthropic
-        .complete_with_transport(
+    let response = ApiEndpoint::AnthropicMessages
+        .complete_with_client(
             &ResolvedApiTarget::new(
                 "https://api.anthropic.com",
                 vec![HttpHeader::new("x-api-key", "secret")],
@@ -154,64 +156,48 @@ fn anthropic_messages_converts_tools_and_tool_use() {
     );
     assert_eq!(body["tools"][0]["input_schema"]["type"], "object");
     assert_eq!(response.stop_reason, StopReason::ToolUse);
-    assert_eq!(response.tool_calls().next().unwrap().name, "weather");
+    assert_eq!(
+        response.tool_calls().next().unwrap().name.as_str(),
+        "weather"
+    );
 }
 
 #[test]
-fn provider_adapters_report_their_underlying_protocol() {
-    assert_eq!(Api::OpenAi.protocol(), ApiProtocol::OpenAiResponses);
-    assert_eq!(Api::Anthropic.protocol(), ApiProtocol::AnthropicMessages);
-    for api in [
-        Api::OpenAiCompatible,
-        Api::Google,
-        Api::Xai,
-        Api::Qwen,
-        Api::Kimi,
-        Api::DeepSeek,
-        Api::Ollama,
-        Api::HuggingFace,
-        Api::Zai,
-        Api::MiniMax,
-        Api::Mimo,
-    ] {
-        assert_eq!(api.protocol(), ApiProtocol::OpenAiCompletions);
-    }
+fn endpoint_families_report_their_underlying_protocol() {
+    assert_eq!(
+        ApiEndpoint::OpenAiResponses.protocol(),
+        ApiProtocol::OpenAiResponses
+    );
+    assert_eq!(
+        ApiEndpoint::AnthropicMessages.protocol(),
+        ApiProtocol::AnthropicMessages
+    );
+    assert_eq!(
+        ApiEndpoint::OpenAiChatCompletions.protocol(),
+        ApiProtocol::OpenAiCompletions
+    );
 }
 
 #[test]
-fn compatible_provider_adapters_dispatch_through_the_shared_codec() {
-    for api in [
-        Api::OpenAiCompatible,
-        Api::Google,
-        Api::Xai,
-        Api::Qwen,
-        Api::Kimi,
-        Api::DeepSeek,
-        Api::Ollama,
-        Api::HuggingFace,
-        Api::Zai,
-        Api::MiniMax,
-        Api::Mimo,
-    ] {
-        let transport = CapturingTransport::new(json!({
-            "id": "chatcmpl_1",
-            "choices": [{
-                "message": {"content": "compatible"},
-                "finish_reason": "stop"
-            }]
-        }));
-        let response = api
-            .complete_with_transport(
-                &target(),
-                "compatible-model",
-                &ModelRequest::text("hello"),
-                &transport,
-            )
-            .unwrap();
-        let (endpoint, _, _) = transport.request.lock().unwrap().clone().unwrap();
-        assert_eq!(endpoint, "https://example.test/v1/chat/completions");
-        assert_eq!(response.text(), "compatible");
-    }
+fn chat_completions_endpoint_dispatches_through_the_shared_codec() {
+    let transport = CapturingTransport::new(json!({
+        "id": "chatcmpl_1",
+        "choices": [{
+            "message": {"content": "compatible"},
+            "finish_reason": "stop"
+        }]
+    }));
+    let response = ApiEndpoint::OpenAiChatCompletions
+        .complete_with_client(
+            &target(),
+            "compatible-model",
+            &ModelRequest::text("hello"),
+            &transport,
+        )
+        .unwrap();
+    let (endpoint, _, _) = transport.request.lock().unwrap().clone().unwrap();
+    assert_eq!(endpoint, "https://example.test/v1/chat/completions");
+    assert_eq!(response.text(), "compatible");
 }
 
 #[test]
@@ -219,4 +205,30 @@ fn header_debug_output_redacts_credentials() {
     let debug = format!("{:?}", HttpHeader::new("Authorization", "Bearer secret"));
     assert!(debug.contains("Authorization"));
     assert!(!debug.contains("Bearer secret"));
+}
+
+#[test]
+fn non_success_status_is_preserved_for_api_error_decoding() {
+    let error = ApiEndpoint::OpenAiResponses
+        .complete_with_client(
+            &target(),
+            "gpt-test",
+            &ModelRequest::text("hello"),
+            &StatusClient(429),
+        )
+        .unwrap_err();
+
+    assert_eq!(error, zeta_api::ApiError::HttpStatus(429));
+}
+
+struct StatusClient(u16);
+
+impl OperationClient for StatusClient {
+    fn execute(&self, _: &ClientRequest) -> Result<ClientResponse, ClientError> {
+        Ok(ClientResponse::new(
+            self.0,
+            Vec::new(),
+            b"rate limited".to_vec(),
+        ))
+    }
 }

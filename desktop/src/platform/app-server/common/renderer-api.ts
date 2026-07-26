@@ -1,13 +1,36 @@
 import type {
   ServerNotification,
+  SessionCommandParams,
+  SessionCreateParams,
+  SessionListResult,
+  SessionReadParams,
+  SessionResult,
+  SessionSubscribeParams,
+  SessionSubscribeResult,
+  SessionThreadArchiveParams,
+  SessionThreadCreateParams,
+  SessionThreadForkParams,
+  SessionThreadResult,
+  SessionUnsubscribeParams,
   ThreadReadParams,
   ThreadReadResult,
-  ThreadStartParams,
-  ThreadStartResult,
+  ThreadSubscribeParams,
+  ThreadSubscribeResult,
+  ThreadUnsubscribeParams,
   TurnInterruptParams,
+  TurnInterruptResult,
   TurnStartParams,
   TurnStartResult,
-} from "../../../../generated/app-server/v1/types.js";
+} from "../../../../generated/app-server/types.js";
+
+export type AppServerConnectionState =
+  | "stopped"
+  | "starting"
+  | "initializing"
+  | "ready"
+  | "stopping"
+  | "crashed"
+  | "restarting";
 
 /**
  * The narrowly scoped, typed capability bridge available to the renderer.
@@ -16,13 +39,30 @@ import type {
  * other Electron primitives to workbench code.
  */
 export interface ZetaRendererApi {
+  appServer: {
+    getConnectionState(): Promise<AppServerConnectionState>;
+    onConnectionState(listener: (state: AppServerConnectionState) => void): () => void;
+  };
+  session: {
+    create(params: SessionCreateParams): Promise<SessionResult>;
+    read(params: SessionReadParams): Promise<SessionResult>;
+    list(): Promise<SessionListResult>;
+    subscribe(params: SessionSubscribeParams): Promise<SessionSubscribeResult>;
+    unsubscribe(params: SessionUnsubscribeParams): Promise<void>;
+    createThread(params: SessionThreadCreateParams): Promise<SessionThreadResult>;
+    forkThread(params: SessionThreadForkParams): Promise<SessionThreadResult>;
+    archiveThread(params: SessionThreadArchiveParams): Promise<SessionResult>;
+    complete(params: SessionCommandParams): Promise<SessionResult>;
+    archive(params: SessionCommandParams): Promise<SessionResult>;
+  };
   thread: {
-    start(params: ThreadStartParams): Promise<ThreadStartResult>;
     read(params: ThreadReadParams): Promise<ThreadReadResult>;
+    subscribe(params: ThreadSubscribeParams): Promise<ThreadSubscribeResult>;
+    unsubscribe(params: ThreadUnsubscribeParams): Promise<void>;
   };
   turn: {
     start(params: TurnStartParams): Promise<TurnStartResult>;
-    interrupt(params: TurnInterruptParams): Promise<void>;
+    interrupt(params: TurnInterruptParams): Promise<TurnInterruptResult>;
   };
   events: {
     subscribe(listener: (event: ServerNotification) => void): () => void;

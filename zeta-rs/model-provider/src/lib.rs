@@ -1,37 +1,25 @@
-//! Provider registration, model catalogs, endpoints, and authentication.
+//! Model-provider instantiation, transport configuration, and API adaptation.
 
-mod anthropic;
-mod deepseek;
-mod google;
-mod huggingface;
-mod kimi;
-mod mimo;
-mod minimax;
-mod ollama;
-mod openai;
-mod openai_compatible;
-mod qwen;
-mod registry;
-mod xai;
-mod zai;
+mod error;
+mod provider;
+mod providers;
 
-pub use openai_compatible::EchoModel;
-pub use openai_compatible::UnavailableModel;
-pub use registry::CapabilitySupport;
-pub use registry::ContextWindow;
-pub use registry::EndpointPolicy;
-pub use registry::Model;
-pub use registry::ModelCapabilities;
-pub use registry::ModelCatalogPolicy;
-pub use registry::ModelId;
-pub use registry::ModelProviderConfig;
-pub use registry::ModelRef;
-pub use registry::Provider;
-pub use registry::ProviderAuthentication;
-pub use registry::ProviderId;
-pub use registry::ProviderRegistry;
-pub use registry::ProviderRegistryError;
+pub use error::ModelProviderError;
+pub use provider::EchoModel;
+pub use provider::ModelInvoker;
+pub use provider::ModelProvider;
+pub use provider::ModelProviderRuntime;
+pub use provider::ModelRuntimeRequest;
+pub use provider::Provider;
+pub use provider::UnavailableModel;
 pub use zeta_api::ApiProtocol;
+pub use zeta_protocol::CapabilitySupport;
+pub use zeta_protocol::ContextWindow;
+pub use zeta_protocol::Model;
+pub use zeta_protocol::ModelCapabilities;
+pub use zeta_protocol::ModelId;
+pub use zeta_protocol::ModelRef;
+pub use zeta_protocol::ProviderId;
 
 #[cfg(test)]
 #[path = "model_tests.rs"]

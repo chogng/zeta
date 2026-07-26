@@ -13,3 +13,8 @@ desktop/node_modules/
 desktop/dist/
 node_modules/
 .pnpm-store/
+desktop/generated/app-server/
+schemas/app-server/
+
+# Downloaded, checksum-verified third-party native runtime artifacts.
+third_party/.cache/

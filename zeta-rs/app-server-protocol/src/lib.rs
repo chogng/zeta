@@ -1,11 +1,13 @@
-//! Versioned external RPC DTOs. Domain entities deliberately remain private to `zeta-core`.
+//! External RPC protocol, wire envelopes, and generated contract artifacts.
+//!
+//! Domain entities deliberately remain private to `zeta-core`.
 
-pub mod common;
-mod schema;
-pub mod v1;
+mod export;
+pub mod protocol;
+pub mod rpc;
 
-pub const CURRENT_PROTOCOL_VERSION: u32 = 1;
+pub use export::{JSON_SCHEMA_FIXTURE, TYPESCRIPT_FIXTURE, json_schema, schema_hash, typescript};
 
-pub use schema::json_schema_v1;
-pub use schema::schema_hash_v1;
-pub use schema::typescript_v1;
+#[cfg(test)]
+#[path = "schema_fixtures.rs"]
+mod tests;

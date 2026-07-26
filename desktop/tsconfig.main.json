@@ -2,10 +2,11 @@
   "extends": "../tsconfig.base.json",
   "compilerOptions": {
     "outDir": "dist/main",
-    "rootDir": "src",
+    "rootDir": ".",
     "types": ["node", "electron"]
   },
   "include": [
+    "generated/**/*.ts",
     "src/code/electron-main/**/*.ts",
     "src/platform/app-server/electron-main/**/*.ts",
     "src/platform/browser/electron-main/**/*.ts"

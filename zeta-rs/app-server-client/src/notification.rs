@@ -1,19 +1,17 @@
 use crate::ClientError;
 use serde::Deserialize;
 use serde_json::Value;
-use zeta_app_server_protocol::v1::notification::AgentMessageCompletedNotification;
-use zeta_app_server_protocol::v1::notification::ThreadStartedNotification;
-use zeta_app_server_protocol::v1::notification::TurnCompletedNotification;
-use zeta_app_server_protocol::v1::notification::TurnInterruptedNotification;
-use zeta_app_server_protocol::v1::notification::TurnStartedNotification;
+use zeta_app_server_protocol::protocol::notification::{
+    SessionUpdateEnvelope, ThreadUpdateEnvelope,
+};
+use zeta_app_server_protocol::protocol::registry::{
+    ServerNotificationMethod, server_notification_method,
+};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ServerNotification {
-    ThreadStarted(ThreadStartedNotification),
-    TurnStarted(TurnStartedNotification),
-    AgentMessageCompleted(AgentMessageCompletedNotification),
-    TurnCompleted(TurnCompletedNotification),
-    TurnInterrupted(TurnInterruptedNotification),
+    SessionUpdate(SessionUpdateEnvelope),
+    ThreadUpdate(ThreadUpdateEnvelope),
     Unknown { method: String, params: Value },
 }
 
@@ -26,17 +24,14 @@ struct NotificationEnvelope {
 pub(crate) fn decode(raw: &str) -> Result<ServerNotification, ClientError> {
     let envelope: NotificationEnvelope =
         serde_json::from_str(raw).map_err(|error| ClientError::Protocol(error.to_string()))?;
-    match envelope.method.as_str() {
-        "thread/started" => decode_params(envelope.params).map(ServerNotification::ThreadStarted),
-        "turn/started" => decode_params(envelope.params).map(ServerNotification::TurnStarted),
-        "item/agentMessage/completed" => {
-            decode_params(envelope.params).map(ServerNotification::AgentMessageCompleted)
+    match server_notification_method(&envelope.method) {
+        Some(ServerNotificationMethod::SessionUpdate) => {
+            decode_params(envelope.params).map(ServerNotification::SessionUpdate)
         }
-        "turn/completed" => decode_params(envelope.params).map(ServerNotification::TurnCompleted),
-        "turn/interrupted" => {
-            decode_params(envelope.params).map(ServerNotification::TurnInterrupted)
+        Some(ServerNotificationMethod::ThreadUpdate) => {
+            decode_params(envelope.params).map(ServerNotification::ThreadUpdate)
         }
-        _ => Ok(ServerNotification::Unknown {
+        None => Ok(ServerNotification::Unknown {
             method: envelope.method,
             params: envelope.params,
         }),

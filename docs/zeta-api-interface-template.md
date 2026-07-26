@@ -9,7 +9,6 @@
 ```yaml
 title: <Capability / Domain> API
 status: draft
-protocolVersion: 1
 capabilityVersion: 1
 owner: zeta-rs
 rustOwner: zeta-rs
@@ -36,7 +35,7 @@ lastUpdated: YYYY-MM-DD
 
 ### Compatibility policy
 
-`<说明兼容范围、废弃周期和升级方式。>`
+`<开发期说明 breaking change 如何同步更新所有调用方；发布后再说明兼容范围和升级方式。>`
 
 ## Method inventory
 
@@ -78,7 +77,7 @@ lastUpdated: YYYY-MM-DD
 
 ### Idempotency
 
-`<副作用请求必须定义 key、ledger scope、request hash、冲突、保留期和重启语义。>`
+`<副作用请求必须定义 commandId、typed command receipt、expectedSequence、冲突和重启重放语义。>`
 
 ### Deadline and cancellation
 
@@ -145,11 +144,11 @@ lastUpdated: YYYY-MM-DD
 
 ## Compatibility
 
-- Missing new fields: `<默认行为>`
-- Unknown enum values: `<处理方式>`
+- Synchronized callers: `<Rust/Desktop/CLI/TUI 需同一变更迁移的入口>`
+- Existing development data: `<是否必须清空>`
 - Unknown notifications: `<处理方式>`
 - Unknown requests: `<稳定错误>`
-- Breaking-change threshold: `<何时发布 v2>`
+- Schema regeneration: `<fixtures/hash/generated TypeScript>`
 - Transport parity: `<in-process/stdio/socket/websocket 的一致性或 capability 限制>`
 
 ## Acceptance tests

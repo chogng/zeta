@@ -1,0 +1,273 @@
+use super::*;
+use crate::protocol::config::{ConfigUpdateParams, McpServerUpsertParams, SkillSourceAddParams};
+use crate::protocol::registry::{CLIENT_METHODS, SERVER_NOTIFICATIONS};
+use crate::rpc::{JsonRpcFailure, JsonRpcId, JsonRpcNotification, JsonRpcRequest, JsonRpcSuccess};
+use std::collections::BTreeSet;
+use zeta_protocol::Patch;
+
+#[test]
+fn registry_method_and_notification_names_are_unique() {
+    let methods = CLIENT_METHODS
+        .iter()
+        .map(|definition| definition.method)
+        .collect::<BTreeSet<_>>();
+    let notifications = SERVER_NOTIFICATIONS
+        .iter()
+        .map(|definition| definition.method)
+        .collect::<BTreeSet<_>>();
+
+    assert_eq!(methods.len(), CLIENT_METHODS.len());
+    assert_eq!(notifications.len(), SERVER_NOTIFICATIONS.len());
+    assert!(methods.contains("initialize"));
+    assert!(methods.contains("session/create"));
+    assert!(methods.contains("session/thread/fork"));
+    assert!(methods.contains("turn/start"));
+    assert!(methods.contains("turn/interaction/resolve"));
+    assert!(notifications.contains("session/update"));
+    assert!(notifications.contains("thread/update"));
+}
+
+#[test]
+fn rpc_envelopes_preserve_json_rpc_2_shape() {
+    let request = JsonRpcRequest::new(
+        JsonRpcId::Number(7),
+        "session/list".into(),
+        serde_json::json!({}),
+    );
+    let notification = JsonRpcNotification::new(
+        "thread/update".into(),
+        serde_json::json!({
+            "sessionId": "session-1",
+            "threadId": "thread-1",
+            "durableSequence": 1,
+            "update": {
+                "type": "committed",
+                "event": {
+                    "type": "threadCreated",
+                    "sessionId": "session-1",
+                    "threadId": "thread-1",
+                    "title": "Thread"
+                }
+            }
+        }),
+    );
+    let success = JsonRpcSuccess::new(JsonRpcId::Number(7), serde_json::json!({}));
+    let failure = JsonRpcFailure::new(
+        JsonRpcId::Null(()),
+        serde_json::json!({"code": -32600, "message": "InvalidRequest", "data": null}),
+    );
+
+    assert_eq!(
+        serde_json::to_value(request).unwrap(),
+        serde_json::json!({"jsonrpc": "2.0", "id": 7, "method": "session/list", "params": {}}),
+    );
+    assert_eq!(
+        serde_json::to_value(notification).unwrap(),
+        serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": "thread/update",
+            "params": {
+                "sessionId": "session-1",
+                "threadId": "thread-1",
+                "durableSequence": 1,
+                "update": {
+                    "type": "committed",
+                    "event": {
+                        "type": "threadCreated",
+                        "sessionId": "session-1",
+                        "threadId": "thread-1",
+                        "title": "Thread"
+                    }
+                }
+            }
+        }),
+    );
+    assert_eq!(
+        serde_json::to_value(success).unwrap(),
+        serde_json::json!({"jsonrpc": "2.0", "id": 7, "result": {}}),
+    );
+    assert_eq!(
+        serde_json::to_value(failure).unwrap(),
+        serde_json::json!({"jsonrpc": "2.0", "id": null, "error": {"code": -32600, "message": "InvalidRequest", "data": null}}),
+    );
+}
+
+#[test]
+fn dto_driven_typescript_preserves_model_ref_and_patch_shape() {
+    let typescript = typescript();
+
+    assert!(typescript.contains("export type ModelRef = { provider: string, model: string, };"));
+    assert!(typescript.contains("preferredModel: ModelRef | null"));
+    assert!(typescript.contains("preferredModel?: ModelRef | null"));
+    assert!(typescript.contains("expectedRevision: number"));
+    assert!(typescript.contains("export type ProviderConfigDto ="));
+    assert!(typescript.contains(r#""provider/configure": { method: "provider/configure" }"#));
+    assert!(typescript.contains("export type McpServerConfigDto ="));
+    assert!(typescript.contains("credentialRef: string"));
+    assert!(typescript.contains("export type SkillSourceConfigDto ="));
+    assert!(typescript.contains(r#""mcp/server/upsert": { method: "mcp/server/upsert" }"#));
+    assert!(typescript.contains(r#""skill/source/add": { method: "skill/source/add" }"#));
+    assert!(!typescript.contains("preferredModel: string"));
+    assert!(typescript.contains(r#""type": "toolResult""#));
+    assert!(typescript.contains("export type ToolName = string;"));
+    assert!(typescript.contains("items: Array<ThreadItem>"));
+    assert!(!typescript.contains("items?: Array<ThreadItem>"));
+    assert!(typescript.contains("export type Session ="));
+    assert!(typescript.contains("parentSequence: number"));
+    assert!(typescript.contains("dataBase64: string"));
+    assert!(typescript.contains("decodedLength: number"));
+    assert!(!typescript.contains("data: Array<number>"));
+    assert!(typescript.contains("export const APP_SERVER_METHODS:"));
+    assert!(typescript.contains(r#""session/create": { method: "session/create" }"#));
+    assert!(typescript.contains(r#""turn/start": { method: "turn/start" }"#));
+    assert!(
+        typescript
+            .contains(r#""turn/interaction/resolve": { method: "turn/interaction/resolve" }"#)
+    );
+    assert!(typescript.contains("export type TurnInteraction ="));
+    assert!(typescript.contains("export type PendingInteraction ="));
+    assert!(typescript.contains("export const APP_SERVER_NOTIFICATIONS:"));
+    assert!(!typescript.contains("ThreadStartParams"));
+}
+
+#[test]
+fn dto_driven_schema_contains_registered_rpc_envelopes() {
+    let schema: serde_json::Value = serde_json::from_str(&json_schema()).unwrap();
+    let definitions = schema["$defs"]
+        .as_object()
+        .expect("generated schema should contain shared definitions");
+
+    assert!(definitions.contains_key("JsonRpcRequest"));
+    assert!(definitions.contains_key("JsonRpcResponse"));
+    assert!(definitions.contains_key("JsonRpcNotification"));
+    assert!(definitions.contains_key("ModelRefDto"));
+    assert!(definitions.contains_key("McpServerConfigDto"));
+    assert!(definitions.contains_key("SkillSourceConfigDto"));
+    assert!(definitions.contains_key("Session"));
+    assert!(definitions.contains_key("ThreadItem"));
+    assert_eq!(definitions["ThreadId"]["minLength"], 1);
+    assert_eq!(definitions["SessionId"]["minLength"], 1);
+    assert_eq!(definitions["CommandId"]["minLength"], 1);
+    assert_eq!(
+        definitions["TurnStartParams"]["properties"]["input"]["minItems"],
+        1
+    );
+    assert_eq!(
+        definitions["ResourceReadParams"]["properties"]["maxBytes"]["maximum"],
+        262_144
+    );
+    assert!(definitions["ResourceReadResult"]["properties"]["dataBase64"].is_object());
+    assert_eq!(
+        definitions["ResourceReadResult"]["properties"]["decodedLength"]["maximum"],
+        262_144
+    );
+    assert!(
+        definitions["ResourceReadResult"]["properties"]
+            .get("data")
+            .is_none()
+    );
+}
+
+#[test]
+fn config_patch_fixture_round_trips_the_provider_scoped_model() {
+    let fixture = serde_json::json!({
+        "commandId": "config-model",
+        "expectedRevision": 4,
+        "preferredModel": {
+            "provider": "openai",
+            "model": "gpt-5.6"
+        }
+    });
+    let params: ConfigUpdateParams = serde_json::from_value(fixture.clone()).unwrap();
+
+    assert!(matches!(
+        &params.preferred_model,
+        Patch::Value(model) if model.provider == "openai"
+    ));
+    assert_eq!(params.expected_revision, 4);
+    assert_eq!(serde_json::to_value(params).unwrap(), fixture);
+}
+
+#[test]
+fn config_patch_distinguishes_missing_null_and_value() {
+    let missing: ConfigUpdateParams = serde_json::from_value(serde_json::json!({
+        "commandId": "missing",
+        "expectedRevision": 0
+    }))
+    .unwrap();
+    let null: ConfigUpdateParams = serde_json::from_value(serde_json::json!({
+        "commandId": "null",
+        "expectedRevision": 3,
+        "preferredModel": null,
+        "theme": null
+    }))
+    .unwrap();
+
+    assert_eq!(missing.preferred_model, Patch::Missing);
+    assert_eq!(missing.expected_revision, 0);
+    assert_eq!(missing.theme, Patch::Missing);
+    assert_eq!(null.preferred_model, Patch::Null);
+    assert_eq!(null.theme, Patch::Null);
+    assert_eq!(
+        serde_json::to_value(missing).unwrap(),
+        serde_json::json!({"commandId": "missing", "expectedRevision": 0})
+    );
+    assert_eq!(
+        serde_json::to_value(null).unwrap(),
+        serde_json::json!({
+            "commandId": "null",
+            "expectedRevision": 3,
+            "preferredModel": null,
+            "theme": null
+        })
+    );
+}
+
+#[test]
+fn mcp_and_skill_config_commands_round_trip() {
+    let mcp_fixture = serde_json::json!({
+        "commandId": "github-mcp",
+        "expectedRevision": 7,
+        "server": {
+            "id": "user:mcp:github",
+            "displayName": "GitHub",
+            "transport": {"type": "streamableHttp", "url": "https://mcp.github.example"},
+            "credential": {"type": "reference", "credentialRef": "user:credential:github"},
+            "enablement": "disabled"
+        }
+    });
+    let skill_fixture = serde_json::json!({
+        "commandId": "personal-skills",
+        "expectedRevision": 8,
+        "source": {
+            "id": "user:skill-source:personal",
+            "rootReference": "user:skill-root:personal",
+            "enablement": "enabled"
+        }
+    });
+
+    let mcp: McpServerUpsertParams = serde_json::from_value(mcp_fixture.clone()).unwrap();
+    let skill: SkillSourceAddParams = serde_json::from_value(skill_fixture.clone()).unwrap();
+
+    assert_eq!(serde_json::to_value(mcp).unwrap(), mcp_fixture);
+    assert_eq!(serde_json::to_value(skill).unwrap(), skill_fixture);
+}
+
+#[test]
+fn schema_hash_is_stable_sha256_of_the_generated_schema() {
+    let first = schema_hash();
+    let second = schema_hash();
+
+    assert_eq!(first, second);
+    assert_eq!(first.len(), "sha256:".len() + 64);
+    assert!(first.starts_with("sha256:"));
+}
+
+#[test]
+fn schema_fixtures_match_the_generators() {
+    let typescript_fixture = include_str!("../schema/types.ts");
+    let schema = include_str!("../schema/schema.json");
+
+    assert_eq!(typescript_fixture, typescript());
+    assert_eq!(schema, json_schema());
+}

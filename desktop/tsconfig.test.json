@@ -1,0 +1,18 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "dist/test",
+    "rootDir": ".",
+    "types": ["node"]
+  },
+  "include": [
+    "src/platform/app-server/electron-main/app-server-client.ts",
+    "src/platform/app-server/electron-main/app-server-ipc.ts",
+    "src/platform/app-server/electron-main/app-server-session.ts",
+    "src/platform/app-server/electron-main/app-server-supervisor.ts",
+    "src/platform/app-server/electron-main/child-process-jsonl-transport.ts",
+    "src/platform/app-server/electron-main/json-rpc-peer.ts",
+    "src/platform/app-server/electron-main/trusted-ipc-router.ts",
+    "test/**/*.ts"
+  ]
+}

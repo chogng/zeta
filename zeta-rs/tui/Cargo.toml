@@ -15,6 +15,7 @@ ratatui = { workspace = true }
 unicode-width = { workspace = true }
 zeta-app-server-client = { workspace = true }
 zeta-app-server-protocol = { workspace = true }
+zeta-protocol = { workspace = true }
 
 [lints]
 workspace = true
