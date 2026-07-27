@@ -81,9 +81,10 @@ Agent spawn 可能由模型 Tool Call、用户操作或系统策略触发，因�
 - delivery receipt；
 - provenance。
 
-## 3. AgentCoordinator
+## 3. MultiAgentCoordinator
 
-`AgentCoordinator` 是 Core 内部的多 Agent 协调组件。
+`MultiAgentCoordinator` 是 Core 内部显式的多 Agent 协调组件。单 Agent 执行不经过它；
+ThreadController、TurnExecutor、ContextManager 和 ToolScheduler 已经构成完整的单 Agent 路径。
 
 负责：
 
@@ -107,8 +108,8 @@ Agent spawn 可能由模型 Tool Call、用户操作或系统策略触发，因�
 - provider connection 或远端 Agent transport；
 - UI projection。
 
-AgentCoordinator 可以协调多个 aggregate，但不能建立跨所有 Thread 的大锁。长 I/O、等待 child
-和等待 delivery receipt 都在 aggregate writer 之外。
+MultiAgentCoordinator 可以协调多个 aggregate，但不能建立跨所有 Thread 的大锁。长 I/O、等待
+child 和等待 delivery receipt 都在 aggregate writer 之外。
 
 ## 4. Create、Fork 与 Spawn
 
@@ -383,7 +384,7 @@ Per-Turn execution limits
   TurnExecutor 负责
 
 Per-Agent-tree resource budget
-  AgentCoordinator 负责
+  MultiAgentCoordinator 负责
 ```
 
 Agent tree budget 至少包含：
@@ -502,11 +503,13 @@ Protocol 变更必须同步更新：
 
 ```text
 core/src/
-└─ agent/
+└─ multi_agent/
    ├─ mod.rs
    ├─ coordinator.rs
    ├─ delegation.rs
-   ├─ delivery.rs
+   ├─ spawn.rs
+   ├─ messaging.rs
+   ├─ join.rs
    ├─ budget.rs
    ├─ recovery.rs
    └─ *_tests.rs
@@ -515,7 +518,7 @@ core/src/
 相关 ownership：
 
 ```text
-AgentCoordinator
+MultiAgentCoordinator
 ├─ uses SessionCoordinator for topology saga
 ├─ uses ThreadController for durable parent/child mutations
 ├─ creates immutable AgentContextSeed
@@ -576,7 +579,7 @@ projection，不公开 coordinator 内部状态机。
 - fork lineage、Agent delegation 与 context inheritance 分离；
 - child Agent 不共享 parent/sibling mutable context；
 - context seed 在 spawn 时固定 parent sequence；
-- AgentCoordinator 协调拓扑和 delivery，但不拥有 context；
+- MultiAgentCoordinator 协调拓扑和 delivery，但不拥有 context；
 - parent/child 只通过 durable message/result 通信；
 - parent 不自动继承 child transcript；
 - per-Thread context budget 与 Agent tree resource budget 分离；

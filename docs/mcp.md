@@ -5,6 +5,7 @@
 > 当前状态：Proposed，尚未创建 crate
 > Core architecture：[`core.md`](core.md)
 > Agent runtime：[`zeta-agent-runtime-architecture.md`](zeta-agent-runtime-architecture.md)
+> Tool shared contract 与纯转换：[`tools.md`](tools.md)
 > Config authority 与 runtime snapshot 接入：[`config.md`](config.md)
 > Plugin 分发边界：[`plugins.md`](plugins.md)
 > Skill 指令边界：[`skills.md`](skills.md)
@@ -95,8 +96,9 @@ HTTP+SSE 是旧 revision 的兼容面，不进入 Zeta 第一版。
 - initialize → operation → shutdown lifecycle；
 - request ID correlation、per-request deadline、cancel propagation 和 late response discard；
 - tools/resources/prompts 的分页 discovery、list-changed invalidation 和 immutable catalog；
-- MCP schema、content 和 error 到 Zeta runtime value 的校验与转换；
-- remote tool identity 到 model-facing `ToolName` 的无歧义绑定；
+- MCP schema、content 和 error 的 revision-specific 校验，以及到 `McpToolProjection` /
+  source result projection 的转换；
+- exact remote tool identity、catalog generation 和 host binding 所需的 source correlation；
 - server process/connection health、bounded queue 和不含秘密的 diagnostics；
 - roots、sampling、elicitation 等 client feature 的 capability gate。
 
@@ -119,25 +121,29 @@ MCP auth runtime 拥有 credential/OAuth lifecycle，并把 opaque token persist
 ## 5. 目标依赖与运行时结构
 
 ```text
-                         zeta-protocol
-                           ▲       ▲
-            shared values  │       │ canonical tools/items
-                           │       │
-                      zeta-mcp   zeta-core ─────► Session/Thread stores
-                           ▲       ▲
-                           │       │ Core ToolService adapter
-                           └───┬───┘
-                         App Server
-                       composition root
-                       ▲       ▲       ▲
-                       │       │       │
-             zeta-plugins  credentials  process/HTTP host adapters
+                          zeta-protocol
+                                ▲
+                          zeta-tools
+                    shared tool contract/adapters
+                         ▲             ▲
+                         │             │
+                    zeta-mcp       zeta-core ─────► Session/Thread stores
+                         ▲             ▲
+                         │             │ Core ToolService adapter
+                         └──────┬──────┘
+                            App Server
+                          composition root
+                          ▲       ▲       ▲
+                          │       │       │
+                zeta-plugins  credentials  process/HTTP host adapters
 ```
 
 规则：
 
-- `zeta-mcp` 可以依赖 `zeta-protocol` 和通用 async/JSON/HTTP 库；
+- `zeta-mcp` 可以依赖 `zeta-tools`、`zeta-protocol` 和通用 async/JSON/HTTP 库；
 - `zeta-mcp` 不依赖 `zeta-core`、stores、App Server、Desktop、CLI 或 Plugin manager；
+- `zeta-mcp` 将 revision-specific wire descriptor 转成纯 `McpToolProjection`；
+  `zeta-tools` 再负责 schema normalization、model-facing definition 和 source-neutral output；
 - `zeta-core` 定义 consumer-owned `ToolService` port；App Server adapter 将 MCP tool
   handle/catalog 适配到该 port，Core 不读取 MCP wire DTO；
 - Plugin manager 只产出经过验证的 server declaration，不持有 live MCP session；
@@ -316,7 +322,9 @@ authentication 和 shutdown contract，不能只提供 `send(Value)`。
 
 ### 9.1 Tools
 
-MCP tool descriptor 转换为 Zeta tool definition 前必须：
+`zeta-mcp` 先将 revision-specific descriptor 转成保留 exact remote identity 的
+`McpToolProjection`，再由 [`tools.md`](tools.md) 的共享 adapter 产生 host tool definition。
+完整转换链必须：
 
 - 完整处理分页，并施加 tool count/page/bytes 上限；
 - 校验 name、input schema、可选 output schema 和 schema complexity；
@@ -330,7 +338,8 @@ MCP `2025-11-25` 的 embedded schema 默认使用 JSON Schema 2020-12；tool out
 [protocol error 与 tool execution error](https://modelcontextprotocol.io/specification/2025-11-25/server/tools)：
 
 - unknown tool、malformed request、server protocol failure → MCP protocol error；
-- API failure、业务校验失败等 `isError: true` → canonical `ToolResult { is_error: true }`。
+- API failure、业务校验失败等 `isError: true` → `ToolOutputStatus::Error`，再由 Core 映射为
+  canonical error Tool Result。
 
 ### 9.2 Resources
 

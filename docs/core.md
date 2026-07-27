@@ -7,6 +7,7 @@
 > 多 Agent 详细设计：[`core-multi-agent.md`](core-multi-agent.md)
 > 跨 Core、App Server、provider 与 Tool 的执行演进：
 > [`zeta-agent-runtime-architecture.md`](zeta-agent-runtime-architecture.md)
+> Tool shared contract、registry/binding 与 source adapter：[`tools.md`](tools.md)
 > Config、Plugin、MCP 与 Skill snapshot：[`config.md`](config.md)
 > Provider credential：[`model-provider.md`](model-provider.md#6-provider-credential-与-subscription-backend)
 > Secret persistence：[`secrets.md`](secrets.md)
@@ -57,7 +58,7 @@ Agent 生命周期能够成为 authority 的前提。
 - `TurnPolicySnapshot` / `ModelInvocationSnapshot` 的完整闭环；
 - `ContextManager`、instruction precedence、context budget 与 compaction；
 - approval、并行 Tool、deadline、retry 与 `UnknownOutcome` 恢复；
-- durable Agent delegation、跨 Thread message/result 与 Agent tree resource budget；
+- durable multi-Agent delegation、跨 Thread message/result 与 Agent tree resource budget；
 - 所有 durable boundary 的 fault injection。
 
 当前实现是演进地基，不应被描述成完整的异步、多 Agent 执行系统。
@@ -161,26 +162,25 @@ Operation lifecycle
 ## 5. 核心组件
 
 ```text
-                         AgentCoordinator
-                  spawn / message / join / budget
-                     ┌──────────┴──────────┐
-                     ▼                     ▼
-            SessionCoordinator      ThreadController
-          membership / lineage      one logical writer
-             shared defaults        commit / recovery
-                                           │
-                                  LoadedThreadState
-                                  └─ ContextManager
-                                           │
-                                           ▼
-                                      TurnExecutor
-                          context → model → tools → model
-                             │          │          │
-                             ▼          ▼          ▼
-                       ContextPlan  ToolScheduler  interactions
-                             │          │
-                             ▼          ▼
-                      ModelService   ToolService
+MultiAgentCoordinator (multi-Agent only)
+  ├─ topology operations ──► SessionCoordinator
+  └─ cross-Thread work ────► ThreadController
+
+SessionCoordinator ────────► ThreadController
+membership / defaults        one logical writer
+                                   │
+                          LoadedThreadState
+                          └─ ContextManager
+                                   │
+                                   ▼
+                              TurnExecutor
+                  context → model → tools → model
+                     │          │          │
+                     ▼          ▼          ▼
+               ContextPlan  ToolScheduler  interactions
+                     │          │
+                     ▼          ▼
+              ModelService   ToolService
 ```
 
 ### 5.1 SessionCoordinator
@@ -272,9 +272,9 @@ ContextManager 可以缓存按 `ThreadSequence`、policy revision 和 model capa
 索引的派生视图，但不能维护第二份 canonical transcript。完整契约见
 [`core-context.md`](core-context.md)。
 
-### 5.6 AgentCoordinator
+### 5.6 MultiAgentCoordinator
 
-负责多 Agent 的领域协调：
+这是只在多 Agent 模式下参与的跨 Thread 协调组件，负责：
 
 - spawn、send、join、cancel、close；
 - durable delegation 与 delivery identity；
@@ -286,6 +286,10 @@ ContextManager 可以缓存按 `ThreadSequence`、policy revision 和 model capa
 它不持有任何 Thread context，也不读取 live ContextManager。父子 Agent 的上下文传递必须通过
 不可变 `AgentContextSeed`，结果必须通过显式 durable Item 合并。完整契约见
 [`core-multi-agent.md`](core-multi-agent.md)。
+
+单 Agent 执行已经由 ThreadController、TurnExecutor、ContextManager 和 ToolScheduler 完整表达，
+不再建立泛化的 `agent/` facade。`multi_agent/` 只包含单 Thread 之外的 delegation、spawn、
+message、join、tree budget 和 recovery。
 
 ## 6. 依赖方向与服务端口
 
@@ -307,6 +311,7 @@ ContextManager 可以缓存按 `ThreadSequence`、policy revision 和 model capa
 允许：
 
 - `zeta-core → zeta-protocol`；
+- `zeta-core → zeta-tools`；
 - `zeta-core → zeta-session-store`；
 - `zeta-core → zeta-thread-store`；
 - `zeta-core → zeta-async-utils`；
@@ -318,7 +323,7 @@ ContextManager 可以缓存按 `ThreadSequence`、policy revision 和 model capa
 zeta-core → zeta-app-server(-protocol)
 zeta-core → zeta-storage / zeta-rollout
 zeta-core → zeta-api / concrete model provider
-zeta-core → built-in-tools / MCP implementation
+zeta-core → shell-command / file-system / file-search / apply-patch / MCP implementation
 zeta-core → config files / credentials / secrets
 zeta-core → Desktop / CLI / TUI
 ```
@@ -486,8 +491,8 @@ Spawn 必须固定 parent Thread sequence，并选择显式 inheritance mode。S
 durable delivery；不能直接读取对方 ContextManager，也不能自动把 child transcript 拼进 parent
 prompt。
 
-Session 只串行拓扑提交；AgentCoordinator 负责 delegation；ThreadController 负责各自 Thread；
-ContextManager 负责各自 context。详细契约见
+Session 只串行拓扑提交；MultiAgentCoordinator 负责 delegation；ThreadController 负责各自
+Thread；ContextManager 负责各自 context。详细契约见
 [`core-multi-agent.md`](core-multi-agent.md)。
 
 ## 11. Tool、interaction 与 capability
@@ -624,10 +629,13 @@ zeta-rs/core/src/
 │  ├─ selection.rs
 │  ├─ window.rs
 │  └─ compaction.rs
-├─ agent/
+├─ multi_agent/
+│  ├─ mod.rs
 │  ├─ coordinator.rs
 │  ├─ delegation.rs
-│  ├─ delivery.rs
+│  ├─ spawn.rs
+│  ├─ messaging.rs
+│  ├─ join.rs
 │  ├─ budget.rs
 │  └─ recovery.rs
 └─ tool/
@@ -649,7 +657,7 @@ zeta-rs/core/src/
 
 公开面只保留：
 
-- `SessionCoordinator` / `ThreadController` / `AgentCoordinator` handle；
+- `SessionCoordinator` / `ThreadController` / `MultiAgentCoordinator` handle；
 - typed request/result；
 - read-only projection/snapshot；
 - consumer-owned service ports；
@@ -693,7 +701,7 @@ Fault-injection tests：
 3. 落地 `TurnPolicySnapshot` / `ModelInvocationSnapshot`；
 4. 引入独立 `context/` 与 `context_manager/`，完成 budget/compaction；
 5. 引入 ToolScheduler、approval、并行 Tool 和 UnknownOutcome recovery；
-6. 增加 AgentCoordinator、delegation protocol 与 context inheritance；
+6. 增加 `multi_agent/`、MultiAgentCoordinator、delegation protocol 与 context inheritance；
 7. 完成 provider wire streaming、outbound writer 与 fault injection；
 8. 通过 context continuity、多 Agent 隔离、取消和副作用恢复评测。
 

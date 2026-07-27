@@ -160,7 +160,7 @@ TurnExecutor (zeta-core private module)
        ▼                              ▼
    ModelPort                     AgentTool
        │                              │
-model-provider              built-in-tools / MCP adapters
+model-provider              shell-command / file-system / file-search / apply-patch / MCP adapters
 
 SessionCoordinator ── append ──► SessionStore
 ThreadController  ─── append ──► ThreadStore ──► rollout
@@ -178,7 +178,7 @@ zeta-protocol
 zeta-core ──────────► SessionStore + ThreadStore
    ▲
    │ Core-owned ports
-App Server adapters ─────► model-provider / built-in-tools / MCP
+App Server adapters ─────► model-provider / shell-command / file-system / file-search / apply-patch / MCP
    │
    └─────────────────────► config / credentials / rollout
 ```
@@ -238,7 +238,10 @@ zeta/
 │  ├─ thread-store/
 │  ├─ storage/
 │  ├─ model-provider/
-│  ├─ built-in-tools/
+│  ├─ shell-command/
+│  ├─ file-system/
+│  ├─ file-search/
+│  ├─ apply-patch/
 │  ├─ app-server-protocol/
 │  ├─ app-server-transport/
 │  └─ app-server/            composition root and transport coordination
@@ -549,7 +552,7 @@ Session-first 基础迁移已经完成；准确范围和仍未完成的 protocol
 ### Phase 7：Projection 与多 Agent
 
 - Renderer projection/resync；
-- AgentCoordinator、durable delegation 与 spawn saga；
+- `multi_agent/`、MultiAgentCoordinator、durable delegation 与 spawn saga；
 - immutable ContextSeed 与 child Thread context isolation；
 - 跨 Thread message/result 的 durable delivery 与 join；
 - Agent tree cancellation 和 resource budget；

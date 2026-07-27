@@ -1,0 +1,1421 @@
+# `zeta-tools` 架构与演进方案
+
+> 计划物理位置：`zeta-rs/tools/`  
+> Rust crate：`zeta_tools`  
+> 当前状态：Phase T0 已创建 crate 并落地受限 schema、host definition、protocol/dynamic/MCP
+> adapter、output、binding、invocation 与 `ToolExecutor` contract。四个独立 crate 已实现
+> `shell-command`、`file-system`、`file-search` 与 `apply-patch`；live registry、Core port 接入、
+> tool search、Plugin discovery、code mode、图片精度仍为 Proposed  
+> Canonical value 与 durable Tool Item：[`protocol.md`](protocol.md)  
+> Core 调度、approval 与恢复：[`core.md`](core.md)  
+> MCP client runtime：[`mcp.md`](mcp.md)  
+> Plugin authority：[`plugins.md`](plugins.md)  
+> Config 与 runtime snapshot：[`config.md`](config.md)  
+> Provider wire adapter：[`zeta-api.md`](zeta-api.md)
+
+## 1. 结论
+
+`zeta-tools` 是 Zeta 工具子系统的共享类型与纯适配层。它定义一个工具如何被描述、暴露、搜索、
+绑定、调用和返回结果，并提供 MCP、dynamic tool、code mode 与图片精度等跨模块转换能力。
+
+它解决的是：
+
+```text
+不同工具来源
+  local / MCP / dynamic / connector / future extension
+            │
+            ▼
+统一 host-side ToolDefinition / ToolSpec / ToolBinding
+            │
+      registry + search + adaptation
+            │
+            ▼
+ToolInvocation ──► ToolExecutor ──► ToolExecutionOutcome
+            │
+            ▼
+Core durable Tool Call / Tool Result lifecycle
+```
+
+长期职责固定为：
+
+- provider-neutral 的 `ToolDefinition`、`ToolSpec`、schema 和 exposure 类型；
+- model-emitted `ToolCall` 到 host-materialized `ToolInvocation` 之间的共享值；
+- executable tool 的 `ToolExecutor` / `ToolOutput` 接口；
+- immutable `ToolRegistrySnapshot`、binding、definition digest 与来源信息；
+- MCP descriptor/result 到 Zeta 工具值的纯转换；
+- dynamic tool definition/result 的校验与转换；
+- deferred tool loading、tool search 索引和值类型；
+- Plugin/Connector 发现结果和 install/enable/connect 请求的纯展示值；
+- code mode 的工具定义投影、命名、nested-call/result 适配；
+- tool output image 的 detail capability 检查、标准化和降级；
+- schema、输出、日志预览和 provider capability 的共享校验规则。
+
+`zeta-tools` 不拥有：
+
+- model → tool → model loop、approval、并行计划、retry 或 `UnknownOutcome` 决策；
+- Thread/Turn reducer、durable append、Tool Call/Result commit 或 recovery；
+- MCP transport、JSON-RPC session、process supervision、OAuth 或 reconnect；
+- Plugin 安装、启用、grant、版本、digest、marketplace 或 package store；
+- local tool、MCP server、browser、terminal 或 code-mode runtime 的具体 I/O；
+- sandbox、filesystem/network enforcement、credential materialization；
+- provider HTTP DTO、Responses API/Anthropic wire encoding；
+- App Server connection owner、interaction delivery 或客户端 UI。
+
+一句话边界：
+
+> `zeta-tools` 统一“工具在 host 中是什么以及如何跨表示转换”；Core 决定“何时、按什么策略调用”；
+> source runtime 决定“如何完成具体 I/O”。
+
+## 2. 当前仓库审计
+
+当前已有可复用地基：
+
+- `zeta-protocol` 已定义 `ToolName`、`ToolCallId`、`ToolDefinition`、`ToolCall`、`ToolResult`、
+  `ContentPart`、`ImageDetail` 和 durable `ThreadItem::ToolCall/ToolResult`；
+- `zeta-protocol` 已定义 `DynamicToolSpec`、`DynamicToolCall`、`DynamicToolResponse` 和对应
+  Agent interaction；
+- `zeta-core` 已定义最小 `ToolService` port，并完成顺序 model → tool → model vertical slice；
+- `zeta-core::ContextAssembler` 已能重建 Tool Call/Result pairing；
+- `zeta-api` 已分别把 canonical function tool 和图片 detail 转成 OpenAI Responses、
+  Chat Completions 与 Anthropic Messages wire payload；
+- `zeta-shell-command`、`zeta-file-system`、`zeta-file-search` 与 `zeta-apply-patch`
+  已各自提供一个独立 executor；
+- `zeta-mcp`、`zeta-plugins`、Tool registry/search、code mode 仍处于 Proposed；
+  `zeta-tools` 尚未完成 live registry 或 Core port 接入。
+
+当前问题不是缺少一个更大的 `tools` module，而是共享语义没有统一落点：
+
+- `zeta-protocol::ToolDefinition` 只覆盖当前 model request 的最小 function schema，不能表达
+  source、binding、deferred loading、namespace、freeform 或 runtime exposure；
+- `ToolService::definitions() + execute(call)` 把 registry snapshot、binding generation、
+  output type 和 uncertain outcome 压成了过窄接口；
+- MCP 和 dynamic tool 都需要重复 schema 清洗、name collision、output conversion；
+- provider adapter 可能分别决定 namespace flattening、strict schema 和 image detail fallback；
+- tool search、Plugin discovery 和 install request 容易被混成一个有隐式副作用的“发现服务”；
+- code mode 若直接持有 executor，会绕过普通 tool 的 approval、durable commit 和 tracing。
+
+因此第一阶段应创建一个窄的共享 crate，先迁移纯值和纯转换，再由 App Server composition root
+接通 live registry。不能把现有 `core/src/tools` 的编排逻辑一次性整体搬入新 crate。
+
+本方案参考本地 `../codex/codex-rs/tools/` 已验证的提取方向：共享 definition/spec、MCP/dynamic
+adapter、tool search/discovery、code-mode bridge、image-detail normalization 与 executor
+contract 可以离开 Core。Zeta 不直接照搬其中的 Responses API DTO 或 Core runtime context：
+provider wire 继续属于 `zeta-api`，durable scheduling/recovery 继续属于 `zeta-core`。
+
+## 3. 三层工具契约
+
+工具系统固定分为三层：
+
+| 层 | Owner | 典型类型 | 生命周期 |
+| --- | --- | --- | --- |
+| Canonical product contract | `zeta-protocol` | `ToolName`、`ToolCallId`、durable Tool Item、dynamic interaction | 可序列化、可持久化 |
+| Host tool contract | `zeta-tools` | `ToolDefinition`、`ToolSpec`、binding、invocation、output、executor | process-local 或 snapshot-scoped |
+| Execution orchestration | `zeta-core` | `ToolScheduler`、`ToolService` port、approval、retry、recovery | Turn/operation-scoped |
+
+### 3.1 `zeta-protocol` 继续拥有
+
+- 所有跨进程和 durable identity；
+- model output 中 canonical `ToolCall` 的语义；
+- Thread transcript 中 Tool Call/Result 事实；
+- dynamic tool 的 Agent request/response envelope；
+- provider-independent message content 和图片 detail 枚举；
+- App Server 客户端确实需要读取的稳定工具值。
+
+`zeta-tools` 不重新定义 `ToolName`、`ToolCallId` 或另一套 durable Tool Item。
+
+### 3.2 `zeta-tools` 拥有
+
+- 比 model request DTO 更完整的 host-side definition/spec；
+- schema normalization、definition digest 和 name/binding 规则；
+- executor authoring contract；
+- source-neutral registry、search、code mode 和 output adapter；
+- 从 source-specific projection 到 host tool contract 的纯函数。
+
+当前 `zeta-protocol::ToolDefinition` 在迁移期保留为 model invocation 的最小 canonical value。
+`zeta-tools::ToolDefinition` 通过显式、可失败的 adapter 转成它。两者不能依赖同名 re-export
+长期共存；迁移完成后应根据真实消费者选择以下一个方向：
+
+1. protocol 类型明确命名为 `ModelToolDefinition`，host 类型保留 `ToolDefinition`；或
+2. 如果完整 host definition 也确实需要跨进程共享，再将纯子集提升到 protocol。
+
+不能用 `pub use` 假装两个不同生命周期的类型语义相同。
+
+### 3.3 `zeta-core` 继续拥有
+
+- 当前 invocation 使用哪个 registry snapshot；
+- model call 后的 schema/availability 校验时机；
+- sequential/parallel plan；
+- approval、deadline、cancellation 与 resource conflict；
+- Tool Call intent 的 durable commit；
+- result ordering、retry 和 uncertain outcome 的最终映射；
+- completion 的 operation/incarnation 校验；
+- next model invocation 与 Turn terminal decision。
+
+Core 的 `ToolService` 是 consumer-owned port；它可以由外层 `ToolRegistryAdapter` 实现，但不能
+被 `ToolExecutor` 取代。前者是 Core 的编排入口，后者是工具作者的执行接口。
+
+## 4. 依赖方向与组合
+
+目标依赖：
+
+```text
+                         zeta-protocol
+                               ▲
+                               │ canonical IDs/content
+                         zeta-tools
+                   shared types / pure adapters
+                    ▲       ▲        ▲
+                    │       │        │
+          local tool crates  zeta-mcp  code-mode adapter
+ shell-command / file-system / file-search / apply-patch
+                    \       |        /
+                     \      |       /
+                      App Server composition
+                     /       |        \
+                    ▼        ▼         ▼
+             Core ToolService  Plugin catalog  zeta-api
+                adapter        projection      provider wire
+                    │
+                    ▼
+                 zeta-core
+```
+
+允许：
+
+- `zeta-tools → zeta-protocol`；
+- `zeta-core → zeta-tools + zeta-protocol`；
+- `zeta-mcp → zeta-tools`；
+- `zeta-shell-command → zeta-tools + zeta-exec + zeta-sandboxing`；
+- `zeta-file-system → zeta-tools + zeta-sandboxing`；
+- `zeta-file-search → zeta-tools + zeta-sandboxing`；
+- `zeta-apply-patch → zeta-tools + zeta-sandboxing`；
+- local process executor 可依赖 `zeta-sandboxing` 与当前平台 backend；Linux backend 仅通过
+  `zeta-bwrap` 构造 Bubblewrap argv；
+- `zeta-api → zeta-tools + zeta-protocol`；
+- App Server 组合 Tool registry、source runtime、policy 和 Core port。
+
+Sandbox backend 的内部调度、平台 crate 边界和 fail-closed 规则见
+[`sandboxing.md`](sandboxing.md)。这里的 sandbox manager 不是 Core `ToolScheduler`。
+
+禁止：
+
+```text
+zeta-tools → zeta-core
+zeta-tools → zeta-mcp live runtime
+zeta-tools → zeta-plugins authority
+zeta-tools → zeta-app-server
+zeta-tools → provider HTTP client
+zeta-tools → credential or secret store
+zeta-tools → ThreadStore / SessionStore
+```
+
+MCP adapter 的公开输入使用 `zeta-tools` 自己的纯 `McpToolProjection`，不在 public API 暴露
+某个 MCP SDK 的 wire DTO。`zeta-mcp` 负责从当前 protocol revision 的 wire model 产生 projection；
+`zeta-tools` 负责从 projection 产生 host definition。这样 MCP SDK 升级不会迫使所有工具消费者
+一起升级。
+
+### 4.1 当前本地工具 source runtime
+
+本地 Workspace 工具不再有聚合 crate。每个 crate 只提供一个独立 `ToolExecutor`，可由
+App Server composition root 按 policy 单独注册：
+
+| Crate / tool name | 可做的事 | 明确不做的事 |
+| --- | --- | --- |
+| `zeta-shell-command` / `shell-command` | 在批准的相对 Workspace 工作目录执行显式 program/arguments；复用 `zeta-exec` 的 approval、timeout 和输出上限 | 不隐式启动 shell，不绕过 process policy |
+| `zeta-file-system` / `file-system` | 读取 UTF-8 文件、列目录、读取 metadata | 不写入、删除、移动或重命名 |
+| `zeta-file-search` / `file-search` | 递归搜索 UTF-8 文本；跳过 symlink、二进制和超限文件 | 不调用 shell，不跟随 symlink，不修改文件 |
+| `zeta-apply-patch` / `apply-patch` | 预检后更新、添加或删除普通文件；replacement 按文件原子写入 | 不接受绝对/`..` 路径，不直接提供任意写入 API |
+
+四者均在构造时固定 `ToolEnvironmentId + WorkspaceRoot`，要求它与
+`ToolExecutionContext.environment_id` 一致，且只接受与自身 `ToolDefinition` digest 相符的冻结
+binding。`apply-patch` 在所有 hunk 校验完成前不写入；
+若多文件 commit 中途失败，返回 `OutcomeUncertain`，由 Core 决定后续恢复语义。
+
+## 5. Identity、来源与 binding
+
+### 5.1 Name 不是执行 identity
+
+`ToolName` 是模型可见、在一次 invocation tool set 中唯一的路由名。它不是：
+
+- MCP remote tool 的永久 identity；
+- Plugin contribution ID；
+- Connector account ID；
+- executor instance ID；
+- `ToolCallId`；
+- registry generation。
+
+同名工具可以在不同 source 中存在，但进入一个 model invocation 前必须解析为唯一 alias 或产生
+明确 collision diagnostic。
+
+### 5.2 Binding
+
+目标共享值：
+
+```rust
+pub struct ToolBinding {
+    pub registry_generation: ToolRegistryGeneration,
+    pub id: ToolBindingId,
+    pub exposed_name: ToolName,
+    pub definition_digest: ToolDefinitionDigest,
+    pub source: ToolSourceProvenance,
+    pub runtime_key: ToolRuntimeKey,
+}
+```
+
+语义：
+
+- `ToolBindingId` 在一个 `ToolRegistrySnapshot` 中稳定且唯一；
+- `ToolRuntimeKey` 是 host router 的 opaque key，不进入 model request 或 Thread transcript；
+- `ToolDefinitionDigest` 覆盖 model-visible name、description、schema、loading 与 invocation kind；
+- `ToolSourceProvenance` 保存稳定、可审计的 source chain，但不保存 credential、PID、session ID
+  或 mutable package path。
+
+一个 Plugin 贡献的 MCP tool 同时保留：
+
+```text
+distribution provenance = PluginId + version + package digest + contribution ID
+execution provenance    = McpServerId + exact remote tool name + catalog generation
+```
+
+二者不能互相替代。
+
+### 5.3 Durable provenance
+
+process-local `ToolBindingId` 不能单独用于 crash recovery。长期 Tool Call durable fact 应能保存：
+
+```text
+exposed ToolName
++ stable source reference
++ definition digest
++ registry/catalog generation provenance
+```
+
+具体字段进入 protocol 前必须先完成 store/schema/App Server migration。恢复时若 exact source
+generation 已不存在：
+
+- 未开始执行的调用变成稳定 `Unavailable`；
+- 已开始且副作用 outcome 不确定的调用进入 Core `UnknownOutcome`；
+- 不能仅按旧 `ToolName` 在新 registry 中重新查找并执行。
+
+## 6. Tool definition、schema 与 spec
+
+### 6.1 Leaf definition
+
+`ToolDefinition` 描述一个可调用 leaf tool：
+
+```rust
+pub struct ToolDefinition {
+    pub name: ToolName,
+    pub description: String,
+    pub invocation: ToolInvocationKind,
+    pub output_schema: ToolOutputSchema,
+    pub schema_mode: ToolSchemaMode,
+    pub loading: ToolLoading,
+}
+
+pub enum ToolInvocationKind {
+    Function { input_schema: ToolInputSchema },
+    Freeform { format: FreeformFormat },
+}
+
+pub enum ToolSchemaMode {
+    ProviderDefault,
+    Strict,
+}
+
+pub enum ToolLoading {
+    Eager,
+    Deferred,
+}
+
+pub enum ToolOutputSchema {
+    Unspecified,
+    Schema(ToolSchema),
+}
+```
+
+不使用 `strict: bool` 或 `defer_loading: bool` 作为 host API。Provider wire 需要的 bool 只在
+`zeta-api` adapter 最后一层产生。
+
+Description 是 untrusted model context：
+
+- 有 byte/token 上限；
+- 保留 source provenance；
+- 不能含有改变 approval、sandbox 或 instruction precedence 的权威语义；
+- source runtime 不能通过 description 宣称自己是 `SafeRead` 并获得自动 retry。
+
+### 6.2 Tool schema
+
+工具 schema 是受约束的 JSON Schema，不是任意 unchecked `serde_json::Value`：
+
+```rust
+pub struct ToolSchema {
+    canonical: serde_json::Value,
+    digest: ToolSchemaDigest,
+}
+
+pub struct ToolInputSchema(ToolSchema);
+```
+
+`ToolInputSchema` 额外要求根节点满足 Zeta function-argument contract。公开构造只能经过
+parser/validator。至少限制：
+
+- 总 bytes、nesting depth、node/property/enum 数；
+- string length、property name 和 description length；
+- `$ref`、recursive schema 和 remote reference；
+- unsupported keyword 与 dialect；
+- `required` 必须引用已存在 property；
+- object 的 `properties` / `additionalProperties` 语义；
+- provider 严格模式所需的完整 required set；
+- schema canonicalization 与稳定 digest。
+
+Canonical dialect 以 Zeta 支持的 JSON Schema 子集表达。MCP 2020-12 schema、dynamic schema 和
+provider function schema 都先进入同一 parser。不能为通过某个 provider 校验而静默删除有语义的
+constraint；只能：
+
+```text
+exactly supported → preserve
+explicitly approximated → diagnostic + capability snapshot records approximation
+unsafe/ambiguous → reject definition
+```
+
+### 6.3 Aggregate spec
+
+`ToolSpec` 是 model-facing aggregate：
+
+```rust
+pub enum ToolSpec {
+    Callable(ToolDefinition),
+    Namespace(ToolNamespaceSpec),
+    Search(ToolSearchSpec),
+    ProviderHosted(ProviderHostedToolSpec),
+}
+```
+
+规则：
+
+- `Callable` 的 function/freeform 形态由 `ToolDefinition::invocation` 唯一决定，并且必须有
+  host binding；
+- `Namespace` 是展示和 provider capability 层的组合，不改变 leaf binding；
+- `Search` 只搜索冻结 registry 中的 deferred definitions；
+- `ProviderHosted` 由 provider 执行，必须有独立 outcome/capability contract，不能伪装成
+  `ToolExecutor`；
+- provider 不支持 namespace 时，由 `zeta-api` 根据 frozen alias table flatten，不能自由拼接
+  字符串；
+- provider 不支持 freeform 或 hosted kind 时，在 model invocation 前返回 capability error。
+
+### 6.4 Exposure
+
+工具是否初始暴露使用自描述 enum：
+
+```rust
+pub enum ToolExposure {
+    Direct,
+    Deferred,
+    DirectModelOnly,
+    Hidden,
+}
+```
+
+- `Direct`：进入初始 model tool set，也可成为 code-mode nested tool；
+- `Deferred`：只进入 search index，被搜索选中后才进入后续 model invocation；
+- `DirectModelOnly`：直接暴露给模型，但不进入 code mode；
+- `Hidden`：只注册 dispatch，不向模型或 tool search 暴露。
+
+Exposure 不表示 authorization。`Direct` 工具仍可在具体 invocation 时要求 approval。
+
+## 7. Registry 与 snapshot
+
+### 7.1 Registry input
+
+App Server composition root 收集：
+
+```text
+built-in registrations
++ ready MCP catalog projections
++ active connector adapters
++ accepted dynamic tool specs
++ host capability tools
++ code-mode bridge tools
+constrained by policy/grants/model capability
+= ToolRegistrySnapshot
+```
+
+`zeta-tools` 提供 builder 和 immutable snapshot value，但不读取任何 live manager。
+
+### 7.2 Snapshot
+
+```rust
+pub struct ToolRegistrySnapshot {
+    pub generation: ToolRegistryGeneration,
+    pub entries: Vec<RegisteredTool>,
+    pub diagnostics: Vec<ToolRegistryDiagnostic>,
+}
+
+pub struct RegisteredTool {
+    pub definition: ToolDefinition,
+    pub binding: ToolBinding,
+    pub exposure: ToolExposure,
+    pub search: ToolSearchMetadata,
+    pub execution: ToolExecutionMetadata,
+}
+```
+
+Builder 必须确定性执行：
+
+1. validate definitions；
+2. resolve reserved names；
+3. assign exposed aliases；
+4. collision check；
+5. compute definition digests；
+6. bind source runtime keys；
+7. build deferred search entries；
+8. project code-mode-eligible definitions；
+9. sort entries and diagnostics；
+10. publish new generation。
+
+同一输入 generation 集合必须产生同一 snapshot。新 snapshot 只有在 consumer-visible tool set、
+binding、definition 或 diagnostic gate 变化时递增 generation。
+
+### 7.3 Safe point 与 drain
+
+- Turn/model invocation 只读取冻结 snapshot；
+- model 产生的 Tool Call 必须在产生它的 invocation snapshot 中解析；
+- MCP list-changed、Plugin update、dynamic tool removal 不改变 in-flight binding；
+- old snapshot 持有 runtime lease，直到其 model calls 和 Tool invocations drain；
+- 新工具默认只在下一个 model safe point 生效；
+- policy 的单调收紧可以取消旧 invocation，但不能将旧 binding 静默换成新 executor。
+
+`ToolRegistrySnapshot` 是 process-local 派生值，不进入 Config document 或 Thread event。只有调用
+恢复所需的稳定 provenance 进入 durable fact。
+
+## 8. Tool Call、Invocation 与执行接口
+
+### 8.1 三种调用值
+
+必须区分：
+
+```text
+Model ToolCall
+  模型输出：call id + exposed name + raw payload
+
+Materialized ToolInvocation
+  host 已解析 binding、校验 schema、固定环境和 operation identity
+
+Durable Tool Call Item
+  Core 已提交的调用事实
+```
+
+不能让 executor 接收一个只有 name/JSON 的值后自行从 live registry、Config 或 Thread 查找环境。
+
+### 8.2 Payload
+
+```rust
+pub enum ToolPayload {
+    FunctionArguments(serde_json::Value),
+    FreeformInput(String),
+    SearchQuery(ToolSearchQuery),
+}
+```
+
+Function arguments 在 materialization 前完成 JSON parse 和 schema validation。原始 provider
+arguments 可以留在 invocation trace 供诊断，但 executor 只接收 canonical payload。若 source
+确实需要 exact raw bytes，应由具名 `RawPayloadRequirement` capability 明确声明，不能成为默认。
+
+### 8.3 Materialized invocation
+
+```rust
+pub struct ToolInvocation {
+    pub operation_id: ToolOperationId,
+    pub call_id: ToolCallId,
+    pub turn_id: TurnId,
+    pub binding: ToolBinding,
+    pub payload: ToolPayload,
+    pub context: ToolExecutionContext,
+}
+```
+
+`ToolExecutionContext` 只包含 executor 被允许看到的 environment identity 与 cancellation token。
+Core/App Server 接入时会将它扩展为具名、受限的 capability handle，例如：
+
+- effective working directory reference；
+- approved filesystem capability；
+- approved network capability；
+- resource writer；
+- redacted locale/timezone；
+- explicitly selected credential capability。
+
+它不默认包含完整 conversation history、Config、secret store、Thread controller 或 App Server handle。
+需要额外上下文的工具必须在 registration 时声明具名 capability，并经过 policy/materialize。
+
+### 8.4 Executor interface
+
+`zeta-tools` 定义工具作者接口：
+
+```rust
+/// Executes one fully materialized tool invocation.
+///
+/// Implementations must execute only the supplied binding and payload, observe
+/// cancellation and limits, never read or mutate Thread state, and report
+/// whether an externally visible operation may have started when a trustworthy
+/// result cannot be produced.
+pub trait ToolExecutor: Send + Sync {
+    fn definition(&self) -> ToolDefinition;
+
+    fn exposure(&self) -> ToolExposure {
+        ToolExposure::Direct
+    }
+
+    fn search_metadata(&self) -> ToolSearchMetadata;
+
+    fn concurrency(&self) -> ToolConcurrency;
+
+    fn execute(&self, invocation: ToolInvocation) -> ToolExecutionFuture<'_>;
+}
+```
+
+新 trait 必须保留上述角色和实现约束的 doc comment。接口不接受含糊的 `bool` / `Option` 参数。
+`definition`、`exposure`、`search_metadata` 和 `concurrency` 必须确定、无 I/O；composition root
+只在构造新 registry snapshot 时读取它们。
+
+`ToolConcurrency` 使用 typed policy hint：
+
+```rust
+pub enum ToolConcurrency {
+    Exclusive,
+    ParallelSafe,
+    ConflictClass(ToolConflictClass),
+}
+```
+
+它只是 executor 声明；Core 仍将它与 Turn policy、approval 和 resource conflict 一起计算最终
+schedule。
+
+### 8.5 Core consumer port
+
+Core port 接收 materialized request 并返回 source-neutral outcome：
+
+```rust
+/// Routes a Core-approved invocation to the executor bound by the frozen
+/// registry snapshot.
+///
+/// Implementations must preserve operation and call identity, reject stale
+/// bindings, enforce host capabilities, and never commit Thread state.
+pub trait ToolService: Send + Sync {
+    fn execute(&self, invocation: ToolInvocation) -> ToolExecutionFuture<'_>;
+}
+```
+
+长期不再通过 `definitions()` 在执行时读取 live list。Definitions 由独立 snapshot 输入
+`ContextManager`；execution 只解析 invocation 中冻结的 binding。
+
+## 9. Output 与 outcome
+
+### 9.1 Model-facing output
+
+```rust
+pub struct ToolOutput {
+    pub status: ToolOutputStatus,
+    pub content: Vec<ToolContent>,
+    pub structured: ToolStructuredOutput,
+    pub provenance: ToolOutputProvenance,
+}
+
+pub enum ToolOutputStatus {
+    Success,
+    Error,
+}
+
+pub enum ToolContent {
+    Text(String),
+    Image(ToolImage),
+    Resource(ToolResourceRef),
+}
+
+pub enum ToolStructuredOutput {
+    Absent,
+    Json(serde_json::Value),
+}
+```
+
+Tool-level API failure、业务校验失败和 command exit non-zero 通常是
+`ToolOutputStatus::Error`，作为 Tool Result 返回模型。它们不是自动终止 Turn 的 infrastructure
+error。
+
+所有 output 施加：
+
+- 总 bytes、content part 数和每 part 上限；
+- UTF-8 与 JSON/schema validation；
+- MIME、URI scheme 和 resource ownership 校验；
+- binary/image 的 resource indirection；
+- deterministic truncation 与明确 truncation marker；
+- 日志预览与 model-facing full output 分离；
+- external context provenance。
+
+### 9.2 Execution outcome
+
+```rust
+pub enum ToolExecutionOutcome {
+    Returned(ToolOutput),
+    NotStarted(ToolStartFailure),
+    OutcomeUncertain(ToolUncertainOutcome),
+}
+```
+
+边界：
+
+- `Returned`：executor 对工具业务结果有可信终态；
+- `NotStarted`：能够证明外部动作尚未开始，例如 binding stale、local validation failed；
+- `OutcomeUncertain`：请求可能已到达外部系统，但断线/崩溃使终态未知。
+
+`zeta-tools` 定义准确值，Core 决定：
+
+- 是否将 `NotStarted` retry；
+- 是否把 `OutcomeUncertain` durable 映射为 `UnknownOutcome`；
+- Tool Result 是否继续 model loop；
+- Turn 是否失败。
+
+取消只是一种执行信号，不自动等于 `NotStarted`。Executor 必须根据外部动作是否可能开始返回准确
+outcome。
+
+### 9.3 Output adapters
+
+共享 adapter 负责：
+
+```text
+ToolOutput
+  ├─► canonical zeta-protocol::ToolResult content
+  ├─► code-mode nested result
+  ├─► bounded telemetry preview
+  └─► provider-neutral next ModelRequest input
+```
+
+Provider wire encoding 仍由 `zeta-api` 完成。不能让每个 executor 自己生成 OpenAI/Anthropic
+JSON。
+
+## 10. MCP tool 转换
+
+### 10.1 两段式 adapter
+
+MCP 转换固定为：
+
+```text
+MCP wire Tool
+  → zeta-mcp: revision-specific parse + exact remote identity
+  → McpToolProjection
+  → zeta-tools: schema normalization + host definition + output adapter
+  → RegisteredTool + MCP executor binding
+```
+
+纯 projection：
+
+```rust
+pub struct McpToolProjection {
+    pub remote_name: String,
+    pub description: String,
+    pub input_schema: serde_json::Value,
+    pub output_schema: McpOutputSchemaProjection,
+    pub annotations: McpToolAnnotationClaims,
+}
+```
+
+它不包含 transport、request ID、credential、connection handle 或 SDK-specific type。
+
+### 10.2 Definition conversion
+
+`mcp_tool_definition` 必须：
+
+- 接收已经 collision-checked 的 exposed `ToolName`；
+- 保留 exact remote name 到 MCP executor binding；
+- 对缺失/null object `properties` 按明确兼容规则补为空 object；
+- 用统一 `ToolSchema` parser 处理 input/output；
+- 将 MCP annotations 标记为 `UntrustedSourceClaim`；
+- 计算 definition/schema digest；
+- 根据 host policy 选择 `Eager` 或 `Deferred`，不能听任 server 自己扩大 exposure；
+- 拒绝 schema bomb、invalid name、超长 description 和不支持 content contract。
+
+MCP `outputSchema` 只约束 `structuredContent`。MCP call result 外层 `content`、`isError` 和 `_meta`
+有独立 envelope；不能把 remote output schema 错当成整个 Tool Result schema。
+
+### 10.3 Result conversion
+
+转换规则保留：
+
+- text → `ToolContent::Text`；
+- image/blob → 经过 size/MIME/resource policy 的 `ToolContent::Image/Resource`；
+- resource link/embedded resource → 保留 MCP source provenance；
+- `structuredContent` → 校验 output schema 后进入 `ToolStructuredOutput::Json`；
+- `isError: true` → `ToolOutputStatus::Error`；
+- MCP protocol error → `NotStarted` 或 infrastructure error，取决于请求是否发送；
+- transport lost after send → `OutcomeUncertain`，不能伪造普通 error output。
+
+MCP adapter 不决定 approval、retry 或 durable state，也不能根据 server `readOnlyHint` 单独把调用
+标为可自动重试。
+
+## 11. Dynamic tool
+
+“Dynamic tool”必须区分两个概念：
+
+```text
+Dynamic definition
+  Turn/client/extension 在运行时提供一个新的 ToolSpec
+
+Dynamic execution
+  一次调用通过 Agent interaction 交给外部 owner 返回结果
+```
+
+二者通常一起出现，但不能让“动态”成为绕过 registry 和 policy 的通用后门。
+
+### 11.1 Definition adapter
+
+`DynamicToolSpec → ToolDefinition` 经过与 MCP/built-in 相同的：
+
+- `ToolName` validation；
+- schema parser 和 complexity limit；
+- description/output limit；
+- exposure/policy resolution；
+- alias collision check；
+- definition digest；
+- registry generation。
+
+Dynamic source 不能提交 unchecked provider wire schema，也不能选择 reserved tool name。
+
+### 11.2 Execution
+
+client-owned dynamic tool 使用：
+
+```text
+model emits Tool Call
+→ Core resolves frozen dynamic binding
+→ validate + approval
+→ durable Tool Call
+→ durable InteractionRequested { DynamicToolCall }
+→ App Server delivers to exact owner
+→ client returns DynamicToolResponse
+→ output adapter validates call id、content 与 image/resource policy，并分配有效 detail
+→ durable InteractionResolved + Tool Result
+```
+
+`RequestId`、`ToolCallId` 和 App Server JSON-RPC request ID 始终分开。
+
+Dynamic tool owner disconnect 时：
+
+- 尚未投递：`NotStarted(OwnerUnavailable)`；
+- 已投递且 side effect 可能开始：按 policy 进入 uncertain outcome；
+- 不能将请求转交给同名的新 owner；
+- reconnect 后只接受与原 request/owner incarnation 匹配的 response。
+
+### 11.3 Runtime registration
+
+进程内 extension 也可以动态注册 `Arc<dyn ToolExecutor>`，但必须由 composition root 生成新的
+registry snapshot。不能从正在执行的 executor 内部直接修改当前 snapshot。
+
+## 12. Tool search
+
+### 12.1 搜索对象
+
+`tool_search` 只搜索：
+
+- 已安装；
+- 已启用；
+- 已完成 grant/credential gate；
+- 当前 registry snapshot 中可用；
+- exposure 为 `Deferred`；
+- 对当前 model/Turn policy 兼容；
+- 尚未直接暴露给当前 invocation 的工具。
+
+它不搜索 marketplace 中未安装的 Plugin，也不触发 install、enable、connect 或 credential flow。
+
+### 12.2 Search value
+
+```rust
+pub struct ToolSearchMetadata {
+    pub text: String,
+    pub source: ToolSearchSourceInfo,
+    pub tags: Vec<ToolSearchTag>,
+}
+
+pub struct ToolSearchQuery {
+    pub text: String,
+    pub limit: ToolSearchLimit,
+}
+
+pub struct ToolSearchResult {
+    pub registry_generation: ToolRegistryGeneration,
+    pub matches: Vec<ToolSearchMatch>,
+}
+
+pub struct ToolSearchMatch {
+    pub binding_id: ToolBindingId,
+    pub score: ToolSearchScore,
+    pub loadable_spec: LoadableToolSpec,
+}
+```
+
+`LoadableToolSpec` 带 definition digest 与 binding correlation。模型不能修改 search result 中的
+name/schema 后要求 host 执行。
+
+第一版 `ToolSearchLimit` 默认值为 8，并受 host-configured hard cap 限制。超出 hard cap 返回
+typed validation error，不以无限结果或静默全量 catalog 作为 fallback。
+
+### 12.3 Index 与 ranking
+
+第一版使用 snapshot-local、可重建的 deterministic index：
+
+- name 与拆词后的 alias；
+- description；
+- schema property name/description；
+- namespace；
+- source display name 与受控 tags。
+
+限制 query bytes、result limit、index size 和单 entry text。相同输入 snapshot/query 必须产生
+稳定 ordering，以 score、source priority、exposed name、binding ID 做 tie-break。
+
+向量或远端搜索只有在独立隐私、缓存和 failure contract 完成后加入。search index 不包含 secret、
+tool output、conversation history 或未经允许的 Plugin package content。
+
+### 12.4 Loading flow
+
+Host-executed flow：
+
+```text
+model calls tool_search
+→ Core durably records search call/result
+→ validate result binding against same registry generation
+→ next model invocation includes selected definitions
+```
+
+如果 provider 原生支持 deferred tool loading，`zeta-api` 可以把同一 `LoadableToolSpec` 编码成
+provider feature，但 provider 返回的 loaded tool 仍必须关联 frozen binding。Provider 不能加载
+host registry 中不存在的 tool。
+
+## 13. Plugin 与 Connector 发现
+
+### 13.1 与 tool search 分离
+
+Plugin discovery 面向“当前不可执行、可能需要安装或启用的扩展能力”：
+
+```text
+tool_search
+  = 在当前已授权 registry 内找 callable tool
+
+plugin discovery
+  = 在 Plugin/Connector catalog 中找候选扩展
+```
+
+Plugin discovery result 永远不是 `ToolDefinition`，不能直接进入 model tool set。
+
+### 13.2 共享发现值
+
+`zeta-tools` 只定义跨 Plugin manager、App Server 和 Agent-facing helper 共享的纯值：
+
+```rust
+pub enum DiscoverableCapability {
+    Plugin(DiscoverablePluginInfo),
+    Connector(DiscoverableConnectorInfo),
+}
+
+pub enum DiscoveryAction {
+    Install,
+    Enable,
+    Connect,
+}
+
+pub struct DiscoverablePluginInfo {
+    pub id: PluginDiscoveryId,
+    pub display_name: String,
+    pub description: String,
+    pub has_skills: CapabilityPresence,
+    pub mcp_servers: Vec<DiscoveryContributionName>,
+    pub connectors: Vec<ConnectorDiscoveryId>,
+    pub action: DiscoveryAction,
+}
+```
+
+这些值是 catalog projection，不是 Plugin authority record。Exact version、digest、origin、
+permissions 和 credential slots 必须在真正 install/enable command 前由 Plugin manager 再读取并
+展示。
+
+### 13.3 Agent-facing helper tools
+
+可以提供两个明确的 built-in helper：
+
+```text
+list_available_plugins_to_install
+request_plugin_install
+```
+
+但其语义必须是：
+
+- list 读取 App Server 提供的 immutable discovery snapshot；
+- request 产生 typed interaction/Plugin command intent；
+- install/enable 需要用户确认和 exact candidate；
+- helper 不下载 package、不写 Config、不授予 permission；
+- Plugin manager 返回成功后，Tool registry 仍等到新的 activation/MCP generation 在 safe point
+  发布；
+- 安装完成不等于相关 MCP server 已 Ready。
+
+客户端差异通过 typed `ClientCapabilities` 过滤，不通过 `"tui"` 等 client-name 字符串硬编码。
+
+## 14. Code mode
+
+### 14.1 定位
+
+Code mode 是普通工具集合的另一种模型调用表示：模型通过一个 code execution surface，在代码中
+调用多个 nested tools。它不是第二套 tool runtime，也不是 approval/sandbox 旁路。
+
+`zeta-tools` 拥有：
+
+- `ToolSpec → CodeModeToolDefinition` 的纯投影；
+- namespace/name normalization 和 collision table；
+- description 中 code-mode 调用示例的确定性增强；
+- eligible nested tool 收集和排序；
+- nested payload/result 与普通 `ToolPayload` / `ToolOutput` 的转换；
+- tool output image detail 的统一 sanitize。
+
+它不拥有：
+
+- code cell/session lifecycle；
+- JavaScript/Python/Wasm runtime；
+- execute/yield/wait/cancel；
+- remote code-mode host transport；
+- nested tool dispatch、approval 或 durable commit；
+- cell recovery 和 resource accounting。
+
+这些由独立 code-mode runtime 和 Core adapter 拥有。
+
+### 14.2 Projection
+
+```rust
+pub struct CodeModeToolBinding {
+    pub code_name: CodeModeToolName,
+    pub binding_id: ToolBindingId,
+    pub definition_digest: ToolDefinitionDigest,
+    pub definition: CodeModeToolDefinition,
+}
+```
+
+映射必须：
+
+- 基于 frozen registry snapshot；
+- 对 namespace 和 leaf name 做规范化；
+- collision check 后保存显式 mapping table；
+- 不依赖运行时把 `namespace__name` 反向猜回 `ToolName`；
+- 排除 `Hidden`、`DirectModelOnly`、provider-hosted 和不能安全嵌套的 tool；
+- 保留 input/output schema；
+- 对相同 snapshot 产生稳定排序。
+
+### 14.3 Nested call path
+
+```text
+model emits code-mode execute call
+→ Core durably records outer call
+→ code runtime parses/starts cell
+→ nested call references CodeModeToolBinding
+→ adapter materializes ordinary ToolInvocation
+→ normal approval / durable nested Tool Call / ToolService dispatch
+→ ToolOutput converted to code-mode result
+→ cell continues/yields/terminates
+→ outer Tool Result durable commit
+```
+
+每个 nested call 必须拥有独立 `ToolCallId` / `ToolOperationId` 和可审计 lifecycle。Code runtime
+不能拿到裸 executor map 后直接执行副作用。
+
+outer call 与 nested calls 的 transcript 展示可以由客户端折叠，但 durable facts 不能只保留一段
+opaque code output，使内部副作用不可恢复。
+
+### 14.4 Result shape
+
+- structured JSON 保持 JSON，不先 stringify 再 parse；
+- text 保持明确 string；
+- image/resource 使用统一 `ToolContent`；
+- MCP result 保留 content、structured content、is-error 和 provenance；
+- output truncation 在 code-mode budget 与普通 tool output budget 两层都可解释；
+- cell yield 不是 Tool Result terminal outcome；
+- code runtime crash 后，已开始的 nested side effect 仍按普通 uncertain-outcome 规则处理。
+
+## 15. 图片精度
+
+### 15.1 为什么属于共享工具层
+
+图片可以来自 built-in tool、MCP、dynamic owner、code mode 或 future connector。它们最终进入同一
+provider-neutral model context。若每个 source/provider 分别降级 `Original`，同一图片会得到不一致
+行为，因此 capability normalization 放在 `zeta-tools`。
+
+### 15.2 请求与决策
+
+保留 canonical：
+
+```text
+Auto / Low / High / Original
+```
+
+“未指定”使用具名选择，而不是把 `None` 的语义散落在调用方：
+
+```rust
+pub enum ImageDetailSelection {
+    ProviderDefault,
+    Explicit(ImageDetail),
+}
+
+pub struct ImageDetailDecision {
+    pub requested: ImageDetailSelection,
+    pub effective: ImageDetailSelection,
+    pub reason: ImageDetailDecisionReason,
+}
+```
+
+`ImageDetailDecisionReason` 至少区分：
+
+- `Supported`；
+- `ProviderDefaultSelected`；
+- `OriginalUnsupportedDowngraded`；
+- `SourcePolicyDowngraded`。
+
+### 15.3 Normalization
+
+输入：
+
+```text
+requested detail
++ resolved model capability snapshot
++ source/content policy
+= effective detail + diagnostic
+```
+
+规则：
+
+- model 支持 `Original` 时保留；
+- model 不支持时默认降级为 `ProviderDefault`；未来若引入其他 fallback，必须使用全局具名
+  policy，不能由各 adapter 自由选择；
+- `Low` / `High` 不因 provider default 改写；
+- `Auto` 与 `ProviderDefault` 保持不同语义；
+- provider wire adapter 只编码 `effective` value；
+- model invocation 前再次 sanitize 所有 tool output image，防止 MCP/dynamic/code-mode path 漏检；
+- downgrade 是可观察 diagnostic，不伪装成原精度已发送。
+
+`Original` 只控制模型读取精度，不授予读取本地文件、绕过 Resource ownership 或发送无限原始
+bytes 的权限。
+
+### 15.4 Image safety
+
+- data URL、remote URL 和 resource handle 使用不同 typed source；
+- 限制 decoded bytes、pixel count、dimensions、frame count 和 MIME；
+- SVG、animated image 和 metadata 使用明确 policy；
+- remote URL fetch 属于 host network/resource adapter，不在 `zeta-tools`；
+- telemetry 不记录完整 data URL 或图片 bytes；
+- dynamic/MCP adapter 若携带 image detail，它也只是请求；未携带时使用
+  `ImageDetailSelection::ProviderDefault`，最终均由 model capability normalization 决定。
+
+## 16. Provider adapter
+
+`zeta-tools` 保持 provider-neutral；`zeta-api` 负责：
+
+```text
+ToolSpec + ModelCapabilitySnapshot
+  → OpenAI Responses / Chat Completions / Anthropic wire tools
+
+provider tool call/result
+  → canonical ToolCall / provider-neutral content
+```
+
+共享层负责提供确定性输入，provider 层负责 wire 差异：
+
+| 能力 | `zeta-tools` | `zeta-api` |
+| --- | --- | --- |
+| name/schema validation | canonical 规则 | provider-specific final gate |
+| namespace | binding 与 flatten plan | wire encoding |
+| strict schema | typed intent/capability requirement | provider bool/field |
+| deferred loading | search/loadable spec | native feature encoding 或 host fallback |
+| freeform | canonical format | provider grammar/custom tool DTO |
+| image detail | effective decision | provider string/field |
+| output content | `ToolOutput` | provider request item |
+
+Provider adapter 不能：
+
+- 重新选择 tool alias；
+- 从 live registry 加载 definition；
+- 将 unsupported schema 静默变宽；
+- 把 provider call ID 当 canonical `ToolCallId` 而不经过 validation；
+- 对同一个 Tool Result 产生与其他 provider 不同的业务 success/error 语义。
+
+## 17. 安全、policy 与可观察性
+
+### 17.1 Trust
+
+以下全部默认不可信：
+
+- Tool description 和 schema；
+- MCP annotation/result；
+- dynamic tool definition/result；
+- Plugin discovery metadata；
+- code-mode source 和 nested arguments；
+- remote image/resource URL；
+- provider 返回的 tool arguments。
+
+Definition validation 不等于 invocation approval，Plugin signature 不等于 tool 安全，MCP
+`readOnlyHint` 不等于 host `SafeRead`。
+
+### 17.2 Secret 与日志
+
+共享 output/log helper 必须：
+
+- 默认只生成 bounded preview；
+- 区分 model-visible output、audit metadata 和 telemetry preview；
+- 对 credential、authorization header、cookie、data URL 和 filesystem path 执行 redaction；
+- 不把完整 arguments/output 放进普通 error display；
+- 允许 source adapter 提供 typed sensitive-field markers；
+- 不因 serialization error fallback 输出整个 raw payload。
+
+### 17.3 Policy input
+
+`ToolExecutionMetadata` 可以携带 source claim 和 host-derived classification：
+
+```text
+source claim
+  read-only / destructive / idempotent / open-world
+
+host classification
+  effect class / approval requirement / retry eligibility / resource conflicts
+```
+
+Core/host policy 只信任后者。Source claim 只用于 diagnostic 和保守收紧。
+
+## 18. Error contract
+
+至少区分：
+
+```text
+ToolDefinitionInvalid
+ToolSchemaTooComplex
+ToolSchemaUnsupported
+ToolNameReserved
+ToolNameCollision
+ToolBindingStale
+ToolUnavailable
+ToolArgumentsInvalid
+ToolOutputInvalid
+ToolOutputTooLarge
+ToolExecutionNotStarted
+ToolExecutionFailed
+ToolOutcomeUncertain
+ToolSearchQueryInvalid
+ToolSearchOverloaded
+PluginDiscoveryUnavailable
+DynamicToolOwnerUnavailable
+CodeModeUnsupportedTool
+CodeModeBindingCollision
+ImageDetailDowngraded
+InternalToolInvariant
+```
+
+职责：
+
+- `zeta-tools` 产生 definition/schema/adapter/binding 错误；
+- source runtime 产生 transport/executor detail；
+- Core 映射 approval/retry/recovery/Turn outcome；
+- App Server 映射 stable RPC error；
+- provider adapter 产生 provider capability/wire error。
+
+内部错误可以保留 source chain，但 public error 不泄露 secret、raw MCP frame、Plugin writable path、
+完整 arguments 或 output。
+
+## 19. 目标目录与公开 API
+
+第一版保持一个 crate，模块默认 private，`lib.rs` 只做精确导出：
+
+```text
+zeta-rs/tools/src/
+├── lib.rs
+├── error.rs
+├── identity.rs
+├── definition/
+│   ├── mod.rs
+│   ├── model.rs
+│   ├── schema.rs
+│   ├── spec.rs
+│   └── validation.rs
+├── registry/
+│   ├── mod.rs
+│   ├── binding.rs
+│   ├── builder.rs
+│   ├── snapshot.rs
+│   └── provenance.rs
+├── execution/
+│   ├── mod.rs
+│   ├── invocation.rs
+│   ├── executor.rs
+│   ├── output.rs
+│   └── outcome.rs
+├── adapters/
+│   ├── mod.rs
+│   ├── protocol.rs
+│   ├── mcp.rs
+│   └── dynamic.rs
+├── search/
+│   ├── mod.rs
+│   ├── index.rs
+│   ├── query.rs
+│   └── loadable.rs
+├── discovery/
+│   ├── mod.rs
+│   ├── model.rs
+│   └── install_request.rs
+├── code_mode/
+│   ├── mod.rs
+│   ├── definition.rs
+│   ├── naming.rs
+│   └── output.rs
+├── image_detail.rs
+└── *_tests.rs
+```
+
+目录只随 vertical slice 创建，不预建空模块。每个 implementation 的测试放在 sibling
+`*_tests.rs`，并使用：
+
+```rust
+#[cfg(test)]
+#[path = "schema_tests.rs"]
+mod tests;
+```
+
+目标 public API 只包含：
+
+- validated definition/schema/spec；
+- registry snapshot/binding/provenance；
+- invocation/payload/output/outcome；
+- `ToolExecutor` 和必要 future 类型；
+- MCP/dynamic/protocol pure adapters；
+- search/discovery values；
+- code-mode/image-detail pure helpers。
+
+不公开：
+
+- mutable global registry；
+- executor concrete map；
+- MCP SDK wire DTO；
+- Plugin manager record；
+- provider Responses/Anthropic DTO；
+- Core TurnContext/ThreadController；
+- secret/resource concrete handle；
+- unchecked schema constructor。
+
+若 code-mode runtime、MCP adapter 或 search engine 后续形成独立重量级依赖，应提取独立 crate，
+但 `zeta-tools` 仍只保留窄 bridge contract。第一版不创建 `tools-common`、`tools-types`、
+`tool-runtime` 等无独立消费者的小 crate。
+
+## 20. 迁移顺序
+
+### Phase T0：固定共享边界（完成）
+
+- ✅ 创建 `zeta-tools`；
+- ✅ 复用 protocol `ToolName` / `ToolCallId`，不复制 identity；
+- ✅ 建立受限 schema parser、`ToolDefinition`、function/freeform invocation 与基础 output content；
+- ✅ 为当前 protocol `ToolDefinition/ToolResult` 提供 adapter；
+- ✅ 为 dynamic tool 与 wire-neutral MCP projection 提供 definition adapter；
+- ✅ 加入 schema/name/output fixture。
+
+完成条件：OpenAI/Anthropic 当前 function tool request round-trip 不回归，且新 crate 不依赖 Core。
+
+### Phase T1：Executor 与 registry（共享类型完成；runtime 接入待实现）
+
+- ✅ 定义 `ToolBinding`、`ToolExecutor`、materialized invocation、cancellation context 与 outcome；
+- built-in process tool 实现 executor contract；
+- App Server 构造 immutable registry snapshot；
+- Core `ToolService` adapter 只执行 frozen binding；
+- definitions 与 execution path 不再读取同一个 live `ToolService`。
+
+完成条件：registry 更新不能劫持 in-flight call，stale binding 被明确拒绝。
+
+### Phase T2：MCP 与 dynamic adapter
+
+- `zeta-mcp` 输出 `McpToolProjection`；
+- 接通 schema/name/result conversion；
+- dynamic definition 与 interaction execution 使用同一 output contract；
+- Tool Call durable provenance 增加 source/digest；
+- 覆盖 transport-lost 和 owner-disconnect uncertain outcome。
+
+完成条件：MCP/dynamic 工具都不能绕过普通 approval、commit 和 recovery。
+
+### Phase T3：Tool search 与 Plugin discovery
+
+- deferred exposure 和 deterministic search index；
+- host tool-search vertical slice；
+- Plugin/Connector discovery projection；
+- typed install/enable/connect request；
+- client capability filtering。
+
+完成条件：search 只返回当前 registry 工具，Plugin discovery 不产生可执行 binding，install 无隐式
+grant。
+
+### Phase T4：Code mode
+
+- code-mode definition projection、naming/collision table；
+- nested call 重新进入普通 ToolInvocation path；
+- structured/MCP/image result adapter；
+- cell yield/cancel/uncertain outcome；
+- durable outer/nested call correlation。
+
+完成条件：code mode 的任意 nested side effect 都可审批、可审计、可取消，并具有准确恢复语义。
+
+### Phase T5：图片精度与 provider capability 收敛
+
+- 统一 `ImageDetailSelection/Decision`；
+- model capability snapshot 接入；
+- OpenAI/Anthropic adapter 只编码 effective detail；
+- MCP/dynamic/code-mode output 统一 sanitize；
+- downgrade diagnostic 和 image safety fixtures。
+
+完成条件：unsupported `Original` 不会到达 provider wire，且调用方能解释实际使用的 detail。
+
+## 21. 验证门
+
+除 workspace 常规检查外，必须覆盖：
+
+- invalid/reserved/colliding ToolName；
+- schema depth/size/property/enum/ref bomb；
+- schema canonicalization 和 digest stability；
+- required/additionalProperties/provider strict conversion；
+- registry deterministic build、generation、old-snapshot drain；
+- stale binding 与同名新 executor 不会互换；
+- model ToolCall → materialized invocation → durable item identity；
+- tool-level error、not-started 和 uncertain outcome 分类；
+- output bytes/content/schema/MIME/resource limit；
+- MCP missing properties、outputSchema、isError、protocol error 和 transport loss；
+- dynamic owner disconnect、late response 和 RequestId/ToolCallId mismatch；
+- deferred search ranking、limit、generation 和 forged result；
+- Plugin discovery 与 tool search 隔离；
+- install/enable/connect 无隐式 grant；
+- code-mode namespace/name collision、nested approval 和 result shape；
+- structured JSON 不被意外 stringify；
+- image Auto/Low/High/Original capability matrix；
+- unsupported Original 的稳定降级；
+- telemetry 不泄露 secret、data URL、raw MCP frame 或完整敏感 payload；
+- 所有新 test module 使用 sibling `*_tests.rs`。
+
+协议或 provider contract 变化还必须重新生成并提交 JSON Schema、TypeScript 和对应 fixtures。
+
+## 22. 固定决策
+
+- `zeta-tools` 是共享类型与纯适配层，不是第二个 Core；
+- `ToolName` 是 model-facing alias，不是 source/executor identity；
+- `ToolCall` 与 materialized `ToolInvocation` 是不同生命周期；
+- Core 的 `ToolService` port 与工具作者的 `ToolExecutor` interface 分开；
+- definition、binding、registry snapshot 在 model safe point 冻结；
+- in-flight call 永远按原 binding 执行，不按 name 重查 live registry；
+- MCP wire/lifecycle 属于 `zeta-mcp`，MCP-to-tool pure conversion 属于 `zeta-tools`；
+- Plugin authority/install/grant 属于 `zeta-plugins`，discovery DTO 不拥有 mutation；
+- tool search 只搜索已安装、已授权、当前可用的 deferred tools；
+- Plugin discovery 不能直接产生 executable ToolDefinition；
+- dynamic tool 不绕过 schema、registry、approval 或 durable interaction；
+- code mode 是普通工具调用的另一种表示，不是执行旁路；
+- nested code-mode tools 继续使用普通 binding、approval、commit 和 recovery；
+- tool output 使用 typed content/structured value，不让各 provider/executor 自定义 wire JSON；
+- `Original` 图片精度只在 model capability 支持时保留；
+- provider adapter 只编码 effective tool/image value，不重新做 host policy；
+- 所有 schema、description、arguments、outputs 和 discovery metadata 默认不可信；
+- `zeta-tools` 不读取 Config、Plugin/MCP live manager、credential、ThreadStore 或 provider client；
+- 新 public trait 必须带角色和实现约束 doc comment；
+- 新 API 不使用让调用方写出 `foo(false)` / `bar(None)` 的含糊参数；
+- 模块默认 private，`lib.rs` 精确导出，implementation tests 放 sibling 文件。

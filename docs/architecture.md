@@ -44,6 +44,8 @@
   provider 与 Tool 的异步执行演进和 Provider safe point。
 - [`zeta-models-manager` 架构与演进方案](models-manager.md)：统一管理 provider 模型发现、
   缓存、字段级合并、筛选、解析和 catalog snapshot。
+- [`zeta-tools` 架构与演进方案](tools.md)：共享工具类型、definition/binding/executor、
+  MCP/dynamic adapter、tool search、Plugin discovery、code mode 与图片精度。
 - [`zeta-mcp` 架构与演进方案](mcp.md)：MCP client session、transport、capability negotiation
   与 tools/resources/prompts adapter。
 - [`zeta-plugins` 架构与演进方案](plugins.md)：扩展包 manifest、安装、权限、activation

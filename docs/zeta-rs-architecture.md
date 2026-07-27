@@ -21,6 +21,11 @@ Desktop UI、Electron IPC、终端渲染和第三方网页 UI 不属于 Rust Cor
 ```text
 zeta-rs/
 ├── protocol/             # canonical shared domain contract
+├── tools/                # target host-side tool types, interfaces and pure adapters
+├── shell-command/        # concrete approved-process executor
+├── file-system/          # concrete read-only filesystem executor
+├── file-search/          # concrete bounded text-search executor
+├── apply-patch/          # concrete validated write executor
 ├── session-store/        # Session persistence port + envelope
 ├── thread-store/         # Thread persistence port + envelope
 ├── core/                 # reducers, coordinators, execution policy and recovery
@@ -69,6 +74,10 @@ Canonical 产品模型、command/event/update/request 的分类、ID/cursor 语�
 统一由 [`protocol.md`](protocol.md) 维护。本文件只规定 workspace 依赖关系：
 `zeta-protocol` 是纯共享值层，Core、store、provider adapter 与 App Server wire 可以依赖它，
 它不能反向依赖这些执行或 I/O crate。
+
+工具 host contract、registry/binding、executor interface、MCP/dynamic conversion、tool search、
+Plugin discovery、code mode 与图片精度由 [`tools.md`](tools.md) 维护。`zeta-tools` 复用 protocol
+identity/content，不拥有 Core 调度、MCP session、Plugin authority 或 provider wire。
 
 ## 4. Core
 
