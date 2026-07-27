@@ -1953,15 +1953,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "zeta-apply-patch"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "zeta-async-utils",
+ "zeta-protocol",
+ "zeta-sandboxing",
+ "zeta-tools",
+]
+
+[[package]]
 name = "zeta-async-utils"
 version = "0.1.0"
 
 [[package]]
-name = "zeta-built-in-tools"
+name = "zeta-bwrap"
 version = "0.1.0"
-dependencies = [
- "zeta-exec",
-]
 
 [[package]]
 name = "zeta-cli"
@@ -2006,8 +2015,31 @@ dependencies = [
 name = "zeta-exec"
 version = "0.1.0"
 dependencies = [
- "zeta-core",
  "zeta-sandboxing",
+]
+
+[[package]]
+name = "zeta-file-search"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "zeta-async-utils",
+ "zeta-protocol",
+ "zeta-sandboxing",
+ "zeta-tools",
+]
+
+[[package]]
+name = "zeta-file-system"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "zeta-async-utils",
+ "zeta-protocol",
+ "zeta-sandboxing",
+ "zeta-tools",
 ]
 
 [[package]]
@@ -2018,6 +2050,14 @@ dependencies = [
  "rustls-native-certs",
  "ureq",
  "zeroize",
+]
+
+[[package]]
+name = "zeta-linux-sandbox"
+version = "0.1.0"
+dependencies = [
+ "zeta-bwrap",
+ "zeta-sandboxing",
 ]
 
 [[package]]
@@ -2101,6 +2141,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "zeta-shell-command"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "zeta-async-utils",
+ "zeta-exec",
+ "zeta-protocol",
+ "zeta-sandboxing",
+ "zeta-tools",
+]
+
+[[package]]
 name = "zeta-storage"
 version = "0.1.0"
 dependencies = [
@@ -2117,6 +2170,16 @@ name = "zeta-thread-store"
 version = "0.1.0"
 dependencies = [
  "serde",
+ "zeta-protocol",
+]
+
+[[package]]
+name = "zeta-tools"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "sha2",
+ "zeta-async-utils",
  "zeta-protocol",
 ]
 
@@ -2146,6 +2209,13 @@ dependencies = [
  "shared_library",
  "tokio",
  "winapi",
+]
+
+[[package]]
+name = "zeta-windows-sandbox"
+version = "0.1.0"
+dependencies = [
+ "zeta-sandboxing",
 ]
 
 [[package]]

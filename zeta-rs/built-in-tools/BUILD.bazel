@@ -1,6 +1,0 @@
-load("//:defs.bzl", "zeta_rust_crate")
-
-zeta_rust_crate(
-    name = "built-in-tools",
-    crate_name = "zeta_built_in_tools",
-)

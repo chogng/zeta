@@ -4,14 +4,18 @@ members = [
     "app-server-client",
     "app-server-protocol",
     "app-server-transport",
+    "apply-patch",
     "async-utils",
-    "built-in-tools",
+    "bwrap",
     "cli",
     "config",
     "core",
     "secrets",
     "exec",
+    "file-search",
+    "file-system",
     "http-client",
+    "linux-sandbox",
     "model-provider",
     "model-provider-config",
     "protocol",
@@ -19,11 +23,14 @@ members = [
     "rollout-trace",
     "sandboxing",
     "session-store",
+    "shell-command",
     "storage",
     "thread-store",
+    "tools",
     "tui",
     "utils/pdf",
     "utils/pty",
+    "windows-sandbox-rs",
     "zeta-api",
     "zeta-client",
 ]
@@ -60,14 +67,19 @@ zeta-app-server = { path = "app-server" }
 zeta-app-server-client = { path = "app-server-client" }
 zeta-app-server-protocol = { path = "app-server-protocol" }
 zeta-app-server-transport = { path = "app-server-transport" }
+zeta-apply-patch = { path = "apply-patch" }
 zeta-async-utils = { path = "async-utils" }
+zeta-bwrap = { path = "bwrap" }
 zeta-api = { path = "zeta-api" }
 zeta-client = { path = "zeta-client" }
 zeta-config = { path = "config" }
 zeta-core = { path = "core" }
 zeta-secrets = { path = "secrets" }
 zeta-exec = { path = "exec" }
+zeta-file-search = { path = "file-search" }
+zeta-file-system = { path = "file-system" }
 zeta-http-client = { path = "http-client" }
+zeta-linux-sandbox = { path = "linux-sandbox" }
 zeta-model-provider = { path = "model-provider" }
 zeta-model-provider-config = { path = "model-provider-config" }
 zeta-protocol = { path = "protocol" }
@@ -75,11 +87,14 @@ zeta-rollout = { path = "rollout" }
 zeta-rollout-trace = { path = "rollout-trace" }
 zeta-sandboxing = { path = "sandboxing" }
 zeta-session-store = { path = "session-store" }
+zeta-shell-command = { path = "shell-command" }
 zeta-storage = { path = "storage" }
 zeta-thread-store = { path = "thread-store" }
+zeta-tools = { path = "tools" }
 zeta-tui = { path = "tui" }
 zeta-pdf = { path = "utils/pdf" }
 zeta-utils-pty = { path = "utils/pty" }
+zeta-windows-sandbox = { path = "windows-sandbox-rs" }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
