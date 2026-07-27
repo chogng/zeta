@@ -129,24 +129,3 @@ impl ToolService for NoTools {
         )))
     }
 }
-
-/// Decides whether a tool action needs an explicit user approval.
-///
-/// Implementations inspect the fully materialized action and must distinguish approval from a
-/// denial; tool execution is allowed only after an explicit approval decision.
-pub trait ApprovalPolicy: Send + Sync {
-    fn requirement_for(&self, action_digest: &str) -> ApprovalRequirement;
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum ApprovalRequirement {
-    NotRequired,
-    Required,
-    Denied,
-}
-
-impl ApprovalRequirement {
-    pub fn allows_execution(self) -> bool {
-        matches!(self, Self::NotRequired)
-    }
-}

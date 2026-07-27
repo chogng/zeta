@@ -13,8 +13,6 @@ mod turn;
 
 pub(crate) use context::ContextAssembler;
 pub use error::CoreError;
-pub use services::ApprovalPolicy;
-pub use services::ApprovalRequirement;
 pub use services::LeaseGuard;
 pub use services::ModelService;
 pub use services::ModelStreamSink;
