@@ -1,0 +1,6 @@
+load("//:defs.bzl", "zeta_rust_crate")
+
+zeta_rust_crate(
+    name = "bwrap",
+    crate_name = "zeta_bwrap",
+)

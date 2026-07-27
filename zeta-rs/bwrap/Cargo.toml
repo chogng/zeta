@@ -1,0 +1,13 @@
+[package]
+name = "zeta-bwrap"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+doctest = false
+name = "zeta_bwrap"
+path = "src/lib.rs"
+
+[lints]
+workspace = true
