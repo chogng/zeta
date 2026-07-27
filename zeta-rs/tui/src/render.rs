@@ -35,6 +35,7 @@ pub(crate) fn draw(frame: &mut Frame<'_>, app: &App) {
             let label_width = match message.role {
                 MessageRole::User => "You: ".width(),
                 MessageRole::Agent => "Zeta: ".width(),
+                MessageRole::Notice => "Note: ".width(),
                 MessageRole::Error => "Error: ".width(),
             };
             estimated_wrapped_rows(label_width, &message.text, history_width)
@@ -47,6 +48,7 @@ pub(crate) fn draw(frame: &mut Frame<'_>, app: &App) {
             let (label, color) = match message.role {
                 MessageRole::User => ("You", Color::Cyan),
                 MessageRole::Agent => ("Zeta", Color::Green),
+                MessageRole::Notice => ("Note", Color::Yellow),
                 MessageRole::Error => ("Error", Color::Red),
             };
             Line::from(vec![
@@ -79,7 +81,24 @@ pub(crate) fn draw(frame: &mut Frame<'_>, app: &App) {
     let (status, style) = match app.status() {
         Status::Ready => ("Enter send  •  Esc quit".to_owned(), Style::default()),
         Status::Working => (
-            "Working… keyboard input pauses until this turn completes".to_owned(),
+            "Working… Ctrl-C interrupts this turn".to_owned(),
+            Style::default().fg(Color::Yellow),
+        ),
+        Status::WaitingForApproval => (
+            "Waiting for approval… this TUI cannot resolve it yet; Ctrl-C interrupts".to_owned(),
+            Style::default().fg(Color::Yellow),
+        ),
+        Status::WaitingForUserInput => (
+            "Waiting for user input… this TUI cannot resolve it yet; Ctrl-C interrupts".to_owned(),
+            Style::default().fg(Color::Yellow),
+        ),
+        Status::WaitingForCapability => (
+            "Waiting for a capability… this TUI cannot resolve it yet; Ctrl-C interrupts"
+                .to_owned(),
+            Style::default().fg(Color::Yellow),
+        ),
+        Status::Cancelling => (
+            "Interrupting turn… waiting for its terminal state".to_owned(),
             Style::default().fg(Color::Yellow),
         ),
         Status::Error(message) => (

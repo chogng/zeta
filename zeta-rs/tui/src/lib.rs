@@ -16,12 +16,13 @@ use std::time::UNIX_EPOCH;
 use zeta_app_server_client::AppServerClient;
 use zeta_app_server_client::ClientError;
 use zeta_app_server_client::JsonRpcTransport;
-use zeta_app_server_client::ServerNotification;
 use zeta_app_server_protocol::protocol::common::{SessionId, ThreadId};
 use zeta_app_server_protocol::protocol::session::{SessionCreateParams, SessionThreadCreateParams};
 use zeta_app_server_protocol::protocol::thread::ThreadReadParams;
-use zeta_app_server_protocol::protocol::turn::{InputItem, InputItemKind, TurnStartParams};
-use zeta_protocol::{CommandId, ThreadEvent, ThreadItem, ThreadUpdate};
+use zeta_app_server_protocol::protocol::turn::{
+    InputItem, InputItemKind, TurnInterruptParams, TurnStartParams,
+};
+use zeta_protocol::{CommandId, ThreadItem, TurnId, TurnStatus};
 
 /// Startup values owned by the CLI host rather than by the terminal UI.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -94,15 +95,24 @@ where
         title: options.thread_title,
     })?;
     let mut thread_sequence = 1;
+    let mut active_turn = None;
     let mut terminal = terminal::TerminalSession::open()?;
     let mut app = App::new();
 
     loop {
-        if matches!(app.status(), app::Status::Working) {
+        if matches!(
+            app.status(),
+            app::Status::Working
+                | app::Status::WaitingForApproval
+                | app::Status::WaitingForUserInput
+                | app::Status::WaitingForCapability
+                | app::Status::Cancelling
+        ) {
             refresh_turn(
                 &mut client,
                 &thread.thread_id,
                 &mut thread_sequence,
+                &mut active_turn,
                 &mut app,
             );
         }
@@ -115,9 +125,35 @@ where
                 if let Some(action) = app.handle_key(key) {
                     match action {
                         Action::Quit => return Ok(TuiExit::UserRequested),
+                        Action::Interrupt => {
+                            refresh_turn(
+                                &mut client,
+                                &thread.thread_id,
+                                &mut thread_sequence,
+                                &mut active_turn,
+                                &mut app,
+                            );
+                            if let Some(turn_id) = active_turn.clone()
+                                && !matches!(app.status(), app::Status::Error(_))
+                            {
+                                interrupt_turn(
+                                    &mut client,
+                                    &session.session.session_id,
+                                    &thread.thread_id,
+                                    &mut thread_sequence,
+                                    &turn_id,
+                                    &mut active_turn,
+                                    &mut app,
+                                );
+                            } else if !matches!(app.status(), app::Status::Ready) {
+                                app.record_interrupt_failure(
+                                    "the active turn is not available".into(),
+                                );
+                            }
+                        }
                         Action::Submit(prompt) => {
                             terminal.draw(|frame| render::draw(frame, &app))?;
-                            submit_prompt(
+                            active_turn = submit_prompt(
                                 &mut client,
                                 &session.session.session_id,
                                 &thread.thread_id,
@@ -142,7 +178,8 @@ fn submit_prompt<T>(
     thread_sequence: &mut u64,
     prompt: String,
     app: &mut App,
-) where
+) -> Option<TurnId>
+where
     T: JsonRpcTransport,
 {
     let turn = client.start_turn(TurnStartParams {
@@ -155,18 +192,23 @@ fn submit_prompt<T>(
             text: prompt,
         }],
     });
-    if let Err(error) = turn {
-        app.record_error(error.to_string());
-        return;
+    match turn {
+        Ok(start) => {
+            *thread_sequence = start.sequence;
+            Some(start.turn_id)
+        }
+        Err(error) => {
+            app.record_error(error.to_string());
+            None
+        }
     }
-
-    refresh_turn(client, thread_id, thread_sequence, app);
 }
 
 fn refresh_turn<T>(
     client: &mut AppServerClient<T>,
     thread_id: &ThreadId,
     thread_sequence: &mut u64,
+    active_turn: &mut Option<TurnId>,
     app: &mut App,
 ) where
     T: JsonRpcTransport,
@@ -174,45 +216,86 @@ fn refresh_turn<T>(
     match client.read_thread(ThreadReadParams {
         thread_id: thread_id.clone(),
     }) {
-        Ok(snapshot) => *thread_sequence = snapshot.thread.sequence,
+        Ok(snapshot) => {
+            *thread_sequence = snapshot.thread.sequence;
+            apply_active_turn_snapshot(app, active_turn, &snapshot.thread.turns);
+        }
         Err(error) => app.record_error(error.to_string()),
     }
-    match client.drain_notifications() {
-        Ok(notifications) => apply_notifications(app, notifications),
-        Err(error) => app.record_error(error.to_string()),
+    if let Err(error) = client.drain_notifications() {
+        app.record_error(error.to_string());
     }
 }
 
-fn apply_notifications(app: &mut App, notifications: Vec<ServerNotification>) {
-    for notification in notifications {
-        match notification {
-            ServerNotification::ThreadUpdate(update) => match update.update {
-                ThreadUpdate::Committed {
-                    event:
-                        ThreadEvent::ItemCompleted {
-                            item: ThreadItem::AgentMessage { text, .. },
-                            ..
-                        },
-                } => {
-                    app.record_response(text);
-                }
-                ThreadUpdate::Committed {
-                    event: ThreadEvent::TurnInterrupted { .. },
-                } => {
-                    app.record_error("turn interrupted".into());
-                    return;
-                }
-                ThreadUpdate::Committed {
-                    event: ThreadEvent::TurnFailed { .. },
-                } => {
-                    app.record_error("turn failed".into());
-                    return;
-                }
-                _ => {}
-            },
-            ServerNotification::SessionUpdate(_) => {}
-            ServerNotification::Unknown { .. } => {}
+fn interrupt_turn<T>(
+    client: &mut AppServerClient<T>,
+    session_id: &SessionId,
+    thread_id: &ThreadId,
+    thread_sequence: &mut u64,
+    turn_id: &TurnId,
+    active_turn: &mut Option<TurnId>,
+    app: &mut App,
+) where
+    T: JsonRpcTransport,
+{
+    match client.interrupt_turn(TurnInterruptParams {
+        command_id: CommandId::new(request_key("interrupt"))
+            .expect("generated command ID is non-empty"),
+        session_id: session_id.clone(),
+        thread_id: thread_id.clone(),
+        turn_id: turn_id.clone(),
+        expected_sequence: *thread_sequence,
+    }) {
+        Ok(result) => {
+            *thread_sequence = result.sequence;
+            refresh_turn(client, thread_id, thread_sequence, active_turn, app);
         }
+        Err(error) => app.record_interrupt_failure(error.to_string()),
+    }
+}
+
+fn apply_active_turn_snapshot(
+    app: &mut App,
+    active_turn: &mut Option<TurnId>,
+    turns: &[zeta_protocol::Turn],
+) {
+    let Some(turn_id) = active_turn.as_ref() else {
+        return;
+    };
+    let Some(turn) = turns.iter().find(|turn| &turn.turn_id == turn_id) else {
+        return;
+    };
+
+    match turn.status {
+        TurnStatus::Completed => {
+            let response = turn.items.iter().rev().find_map(|item| match item {
+                ThreadItem::AgentMessage { text, .. } => Some(text.clone()),
+                _ => None,
+            });
+            *active_turn = None;
+            match response {
+                Some(response) => app.record_response(response),
+                None => app.record_error("turn completed without an agent message".into()),
+            }
+        }
+        TurnStatus::Failed => {
+            *active_turn = None;
+            let detail = turn
+                .error
+                .as_ref()
+                .map(|error| format!("turn failed: {error:?}"))
+                .unwrap_or_else(|| "turn failed".into());
+            app.record_error(detail);
+        }
+        TurnStatus::Interrupted => {
+            *active_turn = None;
+            app.record_interrupted();
+        }
+        TurnStatus::WaitingForApproval => app.wait_for_approval(),
+        TurnStatus::WaitingForUserInput => app.wait_for_user_input(),
+        TurnStatus::WaitingForCapability => app.wait_for_capability(),
+        TurnStatus::Created | TurnStatus::Running => app.record_working(),
+        TurnStatus::Cancelling => app.record_cancelling(),
     }
 }
 
@@ -223,3 +306,7 @@ fn request_key(prefix: &str) -> String {
         .as_nanos();
     format!("{prefix}-{}-{timestamp}", std::process::id())
 }
+
+#[cfg(test)]
+#[path = "lib_tests.rs"]
+mod tests;

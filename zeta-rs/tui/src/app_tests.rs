@@ -43,6 +43,56 @@ fn control_c_requests_exit() {
 }
 
 #[test]
+fn control_c_interrupts_a_working_turn_without_exiting() {
+    let mut app = App::new();
+    app.insert_text("hello");
+    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+
+    let action = app.handle_key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL));
+
+    assert_eq!(action, Some(Action::Interrupt));
+    assert_eq!(app.status(), &Status::Cancelling);
+}
+
+#[test]
+fn a_second_control_c_does_not_duplicate_an_interrupt() {
+    let mut app = App::new();
+    app.insert_text("hello");
+    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL));
+
+    let action = app.handle_key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL));
+
+    assert_eq!(action, None);
+    assert_eq!(app.status(), &Status::Cancelling);
+}
+
+#[test]
+fn control_c_interrupts_a_turn_waiting_for_user_input() {
+    let mut app = App::new();
+    app.wait_for_user_input();
+
+    let action = app.handle_key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL));
+
+    assert_eq!(action, Some(Action::Interrupt));
+    assert_eq!(app.status(), &Status::Cancelling);
+}
+
+#[test]
+fn working_turn_does_not_accept_a_second_prompt_or_paste() {
+    let mut app = App::new();
+    app.insert_text("first");
+    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+
+    let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    app.insert_text("second");
+
+    assert_eq!(action, None);
+    assert_eq!(app.input(), "");
+    assert_eq!(app.messages().len(), 1);
+}
+
+#[test]
 fn response_returns_the_app_to_ready() {
     let mut app = App::new();
     app.insert_text("hello");
@@ -66,4 +116,18 @@ fn client_error_is_visible_in_history_and_status() {
     assert_eq!(app.messages()[0].role, MessageRole::Error);
     assert_eq!(app.messages()[0].text, "provider unavailable");
     assert_eq!(app.status(), &Status::Error("provider unavailable".into()));
+}
+
+#[test]
+fn interrupted_turn_returns_to_ready_with_a_notice() {
+    let mut app = App::new();
+    app.insert_text("hello");
+    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL));
+
+    app.record_interrupted();
+
+    assert_eq!(app.status(), &Status::Ready);
+    assert_eq!(app.messages().last().unwrap().role, MessageRole::Notice);
+    assert_eq!(app.messages().last().unwrap().text, "turn interrupted");
 }
