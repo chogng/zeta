@@ -1,0 +1,17 @@
+[package]
+name = "zeta-linux-sandbox"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+doctest = false
+name = "zeta_linux_sandbox"
+path = "src/lib.rs"
+
+[dependencies]
+zeta-bwrap = { workspace = true }
+zeta-sandboxing = { workspace = true }
+
+[lints]
+workspace = true
