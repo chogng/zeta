@@ -10,7 +10,6 @@ name = "zeta_exec"
 path = "src/lib.rs"
 
 [dependencies]
-zeta-core = { workspace = true }
 zeta-sandboxing = { workspace = true }
 
 [lints]

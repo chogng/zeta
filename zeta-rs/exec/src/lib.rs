@@ -5,8 +5,29 @@ use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::thread;
 use std::time::{Duration, Instant};
-use zeta_core::{ApprovalPolicy, ApprovalRequirement};
 use zeta_sandboxing::WorkspaceRoot;
+
+/// Decides whether a fully materialized local process action can start.
+///
+/// Hosts implement this policy from their approval authority. The executor asks only about the
+/// exact program-and-arguments digest and never turns a required approval into permission itself.
+pub trait ApprovalPolicy: Send + Sync {
+    fn requirement_for(&self, action_digest: &str) -> ApprovalRequirement;
+}
+
+/// Distinguishes a command that may start from one awaiting user approval or prohibited by policy.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ApprovalRequirement {
+    NotRequired,
+    Required,
+    Denied,
+}
+
+impl ApprovalRequirement {
+    pub fn allows_execution(self) -> bool {
+        matches!(self, Self::NotRequired)
+    }
+}
 
 #[derive(Clone, Debug)]
 pub struct CommandRequest {
@@ -35,13 +56,13 @@ pub enum ExecutionError {
     Sandbox(String),
 }
 
-pub struct ToolExecutor<P> {
+pub struct CommandExecutor<P> {
     workspace: WorkspaceRoot,
     approval_policy: P,
     limits: ExecutionLimits,
 }
 
-impl<P: ApprovalPolicy> ToolExecutor<P> {
+impl<P: ApprovalPolicy> CommandExecutor<P> {
     pub fn new(workspace: WorkspaceRoot, approval_policy: P, limits: ExecutionLimits) -> Self {
         Self {
             workspace,
@@ -113,6 +134,9 @@ impl<P: ApprovalPolicy> ToolExecutor<P> {
         })
     }
 }
+
+/// Backwards-compatible name for the local process execution boundary.
+pub type ToolExecutor<P> = CommandExecutor<P>;
 
 fn drain_stream(mut stream: impl Read, max_output_bytes: usize) -> Result<(Vec<u8>, bool), String> {
     let mut captured = Vec::new();
