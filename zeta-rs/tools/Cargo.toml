@@ -1,0 +1,19 @@
+[package]
+name = "zeta-tools"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+doctest = false
+name = "zeta_tools"
+path = "src/lib.rs"
+
+[dependencies]
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+zeta-async-utils = { workspace = true }
+zeta-protocol = { workspace = true }
+
+[lints]
+workspace = true

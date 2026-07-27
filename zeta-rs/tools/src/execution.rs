@@ -1,0 +1,206 @@
+use crate::{
+    ToolBinding, ToolCallId, ToolDefinition, ToolEnvironmentId, ToolOperationId, ToolOutput,
+};
+use serde_json::Value;
+use std::future::Future;
+use std::pin::Pin;
+use zeta_async_utils::CancellationToken;
+use zeta_protocol::TurnId;
+
+/// Controls whether an executor enters the initial model tool set, deferred search, or neither.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ToolExposure {
+    Direct,
+    Deferred,
+    DirectModelOnly,
+    Hidden,
+}
+
+/// Canonical payload shapes accepted by a fully materialized host tool invocation.
+#[derive(Clone, Debug, PartialEq)]
+pub enum ToolPayload {
+    FunctionArguments(Value),
+    FreeformInput(String),
+}
+
+/// Declares whether independently materialized calls may run concurrently.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ToolConcurrency {
+    Exclusive,
+    ParallelSafe,
+    ConflictClass(ToolConflictClass),
+}
+
+/// A host-defined conflict domain used by Core when it plans concurrent tool calls.
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct ToolConflictClass(String);
+
+impl ToolConflictClass {
+    pub fn new(value: impl Into<String>) -> Result<Self, crate::ToolIdentityError> {
+        let value = value.into();
+        if value.trim().is_empty() {
+            return Err(crate::ToolIdentityError::Empty {
+                kind: "tool conflict class",
+            });
+        }
+        Ok(Self(value))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+/// The host environment selected for one invocation without exposing a raw capability map.
+#[derive(Clone, Debug)]
+pub struct ToolExecutionContext {
+    environment_id: ToolEnvironmentId,
+    cancellation: CancellationToken,
+}
+
+impl ToolExecutionContext {
+    pub fn new(environment_id: ToolEnvironmentId, cancellation: CancellationToken) -> Self {
+        Self {
+            environment_id,
+            cancellation,
+        }
+    }
+
+    pub fn environment_id(&self) -> &ToolEnvironmentId {
+        &self.environment_id
+    }
+
+    pub fn cancellation(&self) -> &CancellationToken {
+        &self.cancellation
+    }
+}
+
+/// A model call resolved to its frozen binding, execution identity, and selected environment.
+#[derive(Clone, Debug)]
+pub struct ToolInvocation {
+    operation_id: ToolOperationId,
+    call_id: ToolCallId,
+    turn_id: TurnId,
+    binding: ToolBinding,
+    payload: ToolPayload,
+    context: ToolExecutionContext,
+}
+
+impl ToolInvocation {
+    pub fn new(
+        operation_id: ToolOperationId,
+        call_id: ToolCallId,
+        turn_id: TurnId,
+        binding: ToolBinding,
+        payload: ToolPayload,
+        context: ToolExecutionContext,
+    ) -> Self {
+        Self {
+            operation_id,
+            call_id,
+            turn_id,
+            binding,
+            payload,
+            context,
+        }
+    }
+
+    pub fn operation_id(&self) -> &ToolOperationId {
+        &self.operation_id
+    }
+
+    pub fn call_id(&self) -> &ToolCallId {
+        &self.call_id
+    }
+
+    pub fn turn_id(&self) -> &TurnId {
+        &self.turn_id
+    }
+
+    pub fn binding(&self) -> &ToolBinding {
+        &self.binding
+    }
+
+    pub fn payload(&self) -> &ToolPayload {
+        &self.payload
+    }
+
+    pub fn context(&self) -> &ToolExecutionContext {
+        &self.context
+    }
+}
+
+/// A failure that proves the tool operation did not begin outside the host.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ToolStartFailure {
+    message: String,
+}
+
+impl ToolStartFailure {
+    pub fn new(message: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
+        }
+    }
+
+    pub fn message(&self) -> &str {
+        &self.message
+    }
+}
+
+/// An outcome where an external side effect may have begun but no trustworthy result is available.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ToolUncertainOutcome {
+    message: String,
+}
+
+impl ToolUncertainOutcome {
+    pub fn new(message: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
+        }
+    }
+
+    pub fn message(&self) -> &str {
+        &self.message
+    }
+}
+
+/// The source-neutral terminal state reported by a tool executor.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ToolExecutionOutcome {
+    Returned(ToolOutput),
+    NotStarted(ToolStartFailure),
+    OutcomeUncertain(ToolUncertainOutcome),
+}
+
+/// Future returned by a tool executor after a fully materialized invocation.
+pub type ToolExecutionFuture<'a> = Pin<Box<dyn Future<Output = ToolExecutionOutcome> + Send + 'a>>;
+
+/// Executes one fully materialized host tool invocation.
+///
+/// Implementations must execute only the supplied binding and payload, use only capabilities
+/// selected by the host environment, preserve call and operation identity, and never mutate
+/// Thread state. Cancellation, deadlines, and durable outcome handling are layered by the Core
+/// service that calls the executor.
+pub trait ToolExecutor: Send + Sync {
+    /// Returns immutable metadata captured when the host builds a registry snapshot.
+    fn definition(&self) -> ToolDefinition;
+
+    /// Declares how the host initially exposes this executor to a model.
+    fn exposure(&self) -> crate::ToolExposure {
+        crate::ToolExposure::Direct
+    }
+
+    /// Declares the executor's concurrency constraints for Core scheduling.
+    fn concurrency(&self) -> ToolConcurrency {
+        ToolConcurrency::Exclusive
+    }
+
+    /// Executes exactly one invocation without directly committing durable state.
+    fn execute(&self, invocation: ToolInvocation) -> ToolExecutionFuture<'_>;
+}
+
+#[cfg(test)]
+#[path = "execution_tests.rs"]
+mod tests;
