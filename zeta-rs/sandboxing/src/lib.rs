@@ -1,55 +1,23 @@
-//! Workspace-root validation for locally executed tools.
+//! Cross-platform sandbox policy and backend coordination.
+//!
+//! Platform crates implement [`SandboxBackend`]. This crate validates workspace-relative command
+//! paths, owns the shared policy vocabulary, and coordinates command preparation. On macOS it
+//! also provides the native Seatbelt backend.
 
-use std::fmt;
-use std::path::{Path, PathBuf};
+mod error;
+mod manager;
+mod model;
+mod workspace;
 
-#[derive(Clone, Debug)]
-pub struct WorkspaceRoot(PathBuf);
+#[cfg(target_os = "macos")]
+mod macos;
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum SandboxError {
-    OutsideWorkspace(PathBuf),
-    Io(String),
-}
+pub use error::SandboxError;
+pub use manager::{SandboxBackend, SandboxManager};
+pub use model::{
+    FileSystemAccess, NetworkAccess, PreparedCommand, SandboxCommand, SandboxKind, SandboxPolicy,
+};
+pub use workspace::WorkspaceRoot;
 
-impl fmt::Display for SandboxError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::OutsideWorkspace(path) => {
-                write!(formatter, "path is outside workspace: {}", path.display())
-            }
-            Self::Io(message) => formatter.write_str(message),
-        }
-    }
-}
-impl std::error::Error for SandboxError {}
-
-impl WorkspaceRoot {
-    pub fn open(path: impl AsRef<Path>) -> Result<Self, SandboxError> {
-        Ok(Self(
-            path.as_ref()
-                .canonicalize()
-                .map_err(|error| SandboxError::Io(error.to_string()))?,
-        ))
-    }
-
-    pub fn path(&self) -> &Path {
-        &self.0
-    }
-
-    pub fn resolve(&self, relative_path: impl AsRef<Path>) -> Result<PathBuf, SandboxError> {
-        let candidate = self.0.join(relative_path);
-        let canonical = candidate
-            .canonicalize()
-            .map_err(|error| SandboxError::Io(error.to_string()))?;
-        if canonical.starts_with(&self.0) {
-            Ok(canonical)
-        } else {
-            Err(SandboxError::OutsideWorkspace(canonical))
-        }
-    }
-}
-
-#[cfg(test)]
-#[path = "workspace_tests.rs"]
-mod tests;
+#[cfg(target_os = "macos")]
+pub use macos::MacosSeatbeltSandbox;
