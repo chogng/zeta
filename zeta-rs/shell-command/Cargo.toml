@@ -1,0 +1,24 @@
+[package]
+name = "zeta-shell-command"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+doctest = false
+name = "zeta_shell_command"
+path = "src/lib.rs"
+
+[dependencies]
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+zeta-exec = { workspace = true }
+zeta-sandboxing = { workspace = true }
+zeta-tools = { workspace = true }
+
+[dev-dependencies]
+zeta-async-utils = { workspace = true }
+zeta-protocol = { workspace = true }
+
+[lints]
+workspace = true
