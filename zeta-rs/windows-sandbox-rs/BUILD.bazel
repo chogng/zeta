@@ -1,0 +1,6 @@
+load("//:defs.bzl", "zeta_rust_crate")
+
+zeta_rust_crate(
+    name = "windows-sandbox-rs",
+    crate_name = "zeta_windows_sandbox",
+)
