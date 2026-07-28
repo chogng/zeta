@@ -14,7 +14,6 @@ members = [
     "secrets",
     "exec",
     "file-search",
-    "text-search",
     "file-system",
     "http-client",
     "linux-sandbox",
@@ -93,7 +92,6 @@ zeta-core = { path = "core" }
 zeta-secrets = { path = "secrets" }
 zeta-exec = { path = "exec" }
 zeta-file-search = { path = "file-search" }
-zeta-text-search = { path = "text-search" }
 zeta-file-system = { path = "file-system" }
 zeta-http-client = { path = "http-client" }
 zeta-linux-sandbox = { path = "linux-sandbox" }

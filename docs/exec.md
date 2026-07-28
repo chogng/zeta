@@ -481,7 +481,7 @@ zeta-scheduler-protocol
 ### Phase 1：消除命名冲突
 
 - 将当前 process `zeta-exec` 迁移为 `zeta-tool-executor`；
-- 更新 shell-command、file-system、text-search、apply-patch、skills、plugins、MCP 文档与依赖；
+- 更新 shell-command、file-system、apply-patch、skills、plugins、MCP 文档与依赖；
 - 为新 headless `zeta-exec` 保留 crate/binary 名称。
 
 ### Phase 2：本地 headless vertical slice

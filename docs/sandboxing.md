@@ -93,7 +93,7 @@ host executor        → zeta-sandboxing + 当前平台 backend
 ```text
 zeta-bwrap → zeta-sandboxing / protocol / core
 platform sandbox → zeta-core / ThreadStore / approval UI
-zeta-sandboxing → shell-command / file-system / text-search / apply-patch / app-server / provider
+zeta-sandboxing → shell-command / file-system / apply-patch / app-server / provider
 zeta-sandboxing → zeta-policy / zeta-auto-review
 ```
 

@@ -163,7 +163,7 @@ TurnExecutor (zeta-core private module)
        ▼                              ▼
    ModelPort                     AgentTool
        │                              │
-model-provider              shell-command / file-system / text-search / apply-patch / MCP adapters
+model-provider              shell-command / file-system / apply-patch / MCP adapters
 
 SessionCoordinator ── append ──► SessionStore
 ThreadController  ─── append ──► ThreadStore ──► rollout
@@ -181,7 +181,7 @@ zeta-protocol
 zeta-core ──────────► SessionStore + ThreadStore
    ▲
    │ Core-owned ports
-App Server adapters ─────► model-provider / shell-command / file-system / text-search / apply-patch / MCP
+App Server adapters ─────► model-provider / shell-command / file-system / apply-patch / MCP
    │
    └─────────────────────► config / credentials / rollout
 ```
@@ -243,7 +243,6 @@ zeta/
 │  ├─ model-provider/
 │  ├─ shell-command/
 │  ├─ file-system/
-│  ├─ text-search/
 │  ├─ file-search/         TUI path index + fuzzy-match CLI
 │  ├─ apply-patch/
 │  ├─ app-server-protocol/

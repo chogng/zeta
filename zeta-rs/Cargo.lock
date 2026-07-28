@@ -4970,18 +4970,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "zeta-text-search"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_json",
- "zeta-async-utils",
- "zeta-protocol",
- "zeta-sandboxing",
- "zeta-tools",
-]
-
-[[package]]
 name = "zeta-thread-store"
 version = "0.1.0"
 dependencies = [
