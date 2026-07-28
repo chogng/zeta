@@ -1,49 +1,49 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { toDisposable } from "../src/base/common/lifecycle.js";
-import { URI } from "../src/base/common/uri.js";
+import { toDisposable } from "../src/zeta/base/common/lifecycle.js";
+import { URI } from "../src/zeta/base/common/uri.js";
 import {
   ConfigurationsRegistry,
-} from "../src/platform/configuration/common/configurationRegistry.js";
+} from "../src/zeta/platform/configuration/common/configurationRegistry.js";
 import {
   ContextKeyService,
-} from "../src/platform/contextkey/common/contextkey.js";
+} from "../src/zeta/platform/contextkey/common/contextkey.js";
 import {
   createServiceIdentifier,
   ServiceCollection,
   SyncDescriptor,
-} from "../src/platform/instantiation/common/instantiation.js";
+} from "../src/zeta/platform/instantiation/common/instantiation.js";
 import {
   darkColorTheme,
   lightColorTheme,
-} from "../src/platform/theme/common/colorTheme.js";
+} from "../src/zeta/platform/theme/common/colorTheme.js";
 import {
   type IWorkspaceContextService,
   WorkbenchState,
-} from "../src/platform/workspace/common/workspace.js";
+} from "../src/zeta/platform/workspace/common/workspace.js";
 import {
   bindWorkbenchContextKeys,
   getVisibleViewContextKey,
-} from "../src/workbench/common/contextkeys.js";
+} from "../src/zeta/workbench/common/contextkeys.js";
 import {
   WorkbenchContributionRegistry,
   WorkbenchPhase,
-} from "../src/workbench/common/contributions.js";
-import { WorkbenchConfiguration } from "../src/workbench/common/configuration.js";
-import { DialogsModel } from "../src/workbench/common/dialogs.js";
+} from "../src/zeta/workbench/common/contributions.js";
+import { WorkbenchConfiguration } from "../src/zeta/workbench/common/configuration.js";
+import { DialogsModel } from "../src/zeta/workbench/common/dialogs.js";
 import {
   getWorkbenchColorTheme,
   WorkbenchThemeRegistry,
-} from "../src/workbench/common/theme.js";
+} from "../src/zeta/workbench/common/theme.js";
 import {
   type IView,
   ViewContainerLocation,
   WorkbenchViewRegistry,
-} from "../src/workbench/common/views.js";
+} from "../src/zeta/workbench/common/views.js";
 import {
   DialogResult,
   DialogSeverity,
-} from "../src/platform/dialogs/common/dialogs.js";
+} from "../src/zeta/platform/dialogs/common/dialogs.js";
 
 test("workbench context keys describe the current workspace", () => {
   using contextKeys = new ContextKeyService();

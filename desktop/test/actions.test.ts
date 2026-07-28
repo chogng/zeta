@@ -4,38 +4,40 @@ import {
   Keybinding,
   logicalKey,
   resolveKeybinding,
-} from "../src/base/common/keybindings.js";
-import { DisposableStore } from "../src/base/common/lifecycle.js";
-import { OperatingSystem } from "../src/base/common/platform.js";
+} from "../src/zeta/base/common/keybindings.js";
+import { DisposableStore } from "../src/zeta/base/common/lifecycle.js";
+import { OperatingSystem } from "../src/zeta/base/common/platform.js";
 import {
   Action2,
   MenuId,
   MenusRegistry,
   registerAction2,
   SubmenuItemAction,
-} from "../src/platform/actions/common/actions.js";
+} from "../src/zeta/platform/actions/common/actions.js";
 import {
   MenuService,
-} from "../src/platform/actions/common/menuService.js";
+} from "../src/zeta/platform/actions/common/menuService.js";
 import {
   CommandsRegistry,
-  CommandService,
-} from "../src/platform/commands/common/command-registry.js";
+} from "../src/zeta/platform/commands/common/commands.js";
 import {
   ContextKeyExpr,
   ContextKeyService,
-} from "../src/platform/contextkey/common/contextkey.js";
+} from "../src/zeta/platform/contextkey/common/contextkey.js";
 import {
   createServiceIdentifier,
   ServiceCollection,
   type ServicesAccessor,
-} from "../src/platform/instantiation/common/instantiation.js";
+} from "../src/zeta/platform/instantiation/common/instantiation.js";
 import {
   KeybindingResolver,
-} from "../src/platform/keybinding/common/keybindingResolver.js";
+} from "../src/zeta/platform/keybinding/common/keybindingResolver.js";
 import {
   KeybindingsRegistry,
-} from "../src/platform/keybinding/common/keybindingsRegistry.js";
+} from "../src/zeta/platform/keybinding/common/keybindingsRegistry.js";
+import {
+  CommandService,
+} from "../src/zeta/workbench/services/commands/common/commandService.js";
 
 test("registerAction2 connects command execution and menu placement", async () => {
   using registrations = new DisposableStore();

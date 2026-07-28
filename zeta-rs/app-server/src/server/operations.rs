@@ -1,7 +1,12 @@
 use super::{AppServer, ConnectionState, RpcError, core_error, decode, result};
 use base64::Engine;
 use serde_json::Value;
+use std::time::Duration;
 use zeta_app_server_protocol::protocol::common::{SchemaHash, ServerInfo};
+use zeta_app_server_protocol::protocol::document::{
+    TypstCompileParams, TypstCompileResult, TypstDiagnosticDto, TypstDiagnosticSeverityDto,
+    TypstSourceRangeDto,
+};
 use zeta_app_server_protocol::protocol::error::AppServerErrorName;
 use zeta_app_server_protocol::protocol::initialize::{
     InitializeParams, InitializeResult, ServerCapabilities,
@@ -32,6 +37,9 @@ use zeta_core::{
     TurnStatus,
 };
 use zeta_protocol::UserInput;
+use zeta_typst::{
+    TypstCompileError, TypstCompileOutcome, TypstDiagnostic, TypstDiagnosticSeverity,
+};
 
 impl AppServer {
     pub(super) fn initialize(
@@ -62,6 +70,7 @@ impl AppServer {
                 threads: true,
                 turns: true,
                 resources: true,
+                typst: true,
                 update_replay: true,
             },
         })
@@ -526,6 +535,53 @@ impl AppServer {
         })
     }
 
+    pub(super) fn typst_compile(
+        &self,
+        connection: &ConnectionState,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        let params: TypstCompileParams = decode(params)?;
+        let outcome = self
+            .typst
+            .compile(&params.source)
+            .map_err(|error| match error {
+                TypstCompileError::SourceTooLarge { .. } => {
+                    RpcError::new(-32602, AppServerErrorName::InvalidParams)
+                }
+            })?;
+        match outcome {
+            TypstCompileOutcome::Success(success) => {
+                let metadata = self
+                    .resources
+                    .lock()
+                    .map_err(|_| RpcError::new(-32000, AppServerErrorName::ServerOverloaded))?
+                    .create(
+                        connection.connection_id,
+                        "application/pdf".into(),
+                        success.pdf,
+                        Duration::from_secs(300),
+                    )
+                    .map_err(resource_rpc_error)?;
+                result(&TypstCompileResult::Success {
+                    resource: ResourceMetadataResult {
+                        resource_id: metadata.resource_id,
+                        mime_type: metadata.mime_type,
+                        size: metadata.size,
+                        sha256: metadata.sha256,
+                    },
+                    warnings: success
+                        .warnings
+                        .into_iter()
+                        .map(typst_diagnostic_dto)
+                        .collect(),
+                })
+            }
+            TypstCompileOutcome::Failed { diagnostics } => result(&TypstCompileResult::Failed {
+                diagnostics: diagnostics.into_iter().map(typst_diagnostic_dto).collect(),
+            }),
+        }
+    }
+
     pub(super) fn resource_read(
         &self,
         connection: &ConnectionState,
@@ -607,4 +663,19 @@ fn resource_rpc_error(error: crate::resource_store::ResourceError) -> RpcError {
             ResourceError::InvalidOffset => AppServerErrorName::InvalidResourceOffset,
         },
     )
+}
+
+fn typst_diagnostic_dto(diagnostic: TypstDiagnostic) -> TypstDiagnosticDto {
+    TypstDiagnosticDto {
+        severity: match diagnostic.severity {
+            TypstDiagnosticSeverity::Error => TypstDiagnosticSeverityDto::Error,
+            TypstDiagnosticSeverity::Warning => TypstDiagnosticSeverityDto::Warning,
+        },
+        message: diagnostic.message,
+        hints: diagnostic.hints,
+        range: diagnostic.range.map(|range| TypstSourceRangeDto {
+            start: range.start,
+            end: range.end,
+        }),
+    }
 }

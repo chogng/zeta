@@ -1,24 +1,45 @@
 import { resolve } from "node:path";
 import { defineConfig } from "vite";
+import {
+  getProductConfiguration,
+  resolveProductId,
+} from "./src/zeta/product/common/product.js";
 
-const codeRoot = resolve(import.meta.dirname, "src/code");
+export default defineConfig(() => {
+  const product = getProductConfiguration(
+    resolveProductId(process.env.ZETA_PRODUCT),
+  );
+  const sourceRoot = resolve(import.meta.dirname, "src/zeta/code");
+  const browserEntry = `browser/workbench/${product.rendererEntry}`;
+  const electronEntry =
+    `electron-browser/workbench/${product.rendererEntry}`;
 
-export default defineConfig({
-  base: "./",
-  root: codeRoot,
-  server: {
-    host: "127.0.0.1",
-    port: 5173,
-    strictPort: true,
-  },
-  build: {
-    outDir: resolve(import.meta.dirname, "dist/renderer"),
-    emptyOutDir: true,
-    rollupOptions: {
-      input: {
-        "browser/workbench/workbench": resolve(codeRoot, "browser/workbench/workbench.html"),
-        "electron-browser/workbench/workbench": resolve(codeRoot, "electron-browser/workbench/workbench.html"),
+  return {
+    base: "./",
+    root: sourceRoot,
+    server: {
+      host: "127.0.0.1",
+      port: 5173,
+      strictPort: true,
+    },
+    build: {
+      outDir: resolve(
+        import.meta.dirname,
+        `dist/renderer/${product.id}`,
+      ),
+      emptyOutDir: true,
+      rollupOptions: {
+        input: {
+          [browserEntry]: resolve(
+            sourceRoot,
+            `${browserEntry}.html`,
+          ),
+          [electronEntry]: resolve(
+            sourceRoot,
+            `${electronEntry}.html`,
+          ),
+        },
       },
     },
-  },
+  };
 });

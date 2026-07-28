@@ -792,6 +792,22 @@
           "properties": {
             "method": {
               "type": "string",
+              "const": "document/typst/compile"
+            },
+            "params": {
+              "$ref": "#/$defs/TypstCompileParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
               "const": "resource/metadata"
             },
             "params": {
@@ -1264,6 +1280,22 @@
             },
             "result": {
               "$ref": "#/$defs/TurnInteractionResolveResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "document/typst/compile"
+            },
+            "result": {
+              "$ref": "#/$defs/TypstCompileResult"
             }
           },
           "required": [
@@ -2322,6 +2354,9 @@
         "turns": {
           "type": "boolean"
         },
+        "typst": {
+          "type": "boolean"
+        },
         "updateReplay": {
           "type": "boolean"
         }
@@ -2331,6 +2366,7 @@
         "threads",
         "turns",
         "resources",
+        "typst",
         "updateReplay"
       ]
     },
@@ -4039,6 +4075,121 @@
         "completed",
         "failed",
         "interrupted"
+      ]
+    },
+    "TypstCompileParams": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "source"
+      ]
+    },
+    "TypstCompileResult": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "resource": {
+              "$ref": "#/$defs/ResourceMetadataResult"
+            },
+            "status": {
+              "type": "string",
+              "const": "success"
+            },
+            "warnings": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/TypstDiagnosticDto"
+              }
+            }
+          },
+          "required": [
+            "status",
+            "resource",
+            "warnings"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "diagnostics": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/TypstDiagnosticDto"
+              }
+            },
+            "status": {
+              "type": "string",
+              "const": "failed"
+            }
+          },
+          "required": [
+            "status",
+            "diagnostics"
+          ]
+        }
+      ]
+    },
+    "TypstDiagnosticDto": {
+      "type": "object",
+      "properties": {
+        "hints": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "message": {
+          "type": "string"
+        },
+        "range": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TypstSourceRangeDto"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "severity": {
+          "$ref": "#/$defs/TypstDiagnosticSeverityDto"
+        }
+      },
+      "required": [
+        "severity",
+        "message",
+        "hints"
+      ]
+    },
+    "TypstDiagnosticSeverityDto": {
+      "type": "string",
+      "enum": [
+        "error",
+        "warning"
+      ]
+    },
+    "TypstSourceRangeDto": {
+      "type": "object",
+      "properties": {
+        "end": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "start": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "start",
+        "end"
       ]
     },
     "UserInputAnswer": {

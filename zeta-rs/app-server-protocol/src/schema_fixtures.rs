@@ -26,6 +26,7 @@ fn registry_method_and_notification_names_are_unique() {
     assert!(methods.contains("session/thread/fork"));
     assert!(methods.contains("turn/start"));
     assert!(methods.contains("turn/interaction/resolve"));
+    assert!(methods.contains("document/typst/compile"));
     assert!(notifications.contains("session/update"));
     assert!(notifications.contains("thread/update"));
 }
@@ -140,6 +141,11 @@ fn dto_driven_typescript_preserves_model_ref_and_patch_shape() {
         typescript
             .contains(r#""turn/interaction/resolve": { method: "turn/interaction/resolve" }"#)
     );
+    assert!(
+        typescript.contains(r#""document/typst/compile": { method: "document/typst/compile" }"#)
+    );
+    assert!(typescript.contains("export type TypstCompileResult ="));
+    assert!(typescript.contains(r#""status": "success""#));
     assert!(typescript.contains("export type TurnInteraction ="));
     assert!(typescript.contains("export type PendingInteraction ="));
     assert!(typescript.contains("export const APP_SERVER_NOTIFICATIONS:"));
@@ -164,6 +170,8 @@ fn dto_driven_schema_contains_registered_rpc_envelopes() {
     assert!(definitions.contains_key("SkillSourceConfigDto"));
     assert!(definitions.contains_key("Session"));
     assert!(definitions.contains_key("ThreadItem"));
+    assert!(definitions.contains_key("TypstCompileParams"));
+    assert!(definitions.contains_key("TypstCompileResult"));
     assert_eq!(definitions["ThreadId"]["minLength"], 1);
     assert_eq!(definitions["SessionId"]["minLength"], 1);
     assert_eq!(definitions["CommandId"]["minLength"], 1);

@@ -12,6 +12,7 @@ use zeta_app_server_protocol::protocol::config::{
     ProviderRemoveParams, SkillSourceAddParams, SkillSourceRemoveParams,
     SkillSourceSetEnablementParams,
 };
+use zeta_app_server_protocol::protocol::document::{TypstCompileParams, TypstCompileResult};
 use zeta_app_server_protocol::protocol::initialize::{InitializeParams, InitializeResult};
 use zeta_app_server_protocol::protocol::registry::ClientMethod;
 use zeta_app_server_protocol::protocol::resources::{
@@ -250,6 +251,13 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
         params: TurnInteractionResolveParams,
     ) -> Result<TurnInteractionResolveResult, ClientError> {
         self.call(ClientMethod::TurnInteractionResolve, params)
+    }
+
+    pub fn compile_typst(
+        &mut self,
+        params: TypstCompileParams,
+    ) -> Result<TypstCompileResult, ClientError> {
+        self.call(ClientMethod::TypstCompile, params)
     }
 
     pub fn resource_metadata(

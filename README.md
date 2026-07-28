@@ -19,6 +19,13 @@ Team responsibilities and integration contracts are documented separately:
 The long-term domain and dependency boundaries are defined in
 [`zeta-code-architecture-codex-style-v2.md`](docs/zeta-code-architecture-codex-style-v2.md).
 
+## License
+
+Zeta's original code and materials are proprietary and all rights reserved.
+See [`LICENSE`](LICENSE). Third-party components remain governed by their own
+licenses and notices, including the Desktop notices in
+[`desktop/THIRD_PARTY_NOTICES.md`](desktop/THIRD_PARTY_NOTICES.md).
+
 ## Run
 
 ```bash

@@ -1,16 +1,16 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { Emitter } from "../src/base/common/event.js";
+import { Emitter } from "../src/zeta/base/common/event.js";
 import {
   DisposableOwner,
-} from "../src/base/common/lifecycle.js";
+} from "../src/zeta/base/common/lifecycle.js";
 import {
   type ContextMenuOptions,
   type IContextMenuService,
-} from "../src/platform/contextview/browser/contextMenu.js";
+} from "../src/zeta/platform/contextview/browser/contextMenu.js";
 import {
   WorkbenchContextMenuService,
-} from "../src/workbench/services/contextmenu/common/contextMenuService.js";
+} from "../src/zeta/workbench/services/contextmenu/common/contextMenuService.js";
 
 test("workbench context menu service owns and forwards its implementation", () => {
   const implementation = new TestContextMenuImplementation();

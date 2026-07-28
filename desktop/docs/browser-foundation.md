@@ -1,6 +1,6 @@
 # Browser foundation
 
-`src/base/browser` contains browser-runtime capabilities shared by UI,
+`src/zeta/base/browser` contains browser-runtime capabilities shared by UI,
 platform, and workbench code. It intentionally does not provide a universal
 DOM component base class.
 

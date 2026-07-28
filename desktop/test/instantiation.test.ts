@@ -6,7 +6,7 @@ import {
   ServiceCollection,
   SyncDescriptor,
   type ServicesAccessor,
-} from "../src/platform/instantiation/common/instantiation.js";
+} from "../src/zeta/platform/instantiation/common/instantiation.js";
 
 test("instantiation resolves descriptor arguments in contract order", () => {
   const serviceId = createServiceIdentifier<string>("test.message");

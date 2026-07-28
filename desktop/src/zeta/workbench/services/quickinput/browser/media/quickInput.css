@@ -1,0 +1,118 @@
+.zeta-workbench {
+  position: relative;
+}
+
+.zeta-quick-input-host {
+  position: absolute;
+  z-index: 1000;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 8px 16px;
+  background: #00000026;
+  inset: 0;
+}
+
+.zeta-quick-input-host[hidden] {
+  display: none;
+}
+
+.zeta-quick-pick {
+  display: flex;
+  width: min(620px, calc(100vw - 32px));
+  max-height: min(520px, calc(100vh - 48px));
+  overflow: hidden;
+  flex-direction: column;
+  border: 1px solid var(--zeta-widget-border, #454545);
+  border-radius: 6px;
+  color: var(--zeta-foreground, #cccccc);
+  background: var(--zeta-quick-input-background, #252526);
+  box-shadow: 0 8px 32px var(--zeta-widget-shadow, #00000066);
+}
+
+.zeta-quick-pick-input {
+  padding: 8px;
+  border-bottom: 1px solid var(--zeta-widget-border, #454545);
+}
+
+.zeta-quick-pick-input input {
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--zeta-input-border, #3c3c3c);
+  outline: none;
+  color: var(--zeta-input-foreground, #cccccc);
+  background: var(--zeta-input-background, #3c3c3c);
+}
+
+.zeta-quick-pick-input input:focus {
+  border-color: var(--zeta-focus-border, #007fd4);
+}
+
+.zeta-quick-pick-list {
+  min-height: 0;
+  overflow: auto;
+  padding: 4px;
+}
+
+.zeta-quick-pick-list-items {
+  min-height: 0;
+}
+
+.zeta-quick-pick-list .zeta-list-row {
+  border-radius: 4px;
+}
+
+.zeta-quick-pick-row-content {
+  display: flex;
+  min-height: 34px;
+  align-items: center;
+  gap: 12px;
+  justify-content: space-between;
+  padding: 5px 8px;
+}
+
+.zeta-quick-pick-list .zeta-list-row.is-active {
+  color: var(--zeta-list-active-selection-foreground, #ffffff);
+  background: var(--zeta-list-active-selection-background, #04395e);
+}
+
+.zeta-quick-pick-row-text {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.zeta-quick-pick-row-label {
+  overflow: hidden;
+  flex: 0 1 auto;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.zeta-quick-pick-row-description,
+.zeta-quick-pick-row-detail {
+  overflow: hidden;
+  color: var(--zeta-description-foreground, #9d9d9d);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.zeta-quick-pick-row-keybinding {
+  flex: 0 0 auto;
+  padding: 2px 6px;
+  border: 1px solid var(--zeta-widget-border, #454545);
+  border-radius: 3px;
+  color: var(--zeta-description-foreground, #b6b6b6);
+  background: var(--zeta-keybinding-label-background, #8080802b);
+  font: inherit;
+  font-size: 11px;
+}
+
+.zeta-quick-pick-empty {
+  padding: 18px;
+  color: var(--zeta-description-foreground, #9d9d9d);
+  text-align: center;
+}

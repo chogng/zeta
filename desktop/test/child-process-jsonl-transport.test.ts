@@ -5,17 +5,17 @@ import test from "node:test";
 import { PassThrough, Writable } from "node:stream";
 import {
   isCancellationError,
-} from "../src/base/common/cancellation.js";
+} from "../src/zeta/base/common/cancellation.js";
 import {
   ChildProcessJsonlTransport,
   type ChildProcessJsonlTransportOptions,
-} from "../src/platform/app-server/electron-main/child-process-jsonl-transport.js";
+} from "../src/zeta/platform/app-server/electron-main/child-process-jsonl-transport.js";
 import {
   JsonRpcPeer,
   JsonRpcRemoteError,
   RpcRequestCancelledError,
   type RpcMethodDefinition,
-} from "../src/platform/app-server/electron-main/json-rpc-peer.js";
+} from "../src/zeta/platform/app-server/electron-main/json-rpc-peer.js";
 import {
   APP_SERVER_METHODS,
   APP_SERVER_NOTIFICATIONS,

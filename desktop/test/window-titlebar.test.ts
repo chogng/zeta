@@ -2,13 +2,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   WorkbenchState,
-} from "../src/platform/workspace/common/workspace.js";
+} from "../src/zeta/platform/workspace/common/workspace.js";
 import {
   defaultWindowState,
-} from "../src/platform/window/electron-main/window.js";
+} from "../src/zeta/platform/window/electron-main/window.js";
 import {
   resolveBrowserWindowOptions,
-} from "../src/platform/windows/electron-main/windows.js";
+} from "../src/zeta/platform/windows/electron-main/windows.js";
 
 test("window options apply the custom titlebar host policy", () => {
   const webPreferences = {

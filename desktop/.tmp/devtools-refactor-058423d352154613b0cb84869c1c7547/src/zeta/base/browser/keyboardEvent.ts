@@ -1,0 +1,69 @@
+import { stopEvent } from "./dom.js";
+
+export interface KeyChord {
+  /** Physical key identity, such as `KeyP` or `ArrowDown`. */
+  readonly code: string;
+  readonly ctrlKey?: boolean;
+  readonly shiftKey?: boolean;
+  readonly altKey?: boolean;
+  readonly metaKey?: boolean;
+}
+
+/**
+ * Stable physical-key view for shortcut and keybinding matching.
+ *
+ * Local widget navigation should normally read `KeyboardEvent.key` directly.
+ * Construct this representation when an event crosses a component boundary or
+ * must be compared with a reusable physical key chord.
+ */
+export class StandardKeyboardEvent {
+  readonly key: string;
+  readonly code: string;
+  readonly ctrlKey: boolean;
+  readonly shiftKey: boolean;
+  readonly altKey: boolean;
+  readonly metaKey: boolean;
+  readonly altGraphKey: boolean;
+  readonly isComposing: boolean;
+  readonly repeat: boolean;
+
+  constructor(readonly browserEvent: KeyboardEvent) {
+    this.key = browserEvent.key;
+    this.code = browserEvent.code;
+    this.ctrlKey = browserEvent.ctrlKey;
+    this.shiftKey = browserEvent.shiftKey;
+    this.altKey = browserEvent.altKey;
+    this.metaKey = browserEvent.metaKey;
+    this.altGraphKey = browserEvent.getModifierState?.("AltGraph") ?? false;
+    this.isComposing = browserEvent.isComposing;
+    this.repeat = browserEvent.repeat;
+  }
+
+  matches(chord: KeyChord): boolean {
+    return !this.isComposing &&
+      !this.altGraphKey &&
+      this.code === chord.code &&
+      this.ctrlKey === Boolean(chord.ctrlKey) &&
+      this.shiftKey === Boolean(chord.shiftKey) &&
+      this.altKey === Boolean(chord.altKey) &&
+      this.metaKey === Boolean(chord.metaKey);
+  }
+
+  stop(options?: {
+    readonly preventDefault?: boolean;
+    readonly immediate?: boolean;
+  }): void {
+    stopEvent(this.browserEvent, options);
+  }
+}
+
+export function hasModifierKeys(event: KeyboardEvent): boolean {
+  return event.ctrlKey || event.shiftKey || event.altKey || event.metaKey;
+}
+
+export function isModifierKey(event: KeyboardEvent): boolean {
+  return event.key === "Control" ||
+    event.key === "Shift" ||
+    event.key === "Alt" ||
+    event.key === "Meta";
+}

@@ -2,7 +2,8 @@
 name = "zeta-app-server"
 version.workspace = true
 edition.workspace = true
-license.workspace = true
+license-file.workspace = true
+publish.workspace = true
 
 [lib]
 doctest = false
@@ -24,6 +25,7 @@ zeta-model-provider = { workspace = true }
 zeta-model-provider-config = { workspace = true }
 zeta-protocol = { workspace = true }
 zeta-rollout = { workspace = true }
+zeta-typst = { workspace = true }
 
 [dev-dependencies]
 zeta-policy = { workspace = true }

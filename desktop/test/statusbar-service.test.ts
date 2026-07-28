@@ -3,7 +3,7 @@ import test from "node:test";
 import {
   StatusbarAlignment,
   StatusbarService,
-} from "../src/workbench/services/statusbar/browser/statusbar.js";
+} from "../src/zeta/workbench/services/statusbar/browser/statusbar.js";
 
 test("status bar entries are grouped and ordered by alignment", () => {
   using service = new StatusbarService();

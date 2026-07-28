@@ -1,0 +1,63 @@
+.zeta-prosemirror-editor-pane {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  min-height: 0;
+  overflow: auto;
+  color: var(--zeta-editor-foreground, #d4d4d4);
+  background: var(--zeta-editor-background, #1e1e1e);
+}
+
+.zeta-prosemirror-editor-pane[hidden] {
+  display: none;
+}
+
+.zeta-prosemirror-editor-surface {
+  box-sizing: border-box;
+  width: min(100%, 920px);
+  min-height: 100%;
+  padding: 56px clamp(32px, 8vw, 96px) 120px;
+  margin: 0 auto;
+  line-height: 1.7;
+  outline: none;
+  caret-color: var(--zeta-focus-border, #007fd4);
+}
+
+.zeta-prosemirror-editor-surface h1,
+.zeta-prosemirror-editor-surface h2,
+.zeta-prosemirror-editor-surface h3 {
+  line-height: 1.25;
+}
+
+.zeta-prosemirror-editor-surface p {
+  margin: 0 0 1em;
+}
+
+.zeta-prosemirror-editor-surface blockquote {
+  padding-left: 1em;
+  margin-left: 0;
+  color: var(--zeta-description-foreground, #a5a5a5);
+  border-left: 3px solid var(--zeta-focus-border, #007fd4);
+}
+
+.zeta-prosemirror-editor-surface code,
+.zeta-prosemirror-editor-surface pre {
+  font-family: var(
+    --zeta-editor-font-family,
+    "Cascadia Code",
+    Consolas,
+    monospace
+  );
+}
+
+.zeta-prosemirror-editor-surface pre {
+  padding: 12px 16px;
+  overflow: auto;
+  background: var(--zeta-text-code-block-background, #0f0f0f);
+  border-radius: 4px;
+}
+
+.zeta-prosemirror-editor-surface.ProseMirror-focused {
+  outline: none;
+}

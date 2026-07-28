@@ -9,23 +9,23 @@ import { join } from "node:path";
 import test from "node:test";
 import {
   ConfigurationMainService,
-} from "../src/platform/configuration/electron-main/configurationMainService.js";
+} from "../src/zeta/platform/configuration/electron-main/configurationMainService.js";
 import {
   type IKeybindingsResourceApi,
   type IKeybindingsResourceSnapshot,
   type IKeybindingsResourceUpdateRequest,
   validateKeybindingsResource,
   validateKeybindingsResourceSnapshot,
-} from "../src/platform/keybinding/common/keybindingsResource.js";
+} from "../src/zeta/platform/keybinding/common/keybindingsResource.js";
 import {
   migrateLegacyKeybindings,
-} from "../src/platform/keybinding/electron-main/migrateLegacyKeybindings.js";
+} from "../src/zeta/platform/keybinding/electron-main/migrateLegacyKeybindings.js";
 import {
   KeybindingsResourceMainService,
-} from "../src/platform/keybinding/electron-main/keybindingsResourceMainService.js";
+} from "../src/zeta/platform/keybinding/electron-main/keybindingsResourceMainService.js";
 import {
   WorkbenchKeybindingsResourceService,
-} from "../src/workbench/services/keybinding/browser/keybindingsResourceService.js";
+} from "../src/zeta/workbench/services/keybinding/browser/keybindingsResourceService.js";
 
 test("keybinding resource wire data validates complete ordered rules", () => {
   assert.deepEqual(

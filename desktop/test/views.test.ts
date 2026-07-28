@@ -3,19 +3,19 @@ import test from "node:test";
 import {
   ContextKeyExpr,
   ContextKeyService,
-} from "../src/platform/contextkey/common/contextkey.js";
+} from "../src/zeta/platform/contextkey/common/contextkey.js";
 import {
   SyncDescriptor,
-} from "../src/platform/instantiation/common/instantiation.js";
+} from "../src/zeta/platform/instantiation/common/instantiation.js";
 import {
   type IView,
   type IViewDescriptor,
   ViewContainerLocation,
   WorkbenchViewRegistry,
-} from "../src/workbench/common/views.js";
+} from "../src/zeta/workbench/common/views.js";
 import {
   ViewDescriptorService,
-} from "../src/workbench/services/views/common/viewDescriptorService.js";
+} from "../src/zeta/workbench/services/views/common/viewDescriptorService.js";
 
 test("view descriptor models project registry and context visibility", () => {
   using contextKeys = new ContextKeyService();

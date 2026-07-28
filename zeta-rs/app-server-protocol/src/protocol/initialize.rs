@@ -26,5 +26,6 @@ pub struct ServerCapabilities {
     pub threads: bool,
     pub turns: bool,
     pub resources: bool,
+    pub typst: bool,
     pub update_replay: bool,
 }

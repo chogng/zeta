@@ -5,24 +5,24 @@ import {
   DialogResult,
   DialogSeverity,
   type IDialogHandler,
-} from "../src/platform/dialogs/common/dialogs.js";
+} from "../src/zeta/platform/dialogs/common/dialogs.js";
 import {
   ServiceCollection,
-} from "../src/platform/instantiation/common/instantiation.js";
+} from "../src/zeta/platform/instantiation/common/instantiation.js";
 import {
   DialogHandlerContribution,
-} from "../src/workbench/browser/parts/dialogs/dialog.contribution.js";
+} from "../src/zeta/workbench/browser/parts/dialogs/dialog.contribution.js";
 import {
   IDialogsModel,
   IWorkbenchDialogHandler,
-} from "../src/workbench/common/dialogs.js";
+} from "../src/zeta/workbench/common/dialogs.js";
 import {
   WorkbenchContributionsRegistry,
   WorkbenchPhase,
-} from "../src/workbench/common/contributions.js";
+} from "../src/zeta/workbench/common/contributions.js";
 import {
   DialogService,
-} from "../src/workbench/services/dialogs/common/dialogService.js";
+} from "../src/zeta/workbench/services/dialogs/common/dialogService.js";
 
 class TestDialogHandler implements IDialogHandler {
   readonly calls: Array<{

@@ -3,10 +3,10 @@ import test from "node:test";
 import {
   DialogResult,
   DialogSeverity,
-} from "../src/platform/dialogs/common/dialogs.js";
+} from "../src/zeta/platform/dialogs/common/dialogs.js";
 import {
   DialogService,
-} from "../src/workbench/services/dialogs/common/dialogService.js";
+} from "../src/zeta/workbench/services/dialogs/common/dialogService.js";
 
 test("dialog service publishes requests through its owned model", async () => {
   using service = new DialogService();

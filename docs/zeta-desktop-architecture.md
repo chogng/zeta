@@ -1,8 +1,9 @@
 # Zeta Desktop 架构与协作边界
 
-> 负责人：Desktop 开发者  
-> Rust 对接负责人：zeta-rs 开发者  
+> 负责人：Desktop 开发者
+> Rust 对接负责人：zeta-rs 开发者
 > 当前开发基线：[`zeta-app-server-api.md`](zeta-app-server-api.md)
+> 产品装配与构建版本：[`product-editions.md`](product-editions.md)
 
 ## 1. 目标
 
@@ -87,19 +88,28 @@ Renderer component
 ```text
 desktop/
 ├── src/
-│   ├── main/
-│   │   ├── app-server/
-│   │   ├── browser/
-│   │   ├── ipc/
-│   │   ├── security/
-│   │   └── windows/
-│   ├── preload/
-│   └── renderer/
+│   ├── main.ts
+│   ├── bootstrap.ts
+│   └── zeta/
+│       ├── base/
+│       ├── code/
+│       ├── editor/
+│       ├── platform/
+│       ├── product/
+│       └── workbench/
 ├── generated/
 │   └── app-server/
 ├── package.json
-└── tsconfig.json
+├── tsconfig.main.json
+├── tsconfig.preload.json
+└── tsconfig.renderer.json
 ```
+
+`src/` 根目录属于宿主进程启动侧。`bootstrap.ts` 只配置必须在 Electron `ready`
+之前生效的进程级策略，`main.ts` 在 bootstrap 完成后加载 Zeta 应用入口。
+`src/zeta/` 是产品源码命名空间；其中 `code/electron-main/main.ts` 选择产品并创建
+`ZetaApplication`，`code/electron-main/app.ts` 持有服务、窗口、IPC 与退出生命周期。
+产品功能不得反向进入根 bootstrap。
 
 `desktop/generated/` 由 zeta-rs 协议生成命令更新，不手写 wire DTO。
 生成的 `APP_SERVER_SCHEMA_HASH` 是 bundled Desktop 的 exact-schema 基线；Electron Main
@@ -174,8 +184,11 @@ Desktop 在创建窗口前由 `WorkspacesMainService.resolveStartupWorkspace()` 
 Folder/Workspace 产生稳定 ID。标识采用 `{ id }`、`{ id, uri }` 或
 `{ id, configPath }` 的结构，不存储重复的 `WorkbenchState` 判别字段。窗口状态策略从标识
 推导状态：`EMPTY` 映射到 `1200 × 800` 默认窗口，`FOLDER` 和 `WORKSPACE` 映射到
-`1440 × 900` 默认窗口；空窗口和项目窗口使用独立的窗口状态键。已有合法窗口状态仍优先于
-默认尺寸。
+`1440 × 900` 默认窗口。`WindowsStateHandler` 在单个 `windowsState` 记录中持有
+`lastActiveWindow` 和 `openedWindows`；每个窗口使用 `workspaceIdentifier`、`folder` 或
+`backupPath` 绑定其 UI state。恢复时先匹配具体 Workspace/Folder/空窗口备份，再回退到
+last-active state，最后才使用默认尺寸。旧的 `windowState` 与 `windowState.empty` 键不会迁移
+或读取。
 
 Renderer 通过受信 IPC route 和 `workspace.getWorkspace()` 读取该身份，并在
 `parseWorkspaceIdentifier()` 校验和恢复 URI。`WorkspaceContextService` 根据该标识构造当前
@@ -188,44 +201,37 @@ contribution 不得通过该服务直接访问文件系统；跨客户端目录�
 - Workspace 身份只在启动时确定，尚无运行时打开、关闭或切换项目流程；
 - `.zeta-workspace` 当前只作为窗口身份，尚未定义或解析其内容；
 - 普通单文件参数仍属于空窗口，文件编辑器尚未实现；
-- 当前 `WorkspacesMainService` 只负责启动目标解析，最近项目、多窗口恢复和 workspace
-  配置管理尚未实现；
+- 当前 `WorkspacesMainService` 只负责启动目标解析，最近项目、多窗口创建和 workspace
+  配置管理尚未实现；`windowsState` 已保留多窗口恢复数据形状，但当前只写入单个主窗口；
+- 空窗口 backup service 尚未实现，因此当前启动路径没有可传给 `WindowsStateHandler` 的
+  `backupPath`，无备份的空窗口只能使用 last-active fallback；
 - 启动目标无效时记录错误并安全回退到空窗口。
 
-## 5. Preload API
+## 5. Sandbox Bridge 与 Renderer API
 
-Preload API 必须是领域化、强类型、可枚举的接口：
+Electron sandbox 边界分为两层。`ISandboxGlobals` 是 preload 唯一暴露到主世界的底层桥接：
+它只包含只读进程元数据，以及受 `zeta:` 频道前缀约束的 `invoke` / `on`。preload 必须保持
+自包含，运行时除 `electron` 外不得加载任何模块，也不得把 Electron event 对象传给 Renderer。
+构建后的 preload 由 `verify-sandbox-preload.mjs` 检查这一约束。
+
+`createElectronRendererApi()` 是该桥接的唯一产品适配器。它在普通 Renderer bundle 中引用频道
+常量，并组装领域化、强类型、可枚举的 `ZetaElectronRendererApi`。领域方法由其父接口
+`ZetaRendererApi` 定义，Electron 专属能力保持以下精确形状：
 
 ```ts
-interface ZetaDesktopApi {
-  appServer: {
-    getConnectionState(): Promise<AppServerConnectionState>;
-    onConnectionState(listener: (state: AppServerConnectionState) => void): () => void;
-  };
-  session: {
-    create(params: SessionCreateParams): Promise<SessionResult>;
-    read(params: SessionReadParams): Promise<SessionResult>;
-    list(): Promise<SessionListResult>;
-    subscribe(params: SessionSubscribeParams): Promise<SessionSubscribeResult>;
-    createThread(params: SessionThreadCreateParams): Promise<SessionThreadResult>;
-    forkThread(params: SessionThreadForkParams): Promise<SessionThreadResult>;
-  };
-  thread: {
-    read(params: ThreadReadParams): Promise<ThreadReadResult>;
-    subscribe(params: ThreadSubscribeParams): Promise<ThreadSubscribeResult>;
-    unsubscribe(params: ThreadUnsubscribeParams): Promise<void>;
-  };
-  turn: {
-    start(params: TurnStartParams): Promise<TurnStartResult>;
-    interrupt(params: TurnInterruptParams): Promise<void>;
-  };
-  events: {
-    subscribe(listener: (event: DesktopEvent) => void): () => void;
-  };
+interface ZetaElectronRendererApi extends ZetaRendererApi {
+  readonly environment: IRuntimeEnvironment;
+  readonly browserView: IBrowserViewApi;
+  readonly configuration: IConfigurationApi;
+  readonly keybindings: IKeybindingsResourceApi;
+  readonly nativeContextMenu: INativeContextMenuApi;
+  readonly nativeMenubar: INativeMenubarApi;
+  readonly workspace: IWorkspaceContextApi;
 }
 ```
 
-禁止提供：
+Workbench 和其他产品代码禁止直接导入 sandbox globals，也禁止提供绕过
+`ZetaElectronRendererApi` 的通用 App Server 调用：
 
 ```ts
 execute(method: string, params?: unknown): Promise<unknown>
@@ -238,40 +244,161 @@ Renderer 负责 Command Registry、路由、组件、输入框、虚拟列表和
 ```text
 button / menu / shortcut
   → UI Command
-  → typed preload method
+  → typed renderer API
+  → sandbox IPC bridge
+  → trusted IPC route
   → domain RPC
 ```
 
 Renderer 不复制 Rust 状态机。遇到 durable `sequence` 或 `streamCursor` 空洞时，停止合并
 当前实体，并通过 `session/subscribe` 或 `thread/subscribe` 获取权威 snapshot + gap。
 
+### 6.1 Editor 宿主
+
+`EditorPart` 是 Workbench 中央编辑区域的唯一宿主。`EditorInput` 表示待打开资源；
+`IEditorPane` 定义编辑器真正共享的创建、输入、取消、布局、可见性、聚焦与释放语义；
+`EditorPaneRegistry` 负责默认匹配、候选枚举和显式编辑器选择。具体产品装配规则由
+[`product-editions.md`](product-editions.md) 负责。
+
+打开新输入时，旧 pane 保持可见，直到新 pane 的异步 `setInput()` 成功。失败不会破坏当前
+编辑器；被后续打开或普通内容替代时，宿主中止 `AbortSignal` 并释放候选 pane。成功切换后由
+宿主隐藏、清空并释放旧 pane。当前只实现单活动 pane，尚无 tab、文档模型、脏状态、保存、
+备份或恢复协议。
+
+### 6.2 iframe Webview
+
+当前 `WebviewElement` 是 Renderer 内用于受控 HTML 的可释放组件，并暴露可由宿主挂载的
+iframe 元素。它适合 Markdown Preview、产品内 HTML 面板和后续自定义编辑器，不负责完整
+网页浏览、导航历史、Cookie、CDP 或 Agent Browser Target；后者属于第 7 节的
+`WebContentsView` 能力。
+
+`WebviewElement` 创建 `srcdoc` iframe，并固定以下边界：
+
+```text
+sandbox: allow-scripts
+无 allow-same-origin / forms / popups / downloads / top-navigation
+opaque origin + credentialless
+固定 iframe CSP 与 document CSP
+无 connect / nested frame / object / form action
+无 Electron preload、Zeta renderer API 或 Node capability
+```
+
+内容通过 `acquireZetaWebviewApi().postMessage()` 发送 structured-clone 数据。宿主只接收
+`event.source === iframe.contentWindow` 且实例 channel 匹配的 envelope；宿主向 iframe
+发送消息时因为 opaque origin 必须使用 `targetOrigin: "*"`，iframe 内容因此有义务检查
+`event.source === parent`。
+
+当前实现只拥有 DOM sandbox、HTML replacement、focus、双向 message 与 deterministic
+disposal。扩展宿主、独立 origin endpoint、远程/本地资源映射、端口映射、find widget、
+state persistence 和权限扩展均尚未实现。引入这些能力时必须保留独立 origin，不能通过加入
+`allow-same-origin` 来绕过资源加载问题。当前也尚未接管 iframe 自身的页面跳转；在加入链接
+打开策略前，调用方只应提供产品控制的 HTML。
+
+### 6.3 Markdown
+
+当前 Renderer 有两条 Markdown 渲染路径，但共享同一个最终安全边界：
+
+```text
+Workbench 短内容
+  → marked
+  → DOMPurify allowlist
+  → MarkdownElement（普通 DOM）
+
+完整文档预览
+  → markdown-it
+  → DOMPurify allowlist
+  → MarkdownPreview
+  → WebviewElement（opaque-origin sandbox iframe）
+```
+
+`base/browser/domSanitize.ts` 是 DOMPurify 的唯一直接适配器，为目标 document 创建隔离的
+sanitizer 实例，防止 hook 跨窗口或跨消费者泄漏。`base/browser/markdownRenderer.ts` 拥有
+普通 Markdown 组件、Markdown 标签/属性 allowlist 和 URL policy。
+`platform/markdown/browser/markdownPreview.ts` 负责完整文档解析、预览样式及 iframe 链接
+消息桥接。`workbench/contrib/markdown/browser/markdownDocumentRenderer.ts` 再将平台预览
+适配为 Editor Part 可持有的 `MarkdownDocumentView`，并拥有产品级链接打开回调。
+
+`workbench/contrib/markdown/browser/markdown.contribution.ts` 是 Workbench 功能入口，由
+`workbench.contribution.ts` 静态加载；该层只接入产品视图和样式，不重复解析器或 sanitizer。
+解析器返回的 HTML 从不视为可信内容，也不得绕过 DOMPurify 直接写入 DOM 或
+`WebviewElement.setHtml()`。
+
+当前 allowlist 覆盖标题、段落、列表、表格、代码块、引用和任务复选框等标准 Markdown
+结构，拒绝脚本、事件属性、内联样式、SVG/MathML 与未知元素。链接只保留 `http:`、
+`https:` 和页内 fragment，并由宿主接管点击；图片只保留 base64 PNG、JPEG、GIF 和 WebP，
+不会直接读取本地文件或请求远程资源。预览消息仍需通过 `WebviewElement` 的 source/channel
+校验，并在 `MarkdownPreview` 中再次做 exact-shape validation。
+
+当前没有语法高亮、Markdown 扩展插件、Mermaid、KaTeX、工作区相对资源 URI 映射、滚动同步
+或预览状态持久化。这些属于后续能力，加入时必须继续保持“解析后统一 sanitize，再进入隔离
+容器”的顺序。
+
 ## 7. Browser Capability
 
 Electron Main 是 Browser Target 的唯一权威持有者。
 
-Desktop 对 Rust 暴露语义动作：
+### 7.1 当前实现
 
-- `browser/observe`
-- `browser/perform`
-- `browser/getPdf`
+`BrowserViewMainService` 为每个目标创建一个 Electron `WebContentsView`，将其挂载到所属
+`BrowserWindow.contentView`，并在目标关闭或窗口释放时移除并关闭 `webContents`。新目标默认
+隐藏；Renderer 必须先通过 `browserView.layout()` 提交窗口内容坐标，再通过
+`browserView.setVisibility()` 显示。
 
-不能暴露任意 CDP method。每个 `targetId` 必须：
+调用路径固定为：
 
-- 绑定创建它的 App Server connection；
-- 在 Tool Call 开始前固定；
-- 关闭后返回 `BrowserTargetUnavailable`；
-- 不得静默切换到另一个活动 Tab。
+```text
+Workbench consumer
+  → ZetaElectronRendererApi.browserView
+  → ISandboxGlobals.invoke/on
+  → registerTrustedIpcRoutes
+  → browserViewIpcRoutes
+  → BrowserViewMainService
+  → WebContentsView
+```
 
-第三方网页必须使用：
+`platform/browser/common/browserView.ts` 拥有可序列化 DTO、频道和输入 validator。
+`browserViewIpcRoutes()` 只做受信 IPC 绑定，`BrowserViewMainService` 拥有 target map、原生 view、
+session 安全策略、导航历史和事件投影。`WebContentsView`、`WebContents`、Electron event 与
+session 对象均不得跨越 IPC。
+
+当前 URL policy 允许 HTTPS、loopback HTTP 与精确的 `about:blank`，拒绝 URL credentials、
+`file:`、`javascript:` 和其他特权 scheme。每个目标使用独立临时 partition，并固定：
 
 ```text
 nodeIntegration: false
 contextIsolation: true
 sandbox: true
-无特权 preload
-无应用 IPC
-独立 session / partition
+webviewTag: false
+无远程页面 preload
+默认拒绝 permission / device permission / download / popup
 ```
+
+popup 请求只以 `openRequested` 事件返回已验证 URL，不会由远程页面直接创建窗口。Renderer
+可收到目标 state、加载失败、popup 请求、renderer 崩溃和关闭事件，但不能获得底层 Electron
+对象。
+
+当前限制：
+
+- 尚无浏览器编辑器、地址栏、标签页或 DOM 容器自动布局绑定；
+- 尚未实现持久 BrowserSession、下载 UI、权限提示、证书信任或 PDF 导出；
+- Browser Target 目前只绑定单个 Desktop 窗口，尚未绑定 App Server connection 或 Tool Call；
+- 尚未向 Rust 暴露 browser capability，也没有开放 CDP。
+
+### 7.2 Proposed：App Server 与 Agent 浏览器能力
+
+Desktop 后续对 Rust 暴露语义动作时，计划使用：
+
+- `browser/observe`
+- `browser/perform`
+- `browser/getPdf`
+
+该 API 尚未实现，不能描述为当前 App Server capability。实现后仍不能暴露任意 CDP method；
+每个 `targetId` 必须：
+
+- 绑定创建它的 App Server connection；
+- 在 Tool Call 开始前固定；
+- 关闭后返回 `BrowserTargetUnavailable`；
+- 不得静默切换到另一个活动 Tab。
 
 ## 8. Desktop 提交 App Server 能力需求
 

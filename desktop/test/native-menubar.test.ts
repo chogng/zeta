@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   validateNativeMenubarData,
-} from "../src/platform/menubar/common/nativeMenubar.js";
+} from "../src/zeta/platform/menubar/common/nativeMenubar.js";
 
 test("native menubar validation accepts a versioned nested snapshot", () => {
   const data = {

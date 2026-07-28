@@ -7,7 +7,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { StateService } from "../src/platform/state/node/stateService.js";
+import { StateService } from "../src/zeta/platform/state/node/stateService.js";
 
 test("state service persists and reloads values", async (context) => {
   const directory = await mkdtemp(join(tmpdir(), "zeta-state-"));

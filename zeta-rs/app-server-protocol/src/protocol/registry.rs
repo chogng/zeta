@@ -10,6 +10,10 @@ use crate::protocol::config::{
     ProviderConfigureParams, ProviderRemoveParams, SkillSourceAddParams, SkillSourceConfigDto,
     SkillSourceEnablementDto, SkillSourceRemoveParams, SkillSourceSetEnablementParams, ThemeDto,
 };
+use crate::protocol::document::{
+    TypstCompileParams, TypstCompileResult, TypstDiagnosticDto, TypstDiagnosticSeverityDto,
+    TypstSourceRangeDto,
+};
 use crate::protocol::error::{AppServerError, AppServerErrorName};
 use crate::protocol::initialize::{InitializeParams, InitializeResult, ServerCapabilities};
 use crate::protocol::notification::{SessionUpdateEnvelope, ThreadUpdateEnvelope};
@@ -308,6 +312,11 @@ client_methods! {
         response: TurnInteractionResolveResult,
         serialization: ThreadExclusive,
     },
+    TypstCompile => "document/typst/compile" {
+        params: TypstCompileParams,
+        response: TypstCompileResult,
+        serialization: GlobalExclusive,
+    },
     ResourceMetadata => "resource/metadata" {
         params: ResourceMetadataParams,
         response: ResourceMetadataResult,
@@ -505,6 +514,11 @@ typescript_bindings! {
     TurnInterruptResult,
     TurnInteractionResolveParams,
     TurnInteractionResolveResult,
+    TypstCompileParams,
+    TypstCompileResult,
+    TypstDiagnosticDto,
+    TypstDiagnosticSeverityDto,
+    TypstSourceRangeDto,
     ResourceMetadataParams,
     ResourceMetadataResult,
     ResourceReadParams,

@@ -6,14 +6,6 @@
     "types": ["node", "electron"]
   },
   "include": [
-    "src/code/electron-browser/preload.cts",
-    "src/base/parts/contextmenu/common/**/*.ts",
-    "src/platform/app-server/common/renderer-api.ts",
-    "src/platform/configuration/common/**/*.ts",
-    "src/platform/keybinding/common/**/*.ts",
-    "src/platform/menubar/common/**/*.ts",
-    "src/platform/native/common/**/*.ts",
-    "src/platform/workspace/common/**/*.ts",
-    "generated/**/*.ts"
+    "src/zeta/base/parts/sandbox/electron-browser/preload.cts"
   ]
 }

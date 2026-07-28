@@ -7,13 +7,13 @@ import {
   APP_SERVER_METHODS,
   APP_SERVER_SCHEMA_HASH,
 } from "../generated/app-server/types.js";
-import { AppServerClient } from "../src/platform/app-server/electron-main/app-server-client.js";
-import { AppServerSession } from "../src/platform/app-server/electron-main/app-server-session.js";
+import { AppServerClient } from "../src/zeta/platform/app-server/electron-main/app-server-client.js";
+import { AppServerSession } from "../src/zeta/platform/app-server/electron-main/app-server-session.js";
 import {
   AppServerSupervisor,
   type AppServerSupervisorOptions,
-} from "../src/platform/app-server/electron-main/app-server-supervisor.js";
-import { JsonRpcPeer } from "../src/platform/app-server/electron-main/json-rpc-peer.js";
+} from "../src/zeta/platform/app-server/electron-main/app-server-supervisor.js";
+import { JsonRpcPeer } from "../src/zeta/platform/app-server/electron-main/json-rpc-peer.js";
 
 class ProtocolChildProcess extends EventEmitter {
   readonly stdin = new PassThrough();
@@ -66,6 +66,7 @@ class ProtocolChildProcess extends EventEmitter {
             threads: true,
             turns: true,
             resources: true,
+            typst: true,
             updateReplay: true,
           },
         });

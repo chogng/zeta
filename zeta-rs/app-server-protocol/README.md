@@ -222,6 +222,18 @@ cargo test -p zeta-app-server-protocol
 bazel test //zeta-rs/app-server-protocol:app-server-protocol-unit-tests
 ```
 
+## Typst document contract
+
+`protocol::document` owns the request and renderer-safe diagnostic/result DTOs
+for `document/typst/compile`. The method is registered as global-exclusive and
+advertised through `ServerCapabilities::typst`. PDF content is referenced by
+`ResourceMetadataResult`; bytes are not embedded into the compile response.
+
+Any change to these DTOs requires regenerating `schema/schema.json` and
+`schema/types.ts`, syncing `desktop/generated/app-server/types.ts`, and
+updating the cross-process contract in
+[`docs/typst.md`](../../docs/typst.md).
+
 Tests 验证 method/notification 唯一性、JSON-RPC 2.0 envelope、TypeScript model/patch shape、root
 schema coverage、config三态、MCP/Skill round trip、schema hash 和 checked-in fixtures exact match。
 

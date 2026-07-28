@@ -1,0 +1,175 @@
+import {
+  DisposableOwner,
+  DisposableSlot,
+  type IDisposable,
+} from "../../../common/lifecycle.js";
+import { scheduleAtNextAnimationFrame } from "../../scheduler.js";
+
+export type AriaRole =
+  | "alert"
+  | "button"
+  | "combobox"
+  | "dialog"
+  | "listbox"
+  | "menu"
+  | "menuitem"
+  | "option"
+  | "status"
+  | "textbox"
+  | (string & {});
+
+export type AriaAutoComplete = "none" | "inline" | "list" | "both";
+export type AriaLivePriority = "polite" | "assertive";
+export type AriaAttribute =
+  | "activedescendant"
+  | "atomic"
+  | "autocomplete"
+  | "checked"
+  | "controls"
+  | "describedby"
+  | "disabled"
+  | "expanded"
+  | "haspopup"
+  | "hidden"
+  | "invalid"
+  | "label"
+  | "labelledby"
+  | "live"
+  | "pressed"
+  | "selected";
+export type AriaAttributeValue =
+  | string
+  | number
+  | boolean
+  | null
+  | undefined;
+
+/** Sets or removes one ARIA attribute while preserving boolean false. */
+export function setAriaAttribute(
+  element: Element,
+  attribute: AriaAttribute,
+  value: AriaAttributeValue,
+): void {
+  const name = `aria-${attribute}`;
+  if (value === undefined || value === null) {
+    element.removeAttribute(name);
+  } else {
+    element.setAttribute(name, String(value));
+  }
+}
+
+/** Reads one ARIA attribute without exposing DOM null semantics. */
+export function getAriaAttribute(
+  element: Element,
+  attribute: AriaAttribute,
+): string | undefined {
+  return element.getAttribute(`aria-${attribute}`) ?? undefined;
+}
+
+/** Sets or removes an element's semantic role. */
+export function setRole(
+  element: Element,
+  role: AriaRole | undefined,
+): void {
+  if (role === undefined) {
+    element.removeAttribute("role");
+  } else {
+    element.setAttribute("role", role);
+  }
+}
+
+/**
+ * Owns screen-reader status and alert regions for one document.
+ *
+ * Callers should create one region per UI root and dispose it with that root.
+ */
+export class AriaLiveRegion extends DisposableOwner {
+  readonly #root: HTMLDivElement;
+  readonly #polite: readonly [HTMLDivElement, HTMLDivElement];
+  readonly #assertive: readonly [HTMLDivElement, HTMLDivElement];
+  readonly #pending = this.own(new DisposableSlot<IDisposable>());
+  #politeIndex = 0;
+  #assertiveIndex = 0;
+
+  constructor(ownerDocument: Document) {
+    super();
+    this.#root = ownerDocument.createElement("div");
+    this.#root.className = "zeta-aria-live";
+    this.#polite = [
+      this.#createRegion(ownerDocument, "polite"),
+      this.#createRegion(ownerDocument, "polite"),
+    ];
+    this.#assertive = [
+      this.#createRegion(ownerDocument, "assertive"),
+      this.#createRegion(ownerDocument, "assertive"),
+    ];
+    this.#root.append(...this.#polite, ...this.#assertive);
+    ownerDocument.body.append(this.#root);
+    this.defer(() => this.#root.remove());
+  }
+
+  status(message: string): void {
+    this.announce(message, "polite");
+  }
+
+  alert(message: string): void {
+    this.announce(message, "assertive");
+  }
+
+  announce(
+    message: string,
+    priority: AriaLivePriority = "polite",
+  ): void {
+    const regions = priority === "assertive"
+      ? this.#assertive
+      : this.#polite;
+    const index = priority === "assertive"
+      ? this.#assertiveIndex
+      : this.#politeIndex;
+    const target = regions[index];
+    const alternate = regions[index === 0 ? 1 : 0];
+    if (priority === "assertive") {
+      this.#assertiveIndex = index === 0 ? 1 : 0;
+    } else {
+      this.#politeIndex = index === 0 ? 1 : 0;
+    }
+    this.#pending.clear();
+    target.textContent = "";
+    alternate.textContent = "";
+    const targetWindow = target.ownerDocument.defaultView;
+    if (!targetWindow) return;
+    this.#pending.replace(scheduleAtNextAnimationFrame(
+      targetWindow,
+      () => {
+        this.#pending.clear();
+        target.textContent = message.slice(0, maximumMessageLength);
+      },
+    ));
+  }
+
+  clear(): void {
+    this.#pending.clear();
+    for (const region of [...this.#polite, ...this.#assertive]) {
+      region.textContent = "";
+    }
+  }
+
+  #createRegion(
+    ownerDocument: Document,
+    priority: AriaLivePriority,
+  ): HTMLDivElement {
+    const region = ownerDocument.createElement("div");
+    region.className = priority === "assertive"
+      ? "zeta-aria-alert"
+      : "zeta-aria-status";
+    if (priority === "assertive") {
+      setRole(region, "alert");
+    } else {
+      setAriaAttribute(region, "live", "polite");
+    }
+    setAriaAttribute(region, "atomic", true);
+    return region;
+  }
+}
+
+const maximumMessageLength = 20_000;

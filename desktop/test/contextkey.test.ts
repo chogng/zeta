@@ -4,7 +4,7 @@ import {
   ContextKeyExpr,
   ContextKeyService,
   RawContextKey,
-} from "../src/platform/contextkey/common/contextkey.js";
+} from "../src/zeta/platform/contextkey/common/contextkey.js";
 
 test("typed context keys reset to their declared default", () => {
   using service = new ContextKeyService();

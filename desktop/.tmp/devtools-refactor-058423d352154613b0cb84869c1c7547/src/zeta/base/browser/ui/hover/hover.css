@@ -1,0 +1,8 @@
+.zeta-hover {
+  max-width: min(420px, calc(100vw - 16px));
+  padding: 6px 8px;
+  color: var(--zeta-foreground, #cccccc);
+  font: inherit;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}

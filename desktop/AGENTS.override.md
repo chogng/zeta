@@ -15,11 +15,11 @@
 
 ## Base module boundaries
 
-- Reverse dependencies from `src/base` into any higher-level domain are
+- Reverse dependencies from `src/zeta/base` into any higher-level domain are
   strictly prohibited. Features such as PDF, editors, workspaces, sessions, or
   file explorers may depend on base APIs; base modules must never import,
   reference, specialize for, or otherwise depend on those features.
-- Keep modules under `src/base` domain-agnostic. Higher-level domains must not
+- Keep modules under `src/zeta/base` domain-agnostic. Higher-level domains must not
   determine base interfaces, types, defaults, comparison rules, lifecycle
   behavior, tests, or examples.
 - Define URI parsing, URI identity, resource collections, UUID validation, and
@@ -30,7 +30,7 @@
   domain explicitly select alternate semantics, such as ignoring fragments.
 - Keep domain identities and lifecycle rules, including document IDs and editor
   instance IDs, in the module that owns those concepts. Do not introduce them
-  into `src/base` before a concrete domain model requires them.
+  into `src/zeta/base` before a concrete domain model requires them.
 - Add structures such as a resource tree when a real hierarchical consumer
   exists. Do not expand the base layer speculatively from anticipated feature
   requirements.

@@ -259,6 +259,20 @@ cargo test -p zeta-app-server
 bazel test //zeta-rs/app-server:app-server-unit-tests
 ```
 
+## Typst integration
+
+`AppServer::typst_compile` owns the application-level bridge from
+`document/typst/compile` to `zeta_typst::TypstCompiler`. It maps expected
+source failures to `TypstCompileResult::Failed`, creates a 300-second
+connection-owned `application/pdf` resource on success, and maps compiler
+diagnostics into protocol DTOs through `typst_diagnostic_dto`.
+
+The compiler boundary itself belongs to `zeta-typst`; this crate must not add
+host path resolution, package download, or font discovery around it. A change
+from connection-owned ephemeral resources to durable document storage is a
+separate ownership decision. The cross-crate trust model is documented in
+[`docs/typst.md`](../../docs/typst.md).
+
 Tests 覆盖 initialization/request IDs、Session-first flow、command replay/conflict、fork lineage、
 Turn replay/model-once、multi-connection update、reconnect durable gap、connection-owned resources、
 config command、interaction/approval resolve、response-before-notification、model config safe point、

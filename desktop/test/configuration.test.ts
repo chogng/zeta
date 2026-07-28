@@ -9,7 +9,7 @@ import { join } from "node:path";
 import test from "node:test";
 import {
   ConfigurationRegistry,
-} from "../src/platform/configuration/common/configurationRegistry.js";
+} from "../src/zeta/platform/configuration/common/configurationRegistry.js";
 import {
   type IConfigurationApi,
   type IConfigurationSnapshot,
@@ -17,13 +17,13 @@ import {
   validateConfigurationDocument,
   validateConfigurationSnapshot,
   validateConfigurationUpdateRequest,
-} from "../src/platform/configuration/common/configuration.js";
+} from "../src/zeta/platform/configuration/common/configuration.js";
 import {
   ConfigurationMainService,
-} from "../src/platform/configuration/electron-main/configurationMainService.js";
+} from "../src/zeta/platform/configuration/electron-main/configurationMainService.js";
 import {
   WorkbenchConfigurationService,
-} from "../src/workbench/services/configuration/browser/configurationService.js";
+} from "../src/zeta/workbench/services/configuration/browser/configurationService.js";
 
 test("configuration validators bound the complete wire document", () => {
   assert.deepEqual(

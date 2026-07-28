@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { resolve } from "node:path";
 import test from "node:test";
-import { URI } from "../src/base/common/uri.js";
+import { URI } from "../src/zeta/base/common/uri.js";
 import {
   isSingleFolderWorkspaceIdentifier,
   isWorkspaceIdentifier,
@@ -10,24 +10,24 @@ import {
   UNKNOWN_EMPTY_WINDOW_WORKSPACE,
   workbenchStateFromWorkspaceIdentifier,
   WorkbenchState,
-} from "../src/platform/workspace/common/workspace.js";
+} from "../src/zeta/platform/workspace/common/workspace.js";
 import {
   WorkspaceOpenTargetKind,
-} from "../src/platform/workspaces/common/workspaces.js";
+} from "../src/zeta/platform/workspaces/common/workspaces.js";
 import {
   parseWorkspaceLaunchArguments,
   WorkspacesMainService,
   workspaceContextIpcRoutes,
-} from "../src/platform/workspaces/electron-main/workspacesMainService.js";
+} from "../src/zeta/platform/workspaces/electron-main/workspacesMainService.js";
 import {
   getSingleFolderWorkspaceIdentifier,
   getWorkspaceIdentifier,
   type IWorkspacePathService,
   WorkspacePathKind,
-} from "../src/platform/workspaces/node/workspaces.js";
+} from "../src/zeta/platform/workspaces/node/workspaces.js";
 import {
   WorkspaceContextService,
-} from "../src/workbench/services/workspaces/browser/workspaceContextService.js";
+} from "../src/zeta/workbench/services/workspaces/browser/workspaceContextService.js";
 
 test("workspace launch arguments distinguish automatic and named targets", () => {
   assert.equal(parseWorkspaceLaunchArguments([]), undefined);

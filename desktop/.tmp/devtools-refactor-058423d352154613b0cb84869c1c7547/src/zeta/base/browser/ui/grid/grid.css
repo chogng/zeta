@@ -1,0 +1,11 @@
+.zeta-grid {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.zeta-grid > .zeta-split-view {
+  position: absolute;
+  inset: 0;
+}

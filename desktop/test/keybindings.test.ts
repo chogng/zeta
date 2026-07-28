@@ -1,55 +1,57 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { IME } from "../src/base/common/ime.js";
+import { IME } from "../src/zeta/base/common/ime.js";
 import {
   Keybinding,
   logicalKey,
   physicalKey,
   resolveKeybinding,
-} from "../src/base/common/keybindings.js";
-import { DisposableStore } from "../src/base/common/lifecycle.js";
-import { OperatingSystem } from "../src/base/common/platform.js";
+} from "../src/zeta/base/common/keybindings.js";
+import { DisposableStore } from "../src/zeta/base/common/lifecycle.js";
+import { OperatingSystem } from "../src/zeta/base/common/platform.js";
 import {
   getKeybindingLabel,
-} from "../src/base/common/keybindingLabels.js";
+} from "../src/zeta/base/common/keybindingLabels.js";
 import {
   CommandRegistry,
-  CommandService,
-} from "../src/platform/commands/common/command-registry.js";
+} from "../src/zeta/platform/commands/common/commands.js";
 import {
   ContextKeyExpr,
   ContextKeyService,
-} from "../src/platform/contextkey/common/contextkey.js";
+} from "../src/zeta/platform/contextkey/common/contextkey.js";
 import {
   parseContextKeyExpression,
-} from "../src/platform/contextkey/common/contextKeyExpressionParser.js";
+} from "../src/zeta/platform/contextkey/common/contextKeyExpressionParser.js";
 import {
   ServiceCollection,
-} from "../src/platform/instantiation/common/instantiation.js";
+} from "../src/zeta/platform/instantiation/common/instantiation.js";
 import {
   KeybindingResolveKind,
   KeybindingResolver,
-} from "../src/platform/keybinding/common/keybindingResolver.js";
+} from "../src/zeta/platform/keybinding/common/keybindingResolver.js";
 import {
   KeybindingRegistry,
   KeybindingWeight,
-} from "../src/platform/keybinding/common/keybindingsRegistry.js";
+} from "../src/zeta/platform/keybinding/common/keybindingsRegistry.js";
 import {
   BrowserKeyboardLayoutService,
-} from "../src/workbench/services/keybinding/browser/keyboardLayoutService.js";
+} from "../src/zeta/workbench/services/keybinding/browser/keyboardLayoutService.js";
 import {
   WorkbenchKeybindingService,
-} from "../src/workbench/services/keybinding/browser/keybindingService.js";
+} from "../src/zeta/workbench/services/keybinding/browser/keybindingService.js";
+import {
+  CommandService,
+} from "../src/zeta/workbench/services/commands/common/commandService.js";
 import {
   KeybindingsResourceContribution,
-} from "../src/workbench/services/keybinding/browser/keybindingsResourceContribution.js";
+} from "../src/zeta/workbench/services/keybinding/browser/keybindingsResourceContribution.js";
 import {
   WorkbenchKeybindingsResourceService,
-} from "../src/workbench/services/keybinding/browser/keybindingsResourceService.js";
+} from "../src/zeta/workbench/services/keybinding/browser/keybindingsResourceService.js";
 import {
   StatusbarAlignment,
   StatusbarService,
-} from "../src/workbench/services/statusbar/browser/statusbar.js";
+} from "../src/zeta/workbench/services/statusbar/browser/statusbar.js";
 
 test("resolver applies context, weight, and latest-registration precedence", () => {
   using registrations = new DisposableStore();
@@ -179,6 +181,46 @@ test("browser service executes chords and restores IME state", async () => {
     getKeybindingLabel(service.resolveUserBinding("ctrl+k")!),
     "Ctrl+K",
   );
+});
+
+test("browser service dispatches Ctrl+Shift+P with a shifted key value", async () => {
+  using registrations = new DisposableStore();
+  const registry = new KeybindingRegistry();
+  const commands = new CommandRegistry();
+  const contexts = registrations.add(new ContextKeyService());
+  const commandId = "workbench.action.showCommands";
+  const executed = new Promise<void>((resolve) => {
+    registrations.add(commands.register(commandId, () => resolve()));
+  });
+  registrations.add(registry.registerKeybindingRule({
+    command: commandId,
+    keybinding: Keybinding.single(logicalKey("p", {
+      ctrlKey: true,
+      shiftKey: true,
+    })),
+  }));
+  const keyboardLayout = registrations.add(
+    new BrowserKeyboardLayoutService({
+      navigator: fakeNavigator(),
+      operatingSystem: OperatingSystem.Windows,
+    }),
+  );
+  const service = registrations.add(new WorkbenchKeybindingService({
+    ownerDocument: new EventTarget() as Document,
+    commandService: new CommandService(new ServiceCollection(), commands),
+    contextKeyService: contexts,
+    keyboardLayoutService: keyboardLayout,
+    registry,
+  }));
+  const shortcut = keyboardEvent({
+    code: "KeyP",
+    key: "P",
+    shiftKey: true,
+  });
+
+  assert.equal(service.dispatchEvent(shortcut.event), true);
+  await executed;
+  assert.equal(shortcut.prevented, true);
 });
 
 test("browser keyboard layouts provide physical key labels", async () => {

@@ -225,8 +225,29 @@ delta。客户端不得把二者压成一个 sequence。
 - 在客户端维护第二份领域状态机；
 - 依赖旧 `thread/start`、`thread/resume` 或 `thread/list`。
 
-Desktop preload 只暴露强类型 capability bridge；Electron Main 持有 JSON-RPC connection 和
-trusted IPC validation，Renderer 不接触 Node/Electron primitive。
+Desktop preload 只暴露自包含的 `ISandboxGlobals`，其中没有 Node API、Electron event 或不受约束
+的频道；`createElectronRendererApi()` 是它的唯一产品适配器，为 Workbench 提供强类型 capability。
+Electron Main 持有 JSON-RPC connection 和 trusted IPC validation，Workbench 不接触
+Node/Electron primitive 或底层 sandbox bridge。
+
+当前嵌入式浏览器同样遵守该边界：Electron Main 的 `BrowserViewMainService` 独占
+`WebContentsView` 和临时 browser session，Workbench 只通过
+`ZetaElectronRendererApi.browserView` 交换可序列化命令与状态。浏览器编辑器 UI 与
+Rust/Agent browser capability 仍是后续工作，当前实现状态和安全策略以
+[`zeta-desktop-architecture.md`](zeta-desktop-architecture.md#7-browser-capability) 为准。
+
+Renderer 内受控 HTML 使用独立的 `WebviewElement` iframe boundary，而不是
+`WebContentsView` 或 Electron `<webview>` 标签。当前 iframe 采用 opaque origin、固定 CSP
+和 source/channel message validation；扩展宿主与独立 webview origin 尚未实现，精确状态见
+[`zeta-desktop-architecture.md`](zeta-desktop-architecture.md#61-iframe-webview)。
+
+Markdown 也不以解析器输出作为信任边界。当前 Workbench 短内容使用
+`marked → DOMPurify → MarkdownElement`，完整预览使用
+`markdown-it → DOMPurify → MarkdownPreview → WebviewElement`。两条路径共享严格的标签、
+属性和 URL allowlist。DOMPurify 的直接适配只位于 `base/browser/domSanitize.ts`；
+`workbench/contrib/markdown` 通过 `MarkdownDocumentView` 接入平台预览并拥有产品链接策略，
+不复制安全边界。语法高亮、扩展插件及工作区资源映射仍未实现。具体所有权与当前限制见
+[`zeta-desktop-architecture.md`](zeta-desktop-architecture.md#62-markdown)。
 
 ## 10. 演进规则
 

@@ -1,0 +1,4 @@
+.zeta-view-pane-container { display: flex; min-width: 0; min-height: 0; flex: 1 1 auto; flex-direction: column; overflow: auto; }
+.zeta-view-pane { min-width: 0; }
+.zeta-view-pane-title { padding: 6px 8px; font-size: 12px; font-weight: 600; }
+.zeta-view-pane-content { min-width: 0; }

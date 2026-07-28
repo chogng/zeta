@@ -1,0 +1,230 @@
+var __addDisposableResource = (this && this.__addDisposableResource) || function (env, value, async) {
+    if (value !== null && value !== void 0) {
+        if (typeof value !== "object" && typeof value !== "function") throw new TypeError("Object expected.");
+        var dispose, inner;
+        if (async) {
+            if (!Symbol.asyncDispose) throw new TypeError("Symbol.asyncDispose is not defined.");
+            dispose = value[Symbol.asyncDispose];
+        }
+        if (dispose === void 0) {
+            if (!Symbol.dispose) throw new TypeError("Symbol.dispose is not defined.");
+            dispose = value[Symbol.dispose];
+            if (async) inner = dispose;
+        }
+        if (typeof dispose !== "function") throw new TypeError("Object not disposable.");
+        if (inner) dispose = function() { try { inner.call(this); } catch (e) { return Promise.reject(e); } };
+        env.stack.push({ value: value, dispose: dispose, async: async });
+    }
+    else if (async) {
+        env.stack.push({ async: true });
+    }
+    return value;
+};
+var __disposeResources = (this && this.__disposeResources) || (function (SuppressedError) {
+    return function (env) {
+        function fail(e) {
+            env.error = env.hasError ? new SuppressedError(e, env.error, "An error was suppressed during disposal.") : e;
+            env.hasError = true;
+        }
+        var r, s = 0;
+        function next() {
+            while (r = env.stack.pop()) {
+                try {
+                    if (!r.async && s === 1) return s = 0, env.stack.push(r), Promise.resolve().then(next);
+                    if (r.dispose) {
+                        var result = r.dispose.call(r.value);
+                        if (r.async) return s |= 2, Promise.resolve(result).then(next, function(e) { fail(e); return next(); });
+                    }
+                    else s |= 1;
+                }
+                catch (e) {
+                    fail(e);
+                }
+            }
+            if (s === 1) return env.hasError ? Promise.reject(env.error) : Promise.resolve();
+            if (env.hasError) throw env.error;
+        }
+        return next();
+    };
+})(typeof SuppressedError === "function" ? SuppressedError : function (error, suppressed, message) {
+    var e = new Error(message);
+    return e.name = "SuppressedError", e.error = error, e.suppressed = suppressed, e;
+});
+import assert from "node:assert/strict";
+import test from "node:test";
+import { Keybinding, logicalKey, resolveKeybinding, } from "../src/base/common/keybindings.js";
+import { DisposableStore } from "../src/base/common/lifecycle.js";
+import { OperatingSystem } from "../src/base/common/platform.js";
+import { Action2, MenuId, MenusRegistry, registerAction2, SubmenuItemAction, } from "../src/platform/actions/common/actions.js";
+import { MenuService, } from "../src/platform/actions/common/menuService.js";
+import { CommandsRegistry, } from "../src/platform/commands/common/commands.js";
+import { ContextKeyExpr, ContextKeyService, } from "../src/platform/contextkey/common/contextkey.js";
+import { createServiceIdentifier, ServiceCollection, } from "../src/platform/instantiation/common/instantiation.js";
+import { KeybindingResolver, } from "../src/platform/keybinding/common/keybindingResolver.js";
+import { KeybindingsRegistry, } from "../src/platform/keybinding/common/keybindingsRegistry.js";
+import { CommandService, } from "../src/workbench/services/commands/common/commandService.js";
+test("registerAction2 connects command execution and menu placement", async () => {
+    const env_1 = { stack: [], error: void 0, hasError: false };
+    try {
+        const registrations = __addDisposableResource(env_1, new DisposableStore(), false);
+        const menuId = new MenuId("test.actions.registration");
+        const serviceId = createServiceIdentifier("testValue");
+        class RegisteredAction extends Action2 {
+            constructor() {
+                super({
+                    id: "test.actions.registered",
+                    title: "Registered action",
+                    menu: {
+                        id: menuId,
+                        group: "navigation",
+                        order: 10,
+                    },
+                    keybinding: {
+                        primary: Keybinding.single(logicalKey("r", {
+                            ctrlKey: true,
+                        })),
+                    },
+                    f1: true,
+                });
+            }
+            run(accessor, ...args) {
+                return `${accessor.get(serviceId)}:${String(args[0])}`;
+            }
+        }
+        registrations.add(registerAction2(RegisteredAction));
+        const services = new ServiceCollection();
+        services.set(serviceId, "service");
+        const commands = new CommandService(services);
+        const contexts = registrations.add(new ContextKeyService());
+        const menus = new MenuService(commands, contexts);
+        assert.ok(new KeybindingResolver({
+            registry: KeybindingsRegistry,
+            resolveKeybinding: (keybinding) => resolveKeybinding(keybinding, OperatingSystem.Windows),
+        }).lookupKeybinding("test.actions.registered", contexts));
+        const groups = menus.getMenuActions(menuId, {
+            shouldForwardArgs: true,
+        });
+        assert.equal(groups.length, 1);
+        assert.equal(groups[0][0], "navigation");
+        assert.equal(groups[0][1][0].label, "Registered action");
+        assert.equal(await groups[0][1][0].run("argument"), "service:argument");
+        const paletteIds = menus.getMenuActions(MenuId.CommandPalette)
+            .flatMap(([, actions]) => actions)
+            .map((action) => action.id);
+        assert.ok(paletteIds.includes("test.actions.registered"));
+    }
+    catch (e_1) {
+        env_1.error = e_1;
+        env_1.hasError = true;
+    }
+    finally {
+        __disposeResources(env_1);
+    }
+});
+test("menu actions react to visibility, enablement, and toggle context", () => {
+    const env_2 = { stack: [], error: void 0, hasError: false };
+    try {
+        const registrations = __addDisposableResource(env_2, new DisposableStore(), false);
+        const menuId = new MenuId("test.actions.context");
+        const commandId = "test.actions.contextual";
+        registrations.add(CommandsRegistry.register(commandId, () => undefined));
+        registrations.add(MenusRegistry.appendMenuItem(menuId, {
+            command: {
+                id: commandId,
+                title: "Contextual action",
+                precondition: ContextKeyExpr.has("test.ready"),
+                toggled: ContextKeyExpr.has("test.active"),
+            },
+            when: ContextKeyExpr.has("test.visible"),
+        }));
+        const services = new ServiceCollection();
+        const commands = new CommandService(services);
+        const contexts = registrations.add(new ContextKeyService());
+        const menus = new MenuService(commands, contexts);
+        const menu = registrations.add(menus.createMenu(menuId));
+        let changes = 0;
+        registrations.add(menu.onDidChange(() => {
+            changes += 1;
+        }));
+        assert.deepEqual(menu.getActions(), []);
+        contexts.setContext("test.visible", true);
+        let action = menu.getActions()[0][1][0];
+        assert.equal(action.enabled, false);
+        assert.equal(action.checked, false);
+        contexts.setContext("test.ready", true);
+        contexts.setContext("test.active", true);
+        action = menu.getActions()[0][1][0];
+        assert.equal(action.enabled, true);
+        assert.equal(action.checked, true);
+        assert.equal(changes, 3);
+    }
+    catch (e_2) {
+        env_2.error = e_2;
+        env_2.hasError = true;
+    }
+    finally {
+        __disposeResources(env_2);
+    }
+});
+test("menu service sorts groups and resolves submenus", () => {
+    const env_3 = { stack: [], error: void 0, hasError: false };
+    try {
+        const registrations = __addDisposableResource(env_3, new DisposableStore(), false);
+        const rootMenu = new MenuId("test.actions.root");
+        const childMenu = new MenuId("test.actions.child");
+        const commandIds = [
+            "test.actions.navigation",
+            "test.actions.first",
+            "test.actions.second",
+        ];
+        for (const commandId of commandIds) {
+            registrations.add(CommandsRegistry.register(commandId, () => undefined));
+        }
+        registrations.add(MenusRegistry.appendMenuItem(rootMenu, {
+            command: {
+                id: commandIds[1],
+                title: "First",
+            },
+            group: "primary",
+            order: 1,
+        }));
+        registrations.add(MenusRegistry.appendMenuItem(rootMenu, {
+            command: {
+                id: commandIds[0],
+                title: "Navigation",
+            },
+            group: "navigation",
+            order: 100,
+        }));
+        registrations.add(MenusRegistry.appendMenuItem(childMenu, {
+            command: {
+                id: commandIds[2],
+                title: "Second",
+            },
+        }));
+        registrations.add(MenusRegistry.appendMenuItem(rootMenu, {
+            title: "More",
+            submenu: childMenu,
+            group: "primary",
+            order: 2,
+        }));
+        const commands = new CommandService(new ServiceCollection());
+        const contexts = registrations.add(new ContextKeyService());
+        const groups = new MenuService(commands, contexts)
+            .getMenuActions(rootMenu);
+        assert.deepEqual(groups.map(([group]) => group), [
+            "navigation",
+            "primary",
+        ]);
+        assert.equal(groups[1][1][0].label, "First");
+        assert.ok(groups[1][1][1] instanceof SubmenuItemAction);
+        assert.equal(groups[1][1][1].actions[0].label, "Second");
+    }
+    catch (e_3) {
+        env_3.error = e_3;
+        env_3.hasError = true;
+    }
+    finally {
+        __disposeResources(env_3);
+    }
+});

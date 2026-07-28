@@ -362,3 +362,16 @@ node desktop/scripts/sync-app-server-protocol.mjs
 ```
 
 生成产物、Rust contract tests 和 Desktop TypeScript 编译必须同时通过。
+
+## 13. Typst document compilation
+
+`initialize.capabilities.typst` indicates support for
+`document/typst/compile`. The method accepts `{ "source": string }` and returns
+either a connection-owned `application/pdf` resource plus warnings, or typed
+source diagnostics. Source size is limited to 1 MiB of UTF-8 bytes.
+
+The current compiler exposes only an in-memory `/main.typ`; it does not expose
+host files, network access, package downloads, system fonts, or the current
+date. PDF bytes use the existing `resource/metadata`, `resource/read`, and
+`resource/release` lifecycle. Cross-process ownership and planned evolution
+are documented in [`typst.md`](typst.md).

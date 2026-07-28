@@ -1,0 +1,5 @@
+.zeta-markdown-document-view {
+  background: var(--zeta-editor-background, #1e1e1e);
+  min-height: 0;
+  min-width: 0;
+}

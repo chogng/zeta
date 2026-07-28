@@ -1,13 +1,13 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
-import type { AppServerSupervisor } from "../src/platform/app-server/electron-main/app-server-supervisor.js";
-import { appServerIpcRoutes } from "../src/platform/app-server/electron-main/app-server-ipc.js";
+import type { AppServerSupervisor } from "../src/zeta/platform/app-server/electron-main/app-server-supervisor.js";
+import { appServerIpcRoutes } from "../src/zeta/platform/app-server/electron-main/app-server-ipc.js";
 import {
   registerTrustedIpcRoutes,
   type IpcMainInvokeEventLike,
   type IpcMainLike,
   type IpcRoute,
-} from "../src/platform/app-server/electron-main/trusted-ipc-router.js";
+} from "../src/zeta/platform/app-server/electron-main/trusted-ipc-router.js";
 
 class FakeIpcMain implements IpcMainLike {
   readonly handlers = new Map<
@@ -94,10 +94,12 @@ test("trusted IPC router enforces webContents, main frame, exact URL, and params
   assert.equal(ipcMain.handlers.size, 0);
 });
 
-test("App Server IPC validators reject unknown fields and malformed Turn input", () => {
+test("App Server IPC validators reject malformed Turn, Typst, and resource input", () => {
   const routes = appServerIpcRoutes({} as AppServerSupervisor);
   const sessionCreate = routes.find((route) => route.channel === "zeta:session:create")!;
   const turnStart = routes.find((route) => route.channel === "zeta:turn:start")!;
+  const typstCompile = routes.find((route) => route.channel === "zeta:typst:compile")!;
+  const resourceRead = routes.find((route) => route.channel === "zeta:resource:read")!;
 
   assert.deepEqual(
     sessionCreate.validate({ commandId: "one", title: "title" }),
@@ -133,6 +135,22 @@ test("App Server IPC validators reject unknown fields and malformed Turn input",
         input: [{ type: "image", text: "no" }],
       }),
     /must be text/,
+  );
+  assert.deepEqual(typstCompile.validate({ source: "= Paper" }), {
+    source: "= Paper",
+  });
+  assert.throws(
+    () => typstCompile.validate({ source: "a".repeat(1024 * 1024 + 1) }),
+    /UTF-8 bytes/,
+  );
+  assert.throws(
+    () =>
+      resourceRead.validate({
+        resourceId: "resource_1",
+        offset: 0,
+        maxBytes: 262_145,
+      }),
+    /must not exceed/,
   );
 });
 
