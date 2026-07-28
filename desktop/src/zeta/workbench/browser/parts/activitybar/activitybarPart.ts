@@ -1,4 +1,5 @@
 import "./activitybarpart.css";
+import "./activityaction.css";
 import {
   ActionBar,
 } from "../../../../base/browser/ui/actionbar/actionbar.js";

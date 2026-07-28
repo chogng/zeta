@@ -4,6 +4,7 @@
     "types": ["vite/client"]
   },
   "include": [
+    "src/typings/**/*.d.ts",
     "src/zeta/base/**/*.ts",
     "src/zeta/code/browser/**/*.ts",
     "src/zeta/code/electron-browser/workbench/**/*.ts",
