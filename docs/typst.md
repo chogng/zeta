@@ -2,7 +2,7 @@
 
 ```yaml
 status: current narrow integration
-owner: zeta-rs/typst and zeta-rs/app-server
+owner: zeta-rs/utils/typst and zeta-rs/app-server
 consumers:
   - desktop
 lastUpdated: 2026-07-28
@@ -10,7 +10,7 @@ lastUpdated: 2026-07-28
 
 This document owns the cross-crate architecture and trust model. Compiler
 implementation details are canonical in
-[`zeta-rs/typst/README.md`](../zeta-rs/typst/README.md).
+[`zeta-rs/utils/typst/README.md`](../zeta-rs/utils/typst/README.md).
 
 ## Decision
 

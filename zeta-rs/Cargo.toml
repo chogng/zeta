@@ -30,9 +30,9 @@ members = [
     "thread-store",
     "tools",
     "tui",
-    "typst",
     "utils/pdf",
     "utils/pty",
+    "utils/typst",
     "windows-sandbox-rs",
     "zeta-api",
     "zeta-client",
@@ -101,9 +101,9 @@ zeta-storage = { path = "storage" }
 zeta-thread-store = { path = "thread-store" }
 zeta-tools = { path = "tools" }
 zeta-tui = { path = "tui" }
-zeta-typst = { path = "typst" }
 zeta-pdf = { path = "utils/pdf" }
 zeta-utils-pty = { path = "utils/pty" }
+zeta-typst = { path = "utils/typst" }
 zeta-windows-sandbox = { path = "windows-sandbox-rs" }
 
 [workspace.lints.rust]

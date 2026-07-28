@@ -2,7 +2,7 @@
 
 > This README owns implementation details for the in-memory compiler boundary.
 > Cross-process ownership, product semantics, and staged evolution are
-> canonical in [`docs/typst.md`](../../docs/typst.md).
+> canonical in [`docs/typst.md`](../../../docs/typst.md).
 
 `zeta-typst` compiles one caller-provided Typst source string to PDF. It owns
 the Typst `World` implementation and deliberately provides no operating-system
