@@ -16,6 +16,7 @@ import {
   type IRegisteredKeybindingRule,
   type KeybindingRegistry,
   KeybindingsRegistry,
+  KeybindingRuleKind,
   KeybindingWeight,
 } from "./keybindingsRegistry.js";
 
@@ -23,6 +24,7 @@ export enum KeybindingResolveKind {
   NoMatch = "noMatch",
   MoreChordsNeeded = "moreChordsNeeded",
   Command = "command",
+  Blocked = "blocked",
 }
 
 export type KeybindingResolveResult =
@@ -35,6 +37,10 @@ export type KeybindingResolveResult =
     readonly kind: KeybindingResolveKind.Command;
     readonly command: CommandId;
     readonly args: readonly unknown[];
+    readonly keybinding: ResolvedKeybinding;
+  }
+  | {
+    readonly kind: KeybindingResolveKind.Blocked;
     readonly keybinding: ResolvedKeybinding;
   };
 
@@ -95,6 +101,12 @@ export class KeybindingResolver {
         keybinding: winner.keybinding,
       };
     }
+    if (winner.rule.kind === KeybindingRuleKind.Blocker) {
+      return {
+        kind: KeybindingResolveKind.Blocked,
+        keybinding: winner.keybinding,
+      };
+    }
     return {
       kind: KeybindingResolveKind.Command,
       command: winner.rule.command,
@@ -107,25 +119,38 @@ export class KeybindingResolver {
     command: CommandId,
     context: Context,
   ): ResolvedKeybinding | undefined {
-    return this.#resolvedRules()
-      .filter(({ rule }) =>
-        rule.command === command &&
-        (!rule.when || rule.when.evaluate(context))
-      )
-      .sort(compareResolvedRules)[0]?.keybinding;
+    return this.#winningRules(context)
+      .find(({ rule }) =>
+        rule.kind === KeybindingRuleKind.Command &&
+        rule.command === command
+      )?.keybinding;
   }
 
   lookupKeybindings(
     command: CommandId,
     context: Context,
   ): readonly ResolvedKeybinding[] {
-    return this.#resolvedRules()
+    return this.#winningRules(context)
       .filter(({ rule }) =>
-        rule.command === command &&
-        (!rule.when || rule.when.evaluate(context))
+        rule.kind === KeybindingRuleKind.Command &&
+        rule.command === command
       )
-      .sort(compareResolvedRules)
       .map(({ keybinding }) => keybinding);
+  }
+
+  #winningRules(context: Context): readonly ResolvedRule[] {
+    const winners = new Map<string, ResolvedRule>();
+    for (
+      const candidate of this.#resolvedRules()
+        .filter(({ rule }) =>
+          !rule.when || rule.when.evaluate(context)
+        )
+        .sort(compareResolvedRules)
+    ) {
+      const identity = keybindingIdentity(candidate.keybinding);
+      if (!winners.has(identity)) winners.set(identity, candidate);
+    }
+    return [...winners.values()];
   }
 
   #resolvedRules(): readonly ResolvedRule[] {
@@ -134,6 +159,17 @@ export class KeybindingResolver {
       keybinding: this.#resolveKeybinding(rule.keybinding),
     }));
   }
+}
+
+function keybindingIdentity(keybinding: ResolvedKeybinding): string {
+  return keybinding.chords.map((chord) => [
+    chord.kind,
+    chord.key,
+    Number(chord.ctrlKey),
+    Number(chord.shiftKey),
+    Number(chord.altKey),
+    Number(chord.metaKey),
+  ].join(":")).join(" ");
 }
 
 function compareResolvedRules(

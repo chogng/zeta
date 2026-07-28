@@ -23,6 +23,23 @@ import {
   nativeContextMenuIpcRoutes,
 } from "../../platform/contextview/electron-main/contextMenuMainService.js";
 import {
+  CONFIGURATION_CHANGED_CHANNEL,
+} from "../../platform/configuration/common/configuration.js";
+import {
+  ConfigurationMainService,
+  configurationIpcRoutes,
+} from "../../platform/configuration/electron-main/configurationMainService.js";
+import {
+  KEYBINDINGS_RESOURCE_CHANGED_CHANNEL,
+} from "../../platform/keybinding/common/keybindingsResource.js";
+import {
+  migrateLegacyKeybindings,
+} from "../../platform/keybinding/electron-main/migrateLegacyKeybindings.js";
+import {
+  KeybindingsResourceMainService,
+  keybindingsResourceIpcRoutes,
+} from "../../platform/keybinding/electron-main/keybindingsResourceMainService.js";
+import {
   NativeMenubarMainService,
   nativeMenubarIpcRoutes,
 } from "../../platform/menubar/electron-main/menubarMainService.js";
@@ -41,6 +58,8 @@ import {
 let supervisor: AppServerSupervisor | undefined;
 let mainWindow: BrowserWindow | undefined;
 let stateService: StateService | undefined;
+let configurationService: ConfigurationMainService | undefined;
+let keybindingsResourceService: KeybindingsResourceMainService | undefined;
 let windowsStateHandler: WindowsStateHandler | undefined;
 let windowStateTracking: IDisposable | undefined;
 let quitAfterStateSaved = false;
@@ -58,6 +77,22 @@ app.whenReady().then(async () => {
   }
   stateService = await StateService.create(
     join(app.getPath("userData"), "state.json"),
+  );
+  configurationService = await ConfigurationMainService.create({
+    filePath: join(app.getPath("userData"), "configuration.json"),
+    onError: (error) => {
+      console.error("Failed to process configuration", error);
+    },
+  });
+  keybindingsResourceService = await KeybindingsResourceMainService.create({
+    filePath: join(app.getPath("userData"), "keybindings.json"),
+    onError: (error) => {
+      console.error("Failed to process keybindings resource", error);
+    },
+  });
+  await migrateLegacyKeybindings(
+    configurationService,
+    keybindingsResourceService,
   );
   windowsStateHandler = new WindowsStateHandler({
     stateService,
@@ -124,7 +159,11 @@ app.whenReady().then(async () => {
       : pathToFileURL(rendererFile).href;
   const windowDisposables = new DisposableStore();
   windowDisposables.add(windowStateTracking);
-  const ipcRoutes = [...appServerIpcRoutes(supervisor)];
+  const ipcRoutes = [
+    ...appServerIpcRoutes(supervisor),
+    ...configurationIpcRoutes(configurationService),
+    ...keybindingsResourceIpcRoutes(keybindingsResourceService),
+  ];
   if (process.platform === "darwin") {
     const nativeContextMenu = windowDisposables.add(
       new NativeContextMenuMainService(window),
@@ -148,6 +187,18 @@ app.whenReady().then(async () => {
   ));
   windowDisposables.add(supervisor.onStateChange((state) =>
     window.webContents.send("zeta:app-server:stateChanged", state),
+  ));
+  windowDisposables.add(configurationService.onDidChange((snapshot) =>
+    window.webContents.send(
+      CONFIGURATION_CHANGED_CHANNEL,
+      snapshot,
+    ),
+  ));
+  windowDisposables.add(keybindingsResourceService.onDidChange((snapshot) =>
+    window.webContents.send(
+      KEYBINDINGS_RESOURCE_CHANGED_CHANNEL,
+      snapshot,
+    ),
   ));
   window.once("closed", () => {
     windowDisposables.dispose();
@@ -182,7 +233,11 @@ app.on("before-quit", (event) => {
       if (mainWindow && !mainWindow.isDestroyed()) {
         await windowsStateHandler?.saveWindowState(mainWindow);
       }
-      await stateService?.close();
+      await Promise.all([
+        stateService?.close(),
+        configurationService?.close(),
+        keybindingsResourceService?.close(),
+      ]);
     } catch (error) {
       console.error("Failed to flush application state before quit", error);
     } finally {

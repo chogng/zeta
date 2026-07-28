@@ -19,6 +19,11 @@ export enum KeybindingWeight {
   User = 200,
 }
 
+export enum KeybindingRuleKind {
+  Command = "command",
+  Blocker = "blocker",
+}
+
 /** One command shortcut contribution before host-specific resolution. */
 export interface IKeybindingRule {
   readonly command: CommandId;
@@ -28,9 +33,28 @@ export interface IKeybindingRule {
   readonly weight?: number;
 }
 
-export interface IRegisteredKeybindingRule extends IKeybindingRule {
+/** Explicitly consumes a shortcut without dispatching a command. */
+export interface IKeybindingBlocker {
+  readonly keybinding: Keybinding;
+  readonly when?: ContextKeyExpression;
+  readonly weight?: number;
+}
+
+export interface IRegisteredCommandKeybindingRule
+  extends IKeybindingRule {
+  readonly kind: KeybindingRuleKind.Command;
   readonly order: number;
 }
+
+export interface IRegisteredKeybindingBlocker
+  extends IKeybindingBlocker {
+  readonly kind: KeybindingRuleKind.Blocker;
+  readonly order: number;
+}
+
+export type IRegisteredKeybindingRule =
+  | IRegisteredCommandKeybindingRule
+  | IRegisteredKeybindingBlocker;
 
 /** Stores realm-wide keybinding contributions and their override order. */
 export class KeybindingRegistry {
@@ -42,10 +66,26 @@ export class KeybindingRegistry {
     this.#onDidChangeKeybindings.event;
 
   registerKeybindingRule(rule: IKeybindingRule): IDisposable {
-    const registered: IRegisteredKeybindingRule = {
+    const registered: IRegisteredCommandKeybindingRule = {
       ...rule,
+      kind: KeybindingRuleKind.Command,
       order: this.#nextOrder++,
     };
+    return this.#register(registered);
+  }
+
+  registerKeybindingBlocker(
+    blocker: IKeybindingBlocker,
+  ): IDisposable {
+    const registered: IRegisteredKeybindingBlocker = {
+      ...blocker,
+      kind: KeybindingRuleKind.Blocker,
+      order: this.#nextOrder++,
+    };
+    return this.#register(registered);
+  }
+
+  #register(registered: IRegisteredKeybindingRule): IDisposable {
     this.#rules.push(registered);
     this.#onDidChangeKeybindings.fire();
     return toDisposable(() => {

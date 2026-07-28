@@ -8,7 +8,9 @@
   "include": [
     "src/code/electron-browser/preload.cts",
     "src/platform/app-server/common/renderer-api.ts",
+    "src/platform/configuration/common/**/*.ts",
     "src/platform/contextview/common/**/*.ts",
+    "src/platform/keybinding/common/**/*.ts",
     "src/platform/menubar/common/**/*.ts",
     "src/platform/native/common/**/*.ts",
     "generated/**/*.ts"

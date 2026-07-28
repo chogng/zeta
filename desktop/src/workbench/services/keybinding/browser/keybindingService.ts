@@ -246,6 +246,11 @@ export class WorkbenchKeybindingService
             this.#onCommandError(error, result.command)
           );
         return true;
+
+      case KeybindingResolveKind.Blocked:
+        this.#leaveChordMode();
+        event.stop();
+        return true;
     }
   }
 

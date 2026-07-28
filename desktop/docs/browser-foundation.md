@@ -113,9 +113,14 @@ Keyboard events support focus policy but do not belong to the focus model.
 - Chord and composition state are published through
   `keybinding.inChordMode` and `keybinding.isComposing`; the status bar exposes
   the pending chord without moving that product policy into platform code.
-- Persisted user keybindings and editing remain a future configuration
-  boundary. They should feed user-weight rules into the Workbench service
-  rather than adding file or settings dependencies to `base/common`.
+- Persisted keybindings are an ordered resource independent of ordinary
+  configuration. `IKeybindingsResourceService` projects the active
+  `keybindings.json` into user-weight resolver rules.
+- A user entry requires `{ key, command }` and may define `when`, `args`,
+  `mac`, `linux`, and `win`. A platform override set to `null` disables that
+  rule on the platform.
+- `command: null` installs an explicit blocker at user weight, removing both
+  dispatch and displayed shortcut lookup for the lower-priority binding.
 
 ## Context key scopes
 
@@ -127,8 +132,8 @@ Context keys connect focus-local state to actions, menus, and keybindings.
 - `RawContextKey<T>` provides typed binding and default reset behavior.
 - Components decide which semantic values they publish; the context service
   only stores, inherits, and evaluates them.
-- String expression parsing is deferred until configuration or extension
-  inputs require it. Built-in code composes typed `ContextKeyExpr` values.
+- Persisted `when` strings are parsed at the user-resource boundary. Built-in
+  code continues to compose typed `ContextKeyExpr` values.
 
 ## Context menu architecture
 
@@ -143,6 +148,72 @@ Context keys connect focus-local state to actions, menus, and keybindings.
   renderer or access the Electron bridge.
 - The service identifier remains in `platform/contextview`. A workbench
   service is a concrete product implementation, not a second contract.
+
+## Configuration architecture
+
+Configuration, application state, and Rust product intent are separate
+authorities:
+
+- `platform/configuration/common` defines typed configuration keys, the
+  `IConfigurationService` contract, and the bounded versioned wire document.
+- `workbench/services/configuration` validates host snapshots through the
+  registered keys and publishes atomic changes to product services.
+- Electron Main owns `configuration.json`, performs atomic writes, watches for
+  external edits, and enforces compare-and-swap revisions. Renderer access is
+  restricted to the typed read/update/change preload capability.
+- Electron Main independently owns `keybindings.json` under the same
+  revisioned JSON storage primitive. This preserves ordered shortcut rules
+  without turning them into an ordinary configuration value.
+- Browser hosts use the same Workbench service with an in-memory document
+  until a browser persistence host is supplied.
+- `configuration.json` stores Desktop-only key/value settings such as menu
+  presentation and fonts. Keyboard shortcuts belong to `keybindings.json`.
+- `state.json` stores reconstructable machine state such as window bounds. It
+  must not become a configuration store.
+- The Rust ConfigStore remains authoritative for cross-client domain intent
+  such as models, providers, MCP servers, Skills, and shared product
+  preferences. Keyboard events and Desktop command IDs do not cross that
+  boundary.
+
+The current Desktop document is:
+
+```json
+{
+  "version": 1,
+  "values": {
+    "editor.fontSize": 14
+  }
+}
+```
+
+Configuration keys are declared once through `ConfigurationsRegistry`.
+Consumers request values with the returned typed key instead of repeating
+string addresses or casting untrusted persisted values.
+
+The active `keybindings.json` is a top-level ordered array:
+
+```json
+[
+  {
+    "key": "primary+n",
+    "command": "zeta.startTurn",
+    "when": "windowFocused && !inputFocus",
+    "args": {
+      "source": "keyboard"
+    },
+    "mac": "cmd+n",
+    "win": "ctrl+n"
+  },
+  {
+    "key": "primary+shift+n",
+    "command": null
+  }
+]
+```
+
+The host capability represents the active keybinding resource rather than a
+fixed path. A future profile service can switch that resource without changing
+the resolver, contribution, or command layers.
 
 ## Design rules
 

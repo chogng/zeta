@@ -11,6 +11,7 @@
     "src/platform/action/common/**/*.ts",
     "src/platform/actions/**/*.ts",
     "src/platform/commands/common/**/*.ts",
+    "src/platform/configuration/common/**/*.ts",
     "src/platform/contextkey/common/**/*.ts",
     "src/platform/contextview/browser/**/*.ts",
     "src/platform/contextview/common/**/*.ts",
@@ -26,6 +27,7 @@
     "generated/**/*.ts"
   ],
   "exclude": [
-    "src/base/test/**/*.ts"
+    "src/base/test/**/*.ts",
+    "src/platform/keybinding/electron-main/**/*.ts"
   ]
 }

@@ -30,6 +30,8 @@ const tracking = disposableTracker
 const workbench = startWorkbench({
   api: window.zeta,
   container: document.querySelector<HTMLElement>("#app"),
+  configurationApi: window.zeta.configuration,
+  keybindingsResourceApi: window.zeta.keybindings,
   createContextMenuService: (options) =>
     createElectronWorkbenchContextMenuService(
       options,

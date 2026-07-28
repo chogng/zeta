@@ -1,10 +1,14 @@
-/** Runtime platforms supported by the workbench. Web is intentionally distinct from native OS targets. */
-export enum Platform {
-  Web = "web",
-  Windows = "windows",
-  Mac = "mac",
-  Linux = "linux",
-}
+import {
+  type IRuntimeEnvironment,
+  operatingSystemFromNodePlatform,
+  operatingSystemFromUserAgent,
+} from "./environment.js";
+
+export type {
+  HostOperatingSystem,
+  IRuntimeEnvironment,
+  RuntimeKind,
+} from "./environment.js";
 
 /** Host operating systems that affect keybinding resolution and labels. */
 export enum OperatingSystem {
@@ -13,41 +17,82 @@ export enum OperatingSystem {
   Linux = "linux",
 }
 
-interface ProcessLike {
-  platform?: string;
-  versions?: { electron?: string };
+interface INodeProcess {
+  readonly platform: string;
+  readonly arch: string;
+  readonly versions?: {
+    readonly node?: string;
+    readonly electron?: string;
+    readonly chrome?: string;
+  };
+  readonly type?: string;
 }
 
-const processLike = (globalThis as typeof globalThis & { process?: ProcessLike }).process;
-const userAgent = globalThis.navigator?.userAgent ?? "";
-const nativeRuntime = Boolean(processLike?.versions?.electron) || /Electron\//.test(userAgent) || typeof globalThis.navigator === "undefined";
-const systemPlatform = processLike?.platform ?? globalThis.navigator?.platform ?? userAgent;
-const windowsSystem = /win/i.test(systemPlatform);
-const macintoshSystem = /mac/i.test(systemPlatform);
+interface IPlatformGlobals {
+  readonly process?: INodeProcess;
+  readonly zeta?: {
+    readonly environment?: IRuntimeEnvironment;
+  };
+  readonly navigator?: {
+    readonly userAgent: string;
+  };
+}
 
-export const isNative = nativeRuntime;
-export const isWeb = !isNative;
-export const isWindows = isNative && windowsSystem;
-export const isMacintosh = isNative && macintoshSystem;
-export const isLinux = isNative && /linux/i.test(systemPlatform);
+const runtimeGlobal = globalThis as IPlatformGlobals;
 
-/** The platform detected once for the current runtime. */
-export const platform = isWeb
-  ? Platform.Web
-  : isWindows
-    ? Platform.Windows
-    : isMacintosh
-      ? Platform.Mac
-      : Platform.Linux;
+function detectEnvironment(): IRuntimeEnvironment {
+  const bridgedEnvironment = runtimeGlobal.zeta?.environment;
+  if (bridgedEnvironment) {
+    return {
+      runtime: bridgedEnvironment.runtime,
+      os: bridgedEnvironment.os,
+      arch: bridgedEnvironment.arch,
+    };
+  }
+
+  const nodeProcess = runtimeGlobal.process;
+  if (typeof nodeProcess?.versions?.node === "string") {
+    return {
+      runtime: typeof nodeProcess.versions.electron === "string"
+        ? "electron"
+        : "node",
+      os: operatingSystemFromNodePlatform(nodeProcess.platform),
+      arch: nodeProcess.arch,
+    };
+  }
+
+  if (runtimeGlobal.navigator) {
+    return {
+      runtime: "web",
+      os: operatingSystemFromUserAgent(runtimeGlobal.navigator.userAgent),
+    };
+  }
+
+  return {
+    runtime: "unknown",
+    os: "unknown",
+  };
+}
+
+/** Runtime and host-OS information detected once for the current environment. */
+export const environment: Readonly<IRuntimeEnvironment> = Object.freeze(
+  detectEnvironment(),
+);
+
+export const isWindows = environment.os === "windows";
+export const isMacintosh = environment.os === "mac";
+export const isLinux = environment.os === "linux";
+export const isNative =
+  environment.runtime === "electron" || environment.runtime === "node";
+export const isWeb = environment.runtime === "web";
 
 /**
- * The host OS detected independently from the runtime platform.
+ * The host OS used for keyboard shortcut resolution and labels.
  *
- * A browser running on macOS is still `Platform.Web`, but keyboard shortcuts
- * must use Command and macOS labels.
+ * Unknown environments use Linux semantics, matching VS Code's fallback.
  */
-export const operatingSystem = windowsSystem
-  ? OperatingSystem.Windows
-  : macintoshSystem
-    ? OperatingSystem.Macintosh
+export const operatingSystem = isMacintosh
+  ? OperatingSystem.Macintosh
+  : isWindows
+    ? OperatingSystem.Windows
     : OperatingSystem.Linux;

@@ -1,11 +1,24 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from "electron";
 import type { ServerNotification } from "../../../generated/app-server/types.js";
+import {
+  operatingSystemFromNodePlatform,
+} from "../../base/common/environment.js";
 import type {
   AppServerConnectionState,
 } from "../../platform/app-server/common/renderer-api.js";
 import type {
   ZetaElectronRendererApi,
 } from "../../platform/native/common/rendererApi.js";
+import {
+  CONFIGURATION_CHANGED_CHANNEL,
+  CONFIGURATION_READ_CHANNEL,
+  CONFIGURATION_UPDATE_CHANNEL,
+} from "../../platform/configuration/common/configuration.js";
+import {
+  KEYBINDINGS_RESOURCE_CHANGED_CHANNEL,
+  KEYBINDINGS_RESOURCE_READ_CHANNEL,
+  KEYBINDINGS_RESOURCE_UPDATE_CHANNEL,
+} from "../../platform/keybinding/common/keybindingsResource.js";
 import {
   NATIVE_CONTEXT_MENU_CLOSE_CHANNEL,
   NATIVE_CONTEXT_MENU_POPUP_CHANNEL,
@@ -19,6 +32,11 @@ import {
 } from "../../platform/menubar/common/nativeMenubar.js";
 
 const api: ZetaElectronRendererApi = {
+  environment: {
+    runtime: "electron",
+    os: operatingSystemFromNodePlatform(process.platform),
+    arch: process.arch,
+  },
   appServer: {
     getConnectionState: () => ipcRenderer.invoke("zeta:app-server:state"),
     onConnectionState: (listener) => {
@@ -58,6 +76,44 @@ const api: ZetaElectronRendererApi = {
       ipcRenderer.on("zeta:event", handler);
       return {
         dispose: () => ipcRenderer.removeListener("zeta:event", handler),
+      };
+    },
+  },
+  configuration: {
+    read: () => ipcRenderer.invoke(CONFIGURATION_READ_CHANNEL),
+    update: (request) =>
+      ipcRenderer.invoke(CONFIGURATION_UPDATE_CHANNEL, request),
+    onDidChange: (listener) => {
+      const handler = (
+        _event: IpcRendererEvent,
+        snapshot: unknown,
+      ) => listener(snapshot);
+      ipcRenderer.on(CONFIGURATION_CHANGED_CHANNEL, handler);
+      return {
+        dispose: () =>
+          ipcRenderer.removeListener(
+            CONFIGURATION_CHANGED_CHANNEL,
+            handler,
+          ),
+      };
+    },
+  },
+  keybindings: {
+    read: () => ipcRenderer.invoke(KEYBINDINGS_RESOURCE_READ_CHANNEL),
+    update: (request) =>
+      ipcRenderer.invoke(KEYBINDINGS_RESOURCE_UPDATE_CHANNEL, request),
+    onDidChange: (listener) => {
+      const handler = (
+        _event: IpcRendererEvent,
+        snapshot: unknown,
+      ) => listener(snapshot);
+      ipcRenderer.on(KEYBINDINGS_RESOURCE_CHANGED_CHANNEL, handler);
+      return {
+        dispose: () =>
+          ipcRenderer.removeListener(
+            KEYBINDINGS_RESOURCE_CHANGED_CHANNEL,
+            handler,
+          ),
       };
     },
   },

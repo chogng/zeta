@@ -21,6 +21,9 @@ import {
   ContextKeyService,
 } from "../src/platform/contextkey/common/contextkey.js";
 import {
+  parseContextKeyExpression,
+} from "../src/platform/contextkey/common/contextKeyExpressionParser.js";
+import {
   ServiceCollection,
 } from "../src/platform/instantiation/common/instantiation.js";
 import {
@@ -37,6 +40,12 @@ import {
 import {
   WorkbenchKeybindingService,
 } from "../src/workbench/services/keybinding/browser/keybindingService.js";
+import {
+  KeybindingsResourceContribution,
+} from "../src/workbench/services/keybinding/browser/keybindingsResourceContribution.js";
+import {
+  WorkbenchKeybindingsResourceService,
+} from "../src/workbench/services/keybinding/browser/keybindingsResourceService.js";
 import {
   StatusbarAlignment,
   StatusbarService,
@@ -87,6 +96,27 @@ test("resolver applies context, weight, and latest-registration precedence", () 
       ? result.command
       : undefined,
     "test.disabled",
+  );
+});
+
+test("when expressions preserve boolean precedence and comparisons", () => {
+  using contexts = new ContextKeyService();
+  const expression = parseContextKeyExpression(
+    "editorFocus && (mode == edit || !readOnly)",
+  );
+
+  contexts.setContext("editorFocus", true);
+  contexts.setContext("mode", "preview");
+  contexts.setContext("readOnly", false);
+  assert.equal(expression.evaluate(contexts), true);
+
+  contexts.setContext("readOnly", true);
+  assert.equal(expression.evaluate(contexts), false);
+  contexts.setContext("mode", "edit");
+  assert.equal(expression.evaluate(contexts), true);
+  assert.throws(
+    () => parseContextKeyExpression("editorFocus &&"),
+    /Expected/,
   );
 });
 
@@ -163,6 +193,74 @@ test("browser keyboard layouts provide physical key labels", async () => {
   );
   assert.equal(getKeybindingLabel(resolved), "Ctrl+Z");
   assert.equal(service.getCurrentKeyboardLayout().source, "browser");
+});
+
+test("keybindings resource applies conditions, arguments, OS keys, and blockers", async () => {
+  using registrations = new DisposableStore();
+  const registry = new KeybindingRegistry();
+  const contexts = registrations.add(new ContextKeyService());
+  registrations.add(registry.registerKeybindingRule({
+    command: "test.builtin",
+    keybinding: Keybinding.single(logicalKey("p", {
+      ctrlKey: true,
+    })),
+    weight: KeybindingWeight.Builtin,
+  }));
+  const keybindingsResource = registrations.add(
+    new WorkbenchKeybindingsResourceService(),
+  );
+  registrations.add(new KeybindingsResourceContribution({
+    service: keybindingsResource,
+    registry,
+    operatingSystem: "windows",
+  }));
+  const resolver = new KeybindingResolver({
+    registry,
+    resolveKeybinding: (keybinding) =>
+      resolveKeybinding(keybinding, OperatingSystem.Windows),
+  });
+
+  await keybindingsResource.updateKeybindings([{
+    key: "ctrl+q",
+    win: "ctrl+p",
+    command: "test.user",
+    when: "test.enabled && mode == edit",
+    args: { source: "user" },
+  }]);
+  let result = resolver.resolve(contexts, [keyEventData()]);
+  assert.equal(result.kind, KeybindingResolveKind.Command);
+  assert.equal(
+    result.kind === KeybindingResolveKind.Command
+      ? result.command
+      : undefined,
+    "test.builtin",
+  );
+
+  contexts.setContext("test.enabled", true);
+  contexts.setContext("mode", "edit");
+  result = resolver.resolve(contexts, [keyEventData()]);
+  assert.equal(result.kind, KeybindingResolveKind.Command);
+  assert.equal(
+    result.kind === KeybindingResolveKind.Command
+      ? result.command
+      : undefined,
+    "test.user",
+  );
+  assert.deepEqual(
+    result.kind === KeybindingResolveKind.Command
+      ? result.args
+      : undefined,
+    [{ source: "user" }],
+  );
+  assert.equal(resolver.lookupKeybinding("test.builtin", contexts), undefined);
+
+  await keybindingsResource.updateKeybindings([{
+    key: "ctrl+p",
+    command: null,
+  }]);
+  result = resolver.resolve(contexts, [keyEventData()]);
+  assert.equal(result.kind, KeybindingResolveKind.Blocked);
+  assert.equal(resolver.lookupKeybinding("test.user", contexts), undefined);
 });
 
 function keyEventData() {

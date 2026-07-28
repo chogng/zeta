@@ -9,7 +9,7 @@ import {
   DisposableOwner,
 } from "../../base/common/lifecycle.js";
 import { LxIcon } from "../../base/common/lxicons.js";
-import { platform } from "../../base/common/platform.js";
+import { environment } from "../../base/common/platform.js";
 import type { ZetaRendererApi } from "../../platform/app-server/common/renderer-api.js";
 import {
   MenuService,
@@ -23,6 +23,10 @@ import {
   ContextKeyService,
 } from "../../platform/contextkey/common/contextkey.js";
 import {
+  type IConfigurationApi,
+  IConfigurationService,
+} from "../../platform/configuration/common/configuration.js";
+import {
   IContextMenuService,
 } from "../../platform/contextview/browser/contextMenu.js";
 import {
@@ -31,6 +35,10 @@ import {
 import {
   IKeybindingService,
 } from "../../platform/keybinding/common/keybinding.js";
+import {
+  type IKeybindingsResourceApi,
+  IKeybindingsResourceService,
+} from "../../platform/keybinding/common/keybindingsResource.js";
 import {
   IKeyboardLayoutService,
 } from "../../platform/keyboardLayout/common/keyboardLayout.js";
@@ -63,6 +71,15 @@ import {
 import {
   WorkbenchKeybindingService,
 } from "../services/keybinding/browser/keybindingService.js";
+import {
+  KeybindingsResourceContribution,
+} from "../services/keybinding/browser/keybindingsResourceContribution.js";
+import {
+  WorkbenchKeybindingsResourceService,
+} from "../services/keybinding/browser/keybindingsResourceService.js";
+import {
+  WorkbenchConfigurationService,
+} from "../services/configuration/browser/configurationService.js";
 import type {
   WorkbenchContextMenuServiceFactory,
 } from "../services/contextmenu/common/contextMenuService.js";
@@ -85,6 +102,8 @@ import "./workbench.contribution.js";
 export interface IStartWorkbenchOptions {
   readonly api: ZetaRendererApi;
   readonly container: HTMLElement | null;
+  readonly configurationApi?: IConfigurationApi;
+  readonly keybindingsResourceApi?: IKeybindingsResourceApi;
   readonly createContextMenuService: WorkbenchContextMenuServiceFactory;
   readonly createTitlebarPart: TitlebarPartFactory;
 }
@@ -93,12 +112,16 @@ export interface IStartWorkbenchOptions {
 export function startWorkbench({
   api,
   container,
+  configurationApi,
+  keybindingsResourceApi,
   createContextMenuService,
   createTitlebarPart,
 }: IStartWorkbenchOptions): IDisposable {
   return new Workbench(
     api,
     container ?? document.body,
+    configurationApi,
+    keybindingsResourceApi,
     createContextMenuService,
     createTitlebarPart,
   );
@@ -109,16 +132,20 @@ export class Workbench extends DisposableOwner {
   constructor(
     api: ZetaRendererApi,
     workbenchRoot: HTMLElement,
+    configurationApi: IConfigurationApi | undefined,
+    keybindingsResourceApi: IKeybindingsResourceApi | undefined,
     createContextMenuService: WorkbenchContextMenuServiceFactory,
     createTitlebarPart: TitlebarPartFactory,
   ) {
     super();
     installWorkbenchStyles();
     workbenchRoot.classList.add("zeta-workbench");
-    workbenchRoot.setAttribute("data-platform", platform);
+    workbenchRoot.setAttribute("data-runtime", environment.runtime);
+    workbenchRoot.setAttribute("data-os", environment.os);
     this.defer(() => {
       workbenchRoot.classList.remove("zeta-workbench");
-      workbenchRoot.removeAttribute("data-platform");
+      workbenchRoot.removeAttribute("data-runtime");
+      workbenchRoot.removeAttribute("data-os");
       workbenchRoot.replaceChildren();
     });
 
@@ -133,6 +160,10 @@ export class Workbench extends DisposableOwner {
 
     const services = new ServiceCollection();
     services.set(IRendererApiService, api);
+    const configuration = this.own(new WorkbenchConfigurationService({
+      api: configurationApi,
+    }));
+    services.set(IConfigurationService, configuration);
     const themeService = this.own(new ThemeService(darkColorTheme));
     services.set(IThemeService, themeService);
     this.own(bindColorTheme(themeService, workbenchRoot));
@@ -160,6 +191,15 @@ export class Workbench extends DisposableOwner {
       navigator: ownerDocument.defaultView?.navigator ?? navigator,
     }));
     services.set(IKeyboardLayoutService, keyboardLayout);
+    const keybindingsResource = this.own(
+      new WorkbenchKeybindingsResourceService({
+        api: keybindingsResourceApi,
+      }),
+    );
+    services.set(IKeybindingsResourceService, keybindingsResource);
+    this.own(new KeybindingsResourceContribution({
+      service: keybindingsResource,
+    }));
     const keybindings = this.own(new WorkbenchKeybindingService({
       ownerDocument,
       commandService: commands,
@@ -168,6 +208,12 @@ export class Workbench extends DisposableOwner {
       statusbarService,
     }));
     services.set(IKeybindingService, keybindings);
+    void configuration.reload().catch((error: unknown) => {
+      console.error("Failed to initialize configuration", error);
+    });
+    void keybindingsResource.reload().catch((error: unknown) => {
+      console.error("Failed to initialize keybindings resource", error);
+    });
     const menus = new MenuService(commands, contextKeys);
     const contextMenus = this.own(createContextMenuService({
       menuService: menus,
