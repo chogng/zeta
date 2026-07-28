@@ -1,40 +1,191 @@
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import type {
+  IContextKey,
+  IContextKeyService,
+} from "../../../../platform/contextkey/common/contextkey.js";
+import type {
+  IInstantiationService,
+} from "../../../../platform/instantiation/common/instantiation.js";
+import { FocusedViewContext } from "../../../common/contextkeys.js";
+import type {
+  IViewContainerDescriptor,
+  IViewContainerModel,
+  IViewDescriptor,
+} from "../../../common/views.js";
 import { ViewPane } from "./viewPane.js";
 
-/** A host that owns the ordered ViewPane instances displayed in one workbench region. */
+/** Construction inputs for one browser view container. */
+export interface ViewPaneContainerOptions {
+  readonly viewContainer: IViewContainerDescriptor;
+  readonly model: IViewContainerModel;
+  readonly instantiationService: IInstantiationService;
+  readonly contextKeyService: IContextKeyService;
+  readonly ownerDocument?: Document;
+  readonly onDidFailCreateView?: (
+    error: unknown,
+    viewId: string,
+  ) => void;
+}
+
+/**
+ * Browser host for the visible panes projected by one container model.
+ */
 export class ViewPaneContainer extends DisposableOwner {
   readonly element: HTMLElement;
   readonly id: string;
-  #panes = new Map<string, ViewPane>();
+  readonly viewContainer: IViewContainerDescriptor;
+  readonly #model: IViewContainerModel;
+  readonly #instantiationService: IInstantiationService;
+  readonly #focusedView: IContextKey<string>;
+  readonly #onDidFailCreateView: (
+    error: unknown,
+    viewId: string,
+  ) => void;
+  readonly #panes = new Map<string, ViewPaneItem>();
+  #visible = true;
 
-  constructor(id: string, ownerDocument: Document = document) {
+  constructor(options: ViewPaneContainerOptions) {
     super();
+    const ownerDocument = options.ownerDocument ?? document;
     const element = ownerDocument.createElement("div");
     this.element = element;
     this.defer(() => element.remove());
     element.className = "zeta-view-pane-container";
-    element.dataset.viewContainerId = id;
-    this.id = id;
+    element.dataset.viewContainerId = options.viewContainer.id;
+    this.id = options.viewContainer.id;
+    this.viewContainer = options.viewContainer;
+    this.#model = options.model;
+    this.#instantiationService = options.instantiationService;
+    this.#onDidFailCreateView = options.onDidFailCreateView ??
+      ((error, viewId) => {
+        console.error(`Unable to create view pane '${viewId}'`, error);
+      });
+    this.#focusedView = FocusedViewContext.bindTo(
+      options.contextKeyService,
+    );
     this.defer(() => {
-      const panes = [...this.#panes.values()].reverse();
+      if (
+        [...this.#panes.values()].some(
+          (item) => item.pane.id === this.#focusedView.get(),
+        )
+      ) {
+        this.#focusedView.reset();
+      }
       this.#panes.clear();
-      for (const pane of panes) pane.dispose();
+    });
+    this.own(this.#model.onDidChangeVisibleViewDescriptors(() => {
+      this.#syncPanes();
+    }));
+    this.#syncPanes();
+  }
+
+  get panes(): readonly ViewPane[] {
+    return this.#model.visibleViewDescriptors
+      .map((descriptor) => this.#panes.get(descriptor.id)?.pane)
+      .filter((pane): pane is ViewPane => pane !== undefined);
+  }
+
+  getView(id: string): ViewPane | undefined {
+    return this.#panes.get(id)?.pane;
+  }
+
+  isVisible(): boolean {
+    return this.#visible;
+  }
+
+  setVisible(visible: boolean): void {
+    if (this.#visible === visible) return;
+    this.#visible = visible;
+    this.element.hidden = !visible;
+    for (const item of this.#panes.values()) {
+      item.pane.setVisible(visible);
+    }
+  }
+
+  openView(id: string): ViewPane | undefined {
+    this.#model.setVisible(id, true);
+    return this.#panes.get(id)?.pane;
+  }
+
+  focusView(id: string): boolean {
+    const pane = this.openView(id);
+    if (!pane) return false;
+    pane.focus();
+    return true;
+  }
+
+  focus(): void {
+    this.panes[0]?.focus();
+  }
+
+  #syncPanes(): void {
+    const desired = this.#model.visibleViewDescriptors;
+    const desiredIds = new Set(desired.map((view) => view.id));
+    for (const [viewId, item] of this.#panes) {
+      if (desiredIds.has(viewId)) continue;
+      this.#panes.delete(viewId);
+      item.dispose();
+    }
+    for (const descriptor of desired) {
+      if (this.#panes.has(descriptor.id)) continue;
+      let pane: ViewPane;
+      try {
+        pane = this.#createView(descriptor);
+      } catch (error) {
+        this.#onDidFailCreateView(error, descriptor.id);
+        continue;
+      }
+      pane.setVisible(this.#visible);
+      this.#panes.set(
+        descriptor.id,
+        this.own(new ViewPaneItem(pane, this.#focusedView)),
+      );
+    }
+    this.element.replaceChildren(
+      ...desired.flatMap((descriptor) => {
+        const pane = this.#panes.get(descriptor.id)?.pane;
+        return pane ? [pane.element] : [];
+      }),
+    );
+  }
+
+  #createView(descriptor: IViewDescriptor): ViewPane {
+    const view = this.#instantiationService.createInstance(
+      descriptor.ctorDescriptor,
+      {
+        id: descriptor.id,
+        title: descriptor.title,
+        ownerDocument: this.element.ownerDocument,
+      },
+    );
+    if (!(view instanceof ViewPane)) {
+      throw new TypeError(
+        `View constructor did not create a ViewPane: ${descriptor.id}`,
+      );
+    }
+    if (view.id !== descriptor.id) {
+      view.dispose();
+      throw new Error(
+        `View constructor returned '${view.id}' for '${descriptor.id}'`,
+      );
+    }
+    return view;
+  }
+}
+
+class ViewPaneItem extends DisposableOwner {
+  constructor(
+    readonly pane: ViewPane,
+    focusedView: IContextKey<string>,
+  ) {
+    super();
+    this.own(pane);
+    this.own(pane.onDidFocus(() => focusedView.set(pane.id)));
+    this.own(pane.onDidBlur(() => {
+      if (focusedView.get() === pane.id) focusedView.reset();
+    }));
+    this.defer(() => {
+      if (focusedView.get() === pane.id) focusedView.reset();
     });
   }
-
-  addPane(pane: ViewPane): void {
-    if (this.#panes.has(pane.id)) throw new Error(`View pane is already registered: ${pane.id}`);
-    this.#panes.set(pane.id, pane);
-    this.element.append(pane.element);
-  }
-
-  removePane(id: string): ViewPane | undefined {
-    const pane = this.#panes.get(id);
-    if (!pane) return undefined;
-    this.#panes.delete(id);
-    pane.element.remove();
-    return pane;
-  }
-
-  get panes(): readonly ViewPane[] { return [...this.#panes.values()]; }
 }

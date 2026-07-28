@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  WindowKind,
-} from "../src/platform/window/common/window.js";
+  WorkbenchState,
+} from "../src/platform/workspace/common/workspace.js";
 import {
   defaultWindowState,
 } from "../src/platform/window/electron-main/window.js";
@@ -18,7 +18,7 @@ test("window options apply the custom titlebar host policy", () => {
     preload: "preload.js",
     additionalArguments: [],
   };
-  const state = defaultWindowState(WindowKind.Workspace);
+  const state = defaultWindowState(WorkbenchState.FOLDER);
   const customWindows = resolveBrowserWindowOptions({
     state,
     webPreferences,

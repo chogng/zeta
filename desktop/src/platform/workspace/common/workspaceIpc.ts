@@ -1,7 +1,7 @@
 export const WORKSPACE_CONTEXT_READ_CHANNEL =
   "zeta:workspace:context:read";
 
-/** Narrow host capability that exposes one immutable startup workspace. */
+/** Narrow host capability that exposes one serialized window workspace. */
 export interface IWorkspaceContextApi {
   getWorkspace(): Promise<unknown>;
 }

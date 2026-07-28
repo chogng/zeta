@@ -22,7 +22,7 @@ import {
 import {
   NATIVE_CONTEXT_MENU_CLOSE_CHANNEL,
   NATIVE_CONTEXT_MENU_POPUP_CHANNEL,
-} from "../../platform/contextview/common/nativeContextMenu.js";
+} from "../../base/parts/contextmenu/common/contextmenu.js";
 import type {
   INativeMenubarSelection,
 } from "../../platform/menubar/common/nativeMenubar.js";

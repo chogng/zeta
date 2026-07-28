@@ -38,7 +38,7 @@ export interface INativeContextMenuResult {
   readonly selectedId?: string;
 }
 
-/** Narrow Electron capability used only by the native context menu renderer. */
+/** Narrow host capability used to present a serialized native context menu. */
 export interface INativeContextMenuApi {
   popup(
     request: INativeContextMenuRequest,

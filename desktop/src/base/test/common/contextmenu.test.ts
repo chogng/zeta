@@ -3,7 +3,7 @@ import test from "node:test";
 import {
   validateNativeContextMenuClose,
   validateNativeContextMenuRequest,
-} from "../src/platform/contextview/common/nativeContextMenu.js";
+} from "../../parts/contextmenu/common/contextmenu.js";
 
 test("native context menu validation accepts bounded nested menus", () => {
   assert.deepEqual(

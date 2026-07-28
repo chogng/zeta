@@ -3,8 +3,8 @@ import test from "node:test";
 import type { IDisposable } from "../src/base/common/lifecycle.js";
 import type { IStateService } from "../src/platform/state/node/state.js";
 import {
-  WindowKind,
-} from "../src/platform/window/common/window.js";
+  WorkbenchState,
+} from "../src/platform/workspace/common/workspace.js";
 import {
   defaultWindowState,
   WindowMode,
@@ -97,11 +97,11 @@ class TestWindow implements IStatefulWindow {
 
 function createHandler(
   stateService: IStateService,
-  windowKind: WindowKind,
+  workbenchState: WorkbenchState,
 ): WindowsStateHandler {
   return new WindowsStateHandler({
     stateService,
-    windowKind,
+    workbenchState,
     displayService: {
       getAllDisplays: () => [primaryDisplay],
       getDisplayMatching: () => primaryDisplay,
@@ -110,12 +110,12 @@ function createHandler(
 }
 
 test("default window states match the VS Code workbench sizes", () => {
-  assert.deepEqual(defaultWindowState(WindowKind.Empty), {
+  assert.deepEqual(defaultWindowState(WorkbenchState.EMPTY), {
     mode: WindowMode.Normal,
     width: 1200,
     height: 800,
   });
-  assert.deepEqual(defaultWindowState(WindowKind.Workspace), {
+  assert.deepEqual(defaultWindowState(WorkbenchState.FOLDER), {
     mode: WindowMode.Normal,
     width: 1440,
     height: 900,
@@ -131,8 +131,8 @@ test("window state falls back to defaults when persisted data is invalid", () =>
   });
 
   assert.deepEqual(
-    createHandler(stateService, WindowKind.Workspace).restoreWindowState(),
-    defaultWindowState(WindowKind.Workspace),
+    createHandler(stateService, WorkbenchState.FOLDER).restoreWindowState(),
+    defaultWindowState(WorkbenchState.FOLDER),
   );
 });
 
@@ -145,8 +145,8 @@ test("empty and workspace windows restore independent state", () => {
   });
 
   assert.deepEqual(
-    createHandler(stateService, WindowKind.Empty).restoreWindowState(),
-    defaultWindowState(WindowKind.Empty),
+    createHandler(stateService, WorkbenchState.EMPTY).restoreWindowState(),
+    defaultWindowState(WorkbenchState.EMPTY),
   );
 });
 
@@ -159,7 +159,7 @@ test("window state restores a valid versioned payload", () => {
   });
 
   assert.deepEqual(
-    createHandler(stateService, WindowKind.Workspace).restoreWindowState(),
+    createHandler(stateService, WorkbenchState.WORKSPACE).restoreWindowState(),
     {
       mode: WindowMode.Maximized,
       x: 140,
@@ -178,7 +178,7 @@ test("window state is adjusted to the current single display", () => {
     y: 5000,
     width: 2400,
     height: 1600,
-  }, [primaryDisplay], WindowKind.Workspace);
+  }, [primaryDisplay], WorkbenchState.FOLDER);
 
   assert.deepEqual(state, {
     mode: WindowMode.Normal,
@@ -230,7 +230,7 @@ test("window options include restored bounds and defer non-normal display", () =
 
 test("maximized windows persist their normal bounds", async () => {
   const stateService = new TestStateService();
-  const handler = createHandler(stateService, WindowKind.Workspace);
+  const handler = createHandler(stateService, WorkbenchState.FOLDER);
   const window = new TestWindow();
   window.maximized = true;
 
@@ -251,7 +251,7 @@ test("maximized windows persist their normal bounds", async () => {
 
 test("tracked windows save on blur and stop after disposal", async () => {
   const stateService = new TestStateService();
-  const handler = createHandler(stateService, WindowKind.Workspace);
+  const handler = createHandler(stateService, WorkbenchState.FOLDER);
   const window = new TestWindow();
   const tracking: IDisposable = handler.trackWindow(window);
 

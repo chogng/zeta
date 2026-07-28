@@ -1,8 +1,8 @@
 import { toDisposable, type IDisposable } from "../../../base/common/lifecycle.js";
 import type { IStateService } from "../../state/node/state.js";
 import {
-  WindowKind,
-} from "../../window/common/window.js";
+  WorkbenchState,
+} from "../../workspace/common/workspace.js";
 import {
   defaultWindowState,
   WindowMode,
@@ -14,9 +14,10 @@ import {
   type IWindowDisplay,
 } from "./windows.js";
 
-const WINDOW_STATE_STORAGE_KEYS: Readonly<Record<WindowKind, string>> = {
-  [WindowKind.Empty]: "windowState.empty",
-  [WindowKind.Workspace]: "windowState",
+const WINDOW_STATE_STORAGE_KEYS: Readonly<Record<WorkbenchState, string>> = {
+  [WorkbenchState.EMPTY]: "windowState.empty",
+  [WorkbenchState.FOLDER]: "windowState",
+  [WorkbenchState.WORKSPACE]: "windowState",
 };
 const WINDOW_STATE_VERSION = 1;
 
@@ -45,7 +46,7 @@ export interface IStatefulWindow {
 export interface IWindowsStateHandlerOptions {
   readonly stateService: IStateService;
   readonly displayService: IWindowDisplayService;
-  readonly windowKind: WindowKind;
+  readonly workbenchState: WorkbenchState;
   readonly onError?: (error: unknown) => void;
 }
 
@@ -55,7 +56,7 @@ export interface IWindowsStateHandlerOptions {
 export class WindowsStateHandler {
   readonly #stateService: IStateService;
   readonly #displayService: IWindowDisplayService;
-  readonly #windowKind: WindowKind;
+  readonly #workbenchState: WorkbenchState;
   readonly #storageKey: string;
   readonly #onError: (error: unknown) => void;
   #lastNormalBounds: IWindowBounds | undefined;
@@ -63,13 +64,13 @@ export class WindowsStateHandler {
   constructor({
     stateService,
     displayService,
-    windowKind,
+    workbenchState,
     onError = () => undefined,
   }: IWindowsStateHandlerOptions) {
     this.#stateService = stateService;
     this.#displayService = displayService;
-    this.#windowKind = windowKind;
-    this.#storageKey = WINDOW_STATE_STORAGE_KEYS[windowKind];
+    this.#workbenchState = workbenchState;
+    this.#storageKey = WINDOW_STATE_STORAGE_KEYS[workbenchState];
     this.#onError = onError;
   }
 
@@ -79,16 +80,16 @@ export class WindowsStateHandler {
       this.#stateService.getItem(this.#storageKey),
     );
     if (!storedState) {
-      return defaultWindowState(this.#windowKind);
+      return defaultWindowState(this.#workbenchState);
     }
 
     const restoredState = validateWindowState(
       storedState,
       this.#displayService.getAllDisplays(),
-      this.#windowKind,
+      this.#workbenchState,
     );
     if (!restoredState) {
-      return defaultWindowState(this.#windowKind);
+      return defaultWindowState(this.#workbenchState);
     }
 
     this.#lastNormalBounds = toBounds(restoredState);

@@ -12,6 +12,9 @@ import {
   DisposableTracker,
   installDisposableTracker,
 } from "../../base/common/disposableTracker.js";
+import {
+  ElectronContextMenu,
+} from "../../base/parts/contextmenu/electron-main/contextmenu.js";
 import { appServerIpcRoutes } from "../../platform/app-server/electron-main/app-server-ipc.js";
 import { AppServerSupervisor } from "../../platform/app-server/electron-main/app-server-supervisor.js";
 import {
@@ -19,9 +22,8 @@ import {
   registerTrustedIpcRoutes,
 } from "../../platform/app-server/electron-main/trusted-ipc-router.js";
 import {
-  NativeContextMenuMainService,
   nativeContextMenuIpcRoutes,
-} from "../../platform/contextview/electron-main/contextMenuMainService.js";
+} from "../../platform/contextview/electron-main/contextMenuIpc.js";
 import {
   CONFIGURATION_CHANGED_CHANNEL,
 } from "../../platform/configuration/common/configuration.js";
@@ -45,9 +47,6 @@ import {
 } from "../../platform/menubar/electron-main/menubarMainService.js";
 import { StateService } from "../../platform/state/node/stateService.js";
 import {
-  windowKindForWorkspace,
-} from "../../platform/window/common/window.js";
-import {
   WindowMode,
 } from "../../platform/window/electron-main/window.js";
 import {
@@ -58,9 +57,16 @@ import {
   WindowsStateHandler,
 } from "../../platform/windows/electron-main/windowsStateHandler.js";
 import {
-  WorkspaceMainService,
+  type IAnyWorkspaceIdentifier,
+  UNKNOWN_EMPTY_WINDOW_WORKSPACE,
+  workbenchStateFromWorkspaceIdentifier,
+} from "../../platform/workspace/common/workspace.js";
+import {
   workspaceContextIpcRoutes,
-} from "../../platform/workspace/electron-main/workspaceMainService.js";
+} from "../../platform/workspace/electron-main/workspaceContextIpc.js";
+import {
+  WorkspacesMainService,
+} from "../../platform/workspaces/electron-main/workspacesMainService.js";
 
 let supervisor: AppServerSupervisor | undefined;
 let mainWindow: BrowserWindow | undefined;
@@ -101,21 +107,20 @@ app.whenReady().then(async () => {
     configurationService,
     keybindingsResourceService,
   );
-  let workspaceMainService: WorkspaceMainService;
+  const workspacesMainService = new WorkspacesMainService();
+  let workspace: IAnyWorkspaceIdentifier;
   try {
-    workspaceMainService = await WorkspaceMainService.create({
+    workspace = await workspacesMainService.resolveStartupWorkspace({
       arguments: process.argv.slice(app.isPackaged ? 1 : 2),
       cwd: process.cwd(),
     });
   } catch (error) {
     console.error("Failed to resolve startup workspace", error);
-    workspaceMainService = WorkspaceMainService.empty();
+    workspace = UNKNOWN_EMPTY_WINDOW_WORKSPACE;
   }
-  const workspace = workspaceMainService.getWorkspace();
-  const windowKind = windowKindForWorkspace(workspace);
   windowsStateHandler = new WindowsStateHandler({
     stateService,
-    windowKind,
+    workbenchState: workbenchStateFromWorkspaceIdentifier(workspace),
     displayService: {
       getAllDisplays: () => screen.getAllDisplays(),
       getDisplayMatching: (bounds) => screen.getDisplayMatching(bounds),
@@ -183,11 +188,11 @@ app.whenReady().then(async () => {
     ...appServerIpcRoutes(supervisor),
     ...configurationIpcRoutes(configurationService),
     ...keybindingsResourceIpcRoutes(keybindingsResourceService),
-    ...workspaceContextIpcRoutes(workspaceMainService),
+    ...workspaceContextIpcRoutes(workspace),
   ];
   if (process.platform === "darwin") {
     const nativeContextMenu = windowDisposables.add(
-      new NativeContextMenuMainService(window),
+      new ElectronContextMenu(window),
     );
     const nativeMenubar = windowDisposables.add(
       new NativeMenubarMainService(window),

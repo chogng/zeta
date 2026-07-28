@@ -20,7 +20,7 @@ import {
   type INativeContextMenuApi,
   type INativeContextMenuRequest,
   type NativeContextMenuItem,
-} from "../common/nativeContextMenu.js";
+} from "../../../base/parts/contextmenu/common/contextmenu.js";
 import {
   type ContextMenuAnchor,
   type ContextMenuOptions,

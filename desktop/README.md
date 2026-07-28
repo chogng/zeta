@@ -34,6 +34,9 @@ corepack pnpm --dir desktop start -- --workspace C:\path\to\team.zeta-workspace
 当前版本只建立启动窗口的 Workspace 身份并选择相应窗口策略；目录内容读取、Workspace
 配置解析和运行时“打开项目”界面尚未实现。
 
+代码中 `platform/workspace` 定义当前窗口的 Workspace 模型与上下文，
+`platform/workspaces` 负责启动目标解析和后续工作区管理能力。两者不是同一服务的单复数别名。
+
 ## 安装失败时
 
 如果出现 `ERR_PNPM_ENOENT`、`electron_tmp` 或 Electron 目录 rename 错误，请先关闭正在运行的 Electron、Vite 和 Node 进程，然后在仓库根目录重建依赖：

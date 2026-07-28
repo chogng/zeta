@@ -1,7 +1,9 @@
 import {
   WINDOW_MINIMUM_SIZE,
-  type WindowKind,
 } from "../../window/common/window.js";
+import type {
+  WorkbenchState,
+} from "../../workspace/common/workspace.js";
 import {
   defaultWindowState,
   WindowMode,
@@ -104,7 +106,7 @@ export function applyWindowState(
 export function validateWindowState(
   state: IWindowState,
   displays: readonly IWindowDisplay[],
-  windowKind: WindowKind,
+  workbenchState: WorkbenchState,
 ): IWindowState | undefined {
   const { x, y, width: stateWidth, height: stateHeight } = state;
   if (
@@ -133,7 +135,7 @@ export function validateWindowState(
     );
     if (fullscreenDisplay) {
       return {
-        ...defaultWindowState(windowKind, WindowMode.Fullscreen),
+        ...defaultWindowState(workbenchState, WindowMode.Fullscreen),
         x: fullscreenDisplay.display.bounds.x,
         y: fullscreenDisplay.display.bounds.y,
         displayId: fullscreenDisplay.display.id,

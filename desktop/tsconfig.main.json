@@ -8,13 +8,14 @@
   "include": [
     "generated/**/*.ts",
     "src/base/common/**/*.ts",
+    "src/base/parts/contextmenu/common/**/*.ts",
+    "src/base/parts/contextmenu/electron-main/**/*.ts",
     "src/code/electron-main/**/*.ts",
     "src/platform/app-server/electron-main/**/*.ts",
     "src/platform/browser/electron-main/**/*.ts",
     "src/platform/configuration/common/**/*.ts",
     "src/platform/configuration/electron-main/**/*.ts",
     "src/platform/contextkey/common/**/*.ts",
-    "src/platform/contextview/common/**/*.ts",
     "src/platform/contextview/electron-main/**/*.ts",
     "src/platform/keybinding/common/**/*.ts",
     "src/platform/keybinding/electron-main/**/*.ts",
@@ -22,6 +23,9 @@
     "src/platform/menubar/electron-main/**/*.ts",
     "src/platform/storage/node/**/*.ts",
     "src/platform/workspace/common/**/*.ts",
-    "src/platform/workspace/electron-main/**/*.ts"
+    "src/platform/workspace/electron-main/**/*.ts",
+    "src/platform/workspaces/common/**/*.ts",
+    "src/platform/workspaces/electron-main/**/*.ts",
+    "src/platform/workspaces/node/**/*.ts"
   ]
 }

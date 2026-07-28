@@ -3,20 +3,15 @@ import {
   type BrowserWindow,
   type MenuItemConstructorOptions,
 } from "electron/main";
-import { DisposableOwner } from "../../../base/common/lifecycle.js";
-import type { IpcRoute } from "../../app-server/electron-main/trusted-ipc-router.js";
+import { DisposableOwner } from "../../../common/lifecycle.js";
 import {
   type INativeContextMenuRequest,
   type INativeContextMenuResult,
-  NATIVE_CONTEXT_MENU_CLOSE_CHANNEL,
-  NATIVE_CONTEXT_MENU_POPUP_CHANNEL,
   type NativeContextMenuItem,
-  validateNativeContextMenuClose,
-  validateNativeContextMenuRequest,
-} from "../common/nativeContextMenu.js";
+} from "../common/contextmenu.js";
 
-/** Owns the active native context menu for one Electron window. */
-export class NativeContextMenuMainService extends DisposableOwner {
+/** Owns the active Electron context menu for one browser window. */
+export class ElectronContextMenu extends DisposableOwner {
   readonly #window: BrowserWindow;
   #activeMenu: Menu | undefined;
   #settle: ((result: INativeContextMenuResult) => void) | undefined;
@@ -80,26 +75,6 @@ export class NativeContextMenuMainService extends DisposableOwner {
     this.#activeMenu = undefined;
     settle(result);
   }
-}
-
-export function nativeContextMenuIpcRoutes(
-  service: NativeContextMenuMainService,
-): readonly IpcRoute<unknown, unknown>[] {
-  return [
-    {
-      channel: NATIVE_CONTEXT_MENU_POPUP_CHANNEL,
-      validate: validateNativeContextMenuRequest,
-      invoke: (request) =>
-        service.popup(request as INativeContextMenuRequest),
-    },
-    {
-      channel: NATIVE_CONTEXT_MENU_CLOSE_CHANNEL,
-      validate: validateNativeContextMenuClose,
-      invoke: () => {
-        service.close();
-      },
-    },
-  ];
 }
 
 function toTemplate(

@@ -12,7 +12,7 @@ import type {
 } from "../../keybinding/common/keybindingsResource.js";
 import type {
   INativeContextMenuApi,
-} from "../../contextview/common/nativeContextMenu.js";
+} from "../../../base/parts/contextmenu/common/contextmenu.js";
 import type {
   INativeMenubarApi,
 } from "../../menubar/common/nativeMenubar.js";

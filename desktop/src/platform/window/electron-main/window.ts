@@ -1,8 +1,10 @@
 import {
   DEFAULT_EMPTY_WINDOW_SIZE,
   DEFAULT_WORKSPACE_WINDOW_SIZE,
-  WindowKind,
 } from "../common/window.js";
+import {
+  WorkbenchState,
+} from "../../workspace/common/workspace.js";
 
 export const WindowMode = {
   Normal: "normal",
@@ -36,14 +38,14 @@ export interface IWindowState {
   readonly displayId?: number;
 }
 
-/** Returns a fresh default state sized for the requested workbench kind. */
+/** Returns a fresh default state sized for the requested workbench state. */
 export function defaultWindowState(
-  kind: WindowKind,
+  workbenchState: WorkbenchState,
   mode: WindowMode = WindowMode.Normal,
 ): IWindowState {
-  const size = kind === WindowKind.Workspace
-    ? DEFAULT_WORKSPACE_WINDOW_SIZE
-    : DEFAULT_EMPTY_WINDOW_SIZE;
+  const size = workbenchState === WorkbenchState.EMPTY
+    ? DEFAULT_EMPTY_WINDOW_SIZE
+    : DEFAULT_WORKSPACE_WINDOW_SIZE;
 
   return {
     mode,

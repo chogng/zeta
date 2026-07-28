@@ -1,7 +1,7 @@
 import { isMacintosh } from "../../../../base/common/platform.js";
 import type {
   INativeContextMenuApi,
-} from "../../../../platform/contextview/common/nativeContextMenu.js";
+} from "../../../../base/parts/contextmenu/common/contextmenu.js";
 import {
   BrowserContextMenuService,
 } from "../../../../platform/contextview/browser/contextMenuService.js";

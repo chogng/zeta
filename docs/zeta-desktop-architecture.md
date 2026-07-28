@@ -156,30 +156,40 @@ router 边界。
 
 ### 4.1 Workspace 身份与窗口策略
 
-当前 Desktop 在创建窗口前由 `WorkspaceMainService.create()` 解析一次启动参数，并产生
-不可变的 `IWorkspaceContext`：
+当前实现明确区分两个所有权边界：
+
+- `platform/workspace`（单数）定义一个窗口当前工作区的模型、结构化标识、
+  `WorkbenchState` 和 `IWorkspaceContextService`；
+- `platform/workspaces`（复数）负责解析、识别和管理工作区。当前已实现启动目标解析，
+  最近项目、运行时切换和 Untitled Workspace 尚未实现。
+
+Desktop 在创建窗口前由 `WorkspacesMainService.resolveStartupWorkspace()` 解析一次启动参数，
+并产生不可变的 `IAnyWorkspaceIdentifier`：
 
 - 无项目参数为 `Empty`；
 - 目录参数或 `--folder <path>` 为 `Folder`；
 - `.zeta-workspace` 文件或 `--workspace <path>` 为 `Workspace`。
 
-`resolveStartupWorkspace()` 只在 Electron Main 中规范化路径并判断文件类型。传给 Renderer
-的是 `file:` URI、显示标签和 discriminant，不是目录访问能力。`windowKindForWorkspace()`
-把 `Empty` 映射到 `1200 × 800` 默认窗口，把 `Folder` 和 `Workspace` 映射到
+`resolveWorkspaceOpenTarget()` 只在 Node/Electron Main 中规范化路径、判断文件类型并为
+Folder/Workspace 产生稳定 ID。标识采用 `{ id }`、`{ id, uri }` 或
+`{ id, configPath }` 的结构，不存储重复的 `WorkbenchState` 判别字段。窗口状态策略从标识
+推导状态：`EMPTY` 映射到 `1200 × 800` 默认窗口，`FOLDER` 和 `WORKSPACE` 映射到
 `1440 × 900` 默认窗口；空窗口和项目窗口使用独立的窗口状态键。已有合法窗口状态仍优先于
 默认尺寸。
 
 Renderer 通过受信 IPC route 和 `workspace.getWorkspace()` 读取该身份，并在
-`parseWorkspaceContext()` 校验后注册为 `IWorkspaceContextService`。Workbench contribution
-不得通过该服务直接访问文件系统；跨客户端目录读写、搜索和 workspace 边界授权仍属于
-Rust / App Server。
+`parseWorkspaceIdentifier()` 校验和恢复 URI。`WorkspaceContextService` 根据该标识构造当前
+`IWorkspace`，并从 `configuration` 或单根 `folders` 推导 `WorkbenchState`。Workbench
+contribution 不得通过该服务直接访问文件系统；跨客户端目录读写、搜索和 workspace 边界
+授权仍属于 Rust / App Server。
 
 当前限制：
 
 - Workspace 身份只在启动时确定，尚无运行时打开、关闭或切换项目流程；
 - `.zeta-workspace` 当前只作为窗口身份，尚未定义或解析其内容；
 - 普通单文件参数仍属于空窗口，文件编辑器尚未实现；
-- 最近项目、多窗口恢复和 workspace 配置管理尚未由 `Workspaces` 服务承接；
+- 当前 `WorkspacesMainService` 只负责启动目标解析，最近项目、多窗口恢复和 workspace
+  配置管理尚未实现；
 - 启动目标无效时记录错误并安全回退到空窗口。
 
 ## 5. Preload API

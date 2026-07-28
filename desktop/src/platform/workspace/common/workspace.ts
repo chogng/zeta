@@ -10,36 +10,55 @@ export const enum WorkbenchState {
   WORKSPACE,
 }
 
-export interface IEmptyWorkspaceContext {
-  readonly state: WorkbenchState.EMPTY;
+/** Identity shared by empty, single-folder, and multi-root workspaces. */
+export interface IBaseWorkspaceIdentifier {
+  readonly id: string;
 }
 
-export interface IFolderWorkspaceContext {
-  readonly state: WorkbenchState.FOLDER;
-  readonly uri: string;
-  readonly label: string;
+/** Identifies an empty workbench window. */
+export interface IEmptyWorkspaceIdentifier extends IBaseWorkspaceIdentifier {
 }
 
-export interface IWorkspaceFileContext {
-  readonly state: WorkbenchState.WORKSPACE;
-  readonly configUri: string;
-  readonly label: string;
+/** Identifies a workbench opened on one folder. */
+export interface ISingleFolderWorkspaceIdentifier
+  extends IBaseWorkspaceIdentifier {
+  readonly uri: URI;
+}
+
+/** Identifies a workbench opened from a multi-root workspace file. */
+export interface IWorkspaceIdentifier extends IBaseWorkspaceIdentifier {
+  readonly configPath: URI;
+}
+
+/** Identifies the workspace, folder, or empty context hosted by one window. */
+export type IAnyWorkspaceIdentifier =
+  | IWorkspaceIdentifier
+  | ISingleFolderWorkspaceIdentifier
+  | IEmptyWorkspaceIdentifier;
+
+/** A folder belonging to the current resolved workspace. */
+export interface IWorkspaceFolder {
+  readonly uri: URI;
+  readonly name: string;
+  readonly index: number;
 }
 
 /**
- * Identifies the project, if any, hosted by one workbench window.
+ * The resolved workspace visible to workbench contributions.
  *
- * File URIs are identities only. Filesystem access and workspace-boundary
+ * Resource URIs are identities only. Filesystem access and workspace-boundary
  * authorization remain outside the renderer.
  */
-export type IWorkspaceContext =
-  | IEmptyWorkspaceContext
-  | IFolderWorkspaceContext
-  | IWorkspaceFileContext;
+export interface IWorkspace {
+  readonly id: string;
+  readonly folders: readonly IWorkspaceFolder[];
+  readonly configuration?: URI;
+  readonly name?: string;
+}
 
 /** Read-only workspace identity available to workbench contributions. */
 export interface IWorkspaceContextService {
-  getWorkspace(): IWorkspaceContext;
+  getWorkspace(): IWorkspace;
   getWorkbenchState(): WorkbenchState;
 }
 
@@ -48,38 +67,98 @@ export const IWorkspaceContextService =
     "workspaceContextService",
   );
 
-export const EMPTY_WORKSPACE: IEmptyWorkspaceContext =
-  Object.freeze({ state: WorkbenchState.EMPTY });
+/** Fallback identity for a window whose durable empty-workspace ID is unknown. */
+export const UNKNOWN_EMPTY_WINDOW_WORKSPACE: IEmptyWorkspaceIdentifier =
+  Object.freeze({ id: "empty-window" });
 
-/** Validates a workspace identity received across a process boundary. */
-export function parseWorkspaceContext(value: unknown): IWorkspaceContext {
-  const record = exactRecord(value);
-  switch (record.state) {
-    case WorkbenchState.EMPTY:
-      requireExactKeys(record, ["state"]);
-      return EMPTY_WORKSPACE;
-    case WorkbenchState.FOLDER:
-      requireExactKeys(record, ["label", "state", "uri"]);
-      return Object.freeze({
-        state: WorkbenchState.FOLDER,
-        uri: fileUri(record.uri, "workspace uri"),
-        label: nonEmptyString(record.label, "workspace label"),
-      });
-    case WorkbenchState.WORKSPACE:
-      requireExactKeys(record, ["configUri", "label", "state"]);
-      return Object.freeze({
-        state: WorkbenchState.WORKSPACE,
-        configUri: fileUri(record.configUri, "workspace config uri"),
-        label: nonEmptyString(record.label, "workspace label"),
-      });
-    default:
-      throw new Error("workbench state is invalid");
+/** Returns whether a value identifies one folder. */
+export function isSingleFolderWorkspaceIdentifier(
+  value: unknown,
+): value is ISingleFolderWorkspaceIdentifier {
+  const candidate = value as Partial<ISingleFolderWorkspaceIdentifier> | null;
+  return isNonEmptyString(candidate?.id) && candidate?.uri instanceof URI;
+}
+
+/** Returns whether a value identifies a multi-root workspace file. */
+export function isWorkspaceIdentifier(
+  value: unknown,
+): value is IWorkspaceIdentifier {
+  const candidate = value as Partial<IWorkspaceIdentifier> | null;
+  return isNonEmptyString(candidate?.id) &&
+    candidate?.configPath instanceof URI;
+}
+
+/** Returns whether a value identifies an empty workbench. */
+export function isEmptyWorkspaceIdentifier(
+  value: unknown,
+): value is IEmptyWorkspaceIdentifier {
+  const candidate = value as Partial<IEmptyWorkspaceIdentifier> | null;
+  return isNonEmptyString(candidate?.id) &&
+    !isSingleFolderWorkspaceIdentifier(value) &&
+    !isWorkspaceIdentifier(value);
+}
+
+/** Derives workbench state without storing a second workspace discriminator. */
+export function workbenchStateFromWorkspaceIdentifier(
+  workspace: IAnyWorkspaceIdentifier,
+): WorkbenchState {
+  if (isWorkspaceIdentifier(workspace)) {
+    return WorkbenchState.WORKSPACE;
   }
+  if (isSingleFolderWorkspaceIdentifier(workspace)) {
+    return WorkbenchState.FOLDER;
+  }
+  return WorkbenchState.EMPTY;
+}
+
+/** Converts a workspace identity into an IPC-safe plain object. */
+export function serializeWorkspaceIdentifier(
+  workspace: IAnyWorkspaceIdentifier,
+): unknown {
+  if (isWorkspaceIdentifier(workspace)) {
+    return {
+      id: workspace.id,
+      configPath: workspace.configPath.toString(),
+    };
+  }
+  if (isSingleFolderWorkspaceIdentifier(workspace)) {
+    return {
+      id: workspace.id,
+      uri: workspace.uri.toString(),
+    };
+  }
+  return { id: workspace.id };
+}
+
+/** Validates and revives a workspace identity received over IPC. */
+export function parseWorkspaceIdentifier(
+  value: unknown,
+): IAnyWorkspaceIdentifier {
+  const record = exactRecord(value);
+  const id = nonEmptyString(record.id, "workspace id");
+  if ("configPath" in record) {
+    requireExactKeys(record, ["configPath", "id"]);
+    return Object.freeze({
+      id,
+      configPath: fileUri(record.configPath, "workspace config path"),
+    });
+  }
+  if ("uri" in record) {
+    requireExactKeys(record, ["id", "uri"]);
+    return Object.freeze({
+      id,
+      uri: fileUri(record.uri, "workspace folder uri"),
+    });
+  }
+  requireExactKeys(record, ["id"]);
+  return id === UNKNOWN_EMPTY_WINDOW_WORKSPACE.id
+    ? UNKNOWN_EMPTY_WINDOW_WORKSPACE
+    : Object.freeze({ id });
 }
 
 function exactRecord(value: unknown): Record<string, unknown> {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    throw new Error("workspace context must be an object");
+    throw new Error("workspace identifier must be an object");
   }
   return value as Record<string, unknown>;
 }
@@ -94,12 +173,12 @@ function requireExactKeys(
     actual.some((key, index) => key !== expected[index])
   ) {
     throw new Error(
-      `workspace context must contain exactly: ${expected.join(", ")}`,
+      `workspace identifier must contain exactly: ${expected.join(", ")}`,
     );
   }
 }
 
-function fileUri(value: unknown, field: string): string {
+function fileUri(value: unknown, field: string): URI {
   if (typeof value !== "string") {
     throw new Error(`${field} must be a string`);
   }
@@ -110,12 +189,16 @@ function fileUri(value: unknown, field: string): string {
   if (uri.query || uri.fragment) {
     throw new Error(`${field} must not contain a query or fragment`);
   }
-  return uri.toString();
+  return uri;
 }
 
 function nonEmptyString(value: unknown, field: string): string {
-  if (typeof value !== "string" || value.trim().length === 0) {
+  if (!isNonEmptyString(value)) {
     throw new Error(`${field} must be a non-empty string`);
   }
   return value;
+}
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
 }

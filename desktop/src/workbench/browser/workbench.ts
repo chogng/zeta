@@ -30,6 +30,7 @@ import {
   IContextMenuService,
 } from "../../platform/contextview/browser/contextMenu.js";
 import {
+  InstantiationService,
   ServiceCollection,
 } from "../../platform/instantiation/common/instantiation.js";
 import {
@@ -46,25 +47,38 @@ import {
   BrowserDialogHandler,
 } from "../../platform/dialogs/browser/browserDialogHandler.js";
 import {
-  DialogService,
   IDialogService,
 } from "../../platform/dialogs/common/dialogs.js";
 import {
   bindColorTheme,
 } from "../../platform/theme/browser/themeStyles.js";
 import {
-  darkColorTheme,
-} from "../../platform/theme/common/colorTheme.js";
-import {
   IThemeService,
   ThemeService,
 } from "../../platform/theme/common/themeService.js";
 import {
+  type IAnyWorkspaceIdentifier,
+  type IWorkspace,
   IWorkspaceContextService,
-  type IWorkspaceContext,
-  WorkbenchState,
 } from "../../platform/workspace/common/workspace.js";
+import { WorkbenchConfiguration } from "../common/configuration.js";
+import {
+  bindWorkbenchContextKeys,
+  workbenchStateToContextValue,
+} from "../common/contextkeys.js";
+import {
+  WorkbenchContributionsRegistry,
+  WorkbenchPhase,
+} from "../common/contributions.js";
+import {
+  IDialogsModel,
+  IWorkbenchDialogHandler,
+} from "../common/dialogs.js";
 import { IRendererApiService } from "../common/services.js";
+import { getWorkbenchColorTheme } from "../common/theme.js";
+import {
+  ViewContainerLocation,
+} from "../common/views.js";
 import {
   IStatusbarService,
   StatusbarAlignment,
@@ -77,32 +91,40 @@ import {
   WorkbenchKeybindingService,
 } from "../services/keybinding/browser/keybindingService.js";
 import {
-  KeybindingsResourceContribution,
-} from "../services/keybinding/browser/keybindingsResourceContribution.js";
-import {
   WorkbenchKeybindingsResourceService,
 } from "../services/keybinding/browser/keybindingsResourceService.js";
 import {
   WorkspaceContextService,
 } from "../services/workspaces/browser/workspaceContextService.js";
 import {
+  IViewDescriptorService,
+  ViewDescriptorService,
+} from "../services/views/common/viewDescriptorService.js";
+import {
   WorkbenchConfigurationService,
 } from "../services/configuration/browser/configurationService.js";
 import type {
   WorkbenchContextMenuServiceFactory,
 } from "../services/contextmenu/common/contextMenuService.js";
+import {
+  DialogService,
+} from "../services/dialogs/common/dialogService.js";
 import { WorkbenchLayout, type SerializableGrid, type WorkbenchPartId } from "./layout.js";
 import type { WorkbenchPart } from "./part.js";
 import {
   AuxiliarybarPart,
-  EditorPart,
-  SessionPart,
-  SidebarPart,
-  StatusbarPart,
-  type TitlebarPartFactory,
+} from "./parts/auxiliarybar/auxiliarybarPart.js";
+import { EditorPart } from "./parts/editor/editorPart.js";
+import { SessionPart } from "./parts/session/sessionPart.js";
+import { SidebarPart } from "./parts/sidebar/sidebarPart.js";
+import { StatusbarPart } from "./parts/statusbar/statusbarPart.js";
+import type {
+  TitlebarPartFactory,
+} from "./parts/titlebar/titlebarPart.js";
+import {
   ViewPaneContainer,
-  Viewlet,
-} from "./parts/index.js";
+} from "./parts/views/viewPaneContainer.js";
+import { Viewlet } from "./parts/views/viewlet.js";
 import { installWorkbenchStyles } from "./style.js";
 import "./workbench.contribution.js";
 
@@ -110,7 +132,7 @@ import "./workbench.contribution.js";
 export interface IStartWorkbenchOptions {
   readonly api: ZetaRendererApi;
   readonly container: HTMLElement | null;
-  readonly workspace: IWorkspaceContext;
+  readonly workspace: IAnyWorkspaceIdentifier;
   readonly configurationApi?: IConfigurationApi;
   readonly keybindingsResourceApi?: IKeybindingsResourceApi;
   readonly createContextMenuService: WorkbenchContextMenuServiceFactory;
@@ -143,7 +165,7 @@ export class Workbench extends DisposableOwner {
   constructor(
     api: ZetaRendererApi,
     workbenchRoot: HTMLElement,
-    workspace: IWorkspaceContext,
+    workspace: IAnyWorkspaceIdentifier,
     configurationApi: IConfigurationApi | undefined,
     keybindingsResourceApi: IKeybindingsResourceApi | undefined,
     createContextMenuService: WorkbenchContextMenuServiceFactory,
@@ -151,12 +173,19 @@ export class Workbench extends DisposableOwner {
   ) {
     super();
     installWorkbenchStyles();
+    const services = new ServiceCollection();
+    const instantiationService = new InstantiationService(services);
+    services.set(IRendererApiService, api);
+    const workspaceContext = new WorkspaceContextService(workspace);
+    services.set(IWorkspaceContextService, workspaceContext);
+    const currentWorkspace = workspaceContext.getWorkspace();
+
     workbenchRoot.classList.add("zeta-workbench");
     workbenchRoot.setAttribute("data-runtime", environment.runtime);
     workbenchRoot.setAttribute("data-os", environment.os);
     workbenchRoot.setAttribute(
       "data-workbench-state",
-      workbenchStateName(workspace.state),
+      workbenchStateToContextValue(workspaceContext.getWorkbenchState()),
     );
     this.defer(() => {
       workbenchRoot.classList.remove("zeta-workbench");
@@ -175,16 +204,23 @@ export class Workbench extends DisposableOwner {
       this.own(cloneDocumentStyles(document, ownerDocument));
     }
 
-    const services = new ServiceCollection();
-    services.set(IRendererApiService, api);
-    const workspaceContext = new WorkspaceContextService(workspace);
-    services.set(IWorkspaceContextService, workspaceContext);
     const configuration = this.own(new WorkbenchConfigurationService({
       api: configurationApi,
     }));
     services.set(IConfigurationService, configuration);
-    const themeService = this.own(new ThemeService(darkColorTheme));
+    const themeService = this.own(new ThemeService(
+      getWorkbenchColorTheme(
+        configuration.getValue(WorkbenchConfiguration.colorTheme),
+      ),
+    ));
     services.set(IThemeService, themeService);
+    this.own(configuration.onDidChangeConfiguration((event) => {
+      if (event.affectsConfiguration(WorkbenchConfiguration.colorTheme)) {
+        themeService.setColorTheme(getWorkbenchColorTheme(
+          configuration.getValue(WorkbenchConfiguration.colorTheme),
+        ));
+      }
+    }));
     this.own(bindColorTheme(themeService, workbenchRoot));
     const statusbarService = this.own(new StatusbarService());
     services.set(IStatusbarService, statusbarService);
@@ -198,14 +234,22 @@ export class Workbench extends DisposableOwner {
         alignment: StatusbarAlignment.Left,
       },
     ));
-    const dialogService = this.own(new DialogService(
-      new BrowserDialogHandler(workbenchRoot),
-    ));
+    const dialogService = this.own(new DialogService());
     services.set(IDialogService, dialogService);
+    services.set(IDialogsModel, dialogService.model);
+    services.set(
+      IWorkbenchDialogHandler,
+      new BrowserDialogHandler(workbenchRoot),
+    );
     const commands = new CommandService(services);
     services.set(ICommandService, commands);
     const contextKeys = this.own(new ContextKeyService());
     services.set(IContextKeyService, contextKeys);
+    this.own(bindWorkbenchContextKeys(contextKeys, workspaceContext));
+    const viewDescriptors = this.own(new ViewDescriptorService({
+      contextKeyService: contextKeys,
+    }));
+    services.set(IViewDescriptorService, viewDescriptors);
     const keyboardLayout = this.own(new BrowserKeyboardLayoutService({
       navigator: ownerDocument.defaultView?.navigator ?? navigator,
     }));
@@ -216,9 +260,6 @@ export class Workbench extends DisposableOwner {
       }),
     );
     services.set(IKeybindingsResourceService, keybindingsResource);
-    this.own(new KeybindingsResourceContribution({
-      service: keybindingsResource,
-    }));
     const keybindings = this.own(new WorkbenchKeybindingService({
       ownerDocument,
       commandService: commands,
@@ -240,19 +281,32 @@ export class Workbench extends DisposableOwner {
       ownerDocument,
     }));
     services.set(IContextMenuService, contextMenus);
+    const contributions = this.own(
+      WorkbenchContributionsRegistry.createHost(services),
+    );
+    contributions.advance(WorkbenchPhase.BlockStartup);
+    contributions.advance(WorkbenchPhase.BlockRestore);
 
     const titlebar = this.own(createTitlebarPart({
       menuService: menus,
       contextMenuService: contextMenus,
       ownerDocument,
-      title: workspaceTitle(workspace),
+      title: workspaceTitle(currentWorkspace),
     }));
     const sidebar = this.own(new SidebarPart(ownerDocument));
-    sidebar.setViewlet(new Viewlet(
-      "zeta.sidebar",
-      "Navigation",
+    const sidebarViewContainer = requiredViewContainer(
+      viewDescriptors,
+      ViewContainerLocation.Sidebar,
+    );
+    sidebar.setViewlet(new Viewlet({
+      viewContainer: sidebarViewContainer,
+      model: viewDescriptors.getViewContainerModel(
+        sidebarViewContainer.id,
+      ),
+      instantiationService,
+      contextKeyService: contextKeys,
       ownerDocument,
-    ));
+    }));
     const session = this.own(new SessionPart(ownerDocument));
     const editor = this.own(new EditorPart(ownerDocument));
     editor.setView(new Button({
@@ -262,9 +316,19 @@ export class Workbench extends DisposableOwner {
       onClick: () => commands.executeCommand("zeta.startTurn"),
     }));
     const auxiliarybar = this.own(new AuxiliarybarPart(ownerDocument));
-    auxiliarybar.setViewPaneContainer(
-      new ViewPaneContainer("zeta.auxiliary", ownerDocument),
+    const auxiliaryViewContainer = requiredViewContainer(
+      viewDescriptors,
+      ViewContainerLocation.AuxiliaryBar,
     );
+    auxiliarybar.setViewPaneContainer(new ViewPaneContainer({
+      viewContainer: auxiliaryViewContainer,
+      model: viewDescriptors.getViewContainerModel(
+        auxiliaryViewContainer.id,
+      ),
+      instantiationService,
+      contextKeyService: contextKeys,
+      ownerDocument,
+    }));
     const statusbar = this.own(new StatusbarPart(
       statusbarService,
       ownerDocument,
@@ -282,6 +346,12 @@ export class Workbench extends DisposableOwner {
       new WorkbenchLayout(workbenchRoot, parts, defaultWorkbenchGrid),
     );
     layout.layout();
+    contributions.advance(WorkbenchPhase.AfterRestored);
+    const eventuallyTimer = globalThis.setTimeout(
+      () => contributions.advance(WorkbenchPhase.Eventually),
+      2_000,
+    );
+    this.defer(() => globalThis.clearTimeout(eventuallyTimer));
   }
 }
 
@@ -312,19 +382,20 @@ const defaultWorkbenchGrid: SerializableGrid = {
   ],
 };
 
-function workspaceTitle(workspace: IWorkspaceContext): string {
-  return workspace.state === WorkbenchState.EMPTY
-    ? "Zeta"
-    : `${workspace.label} — Zeta`;
+function workspaceTitle(workspace: IWorkspace): string {
+  const name = workspace.name ?? workspace.folders[0]?.name;
+  return name ? `${name} — Zeta` : "Zeta";
 }
 
-function workbenchStateName(state: WorkbenchState): string {
-  switch (state) {
-    case WorkbenchState.EMPTY:
-      return "empty";
-    case WorkbenchState.FOLDER:
-      return "folder";
-    case WorkbenchState.WORKSPACE:
-      return "workspace";
+function requiredViewContainer(
+  service: IViewDescriptorService,
+  location: ViewContainerLocation,
+) {
+  const container = service.getDefaultViewContainer(location);
+  if (!container) {
+    throw new Error(
+      `No default view container is registered for ${location}`,
+    );
   }
+  return container;
 }

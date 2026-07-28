@@ -3,43 +3,53 @@ import { resolve } from "node:path";
 import test from "node:test";
 import { URI } from "../src/base/common/uri.js";
 import {
-  EMPTY_WORKSPACE,
-  parseWorkspaceContext,
+  isSingleFolderWorkspaceIdentifier,
+  isWorkspaceIdentifier,
+  parseWorkspaceIdentifier,
+  serializeWorkspaceIdentifier,
+  UNKNOWN_EMPTY_WINDOW_WORKSPACE,
+  workbenchStateFromWorkspaceIdentifier,
   WorkbenchState,
 } from "../src/platform/workspace/common/workspace.js";
 import {
-  parseWorkspaceLaunchArguments,
-  resolveStartupWorkspace,
-  WorkspaceLaunchTargetKind,
-  type IWorkspacePathService,
-  WorkspaceMainService,
-  WorkspacePathKind,
   workspaceContextIpcRoutes,
-} from "../src/platform/workspace/electron-main/workspaceMainService.js";
+} from "../src/platform/workspace/electron-main/workspaceContextIpc.js";
 import {
-  WindowKind,
-  windowKindForWorkspace,
-} from "../src/platform/window/common/window.js";
+  WorkspaceOpenTargetKind,
+} from "../src/platform/workspaces/common/workspaces.js";
+import {
+  parseWorkspaceLaunchArguments,
+  WorkspacesMainService,
+} from "../src/platform/workspaces/electron-main/workspacesMainService.js";
+import {
+  getSingleFolderWorkspaceIdentifier,
+  getWorkspaceIdentifier,
+  type IWorkspacePathService,
+  WorkspacePathKind,
+} from "../src/platform/workspaces/node/workspaces.js";
+import {
+  WorkspaceContextService,
+} from "../src/workbench/services/workspaces/browser/workspaceContextService.js";
 
 test("workspace launch arguments distinguish automatic and named targets", () => {
   assert.equal(parseWorkspaceLaunchArguments([]), undefined);
   assert.deepEqual(parseWorkspaceLaunchArguments(["project"]), {
-    kind: WorkspaceLaunchTargetKind.Automatic,
+    kind: WorkspaceOpenTargetKind.Automatic,
     path: "project",
   });
   assert.deepEqual(parseWorkspaceLaunchArguments(["--folder", "project"]), {
-    kind: WorkspaceLaunchTargetKind.Folder,
+    kind: WorkspaceOpenTargetKind.Folder,
     path: "project",
   });
   assert.deepEqual(
     parseWorkspaceLaunchArguments(["--workspace=team.zeta-workspace"]),
     {
-      kind: WorkspaceLaunchTargetKind.Workspace,
+      kind: WorkspaceOpenTargetKind.Workspace,
       path: "team.zeta-workspace",
     },
   );
   assert.deepEqual(parseWorkspaceLaunchArguments(["--", "-project"]), {
-    kind: WorkspaceLaunchTargetKind.Automatic,
+    kind: WorkspaceOpenTargetKind.Automatic,
     path: "-project",
   });
 
@@ -53,7 +63,7 @@ test("workspace launch arguments distinguish automatic and named targets", () =>
   );
 });
 
-test("startup workspace resolves a canonical folder identity", async () => {
+test("workspaces service resolves a canonical single-folder identity", async () => {
   const cwd = resolve("launch-root");
   const canonicalPath = resolve("canonical", "project");
   let requestedPath: string | undefined;
@@ -67,22 +77,27 @@ test("startup workspace resolves a canonical folder identity", async () => {
     },
   };
 
-  const workspace = await resolveStartupWorkspace({
-    arguments: ["project"],
-    cwd,
-    pathService,
-  });
+  const workspace = await new WorkspacesMainService(pathService)
+    .resolveStartupWorkspace({
+      arguments: ["project"],
+      cwd,
+    });
 
   assert.equal(requestedPath, resolve(cwd, "project"));
-  assert.deepEqual(workspace, {
-    state: WorkbenchState.FOLDER,
-    uri: URI.file(canonicalPath).toString(),
-    label: "project",
-  });
-  assert.equal(windowKindForWorkspace(workspace), WindowKind.Workspace);
+  assert.ok(isSingleFolderWorkspaceIdentifier(workspace));
+  assert.equal(workspace.id.length, 64);
+  assert.equal(workspace.uri.toString(), URI.file(canonicalPath).toString());
+  assert.equal(
+    workbenchStateFromWorkspaceIdentifier(workspace),
+    WorkbenchState.FOLDER,
+  );
+
+  const context = new WorkspaceContextService(workspace);
+  assert.equal(context.getWorkbenchState(), WorkbenchState.FOLDER);
+  assert.equal(context.getWorkspace().folders[0]?.name, "project");
 });
 
-test("startup workspace recognizes explicit workspace files", async () => {
+test("workspaces service recognizes explicit workspace files", async () => {
   const canonicalPath = resolve("canonical", "team.zeta-workspace");
   const pathService: IWorkspacePathService = {
     async resolvePath() {
@@ -93,20 +108,37 @@ test("startup workspace recognizes explicit workspace files", async () => {
     },
   };
 
-  const workspace = await resolveStartupWorkspace({
-    arguments: ["--workspace", "team.zeta-workspace"],
-    cwd: resolve("launch-root"),
-    pathService,
-  });
+  const workspace = await new WorkspacesMainService(pathService)
+    .resolveStartupWorkspace({
+      arguments: ["--workspace", "team.zeta-workspace"],
+      cwd: resolve("launch-root"),
+    });
 
-  assert.deepEqual(workspace, {
-    state: WorkbenchState.WORKSPACE,
-    configUri: URI.file(canonicalPath).toString(),
-    label: "team",
-  });
+  assert.ok(isWorkspaceIdentifier(workspace));
+  assert.equal(
+    workspace.configPath.toString(),
+    URI.file(canonicalPath).toString(),
+  );
+  const context = new WorkspaceContextService(workspace);
+  assert.equal(context.getWorkbenchState(), WorkbenchState.WORKSPACE);
+  assert.equal(context.getWorkspace().name, "team");
 });
 
-test("startup workspace keeps loose files and missing targets empty", async () => {
+test("non-empty workspace identifiers are stable for canonical URIs", () => {
+  const folderUri = URI.file(resolve("canonical", "project"));
+  const configPath = URI.file(resolve("canonical", "team.zeta-workspace"));
+
+  assert.equal(
+    getSingleFolderWorkspaceIdentifier(folderUri).id,
+    getSingleFolderWorkspaceIdentifier(folderUri).id,
+  );
+  assert.equal(
+    getWorkspaceIdentifier(configPath).id,
+    getWorkspaceIdentifier(configPath).id,
+  );
+});
+
+test("loose files and launches without a target remain empty", async () => {
   const filePath = resolve("canonical", "notes.txt");
   const pathService: IWorkspacePathService = {
     async resolvePath() {
@@ -116,75 +148,89 @@ test("startup workspace keeps loose files and missing targets empty", async () =
       };
     },
   };
+  const service = new WorkspacesMainService(pathService);
 
   assert.deepEqual(
-    await resolveStartupWorkspace({
+    await service.resolveStartupWorkspace({
       arguments: [],
       cwd: resolve("launch-root"),
-      pathService,
     }),
-    EMPTY_WORKSPACE,
+    UNKNOWN_EMPTY_WINDOW_WORKSPACE,
   );
-  const looseFileWorkspace = await resolveStartupWorkspace({
+  const looseFileWorkspace = await service.resolveStartupWorkspace({
     arguments: ["notes.txt"],
     cwd: resolve("launch-root"),
-    pathService,
   });
-  assert.deepEqual(looseFileWorkspace, EMPTY_WORKSPACE);
+  assert.deepEqual(looseFileWorkspace, UNKNOWN_EMPTY_WINDOW_WORKSPACE);
   assert.equal(
-    windowKindForWorkspace(looseFileWorkspace),
-    WindowKind.Empty,
+    workbenchStateFromWorkspaceIdentifier(looseFileWorkspace),
+    WorkbenchState.EMPTY,
+  );
+  assert.equal(
+    new WorkspaceContextService(looseFileWorkspace).getWorkbenchState(),
+    WorkbenchState.EMPTY,
   );
   await assert.rejects(
-    resolveStartupWorkspace({
+    service.resolveStartupWorkspace({
       arguments: ["--folder", "notes.txt"],
       cwd: resolve("launch-root"),
-      pathService,
     }),
     /not a directory/,
   );
 });
 
-test("workspace context validation rejects malformed renderer data", () => {
-  const folder = {
-    state: WorkbenchState.FOLDER,
+test("workspace identifier IPC validation revives URIs", () => {
+  const serializedFolder = {
+    id: "folder-id",
     uri: URI.file(resolve("project")).toString(),
-    label: "project",
   };
-  assert.deepEqual(parseWorkspaceContext(folder), folder);
+  const folder = parseWorkspaceIdentifier(serializedFolder);
+  assert.ok(isSingleFolderWorkspaceIdentifier(folder));
+  assert.equal(folder.uri.toString(), serializedFolder.uri);
+  assert.deepEqual(
+    serializeWorkspaceIdentifier(folder),
+    serializedFolder,
+  );
+
   assert.throws(
-    () => parseWorkspaceContext({ ...folder, unexpected: true }),
+    () => parseWorkspaceIdentifier({ ...serializedFolder, unexpected: true }),
     /exactly/,
   );
   assert.throws(
     () =>
-      parseWorkspaceContext({
-        state: WorkbenchState.FOLDER,
+      parseWorkspaceIdentifier({
+        id: "folder-id",
         uri: "https://example.com/project",
-        label: "project",
       }),
     /file scheme/,
   );
   assert.throws(
     () =>
-      parseWorkspaceContext({
-        state: WorkbenchState.FOLDER,
-        uri: `${folder.uri}?revision=1`,
-        label: "project",
+      parseWorkspaceIdentifier({
+        id: "folder-id",
+        uri: `${serializedFolder.uri}?revision=1`,
       }),
     /query or fragment/,
   );
+  assert.throws(
+    () => parseWorkspaceIdentifier({ id: "" }),
+    /non-empty/,
+  );
 });
 
-test("workspace main service exposes its immutable context through IPC", async () => {
-  const service = await WorkspaceMainService.create({
-    arguments: [],
-    cwd: resolve("launch-root"),
-  });
-  const [route] = workspaceContextIpcRoutes(service);
+test("workspaces main service exposes a window-owned identity through IPC", async () => {
+  const workspace = await new WorkspacesMainService()
+    .resolveStartupWorkspace({
+      arguments: [],
+      cwd: resolve("launch-root"),
+    });
+  const [route] = workspaceContextIpcRoutes(workspace);
 
   assert.equal(route.channel, "zeta:workspace:context:read");
   assert.equal(route.validate(undefined), undefined);
   assert.throws(() => route.validate({}), /does not accept parameters/);
-  assert.deepEqual(await route.invoke(undefined), EMPTY_WORKSPACE);
+  assert.deepEqual(
+    await route.invoke(undefined),
+    serializeWorkspaceIdentifier(UNKNOWN_EMPTY_WINDOW_WORKSPACE),
+  );
 });
