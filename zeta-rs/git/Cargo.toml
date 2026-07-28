@@ -1,0 +1,21 @@
+[package]
+name = "zeta-git"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[lib]
+doctest = false
+name = "zeta_git"
+path = "src/lib.rs"
+
+[dependencies]
+tokio = { workspace = true, features = ["io-util", "process", "rt", "time"] }
+
+[dev-dependencies]
+pretty_assertions = { workspace = true }
+tokio = { workspace = true, features = ["io-util", "macros", "process", "rt", "time"] }
+
+[lints]
+workspace = true

@@ -64,6 +64,7 @@ fn run_app_server(arguments: Vec<String>) -> Result<(), String> {
     if let Some(workspace_root) = env::var_os("ZETA_WORKSPACE_ROOT") {
         options = options.with_workspace_root(workspace_root);
     }
+    options = options.with_tool_workspace(current_workspace()?);
     open_local_app_server(options)
         .map_err(|error| error.to_string())?
         .serve_stdio()
@@ -78,6 +79,10 @@ fn state_root() -> PathBuf {
     env::var_os("ZETA_STATE_ROOT")
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from(".zeta"))
+}
+
+fn current_workspace() -> Result<PathBuf, String> {
+    env::current_dir().map_err(|error| format!("could not resolve current workspace: {error}"))
 }
 
 fn execute(arguments: Vec<String>) -> Result<(), String> {
@@ -158,13 +163,16 @@ fn run_prompt(prompt: String, title: &str) -> Result<String, String> {
 }
 
 fn in_process_client() -> Result<AppServerClient<InProcessTransport>, String> {
-    start_in_process_client(InProcessClientOptions::new(
-        state_root(),
-        ClientInfo {
-            name: "zeta-cli".into(),
-            version: env!("CARGO_PKG_VERSION").into(),
-        },
-    ))
+    start_in_process_client(
+        InProcessClientOptions::new(
+            state_root(),
+            ClientInfo {
+                name: "zeta-cli".into(),
+                version: env!("CARGO_PKG_VERSION").into(),
+            },
+        )
+        .with_tool_workspace(current_workspace()?),
+    )
     .map_err(|error| error.to_string())
 }
 

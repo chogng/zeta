@@ -267,8 +267,14 @@ pub struct SkillCatalogEntry {
 排序必须确定，相同 generation 的序列化结果稳定。只有 consumer-visible metadata、digest、
 availability 或 diagnostic 变化才递增 generation。
 
-Filesystem watcher 只发 invalidation hint。manager 必须重新扫描/校验后再发布 snapshot，不能把
-watch event 当作事实。watch overflow 触发 scoped full rescan。
+当前 `zeta-file-watcher` 已提供共享、多订阅者的 filesystem invalidation substrate：
+`PathsChanged` 传递排序去重后的 coarse path hint，backend error/overflow 通过
+`RescanRequired` 传递 subscriber 自己的 watched roots。其 backend/ref-count/path fallback contract
+由 [`zeta-rs/file-watcher/README.md`](../zeta-rs/file-watcher/README.md) 维护。
+
+Watcher 仍只发 invalidation hint。Skill manager（尚未实现）必须重新扫描/校验后再发布 snapshot，
+不能把 watch event 当作事实；`RescanRequired` 触发 scoped full rescan。`zeta-file-watcher`
+已实现不代表 Skill catalog manager、generation 发布或 App Server refresh path 已完成。
 
 ## 8. Selection
 

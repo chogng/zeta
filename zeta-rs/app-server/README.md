@@ -45,15 +45,18 @@ request-ID set、notification queue 与 resource ownership；Session/Thread dura
 | `AppServer::with_config_store` | 开启 config/provider/MCP/Skill RPC |
 | `AppServer::with_slash_command_catalog` | 安装 initialize 时下发的 immutable 动态命令 snapshot |
 | `AppServer::with_file_system` | 注入受 workspace 约束的 filesystem authority |
+| `AppServer::with_tool_service` | 安装同一 server 内所有 Turn 使用的 Core Tool/Policy ports |
 | `open_local_app_server` | 打开 rollout/config、恢复 coordinator、组合 provider-backed model |
-| `LocalAppServerOptions` | local state root + optional Workspace config/root + validated slash catalog |
+| `LocalAppServerOptions` | local state root + optional config/tool Workspace + validated slash catalog |
 | `SlashCommandCatalog` | 校验动态命令名称、描述与唯一性，并冻结 server-advertised snapshot |
 | `ReviewModelResolver` | 从 frozen config snapshot 选择 review-only model |
 | `ProviderReviewModel` | `ModelInvoker → zeta_auto_review::ReviewModel` adapter |
 
-`AppServer::new` 默认用 `TurnExecutor::without_tools`。需要 Tool/approval execution 的 host 必须使用
-相应 composition path；不能因为 protocol 暴露 approval interaction 就假设默认 server 已经拥有
-完整 Tool registry。
+`AppServer::new` 默认用 `TurnExecutor::without_tools`。`with_tool_service` 才会替换为有 Tool 和
+Policy port 的 executor。`open_local_app_server` 仅在调用方通过
+`LocalAppServerOptions::with_tool_workspace` 提供工具根时组合只读 `rg` registry；Zeta CLI 的
+stdio 与 in-process 路径都会传入启动时当前目录。不能因为 protocol 暴露 approval interaction
+就假设任意自定义 host 已经拥有 Tool registry。
 
 ## 文件与职责
 
@@ -66,6 +69,7 @@ src/
 │       ├── fs_operations.rs       # root-relative filesystem DTO conversion/error mapping
 │       └── update_broker.rs       # per-connection subscription/cursor/fanout
 ├── local.rs                       # persistent local composition + model safe point
+├── local_tools.rs                 # frozen rg registry + Core Tool/Policy adapters
 ├── review.rs                      # review-only provider adapter
 └── resource_store.rs              # bounded in-memory connection-owned resources
 ```
@@ -90,6 +94,9 @@ src/
 | `file_type` in `fs_operations` | private | foundation file kind → protocol DTO | wire enum 只由 protocol crate 定义 |
 | `ConfigBackedModelService::resolve_config` | private | user snapshot + optional Workspace snapshot merge | 每次 invocation safe point 重新解析 |
 | `WorkspaceConfigTracker::read` | private | 内容变化才推进 synthetic workspace revision | 不监听/修改 workspace file |
+| `compose_local_tools` | crate-private | 固定 WorkspaceRoot、发现 rg、选择 native sandbox | discovery 失败时不降级成 unrestricted |
+| `LocalShellToolService::materialize` | private | parse call、约束 workspace 参数、冻结 rg executable | policy review 前不启动进程 |
+| `LocalReadOnlyPolicy::decide` | private | 只接受 exact revision/provenance/capability/sandbox | 不产生 unsandboxed grant |
 | `ModelSnapshotResolver` | private trait | frozen config → immutable invoker | implementation 不持有 mutable config view |
 | `SlashCommandCatalog::new` | public constructor | 校验 lowercase ASCII/interior-hyphen name、非空描述与唯一性 | 不执行命令、不引用 TUI built-ins |
 | `ProviderReviewModel::request` | private | system/input/schema → tool-disabled zero-temperature request | reviewer 不获得 Tool capability |
@@ -288,7 +295,11 @@ separate ownership decision. The cross-crate trust model is documented in
 Tests 覆盖 initialization/request IDs、Session-first flow、command replay/conflict、fork lineage、
 Turn replay/model-once、multi-connection update、reconnect durable gap、connection-owned resources、
 config command、interaction/approval resolve、response-before-notification、model config safe point、
-Workspace override 和 review-only request。
+Workspace override、review-only request，以及只读 `rg` definition/materialization/policy/execution。
+
+local tool 的参数白名单、discovery、取消与输出限制由
+[`zeta-shell-command`](../shell-command/README.md) 和 [`zeta-exec`](../exec/README.md) 维护；
+本 README 只拥有 App Server 组合与 Core port binding。
 
 当前 server 是 synchronous JSONL/in-process boundary；没有 async multi-connection scheduler、
 serialization-scope enforcement、notification backpressure、durable resource、immediate disconnect

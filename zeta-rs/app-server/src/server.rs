@@ -14,7 +14,10 @@ use zeta_app_server_protocol::rpc::{
 };
 use zeta_app_server_transport::{DEFAULT_MAX_MESSAGE_BYTES, JsonlTransport};
 use zeta_config::ConfigStore;
-use zeta_core::{CoreError, ModelService, SessionCoordinator, ThreadUpdateSink, TurnExecutor};
+use zeta_core::{
+    CoreError, ModelService, PolicyService, SessionCoordinator, ThreadUpdateSink, ToolService,
+    TurnExecutionLimits, TurnExecutor,
+};
 use zeta_file_system::WorkspaceFileSystem;
 use zeta_protocol::ThreadUpdateEnvelope;
 use zeta_typst::TypstCompiler;
@@ -28,6 +31,7 @@ use update_broker::{NotificationQueue, UpdateBroker};
 
 pub struct AppServer {
     pub(super) sessions: Arc<SessionCoordinator>,
+    model: Arc<dyn ModelService>,
     pub(super) turn_executor: TurnExecutor,
     next_connection_id: AtomicU64,
     pub(super) resources: Mutex<ResourceStore>,
@@ -49,12 +53,13 @@ pub struct ConnectionState {
 impl AppServer {
     pub fn new(sessions: Arc<SessionCoordinator>, model: Arc<dyn ModelService>) -> Self {
         let updates = Arc::new(UpdateBroker::default());
-        let turn_executor = TurnExecutor::without_tools(sessions.threads().clone(), model)
+        let turn_executor = TurnExecutor::without_tools(sessions.threads().clone(), model.clone())
             .with_thread_updates(Arc::new(AppServerThreadUpdates {
                 updates: updates.clone(),
             }));
         Self {
             sessions,
+            model,
             turn_executor,
             next_connection_id: AtomicU64::new(1),
             resources: Mutex::new(ResourceStore::default()),
@@ -88,6 +93,25 @@ impl AppServer {
 
     pub fn with_file_system(mut self, file_system: Arc<dyn WorkspaceFileSystem>) -> Self {
         self.file_system = Some(file_system);
+        self
+    }
+
+    /// Installs the tool registry and policy used by every Turn executed by this server.
+    pub fn with_tool_service(
+        mut self,
+        tools: Arc<dyn ToolService>,
+        policy: Arc<dyn PolicyService>,
+    ) -> Self {
+        self.turn_executor = TurnExecutor::new(
+            self.sessions.threads().clone(),
+            self.model.clone(),
+            tools,
+            policy,
+            TurnExecutionLimits::default(),
+        )
+        .with_thread_updates(Arc::new(AppServerThreadUpdates {
+            updates: self.updates.clone(),
+        }));
         self
     }
 

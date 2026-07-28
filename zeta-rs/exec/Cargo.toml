@@ -11,6 +11,7 @@ name = "zeta_exec"
 path = "src/lib.rs"
 
 [dependencies]
+zeta-async-utils = { workspace = true }
 zeta-protocol = { workspace = true }
 zeta-sandboxing = { workspace = true }
 

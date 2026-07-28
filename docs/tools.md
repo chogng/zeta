@@ -4,8 +4,9 @@
 > Rust crate：`zeta_tools`  
 > 当前状态：Phase T0 已创建 crate 并落地受限 schema、host definition、protocol/dynamic/MCP
 > adapter、output、binding、invocation 与 `ToolExecutor` contract。三个独立 crate 已实现
-> `shell-command`、`file-system` 与 `apply-patch`；live registry、Core port 接入、
-> tool search、Plugin discovery、code mode、图片精度仍为 Proposed  
+> `shell-command`、`file-system` 与 `apply-patch`；App Server 已将只读 `rg` profile 接入
+> Core Tool port。通用 live registry、tool search、Plugin discovery、code mode、图片精度仍为
+> Proposed
 > Canonical value 与 durable Tool Item：[`protocol.md`](protocol.md)  
 > Core 调度、approval 与恢复：[`core.md`](core.md)  
 > MCP client runtime：[`mcp.md`](mcp.md)  
@@ -80,9 +81,10 @@ Core durable Tool Call / Tool Result lifecycle
 - `zeta-api` 已分别把 canonical function tool 和图片 detail 转成 OpenAI Responses、
   Chat Completions 与 Anthropic Messages wire payload；
 - `zeta-shell-command`、`zeta-file-system` 与 `zeta-apply-patch`
-  已各自提供一个独立 executor；
-- `zeta-mcp`、`zeta-plugins`、Tool registry/search、code mode 仍处于 Proposed；
-  `zeta-tools` 尚未完成 live registry 或 Core port 接入。
+  已各自提供一个独立 executor；App Server 当前只组合 `zeta-shell-command` 的只读 `rg`
+  profile；
+- `zeta-mcp`、`zeta-plugins`、通用 Tool registry/search、code mode 仍处于 Proposed；
+  当前 Core port adapter 是 App Server 私有的固定 `rg` registry，不代表通用 registry 已完成。
 
 当前问题不是缺少一个更大的 `tools` module，而是共享语义没有统一落点：
 
@@ -191,6 +193,8 @@ Core 的 `ToolService` 是 consumer-owned port；它可以由外层 `ToolRegistr
 - `zeta-file-system → zeta-tools + zeta-sandboxing`；
 - `zeta-tui → zeta-file-search`；后者提供只读路径索引，不依赖 `zeta-tools`，也不注册为模型
   Tool；
+- catalog/runtime manager 可依赖 `zeta-file-watcher` 获取 coarse invalidation hint；后者不依赖
+  `zeta-tools`，不读取文件内容，也不注册为模型 Tool；
 - `zeta-apply-patch → zeta-tools + zeta-sandboxing`；
 - `zeta-policy → zeta-sandboxing`；
 - `zeta-auto-review → zeta-policy + zeta-sandboxing`；
@@ -237,21 +241,39 @@ App Server composition root 按 policy 单独注册：
 binding。`apply-patch` 在所有 hunk 校验完成前不写入；
 若多文件 commit 中途失败，返回 `OutcomeUncertain`，由 Core 决定后续恢复语义。
 
+`zeta-file-system` 还提供 host-only 的 `find_nearest_ancestor_with_markers`，用于从一个本地路径
+向上发现最近的项目 marker。它不是模型 Tool，不读取 marker 配置，也不施加 `WorkspaceRoot`
+containment；调用方仍拥有项目根语义和搜索边界。实现与错误策略由
+[`zeta-rs/file-system/README.md`](../zeta-rs/file-system/README.md) 维护。
+
 搜索分成模型侧命令搜索与交互式路径搜索：
 
 | Surface | 所有权 | 模型可见 |
 | --- | --- | --- |
 | `zeta-shell-command` + `rg` | 内容搜索、`rg --files` 路径枚举和 `-g` glob filtering | `shell-command` Tool |
 | `zeta-file-search` | ignore-aware 路径索引、fuzzy matching、`PathSearchHandle` 和 CLI | 否 |
+| `zeta-file-watcher` | 多订阅者路径失效提示、missing-path fallback、throttle/debounce 与 overflow rescan hint | 否 |
 
 模型侧不注册独立 `glob`、`grep` 或 `text-search` Tool：内容搜索使用 `rg PATTERN`，路径枚举
 使用 `rg --files`，glob 作为 `-g` 参数传给 `rg`。交互式路径搜索契约由
 [`zeta-rs/file-search/README.md`](../zeta-rs/file-search/README.md) 维护；TUI 直接持有
 `PathSearchHandle`，不启动 CLI，Core 也不把路径搜索注册成 Tool。
 
-当前 `zeta-shell-command` 可以用显式 program/arguments 启动 host PATH 中的 `rg`，但产品安装层
-尚未拥有 bundled ripgrep discovery 或版本检查。补齐该 runtime prerequisite 属于命令执行与安装
-诊断，不应通过重新增加一套内容搜索 Tool 解决。
+`zeta-file-watcher` 同样不是搜索或读取接口。它只把 OS mutation/error 转成
+`PathsChanged`/`RescanRequired`；consumer 必须重新扫描并校验 own state。其 ref-count、路径匹配、
+RAII 与 failure contract 由
+[`zeta-rs/file-watcher/README.md`](../zeta-rs/file-watcher/README.md) 维护。
+
+当前 local App Server 启动时按 `ZETA_RG_PATH`、Zeta executable 同目录、host `PATH` 的顺序发现
+`rg`，随后冻结 canonical executable identity；未找到时启用本地工具的 composition 直接失败。
+模型只看到 `program = "rg"`，host 强制加入 `--no-config`，拒绝 preprocessor、archive search、
+symlink follow 和外部 pattern/ignore file 参数，并用只读、断网 sandbox 执行。进程输出采用总
+byte budget 截断并返回显式 truncation marker，Turn cancellation 会终止已启动的子进程。
+
+当前限制：仓库尚未打包 `rg` binary，也未做版本/capability probe；同目录发现只是 packaging
+extension point。该 runtime prerequisite 属于命令执行与安装诊断，不应通过重新增加一套内容
+搜索 Tool 解决。crate 内实现契约见
+[`zeta-rs/shell-command/README.md`](../zeta-rs/shell-command/README.md)。
 
 ## 5. Identity、来源与 binding
 

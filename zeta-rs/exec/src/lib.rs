@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use std::process::Stdio;
 use std::thread;
 use std::time::{Duration, Instant};
+use zeta_async_utils::CancellationToken;
 use zeta_protocol::{ProcessExecutionOutput, ProcessExitStatus, SandboxDenialOutput};
 use zeta_sandboxing::{
     FileSystemAccess, NetworkAccess, SandboxBackend, SandboxCommand, SandboxDenialTiming,
@@ -71,6 +72,8 @@ pub struct CommandOutput {
     pub exit_code: Option<i32>,
     pub stdout: String,
     pub stderr: String,
+    pub stdout_truncated: bool,
+    pub stderr_truncated: bool,
 }
 
 /// Structured result of a process that reached sandbox preparation.
@@ -85,8 +88,9 @@ pub enum ExecutionError {
     ApprovalRequired,
     Denied,
     Spawn(String),
+    CancelledBeforeStart(String),
+    CancelledAfterStart(String),
     TimedOut,
-    OutputLimitExceeded,
     Sandbox(SandboxError),
 }
 
@@ -115,7 +119,9 @@ impl<P: ApprovalPolicy, B: SandboxBackend> CommandExecutor<P, B> {
         &self,
         request: CommandRequest,
         authority: CommandExecutionAuthority,
+        cancellation: &CancellationToken,
     ) -> Result<CommandExecutionOutcome, ExecutionError> {
+        check_cancellation_before_start(cancellation)?;
         let action_digest = format!("{}:{}", request.program, request.arguments.join("\u{1f}"));
         match self.approval_policy.requirement_for(&action_digest) {
             ApprovalRequirement::NotRequired => {}
@@ -145,6 +151,7 @@ impl<P: ApprovalPolicy, B: SandboxBackend> CommandExecutor<P, B> {
             }
             Err(error) => return Err(ExecutionError::Sandbox(error)),
         };
+        check_cancellation_before_start(cancellation)?;
         let prepared_kind = prepared.kind();
         let mut command = prepared.into_command();
         command.stdout(Stdio::piped()).stderr(Stdio::piped());
@@ -180,13 +187,14 @@ impl<P: ApprovalPolicy, B: SandboxBackend> CommandExecutor<P, B> {
             {
                 break status;
             }
+            if let Err(cancellation) = cancellation.check() {
+                terminate(&mut child, stdout_reader, stderr_reader)?;
+                return Err(ExecutionError::CancelledAfterStart(
+                    cancellation.reason().to_string(),
+                ));
+            }
             if started.elapsed() >= self.limits.timeout {
-                child
-                    .kill()
-                    .map_err(|error| ExecutionError::Spawn(error.to_string()))?;
-                let _ = child.wait();
-                let _ = stdout_reader.join();
-                let _ = stderr_reader.join();
+                terminate(&mut child, stdout_reader, stderr_reader)?;
                 return Err(ExecutionError::TimedOut);
             }
             thread::sleep(Duration::from_millis(10));
@@ -199,16 +207,17 @@ impl<P: ApprovalPolicy, B: SandboxBackend> CommandExecutor<P, B> {
             .join()
             .map_err(|_| ExecutionError::Spawn("stderr reader panicked".into()))?
             .map_err(ExecutionError::Spawn)?;
-        if stdout_exceeded
-            || stderr_exceeded
-            || stdout.len() + stderr.len() > self.limits.max_output_bytes
-        {
-            return Err(ExecutionError::OutputLimitExceeded);
-        }
+        let stdout_bytes = stdout.len().min(self.limits.max_output_bytes);
+        let stderr_budget = self.limits.max_output_bytes.saturating_sub(stdout_bytes);
+        let stderr_bytes = stderr.len().min(stderr_budget);
+        let stdout_truncated = stdout_exceeded || stdout_bytes < stdout.len();
+        let stderr_truncated = stderr_exceeded || stderr_bytes < stderr.len();
         let output = CommandOutput {
             exit_code: status.code(),
-            stdout: String::from_utf8_lossy(&stdout).into_owned(),
-            stderr: String::from_utf8_lossy(&stderr).into_owned(),
+            stdout: String::from_utf8_lossy(&stdout[..stdout_bytes]).into_owned(),
+            stderr: String::from_utf8_lossy(&stderr[..stderr_bytes]).into_owned(),
+            stdout_truncated,
+            stderr_truncated,
         };
         if matches!(authority, CommandExecutionAuthority::Sandboxed(_))
             && let Some(denial) = self.sandbox.classify_denial(
@@ -239,6 +248,26 @@ impl<P: ApprovalPolicy, B: SandboxBackend> CommandExecutor<P, B> {
         }
         Ok(CommandExecutionOutcome::Completed(output))
     }
+}
+
+fn check_cancellation_before_start(cancellation: &CancellationToken) -> Result<(), ExecutionError> {
+    cancellation
+        .check()
+        .map_err(|signal| ExecutionError::CancelledBeforeStart(signal.reason().to_string()))
+}
+
+fn terminate(
+    child: &mut std::process::Child,
+    stdout_reader: thread::JoinHandle<Result<(Vec<u8>, bool), String>>,
+    stderr_reader: thread::JoinHandle<Result<(Vec<u8>, bool), String>>,
+) -> Result<(), ExecutionError> {
+    child
+        .kill()
+        .map_err(|error| ExecutionError::Spawn(error.to_string()))?;
+    let _ = child.wait();
+    let _ = stdout_reader.join();
+    let _ = stderr_reader.join();
+    Ok(())
 }
 
 /// Backwards-compatible name for the local process execution boundary.

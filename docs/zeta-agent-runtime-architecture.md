@@ -244,6 +244,7 @@ zeta/
 │  ├─ shell-command/
 │  ├─ file-system/
 │  ├─ file-search/         TUI path index + fuzzy-match CLI
+│  ├─ file-watcher/        shared multi-subscriber invalidation hints
 │  ├─ apply-patch/
 │  ├─ app-server-protocol/
 │  ├─ app-server-transport/

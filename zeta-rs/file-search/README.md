@@ -2,8 +2,8 @@
 
 > 本 README 是 workspace 文件路径 fuzzy search 的实现契约。TUI `@file` 交互由
 > [`zeta-rs/tui/README.md`](../tui/README.md) 维护。模型侧的文件内容搜索通过
-> `zeta-shell-command` 执行 host PATH 中的 `rg`；当前产品安装层尚未提供 bundled `rg`
-> discovery。
+> `zeta-shell-command` 的只读 `rg` profile 完成；discovery 与执行边界见
+> [`zeta-rs/shell-command/README.md`](../shell-command/README.md)。
 
 `zeta-file-search` 只拥有 workspace-relative 文件路径的后台索引、增量 fuzzy matching 和独立
 CLI。它不读取候选文件内容，不注册模型 Tool，也不拥有 TUI popup/token 状态。

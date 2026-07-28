@@ -26,6 +26,8 @@ zeta-rs/
 ├── shell-command/        # concrete approved-process executor
 ├── file-system/          # concrete read-only filesystem executor
 ├── file-search/          # workspace path fuzzy search + CLI
+├── file-watcher/         # shared filesystem invalidation hints
+├── git/                  # bounded Git repository operations and structured parsing
 ├── apply-patch/          # concrete validated write executor
 ├── session-store/        # Session persistence port + envelope
 ├── thread-store/         # Thread persistence port + envelope
@@ -57,6 +59,11 @@ zeta-rs/
 
 不建立职责含糊的 `common`、`service` 或总括式执行 crate。Agent loop 先在 Core 内按模块
 分层；只有具备第二个真实消费者、独立 typed port 与测试 vertical slice 时才提取 crate。
+
+`zeta-git` 当前拥有 system Git process identity、repository discovery、porcelain-v2 snapshot、
+branch/remote/history query 与 patch check/apply，不拥有 live repository registry、watch state、
+App Server wire 或 Desktop SCM。当前 API、进程隔离、失败语义与尚未实现的 service 边界见
+[`git/README.md`](../zeta-rs/git/README.md)。
 
 Direct-provider credential ownership 由 [`model-provider.md`](model-provider.md) 维护；通用 secret
 persistence 由 [`secrets.md`](secrets.md) 维护；interactive login control plane 由

@@ -1,6 +1,7 @@
 //! JSON-RPC application boundary between product clients and Zeta's domain components.
 
 mod local;
+mod local_tools;
 mod resource_store;
 mod review;
 mod server;

@@ -1,5 +1,6 @@
 use crate::AppServer;
 use crate::SlashCommandCatalog;
+use crate::local_tools::compose_local_tools;
 use std::fmt;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -22,6 +23,7 @@ use zeta_sandboxing::WorkspaceRoot;
 pub struct LocalAppServerOptions {
     pub state_root: PathBuf,
     pub workspace: Option<LocalWorkspaceConfigOptions>,
+    pub tool_workspace: Option<PathBuf>,
     pub slash_commands: SlashCommandCatalog,
     pub workspace_root: Option<PathBuf>,
 }
@@ -31,6 +33,7 @@ impl LocalAppServerOptions {
         Self {
             state_root: state_root.into(),
             workspace: None,
+            tool_workspace: None,
             slash_commands: SlashCommandCatalog::default(),
             workspace_root: None,
         }
@@ -48,6 +51,12 @@ impl LocalAppServerOptions {
 
     pub fn with_workspace_root(mut self, workspace_root: impl Into<PathBuf>) -> Self {
         self.workspace_root = Some(workspace_root.into());
+        self
+    }
+
+    /// Enables the local read-only tool registry rooted at `workspace`.
+    pub fn with_tool_workspace(mut self, workspace: impl Into<PathBuf>) -> Self {
+        self.tool_workspace = Some(workspace.into());
         self
     }
 }
@@ -119,6 +128,11 @@ pub fn open_local_app_server(
     if let Some(workspace_root) = options.workspace_root {
         let workspace = WorkspaceRoot::open(workspace_root).map_err(open_error)?;
         server = server.with_file_system(Arc::new(LocalFileSystem::new(workspace)));
+    }
+    if let Some(tool_workspace) = options.tool_workspace {
+        let tools = compose_local_tools(tool_workspace)
+            .map_err(|error| OpenAppServerError(error.to_string()))?;
+        server = server.with_tool_service(tools.tools, tools.policy);
     }
     Ok(server)
 }

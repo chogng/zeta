@@ -24,13 +24,19 @@ zeta-core = { workspace = true }
 zeta-file-system = { workspace = true }
 zeta-model-provider = { workspace = true }
 zeta-model-provider-config = { workspace = true }
+zeta-policy = { workspace = true }
 zeta-protocol = { workspace = true }
 zeta-rollout = { workspace = true }
 zeta-sandboxing = { workspace = true }
+zeta-shell-command = { workspace = true }
+zeta-tools = { workspace = true }
 zeta-typst = { workspace = true }
 
-[dev-dependencies]
-zeta-policy = { workspace = true }
+[target.'cfg(target_os = "linux")'.dependencies]
+zeta-linux-sandbox = { workspace = true }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+zeta-windows-sandbox = { workspace = true }
 
 [lints]
 workspace = true

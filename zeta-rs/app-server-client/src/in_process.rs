@@ -15,6 +15,7 @@ use zeta_app_server_protocol::schema_hash;
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct InProcessClientOptions {
     pub state_root: PathBuf,
+    pub tool_workspace: Option<PathBuf>,
     pub client_info: ClientInfo,
     pub capabilities: ClientCapabilities,
     pub slash_commands: SlashCommandCatalog,
@@ -24,6 +25,7 @@ impl InProcessClientOptions {
     pub fn new(state_root: impl Into<PathBuf>, client_info: ClientInfo) -> Self {
         Self {
             state_root: state_root.into(),
+            tool_workspace: None,
             client_info,
             capabilities: ClientCapabilities::default(),
             slash_commands: SlashCommandCatalog::default(),
@@ -37,6 +39,12 @@ impl InProcessClientOptions {
 
     pub fn with_slash_command_catalog(mut self, slash_commands: SlashCommandCatalog) -> Self {
         self.slash_commands = slash_commands;
+        self
+    }
+
+    /// Enables local read-only workspace tools for the embedded server.
+    pub fn with_tool_workspace(mut self, workspace: impl Into<PathBuf>) -> Self {
+        self.tool_workspace = Some(workspace.into());
         self
     }
 }
@@ -80,11 +88,13 @@ impl JsonRpcTransport for InProcessTransport {
 pub fn start_in_process_client(
     options: InProcessClientOptions,
 ) -> Result<AppServerClient<InProcessTransport>, ClientError> {
-    let server = open_local_app_server(
-        LocalAppServerOptions::new(options.state_root)
-            .with_slash_command_catalog(options.slash_commands),
-    )
-    .map_err(|error| ClientError::Transport(error.to_string()))?;
+    let mut server_options = LocalAppServerOptions::new(options.state_root)
+        .with_slash_command_catalog(options.slash_commands);
+    if let Some(tool_workspace) = options.tool_workspace {
+        server_options = server_options.with_tool_workspace(tool_workspace);
+    }
+    let server = open_local_app_server(server_options)
+        .map_err(|error| ClientError::Transport(error.to_string()))?;
     let mut client = AppServerClient::new(InProcessTransport::from_server(server));
     let initialized = client.initialize(InitializeParams {
         client_info: options.client_info,
