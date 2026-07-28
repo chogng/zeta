@@ -1,0 +1,298 @@
+import {
+  SubmenuAction,
+  type IAction,
+} from "../../../base/common/actions.js";
+import { Emitter, type Event } from "../../../base/common/event.js";
+import type { Icon } from "../../../base/common/icon.js";
+import type { Keybinding } from "../../../base/common/keybindings.js";
+import {
+  DisposableStore,
+  type IDisposable,
+  toDisposable,
+} from "../../../base/common/lifecycle.js";
+import {
+  commandActionLabel,
+  type ICommandAction,
+  isCommandActionToggleInfo,
+} from "../../action/common/action.js";
+import {
+  CommandsRegistry,
+  type ICommandService,
+} from "../../commands/common/command-registry.js";
+import type {
+  ContextKeyExpression,
+  IContextKeyService,
+} from "../../contextkey/common/contextkey.js";
+import {
+  ContextKeyExpr,
+} from "../../contextkey/common/contextkey.js";
+import type {
+  ServicesAccessor,
+} from "../../instantiation/common/instantiation.js";
+import {
+  KeybindingsRegistry,
+  type KeybindingWeight,
+} from "../../keybinding/common/keybindingsRegistry.js";
+
+export interface IMenuItem {
+  readonly command: ICommandAction;
+  readonly alt?: ICommandAction;
+  readonly when?: ContextKeyExpression;
+  readonly group?: "navigation" | string;
+  readonly order?: number;
+}
+
+export interface ISubmenuItem {
+  readonly title: string;
+  readonly submenu: MenuId;
+  readonly when?: ContextKeyExpression;
+  readonly group?: "navigation" | string;
+  readonly order?: number;
+}
+
+export type MenuRegistryItem = IMenuItem | ISubmenuItem;
+
+export function isMenuItem(item: MenuRegistryItem): item is IMenuItem {
+  return "command" in item;
+}
+
+/** Identifies an action contribution location, regardless of its final UI. */
+export class MenuId {
+  static readonly #instances = new Map<string, MenuId>();
+
+  static readonly CommandPalette = new MenuId("CommandPalette");
+  static readonly TitleBar = new MenuId("TitleBar");
+  static readonly MenubarMainMenu = new MenuId("MenubarMainMenu");
+  static readonly MenubarFileMenu = new MenuId("MenubarFileMenu");
+
+  static for(identifier: string): MenuId {
+    return this.#instances.get(identifier) ?? new MenuId(identifier);
+  }
+
+  readonly id: string;
+
+  constructor(identifier: string) {
+    if (MenuId.#instances.has(identifier)) {
+      throw new TypeError(
+        `MenuId '${identifier}' already exists; use MenuId.for()`,
+      );
+    }
+    this.id = identifier;
+    MenuId.#instances.set(identifier, this);
+  }
+}
+
+export interface IMenuRegistryChangeEvent {
+  readonly menuId: MenuId;
+}
+
+/** Realm-wide registry of static and dynamic action placements. */
+export class MenuRegistry {
+  readonly #items = new Map<MenuId, MenuRegistryItem[]>();
+  readonly #onDidChangeMenu = new Emitter<IMenuRegistryChangeEvent>();
+
+  readonly onDidChangeMenu: Event<IMenuRegistryChangeEvent> =
+    this.#onDidChangeMenu.event;
+
+  appendMenuItem(id: MenuId, item: MenuRegistryItem): IDisposable {
+    let items = this.#items.get(id);
+    if (!items) {
+      items = [];
+      this.#items.set(id, items);
+    }
+    items.push(item);
+    this.#onDidChangeMenu.fire({ menuId: id });
+
+    return toDisposable(() => {
+      const current = this.#items.get(id);
+      if (!current) return;
+      const index = current.indexOf(item);
+      if (index < 0) return;
+      current.splice(index, 1);
+      if (current.length === 0) this.#items.delete(id);
+      this.#onDidChangeMenu.fire({ menuId: id });
+    });
+  }
+
+  getMenuItems(id: MenuId): readonly MenuRegistryItem[] {
+    return [...(this.#items.get(id) ?? [])];
+  }
+}
+
+/** Realm-wide menu contributions populated by static contribution modules. */
+export const MenusRegistry = new MenuRegistry();
+
+export interface IMenuActionOptions {
+  readonly arg?: unknown;
+  readonly args?: readonly unknown[];
+  readonly shouldForwardArgs?: boolean;
+  readonly renderShortTitle?: boolean;
+}
+
+/** A command contribution resolved into a runnable UI action. */
+export class MenuItemAction implements IAction {
+  readonly id: string;
+  readonly label: string;
+  readonly tooltip: string;
+  readonly icon?: Icon;
+  readonly enabled: boolean;
+  readonly checked?: boolean;
+  readonly #options: IMenuActionOptions | undefined;
+  readonly #commandService: ICommandService;
+
+  constructor(
+    readonly item: ICommandAction,
+    readonly alt: MenuItemAction | undefined,
+    options: IMenuActionOptions | undefined,
+    contextKeyService: IContextKeyService,
+    commandService: ICommandService,
+  ) {
+    this.#options = options;
+    this.#commandService = commandService;
+    this.id = item.id;
+    this.label = options?.renderShortTitle && item.shortTitle
+      ? commandActionLabel(item.shortTitle)
+      : commandActionLabel(item.title);
+    this.tooltip = item.tooltip
+      ? commandActionLabel(item.tooltip)
+      : this.label;
+    this.icon = item.icon;
+    this.enabled = contextKeyService.contextMatchesRules(item.precondition);
+
+    if (item.toggled) {
+      const toggled = isCommandActionToggleInfo(item.toggled)
+        ? item.toggled
+        : { condition: item.toggled };
+      this.checked = contextKeyService.contextMatchesRules(toggled.condition);
+      if (this.checked) {
+        if (toggled.title) this.label = commandActionLabel(toggled.title);
+        if (toggled.tooltip) {
+          this.tooltip = commandActionLabel(toggled.tooltip);
+        }
+        if (toggled.icon) this.icon = toggled.icon;
+      }
+    }
+  }
+
+  run(...args: readonly unknown[]): Promise<unknown> {
+    const commandArgs: unknown[] = [];
+    if (this.#options?.args) {
+      commandArgs.push(...this.#options.args);
+    } else if (this.#options && "arg" in this.#options) {
+      commandArgs.push(this.#options.arg);
+    }
+    if (this.#options?.shouldForwardArgs) commandArgs.push(...args);
+    return this.#commandService.executeCommand(this.id, ...commandArgs);
+  }
+}
+
+/** A submenu contribution resolved into a nested runtime action. */
+export class SubmenuItemAction extends SubmenuAction {
+  constructor(
+    readonly item: ISubmenuItem,
+    actions: readonly IAction[],
+  ) {
+    super(`submenu.${item.submenu.id}`, item.title, actions);
+  }
+}
+
+type OneOrMany<T> = T | readonly T[];
+
+export interface IAction2KeybindingOptions {
+  readonly primary: Keybinding;
+  readonly secondary?: readonly Keybinding[];
+  readonly when?: ContextKeyExpression;
+  readonly args?: readonly unknown[];
+  readonly weight?: KeybindingWeight | number;
+}
+
+export interface IAction2Options extends ICommandAction {
+  readonly menu?: OneOrMany<{
+    readonly id: MenuId;
+    readonly when?: ContextKeyExpression;
+    readonly group?: "navigation" | string;
+    readonly order?: number;
+  }>;
+  readonly keybinding?: IAction2KeybindingOptions;
+  readonly f1?: boolean;
+}
+
+/** Base class for a statically declared command and its UI contributions. */
+export abstract class Action2 {
+  constructor(readonly desc: Readonly<IAction2Options>) {}
+
+  abstract run(
+    accessor: ServicesAccessor,
+    ...args: readonly unknown[]
+  ): unknown;
+}
+
+/**
+ * Registers a built-in action for the current JavaScript realm.
+ *
+ * Static contribution modules intentionally keep registrations for the realm
+ * lifetime. Dynamic callers must retain and dispose the returned registration.
+ */
+export function registerAction2(
+  ctor: new () => Action2,
+): IDisposable {
+  const action = new ctor();
+  const registrations = new DisposableStore();
+
+  try {
+    registrations.add(CommandsRegistry.register(
+      action.desc.id,
+      (accessor, ...args) => action.run(accessor, ...args),
+    ));
+
+    if (action.desc.keybinding) {
+      const contribution = action.desc.keybinding;
+      const keybindings = [
+        contribution.primary,
+        ...(contribution.secondary ?? []),
+      ];
+      const when = ContextKeyExpr.and(
+        action.desc.precondition,
+        contribution.when,
+      );
+      for (const keybinding of keybindings) {
+        registrations.add(KeybindingsRegistry.registerKeybindingRule({
+          command: action.desc.id,
+          keybinding,
+          when,
+          args: contribution.args,
+          weight: contribution.weight,
+        }));
+      }
+    }
+
+    const placements = action.desc.menu
+      ? Array.isArray(action.desc.menu)
+        ? action.desc.menu
+        : [action.desc.menu]
+      : [];
+    for (const placement of placements) {
+      registrations.add(MenusRegistry.appendMenuItem(placement.id, {
+        command: action.desc,
+        when: placement.when,
+        group: placement.group,
+        order: placement.order,
+      }));
+    }
+
+    if (action.desc.f1) {
+      registrations.add(MenusRegistry.appendMenuItem(
+        MenuId.CommandPalette,
+        {
+          command: action.desc,
+          when: action.desc.precondition,
+        },
+      ));
+    }
+  } catch (error) {
+    registrations.dispose();
+    throw error;
+  }
+
+  return registrations;
+}

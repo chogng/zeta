@@ -90,7 +90,7 @@ test("trusted IPC router enforces webContents, main frame, exact URL, and params
   assert.throws(() => invoke(trusted.event, "invalid"), /invalid params/);
   assert.equal(calls, 1);
 
-  dispose();
+  dispose.dispose();
   assert.equal(ipcMain.handlers.size, 0);
 });
 

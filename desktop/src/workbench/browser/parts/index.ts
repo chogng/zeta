@@ -4,6 +4,10 @@ export { WorkbenchPart } from "../part.js";
 export { SessionPart } from "./session/sessionPart.js";
 export { SidebarPart } from "./sidebar/sidebarPart.js";
 export { StatusbarPart } from "./statusbar/statusbarPart.js";
-export { TitlebarPart } from "./titlebar/titlebarPart.js";
-export type { TitlebarAction } from "./titlebar/titlebarActions.js";
+export {
+  BrowserTitlebarPart,
+  createBrowserTitlebarPart,
+  type ITitlebarPartFactoryOptions,
+  type TitlebarPartFactory,
+} from "./titlebar/titlebarPart.js";
 export { ViewPane, ViewPaneContainer, Viewlet } from "./views/index.js";

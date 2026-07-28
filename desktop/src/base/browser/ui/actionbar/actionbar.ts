@@ -1,19 +1,58 @@
-import { Button, type ButtonOptions } from "../button/button.js";
-import { Component } from "../common/component.js";
+import type { IAction } from "../../../common/actions.js";
+import {
+  DisposableOwner,
+  ResettableDisposableGroup,
+} from "../../../common/lifecycle.js";
+import {
+  type ActionViewItem,
+  createActionViewItem,
+} from "./actionViewItems.js";
 
-/** A horizontal group of related command buttons. */
-export class ActionBar extends Component<HTMLDivElement> {
-  constructor(actions: readonly ButtonOptions[] = []) {
-    const element = document.createElement("div");
+export type ActionViewItemProvider = (
+  action: IAction,
+) => ActionViewItem | undefined;
+
+export interface ActionBarOptions {
+  readonly ownerDocument?: Document;
+  readonly actions?: readonly IAction[];
+  readonly actionViewItemProvider?: ActionViewItemProvider;
+}
+
+/** Owns and arranges action view items without interpreting action subtypes. */
+export class ActionBar extends DisposableOwner {
+  readonly element: HTMLDivElement;
+  readonly #items = this.own(new ResettableDisposableGroup());
+  readonly #actionViewItemProvider: ActionViewItemProvider | undefined;
+
+  constructor(options: ActionBarOptions = {}) {
+    super();
+    const ownerDocument = options.ownerDocument ?? document;
+    const element = ownerDocument.createElement("div");
+    this.element = element;
+    this.defer(() => element.remove());
     element.className = "zeta-action-bar";
     element.setAttribute("role", "toolbar");
-    super(element);
-    for (const action of actions) this.add(action);
+    this.#actionViewItemProvider = options.actionViewItemProvider;
+    this.setActions(options.actions ?? []);
   }
 
-  add(action: ButtonOptions): Button {
-    const button = new Button(action);
-    this.element.append(button.element);
-    return button;
+  add(action: IAction): ActionViewItem {
+    const container = this.element.ownerDocument.createElement("div");
+    container.className = "zeta-action-view-item";
+    container.dataset.actionId = action.id;
+    container.setAttribute("role", "presentation");
+    const item = this.#items.add(
+      this.#actionViewItemProvider?.(action) ??
+        createActionViewItem(action),
+    );
+    this.element.append(container);
+    item.render(container);
+    return item;
+  }
+
+  setActions(actions: readonly IAction[]): void {
+    this.#items.clear();
+    this.element.replaceChildren();
+    for (const action of actions) this.add(action);
   }
 }

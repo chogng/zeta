@@ -12,6 +12,14 @@ import type {
   ServerNotification,
 } from "../../../../generated/app-server/types.js";
 import type { AppServerConnectionState } from "../common/renderer-api.js";
+import {
+  DisposableSlot,
+  type IDisposable,
+  markAsDisposed,
+  setDisposableOwner,
+  trackDisposable,
+  toDisposable,
+} from "../../../base/common/lifecycle.js";
 import { AppServerClient } from "./app-server-client.js";
 import {
   AppServerSession,
@@ -49,12 +57,13 @@ type NotificationListener = (notification: ServerNotification) => void;
 /**
  * Supervises App Server process/session replacement without replaying application requests.
  */
-export class AppServerSupervisor {
+export class AppServerSupervisor implements IDisposable {
   readonly #spawnProcess: SpawnAppServer;
   readonly #fileExists: (path: string) => boolean;
   readonly #wait: (milliseconds: number) => Promise<void>;
   readonly #stateListeners = new Set<StateListener>();
   readonly #notificationListeners = new Set<NotificationListener>();
+  readonly #sessionNotification = new DisposableSlot<IDisposable>();
   readonly #maxRestartAttempts: number;
   readonly #initialRestartDelayMs: number;
   readonly #maxRestartDelayMs: number;
@@ -64,6 +73,7 @@ export class AppServerSupervisor {
   #generation = 0;
   #restartAttempts = 0;
   #stopping = false;
+  #disposed = false;
   #lastDiagnostics = "";
 
   constructor(readonly options: AppServerSupervisorOptions) {
@@ -96,23 +106,28 @@ export class AppServerSupervisor {
     this.#spawnProcess = options.spawnProcess ?? defaultSpawn;
     this.#fileExists = options.fileExists ?? existsSync;
     this.#wait = options.wait ?? wait;
+    trackDisposable(this);
+    setDisposableOwner(this.#sessionNotification, this);
   }
 
   get state(): AppServerConnectionState {
     return this.#state;
   }
 
-  onStateChange(listener: StateListener): () => void {
+  onStateChange(listener: StateListener): IDisposable {
     this.#stateListeners.add(listener);
-    return () => this.#stateListeners.delete(listener);
+    return toDisposable(() => this.#stateListeners.delete(listener));
   }
 
-  onNotification(listener: NotificationListener): () => void {
+  onNotification(listener: NotificationListener): IDisposable {
     this.#notificationListeners.add(listener);
-    return () => this.#notificationListeners.delete(listener);
+    return toDisposable(() => this.#notificationListeners.delete(listener));
   }
 
   async start(): Promise<void> {
+    if (this.#disposed) {
+      throw new Error("Cannot start a disposed App Server supervisor");
+    }
     if (this.#state !== "stopped") {
       throw new Error(`Cannot start App Server supervisor from ${this.#state}`);
     }
@@ -163,6 +178,7 @@ export class AppServerSupervisor {
     const session = this.#session;
     this.#session = undefined;
     this.#process = undefined;
+    this.#sessionNotification.clear();
     await session?.close();
     this.#setState("stopped");
   }
@@ -179,9 +195,14 @@ export class AppServerSupervisor {
     child.once("exit", () => {
       if (this.#process !== child || this.#generation !== generation) return;
       const restart = !this.#stopping && this.#state === "ready";
-      this.#lastDiagnostics = this.#session?.diagnostics() ?? this.#lastDiagnostics;
+      const exitedSession = this.#session;
+      this.#lastDiagnostics = exitedSession?.diagnostics() ?? this.#lastDiagnostics;
+      this.#sessionNotification.clear();
       this.#process = undefined;
       this.#session = undefined;
+      if (exitedSession) {
+        queueMicrotask(() => exitedSession.dispose());
+      }
       if (restart) {
         this.#setState("crashed");
         void this.#restartAfterCrash();
@@ -192,8 +213,9 @@ export class AppServerSupervisor {
       new AppServerClient(new JsonRpcPeer(child)),
       this.options.session,
     );
+    setDisposableOwner(session, this);
     this.#session = session;
-    session.onAnyNotification((notification) => {
+    this.#sessionNotification.replace(session.onAnyNotification((notification) => {
       if (this.#session !== session) return;
       for (const listener of this.#notificationListeners) {
         try {
@@ -202,19 +224,23 @@ export class AppServerSupervisor {
           // One host consumer cannot prevent delivery to other notification consumers.
         }
       }
-    });
+    }));
     this.#setState("initializing");
     try {
       await session.initialize();
     } catch (error) {
       this.#lastDiagnostics = session.diagnostics();
-      if (this.#session === session) this.#session = undefined;
+      if (this.#session === session) {
+        this.#sessionNotification.clear();
+        this.#session = undefined;
+      }
       if (this.#process === child) this.#process = undefined;
       this.#generation += 1;
       await session.close();
       throw error;
     }
     if (this.#stopping || this.#generation !== generation) {
+      if (this.#session === session) this.#sessionNotification.clear();
       await session.close();
       throw new Error("App Server startup was superseded");
     }
@@ -253,6 +279,26 @@ export class AppServerSupervisor {
         // Connection state observers are isolated from supervisor lifecycle.
       }
     }
+  }
+
+  dispose(): void {
+    if (this.#disposed) return;
+    this.#disposed = true;
+    this.#stateListeners.clear();
+    this.#notificationListeners.clear();
+    try {
+      const stopping = this.stop();
+      this.#sessionNotification.dispose();
+      void stopping.catch(() => {
+        // Explicit stop callers observe errors; disposal is best-effort.
+      });
+    } finally {
+      markAsDisposed(this);
+    }
+  }
+
+  [Symbol.dispose](): void {
+    this.dispose();
   }
 }
 

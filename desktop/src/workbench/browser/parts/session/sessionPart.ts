@@ -4,9 +4,12 @@ import { WorkbenchPart } from "../../part.js";
 export class SessionPart extends WorkbenchPart {
   readonly #label: HTMLSpanElement;
 
-  constructor(sessionName = "No session") {
-    super("session");
-    this.#label = document.createElement("span");
+  constructor(
+    ownerDocument: Document,
+    sessionName = "No session",
+  ) {
+    super("session", ownerDocument);
+    this.#label = ownerDocument.createElement("span");
     this.#label.className = "zeta-session-label";
     this.#label.textContent = sessionName;
     this.contentElement.append(this.#label);

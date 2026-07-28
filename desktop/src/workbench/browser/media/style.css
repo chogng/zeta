@@ -2,15 +2,18 @@
   color-scheme: dark;
   font-family: Inter, "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
   font-size: 13px;
-  background: #1e1e1e;
-  color: #cccccc;
+  background: var(--zeta-workbench-background, #1e1e1e);
+  color: var(--zeta-foreground, #cccccc);
 }
 
 *, *::before, *::after { box-sizing: border-box; }
 
 html, body, #app { width: 100%; min-width: 0; min-height: 0; height: 100%; margin: 0; }
 
-body { overflow: hidden; background: #1e1e1e; }
+body {
+  overflow: hidden;
+  background: var(--zeta-workbench-background, #1e1e1e);
+}
 
 button, input, select, textarea { font: inherit; }
 
@@ -22,9 +25,13 @@ button, input, select, textarea { font: inherit; }
   height: 100%;
   overflow: hidden;
   flex-direction: column;
-  background: #1e1e1e;
+  color: var(--zeta-foreground, #cccccc);
+  background: var(--zeta-workbench-background, #1e1e1e);
 }
 
 .zeta-workbench-layout-split { flex: 1 1 auto; }
 
-.zeta-workbench ::selection { color: #ffffff; background: #264f78; }
+.zeta-workbench ::selection {
+  color: var(--zeta-selection-foreground, #ffffff);
+  background: var(--zeta-selection-background, #264f78);
+}

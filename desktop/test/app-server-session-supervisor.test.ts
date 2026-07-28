@@ -174,7 +174,7 @@ test("supervisor restarts a crashed process with bounded lifecycle states", asyn
   const restarted = new Promise<void>((resolve) => {
     const dispose = supervisor.onStateChange((state) => {
       if (state === "ready" && children.length === 2) {
-        dispose();
+        dispose.dispose();
         resolve();
       }
     });
@@ -207,7 +207,7 @@ test("crash rejects an unknown-outcome side effect without replaying it", async 
   const restarted = new Promise<void>((resolve) => {
     const dispose = supervisor.onStateChange((state) => {
       if (state === "ready" && children.length === 2) {
-        dispose();
+        dispose.dispose();
         resolve();
       }
     });
@@ -233,7 +233,7 @@ test("supervisor stops restarting after its crash budget is exhausted", async ()
   const restarted = new Promise<void>((resolve) => {
     const dispose = supervisor.onStateChange((state) => {
       if (state === "ready" && children.length === 2) {
-        dispose();
+        dispose.dispose();
         resolve();
       }
     });

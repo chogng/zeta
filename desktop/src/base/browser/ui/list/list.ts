@@ -1,11 +1,15 @@
-import { Component } from "../common/component.js";
+import { DisposableOwner } from "../../../common/lifecycle.js";
 
 /** A generic list renderer that leaves row presentation to its caller. */
-export class List<T> extends Component<HTMLUListElement> {
+export class List<T> extends DisposableOwner {
+  readonly element: HTMLUListElement;
+
   constructor(items: readonly T[], render: (item: T, index: number) => Element) {
+    super();
     const element = document.createElement("ul");
+    this.element = element;
+    this.defer(() => element.remove());
     element.className = "zeta-list";
-    super(element);
     this.setItems(items, render);
   }
 

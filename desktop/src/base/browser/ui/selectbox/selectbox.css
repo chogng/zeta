@@ -1,1 +1,58 @@
-.zeta-select-box { font: inherit; }
+.zeta-select-box {
+  min-width: 120px;
+  max-width: 100%;
+}
+
+.zeta-select-box-button {
+  width: 100%;
+}
+
+.zeta-select-box-list {
+  min-width: 160px;
+  max-height: min(320px, calc(100vh - 16px));
+  padding: 3px;
+  outline: none;
+  overflow: auto;
+}
+
+.zeta-select-box-option {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  min-height: 24px;
+  padding: 3px 6px;
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+}
+
+.zeta-select-box-option-active {
+  color: var(--zeta-selection-foreground, #ffffff);
+  background: var(--zeta-selection-background, #264f78);
+}
+
+.zeta-select-box-option-selected .zeta-select-box-option-label::before {
+  content: "✓";
+  display: inline-block;
+  width: 16px;
+}
+
+.zeta-select-box-option:not(.zeta-select-box-option-selected)
+  .zeta-select-box-option-label::before {
+  content: "";
+  display: inline-block;
+  width: 16px;
+}
+
+.zeta-select-box-option-description {
+  color: var(--zeta-description-foreground, #b8b8b8);
+}
+
+.zeta-select-box-option-active .zeta-select-box-option-description {
+  color: inherit;
+}
+
+.zeta-select-box-option-disabled {
+  opacity: .5;
+  cursor: default;
+}

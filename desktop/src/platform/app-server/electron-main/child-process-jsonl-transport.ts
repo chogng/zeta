@@ -1,4 +1,10 @@
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
+import {
+  type IDisposable,
+  markAsDisposed,
+  trackDisposable,
+  toDisposable,
+} from "../../../base/common/lifecycle.js";
 
 export const DEFAULT_MAX_JSONL_FRAME_BYTES = 1_048_576;
 export const DEFAULT_MAX_STDERR_BYTES = 65_536;
@@ -19,7 +25,7 @@ type CloseListener = (error: Error) => void;
  *
  * This transport deliberately has no knowledge of JSON-RPC methods or request identifiers.
  */
-export class ChildProcessJsonlTransport {
+export class ChildProcessJsonlTransport implements IDisposable {
   readonly #maxFrameBytes: number;
   readonly #maxStderrBytes: number;
   readonly #maxPendingWrites: number;
@@ -59,34 +65,32 @@ export class ChildProcessJsonlTransport {
     process.stdout.on("data", this.#onStdoutData);
     process.stderr.on("data", this.#onStderrData);
     process.stdout.once("end", this.#onStdoutEnd);
-    process.stdout.once("error", (error: Error) => this.#fail(streamError("stdout", error)));
-    process.stderr.once("error", (error: Error) => this.#fail(streamError("stderr", error)));
-    process.stdin.once("error", (error: Error) => this.#fail(streamError("stdin", error)));
-    process.once("error", (error: Error) => this.#fail(new Error(`App Server process error: ${error.message}`)));
-    process.once("exit", (code, signal) => {
-      this.#finish(
-        new Error(
-          signal
-            ? `Zeta app-server exited from signal ${signal}`
-            : `Zeta app-server exited with code ${code ?? "unknown"}`,
-        ),
-      );
-    });
+    process.stdout.once("error", this.#onStdoutError);
+    process.stderr.once("error", this.#onStderrError);
+    process.stdin.once("error", this.#onStdinError);
+    process.once("error", this.#onProcessError);
+    process.once("exit", this.#onProcessExit);
+    trackDisposable(this);
   }
 
-  onFrame(listener: FrameListener): () => void {
+  onFrame(listener: FrameListener): IDisposable {
     this.#frameListeners.add(listener);
-    return () => this.#frameListeners.delete(listener);
+    return toDisposable(() => this.#frameListeners.delete(listener));
   }
 
-  onClose(listener: CloseListener): () => void {
+  onClose(listener: CloseListener): IDisposable {
     if (this.#terminalError) {
       const error = this.#terminalError;
-      queueMicrotask(() => listener(error));
-      return () => {};
+      let active = true;
+      queueMicrotask(() => {
+        if (active) listener(error);
+      });
+      return toDisposable(() => {
+        active = false;
+      });
     }
     this.#closeListeners.add(listener);
-    return () => this.#closeListeners.delete(listener);
+    return toDisposable(() => this.#closeListeners.delete(listener));
   }
 
   send(frame: string): Promise<void> {
@@ -141,6 +145,16 @@ export class ChildProcessJsonlTransport {
     return this.#closePromise;
   }
 
+  dispose(): void {
+    void this.close().catch(() => {
+      // Explicit close callers can observe errors; disposal is best-effort.
+    });
+  }
+
+  [Symbol.dispose](): void {
+    this.dispose();
+  }
+
   readonly #onStdoutData = (chunk: Buffer | string): void => {
     if (this.#terminalError) return;
     const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk, "utf8");
@@ -174,6 +188,35 @@ export class ChildProcessJsonlTransport {
         ? "App Server stdout ended"
         : "App Server stdout ended with an unterminated JSONL frame";
     this.#fail(new Error(message));
+  };
+
+  readonly #onStdoutError = (error: Error): void => {
+    this.#fail(streamError("stdout", error));
+  };
+
+  readonly #onStderrError = (error: Error): void => {
+    this.#fail(streamError("stderr", error));
+  };
+
+  readonly #onStdinError = (error: Error): void => {
+    this.#fail(streamError("stdin", error));
+  };
+
+  readonly #onProcessError = (error: Error): void => {
+    this.#fail(new Error(`App Server process error: ${error.message}`));
+  };
+
+  readonly #onProcessExit = (
+    code: number | null,
+    signal: NodeJS.Signals | null,
+  ): void => {
+    this.#finish(
+      new Error(
+        signal
+          ? `Zeta app-server exited from signal ${signal}`
+          : `Zeta app-server exited with code ${code ?? "unknown"}`,
+      ),
+    );
   };
 
   #appendFramePart(part: Buffer): void {
@@ -275,11 +318,25 @@ export class ChildProcessJsonlTransport {
     if (this.#terminalError) return;
     this.#terminalError = error;
     this.process.stdout.off("data", this.#onStdoutData);
+    this.process.stdout.off("end", this.#onStdoutEnd);
+    this.process.stdout.off("error", this.#onStdoutError);
     this.process.stderr.off("data", this.#onStderrData);
+    this.process.stderr.off("error", this.#onStderrError);
+    this.process.stdin.off("error", this.#onStdinError);
+    this.process.off("error", this.#onProcessError);
+    this.process.off("exit", this.#onProcessExit);
     for (const reject of this.#writeRejectors) reject(error);
     this.#writeRejectors.clear();
-    for (const listener of this.#closeListeners) listener(error);
+    for (const listener of this.#closeListeners) {
+      try {
+        listener(error);
+      } catch {
+        // One close observer cannot block transport-wide teardown.
+      }
+    }
+    this.#frameListeners.clear();
     this.#closeListeners.clear();
+    markAsDisposed(this);
   }
 }
 

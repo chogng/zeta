@@ -1,4 +1,13 @@
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
+import { CancellationError } from "../../../base/common/cancellation.js";
+import {
+  DisposableStore,
+  type IDisposable,
+  markAsDisposed,
+  setDisposableOwner,
+  trackDisposable,
+  toDisposable,
+} from "../../../base/common/lifecycle.js";
 import { ChildProcessJsonlTransport } from "./child-process-jsonl-transport.js";
 
 type JsonRpcId = number | string;
@@ -39,11 +48,21 @@ export class JsonRpcRemoteError extends Error {
   }
 }
 
+export class RpcRequestCancelledError extends CancellationError {
+  constructor(
+    readonly method: string,
+    reason?: unknown,
+  ) {
+    super(`JSON-RPC request cancelled: ${method}`, reason);
+    this.name = "RpcRequestCancelledError";
+  }
+}
+
 interface PendingRequest {
   resolve(value: unknown): void;
   reject(error: Error): void;
   timeout?: NodeJS.Timeout;
-  removeAbortListener?: () => void;
+  abortListener?: IDisposable;
 }
 
 interface RequestHandler {
@@ -55,8 +74,9 @@ type RetiredRequest = "completed" | "abandoned";
 /**
  * Implements transport-independent JSON-RPC pairing, lifecycle, and bidirectional dispatch.
  */
-export class JsonRpcPeer {
+export class JsonRpcPeer implements IDisposable {
   readonly #transport: ChildProcessJsonlTransport;
+  readonly #subscriptions = new DisposableStore();
   readonly #maxPendingRequests: number;
   readonly #retiredRequestLimit: number;
   readonly #pending = new Map<number, PendingRequest>();
@@ -82,8 +102,15 @@ export class JsonRpcPeer {
       "retiredRequestLimit",
     );
     this.#transport = new ChildProcessJsonlTransport(process);
-    this.#transport.onFrame((frame) => this.#onFrame(frame));
-    this.#transport.onClose((error) => this.#shutdown(error));
+    this.#subscriptions.add(
+      this.#transport.onFrame((frame) => this.#onFrame(frame)),
+    );
+    this.#subscriptions.add(
+      this.#transport.onClose((error) => this.#shutdown(error)),
+    );
+    trackDisposable(this);
+    setDisposableOwner(this.#transport, this);
+    setDisposableOwner(this.#subscriptions, this);
   }
 
   request<P, R>(
@@ -93,7 +120,9 @@ export class JsonRpcPeer {
   ): Promise<R> {
     if (this.#closedError) return Promise.reject(this.#closedError);
     if (options.signal?.aborted) {
-      return Promise.reject(abortError(definition.method));
+      return Promise.reject(
+        new RpcRequestCancelledError(definition.method, options.signal.reason),
+      );
     }
     if (this.#pending.size >= this.#maxPendingRequests) {
       return Promise.reject(new Error("JSON-RPC pending request limit reached"));
@@ -118,9 +147,14 @@ export class JsonRpcPeer {
         pending.timeout.unref();
       }
       if (options.signal) {
-        const onAbort = (): void => this.#abandon(id, abortError(definition.method));
-        options.signal.addEventListener("abort", onAbort, { once: true });
-        pending.removeAbortListener = () => options.signal?.removeEventListener("abort", onAbort);
+        const signal = options.signal;
+        const onAbort = (): void => {
+          this.#cancelOutbound(id, definition.method, signal.reason);
+        };
+        signal.addEventListener("abort", onAbort, { once: true });
+        pending.abortListener = toDisposable(() => {
+          signal.removeEventListener("abort", onAbort);
+        });
       }
       this.#pending.set(id, pending);
     });
@@ -147,7 +181,8 @@ export class JsonRpcPeer {
   onNotification<P>(
     definition: RpcNotificationDefinition<P>,
     listener: (params: P) => void,
-  ): () => void {
+  ): IDisposable {
+    if (this.#closedError) throw this.#closedError;
     let listeners = this.#notificationListeners.get(definition.method);
     if (!listeners) {
       listeners = new Set();
@@ -155,27 +190,28 @@ export class JsonRpcPeer {
     }
     const untypedListener = listener as (params: unknown) => void;
     listeners.add(untypedListener);
-    return () => {
+    return toDisposable(() => {
       listeners?.delete(untypedListener);
       if (listeners?.size === 0) this.#notificationListeners.delete(definition.method);
-    };
+    });
   }
 
   registerRequestHandler<P, R>(
     definition: RpcMethodDefinition<P, R>,
     handler: (params: P, context: RpcRequestContext) => R | Promise<R>,
-  ): () => void {
+  ): IDisposable {
+    if (this.#closedError) throw this.#closedError;
     if (this.#requestHandlers.has(definition.method)) {
       throw new Error(`JSON-RPC request handler already registered: ${definition.method}`);
     }
     const untypedHandler: RequestHandler = (params, context) =>
       handler(params as P, context);
     this.#requestHandlers.set(definition.method, untypedHandler);
-    return () => {
+    return toDisposable(() => {
       if (this.#requestHandlers.get(definition.method) === untypedHandler) {
         this.#requestHandlers.delete(definition.method);
       }
-    };
+    });
   }
 
   diagnostics(): string {
@@ -185,6 +221,15 @@ export class JsonRpcPeer {
   close(): Promise<void> {
     this.#shutdown(new Error("JSON-RPC peer closed"));
     return this.#transport.close();
+  }
+
+  dispose(): void {
+    this.#shutdown(new Error("JSON-RPC peer disposed"));
+    this.#transport.dispose();
+  }
+
+  [Symbol.dispose](): void {
+    this.dispose();
   }
 
   #onFrame(frame: string): void {
@@ -316,15 +361,21 @@ export class JsonRpcPeer {
         response = { jsonrpc: "2.0", id, result };
       }
     } catch (error) {
-      response = {
-        jsonrpc: "2.0",
-        id,
-        error: {
-          code: -32603,
-          message: error instanceof Error ? error.message : "Internal error",
-          data: null,
-        },
-      };
+      response = controller.signal.aborted
+        ? {
+            jsonrpc: "2.0",
+            id,
+            error: { code: -32800, message: "Request cancelled", data: null },
+          }
+        : {
+            jsonrpc: "2.0",
+            id,
+            error: {
+              code: -32603,
+              message: error instanceof Error ? error.message : "Internal error",
+              data: null,
+            },
+          };
     }
     try {
       await this.#transport.send(JSON.stringify(response));
@@ -345,13 +396,25 @@ export class JsonRpcPeer {
     );
   }
 
-  #abandon(id: number, error: Error): void {
+  #cancelOutbound(id: number, method: string, reason?: unknown): void {
+    if (!this.#abandon(id, new RpcRequestCancelledError(method, reason))) return;
+    void this.#transport.send(JSON.stringify({
+      jsonrpc: "2.0",
+      method: "$/cancelRequest",
+      params: { id },
+    })).catch(() => {
+      // The local request is already settled; transport shutdown owns failures.
+    });
+  }
+
+  #abandon(id: number, error: Error): boolean {
     const pending = this.#pending.get(id);
-    if (!pending) return;
+    if (!pending) return false;
     this.#pending.delete(id);
     cleanupPending(pending);
     this.#retire(id, "abandoned");
     pending.reject(error);
+    return true;
   }
 
   #retire(id: number, outcome: RetiredRequest): void {
@@ -372,21 +435,25 @@ export class JsonRpcPeer {
   #shutdown(error: Error): void {
     if (this.#closedError) return;
     this.#closedError = error;
+    this.#subscriptions.dispose();
     for (const pending of this.#pending.values()) {
       cleanupPending(pending);
       pending.reject(error);
     }
     this.#pending.clear();
-    for (const controller of this.#inboundRequests.values()) controller.abort();
+    for (const controller of this.#inboundRequests.values()) {
+      controller.abort(error);
+    }
     this.#inboundRequests.clear();
     this.#notificationListeners.clear();
     this.#requestHandlers.clear();
+    markAsDisposed(this);
   }
 }
 
 function cleanupPending(pending: PendingRequest): void {
   if (pending.timeout) clearTimeout(pending.timeout);
-  pending.removeAbortListener?.();
+  pending.abortListener?.dispose();
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -395,12 +462,6 @@ function isObject(value: unknown): value is Record<string, unknown> {
 
 function isJsonRpcId(value: unknown): value is JsonRpcId {
   return typeof value === "string" || (Number.isSafeInteger(value) && (value as number) >= 0);
-}
-
-function abortError(method: string): Error {
-  const error = new Error(`JSON-RPC request aborted: ${method}`);
-  error.name = "AbortError";
-  return error;
 }
 
 function positiveInteger(value: number | undefined, fallback: number, name: string): number {

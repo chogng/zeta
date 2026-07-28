@@ -23,6 +23,17 @@ import type {
   TurnStartResult,
 } from "../../../../generated/app-server/types.js";
 
+/**
+ * A string-keyed cleanup handle that can cross Electron's contextBridge.
+ *
+ * Symbol-keyed standard disposal methods cannot cross that serialization
+ * boundary. Renderer code should adapt this handle to a local `IDisposable`
+ * when it needs to transfer ownership.
+ */
+export interface DisposableHandle {
+  dispose(): void;
+}
+
 export type AppServerConnectionState =
   | "stopped"
   | "starting"
@@ -41,7 +52,9 @@ export type AppServerConnectionState =
 export interface ZetaRendererApi {
   appServer: {
     getConnectionState(): Promise<AppServerConnectionState>;
-    onConnectionState(listener: (state: AppServerConnectionState) => void): () => void;
+    onConnectionState(
+      listener: (state: AppServerConnectionState) => void,
+    ): DisposableHandle;
   };
   session: {
     create(params: SessionCreateParams): Promise<SessionResult>;
@@ -65,6 +78,6 @@ export interface ZetaRendererApi {
     interrupt(params: TurnInterruptParams): Promise<TurnInterruptResult>;
   };
   events: {
-    subscribe(listener: (event: ServerNotification) => void): () => void;
+    subscribe(listener: (event: ServerNotification) => void): DisposableHandle;
   };
 }

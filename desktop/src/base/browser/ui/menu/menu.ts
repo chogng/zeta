@@ -1,19 +1,33 @@
 import { Button } from "../button/button.js";
-import { Component } from "../common/component.js";
+import { DisposableOwner } from "../../../common/lifecycle.js";
 
 export interface MenuItem { id: string; label: string; enabled?: boolean; run: () => void; }
 
 /** A keyboard-focusable action menu suitable for a ContextView. */
-export class Menu extends Component<HTMLDivElement> {
-  constructor(items: readonly MenuItem[]) {
-    const element = document.createElement("div");
+export class Menu extends DisposableOwner {
+  readonly element: HTMLDivElement;
+
+  constructor(
+    items: readonly MenuItem[],
+    ownerDocument: Document = document,
+  ) {
+    super();
+    const element = ownerDocument.createElement("div");
+    this.element = element;
+    this.defer(() => element.remove());
     element.className = "zeta-menu";
     element.setAttribute("role", "menu");
-    super(element);
     for (const item of items) {
-      const button = new Button({ label: item.label, enabled: item.enabled, onClick: item.run });
+      const button = this.own(
+        new Button({
+          label: item.label,
+          ownerDocument,
+          enabled: item.enabled,
+          onClick: item.run,
+        }),
+      );
       button.element.setAttribute("role", "menuitem");
-      this.element.append(button.element);
+      element.append(button.element);
     }
   }
 }

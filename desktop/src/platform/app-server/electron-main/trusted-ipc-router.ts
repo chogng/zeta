@@ -35,7 +35,7 @@ export function registerTrustedIpcRoutes(
   ipcMain: IpcMainLike,
   target: TrustedIpcTarget,
   routes: readonly IpcRoute<unknown, unknown>[],
-): () => void {
+): IDisposable {
   const channels = new Set<string>();
   for (const route of routes) {
     if (channels.has(route.channel)) {
@@ -56,9 +56,9 @@ export function registerTrustedIpcRoutes(
     for (const channel of registered) ipcMain.removeHandler(channel);
     throw error;
   }
-  return () => {
+  return toDisposable(() => {
     for (const channel of channels) ipcMain.removeHandler(channel);
-  };
+  });
 }
 
 export function requireTrustedSender(
@@ -79,3 +79,7 @@ export function requireTrustedSender(
 export function normalizeEntryUrl(value: string): string {
   return new URL(value).href;
 }
+import {
+  type IDisposable,
+  toDisposable,
+} from "../../../base/common/lifecycle.js";

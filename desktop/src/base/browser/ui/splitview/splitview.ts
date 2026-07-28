@@ -1,28 +1,44 @@
-import { Component } from "../common/component.js";
+import { DisposableOwner } from "../../../common/lifecycle.js";
 import { Sash } from "../sash/sash.js";
 
 export type SplitViewOrientation = "horizontal" | "vertical";
 
 /** A flex layout with panes separated by draggable sashes. */
-export class SplitView extends Component<HTMLDivElement> {
+export class SplitView extends DisposableOwner {
+  readonly element: HTMLDivElement;
   #panes: HTMLElement[] = [];
 
-  constructor(readonly orientation: SplitViewOrientation) {
-    const element = document.createElement("div");
+  constructor(
+    readonly orientation: SplitViewOrientation,
+    ownerDocument: Document = document,
+  ) {
+    super();
+    const element = ownerDocument.createElement("div");
+    this.element = element;
+    this.defer(() => element.remove());
     element.className = `zeta-split-view zeta-split-view-${orientation}`;
     element.style.flexDirection = orientation === "horizontal" ? "row" : "column";
-    super(element);
   }
 
   addPane(content: Element, basis = "1fr"): void {
-    const pane = document.createElement("div");
+    const ownerDocument = this.element.ownerDocument;
+    const pane = ownerDocument.createElement("div");
     pane.className = "zeta-split-view-pane";
     pane.style.flex = flexForPaneSize(basis);
     pane.append(content);
     const previous = this.#panes.at(-1);
     if (previous) {
-      const sash = new Sash(this.orientation === "horizontal" ? "vertical" : "horizontal");
-      sash.onDidDrag((delta) => this.resizeAdjacentPanes(previous, pane, delta));
+      const sash = this.own(
+        new Sash(
+          this.orientation === "horizontal" ? "vertical" : "horizontal",
+          ownerDocument,
+        ),
+      );
+      this.own(
+        sash.onDidDrag((delta) =>
+          this.resizeAdjacentPanes(previous, pane, delta),
+        ),
+      );
       this.element.append(sash.element);
     }
     this.#panes.push(pane);

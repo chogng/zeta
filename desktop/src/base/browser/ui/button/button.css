@@ -1,13 +1,25 @@
 .zeta-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   min-height: 28px;
   padding: 4px 10px;
   border: 1px solid transparent;
   border-radius: 4px;
-  color: #cccccc;
+  color: var(--zeta-button-foreground, #cccccc);
   background: transparent;
   font: inherit;
   cursor: pointer;
 }
-.zeta-button:hover { background: #2a2d2e; }
-.zeta-button:focus-visible { outline: 1px solid #007fd4; outline-offset: -1px; }
+.zeta-button:hover {
+  background: var(--zeta-button-hover-background, #2a2d2e);
+}
+.zeta-button[aria-pressed="true"] {
+  background: var(--zeta-button-active-background, #37373d);
+}
+.zeta-button:focus-visible {
+  outline: 1px solid var(--zeta-focus-border, #007fd4);
+  outline-offset: -1px;
+}
 .zeta-button:disabled { opacity: .5; cursor: default; }

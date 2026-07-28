@@ -42,6 +42,46 @@ Desktop 不负责：
 - 模型供应商与长期凭据持久化；
 - Rust 协议 DTO 的定义。
 
+### 2.1 新功能归属判断
+
+不能因为功能从 UI 进入，就把整项功能都归给 Renderer。设计新功能时，按下面的顺序判断并
+拆分职责：
+
+1. 没有 Desktop 时，CLI、TUI 或远程客户端是否仍需要相同语义？如果需要，权威行为和共享
+   contract 属于 Rust，并通过 App Server 暴露。
+2. 功能是否修改权威状态、访问磁盘或网络、执行进程，或者承担权限与安全校验？如果是，它
+   不能只在 Renderer 实现。跨客户端的产品语义归 Rust；Desktop 独有的宿主能力归 Electron
+   Main，并通过窄的 typed Preload API 暴露。
+3. 功能是否只决定如何显示、如何交互，或维护可丢弃且可重建的视图状态？如果是，它属于
+   Renderer。
+4. 如果以上答案跨越多层，就把它实现为纵向功能，不把后端语义复制到前端，也不把 UI 状态
+   塞进 Rust。
+
+前端可以为了即时反馈重复一部分格式校验，但这不替代权威 owner 在可信边界内重新校验。
+Renderer 不能因为已经校验过输入，就获得直接使用 `fs`、网络或任意 IPC/RPC 的权限。
+
+以未来增加 `Files` 能力为例，下表说明职责放置规则，不表示这些 API 当前已经实现：
+
+| 能力 | Owner |
+| --- | --- |
+| 文件树渲染、选中、展开、快捷键、加载态 | Renderer |
+| 系统文件选择器、在原生文件管理器中显示 | Electron Main / Preload |
+| 跨客户端的目录枚举、读写、重命名、搜索和 workspace 边界校验 | Rust / App Server |
+| 文件位置 identity | 共享 URI contract；Renderer 只维护其视图投影 |
+| 跨重启的领域 `FileId` 或 `DocumentId` | 拥有该生命周期的 Rust 领域模型 |
+| Tab、Pane 等纯 UI 实例 ID | Renderer |
+
+因此，一项完整功能可以具有一条跨层执行路径：
+
+```text
+Renderer component
+  → UI command
+  → typed Preload API
+  → Electron Main
+  → typed App Server method
+  → Rust authority
+```
+
 ## 3. 目录边界
 
 ```text

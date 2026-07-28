@@ -1,2 +1,34 @@
-.zeta-workbench-statusbar { min-height: 23px; flex: 0 0 23px; color: #ffffff; background: #007acc; font-size: 12px; }
-.zeta-workbench-statusbar .zeta-workbench-part-content { flex-direction: row; align-items: center; padding: 0 10px; }
+.zeta-workbench-statusbar {
+  min-height: 23px;
+  flex: 0 0 23px;
+  color: var(--zeta-status-bar-foreground, #ffffff);
+  background: var(--zeta-status-bar-background, #007acc);
+  font-size: 12px;
+}
+
+.zeta-workbench-statusbar .zeta-workbench-part-content {
+  flex-direction: row;
+  align-items: stretch;
+  padding: 0 4px;
+}
+
+.zeta-statusbar-items {
+  display: flex;
+  min-width: 0;
+  align-items: stretch;
+}
+
+.zeta-statusbar-items-right {
+  flex-direction: row-reverse;
+  margin-left: auto;
+}
+
+.zeta-statusbar-item {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  padding: 0 6px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}

@@ -1,19 +1,76 @@
-import { app, BrowserWindow, ipcMain } from "electron/main";
+import { app, BrowserWindow, ipcMain, Menu, screen } from "electron/main";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import {
   APP_SERVER_SCHEMA_HASH,
 } from "../../../generated/app-server/types.js";
+import {
+  DisposableStore,
+  type IDisposable,
+} from "../../base/common/lifecycle.js";
+import {
+  DisposableTracker,
+  installDisposableTracker,
+} from "../../base/common/disposableTracker.js";
 import { appServerIpcRoutes } from "../../platform/app-server/electron-main/app-server-ipc.js";
 import { AppServerSupervisor } from "../../platform/app-server/electron-main/app-server-supervisor.js";
 import {
   normalizeEntryUrl,
   registerTrustedIpcRoutes,
 } from "../../platform/app-server/electron-main/trusted-ipc-router.js";
+import {
+  NativeContextMenuMainService,
+  nativeContextMenuIpcRoutes,
+} from "../../platform/contextview/electron-main/contextMenuMainService.js";
+import {
+  NativeMenubarMainService,
+  nativeMenubarIpcRoutes,
+} from "../../platform/menubar/electron-main/menubarMainService.js";
+import { StateService } from "../../platform/state/node/stateService.js";
+import {
+  WindowMode,
+} from "../../platform/window/electron-main/window.js";
+import {
+  applyWindowState,
+  resolveBrowserWindowOptions,
+} from "../../platform/windows/electron-main/windows.js";
+import {
+  WindowsStateHandler,
+} from "../../platform/windows/electron-main/windowsStateHandler.js";
 
 let supervisor: AppServerSupervisor | undefined;
+let mainWindow: BrowserWindow | undefined;
+let stateService: StateService | undefined;
+let windowsStateHandler: WindowsStateHandler | undefined;
+let windowStateTracking: IDisposable | undefined;
+let quitAfterStateSaved = false;
+let quitSaveStarted = false;
+const disposableTracker = app.isPackaged
+  ? undefined
+  : new DisposableTracker();
+const tracking = disposableTracker
+  ? installDisposableTracker(disposableTracker)
+  : undefined;
 
 app.whenReady().then(async () => {
+  if (process.platform !== "darwin") {
+    Menu.setApplicationMenu(null);
+  }
+  stateService = await StateService.create(
+    join(app.getPath("userData"), "state.json"),
+  );
+  windowsStateHandler = new WindowsStateHandler({
+    stateService,
+    displayService: {
+      getAllDisplays: () => screen.getAllDisplays(),
+      getDisplayMatching: (bounds) => screen.getDisplayMatching(bounds),
+    },
+    onError: (error) => {
+      console.error("Failed to save window state", error);
+    },
+  });
+  const windowState = windowsStateHandler.restoreWindowState();
+
   const executableName = process.platform === "win32" ? "zeta.exe" : "zeta";
   const executable = app.isPackaged
     ? join(process.resourcesPath, "bin", executableName)
@@ -35,18 +92,27 @@ app.whenReady().then(async () => {
   });
   await supervisor.start();
 
-  const useWindowsTitleBarOverlay = process.platform === "win32";
-  const window = new BrowserWindow({
-    frame: !useWindowsTitleBarOverlay,
-    titleBarStyle: process.platform === "darwin" ? "hiddenInset" : undefined,
-    titleBarOverlay: useWindowsTitleBarOverlay ? { color: "#181818", symbolColor: "#d6d6d6", height: 35 } : false,
+  const browserWindowOptions = resolveBrowserWindowOptions({
+    state: windowState,
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
       preload: join(app.getAppPath(), "dist/preload/src/code/electron-browser/preload.cjs"),
+      additionalArguments: [],
     },
   });
+  const window = new BrowserWindow(browserWindowOptions);
+  mainWindow = window;
+  windowStateTracking = windowsStateHandler.trackWindow(window);
+  if (windowState.mode !== WindowMode.Normal) {
+    window.once("ready-to-show", () => {
+      if (!window.isDestroyed()) {
+        window.show();
+      }
+    });
+    applyWindowState(window, windowState);
+  }
   const rendererUrl = process.env.ZETA_RENDERER_URL;
   const rendererFile = join(
     app.getAppPath(),
@@ -56,24 +122,39 @@ app.whenReady().then(async () => {
     !app.isPackaged && rendererUrl
       ? new URL("/electron-browser/workbench/workbench.html", rendererUrl).href
       : pathToFileURL(rendererFile).href;
-  const disposeRoutes = registerTrustedIpcRoutes(
+  const windowDisposables = new DisposableStore();
+  windowDisposables.add(windowStateTracking);
+  const ipcRoutes = [...appServerIpcRoutes(supervisor)];
+  if (process.platform === "darwin") {
+    const nativeContextMenu = windowDisposables.add(
+      new NativeContextMenuMainService(window),
+    );
+    const nativeMenubar = windowDisposables.add(
+      new NativeMenubarMainService(window),
+    );
+    ipcRoutes.push(...nativeContextMenuIpcRoutes(nativeContextMenu));
+    ipcRoutes.push(...nativeMenubarIpcRoutes(nativeMenubar));
+  }
+  windowDisposables.add(registerTrustedIpcRoutes(
     ipcMain,
     {
       webContents: window.webContents,
       allowedEntryUrls: new Set([normalizeEntryUrl(rendererEntryUrl)]),
     },
-    appServerIpcRoutes(supervisor),
-  );
-  const disposeNotifications = supervisor.onNotification((notification) =>
+    ipcRoutes,
+  ));
+  windowDisposables.add(supervisor.onNotification((notification) =>
     window.webContents.send("zeta:event", notification),
-  );
-  const disposeState = supervisor.onStateChange((state) =>
+  ));
+  windowDisposables.add(supervisor.onStateChange((state) =>
     window.webContents.send("zeta:app-server:stateChanged", state),
-  );
+  ));
   window.once("closed", () => {
-    disposeRoutes();
-    disposeNotifications();
-    disposeState();
+    windowDisposables.dispose();
+    if (mainWindow === window) {
+      mainWindow = undefined;
+      windowStateTracking = undefined;
+    }
   });
 
   if (!app.isPackaged && rendererUrl) {
@@ -83,6 +164,38 @@ app.whenReady().then(async () => {
   }
 });
 
-app.on("before-quit", () => {
-  void supervisor?.stop();
+app.on("before-quit", (event) => {
+  supervisor?.dispose();
+
+  if (quitAfterStateSaved || !stateService) {
+    return;
+  }
+  event.preventDefault();
+  if (quitSaveStarted) {
+    return;
+  }
+
+  quitSaveStarted = true;
+  windowStateTracking?.dispose();
+  void (async () => {
+    try {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        await windowsStateHandler?.saveWindowState(mainWindow);
+      }
+      await stateService?.close();
+    } catch (error) {
+      console.error("Failed to flush application state before quit", error);
+    } finally {
+      quitAfterStateSaved = true;
+      app.quit();
+    }
+  })();
+});
+
+app.on("will-quit", () => {
+  try {
+    disposableTracker?.assertNoLeaks();
+  } finally {
+    tracking?.[Symbol.dispose]();
+  }
 });

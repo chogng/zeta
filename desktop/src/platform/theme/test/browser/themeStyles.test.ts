@@ -1,0 +1,89 @@
+import { strict as assert } from "node:assert";
+import test from "node:test";
+import { bindColorTheme } from "../../browser/themeStyles.js";
+import {
+  ColorId,
+  colorCssVariable,
+  darkColorTheme,
+  lightColorTheme,
+} from "../../common/colorTheme.js";
+import { ThemeService } from "../../common/themeService.js";
+
+test("color theme binding applies changes and restores prior root styles", () => {
+  using service = new ThemeService(darkColorTheme);
+  const target = new FakeThemeTarget();
+  const foreground = colorCssVariable(ColorId.foreground);
+  const background = colorCssVariable(ColorId.workbenchBackground);
+  target.style.setProperty(foreground, "hotpink", "important");
+  target.style.setProperty("color-scheme", "only light");
+  target.setAttribute("data-color-theme", "host-theme");
+
+  const binding = bindColorTheme(
+    service,
+    target as unknown as HTMLElement,
+  );
+  assert.equal(target.style.getPropertyValue(foreground), "#cccccc");
+  assert.equal(target.style.getPropertyValue(background), "#1e1e1e");
+  assert.equal(target.style.getPropertyValue("color-scheme"), "dark");
+  assert.equal(target.getAttribute("data-color-theme"), "zeta-dark");
+
+  service.setColorTheme(lightColorTheme);
+  assert.equal(target.style.getPropertyValue(background), "#ffffff");
+  assert.equal(target.style.getPropertyValue("color-scheme"), "light");
+  assert.equal(target.getAttribute("data-color-theme"), "zeta-light");
+
+  binding.dispose();
+  assert.equal(target.style.getPropertyValue(foreground), "hotpink");
+  assert.equal(target.style.getPropertyPriority(foreground), "important");
+  assert.equal(target.style.getPropertyValue(background), "");
+  assert.equal(target.style.getPropertyValue("color-scheme"), "only light");
+  assert.equal(target.getAttribute("data-color-theme"), "host-theme");
+  assert.equal(target.getAttribute("data-color-scheme"), null);
+
+  service.setColorTheme(darkColorTheme);
+  assert.equal(target.style.getPropertyValue(background), "");
+});
+
+interface IStyleProperty {
+  readonly value: string;
+  readonly priority: string;
+}
+
+class FakeStyle {
+  readonly #properties = new Map<string, IStyleProperty>();
+
+  getPropertyValue(name: string): string {
+    return this.#properties.get(name)?.value ?? "";
+  }
+
+  getPropertyPriority(name: string): string {
+    return this.#properties.get(name)?.priority ?? "";
+  }
+
+  setProperty(name: string, value: string, priority = ""): void {
+    this.#properties.set(name, { value, priority });
+  }
+
+  removeProperty(name: string): string {
+    const previous = this.getPropertyValue(name);
+    this.#properties.delete(name);
+    return previous;
+  }
+}
+
+class FakeThemeTarget {
+  readonly style = new FakeStyle();
+  readonly #attributes = new Map<string, string>();
+
+  getAttribute(name: string): string | null {
+    return this.#attributes.get(name) ?? null;
+  }
+
+  setAttribute(name: string, value: string): void {
+    this.#attributes.set(name, value);
+  }
+
+  removeAttribute(name: string): void {
+    this.#attributes.delete(name);
+  }
+}

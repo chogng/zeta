@@ -2,17 +2,33 @@ import { contextBridge, ipcRenderer, type IpcRendererEvent } from "electron";
 import type { ServerNotification } from "../../../generated/app-server/types.js";
 import type {
   AppServerConnectionState,
-  ZetaRendererApi,
 } from "../../platform/app-server/common/renderer-api.js";
+import type {
+  ZetaElectronRendererApi,
+} from "../../platform/native/common/rendererApi.js";
+import {
+  NATIVE_CONTEXT_MENU_CLOSE_CHANNEL,
+  NATIVE_CONTEXT_MENU_POPUP_CHANNEL,
+} from "../../platform/contextview/common/nativeContextMenu.js";
+import type {
+  INativeMenubarSelection,
+} from "../../platform/menubar/common/nativeMenubar.js";
+import {
+  NATIVE_MENUBAR_SELECT_CHANNEL,
+  NATIVE_MENUBAR_UPDATE_CHANNEL,
+} from "../../platform/menubar/common/nativeMenubar.js";
 
-const api: ZetaRendererApi = {
+const api: ZetaElectronRendererApi = {
   appServer: {
     getConnectionState: () => ipcRenderer.invoke("zeta:app-server:state"),
     onConnectionState: (listener) => {
       const handler = (_event: IpcRendererEvent, state: AppServerConnectionState) =>
         listener(state);
       ipcRenderer.on("zeta:app-server:stateChanged", handler);
-      return () => ipcRenderer.removeListener("zeta:app-server:stateChanged", handler);
+      return {
+        dispose: () =>
+          ipcRenderer.removeListener("zeta:app-server:stateChanged", handler),
+      };
     },
   },
   session: {
@@ -40,7 +56,33 @@ const api: ZetaRendererApi = {
     subscribe: (listener) => {
       const handler = (_event: IpcRendererEvent, notification: ServerNotification) => listener(notification);
       ipcRenderer.on("zeta:event", handler);
-      return () => ipcRenderer.removeListener("zeta:event", handler);
+      return {
+        dispose: () => ipcRenderer.removeListener("zeta:event", handler),
+      };
+    },
+  },
+  nativeContextMenu: {
+    popup: (request) =>
+      ipcRenderer.invoke(NATIVE_CONTEXT_MENU_POPUP_CHANNEL, request),
+    close: () =>
+      ipcRenderer.invoke(NATIVE_CONTEXT_MENU_CLOSE_CHANNEL),
+  },
+  nativeMenubar: {
+    update: (data) =>
+      ipcRenderer.invoke(NATIVE_MENUBAR_UPDATE_CHANNEL, data),
+    onDidSelect: (listener) => {
+      const handler = (
+        _event: IpcRendererEvent,
+        selection: INativeMenubarSelection,
+      ) => listener(selection);
+      ipcRenderer.on(NATIVE_MENUBAR_SELECT_CHANNEL, handler);
+      return {
+        dispose: () =>
+          ipcRenderer.removeListener(
+            NATIVE_MENUBAR_SELECT_CHANNEL,
+            handler,
+          ),
+      };
     },
   },
 };

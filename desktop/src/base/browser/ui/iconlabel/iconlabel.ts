@@ -1,11 +1,15 @@
-import { Component } from "../common/component.js";
+import { DisposableOwner } from "../../../common/lifecycle.js";
 
 /** A text label paired with an icon glyph or application-provided icon element. */
-export class IconLabel extends Component<HTMLSpanElement> {
+export class IconLabel extends DisposableOwner {
+  readonly element: HTMLSpanElement;
+
   constructor(label: string, icon?: string | Element) {
+    super();
     const element = document.createElement("span");
+    this.element = element;
+    this.defer(() => element.remove());
     element.className = "zeta-icon-label";
-    super(element);
     if (icon) {
       const iconElement = typeof icon === "string" ? document.createElement("span") : icon;
       if (typeof icon === "string") iconElement.textContent = icon;

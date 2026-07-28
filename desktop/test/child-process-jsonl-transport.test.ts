@@ -4,12 +4,16 @@ import { EventEmitter, once } from "node:events";
 import test from "node:test";
 import { PassThrough, Writable } from "node:stream";
 import {
+  isCancellationError,
+} from "../src/base/common/cancellation.js";
+import {
   ChildProcessJsonlTransport,
   type ChildProcessJsonlTransportOptions,
 } from "../src/platform/app-server/electron-main/child-process-jsonl-transport.js";
 import {
   JsonRpcPeer,
   JsonRpcRemoteError,
+  RpcRequestCancelledError,
   type RpcMethodDefinition,
 } from "../src/platform/app-server/electron-main/json-rpc-peer.js";
 import {
@@ -188,29 +192,42 @@ test("times out locally and ignores the retired request's late response", async 
   await peer.close();
 });
 
-test("aborts requests and enforces the pending request bound", async () => {
+test("cancels requests and enforces the pending request bound", async () => {
   const child = new FakeChildProcess();
   const peer = new JsonRpcPeer(
     child as unknown as ChildProcessWithoutNullStreams,
     { maxPendingRequests: 1 },
   );
-  const controller = new AbortController();
+  const cancellation = new AbortController();
+  const requestFrame = once(child.stdin, "data");
   const first = peer.request(
     APP_SERVER_METHODS["thread/read"],
     { threadId: "thread_1" },
-    { signal: controller.signal },
+    { signal: cancellation.signal },
   );
+  const [requestChunk] = await requestFrame;
+  const requestId = JSON.parse((requestChunk as Buffer).toString("utf8")).id;
   await assert.rejects(
     peer.request(APP_SERVER_METHODS["thread/read"], { threadId: "thread_2" }),
     /pending request limit/,
   );
 
-  controller.abort();
+  const cancellationFrame = once(child.stdin, "data");
+  cancellation.abort();
   await assert.rejects(first, (error: unknown) => {
-    assert.ok(error instanceof Error);
-    assert.equal(error.name, "AbortError");
+    assert.ok(error instanceof RpcRequestCancelledError);
+    assert.equal(isCancellationError(error), true);
     return true;
   });
+  const [cancellationChunk] = await cancellationFrame;
+  assert.deepEqual(
+    JSON.parse((cancellationChunk as Buffer).toString("utf8")),
+    {
+      jsonrpc: "2.0",
+      method: "$/cancelRequest",
+      params: { id: requestId },
+    },
+  );
   await peer.close();
 });
 
@@ -258,7 +275,9 @@ test("cancels inbound request handlers and returns a cancellation error", async 
   };
   peer.registerRequestHandler(definition, (_params, context) =>
     new Promise<string>((resolve) => {
-      context.signal.addEventListener("abort", () => resolve("cancelled"), { once: true });
+      context.signal.addEventListener("abort", () => resolve("cancelled"), {
+        once: true,
+      });
     }),
   );
   const responseFrame = once(child.stdin, "data");

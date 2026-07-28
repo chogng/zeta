@@ -1,18 +1,42 @@
-import { Component } from "../common/component.js";
+import { addDisposableListener } from "../../dom.js";
+import type { Icon } from "../../../common/icon.js";
+import { DisposableOwner } from "../../../common/lifecycle.js";
+import { appendIcon } from "../icon/icon.js";
 
-export interface ButtonOptions { label: string; title?: string; enabled?: boolean; onClick?: () => void; }
+export interface ButtonOptions {
+  label: string;
+  ownerDocument?: Document;
+  icon?: Icon;
+  title?: string;
+  enabled?: boolean;
+  checked?: boolean;
+  onClick?: () => void;
+}
 
 /** A semantic button with an explicit enabled state. */
-export class Button extends Component<HTMLButtonElement> {
+export class Button extends DisposableOwner {
+  readonly element: HTMLButtonElement;
+
   constructor(options: ButtonOptions) {
-    const element = document.createElement("button");
+    super();
+    const ownerDocument = options.ownerDocument ?? document;
+    const element = ownerDocument.createElement("button");
+    this.element = element;
+    this.defer(() => element.remove());
     element.className = "zeta-button";
     element.type = "button";
-    element.textContent = options.label;
+    if (options.icon) appendIcon(options.icon, element);
+    const label = ownerDocument.createElement("span");
+    label.textContent = options.label;
+    element.append(label);
     element.title = options.title ?? options.label;
     element.disabled = options.enabled === false;
-    super(element);
-    if (options.onClick) this.listen(element, "click", () => options.onClick?.());
+    if (options.checked !== undefined) {
+      element.setAttribute("aria-pressed", String(options.checked));
+    }
+    if (options.onClick) {
+      this.own(addDisposableListener(element, "click", options.onClick));
+    }
   }
 
   set enabled(value: boolean) { this.element.disabled = !value; }

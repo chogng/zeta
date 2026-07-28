@@ -13,6 +13,12 @@ import type {
 import {
   APP_SERVER_METHODS,
 } from "../../../../generated/app-server/types.js";
+import {
+  type IDisposable,
+  markAsDisposed,
+  setDisposableOwner,
+  trackDisposable,
+} from "../../../base/common/lifecycle.js";
 import { AppServerClient } from "./app-server-client.js";
 import type {
   RpcMethodDefinition,
@@ -33,14 +39,17 @@ export interface AppServerSessionOptions {
 /**
  * Owns one initialized App Server connection and its negotiated immutable capabilities.
  */
-export class AppServerSession {
+export class AppServerSession implements IDisposable {
   #state: AppServerSessionState = "created";
   #initializeResult?: InitializeResult;
 
   constructor(
     readonly client: AppServerClient,
     readonly options: AppServerSessionOptions,
-  ) {}
+  ) {
+    trackDisposable(this);
+    setDisposableOwner(client, this);
+  }
 
   get state(): AppServerSessionState {
     return this.#state;
@@ -114,18 +123,20 @@ export class AppServerSession {
   onNotification<M extends AppServerNotificationMethod>(
     definition: AppServerNotificationDefinition<M>,
     listener: (params: NotificationParams<M>) => void,
-  ): () => void {
+  ): IDisposable {
     return this.client.onNotification(definition, listener);
   }
 
-  onAnyNotification(listener: (notification: ServerNotification) => void): () => void {
+  onAnyNotification(
+    listener: (notification: ServerNotification) => void,
+  ): IDisposable {
     return this.client.onAnyNotification(listener);
   }
 
   registerRequestHandler<P, R>(
     definition: RpcMethodDefinition<P, R>,
     handler: (params: P, context: RpcRequestContext) => R | Promise<R>,
-  ): () => void {
+  ): IDisposable {
     if (this.#state === "closed") {
       throw new Error("Cannot register a handler on a closed App Server session");
     }
@@ -139,7 +150,25 @@ export class AppServerSession {
   async close(): Promise<void> {
     if (this.#state === "closed") return;
     this.#state = "closed";
-    await this.client.close();
+    try {
+      await this.client.close();
+    } finally {
+      markAsDisposed(this);
+    }
+  }
+
+  dispose(): void {
+    if (this.#state === "closed") return;
+    this.#state = "closed";
+    try {
+      this.client.dispose();
+    } finally {
+      markAsDisposed(this);
+    }
+  }
+
+  [Symbol.dispose](): void {
+    this.dispose();
   }
 }
 

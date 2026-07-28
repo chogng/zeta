@@ -1,26 +1,55 @@
-import { Component } from "../common/component.js";
+import { addDisposableListener } from "../../dom.js";
+import { IME } from "../../../common/ime.js";
+import { DisposableOwner } from "../../../common/lifecycle.js";
 
-export interface InputBoxOptions { placeholder?: string; type?: "text" | "password" | "search"; onInput?: (value: string) => void; }
+export interface InputBoxOptions {
+  readonly placeholder?: string;
+  readonly type?: "text" | "password" | "search";
+  readonly ownerDocument?: Document;
+  readonly readOnly?: boolean;
+  readonly onInput?: (value: string) => void;
+}
 
 /** A text input with a separately rendered validation message. */
-export class InputBox extends Component<HTMLDivElement> {
+export class InputBox extends DisposableOwner {
+  readonly element: HTMLDivElement;
   readonly input: HTMLInputElement;
-  #message: HTMLDivElement;
+  readonly #message: HTMLDivElement;
+  #readOnly: boolean;
 
   constructor(options: InputBoxOptions = {}) {
-    const element = document.createElement("div");
+    super();
+    const ownerDocument = options.ownerDocument ?? document;
+    const element = ownerDocument.createElement("div");
+    this.element = element;
+    this.defer(() => element.remove());
     element.className = "zeta-input-box";
-    super(element);
-    this.input = document.createElement("input");
+    this.input = ownerDocument.createElement("input");
     this.input.type = options.type ?? "text";
     this.input.placeholder = options.placeholder ?? "";
-    this.#message = document.createElement("div");
+    this.#readOnly = options.readOnly ?? false;
+    this.#message = ownerDocument.createElement("div");
     this.#message.hidden = true;
     element.append(this.input, this.#message);
-    if (options.onInput) this.listen(this.input, "input", () => options.onInput?.(this.input.value));
+    this.#syncReadOnly();
+    this.own(IME.onDidChange(() => this.#syncReadOnly()));
+    if (options.onInput) {
+      this.own(addDisposableListener(this.input, "input", () =>
+        options.onInput?.(this.input.value),
+      ));
+    }
   }
 
   get value(): string { return this.input.value; }
   set value(value: string) { this.input.value = value; }
+  get readOnly(): boolean { return this.#readOnly; }
+  set readOnly(value: boolean) {
+    this.#readOnly = value;
+    this.#syncReadOnly();
+  }
   showValidation(message: string): void { this.#message.textContent = message; this.#message.hidden = !message; }
+
+  #syncReadOnly(): void {
+    this.input.readOnly = this.#readOnly || !IME.enabled;
+  }
 }

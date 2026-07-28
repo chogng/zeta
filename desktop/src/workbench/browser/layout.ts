@@ -1,4 +1,8 @@
 import { SplitView, type SplitViewOrientation } from "../../base/browser/ui/index.js";
+import {
+  ResettableDisposableGroup,
+  DisposableOwner,
+} from "../../base/common/lifecycle.js";
 import { type WorkbenchPart } from "./part.js";
 
 export const workbenchPartIds = ["titlebar", "statusbar", "sidebar", "session", "auxiliarybar", "editor"] as const;
@@ -21,18 +25,24 @@ export interface SerializableGridSplit {
 export type SerializableGrid = SerializableGridPart | SerializableGridSplit;
 
 /** Builds and owns the runtime SplitView tree represented by a SerializableGrid. */
-export class WorkbenchLayout {
+export class WorkbenchLayout extends DisposableOwner {
   #grid: SerializableGrid;
+  readonly #layoutDisposables: ResettableDisposableGroup;
 
   constructor(
     private readonly container: Element,
     private readonly parts: ReadonlyMap<WorkbenchPartId, WorkbenchPart>,
     grid: SerializableGrid,
   ) {
+    super();
     this.#grid = grid;
+    this.#layoutDisposables = this.own(new ResettableDisposableGroup());
   }
 
-  layout(): void { this.container.replaceChildren(this.createNode(this.#grid)); }
+  layout(): void {
+    this.#layoutDisposables.clear();
+    this.container.replaceChildren(this.createNode(this.#grid));
+  }
   get serializableGrid(): SerializableGrid { return structuredClone(this.#grid); }
 
   restore(grid: SerializableGrid): void {
@@ -42,7 +52,9 @@ export class WorkbenchLayout {
 
   private createNode(node: SerializableGrid): HTMLElement {
     if (node.type === "part") return this.part(node.partId).element;
-    const splitView = new SplitView(node.orientation);
+    const splitView = this.#layoutDisposables.add(
+      new SplitView(node.orientation, this.container.ownerDocument),
+    );
     splitView.element.classList.add("zeta-workbench-layout-split");
     for (const child of node.children) splitView.addPane(this.createNode(child), child.size ?? "1fr");
     return splitView.element;

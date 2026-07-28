@@ -1,14 +1,19 @@
-import { Component } from "../common/component.js";
+import { addDisposableListener } from "../../dom.js";
+import { DisposableOwner } from "../../../common/lifecycle.js";
 
 export interface TreeItem { id: string; label: string; children?: readonly TreeItem[]; }
 
 /** A simple accessible tree renderer with selectable nodes. */
-export class Tree extends Component<HTMLUListElement> {
+export class Tree extends DisposableOwner {
+  readonly element: HTMLUListElement;
+
   constructor(items: readonly TreeItem[], onSelect?: (item: TreeItem) => void) {
+    super();
     const element = document.createElement("ul");
+    this.element = element;
+    this.defer(() => element.remove());
     element.className = "zeta-tree";
     element.setAttribute("role", "tree");
-    super(element);
     this.render(items, element, onSelect);
   }
 
@@ -18,7 +23,7 @@ export class Tree extends Component<HTMLUListElement> {
       node.textContent = item.label;
       node.tabIndex = 0;
       node.setAttribute("role", "treeitem");
-      this.listen(node, "click", () => onSelect?.(item));
+      this.own(addDisposableListener(node, "click", () => onSelect?.(item)));
       parent.append(node);
       if (item.children?.length) {
         const children = document.createElement("ul");

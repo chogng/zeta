@@ -2,9 +2,11 @@
   "name": "zeta-desktop",
   "private": true,
   "type": "module",
-  "packageManager": "pnpm@10.0.0",
+  "packageManager": "pnpm@11.17.0",
   "pnpm": {
-    "onlyBuiltDependencies": ["electron"]
+    "onlyBuiltDependencies": [
+      "electron"
+    ]
   },
   "version": "0.1.0",
   "description": "Electron client for the Zeta app-server protocol",
@@ -27,7 +29,7 @@
     "build:preload": "tsc -p tsconfig.preload.json",
     "build:renderer": "tsc -p tsconfig.renderer.json --noEmit && vite build",
     "build:rust": "cargo build --manifest-path ../zeta-rs/Cargo.toml -p zeta-cli",
-    "test:main": "tsc -p tsconfig.test.json && node --test dist/test/test/*.test.js",
+    "test:main": "node -e \"require('node:fs').rmSync('dist/test', { recursive: true, force: true })\" && tsc -p tsconfig.test.json && node --test dist/test/test/*.test.js dist/test/src/base/test/common/*.test.js dist/test/src/base/test/browser/*.test.js dist/test/src/platform/theme/test/common/*.test.js dist/test/src/platform/theme/test/browser/*.test.js",
     "typecheck:renderer": "tsc -p tsconfig.renderer.json --noEmit",
     "dev": "cargo build --manifest-path ../zeta-rs/Cargo.toml -p zeta-cli && tsc -p tsconfig.main.json && tsc -p tsconfig.preload.json && concurrently -k -n renderer,main,preload,electron \"vite\" \"tsc -p tsconfig.main.json --watch --preserveWatchOutput\" \"tsc -p tsconfig.preload.json --watch --preserveWatchOutput\" \"wait-on http-get://127.0.0.1:5173/electron-browser/workbench/workbench.html && cross-env ZETA_RENDERER_URL=http://127.0.0.1:5173 nodemon --quiet --signal SIGTERM --watch dist/main --watch dist/preload --ext js,cjs --exec \\\"node scripts/run-electron.mjs\\\"\"",
     "dev:renderer": "vite",
@@ -40,10 +42,13 @@
     "@types/node": "^24.0.0",
     "concurrently": "^10.0.4",
     "cross-env": "^10.1.0",
-    "electron": "^39.0.0",
+    "electron": "^43.2.0",
     "nodemon": "^3.1.14",
     "typescript": "^5.9.0",
     "vite": "^8.1.5",
     "wait-on": "^9.1.0"
+  },
+  "dependencies": {
+    "@chogng/lxicons": "^1.0.21"
   }
 }
