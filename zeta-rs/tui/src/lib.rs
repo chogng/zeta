@@ -1,8 +1,10 @@
 //! Interactive terminal client for Zeta's App Server product boundary.
 
 mod app;
+mod chatwidget;
 mod render;
 mod terminal;
+mod toppane;
 
 use app::Action;
 use app::App;

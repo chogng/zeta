@@ -532,29 +532,39 @@ terminal。
 
 ## 16. 当前实现与目标差距
 
-当前 `zeta-rs/tui/src/` 只有：
+当前 `zeta-rs/tui/src/` 是保持同步行为的 bootstrap 分层：
 
 ```text
 app.rs
+chatwidget/
+└── mod.rs
+toppane/
+├── mod.rs
+├── chat_composer.rs
+└── textarea.rs
 render.rs
 terminal.rs
 lib.rs
 ```
 
-它已经满足两个正确边界：
+它已经满足以下正确边界：
 
 - 通过 `zeta-app-server-client` 的 typed method 工作；
 - 明确声明权威 Thread/Turn 状态留在 App Server 后面。
+- `App` 处理全局状态/键，`ChatWidget` 协调 transcript 与 sibling `TopPane`；
+- `ChatComposer` 拥有提交和未来 slash 语义边界，`TextArea` 拥有 UTF-8 编辑状态和未来 Vim
+  keymap 边界。
 
 但目前仍是同步最小实现：
 
 - 每次启动都创建新的 Session 和 root Thread；
-- `App` 只保存扁平 `Vec<Message>`，没有 canonical projection；
+- `ChatWidget` 只保存扁平 `Vec<Message>`，没有 canonical projection；
 - `turn/start` 执行期间暂停输入；
 - 请求结束后一次性 drain notification；
 - 没有 Session/Thread subscribe、gap detection 或 resync；
 - 只提取最终 AgentMessage，忽略 Turn/Item 的完整 typed lifecycle；
 - 没有 resume、fork、archive、interrupt 和多 Thread 导航；
+- slash discovery/completion 与 Vim mode/motion/operator 尚未实现；
 - `lib.rs` 同时承担 public API、启动编排、请求执行和通知解释。
 
 这些限制可以作为 bootstrap 阶段存在，但不应在其上继续堆叠 feature。
@@ -567,7 +577,8 @@ lib.rs
 2. 将纯 TUI state/event/command 移入 `app/`；
 3. 将 typed request 与 notification 适配移入 `client/`；
 4. 建立 `projection/`，用 Session/Thread snapshot 替换扁平 message authority；
-5. 将 composer 和 transcript 移入 `conversation/`；
+5. 随 projection 落地，把 bootstrap `chatwidget/` 与 `toppane/` 迁入 `conversation/`，保留
+   `ChatWidget → TopPane → ChatComposer → TextArea` 的局部 ownership；
 6. 保持现有同步行为和 public `run` API 可用。
 
 ### 阶段二：订阅与恢复

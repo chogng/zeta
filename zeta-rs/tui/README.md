@@ -14,7 +14,7 @@ Tool、approval policy 或 persistence。
 ## 当前能力
 
 - 启动时创建一个 product Session 和 root Thread；
-- 单行文本 composer，支持 typing、backspace 与 bracketed paste；
+- 单行文本 composer，支持 typing、Unicode-safe cursor/editing 与 bracketed paste；
 - Enter 提交一个 text-only Turn；
 - active Turn 期间每 25 ms event-loop iteration 读取 Thread snapshot；
 - 以无外框 transcript 显示 latest completed Agent message、友好 failure、interruption 与
@@ -26,7 +26,8 @@ Tool、approval policy 或 persistence。
 
 当前没有 Session browser、Thread navigation、Markdown、stream delta render、Tool transcript、
 approval/user-input response UI、mouse/resize-specific state、remote connection selector 或 async event
-pump。系统文档中的这些内容是演进方向，不是已实现功能。
+pump。Slash discovery/completion 与 Vim mode/motion/operator 目前只有明确的组件所有权，尚未实现。
+系统文档中的这些内容是演进方向，不是已实现功能。
 
 从 repository root 启动当前 embedded TUI：
 
@@ -57,24 +58,34 @@ remote 选择与 initialize/schema handshake 属于 CLI 和 app-server-client，
 
 ```text
 src/
-├── lib.rs        # RPC coordination + event loop + snapshot mapping
-├── app.rs        # pure presentation state and keyboard-to-Action mapping
-├── render.rs     # Ratatui layout/widgets
-└── terminal.rs   # raw/alternate-screen/bracketed-paste lifecycle
+├── lib.rs                    # RPC coordination + event loop + snapshot mapping
+├── app.rs                    # global presentation status and keyboard-to-Action mapping
+├── chatwidget/
+│   └── mod.rs                # transcript state + top-pane coordination
+├── toppane/
+│   ├── mod.rs                # active interaction-surface routing
+│   ├── chat_composer.rs      # submit semantics and slash extension boundary
+│   └── textarea.rs           # text buffer, cursor and Vim extension boundary
+├── render.rs                 # Ratatui layout/widgets
+└── terminal.rs               # raw/alternate-screen/bracketed-paste lifecycle
 ```
 
-三个实现 module 都是 private；crate 只导出启动 contract。
+实现 module 都是 private；crate 只导出启动 contract。
 
 ## 内部接口地图
 
 | Symbol | 可见性 | 当前职责 | 方向约束 |
 | --- | --- | --- | --- |
-| `App` | crate-private | input、display messages 与 presentation `Status` | 不保存 canonical Thread authority |
+| `App` | crate-private | presentation `Status`、全局键与 `ChatWidgetOutcome` → `Action` | 不保存 canonical Thread authority 或编辑器细节 |
 | `Action` | crate-private | `Quit`、`Interrupt`、`Submit(String)` | keyboard mapping 后才触发 I/O |
 | `Status` | crate-private | Ready/Working/waiting/Cancelling/Error display state | 只能由 canonical snapshot/result驱动 |
-| `App::handle_key` | crate-private | KeyEvent → optional semantic Action | 不直接调用 client |
-| `App::submit` | private | trim input、append user message、进入 Working | blank input 不产生 command |
+| `App::handle_key` | crate-private | 先委托局部输入，再处理未消费的全局键 | 不直接调用 client |
 | `App::quit_or_interrupt` | private | active state interrupt；idle/error quit | Cancelling 不重复发送 interrupt |
+| `ChatWidget` | crate-private | transcript 与 sibling `TopPane` 协调 | 不拥有产品 lifecycle、RPC 或 Vim keymap |
+| `ChatWidget::handle_key` | crate-private | `TopPaneOutcome` → `ChatWidgetOutcome`，提交时记录 user message | 不执行提交动作 |
+| `TopPane` | crate-private | 把当前交互面的键盘和 paste 委托给 composer | 不解释 slash 或编辑文本 |
+| `ChatComposer` | private | blank/trim/submit 语义；slash discovery/completion 的扩展 owner | 不拥有 cursor、Vim state 或 RPC |
+| `TextArea` | private | UTF-8 buffer、byte-safe cursor、insert/delete/movement；Vim 的扩展 owner | 不解释 Enter submission 或 slash command |
 | `submit_prompt` | private | build typed `TurnStartParams` 并更新 sequence | 不手写 method string/JSON |
 | `refresh_turn` | private | `thread/read` + update local sequence + drain notifications | snapshot 是当前 authoritative UI source |
 | `interrupt_turn` | private | typed Turn interrupt + refresh | 使用当前 Thread sequence |
@@ -103,10 +114,11 @@ run(client, options)
    ├─ event::poll(25 ms)
    └─ event::read
       ├─ key → App::handle_key
+      │  ├─ local input → ChatWidget → TopPane → ChatComposer → TextArea
       │  ├─ Quit → return
       │  ├─ Submit → submit_prompt
       │  └─ Interrupt → refresh + interrupt_turn
-      └─ Paste → App::insert_text
+      └─ Paste → App → ChatWidget → TopPane → ChatComposer → TextArea
 ```
 
 Session create 和 Thread create 使用独立 `CommandId`。Turn start/interrupt 使用当前
@@ -147,7 +159,7 @@ Thread snapshot polling 才是 authority。这保证实现简单，也意味着�
 Ready / Error
 ├─ Enter(non-empty) → Submit → Working
 ├─ Esc / Ctrl-C / empty Ctrl-D → Quit
-└─ typing/paste accepted
+└─ typing/paste/cursor movement/editing accepted
 
 Working / Waiting*
 ├─ Esc / Ctrl-C / empty Ctrl-D → Interrupt → Cancelling
@@ -227,9 +239,10 @@ cargo test -p zeta-tui
 bazel test //zeta-rs/tui:tui-unit-tests
 ```
 
-Tests 当前覆盖 trimmed/blank submit、quit/interrupt keyboard semantics、duplicate interrupt
-suppression、input lock、response/error/interrupted transitions、snapshot terminal/wait/resume mapping，
-以及 transcript chrome、error 去重、role label/Unicode/zero-width wrapping。
+Tests 当前覆盖局部键到全局键的 routing、trimmed/blank submit、Unicode cursor/editing、paste at
+cursor、quit/interrupt keyboard semantics、duplicate interrupt suppression、input lock、
+response/error/interrupted transitions、snapshot terminal/wait/resume mapping，以及 transcript chrome、
+error 去重、role label/Unicode/zero-width wrapping。
 
 Render tests 使用 Ratatui `TestBackend` 固定 empty/error surface 和 row estimation，但还没有完整
 snapshot/golden terminal test；`run` 也没有完整的 fake transport event-loop integration test。

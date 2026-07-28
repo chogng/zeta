@@ -163,8 +163,7 @@ fn draw_composer(frame: &mut Frame<'_>, area: Rect, app: &App) {
 
     if app.accepts_input() {
         let input_width = app
-            .input()
-            .width()
+            .input_cursor_width()
             .min(area.width.saturating_sub(5) as usize) as u16;
         frame.set_cursor_position((area.x + 3 + input_width, area.y + 1));
     }
