@@ -2,19 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { DisposableStore } from "../src/zeta/base/common/lifecycle.js";
-import { URI } from "../src/zeta/base/common/uri.js";
-import type {
-  ICommandService,
-} from "../src/zeta/platform/commands/common/commands.js";
 import {
   ContextKeyService,
 } from "../src/zeta/platform/contextkey/common/contextkey.js";
-import {
-  UNKNOWN_EMPTY_WINDOW_WORKSPACE,
-} from "../src/zeta/platform/workspace/common/workspace.js";
-import {
-  StartTurnCommandId,
-} from "../src/zeta/workbench/contrib/turn/common/turnCommands.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
@@ -41,16 +31,8 @@ const {
   workbenchPartIds,
 } = await import("../src/zeta/workbench/browser/layout.js");
 const { WorkbenchPart } = await import("../src/zeta/workbench/browser/part.js");
-const {
-  EmptyWorkspaceContribution,
-} = await import(
-  "../src/zeta/workbench/contrib/emptyWorkspace/browser/emptyWorkspace.js"
-);
 const { EditorPart } = await import(
   "../src/zeta/workbench/browser/parts/editor/editorPart.js"
-);
-const { WorkspaceContextService } = await import(
-  "../src/zeta/workbench/services/workspaces/browser/workspaceContextService.js"
 );
 const {
   ToggleAuxiliaryBarCommandId,
@@ -109,20 +91,6 @@ class TestPart extends WorkbenchPart {
     if (this.id === "session") return 36;
     if (this.id === "statusbar") return 23;
     return Number.POSITIVE_INFINITY;
-  }
-}
-
-class TestCommandService implements ICommandService {
-  readonly calls: string[] = [];
-  readonly onWillExecuteCommand = () => ({
-    dispose() {},
-    [Symbol.dispose]() {},
-  });
-  readonly onDidExecuteCommand = this.onWillExecuteCommand;
-
-  async executeCommand<T = unknown>(id: string): Promise<T> {
-    this.calls.push(id);
-    return undefined as T;
   }
 }
 
@@ -298,68 +266,6 @@ test("titlebar layout commands toggle both sidebars", async () => {
   await commands.executeCommand(ToggleAuxiliaryBarCommandId);
   assert.equal(harness.layout.isPartVisible("auxiliarybar"), true);
 
-  harness.disposables.dispose();
-  dom.window.close();
-});
-
-test("empty workspace contribution owns its EmptyView and collapses side Parts", async () => {
-  const dom = new JSDOM("<!doctype html><body></body>");
-  const harness = createLayoutHarness(dom.window.document);
-  const commands = new TestCommandService();
-  const contribution = harness.disposables.add(
-    new EmptyWorkspaceContribution(
-      new WorkspaceContextService(UNKNOWN_EMPTY_WINDOW_WORKSPACE),
-      harness.editor,
-      harness.layout,
-      commands,
-    ),
-  );
-
-  assert.equal(harness.layout.isPartVisible("sidebar"), false);
-  assert.equal(harness.layout.isPartVisible("auxiliarybar"), false);
-  assert.equal(
-    harness.editor.element.querySelector("h1")?.textContent,
-    "No folder open",
-  );
-
-  const button = harness.editor.element.querySelector("button");
-  assert.ok(button);
-  button.click();
-  await Promise.resolve();
-  assert.deepEqual(commands.calls, [StartTurnCommandId]);
-
-  contribution.dispose();
-  assert.equal(
-    harness.editor.element.querySelector(".zeta-empty-workspace-view"),
-    null,
-  );
-  harness.disposables.dispose();
-  dom.window.close();
-});
-
-test("empty workspace contribution leaves project windows unchanged", () => {
-  const dom = new JSDOM("<!doctype html><body></body>");
-  const harness = createLayoutHarness(dom.window.document);
-  const marker = dom.window.document.createElement("div");
-  marker.textContent = "Project editor";
-  harness.editor.setContent(marker);
-  const contribution = harness.disposables.add(
-    new EmptyWorkspaceContribution(
-      new WorkspaceContextService({
-        id: "project",
-        uri: URI.file("C:\\project"),
-      }),
-      harness.editor,
-      harness.layout,
-      new TestCommandService(),
-    ),
-  );
-
-  assert.equal(harness.layout.isPartVisible("sidebar"), true);
-  assert.equal(harness.layout.isPartVisible("auxiliarybar"), true);
-  assert.equal(harness.editor.element.textContent, "Project editor");
-
-  contribution.dispose();
   harness.disposables.dispose();
   dom.window.close();
 });

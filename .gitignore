@@ -7,6 +7,7 @@ zeta-rs/target/
 
 # Per-workspace runtime state
 .zeta/
+.playwright-cli/
 
 # Desktop build products
 desktop/node_modules/

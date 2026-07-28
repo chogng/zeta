@@ -52,6 +52,9 @@ Renderer 产品目录，并从该目录与入口名确定产品身份。
   `code/electron-browser/workbench/workbench-{code,academic,complete}.*`。
 - Renderer host 装配由 `workbench.web.main.ts`、`workbench.desktop.main.ts` 与
   `workbench.common.main.ts` 分层；Electron-only 开发者 action 不进入 Browser 产物。
+- 三个 Browser 产品模块加载后会通过 `web.factory.ts` 自动启动 Workbench。Web embedder 可在
+  导入产品入口前设置 `globalThis.zetaWebWorkbenchHost`，提供真实 `ZetaRendererApi`、
+  workspace 和可选容器。
 - 三个产品使用独立 HTML 标题、`ProductConfiguration` 和 Renderer 输出目录。
 - 各 `workbench-*.ts` 直接导入自身需要的编辑器 contribution，不额外拆分产品级
   `workbench-*.contribution.ts` 文件。
@@ -60,6 +63,10 @@ Renderer 产品目录，并从该目录与入口名确定产品身份。
 - Code 已从产品入口注册 Monaco pane；它拥有文本模型、语言 worker、布局、焦点和释放。
 - Academic 已从产品入口注册 ProseMirror pane；它拥有基础论文 schema、历史、快捷键、布局和释放。
 - Main、Preload 和 App Server 当前由三个产品共享，尚未按产品裁剪原生能力或 Rust feature。
+- 未注入 Web host 的 Browser 页面使用显式 disconnected renderer API：页面和 Workbench
+  可以运行，连接状态为 `stopped`，所有 App Server 产品操作以
+  `WebAppServerUnavailableError` 失败。当前 Rust App Server 只监听 `stdio://`，尚无浏览器可
+  直连的 HTTP/WebSocket transport。
 
 因此，Renderer 构建产物和编辑器依赖已经按产品入口分流。Complete 静态组合两套编辑器；
 Academic 专有内容类型和 `.zeta-paper`、`.zeta-academic` 默认由 ProseMirror 打开，普通源码及

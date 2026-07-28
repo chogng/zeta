@@ -12,6 +12,7 @@
     "src/zeta/editor/**/contrib/**/*.ts",
     "src/zeta/product/common/**/*.ts",
     "src/zeta/platform/app-server/common/**/*.ts",
+    "src/zeta/platform/app-server/browser/**/*.ts",
     "src/zeta/platform/action/common/**/*.ts",
     "src/zeta/platform/actions/**/*.ts",
     "src/zeta/platform/commands/common/**/*.ts",

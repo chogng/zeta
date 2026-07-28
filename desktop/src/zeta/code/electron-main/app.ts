@@ -1,6 +1,7 @@
 import {
   app,
   BrowserWindow,
+  dialog,
   ipcMain,
   Menu,
   screen,
@@ -93,6 +94,9 @@ import {
   WorkspacesMainService,
   workspaceContextIpcRoutes,
 } from "../../platform/workspaces/electron-main/workspacesMainService.js";
+import {
+  StartupWindow,
+} from "./startupWindow.js";
 
 export interface ZetaApplicationOptions {
   readonly product: ProductConfiguration;
@@ -110,6 +114,7 @@ export class ZetaApplication extends DisposableOwner {
 
   #supervisor: AppServerSupervisor | undefined;
   #mainWindow: BrowserWindow | undefined;
+  #startupWindow: StartupWindow | undefined;
   #stateService: StateService | undefined;
   #configurationService: ConfigurationMainService | undefined;
   #keybindingsResourceService: KeybindingsResourceMainService | undefined;
@@ -148,11 +153,20 @@ export class ZetaApplication extends DisposableOwner {
     return new ZetaApplication(options, disposableTracker, tracking);
   }
 
-  async startup(): Promise<void> {
-    await app.whenReady();
+  async startupAfterReady(): Promise<void> {
+    if (!app.isReady()) {
+      throw new Error("Zeta application startup requires Electron to be ready");
+    }
     if (process.platform !== "darwin") {
       Menu.setApplicationMenu(null);
     }
+
+    const startupWindow = this.own(new StartupWindow({
+      productName: this.#product.name,
+      onClosed: () => app.quit(),
+    }));
+    this.#startupWindow = startupWindow;
+    await startupWindow.showStarting();
 
     await this.#createPersistentServices();
     const workspace = await this.#resolveWorkspace();
@@ -170,8 +184,16 @@ export class ZetaApplication extends DisposableOwner {
 
     const supervisor = this.own(this.#createAppServerSupervisor());
     this.#supervisor = supervisor;
-    await supervisor.start();
+    const appServerReady = await this.#startAppServerWithRecovery(
+      supervisor,
+      startupWindow,
+    );
+    if (!appServerReady) {
+      return;
+    }
     await this.#openFirstWindow(workspace, supervisor);
+    startupWindow.complete();
+    this.#startupWindow = undefined;
   }
 
   async disposeAfterStartupFailure(): Promise<void> {
@@ -246,6 +268,57 @@ export class ZetaApplication extends DisposableOwner {
         expectedServerName: "zeta-app-server",
       },
     });
+  }
+
+  async #startAppServerWithRecovery(
+    supervisor: AppServerSupervisor,
+    startupWindow: StartupWindow,
+  ): Promise<boolean> {
+    let retrying = false;
+    while (!startupWindow.closed) {
+      if (retrying) {
+        await startupWindow.showRetrying();
+      }
+      try {
+        await supervisor.start();
+        return true;
+      } catch (error) {
+        console.error("App Server failed the startup gate", error);
+        if (startupWindow.closed) {
+          return false;
+        }
+
+        const message = error instanceof Error
+          ? error.message
+          : "The App Server failed to start";
+        await startupWindow.showFailure(message);
+        const parent = startupWindow.window;
+        if (!parent || parent.isDestroyed()) {
+          return false;
+        }
+        const diagnostics = supervisor.diagnostics().trim();
+        const detail = diagnostics
+          ? `${message}\n\nDiagnostics:\n${diagnostics}`.slice(0, 8_000)
+          : message;
+        const result = await dialog.showMessageBox(parent, {
+          type: "error",
+          title: `${this.#product.name} startup failed`,
+          message: "The App Server could not be validated.",
+          detail,
+          buttons: ["Retry", "Quit"],
+          defaultId: 0,
+          cancelId: 1,
+          noLink: true,
+        });
+        if (result.response !== 0) {
+          app.quit();
+          return false;
+        }
+        await supervisor.stop();
+        retrying = true;
+      }
+    }
+    return false;
   }
 
   async #openFirstWindow(

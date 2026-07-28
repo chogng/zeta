@@ -13,10 +13,8 @@ import {
 import {
   KeybindingsResourceContribution,
 } from "../services/keybinding/browser/keybindingsResourceContribution.js";
-import "../contrib/emptyWorkspace/browser/emptyWorkspace.contribution.js";
 import "../contrib/markdown/browser/markdown.contribution.js";
 import "../contrib/quickaccess/browser/commandsQuickAccess.js";
-import "../contrib/turn/browser/turnActions.js";
 import "./parts/dialogs/dialog.contribution.js";
 import "./parts/titlebar/menubar.contribution.js";
 import "./parts/titlebar/titlebarActions.js";

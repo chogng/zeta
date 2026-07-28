@@ -291,3 +291,31 @@ test("initialization failures consume exactly the bounded startup retry budget",
   assert.equal(supervisor.state, "crashed");
   await supervisor.stop();
 });
+
+test("supervisor can retry a failed startup gate after stopping", async () => {
+  const children: ProtocolChildProcess[] = [];
+  const options = supervisorOptions(children);
+  options.maxRestartAttempts = 0;
+  options.session = { ...options.session, initializeTimeoutMs: 5 };
+  let respondToInitialize = false;
+  options.spawnProcess = () => {
+    const child = new ProtocolChildProcess(
+      APP_SERVER_SCHEMA_HASH,
+      respondToInitialize,
+    );
+    children.push(child);
+    return child as unknown as ChildProcessWithoutNullStreams;
+  };
+  const supervisor = new AppServerSupervisor(options);
+
+  await assert.rejects(supervisor.start(), /timed out/);
+  assert.equal(supervisor.state, "crashed");
+
+  await supervisor.stop();
+  respondToInitialize = true;
+  await supervisor.start();
+
+  assert.equal(supervisor.state, "ready");
+  assert.equal(children.length, 2);
+  await supervisor.stop();
+});

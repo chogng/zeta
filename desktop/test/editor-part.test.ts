@@ -4,8 +4,24 @@ import { JSDOM } from "jsdom";
 import type {
   IDimension,
 } from "../src/zeta/base/browser/geometry.js";
+import { Emitter } from "../src/zeta/base/common/event.js";
+import {
+  Keybinding,
+  logicalKey,
+  type ResolvedKeybinding,
+  resolveKeybinding,
+} from "../src/zeta/base/common/keybindings.js";
 import { DisposableOwner } from "../src/zeta/base/common/lifecycle.js";
 import { URI } from "../src/zeta/base/common/uri.js";
+import type {
+  CommandId,
+} from "../src/zeta/platform/commands/common/commands.js";
+import type {
+  Context,
+} from "../src/zeta/platform/contextkey/common/contextkey.js";
+import type {
+  IKeybindingService,
+} from "../src/zeta/platform/keybinding/common/keybinding.js";
 import type {
   EditorInput,
 } from "../src/zeta/workbench/browser/parts/editor/editorInput.js";
@@ -38,6 +54,11 @@ const {
   EditorPart,
 } = await import(
   "../src/zeta/workbench/browser/parts/editor/editorPart.js"
+);
+const {
+  EditorGroupWatermarkEntries,
+} = await import(
+  "../src/zeta/workbench/browser/parts/editor/editorGroupWatermark.js"
 );
 
 test.after(() => browserEnvironment.window.close());
@@ -88,6 +109,46 @@ test("editor registry resolves defaults and explicit Open With choices", () => {
   assert.throws(() => registry.resolve(markdown), /No editor can open/);
 });
 
+test("EditorPart shows command shortcuts until an editor opens", async () => {
+  const dom = new JSDOM("<!doctype html><body></body>");
+  const registry = new EditorPaneRegistry();
+  registry.register(descriptor(
+    "zeta.editor.monaco",
+    ".ts",
+    () => new TestEditorPane("zeta.editor.monaco"),
+  ));
+  const keybindings = new TestKeybindingService();
+  keybindings.set(
+    "test.openEditor",
+    Keybinding.single(logicalKey("o", { primaryKey: true })),
+  );
+  const entry = EditorGroupWatermarkEntries.register({
+    id: "test.openEditor",
+    label: "Open Editor",
+    command: "test.openEditor",
+  });
+  const editor = new EditorPart(dom.window.document, {
+    keybindingService: keybindings,
+    registry,
+  });
+  dom.window.document.body.append(editor.element);
+
+  assert.match(
+    editor.element.textContent ?? "",
+    /Open Editor.*Ctrl\+O/,
+  );
+  await editor.openEditor(input("C:\\project\\main.ts"));
+  assert.equal(
+    editor.element.querySelector(".zeta-editor-group-watermark"),
+    null,
+  );
+
+  editor.dispose();
+  entry.dispose();
+  keybindings.dispose();
+  dom.window.close();
+});
+
 test("EditorPart switches panes only after the next input is ready", async () => {
   const dom = new JSDOM("<!doctype html><body></body>");
   const registry = new EditorPaneRegistry();
@@ -102,7 +163,7 @@ test("EditorPart switches panes only after the next input is ready", async () =>
     ".md",
     () => trackPane(panes, "zeta.editor.prosemirror"),
   ));
-  const editor = new EditorPart(dom.window.document, registry);
+  const editor = new EditorPart(dom.window.document, { registry });
   dom.window.document.body.append(editor.element);
 
   const typescript = input("C:\\project\\main.ts");
@@ -161,7 +222,7 @@ test("EditorPart retains the active pane when a replacement fails", async () => 
       return pane;
     },
   ));
-  const editor = new EditorPart(dom.window.document, registry);
+  const editor = new EditorPart(dom.window.document, { registry });
   dom.window.document.body.append(editor.element);
   const workingInput = input("C:\\project\\document.ok");
   const workingPane = await editor.openEditor(workingInput);
@@ -193,7 +254,7 @@ test("EditorPart rejects an open superseded by ordinary content", async () => {
       return pane;
     },
   ));
-  const editor = new EditorPart(dom.window.document, registry);
+  const editor = new EditorPart(dom.window.document, { registry });
   dom.window.document.body.append(editor.element);
   const opening = editor.openEditor(input("C:\\project\\document.slow"));
   const content = dom.window.document.createElement("div");
@@ -259,6 +320,46 @@ class TestEditorPane extends DisposableOwner implements IEditorPane {
 
   focus(): void {
     this.focusCount += 1;
+  }
+}
+
+class TestKeybindingService implements IKeybindingService {
+  readonly #onDidUpdateKeybindings = new Emitter<void>();
+  readonly #bindings = new Map<CommandId, ResolvedKeybinding>();
+
+  readonly inChordMode = false;
+  readonly onDidUpdateKeybindings = this.#onDidUpdateKeybindings.event;
+
+  set(command: CommandId, keybinding: Keybinding): void {
+    this.#bindings.set(command, resolveKeybinding(keybinding));
+    this.#onDidUpdateKeybindings.fire();
+  }
+
+  resolveKeybinding(keybinding: Keybinding): ResolvedKeybinding {
+    return resolveKeybinding(keybinding);
+  }
+
+  resolveUserBinding(_userBinding: string): ResolvedKeybinding | undefined {
+    return undefined;
+  }
+
+  lookupKeybindings(
+    command: CommandId,
+    _context?: Context,
+  ): readonly ResolvedKeybinding[] {
+    const keybinding = this.lookupKeybinding(command);
+    return keybinding ? [keybinding] : [];
+  }
+
+  lookupKeybinding(
+    command: CommandId,
+    _context?: Context,
+  ): ResolvedKeybinding | undefined {
+    return this.#bindings.get(command);
+  }
+
+  dispose(): void {
+    this.#onDidUpdateKeybindings.dispose();
   }
 }
 

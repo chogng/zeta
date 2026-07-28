@@ -11,7 +11,10 @@ import { environment } from "../../base/common/platform.js";
 import type {
   ProductConfiguration,
 } from "../../product/common/product.js";
-import type { ZetaRendererApi } from "../../platform/app-server/common/renderer-api.js";
+import type {
+  AppServerConnectionState,
+  ZetaRendererApi,
+} from "../../platform/app-server/common/renderer-api.js";
 import type {
   INativeHostApi,
 } from "../../platform/native/common/nativeHost.js";
@@ -257,16 +260,24 @@ export class Workbench extends DisposableOwner {
     this.own(bindColorTheme(themeService, workbenchRoot));
     const statusbarService = this.own(new StatusbarService());
     services.set(IStatusbarService, statusbarService);
-    this.own(statusbarService.addEntry(
+    const connectionStatus = this.own(statusbarService.addEntry(
+      appServerStatusEntry("starting"),
       {
-        text: "Ready",
-        ariaLabel: "Application ready",
-      },
-      {
-        id: "zeta.status.ready",
+        id: "zeta.status.appServer",
         alignment: StatusbarAlignment.Left,
       },
     ));
+    const connectionStateSubscription = api.appServer.onConnectionState(
+      (state) => connectionStatus.update(appServerStatusEntry(state)),
+    );
+    this.defer(() => connectionStateSubscription.dispose());
+    void Promise.resolve()
+      .then(() => api.appServer.getConnectionState())
+      .then((state) => connectionStatus.update(appServerStatusEntry(state)))
+      .catch((error: unknown) => {
+        console.error("Failed to read App Server connection state", error);
+        connectionStatus.update(appServerStatusEntry("crashed"));
+      });
     const dialogService = this.own(new DialogService());
     services.set(IDialogService, dialogService);
     services.set(IDialogsModel, dialogService.model);
@@ -349,7 +360,9 @@ export class Workbench extends DisposableOwner {
       ownerDocument,
     }));
     const session = this.own(new SessionPart(ownerDocument));
-    const editor = this.own(new EditorPart(ownerDocument));
+    const editor = this.own(new EditorPart(ownerDocument, {
+      keybindingService: keybindings,
+    }));
     services.set(IEditorPart, editor);
     const auxiliarybar = this.own(new AuxiliarybarPart(ownerDocument));
     const auxiliaryViewContainer = requiredViewContainer(
@@ -415,4 +428,45 @@ function requiredViewContainer(
     );
   }
   return container;
+}
+
+function appServerStatusEntry(state: AppServerConnectionState) {
+  switch (state) {
+    case "ready":
+      return {
+        text: "Ready",
+        ariaLabel: "App Server ready",
+      };
+    case "stopped":
+      return {
+        text: "App Server unavailable",
+        ariaLabel: "App Server unavailable",
+        tooltip: "No App Server host is connected",
+      };
+    case "crashed":
+      return {
+        text: "App Server crashed",
+        ariaLabel: "App Server crashed",
+      };
+    case "restarting":
+      return {
+        text: "App Server restarting\u2026",
+        ariaLabel: "App Server restarting",
+      };
+    case "stopping":
+      return {
+        text: "App Server stopping\u2026",
+        ariaLabel: "App Server stopping",
+      };
+    case "initializing":
+      return {
+        text: "App Server initializing\u2026",
+        ariaLabel: "App Server initializing",
+      };
+    case "starting":
+      return {
+        text: "App Server starting\u2026",
+        ariaLabel: "App Server starting",
+      };
+  }
 }

@@ -27,9 +27,18 @@ import {
   IQuickInputService,
   type IQuickPickItem,
 } from "../../../../platform/quickinput/common/quickInput.js";
+import {
+  EditorGroupWatermarkEntries,
+} from "../../../browser/parts/editor/editorGroupWatermark.js";
 
 export const ShowAllCommandsCommandId =
   "workbench.action.showCommands";
+
+EditorGroupWatermarkEntries.register({
+  id: "workbench.action.showCommands",
+  label: "Show All Commands",
+  command: ShowAllCommandsCommandId,
+});
 
 interface ICommandQuickPickItem extends IQuickPickItem {
   readonly commandId: string;

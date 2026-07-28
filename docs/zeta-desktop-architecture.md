@@ -111,6 +111,13 @@ desktop/
 `ZetaApplication`，`code/electron-main/app.ts` 持有服务、窗口、IPC 与退出生命周期。
 产品功能不得反向进入根 bootstrap。
 
+产品主进程入口同步注册 Electron `ready` 监听器；异步启动链只能从该监听器触发，
+不得在 ESM 顶层等待一个内部再调用 `app.whenReady()` 的 Promise。
+`ZetaApplication.startupAfterReady()` 断言 Ready 前置条件，并先创建无 preload、无脚本、
+无业务 IPC 的 `StartupWindow`。该窗口属于启动恢复界面，不是业务 UI；App Server gate
+成功后才创建 Workbench。gate 失败时，原生 Retry/Quit 对话框允许 supervisor 回到
+stopped 后重新初始化，或按正常退出生命周期关闭应用。
+
 `desktop/generated/` 由 zeta-rs 协议生成命令更新，不手写 wire DTO。
 生成的 `APP_SERVER_SCHEMA_HASH` 是 bundled Desktop 的 exact-schema 基线；Electron Main
 必须比较 initialize response，hash 不一致时不得创建业务窗口或进入 Ready。

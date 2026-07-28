@@ -35,6 +35,7 @@
     "src/zeta/platform/webview/browser/**/*.ts",
     "src/zeta/product/common/**/*.ts",
     "src/zeta/product/node/**/*.ts",
+    "src/zeta/code/electron-main/startupWindowPage.ts",
     "src/zeta/workbench/services/statusbar/**/*.ts",
     "src/zeta/workbench/services/commands/**/*.ts",
     "src/zeta/workbench/services/configuration/**/*.ts",
@@ -51,6 +52,7 @@
     "src/zeta/platform/app-server/electron-main/child-process-jsonl-transport.ts",
     "src/zeta/platform/app-server/electron-main/json-rpc-peer.ts",
     "src/zeta/platform/app-server/electron-main/trusted-ipc-router.ts",
+    "src/zeta/platform/app-server/browser/**/*.ts",
     "src/zeta/platform/browser/common/**/*.ts",
     "src/zeta/platform/browser/electron-main/browserViewIpc.ts",
     "test/**/*.ts"

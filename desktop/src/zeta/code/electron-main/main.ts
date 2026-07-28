@@ -25,10 +25,16 @@ const application = ZetaApplication.create({
   rendererRoot,
 });
 
-try {
-  await application.startup();
-} catch (error) {
-  console.error("Failed to start Zeta", error);
-  await application.disposeAfterStartupFailure();
-  app.exit(1);
+async function startup(): Promise<void> {
+  try {
+    await application.startupAfterReady();
+  } catch (error) {
+    console.error("Failed to start Zeta", error);
+    await application.disposeAfterStartupFailure();
+    app.exit(1);
+  }
 }
+
+app.once("ready", () => {
+  void startup();
+});

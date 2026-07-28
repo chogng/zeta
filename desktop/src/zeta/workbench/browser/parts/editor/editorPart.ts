@@ -22,6 +22,12 @@ import {
   EditorPaneRegistry,
   EditorPanes,
 } from "./editorRegistry.js";
+import {
+  EditorGroupWatermark,
+} from "./editorGroupWatermark.js";
+import type {
+  IKeybindingService,
+} from "../../../../platform/keybinding/common/keybinding.js";
 
 /** Editor-region operations available to Workbench contributions. */
 export interface IEditorPart {
@@ -41,6 +47,12 @@ export interface IEditorPart {
 export const IEditorPart =
   createServiceIdentifier<IEditorPart>("editorPart");
 
+/** Named collaborators used to construct the editor region. */
+export interface IEditorPartOptions {
+  readonly keybindingService?: IKeybindingService;
+  readonly registry?: EditorPaneRegistry;
+}
+
 /** The central content region that hosts the active workbench editor or view. */
 export class EditorPart extends WorkbenchPart implements IEditorPart {
   readonly #activeSession =
@@ -56,11 +68,18 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 
   constructor(
     ownerDocument: Document,
-    registry: EditorPaneRegistry = EditorPanes,
+    options: IEditorPartOptions = {},
   ) {
     super("editor", ownerDocument);
-    this.#registry = registry;
+    this.#registry = options.registry ?? EditorPanes;
     this.element.setAttribute("aria-label", "Editor");
+    if (options.keybindingService) {
+      const watermark = this.own(new EditorGroupWatermark(
+        ownerDocument,
+        options.keybindingService,
+      ));
+      this.contentElement.append(watermark.element);
+    }
     const ResizeObserverConstructor =
       ownerDocument.defaultView?.ResizeObserver;
     if (ResizeObserverConstructor) {

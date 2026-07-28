@@ -41,6 +41,40 @@ corepack pnpm --dir desktop start -- --workspace C:\path\to\team.zeta-workspace
 代码中 `platform/workspace` 定义当前窗口的 Workspace 模型与上下文，
 `platform/workspaces` 负责启动目标解析和后续工作区管理能力。两者不是同一服务的单复数别名。
 
+## Electron 启动门禁
+
+根入口 `src/main.ts` 先同步执行 Electron bootstrap，再加载产品主进程入口；
+`code/electron-main/main.ts` 通过 Electron `ready` 事件启动应用，不在 ESM 顶层等待
+`app.whenReady()`。`ZetaApplication.startupAfterReady()` 会断言 Electron 已进入 Ready，
+从结构上避免入口模块和 `ready` 生命周期互相等待。
+
+Ready 后首先显示 `StartupWindow`。该窗口不加载 preload、不注册业务 IPC，也不具备
+Workbench 能力；它只负责在 App Server 完成 initialize、server identity、protocol version
+与 schema hash 校验前提供可见反馈。门禁通过后才创建业务 Workbench 窗口。门禁失败时使用
+Electron 原生对话框提供 Retry/Quit，重试会先把 supervisor 恢复到 stopped 状态。
+
+## Browser Workbench
+
+三个 Browser HTML 入口现在会直接启动对应产品 Workbench。`workbench/browser/web.factory.ts`
+拥有自动启动与 `pagehide` 释放，`web.api.ts` 定义 embedder 输入，产品入口仍只选择自身的
+Monaco/ProseMirror contribution。
+
+独立页面未配置 host 时由
+`platform/app-server/browser/rendererApi.ts` 提供 disconnected API：UI 正常启动，状态栏显示
+App Server 不可用，产品操作明确失败。嵌入方若已实现受认证的远程 transport，必须在产品入口
+执行前注入：
+
+```ts
+globalThis.zetaWebWorkbenchHost = {
+  api: authenticatedRendererApi,
+  workspace,
+};
+```
+
+该对象是进程内 capability，不是可直接从不可信 JSON 反序列化的配置。当前 Rust App Server
+仅支持 `zeta app-server --listen stdio://`；HTTP/WebSocket listener、认证、origin policy 和
+部署服务尚未实现，因此 disconnected 页面不能描述为已连接的 Web 客户端。
+
 ## Electron sandbox 边界
 
 `base/parts/sandbox/electron-browser/preload.cts` 是主窗口唯一的 preload 入口。它在
