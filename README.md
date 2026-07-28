@@ -28,7 +28,14 @@ licenses and notices, including the Desktop notices in
 
 ## Run
 
-Launch the interactive terminal:
+With [`just`](https://just.systems/) installed, launch the interactive terminal from the current
+source tree:
+
+```bash
+just zeta
+```
+
+The equivalent Cargo command is:
 
 ```bash
 cargo run --manifest-path zeta-rs/Cargo.toml -p zeta-cli
@@ -37,6 +44,10 @@ cargo run --manifest-path zeta-rs/Cargo.toml -p zeta-cli
 Run a one-shot prompt:
 
 ```bash
+just zeta ask "explain this repository"
+just zeta exec "summarize the current changes"
+
+# Without just:
 cargo run --manifest-path zeta-rs/Cargo.toml -p zeta-cli -- ask "explain this repository"
 cargo run --manifest-path zeta-rs/Cargo.toml -p zeta-cli -- exec "summarize the current changes"
 ```

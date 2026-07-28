@@ -30,7 +30,13 @@ pump。系统文档中的这些内容是演进方向，不是已实现功能。
 
 从 repository root 启动当前 embedded TUI：
 
-```text
+```bash
+just zeta
+```
+
+等价的 Cargo 命令是：
+
+```bash
 cargo run --manifest-path zeta-rs/Cargo.toml -p zeta-cli
 ```
 
