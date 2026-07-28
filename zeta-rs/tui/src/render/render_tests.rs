@@ -71,12 +71,14 @@ fn bare_slash_renders_all_registered_commands() {
 
     let rendered = render(&app, 80, 20);
 
-    assert!(rendered.contains("/models"));
-    assert!(rendered.contains("/statusline"));
-    assert!(rendered.contains("/review"));
-    assert!(rendered.contains("/init"));
     assert!(rendered.contains("/status"));
     assert!(rendered.contains("/skills"));
+    assert!(rendered.contains("/mcp"));
+    assert!(rendered.contains("/resume"));
+    assert!(rendered.contains("/clear"));
+    assert!(rendered.contains("/config"));
+    assert!(!rendered.contains("/login"));
+    assert!(!rendered.contains("/plugins"));
 }
 
 #[test]

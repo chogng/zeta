@@ -14,6 +14,7 @@ members = [
     "secrets",
     "exec",
     "file-search",
+    "text-search",
     "file-system",
     "http-client",
     "linux-sandbox",
@@ -49,6 +50,7 @@ version = "0.1.0"
 anyhow = "1"
 arboard = { version = "3", features = ["wayland-data-control"] }
 base64 = "0.22"
+clap = "4"
 image = { version = "0.25.10", default-features = false }
 ignore = "0.4"
 lazy_static = "1"
@@ -91,6 +93,7 @@ zeta-core = { path = "core" }
 zeta-secrets = { path = "secrets" }
 zeta-exec = { path = "exec" }
 zeta-file-search = { path = "file-search" }
+zeta-text-search = { path = "text-search" }
 zeta-file-system = { path = "file-system" }
 zeta-http-client = { path = "http-client" }
 zeta-linux-sandbox = { path = "linux-sandbox" }

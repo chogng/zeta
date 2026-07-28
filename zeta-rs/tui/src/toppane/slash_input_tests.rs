@@ -20,19 +20,19 @@ fn popup_query_tracks_the_command_fragment_before_the_cursor() {
         Some("")
     );
     assert_eq!(
-        SlashInput::at_cursor("/review details", 4, &registry)
+        SlashInput::at_cursor("/model details", 4, &registry)
             .popup_query()
             .map(|query| query.text),
-        Some("rev")
+        Some("mod")
     );
     assert_eq!(
-        SlashInput::at_cursor("/review details", "/review".len(), &registry)
+        SlashInput::at_cursor("/model details", "/model".len(), &registry)
             .popup_query()
             .map(|query| query.text),
-        Some("review")
+        Some("model")
     );
     assert_eq!(
-        SlashInput::at_cursor("/review details", "/review ".len(), &registry).popup_query(),
+        SlashInput::at_cursor("/model details", "/model ".len(), &registry).popup_query(),
         None
     );
     assert_eq!(
@@ -47,7 +47,6 @@ fn matching_commands_uses_the_registered_presentation_order() {
     assert_eq!(
         SlashInput::at_cursor("/m", 2, &registry).matching_commands(),
         Some(vec![
-            SlashCommandItem::Builtin(SlashCommand::Models),
             SlashCommandItem::Builtin(SlashCommand::Mcp),
             SlashCommandItem::Builtin(SlashCommand::Model),
         ])
@@ -61,29 +60,29 @@ fn matching_commands_uses_the_registered_presentation_order() {
 #[test]
 fn completion_replaces_the_whole_name_and_preserves_the_argument_tail() {
     let registry = builtins();
-    let command = SlashCommandItem::Builtin(SlashCommand::Review);
-    let completion = SlashInput::at_cursor("/review details", 4, &registry)
+    let command = SlashCommandItem::Builtin(SlashCommand::Model);
+    let completion = SlashInput::at_cursor("/model details", 4, &registry)
         .completion(&command)
         .unwrap();
 
-    assert_eq!(completion.range, 0..8);
-    assert_eq!(completion.replacement, "/review ");
+    assert_eq!(completion.range, 0..7);
+    assert_eq!(completion.replacement, "/model ");
 
-    let mut text = "/review details".to_owned();
+    let mut text = "/model details".to_owned();
     text.replace_range(completion.range, &completion.replacement);
-    assert_eq!(text, "/review details");
+    assert_eq!(text, "/model details");
 }
 
 #[test]
 fn completion_adds_a_separator_before_a_newline() {
     let registry = builtins();
-    let command = SlashCommandItem::Builtin(SlashCommand::Review);
-    let completion = SlashInput::at_cursor("/rev\nmore", 4, &registry)
+    let command = SlashCommandItem::Builtin(SlashCommand::Model);
+    let completion = SlashInput::at_cursor("/mod\nmore", 4, &registry)
         .completion(&command)
         .unwrap();
 
     assert_eq!(completion.range, 0..4);
-    assert_eq!(completion.replacement, "/review ");
+    assert_eq!(completion.replacement, "/model ");
 }
 
 #[test]
@@ -95,16 +94,16 @@ fn submission_recognizes_bare_and_supported_inline_commands() {
     assert_eq!(bare.command, SlashCommandItem::Builtin(SlashCommand::Quit));
     assert!(bare.arguments_range.is_empty());
 
-    let inline = SlashInput::for_submission("/review   src/lib.rs  ", &registry)
+    let inline = SlashInput::for_submission("/model   provider/model  ", &registry)
         .submission_command()
         .unwrap();
     assert_eq!(
         inline.command,
-        SlashCommandItem::Builtin(SlashCommand::Review)
+        SlashCommandItem::Builtin(SlashCommand::Model)
     );
     assert_eq!(
-        &"/review   src/lib.rs  "[inline.arguments_range],
-        "src/lib.rs"
+        &"/model   provider/model  "[inline.arguments_range],
+        "provider/model"
     );
 
     assert_eq!(
@@ -154,12 +153,12 @@ fn recognized_completed_names_become_atomic_only_outside_the_name() {
     let registry = builtins();
 
     assert_eq!(
-        SlashInput::at_cursor("/review details", "/review details".len(), &registry)
+        SlashInput::at_cursor("/model details", "/model details".len(), &registry)
             .command_element_range(),
-        Some(0..7)
+        Some(0..6)
     );
     assert_eq!(
-        SlashInput::at_cursor("/review details", 4, &registry).command_element_range(),
+        SlashInput::at_cursor("/model details", 4, &registry).command_element_range(),
         None
     );
     assert_eq!(

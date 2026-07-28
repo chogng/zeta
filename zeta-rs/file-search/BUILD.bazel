@@ -1,6 +1,13 @@
-load("//:defs.bzl", "zeta_rust_crate")
+load("//:defs.bzl", "zeta_rust_binary", "zeta_rust_crate")
 
 zeta_rust_crate(
     name = "file-search",
     crate_name = "zeta_file_search",
+)
+
+zeta_rust_binary(
+    name = "zeta-file-search",
+    crate_name = "zeta_file_search_cli",
+    crate_root = "src/main.rs",
+    deps = [":file-search"],
 )

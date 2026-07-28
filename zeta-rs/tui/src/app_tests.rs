@@ -5,7 +5,9 @@ use super::Status;
 use crate::toppane::ComposerInput;
 use crate::toppane::ComposerSubmission;
 use crate::toppane::DynamicSlashCommand;
+use crate::toppane::SlashCommand;
 use crate::toppane::SlashCommandArgumentMode;
+use crate::toppane::SlashCommandItem;
 use crate::toppane::SlashCommandRegistry;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
@@ -198,35 +200,45 @@ fn quit_slash_command_requests_exit_without_starting_a_turn() {
 }
 
 #[test]
-fn registered_command_without_execution_flow_shows_a_notice() {
+fn product_command_is_delegated_to_the_typed_dispatcher() {
     let mut app = App::new();
-    app.insert_text("/models");
+    app.insert_text("/status");
 
     let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
-    assert_eq!(action, None);
-    assert_eq!(app.status(), &Status::Ready);
-    assert_eq!(app.messages().len(), 1);
-    assert_eq!(app.messages()[0].role, MessageRole::Notice);
+    let Some(Action::Command(invocation)) = action else {
+        panic!("expected product command action");
+    };
     assert_eq!(
-        app.messages()[0].text,
-        "command /models is not implemented yet"
+        invocation.command,
+        SlashCommandItem::Builtin(SlashCommand::Status)
     );
+    assert!(invocation.arguments.is_empty());
+    assert_eq!(app.status(), &Status::Ready);
+    assert!(app.messages().is_empty());
 }
 
 #[test]
-fn inline_command_arguments_reach_the_same_local_dispatch_boundary() {
+fn inline_product_arguments_reach_the_typed_dispatcher() {
     let mut app = App::new();
-    app.insert_text("/review inspect src/lib.rs");
+    app.insert_text("/model provider/model");
 
     let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
-    assert_eq!(action, None);
-    assert_eq!(app.status(), &Status::Ready);
+    let Some(Action::Command(invocation)) = action else {
+        panic!("expected product command action");
+    };
     assert_eq!(
-        app.messages()[0].text,
-        "command /review is not implemented yet"
+        invocation.command,
+        SlashCommandItem::Builtin(SlashCommand::Model)
     );
+    assert_eq!(invocation.display_arguments, "provider/model");
+    assert_eq!(
+        invocation.arguments,
+        vec![ComposerInput::Text("provider/model".into())]
+    );
+    assert_eq!(app.status(), &Status::Ready);
+    assert!(app.messages().is_empty());
 }
 
 #[test]

@@ -5,6 +5,7 @@ mod chatwidget;
 mod clipboard;
 mod file_search;
 mod render;
+mod slash_command_dispatch;
 mod terminal;
 mod toppane;
 
@@ -15,6 +16,7 @@ use crossterm::event::Event;
 use crossterm::event::KeyEventKind;
 use crossterm::event::MouseButton;
 use crossterm::event::MouseEventKind;
+use slash_command_dispatch::ActiveConversation;
 use std::fmt;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -28,8 +30,6 @@ use toppane::SlashCommandRegistry;
 use zeta_app_server_client::AppServerClient;
 use zeta_app_server_client::ClientError;
 use zeta_app_server_client::JsonRpcTransport;
-use zeta_app_server_protocol::protocol::common::{SessionId, ThreadId};
-use zeta_app_server_protocol::protocol::session::{SessionCreateParams, SessionThreadCreateParams};
 use zeta_app_server_protocol::protocol::slash_commands::{
     SlashCommandArgumentModeDto, SlashCommandDefinition,
 };
@@ -110,19 +110,7 @@ where
         workspace_root,
     } = options;
     let slash_commands = slash_command_registry(&client.initialization()?.slash_commands)?;
-    let session = client.create_session(SessionCreateParams {
-        command_id: CommandId::new(request_key("session"))
-            .expect("generated command ID is non-empty"),
-        title: thread_title.clone(),
-    })?;
-    let thread = client.create_session_thread(SessionThreadCreateParams {
-        command_id: CommandId::new(request_key("thread"))
-            .expect("generated command ID is non-empty"),
-        session_id: session.session.session_id.clone(),
-        expected_sequence: session.session.sequence,
-        title: thread_title,
-    })?;
-    let mut thread_sequence = 1;
+    let mut conversation = ActiveConversation::start(&mut client, thread_title)?;
     let mut active_turn = None;
     let mut terminal = terminal::TerminalSession::open()?;
     let mut app = App::for_workspace_with_slash_commands(&workspace_root, slash_commands);
@@ -137,13 +125,7 @@ where
                 | app::Status::WaitingForCapability
                 | app::Status::Cancelling
         ) {
-            refresh_turn(
-                &mut client,
-                &thread.thread_id,
-                &mut thread_sequence,
-                &mut active_turn,
-                &mut app,
-            );
+            refresh_turn(&mut client, &mut conversation, &mut active_turn, &mut app);
         }
         terminal.draw(|frame| render::draw(frame, &app))?;
         if !event::poll(Duration::from_millis(25))? {
@@ -171,23 +153,18 @@ where
         };
         if let Some(action) = action {
             match action {
+                Action::Command(invocation) => {
+                    conversation.execute(&mut client, invocation, &mut app);
+                }
                 Action::Quit => return Ok(TuiExit::UserRequested),
                 Action::Interrupt => {
-                    refresh_turn(
-                        &mut client,
-                        &thread.thread_id,
-                        &mut thread_sequence,
-                        &mut active_turn,
-                        &mut app,
-                    );
+                    refresh_turn(&mut client, &mut conversation, &mut active_turn, &mut app);
                     if let Some(turn_id) = active_turn.clone()
                         && !matches!(app.status(), app::Status::Error)
                     {
                         interrupt_turn(
                             &mut client,
-                            &session.session.session_id,
-                            &thread.thread_id,
-                            &mut thread_sequence,
+                            &mut conversation,
                             &turn_id,
                             &mut active_turn,
                             &mut app,
@@ -202,14 +179,7 @@ where
                 },
                 Action::Submit(prompt) => {
                     terminal.draw(|frame| render::draw(frame, &app))?;
-                    active_turn = submit_prompt(
-                        &mut client,
-                        &session.session.session_id,
-                        &thread.thread_id,
-                        &mut thread_sequence,
-                        prompt,
-                        &mut app,
-                    );
+                    active_turn = submit_prompt(&mut client, &mut conversation, prompt, &mut app);
                 }
             }
         }
@@ -236,9 +206,7 @@ fn slash_command_registry(
 
 fn submit_prompt<T>(
     client: &mut AppServerClient<T>,
-    session_id: &SessionId,
-    thread_id: &ThreadId,
-    thread_sequence: &mut u64,
+    conversation: &mut ActiveConversation,
     submission: ComposerSubmission,
     app: &mut App,
 ) -> Option<TurnId>
@@ -247,9 +215,9 @@ where
 {
     let turn = client.start_turn(TurnStartParams {
         command_id: CommandId::new(request_key("turn")).expect("generated command ID is non-empty"),
-        session_id: session_id.clone(),
-        thread_id: thread_id.clone(),
-        expected_sequence: *thread_sequence,
+        session_id: conversation.session_id().clone(),
+        thread_id: conversation.thread_id().clone(),
+        expected_sequence: conversation.thread_sequence(),
         input: submission
             .input
             .into_iter()
@@ -261,7 +229,7 @@ where
     });
     match turn {
         Ok(start) => {
-            *thread_sequence = start.sequence;
+            conversation.set_thread_sequence(start.sequence);
             Some(start.turn_id)
         }
         Err(error) => {
@@ -273,18 +241,17 @@ where
 
 fn refresh_turn<T>(
     client: &mut AppServerClient<T>,
-    thread_id: &ThreadId,
-    thread_sequence: &mut u64,
+    conversation: &mut ActiveConversation,
     active_turn: &mut Option<TurnId>,
     app: &mut App,
 ) where
     T: JsonRpcTransport,
 {
     match client.read_thread(ThreadReadParams {
-        thread_id: thread_id.clone(),
+        thread_id: conversation.thread_id().clone(),
     }) {
         Ok(snapshot) => {
-            *thread_sequence = snapshot.thread.sequence;
+            conversation.set_thread_sequence(snapshot.thread.sequence);
             apply_active_turn_snapshot(app, active_turn, &snapshot.thread.turns);
         }
         Err(error) => app.record_error(error.to_string()),
@@ -296,9 +263,7 @@ fn refresh_turn<T>(
 
 fn interrupt_turn<T>(
     client: &mut AppServerClient<T>,
-    session_id: &SessionId,
-    thread_id: &ThreadId,
-    thread_sequence: &mut u64,
+    conversation: &mut ActiveConversation,
     turn_id: &TurnId,
     active_turn: &mut Option<TurnId>,
     app: &mut App,
@@ -308,14 +273,14 @@ fn interrupt_turn<T>(
     match client.interrupt_turn(TurnInterruptParams {
         command_id: CommandId::new(request_key("interrupt"))
             .expect("generated command ID is non-empty"),
-        session_id: session_id.clone(),
-        thread_id: thread_id.clone(),
+        session_id: conversation.session_id().clone(),
+        thread_id: conversation.thread_id().clone(),
         turn_id: turn_id.clone(),
-        expected_sequence: *thread_sequence,
+        expected_sequence: conversation.thread_sequence(),
     }) {
         Ok(result) => {
-            *thread_sequence = result.sequence;
-            refresh_turn(client, thread_id, thread_sequence, active_turn, app);
+            conversation.set_thread_sequence(result.sequence);
+            refresh_turn(client, conversation, active_turn, app);
         }
         Err(error) => app.record_interrupt_failure(error.to_string()),
     }
@@ -381,7 +346,7 @@ fn present_turn_error(error: &StableTurnError) -> String {
     }
 }
 
-fn request_key(prefix: &str) -> String {
+pub(crate) fn request_key(prefix: &str) -> String {
     let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()

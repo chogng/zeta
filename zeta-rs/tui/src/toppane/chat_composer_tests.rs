@@ -17,30 +17,30 @@ fn key(code: KeyCode) -> KeyEvent {
 #[test]
 fn cursor_aware_completion_preserves_an_existing_argument_tail() {
     let mut composer = ChatComposer::new();
-    composer.insert_text("/rev inspect src/lib.rs");
+    composer.insert_text("/mod provider/model");
     composer.handle_key(key(KeyCode::Home));
 
     composer.handle_key(key(KeyCode::Tab));
 
-    assert_eq!(composer.text(), "/review inspect src/lib.rs");
+    assert_eq!(composer.text(), "/model provider/model");
     let ComposerOutcome::Command(invocation) = composer.handle_key(key(KeyCode::Enter)) else {
         panic!("expected inline command invocation");
     };
     assert_eq!(
         invocation.command,
-        SlashCommandItem::Builtin(SlashCommand::Review)
+        SlashCommandItem::Builtin(SlashCommand::Model)
     );
-    assert_eq!(invocation.display_arguments, "inspect src/lib.rs");
+    assert_eq!(invocation.display_arguments, "provider/model");
     assert_eq!(
         invocation.arguments,
-        vec![ComposerInput::Text("inspect src/lib.rs".into())]
+        vec![ComposerInput::Text("provider/model".into())]
     );
 }
 
 #[test]
 fn inline_command_arguments_preserve_images_and_following_text() {
     let mut composer = ChatComposer::new();
-    composer.insert_text("/review ");
+    composer.insert_text("/model ");
     composer
         .attach_image_bytes(b"\x89PNG\r\n\x1a\npayload".to_vec())
         .unwrap();
@@ -66,7 +66,7 @@ fn inline_command_arguments_preserve_images_and_following_text() {
 fn inline_command_arguments_expand_large_pastes_without_losing_binding() {
     let mut composer = ChatComposer::new();
     let pasted = "p".repeat(1001);
-    composer.insert_text("/review ");
+    composer.insert_text("/model ");
     composer.handle_paste(pasted.clone()).unwrap();
 
     let ComposerOutcome::Command(invocation) = composer.handle_key(key(KeyCode::Enter)) else {
@@ -95,7 +95,7 @@ fn arguments_on_an_argument_free_command_remain_a_normal_prompt() {
 #[test]
 fn deleting_an_atomic_command_clears_its_binding_and_allows_new_discovery() {
     let mut composer = ChatComposer::new();
-    composer.insert_text("/review ");
+    composer.insert_text("/model ");
     composer.handle_key(key(KeyCode::Home));
 
     composer.handle_key(key(KeyCode::Delete));

@@ -1,41 +1,27 @@
 # `zeta-file-search`
 
-> 本 README 是该 crate 的实现契约。模型可见本地工具的跨 crate 架构由
-> [`docs/tools.md`](../../docs/tools.md) 维护；TUI `@file` 交互由
-> [`zeta-rs/tui/README.md`](../tui/README.md) 维护。
+> 本 README 是 workspace 文件路径 fuzzy search 的实现契约。TUI `@file` 交互由
+> [`zeta-rs/tui/README.md`](../tui/README.md) 维护。模型可见的文件内容搜索属于 sibling
+> [`zeta-text-search`](../text-search/README.md)。
 
-`zeta-file-search` 拥有两条彼此独立的只读搜索路径：
-
-| 能力 | Public entry point | 调用方 | 搜索对象 |
-| --- | --- | --- | --- |
-| 模型文本搜索 | `FileSearchTool` | Tool registry / Core | UTF-8 文件内容 |
-| 交互式路径搜索 | `PathSearchHandle` | TUI 等 presentation adapter | workspace-relative 文件路径 |
-
-路径搜索不是一个新的模型 Tool；它不会读取候选文件内容，也不会改变 `file-search` Tool 的
-schema、binding、sandbox 或结果语义。
+`zeta-file-search` 只拥有 workspace-relative 文件路径的后台索引、增量 fuzzy matching 和独立
+CLI。它不读取候选文件内容，不注册模型 Tool，也不拥有 TUI popup/token 状态。
 
 ## 文件与职责
 
 ```text
 src/
-├── lib.rs                    # FileSearchTool 与显式 public exports
-├── file_search_tests.rs      # 模型文本搜索 Tool contract
-├── path_search.rs            # 后台 walker、Nucleo handle 与 snapshot contract
-└── path_search_tests.rs      # 增量 query、ignore、排序和高亮索引
+├── lib.rs                    # PathSearchHandle、worker、snapshot 与 public exports
+├── file_search_tests.rs      # 增量 query、ignore、排序和高亮索引
+├── main.rs                   # zeta-file-search 的薄进程入口与 exit status
+├── cli.rs                    # 参数、snapshot wait 与 stdout/stderr 输出
+└── cli_tests.rs              # CLI 参数、JSON 与 plain-text output
 ```
 
 ## Public contract
 
-### `FileSearchTool`
-
-`FileSearchTool::new` 固定 `ToolEnvironmentId + WorkspaceRoot + FileSearchLimits`。执行时验证
-environment、冻结 binding digest、结构化参数和 cancellation，然后递归读取 UTF-8 文本。它跳过
-symlink、二进制和超限文件，并以有界 JSON Tool output 返回行号、byte column 和截断状态。
-
-### `PathSearchHandle`
-
 `PathSearchHandle::start(root, options)` 验证 root 是目录，返回后台搜索 handle 和
-`Receiver<PathSearchSnapshot>`。handle 启动：
+`Receiver<PathSearchSnapshot>`：
 
 ```text
 ignore::WalkBuilder worker
@@ -63,33 +49,60 @@ revision 和 query，避免输入从 A 变成 B 再回到 A 时接受第一次 A
 - 跳过非 UTF-8 relative path；
 - 只注入普通文件，不返回目录。
 
+## `zeta-file-search` CLI
+
+独立 binary 是 `PathSearchHandle` 的开发者/脚本入口，不是 TUI 启动的子进程：
+
+```bash
+cargo run --manifest-path zeta-rs/Cargo.toml -p zeta-file-search -- src -C .
+cargo run --manifest-path zeta-rs/Cargo.toml -p zeta-file-search -- \
+  --json --compute-indices --limit 20 mention -C zeta-rs
+```
+
+| 参数 | 语义 |
+| --- | --- |
+| `[PATTERN]` | fuzzy pattern；省略时列出 workspace 文件 |
+| `-C, --cwd <DIR>` | 搜索 root；默认当前目录 |
+| `-l, --limit <N>` | 输出上限；默认 64 |
+| `--threads <N>` | walker 和 Nucleo worker 数；默认 2 |
+| `--json` | 每个 match 输出一行 JSON |
+| `--compute-indices` | JSON 包含 indices；TTY plain output 对命中字符加粗 |
+
+CLI 等待当前 `query_revision` 的 `search_complete` snapshot 后输出，因此不会显示中间结果。结果被
+limit 截断时，warning 写入 stderr；JSON match 仍写入 stdout，方便逐行消费。省略 pattern 时仍
+通过 `PathSearchHandle` 列出文件，不回退执行 `ls` 或其他 shell 命令。
+
 ## 内部接口地图
 
 | Symbol | 职责 | 不承担 |
 | --- | --- | --- |
-| `SearchState` | 模型文本搜索的递归读取、内容匹配和 limit/cancellation checkpoint | fuzzy path ranking |
-| `SearchInner` | 路径搜索 root、worker 配置、shutdown 与进度共享状态 | popup/query 生命周期 |
+| `SearchInner` | 搜索 root、worker 配置、shutdown 与进度共享状态 | popup/query 生命周期 |
 | `walker_worker` | 遍历并向 Nucleo 注入 relative file path | 读取文件内容、排序结果 |
 | `matcher_worker` | 合并 query/walker/notify signal，驱动增量 tick | UI stale-result policy |
 | `build_snapshot` | 生成有界、稳定排序且带高亮索引的 immutable snapshot | 发送 UI event |
+| `cli::execute` | 等待 final snapshot 并选择 stdout/stderr 编码 | 扫描或 fuzzy matching |
 
-如果路径搜索开始读取候选文件内容，或 `FileSearchTool` 开始依赖交互 handle/popup 状态，说明两条
-职责边界发生了漂移。
+如果该 crate 开始读取候选文件内容、实现模型 Tool binding，或保存 TUI popup state，说明 ownership
+已经漂移；这些职责分别属于 `zeta-text-search`、Tool registry 和 `zeta-tui`。
 
 ## Failure 与 cancellation
 
 - root 不存在或不是目录：`PathSearchHandle::start` 返回 `std::io::Error`，不启动 worker；
+- CLI 参数非法、root 不可用或 worker 在 completion 前退出：binary 输出带
+  `zeta-file-search:` 前缀的错误并返回非零状态；
 - 单个 walker entry 错误或非 UTF-8 path：跳过该 entry，搜索继续；
 - snapshot receiver 被丢弃：matcher 停止发送并退出；
-- handle 被丢弃：matcher 立即收到 shutdown，walker 在下一次 entry callback 停止；
-- 模型 Tool cancellation 和错误语义仍由 `FileSearchTool`/`SearchFailure` 独立拥有。
+- handle 被丢弃：matcher 立即收到 shutdown，walker 在下一次 entry callback 停止。
 
 ## 验证
 
 ```bash
 cargo test --manifest-path zeta-rs/Cargo.toml -p zeta-file-search
-cargo clippy --manifest-path zeta-rs/Cargo.toml -p zeta-file-search --no-deps -- -D warnings
+cargo clippy --manifest-path zeta-rs/Cargo.toml -p zeta-file-search --all-targets --no-deps -- -D warnings
+cargo run --manifest-path zeta-rs/Cargo.toml -p zeta-file-search -- --help
+bazel test //zeta-rs/file-search:file-search-unit-tests
+bazel build //zeta-rs/file-search:zeta-file-search
 ```
 
 修改 Nucleo 配置、ignore 规则、排序或 snapshot completion 语义时，必须同步检查
-`path_search_tests.rs`、TUI file-search manager、mention renderer 和两层文档。
+`file_search_tests.rs`、TUI file-search manager、mention renderer 和两层文档。

@@ -20,6 +20,7 @@ pub(crate) use slash_commands::SlashCommand;
 pub(crate) use slash_commands::SlashCommandArgumentMode;
 pub(crate) use slash_commands::SlashCommandItem;
 pub(crate) use slash_commands::SlashCommandRegistry;
+pub(crate) use slash_commands::built_in_slash_commands;
 use zeta_file_search::PathSearchSnapshot;
 
 #[derive(Clone, Debug, Eq, PartialEq)]

@@ -10,17 +10,15 @@ doctest = false
 name = "zeta_file_search"
 path = "src/lib.rs"
 
+[[bin]]
+name = "zeta-file-search"
+path = "src/main.rs"
+
 [dependencies]
+clap = { workspace = true, features = ["derive"] }
 ignore = { workspace = true }
 nucleo = { workspace = true }
-serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
-zeta-async-utils = { workspace = true }
-zeta-sandboxing = { workspace = true }
-zeta-tools = { workspace = true }
-
-[dev-dependencies]
-zeta-protocol = { workspace = true }
 
 [lints]
 workspace = true

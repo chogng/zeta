@@ -1,68 +1,111 @@
 use super::*;
-use serde_json::json;
 use std::fs;
-use std::future::Future;
-use std::path::{Path, PathBuf};
-use std::pin::Pin;
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::task::{Context, Poll, Waker};
-use zeta_async_utils::CancellationSource;
-use zeta_protocol::{ToolCallId, TurnId};
-use zeta_sandboxing::WorkspaceRoot;
-use zeta_tools::{
-    ToolBinding, ToolBindingId, ToolDefinition, ToolEnvironmentId, ToolExecutionContext,
-    ToolExecutionOutcome, ToolExecutor, ToolInvocation, ToolOperationId, ToolOutputStatus,
-    ToolPayload, ToolRegistryGeneration, ToolRuntimeAuthority, ToolRuntimeKey,
-};
+use std::path::Path;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
+use std::time::Instant;
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
 
 #[test]
-fn finds_text_recursively_without_following_binary_content() {
+fn handle_streams_scored_paths_and_highlight_indices() {
     let workspace = TestWorkspace::new();
-    workspace.write("src/lib.rs", "let needle = 1;\n");
-    workspace.write("src/other.rs", "let NEEDLE = 2;\n");
-    fs::write(workspace.path().join("src/blob.bin"), b"needle\0").unwrap();
-    let tool = FileSearchTool::new(
-        environment_id(),
-        workspace.root(),
-        FileSearchLimits::default(),
-    )
-    .unwrap();
-    let definition = tool.definition();
+    workspace.write("docs/src-notes.md");
+    workspace.write("tests/s_r_c.rs");
+    workspace.write("src/lib.rs");
+    let (handle, snapshots) =
+        PathSearchHandle::start(workspace.path.clone(), PathSearchOptions::default()).unwrap();
 
-    let outcome = resolve(tool.execute(invocation(
-        &definition,
-        json!({"query": "needle", "path": "src", "case": "insensitive"}),
-    )));
+    let revision = handle.update_query("src");
+    let snapshot = wait_for_snapshot(&snapshots, "src", |snapshot| snapshot.search_complete);
 
-    let ToolExecutionOutcome::Returned(output) = outcome else {
-        panic!("search should return a tool output");
-    };
-    assert_eq!(output.status(), ToolOutputStatus::Success);
-    let text = format!("{:?}", output.content());
-    assert!(text.contains("lib.rs"));
-    assert!(text.contains("other.rs"));
-    assert!(text.contains("skipped_non_text_files"));
+    assert_eq!(snapshot.query_revision, revision);
+    let contiguous = snapshot
+        .matches
+        .iter()
+        .find(|matched| matched.path == Path::new("docs/src-notes.md"))
+        .unwrap();
+    let spread = snapshot
+        .matches
+        .iter()
+        .find(|matched| matched.path == Path::new("tests/s_r_c.rs"))
+        .unwrap();
+    assert_eq!(contiguous.indices, vec![5, 6, 7]);
+    assert!(
+        contiguous.score > spread.score,
+        "a contiguous basename match should outrank a spread subsequence"
+    );
+    assert!(
+        snapshot
+            .matches
+            .windows(2)
+            .all(|pair| pair[0].score >= pair[1].score),
+        "Nucleo snapshots should already be ordered by descending score"
+    );
 }
 
 #[test]
-fn bounds_model_visible_matches() {
+fn query_updates_reuse_the_handle_and_publish_the_latest_query() {
     let workspace = TestWorkspace::new();
-    workspace.write("src/lib.rs", "needle\nneedle\n");
-    let limits = FileSearchLimits::new(1024, 1, 10).unwrap();
-    let tool = FileSearchTool::new(environment_id(), workspace.root(), limits).unwrap();
-    let definition = tool.definition();
+    workspace.write("src/alpha.rs");
+    workspace.write("src/beta.rs");
+    let (handle, snapshots) =
+        PathSearchHandle::start(workspace.path.clone(), PathSearchOptions::default()).unwrap();
 
-    let outcome = resolve(tool.execute(invocation(
-        &definition,
-        json!({"query": "needle", "path": "src", "case": "sensitive"}),
-    )));
+    let first_revision = handle.update_query("alpha");
+    let first = wait_for_snapshot(&snapshots, "alpha", |snapshot| snapshot.search_complete);
+    let second_revision = handle.update_query("beta");
+    let snapshot = wait_for_snapshot(&snapshots, "beta", |snapshot| snapshot.search_complete);
 
-    let ToolExecutionOutcome::Returned(output) = outcome else {
-        panic!("search should return a tool output");
-    };
-    let text = format!("{:?}", output.content());
-    assert_eq!(text.matches("column_byte").count(), 1);
-    assert!(text.contains("truncated"));
+    assert_eq!(first.query_revision, first_revision);
+    assert_eq!(snapshot.query_revision, second_revision);
+    assert!(second_revision > first_revision);
+    assert_eq!(snapshot.matches.len(), 1);
+    assert_eq!(snapshot.matches[0].path, Path::new("src/beta.rs"));
+}
+
+#[test]
+fn walker_respects_gitignore_and_skips_generated_directories() {
+    let workspace = TestWorkspace::new();
+    fs::create_dir(workspace.path.join(".git")).unwrap();
+    fs::write(workspace.path.join(".gitignore"), "ignored.rs\n").unwrap();
+    workspace.write("src/lib.rs");
+    workspace.write("ignored.rs");
+    workspace.write("target/debug/zeta");
+    workspace.write("node_modules/package/index.js");
+    let (handle, snapshots) =
+        PathSearchHandle::start(workspace.path.clone(), PathSearchOptions::default()).unwrap();
+
+    handle.update_query("");
+    let snapshot = wait_for_snapshot(&snapshots, "", |snapshot| snapshot.search_complete);
+    let paths = snapshot
+        .matches
+        .iter()
+        .map(|matched| matched.path.as_path())
+        .collect::<Vec<_>>();
+
+    assert!(paths.contains(&Path::new(".gitignore")));
+    assert!(paths.contains(&Path::new("src/lib.rs")));
+    assert!(!paths.contains(&Path::new("ignored.rs")));
+    assert!(!paths.iter().any(|path| path.starts_with("target")));
+    assert!(!paths.iter().any(|path| path.starts_with("node_modules")));
+}
+
+fn wait_for_snapshot(
+    snapshots: &Receiver<PathSearchSnapshot>,
+    query: &str,
+    predicate: impl Fn(&PathSearchSnapshot) -> bool,
+) -> PathSearchSnapshot {
+    let deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        let snapshot = snapshots
+            .recv_timeout(remaining)
+            .unwrap_or_else(|error| panic!("timed out waiting for path-search snapshot: {error}"));
+        if snapshot.query == query && predicate(&snapshot) {
+            return snapshot;
+        }
+    }
 }
 
 static NEXT_WORKSPACE: AtomicUsize = AtomicUsize::new(0);
@@ -75,66 +118,26 @@ impl TestWorkspace {
     fn new() -> Self {
         let sequence = NEXT_WORKSPACE.fetch_add(1, Ordering::Relaxed);
         let path = std::env::temp_dir().join(format!(
-            "zeta-file-search-tests-{}-{sequence}",
-            std::process::id()
+            "zeta-path-search-tests-{}-{}-{sequence}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
         ));
         fs::create_dir_all(&path).unwrap();
         Self { path }
     }
 
-    fn path(&self) -> &Path {
-        &self.path
-    }
-
-    fn root(&self) -> WorkspaceRoot {
-        WorkspaceRoot::open(&self.path).unwrap()
-    }
-
-    fn write(&self, relative: impl AsRef<Path>, content: &str) {
+    fn write(&self, relative: impl AsRef<Path>) {
         let target = self.path.join(relative);
         fs::create_dir_all(target.parent().unwrap()).unwrap();
-        fs::write(target, content).unwrap();
+        fs::write(target, "contents").unwrap();
     }
 }
 
 impl Drop for TestWorkspace {
     fn drop(&mut self) {
         let _ = fs::remove_dir_all(&self.path);
-    }
-}
-
-fn environment_id() -> ToolEnvironmentId {
-    ToolEnvironmentId::new("test-environment").unwrap()
-}
-
-fn invocation(definition: &ToolDefinition, arguments: serde_json::Value) -> ToolInvocation {
-    ToolInvocation::new(
-        ToolOperationId::new("operation-1").unwrap(),
-        ToolCallId::new("call-1").unwrap(),
-        TurnId::new("turn-1").unwrap(),
-        ToolBinding::new(
-            ToolRegistryGeneration::new(1),
-            ToolBindingId::new("binding-1").unwrap(),
-            definition.name().clone(),
-            definition.digest(),
-            ToolRuntimeKey::new("local:test").unwrap(),
-        ),
-        ToolPayload::FunctionArguments(arguments),
-        ToolExecutionContext::new(
-            environment_id(),
-            CancellationSource::new().token(),
-            ToolRuntimeAuthority::Unrestricted,
-        ),
-    )
-}
-
-fn resolve(
-    mut future: Pin<Box<dyn Future<Output = ToolExecutionOutcome> + Send + '_>>,
-) -> ToolExecutionOutcome {
-    let waker: &Waker = Waker::noop();
-    let mut context = Context::from_waker(waker);
-    match future.as_mut().poll(&mut context) {
-        Poll::Ready(outcome) => outcome,
-        Poll::Pending => panic!("local tool future should complete synchronously"),
     }
 }

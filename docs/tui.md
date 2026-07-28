@@ -582,27 +582,31 @@ lib.rs
 
 但目前仍是同步最小实现：
 
-- 每次启动都创建新的 Session 和 root Thread；
+- 每次启动创建新的 Session 和 root Thread；`/new`、`/clear`、`/fork` 与
+  `/resume <session-id>` 可以切换当前 conversation，但尚无 picker/browser；
 - `ChatWidget` 只保存扁平 `Vec<Message>`，没有 canonical projection；
 - `turn/start` 执行期间暂停输入；
 - 请求结束后一次性 drain notification；
 - 没有 Session/Thread subscribe、gap detection 或 resync；
 - 只提取最终 AgentMessage，忽略 Turn/Item 的完整 typed lifecycle；
-- 没有 resume、fork、archive、interrupt 和多 Thread 导航；
+- 没有 archive UI、resume picker 或多 Thread navigation surface；interrupt、exact-ID resume
+  与当前 Thread fork 已接通 typed API；
 - local slash popup 已支持共享 validated registry、cursor-aware prefix filtering、保留 argument
   tail 的 range completion、keyboard/mouse selection、原子 command token，以及 inline
   text/image/large-paste arguments；App Server 的 `initialize.slashCommands` snapshot 会在创建
   Session 前合并进 registry，非法名称、空描述、重复项和 built-in shadowing 都会使启动失败；
   dynamic command 恢复完整 `/name` 与 ordered arguments 后作为普通 Turn input 提交。
-  `/quit` 与 `/exit` 具备 local dispatch，其他 built-in 命令仍只显示未实现提示；workspace file
-  mention popup 也支持
+  Built-in registry 只保留真实执行流：Session/Thread lifecycle、status/config/MCP/Skill 查询、
+  revision-checked model selection、help 与退出；缺少 backend contract 的命令不显示。
+  workspace file mention popup 也支持
   keyboard/mouse selection，两者之外的 mouse surface 尚未接通；结构化 app/plugin Mention
   仍无 catalog 与执行流；
 - 图片输入已形成“本地路径/系统 clipboard → data URL → `UserImage` → provider image block”
   的 vertical slice；native clipboard 在远程 SSH/tmux 环境尚无 terminal-mediated fallback，
   data URL 也会放大 command receipt、Thread store 与 snapshot，长期仍需 resource/blob 引用
   contract；
-- `lib.rs` 同时承担 public API、启动编排、请求执行和通知解释。
+- `lib.rs` 同时承担 public API、启动编排、Turn 请求执行和通知解释；built-in product commands
+  已抽到 `slash_command_dispatch.rs`。
 
 这些限制可以作为 bootstrap 阶段存在，但不应在其上继续堆叠 feature。
 

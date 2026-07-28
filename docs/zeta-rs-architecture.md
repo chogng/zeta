@@ -25,7 +25,8 @@ zeta-rs/
 ├── tools/                # target host-side tool types, interfaces and pure adapters
 ├── shell-command/        # concrete approved-process executor
 ├── file-system/          # concrete read-only filesystem executor
-├── file-search/          # concrete bounded text-search executor
+├── text-search/          # concrete bounded text-content executor
+├── file-search/          # workspace path fuzzy search + CLI
 ├── apply-patch/          # concrete validated write executor
 ├── session-store/        # Session persistence port + envelope
 ├── thread-store/         # Thread persistence port + envelope

@@ -4,7 +4,7 @@
 > Rust crate：`zeta_tools`  
 > 当前状态：Phase T0 已创建 crate 并落地受限 schema、host definition、protocol/dynamic/MCP
 > adapter、output、binding、invocation 与 `ToolExecutor` contract。四个独立 crate 已实现
-> `shell-command`、`file-system`、`file-search` 与 `apply-patch`；live registry、Core port 接入、
+> `shell-command`、`file-system`、`text-search` 与 `apply-patch`；live registry、Core port 接入、
 > tool search、Plugin discovery、code mode、图片精度仍为 Proposed  
 > Canonical value 与 durable Tool Item：[`protocol.md`](protocol.md)  
 > Core 调度、approval 与恢复：[`core.md`](core.md)  
@@ -79,7 +79,7 @@ Core durable Tool Call / Tool Result lifecycle
 - `zeta-core::ContextAssembler` 已能重建 Tool Call/Result pairing；
 - `zeta-api` 已分别把 canonical function tool 和图片 detail 转成 OpenAI Responses、
   Chat Completions 与 Anthropic Messages wire payload；
-- `zeta-shell-command`、`zeta-file-system`、`zeta-file-search` 与 `zeta-apply-patch`
+- `zeta-shell-command`、`zeta-file-system`、`zeta-text-search` 与 `zeta-apply-patch`
   已各自提供一个独立 executor；
 - `zeta-mcp`、`zeta-plugins`、Tool registry/search、code mode 仍处于 Proposed；
   `zeta-tools` 尚未完成 live registry 或 Core port 接入。
@@ -169,7 +169,7 @@ Core 的 `ToolService` 是 consumer-owned port；它可以由外层 `ToolRegistr
                     ▲       ▲        ▲
                     │       │        │
           local tool crates  zeta-mcp  code-mode adapter
- shell-command / file-system / file-search / apply-patch
+ shell-command / file-system / text-search / apply-patch
                     \       |        /
                      \      |       /
                       App Server composition
@@ -189,8 +189,9 @@ Core 的 `ToolService` 是 consumer-owned port；它可以由外层 `ToolRegistr
 - `zeta-mcp → zeta-tools`；
 - `zeta-shell-command → zeta-tools + zeta-exec + zeta-sandboxing`；
 - `zeta-file-system → zeta-tools + zeta-sandboxing`；
-- `zeta-file-search → zeta-tools + zeta-sandboxing`；同 crate 的 `PathSearchHandle` 是供 TUI
-  使用的只读路径索引，不注册为模型 Tool；
+- `zeta-text-search → zeta-tools + zeta-sandboxing`；
+- `zeta-tui → zeta-file-search`；后者提供只读路径索引，不依赖 `zeta-tools`，也不注册为模型
+  Tool；
 - `zeta-apply-patch → zeta-tools + zeta-sandboxing`；
 - `zeta-policy → zeta-sandboxing`；
 - `zeta-auto-review → zeta-policy + zeta-sandboxing`；
@@ -230,7 +231,7 @@ App Server composition root 按 policy 单独注册：
 | --- | --- | --- |
 | `zeta-shell-command` / `shell-command` | 在批准的相对 Workspace 工作目录执行显式 program/arguments；复用 `zeta-exec` 的 approval、timeout 和输出上限 | 不隐式启动 shell，不绕过 process policy |
 | `zeta-file-system` / `file-system` | 读取 UTF-8 文件、列目录、读取 metadata | 不写入、删除、移动或重命名 |
-| `zeta-file-search` / `file-search` | 递归搜索 UTF-8 文本；跳过 symlink、二进制和超限文件 | 不调用 shell，不跟随 symlink，不修改文件 |
+| `zeta-text-search` / `text-search` | 递归搜索 UTF-8 文本；跳过 symlink、二进制和超限文件 | 不调用 shell，不跟随 symlink，不修改文件 |
 | `zeta-apply-patch` / `apply-patch` | 预检后更新、添加或删除普通文件；replacement 按文件原子写入 | 不接受绝对/`..` 路径，不直接提供任意写入 API |
 
 四者均在构造时固定 `ToolEnvironmentId + WorkspaceRoot`，要求它与
@@ -238,10 +239,17 @@ App Server composition root 按 policy 单独注册：
 binding。`apply-patch` 在所有 hunk 校验完成前不写入；
 若多文件 commit 中途失败，返回 `OutcomeUncertain`，由 Core 决定后续恢复语义。
 
-`zeta-file-search` 还导出不进入 Tool registry 的 `PathSearchHandle`，供交互客户端后台索引
-workspace-relative 文件路径。该 API 的 worker、ignore、snapshot 和 cancellation 契约由
-[`zeta-rs/file-search/README.md`](../zeta-rs/file-search/README.md) 维护；它不改变上表
-`file-search` Tool 的模型可见语义。
+文本内容搜索与交互式文件路径搜索现在由两个 crate 明确分工：
+
+| Crate | 所有权 | 模型可见 |
+| --- | --- | --- |
+| `zeta-text-search` | bounded UTF-8 内容扫描和 `TextSearchTool` | `text-search` Tool |
+| `zeta-file-search` | ignore-aware 路径索引、fuzzy matching、`PathSearchHandle` 和 CLI | 否 |
+
+具体契约分别由
+[`zeta-rs/text-search/README.md`](../zeta-rs/text-search/README.md) 和
+[`zeta-rs/file-search/README.md`](../zeta-rs/file-search/README.md) 维护。TUI 直接持有
+`PathSearchHandle`，不启动 CLI；Core 也不把路径搜索注册成 Tool。
 
 ## 5. Identity、来源与 binding
 

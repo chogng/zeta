@@ -26,10 +26,12 @@ Tool、approval policy 或 persistence。
   原子文本插入；
 - `/` 打开 command popup，支持 cursor-aware prefix filtering、循环选择、保留已有参数尾部的
   Tab completion、Esc dismiss 与左键单击可见命令；
-- `/review`、`/resume`、`/clear`、`/goal`、`/ide`、`/mcp`、`/new` 与 `/plan` 可解析 inline
-  arguments；参数保持 text/image 顺序，并在提交命令前展开 large-paste placeholder；
-- command popup 注册常用 workspace/session/configuration 命令；当前只有 `/quit` 与 `/exit`
-  具备本地执行流，其他已注册命令会显示尚未实现提示；
+- `/resume`、`/clear`、`/fork`、`/model` 与 `/new` 可解析 inline arguments，并在执行前展开
+  large-paste placeholder；product command 明确拒绝 image arguments；
+- command popup 只注册已有真实执行流的 built-ins：`/status`、`/skills`、`/mcp`、`/resume`、
+  `/clear`、`/config`、`/fork`、`/help`、`/model`、`/new`、`/quit` 与 `/exit`；
+- Session/Thread 命令调用 typed create/list/read/fork API 并切换当前 conversation；配置命令调用
+  `config/read`，`/model` 使用 expected revision 更新 preferred model；
 - 启动时读取 client 保存的 `initialize.slashCommands` snapshot，与 built-ins 做防冲突合并；
   server-advertised command 保留 `/name`、inline text/image/large-paste 参数并作为普通 Turn
   input 提交；
@@ -45,8 +47,8 @@ Tool、approval policy 或 persistence。
 当前没有 Session browser、Thread navigation、Markdown、stream delta render、Tool transcript、
 approval/user-input response UI、resize-specific state、remote connection selector 或 async App
 Server event pump。Mouse support 当前覆盖 slash 与 file mention popup 左键命中，不包含 hover、滚轮或其他
-surface；除 server-advertised forwarded commands 与本地退出以外的 built-in product command
-execution 仍尚未实现。Vim mode/motion/operator 目前只有明确的组件所有权，尚未实现。file
+surface；缺少 typed backend contract 的 login、plugins、hooks、compact、service tier 等
+命令不会进入 registry。Vim mode/motion/operator 目前只有明确的组件所有权，尚未实现。file
 mention 只插入 workspace-relative 文本路径，不是 `app://`/`plugin://`
 结构化 Mention，也不会读取文件内容。系统剪贴板图片依赖本机 clipboard backend；远程 SSH/
 tmux 会话尚无 terminal-mediated image clipboard fallback。
@@ -110,6 +112,7 @@ src/
 │   ├── footer.rs             # status-specific key hints
 │   ├── layout.rs             # shared narrow layout helpers
 │   └── theme.rs              # shared presentation colors
+├── slash_command_dispatch.rs # executable built-in command flows + active conversation selection
 └── terminal.rs               # raw/alternate-screen/paste/mouse lifecycle
 ```
 
@@ -137,7 +140,8 @@ src/
 | `SlashCommandPopup` | private | 缓存 cursor-query/registry-derived matches、selection 与 dismissal state | 不解析输入、不执行命令、不渲染 Ratatui widget |
 | `SlashInput` / `SlashCompletion` | private | 解析 cursor 下的 command token、返回替换 range、识别 bare/inline submission 和 command element range | 不改变 editor/popup、不执行命令 |
 | `SlashCommandRegistry` / `SlashCommandItem` | private / crate-private | 合并 built-in 与已校验 dynamic metadata，为 discovery 和 submission 提供同一 snapshot | 不决定 product availability、不执行 App Server operation |
-| `SlashCommandInvocation` | crate-private | command identity、trimmed display arguments 与有序 text/image argument items | 不把未实现命令伪装成普通 Turn |
+| `SlashCommandInvocation` | crate-private | command identity、trimmed display arguments 与有序 text/image argument items | 不执行 RPC |
+| `ActiveConversation` | crate-private | 当前 Session/Thread identity、sequence 与 typed built-in command execution | 不解析 composer text、不拥有 App Server |
 | `TextArea` | private | UTF-8 buffer、byte-safe cursor、原子元素 insert/delete/movement；Vim 的扩展 owner | 不保存 paste payload，不解释 Enter submission 或 slash command |
 | `submit_prompt` | private | build typed `TurnStartParams` 并更新 sequence | 不手写 method string/JSON |
 | `refresh_turn` | private | `thread/read` + update local sequence + drain notifications | snapshot 是当前 authoritative UI source |
@@ -226,7 +230,8 @@ popup 再校验 query，因此包括 A → B → A 在内的旧结果都不会�
 搜索并随着 walker 发现文件逐步更新候选。
 
 `SlashInput::at_cursor` 只在光标位于第一行 `/name` token 内时提供 popup query；补全返回
-`SlashCompletion { range, replacement }`，因此 `/rev inspect` 可变成 `/review inspect` 而不会
+`SlashCompletion { range, replacement }`，因此 `/mod provider/model` 可变成
+`/model provider/model` 而不会
 清空后缀、图片或 paste bindings。完成且后接 whitespace 的命令名会被标记为 `TextArea`
 原子元素；移除 separator 后会解除标记，从而允许重新编辑。
 
@@ -235,7 +240,12 @@ popup 再校验 query，因此包括 A → B → A 在内的旧结果都不会�
 `SlashCommandInvocation`：display arguments 已 trim，structured arguments 保持原有
 `ComposerInput::Text` / `ComposerInput::Image` 顺序。未知命令以及不支持参数却带参数的命令仍是
 普通 prompt。Registry 可以合并已校验的 dynamic metadata，并拒绝非法名称、空描述和 built-in
-冲突；当前没有 App Server dynamic-command source，默认 snapshot 只包含 built-ins。
+冲突；App Server 在 initialize snapshot 中提供 host-composed dynamic command source。
+
+Built-in command 进入 `ActiveConversation::execute`：Session/Thread lifecycle 使用 typed
+Session/Thread API，查询命令读取 authoritative config，`/model` 通过 expected revision mutation
+更新 preferred model。没有对应 typed contract 的产品命令不进入 registry，不显示占位提示，也不
+转成普通 prompt 冒充成功。
 
 ## Snapshot → UI mapping
 
@@ -267,7 +277,8 @@ Thread snapshot polling 才是 authority。这保证实现简单，也意味着�
 Ready / Error
 ├─ Enter(non-empty) → Submit → Working
 ├─ Enter(/quit or /exit) → Quit
-├─ Enter(其他已注册 bare/inline command) → structured invocation → 本地未实现提示
+├─ Enter(其他 built-in command) → structured invocation → typed command dispatcher
+├─ Enter(server dynamic command) → preserve /name + ordered arguments → Submit
 ├─ /query → cursor-aware popup；↑/↓ select；Tab range completion；Esc dismiss
 ├─ @query → workspace file popup；↑/↓ select；Tab/Enter complete；Esc dismiss
 ├─ popup 可见行左键单击 → 补全 mention 或执行 slash command

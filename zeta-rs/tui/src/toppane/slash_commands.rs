@@ -57,12 +57,9 @@ impl SlashCommand {
 
     pub(crate) fn argument_mode(self) -> SlashCommandArgumentMode {
         match self {
-            Self::Resume
-            | Self::Clear
-            | Self::Fork
-            | Self::Model
-            | Self::New
-                => SlashCommandArgumentMode::Optional,
+            Self::Resume | Self::Clear | Self::Fork | Self::Model | Self::New => {
+                SlashCommandArgumentMode::Optional
+            }
             _ => SlashCommandArgumentMode::None,
         }
     }

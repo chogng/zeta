@@ -10,29 +10,15 @@ fn built_in_commands_follow_enum_presentation_order() {
     assert_eq!(
         built_in_slash_commands(),
         vec![
-            ("models", SlashCommand::Models),
-            ("statusline", SlashCommand::Statusline),
-            ("review", SlashCommand::Review),
-            ("init", SlashCommand::Init),
             ("status", SlashCommand::Status),
             ("skills", SlashCommand::Skills),
             ("mcp", SlashCommand::Mcp),
             ("resume", SlashCommand::Resume),
-            ("plugins", SlashCommand::Plugins),
             ("clear", SlashCommand::Clear),
-            ("compact", SlashCommand::Compact),
             ("config", SlashCommand::Config),
-            ("fast", SlashCommand::Fast),
             ("fork", SlashCommand::Fork),
-            ("goal", SlashCommand::Goal),
             ("help", SlashCommand::Help),
-            ("ide", SlashCommand::Ide),
-            ("hooks", SlashCommand::Hooks),
-            ("login", SlashCommand::Login),
-            ("logout", SlashCommand::Logout),
             ("model", SlashCommand::Model),
-            ("plan", SlashCommand::Plan),
-            ("permissions", SlashCommand::Permissions),
             ("new", SlashCommand::New),
             ("quit", SlashCommand::Quit),
             ("exit", SlashCommand::Exit),
@@ -43,11 +29,11 @@ fn built_in_commands_follow_enum_presentation_order() {
 #[test]
 fn inline_argument_support_is_explicit_command_metadata() {
     assert_eq!(
-        SlashCommand::Review.argument_mode(),
+        SlashCommand::Model.argument_mode(),
         SlashCommandArgumentMode::Optional
     );
     assert_eq!(
-        SlashCommand::Goal.argument_mode(),
+        SlashCommand::Fork.argument_mode(),
         SlashCommandArgumentMode::Optional
     );
     assert_eq!(
@@ -59,13 +45,13 @@ fn inline_argument_support_is_explicit_command_metadata() {
 #[test]
 fn dynamic_registry_rejects_invalid_and_duplicate_names() {
     let duplicate = SlashCommandRegistry::with_dynamic_commands([DynamicSlashCommand {
-        name: "review".into(),
+        name: "status".into(),
         description: "duplicate".into(),
         argument_mode: SlashCommandArgumentMode::Optional,
     }]);
     assert_eq!(
         duplicate.unwrap_err(),
-        "duplicate slash command name 'review'"
+        "duplicate slash command name 'status'"
     );
 
     let invalid = SlashCommandRegistry::with_dynamic_commands([DynamicSlashCommand {

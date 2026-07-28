@@ -49,7 +49,7 @@ fn selection_wraps_in_both_directions() {
     popup.select_next();
     assert_eq!(
         popup.selected_command(),
-        Some(SlashCommandItem::Builtin(SlashCommand::Models))
+        Some(SlashCommandItem::Builtin(SlashCommand::Status))
     );
 }
 
@@ -60,17 +60,13 @@ fn command_lookup_returns_only_a_visible_registered_command() {
 
     assert_eq!(
         popup.command_at(0),
-        Some(SlashCommandItem::Builtin(SlashCommand::Models))
-    );
-    assert_eq!(
-        popup.command_at(1),
         Some(SlashCommandItem::Builtin(SlashCommand::Mcp))
     );
     assert_eq!(
-        popup.command_at(2),
+        popup.command_at(1),
         Some(SlashCommandItem::Builtin(SlashCommand::Model))
     );
-    assert_eq!(popup.command_at(3), None);
+    assert_eq!(popup.command_at(2), None);
 
     popup.dismiss();
     assert_eq!(popup.command_at(0), None);
@@ -94,11 +90,11 @@ fn moving_the_cursor_back_into_the_name_reopens_discovery_without_losing_the_tai
     let registry = SlashCommandRegistry::default();
     let mut popup = SlashCommandPopup::default();
 
-    popup.sync_input("/rev details", 4, &registry);
+    popup.sync_input("/res details", 4, &registry);
 
     assert_eq!(
         popup.selected_command(),
-        Some(SlashCommandItem::Builtin(SlashCommand::Review))
+        Some(SlashCommandItem::Builtin(SlashCommand::Resume))
     );
 }
 
