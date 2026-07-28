@@ -1,14 +1,19 @@
 use super::*;
 use std::collections::VecDeque;
+use std::fs;
 use std::sync::Arc;
 use std::thread;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use zeta_app_server::AppServer;
+use zeta_app_server::SlashCommandCatalog;
 use zeta_app_server_protocol::protocol::common::{ClientCapabilities, ClientInfo};
 use zeta_app_server_protocol::protocol::initialize::InitializeParams;
 use zeta_app_server_protocol::protocol::session::{SessionCreateParams, SessionThreadCreateParams};
+use zeta_app_server_protocol::protocol::slash_commands::{
+    SlashCommandArgumentModeDto, SlashCommandDefinition,
+};
 use zeta_app_server_protocol::protocol::thread::ThreadReadParams;
-use zeta_app_server_protocol::protocol::turn::{InputItem, InputItemKind, TurnStartParams};
+use zeta_app_server_protocol::protocol::turn::{InputItem, TurnStartParams};
 use zeta_app_server_protocol::schema_hash;
 use zeta_async_utils::CancellationToken;
 use zeta_core::{
@@ -96,6 +101,7 @@ fn in_process_client_uses_session_first_contract_and_canonical_updates() {
         })
         .expect("in-process client initializes");
     assert_eq!(initialized.schema_hash.0, schema_hash());
+    assert_eq!(client.initialization().unwrap(), &initialized);
     let session = client
         .create_session(SessionCreateParams {
             command_id: CommandId::new("session-one").expect("test ID is non-empty"),
@@ -116,10 +122,14 @@ fn in_process_client_uses_session_first_contract_and_canonical_updates() {
             session_id: session.session.session_id,
             thread_id: thread.thread_id.clone(),
             expected_sequence: 1,
-            input: vec![InputItem {
-                kind: InputItemKind::Text,
-                text: "hello".into(),
-            }],
+            input: vec![
+                InputItem::Text {
+                    text: "hello".into(),
+                },
+                InputItem::Image {
+                    url: "data:image/png;base64,iVBORw0KGgpwYXlsb2Fk".into(),
+                },
+            ],
         })
         .expect("Turn starts");
     let deadline = Instant::now() + Duration::from_secs(1);
@@ -154,4 +164,81 @@ fn in_process_client_uses_session_first_contract_and_canonical_updates() {
     assert_eq!(output, Some("Zeta: hello"));
     assert_eq!(snapshot.thread.turns[0].turn_id, turn.turn_id);
     assert_eq!(snapshot.thread.turns[0].status, TurnStatus::Completed);
+    assert!(matches!(
+        &snapshot.thread.turns[0].items[1],
+        ThreadItem::UserImage { url, .. }
+            if url == "data:image/png;base64,iVBORw0KGgpwYXlsb2Fk"
+    ));
+}
+
+#[test]
+fn client_preserves_the_initialized_slash_command_snapshot() {
+    let definition = SlashCommandDefinition {
+        name: "diagnose".into(),
+        description: "inspect the current workspace".into(),
+        argument_mode: SlashCommandArgumentModeDto::Optional,
+    };
+    let server = app_server()
+        .with_slash_command_catalog(SlashCommandCatalog::new([definition.clone()]).unwrap());
+    let mut client = AppServerClient::new(InProcessTransport::from_server(server));
+
+    client
+        .initialize(InitializeParams {
+            client_info: ClientInfo {
+                name: "test-client".into(),
+                version: "1".into(),
+            },
+            capabilities: ClientCapabilities::default(),
+        })
+        .unwrap();
+
+    assert_eq!(
+        client.initialization().unwrap().slash_commands,
+        [definition]
+    );
+}
+
+#[test]
+fn initialization_snapshot_is_unavailable_before_handshake() {
+    let client = AppServerClient::new(MockTransport(VecDeque::new()));
+
+    assert!(matches!(
+        client.initialization(),
+        Err(ClientError::Protocol(message)) if message.contains("initialize handshake")
+    ));
+}
+
+#[test]
+fn embedded_startup_propagates_the_host_slash_command_catalog() {
+    let definition = SlashCommandDefinition {
+        name: "diagnose".into(),
+        description: "inspect the current workspace".into(),
+        argument_mode: SlashCommandArgumentModeDto::Optional,
+    };
+    let state_root = std::env::temp_dir().join(format!(
+        "zeta-app-server-client-slash-{}",
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+
+    let client = start_in_process_client(
+        InProcessClientOptions::new(
+            &state_root,
+            ClientInfo {
+                name: "test-client".into(),
+                version: "1".into(),
+            },
+        )
+        .with_slash_command_catalog(SlashCommandCatalog::new([definition.clone()]).unwrap()),
+    )
+    .unwrap();
+
+    assert_eq!(
+        client.initialization().unwrap().slash_commands,
+        [definition]
+    );
+    drop(client);
+    let _ = fs::remove_dir_all(state_root);
 }

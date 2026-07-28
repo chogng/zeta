@@ -48,6 +48,51 @@ fn assembles_messages_and_paired_tool_results_from_durable_items() {
 }
 
 #[test]
+fn groups_ordered_text_and_images_from_one_user_turn() {
+    let turn_id = id::<TurnId>("turn");
+    let image_url = "data:image/png;base64,iVBORw0KGgpwYXlsb2Fk";
+    let snapshot = snapshot(
+        turn_id.clone(),
+        vec![
+            ThreadItem::UserMessage {
+                item_id: id("text-before"),
+                turn_id: turn_id.clone(),
+                text: "describe".into(),
+            },
+            ThreadItem::UserImage {
+                item_id: id("image"),
+                turn_id: turn_id.clone(),
+                url: image_url.into(),
+            },
+            ThreadItem::UserMessage {
+                item_id: id("text-after"),
+                turn_id,
+                text: "briefly".into(),
+            },
+        ],
+    );
+
+    let request = ContextAssembler::assemble(&snapshot, Vec::new()).unwrap();
+
+    assert_eq!(request.input.len(), 1);
+    let InputItem::Message(message) = &request.input[0] else {
+        panic!("user input must assemble as one message");
+    };
+    assert_eq!(message.role, MessageRole::User);
+    assert_eq!(
+        message.content,
+        vec![
+            ContentPart::Text("describe".into()),
+            ContentPart::ImageUrl {
+                url: image_url.into(),
+                detail: ImageDetail::Auto,
+            },
+            ContentPart::Text("briefly".into()),
+        ]
+    );
+}
+
+#[test]
 fn rejects_invalid_durable_tool_arguments() {
     let turn_id = id::<TurnId>("turn");
     let snapshot = snapshot(

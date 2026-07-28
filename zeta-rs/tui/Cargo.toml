@@ -11,12 +11,20 @@ name = "zeta_tui"
 path = "src/lib.rs"
 
 [dependencies]
+base64 = { workspace = true }
 crossterm = { workspace = true }
 ratatui = { workspace = true }
+strum = { workspace = true }
+strum_macros = { workspace = true }
 unicode-width = { workspace = true }
 zeta-app-server-client = { workspace = true }
 zeta-app-server-protocol = { workspace = true }
+zeta-file-search = { workspace = true }
 zeta-protocol = { workspace = true }
+
+[target.'cfg(not(target_os = "android"))'.dependencies]
+arboard = { workspace = true }
+image = { workspace = true, features = ["gif", "jpeg", "png", "webp"] }
 
 [lints]
 workspace = true

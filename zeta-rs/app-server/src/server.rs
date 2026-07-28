@@ -1,4 +1,5 @@
 use crate::resource_store::{ResourceError, ResourceStore};
+use crate::slash_commands::SlashCommandCatalog;
 use serde::Deserialize;
 use serde_json::Value;
 use std::collections::BTreeSet;
@@ -30,6 +31,7 @@ pub struct AppServer {
     pub(super) resources: Mutex<ResourceStore>,
     pub(super) config: Option<Arc<ConfigStore>>,
     pub(super) typst: TypstCompiler,
+    pub(super) slash_commands: SlashCommandCatalog,
     updates: Arc<UpdateBroker>,
 }
 
@@ -55,6 +57,7 @@ impl AppServer {
             resources: Mutex::new(ResourceStore::default()),
             config: None,
             typst: TypstCompiler::new(),
+            slash_commands: SlashCommandCatalog::default(),
             updates,
         }
     }
@@ -71,6 +74,11 @@ impl AppServer {
 
     pub fn with_config_store(mut self, config: Arc<ConfigStore>) -> Self {
         self.config = Some(config);
+        self
+    }
+
+    pub fn with_slash_command_catalog(mut self, slash_commands: SlashCommandCatalog) -> Self {
+        self.slash_commands = slash_commands;
         self
     }
 

@@ -196,6 +196,11 @@ determinism。`ContextManager` 只协调生命周期与缓存。
 当前基础 `ContextAssembler` 直接接受 `ThreadSnapshot` 是过渡 API。长期应改为接受
 `ContextPlan`，Thread snapshot 的读取和选择由 ContextManager/Planner 完成。
 
+当前 assembler 会把同一 Turn 中相邻的 `UserMessage` / `UserImage` 按 durable 顺序合并成一个
+provider-neutral user `Message`，分别映射为 `ContentPart::Text` 与
+`ContentPart::ImageUrl`。图片内容在 Turn 接受阶段已经由 Core 校验；provider adapter 只负责
+转换为各自的 URL/base64 image block。
+
 ## 6. 上下文组织
 
 ### 6.1 逻辑层次
@@ -427,7 +432,7 @@ TurnExecutor
 当前：
 
 - `context/assembler.rs` 从完整 `ThreadSnapshot` 直接构造 `ModelRequest`；
-- 已覆盖 user/assistant message 与 Tool Call/Result 基础映射；
+- 已覆盖同一 Turn 的有序 user text/image、assistant message 与 Tool Call/Result 基础映射；
 - 已拒绝损坏的 Tool arguments 和悬空 Tool Result；
 - 尚无 ContextManager、instructions、预算、checkpoint 和 compaction。
 

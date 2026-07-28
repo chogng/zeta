@@ -36,3 +36,79 @@ fn control_keys_are_left_for_parent_routing() {
     assert_eq!(outcome, super::TextAreaOutcome::Unhandled);
     assert_eq!(textarea.text(), "");
 }
+
+#[test]
+fn cursor_movement_skips_atomic_elements() {
+    let mut textarea = TextArea::new();
+    textarea.insert_text("a");
+    textarea.insert_element("[P]");
+    textarea.insert_text("b");
+
+    textarea.handle_key(KeyEvent::new(KeyCode::Left, KeyModifiers::NONE));
+    textarea.handle_key(KeyEvent::new(KeyCode::Left, KeyModifiers::NONE));
+
+    assert_eq!(textarea.cursor_display_width(), 1);
+
+    textarea.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
+
+    assert_eq!(textarea.cursor_display_width(), 4);
+}
+
+#[test]
+fn backspace_removes_an_atomic_element_as_a_unit() {
+    let mut textarea = TextArea::new();
+    textarea.insert_text("a");
+    let element = textarea.insert_element("[P]");
+
+    textarea.handle_key(KeyEvent::new(KeyCode::Backspace, KeyModifiers::NONE));
+
+    assert_eq!(textarea.text(), "a");
+    assert_eq!(textarea.cursor_display_width(), 1);
+    assert!(!textarea.has_element(element));
+}
+
+#[test]
+fn delete_removes_an_atomic_element_as_a_unit() {
+    let mut textarea = TextArea::new();
+    let element = textarea.insert_element("[P]");
+    textarea.handle_key(KeyEvent::new(KeyCode::Home, KeyModifiers::NONE));
+
+    textarea.handle_key(KeyEvent::new(KeyCode::Delete, KeyModifiers::NONE));
+
+    assert_eq!(textarea.text(), "");
+    assert_eq!(textarea.cursor_display_width(), 0);
+    assert!(!textarea.has_element(element));
+}
+
+#[test]
+fn replacing_editable_text_preserves_and_repositions_atomic_elements() {
+    let mut textarea = TextArea::new();
+    textarea.insert_text("@sr");
+    textarea.insert_text(" ");
+    let element = textarea.insert_element("[P]");
+    textarea.handle_key(KeyEvent::new(KeyCode::Home, KeyModifiers::NONE));
+
+    textarea.replace_range(0..3, "src/lib.rs");
+
+    assert_eq!(textarea.text(), "src/lib.rs [P]");
+    assert_eq!(textarea.cursor(), "src/lib.rs".len());
+    assert!(textarea.has_element(element));
+    assert_eq!(
+        textarea.elements().next().unwrap().1,
+        "src/lib.rs ".len().."src/lib.rs [P]".len()
+    );
+}
+
+#[test]
+fn existing_text_can_be_marked_and_unmarked_without_changing_its_contents() {
+    let mut textarea = TextArea::new();
+    textarea.insert_text("/review details");
+
+    let element = textarea.mark_element(0.."/review".len());
+    assert_eq!(textarea.element_range(element), Some(0.."/review".len()));
+
+    textarea.unmark_element(element);
+
+    assert_eq!(textarea.text(), "/review details");
+    assert_eq!(textarea.element_range(element), None);
+}

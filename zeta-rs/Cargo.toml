@@ -47,10 +47,14 @@ version = "0.1.0"
 
 [workspace.dependencies]
 anyhow = "1"
+arboard = { version = "3", features = ["wayland-data-control"] }
 base64 = "0.22"
+image = { version = "0.25.10", default-features = false }
+ignore = "0.4"
 lazy_static = "1"
 libc = "0.2"
 log = "0.4"
+nucleo = { git = "https://github.com/helix-editor/nucleo.git", rev = "4253de9faabb4e5c6d81d946a5e35a90f87347ee" }
 pdfium-render = { version = "0.9.3", default-features = false, features = ["pdfium_7763", "thread_safe"] }
 portable-pty = "0.9.0"
 pretty_assertions = "1"
@@ -62,6 +66,8 @@ serde_json = "1"
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
 rustls-native-certs = "0.7"
 sha2 = "0.10"
+strum = "0.27"
+strum_macros = "0.27"
 ts-rs = { version = "12.0.1", features = ["serde-compat"] }
 typst = "=0.15.1"
 typst-assets = { version = "=0.15.1", features = ["fonts"] }

@@ -1610,33 +1610,55 @@
         },
         "serverInfo": {
           "$ref": "#/$defs/ServerInfo"
+        },
+        "slashCommands": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SlashCommandDefinition"
+          }
         }
       },
       "required": [
         "serverInfo",
         "schemaHash",
-        "capabilities"
+        "capabilities",
+        "slashCommands"
       ]
     },
     "InputItem": {
-      "type": "object",
-      "properties": {
-        "text": {
-          "type": "string"
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "text"
+            }
+          },
+          "required": [
+            "type",
+            "text"
+          ]
         },
-        "type": {
-          "$ref": "#/$defs/InputItemKind"
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "image"
+            },
+            "url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "url"
+          ]
         }
-      },
-      "required": [
-        "type",
-        "text"
-      ]
-    },
-    "InputItemKind": {
-      "type": "string",
-      "enum": [
-        "text"
       ]
     },
     "InteractionCancelReason": {
@@ -3050,6 +3072,34 @@
         "enablement"
       ]
     },
+    "SlashCommandArgumentModeDto": {
+      "description": "Whether a server-advertised slash command accepts inline composer arguments.",
+      "type": "string",
+      "enum": [
+        "none",
+        "optional"
+      ]
+    },
+    "SlashCommandDefinition": {
+      "description": "One server-advertised command in the immutable initialization snapshot.\n\nClients may merge these commands with local presentation commands. A submitted dynamic command\nremains ordinary ordered Turn input; the definition only makes its slash syntax discoverable\nand declares whether inline arguments are accepted.",
+      "type": "object",
+      "properties": {
+        "argumentMode": {
+          "$ref": "#/$defs/SlashCommandArgumentModeDto"
+        },
+        "description": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "description",
+        "argumentMode"
+      ]
+    },
     "StableTurnError": {
       "type": "object",
       "properties": {
@@ -3507,6 +3557,30 @@
             "itemId",
             "turnId",
             "text"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "itemId": {
+              "$ref": "#/$defs/ItemId"
+            },
+            "turnId": {
+              "$ref": "#/$defs/TurnId"
+            },
+            "type": {
+              "type": "string",
+              "const": "userImage"
+            },
+            "url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "itemId",
+            "turnId",
+            "url"
           ]
         },
         {

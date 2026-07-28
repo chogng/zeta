@@ -189,7 +189,8 @@ Core 的 `ToolService` 是 consumer-owned port；它可以由外层 `ToolRegistr
 - `zeta-mcp → zeta-tools`；
 - `zeta-shell-command → zeta-tools + zeta-exec + zeta-sandboxing`；
 - `zeta-file-system → zeta-tools + zeta-sandboxing`；
-- `zeta-file-search → zeta-tools + zeta-sandboxing`；
+- `zeta-file-search → zeta-tools + zeta-sandboxing`；同 crate 的 `PathSearchHandle` 是供 TUI
+  使用的只读路径索引，不注册为模型 Tool；
 - `zeta-apply-patch → zeta-tools + zeta-sandboxing`；
 - `zeta-policy → zeta-sandboxing`；
 - `zeta-auto-review → zeta-policy + zeta-sandboxing`；
@@ -236,6 +237,11 @@ App Server composition root 按 policy 单独注册：
 `ToolExecutionContext.environment_id` 一致，且只接受与自身 `ToolDefinition` digest 相符的冻结
 binding。`apply-patch` 在所有 hunk 校验完成前不写入；
 若多文件 commit 中途失败，返回 `OutcomeUncertain`，由 Core 决定后续恢复语义。
+
+`zeta-file-search` 还导出不进入 Tool registry 的 `PathSearchHandle`，供交互客户端后台索引
+workspace-relative 文件路径。该 API 的 worker、ignore、snapshot 和 cancellation 契约由
+[`zeta-rs/file-search/README.md`](../zeta-rs/file-search/README.md) 维护；它不改变上表
+`file-search` Tool 的模型可见语义。
 
 ## 5. Identity、来源与 binding
 

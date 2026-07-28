@@ -20,6 +20,11 @@ pub enum ThreadItem {
         turn_id: TurnId,
         text: String,
     },
+    UserImage {
+        item_id: ItemId,
+        turn_id: TurnId,
+        url: String,
+    },
     AgentMessage {
         item_id: ItemId,
         turn_id: TurnId,
@@ -55,6 +60,7 @@ impl ThreadItem {
     pub fn item_id(&self) -> &ItemId {
         match self {
             Self::UserMessage { item_id, .. }
+            | Self::UserImage { item_id, .. }
             | Self::AgentMessage { item_id, .. }
             | Self::Reasoning { item_id, .. }
             | Self::Plan { item_id, .. }
@@ -66,6 +72,7 @@ impl ThreadItem {
     pub fn turn_id(&self) -> &TurnId {
         match self {
             Self::UserMessage { turn_id, .. }
+            | Self::UserImage { turn_id, .. }
             | Self::AgentMessage { turn_id, .. }
             | Self::Reasoning { turn_id, .. }
             | Self::Plan { turn_id, .. }

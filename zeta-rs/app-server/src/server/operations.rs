@@ -26,7 +26,7 @@ use zeta_app_server_protocol::protocol::thread::{
     ThreadUnsubscribeParams,
 };
 use zeta_app_server_protocol::protocol::turn::{
-    TurnInteractionResolveParams, TurnInteractionResolveResult, TurnInterruptParams,
+    InputItem, TurnInteractionResolveParams, TurnInteractionResolveResult, TurnInterruptParams,
     TurnInterruptResult, TurnStartParams, TurnStartResult,
 };
 use zeta_app_server_protocol::schema_hash;
@@ -73,6 +73,7 @@ impl AppServer {
                 typst: true,
                 update_replay: true,
             },
+            slash_commands: self.slash_commands.definitions().to_vec(),
         })
     }
 
@@ -361,7 +362,10 @@ impl AppServer {
                     input: params
                         .input
                         .into_iter()
-                        .map(|item| UserInput::Text { text: item.text })
+                        .map(|item| match item {
+                            InputItem::Text { text } => UserInput::Text { text },
+                            InputItem::Image { url } => UserInput::Image { url },
+                        })
                         .collect(),
                 },
             )

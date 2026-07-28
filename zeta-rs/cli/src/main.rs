@@ -15,7 +15,7 @@ use zeta_app_server_client::start_in_process_client;
 use zeta_app_server_protocol::protocol::common::ClientInfo;
 use zeta_app_server_protocol::protocol::session::{SessionCreateParams, SessionThreadCreateParams};
 use zeta_app_server_protocol::protocol::thread::ThreadReadParams;
-use zeta_app_server_protocol::protocol::turn::{InputItem, InputItemKind, TurnStartParams};
+use zeta_app_server_protocol::protocol::turn::{InputItem, TurnStartParams};
 use zeta_protocol::{CommandId, ThreadItem, TurnStatus};
 
 fn main() {
@@ -110,10 +110,7 @@ fn run_prompt(prompt: String, title: &str) -> Result<String, String> {
             session_id: session.session.session_id,
             thread_id: thread.thread_id.clone(),
             expected_sequence: 1,
-            input: vec![InputItem {
-                kind: InputItemKind::Text,
-                text: prompt,
-            }],
+            input: vec![InputItem::Text { text: prompt }],
         })
         .map_err(|error| error.to_string())?;
     let deadline = Instant::now() + Duration::from_secs(60);

@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use zeta_app_server::AppServer;
 use zeta_app_server::ConnectionState;
 use zeta_app_server::LocalAppServerOptions;
+use zeta_app_server::SlashCommandCatalog;
 use zeta_app_server::open_local_app_server;
 use zeta_app_server_protocol::protocol::common::{ClientCapabilities, ClientInfo};
 use zeta_app_server_protocol::protocol::initialize::InitializeParams;
@@ -16,6 +17,7 @@ pub struct InProcessClientOptions {
     pub state_root: PathBuf,
     pub client_info: ClientInfo,
     pub capabilities: ClientCapabilities,
+    pub slash_commands: SlashCommandCatalog,
 }
 
 impl InProcessClientOptions {
@@ -24,11 +26,17 @@ impl InProcessClientOptions {
             state_root: state_root.into(),
             client_info,
             capabilities: ClientCapabilities::default(),
+            slash_commands: SlashCommandCatalog::default(),
         }
     }
 
     pub fn with_capabilities(mut self, capabilities: ClientCapabilities) -> Self {
         self.capabilities = capabilities;
+        self
+    }
+
+    pub fn with_slash_command_catalog(mut self, slash_commands: SlashCommandCatalog) -> Self {
+        self.slash_commands = slash_commands;
         self
     }
 }
@@ -72,8 +80,11 @@ impl JsonRpcTransport for InProcessTransport {
 pub fn start_in_process_client(
     options: InProcessClientOptions,
 ) -> Result<AppServerClient<InProcessTransport>, ClientError> {
-    let server = open_local_app_server(LocalAppServerOptions::new(options.state_root))
-        .map_err(|error| ClientError::Transport(error.to_string()))?;
+    let server = open_local_app_server(
+        LocalAppServerOptions::new(options.state_root)
+            .with_slash_command_catalog(options.slash_commands),
+    )
+    .map_err(|error| ClientError::Transport(error.to_string()))?;
     let mut client = AppServerClient::new(InProcessTransport::from_server(server));
     let initialized = client.initialize(InitializeParams {
         client_info: options.client_info,

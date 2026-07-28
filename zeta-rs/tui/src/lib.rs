@@ -2,6 +2,8 @@
 
 mod app;
 mod chatwidget;
+mod clipboard;
+mod file_search;
 mod render;
 mod terminal;
 mod toppane;
@@ -11,19 +13,28 @@ use app::App;
 use crossterm::event;
 use crossterm::event::Event;
 use crossterm::event::KeyEventKind;
+use crossterm::event::MouseButton;
+use crossterm::event::MouseEventKind;
 use std::fmt;
+use std::path::PathBuf;
 use std::time::Duration;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
+use toppane::ComposerInput;
+use toppane::ComposerSubmission;
+use toppane::DynamicSlashCommand;
+use toppane::SlashCommandArgumentMode;
+use toppane::SlashCommandRegistry;
 use zeta_app_server_client::AppServerClient;
 use zeta_app_server_client::ClientError;
 use zeta_app_server_client::JsonRpcTransport;
 use zeta_app_server_protocol::protocol::common::{SessionId, ThreadId};
 use zeta_app_server_protocol::protocol::session::{SessionCreateParams, SessionThreadCreateParams};
-use zeta_app_server_protocol::protocol::thread::ThreadReadParams;
-use zeta_app_server_protocol::protocol::turn::{
-    InputItem, InputItemKind, TurnInterruptParams, TurnStartParams,
+use zeta_app_server_protocol::protocol::slash_commands::{
+    SlashCommandArgumentModeDto, SlashCommandDefinition,
 };
+use zeta_app_server_protocol::protocol::thread::ThreadReadParams;
+use zeta_app_server_protocol::protocol::turn::{InputItem, TurnInterruptParams, TurnStartParams};
 use zeta_protocol::{
     CommandId, StableTurnError, StableTurnErrorCode, ThreadItem, TurnId, TurnStatus,
 };
@@ -32,13 +43,21 @@ use zeta_protocol::{
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TuiOptions {
     thread_title: String,
+    workspace_root: PathBuf,
 }
 
 impl TuiOptions {
     pub fn new(thread_title: impl Into<String>) -> Self {
         Self {
             thread_title: thread_title.into(),
+            workspace_root: std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
         }
+    }
+
+    /// Uses `workspace_root` as the bounded source for `@file` mention candidates.
+    pub fn with_workspace_root(mut self, workspace_root: impl Into<PathBuf>) -> Self {
+        self.workspace_root = workspace_root.into();
+        self
     }
 }
 
@@ -86,24 +105,30 @@ pub fn run<T>(mut client: AppServerClient<T>, options: TuiOptions) -> Result<Tui
 where
     T: JsonRpcTransport,
 {
+    let TuiOptions {
+        thread_title,
+        workspace_root,
+    } = options;
+    let slash_commands = slash_command_registry(&client.initialization()?.slash_commands)?;
     let session = client.create_session(SessionCreateParams {
         command_id: CommandId::new(request_key("session"))
             .expect("generated command ID is non-empty"),
-        title: options.thread_title.clone(),
+        title: thread_title.clone(),
     })?;
     let thread = client.create_session_thread(SessionThreadCreateParams {
         command_id: CommandId::new(request_key("thread"))
             .expect("generated command ID is non-empty"),
         session_id: session.session.session_id.clone(),
         expected_sequence: session.session.sequence,
-        title: options.thread_title,
+        title: thread_title,
     })?;
     let mut thread_sequence = 1;
     let mut active_turn = None;
     let mut terminal = terminal::TerminalSession::open()?;
-    let mut app = App::new();
+    let mut app = App::for_workspace_with_slash_commands(&workspace_root, slash_commands);
 
     loop {
+        app.poll_background_events();
         if matches!(
             app.status(),
             app::Status::Working
@@ -124,55 +149,89 @@ where
         if !event::poll(Duration::from_millis(25))? {
             continue;
         }
-        match event::read()? {
-            Event::Key(key) if key.kind != KeyEventKind::Release => {
-                if let Some(action) = app.handle_key(key) {
-                    match action {
-                        Action::Quit => return Ok(TuiExit::UserRequested),
-                        Action::Interrupt => {
-                            refresh_turn(
-                                &mut client,
-                                &thread.thread_id,
-                                &mut thread_sequence,
-                                &mut active_turn,
-                                &mut app,
-                            );
-                            if let Some(turn_id) = active_turn.clone()
-                                && !matches!(app.status(), app::Status::Error)
-                            {
-                                interrupt_turn(
-                                    &mut client,
-                                    &session.session.session_id,
-                                    &thread.thread_id,
-                                    &mut thread_sequence,
-                                    &turn_id,
-                                    &mut active_turn,
-                                    &mut app,
-                                );
-                            } else if !matches!(app.status(), app::Status::Ready) {
-                                app.record_interrupt_failure(
-                                    "the active turn is not available".into(),
-                                );
-                            }
-                        }
-                        Action::Submit(prompt) => {
-                            terminal.draw(|frame| render::draw(frame, &app))?;
-                            active_turn = submit_prompt(
-                                &mut client,
-                                &session.session.session_id,
-                                &thread.thread_id,
-                                &mut thread_sequence,
-                                prompt,
-                                &mut app,
-                            );
-                        }
-                    }
+        let action = match event::read()? {
+            Event::Key(key) if key.kind != KeyEventKind::Release => app.handle_key(key),
+            Event::Mouse(mouse) if mouse.kind == MouseEventKind::Down(MouseButton::Left) => {
+                let terminal_area = terminal.area()?;
+                if let Some(index) =
+                    render::mention_index_at(&app, terminal_area, mouse.column, mouse.row)
+                {
+                    app.activate_mention(index);
+                    None
+                } else {
+                    render::slash_command_index_at(&app, terminal_area, mouse.column, mouse.row)
+                        .and_then(|index| app.activate_slash_command(index))
                 }
             }
-            Event::Paste(text) => app.insert_text(&text),
-            _ => {}
+            Event::Paste(text) => {
+                app.handle_paste(text);
+                None
+            }
+            _ => None,
+        };
+        if let Some(action) = action {
+            match action {
+                Action::Quit => return Ok(TuiExit::UserRequested),
+                Action::Interrupt => {
+                    refresh_turn(
+                        &mut client,
+                        &thread.thread_id,
+                        &mut thread_sequence,
+                        &mut active_turn,
+                        &mut app,
+                    );
+                    if let Some(turn_id) = active_turn.clone()
+                        && !matches!(app.status(), app::Status::Error)
+                    {
+                        interrupt_turn(
+                            &mut client,
+                            &session.session.session_id,
+                            &thread.thread_id,
+                            &mut thread_sequence,
+                            &turn_id,
+                            &mut active_turn,
+                            &mut app,
+                        );
+                    } else if !matches!(app.status(), app::Status::Ready) {
+                        app.record_interrupt_failure("the active turn is not available".into());
+                    }
+                }
+                Action::PasteImage => match clipboard::read_image() {
+                    Ok(image) => app.attach_image_bytes(image.png),
+                    Err(error) => app.record_clipboard_error(error),
+                },
+                Action::Submit(prompt) => {
+                    terminal.draw(|frame| render::draw(frame, &app))?;
+                    active_turn = submit_prompt(
+                        &mut client,
+                        &session.session.session_id,
+                        &thread.thread_id,
+                        &mut thread_sequence,
+                        prompt,
+                        &mut app,
+                    );
+                }
+            }
         }
     }
+}
+
+fn slash_command_registry(
+    definitions: &[SlashCommandDefinition],
+) -> Result<SlashCommandRegistry, ClientError> {
+    let commands = definitions.iter().map(|definition| DynamicSlashCommand {
+        name: definition.name.clone(),
+        description: definition.description.clone(),
+        argument_mode: match definition.argument_mode {
+            SlashCommandArgumentModeDto::None => SlashCommandArgumentMode::None,
+            SlashCommandArgumentModeDto::Optional => SlashCommandArgumentMode::Optional,
+        },
+    });
+    SlashCommandRegistry::with_dynamic_commands(commands).map_err(|error| {
+        ClientError::Protocol(format!(
+            "App Server advertised an invalid slash command snapshot: {error}"
+        ))
+    })
 }
 
 fn submit_prompt<T>(
@@ -180,7 +239,7 @@ fn submit_prompt<T>(
     session_id: &SessionId,
     thread_id: &ThreadId,
     thread_sequence: &mut u64,
-    prompt: String,
+    submission: ComposerSubmission,
     app: &mut App,
 ) -> Option<TurnId>
 where
@@ -191,10 +250,14 @@ where
         session_id: session_id.clone(),
         thread_id: thread_id.clone(),
         expected_sequence: *thread_sequence,
-        input: vec![InputItem {
-            kind: InputItemKind::Text,
-            text: prompt,
-        }],
+        input: submission
+            .input
+            .into_iter()
+            .map(|input| match input {
+                ComposerInput::Text(text) => InputItem::Text { text },
+                ComposerInput::Image { url } => InputItem::Image { url },
+            })
+            .collect(),
     });
     match turn {
         Ok(start) => {

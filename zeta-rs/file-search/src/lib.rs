@@ -3,6 +3,13 @@
 //! The executor never invokes a shell and does not follow symlinks. It intentionally reports only
 //! UTF-8 text matches bounded by configured file, traversal, and result limits.
 
+mod path_search;
+
+pub use path_search::PathMatch;
+pub use path_search::PathSearchHandle;
+pub use path_search::PathSearchOptions;
+pub use path_search::PathSearchSnapshot;
+
 use serde::Deserialize;
 use serde_json::json;
 use std::fmt;

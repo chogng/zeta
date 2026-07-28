@@ -1,12 +1,15 @@
 use crossterm::ExecutableCommand;
 use crossterm::event::DisableBracketedPaste;
+use crossterm::event::DisableMouseCapture;
 use crossterm::event::EnableBracketedPaste;
+use crossterm::event::EnableMouseCapture;
 use crossterm::terminal::EnterAlternateScreen;
 use crossterm::terminal::LeaveAlternateScreen;
 use crossterm::terminal::disable_raw_mode;
 use crossterm::terminal::enable_raw_mode;
 use ratatui::Terminal;
 use ratatui::backend::CrosstermBackend;
+use ratatui::layout::Rect;
 use std::io;
 use std::io::Stdout;
 
@@ -27,6 +30,12 @@ impl TerminalSession {
             let _ = stdout.execute(LeaveAlternateScreen);
             return Err(error);
         }
+        if let Err(error) = stdout.execute(EnableMouseCapture) {
+            let _ = disable_raw_mode();
+            let _ = stdout.execute(DisableBracketedPaste);
+            let _ = stdout.execute(LeaveAlternateScreen);
+            return Err(error);
+        }
         match Terminal::new(CrosstermBackend::new(stdout)) {
             Ok(terminal) => {
                 let mut session = Self { terminal };
@@ -35,6 +44,7 @@ impl TerminalSession {
             }
             Err(error) => {
                 let _ = disable_raw_mode();
+                let _ = io::stdout().execute(DisableMouseCapture);
                 let _ = io::stdout().execute(DisableBracketedPaste);
                 let _ = io::stdout().execute(LeaveAlternateScreen);
                 Err(error)
@@ -48,11 +58,18 @@ impl TerminalSession {
     {
         self.terminal.draw(render).map(|_| ())
     }
+
+    pub(crate) fn area(&self) -> io::Result<Rect> {
+        self.terminal
+            .size()
+            .map(|size| Rect::new(0, 0, size.width, size.height))
+    }
 }
 
 impl Drop for TerminalSession {
     fn drop(&mut self) {
         let _ = disable_raw_mode();
+        let _ = self.terminal.backend_mut().execute(DisableMouseCapture);
         let _ = self.terminal.backend_mut().execute(DisableBracketedPaste);
         let _ = self.terminal.backend_mut().execute(LeaveAlternateScreen);
         let _ = self.terminal.show_cursor();

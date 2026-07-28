@@ -326,6 +326,7 @@ pub fn reduce_thread_event(
                     }
                 }
                 ThreadItem::UserMessage { .. }
+                | ThreadItem::UserImage { .. }
                 | ThreadItem::AgentMessage { .. }
                 | ThreadItem::Reasoning { .. }
                 | ThreadItem::Plan { .. } => {}

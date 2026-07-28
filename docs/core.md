@@ -53,7 +53,7 @@ Agent 生命周期能够成为 authority 的前提。
 - provider-independent `ModelService`；
 - `TextDelta` / `ReasoningDelta` Core streaming contract；
 - `TurnExecutor` 的顺序 model → tool → model 循环；
-- 从 durable `ThreadSnapshot` 派生请求的基础 `ContextAssembler`。
+- 从 durable `ThreadSnapshot` 派生有序 text/image 请求的基础 `ContextAssembler`。
 
 尚未完成：
 

@@ -79,19 +79,33 @@ notification contract，不能拥有隐藏业务接口。JSONL/stdio、WebSocket
 }
 ```
 
-返回值包含 `serverInfo`、完整 schema 的 `schemaHash`，以及：
+返回值包含 `serverInfo`、完整 schema 的 `schemaHash`、server capability，以及 composition
+边界冻结的 `slashCommands` snapshot：
 
 ```json
 {
-  "sessions": true,
-  "threads": true,
-  "turns": true,
-  "resources": true,
-  "updateReplay": true
+  "capabilities": {
+    "sessions": true,
+    "threads": true,
+    "turns": true,
+    "resources": true,
+    "typst": true,
+    "updateReplay": true
+  },
+  "slashCommands": [
+    {
+      "name": "diagnose",
+      "description": "inspect the current workspace",
+      "argumentMode": "optional"
+    }
+  ]
 }
 ```
 
 schema hash 不一致时客户端必须拒绝继续运行。
+`slashCommands` 每项的 `name` 只能使用 lowercase ASCII letters、digits 与 interior hyphens，
+description 不能为空，同一 snapshot 中 name 必须唯一。该 snapshot 负责 discoverability 与
+inline argument parsing；提交仍通过 `turn/start.input`，并保留 `/name`、text/image 顺序。
 
 ## 5. Method inventory
 
@@ -199,13 +213,21 @@ Thread {
   "sessionId": "session_1",
   "threadId": "thread_1",
   "expectedSequence": 1,
-  "input": [{ "type": "text", "text": "Explain this repository" }]
+  "input": [
+    { "type": "text", "text": "Describe this image" },
+    { "type": "image", "url": "data:image/png;base64,..." }
+  ]
 }
 ```
 
 acceptance、user items 与 started facts 作为一个 atomic Thread batch 提交。最终 Agent item
 与 completed fact 也作为一个 atomic batch 提交。Provider 失败时持久化稳定
 `StableTurnError`；持久化失败时内存投影不得伪造终态。
+
+`input` 是保持顺序的非空 tagged union。文本项必须非空；图片项接受受限 HTTP(S) URL，或
+PNG/JPEG/GIF/WEBP base64 data URL。App Server 不接受本地路径；客户端必须在 RPC 边界前读取并
+规范化本地文件。Core 会重新校验 MIME、签名、base64 和 16 MiB decoded-size 上限，并把图片
+作为 durable `UserImage` 保存。
 
 `turn/interrupt` 同样携带 `commandId`、Session/Thread/Turn identity 与
 `expectedSequence`，成功返回新的 Thread sequence。

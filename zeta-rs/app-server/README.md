@@ -42,8 +42,10 @@ request-ID set、notification queue 与 resource ownership；Session/Thread dura
 | `AppServer::{serve_stdio,serve_jsonl}` | 同步 JSON Lines service loop |
 | `AppServer::create_resource` | 创建 5 分钟 TTL 的 connection-owned resource |
 | `AppServer::with_config_store` | 开启 config/provider/MCP/Skill RPC |
+| `AppServer::with_slash_command_catalog` | 安装 initialize 时下发的 immutable 动态命令 snapshot |
 | `open_local_app_server` | 打开 rollout/config、恢复 coordinator、组合 provider-backed model |
-| `LocalAppServerOptions` | local state root + optional Workspace config |
+| `LocalAppServerOptions` | local state root + optional Workspace config + validated slash catalog |
+| `SlashCommandCatalog` | 校验动态命令名称、描述与唯一性，并冻结 server-advertised snapshot |
 | `ReviewModelResolver` | 从 frozen config snapshot 选择 review-only model |
 | `ProviderReviewModel` | `ModelInvoker → zeta_auto_review::ReviewModel` adapter |
 
@@ -84,6 +86,7 @@ src/
 | `ConfigBackedModelService::resolve_config` | private | user snapshot + optional Workspace snapshot merge | 每次 invocation safe point 重新解析 |
 | `WorkspaceConfigTracker::read` | private | 内容变化才推进 synthetic workspace revision | 不监听/修改 workspace file |
 | `ModelSnapshotResolver` | private trait | frozen config → immutable invoker | implementation 不持有 mutable config view |
+| `SlashCommandCatalog::new` | public constructor | 校验 lowercase ASCII/interior-hyphen name、非空描述与唯一性 | 不执行命令、不引用 TUI built-ins |
 | `ProviderReviewModel::request` | private | system/input/schema → tool-disabled zero-temperature request | reviewer 不获得 Tool capability |
 | config `*_dto` / `*_from_dto` helpers | private | external DTO 与 config domain 显式转换 | invalid identity 映射 InvalidParams |
 
@@ -113,6 +116,8 @@ protocol registry 中的 `SerializationScopeDefinition` 尚未接入并发 sched
 
 Initialize 是每 connection 一次。重复 initialize 返回 `AlreadyInitialized`；初始化前的其他 method
 返回 `NotInitialized`。Request ID 只接受正整数，且在 connection 生命周期内不能重复。
+成功结果同时包含 composition 时冻结的 `slashCommands`。不同 connection 可获得同一 server
+snapshot；单个 connection 生命周期中不会因 host 后续状态变化而更换 popup contract。
 
 ## Session、Thread 与 Turn orchestration
 

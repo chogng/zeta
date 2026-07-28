@@ -5,6 +5,9 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use zeta_app_server_protocol::protocol::slash_commands::{
+    SlashCommandArgumentModeDto, SlashCommandDefinition,
+};
 use zeta_async_utils::CancellationToken;
 use zeta_config::ConfigStore;
 use zeta_core::{
@@ -138,6 +141,38 @@ fn initialize_is_required_and_request_ids_are_connection_unique() {
         serde_json::json!({"jsonrpc":"2.0","id":1,"method":"session/list","params":{}}),
     );
     assert_eq!(duplicate["error"]["message"], "InvalidRequest");
+}
+
+#[test]
+fn initialize_advertises_the_server_slash_command_snapshot() {
+    let catalog = SlashCommandCatalog::new([SlashCommandDefinition {
+        name: "diagnose".into(),
+        description: "inspect the current workspace".into(),
+        argument_mode: SlashCommandArgumentModeDto::Optional,
+    }])
+    .unwrap();
+    let server = server().with_slash_command_catalog(catalog);
+    let mut connection = server.connection();
+
+    let response = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":1,
+            "method":"initialize",
+            "params":{"clientInfo":{"name":"test","version":"1"},"capabilities":{}}
+        }),
+    );
+
+    assert_eq!(
+        response["result"]["slashCommands"],
+        serde_json::json!([{
+            "name": "diagnose",
+            "description": "inspect the current workspace",
+            "argumentMode": "optional"
+        }])
+    );
 }
 
 #[test]

@@ -56,6 +56,7 @@ pub trait JsonRpcTransport {
 pub struct AppServerClient<T> {
     transport: T,
     next_request_id: u64,
+    initialization: Option<InitializeResult>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -70,6 +71,7 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
         Self {
             transport,
             next_request_id: 1,
+            initialization: None,
         }
     }
 
@@ -77,7 +79,18 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
         &mut self,
         params: InitializeParams,
     ) -> Result<InitializeResult, ClientError> {
-        self.call(ClientMethod::Initialize, params)
+        let initialization: InitializeResult = self.call(ClientMethod::Initialize, params)?;
+        self.initialization = Some(initialization.clone());
+        Ok(initialization)
+    }
+
+    /// Returns the immutable server snapshot captured by the successful initialize handshake.
+    pub fn initialization(&self) -> Result<&InitializeResult, ClientError> {
+        self.initialization.as_ref().ok_or_else(|| {
+            ClientError::Protocol(
+                "App Server client has not completed the initialize handshake".into(),
+            )
+        })
     }
 
     pub fn create_session(

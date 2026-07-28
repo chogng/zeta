@@ -4,6 +4,8 @@ use crate::protocol::config::{
     SkillSourceAddParams,
 };
 use crate::protocol::registry::{CLIENT_METHODS, SERVER_NOTIFICATIONS};
+use crate::protocol::slash_commands::{SlashCommandArgumentModeDto, SlashCommandDefinition};
+use crate::protocol::turn::InputItem;
 use crate::rpc::{JsonRpcFailure, JsonRpcId, JsonRpcNotification, JsonRpcRequest, JsonRpcSuccess};
 use std::collections::BTreeSet;
 use zeta_protocol::Patch;
@@ -29,6 +31,44 @@ fn registry_method_and_notification_names_are_unique() {
     assert!(methods.contains("document/typst/compile"));
     assert!(notifications.contains("session/update"));
     assert!(notifications.contains("thread/update"));
+}
+
+#[test]
+fn turn_input_items_preserve_ordered_text_and_image_shapes() {
+    let input = vec![
+        InputItem::Text {
+            text: "describe".into(),
+        },
+        InputItem::Image {
+            url: "https://example.test/image.png".into(),
+        },
+    ];
+
+    assert_eq!(
+        serde_json::to_value(input).unwrap(),
+        serde_json::json!([
+            {"type": "text", "text": "describe"},
+            {"type": "image", "url": "https://example.test/image.png"}
+        ])
+    );
+}
+
+#[test]
+fn slash_command_definition_preserves_discovery_and_argument_shape() {
+    let definition = SlashCommandDefinition {
+        name: "diagnose".into(),
+        description: "inspect the current workspace".into(),
+        argument_mode: SlashCommandArgumentModeDto::Optional,
+    };
+
+    assert_eq!(
+        serde_json::to_value(definition).unwrap(),
+        serde_json::json!({
+            "name": "diagnose",
+            "description": "inspect the current workspace",
+            "argumentMode": "optional"
+        })
+    );
 }
 
 #[test]
@@ -140,6 +180,11 @@ fn dto_driven_typescript_preserves_model_ref_and_patch_shape() {
     assert!(typescript.contains("export const APP_SERVER_METHODS:"));
     assert!(typescript.contains(r#""session/create": { method: "session/create" }"#));
     assert!(typescript.contains(r#""turn/start": { method: "turn/start" }"#));
+    assert!(typescript.contains(
+        r#"export type InputItem = { "type": "text", text: string, } | { "type": "image", url: string, };"#
+    ));
+    assert!(!typescript.contains("InputItemKind"));
+    assert!(typescript.contains(r#"{ "type": "userImage""#));
     assert!(
         typescript
             .contains(r#""turn/interaction/resolve": { method: "turn/interaction/resolve" }"#)

@@ -538,11 +538,25 @@ terminal。
 app.rs
 chatwidget/
 └── mod.rs
+clipboard.rs
 toppane/
 ├── mod.rs
+├── attachments.rs
 ├── chat_composer.rs
+├── pending_pastes.rs
+├── slash_command_popup.rs
+├── slash_input.rs
+├── slash_commands.rs
 └── textarea.rs
-render.rs
+render/
+├── mod.rs
+├── header.rs
+├── history.rs
+├── composer.rs
+├── slash_command_popup.rs
+├── footer.rs
+├── layout.rs
+└── theme.rs
 terminal.rs
 lib.rs
 ```
@@ -552,8 +566,19 @@ lib.rs
 - 通过 `zeta-app-server-client` 的 typed method 工作；
 - 明确声明权威 Thread/Turn 状态留在 App Server 后面。
 - `App` 处理全局状态/键，`ChatWidget` 协调 transcript 与 sibling `TopPane`；
-- `ChatComposer` 拥有提交和未来 slash 语义边界，`TextArea` 拥有 UTF-8 编辑状态和未来 Vim
-  keymap 边界。
+- `ChatComposer` 协调提交、popup keys、range completion application 与 structured local
+  command dispatch，`SlashInput` 解释 cursor 下的 slash composer text，`TextArea` 拥有 UTF-8
+  编辑状态、原子 command element 和未来 Vim keymap 边界；
+- bracketed paste 使用独立事件路径；超过 1000 个 Unicode scalar value 的内容由 `PendingPastes`
+  绑定到 `TextArea` 原子占位符，并在提交前展开；
+- 粘贴 PNG/JPEG/GIF/WEBP 本地文件路径会由 `Attachments` 立即读取并绑定为 `[Image #N]`
+  原子占位符；提交保持 text/image 顺序并通过 typed `turn/start` 进入 durable Thread history；
+- `Ctrl-V` 产生独立 `PasteImage` action，由 native clipboard adapter 读取文件列表或 RGBA 位图、
+  编码 PNG，并复用 `Attachments` 的校验、占位符与结构化提交；
+- `FileSearchManager` 通过 `zeta-file-search::PathSearchHandle` 在后台增量遍历 workspace 并
+  使用完整 `nucleo` engine 更新 `@token` fuzzy results；`Mentions` 只拥有 token/popup 状态、
+  高亮、keyboard/mouse selection 和原子文本路径 completion。旧 query snapshot 会在 manager
+  和 popup 边界被丢弃；两者都不读取候选文件内容，也不构造结构化 app/plugin Mention；
 
 但目前仍是同步最小实现：
 
@@ -564,7 +589,19 @@ lib.rs
 - 没有 Session/Thread subscribe、gap detection 或 resync；
 - 只提取最终 AgentMessage，忽略 Turn/Item 的完整 typed lifecycle；
 - 没有 resume、fork、archive、interrupt 和多 Thread 导航；
-- slash discovery/completion 与 Vim mode/motion/operator 尚未实现；
+- local slash popup 已支持共享 validated registry、cursor-aware prefix filtering、保留 argument
+  tail 的 range completion、keyboard/mouse selection、原子 command token，以及 inline
+  text/image/large-paste arguments；App Server 的 `initialize.slashCommands` snapshot 会在创建
+  Session 前合并进 registry，非法名称、空描述、重复项和 built-in shadowing 都会使启动失败；
+  dynamic command 恢复完整 `/name` 与 ordered arguments 后作为普通 Turn input 提交。
+  `/quit` 与 `/exit` 具备 local dispatch，其他 built-in 命令仍只显示未实现提示；workspace file
+  mention popup 也支持
+  keyboard/mouse selection，两者之外的 mouse surface 尚未接通；结构化 app/plugin Mention
+  仍无 catalog 与执行流；
+- 图片输入已形成“本地路径/系统 clipboard → data URL → `UserImage` → provider image block”
+  的 vertical slice；native clipboard 在远程 SSH/tmux 环境尚无 terminal-mediated fallback，
+  data URL 也会放大 command receipt、Thread store 与 snapshot，长期仍需 resource/blob 引用
+  contract；
 - `lib.rs` 同时承担 public API、启动编排、请求执行和通知解释。
 
 这些限制可以作为 bootstrap 阶段存在，但不应在其上继续堆叠 feature。

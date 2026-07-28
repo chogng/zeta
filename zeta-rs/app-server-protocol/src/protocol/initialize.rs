@@ -1,4 +1,5 @@
 use crate::protocol::common::{ClientCapabilities, ClientInfo, SchemaHash, ServerInfo};
+use crate::protocol::slash_commands::SlashCommandDefinition;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
@@ -17,6 +18,7 @@ pub struct InitializeResult {
     pub server_info: ServerInfo,
     pub schema_hash: SchemaHash,
     pub capabilities: ServerCapabilities,
+    pub slash_commands: Vec<SlashCommandDefinition>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

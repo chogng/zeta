@@ -44,6 +44,7 @@ zeta-rs/app-server-protocol/
 │   │   ├── registry.rs       # method、notification、serialization scope
 │   │   ├── common.rs         # handshake/shared wire values
 │   │   ├── initialize.rs
+│   │   ├── slash_commands.rs
 │   │   ├── session.rs
 │   │   ├── thread.rs
 │   │   ├── turn.rs
@@ -161,6 +162,11 @@ dispatcher 的 executable metadata，不能被误写成已经落实的并发保�
 - Durable mutation params 带 `CommandId` 与 expected sequence/revision；JSON-RPC ID 不替代它。
 - `ConfigUpdateParams` 使用 `Patch<T>` 表达 missing/no-op、null/clear、value/set 三态。
 - `TurnInteractionResolveParams` 使用 canonical `AgentResponse` 与 exact `RequestId`。
+- `TurnStartParams.input` 是有序、非空的 tagged union：`text { text }` 或
+  `image { url }`；图片在进入 wire contract 前必须已经从本地路径规范化为 HTTP(S)/data URL。
+- `InitializeResult.slash_commands` 是 server composition 在 handshake 时冻结的完整动态命令
+  snapshot；每项声明 canonical name、description 与 inline argument mode。动态命令提交仍是
+  普通 ordered Turn input，不引入第二套 command RPC。
 - Resource chunk 的 `data_base64` 是标准 Base64，`decoded_length` 是原始 bytes 数，最大 chunk
   262,144 bytes。
 - `AppServerError` 的 `message` 是 stable `AppServerErrorName`，`data` 当前为 unit，不传任意

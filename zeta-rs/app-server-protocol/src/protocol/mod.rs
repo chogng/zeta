@@ -9,5 +9,6 @@ pub mod notification;
 pub mod registry;
 pub mod resources;
 pub mod session;
+pub mod slash_commands;
 pub mod thread;
 pub mod turn;

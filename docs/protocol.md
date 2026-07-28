@@ -139,6 +139,7 @@ canonical state 已存在而误称为完整的 Server → Client interaction 服
 `ThreadItem` 是 Turn transcript 的 durable 业务单元，当前包含：
 
 - User Message；
+- User Image；
 - Agent Message；
 - Reasoning；
 - Plan；
@@ -531,7 +532,7 @@ zeta-rs/protocol/
 | Session/Thread 独立 sequence | 已完成 | model、store 和 fork lineage 已覆盖 |
 | durable Event 与 live Update 分离 | 基础完成 | store 类型只能接受 durable event |
 | typed Session/Thread command | 基础完成 | Core receipt 已使用；无消费者的 shared envelope 已删除 |
-| ThreadItem durable transcript | 基础完成 | message、reasoning、plan、tool item 可重建 |
+| ThreadItem durable transcript | 基础完成 | text/image message、reasoning、plan、tool item 可重建 |
 | transient Item streaming | 类型已定义 | 当前没有完整异步 model stream producer |
 | Agent request/response | 基础完成 | durable request/resolve/cancel、deadline value、request correlation 和 typed resolve 已实现；owner delivery/timer 未实现 |
 | waiting Turn lifecycle | 基础完成 | event/reducer/recovery 已实现；异步 Agent loop 的继续执行尚未实现 |

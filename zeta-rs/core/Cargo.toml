@@ -11,6 +11,7 @@ name = "zeta_core"
 path = "src/lib.rs"
 
 [dependencies]
+base64 = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 zeta-async-utils = { workspace = true }

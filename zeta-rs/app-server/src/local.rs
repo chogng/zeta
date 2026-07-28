@@ -1,4 +1,5 @@
 use crate::AppServer;
+use crate::SlashCommandCatalog;
 use std::fmt;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -19,6 +20,7 @@ use zeta_rollout::RolloutRepository;
 pub struct LocalAppServerOptions {
     pub state_root: PathBuf,
     pub workspace: Option<LocalWorkspaceConfigOptions>,
+    pub slash_commands: SlashCommandCatalog,
 }
 
 impl LocalAppServerOptions {
@@ -26,11 +28,17 @@ impl LocalAppServerOptions {
         Self {
             state_root: state_root.into(),
             workspace: None,
+            slash_commands: SlashCommandCatalog::default(),
         }
     }
 
     pub fn with_workspace(mut self, workspace: LocalWorkspaceConfigOptions) -> Self {
         self.workspace = Some(workspace);
+        self
+    }
+
+    pub fn with_slash_command_catalog(mut self, slash_commands: SlashCommandCatalog) -> Self {
+        self.slash_commands = slash_commands;
         self
     }
 }
@@ -96,7 +104,9 @@ pub fn open_local_app_server(
             model_provider: Arc::new(ModelProviderRuntime::builtin()),
         }),
     });
-    Ok(AppServer::new(sessions, model).with_config_store(config))
+    Ok(AppServer::new(sessions, model)
+        .with_config_store(config)
+        .with_slash_command_catalog(options.slash_commands))
 }
 
 /// Resolves an immutable model runtime from one persisted configuration snapshot.

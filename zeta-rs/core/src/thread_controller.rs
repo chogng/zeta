@@ -40,6 +40,7 @@ use zeta_thread_store::{
 
 mod execution;
 mod mailbox;
+mod user_input;
 
 pub struct StartTurnRequest {
     pub command_id: CommandId,
@@ -255,25 +256,8 @@ impl ThreadController {
         thread_id: &ThreadId,
         request: StartTurnRequest,
     ) -> Result<StartTurnResult, CoreError> {
-        if request.input.is_empty() {
-            return Err(CoreError::InvalidInput(
-                "Turn input must contain at least one item".into(),
-            ));
-        }
+        let validated_input = user_input::validate(&request.input)?;
         validate_command_id(&request.command_id)?;
-        let text_input = request
-            .input
-            .iter()
-            .map(|input| match input {
-                UserInput::Text { text } if !text.trim().is_empty() => Ok(text.clone()),
-                UserInput::Text { .. } => Err(CoreError::InvalidInput(
-                    "Turn text input must not be empty".into(),
-                )),
-                _ => Err(CoreError::InvalidInput(
-                    "this Thread controller currently accepts text input only".into(),
-                )),
-            })
-            .collect::<Result<Vec<_>, _>>()?;
         let command = ThreadCommand::StartTurn {
             input: request.input.clone(),
         };
@@ -307,23 +291,23 @@ impl ThreadController {
         validate_thread_expectation(request.expected_sequence, snapshot.sequence)?;
         let turn_id =
             TurnId::new(self.next_identifier("turn")).expect("generated Turn ID is non-empty");
-        let mut events = Vec::with_capacity(text_input.len() + 2);
+        let input_items = user_input::thread_items(&validated_input, &turn_id, || {
+            ItemId::new(self.next_identifier("item")).expect("generated Item ID is non-empty")
+        });
+        let mut events = Vec::with_capacity(input_items.len() + 2);
         events.push(ThreadEvent::TurnAccepted {
             thread_id: thread_id.clone(),
             turn_id: turn_id.clone(),
         });
-        events.extend(text_input.into_iter().map(|text| {
-            ThreadEvent::ItemCompleted {
-                thread_id: thread_id.clone(),
-                turn_id: turn_id.clone(),
-                item: ThreadItem::UserMessage {
-                    item_id: ItemId::new(self.next_identifier("item"))
-                        .expect("generated Item ID is non-empty"),
+        events.extend(
+            input_items
+                .into_iter()
+                .map(|item| ThreadEvent::ItemCompleted {
+                    thread_id: thread_id.clone(),
                     turn_id: turn_id.clone(),
-                    text,
-                },
-            }
-        }));
+                    item,
+                }),
+        );
         events.push(ThreadEvent::TurnStarted {
             thread_id: thread_id.clone(),
             turn_id: turn_id.clone(),

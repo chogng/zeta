@@ -404,6 +404,8 @@ TUI 不再接收一个同步 `&mut AppServerClient<T>`，也不调用 `drain_not
 - external JSON-RPC request/response 编解码；
 - response ID 校验；
 - schema hash 校验；
+- successful `InitializeResult` 保存在 `AppServerClient::initialization` snapshot 中，consumer
+  可读取 server capabilities 与动态 slash catalog，而无需重复 handshake；
 - known notification typed decode。
 
 需要替换的部分：

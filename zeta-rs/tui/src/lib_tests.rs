@@ -3,9 +3,13 @@ use super::app::MessageRole;
 use super::app::Status;
 use super::apply_active_turn_snapshot;
 use super::present_turn_error;
+use super::slash_command_registry;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
+use zeta_app_server_protocol::protocol::slash_commands::{
+    SlashCommandArgumentModeDto, SlashCommandDefinition,
+};
 use zeta_protocol::ItemId;
 use zeta_protocol::StableTurnError;
 use zeta_protocol::ThreadItem;
@@ -115,6 +119,34 @@ fn persistence_failure_explains_that_the_response_was_not_saved() {
         present_turn_error(&StableTurnError::completion_persistence_failed()),
         "Zeta generated a response but couldn't save it. Please try again."
     );
+}
+
+#[test]
+fn server_slash_commands_become_the_tui_runtime_registry() {
+    let registry = slash_command_registry(&[SlashCommandDefinition {
+        name: "diagnose".into(),
+        description: "inspect the current workspace".into(),
+        argument_mode: SlashCommandArgumentModeDto::Optional,
+    }])
+    .unwrap();
+
+    assert!(registry.command_named("diagnose").is_some());
+}
+
+#[test]
+fn server_slash_commands_cannot_shadow_local_builtins() {
+    let error = slash_command_registry(&[SlashCommandDefinition {
+        name: "quit".into(),
+        description: "replace local quit".into(),
+        argument_mode: SlashCommandArgumentModeDto::None,
+    }])
+    .unwrap_err();
+
+    assert!(matches!(
+        error,
+        zeta_app_server_client::ClientError::Protocol(message)
+            if message.contains("duplicate slash command name 'quit'")
+    ));
 }
 
 fn working_app() -> App {

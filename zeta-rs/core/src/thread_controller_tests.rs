@@ -595,3 +595,40 @@ fn durable_projection_contains_messages_tools_and_session_identity() {
         } if text == "result"
     ));
 }
+
+#[test]
+fn start_turn_persists_ordered_text_and_image_items() {
+    let threads = ThreadController::with_store(Arc::new(InMemoryThreadStore::default()));
+    let thread = create_thread(&threads, "image");
+    let image_url = "data:image/png;base64,iVBORw0KGgpwYXlsb2Fk";
+
+    let result = threads
+        .start_turn(
+            &thread,
+            StartTurnRequest {
+                command_id: CommandId::new("image-turn").expect("test ID is non-empty"),
+                expected_sequence: SequenceExpectation::Any,
+                input: vec![
+                    UserInput::Text {
+                        text: "describe".into(),
+                    },
+                    UserInput::Image {
+                        url: image_url.into(),
+                    },
+                ],
+            },
+        )
+        .unwrap();
+    let snapshot = threads.read_thread(&thread).unwrap();
+
+    assert!(matches!(
+        &snapshot.items[0],
+        ThreadItem::UserMessage { turn_id, text, .. }
+            if turn_id == &result.turn_id && text == "describe"
+    ));
+    assert!(matches!(
+        &snapshot.items[1],
+        ThreadItem::UserImage { turn_id, url, .. }
+            if turn_id == &result.turn_id && url == image_url
+    ));
+}

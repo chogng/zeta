@@ -27,13 +27,14 @@ use crate::protocol::session::{
     SessionThreadCreateParams, SessionThreadForkParams, SessionThreadResult,
     SessionUnsubscribeParams,
 };
+use crate::protocol::slash_commands::{SlashCommandArgumentModeDto, SlashCommandDefinition};
 use crate::protocol::thread::{
     ThreadReadParams, ThreadReadResult, ThreadSubscribeParams, ThreadSubscribeResult,
     ThreadUnsubscribeParams,
 };
 use crate::protocol::turn::{
-    InputItem, InputItemKind, TurnInteractionResolveParams, TurnInteractionResolveResult,
-    TurnInterruptParams, TurnInterruptResult, TurnStartParams, TurnStartResult,
+    InputItem, TurnInteractionResolveParams, TurnInteractionResolveResult, TurnInterruptParams,
+    TurnInterruptResult, TurnStartParams, TurnStartResult,
 };
 use schemars::JsonSchema;
 use ts_rs::{Config, TS};
@@ -443,6 +444,8 @@ typescript_bindings! {
     SkillSourceAddParams,
     SkillSourceRemoveParams,
     SkillSourceSetEnablementParams,
+    SlashCommandArgumentModeDto,
+    SlashCommandDefinition,
     ServerCapabilities,
     InitializeParams,
     InitializeResult,
@@ -511,7 +514,6 @@ typescript_bindings! {
     ThreadUnsubscribeParams,
     ThreadReadResult,
     ThreadSubscribeResult,
-    InputItemKind,
     InputItem,
     TurnStartParams,
     TurnStartResult,

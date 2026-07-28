@@ -95,10 +95,53 @@ fn convert_message(message: &Message) -> Result<Value, ApiError> {
 fn convert_content(content: &ContentPart) -> Result<Value, ApiError> {
     match content {
         ContentPart::Text(text) => Ok(json!({"type": "text", "text": text})),
-        ContentPart::ImageUrl { .. } => Err(ApiError::InvalidRequest(
-            "Anthropic image inputs require normalized source data, not an image URL".into(),
-        )),
+        ContentPart::ImageUrl { url, .. } => convert_image(url),
     }
+}
+
+fn convert_image(url: &str) -> Result<Value, ApiError> {
+    if url.starts_with("https://") || url.starts_with("http://") {
+        return Ok(json!({
+            "type": "image",
+            "source": {
+                "type": "url",
+                "url": url,
+            },
+        }));
+    }
+
+    let Some((header, data)) = url.split_once(',') else {
+        return Err(invalid_image());
+    };
+    let Some(media_type) = header
+        .strip_prefix("data:")
+        .and_then(|header| header.strip_suffix(";base64"))
+    else {
+        return Err(invalid_image());
+    };
+    if data.is_empty()
+        || !matches!(
+            media_type,
+            "image/png" | "image/jpeg" | "image/gif" | "image/webp"
+        )
+    {
+        return Err(invalid_image());
+    }
+
+    Ok(json!({
+        "type": "image",
+        "source": {
+            "type": "base64",
+            "media_type": media_type,
+            "data": data,
+        },
+    }))
+}
+
+fn invalid_image() -> ApiError {
+    ApiError::InvalidRequest(
+        "Anthropic image input must be an HTTP(S) URL or a supported base64 data URL".into(),
+    )
 }
 
 fn convert_tool(tool: &ToolDefinition) -> Value {
@@ -209,3 +252,7 @@ fn content_text(content: &[ContentPart]) -> String {
         .collect::<Vec<_>>()
         .join("\n")
 }
+
+#[cfg(test)]
+#[path = "anthropic_messages_tests.rs"]
+mod tests;
