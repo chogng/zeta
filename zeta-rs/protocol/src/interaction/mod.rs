@@ -1,8 +1,13 @@
+mod approval;
 mod dynamic_tool;
 mod envelope;
 mod request_user_input;
 mod user_input;
 
+pub use approval::{
+    ActionApprovalCapability, ActionApprovalCapabilityKind, ActionApprovalDecision,
+    ActionApprovalRequest, ActionApprovalResponse,
+};
 pub use dynamic_tool::{DynamicToolCall, DynamicToolOutput, DynamicToolResponse, DynamicToolSpec};
 pub use envelope::{
     AgentInteractionKind, AgentRequest, AgentRequestEnvelope, AgentResponse, AgentResponseEnvelope,

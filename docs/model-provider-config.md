@@ -4,6 +4,7 @@
 > - Rust crate：`zeta_model_provider_config`
 > - 层次：声明配置层
 > - 当前状态：基础实现已包含声明式默认 `ApiProfile`；多 profile allow-list 与用户 override 仍待实现
+> - Crate 实现与修改路径：[`zeta-rs/model-provider-config/README.md`](../zeta-rs/model-provider-config/README.md)
 > - Provider runtime：[`model-provider.md`](model-provider.md)
 > - API 协议层：[`zeta-api.md`](zeta-api.md)
 

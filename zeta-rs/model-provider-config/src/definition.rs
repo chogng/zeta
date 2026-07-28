@@ -1,5 +1,5 @@
 use crate::config::{is_http_url, normalize_base_url};
-use crate::{ProviderConfigError, ProviderId};
+use crate::{ModelId, ProviderConfigError, ProviderId};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
@@ -67,6 +67,23 @@ pub enum BaseUrlNormalization {
 pub struct ProviderDefaults {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub max_output_tokens: Option<u32>,
+    #[serde(default)]
+    pub approval_review_model: ApprovalReviewModelDefault,
+}
+
+/// Provider-owned default used when automatic approval review follows the active provider.
+#[derive(Clone, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[serde(
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    tag = "type"
+)]
+pub enum ApprovalReviewModelDefault {
+    /// Reuse the active Agent model when the provider has no dedicated review default.
+    #[default]
+    ActiveModel,
+    /// Use one provider-declared model for approval review.
+    Model { model: ModelId },
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
@@ -113,6 +130,14 @@ impl ProviderDefinition {
         self
     }
 
+    pub fn with_default_model(mut self, model: Model) -> Self {
+        self.defaults.approval_review_model = ApprovalReviewModelDefault::Model {
+            model: model.id.clone(),
+        };
+        self.models.push(model);
+        self
+    }
+
     pub fn with_defaults(mut self, defaults: ProviderDefaults) -> Self {
         self.defaults = defaults;
         self
@@ -137,6 +162,15 @@ impl ProviderDefinition {
         }
         if self.defaults.max_output_tokens == Some(0) {
             return Err(ProviderConfigError::InvalidMaxOutputTokens(self.id.clone()));
+        }
+        if let ApprovalReviewModelDefault::Model { model } = &self.defaults.approval_review_model
+            && self.model_catalog_policy == ModelCatalogPolicy::ListedOnly
+            && !self.models.iter().any(|candidate| &candidate.id == model)
+        {
+            return Err(self.invalid(format!(
+                "approval review model '{}' is not present in its listed model catalog",
+                model
+            )));
         }
         let mut model_ids = BTreeSet::new();
         for model in &self.models {

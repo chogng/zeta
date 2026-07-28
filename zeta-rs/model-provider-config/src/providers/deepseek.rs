@@ -9,8 +9,8 @@ pub(super) fn definition() -> ProviderDefinition {
         ApiProfile::OpenAiChatCompletions,
         "https://api.deepseek.com",
     )
-    .with_models([Model::new(
+    .with_default_model(Model::new(
         ModelId::new("deepseek-v4-pro").expect("valid model ID"),
         "DeepSeek V4 Pro",
-    )])
+    ))
 }

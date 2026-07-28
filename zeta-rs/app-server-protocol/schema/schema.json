@@ -23,15 +23,114 @@
     "errorResponse"
   ],
   "$defs": {
+    "ActionApprovalCapability": {
+      "description": "One exact capability included in an action approval request.",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/ActionApprovalCapabilityKind"
+        },
+        "scope": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "kind",
+        "scope"
+      ]
+    },
+    "ActionApprovalCapabilityKind": {
+      "description": "Capability kind displayed and approved through a durable Agent interaction.",
+      "type": "string",
+      "enum": [
+        "fileRead",
+        "fileWrite",
+        "processSpawn",
+        "network",
+        "credentialUse",
+        "externalMutation",
+        "systemConfiguration",
+        "userInterface"
+      ]
+    },
+    "ActionApprovalDecision": {
+      "description": "User decision for one exact action approval interaction.",
+      "type": "string",
+      "enum": [
+        "approveOnce",
+        "decline"
+      ]
+    },
+    "ActionApprovalRequest": {
+      "description": "Durable request for approval of one policy-bound action.",
+      "type": "object",
+      "properties": {
+        "actionDigest": {
+          "type": "string",
+          "minLength": 1
+        },
+        "capabilities": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ActionApprovalCapability"
+          },
+          "minItems": 1
+        },
+        "policyRevision": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "actionDigest",
+        "policyRevision",
+        "capabilities",
+        "reason"
+      ]
+    },
+    "ActionApprovalResponse": {
+      "description": "Durable response to an action approval request.",
+      "type": "object",
+      "properties": {
+        "decision": {
+          "$ref": "#/$defs/ActionApprovalDecision"
+        }
+      },
+      "required": [
+        "decision"
+      ]
+    },
     "AgentInteractionKind": {
       "type": "string",
       "enum": [
+        "approval",
         "userInput",
         "dynamicTool"
       ]
     },
     "AgentRequest": {
       "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "request": {
+              "$ref": "#/$defs/ActionApprovalRequest"
+            },
+            "type": {
+              "type": "string",
+              "const": "approval"
+            }
+          },
+          "required": [
+            "type",
+            "request"
+          ]
+        },
         {
           "type": "object",
           "properties": {
@@ -68,6 +167,22 @@
     },
     "AgentResponse": {
       "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "response": {
+              "$ref": "#/$defs/ActionApprovalResponse"
+            },
+            "type": {
+              "type": "string",
+              "const": "approval"
+            }
+          },
+          "required": [
+            "type",
+            "response"
+          ]
+        },
         {
           "type": "object",
           "properties": {
@@ -142,6 +257,39 @@
         "InvalidResourceOffset",
         "ConfigUnavailable",
         "ConfigRevisionConflict"
+      ]
+    },
+    "ApprovalReviewModelSelectionDto": {
+      "description": "User-facing selection for the model that reviews approval requests.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "automatic"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "model": {
+              "$ref": "#/$defs/ModelRefDto"
+            },
+            "type": {
+              "type": "string",
+              "const": "explicit"
+            }
+          },
+          "required": [
+            "type",
+            "model"
+          ]
+        }
       ]
     },
     "BrowserCapability": {
@@ -1213,6 +1361,9 @@
       "description": "Current user configuration snapshot returned by `config/read`.",
       "type": "object",
       "properties": {
+        "approvalReviewModel": {
+          "$ref": "#/$defs/ApprovalReviewModelSelectionDto"
+        },
         "generation": {
           "type": "integer",
           "format": "uint64",
@@ -1265,6 +1416,7 @@
       "required": [
         "revision",
         "generation",
+        "approvalReviewModel",
         "providers",
         "mcpServers",
         "skillSources"
@@ -1274,6 +1426,16 @@
       "description": "Patch for user preferences at one expected Config revision.",
       "type": "object",
       "properties": {
+        "approvalReviewModel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ApprovalReviewModelSelectionDto"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "commandId": {
           "$ref": "#/$defs/CommandId"
         },
@@ -3014,6 +3176,42 @@
         {
           "type": "object",
           "properties": {
+            "actionDigest": {
+              "type": "string"
+            },
+            "authority": {
+              "$ref": "#/$defs/ToolExecutionAuthority"
+            },
+            "policyRevision": {
+              "type": "string"
+            },
+            "threadId": {
+              "$ref": "#/$defs/ThreadId"
+            },
+            "toolCallId": {
+              "$ref": "#/$defs/ToolCallId"
+            },
+            "turnId": {
+              "$ref": "#/$defs/TurnId"
+            },
+            "type": {
+              "type": "string",
+              "const": "toolExecutionStarted"
+            }
+          },
+          "required": [
+            "type",
+            "threadId",
+            "turnId",
+            "toolCallId",
+            "actionDigest",
+            "policyRevision",
+            "authority"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
             "reason": {
               "$ref": "#/$defs/InteractionCancelReason"
             },
@@ -3533,6 +3731,71 @@
       "description": "Stable identity for one model-requested tool call and its eventual result.",
       "type": "string",
       "minLength": 1
+    },
+    "ToolExecutionAuthority": {
+      "description": "Durable authority selected before a Tool Call crosses its side-effect boundary.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "sandboxed"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "grantId": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "unsandboxedGrant"
+            }
+          },
+          "required": [
+            "type",
+            "grantId"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "assessmentId": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "autoReviewed"
+            }
+          },
+          "required": [
+            "type",
+            "assessmentId"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "requestId": {
+              "$ref": "#/$defs/RequestId"
+            },
+            "type": {
+              "type": "string",
+              "const": "approvedOnce"
+            }
+          },
+          "required": [
+            "type",
+            "requestId"
+          ]
+        }
+      ]
     },
     "ToolName": {
       "description": "Validated provider-independent name used to register and invoke a tool.",

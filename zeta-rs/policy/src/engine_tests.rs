@@ -1,0 +1,304 @@
+use super::*;
+use crate::{
+    ActionDigest, ActionKind, ActionProvenance, ActionSource, AssessmentId, Capability,
+    CapabilityKind, CapabilitySet, GrantId, ProcessInvocationKind, ResolvedAction, RuleId,
+};
+use std::fmt;
+use zeta_async_utils::{CancellationSource, CancellationToken};
+use zeta_sandboxing::{FileSystemAccess, NetworkAccess, SandboxPolicy};
+
+#[derive(Clone, Debug)]
+struct TestClassifierError(&'static str);
+
+impl fmt::Display for TestClassifierError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(self.0)
+    }
+}
+
+impl std::error::Error for TestClassifierError {}
+
+struct PanicClassifier;
+
+impl ActionClassifier for PanicClassifier {
+    type Error = TestClassifierError;
+
+    fn classify(
+        &self,
+        _: &ActionReviewRequest,
+        _: &CancellationToken,
+    ) -> Result<ClassifierAssessment, Self::Error> {
+        panic!("classifier should not have been called")
+    }
+}
+
+struct StaticClassifier(Result<ClassifierAssessment, TestClassifierError>);
+
+impl ActionClassifier for StaticClassifier {
+    type Error = TestClassifierError;
+
+    fn classify(
+        &self,
+        _: &ActionReviewRequest,
+        _: &CancellationToken,
+    ) -> Result<ClassifierAssessment, Self::Error> {
+        self.0.clone()
+    }
+}
+
+fn capability() -> Capability {
+    Capability::new(CapabilityKind::Network, "api.example.com")
+}
+
+fn request(sandbox: SandboxCompatibility) -> ActionReviewRequest {
+    ActionReviewRequest::new(
+        ResolvedAction::new(
+            ActionDigest::from_canonical_bytes(b"curl api.example.com"),
+            ActionKind::LocalProcess(ProcessInvocationKind::Direct),
+            "call the configured API",
+            CapabilitySet::new([capability()]),
+        ),
+        ActionProvenance::new(ActionSource::BuiltInTool, "shell-command"),
+        sandbox,
+        PolicyRevision::new("policy-1"),
+    )
+}
+
+fn decide<C: ActionClassifier>(
+    engine: &PolicyEngine<C>,
+    request: &ActionReviewRequest,
+) -> Result<ExecutionDecision, PolicyError> {
+    engine.decide(request, &CancellationSource::new().token())
+}
+
+#[test]
+fn supported_actions_run_in_the_sandbox_without_classifier_review() {
+    let policy = SandboxPolicy::new(FileSystemAccess::ReadOnly, NetworkAccess::Denied);
+    let request = request(SandboxCompatibility::Supported(policy));
+    let engine = PolicyEngine::new(
+        PolicyRevision::new("policy-1"),
+        PanicClassifier,
+        ReviewFailurePolicy::Block,
+    );
+
+    assert_eq!(
+        decide(&engine, &request).unwrap(),
+        ExecutionDecision::RunSandboxed(policy)
+    );
+}
+
+#[test]
+fn exact_preexisting_grant_remains_an_unsandboxed_path() {
+    let request = request(SandboxCompatibility::Unsupported {
+        reason: "network unavailable".to_owned(),
+    });
+    let grant = UnsandboxedGrant::new(
+        GrantId::new("grant-1"),
+        request.action().digest().clone(),
+        request.action().required_capabilities().clone(),
+        request.policy_revision().clone(),
+    );
+    let engine = PolicyEngine::new(
+        PolicyRevision::new("policy-1"),
+        PanicClassifier,
+        ReviewFailurePolicy::Block,
+    )
+    .with_grants([grant]);
+
+    assert_eq!(
+        decide(&engine, &request).unwrap(),
+        ExecutionDecision::RunUnsandboxed {
+            grant_id: GrantId::new("grant-1")
+        }
+    );
+}
+
+#[test]
+fn medium_risk_implicitly_authorized_action_receives_a_bound_auto_review_grant() {
+    let request = request(SandboxCompatibility::Unsupported {
+        reason: "network unavailable".to_owned(),
+    });
+    let assessment = ClassifierAssessment::new(
+        AssessmentId::new("assessment-1"),
+        request.action().digest().clone(),
+        request.policy_revision().clone(),
+        "test-prompt",
+        ClassifierRecommendation::Approve {
+            capabilities: request.action().required_capabilities().clone(),
+            risk: RiskLevel::Medium,
+            user_authorization: UserAuthorization::Implicit,
+            reason: "the API call needs network access".to_owned(),
+        },
+    );
+    let engine = PolicyEngine::new(
+        PolicyRevision::new("policy-1"),
+        StaticClassifier(Ok(assessment)),
+        ReviewFailurePolicy::Block,
+    );
+
+    let ExecutionDecision::RunAutoReviewed(grant) = decide(&engine, &request).unwrap() else {
+        panic!("eligible reviewer approval must create a policy-bound grant");
+    };
+    assert_eq!(grant.assessment_id(), &AssessmentId::new("assessment-1"));
+    assert!(grant.matches(
+        request.action().digest(),
+        request.action().required_capabilities(),
+        request.policy_revision()
+    ));
+}
+
+#[test]
+fn high_risk_action_without_explicit_authorization_asks_the_user() {
+    let request = request(SandboxCompatibility::Unsupported {
+        reason: "network unavailable".to_owned(),
+    });
+    let assessment = ClassifierAssessment::new(
+        AssessmentId::new("assessment-2"),
+        request.action().digest().clone(),
+        request.policy_revision().clone(),
+        "test-prompt",
+        ClassifierRecommendation::Approve {
+            capabilities: request.action().required_capabilities().clone(),
+            risk: RiskLevel::High,
+            user_authorization: UserAuthorization::Implicit,
+            reason: "publishes externally".to_owned(),
+        },
+    );
+    let engine = PolicyEngine::new(
+        PolicyRevision::new("policy-1"),
+        StaticClassifier(Ok(assessment)),
+        ReviewFailurePolicy::Block,
+    );
+
+    assert!(matches!(
+        decide(&engine, &request).unwrap(),
+        ExecutionDecision::AskUser(_)
+    ));
+}
+
+#[test]
+fn critical_risk_action_cannot_be_auto_approved() {
+    let request = request(SandboxCompatibility::Unsupported {
+        reason: "network unavailable".to_owned(),
+    });
+    let assessment = ClassifierAssessment::new(
+        AssessmentId::new("assessment-3"),
+        request.action().digest().clone(),
+        request.policy_revision().clone(),
+        "test-prompt",
+        ClassifierRecommendation::Approve {
+            capabilities: request.action().required_capabilities().clone(),
+            risk: RiskLevel::Critical,
+            user_authorization: UserAuthorization::Explicit,
+            reason: "would exfiltrate credentials".to_owned(),
+        },
+    );
+    let engine = PolicyEngine::new(
+        PolicyRevision::new("policy-1"),
+        StaticClassifier(Ok(assessment)),
+        ReviewFailurePolicy::Block,
+    );
+
+    assert!(matches!(
+        decide(&engine, &request).unwrap(),
+        ExecutionDecision::Block(BlockReason::CriticalRisk { .. })
+    ));
+}
+
+#[test]
+fn deterministic_deny_never_calls_the_classifier() {
+    let request = request(SandboxCompatibility::NotApplicable {
+        reason: "external action".to_owned(),
+    });
+    let rule = ActionRule::new(
+        RuleId::new("deny-1"),
+        request.action().digest().clone(),
+        RuleEffect::Deny {
+            reason: "blocked by administrator".to_owned(),
+        },
+    );
+    let engine = PolicyEngine::new(
+        PolicyRevision::new("policy-1"),
+        PanicClassifier,
+        ReviewFailurePolicy::Block,
+    )
+    .with_rules([rule]);
+
+    assert!(matches!(
+        decide(&engine, &request).unwrap(),
+        ExecutionDecision::Block(BlockReason::DeterministicRule { .. })
+    ));
+}
+
+#[test]
+fn classifier_failure_asks_only_when_the_host_selected_that_failure_policy() {
+    let request = request(SandboxCompatibility::Unsupported {
+        reason: "network unavailable".to_owned(),
+    });
+    let engine = PolicyEngine::new(
+        PolicyRevision::new("policy-1"),
+        StaticClassifier(Err(TestClassifierError("offline"))),
+        ReviewFailurePolicy::AskUser,
+    );
+
+    assert!(matches!(
+        decide(&engine, &request).unwrap(),
+        ExecutionDecision::AskUser(_)
+    ));
+}
+
+#[test]
+fn rejects_assessment_bound_to_another_action() {
+    let request = request(SandboxCompatibility::Unsupported {
+        reason: "network unavailable".to_owned(),
+    });
+    let assessment = ClassifierAssessment::new(
+        AssessmentId::new("assessment-other"),
+        ActionDigest::from_canonical_bytes(b"another action"),
+        request.policy_revision().clone(),
+        "test-prompt",
+        ClassifierRecommendation::Deny {
+            reason: "blocked".to_owned(),
+        },
+    );
+    let engine = PolicyEngine::new(
+        PolicyRevision::new("policy-1"),
+        StaticClassifier(Ok(assessment)),
+        ReviewFailurePolicy::Block,
+    );
+
+    assert_eq!(
+        decide(&engine, &request),
+        Err(PolicyError::ClassifierBindingMismatch)
+    );
+}
+
+#[test]
+fn require_sandbox_rule_overrides_an_unsandboxed_grant() {
+    let request = request(SandboxCompatibility::Unsupported {
+        reason: "network unavailable".to_owned(),
+    });
+    let rule = ActionRule::new(
+        RuleId::new("sandbox-only"),
+        request.action().digest().clone(),
+        RuleEffect::RequireSandbox,
+    );
+    let grant = UnsandboxedGrant::new(
+        GrantId::new("grant-1"),
+        request.action().digest().clone(),
+        request.action().required_capabilities().clone(),
+        request.policy_revision().clone(),
+    );
+    let engine = PolicyEngine::new(
+        PolicyRevision::new("policy-1"),
+        PanicClassifier,
+        ReviewFailurePolicy::Block,
+    )
+    .with_rules([rule])
+    .with_grants([grant]);
+
+    assert!(matches!(
+        decide(&engine, &request).unwrap(),
+        ExecutionDecision::Block(BlockReason::SandboxRequiredButUnavailable { .. })
+    ));
+}

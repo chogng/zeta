@@ -3,9 +3,11 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use zeta_protocol::{
-    AgentRequest, AgentResponse, CommandId, InteractionDeadline, RequestId, RequestUserInput,
-    RequestUserInputResponse, SessionId, StableTurnError, StableTurnErrorCode, ThreadEvent,
-    ThreadId, ThreadItem, ToolName, TurnId, UserInput, UserInputQuestion,
+    ActionApprovalCapability, ActionApprovalCapabilityKind, ActionApprovalDecision,
+    ActionApprovalRequest, ActionApprovalResponse, AgentRequest, AgentResponse, CommandId,
+    InteractionDeadline, RequestId, RequestUserInput, RequestUserInputResponse, SessionId,
+    StableTurnError, StableTurnErrorCode, ThreadEvent, ThreadId, ThreadItem, ToolName, TurnId,
+    UserInput, UserInputQuestion,
 };
 use zeta_thread_store::StoredEvent;
 
@@ -63,6 +65,26 @@ fn user_input_response() -> AgentResponse {
         response: RequestUserInputResponse {
             answers: BTreeMap::new(),
         },
+    }
+}
+
+fn approval_interaction() -> AgentRequest {
+    AgentRequest::Approval {
+        request: ActionApprovalRequest {
+            action_digest: "a".repeat(64),
+            policy_revision: "policy-1".into(),
+            capabilities: vec![ActionApprovalCapability {
+                kind: ActionApprovalCapabilityKind::Network,
+                scope: "api.example.com".into(),
+            }],
+            reason: "network requires unsandboxed execution".into(),
+        },
+    }
+}
+
+fn approval_response(decision: ActionApprovalDecision) -> AgentResponse {
+    AgentResponse::Approval {
+        response: ActionApprovalResponse { decision },
     }
 }
 
@@ -286,6 +308,70 @@ fn waiting_interaction_survives_recovery_and_resolves_idempotently() {
     assert!(matches!(
         store.events().last().unwrap().event,
         ThreadEvent::InteractionResolved { .. }
+    ));
+}
+
+#[test]
+fn approval_interaction_is_durable_bound_and_recoverable() {
+    let store = Arc::new(InMemoryThreadStore::default());
+    let original = ThreadController::with_store(store.clone());
+    let thread = create_thread(&original, "approval");
+    let turn = start_turn(&original, &thread, "approval-start");
+    let requested = original
+        .request_turn_interaction(
+            &thread,
+            &turn,
+            RequestTurnInteraction {
+                request_id: RequestId::new("approval_1").unwrap(),
+                item_id: None,
+                request: approval_interaction(),
+                deadline: None,
+            },
+        )
+        .unwrap();
+    assert_eq!(
+        original.read_thread(&thread).unwrap().turns[0].status,
+        TurnStatus::WaitingForApproval
+    );
+
+    let recovered = ThreadController::with_store(store.clone());
+    let snapshot = recovered.recover_thread(&thread).unwrap();
+    assert_eq!(snapshot.turns[0].status, TurnStatus::WaitingForApproval);
+    assert_eq!(
+        snapshot.turns[0]
+            .pending_interaction
+            .as_ref()
+            .unwrap()
+            .request,
+        approval_interaction()
+    );
+
+    recovered
+        .resolve_turn_interaction(
+            &thread,
+            ResolveTurnInteractionRequest {
+                command_id: CommandId::new("approve_1").unwrap(),
+                expected_sequence: SequenceExpectation::Exact(requested.sequence),
+                turn_id: turn,
+                request_id: RequestId::new("approval_1").unwrap(),
+                response: approval_response(ActionApprovalDecision::ApproveOnce),
+            },
+        )
+        .unwrap();
+    assert_eq!(
+        recovered.read_thread(&thread).unwrap().turns[0].status,
+        TurnStatus::Running
+    );
+    assert!(matches!(
+        &store.events().last().unwrap().event,
+        ThreadEvent::InteractionResolved {
+            response: AgentResponse::Approval {
+                response: ActionApprovalResponse {
+                    decision: ActionApprovalDecision::ApproveOnce
+                }
+            },
+            ..
+        }
     ));
 }
 

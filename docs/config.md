@@ -142,6 +142,23 @@ pub extra: HashMap<String, serde_json::Value>
 Provider 配置继续由 `zeta-model-provider-config` 定义。`zeta-config` 可以保存
 `BTreeMap<ProviderId, ModelProviderConfig>`，但不重新定义 Provider normalization 或 runtime。
 
+自动审批模型是独立于主 Agent 模型的 User 配置：
+
+```rust
+pub enum ApprovalReviewModelSelection {
+    Automatic,
+    Explicit { model: ModelRef },
+}
+```
+
+`Automatic` 跟随当前主 Agent 模型的 provider，再由该 provider 的声明选择适合审批的默认
+review model；没有专用默认值的自定义或本地 provider 才复用当前模型。它不是一个全局固定
+模型。`Explicit` 允许用户锁定一个已经配置、且满足 review capability gate 的 provider/model。
+显式模型的 provider 不能在仍被引用时删除。配置层能够验证 provider、静态 catalog 与 endpoint；
+credential、订阅 entitlement 和远端模型是否实际可调用，由创建 review runtime 时再次验证。
+Workspace 配置不能覆盖审批模型，避免仓库内容自行降低 reviewer 强度。模型不可用或不兼容时
+fail closed，不得静默换成其他审批模型。
+
 ## 5. Resolved config snapshot
 
 解析结果是不可变、带 generation 和来源信息的值：
@@ -158,7 +175,8 @@ pub struct ResolvedConfigSnapshot {
 当前代码区分 User authority snapshot 与 `ScopedConfigSnapshot`：后者额外携带 host-observed
 `WorkspaceConfigRevision`、provenance 和 diagnostics。它保留 Workspace MCP、Skill 与 Plugin
 内容为 pending intent；只有 Workspace preferred model 在 provider 已由 User 配置时才覆盖 user
-default。未配置的 provider 产生 diagnostic，不会暗中选择或创建 endpoint。
+default。审批模型始终来自 User/managed configuration，Workspace 无权覆盖。未配置的 provider
+产生 diagnostic，不会暗中选择或创建 endpoint。
 
 `ConfigGeneration` 只在 consumer-visible resolved value 或 diagnostics gate 发生变化时递增。
 snapshot 不包含：

@@ -16,8 +16,8 @@ pub use command::{
     PreferencesUpdate, UserConfigCommand,
 };
 pub use document::{
-    AgentConfig, ConfigGeneration, ConfigRevision, ResolvedConfig, ResolvedConfigSnapshot,
-    UiConfig, UserConfigDocument,
+    AgentConfig, ApprovalReviewModelSelection, ConfigGeneration, ConfigRevision, ResolvedConfig,
+    ResolvedConfigSnapshot, UiConfig, UserConfigDocument,
 };
 pub use mcp::{
     McpConfig, McpCredentialBinding, McpServerConfig, McpServerEnablement, McpServerId,

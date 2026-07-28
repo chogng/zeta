@@ -9,6 +9,7 @@ mod registry;
 pub use config::ModelProviderConfig;
 pub use config::NormalizedModelProviderConfig;
 pub use definition::ApiProfile;
+pub use definition::ApprovalReviewModelDefault;
 pub use definition::BaseUrlNormalization;
 pub use definition::EndpointPolicy;
 pub use definition::ModelCatalogPolicy;

@@ -12,6 +12,7 @@ use zeta_protocol::ThreadEvent;
 use zeta_protocol::ThreadId;
 use zeta_protocol::ThreadItem;
 use zeta_protocol::ThreadStatus;
+use zeta_protocol::ToolCallId;
 use zeta_protocol::Turn;
 use zeta_protocol::TurnId;
 use zeta_protocol::TurnInteraction;
@@ -28,6 +29,8 @@ pub struct ThreadSnapshot {
     pub items: Vec<ThreadItem>,
     pub commands: Vec<ThreadCommandSnapshot>,
     pub seen_interaction_ids: BTreeSet<RequestId>,
+    pub resolved_interactions: Vec<ResolvedTurnInteraction>,
+    pub started_tool_calls: BTreeSet<ToolCallId>,
 }
 
 impl ThreadSnapshot {
@@ -60,6 +63,34 @@ impl ThreadSnapshot {
                 .collect(),
         }
     }
+
+    /// Returns whether a Turn owns an exact durable Tool Call that has no terminal result.
+    pub fn has_resumable_tool_continuation(&self, turn_id: &TurnId) -> bool {
+        self.items.iter().any(|item| {
+            let ThreadItem::ToolCall {
+                turn_id: item_turn_id,
+                tool_call_id,
+                ..
+            } = item
+            else {
+                return false;
+            };
+            if item_turn_id != turn_id
+                || self.items.iter().any(|candidate| {
+                    matches!(
+                        candidate,
+                        ThreadItem::ToolResult {
+                            tool_call_id: result_call_id,
+                            ..
+                        } if result_call_id == tool_call_id
+                    )
+                })
+            {
+                return false;
+            }
+            true
+        })
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -68,6 +99,14 @@ pub struct TurnSnapshot {
     pub status: TurnStatus,
     pub failure: Option<StableTurnError>,
     pub pending_interaction: Option<TurnInteraction>,
+}
+
+/// A durable interaction response retained for exact continuation after a process restart.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ResolvedTurnInteraction {
+    pub turn_id: TurnId,
+    pub interaction: TurnInteraction,
+    pub response: AgentResponse,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -126,6 +165,8 @@ pub fn reduce_thread_event(
                 turns: Vec::new(),
                 items: Vec::new(),
                 seen_interaction_ids: BTreeSet::new(),
+                resolved_interactions: Vec::new(),
+                started_tool_calls: BTreeSet::new(),
                 commands: {
                     require_no_command(envelope)?;
                     Vec::new()
@@ -286,6 +327,7 @@ pub fn reduce_thread_event(
             ..
         } => {
             require_no_command(envelope)?;
+            validate_agent_request(&interaction.request).map_err(CoreError::Journal)?;
             if !snapshot
                 .seen_interaction_ids
                 .insert(interaction.request_id.clone())
@@ -344,6 +386,13 @@ pub fn reduce_thread_event(
             }
             transition_turn(&mut snapshot, turn_id, TurnStatus::Running, None)?;
             find_turn_mut(&mut snapshot, turn_id)?.pending_interaction = None;
+            snapshot
+                .resolved_interactions
+                .push(ResolvedTurnInteraction {
+                    turn_id: turn_id.clone(),
+                    interaction,
+                    response: response.clone(),
+                });
             snapshot.commands.push(ThreadCommandSnapshot {
                 receipt,
                 result: ThreadCommandResult::InteractionResolved {
@@ -352,6 +401,59 @@ pub fn reduce_thread_event(
                 },
                 response_sequence: envelope.sequence,
             });
+        }
+        ThreadEvent::ToolExecutionStarted {
+            turn_id,
+            tool_call_id,
+            action_digest,
+            policy_revision,
+            ..
+        } => {
+            require_no_command(envelope)?;
+            if action_digest.trim().is_empty() || policy_revision.trim().is_empty() {
+                return Err(CoreError::Journal(
+                    "tool execution marker requires action and policy identities".into(),
+                ));
+            }
+            let turn = snapshot
+                .turns
+                .iter()
+                .find(|turn| turn.turn_id == *turn_id)
+                .ok_or_else(|| CoreError::NotFound(turn_id.to_string()))?;
+            if turn.status != TurnStatus::Running {
+                return Err(CoreError::Journal(
+                    "tool execution can start only while its Turn is running".into(),
+                ));
+            }
+            let has_call = snapshot.items.iter().any(|item| {
+                matches!(
+                    item,
+                    ThreadItem::ToolCall {
+                        turn_id: item_turn_id,
+                        tool_call_id: item_call_id,
+                        ..
+                    } if item_turn_id == turn_id && item_call_id == tool_call_id
+                )
+            });
+            let has_result = snapshot.items.iter().any(|item| {
+                matches!(
+                    item,
+                    ThreadItem::ToolResult {
+                        tool_call_id: item_call_id,
+                        ..
+                    } if item_call_id == tool_call_id
+                )
+            });
+            if !has_call || has_result {
+                return Err(CoreError::Journal(
+                    "tool execution marker must reference an unresolved Tool Call".into(),
+                ));
+            }
+            if !snapshot.started_tool_calls.insert(tool_call_id.clone()) {
+                return Err(CoreError::Journal(format!(
+                    "tool execution already started: {tool_call_id}"
+                )));
+            }
         }
         ThreadEvent::InteractionCancelled {
             turn_id,
@@ -456,6 +558,48 @@ pub fn reduce_thread_event(
     Ok(snapshot)
 }
 
+pub(crate) fn validate_agent_request(request: &AgentRequest) -> Result<(), String> {
+    let AgentRequest::Approval { request } = request else {
+        return Ok(());
+    };
+    if request.action_digest.len() != 64
+        || !request
+            .action_digest
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+    {
+        return Err("approval action digest must be a SHA-256 hex digest".into());
+    }
+    if request.policy_revision.trim().is_empty() {
+        return Err("approval policy revision must not be empty".into());
+    }
+    if request.reason.trim().is_empty() {
+        return Err("approval reason must not be empty".into());
+    }
+    if request.capabilities.is_empty() {
+        return Err("approval capabilities must not be empty".into());
+    }
+    if request
+        .capabilities
+        .iter()
+        .any(|capability| capability.scope.trim().is_empty())
+    {
+        return Err("approval capability scope must not be empty".into());
+    }
+    let unique = request.capabilities.iter().collect::<BTreeSet<_>>();
+    if unique.len() != request.capabilities.len() {
+        return Err("approval capabilities must not contain duplicates".into());
+    }
+    if !request
+        .capabilities
+        .windows(2)
+        .all(|pair| pair[0] < pair[1])
+    {
+        return Err("approval capabilities must use canonical order".into());
+    }
+    Ok(())
+}
+
 fn create_turn(snapshot: &mut ThreadSnapshot, turn_id: &TurnId) -> Result<(), CoreError> {
     if snapshot.turns.iter().any(|turn| turn.turn_id == *turn_id) {
         return Err(CoreError::Journal(format!(
@@ -534,6 +678,7 @@ fn pending_interaction(
 
 fn waiting_status_for(request: &AgentRequest) -> TurnStatus {
     match request {
+        AgentRequest::Approval { .. } => TurnStatus::WaitingForApproval,
         AgentRequest::UserInput { .. } => TurnStatus::WaitingForUserInput,
         AgentRequest::DynamicTool { .. } => TurnStatus::WaitingForCapability,
     }
@@ -545,6 +690,11 @@ fn resolution_command(
     response: &AgentResponse,
 ) -> ThreadCommand {
     match response {
+        AgentResponse::Approval { response } => ThreadCommand::ResolveApproval {
+            turn_id: turn_id.clone(),
+            request_id: request_id.clone(),
+            response: response.clone(),
+        },
         AgentResponse::UserInput { response } => ThreadCommand::ResolveUserInput {
             turn_id: turn_id.clone(),
             request_id: request_id.clone(),

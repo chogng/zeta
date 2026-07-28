@@ -9,8 +9,8 @@ pub(super) fn definition() -> ProviderDefinition {
         ApiProfile::OpenAiChatCompletions,
         "https://api.x.ai/v1",
     )
-    .with_models([Model::new(
+    .with_default_model(Model::new(
         ModelId::new("grok-4.5").expect("valid model ID"),
         "Grok 4.5",
-    )])
+    ))
 }

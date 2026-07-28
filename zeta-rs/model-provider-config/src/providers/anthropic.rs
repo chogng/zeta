@@ -9,11 +9,12 @@ pub(super) fn definition() -> ProviderDefinition {
         ApiProfile::AnthropicMessages,
         "https://api.anthropic.com",
     )
-    .with_models([Model::new(
-        ModelId::new("claude-sonnet-4-20250514").expect("valid model ID"),
-        "Claude Sonnet 4",
-    )])
     .with_defaults(ProviderDefaults {
         max_output_tokens: Some(1024),
+        ..ProviderDefaults::default()
     })
+    .with_default_model(Model::new(
+        ModelId::new("claude-sonnet-4-20250514").expect("valid model ID"),
+        "Claude Sonnet 4",
+    ))
 }

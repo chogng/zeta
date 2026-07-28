@@ -1,9 +1,10 @@
 use crate::config::{is_http_url, normalize_base_url};
 use crate::{
-    EndpointPolicy, ModelProviderConfig, NormalizedModelProviderConfig, ProviderConfigError,
-    ProviderDefinition, ProviderId, providers,
+    ApprovalReviewModelDefault, EndpointPolicy, ModelCatalogPolicy, ModelProviderConfig,
+    NormalizedModelProviderConfig, ProviderConfigError, ProviderDefinition, ProviderId, providers,
 };
 use std::collections::BTreeMap;
+use zeta_protocol::ModelRef;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum RegistryMergePolicy {
@@ -72,6 +73,46 @@ impl ProviderConfigRegistry {
 
     pub fn providers(&self) -> impl Iterator<Item = &ProviderDefinition> {
         self.providers.values()
+    }
+
+    /// Selects the provider-owned automatic approval-review model for an active Agent model.
+    ///
+    /// Providers may name a dedicated review default. Providers without one reuse the active
+    /// model, which keeps custom and local providers usable without inventing a model identifier.
+    pub fn automatic_approval_review_model(
+        &self,
+        active_model: &ModelRef,
+    ) -> Result<ModelRef, ProviderConfigError> {
+        let definition = self
+            .get(&active_model.provider)
+            .ok_or_else(|| ProviderConfigError::UnknownProvider(active_model.provider.clone()))?;
+        let model = match &definition.defaults.approval_review_model {
+            ApprovalReviewModelDefault::ActiveModel => active_model.model.clone(),
+            ApprovalReviewModelDefault::Model { model } => model.clone(),
+        };
+        Ok(ModelRef::new(active_model.provider.clone(), model))
+    }
+
+    /// Validates the part of model availability represented by the provider's static catalog.
+    ///
+    /// Providers that allow unlisted model IDs still require runtime validation because account
+    /// entitlement and remote availability cannot be proven from local configuration.
+    pub fn validate_model_selection(&self, model: &ModelRef) -> Result<(), ProviderConfigError> {
+        let definition = self
+            .get(&model.provider)
+            .ok_or_else(|| ProviderConfigError::UnknownProvider(model.provider.clone()))?;
+        if definition.model_catalog_policy == ModelCatalogPolicy::ListedOnly
+            && !definition
+                .models
+                .iter()
+                .any(|candidate| candidate.id == model.model)
+        {
+            return Err(ProviderConfigError::ModelNotRegistered {
+                provider: model.provider.clone(),
+                model: model.model.clone(),
+            });
+        }
+        Ok(())
     }
 
     pub fn normalize(

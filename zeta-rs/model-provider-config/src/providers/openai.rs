@@ -9,8 +9,8 @@ pub(super) fn definition() -> ProviderDefinition {
         ApiProfile::OpenAiResponses,
         "https://api.openai.com/v1",
     )
-    .with_models([Model::new(
+    .with_default_model(Model::new(
         ModelId::new("gpt-5.6").expect("valid model ID"),
         "GPT-5.6",
-    )])
+    ))
 }

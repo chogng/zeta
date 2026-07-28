@@ -11,6 +11,10 @@
 > Config、Plugin、MCP 与 Skill snapshot：[`config.md`](config.md)
 > Provider credential：[`model-provider.md`](model-provider.md#6-provider-credential-与-subscription-backend)
 > Secret persistence：[`secrets.md`](secrets.md)
+> Cancellation tree 实现：[`zeta-async-utils` README](../zeta-rs/async-utils/README.md)
+> Session/Thread store ports：[`zeta-session-store`](../zeta-rs/session-store/README.md) /
+> [`zeta-thread-store`](../zeta-rs/thread-store/README.md)
+> Local recovery composition：[`zeta-rollout`](../zeta-rs/rollout/README.md)
 
 ## 1. 定位
 
@@ -346,6 +350,10 @@ zeta-core → Desktop / CLI / TUI
 Port 必须是 consumer-owned interface。新 trait 必须说明角色、实现不变量、取消和错误约束。
 公共 request 不使用语义含糊的 `bool` 或 `Option` 参数。
 
+目标 host policy adapter 由 [`auto-review.md`](auto-review.md) 中的 `zeta-policy` 实现：
+deterministic rule/grant 是 authority，LLM classifier 只提供 recommendation。Core 只消费最终
+decision，并负责 durable approval、retry 与 unknown-outcome lifecycle。
+
 Composition root 负责读取各 authority、构造 provider/tool/store/policy adapter、materialize
 credential、注入 Core 并启动 transport。Core 不提供隐藏全局状态的 service registry。
 
@@ -501,10 +509,11 @@ Thread；ContextManager 负责各自 context。详细契约见
 
 ```text
 model emits Tool Calls
-→ validate schema/availability
-→ plan sequential or parallel execution
-→ evaluate approval
 → durable Tool Call intents
+→ ToolService materializes ActionReviewRequest
+→ PolicyService evaluates sandbox / grant / approval / block
+→ durable approval wait and exact continuation when required
+→ durable ToolExecutionStarted with action/policy/authority identity
 → execute outside Thread writer
 → durable ordered Tool Results / UnknownOutcome
 → next model invocation
@@ -545,6 +554,32 @@ Core commits InteractionRequested
 
 Core 拥有 durable request/wait/resolve/cancel。App Server 拥有 connection owner、投递、
 disconnect 和 outbound queue。
+
+Approval 使用独立 typed payload，不复用普通 user-input 文本：
+
+```text
+ActionApprovalRequest
+  action_digest: SHA-256
+  policy_revision
+  complete capability set
+  reason
+
+ActionApprovalResponse
+  ApproveOnce | Decline
+```
+
+Core 的 `PolicyService` 接收 immutable `ActionReviewRequest` 并返回 `ExecutionDecision`。
+`AskUser` 必须先通过 `durable_approval_request` 绑定并转换，之后才能提交
+`InteractionRequested`。Reducer 校验 digest、revision、非空 capability scope 和重复
+capability，并把 Turn 转为 `WaitingForApproval`。响应通过原有的 RequestId、Thread/Turn identity
+和 sequence gate 提交；`ApproveOnce` 只表示该 exact request 获得一次性批准，不创建持久或
+跨 action grant。Tool scheduler 将它物化为绑定 RequestId、ToolCallId 和完整 approval payload
+的 `OneTimeToolGrant`，并在恢复时重新验证 action digest、policy revision 与 capability。
+
+副作用开始前必须提交 `ToolExecutionStarted`。如果恢复时存在 unresolved Tool Call 但没有
+start marker，scheduler 可以从 policy safe point 继续；如果 start marker 已存在而 Tool Result
+缺失，则提交 outcome-unknown Tool failure，禁止自动重放。Host 在完成 Tool/Policy service
+装配后通过 `TurnExecutor::resume_recovered_tool_continuations` 恢复这些 Turn。
 
 ## 12. 恢复、错误与 backpressure
 
@@ -700,7 +735,8 @@ Fault-injection tests：
 2. 引入 `LoadedThreadState`、显式 incarnation、idle eviction 和统一 mailbox；
 3. 落地 `TurnPolicySnapshot` / `ModelInvocationSnapshot`；
 4. 引入独立 `context/` 与 `context_manager/`，完成 budget/compaction；
-5. 引入 ToolScheduler、approval、并行 Tool 和 UnknownOutcome recovery；
+5. 扩展现有 ToolScheduler：已完成 durable approval/顺序 Tool/UnknownOutcome 基线，后续增加
+   并行计划、deadline、reconciliation 与 resource conflict；
 6. 增加 `multi_agent/`、MultiAgentCoordinator、delegation protocol 与 context inheritance；
 7. 完成 provider wire streaming、outbound writer 与 fault injection；
 8. 通过 context continuity、多 Agent 隔离、取消和副作用恢复评测。

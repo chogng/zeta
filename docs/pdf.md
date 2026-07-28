@@ -1,9 +1,13 @@
-# `zeta-pdf`：PDF 文档入库与内部接口
+# `zeta-pdf`：PDF 文档入库、系统边界与演进
+
+> 当前 crate 接口、PDFium binding 与 native smoke test 见
+> [`zeta-rs/utils/pdf/README.md`](../zeta-rs/utils/pdf/README.md)。本文拥有 PDF ingestion、OCR、
+> retrieval 与 citation 的跨系统边界和演进方向。
 
 ## 1. 结论
 
 `zeta-pdf` 是 Zeta 的 **PDF 原生处理边界**：它通过随安装包发布的
-PDFium，读取页面、提取原生文字，并在后续需要时渲染页面给 OCR 使用。
+PDFium 读取页面并提取原生文字。页面渲染是为 OCR 准备的 Proposed extension，当前尚未实现。
 
 它不是 PDF 知识库、RAG 或 Agent Memory。持久化的文档、chunk、索引和检索
 策略应由上层 document-library / app-server 领域服务拥有；`zeta-pdf` 只提供
@@ -56,7 +60,7 @@ resources/native/pdfium/
 
 | 层 | 负责 | 不负责 |
 | --- | --- | --- |
-| `zeta-pdf` | PDFium 绑定、原生文字、页级几何与渲染、PDF 错误归类 | 文件持久化、OCR 模型、chunk、embedding、检索、Memory |
+| `zeta-pdf` | Current：PDFium 绑定、原生文字、PDF 错误；Proposed：页级几何与渲染 | 文件持久化、OCR 模型、chunk、embedding、检索、Memory |
 | document-library（新增领域服务） | 文档身份、内容哈希、版本、页面记录、导入状态、chunk 与引用 | PDFium 动态库加载、浏览器预览 UI |
 | OCR worker | 仅对需要识别的渲染页做 OCR，返回文字与置信度 | 判断文档归属、写检索索引 |
 | 检索服务 | FTS / 向量检索、融合、rerank、过滤 | 修改源 PDF 或 Agent 记忆 |

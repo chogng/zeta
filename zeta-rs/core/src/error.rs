@@ -12,6 +12,8 @@ pub enum CoreError {
     Journal(String),
     Model(String),
     NotFound(String),
+    Policy(String),
+    PolicyCircuitBreaker(String),
     CommandConflict,
     SessionStore(SessionStoreError),
     ThreadStore(ThreadStoreError),
@@ -30,6 +32,10 @@ impl fmt::Display for CoreError {
             Self::Journal(message) => write!(formatter, "journal error: {message}"),
             Self::Model(message) => write!(formatter, "model error: {message}"),
             Self::NotFound(value) => write!(formatter, "not found: {value}"),
+            Self::Policy(message) => write!(formatter, "policy error: {message}"),
+            Self::PolicyCircuitBreaker(message) => {
+                write!(formatter, "policy circuit breaker: {message}")
+            }
             Self::CommandConflict => formatter.write_str("command ID conflict"),
             Self::SessionStore(error) => error.fmt(formatter),
             Self::ThreadStore(error) => error.fmt(formatter),

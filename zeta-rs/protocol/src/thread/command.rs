@@ -1,4 +1,7 @@
-use crate::{DynamicToolResponse, RequestId, RequestUserInputResponse, TurnId, UserInput};
+use crate::{
+    ActionApprovalResponse, DynamicToolResponse, RequestId, RequestUserInputResponse, TurnId,
+    UserInput,
+};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
@@ -15,6 +18,11 @@ pub enum ThreadCommand {
     },
     InterruptTurn {
         turn_id: TurnId,
+    },
+    ResolveApproval {
+        turn_id: TurnId,
+        request_id: RequestId,
+        response: ActionApprovalResponse,
     },
     ResolveUserInput {
         turn_id: TurnId,

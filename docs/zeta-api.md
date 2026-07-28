@@ -4,6 +4,7 @@
 > - Rust crate：`zeta_api`
 > - 层次：模型 API 协议层
 > - 当前状态：同步 unary endpoint/profile dispatch、OpenAI Responses 与 Anthropic Messages SSE decoder 已迁移；live streaming invocation 尚未实现
+> - Crate codec 与 decoder 实现：[`zeta-rs/zeta-api/README.md`](../zeta-rs/zeta-api/README.md)
 > - Canonical contract：[`protocol.md`](protocol.md#6-provider-independent-model-contract)
 > - Provider runtime：[`model-provider.md`](model-provider.md)
 > - Operation client：[`zeta-client.md`](zeta-client.md)

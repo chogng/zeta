@@ -138,6 +138,64 @@ fn readable_wait_state_excludes_the_owner_directed_request_payload() {
 }
 
 #[test]
+fn approval_interaction_serializes_its_exact_policy_binding() {
+    let interaction = TurnInteraction {
+        request_id: RequestId::new("approval_1").unwrap(),
+        item_id: None,
+        request: AgentRequest::Approval {
+            request: ActionApprovalRequest {
+                action_digest: "a".repeat(64),
+                policy_revision: "policy-7".into(),
+                capabilities: vec![ActionApprovalCapability {
+                    kind: ActionApprovalCapabilityKind::Network,
+                    scope: "api.example.com".into(),
+                }],
+                reason: "network requires unsandboxed execution".into(),
+            },
+        },
+        deadline: None,
+    };
+
+    assert_eq!(
+        serde_json::to_value(&interaction).unwrap(),
+        json!({
+            "requestId": "approval_1",
+            "request": {
+                "type": "approval",
+                "request": {
+                    "actionDigest": "a".repeat(64),
+                    "policyRevision": "policy-7",
+                    "capabilities": [{
+                        "kind": "network",
+                        "scope": "api.example.com"
+                    }],
+                    "reason": "network requires unsandboxed execution"
+                }
+            }
+        })
+    );
+    assert_eq!(
+        serde_json::to_value(interaction.pending_state()).unwrap(),
+        json!({
+            "requestId": "approval_1",
+            "kind": "approval"
+        })
+    );
+    assert_eq!(
+        serde_json::to_value(AgentResponse::Approval {
+            response: ActionApprovalResponse {
+                decision: ActionApprovalDecision::ApproveOnce,
+            },
+        })
+        .unwrap(),
+        json!({
+            "type": "approval",
+            "response": {"decision": "approveOnce"}
+        })
+    );
+}
+
+#[test]
 fn user_input_supports_text_images_skills_and_mentions() {
     let input = [
         UserInput::Text {

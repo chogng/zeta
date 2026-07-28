@@ -1,6 +1,7 @@
 use crate::{
-    ConfigGeneration, ConfigRevision, McpServerConfig, McpServerEnablement, McpServerId, ModelRef,
-    SkillSourceConfig, SkillSourceEnablement, SkillSourceId, Theme,
+    ApprovalReviewModelSelection, ConfigGeneration, ConfigRevision, McpServerConfig,
+    McpServerEnablement, McpServerId, ModelRef, SkillSourceConfig, SkillSourceEnablement,
+    SkillSourceId, Theme,
 };
 use serde::{Deserialize, Serialize};
 use zeta_model_provider_config::ModelProviderConfig;
@@ -12,6 +13,8 @@ use zeta_protocol::{CommandId, Patch, ProviderId};
 pub struct PreferencesUpdate {
     #[serde(default, skip_serializing_if = "Patch::is_missing")]
     pub preferred_model: Patch<ModelRef>,
+    #[serde(default, skip_serializing_if = "Patch::is_missing")]
+    pub approval_review_model: Patch<ApprovalReviewModelSelection>,
     #[serde(default, skip_serializing_if = "Patch::is_missing")]
     pub theme: Patch<Theme>,
 }

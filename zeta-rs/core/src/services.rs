@@ -1,8 +1,11 @@
 use crate::CoreError;
 use zeta_async_utils::CancellationToken;
+use zeta_policy::{ActionReviewRequest, AutoReviewGrant, GrantId, ReviewEvidence};
 use zeta_protocol::{
-    ModelRequest, ModelResponse, ModelStreamEvent, ThreadUpdateEnvelope, ToolCall, ToolDefinition,
+    ActionApprovalRequest, ModelRequest, ModelResponse, ModelStreamEvent, RequestId,
+    ThreadUpdateEnvelope, ToolCall, ToolCallId, ToolDefinition,
 };
+use zeta_sandboxing::SandboxPolicy;
 
 /// Holds a process-local or inter-process write lock for a Thread.
 ///
@@ -95,6 +98,73 @@ pub enum ToolExecutionOutput {
     Failure(String),
 }
 
+/// Explicit authority under which a prepared tool call may execute.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ToolAuthorization {
+    Sandboxed(SandboxPolicy),
+    UnsandboxedGrant { grant_id: GrantId },
+    AutoReviewed(AutoReviewedToolGrant),
+    ApprovedOnce(OneTimeToolGrant),
+}
+
+/// Non-reusable automatic-review authority bound to one exact durable Tool Call.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AutoReviewedToolGrant {
+    tool_call_id: ToolCallId,
+    policy_grant: AutoReviewGrant,
+}
+
+impl AutoReviewedToolGrant {
+    pub(crate) fn new(tool_call_id: ToolCallId, policy_grant: AutoReviewGrant) -> Self {
+        Self {
+            tool_call_id,
+            policy_grant,
+        }
+    }
+
+    pub fn tool_call_id(&self) -> &ToolCallId {
+        &self.tool_call_id
+    }
+
+    pub fn policy_grant(&self) -> &AutoReviewGrant {
+        &self.policy_grant
+    }
+}
+
+/// A non-reusable user grant bound to one durable interaction and exact Tool Call.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct OneTimeToolGrant {
+    request_id: RequestId,
+    tool_call_id: ToolCallId,
+    approval: ActionApprovalRequest,
+}
+
+impl OneTimeToolGrant {
+    pub(crate) fn new(
+        request_id: RequestId,
+        tool_call_id: ToolCallId,
+        approval: ActionApprovalRequest,
+    ) -> Self {
+        Self {
+            request_id,
+            tool_call_id,
+            approval,
+        }
+    }
+
+    pub fn request_id(&self) -> &RequestId {
+        &self.request_id
+    }
+
+    pub fn tool_call_id(&self) -> &ToolCallId {
+        &self.tool_call_id
+    }
+
+    pub fn approval(&self) -> &ActionApprovalRequest {
+        &self.approval
+    }
+}
+
 /// Executes tools selected and durably recorded by Core.
 ///
 /// Implementations expose immutable definitions and execute only the exact materialized call
@@ -103,9 +173,25 @@ pub enum ToolExecutionOutput {
 pub trait ToolService: Send + Sync {
     fn definitions(&self) -> Vec<ToolDefinition>;
 
+    /// Materializes every security-relevant field before policy review.
+    ///
+    /// Implementations must resolve aliases, paths, executable identity, provenance, required
+    /// capabilities, and sandbox compatibility without causing the requested side effect.
+    fn prepare(&self, call: &ToolCall) -> Result<ActionReviewRequest, CoreError>;
+
+    /// Collects bounded, secret-free evidence needed to interpret an otherwise opaque action.
+    ///
+    /// Implementations may inspect local state but must not perform the proposed action, use
+    /// credentials, access the network, or mutate anything. Repository and file contents must be
+    /// labeled as untrusted evidence by their constructors.
+    fn review_evidence(&self, _: &ToolCall) -> Result<Vec<ReviewEvidence>, CoreError> {
+        Ok(Vec::new())
+    }
+
     fn execute(
         &self,
         call: &ToolCall,
+        authorization: &ToolAuthorization,
         cancellation: &CancellationToken,
     ) -> Result<ToolExecutionOutput, CoreError>;
 }
@@ -121,10 +207,18 @@ impl ToolService for NoTools {
     fn execute(
         &self,
         call: &ToolCall,
+        _: &ToolAuthorization,
         _: &CancellationToken,
     ) -> Result<ToolExecutionOutput, CoreError> {
         Ok(ToolExecutionOutput::Failure(format!(
             "tool is not available: {}",
+            call.name
+        )))
+    }
+
+    fn prepare(&self, call: &ToolCall) -> Result<ActionReviewRequest, CoreError> {
+        Err(CoreError::Policy(format!(
+            "tool is not available for policy review: {}",
             call.name
         )))
     }

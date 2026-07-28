@@ -450,6 +450,35 @@ impl AppServer {
                 AppServerErrorName::CoreOperationFailed,
             ));
         }
+        let approval_response = matches!(
+            &params.response,
+            zeta_protocol::AgentResponse::Approval { .. }
+        );
+        let resumes_tool = approval_response
+            && before
+                .turns
+                .iter()
+                .find(|turn| turn.turn_id == params.turn_id)
+                .and_then(|turn| turn.pending_interaction.as_ref())
+                .filter(|interaction| {
+                    matches!(
+                        &interaction.request,
+                        zeta_protocol::AgentRequest::Approval { .. }
+                    )
+                })
+                .and_then(|interaction| interaction.item_id.as_ref())
+                .is_some_and(|item_id| {
+                    before.items.iter().any(|item| {
+                        matches!(
+                            item,
+                            zeta_protocol::ThreadItem::ToolCall {
+                                item_id: call_item_id,
+                                ..
+                            } if call_item_id == item_id
+                        )
+                    })
+                });
+        let turn_id = params.turn_id.clone();
         let resolved = self
             .sessions
             .threads()
@@ -464,6 +493,13 @@ impl AppServer {
                 },
             )
             .map_err(core_error)?;
+        if resumes_tool
+            && resolved.disposition == zeta_core::ResolveTurnInteractionDisposition::Resolved
+        {
+            self.turn_executor
+                .start(&params.thread_id, &turn_id)
+                .map_err(core_error)?;
+        }
         self.notify_thread_updates(&params.thread_id, before.sequence)?;
         result(&TurnInteractionResolveResult {
             sequence: resolved.sequence,

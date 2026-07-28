@@ -7,8 +7,9 @@ use std::collections::BTreeMap;
 use zeta_protocol::{ModelRef, ProviderId};
 
 /// Source that contributed a resolved value or pending capability request.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub enum ConfigValueSource {
+    #[default]
     User,
     Workspace(WorkspaceId),
 }
@@ -18,6 +19,7 @@ pub enum ConfigValueSource {
 pub struct ConfigProvenance {
     pub theme: Option<ConfigValueSource>,
     pub preferred_model: Option<ConfigValueSource>,
+    pub approval_review_model: ConfigValueSource,
     pub providers: BTreeMap<ProviderId, ConfigValueSource>,
     pub mcp_servers: BTreeMap<McpServerId, ConfigValueSource>,
     pub skill_sources: BTreeMap<SkillSourceId, ConfigValueSource>,
@@ -33,6 +35,7 @@ impl ConfigProvenance {
                 .preferred_model
                 .as_ref()
                 .map(|_| ConfigValueSource::User),
+            approval_review_model: ConfigValueSource::User,
             providers: document
                 .providers
                 .keys()

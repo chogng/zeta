@@ -13,6 +13,12 @@ lastUpdated: 2026-07-25
 本文描述当前开发期的唯一 App Server 契约。项目不保留旧 wire API、旧 DTO 或旧持久化格式
 的兼容入口；Rust DTO、生成的 TypeScript 和 JSON Schema 必须始终一致。
 
+具体 method registry、artifact generator 与 schema fixture 见
+[`zeta-app-server-protocol` README](../zeta-rs/app-server-protocol/README.md)；JSON-RPC dispatch、
+subscription broker、resource store 与 local composition 见
+[`zeta-app-server` README](../zeta-rs/app-server/README.md)。本文拥有跨客户端 API 语义与演进方向，
+两个 README 拥有当前实现接口与修改路径。
+
 ## 1. 产品模型
 
 Canonical 产品实体和内部契约的详细定义见 [`protocol.md`](protocol.md)。本 API 直接暴露

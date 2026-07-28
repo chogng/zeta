@@ -9,8 +9,8 @@ pub(super) fn definition() -> ProviderDefinition {
         ApiProfile::OpenAiChatCompletions,
         "https://generativelanguage.googleapis.com/v1beta/openai",
     )
-    .with_models([Model::new(
+    .with_default_model(Model::new(
         ModelId::new("gemini-3.6-flash").expect("valid model ID"),
         "Gemini 3.6 Flash",
-    )])
+    ))
 }

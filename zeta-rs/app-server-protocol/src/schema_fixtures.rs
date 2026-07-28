@@ -1,5 +1,8 @@
 use super::*;
-use crate::protocol::config::{ConfigUpdateParams, McpServerUpsertParams, SkillSourceAddParams};
+use crate::protocol::config::{
+    ApprovalReviewModelSelectionDto, ConfigUpdateParams, McpServerUpsertParams,
+    SkillSourceAddParams,
+};
 use crate::protocol::registry::{CLIENT_METHODS, SERVER_NOTIFICATIONS};
 use crate::rpc::{JsonRpcFailure, JsonRpcId, JsonRpcNotification, JsonRpcRequest, JsonRpcSuccess};
 use std::collections::BTreeSet;
@@ -97,8 +100,19 @@ fn dto_driven_typescript_preserves_model_ref_and_patch_shape() {
     let typescript = typescript();
 
     assert!(typescript.contains("export type ModelRef = { provider: string, model: string, };"));
+    assert!(
+        typescript
+            .contains("export type ApprovalReviewModelSelection = { \"type\": \"automatic\" }")
+    );
     assert!(typescript.contains("preferredModel: ModelRef | null"));
     assert!(typescript.contains("preferredModel?: ModelRef | null"));
+    assert!(typescript.contains("approvalReviewModel: ApprovalReviewModelSelection"));
+    assert!(typescript.contains("approvalReviewModel?: ApprovalReviewModelSelection | null"));
+    assert!(
+        typescript.contains("export type ActionApprovalDecision = \"approveOnce\" | \"decline\"")
+    );
+    assert!(typescript.contains("{ \"type\": \"approval\", request: ActionApprovalRequest, }"));
+    assert!(typescript.contains("{ \"type\": \"approval\", response: ActionApprovalResponse, }"));
     assert!(typescript.contains("expectedRevision: number"));
     assert!(typescript.contains("export type ProviderConfigDto ="));
     assert!(typescript.contains(r#""provider/configure": { method: "provider/configure" }"#));
@@ -114,6 +128,8 @@ fn dto_driven_typescript_preserves_model_ref_and_patch_shape() {
     assert!(!typescript.contains("items?: Array<ThreadItem>"));
     assert!(typescript.contains("export type Session ="));
     assert!(typescript.contains("parentSequence: number"));
+    assert!(typescript.contains("export type ToolExecutionAuthority ="));
+    assert!(typescript.contains(r#"{ "type": "autoReviewed", assessmentId: string, }"#));
     assert!(typescript.contains("dataBase64: string"));
     assert!(typescript.contains("decodedLength: number"));
     assert!(!typescript.contains("data: Array<number>"));
@@ -141,6 +157,9 @@ fn dto_driven_schema_contains_registered_rpc_envelopes() {
     assert!(definitions.contains_key("JsonRpcResponse"));
     assert!(definitions.contains_key("JsonRpcNotification"));
     assert!(definitions.contains_key("ModelRefDto"));
+    assert!(definitions.contains_key("ApprovalReviewModelSelectionDto"));
+    assert!(definitions.contains_key("ActionApprovalRequest"));
+    assert!(definitions.contains_key("ActionApprovalResponse"));
     assert!(definitions.contains_key("McpServerConfigDto"));
     assert!(definitions.contains_key("SkillSourceConfigDto"));
     assert!(definitions.contains_key("Session"));
@@ -176,6 +195,13 @@ fn config_patch_fixture_round_trips_the_provider_scoped_model() {
         "preferredModel": {
             "provider": "openai",
             "model": "gpt-5.6"
+        },
+        "approvalReviewModel": {
+            "type": "explicit",
+            "model": {
+                "provider": "openai",
+                "model": "codex-auto-review"
+            }
         }
     });
     let params: ConfigUpdateParams = serde_json::from_value(fixture.clone()).unwrap();
@@ -183,6 +209,11 @@ fn config_patch_fixture_round_trips_the_provider_scoped_model() {
     assert!(matches!(
         &params.preferred_model,
         Patch::Value(model) if model.provider == "openai"
+    ));
+    assert!(matches!(
+        &params.approval_review_model,
+        Patch::Value(ApprovalReviewModelSelectionDto::Explicit { model })
+            if model.model == "codex-auto-review"
     ));
     assert_eq!(params.expected_revision, 4);
     assert_eq!(serde_json::to_value(params).unwrap(), fixture);
@@ -199,14 +230,17 @@ fn config_patch_distinguishes_missing_null_and_value() {
         "commandId": "null",
         "expectedRevision": 3,
         "preferredModel": null,
+        "approvalReviewModel": null,
         "theme": null
     }))
     .unwrap();
 
     assert_eq!(missing.preferred_model, Patch::Missing);
+    assert_eq!(missing.approval_review_model, Patch::Missing);
     assert_eq!(missing.expected_revision, 0);
     assert_eq!(missing.theme, Patch::Missing);
     assert_eq!(null.preferred_model, Patch::Null);
+    assert_eq!(null.approval_review_model, Patch::Null);
     assert_eq!(null.theme, Patch::Null);
     assert_eq!(
         serde_json::to_value(missing).unwrap(),
@@ -218,6 +252,7 @@ fn config_patch_distinguishes_missing_null_and_value() {
             "commandId": "null",
             "expectedRevision": 3,
             "preferredModel": null,
+            "approvalReviewModel": null,
             "theme": null
         })
     );

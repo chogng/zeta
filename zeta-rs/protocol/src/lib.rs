@@ -18,11 +18,12 @@ pub use ids::{
     CommandId, InvalidIdentifier, ItemId, RequestId, SessionId, ThreadId, ToolCallId, TurnId,
 };
 pub use interaction::{
-    AgentInteractionKind, AgentRequest, AgentRequestEnvelope, AgentResponse, AgentResponseEnvelope,
-    DynamicToolCall, DynamicToolOutput, DynamicToolResponse, DynamicToolSpec,
-    InteractionCancelReason, InteractionDeadline, PendingInteraction, RequestUserInput,
-    RequestUserInputResponse, TurnInteraction, UserInput, UserInputAnswer, UserInputOption,
-    UserInputQuestion,
+    ActionApprovalCapability, ActionApprovalCapabilityKind, ActionApprovalDecision,
+    ActionApprovalRequest, ActionApprovalResponse, AgentInteractionKind, AgentRequest,
+    AgentRequestEnvelope, AgentResponse, AgentResponseEnvelope, DynamicToolCall, DynamicToolOutput,
+    DynamicToolResponse, DynamicToolSpec, InteractionCancelReason, InteractionDeadline,
+    PendingInteraction, RequestUserInput, RequestUserInputResponse, TurnInteraction, UserInput,
+    UserInputAnswer, UserInputOption, UserInputQuestion,
 };
 pub use item::{PlanStep, PlanStepStatus, PlanUpdate, ThreadItem};
 pub use model::{
@@ -37,7 +38,8 @@ pub use session::{
 };
 pub use stream::{StreamCursor, StreamInstanceId};
 pub use thread::{
-    ItemDelta, Thread, ThreadCommand, ThreadEvent, ThreadStatus, ThreadUpdate, ThreadUpdateEnvelope,
+    ItemDelta, Thread, ThreadCommand, ThreadEvent, ThreadStatus, ThreadUpdate,
+    ThreadUpdateEnvelope, ToolExecutionAuthority,
 };
 pub use tool_name::{InvalidToolName, ToolName};
 pub use turn::{Turn, TurnStatus};

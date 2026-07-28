@@ -1,0 +1,21 @@
+[package]
+name = "zeta-auto-review"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+readme = "README.md"
+
+[lib]
+doctest = false
+name = "zeta_auto_review"
+path = "src/lib.rs"
+
+[dependencies]
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+zeta-async-utils = { workspace = true }
+zeta-policy = { workspace = true }
+zeta-sandboxing = { workspace = true }
+
+[lints]
+workspace = true

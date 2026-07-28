@@ -9,8 +9,8 @@ pub(super) fn definition() -> ProviderDefinition {
         ApiProfile::OpenAiChatCompletions,
         "https://api.xiaomimimo.com/v1",
     )
-    .with_models([Model::new(
+    .with_default_model(Model::new(
         ModelId::new("mimo-v2.5-pro").expect("valid model ID"),
         "MiMo V2.5 Pro",
-    )])
+    ))
 }

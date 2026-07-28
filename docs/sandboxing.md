@@ -2,12 +2,14 @@
 
 ## 1. 定位
 
-Zeta 将 sandbox policy、平台选择、命令构建和 OS enforcement 分开：
+Zeta 将 action review、sandbox policy、平台选择、命令构建和 OS enforcement 分开：
 
 ```text
 Core ToolScheduler
-  → local Tool/command executor
-    → zeta-sandboxing
+  → zeta-policy
+    → zeta-auto-review（需要时）
+    → local Tool/command executor
+      → zeta-sandboxing
       ├─ macOS Seatbelt backend
       ├─ zeta-linux-sandbox
       │    └─ zeta-bwrap
@@ -17,6 +19,7 @@ Core ToolScheduler
 这里的 `SandboxManager` 只调度 sandbox backend：它验证 Workspace 相对路径、解析当前平台的
 policy，并生成可执行的 host launch plan。它不负责 Tool 并行计划、approval、retry、
 deterministic result ordering 或 durable Tool Call/Result；这些仍属于 Core `ToolScheduler`。
+Action review、grant 与最终 execution decision 见 [`auto-review.md`](auto-review.md)。
 
 ## 2. Crate 边界
 
@@ -80,6 +83,8 @@ seccomp 与 managed-network bridge；这些细节不能进入共享 policy。
 ```text
 zeta-linux-sandbox   → zeta-bwrap + zeta-sandboxing
 zeta-windows-sandbox → zeta-sandboxing
+zeta-policy          → zeta-sandboxing
+zeta-auto-review     → zeta-policy + zeta-sandboxing
 host executor        → zeta-sandboxing + 当前平台 backend
 ```
 
@@ -89,6 +94,7 @@ host executor        → zeta-sandboxing + 当前平台 backend
 zeta-bwrap → zeta-sandboxing / protocol / core
 platform sandbox → zeta-core / ThreadStore / approval UI
 zeta-sandboxing → shell-command / file-system / file-search / apply-patch / app-server / provider
+zeta-sandboxing → zeta-policy / zeta-auto-review
 ```
 
 平台 backend 通过 `SandboxBackend` 注入。共享 manager 不依赖所有平台实现，因此不会形成

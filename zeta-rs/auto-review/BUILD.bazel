@@ -1,0 +1,21 @@
+load("@crates//:defs.bzl", "all_crate_deps")
+load("@rules_rust//rust:defs.bzl", "rust_test")
+load("//:defs.bzl", "zeta_rust_crate")
+
+zeta_rust_crate(
+    name = "auto-review",
+    crate_name = "zeta_auto_review",
+)
+
+rust_test(
+    name = "eval-contract-tests",
+    crate_name = "eval_contract",
+    crate_root = "tests/eval_contract.rs",
+    compile_data = ["evals/cases.jsonl"],
+    edition = "2024",
+    srcs = ["tests/eval_contract.rs"],
+    deps = all_crate_deps(
+        normal = True,
+        normal_dev = True,
+    ),
+)

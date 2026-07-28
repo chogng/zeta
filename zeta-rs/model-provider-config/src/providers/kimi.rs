@@ -9,8 +9,8 @@ pub(super) fn definition() -> ProviderDefinition {
         ApiProfile::OpenAiChatCompletions,
         "https://api.moonshot.ai/v1",
     )
-    .with_models([Model::new(
+    .with_default_model(Model::new(
         ModelId::new("kimi-k2.6").expect("valid model ID"),
         "Kimi K2.6",
-    )])
+    ))
 }

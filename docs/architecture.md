@@ -1,5 +1,10 @@
 # Zeta 架构文档索引
 
+## 文档规范
+
+- [Zeta 文档分层与写作规范](documentation-guidelines.md)：规定 crate README 与
+  `docs/*.md` 的读者、信息所有权、状态表达、推荐结构和 review checklist。
+
 ## 权威基线
 
 - [Zeta 长期架构](zeta-code-architecture-codex-style-v2.md)
@@ -10,6 +15,8 @@
   organization、budget、compaction 与恢复。
 - [`zeta-core` 多 Agent 架构](core-multi-agent.md)：delegation、spawn、context inheritance、
   message/result、cancellation 与 Agent tree budget。
+- [Zeta Auto Review](auto-review.md)：contextual risk review、policy authority、用户交互、
+  durable execution boundary、evaluation 与演进方向。
 - [`zeta-config` 架构与 Plugin/MCP/Skill 接入方案](config.md)：Config authority、scope
   resolution、领域 snapshot reconcile 和 runtime safe point。
 - [`zeta-model-provider-config` 架构与演进方案](model-provider-config.md)：Provider
@@ -52,7 +59,7 @@
   snapshot、更新与回滚。
 - [`zeta-skills` 架构与演进方案](skills.md)：Agent Skills 发现、选择、渐进加载、context
   layering 与文件安全。
-- [`zeta-pdf` PDF 文档入库与内部接口](pdf.md)：PDFium 原生处理边界、持久导入、OCR、
+- [`zeta-pdf` PDF 文档入库与演进](pdf.md)：PDFium 原生处理边界、持久导入、OCR、
   引用与 RAG 知识库的职责划分。
 
 Proposed 文档不能覆盖当前 API 与已实现领域边界。当前处于开发阶段，发生冲突时直接修正

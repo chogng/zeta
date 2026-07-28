@@ -3,12 +3,12 @@ use crate::protocol::common::{
     SchemaHash, ServerInfo, SessionId, StreamInstanceId, ThreadId, ToolCallId, ToolName, TurnId,
 };
 use crate::protocol::config::{
-    ConfigCommandDispositionDto, ConfigCommandResult, ConfigReadResult, ConfigUpdateParams,
-    McpCredentialBindingDto, McpServerConfigDto, McpServerEnablementDto, McpServerRemoveParams,
-    McpServerSetEnablementParams, McpServerUpsertParams, McpTransportDto, ModelRefDto,
-    ProviderConfigDto, ProviderConfigureParams, ProviderRemoveParams, SkillSourceAddParams,
-    SkillSourceConfigDto, SkillSourceEnablementDto, SkillSourceRemoveParams,
-    SkillSourceSetEnablementParams, ThemeDto,
+    ApprovalReviewModelSelectionDto, ConfigCommandDispositionDto, ConfigCommandResult,
+    ConfigReadResult, ConfigUpdateParams, McpCredentialBindingDto, McpServerConfigDto,
+    McpServerEnablementDto, McpServerRemoveParams, McpServerSetEnablementParams,
+    McpServerUpsertParams, McpTransportDto, ModelRefDto, ProviderConfigDto,
+    ProviderConfigureParams, ProviderRemoveParams, SkillSourceAddParams, SkillSourceConfigDto,
+    SkillSourceEnablementDto, SkillSourceRemoveParams, SkillSourceSetEnablementParams, ThemeDto,
 };
 use crate::protocol::error::{AppServerError, AppServerErrorName};
 use crate::protocol::initialize::{InitializeParams, InitializeResult, ServerCapabilities};
@@ -34,13 +34,15 @@ use crate::protocol::turn::{
 use schemars::JsonSchema;
 use ts_rs::{Config, TS};
 use zeta_protocol::{
-    AgentInteractionKind, AgentRequest, AgentResponse, DynamicToolCall, DynamicToolOutput,
-    DynamicToolResponse, InteractionCancelReason, InteractionDeadline, ItemDelta,
-    PendingInteraction, PlanStep, PlanStepStatus, PlanUpdate, RequestUserInput,
-    RequestUserInputResponse, Session, SessionEvent, SessionStatus, SessionThread,
-    SessionThreadStatus, SessionUpdate, StableTurnError, StableTurnErrorCode, StreamCursor, Thread,
-    ThreadEvent, ThreadItem, ThreadOrigin, ThreadStatus, ThreadUpdate, Turn, TurnInteraction,
-    TurnStatus, UserInputAnswer, UserInputOption, UserInputQuestion,
+    ActionApprovalCapability, ActionApprovalCapabilityKind, ActionApprovalDecision,
+    ActionApprovalRequest, ActionApprovalResponse, AgentInteractionKind, AgentRequest,
+    AgentResponse, DynamicToolCall, DynamicToolOutput, DynamicToolResponse,
+    InteractionCancelReason, InteractionDeadline, ItemDelta, PendingInteraction, PlanStep,
+    PlanStepStatus, PlanUpdate, RequestUserInput, RequestUserInputResponse, Session, SessionEvent,
+    SessionStatus, SessionThread, SessionThreadStatus, SessionUpdate, StableTurnError,
+    StableTurnErrorCode, StreamCursor, Thread, ThreadEvent, ThreadItem, ThreadOrigin, ThreadStatus,
+    ThreadUpdate, ToolExecutionAuthority, Turn, TurnInteraction, TurnStatus, UserInputAnswer,
+    UserInputOption, UserInputQuestion,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -410,6 +412,7 @@ typescript_bindings! {
     ClientCapabilities,
     ServerInfo,
     ModelRefDto,
+    ApprovalReviewModelSelectionDto,
     ProviderConfigDto,
     McpCredentialBindingDto,
     McpServerEnablementDto,
@@ -457,6 +460,11 @@ typescript_bindings! {
     StableTurnError,
     ThreadStatus,
     TurnStatus,
+    ActionApprovalCapabilityKind,
+    ActionApprovalCapability,
+    ActionApprovalRequest,
+    ActionApprovalDecision,
+    ActionApprovalResponse,
     AgentInteractionKind,
     AgentRequest,
     AgentResponse,
@@ -475,6 +483,7 @@ typescript_bindings! {
     ThreadItem,
     Turn,
     Thread,
+    ToolExecutionAuthority,
     ThreadEvent,
     PlanStepStatus,
     PlanStep,

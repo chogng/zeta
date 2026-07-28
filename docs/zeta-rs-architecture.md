@@ -2,6 +2,7 @@
 
 > 当前基线：[Zeta 长期架构](zeta-code-architecture-codex-style-v2.md) 与
 > [App Server API](zeta-app-server-api.md)。
+> 各 crate 的当前 public/private interface、调用图与修改路径以对应 README 为准。
 
 ## 1. Workspace 职责
 
@@ -43,8 +44,8 @@ zeta-rs/
 ├── model-provider-config/
 ├── model-provider/
 ├── zeta-api/
-├── http-client/           # target shared proxy/TLS/HTTP/WebSocket substrate
-├── zeta-client/           # target API operation retry/framing layer
+├── http-client/           # shared proxy/TLS/unary HTTP substrate；stream/WebSocket 尚未实现
+├── zeta-client/           # API operation retry 与 SSE framing layer
 ├── exec/                  # target headless Agent runner
 ├── tool-executor/         # target local process execution boundary
 ├── tui/
@@ -109,6 +110,8 @@ Thread 的执行历史。不同 Thread 可并行，不受 Session sequence 阻�
 
 `zeta-session-store` 和 `zeta-thread-store` 分别拥有 storage-neutral trait、stored envelope、
 typed command receipt 与 atomic batch validator。Core 依赖这些 port，不依赖本地文件实现。
+实现细节分别见 [`session-store/README.md`](../zeta-rs/session-store/README.md) 与
+[`thread-store/README.md`](../zeta-rs/thread-store/README.md)。
 
 `zeta-storage` 只有一个物理 event-stream engine，统一负责：
 
@@ -124,11 +127,14 @@ typed command receipt 与 atomic batch validator。Core 依赖这些 port，不�
 `zeta-rollout` 组合上述 adapters 与 writer lease，负责从一个 state root 恢复可运行的
 SessionCoordinator；它先恢复 Thread，再恢复 Session 以便继续 create/fork saga。App Server 的本地
 composition root 只依赖该 repository，不重复这套恢复流程。
+具体打开与恢复顺序见 [`rollout/README.md`](../zeta-rs/rollout/README.md)。
 
 `zeta-rollout-trace` 以两个 store port 为输入，生成只读、可序列化的 Session trace。它适合
 诊断、导出和评测，但不是 authority，也不能成为执行输入。它保留独立 Session/Thread
 sequence，而不把并发 aggregate 拼成伪全局顺序。trace 可能携带用户输入、工具参数和结果，因此
 crate 不提供默认文件写入；持久化或上传必须由调用方显式施加脱敏、访问控制和保留期策略。
+实现与 privacy obligation 见
+[`rollout-trace/README.md`](../zeta-rs/rollout-trace/README.md)。
 
 当前开发期只读当前 schema。旧记录、implicit Session、kind/payload upcast 和 sidecar ledger
 不进入执行路径。
@@ -164,17 +170,22 @@ typed receipt 与首个业务 event 原子提交，reducer recovery 恢复稳定
 
 `zeta-app-server-protocol` 直接引用语义完全一致的 canonical Session/Thread/Turn/ThreadItem、
 events 和 updates，只为真正 wire-specific 的 params/result/error 定义 DTO。
+Registry/generator 实现见
+[`app-server-protocol/README.md`](../zeta-rs/app-server-protocol/README.md)。
 
 `zeta-app-server` 负责：
 
 - initialize 与 schema hash gate；
-- method dispatch 和 Session/Thread serialization scope；
+- method dispatch；registry 已声明 Session/Thread serialization scope，但当前同步 server 尚未
+  接入 per-scope scheduler；
 - connection subscription cursor；
 - `session/update` / `thread/update`；
 - Resource ownership；
 - Core error 到 stable RPC error 的映射。
 
 它不重建旧事件、不运行 reducer、不推断领域状态，也不拥有持久化模型。
+当前 dispatch、broker、resource 与 local composition 见
+[`app-server/README.md`](../zeta-rs/app-server/README.md)。
 
 ## 9. Client 与 transport
 

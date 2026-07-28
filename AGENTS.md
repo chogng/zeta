@@ -8,7 +8,22 @@
   - Target Rust modules under 500 LoC, excluding tests.
   - If a file exceeds roughly 800 LoC, add new functionality in a new module instead of extending the existing file unless there is a strong documented reason not to.
   - When extracting code from a large module, move the related tests and module/type docs toward the new implementation so the invariants stay close to the code that owns them.
-- 
+
+## Documentation
+
+- Follow [`docs/documentation-guidelines.md`](docs/documentation-guidelines.md).
+- Crate READMEs should focus on implementation ownership, exact contracts, execution paths,
+  failure semantics, integration obligations, tests, modification impact, current limitations, and
+  crate-level extension points.
+- Crate READMEs should name the key private symbols that carry ownership, validation, binding,
+  failure semantics, and extension direction. Include their real call relationships and identify
+  internal changes that would signal architectural drift.
+- `docs/*.md` should focus on cross-crate architecture, product semantics, ownership, tradeoffs,
+  trust and durability boundaries, current system status, and staged evolution.
+- Keep current implementation, proposed work, and potential future directions explicitly
+  separated. Do not describe future capability as current behavior.
+- When a crate README and a system document cover the same topic, make their canonical ownership
+  explicit, link them in both directions, and avoid duplicating the same detailed explanation.
 
 ## Tests
 

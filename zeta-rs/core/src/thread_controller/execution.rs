@@ -1,8 +1,8 @@
-use super::{CompletedTurn, RecordedToolCall, ThreadController};
+use super::{CompletedTurn, RecordToolExecutionStart, RecordedToolCall, ThreadController};
 use crate::CoreError;
 use zeta_async_utils::CancellationToken;
 use zeta_protocol::{
-    ItemId, StreamInstanceId, ThreadEvent, ThreadId, ThreadItem, ToolCall, TurnId,
+    ItemId, RequestId, StreamInstanceId, ThreadEvent, ThreadId, ThreadItem, ToolCall, TurnId,
 };
 
 impl ThreadController {
@@ -140,6 +140,30 @@ impl ThreadController {
     pub(crate) fn next_stream_instance_id(&self) -> StreamInstanceId {
         StreamInstanceId::new(self.next_identifier("stream"))
             .expect("generated stream instance ID is non-empty")
+    }
+
+    pub(crate) fn next_interaction_request_id(&self) -> RequestId {
+        RequestId::new(self.next_identifier("request"))
+            .expect("generated interaction request ID is non-empty")
+    }
+
+    pub(crate) fn record_tool_execution_started(
+        &self,
+        thread_id: &ThreadId,
+        turn_id: &TurnId,
+        start: RecordToolExecutionStart,
+    ) -> Result<(), CoreError> {
+        self.transition_turn(
+            thread_id,
+            vec![ThreadEvent::ToolExecutionStarted {
+                thread_id: thread_id.clone(),
+                turn_id: turn_id.clone(),
+                tool_call_id: start.tool_call_id,
+                action_digest: start.action_digest,
+                policy_revision: start.policy_revision,
+                authority: start.authority,
+            }],
+        )
     }
 
     pub(crate) fn enqueue_turn_execution(

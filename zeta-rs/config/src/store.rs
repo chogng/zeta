@@ -215,6 +215,17 @@ fn apply_command(
                     provider
                 )));
             }
+            if document
+                .agent
+                .approval_review_model
+                .explicit_model()
+                .is_some_and(|model| model.provider == *provider)
+            {
+                return Err(ConfigError(format!(
+                    "cannot remove provider '{}' while it is the approval review model provider",
+                    provider
+                )));
+            }
             document.providers.remove(provider);
         }
         UserConfigCommand::UpsertMcpServer { server } => {
@@ -262,6 +273,15 @@ fn apply_preferences(document: &mut UserConfigDocument, update: &PreferencesUpda
         Patch::Missing => {}
         Patch::Null => document.agent.preferred_model = None,
         Patch::Value(model) => document.agent.preferred_model = Some(model.clone()),
+    }
+    match &update.approval_review_model {
+        Patch::Missing => {}
+        Patch::Null => {
+            document.agent.approval_review_model = crate::ApprovalReviewModelSelection::Automatic;
+        }
+        Patch::Value(selection) => {
+            document.agent.approval_review_model = selection.clone();
+        }
     }
     match update.theme {
         Patch::Missing => {}

@@ -1,18 +1,207 @@
 # `zeta-utils-pty`
 
-This is Zeta's local adaptation of Codex's PTY integration layer, pinned to the
-revision recorded in `NOTICE`. It provides PTY and pipe process execution,
-process-group cleanup, and Windows ConPTY support. It is source reuse only:
-Zeta does not import a Codex protocol, RPC method, or runtime dependency.
+> 本 README 解释 PTY/pipe process adapter、channel lifecycle 与跨平台 kill-tree 语义。
+> Source provenance 与第三方许可见 [`NOTICE`](NOTICE)。
 
-The wrapper layer originates in Codex under Apache-2.0. The ConPTY files under
-`src/win/` originate in WezTerm under MIT; both attributions are retained in
-`NOTICE` and `third_party/wezterm/LICENSE`.
+`zeta-utils-pty` 为 Zeta 提供统一的 interactive PTY、non-interactive pipe 与 externally-driven
+process handle。它拥有 process spawn plumbing、stdin/output/exit channels、resize、interrupt 和
+best-effort process-tree cleanup。
 
-## API surface
+它不拥有 Tool authorization、sandbox policy、command allow-list、timeout、output persistence 或
+Agent execution lifecycle。
 
-- `spawn_pty_process()` creates an interactive terminal process.
-- `spawn_pipe_process()` creates a non-interactive process with split pipes.
-- `ProcessHandle` handles input, resize, interruption, and termination.
-- `TerminalSize` defines PTY dimensions.
-- `conpty_supported()` reports Windows ConPTY availability.
+## Source boundary
+
+PTY integration 基于 `NOTICE` 中固定的 OpenAI Codex revision 并在 Zeta 内适配，Apache-2.0。
+`src/win/` 的 ConPTY 部分来自 WezTerm，MIT license 位于
+`third_party/wezterm/LICENSE`。这是 source reuse，不是 Codex wire protocol/runtime dependency。
+
+同步上游实现时必须保留 provenance，并按 Zeta 当前 public contract、process-group tests 和 Windows
+tests 审查行为；不能用“来自上游”替代本地 correctness review。
+
+## Public contract
+
+### Spawn 与统一结果
+
+| Symbol | 职责 | 当前语义 |
+| --- | --- | --- |
+| `spawn_pty_process` | interactive PTY spawn | stdout/stderr 是 terminal 合并流；支持 resize |
+| `spawn_pipe_process` | stdin/stdout/stderr pipes | stdout 与 stderr 分离 |
+| `spawn_pipe_process_no_stdin` | stdin 立即关闭的 pipe spawn | 适合不接收输入的 child |
+| `SpawnedProcess` | `session + stdout_rx + stderr_rx + exit_rx` | 三种 spawn path 的统一 result |
+| `ProcessHandle` | input、state、resize、signal、terminate | Drop 会 hard terminate + abort helper tasks |
+| `ProcessSignal::Interrupt` | cooperative interrupt request | Unix 发 SIGINT；unsupported backend 返回 error |
+| `TerminalSize` | rows/cols | 默认 24 × 80 |
+| `combine_output_receivers` | split mpsc → one broadcast stream | 不保证 stdout/stderr total order |
+
+`spawn_*` 参数包括 program、args、cwd、完整 env map、optional arg0 与 Unix inherited FDs；PTY 额外
+接收 `TerminalSize`。Spawn 前 `env_clear`，因此 child 只看到 caller 显式提供的 environment。
+
+### External driver adapter
+
+| Symbol | 职责 | Implementation obligation |
+| --- | --- | --- |
+| `ProcessDriver` | 接入已有 stdin/output/exit backend | output sender 必须在 final bytes 后关闭 |
+| `spawn_from_driver` | 转成 standard `SpawnedProcess` | exit signal 后继续 drain 到 broadcast close |
+| `ProcessHandle::resize` | local PTY 或 driver resizer | pipe/no-resizer 返回 error |
+| `ProcessHandle::writer_sender` | clone raw-byte stdin sender | handle closed 后返回 disconnected sender |
+| `ProcessHandle::close_stdin` | drop owned stdin sender | 已 clone sender 仍可保持 channel alive |
+| `ProcessHandle::request_terminate` | kill child、保留 I/O tasks 以 drain EOF | killer 只消费一次 |
+| `ProcessHandle::terminate` | kill child并 abort reader/writer/wait tasks | 不保证剩余 output drain |
+| `ProcessHandle::{has_exited,exit_code}` | non-blocking observed exit state | `exit_rx` 是 authoritative completion notification |
+
+`ExecCommandSession` 与 `SpawnedPty` 是 backward-compatible type aliases。新增代码应优先使用
+`ProcessHandle` 与 `SpawnedProcess` 的真实名称。
+
+`DEFAULT_OUTPUT_BYTES_CAP` 当前是 public 1 MiB constant，但 crate 内没有读取或 enforce 它。Output
+channels 以 chunk 数 bounded；总 captured bytes、truncation 与 persistence 必须由 consumer 实施。
+不要把这个常量写成现有 hard limit。
+
+## 内部接口地图
+
+| Symbol | 可见性 | 当前职责 | 方向约束 |
+| --- | --- | --- | --- |
+| `ChildTerminator` | crate-private trait | backend-specific interrupt/hard kill | 与 helper-task abortion 分离 |
+| `PipeChildTerminator` | private | Unix process group 或 Windows job/process kill | pipe backend 不泄漏 OS handle |
+| `PtyChildTerminator` / `RawPidTerminator` | private | PTY child/process-group control | interactive descendants 必须一起 cleanup |
+| `ProcessHandle::new` | crate-private | 组装 writer、killer、tasks、exit state、PTY handles | 所有 spawn paths 共享 lifecycle |
+| `PtyMasterHandle` | crate-private | portable resizable 或 raw-FD PTY master | raw handle 必须存活到 session drop |
+| `read_output_stream` | private async fn | 8 KiB pipe reads → bounded mpsc | stdout/stderr reader 独立 drain |
+| `spawn_process_with_stdin_mode` | private async fn | pipe command + containment + channel/tasks | public pipe variants 的唯一 spawn path |
+| `spawn_process_portable` | private async fn | portable-pty/ConPTY path | 无 inherited FDs 的常规 PTY |
+| `spawn_process_preserving_fds` | private async fn, Unix | raw openpty + setsid + controlling TTY | inherited FD contract 不走 portable path |
+| `close_inherited_fds_except` | crate-private, Unix | exec 前关闭非 stdio/non-preserved non-CLOEXEC FDs | 保留 stdio、explicit FDs 与 exec-error pipe |
+| `exit_code_from_status` | crate-private | exit code；Unix signal → `128 + signal`；unknown `-1` | 所有 wait paths使用一致编码 |
+| `ClosureTerminator` | private | driver closure → hard-kill adapter | driver signal 当前 unsupported |
+| `WindowsTtyInputNormalizer` | Windows-only public | LF→CR、CRLF collapse、backspace→DEL | state 跨 write chunk 保留 |
+| process-group helpers | public module | detach、pdeathsig、SIGINT/SIGTERM/SIGKILL group operations | non-Unix 多数为 no-op |
+
+## Pipe spawn 调用图
+
+```text
+spawn_pipe_process / spawn_pipe_process_no_stdin
+└─ spawn_process_with_stdin_mode
+   ├─ validate non-empty program
+   ├─ Command::new + cwd + env_clear + args
+   ├─ Unix pre_exec
+   │  ├─ detach_from_tty
+   │  ├─ set_parent_death_signal [Linux]
+   │  └─ close_inherited_fds_except
+   ├─ Windows JobObject assignment [best effort]
+   ├─ spawn child
+   ├─ stdin writer task
+   ├─ stdout/stderr read_output_stream tasks
+   ├─ wait task → exit code/state/oneshot
+   └─ ProcessHandle::new(PipeChildTerminator, tasks...)
+```
+
+Unix pipe child 进入独立 session/process group；terminate/interrupt 作用于 group。Linux
+`set_parent_death_signal` 在 `pre_exec` 设置 SIGTERM 并复查 parent PID，降低 fork/exec race。
+
+Windows pipe backend 在 process spawn 后分配 Job Object，因此 child 在 assignment 前创建 descendant
+时存在逃逸 race。Assignment 失败会 fallback 到只终止 root process。ConPTY path 的 containment
+与 pipe path 不同，相关保证必须按 platform test 而不是统一假设。
+
+## PTY spawn 调用图
+
+```text
+spawn_pty_process
+├─ validate non-empty program
+├─ inherited_fds empty / non-Unix
+│  └─ spawn_process_portable
+│     ├─ platform_native_pty_system
+│     ├─ openpty(size)
+│     ├─ CommandBuilder + env_clear
+│     ├─ spawn child
+│     ├─ blocking PTY reader + async writer
+│     ├─ blocking wait
+│     └─ ProcessHandle::new(PtyChildTerminator, PtyHandles...)
+└─ inherited_fds non-empty [Unix]
+   └─ spawn_process_preserving_fds
+      ├─ open_unix_pty + CLOEXEC
+      ├─ std::process::Command
+      ├─ pre_exec: reset signals, setsid, TIOCSCTTY, close FDs
+      ├─ raw master reader/writer + wait tasks
+      └─ ProcessHandle::new(RawPidTerminator, opaque raw master...)
+```
+
+PTY stdout 与 stderr 指向同一个 terminal slave，因此 result 的 `stderr_rx` 不承载独立 PTY stderr。
+Caller 如果需要 split stderr，应选择 pipe backend。
+
+Windows portable writer 在写入 ConPTY 前经过 `WindowsTtyInputNormalizer`。Normalizer 维护
+`previous_was_cr`，所以 CR 和下一 chunk 的 LF 也只生成一个 carriage return。
+
+## Driver 与 output lifecycle
+
+`spawn_from_driver` 把 broadcast output 转成 capacity-256 mpsc。它收到 exit code后只标记
+`has_exited/exit_code`，仍等待 driver 的 stdout/stderr broadcast sender关闭，避免丢失 exit signal
+之后到达的 tail output。
+
+因此 driver contract 是：
+
+```text
+publish final output
+→ drop/close output senders
+→ exit lifecycle may fully settle
+```
+
+若 sender 永不关闭，reader task 会一直等待，直到 `ProcessHandle::terminate`/Drop abort。若 broadcast
+receiver发生 `Lagged`，当前 adapter 会跳过丢失的 chunks，没有 error 或 gap signal。需要 lossless
+output 的 caller 不应让 producer 超过消费能力。
+
+`combine_output_receivers` 也使用 capacity-256 broadcast；select 顺序只反映运行时可用性，不构造
+stdout/stderr 的全局 byte order。
+
+## Termination semantics
+
+```text
+request_terminate
+├─ take ChildTerminator once
+└─ hard kill child/tree
+   └─ keep read/write/wait tasks alive for drain
+
+terminate / Drop
+├─ request_terminate
+├─ abort primary reader
+├─ abort detached stdout/stderr readers
+├─ abort writer
+└─ abort wait task
+```
+
+`signal(Interrupt)` 是 cooperative signal；`terminate` 是 hard cleanup。Killer 已被
+`request_terminate` 消费后，后续 signal/terminate 是 best effort no-op。Caller 需要 graceful
+deadline 时应先 signal，再等待 `exit_rx`，最后 terminate；本 crate 不提供 timer。
+
+## 方向偏差检查
+
+- Tool command/policy/sandbox 进入 spawn API：utility 获得 execution authority；
+- Pipe/PTY 各自实现一套 `ProcessHandle` lifecycle：cleanup semantics 分叉；
+- 只 kill root PID、不测试 descendants：process tree 泄漏；
+- 把 `DEFAULT_OUTPUT_BYTES_CAP` 当作已 enforce：内存/输出安全假设错误；
+- PTY caller 期待 split stderr：terminal stream contract 被误读；
+- Driver 在 final output 前关闭 sender：tail output 被丢弃；
+- Driver sender 永不关闭：exit 后 reader task 泄漏；
+- Public API 暴露 portable-pty/Tokio child/Windows raw handles（Windows interop exports除外）；
+- 修改 `src/win/` 不维护 WezTerm attribution；
+- Non-Unix no-op process-group helper 被上层当作 containment guarantee。
+
+## 测试、限制与演进
+
+```text
+cargo test -p zeta-utils-pty
+bazel test //zeta-rs/utils/pty:pty-unit-tests
+```
+
+Cross-platform tests 覆盖 PTY Python REPL、pipe stdin、session detach、统一 result、split stderr、
+driver resize/tail drain、terminate reader abort、Unix descendant kill、inherited FDs、spawn failure 与
+resize。Windows-only tests 覆盖 job/ConPTY descendant behavior、foreground input、Ctrl-C 与 input
+normalization。
+
+部分 integration tests 依赖 Python、`setsid` 或特定 OS capability，会在环境不满足时 skip。当前
+Unix inherited-FD cases 还要求 child 能打开 `/dev/fd/<n>`；禁止该访问的 managed sandbox 会使
+child 以非零状态退出，即使 FD preservation path 本身已经执行。
+
+当前
+没有 cancellation token、deadline、output byte cap enforcement、structured spawn error taxonomy、
+sandbox integration 或 lossless broadcast gap reporting。未来能力必须继续由上层拥有 policy，
+本 crate只负责可测试的 process/terminal mechanism。

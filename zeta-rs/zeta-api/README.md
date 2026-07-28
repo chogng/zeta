@@ -1,52 +1,160 @@
-# zeta-api
+# `zeta-api`
 
-The canonical architecture and evolution plan is
-[`docs/zeta-api.md`](../../docs/zeta-api.md).
+> 本 README 解释 endpoint dispatch、wire codec 与 streaming event decoder 的实现边界。
+> Provider/runtime 的系统关系与演进见 [`docs/zeta-api.md`](../../docs/zeta-api.md)。
 
-`zeta-api` is the model API protocol layer. Canonical model values belong to `zeta-protocol`; this
-crate translates those values to and from concrete endpoint, request/response, and streaming event
-protocols. Shared HTTP/WebSocket execution and network policy belong to `zeta-http-client`;
-operation retry, SSE/NDJSON framing, and operation telemetry belong to `zeta-client`.
+`zeta-api` 在 canonical `zeta-protocol` model values 与具体模型 API wire format 之间转换。
+它当前实现 OpenAI Responses、OpenAI-compatible Chat Completions 和 Anthropic Messages 的
+unary request/response codec，并实现 OpenAI Responses 与 Anthropic Messages 的 SSE event
+decoder。
+
+它不选择 provider、model 或 credential，不拥有 base URL，也不执行 socket、retry 或 SSE
+framing。
+
+## Crate 边界
 
 ```text
-src/
-├── endpoint/
-├── requests/
-├── sse/
-├── ndjson/
-└── error/
+zeta-model-provider
+  └─ 选择 ApiEndpoint + ResolvedApiTarget
+       └─ zeta-api
+          ├─ canonical request → provider JSON
+          ├─ provider JSON → canonical response
+          └─ framed SSE event → ModelStreamEvent
+               ├─ zeta-client：operation retry 与 SSE framing
+               └─ zeta-http-client：HTTP transport
 ```
 
-Canonical request and response values are defined in `zeta-protocol` and explicitly re-exported
-from this crate; they are not duplicated in local `request.rs` or `response.rs` modules.
+本 crate 直接 re-export `zeta-protocol` 的 `ModelRequest`、`ModelResponse`、`Message`、
+`ContentPart`、`ToolDefinition`、`ToolCall` 等 canonical types。不要在这里创建第二套
+request/response domain model。
 
-The tree above is the migration target, not the current implementation. Provider registry and
-selection live only in `zeta-model-provider`. This crate is organized by API endpoint/profile;
-compatible profiles may share mechanical codecs without claiming identical cache, error, usage,
-or streaming behavior.
+## Public contract
 
-A provider can expose more than one official profile (for example, xAI supports Chat Completions
-and Responses; Ollama supports compatible SSE and native NDJSON). Profile selection belongs to
-validated model-provider runtime configuration, not URL or provider-name guessing. Heartbeats,
-cache controls, errors, usage, and catalog behavior remain profile-specific even when the
-invocation body is OpenAI-compatible.
+| Symbol | 职责 | 不负责 |
+| --- | --- | --- |
+| `ApiEndpoint` | 指定 concrete endpoint family 并 dispatch codec | provider 或 model selection |
+| `ApiProtocol` | 暴露 endpoint 使用的 normalized protocol family | URL/provider 推断 |
+| `ApiEndpoint::complete_with_client` | 校验 canonical request，执行 unary encode/call/decode | retry、credential refresh |
+| `OpenAiResponsesSseDecoder` | Responses SSE event schema 与 terminal lifecycle | SSE byte framing、reconnect |
+| `AnthropicMessagesSseDecoder` | Messages content-block lifecycle 与 canonical delta | transport liveness、tool JSON accumulation |
+| `ApiError` | request、transport、status 与 response codec failure | provider selection error |
 
-The implemented wire protocols are:
+`ApiEndpoint` 是 wire contract，不是 vendor identity。同一 provider 可以暴露多个 profile；相同
+compatible profile 也不能据此假设 cache、usage、error 或 streaming 语义完全相同。
 
-- OpenAI Responses;
-- OpenAI-compatible Chat Completions;
-- Anthropic Messages.
+## 内部接口地图
 
-The normalized API covers messages, function tools, tool results, reasoning settings, usage, stop
-reasons, and provider output items. Credential-bearing headers and raw payloads must remain out of
-protocol diagnostics.
+| Symbol | 可见性 | 当前职责 | 方向约束 |
+| --- | --- | --- | --- |
+| `ApiEndpoint::method` | crate-private | 当前所有 endpoint 使用 `POST` | transport method 不由 provider adapter 重写 |
+| `ApiEndpoint::relative_path` | crate-private | `responses`、`chat/completions`、`v1/messages` | path 属于 endpoint protocol |
+| `ApiEndpoint::headers` | crate-private | 合并 target headers，并补 Anthropic version | credential headers 仍由 provider runtime 提供 |
+| `validate_request` | private | 拒绝空 model/input 与零 max tokens | 在任何 transport 调用前执行 |
+| `requests::post_json` | crate-private | JSON serialization、`ClientRequest`、status 与 JSON parse | 不选择 retry policy或 codec |
+| `requests::*::complete` | crate-private | 对应 endpoint 的 build/call/parse pipeline | endpoint dispatch 的唯一 codec target |
+| `requests::*::build_request` | private | canonical input → endpoint JSON | 不读取 provider config |
+| `requests::*::parse_response` | private | endpoint JSON → canonical output/usage/stop reason | malformed response fail closed |
+| `OpenAiResponsesSseDecoder::decode_event` | private | event type dispatch、delta extraction、terminal transition | 不解释 raw SSE bytes |
+| `AnthropicMessagesSseDecoder::{start_message,start_block,decode_block_delta,stop_block,stop_message}` | private | enforce message/block state machine | lifecycle 不能下沉到 UI |
+| `ContentBlockKind` | private | 将 block kind 与允许的 delta kind 绑定 | unknown block 可以忽略，known mismatch 必须拒绝 |
 
-Provider registry and selection, endpoint defaults, authentication configuration, credential or
-deployment headers, and retry policy selection belong to `zeta-model-provider`. Catalog refresh,
-cache, merge, and filtering belong to the proposed `zeta-models-manager`; model-list wire codecs
-may live here. Protocol-required headers such as API versions and streaming media types belong to
-the corresponding `zeta-api` endpoint. Agent and tool execution loops belong to `zeta-core`.
+## Unary 调用图
 
-The current implementation remains synchronous and non-streaming. The normalized response retains
-text, reasoning, tool calls, usage, and stop reasons, but `zeta-client` framing plus API event
-decoders must be implemented before the stack is described as streaming-capable.
+```text
+ApiEndpoint::complete_with_client(target, model, request, client)
+├─ validate_request
+└─ endpoint-specific requests::*::complete
+   ├─ build_request
+   └─ requests::post_json
+      ├─ serde_json::to_vec
+      ├─ ClientRequest::new
+      │  ├─ ApiEndpoint::method
+      │  ├─ ApiEndpoint::relative_path
+      │  └─ ApiEndpoint::headers
+      ├─ OperationClient::execute
+      ├─ reject non-2xx as ApiError::HttpStatus
+      └─ serde_json::from_slice
+         └─ parse_response
+```
+
+三套 codec 都处理 canonical messages、tools、tool choice、reasoning、usage 和 stop reason，但
+只共享 mechanical helpers；不能因为 JSON 外形相似就合并 protocol-specific semantics。
+
+## Streaming decoder
+
+Decoder 接收 `zeta-client::SseFrame`，说明 SSE field parsing 已经完成。它们输出
+`zeta_protocol::ModelStreamEvent`：
+
+```text
+SseFrame::Event
+└─ Decoder::decode
+   ├─ parse event.data JSON
+   ├─ determine event type
+   ├─ validate lifecycle/schema
+   └─ emit TextDelta / ReasoningDelta / no event
+
+end of stream
+└─ Decoder::finish
+   └─ require protocol terminal state
+```
+
+`OpenAiResponsesSseDecoder`：
+
+- text 与 reasoning-summary delta 分别映射为 canonical delta；
+- `response.completed` 进入 terminal；
+- `response.failed`/`response.incomplete` 返回 failure；
+- terminal 后的任何 event、或 terminal 前 EOF 都是 invalid response；
+- unknown optional event 与 non-event frame 被忽略。
+
+`AnthropicMessagesSseDecoder`：
+
+- 要求 `message_start → content_block_* → message_stop`；
+- 用 `BTreeMap<u64, ContentBlockKind>` 跟踪并行 block index；
+- text/thinking delta 映射为 canonical delta；
+- ping、message-level delta、signature 与 tool input JSON fragment 当前不输出；
+- 未 start 的 delta、重复 block、unknown stop、open block 上的 message stop、terminal 前 EOF 都被拒绝。
+
+当前只有这两个 streaming decoder；Chat Completions streaming codec 尚未实现。拥有 decoder 不表示
+整个 model invocation stack 已经暴露 streaming public API。
+
+## Error 语义
+
+| Condition | `ApiError` |
+| --- | --- |
+| canonical request 不满足基本 invariant | `InvalidRequest` |
+| `OperationClient` transport/operation failure | `Transport` |
+| unary response 为非 2xx | `HttpStatus(status)` |
+| response JSON、field 或 stream lifecycle 无效 | `InvalidResponse` |
+
+`From<zeta_client::ClientError>` 将 framing failure 映射为 `InvalidResponse`，其余 client failure
+映射为 `Transport`。Error text 不应包含 credential-bearing headers 或 raw sensitive payload。
+
+## 方向偏差检查
+
+- Codec 根据 provider name 或 URL 选择：profile ownership 从 provider config 漂移；
+- Provider adapter 手写 request JSON：wire ownership 从本 crate 漂移；
+- `requests::post_json` 自己重试：operation replay policy 下沉；
+- Decoder 接收 socket bytes 或管理 reconnect：framing/transport ownership 下沉；
+- Decoder 在 lifecycle validation 前向 UI 输出 event：invalid provider sequence 可能成为可信状态；
+- 本 crate 读取 credential/config store：composition authority 下沉；
+- 新建本地 canonical request type：`zeta-protocol` 不再是唯一 domain source。
+
+修改 endpoint 时同步检查 `ApiEndpoint` variants、`protocol`、`relative_path`、headers、request module、
+provider `ApiProfile` mapping、unary tests 与 streaming decoder support。修改 canonical model field 时
+同步检查三套 `build_request`、三套 `parse_response` 和 contract fixtures。
+
+## 测试、限制与演进
+
+```text
+cargo test -p zeta-api
+bazel test //zeta-rs/zeta-api:zeta-api-unit-tests
+```
+
+当前 tests 重点覆盖两个 SSE decoder 的 delta mapping、unknown optional event、terminal EOF、
+malformed JSON 与 Anthropic block lifecycle。Unary codec 还应持续通过 injected
+`OperationClient`/provider contract tests 验证 request 与 response shape。
+
+当前实现仍以同步 unary completion 为主；stream decoder 已存在，但端到端 streaming invocation、
+Chat Completions streaming、tool argument fragment assembly、NDJSON 和 provider-native catalog codec
+仍是潜在演进。新增能力必须继续保持 canonical domain、wire codec、operation framing、transport
+四层分离。

@@ -1,5 +1,5 @@
 use std::fmt;
-use zeta_protocol::ProviderId;
+use zeta_protocol::{ModelId, ProviderId};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ProviderConfigError {
@@ -15,6 +15,10 @@ pub enum ProviderConfigError {
         base_url: String,
     },
     InvalidMaxOutputTokens(ProviderId),
+    ModelNotRegistered {
+        provider: ProviderId,
+        model: ModelId,
+    },
     ProviderMismatch {
         configured: ProviderId,
         selected: ProviderId,
@@ -43,6 +47,10 @@ impl fmt::Display for ProviderConfigError {
             Self::InvalidMaxOutputTokens(provider) => write!(
                 formatter,
                 "provider '{provider}' max output tokens must be greater than zero"
+            ),
+            Self::ModelNotRegistered { provider, model } => write!(
+                formatter,
+                "model '{model}' is not registered for provider '{provider}'"
             ),
             Self::ProviderMismatch {
                 configured,

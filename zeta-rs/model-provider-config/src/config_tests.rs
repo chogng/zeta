@@ -16,6 +16,13 @@ fn definition(id: &str, endpoint: EndpointPolicy) -> ProviderDefinition {
     )
 }
 
+fn model_ref(provider: &str, model: &str) -> zeta_protocol::ModelRef {
+    zeta_protocol::ModelRef::new(
+        provider_id(provider),
+        ModelId::new(model).expect("test model ID is valid"),
+    )
+}
+
 #[test]
 fn model_provider_config_is_serializable_and_has_a_schema() {
     let config = ModelProviderConfig {
@@ -53,6 +60,7 @@ fn registry_applies_endpoint_and_token_defaults_during_normalization() {
     )
     .with_defaults(ProviderDefaults {
         max_output_tokens: Some(1024),
+        ..ProviderDefaults::default()
     })])
     .unwrap();
 
@@ -63,6 +71,53 @@ fn registry_applies_endpoint_and_token_defaults_during_normalization() {
     assert_eq!(normalized.base_url, "https://example.test/v1");
     assert_eq!(normalized.max_output_tokens, Some(1024));
     assert_eq!(normalized.api_profile, ApiProfile::OpenAiChatCompletions);
+}
+
+#[test]
+fn automatic_review_uses_the_provider_default_or_active_model() {
+    let builtins = ProviderConfigRegistry::builtin();
+    assert_eq!(
+        builtins
+            .automatic_approval_review_model(&model_ref("openai", "gpt-main"))
+            .unwrap(),
+        model_ref("openai", "gpt-5.6")
+    );
+
+    let custom = ProviderConfigRegistry::from_definitions([definition(
+        "custom",
+        EndpointPolicy::ConfiguredOnly,
+    )])
+    .unwrap();
+    assert_eq!(
+        custom
+            .automatic_approval_review_model(&model_ref("custom", "local-review-capable"))
+            .unwrap(),
+        model_ref("custom", "local-review-capable")
+    );
+}
+
+#[test]
+fn explicit_review_model_must_pass_the_static_catalog_gate() {
+    let registry = ProviderConfigRegistry::from_definitions([ProviderDefinition::new(
+        provider_id("listed"),
+        "Listed provider",
+        ProviderAdapter::OpenAiCompatible,
+        ApiProfile::OpenAiChatCompletions,
+        EndpointPolicy::ConfiguredOnly,
+        ModelCatalogPolicy::ListedOnly,
+    )
+    .with_default_model(Model::new(ModelId::new("available").unwrap(), "Available"))])
+    .unwrap();
+
+    assert_eq!(
+        registry
+            .validate_model_selection(&model_ref("listed", "missing"))
+            .unwrap_err(),
+        ProviderConfigError::ModelNotRegistered {
+            provider: provider_id("listed"),
+            model: ModelId::new("missing").unwrap(),
+        }
+    );
 }
 
 #[test]

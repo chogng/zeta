@@ -1,101 +1,103 @@
-# zeta-async-utils
+# `zeta-async-utils`
 
-`zeta-async-utils` provides executor-independent cooperative cancellation for Rust futures and
-structured parent/child work such as multi-agent runs. It has no runtime or third-party
-dependencies.
+> 本 README 解释 cancellation tree 的当前接口与 race semantics。跨 Agent、model、Tool 与 process
+> 的 cancellation 演进见
+> [`docs/zeta-agent-runtime-architecture.md`](../../docs/zeta-agent-runtime-architecture.md)。
 
-## Cancellation domains
+`zeta-async-utils` 提供 runtime-independent cooperative cancellation。它只依赖 `std`，不拥有 task
+spawn、deadline timer、signal handling 或 OS interruption。
 
-A `CancellationSource` owns cancellation authority. Its `CancellationToken` is read-only:
+## Public contract
 
-```rust
-use zeta_async_utils::{CancellationSource, FutureCancellationExt};
+| Symbol | 职责 | 关键语义 |
+| --- | --- | --- |
+| `CancellationSource<R>` | 一个 domain 的 cancel authority | clone 共享同一 domain；drop 不自动 cancel |
+| `CancellationToken<R>` | read-only observer 与 child-source factory | child cancel 不影响 parent/sibling |
+| `Cancellation<R>` | effective signal | 保留 first winner 的 reason 与 origin ID |
+| `CancelResult<R>` | cancel race 结果 | 区分本次 installed 与 already cancelled |
+| `Cancelled<R>` | 等待 token cancellation 的 future | drop 时注销 waiter |
+| `CancelOnDrop<R>` | scope-exit cancellation guard | `disarm` 后不 cancel |
+| `Cancelable<F, R>` | inner future 与 cancellation 的 race wrapper | cancellation 每次 poll 优先检查；获胜时 drop inner future |
+| `FutureCancellationExt` | 所有 Future 的 extension trait | 只在 drop-at-await 安全时使用 |
 
-let source = CancellationSource::new();
-let token = source.token();
+默认 reason 是 `CancellationReason::{Requested, Shutdown, DeadlineExceeded}`。需要 domain-specific
+reason 时使用 `CancellationSource::<R>::new_typed()`；`R` 不要求 `Clone`，signal 通过 `Arc` 传播。
 
-let result = do_work()
-    .with_cancellation(token)
-    .await;
+## 内部接口地图
+
+| Symbol | 可见性 | 当前职责 | 方向约束 |
+| --- | --- | --- | --- |
+| `Node<R>` | crate-private | 一个 cancellation domain 的 ID 与 mutex state | 不暴露给 runtime 或 protocol |
+| `State<R>` | private | signal、weak children、waiters、waiter ID allocator | state transition 始终在同一 mutex 下 |
+| `Signal<R>` | crate-private | origin + reason | descendants 共享同一 effective signal |
+| `Node::child_of` | crate-private | 原子注册 child 或继承 parent signal | child creation 与 parent cancel 不能丢信号 |
+| `cancel_tree` | crate-private | iterative propagation、drain waiters/children | 不递归；先标记整棵可达树，再 wake |
+| `poll_cancelled` | crate-private | register/refresh waiter waker | repoll 必须替换 stale waker |
+| `remove_waiter` | crate-private | future/drop cleanup | pending future drop 后不能泄漏 waker |
+| `Cancelable::poll` | private impl path | cancellation-first race | inner poll 中触发 cancel 时，本次 inner output 获胜 |
+| `NEXT_CANCELLATION_ID` / `next_id` | private | process-local unique domain ID | overflow panic，不复用 identity |
+
+## 调用图与 race 语义
+
+```text
+CancellationSource::cancel_with(reason)
+├─ Signal { origin: source.id, reason }
+├─ tree::cancel_tree(root, signal)
+│  ├─ iterative pending stack
+│  ├─ first signal per Node wins
+│  ├─ inherit effective signal into descendants
+│  ├─ drain weak children and waiters
+│  └─ wake after reachable nodes are marked
+└─ Cancelled | AlreadyCancelled(effective signal)
+
+CancellationToken::cancelled
+└─ Cancelled::poll
+   └─ token.poll_cancelled
+      └─ tree::poll_cancelled → ready signal or registered waiter
+
+future.with_cancellation(token)
+└─ Cancelable::poll
+   ├─ poll cancellation first
+   ├─ cancelled → drop inner, return Err
+   └─ active → poll inner, return Ok or Pending
 ```
 
-The wrapper pins the inner future in a box, then checks cancellation before polling it. When
-cancellation wins, it drops the inner future and returns `Err(Cancellation)`. Use this only when
-dropping the future at an await point is safe.
+重要 race：
 
-Work that must perform asynchronous cleanup should observe cancellation itself:
+- child creation 与 parent cancellation 在 parent mutex 下序列化，因此不会 missed cancellation；
+- domain 已有 signal 后，新 child 直接继承 effective signal；
+- 两个 canceller 竞争时，每个 Node 的 first observed signal wins；
+- inner future 在自己的 `poll` 内触发 cancellation 并同时 Ready，本次 output wins，因为 cancellation
+  checkpoint 已经发生；
+- waker 在离开 mutex 后调用，避免 wake path 重入锁。
 
-```rust
-# use zeta_async_utils::CancellationToken;
-# async fn next_step() {}
-async fn worker(token: CancellationToken) {
-    loop {
-        if let Err(cancellation) = token.check() {
-            // Flush, rollback, or release resources here.
-            eprintln!("{cancellation}");
-            return;
-        }
-        next_step().await;
-    }
-}
+方向偏差：
+
+- 使用 strong child reference：完成的 child tree 会被 parent 永久保活；
+- 递归传播：深 Agent tree 可能 stack overflow；
+- plain source drop 自动 cancel：clone owner lifecycle 变得不可预测；
+- `Cancelable` 尝试异步 cleanup：wrapper 越过 generic Future contract；
+- token 可以 cancel 自己：observer/authority capability split 被破坏。
+
+## 使用选择
+
+使用 `with_cancellation` 仅当取消时直接 drop inner future 是安全的。需要 flush、rollback、关闭
+protocol 或释放远端 lease 时，把 `CancellationToken` 传入 worker，并在安全点调用 `check()` 或
+await `cancelled()`。
+
+Cancellation 不能抢占 blocking syscall、CPU loop 或没有观察 token 的 detached work。Deadline
+由 caller timer 决定，再用 `cancel_with(DeadlineExceeded)` 传播。
+
+## 测试与演进
+
+```text
+cargo test -p zeta-async-utils
+bazel test //zeta-rs/async-utils:async-utils-unit-tests
 ```
 
-`token.cancelled().await` is also available for event-driven loops and custom `select` mechanisms.
+测试覆盖 non-`Unpin` future、prior cancellation precedence、drop cleanup、first-reason wins、
+concurrent child creation、waker replacement、deep iterative propagation 和 RAII guard。
 
-## Parent and child agents
-
-Create a distinct child source before spawning each child agent:
-
-```rust
-use zeta_async_utils::CancellationSource;
-
-let parent = CancellationSource::new();
-let child_a = parent.token().child_source();
-let child_b = parent.token().child_source();
-
-parent.cancel(); // cancels parent, child_a, child_b, and their descendants
-```
-
-The hierarchy has these guarantees:
-
-- Parent cancellation propagates to all currently live descendants.
-- A child created after its parent is cancelled starts cancelled with the same signal.
-- Child cancellation does not affect its parent or siblings.
-- Cloning a source shares one cancellation domain; it does not create a child.
-- The first signal observed by each domain wins. The signal retains its original domain ID and
-  application-defined reason as it propagates.
-- Parents retain weak references to children, so completed child domains are not kept alive.
-- Propagation is iterative and waiter registration is synchronized with cancellation, preventing
-  stack overflow and missed wakeups.
-
-For custom reasons, parameterize the source:
-
-```rust
-#[derive(Debug)]
-enum StopReason {
-    UserInterrupted,
-    ParentFailed,
-}
-
-let source = CancellationSource::<StopReason>::new_typed();
-source.cancel_with(StopReason::UserInterrupted);
-```
-
-## Lifecycle behavior
-
-Dropping a source does not implicitly cancel its tokens. This avoids surprising cancellation when
-one of several source clones is dropped. An owner that needs scope-exit cancellation can hold a
-`CancelOnDrop` guard:
-
-```rust
-use zeta_async_utils::CancellationSource;
-
-let source = CancellationSource::new();
-let guard = source.cancel_on_drop();
-// Dropping `guard` requests cancellation, including on early return or unwind.
-# guard.disarm();
-```
-
-Cancellation cannot interrupt blocking synchronous code, an operating-system call, or independently
-spawned work that does not observe a related token. Such work must use explicit checkpoints or its
-own runtime-specific interruption mechanism.
+当前没有 runtime-specific select macro、deadline timer、task group/join set 或 forced abort。未来
+若增加 structured task ownership，应建立在现有 source/token capability split 上，而不是把 Tokio
+handle 或 executor type 放进本 crate。

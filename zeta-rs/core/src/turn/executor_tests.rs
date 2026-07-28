@@ -1,7 +1,8 @@
 use super::*;
 use crate::{
-    CreateThreadRequest, InMemoryThreadStore, ModelService, ModelStreamSink, SequenceExpectation,
-    StartTurnRequest, ThreadUpdateSink, ToolExecutionOutput, ToolService,
+    CreateThreadRequest, InMemoryThreadStore, ModelService, ModelStreamSink, PolicyService,
+    SequenceExpectation, StartTurnRequest, ThreadUpdateSink, ToolAuthorization,
+    ToolExecutionOutput, ToolService, TurnExecutionOutcome,
 };
 use serde_json::json;
 use std::collections::VecDeque;
@@ -10,11 +11,17 @@ use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 use zeta_async_utils::CancellationSource;
+use zeta_policy::{
+    ActionDigest, ActionKind, ActionProvenance, ActionReviewRequest, ActionSource, Capability,
+    CapabilityKind, CapabilitySet, ExecutionDecision, PolicyRevision, ResolvedAction,
+    SandboxCompatibility,
+};
 use zeta_protocol::{
     CommandId, ContentPart, InputItem, ModelRequest, ModelResponse, ModelStreamEvent, ResponseItem,
     SessionId, StopReason, ThreadId, ThreadItem, ThreadUpdate, ThreadUpdateEnvelope, ToolCallId,
     ToolDefinition, ToolName, TurnStatus, UserInput,
 };
+use zeta_sandboxing::{FileSystemAccess, NetworkAccess, SandboxPolicy};
 
 #[test]
 fn completes_a_text_turn_from_durable_context() {
@@ -27,8 +34,11 @@ fn completes_a_text_turn_from_durable_context() {
         .unwrap();
 
     assert!(matches!(
-        completion.item,
-        ThreadItem::AgentMessage { ref text, .. } if text == "answer"
+        completion,
+        TurnExecutionOutcome::Completed(crate::CompletedTurn {
+            item: ThreadItem::AgentMessage { ref text, .. },
+            ..
+        }) if text == "answer"
     ));
     assert_eq!(model.requests().len(), 1);
     let InputItem::Message(message) = &model.requests()[0].input[0] else {
@@ -68,6 +78,7 @@ fn executes_a_durable_tool_loop_before_the_next_model_invocation() {
         threads.clone(),
         model.clone(),
         tools,
+        Arc::new(SandboxPolicyService),
         TurnExecutionLimits::default(),
     );
 
@@ -382,13 +393,47 @@ impl ToolService for WeatherTool {
         }]
     }
 
+    fn prepare(&self, call: &ToolCall) -> Result<ActionReviewRequest, CoreError> {
+        let capabilities =
+            CapabilitySet::new([Capability::new(CapabilityKind::Network, "weather.example")]);
+        let sandbox = SandboxPolicy::new(FileSystemAccess::ReadOnly, NetworkAccess::Allowed);
+        Ok(ActionReviewRequest::new(
+            ResolvedAction::new(
+                ActionDigest::from_canonical_bytes(serde_json::to_vec(call).unwrap()),
+                ActionKind::NetworkRequest,
+                "read weather",
+                capabilities,
+            ),
+            ActionProvenance::new(ActionSource::BuiltInTool, "weather"),
+            SandboxCompatibility::Supported(sandbox),
+            PolicyRevision::new("test-policy"),
+        ))
+    }
+
     fn execute(
         &self,
         call: &ToolCall,
+        authorization: &ToolAuthorization,
         _: &CancellationToken,
     ) -> Result<ToolExecutionOutput, CoreError> {
+        assert!(matches!(authorization, ToolAuthorization::Sandboxed(_)));
         assert_eq!(call.arguments["city"], "Paris");
         Ok(ToolExecutionOutput::Success("sunny".into()))
+    }
+}
+
+struct SandboxPolicyService;
+
+impl PolicyService for SandboxPolicyService {
+    fn decide(
+        &self,
+        request: &ActionReviewRequest,
+        _: &zeta_async_utils::CancellationToken,
+    ) -> Result<ExecutionDecision, CoreError> {
+        let SandboxCompatibility::Supported(policy) = request.sandbox() else {
+            return Err(CoreError::Policy("test action has no sandbox".into()));
+        };
+        Ok(ExecutionDecision::RunSandboxed(*policy))
     }
 }
 

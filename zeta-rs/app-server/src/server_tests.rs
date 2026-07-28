@@ -12,8 +12,9 @@ use zeta_core::{
 };
 use zeta_model_provider::EchoModel;
 use zeta_protocol::{
-    AgentRequest, CommandId, ContentPart, InputItem, ModelRequest, ModelResponse, RequestId,
-    RequestUserInput, ResponseItem, StopReason, TurnStatus, UserInput,
+    ActionApprovalCapability, ActionApprovalCapabilityKind, ActionApprovalRequest, AgentRequest,
+    CommandId, ContentPart, InputItem, ModelRequest, ModelResponse, RequestId, RequestUserInput,
+    ResponseItem, StopReason, TurnStatus, UserInput,
 };
 
 fn server_with_model(model: Arc<dyn ModelService>) -> AppServer {
@@ -446,7 +447,10 @@ fn config_updates_use_typed_command_ids() {
         &mut connection,
         serde_json::json!({
             "jsonrpc":"2.0","id":2,"method":"config/update",
-            "params":{"commandId":"theme","expectedRevision":0,"theme":"dark"}
+            "params":{
+                "commandId":"theme","expectedRevision":0,"theme":"dark",
+                "approvalReviewModel":{"type":"automatic"}
+            }
         }),
     );
     assert_eq!(updated["result"]["revision"], 1);
@@ -459,6 +463,10 @@ fn config_updates_use_typed_command_ids() {
     );
     assert_eq!(read["result"]["revision"], 1);
     assert_eq!(read["result"]["theme"], "dark");
+    assert_eq!(
+        read["result"]["approvalReviewModel"],
+        serde_json::json!({"type":"automatic"})
+    );
     let mcp = call(
         &server,
         &mut connection,
@@ -603,6 +611,95 @@ fn interaction_resolution_uses_the_durable_request_identity() {
     let snapshot = server.sessions().threads().read_thread(&thread_id).unwrap();
     assert_eq!(snapshot.turns[0].status, zeta_core::TurnStatus::Running);
     assert!(snapshot.turns[0].pending_interaction.is_none());
+}
+
+#[test]
+fn approval_interaction_resolves_through_the_typed_app_server_contract() {
+    let server = server();
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+    let session = create_session(&server, &mut connection, 2, "session");
+    let session_id = session["result"]["session"]["sessionId"].as_str().unwrap();
+    let thread = create_thread(&server, &mut connection, 3, "thread", session_id, 1);
+    let thread_id = thread["result"]["threadId"].as_str().unwrap();
+    let thread_id = zeta_protocol::ThreadId::new(thread_id).unwrap();
+    let session_id = zeta_protocol::SessionId::new(session_id).unwrap();
+    let started = server
+        .sessions()
+        .threads()
+        .start_turn(
+            &thread_id,
+            StartTurnRequest {
+                command_id: CommandId::new("approval-turn").unwrap(),
+                expected_sequence: zeta_core::SequenceExpectation::Exact(1),
+                input: vec![UserInput::Text {
+                    text: "approve".into(),
+                }],
+            },
+        )
+        .unwrap();
+    server
+        .sessions()
+        .threads()
+        .request_turn_interaction(
+            &thread_id,
+            &started.turn_id,
+            RequestTurnInteraction {
+                request_id: RequestId::new("approval-1").unwrap(),
+                item_id: None,
+                request: AgentRequest::Approval {
+                    request: ActionApprovalRequest {
+                        action_digest: "a".repeat(64),
+                        policy_revision: "policy-1".into(),
+                        capabilities: vec![ActionApprovalCapability {
+                            kind: ActionApprovalCapabilityKind::Network,
+                            scope: "api.example.com".into(),
+                        }],
+                        reason: "network requires approval".into(),
+                    },
+                },
+                deadline: None,
+            },
+        )
+        .unwrap();
+
+    let resolved = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":4,
+            "method":"turn/interaction/resolve",
+            "params":{
+                "commandId":"resolve-approval-1",
+                "sessionId":session_id,
+                "threadId":thread_id,
+                "turnId":started.turn_id,
+                "requestId":"approval-1",
+                "expectedSequence":5,
+                "response":{
+                    "type":"approval",
+                    "response":{"decision":"approveOnce"}
+                }
+            }
+        }),
+    );
+
+    assert_eq!(resolved["result"]["sequence"], 6);
+    let events = server
+        .sessions()
+        .threads()
+        .thread_updates_after(&thread_id, 5)
+        .unwrap();
+    assert!(matches!(
+        &events[0].update,
+        zeta_protocol::ThreadUpdate::Committed {
+            event: zeta_protocol::ThreadEvent::InteractionResolved {
+                response: zeta_protocol::AgentResponse::Approval { .. },
+                ..
+            }
+        }
+    ));
 }
 
 #[test]

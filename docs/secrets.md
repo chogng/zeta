@@ -4,6 +4,7 @@
 > - Rust crate：`zeta_secrets`
 > - 层次：host secret persistence primitive
 > - 当前实现：typed key/value、`load/store/delete` port、ephemeral memory backend、unavailable backend
+> - Crate 实现、安全义务与测试：[`zeta-rs/secrets/README.md`](../zeta-rs/secrets/README.md)
 > - Direct-provider credential：[`model-provider.md`](model-provider.md#6-provider-credential-与-subscription-backend)
 > - Interactive login control plane：[`login.md`](login.md)
 > - App Server 登录控制面：[`zeta-app-server-api.md`](zeta-app-server-api.md#11-account-与登录)

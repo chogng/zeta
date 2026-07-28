@@ -1,19 +1,20 @@
 use super::{AppServer, RpcError, decode, result};
 use serde_json::Value;
 use zeta_app_server_protocol::protocol::config::{
-    ConfigCommandDispositionDto, ConfigCommandResult, ConfigReadResult, ConfigUpdateParams,
-    McpCredentialBindingDto, McpServerConfigDto, McpServerEnablementDto, McpServerRemoveParams,
-    McpServerSetEnablementParams, McpServerUpsertParams, McpTransportDto, ModelRefDto,
-    ProviderConfigDto, ProviderConfigureParams, ProviderRemoveParams, SkillSourceAddParams,
-    SkillSourceConfigDto, SkillSourceEnablementDto, SkillSourceRemoveParams,
-    SkillSourceSetEnablementParams, ThemeDto,
+    ApprovalReviewModelSelectionDto, ConfigCommandDispositionDto, ConfigCommandResult,
+    ConfigReadResult, ConfigUpdateParams, McpCredentialBindingDto, McpServerConfigDto,
+    McpServerEnablementDto, McpServerRemoveParams, McpServerSetEnablementParams,
+    McpServerUpsertParams, McpTransportDto, ModelRefDto, ProviderConfigDto,
+    ProviderConfigureParams, ProviderRemoveParams, SkillSourceAddParams, SkillSourceConfigDto,
+    SkillSourceEnablementDto, SkillSourceRemoveParams, SkillSourceSetEnablementParams, ThemeDto,
 };
 use zeta_app_server_protocol::protocol::error::AppServerErrorName;
 use zeta_config::{
-    ConfigCommandDisposition, ConfigCommandError, ConfigCommandRequest, ConfigRevision,
-    McpCredentialBinding, McpServerConfig, McpServerEnablement, McpServerId, McpTransportConfig,
-    PreferencesUpdate, ResolvedConfigSnapshot, SkillSourceConfig, SkillSourceEnablement,
-    SkillSourceId, Theme, UserConfigCommand,
+    ApprovalReviewModelSelection, ConfigCommandDisposition, ConfigCommandError,
+    ConfigCommandRequest, ConfigRevision, McpCredentialBinding, McpServerConfig,
+    McpServerEnablement, McpServerId, McpTransportConfig, PreferencesUpdate,
+    ResolvedConfigSnapshot, SkillSourceConfig, SkillSourceEnablement, SkillSourceId, Theme,
+    UserConfigCommand,
 };
 use zeta_model_provider::{ModelId, ModelRef, ProviderId};
 use zeta_model_provider_config::ModelProviderConfig;
@@ -42,6 +43,9 @@ impl AppServer {
                 expected_revision: ConfigRevision::new(params.expected_revision),
                 command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
                     preferred_model: model_ref_update_from_dto(params.preferred_model)?,
+                    approval_review_model: approval_review_model_update_from_dto(
+                        params.approval_review_model,
+                    )?,
                     theme: params.theme.map(theme_from_dto),
                 }),
             })
@@ -221,6 +225,7 @@ fn config_read_result(snapshot: ResolvedConfigSnapshot) -> ConfigReadResult {
         revision: snapshot.revision.get(),
         generation: snapshot.generation.get(),
         preferred_model: snapshot.values.preferred_model.map(model_ref_dto),
+        approval_review_model: approval_review_model_dto(snapshot.values.approval_review_model),
         theme: snapshot.values.theme.map(theme_dto),
         providers: snapshot
             .values
@@ -293,6 +298,42 @@ fn model_ref_update_from_dto(update: Patch<ModelRefDto>) -> Result<Patch<ModelRe
         Patch::Missing => Ok(Patch::Missing),
         Patch::Null => Ok(Patch::Null),
         Patch::Value(model_ref) => model_ref_from_dto(model_ref).map(Patch::Value),
+    }
+}
+
+fn approval_review_model_dto(
+    selection: ApprovalReviewModelSelection,
+) -> ApprovalReviewModelSelectionDto {
+    match selection {
+        ApprovalReviewModelSelection::Automatic => ApprovalReviewModelSelectionDto::Automatic,
+        ApprovalReviewModelSelection::Explicit { model } => {
+            ApprovalReviewModelSelectionDto::Explicit {
+                model: model_ref_dto(model),
+            }
+        }
+    }
+}
+
+fn approval_review_model_from_dto(
+    selection: ApprovalReviewModelSelectionDto,
+) -> Result<ApprovalReviewModelSelection, RpcError> {
+    match selection {
+        ApprovalReviewModelSelectionDto::Automatic => Ok(ApprovalReviewModelSelection::Automatic),
+        ApprovalReviewModelSelectionDto::Explicit { model } => {
+            Ok(ApprovalReviewModelSelection::Explicit {
+                model: model_ref_from_dto(model)?,
+            })
+        }
+    }
+}
+
+fn approval_review_model_update_from_dto(
+    update: Patch<ApprovalReviewModelSelectionDto>,
+) -> Result<Patch<ApprovalReviewModelSelection>, RpcError> {
+    match update {
+        Patch::Missing => Ok(Patch::Missing),
+        Patch::Null => Ok(Patch::Null),
+        Patch::Value(selection) => approval_review_model_from_dto(selection).map(Patch::Value),
     }
 }
 

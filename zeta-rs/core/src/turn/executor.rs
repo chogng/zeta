@@ -1,6 +1,8 @@
+use super::tool_scheduler::{ToolScheduler, ToolSchedulingProgress};
+use crate::policy_service::UnavailablePolicyService;
 use crate::{
     CompletedTurn, ContextAssembler, CoreError, ModelService, ModelStreamSink, NoThreadUpdates,
-    NoTools, ThreadController, ThreadUpdateSink, ToolCallOutput, ToolExecutionOutput, ToolService,
+    NoTools, PolicyService, ThreadController, ThreadUpdateSink, ToolService,
 };
 use std::num::NonZeroUsize;
 use std::sync::Arc;
@@ -41,8 +43,15 @@ pub struct TurnExecutor {
     threads: Arc<ThreadController>,
     model: Arc<dyn ModelService>,
     tools: Arc<dyn ToolService>,
+    policy: Arc<dyn PolicyService>,
     limits: TurnExecutionLimits,
     updates: Arc<dyn ThreadUpdateSink>,
+}
+
+/// Terminal result of one executor run.
+pub enum TurnExecutionOutcome {
+    Completed(CompletedTurn),
+    WaitingForApproval,
 }
 
 impl TurnExecutor {
@@ -50,12 +59,14 @@ impl TurnExecutor {
         threads: Arc<ThreadController>,
         model: Arc<dyn ModelService>,
         tools: Arc<dyn ToolService>,
+        policy: Arc<dyn PolicyService>,
         limits: TurnExecutionLimits,
     ) -> Self {
         Self {
             threads,
             model,
             tools,
+            policy,
             limits,
             updates: Arc::new(NoThreadUpdates),
         }
@@ -66,6 +77,7 @@ impl TurnExecutor {
             threads,
             model,
             Arc::new(NoTools),
+            Arc::new(UnavailablePolicyService),
             TurnExecutionLimits::default(),
         )
     }
@@ -90,12 +102,32 @@ impl TurnExecutor {
             })
     }
 
+    /// Enqueues every recovered running Turn that owns an unresolved durable Tool Call.
+    ///
+    /// Hosts should call this only after installing the same tool and policy services used for
+    /// normal execution. A call that crossed its durable execution-start boundary is converted
+    /// into an unknown-outcome Tool failure and is never replayed.
+    pub fn resume_recovered_tool_continuations(&self) -> Result<usize, CoreError> {
+        let mut resumed = 0;
+        for snapshot in self.threads.list_threads()? {
+            for turn in &snapshot.turns {
+                if turn.status == TurnStatus::Running
+                    && snapshot.has_resumable_tool_continuation(&turn.turn_id)
+                {
+                    self.start(&snapshot.thread_id, &turn.turn_id)?;
+                    resumed += 1;
+                }
+            }
+        }
+        Ok(resumed)
+    }
+
     pub fn execute(
         &self,
         thread_id: &ThreadId,
         turn_id: &TurnId,
         cancellation: &CancellationToken,
-    ) -> Result<CompletedTurn, CoreError> {
+    ) -> Result<TurnExecutionOutcome, CoreError> {
         let sequence_before_execution = self
             .threads
             .read_thread(thread_id)
@@ -104,6 +136,10 @@ impl TurnExecutor {
         let result = match self.execute_steps(thread_id, turn_id, cancellation) {
             Ok(completion) => Ok(completion),
             Err(ExecutionFailure::Cancelled(error)) => {
+                self.threads.interrupt_execution(thread_id, turn_id)?;
+                Err(error)
+            }
+            Err(ExecutionFailure::Interrupted(error)) => {
                 self.threads.interrupt_execution(thread_id, turn_id)?;
                 Err(error)
             }
@@ -121,9 +157,17 @@ impl TurnExecutor {
         thread_id: &ThreadId,
         turn_id: &TurnId,
         cancellation: &CancellationToken,
-    ) -> Result<CompletedTurn, ExecutionFailure> {
+    ) -> Result<TurnExecutionOutcome, ExecutionFailure> {
         check_cancellation(cancellation)?;
         self.require_running_turn(thread_id, turn_id)?;
+        if matches!(
+            self.tool_scheduler()
+                .run_pending(thread_id, turn_id, cancellation)
+                .map_err(ExecutionFailure::service)?,
+            ToolSchedulingProgress::WaitingForApproval
+        ) {
+            return Ok(TurnExecutionOutcome::WaitingForApproval);
+        }
         let tools = self.tools.definitions();
 
         for _ in 0..self.limits.max_model_invocations.get() {
@@ -164,7 +208,9 @@ impl TurnExecutor {
                         .complete_turn_with_agent_message(thread_id, turn_id, item_id, text),
                     None => self.threads.complete_turn(thread_id, turn_id, text),
                 };
-                return completion.map_err(ExecutionFailure::persistence);
+                return completion
+                    .map(TurnExecutionOutcome::Completed)
+                    .map_err(ExecutionFailure::persistence);
             }
 
             if !text.trim().is_empty() {
@@ -176,7 +222,12 @@ impl TurnExecutor {
                 }
                 .map_err(ExecutionFailure::persistence)?;
             }
-            self.execute_tools(thread_id, turn_id, &tool_calls, cancellation)?;
+            if matches!(
+                self.execute_tools(thread_id, turn_id, &tool_calls, cancellation)?,
+                ToolSchedulingProgress::WaitingForApproval
+            ) {
+                return Ok(TurnExecutionOutcome::WaitingForApproval);
+            }
         }
 
         Err(ExecutionFailure::model(CoreError::Execution(format!(
@@ -250,34 +301,23 @@ impl TurnExecutor {
         turn_id: &TurnId,
         calls: &[ToolCall],
         cancellation: &CancellationToken,
-    ) -> Result<(), ExecutionFailure> {
+    ) -> Result<ToolSchedulingProgress, ExecutionFailure> {
         for call in calls {
             self.threads
                 .record_model_tool_call(thread_id, turn_id, call)
                 .map_err(ExecutionFailure::persistence)?;
         }
-        for call in calls {
-            check_cancellation(cancellation)?;
-            let output = self
-                .tools
-                .execute(call, cancellation)
-                .map_err(ExecutionFailure::service)?;
-            let output = match output {
-                ToolExecutionOutput::Success(text) => ToolCallOutput::Success(text),
-                ToolExecutionOutput::Failure(text) => ToolCallOutput::Failure(text),
-            };
-            self.threads
-                .record_tool_result(
-                    thread_id,
-                    turn_id,
-                    crate::RecordToolResultRequest {
-                        tool_call_id: call.id.clone(),
-                        output,
-                    },
-                )
-                .map_err(ExecutionFailure::persistence)?;
-        }
-        Ok(())
+        self.tool_scheduler()
+            .run_pending(thread_id, turn_id, cancellation)
+            .map_err(ExecutionFailure::service)
+    }
+
+    fn tool_scheduler(&self) -> ToolScheduler {
+        ToolScheduler::new(
+            self.threads.clone(),
+            self.tools.clone(),
+            self.policy.clone(),
+        )
     }
 }
 
@@ -426,6 +466,7 @@ fn final_text(response: &ModelResponse, stream: &InvocationStream) -> String {
 
 enum ExecutionFailure {
     Cancelled(CoreError),
+    Interrupted(CoreError),
     Failed {
         error: CoreError,
         stable: StableTurnError,
@@ -443,6 +484,7 @@ impl ExecutionFailure {
     fn service(error: CoreError) -> Self {
         match error {
             CoreError::Cancelled(_) => Self::Cancelled(error),
+            CoreError::PolicyCircuitBreaker(_) => Self::Interrupted(error),
             _ => Self::model(error),
         }
     }

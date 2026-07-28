@@ -14,6 +14,19 @@ pub struct ModelRefDto {
     pub model: String,
 }
 
+/// User-facing selection for the model that reviews approval requests.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    tag = "type"
+)]
+#[ts(rename = "ApprovalReviewModelSelection")]
+pub enum ApprovalReviewModelSelectionDto {
+    Automatic,
+    Explicit { model: ModelRefDto },
+}
+
 /// Non-secret declarative provider settings exposed through the App Server contract.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -97,6 +110,7 @@ pub struct ConfigReadResult {
     #[ts(type = "number")]
     pub generation: u64,
     pub preferred_model: Option<ModelRefDto>,
+    pub approval_review_model: ApprovalReviewModelSelectionDto,
     pub theme: Option<ThemeDto>,
     pub providers: BTreeMap<String, ProviderConfigDto>,
     pub mcp_servers: BTreeMap<String, McpServerConfigDto>,
@@ -133,6 +147,10 @@ pub struct ConfigUpdateParams {
     #[schemars(with = "Option<ModelRefDto>")]
     #[ts(as = "Option<ModelRefDto>", optional = nullable)]
     pub preferred_model: Patch<ModelRefDto>,
+    #[serde(default, skip_serializing_if = "Patch::is_missing")]
+    #[schemars(with = "Option<ApprovalReviewModelSelectionDto>")]
+    #[ts(as = "Option<ApprovalReviewModelSelectionDto>", optional = nullable)]
+    pub approval_review_model: Patch<ApprovalReviewModelSelectionDto>,
     #[serde(default, skip_serializing_if = "Patch::is_missing")]
     #[schemars(with = "Option<ThemeDto>")]
     #[ts(as = "Option<ThemeDto>", optional = nullable)]

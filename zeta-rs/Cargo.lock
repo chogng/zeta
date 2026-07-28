@@ -1910,10 +1910,12 @@ dependencies = [
  "zeta-app-server-protocol",
  "zeta-app-server-transport",
  "zeta-async-utils",
+ "zeta-auto-review",
  "zeta-config",
  "zeta-core",
  "zeta-model-provider",
  "zeta-model-provider-config",
+ "zeta-policy",
  "zeta-protocol",
  "zeta-rollout",
 ]
@@ -1969,6 +1971,17 @@ name = "zeta-async-utils"
 version = "0.1.0"
 
 [[package]]
+name = "zeta-auto-review"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "zeta-async-utils",
+ "zeta-policy",
+ "zeta-sandboxing",
+]
+
+[[package]]
 name = "zeta-bwrap"
 version = "0.1.0"
 
@@ -2004,9 +2017,12 @@ dependencies = [
 name = "zeta-core"
 version = "0.1.0"
 dependencies = [
+ "serde",
  "serde_json",
  "zeta-async-utils",
+ "zeta-policy",
  "zeta-protocol",
+ "zeta-sandboxing",
  "zeta-session-store",
  "zeta-thread-store",
 ]
@@ -2087,6 +2103,16 @@ name = "zeta-pdf"
 version = "0.1.0"
 dependencies = [
  "pdfium-render",
+]
+
+[[package]]
+name = "zeta-policy"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "sha2",
+ "zeta-async-utils",
+ "zeta-sandboxing",
 ]
 
 [[package]]

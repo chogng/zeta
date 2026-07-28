@@ -9,8 +9,8 @@ pub(super) fn definition() -> ProviderDefinition {
         ApiProfile::OpenAiChatCompletions,
         "https://dashscope.aliyuncs.com/compatible-mode/v1",
     )
-    .with_models([Model::new(
+    .with_default_model(Model::new(
         ModelId::new("qwen-plus").expect("valid model ID"),
         "Qwen Plus",
-    )])
+    ))
 }

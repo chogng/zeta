@@ -82,6 +82,8 @@ fn snapshot(turn_id: TurnId, items: Vec<ThreadItem>) -> ThreadSnapshot {
         items,
         commands: Vec::<ThreadCommandSnapshot>::new(),
         seen_interaction_ids: BTreeSet::new(),
+        resolved_interactions: Vec::new(),
+        started_tool_calls: BTreeSet::new(),
     }
 }
 

@@ -2,11 +2,12 @@
 
 > 物理位置：`zeta-rs/protocol/`  
 > 当前状态：Session-first canonical contract 基础已落地，Agent 执行相关契约部分完成  
+> Crate 类型、helper 与同步修改关系：[`zeta-rs/protocol/README.md`](../zeta-rs/protocol/README.md)
 > 上层接口：[Zeta App Server API](zeta-app-server-api.md)  
 > 执行计划：[Zeta Agent 执行架构与演进方案](zeta-agent-runtime-architecture.md)
 
-> 文档所有权：本文件是 `zeta-protocol` 详细架构、当前审计与演进方案的唯一来源。其他总架构、
-> crate README 和客户端文档只保留各自边界与应用规则，并链接到这里。
+> 文档所有权：本文件拥有跨组件语义、当前审计与演进方向；crate README 拥有当前源码接口、
+> serialization invariant 与修改路径。
 
 ## 1. 结论
 

@@ -9,8 +9,8 @@ pub(super) fn definition() -> ProviderDefinition {
         ApiProfile::OpenAiChatCompletions,
         "https://api.minimax.io/v1",
     )
-    .with_models([Model::new(
+    .with_default_model(Model::new(
         ModelId::new("MiniMax-M3").expect("valid model ID"),
         "MiniMax M3",
-    )])
+    ))
 }

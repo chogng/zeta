@@ -4,7 +4,7 @@
 > - Rust crate：`zeta_client`
 > - 层次：Zeta API operation client、retry 与 stream framing
 > - 当前状态：typed unary request/response、安全 retry loop、增量 SSE framer 和 telemetry wrapper
->   已实现；底层 HTTP port 暂时仍在本 crate，后续迁入 `zeta-http-client`
+>   已实现；底层 HTTP port 与 production backend 已在 `zeta-http-client`
 > - 底层网络：[`zeta-http-client` README](../zeta-rs/http-client/README.md)
 > - API 协议层：[`zeta-api.md`](zeta-api.md)
 > - Provider runtime：[`model-provider.md`](model-provider.md)
@@ -319,7 +319,7 @@ provider.kind = openai | anthropic | custom
 
 禁止把 exact model ID、URL、header value、credential、prompt、tool arguments/output、reasoning、
 raw response body 或 stream payload 放进 operation log/label。底层完整规则以
-[`zeta-http-client` README](../zeta-rs/http-client/README.md#9-loggingtrace-与-metrics) 为准。
+[`zeta-http-client` README](../zeta-rs/http-client/README.md#telemetry) 为准。
 
 ## 8. Error
 

@@ -1,5 +1,8 @@
 # Zeta Agent 执行架构与演进方案
 
+> Cancellation tree 的当前实现与 race semantics 见
+> [`zeta-async-utils` README](../zeta-rs/async-utils/README.md)。
+>
 > 状态：Proposed  
 > 审查基线：`817e604af3a179d5ff70d14f4ed403a0f26cd47c` 加当前工作区改动  
 > 最后审查：2026-07-25  

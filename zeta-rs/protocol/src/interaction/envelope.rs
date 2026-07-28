@@ -1,6 +1,6 @@
 use crate::{
-    DynamicToolCall, DynamicToolResponse, ItemId, RequestId, RequestUserInput,
-    RequestUserInputResponse, SessionId, ThreadId, TurnId,
+    ActionApprovalRequest, ActionApprovalResponse, DynamicToolCall, DynamicToolResponse, ItemId,
+    RequestId, RequestUserInput, RequestUserInputResponse, SessionId, ThreadId, TurnId,
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -13,6 +13,7 @@ use ts_rs::TS;
     rename_all_fields = "camelCase"
 )]
 pub enum AgentRequest {
+    Approval { request: ActionApprovalRequest },
     UserInput { request: RequestUserInput },
     DynamicTool { call: DynamicToolCall },
 }
@@ -20,6 +21,7 @@ pub enum AgentRequest {
 impl AgentRequest {
     pub fn kind(&self) -> AgentInteractionKind {
         match self {
+            Self::Approval { .. } => AgentInteractionKind::Approval,
             Self::UserInput { .. } => AgentInteractionKind::UserInput,
             Self::DynamicTool { .. } => AgentInteractionKind::DynamicTool,
         }
@@ -29,6 +31,7 @@ impl AgentRequest {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub enum AgentInteractionKind {
+    Approval,
     UserInput,
     DynamicTool,
 }
@@ -112,6 +115,7 @@ pub struct AgentRequestEnvelope {
     rename_all_fields = "camelCase"
 )]
 pub enum AgentResponse {
+    Approval { response: ActionApprovalResponse },
     UserInput { response: RequestUserInputResponse },
     DynamicTool { response: DynamicToolResponse },
 }
@@ -119,6 +123,7 @@ pub enum AgentResponse {
 impl AgentResponse {
     pub fn kind(&self) -> AgentInteractionKind {
         match self {
+            Self::Approval { .. } => AgentInteractionKind::Approval,
             Self::UserInput { .. } => AgentInteractionKind::UserInput,
             Self::DynamicTool { .. } => AgentInteractionKind::DynamicTool,
         }

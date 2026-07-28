@@ -1,79 +1,117 @@
-# Model providers
+# `zeta-model-provider`
 
-The canonical architecture and evolution plan is
-[`docs/model-provider.md`](../../docs/model-provider.md).
+> 本 README 解释 provider runtime instantiation、adapter selection 与 immutable model invoker。
+> Declarative config 见 [`zeta-model-provider-config`](../model-provider-config/README.md)，跨系统
+> credential/provider 设计见 [`docs/model-provider.md`](../../docs/model-provider.md)。
 
-This crate turns validated declarative configuration into runnable provider instances. Models are
-uniquely selected by `(ProviderId, ModelId)`:
+`zeta-model-provider` 把 validated declarative config 与 `ModelRef(provider, model)` 解析成
+`Arc<dyn ModelInvoker>`。它选择 provider runtime 和 API profile；wire codec 属于 `zeta-api`，
+operation retry/framing 属于 `zeta-client`，socket/TLS/proxy 属于 `zeta-http-client`。
 
-```json
-{
-  "provider": "openai",
-  "model": "gpt-5.6"
-}
+## Public contract
+
+| Symbol | 职责 | 生命周期 |
+| --- | --- | --- |
+| `ModelProvider` | `ModelRuntimeRequest → ModelInvoker` port | composition/invocation safe point |
+| `ModelProviderRuntime` | built-in concrete resolver | 持有 config registry + shared operation client |
+| `ModelRuntimeRequest` | exact `ModelRef + ModelProviderConfig` | immutable selection request |
+| `ModelInvoker` | canonical `ModelRequest → ModelResponse` | one immutable provider/model snapshot |
+| `Provider` | normalized provider runtime | definition、config、private adapter、client |
+| `UnavailableModel` | explicit failing invoker | host 无法配置 model 时 fail closed |
+| `EchoModel` | deterministic test/local fixture | 不是 production model |
+| `ModelProviderError` | config/model/API/unavailable error | 保留 failure domain |
+
+App Server 应在每次 model invocation safe point 重新 resolve invoker；config update 影响下一次
+invocation，不原地修改已经运行的 `RegisteredModelInvoker`。
+
+## 内部接口地图
+
+| Symbol | 可见性 | 当前职责 | 方向约束 |
+| --- | --- | --- | --- |
+| `ModelProviderRuntime::instantiate_normalized` | private method | definition lookup + `Provider::instantiate` | normalization success 后 provider 必须存在 |
+| `Provider::instantiate` | crate-private | enforce definition/config ID equality，materialize adapter | 不读取 mutable config/credential store |
+| `providers::instantiate` | crate-private function | exhaustive `ProviderAdapter` enum dispatch | provider selection 唯一 switch |
+| `ProviderAdapter` | crate-private trait | protocol + complete against `OperationClient` | 不暴露给 Core/public config |
+| `api_endpoint` | private function | `ApiProfile → zeta_api::ApiEndpoint` | 按 profile，不按 provider name 猜 |
+| provider `*Adapter::new` | crate-private | normalized base URL + fixed headers + endpoint | one immutable runtime snapshot |
+| `Provider::resolve_model` | private method | listed lookup 或 allow-unlisted synthetic model | 不做远端 catalog request |
+| `RegisteredModelInvoker` | private struct | bind exact Provider + resolved Model | request 时只应用 normalized defaults |
+| `RegisteredModelInvoker::invoke` | private trait impl | clone canonical request、apply max tokens、complete | 不读取 product config |
+
+## Runtime 调用图
+
+```text
+ModelProviderRuntime::runtime(ModelRuntimeRequest)
+└─ build_model(config, model_ref)
+   ├─ ProviderConfigRegistry::normalize_for
+   ├─ instantiate_normalized
+   │  ├─ registry.get(definition)
+   │  └─ Provider::instantiate
+   │     └─ providers::instantiate(adapter kind, normalized config)
+   └─ Provider::build_model(model_id)
+      ├─ Provider::resolve_model
+      └─ RegisteredModelInvoker { provider, model }
+
+RegisteredModelInvoker::invoke(request)
+├─ clone canonical ModelRequest
+├─ apply normalized max_output_tokens
+└─ Provider::complete
+   ├─ resolve_model
+   └─ ProviderAdapter::complete
+      └─ zeta_api::ApiEndpoint::complete_with_client
+         └─ OperationClient
 ```
 
-The sibling `zeta-model-provider-config` crate owns serializable configuration, schemas, static
-validation, normalization rules, built-in definitions, and registry merging. This runtime crate
-owns endpoint resolution results, provider-specific API profile selection,
-credential/deployment runtime headers, retry policy selection, and runtime errors.
-Protocol-required headers and Provider wire codecs belong to `zeta-api`; shared HTTP/WebSocket
-execution and network policy belong to `zeta-http-client`, while operation retry and SSE/NDJSON
-framing belong to `zeta-client`.
+`Provider::complete` 再次 resolve model，因此 direct Provider callers 与 bound invoker 使用相同
+catalog policy。
 
-Wire request, response, and event conversion is implemented by endpoint/profile codecs in the
-sibling `zeta-api` crate. Provider selection happens only in this crate. Compatible providers may
-share an API codec, but the runtime must select any verified compatibility profile explicitly.
+## Provider adapter pattern
 
-Provider-specific runtime adapters are kept in `src/providers/`, one module per external service.
-Zeta uses the provider-neutral `ModelProvider` interface in `src/provider.rs`; callers submit a
-model selection and `ModelProviderConfig`, without constructing API clients or branching on an
-adapter identity. `ModelProviderRuntime` is the concrete process-local implementation and owns the
-configuration registry plus a client handle. There is intentionally no second Provider registry
-in `zeta-api`.
+每个 `src/providers/<name>.rs` 定义 private adapter，通常持有：
 
-Boundary rules:
+- `ResolvedApiTarget`：normalized base URL 与 fixed headers；
+- `ApiEndpoint`：由 declarative `ApiProfile` 映射；
+- 必要 provider-fixed header。
 
-- `zeta-model-provider-config` must not depend on API clients, transports, credentials, or Core.
-- `zeta-model-provider` may depend on configuration declarations, but the configuration crate must
-  never depend back on the runtime crate.
-- endpoint defaults belong to provider definitions; resolved endpoints belong to runtime
-  `Provider` instances.
-- adapter identifiers are serializable declarations; concrete `zeta-api` endpoint/profile bindings
-  and fixed runtime headers are process-local values.
-- configuration failures are returned as `ProviderConfigError`; adapter and transport failures are
-  returned as `ModelProviderError`.
-- configuration may serialize credential references or auth policy, but secret lookup, token
-  refresh, scope validation, and header/signature materialization remain runtime behavior.
+Adapter 不手写 request JSON；它委托 `zeta-api` codec。相同 provider adapter 可以选择不同
+profile，但只有 configuration definition 可以决定 profile。
 
-Direct-provider credential lifecycle, including API-key materialization, cloud-identity adapters,
-scope validation, refresh, and request signing, belongs to this runtime crate. Opaque secret
-persistence is delegated to the sibling `zeta-secrets` crate; API and network client layers never
-read the secret store. The exact long-term ownership is documented in
-[`docs/model-provider.md`](../../docs/model-provider.md#6-provider-credential-与-subscription-backend).
+新增 provider/profile 时同步检查 config enum/definition、`providers::instantiate` exhaustive match、
+`api_endpoint`、fixed headers、codec support、fake transport tests 和系统 provider matrix。
 
-ChatGPT/Codex subscription login and credential refresh do **not** belong to this crate. Zeta uses
-an injected subscription backend implemented by `zeta-codex-app-server`, which controls the local
-upstream Codex App Server; its public architecture is in
-[`docs/codex-app-server.md`](../../docs/codex-app-server.md). This crate never reads Codex token
-storage or invokes the private ChatGPT/Codex backend directly.
+## Error 与 model catalog
 
-The local App Server resolves a fresh immutable model runtime from the latest authoritative Config
-at the start of every model invocation. A configuration update therefore affects the next
-invocation without mutating one already in flight.
+| Path | Error |
+| --- | --- |
+| invalid/unknown/mismatched config | `ModelProviderError::Config` |
+| listed-only unknown model | `ModelNotRegistered` |
+| wire/operation codec failure | `Api(ApiError)` |
+| explicitly unavailable host model | `Unavailable` |
 
-| Provider | ID | Default base URL | Runtime API profile | Reference |
-| --- | --- | --- | --- | --- |
-| OpenAI (GPT) | `openai` | `https://api.openai.com/v1` | Responses API | [Responses API](https://developers.openai.com/api/reference/resources/responses/methods/create) |
-| OpenAI-compatible | `openai-compatible` | Custom URL required | Chat Completions | Provider-specific compatibility documentation |
-| Anthropic (Claude) | `anthropic` | `https://api.anthropic.com` | Messages API and version header | [Messages API](https://docs.anthropic.com/en/api/messages) |
-| Google (Gemini) | `google` | `https://generativelanguage.googleapis.com/v1beta/openai` | Current Chat Completions profile; native Gemini is a separate future profile | [OpenAI compatibility](https://ai.google.dev/gemini-api/docs/openai) |
-| xAI (Grok) | `xai` | `https://api.x.ai/v1` | Chat Completions | [Chat Completions](https://docs.x.ai/developers/model-capabilities/legacy/chat-completions) |
-| Qwen | `qwen` | `https://dashscope.aliyuncs.com/compatible-mode/v1` | Chat Completions | [OpenAI-compatible Chat](https://help.aliyun.com/en/model-studio/compatibility-of-openai-with-dashscope) |
-| Kimi | `kimi` | `https://api.moonshot.ai/v1` | Configured Chat Completions contract; advanced wire behavior remains unverified | [Kimi API Platform](https://platform.moonshot.ai/docs/) |
-| DeepSeek | `deepseek` | `https://api.deepseek.com` | Chat Completions | [API quickstart](https://api-docs.deepseek.com/) |
-| Ollama | `ollama` | `http://localhost:11434/v1` | Local Chat Completions | [OpenAI compatibility](https://docs.ollama.com/api/openai-compatibility) |
-| Hugging Face | `huggingface` | `https://router.huggingface.co/v1` | Chat Completions | [Inference Providers](https://huggingface.co/docs/inference-providers/index) |
-| Z.AI (GLM) | `zai` | `https://api.z.ai/api/paas/v4` | Chat Completions and language header | [Chat Completion API](https://docs.z.ai/api-reference/llm/chat-completion) |
-| MiniMax | `minimax` | `https://api.minimax.io/v1` | Current Chat Completions profile; official Anthropic-compatible profile is a separate option | [API documentation](https://platform.minimax.io/docs) |
-| Xiaomi MiMo | `mimo` | `https://api.xiaomimimo.com/v1` | Configured Chat Completions contract; official wire reference still required | No verified public reference |
+`AllowUnlisted` 只创建 `Model::new(id, id)` 作为 runtime selection，不证明 entitlement、capability 或
+remote availability。`ListedOnly` 在任何 network call 前拒绝。
+
+## 方向偏差检查
+
+- Core 按 provider ID branch：provider selection 泄漏出 runtime crate；
+- runtime 根据 URL 猜 profile：declarative config 被绕过；
+- provider adapter 自己序列化 wire JSON：codec ownership 从 `zeta-api` 漂移；
+- adapter 直接构造 ureq/reqwest client：network substrate/retry ownership 漂移；
+- `RegisteredModelInvoker` 读取 mutable config：safe-point snapshot 被破坏；
+- `EchoModel` 出现在 production fallback：配置失败被静默掩盖；
+- API/network layer 读取 secret store：credential lifecycle 下沉到错误层。
+
+## 测试、限制与演进
+
+```text
+cargo test -p zeta-model-provider
+bazel test //zeta-rs/model-provider:model-provider-unit-tests
+```
+
+Tests 使用 injected `OperationClient` 捕获 request，覆盖 Responses/Chat/Anthropic profile、structured
+tools、custom endpoint、defaults、provider mismatch、catalog policy、fixed header 和默认 HTTP
+transport。
+
+当前 invocation 是同步 unary；credential materialization、subscription backend、streaming 与动态
+catalog 的长期设计仍在系统文档中演进。新增能力应保持 invoker immutable、profile explicit、
+provider adapter private，以及 config/codec/operation/network 四层分离。

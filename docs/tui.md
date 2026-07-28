@@ -2,6 +2,7 @@
 
 > 物理位置：`zeta-rs/tui/`  
 > 宿主：`zeta-rs/cli/`  
+> 当前实现接口与事件循环：[`zeta-rs/tui/README.md`](../zeta-rs/tui/README.md)
 > 产品接口基线：[`zeta-app-server-api.md`](zeta-app-server-api.md)  
 > App Server 启动与连接基线：[`app-server-client.md`](app-server-client.md)  
 > Workspace 边界基线：[`zeta-rs-architecture.md`](zeta-rs-architecture.md)

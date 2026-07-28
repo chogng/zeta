@@ -1,10 +1,24 @@
 use crate::{
     AgentResponse, InteractionCancelReason, RequestId, SessionId, StableTurnError, ThreadId,
-    ThreadItem, TurnId, TurnInteraction,
+    ThreadItem, ToolCallId, TurnId, TurnInteraction,
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
+
+/// Durable authority selected before a Tool Call crosses its side-effect boundary.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum ToolExecutionAuthority {
+    Sandboxed,
+    UnsandboxedGrant { grant_id: String },
+    AutoReviewed { assessment_id: String },
+    ApprovedOnce { request_id: RequestId },
+}
 
 /// A durable fact in one Thread's authoritative event stream.
 ///
@@ -46,6 +60,14 @@ pub enum ThreadEvent {
         request_id: RequestId,
         response: AgentResponse,
     },
+    ToolExecutionStarted {
+        thread_id: ThreadId,
+        turn_id: TurnId,
+        tool_call_id: ToolCallId,
+        action_digest: String,
+        policy_revision: String,
+        authority: ToolExecutionAuthority,
+    },
     InteractionCancelled {
         thread_id: ThreadId,
         turn_id: TurnId,
@@ -80,6 +102,7 @@ impl ThreadEvent {
             Self::ItemCompleted { .. } => "item.completed",
             Self::InteractionRequested { .. } => "interaction.requested",
             Self::InteractionResolved { .. } => "interaction.resolved",
+            Self::ToolExecutionStarted { .. } => "tool.execution_started",
             Self::InteractionCancelled { .. } => "interaction.cancelled",
             Self::TurnCompleted { .. } => "turn.completed",
             Self::TurnFailed { .. } => "turn.failed",
@@ -96,6 +119,7 @@ impl ThreadEvent {
             | Self::ItemCompleted { thread_id, .. }
             | Self::InteractionRequested { thread_id, .. }
             | Self::InteractionResolved { thread_id, .. }
+            | Self::ToolExecutionStarted { thread_id, .. }
             | Self::InteractionCancelled { thread_id, .. }
             | Self::TurnCompleted { thread_id, .. }
             | Self::TurnFailed { thread_id, .. }

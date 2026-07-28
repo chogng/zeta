@@ -6,6 +6,7 @@ use crate::ThreadSnapshot;
 use crate::ThreadStore;
 use crate::WriterLease;
 use crate::reduce_thread_event;
+use crate::thread_reducer::validate_agent_request;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -154,6 +155,13 @@ pub struct RecordToolResultRequest {
 pub struct RecordedToolResult {
     pub item: ThreadItem,
     pub sequence: u64,
+}
+
+pub(crate) struct RecordToolExecutionStart {
+    pub tool_call_id: ToolCallId,
+    pub action_digest: String,
+    pub policy_revision: String,
+    pub authority: zeta_protocol::ToolExecutionAuthority,
 }
 
 enum BatchCommand {
@@ -358,6 +366,7 @@ impl ThreadController {
         request: RequestTurnInteraction,
     ) -> Result<RequestedTurnInteraction, CoreError> {
         validate_request_id(&request.request_id)?;
+        validate_agent_request(&request.request).map_err(CoreError::InvalidInput)?;
         let interaction = TurnInteraction {
             request_id: request.request_id,
             item_id: request.item_id,
@@ -692,7 +701,8 @@ impl ThreadController {
                     | crate::TurnStatus::WaitingForApproval
                     | crate::TurnStatus::WaitingForUserInput
                     | crate::TurnStatus::WaitingForCapability
-            ) {
+            ) && !snapshot.has_resumable_tool_continuation(&turn.turn_id)
+            {
                 if turn.status != crate::TurnStatus::Cancelling {
                     recovery_events.push(ThreadEvent::TurnCancelling {
                         thread_id: thread_id.clone(),
@@ -886,6 +896,11 @@ fn validate_request_id(request_id: &RequestId) -> Result<(), CoreError> {
 
 fn resolution_command(request: &ResolveTurnInteractionRequest) -> ThreadCommand {
     match &request.response {
+        AgentResponse::Approval { response } => ThreadCommand::ResolveApproval {
+            turn_id: request.turn_id.clone(),
+            request_id: request.request_id.clone(),
+            response: response.clone(),
+        },
         AgentResponse::UserInput { response } => ThreadCommand::ResolveUserInput {
             turn_id: request.turn_id.clone(),
             request_id: request.request_id.clone(),

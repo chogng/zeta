@@ -3,8 +3,9 @@
 > - 物理位置：`zeta-rs/model-provider/`
 > - Rust crate：`zeta_model_provider`
 > - 层次：Provider 运行时与选择层
-> - 当前状态：同步 unary runtime 已直接组合 `zeta-api` endpoint profile 与当前
->   `zeta-client` 临时 transport；credential、完整 retry execution 和 streaming 尚未实现
+> - 当前状态：同步 unary runtime 已直接组合 `zeta-api` endpoint profile、`zeta-client`
+>   operation retry 与 `zeta-http-client` transport；credential 与 streaming 尚未实现
+> - Crate 实现与 adapter 调用图：[`zeta-rs/model-provider/README.md`](../zeta-rs/model-provider/README.md)
 > - 声明配置层：[`model-provider-config.md`](model-provider-config.md)
 > - API 协议层：[`zeta-api.md`](zeta-api.md)
 > - Operation client：[`zeta-client.md`](zeta-client.md)

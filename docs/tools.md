@@ -74,7 +74,8 @@ Core durable Tool Call / Tool Result lifecycle
   `ContentPart`、`ImageDetail` 和 durable `ThreadItem::ToolCall/ToolResult`；
 - `zeta-protocol` 已定义 `DynamicToolSpec`、`DynamicToolCall`、`DynamicToolResponse` 和对应
   Agent interaction；
-- `zeta-core` 已定义最小 `ToolService` port，并完成顺序 model → tool → model vertical slice；
+- `zeta-core` 已定义 `ToolService::prepare/execute` port，并完成 policy-gated、可恢复的顺序
+  model → tool → model vertical slice；
 - `zeta-core::ContextAssembler` 已能重建 Tool Call/Result pairing；
 - `zeta-api` 已分别把 canonical function tool 和图片 detail 转成 OpenAI Responses、
   Chat Completions 与 Anthropic Messages wire payload；
@@ -87,8 +88,9 @@ Core durable Tool Call / Tool Result lifecycle
 
 - `zeta-protocol::ToolDefinition` 只覆盖当前 model request 的最小 function schema，不能表达
   source、binding、deferred loading、namespace、freeform 或 runtime exposure；
-- `ToolService::definitions() + execute(call)` 把 registry snapshot、binding generation、
-  output type 和 uncertain outcome 压成了过窄接口；
+- 当前 `ToolService::definitions() + prepare(call) + execute(call, authorization)` 已分开
+  materialization、policy review 与 authorized execution，但 registry snapshot、binding
+  generation、rich output 和 reconciliation 仍需由 `zeta-tools` adapter 完整接入；
 - MCP 和 dynamic tool 都需要重复 schema 清洗、name collision、output conversion；
 - provider adapter 可能分别决定 namespace flattening、strict schema 和 image detail fallback；
 - tool search、Plugin discovery 和 install request 容易被混成一个有隐式副作用的“发现服务”；
@@ -189,6 +191,8 @@ Core 的 `ToolService` 是 consumer-owned port；它可以由外层 `ToolRegistr
 - `zeta-file-system → zeta-tools + zeta-sandboxing`；
 - `zeta-file-search → zeta-tools + zeta-sandboxing`；
 - `zeta-apply-patch → zeta-tools + zeta-sandboxing`；
+- `zeta-policy → zeta-sandboxing`；
+- `zeta-auto-review → zeta-policy + zeta-sandboxing`；
 - local process executor 可依赖 `zeta-sandboxing` 与当前平台 backend；Linux backend 仅通过
   `zeta-bwrap` 构造 Bubblewrap argv；
 - `zeta-api → zeta-tools + zeta-protocol`；
@@ -196,6 +200,8 @@ Core 的 `ToolService` 是 consumer-owned port；它可以由外层 `ToolRegistr
 
 Sandbox backend 的内部调度、平台 crate 边界和 fail-closed 规则见
 [`sandboxing.md`](sandboxing.md)。这里的 sandbox manager 不是 Core `ToolScheduler`。
+Action classifier、exact grant 与最终 execution decision 见
+[`auto-review.md`](auto-review.md)。
 
 禁止：
 

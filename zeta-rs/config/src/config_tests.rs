@@ -2,7 +2,7 @@ use super::*;
 use std::collections::BTreeMap;
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
-use zeta_model_provider_config::ModelProviderConfig;
+use zeta_model_provider_config::{ModelProviderConfig, ProviderConfigRegistry};
 use zeta_protocol::{CommandId, Patch, ProviderId};
 
 fn config_path(label: &str) -> std::path::PathBuf {
@@ -68,6 +68,7 @@ fn update_preferences(
         expected_revision: ConfigRevision::new(revision),
         command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
             preferred_model,
+            approval_review_model: Patch::Missing,
             theme,
         }),
     }
@@ -218,6 +219,89 @@ fn selected_model_must_reference_a_configured_provider() {
         ConfigRevision::INITIAL
     );
     remove_config_files(&path);
+}
+
+#[test]
+fn approval_review_model_is_explicit_and_keeps_its_provider_configured() {
+    let path = config_path("approval-review-model");
+    let store = ConfigStore::open(&path).unwrap();
+    assert_eq!(
+        store.read_snapshot().unwrap().values.approval_review_model,
+        ApprovalReviewModelSelection::Automatic
+    );
+
+    let missing_provider = store
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("select-missing-review-provider").unwrap(),
+            expected_revision: ConfigRevision::INITIAL,
+            command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+                preferred_model: Patch::Missing,
+                approval_review_model: Patch::Value(ApprovalReviewModelSelection::Explicit {
+                    model: model_ref("openai", "codex-auto-review"),
+                }),
+                theme: Patch::Missing,
+            }),
+        })
+        .unwrap_err();
+    assert!(matches!(missing_provider, ConfigCommandError::Config(_)));
+
+    let configured = configure_provider(&store, 0, "openai");
+    let selected = store
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("select-review-model").unwrap(),
+            expected_revision: configured.revision,
+            command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+                preferred_model: Patch::Missing,
+                approval_review_model: Patch::Value(ApprovalReviewModelSelection::Explicit {
+                    model: model_ref("openai", "codex-auto-review"),
+                }),
+                theme: Patch::Missing,
+            }),
+        })
+        .unwrap();
+    assert_eq!(
+        store.read_snapshot().unwrap().values.approval_review_model,
+        ApprovalReviewModelSelection::Explicit {
+            model: model_ref("openai", "codex-auto-review")
+        }
+    );
+
+    let remove_error = store
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("remove-review-provider").unwrap(),
+            expected_revision: selected.revision,
+            command: UserConfigCommand::RemoveProvider {
+                provider: provider_id("openai"),
+            },
+        })
+        .unwrap_err();
+    assert!(matches!(remove_error, ConfigCommandError::Config(_)));
+    remove_config_files(&path);
+}
+
+#[test]
+fn automatic_approval_review_follows_the_selected_model_provider() {
+    let resolved = ResolvedConfig {
+        preferred_model: Some(model_ref("anthropic", "claude-main")),
+        providers: BTreeMap::from([(
+            provider_id("anthropic"),
+            ModelProviderConfig::new(provider_id("anthropic")),
+        )]),
+        ..ResolvedConfig::default()
+    };
+
+    assert_eq!(
+        resolved
+            .selected_approval_review_provider()
+            .map(|provider| provider.provider.clone()),
+        Some(provider_id("anthropic"))
+    );
+    assert_eq!(
+        resolved
+            .resolve_approval_review_model(&ProviderConfigRegistry::builtin())
+            .unwrap(),
+        model_ref("anthropic", "claude-sonnet-4-20250514")
+    );
 }
 
 #[test]
