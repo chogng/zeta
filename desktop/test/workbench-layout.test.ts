@@ -25,15 +25,30 @@ for (const [name, value] of Object.entries({
 
 const { Dimension } = await import("../src/zeta/base/browser/geometry.js");
 const {
-  applyWorkbenchPartVisibilityContext,
   IWorkbenchLayoutService,
   WorkbenchLayout,
   workbenchPartIds,
 } = await import("../src/zeta/workbench/browser/layout.js");
+const {
+  bindWorkbenchPartVisibilityContextKeys,
+} = await import("../src/zeta/workbench/browser/contextkeys.js");
 const { WorkbenchPart } = await import("../src/zeta/workbench/browser/part.js");
+const { ActivitybarPart } = await import(
+  "../src/zeta/workbench/browser/parts/activitybar/activitybarPart.js"
+);
+const { SidebarPart } = await import(
+  "../src/zeta/workbench/browser/parts/sidebar/sidebarPart.js"
+);
 const { EditorPart } = await import(
   "../src/zeta/workbench/browser/parts/editor/editorPart.js"
 );
+const { ViewDescriptorService } = await import(
+  "../src/zeta/workbench/services/views/common/viewDescriptorService.js"
+);
+const {
+  ViewContainerLocation,
+  WorkbenchViewRegistry,
+} = await import("../src/zeta/workbench/common/views.js");
 const {
   ToggleAuxiliaryBarCommandId,
   ToggleSideBarCommandId,
@@ -129,12 +144,9 @@ test("Workbench layout hides and restores Parts with context keys", () => {
   harness.container.append(overlay);
   const contextKeys = new ContextKeyService();
   harness.disposables.add(contextKeys);
-  applyWorkbenchPartVisibilityContext(contextKeys, "sidebar", true);
-  applyWorkbenchPartVisibilityContext(contextKeys, "auxiliarybar", true);
-  applyWorkbenchPartVisibilityContext(contextKeys, "editor", true);
-  harness.disposables.add(harness.layout.onDidChangePartVisibility(
-    ({ partId, visible }) =>
-      applyWorkbenchPartVisibilityContext(contextKeys, partId, visible),
+  harness.disposables.add(bindWorkbenchPartVisibilityContextKeys(
+    contextKeys,
+    harness.layout,
   ));
 
   harness.layout.layout(new Dimension(1_000, 700));
@@ -146,7 +158,6 @@ test("Workbench layout hides and restores Parts with context keys", () => {
   assert.ok(overlay.isConnected);
   assert.ok(harness.container.querySelector("[data-part='sidebar']"));
   assert.equal(contextKeys.getValue("sideBarVisible"), true);
-
   harness.layout.hideParts(["sidebar", "auxiliarybar"]);
   assert.ok(overlay.isConnected);
   assert.equal(
@@ -165,7 +176,6 @@ test("Workbench layout hides and restores Parts with context keys", () => {
   assert.equal(contextKeys.getValue("sideBarVisible"), false);
   assert.equal(contextKeys.getValue("auxiliaryBarVisible"), false);
   assert.equal(contextKeys.getValue("editorAreaVisible"), true);
-
   harness.layout.showPart("sidebar");
   assert.equal(
     harness.container.querySelector<HTMLElement>(
@@ -239,11 +249,119 @@ test("Workbench layout retains resized Part dimensions across visibility", () =>
   harness.layout.showPart("sidebar");
   assert.equal(harness.layout.getPartSize("sidebar").width, 250);
   const restoredSidebarPane = harness.container.querySelector<HTMLElement>(
-    ".zeta-split-view-horizontal > .zeta-split-view-pane",
-  );
+    "[data-part='sidebar']",
+  )?.parentElement;
   assert.equal(restoredSidebarPane?.style.width, "250px");
 
   harness.disposables.dispose();
+  dom.window.close();
+});
+
+test("Activity Bar tracks and selects Sidebar View Containers", () => {
+  const dom = new JSDOM("<!doctype html><body></body>");
+  const disposables = new DisposableStore();
+  const registry = new WorkbenchViewRegistry();
+  disposables.add(registry.registerViewContainer({
+    id: "zeta.explorer",
+    title: "Explorer",
+    location: ViewContainerLocation.Sidebar,
+    order: 1,
+    isDefault: true,
+  }));
+  disposables.add(registry.registerViewContainer({
+    id: "zeta.search",
+    title: "Search",
+    location: ViewContainerLocation.Sidebar,
+    order: 2,
+  }));
+  disposables.add(registry.registerViewContainer({
+    id: "zeta.git",
+    title: "Git",
+    location: ViewContainerLocation.Sidebar,
+    order: 3,
+  }));
+  const contextKeys = disposables.add(new ContextKeyService());
+  const viewDescriptors = disposables.add(new ViewDescriptorService({
+    contextKeyService: contextKeys,
+    registry,
+  }));
+  const activitybar = disposables.add(new ActivitybarPart({
+    ownerDocument: dom.window.document,
+    viewDescriptorService: viewDescriptors,
+  }));
+  const sidebar = disposables.add(new SidebarPart(
+    dom.window.document,
+    activitybar,
+  ));
+  const selections: string[] = [];
+  disposables.add(activitybar.onDidSelectViewContainer(
+    ({ viewContainerId }) => selections.push(viewContainerId),
+  ));
+
+  assert.equal(
+    activitybar.element.querySelectorAll(".zeta-action-view-item").length,
+    3,
+  );
+  assert.deepEqual(
+    [...activitybar.element.querySelectorAll<HTMLElement>(
+      ".zeta-action-view-item",
+    )].map((item) => item.dataset.actionId),
+    ["zeta.explorer", "zeta.search", "zeta.git"],
+  );
+  assert.equal(activitybar.element.parentElement, sidebar.element);
+  assert.equal(sidebar.element.firstElementChild, activitybar.element);
+  assert.equal(
+    activitybar.element.className,
+    "zeta-activitybar-container",
+  );
+  const actionbar = activitybar.element.querySelector(
+    ":scope > .zeta-action-bar",
+  );
+  assert.equal(actionbar?.className, "zeta-action-bar");
+  assert.equal(actionbar?.getAttribute("role"), "tablist");
+  assert.deepEqual(
+    [...(actionbar?.children ?? [])].map((item) => item.className),
+    [
+      "zeta-action-view-item",
+      "zeta-action-view-item",
+      "zeta-action-view-item",
+    ],
+  );
+  assert.equal(
+    activitybar.element.querySelectorAll(
+      ".zeta-action-bar > .zeta-action-view-item",
+    ).length,
+    3,
+  );
+  assert.equal(
+    activitybar.element.querySelectorAll(
+      ".zeta-action-view-item > .zeta-action-label",
+    ).length,
+    3,
+  );
+  assert.equal(activitybar.element.querySelector("button"), null);
+  assert.equal(activitybar.element.hasAttribute("data-part"), false);
+  assert.equal(
+    activitybar.element.querySelector(".zeta-workbench-part-content"),
+    null,
+  );
+  activitybar.setActiveViewContainer("zeta.explorer");
+  assert.equal(
+    activitybar.element.querySelector<HTMLElement>(
+      "[data-action-id='zeta.explorer']",
+    )?.getAttribute("aria-selected"),
+    "true",
+  );
+  activitybar.element.querySelector<HTMLElement>(
+    "[data-action-id='zeta.explorer']",
+  )?.click();
+  assert.deepEqual(selections, []);
+  activitybar.element.querySelector<HTMLElement>(
+    "[data-action-id='zeta.search']",
+  )?.click();
+  assert.deepEqual(selections, ["zeta.search"]);
+
+  disposables.dispose();
   dom.window.close();
 });
 

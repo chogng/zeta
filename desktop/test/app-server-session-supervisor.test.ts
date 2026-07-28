@@ -66,6 +66,7 @@ class ProtocolChildProcess extends EventEmitter {
             threads: true,
             turns: true,
             resources: true,
+            fileSystem: true,
             typst: true,
             updateReplay: true,
           },

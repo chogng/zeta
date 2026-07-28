@@ -58,6 +58,10 @@ export function createDisconnectedRendererApi(): ZetaRendererApi {
       read: () => unavailable("resource.read"),
       release: () => unavailable("resource.release"),
     },
+    fs: {
+      getMetadata: () => unavailable("fs.getMetadata"),
+      readDirectory: () => unavailable("fs.readDirectory"),
+    },
     events: {
       subscribe: inertSubscription,
     },

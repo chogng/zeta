@@ -35,8 +35,10 @@ corepack pnpm --dir desktop start -- --folder C:\path\to\project
 corepack pnpm --dir desktop start -- --workspace C:\path\to\team.zeta-workspace
 ```
 
-当前版本只建立启动窗口的 Workspace 身份并选择相应窗口策略；目录内容读取、Workspace
-配置解析和运行时“打开项目”界面尚未实现。
+单目录启动时，当前版本会把目录作为 App Server 的受限 workspace root，并通过
+`fs/getMetadata`、`fs/readDirectory` 为 Renderer 的只读 Explorer 提供按需目录枚举。
+文件打开与编辑、写入/重命名、文件监听与自动刷新、多根 Workspace 配置解析，以及运行时
+“打开项目”界面尚未实现。
 
 代码中 `platform/workspace` 定义当前窗口的 Workspace 模型与上下文，
 `platform/workspaces` 负责启动目标解析和后续工作区管理能力。两者不是同一服务的单复数别名。

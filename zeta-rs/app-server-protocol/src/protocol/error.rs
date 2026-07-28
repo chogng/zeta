@@ -19,6 +19,8 @@ pub enum AppServerErrorName {
     ResourceTooLarge,
     InvalidResourceChunkSize,
     InvalidResourceOffset,
+    FileSystemUnavailable,
+    FileSystemOperationFailed,
     ConfigUnavailable,
     ConfigRevisionConflict,
 }

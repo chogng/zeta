@@ -21,6 +21,7 @@ JSONL / in-process caller
    ├─ SessionCoordinator / ThreadController
    ├─ TurnExecutor
    ├─ ConfigStore
+   ├─ optional WorkspaceFileSystem
    ├─ connection-owned ResourceStore
    └─ UpdateBroker → session/update, thread/update
 ```
@@ -43,8 +44,9 @@ request-ID set、notification queue 与 resource ownership；Session/Thread dura
 | `AppServer::create_resource` | 创建 5 分钟 TTL 的 connection-owned resource |
 | `AppServer::with_config_store` | 开启 config/provider/MCP/Skill RPC |
 | `AppServer::with_slash_command_catalog` | 安装 initialize 时下发的 immutable 动态命令 snapshot |
+| `AppServer::with_file_system` | 注入受 workspace 约束的 filesystem authority |
 | `open_local_app_server` | 打开 rollout/config、恢复 coordinator、组合 provider-backed model |
-| `LocalAppServerOptions` | local state root + optional Workspace config + validated slash catalog |
+| `LocalAppServerOptions` | local state root + optional Workspace config/root + validated slash catalog |
 | `SlashCommandCatalog` | 校验动态命令名称、描述与唯一性，并冻结 server-advertised snapshot |
 | `ReviewModelResolver` | 从 frozen config snapshot 选择 review-only model |
 | `ProviderReviewModel` | `ModelInvoker → zeta_auto_review::ReviewModel` adapter |
@@ -61,6 +63,7 @@ src/
 │   └── server/
 │       ├── operations.rs          # Session/Thread/Turn/Resource methods
 │       ├── config_operations.rs   # Config/provider/MCP/Skill methods + DTO conversion
+│       ├── fs_operations.rs       # root-relative filesystem DTO conversion/error mapping
 │       └── update_broker.rs       # per-connection subscription/cursor/fanout
 ├── local.rs                       # persistent local composition + model safe point
 ├── review.rs                      # review-only provider adapter
@@ -83,6 +86,8 @@ src/
 | `notification<T>` | private | canonical update → JSON-RPC notification | method 来自 `ServerNotificationMethod` |
 | `ResourceStore::resource` | private | cleanup + owner check | 所有 read/release 必须经过这里 |
 | `ResourceStore::cleanup` | private | lazy TTL eviction | resource 不持久化 |
+| `AppServer::file_system` | private | 读取注入的 `WorkspaceFileSystem` 或返回稳定 unavailable error | 不绕过 workspace authority |
+| `file_type` in `fs_operations` | private | foundation file kind → protocol DTO | wire enum 只由 protocol crate 定义 |
 | `ConfigBackedModelService::resolve_config` | private | user snapshot + optional Workspace snapshot merge | 每次 invocation safe point 重新解析 |
 | `WorkspaceConfigTracker::read` | private | 内容变化才推进 synthetic workspace revision | 不监听/修改 workspace file |
 | `ModelSnapshotResolver` | private trait | frozen config → immutable invoker | implementation 不持有 mutable config view |
@@ -239,6 +244,8 @@ Resource 不跨重启恢复，也不能被另一 connection 读取或 release。
 | missing config store | `ConfigUnavailable` |
 | config sequence mismatch | `ConfigRevisionConflict` |
 | resource ownership/bounds | corresponding stable resource error |
+| missing filesystem authority | `FileSystemUnavailable` |
+| filesystem path/I/O failure | `FileSystemOperationFailed` |
 | poisoned lock/serialization invariant | `ServerOverloaded` or `InternalError` |
 
 External errors不携带 `CoreError`、`ConfigError` 或 backend error text。新增 error mapping 时先更新

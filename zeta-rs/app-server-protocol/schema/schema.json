@@ -255,6 +255,8 @@
         "ResourceTooLarge",
         "InvalidResourceChunkSize",
         "InvalidResourceOffset",
+        "FileSystemUnavailable",
+        "FileSystemOperationFailed",
         "ConfigUnavailable",
         "ConfigRevisionConflict"
       ]
@@ -850,6 +852,38 @@
             "method",
             "params"
           ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "fs/getMetadata"
+            },
+            "params": {
+              "$ref": "#/$defs/FsGetMetadataParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "fs/readDirectory"
+            },
+            "params": {
+              "$ref": "#/$defs/FsReadDirectoryParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
         }
       ]
     },
@@ -1350,6 +1384,38 @@
             "method",
             "result"
           ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "fs/getMetadata"
+            },
+            "result": {
+              "$ref": "#/$defs/FsGetMetadataResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "fs/readDirectory"
+            },
+            "result": {
+              "$ref": "#/$defs/FsReadDirectoryResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
         }
       ]
     },
@@ -1580,6 +1646,101 @@
     "EmptyParams": {
       "type": "object",
       "additionalProperties": false
+    },
+    "FsFileType": {
+      "description": "Stable filesystem entry kind exposed to clients.",
+      "type": "string",
+      "enum": [
+        "directory",
+        "file",
+        "symbolicLink",
+        "other"
+      ]
+    },
+    "FsGetMetadataParams": {
+      "description": "Read metadata for one path relative to the configured workspace root.",
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ]
+    },
+    "FsGetMetadataResult": {
+      "description": "Metadata returned for one existing workspace path.",
+      "type": "object",
+      "properties": {
+        "fileType": {
+          "$ref": "#/$defs/FsFileType"
+        },
+        "modifiedAtMillis": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "readonly": {
+          "type": "boolean"
+        },
+        "sizeBytes": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "fileType",
+        "sizeBytes",
+        "readonly"
+      ]
+    },
+    "FsReadDirectoryEntry": {
+      "description": "One direct child returned by `fs/readDirectory`.",
+      "type": "object",
+      "properties": {
+        "fileType": {
+          "$ref": "#/$defs/FsFileType"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "fileType"
+      ]
+    },
+    "FsReadDirectoryParams": {
+      "description": "List direct children for one directory relative to the configured workspace root.",
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ]
+    },
+    "FsReadDirectoryResult": {
+      "description": "Direct children returned by `fs/readDirectory`.",
+      "type": "object",
+      "properties": {
+        "entries": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/FsReadDirectoryEntry"
+          }
+        }
+      },
+      "required": [
+        "entries"
+      ]
     },
     "InitializeParams": {
       "type": "object",
@@ -2442,6 +2603,9 @@
     "ServerCapabilities": {
       "type": "object",
       "properties": {
+        "fileSystem": {
+          "type": "boolean"
+        },
         "resources": {
           "type": "boolean"
         },
@@ -2466,6 +2630,7 @@
         "threads",
         "turns",
         "resources",
+        "fileSystem",
         "typst",
         "updateReplay"
       ]

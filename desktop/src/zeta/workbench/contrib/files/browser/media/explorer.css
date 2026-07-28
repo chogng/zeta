@@ -1,0 +1,51 @@
+.zeta-explorer {
+  min-height: 0;
+  overflow: auto;
+  padding: 2px 0 8px;
+}
+
+.zeta-explorer-tree,
+.zeta-explorer-tree ul {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.zeta-explorer-tree ul {
+  padding-left: 14px;
+}
+
+.zeta-explorer-row {
+  width: 100%;
+  overflow: hidden;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: default;
+  font: inherit;
+  line-height: 22px;
+  padding: 0 8px;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.zeta-explorer-row:hover {
+  background: color-mix(in srgb, currentColor 8%, transparent);
+}
+
+.zeta-explorer-row:focus-visible {
+  outline: 1px solid currentColor;
+  outline-offset: -1px;
+}
+
+.zeta-explorer-status {
+  padding: 8px;
+  color: color-mix(in srgb, currentColor 70%, transparent);
+  font-size: 12px;
+}
+
+.zeta-explorer-error {
+  color: var(--zeta-error-foreground, #f14c4c);
+}

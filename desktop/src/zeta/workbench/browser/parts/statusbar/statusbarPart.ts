@@ -1,3 +1,4 @@
+import "./statusbarpart.css";
 import { WorkbenchPart } from "../../part.js";
 import {
   type IStatusbarEntryItem,

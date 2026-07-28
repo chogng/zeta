@@ -81,7 +81,8 @@ export class AppServerSupervisor implements IDisposable {
       throw new Error("App Server executable path must be absolute");
     }
     const allowedEnvironmentKeys = new Set(
-      options.allowedEnvironmentKeys ?? ["PATH", "ZETA_STATE_ROOT"],
+      options.allowedEnvironmentKeys ??
+        ["PATH", "ZETA_STATE_ROOT", "ZETA_WORKSPACE_ROOT"],
     );
     for (const key of Object.keys(options.environment)) {
       if (!allowedEnvironmentKeys.has(key)) {

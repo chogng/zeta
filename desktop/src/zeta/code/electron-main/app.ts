@@ -88,6 +88,7 @@ import {
 } from "../../platform/windows/electron-main/windowsStateHandler.js";
 import {
   type IAnyWorkspaceIdentifier,
+  isSingleFolderWorkspaceIdentifier,
   UNKNOWN_EMPTY_WINDOW_WORKSPACE,
 } from "../../platform/workspace/common/workspace.js";
 import {
@@ -182,7 +183,7 @@ export class ZetaApplication extends DisposableOwner {
       },
     });
 
-    const supervisor = this.own(this.#createAppServerSupervisor());
+    const supervisor = this.own(this.#createAppServerSupervisor(workspace));
     this.#supervisor = supervisor;
     const appServerReady = await this.#startAppServerWithRecovery(
       supervisor,
@@ -241,7 +242,9 @@ export class ZetaApplication extends DisposableOwner {
     }
   }
 
-  #createAppServerSupervisor(): AppServerSupervisor {
+  #createAppServerSupervisor(
+    workspace: IAnyWorkspaceIdentifier,
+  ): AppServerSupervisor {
     const executableName = process.platform === "win32" ? "zeta.exe" : "zeta";
     const executable = app.isPackaged
       ? join(process.resourcesPath, "bin", executableName)
@@ -259,6 +262,9 @@ export class ZetaApplication extends DisposableOwner {
       environment: {
         PATH: process.env.PATH ?? "",
         ZETA_STATE_ROOT: join(app.getPath("userData"), "state"),
+        ...(isSingleFolderWorkspaceIdentifier(workspace)
+          ? { ZETA_WORKSPACE_ROOT: workspace.uri.fsPath }
+          : {}),
       },
       session: {
         clientName: "zeta-desktop",

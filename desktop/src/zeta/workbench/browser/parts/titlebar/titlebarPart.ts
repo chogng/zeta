@@ -1,3 +1,4 @@
+import "./titlebarpart.css";
 import {
   MenuWorkbenchToolBar,
 } from "../../../../platform/actions/browser/toolbar.js";

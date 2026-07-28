@@ -61,16 +61,22 @@ Desktop 不负责：
 前端可以为了即时反馈重复一部分格式校验，但这不替代权威 owner 在可信边界内重新校验。
 Renderer 不能因为已经校验过输入，就获得直接使用 `fs`、网络或任意 IPC/RPC 的权限。
 
-以未来增加 `Files` 能力为例，下表说明职责放置规则，不表示这些 API 当前已经实现：
+`Files` 按下表拆分所有权；“当前状态”用于区分本阶段实现和后续能力：
+Rust primitive 与 model adapter 的实现细节分别见
+[`zeta-rs/file-system/README.md`](../zeta-rs/file-system/README.md) 和
+[`zeta-rs/file-system-tool/README.md`](../zeta-rs/file-system-tool/README.md)。
 
-| 能力 | Owner |
-| --- | --- |
-| 文件树渲染、选中、展开、快捷键、加载态 | Renderer |
-| 系统文件选择器、在原生文件管理器中显示 | Electron Main / Preload |
-| 跨客户端的目录枚举、读写、重命名、搜索和 workspace 边界校验 | Rust / App Server |
-| 文件位置 identity | 共享 URI contract；Renderer 只维护其视图投影 |
-| 跨重启的领域 `FileId` 或 `DocumentId` | 拥有该生命周期的 Rust 领域模型 |
-| Tab、Pane 等纯 UI 实例 ID | Renderer |
+| 能力 | Owner | 当前状态 |
+| --- | --- | --- |
+| 文件树渲染、展开、加载态 | Renderer | ✅ 单目录只读 Explorer |
+| 选中、快捷键、文件打开与编辑 | Renderer | 尚未完成 |
+| 系统文件选择器、在原生文件管理器中显示 | Electron Main / Preload | 尚未完成 |
+| 目录枚举、metadata 与 workspace 边界校验 | Rust / App Server | ✅ `fs/readDirectory`、`fs/getMetadata` |
+| 写入、重命名、搜索 | Rust / App Server | 尚未完成 |
+| watcher invalidation 与前端自动刷新 | Rust authority + Renderer projection | 尚未完成 |
+| 文件位置 identity | 共享 URI contract；Renderer 只维护其视图投影 | 部分具备：单根 URI 映射 |
+| 跨重启的领域 `FileId` 或 `DocumentId` | 拥有该生命周期的 Rust 领域模型 | 尚未完成 |
+| Tab、Pane 等纯 UI 实例 ID | Renderer | 已有 Workbench 基础设施 |
 
 因此，一项完整功能可以具有一条跨层执行路径：
 
@@ -200,14 +206,18 @@ last-active state，最后才使用默认尺寸。旧的 `windowState` 与 `wind
 Renderer 通过受信 IPC route 和 `workspace.getWorkspace()` 读取该身份，并在
 `parseWorkspaceIdentifier()` 校验和恢复 URI。`WorkspaceContextService` 根据该标识构造当前
 `IWorkspace`，并从 `configuration` 或单根 `folders` 推导 `WorkbenchState`。Workbench
-contribution 不得通过该服务直接访问文件系统；跨客户端目录读写、搜索和 workspace 边界
-授权仍属于 Rust / App Server。
+contribution 不得通过该服务直接访问文件系统。单根 Folder 启动时，Electron Main 将该根
+配置给 App Server；Renderer 的 `BrowserFileService` 只把 workspace URI 映射成根相对路径，
+目录枚举、metadata 与最终边界授权由 Rust / App Server 完成。读写、搜索和多根 Workspace
+仍未实现。
 
 当前限制：
 
 - Workspace 身份只在启动时确定，尚无运行时打开、关闭或切换项目流程；
 - `.zeta-workspace` 当前只作为窗口身份，尚未定义或解析其内容；
 - 普通单文件参数仍属于空窗口，文件编辑器尚未实现；
+- Explorer 当前仅支持单根 Folder 的按需读取；没有文件 watcher、自动刷新、写操作、搜索、
+  选择模型或键盘导航；
 - 当前 `WorkspacesMainService` 只负责启动目标解析，最近项目、多窗口创建和 workspace
   配置管理尚未实现；`windowsState` 已保留多窗口恢复数据形状，但当前只写入单个主窗口；
 - 空窗口 backup service 尚未实现，因此当前启动路径没有可传给 `WindowsStateHandler` 的

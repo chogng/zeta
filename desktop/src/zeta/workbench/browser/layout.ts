@@ -11,17 +11,9 @@ import {
 } from "../../base/browser/ui/grid/grid.js";
 import { type Event, Emitter } from "../../base/common/event.js";
 import { DisposableOwner } from "../../base/common/lifecycle.js";
-import type {
-  IContextKeyService,
-} from "../../platform/contextkey/common/contextkey.js";
 import {
   createServiceIdentifier,
 } from "../../platform/instantiation/common/instantiation.js";
-import {
-  AuxiliaryBarVisibleContext,
-  EditorAreaVisibleContext,
-  SideBarVisibleContext,
-} from "../common/contextkeys.js";
 import { type WorkbenchPart } from "./part.js";
 
 export const workbenchPartIds = [
@@ -33,25 +25,6 @@ export const workbenchPartIds = [
   "editor",
 ] as const;
 export type WorkbenchPartId = typeof workbenchPartIds[number];
-
-/** Publishes one runtime Part visibility change to its context key. */
-export function applyWorkbenchPartVisibilityContext(
-  contextKeyService: IContextKeyService,
-  partId: WorkbenchPartId,
-  visible: boolean,
-): void {
-  switch (partId) {
-    case "sidebar":
-      contextKeyService.setContext(SideBarVisibleContext.key, visible);
-      break;
-    case "auxiliarybar":
-      contextKeyService.setContext(AuxiliaryBarVisibleContext.key, visible);
-      break;
-    case "editor":
-      contextKeyService.setContext(EditorAreaVisibleContext.key, visible);
-      break;
-  }
-}
 
 /** A Workbench Part whose effective layout visibility changed. */
 export interface WorkbenchPartVisibilityChangeEvent {

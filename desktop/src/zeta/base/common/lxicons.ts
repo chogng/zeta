@@ -4,10 +4,13 @@ import {
   lxChatFilled,
   lxChevronDown,
   lxChevronRight,
+  lxFiles,
   lxGear,
+  lxGitCommit,
   lxLayoutSidebarLeft,
   lxLayoutSidebarLeftOff,
   lxMenu,
+  lxSearch,
   lxStart,
 } from "@chogng/lxicons";
 import { registerIcon } from "./icon.js";
@@ -24,7 +27,9 @@ export const LxIcon = {
   chat: registerIcon("chat", lxChat),
   chatFilled: registerIcon("chat-filled", lxChatFilled),
   dropdownIndicator: registerIcon("dropdown-indicator", lxChevronDown),
+  files: registerIcon("files", lxFiles),
   gear: registerIcon("gear", lxGear),
+  gitCommit: registerIcon("git-commit", lxGitCommit),
   layoutSidebarLeft: registerIcon(
     "layout-sidebar-left",
     lxLayoutSidebarLeft,
@@ -34,6 +39,7 @@ export const LxIcon = {
     lxLayoutSidebarLeftOff,
   ),
   menu: registerIcon("menu", lxMenu),
+  search: registerIcon("search", lxSearch),
   start: registerIcon("start", lxStart),
   submenuIndicator: registerIcon("submenu-indicator", lxChevronRight),
 } as const;

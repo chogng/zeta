@@ -1,13 +1,7 @@
 import {
-  type IDisposable,
-  toDisposable,
-} from "../../base/common/lifecycle.js";
-import {
-  type IContextKeyService,
   RawContextKey,
 } from "../../platform/contextkey/common/contextkey.js";
 import {
-  type IWorkspaceContextService,
   WorkbenchState,
 } from "../../platform/workspace/common/workspace.js";
 
@@ -43,44 +37,6 @@ export const EditorAreaVisibleContext =
 /** Identifier of the view that currently owns keyboard focus. */
 export const FocusedViewContext =
   new RawContextKey<string>("focusedView", "");
-
-/**
- * Installs the initial window-wide workbench keys.
- *
- * The workspace service is currently immutable for a window. Layout and view
- * owners can update their corresponding bound keys when those features become
- * mutable.
- */
-export function bindWorkbenchContextKeys(
-  contextKeyService: IContextKeyService,
-  workspaceContextService: IWorkspaceContextService,
-): IDisposable {
-  const workbenchState = WorkbenchStateContext.bindTo(contextKeyService);
-  const workspaceFolderCount =
-    WorkspaceFolderCountContext.bindTo(contextKeyService);
-  const sideBarVisible = SideBarVisibleContext.bindTo(contextKeyService);
-  const auxiliaryBarVisible =
-    AuxiliaryBarVisibleContext.bindTo(contextKeyService);
-  const editorAreaVisible =
-    EditorAreaVisibleContext.bindTo(contextKeyService);
-  const focusedView = FocusedViewContext.bindTo(contextKeyService);
-
-  workbenchState.set(workbenchStateToContextValue(
-    workspaceContextService.getWorkbenchState(),
-  ));
-  workspaceFolderCount.set(
-    workspaceContextService.getWorkspace().folders.length,
-  );
-
-  return toDisposable(() => {
-    focusedView.reset();
-    editorAreaVisible.reset();
-    auxiliaryBarVisible.reset();
-    sideBarVisible.reset();
-    workspaceFolderCount.reset();
-    workbenchState.reset();
-  });
-}
 
 /** Converts the workspace model enum into its stable context-key value. */
 export function workbenchStateToContextValue(

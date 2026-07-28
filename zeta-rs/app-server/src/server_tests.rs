@@ -14,12 +14,14 @@ use zeta_core::{
     CoreError, InMemorySessionStore, InMemoryThreadStore, ModelService, RequestTurnInteraction,
     SessionCoordinator, StartTurnRequest, ThreadController,
 };
+use zeta_file_system::LocalFileSystem;
 use zeta_model_provider::EchoModel;
 use zeta_protocol::{
     ActionApprovalCapability, ActionApprovalCapabilityKind, ActionApprovalRequest, AgentRequest,
     CommandId, ContentPart, InputItem, ModelRequest, ModelResponse, RequestId, RequestUserInput,
     ResponseItem, StopReason, TurnStatus, UserInput,
 };
+use zeta_sandboxing::WorkspaceRoot;
 
 fn server_with_model(model: Arc<dyn ModelService>) -> AppServer {
     let threads = Arc::new(ThreadController::with_store(Arc::new(
@@ -812,4 +814,52 @@ fn jsonl_transport_writes_response_before_causal_updates() {
     let lines = String::from_utf8(output).unwrap();
     assert_eq!(lines.lines().count(), 2);
     assert!(lines.lines().all(|line| line.contains("\"id\":")));
+}
+
+#[test]
+fn filesystem_rpc_lists_and_describes_workspace_paths() {
+    let root = std::env::temp_dir().join(format!(
+        "zeta-app-server-files-{}-{}",
+        std::process::id(),
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos(),
+    ));
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    std::fs::write(root.join("src/lib.rs"), "hello").unwrap();
+    let server = server().with_file_system(Arc::new(LocalFileSystem::new(
+        WorkspaceRoot::open(&root).unwrap(),
+    )));
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+
+    let listed = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":2,
+            "method":"fs/readDirectory",
+            "params":{"path":"src"}
+        }),
+    );
+    let metadata = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":3,
+            "method":"fs/getMetadata",
+            "params":{"path":"src/lib.rs"}
+        }),
+    );
+
+    assert_eq!(
+        listed["result"]["entries"],
+        serde_json::json!([{"name":"lib.rs","fileType":"file"}]),
+    );
+    assert_eq!(metadata["result"]["fileType"], "file");
+    assert_eq!(metadata["result"]["sizeBytes"], 5);
+    let _ = std::fs::remove_dir_all(root);
 }

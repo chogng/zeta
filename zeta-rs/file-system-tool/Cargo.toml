@@ -1,0 +1,25 @@
+[package]
+name = "zeta-file-system-tool"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[lib]
+doctest = false
+name = "zeta_file_system_tool"
+path = "src/lib.rs"
+
+[dependencies]
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+zeta-file-system = { workspace = true }
+zeta-tools = { workspace = true }
+
+[dev-dependencies]
+zeta-async-utils = { workspace = true }
+zeta-protocol = { workspace = true }
+zeta-sandboxing = { workspace = true }
+
+[lints]
+workspace = true

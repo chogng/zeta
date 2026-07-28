@@ -15,6 +15,10 @@ use crate::protocol::document::{
     TypstSourceRangeDto,
 };
 use crate::protocol::error::{AppServerError, AppServerErrorName};
+use crate::protocol::fs::{
+    FsFileType, FsGetMetadataParams, FsGetMetadataResult, FsReadDirectoryEntry,
+    FsReadDirectoryParams, FsReadDirectoryResult,
+};
 use crate::protocol::initialize::{InitializeParams, InitializeResult, ServerCapabilities};
 use crate::protocol::notification::{SessionUpdateEnvelope, ThreadUpdateEnvelope};
 use crate::protocol::resources::{
@@ -334,6 +338,16 @@ client_methods! {
         response: (),
         serialization: ResourceExclusive,
     },
+    FsGetMetadata => "fs/getMetadata" {
+        params: FsGetMetadataParams,
+        response: FsGetMetadataResult,
+        serialization: GlobalSharedRead,
+    },
+    FsReadDirectory => "fs/readDirectory" {
+        params: FsReadDirectoryParams,
+        response: FsReadDirectoryResult,
+        serialization: GlobalSharedRead,
+    },
 }
 
 macro_rules! server_notifications {
@@ -531,6 +545,12 @@ typescript_bindings! {
     ResourceReadParams,
     ResourceReadResult,
     ResourceReleaseParams,
+    FsFileType,
+    FsGetMetadataParams,
+    FsGetMetadataResult,
+    FsReadDirectoryParams,
+    FsReadDirectoryEntry,
+    FsReadDirectoryResult,
     AppServerErrorName,
     AppServerError,
 }

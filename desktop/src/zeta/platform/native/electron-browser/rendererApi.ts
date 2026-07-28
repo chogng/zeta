@@ -1,4 +1,6 @@
 import type {
+  FsGetMetadataResult,
+  FsReadDirectoryResult,
   ResourceMetadataResult,
   ResourceReadResult,
   ServerNotification,
@@ -170,6 +172,12 @@ export function createElectronRendererApi(): ZetaElectronRendererApi {
         invoke<ResourceReadResult>("zeta:resource:read", params),
       release: (params) =>
         invoke<void>("zeta:resource:release", params),
+    },
+    fs: {
+      getMetadata: (params) =>
+        invoke<FsGetMetadataResult>("zeta:fs:get-metadata", params),
+      readDirectory: (params) =>
+        invoke<FsReadDirectoryResult>("zeta:fs:read-directory", params),
     },
     events: {
       subscribe: (listener) =>

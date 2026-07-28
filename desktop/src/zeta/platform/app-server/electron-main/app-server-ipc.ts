@@ -1,4 +1,6 @@
 import type {
+  FsGetMetadataParams,
+  FsReadDirectoryParams,
   ResourceMetadataParams,
   ResourceReadParams,
   ResourceReleaseParams,
@@ -133,6 +135,18 @@ export function appServerIpcRoutes(
       validate: resourceReleaseParams,
       invoke: (params) =>
         supervisor.request(APP_SERVER_METHODS["resource/release"], params),
+    }),
+    route({
+      channel: "zeta:fs:get-metadata",
+      validate: fsGetMetadataParams,
+      invoke: (params) =>
+        supervisor.request(APP_SERVER_METHODS["fs/getMetadata"], params),
+    }),
+    route({
+      channel: "zeta:fs:read-directory",
+      validate: fsReadDirectoryParams,
+      invoke: (params) =>
+        supervisor.request(APP_SERVER_METHODS["fs/readDirectory"], params),
     }),
   ];
 }
@@ -292,6 +306,29 @@ function turnInterruptParams(value: unknown): TurnInterruptParams {
     turnId: nonEmptyString(params.turnId, "turnId"),
     expectedSequence: nonNegativeInteger(params.expectedSequence, "expectedSequence"),
   };
+}
+
+function fsGetMetadataParams(value: unknown): FsGetMetadataParams {
+  const params = record(value, ["path"]);
+  return { path: relativeWorkspacePath(params.path) };
+}
+
+function fsReadDirectoryParams(value: unknown): FsReadDirectoryParams {
+  return fsGetMetadataParams(value);
+}
+
+function relativeWorkspacePath(value: unknown): string {
+  const path = string(value, "path");
+  if (
+    path.includes("\0") ||
+    path.startsWith("/") ||
+    path.startsWith("\\") ||
+    /^[A-Za-z]:/.test(path) ||
+    path.split(/[\\/]/).includes("..")
+  ) {
+    throw new Error("path must be relative to the workspace root");
+  }
+  return path;
 }
 
 const MAX_TYPST_SOURCE_BYTES = 1024 * 1024;

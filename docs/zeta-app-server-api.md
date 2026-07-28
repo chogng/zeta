@@ -89,6 +89,7 @@ notification contract，不能拥有隐藏业务接口。JSONL/stdio、WebSocket
     "threads": true,
     "turns": true,
     "resources": true,
+    "fileSystem": true,
     "typst": true,
     "updateReplay": true
   },
@@ -132,9 +133,21 @@ inline argument parsing；提交仍通过 `turn/start.input`，并保留 `/name`
 | `resource/metadata` | Resource | 读取元数据 |
 | `resource/read` | Resource | 分块读取 |
 | `resource/release` | Resource | 释放 connection-owned resource |
+| `fs/getMetadata` | workspace | 读取根相对路径的 metadata |
+| `fs/readDirectory` | workspace | 枚举根相对目录的直接子项 |
 
 长期 account control plane 另见[第 11 节](#11-account-与登录)。它尚未进入当前 registry/schema，
 加入时必须和 Rust DTO、TypeScript 与 JSON Schema 同步提交。
+
+### Filesystem
+
+Filesystem method 的 `path` 是配置 workspace root 下的相对路径；空字符串表示 root。
+绝对路径、父目录逃逸和解析后越过 root 的 symlink 会在可信 Rust 边界被拒绝。Desktop 的
+IPC 层会先做同形状校验以便快速失败，但不承担最终授权。
+
+当前 contract 只提供 `fs/getMetadata` 和 `fs/readDirectory`，用于单根 Folder 的只读
+Explorer。它不包含读取文件内容、写入、重命名、删除、搜索、watcher、多根 Workspace，
+也不保证跨请求 snapshot 一致性。客户端应把目录展开状态和重新加载策略视为可丢弃 UI 状态。
 
 ## 6. Session commands
 

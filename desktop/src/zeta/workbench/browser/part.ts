@@ -1,3 +1,4 @@
+import "./media/part.css";
 import { type IDimension } from "../../base/browser/geometry.js";
 import { Emitter, type Event } from "../../base/common/event.js";
 import { DisposableOwner } from "../../base/common/lifecycle.js";

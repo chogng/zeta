@@ -1,13 +1,8 @@
-import { cloneDocumentStyles } from "../../base/browser/domStylesheets.js";
-import {
-  isRegisteredWindow,
-  registerWindow,
-} from "../../base/browser/window.js";
+import "./style.js";
 import {
   type IDisposable,
   DisposableOwner,
 } from "../../base/common/lifecycle.js";
-import { environment } from "../../base/common/platform.js";
 import type {
   ProductConfiguration,
 } from "../../product/common/product.js";
@@ -60,6 +55,12 @@ import {
   IDialogService,
 } from "../../platform/dialogs/common/dialogs.js";
 import {
+  BrowserFileService,
+} from "../../platform/files/browser/fileService.js";
+import {
+  IFileService,
+} from "../../platform/files/common/files.js";
+import {
   bindColorTheme,
 } from "../../platform/theme/browser/themeStyles.js";
 import {
@@ -72,10 +73,6 @@ import {
   IWorkspaceContextService,
 } from "../../platform/workspace/common/workspace.js";
 import { WorkbenchConfiguration } from "../common/configuration.js";
-import {
-  bindWorkbenchContextKeys,
-  workbenchStateToContextValue,
-} from "../common/contextkeys.js";
 import {
   WorkbenchContributionsRegistry,
   WorkbenchPhase,
@@ -129,12 +126,18 @@ import {
   WorkbenchQuickInputService,
 } from "../services/quickinput/browser/quickInputService.js";
 import {
-  applyWorkbenchPartVisibilityContext,
+  bindWorkbenchContextKeys,
+  bindWorkbenchPartVisibilityContextKeys,
+} from "./contextkeys.js";
+import {
   IWorkbenchLayoutService,
   WorkbenchLayout,
   type WorkbenchPartId,
 } from "./layout.js";
 import type { WorkbenchPart } from "./part.js";
+import {
+  ActivitybarPart,
+} from "./parts/activitybar/activitybarPart.js";
 import {
   AuxiliarybarPart,
 } from "./parts/auxiliarybar/auxiliarybarPart.js";
@@ -149,7 +152,7 @@ import {
   ViewPaneContainer,
 } from "./parts/views/viewPaneContainer.js";
 import { Viewlet } from "./parts/views/viewlet.js";
-import { installWorkbenchStyles } from "./style.js";
+import { WorkbenchWindow } from "./window.js";
 
 /** Host-specific inputs required to construct a workbench. */
 export interface IStartWorkbenchOptions {
@@ -203,7 +206,6 @@ export class Workbench extends DisposableOwner {
     createTitlebarPart: TitlebarPartFactory,
   ) {
     super();
-    installWorkbenchStyles();
     const services = new ServiceCollection();
     const instantiationService = new InstantiationService(services);
     services.set(IRendererApiService, api);
@@ -212,33 +214,18 @@ export class Workbench extends DisposableOwner {
     }
     const workspaceContext = new WorkspaceContextService(workspace);
     services.set(IWorkspaceContextService, workspaceContext);
+    services.set(IFileService, new BrowserFileService({
+      api: api.fs,
+      workspaceContextService: workspaceContext,
+    }));
     const currentWorkspace = workspaceContext.getWorkspace();
     const workbenchState = workspaceContext.getWorkbenchState();
-    workbenchRoot.classList.add("zeta-workbench");
-    workbenchRoot.setAttribute("data-product", product.id);
-    workbenchRoot.setAttribute("data-runtime", environment.runtime);
-    workbenchRoot.setAttribute("data-os", environment.os);
-    workbenchRoot.setAttribute(
-      "data-workbench-state",
-      workbenchStateToContextValue(workbenchState),
-    );
-    this.defer(() => {
-      workbenchRoot.classList.remove("zeta-workbench");
-      workbenchRoot.removeAttribute("data-product");
-      workbenchRoot.removeAttribute("data-runtime");
-      workbenchRoot.removeAttribute("data-os");
-      workbenchRoot.removeAttribute("data-workbench-state");
-      workbenchRoot.replaceChildren();
-    });
-
-    const ownerDocument = workbenchRoot.ownerDocument;
-    const targetWindow = ownerDocument.defaultView;
-    if (targetWindow && !isRegisteredWindow(targetWindow)) {
-      this.own(registerWindow(targetWindow));
-    }
-    if (ownerDocument !== document) {
-      this.own(cloneDocumentStyles(document, ownerDocument));
-    }
+    const workbenchWindow = this.own(new WorkbenchWindow({
+      root: workbenchRoot,
+      productId: product.id,
+      workbenchState,
+    }));
+    const ownerDocument = workbenchWindow.ownerDocument;
 
     const configuration = this.own(new WorkbenchConfigurationService({
       api: configurationApi,
@@ -290,9 +277,6 @@ export class Workbench extends DisposableOwner {
     const contextKeys = this.own(new ContextKeyService());
     services.set(IContextKeyService, contextKeys);
     this.own(bindWorkbenchContextKeys(contextKeys, workspaceContext));
-    applyWorkbenchPartVisibilityContext(contextKeys, "sidebar", true);
-    applyWorkbenchPartVisibilityContext(contextKeys, "auxiliarybar", true);
-    applyWorkbenchPartVisibilityContext(contextKeys, "editor", true);
     const viewDescriptors = this.own(new ViewDescriptorService({
       contextKeyService: contextKeys,
     }));
@@ -345,20 +329,36 @@ export class Workbench extends DisposableOwner {
       ownerDocument,
       title: workspaceTitle(currentWorkspace, product.name),
     }));
-    const sidebar = this.own(new SidebarPart(ownerDocument));
+    const activitybar = this.own(new ActivitybarPart({
+      ownerDocument,
+      viewDescriptorService: viewDescriptors,
+    }));
+    const sidebar = this.own(new SidebarPart(ownerDocument, activitybar));
     const sidebarViewContainer = requiredViewContainer(
       viewDescriptors,
       ViewContainerLocation.Sidebar,
     );
-    sidebar.setViewlet(new Viewlet({
-      viewContainer: sidebarViewContainer,
-      model: viewDescriptors.getViewContainerModel(
-        sidebarViewContainer.id,
-      ),
-      instantiationService,
-      contextKeyService: contextKeys,
-      ownerDocument,
-    }));
+    const openSidebarViewContainer = (
+      viewContainerId: string,
+    ): void => {
+      const viewContainer = viewDescriptors
+        .getViewContainers(ViewContainerLocation.Sidebar)
+        .find((candidate) => candidate.id === viewContainerId);
+      if (!viewContainer) {
+        throw new Error(
+          `Sidebar View Container is not registered: ${viewContainerId}`,
+        );
+      }
+      sidebar.setViewlet(new Viewlet({
+        viewContainer,
+        model: viewDescriptors.getViewContainerModel(viewContainer.id),
+        instantiationService,
+        contextKeyService: contextKeys,
+        ownerDocument,
+      }));
+      activitybar.setActiveViewContainer(viewContainer.id);
+    };
+    openSidebarViewContainer(sidebarViewContainer.id);
     const session = this.own(new SessionPart(ownerDocument));
     const editor = this.own(new EditorPart(ownerDocument, {
       keybindingService: keybindings,
@@ -395,9 +395,13 @@ export class Workbench extends DisposableOwner {
       new WorkbenchLayout(workbenchRoot, parts),
     );
     services.set(IWorkbenchLayoutService, layout);
-    this.own(layout.onDidChangePartVisibility(({ partId, visible }) => {
-      applyWorkbenchPartVisibilityContext(contextKeys, partId, visible);
-    }));
+    this.own(bindWorkbenchPartVisibilityContextKeys(contextKeys, layout));
+    this.own(activitybar.onDidSelectViewContainer(
+      ({ viewContainerId }) => {
+        if (sidebar.activeViewletId === viewContainerId) return;
+        openSidebarViewContainer(viewContainerId);
+      },
+    ));
     contributions.advance(WorkbenchPhase.BlockRestore);
     layout.layout();
     contributions.advance(WorkbenchPhase.AfterRestored);

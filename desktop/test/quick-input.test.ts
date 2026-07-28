@@ -34,9 +34,11 @@ import {
   CommandService,
 } from "../src/zeta/workbench/services/commands/common/commandService.js";
 import {
-  InQuickInputContext,
   WorkbenchQuickInputService,
 } from "../src/zeta/workbench/services/quickinput/browser/quickInputService.js";
+import {
+  InQuickInputContext,
+} from "../src/zeta/workbench/browser/quickaccess.js";
 import {
   ShowAllCommandsCommandId,
 } from "../src/zeta/workbench/contrib/quickaccess/browser/commandsQuickAccess.js";

@@ -11,14 +11,7 @@ name = "zeta_file_system"
 path = "src/lib.rs"
 
 [dependencies]
-serde = { workspace = true, features = ["derive"] }
-serde_json = { workspace = true }
 zeta-sandboxing = { workspace = true }
-zeta-tools = { workspace = true }
-
-[dev-dependencies]
-zeta-async-utils = { workspace = true }
-zeta-protocol = { workspace = true }
 
 [lints]
 workspace = true

@@ -1,3 +1,4 @@
+import "./auxiliarybarpart.css";
 import { WorkbenchPart } from "../../part.js";
 import { DisposableSlot } from "../../../../base/common/lifecycle.js";
 import { ViewPaneContainer } from "../views/viewPaneContainer.js";

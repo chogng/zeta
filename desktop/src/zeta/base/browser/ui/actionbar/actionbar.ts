@@ -16,6 +16,8 @@ export interface ActionBarOptions {
   readonly ownerDocument?: Document;
   readonly actions?: readonly IAction[];
   readonly actionViewItemProvider?: ActionViewItemProvider;
+  readonly ariaRole?: "toolbar" | "tablist";
+  readonly ariaLabel?: string;
 }
 
 /** Owns and arranges action view items without interpreting action subtypes. */
@@ -31,7 +33,10 @@ export class ActionBar extends DisposableOwner {
     this.element = element;
     this.defer(() => element.remove());
     element.className = "zeta-action-bar";
-    element.setAttribute("role", "toolbar");
+    element.setAttribute("role", options.ariaRole ?? "toolbar");
+    if (options.ariaLabel) {
+      element.setAttribute("aria-label", options.ariaLabel);
+    }
     this.#actionViewItemProvider = options.actionViewItemProvider;
     this.setActions(options.actions ?? []);
   }

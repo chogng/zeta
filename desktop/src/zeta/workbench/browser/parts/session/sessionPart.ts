@@ -1,3 +1,4 @@
+import "./sessionpart.css";
 import { WorkbenchPart } from "../../part.js";
 
 /** The session selector and session-scoped navigation region. */

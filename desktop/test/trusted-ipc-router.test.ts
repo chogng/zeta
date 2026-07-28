@@ -94,12 +94,15 @@ test("trusted IPC router enforces webContents, main frame, exact URL, and params
   assert.equal(ipcMain.handlers.size, 0);
 });
 
-test("App Server IPC validators reject malformed Turn, Typst, and resource input", () => {
+test("App Server IPC validators reject malformed Turn, Typst, resource, and filesystem input", () => {
   const routes = appServerIpcRoutes({} as AppServerSupervisor);
   const sessionCreate = routes.find((route) => route.channel === "zeta:session:create")!;
   const turnStart = routes.find((route) => route.channel === "zeta:turn:start")!;
   const typstCompile = routes.find((route) => route.channel === "zeta:typst:compile")!;
   const resourceRead = routes.find((route) => route.channel === "zeta:resource:read")!;
+  const fsGetMetadata = routes.find(
+    (route) => route.channel === "zeta:fs:get-metadata",
+  )!;
 
   assert.deepEqual(
     sessionCreate.validate({ commandId: "one", title: "title" }),
@@ -152,6 +155,22 @@ test("App Server IPC validators reject malformed Turn, Typst, and resource input
       }),
     /must not exceed/,
   );
+  assert.deepEqual(fsGetMetadata.validate({ path: "src/main.ts" }), {
+    path: "src/main.ts",
+  });
+  for (const path of [
+    "../outside",
+    "src/../../outside",
+    "/absolute",
+    "\\\\server\\share",
+    "C:\\absolute",
+    "src\0file",
+  ]) {
+    assert.throws(
+      () => fsGetMetadata.validate({ path }),
+      /relative to the workspace root/,
+    );
+  }
 });
 
 test("trusted IPC router rejects duplicate route registrations", () => {

@@ -2,3 +2,9 @@
 .zeta-view-pane { min-width: 0; }
 .zeta-view-pane-title { padding: 6px 8px; font-size: 12px; font-weight: 600; }
 .zeta-view-pane-content { min-width: 0; }
+.zeta-view-pane-placeholder {
+  margin: 0;
+  padding: 8px;
+  color: color-mix(in srgb, currentColor 70%, transparent);
+  font-size: 12px;
+}

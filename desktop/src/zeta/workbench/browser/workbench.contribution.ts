@@ -13,6 +13,16 @@ import {
 import {
   KeybindingsResourceContribution,
 } from "../services/keybinding/browser/keybindingsResourceContribution.js";
+import {
+  registerFilesViews,
+} from "../contrib/files/browser/files.contribution.js";
+import {
+  registerGitViews,
+} from "../contrib/scm/browser/scm.contribution.js";
+import {
+  registerSearchViews,
+} from "../contrib/search/browser/search.contribution.js";
+import { LxIcon } from "../../base/common/lxicons.js";
 import "../contrib/markdown/browser/markdown.contribution.js";
 import "../contrib/quickaccess/browser/commandsQuickAccess.js";
 import "./parts/dialogs/dialog.contribution.js";
@@ -21,8 +31,9 @@ import "./parts/titlebar/titlebarActions.js";
 
 ViewsRegistry.registerStaticViewContainer({
   id: WorkbenchViewContainerId.Sidebar,
-  title: "Navigation",
+  title: "Explorer",
   location: ViewContainerLocation.Sidebar,
+  icon: LxIcon.files,
   order: 1,
   isDefault: true,
 });
@@ -33,6 +44,9 @@ ViewsRegistry.registerStaticViewContainer({
   order: 1,
   isDefault: true,
 });
+registerFilesViews();
+registerSearchViews();
+registerGitViews();
 
 registerWorkbenchContribution(
   "workbench.contrib.keybindingsResource",

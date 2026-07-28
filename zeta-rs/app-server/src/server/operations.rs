@@ -70,6 +70,7 @@ impl AppServer {
                 threads: true,
                 turns: true,
                 resources: true,
+                file_system: self.file_system.is_some(),
                 typst: true,
                 update_replay: true,
             },

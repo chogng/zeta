@@ -9,6 +9,7 @@ import type {
 import type {
   SyncDescriptor,
 } from "../../platform/instantiation/common/instantiation.js";
+import type { Icon } from "../../base/common/icon.js";
 
 /** Workbench region capable of hosting registered view containers. */
 export enum ViewContainerLocation {
@@ -22,6 +23,7 @@ export interface IViewContainerDescriptor {
   readonly id: string;
   readonly title: string;
   readonly location: ViewContainerLocation;
+  readonly icon?: Icon;
   readonly order?: number;
   readonly isDefault?: boolean;
 }
@@ -90,6 +92,8 @@ export interface IViewContainerModel {
 /** Stable identifiers for the containers supplied by the core workbench. */
 export const WorkbenchViewContainerId = Object.freeze({
   Sidebar: "zeta.sidebar",
+  Search: "zeta.search",
+  Git: "zeta.git",
   AuxiliaryBar: "zeta.auxiliary",
 });
 

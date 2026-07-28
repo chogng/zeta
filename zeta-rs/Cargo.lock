@@ -4690,11 +4690,13 @@ dependencies = [
  "zeta-auto-review",
  "zeta-config",
  "zeta-core",
+ "zeta-file-system",
  "zeta-model-provider",
  "zeta-model-provider-config",
  "zeta-policy",
  "zeta-protocol",
  "zeta-rollout",
+ "zeta-sandboxing",
  "zeta-typst",
 ]
 
@@ -4828,9 +4830,17 @@ dependencies = [
 name = "zeta-file-system"
 version = "0.1.0"
 dependencies = [
+ "zeta-sandboxing",
+]
+
+[[package]]
+name = "zeta-file-system-tool"
+version = "0.1.0"
+dependencies = [
  "serde",
  "serde_json",
  "zeta-async-utils",
+ "zeta-file-system",
  "zeta-protocol",
  "zeta-sandboxing",
  "zeta-tools",

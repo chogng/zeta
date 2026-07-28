@@ -1,3 +1,4 @@
+import "./editorpart.css";
 import {
   Dimension,
   type IDimension,

@@ -1,4 +1,8 @@
 import type {
+  FsGetMetadataParams,
+  FsGetMetadataResult,
+  FsReadDirectoryParams,
+  FsReadDirectoryResult,
   ResourceMetadataParams,
   ResourceMetadataResult,
   ResourceReadParams,
@@ -91,6 +95,10 @@ export interface ZetaRendererApi {
     metadata(params: ResourceMetadataParams): Promise<ResourceMetadataResult>;
     read(params: ResourceReadParams): Promise<ResourceReadResult>;
     release(params: ResourceReleaseParams): Promise<void>;
+  };
+  fs: {
+    getMetadata(params: FsGetMetadataParams): Promise<FsGetMetadataResult>;
+    readDirectory(params: FsReadDirectoryParams): Promise<FsReadDirectoryResult>;
   };
   events: {
     subscribe(listener: (event: ServerNotification) => void): DisposableHandle;

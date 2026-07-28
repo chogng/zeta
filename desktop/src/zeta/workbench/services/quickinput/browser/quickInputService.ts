@@ -1,3 +1,4 @@
+import "./media/quickInput.css";
 import {
   addDisposableListener,
   isHTMLElement,
@@ -17,10 +18,9 @@ import type {
   IContextKey,
   IContextKeyService,
 } from "../../../../platform/contextkey/common/contextkey.js";
-import { RawContextKey } from "../../../../platform/contextkey/common/contextkey.js";
-
-export const InQuickInputContext =
-  new RawContextKey<boolean>("inQuickInput", false);
+import {
+  InQuickInputContext,
+} from "../../../browser/quickaccess.js";
 
 export interface WorkbenchQuickInputServiceOptions {
   readonly container: HTMLElement;

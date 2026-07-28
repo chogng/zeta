@@ -1,4 +1,5 @@
 import { addDisposableListener } from "../../base/browser/dom.js";
+import { installBaseUiStyles } from "../../base/browser/ui/index.js";
 import {
   DisposableStore,
   type IDisposable,
@@ -10,20 +11,35 @@ import {
   createDisconnectedRendererApi,
 } from "../../platform/app-server/browser/rendererApi.js";
 import {
-  startBrowserWorkbench,
-} from "./browserWorkbench.js";
+  UNKNOWN_EMPTY_WINDOW_WORKSPACE,
+} from "../../platform/workspace/common/workspace.js";
+import {
+  createBrowserWorkbenchContextMenuService,
+} from "../services/contextmenu/browser/contextMenuService.js";
+import {
+  createBrowserTitlebarPart,
+} from "./parts/titlebar/titlebarPart.js";
 import type {
   IWebWorkbench,
   IWebWorkbenchConstructionOptions,
   IWebWorkbenchHost,
 } from "./web.api.js";
+import { startWorkbench } from "./workbench.js";
 
-/** Creates a browser-hosted Workbench for an explicit Web embedder. */
+/** Creates a browser-hosted Workbench with the shared Web adapters. */
 export function createWebWorkbench(
   product: ProductConfiguration,
   options: IWebWorkbenchConstructionOptions,
 ): IWebWorkbench {
-  return startBrowserWorkbench(product, options);
+  installBaseUiStyles();
+  return startWorkbench({
+    product,
+    api: options.api,
+    container: options.container,
+    workspace: options.workspace ?? UNKNOWN_EMPTY_WINDOW_WORKSPACE,
+    createContextMenuService: createBrowserWorkbenchContextMenuService,
+    createTitlebarPart: createBrowserTitlebarPart,
+  });
 }
 
 /**

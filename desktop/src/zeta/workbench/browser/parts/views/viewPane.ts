@@ -1,3 +1,4 @@
+import "./views.css";
 import { trackFocus } from "../../../../base/browser/focus.js";
 import type { Event } from "../../../../base/common/event.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";

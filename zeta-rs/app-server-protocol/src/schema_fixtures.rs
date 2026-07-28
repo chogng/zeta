@@ -29,6 +29,8 @@ fn registry_method_and_notification_names_are_unique() {
     assert!(methods.contains("turn/start"));
     assert!(methods.contains("turn/interaction/resolve"));
     assert!(methods.contains("document/typst/compile"));
+    assert!(methods.contains("fs/getMetadata"));
+    assert!(methods.contains("fs/readDirectory"));
     assert!(notifications.contains("session/update"));
     assert!(notifications.contains("thread/update"));
 }
@@ -192,6 +194,8 @@ fn dto_driven_typescript_preserves_model_ref_and_patch_shape() {
     assert!(
         typescript.contains(r#""document/typst/compile": { method: "document/typst/compile" }"#)
     );
+    assert!(typescript.contains(r#""fs/getMetadata": { method: "fs/getMetadata" }"#));
+    assert!(typescript.contains(r#""fs/readDirectory": { method: "fs/readDirectory" }"#));
     assert!(typescript.contains("export type TypstCompileResult ="));
     assert!(typescript.contains(r#""status": "success""#));
     assert!(typescript.contains("export type TurnInteraction ="));

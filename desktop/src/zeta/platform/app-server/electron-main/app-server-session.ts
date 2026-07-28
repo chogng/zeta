@@ -187,6 +187,7 @@ function validateInitializeResult(value: InitializeResult): void {
     typeof value.capabilities.threads !== "boolean" ||
     typeof value.capabilities.turns !== "boolean" ||
     typeof value.capabilities.resources !== "boolean" ||
+    typeof value.capabilities.fileSystem !== "boolean" ||
     typeof value.capabilities.typst !== "boolean" ||
     typeof value.capabilities.updateReplay !== "boolean"
   ) {

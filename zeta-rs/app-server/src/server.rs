@@ -15,10 +15,12 @@ use zeta_app_server_protocol::rpc::{
 use zeta_app_server_transport::{DEFAULT_MAX_MESSAGE_BYTES, JsonlTransport};
 use zeta_config::ConfigStore;
 use zeta_core::{CoreError, ModelService, SessionCoordinator, ThreadUpdateSink, TurnExecutor};
+use zeta_file_system::WorkspaceFileSystem;
 use zeta_protocol::ThreadUpdateEnvelope;
 use zeta_typst::TypstCompiler;
 
 mod config_operations;
+mod fs_operations;
 mod operations;
 mod update_broker;
 
@@ -30,6 +32,7 @@ pub struct AppServer {
     next_connection_id: AtomicU64,
     pub(super) resources: Mutex<ResourceStore>,
     pub(super) config: Option<Arc<ConfigStore>>,
+    pub(super) file_system: Option<Arc<dyn WorkspaceFileSystem>>,
     pub(super) typst: TypstCompiler,
     pub(super) slash_commands: SlashCommandCatalog,
     updates: Arc<UpdateBroker>,
@@ -56,6 +59,7 @@ impl AppServer {
             next_connection_id: AtomicU64::new(1),
             resources: Mutex::new(ResourceStore::default()),
             config: None,
+            file_system: None,
             typst: TypstCompiler::new(),
             slash_commands: SlashCommandCatalog::default(),
             updates,
@@ -79,6 +83,11 @@ impl AppServer {
 
     pub fn with_slash_command_catalog(mut self, slash_commands: SlashCommandCatalog) -> Self {
         self.slash_commands = slash_commands;
+        self
+    }
+
+    pub fn with_file_system(mut self, file_system: Arc<dyn WorkspaceFileSystem>) -> Self {
+        self.file_system = Some(file_system);
         self
     }
 
@@ -249,6 +258,8 @@ impl AppServer {
             Some(ClientMethod::ResourceRelease) => {
                 self.resource_release(connection, &request.params)
             }
+            Some(ClientMethod::FsGetMetadata) => self.fs_get_metadata(&request.params),
+            Some(ClientMethod::FsReadDirectory) => self.fs_read_directory(&request.params),
             None => Err(RpcError::new(-32601, AppServerErrorName::MethodNotFound)),
         }
     }

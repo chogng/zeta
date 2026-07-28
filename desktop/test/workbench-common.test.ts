@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { JSDOM } from "jsdom";
 import { toDisposable } from "../src/zeta/base/common/lifecycle.js";
 import { URI } from "../src/zeta/base/common/uri.js";
 import {
@@ -22,9 +23,11 @@ import {
   WorkbenchState,
 } from "../src/zeta/platform/workspace/common/workspace.js";
 import {
-  bindWorkbenchContextKeys,
   getVisibleViewContextKey,
 } from "../src/zeta/workbench/common/contextkeys.js";
+import {
+  bindWorkbenchContextKeys,
+} from "../src/zeta/workbench/browser/contextkeys.js";
 import {
   WorkbenchContributionRegistry,
   WorkbenchPhase,
@@ -38,6 +41,7 @@ import {
 import {
   type IView,
   ViewContainerLocation,
+  WorkbenchViewContainerId,
   WorkbenchViewRegistry,
 } from "../src/zeta/workbench/common/views.js";
 import {
@@ -238,6 +242,40 @@ test("view registrations are ordered and disposed atomically", () => {
     "add:zeta.explorer,zeta.search",
     "remove:zeta.explorer,zeta.search",
   ]);
+});
+
+test("file views register after their host container", async () => {
+  const registry = new WorkbenchViewRegistry();
+  registry.registerStaticViewContainer({
+    id: WorkbenchViewContainerId.Sidebar,
+    title: "Navigation",
+    location: ViewContainerLocation.Sidebar,
+  });
+  const browserEnvironment = new JSDOM("<!doctype html><body></body>");
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    value: browserEnvironment.window,
+  });
+  try {
+    const {
+      EXPLORER_VIEW_ID,
+      registerFilesViews,
+    } = await import(
+      "../src/zeta/workbench/contrib/files/browser/files.contribution.js"
+    );
+
+    registerFilesViews(registry);
+
+    assert.deepEqual(
+      registry.getViews(WorkbenchViewContainerId.Sidebar).map(
+        (view) => view.id,
+      ),
+      [EXPLORER_VIEW_ID],
+    );
+  } finally {
+    browserEnvironment.window.close();
+    Reflect.deleteProperty(globalThis, "window");
+  }
 });
 
 class TestView implements IView {

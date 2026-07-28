@@ -60,7 +60,11 @@ fn run_app_server(arguments: Vec<String>) -> Result<(), String> {
     if arguments.as_slice() != ["--listen", "stdio://"] {
         return Err("usage: zeta app-server --listen stdio://".into());
     }
-    open_local_app_server(LocalAppServerOptions::new(state_root()))
+    let mut options = LocalAppServerOptions::new(state_root());
+    if let Some(workspace_root) = env::var_os("ZETA_WORKSPACE_ROOT") {
+        options = options.with_workspace_root(workspace_root);
+    }
+    open_local_app_server(options)
         .map_err(|error| error.to_string())?
         .serve_stdio()
         .map_err(|error| error.to_string())
