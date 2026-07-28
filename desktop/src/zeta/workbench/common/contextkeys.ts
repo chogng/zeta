@@ -30,6 +30,10 @@ export const SideBarVisibleContext =
 export const AuxiliaryBarVisibleContext =
   new RawContextKey<boolean>("auxiliaryBarVisible", true);
 
+/** Whether the bottom panel is currently visible. */
+export const PanelVisibleContext =
+  new RawContextKey<boolean>("panelVisible", true);
+
 /** Whether the main editor area is currently visible. */
 export const EditorAreaVisibleContext =
   new RawContextKey<boolean>("editorAreaVisible", true);

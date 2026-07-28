@@ -9,6 +9,7 @@ import type {
 } from "../../../../platform/instantiation/common/instantiation.js";
 import {
   AuxiliaryBarVisibleContext,
+  PanelVisibleContext,
   SideBarVisibleContext,
 } from "../../../common/contextkeys.js";
 import { IWorkbenchLayoutService } from "../../layout.js";
@@ -16,6 +17,7 @@ import { IWorkbenchLayoutService } from "../../layout.js";
 export const ToggleSideBarCommandId = "workbench.action.toggleSideBar";
 export const ToggleAuxiliaryBarCommandId =
   "workbench.action.toggleAuxiliaryBar";
+export const TogglePanelCommandId = "workbench.action.togglePanel";
 
 registerAction2(class ToggleSideBarAction extends Action2 {
   constructor() {
@@ -91,6 +93,45 @@ registerAction2(class ToggleAuxiliaryBarAction extends Action2 {
       layout.hidePart("auxiliarybar");
     } else {
       layout.showPart("auxiliarybar");
+    }
+  }
+});
+
+registerAction2(class TogglePanelAction extends Action2 {
+  constructor() {
+    super({
+      id: TogglePanelCommandId,
+      title: "Show Panel",
+      tooltip: "Show Panel",
+      icon: LxIcon.layoutPanelOff,
+      toggled: {
+        condition: PanelVisibleContext.isEqualTo(true),
+        title: "Hide Panel",
+        tooltip: "Hide Panel",
+        icon: LxIcon.layoutPanel,
+      },
+      menu: [
+        {
+          id: MenuId.TitleBar,
+          group: "navigation",
+          order: 9,
+        },
+        {
+          id: MenuId.MenubarViewMenu,
+          group: "2_appearance",
+          order: 11,
+        },
+      ],
+      f1: true,
+    });
+  }
+
+  override run(accessor: ServicesAccessor): void {
+    const layout = accessor.get(IWorkbenchLayoutService);
+    if (layout.isPartVisible("panel")) {
+      layout.hidePart("panel");
+    } else {
+      layout.showPart("panel");
     }
   }
 });

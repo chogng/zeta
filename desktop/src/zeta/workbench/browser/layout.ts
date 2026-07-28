@@ -23,6 +23,7 @@ export const workbenchPartIds = [
   "session",
   "auxiliarybar",
   "editor",
+  "panel",
 ] as const;
 export type WorkbenchPartId = typeof workbenchPartIds[number];
 
@@ -39,13 +40,17 @@ export interface WorkbenchPartVisibilityChangeEvent {
  * regions and visibility, never an arbitrary external layout tree.
  */
 export interface WorkbenchLayoutState {
-  readonly version: 1;
+  readonly version: 2;
   readonly sidebar: {
     readonly width: number;
     readonly visible: boolean;
   };
   readonly auxiliarybar: {
     readonly width: number;
+    readonly visible: boolean;
+  };
+  readonly panel: {
+    readonly height: number;
     readonly visible: boolean;
   };
 }
@@ -135,8 +140,9 @@ export class WorkbenchLayout
   get state(): WorkbenchLayoutState {
     const sidebar = this.getPartSize("sidebar");
     const auxiliarybar = this.getPartSize("auxiliarybar");
+    const panel = this.getPartSize("panel");
     return {
-      version: 1,
+      version: 2,
       sidebar: {
         width: sidebar.width,
         visible: this.isPartVisible("sidebar"),
@@ -144,6 +150,10 @@ export class WorkbenchLayout
       auxiliarybar: {
         width: auxiliarybar.width,
         visible: this.isPartVisible("auxiliarybar"),
+      },
+      panel: {
+        height: panel.height,
+        visible: this.isPartVisible("panel"),
       },
     };
   }
@@ -158,6 +168,10 @@ export class WorkbenchLayout
       "auxiliarybar",
       this.getPartSize("auxiliarybar").with(state.auxiliarybar.width),
     );
+    this.resizePart(
+      "panel",
+      new Dimension(this.getPartSize("panel").width, state.panel.height),
+    );
     this.updatePartsVisibility(
       ["sidebar"],
       state.sidebar.visible,
@@ -166,6 +180,7 @@ export class WorkbenchLayout
       ["auxiliarybar"],
       state.auxiliarybar.visible,
     );
+    this.updatePartsVisibility(["panel"], state.panel.visible);
   }
 
   isPartVisible(partId: WorkbenchPartId): boolean {
@@ -280,9 +295,10 @@ function createWorkbenchGridDescriptor(
             children: [
               leaf("session", 36),
               {
-                ...leaf("editor", 674),
+                ...leaf("editor", 474),
                 priority: "high",
               },
+              leaf("panel", 200),
             ],
           },
           leaf("auxiliarybar", 220),
@@ -325,14 +341,24 @@ function requiredView(
 function parseWorkbenchLayoutState(value: unknown): WorkbenchLayoutState {
   if (
     !isRecord(value) ||
-    value.version !== 1 ||
-    !isLayoutRegionState(value.sidebar) ||
-    !isLayoutRegionState(value.auxiliarybar)
+    !isHorizontalLayoutRegionState(value.sidebar) ||
+    !isHorizontalLayoutRegionState(value.auxiliarybar)
   ) {
     throw new TypeError("Workbench layout state is invalid or unsupported");
   }
+  let panel: { readonly height: number; readonly visible: boolean };
+  if (value.version === 1) {
+    panel = { height: 200, visible: true };
+  } else if (
+    value.version === 2 &&
+    isVerticalLayoutRegionState(value.panel)
+  ) {
+    panel = value.panel;
+  } else {
+    throw new TypeError("Workbench layout state is invalid or unsupported");
+  }
   return {
-    version: 1,
+    version: 2,
     sidebar: {
       width: value.sidebar.width,
       visible: value.sidebar.visible,
@@ -341,16 +367,30 @@ function parseWorkbenchLayoutState(value: unknown): WorkbenchLayoutState {
       width: value.auxiliarybar.width,
       visible: value.auxiliarybar.visible,
     },
+    panel: {
+      height: panel.height,
+      visible: panel.visible,
+    },
   };
 }
 
-function isLayoutRegionState(
+function isHorizontalLayoutRegionState(
   value: unknown,
 ): value is { readonly width: number; readonly visible: boolean } {
   return isRecord(value) &&
     typeof value.width === "number" &&
     Number.isFinite(value.width) &&
     value.width >= 0 &&
+    typeof value.visible === "boolean";
+}
+
+function isVerticalLayoutRegionState(
+  value: unknown,
+): value is { readonly height: number; readonly visible: boolean } {
+  return isRecord(value) &&
+    typeof value.height === "number" &&
+    Number.isFinite(value.height) &&
+    value.height >= 0 &&
     typeof value.visible === "boolean";
 }
 

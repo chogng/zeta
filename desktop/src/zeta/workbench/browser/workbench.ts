@@ -142,6 +142,7 @@ import {
   AuxiliarybarPart,
 } from "./parts/auxiliarybar/auxiliarybarPart.js";
 import { EditorPart, IEditorPart } from "./parts/editor/editorPart.js";
+import { PanelPart } from "./parts/panel/panelPart.js";
 import { SessionPart } from "./parts/session/sessionPart.js";
 import { SidebarPart } from "./parts/sidebar/sidebarPart.js";
 import { StatusbarPart } from "./parts/statusbar/statusbarPart.js";
@@ -364,6 +365,18 @@ export class Workbench extends DisposableOwner {
       keybindingService: keybindings,
     }));
     services.set(IEditorPart, editor);
+    const panel = this.own(new PanelPart(ownerDocument));
+    const panelViewContainer = requiredViewContainer(
+      viewDescriptors,
+      ViewContainerLocation.Panel,
+    );
+    panel.setViewPaneContainer(new ViewPaneContainer({
+      viewContainer: panelViewContainer,
+      model: viewDescriptors.getViewContainerModel(panelViewContainer.id),
+      instantiationService,
+      contextKeyService: contextKeys,
+      ownerDocument,
+    }));
     const auxiliarybar = this.own(new AuxiliarybarPart(ownerDocument));
     const auxiliaryViewContainer = requiredViewContainer(
       viewDescriptors,
@@ -390,6 +403,7 @@ export class Workbench extends DisposableOwner {
       ["session", session],
       ["auxiliarybar", auxiliarybar],
       ["editor", editor],
+      ["panel", panel],
     ]);
     const layout = this.own(
       new WorkbenchLayout(workbenchRoot, parts),

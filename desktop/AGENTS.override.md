@@ -34,3 +34,10 @@
 - Add structures such as a resource tree when a real hierarchical consumer
   exists. Do not expand the base layer speculatively from anticipated feature
   requirements.
+
+
+# Code formatting
+
+- Prefer compact single-line formatting for short imports, function calls, parameter lists, conditions, and expressions.
+- Split code across lines only when it exceeds the project's line-length convention, materially improves readability, or is required by the configured formatter.
+- Do not preemptively use multiline formatting merely because more items might be added later.

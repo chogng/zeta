@@ -44,6 +44,13 @@ ViewsRegistry.registerStaticViewContainer({
   order: 1,
   isDefault: true,
 });
+ViewsRegistry.registerStaticViewContainer({
+  id: WorkbenchViewContainerId.Panel,
+  title: "Panel",
+  location: ViewContainerLocation.Panel,
+  order: 1,
+  isDefault: true,
+});
 registerFilesViews();
 registerSearchViews();
 registerGitViews();

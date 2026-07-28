@@ -24,6 +24,13 @@ for (const [name, value] of Object.entries({
 }
 
 const { Dimension } = await import("../src/zeta/base/browser/geometry.js");
+const { LxIcon } = await import("../src/zeta/base/common/lxicons.js");
+const { MenuId } = await import(
+  "../src/zeta/platform/actions/common/actions.js"
+);
+const { MenuService } = await import(
+  "../src/zeta/platform/actions/common/menuService.js"
+);
 const {
   IWorkbenchLayoutService,
   WorkbenchLayout,
@@ -51,6 +58,7 @@ const {
 } = await import("../src/zeta/workbench/common/views.js");
 const {
   ToggleAuxiliaryBarCommandId,
+  TogglePanelCommandId,
   ToggleSideBarCommandId,
 } = await import(
   "../src/zeta/workbench/browser/parts/titlebar/titlebarActions.js"
@@ -98,6 +106,7 @@ class TestPart extends WorkbenchPart {
     if (this.id === "session") return 36;
     if (this.id === "statusbar") return 23;
     if (this.id === "editor") return 84;
+    if (this.id === "panel") return 80;
     return 0;
   }
 
@@ -152,13 +161,14 @@ test("Workbench layout hides and restores Parts with context keys", () => {
   harness.layout.layout(new Dimension(1_000, 700));
   assert.equal(
     harness.container.querySelectorAll(".zeta-sash").length,
-    2,
+    3,
   );
   assert.equal(overlay.parentElement, harness.container);
   assert.ok(overlay.isConnected);
   assert.ok(harness.container.querySelector("[data-part='sidebar']"));
   assert.equal(contextKeys.getValue("sideBarVisible"), true);
-  harness.layout.hideParts(["sidebar", "auxiliarybar"]);
+  assert.equal(contextKeys.getValue("panelVisible"), true);
+  harness.layout.hideParts(["sidebar", "auxiliarybar", "panel"]);
   assert.ok(overlay.isConnected);
   assert.equal(
     harness.container.querySelector<HTMLElement>(
@@ -175,6 +185,7 @@ test("Workbench layout hides and restores Parts with context keys", () => {
   assert.ok(harness.container.querySelector("[data-part='editor']"));
   assert.equal(contextKeys.getValue("sideBarVisible"), false);
   assert.equal(contextKeys.getValue("auxiliaryBarVisible"), false);
+  assert.equal(contextKeys.getValue("panelVisible"), false);
   assert.equal(contextKeys.getValue("editorAreaVisible"), true);
   harness.layout.showPart("sidebar");
   assert.equal(
@@ -198,12 +209,17 @@ test("Workbench layout state is versioned and excludes topology", () => {
     harness.layout.getPartSize("sidebar").with(250),
   );
   harness.layout.hidePart("auxiliarybar");
+  harness.layout.resizePart(
+    "panel",
+    new Dimension(harness.layout.getPartSize("panel").width, 180),
+  );
   const state = harness.layout.state;
 
   assert.deepEqual(state, {
-    version: 1,
+    version: 2,
     sidebar: { width: 250, visible: true },
     auxiliarybar: { width: 220, visible: false },
+    panel: { height: 180, visible: true },
   });
   assert.equal("children" in state, false);
 
@@ -216,18 +232,28 @@ test("Workbench layout validates and restores mutable state only", () => {
   const harness = createLayoutHarness(dom.window.document);
   harness.layout.layout(new Dimension(1_000, 700));
   harness.layout.restoreState({
-    version: 1,
+    version: 2,
     sidebar: { width: 260, visible: true },
     auxiliarybar: { width: 240, visible: false },
+    panel: { height: 160, visible: false },
   });
 
   assert.equal(harness.layout.getPartSize("sidebar").width, 260);
   assert.equal(harness.layout.isPartVisible("auxiliarybar"), false);
+  assert.equal(harness.layout.isPartVisible("panel"), false);
+  harness.layout.restoreState({
+    version: 1,
+    sidebar: { width: 250, visible: true },
+    auxiliarybar: { width: 230, visible: true },
+  });
+  assert.equal(harness.layout.getPartSize("panel").height, 200);
+  assert.equal(harness.layout.isPartVisible("panel"), true);
   assert.throws(
     () => harness.layout.restoreState({
-      version: 2,
+      version: 3,
       sidebar: { width: 260, visible: true },
       auxiliarybar: { width: 240, visible: false },
+      panel: { height: 160, visible: false },
     }),
     /invalid or unsupported/,
   );
@@ -365,7 +391,7 @@ test("Activity Bar tracks and selects Sidebar View Containers", () => {
   dom.window.close();
 });
 
-test("titlebar layout commands toggle both sidebars", async () => {
+test("titlebar layout commands toggle shell regions", async () => {
   const dom = new JSDOM("<!doctype html><body></body>");
   const harness = createLayoutHarness(dom.window.document);
   const services = new ServiceCollection();
@@ -384,6 +410,29 @@ test("titlebar layout commands toggle both sidebars", async () => {
   await commands.executeCommand(ToggleAuxiliaryBarCommandId);
   assert.equal(harness.layout.isPartVisible("auxiliarybar"), true);
 
+  assert.equal(harness.layout.isPartVisible("panel"), true);
+  await commands.executeCommand(TogglePanelCommandId);
+  assert.equal(harness.layout.isPartVisible("panel"), false);
+  await commands.executeCommand(TogglePanelCommandId);
+  assert.equal(harness.layout.isPartVisible("panel"), true);
+
   harness.disposables.dispose();
   dom.window.close();
+});
+
+test("panel toggle action uses state icons in the right titlebar", () => {
+  using disposables = new DisposableStore();
+  const contextKeys = disposables.add(new ContextKeyService());
+  const commands = disposables.add(
+    new CommandService(new ServiceCollection()),
+  );
+  const menuService = new MenuService(commands, contextKeys);
+  const panelAction = () => menuService
+    .getMenuActions(MenuId.TitleBar)
+    .flatMap(([, actions]) => actions)
+    .find((action) => action.id === TogglePanelCommandId);
+
+  assert.equal(panelAction()?.icon, LxIcon.layoutPanelOff);
+  contextKeys.setContext("panelVisible", true);
+  assert.equal(panelAction()?.icon, LxIcon.layoutPanel);
 });

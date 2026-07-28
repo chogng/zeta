@@ -12,6 +12,7 @@ import {
   AuxiliaryBarVisibleContext,
   EditorAreaVisibleContext,
   FocusedViewContext,
+  PanelVisibleContext,
   SideBarVisibleContext,
   WorkbenchStateContext,
   WorkspaceFolderCountContext,
@@ -33,6 +34,7 @@ export function bindWorkbenchContextKeys(
   const sideBarVisible = SideBarVisibleContext.bindTo(contextKeyService);
   const auxiliaryBarVisible =
     AuxiliaryBarVisibleContext.bindTo(contextKeyService);
+  const panelVisible = PanelVisibleContext.bindTo(contextKeyService);
   const editorAreaVisible =
     EditorAreaVisibleContext.bindTo(contextKeyService);
   const focusedView = FocusedViewContext.bindTo(contextKeyService);
@@ -47,6 +49,7 @@ export function bindWorkbenchContextKeys(
   return toDisposable(() => {
     focusedView.reset();
     editorAreaVisible.reset();
+    panelVisible.reset();
     auxiliaryBarVisible.reset();
     sideBarVisible.reset();
     workspaceFolderCount.reset();
@@ -78,6 +81,7 @@ export function bindWorkbenchPartVisibilityContextKeys(
 const visibilityContextPartIds = [
   "sidebar",
   "auxiliarybar",
+  "panel",
   "editor",
 ] as const satisfies readonly WorkbenchPartId[];
 
@@ -92,6 +96,9 @@ function applyWorkbenchPartVisibilityContext(
       break;
     case "auxiliarybar":
       contextKeyService.setContext(AuxiliaryBarVisibleContext.key, visible);
+      break;
+    case "panel":
+      contextKeyService.setContext(PanelVisibleContext.key, visible);
       break;
     case "editor":
       contextKeyService.setContext(EditorAreaVisibleContext.key, visible);
