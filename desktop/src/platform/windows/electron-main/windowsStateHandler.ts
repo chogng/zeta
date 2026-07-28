@@ -1,6 +1,9 @@
 import { toDisposable, type IDisposable } from "../../../base/common/lifecycle.js";
 import type { IStateService } from "../../state/node/state.js";
 import {
+  WindowKind,
+} from "../../window/common/window.js";
+import {
   defaultWindowState,
   WindowMode,
   type IWindowBounds,
@@ -11,7 +14,10 @@ import {
   type IWindowDisplay,
 } from "./windows.js";
 
-const WINDOW_STATE_STORAGE_KEY = "windowState";
+const WINDOW_STATE_STORAGE_KEYS: Readonly<Record<WindowKind, string>> = {
+  [WindowKind.Empty]: "windowState.empty",
+  [WindowKind.Workspace]: "windowState",
+};
 const WINDOW_STATE_VERSION = 1;
 
 /** Display operations needed to restore and capture window placement. */
@@ -39,6 +45,7 @@ export interface IStatefulWindow {
 export interface IWindowsStateHandlerOptions {
   readonly stateService: IStateService;
   readonly displayService: IWindowDisplayService;
+  readonly windowKind: WindowKind;
   readonly onError?: (error: unknown) => void;
 }
 
@@ -48,34 +55,40 @@ export interface IWindowsStateHandlerOptions {
 export class WindowsStateHandler {
   readonly #stateService: IStateService;
   readonly #displayService: IWindowDisplayService;
+  readonly #windowKind: WindowKind;
+  readonly #storageKey: string;
   readonly #onError: (error: unknown) => void;
   #lastNormalBounds: IWindowBounds | undefined;
 
   constructor({
     stateService,
     displayService,
+    windowKind,
     onError = () => undefined,
   }: IWindowsStateHandlerOptions) {
     this.#stateService = stateService;
     this.#displayService = displayService;
+    this.#windowKind = windowKind;
+    this.#storageKey = WINDOW_STATE_STORAGE_KEYS[windowKind];
     this.#onError = onError;
   }
 
   /** Restores validated state or returns defaults when state cannot be used. */
   restoreWindowState(): IWindowState {
     const storedState = parseStoredWindowState(
-      this.#stateService.getItem(WINDOW_STATE_STORAGE_KEY),
+      this.#stateService.getItem(this.#storageKey),
     );
     if (!storedState) {
-      return defaultWindowState();
+      return defaultWindowState(this.#windowKind);
     }
 
     const restoredState = validateWindowState(
       storedState,
       this.#displayService.getAllDisplays(),
+      this.#windowKind,
     );
     if (!restoredState) {
-      return defaultWindowState();
+      return defaultWindowState(this.#windowKind);
     }
 
     this.#lastNormalBounds = toBounds(restoredState);
@@ -104,7 +117,7 @@ export class WindowsStateHandler {
     }
 
     this.#stateService.setItem(
-      WINDOW_STATE_STORAGE_KEY,
+      this.#storageKey,
       serializeWindowState(state),
     );
     await this.#stateService.flush();

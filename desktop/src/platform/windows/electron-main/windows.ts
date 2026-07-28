@@ -1,5 +1,6 @@
 import {
   WINDOW_MINIMUM_SIZE,
+  type WindowKind,
 } from "../../window/common/window.js";
 import {
   defaultWindowState,
@@ -103,6 +104,7 @@ export function applyWindowState(
 export function validateWindowState(
   state: IWindowState,
   displays: readonly IWindowDisplay[],
+  windowKind: WindowKind,
 ): IWindowState | undefined {
   const { x, y, width: stateWidth, height: stateHeight } = state;
   if (
@@ -131,7 +133,7 @@ export function validateWindowState(
     );
     if (fullscreenDisplay) {
       return {
-        ...defaultWindowState(WindowMode.Fullscreen),
+        ...defaultWindowState(windowKind, WindowMode.Fullscreen),
         x: fullscreenDisplay.display.bounds.x,
         y: fullscreenDisplay.display.bounds.y,
         displayId: fullscreenDisplay.display.id,

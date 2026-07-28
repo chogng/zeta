@@ -30,6 +30,9 @@ import {
   NATIVE_MENUBAR_SELECT_CHANNEL,
   NATIVE_MENUBAR_UPDATE_CHANNEL,
 } from "../../platform/menubar/common/nativeMenubar.js";
+import {
+  WORKSPACE_CONTEXT_READ_CHANNEL,
+} from "../../platform/workspace/common/workspaceIpc.js";
 
 const api: ZetaElectronRendererApi = {
   environment: {
@@ -140,6 +143,10 @@ const api: ZetaElectronRendererApi = {
           ),
       };
     },
+  },
+  workspace: {
+    getWorkspace: () =>
+      ipcRenderer.invoke(WORKSPACE_CONTEXT_READ_CHANNEL),
   },
 };
 

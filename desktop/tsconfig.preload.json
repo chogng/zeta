@@ -13,6 +13,7 @@
     "src/platform/keybinding/common/**/*.ts",
     "src/platform/menubar/common/**/*.ts",
     "src/platform/native/common/**/*.ts",
+    "src/platform/workspace/common/**/*.ts",
     "generated/**/*.ts"
   ]
 }

@@ -7,6 +7,9 @@ import type {
   ZetaElectronRendererApi,
 } from "../../../platform/native/common/rendererApi.js";
 import {
+  parseWorkspaceContext,
+} from "../../../platform/workspace/common/workspace.js";
+import {
   createElectronWorkbenchContextMenuService,
 } from "../../../workbench/services/contextmenu/electron-browser/contextMenuService.js";
 import { startWorkbench } from "../../../workbench/browser/workbench.js";
@@ -27,9 +30,13 @@ const disposableTracker = import.meta.env.DEV
 const tracking = disposableTracker
   ? installDisposableTracker(disposableTracker)
   : undefined;
+const workspace = parseWorkspaceContext(
+  await window.zeta.workspace.getWorkspace(),
+);
 const workbench = startWorkbench({
   api: window.zeta,
   container: document.querySelector<HTMLElement>("#app"),
+  workspace,
   configurationApi: window.zeta.configuration,
   keybindingsResourceApi: window.zeta.keybindings,
   createContextMenuService: (options) =>

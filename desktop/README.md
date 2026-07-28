@@ -18,6 +18,22 @@ corepack pnpm dev:desktop
 
 这个命令会先编译 Rust CLI，然后启动 Vite、主进程、预加载脚本和 Electron。启动后不要关闭终端，停止服务可以按 `Ctrl+C`。
 
+不带项目路径启动时，Zeta 使用空窗口上下文。构建完成后，可以通过启动参数打开一个项目目录：
+
+```powershell
+corepack pnpm --dir desktop start -- C:\path\to\project
+```
+
+也可以显式声明目标类型：
+
+```powershell
+corepack pnpm --dir desktop start -- --folder C:\path\to\project
+corepack pnpm --dir desktop start -- --workspace C:\path\to\team.zeta-workspace
+```
+
+当前版本只建立启动窗口的 Workspace 身份并选择相应窗口策略；目录内容读取、Workspace
+配置解析和运行时“打开项目”界面尚未实现。
+
 ## 安装失败时
 
 如果出现 `ERR_PNPM_ENOENT`、`electron_tmp` 或 Electron 目录 rename 错误，请先关闭正在运行的 Electron、Vite 和 Node 进程，然后在仓库根目录重建依赖：

@@ -45,6 +45,9 @@ import {
 } from "../../platform/menubar/electron-main/menubarMainService.js";
 import { StateService } from "../../platform/state/node/stateService.js";
 import {
+  windowKindForWorkspace,
+} from "../../platform/window/common/window.js";
+import {
   WindowMode,
 } from "../../platform/window/electron-main/window.js";
 import {
@@ -54,6 +57,10 @@ import {
 import {
   WindowsStateHandler,
 } from "../../platform/windows/electron-main/windowsStateHandler.js";
+import {
+  WorkspaceMainService,
+  workspaceContextIpcRoutes,
+} from "../../platform/workspace/electron-main/workspaceMainService.js";
 
 let supervisor: AppServerSupervisor | undefined;
 let mainWindow: BrowserWindow | undefined;
@@ -94,8 +101,21 @@ app.whenReady().then(async () => {
     configurationService,
     keybindingsResourceService,
   );
+  let workspaceMainService: WorkspaceMainService;
+  try {
+    workspaceMainService = await WorkspaceMainService.create({
+      arguments: process.argv.slice(app.isPackaged ? 1 : 2),
+      cwd: process.cwd(),
+    });
+  } catch (error) {
+    console.error("Failed to resolve startup workspace", error);
+    workspaceMainService = WorkspaceMainService.empty();
+  }
+  const workspace = workspaceMainService.getWorkspace();
+  const windowKind = windowKindForWorkspace(workspace);
   windowsStateHandler = new WindowsStateHandler({
     stateService,
+    windowKind,
     displayService: {
       getAllDisplays: () => screen.getAllDisplays(),
       getDisplayMatching: (bounds) => screen.getDisplayMatching(bounds),
@@ -163,6 +183,7 @@ app.whenReady().then(async () => {
     ...appServerIpcRoutes(supervisor),
     ...configurationIpcRoutes(configurationService),
     ...keybindingsResourceIpcRoutes(keybindingsResourceService),
+    ...workspaceContextIpcRoutes(workspaceMainService),
   ];
   if (process.platform === "darwin") {
     const nativeContextMenu = windowDisposables.add(

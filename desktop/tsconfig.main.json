@@ -20,6 +20,8 @@
     "src/platform/keybinding/electron-main/**/*.ts",
     "src/platform/menubar/common/**/*.ts",
     "src/platform/menubar/electron-main/**/*.ts",
-    "src/platform/storage/node/**/*.ts"
+    "src/platform/storage/node/**/*.ts",
+    "src/platform/workspace/common/**/*.ts",
+    "src/platform/workspace/electron-main/**/*.ts"
   ]
 }

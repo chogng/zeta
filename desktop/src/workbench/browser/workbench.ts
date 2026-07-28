@@ -59,6 +59,11 @@ import {
   IThemeService,
   ThemeService,
 } from "../../platform/theme/common/themeService.js";
+import {
+  IWorkspaceContextService,
+  type IWorkspaceContext,
+  WorkbenchState,
+} from "../../platform/workspace/common/workspace.js";
 import { IRendererApiService } from "../common/services.js";
 import {
   IStatusbarService,
@@ -77,6 +82,9 @@ import {
 import {
   WorkbenchKeybindingsResourceService,
 } from "../services/keybinding/browser/keybindingsResourceService.js";
+import {
+  WorkspaceContextService,
+} from "../services/workspaces/browser/workspaceContextService.js";
 import {
   WorkbenchConfigurationService,
 } from "../services/configuration/browser/configurationService.js";
@@ -102,6 +110,7 @@ import "./workbench.contribution.js";
 export interface IStartWorkbenchOptions {
   readonly api: ZetaRendererApi;
   readonly container: HTMLElement | null;
+  readonly workspace: IWorkspaceContext;
   readonly configurationApi?: IConfigurationApi;
   readonly keybindingsResourceApi?: IKeybindingsResourceApi;
   readonly createContextMenuService: WorkbenchContextMenuServiceFactory;
@@ -112,6 +121,7 @@ export interface IStartWorkbenchOptions {
 export function startWorkbench({
   api,
   container,
+  workspace,
   configurationApi,
   keybindingsResourceApi,
   createContextMenuService,
@@ -120,6 +130,7 @@ export function startWorkbench({
   return new Workbench(
     api,
     container ?? document.body,
+    workspace,
     configurationApi,
     keybindingsResourceApi,
     createContextMenuService,
@@ -132,6 +143,7 @@ export class Workbench extends DisposableOwner {
   constructor(
     api: ZetaRendererApi,
     workbenchRoot: HTMLElement,
+    workspace: IWorkspaceContext,
     configurationApi: IConfigurationApi | undefined,
     keybindingsResourceApi: IKeybindingsResourceApi | undefined,
     createContextMenuService: WorkbenchContextMenuServiceFactory,
@@ -142,10 +154,15 @@ export class Workbench extends DisposableOwner {
     workbenchRoot.classList.add("zeta-workbench");
     workbenchRoot.setAttribute("data-runtime", environment.runtime);
     workbenchRoot.setAttribute("data-os", environment.os);
+    workbenchRoot.setAttribute(
+      "data-workbench-state",
+      workbenchStateName(workspace.state),
+    );
     this.defer(() => {
       workbenchRoot.classList.remove("zeta-workbench");
       workbenchRoot.removeAttribute("data-runtime");
       workbenchRoot.removeAttribute("data-os");
+      workbenchRoot.removeAttribute("data-workbench-state");
       workbenchRoot.replaceChildren();
     });
 
@@ -160,6 +177,8 @@ export class Workbench extends DisposableOwner {
 
     const services = new ServiceCollection();
     services.set(IRendererApiService, api);
+    const workspaceContext = new WorkspaceContextService(workspace);
+    services.set(IWorkspaceContextService, workspaceContext);
     const configuration = this.own(new WorkbenchConfigurationService({
       api: configurationApi,
     }));
@@ -226,7 +245,7 @@ export class Workbench extends DisposableOwner {
       menuService: menus,
       contextMenuService: contextMenus,
       ownerDocument,
-      title: "Zeta",
+      title: workspaceTitle(workspace),
     }));
     const sidebar = this.own(new SidebarPart(ownerDocument));
     sidebar.setViewlet(new Viewlet(
@@ -292,3 +311,20 @@ const defaultWorkbenchGrid: SerializableGrid = {
     { type: "part", partId: "statusbar", size: "22px" },
   ],
 };
+
+function workspaceTitle(workspace: IWorkspaceContext): string {
+  return workspace.state === WorkbenchState.EMPTY
+    ? "Zeta"
+    : `${workspace.label} — Zeta`;
+}
+
+function workbenchStateName(state: WorkbenchState): string {
+  switch (state) {
+    case WorkbenchState.EMPTY:
+      return "empty";
+    case WorkbenchState.FOLDER:
+      return "folder";
+    case WorkbenchState.WORKSPACE:
+      return "workspace";
+  }
+}

@@ -16,6 +16,9 @@ import type {
 import type {
   INativeMenubarApi,
 } from "../../menubar/common/nativeMenubar.js";
+import type {
+  IWorkspaceContextApi,
+} from "../../workspace/common/workspaceIpc.js";
 
 /** Capabilities exposed only by the Electron preload bridge. */
 export interface ZetaElectronRendererApi extends ZetaRendererApi {
@@ -24,4 +27,5 @@ export interface ZetaElectronRendererApi extends ZetaRendererApi {
   readonly keybindings: IKeybindingsResourceApi;
   readonly nativeContextMenu: INativeContextMenuApi;
   readonly nativeMenubar: INativeMenubarApi;
+  readonly workspace: IWorkspaceContextApi;
 }

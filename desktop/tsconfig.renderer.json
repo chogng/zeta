@@ -23,6 +23,7 @@
     "src/platform/native/common/**/*.ts",
     "src/platform/theme/browser/**/*.ts",
     "src/platform/theme/common/**/*.ts",
+    "src/platform/workspace/common/**/*.ts",
     "src/workbench/**/*.ts",
     "generated/**/*.ts"
   ],

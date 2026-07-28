@@ -27,6 +27,7 @@
     "src/platform/theme/common/**/*.ts",
     "src/platform/theme/test/**/*.ts",
     "src/platform/storage/node/**/*.ts",
+    "src/platform/workspace/**/*.ts",
     "src/workbench/services/statusbar/**/*.ts",
     "src/workbench/services/configuration/**/*.ts",
     "src/workbench/services/contextmenu/**/*.ts",

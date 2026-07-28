@@ -6,10 +6,14 @@ const electronExecutable = require("electron");
 const environment = { ...process.env };
 delete environment.ELECTRON_RUN_AS_NODE;
 
-const electron = spawn(electronExecutable, [process.cwd()], {
-  env: environment,
-  stdio: "inherit",
-});
+const electron = spawn(
+  electronExecutable,
+  [process.cwd(), ...process.argv.slice(2)],
+  {
+    env: environment,
+    stdio: "inherit",
+  },
+);
 
 const stopElectron = () => {
   if (!electron.killed) electron.kill();
