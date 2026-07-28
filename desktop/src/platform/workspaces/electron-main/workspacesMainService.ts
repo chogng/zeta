@@ -1,7 +1,15 @@
 import {
   type IAnyWorkspaceIdentifier,
   UNKNOWN_EMPTY_WINDOW_WORKSPACE,
+  serializeWorkspaceIdentifier,
 } from "../../workspace/common/workspace.js";
+import {
+  WORKSPACE_CONTEXT_READ_CHANNEL,
+  validateWorkspaceContextRead,
+} from "../../workspace/common/workspaceIpc.js";
+import type {
+  IpcRoute,
+} from "../../app-server/electron-main/trusted-ipc-router.js";
 import {
   type IWorkspaceOpenTarget,
   WorkspaceOpenTargetKind,
@@ -42,6 +50,17 @@ export class WorkspacesMainService {
     }
     return resolveWorkspaceOpenTarget(target, cwd, this.#pathService);
   }
+}
+
+/** Exposes one window-owned workspace identity through the trusted IPC router. */
+export function workspaceContextIpcRoutes(
+  workspace: IAnyWorkspaceIdentifier,
+): readonly IpcRoute<unknown, unknown>[] {
+  return [{
+    channel: WORKSPACE_CONTEXT_READ_CHANNEL,
+    validate: validateWorkspaceContextRead,
+    invoke: () => serializeWorkspaceIdentifier(workspace),
+  }];
 }
 
 /**

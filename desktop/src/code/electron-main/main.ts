@@ -62,10 +62,8 @@ import {
   workbenchStateFromWorkspaceIdentifier,
 } from "../../platform/workspace/common/workspace.js";
 import {
-  workspaceContextIpcRoutes,
-} from "../../platform/workspace/electron-main/workspaceContextIpc.js";
-import {
   WorkspacesMainService,
+  workspaceContextIpcRoutes,
 } from "../../platform/workspaces/electron-main/workspacesMainService.js";
 
 let supervisor: AppServerSupervisor | undefined;

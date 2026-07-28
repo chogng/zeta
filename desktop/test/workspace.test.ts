@@ -12,14 +12,12 @@ import {
   WorkbenchState,
 } from "../src/platform/workspace/common/workspace.js";
 import {
-  workspaceContextIpcRoutes,
-} from "../src/platform/workspace/electron-main/workspaceContextIpc.js";
-import {
   WorkspaceOpenTargetKind,
 } from "../src/platform/workspaces/common/workspaces.js";
 import {
   parseWorkspaceLaunchArguments,
   WorkspacesMainService,
+  workspaceContextIpcRoutes,
 } from "../src/platform/workspaces/electron-main/workspacesMainService.js";
 import {
   getSingleFolderWorkspaceIdentifier,
