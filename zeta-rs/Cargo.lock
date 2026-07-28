@@ -4310,6 +4310,7 @@ dependencies = [
 name = "zeta-exec"
 version = "0.1.0"
 dependencies = [
+ "zeta-protocol",
  "zeta-sandboxing",
 ]
 
@@ -4486,6 +4487,7 @@ dependencies = [
  "sha2",
  "zeta-async-utils",
  "zeta-protocol",
+ "zeta-sandboxing",
 ]
 
 [[package]]

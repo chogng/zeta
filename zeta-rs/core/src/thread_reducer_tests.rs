@@ -306,3 +306,103 @@ fn reducer_rejects_a_tool_result_without_its_tool_call() {
         .is_err()
     );
 }
+
+#[test]
+fn reducer_rejects_unsafe_or_rebound_tool_escalation() {
+    let thread = started_sandboxed_tool_snapshot();
+    let denial_output = zeta_protocol::ProcessExecutionOutput::from_captured_streams(
+        zeta_protocol::ProcessExitStatus::Code(1),
+        "",
+        "operation not permitted",
+    );
+    let unsafe_escalation = ThreadEvent::ToolExecutionEscalated {
+        thread_id: ThreadId::new("thread_1").unwrap(),
+        turn_id: TurnId::new("turn_1").unwrap(),
+        tool_call_id: ToolCallId::new("tool_1").unwrap(),
+        action_digest: "action-1".into(),
+        policy_revision: "policy-1".into(),
+        denial: zeta_protocol::SandboxDenialOutput::may_have_side_effects(
+            "write denied after process start",
+            denial_output.clone(),
+        ),
+        authority: zeta_protocol::ToolExecutionAuthority::AutoReviewed {
+            assessment_id: "assessment-1".into(),
+        },
+    };
+    assert!(reduce_thread_event(Some(thread.clone()), &envelope(6, unsafe_escalation)).is_err());
+
+    let rebound_escalation = ThreadEvent::ToolExecutionEscalated {
+        thread_id: ThreadId::new("thread_1").unwrap(),
+        turn_id: TurnId::new("turn_1").unwrap(),
+        tool_call_id: ToolCallId::new("tool_1").unwrap(),
+        action_digest: "another-action".into(),
+        policy_revision: "policy-1".into(),
+        denial: zeta_protocol::SandboxDenialOutput::safe_to_retry(
+            "sandbox setup failed",
+            denial_output,
+        ),
+        authority: zeta_protocol::ToolExecutionAuthority::AutoReviewed {
+            assessment_id: "assessment-1".into(),
+        },
+    };
+    assert!(reduce_thread_event(Some(thread), &envelope(6, rebound_escalation)).is_err());
+}
+
+fn started_sandboxed_tool_snapshot() -> ThreadSnapshot {
+    let events = [
+        envelope(
+            1,
+            ThreadEvent::ThreadCreated {
+                session_id: zeta_protocol::SessionId::new("session_1").unwrap(),
+                thread_id: ThreadId::new("thread_1").unwrap(),
+                title: "test".into(),
+            },
+        ),
+        envelope(
+            2,
+            ThreadEvent::TurnAccepted {
+                thread_id: ThreadId::new("thread_1").unwrap(),
+                turn_id: TurnId::new("turn_1").unwrap(),
+            },
+        ),
+        envelope(
+            3,
+            ThreadEvent::TurnStarted {
+                thread_id: ThreadId::new("thread_1").unwrap(),
+                turn_id: TurnId::new("turn_1").unwrap(),
+            },
+        ),
+        envelope(
+            4,
+            ThreadEvent::ItemCompleted {
+                thread_id: ThreadId::new("thread_1").unwrap(),
+                turn_id: TurnId::new("turn_1").unwrap(),
+                item: ThreadItem::ToolCall {
+                    item_id: ItemId::new("item_1").unwrap(),
+                    turn_id: TurnId::new("turn_1").unwrap(),
+                    tool_call_id: ToolCallId::new("tool_1").unwrap(),
+                    name: ToolName::new("shell-command").unwrap(),
+                    arguments_json: "{}".into(),
+                },
+            },
+        ),
+        envelope(
+            5,
+            ThreadEvent::ToolExecutionStarted {
+                thread_id: ThreadId::new("thread_1").unwrap(),
+                turn_id: TurnId::new("turn_1").unwrap(),
+                tool_call_id: ToolCallId::new("tool_1").unwrap(),
+                action_digest: "action-1".into(),
+                policy_revision: "policy-1".into(),
+                authority: zeta_protocol::ToolExecutionAuthority::Sandboxed,
+            },
+        ),
+    ];
+    events
+        .iter()
+        .try_fold(None, |snapshot, event| {
+            reduce_thread_event(snapshot, event).map(Some)
+        })
+        .unwrap()
+        .unwrap()
+}

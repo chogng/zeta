@@ -164,6 +164,14 @@ pub(crate) struct RecordToolExecutionStart {
     pub authority: zeta_protocol::ToolExecutionAuthority,
 }
 
+pub(crate) struct RecordToolExecutionEscalation {
+    pub tool_call_id: ToolCallId,
+    pub action_digest: String,
+    pub policy_revision: String,
+    pub denial: zeta_protocol::SandboxDenialOutput,
+    pub authority: zeta_protocol::ToolExecutionAuthority,
+}
+
 enum BatchCommand {
     None,
     AtEvent {

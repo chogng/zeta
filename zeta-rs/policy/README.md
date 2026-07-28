@@ -14,7 +14,7 @@ approval UI、不选择 model、不持久化 rule/grant。
 | --- | --- | --- |
 | Resolved action | `ResolvedAction`, `ActionDigest`, `ActionKind`, `ActionProvenance` | host 完整 materialize 后交给 policy |
 | Capability | `CapabilityKind`, `Capability`, `CapabilitySet` | exact `kind + scope`，BTreeSet canonical order |
-| Review input | `ActionReviewRequest`, `SandboxCompatibility`, `PolicyRevision`, `ReviewContext` | immutable safe-point snapshot |
+| Review input | `ActionReviewRequest`, `ActionReviewPhase`, `SandboxDenialEvidence`, `SandboxCompatibility`, `PolicyRevision`, `ReviewContext` | immutable safe-point snapshot；denial phase 保持 exact action binding |
 | Evidence | `ReviewEvidence`, `ReviewEvidenceKind`, `ReviewEvidenceTrust` | host 标注；repository/Tool/Agent 内容不可信 |
 | Deterministic policy | `ActionRule`, `RuleEffect`, `UnsandboxedGrant` | exact digest/revision/capability matching |
 | Advisory port | `ActionClassifier`, `ClassifierAssessment`, `ClassifierRecommendation` | implementation 不能执行或授权 |
@@ -31,7 +31,7 @@ materializer 负责；遗漏 cwd、environment、resolved path 或 provenance �
 src/
 ├── action.rs       # action/capability/review request
 ├── context.rs      # trust-labeled reviewer context
-├── classifier.rs   # advisory port、assessment identity/recommendation
+├── classifier.rs   # advisory port、assessment identity/recommendation constraints
 ├── rule.rs         # exact rules 与 existing grant
 ├── decision.rs     # final typed decisions 与 grant
 ├── engine.rs       # precedence、binding、risk gate
@@ -43,13 +43,14 @@ src/
 | `PolicyEngine::decide` | public | 唯一 top-level precedence entry | classifier 不能绕过 earlier deterministic branches |
 | `ensure_revision` | private | engine/request safe-point equality | mismatch 是 `PolicyError`，不是 classifier question |
 | `deterministic_rule_decision` | private | deny first，再 require-sandbox | deterministic deny 必须优先 |
-| `apply_assessment` | private | 验证 assessment binding，映射四种 recommendation | model identity mismatch 不能降级 AskUser |
-| `automatic_approval_decision` | private | exact capability + risk/auth matrix | 只有这里可构造 `AutoReviewGrant` |
+| `ClassifierRecommendation::validate_against` | public method | enforce approve exact/non-empty 与 revise subset | classifier 可提前调用，engine 对所有实现统一复检 |
+| `apply_assessment` | private | 验证 assessment binding/constraints，映射四种 recommendation | identity mismatch 不能降级 AskUser，invalid constraints 必须 fail closed |
+| `automatic_approval_decision` | private | risk/auth matrix 与 grant construction | 只有这里可构造 `AutoReviewGrant` |
 | `review_failure_decision` | private | explicit `ReviewFailurePolicy` mapping | classifier error 不得 fail open |
 | `UnsandboxedGrant::matches` | public method | digest + capabilities + revision exact match | 不使用 summary/Tool name 模糊匹配 |
 | `AutoReviewGrant::new` | crate-private | engine-only authority construction | 不得公开给 classifier/host adapter |
 | `AutoReviewGrant::matches` | public method | execution-time binding check | Core 还需绑定 exact Tool Call |
-| `AssessmentId::from_response` | public constructor | request/prompt/response audit hash | classifier 实现负责 canonical response bytes |
+| `AssessmentId::from_response` | public constructor | request/review-protocol/response audit hash | classifier 实现负责 canonical response bytes |
 
 ## 决策调用图
 
@@ -60,13 +61,15 @@ PolicyEngine::decide(request, cancellation)
 │  ├─ exact Deny → Block
 │  └─ exact RequireSandbox
 │     ├─ supported → RunSandboxed
-│     └─ unavailable → Block
+│     ├─ unavailable → Block
+│     └─ confirmed denial → Block
 ├─ exact UnsandboxedGrant::matches → RunUnsandboxed
-├─ SandboxCompatibility::Supported → RunSandboxed
+├─ Initial + SandboxCompatibility::Supported → RunSandboxed
 ├─ ActionClassifier::classify
 │  └─ error → review_failure_decision
 └─ apply_assessment
    ├─ digest/revision binding check
+   ├─ ClassifierRecommendation::validate_against
    ├─ Approve → automatic_approval_decision
    ├─ ReviseAction → SaferActionRequest
    ├─ AskUser → ApprovalRequest
@@ -78,7 +81,8 @@ PolicyEngine::decide(request, cancellation)
 
 ## Auto approval matrix
 
-`automatic_approval_decision` 先要求 non-empty exact capabilities，再应用：
+`apply_assessment` 先通过 `validate_against` 要求 approval capabilities non-empty/exact、revision
+capabilities 是原 action 的 subset，再由 `automatic_approval_decision` 应用：
 
 | Risk | Explicit | Implicit | Absent / Ambiguous |
 | --- | --- | --- | --- |
@@ -98,7 +102,10 @@ capability set 和 policy revision。Core 在执行时再把它绑定到 exact d
 | classifier failure + `Block` policy | `ExecutionDecision::Block(ReviewFailed)` |
 | classifier failure + `AskUser` policy | `ExecutionDecision::AskUser` |
 | approve capability mismatch/empty | `Block(ReviewFailed)` |
+| revise capability 不是原 action subset | `Block(ReviewFailed)` |
 | deterministic sandbox required but unavailable | `Block(SandboxRequiredButUnavailable)` |
+| require-sandbox action 的 sandbox 已确认拒绝 | `Block(SandboxRequiredButUnavailable)` |
+| supported action 的 safe sandbox denial phase | 跳过 sandbox fast path，进入 classifier |
 
 `PolicyError` 表示调用/binding contract 被破坏；`ExecutionDecision::Block` 是对合法 request 的 policy
 outcome。调用方不能把两者混成普通 Tool failure。
@@ -108,6 +115,7 @@ outcome。调用方不能把两者混成普通 Tool failure。
 - classifier 返回或构造 grant：advisory/authority boundary 被破坏；
 - `AutoReviewGrant::new` 变成 public：外层可以绕过 risk gate；
 - grant 只匹配 digest、不匹配 capability/revision：stale authority 可复用；
+- capability constraint 只在某个 classifier implementation 中检查：其他 classifier 可破坏 policy domain invariant；
 - sandbox-supported action仍调用 classifier扩权：least-privilege precedence 被破坏；
 - ReviewContext 在本 crate 内读取 Thread/filesystem：evidence broker ownership 漂移；
 - rule/grant persistence 进入 engine：pure decision 与 config/storage composition 耦合。
@@ -120,7 +128,8 @@ bazel test //zeta-rs/policy:policy-unit-tests
 ```
 
 `engine_tests.rs` 使用 panic classifier 证明 deterministic/sandbox paths 不调用 model，并覆盖
-exact grant、risk matrix、failure policy、binding mismatch 和 rule precedence。
+exact grant、risk matrix、recommendation capability constraints、failure policy、binding
+mismatch、sandbox-denial second review 和 rule precedence。
 
 修改 recommendation 或 final decision 时必须同步更新 `zeta-auto-review` schema、Core scheduler、
 durable authority、eval corpus 和系统文档。新增 capability kind 时同步审查 Tool materializer、

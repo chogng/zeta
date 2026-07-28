@@ -2,7 +2,7 @@ use super::*;
 use std::collections::BTreeMap;
 use std::sync::Mutex;
 use zeta_async_utils::CancellationSource;
-use zeta_auto_review::LlmActionClassifier;
+use zeta_auto_review::{AutoReviewError, LlmActionClassifier};
 use zeta_model_provider::ModelProviderError;
 use zeta_model_provider_config::{
     ApiProfile, EndpointPolicy, Model, ModelCatalogPolicy, ModelId, ModelProviderConfig,
@@ -43,6 +43,18 @@ impl ModelInvoker for RecordingInvoker {
             output: vec![ResponseItem::Text(
                 r#"{"recommendation":"deny","reason":"unsafe"}"#.into(),
             )],
+            usage: None,
+            stop_reason: StopReason::Completed,
+        })
+    }
+}
+
+struct StaticResponseInvoker(String);
+
+impl ModelInvoker for StaticResponseInvoker {
+    fn invoke(&self, _: &ModelRequest) -> Result<ModelResponse, ModelProviderError> {
+        Ok(ModelResponse {
+            output: vec![ResponseItem::Text(self.0.clone())],
             usage: None,
             stop_reason: StopReason::Completed,
         })
@@ -117,7 +129,7 @@ fn automatic_review_resolves_provider_default_and_uses_a_review_only_request() {
 
     let reviewer = resolver.resolve(&config).unwrap();
     assert_eq!(reviewer.model(), &model_ref("test", "review-model"));
-    let classifier = LlmActionClassifier::new(reviewer, "review-prompt-1");
+    let classifier = LlmActionClassifier::new(reviewer);
     classifier
         .classify(&review_request(), &CancellationSource::new().token())
         .unwrap();
@@ -142,6 +154,20 @@ fn automatic_review_resolves_provider_default_and_uses_a_review_only_request() {
     };
     assert!(input.contains("\"policy_revision\":\"policy-1\""));
     assert!(input.contains("\"user_intent\":\"call the configured API for this task\""));
+}
+
+#[test]
+fn review_adapter_enforces_the_classifier_response_budget_while_collecting_text() {
+    let reviewer = ProviderReviewModel {
+        model: model_ref("test", "review-model"),
+        invoker: Arc::new(StaticResponseInvoker("x".repeat(20 * 1024))),
+    };
+    let classifier = LlmActionClassifier::new(reviewer);
+
+    assert!(matches!(
+        classifier.classify(&review_request(), &CancellationSource::new().token()),
+        Err(AutoReviewError::ResponseTooLarge { .. })
+    ));
 }
 
 #[test]

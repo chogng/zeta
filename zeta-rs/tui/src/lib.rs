@@ -22,7 +22,9 @@ use zeta_app_server_protocol::protocol::thread::ThreadReadParams;
 use zeta_app_server_protocol::protocol::turn::{
     InputItem, InputItemKind, TurnInterruptParams, TurnStartParams,
 };
-use zeta_protocol::{CommandId, ThreadItem, TurnId, TurnStatus};
+use zeta_protocol::{
+    CommandId, StableTurnError, StableTurnErrorCode, ThreadItem, TurnId, TurnStatus,
+};
 
 /// Startup values owned by the CLI host rather than by the terminal UI.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -134,7 +136,7 @@ where
                                 &mut app,
                             );
                             if let Some(turn_id) = active_turn.clone()
-                                && !matches!(app.status(), app::Status::Error(_))
+                                && !matches!(app.status(), app::Status::Error)
                             {
                                 interrupt_turn(
                                     &mut client,
@@ -283,8 +285,10 @@ fn apply_active_turn_snapshot(
             let detail = turn
                 .error
                 .as_ref()
-                .map(|error| format!("turn failed: {error:?}"))
-                .unwrap_or_else(|| "turn failed".into());
+                .map(present_turn_error)
+                .unwrap_or_else(|| {
+                    "The request stopped before Zeta could finish. Please try again.".into()
+                });
             app.record_error(detail);
         }
         TurnStatus::Interrupted => {
@@ -296,6 +300,19 @@ fn apply_active_turn_snapshot(
         TurnStatus::WaitingForCapability => app.wait_for_capability(),
         TurnStatus::Created | TurnStatus::Running => app.record_working(),
         TurnStatus::Cancelling => app.record_cancelling(),
+    }
+}
+
+fn present_turn_error(error: &StableTurnError) -> String {
+    match error.code {
+        StableTurnErrorCode::ModelInvocationFailed => {
+            "Zeta couldn't reach the configured model. Check the model provider and credentials, \
+             then try again."
+                .into()
+        }
+        StableTurnErrorCode::CompletionPersistenceFailed => {
+            "Zeta generated a response but couldn't save it. Please try again.".into()
+        }
     }
 }
 

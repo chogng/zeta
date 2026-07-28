@@ -1,6 +1,6 @@
 use crate::CoreError;
 use crate::state::transition_turn_status;
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use zeta_protocol::AgentRequest;
 use zeta_protocol::AgentResponse;
 use zeta_protocol::RequestId;
@@ -31,6 +31,8 @@ pub struct ThreadSnapshot {
     pub seen_interaction_ids: BTreeSet<RequestId>,
     pub resolved_interactions: Vec<ResolvedTurnInteraction>,
     pub started_tool_calls: BTreeSet<ToolCallId>,
+    pub tool_execution_starts: BTreeMap<ToolCallId, ToolExecutionStartSnapshot>,
+    pub escalated_tool_calls: BTreeSet<ToolCallId>,
 }
 
 impl ThreadSnapshot {
@@ -101,6 +103,13 @@ pub struct TurnSnapshot {
     pub pending_interaction: Option<TurnInteraction>,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ToolExecutionStartSnapshot {
+    pub action_digest: String,
+    pub policy_revision: String,
+    pub authority: zeta_protocol::ToolExecutionAuthority,
+}
+
 /// A durable interaction response retained for exact continuation after a process restart.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ResolvedTurnInteraction {
@@ -167,6 +176,8 @@ pub fn reduce_thread_event(
                 seen_interaction_ids: BTreeSet::new(),
                 resolved_interactions: Vec::new(),
                 started_tool_calls: BTreeSet::new(),
+                tool_execution_starts: BTreeMap::new(),
+                escalated_tool_calls: BTreeSet::new(),
                 commands: {
                     require_no_command(envelope)?;
                     Vec::new()
@@ -407,6 +418,7 @@ pub fn reduce_thread_event(
             tool_call_id,
             action_digest,
             policy_revision,
+            authority,
             ..
         } => {
             require_no_command(envelope)?;
@@ -452,6 +464,92 @@ pub fn reduce_thread_event(
             if !snapshot.started_tool_calls.insert(tool_call_id.clone()) {
                 return Err(CoreError::Journal(format!(
                     "tool execution already started: {tool_call_id}"
+                )));
+            }
+            snapshot.tool_execution_starts.insert(
+                tool_call_id.clone(),
+                ToolExecutionStartSnapshot {
+                    action_digest: action_digest.clone(),
+                    policy_revision: policy_revision.clone(),
+                    authority: authority.clone(),
+                },
+            );
+        }
+        ThreadEvent::ToolExecutionEscalated {
+            turn_id,
+            tool_call_id,
+            action_digest,
+            policy_revision,
+            denial,
+            authority,
+            ..
+        } => {
+            require_no_command(envelope)?;
+            if action_digest.trim().is_empty()
+                || policy_revision.trim().is_empty()
+                || denial.reason().trim().is_empty()
+            {
+                return Err(CoreError::Journal(
+                    "tool escalation requires action, policy, and denial identities".into(),
+                ));
+            }
+            let turn = snapshot
+                .turns
+                .iter()
+                .find(|turn| turn.turn_id == *turn_id)
+                .ok_or_else(|| CoreError::NotFound(turn_id.to_string()))?;
+            if turn.status != TurnStatus::Running {
+                return Err(CoreError::Journal(
+                    "tool execution can escalate only while its Turn is running".into(),
+                ));
+            }
+            let has_result = snapshot.items.iter().any(|item| {
+                matches!(
+                    item,
+                    ThreadItem::ToolResult {
+                        tool_call_id: item_call_id,
+                        ..
+                    } if item_call_id == tool_call_id
+                )
+            });
+            let Some(start) = snapshot.tool_execution_starts.get(tool_call_id) else {
+                return Err(CoreError::Journal(
+                    "tool escalation must reference a started Tool Call".into(),
+                ));
+            };
+            if has_result {
+                return Err(CoreError::Journal(
+                    "tool escalation must reference a started unresolved Tool Call".into(),
+                ));
+            }
+            if start.action_digest != *action_digest
+                || start.policy_revision != *policy_revision
+                || !matches!(
+                    start.authority,
+                    zeta_protocol::ToolExecutionAuthority::Sandboxed
+                )
+            {
+                return Err(CoreError::Journal(
+                    "tool escalation must preserve the sandboxed start binding".into(),
+                ));
+            }
+            if denial.replay_safety() != zeta_protocol::ToolReplaySafety::SafeToRetry {
+                return Err(CoreError::Journal(
+                    "tool escalation requires a safe-to-retry sandbox denial".into(),
+                ));
+            }
+            if !matches!(
+                authority,
+                zeta_protocol::ToolExecutionAuthority::UnsandboxedGrant { .. }
+                    | zeta_protocol::ToolExecutionAuthority::AutoReviewed { .. }
+            ) {
+                return Err(CoreError::Journal(
+                    "tool escalation requires a validated unsandboxed authority".into(),
+                ));
+            }
+            if !snapshot.escalated_tool_calls.insert(tool_call_id.clone()) {
+                return Err(CoreError::Journal(format!(
+                    "tool execution already escalated: {tool_call_id}"
                 )));
             }
         }

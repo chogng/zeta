@@ -17,7 +17,9 @@ Tool、approval policy 或 persistence。
 - 单行文本 composer，支持 typing、backspace 与 bracketed paste；
 - Enter 提交一个 text-only Turn；
 - active Turn 期间每 25 ms event-loop iteration 读取 Thread snapshot；
-- 显示 latest completed Agent message、failure、interruption 与 waiting/cancelling state；
+- 以无外框 transcript 显示 latest completed Agent message、友好 failure、interruption 与
+  waiting/cancelling state；
+- 顶部显示低干扰的运行状态，底部使用圆角 composer 和只包含下一步操作的 footer；
 - Ctrl-C、Ctrl-D（空输入）或 Esc：idle 时退出，active 时请求 interrupt；
 - raw mode、alternate screen、bracketed paste 与 cursor cleanup；
 - basic Unicode-aware wrapped-row estimation 和自动滚动到底部。
@@ -25,6 +27,12 @@ Tool、approval policy 或 persistence。
 当前没有 Session browser、Thread navigation、Markdown、stream delta render、Tool transcript、
 approval/user-input response UI、mouse/resize-specific state、remote connection selector 或 async event
 pump。系统文档中的这些内容是演进方向，不是已实现功能。
+
+从 repository root 启动当前 embedded TUI：
+
+```text
+cargo run --manifest-path zeta-rs/Cargo.toml -p zeta-cli
+```
 
 ## Public contract
 
@@ -65,6 +73,7 @@ src/
 | `refresh_turn` | private | `thread/read` + update local sequence + drain notifications | snapshot 是当前 authoritative UI source |
 | `interrupt_turn` | private | typed Turn interrupt + refresh | 使用当前 Thread sequence |
 | `apply_active_turn_snapshot` | private | canonical Turn status/items → presentation state | 不从 log/text 猜 terminal state |
+| `present_turn_error` | private | stable Turn error code → user-facing recovery message | 不显示 Rust Debug/provider secret |
 | `request_key` | private | process ID + wall-clock nanos command ID | 一次逻辑 command 一个新 ID |
 | `render::draw` | crate-private | history/input/status layout 与 cursor | 不改变 App state |
 | `estimated_wrapped_rows` | private | Unicode display-width based scroll estimate | width 0 不 panic |
@@ -117,8 +126,10 @@ sequence contract。若 create result/schema 改为返回 sequence，应该移�
 | `Failed` | 显示 stable Turn error，清除 active turn |
 | `Interrupted` | 添加 notice，返回 Ready |
 
-Completed Turn 没有 Agent message 会被显示为 error。Reasoning、Plan、ToolCall、ToolResult 与多个
-Agent message 当前不呈现在 transcript；UI 只取最后一个 Agent message。
+Completed Turn 没有 Agent message 会被显示为 error。已知 stable Turn error 由
+`present_turn_error` 映射成面向用户的恢复提示，错误详情只在 transcript 出现一次；footer 只说明
+可以 retry 或退出。Reasoning、Plan、ToolCall、ToolResult 与多个 Agent message 当前不呈现在
+transcript；UI 只取最后一个 Agent message。
 
 `refresh_turn` 每次成功 read 都用 snapshot sequence 覆盖 local expected sequence。它随后调用
 `drain_notifications`，但当前 presentation 不消费 notification payload 来增量更新 projection；
@@ -169,13 +180,14 @@ Cleanup error 被忽略是 Drop 路径的刻意选择，避免 panic during unwi
 
 ## Rendering
 
-当前 layout 是固定三段：
+当前 layout 是固定四段：
 
-1. expandable bordered history；
-2. 三行 input box；
-3. 一行 status/help。
+1. 两行轻量 header，包括产品名和 canonical status 的 presentation label；
+2. expandable、无外框的 transcript，空会话显示 centered welcome；
+3. 三行圆角 composer；
+4. 一行 recovery/help footer。
 
-History label 用 role-specific color，正文是 plain text。`estimated_wrapped_rows` 使用
+Transcript marker 使用 role-specific color，正文是 plain text。`estimated_wrapped_rows` 使用
 `unicode_width::UnicodeWidthStr`，把 label width 计入首行，然后计算 bottom scroll。它是估算，
 不处理完整 grapheme/reflow/Markdown layout。
 
@@ -211,9 +223,10 @@ bazel test //zeta-rs/tui:tui-unit-tests
 
 Tests 当前覆盖 trimmed/blank submit、quit/interrupt keyboard semantics、duplicate interrupt
 suppression、input lock、response/error/interrupted transitions、snapshot terminal/wait/resume mapping，
-以及 role label/Unicode/zero-width wrapping。
+以及 transcript chrome、error 去重、role label/Unicode/zero-width wrapping。
 
-Render tests 目前只验证 row estimation，没有 snapshot/golden terminal test；`run` 也没有完整的 fake
-transport event-loop integration test。下一阶段优先级应是 async request/notification pump、
-subscription projection + gap resync、interaction resolve UI 和 richer transcript。演进时继续让
-TUI 可丢弃、可重建，并始终通过 typed App Server client。
+Render tests 使用 Ratatui `TestBackend` 固定 empty/error surface 和 row estimation，但还没有完整
+snapshot/golden terminal test；`run` 也没有完整的 fake transport event-loop integration test。
+下一阶段优先级应是 async request/notification pump、subscription projection + gap resync、
+interaction resolve UI 和 richer transcript。演进时继续让 TUI 可丢弃、可重建，并始终通过
+typed App Server client。

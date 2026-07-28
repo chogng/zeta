@@ -5,6 +5,7 @@ load("//:defs.bzl", "zeta_rust_crate")
 zeta_rust_crate(
     name = "auto-review",
     crate_name = "zeta_auto_review",
+    data = ["prompt.md"],
 )
 
 rust_test(

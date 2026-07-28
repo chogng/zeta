@@ -93,6 +93,51 @@ pub enum SandboxKind {
     WindowsRestrictedToken,
 }
 
+/// Process termination shape used by a backend when classifying enforcement output.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SandboxProcessExitStatus {
+    Code(i32),
+    Terminated,
+}
+
+/// Whether sandbox evidence proves the requested child process did not reach its entry point.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SandboxDenialTiming {
+    BeforeProcessStart,
+    ProcessMayHaveStarted,
+}
+
+/// Backend-specific classification of a process result caused by sandbox enforcement.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SandboxProcessDenial {
+    reason: String,
+    timing: SandboxDenialTiming,
+}
+
+impl SandboxProcessDenial {
+    pub fn before_process_start(reason: impl Into<String>) -> Self {
+        Self {
+            reason: reason.into(),
+            timing: SandboxDenialTiming::BeforeProcessStart,
+        }
+    }
+
+    pub fn process_may_have_started(reason: impl Into<String>) -> Self {
+        Self {
+            reason: reason.into(),
+            timing: SandboxDenialTiming::ProcessMayHaveStarted,
+        }
+    }
+
+    pub fn reason(&self) -> &str {
+        &self.reason
+    }
+
+    pub fn timing(&self) -> SandboxDenialTiming {
+        self.timing
+    }
+}
+
 /// A host command produced by a sandbox backend and ready for the process executor.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PreparedCommand {

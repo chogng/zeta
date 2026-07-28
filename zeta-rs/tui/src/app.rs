@@ -31,7 +31,7 @@ pub(crate) enum Status {
     WaitingForUserInput,
     WaitingForCapability,
     Cancelling,
-    Error(String),
+    Error,
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -96,6 +96,10 @@ impl App {
         &self.status
     }
 
+    pub(crate) fn accepts_input(&self) -> bool {
+        matches!(&self.status, Status::Ready | Status::Error)
+    }
+
     pub(crate) fn record_response(&mut self, response: String) {
         self.messages.push(Message {
             role: MessageRole::Agent,
@@ -143,9 +147,9 @@ impl App {
     pub(crate) fn record_error(&mut self, error: String) {
         self.messages.push(Message {
             role: MessageRole::Error,
-            text: error.clone(),
+            text: error,
         });
-        self.status = Status::Error(error);
+        self.status = Status::Error;
     }
 
     fn submit(&mut self) -> Option<Action> {
@@ -162,10 +166,6 @@ impl App {
         Some(Action::Submit(prompt))
     }
 
-    fn accepts_input(&self) -> bool {
-        matches!(&self.status, Status::Ready | Status::Error(_))
-    }
-
     fn quit_or_interrupt(&mut self) -> Option<Action> {
         match &self.status {
             Status::Working
@@ -176,7 +176,7 @@ impl App {
                 Some(Action::Interrupt)
             }
             Status::Cancelling => None,
-            Status::Ready | Status::Error(_) => Some(Action::Quit),
+            Status::Ready | Status::Error => Some(Action::Quit),
         }
     }
 }

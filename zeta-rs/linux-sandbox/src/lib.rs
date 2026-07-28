@@ -3,8 +3,9 @@
 use std::path::{Path, PathBuf};
 use zeta_bwrap::{BwrapCommandBuilder, MountAccess};
 use zeta_sandboxing::{
-    FileSystemAccess, NetworkAccess, PreparedCommand, SandboxBackend, SandboxCommand, SandboxError,
-    SandboxKind, SandboxPolicy, WorkspaceRoot,
+    FileSystemAccess, NetworkAccess, PROTECTED_WORKSPACE_METADATA_NAMES, PreparedCommand,
+    SandboxBackend, SandboxCommand, SandboxError, SandboxKind, SandboxPolicy, SandboxProcessDenial,
+    SandboxProcessExitStatus, WorkspaceRoot,
 };
 
 /// Translates shared sandbox policy into a Bubblewrap launch command.
@@ -48,6 +49,12 @@ impl LinuxSandbox {
         .mount(Path::new("/"), Path::new("/"), root_access);
         if policy.file_system() == FileSystemAccess::WorkspaceWrite {
             builder = builder.mount(workspace.path(), workspace.path(), MountAccess::ReadWrite);
+            for name in PROTECTED_WORKSPACE_METADATA_NAMES {
+                let path = workspace.path().join(name);
+                if path.exists() {
+                    builder = builder.mount(&path, &path, MountAccess::ReadOnly);
+                }
+            }
         }
         if policy.network() == NetworkAccess::Denied {
             builder = builder.isolate_network();
@@ -90,6 +97,36 @@ impl SandboxBackend for LinuxSandbox {
                 message: "the Bubblewrap backend can only run on Linux".to_owned(),
             })
         }
+    }
+
+    fn classify_denial(
+        &self,
+        exit_status: SandboxProcessExitStatus,
+        stdout: &str,
+        stderr: &str,
+    ) -> Option<SandboxProcessDenial> {
+        if exit_status == SandboxProcessExitStatus::Code(0) {
+            return None;
+        }
+        let output = format!("{stdout}\n{stderr}").to_ascii_lowercase();
+        if output.contains("bwrap:") {
+            return Some(SandboxProcessDenial::before_process_start(
+                "Linux Bubblewrap could not establish the sandbox",
+            ));
+        }
+        [
+            "operation not permitted",
+            "permission denied",
+            "read-only file system",
+            "network is unreachable",
+        ]
+        .iter()
+        .any(|marker| output.contains(marker))
+        .then(|| {
+            SandboxProcessDenial::process_may_have_started(
+                "Linux Bubblewrap denied the sandboxed process operation",
+            )
+        })
     }
 }
 

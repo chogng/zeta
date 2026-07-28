@@ -35,6 +35,7 @@ serde / schemars / ts-rs
 | Product model | `Session`, `SessionThread`, `Thread`, `Turn`, `ThreadItem` | `Session → Thread → Turn → Item` snapshot |
 | Intent | `SessionCommand`, `ThreadCommand` | 请求改变状态，不表示已发生 |
 | Durable fact | `SessionEvent`, `ThreadEvent`, `ToolExecutionAuthority` | reducer/store 接受的过去式事实 |
+| Tool execution | `ProcessExecutionOutput`, `SandboxDenialOutput`, `ToolExecutionOutput`, `ToolReplaySafety` | executor、Core 与 durable audit 共享的原始结果/重放语义 |
 | Consumer update | `SessionUpdateEnvelope`, `ThreadUpdateEnvelope`, `ThreadUpdate`, `ItemDelta` | durable committed 与 transient projection |
 | Interaction | `TurnInteraction`, `AgentRequest`, `AgentResponse`, `PendingInteraction` | Turn 等待/恢复的 typed request-response |
 | Approval | `ActionApprovalRequest`, `ActionApprovalResponse`, capability/decision enums | exact action/policy binding |
@@ -100,7 +101,10 @@ Command
 
 Event 不携带 sequence、timestamp、schema version、event ID 或 transport metadata。特别地，
 `ThreadEvent::ToolExecutionStarted` durable 地保存 action digest、policy revision 和
-`ToolExecutionAuthority`，但不负责判断 authority 是否有效。
+`ToolExecutionAuthority`，但不负责判断 authority 是否有效。一次 sandbox denial 获得新的 exact
+authority 后，`ThreadEvent::ToolExecutionEscalated` 在重试前保存完整
+`SandboxDenialOutput` 与新 authority；Core reducer 负责验证它只能引用 started、未完成且尚未
+escalate 的 Tool Call。
 
 ### Update
 
@@ -179,6 +183,7 @@ Provider endpoint、header、cache-control、JSON shape、SSE event name 和 ret
 | ID type/invariant | `identifier!`、deserialize、schema/TS、store keys、contract tests |
 | Command variant | Core handler/reducer plan、App Server RPC params、idempotency tests |
 | Event variant/field | store validation、Core reducer/recovery、`kind`/ID extractor、updates、fixtures |
+| Tool execution output/replay field | executor capture、Tool adapter、Core retry gate、durable escalation、schema/TS、contract tests |
 | ThreadItem variant | item ID/turn ID extractors、Core projection、TUI/render、schema |
 | Interaction family | request/response kind、pending redaction、Core resolve command、App Server routing |
 | Model field/variant | `zeta-api` 三套 codecs、provider adapters、schema consumers |
@@ -204,8 +209,9 @@ bazel test //zeta-rs/protocol:protocol-unit-tests
 ```
 
 `contract_tests.rs` 当前验证 JSON shape、Session lineage、durable/transient cursor 分离、interaction
-payload redaction、approval binding、UserInput variants、ToolName/ID validation、tool identity 和
-auto-compact limit。新增测试继续放在独立 sibling test file。
+payload redaction、approval binding、structured sandbox escalation、UserInput variants、
+ToolName/ID validation、tool identity 和 auto-compact limit。新增测试继续放在独立 sibling
+test file。
 
 当前 protocol 已覆盖 Session-first product contract 与 durable interaction 基础；multi-agent
 delegation、shared session settings、完整 streaming tool-call delta 和更强 schema compatibility

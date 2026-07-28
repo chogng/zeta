@@ -1,6 +1,6 @@
 use super::{
     ToolConcurrency, ToolExecutionContext, ToolExecutionFuture, ToolExecutionOutcome, ToolExecutor,
-    ToolInvocation, ToolPayload,
+    ToolInvocation, ToolPayload, ToolRuntimeAuthority,
 };
 use crate::{
     ToolBinding, ToolBindingId, ToolDefinition, ToolEnvironmentId, ToolInputSchema, ToolLoading,
@@ -30,6 +30,7 @@ fn invocation_keeps_the_frozen_binding_and_environment() {
         ToolExecutionContext::new(
             ToolEnvironmentId::new("workspace_1").expect("valid environment"),
             CancellationSource::new().token(),
+            ToolRuntimeAuthority::Unrestricted,
         ),
     );
 
@@ -41,6 +42,10 @@ fn invocation_keeps_the_frozen_binding_and_environment() {
     assert_eq!(
         invocation.context().environment_id().as_str(),
         "workspace_1"
+    );
+    assert_eq!(
+        invocation.context().authority(),
+        ToolRuntimeAuthority::Unrestricted
     );
 }
 

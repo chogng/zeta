@@ -1,7 +1,7 @@
 use std::fmt;
 use std::sync::Arc;
 use zeta_async_utils::CancellationToken;
-use zeta_auto_review::{ReviewModel, ReviewModelRequest};
+use zeta_auto_review::{ReviewModel, ReviewModelError, ReviewModelRequest};
 use zeta_config::ResolvedConfig;
 use zeta_model_provider::{ModelInvoker, ModelProvider, ModelProviderRuntime, ModelRuntimeRequest};
 use zeta_model_provider_config::ProviderConfigRegistry;
@@ -88,33 +88,48 @@ impl ReviewModel for ProviderReviewModel {
         &self,
         request: &ReviewModelRequest,
         cancellation: &CancellationToken,
-    ) -> Result<String, String> {
+    ) -> Result<String, ReviewModelError> {
         cancellation
             .check()
-            .map_err(|signal| signal.reason().to_string())?;
+            .map_err(|signal| ReviewModelError::Invocation(signal.reason().to_string()))?;
         let response = self
             .invoker
             .invoke(&Self::request(request))
-            .map_err(|error| error.to_string())?;
+            .map_err(|error| ReviewModelError::Invocation(error.to_string()))?;
         cancellation
             .check()
-            .map_err(|signal| signal.reason().to_string())?;
+            .map_err(|signal| ReviewModelError::Invocation(signal.reason().to_string()))?;
 
         let mut text = String::new();
         for item in response.output {
             match item {
-                ResponseItem::Text(fragment) => text.push_str(&fragment),
+                ResponseItem::Text(fragment) => {
+                    let bytes = text
+                        .len()
+                        .checked_add(fragment.len())
+                        .ok_or(ReviewModelError::ResponseTooLarge { bytes: usize::MAX })?;
+                    if bytes > request.maximum_response_bytes() {
+                        return Err(ReviewModelError::ResponseTooLarge { bytes });
+                    }
+                    text.push_str(&fragment);
+                }
                 ResponseItem::Reasoning(_) => {}
                 ResponseItem::Refusal(reason) => {
-                    return Err(format!("review model refused the assessment: {reason}"));
+                    return Err(ReviewModelError::Invocation(format!(
+                        "review model refused the assessment: {reason}"
+                    )));
                 }
                 ResponseItem::ToolCall(_) => {
-                    return Err("review model attempted a tool call".into());
+                    return Err(ReviewModelError::Invocation(
+                        "review model attempted a tool call".into(),
+                    ));
                 }
             }
         }
         if text.trim().is_empty() {
-            return Err("review model returned no JSON response".into());
+            return Err(ReviewModelError::Invocation(
+                "review model returned no JSON response".into(),
+            ));
         }
         Ok(text)
     }

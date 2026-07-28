@@ -10,15 +10,49 @@
 它只产生 advisory recommendation。它不能创建 grant、执行 Tool、修改 sandbox policy，也不拥有
 用户审批流程。
 
+## 核心产品流程（Current）
+
+本 crate 是下面流程中的 `classifier`，不是整条流程的 owner。跨 crate 的完整产品语义由
+[`docs/auto-review.md`](../../docs/auto-review.md#4-端到端决策模型) canonical 定义；这里保留
+最短摘要，因为这个调用位置直接决定 classifier 的输入和扩展方向。
+
+```text
+Agent action
+├─ deterministic deny → Block                                Current
+├─ 已有 exact grant → 直接执行                                Current
+└─ 其他 action
+   ├─ sandbox 不适用（如 Fetch / MCP / external）→ classifier Current
+   └─ local process
+      ├─ sandbox 无法满足 capability → classifier             Current
+      └─ sandbox 可以执行 → 先在 sandbox 中运行               Current
+         ├─ 成功或普通命令失败 → 返回执行结果                  Current
+         └─ 确认是 sandbox denial
+            ├─ safe to retry → classifier                     Current
+            └─ possible side effects / unknown → 不重放       Current
+
+classifier
+└─ recommendation → PolicyEngine 校验
+   ├─ Approve → exact grant
+   ├─ ReviseAction → Agent 换更安全的 action
+   ├─ AskUser → 请求用户批准
+   └─ Deny → Block
+```
+
+失败回流不能把所有 non-zero exit 都当成 sandbox denial。Tool executor 必须先区分
+普通命令失败与 sandbox enforcement denial，并保留可信的失败证据。即使确认是 denial，命令也
+可能在被拒绝前已经产生部分副作用；只有 Core 能证明没有副作用、或 action 可安全重放时，新的
+exact grant 才能触发自动重试。部分副作用可能发生或结果未知时，只能返回 Agent、请求用户或
+选择新的 action，不能自动重放原调用。
+
 ## 1. Crate 边界
 
 本 crate 拥有：
 
-- review-only system prompt；
+- versioned review protocol（system prompt、response schema 与 revision）；
 - provider-neutral `ReviewModel` port；
 - model input JSON 的序列化；
-- recommendation response schema；
-- response 大小、JSON shape 和 capability 边界校验；
+- model input/response 大小与 strict wire JSON 校验；
+- 在 assessment 构造前调用 policy-owned capability constraint validation；
 - canonical assessment ID 的构造；
 - model、cancellation 和 invalid-response 错误分类；
 - auto-review seed eval corpus。
@@ -47,9 +81,12 @@ zeta-auto-review
 
 ```text
 zeta-rs/auto-review/
+├── prompt.md                   # compile-time reviewer system policy
 ├── src/
 │   ├── lib.rs                  # 私有模块与显式 public export
-│   ├── classifier.rs           # production classifier、schema、validation
+│   ├── classifier.rs           # classifier orchestration、budgets、error mapping、binding
+│   ├── protocol.rs             # versioned prompt/schema、wire input/output、canonical response
+│   ├── review_model.rs         # provider-neutral model port 与 request/error contract
 │   └── classifier_tests.rs     # classifier 单元测试
 ├── evals/
 │   ├── README.md               # corpus 格式、隐私与指标要求
@@ -67,9 +104,10 @@ private，并从 `lib.rs` 显式导出必要 API。
 
 | API | 作用 | 实现者或调用者必须保证 |
 | --- | --- | --- |
-| `ReviewModel` | provider-neutral completion port | 观察 cancellation；返回一个 JSON string；不提供 Tool、memory 或 mutation capability |
-| `ReviewModelRequest` | 一次 review 的 exact prompt payload | adapter 分别消费 system prompt、input JSON 和 response schema，不得把 Agent instruction 提升为 system instruction |
-| `LlmActionClassifier<M>` | 实现 `zeta_policy::ActionClassifier` | caller 提供 review model 和可审计的 prompt revision |
+| `ReviewModel` | provider-neutral completion port | 观察 cancellation；按 request budget 收集 JSON；不提供 Tool、memory 或 mutation capability |
+| `ReviewModelRequest` | 一次 review 的 exact prompt payload 与 response budget | adapter 分别消费 system prompt、input JSON 和 response schema，并执行 `maximum_response_bytes` |
+| `ReviewModelError` | adapter failure contract | 区分 provider invocation failure 与 response oversize |
+| `LlmActionClassifier<M>` | 实现 `zeta_policy::ActionClassifier` | caller 只提供 review model；classifier 固定使用当前 `ReviewProtocol` |
 | `AutoReviewError` | fail-closed 的错误分类 | caller 只能映射为显式 failure policy，不能把错误当成批准 |
 
 `ActionReviewRequest`、`ClassifierAssessment`、`ClassifierRecommendation`、`RiskLevel` 和
@@ -84,18 +122,19 @@ ownership 为什么仍然正确。
 
 | Symbol | 可见性 | 当前职责 | 方向约束 |
 | --- | --- | --- | --- |
-| `SYSTEM_PROMPT` | private constant | reviewer 的 trusted instruction | 不接收 action content；语义改变必须 bump prompt revision |
-| `MAX_MODEL_RESPONSE_BYTES` | private constant | model response 的 16 KiB 上限 | 在 JSON parse 前检查；不能由 model input 覆盖 |
+| `CURRENT_REVIEW_PROTOCOL` | private constant | 原子绑定 revision、system prompt 与 response schema | 修改 prompt/schema 语义必须在同一 module bump revision |
+| `MAX_MODEL_INPUT_BYTES` | private constant | serialized request 的 64 KiB 总上限 | Core 仍负责内容选择、截断与 secret removal |
+| `MAX_MODEL_RESPONSE_BYTES` | private constant | model response 的 16 KiB 上限 | 通过 request 交给 adapter 提前执行，classifier 再复检 |
 | `LlmActionClassifier::model_request` | private method | 将 policy request 组装为三个分离的 model payload | 只序列化，不重新解析 action、选择 model 或授予 capability |
-| `LlmActionClassifier::validate_recommendation` | private method | enforce approve exact match 与 revise subset | 所有 model capability 必须在进入 assessment 前经过这里 |
+| `LlmActionClassifier::parse_recommendation` | private method | strict parse 后调用 policy-owned constraint validation | model capability 必须在 assessment 前验证，engine 仍会复检 |
 | `ModelInput` | private struct | 定义发送给 model 的 input JSON shape | 只借用 host-owned domain values，不拥有权限语义 |
 | `ModelInput::from` | private conversion | 映射 action、provenance、sandbox、revision、context | 不读取 Thread、config、credential 或 provider state |
 | `ModelSandboxCompatibility` | private enum | 把 sandbox contract 转成稳定的 tagged JSON | 只描述 host 结论，不让 model 修改 availability |
 | `ModelRecommendation` | private enum | strict deserialize target，拒绝 unknown fields | 不能直接成为 execution decision 或 grant |
+| `ModelCapability` | private struct | 对 capability 嵌套字段执行 `deny_unknown_fields` | 不直接反序列化 domain `Capability` 而丢弃未知字段 |
 | `From<ModelRecommendation> for ClassifierRecommendation` | private conversion impl | 转换成 `zeta-policy` advisory domain type | 转换后仍必须经过 host validation |
 | `response_json_bytes` | private function | 序列化 validated canonical recommendation | assessment ID 不 hash 未解析的 raw model text |
-| `response_schema` | private function | 定义四种 recommendation JSON shape | 必须与 `ModelRecommendation` lockstep 更新 |
-| `capability_schema` | private function | 定义 capability `kind + scope` schema | 必须与 `zeta_policy::Capability` serialization 一致 |
+| `RESPONSE_SCHEMA_JSON` | private constant | 定义四种 recommendation wire shape | 与 `ModelRecommendation` / `ModelCapability` lockstep 更新 |
 
 ### 4.1 内部调用图
 
@@ -105,14 +144,14 @@ ActionClassifier::classify
 ├─ LlmActionClassifier::model_request
 │  ├─ ModelInput::from
 │  ├─ serde_json::to_string(ModelInput)
-│  └─ response_schema
-│     └─ capability_schema
+│  └─ input byte-limit check
 ├─ ReviewModel::complete
+│  └─ adapter response byte-limit enforcement
 ├─ cancellation.is_cancelled
-├─ response byte-limit check
+├─ classifier response byte-limit recheck
 ├─ serde_json::from_str<ModelRecommendation>
 ├─ From<ModelRecommendation> for ClassifierRecommendation
-├─ LlmActionClassifier::validate_recommendation
+├─ ClassifierRecommendation::validate_against
 ├─ response_json_bytes
 ├─ AssessmentId::from_response
 └─ ClassifierAssessment::new
@@ -131,11 +170,11 @@ ActionClassifier::classify
 | 修改 | 必须同步检查 |
 | --- | --- |
 | `ModelInput` field | `ModelInput::from`、trust/redaction owner、classifier tests、eval corpus |
-| `ModelRecommendation` variant/field | `response_schema`、conversion impl、policy domain、Core handling、eval labels |
-| Capability JSON shape | `capability_schema`、`Capability` serde、exact/subset validation、fixtures |
-| Prompt policy | `SYSTEM_PROMPT`、prompt revision、injection cases、model eval |
+| `ModelRecommendation` variant/field | `RESPONSE_SCHEMA_JSON`、conversion impl、policy domain、Core handling、eval labels |
+| Capability JSON shape | `ModelCapability`、`RESPONSE_SCHEMA_JSON`、policy constraint validation、fixtures |
+| Prompt/schema policy | `CURRENT_REVIEW_PROTOCOL` revision、injection cases、model eval |
 | Assessment binding | `response_json_bytes`、`AssessmentId::from_response`、audit consumer、stable-ID tests |
-| Response limit | `MAX_MODEL_RESPONSE_BYTES`、error expectations、provider behavior、large-response tests |
+| Request/response limit | classifier constants、`ReviewModelRequest`、provider collection、large-payload tests |
 
 ## 5. `classify()` 的准确执行顺序
 
@@ -144,21 +183,23 @@ ActionClassifier::classify
 ```text
 1. preflight cancellation check
 2. ActionReviewRequest → ModelInput JSON
-3. 构造 response schema JSON
-4. ReviewModel::complete(...)
-5. post-call cancellation check
-6. response byte limit
-7. strict serde parse + capability validation
-8. canonical recommendation → AssessmentId
-9. 返回 request-bound ClassifierAssessment
+3. serialized input 64 KiB limit
+4. current ReviewProtocol → ReviewModelRequest
+5. ReviewModel::complete(...) with 16 KiB response budget
+6. model error/cancellation normalization
+7. post-call cancellation + response byte-limit recheck
+8. strict wire parse + policy-owned capability validation
+9. canonical recommendation → AssessmentId
+10. 返回 request-bound ClassifierAssessment
 ```
 
 顺序具有安全含义：
 
 - 调用前已取消时，model 不应启动；
-- model 返回后发生取消时，结果被丢弃，不产生 assessment；
-- response 上限是 16 KiB，使用 Rust `String::len()` 的 UTF-8 byte length；
-- `deny_unknown_fields` 拒绝模型偷偷增加 `authorization`、`grant` 等字段；
+- model 调用中或返回后发生取消时，结果被归类为 `Cancelled` 并丢弃；
+- input/response 上限分别是 64/16 KiB，使用 Rust `String::len()` 的 UTF-8 byte length；
+- adapter 在拼接 response fragment 时执行预算，classifier 在 parse 前再次检查；
+- `deny_unknown_fields` 在 recommendation 与嵌套 capability 两层拒绝额外字段；
 - assessment 复制 host-owned action digest 与 policy revision，模型不能覆盖它们。
 
 ### 5.1 Assessment identity
@@ -170,28 +211,29 @@ action_digest
 NUL
 policy_revision
 NUL
-prompt_revision
+review_protocol_revision
 NUL
 canonical_recommendation_json
 ```
 
 这里使用解析后重新序列化的 canonical recommendation，而不是模型原始文本。因此仅改变 JSON
-空格或字段顺序不会产生新的 ID；改变 recommendation 语义、prompt revision、action 或 policy
-revision 会产生新 ID。
+空格或字段顺序不会产生新的 ID；改变 recommendation 语义、review protocol revision、action
+或 policy revision 会产生新 ID。
 
-修改 system prompt、response schema 的语义或 review policy 时，组合层必须同步 bump
-`prompt_revision`。当前类型不会自动验证 revision 与 prompt source 是否一致，这是调用方必须
-维护的 audit invariant。
+`CURRENT_REVIEW_PROTOCOL` 在同一 private value 中绑定 system prompt、response schema 与
+revision。修改 prompt/schema 语义时必须在 `protocol.rs` 同步 bump revision；caller 不能再传入
+一个与实际 prompt 不一致的 revision。
 
 ## 6. Model request
 
-`ReviewModelRequest` 包含三个互相分离的字符串：
+`ReviewModelRequest` 包含三个互相分离的 payload 和一个 response budget：
 
 | 字段 | 内容 | 信任级别 |
 | --- | --- | --- |
 | `system_prompt` | crate 内编译的 reviewer policy | trusted classifier instruction |
-| `input_json` | action、provenance、sandbox、policy revision、review context | host metadata 与 untrusted content 的结构化混合 |
+| `input_json` | action、provenance、sandbox、phase、policy revision、review context | host metadata 与 untrusted content 的结构化混合 |
 | `response_schema_json` | 四种 recommendation 的严格 JSON schema | trusted output contract |
+| `maximum_response_bytes` | adapter 收集输出时必须执行的字节上限 | trusted classifier budget |
 
 `input_json` 的结构为：
 
@@ -200,6 +242,11 @@ action
 provenance
 sandbox
 policy_revision
+phase
+  ├─ initial
+  └─ sandbox_denial
+       ├─ reason
+       └─ bounded output
 context
   ├─ user_intent
   └─ evidence[]
@@ -210,8 +257,8 @@ context
 ```
 
 本 crate 保留 evidence 的 trust label，但不负责生成或截断 context。Core/Tool host 必须在构造
-`ActionReviewRequest` 前完成长度限制、secret removal 和 trust classification。直接调用本 crate
-时绕过这些 host 约束，会把任意大小或含 secret 的内容发送给 model。
+`ActionReviewRequest` 前完成内容长度限制、secret removal 和 trust classification。classifier
+对最终 serialized input 另设 64 KiB 总上限；它只拒绝超限 request，不替代 host 的选择与脱敏。
 
 `ReviewModel` 是安全边界而不只是 transport abstraction。trait 本身无法阻止恶意实现调用 Tool
 或读取 credential；可信 host adapter 必须确保 review runtime 没有这些能力。
@@ -229,11 +276,14 @@ context
 
 Capability 由精确的 `kind + scope` 组成。在 `approve` 中，模型不能通过扩大 scope、添加
 capability kind 或遗漏原 capability 获得部分批准；`revise_action` 则有意允许返回原集合的
-子集。
+子集。Wire 层使用 private `ModelCapability`，因此 capability object 内的未知字段也不会被
+serde 静默忽略。
 
 Response schema 提供给 adapter 以约束生成，但本地 serde parse 和 host validation 才是最终
 可信边界。当前 App Server adapter 将 schema 放入 model instructions；即使 provider 不支持
-原生 structured output，malformed response 仍会在本 crate 被拒绝。
+原生 structured output，malformed response 仍会在本 crate 被拒绝。Capability exact/subset
+规则由 `zeta-policy::ClassifierRecommendation::validate_against` 定义；auto-review 在构造
+assessment 前调用，`PolicyEngine` 对任意 classifier implementation 的结果再次调用。
 
 本 crate 不执行 risk/authorization 到 execution decision 的映射。例如 high risk +
 implicit authorization 即使被解析为 `Approve` recommendation，仍由 `PolicyEngine` 转成
@@ -244,16 +294,19 @@ implicit authorization 即使被解析为 `Approve` recommendation，仍由 `Pol
 
 | 条件 | `AutoReviewError` | 是否产生 assessment |
 | --- | --- | --- |
-| model 调用前或返回后 cancellation | `Cancelled` | 否 |
-| `ReviewModel` 返回错误 | `Model(String)` | 否 |
+| model 调用前、调用中或返回后 cancellation | `Cancelled` | 否 |
+| request serialization failure | `InvalidRequest(String)` | 否 |
+| serialized input 超过 64 KiB | `RequestTooLarge { bytes }` | 否 |
+| `ReviewModelError::Invocation` | `Model(String)` | 否 |
 | response 超过 16 KiB | `ResponseTooLarge { bytes }` | 否 |
 | JSON 无效、字段缺失、unknown field、enum 无效 | `InvalidResponse(String)` | 否 |
 | approve capability 非 exact match | `InvalidResponse(String)` | 否 |
 | revise capability 不是 subset | `InvalidResponse(String)` | 否 |
 
-`ReviewModel::complete()` 返回 `Result<String, String>` 是当前窄 port，不表达 provider error
-taxonomy。App Server 应在进入本 crate 前完成安全 redaction。错误最终如何成为 `Block` 或
-`AskUser` 由 `zeta-policy::ReviewFailurePolicy` 决定。
+`ReviewModel::complete()` 返回 `Result<String, ReviewModelError>`。Port 只区分 invocation
+failure 与 response oversize，不把完整 provider taxonomy 泄漏进 classifier。App Server 应在
+进入本 crate 前完成安全 redaction。错误最终如何成为 `Block` 或 `AskUser` 由
+`zeta-policy::ReviewFailurePolicy` 决定。
 
 Cancellation 只能保证本 crate 在调用前后检查。正在进行的网络请求能否及时停止，取决于
 `ReviewModel` implementation 是否在 provider checkpoint 观察 token。
@@ -269,6 +322,7 @@ safe-point snapshot 创建 immutable model runtime，并：
 - 使用 temperature `0.0`；
 - 忽略 reasoning，只拼接 text；
 - 拒绝 refusal、Tool Call 和空 text；
+- 拼接每个 text fragment 前执行 `maximum_response_bytes`；
 - 在 provider invocation 前后检查 cancellation。
 
 新的 adapter 必须保持相同安全语义，但不要求使用相同 provider API。最小实现形态：
@@ -279,8 +333,9 @@ impl ReviewModel for ProviderAdapter {
         &self,
         request: &ReviewModelRequest,
         cancellation: &CancellationToken,
-    ) -> Result<String, String> {
-        // Invoke one immutable, tool-less reviewer and return only its JSON text.
+    ) -> Result<String, ReviewModelError> {
+        // Invoke one immutable, tool-less reviewer, enforcing maximum_response_bytes
+        // while collecting its JSON text.
     }
 }
 ```
@@ -306,21 +361,21 @@ bazel test \
 
 测试分两层：
 
-- `classifier_tests.rs` 直接覆盖 parsing、binding、capability escalation、response shape 和
-  cancellation；
+- `classifier_tests.rs` 直接覆盖 parsing、nested strict fields、binding、capability escalation、
+  request/response budgets 和 cancellation；
 - `eval_contract.rs` 离线读取 `evals/cases.jsonl`，检查 schema/coverage，并把 gold
   recommendation 送入真实 `PolicyEngine` 验证最终 disposition。
 
 默认测试禁止访问网络或调用真实 model。Model-backed eval 必须是显式 runner，记录 model 与
-prompt revision，并输出 false-auto-approval 等安全指标。Corpus 的隐私和扩充规则见
+review protocol revision，并输出 false-auto-approval 等安全指标。Corpus 的隐私和扩充规则见
 [`evals/README.md`](evals/README.md)。
 
 ## 11. 常见修改路径
 
 ### 修改 prompt 或 review policy wording
 
-1. 修改 `SYSTEM_PROMPT`；
-2. bump 组合层传入的 prompt revision；
+1. 修改 [`prompt.md`](prompt.md)；
+2. 在同一 `CURRENT_REVIEW_PROTOCOL` 中 bump review protocol revision；
 3. 增加 prompt injection 与边界 case；
 4. 用显式 model eval runner 比较新旧 revision；
 5. 不因 wording 变化放宽本地 schema/validation。
@@ -357,9 +412,9 @@ request、cancellation、tool-less runtime 与 immutable config snapshot contrac
 
 - 一个 action 对应一次同步 completion，不支持 streaming、ensemble 或分阶段 review；
 - prompt 是 compile-time constant，没有 per-organization policy steering；
-- schema 由私有 Rust function 构造，尚未作为独立 versioned artifact 导出；
+- prompt/schema/revision 已在 private `ReviewProtocol` 中原子绑定，但 schema 尚未作为独立 artifact 导出；
 - reason 只要求是 string，production validator 尚未检查空字符串或 rationale quality；
-- context budget 与 secret removal 依赖 Core/Tool host，crate 不重复截断；
+- context item budget 与 secret removal 依赖 Core/Tool host；crate 只执行 serialized input 总上限；
 - seed corpus 只验证格式与 policy contract，尚未运行真实 model benchmark；
 - 没有 calibration、shadow-mode telemetry 或 human override feedback loop。
 
@@ -369,9 +424,9 @@ request、cancellation、tool-less runtime 与 immutable config snapshot contrac
 
 以下是扩展方向，不是已承诺 API：
 
-1. 增加显式 model eval runner，比较 model/prompt revision 并生成安全指标；
+1. 增加显式 model eval runner，比较 model/review protocol revision 并生成安全指标；
 2. 在有隐私审查的前提下，将 human override 转成匿名 regression case；
-3. version response schema 与 prompt policy，减少 revision 由调用方手工维护的风险；
+3. 将当前 private versioned response schema 导出为 eval/tooling 可消费的 artifact；
 4. 增加组织级 policy steering，但继续与 untrusted action/context 分层；
 5. 当 one-shot reviewer 的误差有数据证据时，再评估 tiered review、ensemble 或专用模型；
 6. 只有积累足够高质量 label 后，才评估 fine-tuning；训练不是建立 eval corpus 的前置条件。

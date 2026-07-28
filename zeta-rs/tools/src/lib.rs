@@ -28,7 +28,7 @@ pub use error::{
 pub use execution::{
     ToolConcurrency, ToolConflictClass, ToolExecutionContext, ToolExecutionFuture,
     ToolExecutionOutcome, ToolExecutor, ToolExposure, ToolInvocation, ToolPayload,
-    ToolStartFailure, ToolUncertainOutcome,
+    ToolRuntimeAuthority, ToolStartFailure, ToolUncertainOutcome,
 };
 pub use identity::{
     ToolBindingId, ToolEnvironmentId, ToolIdentityError, ToolOperationId, ToolRegistryGeneration,
@@ -39,3 +39,6 @@ pub use output::{ToolContent, ToolOutput, ToolOutputStatus};
 pub use protocol_adapter::{to_protocol_tool_definition, to_protocol_tool_result};
 pub use schema::{ToolInputSchema, ToolSchema, ToolSchemaDigest};
 pub use zeta_protocol::{ImageDetail, ToolCallId, ToolName};
+pub use zeta_protocol::{
+    ProcessExecutionOutput, ProcessExitStatus, SandboxDenialOutput, ToolReplaySafety,
+};

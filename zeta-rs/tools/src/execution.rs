@@ -5,7 +5,9 @@ use serde_json::Value;
 use std::future::Future;
 use std::pin::Pin;
 use zeta_async_utils::CancellationToken;
+use zeta_protocol::SandboxDenialOutput;
 use zeta_protocol::TurnId;
+use zeta_sandboxing::SandboxPolicy;
 
 /// Controls whether an executor enters the initial model tool set, deferred search, or neither.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -56,13 +58,30 @@ impl ToolConflictClass {
 pub struct ToolExecutionContext {
     environment_id: ToolEnvironmentId,
     cancellation: CancellationToken,
+    authority: ToolRuntimeAuthority,
+}
+
+/// Exact runtime boundary selected by policy for one materialized tool invocation.
+///
+/// Hosts must create a fresh value for each Tool Call. Executors that start subprocesses must
+/// translate `Sandboxed` into platform enforcement and must not infer unrestricted execution from
+/// an allow-list or approval result.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ToolRuntimeAuthority {
+    Sandboxed(SandboxPolicy),
+    Unrestricted,
 }
 
 impl ToolExecutionContext {
-    pub fn new(environment_id: ToolEnvironmentId, cancellation: CancellationToken) -> Self {
+    pub fn new(
+        environment_id: ToolEnvironmentId,
+        cancellation: CancellationToken,
+        authority: ToolRuntimeAuthority,
+    ) -> Self {
         Self {
             environment_id,
             cancellation,
+            authority,
         }
     }
 
@@ -72,6 +91,10 @@ impl ToolExecutionContext {
 
     pub fn cancellation(&self) -> &CancellationToken {
         &self.cancellation
+    }
+
+    pub fn authority(&self) -> ToolRuntimeAuthority {
+        self.authority
     }
 }
 
@@ -167,10 +190,15 @@ impl ToolUncertainOutcome {
 }
 
 /// The source-neutral terminal state reported by a tool executor.
+///
+/// `SandboxDenied` preserves the protocol-owned process result for Core review. Executors must
+/// use it only when their selected platform backend recognized enforcement, and may mark it
+/// `SafeToRetry` only when the requested action never began.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ToolExecutionOutcome {
     Returned(ToolOutput),
     NotStarted(ToolStartFailure),
+    SandboxDenied(SandboxDenialOutput),
     OutcomeUncertain(ToolUncertainOutcome),
 }
 

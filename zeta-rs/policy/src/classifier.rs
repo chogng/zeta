@@ -2,6 +2,7 @@ use crate::{ActionDigest, ActionReviewRequest, CapabilitySet, PolicyRevision};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::error::Error;
+use std::fmt;
 use zeta_async_utils::CancellationToken;
 
 /// Produces advisory assessments consumed by the deterministic policy engine.
@@ -28,11 +29,12 @@ impl AssessmentId {
         Self(value.into())
     }
 
-    /// Derives an assessment identity from its immutable request binding and exact model output.
+    /// Derives an assessment identity from its immutable request binding and canonical reviewer
+    /// output.
     pub fn from_response(
         action_digest: &ActionDigest,
         policy_revision: &PolicyRevision,
-        prompt_revision: &str,
+        review_protocol_revision: &str,
         response: impl AsRef<[u8]>,
     ) -> Self {
         let mut digest = Sha256::new();
@@ -40,7 +42,7 @@ impl AssessmentId {
         digest.update([0]);
         digest.update(policy_revision.as_str().as_bytes());
         digest.update([0]);
-        digest.update(prompt_revision.as_bytes());
+        digest.update(review_protocol_revision.as_bytes());
         digest.update([0]);
         digest.update(response.as_ref());
         let digest = digest.finalize();
@@ -93,13 +95,69 @@ pub enum ClassifierRecommendation {
     },
 }
 
+/// Explains why advisory output is incompatible with the action it reviewed.
+///
+/// Classifier implementations may use this validation before returning an assessment, while the
+/// policy engine always applies it again before interpreting advisory output.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum RecommendationValidationError {
+    EmptyApprovalCapabilities,
+    ApprovalCapabilitiesMismatch,
+    RevisedCapabilitiesExceeded,
+}
+
+impl fmt::Display for RecommendationValidationError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::EmptyApprovalCapabilities => {
+                formatter.write_str("reviewer approved no capabilities")
+            }
+            Self::ApprovalCapabilitiesMismatch => {
+                formatter.write_str("reviewer approved capabilities outside the resolved action")
+            }
+            Self::RevisedCapabilitiesExceeded => {
+                formatter.write_str("reviewer proposed a revised action with broader capabilities")
+            }
+        }
+    }
+}
+
+impl Error for RecommendationValidationError {}
+
+impl ClassifierRecommendation {
+    /// Validates capability constraints against the exact resolved action.
+    ///
+    /// Approval must cover the complete non-empty capability set. A proposed revision may narrow
+    /// the set, including to an empty set, but may never broaden it.
+    pub fn validate_against(
+        &self,
+        required: &CapabilitySet,
+    ) -> Result<(), RecommendationValidationError> {
+        match self {
+            Self::Approve { capabilities, .. } if capabilities.is_empty() => {
+                Err(RecommendationValidationError::EmptyApprovalCapabilities)
+            }
+            Self::Approve { capabilities, .. } if capabilities != required => {
+                Err(RecommendationValidationError::ApprovalCapabilitiesMismatch)
+            }
+            Self::ReviseAction {
+                maximum_capabilities,
+                ..
+            } if !maximum_capabilities.is_subset(required) => {
+                Err(RecommendationValidationError::RevisedCapabilitiesExceeded)
+            }
+            _ => Ok(()),
+        }
+    }
+}
+
 /// Advisory classifier output bound by the host to the reviewed action and policy revision.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ClassifierAssessment {
     assessment_id: AssessmentId,
     action_digest: ActionDigest,
     policy_revision: PolicyRevision,
-    prompt_revision: String,
+    review_protocol_revision: String,
     recommendation: ClassifierRecommendation,
 }
 
@@ -111,14 +169,14 @@ impl ClassifierAssessment {
         assessment_id: AssessmentId,
         action_digest: ActionDigest,
         policy_revision: PolicyRevision,
-        prompt_revision: impl Into<String>,
+        review_protocol_revision: impl Into<String>,
         recommendation: ClassifierRecommendation,
     ) -> Self {
         Self {
             assessment_id,
             action_digest,
             policy_revision,
-            prompt_revision: prompt_revision.into(),
+            review_protocol_revision: review_protocol_revision.into(),
             recommendation,
         }
     }
@@ -135,8 +193,8 @@ impl ClassifierAssessment {
         &self.policy_revision
     }
 
-    pub fn prompt_revision(&self) -> &str {
-        &self.prompt_revision
+    pub fn review_protocol_revision(&self) -> &str {
+        &self.review_protocol_revision
     }
 
     pub fn recommendation(&self) -> &ClassifierRecommendation {

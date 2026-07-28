@@ -204,6 +204,41 @@ pub enum SandboxCompatibility {
     NotApplicable { reason: String },
 }
 
+/// Bounded evidence from a completed sandbox attempt that was denied by enforcement.
+///
+/// The host is expected to retain only the output needed for review, remove secrets, and create
+/// this value only after distinguishing sandbox enforcement from an ordinary command failure.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub struct SandboxDenialEvidence {
+    reason: String,
+    output: String,
+}
+
+impl SandboxDenialEvidence {
+    pub fn new(reason: impl Into<String>, output: impl Into<String>) -> Self {
+        Self {
+            reason: reason.into(),
+            output: output.into(),
+        }
+    }
+
+    pub fn reason(&self) -> &str {
+        &self.reason
+    }
+
+    pub fn output(&self) -> &str {
+        &self.output
+    }
+}
+
+/// Identifies whether review happens before execution or after a confirmed sandbox denial.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[serde(tag = "kind", content = "detail", rename_all = "snake_case")]
+pub enum ActionReviewPhase {
+    Initial,
+    SandboxDenial(SandboxDenialEvidence),
+}
+
 /// Complete, immutable input to deterministic policy and optional classifier review.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ActionReviewRequest {
@@ -212,6 +247,7 @@ pub struct ActionReviewRequest {
     sandbox: SandboxCompatibility,
     policy_revision: PolicyRevision,
     context: ReviewContext,
+    phase: ActionReviewPhase,
 }
 
 impl ActionReviewRequest {
@@ -227,12 +263,22 @@ impl ActionReviewRequest {
             sandbox,
             policy_revision,
             context: ReviewContext::default(),
+            phase: ActionReviewPhase::Initial,
         }
     }
 
     /// Attaches a compact, secret-free context snapshot for the advisory reviewer.
     pub fn with_context(mut self, context: ReviewContext) -> Self {
         self.context = context;
+        self
+    }
+
+    /// Converts an initial request into a second review of the same exact action.
+    ///
+    /// Callers must invoke this only after a trustworthy sandbox denial result. The action,
+    /// provenance, sandbox policy, context, and policy revision remain unchanged.
+    pub fn after_sandbox_denial(mut self, denial: SandboxDenialEvidence) -> Self {
+        self.phase = ActionReviewPhase::SandboxDenial(denial);
         self
     }
 
@@ -254,5 +300,9 @@ impl ActionReviewRequest {
 
     pub fn context(&self) -> &ReviewContext {
         &self.context
+    }
+
+    pub fn phase(&self) -> &ActionReviewPhase {
+        &self.phase
     }
 }

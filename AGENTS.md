@@ -1,3 +1,13 @@
+# Communication
+
+- When comparing responsibilities, capabilities, implementation status, or design options, prefer
+  a compact, conclusion-oriented comparison table when it makes the distinction clearer.
+- Use `✅` and `❌` for genuinely binary judgments so ownership and support boundaries are visually
+  unambiguous.
+- Do not force nuanced states into a binary marker. Use explicit labels such as `部分具备`,
+  `尚未完成`, `协调`, or `委托` when those are more accurate.
+- Lead with the conclusion; use surrounding prose only to explain important boundaries or caveats.
+
 # Crates
 
 - Newly added traits should include doc comments that explain their role and how implementations are expected to use them.

@@ -1,10 +1,11 @@
 use super::policy_feedback::{denied_feedback, rejection_circuit_breaker, safer_action_feedback};
 use super::review_context::attach_review_context;
+use super::tool_execution::{ToolExecutionCompletion, ToolExecutionOrchestrator};
 use crate::policy_service::approval_matches_review;
 use crate::{
     AutoReviewedToolGrant, CoreError, OneTimeToolGrant, PolicyService, RecordToolResultRequest,
     RequestTurnInteraction, ThreadController, ThreadSnapshot, ToolAuthorization, ToolCallOutput,
-    ToolExecutionOutput, ToolService, durable_approval_request,
+    ToolService, durable_approval_request,
 };
 use std::sync::Arc;
 use zeta_async_utils::CancellationToken;
@@ -234,49 +235,22 @@ impl ToolScheduler {
         authorization: ToolAuthorization,
         cancellation: &CancellationToken,
     ) -> Result<(), CoreError> {
-        let authority = match &authorization {
-            ToolAuthorization::Sandboxed(_) => zeta_protocol::ToolExecutionAuthority::Sandboxed,
-            ToolAuthorization::UnsandboxedGrant { grant_id } => {
-                zeta_protocol::ToolExecutionAuthority::UnsandboxedGrant {
-                    grant_id: grant_id.as_str().to_owned(),
-                }
-            }
-            ToolAuthorization::AutoReviewed(grant) => {
-                zeta_protocol::ToolExecutionAuthority::AutoReviewed {
-                    assessment_id: grant.policy_grant().assessment_id().as_str().to_owned(),
-                }
-            }
-            ToolAuthorization::ApprovedOnce(grant) => {
-                zeta_protocol::ToolExecutionAuthority::ApprovedOnce {
-                    request_id: grant.request_id().clone(),
-                }
-            }
-        };
-        self.threads.record_tool_execution_started(
+        let completion = ToolExecutionOrchestrator::new(
+            self.threads.as_ref(),
+            self.tools.as_ref(),
+            self.policy.as_ref(),
+        )
+        .execute(
             thread_id,
             turn_id,
-            crate::thread_controller::RecordToolExecutionStart {
-                tool_call_id: call.id.clone(),
-                action_digest: reviewed.action().digest().as_str().to_owned(),
-                policy_revision: reviewed.policy_revision().as_str().to_owned(),
-                authority,
-            },
+            call,
+            reviewed,
+            authorization,
+            cancellation,
         )?;
-        let output = match self.tools.execute(&call, &authorization, cancellation) {
-            Ok(ToolExecutionOutput::Success(text)) => ToolCallOutput::Success(text),
-            Ok(ToolExecutionOutput::Failure(text)) => ToolCallOutput::Failure(text),
-            Err(error) => ToolCallOutput::Failure(format!(
-                "tool execution outcome is unknown after execution started: {error}"
-            )),
-        };
-        self.threads.record_tool_result(
-            thread_id,
-            turn_id,
-            RecordToolResultRequest {
-                tool_call_id: call.id,
-                output,
-            },
-        )?;
+        if matches!(completion, ToolExecutionCompletion::PolicyRejected) {
+            self.enforce_rejection_circuit_breaker(thread_id, turn_id)?;
+        }
         Ok(())
     }
 

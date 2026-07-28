@@ -1,6 +1,6 @@
 use crate::{
-    AgentResponse, InteractionCancelReason, RequestId, SessionId, StableTurnError, ThreadId,
-    ThreadItem, ToolCallId, TurnId, TurnInteraction,
+    AgentResponse, InteractionCancelReason, RequestId, SandboxDenialOutput, SessionId,
+    StableTurnError, ThreadId, ThreadItem, ToolCallId, TurnId, TurnInteraction,
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -68,6 +68,15 @@ pub enum ThreadEvent {
         policy_revision: String,
         authority: ToolExecutionAuthority,
     },
+    ToolExecutionEscalated {
+        thread_id: ThreadId,
+        turn_id: TurnId,
+        tool_call_id: ToolCallId,
+        action_digest: String,
+        policy_revision: String,
+        denial: SandboxDenialOutput,
+        authority: ToolExecutionAuthority,
+    },
     InteractionCancelled {
         thread_id: ThreadId,
         turn_id: TurnId,
@@ -103,6 +112,7 @@ impl ThreadEvent {
             Self::InteractionRequested { .. } => "interaction.requested",
             Self::InteractionResolved { .. } => "interaction.resolved",
             Self::ToolExecutionStarted { .. } => "tool.execution_started",
+            Self::ToolExecutionEscalated { .. } => "tool.execution_escalated",
             Self::InteractionCancelled { .. } => "interaction.cancelled",
             Self::TurnCompleted { .. } => "turn.completed",
             Self::TurnFailed { .. } => "turn.failed",
@@ -120,6 +130,7 @@ impl ThreadEvent {
             | Self::InteractionRequested { thread_id, .. }
             | Self::InteractionResolved { thread_id, .. }
             | Self::ToolExecutionStarted { thread_id, .. }
+            | Self::ToolExecutionEscalated { thread_id, .. }
             | Self::InteractionCancelled { thread_id, .. }
             | Self::TurnCompleted { thread_id, .. }
             | Self::TurnFailed { thread_id, .. }

@@ -1,4 +1,7 @@
-use super::{CompletedTurn, RecordToolExecutionStart, RecordedToolCall, ThreadController};
+use super::{
+    CompletedTurn, RecordToolExecutionEscalation, RecordToolExecutionStart, RecordedToolCall,
+    ThreadController,
+};
 use crate::CoreError;
 use zeta_async_utils::CancellationToken;
 use zeta_protocol::{
@@ -162,6 +165,26 @@ impl ThreadController {
                 action_digest: start.action_digest,
                 policy_revision: start.policy_revision,
                 authority: start.authority,
+            }],
+        )
+    }
+
+    pub(crate) fn record_tool_execution_escalated(
+        &self,
+        thread_id: &ThreadId,
+        turn_id: &TurnId,
+        escalation: RecordToolExecutionEscalation,
+    ) -> Result<(), CoreError> {
+        self.transition_turn(
+            thread_id,
+            vec![ThreadEvent::ToolExecutionEscalated {
+                thread_id: thread_id.clone(),
+                turn_id: turn_id.clone(),
+                tool_call_id: escalation.tool_call_id,
+                action_digest: escalation.action_digest,
+                policy_revision: escalation.policy_revision,
+                denial: escalation.denial,
+                authority: escalation.authority,
             }],
         )
     }

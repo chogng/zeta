@@ -42,10 +42,11 @@ use zeta_protocol::{
     ActionApprovalRequest, ActionApprovalResponse, AgentInteractionKind, AgentRequest,
     AgentResponse, DynamicToolCall, DynamicToolOutput, DynamicToolResponse,
     InteractionCancelReason, InteractionDeadline, ItemDelta, PendingInteraction, PlanStep,
-    PlanStepStatus, PlanUpdate, RequestUserInput, RequestUserInputResponse, Session, SessionEvent,
-    SessionStatus, SessionThread, SessionThreadStatus, SessionUpdate, StableTurnError,
-    StableTurnErrorCode, StreamCursor, Thread, ThreadEvent, ThreadItem, ThreadOrigin, ThreadStatus,
-    ThreadUpdate, ToolExecutionAuthority, Turn, TurnInteraction, TurnStatus, UserInputAnswer,
+    PlanStepStatus, PlanUpdate, ProcessExecutionOutput, ProcessExitStatus, RequestUserInput,
+    RequestUserInputResponse, SandboxDenialOutput, Session, SessionEvent, SessionStatus,
+    SessionThread, SessionThreadStatus, SessionUpdate, StableTurnError, StableTurnErrorCode,
+    StreamCursor, Thread, ThreadEvent, ThreadItem, ThreadOrigin, ThreadStatus, ThreadUpdate,
+    ToolExecutionAuthority, ToolReplaySafety, Turn, TurnInteraction, TurnStatus, UserInputAnswer,
     UserInputOption, UserInputQuestion,
 };
 
@@ -372,7 +373,7 @@ macro_rules! server_notifications {
             )+
         ];
 
-        #[allow(dead_code)]
+        #[allow(dead_code, clippy::large_enum_variant)]
         #[derive(JsonSchema)]
         #[serde(tag = "method", content = "params")]
         pub(crate) enum ServerNotificationSchema {
@@ -493,6 +494,10 @@ typescript_bindings! {
     Turn,
     Thread,
     ToolExecutionAuthority,
+    ProcessExitStatus,
+    ProcessExecutionOutput,
+    ToolReplaySafety,
+    SandboxDenialOutput,
     ThreadEvent,
     PlanStepStatus,
     PlanStep,

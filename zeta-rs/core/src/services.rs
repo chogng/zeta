@@ -3,7 +3,7 @@ use zeta_async_utils::CancellationToken;
 use zeta_policy::{ActionReviewRequest, AutoReviewGrant, GrantId, ReviewEvidence};
 use zeta_protocol::{
     ActionApprovalRequest, ModelRequest, ModelResponse, ModelStreamEvent, RequestId,
-    ThreadUpdateEnvelope, ToolCall, ToolCallId, ToolDefinition,
+    ThreadUpdateEnvelope, ToolCall, ToolCallId, ToolDefinition, ToolExecutionOutput,
 };
 use zeta_sandboxing::SandboxPolicy;
 
@@ -85,17 +85,6 @@ pub struct NoThreadUpdates;
 
 impl ThreadUpdateSink for NoThreadUpdates {
     fn publish(&self, _: ThreadUpdateEnvelope) {}
-}
-
-/// The user-safe outcome of one tool execution.
-///
-/// A tool-level failure is returned as data so the Agent can inspect it and decide whether to
-/// continue. Infrastructure failures that prevent the service from producing a trustworthy
-/// outcome should be returned as [`CoreError`].
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum ToolExecutionOutput {
-    Success(String),
-    Failure(String),
 }
 
 /// Explicit authority under which a prepared tool call may execute.
@@ -188,6 +177,13 @@ pub trait ToolService: Send + Sync {
         Ok(Vec::new())
     }
 
+    /// Executes under the exact selected authority and reports a protocol-owned outcome.
+    ///
+    /// `SandboxDenied` is valid only for `Sandboxed` authority and must distinguish an ordinary
+    /// command failure from backend enforcement. `SafeToRetry` additionally guarantees that the
+    /// requested child action did not begin; otherwise implementations must report
+    /// `MayHaveSideEffects` or `OutcomeUnknown`. An `Err` after invocation begins is treated as an
+    /// unknown outcome and is never automatically replayed.
     fn execute(
         &self,
         call: &ToolCall,

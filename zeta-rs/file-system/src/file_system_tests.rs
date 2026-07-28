@@ -12,7 +12,7 @@ use zeta_sandboxing::WorkspaceRoot;
 use zeta_tools::{
     ToolBinding, ToolBindingId, ToolDefinition, ToolEnvironmentId, ToolExecutionContext,
     ToolExecutionOutcome, ToolExecutor, ToolInvocation, ToolOperationId, ToolOutputStatus,
-    ToolPayload, ToolRegistryGeneration, ToolRuntimeKey,
+    ToolPayload, ToolRegistryGeneration, ToolRuntimeAuthority, ToolRuntimeKey,
 };
 
 #[test]
@@ -136,7 +136,11 @@ fn invocation(definition: &ToolDefinition, arguments: serde_json::Value) -> Tool
             ToolRuntimeKey::new("local:test").unwrap(),
         ),
         ToolPayload::FunctionArguments(arguments),
-        ToolExecutionContext::new(environment_id(), CancellationSource::new().token()),
+        ToolExecutionContext::new(
+            environment_id(),
+            CancellationSource::new().token(),
+            ToolRuntimeAuthority::Unrestricted,
+        ),
     )
 }
 

@@ -12,13 +12,13 @@ mod engine;
 mod rule;
 
 pub use action::{
-    ActionDigest, ActionKind, ActionProvenance, ActionReviewRequest, ActionSource, Capability,
-    CapabilityKind, CapabilitySet, PolicyRevision, ProcessInvocationKind, ResolvedAction,
-    SandboxCompatibility,
+    ActionDigest, ActionKind, ActionProvenance, ActionReviewPhase, ActionReviewRequest,
+    ActionSource, Capability, CapabilityKind, CapabilitySet, PolicyRevision, ProcessInvocationKind,
+    ResolvedAction, SandboxCompatibility, SandboxDenialEvidence,
 };
 pub use classifier::{
-    ActionClassifier, AssessmentId, ClassifierAssessment, ClassifierRecommendation, RiskLevel,
-    UserAuthorization,
+    ActionClassifier, AssessmentId, ClassifierAssessment, ClassifierRecommendation,
+    RecommendationValidationError, RiskLevel, UserAuthorization,
 };
 pub use context::{ReviewContext, ReviewEvidence, ReviewEvidenceKind, ReviewEvidenceTrust};
 pub use decision::{

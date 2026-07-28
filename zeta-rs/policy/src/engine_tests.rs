@@ -2,6 +2,7 @@ use super::*;
 use crate::{
     ActionDigest, ActionKind, ActionProvenance, ActionSource, AssessmentId, Capability,
     CapabilityKind, CapabilitySet, GrantId, ProcessInvocationKind, ResolvedAction, RuleId,
+    SandboxDenialEvidence,
 };
 use std::fmt;
 use zeta_async_utils::{CancellationSource, CancellationToken};
@@ -88,6 +89,36 @@ fn supported_actions_run_in_the_sandbox_without_classifier_review() {
 }
 
 #[test]
+fn confirmed_sandbox_denial_reaches_the_classifier() {
+    let policy = SandboxPolicy::new(FileSystemAccess::ReadOnly, NetworkAccess::Denied);
+    let request = request(SandboxCompatibility::Supported(policy)).after_sandbox_denial(
+        SandboxDenialEvidence::new("network access denied", "operation not permitted"),
+    );
+    let assessment = ClassifierAssessment::new(
+        AssessmentId::new("assessment-after-denial"),
+        request.action().digest().clone(),
+        request.policy_revision().clone(),
+        "test-prompt",
+        ClassifierRecommendation::Approve {
+            capabilities: request.action().required_capabilities().clone(),
+            risk: RiskLevel::Medium,
+            user_authorization: UserAuthorization::Implicit,
+            reason: "the requested API call requires network access".to_owned(),
+        },
+    );
+    let engine = PolicyEngine::new(
+        PolicyRevision::new("policy-1"),
+        StaticClassifier(Ok(assessment)),
+        ReviewFailurePolicy::Block,
+    );
+
+    assert!(matches!(
+        decide(&engine, &request).unwrap(),
+        ExecutionDecision::RunAutoReviewed(_)
+    ));
+}
+
+#[test]
 fn exact_preexisting_grant_remains_an_unsandboxed_path() {
     let request = request(SandboxCompatibility::Unsupported {
         reason: "network unavailable".to_owned(),
@@ -148,6 +179,42 @@ fn medium_risk_implicitly_authorized_action_receives_a_bound_auto_review_grant()
 }
 
 #[test]
+fn invalid_approval_capabilities_fail_closed_for_any_classifier() {
+    let request = request(SandboxCompatibility::Unsupported {
+        reason: "network unavailable".to_owned(),
+    });
+    let invalid_capability_sets = [
+        CapabilitySet::default(),
+        CapabilitySet::new([Capability::new(CapabilityKind::SystemConfiguration, "host")]),
+    ];
+
+    for (index, capabilities) in invalid_capability_sets.into_iter().enumerate() {
+        let assessment = ClassifierAssessment::new(
+            AssessmentId::new(format!("assessment-invalid-{index}")),
+            request.action().digest().clone(),
+            request.policy_revision().clone(),
+            "test-protocol",
+            ClassifierRecommendation::Approve {
+                capabilities,
+                risk: RiskLevel::Medium,
+                user_authorization: UserAuthorization::Explicit,
+                reason: "invalid approval".to_owned(),
+            },
+        );
+        let engine = PolicyEngine::new(
+            PolicyRevision::new("policy-1"),
+            StaticClassifier(Ok(assessment)),
+            ReviewFailurePolicy::Block,
+        );
+
+        assert!(matches!(
+            decide(&engine, &request).unwrap(),
+            ExecutionDecision::Block(BlockReason::ReviewFailed { .. })
+        ));
+    }
+}
+
+#[test]
 fn high_risk_action_without_explicit_authorization_asks_the_user() {
     let request = request(SandboxCompatibility::Unsupported {
         reason: "network unavailable".to_owned(),
@@ -202,6 +269,36 @@ fn critical_risk_action_cannot_be_auto_approved() {
     assert!(matches!(
         decide(&engine, &request).unwrap(),
         ExecutionDecision::Block(BlockReason::CriticalRisk { .. })
+    ));
+}
+
+#[test]
+fn revised_action_cannot_broaden_the_resolved_capabilities() {
+    let request = request(SandboxCompatibility::Unsupported {
+        reason: "network unavailable".to_owned(),
+    });
+    let assessment = ClassifierAssessment::new(
+        AssessmentId::new("assessment-revision"),
+        request.action().digest().clone(),
+        request.policy_revision().clone(),
+        "test-prompt",
+        ClassifierRecommendation::ReviseAction {
+            maximum_capabilities: CapabilitySet::new([
+                capability(),
+                Capability::new(CapabilityKind::SystemConfiguration, "host"),
+            ]),
+            reason: "use a different action".to_owned(),
+        },
+    );
+    let engine = PolicyEngine::new(
+        PolicyRevision::new("policy-1"),
+        StaticClassifier(Ok(assessment)),
+        ReviewFailurePolicy::Block,
+    );
+
+    assert!(matches!(
+        decide(&engine, &request).unwrap(),
+        ExecutionDecision::Block(BlockReason::ReviewFailed { .. })
     ));
 }
 
@@ -296,6 +393,30 @@ fn require_sandbox_rule_overrides_an_unsandboxed_grant() {
     )
     .with_rules([rule])
     .with_grants([grant]);
+
+    assert!(matches!(
+        decide(&engine, &request).unwrap(),
+        ExecutionDecision::Block(BlockReason::SandboxRequiredButUnavailable { .. })
+    ));
+}
+
+#[test]
+fn require_sandbox_rule_blocks_after_the_sandbox_denies_execution() {
+    let policy = SandboxPolicy::new(FileSystemAccess::ReadOnly, NetworkAccess::Denied);
+    let request = request(SandboxCompatibility::Supported(policy)).after_sandbox_denial(
+        SandboxDenialEvidence::new("network access denied", "operation not permitted"),
+    );
+    let rule = ActionRule::new(
+        RuleId::new("sandbox-only"),
+        request.action().digest().clone(),
+        RuleEffect::RequireSandbox,
+    );
+    let engine = PolicyEngine::new(
+        PolicyRevision::new("policy-1"),
+        PanicClassifier,
+        ReviewFailurePolicy::Block,
+    )
+    .with_rules([rule]);
 
     assert!(matches!(
         decide(&engine, &request).unwrap(),

@@ -131,6 +131,9 @@ fn dto_driven_typescript_preserves_model_ref_and_patch_shape() {
     assert!(typescript.contains("parentSequence: number"));
     assert!(typescript.contains("export type ToolExecutionAuthority ="));
     assert!(typescript.contains(r#"{ "type": "autoReviewed", assessmentId: string, }"#));
+    assert!(typescript.contains("export type ProcessExecutionOutput ="));
+    assert!(typescript.contains("export type SandboxDenialOutput ="));
+    assert!(typescript.contains("replaySafety: ToolReplaySafety"));
     assert!(typescript.contains("dataBase64: string"));
     assert!(typescript.contains("decodedLength: number"));
     assert!(!typescript.contains("data: Array<number>"));

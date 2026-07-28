@@ -1,19 +1,23 @@
 //! Approved local process execution as one model-visible tool.
 //!
 //! This crate owns the `shell-command` schema and executor. It delegates process approval,
-//! output capture, timeout enforcement, and working-directory containment to `zeta-exec`.
+//! sandbox enforcement, output capture, timeout enforcement, and working-directory containment to
+//! `zeta-exec`.
 
 use serde::Deserialize;
 use serde_json::json;
 use std::fmt;
 use std::future;
 use std::path::PathBuf;
-use zeta_exec::{CommandExecutor, CommandRequest, ExecutionError};
-use zeta_sandboxing::WorkspaceRoot;
+use zeta_exec::{
+    CommandExecutionAuthority, CommandExecutionOutcome, CommandExecutor, CommandRequest,
+    ExecutionError,
+};
+use zeta_sandboxing::{SandboxBackend, WorkspaceRoot};
 use zeta_tools::{
     ToolConcurrency, ToolDefinition, ToolExecutionFuture, ToolExecutionOutcome, ToolExecutor,
     ToolInputSchema, ToolInvocation, ToolLoading, ToolName, ToolOutput, ToolOutputSchema,
-    ToolPayload, ToolSchemaMode, ToolStartFailure,
+    ToolPayload, ToolRuntimeAuthority, ToolSchemaMode, ToolStartFailure,
 };
 
 pub use zeta_exec::{ApprovalPolicy, ExecutionLimits as ShellCommandLimits};
@@ -38,22 +42,23 @@ impl std::error::Error for ShellCommandToolError {}
 ///
 /// The selected environment ID must match the immutable ID configured at construction. The
 /// executor never starts a shell implicitly: callers must choose the program they intend to run.
-pub struct ShellCommandTool<P> {
+pub struct ShellCommandTool<P, B> {
     environment_id: zeta_tools::ToolEnvironmentId,
-    executor: CommandExecutor<P>,
+    executor: CommandExecutor<P, B>,
     definition: ToolDefinition,
 }
 
-impl<P: ApprovalPolicy> ShellCommandTool<P> {
+impl<P: ApprovalPolicy, B: SandboxBackend> ShellCommandTool<P, B> {
     pub fn new(
         environment_id: zeta_tools::ToolEnvironmentId,
         workspace: WorkspaceRoot,
+        backend: B,
         approval_policy: P,
         limits: ShellCommandLimits,
     ) -> Result<Self, ShellCommandToolError> {
         Ok(Self {
             environment_id,
-            executor: CommandExecutor::new(workspace, approval_policy, limits),
+            executor: CommandExecutor::new(workspace, backend, approval_policy, limits),
             definition: shell_command_definition()?,
         })
     }
@@ -62,6 +67,10 @@ impl<P: ApprovalPolicy> ShellCommandTool<P> {
         if invocation.context().environment_id() != &self.environment_id {
             return not_started("tool invocation selected a different local environment");
         }
+        let authority = match invocation.context().authority() {
+            ToolRuntimeAuthority::Sandboxed(policy) => CommandExecutionAuthority::Sandboxed(policy),
+            ToolRuntimeAuthority::Unrestricted => CommandExecutionAuthority::Unrestricted,
+        };
         if let Err(outcome) = validate_invocation(&self.definition, &invocation) {
             return outcome;
         }
@@ -73,12 +82,15 @@ impl<P: ApprovalPolicy> ShellCommandTool<P> {
             return returned_error("program must not be empty");
         }
 
-        match self.executor.execute(CommandRequest {
-            program: input.program,
-            arguments: input.arguments,
-            working_directory: input.working_directory,
-        }) {
-            Ok(output) => returned_json(json!({
+        match self.executor.execute(
+            CommandRequest {
+                program: input.program,
+                arguments: input.arguments,
+                working_directory: input.working_directory,
+            },
+            authority,
+        ) {
+            Ok(CommandExecutionOutcome::Completed(output)) => returned_json(json!({
                 "tool": "shell-command",
                 "result": {
                     "exit_code": output.exit_code,
@@ -86,12 +98,15 @@ impl<P: ApprovalPolicy> ShellCommandTool<P> {
                     "stderr": output.stderr,
                 }
             })),
+            Ok(CommandExecutionOutcome::SandboxDenied(denial)) => {
+                ToolExecutionOutcome::SandboxDenied(denial)
+            }
             Err(error) => returned_error(command_error_message(error)),
         }
     }
 }
 
-impl<P: ApprovalPolicy> ToolExecutor for ShellCommandTool<P> {
+impl<P: ApprovalPolicy, B: SandboxBackend> ToolExecutor for ShellCommandTool<P, B> {
     fn definition(&self) -> ToolDefinition {
         self.definition.clone()
     }
@@ -196,8 +211,8 @@ fn command_error_message(error: ExecutionError) -> String {
         ExecutionError::OutputLimitExceeded => {
             "command output exceeded its configured capture limit".to_owned()
         }
-        ExecutionError::Sandbox(message) => {
-            format!("command working directory is not allowed: {message}")
+        ExecutionError::Sandbox(error) => {
+            format!("command working directory is not allowed: {error}")
         }
     }
 }

@@ -115,7 +115,7 @@ fn client_error_is_visible_in_history_and_status() {
     assert_eq!(app.messages().len(), 1);
     assert_eq!(app.messages()[0].role, MessageRole::Error);
     assert_eq!(app.messages()[0].text, "provider unavailable");
-    assert_eq!(app.status(), &Status::Error("provider unavailable".into()));
+    assert_eq!(app.status(), &Status::Error);
 }
 
 #[test]

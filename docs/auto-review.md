@@ -22,7 +22,9 @@ Zeta 把 auto review 定义为“受 deterministic policy 约束的 advisory ris
 - user intent 与 evidence 必须带明确 trust boundary，repository/Tool/Agent 内容默认不可信；
 - review failure 必须 fail closed；
 - Tool crossing side-effect boundary 前必须 durable 记录 authority；
-- started-but-unknown action 不得由 classifier 自动重放。
+- started-but-unknown action 不得由 classifier 自动重放；
+- 确认且可安全重放的 sandbox denial 可以携带结构化执行证据回到 classifier；普通命令失败、
+  部分副作用可能发生或结果未知时不得自动提权重跑。
 
 这套设计追求的不是“尽量少弹窗”，而是在危险自动批准率接近零的前提下，减少可确定安全场景的
 无效打断。
@@ -56,8 +58,8 @@ Auto Review 不解决：
 | `zeta-policy` | rules、grants、classifier port、risk/authorization gate、final decision | LLM prompt 与 provider |
 | `zeta-auto-review` | review prompt、strict response、assessment binding | grant、Tool execution、approval UI |
 | App Server | config safe point、review model resolution、provider adapter | recommendation 的授权语义 |
-| Core | Tool scheduling、typed approval、durable start、recovery、rejection breaker | model risk judgment、OS sandbox |
-| Tool executor / sandbox | 执行 selected authority、资源隔离 | 放宽 capability 或重新解释用户意图 |
+| Core | Tool scheduling、typed approval、durable start/escalation、safe-retry gate、recovery、rejection breaker | model risk judgment、OS sandbox |
+| Tool executor / sandbox | 执行 selected authority、结构化执行结果、平台 denial 分类、资源隔离 | 放宽 capability 或重新解释用户意图 |
 | Desktop/CLI/TUI | 展示 approval 和风险信息、收集 user decision | 自行创建 grant |
 
 关键依赖方向：
@@ -75,6 +77,8 @@ Core ──exact authority──► Tool executor / sandbox
 替换模型实现、关闭 auto review 或增加 deterministic classifier，而不改变权限 authority。
 
 ## 4. 端到端决策模型
+
+### 4.1 Current：执行前决策
 
 ```mermaid
 flowchart TD
@@ -106,6 +110,43 @@ flowchart TD
 3. classifier recommendation 必须重新经过 host invariant；
 4. grant 必须绑定当前 action，而不是绑定 Tool name 或自然语言摘要；
 5. durable start marker 必须先于 side effect。
+
+### 4.2 Current：sandbox denial 回流
+
+为了减少 sandbox 权限不足造成的人工中断，执行前决策后有一条窄的失败回流：
+
+```text
+Sandboxed execution
+├─ success → 完成
+├─ ordinary command failure → 返回 Agent
+├─ timeout / signal → 返回 Agent
+└─ confirmed sandbox denial
+   ├─ safe to replay → 带 denial evidence 重新 review
+   └─ partial effects possible / unknown → 不自动重放
+
+重新 review
+└─ classifier recommendation → PolicyEngine 校验
+   ├─ eligible Approve → exact grant 下重试
+   ├─ ReviseAction → Agent 提出更安全的 action
+   ├─ AskUser → 请求用户批准
+   └─ Deny → Block
+```
+
+这条回流只适用于 platform backend 能结构化确认的 sandbox enforcement denial。Core 和
+classifier 不能从任意 stderr、non-zero exit 或自然语言猜测 denial；Seatbelt/Bubblewrap backend
+只对各自认识的 enforcement/setup signature 产生 typed classification。回流 request 必须继续
+绑定原 action digest、capabilities、policy revision 与 Tool Call，并携带 bounded、secret-free
+的 denial evidence。
+
+是否自动重试是 Core 的 durable execution 决策，不是 classifier recommendation 的隐含效果。
+如果第一次尝试可能已写入文件、发出请求或产生其他副作用，即使 classifier 返回 `Approve`，
+Core 也不得自动重放原调用；它只能记录 terminal/unknown outcome，并让 Agent 修改 action 或
+请求用户决定。
+
+`zeta-protocol::SandboxDenialOutput` 保存 reason、exit status、stdout、stderr、
+aggregated output 与 replay safety。Core 从中截取最多 500 字符的 reason 和 2,000 字符的
+aggregated output 给 reviewer；原结构化 denial 与第二次 authority 一起 durable 写入
+`ThreadEvent::ToolExecutionEscalated`。第二次执行只允许一次，不形成循环。
 
 ## 5. 风险与用户授权矩阵
 
@@ -190,6 +231,10 @@ Auto review 的 failure mode 必须显式：
 - model unavailable、timeout、cancellation、malformed JSON 和 capability mismatch 都不能授权；
 - host 使用 `ReviewFailurePolicy::Block` 或 `AskUser`，不存在隐式 fail-open；
 - sandboxed process 返回 non-zero 不代表应自动 unsandboxed retry；
+- 只有 executor 结构化确认且标记为 `SafeToRetry` 的 sandbox enforcement denial 才能进入二次
+  review；
+- denial 发生前可能已完成部分副作用；不能证明 safe-to-replay 时，即使获得新 grant 也不得自动
+  重放原 Tool Call；
 - action、capabilities、cwd、environment、provenance 或 policy revision 改变后必须重新 review；
 - Tool 已 durable start 但没有 terminal result 时，结果视为 unknown，不自动重放。
 
@@ -202,14 +247,15 @@ Result 中累计 10 次 review rejection，会触发 circuit breaker 并中断�
 一次可审计的执行至少关联：
 
 - action digest 与 Tool Call identity；
-- policy revision、prompt revision 和 assessment ID；
+- policy revision、review protocol revision 和 assessment ID；
 - recommendation 与 final decision；
 - matched deterministic rule、existing grant 或 user approval identity；
 - durable execution authority；
+- sandbox denial 的原始结构化输出、replay safety 与 durable escalation authority；
 - execution start certainty 与 terminal/unknown outcome。
 
 Assessment ID 对 canonical recommendation 建立稳定身份，因此 model JSON 的空格变化不会制造新
-assessment；prompt 或 policy 语义变化必须有新 revision。
+assessment；review protocol 或 policy 语义变化必须有新 revision。
 
 安全指标按优先级排序：
 
@@ -218,7 +264,7 @@ assessment；prompt 或 policy 语义变化必须有新 revision。
 3. unnecessary AskUser rate；
 4. recommendation、risk 与 authorization accuracy；
 5. `ReviseAction` 后安全完成目标的比例；
-6. 不同 model/prompt revision 的一致性与漂移。
+6. 不同 model/review protocol revision 的一致性与漂移。
 
 ## 10. 当前实现状态
 
@@ -226,11 +272,17 @@ assessment；prompt 或 policy 语义变化必须有新 revision。
 
 - deterministic-first `PolicyEngine` 顺序；
 - 四种 classifier recommendation；
-- strict JSON parse、capability exact/subset validation 和 response size limit；
+- recommendation/capability 两层 strict JSON parse、policy-owned exact/subset validation；
+- 64 KiB serialized input limit 与 adapter/classifier 两层 16 KiB response limit；
+- prompt、response schema 和 review protocol revision 的原子绑定；
 - risk × user authorization 自动授权矩阵；
 - assessment-bound `AutoReviewGrant` 与 Tool Call-bound execution authority；
 - bounded user intent 与 trust-labeled evidence；
 - typed durable approval、execution start marker 和 unknown-outcome no-replay；
+- protocol-owned structured process/sandbox outcome；
+- Seatbelt/Bubblewrap backend-specific denial classification；
+- safe sandbox denial 的 second review、exact grant、durable escalation 与单次 retry；
+- possible-side-effect denial 的 no-replay gate；
 - structured safer-action/deny feedback 与 per-turn circuit breaker；
 - App Server immutable, tool-less review model adapter；
 - synthetic seed corpus、Cargo/Bazel offline contract test。
@@ -238,6 +290,10 @@ assessment；prompt 或 policy 语义变化必须有新 revision。
 当前仍有限：
 
 - reviewer 是 one-shot completion，没有 tiered review 或 ensemble；
+- sandbox denial classifier 当前只覆盖 macOS Seatbelt 与 Linux Bubblewrap 的已知 signature；
+- Windows sandbox denial classification 尚未实现；
+- denial 后的 `AskUser` 当前终止原 Tool Call，由 Agent 发起新的批准路径，不在同一 started call
+  上建立可恢复的 approval wait；
 - prompt policy 是 compile-time constant；
 - 没有真实 model benchmark runner、shadow-mode telemetry 或 human-label pipeline；
 - 没有 organization policy steering；
@@ -249,14 +305,16 @@ assessment；prompt 或 policy 语义变化必须有新 revision。
 ### 近期：建立可测量性
 
 - 实现显式 model eval runner，不进入默认 CI；
-- 按 model + prompt revision 输出安全指标；
+- 按 model + review protocol revision 输出安全指标；
 - 扩充真实 bug、human override 和 policy regression 的匿名 synthetic reproduction；
 - 为 false auto-approval 设置 release gate；
-- 先运行 shadow mode，再讨论扩大自动批准覆盖率。
+- 先运行 shadow mode，再讨论扩大自动批准覆盖率；
+- 用真实平台 denial corpus 评估 classifier 的 false-positive/false-negative，并扩展 Windows
+  backend。
 
 ### 中期：提高可控性
 
-- version prompt 与 response schema，降低手工 revision 漂移；
+- 将 private versioned response schema 导出为 eval/tooling 可消费的 artifact；
 - 增加 organization policy steering，并与 untrusted context 分层；
 - 改善 AskUser reason 和 ReviseAction 的可执行性评测；
 - 增加 classifier calibration 与高风险 double-check，但保持 deterministic authority。

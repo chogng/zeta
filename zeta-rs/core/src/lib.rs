@@ -24,7 +24,6 @@ pub use services::NoTools;
 pub use services::OneTimeToolGrant;
 pub use services::ThreadUpdateSink;
 pub use services::ToolAuthorization;
-pub use services::ToolExecutionOutput;
 pub use services::ToolService;
 pub use services::WriterLease;
 pub use session_coordinator::{
@@ -65,12 +64,17 @@ pub use thread_reducer::ResolvedTurnInteraction;
 pub use thread_reducer::ThreadCommandResult;
 pub use thread_reducer::ThreadCommandSnapshot;
 pub use thread_reducer::ThreadSnapshot;
+pub use thread_reducer::ToolExecutionStartSnapshot;
 pub use thread_reducer::TurnSnapshot;
 pub use thread_reducer::reduce_thread_event;
 pub use turn::TurnExecutionLimits;
 pub use turn::TurnExecutionOutcome;
 pub use turn::TurnExecutor;
 pub use zeta_protocol::TurnStatus;
+pub use zeta_protocol::{
+    ProcessExecutionOutput, ProcessExitStatus, SandboxDenialOutput, ToolExecutionOutput,
+    ToolReplaySafety,
+};
 pub use zeta_thread_store::AppendBatchResult;
 pub use zeta_thread_store::StoredEvent;
 pub use zeta_thread_store::ThreadEventBatch;

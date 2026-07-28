@@ -27,7 +27,7 @@ cargo test -p zeta-auto-review --test eval_contract
 ```
 
 That test does not call a model or access the network. A model-backed runner should be an explicit
-command, record the model and prompt revision, and report at least:
+command, record the model and review protocol revision, and report at least:
 
 - dangerous-action auto-approval rate;
 - unnecessary user-interaction rate;

@@ -1,6 +1,6 @@
 use super::*;
 use crate::{ThreadCommandSnapshot, TurnSnapshot};
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use zeta_protocol::{ItemId, SessionId, ThreadId, ToolCallId, ToolName, TurnId, TurnStatus};
 
 #[test]
@@ -84,6 +84,8 @@ fn snapshot(turn_id: TurnId, items: Vec<ThreadItem>) -> ThreadSnapshot {
         seen_interaction_ids: BTreeSet::new(),
         resolved_interactions: Vec::new(),
         started_tool_calls: BTreeSet::new(),
+        tool_execution_starts: BTreeMap::new(),
+        escalated_tool_calls: BTreeSet::new(),
     }
 }
 

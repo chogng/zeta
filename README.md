@@ -28,6 +28,14 @@ licenses and notices, including the Desktop notices in
 
 ## Run
 
+Launch the interactive terminal:
+
+```bash
+cargo run --manifest-path zeta-rs/Cargo.toml -p zeta-cli
+```
+
+Run a one-shot prompt:
+
 ```bash
 cargo run --manifest-path zeta-rs/Cargo.toml -p zeta-cli -- ask "explain this repository"
 cargo run --manifest-path zeta-rs/Cargo.toml -p zeta-cli -- exec "summarize the current changes"

@@ -2,10 +2,12 @@ use super::app::App;
 use super::app::MessageRole;
 use super::app::Status;
 use super::apply_active_turn_snapshot;
+use super::present_turn_error;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
 use zeta_protocol::ItemId;
+use zeta_protocol::StableTurnError;
 use zeta_protocol::ThreadItem;
 use zeta_protocol::Turn;
 use zeta_protocol::TurnId;
@@ -83,6 +85,36 @@ fn resumed_active_turn_returns_from_waiting_to_working() {
     apply_active_turn_snapshot(&mut app, &mut active_turn, &[resumed_turn]);
 
     assert_eq!(app.status(), &Status::Working);
+}
+
+#[test]
+fn failed_turn_uses_a_friendly_error_instead_of_debug_output() {
+    let turn_id = turn_id();
+    let mut active_turn = Some(turn_id.clone());
+    let mut app = working_app();
+    let turn = Turn {
+        turn_id,
+        status: TurnStatus::Failed,
+        items: Vec::new(),
+        pending_interaction: None,
+        error: Some(StableTurnError::model_invocation_failed()),
+    };
+
+    apply_active_turn_snapshot(&mut app, &mut active_turn, &[turn]);
+
+    assert_eq!(app.status(), &Status::Error);
+    let message = &app.messages().last().unwrap().text;
+    assert!(message.contains("configured model"));
+    assert!(!message.contains("StableTurnError"));
+    assert!(!message.contains("ModelInvocationFailed"));
+}
+
+#[test]
+fn persistence_failure_explains_that_the_response_was_not_saved() {
+    assert_eq!(
+        present_turn_error(&StableTurnError::completion_persistence_failed()),
+        "Zeta generated a response but couldn't save it. Please try again."
+    );
 }
 
 fn working_app() -> App {

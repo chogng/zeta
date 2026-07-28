@@ -2125,6 +2125,64 @@
         "steps"
       ]
     },
+    "ProcessExecutionOutput": {
+      "description": "Provider-independent process result retained across executor and Core boundaries.",
+      "type": "object",
+      "properties": {
+        "aggregatedOutput": {
+          "type": "string"
+        },
+        "exitStatus": {
+          "$ref": "#/$defs/ProcessExitStatus"
+        },
+        "stderr": {
+          "type": "string"
+        },
+        "stdout": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "exitStatus",
+        "stdout",
+        "stderr",
+        "aggregatedOutput"
+      ]
+    },
+    "ProcessExitStatus": {
+      "description": "How a sandboxed process terminated before its captured output was returned.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "code": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "type": {
+              "type": "string",
+              "const": "code"
+            }
+          },
+          "required": [
+            "type",
+            "code"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "terminated"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        }
+      ]
+    },
     "ProviderConfigDto": {
       "description": "Non-secret declarative provider settings exposed through the App Server contract.",
       "type": "object",
@@ -2334,6 +2392,26 @@
       },
       "required": [
         "resourceId"
+      ]
+    },
+    "SandboxDenialOutput": {
+      "description": "Trustworthy result of an execution attempt rejected by sandbox enforcement.\n\nProducers must not use this for an ordinary non-zero exit. Captured streams must already be\nbounded and secret-free before this value crosses the executor boundary.",
+      "type": "object",
+      "properties": {
+        "output": {
+          "$ref": "#/$defs/ProcessExecutionOutput"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "replaySafety": {
+          "$ref": "#/$defs/ToolReplaySafety"
+        }
+      },
+      "required": [
+        "reason",
+        "output",
+        "replaySafety"
       ]
     },
     "SchemaHash": {
@@ -3248,6 +3326,46 @@
         {
           "type": "object",
           "properties": {
+            "actionDigest": {
+              "type": "string"
+            },
+            "authority": {
+              "$ref": "#/$defs/ToolExecutionAuthority"
+            },
+            "denial": {
+              "$ref": "#/$defs/SandboxDenialOutput"
+            },
+            "policyRevision": {
+              "type": "string"
+            },
+            "threadId": {
+              "$ref": "#/$defs/ThreadId"
+            },
+            "toolCallId": {
+              "$ref": "#/$defs/ToolCallId"
+            },
+            "turnId": {
+              "$ref": "#/$defs/TurnId"
+            },
+            "type": {
+              "type": "string",
+              "const": "toolExecutionEscalated"
+            }
+          },
+          "required": [
+            "type",
+            "threadId",
+            "turnId",
+            "toolCallId",
+            "actionDigest",
+            "policyRevision",
+            "denial",
+            "authority"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
             "reason": {
               "$ref": "#/$defs/InteractionCancelReason"
             },
@@ -3836,6 +3954,14 @@
     "ToolName": {
       "description": "Validated provider-independent name used to register and invoke a tool.",
       "type": "string"
+    },
+    "ToolReplaySafety": {
+      "description": "Whether Core may automatically execute the same exact Tool Call after sandbox review.",
+      "type": "string",
+      "enum": [
+        "safeToRetry",
+        "mayHaveSideEffects"
+      ]
     },
     "Turn": {
       "description": "Canonical readable state for one user-intent-driven Agent execution.",

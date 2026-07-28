@@ -19,6 +19,54 @@ fn durable_thread_event_serializes_without_a_runtime_message_wrapper() {
 }
 
 #[test]
+fn sandbox_escalation_retains_the_structured_denied_process_result() {
+    let event = ThreadEvent::ToolExecutionEscalated {
+        thread_id: ThreadId::new("thread_1").unwrap(),
+        turn_id: TurnId::new("turn_1").unwrap(),
+        tool_call_id: ToolCallId::new("call_1").unwrap(),
+        action_digest: "a".repeat(64),
+        policy_revision: "policy-1".into(),
+        denial: SandboxDenialOutput::safe_to_retry(
+            "network access denied",
+            ProcessExecutionOutput::from_captured_streams(
+                ProcessExitStatus::Code(1),
+                "",
+                "operation not permitted",
+            ),
+        ),
+        authority: ToolExecutionAuthority::AutoReviewed {
+            assessment_id: "assessment-1".into(),
+        },
+    };
+
+    assert_eq!(
+        serde_json::to_value(event).unwrap(),
+        json!({
+            "type": "toolExecutionEscalated",
+            "threadId": "thread_1",
+            "turnId": "turn_1",
+            "toolCallId": "call_1",
+            "actionDigest": "a".repeat(64),
+            "policyRevision": "policy-1",
+            "denial": {
+                "reason": "network access denied",
+                "output": {
+                    "exitStatus": {"type": "code", "code": 1},
+                    "stdout": "",
+                    "stderr": "operation not permitted",
+                    "aggregatedOutput": "operation not permitted"
+                },
+                "replaySafety": "safeToRetry"
+            },
+            "authority": {
+                "type": "autoReviewed",
+                "assessmentId": "assessment-1"
+            }
+        })
+    );
+}
+
+#[test]
 fn canonical_session_contains_thread_lineage_without_embedding_thread_history() {
     let session = Session {
         session_id: SessionId::new("session_1").expect("test ID is non-empty"),

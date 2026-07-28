@@ -4,5 +4,8 @@
 //! interprets a recommendation as authorization to bypass a sandbox.
 
 mod classifier;
+mod protocol;
+mod review_model;
 
-pub use classifier::{AutoReviewError, LlmActionClassifier, ReviewModel, ReviewModelRequest};
+pub use classifier::{AutoReviewError, LlmActionClassifier};
+pub use review_model::{ReviewModel, ReviewModelError, ReviewModelRequest};

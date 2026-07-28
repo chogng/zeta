@@ -9,6 +9,7 @@ mod model;
 mod session;
 mod stream;
 mod thread;
+mod tool_execution;
 mod tool_name;
 mod turn;
 
@@ -40,6 +41,10 @@ pub use stream::{StreamCursor, StreamInstanceId};
 pub use thread::{
     ItemDelta, Thread, ThreadCommand, ThreadEvent, ThreadStatus, ThreadUpdate,
     ThreadUpdateEnvelope, ToolExecutionAuthority,
+};
+pub use tool_execution::{
+    ProcessExecutionOutput, ProcessExitStatus, SandboxDenialOutput, ToolExecutionOutput,
+    ToolReplaySafety,
 };
 pub use tool_name::{InvalidToolName, ToolName};
 pub use turn::{Turn, TurnStatus};

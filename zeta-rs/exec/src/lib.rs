@@ -2,10 +2,14 @@
 
 use std::io::Read;
 use std::path::PathBuf;
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 use std::thread;
 use std::time::{Duration, Instant};
-use zeta_sandboxing::WorkspaceRoot;
+use zeta_protocol::{ProcessExecutionOutput, ProcessExitStatus, SandboxDenialOutput};
+use zeta_sandboxing::{
+    FileSystemAccess, NetworkAccess, SandboxBackend, SandboxCommand, SandboxDenialTiming,
+    SandboxError, SandboxManager, SandboxPolicy, SandboxProcessExitStatus, WorkspaceRoot,
+};
 
 /// Decides whether a fully materialized local process action can start.
 ///
@@ -35,17 +39,47 @@ pub struct CommandRequest {
     pub arguments: Vec<String>,
     pub working_directory: PathBuf,
 }
+
+/// Exact process authority selected before execution reaches the host spawn boundary.
+///
+/// `Sandboxed` requires the configured backend to enforce the supplied policy. `Unrestricted`
+/// remains explicit so approval or allow-list decisions never silently become sandbox bypasses.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CommandExecutionAuthority {
+    Sandboxed(SandboxPolicy),
+    Unrestricted,
+}
+
+impl CommandExecutionAuthority {
+    fn sandbox_policy(self) -> SandboxPolicy {
+        match self {
+            Self::Sandboxed(policy) => policy,
+            Self::Unrestricted => {
+                SandboxPolicy::new(FileSystemAccess::FullAccess, NetworkAccess::Allowed)
+            }
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 pub struct ExecutionLimits {
     pub timeout: Duration,
     pub max_output_bytes: usize,
 }
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CommandOutput {
     pub exit_code: Option<i32>,
     pub stdout: String,
     pub stderr: String,
 }
+
+/// Structured result of a process that reached sandbox preparation.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum CommandExecutionOutcome {
+    Completed(CommandOutput),
+    SandboxDenied(SandboxDenialOutput),
+}
+
 #[derive(Debug)]
 pub enum ExecutionError {
     ApprovalRequired,
@@ -53,42 +87,86 @@ pub enum ExecutionError {
     Spawn(String),
     TimedOut,
     OutputLimitExceeded,
-    Sandbox(String),
+    Sandbox(SandboxError),
 }
 
-pub struct CommandExecutor<P> {
-    workspace: WorkspaceRoot,
+/// Starts approved commands only after the selected sandbox backend prepares their host process.
+pub struct CommandExecutor<P, B> {
+    sandbox: SandboxManager<B>,
     approval_policy: P,
     limits: ExecutionLimits,
 }
 
-impl<P: ApprovalPolicy> CommandExecutor<P> {
-    pub fn new(workspace: WorkspaceRoot, approval_policy: P, limits: ExecutionLimits) -> Self {
+impl<P: ApprovalPolicy, B: SandboxBackend> CommandExecutor<P, B> {
+    pub fn new(
+        workspace: WorkspaceRoot,
+        backend: B,
+        approval_policy: P,
+        limits: ExecutionLimits,
+    ) -> Self {
         Self {
-            workspace,
+            sandbox: SandboxManager::new(workspace, backend),
             approval_policy,
             limits,
         }
     }
 
-    pub fn execute(&self, request: CommandRequest) -> Result<CommandOutput, ExecutionError> {
+    pub fn execute(
+        &self,
+        request: CommandRequest,
+        authority: CommandExecutionAuthority,
+    ) -> Result<CommandExecutionOutcome, ExecutionError> {
         let action_digest = format!("{}:{}", request.program, request.arguments.join("\u{1f}"));
         match self.approval_policy.requirement_for(&action_digest) {
             ApprovalRequirement::NotRequired => {}
             ApprovalRequirement::Required => return Err(ExecutionError::ApprovalRequired),
             ApprovalRequirement::Denied => return Err(ExecutionError::Denied),
         }
-        let working_directory = self
-            .workspace
-            .resolve(&request.working_directory)
-            .map_err(|error| ExecutionError::Sandbox(error.to_string()))?;
-        let mut child = Command::new(&request.program)
-            .args(&request.arguments)
-            .current_dir(working_directory)
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .map_err(|error| ExecutionError::Spawn(error.to_string()))?;
+        let command = SandboxCommand::new(
+            request.program,
+            request.arguments,
+            request.working_directory,
+        );
+        let prepared = match self.sandbox.prepare(&command, authority.sandbox_policy()) {
+            Ok(prepared) => prepared,
+            Err(error @ SandboxError::BackendUnavailable { .. })
+                if matches!(authority, CommandExecutionAuthority::Sandboxed(_)) =>
+            {
+                return Ok(CommandExecutionOutcome::SandboxDenied(
+                    SandboxDenialOutput::safe_to_retry(
+                        error.to_string(),
+                        ProcessExecutionOutput::from_captured_streams(
+                            ProcessExitStatus::Terminated,
+                            "",
+                            "",
+                        ),
+                    ),
+                ));
+            }
+            Err(error) => return Err(ExecutionError::Sandbox(error)),
+        };
+        let prepared_kind = prepared.kind();
+        let mut command = prepared.into_command();
+        command.stdout(Stdio::piped()).stderr(Stdio::piped());
+        let mut child = match command.spawn() {
+            Ok(child) => child,
+            Err(error)
+                if matches!(authority, CommandExecutionAuthority::Sandboxed(_))
+                    && prepared_kind != zeta_sandboxing::SandboxKind::Unrestricted =>
+            {
+                return Ok(CommandExecutionOutcome::SandboxDenied(
+                    SandboxDenialOutput::safe_to_retry(
+                        format!("sandbox launcher could not start: {error}"),
+                        ProcessExecutionOutput::from_captured_streams(
+                            ProcessExitStatus::Terminated,
+                            "",
+                            "",
+                        ),
+                    ),
+                ));
+            }
+            Err(error) => return Err(ExecutionError::Spawn(error.to_string())),
+        };
         let stdout = child.stdout.take().expect("stdout was piped");
         let stderr = child.stderr.take().expect("stderr was piped");
         let max_output_bytes = self.limits.max_output_bytes;
@@ -127,16 +205,44 @@ impl<P: ApprovalPolicy> CommandExecutor<P> {
         {
             return Err(ExecutionError::OutputLimitExceeded);
         }
-        Ok(CommandOutput {
+        let output = CommandOutput {
             exit_code: status.code(),
             stdout: String::from_utf8_lossy(&stdout).into_owned(),
             stderr: String::from_utf8_lossy(&stderr).into_owned(),
-        })
+        };
+        if matches!(authority, CommandExecutionAuthority::Sandboxed(_))
+            && let Some(denial) = self.sandbox.classify_denial(
+                output.exit_code.map_or(
+                    SandboxProcessExitStatus::Terminated,
+                    SandboxProcessExitStatus::Code,
+                ),
+                &output.stdout,
+                &output.stderr,
+            )
+        {
+            let output = ProcessExecutionOutput::from_captured_streams(
+                output
+                    .exit_code
+                    .map_or(ProcessExitStatus::Terminated, ProcessExitStatus::Code),
+                output.stdout,
+                output.stderr,
+            );
+            let denial = match denial.timing() {
+                SandboxDenialTiming::BeforeProcessStart => {
+                    SandboxDenialOutput::safe_to_retry(denial.reason(), output)
+                }
+                SandboxDenialTiming::ProcessMayHaveStarted => {
+                    SandboxDenialOutput::may_have_side_effects(denial.reason(), output)
+                }
+            };
+            return Ok(CommandExecutionOutcome::SandboxDenied(denial));
+        }
+        Ok(CommandExecutionOutcome::Completed(output))
     }
 }
 
 /// Backwards-compatible name for the local process execution boundary.
-pub type ToolExecutor<P> = CommandExecutor<P>;
+pub type ToolExecutor<P, B> = CommandExecutor<P, B>;
 
 fn drain_stream(mut stream: impl Read, max_output_bytes: usize) -> Result<(Vec<u8>, bool), String> {
     let mut captured = Vec::new();
@@ -154,3 +260,7 @@ fn drain_stream(mut stream: impl Read, max_output_bytes: usize) -> Result<(Vec<u
     }
     Ok((captured, exceeded))
 }
+
+#[cfg(test)]
+#[path = "command_executor_tests.rs"]
+mod tests;

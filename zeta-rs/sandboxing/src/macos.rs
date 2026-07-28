@@ -1,9 +1,10 @@
 use crate::{
-    FileSystemAccess, NetworkAccess, PreparedCommand, SandboxBackend, SandboxCommand, SandboxError,
-    SandboxKind, SandboxPolicy, WorkspaceRoot,
+    FileSystemAccess, NetworkAccess, PROTECTED_WORKSPACE_METADATA_NAMES, PreparedCommand,
+    SandboxBackend, SandboxCommand, SandboxError, SandboxKind, SandboxPolicy, SandboxProcessDenial,
+    SandboxProcessExitStatus, WorkspaceRoot,
 };
 use std::ffi::OsString;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 const SANDBOX_EXEC: &str = "/usr/bin/sandbox-exec";
 
@@ -43,6 +44,31 @@ impl SandboxBackend for MacosSeatbeltSandbox {
             command.working_directory(),
         ))
     }
+
+    fn classify_denial(
+        &self,
+        exit_status: SandboxProcessExitStatus,
+        stdout: &str,
+        stderr: &str,
+    ) -> Option<SandboxProcessDenial> {
+        if exit_status == SandboxProcessExitStatus::Code(0) {
+            return None;
+        }
+        let output = format!("{stdout}\n{stderr}").to_ascii_lowercase();
+        if output.contains("sandbox-exec: sandbox_apply") {
+            return Some(SandboxProcessDenial::before_process_start(
+                "macOS Seatbelt could not apply the sandbox profile",
+            ));
+        }
+        ["operation not permitted", "sandbox: deny", "sandbox-exec:"]
+            .iter()
+            .any(|marker| output.contains(marker))
+            .then(|| {
+                SandboxProcessDenial::process_may_have_started(
+                    "macOS Seatbelt denied the sandboxed process operation",
+                )
+            })
+    }
 }
 
 fn seatbelt_profile(policy: SandboxPolicy, workspace: &WorkspaceRoot) -> String {
@@ -55,6 +81,9 @@ fn seatbelt_profile(policy: SandboxPolicy, workspace: &WorkspaceRoot) -> String 
                 "(allow file-write* (subpath \"{}\"))\n",
                 escape_profile_literal(workspace.path().to_string_lossy().as_ref())
             ));
+            for name in PROTECTED_WORKSPACE_METADATA_NAMES {
+                push_protected_metadata_policy(&mut profile, workspace.path(), name);
+            }
         }
         FileSystemAccess::FullAccess => {}
     }
@@ -62,6 +91,15 @@ fn seatbelt_profile(policy: SandboxPolicy, workspace: &WorkspaceRoot) -> String 
         profile.push_str("(deny network*)\n");
     }
     profile
+}
+
+fn push_protected_metadata_policy(profile: &mut String, workspace: &Path, name: &str) {
+    let path = workspace.join(name);
+    let path = escape_profile_literal(path.to_string_lossy().as_ref());
+    profile.push_str(&format!(
+        "(deny file-write* (literal \"{path}\"))\n\
+         (deny file-write* (subpath \"{path}\"))\n"
+    ));
 }
 
 fn escape_profile_literal(value: &str) -> String {

@@ -1,15 +1,17 @@
 use super::*;
 use crate::{
-    CreateThreadRequest, InMemoryThreadStore, ResolveTurnInteractionRequest, SequenceExpectation,
-    StartTurnRequest, ToolAuthorization,
+    CreateThreadRequest, InMemoryThreadStore, ProcessExecutionOutput, ProcessExitStatus,
+    ResolveTurnInteractionRequest, SandboxDenialOutput, SequenceExpectation, StartTurnRequest,
+    ToolAuthorization, ToolExecutionOutput,
 };
 use serde_json::json;
+use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 use zeta_async_utils::CancellationSource;
 use zeta_policy::{
-    ActionClassifier, ActionDigest, ActionKind, ActionProvenance, ActionReviewRequest,
-    ActionSource, ApprovalRequest, AssessmentId, Capability, CapabilityKind, CapabilitySet,
-    ClassifierAssessment, ClassifierRecommendation, ExecutionDecision, PolicyEngine,
+    ActionClassifier, ActionDigest, ActionKind, ActionProvenance, ActionReviewPhase,
+    ActionReviewRequest, ActionSource, ApprovalRequest, AssessmentId, Capability, CapabilityKind,
+    CapabilitySet, ClassifierAssessment, ClassifierRecommendation, ExecutionDecision, PolicyEngine,
     PolicyRevision, ResolvedAction, ReviewEvidence, ReviewEvidenceKind, ReviewEvidenceTrust,
     ReviewFailurePolicy, RiskLevel, SandboxCompatibility, UserAuthorization,
 };
@@ -152,6 +154,137 @@ fn reviewer_approval_executes_with_bound_authority_and_user_context() {
     assert_eq!(context.user_intent(), "run");
     assert_eq!(context.evidence().len(), 1);
     assert_eq!(context.evidence()[0].source(), "script.py");
+}
+
+#[test]
+fn safe_sandbox_denial_is_reviewed_and_retried_once() {
+    let observed = Arc::new(Mutex::new(Vec::new()));
+    let tools = Arc::new(ReviewTool {
+        outputs: Mutex::new(VecDeque::from([
+            ToolExecutionOutput::SandboxDenied(SandboxDenialOutput::safe_to_retry(
+                "network access denied",
+                ProcessExecutionOutput::from_captured_streams(
+                    ProcessExitStatus::Code(1),
+                    "",
+                    "connect: operation not permitted",
+                ),
+            )),
+            ToolExecutionOutput::Success("executed outside sandbox".into()),
+        ])),
+        ..ReviewTool::default()
+    });
+    let engine = PolicyEngine::new(
+        PolicyRevision::new("policy-v1"),
+        DenialApprovingClassifier {
+            observed: observed.clone(),
+        },
+        ReviewFailurePolicy::Block,
+    );
+    let fixture = fixture_with(tools, Arc::new(engine));
+
+    fixture
+        .scheduler
+        .run_pending(
+            &fixture.thread_id,
+            &fixture.turn_id,
+            &CancellationSource::new().token(),
+        )
+        .unwrap();
+
+    let authorizations = fixture.tools.authorizations.lock().unwrap();
+    assert!(matches!(
+        authorizations.as_slice(),
+        [ToolAuthorization::Sandboxed(_), ToolAuthorization::AutoReviewed(grant)]
+            if grant.tool_call_id() == &fixture.call_id
+    ));
+    let phases = observed.lock().unwrap();
+    assert!(matches!(
+        phases.as_slice(),
+        [ActionReviewPhase::SandboxDenial(denial)]
+            if denial.reason() == "network access denied"
+                && denial.output() == "connect: operation not permitted"
+    ));
+    let snapshot = fixture.threads.read_thread(&fixture.thread_id).unwrap();
+    assert!(snapshot.escalated_tool_calls.contains(&fixture.call_id));
+    assert!(snapshot.items.iter().any(|item| matches!(
+        item,
+        ThreadItem::ToolResult {
+            tool_call_id,
+            text,
+            is_error: false,
+            ..
+        } if tool_call_id == &fixture.call_id && text == "executed outside sandbox"
+    )));
+    let recovered = ThreadController::with_store(fixture.store.clone())
+        .recover_thread(&fixture.thread_id)
+        .unwrap();
+    assert!(recovered.escalated_tool_calls.contains(&fixture.call_id));
+    assert_eq!(
+        recovered
+            .tool_execution_starts
+            .get(&fixture.call_id)
+            .unwrap()
+            .action_digest,
+        snapshot
+            .tool_execution_starts
+            .get(&fixture.call_id)
+            .unwrap()
+            .action_digest
+    );
+}
+
+#[test]
+fn sandbox_denial_with_possible_side_effects_is_not_retried() {
+    let observed = Arc::new(Mutex::new(Vec::new()));
+    let tools = Arc::new(ReviewTool {
+        outputs: Mutex::new(VecDeque::from([ToolExecutionOutput::SandboxDenied(
+            SandboxDenialOutput::may_have_side_effects(
+                "write denied after process launch",
+                ProcessExecutionOutput::from_captured_streams(
+                    ProcessExitStatus::Code(1),
+                    "partial output",
+                    "",
+                ),
+            ),
+        )])),
+        ..ReviewTool::default()
+    });
+    let engine = PolicyEngine::new(
+        PolicyRevision::new("policy-v1"),
+        DenialApprovingClassifier {
+            observed: observed.clone(),
+        },
+        ReviewFailurePolicy::Block,
+    );
+    let fixture = fixture_with(tools, Arc::new(engine));
+
+    fixture
+        .scheduler
+        .run_pending(
+            &fixture.thread_id,
+            &fixture.turn_id,
+            &CancellationSource::new().token(),
+        )
+        .unwrap();
+
+    assert!(matches!(
+        fixture.tools.authorizations.lock().unwrap().as_slice(),
+        [ToolAuthorization::Sandboxed(_)]
+    ));
+    assert!(observed.lock().unwrap().is_empty());
+    let snapshot = fixture.threads.read_thread(&fixture.thread_id).unwrap();
+    assert!(!snapshot.escalated_tool_calls.contains(&fixture.call_id));
+    assert!(snapshot.items.iter().any(|item| matches!(
+        item,
+        ThreadItem::ToolResult {
+            tool_call_id,
+            text,
+            is_error: true,
+            ..
+        } if tool_call_id == &fixture.call_id
+            && text.contains("may have produced side effects")
+            && text.contains("partial output")
+    )));
 }
 
 #[test]
@@ -398,6 +531,7 @@ fn resolve(fixture: &Fixture, decision: ActionApprovalDecision) {
 
 struct ReviewTool {
     authorizations: Mutex<Vec<ToolAuthorization>>,
+    outputs: Mutex<VecDeque<ToolExecutionOutput>>,
     requires_escalation: bool,
     evidence: Vec<ReviewEvidence>,
 }
@@ -406,6 +540,7 @@ impl Default for ReviewTool {
     fn default() -> Self {
         Self {
             authorizations: Mutex::new(Vec::new()),
+            outputs: Mutex::new(VecDeque::new()),
             requires_escalation: false,
             evidence: Vec::new(),
         }
@@ -435,7 +570,12 @@ impl ToolService for ReviewTool {
             .lock()
             .unwrap()
             .push(authorization.clone());
-        Ok(ToolExecutionOutput::Success("executed".into()))
+        Ok(self
+            .outputs
+            .lock()
+            .unwrap()
+            .pop_front()
+            .unwrap_or_else(|| ToolExecutionOutput::Success("executed".into())))
     }
 }
 
@@ -457,6 +597,10 @@ impl PolicyService for AskPolicy {
 
 struct ContextApprovingClassifier {
     observed: Arc<Mutex<Option<zeta_policy::ReviewContext>>>,
+}
+
+struct DenialApprovingClassifier {
+    observed: Arc<Mutex<Vec<ActionReviewPhase>>>,
 }
 
 #[derive(Debug)]
@@ -489,6 +633,30 @@ impl ActionClassifier for ContextApprovingClassifier {
                 risk: RiskLevel::Medium,
                 user_authorization: UserAuthorization::Implicit,
                 reason: "matches the requested operation".into(),
+            },
+        ))
+    }
+}
+
+impl ActionClassifier for DenialApprovingClassifier {
+    type Error = ContextClassifierError;
+
+    fn classify(
+        &self,
+        request: &ActionReviewRequest,
+        _: &CancellationToken,
+    ) -> Result<ClassifierAssessment, Self::Error> {
+        self.observed.lock().unwrap().push(request.phase().clone());
+        Ok(ClassifierAssessment::new(
+            AssessmentId::new("denial-assessment"),
+            request.action().digest().clone(),
+            request.policy_revision().clone(),
+            "test-prompt",
+            ClassifierRecommendation::Approve {
+                capabilities: request.action().required_capabilities().clone(),
+                risk: RiskLevel::Medium,
+                user_authorization: UserAuthorization::Implicit,
+                reason: "outside-sandbox retry is allowed".into(),
             },
         ))
     }

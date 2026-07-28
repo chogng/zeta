@@ -1,8 +1,8 @@
 use crate::{
-    ActionClassifier, ActionReviewRequest, ActionRule, ApprovalRequest, AutoReviewGrant,
-    BlockReason, ClassifierAssessment, ClassifierRecommendation, ExecutionDecision, PolicyError,
-    PolicyRevision, ReviewFailurePolicy, RiskLevel, RuleEffect, SaferActionRequest,
-    SandboxCompatibility, UnsandboxedGrant, UserAuthorization,
+    ActionClassifier, ActionReviewPhase, ActionReviewRequest, ActionRule, ApprovalRequest,
+    AutoReviewGrant, BlockReason, ClassifierAssessment, ClassifierRecommendation,
+    ExecutionDecision, PolicyError, PolicyRevision, ReviewFailurePolicy, RiskLevel, RuleEffect,
+    SaferActionRequest, SandboxCompatibility, UnsandboxedGrant, UserAuthorization,
 };
 use zeta_async_utils::CancellationToken;
 
@@ -62,7 +62,9 @@ impl<C: ActionClassifier> PolicyEngine<C> {
                 grant_id: grant.id().clone(),
             });
         }
-        if let SandboxCompatibility::Supported(policy) = request.sandbox() {
+        if matches!(request.phase(), ActionReviewPhase::Initial)
+            && let SandboxCompatibility::Supported(policy) = request.sandbox()
+        {
             return Ok(ExecutionDecision::RunSandboxed(*policy));
         }
 
@@ -105,12 +107,24 @@ impl<C: ActionClassifier> PolicyEngine<C> {
                 && matches!(rule.effect(), RuleEffect::RequireSandbox)
         })?;
         match rule.effect() {
-            RuleEffect::RequireSandbox => match request.sandbox() {
-                SandboxCompatibility::Supported(policy) => {
+            RuleEffect::RequireSandbox => match (request.phase(), request.sandbox()) {
+                (ActionReviewPhase::SandboxDenial(denial), _) => Some(ExecutionDecision::Block(
+                    BlockReason::SandboxRequiredButUnavailable {
+                        rule_id: rule.id().clone(),
+                        reason: format!(
+                            "the required sandbox denied the action: {}",
+                            denial.reason()
+                        ),
+                    },
+                )),
+                (ActionReviewPhase::Initial, SandboxCompatibility::Supported(policy)) => {
                     Some(ExecutionDecision::RunSandboxed(*policy))
                 }
-                SandboxCompatibility::Unsupported { reason }
-                | SandboxCompatibility::NotApplicable { reason } => Some(ExecutionDecision::Block(
+                (
+                    ActionReviewPhase::Initial,
+                    SandboxCompatibility::Unsupported { reason }
+                    | SandboxCompatibility::NotApplicable { reason },
+                ) => Some(ExecutionDecision::Block(
                     BlockReason::SandboxRequiredButUnavailable {
                         rule_id: rule.id().clone(),
                         reason: reason.clone(),
@@ -130,6 +144,14 @@ impl<C: ActionClassifier> PolicyEngine<C> {
             || assessment.policy_revision() != request.policy_revision()
         {
             return Err(PolicyError::ClassifierBindingMismatch);
+        }
+        if let Err(error) = assessment
+            .recommendation()
+            .validate_against(request.action().required_capabilities())
+        {
+            return Ok(ExecutionDecision::Block(BlockReason::ReviewFailed {
+                reason: error.to_string(),
+            }));
         }
         let decision = match assessment.recommendation() {
             ClassifierRecommendation::Approve {
@@ -179,11 +201,6 @@ impl<C: ActionClassifier> PolicyEngine<C> {
         user_authorization: UserAuthorization,
         reason: &str,
     ) -> ExecutionDecision {
-        if capabilities.is_empty() || capabilities != request.action().required_capabilities() {
-            return ExecutionDecision::Block(BlockReason::ReviewFailed {
-                reason: "reviewer approved capabilities outside the resolved action".to_owned(),
-            });
-        }
         if risk == RiskLevel::Critical {
             return ExecutionDecision::Block(BlockReason::CriticalRisk {
                 assessment_id: assessment.assessment_id().clone(),
