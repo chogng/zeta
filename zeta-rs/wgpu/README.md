@@ -15,8 +15,8 @@ Workbench 或其他产品状态。
 | Instance、adapter、device、queue、surface、configuration | ✅ | |
 | Frame acquire、clear、submit、present | ✅ | |
 | Resize、零尺寸与 surface lost recovery | ✅ | |
-| UI scene/font/text semantics | ❌ | `zeta-ui` |
-| Shaping、glyph cache、texture atlas、text pipeline | 协调 | `zeta-ui::UiRenderer` |
+| UI scene/paint/font/text semantics | ❌ | `zeta-ui` |
+| Rect/text GPU pipelines 与 glyph resources | 协调 | `zeta-ui::UiRenderer` |
 | Event loop、窗口策略 | ❌ | `zeta-winit` / product host |
 | Widget、layout、input、IME、accessibility | ❌ | 尚无 owner |
 | App Server、workspace、durable state | ❌ | 上层产品 |
@@ -43,6 +43,7 @@ implementation，意味着 crate ownership 已经漂移。
 | `WgpuRenderer::initialize` | public | `NativeWindow` → surface/adapter/device/config/UI pipeline | App Server startup |
 | `WgpuRenderer::resize` | public | 保存 physical extent 并在非零时 configure | layout 计算 |
 | `WgpuRenderer::set_scale_factor` | public | 保存平台 DPI 事实 | logical layout policy |
+| `WgpuRenderer::request_redraw` | public | 转发 owned native window 的 redraw 请求 | 动画或 invalidation policy |
 | `WgpuRenderer::render` | public | 无 scene 的稳定 clear/present 路径 | UI state mutation |
 | `WgpuRenderer::render_scene` | public | prepare UI、clear scene background、draw、present | 构造或布局 scene |
 | `RenderOutcome` | public | 告知 host presented/skipped/retry | 自行调度 event loop |
@@ -110,4 +111,4 @@ Current limitations：
 - 一个 `WgpuRenderer` 只服务一个 window/surface；
 - 没有 frame telemetry、device-lost migration 或显式 pipeline warmup；
 - 没有 headless GPU test、golden image 或产品 host vertical；
-- `render_scene` 目前只绘制 `zeta-ui` 已支持的背景和 text blocks。
+- `render_scene` 目前只绘制 `zeta-ui` 已支持的背景、rects 和 text blocks。

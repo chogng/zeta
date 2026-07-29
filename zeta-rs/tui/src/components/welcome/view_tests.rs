@@ -1,0 +1,46 @@
+use super::draw;
+use crate::ui::HIGHLIGHT;
+use ratatui::Terminal;
+use ratatui::backend::TestBackend;
+
+#[test]
+fn wide_banner_uses_the_two_column_welcome_presentation() {
+    let buffer = render(80, 13);
+    let rendered = buffer
+        .content()
+        .iter()
+        .map(|cell| cell.symbol())
+        .collect::<String>();
+
+    assert!(rendered.contains(concat!("Zeta v", env!("CARGO_PKG_VERSION"))));
+    assert!(rendered.contains("Welcome back!"));
+    assert!(rendered.contains("Tips for getting started"));
+    assert!(rendered.contains("Use @ to mention workspace files"));
+    assert!(rendered.contains("Try asking"));
+    assert_eq!(buffer[(2, 1)].fg, HIGHLIGHT);
+    assert_eq!(buffer[(77, 11)].fg, HIGHLIGHT);
+    assert_eq!(buffer[(30, 2)].fg, HIGHLIGHT);
+    assert_eq!(buffer[(33, 5)].fg, HIGHLIGHT);
+}
+
+#[test]
+fn narrow_banner_uses_the_compact_single_column_copy() {
+    let buffer = render(48, 12);
+    let rendered = buffer
+        .content()
+        .iter()
+        .map(|cell| cell.symbol())
+        .collect::<String>();
+
+    assert!(rendered.contains("Welcome back!"));
+    assert!(rendered.contains("Use @ for workspace files"));
+    assert!(rendered.contains("Explain this workspace"));
+    assert!(!rendered.contains("╭─────╮"));
+}
+
+fn render(width: u16, height: u16) -> ratatui::buffer::Buffer {
+    let backend = TestBackend::new(width, height);
+    let mut terminal = Terminal::new(backend).unwrap();
+    terminal.draw(|frame| draw(frame, frame.area())).unwrap();
+    terminal.backend().buffer().clone()
+}

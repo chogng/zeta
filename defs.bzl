@@ -35,7 +35,7 @@ def zeta_rust_crate(name, crate_name, data = []):
         ),
     )
 
-def zeta_rust_binary(name, crate_name, crate_root, deps):
+def zeta_rust_binary(name, crate_name, crate_root, deps, data = []):
     """Defines a Cargo binary using the lockfile-derived dependency graph.
 
     Callers provide the package library in `deps` when the binary imports it.
@@ -44,6 +44,7 @@ def zeta_rust_binary(name, crate_name, crate_root, deps):
     rust_binary(
         name = name,
         crate_name = crate_name,
+        compile_data = data,
         crate_root = crate_root,
         deps = all_crate_deps() + deps,
         edition = "2024",

@@ -22,6 +22,9 @@ zeta-app-server-protocol = { workspace = true }
 zeta-file-search = { workspace = true }
 zeta-protocol = { workspace = true }
 
+[target.'cfg(unix)'.dependencies]
+signal-hook = { workspace = true }
+
 [target.'cfg(not(target_os = "android"))'.dependencies]
 arboard = { workspace = true }
 image = { workspace = true, features = ["gif", "jpeg", "png", "webp"] }

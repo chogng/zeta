@@ -1182,7 +1182,7 @@ metadata-only 诊断与包含测试 fixture 的受控 trace。
 - `expectedSequence` 来自正确 aggregate，逻辑重试复用原 `CommandId`；
 - transcript 展示完整 typed Turn/ThreadItem lifecycle；
 - Ctrl-C 在 Turn 运行时优先发出 `turn/interrupt`，空闲时才退出；
-- terminal 在正常退出、错误和 panic 路径均可恢复；
+- terminal 在正常退出、错误、panic 和 Unix termination signal 路径均可恢复；
 - feature 只通过 owner crate 的 public interface 或已接受的 App Server contract 工作；
 - UI 原语、terminal 基础设施和 host adapter 不依赖产品状态；
 - control plane 不被 streaming data plane 饿死，overflow/lag 会触发确定 resync；

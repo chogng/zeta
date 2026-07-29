@@ -15,6 +15,9 @@ App Server connection、UI tree 或渲染状态。
 | `NativeWindow::create` | public | 从 `ActiveEventLoop` 和 attributes 创建窗口 | 产品窗口策略 |
 | `NativeWindow` | public | 安全持有 window 与 display handle | GPU surface、widget 或 workspace |
 | `PhysicalExtent` | public | 跨底层 crate 传递 physical pixel dimensions | logical layout |
+| `WindowChrome` / `apply_window_chrome` | public | 把命名 chrome policy 转换为平台 attributes | titlebar paint/layout |
+| `NativeWindow::start_window_drag` | public | 转发产品 titlebar 命中的平台窗口拖动 | hit testing |
+| `NativeWindow::set_cursor` | public | 应用产品 hit testing 选择的 cursor | hover state |
 
 `ApplicationHandler`、`ActiveEventLoop`、`WindowEvent`、`WindowAttributes`、`WindowId` 和
 `LogicalSize` 由本 crate 重新导出，使上层 host 不需要绕过 adapter 建立另一套 `winit`
@@ -29,6 +32,7 @@ product-owned ApplicationHandler
        ├─ ActiveEventLoop::create_window
        └─ ActiveEventLoop::owned_display_handle
   → NativeWindow event/redraw methods
+  → apply_window_chrome (optional platform chrome adaptation)
   → zeta-wgpu consumes surface_target + display_handle
 ```
 
@@ -36,8 +40,11 @@ product-owned ApplicationHandler
 
 - window 必须在 `ApplicationHandler::resumed` 后创建，以保留移动端 surface lifecycle；
 - `WindowAttributes` 由产品构造，因此标题、尺寸和窗口模式不是本 crate policy；
+- `ContentUnderTitlebar` 在 macOS 保留 system window buttons，同时启用 transparent titlebar、
+  full-size content 和 first-mouse；其他平台当前保持 attributes 不变；
 - event-loop 与 window creation error 原样返回，产品决定诊断、恢复或退出；
-- `NativeWindow` 只提供 handle、identity、extent、scale factor 和 redraw/present hooks；
+- `NativeWindow` 只提供 handle、identity、extent、scale factor、redraw/present hooks 与原生窗口
+  交互 forwarding；
 - 出现 App Server method、workspace state、widget、paint scene 或 GPU resource 意味着 ownership
   已漂移。
 
@@ -50,5 +57,5 @@ cargo test --manifest-path zeta-rs/Cargo.toml -p zeta-winit
 当前单元测试只验证无平台依赖的值语义。CI 编译不能代替 macOS、Windows、Linux 的真实窗口、
 resume/suspend、DPI 与多窗口 smoke。
 
-当前没有产品 event handler、默认窗口策略、clipboard、IME、accessibility、drag/drop 或
+当前没有产品 event handler、默认窗口策略、clipboard、IME、accessibility、file drag/drop 或
 platform menu；这些能力必须在出现明确 owner 与 representative product vertical 后分层加入。

@@ -2,14 +2,19 @@
 
 mod host;
 mod window;
+mod window_chrome;
 
 pub use host::run_application;
 pub use window::NativeWindow;
 pub use window::PhysicalExtent;
+pub use window_chrome::{WindowChrome, apply_window_chrome};
 
 pub use winit::application::ApplicationHandler;
 pub use winit::dpi::LogicalSize;
+pub use winit::event::ElementState;
+pub use winit::event::MouseButton;
 pub use winit::event::WindowEvent;
 pub use winit::event_loop::ActiveEventLoop;
+pub use winit::window::CursorIcon;
 pub use winit::window::WindowAttributes;
 pub use winit::window::WindowId;

@@ -1,0 +1,18 @@
+[package]
+name = "zeta-native"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "zeta-native"
+path = "src/main.rs"
+
+[dependencies]
+zeta-ui = { workspace = true }
+zeta-wgpu = { workspace = true }
+zeta-winit = { workspace = true }
+
+[lints]
+workspace = true

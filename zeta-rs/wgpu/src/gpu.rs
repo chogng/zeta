@@ -107,6 +107,11 @@ impl WgpuRenderer {
         self.viewport.set_scale_factor(scale_factor);
     }
 
+    /// Schedules a redraw through the renderer's owned native window.
+    pub fn request_redraw(&self) {
+        self.window.request_redraw();
+    }
+
     /// Renders one invalidated frame.
     pub fn render(&mut self) -> Result<RenderOutcome, WgpuRendererError> {
         self.render_frame(None)

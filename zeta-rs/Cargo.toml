@@ -30,6 +30,7 @@ members = [
     "model-provider-config",
     "mcp",
     "mcp-server",
+    "native",
     "policy",
     "plugins",
     "protocol",
@@ -65,6 +66,7 @@ version = "0.1.0"
 anyhow = "1"
 arboard = { version = "3", features = ["wayland-data-control"] }
 base64 = "0.22"
+bytemuck = { version = "1", features = ["derive"] }
 cc = "1"
 clap = "4"
 dunce = "1"
@@ -89,9 +91,11 @@ semver = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde_yaml = "0.9"
+signal-hook = "0.3"
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
 rustls-native-certs = "0.7"
 rmcp = { version = "=3.0.0-beta.3", default-features = false }
+resvg = { version = "0.47", default-features = false }
 sha2 = "0.10"
 strum = "0.27"
 strum_macros = "0.27"

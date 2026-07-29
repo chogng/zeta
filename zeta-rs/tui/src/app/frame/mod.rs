@@ -1,5 +1,4 @@
 mod footer;
-mod header;
 
 use crate::app::App;
 use crate::components::composer;
@@ -14,7 +13,6 @@ use ratatui::layout::Rect;
 pub(crate) fn draw(frame: &mut Frame<'_>, app: &App) {
     let areas = frame_areas(frame.area(), interaction_layout(app, frame.area()));
 
-    header::draw(frame, areas.header, app.status());
     transcript::draw(frame, areas.history, app.messages());
     if let Some(view) = app.selection_view() {
         selection::draw(frame, areas.interaction, view);

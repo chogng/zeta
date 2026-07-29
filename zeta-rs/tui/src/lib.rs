@@ -40,7 +40,10 @@ impl TuiOptions {
 /// Describes why the interactive terminal returned control to its host.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TuiExit {
+    /// The user exited through an interactive TUI command or key binding.
     UserRequested,
+    /// The host process received an operating-system termination request.
+    TerminationRequested,
 }
 
 /// Failure to start or operate an interactive terminal session.

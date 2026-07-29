@@ -1,13 +1,11 @@
 use ratatui::layout::Rect;
 
-const HEADER_HEIGHT: u16 = 2;
 const MIN_HISTORY_HEIGHT: u16 = 4;
 const STATUS_LINE_HEIGHT: u16 = 1;
 const COMPOSER_HEIGHT: u16 = 3;
 const FOOTER_HEIGHT: u16 = 1;
 
 pub(crate) struct FrameAreas {
-    pub(crate) header: Rect,
     pub(crate) history: Rect,
     pub(crate) status_line: Rect,
     pub(crate) interaction: Rect,
@@ -21,8 +19,7 @@ pub(crate) enum InteractionLayout {
 }
 
 pub(crate) fn frame_areas(area: Rect, interaction_layout: InteractionLayout) -> FrameAreas {
-    let header_height = HEADER_HEIGHT.min(area.height);
-    let available_height = area.height.saturating_sub(header_height);
+    let available_height = area.height;
     let (requested_status_line_height, requested_interaction_height, requested_footer_height) =
         match interaction_layout {
             InteractionLayout::Composer => (STATUS_LINE_HEIGHT, COMPOSER_HEIGHT, FOOTER_HEIGHT),
@@ -43,13 +40,9 @@ pub(crate) fn frame_areas(area: Rect, interaction_layout: InteractionLayout) -> 
     let footer_y = bottom.saturating_sub(footer_height);
     let interaction_y = footer_y.saturating_sub(interaction_height);
     let status_line_y = interaction_y.saturating_sub(status_line_height);
-    let history_y = area.y.saturating_add(header_height);
+    let history_y = area.y;
 
     FrameAreas {
-        header: Rect {
-            height: header_height,
-            ..area
-        },
         history: Rect {
             y: history_y,
             height: status_line_y.saturating_sub(history_y),

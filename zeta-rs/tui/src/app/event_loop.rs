@@ -93,6 +93,9 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                     None
                 }
                 client::RuntimeEvent::Tick => None,
+                client::RuntimeEvent::TerminationRequested => {
+                    return Ok(TuiExit::TerminationRequested);
+                }
                 client::RuntimeEvent::TerminalFailed(error) => return Err(error.into()),
                 client::RuntimeEvent::Terminal(event) => match event {
                     Event::Key(key) if key.kind != KeyEventKind::Release => app.handle_key(key),

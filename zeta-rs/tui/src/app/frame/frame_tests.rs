@@ -27,13 +27,16 @@ use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
 #[test]
-fn empty_frame_uses_lightweight_chrome_and_a_welcome_message() {
+fn empty_frame_uses_lightweight_chrome_and_a_welcome_banner() {
     let rendered = render(&App::new(), 80, 20);
 
-    assert!(rendered.contains("Zeta  workspace assistant"));
-    assert!(rendered.contains("Ask anything about your workspace."));
+    assert!(!rendered.contains("workspace assistant"));
+    assert!(rendered.contains(concat!("Zeta v", env!("CARGO_PKG_VERSION"))));
+    assert!(rendered.contains("Welcome back!"));
+    assert!(rendered.contains("Tips for getting started"));
+    assert!(rendered.contains("Try asking"));
     assert!(rendered.contains("enter send  ·  ctrl-v image  ·  esc quit"));
-    assert!(!rendered.contains("┌ Zeta"));
+    assert!(rendered.contains("┌ Zeta v"));
 }
 
 #[test]

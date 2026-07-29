@@ -1,59 +1,4 @@
-/// An sRGB color with straight alpha.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub struct Color {
-    red: u8,
-    green: u8,
-    blue: u8,
-    alpha: u8,
-}
-
-impl Color {
-    pub const TRANSPARENT: Self = Self::rgba(0, 0, 0, 0);
-    pub const WHITE: Self = Self::rgb(255, 255, 255);
-
-    pub const fn rgb(red: u8, green: u8, blue: u8) -> Self {
-        Self::rgba(red, green, blue, 255)
-    }
-
-    pub const fn rgba(red: u8, green: u8, blue: u8, alpha: u8) -> Self {
-        Self {
-            red,
-            green,
-            blue,
-            alpha,
-        }
-    }
-
-    pub const fn components(self) -> [u8; 4] {
-        [self.red, self.green, self.blue, self.alpha]
-    }
-}
-
-/// A point in logical UI pixels.
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct Point {
-    pub x: f32,
-    pub y: f32,
-}
-
-impl Point {
-    pub const fn new(x: f32, y: f32) -> Self {
-        Self { x, y }
-    }
-}
-
-/// A size in logical UI pixels.
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct Size {
-    pub width: f32,
-    pub height: f32,
-}
-
-impl Size {
-    pub const fn new(width: f32, height: f32) -> Self {
-        Self { width, height }
-    }
-}
+use crate::{Color, PaintIcon, PaintRect, Point, Rect, Size};
 
 /// The font-family selection requested by a text block.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
@@ -155,6 +100,7 @@ pub struct TextBlock {
     origin: Point,
     bounds: Size,
     style: TextStyle,
+    clip_bounds: Option<Rect>,
 }
 
 impl TextBlock {
@@ -164,6 +110,7 @@ impl TextBlock {
             origin,
             bounds,
             style,
+            clip_bounds: None,
         }
     }
 
@@ -182,29 +129,82 @@ impl TextBlock {
     pub fn style(&self) -> &TextStyle {
         &self.style
     }
+
+    pub(crate) const fn clip_bounds(&self) -> Option<Rect> {
+        self.clip_bounds
+    }
+
+    fn apply_clip(&mut self, clip_bounds: Rect) {
+        self.clip_bounds = Some(match self.clip_bounds {
+            Some(current) => current.intersection(clip_bounds),
+            None => clip_bounds,
+        });
+    }
 }
 
 /// One immutable frame of native UI drawing input.
 #[derive(Clone, Debug, PartialEq)]
 pub struct UiScene {
     background: Color,
+    rects: Vec<PaintRect>,
+    icons: Vec<PaintIcon>,
     text_blocks: Vec<TextBlock>,
+    active_clip: Option<Rect>,
 }
 
 impl UiScene {
     pub fn new(background: Color) -> Self {
         Self {
             background,
+            rects: Vec::new(),
+            icons: Vec::new(),
             text_blocks: Vec::new(),
+            active_clip: None,
         }
     }
 
-    pub fn draw_text(&mut self, block: TextBlock) {
+    pub fn draw_rect(&mut self, mut rect: PaintRect) {
+        if let Some(clip_bounds) = self.active_clip {
+            rect.apply_clip(clip_bounds);
+        }
+        self.rects.push(rect);
+    }
+
+    pub fn draw_icon(&mut self, mut icon: PaintIcon) {
+        if let Some(clip_bounds) = self.active_clip {
+            icon.apply_clip(clip_bounds);
+        }
+        self.icons.push(icon);
+    }
+
+    pub fn draw_text(&mut self, mut block: TextBlock) {
+        if let Some(clip_bounds) = self.active_clip {
+            block.apply_clip(clip_bounds);
+        }
         self.text_blocks.push(block);
+    }
+
+    pub fn with_clip<R>(&mut self, clip_bounds: Rect, draw: impl FnOnce(&mut Self) -> R) -> R {
+        let previous_clip = self.active_clip;
+        self.active_clip = Some(match previous_clip {
+            Some(current) => current.intersection(clip_bounds),
+            None => clip_bounds,
+        });
+        let result = draw(self);
+        self.active_clip = previous_clip;
+        result
     }
 
     pub fn background(&self) -> Color {
         self.background
+    }
+
+    pub fn rects(&self) -> &[PaintRect] {
+        &self.rects
+    }
+
+    pub fn icons(&self) -> &[PaintIcon] {
+        &self.icons
     }
 
     pub fn text_blocks(&self) -> &[TextBlock] {

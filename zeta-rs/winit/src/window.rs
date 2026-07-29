@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
-use winit::error::OsError;
+use winit::error::{ExternalError, OsError};
 use winit::event_loop::{ActiveEventLoop, OwnedDisplayHandle};
-use winit::window::{Window, WindowAttributes, WindowId};
+use winit::window::{CursorIcon, Window, WindowAttributes, WindowId};
 
 /// Physical pixel extent reported by the native window system.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -60,6 +60,16 @@ impl NativeWindow {
     /// Schedules a redraw request through the platform event loop.
     pub fn request_redraw(&self) {
         self.window.request_redraw();
+    }
+
+    /// Begins a platform window drag in response to a primary-button press in product chrome.
+    pub fn start_window_drag(&self) -> Result<(), ExternalError> {
+        self.window.drag_window()
+    }
+
+    /// Updates the pointer cursor requested by product-owned hit testing.
+    pub fn set_cursor(&self, cursor: CursorIcon) {
+        self.window.set_cursor(cursor);
     }
 
     /// Notifies the platform immediately before a rendered frame is presented.

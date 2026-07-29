@@ -3,7 +3,9 @@ use glyphon::{
     TextArea, TextAtlas, TextBounds, TextRenderer, Viewport,
 };
 
-use crate::{FontFamily, FontStyle, FontWeight, TextBlock, UiScene};
+use crate::icon_renderer::IconRenderer;
+use crate::rect_renderer::RectRenderer;
+use crate::{FontFamily, FontStyle, FontWeight, Rect, TextBlock, UiScene};
 
 /// Physical render-target extent paired with the logical-to-physical UI scale.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -21,6 +23,18 @@ impl UiViewport {
             scale_factor,
         }
     }
+
+    pub const fn width(self) -> u32 {
+        self.width
+    }
+
+    pub const fn height(self) -> u32 {
+        self.height
+    }
+
+    pub const fn scale_factor(self) -> f32 {
+        self.scale_factor
+    }
 }
 
 struct PreparedArea {
@@ -32,6 +46,8 @@ struct PreparedArea {
 
 /// Owns the font shaping, glyph cache, atlas, and GPU pipeline for a native UI surface.
 pub struct UiRenderer {
+    rect_renderer: RectRenderer,
+    icon_renderer: IconRenderer,
     font_system: glyphon::FontSystem,
     swash_cache: SwashCache,
     viewport: Viewport,
@@ -53,6 +69,8 @@ impl UiRenderer {
         let text_renderer =
             TextRenderer::new(&mut atlas, device, wgpu::MultisampleState::default(), None);
         Self {
+            rect_renderer: RectRenderer::new(device, surface_format),
+            icon_renderer: IconRenderer::new(device, surface_format),
             font_system: glyphon::FontSystem::new(),
             swash_cache: SwashCache::new(),
             viewport,
@@ -83,6 +101,8 @@ impl UiRenderer {
         );
         self.buffers.clear();
         self.areas.clear();
+        self.rect_renderer.prepare(device, queue, scene, target)?;
+        self.icon_renderer.prepare(device, queue, scene, target)?;
 
         for (index, block) in scene.text_blocks().iter().enumerate() {
             validate_text_block(index, block)?;
@@ -116,6 +136,7 @@ impl UiRenderer {
             text_renderer,
             buffers,
             areas,
+            ..
         } = self;
         let text_areas = buffers
             .iter()
@@ -145,6 +166,8 @@ impl UiRenderer {
         &'pass self,
         render_pass: &mut wgpu::RenderPass<'pass>,
     ) -> Result<(), UiRenderError> {
+        self.rect_renderer.render(render_pass);
+        self.icon_renderer.render(render_pass);
         self.text_renderer
             .render(&self.atlas, &self.viewport, render_pass)?;
         Ok(())
@@ -185,6 +208,26 @@ fn validate_text_block(index: usize, block: &TextBlock) -> Result<(), UiRenderEr
             reason: "font size and line height must be positive",
         });
     }
+    if let Some(clip) = block.clip_bounds() {
+        let values = [
+            clip.origin.x,
+            clip.origin.y,
+            clip.size.width,
+            clip.size.height,
+        ];
+        if values.into_iter().any(|value| !value.is_finite()) {
+            return Err(UiRenderError::InvalidTextBlock {
+                index,
+                reason: "clip bounds must be finite",
+            });
+        }
+        if clip.size.width < 0.0 || clip.size.height < 0.0 {
+            return Err(UiRenderError::InvalidTextBlock {
+                index,
+                reason: "clip bounds must not be negative",
+            });
+        }
+    }
     Ok(())
 }
 
@@ -193,14 +236,19 @@ fn prepared_area(block: &TextBlock, scale_factor: f32, color: crate::Color) -> P
     let size = block.bounds();
     let left = origin.x * scale_factor;
     let top = origin.y * scale_factor;
+    let block_bounds = Rect::new(origin, size);
+    let clip_bounds = block
+        .clip_bounds()
+        .map(|clip| clip.intersection(block_bounds))
+        .unwrap_or(block_bounds);
     PreparedArea {
         left,
         top,
         bounds: TextBounds {
-            left: left.floor() as i32,
-            top: top.floor() as i32,
-            right: (left + size.width * scale_factor).ceil() as i32,
-            bottom: (top + size.height * scale_factor).ceil() as i32,
+            left: (clip_bounds.origin.x * scale_factor).floor() as i32,
+            top: (clip_bounds.origin.y * scale_factor).floor() as i32,
+            right: (clip_bounds.right() * scale_factor).ceil() as i32,
+            bottom: (clip_bounds.bottom() * scale_factor).ceil() as i32,
         },
         color: glyphon_color(color),
     }
@@ -238,6 +286,20 @@ fn glyphon_color(color: crate::Color) -> GlyphColor {
 pub enum UiRenderError {
     #[error("UI scale factor must be finite and positive, got {0}")]
     InvalidScaleFactor(f32),
+    #[error("paint rect {index} is invalid: {reason}")]
+    InvalidPaintRect { index: usize, reason: &'static str },
+    #[error("paint icon {index} is invalid: {reason}")]
+    InvalidPaintIcon { index: usize, reason: &'static str },
+    #[error("SVG icon {name} is invalid: {reason}")]
+    InvalidSvgIcon { name: &'static str, reason: String },
+    #[error("SVG icon {name} cannot be rasterized at {width}x{height}")]
+    IconRasterTooLarge {
+        name: &'static str,
+        width: u32,
+        height: u32,
+    },
+    #[error("symbolic icon atlas is full at {width}x{height}")]
+    IconAtlasFull { width: u32, height: u32 },
     #[error("text block {index} is invalid: {reason}")]
     InvalidTextBlock { index: usize, reason: &'static str },
     #[error("failed to prepare UI text: {0}")]

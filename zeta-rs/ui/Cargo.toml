@@ -11,7 +11,9 @@ name = "zeta_ui"
 path = "src/lib.rs"
 
 [dependencies]
+bytemuck = { workspace = true }
 glyphon = { workspace = true }
+resvg = { workspace = true }
 thiserror = { workspace = true }
 wgpu = { workspace = true }
 

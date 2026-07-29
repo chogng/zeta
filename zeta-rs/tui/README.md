@@ -56,6 +56,8 @@ Tool、approval policy 或 persistence。
 - 顶部显示低干扰的运行状态；composer 上方右对齐显示 preferred model 与 workspace，并按宽度
   依次使用短值或省略号；composer 只使用上下两条浅灰分隔线，footer 只包含下一步操作；
 - Ctrl-C、Ctrl-D（空输入）或 Esc：idle 时退出，active 时请求 interrupt；
+- Unix `SIGINT`/`SIGTERM` 进入同一个 event loop 退出路径，确保 watcher 重启和 host termination
+  仍执行 session shutdown 与 terminal RAII cleanup；
 - raw mode、alternate screen、bracketed paste、mouse capture 与 cursor cleanup；
 - basic Unicode-aware wrapped-row estimation 和自动滚动到底部。
 
@@ -78,7 +80,7 @@ completion event，不能用恢复 notification polling 规避。
 从 repository root 启动当前 embedded TUI：
 
 ```bash
-just zeta
+just tui
 ```
 
 等价的 Cargo 命令是：
@@ -94,7 +96,8 @@ cargo run --manifest-path zeta-rs/Cargo.toml -p zeta-cli
 | `TuiOptions::new` | 提供 Session/Thread title，并默认以当前目录作为 file mention root |
 | `TuiOptions::with_workspace_root` | 显式覆盖有界 file mention root |
 | `run` | 接管 ready `AppServerSession`，校验 initialize snapshot、驱动 terminal/client events，并在退出时显式 shutdown |
-| `TuiExit::UserRequested` | 正常退出原因 |
+| `TuiExit::UserRequested` | 用户通过按键或 command 请求正常退出 |
+| `TuiExit::TerminationRequested` | Unix host termination signal 请求正常退出 |
 | `TuiError::Client` | typed App Server client failure |
 | `TuiError::SessionEvents` | session event stream 被提前取走 |
 | `TuiError::Shutdown` | App Server background driver 关闭失败 |
@@ -116,7 +119,7 @@ src/
 │   ├── event.rs / command.rs      # completed facts / typed side-effect intents
 │   ├── dispatch.rs                # built-in product command coordination
 │   ├── bootstrap.rs / help.rs     # startup registry validation / help model
-│   └── frame/                     # top-level frame, header and footer assembly
+│   └── frame/                     # top-level frame and footer assembly
 ├── client/
 │   ├── command_id.rs              # stable logical command identity allocation
 │   ├── event_pump.rs              # terminal + AppServerEvents wakeup/multiplexing
@@ -162,7 +165,7 @@ src/
 | `App::handle_key` | crate-private | 先委托局部输入，再处理未消费的全局键 | 不直接调用 client |
 | `App::activate_slash_command` | crate-private | 将鼠标命中的 command index 委托给 composer 并复用 command dispatch | 不计算 terminal geometry |
 | `App::quit_or_interrupt` | private | active state interrupt；idle/error quit | Cancelling 不重复发送 interrupt |
-| `client::EventPump` | crate-private | 独立等待 terminal input 与 `AppServerEvents`，把两者汇入单写者 loop | 不应用 UI state、不执行领域 request |
+| `client::EventPump` | crate-private | 独立等待 terminal input、Unix termination signal 与 `AppServerEvents`，把三者汇入单写者 loop | 不应用 UI state、不执行领域 request |
 | `client::map_event` / `ClientEvent` | crate-private | 把共享 connection event 映射为 skills changed、Thread update 与 connection failure | 不保存 transport、不应用 projection |
 | `ThreadSubscription` | crate-private | 维护 active Thread scope 与最后确认的 snapshot sequence；新 update 只请求 snapshot resync | 不应用 `ThreadEvent` reducer、不保存 transient projection |
 | `InteractionPane` | crate-private | 保留 composer、拥有 temporary view stack，并把 key/paste 路由到 active view 或 composer | 不保存 Plugin/Session 等产品 feature 状态 |
@@ -385,17 +388,17 @@ acquisition flag、reverse cleanup 和 `session_tests.rs` 的 partial-failure ca
 
 ## Rendering
 
-当前 layout 在 composer 模式是固定五段：
+当前 layout 在 composer 模式是固定四段：
 
-1. 两行轻量 header，包括产品名和 canonical status 的 presentation label；
-2. expandable、无外框的 transcript，空会话显示 centered welcome；
-3. 一行右对齐 status line，显示现有接口提供的 model/workspace context；
-4. 三行 composer：上下浅灰水平线，中间一行以浅灰 `❯` 开始；
-5. 一行 recovery/help footer。
+1. expandable、无外框的 transcript；空会话显示由 `components::welcome` 拥有的 responsive
+   Welcome Banner，宽终端使用双栏，窄终端降级为单栏；
+2. 一行右对齐 status line，显示现有接口提供的 model/workspace context；
+3. 三行 composer：上下浅灰水平线，中间一行以浅灰 `❯` 开始；
+4. 一行 recovery/help footer。
 
 所有 interaction surface 都以 terminal 底部为锚点：composer/footer 固定在底部，slash/mention
 popup 从 composer 上沿向上展开；temporary interaction view active 时替换 composer/footer 区域，
-底边保持不动并按 view 的 desired height 只向上扩张。header 保持不变，transcript 至少保留四行。
+底边保持不动并按 view 的 desired height 只向上扩张，transcript 至少保留四行。
 temporary view active 时 status line 不占行。普通 composer 模式下，status line 只消费
 `StatusLineModel`，不在 draw 中调用 config、Git 或 Thread 接口。
 Selection surface 当前包含顶部分隔线、标题、可换行 Tabs、搜索框、可滚动窗口和 view-local
