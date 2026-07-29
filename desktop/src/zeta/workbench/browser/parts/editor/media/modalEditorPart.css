@@ -1,0 +1,78 @@
+.zeta-modal-editor-host {
+  position: absolute;
+  z-index: 900;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+  background: rgb(0 0 0 / 45%);
+  inset: 0;
+}
+
+.zeta-modal-editor-host[hidden] {
+  display: none;
+}
+
+.zeta-modal-editor {
+  display: flex;
+  width: min(var(--zeta-modal-editor-width, 960px), calc(100vw - 64px));
+  height: min(var(--zeta-modal-editor-height, 720px), calc(100vh - 64px));
+  min-width: 0;
+  min-height: 320px;
+  overflow: hidden;
+  flex-direction: column;
+  border: 1px solid var(--zeta-widget-border, #454545);
+  border-radius: 8px;
+  outline: none;
+  color: var(--zeta-foreground, #cccccc);
+  background: var(--zeta-editor-background, #1e1e1e);
+  box-shadow: 0 16px 48px var(--zeta-widget-shadow, #00000080);
+}
+
+.zeta-modal-editor-header {
+  display: flex;
+  min-height: 35px;
+  flex: 0 0 35px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 8px 0 14px;
+  border-bottom: 1px solid var(--zeta-widget-border, #454545);
+  background: var(--zeta-title-bar-background, #181818);
+}
+
+.zeta-modal-editor-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.zeta-modal-editor-close {
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  padding: 0;
+}
+
+.zeta-modal-editor-close > span {
+  display: none;
+}
+
+.zeta-modal-editor-content {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  flex: 1 1 auto;
+}
+
+@media (max-width: 640px), (max-height: 520px) {
+  .zeta-modal-editor-host {
+    padding: 12px;
+  }
+
+  .zeta-modal-editor {
+    width: calc(100vw - 24px);
+    height: calc(100vh - 24px);
+    min-height: 0;
+  }
+}

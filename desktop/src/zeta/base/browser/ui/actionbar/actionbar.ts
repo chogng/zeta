@@ -72,6 +72,7 @@ export class ActionBar extends DisposableOwner {
   add(action: IAction): ActionViewItem {
     const container = this.element.ownerDocument.createElement("div");
     container.className = "zeta-action-view-item";
+    container.classList.toggle("icon", action.icon !== undefined);
     container.dataset.actionId = action.id;
     container.setAttribute("role", "presentation");
     const item = this.#items.add(

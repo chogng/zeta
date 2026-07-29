@@ -52,6 +52,7 @@ for (const [name, value] of Object.entries({
 const {
   EditorOpenSupersededError,
   EditorPart,
+  IEditorPart,
 } = await import(
   "../src/zeta/workbench/browser/parts/editor/editorPart.js"
 );
@@ -59,6 +60,12 @@ const {
   EditorGroupWatermarkEntries,
 } = await import(
   "../src/zeta/workbench/browser/parts/editor/editorGroupWatermark.js"
+);
+const { SplitEditorHorizontalCommandId } = await import(
+  "../src/zeta/workbench/browser/parts/editor/editorActions.js"
+);
+await import(
+  "../src/zeta/workbench/contrib/preferences/browser/preferences.contribution.js"
 );
 
 test.after(() => browserEnvironment.window.close());
@@ -196,6 +203,7 @@ test("EditorPart retains tabs and switches loaded panes", async () => {
   );
   assert.equal(tablist?.getAttribute("role"), "tablist");
   assert.equal(toolbar?.getAttribute("role"), "toolbar");
+  assert.equal(toolbar?.classList.contains("zeta-toolbar"), true);
   assert.equal(
     titleControl?.querySelector(
       ".zeta-editor-tabs-control .zeta-scrollable-element",
@@ -272,6 +280,97 @@ test("EditorPart retains tabs and switches loaded panes", async () => {
   assert.equal(editor.activeInput, undefined);
   assert.equal(panes[1]?.disposed, true);
   assert.equal(editor.element.textContent, "Welcome");
+
+  editor.dispose();
+  dom.window.close();
+});
+
+test("Editor title toolbar splits the active group and owns More Actions", async () => {
+  const [
+    { MenuService },
+    { ContextKeyService },
+    { ServiceCollection },
+    { CommandService },
+  ] = await Promise.all([
+    import("../src/zeta/platform/actions/common/menuService.js"),
+    import("../src/zeta/platform/contextkey/common/contextkey.js"),
+    import("../src/zeta/platform/instantiation/common/instantiation.js"),
+    import("../src/zeta/workbench/services/commands/common/commandService.js"),
+  ]);
+  const dom = new JSDOM("<!doctype html><body></body>");
+  const registry = new EditorPaneRegistry();
+  const panes: TestEditorPane[] = [];
+  registry.register(descriptor(
+    "zeta.editor.monaco",
+    ".ts",
+    () => trackPane(panes, "zeta.editor.monaco"),
+  ));
+  const services = new ServiceCollection();
+  using contextKeys = new ContextKeyService();
+  using commands = new CommandService(services);
+  const menus = new MenuService(commands, contextKeys);
+  const editor = new EditorPart(dom.window.document, {
+    registry,
+    titleActions: {
+      menuService: menus,
+      contextMenuProvider: {
+        showContextMenu() {},
+      },
+    },
+  });
+  services.set(IEditorPart, editor);
+  dom.window.document.body.append(editor.element);
+  const activeInput = input("C:\\project\\main.ts");
+  await editor.openEditor(activeInput);
+  editor.layout({ width: 800, height: 600 });
+
+  const toolbar = editor.element.querySelector(
+    ".zeta-editor-title-actions > .zeta-toolbar",
+  );
+  assert.deepEqual(
+    [...toolbar?.querySelectorAll<HTMLElement>("[data-action-id]") ?? []]
+      .map((item) => item.dataset.actionId),
+    [
+      SplitEditorHorizontalCommandId,
+      "zeta.toolbar.moreActions",
+    ],
+  );
+  assert.deepEqual(
+    [...toolbar?.querySelectorAll<HTMLButtonElement>("button") ?? []]
+      .map((button) => button.title),
+    ["Split Editor Horizontal", "More Actions"],
+  );
+
+  toolbar?.querySelector<HTMLButtonElement>(
+    `[data-action-id="${SplitEditorHorizontalCommandId}"] button`,
+  )?.click();
+  await nextTask();
+
+  assert.equal(editor.groups.length, 2);
+  assert.equal(editor.activeGroup, editor.groups[1]);
+  assert.deepEqual(
+    editor.groups.map((group) => group.inputs),
+    [[activeInput], [activeInput]],
+  );
+  assert.equal(
+    editor.element.querySelectorAll(
+      ":scope .zeta-split-view > .zeta-split-view-pane",
+    ).length,
+    2,
+  );
+  assert.equal(
+    editor.element.querySelectorAll(
+      ":scope .zeta-split-view > .zeta-sash",
+    ).length,
+    1,
+  );
+  assert.deepEqual(
+    panes.map((pane) => pane.dimension),
+    [
+      { width: 400, height: 565 },
+      { width: 400, height: 565 },
+    ],
+  );
 
   editor.dispose();
   dom.window.close();
@@ -394,6 +493,10 @@ class TestEditorPane extends DisposableOwner implements IEditorPane {
   focus(): void {
     this.focusCount += 1;
   }
+}
+
+function nextTask(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
 class TestKeybindingService implements IKeybindingService {

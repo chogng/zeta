@@ -6,6 +6,7 @@ import {
 } from "../../base/browser/window.js";
 import { DisposableOwner } from "../../base/common/lifecycle.js";
 import { environment } from "../../base/common/platform.js";
+import { createServiceIdentifier } from "../../platform/instantiation/common/instantiation.js";
 import type { ProductId } from "../../product/common/product.js";
 import type {
   WorkbenchState,
@@ -20,6 +21,16 @@ export interface WorkbenchWindowOptions {
   readonly workbenchState: WorkbenchState;
 }
 
+/** Browser resources exposed to window-scoped Workbench contributions. */
+export interface IWorkbenchWindowService {
+  readonly root: HTMLElement;
+}
+
+export const IWorkbenchWindowService =
+  createServiceIdentifier<IWorkbenchWindowService>(
+    "workbenchWindowService",
+  );
+
 /**
  * Owns the browser-window identity and document integration for one Workbench.
  *
@@ -27,7 +38,9 @@ export interface WorkbenchWindowOptions {
  * corresponding window registration, stylesheet projection, root attributes,
  * and deterministic teardown.
  */
-export class WorkbenchWindow extends DisposableOwner {
+export class WorkbenchWindow
+  extends DisposableOwner
+  implements IWorkbenchWindowService {
   readonly root: HTMLElement;
   readonly ownerDocument: Document;
   readonly targetWindow: Window | null;

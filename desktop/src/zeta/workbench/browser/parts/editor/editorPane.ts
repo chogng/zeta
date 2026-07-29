@@ -4,6 +4,9 @@ import type {
 import type {
   IDisposable,
 } from "../../../../base/common/lifecycle.js";
+import type {
+  IConfigurationService,
+} from "../../../../platform/configuration/common/configuration.js";
 import type { EditorInput } from "./editorInput.js";
 
 export enum EditorPaneVisibility {
@@ -32,6 +35,7 @@ export interface IEditorPane extends IDisposable {
 
 export interface EditorPaneCreationOptions {
   readonly ownerDocument: Document;
+  readonly configurationService?: IConfigurationService;
 }
 
 export enum EditorPaneMatch {

@@ -8,6 +8,9 @@ import {
   DisposableOwner,
 } from "../../../base/common/lifecycle.js";
 import type {
+  IConfigurationService,
+} from "../../../platform/configuration/common/configuration.js";
+import type {
   EditorInput,
 } from "../../../workbench/browser/parts/editor/editorInput.js";
 import type {
@@ -16,6 +19,10 @@ import type {
 import {
   EditorPaneVisibility,
 } from "../../../workbench/browser/parts/editor/editorPane.js";
+import {
+  affectsMonacoEditorFontConfiguration,
+  readMonacoEditorFontSettings,
+} from "../common/config/editorConfiguration.js";
 import {
   MONACO_EDITOR_ID,
   monacoLanguageForInput,
@@ -30,6 +37,21 @@ export class MonacoEditorPane extends DisposableOwner
   #editor: monaco.editor.IStandaloneCodeEditor | undefined;
   #model: monaco.editor.ITextModel | undefined;
   #dimension: IDimension = { width: 0, height: 0 };
+  readonly #configurationService: IConfigurationService | undefined;
+
+  constructor(configurationService?: IConfigurationService) {
+    super();
+    this.#configurationService = configurationService;
+    if (this.#configurationService) {
+      this.own(this.#configurationService.onDidChangeConfiguration(
+        (event) => {
+          if (affectsMonacoEditorFontConfiguration(event)) {
+            this.#applyFontConfiguration();
+          }
+        },
+      ));
+    }
+  }
 
   create(parent: HTMLElement): void {
     if (this.#container) {
@@ -41,6 +63,7 @@ export class MonacoEditorPane extends DisposableOwner
     this.#container = container;
     this.#editor = monaco.editor.create(container, {
       automaticLayout: false,
+      ...this.#fontOptions(),
       minimap: { enabled: true },
       model: null,
       scrollBeyondLastLine: false,
@@ -118,6 +141,25 @@ export class MonacoEditorPane extends DisposableOwner
     this.#editor?.setModel(null);
     this.#model?.dispose();
     this.#model = undefined;
+  }
+
+  #applyFontConfiguration(): void {
+    this.#editor?.updateOptions(this.#fontOptions());
+  }
+
+  #fontOptions(): monaco.editor.IEditorOptions {
+    const settings = readMonacoEditorFontSettings(
+      this.#configurationService,
+    );
+    return {
+      fontFamily: settings.fontFamily,
+      fontWeight: settings.fontWeight,
+      fontSize: settings.fontSize,
+      fontLigatures: settings.fontLigatures,
+      fontVariations: settings.fontVariations,
+      lineHeight: settings.lineHeight,
+      letterSpacing: settings.letterSpacing,
+    };
   }
 
   #requireEditor(): monaco.editor.IStandaloneCodeEditor {

@@ -85,6 +85,7 @@ test("ExplorerViewPane renders, expands, and opens workspace files", async () =>
     },
     closeEditor() {},
     setContent() {},
+    async splitActiveGroupHorizontal() {},
     layout() {},
     focus() {},
   };

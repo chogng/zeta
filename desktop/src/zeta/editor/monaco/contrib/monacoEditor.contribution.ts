@@ -13,5 +13,7 @@ registerEditorPane({
   id: MONACO_EDITOR_ID,
   name: "Code Editor",
   canOpen: matchMonacoEditor,
-  create: () => new MonacoEditorPane(),
+  create: (options) => new MonacoEditorPane(
+    options.configurationService,
+  ),
 });

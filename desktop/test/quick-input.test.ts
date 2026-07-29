@@ -1,10 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import {
-  Action2,
-  registerAction2,
-} from "../src/zeta/platform/actions/common/actions.js";
+import { Action2, MenuId, MenusRegistry, registerAction2 } from "../src/zeta/platform/actions/common/actions.js";
 import {
   IMenuService,
   MenuService,
@@ -42,6 +39,13 @@ import {
 import {
   ShowAllCommandsCommandId,
 } from "../src/zeta/workbench/contrib/quickaccess/browser/commandsQuickAccess.js";
+
+test("Show All Commands is not exposed in the titlebar", () => {
+  const titlebarCommandIds = MenusRegistry.getMenuItems(MenuId.TitleBar)
+    .flatMap((item) => "command" in item ? [item.command.id] : []);
+
+  assert.equal(titlebarCommandIds.includes(ShowAllCommandsCommandId), false);
+});
 
 test("Quick Pick filtering matches ordered characters and favors labels", () => {
   const items = [

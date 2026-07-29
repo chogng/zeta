@@ -1,45 +1,22 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import type {
-  ServerNotification,
-  Session,
-  Thread,
-} from "../generated/app-server/types.js";
-import type {
-  ZetaRendererApi,
-} from "../src/zeta/platform/app-server/common/renderer-api.js";
+import type { ServerNotification, Session, Thread } from "../generated/app-server/types.js";
+import type { ZetaRendererApi } from "../src/zeta/platform/app-server/common/renderer-api.js";
 import { MenuService } from "../src/zeta/platform/actions/common/menuService.js";
 import type { IContextMenuService } from "../src/zeta/platform/contextview/browser/contextMenu.js";
 import { ServiceCollection } from "../src/zeta/platform/instantiation/common/instantiation.js";
+import { IQuickInputService } from "../src/zeta/platform/quickinput/common/quickInput.js";
 import { CommandService } from "../src/zeta/workbench/services/commands/common/commandService.js";
-import type {
-  ViewPaneContainer,
-} from "../src/zeta/workbench/browser/parts/views/viewPaneContainer.js";
-import {
-  ViewContainerLocation,
-  WorkbenchViewRegistry,
-} from "../src/zeta/workbench/common/views.js";
-import {
-  ChatViewModel,
-} from "../src/zeta/workbench/contrib/chat/browser/chatViewModel.js";
-import {
-  CHAT_VIEW_CONTAINER_ID,
-  CHAT_VIEW_ID,
-  NEW_CHAT_COMMAND_ID,
-} from "../src/zeta/workbench/contrib/chat/common/chat.js";
-import {
-  WorkbenchSessionService,
-} from "../src/zeta/workbench/services/sessions/common/sessionService.js";
-import {
-  ViewsService,
-} from "../src/zeta/workbench/services/views/browser/viewsService.js";
-import {
-  ContextKeyService,
-} from "../src/zeta/platform/contextkey/common/contextkey.js";
-import {
-  ViewDescriptorService,
-} from "../src/zeta/workbench/services/views/common/viewDescriptorService.js";
+import type { ViewPaneContainer } from "../src/zeta/workbench/browser/parts/views/viewPaneContainer.js";
+import { ViewContainerLocation, WorkbenchViewRegistry } from "../src/zeta/workbench/common/views.js";
+import { ChatViewModel } from "../src/zeta/workbench/contrib/chat/browser/chatViewModel.js";
+import { CHAT_VIEW_CONTAINER_ID, CHAT_VIEW_ID, NEW_CHAT_COMMAND_ID, SHOW_CHAT_HISTORY_COMMAND_ID } from "../src/zeta/workbench/contrib/chat/common/chat.js";
+import { IWorkbenchSessionService, WorkbenchSessionService } from "../src/zeta/workbench/services/sessions/common/sessionService.js";
+import { IViewsService, ViewsService } from "../src/zeta/workbench/services/views/browser/viewsService.js";
+import { ContextKeyService } from "../src/zeta/platform/contextkey/common/contextkey.js";
+import { ViewDescriptorService } from "../src/zeta/workbench/services/views/common/viewDescriptorService.js";
+import { WorkbenchQuickInputService } from "../src/zeta/workbench/services/quickinput/browser/quickInputService.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
@@ -61,6 +38,12 @@ const { registerChatViews } = await import(
 );
 const { ChatViewPane } = await import(
   "../src/zeta/workbench/contrib/chat/browser/chatViewPane.js"
+);
+await import(
+  "../src/zeta/workbench/contrib/preferences/browser/preferences.contribution.js"
+);
+const { ToggleAuxiliaryBarCommandId } = await import(
+  "../src/zeta/workbench/browser/parts/titlebar/titlebarActions.js"
 );
 test.after(() => {
   browserEnvironment.window.close();
@@ -127,17 +110,41 @@ test("Chat title separates Thread tabs from its action toolbar", async () => {
   const tablist = title?.querySelector(
     ".zeta-chat-tabs-control .zeta-action-bar",
   );
-  const toolbar = title?.querySelector(
+  const toolbars = title?.querySelectorAll(
     ".zeta-chat-title-actions > .zeta-action-bar",
   );
+  const toolbar = toolbars?.[0];
+  const layoutToolbar = toolbars?.[1];
   assert.equal(tablist?.getAttribute("role"), "tablist");
   assert.equal(toolbar?.getAttribute("role"), "toolbar");
+  assert.equal(toolbar?.classList.contains("zeta-toolbar"), true);
+  assert.equal(toolbars?.length, 2);
   assert.equal(
     tablist?.closest(".zeta-chat-tabs-control")?.nextElementSibling,
     toolbar?.parentElement,
   );
-  assert.ok(toolbar?.querySelector(
-    `[data-action-id="${NEW_CHAT_COMMAND_ID}"]`,
+  assert.deepEqual(
+    [...toolbar?.querySelectorAll<HTMLElement>("[data-action-id]") ?? []]
+      .map((item) => item.dataset.actionId),
+    [
+      NEW_CHAT_COMMAND_ID,
+      SHOW_CHAT_HISTORY_COMMAND_ID,
+      "zeta.toolbar.moreActions",
+    ],
+  );
+  assert.deepEqual(
+    [...toolbar?.querySelectorAll<HTMLButtonElement>("button") ?? []]
+      .map((button) => button.title),
+    ["New Chat", "Show Chat History", "More Actions"],
+  );
+  assert.equal(
+    toolbar?.querySelectorAll(".zeta-action-view-item.icon").length,
+    3,
+  );
+  assert.ok(toolbar?.querySelector(".zeta-button-label"));
+  assert.ok(toolbar?.querySelector("svg.zeta-icon"));
+  assert.ok(layoutToolbar?.querySelector(
+    `[data-action-id="${ToggleAuxiliaryBarCommandId}"]`,
   ));
   const tabs = tablist?.querySelectorAll<HTMLButtonElement>("[role='tab']");
   assert.equal(tabs?.length, 2);
@@ -170,6 +177,66 @@ test("Chat title separates Thread tabs from its action toolbar", async () => {
     ["false", "true"],
   );
 
+  dom.window.close();
+});
+
+test("Chat history selects an active Thread through Quick Pick", async () => {
+  const dom = new JSDOM("<!doctype html><body></body>");
+  const api = fakeApi({
+    sessions: [
+      session("session-1", "thread-1", "First Chat"),
+      session("session-2", "thread-2", "Second Chat"),
+    ],
+  }).api;
+  const services = new ServiceCollection();
+  using sessions = new WorkbenchSessionService(api);
+  using contextKeys = new ContextKeyService();
+  using quickInput = new WorkbenchQuickInputService({
+    container: dom.window.document.body,
+    contextKeyService: contextKeys,
+  });
+  let focusedView: string | undefined;
+  services.set(IWorkbenchSessionService, sessions);
+  services.set(IQuickInputService, quickInput);
+  services.set(IViewsService, {
+    openView: () => undefined,
+    focusView: (viewId) => {
+      focusedView = viewId;
+      return true;
+    },
+  });
+  using commands = new CommandService(services);
+  await sessions.initialize();
+
+  await commands.executeCommand(SHOW_CHAT_HISTORY_COMMAND_ID);
+  assert.deepEqual(
+    [...dom.window.document.querySelectorAll(
+      ".zeta-quick-pick-row-label",
+    )].map((label) => label.textContent),
+    ["First Chat", "Second Chat"],
+  );
+  const input = dom.window.document.querySelector<HTMLInputElement>(
+    ".zeta-quick-pick-input input",
+  );
+  assert.ok(input);
+  input.dispatchEvent(new dom.window.KeyboardEvent("keydown", {
+    bubbles: true,
+    cancelable: true,
+    key: "ArrowDown",
+  }));
+  input.dispatchEvent(new dom.window.KeyboardEvent("keydown", {
+    bubbles: true,
+    cancelable: true,
+    key: "Enter",
+  }));
+
+  assert.equal(sessions.active?.session.sessionId, "session-2");
+  assert.equal(sessions.active?.threadId, "thread-2");
+  assert.equal(focusedView, CHAT_VIEW_ID);
+  assert.equal(
+    dom.window.document.querySelector(".zeta-quick-pick"),
+    null,
+  );
   dom.window.close();
 });
 
@@ -371,10 +438,14 @@ function fakeApi(options: FakeOptions = {}): {
   };
 }
 
-function session(id: string, threadId?: string): Session {
+function session(
+  id: string,
+  threadId?: string,
+  title = `Session ${id}`,
+): Session {
   return {
     sessionId: id,
-    title: `Session ${id}`,
+    title,
     status: "active",
     sequence: threadId ? 2 : 1,
     threads: threadId

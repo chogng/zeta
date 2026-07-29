@@ -1,25 +1,11 @@
-import type {
-  IContextMenuProvider,
-} from "../../../../base/browser/contextmenu.js";
-import {
-  ActionBar,
-} from "../../../../base/browser/ui/actionbar/actionbar.js";
+import type { IContextMenuProvider } from "../../../../base/browser/contextmenu.js";
+import { ToolBar } from "../../../../base/browser/ui/toolbar/toolbar.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
-import {
-  MenuWorkbenchToolBar,
-} from "../../../../platform/actions/browser/toolbar.js";
-import {
-  MenuId,
-} from "../../../../platform/actions/common/actions.js";
-import type {
-  IMenuService,
-} from "../../../../platform/actions/common/menuService.js";
+import { MenuWorkbenchToolBar } from "../../../../platform/actions/browser/toolbar.js";
+import { MenuId } from "../../../../platform/actions/common/actions.js";
+import type { IMenuService } from "../../../../platform/actions/common/menuService.js";
 import type { EditorInput } from "./editorInput.js";
-import {
-  EditorTabsControl,
-  type EditorTabDescriptor,
-  type EditorTabsDelegate,
-} from "./editorTabsControl.js";
+import { EditorTabsControl, type EditorTabDescriptor, type EditorTabsDelegate } from "./editorTabsControl.js";
 
 /** Platform services used to populate the Editor title toolbar. */
 export interface EditorTitleActions {
@@ -33,7 +19,7 @@ export class EditorTitleControl extends DisposableOwner {
 
   readonly element: HTMLDivElement;
   readonly #tabs: EditorTabsControl;
-  readonly #toolbar: ActionBar;
+  readonly #toolbar: ToolBar;
 
   constructor(
     ownerDocument: Document,
@@ -51,10 +37,10 @@ export class EditorTitleControl extends DisposableOwner {
         MenuId.EditorTitle,
         ownerDocument,
       )
-      : new ActionBar({
+      : new ToolBar({
+        contextMenuProvider: emptyEditorToolbarContextMenuProvider,
         ownerDocument,
         ariaLabel: "Editor actions",
-        ariaRole: "toolbar",
       }));
     const actions = ownerDocument.createElement("div");
     actions.className = "zeta-editor-title-actions";
@@ -70,3 +56,11 @@ export class EditorTitleControl extends DisposableOwner {
     this.#tabs.setEditors(editors, activeInput);
   }
 }
+
+const emptyEditorToolbarContextMenuProvider: IContextMenuProvider = {
+  showContextMenu(): never {
+    throw new Error(
+      "The empty Editor toolbar cannot present secondary actions",
+    );
+  },
+};

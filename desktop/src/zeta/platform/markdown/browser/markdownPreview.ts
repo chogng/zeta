@@ -1,4 +1,5 @@
 import MarkdownIt from "markdown-it";
+import { DEFAULT_FONT_FAMILY } from "../../../base/browser/fonts.js";
 import {
   isSafeMarkdownLink,
   sanitizeMarkdownHtmlToString,
@@ -45,7 +46,7 @@ const PREVIEW_STYLE = `
     monospace;
 
   color-scheme: light dark;
-  font: 14px/1.6 system-ui, sans-serif;
+  font: 14px/1.6 ${DEFAULT_FONT_FAMILY};
 }
 body {
   box-sizing: border-box;

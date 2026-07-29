@@ -1,0 +1,168 @@
+.zeta-settings-editor {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  flex: 1 1 auto;
+  flex-direction: column;
+}
+
+.zeta-settings-search {
+  display: flex;
+  min-width: 0;
+  min-height: 44px;
+  flex: 0 0 44px;
+  align-items: center;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--zeta-widget-border, #454545);
+  background: var(--zeta-editor-background, #1e1e1e);
+}
+
+.zeta-settings-search-input {
+  width: 100%;
+}
+
+.zeta-settings-search-input input {
+  height: 30px;
+  padding: 4px 10px;
+  border: 1px solid var(--zeta-input-border, #3c3c3c);
+  border-radius: 4px;
+  outline: none;
+  color: var(--zeta-input-foreground, #cccccc);
+  background: var(--zeta-input-background, #313131);
+}
+
+.zeta-settings-search-input input:focus {
+  border-color: var(--zeta-focus-border, #007fd4);
+}
+
+.zeta-settings-search-input input::placeholder {
+  color: var(--zeta-input-placeholder-foreground, #a6a6a6);
+}
+
+.zeta-settings-layout {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  flex: 1 1 auto;
+  grid-template-columns: 232px minmax(0, 1fr);
+}
+
+.zeta-settings-sidebar {
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border-right: 1px solid var(--zeta-widget-border, #454545);
+  background: var(--zeta-side-bar-background, #181818);
+}
+
+.zeta-settings-sidebar-scrollable,
+.zeta-settings-page-scrollable {
+  width: 100%;
+  height: 100%;
+}
+
+.zeta-settings-navigation-list {
+  display: flex;
+  margin: 0;
+  padding: 18px 12px;
+  flex-direction: column;
+  gap: 2px;
+  list-style: none;
+}
+
+.zeta-settings-navigation-empty {
+  margin: 0;
+  padding: 18px 24px;
+  color: var(--zeta-description-foreground, #9d9d9d);
+  line-height: 1.5;
+}
+
+.zeta-settings-navigation-item {
+  width: 100%;
+  min-height: 34px;
+  padding: 6px 12px;
+  border: 0;
+  border-radius: 5px;
+  color: var(--zeta-foreground, #cccccc);
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  line-height: 20px;
+  text-align: left;
+}
+
+.zeta-settings-navigation-item:hover {
+  background: var(--zeta-list-hover-background, #2a2d2e);
+}
+
+.zeta-settings-navigation-item:focus-visible {
+  outline: 1px solid var(--zeta-focus-border, #007fd4);
+  outline-offset: -1px;
+}
+
+.zeta-settings-navigation-item.is-active {
+  color: var(--zeta-list-active-selection-foreground, #ffffff);
+  background: var(--zeta-list-active-selection-background, #04395e);
+  font-weight: 500;
+}
+
+.zeta-settings-page {
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.zeta-settings-page-inner {
+  padding: 32px 40px;
+}
+
+.zeta-settings-page h3 {
+  margin: 0 0 8px;
+  color: var(--zeta-foreground, #cccccc);
+  font-size: 22px;
+  font-weight: 600;
+}
+
+.zeta-settings-description {
+  max-width: 680px;
+  margin: 0 0 28px;
+  color: var(--zeta-description-foreground, #9d9d9d);
+  line-height: 1.5;
+}
+
+.zeta-settings-section-content {
+  min-height: 1px;
+}
+
+@media (max-width: 720px) {
+  .zeta-settings-layout {
+    grid-template-columns: minmax(164px, 36%) minmax(0, 1fr);
+  }
+
+  .zeta-settings-page-inner {
+    padding: 24px;
+  }
+}
+
+@media (max-width: 480px) {
+  .zeta-settings-layout {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(132px, 36%) minmax(0, 1fr);
+  }
+
+  .zeta-settings-sidebar {
+    border-right: 0;
+    border-bottom: 1px solid var(--zeta-widget-border, #454545);
+  }
+
+  .zeta-settings-navigation-list {
+    padding: 10px;
+  }
+
+  .zeta-settings-page-inner {
+    padding: 20px;
+  }
+}

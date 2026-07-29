@@ -60,9 +60,7 @@
   color: var(--zeta-title-bar-foreground, #f0f0f0);
 }
 
-.zeta-menubar .zeta-menubar-item > span,
-.zeta-titlebar-left-actions .zeta-button > span,
-.zeta-titlebar-actions .zeta-button > span {
+.zeta-menubar .zeta-menubar-item > span {
   display: none;
 }
 
@@ -72,15 +70,6 @@
   background: var(--zeta-title-bar-hover-background, #2a2d2e);
 }
 
-.zeta-titlebar-left-actions .zeta-action-bar,
-.zeta-titlebar-actions .zeta-action-bar { align-items: center; }
-.zeta-titlebar-left-actions .zeta-button,
-.zeta-titlebar-actions .zeta-button {
-  width: 28px;
-  min-width: 28px;
-  padding: 0;
-}
 .zeta-workbench-titlebar .zeta-button {
-  min-height: 26px;
   color: var(--zeta-title-bar-action-foreground, #d6d6d6);
 }

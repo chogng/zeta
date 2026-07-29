@@ -149,6 +149,8 @@ import {
 import {
   WorkbenchQuickInputService,
 } from "../services/quickinput/browser/quickInputService.js";
+import { ISettingsService } from "../services/preferences/common/settings.js";
+import { SettingsService } from "../services/preferences/common/settingsService.js";
 import {
   bindWorkbenchContextKeys,
   bindWorkbenchPartVisibilityContextKeys,
@@ -179,7 +181,7 @@ import {
   ViewPaneContainer,
 } from "./parts/views/viewPaneContainer.js";
 import { PaneComposite } from "./parts/views/paneComposite.js";
-import { WorkbenchWindow } from "./window.js";
+import { IWorkbenchWindowService, WorkbenchWindow } from "./window.js";
 
 /** Host-specific inputs required to construct a workbench. */
 export interface IStartWorkbenchOptions {
@@ -260,6 +262,7 @@ export class Workbench extends DisposableOwner {
       productId: product.id,
       workbenchState,
     }));
+    services.set(IWorkbenchWindowService, workbenchWindow);
     const ownerDocument = workbenchWindow.ownerDocument;
 
     const configuration = this.own(new WorkbenchConfigurationService({
@@ -357,6 +360,8 @@ export class Workbench extends DisposableOwner {
       contextKeyService: contextKeys,
     }));
     services.set(IQuickInputService, quickInput);
+    const settings = this.own(new SettingsService());
+    services.set(ISettingsService, settings);
     const contextMenus = this.own(createContextMenuService({
       menuService: menus,
       keybindingService: keybindings,
@@ -379,6 +384,7 @@ export class Workbench extends DisposableOwner {
       viewDescriptorService: viewDescriptors,
     }));
     const editor = this.own(new EditorPart(ownerDocument, {
+      configurationService: configuration,
       keybindingService: keybindings,
       titleActions: {
         menuService: menus,

@@ -41,9 +41,16 @@ export class ChatTitleControl extends DisposableOwner {
       ownerDocument,
     ));
     toolbar.element.setAttribute("aria-label", "Chat actions");
+    const layoutToolbar = this.own(new MenuWorkbenchToolBar(
+      menuService,
+      contextMenuService,
+      MenuId.ChatTitleLayout,
+      ownerDocument,
+    ));
+    layoutToolbar.element.setAttribute("aria-label", "Chat layout");
     const actions = ownerDocument.createElement("div");
     actions.className = "zeta-chat-title-actions";
-    actions.append(toolbar.element);
+    actions.append(toolbar.element, layoutToolbar.element);
     this.element.append(this.#tabs.element, actions);
     this.defer(() => this.element.remove());
   }

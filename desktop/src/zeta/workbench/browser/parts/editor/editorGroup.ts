@@ -1,36 +1,14 @@
-import {
-  Dimension,
-  type IDimension,
-} from "../../../../base/browser/geometry.js";
-import {
-  DisposableOwner,
-  setDisposableOwner,
-} from "../../../../base/common/lifecycle.js";
-import type {
-  IKeybindingService,
-} from "../../../../platform/keybinding/common/keybinding.js";
-import type {
-  EditorInput,
-  EditorOpenOptions,
-} from "./editorInput.js";
-import {
-  type IEditorPane,
-  EditorPaneVisibility,
-} from "./editorPane.js";
-import {
-  EditorPaneRegistry,
-} from "./editorRegistry.js";
-import {
-  EditorGroupWatermark,
-} from "./editorGroupWatermark.js";
-import {
-  editorInputKey,
-  type EditorTabDescriptor,
-} from "./editorTabsControl.js";
-import {
-  EditorTitleControl,
-  type EditorTitleActions,
-} from "./editorTitleControl.js";
+import { addDisposableListener } from "../../../../base/browser/dom.js";
+import { Dimension, type IDimension } from "../../../../base/browser/geometry.js";
+import { DisposableOwner, setDisposableOwner } from "../../../../base/common/lifecycle.js";
+import type { IKeybindingService } from "../../../../platform/keybinding/common/keybinding.js";
+import type { IConfigurationService } from "../../../../platform/configuration/common/configuration.js";
+import type { EditorInput, EditorOpenOptions } from "./editorInput.js";
+import { type IEditorPane, EditorPaneVisibility } from "./editorPane.js";
+import { EditorPaneRegistry } from "./editorRegistry.js";
+import { EditorGroupWatermark } from "./editorGroupWatermark.js";
+import { editorInputKey, type EditorTabDescriptor } from "./editorTabsControl.js";
+import { EditorTitleControl, type EditorTitleActions } from "./editorTitleControl.js";
 
 /** Operations and state owned independently by one EditorGroup. */
 export interface IEditorGroup {
@@ -54,8 +32,10 @@ export interface IEditorGroup {
 export interface EditorGroupOptions {
   readonly ownerDocument: Document;
   readonly registry: EditorPaneRegistry;
+  readonly configurationService?: IConfigurationService;
   readonly keybindingService?: IKeybindingService;
   readonly titleActions?: EditorTitleActions;
+  readonly onDidActivate?: () => void;
 }
 
 interface EditorGroupEntry extends EditorTabDescriptor {
@@ -73,6 +53,7 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
   readonly element: HTMLElement;
   readonly #contentElement: HTMLDivElement;
   readonly #registry: EditorPaneRegistry;
+  readonly #configurationService: IConfigurationService | undefined;
   readonly #titleControl: EditorTitleControl;
   readonly #watermarkElement: HTMLElement;
   readonly #entries: EditorGroupEntry[] = [];
@@ -85,9 +66,15 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
   constructor(options: EditorGroupOptions) {
     super();
     this.#registry = options.registry;
+    this.#configurationService = options.configurationService;
     this.element = options.ownerDocument.createElement("section");
     this.element.className = "zeta-editor-group";
     this.element.setAttribute("aria-label", "Editor group");
+    if (options.onDidActivate) {
+      this.own(addDisposableListener(this.element, "focusin", () => {
+        options.onDidActivate?.();
+      }));
+    }
     this.#titleControl = this.own(new EditorTitleControl(
       options.ownerDocument,
       {
@@ -151,6 +138,7 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
 
     const pane = descriptor.create({
       ownerDocument: this.element.ownerDocument,
+      configurationService: this.#configurationService,
     });
     if (pane.id !== descriptor.id) {
       pane.dispose();

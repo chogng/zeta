@@ -9,6 +9,14 @@
   overflow: hidden;
 }
 
+.zeta-workbench-editor .zeta-workbench-part-content > .zeta-split-view {
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  min-height: 0;
+}
+
 .zeta-editor-group {
   display: flex;
   width: 100%;
@@ -116,11 +124,6 @@
   align-items: center;
   margin-left: auto;
   padding: 0 4px;
-}
-
-.zeta-editor-title-actions .zeta-action-bar {
-  display: flex;
-  align-items: center;
 }
 
 .zeta-editor-group-content {

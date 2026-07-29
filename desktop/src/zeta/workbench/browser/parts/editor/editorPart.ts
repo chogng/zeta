@@ -1,35 +1,16 @@
 import "./editorpart.css";
-import {
-  type IDimension,
-} from "../../../../base/browser/geometry.js";
-import type {
-  IContextMenuProvider,
-} from "../../../../base/browser/contextmenu.js";
-import {
-  createServiceIdentifier,
-} from "../../../../platform/instantiation/common/instantiation.js";
-import type {
-  IKeybindingService,
-} from "../../../../platform/keybinding/common/keybinding.js";
-import type {
-  IMenuService,
-} from "../../../../platform/actions/common/menuService.js";
+import type { IContextMenuProvider } from "../../../../base/browser/contextmenu.js";
+import { Dimension, type IDimension } from "../../../../base/browser/geometry.js";
+import { SplitView, type ISplitViewView } from "../../../../base/browser/ui/splitview/splitview.js";
+import type { IMenuService } from "../../../../platform/actions/common/menuService.js";
+import type { IConfigurationService } from "../../../../platform/configuration/common/configuration.js";
+import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
+import type { IKeybindingService } from "../../../../platform/keybinding/common/keybinding.js";
 import { WorkbenchPart } from "../../part.js";
-import {
-  EditorGroup,
-  type IEditorGroup,
-} from "./editorGroup.js";
-import type {
-  EditorInput,
-  EditorOpenOptions,
-} from "./editorInput.js";
-import type {
-  IEditorPane,
-} from "./editorPane.js";
-import {
-  EditorPaneRegistry,
-  EditorPanes,
-} from "./editorRegistry.js";
+import { EditorGroup, type EditorGroupOptions, type IEditorGroup } from "./editorGroup.js";
+import type { EditorInput, EditorOpenOptions } from "./editorInput.js";
+import type { IEditorPane } from "./editorPane.js";
+import { EditorPaneRegistry, EditorPanes } from "./editorRegistry.js";
 
 export { EditorOpenSupersededError } from "./editorGroup.js";
 
@@ -48,6 +29,7 @@ export interface IEditorPart {
   activateEditor(input: EditorInput): IEditorPane;
   closeEditor(input: EditorInput): void;
   setContent(content: Element): void;
+  splitActiveGroupHorizontal(): Promise<void>;
   layout(dimension: IDimension): void;
   focus(): void;
 }
@@ -57,6 +39,7 @@ export const IEditorPart =
 
 /** Named collaborators used to construct the editor region. */
 export interface IEditorPartOptions {
+  readonly configurationService?: IConfigurationService;
   readonly keybindingService?: IKeybindingService;
   readonly registry?: EditorPaneRegistry;
   readonly titleActions?: {
@@ -67,7 +50,11 @@ export interface IEditorPartOptions {
 
 /** Owns EditorGroup layout and delegates editor behavior to the active group. */
 export class EditorPart extends WorkbenchPart implements IEditorPart {
-  readonly #group: EditorGroup;
+  readonly #splitView: SplitView;
+  readonly #groupOptions: Omit<EditorGroupOptions, "ownerDocument" | "onDidActivate">;
+  readonly #groups: EditorGroupHost[] = [];
+  #activeGroup: EditorGroup;
+  #dimension = Dimension.Zero;
 
   override get minimumWidth(): number { return 120; }
   override get minimumHeight(): number { return 119; }
@@ -79,13 +66,21 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
     super("editor", ownerDocument);
     this.titleElement.remove();
     this.element.setAttribute("aria-label", "Editor");
-    this.#group = this.own(new EditorGroup({
-      ownerDocument,
+    this.#groupOptions = {
       registry: options.registry ?? EditorPanes,
+      configurationService: options.configurationService,
       keybindingService: options.keybindingService,
       titleActions: options.titleActions,
-    }));
-    this.contentElement.append(this.#group.element);
+    };
+    this.#splitView = this.own(new SplitView(
+      "horizontal",
+      ownerDocument,
+    ));
+    const initial = this.#createGroup();
+    this.#groups.push(initial);
+    this.#activeGroup = initial.group;
+    this.#splitView.addView(initial.view);
+    this.contentElement.append(this.#splitView.element);
     const ResizeObserverConstructor =
       ownerDocument.defaultView?.ResizeObserver;
     if (ResizeObserverConstructor) {
@@ -103,45 +98,119 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
   }
 
   get groups(): readonly IEditorGroup[] {
-    return [this.#group];
+    return this.#groups.map(({ group }) => group);
   }
 
   get activeGroup(): IEditorGroup {
-    return this.#group;
+    return this.#activeGroup;
   }
 
   get activeInput(): EditorInput | undefined {
-    return this.#group.activeInput;
+    return this.#activeGroup.activeInput;
   }
 
   get activePane(): IEditorPane | undefined {
-    return this.#group.activePane;
+    return this.#activeGroup.activePane;
   }
 
   openEditor(
     input: EditorInput,
     options: EditorOpenOptions = {},
   ): Promise<IEditorPane> {
-    return this.#group.openEditor(input, options);
+    return this.#activeGroup.openEditor(input, options);
   }
 
   activateEditor(input: EditorInput): IEditorPane {
-    return this.#group.activateEditor(input);
+    return this.#activeGroup.activateEditor(input);
   }
 
   closeEditor(input: EditorInput): void {
-    this.#group.closeEditor(input);
+    this.#activeGroup.closeEditor(input);
   }
 
   setContent(content: Element): void {
-    this.#group.setContent(content);
+    this.#activeGroup.setContent(content);
+  }
+
+  async splitActiveGroupHorizontal(): Promise<void> {
+    const source = this.#activeGroup;
+    const sourceIndex = this.#groups.findIndex(
+      ({ group }) => group === source,
+    );
+    if (sourceIndex < 0) {
+      throw new Error("Active EditorGroup is not owned by EditorPart");
+    }
+    const created = this.#createGroup();
+    const targetIndex = sourceIndex + 1;
+    this.#groups.splice(targetIndex, 0, created);
+    this.#splitView.addView(
+      created.view,
+      { type: "split", index: sourceIndex },
+      targetIndex,
+    );
+    this.#splitView.distributeViewSizes();
+    this.#activeGroup = created.group;
+    try {
+      if (source.activeInput) {
+        await created.group.openEditor(source.activeInput);
+      }
+      created.group.focus();
+    } catch (error) {
+      this.#splitView.removeView(targetIndex);
+      this.#groups.splice(targetIndex, 1);
+      created.group.dispose();
+      this.#activeGroup = source;
+      throw error;
+    }
   }
 
   override layout(dimension: IDimension): void {
-    this.#group.layout(dimension);
+    this.#dimension = new Dimension(dimension.width, dimension.height);
+    this.#splitView.layout(
+      this.#dimension.width,
+      this.#dimension.height,
+    );
   }
 
   focus(): void {
-    this.#group.focus();
+    this.#activeGroup.focus();
+  }
+
+  #createGroup(): EditorGroupHost {
+    let group: EditorGroup;
+    group = this.own(new EditorGroup({
+      ownerDocument: this.element.ownerDocument,
+      ...this.#groupOptions,
+      onDidActivate: () => {
+        this.#activeGroup = group;
+      },
+    }));
+    return {
+      group,
+      view: new EditorGroupSplitView(group),
+    };
+  }
+}
+
+interface EditorGroupHost {
+  readonly group: EditorGroup;
+  readonly view: EditorGroupSplitView;
+}
+
+class EditorGroupSplitView implements ISplitViewView {
+  readonly minimumSize = 120;
+  readonly maximumSize = Infinity;
+
+  constructor(readonly group: EditorGroup) {}
+
+  get element(): HTMLElement {
+    return this.group.element;
+  }
+
+  layout(size: number, _offset: number, orthogonalSize: number): void {
+    this.group.layout({
+      width: size,
+      height: orthogonalSize,
+    });
   }
 }

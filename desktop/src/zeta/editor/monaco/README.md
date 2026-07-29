@@ -5,6 +5,10 @@ It does not own files, persistence, tabs, dirty state, or Markdown rendering.
 
 - `common/monacoEditorInput.ts` owns editor matching and extension/content-type
   to Monaco language mapping. Add or override language selection here.
+- `common/config/editorConfiguration.ts` owns the typed `editor.font*`
+  configuration keys and their projection into Monaco construction options.
+  Monaco itself remains the canonical owner of FontInfo normalization, zoom,
+  pixel ratio, and DOM glyph measurement.
 - `browser/monacoEnvironment.ts` owns worker construction. Change language
   services or worker bundling here.
 - `browser/monacoEditorPane.ts` owns Monaco model, DOM, layout, visibility,

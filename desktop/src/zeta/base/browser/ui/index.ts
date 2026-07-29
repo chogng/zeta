@@ -108,5 +108,6 @@ export {
   type TabListItem,
   type TabListOptions,
 } from "./tablist/tabList.js";
+export { ToolBar, type ToolBarOptions } from "./toolbar/toolbar.js";
 export { Toggle } from "./toggle/toggle.js";
 export { Tree, type TreeItem } from "./tree/tree.js";

@@ -1,17 +1,7 @@
 import { LxIcon } from "../../../../base/common/lxicons.js";
-import {
-  Action2,
-  MenuId,
-  registerAction2,
-} from "../../../../platform/actions/common/actions.js";
-import type {
-  ServicesAccessor,
-} from "../../../../platform/instantiation/common/instantiation.js";
-import {
-  AuxiliaryBarVisibleContext,
-  PanelVisibleContext,
-  SideBarVisibleContext,
-} from "../../../common/contextkeys.js";
+import { Action2, MenuId, registerAction2 } from "../../../../platform/actions/common/actions.js";
+import type { ServicesAccessor } from "../../../../platform/instantiation/common/instantiation.js";
+import { AuxiliaryBarVisibleContext, PanelVisibleContext, SideBarVisibleContext } from "../../../common/contextkeys.js";
 import { IWorkbenchLayoutService } from "../../layout.js";
 
 export const ToggleSideBarCommandId = "workbench.action.toggleSideBar";
@@ -64,18 +54,23 @@ registerAction2(class ToggleAuxiliaryBarAction extends Action2 {
       id: ToggleAuxiliaryBarCommandId,
       title: "Show Secondary Side Bar",
       tooltip: "Show Secondary Side Bar",
-      icon: LxIcon.chat,
+      icon: LxIcon.layoutSidebarRightOff,
       toggled: {
         condition: AuxiliaryBarVisibleContext.isEqualTo(true),
         title: "Hide Secondary Side Bar",
         tooltip: "Hide Secondary Side Bar",
-        icon: LxIcon.chatFilled,
+        icon: LxIcon.layoutSidebarRight,
       },
       menu: [
         {
           id: MenuId.TitleBar,
           group: "navigation",
           order: 10,
+        },
+        {
+          id: MenuId.ChatTitleLayout,
+          group: "navigation",
+          order: 1,
         },
         {
           id: MenuId.MenubarViewMenu,

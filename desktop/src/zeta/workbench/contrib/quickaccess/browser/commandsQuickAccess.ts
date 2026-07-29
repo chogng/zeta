@@ -3,7 +3,6 @@ import {
   Keybinding,
   logicalKey,
 } from "../../../../base/common/keybindings.js";
-import { LxIcon } from "../../../../base/common/lxicons.js";
 import { DisposableStore } from "../../../../base/common/lifecycle.js";
 import {
   Action2,
@@ -49,13 +48,6 @@ registerAction2(class ShowAllCommandsAction extends Action2 {
     super({
       id: ShowAllCommandsCommandId,
       title: "Show All Commands",
-      tooltip: "Manage",
-      icon: LxIcon.gear,
-      menu: {
-        id: MenuId.TitleBar,
-        group: "navigation",
-        order: 20,
-      },
       keybinding: {
         primary: Keybinding.single(logicalKey("p", {
           primaryKey: true,

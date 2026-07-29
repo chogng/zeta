@@ -1,4 +1,4 @@
-.zeta-action-bar { display: flex; align-items: stretch; gap: 4px; }
+.zeta-action-bar { display: flex; align-items: stretch; gap: var(--zeta-action-bar-gap, 4px); }
 .zeta-action-view-item { display: flex; align-items: stretch; }
 .zeta-action-view-item-separator {
   align-self: center;

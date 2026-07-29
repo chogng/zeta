@@ -28,6 +28,7 @@ export class Button extends DisposableOwner {
     element.type = "button";
     if (options.icon) appendIcon(options.icon, element);
     const label = ownerDocument.createElement("span");
+    label.className = "zeta-button-label";
     label.textContent = options.label;
     element.append(label);
     element.title = options.title ?? options.label;
