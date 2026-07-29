@@ -1,8 +1,11 @@
 import { LxIcon } from "../../../../base/common/lxicons.js";
 import {
   Action2,
+  MenuId,
   registerAction2,
 } from "../../../../platform/actions/common/actions.js";
+import { IMenuService } from "../../../../platform/actions/common/menuService.js";
+import { IContextMenuService } from "../../../../platform/contextview/browser/contextMenu.js";
 import type {
   ServicesAccessor,
 } from "../../../../platform/instantiation/common/instantiation.js";
@@ -29,7 +32,7 @@ import {
 } from "../common/chat.js";
 import { ChatViewPane } from "./chatViewPane.js";
 
-/** Registers the Chat Composite and its transcript view. */
+/** Registers the fixed Auxiliary Chat view. */
 export function registerChatViews(
   registry: WorkbenchViewRegistry = ViewsRegistry,
 ): void {
@@ -50,6 +53,8 @@ export function registerChatViews(
       serviceDependencies: [
         IRendererApiService,
         IWorkbenchSessionService,
+        IMenuService,
+        IContextMenuService,
       ],
     }),
   }]);
@@ -75,8 +80,13 @@ registerAction2(class NewChatAction extends Action2 {
     super({
       id: NEW_CHAT_COMMAND_ID,
       title: "New Chat",
-      icon: LxIcon.chat,
+      icon: LxIcon.add,
       f1: true,
+      menu: {
+        id: MenuId.ChatTitle,
+        group: "navigation",
+        order: 1,
+      },
     });
   }
 

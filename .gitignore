@@ -12,6 +12,7 @@ zeta-rs/target/
 # Desktop build products
 desktop/node_modules/
 desktop/dist/
+desktop/.tmp
 node_modules/
 .pnpm-store/
 desktop/generated/app-server/

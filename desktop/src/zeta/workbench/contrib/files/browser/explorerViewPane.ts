@@ -8,8 +8,8 @@ import {
   appendIcon,
 } from "../../../../base/browser/ui/icon/icon.js";
 import {
-  Scrollbar,
-} from "../../../../base/browser/ui/scrollbar/scrollbar.js";
+  ScrollableElement,
+} from "../../../../base/browser/ui/scrollbar/scrollableElement.js";
 import { LxIcon } from "../../../../base/common/lxicons.js";
 import {
   ResettableDisposableGroup,
@@ -49,7 +49,7 @@ export class ExplorerViewPane extends ViewPane {
   readonly #workspaceContextService: IWorkspaceContextService;
   readonly #editorPart: IEditorPart;
   readonly #fileIconThemeService: IFileIconThemeService;
-  readonly #scrollbar: Scrollbar;
+  readonly #scrollable: ScrollableElement;
   readonly #renderedLabels =
     this.own(new ResettableDisposableGroup());
   readonly #nodes = new Map<string, ExplorerNode>();
@@ -71,11 +71,13 @@ export class ExplorerViewPane extends ViewPane {
     this.#fileIconThemeService = fileIconThemeService;
     this.element.classList.add("zeta-explorer-view-pane");
     this.contentElement.classList.add("zeta-explorer");
-    this.#scrollbar = this.own(new Scrollbar({
+    this.#scrollable = this.own(new ScrollableElement({
       ownerDocument: options.ownerDocument,
       ariaLabel: "Workspace files",
+      direction: "vertical",
+      vertical: "auto",
     }));
-    this.contentElement.append(this.#scrollbar.element);
+    this.contentElement.append(this.#scrollable.element);
     this.own(addDisposableListener(
       this.contentElement,
       "click",
@@ -200,7 +202,7 @@ export class ExplorerViewPane extends ViewPane {
       status.className = "zeta-explorer-status";
       status.textContent = this.#error ?? "Loading files…";
       surface.append(status);
-      this.#scrollbar.setContent(surface);
+      this.#scrollable.replaceChildren(surface);
       return;
     }
     const tree = document.createElement("ul");
@@ -216,7 +218,7 @@ export class ExplorerViewPane extends ViewPane {
       error.textContent = this.#error;
       surface.append(error);
     }
-    this.#scrollbar.setContent(surface);
+    this.#scrollable.replaceChildren(surface);
   }
 
   #renderNode(node: ExplorerNode, document: Document): HTMLLIElement {

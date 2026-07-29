@@ -33,6 +33,7 @@ import {
 interface MenuActionViewItemOptions {
   readonly onDidSelect?: () => void;
   readonly submenuLayer?: number;
+  readonly contextViewContainer?: HTMLElement;
   readonly keybinding?: ResolvedKeybinding;
   readonly getKeybinding?: (
     action: IAction,
@@ -88,6 +89,7 @@ class SubmenuMenuActionViewItem extends ButtonActionViewItem {
   readonly #submenuAction: SubmenuAction;
   readonly #onDidSelect: (() => void) | undefined;
   readonly #submenuLayer: number;
+  readonly #contextViewContainer: HTMLElement | undefined;
   readonly #getKeybinding:
     | ((action: IAction) => ResolvedKeybinding | undefined)
     | undefined;
@@ -103,16 +105,26 @@ class SubmenuMenuActionViewItem extends ButtonActionViewItem {
     this.#submenuAction = action;
     this.#onDidSelect = options.onDidSelect;
     this.#submenuLayer = options.submenuLayer ?? 20;
+    this.#contextViewContainer = options.contextViewContainer;
     this.#getKeybinding = options.getKeybinding;
   }
 
   override render(container: HTMLElement): void {
     super.render(container);
     const ownerDocument = container.ownerDocument;
-    this.#contextView = this.own(new ContextView(ownerDocument));
+    if (
+      this.#contextViewContainer &&
+      this.#contextViewContainer.ownerDocument !== ownerDocument
+    ) {
+      throw new Error("Context view container belongs to another document");
+    }
+    this.#contextView = this.own(new ContextView(
+      this.#contextViewContainer ?? ownerDocument.body,
+    ));
     this.#menu = this.own(new Menu({
       actions: this.#submenuAction.actions,
       ownerDocument,
+      contextViewContainer: this.#contextViewContainer,
       layer: this.#submenuLayer,
       getKeybinding: this.#getKeybinding,
       onDidSelect: () => {
@@ -195,6 +207,7 @@ function createMenuActionViewItem(
 export interface MenuOptions {
   readonly actions: readonly IAction[];
   readonly ownerDocument?: Document;
+  readonly contextViewContainer?: HTMLElement;
   readonly onDidSelect?: () => void;
   readonly onDidRequestClose?: () => void;
   readonly getKeybinding?: (
@@ -222,6 +235,7 @@ export class Menu extends DisposableOwner {
         createMenuActionViewItem(action, {
           onDidSelect: options.onDidSelect,
           submenuLayer: (options.layer ?? 20) + 1,
+          contextViewContainer: options.contextViewContainer,
           keybinding: options.getKeybinding?.(action),
           getKeybinding: options.getKeybinding,
         }),

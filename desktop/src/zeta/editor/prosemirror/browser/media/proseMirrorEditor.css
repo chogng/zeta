@@ -45,9 +45,7 @@
 .zeta-prosemirror-editor-surface pre {
   font-family: var(
     --zeta-editor-font-family,
-    "Cascadia Code",
-    Consolas,
-    monospace
+    var(--zeta-font-family-monospace, ui-monospace, monospace)
   );
 }
 

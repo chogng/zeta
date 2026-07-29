@@ -40,12 +40,7 @@
 
 .zeta-markdown code,
 .zeta-markdown pre {
-  font-family: var(
-    --zeta-font-family-monospace,
-    "Cascadia Code",
-    Consolas,
-    monospace
-  );
+  font-family: var(--zeta-font-family-monospace, ui-monospace, monospace);
 }
 
 .zeta-markdown code {

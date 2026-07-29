@@ -1,5 +1,6 @@
 export {
   ActionBar,
+  type ActionBarOrientation,
   type ActionBarOptions,
   type ActionViewItemProvider,
 } from "./actionbar/actionbar.js";
@@ -72,8 +73,20 @@ export { ProgressBar } from "./progressbar/progressbar.js";
 export { Resizable } from "./resizable/resizable.js";
 export { Sash, type SashOrientation } from "./sash/sash.js";
 export {
+  ScrollableElement,
   Scrollbar,
+  type ScrollableElementOptions,
+  type ScrollableElementState,
+  type ScrollableScrollEvent,
+  type ScrollDirection,
+  type ScrollPosition,
+  type ScrollbarAxis,
   type ScrollbarOptions,
+  type ScrollbarPosition,
+  type ScrollbarScrollEvent,
+  type ScrollbarState,
+  type ScrollbarVisibility,
+  type ScrollbarWheelOptions,
 } from "./scrollbar/scrollbar.js";
 export {
   SelectBox,
@@ -89,5 +102,11 @@ export {
   type SplitViewSizing,
 } from "./splitview/splitview.js";
 export { installBaseUiStyles } from "./styles.js";
+export {
+  TabList,
+  type TabListActions,
+  type TabListItem,
+  type TabListOptions,
+} from "./tablist/tabList.js";
 export { Toggle } from "./toggle/toggle.js";
 export { Tree, type TreeItem } from "./tree/tree.js";

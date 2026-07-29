@@ -74,7 +74,7 @@ export class Hover extends DisposableOwner {
       AnchorPosition.Above;
     this.#gap = Math.max(0, options.gap ?? 6);
     this.#contextView = options.contextViewProvider ??
-      this.own(new ContextView(target.ownerDocument));
+      this.own(new ContextView(target.ownerDocument.body));
 
     const title = target.getAttribute("title");
     if (title !== null) {

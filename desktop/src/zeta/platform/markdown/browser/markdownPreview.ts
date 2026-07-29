@@ -34,6 +34,16 @@ const MAX_MARKDOWN_LENGTH = 4 * 1024 * 1024;
 
 const PREVIEW_STYLE = `
 :root {
+  --zeta-font-family-monospace:
+    ui-monospace,
+    "SFMono-Regular",
+    Menlo,
+    Monaco,
+    Consolas,
+    "Liberation Mono",
+    "Courier New",
+    monospace;
+
   color-scheme: light dark;
   font: 14px/1.6 system-ui, sans-serif;
 }
@@ -50,7 +60,7 @@ h1, h2, h3, h4, h5, h6 { line-height: 1.25; margin: 1.35em 0 0.55em; }
 h1, h2 { border-bottom: 1px solid GrayText; padding-bottom: 0.25em; }
 p, blockquote, pre, table, ul, ol { margin: 0.85em 0; }
 blockquote { border-left: 3px solid GrayText; margin-left: 0; padding-left: 1em; }
-code, pre { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; }
+code, pre { font-family: var(--zeta-font-family-monospace); }
 code { background: color-mix(in srgb, CanvasText 10%, Canvas); border-radius: 3px; padding: 0.12em 0.3em; }
 pre { background: color-mix(in srgb, CanvasText 8%, Canvas); overflow: auto; padding: 1em; }
 pre code { background: none; padding: 0; }

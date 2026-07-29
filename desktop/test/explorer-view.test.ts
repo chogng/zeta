@@ -72,12 +72,18 @@ test("ExplorerViewPane renders, expands, and opens workspace files", async () =>
   };
   const editorPart: IEditorPart = {
     element: browser.window.document.createElement("section"),
+    groups: [],
+    activeGroup: {} as never,
     activeInput: undefined,
     activePane: undefined,
     openEditor: async (input: EditorInput) => {
       openedInput = input;
       return {} as never;
     },
+    activateEditor: () => {
+      throw new Error("No active editor");
+    },
+    closeEditor() {},
     setContent() {},
     layout() {},
     focus() {},
@@ -155,6 +161,12 @@ test("ExplorerViewPane renders, expands, and opens workspace files", async () =>
       "project",
     );
     assert.deepEqual(rowLabels(pane.element), ["src", "README.md"]);
+    assert.equal(
+      pane.element.querySelector(
+        ".zeta-explorer > .zeta-scrollable-element",
+      )?.getAttribute("data-scroll-direction"),
+      "vertical",
+    );
     assert.equal(
       pane.element.querySelectorAll(
         ".zeta-explorer-twistie .zeta-icon",

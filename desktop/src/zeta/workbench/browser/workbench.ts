@@ -35,6 +35,12 @@ import {
   IContextMenuService,
 } from "../../platform/contextview/browser/contextMenu.js";
 import {
+  IContextViewService,
+} from "../../platform/contextview/browser/contextView.js";
+import {
+  BrowserContextViewService,
+} from "../../platform/contextview/browser/contextViewService.js";
+import {
   InstantiationService,
   ServiceCollection,
 } from "../../platform/instantiation/common/instantiation.js";
@@ -160,14 +166,10 @@ import {
 } from "../../platform/search/browser/searchService.js";
 import type { WorkbenchPart } from "./part.js";
 import {
-  ActivitybarPart,
-} from "./parts/activitybar/activitybarPart.js";
-import {
   AuxiliarybarPart,
 } from "./parts/auxiliarybar/auxiliarybarPart.js";
 import { EditorPart, IEditorPart } from "./parts/editor/editorPart.js";
 import { PanelPart } from "./parts/panel/panelPart.js";
-import { SessionPart } from "./parts/session/sessionPart.js";
 import { SidebarPart } from "./parts/sidebar/sidebarPart.js";
 import { StatusbarPart } from "./parts/statusbar/statusbarPart.js";
 import type {
@@ -346,6 +348,10 @@ export class Workbench extends DisposableOwner {
     });
     const menus = new MenuService(commands, contextKeys);
     services.set(IMenuService, menus);
+    const contextViews = this.own(
+      new BrowserContextViewService(workbenchRoot),
+    );
+    services.set(IContextViewService, contextViews);
     const quickInput = this.own(new WorkbenchQuickInputService({
       container: workbenchRoot,
       contextKeyService: contextKeys,
@@ -354,7 +360,7 @@ export class Workbench extends DisposableOwner {
     const contextMenus = this.own(createContextMenuService({
       menuService: menus,
       keybindingService: keybindings,
-      ownerDocument,
+      contextViewService: contextViews,
     }));
     services.set(IContextMenuService, contextMenus);
     const contributions = this.own(
@@ -368,17 +374,16 @@ export class Workbench extends DisposableOwner {
       ownerDocument,
       title: workspaceTitle(currentWorkspace, product.name),
     }));
-    const activitybar = this.own(new ActivitybarPart({
+    const sidebar = this.own(new SidebarPart({
       ownerDocument,
       viewDescriptorService: viewDescriptors,
     }));
-    const sidebar = this.own(new SidebarPart(ownerDocument, activitybar));
-    const session = this.own(new SessionPart(
-      ownerDocument,
-      sessionService,
-    ));
     const editor = this.own(new EditorPart(ownerDocument, {
       keybindingService: keybindings,
+      titleActions: {
+        menuService: menus,
+        contextMenuProvider: contextMenus,
+      },
     }));
     services.set(IEditorPart, editor);
     const sidebarCompositeDescriptor = requiredViewContainer(
@@ -406,7 +411,7 @@ export class Workbench extends DisposableOwner {
         }));
       }
       sidebar.showComposite(viewContainer.id);
-      activitybar.setActiveComposite(viewContainer.id);
+      sidebar.setActiveComposite(viewContainer.id);
       return sidebar.getComposite(viewContainer.id)!;
     };
     openSidebarComposite(sidebarCompositeDescriptor.id);
@@ -423,41 +428,19 @@ export class Workbench extends DisposableOwner {
       ownerDocument,
     });
     panel.setViewPaneContainer(panelPaneContainer);
-    const auxiliarybar = this.own(new AuxiliarybarPart({
+    const auxiliarybar = this.own(new AuxiliarybarPart(ownerDocument));
+    const auxiliaryViewContainer = requiredViewContainer(
+      viewDescriptors,
+      ViewContainerLocation.AuxiliaryBar,
+    );
+    const auxiliaryPaneContainer = new ViewPaneContainer({
+      viewContainer: auxiliaryViewContainer,
+      model: viewDescriptors.getViewContainerModel(auxiliaryViewContainer.id),
+      instantiationService,
+      contextKeyService: contextKeys,
       ownerDocument,
-      viewDescriptorService: viewDescriptors,
-    }));
-    const openAuxiliaryComposite = (
-      compositeId: string,
-    ): PaneComposite => {
-      const viewContainer = viewDescriptors
-        .getViewContainers(ViewContainerLocation.AuxiliaryBar)
-        .find((candidate) => candidate.id === compositeId);
-      if (!viewContainer) {
-        throw new Error(
-          `Auxiliary Composite is not registered: ${compositeId}`,
-        );
-      }
-      if (!auxiliarybar.getComposite(viewContainer.id)) {
-        auxiliarybar.addComposite(new PaneComposite({
-          viewContainer,
-          model: viewDescriptors.getViewContainerModel(viewContainer.id),
-          instantiationService,
-          contextKeyService: contextKeys,
-          ownerDocument,
-        }));
-      }
-      auxiliarybar.showComposite(viewContainer.id);
-      auxiliarybar.setActiveComposite(viewContainer.id);
-      return auxiliarybar.getComposite(viewContainer.id)!;
-    };
-    const auxiliaryCompositeDescriptor =
-      viewDescriptors.getDefaultViewContainer(
-        ViewContainerLocation.AuxiliaryBar,
-      );
-    if (auxiliaryCompositeDescriptor) {
-      openAuxiliaryComposite(auxiliaryCompositeDescriptor.id);
-    }
+    });
+    auxiliarybar.setViewPaneContainer(auxiliaryPaneContainer);
     const statusbar = this.own(new StatusbarPart(
       statusbarService,
       ownerDocument,
@@ -467,7 +450,6 @@ export class Workbench extends DisposableOwner {
       ["titlebar", titlebar],
       ["statusbar", statusbar],
       ["sidebar", sidebar],
-      ["session", session],
       ["auxiliarybar", auxiliarybar],
       ["editor", editor],
       ["panel", panel],
@@ -485,7 +467,9 @@ export class Workbench extends DisposableOwner {
             return openSidebarComposite(container.id);
           case ViewContainerLocation.AuxiliaryBar:
             layout.showPart("auxiliarybar");
-            return openAuxiliaryComposite(container.id);
+            return container.id === auxiliaryViewContainer.id
+              ? auxiliaryPaneContainer
+              : undefined;
           case ViewContainerLocation.Panel:
             layout.showPart("panel");
             return container.id === panelViewContainer.id
@@ -495,17 +479,10 @@ export class Workbench extends DisposableOwner {
       },
     }));
     this.own(bindWorkbenchPartVisibilityContextKeys(contextKeys, layout));
-    this.own(activitybar.onDidSelectComposite(
+    this.own(sidebar.onDidSelectComposite(
       ({ compositeId }) => {
         if (sidebar.activeCompositeId === compositeId) return;
         openSidebarComposite(compositeId);
-      },
-    ));
-    this.own(auxiliarybar.onDidSelectComposite(
-      ({ compositeId }) => {
-        if (auxiliarybar.activeCompositeId === compositeId) return;
-        openAuxiliaryComposite(compositeId);
-        layout.showPart("auxiliarybar");
       },
     ));
     void sessionService.initialize();

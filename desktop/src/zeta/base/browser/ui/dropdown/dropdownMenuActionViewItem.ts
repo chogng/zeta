@@ -70,6 +70,10 @@ export class DropdownMenuActionViewItem extends ActionViewItem {
     this.#button?.element.focus();
   }
 
+  override setTabbable(tabbable: boolean): void {
+    if (this.#button) this.#button.element.tabIndex = tabbable ? 0 : -1;
+  }
+
   show(): void {
     const button = this.#button;
     if (!button?.enabled || this.#visible) return;

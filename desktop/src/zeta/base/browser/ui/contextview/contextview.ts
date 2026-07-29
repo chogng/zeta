@@ -83,14 +83,15 @@ export class ContextView
   #restoreFocusTo: HTMLElement | undefined;
   #options: ContextViewOptions | undefined;
 
-  constructor(ownerDocument: Document = mainWindow.document) {
+  constructor(container: HTMLElement = mainWindow.document.body) {
     super();
+    const ownerDocument = container.ownerDocument;
     const element = ownerDocument.createElement("div");
     this.element = element;
     this.defer(() => element.remove());
     element.className = "zeta-context-view";
     element.hidden = true;
-    ownerDocument.body.append(element);
+    container.append(element);
     this.defer(() => this.hide());
   }
 

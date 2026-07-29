@@ -3,12 +3,15 @@ import {
   addDisposableListener,
 } from "../../../../base/browser/dom.js";
 import { MarkdownElement } from "../../../../base/browser/markdownRenderer.js";
+import { ScrollableElement } from "../../../../base/browser/ui/scrollbar/scrollableElement.js";
 import {
   ResettableDisposableGroup,
 } from "../../../../base/common/lifecycle.js";
 import type {
   ZetaRendererApi,
 } from "../../../../platform/app-server/common/renderer-api.js";
+import type { IMenuService } from "../../../../platform/actions/common/menuService.js";
+import type { IContextMenuService } from "../../../../platform/contextview/browser/contextMenu.js";
 import {
   ViewPane,
   type IViewPaneOptions,
@@ -22,18 +25,24 @@ import {
 import type {
   IChatDisplayItem,
 } from "./chatDisplayItems.js";
+import { ChatTitleControl } from "./chatTitleControl.js";
+
+let chatPanelId = 0;
 
 /** Transcript and composer for the active Workbench Thread. */
 export class ChatViewPane extends ViewPane {
   readonly #model: ChatViewModel;
+  readonly #titleControl: ChatTitleControl;
   readonly #renderedItems =
     this.own(new ResettableDisposableGroup());
   readonly #interactionListeners =
     this.own(new ResettableDisposableGroup());
+  readonly #transcriptScrollable: ScrollableElement;
   readonly #transcript: HTMLDivElement;
   readonly #status: HTMLDivElement;
   readonly #interaction: HTMLDivElement;
   readonly #form: HTMLFormElement;
+  readonly #panel: HTMLDivElement;
   readonly #input: HTMLTextAreaElement;
   readonly #sendButton: HTMLButtonElement;
   readonly #interruptButton: HTMLButtonElement;
@@ -42,23 +51,38 @@ export class ChatViewPane extends ViewPane {
     options: IViewPaneOptions,
     api: ZetaRendererApi,
     sessionService: IWorkbenchSessionService,
+    menuService: IMenuService,
+    contextMenuService: IContextMenuService,
   ) {
     super(options);
     this.element.classList.add("zeta-chat-view-pane");
     this.titleElement.hidden = true;
-    this.contentElement.classList.add("zeta-chat");
+    this.contentElement.classList.add("zeta-chat-view");
     this.#model = this.own(new ChatViewModel(api, sessionService));
+    const panelId = `zeta-chat-panel-${++chatPanelId}`;
+    this.#titleControl = this.own(new ChatTitleControl(
+      options.ownerDocument,
+      panelId,
+      sessionService,
+      menuService,
+      contextMenuService,
+    ));
+    this.#panel = options.ownerDocument.createElement("div");
+    this.#panel.id = panelId;
+    this.#panel.className = "zeta-chat";
+    this.#panel.setAttribute("role", "tabpanel");
 
-    const toolbar = options.ownerDocument.createElement("div");
-    toolbar.className = "zeta-chat-toolbar";
-    const newChat = options.ownerDocument.createElement("button");
-    newChat.type = "button";
-    newChat.className = "zeta-chat-secondary-button";
-    newChat.textContent = "New Chat";
-    toolbar.append(newChat);
-
-    this.#transcript = options.ownerDocument.createElement("div");
-    this.#transcript.className = "zeta-chat-transcript";
+    this.#transcriptScrollable = this.own(new ScrollableElement({
+      ownerDocument: options.ownerDocument,
+      direction: "vertical",
+      vertical: "auto",
+      tabIndex: -1,
+    }));
+    this.#transcriptScrollable.element.classList.add(
+      "zeta-chat-transcript-scrollable",
+    );
+    this.#transcript = this.#transcriptScrollable.contentElement;
+    this.#transcript.classList.add("zeta-chat-transcript");
     this.#transcript.setAttribute("role", "log");
     this.#transcript.setAttribute("aria-label", "Chat transcript");
     this.#transcript.setAttribute("aria-live", "polite");
@@ -89,18 +113,19 @@ export class ChatViewPane extends ViewPane {
     this.#sendButton.textContent = "Send";
     actions.append(this.#interruptButton, this.#sendButton);
     this.#form.append(this.#input, actions);
-    this.contentElement.append(
-      toolbar,
-      this.#transcript,
+    this.#panel.append(
+      this.#transcriptScrollable.element,
       this.#status,
       this.#interaction,
       this.#form,
     );
+    this.contentElement.append(
+      this.#titleControl.element,
+      this.#panel,
+    );
 
     this.own(this.#model.onDidChange(() => this.#render()));
-    this.own(addDisposableListener(newChat, "click", () => {
-      void this.#model.startNewChat();
-    }));
+    this.own(sessionService.onDidChange(() => this.#renderTitle()));
     this.own(addDisposableListener(
       this.#interruptButton,
       "click",
@@ -132,6 +157,7 @@ export class ChatViewPane extends ViewPane {
         this.#form.requestSubmit();
       },
     ));
+    this.#renderTitle();
     this.#render();
   }
 
@@ -139,11 +165,24 @@ export class ChatViewPane extends ViewPane {
     this.#input.focus();
   }
 
+  #renderTitle(): void {
+    const activeTabId = this.#titleControl.refresh();
+    if (activeTabId) {
+      this.#panel.setAttribute("aria-labelledby", activeTabId);
+      this.#panel.removeAttribute("aria-label");
+    } else {
+      this.#panel.removeAttribute("aria-labelledby");
+      this.#panel.setAttribute("aria-label", "Chat");
+    }
+  }
+
   #render(): void {
+    this.#transcriptScrollable.layout();
+    const previousScroll = this.#transcriptScrollable.state;
     const shouldFollow =
-      this.#transcript.scrollHeight -
-        this.#transcript.scrollTop -
-        this.#transcript.clientHeight < 48;
+      previousScroll.scrollHeight -
+        previousScroll.top -
+        previousScroll.height < 48;
     this.#renderedItems.clear();
     this.#transcript.replaceChildren(
       ...this.#model.items.map((item) => this.#renderItem(item)),
@@ -156,8 +195,12 @@ export class ChatViewPane extends ViewPane {
         : "Start a new chat to begin.";
       this.#transcript.append(empty);
     }
+    this.#transcriptScrollable.layout();
     if (shouldFollow) {
-      this.#transcript.scrollTop = this.#transcript.scrollHeight;
+      this.#transcriptScrollable.scrollTo(
+        0,
+        this.#transcriptScrollable.state.maximumTop,
+      );
     }
     this.#status.textContent = this.#statusText();
     this.#renderInteraction();

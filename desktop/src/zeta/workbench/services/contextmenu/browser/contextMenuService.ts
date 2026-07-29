@@ -13,6 +13,6 @@ export function createBrowserWorkbenchContextMenuService(
   return new WorkbenchContextMenuService(new BrowserContextMenuService(
     options.menuService,
     options.keybindingService,
-    options.ownerDocument,
+    options.contextViewService,
   ));
 }

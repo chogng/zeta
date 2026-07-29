@@ -1,22 +1,9 @@
 import "./compositebar.css";
-import {
-  ActionBar,
-} from "../../../../base/browser/ui/actionbar/actionbar.js";
-import type { IAction } from "../../../../base/common/actions.js";
+import { TabList } from "../../../../base/browser/ui/tablist/tabList.js";
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
-import type {
-  IViewContainerDescriptor,
-} from "../../../common/views.js";
-import {
-  ViewContainerLocation,
-} from "../../../common/views.js";
-import type {
-  IViewDescriptorService,
-} from "../../../services/views/common/viewDescriptorService.js";
-import {
-  CompositeBarActionViewItem,
-} from "./compositeBarActionViewItem.js";
+import { ViewContainerLocation } from "../../../common/views.js";
+import type { IViewDescriptorService } from "../../../services/views/common/viewDescriptorService.js";
 
 /** Selection of an inactive Composite requested from a CompositeBar. */
 export interface CompositeBarSelectionEvent {
@@ -32,17 +19,16 @@ export interface CompositeBarOptions {
 }
 
 /**
- * Selector for the Composites registered at one workbench location.
+ * Maps registered workbench Composites onto the shared TabList.
  *
- * A CompositeBar owns selection presentation only. Its containing Part owns
- * Composite construction, activation, visibility, and persisted state.
+ * Its containing Part owns construction, activation, visibility, and
+ * persisted state for the selected Composite.
  */
 export class CompositeBar extends DisposableOwner {
   readonly element: HTMLElement;
   readonly #viewDescriptorService: IViewDescriptorService;
   readonly #location: ViewContainerLocation;
-  readonly #actionbar: ActionBar;
-  readonly #items = new Map<string, CompositeBarActionViewItem>();
+  readonly #tabList: TabList<string>;
   readonly #onDidSelectComposite =
     this.own(new Emitter<CompositeBarSelectionEvent>());
   #activeCompositeId: string | undefined;
@@ -59,17 +45,15 @@ export class CompositeBar extends DisposableOwner {
     this.element.setAttribute("aria-label", options.ariaLabel);
     this.element.dataset.viewContainerLocation = options.location;
     this.defer(() => this.element.remove());
-    this.#actionbar = this.own(new ActionBar({
+    this.#tabList = this.own(new TabList({
       ownerDocument: options.ownerDocument,
-      ariaRole: "tablist",
       ariaLabel: options.ariaLabel,
-      actionViewItemProvider: (action) => {
-        const item = new CompositeBarActionViewItem(action);
-        this.#items.set(action.id, item);
-        return item;
+      onActivate: (compositeId) => {
+        if (this.#activeCompositeId === compositeId) return;
+        this.#onDidSelectComposite.fire({ compositeId });
       },
     }));
-    this.element.append(this.#actionbar.element);
+    this.element.append(this.#tabList.element);
     this.own(this.#viewDescriptorService.onDidChangeViewContainers(() => {
       this.#render();
     }));
@@ -81,60 +65,44 @@ export class CompositeBar extends DisposableOwner {
   }
 
   setActiveComposite(compositeId: string): void {
-    if (!this.#items.has(compositeId)) {
-      throw new Error(
-        `Composite Bar item is not available: ${compositeId}`,
-      );
+    const available = this.#viewDescriptorService
+      .getViewContainers(this.#location)
+      .some((container) => container.id === compositeId);
+    if (!available) {
+      throw new Error(`Composite Bar item is not available: ${compositeId}`);
     }
     if (this.#activeCompositeId === compositeId) return;
     this.#activeCompositeId = compositeId;
-    this.#updateCheckedState();
+    this.#render();
   }
 
   #render(): void {
-    this.#items.clear();
     const containers = this.#viewDescriptorService.getViewContainers(
       this.#location,
     );
-    this.#actionbar.setActions(
-      containers.map((container) => this.#createAction(container)),
-    );
-    for (const container of containers) {
-      if (!this.#items.has(container.id)) {
-        throw new Error(
-          `Composite Bar action did not render: ${container.id}`,
-        );
-      }
-    }
     if (
       this.#activeCompositeId !== undefined &&
-      !this.#items.has(this.#activeCompositeId)
+      !containers.some((container) => container.id === this.#activeCompositeId)
     ) {
       this.#activeCompositeId = undefined;
     }
-    this.#updateCheckedState();
+    this.#tabList.setTabs(
+      containers.map((container) => ({
+        id: container.id,
+        value: container.id,
+        label: container.title,
+        tooltip: container.title,
+        icon: container.icon,
+        tabId: compositeTabId(this.#location, container.id),
+      })),
+      this.#activeCompositeId,
+    );
   }
+}
 
-  #createAction(container: IViewContainerDescriptor): IAction {
-    return {
-      id: container.id,
-      label: container.title,
-      tooltip: container.title,
-      icon: container.icon,
-      enabled: true,
-      checked: container.id === this.#activeCompositeId,
-      run: () => {
-        if (this.#activeCompositeId === container.id) return;
-        this.#onDidSelectComposite.fire({
-          compositeId: container.id,
-        });
-      },
-    };
-  }
-
-  #updateCheckedState(): void {
-    for (const [compositeId, item] of this.#items) {
-      item.setActive(compositeId === this.#activeCompositeId);
-    }
-  }
+function compositeTabId(
+  location: ViewContainerLocation,
+  compositeId: string,
+): string {
+  return `zeta-${location}-composite-tab-${encodeURIComponent(compositeId)}`;
 }

@@ -84,7 +84,7 @@ export class Dropdown extends DisposableOwner {
     element.append(button);
 
     this.#contextView = options.contextViewProvider ??
-      this.own(new ContextView(ownerDocument));
+      this.own(new ContextView(ownerDocument.body));
     this.defer(() => this.hide());
     this.own(addDisposableListener(button, "click", () => this.toggle()));
     this.own(addDisposableListener(button, "keydown", (event) => {

@@ -1,39 +1,149 @@
 .zeta-scrollbar {
-  overflow: auto;
-  scrollbar-color:
-    var(--zeta-scrollbar-slider-background, #79797966)
-    transparent;
-  scrollbar-width: thin;
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  outline: none;
 }
 
-.zeta-scrollbar::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+.zeta-scrollbar-viewport {
+  position: absolute;
+  inset: 0;
+  overflow: scroll;
+  overscroll-behavior: auto;
+  scrollbar-width: none;
 }
 
-.zeta-scrollbar::-webkit-scrollbar-corner,
-.zeta-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
+.zeta-scrollable-element[data-scroll-direction="horizontal"] >
+  .zeta-scrollbar-viewport {
+  overflow-x: scroll;
+  overflow-y: hidden;
 }
 
-.zeta-scrollbar::-webkit-scrollbar-thumb {
-  min-width: 20px;
-  min-height: 20px;
+.zeta-scrollable-element[data-scroll-direction="vertical"] >
+  .zeta-scrollbar-viewport {
+  overflow-x: hidden;
+  overflow-y: scroll;
+}
+
+.zeta-scrollbar-viewport::-webkit-scrollbar {
+  display: none;
+}
+
+.zeta-scrollbar-content {
+  min-width: 100%;
+  min-height: 100%;
+  box-sizing: border-box;
+  width: max-content;
+}
+
+.zeta-scrollable-element[data-scroll-direction="horizontal"] >
+  .zeta-scrollbar-viewport >
+  .zeta-scrollbar-content {
+  height: 100%;
+}
+
+.zeta-scrollable-element[data-scroll-direction="vertical"] >
+  .zeta-scrollbar-viewport >
+  .zeta-scrollbar-content {
+  width: 100%;
+}
+
+.zeta-scrollbar-track {
+  position: absolute;
+  z-index: 3;
+  border-radius: calc(var(--zeta-scrollbar-size, 10px) / 2);
+  opacity: 1;
+  outline: none;
+  touch-action: none;
+  transition: opacity 100ms linear;
+}
+
+.zeta-scrollbar-track-horizontal {
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: var(--zeta-scrollbar-size, 10px);
+}
+
+.zeta-scrollbar-track-vertical {
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: var(--zeta-scrollbar-size, 10px);
+}
+
+.zeta-scrollbar-track[data-visibility="auto"] {
+  opacity: 0;
+}
+
+.zeta-scrollbar:hover >
+  .zeta-scrollbar-track[data-visibility="auto"],
+.zeta-scrollbar:focus-within >
+  .zeta-scrollbar-track[data-visibility="auto"],
+.zeta-scrollbar-scrolling >
+  .zeta-scrollbar-track[data-visibility="auto"],
+.zeta-scrollbar-track[data-active="true"] {
+  opacity: 1;
+}
+
+.zeta-scrollbar-thumb {
+  position: absolute;
+  box-sizing: border-box;
   border: 2px solid transparent;
-  border-radius: 6px;
+  border-radius: calc(var(--zeta-scrollbar-size, 10px) / 2);
   background:
     var(--zeta-scrollbar-slider-background, #79797966)
     padding-box;
+  cursor: default;
+  forced-color-adjust: none;
+  will-change: transform;
 }
 
-.zeta-scrollbar::-webkit-scrollbar-thumb:hover {
+.zeta-scrollbar-track-horizontal > .zeta-scrollbar-thumb {
+  top: 0;
+  bottom: 0;
+  left: 0;
+}
+
+.zeta-scrollbar-track-vertical > .zeta-scrollbar-thumb {
+  top: 0;
+  right: 0;
+  bottom: auto;
+  left: 0;
+}
+
+.zeta-scrollbar-track:hover > .zeta-scrollbar-thumb {
   background:
     var(--zeta-scrollbar-slider-hover-background, #646464b3)
     padding-box;
 }
 
-.zeta-scrollbar::-webkit-scrollbar-thumb:active {
+.zeta-scrollbar-track[data-active="true"] > .zeta-scrollbar-thumb {
   background:
     var(--zeta-scrollbar-slider-active-background, #bfbfbf66)
     padding-box;
+}
+
+.zeta-scrollbar-track:focus-visible {
+  outline: 1px solid
+    var(--zeta-focus-border, #007fd4);
+  outline-offset: -1px;
+}
+
+.zeta-scrollbar-corner {
+  position: absolute;
+  z-index: 2;
+  right: 0;
+  bottom: 0;
+  width: var(--zeta-scrollbar-size, 10px);
+  height: var(--zeta-scrollbar-size, 10px);
+  background: transparent;
+}
+
+@media (forced-colors: active) {
+  .zeta-scrollbar-thumb {
+    border-color: ButtonText;
+    background: ButtonFace padding-box;
+  }
 }

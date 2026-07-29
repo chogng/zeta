@@ -1,11 +1,17 @@
-import "./sessionpart.css";
+import "./media/sessionsPart.css";
 import type {
   IWorkbenchSessionService,
-} from "../../../services/sessions/common/sessionService.js";
-import { WorkbenchPart } from "../../part.js";
+} from "../../../workbench/services/sessions/common/sessionService.js";
+import { WorkbenchPart } from "../../../workbench/browser/part.js";
 
-/** The session selector and session-scoped navigation region. */
-export class SessionPart extends WorkbenchPart {
+/**
+ * Prototype surface for the Sessions-specific workbench.
+ *
+ * The regular Workbench does not mount this Part. The Sessions product layer
+ * owns its future layout and can evolve this placeholder into the full
+ * multi-session interface without adding a Session leaf beside EditorPart.
+ */
+export class SessionsPart extends WorkbenchPart {
   readonly #label: HTMLSpanElement;
   readonly #sessionService: IWorkbenchSessionService;
 
@@ -16,10 +22,10 @@ export class SessionPart extends WorkbenchPart {
     ownerDocument: Document,
     sessionService: IWorkbenchSessionService,
   ) {
-    super("session", ownerDocument);
+    super("sessions", ownerDocument);
     this.#sessionService = sessionService;
     this.#label = ownerDocument.createElement("span");
-    this.#label.className = "zeta-session-label";
+    this.#label.className = "zeta-sessions-label";
     this.contentElement.append(this.#label);
     this.own(sessionService.onDidChange(() => this.#render()));
     this.#render();

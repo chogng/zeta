@@ -1,6 +1,24 @@
 :root {
+  --zeta-font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    system-ui,
+    "Ubuntu",
+    "Droid Sans",
+    sans-serif;
+  --zeta-font-family-monospace:
+    ui-monospace,
+    "SFMono-Regular",
+    Menlo,
+    Monaco,
+    Consolas,
+    "Liberation Mono",
+    "Courier New",
+    monospace;
+
   color-scheme: dark;
-  font-family: Inter, "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+  font-family: var(--zeta-font-family);
   font-size: 13px;
   background: var(--zeta-workbench-background, #1e1e1e);
   color: var(--zeta-foreground, #cccccc);
@@ -17,6 +35,146 @@ body {
 
 button, input, select, textarea { font: inherit; }
 
+.zeta-workbench[data-os="mac"] {
+  --zeta-font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+  --zeta-font-family-monospace:
+    "SF Mono",
+    Monaco,
+    Menlo,
+    Courier,
+    monospace;
+}
+
+.zeta-workbench[data-os="mac"]:lang(zh-Hans) {
+  --zeta-font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "PingFang SC",
+    "Hiragino Sans GB",
+    sans-serif;
+}
+
+.zeta-workbench[data-os="mac"]:lang(zh-Hant) {
+  --zeta-font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "PingFang TC",
+    sans-serif;
+}
+
+.zeta-workbench[data-os="mac"]:lang(ja) {
+  --zeta-font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Hiragino Kaku Gothic Pro",
+    sans-serif;
+}
+
+.zeta-workbench[data-os="mac"]:lang(ko) {
+  --zeta-font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Apple SD Gothic Neo",
+    "Nanum Gothic",
+    AppleGothic,
+    sans-serif;
+}
+
+.zeta-workbench[data-os="windows"] {
+  --zeta-font-family: "Segoe WPC", "Segoe UI", sans-serif;
+  --zeta-font-family-monospace: Consolas, "Courier New", monospace;
+}
+
+.zeta-workbench[data-os="windows"]:lang(zh-Hans) {
+  --zeta-font-family:
+    "Segoe WPC",
+    "Segoe UI",
+    "Microsoft YaHei",
+    sans-serif;
+}
+
+.zeta-workbench[data-os="windows"]:lang(zh-Hant) {
+  --zeta-font-family:
+    "Segoe WPC",
+    "Segoe UI",
+    "Microsoft Jhenghei",
+    sans-serif;
+}
+
+.zeta-workbench[data-os="windows"]:lang(ja) {
+  --zeta-font-family:
+    "Segoe WPC",
+    "Segoe UI",
+    "Yu Gothic UI",
+    "Meiryo UI",
+    sans-serif;
+}
+
+.zeta-workbench[data-os="windows"]:lang(ko) {
+  --zeta-font-family:
+    "Segoe WPC",
+    "Segoe UI",
+    "Malgun Gothic",
+    Dotom,
+    sans-serif;
+}
+
+.zeta-workbench[data-os="linux"] {
+  --zeta-font-family: system-ui, "Ubuntu", "Droid Sans", sans-serif;
+  --zeta-font-family-monospace:
+    "Ubuntu Mono",
+    "Liberation Mono",
+    "DejaVu Sans Mono",
+    "Courier New",
+    monospace;
+}
+
+.zeta-workbench[data-os="linux"]:lang(zh-Hans) {
+  --zeta-font-family:
+    system-ui,
+    "Ubuntu",
+    "Droid Sans",
+    "Source Han Sans SC",
+    "Source Han Sans CN",
+    "Source Han Sans",
+    sans-serif;
+}
+
+.zeta-workbench[data-os="linux"]:lang(zh-Hant) {
+  --zeta-font-family:
+    system-ui,
+    "Ubuntu",
+    "Droid Sans",
+    "Source Han Sans TC",
+    "Source Han Sans TW",
+    "Source Han Sans",
+    sans-serif;
+}
+
+.zeta-workbench[data-os="linux"]:lang(ja) {
+  --zeta-font-family:
+    system-ui,
+    "Ubuntu",
+    "Droid Sans",
+    "Source Han Sans J",
+    "Source Han Sans JP",
+    "Source Han Sans",
+    sans-serif;
+}
+
+.zeta-workbench[data-os="linux"]:lang(ko) {
+  --zeta-font-family:
+    system-ui,
+    "Ubuntu",
+    "Droid Sans",
+    "Source Han Sans K",
+    "Source Han Sans KR",
+    "Source Han Sans",
+    UnDotum,
+    "FBaekmuk Gulim",
+    sans-serif;
+}
+
 .zeta-workbench {
   display: flex;
   width: 100%;
@@ -25,6 +183,7 @@ button, input, select, textarea { font: inherit; }
   height: 100%;
   overflow: hidden;
   flex-direction: column;
+  font-family: var(--zeta-font-family);
   color: var(--zeta-foreground, #cccccc);
   background: var(--zeta-workbench-background, #1e1e1e);
 }

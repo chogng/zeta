@@ -18,6 +18,9 @@ export abstract class ActionViewItem extends DisposableOwner {
 
   abstract render(container: HTMLElement): void;
 
+  /** Controls whether this item is the ActionBar's page-level Tab stop. */
+  abstract setTabbable(tabbable: boolean): void;
+
   focus(): void {}
 }
 
@@ -49,6 +52,10 @@ export class ButtonActionViewItem extends ActionViewItem {
     this.button.element.focus();
   }
 
+  override setTabbable(tabbable: boolean): void {
+    this.button.element.tabIndex = tabbable ? 0 : -1;
+  }
+
   protected get button(): Button {
     if (!this.#button) {
       throw new Error(`Action view item is not rendered: ${this.action.id}`);
@@ -77,6 +84,8 @@ export class SeparatorActionViewItem extends ActionViewItem {
     container.classList.add("zeta-action-view-item-separator");
     container.setAttribute("role", "separator");
   }
+
+  override setTabbable(_tabbable: boolean): void {}
 }
 
 /** Creates the base representation used when a platform has no override. */

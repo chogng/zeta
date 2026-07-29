@@ -1,9 +1,15 @@
-.zeta-workbench-session {
+.zeta-workbench-sessions {
   border-bottom: 1px solid var(--zeta-border, #2b2b2b);
   background: var(--zeta-editor-background, #1e1e1e);
 }
-.zeta-workbench-session .zeta-workbench-part-content { flex-direction: row; align-items: center; padding: 0 16px; }
-.zeta-session-label {
+
+.zeta-workbench-sessions .zeta-workbench-part-content {
+  flex-direction: row;
+  align-items: center;
+  padding: 0 16px;
+}
+
+.zeta-sessions-label {
   color: var(--zeta-description-foreground, #b8b8b8);
   font-size: 12px;
 }

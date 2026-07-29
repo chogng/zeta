@@ -40,14 +40,17 @@ const {
   bindWorkbenchPartVisibilityContextKeys,
 } = await import("../src/zeta/workbench/browser/contextkeys.js");
 const { WorkbenchPart } = await import("../src/zeta/workbench/browser/part.js");
-const { ActivitybarPart } = await import(
-  "../src/zeta/workbench/browser/parts/activitybar/activitybarPart.js"
-);
 const { SidebarPart } = await import(
   "../src/zeta/workbench/browser/parts/sidebar/sidebarPart.js"
 );
+const { AuxiliarybarPart } = await import(
+  "../src/zeta/workbench/browser/parts/auxiliarybar/auxiliarybarPart.js"
+);
 const { PaneComposite } = await import(
   "../src/zeta/workbench/browser/parts/views/paneComposite.js"
+);
+const { ViewPaneContainer } = await import(
+  "../src/zeta/workbench/browser/parts/views/viewPaneContainer.js"
 );
 const { EditorPart } = await import(
   "../src/zeta/workbench/browser/parts/editor/editorPart.js"
@@ -106,7 +109,6 @@ class TestPart extends WorkbenchPart {
 
   override get minimumHeight(): number {
     if (this.id === "titlebar") return 35;
-    if (this.id === "session") return 36;
     if (this.id === "statusbar") return 23;
     if (this.id === "editor") return 84;
     if (this.id === "panel") return 80;
@@ -115,7 +117,6 @@ class TestPart extends WorkbenchPart {
 
   override get maximumHeight(): number {
     if (this.id === "titlebar") return 35;
-    if (this.id === "session") return 36;
     if (this.id === "statusbar") return 23;
     return Number.POSITIVE_INFINITY;
   }
@@ -186,6 +187,10 @@ test("Workbench layout hides and restores Parts with context keys", () => {
     true,
   );
   assert.ok(harness.container.querySelector("[data-part='editor']"));
+  assert.equal(
+    harness.container.querySelector("[data-part='session']"),
+    null,
+  );
   assert.equal(contextKeys.getValue("sideBarVisible"), false);
   assert.equal(contextKeys.getValue("auxiliaryBarVisible"), false);
   assert.equal(contextKeys.getValue("panelVisible"), false);
@@ -286,7 +291,7 @@ test("Workbench layout retains resized Part dimensions across visibility", () =>
   dom.window.close();
 });
 
-test("Activity Bar hosts a movable Sidebar Composite Bar", () => {
+test("Sidebar hosts its Composite Bar before content", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
   const disposables = new DisposableStore();
   const registry = new WorkbenchViewRegistry();
@@ -314,17 +319,14 @@ test("Activity Bar hosts a movable Sidebar Composite Bar", () => {
     contextKeyService: contextKeys,
     registry,
   }));
-  const activitybar = disposables.add(new ActivitybarPart({
+  const sidebar = disposables.add(new SidebarPart({
     ownerDocument: dom.window.document,
     viewDescriptorService: viewDescriptors,
   }));
-  const compositeBar = activitybar.compositeBar;
-  const sidebar = disposables.add(new SidebarPart(
-    dom.window.document,
-    activitybar,
-  ));
+  dom.window.document.body.append(sidebar.element);
+  const compositeBar = sidebar.compositeBar;
   const selections: string[] = [];
-  disposables.add(activitybar.onDidSelectComposite(
+  disposables.add(sidebar.onDidSelectComposite(
     ({ compositeId }) => selections.push(compositeId),
   ));
 
@@ -338,35 +340,35 @@ test("Activity Bar hosts a movable Sidebar Composite Bar", () => {
     )].map((item) => item.dataset.actionId),
     ["zeta.explorer", "zeta.search", "zeta.git"],
   );
-  assert.equal(compositeBar.element.parentElement, activitybar.element);
-  assert.equal(activitybar.element.parentElement, sidebar.element);
-  assert.equal(sidebar.element.firstElementChild, activitybar.element);
+  assert.equal(
+    compositeBar.element.parentElement,
+    sidebar.element,
+  );
+  assert.equal(sidebar.element.firstElementChild, compositeBar.element);
   assert.equal(
     compositeBar.element.className,
     "zeta-composite-bar",
   );
+  const content = sidebar.element.querySelector(
+    ":scope > .zeta-composite-content",
+  );
+  assert.ok(content);
+  assert.equal(compositeBar.element.nextElementSibling, content);
   assert.equal(
-    activitybar.element.className,
-    "zeta-activitybar-container",
-  );
-  assert.ok(
-    sidebar.element.querySelector(":scope > .zeta-composite-title"),
-  );
-  assert.ok(
-    sidebar.element.querySelector(":scope > .zeta-composite-content"),
+    sidebar.element.querySelector(":scope > .zeta-workbench-part-title"),
+    null,
   );
   const actionbar = compositeBar.element.querySelector(
-    ":scope > .zeta-action-bar",
+    ".zeta-tab-list-scroll-content > .zeta-action-bar",
   );
   assert.equal(actionbar?.className, "zeta-action-bar");
   assert.equal(actionbar?.getAttribute("role"), "tablist");
+  assert.equal(actionbar?.getAttribute("aria-orientation"), "horizontal");
   assert.deepEqual(
-    [...(actionbar?.children ?? [])].map((item) => item.className),
-    [
-      "zeta-action-view-item",
-      "zeta-action-view-item",
-      "zeta-action-view-item",
-    ],
+    [...(actionbar?.children ?? [])].map(
+      (item) => item.classList.contains("zeta-tab"),
+    ),
+    [true, true, true],
   );
   assert.equal(
     compositeBar.element.querySelectorAll(
@@ -376,37 +378,42 @@ test("Activity Bar hosts a movable Sidebar Composite Bar", () => {
   );
   assert.equal(
     compositeBar.element.querySelectorAll(
-      ".zeta-action-view-item > .zeta-action-label",
+      ".zeta-action-view-item > .zeta-tab-label",
     ).length,
     3,
   );
-  assert.equal(compositeBar.element.querySelector("button"), null);
+  assert.equal(compositeBar.element.querySelectorAll("button").length, 3);
   assert.equal(compositeBar.element.hasAttribute("data-part"), false);
   assert.equal(
     compositeBar.element.querySelector(".zeta-workbench-part-content"),
     null,
   );
-  activitybar.setActiveComposite("zeta.explorer");
+  sidebar.setActiveComposite("zeta.explorer");
+  const explorerTab = compositeBar.element.querySelector<HTMLButtonElement>(
+    "[data-action-id='zeta.explorer'] > [role='tab']",
+  );
+  const searchTab = compositeBar.element.querySelector<HTMLButtonElement>(
+    "[data-action-id='zeta.search'] > [role='tab']",
+  );
+  assert.ok(explorerTab);
+  assert.ok(searchTab);
   assert.equal(
-    compositeBar.element.querySelector<HTMLElement>(
-      "[data-action-id='zeta.explorer']",
-    )?.getAttribute("aria-selected"),
+    explorerTab.getAttribute("aria-selected"),
     "true",
   );
-  compositeBar.element.querySelector<HTMLElement>(
-    "[data-action-id='zeta.explorer']",
-  )?.click();
+  explorerTab.focus();
+  explorerTab.dispatchEvent(new dom.window.KeyboardEvent("keydown", {
+    bubbles: true,
+    cancelable: true,
+    key: "ArrowRight",
+  }));
+  assert.equal(dom.window.document.activeElement, searchTab);
   assert.deepEqual(selections, []);
-  compositeBar.element.querySelector<HTMLElement>(
-    "[data-action-id='zeta.search']",
-  )?.click();
+  explorerTab.click();
+  assert.deepEqual(selections, []);
+  searchTab.click();
   assert.deepEqual(selections, ["zeta.search"]);
-  const alternateHost = dom.window.document.createElement("div");
-  activitybar.placeCompositeBar(alternateHost);
-  assert.equal(compositeBar.element.parentElement, alternateHost);
-  assert.equal(activitybar.activeCompositeId, "zeta.explorer");
-  activitybar.placeCompositeBar(activitybar.element);
-  assert.equal(compositeBar.element.parentElement, activitybar.element);
+  assert.equal(compositeBar.activeCompositeId, "zeta.explorer");
 
   const instantiationService = new InstantiationService();
   const explorerContainer = viewDescriptors.getViewContainers(
@@ -433,11 +440,6 @@ test("Activity Bar hosts a movable Sidebar Composite Bar", () => {
   sidebar.addComposite(searchComposite);
   sidebar.showComposite(explorerComposite.id);
   assert.equal(sidebar.activeCompositeId, explorerComposite.id);
-  assert.equal(
-    sidebar.element.querySelector(".zeta-composite-title-label")
-      ?.textContent,
-    "Explorer",
-  );
   assert.equal(explorerComposite.element.hidden, false);
   assert.equal(searchComposite.element.hidden, true);
   sidebar.showComposite(searchComposite.id);
@@ -450,6 +452,56 @@ test("Activity Bar hosts a movable Sidebar Composite Bar", () => {
     explorerComposite,
   );
   assert.equal(explorerComposite.element.hidden, false);
+
+  disposables.dispose();
+  dom.window.close();
+});
+
+test("Auxiliary Bar directly hosts its fixed View container", () => {
+  const dom = new JSDOM("<!doctype html><body></body>");
+  const disposables = new DisposableStore();
+  const registry = new WorkbenchViewRegistry();
+  disposables.add(registry.registerViewContainer({
+    id: "zeta.chat",
+    title: "Chat",
+    location: ViewContainerLocation.AuxiliaryBar,
+    isDefault: true,
+  }));
+  const contextKeys = disposables.add(new ContextKeyService());
+  const viewDescriptors = disposables.add(new ViewDescriptorService({
+    contextKeyService: contextKeys,
+    registry,
+  }));
+  const descriptor = viewDescriptors.getDefaultViewContainer(
+    ViewContainerLocation.AuxiliaryBar,
+  );
+  assert.ok(descriptor);
+  const instantiationService = new InstantiationService(
+    new ServiceCollection(),
+  );
+  const container = new ViewPaneContainer({
+    viewContainer: descriptor,
+    model: viewDescriptors.getViewContainerModel(descriptor.id),
+    instantiationService,
+    contextKeyService: contextKeys,
+    ownerDocument: dom.window.document,
+  });
+  const auxiliarybar = disposables.add(
+    new AuxiliarybarPart(dom.window.document),
+  );
+  auxiliarybar.setViewPaneContainer(container);
+  const content = auxiliarybar.element.querySelector(
+    ":scope > .zeta-auxiliarybar-content",
+  );
+
+  assert.ok(content);
+  assert.equal(auxiliarybar.element.firstElementChild, content);
+  assert.equal(content.firstElementChild, container.element);
+  assert.equal(auxiliarybar.element.querySelector(".zeta-composite-bar"), null);
+  assert.equal(
+    auxiliarybar.element.querySelector(":scope > .zeta-workbench-part-title"),
+    null,
+  );
 
   disposables.dispose();
   dom.window.close();

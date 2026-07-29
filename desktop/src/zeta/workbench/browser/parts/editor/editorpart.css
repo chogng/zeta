@@ -5,16 +5,143 @@
 }
 
 .zeta-workbench-editor .zeta-workbench-part-content {
-  position: relative;
   padding: 0;
   overflow: hidden;
 }
 
-.zeta-editor-pane-host {
+.zeta-editor-group {
+  display: flex;
   width: 100%;
   min-width: 0;
   height: 100%;
   min-height: 0;
+  flex-direction: column;
+}
+
+.zeta-editor-title-control {
+  display: flex;
+  min-width: 0;
+  height: 35px;
+  flex: 0 0 35px;
+  border-bottom: 1px solid var(--zeta-border, #2b2b2b);
+}
+
+.zeta-editor-tabs-control {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+}
+
+.zeta-editor-tabs-control .zeta-action-bar {
+  display: flex;
+  height: 100%;
+  align-items: stretch;
+  overflow: hidden;
+}
+
+.zeta-editor-tabs-control .zeta-tab {
+  display: flex;
+  min-width: 80px;
+  max-width: 220px;
+  height: 100%;
+  align-items: center;
+  border-right: 1px solid var(--zeta-border, #2b2b2b);
+  color: var(--zeta-description-foreground, #9d9d9d);
+  background: var(--zeta-workbench-background, #181818);
+}
+
+.zeta-editor-tabs-control .zeta-tab.active {
+  color: var(--zeta-foreground, #cccccc);
+  background: var(--zeta-editor-background, #1e1e1e);
+}
+
+.zeta-editor-tabs-control .zeta-tab-label {
+  display: flex;
+  min-width: 0;
+  height: 100%;
+  flex: 1 1 auto;
+  align-items: center;
+  padding-left: 12px;
+  cursor: default;
+  outline: none;
+}
+
+.zeta-editor-tabs-control .zeta-tab-label:focus-visible {
+  outline: 1px solid var(--zeta-focus-border, #007fd4);
+  outline-offset: -1px;
+}
+
+.zeta-editor-tabs-control .zeta-icon-label-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.zeta-editor-tabs-control .zeta-tab-actions {
+  gap: 0;
+  flex: 0 0 auto;
+  padding-right: 4px;
+}
+
+.zeta-editor-tabs-control .zeta-tab-actions .zeta-button {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  border: 0;
+  border-radius: 4px;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.zeta-editor-tabs-control .zeta-tab-actions .zeta-button > span {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.zeta-editor-tabs-control .zeta-tab-actions .zeta-button:hover {
+  background: var(--zeta-toolbar-hover-background, #5a5d5e50);
+}
+
+.zeta-editor-title-actions {
+  display: flex;
+  height: 100%;
+  flex: 0 0 auto;
+  align-items: center;
+  margin-left: auto;
+  padding: 0 4px;
+}
+
+.zeta-editor-title-actions .zeta-action-bar {
+  display: flex;
+  align-items: center;
+}
+
+.zeta-editor-group-content {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+}
+
+.zeta-editor-pane-host {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  min-height: 0;
+}
+
+.zeta-editor-pane-host[hidden] {
+  display: none;
 }
 
 .zeta-editor-group-watermark {

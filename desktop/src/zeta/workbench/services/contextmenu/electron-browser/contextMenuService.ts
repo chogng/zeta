@@ -31,7 +31,7 @@ export function createElectronWorkbenchContextMenuService(
     : new BrowserContextMenuService(
       options.menuService,
       options.keybindingService,
-      options.ownerDocument,
+      options.contextViewService,
     );
   return new WorkbenchContextMenuService(implementation);
 }

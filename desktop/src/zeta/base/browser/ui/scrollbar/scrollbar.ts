@@ -1,40 +1,24 @@
-import { addDisposableListener } from "../../dom.js";
-import { DisposableOwner } from "../../../common/lifecycle.js";
-
-export interface ScrollbarOptions {
-  readonly ownerDocument?: Document;
-  readonly ariaLabel?: string;
-  readonly onScroll?: (position: { left: number; top: number }) => void;
-}
-
 /**
- * Themeable scroll container backed by the browser's native scrolling model.
+ * Compatibility exports for the former combined scrollbar/container API.
+ *
+ * New code should name `ScrollableElement` directly. A scrollbar is one axis
+ * owned by that container rather than the container itself.
  */
-export class Scrollbar extends DisposableOwner {
-  readonly element: HTMLDivElement;
-
-  constructor(options: ScrollbarOptions = {}) {
-    super();
-    const ownerDocument = options.ownerDocument ?? document;
-    const element = ownerDocument.createElement("div");
-    this.element = element;
-    this.defer(() => element.remove());
-    element.className = "zeta-scrollbar";
-    element.tabIndex = 0;
-    if (options.ariaLabel) {
-      element.setAttribute("role", "region");
-      element.setAttribute("aria-label", options.ariaLabel);
-    }
-    if (options.onScroll) {
-      this.own(addDisposableListener(element, "scroll", () =>
-        options.onScroll?.({
-          left: element.scrollLeft,
-          top: element.scrollTop,
-        }),
-      ));
-    }
-  }
-
-  setContent(content: Element): void { this.element.replaceChildren(content); }
-  scrollTo(left: number, top: number): void { this.element.scrollTo({ left, top }); }
-}
+export {
+  ScrollableElement,
+  ScrollableElement as Scrollbar,
+} from "./scrollableElement.js";
+export type {
+  ScrollableElementOptions,
+  ScrollableElementOptions as ScrollbarOptions,
+  ScrollableElementState,
+  ScrollableElementState as ScrollbarState,
+  ScrollableScrollEvent,
+  ScrollableScrollEvent as ScrollbarScrollEvent,
+  ScrollDirection,
+  ScrollPosition,
+  ScrollPosition as ScrollbarPosition,
+  ScrollbarVisibility,
+  ScrollbarWheelOptions,
+} from "./scrollableElement.js";
+export type { ScrollbarAxis } from "./abstractScrollbar.js";

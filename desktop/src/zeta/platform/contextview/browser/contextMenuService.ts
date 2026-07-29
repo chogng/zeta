@@ -7,7 +7,6 @@ import {
 import type { IRectangle } from "../../../base/common/layout.js";
 import {
   AnchorPosition,
-  ContextView,
   ContextViewFocusRestore,
 } from "../../../base/browser/ui/contextview/contextview.js";
 import { Menu } from "../../../base/browser/ui/menu/menu.js";
@@ -21,6 +20,7 @@ import {
   type IContextMenuService,
   resolveContextMenuActions,
 } from "./contextMenu.js";
+import type { IContextViewService } from "./contextView.js";
 
 /** HTML implementation used by web, Windows, and Linux workbenches. */
 export class BrowserContextMenuService extends DisposableOwner
@@ -28,7 +28,7 @@ export class BrowserContextMenuService extends DisposableOwner
   readonly #onDidShowContextMenu = this.own(new Emitter<void>());
   readonly #onDidHideContextMenu = this.own(new Emitter<void>());
   readonly #activeMenu = this.own(new DisposableSlot<Menu>());
-  readonly #contextView: ContextView;
+  readonly #contextViewService: IContextViewService;
   readonly #menuService: IMenuService;
   readonly #keybindingService: IKeybindingService;
   #onHide: ((didCancel: boolean) => void) | undefined;
@@ -42,12 +42,12 @@ export class BrowserContextMenuService extends DisposableOwner
   constructor(
     menuService: IMenuService,
     keybindingService: IKeybindingService,
-    ownerDocument: Document,
+    contextViewService: IContextViewService,
   ) {
     super();
     this.#menuService = menuService;
     this.#keybindingService = keybindingService;
-    this.#contextView = this.own(new ContextView(ownerDocument));
+    this.#contextViewService = contextViewService;
     this.defer(() => this.hideContextMenu());
   }
 
@@ -65,17 +65,18 @@ export class BrowserContextMenuService extends DisposableOwner
     this.#onHide = options.onHide;
     const menu = new Menu({
       actions,
-      ownerDocument: this.#contextView.element.ownerDocument,
+      ownerDocument: this.#contextViewService.container.ownerDocument,
+      contextViewContainer: this.#contextViewService.container,
       layer: 10,
       getKeybinding: (action) =>
         this.#keybindingService.lookupKeybinding(action.id),
       onDidSelect: () => {
         this.#didSelect = true;
-        this.#contextView.hide();
+        this.#contextViewService.hide();
       },
     });
     this.#activeMenu.replace(menu);
-    const shown = this.#contextView.show({
+    const shown = this.#contextViewService.show({
       anchor: toContextViewAnchor(options.anchor),
       content: menu.element,
       anchorPosition: AnchorPosition.Below,
@@ -95,11 +96,8 @@ export class BrowserContextMenuService extends DisposableOwner
   }
 
   hideContextMenu(): void {
-    if (this.#contextView.visible) {
-      this.#contextView.hide();
-    } else if (this.#activeMenu.value) {
-      this.#didHide();
-    }
+    if (!this.#active) return;
+    this.#contextViewService.hide();
   }
 
   #didHide(): void {

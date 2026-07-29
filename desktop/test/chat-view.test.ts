@@ -9,6 +9,10 @@ import type {
 import type {
   ZetaRendererApi,
 } from "../src/zeta/platform/app-server/common/renderer-api.js";
+import { MenuService } from "../src/zeta/platform/actions/common/menuService.js";
+import type { IContextMenuService } from "../src/zeta/platform/contextview/browser/contextMenu.js";
+import { ServiceCollection } from "../src/zeta/platform/instantiation/common/instantiation.js";
+import { CommandService } from "../src/zeta/workbench/services/commands/common/commandService.js";
 import type {
   ViewPaneContainer,
 } from "../src/zeta/workbench/browser/parts/views/viewPaneContainer.js";
@@ -22,6 +26,7 @@ import {
 import {
   CHAT_VIEW_CONTAINER_ID,
   CHAT_VIEW_ID,
+  NEW_CHAT_COMMAND_ID,
 } from "../src/zeta/workbench/contrib/chat/common/chat.js";
 import {
   WorkbenchSessionService,
@@ -37,19 +42,42 @@ import {
 } from "../src/zeta/workbench/services/views/common/viewDescriptorService.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
-Object.defineProperty(globalThis, "window", {
-  configurable: true,
-  value: browserEnvironment.window,
-});
+for (const [name, value] of Object.entries({
+  window: browserEnvironment.window,
+  document: browserEnvironment.window.document,
+  Node: browserEnvironment.window.Node,
+  Element: browserEnvironment.window.Element,
+  HTMLElement: browserEnvironment.window.HTMLElement,
+  Event: browserEnvironment.window.Event,
+  MouseEvent: browserEnvironment.window.MouseEvent,
+})) {
+  Object.defineProperty(globalThis, name, {
+    configurable: true,
+    value,
+  });
+}
 const { registerChatViews } = await import(
   "../src/zeta/workbench/contrib/chat/browser/chat.contribution.js"
 );
+const { ChatViewPane } = await import(
+  "../src/zeta/workbench/contrib/chat/browser/chatViewPane.js"
+);
 test.after(() => {
   browserEnvironment.window.close();
-  Reflect.deleteProperty(globalThis, "window");
+  for (const name of [
+    "window",
+    "document",
+    "Node",
+    "Element",
+    "HTMLElement",
+    "Event",
+    "MouseEvent",
+  ]) {
+    Reflect.deleteProperty(globalThis, name);
+  }
 });
 
-test("Chat contribution owns the default Auxiliary Bar Composite", () => {
+test("Chat contribution owns the fixed Auxiliary Bar view", () => {
   const registry = new WorkbenchViewRegistry();
 
   registerChatViews(registry);
@@ -62,6 +90,87 @@ test("Chat contribution owns the default Auxiliary Bar Composite", () => {
     registry.getViews(CHAT_VIEW_CONTAINER_ID).map((view) => view.id),
     [CHAT_VIEW_ID],
   );
+});
+
+test("Chat title separates Thread tabs from its action toolbar", async () => {
+  const dom = new JSDOM("<!doctype html><body></body>");
+  const api = fakeApi({
+    sessions: [
+      session("session-1", "thread-1"),
+      session("session-2", "thread-2"),
+    ],
+  }).api;
+  using sessions = new WorkbenchSessionService(api);
+  using contextKeys = new ContextKeyService();
+  using commands = new CommandService(new ServiceCollection());
+  const menuService = new MenuService(commands, contextKeys);
+  const contextMenuService = {
+    showContextMenu: () => undefined,
+  } as unknown as IContextMenuService;
+  using pane = new ChatViewPane(
+    {
+      id: CHAT_VIEW_ID,
+      title: "Chat",
+      ownerDocument: dom.window.document,
+    },
+    api,
+    sessions,
+    menuService,
+    contextMenuService,
+  );
+  dom.window.document.body.append(pane.element);
+
+  await sessions.initialize();
+  await nextTask();
+
+  const title = pane.element.querySelector(".zeta-chat-title-control");
+  const tablist = title?.querySelector(
+    ".zeta-chat-tabs-control .zeta-action-bar",
+  );
+  const toolbar = title?.querySelector(
+    ".zeta-chat-title-actions > .zeta-action-bar",
+  );
+  assert.equal(tablist?.getAttribute("role"), "tablist");
+  assert.equal(toolbar?.getAttribute("role"), "toolbar");
+  assert.equal(
+    tablist?.closest(".zeta-chat-tabs-control")?.nextElementSibling,
+    toolbar?.parentElement,
+  );
+  assert.ok(toolbar?.querySelector(
+    `[data-action-id="${NEW_CHAT_COMMAND_ID}"]`,
+  ));
+  const tabs = tablist?.querySelectorAll<HTMLButtonElement>("[role='tab']");
+  assert.equal(tabs?.length, 2);
+  assert.deepEqual(
+    [...(tabs ?? [])].map((tab) => tab.getAttribute("aria-selected")),
+    ["true", "false"],
+  );
+  const panel = pane.element.querySelector("[role='tabpanel']");
+  assert.equal(panel?.id, tabs?.[0]?.getAttribute("aria-controls"));
+  assert.equal(panel?.getAttribute("aria-labelledby"), tabs?.[0]?.id);
+  assert.equal(
+    pane.element.querySelector(
+      ".zeta-chat-tabs-control .zeta-scrollable-element",
+    )?.getAttribute("data-scroll-direction"),
+    "horizontal",
+  );
+  assert.equal(
+    pane.element.querySelector(
+      ".zeta-chat-transcript-scrollable",
+    )?.getAttribute("data-scroll-direction"),
+    "vertical",
+  );
+
+  tabs?.[1]?.click();
+  assert.equal(sessions.active?.session.sessionId, "session-2");
+  assert.equal(sessions.active?.threadId, "thread-2");
+  assert.deepEqual(
+    [...pane.element.querySelectorAll<HTMLElement>("[role='tab']")]
+      .map((tab) => tab.getAttribute("aria-selected")),
+    ["false", "true"],
+  );
+
+  dom.window.close();
 });
 
 test("ViewsService resolves, opens, and focuses contributed views", () => {

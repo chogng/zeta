@@ -139,8 +139,10 @@ test("EditorPart shows command shortcuts until an editor opens", async () => {
   );
   await editor.openEditor(input("C:\\project\\main.ts"));
   assert.equal(
-    editor.element.querySelector(".zeta-editor-group-watermark"),
-    null,
+    editor.element.querySelector<HTMLElement>(
+      ".zeta-editor-group-watermark",
+    )?.hidden,
+    true,
   );
 
   editor.dispose();
@@ -149,7 +151,7 @@ test("EditorPart shows command shortcuts until an editor opens", async () => {
   dom.window.close();
 });
 
-test("EditorPart switches panes only after the next input is ready", async () => {
+test("EditorPart retains tabs and switches loaded panes", async () => {
   const dom = new JSDOM("<!doctype html><body></body>");
   const registry = new EditorPaneRegistry();
   const panes: TestEditorPane[] = [];
@@ -168,16 +170,54 @@ test("EditorPart switches panes only after the next input is ready", async () =>
 
   const typescript = input("C:\\project\\main.ts");
   const monaco = await editor.openEditor(typescript);
+  assert.equal(editor.groups.length, 1);
+  assert.equal(editor.activeGroup, editor.groups[0]);
   assert.equal(editor.activePane, monaco);
   assert.equal(editor.activeInput, typescript);
-  assert.equal(editor.element.textContent, "zeta.editor.monaco");
+  assert.deepEqual(editor.activeGroup.inputs, [typescript]);
+  assert.equal(
+    editor.element.querySelector(
+      ".zeta-editor-pane-host:not([hidden])",
+    )?.textContent,
+    "zeta.editor.monaco",
+  );
   assert.deepEqual(panes[0]?.visibilities, [
     EditorPaneVisibility.Hidden,
     EditorPaneVisibility.Visible,
   ]);
+  const titleControl = editor.element.querySelector(
+    ".zeta-editor-title-control",
+  );
+  const tablist = titleControl?.querySelector(
+    ".zeta-editor-tabs-control .zeta-action-bar",
+  );
+  const toolbar = titleControl?.querySelector(
+    ".zeta-editor-title-actions > .zeta-action-bar",
+  );
+  assert.equal(tablist?.getAttribute("role"), "tablist");
+  assert.equal(toolbar?.getAttribute("role"), "toolbar");
+  assert.equal(
+    titleControl?.querySelector(
+      ".zeta-editor-tabs-control .zeta-scrollable-element",
+    )?.getAttribute("data-scroll-direction"),
+    "horizontal",
+  );
+  assert.equal(
+    tablist?.closest(".zeta-editor-tabs-control")?.nextElementSibling,
+    toolbar?.parentElement,
+  );
+  const firstTab = tablist?.querySelector<HTMLElement>("[role='tab']");
+  assert.equal(firstTab?.textContent, "main.ts");
+  assert.equal(firstTab?.getAttribute("aria-selected"), "true");
+  const firstPanelId = firstTab?.getAttribute("aria-controls");
+  assert.ok(firstPanelId);
+  assert.equal(
+    editor.element.querySelector(`#${firstPanelId}`)?.getAttribute("role"),
+    "tabpanel",
+  );
 
   editor.layout({ width: 800, height: 600 });
-  assert.deepEqual(panes[0]?.dimension, { width: 800, height: 600 });
+  assert.deepEqual(panes[0]?.dimension, { width: 800, height: 565 });
   editor.focus();
   assert.equal(panes[0]?.focusCount, 1);
 
@@ -185,12 +225,45 @@ test("EditorPart switches panes only after the next input is ready", async () =>
   const prosemirror = await editor.openEditor(markdown);
   assert.equal(editor.activePane, prosemirror);
   assert.equal(editor.activeInput, markdown);
-  assert.equal(editor.element.textContent, "zeta.editor.prosemirror");
-  assert.equal(panes[0]?.disposed, true);
+  assert.deepEqual(editor.activeGroup.inputs, [typescript, markdown]);
+  assert.equal(
+    editor.element.querySelector(
+      ".zeta-editor-pane-host:not([hidden])",
+    )?.textContent,
+    "zeta.editor.prosemirror",
+  );
+  assert.equal(panes[0]?.disposed, false);
   assert.deepEqual(panes[0]?.visibilities.slice(-1), [
     EditorPaneVisibility.Hidden,
   ]);
-  assert.deepEqual(panes[1]?.dimension, { width: 800, height: 600 });
+  assert.deepEqual(panes[1]?.dimension, { width: 800, height: 565 });
+  const tabs = editor.element.querySelectorAll<HTMLElement>("[role='tab']");
+  assert.equal(tabs.length, 2);
+  assert.deepEqual(
+    [...tabs].map((tab) => tab.getAttribute("aria-selected")),
+    ["false", "true"],
+  );
+
+  tabs[0]?.click();
+  assert.equal(editor.activeInput, typescript);
+  assert.equal(editor.activePane, monaco);
+  assert.equal(panes[0]?.focusCount, 2);
+  assert.deepEqual(
+    [...editor.element.querySelectorAll<HTMLElement>("[role='tab']")]
+      .map((tab) => tab.getAttribute("aria-selected")),
+    ["true", "false"],
+  );
+  editor.element.querySelector<HTMLButtonElement>(
+    ".zeta-editor-tabs-control .zeta-tab-actions button",
+  )?.click();
+  assert.equal(panes[0]?.disposed, true);
+  assert.equal(editor.activeInput, markdown);
+  assert.equal(editor.activePane, prosemirror);
+  assert.deepEqual(editor.activeGroup.inputs, [markdown]);
+  assert.equal(
+    editor.element.querySelectorAll("[role='tab']").length,
+    1,
+  );
 
   const content = dom.window.document.createElement("div");
   content.textContent = "Welcome";

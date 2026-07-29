@@ -13,12 +13,15 @@ import {
 import type {
   IKeybindingService,
 } from "../../../../platform/keybinding/common/keybinding.js";
+import type {
+  IContextViewService,
+} from "../../../../platform/contextview/browser/contextView.js";
 
 /** Product services required to construct a context menu for one window. */
 export interface WorkbenchContextMenuServiceOptions {
   readonly menuService: IMenuService;
   readonly keybindingService: IKeybindingService;
-  readonly ownerDocument: Document;
+  readonly contextViewService: IContextViewService;
 }
 
 /** Creates the host-specific product context menu service for one workbench. */

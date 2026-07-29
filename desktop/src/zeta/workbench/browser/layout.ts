@@ -20,7 +20,6 @@ export const workbenchPartIds = [
   "titlebar",
   "statusbar",
   "sidebar",
-  "session",
   "auxiliarybar",
   "editor",
   "panel",
@@ -293,9 +292,8 @@ function createWorkbenchGridDescriptor(
             size: 584,
             priority: "high",
             children: [
-              leaf("session", 36),
               {
-                ...leaf("editor", 474),
+                ...leaf("editor", 510),
                 priority: "high",
               },
               leaf("panel", 200),
