@@ -14,23 +14,43 @@ pub(crate) struct TestRepository {
 
 impl TestRepository {
     pub(crate) fn init() -> Self {
-        let sequence = NEXT_TEMP_ID.fetch_add(1, Ordering::Relaxed);
-        let timestamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("clock after epoch")
-            .as_nanos();
-        let root = std::env::temp_dir().join(format!(
-            "zeta-git-test-{}-{timestamp}-{sequence}",
-            std::process::id()
-        ));
+        let root = unique_test_path("repository");
         std::fs::create_dir_all(&root).expect("create test repository");
-        let root = std::fs::canonicalize(root).expect("canonicalize test repository");
+        let root = dunce::canonicalize(root).expect("canonicalize test repository");
         let repository = Self { root };
         repository.git(&["init", "--initial-branch=main"]);
-        repository.git(&["config", "user.name", "Zeta Test"]);
-        repository.git(&["config", "user.email", "zeta@example.invalid"]);
-        repository.git(&["config", "commit.gpgsign", "false"]);
+        repository.configure();
         repository
+    }
+
+    pub(crate) fn clone_from(remote: &Path) -> Self {
+        let root = unique_test_path("clone");
+        let output = Command::new("git")
+            .args(["-c", disabled_hooks_config()])
+            .args(["-c", "core.autocrlf=false"])
+            .arg("clone")
+            .arg(remote)
+            .arg(&root)
+            .output()
+            .expect("clone test repository");
+        assert!(
+            output.status.success(),
+            "git clone failed\nstdout:\n{}\nstderr:\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let root = dunce::canonicalize(root).expect("canonicalize cloned test repository");
+        let repository = Self { root };
+        repository.configure();
+        repository
+    }
+
+    fn configure(&self) {
+        self.git(&["config", "user.name", "Zeta Test"]);
+        self.git(&["config", "user.email", "zeta@example.invalid"]);
+        self.git(&["config", "commit.gpgsign", "false"]);
+        self.git(&["config", "core.autocrlf", "false"]);
+        self.git(&["config", "core.eol", "lf"]);
     }
 
     pub(crate) fn root(&self) -> &Path {
@@ -63,19 +83,7 @@ impl TestRepository {
     }
 
     pub(crate) fn git_raw(&self, args: &[&str]) -> String {
-        let output = Command::new("git")
-            .current_dir(&self.root)
-            .args(["-c", disabled_hooks_config()])
-            .args(args)
-            .output()
-            .expect("run test Git command");
-        assert!(
-            output.status.success(),
-            "git {args:?} failed\nstdout:\n{}\nstderr:\n{}",
-            String::from_utf8_lossy(&output.stdout),
-            String::from_utf8_lossy(&output.stderr)
-        );
-        String::from_utf8(output.stdout).expect("Git test output is UTF-8")
+        run_git(&self.root, args)
     }
 }
 
@@ -83,6 +91,63 @@ impl Drop for TestRepository {
     fn drop(&mut self) {
         let _ = std::fs::remove_dir_all(&self.root);
     }
+}
+
+pub(crate) struct TestBareRepository {
+    root: PathBuf,
+}
+
+impl TestBareRepository {
+    pub(crate) fn init() -> Self {
+        let root = unique_test_path("bare");
+        std::fs::create_dir_all(&root).expect("create bare repository directory");
+        let root = dunce::canonicalize(root).expect("canonicalize bare repository");
+        let repository = Self { root };
+        repository.git(&["init", "--bare", "--initial-branch=main"]);
+        repository
+    }
+
+    pub(crate) fn root(&self) -> &Path {
+        &self.root
+    }
+
+    pub(crate) fn git(&self, args: &[&str]) -> String {
+        run_git(&self.root, args).trim().to_string()
+    }
+}
+
+impl Drop for TestBareRepository {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.root);
+    }
+}
+
+fn unique_test_path(kind: &str) -> PathBuf {
+    let sequence = NEXT_TEMP_ID.fetch_add(1, Ordering::Relaxed);
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("clock after epoch")
+        .as_nanos();
+    std::env::temp_dir().join(format!(
+        "zeta-git-{kind}-{}-{timestamp}-{sequence}",
+        std::process::id()
+    ))
+}
+
+fn run_git(root: &Path, args: &[&str]) -> String {
+    let output = Command::new("git")
+        .current_dir(root)
+        .args(["-c", disabled_hooks_config()])
+        .args(args)
+        .output()
+        .expect("run test Git command");
+    assert!(
+        output.status.success(),
+        "git {args:?} failed\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    String::from_utf8(output.stdout).expect("Git test output is UTF-8")
 }
 
 fn disabled_hooks_config() -> &'static str {

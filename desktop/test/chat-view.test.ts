@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import type { ServerNotification, Session, SessionCommandParams, Thread } from "../generated/app-server/types.js";
+import type { ModelRef, ServerNotification, Session, SessionCommandParams, SessionModelSetParams, Thread } from "../generated/app-server/types.js";
 import type { ZetaRendererApi } from "../src/zeta/platform/app-server/common/renderer-api.js";
+import type { IAction } from "../src/zeta/base/common/actions.js";
 import { TAB_CLOSE_ACTION_ID } from "../src/zeta/base/browser/ui/tablist/tabList.js";
 import { LxIcon } from "../src/zeta/base/common/lxicons.js";
 import { toDisposable } from "../src/zeta/base/common/lifecycle.js";
@@ -108,8 +109,11 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
   services.set(IContextKeyService, contextKeys);
   using commands = new CommandService(services);
   const menuService = new MenuService(commands, contextKeys);
+  let shownContextMenuActions: readonly IAction[] = [];
   const contextMenuService = {
-    showContextMenu: () => undefined,
+    showContextMenu: (options: { readonly actions?: readonly IAction[] }) => {
+      shownContextMenuActions = options.actions ?? [];
+    },
   } as unknown as IContextMenuService;
   using pane = new ChatViewPane(
     {
@@ -240,9 +244,30 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
   const chatPanes = pane.element.querySelectorAll<HTMLElement>(".zeta-chat-pane-host > .zeta-chat");
   assert.equal(chatPanes.length, 2);
   for (const chatPane of chatPanes) {
-    assert.ok(chatPane.querySelector(".zeta-chat-list-widget"));
-    assert.ok(chatPane.querySelector(".zeta-chat-input-widget"));
+    assert.equal(chatPane.childElementCount, 2);
+    assert.ok(chatPane.firstElementChild?.classList.contains("zeta-chat-input-widget"));
+    assert.ok(chatPane.lastElementChild?.classList.contains("zeta-chat-list-widget"));
+    const inputToolbar = chatPane.querySelector<HTMLElement>(".zeta-chat-input-toolbar");
+    assert.equal(inputToolbar?.getAttribute("role"), "toolbar");
+    assert.deepEqual(
+      [...inputToolbar?.querySelectorAll<HTMLElement>("[data-action-id]") ?? []].map((item) => item.dataset.actionId),
+      [
+        "zeta.chat.input.mode",
+        "zeta.chat.input.model",
+        "zeta.chat.input.attachment",
+        "zeta.chat.input.send",
+      ],
+    );
+    assert.equal(inputToolbar?.querySelector<HTMLButtonElement>("[data-action-id='zeta.chat.input.mode'] button")?.textContent, "Agent");
+    assert.equal(inputToolbar?.querySelector<HTMLButtonElement>("[data-action-id='zeta.chat.input.model'] button")?.textContent, "Model");
+    assert.equal(inputToolbar?.querySelector<HTMLButtonElement>("[data-action-id='zeta.chat.input.attachment'] button")?.disabled, true);
+    assert.equal(inputToolbar?.querySelector<HTMLButtonElement>("[data-action-id='zeta.chat.input.send'] button")?.disabled, true);
   }
+  const firstChatPane = chatPanes[0]!;
+  firstChatPane.querySelector<HTMLButtonElement>("[data-action-id='zeta.chat.input.mode'] button")?.click();
+  assert.deepEqual(shownContextMenuActions.map((action) => action.label), ["Agent", "Plan", "Debug", "Multitask", "Ask"]);
+  shownContextMenuActions[1]?.run();
+  assert.equal(firstChatPane.querySelector<HTMLButtonElement>("[data-action-id='zeta.chat.input.mode'] button")?.textContent, "Plan");
   assert.deepEqual([...chatPanes].map((chatPane) => chatPane.hidden), [false, true]);
   const composerInputs = [...chatPanes].map((chatPane) => {
     const input = chatPane.querySelector<HTMLTextAreaElement>(".zeta-chat-input-widget textarea");
@@ -250,6 +275,8 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
     return input;
   });
   composerInputs[0].value = "First draft";
+  composerInputs[0].dispatchEvent(new dom.window.Event("input"));
+  assert.equal(firstChatPane.querySelector<HTMLButtonElement>("[data-action-id='zeta.chat.input.send'] button")?.disabled, false);
 
   tabs?.[1]?.click();
   assert.equal(sessions.active?.session.sessionId, "session-2");
@@ -595,6 +622,29 @@ test("WorkbenchSessionService archives a Session and selects the next active one
   assert.equal(service.state, "ready");
 });
 
+test("WorkbenchSessionService changes the model only for the selected Session", async () => {
+  const fake = fakeApi({
+    sessions: [
+      session("session-1", "thread-1"),
+      session("session-2", "thread-2"),
+    ],
+  });
+  using service = new WorkbenchSessionService(fake.api);
+  await service.initialize();
+  const model: ModelRef = { provider: "openai", model: "gpt-session" };
+
+  await service.setModel("session-1", model);
+
+  assert.deepEqual(fake.setModelRequests.map(({ sessionId, expectedSequence, model }) => ({
+    sessionId,
+    expectedSequence,
+    model,
+  })), [{ sessionId: "session-1", expectedSequence: 2, model }]);
+  assert.deepEqual(service.sessions.find(({ sessionId }) => sessionId === "session-1")?.model, model);
+  assert.equal(service.sessions.find(({ sessionId }) => sessionId === "session-2")?.model, undefined);
+  assert.deepEqual(service.active?.session.model, model);
+});
+
 test("ChatPaneModel layers transient deltas over canonical Thread state", async () => {
   const activeSession = session("session-1", "thread-1");
   let currentThread = thread();
@@ -602,10 +652,11 @@ test("ChatPaneModel layers transient deltas over canonical Thread state", async 
     sessions: [activeSession],
     thread: () => currentThread,
   });
+  using sessions = new WorkbenchSessionService(fake.api);
   using model = new ChatPaneModel(fake.api, {
     session: activeSession,
     threadId: "thread-1",
-  });
+  }, sessions);
 
   await model.initialize();
   fake.emit({
@@ -690,10 +741,12 @@ interface FakeOptions {
 function fakeApi(options: FakeOptions = {}): {
   readonly api: ZetaRendererApi;
   readonly archiveRequests: readonly SessionCommandParams[];
+  readonly setModelRequests: readonly SessionModelSetParams[];
   readonly emit: (notification: ServerNotification) => void;
 } {
   const listeners = new Set<(notification: ServerNotification) => void>();
   const archiveRequests: SessionCommandParams[] = [];
+  const setModelRequests: SessionModelSetParams[] = [];
   const currentThread = () => options.thread?.() ?? thread();
   const api = {
     appServer: {
@@ -723,6 +776,14 @@ function fakeApi(options: FakeOptions = {}): {
           },
         };
       },
+      setModel: async (params: SessionModelSetParams) => {
+        setModelRequests.push(params);
+        const current = options.sessions?.find(({ sessionId }) => sessionId === params.sessionId) ?? session(params.sessionId);
+        return { session: { ...current, model: params.model, sequence: current.sequence + 1 } };
+      },
+    },
+    model: {
+      list: async () => ({ models: [] }),
     },
     thread: {
       read: async () => ({ thread: currentThread() }),
@@ -747,6 +808,7 @@ function fakeApi(options: FakeOptions = {}): {
   return {
     api,
     archiveRequests,
+    setModelRequests,
     emit: (notification) => {
       for (const listener of listeners) listener(notification);
     },

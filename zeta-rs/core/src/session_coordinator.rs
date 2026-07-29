@@ -7,8 +7,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 use zeta_protocol::{
-    CommandId, SessionCommand, SessionEvent, SessionId, SessionThread, SessionThreadStatus,
-    SessionUpdate, SessionUpdateEnvelope, ThreadId, ThreadOrigin,
+    CommandId, ModelRef, SessionCommand, SessionEvent, SessionId, SessionThread,
+    SessionThreadStatus, SessionUpdate, SessionUpdateEnvelope, ThreadId, ThreadOrigin,
 };
 use zeta_session_store::{
     AppendSessionBatchResult, CURRENT_SESSION_EVENT_SCHEMA_VERSION, SessionCommandReceipt,
@@ -31,6 +31,14 @@ pub enum CommandDisposition {
 pub struct CreateSessionRequest {
     pub command_id: CommandId,
     pub title: String,
+    pub model: Option<ModelRef>,
+}
+
+pub struct SetSessionModelRequest {
+    pub command_id: CommandId,
+    pub session_id: SessionId,
+    pub expected_sequence: SequenceExpectation,
+    pub model: ModelRef,
 }
 
 pub struct CreateSessionResult {
@@ -128,6 +136,7 @@ impl SessionCoordinator {
         validate_command(&request.command_id, &request.title)?;
         let command = SessionCommand::Create {
             title: request.title.clone(),
+            model: request.model.clone(),
         };
         let catalog_id = SessionId::new("__zeta_session_catalog__")
             .expect("static Session catalog ID is non-empty");
@@ -171,6 +180,7 @@ impl SessionCoordinator {
             vec![SessionEvent::SessionCreated {
                 session_id: session_id.clone(),
                 title: request.title,
+                model: request.model,
             }],
             SessionBatchCommand::FirstEvent(SessionCommandReceipt {
                 command_id: request.command_id,
@@ -201,6 +211,31 @@ impl SessionCoordinator {
             },
             ThreadOrigin::Root,
             request.title,
+        )
+    }
+
+    pub fn set_model(
+        &self,
+        request: SetSessionModelRequest,
+    ) -> Result<SessionMutationResult, CoreError> {
+        validate_command_id(&request.command_id)?;
+        let model = request.model;
+        self.apply_single_command(
+            request.session_id,
+            request.expected_sequence,
+            SessionCommandReceipt {
+                command_id: request.command_id,
+                command: SessionCommand::SetModel {
+                    model: model.clone(),
+                },
+            },
+            |session_id| SessionEvent::SessionModelChanged {
+                session_id,
+                model: model.clone(),
+            },
+            SessionCommandResult::SessionModelChanged {
+                model: model.clone(),
+            },
         )
     }
 

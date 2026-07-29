@@ -1,4 +1,4 @@
-use crate::ThreadId;
+use crate::{ModelRef, ThreadId};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
@@ -12,6 +12,12 @@ use ts_rs::TS;
 pub enum SessionCommand {
     Create {
         title: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional = nullable)]
+        model: Option<ModelRef>,
+    },
+    SetModel {
+        model: ModelRef,
     },
     CreateThread {
         title: String,

@@ -19,6 +19,7 @@ fn validation_rejects_stale_sequence_and_mismatched_identity() {
             event: SessionEvent::SessionCreated {
                 session_id,
                 title: "test".into(),
+                model: None,
             },
         }],
     };

@@ -11,15 +11,16 @@ use zeta_app_server_protocol::protocol::error::AppServerErrorName;
 use zeta_app_server_protocol::protocol::initialize::{
     InitializeParams, InitializeResult, ServerCapabilities,
 };
+use zeta_app_server_protocol::protocol::model::ModelListResult;
 use zeta_app_server_protocol::protocol::resources::{
     ResourceMetadataParams, ResourceMetadataResult, ResourceReadParams, ResourceReadResult,
     ResourceReleaseParams,
 };
 use zeta_app_server_protocol::protocol::session::{
-    SessionCommandParams, SessionCreateParams, SessionListResult, SessionReadParams, SessionResult,
-    SessionSubscribeParams, SessionSubscribeResult, SessionThreadArchiveParams,
-    SessionThreadCreateParams, SessionThreadForkParams, SessionThreadResult,
-    SessionUnsubscribeParams,
+    SessionCommandParams, SessionCreateParams, SessionListResult, SessionModelSetParams,
+    SessionReadParams, SessionResult, SessionSubscribeParams, SessionSubscribeResult,
+    SessionThreadArchiveParams, SessionThreadCreateParams, SessionThreadForkParams,
+    SessionThreadResult, SessionUnsubscribeParams,
 };
 use zeta_app_server_protocol::protocol::thread::{
     ThreadReadParams, ThreadReadResult, ThreadSubscribeParams, ThreadSubscribeResult,
@@ -33,8 +34,8 @@ use zeta_app_server_protocol::schema_hash;
 use zeta_core::{
     ArchiveSessionThreadRequest, CreateSessionRequest, CreateSessionThreadRequest,
     ForkSessionThreadRequest, InterruptTurnRequest, ResolveTurnInteractionRequest,
-    SequenceExpectation, SessionLifecycleRequest, StartTurnDisposition, StartTurnRequest,
-    TurnStatus,
+    SequenceExpectation, SessionLifecycleRequest, SetSessionModelRequest, StartTurnDisposition,
+    StartTurnRequest, TurnStatus,
 };
 use zeta_protocol::UserInput;
 use zeta_typst::{
@@ -71,6 +72,7 @@ impl AppServer {
                 turns: true,
                 resources: true,
                 file_system: self.file_system.is_some(),
+                git: self.git.is_some(),
                 workspace_search: self.workspace_search.is_some(),
                 terminal: self.terminals.is_some(),
                 typst: true,
@@ -91,6 +93,10 @@ impl AppServer {
             .create_session(CreateSessionRequest {
                 command_id: params.command_id,
                 title: params.title,
+                model: self
+                    .model_catalog
+                    .configured_default()
+                    .map_err(core_error)?,
             })
             .map_err(core_error)?;
         self.updates.subscribe_session(
@@ -127,6 +133,39 @@ impl AppServer {
                 .into_iter()
                 .map(|session| session.public_session())
                 .collect(),
+        })
+    }
+
+    pub(super) fn model_list(&self) -> Result<Value, RpcError> {
+        result(&ModelListResult {
+            models: self.model_catalog.list().map_err(core_error)?,
+        })
+    }
+
+    pub(super) fn session_model_set(
+        &self,
+        _connection: &mut ConnectionState,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        let params: SessionModelSetParams = decode(params)?;
+        self.model_catalog
+            .validate(&params.model)
+            .map_err(core_error)?;
+        self.sessions
+            .set_model(SetSessionModelRequest {
+                command_id: params.command_id,
+                session_id: params.session_id.clone(),
+                expected_sequence: SequenceExpectation::Exact(params.expected_sequence),
+                model: params.model,
+            })
+            .map_err(core_error)?;
+        self.notify_session_updates(&params.session_id, params.expected_sequence)?;
+        result(&SessionResult {
+            session: self
+                .sessions
+                .read_session(&params.session_id)
+                .map_err(core_error)?
+                .public_session(),
         })
     }
 
@@ -354,6 +393,17 @@ impl AppServer {
                 AppServerErrorName::CoreOperationFailed,
             ));
         }
+        let session = self
+            .sessions
+            .read_session(&params.session_id)
+            .map_err(core_error)?;
+        let model = match session.model {
+            Some(model) => Some(model),
+            None => self
+                .model_catalog
+                .configured_default()
+                .map_err(core_error)?,
+        };
         let start = self
             .sessions
             .threads()
@@ -362,6 +412,7 @@ impl AppServer {
                 StartTurnRequest {
                     command_id: params.command_id,
                     expected_sequence: SequenceExpectation::Exact(params.expected_sequence),
+                    model,
                     input: params
                         .input
                         .into_iter()

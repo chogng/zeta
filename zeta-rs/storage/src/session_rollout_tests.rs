@@ -32,11 +32,13 @@ fn session_rollouts_keep_independent_sequences_and_typed_receipts() {
                     .expect("test ID is non-empty"),
                 command: SessionCommand::Create {
                     title: format!("task {index}"),
+                    model: None,
                 },
             }),
             event: SessionEvent::SessionCreated {
                 session_id: session_id.clone(),
                 title: format!("task {index}"),
+                model: None,
             },
         };
         store

@@ -18,8 +18,8 @@ use zeta_file_system::LocalFileSystem;
 use zeta_model_provider::EchoModel;
 use zeta_protocol::{
     ActionApprovalCapability, ActionApprovalCapabilityKind, ActionApprovalRequest, AgentRequest,
-    CommandId, ContentPart, InputItem, ModelRequest, ModelResponse, RequestId, RequestUserInput,
-    ResponseItem, StopReason, TurnStatus, UserInput,
+    CommandId, ContentPart, InputItem, ModelId, ModelRef, ModelRequest, ModelResponse, ProviderId,
+    RequestId, RequestUserInput, ResponseItem, StopReason, TurnStatus, UserInput,
 };
 use zeta_sandboxing::WorkspaceRoot;
 
@@ -38,6 +38,39 @@ fn server() -> AppServer {
     server_with_model(Arc::new(crate::local::ProviderModelService::new(Arc::new(
         EchoModel,
     ))))
+}
+
+#[derive(Clone)]
+struct FixedModelCatalog {
+    models: Vec<zeta_app_server_protocol::protocol::model::ModelCatalogEntry>,
+    default: ModelRef,
+}
+
+impl crate::model_catalog::ModelCatalog for FixedModelCatalog {
+    fn list(
+        &self,
+    ) -> Result<Vec<zeta_app_server_protocol::protocol::model::ModelCatalogEntry>, CoreError> {
+        Ok(self.models.clone())
+    }
+
+    fn configured_default(&self) -> Result<Option<ModelRef>, CoreError> {
+        Ok(Some(self.default.clone()))
+    }
+
+    fn validate(&self, model: &ModelRef) -> Result<(), CoreError> {
+        self.models
+            .iter()
+            .any(|entry| &entry.model == model)
+            .then_some(())
+            .ok_or_else(|| CoreError::Model("model is not available".into()))
+    }
+}
+
+fn model_ref(model: &str) -> ModelRef {
+    ModelRef::new(
+        ProviderId::new("openai").unwrap(),
+        ModelId::new(model).unwrap(),
+    )
 }
 
 fn call(
@@ -476,6 +509,75 @@ fn session_first_flow_exposes_canonical_session_and_thread_models() {
 }
 
 #[test]
+fn model_selection_is_catalog_backed_and_session_scoped() {
+    let default = model_ref("gpt-default");
+    let alternate = model_ref("gpt-alternate");
+    let catalog = FixedModelCatalog {
+        models: vec![
+            zeta_app_server_protocol::protocol::model::ModelCatalogEntry {
+                model: default.clone(),
+                display_name: "Default".into(),
+            },
+            zeta_app_server_protocol::protocol::model::ModelCatalogEntry {
+                model: alternate.clone(),
+                display_name: "Alternate".into(),
+            },
+        ],
+        default,
+    };
+    let server = server().with_model_catalog(Arc::new(catalog));
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+
+    let listed = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":2,"method":"model/list","params":{}}),
+    );
+    assert_eq!(listed["result"]["models"].as_array().unwrap().len(), 2);
+    let first = create_session(&server, &mut connection, 3, "first-session");
+    let second = create_session(&server, &mut connection, 4, "second-session");
+    let first_id = first["result"]["session"]["sessionId"].as_str().unwrap();
+    let second_id = second["result"]["session"]["sessionId"].as_str().unwrap();
+    assert_eq!(first["result"]["session"]["model"]["model"], "gpt-default");
+    assert_eq!(second["result"]["session"]["model"]["model"], "gpt-default");
+
+    let changed = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":5,
+            "method":"session/model/set",
+            "params":{
+                "commandId":"set-first-model",
+                "sessionId":first_id,
+                "expectedSequence":1,
+                "model":{"provider":"openai","model":"gpt-alternate"}
+            }
+        }),
+    );
+    assert_eq!(
+        changed["result"]["session"]["model"]["model"],
+        "gpt-alternate"
+    );
+    let unchanged = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":6,
+            "method":"session/read",
+            "params":{"sessionId":second_id}
+        }),
+    );
+    assert_eq!(
+        unchanged["result"]["session"]["model"]["model"],
+        "gpt-default"
+    );
+}
+
+#[test]
 fn typed_commands_replay_and_reject_payload_conflicts() {
     let server = server();
     let mut connection = server.connection();
@@ -543,6 +645,7 @@ struct CountingModel {
 impl ModelService for CountingModel {
     fn invoke(
         &self,
+        _: zeta_core::ModelSelection<'_>,
         request: &ModelRequest,
         _: &CancellationToken,
     ) -> Result<ModelResponse, CoreError> {
@@ -930,6 +1033,7 @@ fn interaction_resolution_uses_the_durable_request_identity() {
             StartTurnRequest {
                 command_id: CommandId::new("agent-turn").unwrap(),
                 expected_sequence: zeta_core::SequenceExpectation::Exact(1),
+                model: None,
                 input: vec![UserInput::Text {
                     text: "wait".into(),
                 }],
@@ -999,6 +1103,7 @@ fn approval_interaction_resolves_through_the_typed_app_server_contract() {
             StartTurnRequest {
                 command_id: CommandId::new("approval-turn").unwrap(),
                 expected_sequence: zeta_core::SequenceExpectation::Exact(1),
+                model: None,
                 input: vec![UserInput::Text {
                     text: "approve".into(),
                 }],
@@ -1143,4 +1248,321 @@ fn filesystem_rpc_lists_and_describes_workspace_paths() {
     assert_eq!(metadata["result"]["sizeBytes"], 5);
     assert_eq!(contents["result"]["content"], "hello");
     let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn git_status_rpc_projects_workspace_repository_state() {
+    let root = std::env::temp_dir().join(format!(
+        "zeta-app-server-git-{}-{}",
+        std::process::id(),
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos(),
+    ));
+    let workspace = root.join("workspace");
+    std::fs::create_dir_all(&workspace).unwrap();
+    run_git(&root, &["init"]);
+    run_git(&root, &["config", "user.name", "Zeta Test"]);
+    run_git(&root, &["config", "user.email", "zeta@example.test"]);
+    std::fs::write(workspace.join("tracked.txt"), "first\n").unwrap();
+    std::fs::write(root.join("outside.txt"), "outside\n").unwrap();
+    run_git(&root, &["add", "workspace/tracked.txt", "outside.txt"]);
+    run_git(&root, &["commit", "-m", "initial"]);
+    std::fs::write(workspace.join("tracked.txt"), "changed\n").unwrap();
+    std::fs::write(workspace.join("new.txt"), "new\n").unwrap();
+    std::fs::write(root.join("outside.txt"), "outside changed\n").unwrap();
+
+    let server = server().with_git_root(workspace).unwrap();
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+    let response = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":2,
+            "method":"git/status",
+            "params":{}
+        }),
+    );
+    assert_eq!(response["result"]["head"]["type"], "branch");
+    assert_eq!(response["result"]["changes"].as_array().unwrap().len(), 2);
+    assert!(
+        response["result"]["changes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|change| {
+                change["path"] == "tracked.txt" && change["worktreeStatus"] == "modified"
+            })
+    );
+    assert!(
+        response["result"]["changes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|change| {
+                change["path"] == "new.txt" && change["worktreeStatus"] == "untracked"
+            })
+    );
+
+    let staged = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":3,
+            "method":"git/stage",
+            "params":{"paths":["new.txt"]}
+        }),
+    );
+    assert!(
+        staged["result"]["status"]["changes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|change| { change["path"] == "new.txt" && change["indexStatus"] == "added" })
+    );
+    let unstaged = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":4,
+            "method":"git/unstage",
+            "params":{"paths":["new.txt"]}
+        }),
+    );
+    assert!(
+        unstaged["result"]["status"]["changes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|change| {
+                change["path"] == "new.txt" && change["worktreeStatus"] == "untracked"
+            })
+    );
+    let invalid = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":5,
+            "method":"git/stage",
+            "params":{"paths":["../outside.txt"]}
+        }),
+    );
+    assert_eq!(invalid["error"]["message"], "InvalidParams");
+    let _ = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":6,
+            "method":"git/stage",
+            "params":{"paths":["new.txt"]}
+        }),
+    );
+    let committed = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":7,
+            "method":"git/commit",
+            "params":{"message":"add workspace file"}
+        }),
+    );
+    assert!(!committed["result"]["objectId"].as_str().unwrap().is_empty());
+    let discarded = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":8,
+            "method":"git/discardWorktree",
+            "params":{"paths":["tracked.txt"]}
+        }),
+    );
+    assert!(
+        discarded["result"]["status"]["changes"]
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
+    drop(server);
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn git_remote_rpcs_fetch_pull_and_push_against_a_local_bare_remote() {
+    let root = std::env::temp_dir().join(format!(
+        "zeta-app-server-git-remote-{}-{}",
+        std::process::id(),
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos(),
+    ));
+    std::fs::create_dir_all(&root).unwrap();
+    run_git(
+        &root,
+        &["init", "--bare", "--initial-branch=main", "origin.git"],
+    );
+    run_git(&root, &["clone", "origin.git", "workspace"]);
+    let workspace = root.join("workspace");
+    run_git(&workspace, &["config", "user.name", "Zeta Test"]);
+    run_git(&workspace, &["config", "user.email", "zeta@example.test"]);
+    run_git(&workspace, &["config", "core.autocrlf", "false"]);
+    std::fs::write(workspace.join("shared.txt"), "initial\n").unwrap();
+    run_git(&workspace, &["add", "shared.txt"]);
+    run_git(&workspace, &["commit", "-m", "initial"]);
+    run_git(&workspace, &["push", "--set-upstream", "origin", "main"]);
+    run_git(&root, &["clone", "origin.git", "peer"]);
+    let peer = root.join("peer");
+    run_git(&peer, &["config", "user.name", "Zeta Test"]);
+    run_git(&peer, &["config", "user.email", "zeta@example.test"]);
+    run_git(&peer, &["config", "core.autocrlf", "false"]);
+
+    let server = server().with_git_root(workspace.clone()).unwrap();
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+    std::fs::write(peer.join("shared.txt"), "from peer\n").unwrap();
+    run_git(&peer, &["add", "shared.txt"]);
+    run_git(&peer, &["commit", "-m", "peer update"]);
+    run_git(&peer, &["push"]);
+
+    let fetched = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":2,"method":"git/fetch","params":{}}),
+    );
+    assert!(fetched.get("error").is_none(), "{fetched}");
+    let pulled = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":3,"method":"git/pull","params":{}}),
+    );
+    assert!(pulled.get("error").is_none(), "{pulled}");
+    assert_eq!(
+        std::fs::read_to_string(workspace.join("shared.txt")).unwrap(),
+        "from peer\n"
+    );
+
+    std::fs::write(workspace.join("local.txt"), "from app server\n").unwrap();
+    let staged = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":4,
+            "method":"git/stage",
+            "params":{"paths":["local.txt"]}
+        }),
+    );
+    assert!(staged.get("error").is_none(), "{staged}");
+    let committed = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":5,
+            "method":"git/commit",
+            "params":{"message":"app server update"}
+        }),
+    );
+    assert!(committed.get("error").is_none(), "{committed}");
+    let pushed = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":6,"method":"git/push","params":{}}),
+    );
+    assert!(pushed.get("error").is_none(), "{pushed}");
+    run_git(&peer, &["pull", "--ff-only"]);
+    assert_eq!(
+        std::fs::read_to_string(peer.join("local.txt")).unwrap(),
+        "from app server\n"
+    );
+
+    drop(server);
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn git_watcher_publishes_external_workspace_changes() {
+    let root = std::env::temp_dir().join(format!(
+        "zeta-app-server-git-watch-{}-{}",
+        std::process::id(),
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos(),
+    ));
+    std::fs::create_dir_all(&root).unwrap();
+    run_git(&root, &["init"]);
+    run_git(&root, &["config", "user.name", "Zeta Test"]);
+    run_git(&root, &["config", "user.email", "zeta@example.test"]);
+    std::fs::write(root.join("tracked.txt"), "initial\n").unwrap();
+    run_git(&root, &["add", "tracked.txt"]);
+    run_git(&root, &["commit", "-m", "initial"]);
+    let server = server().with_git_root(root.clone()).unwrap();
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+    let initial = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":2,
+            "method":"git/status",
+            "params":{}
+        }),
+    );
+    let initial_revision = initial["result"]["revision"].as_u64().unwrap();
+    server.drain_notifications(&mut connection);
+
+    let mut observed = None;
+    for attempt in 0..60 {
+        std::fs::write(root.join("tracked.txt"), format!("external {attempt}\n")).unwrap();
+        thread::sleep(Duration::from_millis(50));
+        for raw in server.drain_notifications(&mut connection) {
+            let notification: serde_json::Value = serde_json::from_str(&raw).unwrap();
+            if notification["method"] == "git/statusChanged"
+                && notification["params"]["status"]["revision"]
+                    .as_u64()
+                    .is_some_and(|revision| revision > initial_revision)
+            {
+                observed = Some(notification);
+                break;
+            }
+        }
+        if observed.is_some() {
+            break;
+        }
+    }
+
+    let observed = observed.expect("Git watcher should publish a changed workspace status");
+    assert_eq!(
+        observed["params"]["status"]["changes"][0]["path"],
+        "tracked.txt"
+    );
+    drop(server);
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+fn run_git(root: &std::path::Path, args: &[&str]) {
+    let output = std::process::Command::new("git")
+        .current_dir(root)
+        .args(args)
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "git {} failed: {}",
+        args.join(" "),
+        String::from_utf8_lossy(&output.stderr),
+    );
 }

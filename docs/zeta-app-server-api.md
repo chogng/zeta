@@ -130,6 +130,8 @@ inline argument parsing；提交仍通过 `turn/start.input`，并保留 `/name`
 | `session/thread/archive` | Session | archive membership |
 | `session/complete` | Session | 完成任务 |
 | `session/archive` | Session | archive 任务 |
+| `session/model/set` | Session | 持久化当前 Session 的模型选择 |
+| `model/list` | global model catalog | 列出当前已配置 provider 可选择的模型 |
 | `thread/read` | Thread | 读取 canonical snapshot |
 | `thread/subscribe` | connection | snapshot + `afterSequence` 之后的 durable gap |
 | `thread/unsubscribe` | connection | 删除订阅 |
@@ -146,6 +148,14 @@ inline argument parsing；提交仍通过 `turn/start.input`，并保留 `/name`
 | `fs/getMetadata` | workspace | 读取根相对路径的 metadata |
 | `fs/readDirectory` | workspace | 枚举根相对目录的直接子项 |
 | `fs/readFile` | workspace | 读取不超过 10 MiB 的 UTF-8 文件 |
+| `git/status` | workspace | 读取 HEAD、upstream 和 index/worktree change snapshot |
+| `git/stage` | workspace | stage 一组 workspace-relative path |
+| `git/unstage` | workspace | 从 index 移除一组 path 的 staged change |
+| `git/discardWorktree` | workspace | 恢复 tracked working-tree change，不删除 untracked 文件 |
+| `git/commit` | workspace | 使用有界非空 message 创建 commit |
+| `git/fetch` | workspace | non-interactive fetch all remotes 并 prune |
+| `git/pull` | workspace | non-interactive fast-forward-only pull |
+| `git/push` | workspace | 按当前 Git upstream/default 配置 push |
 | `workspace/search/start` | connection + workspace | 启动有界内容搜索 |
 | `workspace/search/read` | connection + search job | 按游标读取最多 200 条结果 |
 | `workspace/search/cancel` | connection + search job | 取消并释放搜索 |
@@ -169,6 +179,36 @@ IPC 层会先做同形状校验以便快速失败，但不承担最终授权。
 Folder 的 Explorer 与文本文件打开。`fs/readFile` 只接受不超过 10 MiB 的 UTF-8 文件。
 Filesystem contract 本身不包含写入、重命名、删除、watcher、多根 Workspace，也不保证
 跨请求 snapshot 一致性。客户端应把目录展开状态和重新加载策略视为可丢弃 UI 状态。
+
+### Git SCM
+
+`initialize.capabilities.git` 表示 server 已冻结可信 workspace root 并安装 Git backend。
+`git/status` 不接受路径参数，返回 `GitStatusResult`：标识当前 Git runtime incarnation 的
+`streamInstanceId`、在该实例内单调递增的 workspace status revision、
+HEAD 的 branch/detached/unborn
+状态、可选 upstream ahead/behind，以及每个 workspace-relative path 的 index/worktree status、
+rename original path、conflict 和 submodule flags。Revision 表示 App Server 观察到的投影版本，
+不是 durable CAS token，客户端不能把一次 snapshot 当作后续 mutation 的 compare-and-swap 前提。
+当 workspace 是更大 repository 的子目录时，server 会过滤 workspace 外 change，并将保留路径
+重新映射为 workspace-relative。
+
+App Server 通过 `zeta-file-watcher` 接收 workspace、Git metadata 和相关 ancestor `.gitignore`
+invalidation hint，100ms debounce 后重新读取 authoritative Git status。投影内容变化时 revision
+递增并向支持 notification 的连接发送 `git/statusChanged { status }`；内容未变时不发送。
+Watcher 初始化失败时显式 `git/status` 与 mutation 仍可用。客户端只在相同
+`streamInstanceId` 内比较 revision 并忽略不大于当前 revision 的通知或响应；实例变化表示
+App Server 已重启，客户端必须接受新 snapshot，并在连接重新 ready 时主动执行 `git/status`
+恢复权威状态。
+
+Mutation contract 提供 `git/stage`、`git/unstage`、`git/discardWorktree`、`git/commit`、
+`git/fetch`、`git/pull` 和 `git/push`。Path mutation 接受 1–5000 个 workspace-relative path；
+Rust service 负责最终边界校验和 repository-relative 映射。Commit message 必须非空、无 NUL，
+且不超过 64 KiB UTF-8。每个成功 mutation 都返回新的 status；commit 另外返回 object ID。
+
+Remote operation 禁用 terminal/credential prompt，pull 固定使用 fast-forward only。Discard 只恢复
+tracked working tree，不删除 untracked 文件。Operation 在单 workspace runtime 内串行执行；当前
+没有可观测 queue、progress 或 caller cancellation。跨层 ownership、当前 UI 和演进顺序见
+[`git.md`](git.md)。
 
 ### Workspace Search
 
@@ -252,6 +292,15 @@ Thread 共享后续 sequence。
 
 `session/thread/archive`、`session/complete` 和 `session/archive` 都要求 `commandId`、
 `sessionId` 与 `expectedSequence`。Archived Session 不允许再修改。
+
+### Session model
+
+`session/model/set` 使用 `commandId`、`sessionId`、`expectedSequence` 和 provider-scoped
+`ModelRef`。选择结果写入 Session event stream，只影响该 Session。`turn/start` 将 Session
+当前模型复制到新 Turn；后续 Session 或全局配置变化不会改变已经启动的 Turn。
+
+`model/list` 只返回 App Server 当前已配置 provider 的静态目录。远端账号 entitlement 和模型
+实际可用性仍在调用时验证。
 
 ## 7. Thread 与 Turn
 
@@ -366,6 +415,9 @@ Resource bytes 使用标准 RFC 4648 Base64；`decodedLength` 是原始 byte 数
 - `TerminalNotOwner`
 - `TerminalBusy`
 - `TerminalOperationFailed`
+- `GitUnavailable`
+- `GitNotRepository`
+- `GitOperationFailed`
 - `ConfigUnavailable`
 - `SkillsUnavailable`
 - `SkillNotFound`

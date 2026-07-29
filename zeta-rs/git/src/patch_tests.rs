@@ -75,6 +75,35 @@ async fn checks_then_applies_patch_with_structured_paths() {
     assert_eq!(repository.read("tracked.txt"), "new\n");
 }
 
+#[cfg(windows)]
+#[tokio::test(flavor = "current_thread")]
+async fn applies_patch_when_the_repository_uses_autocrlf() {
+    let repository = TestRepository::init();
+    repository.write("tracked.txt", "old\n");
+    repository.commit_all("initial");
+    repository.git(&["config", "core.autocrlf", "true"]);
+    repository.write("tracked.txt", "new\n");
+    let patch = repository.git_raw(&["diff", "--binary"]);
+    repository.git(&["checkout", "--", "tracked.txt"]);
+
+    let client = GitClient::system();
+    let opened = client.open_repository(repository.root()).await.unwrap();
+    let applied = client
+        .apply_patch(
+            &opened,
+            &GitPatchRequest::new(patch, GitPatchExecution::Apply, GitPatchDirection::Forward),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(applied.disposition(), GitPatchDisposition::Applied);
+    assert_eq!(
+        repository.read("tracked.txt").replace("\r\n", "\n"),
+        "new\n"
+    );
+    assert_eq!(repository.git_raw(&["show", ":tracked.txt"]), "new\n");
+}
+
 #[tokio::test(flavor = "current_thread")]
 async fn reports_git_rejection_as_a_completed_patch_result() {
     let repository = TestRepository::init();

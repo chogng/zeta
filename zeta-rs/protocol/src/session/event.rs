@@ -1,4 +1,4 @@
-use crate::{SessionId, SessionThread, ThreadId};
+use crate::{ModelRef, SessionId, SessionThread, ThreadId};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
@@ -14,6 +14,13 @@ pub enum SessionEvent {
     SessionCreated {
         session_id: SessionId,
         title: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional = nullable)]
+        model: Option<ModelRef>,
+    },
+    SessionModelChanged {
+        session_id: SessionId,
+        model: ModelRef,
     },
     ThreadCreationPlanned {
         session_id: SessionId,
@@ -40,6 +47,7 @@ impl SessionEvent {
     pub fn session_id(&self) -> &SessionId {
         match self {
             Self::SessionCreated { session_id, .. }
+            | Self::SessionModelChanged { session_id, .. }
             | Self::ThreadCreationPlanned { session_id, .. }
             | Self::ThreadAttached { session_id, .. }
             | Self::ThreadArchived { session_id, .. }

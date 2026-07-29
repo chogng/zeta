@@ -2,9 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { Emitter } from "../src/zeta/base/common/event.js";
-import type {
-  IWorkbenchSessionService,
-} from "../src/zeta/workbench/services/sessions/common/sessionService.js";
+import type { IWorkbenchSessionService } from "../src/zeta/workbench/services/sessions/common/sessionService.js";
 import { SessionsPart } from "../src/zeta/sessions/browser/parts/sessionsPart.js";
 
 test("SessionsPart remains owned by the Sessions product layer", () => {
@@ -23,6 +21,9 @@ test("SessionsPart remains owned by the Sessions product layer", () => {
     },
     async startNewSession() {
       throw new Error("Session creation is unavailable");
+    },
+    async setModel() {
+      throw new Error("Model selection is unavailable");
     },
     async archiveSession() {
       throw new Error("Session archiving is unavailable");

@@ -72,6 +72,7 @@ fn thread_store_rejects_duplicate_event_and_rebuilds_projection() {
         event: ThreadEvent::TurnAccepted {
             thread_id: ThreadId::new("thread_1").expect("test ID is non-empty"),
             turn_id: zeta_protocol::TurnId::new("turn_1").expect("test ID is non-empty"),
+            model: None,
         },
     };
     assert!(matches!(

@@ -19,6 +19,7 @@ fn start_request(key: &str) -> StartTurnRequest {
     StartTurnRequest {
         command_id: CommandId::new(key).expect("test ID is non-empty"),
         expected_sequence: SequenceExpectation::Any,
+        model: None,
         input: vec![UserInput::Text {
             text: "hello".into(),
         }],
@@ -587,6 +588,7 @@ fn typed_command_rejects_reusing_an_id_with_different_input() {
     let conflicting = StartTurnRequest {
         command_id: CommandId::new("conflict").expect("test ID is non-empty"),
         expected_sequence: SequenceExpectation::Any,
+        model: None,
         input: vec![UserInput::Text {
             text: "different".into(),
         }],
@@ -596,6 +598,30 @@ fn typed_command_rejects_reusing_an_id_with_different_input() {
         threads.start_turn(&thread, conflicting),
         Err(CoreError::CommandConflict)
     ));
+}
+
+#[test]
+fn start_turn_snapshots_the_selected_model() {
+    let threads = ThreadController::with_store(Arc::new(InMemoryThreadStore::default()));
+    let thread = create_thread(&threads, "model");
+    let model = zeta_protocol::ModelRef::new(
+        zeta_protocol::ProviderId::new("openai").unwrap(),
+        zeta_protocol::ModelId::new("gpt-5.6").unwrap(),
+    );
+    let mut request = start_request("model-turn");
+    request.model = Some(model.clone());
+
+    let started = threads.start_turn(&thread, request).unwrap();
+    let snapshot = threads.read_thread(&thread).unwrap();
+
+    assert_eq!(
+        snapshot
+            .turns
+            .iter()
+            .find(|turn| turn.turn_id == started.turn_id)
+            .and_then(|turn| turn.model.clone()),
+        Some(model)
+    );
 }
 
 #[test]
@@ -712,6 +738,7 @@ fn start_turn_persists_ordered_text_and_image_items() {
             StartTurnRequest {
                 command_id: CommandId::new("image-turn").expect("test ID is non-empty"),
                 expected_sequence: SequenceExpectation::Any,
+                model: None,
                 input: vec![
                     UserInput::Text {
                         text: "describe".into(),

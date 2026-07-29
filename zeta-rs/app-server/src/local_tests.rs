@@ -229,6 +229,7 @@ fn local_model_resolution_applies_workspace_model_at_the_next_safe_point() {
 fn invoke_text(model: &dyn ModelService, prompt: &str) -> String {
     model
         .invoke(
+            zeta_core::ModelSelection::ConfiguredDefault,
             &ModelRequest::text(prompt),
             &CancellationSource::new().token(),
         )

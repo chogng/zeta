@@ -121,6 +121,7 @@ fn snapshot(turn_id: TurnId, items: Vec<ThreadItem>) -> ThreadSnapshot {
         turns: vec![TurnSnapshot {
             turn_id,
             status: TurnStatus::Running,
+            model: None,
             failure: None,
             pending_interaction: None,
         }],

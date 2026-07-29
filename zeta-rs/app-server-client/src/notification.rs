@@ -2,7 +2,7 @@ use crate::ClientError;
 use serde::Deserialize;
 use serde_json::Value;
 use zeta_app_server_protocol::protocol::notification::{
-    SessionUpdateEnvelope, SkillsChanged, ThreadUpdateEnvelope,
+    GitStatusChanged, SessionUpdateEnvelope, SkillsChanged, ThreadUpdateEnvelope,
 };
 use zeta_app_server_protocol::protocol::registry::{
     ServerNotificationMethod, server_notification_method,
@@ -13,6 +13,7 @@ pub enum ServerNotification {
     SessionUpdate(SessionUpdateEnvelope),
     ThreadUpdate(Box<ThreadUpdateEnvelope>),
     SkillsChanged(SkillsChanged),
+    GitStatusChanged(GitStatusChanged),
     Unknown { method: String, params: Value },
 }
 
@@ -35,6 +36,9 @@ pub(crate) fn decode(raw: &str) -> Result<ServerNotification, ClientError> {
         Some(ServerNotificationMethod::SkillsChanged) => {
             decode_params(envelope.params).map(ServerNotification::SkillsChanged)
         }
+        Some(ServerNotificationMethod::GitStatusChanged) => {
+            decode_params(envelope.params).map(ServerNotification::GitStatusChanged)
+        }
         None => Ok(ServerNotification::Unknown {
             method: envelope.method,
             params: envelope.params,
@@ -45,3 +49,7 @@ pub(crate) fn decode(raw: &str) -> Result<ServerNotification, ClientError> {
 fn decode_params<T: for<'a> Deserialize<'a>>(params: Value) -> Result<T, ClientError> {
     serde_json::from_value(params).map_err(|error| ClientError::Protocol(error.to_string()))
 }
+
+#[cfg(test)]
+#[path = "notification_tests.rs"]
+mod tests;

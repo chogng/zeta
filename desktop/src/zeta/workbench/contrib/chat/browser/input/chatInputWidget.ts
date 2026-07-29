@@ -1,6 +1,9 @@
+import "./chatInputWidget.css";
 import { addDisposableListener } from "../../../../../base/browser/dom.js";
 import { DisposableOwner, ResettableDisposableGroup } from "../../../../../base/common/lifecycle.js";
+import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextMenu.js";
 import type { ChatInputDelegate, ChatInputState } from "./chatInput.js";
+import { ChatInputToolbar } from "./chatInputToolbar.js";
 
 /** Owns the composer and all user-facing interactions for one Chat pane. */
 export class ChatInputWidget extends DisposableOwner {
@@ -11,10 +14,10 @@ export class ChatInputWidget extends DisposableOwner {
   readonly #interaction: HTMLDivElement;
   readonly #form: HTMLFormElement;
   readonly #input: HTMLTextAreaElement;
-  readonly #sendButton: HTMLButtonElement;
-  readonly #interruptButton: HTMLButtonElement;
+  readonly #toolbar: ChatInputToolbar;
+  #state: ChatInputState = { phase: "loading", canInterrupt: false, models: [] };
 
-  constructor(ownerDocument: Document, delegate: ChatInputDelegate) {
+  constructor(ownerDocument: Document, delegate: ChatInputDelegate, contextMenuService: IContextMenuService) {
     super();
     this.#delegate = delegate;
     this.element = ownerDocument.createElement("div");
@@ -31,29 +34,27 @@ export class ChatInputWidget extends DisposableOwner {
     this.#input.rows = 3;
     this.#input.placeholder = "Ask Zeta";
     this.#input.setAttribute("aria-label", "Chat message");
-    const actions = ownerDocument.createElement("div");
-    actions.className = "zeta-chat-composer-actions";
-    this.#interruptButton = ownerDocument.createElement("button");
-    this.#interruptButton.type = "button";
-    this.#interruptButton.className = "zeta-chat-secondary-button";
-    this.#interruptButton.textContent = "Stop";
-    this.#sendButton = ownerDocument.createElement("button");
-    this.#sendButton.type = "submit";
-    this.#sendButton.className = "zeta-chat-send-button";
-    this.#sendButton.textContent = "Send";
-    actions.append(this.#interruptButton, this.#sendButton);
-    this.#form.append(this.#input, actions);
+    this.#toolbar = this.own(new ChatInputToolbar(ownerDocument, contextMenuService, {
+      submit: () => this.#form.requestSubmit(),
+      interrupt: () => void this.#delegate.interrupt(),
+      selectModel: (model) => void this.#delegate.selectModel(model),
+    }));
+    this.#form.append(this.#input, this.#toolbar.element);
     this.element.append(this.#status, this.#interaction, this.#form);
-    this.own(addDisposableListener(this.#interruptButton, "click", () => void this.#delegate.interrupt()));
     this.own(addDisposableListener(this.#form, "submit", (event) => {
       event.preventDefault();
       const value = this.#input.value;
       if (!value.trim()) return;
       this.#input.value = "";
+      this.#renderToolbar();
       void this.#delegate.send(value).catch(() => {
-        if (!this.#input.value) this.#input.value = value;
+        if (!this.#input.value) {
+          this.#input.value = value;
+          this.#renderToolbar();
+        }
       });
     }));
+    this.own(addDisposableListener(this.#input, "input", () => this.#renderToolbar()));
     this.own(addDisposableListener(this.#input, "keydown", (event: KeyboardEvent) => {
       if (event.key !== "Enter" || event.shiftKey || event.isComposing) return;
       event.preventDefault();
@@ -67,11 +68,19 @@ export class ChatInputWidget extends DisposableOwner {
   }
 
   render(state: ChatInputState): void {
+    this.#state = state;
     this.#status.textContent = this.#statusText(state);
     this.#renderInteraction(state);
-    const submitting = state.phase === "submitting";
-    this.#sendButton.disabled = submitting || state.canInterrupt;
-    this.#interruptButton.hidden = !state.canInterrupt;
+    this.#renderToolbar();
+  }
+
+  #renderToolbar(): void {
+    this.#toolbar.render({
+      canSubmit: this.#input.value.trim().length > 0 && this.#state.phase !== "submitting" && !this.#state.canInterrupt,
+      canInterrupt: this.#state.canInterrupt,
+      models: this.#state.models,
+      selectedModel: this.#state.selectedModel,
+    });
   }
 
   #renderInteraction(state: ChatInputState): void {

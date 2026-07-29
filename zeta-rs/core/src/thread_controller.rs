@@ -18,6 +18,7 @@ use zeta_protocol::CommandId;
 use zeta_protocol::InteractionCancelReason;
 use zeta_protocol::InteractionDeadline;
 use zeta_protocol::ItemId;
+use zeta_protocol::ModelRef;
 use zeta_protocol::RequestId;
 use zeta_protocol::SessionId;
 use zeta_protocol::StableTurnError;
@@ -46,6 +47,7 @@ mod user_input;
 pub struct StartTurnRequest {
     pub command_id: CommandId,
     pub expected_sequence: SequenceExpectation,
+    pub model: Option<ModelRef>,
     pub input: Vec<UserInput>,
 }
 
@@ -264,6 +266,7 @@ impl ThreadController {
         let validated_input = user_input::validate(&request.input)?;
         validate_command_id(&request.command_id)?;
         let command = ThreadCommand::StartTurn {
+            model: request.model.clone(),
             input: request.input.clone(),
         };
         self.mutate_thread(thread_id, |snapshot| {
@@ -296,6 +299,7 @@ impl ThreadController {
             events.push(ThreadEvent::TurnAccepted {
                 thread_id: thread_id.clone(),
                 turn_id: turn_id.clone(),
+                model: request.model.clone(),
             });
             events.extend(
                 input_items

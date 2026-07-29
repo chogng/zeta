@@ -3,6 +3,7 @@ use crate::state::transition_turn_status;
 use std::collections::{BTreeMap, BTreeSet};
 use zeta_protocol::AgentRequest;
 use zeta_protocol::AgentResponse;
+use zeta_protocol::ModelRef;
 use zeta_protocol::RequestId;
 use zeta_protocol::SessionId;
 use zeta_protocol::StableTurnError;
@@ -53,6 +54,7 @@ impl ThreadSnapshot {
                 .map(|turn| Turn {
                     turn_id: turn.turn_id.clone(),
                     status: turn.status,
+                    model: turn.model.clone(),
                     items: self
                         .items
                         .iter()
@@ -102,6 +104,7 @@ impl ThreadSnapshot {
 pub struct TurnSnapshot {
     pub turn_id: TurnId,
     pub status: TurnStatus,
+    pub model: Option<ModelRef>,
     pub failure: Option<StableTurnError>,
     pub pending_interaction: Option<TurnInteraction>,
 }
@@ -206,14 +209,20 @@ pub fn reduce_thread_event(
                 "Thread cannot be created more than once".into(),
             ));
         }
-        ThreadEvent::TurnAccepted { turn_id, .. } => {
-            create_turn(&mut snapshot, turn_id)?;
+        ThreadEvent::TurnAccepted { turn_id, model, .. } => {
+            create_turn(&mut snapshot, turn_id, model.clone())?;
             let receipt = envelope.command.clone().ok_or_else(|| {
                 CoreError::Journal("Turn acceptance requires a command receipt".into())
             })?;
-            if !matches!(receipt.command, ThreadCommand::StartTurn { .. }) {
+            if !matches!(
+                &receipt.command,
+                ThreadCommand::StartTurn {
+                    model: command_model,
+                    ..
+                } if command_model == model
+            ) {
                 return Err(CoreError::Journal(
-                    "Turn acceptance requires a start-Turn command".into(),
+                    "Turn acceptance requires a matching start-Turn command".into(),
                 ));
             }
             if snapshot
@@ -708,7 +717,11 @@ pub(crate) fn validate_agent_request(request: &AgentRequest) -> Result<(), Strin
     Ok(())
 }
 
-fn create_turn(snapshot: &mut ThreadSnapshot, turn_id: &TurnId) -> Result<(), CoreError> {
+fn create_turn(
+    snapshot: &mut ThreadSnapshot,
+    turn_id: &TurnId,
+    model: Option<ModelRef>,
+) -> Result<(), CoreError> {
     if snapshot.turns.iter().any(|turn| turn.turn_id == *turn_id) {
         return Err(CoreError::Journal(format!(
             "Turn already exists: {turn_id}"
@@ -717,6 +730,7 @@ fn create_turn(snapshot: &mut ThreadSnapshot, turn_id: &TurnId) -> Result<(), Co
     snapshot.turns.push(TurnSnapshot {
         turn_id: turn_id.clone(),
         status: TurnStatus::Created,
+        model,
         failure: None,
         pending_interaction: None,
     });

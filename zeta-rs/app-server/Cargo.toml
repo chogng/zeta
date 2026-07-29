@@ -12,6 +12,7 @@ path = "src/lib.rs"
 
 [dependencies]
 base64 = { workspace = true }
+getrandom = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
@@ -24,6 +25,7 @@ zeta-config = { workspace = true }
 zeta-core = { workspace = true }
 zeta-file-system = { workspace = true }
 zeta-file-watcher = { workspace = true }
+zeta-git = { workspace = true }
 zeta-install-context = { workspace = true }
 zeta-model-provider = { workspace = true }
 zeta-model-provider-config = { workspace = true }

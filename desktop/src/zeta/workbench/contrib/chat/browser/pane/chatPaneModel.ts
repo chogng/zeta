@@ -1,9 +1,9 @@
-import type { AgentResponse, Thread, ThreadId, ThreadItem, ThreadUpdateEnvelope, Turn, TurnInteraction } from "../../../../../../../generated/app-server/types.js";
+import type { AgentResponse, ModelCatalogEntry, ModelRef, Thread, ThreadId, ThreadItem, ThreadUpdateEnvelope, Turn, TurnInteraction } from "../../../../../../../generated/app-server/types.js";
 import { Emitter, type Event } from "../../../../../base/common/event.js";
 import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
 import { createUuid } from "../../../../../base/common/uuid.js";
 import type { ZetaRendererApi } from "../../../../../platform/app-server/common/renderer-api.js";
-import type { IActiveSessionThread } from "../../../../services/sessions/common/sessionService.js";
+import type { IActiveSessionThread, IWorkbenchSessionService } from "../../../../services/sessions/common/sessionService.js";
 import { chatListItem, type IChatListItem } from "../list/chatListItems.js";
 
 export type ChatPaneState =
@@ -21,6 +21,7 @@ export type ChatPaneState =
  */
 export class ChatPaneModel extends DisposableOwner {
   readonly #api: ZetaRendererApi;
+  readonly #sessionService: IWorkbenchSessionService;
   readonly #onDidChange = this.own(new Emitter<void>());
   readonly #transientItems = new Map<string, ThreadItem>();
   #selection: IActiveSessionThread;
@@ -36,12 +37,14 @@ export class ChatPaneModel extends DisposableOwner {
   #subscriptionPromise: Promise<void> | undefined;
   #streamInstanceId: string | undefined;
   #streamSequence = 0;
+  #models: readonly ModelCatalogEntry[] = [];
 
   readonly onDidChange: Event<void> = this.#onDidChange.event;
 
-  constructor(api: ZetaRendererApi, active: IActiveSessionThread) {
+  constructor(api: ZetaRendererApi, active: IActiveSessionThread, sessionService: IWorkbenchSessionService) {
     super();
     this.#api = api;
+    this.#sessionService = sessionService;
     this.#selection = active;
     const events = api.events.subscribe((notification) => {
       if (notification.method === "thread/update") {
@@ -79,6 +82,14 @@ export class ChatPaneModel extends DisposableOwner {
     return this.#selection.threadId;
   }
 
+  get models(): readonly ModelCatalogEntry[] {
+    return this.#models;
+  }
+
+  get selectedModel(): ModelRef | undefined {
+    return this.#selection.session.model ?? undefined;
+  }
+
   get items(): readonly IChatListItem[] {
     const committed = this.#thread?.turns.flatMap(
       (turn) => turn.items.map((item) => chatListItem(item)),
@@ -110,12 +121,20 @@ export class ChatPaneModel extends DisposableOwner {
       throw new Error(`ChatPaneModel cannot select a Thread from another Session: ${active.session.sessionId}`);
     }
     const previousThreadId = this.#selection.threadId;
+    const previousModel = this.#selection.session.model;
     this.#selection = active;
-    if (previousThreadId === active.threadId && this.#thread?.threadId === active.threadId) return;
+    if (previousThreadId === active.threadId && this.#thread?.threadId === active.threadId) {
+      if (!sameModel(previousModel, active.session.model)) this.#onDidChange.fire();
+      return;
+    }
     if (previousThreadId !== active.threadId) {
       void this.#api.thread.unsubscribe({ threadId: previousThreadId });
     }
     await this.#subscribe(active);
+  }
+
+  async selectModel(model: ModelRef): Promise<void> {
+    await this.#sessionService.setModel(this.#selection.session.sessionId, model);
   }
 
   async send(text: string): Promise<void> {
@@ -196,7 +215,16 @@ export class ChatPaneModel extends DisposableOwner {
 
   async #initialize(): Promise<void> {
     this.#setState("loading");
-    await this.#subscribe(this.#selection);
+    await Promise.all([this.#subscribe(this.#selection), this.#loadModels()]);
+  }
+
+  async #loadModels(): Promise<void> {
+    try {
+      this.#models = (await this.#api.model.list()).models;
+      this.#onDidChange.fire();
+    } catch {
+      this.#models = [];
+    }
   }
 
   async #subscribe(active: IActiveSessionThread): Promise<void> {
@@ -407,4 +435,8 @@ function activeTurn(thread: Thread | undefined): Turn | undefined {
 
 function commandId(kind: string): string {
   return `desktop-${kind}-${createUuid()}`;
+}
+
+function sameModel(left: ModelRef | null | undefined, right: ModelRef | null | undefined): boolean {
+  return left?.provider === right?.provider && left?.model === right?.model;
 }

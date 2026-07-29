@@ -2,6 +2,7 @@ use crate::AppServer;
 use crate::SlashCommandCatalog;
 use crate::local_tools::compose_local_tools;
 use crate::mcp_tools::compose_mcp_tools;
+use crate::model_catalog::ModelCatalog;
 use crate::server::skills_runtime::{BuiltInSkillSource, SkillConfigSnapshotProvider};
 use crate::tool_composition::{ToolPort, combine_tool_ports};
 use std::fmt;
@@ -13,12 +14,13 @@ use zeta_config::{
     WorkspaceConfigInput, WorkspaceConfigRevision, WorkspaceConfigScope, WorkspaceConfigStore,
     WorkspaceId, resolve_scoped_config,
 };
-use zeta_core::{CoreError, ModelService};
+use zeta_core::{CoreError, ModelSelection, ModelService};
 use zeta_file_system::LocalFileSystem;
 use zeta_install_context::InstallContext;
 use zeta_model_provider::{
     ModelInvoker, ModelProvider, ModelProviderRuntime, ModelRuntimeRequest, UnavailableModel,
 };
+use zeta_model_provider_config::ProviderConfigRegistry;
 use zeta_rollout::RolloutRepository;
 use zeta_sandboxing::WorkspaceRoot;
 
@@ -146,7 +148,8 @@ pub fn open_local_app_server(
         config_path: options.state_root.join("config.authority.json"),
     });
     let built_in_skill_root = resolve_built_in_skill_root(options.built_in_skills);
-    let mut server = AppServer::new(sessions, model)
+    let mut server = AppServer::new(sessions, model.clone())
+        .with_model_catalog(model)
         .with_config_store(config)
         .with_slash_command_catalog(options.slash_commands)
         .with_skill_runtime(built_in_skill_root, skill_config)
@@ -159,6 +162,8 @@ pub fn open_local_app_server(
         server = server
             .with_file_system(Arc::new(LocalFileSystem::new(workspace.clone())))
             .with_workspace_search(workspace.clone(), tools.ripgrep.clone())
+            .with_git_root(workspace.path().to_path_buf())
+            .map_err(|_| OpenAppServerError("failed to initialize Git runtime".into()))?
             .with_terminal_root(workspace.path().to_path_buf())
             .map_err(|_| OpenAppServerError("failed to initialize terminal runtime".into()))?;
         tool_ports.push(ToolPort::local(tools.tools, tools.policy));
@@ -254,18 +259,90 @@ struct ConfigBackedModelService {
 impl ModelService for ConfigBackedModelService {
     fn invoke(
         &self,
+        selection: ModelSelection<'_>,
         request: &zeta_protocol::ModelRequest,
         cancellation: &CancellationToken,
     ) -> Result<zeta_protocol::ModelResponse, CoreError> {
         let user = self.config.read_snapshot().map_err(|error| {
             CoreError::Model(format!("failed to read model config: {}", error.0))
         })?;
-        let config = self.resolve_config(&user)?;
-        ProviderModelService::new(self.resolver.resolve(&config)).invoke(request, cancellation)
+        let mut config = self.resolve_config(&user)?;
+        if let ModelSelection::Session(model) = selection {
+            config.preferred_model = Some(model.clone());
+        }
+        ProviderModelService::new(self.resolver.resolve(&config)).invoke(
+            ModelSelection::ConfiguredDefault,
+            request,
+            cancellation,
+        )
+    }
+}
+
+impl ModelCatalog for ConfigBackedModelService {
+    fn list(
+        &self,
+    ) -> Result<Vec<zeta_app_server_protocol::protocol::model::ModelCatalogEntry>, CoreError> {
+        let config = self.resolved_config()?;
+        let registry = ProviderConfigRegistry::builtin();
+        let mut models = Vec::new();
+        for provider_id in config.providers.keys() {
+            let Some(provider) = registry.get(provider_id) else {
+                continue;
+            };
+            models.extend(provider.models.iter().cloned().map(|model| {
+                zeta_app_server_protocol::protocol::model::ModelCatalogEntry {
+                    model: zeta_protocol::ModelRef::new(provider_id.clone(), model.id),
+                    display_name: model.display_name,
+                }
+            }));
+        }
+        if let Some(preferred) = config.preferred_model
+            && !models.iter().any(|entry| entry.model == preferred)
+        {
+            models.push(
+                zeta_app_server_protocol::protocol::model::ModelCatalogEntry {
+                    display_name: preferred.model.to_string(),
+                    model: preferred,
+                },
+            );
+        }
+        models.sort_by(|left, right| {
+            left.model
+                .provider
+                .cmp(&right.model.provider)
+                .then_with(|| left.model.model.cmp(&right.model.model))
+        });
+        Ok(models)
+    }
+
+    fn configured_default(&self) -> Result<Option<zeta_protocol::ModelRef>, CoreError> {
+        Ok(self.resolved_config()?.preferred_model)
+    }
+
+    fn validate(&self, model: &zeta_protocol::ModelRef) -> Result<(), CoreError> {
+        let config = self.resolved_config()?;
+        let provider = config.providers.get(&model.provider).ok_or_else(|| {
+            CoreError::Model(format!(
+                "model provider '{}' is not configured",
+                model.provider
+            ))
+        })?;
+        let registry = ProviderConfigRegistry::builtin();
+        registry
+            .normalize_for(provider, &model.provider)
+            .and_then(|_| registry.validate_model_selection(model))
+            .map_err(|error| CoreError::Model(error.to_string()))
     }
 }
 
 impl ConfigBackedModelService {
+    fn resolved_config(&self) -> Result<ResolvedConfig, CoreError> {
+        let user = self.config.read_snapshot().map_err(|error| {
+            CoreError::Model(format!("failed to read model config: {}", error.0))
+        })?;
+        self.resolve_config(&user)
+    }
+
     fn resolve_config(&self, user: &ResolvedConfigSnapshot) -> Result<ResolvedConfig, CoreError> {
         let Some(workspace) = &self.workspace else {
             return Ok(user.values.clone());
@@ -348,6 +425,7 @@ impl ProviderModelService {
 impl ModelService for ProviderModelService {
     fn invoke(
         &self,
+        _: ModelSelection<'_>,
         request: &zeta_protocol::ModelRequest,
         cancellation: &CancellationToken,
     ) -> Result<zeta_protocol::ModelResponse, CoreError> {

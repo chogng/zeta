@@ -19,7 +19,13 @@ use crate::protocol::fs::{
     FsFileType, FsGetMetadataParams, FsGetMetadataResult, FsReadDirectoryEntry,
     FsReadDirectoryParams, FsReadDirectoryResult, FsReadFileParams, FsReadFileResult,
 };
+use crate::protocol::git::{
+    GitChangeStatusDto, GitCommitParams, GitCommitResult, GitHeadDto, GitOperationResult,
+    GitPathsParams, GitRepositoryChangeDto, GitStatusChanged, GitStatusResult,
+    GitSubmoduleStateDto, GitUpstreamDto,
+};
 use crate::protocol::initialize::{InitializeParams, InitializeResult, ServerCapabilities};
+use crate::protocol::model::{ModelCatalogEntry, ModelListResult};
 use crate::protocol::notification::{SessionUpdateEnvelope, ThreadUpdateEnvelope};
 use crate::protocol::resources::{
     ResourceMetadataParams, ResourceMetadataResult, ResourceReadParams, ResourceReadResult,
@@ -31,10 +37,10 @@ use crate::protocol::search::{
     WorkspaceSearchReadResult, WorkspaceSearchStartParams, WorkspaceSearchStartResult,
 };
 use crate::protocol::session::{
-    SessionCommandParams, SessionCreateParams, SessionListResult, SessionReadParams, SessionResult,
-    SessionSubscribeParams, SessionSubscribeResult, SessionThreadArchiveParams,
-    SessionThreadCreateParams, SessionThreadForkParams, SessionThreadResult,
-    SessionUnsubscribeParams,
+    SessionCommandParams, SessionCreateParams, SessionListResult, SessionModelSetParams,
+    SessionReadParams, SessionResult, SessionSubscribeParams, SessionSubscribeResult,
+    SessionThreadArchiveParams, SessionThreadCreateParams, SessionThreadForkParams,
+    SessionThreadResult, SessionUnsubscribeParams,
 };
 use crate::protocol::skills::{
     SkillCatalogReloadDto, SkillCompatibilityDto, SkillDiagnosticCodeDto, SkillDiagnosticDto,
@@ -253,6 +259,11 @@ client_methods! {
         response: SessionResult,
         serialization: SessionExclusive,
     },
+    SessionModelSet => "session/model/set" {
+        params: SessionModelSetParams,
+        response: SessionResult,
+        serialization: SessionExclusive,
+    },
     ThreadRead => "thread/read" {
         params: ThreadReadParams,
         response: ThreadReadResult,
@@ -271,6 +282,11 @@ client_methods! {
     ConfigRead => "config/read" {
         params: EmptyParams,
         response: ConfigReadResult,
+        serialization: GlobalSharedRead,
+    },
+    ModelList => "model/list" {
+        params: EmptyParams,
+        response: ModelListResult,
         serialization: GlobalSharedRead,
     },
     ConfigUpdate => "config/update" {
@@ -377,6 +393,46 @@ client_methods! {
         params: FsReadFileParams,
         response: FsReadFileResult,
         serialization: GlobalSharedRead,
+    },
+    GitStatus => "git/status" {
+        params: EmptyParams,
+        response: GitStatusResult,
+        serialization: GlobalSharedRead,
+    },
+    GitStage => "git/stage" {
+        params: GitPathsParams,
+        response: GitOperationResult,
+        serialization: GlobalExclusive,
+    },
+    GitUnstage => "git/unstage" {
+        params: GitPathsParams,
+        response: GitOperationResult,
+        serialization: GlobalExclusive,
+    },
+    GitDiscardWorktree => "git/discardWorktree" {
+        params: GitPathsParams,
+        response: GitOperationResult,
+        serialization: GlobalExclusive,
+    },
+    GitCommit => "git/commit" {
+        params: GitCommitParams,
+        response: GitCommitResult,
+        serialization: GlobalExclusive,
+    },
+    GitFetch => "git/fetch" {
+        params: EmptyParams,
+        response: GitOperationResult,
+        serialization: GlobalExclusive,
+    },
+    GitPull => "git/pull" {
+        params: EmptyParams,
+        response: GitOperationResult,
+        serialization: GlobalExclusive,
+    },
+    GitPush => "git/push" {
+        params: EmptyParams,
+        response: GitOperationResult,
+        serialization: GlobalExclusive,
     },
     WorkspaceSearchStart => "workspace/search/start" {
         params: WorkspaceSearchStartParams,
@@ -485,6 +541,9 @@ server_notifications! {
     SkillsChanged => "skills/changed" {
         params: SkillsChanged,
     },
+    GitStatusChanged => "git/statusChanged" {
+        params: GitStatusChanged,
+    },
 }
 
 macro_rules! typescript_bindings {
@@ -568,6 +627,7 @@ typescript_bindings! {
     SessionSubscribeParams,
     SessionUnsubscribeParams,
     SessionCommandParams,
+    SessionModelSetParams,
     SessionThreadCreateParams,
     SessionThreadForkParams,
     SessionThreadArchiveParams,
@@ -575,6 +635,8 @@ typescript_bindings! {
     SessionListResult,
     SessionSubscribeResult,
     SessionThreadResult,
+    ModelCatalogEntry,
+    ModelListResult,
     StableTurnErrorCode,
     StableTurnError,
     ThreadStatus,
@@ -645,6 +707,17 @@ typescript_bindings! {
     FsReadDirectoryResult,
     FsReadFileParams,
     FsReadFileResult,
+    GitChangeStatusDto,
+    GitUpstreamDto,
+    GitHeadDto,
+    GitSubmoduleStateDto,
+    GitRepositoryChangeDto,
+    GitStatusResult,
+    GitStatusChanged,
+    GitPathsParams,
+    GitCommitParams,
+    GitOperationResult,
+    GitCommitResult,
     WorkspaceSearchPatternKind,
     WorkspaceSearchCaseSensitivity,
     WorkspaceSearchStartParams,

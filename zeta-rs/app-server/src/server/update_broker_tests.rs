@@ -28,6 +28,7 @@ fn update(session_id: &SessionId, sequence: u64) -> SessionUpdateEnvelope {
             event: SessionEvent::SessionCreated {
                 session_id: session_id.clone(),
                 title: "task".into(),
+                model: None,
             },
         },
     }

@@ -2,6 +2,7 @@ use crate::protocol::common::{CommandId, SessionId, ThreadId};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
+use zeta_protocol::ModelRef;
 use zeta_protocol::{Session, SessionUpdateEnvelope};
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
@@ -38,6 +39,16 @@ pub struct SessionCommandParams {
     pub session_id: SessionId,
     #[ts(type = "number")]
     pub expected_sequence: u64,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionModelSetParams {
+    pub command_id: CommandId,
+    pub session_id: SessionId,
+    #[ts(type = "number")]
+    pub expected_sequence: u64,
+    pub model: ModelRef,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

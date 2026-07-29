@@ -26,6 +26,7 @@ let chatPaneInstanceId = 0;
 export class ChatViewPane extends ViewPane {
   readonly #api: ZetaRendererApi;
   readonly #sessionService: IWorkbenchSessionService;
+  readonly #contextMenuService: IContextMenuService;
   readonly #titleControl: ChatTitleControl;
   readonly #agentSidebar: SidebarPart;
   readonly #paneHost: HTMLDivElement;
@@ -45,6 +46,7 @@ export class ChatViewPane extends ViewPane {
     super(options);
     this.#api = api;
     this.#sessionService = sessionService;
+    this.#contextMenuService = contextMenuService;
     this.element.classList.add("zeta-chat-view-pane");
     this.titleElement.hidden = true;
     this.contentElement.classList.add("zeta-chat-view");
@@ -113,10 +115,12 @@ export class ChatViewPane extends ViewPane {
           `zeta-chat-pane-${++chatPaneInstanceId}`,
           this.#api,
           selection,
+          this.#sessionService,
+          this.#contextMenuService,
         );
         setDisposableOwner(pane, this);
         this.#panes.set(session.sessionId, pane);
-      } else if (pane.threadId !== selection.threadId) {
+      } else {
         void pane.selectThread(selection);
       }
       entries.push({ session, pane });

@@ -15,6 +15,7 @@ fn create_session(coordinator: &SessionCoordinator) -> CreateSessionResult {
         .create_session(CreateSessionRequest {
             command_id: CommandId::new("create-session").expect("test ID is non-empty"),
             title: "task".into(),
+            model: None,
         })
         .unwrap()
 }
@@ -59,8 +60,44 @@ fn commands_replay_by_typed_identity_and_reject_payload_conflicts() {
     let conflict = coordinator.create_session(CreateSessionRequest {
         command_id: CommandId::new("create-session").expect("test ID is non-empty"),
         title: "different".into(),
+        model: None,
     });
     assert!(matches!(conflict, Err(CoreError::CommandConflict)));
+}
+
+#[test]
+fn model_selection_is_durable_and_isolated_per_session() {
+    let coordinator = coordinator();
+    let first = create_session(&coordinator);
+    let second = coordinator
+        .create_session(CreateSessionRequest {
+            command_id: CommandId::new("create-second").unwrap(),
+            title: "second".into(),
+            model: None,
+        })
+        .unwrap();
+    let selected = zeta_protocol::ModelRef::new(
+        zeta_protocol::ProviderId::new("openai").unwrap(),
+        zeta_protocol::ModelId::new("gpt-5.6").unwrap(),
+    );
+
+    coordinator
+        .set_model(SetSessionModelRequest {
+            command_id: CommandId::new("set-model").unwrap(),
+            session_id: first.session_id.clone(),
+            expected_sequence: SequenceExpectation::Exact(first.sequence),
+            model: selected.clone(),
+        })
+        .unwrap();
+
+    assert_eq!(
+        coordinator.read_session(&first.session_id).unwrap().model,
+        Some(selected)
+    );
+    assert_eq!(
+        coordinator.read_session(&second.session_id).unwrap().model,
+        None
+    );
 }
 
 #[test]

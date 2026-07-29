@@ -1,48 +1,6 @@
-import type {
-  FsGetMetadataParams,
-  FsGetMetadataResult,
-  FsReadDirectoryParams,
-  FsReadDirectoryResult,
-  FsReadFileParams,
-  FsReadFileResult,
-  ResourceMetadataParams,
-  ResourceMetadataResult,
-  ResourceReadParams,
-  ResourceReadResult,
-  ResourceReleaseParams,
-  ServerNotification,
-  SessionCommandParams,
-  SessionCreateParams,
-  SessionListResult,
-  SessionReadParams,
-  SessionResult,
-  SessionSubscribeParams,
-  SessionSubscribeResult,
-  SessionThreadArchiveParams,
-  SessionThreadCreateParams,
-  SessionThreadForkParams,
-  SessionThreadResult,
-  SessionUnsubscribeParams,
-  ThreadReadParams,
-  ThreadReadResult,
-  ThreadSubscribeParams,
-  ThreadSubscribeResult,
-  ThreadUnsubscribeParams,
-  TurnInterruptParams,
-  TurnInterruptResult,
-  TurnInteractionResolveParams,
-  TurnInteractionResolveResult,
-  TurnStartParams,
-  TurnStartResult,
-  TypstCompileParams,
-  TypstCompileResult,
-  WorkspaceSearchCancelParams,
-  WorkspaceSearchReadParams,
-  WorkspaceSearchReadResult,
-  WorkspaceSearchStartParams,
-  WorkspaceSearchStartResult,
-} from "../../../../../generated/app-server/types.js";
+import type { FsGetMetadataParams, FsGetMetadataResult, FsReadDirectoryParams, FsReadDirectoryResult, FsReadFileParams, FsReadFileResult, ModelListResult, ResourceMetadataParams, ResourceMetadataResult, ResourceReadParams, ResourceReadResult, ResourceReleaseParams, ServerNotification, SessionCommandParams, SessionCreateParams, SessionListResult, SessionModelSetParams, SessionReadParams, SessionResult, SessionSubscribeParams, SessionSubscribeResult, SessionThreadArchiveParams, SessionThreadCreateParams, SessionThreadForkParams, SessionThreadResult, SessionUnsubscribeParams, ThreadReadParams, ThreadReadResult, ThreadSubscribeParams, ThreadSubscribeResult, ThreadUnsubscribeParams, TurnInterruptParams, TurnInterruptResult, TurnInteractionResolveParams, TurnInteractionResolveResult, TurnStartParams, TurnStartResult, TypstCompileParams, TypstCompileResult, WorkspaceSearchCancelParams, WorkspaceSearchReadParams, WorkspaceSearchReadResult, WorkspaceSearchStartParams, WorkspaceSearchStartResult } from "../../../../../generated/app-server/types.js";
 import type { TerminalCloseParams, TerminalCreateParams, TerminalCreateResult, TerminalProfileListResult, TerminalReadParams, TerminalReadResult, TerminalResizeParams, TerminalWriteParams } from "../../../../../generated/app-server/types.js";
+import type { GitCommitParams, GitCommitResult, GitOperationResult, GitPathsParams, GitStatusResult } from "../../../../../generated/app-server/types.js";
 
 /**
  * A string-keyed cleanup handle that can cross Electron's contextBridge.
@@ -88,6 +46,10 @@ export interface ZetaRendererApi {
     archiveThread(params: SessionThreadArchiveParams): Promise<SessionResult>;
     complete(params: SessionCommandParams): Promise<SessionResult>;
     archive(params: SessionCommandParams): Promise<SessionResult>;
+    setModel(params: SessionModelSetParams): Promise<SessionResult>;
+  };
+  model: {
+    list(): Promise<ModelListResult>;
   };
   thread: {
     read(params: ThreadReadParams): Promise<ThreadReadResult>;
@@ -113,6 +75,16 @@ export interface ZetaRendererApi {
     getMetadata(params: FsGetMetadataParams): Promise<FsGetMetadataResult>;
     readDirectory(params: FsReadDirectoryParams): Promise<FsReadDirectoryResult>;
     readFile(params: FsReadFileParams): Promise<FsReadFileResult>;
+  };
+  git: {
+    status(): Promise<GitStatusResult>;
+    stage(params: GitPathsParams): Promise<GitOperationResult>;
+    unstage(params: GitPathsParams): Promise<GitOperationResult>;
+    discardWorktree(params: GitPathsParams): Promise<GitOperationResult>;
+    commit(params: GitCommitParams): Promise<GitCommitResult>;
+    fetch(): Promise<GitOperationResult>;
+    pull(): Promise<GitOperationResult>;
+    push(): Promise<GitOperationResult>;
   };
   workspaceSearch: {
     start(

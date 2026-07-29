@@ -65,9 +65,11 @@ zeta-rs/
 分层；只有具备第二个真实消费者、独立 typed port 与测试 vertical slice 时才提取 crate。
 
 `zeta-git` 当前拥有 system Git process identity、repository discovery、porcelain-v2 snapshot、
-branch/remote/history query 与 patch check/apply，不拥有 live repository registry、watch state、
-App Server wire 或 Desktop SCM。当前 API、进程隔离、失败语义与尚未实现的 service 边界见
-[`git/README.md`](../zeta-rs/git/README.md)。
+branch/remote/history query、typed stage/unstage/discard/commit/fetch/pull/push 与 patch
+check/apply，不拥有 live repository registry、watch state、App Server wire 或 Desktop SCM。
+Git status/mutation adapter、workspace-scoped runtime、watch invalidation/revision notification
+与 SCM View 已在各自层实现；它们不改变 `zeta-git` crate ownership。当前 API 和失败语义见
+[`git/README.md`](../zeta-rs/git/README.md)，跨层状态见 [`git.md`](git.md)。
 
 Direct-provider credential ownership 由 [`model-provider.md`](model-provider.md) 维护；通用 secret
 persistence 由 [`secrets.md`](secrets.md) 维护；interactive login control plane 由

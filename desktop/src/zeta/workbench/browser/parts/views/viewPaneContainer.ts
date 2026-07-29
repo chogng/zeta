@@ -156,6 +156,7 @@ export class ViewPaneContainer extends DisposableOwner {
         id: descriptor.id,
         title: descriptor.title,
         ownerDocument: this.element.ownerDocument,
+        collapsed: descriptor.collapsed,
       },
     );
     if (!(view instanceof ViewPane)) {

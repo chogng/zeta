@@ -8,7 +8,7 @@ use crate::protocol::slash_commands::{SlashCommandArgumentModeDto, SlashCommandD
 use crate::protocol::turn::InputItem;
 use crate::rpc::{JsonRpcFailure, JsonRpcId, JsonRpcNotification, JsonRpcRequest, JsonRpcSuccess};
 use std::collections::BTreeSet;
-use zeta_protocol::Patch;
+use zeta_protocol::{Patch, SessionEvent, ThreadEvent};
 
 #[test]
 fn registry_method_and_notification_names_are_unique() {
@@ -32,6 +32,14 @@ fn registry_method_and_notification_names_are_unique() {
     assert!(methods.contains("fs/getMetadata"));
     assert!(methods.contains("fs/readDirectory"));
     assert!(methods.contains("fs/readFile"));
+    assert!(methods.contains("git/status"));
+    assert!(methods.contains("git/stage"));
+    assert!(methods.contains("git/unstage"));
+    assert!(methods.contains("git/discardWorktree"));
+    assert!(methods.contains("git/commit"));
+    assert!(methods.contains("git/fetch"));
+    assert!(methods.contains("git/pull"));
+    assert!(methods.contains("git/push"));
     assert!(methods.contains("workspace/search/start"));
     assert!(methods.contains("workspace/search/read"));
     assert!(methods.contains("workspace/search/cancel"));
@@ -43,6 +51,7 @@ fn registry_method_and_notification_names_are_unique() {
     assert!(methods.contains("terminal/close"));
     assert!(notifications.contains("session/update"));
     assert!(notifications.contains("thread/update"));
+    assert!(notifications.contains("git/statusChanged"));
 }
 
 #[test]
@@ -178,6 +187,7 @@ fn dto_driven_typescript_preserves_model_ref_and_patch_shape() {
     assert!(typescript.contains("export type SkillSourceId = string;"));
     assert!(typescript.contains(r#""skills/list": { method: "skills/list" }"#));
     assert!(typescript.contains(r#""skills/changed": { method: "skills/changed" }"#));
+    assert!(typescript.contains(r#""git/statusChanged": { method: "git/statusChanged" }"#));
     assert!(!typescript.contains("preferredModel: string"));
     assert!(typescript.contains(r#""type": "toolResult""#));
     assert!(typescript.contains("export type ToolName = string;"));
@@ -258,6 +268,11 @@ fn dto_driven_schema_contains_registered_rpc_envelopes() {
     assert!(definitions.contains_key("TerminalProfileListResult"));
     assert!(definitions.contains_key("TerminalCreateParams"));
     assert!(definitions.contains_key("TerminalReadResult"));
+    assert!(definitions.contains_key("GitStatusResult"));
+    assert!(definitions.contains_key("GitPathsParams"));
+    assert!(definitions.contains_key("GitCommitParams"));
+    assert!(definitions.contains_key("GitOperationResult"));
+    assert!(definitions.contains_key("GitCommitResult"));
     assert_eq!(definitions["ThreadId"]["minLength"], 1);
     assert_eq!(definitions["SessionId"]["minLength"], 1);
     assert_eq!(definitions["CommandId"]["minLength"], 1);
@@ -380,6 +395,31 @@ fn mcp_and_skill_config_commands_round_trip() {
 
     assert_eq!(serde_json::to_value(mcp).unwrap(), mcp_fixture);
     assert_eq!(serde_json::to_value(skill).unwrap(), skill_fixture);
+}
+
+#[test]
+fn durable_events_without_model_snapshots_remain_readable() {
+    let session: SessionEvent = serde_json::from_value(serde_json::json!({
+        "type": "sessionCreated",
+        "sessionId": "session-1",
+        "title": "Legacy session"
+    }))
+    .unwrap();
+    let turn: ThreadEvent = serde_json::from_value(serde_json::json!({
+        "type": "turnAccepted",
+        "threadId": "thread-1",
+        "turnId": "turn-1"
+    }))
+    .unwrap();
+
+    assert!(matches!(
+        session,
+        SessionEvent::SessionCreated { model: None, .. }
+    ));
+    assert!(matches!(
+        turn,
+        ThreadEvent::TurnAccepted { model: None, .. }
+    ));
 }
 
 #[test]

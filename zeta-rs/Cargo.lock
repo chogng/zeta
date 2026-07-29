@@ -7222,6 +7222,7 @@ name = "zeta-app-server"
 version = "0.1.0"
 dependencies = [
  "base64",
+ "getrandom 0.2.17",
  "serde",
  "serde_json",
  "sha2",
@@ -7234,6 +7235,7 @@ dependencies = [
  "zeta-core",
  "zeta-file-system",
  "zeta-file-watcher",
+ "zeta-git",
  "zeta-install-context",
  "zeta-linux-sandbox",
  "zeta-mcp",
@@ -7435,6 +7437,7 @@ dependencies = [
 name = "zeta-git"
 version = "0.1.0"
 dependencies = [
+ "dunce",
  "pretty_assertions",
  "tokio",
 ]

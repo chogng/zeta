@@ -158,6 +158,7 @@ struct TestModel;
 impl ModelService for TestModel {
     fn invoke(
         &self,
+        _: zeta_core::ModelSelection<'_>,
         request: &ModelRequest,
         _: &CancellationToken,
     ) -> Result<ModelResponse, CoreError> {

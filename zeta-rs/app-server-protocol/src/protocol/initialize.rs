@@ -29,6 +29,7 @@ pub struct ServerCapabilities {
     pub turns: bool,
     pub resources: bool,
     pub file_system: bool,
+    pub git: bool,
     pub workspace_search: bool,
     pub terminal: bool,
     pub typst: bool,

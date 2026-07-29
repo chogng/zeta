@@ -5,7 +5,8 @@
 > [`docs/zeta-app-server-api.md`](../../docs/zeta-app-server-api.md)，canonical product model 见
 > [`docs/protocol.md`](../../docs/protocol.md)，workspace 搜索的跨层 ownership 见
 > [`docs/search.md`](../../docs/search.md)，外部 MCP client runtime 的跨 crate 语义见
-> [`docs/mcp.md`](../../docs/mcp.md)。
+> [`docs/mcp.md`](../../docs/mcp.md)，Git/SCM 跨进程 ownership 见
+> [`docs/git.md`](../../docs/git.md)。
 
 `zeta-app-server` 是产品客户端与 Zeta domain/runtime 的 application boundary。它解析
 `zeta-app-server-protocol` request，调用 `SessionCoordinator`、Thread controller、
@@ -24,6 +25,7 @@ JSONL / in-process caller
    ├─ TurnExecutor
    ├─ ConfigStore
    ├─ optional WorkspaceFileSystem
+   ├─ optional GitRuntime → zeta-file-watcher + GitService → zeta-git
    ├─ optional WorkspaceSearchService
    ├─ optional TerminalService → zeta-utils-pty
    ├─ optional McpRuntimeOwner → zeta-mcp
@@ -53,6 +55,7 @@ request-ID set、notification queue 与 resource ownership；Session/Thread dura
 | `AppServer::with_config_store` | 开启 config/provider/MCP/Skill RPC |
 | `AppServer::with_slash_command_catalog` | 安装 initialize 时下发的 immutable 动态命令 snapshot |
 | `AppServer::with_file_system` | 注入受 workspace 约束的 filesystem authority |
+| `AppServer::with_git_root` | 冻结 workspace root，开启 Git status/mutation、watcher 与 revision notification |
 | `AppServer::with_workspace_search` | 注入 workspace root 与冻结的 ripgrep executable |
 | `AppServer::with_tool_service` | 安装同一 server 内所有 Turn 使用的 Core Tool/Policy ports |
 | `open_local_app_server` | 打开 rollout/config、恢复 coordinator、组合 provider-backed model |
@@ -67,7 +70,7 @@ Policy port 的 executor。`open_local_app_server` 会从启动时 user config s
 `enabled` 的 unauthenticated MCP server，并把冻结 catalog 与本地工具组合；每次 MCP tool call
 仍必须经过 durable one-time approval。它仅在调用方通过
 `LocalAppServerOptions::with_workspace_root` 提供统一 Workspace 根时同时组合 filesystem 与
-workspace search、connection-owned Terminal runtime、只读 `rg` registry；Zeta CLI 的 stdio 与
+workspace search、Git SCM、connection-owned Terminal runtime、只读 `rg` registry；Zeta CLI 的 stdio 与
 in-process 路径都会使用同一个启动时解析结果：
 `ZETA_WORKSPACE_ROOT` 优先，否则使用当前目录。不能因为 protocol 暴露 approval interaction 就
 假设任意自定义 host 已经拥有 Tool registry。`rg` 安装候选来自
@@ -85,6 +88,8 @@ src/
 │       ├── skill_operations.rs    # Skill catalog/enablement DTO conversion and error mapping
 │       ├── skills_runtime.rs       # source composition、catalog cache、watcher、projection
 │       ├── fs_operations.rs       # root-relative filesystem DTO conversion/error mapping
+│       ├── git_operations.rs      # Git RPC decode 与稳定错误映射
+│       ├── git_runtime.rs         # status projection/revision、watcher、去重与通知
 │       ├── search_operations.rs   # search RPC decode、ownership 与稳定错误映射
 │       ├── terminal_operations.rs # terminal RPC decode、ownership 与稳定错误映射
 │       └── update_broker.rs       # per-connection subscription/cursor/fanout
@@ -95,6 +100,7 @@ src/
 ├── tool_composition.rs            # frozen local/MCP definition and policy routing
 ├── review.rs                      # review-only provider adapter
 ├── resource_store.rs              # bounded in-memory connection-owned resources
+├── git_service.rs                 # workspace root + GitClient + synchronous RPC runtime bridge
 ├── workspace_search.rs            # bounded connection-owned ripgrep jobs
 ├── terminal_profiles.rs           # trusted Shell discovery、ID 与 environment allowlist
 └── terminal_service.rs            # PTY runtime、output ring 与 connection-owned sessions
@@ -121,6 +127,9 @@ src/
 | `ResourceStore::resource` | private | cleanup + owner check | 所有 read/release 必须经过这里 |
 | `ResourceStore::cleanup` | private | lazy TTL eviction | resource 不持久化 |
 | `AppServer::file_system` | private | 读取注入的 `WorkspaceFileSystem` 或返回稳定 unavailable error | 不绕过 workspace authority |
+| `GitService` | crate-private | 冻结 workspace root、映射 repository path、持有 Tokio runtime，并调用 `zeta-git` query/mutation API | 不持有 Renderer 状态、不复制 Git command/parser |
+| `GitRuntime` | crate-private | 串行 operation、为每次 runtime incarnation 创建 `StreamInstanceId`、投影 workspace status、推进实例内 revision 并发布去重 notification | watcher event 不直接成为 Git truth |
+| `project_status` in `git_runtime` | private | `zeta-git` snapshot → renderer-safe protocol DTO | 不回传绝对 metadata path 或 internal stderr |
 | `file_type` in `fs_operations` | private | foundation file kind → protocol DTO | wire enum 只由 protocol crate 定义 |
 | `WorkspaceSearchService` | crate-private | 持有 workspace、frozen rg 和 connection-owned job map | 不持有 Renderer 状态或模型 Tool authority |
 | `run_search` | private | 以 typed argv 启动/取消 rg 并收束 terminal state | 不经过 shell，不回传任意 stderr |
@@ -207,9 +216,14 @@ session/thread/create
 `turn/start`：
 
 1. 校验 Thread 属于 supplied Session；
-2. `start_turn` 使用 typed command ID + exact expected sequence；
-3. replay 时读取既有 Turn，terminal failure/interruption 不伪装成 success；
-4. 新 start 发布 durable update 后调用 `TurnExecutor::start`。
+2. 读取 Session 当前模型，并把它作为 `TurnAccepted` 的 durable snapshot；
+3. `start_turn` 使用 typed command ID + exact expected sequence；
+4. replay 时读取既有 Turn，terminal failure/interruption 不伪装成 success；
+5. 新 start 发布 durable update 后调用 `TurnExecutor::start`。
+
+`model/list` 由 `ModelCatalog` 投影当前已配置 provider 的可选模型；`session/model/set`
+先通过同一 catalog 校验，再提交 Session command。全局 `preferredModel` 只作为新 Session
+和历史无模型 Session 的默认值，不承担当前 Session 的模型切换。
 
 `turn/interaction/resolve` 使用 exact durable `RequestId`。当 response 是 Tool Call 对应的 approval，
 且 Core 确实产生 `Resolved` disposition，App Server 再启动 executor 恢复 Tool path。这个判断依赖
@@ -421,6 +435,8 @@ Workspace override、review-only request、只读 `rg` definition/materializatio
 MCP worker bridge、exact provenance/approval policy、local/MCP 路由与 collision rejection，以及
 可信 Terminal Profile、真实 PTY create/write/read/exit、Terminal owner/error/ring limits，
 Skill built-in/user composition、enablement overlay、watcher refresh 与 `skills/changed`。
+Git 覆盖 workspace projection、runtime stream identity、revision 去重、`git/statusChanged`、
+path mutation 与 commit。
 
 local tool 的参数白名单、discovery、取消与输出限制由
 [`zeta-shell-command`](../shell-command/README.md) 和 [`zeta-exec`](../exec/README.md) 维护；

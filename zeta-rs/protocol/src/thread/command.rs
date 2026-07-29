@@ -1,6 +1,6 @@
 use crate::{
-    ActionApprovalResponse, DynamicToolResponse, RequestId, RequestUserInputResponse, TurnId,
-    UserInput,
+    ActionApprovalResponse, DynamicToolResponse, ModelRef, RequestId, RequestUserInputResponse,
+    TurnId, UserInput,
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -14,6 +14,9 @@ use ts_rs::TS;
 )]
 pub enum ThreadCommand {
     StartTurn {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional = nullable)]
+        model: Option<ModelRef>,
         input: Vec<UserInput>,
     },
     InterruptTurn {

@@ -1,30 +1,6 @@
-import type {
-  FsGetMetadataParams,
-  FsReadDirectoryParams,
-  FsReadFileParams,
-  ResourceMetadataParams,
-  ResourceReadParams,
-  ResourceReleaseParams,
-  SessionCommandParams,
-  SessionCreateParams,
-  SessionReadParams,
-  SessionSubscribeParams,
-  SessionThreadArchiveParams,
-  SessionThreadCreateParams,
-  SessionThreadForkParams,
-  SessionUnsubscribeParams,
-  ThreadReadParams,
-  ThreadSubscribeParams,
-  ThreadUnsubscribeParams,
-  TurnInterruptParams,
-  TurnInteractionResolveParams,
-  TurnStartParams,
-  TypstCompileParams,
-  WorkspaceSearchCancelParams,
-  WorkspaceSearchReadParams,
-  WorkspaceSearchStartParams,
-} from "../../../../../generated/app-server/types.js";
+import type { FsGetMetadataParams, FsReadDirectoryParams, FsReadFileParams, ResourceMetadataParams, ResourceReadParams, ResourceReleaseParams, SessionCommandParams, SessionCreateParams, SessionModelSetParams, SessionReadParams, SessionSubscribeParams, SessionThreadArchiveParams, SessionThreadCreateParams, SessionThreadForkParams, SessionUnsubscribeParams, ThreadReadParams, ThreadSubscribeParams, ThreadUnsubscribeParams, TurnInterruptParams, TurnInteractionResolveParams, TurnStartParams, TypstCompileParams, WorkspaceSearchCancelParams, WorkspaceSearchReadParams, WorkspaceSearchStartParams } from "../../../../../generated/app-server/types.js";
 import { APP_SERVER_METHODS } from "../../../../../generated/app-server/types.js";
+import type { GitCommitParams, GitPathsParams } from "../../../../../generated/app-server/types.js";
 import type { AppServerSupervisor } from "./app-server-supervisor.js";
 import { boolean, boundedPositiveInteger, nonEmptyString, nonNegativeInteger, positiveInteger, record, string, stringEnum } from "./app-server-ipc-validation.js";
 import { terminalIpcRoutes } from "./terminal-ipc.js";
@@ -92,6 +68,16 @@ export function appServerIpcRoutes(
       channel: "zeta:session:archive",
       validate: sessionCommandParams,
       invoke: (params) => supervisor.request(APP_SERVER_METHODS["session/archive"], params),
+    }),
+    route({
+      channel: "zeta:session:model:set",
+      validate: sessionModelSetParams,
+      invoke: (params) => supervisor.request(APP_SERVER_METHODS["session/model/set"], params),
+    }),
+    route({
+      channel: "zeta:model:list",
+      validate: emptyParams,
+      invoke: () => supervisor.request(APP_SERVER_METHODS["model/list"], {}),
     }),
     route({
       channel: "zeta:thread:read",
@@ -171,6 +157,51 @@ export function appServerIpcRoutes(
         supervisor.request(APP_SERVER_METHODS["fs/readFile"], params),
     }),
     route({
+      channel: "zeta:git:status",
+      validate: emptyParams,
+      invoke: () =>
+        supervisor.request(APP_SERVER_METHODS["git/status"], {}),
+    }),
+    route({
+      channel: "zeta:git:stage",
+      validate: gitPathsParams,
+      invoke: (params) =>
+        supervisor.request(APP_SERVER_METHODS["git/stage"], params),
+    }),
+    route({
+      channel: "zeta:git:unstage",
+      validate: gitPathsParams,
+      invoke: (params) =>
+        supervisor.request(APP_SERVER_METHODS["git/unstage"], params),
+    }),
+    route({
+      channel: "zeta:git:discard-worktree",
+      validate: gitPathsParams,
+      invoke: (params) =>
+        supervisor.request(APP_SERVER_METHODS["git/discardWorktree"], params),
+    }),
+    route({
+      channel: "zeta:git:commit",
+      validate: gitCommitParams,
+      invoke: (params) =>
+        supervisor.request(APP_SERVER_METHODS["git/commit"], params),
+    }),
+    route({
+      channel: "zeta:git:fetch",
+      validate: emptyParams,
+      invoke: () => supervisor.request(APP_SERVER_METHODS["git/fetch"], {}),
+    }),
+    route({
+      channel: "zeta:git:pull",
+      validate: emptyParams,
+      invoke: () => supervisor.request(APP_SERVER_METHODS["git/pull"], {}),
+    }),
+    route({
+      channel: "zeta:git:push",
+      validate: emptyParams,
+      invoke: () => supervisor.request(APP_SERVER_METHODS["git/push"], {}),
+    }),
+    route({
       channel: "zeta:workspace-search:start",
       validate: workspaceSearchStartParams,
       invoke: (params) =>
@@ -236,6 +267,20 @@ function sessionCommandParams(value: unknown): SessionCommandParams {
     commandId: nonEmptyString(params.commandId, "commandId"),
     sessionId: nonEmptyString(params.sessionId, "sessionId"),
     expectedSequence: nonNegativeInteger(params.expectedSequence, "expectedSequence"),
+  };
+}
+
+function sessionModelSetParams(value: unknown): SessionModelSetParams {
+  const params = record(value, ["commandId", "sessionId", "expectedSequence", "model"]);
+  const model = record(params.model, ["provider", "model"]);
+  return {
+    commandId: nonEmptyString(params.commandId, "commandId"),
+    sessionId: nonEmptyString(params.sessionId, "sessionId"),
+    expectedSequence: nonNegativeInteger(params.expectedSequence, "expectedSequence"),
+    model: {
+      provider: nonEmptyString(model.provider, "model.provider"),
+      model: nonEmptyString(model.model, "model.model"),
+    },
   };
 }
 
@@ -598,6 +643,29 @@ function relativeWorkspacePath(value: unknown): string {
     throw new Error("path must be relative to the workspace root");
   }
   return path;
+}
+
+function gitPathsParams(value: unknown): GitPathsParams {
+  const params = record(value, ["paths"]);
+  if (!Array.isArray(params.paths) || params.paths.length === 0 || params.paths.length > 5_000) {
+    throw new Error("paths must contain between 1 and 5000 entries");
+  }
+  return {
+    paths: params.paths.map((path, index) => {
+      const resolved = relativeWorkspacePath(path);
+      if (!resolved) throw new Error(`paths[${index}] must not be empty`);
+      return resolved;
+    }),
+  };
+}
+
+function gitCommitParams(value: unknown): GitCommitParams {
+  const params = record(value, ["message"]);
+  const message = string(params.message, "message");
+  if (!message.trim() || message.includes("\0") || new TextEncoder().encode(message).byteLength > 65_536) {
+    throw new Error("message must be non-empty, NUL-free, and no larger than 65536 UTF-8 bytes");
+  }
+  return { message };
 }
 
 const MAX_TYPST_SOURCE_BYTES = 1024 * 1024;

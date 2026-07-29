@@ -1,8 +1,8 @@
 use super::tool_scheduler::{ToolScheduler, ToolSchedulingProgress};
 use crate::policy_service::UnavailablePolicyService;
 use crate::{
-    CompletedTurn, ContextAssembler, CoreError, ModelService, ModelStreamSink, NoThreadUpdates,
-    NoTools, PolicyService, ThreadController, ThreadUpdateSink, ToolService,
+    CompletedTurn, ContextAssembler, CoreError, ModelSelection, ModelService, ModelStreamSink,
+    NoThreadUpdates, NoTools, PolicyService, ThreadController, ThreadUpdateSink, ToolService,
 };
 use std::sync::Arc;
 use zeta_async_utils::{Cancellation, CancellationReason, CancellationToken};
@@ -160,6 +160,15 @@ impl TurnExecutor {
                 .map_err(ExecutionFailure::model)?;
             let request = ContextAssembler::assemble(&snapshot, tools.clone())
                 .map_err(ExecutionFailure::model)?;
+            let turn = snapshot
+                .turns
+                .iter()
+                .find(|turn| &turn.turn_id == turn_id)
+                .ok_or_else(|| ExecutionFailure::model(CoreError::NotFound(turn_id.to_string())))?;
+            let model = match turn.model.as_ref() {
+                Some(model) => ModelSelection::Session(model),
+                None => ModelSelection::ConfiguredDefault,
+            };
             let mut stream = InvocationStream::new(
                 self.threads.clone(),
                 self.updates.clone(),
@@ -171,7 +180,7 @@ impl TurnExecutor {
             );
             let response = self
                 .model
-                .stream(&request, cancellation, &mut stream)
+                .stream(model, &request, cancellation, &mut stream)
                 .map_err(ExecutionFailure::service)?;
             check_cancellation(cancellation)?;
 

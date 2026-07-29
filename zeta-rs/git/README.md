@@ -1,14 +1,15 @@
 # `zeta-git`
 
 > 本 README 是 Zeta 本地 Git 实现的 crate-level canonical contract。它说明当前代码、关键
-> private symbol、失败语义与安全修改路径。未来 Desktop/App Server Git 产品语义需要独立系统
-> 文档；模型 Tool 和 approval 边界仍由 [`docs/tools.md`](../../docs/tools.md) 与
+> private symbol、失败语义与安全修改路径。Desktop/App Server Git 产品语义见
+> [`docs/git.md`](../../docs/git.md)；模型 Tool 和 approval 边界仍由 [`docs/tools.md`](../../docs/tools.md) 与
 > [`docs/sandboxing.md`](../../docs/sandboxing.md) 维护。
 
 `zeta-git` 是 Zeta 中“如何调用 Git、如何解释 Git 结果”的唯一实现 owner。完整 owner 不等于
-当前已经实现完整 SCM：本阶段提供仓库打开、结构化状态快照、本地 branch、remote、最近 commit
-和 patch check/apply；持续监听、状态缓存、stage/commit/fetch/push/worktree mutation 与前端协议
-尚未实现。
+当前已经实现完整 SCM：本阶段提供仓库打开、结构化状态快照、本地 branch、remote、最近 commit、
+typed stage/unstage/discard/commit/fetch/pull/push 和 patch check/apply；持续监听、状态缓存与
+branch/worktree mutation 尚未实现。App Server 与 Desktop 已通过 Git SCM 纵向切片消费这些能力，但该 service/protocol/UI
+不属于本 crate。
 
 ## 为什么不是普通 `git utils`
 
@@ -36,6 +37,7 @@ Git domain owner 下，而不是建立平级的 `zeta-git-utils`：
 | `src/repository.rs` | 从已有 path 打开 working tree，解析 worktree/git/common metadata path | `GitRepository`、`GitRepositoryKind`、`existing_directory` |
 | `src/status.rs` | porcelain-v2 snapshot 与 HEAD/change/submodule model | `GitRepositorySnapshot`、`GitHead`、private `parse_status` |
 | `src/info.rs` | local branches、fetch/push remote URLs、bounded recent history | `GitBranch`、`GitRemote`、`GitCommitSummary` |
+| `src/mutation.rs` | path set/commit request validation 与常用 index/worktree/remote mutation | `GitPathspecSet`、`GitCommitRequest`、`GitCommitResult` |
 | `src/patch.rs` | patch request/result、stdin apply、path extraction 和 diagnostics 分类 | `GitPatchRequest`、`GitPatchResult`、private `parse_apply_diagnostics` |
 | `src/fsmonitor.rs` | effective config 与 built-in daemon capability 探测 | private `detect_fsmonitor_override` |
 | `src/path.rs` | porcelain path bytes 到 platform `PathBuf` | private `path_from_git_bytes` |
@@ -70,6 +72,15 @@ GitClient::local_branches / remotes / recent_commits
 └─ GitClient::run_query
    └─ strict parser for the command-specific output
 
+GitClient::stage / unstage / discard_worktree
+├─ GitPathspecSet
+└─ GitClient::run_mutation
+   └─ git add | restore --staged | restore --worktree
+
+GitClient::commit / fetch / pull_fast_forward / push
+└─ GitClient::run_mutation[_with_stdin]
+   └─ git commit --file=- | fetch --all --prune | pull --ff-only | push
+
 GitClient::apply_patch
 ├─ extract_patch_paths
 ├─ GitClient::run_mutation_with_stdin
@@ -97,8 +108,20 @@ branch、remote URL 和 commit subject 当前要求 UTF-8。Snapshot 按 Git 输
 额外排序，因为 rename record 的相邻 NUL payload 由 parser 顺序消费。
 
 `snapshot` 使用 `GIT_OPTIONAL_LOCKS=0`。它是 observation，不获得阻止并发 Git mutation 的锁；
-调用方不能把一次 snapshot 当作后续 mutation 的 compare-and-swap 前提。App Server service
-未来必须使用 revision/invalidation 重新确认状态。
+调用方不能把一次 snapshot 当作后续 mutation 的 compare-and-swap 前提。App Server
+`GitRuntime` 当前使用 watcher invalidation 重新查询，并仅在 workspace projection 改变时推进
+revision；该 revision 仍不是 mutation CAS token。
+
+## Mutation contract
+
+`GitPathspecSet` 在启动 Git 前拒绝空集合、空路径、绝对路径、`.`/`..` component 和 NUL。
+`GitCommitRequest` 拒绝空白 message、NUL 和超过 64 KiB 的内容。`stage`、`unstage` 与
+`discard_worktree` 只接收该 validated type，避免调用方把未经建模的 host path 直接拼进 argv。
+
+`unstage` 在 unborn repository 使用 `git rm --cached`，其他情况使用 `git restore --staged`。
+`discard_worktree` 只恢复 tracked path，不删除 untracked 内容。`commit` 从 stdin 读取 message，
+成功后返回 HEAD object ID。Remote mutation non-interactive；`fetch` 为 all-remotes prune，
+`pull_fast_forward` 明确使用 `--ff-only`，`push` 使用 repository 当前 upstream/default。
 
 ## Patch contract
 
@@ -154,26 +177,32 @@ private `GitCommandProfile` 固定三类执行：
 Current：
 
 ```text
-host
-└─ zeta-git
-   └─ system git
+Desktop SCM
+  ↔ App Server git/* + git/statusChanged
+  → workspace-scoped GitRuntime
+  → workspace-scoped GitService
+  → zeta-git
+  → system git
 ```
 
-Proposed，但尚未实现：
+Current live status projection：
 
 ```text
 Desktop
   ↕ app-server-protocol Git commands/snapshots/events
-App Server Git service
-  ├─ repository registry + revision
-  ├─ zeta-file-watcher invalidation hints
-  ├─ operation serialization/progress/cancellation
+App Server GitRuntime
+  ├─ single-workspace projection + revision
+  ├─ zeta-file-watcher invalidation hints + debounce
+  ├─ operation serialization
+  ├─ status deduplication + notification
   └─ zeta-git
       └─ system git
 ```
 
-未来 App Server service 拥有 live repository lifecycle；`zeta-file-watcher` 只提供 invalidation
-hint；protocol 拥有 wire DTO；Desktop 只展示状态和发送 intent；agent Git Tool 还必须经过
+当前 `GitService` 冻结 workspace root 和 async runtime，每次 operation 重新打开仓库；成功
+mutation 随后读取并返回新 snapshot。`GitRuntime` 串行化 operation、维护当前 workspace
+projection/revision，并把 `zeta-file-watcher` hint 转换为重新查询；protocol 拥有 wire DTO；
+Desktop 只展示状态和发送 intent；agent Git Tool 还必须经过
 policy/approval。它们都不能复制本 crate 的 command/parsing 实现。
 
 ## 测试与修改
@@ -184,8 +213,14 @@ policy/approval。它们都不能复制本 crate 的 command/parsing 实现。
 - `repository_tests.rs`：nested start、non-repository、linked worktree；
 - `status_tests.rs`：index/worktree/untracked、rename 与 unmerged/unborn parser；
 - `info_tests.rs`：branch、remote fetch/push URL、history limit；
-- `patch_tests.rs`：quoted paths、check/apply、unapplied rejection 与 three-way conflict；
+- `mutation_tests.rs`：validation、stage/unstage/discard/commit，以及本地 bare remote 驱动的
+  fetch/fast-forward pull/push；
+- `patch_tests.rs`：quoted paths、check/apply、unapplied rejection、three-way conflict 与
+  Windows `core.autocrlf=true`；
 - `fsmonitor_tests.rs`：NUL config value 与 boolean spelling。
+
+测试仓库固定 `core.autocrlf=false` 与 LF，避免继承开发机全局配置；需要验证平台换行语义的测试
+必须显式覆盖 repository-local config。本地 remote 测试不访问网络或用户凭据。
 
 正常 workspace 状态下运行：
 
@@ -205,8 +240,9 @@ Current capability 和 failure contract。
 
 当前限制：
 
-- 尚无 stage/unstage/discard/commit/branch mutation/worktree mutation/fetch/pull/push；
-- 尚无 live cache、watch、operation queue、progress、caller cancellation 或 protocol DTO；
+- 尚无 branch/tag/worktree mutation；
+- App Server 已有单 workspace projection、watch、revision/event 和 operation serialization，
+  但尚无 multi-repository registry、可观测 queue、progress 或 caller cancellation；
 - 不支持 bare repository，`open_repository` 要求 working tree；
 - repository discovery 依赖支持 `rev-parse --path-format=absolute` 的 Git；
 - patch diagnostics parser 是 best effort，不承诺复现所有 Git 版本的自然语言；
@@ -215,10 +251,10 @@ Current capability 和 failure contract。
 
 扩展顺序应优先保持 ownership：
 
-1. 在本 crate 增加明确 typed operation 与 parser；
-2. 为 mutation 定义 index/worktree side effect、failure 和 cancellation；
-3. 在 App Server service 中增加 registry、revision、watch invalidation 与 operation manager；
-4. 最后增加 protocol/desktop/agent adapter。
+1. 在本 crate 增加新的明确 typed operation 与 parser；
+2. 为新增 mutation 定义 index/worktree side effect、failure 和 cancellation；
+3. 在当前 App Server `GitRuntime` 上增加 multi-repository registry 与 operation manager；
+4. 最后增加对应 protocol/desktop/agent adapter。
 
 只有出现多个独立底层 Git owner 且有稳定共享 primitive 时，才重新评估 `zeta-git-utils`；当前不应
 新增该 crate。

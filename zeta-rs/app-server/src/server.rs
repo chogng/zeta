@@ -1,3 +1,4 @@
+use crate::model_catalog::{ModelCatalog, unavailable_model_catalog};
 use crate::resource_store::{ResourceError, ResourceStore};
 use crate::server::skills_runtime::{SkillConfigSnapshotProvider, SkillRuntime, SkillWatcher};
 use crate::slash_commands::SlashCommandCatalog;
@@ -25,6 +26,8 @@ use zeta_typst::TypstCompiler;
 
 mod config_operations;
 mod fs_operations;
+mod git_operations;
+mod git_runtime;
 mod operations;
 mod search_operations;
 mod skill_operations;
@@ -37,16 +40,19 @@ use update_broker::{NotificationListener, NotificationQueue, UpdateBroker};
 pub struct AppServer {
     pub(super) sessions: Arc<SessionCoordinator>,
     model: Arc<dyn ModelService>,
+    model_catalog: Arc<dyn ModelCatalog>,
     pub(super) turn_executor: TurnExecutor,
     next_connection_id: AtomicU64,
     pub(super) resources: Mutex<ResourceStore>,
     pub(super) config: Option<Arc<ConfigStore>>,
     pub(super) file_system: Option<Arc<dyn WorkspaceFileSystem>>,
+    pub(super) git: Option<Arc<git_runtime::GitRuntime>>,
     pub(super) workspace_search: Option<crate::workspace_search::WorkspaceSearchService>,
     pub(super) terminals: Option<crate::terminal_service::TerminalService>,
     pub(super) typst: TypstCompiler,
     pub(super) slash_commands: SlashCommandCatalog,
     pub(super) skills: Option<Arc<SkillRuntime>>,
+    _git_watcher: Option<git_runtime::GitWatcher>,
     _skill_watcher: Option<SkillWatcher>,
     updates: Arc<UpdateBroker>,
 }
@@ -98,16 +104,19 @@ impl AppServer {
         Self {
             sessions,
             model,
+            model_catalog: unavailable_model_catalog(),
             turn_executor,
             next_connection_id: AtomicU64::new(1),
             resources: Mutex::new(ResourceStore::default()),
             config: None,
             file_system: None,
+            git: None,
             workspace_search: None,
             terminals: None,
             typst: TypstCompiler::new(),
             slash_commands: SlashCommandCatalog::default(),
             skills: None,
+            _git_watcher: None,
             _skill_watcher: None,
             updates,
         }
@@ -169,6 +178,22 @@ impl AppServer {
     pub fn with_file_system(mut self, file_system: Arc<dyn WorkspaceFileSystem>) -> Self {
         self.file_system = Some(file_system);
         self
+    }
+
+    pub(crate) fn with_model_catalog(mut self, model_catalog: Arc<dyn ModelCatalog>) -> Self {
+        self.model_catalog = model_catalog;
+        self
+    }
+
+    /// Enables workspace-scoped Git queries without exposing arbitrary host paths to clients.
+    pub(crate) fn with_git_root(
+        mut self,
+        workspace_root: std::path::PathBuf,
+    ) -> Result<Self, git_runtime::GitRuntimeError> {
+        let runtime = git_runtime::GitRuntime::new(workspace_root, Arc::clone(&self.updates))?;
+        self._git_watcher = Some(runtime.start_watching());
+        self.git = Some(runtime);
+        Ok(self)
     }
 
     /// Enables connection-owned workspace content search using one frozen ripgrep executable.
@@ -346,6 +371,9 @@ impl AppServer {
                 self.session_complete(connection, &request.params)
             }
             Some(ClientMethod::SessionArchive) => self.session_archive(connection, &request.params),
+            Some(ClientMethod::SessionModelSet) => {
+                self.session_model_set(connection, &request.params)
+            }
             Some(ClientMethod::ThreadRead) => self.thread_read(&request.params),
             Some(ClientMethod::ThreadSubscribe) => {
                 self.thread_subscribe(connection, &request.params)
@@ -360,6 +388,7 @@ impl AppServer {
             }
             Some(ClientMethod::TypstCompile) => self.typst_compile(connection, &request.params),
             Some(ClientMethod::ConfigRead) => self.config_read(),
+            Some(ClientMethod::ModelList) => self.model_list(),
             Some(ClientMethod::ConfigUpdate) => self.config_update(&request.params),
             Some(ClientMethod::ProviderConfigure) => self.provider_configure(&request.params),
             Some(ClientMethod::ProviderRemove) => self.provider_remove(&request.params),
@@ -385,6 +414,14 @@ impl AppServer {
             Some(ClientMethod::FsGetMetadata) => self.fs_get_metadata(&request.params),
             Some(ClientMethod::FsReadDirectory) => self.fs_read_directory(&request.params),
             Some(ClientMethod::FsReadFile) => self.fs_read_file(&request.params),
+            Some(ClientMethod::GitStatus) => self.git_status(),
+            Some(ClientMethod::GitStage) => self.git_stage(&request.params),
+            Some(ClientMethod::GitUnstage) => self.git_unstage(&request.params),
+            Some(ClientMethod::GitDiscardWorktree) => self.git_discard_worktree(&request.params),
+            Some(ClientMethod::GitCommit) => self.git_commit(&request.params),
+            Some(ClientMethod::GitFetch) => self.git_fetch(),
+            Some(ClientMethod::GitPull) => self.git_pull(),
+            Some(ClientMethod::GitPush) => self.git_push(),
             Some(ClientMethod::WorkspaceSearchStart) => {
                 self.workspace_search_start(connection, &request.params)
             }

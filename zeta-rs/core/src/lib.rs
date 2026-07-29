@@ -17,6 +17,7 @@ pub use error::CoreError;
 pub use policy_service::{PolicyService, durable_approval_request};
 pub use services::AutoReviewedToolGrant;
 pub use services::LeaseGuard;
+pub use services::ModelSelection;
 pub use services::ModelService;
 pub use services::ModelStreamSink;
 pub use services::NoThreadUpdates;
@@ -30,7 +31,7 @@ pub use session_coordinator::{
     ArchiveSessionThreadRequest, CommandDisposition, CreateSessionRequest, CreateSessionResult,
     CreateSessionThreadRequest, ForkSessionThreadRequest, InMemorySessionStore,
     SequenceExpectation, SessionCoordinator, SessionLifecycleRequest, SessionMutationResult,
-    SessionThreadResult,
+    SessionThreadResult, SetSessionModelRequest,
 };
 pub use session_reducer::{
     SessionCommandResult, SessionCommandSnapshot, SessionSnapshot, SessionThreadSnapshot,

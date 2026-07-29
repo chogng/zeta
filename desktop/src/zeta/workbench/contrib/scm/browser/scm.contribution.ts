@@ -1,16 +1,9 @@
 import { LxIcon } from "../../../../base/common/lxicons.js";
-import {
-  SyncDescriptor,
-} from "../../../../platform/instantiation/common/instantiation.js";
-import {
-  PlaceholderViewPane,
-} from "../../../browser/parts/views/placeholderViewPane.js";
-import {
-  ViewContainerLocation,
-  type WorkbenchViewRegistry,
-  WorkbenchViewContainerId,
-  ViewsRegistry,
-} from "../../../common/views.js";
+import { SyncDescriptor } from "../../../../platform/instantiation/common/instantiation.js";
+import { ViewContainerLocation, type WorkbenchViewRegistry, WorkbenchViewContainerId, ViewsRegistry } from "../../../common/views.js";
+import { IRendererApiService } from "../../../common/services.js";
+import { ScmViewPane } from "./scmViewPane.js";
+import "./media/scm.css";
 
 export const GIT_VIEW_ID = "zeta.gitView";
 
@@ -30,8 +23,8 @@ export function registerGitViews(
     title: "Changes",
     order: 1,
     canToggleVisibility: false,
-    ctorDescriptor: new SyncDescriptor(PlaceholderViewPane, {
-      staticArguments: ["Git integration is not implemented yet."],
+    ctorDescriptor: new SyncDescriptor(ScmViewPane, {
+      serviceDependencies: [IRendererApiService],
     }),
   }]);
 }

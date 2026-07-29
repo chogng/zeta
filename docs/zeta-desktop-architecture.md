@@ -6,6 +6,7 @@
 > 产品装配与构建版本：[`product-editions.md`](product-editions.md)
 > Renderer 控件、Workbench Part 与 CSS 状态所有权：[`ui-styling-ownership.md`](ui-styling-ownership.md)
 > Renderer Command、MenuId 与 UI Action 组合系统：[`menu-system.md`](menu-system.md)
+> Chat 内 Session Inspector 的信息架构与 Plan 演进：[`chat-session-inspector.md`](chat-session-inspector.md)
 
 ## 1. 目标
 
@@ -82,7 +83,7 @@ production consumer，因此下表的共享 URI 状态仍为“部分具备”�
 | workspace 内容搜索执行、取消与结果限额 | Rust / App Server | ✅ connection-owned pull job |
 | 搜索表单、增量结果分组与高亮 | Renderer | ✅ Search contrib |
 | 搜索结果打开文件 | Files / Editor vertical | 尚未完成 |
-| watcher invalidation 与前端自动刷新 | Rust authority + Renderer projection | 尚未完成 |
+| Explorer watcher invalidation 与文件树自动刷新 | Rust authority + Renderer projection | 尚未完成；Git SCM 已有独立自动状态刷新 |
 | 文件位置 identity | 共享 URI contract；Renderer 只维护其视图投影 | 部分具备：单根 URI 映射 |
 | 跨重启的领域 `FileId` 或 `DocumentId` | 拥有该生命周期的 Rust 领域模型 | 尚未完成 |
 | Tab、Pane 等纯 UI 实例 ID | Renderer | 已有 Workbench 基础设施 |

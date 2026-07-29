@@ -1,6 +1,6 @@
 use crate::CoreError;
 use zeta_protocol::{
-    Session, SessionCommand, SessionEvent, SessionId, SessionStatus, SessionThread,
+    ModelRef, Session, SessionCommand, SessionEvent, SessionId, SessionStatus, SessionThread,
     SessionThreadStatus, ThreadId, ThreadOrigin,
 };
 use zeta_session_store::{
@@ -12,6 +12,7 @@ pub struct SessionSnapshot {
     pub session_id: SessionId,
     pub title: String,
     pub status: SessionStatus,
+    pub model: Option<ModelRef>,
     pub sequence: u64,
     pub threads: Vec<SessionThreadSnapshot>,
     pub commands: Vec<SessionCommandSnapshot>,
@@ -24,6 +25,7 @@ impl SessionSnapshot {
             session_id: self.session_id.clone(),
             title: self.title.clone(),
             status: self.status,
+            model: self.model.clone(),
             sequence: self.sequence,
             threads: self
                 .threads
@@ -50,6 +52,7 @@ pub struct SessionCommandSnapshot {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum SessionCommandResult {
     SessionCreated,
+    SessionModelChanged { model: ModelRef },
     ThreadCreated { thread_id: ThreadId },
     ThreadArchived { thread_id: ThreadId },
     SessionCompleted,
@@ -74,7 +77,12 @@ pub fn reduce_session_event(
                 "first Session event must have sequence 1".into(),
             ));
         }
-        let SessionEvent::SessionCreated { session_id, title } = &envelope.event else {
+        let SessionEvent::SessionCreated {
+            session_id,
+            title,
+            model,
+        } = &envelope.event
+        else {
             return Err(CoreError::Journal(
                 "first Session event must create the Session".into(),
             ));
@@ -83,6 +91,7 @@ pub fn reduce_session_event(
         if receipt.command
             != (SessionCommand::Create {
                 title: title.clone(),
+                model: model.clone(),
             })
         {
             return Err(CoreError::Journal(
@@ -93,6 +102,7 @@ pub fn reduce_session_event(
             session_id: session_id.clone(),
             title: title.clone(),
             status: SessionStatus::Active,
+            model: model.clone(),
             sequence: 1,
             threads: Vec::new(),
             commands: vec![SessionCommandSnapshot {
@@ -122,6 +132,26 @@ pub fn reduce_session_event(
             return Err(CoreError::Journal(
                 "Session cannot be created more than once".into(),
             ));
+        }
+        SessionEvent::SessionModelChanged { model, .. } => {
+            let receipt = require_new_session_command(&snapshot, envelope)?;
+            if receipt.command
+                != (SessionCommand::SetModel {
+                    model: model.clone(),
+                })
+            {
+                return Err(CoreError::Journal(
+                    "Session model command does not match its event".into(),
+                ));
+            }
+            snapshot.model = Some(model.clone());
+            snapshot.commands.push(SessionCommandSnapshot {
+                receipt: receipt.clone(),
+                result: SessionCommandResult::SessionModelChanged {
+                    model: model.clone(),
+                },
+                response_sequence: envelope.sequence,
+            });
         }
         SessionEvent::ThreadCreationPlanned { thread, title, .. } => {
             if snapshot.status != SessionStatus::Active {

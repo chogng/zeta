@@ -14,6 +14,7 @@ fn envelope(sequence: u64, event: ThreadEvent) -> StoredEvent {
             command_id: CommandId::new(format!("command_{sequence}"))
                 .expect("test ID is non-empty"),
             command: ThreadCommand::StartTurn {
+                model: None,
                 input: vec![UserInput::Text {
                     text: "hello".into(),
                 }],
@@ -54,6 +55,7 @@ fn reducer_rebuilds_a_failed_turn_with_stable_error_details() {
             ThreadEvent::TurnAccepted {
                 thread_id: ThreadId::new("thread_1").expect("test ID is non-empty"),
                 turn_id: TurnId::new("turn_1").expect("test ID is non-empty"),
+                model: None,
             },
         ),
     )
@@ -111,7 +113,8 @@ fn reducer_rejects_sequence_gaps_and_illegal_transitions() {
                 3,
                 ThreadEvent::TurnAccepted {
                     thread_id: ThreadId::new("thread_1").expect("test ID is non-empty"),
-                    turn_id: TurnId::new("turn_1").expect("test ID is non-empty")
+                    turn_id: TurnId::new("turn_1").expect("test ID is non-empty"),
+                    model: None
                 }
             )
         )
@@ -125,6 +128,7 @@ fn reducer_rejects_sequence_gaps_and_illegal_transitions() {
             ThreadEvent::TurnAccepted {
                 thread_id: ThreadId::new("thread_1").expect("test ID is non-empty"),
                 turn_id: TurnId::new("turn_1").expect("test ID is non-empty"),
+                model: None,
             },
         ),
     )
@@ -151,11 +155,13 @@ fn reducer_rebuilds_typed_command_receipt_and_all_durable_item_kinds() {
         ThreadEvent::TurnAccepted {
             thread_id: ThreadId::new("thread_1").expect("test ID is non-empty"),
             turn_id: TurnId::new("turn_1").expect("test ID is non-empty"),
+            model: None,
         },
     );
     accepted.command = Some(ThreadCommandReceipt {
         command_id: CommandId::new("command_1").expect("test ID is non-empty"),
         command: ThreadCommand::StartTurn {
+            model: None,
             input: vec![UserInput::Text {
                 text: "hello".into(),
             }],
@@ -280,6 +286,7 @@ fn reducer_rejects_a_tool_result_without_its_tool_call() {
             ThreadEvent::TurnAccepted {
                 thread_id: ThreadId::new("thread_1").expect("test ID is non-empty"),
                 turn_id: TurnId::new("turn_1").expect("test ID is non-empty"),
+                model: None,
             },
         ),
     )
@@ -383,6 +390,7 @@ fn started_sandboxed_tool_snapshot() -> ThreadSnapshot {
             ThreadEvent::TurnAccepted {
                 thread_id: ThreadId::new("thread_1").unwrap(),
                 turn_id: TurnId::new("turn_1").unwrap(),
+                model: None,
             },
         ),
         envelope(

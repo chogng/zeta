@@ -682,6 +682,7 @@ fn fixture_with(tools: Arc<ReviewTool>, policy: Arc<dyn PolicyService>) -> Fixtu
             StartTurnRequest {
                 command_id: CommandId::new("start").unwrap(),
                 expected_sequence: SequenceExpectation::Any,
+                model: None,
                 input: vec![UserInput::Text { text: "run".into() }],
             },
         )

@@ -1,7 +1,8 @@
 # `zeta-file-watcher`
 
 > 本 README 是共享 filesystem invalidation hint 的实现契约。Skill catalog 的扫描、校验与
-> snapshot 发布语义由 [`docs/skills.md`](../../docs/skills.md) 维护。
+> snapshot 发布语义由 [`docs/skills.md`](../../docs/skills.md) 维护；Git status 的重新查询、
+> revision 与 notification 语义由 [`docs/git.md`](../../docs/git.md) 维护。
 
 `zeta-file-watcher` 提供基于 `notify` 的多订阅者路径监听、共享 backend watch ref-count、
 缺失路径回退、RAII 注销和异步事件合并。它只报告“可能发生了变化”；消费者必须重新读取并验证
@@ -118,6 +119,7 @@ bazel test //zeta-rs/file-watcher:file-watcher-unit-tests
 ```
 
 修改 path normalization、recursive mode、missing-target fallback、backend error 或 event
-coalescing 时，必须同步检查 `file_watcher_tests.rs`、本 README 和
-[`docs/skills.md`](../../docs/skills.md) 的 snapshot invalidation 语义。接入新 consumer 时应把
+coalescing 时，必须同步检查 `file_watcher_tests.rs`、本 README、
+[`docs/skills.md`](../../docs/skills.md) 与 [`docs/git.md`](../../docs/git.md) 的 snapshot
+invalidation 语义。接入新 consumer 时应把
 其 owner 文档链接回本 README，而不是复制 backend 细节。

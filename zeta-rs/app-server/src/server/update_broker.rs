@@ -2,6 +2,7 @@ use serde::Serialize;
 use serde_json::Value;
 use std::collections::BTreeMap;
 use std::sync::{Arc, Condvar, Mutex, Weak};
+use zeta_app_server_protocol::protocol::git::{GitStatusChanged, GitStatusResult};
 use zeta_app_server_protocol::protocol::registry::ServerNotificationMethod;
 use zeta_app_server_protocol::protocol::skills::SkillsChanged;
 use zeta_app_server_protocol::rpc::JsonRpcNotification;
@@ -261,6 +262,28 @@ impl UpdateBroker {
             queue.push(notification(
                 ServerNotificationMethod::SkillsChanged,
                 &SkillsChanged { generation },
+            ));
+            true
+        });
+    }
+
+    pub(super) fn publish_git_status_changed(&self, status: GitStatusResult) {
+        let Ok(mut subscribers) = self.subscribers.lock() else {
+            return;
+        };
+        subscribers.retain(|_, subscriber| {
+            let Some(queue) = subscriber
+                .queue
+                .upgrade()
+                .map(NotificationQueue::from_inner)
+            else {
+                return false;
+            };
+            queue.push(notification(
+                ServerNotificationMethod::GitStatusChanged,
+                &GitStatusChanged {
+                    status: status.clone(),
+                },
             ));
             true
         });

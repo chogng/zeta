@@ -2,12 +2,7 @@ import { strict as assert } from "node:assert";
 import test from "node:test";
 import type { AppServerSupervisor } from "../src/zeta/platform/app-server/electron-main/app-server-supervisor.js";
 import { appServerIpcRoutes } from "../src/zeta/platform/app-server/electron-main/app-server-ipc.js";
-import {
-  registerTrustedIpcRoutes,
-  type IpcMainInvokeEventLike,
-  type IpcMainLike,
-  type IpcRoute,
-} from "../src/zeta/platform/app-server/electron-main/trusted-ipc-router.js";
+import { registerTrustedIpcRoutes, type IpcMainInvokeEventLike, type IpcMainLike, type IpcRoute } from "../src/zeta/platform/app-server/electron-main/trusted-ipc-router.js";
 
 class FakeIpcMain implements IpcMainLike {
   readonly handlers = new Map<
@@ -94,7 +89,7 @@ test("trusted IPC router enforces webContents, main frame, exact URL, and params
   assert.equal(ipcMain.handlers.size, 0);
 });
 
-test("App Server IPC validators reject malformed Turn, Typst, resource, filesystem, and search input", () => {
+test("App Server IPC validators reject malformed Turn, Typst, resource, filesystem, search, and Git input", () => {
   const routes = appServerIpcRoutes({} as AppServerSupervisor);
   const sessionCreate = routes.find((route) => route.channel === "zeta:session:create")!;
   const turnStart = routes.find((route) => route.channel === "zeta:turn:start")!;
@@ -133,6 +128,8 @@ test("App Server IPC validators reject malformed Turn, Typst, resource, filesyst
   const terminalClose = routes.find(
     (route) => route.channel === "zeta:terminal:close",
   )!;
+  const gitStage = routes.find((route) => route.channel === "zeta:git:stage")!;
+  const gitCommit = routes.find((route) => route.channel === "zeta:git:commit")!;
 
   assert.deepEqual(
     sessionCreate.validate({ commandId: "one", title: "title" }),
@@ -382,6 +379,18 @@ test("App Server IPC validators reject malformed Turn, Typst, resource, filesyst
     terminalId: "terminal-1",
     force: true,
   }), /exactly/);
+  assert.deepEqual(gitStage.validate({ paths: ["src/main.ts", "README.md"] }), {
+    paths: ["src/main.ts", "README.md"],
+  });
+  for (const paths of [[], ["../outside"], ["/absolute"], ["C:\\absolute"], ["src\0file"]]) {
+    assert.throws(() => gitStage.validate({ paths }), /paths|workspace root/);
+  }
+  assert.deepEqual(gitCommit.validate({ message: "feat: add SCM actions" }), {
+    message: "feat: add SCM actions",
+  });
+  assert.throws(() => gitCommit.validate({ message: "   " }), /non-empty/);
+  assert.throws(() => gitCommit.validate({ message: "bad\0message" }), /NUL/);
+  assert.throws(() => gitCommit.validate({ message: "a".repeat(65_537) }), /UTF-8 bytes/);
 });
 
 test("trusted IPC router rejects duplicate route registrations", () => {

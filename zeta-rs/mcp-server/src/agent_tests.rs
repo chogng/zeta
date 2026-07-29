@@ -23,6 +23,7 @@ struct EchoModel {
 impl ModelService for EchoModel {
     fn invoke(
         &self,
+        _: zeta_core::ModelSelection<'_>,
         request: &ModelRequest,
         _: &CancellationToken,
     ) -> Result<ModelResponse, CoreError> {
@@ -232,6 +233,7 @@ struct BlockingModel {
 impl ModelService for BlockingModel {
     fn invoke(
         &self,
+        _: zeta_core::ModelSelection<'_>,
         _: &ModelRequest,
         cancellation: &CancellationToken,
     ) -> Result<ModelResponse, CoreError> {

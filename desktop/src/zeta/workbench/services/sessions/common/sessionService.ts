@@ -1,4 +1,4 @@
-import type { Session, SessionId, ThreadId } from "../../../../../../generated/app-server/types.js";
+import type { ModelRef, Session, SessionId, ThreadId } from "../../../../../../generated/app-server/types.js";
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { createUuid } from "../../../../base/common/uuid.js";
@@ -37,6 +37,7 @@ export interface IWorkbenchSessionService {
   ensureActiveThread(): Promise<IActiveSessionThread>;
   startNewSession(title?: string): Promise<IActiveSessionThread>;
   archiveSession(sessionId: SessionId): Promise<void>;
+  setModel(sessionId: SessionId, model: ModelRef): Promise<void>;
 }
 
 export const IWorkbenchSessionService =
@@ -175,6 +176,29 @@ export class WorkbenchSessionService
         this.#active = firstActiveThread(this.#sessions);
       }
       this.#setState("ready");
+    } catch (error) {
+      this.#setError(error);
+      throw error;
+    }
+  }
+
+  async setModel(sessionId: SessionId, model: ModelRef): Promise<void> {
+    await this.initialize();
+    const session = this.#sessions.find((candidate) => candidate.sessionId === sessionId && candidate.status === "active");
+    if (!session) throw new Error(`Active Session is not available: ${sessionId}`);
+    try {
+      const result = await this.#api.session.setModel({
+        commandId: commandId("session-model"),
+        sessionId,
+        expectedSequence: session.sequence,
+        model,
+      });
+      this.#sessions = this.#sessions.map((candidate) => candidate.sessionId === sessionId ? result.session : candidate);
+      if (this.#active?.session.sessionId === sessionId) {
+        this.#active = { session: result.session, threadId: this.#active.threadId };
+      }
+      this.#error = undefined;
+      this.#onDidChange.fire();
     } catch (error) {
       this.#setError(error);
       throw error;

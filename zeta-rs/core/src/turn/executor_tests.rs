@@ -1,7 +1,7 @@
 use super::*;
 use crate::{
-    CreateThreadRequest, InMemoryThreadStore, ModelService, ModelStreamSink, PolicyService,
-    SequenceExpectation, StartTurnRequest, ThreadUpdateSink, ToolAuthorization,
+    CreateThreadRequest, InMemoryThreadStore, ModelSelection, ModelService, ModelStreamSink,
+    PolicyService, SequenceExpectation, StartTurnRequest, ThreadUpdateSink, ToolAuthorization,
     ToolExecutionOutput, ToolService, TurnExecutionOutcome,
 };
 use serde_json::json;
@@ -244,6 +244,7 @@ fn per_thread_mailboxes_run_independently_and_interrupt_the_active_turn() {
             StartTurnRequest {
                 command_id: CommandId::new("fast-start").unwrap(),
                 expected_sequence: SequenceExpectation::Any,
+                model: None,
                 input: vec![UserInput::Text {
                     text: "fast".into(),
                 }],
@@ -358,7 +359,12 @@ impl LongRunningToolModel {
 }
 
 impl ModelService for LongRunningToolModel {
-    fn invoke(&self, _: &ModelRequest, _: &CancellationToken) -> Result<ModelResponse, CoreError> {
+    fn invoke(
+        &self,
+        _: ModelSelection<'_>,
+        _: &ModelRequest,
+        _: &CancellationToken,
+    ) -> Result<ModelResponse, CoreError> {
         let invocation = self.invocations.fetch_add(1, Ordering::Relaxed);
         if invocation == self.tool_rounds {
             return Ok(text_response("done"));
@@ -393,12 +399,18 @@ impl ThreadUpdateSink for RecordingUpdates {
 struct ChunkedModel;
 
 impl ModelService for ChunkedModel {
-    fn invoke(&self, _: &ModelRequest, _: &CancellationToken) -> Result<ModelResponse, CoreError> {
+    fn invoke(
+        &self,
+        _: ModelSelection<'_>,
+        _: &ModelRequest,
+        _: &CancellationToken,
+    ) -> Result<ModelResponse, CoreError> {
         unreachable!("stream is overridden")
     }
 
     fn stream(
         &self,
+        _: ModelSelection<'_>,
         _: &ModelRequest,
         _: &CancellationToken,
         sink: &mut dyn ModelStreamSink,
@@ -431,12 +443,18 @@ impl BlockingFirstModel {
 }
 
 impl ModelService for BlockingFirstModel {
-    fn invoke(&self, _: &ModelRequest, _: &CancellationToken) -> Result<ModelResponse, CoreError> {
+    fn invoke(
+        &self,
+        _: ModelSelection<'_>,
+        _: &ModelRequest,
+        _: &CancellationToken,
+    ) -> Result<ModelResponse, CoreError> {
         unreachable!("stream is overridden")
     }
 
     fn stream(
         &self,
+        _: ModelSelection<'_>,
         request: &ModelRequest,
         cancellation: &CancellationToken,
         sink: &mut dyn ModelStreamSink,
@@ -485,6 +503,7 @@ impl ScriptedModel {
 impl ModelService for ScriptedModel {
     fn invoke(
         &self,
+        _: ModelSelection<'_>,
         request: &ModelRequest,
         _: &CancellationToken,
     ) -> Result<ModelResponse, CoreError> {
@@ -637,6 +656,7 @@ fn started_turn() -> (Arc<ThreadController>, ThreadId, TurnId) {
             StartTurnRequest {
                 command_id: CommandId::new("start").unwrap(),
                 expected_sequence: SequenceExpectation::Any,
+                model: None,
                 input: vec![UserInput::Text {
                     text: "hello".into(),
                 }],

@@ -4,7 +4,8 @@
 > 面向客户端的 API 语义见 [`docs/zeta-app-server-api.md`](../../docs/zeta-app-server-api.md)，
 > canonical product values 见 [`docs/protocol.md`](../../docs/protocol.md)，workspace 搜索的跨层
 > ownership 见 [`docs/search.md`](../../docs/search.md)，Terminal external 语义见
-> [`docs/zeta-app-server-api.md`](../../docs/zeta-app-server-api.md#integrated-terminal)。
+> [`docs/zeta-app-server-api.md`](../../docs/zeta-app-server-api.md#integrated-terminal)，Git/SCM
+> ownership 见 [`docs/git.md`](../../docs/git.md)。
 
 `zeta-app-server-protocol` 是 App Server 对外 wire contract 的唯一 Rust source。它定义 typed
 params/results/errors、JSON-RPC 2.0 envelopes、method/notification registry，并从同一套定义生成
@@ -48,6 +49,7 @@ zeta-rs/app-server-protocol/
 │   │   ├── initialize.rs
 │   │   ├── slash_commands.rs
 │   │   ├── session.rs
+│   │   ├── model.rs
 │   │   ├── thread.rs
 │   │   ├── turn.rs
 │   │   ├── config.rs
@@ -81,10 +83,13 @@ zeta-rs/app-server-protocol/
 | `SerializationScopeDefinition` | dispatcher serialization requirement |
 
 Method registry 当前覆盖 initialize、Session lifecycle/subscription、Thread read/subscription、
-Config/provider/MCP/Skill mutation、Turn start/interrupt/interaction resolve 与 Resource
-metadata/read/release，以及 workspace search start/read/cancel。Notification 只有
-`session/update` 与 `thread/update`；Terminal 当前使用 profile/list 与
+Session model selection、model catalog、Config/provider/MCP/Skill mutation、Turn
+start/interrupt/interaction resolve 与 Resource
+metadata/read/release，以及 workspace search start/read/cancel。Notification 包含
+`session/update`、`thread/update`、`skills/changed` 与 `git/statusChanged`；Terminal 当前使用 profile/list 与
 create/write/resize/read/close 的有界 pull contract，不伪装成主动 notification stream。
+Git 注册 `git/status` snapshot query，以及 stage/unstage/discardWorktree/commit/fetch/pull/push
+global-exclusive mutation；status 带 revision，投影变化通过 `git/statusChanged` 发送完整 snapshot。
 
 ### JSON-RPC
 

@@ -1,6 +1,4 @@
-import type {
-  ZetaRendererApi,
-} from "../common/renderer-api.js";
+import type { ZetaRendererApi } from "../common/renderer-api.js";
 
 /**
  * Error returned when a standalone Web Workbench has no App Server host.
@@ -40,6 +38,10 @@ export function createDisconnectedRendererApi(): ZetaRendererApi {
       archiveThread: () => unavailable("session.archiveThread"),
       complete: () => unavailable("session.complete"),
       archive: () => unavailable("session.archive"),
+      setModel: () => unavailable("session.setModel"),
+    },
+    model: {
+      list: () => unavailable("model.list"),
     },
     thread: {
       read: () => unavailable("thread.read"),
@@ -64,6 +66,16 @@ export function createDisconnectedRendererApi(): ZetaRendererApi {
       getMetadata: () => unavailable("fs.getMetadata"),
       readDirectory: () => unavailable("fs.readDirectory"),
       readFile: () => unavailable("fs.readFile"),
+    },
+    git: {
+      status: () => unavailable("git.status"),
+      stage: () => unavailable("git.stage"),
+      unstage: () => unavailable("git.unstage"),
+      discardWorktree: () => unavailable("git.discardWorktree"),
+      commit: () => unavailable("git.commit"),
+      fetch: () => unavailable("git.fetch"),
+      pull: () => unavailable("git.pull"),
+      push: () => unavailable("git.push"),
     },
     workspaceSearch: {
       start: () => unavailable("workspaceSearch.start"),

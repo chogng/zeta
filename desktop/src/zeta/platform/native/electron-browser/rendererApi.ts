@@ -1,81 +1,18 @@
-import type {
-  FsGetMetadataResult,
-  FsReadDirectoryResult,
-  FsReadFileResult,
-  ResourceMetadataResult,
-  ResourceReadResult,
-  ServerNotification,
-  SessionListResult,
-  SessionResult,
-  SessionSubscribeResult,
-  SessionThreadResult,
-  ThreadReadResult,
-  ThreadSubscribeResult,
-  TurnInterruptResult,
-  TurnInteractionResolveResult,
-  TurnStartResult,
-  TypstCompileResult,
-  WorkspaceSearchReadResult,
-  WorkspaceSearchStartResult,
-} from "../../../../../generated/app-server/types.js";
+import type { FsGetMetadataResult, FsReadDirectoryResult, FsReadFileResult, ModelListResult, ResourceMetadataResult, ResourceReadResult, ServerNotification, SessionListResult, SessionResult, SessionSubscribeResult, SessionThreadResult, ThreadReadResult, ThreadSubscribeResult, TurnInterruptResult, TurnInteractionResolveResult, TurnStartResult, TypstCompileResult, WorkspaceSearchReadResult, WorkspaceSearchStartResult } from "../../../../../generated/app-server/types.js";
 import type { TerminalCreateResult, TerminalProfileListResult, TerminalReadResult } from "../../../../../generated/app-server/types.js";
-import {
-  operatingSystemFromNodePlatform,
-} from "../../../base/common/environment.js";
-import {
-  ipcRenderer,
-  sandboxProcess,
-} from "../../../base/parts/sandbox/electron-browser/globals.js";
-import {
-  NATIVE_CONTEXT_MENU_CLOSE_CHANNEL,
-  NATIVE_CONTEXT_MENU_POPUP_CHANNEL,
-  type INativeContextMenuResult,
-} from "../../../base/parts/contextmenu/common/contextmenu.js";
-import {
-  type AppServerConnectionState,
-} from "../../app-server/common/renderer-api.js";
-import {
-  BROWSER_VIEW_CLOSE_CHANNEL,
-  BROWSER_VIEW_CREATE_CHANNEL,
-  BROWSER_VIEW_EVENT_CHANNEL,
-  BROWSER_VIEW_GO_BACK_CHANNEL,
-  BROWSER_VIEW_GO_FORWARD_CHANNEL,
-  BROWSER_VIEW_LAYOUT_CHANNEL,
-  BROWSER_VIEW_NAVIGATE_CHANNEL,
-  BROWSER_VIEW_RELOAD_CHANNEL,
-  BROWSER_VIEW_STATE_CHANNEL,
-  BROWSER_VIEW_STOP_CHANNEL,
-  BROWSER_VIEW_VISIBILITY_CHANNEL,
-  type BrowserViewEvent,
-  type IBrowserViewState,
-} from "../../browser/common/browserView.js";
-import {
-  CONFIGURATION_CHANGED_CHANNEL,
-  CONFIGURATION_READ_CHANNEL,
-  CONFIGURATION_UPDATE_CHANNEL,
-} from "../../configuration/common/configuration.js";
-import {
-  KEYBINDINGS_RESOURCE_CHANGED_CHANNEL,
-  KEYBINDINGS_RESOURCE_READ_CHANNEL,
-  KEYBINDINGS_RESOURCE_UPDATE_CHANNEL,
-} from "../../keybinding/common/keybindingsResource.js";
-import {
-  NATIVE_MENUBAR_SELECT_CHANNEL,
-  NATIVE_MENUBAR_UPDATE_CHANNEL,
-  type INativeMenubarSelection,
-} from "../../menubar/common/nativeMenubar.js";
-import {
-  NATIVE_HOST_OPEN_FOLDER_CHANNEL,
-  NATIVE_HOST_SET_WINDOW_THEME_CHANNEL,
-  NATIVE_HOST_TOGGLE_DEVELOPER_TOOLS_CHANNEL,
-} from "../common/nativeHost.js";
-import {
-  WORKSPACE_CONTEXT_READ_CHANNEL,
-} from "../../workspace/common/workspaceIpc.js";
+import type { GitCommitResult, GitOperationResult, GitStatusResult } from "../../../../../generated/app-server/types.js";
+import { operatingSystemFromNodePlatform } from "../../../base/common/environment.js";
+import { ipcRenderer, sandboxProcess } from "../../../base/parts/sandbox/electron-browser/globals.js";
+import { NATIVE_CONTEXT_MENU_CLOSE_CHANNEL, NATIVE_CONTEXT_MENU_POPUP_CHANNEL, type INativeContextMenuResult } from "../../../base/parts/contextmenu/common/contextmenu.js";
+import { type AppServerConnectionState } from "../../app-server/common/renderer-api.js";
+import { BROWSER_VIEW_CLOSE_CHANNEL, BROWSER_VIEW_CREATE_CHANNEL, BROWSER_VIEW_EVENT_CHANNEL, BROWSER_VIEW_GO_BACK_CHANNEL, BROWSER_VIEW_GO_FORWARD_CHANNEL, BROWSER_VIEW_LAYOUT_CHANNEL, BROWSER_VIEW_NAVIGATE_CHANNEL, BROWSER_VIEW_RELOAD_CHANNEL, BROWSER_VIEW_STATE_CHANNEL, BROWSER_VIEW_STOP_CHANNEL, BROWSER_VIEW_VISIBILITY_CHANNEL, type BrowserViewEvent, type IBrowserViewState } from "../../browser/common/browserView.js";
+import { CONFIGURATION_CHANGED_CHANNEL, CONFIGURATION_READ_CHANNEL, CONFIGURATION_UPDATE_CHANNEL } from "../../configuration/common/configuration.js";
+import { KEYBINDINGS_RESOURCE_CHANGED_CHANNEL, KEYBINDINGS_RESOURCE_READ_CHANNEL, KEYBINDINGS_RESOURCE_UPDATE_CHANNEL } from "../../keybinding/common/keybindingsResource.js";
+import { NATIVE_MENUBAR_SELECT_CHANNEL, NATIVE_MENUBAR_UPDATE_CHANNEL, type INativeMenubarSelection } from "../../menubar/common/nativeMenubar.js";
+import { NATIVE_HOST_OPEN_FOLDER_CHANNEL, NATIVE_HOST_SET_WINDOW_THEME_CHANNEL, NATIVE_HOST_TOGGLE_DEVELOPER_TOOLS_CHANNEL } from "../common/nativeHost.js";
+import { WORKSPACE_CONTEXT_READ_CHANNEL } from "../../workspace/common/workspaceIpc.js";
 import { USER_THEME_FILES_LIST_CHANNEL, USER_THEME_FILE_DELETE_CHANNEL, USER_THEME_FILE_WRITE_CHANNEL } from "../../theme/common/userThemeFiles.js";
-import type {
-  ZetaElectronRendererApi,
-} from "../common/rendererApi.js";
+import type { ZetaElectronRendererApi } from "../common/rendererApi.js";
 
 /** Builds Zeta's typed renderer API on top of the minimal sandbox globals. */
 export function createElectronRendererApi(): ZetaElectronRendererApi {
@@ -151,6 +88,12 @@ export function createElectronRendererApi(): ZetaElectronRendererApi {
         invoke<SessionResult>("zeta:session:complete", params),
       archive: (params) =>
         invoke<SessionResult>("zeta:session:archive", params),
+      setModel: (params) =>
+        invoke<SessionResult>("zeta:session:model:set", params),
+    },
+    model: {
+      list: () =>
+        invoke<ModelListResult>("zeta:model:list"),
     },
     thread: {
       read: (params) =>
@@ -193,6 +136,24 @@ export function createElectronRendererApi(): ZetaElectronRendererApi {
         invoke<FsReadDirectoryResult>("zeta:fs:read-directory", params),
       readFile: (params) =>
         invoke<FsReadFileResult>("zeta:fs:read-file", params),
+    },
+    git: {
+      status: () =>
+        invoke<GitStatusResult>("zeta:git:status"),
+      stage: (params) =>
+        invoke<GitOperationResult>("zeta:git:stage", params),
+      unstage: (params) =>
+        invoke<GitOperationResult>("zeta:git:unstage", params),
+      discardWorktree: (params) =>
+        invoke<GitOperationResult>("zeta:git:discard-worktree", params),
+      commit: (params) =>
+        invoke<GitCommitResult>("zeta:git:commit", params),
+      fetch: () =>
+        invoke<GitOperationResult>("zeta:git:fetch"),
+      pull: () =>
+        invoke<GitOperationResult>("zeta:git:pull"),
+      push: () =>
+        invoke<GitOperationResult>("zeta:git:push"),
     },
     workspaceSearch: {
       start: (params) =>

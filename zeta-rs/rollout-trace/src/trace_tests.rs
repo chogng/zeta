@@ -50,6 +50,7 @@ fn trace_keeps_session_and_thread_sequences_independent() {
                     event: SessionEvent::SessionCreated {
                         session_id: session_id.clone(),
                         title: "Task".into(),
+                        model: None,
                     },
                 },
                 StoredSessionEvent {

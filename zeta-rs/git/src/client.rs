@@ -182,6 +182,18 @@ impl GitClient {
             .await
     }
 
+    pub(crate) async fn run_mutation<I, S>(
+        &self,
+        cwd: &Path,
+        args: I,
+    ) -> GitResult<GitCommandOutput>
+    where
+        I: IntoIterator<Item = S>,
+        S: AsRef<OsStr>,
+    {
+        self.run(GitInvocation::mutation(cwd, args)).await
+    }
+
     async fn run(&self, invocation: GitInvocation) -> GitResult<GitCommandOutput> {
         let timeout_duration = invocation.profile.timeout(self.limits);
         let command_for_log = render_command(&self.executable, &invocation.args);
@@ -379,7 +391,7 @@ pub(crate) struct GitCommandOutput {
 }
 
 impl GitCommandOutput {
-    fn require_success(self) -> GitResult<Self> {
+    pub(crate) fn require_success(self) -> GitResult<Self> {
         if self.status.success() {
             return Ok(self);
         }

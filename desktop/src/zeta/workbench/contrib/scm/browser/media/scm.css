@@ -1,0 +1,175 @@
+.zeta-scm {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 8px 0;
+}
+
+.zeta-scm-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  padding: 0 8px 8px;
+}
+
+.zeta-scm-branch {
+  flex: 1 1 120px;
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.zeta-scm-remote-actions {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.zeta-scm-command {
+  margin-left: auto;
+  border: 1px solid color-mix(in srgb, currentColor 22%, transparent);
+  border-radius: 3px;
+  padding: 3px 8px;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+
+.zeta-scm-command:hover {
+  background: color-mix(in srgb, currentColor 9%, transparent);
+}
+
+.zeta-scm-command:focus-visible {
+  outline: 1px solid var(--zeta-focus-border);
+  outline-offset: 1px;
+}
+
+.zeta-scm-command:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.zeta-scm-remote-actions > .zeta-scm-command {
+  margin-left: 0;
+  padding-inline: 5px;
+  font-size: 11px;
+}
+
+.zeta-scm-commit-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px;
+  padding: 0 8px 8px;
+}
+
+.zeta-scm-commit-input {
+  min-width: 0;
+  resize: vertical;
+  border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+  border-radius: 3px;
+  padding: 5px 7px;
+  color: inherit;
+  background: color-mix(in srgb, currentColor 6%, transparent);
+  font: inherit;
+}
+
+.zeta-scm-commit-input:focus {
+  border-color: var(--zeta-focus-border);
+  outline: 1px solid var(--zeta-focus-border);
+}
+
+.zeta-scm-commit-form > .zeta-scm-command {
+  margin-left: 0;
+}
+
+.zeta-scm-status {
+  min-height: 18px;
+  padding: 0 8px 6px;
+  color: color-mix(in srgb, currentColor 70%, transparent);
+  font-size: 12px;
+}
+
+.zeta-scm-changes {
+  min-height: 0;
+  overflow: auto;
+}
+
+.zeta-scm-section + .zeta-scm-section {
+  margin-top: 8px;
+}
+
+.zeta-scm-section-heading {
+  display: flex;
+  align-items: center;
+  margin: 0;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.zeta-scm-section-count {
+  margin-left: auto;
+  opacity: 0.65;
+  font-variant-numeric: tabular-nums;
+}
+
+.zeta-scm-section-action {
+  margin-left: 6px;
+  padding: 1px 5px;
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+.zeta-scm-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.zeta-scm-change {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-height: 24px;
+  padding: 2px 8px 2px 16px;
+}
+
+.zeta-scm-change:hover {
+  background: color-mix(in srgb, currentColor 7%, transparent);
+}
+
+.zeta-scm-change-path {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.zeta-scm-change-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 3px;
+}
+
+.zeta-scm-change-action {
+  margin-left: 0;
+  padding: 1px 4px;
+  font-size: 10px;
+}
+
+.zeta-scm-change-status {
+  flex: 0 0 16px;
+  width: 16px;
+  color: color-mix(in srgb, currentColor 78%, transparent);
+  font-weight: 700;
+  text-align: center;
+}

@@ -109,11 +109,11 @@ fn existing_directory(start: &Path) -> GitResult<PathBuf> {
         }
     })?;
     if metadata.is_dir() {
-        return Ok(start.to_path_buf());
+        return Ok(normalize_native_path(start.to_path_buf()));
     }
     start
         .parent()
-        .map(Path::to_path_buf)
+        .map(|parent| normalize_native_path(parent.to_path_buf()))
         .ok_or_else(|| GitError::InvalidStartPath {
             path: start.to_path_buf(),
         })
@@ -130,7 +130,15 @@ fn required_path(value: Option<&str>, command: &str, label: &str) -> GitResult<P
             format!("{label} was not absolute"),
         ));
     }
-    Ok(path)
+    Ok(normalize_native_path(path))
+}
+
+fn normalize_native_path(path: PathBuf) -> PathBuf {
+    if cfg!(windows) {
+        dunce::simplified(&path).to_path_buf()
+    } else {
+        path
+    }
 }
 
 #[cfg(test)]

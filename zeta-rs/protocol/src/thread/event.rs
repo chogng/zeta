@@ -1,5 +1,5 @@
 use crate::{
-    AgentResponse, InteractionCancelReason, RequestId, SandboxDenialOutput, SessionId,
+    AgentResponse, InteractionCancelReason, ModelRef, RequestId, SandboxDenialOutput, SessionId,
     StableTurnError, ThreadId, ThreadItem, ToolCallId, TurnId, TurnInteraction,
 };
 use schemars::JsonSchema;
@@ -39,6 +39,9 @@ pub enum ThreadEvent {
     TurnAccepted {
         thread_id: ThreadId,
         turn_id: TurnId,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional = nullable)]
+        model: Option<ModelRef>,
     },
     TurnStarted {
         thread_id: ThreadId,

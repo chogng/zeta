@@ -11,6 +11,7 @@ name = "zeta_git"
 path = "src/lib.rs"
 
 [dependencies]
+dunce = { workspace = true }
 tokio = { workspace = true, features = ["io-util", "process", "rt", "time"] }
 
 [dev-dependencies]

@@ -267,6 +267,9 @@
         "InvalidResourceOffset",
         "FileSystemUnavailable",
         "FileSystemOperationFailed",
+        "GitUnavailable",
+        "GitNotRepository",
+        "GitOperationFailed",
         "SearchUnavailable",
         "SearchNotFound",
         "SearchNotOwner",
@@ -560,6 +563,22 @@
           "properties": {
             "method": {
               "type": "string",
+              "const": "session/model/set"
+            },
+            "params": {
+              "$ref": "#/$defs/SessionModelSetParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
               "const": "thread/read"
             },
             "params": {
@@ -609,6 +628,22 @@
             "method": {
               "type": "string",
               "const": "config/read"
+            },
+            "params": {
+              "$ref": "#/$defs/EmptyParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "model/list"
             },
             "params": {
               "$ref": "#/$defs/EmptyParams"
@@ -960,6 +995,134 @@
           "properties": {
             "method": {
               "type": "string",
+              "const": "git/status"
+            },
+            "params": {
+              "$ref": "#/$defs/EmptyParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "git/stage"
+            },
+            "params": {
+              "$ref": "#/$defs/GitPathsParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "git/unstage"
+            },
+            "params": {
+              "$ref": "#/$defs/GitPathsParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "git/discardWorktree"
+            },
+            "params": {
+              "$ref": "#/$defs/GitPathsParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "git/commit"
+            },
+            "params": {
+              "$ref": "#/$defs/GitCommitParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "git/fetch"
+            },
+            "params": {
+              "$ref": "#/$defs/EmptyParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "git/pull"
+            },
+            "params": {
+              "$ref": "#/$defs/EmptyParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "git/push"
+            },
+            "params": {
+              "$ref": "#/$defs/EmptyParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
               "const": "workspace/search/start"
             },
             "params": {
@@ -1284,6 +1447,22 @@
           "properties": {
             "method": {
               "type": "string",
+              "const": "session/model/set"
+            },
+            "result": {
+              "$ref": "#/$defs/SessionResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
               "const": "thread/read"
             },
             "result": {
@@ -1336,6 +1515,22 @@
             },
             "result": {
               "$ref": "#/$defs/ConfigReadResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "model/list"
+            },
+            "result": {
+              "$ref": "#/$defs/ModelListResult"
             }
           },
           "required": [
@@ -1672,6 +1867,134 @@
             },
             "result": {
               "$ref": "#/$defs/FsReadFileResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "git/status"
+            },
+            "result": {
+              "$ref": "#/$defs/GitStatusResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "git/stage"
+            },
+            "result": {
+              "$ref": "#/$defs/GitOperationResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "git/unstage"
+            },
+            "result": {
+              "$ref": "#/$defs/GitOperationResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "git/discardWorktree"
+            },
+            "result": {
+              "$ref": "#/$defs/GitOperationResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "git/commit"
+            },
+            "result": {
+              "$ref": "#/$defs/GitCommitResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "git/fetch"
+            },
+            "result": {
+              "$ref": "#/$defs/GitOperationResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "git/pull"
+            },
+            "result": {
+              "$ref": "#/$defs/GitOperationResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "git/push"
+            },
+            "result": {
+              "$ref": "#/$defs/GitOperationResult"
             }
           },
           "required": [
@@ -2172,6 +2495,260 @@
         "content"
       ]
     },
+    "GitChangeStatusDto": {
+      "type": "string",
+      "enum": [
+        "unmodified",
+        "modified",
+        "added",
+        "deleted",
+        "renamed",
+        "copied",
+        "typeChanged",
+        "unmerged",
+        "untracked",
+        "ignored"
+      ]
+    },
+    "GitCommitParams": {
+      "type": "object",
+      "properties": {
+        "message": {
+          "type": "string",
+          "maxLength": 65536,
+          "minLength": 1
+        }
+      },
+      "required": [
+        "message"
+      ]
+    },
+    "GitCommitResult": {
+      "type": "object",
+      "properties": {
+        "objectId": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/GitStatusResult"
+        }
+      },
+      "required": [
+        "objectId",
+        "status"
+      ]
+    },
+    "GitHeadDto": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "objectId": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "branch"
+            },
+            "upstream": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/GitUpstreamDto"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "type",
+            "name",
+            "objectId"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "objectId": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "detached"
+            }
+          },
+          "required": [
+            "type",
+            "objectId"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "unborn"
+            }
+          },
+          "required": [
+            "type",
+            "name"
+          ]
+        }
+      ]
+    },
+    "GitOperationResult": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "$ref": "#/$defs/GitStatusResult"
+        }
+      },
+      "required": [
+        "status"
+      ]
+    },
+    "GitPathsParams": {
+      "type": "object",
+      "properties": {
+        "paths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 5000,
+          "minItems": 1
+        }
+      },
+      "required": [
+        "paths"
+      ]
+    },
+    "GitRepositoryChangeDto": {
+      "type": "object",
+      "properties": {
+        "conflicted": {
+          "type": "boolean"
+        },
+        "indexStatus": {
+          "$ref": "#/$defs/GitChangeStatusDto"
+        },
+        "originalPath": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "path": {
+          "type": "string"
+        },
+        "submodule": {
+          "$ref": "#/$defs/GitSubmoduleStateDto"
+        },
+        "worktreeStatus": {
+          "$ref": "#/$defs/GitChangeStatusDto"
+        }
+      },
+      "required": [
+        "path",
+        "indexStatus",
+        "worktreeStatus",
+        "conflicted",
+        "submodule"
+      ]
+    },
+    "GitStatusChanged": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "$ref": "#/$defs/GitStatusResult"
+        }
+      },
+      "required": [
+        "status"
+      ]
+    },
+    "GitStatusResult": {
+      "type": "object",
+      "properties": {
+        "changes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/GitRepositoryChangeDto"
+          }
+        },
+        "head": {
+          "$ref": "#/$defs/GitHeadDto"
+        },
+        "revision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "streamInstanceId": {
+          "$ref": "#/$defs/StreamInstanceId"
+        }
+      },
+      "required": [
+        "streamInstanceId",
+        "revision",
+        "head",
+        "changes"
+      ]
+    },
+    "GitSubmoduleStateDto": {
+      "type": "object",
+      "properties": {
+        "commitChanged": {
+          "type": "boolean"
+        },
+        "isSubmodule": {
+          "type": "boolean"
+        },
+        "trackedChanges": {
+          "type": "boolean"
+        },
+        "untrackedChanges": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "isSubmodule",
+        "commitChanged",
+        "trackedChanges",
+        "untrackedChanges"
+      ]
+    },
+    "GitUpstreamDto": {
+      "type": "object",
+      "properties": {
+        "ahead": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "behind": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "ahead",
+        "behind"
+      ]
+    },
     "InitializeParams": {
       "type": "object",
       "properties": {
@@ -2642,6 +3219,53 @@
         }
       ]
     },
+    "ModelCatalogEntry": {
+      "type": "object",
+      "properties": {
+        "displayName": {
+          "type": "string"
+        },
+        "model": {
+          "$ref": "#/$defs/ModelRef"
+        }
+      },
+      "required": [
+        "model",
+        "displayName"
+      ]
+    },
+    "ModelId": {
+      "type": "string"
+    },
+    "ModelListResult": {
+      "type": "object",
+      "properties": {
+        "models": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ModelCatalogEntry"
+          }
+        }
+      },
+      "required": [
+        "models"
+      ]
+    },
+    "ModelRef": {
+      "type": "object",
+      "properties": {
+        "model": {
+          "$ref": "#/$defs/ModelId"
+        },
+        "provider": {
+          "$ref": "#/$defs/ProviderId"
+        }
+      },
+      "required": [
+        "provider",
+        "model"
+      ]
+    },
     "ModelRefDto": {
       "type": "object",
       "properties": {
@@ -2845,6 +3469,9 @@
         "config"
       ]
     },
+    "ProviderId": {
+      "type": "string"
+    },
     "ProviderRemoveParams": {
       "description": "Removes one provider entry from the user configuration authority.",
       "type": "object",
@@ -3036,6 +3663,9 @@
         "fileSystem": {
           "type": "boolean"
         },
+        "git": {
+          "type": "boolean"
+        },
         "resources": {
           "type": "boolean"
         },
@@ -3067,6 +3697,7 @@
         "turns",
         "resources",
         "fileSystem",
+        "git",
         "workspaceSearch",
         "terminal",
         "typst",
@@ -3137,6 +3768,22 @@
             "method",
             "params"
           ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "git/statusChanged"
+            },
+            "params": {
+              "$ref": "#/$defs/GitStatusChanged"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
         }
       ]
     },
@@ -3144,6 +3791,16 @@
       "description": "Canonical product-level container for a task and its Thread topology.\n\nA Session owns Thread membership and lineage, but not the child Threads' Turn or Item history.\nEach Thread remains an independent ordering, persistence, and execution boundary.",
       "type": "object",
       "properties": {
+        "model": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModelRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "sequence": {
           "type": "integer",
           "format": "uint64",
@@ -3215,6 +3872,16 @@
         {
           "type": "object",
           "properties": {
+            "model": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ModelRef"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "sessionId": {
               "$ref": "#/$defs/SessionId"
             },
@@ -3230,6 +3897,26 @@
             "type",
             "sessionId",
             "title"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "model": {
+              "$ref": "#/$defs/ModelRef"
+            },
+            "sessionId": {
+              "$ref": "#/$defs/SessionId"
+            },
+            "type": {
+              "type": "string",
+              "const": "sessionModelChanged"
+            }
+          },
+          "required": [
+            "type",
+            "sessionId",
+            "model"
           ]
         },
         {
@@ -3347,6 +4034,31 @@
       },
       "required": [
         "sessions"
+      ]
+    },
+    "SessionModelSetParams": {
+      "type": "object",
+      "properties": {
+        "commandId": {
+          "$ref": "#/$defs/CommandId"
+        },
+        "expectedSequence": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "model": {
+          "$ref": "#/$defs/ModelRef"
+        },
+        "sessionId": {
+          "$ref": "#/$defs/SessionId"
+        }
+      },
+      "required": [
+        "commandId",
+        "sessionId",
+        "expectedSequence",
+        "model"
       ]
     },
     "SessionReadParams": {
@@ -4318,6 +5030,16 @@
         {
           "type": "object",
           "properties": {
+            "model": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ModelRef"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "threadId": {
               "$ref": "#/$defs/ThreadId"
             },
@@ -5150,6 +5872,16 @@
           "items": {
             "$ref": "#/$defs/ThreadItem"
           }
+        },
+        "model": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModelRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "pendingInteraction": {
           "anyOf": [

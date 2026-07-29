@@ -2,7 +2,7 @@ use crate::CoreError;
 use zeta_async_utils::CancellationToken;
 use zeta_policy::{ActionReviewRequest, AutoReviewGrant, GrantId, ReviewEvidence};
 use zeta_protocol::{
-    ActionApprovalRequest, ModelRequest, ModelResponse, ModelStreamEvent, RequestId,
+    ActionApprovalRequest, ModelRef, ModelRequest, ModelResponse, ModelStreamEvent, RequestId,
     ThreadUpdateEnvelope, ToolCall, ToolCallId, ToolDefinition, ToolExecutionOutput,
 };
 use zeta_sandboxing::SandboxPolicy;
@@ -29,6 +29,17 @@ pub trait ModelStreamSink {
     fn emit(&mut self, event: ModelStreamEvent) -> Result<(), CoreError>;
 }
 
+/// Selects the immutable model runtime used for one Turn.
+///
+/// Legacy Sessions without a durable selection use the resolved configuration default. New
+/// Sessions pass their snapshotted model explicitly so later configuration or Session changes
+/// cannot alter an already-started Turn.
+#[derive(Clone, Copy)]
+pub enum ModelSelection<'a> {
+    ConfiguredDefault,
+    Session(&'a ModelRef),
+}
+
 /// Executes one provider-independent model invocation.
 ///
 /// Implementations receive a complete immutable request assembled by Core. They must not read
@@ -37,6 +48,7 @@ pub trait ModelStreamSink {
 pub trait ModelService: Send + Sync {
     fn invoke(
         &self,
+        selection: ModelSelection<'_>,
         request: &ModelRequest,
         cancellation: &CancellationToken,
     ) -> Result<ModelResponse, CoreError>;
@@ -48,11 +60,12 @@ pub trait ModelService: Send + Sync {
     /// this method when their wire protocol exposes earlier incremental output.
     fn stream(
         &self,
+        selection: ModelSelection<'_>,
         request: &ModelRequest,
         cancellation: &CancellationToken,
         sink: &mut dyn ModelStreamSink,
     ) -> Result<ModelResponse, CoreError> {
-        let response = self.invoke(request, cancellation)?;
+        let response = self.invoke(selection, request, cancellation)?;
         for item in &response.output {
             let event = match item {
                 zeta_protocol::ResponseItem::Text(text) => {

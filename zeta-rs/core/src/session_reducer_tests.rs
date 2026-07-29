@@ -35,11 +35,13 @@ fn reducer_projects_a_recoverable_thread_creation_saga() {
                 "create-session",
                 SessionCommand::Create {
                     title: "task".into(),
+                    model: None,
                 },
             )),
             SessionEvent::SessionCreated {
                 session_id: SessionId::new("session_1").expect("test ID is non-empty"),
                 title: "task".into(),
+                model: None,
             },
         ),
     )
@@ -101,11 +103,13 @@ fn reducer_rejects_fork_from_an_unknown_parent() {
                 "create-session",
                 SessionCommand::Create {
                     title: "task".into(),
+                    model: None,
                 },
             )),
             SessionEvent::SessionCreated {
                 session_id: SessionId::new("session_1").expect("test ID is non-empty"),
                 title: "task".into(),
+                model: None,
             },
         ),
     )
