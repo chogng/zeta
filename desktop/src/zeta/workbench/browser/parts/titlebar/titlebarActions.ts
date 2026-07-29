@@ -5,8 +5,7 @@ import { AuxiliaryBarVisibleContext, PanelVisibleContext, SideBarVisibleContext 
 import { IWorkbenchLayoutService } from "../../layout.js";
 
 export const ToggleSideBarCommandId = "workbench.action.toggleSideBar";
-export const ToggleAuxiliaryBarCommandId =
-  "workbench.action.toggleAuxiliaryBar";
+export const ToggleAuxiliaryBarCommandId = "workbench.action.toggleAuxiliaryBar";
 export const TogglePanelCommandId = "workbench.action.togglePanel";
 
 registerAction2(class ToggleSideBarAction extends Action2 {
@@ -66,11 +65,6 @@ registerAction2(class ToggleAuxiliaryBarAction extends Action2 {
           id: MenuId.TitleBar,
           group: "navigation",
           order: 10,
-        },
-        {
-          id: MenuId.ChatTitleLayout,
-          group: "navigation",
-          order: 1,
         },
         {
           id: MenuId.MenubarViewMenu,

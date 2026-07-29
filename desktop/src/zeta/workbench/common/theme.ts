@@ -8,6 +8,9 @@ import {
   lightColorTheme,
 } from "../../platform/theme/common/colorTheme.js";
 
+/** Configuration value that delegates the active theme to the operating system. */
+export const SystemColorThemePreference = "system";
+
 /**
  * Registry of complete color themes that can be selected by the workbench.
  *
@@ -52,16 +55,28 @@ export class WorkbenchThemeRegistry {
 
 /** Built-in and contributed color themes selectable by configuration. */
 export const WorkbenchThemesRegistry = new WorkbenchThemeRegistry([
-  darkColorTheme,
   lightColorTheme,
+  darkColorTheme,
 ]);
 
-/** Theme used before persisted configuration has been loaded. */
-export const defaultWorkbenchColorTheme = darkColorTheme;
+/** Theme preference used before persisted configuration has been loaded. */
+export const defaultWorkbenchColorThemePreference =
+  SystemColorThemePreference;
 
 /** Resolves a validated theme identifier for a workbench window. */
 export function getWorkbenchColorTheme(id: string): IColorTheme {
   const theme = WorkbenchThemesRegistry.getColorTheme(id);
   if (!theme) throw new Error(`Unknown workbench color theme: ${id}`);
   return theme;
+}
+
+/** Resolves a persisted theme preference against the current system scheme. */
+export function resolveWorkbenchColorTheme(
+  preference: string,
+  systemPrefersDark: boolean,
+): IColorTheme {
+  if (preference === SystemColorThemePreference) {
+    return systemPrefersDark ? darkColorTheme : lightColorTheme;
+  }
+  return getWorkbenchColorTheme(preference);
 }

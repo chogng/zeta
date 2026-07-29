@@ -115,6 +115,24 @@ test("App Server IPC validators reject malformed Turn, Typst, resource, filesyst
   const searchRead = routes.find(
     (route) => route.channel === "zeta:workspace-search:read",
   )!;
+  const terminalCreate = routes.find(
+    (route) => route.channel === "zeta:terminal:create",
+  )!;
+  const terminalProfileList = routes.find(
+    (route) => route.channel === "zeta:terminal:profile-list",
+  )!;
+  const terminalWrite = routes.find(
+    (route) => route.channel === "zeta:terminal:write",
+  )!;
+  const terminalResize = routes.find(
+    (route) => route.channel === "zeta:terminal:resize",
+  )!;
+  const terminalRead = routes.find(
+    (route) => route.channel === "zeta:terminal:read",
+  )!;
+  const terminalClose = routes.find(
+    (route) => route.channel === "zeta:terminal:close",
+  )!;
 
   assert.deepEqual(
     sessionCreate.validate({ commandId: "one", title: "title" }),
@@ -280,6 +298,90 @@ test("App Server IPC validators reject malformed Turn, Typst, resource, filesyst
     afterMatch: 0,
     maxMatches: 201,
   }), /must not exceed 200/);
+  assert.deepEqual(terminalCreate.validate({
+    rows: 24,
+    cols: 80,
+    profile: { type: "default" },
+  }), {
+    rows: 24,
+    cols: 80,
+    profile: { type: "default" },
+  });
+  assert.throws(() => terminalCreate.validate({
+    rows: 0,
+    cols: 80,
+    profile: { type: "default" },
+  }), /must be positive/);
+  assert.deepEqual(terminalCreate.validate({
+    rows: 24,
+    cols: 80,
+    profile: { type: "profile", profileId: "powershell" },
+  }), {
+    rows: 24,
+    cols: 80,
+    profile: { type: "profile", profileId: "powershell" },
+  });
+  assert.throws(() => terminalCreate.validate({
+    rows: 24,
+    cols: 80,
+    profile: { type: "profile", executable: "cmd.exe" },
+  }), /profile/);
+  assert.deepEqual(terminalProfileList.validate(undefined), {});
+  assert.deepEqual(terminalWrite.validate({
+    terminalId: "terminal-1",
+    data: "echo hello\r",
+  }), {
+    terminalId: "terminal-1",
+    data: "echo hello\r",
+  });
+  assert.deepEqual(terminalWrite.validate({
+    terminalId: "terminal-1",
+    data: " ",
+  }), {
+    terminalId: "terminal-1",
+    data: " ",
+  });
+  assert.throws(() => terminalWrite.validate({
+    terminalId: "terminal-1",
+    data: "a".repeat(65_537),
+  }), /UTF-8 bytes/);
+  assert.deepEqual(terminalResize.validate({
+    terminalId: "terminal-1",
+    rows: 40,
+    cols: 120,
+  }), {
+    terminalId: "terminal-1",
+    rows: 40,
+    cols: 120,
+  });
+  assert.throws(() => terminalResize.validate({
+    terminalId: "terminal-1",
+    rows: 40,
+    cols: 513,
+  }), /must not exceed 512/);
+  assert.deepEqual(terminalRead.validate({
+    terminalId: "terminal-1",
+    afterSequence: 0,
+    maxChunks: 128,
+  }), {
+    terminalId: "terminal-1",
+    afterSequence: 0,
+    maxChunks: 128,
+  });
+  assert.throws(() => terminalRead.validate({
+    terminalId: "terminal-1",
+    afterSequence: 0,
+    maxChunks: 129,
+  }), /must not exceed 128/);
+  assert.deepEqual(terminalClose.validate({
+    terminalId: "terminal-1",
+  }), {
+    terminalId: "terminal-1",
+  });
+  assert.throws(() => terminalClose.validate({
+    terminalId: "terminal-1",
+    force: true,
+  }), /exactly/);
 });
 
 test("trusted IPC router rejects duplicate route registrations", () => {

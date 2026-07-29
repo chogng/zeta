@@ -1,48 +1,32 @@
-import type {
-  AgentResponse,
-  Thread,
-  ThreadId,
-  ThreadItem,
-  ThreadUpdateEnvelope,
-  Turn,
-  TurnInteraction,
-} from "../../../../../../generated/app-server/types.js";
-import { Emitter, type Event } from "../../../../base/common/event.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
-import { createUuid } from "../../../../base/common/uuid.js";
-import type {
-  ZetaRendererApi,
-} from "../../../../platform/app-server/common/renderer-api.js";
-import type {
-  IActiveSessionThread,
-  IWorkbenchSessionService,
-} from "../../../services/sessions/common/sessionService.js";
-import {
-  chatDisplayItem,
-  type IChatDisplayItem,
-} from "./chatDisplayItems.js";
+import type { AgentResponse, Thread, ThreadId, ThreadItem, ThreadUpdateEnvelope, Turn, TurnInteraction } from "../../../../../../../generated/app-server/types.js";
+import { Emitter, type Event } from "../../../../../base/common/event.js";
+import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
+import { createUuid } from "../../../../../base/common/uuid.js";
+import type { ZetaRendererApi } from "../../../../../platform/app-server/common/renderer-api.js";
+import type { IActiveSessionThread } from "../../../../services/sessions/common/sessionService.js";
+import { chatListItem, type IChatListItem } from "../list/chatListItems.js";
 
-export type ChatViewState =
+export type ChatPaneState =
   | "loading"
   | "ready"
   | "submitting"
   | "error";
 
 /**
- * Window-local projection of the active Thread for the Chat view.
+ * Projection of the selected Thread inside one Session-owned Chat pane.
  *
  * Canonical committed state is refreshed from `thread/read`. Transient item
  * updates are layered by Item ID and discarded once the committed snapshot
  * contains the same item.
  */
-export class ChatViewModel extends DisposableOwner {
+export class ChatPaneModel extends DisposableOwner {
   readonly #api: ZetaRendererApi;
-  readonly #sessionService: IWorkbenchSessionService;
   readonly #onDidChange = this.own(new Emitter<void>());
   readonly #transientItems = new Map<string, ThreadItem>();
+  #selection: IActiveSessionThread;
   #thread: Thread | undefined;
   #interaction: TurnInteraction | undefined;
-  #state: ChatViewState = "loading";
+  #state: ChatPaneState = "loading";
   #error: string | undefined;
   #generation = 0;
   #disposed = false;
@@ -55,16 +39,10 @@ export class ChatViewModel extends DisposableOwner {
 
   readonly onDidChange: Event<void> = this.#onDidChange.event;
 
-  constructor(
-    api: ZetaRendererApi,
-    sessionService: IWorkbenchSessionService,
-  ) {
+  constructor(api: ZetaRendererApi, active: IActiveSessionThread) {
     super();
     this.#api = api;
-    this.#sessionService = sessionService;
-    this.own(sessionService.onDidChange(() => {
-      void this.#selectActiveThread();
-    }));
+    this.#selection = active;
     const events = api.events.subscribe((notification) => {
       if (notification.method === "thread/update") {
         this.#acceptUpdate(notification.params);
@@ -78,15 +56,14 @@ export class ChatViewModel extends DisposableOwner {
     this.defer(() => {
       this.#disposed = true;
       this.#generation++;
-      const threadId = this.#thread?.threadId;
-      if (threadId) void this.#api.thread.unsubscribe({ threadId });
+      void this.#api.thread.unsubscribe({ threadId: this.#selection.threadId });
       this.#transientItems.clear();
       this.#resetStreamCursor();
     });
     void this.initialize();
   }
 
-  get state(): ChatViewState {
+  get state(): ChatPaneState {
     return this.#state;
   }
 
@@ -98,14 +75,18 @@ export class ChatViewModel extends DisposableOwner {
     return this.#thread;
   }
 
-  get items(): readonly IChatDisplayItem[] {
+  get threadId(): ThreadId {
+    return this.#selection.threadId;
+  }
+
+  get items(): readonly IChatListItem[] {
     const committed = this.#thread?.turns.flatMap(
-      (turn) => turn.items.map((item) => chatDisplayItem(item)),
+      (turn) => turn.items.map((item) => chatListItem(item)),
     ) ?? [];
     const committedIds = new Set(committed.map((item) => item.id));
     const transient = [...this.#transientItems.values()]
       .filter((item) => !committedIds.has(item.itemId))
-      .map((item) => chatDisplayItem(item, true));
+      .map((item) => chatListItem(item, true));
     return [...committed, ...transient];
   }
 
@@ -124,14 +105,17 @@ export class ChatViewModel extends DisposableOwner {
     return this.#initializePromise;
   }
 
-  async startNewChat(): Promise<void> {
-    try {
-      this.#setState("submitting");
-      const active = await this.#sessionService.startNewSession();
-      await this.#subscribe(active);
-    } catch (error) {
-      this.#setError(error);
+  async selectThread(active: IActiveSessionThread): Promise<void> {
+    if (active.session.sessionId !== this.#selection.session.sessionId) {
+      throw new Error(`ChatPaneModel cannot select a Thread from another Session: ${active.session.sessionId}`);
     }
+    const previousThreadId = this.#selection.threadId;
+    this.#selection = active;
+    if (previousThreadId === active.threadId && this.#thread?.threadId === active.threadId) return;
+    if (previousThreadId !== active.threadId) {
+      void this.#api.thread.unsubscribe({ threadId: previousThreadId });
+    }
+    await this.#subscribe(active);
   }
 
   async send(text: string): Promise<void> {
@@ -139,7 +123,7 @@ export class ChatViewModel extends DisposableOwner {
     if (!input) return;
     try {
       this.#setState("submitting");
-      const active = await this.#sessionService.ensureActiveThread();
+      const active = this.#selection;
       if (this.#thread?.threadId !== active.threadId) {
         await this.#subscribe(active);
       }
@@ -210,36 +194,9 @@ export class ChatViewModel extends DisposableOwner {
     }
   }
 
-  async #selectActiveThread(): Promise<void> {
-    const active = this.#sessionService.active;
-    if (!active) {
-      const oldThreadId = this.#thread?.threadId;
-      this.#generation++;
-      this.#thread = undefined;
-      this.#interaction = undefined;
-      this.#transientItems.clear();
-      this.#resetStreamCursor();
-      if (oldThreadId) {
-        void this.#api.thread.unsubscribe({ threadId: oldThreadId });
-      }
-      this.#setState(
-        this.#sessionService.state === "error"
-          ? "error"
-          : this.#sessionService.state === "ready"
-          ? "ready"
-          : "loading",
-        this.#sessionService.error,
-      );
-      return;
-    }
-    if (this.#thread?.threadId === active.threadId) return;
-    await this.#subscribe(active);
-  }
-
   async #initialize(): Promise<void> {
     this.#setState("loading");
-    await this.#sessionService.initialize();
-    await this.#selectActiveThread();
+    await this.#subscribe(this.#selection);
   }
 
   async #subscribe(active: IActiveSessionThread): Promise<void> {
@@ -294,8 +251,7 @@ export class ChatViewModel extends DisposableOwner {
   }
 
   #acceptUpdate(update: ThreadUpdateEnvelope): void {
-    const selectedThreadId =
-      this.#thread?.threadId ?? this.#sessionService.active?.threadId;
+    const selectedThreadId = this.#thread?.threadId ?? this.#selection.threadId;
     if (update.threadId !== selectedThreadId) return;
     if (!this.#acceptStreamCursor(update)) return;
     switch (update.update.type) {
@@ -319,13 +275,7 @@ export class ChatViewModel extends DisposableOwner {
   }
 
   async #reconnect(): Promise<void> {
-    await this.#sessionService.initialize();
-    const active = this.#sessionService.active;
-    if (active) {
-      await this.#subscribe(active);
-    } else {
-      await this.#selectActiveThread();
-    }
+    await this.#subscribe(this.#selection);
   }
 
   #acceptStreamCursor(update: ThreadUpdateEnvelope): boolean {
@@ -397,17 +347,14 @@ export class ChatViewModel extends DisposableOwner {
   }
 
   async #refreshThread(): Promise<void> {
-    const threadId = this.#thread?.threadId ??
-      this.#sessionService.active?.threadId;
-    if (!threadId) return;
+    const threadId = this.#selection.threadId;
     const generation = this.#generation;
     try {
       const result = await this.#api.thread.read({ threadId });
       if (
         this.#disposed ||
         generation !== this.#generation ||
-        result.thread.threadId !==
-          this.#sessionService.active?.threadId
+        result.thread.threadId !== this.#selection.threadId
       ) return;
       this.#thread = result.thread;
       this.#discardCommittedTransientItems();
@@ -432,7 +379,7 @@ export class ChatViewModel extends DisposableOwner {
     }
   }
 
-  #setState(state: ChatViewState, error?: string): void {
+  #setState(state: ChatPaneState, error?: string): void {
     this.#state = state;
     this.#error = error;
     this.#onDidChange.fire();

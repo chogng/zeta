@@ -25,16 +25,16 @@
 
 .zeta-search-query:focus,
 .zeta-search-filter:focus {
-  border-color: #007acc;
-  outline: 1px solid #007acc;
+  border-color: var(--zeta-focus-border);
+  outline: 1px solid var(--zeta-focus-border);
 }
 
 .zeta-search-submit {
   border: 0;
   border-radius: 3px;
   padding: 0 10px;
-  color: #fff;
-  background: #0e639c;
+  color: var(--zeta-button-primary-foreground);
+  background: var(--zeta-button-primary-background);
   font: inherit;
   cursor: pointer;
 }
@@ -131,5 +131,5 @@
 
 .zeta-search-preview mark {
   color: inherit;
-  background: color-mix(in srgb, #f9c74f 55%, transparent);
+  background: var(--zeta-search-match-background);
 }

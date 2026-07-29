@@ -16,6 +16,7 @@ export enum ViewContainerLocation {
   Sidebar = "sidebar",
   Panel = "panel",
   AuxiliaryBar = "auxiliarybar",
+  AgentSidebar = "agentSidebar",
 }
 
 /** Static declaration of a named workbench view container. */
@@ -94,7 +95,10 @@ export const WorkbenchViewContainerId = Object.freeze({
   Sidebar: "zeta.sidebar",
   Search: "zeta.search",
   Git: "zeta.git",
-  Panel: "zeta.panel",
+  Problems: "zeta.panel.problems",
+  Output: "zeta.panel.output",
+  Terminal: "zeta.panel.terminal",
+  Ports: "zeta.panel.ports",
 });
 
 /**

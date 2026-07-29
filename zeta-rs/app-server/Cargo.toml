@@ -15,7 +15,7 @@ base64 = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
-tokio = { workspace = true, features = ["rt", "sync", "time"] }
+tokio = { workspace = true, features = ["rt-multi-thread", "sync", "time"] }
 zeta-app-server-protocol = { workspace = true }
 zeta-app-server-transport = { workspace = true }
 zeta-async-utils = { workspace = true }
@@ -37,6 +37,7 @@ zeta-shell-command = { workspace = true }
 zeta-skills = { workspace = true }
 zeta-tools = { workspace = true }
 zeta-typst = { workspace = true }
+zeta-utils-pty = { workspace = true }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 zeta-linux-sandbox = { workspace = true }

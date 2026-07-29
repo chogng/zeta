@@ -182,6 +182,21 @@ impl ProcessHandle {
         self.exit_code.lock().ok().and_then(|guard| *guard)
     }
 
+    /// Releases parent-held PTY handles after the child has authoritatively exited.
+    ///
+    /// Windows keeps these handles during execution so closing the caller's
+    /// session does not inject Control+C. Once `has_exited` is true, releasing
+    /// them closes the pseudoconsole and allows the output reader to observe
+    /// EOF after all final bytes.
+    pub fn release_pty_handles_after_exit(&self) {
+        if !self.has_exited() {
+            return;
+        }
+        if let Ok(mut handles) = self._pty_handles.lock() {
+            handles.take();
+        }
+    }
+
     /// Resize the PTY in character cells.
     pub fn resize(&self, size: TerminalSize) -> anyhow::Result<()> {
         {

@@ -3,22 +3,22 @@
   max-width: none;
   padding: 0;
   overflow: hidden;
-  border: 1px solid var(--zeta-dialog-border, #454545);
+  border: 1px solid var(--zeta-dialog-border);
   border-radius: 6px;
-  color: var(--zeta-foreground, #cccccc);
-  background: var(--zeta-dialog-background, #252526);
-  box-shadow: 0 12px 36px rgb(0 0 0 / 45%);
+  color: var(--zeta-foreground);
+  background: var(--zeta-dialog-background);
+  box-shadow: 0 12px 36px var(--zeta-dialog-shadow);
   font: inherit;
 }
 
 .zeta-dialog::backdrop {
-  background: rgb(0 0 0 / 45%);
+  background: var(--zeta-dialog-backdrop-background);
 }
 
 .zeta-dialog-title {
   margin: 0;
   padding: 16px 18px 8px;
-  color: var(--zeta-foreground, #cccccc);
+  color: var(--zeta-foreground);
   font-size: 15px;
   font-weight: 600;
 }
@@ -40,12 +40,12 @@
 }
 
 .zeta-dialog-message {
-  color: var(--zeta-foreground, #cccccc);
+  color: var(--zeta-foreground);
   font-size: 13px;
 }
 
 .zeta-dialog-detail {
-  color: var(--zeta-description-foreground, #9d9d9d);
+  color: var(--zeta-description-foreground);
   font-size: 12px;
   line-height: 1.5;
   white-space: pre-wrap;
@@ -63,18 +63,18 @@
 }
 
 .zeta-dialog-actions .zeta-dialog-primary-button {
-  color: var(--zeta-button-primary-foreground, #ffffff);
-  background: var(--zeta-button-primary-background, #0e639c);
+  color: var(--zeta-button-primary-foreground);
+  background: var(--zeta-button-primary-background);
 }
 
 .zeta-dialog-actions .zeta-dialog-primary-button:hover {
-  background: var(--zeta-button-primary-hover-background, #1177bb);
+  background: var(--zeta-button-primary-hover-background);
 }
 
 .zeta-dialog[data-dialog-severity="warning"] {
-  border-top-color: var(--zeta-warning-foreground, #cca700);
+  border-top-color: var(--zeta-warning-foreground);
 }
 
 .zeta-dialog[data-dialog-severity="error"] {
-  border-top-color: var(--zeta-error-foreground, #f48771);
+  border-top-color: var(--zeta-error-foreground);
 }

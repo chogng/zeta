@@ -49,6 +49,7 @@ tests 审查行为；不能用“来自上游”替代本地 correctness review�
 | `ProcessHandle::request_terminate` | kill child、保留 I/O tasks 以 drain EOF | killer 只消费一次 |
 | `ProcessHandle::terminate` | kill child并 abort reader/writer/wait tasks | 不保证剩余 output drain |
 | `ProcessHandle::{has_exited,exit_code}` | non-blocking observed exit state | `exit_rx` 是 authoritative completion notification |
+| `ProcessHandle::release_pty_handles_after_exit` | authoritative exit 后释放 parent-held PTY/ConPTY handles | 运行中调用是 no-op；允许 reader 在 final bytes 后观察 EOF |
 
 `ExecCommandSession` 与 `SpawnedPty` 是 backward-compatible type aliases。新增代码应优先使用
 `ProcessHandle` 与 `SpawnedProcess` 的真实名称。
@@ -130,6 +131,12 @@ Caller 如果需要 split stderr，应选择 pipe backend。
 
 Windows portable writer 在写入 ConPTY 前经过 `WindowsTtyInputNormalizer`。Normalizer 维护
 `previous_was_cr`，所以 CR 和下一 chunk 的 LF 也只生成一个 carriage return。
+
+Windows portable path 在 child 运行期间保留 slave/master pseudoconsole handles，避免过早关闭
+改变前台输入语义。消费 `exit_rx` 后，owner 应调用
+`ProcessHandle::release_pty_handles_after_exit`；该方法先检查 `has_exited`，再释放 parent-held
+handles，使 reader 在排空 ConPTY tail 后收到 EOF。只观察 exit code 而不释放 handles，会让
+依赖 output-close 的上层 terminal lifecycle 无法收束。
 
 ## Driver 与 output lifecycle
 

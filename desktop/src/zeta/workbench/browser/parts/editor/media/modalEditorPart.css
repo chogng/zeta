@@ -5,7 +5,7 @@
   align-items: center;
   justify-content: center;
   padding: 32px;
-  background: rgb(0 0 0 / 45%);
+  background: var(--zeta-dialog-backdrop-background);
   inset: 0;
 }
 
@@ -15,18 +15,18 @@
 
 .zeta-modal-editor {
   display: flex;
-  width: min(var(--zeta-modal-editor-width, 960px), calc(100vw - 64px));
-  height: min(var(--zeta-modal-editor-height, 720px), calc(100vh - 64px));
+  width: min(var(--zeta-modal-editor-width), calc(100vw - 64px));
+  height: min(var(--zeta-modal-editor-height), calc(100vh - 64px));
   min-width: 0;
   min-height: 320px;
   overflow: hidden;
   flex-direction: column;
-  border: 1px solid var(--zeta-widget-border, #454545);
+  border: 1px solid var(--zeta-widget-border);
   border-radius: 8px;
   outline: none;
-  color: var(--zeta-foreground, #cccccc);
-  background: var(--zeta-editor-background, #1e1e1e);
-  box-shadow: 0 16px 48px var(--zeta-widget-shadow, #00000080);
+  color: var(--zeta-foreground);
+  background: var(--zeta-editor-background);
+  box-shadow: 0 16px 48px var(--zeta-dialog-shadow);
 }
 
 .zeta-modal-editor-header {
@@ -36,8 +36,8 @@
   align-items: center;
   justify-content: space-between;
   padding: 0 8px 0 14px;
-  border-bottom: 1px solid var(--zeta-widget-border, #454545);
-  background: var(--zeta-title-bar-background, #181818);
+  border-bottom: 1px solid var(--zeta-widget-border);
+  background: var(--zeta-title-bar-background);
 }
 
 .zeta-modal-editor-title {

@@ -158,7 +158,9 @@ pub fn open_local_app_server(
             .map_err(|error| OpenAppServerError(error.to_string()))?;
         server = server
             .with_file_system(Arc::new(LocalFileSystem::new(workspace.clone())))
-            .with_workspace_search(workspace, tools.ripgrep.clone());
+            .with_workspace_search(workspace.clone(), tools.ripgrep.clone())
+            .with_terminal_root(workspace.path().to_path_buf())
+            .map_err(|_| OpenAppServerError("failed to initialize terminal runtime".into()))?;
         tool_ports.push(ToolPort::local(tools.tools, tools.policy));
     }
     if let Some(mcp) = compose_mcp_tools(&runtime_config, user_config.generation)

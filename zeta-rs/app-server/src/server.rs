@@ -29,6 +29,7 @@ mod operations;
 mod search_operations;
 mod skill_operations;
 pub(crate) mod skills_runtime;
+mod terminal_operations;
 mod update_broker;
 
 use update_broker::{NotificationQueue, UpdateBroker};
@@ -42,6 +43,7 @@ pub struct AppServer {
     pub(super) config: Option<Arc<ConfigStore>>,
     pub(super) file_system: Option<Arc<dyn WorkspaceFileSystem>>,
     pub(super) workspace_search: Option<crate::workspace_search::WorkspaceSearchService>,
+    pub(super) terminals: Option<crate::terminal_service::TerminalService>,
     pub(super) typst: TypstCompiler,
     pub(super) slash_commands: SlashCommandCatalog,
     pub(super) skills: Option<Arc<SkillRuntime>>,
@@ -73,6 +75,7 @@ impl AppServer {
             config: None,
             file_system: None,
             workspace_search: None,
+            terminals: None,
             typst: TypstCompiler::new(),
             slash_commands: SlashCommandCatalog::default(),
             skills: None,
@@ -127,6 +130,17 @@ impl AppServer {
             workspace, ripgrep,
         ));
         self
+    }
+
+    /// Enables connection-owned interactive terminals rooted at one trusted Workspace.
+    pub(crate) fn with_terminal_root(
+        mut self,
+        workspace_root: std::path::PathBuf,
+    ) -> Result<Self, crate::terminal_service::TerminalError> {
+        self.terminals = Some(crate::terminal_service::TerminalService::new(
+            workspace_root,
+        )?);
+        Ok(self)
     }
 
     /// Installs the tool registry and policy used by every Turn executed by this server.
@@ -236,14 +250,20 @@ impl AppServer {
     ) -> Result<(), std::io::Error> {
         let mut transport = JsonlTransport::new(reader, writer, DEFAULT_MAX_MESSAGE_BYTES);
         let mut connection = self.connection();
-        while let Some(line) = transport.read_message()? {
-            let response = self.handle_json(&mut connection, &line);
-            transport.write_message(&response)?;
-            for notification in self.drain_notifications(&mut connection) {
-                transport.write_message(&notification)?;
+        let result = (|| {
+            while let Some(line) = transport.read_message()? {
+                let response = self.handle_json(&mut connection, &line);
+                transport.write_message(&response)?;
+                for notification in self.drain_notifications(&mut connection) {
+                    transport.write_message(&notification)?;
+                }
             }
+            Ok(())
+        })();
+        if let Some(terminals) = &self.terminals {
+            terminals.close_owner(connection.connection_id);
         }
-        Ok(())
+        result
     }
 
     fn dispatch(
@@ -329,6 +349,12 @@ impl AppServer {
             Some(ClientMethod::WorkspaceSearchCancel) => {
                 self.workspace_search_cancel(connection, &request.params)
             }
+            Some(ClientMethod::TerminalProfileList) => self.terminal_profile_list(&request.params),
+            Some(ClientMethod::TerminalCreate) => self.terminal_create(connection, &request.params),
+            Some(ClientMethod::TerminalWrite) => self.terminal_write(connection, &request.params),
+            Some(ClientMethod::TerminalResize) => self.terminal_resize(connection, &request.params),
+            Some(ClientMethod::TerminalRead) => self.terminal_read(connection, &request.params),
+            Some(ClientMethod::TerminalClose) => self.terminal_close(connection, &request.params),
             None => Err(RpcError::new(-32601, AppServerErrorName::MethodNotFound)),
         }
     }

@@ -35,6 +35,12 @@ fn registry_method_and_notification_names_are_unique() {
     assert!(methods.contains("workspace/search/start"));
     assert!(methods.contains("workspace/search/read"));
     assert!(methods.contains("workspace/search/cancel"));
+    assert!(methods.contains("terminal/profile/list"));
+    assert!(methods.contains("terminal/create"));
+    assert!(methods.contains("terminal/write"));
+    assert!(methods.contains("terminal/resize"));
+    assert!(methods.contains("terminal/read"));
+    assert!(methods.contains("terminal/close"));
     assert!(notifications.contains("session/update"));
     assert!(notifications.contains("thread/update"));
 }
@@ -208,6 +214,14 @@ fn dto_driven_typescript_preserves_model_ref_and_patch_shape() {
     assert!(
         typescript.contains(r#""workspace/search/start": { method: "workspace/search/start" }"#)
     );
+    assert!(typescript.contains(r#""terminal/profile/list": { method: "terminal/profile/list" }"#));
+    assert!(typescript.contains(r#""terminal/create": { method: "terminal/create" }"#));
+    assert!(typescript.contains(r#""terminal/read": { method: "terminal/read" }"#));
+    assert!(typescript.contains("export type TerminalProfile ="));
+    assert!(typescript.contains("profileId: string"));
+    assert!(typescript.contains("export type TerminalProfileSelection ="));
+    assert!(typescript.contains("export type TerminalProfileListResult ="));
+    assert!(typescript.contains("export type TerminalReadResult ="));
     assert!(typescript.contains("export type WorkspaceSearchMatch ="));
     assert!(typescript.contains("export type TypstCompileResult ="));
     assert!(typescript.contains(r#""status": "success""#));
@@ -239,6 +253,11 @@ fn dto_driven_schema_contains_registered_rpc_envelopes() {
     assert!(definitions.contains_key("TypstCompileResult"));
     assert!(definitions.contains_key("WorkspaceSearchStartParams"));
     assert!(definitions.contains_key("WorkspaceSearchReadResult"));
+    assert!(definitions.contains_key("TerminalProfile"));
+    assert!(definitions.contains_key("TerminalProfileSelection"));
+    assert!(definitions.contains_key("TerminalProfileListResult"));
+    assert!(definitions.contains_key("TerminalCreateParams"));
+    assert!(definitions.contains_key("TerminalReadResult"));
     assert_eq!(definitions["ThreadId"]["minLength"], 1);
     assert_eq!(definitions["SessionId"]["minLength"], 1);
     assert_eq!(definitions["CommandId"]["minLength"], 1);

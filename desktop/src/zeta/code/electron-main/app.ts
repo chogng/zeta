@@ -33,6 +33,7 @@ import {
 import {
   AppServerSupervisor,
 } from "../../platform/app-server/electron-main/app-server-supervisor.js";
+import { appServerExecutablePath } from "../../platform/app-server/electron-main/app-server-package.js";
 import {
   normalizeEntryUrl,
   registerTrustedIpcRoutes,
@@ -76,9 +77,8 @@ import {
 import {
   StateService,
 } from "../../platform/state/node/stateService.js";
-import {
-  WindowMode,
-} from "../../platform/window/electron-main/window.js";
+import { userThemeIpcRoutes } from "../../platform/theme/electron-main/userThemeIpc.js";
+import { UserThemeFileService } from "../../platform/theme/node/userThemeFileService.js";
 import {
   applyWindowState,
   resolveBrowserWindowOptions,
@@ -96,10 +96,6 @@ import {
   WorkspacesMainService,
   workspaceContextIpcRoutes,
 } from "../../platform/workspaces/electron-main/workspacesMainService.js";
-import {
-  StartupWindow,
-} from "./startupWindow.js";
-
 export interface ZetaApplicationOptions {
   readonly product: ProductConfiguration;
   readonly rendererRoot: string;
@@ -116,13 +112,13 @@ export class ZetaApplication extends DisposableOwner {
 
   #supervisor: AppServerSupervisor | undefined;
   #mainWindow: BrowserWindow | undefined;
-  #startupWindow: StartupWindow | undefined;
   #stateService: StateService | undefined;
   #configurationService: ConfigurationMainService | undefined;
   #keybindingsResourceService: KeybindingsResourceMainService | undefined;
   #windowsStateHandler: WindowsStateHandler | undefined;
   #windowStateTracking: IDisposable | undefined;
   #closePersistentServicesPromise: Promise<void> | undefined;
+  #quitRequested = false;
   #quitAfterStateSaved = false;
   #quitSaveStarted = false;
 
@@ -163,13 +159,6 @@ export class ZetaApplication extends DisposableOwner {
       Menu.setApplicationMenu(null);
     }
 
-    const startupWindow = this.own(new StartupWindow({
-      productName: this.#product.name,
-      onClosed: () => app.quit(),
-    }));
-    this.#startupWindow = startupWindow;
-    await startupWindow.showStarting();
-
     await this.#createPersistentServices();
     const workspace = await this.#resolveWorkspace();
     this.#windowsStateHandler = new WindowsStateHandler({
@@ -186,16 +175,11 @@ export class ZetaApplication extends DisposableOwner {
 
     const supervisor = this.own(this.#createAppServerSupervisor(workspace));
     this.#supervisor = supervisor;
-    const appServerReady = await this.#startAppServerWithRecovery(
-      supervisor,
-      startupWindow,
-    );
+    const appServerReady = await this.#startAppServerWithRecovery(supervisor);
     if (!appServerReady) {
       return;
     }
     await this.#openFirstWindow(workspace, supervisor);
-    startupWindow.complete();
-    this.#startupWindow = undefined;
   }
 
   async disposeAfterStartupFailure(): Promise<void> {
@@ -246,17 +230,12 @@ export class ZetaApplication extends DisposableOwner {
   #createAppServerSupervisor(
     workspace: IAnyWorkspaceIdentifier,
   ): AppServerSupervisor {
-    const executableName = process.platform === "win32" ? "zeta.exe" : "zeta";
-    const executable = app.isPackaged
-      ? join(process.resourcesPath, "bin", executableName)
-      : join(
-        app.getAppPath(),
-        "..",
-        "zeta-rs",
-        "target",
-        "debug",
-        executableName,
-      );
+    const executable = appServerExecutablePath({
+      appPath: app.getAppPath(),
+      isPackaged: app.isPackaged,
+      platform: process.platform,
+      resourcesPath: process.resourcesPath,
+    });
     return new AppServerSupervisor({
       executable,
       args: ["app-server", "--listen", "stdio://"],
@@ -282,35 +261,25 @@ export class ZetaApplication extends DisposableOwner {
 
   async #startAppServerWithRecovery(
     supervisor: AppServerSupervisor,
-    startupWindow: StartupWindow,
   ): Promise<boolean> {
-    let retrying = false;
-    while (!startupWindow.closed) {
-      if (retrying) {
-        await startupWindow.showRetrying();
-      }
+    while (!this.#quitRequested) {
       try {
         await supervisor.start();
         return true;
       } catch (error) {
         console.error("App Server failed the startup gate", error);
-        if (startupWindow.closed) {
+        if (this.#quitRequested) {
           return false;
         }
 
         const message = error instanceof Error
           ? error.message
           : "The App Server failed to start";
-        await startupWindow.showFailure(message);
-        const parent = startupWindow.window;
-        if (!parent || parent.isDestroyed()) {
-          return false;
-        }
         const diagnostics = supervisor.diagnostics().trim();
         const detail = diagnostics
           ? `${message}\n\nDiagnostics:\n${diagnostics}`.slice(0, 8_000)
           : message;
-        const result = await dialog.showMessageBox(parent, {
+        const result = await dialog.showMessageBox({
           type: "error",
           title: `${this.#product.name} startup failed`,
           message: "The App Server could not be validated.",
@@ -320,12 +289,13 @@ export class ZetaApplication extends DisposableOwner {
           cancelId: 1,
           noLink: true,
         });
-        if (result.response !== 0) {
-          app.quit();
+        if (this.#quitRequested || result.response !== 0) {
+          if (!this.#quitRequested) {
+            app.quit();
+          }
           return false;
         }
         await supervisor.stop();
-        retrying = true;
       }
     }
     return false;
@@ -350,17 +320,19 @@ export class ZetaApplication extends DisposableOwner {
         additionalArguments: [],
       },
     });
-    const window = new BrowserWindow(browserWindowOptions);
+    const window = new BrowserWindow({
+      ...browserWindowOptions,
+      show: false,
+    });
     this.#mainWindow = window;
     this.#windowStateTracking = windowsStateHandler.trackWindow(window);
-    if (windowState.mode !== WindowMode.Normal) {
-      window.once("ready-to-show", () => {
-        if (!window.isDestroyed()) {
-          window.show();
-        }
-      });
+    window.once("ready-to-show", () => {
+      if (window.isDestroyed()) {
+        return;
+      }
       applyWindowState(window, windowState);
-    }
+      window.show();
+    });
 
     const rendererUrl = process.env.ZETA_RENDERER_URL;
     const rendererFile = join(
@@ -414,8 +386,14 @@ export class ZetaApplication extends DisposableOwner {
           });
           globalThis.setTimeout(() => app.quit(), 0);
         },
+        setWindowTheme: ({ backgroundColor, symbolColor }) => {
+          if (process.platform === "win32" || process.platform === "linux") {
+            window.setTitleBarOverlay({ color: backgroundColor, symbolColor, height: 35 });
+          }
+        },
         toggleDeveloperTools: () => window.webContents.toggleDevTools(),
       }),
+      ...userThemeIpcRoutes(new UserThemeFileService(join(app.getPath("userData"), "themes"))),
       ...workspaceContextIpcRoutes(workspace),
     ];
     if (process.platform === "darwin") {
@@ -464,6 +442,7 @@ export class ZetaApplication extends DisposableOwner {
   }
 
   readonly #onBeforeQuit = (event: ElectronEvent): void => {
+    this.#quitRequested = true;
     this.#supervisor?.dispose();
     if (this.#quitAfterStateSaved || !this.#stateService) {
       return;

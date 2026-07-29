@@ -27,8 +27,8 @@
 }
 
 .zeta-select-box-option-active {
-  color: var(--zeta-selection-foreground, #ffffff);
-  background: var(--zeta-selection-background, #264f78);
+  color: var(--zeta-selection-foreground);
+  background: var(--zeta-selection-background);
 }
 
 .zeta-select-box-option-selected .zeta-select-box-option-label::before {
@@ -45,7 +45,7 @@
 }
 
 .zeta-select-box-option-description {
-  color: var(--zeta-description-foreground, #b8b8b8);
+  color: var(--zeta-description-foreground);
 }
 
 .zeta-select-box-option-active .zeta-select-box-option-description {

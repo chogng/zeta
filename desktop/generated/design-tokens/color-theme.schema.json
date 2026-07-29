@@ -1,0 +1,234 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zeta.dev/schemas/color-theme.schema.json",
+  "title": "Zeta user color theme",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "id",
+    "label",
+    "colorScheme",
+    "colors"
+  ],
+  "properties": {
+    "$schema": {
+      "const": "https://zeta.dev/schemas/color-theme.schema.json"
+    },
+    "version": {
+      "const": 1
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+    },
+    "label": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80
+    },
+    "colorScheme": {
+      "enum": [
+        "dark",
+        "light",
+        "high-contrast-dark",
+        "high-contrast-light"
+      ]
+    },
+    "colors": {
+      "type": "object",
+      "maxProperties": 512,
+      "propertyNames": {
+        "enum": [
+          "foreground",
+          "description.foreground",
+          "muted.foreground",
+          "accent.foreground",
+          "error.foreground",
+          "warning.foreground",
+          "focusBorder",
+          "border",
+          "widget.border",
+          "widget.shadow",
+          "input.foreground",
+          "input.background",
+          "input.border",
+          "input.placeholderForeground",
+          "selection.foreground",
+          "selection.background",
+          "list.hoverBackground",
+          "list.activeSelectionForeground",
+          "list.activeSelectionBackground",
+          "menu.selectionForeground",
+          "menu.selectionBackground",
+          "button.foreground",
+          "button.background",
+          "button.hoverBackground",
+          "button.activeBackground",
+          "button.secondaryBackground",
+          "button.primaryForeground",
+          "button.primaryBackground",
+          "button.primaryHoverBackground",
+          "toolbar.hoverBackground",
+          "keybindingLabel.foreground",
+          "keybindingLabel.background",
+          "keybindingLabel.border",
+          "keybindingLabel.bottomBorder",
+          "scrollbar.sliderBackground",
+          "scrollbar.sliderHoverBackground",
+          "scrollbar.sliderActiveBackground",
+          "dialog.background",
+          "dialog.border",
+          "dialog.backdropBackground",
+          "dialog.shadow",
+          "quickInput.background",
+          "quickInput.backdropBackground",
+          "text.codeBlockBackground",
+          "search.matchBackground",
+          "sectionHeader.foreground",
+          "workbench.background",
+          "editor.background",
+          "editor.foreground",
+          "titleBar.background",
+          "titleBar.foreground",
+          "titleBar.actionForeground",
+          "titleBar.hoverBackground",
+          "sideBar.background",
+          "auxiliaryBar.background",
+          "panel.background",
+          "compositeBar.foreground",
+          "compositeBar.inactiveForeground",
+          "statusBar.foreground",
+          "statusBar.background",
+          "sash.hoverBackground"
+        ]
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/colorValue"
+      }
+    }
+  },
+  "$defs": {
+    "colorValue": {
+      "anyOf": [
+        {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^(?:#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})|[a-z][a-zA-Z0-9]*(?:\\.[a-z][a-zA-Z0-9]*)*)$"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "op",
+            "value",
+            "factor"
+          ],
+          "properties": {
+            "op": {
+              "const": "transparent"
+            },
+            "value": {
+              "$ref": "#/$defs/colorValue"
+            },
+            "factor": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "op",
+            "value",
+            "factor"
+          ],
+          "properties": {
+            "op": {
+              "const": "lighten"
+            },
+            "value": {
+              "$ref": "#/$defs/colorValue"
+            },
+            "factor": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "op",
+            "value",
+            "factor"
+          ],
+          "properties": {
+            "op": {
+              "const": "darken"
+            },
+            "value": {
+              "$ref": "#/$defs/colorValue"
+            },
+            "factor": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "op",
+            "value",
+            "other",
+            "factor"
+          ],
+          "properties": {
+            "op": {
+              "const": "mix"
+            },
+            "value": {
+              "$ref": "#/$defs/colorValue"
+            },
+            "other": {
+              "$ref": "#/$defs/colorValue"
+            },
+            "factor": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "op",
+            "value",
+            "background"
+          ],
+          "properties": {
+            "op": {
+              "const": "opaque"
+            },
+            "value": {
+              "$ref": "#/$defs/colorValue"
+            },
+            "background": {
+              "$ref": "#/$defs/colorValue"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

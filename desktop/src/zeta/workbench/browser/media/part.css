@@ -4,8 +4,8 @@
   min-height: 0;
   flex: 1 1 auto;
   flex-direction: column;
-  color: var(--zeta-foreground, #cccccc);
-  background: var(--zeta-workbench-background, #1e1e1e);
+  color: var(--zeta-foreground);
+  background: var(--zeta-workbench-background);
 }
 
 .zeta-workbench-part[hidden] { display: none; }

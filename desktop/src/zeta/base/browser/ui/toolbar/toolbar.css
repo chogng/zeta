@@ -1,17 +1,16 @@
 .zeta-toolbar {
-  --zeta-action-bar-gap: var(--zeta-toolbar-item-gap, 2px);
   align-items: center;
 }
 
 .zeta-toolbar + .zeta-toolbar {
-  margin-left: var(--zeta-toolbar-item-gap, 2px);
+  margin-left: var(--zeta-toolbar-item-gap);
 }
 
 .zeta-toolbar .zeta-action-view-item.icon .zeta-button {
-  width: var(--zeta-toolbar-action-size, 26px);
-  min-width: var(--zeta-toolbar-action-size, 26px);
-  height: var(--zeta-toolbar-action-size, 26px);
-  min-height: var(--zeta-toolbar-action-size, 26px);
+  width: var(--zeta-toolbar-action-size);
+  min-width: var(--zeta-toolbar-action-size);
+  height: var(--zeta-toolbar-action-size);
+  min-height: var(--zeta-toolbar-action-size);
   padding: 4px;
 }
 

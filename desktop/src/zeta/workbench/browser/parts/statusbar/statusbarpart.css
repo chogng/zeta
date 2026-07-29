@@ -1,6 +1,6 @@
 .zeta-workbench-statusbar {
-  color: var(--zeta-status-bar-foreground, #ffffff);
-  background: var(--zeta-status-bar-background, #007acc);
+  color: var(--zeta-status-bar-foreground);
+  background: var(--zeta-status-bar-background);
   font-size: 12px;
 }
 

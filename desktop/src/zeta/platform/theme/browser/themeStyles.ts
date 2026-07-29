@@ -1,16 +1,7 @@
-import {
-  combinedDisposable,
-  type IDisposable,
-  toDisposable,
-} from "../../../base/common/lifecycle.js";
-import {
-  colorCssVariable,
-  colorIdentifiers,
-  type IColorTheme,
-} from "../common/colorTheme.js";
-import {
-  type IThemeService,
-} from "../common/themeService.js";
+import { combinedDisposable, type IDisposable, toDisposable } from "../../../base/common/lifecycle.js";
+import { colorCssVariable, sizeCssVariable, type IColorTheme } from "../common/colorTheme.js";
+import { sizeToCss } from "../common/sizeRegistry.js";
+import { type IThemeService } from "../common/themeService.js";
 import { isDarkColorScheme } from "../common/theme.js";
 
 interface IPreviousProperty {
@@ -29,8 +20,12 @@ export function bindColorTheme(
   target: HTMLElement,
 ): IDisposable {
   const previousProperties = new Map<string, IPreviousProperty>();
-  for (const id of colorIdentifiers) {
-    const property = colorCssVariable(id);
+  const initialTheme = themeService.getColorTheme();
+  const projectedProperties = [
+    ...initialTheme.colorEntries.map(({ id }) => colorCssVariable(id)),
+    ...initialTheme.sizeEntries.map(({ id }) => sizeCssVariable(id)),
+  ];
+  for (const property of projectedProperties) {
     previousProperties.set(property, {
       value: target.style.getPropertyValue(property),
       priority: target.style.getPropertyPriority(property),
@@ -45,8 +40,12 @@ export function bindColorTheme(
   const previousColorScheme = target.getAttribute("data-color-scheme");
 
   const apply = (theme: IColorTheme): void => {
-    for (const id of colorIdentifiers) {
-      target.style.setProperty(colorCssVariable(id), theme.colors[id]);
+    for (const { id, value } of theme.colorEntries) {
+      if (value) target.style.setProperty(colorCssVariable(id), value.toString());
+      else target.style.removeProperty(colorCssVariable(id));
+    }
+    for (const { id, value } of theme.sizeEntries) {
+      target.style.setProperty(sizeCssVariable(id), sizeToCss(value));
     }
     target.style.setProperty(
       "color-scheme",

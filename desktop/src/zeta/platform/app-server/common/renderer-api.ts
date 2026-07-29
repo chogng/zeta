@@ -42,6 +42,7 @@ import type {
   WorkspaceSearchStartParams,
   WorkspaceSearchStartResult,
 } from "../../../../../generated/app-server/types.js";
+import type { TerminalCloseParams, TerminalCreateParams, TerminalCreateResult, TerminalProfileListResult, TerminalReadParams, TerminalReadResult, TerminalResizeParams, TerminalWriteParams } from "../../../../../generated/app-server/types.js";
 
 /**
  * A string-keyed cleanup handle that can cross Electron's contextBridge.
@@ -121,6 +122,14 @@ export interface ZetaRendererApi {
       params: WorkspaceSearchReadParams,
     ): Promise<WorkspaceSearchReadResult>;
     cancel(params: WorkspaceSearchCancelParams): Promise<void>;
+  };
+  terminal: {
+    listProfiles(): Promise<TerminalProfileListResult>;
+    create(params: TerminalCreateParams): Promise<TerminalCreateResult>;
+    write(params: TerminalWriteParams): Promise<void>;
+    resize(params: TerminalResizeParams): Promise<void>;
+    read(params: TerminalReadParams): Promise<TerminalReadResult>;
+    close(params: TerminalCloseParams): Promise<void>;
   };
   events: {
     subscribe(listener: (event: ServerNotification) => void): DisposableHandle;

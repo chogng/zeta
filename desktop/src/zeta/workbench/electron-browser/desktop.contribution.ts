@@ -4,5 +4,6 @@ import {
 import {
   ToggleDeveloperToolsAction,
 } from "./actions/developerActions.js";
+import "./windowTheme.contribution.js";
 
 registerAction2(ToggleDeveloperToolsAction);

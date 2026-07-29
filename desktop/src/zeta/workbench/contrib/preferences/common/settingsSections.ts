@@ -12,6 +12,11 @@ export const SettingsSections = [
     description: "Configure core application behavior and defaults.",
   },
   {
+    id: "chat",
+    label: "Chat",
+    description: "Configure chat behavior, conversations, and presentation.",
+  },
+  {
     id: "user",
     label: "User",
     description: "Manage your identity, account, and user-level preferences.",

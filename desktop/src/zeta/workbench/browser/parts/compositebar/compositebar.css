@@ -31,7 +31,7 @@
   padding: 0;
   border: 0;
   border-radius: 4px;
-  color: var(--zeta-composite-bar-inactive-foreground, #858585);
+  color: var(--zeta-composite-bar-inactive-foreground);
   background: transparent;
 }
 
@@ -43,8 +43,8 @@
   .zeta-tab-list-scroll-content
   > .zeta-action-bar
   > .zeta-tab.active {
-  color: var(--zeta-composite-bar-foreground, #ffffff);
-  background: var(--zeta-button-hover-background, #2a2d2e);
+  color: var(--zeta-composite-bar-foreground);
+  background: var(--zeta-button-hover-background);
 }
 
 .zeta-composite-bar .zeta-tab-label {

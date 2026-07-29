@@ -11,9 +11,9 @@
   min-width: 0;
   min-height: 26px;
   padding: 2px 8px;
-  color: var(--zeta-foreground, #cccccc);
+  color: var(--zeta-foreground);
   background: transparent;
-  border: 1px solid var(--zeta-border, #454545);
+  border: 1px solid var(--zeta-border);
   border-radius: 3px;
   font: inherit;
   cursor: pointer;
@@ -21,11 +21,11 @@
 
 .zeta-dropdown-button:hover,
 .zeta-dropdown-open > .zeta-dropdown-button {
-  background: var(--zeta-button-hover-background, #2a2d2e);
+  background: var(--zeta-button-hover-background);
 }
 
 .zeta-dropdown-button:focus-visible {
-  outline: 1px solid var(--zeta-focus-border, #007fd4);
+  outline: 1px solid var(--zeta-focus-border);
   outline-offset: -1px;
 }
 

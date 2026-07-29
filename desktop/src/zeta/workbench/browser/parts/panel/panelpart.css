@@ -1,12 +1,54 @@
 .zeta-workbench-panel {
-  border-top: 1px solid var(--zeta-border, #2b2b2b);
-  background: var(--zeta-panel-background, #181818);
+  border-top: 1px solid var(--zeta-border);
+  background: var(--zeta-panel-background);
 }
-.zeta-workbench-panel .zeta-workbench-part-content { overflow: auto; }
+.zeta-panel-title-control {
+  display: flex;
+  min-width: 0;
+  height: 35px;
+  flex: 0 0 35px;
+  border-bottom: 1px solid var(--zeta-border);
+}
+.zeta-panel-title-control > .zeta-composite-bar {
+  min-width: 0;
+  height: 100%;
+  flex: 1 1 auto;
+}
+.zeta-panel-title-control .zeta-tab-list-scroll-content > .zeta-action-bar {
+  gap: 0;
+  padding: 0 8px;
+}
+.zeta-panel-title-control .zeta-tab-list-scroll-content > .zeta-action-bar > .zeta-tab {
+  width: auto;
+  min-width: 0;
+  height: 100%;
+  min-height: 0;
+  padding: 0 5px;
+  color: var(--zeta-description-foreground);
+  background: transparent;
+}
+.zeta-panel-title-control .zeta-tab-label {
+  width: auto;
+  padding: 0 2px;
+}
+.zeta-panel-title-control .zeta-icon-label-text {
+  display: block;
+  white-space: nowrap;
+}
+.zeta-panel-title-actions {
+  display: flex;
+  height: 100%;
+  flex: 0 0 auto;
+  align-items: center;
+  margin-left: auto;
+  padding: 0 4px;
+}
+.zeta-workbench-panel > .zeta-composite-content { overflow: hidden; }
+.zeta-workbench-panel .zeta-view-pane > .zeta-view-pane-title { display: none; }
 .zeta-workbench-panel .zeta-view-pane-container:empty::before {
   display: block;
   padding: 14px;
-  color: var(--zeta-muted-foreground, #8f8f8f);
+  color: var(--zeta-muted-foreground);
   content: "PANEL";
   font-size: 11px;
   font-weight: 600;

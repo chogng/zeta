@@ -11,8 +11,11 @@ It does not own files, persistence, tabs, dirty state, or Markdown rendering.
   pixel ratio, and DOM glyph measurement.
 - `browser/monacoEnvironment.ts` owns worker construction. Change language
   services or worker bundling here.
-- `browser/monacoEditorPane.ts` owns Monaco model, DOM, layout, visibility,
-  focus, and disposal for one Workbench pane.
+- `browser/monacoModelService.ts` owns the realm-scoped URI-to-model pool and
+  reference-counted model disposal. A later `initialText` snapshot cannot
+  overwrite a model that is already in use.
+- `browser/monacoEditorPane.ts` owns Monaco DOM, layout, visibility, focus,
+  and one reference to the shared model.
 - `contrib/monacoEditor.contribution.ts` is the stable registration boundary.
 - `test/` verifies matching and language policy without loading browser workers.
 

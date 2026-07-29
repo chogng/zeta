@@ -20,7 +20,12 @@ corepack pnpm install
 corepack pnpm dev:desktop
 ```
 
-这个命令会先编译 Rust CLI，然后启动 Vite、主进程、预加载脚本和 Electron。启动后不要关闭终端，停止服务可以按 `Ctrl+C`。
+这个命令会先通过 Node 开发组装器生成 `desktop/.tmp/zeta-package`；其中包含 debug Rust
+CLI、锁定版本的 ripgrep 与平台 sandbox helper。开发态和发布态 Electron 都从相同的
+`<package>/bin/zeta[.exe]` 入口启动 App Server，区别仅在编译 profile 和 package root。
+准备流程只使用 Desktop 已要求的 Node、Rust 和 host archive utility，不安装或调用
+Python。随后命令会启动 Vite、主进程、预加载脚本和 Electron。启动后不要关闭终端，
+停止服务可以按 `Ctrl+C`。
 
 不带项目路径启动时，Zeta 使用空窗口上下文。构建完成后，可以通过启动参数打开一个项目目录：
 
@@ -54,10 +59,11 @@ Renderer 类型检查前同步到 `generated/file-icons/`。TypeScript 直接从
 `app.whenReady()`。`ZetaApplication.startupAfterReady()` 会断言 Electron 已进入 Ready，
 从结构上避免入口模块和 `ready` 生命周期互相等待。
 
-Ready 后首先显示 `StartupWindow`。该窗口不加载 preload、不注册业务 IPC，也不具备
-Workbench 能力；它只负责在 App Server 完成 initialize、server identity、protocol version
-与 schema hash 校验前提供可见反馈。门禁通过后才创建业务 Workbench 窗口。门禁失败时使用
-Electron 原生对话框提供 Retry/Quit，重试会先把 supervisor 恢复到 stopped 状态。
+Ready 后在后台启动 App Server，并完成 initialize、server identity、protocol version
+与 schema hash 校验；门禁通过后才创建业务 Workbench 窗口。主窗口初始保持隐藏，
+在 `ready-to-show` 后恢复窗口模式并显示，启动过程不创建额外的 splash 窗口。
+门禁失败时使用 Electron 原生对话框提供 Retry/Quit，重试会先把 supervisor 恢复到
+stopped 状态。
 
 ## Browser Workbench
 

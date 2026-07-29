@@ -94,15 +94,20 @@ export class CompositeBar extends DisposableOwner {
         tooltip: container.title,
         icon: container.icon,
         tabId: compositeTabId(this.#location, container.id),
+        panelId: compositePanelId(this.#location, container.id),
       })),
       this.#activeCompositeId,
     );
   }
 }
 
-function compositeTabId(
+export function compositeTabId(
   location: ViewContainerLocation,
   compositeId: string,
 ): string {
   return `zeta-${location}-composite-tab-${encodeURIComponent(compositeId)}`;
+}
+
+export function compositePanelId(location: ViewContainerLocation, compositeId: string): string {
+  return `zeta-${location}-composite-panel-${encodeURIComponent(compositeId)}`;
 }

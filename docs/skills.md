@@ -166,6 +166,9 @@ Plugin manifest/config。独立 Skill 需要额外能力时只能产生明确 co
              │ built-in/user   │ workspace      │ Plugin contribution
              │                 │                │
          config roots      App Server      zeta-plugins snapshot
+             │
+             └── zeta-file-identity supplies stable file identity
+                 and hard-link count to zeta-skills
                               │
                               ▼
                  Core ContextAssembler
@@ -177,6 +180,9 @@ Plugin manifest/config。独立 Skill 需要额外能力时只能产生明确 co
 规则：
 
 - `zeta-skills` 不依赖 `zeta-core`、stores、App Server 或 Plugin live manager；
+- `zeta-file-identity` 只提供已打开文件的跨平台 identity/link-count，不拥有 Skill path
+  policy；具体 Win32/Unix contract 见
+  [`zeta-rs/file-identity/README.md`](../zeta-rs/file-identity/README.md)；
 - Skill source 以窄 `SkillSourceRoot`/file resolver port 注入；
 - Plugin manager 提供 immutable package root，Skill manager 仍重新校验 Skill format；
 - Core ContextAssembler 只接收激活 snapshot，不在构造 prompt 时重新扫描 filesystem；

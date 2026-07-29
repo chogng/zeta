@@ -3,7 +3,8 @@
 > 本 README 解释 App Server external RPC contract、method registry 与 artifact generator。
 > 面向客户端的 API 语义见 [`docs/zeta-app-server-api.md`](../../docs/zeta-app-server-api.md)，
 > canonical product values 见 [`docs/protocol.md`](../../docs/protocol.md)，workspace 搜索的跨层
-> ownership 见 [`docs/search.md`](../../docs/search.md)。
+> ownership 见 [`docs/search.md`](../../docs/search.md)，Terminal external 语义见
+> [`docs/zeta-app-server-api.md`](../../docs/zeta-app-server-api.md#integrated-terminal)。
 
 `zeta-app-server-protocol` 是 App Server 对外 wire contract 的唯一 Rust source。它定义 typed
 params/results/errors、JSON-RPC 2.0 envelopes、method/notification registry，并从同一套定义生成
@@ -52,6 +53,7 @@ zeta-rs/app-server-protocol/
 │   │   ├── config.rs
 │   │   ├── resources.rs
 │   │   ├── search.rs
+│   │   ├── terminal.rs
 │   │   └── error.rs
 │   ├── rpc.rs                # generic JSON-RPC 2.0 envelopes
 │   ├── export.rs             # pure deterministic generators
@@ -81,7 +83,8 @@ zeta-rs/app-server-protocol/
 Method registry 当前覆盖 initialize、Session lifecycle/subscription、Thread read/subscription、
 Config/provider/MCP/Skill mutation、Turn start/interrupt/interaction resolve 与 Resource
 metadata/read/release，以及 workspace search start/read/cancel。Notification 只有
-`session/update` 与 `thread/update`。
+`session/update` 与 `thread/update`；Terminal 当前使用 profile/list 与
+create/write/resize/read/close 的有界 pull contract，不伪装成主动 notification stream。
 
 ### JSON-RPC
 
@@ -172,6 +175,12 @@ dispatcher 的 executable metadata，不能被误写成已经落实的并发保�
   普通 ordered Turn input，不引入第二套 command RPC。
 - Resource chunk 的 `data_base64` 是标准 Base64，`decoded_length` 是原始 bytes 数，最大 chunk
   262,144 bytes。
+- Terminal raw output 使用 `TerminalOutputChunk.data_base64`；sequence 字段在 Rust 使用 `u64`，
+  TypeScript artifact 显式生成为 `number`，server 只产生 safe-lifetime 的单调值。`output_gap`
+  是 ring eviction 的显式信号，不能由客户端忽略。
+- `TerminalProfile` 只暴露稳定 ID、标题和 default 标记。Terminal create 只接受
+  `TerminalProfileSelection`，不包含 program、args、cwd 或 environment；这些 authority 留在
+  local App Server composition。
 - `AppServerError` 的 `message` 是 stable `AppServerErrorName`，`data` 当前为 unit，不传任意
   internal error text。
 - DTO 默认 camelCase；required/optional/nullability 要同时符合 serde、schemars 与 ts-rs。

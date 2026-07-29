@@ -18,6 +18,12 @@ Repository-owned built-in content 位于 [`assets/`](assets)，打包后位于
 当前正式内置内容只有 `skill-creator`；通用 code review/debugging 工作流没有因测试便利而成为
 产品 built-in。
 
+Catalog scanner 通过 [`zeta-file-identity`](../file-identity/README.md) 从已打开文件句柄取得
+稳定 identity 与 hard-link count。`scan_skill_file` 在读取前绑定句柄 identity，读取后重新打开
+受控 path 并比较 identity；因此 Windows 不依赖不稳定的标准库 `MetadataExt` API，也不会为了
+跨平台编译而跳过 hard-link 或换文件检测。symlink、root containment、大小限制和 diagnostic
+语义仍由本 crate 拥有。
+
 ## Public contract
 
 | Symbol | 当前职责 | 不承担 |

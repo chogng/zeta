@@ -3,6 +3,9 @@ import test from "node:test";
 import { JSDOM } from "jsdom";
 import type { ServerNotification, Session, Thread } from "../generated/app-server/types.js";
 import type { ZetaRendererApi } from "../src/zeta/platform/app-server/common/renderer-api.js";
+import { LxIcon } from "../src/zeta/base/common/lxicons.js";
+import { toDisposable } from "../src/zeta/base/common/lifecycle.js";
+import { MenuId } from "../src/zeta/platform/actions/common/actions.js";
 import { MenuService } from "../src/zeta/platform/actions/common/menuService.js";
 import type { IContextMenuService } from "../src/zeta/platform/contextview/browser/contextMenu.js";
 import { ServiceCollection } from "../src/zeta/platform/instantiation/common/instantiation.js";
@@ -10,11 +13,12 @@ import { IQuickInputService } from "../src/zeta/platform/quickinput/common/quick
 import { CommandService } from "../src/zeta/workbench/services/commands/common/commandService.js";
 import type { ViewPaneContainer } from "../src/zeta/workbench/browser/parts/views/viewPaneContainer.js";
 import { ViewContainerLocation, WorkbenchViewRegistry } from "../src/zeta/workbench/common/views.js";
-import { ChatViewModel } from "../src/zeta/workbench/contrib/chat/browser/chatViewModel.js";
-import { CHAT_VIEW_CONTAINER_ID, CHAT_VIEW_ID, NEW_CHAT_COMMAND_ID, SHOW_CHAT_HISTORY_COMMAND_ID } from "../src/zeta/workbench/contrib/chat/common/chat.js";
+import { ChatPaneModel } from "../src/zeta/workbench/contrib/chat/browser/pane/chatPaneModel.js";
+import { CHAT_VIEW_CONTAINER_ID, CHAT_VIEW_ID, MOVE_CHAT_TO_EDITOR_COMMAND_ID, MOVE_CHAT_TO_NEW_WINDOW_COMMAND_ID, NEW_CHAT_COMMAND_ID, OPEN_CHAT_BROWSER_COMMAND_ID, OPEN_CHAT_SETTINGS_COMMAND_ID, SHOW_CHAT_HISTORY_COMMAND_ID, TOGGLE_AGENT_SIDEBAR_COMMAND_ID } from "../src/zeta/workbench/contrib/chat/common/chat.js";
+import { ISettingsService } from "../src/zeta/workbench/services/preferences/common/settings.js";
 import { IWorkbenchSessionService, WorkbenchSessionService } from "../src/zeta/workbench/services/sessions/common/sessionService.js";
 import { IViewsService, ViewsService } from "../src/zeta/workbench/services/views/browser/viewsService.js";
-import { ContextKeyService } from "../src/zeta/platform/contextkey/common/contextkey.js";
+import { ContextKeyService, IContextKeyService } from "../src/zeta/platform/contextkey/common/contextkey.js";
 import { ViewDescriptorService } from "../src/zeta/workbench/services/views/common/viewDescriptorService.js";
 import { WorkbenchQuickInputService } from "../src/zeta/workbench/services/quickinput/browser/quickInputService.js";
 
@@ -37,13 +41,10 @@ const { registerChatViews } = await import(
   "../src/zeta/workbench/contrib/chat/browser/chat.contribution.js"
 );
 const { ChatViewPane } = await import(
-  "../src/zeta/workbench/contrib/chat/browser/chatViewPane.js"
+  "../src/zeta/workbench/contrib/chat/browser/view/chatViewPane.js"
 );
 await import(
   "../src/zeta/workbench/contrib/preferences/browser/preferences.contribution.js"
-);
-const { ToggleAuxiliaryBarCommandId } = await import(
-  "../src/zeta/workbench/browser/parts/titlebar/titlebarActions.js"
 );
 test.after(() => {
   browserEnvironment.window.close();
@@ -75,7 +76,7 @@ test("Chat contribution owns the fixed Auxiliary Bar view", () => {
   );
 });
 
-test("Chat title separates Thread tabs from its action toolbar", async () => {
+test("Chat title separates Session tabs from its action toolbar", async () => {
   const dom = new JSDOM("<!doctype html><body></body>");
   const api = fakeApi({
     sessions: [
@@ -85,7 +86,25 @@ test("Chat title separates Thread tabs from its action toolbar", async () => {
   }).api;
   using sessions = new WorkbenchSessionService(api);
   using contextKeys = new ContextKeyService();
-  using commands = new CommandService(new ServiceCollection());
+  using viewDescriptors = new ViewDescriptorService({
+    contextKeyService: contextKeys,
+    registry: new WorkbenchViewRegistry(),
+  });
+  const services = new ServiceCollection();
+  let openedSettingsSection: string | undefined;
+  const settings: ISettingsService = {
+    onDidChangeVisibility: () => toDisposable(() => {}),
+    onDidChangeActiveSection: () => toDisposable(() => {}),
+    isOpen: false,
+    activeSectionId: "general",
+    open: (sectionId) => {
+      openedSettingsSection = sectionId;
+    },
+    close() {},
+  };
+  services.set(ISettingsService, settings);
+  services.set(IContextKeyService, contextKeys);
+  using commands = new CommandService(services);
   const menuService = new MenuService(commands, contextKeys);
   const contextMenuService = {
     showContextMenu: () => undefined,
@@ -100,6 +119,8 @@ test("Chat title separates Thread tabs from its action toolbar", async () => {
     sessions,
     menuService,
     contextMenuService,
+    viewDescriptors,
+    contextKeys,
   );
   dom.window.document.body.append(pane.element);
 
@@ -144,8 +165,55 @@ test("Chat title separates Thread tabs from its action toolbar", async () => {
   assert.ok(toolbar?.querySelector(".zeta-button-label"));
   assert.ok(toolbar?.querySelector("svg.zeta-icon"));
   assert.ok(layoutToolbar?.querySelector(
-    `[data-action-id="${ToggleAuxiliaryBarCommandId}"]`,
+    `[data-action-id="${TOGGLE_AGENT_SIDEBAR_COMMAND_ID}"]`,
   ));
+  const agentSidebar = pane.element.querySelector<HTMLElement>(
+    "[data-part='agentSidebar']",
+  );
+  assert.equal(agentSidebar?.hidden, true);
+  await commands.executeCommand(TOGGLE_AGENT_SIDEBAR_COMMAND_ID);
+  assert.equal(agentSidebar?.hidden, false);
+  await commands.executeCommand(TOGGLE_AGENT_SIDEBAR_COMMAND_ID);
+  assert.equal(agentSidebar?.hidden, true);
+  const chatActions = menuService.getMenuActions(MenuId.ChatTitle)
+    .filter(([group]) => group !== "navigation")
+    .flatMap(([, actions]) => actions);
+  assert.deepEqual(
+    chatActions.map((action) => ({
+      id: action.id,
+      label: action.label,
+      enabled: action.enabled,
+      icon: action.icon,
+    })),
+    [
+      {
+        id: OPEN_CHAT_BROWSER_COMMAND_ID,
+        label: "Open Browser",
+        enabled: false,
+        icon: LxIcon.browserWeb,
+      },
+      {
+        id: MOVE_CHAT_TO_EDITOR_COMMAND_ID,
+        label: "Move Chat to Editor Area",
+        enabled: false,
+        icon: LxIcon.layoutPanel,
+      },
+      {
+        id: MOVE_CHAT_TO_NEW_WINDOW_COMMAND_ID,
+        label: "Move Chat to New Window",
+        enabled: false,
+        icon: LxIcon.linkExternal,
+      },
+      {
+        id: OPEN_CHAT_SETTINGS_COMMAND_ID,
+        label: "Chat Settings",
+        enabled: true,
+        icon: LxIcon.settings,
+      },
+    ],
+  );
+  await chatActions[3]?.run();
+  assert.equal(openedSettingsSection, "chat");
   const tabs = tablist?.querySelectorAll<HTMLButtonElement>("[role='tab']");
   assert.equal(tabs?.length, 2);
   assert.deepEqual(
@@ -167,6 +235,18 @@ test("Chat title separates Thread tabs from its action toolbar", async () => {
     )?.getAttribute("data-scroll-direction"),
     "vertical",
   );
+  const chatPanes = pane.element.querySelectorAll<HTMLElement>(".zeta-chat-pane-host > .zeta-chat");
+  assert.equal(chatPanes.length, 2);
+  for (const chatPane of chatPanes) {
+    assert.ok(chatPane.querySelector(".zeta-chat-list-widget"));
+    assert.ok(chatPane.querySelector(".zeta-chat-input-widget"));
+  }
+  const composerInputs = [...chatPanes].map((chatPane) => {
+    const input = chatPane.querySelector<HTMLTextAreaElement>(".zeta-chat-input-widget textarea");
+    assert.ok(input);
+    return input;
+  });
+  composerInputs[0].value = "First draft";
 
   tabs?.[1]?.click();
   assert.equal(sessions.active?.session.sessionId, "session-2");
@@ -176,7 +256,158 @@ test("Chat title separates Thread tabs from its action toolbar", async () => {
       .map((tab) => tab.getAttribute("aria-selected")),
     ["false", "true"],
   );
+  composerInputs[1].value = "Second draft";
+  pane.element.querySelectorAll<HTMLButtonElement>("[role='tab']")[0]?.click();
+  assert.equal(sessions.active?.session.sessionId, "session-1");
+  assert.equal(composerInputs[0].value, "First draft");
+  assert.equal(composerInputs[1].value, "Second draft");
 
+  dom.window.close();
+});
+
+test("New Chat creates and activates a dedicated Session pane", async () => {
+  const dom = new JSDOM("<!doctype html><body></body>");
+  const initialSession = session("session-1", "thread-1", "First Chat");
+  const createdSession = session("session-2", undefined, "New Chat");
+  const attachedSession = session("session-2", "thread-2", "New Chat");
+  const api = fakeApi({
+    sessions: [initialSession],
+    createSession: createdSession,
+    createThread: {
+      session: attachedSession,
+      threadId: "thread-2",
+    },
+  }).api;
+  const services = new ServiceCollection();
+  using sessions = new WorkbenchSessionService(api);
+  using contextKeys = new ContextKeyService();
+  using viewDescriptors = new ViewDescriptorService({
+    contextKeyService: contextKeys,
+    registry: new WorkbenchViewRegistry(),
+  });
+  services.set(IWorkbenchSessionService, sessions);
+  let focusedView: string | undefined;
+  services.set(IViewsService, {
+    openView: () => undefined,
+    focusView: (viewId) => {
+      focusedView = viewId;
+      return true;
+    },
+  });
+  using commands = new CommandService(services);
+  const menuService = new MenuService(commands, contextKeys);
+  const contextMenuService = {
+    showContextMenu: () => undefined,
+  } as unknown as IContextMenuService;
+  using pane = new ChatViewPane(
+    {
+      id: CHAT_VIEW_ID,
+      title: "Chat",
+      ownerDocument: dom.window.document,
+    },
+    api,
+    sessions,
+    menuService,
+    contextMenuService,
+    viewDescriptors,
+    contextKeys,
+  );
+  dom.window.document.body.append(pane.element);
+
+  await sessions.initialize();
+  await nextTask();
+  assert.equal(pane.element.querySelectorAll("[role='tab']").length, 1);
+
+  await commands.executeCommand(NEW_CHAT_COMMAND_ID);
+  await nextTask();
+
+  const tabs = pane.element.querySelectorAll<HTMLButtonElement>("[role='tab']");
+  assert.equal(tabs.length, 2);
+  assert.deepEqual(
+    [...tabs].map((tab) => ({
+      label: tab.textContent,
+      selected: tab.getAttribute("aria-selected"),
+    })),
+    [
+      { label: "New Chat", selected: "true" },
+      { label: "First Chat", selected: "false" },
+    ],
+  );
+  assert.equal(sessions.active?.session.sessionId, "session-2");
+  assert.equal(sessions.active?.threadId, "thread-2");
+  assert.equal(focusedView, CHAT_VIEW_ID);
+  assert.equal(
+    pane.element.querySelector("[role='tabpanel']")?.getAttribute(
+      "aria-labelledby",
+    ),
+    tabs[0]?.id,
+  );
+
+  dom.window.close();
+});
+
+test("one Session retains one Chat pane while its selected Thread changes", async () => {
+  const dom = new JSDOM("<!doctype html><body></body>");
+  const multiThreadSession: Session = {
+    ...session("session-1", "thread-1", "One Chat"),
+    threads: [
+      { threadId: "thread-1", origin: { type: "root" }, status: "active" },
+      {
+        threadId: "thread-2",
+        origin: {
+          type: "fork",
+          parentThreadId: "thread-1",
+          parentSequence: 1,
+        },
+        status: "active",
+      },
+    ],
+  };
+  const api = fakeApi({ sessions: [multiThreadSession] }).api;
+  using sessions = new WorkbenchSessionService(api);
+  using contextKeys = new ContextKeyService();
+  using viewDescriptors = new ViewDescriptorService({
+    contextKeyService: contextKeys,
+    registry: new WorkbenchViewRegistry(),
+  });
+  using commands = new CommandService(new ServiceCollection());
+  const menuService = new MenuService(commands, contextKeys);
+  const contextMenuService = {
+    showContextMenu: () => undefined,
+  } as unknown as IContextMenuService;
+  using pane = new ChatViewPane(
+    {
+      id: CHAT_VIEW_ID,
+      title: "Chat",
+      ownerDocument: dom.window.document,
+    },
+    api,
+    sessions,
+    menuService,
+    contextMenuService,
+    viewDescriptors,
+    contextKeys,
+  );
+  dom.window.document.body.append(pane.element);
+
+  await sessions.initialize();
+  await nextTask();
+
+  assert.equal(pane.element.querySelectorAll("[role='tab']").length, 1);
+  const chatPane = pane.element.querySelector<HTMLElement>(".zeta-chat-pane-host > .zeta-chat");
+  assert.ok(chatPane);
+  assert.equal(chatPane.dataset.sessionId, "session-1");
+  assert.equal(chatPane.dataset.threadId, "thread-1");
+
+  sessions.selectThread("session-1", "thread-2");
+  await nextTask();
+
+  assert.strictEqual(
+    pane.element.querySelector(".zeta-chat-pane-host > .zeta-chat"),
+    chatPane,
+  );
+  assert.equal(pane.element.querySelectorAll("[role='tab']").length, 1);
+  assert.equal(chatPane.dataset.threadId, "thread-2");
   dom.window.close();
 });
 
@@ -300,15 +531,17 @@ test("WorkbenchSessionService restores and creates active Threads", async () => 
   assert.equal(service.state, "ready");
 });
 
-test("ChatViewModel layers transient deltas over canonical Thread state", async () => {
+test("ChatPaneModel layers transient deltas over canonical Thread state", async () => {
   const activeSession = session("session-1", "thread-1");
   let currentThread = thread();
   const fake = fakeApi({
     sessions: [activeSession],
     thread: () => currentThread,
   });
-  using sessions = new WorkbenchSessionService(fake.api);
-  using model = new ChatViewModel(fake.api, sessions);
+  using model = new ChatPaneModel(fake.api, {
+    session: activeSession,
+    threadId: "thread-1",
+  });
 
   await model.initialize();
   fake.emit({
@@ -394,7 +627,7 @@ function fakeApi(options: FakeOptions = {}): {
   readonly api: ZetaRendererApi;
   readonly emit: (notification: ServerNotification) => void;
 } {
-  let listener: ((notification: ServerNotification) => void) | undefined;
+  const listeners = new Set<(notification: ServerNotification) => void>();
   const currentThread = () => options.thread?.() ?? thread();
   const api = {
     appServer: {
@@ -427,14 +660,16 @@ function fakeApi(options: FakeOptions = {}): {
     },
     events: {
       subscribe: (next: (notification: ServerNotification) => void) => {
-        listener = next;
-        return { dispose: () => { listener = undefined; } };
+        listeners.add(next);
+        return { dispose: () => { listeners.delete(next); } };
       },
     },
   } as unknown as ZetaRendererApi;
   return {
     api,
-    emit: (notification) => listener?.(notification),
+    emit: (notification) => {
+      for (const listener of listeners) listener(notification);
+    },
   };
 }
 

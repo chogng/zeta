@@ -70,6 +70,14 @@ export function createDisconnectedRendererApi(): ZetaRendererApi {
       read: () => unavailable("workspaceSearch.read"),
       cancel: () => unavailable("workspaceSearch.cancel"),
     },
+    terminal: {
+      listProfiles: () => unavailable("terminal.listProfiles"),
+      create: () => unavailable("terminal.create"),
+      write: () => unavailable("terminal.write"),
+      resize: () => unavailable("terminal.resize"),
+      read: () => unavailable("terminal.read"),
+      close: () => unavailable("terminal.close"),
+    },
     events: {
       subscribe: inertSubscription,
     },

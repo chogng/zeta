@@ -1,9 +1,13 @@
 import { Keybinding, logicalKey } from "../../../../base/common/keybindings.js";
 import { LxIcon } from "../../../../base/common/lxicons.js";
 import { Action2, MenuId, registerAction2 } from "../../../../platform/actions/common/actions.js";
+import { IConfigurationService } from "../../../../platform/configuration/common/configuration.js";
+import { IDialogService } from "../../../../platform/dialogs/common/dialogs.js";
 import type { ServicesAccessor } from "../../../../platform/instantiation/common/instantiation.js";
+import { IThemeService } from "../../../../platform/theme/common/themeService.js";
 import { IWorkbenchWindowService } from "../../../browser/window.js";
 import { registerWorkbenchContribution, WorkbenchPhase } from "../../../common/contributions.js";
+import { IUserThemeService } from "../../../common/userThemes.js";
 import { ISettingsService } from "../../../services/preferences/common/settings.js";
 import { SettingsEditorContribution } from "./settingsEditor.contribution.js";
 
@@ -20,11 +24,6 @@ registerAction2(class OpenSettingsAction extends Action2 {
         {
           id: MenuId.TitleBar,
           group: "navigation",
-          order: 100,
-        },
-        {
-          id: MenuId.ChatTitle,
-          group: "settings",
           order: 100,
         },
         {
@@ -51,7 +50,11 @@ registerWorkbenchContribution(
   "workbench.contrib.settingsEditor",
   WorkbenchPhase.BlockStartup,
   (accessor) => new SettingsEditorContribution({
+    configurationService: accessor.get(IConfigurationService),
     container: accessor.get(IWorkbenchWindowService).root,
+    dialogService: accessor.get(IDialogService),
     settingsService: accessor.get(ISettingsService),
+    themeService: accessor.get(IThemeService),
+    userThemeService: accessor.get(IUserThemeService),
   }),
 );

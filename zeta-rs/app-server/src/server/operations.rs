@@ -72,6 +72,7 @@ impl AppServer {
                 resources: true,
                 file_system: self.file_system.is_some(),
                 workspace_search: self.workspace_search.is_some(),
+                terminal: self.terminals.is_some(),
                 typst: true,
                 update_replay: true,
             },

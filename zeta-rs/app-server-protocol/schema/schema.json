@@ -261,6 +261,11 @@
         "SearchNotFound",
         "SearchNotOwner",
         "SearchBusy",
+        "TerminalUnavailable",
+        "TerminalNotFound",
+        "TerminalNotOwner",
+        "TerminalBusy",
+        "TerminalOperationFailed",
         "ConfigUnavailable",
         "ConfigRevisionConflict",
         "SkillsUnavailable",
@@ -987,6 +992,102 @@
             "method",
             "params"
           ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "terminal/profile/list"
+            },
+            "params": {
+              "$ref": "#/$defs/EmptyParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "terminal/create"
+            },
+            "params": {
+              "$ref": "#/$defs/TerminalCreateParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "terminal/write"
+            },
+            "params": {
+              "$ref": "#/$defs/TerminalWriteParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "terminal/resize"
+            },
+            "params": {
+              "$ref": "#/$defs/TerminalResizeParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "terminal/read"
+            },
+            "params": {
+              "$ref": "#/$defs/TerminalReadParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "terminal/close"
+            },
+            "params": {
+              "$ref": "#/$defs/TerminalCloseParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
         }
       ]
     },
@@ -1606,6 +1707,102 @@
             "method": {
               "type": "string",
               "const": "workspace/search/cancel"
+            },
+            "result": {
+              "type": "null"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "terminal/profile/list"
+            },
+            "result": {
+              "$ref": "#/$defs/TerminalProfileListResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "terminal/create"
+            },
+            "result": {
+              "$ref": "#/$defs/TerminalCreateResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "terminal/write"
+            },
+            "result": {
+              "type": "null"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "terminal/resize"
+            },
+            "result": {
+              "type": "null"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "terminal/read"
+            },
+            "result": {
+              "$ref": "#/$defs/TerminalReadResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "terminal/close"
             },
             "result": {
               "type": "null"
@@ -2835,6 +3032,9 @@
         "sessions": {
           "type": "boolean"
         },
+        "terminal": {
+          "type": "boolean"
+        },
         "threads": {
           "type": "boolean"
         },
@@ -2858,6 +3058,7 @@
         "resources",
         "fileSystem",
         "workspaceSearch",
+        "terminal",
         "typst",
         "updateReplay"
       ]
@@ -3778,6 +3979,259 @@
       "description": "Stable identity for one transient stream-emitter incarnation.\n\nA new value is created whenever the emitter restarts. Its sequence is meaningful only within\nthat instance, so consumers must discard a previous cursor when this value changes.",
       "type": "string",
       "minLength": 1
+    },
+    "TerminalCloseParams": {
+      "description": "Terminates and releases one connection-owned terminal.",
+      "type": "object",
+      "properties": {
+        "terminalId": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "terminalId"
+      ]
+    },
+    "TerminalCreateParams": {
+      "description": "Starts one connection-owned interactive terminal at the server's trusted workspace root.",
+      "type": "object",
+      "properties": {
+        "cols": {
+          "type": "integer",
+          "format": "uint16",
+          "maximum": 512,
+          "minimum": 1
+        },
+        "profile": {
+          "$ref": "#/$defs/TerminalProfileSelection"
+        },
+        "rows": {
+          "type": "integer",
+          "format": "uint16",
+          "maximum": 512,
+          "minimum": 1
+        }
+      },
+      "required": [
+        "rows",
+        "cols",
+        "profile"
+      ]
+    },
+    "TerminalCreateResult": {
+      "description": "Identity allocated for one interactive terminal.",
+      "type": "object",
+      "properties": {
+        "profile": {
+          "$ref": "#/$defs/TerminalProfile"
+        },
+        "terminalId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "terminalId",
+        "profile"
+      ]
+    },
+    "TerminalOutputChunk": {
+      "description": "One ordered raw PTY output chunk encoded for JSON transport.",
+      "type": "object",
+      "properties": {
+        "dataBase64": {
+          "type": "string"
+        },
+        "sequence": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "sequence",
+        "dataBase64"
+      ]
+    },
+    "TerminalProfile": {
+      "description": "One server-owned shell profile available to interactive terminal clients.",
+      "type": "object",
+      "properties": {
+        "isDefault": {
+          "type": "boolean"
+        },
+        "profileId": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "profileId",
+        "title",
+        "isDefault"
+      ]
+    },
+    "TerminalProfileListResult": {
+      "description": "Trusted terminal profiles discovered by the local App Server composition.",
+      "type": "object",
+      "properties": {
+        "profiles": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TerminalProfile"
+          }
+        }
+      },
+      "required": [
+        "profiles"
+      ]
+    },
+    "TerminalProfileSelection": {
+      "description": "Selects either the server default or one previously listed trusted profile.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "default"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "profileId": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "profile"
+            }
+          },
+          "required": [
+            "type",
+            "profileId"
+          ]
+        }
+      ]
+    },
+    "TerminalReadParams": {
+      "description": "Reads output after the last sequence observed by this client.",
+      "type": "object",
+      "properties": {
+        "afterSequence": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "maxChunks": {
+          "type": "integer",
+          "format": "uint",
+          "maximum": 128,
+          "minimum": 1
+        },
+        "terminalId": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "terminalId",
+        "afterSequence",
+        "maxChunks"
+      ]
+    },
+    "TerminalReadResult": {
+      "description": "Bounded output and process state for one interactive terminal.",
+      "type": "object",
+      "properties": {
+        "chunks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TerminalOutputChunk"
+          }
+        },
+        "exitCode": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int32"
+        },
+        "exited": {
+          "type": "boolean"
+        },
+        "nextSequence": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "outputGap": {
+          "type": "boolean"
+        },
+        "terminalId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "terminalId",
+        "chunks",
+        "nextSequence",
+        "outputGap",
+        "exited"
+      ]
+    },
+    "TerminalResizeParams": {
+      "description": "Changes the PTY character-cell dimensions.",
+      "type": "object",
+      "properties": {
+        "cols": {
+          "type": "integer",
+          "format": "uint16",
+          "maximum": 512,
+          "minimum": 1
+        },
+        "rows": {
+          "type": "integer",
+          "format": "uint16",
+          "maximum": 512,
+          "minimum": 1
+        },
+        "terminalId": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "terminalId",
+        "rows",
+        "cols"
+      ]
+    },
+    "TerminalWriteParams": {
+      "description": "Writes one bounded UTF-8 input batch to an interactive terminal.",
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "string",
+          "maxLength": 65536,
+          "minLength": 1
+        },
+        "terminalId": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "terminalId",
+        "data"
+      ]
     },
     "ThemeDto": {
       "type": "string",

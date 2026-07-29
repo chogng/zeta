@@ -85,6 +85,18 @@ production consumer，因此下表的共享 URI 状态仍为“部分具备”�
 | 跨重启的领域 `FileId` 或 `DocumentId` | 拥有该生命周期的 Rust 领域模型 | 尚未完成 |
 | Tab、Pane 等纯 UI 实例 ID | Renderer | 已有 Workbench 基础设施 |
 
+集成终端同样按 UI 与进程 authority 拆分：
+
+| 能力 | Owner | 当前状态 |
+| --- | --- | --- |
+| 每实例 xterm、Tab、输入、焦点和 panel actions | Renderer | ✅ `TerminalViewPane` / `TerminalInstanceWidget` |
+| 实例列表、active instance、输入 batching 与 resize coalescing | Renderer `ITerminalService` | ✅ |
+| Typed IPC 与 App Server DTO adapter | Preload / Electron Main | ✅ exact-shape validation |
+| Terminal ID、workspace binding、输出 ring 与 connection cleanup | Rust / App Server | ✅ connection-owned |
+| PTY/ConPTY spawn、raw bytes、resize 与进程终止 | `zeta-utils-pty` | ✅ |
+| 可信 Shell Profile discovery 与 ID 解析 | Rust / App Server | ✅ 不暴露 executable |
+| 任意 executable/environment 选择 | 无 | ❌ 当前客户端不能提交 |
+
 文件图标的跨客户端数据契约由
 [`zeta-file-icons`](../zeta-rs/file-icons/README.md) 拥有：crate 内保存 Seti manifest、WOFF
 并提供 Rust resolver。Desktop 在构建前同步运行时资源、直接从 JSON 推导 TypeScript 所需
@@ -132,14 +144,24 @@ desktop/
 
 产品主进程入口同步注册 Electron `ready` 监听器；异步启动链只能从该监听器触发，
 不得在 ESM 顶层等待一个内部再调用 `app.whenReady()` 的 Promise。
-`ZetaApplication.startupAfterReady()` 断言 Ready 前置条件，并先创建无 preload、无脚本、
-无业务 IPC 的 `StartupWindow`。该窗口属于启动恢复界面，不是业务 UI；App Server gate
-成功后才创建 Workbench。gate 失败时，原生 Retry/Quit 对话框允许 supervisor 回到
-stopped 后重新初始化，或按正常退出生命周期关闭应用。
+`ZetaApplication.startupAfterReady()` 断言 Ready 前置条件，并在不创建业务窗口的状态下
+完成 App Server gate。gate 成功后才创建 Workbench；主窗口在 `ready-to-show` 前保持隐藏，
+启动过程不创建额外的 splash 窗口。gate 失败时，原生 Retry/Quit 对话框允许 supervisor
+回到 stopped 后重新初始化，或按正常退出生命周期关闭应用。
 
 `desktop/generated/` 由 zeta-rs 协议生成命令更新，不手写 wire DTO。
 生成的 `APP_SERVER_SCHEMA_HASH` 是 bundled Desktop 的 exact-schema 基线；Electron Main
 必须比较 initialize response，hash 不一致时不得创建业务窗口或进入 Ready。
+
+开发态与发布态共享 canonical Zeta package contract。Node 开发组装器
+`desktop/scripts/prepare-dev-package.mjs` 在 `desktop/.tmp/zeta-package` 生成 debug
+package；它读取 production builder 使用的同一份 runtime lock、校验 archive digest，并且
+只有新 package 完整构建并通过 layout validation 后才替换上一代。它不安装或调用 Python；
+Python builder 只属于显式 release packaging。`appServerExecutablePath()` 在开发态选择该
+package root，在发布态选择 Electron `resourcesPath`，两者都只启动
+`<package>/bin/zeta[.exe]`。因此 ripgrep、sandbox helper 与 built-in Skills 不依赖开发机
+`PATH`，缺失或 digest 不匹配会在 package preparation 阶段失败，而不是推迟到 App Server
+initialize gate。
 
 ## 4. Main Process
 
@@ -395,6 +417,35 @@ thread 的可释放订阅、已提交 transcript 与临时 stream projection。�
 当前尚未实现 session/thread picker、附件和图片输入、fork/history 导航、动态工具执行器。
 由于 session 列表当前没有最近活动时间，启动时只能按服务端顺序选择首个活动 thread；
 Browser 入口没有 App Server 连接时会明确显示不可用状态。
+
+### 6.5 Integrated Terminal
+
+Workbench consumer 只依赖 `ITerminalService`；wire DTO 被限制在
+`AppServerTerminalBackend`，xterm view 不直接调用 `ZetaRendererApi`：
+
+```text
+TerminalViewPane / xterm
+  → ITerminalService
+  → AppServerTerminalBackend
+  → ZetaRendererApi.terminal
+  → trusted Electron IPC
+  → terminal/* App Server methods
+  → TerminalService (Rust)
+  → zeta-utils-pty
+```
+
+当前输出采用 `terminal/read` bounded polling，而不是 `terminal/output` notification。这是现有
+同步 JSONL loop 的明确限制；前端 service 将 pull 转成 `onDidWriteData` 事件，因此 future
+transport 支持主动、有背压的 stream 后，Workbench caller 不需要改变。Renderer 对输入做 8 ms
+batch，对 resize 做 microtask coalescing；Rust 仍重新校验输入 byte limit、rows/cols、owner 和
+output cursor。
+
+Terminal 当前只在单根 workspace composition 中可用；空窗口会显示 backend unavailable。PTY
+不跨 App Server crash 恢复。每个实例拥有独立 xterm widget，Tab 切换或 Panel 隐藏不会丢失
+窗口生命周期内的 scrollback 与 ANSI parser 状态；Profile picker 只提交 App Server 已列出的
+稳定 ID。Supervisor 离开 ready 后，运行实例进入 `disconnected`；恢复 ready 后用户可以显式
+Relaunch，新 PTY 使用原 Profile，但不会重放未确认输入或冒充旧进程。当前尚无 shell
+integration、跨进程 reconnection attach 或跨应用重启的持久 scrollback。
 
 ## 7. Browser Capability
 

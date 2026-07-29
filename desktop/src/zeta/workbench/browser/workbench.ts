@@ -97,7 +97,8 @@ import {
   INativeHostService,
   IRendererApiService,
 } from "../common/services.js";
-import { getWorkbenchColorTheme } from "../common/theme.js";
+import { resolveWorkbenchColorTheme } from "../common/theme.js";
+import { IUserThemeService, type IUserThemeService as IUserThemeServiceContract, UnavailableUserThemeService } from "../common/userThemes.js";
 import {
   ViewContainerLocation,
 } from "../common/views.js";
@@ -155,6 +156,7 @@ import {
   bindWorkbenchContextKeys,
   bindWorkbenchPartVisibilityContextKeys,
 } from "./contextkeys.js";
+import { WorkbenchThemeController } from "./theme.js";
 import {
   IWorkbenchLayoutService,
   WorkbenchLayout,
@@ -167,9 +169,7 @@ import {
   BrowserWorkspaceSearchService,
 } from "../../platform/search/browser/searchService.js";
 import type { WorkbenchPart } from "./part.js";
-import {
-  AuxiliarybarPart,
-} from "./parts/auxiliarybar/auxiliarybarPart.js";
+import { AuxiliarybarPart } from "./parts/auxiliarybar/auxiliarybarPart.js";
 import { EditorPart, IEditorPart } from "./parts/editor/editorPart.js";
 import { PanelPart } from "./parts/panel/panelPart.js";
 import { SidebarPart } from "./parts/sidebar/sidebarPart.js";
@@ -182,6 +182,9 @@ import {
 } from "./parts/views/viewPaneContainer.js";
 import { PaneComposite } from "./parts/views/paneComposite.js";
 import { IWorkbenchWindowService, WorkbenchWindow } from "./window.js";
+import { AppServerTerminalBackend } from "../contrib/terminal/browser/appServerTerminalBackend.js";
+import { TerminalService } from "../contrib/terminal/browser/terminalService.js";
+import { ITerminalService } from "../contrib/terminal/common/terminal.js";
 
 /** Host-specific inputs required to construct a workbench. */
 export interface IStartWorkbenchOptions {
@@ -192,6 +195,7 @@ export interface IStartWorkbenchOptions {
   readonly configurationApi?: IConfigurationApi;
   readonly keybindingsResourceApi?: IKeybindingsResourceApi;
   readonly nativeHostApi?: INativeHostApi;
+  readonly userThemeService?: IUserThemeServiceContract;
   readonly createContextMenuService: WorkbenchContextMenuServiceFactory;
   readonly createTitlebarPart: TitlebarPartFactory;
 }
@@ -205,6 +209,7 @@ export function startWorkbench({
   configurationApi,
   keybindingsResourceApi,
   nativeHostApi,
+  userThemeService,
   createContextMenuService,
   createTitlebarPart,
 }: IStartWorkbenchOptions): IDisposable {
@@ -216,6 +221,7 @@ export function startWorkbench({
     configurationApi,
     keybindingsResourceApi,
     nativeHostApi,
+    userThemeService,
     createContextMenuService,
     createTitlebarPart,
   );
@@ -231,6 +237,7 @@ export class Workbench extends DisposableOwner {
     configurationApi: IConfigurationApi | undefined,
     keybindingsResourceApi: IKeybindingsResourceApi | undefined,
     nativeHostApi: INativeHostApi | undefined,
+    userThemeService: IUserThemeServiceContract | undefined,
     createContextMenuService: WorkbenchContextMenuServiceFactory,
     createTitlebarPart: TitlebarPartFactory,
   ) {
@@ -255,6 +262,8 @@ export class Workbench extends DisposableOwner {
       IWorkspaceSearchService,
       new BrowserWorkspaceSearchService(api.workspaceSearch),
     );
+    const terminalService = this.own(new TerminalService(new AppServerTerminalBackend(api)));
+    services.set(ITerminalService, terminalService);
     const currentWorkspace = workspaceContext.getWorkspace();
     const workbenchState = workspaceContext.getWorkbenchState();
     const workbenchWindow = this.own(new WorkbenchWindow({
@@ -269,23 +278,27 @@ export class Workbench extends DisposableOwner {
       api: configurationApi,
     }));
     services.set(IConfigurationService, configuration);
+    const ownerWindow = ownerDocument.defaultView;
+    if (!ownerWindow) {
+      throw new Error("Workbench requires an owner window");
+    }
     const themeService = this.own(new ThemeService(
-      getWorkbenchColorTheme(
+      resolveWorkbenchColorTheme(
         configuration.getValue(WorkbenchConfiguration.colorTheme),
+        ownerWindow.matchMedia("(prefers-color-scheme: dark)").matches,
       ),
     ));
     services.set(IThemeService, themeService);
+    services.set(IUserThemeService, userThemeService ?? UnavailableUserThemeService);
     services.set(
       IFileIconThemeService,
       this.own(new SetiFileIconThemeService(themeService)),
     );
-    this.own(configuration.onDidChangeConfiguration((event) => {
-      if (event.affectsConfiguration(WorkbenchConfiguration.colorTheme)) {
-        themeService.setColorTheme(getWorkbenchColorTheme(
-          configuration.getValue(WorkbenchConfiguration.colorTheme),
-        ));
-      }
-    }));
+    this.own(new WorkbenchThemeController(
+      configuration,
+      themeService,
+      ownerWindow,
+    ));
     this.own(bindColorTheme(themeService, workbenchRoot));
     const statusbarService = this.own(new StatusbarService());
     services.set(IStatusbarService, statusbarService);
@@ -421,19 +434,39 @@ export class Workbench extends DisposableOwner {
       return sidebar.getComposite(viewContainer.id)!;
     };
     openSidebarComposite(sidebarCompositeDescriptor.id);
-    const panel = this.own(new PanelPart(ownerDocument));
-    const panelViewContainer = requiredViewContainer(
+    const panel = this.own(new PanelPart({
+      ownerDocument,
+      viewDescriptorService: viewDescriptors,
+    }));
+    const panelCompositeDescriptor = requiredViewContainer(
       viewDescriptors,
       ViewContainerLocation.Panel,
     );
-    const panelPaneContainer = new ViewPaneContainer({
-      viewContainer: panelViewContainer,
-      model: viewDescriptors.getViewContainerModel(panelViewContainer.id),
-      instantiationService,
-      contextKeyService: contextKeys,
-      ownerDocument,
-    });
-    panel.setViewPaneContainer(panelPaneContainer);
+    const openPanelComposite = (
+      compositeId: string,
+    ): PaneComposite => {
+      const viewContainer = viewDescriptors
+        .getViewContainers(ViewContainerLocation.Panel)
+        .find((candidate) => candidate.id === compositeId);
+      if (!viewContainer) {
+        throw new Error(
+          `Panel Composite is not registered: ${compositeId}`,
+        );
+      }
+      if (!panel.getComposite(viewContainer.id)) {
+        panel.addComposite(new PaneComposite({
+          viewContainer,
+          model: viewDescriptors.getViewContainerModel(viewContainer.id),
+          instantiationService,
+          contextKeyService: contextKeys,
+          ownerDocument,
+        }));
+      }
+      panel.showComposite(viewContainer.id);
+      panel.setActiveComposite(viewContainer.id);
+      return panel.getComposite(viewContainer.id)!;
+    };
+    openPanelComposite(panelCompositeDescriptor.id);
     const auxiliarybar = this.own(new AuxiliarybarPart(ownerDocument));
     const auxiliaryViewContainer = requiredViewContainer(
       viewDescriptors,
@@ -478,9 +511,7 @@ export class Workbench extends DisposableOwner {
               : undefined;
           case ViewContainerLocation.Panel:
             layout.showPart("panel");
-            return container.id === panelViewContainer.id
-              ? panelPaneContainer
-              : undefined;
+            return openPanelComposite(container.id);
         }
       },
     }));
@@ -489,6 +520,12 @@ export class Workbench extends DisposableOwner {
       ({ compositeId }) => {
         if (sidebar.activeCompositeId === compositeId) return;
         openSidebarComposite(compositeId);
+      },
+    ));
+    this.own(panel.onDidSelectComposite(
+      ({ compositeId }) => {
+        if (panel.activeCompositeId === compositeId) return;
+        openPanelComposite(compositeId);
       },
     ));
     void sessionService.initialize();

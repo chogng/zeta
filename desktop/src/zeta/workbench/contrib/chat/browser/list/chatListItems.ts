@@ -1,9 +1,7 @@
-import type {
-  ThreadItem,
-} from "../../../../../../generated/app-server/types.js";
+import type { ThreadItem } from "../../../../../../../generated/app-server/types.js";
 
 /** Render-ready projection of one committed or transient Thread item. */
-export interface IChatDisplayItem {
+export interface IChatListItem {
   readonly id: string;
   readonly type: ThreadItem["type"];
   readonly text: string;
@@ -12,10 +10,7 @@ export interface IChatDisplayItem {
 }
 
 /** Maps a protocol Thread item without interpreting untrusted content. */
-export function chatDisplayItem(
-  item: ThreadItem,
-  transient = false,
-): IChatDisplayItem {
+export function chatListItem(item: ThreadItem, transient = false): IChatListItem {
   switch (item.type) {
     case "userMessage":
     case "agentMessage":

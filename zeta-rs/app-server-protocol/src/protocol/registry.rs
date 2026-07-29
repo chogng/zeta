@@ -42,6 +42,11 @@ use crate::protocol::skills::{
     SkillSourceKindDto, SkillsChanged,
 };
 use crate::protocol::slash_commands::{SlashCommandArgumentModeDto, SlashCommandDefinition};
+use crate::protocol::terminal::{
+    TerminalCloseParams, TerminalCreateParams, TerminalCreateResult, TerminalOutputChunk,
+    TerminalProfile, TerminalProfileListResult, TerminalProfileSelection, TerminalReadParams,
+    TerminalReadResult, TerminalResizeParams, TerminalWriteParams,
+};
 use crate::protocol::thread::{
     ThreadReadParams, ThreadReadResult, ThreadSubscribeParams, ThreadSubscribeResult,
     ThreadUnsubscribeParams,
@@ -388,6 +393,36 @@ client_methods! {
         response: (),
         serialization: None,
     },
+    TerminalProfileList => "terminal/profile/list" {
+        params: EmptyParams,
+        response: TerminalProfileListResult,
+        serialization: GlobalSharedRead,
+    },
+    TerminalCreate => "terminal/create" {
+        params: TerminalCreateParams,
+        response: TerminalCreateResult,
+        serialization: None,
+    },
+    TerminalWrite => "terminal/write" {
+        params: TerminalWriteParams,
+        response: (),
+        serialization: None,
+    },
+    TerminalResize => "terminal/resize" {
+        params: TerminalResizeParams,
+        response: (),
+        serialization: None,
+    },
+    TerminalRead => "terminal/read" {
+        params: TerminalReadParams,
+        response: TerminalReadResult,
+        serialization: None,
+    },
+    TerminalClose => "terminal/close" {
+        params: TerminalCloseParams,
+        response: (),
+        serialization: None,
+    },
 }
 
 macro_rules! server_notifications {
@@ -619,6 +654,17 @@ typescript_bindings! {
     WorkspaceSearchMatch,
     WorkspaceSearchReadResult,
     WorkspaceSearchCancelParams,
+    TerminalProfile,
+    TerminalProfileListResult,
+    TerminalProfileSelection,
+    TerminalCreateParams,
+    TerminalCreateResult,
+    TerminalWriteParams,
+    TerminalResizeParams,
+    TerminalReadParams,
+    TerminalOutputChunk,
+    TerminalReadResult,
+    TerminalCloseParams,
     AppServerErrorName,
     AppServerError,
 }

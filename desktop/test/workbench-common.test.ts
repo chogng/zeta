@@ -36,6 +36,7 @@ import { WorkbenchConfiguration } from "../src/zeta/workbench/common/configurati
 import { DialogsModel } from "../src/zeta/workbench/common/dialogs.js";
 import {
   getWorkbenchColorTheme,
+  SystemColorThemePreference,
   WorkbenchThemeRegistry,
 } from "../src/zeta/workbench/common/theme.js";
 import {
@@ -119,7 +120,11 @@ test("workbench configuration resolves registered color themes", () => {
   );
   assert.equal(
     WorkbenchConfiguration.colorTheme.defaultValue,
-    darkColorTheme.id,
+    SystemColorThemePreference,
+  );
+  assert.equal(
+    WorkbenchConfiguration.colorTheme.parse(SystemColorThemePreference),
+    SystemColorThemePreference,
   );
   assert.equal(
     WorkbenchConfiguration.colorTheme.parse(lightColorTheme.id),
@@ -127,7 +132,7 @@ test("workbench configuration resolves registered color themes", () => {
   );
   assert.throws(
     () => WorkbenchConfiguration.colorTheme.parse("missing-theme"),
-    /Unknown workbench color theme/,
+    /Unknown workbench color theme preference/,
   );
   assert.equal(
     getWorkbenchColorTheme(lightColorTheme.id),

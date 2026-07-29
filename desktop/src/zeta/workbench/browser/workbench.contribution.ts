@@ -25,6 +25,8 @@ import {
 import {
   registerChatViews,
 } from "../contrib/chat/browser/chat.contribution.js";
+import { registerPanelPlaceholderViews } from "../contrib/panel/browser/panel.contribution.js";
+import { registerTerminalView } from "../contrib/terminal/browser/terminal.contribution.js";
 import { LxIcon } from "../../base/common/lxicons.js";
 import "../contrib/markdown/browser/markdown.contribution.js";
 import "../contrib/preferences/browser/preferences.contribution.js";
@@ -42,17 +44,12 @@ ViewsRegistry.registerStaticViewContainer({
   order: 1,
   isDefault: true,
 });
-ViewsRegistry.registerStaticViewContainer({
-  id: WorkbenchViewContainerId.Panel,
-  title: "Panel",
-  location: ViewContainerLocation.Panel,
-  order: 1,
-  isDefault: true,
-});
 registerFilesViews();
 registerSearchViews();
 registerGitViews();
 registerChatViews();
+registerPanelPlaceholderViews();
+registerTerminalView();
 
 registerWorkbenchContribution(
   "workbench.contrib.keybindingsResource",

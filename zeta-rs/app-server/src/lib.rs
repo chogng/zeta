@@ -8,6 +8,8 @@ mod resource_store;
 mod review;
 mod server;
 mod slash_commands;
+mod terminal_profiles;
+mod terminal_service;
 mod tool_composition;
 mod workspace_search;
 

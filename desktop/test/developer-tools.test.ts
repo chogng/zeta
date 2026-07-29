@@ -14,6 +14,7 @@ import {
 } from "../src/zeta/platform/instantiation/common/instantiation.js";
 import {
   NATIVE_HOST_OPEN_FOLDER_CHANNEL,
+  NATIVE_HOST_SET_WINDOW_THEME_CHANNEL,
   NATIVE_HOST_TOGGLE_DEVELOPER_TOOLS_CHANNEL,
 } from "../src/zeta/platform/native/common/nativeHost.js";
 import {
@@ -33,9 +34,13 @@ import {
 test("native host routes validate folder opening and developer tools", async () => {
   let folderOpens = 0;
   let toggles = 0;
+  const windowThemes: unknown[] = [];
   const routes = nativeHostIpcRoutes({
     openFolder: async () => {
       folderOpens += 1;
+    },
+    setWindowTheme: (theme) => {
+      windowThemes.push(theme);
     },
     toggleDeveloperTools: () => {
       toggles += 1;
@@ -48,7 +53,11 @@ test("native host routes validate folder opening and developer tools", async () 
     ({ channel }) =>
       channel === NATIVE_HOST_TOGGLE_DEVELOPER_TOOLS_CHANNEL,
   );
+  const setWindowTheme = routes.find(
+    ({ channel }) => channel === NATIVE_HOST_SET_WINDOW_THEME_CHANNEL,
+  );
   assert.ok(openFolder);
+  assert.ok(setWindowTheme);
   assert.ok(toggleDeveloperTools);
 
   assert.throws(
@@ -57,6 +66,19 @@ test("native host routes validate folder opening and developer tools", async () 
   );
   await openFolder.invoke(openFolder.validate(undefined));
   assert.equal(folderOpens, 1);
+  assert.throws(
+    () => setWindowTheme.validate({ backgroundColor: "white", symbolColor: "#000000" }),
+    /backgroundColor must be an opaque hexadecimal color/,
+  );
+  const validatedTheme = setWindowTheme.validate({
+    backgroundColor: "#F3F3F3",
+    symbolColor: "#424242",
+  });
+  setWindowTheme.invoke(validatedTheme);
+  assert.deepEqual(windowThemes, [{
+    backgroundColor: "#f3f3f3",
+    symbolColor: "#424242",
+  }]);
   assert.throws(
     () => toggleDeveloperTools.validate(null),
     /does not accept parameters/,
@@ -72,6 +94,7 @@ test("developer tools command is available from the command palette", async () =
   let toggles = 0;
   services.set(INativeHostService, {
     openFolder: async () => {},
+    setWindowTheme: async () => {},
     async toggleDeveloperTools() {
       toggles += 1;
     },

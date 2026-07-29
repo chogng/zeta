@@ -173,6 +173,248 @@ fn workspace_search_requires_an_installed_backend() {
 }
 
 #[test]
+fn terminal_requires_an_installed_backend() {
+    let server = server();
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+
+    let response = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":2,
+            "method":"terminal/create",
+            "params":{"rows":24,"cols":80,"profile":{"type":"default"}}
+        }),
+    );
+
+    assert_eq!(response["error"]["message"], "TerminalUnavailable");
+}
+
+#[test]
+fn terminal_profiles_are_server_owned_and_reject_unknown_ids() {
+    let root = std::env::temp_dir().join(format!(
+        "zeta-app-server-terminal-profiles-{}-{}",
+        std::process::id(),
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos(),
+    ));
+    std::fs::create_dir_all(&root).unwrap();
+    let server = server().with_terminal_root(root.clone()).unwrap();
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+
+    let profiles = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":2,
+            "method":"terminal/profile/list",
+            "params":{}
+        }),
+    );
+    let profiles = profiles["result"]["profiles"].as_array().unwrap();
+    assert!(!profiles.is_empty());
+    assert_eq!(
+        profiles
+            .iter()
+            .filter(|profile| profile["isDefault"] == true)
+            .count(),
+        1
+    );
+    assert!(
+        profiles
+            .iter()
+            .all(|profile| profile.get("program").is_none())
+    );
+
+    let rejected = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":3,
+            "method":"terminal/create",
+            "params":{
+                "rows":24,
+                "cols":80,
+                "profile":{"type":"profile","profileId":"client-program"}
+            }
+        }),
+    );
+    assert_eq!(rejected["error"]["message"], "InvalidParams");
+
+    drop(server);
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn terminal_rpc_drives_a_workspace_rooted_pty_to_exit() {
+    let root = std::env::temp_dir().join(format!(
+        "zeta-app-server-terminal-{}-{}",
+        std::process::id(),
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos(),
+    ));
+    std::fs::create_dir_all(&root).unwrap();
+    let server = server().with_terminal_root(root.clone()).unwrap();
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+    let created = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":2,
+            "method":"terminal/create",
+            "params":{"rows":24,"cols":80,"profile":{"type":"default"}}
+        }),
+    );
+    let terminal_id = created["result"]["terminalId"].as_str().unwrap();
+    #[cfg(windows)]
+    let input = "echo zeta-terminal-ready\r\nexit\r\n";
+    #[cfg(not(windows))]
+    let input = "printf 'zeta-terminal-ready\\n'\nexit\n";
+    let written = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":3,
+            "method":"terminal/write",
+            "params":{"terminalId":terminal_id,"data":input}
+        }),
+    );
+    assert!(written["error"].is_null());
+
+    let deadline = Instant::now() + Duration::from_secs(5);
+    let mut request_id = 4;
+    let mut after_sequence = 0;
+    let mut output = Vec::new();
+    let exit_code = loop {
+        let read = call(
+            &server,
+            &mut connection,
+            serde_json::json!({
+                "jsonrpc":"2.0",
+                "id":request_id,
+                "method":"terminal/read",
+                "params":{
+                    "terminalId":terminal_id,
+                    "afterSequence":after_sequence,
+                    "maxChunks":128
+                }
+            }),
+        );
+        request_id += 1;
+        after_sequence = read["result"]["nextSequence"].as_u64().unwrap();
+        for chunk in read["result"]["chunks"].as_array().unwrap() {
+            output.extend(
+                base64::engine::general_purpose::STANDARD
+                    .decode(chunk["dataBase64"].as_str().unwrap())
+                    .unwrap(),
+            );
+        }
+        if read["result"]["exited"] == true {
+            break read["result"]["exitCode"].as_i64().unwrap();
+        }
+        assert!(
+            Instant::now() < deadline,
+            "terminal did not exit; output={:?}; exit_code={:?}",
+            String::from_utf8_lossy(&output),
+            read["result"]["exitCode"]
+        );
+        thread::sleep(Duration::from_millis(10));
+    };
+
+    assert_eq!(exit_code, 0);
+    assert!(String::from_utf8_lossy(&output).contains("zeta-terminal-ready"));
+    drop(server);
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn terminal_rpc_enforces_connection_ownership_and_close() {
+    let root = std::env::temp_dir().join(format!(
+        "zeta-app-server-terminal-owner-{}-{}",
+        std::process::id(),
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos(),
+    ));
+    std::fs::create_dir_all(&root).unwrap();
+    let server = server().with_terminal_root(root.clone()).unwrap();
+    let mut owner = server.connection();
+    let mut other = server.connection();
+    initialize(&server, &mut owner);
+    initialize(&server, &mut other);
+    let created = call(
+        &server,
+        &mut owner,
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":2,
+            "method":"terminal/create",
+            "params":{"rows":24,"cols":80,"profile":{"type":"default"}}
+        }),
+    );
+    let terminal_id = created["result"]["terminalId"].as_str().unwrap();
+
+    let rejected = call(
+        &server,
+        &mut other,
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":2,
+            "method":"terminal/read",
+            "params":{
+                "terminalId":terminal_id,
+                "afterSequence":0,
+                "maxChunks":1
+            }
+        }),
+    );
+    assert_eq!(rejected["error"]["message"], "TerminalNotOwner");
+
+    let closed = call(
+        &server,
+        &mut owner,
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":3,
+            "method":"terminal/close",
+            "params":{"terminalId":terminal_id}
+        }),
+    );
+    assert!(closed["error"].is_null());
+    let missing = call(
+        &server,
+        &mut owner,
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":4,
+            "method":"terminal/read",
+            "params":{
+                "terminalId":terminal_id,
+                "afterSequence":0,
+                "maxChunks":1
+            }
+        }),
+    );
+    assert_eq!(missing["error"]["message"], "TerminalNotFound");
+
+    drop(server);
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn initialize_advertises_the_server_slash_command_snapshot() {
     let catalog = SlashCommandCatalog::new([SlashCommandDefinition {
         name: "diagnose".into(),

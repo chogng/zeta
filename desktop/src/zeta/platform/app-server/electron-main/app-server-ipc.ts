@@ -26,6 +26,8 @@ import type {
 } from "../../../../../generated/app-server/types.js";
 import { APP_SERVER_METHODS } from "../../../../../generated/app-server/types.js";
 import type { AppServerSupervisor } from "./app-server-supervisor.js";
+import { boolean, boundedPositiveInteger, nonEmptyString, nonNegativeInteger, positiveInteger, record, string, stringEnum } from "./app-server-ipc-validation.js";
+import { terminalIpcRoutes } from "./terminal-ipc.js";
 import type { IpcRoute } from "./trusted-ipc-router.js";
 
 export function appServerIpcRoutes(
@@ -186,6 +188,7 @@ export function appServerIpcRoutes(
       invoke: (params) =>
         supervisor.request(APP_SERVER_METHODS["workspace/search/cancel"], params),
     }),
+    ...terminalIpcRoutes(supervisor),
   ];
 }
 
@@ -631,74 +634,4 @@ function resourceReadParams(value: unknown): ResourceReadParams {
     offset: nonNegativeInteger(params.offset, "offset"),
     maxBytes,
   };
-}
-
-function record(value: unknown, keys: readonly string[]): Record<string, unknown> {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    throw new Error("IPC params must be an object");
-  }
-  const params = value as Record<string, unknown>;
-  const actualKeys = Object.keys(params).sort();
-  const expectedKeys = [...keys].sort();
-  if (
-    actualKeys.length !== expectedKeys.length ||
-    actualKeys.some((key, index) => key !== expectedKeys[index])
-  ) {
-    throw new Error(`IPC params must contain exactly: ${expectedKeys.join(", ")}`);
-  }
-  return params;
-}
-
-function nonEmptyString(value: unknown, field: string): string {
-  const resolved = string(value, field);
-  if (resolved.trim().length === 0) throw new Error(`${field} must not be empty`);
-  return resolved;
-}
-
-function string(value: unknown, field: string): string {
-  if (typeof value !== "string") throw new Error(`${field} must be a string`);
-  return value;
-}
-
-function boolean(value: unknown, field: string): boolean {
-  if (typeof value !== "boolean") {
-    throw new Error(`${field} must be a boolean`);
-  }
-  return value;
-}
-
-function nonNegativeInteger(value: unknown, field: string): number {
-  if (!Number.isSafeInteger(value) || (value as number) < 0) {
-    throw new Error(`${field} must be a non-negative safe integer`);
-  }
-  return value as number;
-}
-
-function positiveInteger(value: unknown, field: string): number {
-  const resolved = nonNegativeInteger(value, field);
-  if (resolved === 0) throw new Error(`${field} must be positive`);
-  return resolved;
-}
-
-function boundedPositiveInteger(
-  value: unknown,
-  field: string,
-  maximum: number,
-): number {
-  const resolved = positiveInteger(value, field);
-  if (resolved > maximum) {
-    throw new Error(`${field} must not exceed ${maximum}`);
-  }
-  return resolved;
-}
-
-function stringEnum<const T extends readonly string[]>(
-  value: unknown,
-  field: string,
-  values: T,
-): T[number] {
-  if (typeof value !== "string" || !values.includes(value)) {
-    throw new Error(`${field} must be one of: ${values.join(", ")}`);
-  }
-  return value as T[number];
 }

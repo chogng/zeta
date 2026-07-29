@@ -1,4 +1,4 @@
-import { lxAdd, lxChat, lxChatFilled, lxChevronDown, lxChevronRight, lxClose, lxEllipsis, lxFiles, lxGear, lxGitCommit, lxLayoutPanel, lxLayoutPanelOff, lxLayoutSidebarLeft, lxLayoutSidebarLeftOff, lxLayoutSidebarRight, lxLayoutSidebarRightOff, lxMenu, lxRefresh, lxSearch, lxSplitHorizontal, lxStart } from "@chogng/lxicons";
+import { lxAdd, lxBrowserWeb, lxChat, lxChatFilled, lxChevronDown, lxChevronRight, lxClose, lxEllipsis, lxFiles, lxGear, lxGitCommit, lxLayoutPanel, lxLayoutPanelOff, lxLayoutSidebarLeft, lxLayoutSidebarLeftOff, lxLayoutSidebarRight, lxLayoutSidebarRightOff, lxLinkExternal, lxMenu, lxRefresh, lxSearch, lxSettings, lxSplitHorizontal, lxStart } from "@chogng/lxicons";
 import { registerIcon } from "./icon.js";
 
 /**
@@ -10,6 +10,7 @@ import { registerIcon } from "./icon.js";
  */
 export const LxIcon = {
   add: registerIcon("add", lxAdd),
+  browserWeb: registerIcon("browser-web", lxBrowserWeb),
   chat: registerIcon("chat", lxChat),
   chatFilled: registerIcon("chat-filled", lxChatFilled),
   close: registerIcon("close", lxClose),
@@ -37,8 +38,10 @@ export const LxIcon = {
   ),
   layoutPanel: registerIcon("layout-panel", lxLayoutPanel),
   layoutPanelOff: registerIcon("layout-panel-off", lxLayoutPanelOff),
+  linkExternal: registerIcon("link-external", lxLinkExternal),
   menu: registerIcon("menu", lxMenu),
   search: registerIcon("search", lxSearch),
+  settings: registerIcon("settings", lxSettings),
   splitHorizontal: registerIcon("split-horizontal", lxSplitHorizontal),
   start: registerIcon("start", lxStart),
   submenuIndicator: registerIcon("submenu-indicator", lxChevronRight),

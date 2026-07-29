@@ -25,6 +25,7 @@ JSONL / in-process caller
    ├─ ConfigStore
    ├─ optional WorkspaceFileSystem
    ├─ optional WorkspaceSearchService
+   ├─ optional TerminalService → zeta-utils-pty
    ├─ optional McpRuntimeOwner → zeta-mcp
    ├─ SkillRuntime → zeta-skills + zeta-file-watcher
    ├─ connection-owned ResourceStore
@@ -64,7 +65,8 @@ Policy port 的 executor。`open_local_app_server` 会从启动时 user config s
 `enabled` 的 unauthenticated MCP server，并把冻结 catalog 与本地工具组合；每次 MCP tool call
 仍必须经过 durable one-time approval。它仅在调用方通过
 `LocalAppServerOptions::with_workspace_root` 提供统一 Workspace 根时同时组合 filesystem 与
-workspace search、只读 `rg` registry；Zeta CLI 的 stdio 与 in-process 路径都会使用同一个启动时解析结果：
+workspace search、connection-owned Terminal runtime、只读 `rg` registry；Zeta CLI 的 stdio 与
+in-process 路径都会使用同一个启动时解析结果：
 `ZETA_WORKSPACE_ROOT` 优先，否则使用当前目录。不能因为 protocol 暴露 approval interaction 就
 假设任意自定义 host 已经拥有 Tool registry。`rg` 安装候选来自
 [`zeta-install-context`](../install-context/README.md)，App Server 只负责把候选交给
@@ -82,6 +84,7 @@ src/
 │       ├── skills_runtime.rs       # source composition、catalog cache、watcher、projection
 │       ├── fs_operations.rs       # root-relative filesystem DTO conversion/error mapping
 │       ├── search_operations.rs   # search RPC decode、ownership 与稳定错误映射
+│       ├── terminal_operations.rs # terminal RPC decode、ownership 与稳定错误映射
 │       └── update_broker.rs       # per-connection subscription/cursor/fanout
 ├── local.rs                       # persistent local composition + model safe point
 ├── local_tools.rs                 # frozen rg registry + Core Tool/Policy adapters
@@ -90,7 +93,9 @@ src/
 ├── tool_composition.rs            # frozen local/MCP definition and policy routing
 ├── review.rs                      # review-only provider adapter
 ├── resource_store.rs              # bounded in-memory connection-owned resources
-└── workspace_search.rs            # bounded connection-owned ripgrep jobs
+├── workspace_search.rs            # bounded connection-owned ripgrep jobs
+├── terminal_profiles.rs           # trusted Shell discovery、ID 与 environment allowlist
+└── terminal_service.rs            # PTY runtime、output ring 与 connection-owned sessions
 ```
 
 ## 内部接口地图
@@ -118,6 +123,11 @@ src/
 | `WorkspaceSearchService` | crate-private | 持有 workspace、frozen rg 和 connection-owned job map | 不持有 Renderer 状态或模型 Tool authority |
 | `run_search` | private | 以 typed argv 启动/取消 rg 并收束 terminal state | 不经过 shell，不回传任意 stderr |
 | `parse_match` | private | rg JSON line → root-relative DTO，并把 byte range 转为 UTF-16 | 不执行 UI 分组或 editor opening |
+| `TerminalService` | crate-private | 持有 workspace root、Tokio runtime、PTY session map 与 1 MiB output ring | 不持有 Renderer/xterm 状态 |
+| `TerminalProfileCatalog` | crate-private | 冻结可信 Shell Profile、program 与 environment allowlist | external DTO 不暴露 executable/args |
+| `TerminalService::create` | crate-private | 将 default/profile ID 解析到 catalog 并启动 workspace-rooted PTY | client 不能提交 executable/environment |
+| `spawn_output_drainers` | private | raw output/exit 并发收束；尾部输出 EOF 后才标记 exited | 不在 exit code 到达时提前丢弃尾部 bytes |
+| `read_state` | private | after-sequence cursor → bounded Base64 chunks + gap/exited state | ring eviction 必须显式返回 `output_gap` |
 | `ConfigBackedModelService::resolve_config` | private | user snapshot + optional Workspace snapshot merge | 每次 invocation safe point 重新解析 |
 | `WorkspaceConfigTracker::read` | private | 内容变化才推进 synthetic workspace revision | 不监听/修改 workspace file |
 | `compose_local_tools` | crate-private | 复用 App Server 已固定的 WorkspaceRoot、解析安装候选、冻结 rg、选择 native sandbox | discovery 失败时不降级成 unrestricted |
@@ -156,6 +166,17 @@ AppServer::handle_json(connection, raw)
 
 `serve_jsonl` 对每一行先写 response，再 drain/write causal notifications。当前 loop 是同步串行的；
 protocol registry 中的 `SerializationScopeDefinition` 尚未接入并发 scheduler。
+
+Terminal 因此使用 bounded `terminal/read` pull：`TerminalService` 在独立 runtime 中持续 drain
+PTY raw bytes，保留最多 1 MiB，并按 sequence 返回最多 128 个 chunk。`terminal/write` 的单批
+UTF-8 输入上限为 64 KiB，rows/cols 上限均为 512；未知 ID、跨 connection 使用和 runtime
+capacity 分别映射稳定 Terminal error。`serve_jsonl` 结束时调用 `close_owner`，不会把 PTY
+留给失效 connection。
+
+`terminal/profile/list` 从 composition 时冻结的 `TerminalProfileCatalog` 返回安全显示信息；
+`terminal/create.profile` 只能选择 default 或已列出的稳定 ID。Windows catalog 可发现 Command
+Prompt、PowerShell 与 Git Bash，Unix catalog 可发现默认 Shell 与已安装的常见 Shell；路径、
+args 和 environment 始终留在 Rust authority。
 
 Initialize 是每 connection 一次。重复 initialize 返回 `AlreadyInitialized`；初始化前的其他 method
 返回 `NotInitialized`。Request ID 只接受正整数，且在 connection 生命周期内不能重复。
@@ -340,6 +361,9 @@ Resource 不跨重启恢复，也不能被另一 connection 读取或 release。
 | unknown/cross-connection search job | `SearchNotFound` / `SearchNotOwner` |
 | search job capacity exhausted | `SearchBusy` |
 | rg spawn/parse/exit failure | terminal `WorkspaceSearchReadResult.error` with stable redacted text |
+| missing terminal backend | `TerminalUnavailable` |
+| unknown/cross-connection Terminal | `TerminalNotFound` / `TerminalNotOwner` |
+| terminal capacity/runtime operation failure | `TerminalBusy` / `TerminalOperationFailed` |
 | poisoned lock/serialization invariant | `ServerOverloaded` or `InternalError` |
 
 External errors不携带 `CoreError`、`ConfigError` 或 backend error text。新增 error mapping 时先更新
@@ -384,6 +408,7 @@ Turn replay/model-once、multi-connection update、reconnect durable gap、conne
 config command、interaction/approval resolve、response-before-notification、model config safe point、
 Workspace override、review-only request、只读 `rg` definition/materialization/policy/execution，
 MCP worker bridge、exact provenance/approval policy、local/MCP 路由与 collision rejection，以及
+可信 Terminal Profile、真实 PTY create/write/read/exit、Terminal owner/error/ring limits，
 Skill built-in/user composition、enablement overlay、watcher refresh 与 `skills/changed`。
 
 local tool 的参数白名单、discovery、取消与输出限制由

@@ -16,8 +16,8 @@
 }
 .zeta-menu .zeta-button:hover,
 .zeta-menu .zeta-button:focus-visible {
-  color: var(--zeta-menu-selection-foreground, #ffffff);
-  background: var(--zeta-menu-selection-background, #04395e);
+  color: var(--zeta-menu-selection-foreground);
+  background: var(--zeta-menu-selection-background);
   outline: 0;
 }
 .zeta-menu .zeta-button[aria-checked="true"]::before {

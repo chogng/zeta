@@ -52,7 +52,7 @@
 .zeta-scrollbar-track {
   position: absolute;
   z-index: 3;
-  border-radius: calc(var(--zeta-scrollbar-size, 10px) / 2);
+  border-radius: calc(var(--zeta-scrollbar-size) / 2);
   opacity: 1;
   outline: none;
   touch-action: none;
@@ -63,14 +63,14 @@
   right: 0;
   bottom: 0;
   left: 0;
-  height: var(--zeta-scrollbar-size, 10px);
+  height: var(--zeta-scrollbar-size);
 }
 
 .zeta-scrollbar-track-vertical {
   top: 0;
   right: 0;
   bottom: 0;
-  width: var(--zeta-scrollbar-size, 10px);
+  width: var(--zeta-scrollbar-size);
 }
 
 .zeta-scrollbar-track[data-visibility="auto"] {
@@ -91,9 +91,9 @@
   position: absolute;
   box-sizing: border-box;
   border: 2px solid transparent;
-  border-radius: calc(var(--zeta-scrollbar-size, 10px) / 2);
+  border-radius: calc(var(--zeta-scrollbar-size) / 2);
   background:
-    var(--zeta-scrollbar-slider-background, #79797966)
+    var(--zeta-scrollbar-slider-background)
     padding-box;
   cursor: default;
   forced-color-adjust: none;
@@ -115,19 +115,19 @@
 
 .zeta-scrollbar-track:hover > .zeta-scrollbar-thumb {
   background:
-    var(--zeta-scrollbar-slider-hover-background, #646464b3)
+    var(--zeta-scrollbar-slider-hover-background)
     padding-box;
 }
 
 .zeta-scrollbar-track[data-active="true"] > .zeta-scrollbar-thumb {
   background:
-    var(--zeta-scrollbar-slider-active-background, #bfbfbf66)
+    var(--zeta-scrollbar-slider-active-background)
     padding-box;
 }
 
 .zeta-scrollbar-track:focus-visible {
   outline: 1px solid
-    var(--zeta-focus-border, #007fd4);
+    var(--zeta-focus-border);
   outline-offset: -1px;
 }
 
@@ -136,8 +136,8 @@
   z-index: 2;
   right: 0;
   bottom: 0;
-  width: var(--zeta-scrollbar-size, 10px);
-  height: var(--zeta-scrollbar-size, 10px);
+  width: var(--zeta-scrollbar-size);
+  height: var(--zeta-scrollbar-size);
   background: transparent;
 }
 

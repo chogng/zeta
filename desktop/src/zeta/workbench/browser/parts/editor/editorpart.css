@@ -1,7 +1,7 @@
 .zeta-workbench-editor {
   min-width: 0;
   min-height: 0;
-  background: var(--zeta-editor-background, #1e1e1e);
+  background: var(--zeta-editor-background);
 }
 
 .zeta-workbench-editor .zeta-workbench-part-content {
@@ -31,7 +31,7 @@
   min-width: 0;
   height: 35px;
   flex: 0 0 35px;
-  border-bottom: 1px solid var(--zeta-border, #2b2b2b);
+  border-bottom: 1px solid var(--zeta-border);
 }
 
 .zeta-editor-tabs-control {
@@ -53,14 +53,14 @@
   max-width: 220px;
   height: 100%;
   align-items: center;
-  border-right: 1px solid var(--zeta-border, #2b2b2b);
-  color: var(--zeta-description-foreground, #9d9d9d);
-  background: var(--zeta-workbench-background, #181818);
+  border-right: 1px solid var(--zeta-border);
+  color: var(--zeta-description-foreground);
+  background: var(--zeta-workbench-background);
 }
 
 .zeta-editor-tabs-control .zeta-tab.active {
-  color: var(--zeta-foreground, #cccccc);
-  background: var(--zeta-editor-background, #1e1e1e);
+  color: var(--zeta-foreground);
+  background: var(--zeta-editor-background);
 }
 
 .zeta-editor-tabs-control .zeta-tab-label {
@@ -75,7 +75,7 @@
 }
 
 .zeta-editor-tabs-control .zeta-tab-label:focus-visible {
-  outline: 1px solid var(--zeta-focus-border, #007fd4);
+  outline: 1px solid var(--zeta-focus-border);
   outline-offset: -1px;
 }
 
@@ -114,7 +114,7 @@
 }
 
 .zeta-editor-tabs-control .zeta-tab-actions .zeta-button:hover {
-  background: var(--zeta-toolbar-hover-background, #5a5d5e50);
+  background: var(--zeta-toolbar-hover-background);
 }
 
 .zeta-editor-title-actions {
@@ -155,7 +155,7 @@
   align-items: center;
   justify-content: center;
   flex-direction: column;
-  color: var(--zeta-description-foreground, #9d9d9d);
+  color: var(--zeta-description-foreground);
   pointer-events: none;
 }
 
@@ -181,12 +181,12 @@
 .zeta-editor-group-watermark .zeta-keybinding-label kbd {
   min-width: 20px;
   padding: 2px 6px;
-  border: 1px solid var(--zeta-keybinding-label-border, #80808033);
-  border-bottom-color: var(--zeta-keybinding-label-bottom-border, #6b6b6b);
+  border: 1px solid var(--zeta-keybinding-label-border);
+  border-bottom-color: var(--zeta-keybinding-label-bottom-border);
   border-radius: 3px;
-  color: var(--zeta-keybinding-label-foreground, #cccccc);
-  background: var(--zeta-keybinding-label-background, #8080802b);
-  box-shadow: inset 0 -1px 0 var(--zeta-widget-shadow, #00000033);
+  color: var(--zeta-keybinding-label-foreground);
+  background: var(--zeta-keybinding-label-background);
+  box-shadow: inset 0 -1px 0 var(--zeta-widget-shadow);
   font: inherit;
   text-align: center;
 }

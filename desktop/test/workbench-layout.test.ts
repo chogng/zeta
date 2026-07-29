@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { DisposableStore } from "../src/zeta/base/common/lifecycle.js";
+import type { IViewPaneOptions } from "../src/zeta/workbench/browser/parts/views/viewPane.js";
 import {
   ContextKeyService,
 } from "../src/zeta/platform/contextkey/common/contextkey.js";
@@ -43,6 +44,9 @@ const { WorkbenchPart } = await import("../src/zeta/workbench/browser/part.js");
 const { SidebarPart } = await import(
   "../src/zeta/workbench/browser/parts/sidebar/sidebarPart.js"
 );
+const { PanelPart } = await import(
+  "../src/zeta/workbench/browser/parts/panel/panelPart.js"
+);
 const { AuxiliarybarPart } = await import(
   "../src/zeta/workbench/browser/parts/auxiliarybar/auxiliarybarPart.js"
 );
@@ -51,6 +55,9 @@ const { PaneComposite } = await import(
 );
 const { ViewPaneContainer } = await import(
   "../src/zeta/workbench/browser/parts/views/viewPaneContainer.js"
+);
+const { ViewPane } = await import(
+  "../src/zeta/workbench/browser/parts/views/viewPane.js"
 );
 const { EditorPart } = await import(
   "../src/zeta/workbench/browser/parts/editor/editorPart.js"
@@ -72,7 +79,7 @@ const {
 const { CommandService } = await import(
   "../src/zeta/workbench/services/commands/common/commandService.js"
 );
-const { InstantiationService, ServiceCollection } = await import(
+const { InstantiationService, ServiceCollection, SyncDescriptor } = await import(
   "../src/zeta/platform/instantiation/common/instantiation.js"
 );
 
@@ -171,6 +178,7 @@ test("Workbench layout hides and restores Parts with context keys", () => {
   assert.ok(overlay.isConnected);
   assert.ok(harness.container.querySelector("[data-part='sidebar']"));
   assert.equal(contextKeys.getValue("sideBarVisible"), true);
+  assert.equal(contextKeys.getValue("auxiliaryBarVisible"), true);
   assert.equal(contextKeys.getValue("panelVisible"), true);
   harness.layout.hideParts(["sidebar", "auxiliarybar", "panel"]);
   assert.ok(overlay.isConnected);
@@ -457,6 +465,112 @@ test("Sidebar hosts its Composite Bar before content", () => {
   dom.window.close();
 });
 
+test("Sidebar can host Agent Sidebar composites", () => {
+  const dom = new JSDOM("<!doctype html><body></body>");
+  const disposables = new DisposableStore();
+  const registry = new WorkbenchViewRegistry();
+  disposables.add(registry.registerViewContainer({
+    id: "zeta.chat",
+    title: "Chat",
+    location: ViewContainerLocation.AgentSidebar,
+    isDefault: true,
+  }));
+  const contextKeys = disposables.add(new ContextKeyService());
+  const viewDescriptors = disposables.add(new ViewDescriptorService({
+    contextKeyService: contextKeys,
+    registry,
+  }));
+  const agentSidebar = disposables.add(new SidebarPart({
+    ownerDocument: dom.window.document,
+    viewDescriptorService: viewDescriptors,
+    id: "agentSidebar",
+    location: ViewContainerLocation.AgentSidebar,
+    ariaLabel: "Agent sidebar",
+    viewsAriaLabel: "Agent sidebar views",
+  }));
+
+  assert.equal(agentSidebar.element.dataset.part, "agentSidebar");
+  assert.equal(agentSidebar.element.getAttribute("aria-label"), "Agent sidebar");
+  assert.equal(
+    agentSidebar.compositeBar.element.querySelector(
+      "[data-action-id='zeta.chat']",
+    ) !== null,
+    true,
+  );
+
+  disposables.dispose();
+  dom.window.close();
+});
+
+test("Panel presents its destinations as tabs and active commands as a toolbar", () => {
+  const dom = new JSDOM("<!doctype html><body></body>");
+  const disposables = new DisposableStore();
+  const registry = new WorkbenchViewRegistry();
+  const panels = [
+    ["zeta.panel.problems", "Problems"],
+    ["zeta.panel.output", "Output"],
+    ["zeta.panel.terminal", "Terminal"],
+    ["zeta.panel.ports", "Ports"],
+  ] as const;
+  for (const [id, title] of panels) {
+    disposables.add(registry.registerViewContainer({
+      id,
+      title,
+      location: ViewContainerLocation.Panel,
+      order: panels.findIndex(([candidate]) => candidate === id),
+      isDefault: title === "Terminal",
+    }));
+  }
+  disposables.add(registry.registerViews("zeta.panel.terminal", [{
+    id: "zeta.terminal",
+    title: "Terminal",
+    ctorDescriptor: new SyncDescriptor(TestPanelView),
+  }]));
+  const contextKeys = disposables.add(new ContextKeyService());
+  const viewDescriptors = disposables.add(new ViewDescriptorService({
+    contextKeyService: contextKeys,
+    registry,
+  }));
+  const panel = disposables.add(new PanelPart({
+    ownerDocument: dom.window.document,
+    viewDescriptorService: viewDescriptors,
+  }));
+  dom.window.document.body.append(panel.element);
+
+  const tablist = panel.element.querySelector(".zeta-panel-title-control [role='tablist']");
+  assert.equal(tablist?.getAttribute("aria-label"), "Panel views");
+  assert.deepEqual(
+    [...(tablist?.querySelectorAll("[role='tab']") ?? [])].map((tab) => tab.textContent),
+    ["Problems", "Output", "Terminal", "Ports"],
+  );
+  assert.equal(panel.element.querySelectorAll(".zeta-panel-title-control [role='toolbar']").length, 0);
+
+  const terminalDescriptor = viewDescriptors.getViewContainers(ViewContainerLocation.Panel).find((container) => container.id === "zeta.panel.terminal");
+  assert.ok(terminalDescriptor);
+  const terminal = new PaneComposite({
+    viewContainer: terminalDescriptor,
+    model: viewDescriptors.getViewContainerModel(terminalDescriptor.id),
+    instantiationService: new InstantiationService(),
+    contextKeyService: contextKeys,
+    ownerDocument: dom.window.document,
+  });
+  panel.addComposite(terminal);
+  panel.showComposite(terminal.id);
+  panel.setActiveComposite(terminal.id);
+
+  const toolbar = panel.element.querySelector(".zeta-panel-title-actions [role='toolbar']");
+  const terminalTab = panel.element.querySelector("[role='tab'][aria-selected='true']");
+  assert.equal(toolbar?.getAttribute("aria-label"), "Test panel actions");
+  assert.equal(toolbar?.querySelector("button")?.textContent, "Run");
+  assert.equal(panel.element.querySelectorAll(".zeta-panel-title-control [role='tablist']").length, 1);
+  assert.equal(terminal.element.getAttribute("role"), "tabpanel");
+  assert.equal(terminalTab?.getAttribute("aria-controls"), terminal.element.id);
+  assert.equal(terminal.element.getAttribute("aria-labelledby"), terminalTab?.id);
+
+  disposables.dispose();
+  dom.window.close();
+});
+
 test("Auxiliary Bar directly hosts its fixed View container", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
   const disposables = new DisposableStore();
@@ -506,6 +620,24 @@ test("Auxiliary Bar directly hosts its fixed View container", () => {
   disposables.dispose();
   dom.window.close();
 });
+
+class TestPanelView extends ViewPane {
+  readonly #actions: HTMLDivElement;
+
+  constructor(options: IViewPaneOptions) {
+    super(options);
+    this.#actions = options.ownerDocument.createElement("div");
+    this.#actions.setAttribute("role", "toolbar");
+    this.#actions.setAttribute("aria-label", "Test panel actions");
+    const button = options.ownerDocument.createElement("button");
+    button.textContent = "Run";
+    this.#actions.append(button);
+  }
+
+  override get titleActionsElement(): HTMLElement {
+    return this.#actions;
+  }
+}
 
 test("titlebar layout commands toggle shell regions", async () => {
   const dom = new JSDOM("<!doctype html><body></body>");

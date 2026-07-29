@@ -5,8 +5,8 @@
   height: 100%;
   min-height: 0;
   overflow: auto;
-  color: var(--zeta-editor-foreground, #d4d4d4);
-  background: var(--zeta-editor-background, #1e1e1e);
+  color: var(--zeta-editor-foreground);
+  background: var(--zeta-editor-background);
 }
 
 .zeta-prosemirror-editor-pane[hidden] {
@@ -21,7 +21,7 @@
   margin: 0 auto;
   line-height: 1.7;
   outline: none;
-  caret-color: var(--zeta-focus-border, #007fd4);
+  caret-color: var(--zeta-focus-border);
 }
 
 .zeta-prosemirror-editor-surface h1,
@@ -37,8 +37,8 @@
 .zeta-prosemirror-editor-surface blockquote {
   padding-left: 1em;
   margin-left: 0;
-  color: var(--zeta-description-foreground, #a5a5a5);
-  border-left: 3px solid var(--zeta-focus-border, #007fd4);
+  color: var(--zeta-description-foreground);
+  border-left: 3px solid var(--zeta-focus-border);
 }
 
 .zeta-prosemirror-editor-surface code,
@@ -52,7 +52,7 @@
 .zeta-prosemirror-editor-surface pre {
   padding: 12px 16px;
   overflow: auto;
-  background: var(--zeta-text-code-block-background, #0f0f0f);
+  background: var(--zeta-text-code-block-background);
   border-radius: 4px;
 }
 

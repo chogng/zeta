@@ -9,7 +9,7 @@
   align-items: flex-start;
   justify-content: center;
   padding: 8px 16px;
-  background: #00000026;
+  background: var(--zeta-quick-input-backdrop-background);
   inset: 0;
 }
 
@@ -23,29 +23,29 @@
   max-height: min(520px, calc(100vh - 48px));
   overflow: hidden;
   flex-direction: column;
-  border: 1px solid var(--zeta-widget-border, #454545);
+  border: 1px solid var(--zeta-widget-border);
   border-radius: 6px;
-  color: var(--zeta-foreground, #cccccc);
-  background: var(--zeta-quick-input-background, #252526);
-  box-shadow: 0 8px 32px var(--zeta-widget-shadow, #00000066);
+  color: var(--zeta-foreground);
+  background: var(--zeta-quick-input-background);
+  box-shadow: 0 8px 32px var(--zeta-widget-shadow);
 }
 
 .zeta-quick-pick-input {
   padding: 8px;
-  border-bottom: 1px solid var(--zeta-widget-border, #454545);
+  border-bottom: 1px solid var(--zeta-widget-border);
 }
 
 .zeta-quick-pick-input input {
   height: 32px;
   padding: 0 10px;
-  border: 1px solid var(--zeta-input-border, #3c3c3c);
+  border: 1px solid var(--zeta-input-border);
   outline: none;
-  color: var(--zeta-input-foreground, #cccccc);
-  background: var(--zeta-input-background, #3c3c3c);
+  color: var(--zeta-input-foreground);
+  background: var(--zeta-input-background);
 }
 
 .zeta-quick-pick-input input:focus {
-  border-color: var(--zeta-focus-border, #007fd4);
+  border-color: var(--zeta-focus-border);
 }
 
 .zeta-quick-pick-list {
@@ -72,8 +72,8 @@
 }
 
 .zeta-quick-pick-list .zeta-list-row.is-active {
-  color: var(--zeta-list-active-selection-foreground, #ffffff);
-  background: var(--zeta-list-active-selection-background, #04395e);
+  color: var(--zeta-list-active-selection-foreground);
+  background: var(--zeta-list-active-selection-background);
 }
 
 .zeta-quick-pick-row-text {
@@ -94,7 +94,7 @@
 .zeta-quick-pick-row-description,
 .zeta-quick-pick-row-detail {
   overflow: hidden;
-  color: var(--zeta-description-foreground, #9d9d9d);
+  color: var(--zeta-description-foreground);
   font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -103,16 +103,16 @@
 .zeta-quick-pick-row-keybinding {
   flex: 0 0 auto;
   padding: 2px 6px;
-  border: 1px solid var(--zeta-widget-border, #454545);
+  border: 1px solid var(--zeta-widget-border);
   border-radius: 3px;
-  color: var(--zeta-description-foreground, #b6b6b6);
-  background: var(--zeta-keybinding-label-background, #8080802b);
+  color: var(--zeta-description-foreground);
+  background: var(--zeta-keybinding-label-background);
   font: inherit;
   font-size: 11px;
 }
 
 .zeta-quick-pick-empty {
   padding: 18px;
-  color: var(--zeta-description-foreground, #9d9d9d);
+  color: var(--zeta-description-foreground);
   text-align: center;
 }

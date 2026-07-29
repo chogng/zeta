@@ -6,6 +6,7 @@ import {
   colorCssVariable,
   darkColorTheme,
   lightColorTheme,
+  sizeCssVariable,
 } from "../../common/colorTheme.js";
 import { ThemeService } from "../../common/themeService.js";
 
@@ -25,6 +26,7 @@ test("color theme binding applies changes and restores prior root styles", () =>
   assert.equal(target.style.getPropertyValue(foreground), "#cccccc");
   assert.equal(target.style.getPropertyValue(background), "#1e1e1e");
   assert.equal(target.style.getPropertyValue("color-scheme"), "dark");
+  assert.equal(target.style.getPropertyValue(sizeCssVariable("scrollbar.size")), "10px");
   assert.equal(target.getAttribute("data-color-theme"), "zeta-dark");
 
   service.setColorTheme(lightColorTheme);
@@ -36,6 +38,7 @@ test("color theme binding applies changes and restores prior root styles", () =>
   assert.equal(target.style.getPropertyValue(foreground), "hotpink");
   assert.equal(target.style.getPropertyPriority(foreground), "important");
   assert.equal(target.style.getPropertyValue(background), "");
+  assert.equal(target.style.getPropertyValue(sizeCssVariable("scrollbar.size")), "");
   assert.equal(target.style.getPropertyValue("color-scheme"), "only light");
   assert.equal(target.getAttribute("data-color-theme"), "host-theme");
   assert.equal(target.getAttribute("data-color-scheme"), null);

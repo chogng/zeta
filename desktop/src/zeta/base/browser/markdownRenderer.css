@@ -1,5 +1,5 @@
 .zeta-markdown {
-  color: var(--zeta-foreground, #cccccc);
+  color: var(--zeta-foreground);
   font-size: 13px;
   line-height: 1.55;
   overflow-wrap: anywhere;
@@ -33,8 +33,8 @@
 }
 
 .zeta-markdown blockquote {
-  border-left: 3px solid var(--zeta-border, #454545);
-  color: var(--zeta-muted-foreground, #8f8f8f);
+  border-left: 3px solid var(--zeta-border);
+  color: var(--zeta-muted-foreground);
   padding-left: 0.9em;
 }
 
@@ -44,14 +44,14 @@
 }
 
 .zeta-markdown code {
-  background: var(--zeta-input-background, #313131);
+  background: var(--zeta-input-background);
   border-radius: 3px;
   padding: 0.12em 0.3em;
 }
 
 .zeta-markdown pre {
-  background: var(--zeta-input-background, #313131);
-  border: 1px solid var(--zeta-border, #454545);
+  background: var(--zeta-input-background);
+  border: 1px solid var(--zeta-border);
   border-radius: 4px;
   overflow: auto;
   padding: 0.8em;
@@ -63,7 +63,7 @@
 }
 
 .zeta-markdown a {
-  color: var(--zeta-accent-foreground, #4daafc);
+  color: var(--zeta-accent-foreground);
   cursor: pointer;
   text-decoration: underline;
 }
@@ -80,7 +80,7 @@
 
 .zeta-markdown th,
 .zeta-markdown td {
-  border: 1px solid var(--zeta-border, #454545);
+  border: 1px solid var(--zeta-border);
   padding: 0.35em 0.65em;
 }
 

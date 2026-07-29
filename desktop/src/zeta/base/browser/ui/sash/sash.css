@@ -1,7 +1,7 @@
 .zeta-sash {
   position: absolute;
   z-index: 2;
-  background: var(--zeta-border, #2b2b2b);
+  background: var(--zeta-border);
 }
 .zeta-sash::before {
   position: absolute;
@@ -12,7 +12,7 @@
 .zeta-sash-vertical::before { inset: 0 -2px; }
 .zeta-sash-horizontal::before { inset: -2px 0; }
 .zeta-sash:hover, .zeta-sash:active {
-  background: var(--zeta-sash-hover-background, #007acc);
+  background: var(--zeta-sash-hover-background);
 }
 .zeta-sash-vertical { cursor: col-resize; }
 .zeta-sash-horizontal { cursor: row-resize; }

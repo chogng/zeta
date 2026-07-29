@@ -93,7 +93,7 @@
 }
 
 .zeta-explorer-error {
-  color: var(--zeta-error-foreground, #f14c4c);
+  color: var(--zeta-error-foreground);
 }
 
 .zeta-empty-explorer {
@@ -117,18 +117,18 @@
 }
 
 .zeta-empty-explorer-open-folder {
-  color: var(--zeta-button-foreground, #ffffff);
-  background: var(--zeta-button-background, #0e639c);
+  color: var(--zeta-button-primary-foreground);
+  background: var(--zeta-button-primary-background);
 }
 
 .zeta-empty-explorer-open-folder:not(:disabled):hover {
-  background: var(--zeta-button-hover-background, #1177bb);
+  background: var(--zeta-button-primary-hover-background);
 }
 
 .zeta-empty-explorer-status {
   min-height: 18px;
   margin: 0;
-  color: var(--zeta-error-foreground, #f14c4c);
+  color: var(--zeta-error-foreground);
   font-size: 12px;
   line-height: 18px;
 }

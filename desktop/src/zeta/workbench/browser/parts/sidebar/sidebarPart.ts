@@ -8,13 +8,17 @@ import {
   type CompositeBarSelectionEvent,
 } from "../compositebar/compositeBar.js";
 
-/** Construction inputs for the primary Sidebar Composite host. */
+/** Construction inputs for a Sidebar Composite host. */
 export interface SidebarPartOptions {
   readonly ownerDocument: Document;
   readonly viewDescriptorService: IViewDescriptorService;
+  readonly id?: string;
+  readonly location?: ViewContainerLocation;
+  readonly ariaLabel?: string;
+  readonly viewsAriaLabel?: string;
 }
 
-/** Primary CompositePart presented at the side of the workbench. */
+/** Reusable CompositePart presented at the side of a host region. */
 export class SidebarPart extends CompositePart {
   readonly compositeBar: CompositeBar;
 
@@ -24,13 +28,14 @@ export class SidebarPart extends CompositePart {
   override get maximumWidth(): number { return 600; }
 
   constructor(options: SidebarPartOptions) {
-    super("sidebar", options.ownerDocument);
-    this.element.setAttribute("aria-label", "Primary sidebar");
+    super(options.id ?? "sidebar", options.ownerDocument);
+    this.element.classList.add("zeta-sidebar-part");
+    this.element.setAttribute("aria-label", options.ariaLabel ?? "Primary sidebar");
     this.compositeBar = this.own(new CompositeBar({
       ownerDocument: options.ownerDocument,
       viewDescriptorService: options.viewDescriptorService,
-      location: ViewContainerLocation.Sidebar,
-      ariaLabel: "Primary side bar views",
+      location: options.location ?? ViewContainerLocation.Sidebar,
+      ariaLabel: options.viewsAriaLabel ?? "Primary side bar views",
     }));
     this.onDidSelectComposite = this.compositeBar.onDidSelectComposite;
     this.contentElement.before(this.compositeBar.element);

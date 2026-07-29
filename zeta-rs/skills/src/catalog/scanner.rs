@@ -8,6 +8,7 @@ use sha2::{Digest, Sha256};
 use std::fs::{self, File, Metadata};
 use std::io::Read;
 use std::path::Path;
+use zeta_file_identity::FileInformation;
 
 const MAX_SOURCE_ENTRIES: usize = 1024;
 const MAX_SKILL_FILE_BYTES: u64 = 1024 * 1024;
@@ -198,7 +199,12 @@ fn scan_skill(
         ));
         return;
     }
-    if !manifest_metadata.is_file() || regular_file_has_multiple_links(&manifest_metadata) {
+    let manifest_information = FileInformation::from_path(&manifest_path);
+    if !manifest_metadata.is_file()
+        || manifest_information
+            .as_ref()
+            .map_or(true, |information| information.number_of_links() > 1)
+    {
         diagnostics.push(diagnostic(
             source,
             Some(subject),
@@ -235,7 +241,13 @@ fn scan_skill(
         return;
     }
 
-    let scanned = match scan_skill_file(&manifest_path, &manifest_metadata) {
+    let scanned = match scan_skill_file(
+        &manifest_path,
+        &manifest_metadata,
+        manifest_information
+            .as_ref()
+            .expect("validated file information"),
+    ) {
         Ok(scanned) => scanned,
         Err(failure) => {
             diagnostics.push(diagnostic(
@@ -290,8 +302,15 @@ struct ScanFailure {
 fn scan_skill_file(
     path: &Path,
     expected_metadata: &Metadata,
+    expected_information: &FileInformation,
 ) -> Result<ScannedSkillFile, ScanFailure> {
     let mut file = File::open(path).map_err(|_| unavailable_file())?;
+    let opened_information = FileInformation::from_file(&file).map_err(|_| unavailable_file())?;
+    if opened_information.identity() != expected_information.identity()
+        || opened_information.number_of_links() > 1
+    {
+        return Err(unavailable_file());
+    }
     let mut hasher = Sha256::new();
     let mut frontmatter_capture = FrontmatterCapture::new();
     let mut total_bytes = 0_u64;
@@ -314,12 +333,13 @@ fn scan_skill_file(
     let frontmatter = frontmatter_capture.finish()?;
 
     let observed_metadata = fs::symlink_metadata(path).map_err(|_| unavailable_file())?;
+    let observed_information = FileInformation::from_path(path).map_err(|_| unavailable_file())?;
     if observed_metadata.file_type().is_symlink()
         || !observed_metadata.is_file()
-        || regular_file_has_multiple_links(&observed_metadata)
+        || observed_information.number_of_links() > 1
         || observed_metadata.len() != expected_metadata.len()
         || total_bytes != expected_metadata.len()
-        || !same_file(expected_metadata, &observed_metadata)
+        || observed_information.identity() != opened_information.identity()
     {
         return Err(ScanFailure {
             code: SkillDiagnosticCode::SourceUnavailable,
@@ -445,48 +465,4 @@ fn unavailable_file() -> ScanFailure {
         code: SkillDiagnosticCode::SourceUnavailable,
         message: "SKILL.md cannot be read",
     }
-}
-
-#[cfg(unix)]
-fn regular_file_has_multiple_links(metadata: &Metadata) -> bool {
-    use std::os::unix::fs::MetadataExt;
-    metadata.nlink() > 1
-}
-
-#[cfg(windows)]
-fn regular_file_has_multiple_links(metadata: &Metadata) -> bool {
-    use std::os::windows::fs::MetadataExt;
-    metadata.number_of_links().is_some_and(|links| links > 1)
-}
-
-#[cfg(not(any(unix, windows)))]
-fn regular_file_has_multiple_links(_: &Metadata) -> bool {
-    false
-}
-
-#[cfg(unix)]
-fn same_file(before: &Metadata, after: &Metadata) -> bool {
-    use std::os::unix::fs::MetadataExt;
-    before.dev() == after.dev() && before.ino() == after.ino()
-}
-
-#[cfg(windows)]
-fn same_file(before: &Metadata, after: &Metadata) -> bool {
-    use std::os::windows::fs::MetadataExt;
-    match (
-        before.volume_serial_number(),
-        before.file_index(),
-        after.volume_serial_number(),
-        after.file_index(),
-    ) {
-        (Some(before_volume), Some(before_file), Some(after_volume), Some(after_file)) => {
-            before_volume == after_volume && before_file == after_file
-        }
-        _ => true,
-    }
-}
-
-#[cfg(not(any(unix, windows)))]
-fn same_file(_: &Metadata, _: &Metadata) -> bool {
-    true
 }

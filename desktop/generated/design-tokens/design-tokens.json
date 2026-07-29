@@ -1,0 +1,909 @@
+{
+  "version": 1,
+  "colors": [
+    {
+      "id": "foreground",
+      "kind": "color",
+      "cssVariable": "--zeta-foreground",
+      "owner": "platform.theme",
+      "description": "Default foreground color.",
+      "needsTransparency": false,
+      "values": {
+        "dark": "#cccccc",
+        "light": "#3b3b3b",
+        "high-contrast-dark": "#cccccc",
+        "high-contrast-light": "#3b3b3b"
+      }
+    },
+    {
+      "id": "description.foreground",
+      "kind": "color",
+      "cssVariable": "--zeta-description-foreground",
+      "owner": "platform.theme",
+      "description": "Foreground for descriptive text.",
+      "needsTransparency": false,
+      "values": {
+        "dark": "#b8b8b8",
+        "light": "#616161",
+        "high-contrast-dark": "#b8b8b8",
+        "high-contrast-light": "#616161"
+      }
+    },
+    {
+      "id": "muted.foreground",
+      "kind": "color",
+      "cssVariable": "--zeta-muted-foreground",
+      "owner": "platform.theme",
+      "description": "Foreground for de-emphasized text.",
+      "needsTransparency": false,
+      "values": {
+        "dark": "#8f8f8f",
+        "light": "#767676",
+        "high-contrast-dark": "#8f8f8f",
+        "high-contrast-light": "#767676"
+      }
+    },
+    {
+      "id": "accent.foreground",
+      "kind": "color",
+      "cssVariable": "--zeta-accent-foreground",
+      "owner": "platform.theme",
+      "description": "Foreground for links and accent content.",
+      "needsTransparency": false,
+      "values": {
+        "dark": "#4daafc",
+        "light": "#005fb8",
+        "high-contrast-dark": "#4daafc",
+        "high-contrast-light": "#005fb8"
+      }
+    },
+    {
+      "id": "error.foreground",
+      "kind": "color",
+      "cssVariable": "--zeta-error-foreground",
+      "owner": "platform.theme",
+      "description": "Foreground for errors.",
+      "needsTransparency": false,
+      "values": {
+        "dark": "#f48771",
+        "light": "#a1260d",
+        "high-contrast-dark": "#f48771",
+        "high-contrast-light": "#a1260d"
+      }
+    },
+    {
+      "id": "warning.foreground",
+      "kind": "color",
+      "cssVariable": "--zeta-warning-foreground",
+      "owner": "platform.theme",
+      "description": "Foreground for warnings.",
+      "needsTransparency": false,
+      "values": {
+        "dark": "#cca700",
+        "light": "#895503",
+        "high-contrast-dark": "#cca700",
+        "high-contrast-light": "#895503"
+      }
+    },
+    {
+      "id": "focusBorder",
+      "kind": "color",
+      "cssVariable": "--zeta-focus-border",
+      "owner": "platform.theme",
+      "description": "Border for focused controls.",
+      "needsTransparency": false,
+      "values": {
+        "dark": "#007fd4",
+        "light": "#0078d4",
+        "high-contrast-dark": "#007fd4",
+        "high-contrast-light": "#0078d4"
+      }
+    },
+    {
+      "id": "border",
+      "kind": "color",
+      "cssVariable": "--zeta-border",
+      "owner": "platform.theme",
+      "description": "Default separator border.",
+      "needsTransparency": false,
+      "values": {
+        "dark": "#2b2b2b",
+        "light": "#e5e5e5",
+        "high-contrast-dark": "#2b2b2b",
+        "high-contrast-light": "#e5e5e5"
+      }
+    },
+    {
+      "id": "widget.border",
+      "kind": "color",
+      "cssVariable": "--zeta-widget-border",
+      "owner": "platform.theme",
+      "description": "Border around floating widgets.",
+      "needsTransparency": false,
+      "values": {
+        "dark": "#454545",
+        "light": "#d4d4d4",
+        "high-contrast-dark": "#454545",
+        "high-contrast-light": "#d4d4d4"
+      }
+    },
+    {
+      "id": "widget.shadow",
+      "kind": "color",
+      "cssVariable": "--zeta-widget-shadow",
+      "owner": "platform.theme",
+      "description": "Shadow around floating widgets.",
+      "needsTransparency": false,
+      "values": {
+        "dark": "#00000066",
+        "light": "#00000029",
+        "high-contrast-dark": "#00000066",
+        "high-contrast-light": "#00000029"
+      }
+    },
+    {
+      "id": "input.foreground",
+      "kind": "color",
+      "cssVariable": "--zeta-input-foreground",
+      "owner": "platform.theme.components",
+      "description": "Input text foreground.",
+      "needsTransparency": false,
+      "values": {
+        "dark": "#cccccc",
+        "light": "#3b3b3b",
+        "high-contrast-dark": "#cccccc",
+        "high-contrast-light": "#3b3b3b"
+      }
+    },
+    {
+      "id": "input.background",
+      "kind": "color",
+      "cssVariable": "--zeta-input-background",
+      "owner": "platform.theme.components",
+      "description": "Input background.",
+      "needsTransparency": false,
+      "values": {
+        "dark": "#313131",
+        "light": "#ffffff",
+        "high-contrast-dark": "#313131",
+        "high-contrast-light": "#ffffff"
+      }
+    },
+    {
+      "id": "input.border",
+      "kind": "color",
+      "cssVariable": "--zeta-input-border",
+      "owner": "platform.theme.components",
+      "description": "Input border.",
+      "needsTransparency": false,
+      "values": {
+        "dark": "#3c3c3c",
+        "light": "#cecece",
+        "high-contrast-dark": "#3c3c3c",
+        "high-contrast-light": "#cecece"
+      }
+    },
+    {
+      "id": "input.placeholderForeground",
+      "kind": "color",
+      "cssVariable": "--zeta-input-placeholder-foreground",
+      "owner": "platform.theme.components",
+      "description": "Input placeholder foreground.",
+      "needsTransparency": false,
+      "values": {
+        "dark": "#8f8f8f",
+        "light": "#767676",
+        "high-contrast-dark": "#8f8f8f",
+        "high-contrast-light": "#767676"
+      }
+    },
+    {
+      "id": "selection.foreground",
+      "kind": "color",
+      "cssVariable": "--zeta-selection-foreground",
+      "owner": "platform.theme.components",
+      "description": "Selected text foreground.",
+      "needsTransparency": false,
+      "values": {
+        "dark": "#ffffff",
+        "light": "#000000",
+        "high-contrast-dark": "#ffffff",
+        "high-contrast-light": "#000000"
+      }
+    },
+    {
+      "id": "selection.background",
+      "kind": "color",
+      "cssVariable": "--zeta-selection-background",
+      "owner": "platform.theme.components",
+      "description": "Selected text background.",
+      "needsTransparency": false,
+      "values": {
+        "dark": "#264f78",
+        "light": "#add6ff",
+        "high-contrast-dark": "#264f78",
+        "high-contrast-light": "#add6ff"
+      }
+    },
+    {
+      "id": "list.hoverBackground",
+      "kind": "color",
+      "cssVariable": "--zeta-list-hover-background",
+      "owner": "platform.theme.components",
+      "description": "Hovered list row background.",
+      "needsTransparency": false,
+      "values": {
+        "dark": "#2a2d2e",
+        "light": "#e8e8e8",
+        "high-contrast-dark": "#2a2d2e",
+        "high-contrast-light": "#e8e8e8"
+      }
+    },
+    {
+      "id": "list.activeSelectionForeground",
+      "kind": "color",
+      "cssVariable": "--zeta-list-active-selection-foreground",
+      "owner": "platform.theme.components",
+      "description": "Active list selection foreground.",
+      "needsTransparency": false,
+      "values": {
+        "dark": "#ffffff",
+        "light": "#ffffff",
+        "high-contrast-dark": "#ffffff",
+        "high-contrast-light": "#ffffff"
+      }
+    },
+    {
+      "id": "list.activeSelectionBackground",
+      "kind": "color",
+      "cssVariable": "--zeta-list-active-selection-background",
+      "owner": "platform.theme.components",
+      "description": "Active list selection background.",
+      "needsTransparency": false,
+      "values": {
+        "dark": "#04395e",
+        "light": "#0060c0",
+        "high-contrast-dark": "#04395e",
+        "high-contrast-light": "#0060c0"
+      }
+    },
+    {
+      "id": "menu.selectionForeground",
+      "kind": "color",
+      "cssVariable": "--zeta-menu-selection-foreground",
+      "owner": "platform.theme.components",
+      "description": "Selected menu item foreground.",
+      "needsTransparency": false,
+      "values": {
+        "dark": "#ffffff",
+        "light": "#ffffff",
+        "high-contrast-dark": "#ffffff",
+        "high-contrast-light": "#ffffff"
+      }
+    },
+    {
+      "id": "menu.selectionBackground",
+      "kind": "color",
+      "cssVariable": "--zeta-menu-selection-background",
+      "owner": "platform.theme.components",
+      "description": "Selected menu item background.",
+      "needsTransparency": false,
+      "values": {
+        "dark": "#04395e",
+        "light": "#0060c0",
+        "high-contrast-dark": "#04395e",
+        "high-contrast-light": "#0060c0"
+      }
+    },
+    {
+      "id": "button.foreground",
+      "kind": "color",
+      "cssVariable": "--zeta-button-foreground",
+      "owner": "platform.theme.components",
+      "description": "Default button foreground.",
+      "needsTransparency": false,
+      "values": {
+        "dark": "#cccccc",
+        "light": "#3b3b3b",
+        "high-contrast-dark": "#cccccc",
+        "high-contrast-light": "#3b3b3b"
+      }
+    },
+    {
+      "id": "button.background",
+      "kind": "color",
+      "cssVariable": "--zeta-button-background",
+      "owner": "platform.theme.components",
+      "description": "Default button background.",
+      "needsTransparency": false,
+      "values": {
+        "dark": "#0e639c",
+        "light": "#0078d4",
+        "high-contrast-dark": "#0e639c",
+        "high-contrast-light": "#0078d4"
+      }
+    },
+    {
+      "id": "button.hoverBackground",
+      "kind": "color",
+      "cssVariable": "--zeta-button-hover-background",
+      "owner": "platform.theme.components",
+      "description": "Hovered button background.",
+      "needsTransparency": false,
+      "values": {
+        "dark": "#2a2d2e",
+        "light": "#e8e8e8",
+        "high-contrast-dark": "#2a2d2e",
+        "high-contrast-light": "#e8e8e8"
+      }
+    },
+    {
+      "id": "button.activeBackground",
+      "kind": "color",
+      "cssVariable": "--zeta-button-active-background",
+      "owner": "platform.theme.components",
+      "description": "Pressed button background.",
+      "needsTransparency": false,
+      "values": {
+        "dark": "#37373d",
+        "light": "#dcdcdc",
+        "high-contrast-dark": "#37373d",
+        "high-contrast-light": "#dcdcdc"
+      }
+    },
+    {
+      "id": "button.secondaryBackground",
+      "kind": "color",
+      "cssVariable": "--zeta-button-secondary-background",
+      "owner": "platform.theme.components",
+      "description": "Secondary button background.",
+      "needsTransparency": false,
+      "values": {
+        "dark": "#3a3d41",
+        "light": "#e5e5e5",
+        "high-contrast-dark": "#3a3d41",
+        "high-contrast-light": "#e5e5e5"
+      }
+    },
+    {
+      "id": "button.primaryForeground",
+      "kind": "color",
+      "cssVariable": "--zeta-button-primary-foreground",
+      "owner": "platform.theme.components",
+      "description": "Primary button foreground.",
+      "needsTransparency": false,
+      "values": {
+        "dark": "#ffffff",
+        "light": "#ffffff",
+        "high-contrast-dark": "#ffffff",
+        "high-contrast-light": "#ffffff"
+      }
+    },
+    {
+      "id": "button.primaryBackground",
+      "kind": "color",
+      "cssVariable": "--zeta-button-primary-background",
+      "owner": "platform.theme.components",
+      "description": "Primary button background.",
+      "needsTransparency": false,
+      "values": {
+        "dark": "#0e639c",
+        "light": "#0078d4",
+        "high-contrast-dark": "#0e639c",
+        "high-contrast-light": "#0078d4"
+      }
+    },
+    {
+      "id": "button.primaryHoverBackground",
+      "kind": "color",
+      "cssVariable": "--zeta-button-primary-hover-background",
+      "owner": "platform.theme.components",
+      "description": "Hovered primary button background.",
+      "needsTransparency": false,
+      "values": {
+        "dark": "#1177bb",
+        "light": "#006cbe",
+        "high-contrast-dark": "#1177bb",
+        "high-contrast-light": "#006cbe"
+      }
+    },
+    {
+      "id": "toolbar.hoverBackground",
+      "kind": "color",
+      "cssVariable": "--zeta-toolbar-hover-background",
+      "owner": "platform.theme.components",
+      "description": "Hovered toolbar item background.",
+      "needsTransparency": false,
+      "values": {
+        "dark": "#5a5d5e50",
+        "light": "#5a5d5e29",
+        "high-contrast-dark": "#5a5d5e50",
+        "high-contrast-light": "#5a5d5e29"
+      }
+    },
+    {
+      "id": "keybindingLabel.foreground",
+      "kind": "color",
+      "cssVariable": "--zeta-keybinding-label-foreground",
+      "owner": "platform.theme.components",
+      "description": "Keybinding label foreground.",
+      "needsTransparency": false,
+      "values": {
+        "dark": "#cccccc",
+        "light": "#555555",
+        "high-contrast-dark": "#cccccc",
+        "high-contrast-light": "#555555"
+      }
+    },
+    {
+      "id": "keybindingLabel.background",
+      "kind": "color",
+      "cssVariable": "--zeta-keybinding-label-background",
+      "owner": "platform.theme.components",
+      "description": "Keybinding label background.",
+      "needsTransparency": false,
+      "values": {
+        "dark": "#8080802b",
+        "light": "#dddddd66",
+        "high-contrast-dark": "#8080802b",
+        "high-contrast-light": "#dddddd66"
+      }
+    },
+    {
+      "id": "keybindingLabel.border",
+      "kind": "color",
+      "cssVariable": "--zeta-keybinding-label-border",
+      "owner": "platform.theme.components",
+      "description": "Keybinding label border.",
+      "needsTransparency": false,
+      "values": {
+        "dark": "#80808033",
+        "light": "#cccccc66",
+        "high-contrast-dark": "#80808033",
+        "high-contrast-light": "#cccccc66"
+      }
+    },
+    {
+      "id": "keybindingLabel.bottomBorder",
+      "kind": "color",
+      "cssVariable": "--zeta-keybinding-label-bottom-border",
+      "owner": "platform.theme.components",
+      "description": "Keybinding label bottom border.",
+      "needsTransparency": false,
+      "values": {
+        "dark": "#6b6b6b",
+        "light": "#b0b0b0",
+        "high-contrast-dark": "#6b6b6b",
+        "high-contrast-light": "#b0b0b0"
+      }
+    },
+    {
+      "id": "scrollbar.sliderBackground",
+      "kind": "color",
+      "cssVariable": "--zeta-scrollbar-slider-background",
+      "owner": "platform.theme.components",
+      "description": "Scrollbar slider background.",
+      "needsTransparency": false,
+      "values": {
+        "dark": "#79797966",
+        "light": "#64646433",
+        "high-contrast-dark": "#79797966",
+        "high-contrast-light": "#64646433"
+      }
+    },
+    {
+      "id": "scrollbar.sliderHoverBackground",
+      "kind": "color",
+      "cssVariable": "--zeta-scrollbar-slider-hover-background",
+      "owner": "platform.theme.components",
+      "description": "Hovered scrollbar slider background.",
+      "needsTransparency": false,
+      "values": {
+        "dark": "#646464b3",
+        "light": "#64646459",
+        "high-contrast-dark": "#646464b3",
+        "high-contrast-light": "#64646459"
+      }
+    },
+    {
+      "id": "scrollbar.sliderActiveBackground",
+      "kind": "color",
+      "cssVariable": "--zeta-scrollbar-slider-active-background",
+      "owner": "platform.theme.components",
+      "description": "Active scrollbar slider background.",
+      "needsTransparency": false,
+      "values": {
+        "dark": "#bfbfbf66",
+        "light": "#00000033",
+        "high-contrast-dark": "#bfbfbf66",
+        "high-contrast-light": "#00000033"
+      }
+    },
+    {
+      "id": "dialog.background",
+      "kind": "color",
+      "cssVariable": "--zeta-dialog-background",
+      "owner": "platform.theme.components",
+      "description": "Dialog background.",
+      "needsTransparency": false,
+      "values": {
+        "dark": "#252526",
+        "light": "#ffffff",
+        "high-contrast-dark": "#252526",
+        "high-contrast-light": "#ffffff"
+      }
+    },
+    {
+      "id": "dialog.border",
+      "kind": "color",
+      "cssVariable": "--zeta-dialog-border",
+      "owner": "platform.theme.components",
+      "description": "Dialog border.",
+      "needsTransparency": false,
+      "values": {
+        "dark": "#454545",
+        "light": "#d4d4d4",
+        "high-contrast-dark": "#454545",
+        "high-contrast-light": "#d4d4d4"
+      }
+    },
+    {
+      "id": "dialog.backdropBackground",
+      "kind": "color",
+      "cssVariable": "--zeta-dialog-backdrop-background",
+      "owner": "platform.theme.components",
+      "description": "Backdrop behind modal dialogs.",
+      "needsTransparency": false,
+      "values": {
+        "dark": "#00000073",
+        "light": "#00000059",
+        "high-contrast-dark": "#00000073",
+        "high-contrast-light": "#00000059"
+      }
+    },
+    {
+      "id": "dialog.shadow",
+      "kind": "color",
+      "cssVariable": "--zeta-dialog-shadow",
+      "owner": "platform.theme.components",
+      "description": "Shadow around modal dialogs.",
+      "needsTransparency": false,
+      "values": {
+        "dark": "#00000073",
+        "light": "#0000003d",
+        "high-contrast-dark": "#00000073",
+        "high-contrast-light": "#0000003d"
+      }
+    },
+    {
+      "id": "quickInput.background",
+      "kind": "color",
+      "cssVariable": "--zeta-quick-input-background",
+      "owner": "platform.theme.components",
+      "description": "Quick input background.",
+      "needsTransparency": false,
+      "values": {
+        "dark": "#252526",
+        "light": "#f8f8f8",
+        "high-contrast-dark": "#252526",
+        "high-contrast-light": "#f8f8f8"
+      }
+    },
+    {
+      "id": "quickInput.backdropBackground",
+      "kind": "color",
+      "cssVariable": "--zeta-quick-input-backdrop-background",
+      "owner": "platform.theme.components",
+      "description": "Backdrop behind quick input.",
+      "needsTransparency": false,
+      "values": {
+        "dark": "#00000026",
+        "light": "#0000001f",
+        "high-contrast-dark": "#00000026",
+        "high-contrast-light": "#0000001f"
+      }
+    },
+    {
+      "id": "text.codeBlockBackground",
+      "kind": "color",
+      "cssVariable": "--zeta-text-code-block-background",
+      "owner": "platform.theme.components",
+      "description": "Inline and block code background.",
+      "needsTransparency": false,
+      "values": {
+        "dark": "#0f0f0f",
+        "light": "#f2f2f2",
+        "high-contrast-dark": "#0f0f0f",
+        "high-contrast-light": "#f2f2f2"
+      }
+    },
+    {
+      "id": "search.matchBackground",
+      "kind": "color",
+      "cssVariable": "--zeta-search-match-background",
+      "owner": "platform.theme.components",
+      "description": "Highlighted search match background.",
+      "needsTransparency": false,
+      "values": {
+        "dark": "#f9c74f8c",
+        "light": "#f9c74f8c",
+        "high-contrast-dark": "#f9c74f8c",
+        "high-contrast-light": "#f9c74f8c"
+      }
+    },
+    {
+      "id": "sectionHeader.foreground",
+      "kind": "color",
+      "cssVariable": "--zeta-section-header-foreground",
+      "owner": "workbench.shell",
+      "description": "Section header foreground.",
+      "needsTransparency": false,
+      "values": {
+        "dark": "#b8b8b8",
+        "light": "#616161",
+        "high-contrast-dark": "#b8b8b8",
+        "high-contrast-light": "#616161"
+      }
+    },
+    {
+      "id": "workbench.background",
+      "kind": "color",
+      "cssVariable": "--zeta-workbench-background",
+      "owner": "workbench.shell",
+      "description": "Workbench root background.",
+      "needsTransparency": false,
+      "values": {
+        "dark": "#1e1e1e",
+        "light": "#ffffff",
+        "high-contrast-dark": "#1e1e1e",
+        "high-contrast-light": "#ffffff"
+      }
+    },
+    {
+      "id": "editor.background",
+      "kind": "color",
+      "cssVariable": "--zeta-editor-background",
+      "owner": "workbench.shell",
+      "description": "Editor background.",
+      "needsTransparency": false,
+      "values": {
+        "dark": "#1e1e1e",
+        "light": "#ffffff",
+        "high-contrast-dark": "#1e1e1e",
+        "high-contrast-light": "#ffffff"
+      }
+    },
+    {
+      "id": "editor.foreground",
+      "kind": "color",
+      "cssVariable": "--zeta-editor-foreground",
+      "owner": "workbench.shell",
+      "description": "Editor foreground.",
+      "needsTransparency": false,
+      "values": {
+        "dark": "#d4d4d4",
+        "light": "#333333",
+        "high-contrast-dark": "#d4d4d4",
+        "high-contrast-light": "#333333"
+      }
+    },
+    {
+      "id": "titleBar.background",
+      "kind": "color",
+      "cssVariable": "--zeta-title-bar-background",
+      "owner": "workbench.shell",
+      "description": "Title bar background.",
+      "needsTransparency": false,
+      "values": {
+        "dark": "#181818",
+        "light": "#f3f3f3",
+        "high-contrast-dark": "#181818",
+        "high-contrast-light": "#f3f3f3"
+      }
+    },
+    {
+      "id": "titleBar.foreground",
+      "kind": "color",
+      "cssVariable": "--zeta-title-bar-foreground",
+      "owner": "workbench.shell",
+      "description": "Title bar foreground.",
+      "needsTransparency": false,
+      "values": {
+        "dark": "#f0f0f0",
+        "light": "#1f1f1f",
+        "high-contrast-dark": "#f0f0f0",
+        "high-contrast-light": "#1f1f1f"
+      }
+    },
+    {
+      "id": "titleBar.actionForeground",
+      "kind": "color",
+      "cssVariable": "--zeta-title-bar-action-foreground",
+      "owner": "workbench.shell",
+      "description": "Title bar action foreground.",
+      "needsTransparency": false,
+      "values": {
+        "dark": "#d6d6d6",
+        "light": "#424242",
+        "high-contrast-dark": "#d6d6d6",
+        "high-contrast-light": "#424242"
+      }
+    },
+    {
+      "id": "titleBar.hoverBackground",
+      "kind": "color",
+      "cssVariable": "--zeta-title-bar-hover-background",
+      "owner": "workbench.shell",
+      "description": "Hovered title bar item background.",
+      "needsTransparency": false,
+      "values": {
+        "dark": "#2a2d2e",
+        "light": "#e5e5e5",
+        "high-contrast-dark": "#2a2d2e",
+        "high-contrast-light": "#e5e5e5"
+      }
+    },
+    {
+      "id": "sideBar.background",
+      "kind": "color",
+      "cssVariable": "--zeta-side-bar-background",
+      "owner": "workbench.shell",
+      "description": "Primary side bar background.",
+      "needsTransparency": false,
+      "values": {
+        "dark": "#181818",
+        "light": "#f8f8f8",
+        "high-contrast-dark": "#181818",
+        "high-contrast-light": "#f8f8f8"
+      }
+    },
+    {
+      "id": "auxiliaryBar.background",
+      "kind": "color",
+      "cssVariable": "--zeta-auxiliary-bar-background",
+      "owner": "workbench.shell",
+      "description": "Auxiliary side bar background.",
+      "needsTransparency": false,
+      "values": {
+        "dark": "#181818",
+        "light": "#f8f8f8",
+        "high-contrast-dark": "#181818",
+        "high-contrast-light": "#f8f8f8"
+      }
+    },
+    {
+      "id": "panel.background",
+      "kind": "color",
+      "cssVariable": "--zeta-panel-background",
+      "owner": "workbench.shell",
+      "description": "Panel background.",
+      "needsTransparency": false,
+      "values": {
+        "dark": "#181818",
+        "light": "#f8f8f8",
+        "high-contrast-dark": "#181818",
+        "high-contrast-light": "#f8f8f8"
+      }
+    },
+    {
+      "id": "compositeBar.foreground",
+      "kind": "color",
+      "cssVariable": "--zeta-composite-bar-foreground",
+      "owner": "workbench.shell",
+      "description": "Active composite bar foreground.",
+      "needsTransparency": false,
+      "values": {
+        "dark": "#ffffff",
+        "light": "#1f1f1f",
+        "high-contrast-dark": "#ffffff",
+        "high-contrast-light": "#1f1f1f"
+      }
+    },
+    {
+      "id": "compositeBar.inactiveForeground",
+      "kind": "color",
+      "cssVariable": "--zeta-composite-bar-inactive-foreground",
+      "owner": "workbench.shell",
+      "description": "Inactive composite bar foreground.",
+      "needsTransparency": false,
+      "values": {
+        "dark": "#858585",
+        "light": "#616161",
+        "high-contrast-dark": "#858585",
+        "high-contrast-light": "#616161"
+      }
+    },
+    {
+      "id": "statusBar.foreground",
+      "kind": "color",
+      "cssVariable": "--zeta-status-bar-foreground",
+      "owner": "workbench.shell",
+      "description": "Status bar foreground.",
+      "needsTransparency": false,
+      "values": {
+        "dark": "#ffffff",
+        "light": "#ffffff",
+        "high-contrast-dark": "#ffffff",
+        "high-contrast-light": "#ffffff"
+      }
+    },
+    {
+      "id": "statusBar.background",
+      "kind": "color",
+      "cssVariable": "--zeta-status-bar-background",
+      "owner": "workbench.shell",
+      "description": "Status bar background.",
+      "needsTransparency": false,
+      "values": {
+        "dark": "#007acc",
+        "light": "#007acc",
+        "high-contrast-dark": "#007acc",
+        "high-contrast-light": "#007acc"
+      }
+    },
+    {
+      "id": "sash.hoverBackground",
+      "kind": "color",
+      "cssVariable": "--zeta-sash-hover-background",
+      "owner": "workbench.shell",
+      "description": "Hovered sash background.",
+      "needsTransparency": false,
+      "values": {
+        "dark": "#007acc",
+        "light": "#007acc",
+        "high-contrast-dark": "#007acc",
+        "high-contrast-light": "#007acc"
+      }
+    }
+  ],
+  "sizes": [
+    {
+      "id": "actionBar.gap",
+      "kind": "size",
+      "cssVariable": "--zeta-action-bar-gap",
+      "owner": "platform.ui",
+      "description": "Gap between action bar items.",
+      "value": "2px"
+    },
+    {
+      "id": "toolbar.itemGap",
+      "kind": "size",
+      "cssVariable": "--zeta-toolbar-item-gap",
+      "owner": "platform.ui",
+      "description": "Gap before a toolbar item.",
+      "value": "2px"
+    },
+    {
+      "id": "toolbar.actionSize",
+      "kind": "size",
+      "cssVariable": "--zeta-toolbar-action-size",
+      "owner": "platform.ui",
+      "description": "Default square toolbar action size.",
+      "value": "24px"
+    },
+    {
+      "id": "scrollbar.size",
+      "kind": "size",
+      "cssVariable": "--zeta-scrollbar-size",
+      "owner": "platform.ui",
+      "description": "Default scrollbar thickness.",
+      "value": "10px"
+    },
+    {
+      "id": "modalEditor.width",
+      "kind": "size",
+      "cssVariable": "--zeta-modal-editor-width",
+      "owner": "platform.ui",
+      "description": "Preferred modal editor width.",
+      "value": "960px"
+    },
+    {
+      "id": "modalEditor.height",
+      "kind": "size",
+      "cssVariable": "--zeta-modal-editor-height",
+      "owner": "platform.ui",
+      "description": "Preferred modal editor height.",
+      "value": "720px"
+    }
+  ]
+}

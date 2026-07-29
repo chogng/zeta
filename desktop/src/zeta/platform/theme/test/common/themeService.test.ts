@@ -27,13 +27,15 @@ test("built-in themes define every registered color", () => {
   for (const id of colorIdentifiers) {
     assert.equal(typeof darkColorTheme.colors[id], "string");
     assert.equal(typeof lightColorTheme.colors[id], "string");
+    assert.equal(darkColorTheme.getColor(id)?.toString(), darkColorTheme.colors[id]);
+    assert.equal(lightColorTheme.getColor(id)?.toString(), lightColorTheme.colors[id]);
   }
 });
 
 test("color identifiers map to stable CSS custom properties", () => {
   assert.equal(
     colorCssVariable(ColorId.primaryButtonHoverBackground),
-    "--zeta-primary-button-hover-background",
+    "--zeta-button-primary-hover-background",
   );
   assert.equal(
     colorCssVariable(ColorId.titleBarForeground),

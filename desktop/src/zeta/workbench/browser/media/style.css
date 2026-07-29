@@ -17,11 +17,11 @@
     "Courier New",
     monospace;
 
-  color-scheme: dark;
+  color-scheme: light dark;
   font-family: var(--zeta-font-family);
   font-size: 13px;
-  background: var(--zeta-workbench-background, #1e1e1e);
-  color: var(--zeta-foreground, #cccccc);
+  background: var(--zeta-workbench-background);
+  color: var(--zeta-foreground);
 }
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -30,7 +30,7 @@ html, body, #app { width: 100%; min-width: 0; min-height: 0; height: 100%; margi
 
 body {
   overflow: hidden;
-  background: var(--zeta-workbench-background, #1e1e1e);
+  background: var(--zeta-workbench-background);
 }
 
 button, input, select, textarea { font: inherit; }
@@ -184,8 +184,8 @@ button, input, select, textarea { font: inherit; }
   overflow: hidden;
   flex-direction: column;
   font-family: var(--zeta-font-family);
-  color: var(--zeta-foreground, #cccccc);
-  background: var(--zeta-workbench-background, #1e1e1e);
+  color: var(--zeta-foreground);
+  background: var(--zeta-workbench-background);
 }
 
 .zeta-workbench-layout {
@@ -204,6 +204,6 @@ button, input, select, textarea { font: inherit; }
 }
 
 .zeta-workbench ::selection {
-  color: var(--zeta-selection-foreground, #ffffff);
-  background: var(--zeta-selection-background, #264f78);
+  color: var(--zeta-selection-foreground);
+  background: var(--zeta-selection-background);
 }

@@ -18,6 +18,7 @@ import type {
   WorkspaceSearchReadResult,
   WorkspaceSearchStartResult,
 } from "../../../../../generated/app-server/types.js";
+import type { TerminalCreateResult, TerminalProfileListResult, TerminalReadResult } from "../../../../../generated/app-server/types.js";
 import {
   operatingSystemFromNodePlatform,
 } from "../../../base/common/environment.js";
@@ -65,11 +66,13 @@ import {
 } from "../../menubar/common/nativeMenubar.js";
 import {
   NATIVE_HOST_OPEN_FOLDER_CHANNEL,
+  NATIVE_HOST_SET_WINDOW_THEME_CHANNEL,
   NATIVE_HOST_TOGGLE_DEVELOPER_TOOLS_CHANNEL,
 } from "../common/nativeHost.js";
 import {
   WORKSPACE_CONTEXT_READ_CHANNEL,
 } from "../../workspace/common/workspaceIpc.js";
+import { USER_THEME_FILES_LIST_CHANNEL, USER_THEME_FILE_DELETE_CHANNEL, USER_THEME_FILE_WRITE_CHANNEL } from "../../theme/common/userThemeFiles.js";
 import type {
   ZetaElectronRendererApi,
 } from "../common/rendererApi.js";
@@ -205,6 +208,20 @@ export function createElectronRendererApi(): ZetaElectronRendererApi {
       cancel: (params) =>
         invoke<void>("zeta:workspace-search:cancel", params),
     },
+    terminal: {
+      listProfiles: () =>
+        invoke<TerminalProfileListResult>("zeta:terminal:profile-list"),
+      create: (params) =>
+        invoke<TerminalCreateResult>("zeta:terminal:create", params),
+      write: (params) =>
+        invoke<void>("zeta:terminal:write", params),
+      resize: (params) =>
+        invoke<void>("zeta:terminal:resize", params),
+      read: (params) =>
+        invoke<TerminalReadResult>("zeta:terminal:read", params),
+      close: (params) =>
+        invoke<void>("zeta:terminal:close", params),
+    },
     events: {
       subscribe: (listener) =>
         subscribe<ServerNotification>("zeta:event", listener),
@@ -235,6 +252,8 @@ export function createElectronRendererApi(): ZetaElectronRendererApi {
     nativeHost: {
       openFolder: () =>
         invoke<void>(NATIVE_HOST_OPEN_FOLDER_CHANNEL),
+      setWindowTheme: (theme) =>
+        invoke<void>(NATIVE_HOST_SET_WINDOW_THEME_CHANNEL, theme),
       toggleDeveloperTools: () =>
         invoke<void>(NATIVE_HOST_TOGGLE_DEVELOPER_TOOLS_CHANNEL),
     },
@@ -246,6 +265,11 @@ export function createElectronRendererApi(): ZetaElectronRendererApi {
           NATIVE_MENUBAR_SELECT_CHANNEL,
           listener,
         ),
+    },
+    userThemes: {
+      delete: (request) => invoke(USER_THEME_FILE_DELETE_CHANNEL, request),
+      list: () => invoke(USER_THEME_FILES_LIST_CHANNEL),
+      write: (request) => invoke(USER_THEME_FILE_WRITE_CHANNEL, request),
     },
     workspace: {
       getWorkspace: () => invoke(WORKSPACE_CONTEXT_READ_CHANNEL),

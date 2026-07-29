@@ -46,6 +46,11 @@ export abstract class ViewPane extends DisposableOwner implements IView {
 
   setTitle(title: string): void { this.titleElement.textContent = title; }
 
+  /** Contextual commands rendered by a host title toolbar, when available. */
+  get titleActionsElement(): HTMLElement | undefined {
+    return undefined;
+  }
+
   focus(): void {
     this.element.focus();
   }

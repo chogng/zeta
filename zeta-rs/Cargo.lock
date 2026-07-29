@@ -5771,6 +5771,7 @@ dependencies = [
  "zeta-skills",
  "zeta-tools",
  "zeta-typst",
+ "zeta-utils-pty",
  "zeta-windows-sandbox",
 ]
 
@@ -5903,6 +5904,13 @@ version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "zeta-file-identity"
+version = "0.1.0"
+dependencies = [
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -6136,6 +6144,7 @@ dependencies = [
  "serde",
  "serde_yaml",
  "sha2",
+ "zeta-file-identity",
  "zeta-protocol",
 ]
 

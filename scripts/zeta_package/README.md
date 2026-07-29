@@ -40,6 +40,15 @@ stages them under `zeta-resources/skills/`, validates the complete package in a
 sibling temporary directory, and renames it into place. It never replaces an
 existing output directory.
 
+Desktop development uses the same locks and canonical layout through the Node
+assembler at `desktop/scripts/prepare-dev-package.mjs`. It builds the
+first-party executables with Cargo's `dev` profile, verifies and extracts the
+target-specific runtime archives, stages the result beside
+`desktop/.tmp/zeta-package`, and replaces the previous development package only
+after validation. It neither installs nor invokes Python. This Python package
+remains the release builder and retains its refusal to replace an explicit
+output directory.
+
 ```sh
 python3 scripts/build_zeta_package.py \
   --target aarch64-apple-darwin \
@@ -67,4 +76,11 @@ digest failure cleanup:
 
 ```sh
 python3 -m unittest discover -s scripts -p 'test_*.py'
+```
+
+The Node development assembler's target selection, locked ripgrep selection,
+and atomic replacement behavior are covered by:
+
+```sh
+node --test desktop/scripts/prepare-dev-package.test.mjs
 ```

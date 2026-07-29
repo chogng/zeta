@@ -19,6 +19,7 @@ import {
 import {
   createElectronWorkbenchContextMenuService,
 } from "../services/contextmenu/electron-browser/contextMenuService.js";
+import { loadUserThemes } from "./userThemes.js";
 
 /** Starts one Electron renderer for the selected product edition. */
 export async function startElectronWorkbench(
@@ -32,6 +33,7 @@ export async function startElectronWorkbench(
     ? installDisposableTracker(disposableTracker)
     : undefined;
   const api = createElectronRendererApi();
+  const userThemes = await loadUserThemes(api.userThemes);
   const workspace = parseWorkspaceIdentifier(
     await api.workspace.getWorkspace(),
   );
@@ -43,6 +45,7 @@ export async function startElectronWorkbench(
     configurationApi: api.configuration,
     keybindingsResourceApi: api.keybindings,
     nativeHostApi: api.nativeHost,
+    userThemeService: userThemes,
     createContextMenuService: (options) =>
       createElectronWorkbenchContextMenuService(
         options,
@@ -55,6 +58,7 @@ export async function startElectronWorkbench(
   window.addEventListener("pagehide", () => {
     try {
       workbench.dispose();
+      userThemes.dispose();
       disposableTracker?.assertNoLeaks();
     } finally {
       tracking?.[Symbol.dispose]();

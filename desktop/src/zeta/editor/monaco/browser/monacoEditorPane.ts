@@ -25,8 +25,11 @@ import {
 } from "../common/config/editorConfiguration.js";
 import {
   MONACO_EDITOR_ID,
-  monacoLanguageForInput,
 } from "../common/monacoEditorInput.js";
+import {
+  acquireMonacoModel,
+  type IMonacoModelReference,
+} from "./monacoModelService.js";
 
 /** Browser host for the customizable Monaco editor subsystem. */
 export class MonacoEditorPane extends DisposableOwner
@@ -36,6 +39,7 @@ export class MonacoEditorPane extends DisposableOwner
   #container: HTMLDivElement | undefined;
   #editor: monaco.editor.IStandaloneCodeEditor | undefined;
   #model: monaco.editor.ITextModel | undefined;
+  #modelReference: IMonacoModelReference | undefined;
   #dimension: IDimension = { width: 0, height: 0 };
   readonly #configurationService: IConfigurationService | undefined;
 
@@ -67,7 +71,6 @@ export class MonacoEditorPane extends DisposableOwner
       minimap: { enabled: true },
       model: null,
       scrollBeyondLastLine: false,
-      theme: "vs-dark",
     });
     this.defer(() => {
       this.#clearModel();
@@ -84,16 +87,15 @@ export class MonacoEditorPane extends DisposableOwner
   ): Promise<void> {
     const editor = this.#requireEditor();
     throwIfAborted(signal);
-    const model = monaco.editor.createModel(
-      input.initialText ?? "",
-      monacoLanguageForInput(input),
-    );
+    const modelReference = acquireMonacoModel(input);
+    const model = modelReference.model;
     if (signal.aborted) {
-      model.dispose();
+      modelReference.dispose();
       throw abortError();
     }
     this.#clearModel();
     this.#model = model;
+    this.#modelReference = modelReference;
     editor.setModel(model);
     editor.updateOptions({
       ariaLabel: input.label ?? resourceLabel(input),
@@ -139,7 +141,8 @@ export class MonacoEditorPane extends DisposableOwner
 
   #clearModel(): void {
     this.#editor?.setModel(null);
-    this.#model?.dispose();
+    this.#modelReference?.dispose();
+    this.#modelReference = undefined;
     this.#model = undefined;
   }
 

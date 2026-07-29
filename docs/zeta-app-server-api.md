@@ -62,7 +62,7 @@ Session 与每个 Thread 拥有独立 durable sequence：
 - 单条 message 最大 1,048,576 bytes；
 - stdout 只允许协议 message，stderr 只用于诊断；
 - 同一 request 的 response 先于由它产生的 causal notifications；
-- connection 断开后 request ID、subscription 和 Resource ownership 全部失效。
+- connection 断开后 request ID、subscription、Resource 与 Terminal ownership 全部失效。
 
 In-process client 使用 protocol-owned typed request/event channel，可以省略 JSON string
 编解码，但必须经过相同 initialize gate、method dispatcher、result/error envelope 与
@@ -97,6 +97,7 @@ notification contract，不能拥有隐藏业务接口。JSONL/stdio、WebSocket
     "resources": true,
     "fileSystem": true,
     "workspaceSearch": true,
+    "terminal": true,
     "typst": true,
     "updateReplay": true
   },
@@ -148,6 +149,12 @@ inline argument parsing；提交仍通过 `turn/start.input`，并保留 `/name`
 | `workspace/search/start` | connection + workspace | 启动有界内容搜索 |
 | `workspace/search/read` | connection + search job | 按游标读取最多 200 条结果 |
 | `workspace/search/cancel` | connection + search job | 取消并释放搜索 |
+| `terminal/profile/list` | workspace | 列出 App Server 冻结的可信 Shell Profile |
+| `terminal/create` | connection + workspace | 在可信 workspace root 启动 PTY |
+| `terminal/write` | connection + Terminal | 写入有界 UTF-8 输入 batch |
+| `terminal/resize` | connection + Terminal | 修改 PTY rows/cols |
+| `terminal/read` | connection + Terminal | 按 sequence 拉取有界 Base64 输出 |
+| `terminal/close` | connection + Terminal | 终止并释放 PTY |
 
 长期 account control plane 另见[第 11 节](#11-account-与登录)。它尚未进入当前 registry/schema，
 加入时必须和 Rust DTO、TypeScript 与 JSON Schema 同步提交。
@@ -176,6 +183,25 @@ number、单行 preview 和 UTF-16 match ranges。
 `SearchNotFound`、`SearchNotOwner` 与 `SearchBusy` error name。执行失败作为 terminal
 read result 的脱敏 `error` 返回。完整 ownership 与当前 UI 限制见
 [`search.md`](search.md)。
+
+### Integrated Terminal
+
+`initialize.capabilities.terminal` 表示 local composition 已提供可信 workspace root 和 PTY
+runtime。`terminal/profile/list` 只返回稳定 `profileId`、显示标题与 default 标记，不暴露
+program、args 或 environment。`terminal/create` 接受 rows/cols 和 `default | profileId`
+tagged selection；Rust owner 把 ID 解析到冻结的本机 Shell Profile，并以显式 environment
+allowlist 在 workspace root 启动。客户端不能提交任意 executable、environment 或绝对 cwd。
+Terminal ID 绑定创建它的 App Server connection，跨 connection 操作返回 `TerminalNotOwner`。
+
+当前同步 JSONL transport 不支持独立于 request 的高频主动输出。客户端通过
+`terminal/read { terminalId, afterSequence, maxChunks }` 拉取最多 128 个 raw-byte chunk；
+每个 chunk 使用标准 Base64，并以单调 sequence 排序。Server 保留最多 1 MiB 输出，cursor
+落后于 ring 时返回 `outputGap: true`，客户端必须显式显示截断而不能把缺口当作连续输出。
+`exited` 只在 authoritative process exit 且尾部输出流关闭后为 true。
+
+当前 terminal 不持久化、不跨 App Server 重启恢复，也不支持环境变量修改或远程 attach。
+正常客户端在实例关闭后调用 `terminal/close`；connection 结束时 server 终止该 connection
+拥有的剩余 PTY。App Server 重启后的显式 Relaunch 会创建新 PTY，不能冒充原进程恢复。
 
 ## 6. Session commands
 
@@ -335,6 +361,11 @@ Resource bytes 使用标准 RFC 4648 Base64；`decodedLength` 是原始 byte 数
 - `ResourceTooLarge`
 - `InvalidResourceChunkSize`
 - `InvalidResourceOffset`
+- `TerminalUnavailable`
+- `TerminalNotFound`
+- `TerminalNotOwner`
+- `TerminalBusy`
+- `TerminalOperationFailed`
 - `ConfigUnavailable`
 - `SkillsUnavailable`
 - `SkillNotFound`

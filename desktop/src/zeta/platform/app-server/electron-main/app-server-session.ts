@@ -188,6 +188,8 @@ function validateInitializeResult(value: InitializeResult): void {
     typeof value.capabilities.turns !== "boolean" ||
     typeof value.capabilities.resources !== "boolean" ||
     typeof value.capabilities.fileSystem !== "boolean" ||
+    typeof value.capabilities.workspaceSearch !== "boolean" ||
+    typeof value.capabilities.terminal !== "boolean" ||
     typeof value.capabilities.typst !== "boolean" ||
     typeof value.capabilities.updateReplay !== "boolean"
   ) {

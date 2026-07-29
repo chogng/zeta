@@ -1,7 +1,5 @@
-import {
-  ViewPaneContainer,
-  type ViewPaneContainerOptions,
-} from "./viewPaneContainer.js";
+import { compositePanelId, compositeTabId } from "../compositebar/compositeBar.js";
+import { ViewPaneContainer, type ViewPaneContainerOptions } from "./viewPaneContainer.js";
 
 /**
  * Activatable Composite whose content is assembled from registered ViewPanes.
@@ -17,5 +15,12 @@ export class PaneComposite extends ViewPaneContainer {
     this.title = options.viewContainer.title;
     this.element.classList.add("zeta-pane-composite");
     this.element.setAttribute("aria-label", this.title);
+    this.element.id = compositePanelId(options.viewContainer.location, options.viewContainer.id);
+    this.element.setAttribute("role", "tabpanel");
+    this.element.setAttribute("aria-labelledby", compositeTabId(options.viewContainer.location, options.viewContainer.id));
+  }
+
+  get titleActionsElement(): HTMLElement | undefined {
+    return this.panes.find((pane) => pane.titleActionsElement)?.titleActionsElement;
   }
 }
