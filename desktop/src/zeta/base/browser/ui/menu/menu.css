@@ -20,7 +20,7 @@
   background: var(--zeta-menu-selection-background);
   outline: 0;
 }
-.zeta-menu .zeta-button[aria-checked="true"]::before {
+.zeta-menu .zeta-button.checked::before {
   width: 12px;
   content: "✓";
 }

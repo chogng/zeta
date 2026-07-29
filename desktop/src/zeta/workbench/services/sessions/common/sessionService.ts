@@ -1,17 +1,9 @@
-import type {
-  Session,
-  SessionId,
-  ThreadId,
-} from "../../../../../../generated/app-server/types.js";
+import type { Session, SessionId, ThreadId } from "../../../../../../generated/app-server/types.js";
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { createUuid } from "../../../../base/common/uuid.js";
-import type {
-  ZetaRendererApi,
-} from "../../../../platform/app-server/common/renderer-api.js";
-import {
-  createServiceIdentifier,
-} from "../../../../platform/instantiation/common/instantiation.js";
+import type { ZetaRendererApi } from "../../../../platform/app-server/common/renderer-api.js";
+import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
 
 /** Selected Session and Thread shared by session navigation and features. */
 export interface IActiveSessionThread {
@@ -24,6 +16,7 @@ export type WorkbenchSessionState =
   | "loading"
   | "ready"
   | "creating"
+  | "archiving"
   | "error";
 
 /**
@@ -43,6 +36,7 @@ export interface IWorkbenchSessionService {
   selectThread(sessionId: SessionId, threadId: ThreadId): void;
   ensureActiveThread(): Promise<IActiveSessionThread>;
   startNewSession(title?: string): Promise<IActiveSessionThread>;
+  archiveSession(sessionId: SessionId): Promise<void>;
 }
 
 export const IWorkbenchSessionService =
@@ -151,6 +145,36 @@ export class WorkbenchSessionService
       };
       this.#setState("ready");
       return this.#active;
+    } catch (error) {
+      this.#setError(error);
+      throw error;
+    }
+  }
+
+  async archiveSession(sessionId: SessionId): Promise<void> {
+    await this.initialize();
+    const session = this.#sessions.find(
+      (candidate) =>
+        candidate.sessionId === sessionId &&
+        candidate.status === "active",
+    );
+    if (!session) {
+      throw new Error(`Active Session is not available: ${sessionId}`);
+    }
+    this.#setState("archiving");
+    try {
+      const result = await this.#api.session.archive({
+        commandId: commandId("archive-session"),
+        sessionId,
+        expectedSequence: session.sequence,
+      });
+      this.#sessions = this.#sessions.map((candidate) =>
+        candidate.sessionId === sessionId ? result.session : candidate
+      );
+      if (this.#active?.session.sessionId === sessionId) {
+        this.#active = firstActiveThread(this.#sessions);
+      }
+      this.#setState("ready");
     } catch (error) {
       this.#setError(error);
       throw error;

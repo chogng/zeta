@@ -1,16 +1,12 @@
+import "./menubarControl.css";
 import { addDisposableListener } from "../../../../base/browser/dom.js";
 import { Button } from "../../../../base/browser/ui/button/button.js";
 import { SubmenuAction } from "../../../../base/common/actions.js";
 import { DisposableOwner, type IDisposable } from "../../../../base/common/lifecycle.js";
 import { LxIcon } from "../../../../base/common/lxicons.js";
 import { MenuId } from "../../../../platform/actions/common/actions.js";
-import type {
-  IMenu,
-  IMenuService,
-} from "../../../../platform/actions/common/menuService.js";
-import type {
-  IContextMenuService,
-} from "../../../../platform/contextview/browser/contextMenu.js";
+import type { IMenu, IMenuService } from "../../../../platform/actions/common/menuService.js";
+import type { IContextMenuService } from "../../../../platform/contextview/browser/contextMenu.js";
 
 /** Host-selected menubar presentation owned by the titlebar. */
 export interface IMenubarControl extends IDisposable {

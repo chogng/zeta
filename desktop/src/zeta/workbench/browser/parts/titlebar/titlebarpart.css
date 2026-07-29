@@ -26,50 +26,12 @@
   display: flex;
   height: 100%;
   align-items: center;
+  color: var(--zeta-title-bar-action-foreground);
 }
 
 .zeta-titlebar-left-actions {
   display: flex;
   height: 100%;
   align-items: center;
-}
-
-.zeta-titlebar-label {
-  flex: 0 0 auto;
-  margin: 0;
-  color: var(--zeta-title-bar-foreground);
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: .1px;
-}
-
-.zeta-menubar {
-  display: flex;
-  height: 100%;
-  align-items: center;
-}
-
-.zeta-menubar .zeta-menubar-item {
-  width: 28px;
-  min-width: 28px;
-  min-height: 28px;
-  padding: 0;
-  border: 0;
-  border-radius: 4px;
-  background: transparent;
-  color: var(--zeta-title-bar-foreground);
-}
-
-.zeta-menubar .zeta-menubar-item > span {
-  display: none;
-}
-
-.zeta-menubar .zeta-menubar-item:hover,
-.zeta-menubar .zeta-menubar-item:focus-visible,
-.zeta-menubar .zeta-menubar-item.active {
-  background: var(--zeta-title-bar-hover-background);
-}
-
-.zeta-workbench-titlebar .zeta-button {
   color: var(--zeta-title-bar-action-foreground);
 }

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { darkColorTheme, lightColorTheme } from "../src/zeta/platform/theme/common/colorTheme.js";
-import { terminalTheme } from "../src/zeta/workbench/contrib/terminal/browser/terminalTheme.js";
+import { terminalTheme } from "../src/zeta/workbench/contrib/terminal/browser/instance/terminalTheme.js";
 
 test("Terminal renderer uses the active editor background instead of a fixed canvas color", () => {
   assert.equal(terminalTheme(lightColorTheme).background, "#ffffff");

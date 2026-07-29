@@ -1,3 +1,4 @@
+import "./chatTitleControl.css";
 import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
 import { MenuWorkbenchToolBar } from "../../../../../platform/actions/browser/toolbar.js";
 import { MenuId } from "../../../../../platform/actions/common/actions.js";
@@ -30,6 +31,7 @@ export class ChatTitleControl extends DisposableOwner {
       contextMenuService,
       MenuId.ChatTitleLayout,
       ownerDocument,
+      { highlightToggledItems: true },
     ));
     layoutToolbar.element.setAttribute("aria-label", "Chat layout");
     const actions = ownerDocument.createElement("div");

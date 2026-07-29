@@ -161,6 +161,10 @@ test("ExplorerViewPane renders, expands, and opens workspace files", async () =>
       pane.element.querySelector(".zeta-view-pane-title")?.textContent,
       "project",
     );
+    assert.equal(
+      pane.element.querySelector(".zeta-view-pane-title")?.classList.contains("zeta-explorer-title"),
+      true,
+    );
     assert.deepEqual(rowLabels(pane.element), ["src", "README.md"]);
     assert.equal(
       pane.element.querySelector(

@@ -38,37 +38,85 @@
   overflow: hidden;
 }
 
+.zeta-terminal-tabs-layout {
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
 .zeta-terminal-tabs {
   display: flex;
-  min-height: 27px;
-  overflow-x: auto;
-  border-bottom: 1px solid color-mix(in srgb, currentColor 12%, transparent);
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  overflow-x: hidden;
+  overflow-y: auto;
+  border-left: 1px solid color-mix(in srgb, currentColor 12%, transparent);
 }
 
 .zeta-terminal-tab {
-  display: inline-flex;
+  position: relative;
+  display: flex;
   align-items: center;
-  max-width: 220px;
-  border-right: 1px solid color-mix(in srgb, currentColor 10%, transparent);
+  width: 100%;
+  min-height: 22px;
+  flex: 0 0 auto;
 }
 
 .zeta-terminal-tab.active {
   background: color-mix(in srgb, currentColor 8%, transparent);
-  box-shadow: inset 0 -1px currentColor;
+}
+
+.zeta-terminal-tab.active::before {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 1px;
+  background: currentColor;
+  content: "";
 }
 
 .zeta-terminal-tab-select {
+  display: flex;
   overflow: hidden;
-  min-width: 72px;
-  padding: 5px 4px 5px 9px;
+  align-items: center;
+  min-width: 0;
+  padding: 3px 4px 3px 10px;
   border: 0;
+  flex: 1 1 auto;
+  gap: 4px;
   color: inherit;
   background: transparent;
   font: inherit;
   text-align: left;
+  cursor: pointer;
+}
+
+.zeta-terminal-tab-icon {
+  width: 16px;
+  flex: 0 0 auto;
+  font-family: var(--zeta-font-family-monospace, Consolas, "Courier New", monospace);
+  font-size: 11px;
+  letter-spacing: -1px;
+  text-align: center;
+}
+
+.zeta-terminal-tab-label {
+  overflow: hidden;
+  min-width: 0;
   text-overflow: ellipsis;
   white-space: nowrap;
-  cursor: pointer;
+}
+
+.zeta-terminal-tabs-narrow .zeta-terminal-tab-select {
+  justify-content: center;
+  padding-right: 3px;
+  padding-left: 3px;
+}
+
+.zeta-terminal-tabs-narrow .zeta-terminal-tab-label {
+  display: none;
 }
 
 .zeta-terminal-tab[data-state="disconnected"] .zeta-terminal-tab-select,
@@ -79,6 +127,7 @@
 .zeta-terminal-tab-close {
   width: 20px;
   height: 20px;
+  flex: 0 0 auto;
   margin-right: 3px;
   border: 0;
   border-radius: 3px;
@@ -86,6 +135,14 @@
   background: transparent;
   cursor: pointer;
   font-size: 13px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.zeta-terminal-tab:hover .zeta-terminal-tab-close,
+.zeta-terminal-tab:focus-within .zeta-terminal-tab-close {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .zeta-terminal-tab-close:hover {

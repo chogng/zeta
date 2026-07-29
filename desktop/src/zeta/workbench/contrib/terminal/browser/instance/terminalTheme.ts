@@ -1,5 +1,5 @@
 import type { ITheme } from "@xterm/xterm";
-import { ColorId, type IColorTheme } from "../../../../platform/theme/common/colorTheme.js";
+import { ColorId, type IColorTheme } from "../../../../../platform/theme/common/colorTheme.js";
 
 /** Projects the workbench theme into xterm's renderer theme contract. */
 export function terminalTheme(theme: IColorTheme): ITheme {

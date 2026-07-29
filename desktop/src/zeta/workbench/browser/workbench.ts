@@ -79,11 +79,7 @@ import {
   IThemeService,
   ThemeService,
 } from "../../platform/theme/common/themeService.js";
-import {
-  type IAnyWorkspaceIdentifier,
-  type IWorkspace,
-  IWorkspaceContextService,
-} from "../../platform/workspace/common/workspace.js";
+import { type IAnyWorkspaceIdentifier, IWorkspaceContextService } from "../../platform/workspace/common/workspace.js";
 import { WorkbenchConfiguration } from "../common/configuration.js";
 import {
   WorkbenchContributionsRegistry,
@@ -182,9 +178,9 @@ import {
 } from "./parts/views/viewPaneContainer.js";
 import { PaneComposite } from "./parts/views/paneComposite.js";
 import { IWorkbenchWindowService, WorkbenchWindow } from "./window.js";
-import { AppServerTerminalBackend } from "../contrib/terminal/browser/appServerTerminalBackend.js";
-import { TerminalService } from "../contrib/terminal/browser/terminalService.js";
-import { ITerminalService } from "../contrib/terminal/common/terminal.js";
+import { BrowserTerminalProcessService } from "../../platform/terminal/browser/terminalProcessService.js";
+import { TerminalService } from "../services/terminal/browser/terminalService.js";
+import { ITerminalService } from "../services/terminal/common/terminal.js";
 
 /** Host-specific inputs required to construct a workbench. */
 export interface IStartWorkbenchOptions {
@@ -262,9 +258,8 @@ export class Workbench extends DisposableOwner {
       IWorkspaceSearchService,
       new BrowserWorkspaceSearchService(api.workspaceSearch),
     );
-    const terminalService = this.own(new TerminalService(new AppServerTerminalBackend(api)));
+    const terminalService = this.own(new TerminalService(new BrowserTerminalProcessService(api)));
     services.set(ITerminalService, terminalService);
-    const currentWorkspace = workspaceContext.getWorkspace();
     const workbenchState = workspaceContext.getWorkbenchState();
     const workbenchWindow = this.own(new WorkbenchWindow({
       root: workbenchRoot,
@@ -390,7 +385,6 @@ export class Workbench extends DisposableOwner {
       menuService: menus,
       contextMenuService: contextMenus,
       ownerDocument,
-      title: workspaceTitle(currentWorkspace, product.name),
     }));
     const sidebar = this.own(new SidebarPart({
       ownerDocument,
@@ -460,6 +454,8 @@ export class Workbench extends DisposableOwner {
           instantiationService,
           contextKeyService: contextKeys,
           ownerDocument,
+          paneHeaders: "hidden",
+          paneLayout: "fill",
         }));
       }
       panel.showComposite(viewContainer.id);
@@ -538,14 +534,6 @@ export class Workbench extends DisposableOwner {
     );
     this.defer(() => globalThis.clearTimeout(eventuallyTimer));
   }
-}
-
-function workspaceTitle(
-  workspace: IWorkspace,
-  productName: string,
-): string {
-  const name = workspace.name ?? workspace.folders[0]?.name;
-  return name ? `${name} — ${productName}` : productName;
 }
 
 function requiredViewContainer(

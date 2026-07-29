@@ -24,6 +24,9 @@ test("SessionsPart remains owned by the Sessions product layer", () => {
     async startNewSession() {
       throw new Error("Session creation is unavailable");
     },
+    async archiveSession() {
+      throw new Error("Session archiving is unavailable");
+    },
   };
   const part = new SessionsPart(dom.window.document, sessionService);
   dom.window.document.body.append(part.element);

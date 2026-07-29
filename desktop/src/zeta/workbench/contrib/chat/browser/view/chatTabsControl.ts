@@ -1,3 +1,4 @@
+import "./chatTabsControl.css";
 import { TabList } from "../../../../../base/browser/ui/tablist/tabList.js";
 import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
 import type { Session, SessionId } from "../../../../../../../generated/app-server/types.js";
@@ -17,6 +18,7 @@ interface ChatTabDescriptor {
 /** Callback through which a Chat tab requests Session selection. */
 export interface ChatTabsDelegate {
   selectSession(sessionId: SessionId): void;
+  closeSession(sessionId: SessionId): void;
 }
 
 /** Maps active Sessions onto the shared TabList. */
@@ -36,6 +38,7 @@ export class ChatTabsControl extends DisposableOwner {
       ownerDocument,
       ariaLabel: "Open chats",
       onActivate: (sessionId) => delegate.selectSession(sessionId),
+      onClose: (sessionId) => delegate.closeSession(sessionId),
     }));
     this.element.append(this.#tabList.element);
     this.defer(() => this.element.remove());

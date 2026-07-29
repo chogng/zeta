@@ -63,6 +63,55 @@ test("toolbar submenu items retain toolbar button semantics", async () => {
   Reflect.deleteProperty(globalThis, "window");
 });
 
+test("workbench toolbar adapts manually supplied platform menu actions", async () => {
+  const dom = new JSDOM("<!doctype html><body></body>");
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    value: dom.window,
+  });
+  const [
+    { MenuId, MenusRegistry },
+    { MenuService },
+    { CommandsRegistry },
+    { ContextKeyService },
+    { ServiceCollection },
+    { CommandService },
+    { DisposableStore },
+    { WorkbenchToolBar },
+  ] = await Promise.all([
+    import("../src/zeta/platform/actions/common/actions.js"),
+    import("../src/zeta/platform/actions/common/menuService.js"),
+    import("../src/zeta/platform/commands/common/commands.js"),
+    import("../src/zeta/platform/contextkey/common/contextkey.js"),
+    import("../src/zeta/platform/instantiation/common/instantiation.js"),
+    import("../src/zeta/workbench/services/commands/common/commandService.js"),
+    import("../src/zeta/base/common/lifecycle.js"),
+    import("../src/zeta/platform/actions/browser/toolbar.js"),
+  ]);
+  using registrations = new DisposableStore();
+  const menuId = new MenuId("test.toolbar.workbench");
+  const commandId = "test.toolbar.workbench.action";
+  registrations.add(CommandsRegistry.register(commandId, () => undefined));
+  registrations.add(MenusRegistry.appendMenuItem(menuId, {
+    command: { id: commandId, title: "Workbench action" },
+    group: "navigation",
+  }));
+  const commands = new CommandService(new ServiceCollection());
+  const contexts = registrations.add(new ContextKeyService());
+  const menus = new MenuService(commands, contexts);
+  const action = menus.getMenuActions(menuId)[0]?.[1][0];
+  assert.ok(action);
+  const toolbar = new WorkbenchToolBar({ showContextMenu() {} }, dom.window.document);
+  toolbar.setActions([action]);
+  dom.window.document.body.append(toolbar.element);
+
+  assert.equal(toolbar.element.querySelector(".zeta-menu-entry button")?.textContent, "Workbench action");
+
+  toolbar.dispose();
+  dom.window.close();
+  Reflect.deleteProperty(globalThis, "window");
+});
+
 test("menu toolbar keeps navigation inline and moves other groups into More Actions", async () => {
   const dom = new JSDOM("<!doctype html><body></body>");
   Object.defineProperty(globalThis, "window", {
@@ -139,6 +188,10 @@ test("menu toolbar keeps navigation inline and moves other groups into More Acti
   assert.deepEqual(
     shownOptions?.actions.map(({ id }) => id),
     ["test.toolbar.secondary"],
+  );
+  assert.throws(
+    () => toolbar.setActions([]),
+    /actions are owned by its MenuId/,
   );
 
   toolbar.dispose();

@@ -16,7 +16,11 @@ export interface CompositeBarOptions {
   readonly viewDescriptorService: IViewDescriptorService;
   readonly location: ViewContainerLocation;
   readonly ariaLabel: string;
+  readonly presentation?: CompositeBarPresentation;
 }
+
+/** Visual density selected by the Part hosting a CompositeBar. */
+export type CompositeBarPresentation = "icon" | "label";
 
 /**
  * Maps registered workbench Composites onto the shared TabList.
@@ -41,7 +45,7 @@ export class CompositeBar extends DisposableOwner {
     this.#viewDescriptorService = options.viewDescriptorService;
     this.#location = options.location;
     this.element = options.ownerDocument.createElement("section");
-    this.element.className = "zeta-composite-bar";
+    this.element.className = `zeta-composite-bar zeta-composite-bar-${options.presentation ?? "icon"}`;
     this.element.setAttribute("aria-label", options.ariaLabel);
     this.element.dataset.viewContainerLocation = options.location;
     this.defer(() => this.element.remove());

@@ -23,6 +23,7 @@ test("ToolBar renders primary actions and trails More Actions", () => {
   const buttons = toolbar.element.querySelectorAll("button");
   assert.equal(toolbar.element.getAttribute("role"), "toolbar");
   assert.equal(toolbar.element.getAttribute("aria-label"), "Test actions");
+  assert.equal(toolbar.element.classList.contains("zeta-toolbar-default"), true);
   assert.equal(buttons.length, 2);
   assert.equal(buttons[0]?.textContent, "primary");
   assert.equal(buttons[1]?.title, "More Actions");
@@ -37,6 +38,38 @@ test("ToolBar renders primary actions and trails More Actions", () => {
   assert.equal(buttons[1]?.getAttribute("aria-expanded"), "true");
   contextMenuProvider.lastOptions?.onHide?.(false);
   assert.equal(buttons[1]?.getAttribute("aria-expanded"), "false");
+
+  toolbar.dispose();
+  dom.window.close();
+});
+
+test("ToolBar exposes component-owned foreground presentations", () => {
+  const dom = new JSDOM("<!doctype html><body></body>");
+  const toolbar = new ToolBar({
+    contextMenuProvider: new TestContextMenuProvider(),
+    ownerDocument: dom.window.document,
+    presentation: "inherit-foreground",
+  });
+
+  assert.equal(toolbar.element.classList.contains("zeta-toolbar-inherit-foreground"), true);
+
+  toolbar.dispose();
+  dom.window.close();
+});
+
+test("ToolBar highlights checked actions only when requested", () => {
+  const dom = new JSDOM("<!doctype html><body></body>");
+  const toolbar = new ToolBar({
+    contextMenuProvider: new TestContextMenuProvider(),
+    ownerDocument: dom.window.document,
+    highlightToggledItems: true,
+  });
+  toolbar.setActions([{ ...action("checked"), checked: true }]);
+
+  const button = toolbar.element.querySelector("button");
+  assert.equal(toolbar.element.classList.contains("highlight-toggled"), true);
+  assert.equal(button?.classList.contains("checked"), true);
+  assert.equal(button?.getAttribute("aria-pressed"), "true");
 
   toolbar.dispose();
   dom.window.close();

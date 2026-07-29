@@ -1,7 +1,6 @@
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
-import type { AppServerConnectionState } from "../../../../platform/app-server/common/renderer-api.js";
-import type { ITerminalBackend } from "./appServerTerminalBackend.js";
+import type { ITerminalProcessService, TerminalProcessConnectionState } from "../../../../platform/terminal/common/terminalProcess.js";
 import type { ITerminalCreateOptions, ITerminalDimensions, ITerminalInstance, ITerminalProfile, ITerminalService, TerminalInstanceState } from "../common/terminal.js";
 
 const POLL_DELAY_MILLIS = 35;
@@ -10,31 +9,31 @@ const INPUT_BATCH_CHARACTERS = 16_384;
 const MAX_INPUT_BATCH_BYTES = 60 * 1024;
 const MAX_READ_CHUNKS = 128;
 
-/** Browser Workbench terminal owner backed by connection-scoped App Server PTYs. */
+/** Browser Workbench owner of terminal instances and their process lifecycle. */
 export class TerminalService extends DisposableOwner implements ITerminalService {
-  readonly #backend: ITerminalBackend;
+  readonly #processService: ITerminalProcessService;
   readonly #instances: TerminalInstance[] = [];
   readonly #onDidCreateInstance = this.own(new Emitter<ITerminalInstance>());
   readonly #onDidDisposeInstance = this.own(new Emitter<ITerminalInstance>());
   readonly #onDidChangeActiveInstance = this.own(new Emitter<ITerminalInstance | undefined>());
   #activeInstance: TerminalInstance | undefined;
   #nextInstanceId = 1;
-  #connectionState: AppServerConnectionState = "ready";
+  #connectionState: TerminalProcessConnectionState = "ready";
   #connectionRevision = 0;
 
   readonly onDidCreateInstance: Event<ITerminalInstance> = this.#onDidCreateInstance.event;
   readonly onDidDisposeInstance: Event<ITerminalInstance> = this.#onDidDisposeInstance.event;
   readonly onDidChangeActiveInstance: Event<ITerminalInstance | undefined> = this.#onDidChangeActiveInstance.event;
 
-  constructor(backend: ITerminalBackend) {
+  constructor(processService: ITerminalProcessService) {
     super();
-    this.#backend = backend;
-    this.own(backend.onConnectionState((state) => {
+    this.#processService = processService;
+    this.own(processService.onConnectionState((state) => {
       this.#connectionRevision += 1;
       this.#setConnectionState(state);
     }));
     const connectionRevision = this.#connectionRevision;
-    void backend.getConnectionState()
+    void processService.getConnectionState()
       .then((state) => {
         if (this.#connectionRevision === connectionRevision) this.#setConnectionState(state);
       })
@@ -59,12 +58,11 @@ export class TerminalService extends DisposableOwner implements ITerminalService
   }
 
   async getProfiles(): Promise<readonly ITerminalProfile[]> {
-    const result = await this.#backend.listProfiles();
-    return result.profiles;
+    return this.#processService.listProfiles();
   }
 
   async createTerminal(options: ITerminalCreateOptions): Promise<ITerminalInstance> {
-    const created = await this.#backend.create({
+    const created = await this.#processService.create({
       rows: options.dimensions.rows,
       cols: options.dimensions.cols,
       profile: options.profile,
@@ -75,7 +73,7 @@ export class TerminalService extends DisposableOwner implements ITerminalService
       created.terminalId,
       `${created.profile.title} ${instanceNumber}`,
       created.profile,
-      this.#backend,
+      this.#processService,
       () => this.#removeInstance(instance),
     ));
     this.#instances.push(instance);
@@ -117,7 +115,7 @@ export class TerminalService extends DisposableOwner implements ITerminalService
     }
   }
 
-  #setConnectionState(state: AppServerConnectionState): void {
+  #setConnectionState(state: TerminalProcessConnectionState): void {
     if (this.#connectionState === state) return;
     this.#connectionState = state;
     if (state === "ready") return;
@@ -128,7 +126,7 @@ export class TerminalService extends DisposableOwner implements ITerminalService
 }
 
 class TerminalInstance extends DisposableOwner implements ITerminalInstance {
-  readonly #backend: ITerminalBackend;
+  readonly #processService: ITerminalProcessService;
   readonly #onClosed: () => void;
   readonly #onDidWriteData = this.own(new Emitter<Uint8Array>());
   readonly #onDidExit = this.own(new Emitter<number | undefined>());
@@ -142,7 +140,7 @@ class TerminalInstance extends DisposableOwner implements ITerminalInstance {
   #writeChain = Promise.resolve();
   #pendingDimensions: ITerminalDimensions | undefined;
   #resizeScheduled = false;
-  #backendId: string;
+  #serverTerminalId: string;
   #profile: ITerminalProfile;
   #pollGeneration = 0;
 
@@ -152,16 +150,16 @@ class TerminalInstance extends DisposableOwner implements ITerminalInstance {
 
   constructor(
     readonly id: string,
-    backendId: string,
+    serverTerminalId: string,
     readonly title: string,
     profile: ITerminalProfile,
-    backend: ITerminalBackend,
+    processService: ITerminalProcessService,
     onClosed: () => void,
   ) {
     super();
-    this.#backendId = backendId;
+    this.#serverTerminalId = serverTerminalId;
     this.#profile = profile;
-    this.#backend = backend;
+    this.#processService = processService;
     this.#onClosed = onClosed;
     this.defer(() => {
       if (this.#inputTimer !== undefined) clearTimeout(this.#inputTimer);
@@ -210,8 +208,8 @@ class TerminalInstance extends DisposableOwner implements ITerminalInstance {
       this.#pendingDimensions = undefined;
       if (!pending || this.#closed || this.#state !== "running") return;
       const generation = this.#pollGeneration;
-      void this.#backend.resize({
-        terminalId: this.#backendId,
+      void this.#processService.resize({
+        terminalId: this.#serverTerminalId,
         rows: pending.rows,
         cols: pending.cols,
       }).catch(() => {
@@ -232,7 +230,7 @@ class TerminalInstance extends DisposableOwner implements ITerminalInstance {
     this.#pendingInput = "";
     this.#pollGeneration += 1;
     try {
-      await this.#backend.close({ terminalId: this.#backendId });
+      await this.#processService.close({ terminalId: this.#serverTerminalId });
     } finally {
       this.#onClosed();
       this.dispose();
@@ -244,14 +242,14 @@ class TerminalInstance extends DisposableOwner implements ITerminalInstance {
     this.#pollGeneration += 1;
     this.#clearPendingInput();
     this.#setState("disconnected");
-    this.#onDidWriteData.fire(new TextEncoder().encode("\r\n[App Server disconnected; terminal process was lost]\r\n"));
+    this.#onDidWriteData.fire(new TextEncoder().encode("\r\n[terminal connection lost; process was not preserved]\r\n"));
   }
 
   async relaunch(dimensions: ITerminalDimensions): Promise<void> {
     if (this.#closed || this.#state === "running") return;
-    await this.#backend.close({ terminalId: this.#backendId }).catch(() => {});
+    await this.#processService.close({ terminalId: this.#serverTerminalId }).catch(() => {});
     try {
-      const created = await this.#backend.create({
+      const created = await this.#processService.create({
         rows: dimensions.rows,
         cols: dimensions.cols,
         profile: {
@@ -259,7 +257,7 @@ class TerminalInstance extends DisposableOwner implements ITerminalInstance {
           profileId: this.#profile.profileId,
         },
       });
-      this.#backendId = created.terminalId;
+      this.#serverTerminalId = created.terminalId;
       this.#profile = created.profile;
       this.#nextSequence = 0;
       this.#exitCode = undefined;
@@ -284,7 +282,7 @@ class TerminalInstance extends DisposableOwner implements ITerminalInstance {
     this.#writeChain = this.#writeChain
       .then(() => {
         if (generation !== this.#pollGeneration || this.#state !== "running") return;
-        return this.#backend.write({ terminalId: this.#backendId, data });
+        return this.#processService.write({ terminalId: this.#serverTerminalId, data });
       })
       .catch(() => {
         if (generation === this.#pollGeneration && this.#state === "running") {
@@ -301,8 +299,8 @@ class TerminalInstance extends DisposableOwner implements ITerminalInstance {
   async #poll(generation: number): Promise<void> {
     while (!this.#closed && this.#state === "running" && generation === this.#pollGeneration) {
       try {
-        const result = await this.#backend.read({
-          terminalId: this.#backendId,
+        const result = await this.#processService.read({
+          terminalId: this.#serverTerminalId,
           afterSequence: this.#nextSequence,
           maxChunks: MAX_READ_CHUNKS,
         });

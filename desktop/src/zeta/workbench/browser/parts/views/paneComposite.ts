@@ -1,6 +1,14 @@
 import { compositePanelId, compositeTabId } from "../compositebar/compositeBar.js";
 import { ViewPaneContainer, type ViewPaneContainerOptions } from "./viewPaneContainer.js";
 
+export interface PaneCompositeOptions extends ViewPaneContainerOptions {
+  readonly paneHeaders?: PaneHeaderVisibility;
+  readonly paneLayout?: PaneLayout;
+}
+
+export type PaneHeaderVisibility = "visible" | "hidden";
+export type PaneLayout = "stack" | "fill";
+
 /**
  * Activatable Composite whose content is assembled from registered ViewPanes.
  *
@@ -10,10 +18,12 @@ import { ViewPaneContainer, type ViewPaneContainerOptions } from "./viewPaneCont
 export class PaneComposite extends ViewPaneContainer {
   readonly title: string;
 
-  constructor(options: ViewPaneContainerOptions) {
+  constructor(options: PaneCompositeOptions) {
     super(options);
     this.title = options.viewContainer.title;
     this.element.classList.add("zeta-pane-composite");
+    this.element.classList.toggle("zeta-pane-composite-pane-headers-hidden", options.paneHeaders === "hidden");
+    this.element.classList.toggle("zeta-pane-composite-pane-layout-fill", options.paneLayout === "fill");
     this.element.setAttribute("aria-label", this.title);
     this.element.id = compositePanelId(options.viewContainer.location, options.viewContainer.id);
     this.element.setAttribute("role", "tabpanel");

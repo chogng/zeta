@@ -355,7 +355,7 @@ test("Sidebar hosts its Composite Bar before content", () => {
   assert.equal(sidebar.element.firstElementChild, compositeBar.element);
   assert.equal(
     compositeBar.element.className,
-    "zeta-composite-bar",
+    "zeta-composite-bar zeta-composite-bar-icon",
   );
   const content = sidebar.element.querySelector(
     ":scope > .zeta-composite-content",
@@ -538,6 +538,7 @@ test("Panel presents its destinations as tabs and active commands as a toolbar",
   dom.window.document.body.append(panel.element);
 
   const tablist = panel.element.querySelector(".zeta-panel-title-control [role='tablist']");
+  assert.equal(panel.compositeBar.element.className, "zeta-composite-bar zeta-composite-bar-label");
   assert.equal(tablist?.getAttribute("aria-label"), "Panel views");
   assert.deepEqual(
     [...(tablist?.querySelectorAll("[role='tab']") ?? [])].map((tab) => tab.textContent),
@@ -553,6 +554,8 @@ test("Panel presents its destinations as tabs and active commands as a toolbar",
     instantiationService: new InstantiationService(),
     contextKeyService: contextKeys,
     ownerDocument: dom.window.document,
+    paneHeaders: "hidden",
+    paneLayout: "fill",
   });
   panel.addComposite(terminal);
   panel.showComposite(terminal.id);
@@ -564,6 +567,8 @@ test("Panel presents its destinations as tabs and active commands as a toolbar",
   assert.equal(toolbar?.querySelector("button")?.textContent, "Run");
   assert.equal(panel.element.querySelectorAll(".zeta-panel-title-control [role='tablist']").length, 1);
   assert.equal(terminal.element.getAttribute("role"), "tabpanel");
+  assert.equal(terminal.element.classList.contains("zeta-pane-composite-pane-headers-hidden"), true);
+  assert.equal(terminal.element.classList.contains("zeta-pane-composite-pane-layout-fill"), true);
   assert.equal(terminalTab?.getAttribute("aria-controls"), terminal.element.id);
   assert.equal(terminal.element.getAttribute("aria-labelledby"), terminalTab?.id);
 

@@ -71,6 +71,11 @@ stopped 状态。
 拥有自动启动与 `pagehide` 释放，`web.api.ts` 定义 embedder 输入，产品入口仍只选择自身的
 Monaco/ProseMirror contribution。
 
+Renderer 控件、Workbench Part 与 CSS 状态的 canonical 所有权规范见
+[`docs/ui-styling-ownership.md`](../docs/ui-styling-ownership.md)。
+Command、MenuId、Context Key 与菜单型 Toolbar 的 canonical 组合规范见
+[`docs/menu-system.md`](../docs/menu-system.md)。
+
 独立页面未配置 host 时由
 `platform/app-server/browser/rendererApi.ts` 提供 disconnected API：UI 正常启动，状态栏显示
 App Server 不可用，产品操作明确失败。嵌入方若已实现受认证的远程 transport，必须在产品入口

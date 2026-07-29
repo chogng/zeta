@@ -4,6 +4,8 @@
 > Rust 对接负责人：zeta-rs 开发者
 > 当前开发基线：[`zeta-app-server-api.md`](zeta-app-server-api.md)
 > 产品装配与构建版本：[`product-editions.md`](product-editions.md)
+> Renderer 控件、Workbench Part 与 CSS 状态所有权：[`ui-styling-ownership.md`](ui-styling-ownership.md)
+> Renderer Command、MenuId 与 UI Action 组合系统：[`menu-system.md`](menu-system.md)
 
 ## 1. 目标
 
@@ -420,13 +422,17 @@ Browser 入口没有 App Server 连接时会明确显示不可用状态。
 
 ### 6.5 Integrated Terminal
 
-Workbench consumer 只依赖 `ITerminalService`；wire DTO 被限制在
-`AppServerTerminalBackend`，xterm view 不直接调用 `ZetaRendererApi`：
+Terminal contribution 只依赖 Workbench service layer 的 `ITerminalService`。实例管理、输入
+batching、resize coalescing 和 polling 由 `TerminalService` 负责；process contract 位于
+platform layer，wire DTO 只在 `BrowserTerminalProcessService` adapter 内出现。Contribution
+和 xterm view 都不直接调用 `ZetaRendererApi`：
 
 ```text
 TerminalViewPane / xterm
   → ITerminalService
-  → AppServerTerminalBackend
+  → TerminalService (Renderer)
+  → ITerminalProcessService
+  → BrowserTerminalProcessService
   → ZetaRendererApi.terminal
   → trusted Electron IPC
   → terminal/* App Server methods
@@ -434,13 +440,18 @@ TerminalViewPane / xterm
   → zeta-utils-pty
 ```
 
+Terminal title actions 通过 `MenuId.TerminalTitle`、Context Key 与
+`MenuWorkbenchToolBar` 接入 MenuService；profile selector 仍由 Terminal 自定义 action view
+item 呈现。Command/Menu/Toolbar 的分层以 [`menu-system.md`](menu-system.md) 为准。
+
 当前输出采用 `terminal/read` bounded polling，而不是 `terminal/output` notification。这是现有
 同步 JSONL loop 的明确限制；前端 service 将 pull 转成 `onDidWriteData` 事件，因此 future
 transport 支持主动、有背压的 stream 后，Workbench caller 不需要改变。Renderer 对输入做 8 ms
 batch，对 resize 做 microtask coalescing；Rust 仍重新校验输入 byte limit、rows/cols、owner 和
 output cursor。
 
-Terminal 当前只在单根 workspace composition 中可用；空窗口会显示 backend unavailable。PTY
+Terminal 当前只在单根 workspace composition 中可用；空窗口会显示 terminal service
+unavailable。PTY
 不跨 App Server crash 恢复。每个实例拥有独立 xterm widget，Tab 切换或 Panel 隐藏不会丢失
 窗口生命周期内的 scrollback 与 ANSI parser 状态；Profile picker 只提交 App Server 已列出的
 稳定 ID。Supervisor 离开 ready 后，运行实例进入 `disconnected`；恢复 ready 后用户可以显式

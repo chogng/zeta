@@ -24,27 +24,55 @@
   > .zeta-action-bar
   > .zeta-tab {
   position: relative;
-  height: 26px;
-  width: 26px;
-  min-width: 28px;
-  min-height: 28px;
-  padding: 0;
   border: 0;
   border-radius: 4px;
   color: var(--zeta-composite-bar-inactive-foreground);
   background: transparent;
 }
 
+.zeta-composite-bar-icon
+  .zeta-tab-list-scroll-content
+  > .zeta-action-bar
+  > .zeta-tab {
+  height: 26px;
+  width: 26px;
+  min-width: 28px;
+  min-height: 28px;
+  padding: 0;
+}
+
+.zeta-composite-bar-label
+  .zeta-tab-list-scroll-content
+  > .zeta-action-bar {
+  gap: 0;
+  padding: 0 8px;
+}
+
+.zeta-composite-bar-label
+  .zeta-tab-list-scroll-content
+  > .zeta-action-bar
+  > .zeta-tab {
+  width: auto;
+  min-width: 0;
+  height: 100%;
+  min-height: 0;
+  padding: 0 5px;
+}
+
 .zeta-composite-bar
   .zeta-tab-list-scroll-content
   > .zeta-action-bar
-  > .zeta-tab:hover,
-.zeta-composite-bar
-  .zeta-tab-list-scroll-content
-  > .zeta-action-bar
-  > .zeta-tab.active {
+  > .zeta-tab:hover {
   color: var(--zeta-composite-bar-foreground);
   background: var(--zeta-button-hover-background);
+}
+
+.zeta-composite-bar
+  .zeta-tab-list-scroll-content
+  > .zeta-action-bar
+  > .zeta-tab.checked {
+  color: var(--zeta-composite-bar-foreground);
+  background: var(--zeta-button-active-background);
 }
 
 .zeta-composite-bar .zeta-tab-label {
@@ -63,11 +91,21 @@
   text-decoration: none;
 }
 
-.zeta-composite-bar
+.zeta-composite-bar-icon
   .zeta-tab.icon
   > .zeta-tab-label
   .zeta-icon-label-text {
   display: none;
+}
+
+.zeta-composite-bar-label .zeta-tab-label {
+  width: auto;
+  padding: 0 2px;
+}
+
+.zeta-composite-bar-label .zeta-icon-label-text {
+  display: block;
+  white-space: nowrap;
 }
 
 .zeta-composite-bar .zeta-tab-label .zeta-icon {

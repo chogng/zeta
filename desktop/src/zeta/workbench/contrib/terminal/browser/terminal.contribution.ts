@@ -1,8 +1,11 @@
+import { IMenuService } from "../../../../platform/actions/common/menuService.js";
+import { IContextKeyService } from "../../../../platform/contextkey/common/contextkey.js";
+import { IContextMenuService } from "../../../../platform/contextview/browser/contextMenu.js";
 import { SyncDescriptor } from "../../../../platform/instantiation/common/instantiation.js";
 import { IThemeService } from "../../../../platform/theme/common/themeService.js";
 import { ViewContainerLocation, WorkbenchViewContainerId, type WorkbenchViewRegistry, ViewsRegistry } from "../../../common/views.js";
-import { ITerminalService } from "../common/terminal.js";
-import { TerminalViewPane } from "./terminalViewPane.js";
+import { ITerminalService } from "../../../services/terminal/common/terminal.js";
+import { TerminalViewPane } from "./view/terminalViewPane.js";
 
 export const TERMINAL_VIEW_ID = "zeta.terminal";
 
@@ -21,7 +24,7 @@ export function registerTerminalView(registry: WorkbenchViewRegistry = ViewsRegi
     order: 1,
     canToggleVisibility: false,
     ctorDescriptor: new SyncDescriptor(TerminalViewPane, {
-      serviceDependencies: [ITerminalService, IThemeService],
+      serviceDependencies: [ITerminalService, IThemeService, IMenuService, IContextMenuService, IContextKeyService],
     }),
   }]);
 }

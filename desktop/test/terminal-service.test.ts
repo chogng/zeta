@@ -1,11 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { TerminalCreateParams, TerminalReadResult } from "../generated/app-server/types.js";
 import { toDisposable } from "../src/zeta/base/common/lifecycle.js";
-import type { AppServerConnectionState } from "../src/zeta/platform/app-server/common/renderer-api.js";
-import type { ITerminalBackend } from "../src/zeta/workbench/contrib/terminal/browser/appServerTerminalBackend.js";
-import { TerminalService } from "../src/zeta/workbench/contrib/terminal/browser/terminalService.js";
-import type { ITerminalInstance } from "../src/zeta/workbench/contrib/terminal/common/terminal.js";
+import type { ITerminalProcessCreateOptions, ITerminalProcessReadResult, ITerminalProcessService, TerminalProcessConnectionState } from "../src/zeta/platform/terminal/common/terminalProcess.js";
+import { TerminalService } from "../src/zeta/workbench/services/terminal/browser/terminalService.js";
+import type { ITerminalInstance } from "../src/zeta/workbench/services/terminal/common/terminal.js";
 
 const DEFAULT_PROFILE = {
   profileId: "command-prompt",
@@ -13,8 +11,8 @@ const DEFAULT_PROFILE = {
   isDefault: true,
 } as const;
 
-test("TerminalService exposes event-driven instances over the pull backend", async () => {
-  const backend = new TestTerminalBackend([
+test("TerminalService exposes event-driven instances over the process service", async () => {
+  const processService = new TestTerminalProcessService([
     readResult({
       chunks: [{
         sequence: 1,
@@ -28,7 +26,7 @@ test("TerminalService exposes event-driven instances over the pull backend", asy
       exitCode: 0,
     }),
   ]);
-  using service = new TerminalService(backend);
+  using service = new TerminalService(processService);
   const output: Uint8Array[] = [];
   let createdInstance: ITerminalInstance | undefined;
   service.onDidCreateInstance((instance) => {
@@ -46,17 +44,17 @@ test("TerminalService exposes event-driven instances over the pull backend", asy
   assert.equal(service.activeInstance, instance);
   assert.equal(new TextDecoder().decode(output[0]), "hello");
   assert.equal(instance.exitCode, 0);
-  assert.deepEqual(backend.createCalls, [{
+  assert.deepEqual(processService.createCalls, [{
     rows: 24,
     cols: 80,
     profile: { type: "default" },
   }]);
-  assert.deepEqual(backend.readCursors, [0, 1]);
+  assert.deepEqual(processService.readCursors, [0, 1]);
 });
 
 test("TerminalService batches input, coalesces resize, and releases terminals", async () => {
-  const backend = new TestTerminalBackend([]);
-  using service = new TerminalService(backend);
+  const processService = new TestTerminalProcessService([]);
+  using service = new TerminalService(processService);
   const instance = await service.createTerminal({
     dimensions: { rows: 20, cols: 60 },
     profile: { type: "profile", profileId: "command-prompt" },
@@ -66,23 +64,23 @@ test("TerminalService batches input, coalesces resize, and releases terminals", 
   instance.write("b");
   instance.resize({ rows: 30, cols: 100 });
   instance.resize({ rows: 31, cols: 101 });
-  await waitFor(() => backend.writeCalls.length === 1 && backend.resizeCalls.length === 1);
+  await waitFor(() => processService.writeCalls.length === 1 && processService.resizeCalls.length === 1);
   await service.closeTerminal(instance);
 
-  assert.equal(backend.writeCalls[0].data, "ab");
-  assert.deepEqual(backend.resizeCalls[0], {
+  assert.equal(processService.writeCalls[0].data, "ab");
+  assert.deepEqual(processService.resizeCalls[0], {
     terminalId: "terminal-1",
     rows: 31,
     cols: 101,
   });
-  assert.deepEqual(backend.closeCalls, ["terminal-1"]);
+  assert.deepEqual(processService.closeCalls, ["terminal-1"]);
   assert.equal(service.instances.length, 0);
   assert.equal(service.activeInstance, undefined);
 });
 
 test("TerminalService keeps multiple instances and safely relaunches after a crash", async () => {
-  const backend = new TestTerminalBackend([]);
-  using service = new TerminalService(backend);
+  const processService = new TestTerminalProcessService([]);
+  using service = new TerminalService(processService);
   const first = await service.createTerminal({
     dimensions: { rows: 24, cols: 80 },
     profile: { type: "default" },
@@ -97,38 +95,38 @@ test("TerminalService keeps multiple instances and safely relaunches after a cra
   service.setActiveInstance(first);
   assert.equal(service.activeInstance, first);
 
-  backend.emitConnectionState("crashed");
+  processService.emitConnectionState("crashed");
   await waitFor(() => first.state === "disconnected" && second.state === "disconnected");
-  backend.emitConnectionState("ready");
+  processService.emitConnectionState("ready");
   assert.equal(first.state, "disconnected");
   await service.relaunchTerminal(first, { rows: 25, cols: 90 });
 
   assert.equal(first.state, "running");
   assert.equal(first.id, "terminal-instance-1");
-  assert.equal(backend.createCalls.length, 3);
-  assert.deepEqual(backend.createCalls[2], {
+  assert.equal(processService.createCalls.length, 3);
+  assert.deepEqual(processService.createCalls[2], {
     rows: 25,
     cols: 90,
     profile: { type: "profile", profileId: "command-prompt" },
   });
 });
 
-class TestTerminalBackend implements ITerminalBackend {
-  readonly createCalls: TerminalCreateParams[] = [];
+class TestTerminalProcessService implements ITerminalProcessService {
+  readonly createCalls: ITerminalProcessCreateOptions[] = [];
   readonly writeCalls: Array<{ terminalId: string; data: string }> = [];
   readonly resizeCalls: Array<{ terminalId: string; rows: number; cols: number }> = [];
   readonly readCursors: number[] = [];
   readonly closeCalls: string[] = [];
-  readonly #connectionListeners = new Set<(state: AppServerConnectionState) => void>();
-  #connectionState: AppServerConnectionState = "ready";
+  readonly #connectionListeners = new Set<(state: TerminalProcessConnectionState) => void>();
+  #connectionState: TerminalProcessConnectionState = "ready";
 
-  constructor(private readonly reads: TerminalReadResult[]) {}
+  constructor(private readonly reads: ITerminalProcessReadResult[]) {}
 
   async listProfiles() {
-    return { profiles: [DEFAULT_PROFILE] };
+    return [DEFAULT_PROFILE];
   }
 
-  async create(params: TerminalCreateParams) {
+  async create(params: ITerminalProcessCreateOptions) {
     this.createCalls.push(params);
     return {
       terminalId: `terminal-${this.createCalls.length}`,
@@ -153,22 +151,22 @@ class TestTerminalBackend implements ITerminalBackend {
     this.closeCalls.push(params.terminalId);
   }
 
-  async getConnectionState(): Promise<AppServerConnectionState> {
+  async getConnectionState(): Promise<TerminalProcessConnectionState> {
     return this.#connectionState;
   }
 
-  onConnectionState(listener: (state: AppServerConnectionState) => void) {
+  onConnectionState(listener: (state: TerminalProcessConnectionState) => void) {
     this.#connectionListeners.add(listener);
     return toDisposable(() => this.#connectionListeners.delete(listener));
   }
 
-  emitConnectionState(state: AppServerConnectionState): void {
+  emitConnectionState(state: TerminalProcessConnectionState): void {
     this.#connectionState = state;
     for (const listener of this.#connectionListeners) listener(state);
   }
 }
 
-function readResult(overrides: Partial<TerminalReadResult>): TerminalReadResult {
+function readResult(overrides: Partial<ITerminalProcessReadResult>): ITerminalProcessReadResult {
   return {
     terminalId: "terminal-1",
     chunks: [],

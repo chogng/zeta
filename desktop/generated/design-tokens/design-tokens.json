@@ -890,6 +890,22 @@
       "value": "10px"
     },
     {
+      "id": "sash.dragAreaSize",
+      "kind": "size",
+      "cssVariable": "--zeta-sash-drag-area-size",
+      "owner": "platform.ui",
+      "description": "Default pointer target size for draggable Sash separators.",
+      "value": "4px"
+    },
+    {
+      "id": "sash.hoverFeedbackSize",
+      "kind": "size",
+      "cssVariable": "--zeta-sash-hover-feedback-size",
+      "owner": "platform.ui",
+      "description": "Default visible feedback size for hovered Sash separators.",
+      "value": "1px"
+    },
+    {
       "id": "modalEditor.width",
       "kind": "size",
       "cssVariable": "--zeta-modal-editor-width",

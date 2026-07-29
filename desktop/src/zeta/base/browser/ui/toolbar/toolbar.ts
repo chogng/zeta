@@ -12,7 +12,12 @@ export interface ToolBarOptions {
   readonly ariaLabel?: string;
   readonly orientation?: ActionBarOrientation;
   readonly actionViewItemProvider?: ActionViewItemProvider;
+  readonly presentation?: ToolBarPresentation;
+  readonly highlightToggledItems?: boolean;
 }
+
+/** Component-owned visual adaptation selected by a toolbar host. */
+export type ToolBarPresentation = "default" | "inherit-foreground";
 
 /**
  * Presents primary actions inline and secondary actions in a trailing menu.
@@ -32,6 +37,7 @@ export class ToolBar extends DisposableOwner {
       ownerDocument: options.ownerDocument,
       ariaLabel: options.ariaLabel,
       orientation: options.orientation,
+      highlightToggledItems: options.highlightToggledItems,
       actionViewItemProvider: (action) => {
         if (action === this.#moreActions) {
           return new MoreActionsViewItem(
@@ -44,7 +50,7 @@ export class ToolBar extends DisposableOwner {
       },
     }));
     this.element = this.#actionBar.element;
-    this.element.classList.add("zeta-toolbar");
+    this.element.classList.add("zeta-toolbar", `zeta-toolbar-${options.presentation ?? "default"}`);
   }
 
   setActions(

@@ -2,6 +2,7 @@
 
 > 本文是 Zeta 主题与 design token 跨模块架构的 canonical 文档。完整 token 清单由构建器生成在 [`desktop/generated/design-tokens/design-tokens.md`](../desktop/generated/design-tokens/design-tokens.md)。
 > 新增具体主题请使用 [`theme-authoring-template.md`](theme-authoring-template.md)。
+> selector、交互状态与组件/Part CSS 的 canonical 所有权见 [`ui-styling-ownership.md`](ui-styling-ownership.md)。
 
 ## 决策摘要
 

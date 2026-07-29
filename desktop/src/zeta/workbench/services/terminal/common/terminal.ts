@@ -2,7 +2,7 @@ import type { Event } from "../../../../base/common/event.js";
 import type { IDisposable } from "../../../../base/common/lifecycle.js";
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
 
-/** Character-cell dimensions shared by the terminal renderer and its backend. */
+/** Character-cell dimensions used by Workbench terminal callers. */
 export interface ITerminalDimensions {
   readonly rows: number;
   readonly cols: number;
@@ -11,7 +11,7 @@ export interface ITerminalDimensions {
 /** Lifecycle state of one Workbench terminal instance. */
 export type TerminalInstanceState = "running" | "exited" | "disconnected" | "error";
 
-/** One server-owned shell profile safe for Renderer selection. */
+/** One available shell profile exposed to Workbench callers. */
 export interface ITerminalProfile {
   readonly profileId: string;
   readonly title: string;
@@ -29,7 +29,7 @@ export interface ITerminalCreateOptions {
   readonly profile: ITerminalProfileSelection;
 }
 
-/** One interactive terminal independently of its App Server wire representation. */
+/** One interactive terminal independently of its transport representation. */
 export interface ITerminalInstance extends IDisposable {
   readonly id: string;
   readonly title: string;
@@ -45,7 +45,7 @@ export interface ITerminalInstance extends IDisposable {
   close(): Promise<void>;
 }
 
-/** Workbench-facing owner of terminal instances and active-instance selection. */
+/** Workbench service contract for terminal instances and active-instance selection. */
 export interface ITerminalService extends IDisposable {
   readonly instances: readonly ITerminalInstance[];
   readonly activeInstance: ITerminalInstance | undefined;

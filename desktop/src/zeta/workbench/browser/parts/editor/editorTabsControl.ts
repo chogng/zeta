@@ -1,7 +1,6 @@
+import "./editorTabsControl.css";
 import { TabList } from "../../../../base/browser/ui/tablist/tabList.js";
-import type { IAction } from "../../../../base/common/actions.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
-import { LxIcon } from "../../../../base/common/lxicons.js";
 import type { EditorInput } from "./editorInput.js";
 
 /** One open Editor presented by an EditorTabsControl. */
@@ -32,7 +31,7 @@ export class EditorTabsControl extends DisposableOwner {
       ownerDocument,
       ariaLabel: "Open editors",
       onActivate: (input) => delegate.activate(input),
-      onDelete: (input) => delegate.close(input),
+      onClose: (input) => delegate.close(input),
     }));
     this.element.append(this.#tabList.element);
     this.defer(() => this.element.remove());
@@ -55,34 +54,12 @@ export class EditorTabsControl extends DisposableOwner {
           tooltip: editor.input.resource.toString(),
           tabId: editor.tabId,
           panelId: editor.panelId,
-          actions: {
-            ariaLabel: `${label} actions`,
-            items: [
-              closeEditorAction(editor.input, label, this.#delegate),
-            ],
-          },
         };
       }),
       activeKey,
     );
     this.element.hidden = editors.length === 0;
   }
-}
-
-function closeEditorAction(
-  input: EditorInput,
-  inputLabel: string,
-  delegate: EditorTabsDelegate,
-): IAction {
-  const label = `Close ${inputLabel}`;
-  return {
-    id: "zeta.editor.close",
-    label,
-    tooltip: label,
-    icon: LxIcon.close,
-    enabled: true,
-    run: () => delegate.close(input),
-  };
 }
 
 export function editorInputKey(input: EditorInput): string {

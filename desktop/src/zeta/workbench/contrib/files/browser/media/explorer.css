@@ -5,7 +5,7 @@
   flex-direction: column;
 }
 
-.zeta-explorer-view-pane > .zeta-view-pane-title {
+.zeta-explorer-title {
   flex: 0 0 auto;
   text-transform: uppercase;
 }

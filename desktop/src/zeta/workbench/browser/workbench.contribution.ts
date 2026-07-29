@@ -31,6 +31,7 @@ import { LxIcon } from "../../base/common/lxicons.js";
 import "../contrib/markdown/browser/markdown.contribution.js";
 import "../contrib/preferences/browser/preferences.contribution.js";
 import "../contrib/quickaccess/browser/commandsQuickAccess.js";
+import "../contrib/sash/browser/sash.contribution.js";
 import "./parts/dialogs/dialog.contribution.js";
 import "./parts/editor/editorActions.js";
 import "./parts/titlebar/menubar.contribution.js";

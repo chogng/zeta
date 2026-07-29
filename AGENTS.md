@@ -86,6 +86,25 @@
   exists. Do not expand the base layer speculatively from anticipated feature
   requirements.
 
+## Renderer UI styling ownership
+
+- Follow [`docs/ui-styling-ownership.md`](docs/ui-styling-ownership.md) for every
+  Renderer component, Workbench Part, contribution, theme, and CSS change.
+- Before adding or changing a visual rule, identify the owner from the state
+  definition, DOM creator, and hosting boundary. The owner must keep its internal
+  geometry and interaction-state styles with the component that defines them.
+- Follow the VS Code state-projection convention: DOM state must expose a stable
+  class such as `.checked` alongside the corresponding ARIA attribute. CSS must
+  select the state class rather than using ARIA attributes as visual selectors.
+- Workbench Part CSS may own region layout, borders, backgrounds, and the external
+  box of a directly hosted component. It must not reach through shared component
+  internals to override item, hover, active, focus, selected, or disabled styles.
+- Express legitimate visual differences through a named presentation variant or
+  semantic token owned by the component. Do not introduce host-specific deep
+  selectors or ambiguous boolean styling options.
+- Treat historical selectors that violate the canonical document as migration
+  debt, not precedent. When modifying an affected area, move the rule to its owner
+  or add the required public presentation contract.
 
 ## Code formatting
 

@@ -1,22 +1,8 @@
-import {
-  KeybindingLabel,
-} from "../../../../base/browser/ui/keybindinglabel/keybindinglabel.js";
-import {
-  Emitter,
-  type Event,
-} from "../../../../base/common/event.js";
-import {
-  DisposableOwner,
-  type IDisposable,
-  ResettableDisposableGroup,
-  toDisposable,
-} from "../../../../base/common/lifecycle.js";
-import type {
-  CommandId,
-} from "../../../../platform/commands/common/commands.js";
-import type {
-  IKeybindingService,
-} from "../../../../platform/keybinding/common/keybinding.js";
+import { KeybindingLabel } from "../../../../base/browser/ui/keybindinglabel/keybindinglabel.js";
+import { Emitter, type Event } from "../../../../base/common/event.js";
+import { DisposableOwner, type IDisposable, ResettableDisposableGroup, toDisposable } from "../../../../base/common/lifecycle.js";
+import type { CommandId } from "../../../../platform/commands/common/commands.js";
+import type { IKeybindingService } from "../../../../platform/keybinding/common/keybinding.js";
 
 /** One command presented while an editor group has no active editor. */
 export interface IEditorGroupWatermarkEntry {
@@ -95,6 +81,7 @@ export class EditorGroupWatermark extends DisposableOwner {
         const shortcut = this.#rendered.add(new KeybindingLabel({
           keybinding,
           ownerDocument,
+          presentation: "keycap",
         }));
         row.append(label, shortcut.element);
         return [row];

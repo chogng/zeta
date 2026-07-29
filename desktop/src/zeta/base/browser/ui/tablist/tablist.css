@@ -15,6 +15,7 @@
 .zeta-tab {
   display: flex;
   min-width: 0;
+  align-items: center;
 }
 
 .zeta-tab-label {
@@ -34,5 +35,32 @@
 }
 
 .zeta-tab-actions {
+  align-items: center;
   flex: 0 0 auto;
+  gap: 0;
+}
+
+.zeta-tab-actions .zeta-action-view-item.icon .zeta-button {
+  width: var(--zeta-toolbar-action-size);
+  min-width: var(--zeta-toolbar-action-size);
+  height: var(--zeta-toolbar-action-size);
+  min-height: var(--zeta-toolbar-action-size);
+  flex: 0 0 var(--zeta-toolbar-action-size);
+  padding: 4px;
+  border: 0;
+  color: inherit;
+  background: transparent;
+}
+
+.zeta-tab-actions .zeta-action-view-item.icon .zeta-button-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.zeta-tab-actions .zeta-action-view-item.icon .zeta-button:hover {
+  background: var(--zeta-toolbar-hover-background);
 }

@@ -1,13 +1,7 @@
 import { addDisposableListener } from "../../dom.js";
 import type { IAction } from "../../../common/actions.js";
-import {
-  DisposableOwner,
-  ResettableDisposableGroup,
-} from "../../../common/lifecycle.js";
-import {
-  type ActionViewItem,
-  createActionViewItem,
-} from "./actionViewItems.js";
+import { DisposableOwner, ResettableDisposableGroup } from "../../../common/lifecycle.js";
+import { type ActionViewItem, createActionViewItem } from "./actionViewItems.js";
 
 export type ActionBarOrientation = "horizontal" | "vertical";
 
@@ -22,6 +16,7 @@ export interface ActionBarOptions {
   readonly ariaRole?: "toolbar" | "tablist";
   readonly orientation?: ActionBarOrientation;
   readonly actionViewItemProvider?: ActionViewItemProvider;
+  readonly highlightToggledItems?: boolean;
 }
 
 /**
@@ -49,6 +44,7 @@ export class ActionBar extends DisposableOwner {
     this.element = element;
     this.defer(() => element.remove());
     element.className = "zeta-action-bar";
+    element.classList.toggle("highlight-toggled", options.highlightToggledItems === true);
     element.setAttribute("role", options.ariaRole ?? "toolbar");
     this.#orientation = options.orientation ?? "horizontal";
     element.setAttribute("aria-orientation", this.#orientation);

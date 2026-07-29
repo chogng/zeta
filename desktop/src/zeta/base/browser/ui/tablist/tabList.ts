@@ -3,10 +3,13 @@ import { addDisposableListener } from "../../dom.js";
 import type { Icon } from "../../../common/icon.js";
 import type { IAction } from "../../../common/actions.js";
 import { DisposableOwner } from "../../../common/lifecycle.js";
+import { LxIcon } from "../../../common/lxicons.js";
 import { ActionBar } from "../actionbar/actionbar.js";
 import { ActionViewItem } from "../actionbar/actionViewItems.js";
 import { IconLabel } from "../iconlabel/iconlabel.js";
 import { ScrollableElement } from "../scrollbar/scrollableElement.js";
+
+export const TAB_CLOSE_ACTION_ID = "zeta.tab.close";
 
 /** Accessible actions rendered after one Tab's label content. */
 export interface TabListActions {
@@ -32,7 +35,7 @@ export interface TabListOptions<T> {
   readonly ownerDocument: Document;
   readonly ariaLabel: string;
   readonly onActivate: (value: T) => void;
-  readonly onDelete?: (value: T) => void;
+  readonly onClose?: (value: T) => void;
 }
 
 /**
@@ -59,7 +62,7 @@ export class TabList<T> extends DisposableOwner {
         if (!(action instanceof TabAction)) {
           throw new TypeError(`Unsupported TabList action: ${action.id}`);
         }
-        return new TabActionViewItem(action, this.#options.onDelete);
+        return new TabActionViewItem(action, this.#options.onClose);
       },
     }));
     this.#scrollable = this.own(new ScrollableElement({
@@ -131,13 +134,13 @@ class TabAction<T> implements IAction {
 
 class TabActionViewItem<T> extends ActionViewItem {
   readonly #tabAction: TabAction<T>;
-  readonly #onDelete: ((value: T) => void) | undefined;
+  readonly #onClose: ((value: T) => void) | undefined;
   #tab: HTMLButtonElement | undefined;
 
-  constructor(action: TabAction<T>, onDelete: ((value: T) => void) | undefined) {
+  constructor(action: TabAction<T>, onClose: ((value: T) => void) | undefined) {
     super(action);
     this.#tabAction = action;
-    this.#onDelete = onDelete;
+    this.#onClose = onClose;
   }
 
   override render(container: HTMLElement): void {
@@ -146,7 +149,7 @@ class TabActionViewItem<T> extends ActionViewItem {
     }
     const item = this.#tabAction.tab;
     container.classList.add("zeta-tab");
-    container.classList.toggle("active", this.#tabAction.checked);
+    container.classList.toggle("checked", this.#tabAction.checked);
     container.classList.toggle("icon", item.icon !== undefined);
 
     const tab = container.ownerDocument.createElement("button");
@@ -173,23 +176,27 @@ class TabActionViewItem<T> extends ActionViewItem {
       event.stopPropagation();
       this.#tabAction.run();
     }));
-    if (this.#onDelete) {
+    if (this.#onClose) {
       tab.setAttribute("aria-keyshortcuts", "Delete");
       this.own(addDisposableListener(tab, "keydown", (event) => {
         if (event.key !== "Delete") return;
         event.preventDefault();
         event.stopPropagation();
-        this.#onDelete?.(item.value);
+        this.#onClose?.(item.value);
       }));
     }
-    if (item.actions?.items.length) {
-      const actions = this.own(new ActionBar({
+    const actions = [
+      ...(item.actions?.items ?? []),
+      ...(this.#onClose ? [closeTabAction(item, this.#onClose)] : []),
+    ];
+    if (actions.length > 0) {
+      const actionBar = this.own(new ActionBar({
         ownerDocument: container.ownerDocument,
-        actions: item.actions.items,
-        ariaLabel: item.actions.ariaLabel,
+        actions,
+        ariaLabel: item.actions?.ariaLabel ?? `${item.label} actions`,
       }));
-      actions.element.classList.add("zeta-tab-actions");
-      container.append(actions.element);
+      actionBar.element.classList.add("zeta-tab-actions");
+      container.append(actionBar.element);
     }
   }
 
@@ -207,4 +214,16 @@ class TabActionViewItem<T> extends ActionViewItem {
     }
     return this.#tab;
   }
+}
+
+function closeTabAction<T>(item: TabListItem<T>, close: (value: T) => void): IAction {
+  const label = `Close ${item.label}`;
+  return {
+    id: TAB_CLOSE_ACTION_ID,
+    label,
+    tooltip: label,
+    icon: LxIcon.close,
+    enabled: true,
+    run: () => close(item.value),
+  };
 }

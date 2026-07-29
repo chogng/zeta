@@ -34,7 +34,7 @@ export class Button extends DisposableOwner {
     element.title = options.title ?? options.label;
     element.disabled = options.enabled === false;
     if (options.checked !== undefined) {
-      setAriaAttribute(element, "pressed", options.checked);
+      this.checked = options.checked;
     }
     if (options.onClick) {
       this.own(addDisposableListener(element, "click", options.onClick));
@@ -43,4 +43,11 @@ export class Button extends DisposableOwner {
 
   set enabled(value: boolean) { this.element.disabled = !value; }
   get enabled(): boolean { return !this.element.disabled; }
+
+  set checked(value: boolean) {
+    this.element.classList.toggle("checked", value);
+    setAriaAttribute(this.element, "pressed", value);
+  }
+
+  get checked(): boolean { return this.element.classList.contains("checked"); }
 }

@@ -27,6 +27,7 @@ export class PanelPart extends CompositePart {
       viewDescriptorService: options.viewDescriptorService,
       location: ViewContainerLocation.Panel,
       ariaLabel: "Panel views",
+      presentation: "label",
     }));
     this.onDidSelectComposite = this.compositeBar.onDidSelectComposite;
     const titleControl = options.ownerDocument.createElement("div");

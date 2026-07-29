@@ -1,7 +1,7 @@
+import "./editorTitleControl.css";
 import type { IContextMenuProvider } from "../../../../base/browser/contextmenu.js";
-import { ToolBar } from "../../../../base/browser/ui/toolbar/toolbar.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
-import { MenuWorkbenchToolBar } from "../../../../platform/actions/browser/toolbar.js";
+import { MenuWorkbenchToolBar, WorkbenchToolBar } from "../../../../platform/actions/browser/toolbar.js";
 import { MenuId } from "../../../../platform/actions/common/actions.js";
 import type { IMenuService } from "../../../../platform/actions/common/menuService.js";
 import type { EditorInput } from "./editorInput.js";
@@ -19,7 +19,7 @@ export class EditorTitleControl extends DisposableOwner {
 
   readonly element: HTMLDivElement;
   readonly #tabs: EditorTabsControl;
-  readonly #toolbar: ToolBar;
+  readonly #toolbar: WorkbenchToolBar;
 
   constructor(
     ownerDocument: Document,
@@ -36,12 +36,16 @@ export class EditorTitleControl extends DisposableOwner {
         titleActions.contextMenuProvider,
         MenuId.EditorTitle,
         ownerDocument,
+        { highlightToggledItems: true },
       )
-      : new ToolBar({
-        contextMenuProvider: emptyEditorToolbarContextMenuProvider,
+      : new WorkbenchToolBar(
+        emptyEditorToolbarContextMenuProvider,
         ownerDocument,
-        ariaLabel: "Editor actions",
-      }));
+        {
+          ariaLabel: "Editor actions",
+          highlightToggledItems: true,
+        },
+      ));
     const actions = ownerDocument.createElement("div");
     actions.className = "zeta-editor-title-actions";
     actions.append(this.#toolbar.element);

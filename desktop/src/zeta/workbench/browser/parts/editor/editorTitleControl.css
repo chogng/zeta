@@ -1,0 +1,16 @@
+.zeta-editor-title-control {
+  display: flex;
+  min-width: 0;
+  height: 35px;
+  flex: 0 0 35px;
+  border-bottom: 1px solid var(--zeta-border);
+}
+
+.zeta-editor-title-actions {
+  display: flex;
+  height: 100%;
+  flex: 0 0 auto;
+  align-items: center;
+  margin-left: auto;
+  padding: 0 4px;
+}

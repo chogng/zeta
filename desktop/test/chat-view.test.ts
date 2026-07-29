@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import type { ServerNotification, Session, Thread } from "../generated/app-server/types.js";
+import type { ServerNotification, Session, SessionCommandParams, Thread } from "../generated/app-server/types.js";
 import type { ZetaRendererApi } from "../src/zeta/platform/app-server/common/renderer-api.js";
+import { TAB_CLOSE_ACTION_ID } from "../src/zeta/base/browser/ui/tablist/tabList.js";
 import { LxIcon } from "../src/zeta/base/common/lxicons.js";
 import { toDisposable } from "../src/zeta/base/common/lifecycle.js";
 import { MenuId } from "../src/zeta/platform/actions/common/actions.js";
@@ -78,12 +79,13 @@ test("Chat contribution owns the fixed Auxiliary Bar view", () => {
 
 test("Chat title separates Session tabs from its action toolbar", async () => {
   const dom = new JSDOM("<!doctype html><body></body>");
-  const api = fakeApi({
+  const fake = fakeApi({
     sessions: [
       session("session-1", "thread-1"),
       session("session-2", "thread-2"),
     ],
-  }).api;
+  });
+  const api = fake.api;
   using sessions = new WorkbenchSessionService(api);
   using contextKeys = new ContextKeyService();
   using viewDescriptors = new ViewDescriptorService({
@@ -241,6 +243,7 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
     assert.ok(chatPane.querySelector(".zeta-chat-list-widget"));
     assert.ok(chatPane.querySelector(".zeta-chat-input-widget"));
   }
+  assert.deepEqual([...chatPanes].map((chatPane) => chatPane.hidden), [false, true]);
   const composerInputs = [...chatPanes].map((chatPane) => {
     const input = chatPane.querySelector<HTMLTextAreaElement>(".zeta-chat-input-widget textarea");
     assert.ok(input);
@@ -256,11 +259,46 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
       .map((tab) => tab.getAttribute("aria-selected")),
     ["false", "true"],
   );
+  assert.deepEqual([...chatPanes].map((chatPane) => chatPane.hidden), [true, false]);
   composerInputs[1].value = "Second draft";
   pane.element.querySelectorAll<HTMLButtonElement>("[role='tab']")[0]?.click();
   assert.equal(sessions.active?.session.sessionId, "session-1");
+  assert.deepEqual([...chatPanes].map((chatPane) => chatPane.hidden), [false, true]);
   assert.equal(composerInputs[0].value, "First draft");
   assert.equal(composerInputs[1].value, "Second draft");
+
+  const closeButtons = pane.element.querySelectorAll<HTMLButtonElement>(
+    `[data-action-id="${TAB_CLOSE_ACTION_ID}"] button`,
+  );
+  assert.equal(closeButtons.length, 2);
+  assert.deepEqual(
+    [...closeButtons].map((button) => button.title),
+    ["Close Session session-1", "Close Session session-2"],
+  );
+  closeButtons[0]?.click();
+  await nextTask();
+
+  assert.deepEqual(
+    fake.archiveRequests.map(({ sessionId, expectedSequence }) => ({
+      sessionId,
+      expectedSequence,
+    })),
+    [{ sessionId: "session-1", expectedSequence: 2 }],
+  );
+  assert.equal(sessions.active?.session.sessionId, "session-2");
+  assert.deepEqual(
+    [...pane.element.querySelectorAll<HTMLElement>("[role='tab']")]
+      .map((tab) => ({
+        label: tab.textContent,
+        selected: tab.getAttribute("aria-selected"),
+      })),
+    [{ label: "Session session-2", selected: "true" }],
+  );
+  assert.equal(
+    pane.element.querySelector<HTMLElement>(".zeta-chat-pane-host > .zeta-chat")
+      ?.dataset.sessionId,
+    "session-2",
+  );
 
   dom.window.close();
 });
@@ -531,6 +569,32 @@ test("WorkbenchSessionService restores and creates active Threads", async () => 
   assert.equal(service.state, "ready");
 });
 
+test("WorkbenchSessionService archives a Session and selects the next active one", async () => {
+  const first = session("session-1", "thread-1");
+  const second = session("session-2", "thread-2");
+  const fake = fakeApi({ sessions: [first, second] });
+  using service = new WorkbenchSessionService(fake.api);
+
+  await service.initialize();
+  await service.archiveSession("session-1");
+
+  assert.deepEqual(
+    fake.archiveRequests.map(({ sessionId, expectedSequence }) => ({
+      sessionId,
+      expectedSequence,
+    })),
+    [{ sessionId: "session-1", expectedSequence: 2 }],
+  );
+  assert.equal(
+    service.sessions.find(({ sessionId }) => sessionId === "session-1")
+      ?.status,
+    "archived",
+  );
+  assert.equal(service.active?.session.sessionId, "session-2");
+  assert.equal(service.active?.threadId, "thread-2");
+  assert.equal(service.state, "ready");
+});
+
 test("ChatPaneModel layers transient deltas over canonical Thread state", async () => {
   const activeSession = session("session-1", "thread-1");
   let currentThread = thread();
@@ -625,9 +689,11 @@ interface FakeOptions {
 
 function fakeApi(options: FakeOptions = {}): {
   readonly api: ZetaRendererApi;
+  readonly archiveRequests: readonly SessionCommandParams[];
   readonly emit: (notification: ServerNotification) => void;
 } {
   const listeners = new Set<(notification: ServerNotification) => void>();
+  const archiveRequests: SessionCommandParams[] = [];
   const currentThread = () => options.thread?.() ?? thread();
   const api = {
     appServer: {
@@ -644,6 +710,19 @@ function fakeApi(options: FakeOptions = {}): {
           session: session("created", "created-thread"),
           threadId: "created-thread",
         },
+      archive: async (params: SessionCommandParams) => {
+        archiveRequests.push(params);
+        const archived = options.sessions?.find(
+          ({ sessionId }) => sessionId === params.sessionId,
+        ) ?? session(params.sessionId);
+        return {
+          session: {
+            ...archived,
+            status: "archived" as const,
+            sequence: archived.sequence + 1,
+          },
+        };
+      },
     },
     thread: {
       read: async () => ({ thread: currentThread() }),
@@ -667,6 +746,7 @@ function fakeApi(options: FakeOptions = {}): {
   } as unknown as ZetaRendererApi;
   return {
     api,
+    archiveRequests,
     emit: (notification) => {
       for (const listener of listeners) listener(notification);
     },

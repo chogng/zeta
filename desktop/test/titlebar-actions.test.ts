@@ -99,7 +99,6 @@ test("titlebar owns a menu-driven actions container", async () => {
     menuService,
     contextMenuService,
     ownerDocument,
-    title: "Zeta",
   }, menubar));
   ownerDocument.body.append(titlebar.element);
 
@@ -107,11 +106,23 @@ test("titlebar owns a menu-driven actions container", async () => {
     ".zeta-workbench-part-content > .zeta-titlebar-actions",
   );
   assert.ok(actionsContainer);
+  assert.equal(actionsContainer.classList.contains("zeta-titlebar-interactive-region"), true);
   assert.equal(
     actionsContainer.querySelector(".zeta-action-bar")
       ?.getAttribute("role"),
     "toolbar",
   );
+  assert.equal(
+    actionsContainer.querySelector(".zeta-toolbar")
+      ?.classList.contains("zeta-toolbar-inherit-foreground"),
+    true,
+  );
+  assert.equal(
+    actionsContainer.querySelector(".zeta-action-bar")
+      ?.classList.contains("highlight-toggled"),
+    false,
+  );
+  assert.equal(menubarElement.classList.contains("zeta-titlebar-interactive-region"), true);
 
   const button = actionsContainer.querySelector("button");
   assert.equal(button?.textContent, "Title action");
@@ -162,7 +173,6 @@ test("titlebar renders left actions before the application menu", () => {
     menuService,
     contextMenuService,
     ownerDocument,
-    title: "Zeta",
   }, {
     element: menubarElement,
     dispose() {
@@ -185,6 +195,8 @@ test("titlebar renders left actions before the application menu", () => {
     titleChildren[0]?.querySelector("button")?.textContent,
     "Left title action",
   );
+  assert.equal(titleChildren.length, 2);
+  assert.equal(titlebar.element.querySelector(".zeta-titlebar-label"), null);
 });
 
 test("browser titlebar uses one icon trigger for the application menus", () => {

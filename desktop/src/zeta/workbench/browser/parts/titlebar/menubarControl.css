@@ -1,0 +1,26 @@
+.zeta-menubar {
+  display: flex;
+  height: 100%;
+  align-items: center;
+}
+
+.zeta-menubar .zeta-menubar-item {
+  width: 28px;
+  min-width: 28px;
+  min-height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  color: var(--zeta-title-bar-foreground);
+  background: transparent;
+}
+
+.zeta-menubar .zeta-menubar-item > span {
+  display: none;
+}
+
+.zeta-menubar .zeta-menubar-item:hover,
+.zeta-menubar .zeta-menubar-item:focus-visible,
+.zeta-menubar .zeta-menubar-item.active {
+  background: var(--zeta-title-bar-hover-background);
+}

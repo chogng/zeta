@@ -1,38 +1,15 @@
-import {
-  addDisposableListener,
-} from "../../../../base/browser/dom.js";
-import {
-  IconLabel,
-} from "../../../../base/browser/ui/iconlabel/iconlabel.js";
-import {
-  appendIcon,
-} from "../../../../base/browser/ui/icon/icon.js";
-import {
-  ScrollableElement,
-} from "../../../../base/browser/ui/scrollbar/scrollableElement.js";
+import { addDisposableListener } from "../../../../base/browser/dom.js";
+import { IconLabel } from "../../../../base/browser/ui/iconlabel/iconlabel.js";
+import { appendIcon } from "../../../../base/browser/ui/icon/icon.js";
+import { ScrollableElement } from "../../../../base/browser/ui/scrollbar/scrollableElement.js";
 import { LxIcon } from "../../../../base/common/lxicons.js";
-import {
-  ResettableDisposableGroup,
-} from "../../../../base/common/lifecycle.js";
+import { ResettableDisposableGroup } from "../../../../base/common/lifecycle.js";
 import { URI } from "../../../../base/common/uri.js";
-import {
-  FileKind,
-  type IFileEntry,
-  type IFileService,
-} from "../../../../platform/files/common/files.js";
-import type {
-  IWorkspaceContextService,
-} from "../../../../platform/workspace/common/workspace.js";
-import type {
-  IFileIconThemeService,
-} from "../../../../platform/theme/browser/fileIconThemeService.js";
-import type {
-  IEditorPart,
-} from "../../../browser/parts/editor/editorPart.js";
-import {
-  ViewPane,
-  type IViewPaneOptions,
-} from "../../../browser/parts/views/viewPane.js";
+import { FileKind, type IFileEntry, type IFileService } from "../../../../platform/files/common/files.js";
+import type { IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
+import type { IFileIconThemeService } from "../../../../platform/theme/browser/fileIconThemeService.js";
+import type { IEditorPart } from "../../../browser/parts/editor/editorPart.js";
+import { ViewPane, type IViewPaneOptions } from "../../../browser/parts/views/viewPane.js";
 
 interface ExplorerNode {
   readonly resource: URI;
@@ -70,6 +47,7 @@ export class ExplorerViewPane extends ViewPane {
     this.#editorPart = editorPart;
     this.#fileIconThemeService = fileIconThemeService;
     this.element.classList.add("zeta-explorer-view-pane");
+    this.titleElement.classList.add("zeta-explorer-title");
     this.contentElement.classList.add("zeta-explorer");
     this.#scrollable = this.own(new ScrollableElement({
       ownerDocument: options.ownerDocument,

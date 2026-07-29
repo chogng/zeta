@@ -26,106 +26,6 @@
   flex-direction: column;
 }
 
-.zeta-editor-title-control {
-  display: flex;
-  min-width: 0;
-  height: 35px;
-  flex: 0 0 35px;
-  border-bottom: 1px solid var(--zeta-border);
-}
-
-.zeta-editor-tabs-control {
-  min-width: 0;
-  flex: 1 1 auto;
-  overflow: hidden;
-}
-
-.zeta-editor-tabs-control .zeta-action-bar {
-  display: flex;
-  height: 100%;
-  align-items: stretch;
-  overflow: hidden;
-}
-
-.zeta-editor-tabs-control .zeta-tab {
-  display: flex;
-  min-width: 80px;
-  max-width: 220px;
-  height: 100%;
-  align-items: center;
-  border-right: 1px solid var(--zeta-border);
-  color: var(--zeta-description-foreground);
-  background: var(--zeta-workbench-background);
-}
-
-.zeta-editor-tabs-control .zeta-tab.active {
-  color: var(--zeta-foreground);
-  background: var(--zeta-editor-background);
-}
-
-.zeta-editor-tabs-control .zeta-tab-label {
-  display: flex;
-  min-width: 0;
-  height: 100%;
-  flex: 1 1 auto;
-  align-items: center;
-  padding-left: 12px;
-  cursor: default;
-  outline: none;
-}
-
-.zeta-editor-tabs-control .zeta-tab-label:focus-visible {
-  outline: 1px solid var(--zeta-focus-border);
-  outline-offset: -1px;
-}
-
-.zeta-editor-tabs-control .zeta-icon-label-text {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.zeta-editor-tabs-control .zeta-tab-actions {
-  gap: 0;
-  flex: 0 0 auto;
-  padding-right: 4px;
-}
-
-.zeta-editor-tabs-control .zeta-tab-actions .zeta-button {
-  width: 28px;
-  height: 28px;
-  flex: 0 0 28px;
-  border: 0;
-  border-radius: 4px;
-  color: inherit;
-  background: transparent;
-  font: inherit;
-  font-size: 18px;
-  line-height: 1;
-}
-
-.zeta-editor-tabs-control .zeta-tab-actions .zeta-button > span {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
-}
-
-.zeta-editor-tabs-control .zeta-tab-actions .zeta-button:hover {
-  background: var(--zeta-toolbar-hover-background);
-}
-
-.zeta-editor-title-actions {
-  display: flex;
-  height: 100%;
-  flex: 0 0 auto;
-  align-items: center;
-  margin-left: auto;
-  padding: 0 4px;
-}
-
 .zeta-editor-group-content {
   position: relative;
   min-width: 0;
@@ -176,19 +76,6 @@
   text-align: right;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.zeta-editor-group-watermark .zeta-keybinding-label kbd {
-  min-width: 20px;
-  padding: 2px 6px;
-  border: 1px solid var(--zeta-keybinding-label-border);
-  border-bottom-color: var(--zeta-keybinding-label-bottom-border);
-  border-radius: 3px;
-  color: var(--zeta-keybinding-label-foreground);
-  background: var(--zeta-keybinding-label-background);
-  box-shadow: inset 0 -1px 0 var(--zeta-widget-shadow);
-  font: inherit;
-  text-align: center;
 }
 
 .zeta-editor-group-watermark .zeta-keybinding-label {

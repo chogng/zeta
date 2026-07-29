@@ -4,8 +4,6 @@
   -webkit-app-region: drag;
 }
 
-.zeta-electron-titlebar .zeta-workbench-part-content,
-.zeta-electron-titlebar .zeta-titlebar-left-actions,
-.zeta-electron-titlebar .zeta-menubar {
+.zeta-electron-titlebar .zeta-titlebar-interactive-region {
   -webkit-app-region: no-drag;
 }

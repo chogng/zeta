@@ -1,10 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import {
-  TabList,
-  type TabListItem,
-} from "../../browser/ui/tablist/tabList.js";
+import { TAB_CLOSE_ACTION_ID, TabList, type TabListItem } from "../../browser/ui/tablist/tabList.js";
 import type { IAction } from "../../common/actions.js";
 
 test("TabList owns manual selection semantics and roving focus", () => {
@@ -43,6 +40,10 @@ test("TabList owns manual selection semantics and roving focus", () => {
     [...elements].map((element) => element.getAttribute("aria-selected")),
     ["true", "false"],
   );
+  assert.deepEqual(
+    [...tabList.element.querySelectorAll(".zeta-tab")].map((element) => element.classList.contains("checked")),
+    [true, false],
+  );
   assert.deepEqual([...elements].map((element) => element.tabIndex), [0, -1]);
   assert.equal(first.getAttribute("aria-controls"), "first-panel");
 
@@ -60,32 +61,36 @@ test("TabList owns manual selection semantics and roving focus", () => {
       .map((element) => element.getAttribute("aria-selected")),
     ["false", "true"],
   );
+  assert.deepEqual(
+    [...tabList.element.querySelectorAll(".zeta-tab")].map((element) => element.classList.contains("checked")),
+    [false, true],
+  );
 
   tabList.dispose();
   dom.window.close();
 });
 
-test("TabList renders IconLabel content and per-tab actions", () => {
+test("TabList renders IconLabel content, custom actions, and its standard close action", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
   const closed: string[] = [];
   const tabList = new TabList({
     ownerDocument: dom.window.document,
     ariaLabel: "Editors",
     onActivate: () => undefined,
-    onDelete: (value: string) => closed.push(value),
+    onClose: (value: string) => closed.push(value),
   });
-  const close: IAction = {
-    id: "close",
-    label: "Close first",
-    tooltip: "Close first",
+  const pin: IAction = {
+    id: "pin",
+    label: "Pin first",
+    tooltip: "Pin first",
     enabled: true,
-    run: () => closed.push("first"),
+    run: () => undefined,
   };
   tabList.setTabs([{
     ...tab("first"),
     actions: {
       ariaLabel: "First tab actions",
-      items: [close],
+      items: [pin],
     },
   }], "first");
   dom.window.document.body.append(tabList.element);
@@ -93,7 +98,7 @@ test("TabList renders IconLabel content and per-tab actions", () => {
     "[role='tab']",
   );
   const closeButton = tabList.element.querySelector<HTMLButtonElement>(
-    ".zeta-tab-actions button",
+    `[data-action-id="${TAB_CLOSE_ACTION_ID}"] button`,
   );
   assert.ok(selected);
   assert.ok(closeButton);
@@ -111,7 +116,13 @@ test("TabList renders IconLabel content and per-tab actions", () => {
       ?.getAttribute("aria-label"),
     "First tab actions",
   );
-  assert.equal(closeButton.textContent, "Close first");
+  assert.deepEqual(
+    [...tabList.element.querySelectorAll<HTMLElement>(".zeta-tab-actions [data-action-id]")]
+      .map((item) => item.dataset.actionId),
+    ["pin", TAB_CLOSE_ACTION_ID],
+  );
+  assert.equal(closeButton.title, "Close first");
+  assert.ok(closeButton.querySelector("svg.zeta-icon"));
 
   selected.dispatchEvent(keyboardEvent(dom.window, "Delete"));
   closeButton.click();

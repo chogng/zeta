@@ -1,14 +1,14 @@
-import { addDisposableListener } from "../../../../base/browser/dom.js";
-import { ActionViewItem } from "../../../../base/browser/ui/actionbar/actionViewItems.js";
-import { ToolBar } from "../../../../base/browser/ui/toolbar/toolbar.js";
-import type { IAction } from "../../../../base/common/actions.js";
-import type { Icon } from "../../../../base/common/icon.js";
-import { LxIcon } from "../../../../base/common/lxicons.js";
-import { DisposableOwner, ResettableDisposableGroup } from "../../../../base/common/lifecycle.js";
-import type { IThemeService } from "../../../../platform/theme/common/themeService.js";
-import { ViewPane, type IViewPaneOptions } from "../../../browser/parts/views/viewPane.js";
-import type { ITerminalDimensions, ITerminalInstance, ITerminalProfile, ITerminalProfileSelection, ITerminalService } from "../common/terminal.js";
-import { TerminalInstanceWidget } from "./terminalInstanceWidget.js";
+import { addDisposableListener } from "../../../../../base/browser/dom.js";
+import { DisposableOwner, ResettableDisposableGroup } from "../../../../../base/common/lifecycle.js";
+import type { IMenuService } from "../../../../../platform/actions/common/menuService.js";
+import type { IContextKeyService } from "../../../../../platform/contextkey/common/contextkey.js";
+import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextMenu.js";
+import type { IThemeService } from "../../../../../platform/theme/common/themeService.js";
+import { ViewPane, type IViewPaneOptions } from "../../../../browser/parts/views/viewPane.js";
+import type { ITerminalDimensions, ITerminalInstance, ITerminalProfileSelection, ITerminalService } from "../../../../services/terminal/common/terminal.js";
+import { TerminalInstanceWidget } from "../instance/terminalInstanceWidget.js";
+import { TerminalTabsLayout } from "./terminalTabsLayout.js";
+import { TerminalTitleActions } from "./terminalTitleActions.js";
 import "./media/terminal.css";
 
 const DEFAULT_DIMENSIONS: ITerminalDimensions = { rows: 24, cols: 80 };
@@ -17,18 +17,17 @@ const DEFAULT_DIMENSIONS: ITerminalDimensions = { rows: 24, cols: 80 };
 export class TerminalViewPane extends ViewPane {
   readonly #terminalService: ITerminalService;
   readonly #themeService: IThemeService;
-  readonly #titleToolbar: ToolBar;
+  readonly #titleActions: TerminalTitleActions;
   readonly #statusElement: HTMLDivElement;
   readonly #tabsElement: HTMLDivElement;
+  readonly #tabsLayout: TerminalTabsLayout;
   readonly #widgetsElement: HTMLDivElement;
   readonly #items = new Map<ITerminalInstance, TerminalViewItem>();
   readonly #tabBindings = this.own(new ResettableDisposableGroup());
-  #profiles: readonly ITerminalProfile[] = [];
-  #selectedProfileId: string | undefined;
   #creating = false;
   #disposed = false;
 
-  constructor(options: IViewPaneOptions, terminalService: ITerminalService, themeService: IThemeService) {
+  constructor(options: IViewPaneOptions, terminalService: ITerminalService, themeService: IThemeService, menuService: IMenuService, contextMenuService: IContextMenuService, contextKeyService: IContextKeyService) {
     super(options);
     this.defer(() => {
       this.#disposed = true;
@@ -37,15 +36,18 @@ export class TerminalViewPane extends ViewPane {
     this.#themeService = themeService;
     this.element.classList.add("zeta-terminal-view");
     this.titleElement.remove();
-    this.#titleToolbar = this.own(new ToolBar({
-      contextMenuProvider: noTerminalContextMenu,
+    this.#titleActions = this.own(new TerminalTitleActions({
       ownerDocument: options.ownerDocument,
-      ariaLabel: "Terminal actions",
-      actionViewItemProvider: (action) => action instanceof TerminalProfileAction
-        ? new TerminalProfileActionViewItem(action)
-        : undefined,
+      menuService,
+      contextMenuService,
+      contextKeyService,
+      createTerminal: () => this.#createTerminal(),
+      relaunchActive: () => this.#relaunchActive(),
+      killActive: () => {
+        const active = this.#terminalService.activeInstance;
+        return active ? this.#terminalService.closeTerminal(active) : undefined;
+      },
     }));
-    this.#titleToolbar.element.classList.add("zeta-terminal-title-toolbar");
 
     this.contentElement.classList.add("zeta-terminal-content");
     this.#statusElement = options.ownerDocument.createElement("div");
@@ -55,9 +57,12 @@ export class TerminalViewPane extends ViewPane {
     this.#tabsElement = options.ownerDocument.createElement("div");
     this.#tabsElement.className = "zeta-terminal-tabs";
     this.#tabsElement.setAttribute("role", "tablist");
+    this.#tabsElement.setAttribute("aria-label", "Terminal instances");
+    this.#tabsElement.setAttribute("aria-orientation", "vertical");
     this.#widgetsElement = options.ownerDocument.createElement("div");
     this.#widgetsElement.className = "zeta-terminal-widgets";
-    this.contentElement.append(this.#statusElement, this.#tabsElement, this.#widgetsElement);
+    this.#tabsLayout = this.own(new TerminalTabsLayout(this.#widgetsElement, this.#tabsElement));
+    this.contentElement.append(this.#statusElement, this.#tabsLayout.element);
 
     for (const instance of terminalService.instances) this.#addInstance(instance);
     this.own(terminalService.onDidCreateInstance((instance) => {
@@ -72,7 +77,12 @@ export class TerminalViewPane extends ViewPane {
 
     const ResizeObserverConstructor = options.ownerDocument.defaultView?.ResizeObserver;
     if (ResizeObserverConstructor) {
-      const observer = new ResizeObserverConstructor(() => this.#activeItem()?.widget.fit());
+      const observer = new ResizeObserverConstructor(() => {
+        const bounds = this.#tabsLayout.element.getBoundingClientRect();
+        this.#tabsLayout.layout(bounds.width, bounds.height);
+        this.#activeItem()?.widget.fit();
+      });
+      observer.observe(this.#tabsLayout.element);
       observer.observe(this.#widgetsElement);
       this.defer(() => observer.disconnect());
     }
@@ -87,17 +97,17 @@ export class TerminalViewPane extends ViewPane {
   }
 
   override get titleActionsElement(): HTMLElement {
-    return this.#titleToolbar.element;
+    return this.#titleActions.element;
   }
 
   async #initialize(): Promise<void> {
     try {
-      this.#profiles = await this.#terminalService.getProfiles();
+      const profiles = await this.#terminalService.getProfiles();
       if (this.#disposed) return;
-      this.#selectedProfileId = this.#profiles.find((profile) => profile.isDefault)?.profileId ?? this.#profiles[0]?.profileId;
-      this.#renderTitleToolbar();
+      this.#titleActions.setProfiles(profiles);
     } catch {
-      this.#profiles = [];
+      if (this.#disposed) return;
+      this.#titleActions.setProfiles([]);
     }
     if (!this.#terminalService.activeInstance) await this.#createTerminal();
   }
@@ -105,7 +115,7 @@ export class TerminalViewPane extends ViewPane {
   async #createTerminal(): Promise<void> {
     if (this.#creating || this.#disposed) return;
     this.#creating = true;
-    this.#renderTitleToolbar();
+    this.#titleActions.setCreating(true);
     this.#setStatus(undefined);
     try {
       await this.#terminalService.createTerminal({
@@ -119,7 +129,7 @@ export class TerminalViewPane extends ViewPane {
       }
     } finally {
       this.#creating = false;
-      if (!this.#disposed) this.#renderTitleToolbar();
+      if (!this.#disposed) this.#titleActions.setCreating(false);
     }
   }
 
@@ -159,11 +169,11 @@ export class TerminalViewPane extends ViewPane {
   #render(): void {
     if (this.#disposed) return;
     const active = this.#terminalService.activeInstance;
+    this.#titleActions.setActiveInstance(active);
     for (const [instance, item] of this.#items) {
       item.widget.setVisible(instance === active);
     }
     this.#renderTabs();
-    this.#renderTitleToolbar();
   }
 
   #renderTabs(): void {
@@ -180,7 +190,15 @@ export class TerminalViewPane extends ViewPane {
       select.className = "zeta-terminal-tab-select";
       select.setAttribute("role", "tab");
       select.setAttribute("aria-selected", String(instance === active));
-      select.textContent = instance.title;
+      select.setAttribute("aria-label", instance.title);
+      const icon = document.createElement("span");
+      icon.className = "zeta-terminal-tab-icon";
+      icon.setAttribute("aria-hidden", "true");
+      icon.textContent = ">_";
+      const label = document.createElement("span");
+      label.className = "zeta-terminal-tab-label";
+      label.textContent = instance.title;
+      select.append(icon, label);
       const close = actionButton(document, `Close ${instance.title}`, "×");
       close.classList.add("zeta-terminal-tab-close");
       this.#tabBindings.add(addDisposableListener(select, "click", () => {
@@ -196,48 +214,8 @@ export class TerminalViewPane extends ViewPane {
     this.#tabsElement.replaceChildren(...tabs);
   }
 
-  #renderTitleToolbar(): void {
-    const active = this.#terminalService.activeInstance;
-    const actions: IAction[] = [];
-    if (this.#profiles.length > 0) {
-      actions.push(new TerminalProfileAction(
-        this.#profiles,
-        this.#selectedProfileId,
-        (profileId) => {
-          this.#selectedProfileId = profileId;
-        },
-      ));
-    }
-    actions.push(terminalAction(
-      "zeta.terminal.new",
-      "New Terminal",
-      LxIcon.add,
-      !this.#creating,
-      () => this.#createTerminal(),
-    ));
-    if (active && active.state !== "running") {
-      actions.push(terminalAction(
-        "zeta.terminal.relaunch",
-        "Relaunch Terminal",
-        LxIcon.history,
-        true,
-        () => this.#relaunchActive(),
-      ));
-    }
-    if (active) {
-      actions.push(terminalAction(
-        "zeta.terminal.kill",
-        "Kill Terminal",
-        LxIcon.close,
-        true,
-        () => this.#terminalService.closeTerminal(active),
-      ));
-    }
-    this.#titleToolbar.setActions(actions);
-  }
-
   #selectedProfile(): ITerminalProfileSelection {
-    const profileId = this.#selectedProfileId;
+    const profileId = this.#titleActions.selectedProfileId;
     return profileId ? { type: "profile", profileId } : { type: "default" };
   }
 
@@ -250,63 +228,7 @@ export class TerminalViewPane extends ViewPane {
     this.#statusElement.textContent = message ?? "";
     this.#statusElement.hidden = message === undefined;
   }
-}
 
-class TerminalProfileAction implements IAction {
-  readonly id = "zeta.terminal.selectProfile";
-  readonly label = "Terminal Profile";
-  readonly tooltip = "Select Terminal Profile";
-  readonly enabled = true;
-  readonly checked = undefined;
-
-  constructor(
-    readonly profiles: readonly ITerminalProfile[],
-    readonly selectedProfileId: string | undefined,
-    readonly selectProfile: (profileId: string) => void,
-  ) {}
-
-  run(): void {}
-}
-
-class TerminalProfileActionViewItem extends ActionViewItem {
-  #select: HTMLSelectElement | undefined;
-
-  constructor(readonly profileAction: TerminalProfileAction) {
-    super(profileAction);
-  }
-
-  override render(container: HTMLElement): void {
-    container.classList.add("zeta-terminal-profile-action");
-    const select = container.ownerDocument.createElement("select");
-    this.#select = select;
-    select.className = "zeta-terminal-profile";
-    select.setAttribute("aria-label", "Terminal profile");
-    const options = this.profileAction.profiles.map((profile) => {
-      const option = container.ownerDocument.createElement("option");
-      option.value = profile.profileId;
-      option.textContent = profile.isDefault ? `${profile.title} (Default)` : profile.title;
-      option.selected = profile.profileId === this.profileAction.selectedProfileId;
-      return option;
-    });
-    select.append(...options);
-    this.own(addDisposableListener(select, "change", () => {
-      this.profileAction.selectProfile(select.value);
-    }));
-    container.append(select);
-  }
-
-  override focus(): void {
-    this.#requireSelect().focus();
-  }
-
-  override setTabbable(tabbable: boolean): void {
-    this.#requireSelect().tabIndex = tabbable ? 0 : -1;
-  }
-
-  #requireSelect(): HTMLSelectElement {
-    if (!this.#select) throw new Error("Terminal profile action is not rendered");
-    return this.#select;
-  }
 }
 
 class TerminalViewItem extends DisposableOwner {
@@ -330,13 +252,3 @@ function actionButton(document: Document, label: string, text: string): HTMLButt
   button.textContent = text;
   return button;
 }
-
-function terminalAction(id: string, label: string, icon: Icon, enabled: boolean, run: () => unknown): IAction {
-  return { id, label, tooltip: label, icon, enabled, checked: undefined, run };
-}
-
-const noTerminalContextMenu = {
-  showContextMenu(): never {
-    throw new Error("Terminal title toolbar has no secondary actions");
-  },
-};

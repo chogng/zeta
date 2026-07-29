@@ -1,9 +1,9 @@
 import "@xterm/xterm/css/xterm.css";
 import { FitAddon } from "@xterm/addon-fit";
 import { Terminal } from "@xterm/xterm";
-import { DisposableOwner, toDisposable } from "../../../../base/common/lifecycle.js";
-import type { IThemeService } from "../../../../platform/theme/common/themeService.js";
-import type { ITerminalDimensions, ITerminalInstance } from "../common/terminal.js";
+import { DisposableOwner, toDisposable } from "../../../../../base/common/lifecycle.js";
+import type { IThemeService } from "../../../../../platform/theme/common/themeService.js";
+import type { ITerminalDimensions, ITerminalInstance } from "../../../../services/terminal/common/terminal.js";
 import { terminalTheme } from "./terminalTheme.js";
 
 /** One persistent xterm renderer bound to exactly one Terminal instance. */

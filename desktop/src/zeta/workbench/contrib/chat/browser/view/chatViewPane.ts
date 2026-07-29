@@ -52,7 +52,10 @@ export class ChatViewPane extends ViewPane {
     this.#titleControl = this.own(new ChatTitleControl(
       options.ownerDocument,
       viewId,
-      { selectSession: (sessionId) => this.#selectSession(sessionId) },
+      {
+        selectSession: (sessionId) => this.#selectSession(sessionId),
+        closeSession: (sessionId) => this.#closeSession(sessionId),
+      },
       menuService,
       contextMenuService,
     ));
@@ -155,6 +158,10 @@ export class ChatViewPane extends ViewPane {
     const pane = this.#panes.get(sessionId);
     if (!pane) return;
     this.#sessionService.selectThread(sessionId, pane.threadId);
+  }
+
+  #closeSession(sessionId: SessionId): void {
+    void this.#sessionService.archiveSession(sessionId).catch(() => {});
   }
 
   #syncAgentSidebarVisibility(contextKeyService: IContextKeyService): void {

@@ -1,18 +1,16 @@
-import {
-  getKeybindingLabel,
-  getKeybindingLabelParts,
-  KeybindingLabelStyle,
-} from "../../../common/keybindingLabels.js";
-import type {
-  ResolvedKeybinding,
-} from "../../../common/keybindings.js";
+import { getKeybindingLabel, getKeybindingLabelParts, KeybindingLabelStyle } from "../../../common/keybindingLabels.js";
+import type { ResolvedKeybinding } from "../../../common/keybindings.js";
 import { DisposableOwner } from "../../../common/lifecycle.js";
 import { setAriaAttribute } from "../aria/aria.js";
 
 export interface KeybindingLabelOptions {
   readonly keybinding: ResolvedKeybinding;
   readonly ownerDocument?: Document;
+  readonly presentation?: KeybindingLabelPresentation;
 }
+
+/** Component-owned visual treatment for a rendered keybinding. */
+export type KeybindingLabelPresentation = "plain" | "keycap";
 
 /** Presents a resolved keybinding without owning matching or dispatch policy. */
 export class KeybindingLabel extends DisposableOwner {
@@ -25,7 +23,7 @@ export class KeybindingLabel extends DisposableOwner {
     this.#keybinding = options.keybinding;
     this.element = ownerDocument.createElement("span");
     this.defer(() => this.element.remove());
-    this.element.className = "zeta-keybinding-label";
+    this.element.className = `zeta-keybinding-label zeta-keybinding-label-${options.presentation ?? "plain"}`;
     this.#render();
   }
 
