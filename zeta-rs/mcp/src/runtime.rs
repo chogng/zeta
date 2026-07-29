@@ -322,6 +322,11 @@ impl McpRuntime {
                 McpRuntimeError::StaleBinding.to_string(),
             ));
         };
+        if connection.catalog_stale.load(Ordering::Acquire) {
+            return Err(McpCallError::NotStarted(
+                McpRuntimeError::StaleCatalog.to_string(),
+            ));
+        }
         let mut request = CallToolRequestParams::new(binding.remote().remote_name().to_owned());
         request.arguments = Some(arguments);
         let result = connection

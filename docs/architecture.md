@@ -81,6 +81,8 @@ canonical contract 和全部调用方，不建立旧 API、旧 DTO 或旧 storag
 - `zeta-mcp-server` stdio/Streamable HTTP initialize、Agent tool start/reply、
   principal-scoped durable continuation/replay、bounded progress、form interaction、cancel 和
   bounded final result；
+- `zeta-rmcp-client` / `zeta-mcp` 外部 tools client，以及启动时 App Server/Core catalog、
+  one-time approval、durable result vertical slice；
 - Rust DTO 生成 JSON Schema/TypeScript/schema hash；
 - CLI/TUI in-process client 与 Desktop JSONL client 共用同一 dispatcher；
 - Electron supervisor、strict JSONL framing、typed peer、trusted IPC 与 generated renderer

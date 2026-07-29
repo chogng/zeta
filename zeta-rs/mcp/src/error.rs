@@ -37,6 +37,8 @@ pub enum McpRuntimeError {
     AliasCollision(String),
     #[error("MCP tool binding is not part of this runtime snapshot")]
     StaleBinding,
+    #[error("MCP server tool catalog is stale and must be rebuilt")]
+    StaleCatalog,
     #[error("MCP tool arguments must be a JSON object")]
     InvalidArguments,
     #[error("MCP host definition cannot be projected to the model contract: {0}")]

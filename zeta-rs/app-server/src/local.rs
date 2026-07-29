@@ -1,6 +1,8 @@
 use crate::AppServer;
 use crate::SlashCommandCatalog;
 use crate::local_tools::compose_local_tools;
+use crate::mcp_tools::compose_mcp_tools;
+use crate::tool_composition::{ToolPort, combine_tool_ports};
 use std::fmt;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -94,7 +96,7 @@ pub fn open_local_app_server(
         ConfigStore::open(options.state_root.join("config.authority.json"))
             .map_err(|error| OpenAppServerError(error.0))?,
     );
-    config
+    let user_config = config
         .read_snapshot()
         .map_err(|error| OpenAppServerError(error.0))?;
     let workspace = options.workspace.map(|workspace| {
@@ -110,22 +112,36 @@ pub fn open_local_app_server(
     }
     let model = Arc::new(ConfigBackedModelService {
         config: config.clone(),
-        workspace,
+        workspace: workspace.clone(),
         resolver: Arc::new(ModelProviderSnapshotResolver {
             model_provider: Arc::new(ModelProviderRuntime::builtin()),
         }),
     });
+    let runtime_config = model
+        .resolve_config(&user_config)
+        .map_err(|error| OpenAppServerError(error.to_string()))?;
     let mut server = AppServer::new(sessions, model)
         .with_config_store(config)
         .with_slash_command_catalog(options.slash_commands);
+    let mut tool_ports = Vec::new();
     if let Some(workspace_root) = options.workspace_root {
         let workspace = WorkspaceRoot::open(workspace_root).map_err(open_error)?;
         let tools = compose_local_tools(workspace.clone())
             .map_err(|error| OpenAppServerError(error.to_string()))?;
         server = server
             .with_file_system(Arc::new(LocalFileSystem::new(workspace.clone())))
-            .with_workspace_search(workspace, tools.ripgrep)
-            .with_tool_service(tools.tools, tools.policy);
+            .with_workspace_search(workspace, tools.ripgrep.clone());
+        tool_ports.push(ToolPort::local(tools.tools, tools.policy));
+    }
+    if let Some(mcp) = compose_mcp_tools(&runtime_config, user_config.generation)
+        .map_err(|error| OpenAppServerError(error.to_string()))?
+    {
+        tool_ports.push(ToolPort::mcp(mcp.tools, mcp.policy));
+    }
+    if let Some(tools) =
+        combine_tool_ports(tool_ports).map_err(|error| OpenAppServerError(error.to_string()))?
+    {
+        server = server.with_tool_service(tools.tools, tools.policy);
     }
     Ok(server)
 }

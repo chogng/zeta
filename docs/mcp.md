@@ -4,8 +4,8 @@
 > Rust crate：`zeta_mcp`
 > Low-level client 当前实现：[`zeta-rs/rmcp-client/`](../zeta-rs/rmcp-client/README.md)，
 > Rust crate：`zeta_rmcp_client`
-> 当前状态：low-level client 与 tools-only product runtime 已实现；App Server/Core vertical
-> slice 尚未接线
+> 当前状态：low-level client、tools-only product runtime 与启动时 App Server/Core tools
+> vertical slice 已实现
 > Core architecture：[`core.md`](core.md)
 > Agent runtime：[`zeta-agent-runtime-architecture.md`](zeta-agent-runtime-architecture.md)
 > Tool shared contract 与纯转换：[`tools.md`](tools.md)
@@ -24,8 +24,9 @@
 MCP client 分成两个边界：Current `zeta-rmcp-client` 负责官方 RMCP SDK、单 server session、
 initialize、原始 tools API 和 stdio/Streamable HTTP transport；Current `zeta-mcp` tools-only
 runtime 负责多 server 启动、provider-neutral tool catalog/binding、分页/大小限制、调用路由、
-取消与失效标记。resources、prompts、reconnect/health、credential lifecycle、policy 和
-App Server/Core 接线仍是 Proposed。
+取消与失效标记。Current App Server adapter 将启动时 user config snapshot 接入 Core
+ToolService、逐次用户 approval 和 durable result。resources、prompts、reconnect/health、
+credential lifecycle、hot reload 与 interaction delivery 仍是 Proposed。
 
 方向相反的 `zeta-mcp-server` 通过 App Server 将 Zeta Agent 暴露给外部 MCP Host。两者不共享
 runtime ownership，也不互相依赖；具体边界见 [`mcp-server.md`](mcp-server.md)。
@@ -52,7 +53,7 @@ MCP    = 如何与一个外部 capability server 建立有状态协议会话
 
 ## 2. 当前仓库审计
 
-当前仓库已有低层 client、tools-only product runtime 和配置面，但还没有端到端产品接线：
+当前仓库已有低层 client、tools-only product runtime、配置面与启动时 tools vertical slice：
 
 - [`core.md`](core.md) 与
   [`zeta-agent-runtime-architecture.md`](zeta-agent-runtime-architecture.md) 已将 MCP adapter
@@ -72,14 +73,15 @@ MCP    = 如何与一个外部 capability server 建立有状态协议会话
 - `zeta-core` 已有 approval policy 基础，目标 `zeta-tool-executor` /
   `zeta-sandboxing` 已有本地执行边界；当前 process executor 的物理 crate 仍名为
   `zeta-exec`，后续按 [`exec.md`](exec.md) 迁移；
-- App Server 尚未把 Config/Plugin declaration materialize 为 `McpServerDefinition`，也没有把
-  MCP catalog/binding 接入 Core `ToolService`、approval 和 durable Tool Call/Result；
+- App Server 已把 enabled user declaration materialize 为 `McpServerDefinition`，通过持续运行
+  的 Tokio worker 桥接同步 Core `ToolService`，合并 local/MCP definitions，并为每次 MCP call
+  生成 exact `ActionSource::McpServer` review、durable one-time approval 与 unknown outcome；
 - 当前没有 credential materialization、OAuth、自动 reconnect/health state machine、
-  resource/prompt product adapter 或跨重启 remote request 恢复。
+  config/list-changed 自动 rebuild、workspace/Plugin trust activation、resource/prompt product
+  adapter、progress/elicitation delivery 或跨重启 remote request 恢复。
 
-因此 low-level protocol/transport 与独立 tools-only runtime 是 Current；App Server vertical
-slice 及其 authorization/durability 仍是 Proposed。不能只因 crate、配置或底层 connector 已存在
-就声称用户可用的 MCP 已完成。
+因此 low-level protocol/transport、独立 tools-only runtime 和窄 App Server/Core tools slice
+是 Current；完整 lifecycle/auth/interaction surface 仍是 Proposed。
 
 ## 3. 标准基线
 
@@ -93,9 +95,9 @@ operation。[官方架构](https://modelcontextprotocol.io/specification/2025-11
 | MCP surface | Low-level client | Product runtime 策略 |
 | --- | --- | --- |
 | Base JSON-RPC lifecycle | Current | Current 多 session startup/shutdown；reconnect/health Proposed |
-| stdio | Current direct-local + injectable transport | Current runtime-ready definition；App Server 接线 Proposed |
-| Streamable HTTP | Current unauthenticated/bearer transport | Current runtime-ready definition；OAuth/安全 header policy Proposed |
-| Tools | Current 原始 list/call | Current catalog/binding/call；Core approval/durability 接线 Proposed |
+| stdio | Current direct-local + injectable transport | Current absolute executable startup；sandboxed launcher Proposed |
+| Streamable HTTP | Current unauthenticated/bearer transport | Current unauthenticated App Server startup；credential/OAuth Proposed |
+| Tools | Current 原始 list/call | Current catalog/binding/Core approval/durable result；hot reload Proposed |
 | Resources | 尚未暴露 | 首发只做 list/read，显式进入 context |
 | Prompts | 尚未暴露 | 首发只做 list/get，不当作 Skill |
 | Roots | 尚未暴露 | 只暴露已授权 workspace root，不能替代 OS sandbox |
@@ -525,7 +527,11 @@ local tool policy override
 
 secret、PID、request ID、OAuth verifier、SSE cursor 和 live session ID 不持久化为 ordinary config。
 
-目标 App Server surface 分为：
+Current App Server 只在启动 safe point 读取 enabled user declaration、建立 runtime 并把 tools
+接入 Core；没有独立 runtime/catalog/auth/diagnostic RPC。Config 更新保留 typed command 语义，
+但需重启 App Server 才会 materialize 新 MCP generation。
+
+Proposed App Server surface 分为：
 
 | 类别 | 方法示例 | 语义 |
 | --- | --- | --- |
@@ -608,13 +614,13 @@ security 和 identity。resources/prompts/auth/reconnect 落地时按独立 owne
 
 完成条件：fake server 可覆盖正常、错误、late response、cancel 和 version mismatch。
 
-### Phase M1：stdio + tools vertical slice（独立 runtime 完成，产品接线未完成）
+### Phase M1：stdio + tools vertical slice（窄启动时接线完成）
 
 - ✅ direct stdio connector 与 graceful shutdown；
 - ✅ tools/list pagination、catalog snapshot 和 list-changed stale 标记；
 - ✅ frozen tool binding、argument shape/output size validation 与 protocol cancellation；
-- 尚未接入 sandbox/process supervisor、Core Turn tool loop、approval、durable Tool Call/Result
-  和 UnknownOutcome recovery。
+- ✅ 接入 Core Turn tool loop、逐次 approval、durable Tool Call/Result 和 UnknownOutcome；
+- sandbox/process supervisor、config/list-changed rebuild 与 interaction delivery 尚未接入。
 
 完成条件：server crash、取消和 Thread recovery 不会静默重放有副作用调用。
 

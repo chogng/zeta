@@ -15,6 +15,7 @@ base64 = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
+tokio = { workspace = true, features = ["rt", "sync", "time"] }
 zeta-app-server-protocol = { workspace = true }
 zeta-app-server-transport = { workspace = true }
 zeta-async-utils = { workspace = true }
@@ -25,9 +26,11 @@ zeta-file-system = { workspace = true }
 zeta-install-context = { workspace = true }
 zeta-model-provider = { workspace = true }
 zeta-model-provider-config = { workspace = true }
+zeta-mcp = { workspace = true }
 zeta-policy = { workspace = true }
 zeta-protocol = { workspace = true }
 zeta-rollout = { workspace = true }
+zeta-rmcp-client = { workspace = true }
 zeta-sandboxing = { workspace = true }
 zeta-shell-command = { workspace = true }
 zeta-tools = { workspace = true }

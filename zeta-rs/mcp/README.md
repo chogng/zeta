@@ -100,16 +100,15 @@ runtime。
 
 ## 接入义务
 
-App Server adapter 仍需负责：
+App Server adapter 当前已负责 tools vertical slice 的：
 
-- 从 `zeta-config` 和 Plugin snapshot 选择已启用 server；
-- 通过 secret/process/network owner materialize definition；
+- 从 user `zeta-config` snapshot 选择已启用 server；
+- materialize absolute stdio executable 与 unauthenticated HTTP endpoint；
 - 把 `catalog().model_definitions()` 与 frozen binding 接入 Core `ToolService`；
 - 执行 approval、durable Tool Call/Result、unknown-outcome recovery；
-- 在 list-changed/config generation 后选择 safe point 重建 runtime；
-- 把 progress、elicitation 和诊断交付给有界 interaction channel。
 
-这些义务尚未在 App Server 接线，因此本 crate 已实现不等于终端用户已经可以调用外部 MCP。
+App Server 尚未负责 Plugin/workspace trust、credential materialization、sandboxed stdio launcher、
+config/list-changed 后的自动 safe-point rebuild，以及 progress/elicitation/diagnostic delivery。
 
 ## 测试与修改影响
 
@@ -130,9 +129,10 @@ startup policy、cancellation 或 output projection 时，必须同步检查这�
 - Current：tools 的多 server discovery/call 已实现；resources、prompts、roots、sampling 和
   tasks 尚未进入 product runtime。
 - Current：list-changed 只标记 stale；自动 reconnect、backoff、health state machine 和 catalog
-  replacement 由后续 host lifecycle 实现。
+  replacement 由后续 host lifecycle 实现；stale server 的新调用会 fail closed。
 - Current：production factory 可连接 direct stdio 与 unauthenticated/bearer Streamable HTTP；
   sandboxed launcher、OAuth 和 credential refresh 需由宿主注入。
-- Current：没有 App Server/Core adapter、approval 或 durable recovery。
+- Current：App Server/Core tools adapter、one-time approval 与 durable result 已接入；runtime
+  snapshot 只在 App Server 启动时构造，且 App Server 当前采用 `RequireAll` startup。
 - Extension point：实现 `McpSessionFactory` 可注入受 sandbox 管理的 process、远端执行或自定义
   HTTP stack，而不改变 catalog/binding 语义。

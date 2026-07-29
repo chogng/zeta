@@ -4,7 +4,8 @@
 > model adapter。External method contract 见
 > [`docs/zeta-app-server-api.md`](../../docs/zeta-app-server-api.md)，canonical product model 见
 > [`docs/protocol.md`](../../docs/protocol.md)，workspace 搜索的跨层 ownership 见
-> [`docs/search.md`](../../docs/search.md)。
+> [`docs/search.md`](../../docs/search.md)，外部 MCP client runtime 的跨 crate 语义见
+> [`docs/mcp.md`](../../docs/mcp.md)。
 
 `zeta-app-server` 是产品客户端与 Zeta domain/runtime 的 application boundary。它解析
 `zeta-app-server-protocol` request，调用 `SessionCoordinator`、Thread controller、
@@ -24,6 +25,7 @@ JSONL / in-process caller
    ├─ ConfigStore
    ├─ optional WorkspaceFileSystem
    ├─ optional WorkspaceSearchService
+   ├─ optional McpRuntimeOwner → zeta-mcp
    ├─ connection-owned ResourceStore
    └─ UpdateBroker → session/update, thread/update
 ```
@@ -56,7 +58,9 @@ request-ID set、notification queue 与 resource ownership；Session/Thread dura
 | `ProviderReviewModel` | `ModelInvoker → zeta_auto_review::ReviewModel` adapter |
 
 `AppServer::new` 默认用 `TurnExecutor::without_tools`。`with_tool_service` 才会替换为有 Tool 和
-Policy port 的 executor。`open_local_app_server` 仅在调用方通过
+Policy port 的 executor。`open_local_app_server` 会从启动时 user config snapshot 连接明确
+`enabled` 的 unauthenticated MCP server，并把冻结 catalog 与本地工具组合；每次 MCP tool call
+仍必须经过 durable one-time approval。它仅在调用方通过
 `LocalAppServerOptions::with_workspace_root` 提供统一 Workspace 根时同时组合 filesystem 与
 workspace search、只读 `rg` registry；Zeta CLI 的 stdio 与 in-process 路径都会使用同一个启动时解析结果：
 `ZETA_WORKSPACE_ROOT` 优先，否则使用当前目录。不能因为 protocol 暴露 approval interaction 就
@@ -77,6 +81,9 @@ src/
 │       └── update_broker.rs       # per-connection subscription/cursor/fanout
 ├── local.rs                       # persistent local composition + model safe point
 ├── local_tools.rs                 # frozen rg registry + Core Tool/Policy adapters
+├── mcp_runtime.rs                 # continuously driven Tokio worker + synchronous Core bridge
+├── mcp_tools.rs                   # Config materialization + MCP Tool/Policy adapters
+├── tool_composition.rs            # frozen local/MCP definition and policy routing
 ├── review.rs                      # review-only provider adapter
 ├── resource_store.rs              # bounded in-memory connection-owned resources
 └── workspace_search.rs            # bounded connection-owned ripgrep jobs
@@ -108,6 +115,11 @@ src/
 | `compose_local_tools` | crate-private | 复用 App Server 已固定的 WorkspaceRoot、解析安装候选、冻结 rg、选择 native sandbox | discovery 失败时不降级成 unrestricted |
 | `LocalShellToolService::materialize` | private | parse call、约束 workspace 参数、冻结 rg executable | policy review 前不启动进程 |
 | `LocalReadOnlyPolicy::decide` | private | 只接受 exact revision/provenance/capability/sandbox | 不产生 unsandboxed grant |
+| `McpRuntimeOwner` | crate-private | worker thread 持有 Tokio runtime 和 live `McpRuntime` | Core thread 不嵌套 `block_on` |
+| `McpToolService::review_request` | private | exact binding/arguments/generation → MCP action digest | remote annotation 不授予只读信任 |
+| `McpApprovalPolicy::decide` | private | 只接受已知 user MCP provenance 并返回 one-time approval | 不自动批准远端副作用 |
+| `CompositeToolService` | private | model tool name → frozen local/MCP service | duplicate name 在 composition 时失败 |
+| `CompositePolicyService` | private | trusted `ActionSource` → owning policy | 不依靠 trial-and-error policy fallback |
 | `ModelSnapshotResolver` | private trait | frozen config → immutable invoker | implementation 不持有 mutable config view |
 | `SlashCommandCatalog::new` | public constructor | 校验 lowercase ASCII/interior-hyphen name、非空描述与唯一性 | 不执行命令、不引用 TUI built-ins |
 | `ProviderReviewModel::request` | private | system/input/schema → tool-disabled zero-temperature request | reviewer 不获得 Tool capability |
@@ -200,6 +212,10 @@ RolloutRepository::open(state_root)
 
 ConfigStore::open(config.authority.json)
 └─ read_snapshot preflight
+   └─ enabled user MCP declarations
+      ├─ materialize absolute stdio executable / unauthenticated HTTP endpoint
+      ├─ McpRuntimeOwner::start
+      └─ immutable catalog + CompositeToolService
 
 optional WorkspaceConfigStore
 └─ WorkspaceConfigTracker::read preflight
@@ -212,6 +228,14 @@ ConfigBackedModelService
 `ModelSnapshotResolver` 生成 immutable invoker。因此 config change 影响下一次 invocation，不会
 改变已经运行的 invocation。`ProviderModelService` 在 invoker 调用前后检查 cancellation；底层同步
 provider request 能否中途停止仍取决于 provider transport。
+
+MCP runtime 当前只在 `open_local_app_server` safe point 构造。`enabled` 是建立连接/启动 server
+的显式用户 intent；它不批准任何 tool call。stdio command 必须是存在的 absolute executable，
+HTTP 当前只接受 unauthenticated endpoint，credential reference 会使 composition 明确失败。
+Workspace MCP intent 仍保持 pending trust，不会接入。Config mutation 或 `tools/list_changed`
+不会原地改 catalog：list-changed 后旧 runtime fail closed；当前需重启 App Server 才会构造新
+generation。启动采用 `RequireAll`，任一 enabled server 无法 initialize 时 App Server 明确启动
+失败，不会静默丢失部分 catalog。
 
 缺少 preferred model/provider 时创建 `UnavailableModel`，使 invocation 显式失败，不回退到 echo
 或任意默认 provider。
@@ -310,7 +334,8 @@ separate ownership decision. The cross-crate trust model is documented in
 Tests 覆盖 initialization/request IDs、Session-first flow、command replay/conflict、fork lineage、
 Turn replay/model-once、multi-connection update、reconnect durable gap、connection-owned resources、
 config command、interaction/approval resolve、response-before-notification、model config safe point、
-Workspace override、review-only request，以及只读 `rg` definition/materialization/policy/execution。
+Workspace override、review-only request、只读 `rg` definition/materialization/policy/execution，
+以及 MCP worker bridge、exact provenance/approval policy、local/MCP 路由与 collision rejection。
 
 local tool 的参数白名单、discovery、取消与输出限制由
 [`zeta-shell-command`](../shell-command/README.md) 和 [`zeta-exec`](../exec/README.md) 维护；
@@ -318,5 +343,8 @@ local tool 的参数白名单、discovery、取消与输出限制由
 
 当前 server 是 synchronous JSONL/in-process boundary；没有 async multi-connection scheduler、
 serialization-scope enforcement、notification backpressure、durable resource、immediate disconnect
-cleanup 或 complete network server lifecycle。演进这些能力时应保留 protocol registry唯一性、
-Core/store authority、snapshot + durable gap 和 per-invocation config safe point。
+cleanup 或 complete network server lifecycle。MCP 当前没有 credential materialization、stdio
+process sandbox、runtime hot reload、list-changed rebuild、progress/elicitation delivery 或 image
+result 的原生 Core content path；MCP image 暂时编码进 bounded JSON text result。演进这些能力时
+应保留 protocol registry唯一性、Core/store authority、snapshot + durable gap 和
+per-invocation config safe point。

@@ -2,10 +2,13 @@
 
 mod local;
 mod local_tools;
+mod mcp_runtime;
+mod mcp_tools;
 mod resource_store;
 mod review;
 mod server;
 mod slash_commands;
+mod tool_composition;
 mod workspace_search;
 
 pub use local::OpenAppServerError;

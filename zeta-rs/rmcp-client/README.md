@@ -96,7 +96,7 @@ timeout/cancellation、callback 或 transport 时需同步检查本 README 与
 
 ## Current limitations / Extension points
 
-- Current：低层 client 已被 `zeta-mcp` product runtime 使用；尚未接入 App Server/Core tool loop。
+- Current：低层 client 已通过 `zeta-mcp` 接入 App Server/Core tools vertical slice。
 - Current：支持 tools list/call；resources、prompts、roots 与 custom request 尚未暴露。
 - Current：HTTP 支持 unauthenticated/bearer；OAuth discovery/refresh、custom header policy 与
   credential persistence 尚未实现。

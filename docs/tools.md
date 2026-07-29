@@ -1385,13 +1385,13 @@ mod tests;
 
 完成条件：registry 更新不能劫持 in-flight call，stale binding 被明确拒绝。
 
-### Phase T2：MCP 与 dynamic adapter（MCP 独立 runtime 部分完成）
+### Phase T2：MCP 与 dynamic adapter（MCP tools vertical slice 部分完成）
 
 - ✅ `zeta-mcp` 输出 `McpToolProjection` 并建立 immutable catalog/binding；
 - ✅ 接通 MCP schema/name/result conversion 与调用取消；
+- ✅ MCP App Server/Core adapter 接入逐次 approval、durable commit 和 unknown outcome；
 - dynamic definition 与 interaction execution 使用同一 output contract；
 - Tool Call durable provenance 增加 source/digest；
-- MCP App Server/Core adapter 接入 approval、durable commit 和 recovery；
 - 覆盖 transport-lost 和 owner-disconnect uncertain outcome 的端到端语义。
 
 完成条件：MCP/dynamic 工具都不能绕过普通 approval、commit 和 recovery。

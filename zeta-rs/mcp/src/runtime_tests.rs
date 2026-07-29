@@ -197,6 +197,37 @@ async fn rejects_binding_from_another_catalog_generation() {
 }
 
 #[tokio::test]
+async fn rejects_calls_after_server_catalog_becomes_stale() {
+    let server = McpServerId::new("user:mcp:docs").unwrap();
+    let runtime = McpRuntime::start_with_factory(
+        vec![definition(server.as_str())],
+        Arc::new(FakeFactory::default()),
+        McpRuntimeOptions::new("zeta-test", "0"),
+    )
+    .await
+    .unwrap();
+    let binding = runtime.catalog().tools()[0].binding().clone();
+    runtime
+        .connections
+        .get(&server)
+        .expect("connection")
+        .catalog_stale
+        .store(true, Ordering::Release);
+
+    let error = runtime
+        .call_tool(
+            &binding,
+            serde_json::json!({}),
+            &CancellationSource::new().token(),
+        )
+        .await
+        .expect_err("stale catalog must fail closed");
+
+    assert!(matches!(error, McpCallError::NotStarted(_)));
+    assert!(runtime.shutdown().await.is_empty());
+}
+
+#[tokio::test]
 async fn rejects_zero_catalog_limit_before_connecting() {
     let factory = Arc::new(FakeFactory::default());
     let limits = McpCatalogLimits {
