@@ -15,6 +15,7 @@ desktop/dist/
 node_modules/
 .pnpm-store/
 desktop/generated/app-server/
+desktop/generated/file-icons/
 schemas/app-server/
 
 # Downloaded, checksum-verified third-party native runtime artifacts.

@@ -44,7 +44,10 @@ export {
   type HoverContent,
   type HoverOptions,
 } from "./hover/hover.js";
-export { IconLabel } from "./iconlabel/iconlabel.js";
+export {
+  IconLabel,
+  type IconLabelOptions,
+} from "./iconlabel/iconlabel.js";
 export { InputBox, type InputBoxOptions } from "./inputbox/inputbox.js";
 export {
   KeybindingLabel,
@@ -68,7 +71,10 @@ export { PixelSpinner } from "./pixelspinner/pixelspinner.js";
 export { ProgressBar } from "./progressbar/progressbar.js";
 export { Resizable } from "./resizable/resizable.js";
 export { Sash, type SashOrientation } from "./sash/sash.js";
-export { Scrollbar } from "./scrollbar/scrollbar.js";
+export {
+  Scrollbar,
+  type ScrollbarOptions,
+} from "./scrollbar/scrollbar.js";
 export {
   SelectBox,
   type SelectBoxOptions,

@@ -1,1 +1,34 @@
-.zeta-icon-label { display: inline-flex; gap: 4px; align-items: center; }
+.zeta-icon-label {
+  display: inline-flex;
+  min-width: 0;
+  gap: 4px;
+  align-items: center;
+}
+
+.zeta-icon-label-icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+}
+
+.zeta-icon-label-icon:empty:not(.is-reserved) {
+  display: none;
+}
+
+.zeta-icon-label-icon.is-reserved {
+  width: 16px;
+  height: 16px;
+}
+
+.zeta-icon-label-icon .zeta-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.zeta-icon-label-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

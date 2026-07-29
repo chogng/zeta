@@ -32,8 +32,15 @@ pub(crate) struct LocalToolComposition {
 pub(crate) fn compose_local_tools(
     workspace_path: impl AsRef<Path>,
 ) -> Result<LocalToolComposition, LocalToolError> {
-    let workspace = WorkspaceRoot::open(workspace_path).map_err(LocalToolError::workspace)?;
     let ripgrep = RipgrepExecutable::discover().map_err(LocalToolError::ripgrep)?;
+    compose_local_tools_with_ripgrep(workspace_path, ripgrep)
+}
+
+pub(crate) fn compose_local_tools_with_ripgrep(
+    workspace_path: impl AsRef<Path>,
+    ripgrep: RipgrepExecutable,
+) -> Result<LocalToolComposition, LocalToolError> {
+    let workspace = WorkspaceRoot::open(workspace_path).map_err(LocalToolError::workspace)?;
     let policy = LocalReadOnlyPolicy::new(&workspace, &ripgrep);
     let service = LocalShellToolService::new(workspace, ripgrep, native_sandbox())?;
     Ok(LocalToolComposition {

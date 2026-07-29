@@ -25,6 +25,27 @@ export interface IResolveStartupWorkspaceOptions {
   readonly cwd: string;
 }
 
+export interface IFolderRelaunchArgumentsOptions {
+  readonly appPath: string;
+  readonly folderPath: string;
+  readonly isPackaged: boolean;
+}
+
+/** Builds process arguments that reopen Zeta on one selected folder. */
+export function folderRelaunchArguments({
+  appPath,
+  folderPath,
+  isPackaged,
+}: IFolderRelaunchArgumentsOptions): readonly string[] {
+  if (!appPath.trim()) throw new TypeError("App path must not be empty");
+  if (!folderPath.trim()) throw new TypeError("Folder path must not be empty");
+  return [
+    ...(isPackaged ? [] : [appPath]),
+    "--folder",
+    folderPath,
+  ];
+}
+
 /**
  * Resolves user-facing workspace targets for native windows.
  *

@@ -52,6 +52,10 @@ test("BrowserFileService maps wire entries back to resource URIs", async () => {
           entries: [{ name: "main.ts", fileType: "file" }],
         };
       },
+      readFile: async ({ path }) => {
+        assert.equal(path, "src/main.ts");
+        return { content: "export {};" };
+      },
     },
   });
 
@@ -63,5 +67,9 @@ test("BrowserFileService maps wire entries back to resource URIs", async () => {
       name: "main.ts",
       kind: FileKind.File,
     }],
+  );
+  assert.equal(
+    await service.readFile(URI.file("C:\\project\\src\\main.ts")),
+    "export {};",
   );
 });

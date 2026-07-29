@@ -1,0 +1,95 @@
+# Workspace Search：Rust 权威执行与 Desktop 投影
+
+> 本文是 workspace 内容搜索的跨进程 ownership、产品语义和演进边界的 canonical 文档。
+> App Server 内部实现细节见
+> [`zeta-rs/app-server/README.md`](../zeta-rs/app-server/README.md)，wire DTO 与生成流程见
+> [`zeta-rs/app-server-protocol/README.md`](../zeta-rs/app-server-protocol/README.md)。
+
+## 决策摘要
+
+Workspace Search 由 Rust / App Server 承担权威执行，Desktop Search contrib 只拥有查询表单、
+取消时机、增量结果投影和可丢弃的视图状态。当前实现使用
+`workspace/search/start`、`workspace/search/read`、`workspace/search/cancel` 三个 pull RPC，
+而不是把 `rg` 进程、路径授权或无界结果流放进 Renderer。
+
+这套 RPC 是产品搜索能力，不是模型 Tool。模型是否可以调用搜索、如何审批以及如何向模型压缩
+结果属于另一条 Tool/Policy contract；两者不能共享隐式权限或生命周期。
+
+## Ownership
+
+| 能力 | Owner | 当前状态 |
+| --- | --- | --- |
+| query、大小写、正则和 include/exclude 输入 | Renderer | ✅ |
+| 结果分组、高亮、状态和重新搜索取消 | Renderer | ✅ |
+| IPC sender、exact shape 与输入上限的快速校验 | Electron Main | ✅ |
+| workspace root 授权、`rg` executable 冻结与进程生命周期 | Rust / App Server | ✅ |
+| job identity、connection ownership、分页游标、取消与结果上限 | Rust / App Server | ✅ |
+| wire DTO、method registry、schema 与 TypeScript bindings | `zeta-app-server-protocol` | ✅ |
+| 点击结果后读取文件并打开编辑器 | Files / Editor vertical | 尚未完成 |
+| replace、索引、multi-root 和 watcher 驱动的结果失效 | 未确定 | 尚未完成 |
+
+## End-to-end flow
+
+```text
+SearchViewPane
+  → IWorkspaceSearchService.search(query, signal, onProgress)
+  → trusted zeta:workspace-search:* IPC
+  → AppServerClient
+  → workspace/search/start
+  → connection-owned WorkspaceSearchService job
+  → frozen RipgrepExecutable under WorkspaceRoot
+  → workspace/search/read batches
+  → renderer groups and highlights matches
+  → workspace/search/cancel releases the job
+```
+
+`start` 冻结查询参数并返回 opaque `searchId`。`read` 使用 `afterMatch` cursor 读取最多 200 条；
+没有新结果且作业仍在运行时可以返回空 batch。Renderer 只在结果非空时推进 cursor。
+完成、取消或 Renderer 异常退出当前搜索流程时都会调用 `cancel`；完成作业也会在服务端延迟清理，
+因此 cleanup RPC 失败不改变已返回结果。
+
+## 当前语义与边界
+
+- 查询不能为空，UTF-8 最多 16 KiB；单次搜索最多返回 5,000 条，Desktop 默认 2,000 条。
+- include/exclude 各最多 64 个 workspace-relative glob，每项最多 1 KiB；绝对路径、`..`、
+  前导 `!` 和 NUL 被拒绝。
+- App Server 直接启动 discovery 后冻结的 `rg` executable，使用 argument vector 和
+  `shell: false` 等价的进程 API，不做 shell 拼接。
+- `rg` 未安装时 stdio App Server 仍可启动，但 `workspaceSearch` capability 为 `false`，
+  Search 调用返回 `SearchUnavailable`；Desktop 会把显式 `ZETA_RG_PATH` 透传给可信子进程。
+- 搜索 cwd 固定为受信 `WorkspaceRoot`；当前沿用 ripgrep 默认 ignore/hidden 行为。
+- preview 单行最多由 `--max-columns=1000 --max-columns-preview` 约束，单文件最大 16 MiB。
+- match range 在 Rust 中从 ripgrep byte offset 转换为 UTF-16 offset，Renderer 可直接用于
+  JavaScript 字符串切片。
+- job 绑定创建它的 App Server connection。其他 connection 的 read/cancel 返回
+  `SearchNotOwner`；未知或已释放 ID 返回 `SearchNotFound`。
+- 同一 server 最多保留 32 个 job；超限返回 `SearchBusy`。已完成 job 最长保留约 5 分钟。
+- 进程或解析失败通过 terminal `read.error` 返回稳定、已脱敏的说明；不会把任意 stderr 暴露给
+  Renderer。
+
+当前 SearchViewPane 只显示根相对路径、行号、preview 与高亮。它不尝试用现有目录枚举 API
+拼出文件内容，也不伪造 editor input；在 Files 具备受约束的 read-file contract、Editor
+具备稳定打开路径后，再把结果激活接到该 vertical。
+
+## 取舍
+
+| 方案 | 判断 | 原因 |
+| --- | --- | --- |
+| Renderer 直接运行 `rg` | ❌ | 绕过 sandbox、workspace authority 和跨客户端产品语义 |
+| 单个同步 RPC 返回全部结果 | ❌ | 受 1 MiB JSONL frame 限制，取消与首批结果延迟也更差 |
+| JSON-RPC notification 推送每条结果 | 暂不采用 | 当前 notification queue 无 backpressure，慢消费者可放大内存 |
+| connection-owned pull job | ✅ | bounded batch、显式取消，并复用现有同步 JSONL transport |
+| 复活旧模型 Search Tool 作为 UI backend | ❌ | 产品 UI 和模型 Tool 的调用者、权限及结果预算不同 |
+
+## 演进
+
+近期只在现有 contract 内完善可用性：空结果/错误呈现、查询历史和搜索中再次提交。结果点击必须
+等待受信 file-content API 与 editor opening contract，不由 Search 绕过。
+
+如果未来数据表明大型仓库的进程启动或重复扫描成为瓶颈，可以评估 Rust-owned index。索引必须
+先定义 watcher、一致性、ignore 语义、持久化和隐私边界；当前 `searchId` 不承诺索引实现，也
+不应泄漏 backend 类型。只有 transport 获得有界 backpressure 后，才考虑用 notification
+替代 pull。
+
+长期不变项是：Renderer 不获得任意进程或磁盘权限；workspace 授权在 Rust 可信边界重复校验；
+结果传输有明确上限；job 不跨 connection 泄漏；产品搜索与模型 Tool 保持独立 contract。

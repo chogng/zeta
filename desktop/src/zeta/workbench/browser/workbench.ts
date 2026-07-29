@@ -64,6 +64,12 @@ import {
   bindColorTheme,
 } from "../../platform/theme/browser/themeStyles.js";
 import {
+  IFileIconThemeService,
+} from "../../platform/theme/browser/fileIconThemeService.js";
+import {
+  SetiFileIconThemeService,
+} from "../../platform/theme/browser/setiFileIconTheme.js";
+import {
   IThemeService,
   ThemeService,
 } from "../../platform/theme/common/themeService.js";
@@ -107,9 +113,21 @@ import {
   WorkspaceContextService,
 } from "../services/workspaces/browser/workspaceContextService.js";
 import {
+  IWorkspaceOpenService,
+  WorkspaceOpenService,
+} from "../services/workspaces/browser/workspaceOpenService.js";
+import {
   IViewDescriptorService,
   ViewDescriptorService,
 } from "../services/views/common/viewDescriptorService.js";
+import {
+  IViewsService,
+  ViewsService,
+} from "../services/views/browser/viewsService.js";
+import {
+  IWorkbenchSessionService,
+  WorkbenchSessionService,
+} from "../services/sessions/common/sessionService.js";
 import {
   WorkbenchConfigurationService,
 } from "../services/configuration/browser/configurationService.js";
@@ -134,6 +152,12 @@ import {
   WorkbenchLayout,
   type WorkbenchPartId,
 } from "./layout.js";
+import {
+  IWorkspaceSearchService,
+} from "../../platform/search/common/search.js";
+import {
+  BrowserWorkspaceSearchService,
+} from "../../platform/search/browser/searchService.js";
 import type { WorkbenchPart } from "./part.js";
 import {
   ActivitybarPart,
@@ -152,7 +176,7 @@ import type {
 import {
   ViewPaneContainer,
 } from "./parts/views/viewPaneContainer.js";
-import { Viewlet } from "./parts/views/viewlet.js";
+import { PaneComposite } from "./parts/views/paneComposite.js";
 import { WorkbenchWindow } from "./window.js";
 
 /** Host-specific inputs required to construct a workbench. */
@@ -213,12 +237,20 @@ export class Workbench extends DisposableOwner {
     if (nativeHostApi) {
       services.set(INativeHostService, nativeHostApi);
     }
+    services.set(
+      IWorkspaceOpenService,
+      new WorkspaceOpenService(nativeHostApi),
+    );
     const workspaceContext = new WorkspaceContextService(workspace);
     services.set(IWorkspaceContextService, workspaceContext);
     services.set(IFileService, new BrowserFileService({
       api: api.fs,
       workspaceContextService: workspaceContext,
     }));
+    services.set(
+      IWorkspaceSearchService,
+      new BrowserWorkspaceSearchService(api.workspaceSearch),
+    );
     const currentWorkspace = workspaceContext.getWorkspace();
     const workbenchState = workspaceContext.getWorkbenchState();
     const workbenchWindow = this.own(new WorkbenchWindow({
@@ -238,6 +270,10 @@ export class Workbench extends DisposableOwner {
       ),
     ));
     services.set(IThemeService, themeService);
+    services.set(
+      IFileIconThemeService,
+      this.own(new SetiFileIconThemeService(themeService)),
+    );
     this.own(configuration.onDidChangeConfiguration((event) => {
       if (event.affectsConfiguration(WorkbenchConfiguration.colorTheme)) {
         themeService.setColorTheme(getWorkbenchColorTheme(
@@ -282,6 +318,8 @@ export class Workbench extends DisposableOwner {
       contextKeyService: contextKeys,
     }));
     services.set(IViewDescriptorService, viewDescriptors);
+    const sessionService = this.own(new WorkbenchSessionService(api));
+    services.set(IWorkbenchSessionService, sessionService);
     const keyboardLayout = this.own(new BrowserKeyboardLayoutService({
       navigator: ownerDocument.defaultView?.navigator ?? navigator,
     }));
@@ -335,62 +373,91 @@ export class Workbench extends DisposableOwner {
       viewDescriptorService: viewDescriptors,
     }));
     const sidebar = this.own(new SidebarPart(ownerDocument, activitybar));
-    const sidebarViewContainer = requiredViewContainer(
-      viewDescriptors,
-      ViewContainerLocation.Sidebar,
-    );
-    const openSidebarViewContainer = (
-      viewContainerId: string,
-    ): void => {
-      const viewContainer = viewDescriptors
-        .getViewContainers(ViewContainerLocation.Sidebar)
-        .find((candidate) => candidate.id === viewContainerId);
-      if (!viewContainer) {
-        throw new Error(
-          `Sidebar View Container is not registered: ${viewContainerId}`,
-        );
-      }
-      sidebar.setViewlet(new Viewlet({
-        viewContainer,
-        model: viewDescriptors.getViewContainerModel(viewContainer.id),
-        instantiationService,
-        contextKeyService: contextKeys,
-        ownerDocument,
-      }));
-      activitybar.setActiveViewContainer(viewContainer.id);
-    };
-    openSidebarViewContainer(sidebarViewContainer.id);
-    const session = this.own(new SessionPart(ownerDocument));
+    const session = this.own(new SessionPart(
+      ownerDocument,
+      sessionService,
+    ));
     const editor = this.own(new EditorPart(ownerDocument, {
       keybindingService: keybindings,
     }));
     services.set(IEditorPart, editor);
+    const sidebarCompositeDescriptor = requiredViewContainer(
+      viewDescriptors,
+      ViewContainerLocation.Sidebar,
+    );
+    const openSidebarComposite = (
+      compositeId: string,
+    ): PaneComposite => {
+      const viewContainer = viewDescriptors
+        .getViewContainers(ViewContainerLocation.Sidebar)
+        .find((candidate) => candidate.id === compositeId);
+      if (!viewContainer) {
+        throw new Error(
+          `Sidebar Composite is not registered: ${compositeId}`,
+        );
+      }
+      if (!sidebar.getComposite(viewContainer.id)) {
+        sidebar.addComposite(new PaneComposite({
+          viewContainer,
+          model: viewDescriptors.getViewContainerModel(viewContainer.id),
+          instantiationService,
+          contextKeyService: contextKeys,
+          ownerDocument,
+        }));
+      }
+      sidebar.showComposite(viewContainer.id);
+      activitybar.setActiveComposite(viewContainer.id);
+      return sidebar.getComposite(viewContainer.id)!;
+    };
+    openSidebarComposite(sidebarCompositeDescriptor.id);
     const panel = this.own(new PanelPart(ownerDocument));
     const panelViewContainer = requiredViewContainer(
       viewDescriptors,
       ViewContainerLocation.Panel,
     );
-    panel.setViewPaneContainer(new ViewPaneContainer({
+    const panelPaneContainer = new ViewPaneContainer({
       viewContainer: panelViewContainer,
       model: viewDescriptors.getViewContainerModel(panelViewContainer.id),
       instantiationService,
       contextKeyService: contextKeys,
       ownerDocument,
-    }));
-    const auxiliarybar = this.own(new AuxiliarybarPart(ownerDocument));
-    const auxiliaryViewContainer = requiredViewContainer(
-      viewDescriptors,
-      ViewContainerLocation.AuxiliaryBar,
-    );
-    auxiliarybar.setViewPaneContainer(new ViewPaneContainer({
-      viewContainer: auxiliaryViewContainer,
-      model: viewDescriptors.getViewContainerModel(
-        auxiliaryViewContainer.id,
-      ),
-      instantiationService,
-      contextKeyService: contextKeys,
+    });
+    panel.setViewPaneContainer(panelPaneContainer);
+    const auxiliarybar = this.own(new AuxiliarybarPart({
       ownerDocument,
+      viewDescriptorService: viewDescriptors,
     }));
+    const openAuxiliaryComposite = (
+      compositeId: string,
+    ): PaneComposite => {
+      const viewContainer = viewDescriptors
+        .getViewContainers(ViewContainerLocation.AuxiliaryBar)
+        .find((candidate) => candidate.id === compositeId);
+      if (!viewContainer) {
+        throw new Error(
+          `Auxiliary Composite is not registered: ${compositeId}`,
+        );
+      }
+      if (!auxiliarybar.getComposite(viewContainer.id)) {
+        auxiliarybar.addComposite(new PaneComposite({
+          viewContainer,
+          model: viewDescriptors.getViewContainerModel(viewContainer.id),
+          instantiationService,
+          contextKeyService: contextKeys,
+          ownerDocument,
+        }));
+      }
+      auxiliarybar.showComposite(viewContainer.id);
+      auxiliarybar.setActiveComposite(viewContainer.id);
+      return auxiliarybar.getComposite(viewContainer.id)!;
+    };
+    const auxiliaryCompositeDescriptor =
+      viewDescriptors.getDefaultViewContainer(
+        ViewContainerLocation.AuxiliaryBar,
+      );
+    if (auxiliaryCompositeDescriptor) {
+      openAuxiliaryComposite(auxiliaryCompositeDescriptor.id);
+    }
     const statusbar = this.own(new StatusbarPart(
       statusbarService,
       ownerDocument,
@@ -409,13 +476,39 @@ export class Workbench extends DisposableOwner {
       new WorkbenchLayout(workbenchRoot, parts),
     );
     services.set(IWorkbenchLayoutService, layout);
+    services.set(IViewsService, new ViewsService({
+      viewDescriptorService: viewDescriptors,
+      openViewContainer: (container) => {
+        switch (container.location) {
+          case ViewContainerLocation.Sidebar:
+            layout.showPart("sidebar");
+            return openSidebarComposite(container.id);
+          case ViewContainerLocation.AuxiliaryBar:
+            layout.showPart("auxiliarybar");
+            return openAuxiliaryComposite(container.id);
+          case ViewContainerLocation.Panel:
+            layout.showPart("panel");
+            return container.id === panelViewContainer.id
+              ? panelPaneContainer
+              : undefined;
+        }
+      },
+    }));
     this.own(bindWorkbenchPartVisibilityContextKeys(contextKeys, layout));
-    this.own(activitybar.onDidSelectViewContainer(
-      ({ viewContainerId }) => {
-        if (sidebar.activeViewletId === viewContainerId) return;
-        openSidebarViewContainer(viewContainerId);
+    this.own(activitybar.onDidSelectComposite(
+      ({ compositeId }) => {
+        if (sidebar.activeCompositeId === compositeId) return;
+        openSidebarComposite(compositeId);
       },
     ));
+    this.own(auxiliarybar.onDidSelectComposite(
+      ({ compositeId }) => {
+        if (auxiliarybar.activeCompositeId === compositeId) return;
+        openAuxiliaryComposite(compositeId);
+        layout.showPart("auxiliarybar");
+      },
+    ));
+    void sessionService.initialize();
     contributions.advance(WorkbenchPhase.BlockRestore);
     layout.layout();
     contributions.advance(WorkbenchPhase.AfterRestored);

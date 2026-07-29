@@ -31,6 +31,7 @@ export interface IFileEntry {
 export interface IFileService {
   stat(resource: URI): Promise<IFileStat>;
   readDirectory(resource: URI): Promise<readonly IFileEntry[]>;
+  readFile(resource: URI): Promise<string>;
 }
 
 export const IFileService =

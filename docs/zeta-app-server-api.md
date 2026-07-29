@@ -90,6 +90,7 @@ notification contract，不能拥有隐藏业务接口。JSONL/stdio、WebSocket
     "turns": true,
     "resources": true,
     "fileSystem": true,
+    "workspaceSearch": true,
     "typst": true,
     "updateReplay": true
   },
@@ -135,6 +136,10 @@ inline argument parsing；提交仍通过 `turn/start.input`，并保留 `/name`
 | `resource/release` | Resource | 释放 connection-owned resource |
 | `fs/getMetadata` | workspace | 读取根相对路径的 metadata |
 | `fs/readDirectory` | workspace | 枚举根相对目录的直接子项 |
+| `fs/readFile` | workspace | 读取不超过 10 MiB 的 UTF-8 文件 |
+| `workspace/search/start` | connection + workspace | 启动有界内容搜索 |
+| `workspace/search/read` | connection + search job | 按游标读取最多 200 条结果 |
+| `workspace/search/cancel` | connection + search job | 取消并释放搜索 |
 
 长期 account control plane 另见[第 11 节](#11-account-与登录)。它尚未进入当前 registry/schema，
 加入时必须和 Rust DTO、TypeScript 与 JSON Schema 同步提交。
@@ -145,9 +150,24 @@ Filesystem method 的 `path` 是配置 workspace root 下的相对路径；空�
 绝对路径、父目录逃逸和解析后越过 root 的 symlink 会在可信 Rust 边界被拒绝。Desktop 的
 IPC 层会先做同形状校验以便快速失败，但不承担最终授权。
 
-当前 contract 只提供 `fs/getMetadata` 和 `fs/readDirectory`，用于单根 Folder 的只读
-Explorer。它不包含读取文件内容、写入、重命名、删除、搜索、watcher、多根 Workspace，
-也不保证跨请求 snapshot 一致性。客户端应把目录展开状态和重新加载策略视为可丢弃 UI 状态。
+当前 contract 提供 `fs/getMetadata`、`fs/readDirectory` 和 `fs/readFile`，用于单根
+Folder 的 Explorer 与文本文件打开。`fs/readFile` 只接受不超过 10 MiB 的 UTF-8 文件。
+Filesystem contract 本身不包含写入、重命名、删除、watcher、多根 Workspace，也不保证
+跨请求 snapshot 一致性。客户端应把目录展开状态和重新加载策略视为可丢弃 UI 状态。
+
+### Workspace Search
+
+`initialize.capabilities.workspaceSearch` 表示 server 已安装 workspace 内容搜索 backend。
+客户端通过 `workspace/search/start` 获得 connection-owned `searchId`，用
+`workspace/search/read` 的 `afterMatch` cursor 分批读取结果，最后调用
+`workspace/search/cancel` 释放作业。每个结果包含 workspace-relative path、1-based line
+number、单行 preview 和 UTF-16 match ranges。
+
+查询、glob、batch 和总结果都有协议上限；Rust backend 重新校验 workspace 边界并直接启动
+冻结的 ripgrep executable。未知 ID、跨 connection 访问和并发超限使用稳定的
+`SearchNotFound`、`SearchNotOwner` 与 `SearchBusy` error name。执行失败作为 terminal
+read result 的脱敏 `error` 返回。完整 ownership 与当前 UI 限制见
+[`search.md`](search.md)。
 
 ## 6. Session commands
 

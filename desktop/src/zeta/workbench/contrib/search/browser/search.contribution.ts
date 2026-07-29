@@ -3,14 +3,16 @@ import {
   SyncDescriptor,
 } from "../../../../platform/instantiation/common/instantiation.js";
 import {
-  PlaceholderViewPane,
-} from "../../../browser/parts/views/placeholderViewPane.js";
+  IWorkspaceSearchService,
+} from "../../../../platform/search/common/search.js";
 import {
   ViewContainerLocation,
   type WorkbenchViewRegistry,
   WorkbenchViewContainerId,
   ViewsRegistry,
 } from "../../../common/views.js";
+import { SearchViewPane } from "./searchViewPane.js";
+import "./media/search.css";
 
 export const SEARCH_VIEW_ID = "zeta.searchView";
 
@@ -30,8 +32,8 @@ export function registerSearchViews(
     title: "Search",
     order: 1,
     canToggleVisibility: false,
-    ctorDescriptor: new SyncDescriptor(PlaceholderViewPane, {
-      staticArguments: ["Workspace search is not implemented yet."],
+    ctorDescriptor: new SyncDescriptor(SearchViewPane, {
+      serviceDependencies: [IWorkspaceSearchService],
     }),
   }]);
 }

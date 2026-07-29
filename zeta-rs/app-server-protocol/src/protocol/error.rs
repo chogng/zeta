@@ -21,6 +21,10 @@ pub enum AppServerErrorName {
     InvalidResourceOffset,
     FileSystemUnavailable,
     FileSystemOperationFailed,
+    SearchUnavailable,
+    SearchNotFound,
+    SearchNotOwner,
+    SearchBusy,
     ConfigUnavailable,
     ConfigRevisionConflict,
 }

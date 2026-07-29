@@ -3,9 +3,11 @@ use serde_json::Value;
 use zeta_app_server_protocol::protocol::error::AppServerErrorName;
 use zeta_app_server_protocol::protocol::fs::{
     FsFileType, FsGetMetadataParams, FsGetMetadataResult, FsReadDirectoryEntry,
-    FsReadDirectoryParams, FsReadDirectoryResult,
+    FsReadDirectoryParams, FsReadDirectoryResult, FsReadFileParams, FsReadFileResult,
 };
 use zeta_file_system::{FileSystemError, FileType};
+
+const MAX_EDITOR_FILE_BYTES: usize = 10 * 1024 * 1024;
 
 impl AppServer {
     pub(super) fn fs_get_metadata(&self, params: &Value) -> Result<Value, RpcError> {
@@ -35,6 +37,18 @@ impl AppServer {
             })
             .collect();
         result(&FsReadDirectoryResult { entries })
+    }
+
+    pub(super) fn fs_read_file(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: FsReadFileParams = decode(params)?;
+        let bytes = self
+            .file_system()?
+            .read_file(&params.path, MAX_EDITOR_FILE_BYTES)
+            .map_err(file_system_error)?;
+        let content = String::from_utf8(bytes).map_err(|_| {
+            file_system_error(FileSystemError::Io("file is not valid UTF-8".into()))
+        })?;
+        result(&FsReadFileResult { content })
     }
 
     fn file_system(&self) -> Result<&dyn zeta_file_system::WorkspaceFileSystem, RpcError> {

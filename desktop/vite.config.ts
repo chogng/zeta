@@ -5,6 +5,8 @@ import {
   resolveProductId,
 } from "./src/zeta/product/common/product.js";
 
+await import("./scripts/sync-generated-resources.mjs");
+
 export default defineConfig(() => {
   const product = getProductConfiguration(
     resolveProductId(process.env.ZETA_PRODUCT),

@@ -31,6 +31,10 @@ fn registry_method_and_notification_names_are_unique() {
     assert!(methods.contains("document/typst/compile"));
     assert!(methods.contains("fs/getMetadata"));
     assert!(methods.contains("fs/readDirectory"));
+    assert!(methods.contains("fs/readFile"));
+    assert!(methods.contains("workspace/search/start"));
+    assert!(methods.contains("workspace/search/read"));
+    assert!(methods.contains("workspace/search/cancel"));
     assert!(notifications.contains("session/update"));
     assert!(notifications.contains("thread/update"));
 }
@@ -196,6 +200,11 @@ fn dto_driven_typescript_preserves_model_ref_and_patch_shape() {
     );
     assert!(typescript.contains(r#""fs/getMetadata": { method: "fs/getMetadata" }"#));
     assert!(typescript.contains(r#""fs/readDirectory": { method: "fs/readDirectory" }"#));
+    assert!(typescript.contains(r#""fs/readFile": { method: "fs/readFile" }"#));
+    assert!(
+        typescript.contains(r#""workspace/search/start": { method: "workspace/search/start" }"#)
+    );
+    assert!(typescript.contains("export type WorkspaceSearchMatch ="));
     assert!(typescript.contains("export type TypstCompileResult ="));
     assert!(typescript.contains(r#""status": "success""#));
     assert!(typescript.contains("export type TurnInteraction ="));
@@ -224,6 +233,8 @@ fn dto_driven_schema_contains_registered_rpc_envelopes() {
     assert!(definitions.contains_key("ThreadItem"));
     assert!(definitions.contains_key("TypstCompileParams"));
     assert!(definitions.contains_key("TypstCompileResult"));
+    assert!(definitions.contains_key("WorkspaceSearchStartParams"));
+    assert!(definitions.contains_key("WorkspaceSearchReadResult"));
     assert_eq!(definitions["ThreadId"]["minLength"], 1);
     assert_eq!(definitions["SessionId"]["minLength"], 1);
     assert_eq!(definitions["CommandId"]["minLength"], 1);

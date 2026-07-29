@@ -6,14 +6,14 @@
   flex: 0 0 35px;
   min-width: 0;
 }
-.zeta-workbench-sidebar > .zeta-workbench-part-title {
+.zeta-workbench-sidebar > .zeta-composite-title {
   display: flex;
   height: 35px;
   min-height: 35px;
   align-items: center;
   padding: 0 12px;
 }
-.zeta-sidebar-title {
+.zeta-workbench-sidebar .zeta-composite-title-label {
   overflow: hidden;
   margin: 0;
   color: var(--zeta-side-bar-title-foreground, #bbbbbb);
@@ -24,4 +24,4 @@
   text-transform: uppercase;
   white-space: nowrap;
 }
-.zeta-workbench-sidebar > .zeta-workbench-part-content { overflow: auto; }
+.zeta-workbench-sidebar > .zeta-composite-content { overflow: auto; }

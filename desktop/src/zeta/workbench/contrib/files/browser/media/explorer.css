@@ -1,6 +1,29 @@
-.zeta-explorer {
+.zeta-explorer-view-pane {
+  display: flex;
   min-height: 0;
-  overflow: auto;
+  flex: 1 1 auto;
+  flex-direction: column;
+}
+
+.zeta-explorer-view-pane > .zeta-view-pane-title {
+  flex: 0 0 auto;
+  text-transform: uppercase;
+}
+
+.zeta-explorer {
+  display: flex;
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+}
+
+.zeta-explorer > .zeta-scrollbar {
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+.zeta-explorer-scroll-content {
   padding: 2px 0 8px;
 }
 
@@ -17,6 +40,8 @@
 }
 
 .zeta-explorer-row {
+  display: flex;
+  align-items: center;
   width: 100%;
   overflow: hidden;
   border: 0;
@@ -29,6 +54,27 @@
   text-align: left;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.zeta-explorer-row > .zeta-icon-label {
+  min-width: 0;
+  flex: 1 1 auto;
+  width: 100%;
+}
+
+.zeta-explorer-twistie {
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  align-items: center;
+  justify-content: center;
+}
+
+.zeta-explorer-twistie .zeta-icon {
+  width: 16px;
+  height: 16px;
+  stroke: currentColor;
 }
 
 .zeta-explorer-row:hover {
@@ -48,4 +94,41 @@
 
 .zeta-explorer-error {
   color: var(--zeta-error-foreground, #f14c4c);
+}
+
+.zeta-empty-explorer {
+  display: flex;
+  min-height: 120px;
+  box-sizing: border-box;
+  align-items: center;
+  flex-direction: column;
+  gap: 12px;
+  justify-content: center;
+  padding: 24px;
+  text-align: center;
+}
+
+.zeta-empty-explorer-message {
+  max-width: 220px;
+  margin: 0;
+  color: color-mix(in srgb, currentColor 70%, transparent);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.zeta-empty-explorer-open-folder {
+  color: var(--zeta-button-foreground, #ffffff);
+  background: var(--zeta-button-background, #0e639c);
+}
+
+.zeta-empty-explorer-open-folder:not(:disabled):hover {
+  background: var(--zeta-button-hover-background, #1177bb);
+}
+
+.zeta-empty-explorer-status {
+  min-height: 18px;
+  margin: 0;
+  color: var(--zeta-error-foreground, #f14c4c);
+  font-size: 12px;
+  line-height: 18px;
 }

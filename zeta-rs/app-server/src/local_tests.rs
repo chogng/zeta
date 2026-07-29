@@ -36,6 +36,20 @@ fn workspace_config_path(label: &str) -> PathBuf {
     ))
 }
 
+#[test]
+fn optional_tool_discovery_treats_only_a_missing_ripgrep_as_unavailable() {
+    assert_eq!(
+        optional_ripgrep(Err(RipgrepDiscoveryError::NotFound)).unwrap(),
+        None
+    );
+    let invalid_override = optional_ripgrep(Err(RipgrepDiscoveryError::InvalidOverride {
+        variable: "ZETA_RG_PATH",
+        reason: "not a file".into(),
+    }))
+    .unwrap_err();
+    assert!(invalid_override.0.contains("ZETA_RG_PATH"));
+}
+
 fn remove_config_files(path: &Path) {
     let _ = std::fs::remove_file(path);
     let _ = std::fs::remove_file(path.with_extension("lock"));

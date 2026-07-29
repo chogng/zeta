@@ -1,6 +1,7 @@
 import type {
   FsGetMetadataParams,
   FsReadDirectoryParams,
+  FsReadFileParams,
   ResourceMetadataParams,
   ResourceReadParams,
   ResourceReleaseParams,
@@ -16,8 +17,12 @@ import type {
   ThreadSubscribeParams,
   ThreadUnsubscribeParams,
   TurnInterruptParams,
+  TurnInteractionResolveParams,
   TurnStartParams,
   TypstCompileParams,
+  WorkspaceSearchCancelParams,
+  WorkspaceSearchReadParams,
+  WorkspaceSearchStartParams,
 } from "../../../../../generated/app-server/types.js";
 import { APP_SERVER_METHODS } from "../../../../../generated/app-server/types.js";
 import type { AppServerSupervisor } from "./app-server-supervisor.js";
@@ -113,6 +118,15 @@ export function appServerIpcRoutes(
       invoke: (params) => supervisor.request(APP_SERVER_METHODS["turn/interrupt"], params),
     }),
     route({
+      channel: "zeta:turn:interaction:resolve",
+      validate: turnInteractionResolveParams,
+      invoke: (params) =>
+        supervisor.request(
+          APP_SERVER_METHODS["turn/interaction/resolve"],
+          params,
+        ),
+    }),
+    route({
       channel: "zeta:typst:compile",
       validate: typstCompileParams,
       invoke: (params) =>
@@ -147,6 +161,30 @@ export function appServerIpcRoutes(
       validate: fsReadDirectoryParams,
       invoke: (params) =>
         supervisor.request(APP_SERVER_METHODS["fs/readDirectory"], params),
+    }),
+    route({
+      channel: "zeta:fs:read-file",
+      validate: fsReadFileParams,
+      invoke: (params) =>
+        supervisor.request(APP_SERVER_METHODS["fs/readFile"], params),
+    }),
+    route({
+      channel: "zeta:workspace-search:start",
+      validate: workspaceSearchStartParams,
+      invoke: (params) =>
+        supervisor.request(APP_SERVER_METHODS["workspace/search/start"], params),
+    }),
+    route({
+      channel: "zeta:workspace-search:read",
+      validate: workspaceSearchReadParams,
+      invoke: (params) =>
+        supervisor.request(APP_SERVER_METHODS["workspace/search/read"], params),
+    }),
+    route({
+      channel: "zeta:workspace-search:cancel",
+      validate: workspaceSearchCancelParams,
+      invoke: (params) =>
+        supervisor.request(APP_SERVER_METHODS["workspace/search/cancel"], params),
     }),
   ];
 }
@@ -317,6 +355,234 @@ function fsReadDirectoryParams(value: unknown): FsReadDirectoryParams {
   return fsGetMetadataParams(value);
 }
 
+function turnInteractionResolveParams(
+  value: unknown,
+): TurnInteractionResolveParams {
+  const params = record(value, [
+    "commandId",
+    "sessionId",
+    "threadId",
+    "turnId",
+    "requestId",
+    "expectedSequence",
+    "response",
+  ]);
+  return {
+    commandId: nonEmptyString(params.commandId, "commandId"),
+    sessionId: nonEmptyString(params.sessionId, "sessionId"),
+    threadId: nonEmptyString(params.threadId, "threadId"),
+    turnId: nonEmptyString(params.turnId, "turnId"),
+    requestId: nonEmptyString(params.requestId, "requestId"),
+    expectedSequence: nonNegativeInteger(
+      params.expectedSequence,
+      "expectedSequence",
+    ),
+    response: agentResponse(params.response),
+  };
+}
+
+function agentResponse(
+  value: unknown,
+): TurnInteractionResolveParams["response"] {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new Error("response must be an object");
+  }
+  const type = (value as Record<string, unknown>).type;
+  switch (type) {
+    case "approval": {
+      const response = record(value, ["type", "response"]);
+      const decision = record(response.response, ["decision"]);
+      return {
+        type,
+        response: {
+          decision: stringEnum(
+            decision.decision,
+            "response.decision",
+            ["approveOnce", "decline"] as const,
+          ),
+        },
+      };
+    }
+    case "userInput": {
+      const response = record(value, ["type", "response"]);
+      const payload = record(response.response, ["answers"]);
+      if (
+        typeof payload.answers !== "object" ||
+        payload.answers === null ||
+        Array.isArray(payload.answers)
+      ) {
+        throw new Error("response.answers must be an object");
+      }
+      const answers: Record<string, { value: string }> = {};
+      for (
+        const [id, answer] of Object.entries(
+          payload.answers as Record<string, unknown>,
+        )
+      ) {
+        if (!id) throw new Error("response answer ID must not be empty");
+        const item = record(answer, ["value"]);
+        answers[id] = {
+          value: string(item.value, `response.answers.${id}.value`),
+        };
+      }
+      return { type, response: { answers } };
+    }
+    case "dynamicTool": {
+      const response = record(value, ["type", "response"]);
+      const payload = record(response.response, [
+        "callId",
+        "content",
+        "success",
+      ]);
+      if (!Array.isArray(payload.content)) {
+        throw new Error("response.content must be an array");
+      }
+      return {
+        type,
+        response: {
+          callId: nonEmptyString(
+            payload.callId,
+            "response.callId",
+          ),
+          content: payload.content.map((entry, index) => {
+            if (
+              typeof entry !== "object" ||
+              entry === null ||
+              Array.isArray(entry)
+            ) {
+              throw new Error(`response.content[${index}] must be an object`);
+            }
+            const entryType = (entry as Record<string, unknown>).type;
+            if (entryType === "text") {
+              const text = record(entry, ["type", "text"]);
+              return {
+                type: "text" as const,
+                text: string(
+                  text.text,
+                  `response.content[${index}].text`,
+                ),
+              };
+            }
+            if (entryType === "image") {
+              const image = record(entry, ["type", "dataUrl"]);
+              return {
+                type: "image" as const,
+                dataUrl: nonEmptyString(
+                  image.dataUrl,
+                  `response.content[${index}].dataUrl`,
+                ),
+              };
+            }
+            throw new Error(
+              `response.content[${index}].type is unsupported`,
+            );
+          }),
+          success: boolean(payload.success, "response.success"),
+        },
+      };
+    }
+    default:
+      throw new Error("response.type is unsupported");
+  }
+}
+
+function fsReadFileParams(value: unknown): FsReadFileParams {
+  return fsGetMetadataParams(value);
+}
+
+function workspaceSearchStartParams(
+  value: unknown,
+): WorkspaceSearchStartParams {
+  const params = record(value, [
+    "query",
+    "patternKind",
+    "caseSensitivity",
+    "includePatterns",
+    "excludePatterns",
+    "maxResults",
+  ]);
+  const query = nonEmptyString(params.query, "query");
+  if (new TextEncoder().encode(query).byteLength > 16_384) {
+    throw new Error("query must not exceed 16384 UTF-8 bytes");
+  }
+  return {
+    query,
+    patternKind: stringEnum(
+      params.patternKind,
+      "patternKind",
+      ["literal", "regex"] as const,
+    ),
+    caseSensitivity: stringEnum(
+      params.caseSensitivity,
+      "caseSensitivity",
+      ["smart", "sensitive", "insensitive"] as const,
+    ),
+    includePatterns: searchPatterns(
+      params.includePatterns,
+      "includePatterns",
+    ),
+    excludePatterns: searchPatterns(
+      params.excludePatterns,
+      "excludePatterns",
+    ),
+    maxResults: boundedPositiveInteger(
+      params.maxResults,
+      "maxResults",
+      5_000,
+    ),
+  };
+}
+
+function workspaceSearchReadParams(
+  value: unknown,
+): WorkspaceSearchReadParams {
+  const params = record(value, [
+    "searchId",
+    "afterMatch",
+    "maxMatches",
+  ]);
+  return {
+    searchId: nonEmptyString(params.searchId, "searchId"),
+    afterMatch: nonNegativeInteger(params.afterMatch, "afterMatch"),
+    maxMatches: boundedPositiveInteger(
+      params.maxMatches,
+      "maxMatches",
+      200,
+    ),
+  };
+}
+
+function workspaceSearchCancelParams(
+  value: unknown,
+): WorkspaceSearchCancelParams {
+  const params = record(value, ["searchId"]);
+  return {
+    searchId: nonEmptyString(params.searchId, "searchId"),
+  };
+}
+
+function searchPatterns(value: unknown, field: string): string[] {
+  if (!Array.isArray(value) || value.length > 64) {
+    throw new Error(`${field} must be an array with at most 64 entries`);
+  }
+  return value.map((entry, index) => {
+    const pattern = nonEmptyString(entry, `${field}[${index}]`);
+    if (
+      new TextEncoder().encode(pattern).byteLength > 1_024 ||
+      pattern.includes("\0") ||
+      pattern.startsWith("!") ||
+      pattern.startsWith("/") ||
+      /^[A-Za-z]:[\\/]/.test(pattern) ||
+      pattern.replaceAll("\\", "/").split("/").includes("..")
+    ) {
+      throw new Error(
+        `${field}[${index}] must be a workspace-relative glob`,
+      );
+    }
+    return pattern;
+  });
+}
+
 function relativeWorkspacePath(value: unknown): string {
   const path = string(value, "path");
   if (
@@ -394,6 +660,13 @@ function string(value: unknown, field: string): string {
   return value;
 }
 
+function boolean(value: unknown, field: string): boolean {
+  if (typeof value !== "boolean") {
+    throw new Error(`${field} must be a boolean`);
+  }
+  return value;
+}
+
 function nonNegativeInteger(value: unknown, field: string): number {
   if (!Number.isSafeInteger(value) || (value as number) < 0) {
     throw new Error(`${field} must be a non-negative safe integer`);
@@ -405,4 +678,27 @@ function positiveInteger(value: unknown, field: string): number {
   const resolved = nonNegativeInteger(value, field);
   if (resolved === 0) throw new Error(`${field} must be positive`);
   return resolved;
+}
+
+function boundedPositiveInteger(
+  value: unknown,
+  field: string,
+  maximum: number,
+): number {
+  const resolved = positiveInteger(value, field);
+  if (resolved > maximum) {
+    throw new Error(`${field} must not exceed ${maximum}`);
+  }
+  return resolved;
+}
+
+function stringEnum<const T extends readonly string[]>(
+  value: unknown,
+  field: string,
+  values: T,
+): T[number] {
+  if (typeof value !== "string" || !values.includes(value)) {
+    throw new Error(`${field} must be one of: ${values.join(", ")}`);
+  }
+  return value as T[number];
 }

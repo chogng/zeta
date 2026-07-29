@@ -9,6 +9,7 @@ pub mod initialize;
 pub mod notification;
 pub mod registry;
 pub mod resources;
+pub mod search;
 pub mod session;
 pub mod slash_commands;
 pub mod thread;

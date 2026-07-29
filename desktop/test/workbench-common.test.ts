@@ -263,6 +263,9 @@ test("file views register after their host container", async () => {
     } = await import(
       "../src/zeta/workbench/contrib/files/browser/files.contribution.js"
     );
+    const { EmptyView } = await import(
+      "../src/zeta/workbench/contrib/files/browser/views/emptyView.js"
+    );
 
     registerFilesViews(registry);
 
@@ -270,8 +273,21 @@ test("file views register after their host container", async () => {
       registry.getViews(WorkbenchViewContainerId.Sidebar).map(
         (view) => view.id,
       ),
-      [EXPLORER_VIEW_ID],
+      [EXPLORER_VIEW_ID, EmptyView.ID],
     );
+    using contextKeys = new ContextKeyService();
+    const explorer = registry.getView(EXPLORER_VIEW_ID);
+    const empty = registry.getView(EmptyView.ID);
+    assert.ok(explorer);
+    assert.ok(empty);
+
+    contextKeys.setContext("workspaceFolderCount", 0);
+    assert.equal(contextKeys.contextMatchesRules(explorer.when), false);
+    assert.equal(contextKeys.contextMatchesRules(empty.when), true);
+
+    contextKeys.setContext("workspaceFolderCount", 1);
+    assert.equal(contextKeys.contextMatchesRules(explorer.when), true);
+    assert.equal(contextKeys.contextMatchesRules(empty.when), false);
   } finally {
     browserEnvironment.window.close();
     Reflect.deleteProperty(globalThis, "window");

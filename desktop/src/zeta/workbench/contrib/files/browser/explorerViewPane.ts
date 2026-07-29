@@ -1,6 +1,19 @@
 import {
   addDisposableListener,
 } from "../../../../base/browser/dom.js";
+import {
+  IconLabel,
+} from "../../../../base/browser/ui/iconlabel/iconlabel.js";
+import {
+  appendIcon,
+} from "../../../../base/browser/ui/icon/icon.js";
+import {
+  Scrollbar,
+} from "../../../../base/browser/ui/scrollbar/scrollbar.js";
+import { LxIcon } from "../../../../base/common/lxicons.js";
+import {
+  ResettableDisposableGroup,
+} from "../../../../base/common/lifecycle.js";
 import { URI } from "../../../../base/common/uri.js";
 import {
   FileKind,
@@ -10,6 +23,12 @@ import {
 import type {
   IWorkspaceContextService,
 } from "../../../../platform/workspace/common/workspace.js";
+import type {
+  IFileIconThemeService,
+} from "../../../../platform/theme/browser/fileIconThemeService.js";
+import type {
+  IEditorPart,
+} from "../../../browser/parts/editor/editorPart.js";
 import {
   ViewPane,
   type IViewPaneOptions,
@@ -24,10 +43,15 @@ interface ExplorerNode {
   children: ExplorerNode[] | undefined;
 }
 
-/** Read-only workspace tree backed by `IFileService`. */
+/** Workspace file tree backed by `IFileService` and the Workbench editor. */
 export class ExplorerViewPane extends ViewPane {
   readonly #fileService: IFileService;
   readonly #workspaceContextService: IWorkspaceContextService;
+  readonly #editorPart: IEditorPart;
+  readonly #fileIconThemeService: IFileIconThemeService;
+  readonly #scrollbar: Scrollbar;
+  readonly #renderedLabels =
+    this.own(new ResettableDisposableGroup());
   readonly #nodes = new Map<string, ExplorerNode>();
   #root: ExplorerNode | undefined;
   #error: string | undefined;
@@ -37,20 +61,34 @@ export class ExplorerViewPane extends ViewPane {
     options: IViewPaneOptions,
     fileService: IFileService,
     workspaceContextService: IWorkspaceContextService,
+    editorPart: IEditorPart,
+    fileIconThemeService: IFileIconThemeService,
   ) {
     super(options);
     this.#fileService = fileService;
     this.#workspaceContextService = workspaceContextService;
+    this.#editorPart = editorPart;
+    this.#fileIconThemeService = fileIconThemeService;
+    this.element.classList.add("zeta-explorer-view-pane");
     this.contentElement.classList.add("zeta-explorer");
+    this.#scrollbar = this.own(new Scrollbar({
+      ownerDocument: options.ownerDocument,
+      ariaLabel: "Workspace files",
+    }));
+    this.contentElement.append(this.#scrollbar.element);
     this.own(addDisposableListener(
       this.contentElement,
       "click",
       (event) => this.#onClick(event),
     ));
+    this.own(fileIconThemeService.onDidFileIconThemeChange(
+      () => this.#render(),
+    ));
     this.defer(() => {
       this.#disposed = true;
       this.#nodes.clear();
     });
+    this.#render();
     void this.#initialize();
   }
 
@@ -62,6 +100,7 @@ export class ExplorerViewPane extends ViewPane {
       return;
     }
     try {
+      this.setTitle(folder.name);
       const metadata = await this.#fileService.stat(folder.uri);
       if (metadata.kind !== FileKind.Directory || this.#disposed) {
         throw new Error("Workspace root is not a directory");
@@ -118,37 +157,66 @@ export class ExplorerViewPane extends ViewPane {
     );
     if (!button || !this.contentElement.contains(button)) return;
     const node = this.#nodes.get(button.dataset.explorerResource ?? "");
-    if (!node || node.kind !== FileKind.Directory || node.loading) return;
-    if (node.children === undefined) {
-      void this.#loadChildren(node);
-      return;
+    if (!node || node.loading) return;
+    if (node.kind === FileKind.Directory) {
+      if (node.children === undefined) {
+        void this.#loadChildren(node);
+        return;
+      }
+      node.expanded = !node.expanded;
+      this.#render();
+    } else if (node.kind === FileKind.File) {
+      void this.#openFile(node);
     }
-    node.expanded = !node.expanded;
-    this.#render();
+  }
+
+  async #openFile(node: ExplorerNode): Promise<void> {
+    try {
+      const content = await this.#fileService.readFile(node.resource);
+      if (this.#disposed) return;
+      await this.#editorPart.openEditor({
+        resource: node.resource,
+        label: node.name,
+        initialText: content,
+      });
+      if (!this.#disposed) this.#editorPart.focus();
+    } catch (error) {
+      if (this.#disposed) return;
+      this.#error = error instanceof Error
+        ? error.message
+        : `Unable to open ${node.name}.`;
+      this.#render();
+    }
   }
 
   #render(): void {
     const document = this.element.ownerDocument;
+    this.#renderedLabels.clear();
     this.#nodes.clear();
+    const surface = document.createElement("div");
+    surface.className = "zeta-explorer-scroll-content";
     if (!this.#root) {
       const status = document.createElement("div");
       status.className = "zeta-explorer-status";
       status.textContent = this.#error ?? "Loading files…";
-      this.contentElement.replaceChildren(status);
+      surface.append(status);
+      this.#scrollbar.setContent(surface);
       return;
     }
     const tree = document.createElement("ul");
     tree.className = "zeta-explorer-tree";
     tree.setAttribute("role", "tree");
-    tree.append(this.#renderNode(this.#root, document));
-    const children: Node[] = [tree];
+    for (const child of this.#root.children ?? []) {
+      tree.append(this.#renderNode(child, document));
+    }
+    surface.append(tree);
     if (this.#error) {
       const error = document.createElement("div");
       error.className = "zeta-explorer-status zeta-explorer-error";
       error.textContent = this.#error;
-      children.push(error);
+      surface.append(error);
     }
-    this.contentElement.replaceChildren(...children);
+    this.#scrollbar.setContent(surface);
   }
 
   #renderNode(node: ExplorerNode, document: Document): HTMLLIElement {
@@ -163,14 +231,32 @@ export class ExplorerViewPane extends ViewPane {
     const key = node.resource.toString();
     button.dataset.explorerResource = key;
     this.#nodes.set(key, node);
-    const twistie = node.kind === FileKind.Directory
-      ? node.loading
-        ? "…"
-        : node.expanded
-          ? "▾"
-          : "▸"
-      : "";
-    button.textContent = `${twistie} ${node.name}`.trimStart();
+    const twistie = document.createElement("span");
+    twistie.className = "zeta-explorer-twistie";
+    twistie.setAttribute("aria-hidden", "true");
+    if (node.kind === FileKind.Directory) {
+      appendIcon(
+        node.expanded
+          ? LxIcon.dropdownIndicator
+          : LxIcon.submenuIndicator,
+        twistie,
+      );
+    }
+    const label = this.#renderedLabels.add(new IconLabel({
+      label: node.name,
+      renderIcon: node.kind === FileKind.Directory
+        ? undefined
+        : (container) => {
+          this.#fileIconThemeService.renderFileIcon(
+            node.resource,
+            container,
+          );
+        },
+      ownerDocument: document,
+      reserveIconSpace: node.kind !== FileKind.Directory,
+      title: node.name,
+    }));
+    button.append(twistie, label.element);
     item.append(button);
     if (node.expanded && node.children) {
       const group = document.createElement("ul");

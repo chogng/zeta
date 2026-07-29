@@ -39,4 +39,46 @@ test("disconnected Web renderer API rejects product operations explicitly", asyn
       return true;
     },
   );
+  await assert.rejects(
+    api.workspaceSearch.start({
+      query: "needle",
+      patternKind: "literal",
+      caseSensitivity: "smart",
+      includePatterns: [],
+      excludePatterns: [],
+      maxResults: 100,
+    }),
+    (error: unknown) => {
+      assert.ok(error instanceof WebAppServerUnavailableError);
+      assert.equal(error.operation, "workspaceSearch.start");
+      return true;
+    },
+  );
+  await assert.rejects(
+    api.fs.readFile({ path: "src/main.ts" }),
+    (error: unknown) => {
+      assert.ok(error instanceof WebAppServerUnavailableError);
+      assert.equal(error.operation, "fs.readFile");
+      return true;
+    },
+  );
+  await assert.rejects(
+    api.turn.resolveInteraction({
+      commandId: "resolve-1",
+      sessionId: "session-1",
+      threadId: "thread-1",
+      turnId: "turn-1",
+      requestId: "request-1",
+      expectedSequence: 1,
+      response: {
+        type: "approval",
+        response: { decision: "decline" },
+      },
+    }),
+    (error: unknown) => {
+      assert.ok(error instanceof WebAppServerUnavailableError);
+      assert.equal(error.operation, "turn.resolveInteraction");
+      return true;
+    },
+  );
 });

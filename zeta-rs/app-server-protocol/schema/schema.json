@@ -257,6 +257,10 @@
         "InvalidResourceOffset",
         "FileSystemUnavailable",
         "FileSystemOperationFailed",
+        "SearchUnavailable",
+        "SearchNotFound",
+        "SearchNotOwner",
+        "SearchBusy",
         "ConfigUnavailable",
         "ConfigRevisionConflict"
       ]
@@ -884,6 +888,70 @@
             "method",
             "params"
           ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "fs/readFile"
+            },
+            "params": {
+              "$ref": "#/$defs/FsReadFileParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "workspace/search/start"
+            },
+            "params": {
+              "$ref": "#/$defs/WorkspaceSearchStartParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "workspace/search/read"
+            },
+            "params": {
+              "$ref": "#/$defs/WorkspaceSearchReadParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "workspace/search/cancel"
+            },
+            "params": {
+              "$ref": "#/$defs/WorkspaceSearchCancelParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
         }
       ]
     },
@@ -1416,6 +1484,70 @@
             "method",
             "result"
           ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "fs/readFile"
+            },
+            "result": {
+              "$ref": "#/$defs/FsReadFileResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "workspace/search/start"
+            },
+            "result": {
+              "$ref": "#/$defs/WorkspaceSearchStartResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "workspace/search/read"
+            },
+            "result": {
+              "$ref": "#/$defs/WorkspaceSearchReadResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "workspace/search/cancel"
+            },
+            "result": {
+              "type": "null"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
         }
       ]
     },
@@ -1740,6 +1872,30 @@
       },
       "required": [
         "entries"
+      ]
+    },
+    "FsReadFileParams": {
+      "description": "Read one UTF-8 file relative to the configured workspace root.",
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ]
+    },
+    "FsReadFileResult": {
+      "description": "UTF-8 text returned by `fs/readFile`.",
+      "type": "object",
+      "properties": {
+        "content": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "content"
       ]
     },
     "InitializeParams": {
@@ -2623,6 +2779,9 @@
         },
         "updateReplay": {
           "type": "boolean"
+        },
+        "workspaceSearch": {
+          "type": "boolean"
         }
       },
       "required": [
@@ -2631,6 +2790,7 @@
         "turns",
         "resources",
         "fileSystem",
+        "workspaceSearch",
         "typst",
         "updateReplay"
       ]
@@ -4610,6 +4770,207 @@
         "id",
         "header",
         "question"
+      ]
+    },
+    "WorkspaceSearchCancelParams": {
+      "description": "Cancels and releases one connection-owned workspace search.",
+      "type": "object",
+      "properties": {
+        "searchId": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "searchId"
+      ]
+    },
+    "WorkspaceSearchCaseSensitivity": {
+      "description": "Selects the case-matching behavior used by one workspace search.",
+      "type": "string",
+      "enum": [
+        "smart",
+        "sensitive",
+        "insensitive"
+      ]
+    },
+    "WorkspaceSearchMatch": {
+      "description": "One line containing one or more matches in a workspace-relative file.",
+      "type": "object",
+      "properties": {
+        "lineNumber": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "path": {
+          "type": "string"
+        },
+        "preview": {
+          "type": "string"
+        },
+        "ranges": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/WorkspaceSearchMatchRange"
+          }
+        }
+      },
+      "required": [
+        "path",
+        "lineNumber",
+        "preview",
+        "ranges"
+      ]
+    },
+    "WorkspaceSearchMatchRange": {
+      "description": "UTF-16 range within one returned preview line.",
+      "type": "object",
+      "properties": {
+        "end": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "start": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "start",
+        "end"
+      ]
+    },
+    "WorkspaceSearchPatternKind": {
+      "description": "Selects how the workspace search query is interpreted by the backend.",
+      "type": "string",
+      "enum": [
+        "literal",
+        "regex"
+      ]
+    },
+    "WorkspaceSearchReadParams": {
+      "description": "Reads a bounded result batch after an already observed match cursor.",
+      "type": "object",
+      "properties": {
+        "afterMatch": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "maxMatches": {
+          "type": "integer",
+          "format": "uint",
+          "maximum": 200,
+          "minimum": 1
+        },
+        "searchId": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "searchId",
+        "afterMatch",
+        "maxMatches"
+      ]
+    },
+    "WorkspaceSearchReadResult": {
+      "description": "Bounded progress snapshot for a running or completed workspace search.",
+      "type": "object",
+      "properties": {
+        "completed": {
+          "type": "boolean"
+        },
+        "error": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "limitHit": {
+          "type": "boolean"
+        },
+        "matches": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/WorkspaceSearchMatch"
+          }
+        },
+        "nextMatch": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "searchId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "searchId",
+        "matches",
+        "nextMatch",
+        "completed",
+        "limitHit"
+      ]
+    },
+    "WorkspaceSearchStartParams": {
+      "description": "Starts one bounded, connection-owned workspace content search.",
+      "type": "object",
+      "properties": {
+        "caseSensitivity": {
+          "$ref": "#/$defs/WorkspaceSearchCaseSensitivity"
+        },
+        "excludePatterns": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 64
+        },
+        "includePatterns": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 64
+        },
+        "maxResults": {
+          "type": "integer",
+          "format": "uint",
+          "maximum": 5000,
+          "minimum": 1
+        },
+        "patternKind": {
+          "$ref": "#/$defs/WorkspaceSearchPatternKind"
+        },
+        "query": {
+          "type": "string",
+          "maxLength": 16384,
+          "minLength": 1
+        }
+      },
+      "required": [
+        "query",
+        "patternKind",
+        "caseSensitivity",
+        "includePatterns",
+        "excludePatterns",
+        "maxResults"
+      ]
+    },
+    "WorkspaceSearchStartResult": {
+      "description": "Identity allocated for one running workspace search.",
+      "type": "object",
+      "properties": {
+        "searchId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "searchId"
       ]
     }
   }

@@ -3,7 +3,8 @@
 > 本 README 解释 JSON-RPC dispatch、local composition、update broker、resource store 与 review
 > model adapter。External method contract 见
 > [`docs/zeta-app-server-api.md`](../../docs/zeta-app-server-api.md)，canonical product model 见
-> [`docs/protocol.md`](../../docs/protocol.md)。
+> [`docs/protocol.md`](../../docs/protocol.md)，workspace 搜索的跨层 ownership 见
+> [`docs/search.md`](../../docs/search.md)。
 
 `zeta-app-server` 是产品客户端与 Zeta domain/runtime 的 application boundary。它解析
 `zeta-app-server-protocol` request，调用 `SessionCoordinator`、Thread controller、
@@ -22,6 +23,7 @@ JSONL / in-process caller
    ├─ TurnExecutor
    ├─ ConfigStore
    ├─ optional WorkspaceFileSystem
+   ├─ optional WorkspaceSearchService
    ├─ connection-owned ResourceStore
    └─ UpdateBroker → session/update, thread/update
 ```
@@ -45,18 +47,22 @@ request-ID set、notification queue 与 resource ownership；Session/Thread dura
 | `AppServer::with_config_store` | 开启 config/provider/MCP/Skill RPC |
 | `AppServer::with_slash_command_catalog` | 安装 initialize 时下发的 immutable 动态命令 snapshot |
 | `AppServer::with_file_system` | 注入受 workspace 约束的 filesystem authority |
+| `AppServer::with_workspace_search` | 注入 workspace root 与冻结的 ripgrep executable |
 | `AppServer::with_tool_service` | 安装同一 server 内所有 Turn 使用的 Core Tool/Policy ports |
 | `open_local_app_server` | 打开 rollout/config、恢复 coordinator、组合 provider-backed model |
 | `LocalAppServerOptions` | local state root + optional config/tool Workspace + validated slash catalog |
+| `LocalAppServerOptions::with_optional_tool_workspace` | `rg` 缺失时保持 Tool capability disabled，而不阻止 capability-optional host 启动 |
 | `SlashCommandCatalog` | 校验动态命令名称、描述与唯一性，并冻结 server-advertised snapshot |
 | `ReviewModelResolver` | 从 frozen config snapshot 选择 review-only model |
 | `ProviderReviewModel` | `ModelInvoker → zeta_auto_review::ReviewModel` adapter |
 
 `AppServer::new` 默认用 `TurnExecutor::without_tools`。`with_tool_service` 才会替换为有 Tool 和
 Policy port 的 executor。`open_local_app_server` 仅在调用方通过
-`LocalAppServerOptions::with_tool_workspace` 提供工具根时组合只读 `rg` registry；Zeta CLI 的
-stdio 与 in-process 路径都会传入启动时当前目录。不能因为 protocol 暴露 approval interaction
-就假设任意自定义 host 已经拥有 Tool registry。
+`LocalAppServerOptions::with_tool_workspace` 提供工具根时要求成功组合只读 `rg` registry；
+in-process CLI 使用这条 required 路径。stdio App Server 使用
+`with_optional_tool_workspace`，因此没有发现 `rg` 时仍可启动，但不会暴露模型 Tool 或
+workspace search capability。显式但无效的 `ZETA_RG_PATH` 仍会使启动失败。不能因为 protocol
+暴露 approval interaction 就假设任意自定义 host 已经拥有 Tool registry。
 
 ## 文件与职责
 
@@ -67,11 +73,13 @@ src/
 │       ├── operations.rs          # Session/Thread/Turn/Resource methods
 │       ├── config_operations.rs   # Config/provider/MCP/Skill methods + DTO conversion
 │       ├── fs_operations.rs       # root-relative filesystem DTO conversion/error mapping
+│       ├── search_operations.rs   # search RPC decode、ownership 与稳定错误映射
 │       └── update_broker.rs       # per-connection subscription/cursor/fanout
 ├── local.rs                       # persistent local composition + model safe point
 ├── local_tools.rs                 # frozen rg registry + Core Tool/Policy adapters
 ├── review.rs                      # review-only provider adapter
-└── resource_store.rs              # bounded in-memory connection-owned resources
+├── resource_store.rs              # bounded in-memory connection-owned resources
+└── workspace_search.rs            # bounded connection-owned ripgrep jobs
 ```
 
 ## 内部接口地图
@@ -92,6 +100,9 @@ src/
 | `ResourceStore::cleanup` | private | lazy TTL eviction | resource 不持久化 |
 | `AppServer::file_system` | private | 读取注入的 `WorkspaceFileSystem` 或返回稳定 unavailable error | 不绕过 workspace authority |
 | `file_type` in `fs_operations` | private | foundation file kind → protocol DTO | wire enum 只由 protocol crate 定义 |
+| `WorkspaceSearchService` | crate-private | 持有 workspace、frozen rg 和 connection-owned job map | 不持有 Renderer 状态或模型 Tool authority |
+| `run_search` | private | 以 typed argv 启动/取消 rg 并收束 terminal state | 不经过 shell，不回传任意 stderr |
+| `parse_match` | private | rg JSON line → root-relative DTO，并把 byte range 转为 UTF-16 | 不执行 UI 分组或 editor opening |
 | `ConfigBackedModelService::resolve_config` | private | user snapshot + optional Workspace snapshot merge | 每次 invocation safe point 重新解析 |
 | `WorkspaceConfigTracker::read` | private | 内容变化才推进 synthetic workspace revision | 不监听/修改 workspace file |
 | `compose_local_tools` | crate-private | 固定 WorkspaceRoot、发现 rg、选择 native sandbox | discovery 失败时不降级成 unrestricted |
@@ -253,6 +264,10 @@ Resource 不跨重启恢复，也不能被另一 connection 读取或 release。
 | resource ownership/bounds | corresponding stable resource error |
 | missing filesystem authority | `FileSystemUnavailable` |
 | filesystem path/I/O failure | `FileSystemOperationFailed` |
+| missing search backend | `SearchUnavailable` |
+| unknown/cross-connection search job | `SearchNotFound` / `SearchNotOwner` |
+| search job capacity exhausted | `SearchBusy` |
+| rg spawn/parse/exit failure | terminal `WorkspaceSearchReadResult.error` with stable redacted text |
 | poisoned lock/serialization invariant | `ServerOverloaded` or `InternalError` |
 
 External errors不携带 `CoreError`、`ConfigError` 或 backend error text。新增 error mapping 时先更新

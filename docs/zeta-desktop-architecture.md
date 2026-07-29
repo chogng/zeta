@@ -68,15 +68,25 @@ Rust primitive 与 model adapter 的实现细节分别见
 
 | 能力 | Owner | 当前状态 |
 | --- | --- | --- |
-| 文件树渲染、展开、加载态 | Renderer | ✅ 单目录只读 Explorer |
-| 选中、快捷键、文件打开与编辑 | Renderer | 尚未完成 |
-| 系统文件选择器、在原生文件管理器中显示 | Electron Main / Preload | 尚未完成 |
-| 目录枚举、metadata 与 workspace 边界校验 | Rust / App Server | ✅ `fs/readDirectory`、`fs/getMetadata` |
-| 写入、重命名、搜索 | Rust / App Server | 尚未完成 |
+| 文件树渲染、展开、加载态 | Renderer | ✅ 单目录 Explorer 与 Seti 文件图标 |
+| 选中、快捷键、文件打开与编辑 | Renderer | 部分具备：点击 UTF-8 文件进入编辑器；保存与键盘选择尚未完成 |
+| 系统目录选择器 | Electron Main / Preload | ✅ Empty Explorer 选择单目录并重启绑定 workspace |
+| 在原生文件管理器中显示 | Electron Main / Preload | 尚未完成 |
+| 目录枚举、metadata、文件读取与 workspace 边界校验 | Rust / App Server | ✅ `fs/readDirectory`、`fs/getMetadata`、`fs/readFile` |
+| 写入、重命名 | Rust / App Server | 尚未完成 |
+| workspace 内容搜索执行、取消与结果限额 | Rust / App Server | ✅ connection-owned pull job |
+| 搜索表单、增量结果分组与高亮 | Renderer | ✅ Search contrib |
+| 搜索结果打开文件 | Files / Editor vertical | 尚未完成 |
 | watcher invalidation 与前端自动刷新 | Rust authority + Renderer projection | 尚未完成 |
 | 文件位置 identity | 共享 URI contract；Renderer 只维护其视图投影 | 部分具备：单根 URI 映射 |
 | 跨重启的领域 `FileId` 或 `DocumentId` | 拥有该生命周期的 Rust 领域模型 | 尚未完成 |
 | Tab、Pane 等纯 UI 实例 ID | Renderer | 已有 Workbench 基础设施 |
+
+文件图标的跨客户端数据契约由
+[`zeta-file-icons`](../zeta-rs/file-icons/README.md) 拥有：crate 内保存 Seti manifest、WOFF
+并提供 Rust resolver。Desktop 在构建前同步运行时资源、直接从 JSON 推导 TypeScript 所需
+结构并负责 DOM glyph 渲染；App Server 不参与图标解析。当前尚未实现 Rust TUI 的 terminal
+Seti codepoint adapter。
 
 因此，一项完整功能可以具有一条跨层执行路径：
 
@@ -208,16 +218,17 @@ Renderer 通过受信 IPC route 和 `workspace.getWorkspace()` 读取该身份�
 `IWorkspace`，并从 `configuration` 或单根 `folders` 推导 `WorkbenchState`。Workbench
 contribution 不得通过该服务直接访问文件系统。单根 Folder 启动时，Electron Main 将该根
 配置给 App Server；Renderer 的 `BrowserFileService` 只把 workspace URI 映射成根相对路径，
-目录枚举、metadata 与最终边界授权由 Rust / App Server 完成。读写、搜索和多根 Workspace
-仍未实现。
+目录枚举、metadata 与最终边界授权由 Rust / App Server 完成。Workspace 内容搜索通过独立的
+`workspace/search/start|read|cancel` contract 接入；其 ownership 与限制见
+[`search.md`](search.md)。文件内容读写、多根 Workspace 与搜索结果打开仍未实现。
 
 当前限制：
 
 - Workspace 身份只在启动时确定，尚无运行时打开、关闭或切换项目流程；
 - `.zeta-workspace` 当前只作为窗口身份，尚未定义或解析其内容；
 - 普通单文件参数仍属于空窗口，文件编辑器尚未实现；
-- Explorer 当前仅支持单根 Folder 的按需读取；没有文件 watcher、自动刷新、写操作、搜索、
-  选择模型或键盘导航；
+- Explorer 当前仅支持单根 Folder 的按需读取；没有文件 watcher、自动刷新、写操作、
+  选择模型或键盘导航。Search contrib 已能展示单根 workspace 内容结果，但尚不能打开文件；
 - 当前 `WorkspacesMainService` 只负责启动目标解析，最近项目、多窗口创建和 workspace
   配置管理尚未实现；`windowsState` 已保留多窗口恢复数据形状，但当前只写入单个主窗口；
 - 空窗口 backup service 尚未实现，因此当前启动路径没有可传给 `WindowsStateHandler` 的
@@ -349,6 +360,38 @@ sanitizer 实例，防止 hook 跨窗口或跨消费者泄漏。`base/browser/ma
 当前没有语法高亮、Markdown 扩展插件、Mermaid、KaTeX、工作区相对资源 URI 映射、滚动同步
 或预览状态持久化。这些属于后续能力，加入时必须继续保持“解析后统一 sanitize，再进入隔离
 容器”的顺序。
+
+### 6.4 Workbench View 与 Chat
+
+Workbench 使用 `ViewContainerLocation` 区分 Sidebar、Auxiliary Bar 和 Panel。
+Sidebar 与 Auxiliary Bar 均由 `CompositePart` 持有通用 `CompositeBar`，容器贡献只负责声明
+位置、顺序和默认项，不直接操作 Workbench 布局。`IViewsService` 根据 view ID 解析所属
+container，再委托对应 Part 显示并激活该 composite。
+
+Chat 是独立 contrib，而不是 Auxiliary Bar 的内建内容：
+
+```text
+Open Chat / New Chat
+  → IViewsService
+  → AuxiliarybarPart
+  → Chat ViewContainer
+  → ChatViewPane
+
+IWorkbenchSessionService
+  → 当前 session / root thread
+  → thread.subscribe + thread/stream 事件
+  → ChatViewModel
+  → ChatViewPane
+```
+
+`IWorkbenchSessionService` 负责恢复和切换当前 session/thread；`ChatViewModel` 负责单个活动
+thread 的可释放订阅、已提交 transcript 与临时 stream projection。重新连接或 stream 序号
+不连续时，以 `thread.read` 返回的权威状态重建展示。`ChatViewPane` 当前支持文本发送、中断、
+审批、用户输入请求和经过统一 sanitizer 的 Markdown 展示。
+
+当前尚未实现 session/thread picker、附件和图片输入、fork/history 导航、动态工具执行器。
+由于 session 列表当前没有最近活动时间，启动时只能按服务端顺序选择首个活动 thread；
+Browser 入口没有 App Server 连接时会明确显示不可用状态。
 
 ## 7. Browser Capability
 

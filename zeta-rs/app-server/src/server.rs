@@ -25,6 +25,7 @@ use zeta_typst::TypstCompiler;
 mod config_operations;
 mod fs_operations;
 mod operations;
+mod search_operations;
 mod update_broker;
 
 use update_broker::{NotificationQueue, UpdateBroker};
@@ -37,6 +38,7 @@ pub struct AppServer {
     pub(super) resources: Mutex<ResourceStore>,
     pub(super) config: Option<Arc<ConfigStore>>,
     pub(super) file_system: Option<Arc<dyn WorkspaceFileSystem>>,
+    pub(super) workspace_search: Option<crate::workspace_search::WorkspaceSearchService>,
     pub(super) typst: TypstCompiler,
     pub(super) slash_commands: SlashCommandCatalog,
     updates: Arc<UpdateBroker>,
@@ -65,6 +67,7 @@ impl AppServer {
             resources: Mutex::new(ResourceStore::default()),
             config: None,
             file_system: None,
+            workspace_search: None,
             typst: TypstCompiler::new(),
             slash_commands: SlashCommandCatalog::default(),
             updates,
@@ -93,6 +96,18 @@ impl AppServer {
 
     pub fn with_file_system(mut self, file_system: Arc<dyn WorkspaceFileSystem>) -> Self {
         self.file_system = Some(file_system);
+        self
+    }
+
+    /// Enables connection-owned workspace content search using one frozen ripgrep executable.
+    pub fn with_workspace_search(
+        mut self,
+        workspace: zeta_sandboxing::WorkspaceRoot,
+        ripgrep: zeta_shell_command::RipgrepExecutable,
+    ) -> Self {
+        self.workspace_search = Some(crate::workspace_search::WorkspaceSearchService::new(
+            workspace, ripgrep,
+        ));
         self
     }
 
@@ -284,6 +299,16 @@ impl AppServer {
             }
             Some(ClientMethod::FsGetMetadata) => self.fs_get_metadata(&request.params),
             Some(ClientMethod::FsReadDirectory) => self.fs_read_directory(&request.params),
+            Some(ClientMethod::FsReadFile) => self.fs_read_file(&request.params),
+            Some(ClientMethod::WorkspaceSearchStart) => {
+                self.workspace_search_start(connection, &request.params)
+            }
+            Some(ClientMethod::WorkspaceSearchRead) => {
+                self.workspace_search_read(connection, &request.params)
+            }
+            Some(ClientMethod::WorkspaceSearchCancel) => {
+                self.workspace_search_cancel(connection, &request.params)
+            }
             None => Err(RpcError::new(-32601, AppServerErrorName::MethodNotFound)),
         }
     }

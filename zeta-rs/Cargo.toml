@@ -13,6 +13,7 @@ members = [
     "core",
     "secrets",
     "exec",
+    "file-icons",
     "file-search",
     "file-system",
     "file-system-tool",
@@ -95,6 +96,7 @@ zeta-config = { path = "config" }
 zeta-core = { path = "core" }
 zeta-secrets = { path = "secrets" }
 zeta-exec = { path = "exec" }
+zeta-file-icons = { path = "file-icons" }
 zeta-file-search = { path = "file-search" }
 zeta-file-system = { path = "file-system" }
 zeta-file-system-tool = { path = "file-system-tool" }

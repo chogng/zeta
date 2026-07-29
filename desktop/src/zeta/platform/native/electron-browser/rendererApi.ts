@@ -1,6 +1,7 @@
 import type {
   FsGetMetadataResult,
   FsReadDirectoryResult,
+  FsReadFileResult,
   ResourceMetadataResult,
   ResourceReadResult,
   ServerNotification,
@@ -11,8 +12,11 @@ import type {
   ThreadReadResult,
   ThreadSubscribeResult,
   TurnInterruptResult,
+  TurnInteractionResolveResult,
   TurnStartResult,
   TypstCompileResult,
+  WorkspaceSearchReadResult,
+  WorkspaceSearchStartResult,
 } from "../../../../../generated/app-server/types.js";
 import {
   operatingSystemFromNodePlatform,
@@ -60,6 +64,7 @@ import {
   type INativeMenubarSelection,
 } from "../../menubar/common/nativeMenubar.js";
 import {
+  NATIVE_HOST_OPEN_FOLDER_CHANNEL,
   NATIVE_HOST_TOGGLE_DEVELOPER_TOOLS_CHANNEL,
 } from "../common/nativeHost.js";
 import {
@@ -160,6 +165,11 @@ export function createElectronRendererApi(): ZetaElectronRendererApi {
         invoke<TurnStartResult>("zeta:turn:start", params),
       interrupt: (params) =>
         invoke<TurnInterruptResult>("zeta:turn:interrupt", params),
+      resolveInteraction: (params) =>
+        invoke<TurnInteractionResolveResult>(
+          "zeta:turn:interaction:resolve",
+          params,
+        ),
     },
     typst: {
       compile: (params) =>
@@ -178,6 +188,22 @@ export function createElectronRendererApi(): ZetaElectronRendererApi {
         invoke<FsGetMetadataResult>("zeta:fs:get-metadata", params),
       readDirectory: (params) =>
         invoke<FsReadDirectoryResult>("zeta:fs:read-directory", params),
+      readFile: (params) =>
+        invoke<FsReadFileResult>("zeta:fs:read-file", params),
+    },
+    workspaceSearch: {
+      start: (params) =>
+        invoke<WorkspaceSearchStartResult>(
+          "zeta:workspace-search:start",
+          params,
+        ),
+      read: (params) =>
+        invoke<WorkspaceSearchReadResult>(
+          "zeta:workspace-search:read",
+          params,
+        ),
+      cancel: (params) =>
+        invoke<void>("zeta:workspace-search:cancel", params),
     },
     events: {
       subscribe: (listener) =>
@@ -207,6 +233,8 @@ export function createElectronRendererApi(): ZetaElectronRendererApi {
         invoke<void>(NATIVE_CONTEXT_MENU_CLOSE_CHANNEL),
     },
     nativeHost: {
+      openFolder: () =>
+        invoke<void>(NATIVE_HOST_OPEN_FOLDER_CHANNEL),
       toggleDeveloperTools: () =>
         invoke<void>(NATIVE_HOST_TOGGLE_DEVELOPER_TOOLS_CHANNEL),
     },

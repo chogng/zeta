@@ -94,14 +94,26 @@ test("trusted IPC router enforces webContents, main frame, exact URL, and params
   assert.equal(ipcMain.handlers.size, 0);
 });
 
-test("App Server IPC validators reject malformed Turn, Typst, resource, and filesystem input", () => {
+test("App Server IPC validators reject malformed Turn, Typst, resource, filesystem, and search input", () => {
   const routes = appServerIpcRoutes({} as AppServerSupervisor);
   const sessionCreate = routes.find((route) => route.channel === "zeta:session:create")!;
   const turnStart = routes.find((route) => route.channel === "zeta:turn:start")!;
+  const resolveInteraction = routes.find(
+    (route) => route.channel === "zeta:turn:interaction:resolve",
+  )!;
   const typstCompile = routes.find((route) => route.channel === "zeta:typst:compile")!;
   const resourceRead = routes.find((route) => route.channel === "zeta:resource:read")!;
   const fsGetMetadata = routes.find(
     (route) => route.channel === "zeta:fs:get-metadata",
+  )!;
+  const fsReadFile = routes.find(
+    (route) => route.channel === "zeta:fs:read-file",
+  )!;
+  const searchStart = routes.find(
+    (route) => route.channel === "zeta:workspace-search:start",
+  )!;
+  const searchRead = routes.find(
+    (route) => route.channel === "zeta:workspace-search:read",
   )!;
 
   assert.deepEqual(
@@ -139,6 +151,44 @@ test("App Server IPC validators reject malformed Turn, Typst, resource, and file
       }),
     /must be text/,
   );
+  assert.deepEqual(resolveInteraction.validate({
+    commandId: "resolve-1",
+    sessionId: "session_1",
+    threadId: "thread_1",
+    turnId: "turn_1",
+    requestId: "request_1",
+    expectedSequence: 3,
+    response: {
+      type: "approval",
+      response: { decision: "approveOnce" },
+    },
+  }), {
+    commandId: "resolve-1",
+    sessionId: "session_1",
+    threadId: "thread_1",
+    turnId: "turn_1",
+    requestId: "request_1",
+    expectedSequence: 3,
+    response: {
+      type: "approval",
+      response: { decision: "approveOnce" },
+    },
+  });
+  assert.throws(
+    () => resolveInteraction.validate({
+      commandId: "resolve-1",
+      sessionId: "session_1",
+      threadId: "thread_1",
+      turnId: "turn_1",
+      requestId: "request_1",
+      expectedSequence: 3,
+      response: {
+        type: "approval",
+        response: { decision: "always" },
+      },
+    }),
+    /response.decision/,
+  );
   assert.deepEqual(typstCompile.validate({ source: "= Paper" }), {
     source: "= Paper",
   });
@@ -158,6 +208,9 @@ test("App Server IPC validators reject malformed Turn, Typst, resource, and file
   assert.deepEqual(fsGetMetadata.validate({ path: "src/main.ts" }), {
     path: "src/main.ts",
   });
+  assert.deepEqual(fsReadFile.validate({ path: "src/main.ts" }), {
+    path: "src/main.ts",
+  });
   for (const path of [
     "../outside",
     "src/../../outside",
@@ -170,7 +223,63 @@ test("App Server IPC validators reject malformed Turn, Typst, resource, and file
       () => fsGetMetadata.validate({ path }),
       /relative to the workspace root/,
     );
+    assert.throws(
+      () => fsReadFile.validate({ path }),
+      /relative to the workspace root/,
+    );
   }
+  assert.deepEqual(searchStart.validate({
+    query: "needle",
+    patternKind: "literal",
+    caseSensitivity: "smart",
+    includePatterns: ["src/**"],
+    excludePatterns: ["**/*.test.ts"],
+    maxResults: 2_000,
+  }), {
+    query: "needle",
+    patternKind: "literal",
+    caseSensitivity: "smart",
+    includePatterns: ["src/**"],
+    excludePatterns: ["**/*.test.ts"],
+    maxResults: 2_000,
+  });
+  for (const includePatterns of [
+    ["../outside"],
+    ["!src/**"],
+    ["/absolute"],
+    ["C:\\absolute"],
+  ]) {
+    assert.throws(() => searchStart.validate({
+      query: "needle",
+      patternKind: "literal",
+      caseSensitivity: "smart",
+      includePatterns,
+      excludePatterns: [],
+      maxResults: 2_000,
+    }), /workspace-relative glob/);
+  }
+  assert.throws(() => searchStart.validate({
+    query: "needle",
+    patternKind: "glob",
+    caseSensitivity: "smart",
+    includePatterns: [],
+    excludePatterns: [],
+    maxResults: 2_000,
+  }), /patternKind/);
+  assert.deepEqual(searchRead.validate({
+    searchId: "search-1",
+    afterMatch: 0,
+    maxMatches: 100,
+  }), {
+    searchId: "search-1",
+    afterMatch: 0,
+    maxMatches: 100,
+  });
+  assert.throws(() => searchRead.validate({
+    searchId: "search-1",
+    afterMatch: 0,
+    maxMatches: 201,
+  }), /must not exceed 200/);
 });
 
 test("trusted IPC router rejects duplicate route registrations", () => {

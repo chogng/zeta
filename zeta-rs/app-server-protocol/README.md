@@ -2,7 +2,8 @@
 
 > 本 README 解释 App Server external RPC contract、method registry 与 artifact generator。
 > 面向客户端的 API 语义见 [`docs/zeta-app-server-api.md`](../../docs/zeta-app-server-api.md)，
-> canonical product values 见 [`docs/protocol.md`](../../docs/protocol.md)。
+> canonical product values 见 [`docs/protocol.md`](../../docs/protocol.md)，workspace 搜索的跨层
+> ownership 见 [`docs/search.md`](../../docs/search.md)。
 
 `zeta-app-server-protocol` 是 App Server 对外 wire contract 的唯一 Rust source。它定义 typed
 params/results/errors、JSON-RPC 2.0 envelopes、method/notification registry，并从同一套定义生成
@@ -50,6 +51,7 @@ zeta-rs/app-server-protocol/
 │   │   ├── turn.rs
 │   │   ├── config.rs
 │   │   ├── resources.rs
+│   │   ├── search.rs
 │   │   └── error.rs
 │   ├── rpc.rs                # generic JSON-RPC 2.0 envelopes
 │   ├── export.rs             # pure deterministic generators
@@ -78,7 +80,8 @@ zeta-rs/app-server-protocol/
 
 Method registry 当前覆盖 initialize、Session lifecycle/subscription、Thread read/subscription、
 Config/provider/MCP/Skill mutation、Turn start/interrupt/interaction resolve 与 Resource
-metadata/read/release。Notification 只有 `session/update` 与 `thread/update`。
+metadata/read/release，以及 workspace search start/read/cancel。Notification 只有
+`session/update` 与 `thread/update`。
 
 ### JSON-RPC
 

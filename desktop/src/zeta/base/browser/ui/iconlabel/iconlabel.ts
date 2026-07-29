@@ -1,23 +1,53 @@
+import type { Icon } from "../../../common/icon.js";
 import { DisposableOwner } from "../../../common/lifecycle.js";
+import { appendIcon } from "../icon/icon.js";
 
-/** A text label paired with an icon glyph or application-provided icon element. */
+/** Construction inputs for a semantic icon and text label. */
+export interface IconLabelOptions {
+  readonly label: string;
+  readonly icon?: Icon;
+  readonly renderIcon?: (container: HTMLSpanElement) => void;
+  readonly ownerDocument?: Document;
+  readonly reserveIconSpace?: boolean;
+  readonly title?: string;
+}
+
+/**
+ * Reusable label whose icon and text keep a stable, themeable DOM shape.
+ */
 export class IconLabel extends DisposableOwner {
   readonly element: HTMLSpanElement;
+  readonly iconElement: HTMLSpanElement;
+  readonly labelElement: HTMLSpanElement;
 
-  constructor(label: string, icon?: string | Element) {
+  constructor(options: IconLabelOptions) {
     super();
-    const element = document.createElement("span");
+    if (options.icon && options.renderIcon) {
+      throw new TypeError(
+        "IconLabel accepts either a semantic icon or an icon renderer",
+      );
+    }
+    const ownerDocument = options.ownerDocument ?? document;
+    const element = ownerDocument.createElement("span");
     this.element = element;
     this.defer(() => element.remove());
     element.className = "zeta-icon-label";
-    if (icon) {
-      const iconElement = typeof icon === "string" ? document.createElement("span") : icon;
-      if (typeof icon === "string") iconElement.textContent = icon;
-      iconElement.classList.add("zeta-icon-label-icon");
-      element.append(iconElement);
+    if (options.title) element.title = options.title;
+    this.iconElement = ownerDocument.createElement("span");
+    this.iconElement.className = "zeta-icon-label-icon";
+    this.iconElement.setAttribute("aria-hidden", "true");
+    this.iconElement.classList.toggle(
+      "is-reserved",
+      options.reserveIconSpace === true,
+    );
+    if (options.icon) {
+      appendIcon(options.icon, this.iconElement);
+    } else {
+      options.renderIcon?.(this.iconElement);
     }
-    const text = document.createElement("span");
-    text.textContent = label;
-    element.append(text);
+    this.labelElement = ownerDocument.createElement("span");
+    this.labelElement.className = "zeta-icon-label-text";
+    this.labelElement.textContent = options.label;
+    element.append(this.iconElement, this.labelElement);
   }
 }

@@ -28,6 +28,7 @@
     "src/zeta/platform/markdown/browser/**/*.ts",
     "src/zeta/platform/native/common/**/*.ts",
     "src/zeta/platform/native/electron-browser/**/*.ts",
+    "src/zeta/platform/search/**/*.ts",
     "src/zeta/platform/browser/common/**/*.ts",
     "src/zeta/platform/theme/browser/**/*.ts",
     "src/zeta/platform/theme/common/**/*.ts",

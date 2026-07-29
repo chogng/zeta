@@ -92,6 +92,7 @@ import {
   UNKNOWN_EMPTY_WINDOW_WORKSPACE,
 } from "../../platform/workspace/common/workspace.js";
 import {
+  folderRelaunchArguments,
   WorkspacesMainService,
   workspaceContextIpcRoutes,
 } from "../../platform/workspaces/electron-main/workspacesMainService.js";
@@ -261,6 +262,9 @@ export class ZetaApplication extends DisposableOwner {
       args: ["app-server", "--listen", "stdio://"],
       environment: {
         PATH: process.env.PATH ?? "",
+        ...(process.env.ZETA_RG_PATH
+          ? { ZETA_RG_PATH: process.env.ZETA_RG_PATH }
+          : {}),
         ZETA_STATE_ROOT: join(app.getPath("userData"), "state"),
         ...(isSingleFolderWorkspaceIdentifier(workspace)
           ? { ZETA_WORKSPACE_ROOT: workspace.uri.fsPath }
@@ -394,6 +398,22 @@ export class ZetaApplication extends DisposableOwner {
       ...configurationIpcRoutes(configurationService),
       ...keybindingsResourceIpcRoutes(keybindingsResourceService),
       ...nativeHostIpcRoutes({
+        openFolder: async () => {
+          const result = await dialog.showOpenDialog(window, {
+            title: "Open Folder",
+            properties: ["openDirectory"],
+          });
+          const folderPath = result.filePaths[0];
+          if (result.canceled || !folderPath) return;
+          app.relaunch({
+            args: [...folderRelaunchArguments({
+              appPath: app.getAppPath(),
+              folderPath,
+              isPackaged: app.isPackaged,
+            })],
+          });
+          globalThis.setTimeout(() => app.quit(), 0);
+        },
         toggleDeveloperTools: () => window.webContents.toggleDevTools(),
       }),
       ...workspaceContextIpcRoutes(workspace),

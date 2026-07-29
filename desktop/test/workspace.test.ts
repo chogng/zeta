@@ -15,6 +15,7 @@ import {
   WorkspaceOpenTargetKind,
 } from "../src/zeta/platform/workspaces/common/workspaces.js";
 import {
+  folderRelaunchArguments,
   parseWorkspaceLaunchArguments,
   WorkspacesMainService,
   workspaceContextIpcRoutes,
@@ -28,6 +29,25 @@ import {
 import {
   WorkspaceContextService,
 } from "../src/zeta/workbench/services/workspaces/browser/workspaceContextService.js";
+
+test("folder relaunch arguments preserve the development app entry", () => {
+  assert.deepEqual(
+    folderRelaunchArguments({
+      appPath: "C:\\zeta\\desktop",
+      folderPath: "C:\\project",
+      isPackaged: false,
+    }),
+    ["C:\\zeta\\desktop", "--folder", "C:\\project"],
+  );
+  assert.deepEqual(
+    folderRelaunchArguments({
+      appPath: "C:\\Program Files\\Zeta",
+      folderPath: "C:\\project",
+      isPackaged: true,
+    }),
+    ["--folder", "C:\\project"],
+  );
+});
 
 test("workspace launch arguments distinguish automatic and named targets", () => {
   assert.equal(parseWorkspaceLaunchArguments([]), undefined);

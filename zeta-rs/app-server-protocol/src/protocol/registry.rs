@@ -17,13 +17,18 @@ use crate::protocol::document::{
 use crate::protocol::error::{AppServerError, AppServerErrorName};
 use crate::protocol::fs::{
     FsFileType, FsGetMetadataParams, FsGetMetadataResult, FsReadDirectoryEntry,
-    FsReadDirectoryParams, FsReadDirectoryResult,
+    FsReadDirectoryParams, FsReadDirectoryResult, FsReadFileParams, FsReadFileResult,
 };
 use crate::protocol::initialize::{InitializeParams, InitializeResult, ServerCapabilities};
 use crate::protocol::notification::{SessionUpdateEnvelope, ThreadUpdateEnvelope};
 use crate::protocol::resources::{
     ResourceMetadataParams, ResourceMetadataResult, ResourceReadParams, ResourceReadResult,
     ResourceReleaseParams,
+};
+use crate::protocol::search::{
+    WorkspaceSearchCancelParams, WorkspaceSearchCaseSensitivity, WorkspaceSearchMatch,
+    WorkspaceSearchMatchRange, WorkspaceSearchPatternKind, WorkspaceSearchReadParams,
+    WorkspaceSearchReadResult, WorkspaceSearchStartParams, WorkspaceSearchStartResult,
 };
 use crate::protocol::session::{
     SessionCommandParams, SessionCreateParams, SessionListResult, SessionReadParams, SessionResult,
@@ -348,6 +353,26 @@ client_methods! {
         response: FsReadDirectoryResult,
         serialization: GlobalSharedRead,
     },
+    FsReadFile => "fs/readFile" {
+        params: FsReadFileParams,
+        response: FsReadFileResult,
+        serialization: GlobalSharedRead,
+    },
+    WorkspaceSearchStart => "workspace/search/start" {
+        params: WorkspaceSearchStartParams,
+        response: WorkspaceSearchStartResult,
+        serialization: None,
+    },
+    WorkspaceSearchRead => "workspace/search/read" {
+        params: WorkspaceSearchReadParams,
+        response: WorkspaceSearchReadResult,
+        serialization: None,
+    },
+    WorkspaceSearchCancel => "workspace/search/cancel" {
+        params: WorkspaceSearchCancelParams,
+        response: (),
+        serialization: None,
+    },
 }
 
 macro_rules! server_notifications {
@@ -551,6 +576,17 @@ typescript_bindings! {
     FsReadDirectoryParams,
     FsReadDirectoryEntry,
     FsReadDirectoryResult,
+    FsReadFileParams,
+    FsReadFileResult,
+    WorkspaceSearchPatternKind,
+    WorkspaceSearchCaseSensitivity,
+    WorkspaceSearchStartParams,
+    WorkspaceSearchStartResult,
+    WorkspaceSearchReadParams,
+    WorkspaceSearchMatchRange,
+    WorkspaceSearchMatch,
+    WorkspaceSearchReadResult,
+    WorkspaceSearchCancelParams,
     AppServerErrorName,
     AppServerError,
 }

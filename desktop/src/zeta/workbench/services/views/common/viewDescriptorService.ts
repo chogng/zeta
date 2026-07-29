@@ -45,6 +45,9 @@ export interface IViewDescriptorService {
   getDefaultViewContainer(
     location: ViewContainerLocation,
   ): IViewContainerDescriptor | undefined;
+  getViewContainerForView(
+    viewId: string,
+  ): IViewContainerDescriptor | undefined;
   getViewContainerModel(
     containerId: string,
   ): IViewContainerModel;
@@ -109,6 +112,12 @@ export class ViewDescriptorService
     location: ViewContainerLocation,
   ): IViewContainerDescriptor | undefined {
     return this.#registry.getDefaultViewContainer(location);
+  }
+
+  getViewContainerForView(
+    viewId: string,
+  ): IViewContainerDescriptor | undefined {
+    return this.#registry.getViewContainerForView(viewId);
   }
 
   getViewContainerModel(containerId: string): IViewContainerModel {

@@ -100,7 +100,11 @@ function supervisorOptions(
   return {
     executable: "/test/zeta",
     args: ["app-server", "--listen", "stdio://"],
-    environment: { PATH: "/test/bin", ZETA_STATE_ROOT: "/test/state" },
+    environment: {
+      PATH: "/test/bin",
+      ZETA_RG_PATH: "/test/bin/rg",
+      ZETA_STATE_ROOT: "/test/state",
+    },
     session: {
       clientName: "desktop-test",
       clientVersion: "1",

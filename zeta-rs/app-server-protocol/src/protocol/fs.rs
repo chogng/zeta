@@ -53,3 +53,17 @@ pub struct FsReadDirectoryEntry {
 pub struct FsReadDirectoryResult {
     pub entries: Vec<FsReadDirectoryEntry>,
 }
+
+/// Read one UTF-8 file relative to the configured workspace root.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct FsReadFileParams {
+    pub path: PathBuf,
+}
+
+/// UTF-8 text returned by `fs/readFile`.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct FsReadFileResult {
+    pub content: String,
+}

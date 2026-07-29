@@ -146,6 +146,33 @@ fn initialize_is_required_and_request_ids_are_connection_unique() {
 }
 
 #[test]
+fn workspace_search_requires_an_installed_backend() {
+    let server = server();
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+
+    let response = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":2,
+            "method":"workspace/search/start",
+            "params":{
+                "query":"needle",
+                "patternKind":"literal",
+                "caseSensitivity":"smart",
+                "includePatterns":[],
+                "excludePatterns":[],
+                "maxResults":100
+            }
+        }),
+    );
+
+    assert_eq!(response["error"]["message"], "SearchUnavailable");
+}
+
+#[test]
 fn initialize_advertises_the_server_slash_command_snapshot() {
     let catalog = SlashCommandCatalog::new([SlashCommandDefinition {
         name: "diagnose".into(),
@@ -854,6 +881,16 @@ fn filesystem_rpc_lists_and_describes_workspace_paths() {
             "params":{"path":"src/lib.rs"}
         }),
     );
+    let contents = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":4,
+            "method":"fs/readFile",
+            "params":{"path":"src/lib.rs"}
+        }),
+    );
 
     assert_eq!(
         listed["result"]["entries"],
@@ -861,5 +898,6 @@ fn filesystem_rpc_lists_and_describes_workspace_paths() {
     );
     assert_eq!(metadata["result"]["fileType"], "file");
     assert_eq!(metadata["result"]["sizeBytes"], 5);
+    assert_eq!(contents["result"]["content"], "hello");
     let _ = std::fs::remove_dir_all(root);
 }

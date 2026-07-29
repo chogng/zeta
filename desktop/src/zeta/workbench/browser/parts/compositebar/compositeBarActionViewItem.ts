@@ -6,12 +6,12 @@ import { appendIcon } from "../../../../base/browser/ui/icon/icon.js";
 import type { IAction } from "../../../../base/common/actions.js";
 
 /**
- * Activity Bar representation of a View Container action.
+ * Visual selector for one Composite exposed by a CompositeBar.
  *
- * The host ActionBar owns the item container. This view item owns its label,
+ * The host ActionBar owns the item container. This item owns its label,
  * interaction, focus, and selected presentation inside that container.
  */
-export class ActivitybarActionViewItem extends ActionViewItem {
+export class CompositeBarActionViewItem extends ActionViewItem {
   #container: HTMLElement | undefined;
 
   constructor(action: IAction) {
@@ -21,7 +21,7 @@ export class ActivitybarActionViewItem extends ActionViewItem {
   override render(container: HTMLElement): void {
     if (this.#container) {
       throw new Error(
-        `Activity Bar action view item is already rendered: ${this.action.id}`,
+        `Composite Bar action is already rendered: ${this.action.id}`,
       );
     }
     this.#container = container;
@@ -80,7 +80,7 @@ export class ActivitybarActionViewItem extends ActionViewItem {
   #requireContainer(): HTMLElement {
     if (!this.#container) {
       throw new Error(
-        `Activity Bar action view item is not rendered: ${this.action.id}`,
+        `Composite Bar action is not rendered: ${this.action.id}`,
       );
     }
     return this.#container;

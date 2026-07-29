@@ -6,6 +6,7 @@ mod resource_store;
 mod review;
 mod server;
 mod slash_commands;
+mod workspace_search;
 
 pub use local::OpenAppServerError;
 pub use local::open_local_app_server;

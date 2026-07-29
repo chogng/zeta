@@ -29,6 +29,7 @@ pub struct ServerCapabilities {
     pub turns: bool,
     pub resources: bool,
     pub file_system: bool,
+    pub workspace_search: bool,
     pub typst: bool,
     pub update_replay: bool,
 }

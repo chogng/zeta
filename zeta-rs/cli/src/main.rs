@@ -64,7 +64,7 @@ fn run_app_server(arguments: Vec<String>) -> Result<(), String> {
     if let Some(workspace_root) = env::var_os("ZETA_WORKSPACE_ROOT") {
         options = options.with_workspace_root(workspace_root);
     }
-    options = options.with_tool_workspace(current_workspace()?);
+    options = options.with_optional_tool_workspace(current_workspace()?);
     open_local_app_server(options)
         .map_err(|error| error.to_string())?
         .serve_stdio()

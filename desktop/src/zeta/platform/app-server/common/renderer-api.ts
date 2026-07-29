@@ -3,6 +3,8 @@ import type {
   FsGetMetadataResult,
   FsReadDirectoryParams,
   FsReadDirectoryResult,
+  FsReadFileParams,
+  FsReadFileResult,
   ResourceMetadataParams,
   ResourceMetadataResult,
   ResourceReadParams,
@@ -28,10 +30,17 @@ import type {
   ThreadUnsubscribeParams,
   TurnInterruptParams,
   TurnInterruptResult,
+  TurnInteractionResolveParams,
+  TurnInteractionResolveResult,
   TurnStartParams,
   TurnStartResult,
   TypstCompileParams,
   TypstCompileResult,
+  WorkspaceSearchCancelParams,
+  WorkspaceSearchReadParams,
+  WorkspaceSearchReadResult,
+  WorkspaceSearchStartParams,
+  WorkspaceSearchStartResult,
 } from "../../../../../generated/app-server/types.js";
 
 /**
@@ -87,6 +96,9 @@ export interface ZetaRendererApi {
   turn: {
     start(params: TurnStartParams): Promise<TurnStartResult>;
     interrupt(params: TurnInterruptParams): Promise<TurnInterruptResult>;
+    resolveInteraction(
+      params: TurnInteractionResolveParams,
+    ): Promise<TurnInteractionResolveResult>;
   };
   typst: {
     compile(params: TypstCompileParams): Promise<TypstCompileResult>;
@@ -99,6 +111,16 @@ export interface ZetaRendererApi {
   fs: {
     getMetadata(params: FsGetMetadataParams): Promise<FsGetMetadataResult>;
     readDirectory(params: FsReadDirectoryParams): Promise<FsReadDirectoryResult>;
+    readFile(params: FsReadFileParams): Promise<FsReadFileResult>;
+  };
+  workspaceSearch: {
+    start(
+      params: WorkspaceSearchStartParams,
+    ): Promise<WorkspaceSearchStartResult>;
+    read(
+      params: WorkspaceSearchReadParams,
+    ): Promise<WorkspaceSearchReadResult>;
+    cancel(params: WorkspaceSearchCancelParams): Promise<void>;
   };
   events: {
     subscribe(listener: (event: ServerNotification) => void): DisposableHandle;

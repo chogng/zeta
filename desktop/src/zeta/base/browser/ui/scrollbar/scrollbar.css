@@ -1,1 +1,39 @@
-.zeta-scrollbar { overflow: auto; }
+.zeta-scrollbar {
+  overflow: auto;
+  scrollbar-color:
+    var(--zeta-scrollbar-slider-background, #79797966)
+    transparent;
+  scrollbar-width: thin;
+}
+
+.zeta-scrollbar::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.zeta-scrollbar::-webkit-scrollbar-corner,
+.zeta-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.zeta-scrollbar::-webkit-scrollbar-thumb {
+  min-width: 20px;
+  min-height: 20px;
+  border: 2px solid transparent;
+  border-radius: 6px;
+  background:
+    var(--zeta-scrollbar-slider-background, #79797966)
+    padding-box;
+}
+
+.zeta-scrollbar::-webkit-scrollbar-thumb:hover {
+  background:
+    var(--zeta-scrollbar-slider-hover-background, #646464b3)
+    padding-box;
+}
+
+.zeta-scrollbar::-webkit-scrollbar-thumb:active {
+  background:
+    var(--zeta-scrollbar-slider-active-background, #bfbfbf66)
+    padding-box;
+}

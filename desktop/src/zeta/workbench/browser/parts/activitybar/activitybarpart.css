@@ -9,13 +9,7 @@
   background: var(--zeta-activity-bar-background, #181818);
 }
 
-.zeta-activitybar-container > .zeta-action-bar {
-  box-sizing: border-box;
-  display: flex;
-  height: 100%;
+.zeta-activitybar-container > .zeta-composite-bar {
   width: 100%;
-  align-items: center;
-  flex-direction: row;
-  gap: 2px;
-  padding: 0 2px;
+  height: 100%;
 }

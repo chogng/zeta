@@ -1,0 +1,152 @@
+.zeta-chat-view-pane,
+.zeta-chat-view-pane > .zeta-view-pane-content,
+.zeta-chat {
+  min-height: 0;
+  height: 100%;
+}
+.zeta-chat {
+  display: flex;
+  overflow: hidden;
+  flex-direction: column;
+}
+.zeta-chat-toolbar {
+  display: flex;
+  flex: 0 0 auto;
+  justify-content: flex-end;
+  padding: 6px 10px;
+}
+.zeta-chat-transcript {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: auto;
+  padding: 6px 12px 16px;
+}
+.zeta-chat-empty,
+.zeta-chat-status {
+  color: var(--zeta-description-foreground, #9d9d9d);
+  font-size: 12px;
+}
+.zeta-chat-interaction {
+  flex: 0 0 auto;
+  margin: 0 10px 8px;
+  padding: 8px;
+  border: 1px solid var(--zeta-focus-border, #007fd4);
+  border-radius: 5px;
+  color: var(--zeta-foreground, #cccccc);
+  background: var(--zeta-input-background, #313131);
+  font-size: 12px;
+}
+.zeta-chat-interaction p {
+  margin: 0 0 8px;
+}
+.zeta-chat-interaction-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+.zeta-chat-interaction-form {
+  display: flex;
+  gap: 8px;
+  flex-direction: column;
+}
+.zeta-chat-interaction-form label {
+  display: flex;
+  gap: 4px;
+  flex-direction: column;
+}
+.zeta-chat-interaction-form input,
+.zeta-chat-interaction-form select {
+  padding: 5px;
+  border: 1px solid var(--zeta-border, #3c3c3c);
+  color: inherit;
+  background: var(--zeta-editor-background, #1e1e1e);
+}
+.zeta-chat-empty {
+  padding: 20px 4px;
+  text-align: center;
+}
+.zeta-chat-status {
+  min-height: 18px;
+  flex: 0 0 auto;
+  padding: 0 12px 4px;
+}
+.zeta-chat-item {
+  margin: 0 0 14px;
+  color: var(--zeta-foreground, #cccccc);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.zeta-chat-item-label {
+  margin-bottom: 4px;
+  color: var(--zeta-description-foreground, #9d9d9d);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+.zeta-chat-item-userMessage pre {
+  border-radius: 6px;
+  background: var(--zeta-input-background, #313131);
+}
+.zeta-chat-item pre {
+  overflow-wrap: anywhere;
+  margin: 0;
+  padding: 8px;
+  font: inherit;
+  white-space: pre-wrap;
+}
+.zeta-chat-item-reasoning,
+.zeta-chat-item-plan,
+.zeta-chat-item-toolCall,
+.zeta-chat-item-toolResult {
+  border-left: 2px solid var(--zeta-border, #3c3c3c);
+  padding-left: 8px;
+  color: var(--zeta-description-foreground, #b8b8b8);
+}
+.zeta-chat-item.error {
+  border-left-color: var(--zeta-error-foreground, #f48771);
+}
+.zeta-chat-composer {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 6px;
+  flex-direction: column;
+  padding: 8px 10px 10px;
+  border-top: 1px solid var(--zeta-border, #2b2b2b);
+}
+.zeta-chat-composer textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 62px;
+  resize: vertical;
+  padding: 8px;
+  border: 1px solid var(--zeta-border, #3c3c3c);
+  border-radius: 5px;
+  outline: none;
+  color: var(--zeta-input-foreground, #cccccc);
+  background: var(--zeta-input-background, #313131);
+  font: inherit;
+}
+.zeta-chat-composer textarea:focus {
+  border-color: var(--zeta-focus-border, #007fd4);
+}
+.zeta-chat-composer-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+.zeta-chat-send-button,
+.zeta-chat-secondary-button {
+  min-height: 26px;
+  padding: 3px 10px;
+  border: 0;
+  border-radius: 4px;
+  color: var(--zeta-button-foreground, #ffffff);
+  background: var(--zeta-button-background, #0e639c);
+}
+.zeta-chat-secondary-button {
+  color: var(--zeta-foreground, #cccccc);
+  background: var(--zeta-button-secondary-background, #3a3d41);
+}
+.zeta-chat-send-button:disabled {
+  opacity: .55;
+}

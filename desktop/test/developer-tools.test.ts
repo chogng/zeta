@@ -13,6 +13,7 @@ import {
   ServiceCollection,
 } from "../src/zeta/platform/instantiation/common/instantiation.js";
 import {
+  NATIVE_HOST_OPEN_FOLDER_CHANNEL,
   NATIVE_HOST_TOGGLE_DEVELOPER_TOOLS_CHANNEL,
 } from "../src/zeta/platform/native/common/nativeHost.js";
 import {
@@ -29,20 +30,40 @@ import {
   CommandService,
 } from "../src/zeta/workbench/services/commands/common/commandService.js";
 
-test("native host route validates and toggles developer tools", () => {
+test("native host routes validate folder opening and developer tools", async () => {
+  let folderOpens = 0;
   let toggles = 0;
-  const [route] = nativeHostIpcRoutes({
+  const routes = nativeHostIpcRoutes({
+    openFolder: async () => {
+      folderOpens += 1;
+    },
     toggleDeveloperTools: () => {
       toggles += 1;
     },
   });
-
-  assert.equal(
-    route.channel,
-    NATIVE_HOST_TOGGLE_DEVELOPER_TOOLS_CHANNEL,
+  const openFolder = routes.find(
+    ({ channel }) => channel === NATIVE_HOST_OPEN_FOLDER_CHANNEL,
   );
-  assert.throws(() => route.validate(null), /does not accept parameters/);
-  route.invoke(route.validate(undefined));
+  const toggleDeveloperTools = routes.find(
+    ({ channel }) =>
+      channel === NATIVE_HOST_TOGGLE_DEVELOPER_TOOLS_CHANNEL,
+  );
+  assert.ok(openFolder);
+  assert.ok(toggleDeveloperTools);
+
+  assert.throws(
+    () => openFolder.validate(null),
+    /does not accept parameters/,
+  );
+  await openFolder.invoke(openFolder.validate(undefined));
+  assert.equal(folderOpens, 1);
+  assert.throws(
+    () => toggleDeveloperTools.validate(null),
+    /does not accept parameters/,
+  );
+  toggleDeveloperTools.invoke(
+    toggleDeveloperTools.validate(undefined),
+  );
   assert.equal(toggles, 1);
 });
 
@@ -50,6 +71,7 @@ test("developer tools command is available from the command palette", async () =
   const services = new ServiceCollection();
   let toggles = 0;
   services.set(INativeHostService, {
+    openFolder: async () => {},
     async toggleDeveloperTools() {
       toggles += 1;
     },

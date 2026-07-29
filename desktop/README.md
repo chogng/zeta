@@ -36,9 +36,13 @@ corepack pnpm --dir desktop start -- --workspace C:\path\to\team.zeta-workspace
 ```
 
 单目录启动时，当前版本会把目录作为 App Server 的受限 workspace root，并通过
-`fs/getMetadata`、`fs/readDirectory` 为 Renderer 的只读 Explorer 提供按需目录枚举。
-文件打开与编辑、写入/重命名、文件监听与自动刷新、多根 Workspace 配置解析，以及运行时
-“打开项目”界面尚未实现。
+`fs/getMetadata`、`fs/readDirectory` 为 Renderer 的 Explorer 提供按需目录枚举，并通过
+`fs/readFile` 把不超过 10 MiB 的 UTF-8 文件打开到已注册的文本编辑器。编辑目前只保留在
+内存模型中；保存、写入/重命名、文件监听与自动刷新、多根 Workspace 配置解析尚未实现。
+Explorer 使用的 Seti manifest 和 WOFF 由
+[`zeta-file-icons`](../zeta-rs/file-icons/README.md) 统一拥有，并在 Desktop 构建、测试和
+Renderer 类型检查前同步到 `generated/file-icons/`。TypeScript 直接从同步后的 JSON
+推导所需结构，不维护额外的 Schema 或生成类型。
 
 代码中 `platform/workspace` 定义当前窗口的 Workspace 模型与上下文，
 `platform/workspaces` 负责启动目标解析和后续工作区管理能力。两者不是同一服务的单复数别名。

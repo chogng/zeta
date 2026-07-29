@@ -95,7 +95,6 @@ export const WorkbenchViewContainerId = Object.freeze({
   Search: "zeta.search",
   Git: "zeta.git",
   Panel: "zeta.panel",
-  AuxiliaryBar: "zeta.auxiliary",
 });
 
 /**

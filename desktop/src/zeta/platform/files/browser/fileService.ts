@@ -4,6 +4,8 @@ import type {
   FsGetMetadataResult,
   FsReadDirectoryParams,
   FsReadDirectoryResult,
+  FsReadFileParams,
+  FsReadFileResult,
 } from "../../../../../generated/app-server/types.js";
 import { URI } from "../../../base/common/uri.js";
 import {
@@ -20,6 +22,7 @@ import type {
 export interface IFileSystemApi {
   getMetadata(params: FsGetMetadataParams): Promise<FsGetMetadataResult>;
   readDirectory(params: FsReadDirectoryParams): Promise<FsReadDirectoryResult>;
+  readFile(params: FsReadFileParams): Promise<FsReadFileResult>;
 }
 
 export interface BrowserFileServiceOptions {
@@ -61,6 +64,13 @@ export class BrowserFileService implements IFileService {
       name: entry.name,
       kind: fileKind(entry.fileType),
     }));
+  }
+
+  async readFile(resource: URI): Promise<string> {
+    const result = await this.#api.readFile({
+      path: this.#relativePath(resource),
+    });
+    return result.content;
   }
 
   #relativePath(resource: URI): string {

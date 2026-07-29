@@ -49,6 +49,8 @@ export function createDisconnectedRendererApi(): ZetaRendererApi {
     turn: {
       start: () => unavailable("turn.start"),
       interrupt: () => unavailable("turn.interrupt"),
+      resolveInteraction: () =>
+        unavailable("turn.resolveInteraction"),
     },
     typst: {
       compile: () => unavailable("typst.compile"),
@@ -61,6 +63,12 @@ export function createDisconnectedRendererApi(): ZetaRendererApi {
     fs: {
       getMetadata: () => unavailable("fs.getMetadata"),
       readDirectory: () => unavailable("fs.readDirectory"),
+      readFile: () => unavailable("fs.readFile"),
+    },
+    workspaceSearch: {
+      start: () => unavailable("workspaceSearch.start"),
+      read: () => unavailable("workspaceSearch.read"),
+      cancel: () => unavailable("workspaceSearch.cancel"),
     },
     events: {
       subscribe: inertSubscription,

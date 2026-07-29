@@ -19,6 +19,10 @@ use zeta_app_server_protocol::protocol::resources::{
     ResourceMetadataParams, ResourceMetadataResult, ResourceReadParams, ResourceReadResult,
     ResourceReleaseParams,
 };
+use zeta_app_server_protocol::protocol::search::{
+    WorkspaceSearchCancelParams, WorkspaceSearchReadParams, WorkspaceSearchReadResult,
+    WorkspaceSearchStartParams, WorkspaceSearchStartResult,
+};
 use zeta_app_server_protocol::protocol::session::{
     SessionCommandParams, SessionCreateParams, SessionListResult, SessionReadParams, SessionResult,
     SessionSubscribeParams, SessionSubscribeResult, SessionThreadArchiveParams,
@@ -289,6 +293,27 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
 
     pub fn release_resource(&mut self, params: ResourceReleaseParams) -> Result<(), ClientError> {
         self.call(ClientMethod::ResourceRelease, params)
+    }
+
+    pub fn start_workspace_search(
+        &mut self,
+        params: WorkspaceSearchStartParams,
+    ) -> Result<WorkspaceSearchStartResult, ClientError> {
+        self.call(ClientMethod::WorkspaceSearchStart, params)
+    }
+
+    pub fn read_workspace_search(
+        &mut self,
+        params: WorkspaceSearchReadParams,
+    ) -> Result<WorkspaceSearchReadResult, ClientError> {
+        self.call(ClientMethod::WorkspaceSearchRead, params)
+    }
+
+    pub fn cancel_workspace_search(
+        &mut self,
+        params: WorkspaceSearchCancelParams,
+    ) -> Result<(), ClientError> {
+        self.call(ClientMethod::WorkspaceSearchCancel, params)
     }
 
     pub fn drain_notifications(&mut self) -> Result<Vec<ServerNotification>, ClientError> {
