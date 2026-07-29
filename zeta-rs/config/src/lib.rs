@@ -27,7 +27,7 @@ pub use resolution::{
     ConfigDiagnostic, ConfigDiagnosticCode, ConfigProvenance, ConfigValueSource,
     ScopedConfigSnapshot, WorkspaceConfigInput, resolve_scoped_config,
 };
-pub use skills::{SkillSourceConfig, SkillSourceEnablement, SkillSourceId, SkillsConfig};
+pub use skills::{SkillEnablement, SkillSourceConfig, SkillSourceEnablement, SkillsConfig};
 pub use store::{ConfigError, ConfigStore};
 pub use workspace::{
     PluginId, PluginVersion, WorkspaceAgentConfig, WorkspaceConfigDocument, WorkspaceConfigIntent,
@@ -35,7 +35,7 @@ pub use workspace::{
     WorkspaceMcpConfig, WorkspaceMcpServerConfig, WorkspacePluginRequest,
     WorkspacePluginRequestScope, WorkspacePluginRequests, WorkspaceSkillsConfig,
 };
-pub use zeta_protocol::{ModelRef, Theme};
+pub use zeta_protocol::{ModelRef, SkillId, SkillName, SkillSourceId, Theme};
 
 #[cfg(test)]
 #[path = "config_tests.rs"]

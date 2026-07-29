@@ -5,7 +5,9 @@ mod chatwidget;
 mod clipboard;
 mod file_search;
 mod render;
+mod selection_views;
 mod slash_command_dispatch;
+mod status_line;
 mod terminal;
 mod toppane;
 
@@ -30,6 +32,7 @@ use toppane::SlashCommandRegistry;
 use zeta_app_server_client::AppServerClient;
 use zeta_app_server_client::ClientError;
 use zeta_app_server_client::JsonRpcTransport;
+use zeta_app_server_client::ServerNotification;
 use zeta_app_server_protocol::protocol::slash_commands::{
     SlashCommandArgumentModeDto, SlashCommandDefinition,
 };
@@ -114,9 +117,13 @@ where
     let mut active_turn = None;
     let mut terminal = terminal::TerminalSession::open()?;
     let mut app = App::for_workspace_with_slash_commands(&workspace_root, slash_commands);
+    if let Ok(config) = client.read_config() {
+        app.apply_config_snapshot(&config);
+    }
 
     loop {
         app.poll_background_events();
+        refresh_server_notifications(&mut client, &conversation, &mut app);
         if matches!(
             app.status(),
             app::Status::Working
@@ -177,12 +184,39 @@ where
                     Ok(image) => app.attach_image_bytes(image.png),
                     Err(error) => app.record_clipboard_error(error),
                 },
+                Action::SetSkillEnablement {
+                    skill_id,
+                    enablement,
+                } => {
+                    conversation.set_skill_enablement(&mut client, skill_id, enablement, &mut app);
+                }
                 Action::Submit(prompt) => {
                     terminal.draw(|frame| render::draw(frame, &app))?;
                     active_turn = submit_prompt(&mut client, &mut conversation, prompt, &mut app);
                 }
             }
         }
+    }
+}
+
+fn refresh_server_notifications<T>(
+    client: &mut AppServerClient<T>,
+    conversation: &ActiveConversation,
+    app: &mut App,
+) where
+    T: JsonRpcTransport,
+{
+    match client.drain_notifications() {
+        Ok(notifications) => {
+            if app.skills_view_is_active()
+                && notifications.iter().any(|notification| {
+                    matches!(notification, ServerNotification::SkillsChanged(_))
+                })
+            {
+                conversation.refresh_skills(client, app);
+            }
+        }
+        Err(error) => app.record_error(error.to_string()),
     }
 }
 

@@ -36,6 +36,11 @@ use crate::protocol::session::{
     SessionThreadCreateParams, SessionThreadForkParams, SessionThreadResult,
     SessionUnsubscribeParams,
 };
+use crate::protocol::skills::{
+    SkillCatalogReloadDto, SkillCompatibilityDto, SkillDiagnosticCodeDto, SkillDiagnosticDto,
+    SkillDto, SkillEnablementDto, SkillListParams, SkillListResult, SkillSetEnablementParams,
+    SkillSourceKindDto, SkillsChanged,
+};
 use crate::protocol::slash_commands::{SlashCommandArgumentModeDto, SlashCommandDefinition};
 use crate::protocol::thread::{
     ThreadReadParams, ThreadReadResult, ThreadSubscribeParams, ThreadSubscribeResult,
@@ -54,10 +59,10 @@ use zeta_protocol::{
     InteractionCancelReason, InteractionDeadline, ItemDelta, PendingInteraction, PlanStep,
     PlanStepStatus, PlanUpdate, ProcessExecutionOutput, ProcessExitStatus, RequestUserInput,
     RequestUserInputResponse, SandboxDenialOutput, Session, SessionEvent, SessionStatus,
-    SessionThread, SessionThreadStatus, SessionUpdate, StableTurnError, StableTurnErrorCode,
-    StreamCursor, Thread, ThreadEvent, ThreadItem, ThreadOrigin, ThreadStatus, ThreadUpdate,
-    ToolExecutionAuthority, ToolReplaySafety, Turn, TurnInteraction, TurnStatus, UserInputAnswer,
-    UserInputOption, UserInputQuestion,
+    SessionThread, SessionThreadStatus, SessionUpdate, SkillId, SkillName, SkillSourceId,
+    StableTurnError, StableTurnErrorCode, StreamCursor, Thread, ThreadEvent, ThreadItem,
+    ThreadOrigin, ThreadStatus, ThreadUpdate, ToolExecutionAuthority, ToolReplaySafety, Turn,
+    TurnInteraction, TurnStatus, UserInputAnswer, UserInputOption, UserInputQuestion,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -308,6 +313,16 @@ client_methods! {
         response: ConfigCommandResult,
         serialization: GlobalExclusive,
     },
+    SkillList => "skills/list" {
+        params: SkillListParams,
+        response: SkillListResult,
+        serialization: GlobalSharedRead,
+    },
+    SkillSetEnablement => "skill/enablement/set" {
+        params: SkillSetEnablementParams,
+        response: ConfigCommandResult,
+        serialization: GlobalExclusive,
+    },
     TurnStart => "turn/start" {
         params: TurnStartParams,
         response: TurnStartResult,
@@ -432,6 +447,9 @@ server_notifications! {
     ThreadUpdate => "thread/update" {
         params: ThreadUpdateEnvelope,
     },
+    SkillsChanged => "skills/changed" {
+        params: SkillsChanged,
+    },
 }
 
 macro_rules! typescript_bindings {
@@ -483,6 +501,20 @@ typescript_bindings! {
     SkillSourceAddParams,
     SkillSourceRemoveParams,
     SkillSourceSetEnablementParams,
+    SkillName,
+    SkillSourceId,
+    SkillId,
+    SkillCatalogReloadDto,
+    SkillEnablementDto,
+    SkillSourceKindDto,
+    SkillCompatibilityDto,
+    SkillDto,
+    SkillDiagnosticCodeDto,
+    SkillDiagnosticDto,
+    SkillListParams,
+    SkillListResult,
+    SkillSetEnablementParams,
+    SkillsChanged,
     SlashCommandArgumentModeDto,
     SlashCommandDefinition,
     ServerCapabilities,

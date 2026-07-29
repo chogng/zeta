@@ -1,3 +1,4 @@
+use super::layout::{bottom_anchored_area, horizontal_margin};
 use super::theme::HIGHLIGHT;
 use super::theme::MUTED;
 use crate::app::App;
@@ -100,12 +101,7 @@ fn popup_layout(area: Rect, path_count: usize, selected: usize) -> Option<PopupL
         .saturating_sub(max_rows)
         .min(path_count.saturating_sub(visible_rows));
     Some(PopupLayout {
-        area: Rect {
-            x: area.x.saturating_add(2),
-            y: area.bottom().saturating_sub(visible_rows as u16),
-            width: area.width.saturating_sub(4),
-            height: visible_rows as u16,
-        },
+        area: horizontal_margin(bottom_anchored_area(area, visible_rows as u16), 2),
         first_path,
         visible_rows,
     })

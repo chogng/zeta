@@ -96,6 +96,13 @@ fn skill_source() -> SkillSourceConfig {
     }
 }
 
+fn built_in_skill() -> SkillId {
+    SkillId::new(
+        SkillSourceId::new("builtin:skill-source:zeta-release").unwrap(),
+        SkillName::new("skill-creator").unwrap(),
+    )
+}
+
 fn workspace_scope() -> WorkspaceConfigScope {
     WorkspaceConfigScope::new(WorkspaceId::new("project").unwrap())
 }
@@ -520,6 +527,54 @@ fn mcp_and_skill_declarations_are_durable_desired_config() {
     let persisted = std::fs::read_to_string(&path).unwrap();
     assert!(persisted.contains("credentialRef"));
     assert!(!persisted.contains("secretValue"));
+    remove_config_files(&path);
+}
+
+#[test]
+fn per_skill_enablement_is_durable_and_enabled_removes_the_override() {
+    let path = config_path("skill-enablement");
+    let store = ConfigStore::open(&path).unwrap();
+    let skill_id = built_in_skill();
+    let disabled = store
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("disable-built-in-skill").unwrap(),
+            expected_revision: ConfigRevision::INITIAL,
+            command: UserConfigCommand::SetSkillEnablement {
+                skill_id: skill_id.clone(),
+                enablement: SkillEnablement::Disabled,
+            },
+        })
+        .unwrap();
+
+    let reopened = ConfigStore::open(&path).unwrap();
+    assert_eq!(
+        reopened
+            .read_snapshot()
+            .unwrap()
+            .values
+            .skills
+            .skill_enablement(&skill_id),
+        SkillEnablement::Disabled
+    );
+    reopened
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("enable-built-in-skill").unwrap(),
+            expected_revision: disabled.revision,
+            command: UserConfigCommand::SetSkillEnablement {
+                skill_id: skill_id.clone(),
+                enablement: SkillEnablement::Enabled,
+            },
+        })
+        .unwrap();
+
+    let skills = ConfigStore::open(&path)
+        .unwrap()
+        .read_snapshot()
+        .unwrap()
+        .values
+        .skills;
+    assert_eq!(skills.skill_enablement(&skill_id), SkillEnablement::Enabled);
+    assert!(skills.enablement.is_empty());
     remove_config_files(&path);
 }
 

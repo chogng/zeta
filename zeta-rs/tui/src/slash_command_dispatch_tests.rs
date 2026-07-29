@@ -1,7 +1,8 @@
 use super::ActiveConversation;
-use super::help_text;
-use crate::app::{App, MessageRole, Status};
+use crate::app::{Action, App, MessageRole, Status};
+use crate::selection_views::help_selection_view;
 use crate::toppane::{ComposerInput, SlashCommand, SlashCommandInvocation, SlashCommandItem};
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use std::fs;
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -10,18 +11,24 @@ use zeta_app_server_client::{
 };
 use zeta_app_server_protocol::protocol::common::ClientInfo;
 use zeta_app_server_protocol::protocol::config::{ProviderConfigDto, ProviderConfigureParams};
+use zeta_app_server_protocol::protocol::skills::SkillEnablementDto;
 use zeta_protocol::CommandId;
 
 #[test]
 fn help_lists_only_executable_builtins() {
-    let help = help_text();
+    let help = crate::toppane::SelectionViewState::new(help_selection_view());
+    let help = help
+        .visible_items()
+        .into_iter()
+        .map(|item| item.label())
+        .collect::<Vec<_>>();
 
-    assert!(help.contains("/status"));
-    assert!(help.contains("/resume"));
-    assert!(help.contains("/model"));
-    assert!(!help.contains("/login"));
-    assert!(!help.contains("/plugins"));
-    assert!(!help.contains("/review"));
+    assert!(help.contains(&"/status"));
+    assert!(help.contains(&"/resume"));
+    assert!(help.contains(&"/model"));
+    assert!(!help.contains(&"/login"));
+    assert!(!help.contains(&"/plugins"));
+    assert!(!help.contains(&"/review"));
 }
 
 #[test]
@@ -69,7 +76,7 @@ fn new_fork_and_resume_change_the_active_typed_conversation() {
 }
 
 #[test]
-fn status_config_mcp_skills_and_help_return_real_results() {
+fn status_config_mcp_skills_and_help_return_real_surfaces() {
     let (mut client, state_root) = client();
     let mut conversation = ActiveConversation::start(&mut client, "commands".into()).unwrap();
     let mut app = App::new();
@@ -78,13 +85,28 @@ fn status_config_mcp_skills_and_help_return_real_results() {
         SlashCommand::Status,
         SlashCommand::Config,
         SlashCommand::Mcp,
-        SlashCommand::Skills,
-        SlashCommand::Help,
     ] {
         conversation.execute(&mut client, invocation(command, ""), &mut app);
         assert_eq!(app.status(), &Status::Ready);
         assert_eq!(app.messages().last().unwrap().role, MessageRole::Notice);
     }
+    conversation.execute(&mut client, invocation(SlashCommand::Skills, ""), &mut app);
+    assert_eq!(app.status(), &Status::Ready);
+    let selection = app.selection_view().unwrap();
+    assert_eq!(selection.title(), "Skills");
+    assert_eq!(
+        selection.tabs()[selection.active_tab_index()].label(),
+        "All (1)"
+    );
+    assert_eq!(selection.visible_items()[0].label(), "skill-creator");
+
+    conversation.execute(&mut client, invocation(SlashCommand::Help, ""), &mut app);
+    assert_eq!(app.status(), &Status::Ready);
+    let selection = app.selection_view().unwrap();
+    assert_eq!(
+        selection.tabs()[selection.active_tab_index()].label(),
+        "Commands"
+    );
 
     assert!(
         app.messages()
@@ -101,11 +123,66 @@ fn status_config_mcp_skills_and_help_return_real_results() {
             .iter()
             .any(|message| message.text == "No MCP servers configured.")
     );
-    assert!(
-        app.messages()
+
+    drop(client);
+    let _ = fs::remove_dir_all(state_root);
+}
+
+#[test]
+fn skills_view_toggles_catalog_entries_by_enablement() {
+    let (mut client, state_root) = client();
+    let mut conversation = ActiveConversation::start(&mut client, "skills".into()).unwrap();
+    let mut app = App::new();
+
+    conversation.execute(&mut client, invocation(SlashCommand::Skills, ""), &mut app);
+
+    let all = app.selection_view().unwrap();
+    assert_eq!(all.tabs()[all.active_tab_index()].label(), "All (1)");
+    assert_eq!(
+        all.visible_items()
             .iter()
-            .any(|message| message.text == "No skill sources configured.")
+            .map(|item| item.label())
+            .collect::<Vec<_>>(),
+        vec!["skill-creator"]
     );
+    assert!(
+        all.visible_items()[0]
+            .description()
+            .unwrap()
+            .contains("enabled  ·  built-in  ·  builtin:skill-source:zeta-release")
+    );
+
+    app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
+    let enabled = app.selection_view().unwrap();
+    assert_eq!(
+        enabled.tabs()[enabled.active_tab_index()].label(),
+        "Enabled (1)"
+    );
+    assert_eq!(enabled.visible_items()[0].label(), "skill-creator");
+
+    app.handle_key(KeyEvent::new(KeyCode::Left, KeyModifiers::NONE));
+    let action = app
+        .handle_key(KeyEvent::new(KeyCode::Char(' '), KeyModifiers::NONE))
+        .unwrap();
+    let Action::SetSkillEnablement {
+        skill_id,
+        enablement,
+    } = action
+    else {
+        panic!("Space should request a skill enablement change");
+    };
+    assert_eq!(skill_id.name.as_str(), "skill-creator");
+    assert_eq!(enablement, SkillEnablementDto::Disabled);
+
+    conversation.set_skill_enablement(&mut client, skill_id, enablement, &mut app);
+    app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
+    let disabled = app.selection_view().unwrap();
+    assert_eq!(
+        disabled.tabs()[disabled.active_tab_index()].label(),
+        "Disabled (1)"
+    );
+    assert_eq!(disabled.visible_items()[0].label(), "skill-creator");
 
     drop(client);
     let _ = fs::remove_dir_all(state_root);
@@ -139,6 +216,7 @@ fn model_command_updates_and_clears_preferred_model_with_config_revision() {
     let selected = configured.preferred_model.unwrap();
     assert_eq!(selected.provider, "test");
     assert_eq!(selected.model, "model-one");
+    assert_eq!(app.status_line().text_for_width(80), "test/model-one · .");
 
     conversation.execute(
         &mut client,
@@ -146,6 +224,7 @@ fn model_command_updates_and_clears_preferred_model_with_config_revision() {
         &mut app,
     );
     assert_eq!(client.read_config().unwrap().preferred_model, None);
+    assert_eq!(app.status_line().text_for_width(80), ".");
     assert_eq!(app.status(), &Status::Ready);
 
     drop(client);

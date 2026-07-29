@@ -30,6 +30,13 @@ Tool、approval policy 或 persistence。
   large-paste placeholder；product command 明确拒绝 image arguments；
 - command popup 只注册已有真实执行流的 built-ins：`/status`、`/skills`、`/mcp`、`/resume`、
   `/clear`、`/config`、`/fork`、`/help`、`/model`、`/new`、`/quit` 与 `/exit`；
+- `/help` 使用保留 composer 的 interaction view stack 打开 Commands/Keys 双 Tab selection
+  surface；支持直接输入搜索、左右键或 Tab/BackTab 循环切页、上下键循环选择，以及 Esc/Ctrl-C
+  返回 composer；
+- `/skills` 通过 typed `skills/list` 打开同一 interaction surface，提供
+  All/Enabled/Disabled/Errors tabs、数量、搜索和 source-qualified metadata；`Space` 通过
+  revision-checked `skill/enablement/set` 切换所选 Skill，`skills/changed` 会刷新仍在前台的页面；
+  该页面不把 enablement 冒充为正文 activation；
 - Session/Thread 命令调用 typed create/list/read/fork API 并切换当前 conversation；配置命令调用
   `config/read`，`/model` 使用 expected revision 更新 preferred model；
 - 启动时读取 client 保存的 `initialize.slashCommands` snapshot，与 built-ins 做防冲突合并；
@@ -39,7 +46,8 @@ Tool、approval policy 或 persistence。
 - active Turn 期间每 25 ms event-loop iteration 读取 Thread snapshot；
 - 以无外框 transcript 显示 latest completed Agent message、友好 failure、interruption 与
   waiting/cancelling state；
-- 顶部显示低干扰的运行状态，底部使用圆角 composer 和只包含下一步操作的 footer；
+- 顶部显示低干扰的运行状态；composer 上方右对齐显示 preferred model 与 workspace，并按宽度
+  依次使用短值或省略号；composer 只使用上下两条浅灰分隔线，footer 只包含下一步操作；
 - Ctrl-C、Ctrl-D（空输入）或 Esc：idle 时退出，active 时请求 interrupt；
 - raw mode、alternate screen、bracketed paste、mouse capture 与 cursor cleanup；
 - basic Unicode-aware wrapped-row estimation 和自动滚动到底部。
@@ -52,6 +60,9 @@ surface；缺少 typed backend contract 的 login、plugins、hooks、compact、
 mention 只插入 workspace-relative 文本路径，不是 `app://`/`plugin://`
 结构化 Mention，也不会读取文件内容。系统剪贴板图片依赖本机 clipboard backend；远程 SSH/
 tmux 会话尚无 terminal-mediated image clipboard fallback。
+status line 当前没有 Git、usage 或用户自定义 item/order；Git 后续应通过 `zeta-git` 的公开
+异步接口进入更新路径，usage 必须等待 App Server typed snapshot 提供，不能从 transcript
+推导。完整边界见 [`docs/tui.md` 的 status line 规划](../../docs/tui.md#111-status_line接口结果的展示投影)。
 系统文档中的这些内容是演进方向，不是已实现功能。
 
 从 repository root 启动当前 embedded TUI：
@@ -90,14 +101,17 @@ src/
 ├── app.rs                    # global presentation status and keyboard-to-Action mapping
 ├── clipboard.rs              # native clipboard file/RGBA image read and PNG encoding
 ├── file_search.rs            # @file handle lifecycle, current-query filtering and snapshot polling
+├── status_line.rs            # model/workspace display projection and width degradation
+├── status_line_tests.rs      # status-line projection and Unicode width tests
 ├── chatwidget/
 │   └── mod.rs                # transcript state + top-pane coordination
 ├── toppane/
-│   ├── mod.rs                # active interaction-surface routing
+│   ├── mod.rs                # composer + temporary interaction view stack routing
 │   ├── attachments.rs        # image-path loading and atomic placeholder bindings
 │   ├── chat_composer.rs      # submit orchestration, popup key routing and local dispatch
 │   ├── mentions/             # @token parsing, async result application and popup state
 │   ├── pending_pastes.rs     # large-paste placeholders and deferred payload expansion
+│   ├── selection.rs          # generic tabs/search/filter/selection state
 │   ├── slash_command_popup.rs # slash selection and dismissal state
 │   ├── slash_input.rs        # cursor parsing, completion ranges and inline submission recognition
 │   ├── slash_commands.rs     # built-in/dynamic command metadata and validated registry
@@ -106,8 +120,10 @@ src/
 │   ├── mod.rs                # frame layout and render ordering
 │   ├── header.rs             # product/status header
 │   ├── history.rs            # transcript and empty state
+│   ├── status_line.rs        # right-aligned context row
 │   ├── composer.rs           # input surface and cursor
 │   ├── mention_popup.rs      # workspace file mention overlay and hit testing
+│   ├── selection_view.rs     # expanded interaction selection surface
 │   ├── slash_command_popup.rs # slash command overlay
 │   ├── footer.rs             # status-specific key hints
 │   ├── layout.rs             # shared narrow layout helpers
@@ -125,12 +141,15 @@ src/
 | `App` | crate-private | presentation `Status`、全局键与 `ChatWidgetOutcome` → `Action` | 不保存 canonical Thread authority 或编辑器细节 |
 | `Action` | crate-private | `Quit`、`Interrupt`、`PasteImage`、`Submit(ComposerSubmission)` | keyboard mapping 后才触发 I/O |
 | `Status` | crate-private | Ready/Working/waiting/Cancelling/Error display state | 只能由 canonical snapshot/result驱动 |
+| `StatusLineModel` | crate-private | 直接把 config/workspace 接口结果变成长短展示值并执行宽度降级 | 不查询接口、不保存领域 authority、不渲染 |
+| `App::apply_config_snapshot` | crate-private | 将 `ConfigReadResult` 映射进 status-line projection | 只在 update path 调用，不复制 config domain |
 | `App::handle_key` | crate-private | 先委托局部输入，再处理未消费的全局键 | 不直接调用 client |
 | `App::activate_slash_command` | crate-private | 将鼠标命中的 command index 委托给 composer 并复用 command dispatch | 不计算 terminal geometry |
 | `App::quit_or_interrupt` | private | active state interrupt；idle/error quit | Cancelling 不重复发送 interrupt |
-| `ChatWidget` | crate-private | transcript 与 sibling `TopPane` 协调 | 不拥有产品 lifecycle、RPC 或 Vim keymap |
-| `ChatWidget::handle_key` | crate-private | `TopPaneOutcome` → `ChatWidgetOutcome`，提交时记录 user message | 不执行提交动作 |
-| `TopPane` | crate-private | 把当前交互面的键盘和 paste 委托给 composer | 不解释 slash 或编辑文本 |
+| `ChatWidget` | crate-private | transcript 与 sibling `InteractionPane` 协调 | 不拥有产品 lifecycle、RPC 或 feature catalog |
+| `ChatWidget::handle_key` | crate-private | `InteractionPaneOutcome` → `ChatWidgetOutcome`，提交时记录 user message | 不执行提交动作 |
+| `InteractionPane` | crate-private | 保留 composer、拥有 temporary view stack，并把 key/paste 路由到 active view 或 composer | 不保存 Plugin/Session 等产品 feature 状态 |
+| `SelectionViewState` | crate-private | tabs、搜索 query、过滤索引、选择与循环导航 | 不执行 action、不依赖产品 ID 或 App Server |
 | `ChatComposer` | private | blank/trim/submit、paste routing、slash completion application、参数结构化与 local dispatch | 不自行实现 slash grammar，不拥有 cursor、Vim state 或 RPC |
 | `Attachments` | private | 图片 bytes/path、data URL 与原子占位符绑定、删除后重新编号 | 不直接读取系统 clipboard、不发 RPC、不渲染 |
 | `clipboard::read_image` | crate-private | 从本机 clipboard 文件列表/RGBA image 读取并统一编码 PNG | 不改变 composer、不发 RPC、不持久化临时文件 |
@@ -149,9 +168,9 @@ src/
 | `apply_active_turn_snapshot` | private | canonical Turn status/items → presentation state | 不从 log/text 猜 terminal state |
 | `present_turn_error` | private | stable Turn error code → user-facing recovery message | 不显示 Rust Debug/provider secret |
 | `request_key` | private | process ID + wall-clock nanos command ID | 一次逻辑 command 一个新 ID |
-| `render::draw` | crate-private | frame 分区并按顺序协调 header/history/popup/composer/footer renderer | 不改变 App state |
+| `render::draw` | crate-private | frame 分区并按顺序协调 header/history/popup/status-line/composer/footer renderer | 不改变 App state |
 | `render::{slash_command_index_at,mention_index_at}` | crate-private | 使用与各自 renderer 相同的 popup geometry 映射可见行点击 | 不执行命令、不改变选择状态 |
-| `render::{header,history,composer,mention_popup,slash_command_popup,footer}` | private modules | 各自拥有一个 presentation surface | 不处理输入、不改变 App state |
+| `render::{header,history,status_line,composer,mention_popup,slash_command_popup,footer}` | private modules | 各自拥有一个 presentation surface | 不处理输入、不改变 App state |
 | `estimated_wrapped_rows` | private | Unicode display-width based scroll estimate | width 0 不 panic |
 | `TerminalSession::open` | crate-private | 进入 raw/alternate/paste/mouse mode 并创建 backend | partial failure 必须 rollback |
 | `Drop for TerminalSession` | private impl | 恢复 terminal modes 与 cursor | 所有退出路径都依赖 RAII |
@@ -166,7 +185,10 @@ run(client, options)
 ├─ client.create_session
 ├─ client.create_session_thread
 ├─ TerminalSession::open
-├─ App::for_workspace → FileSearchManager::new
+├─ App::for_workspace
+│  ├─ FileSearchManager::new
+│  └─ StatusLineModel::for_workspace
+├─ client.read_config → App::apply_config_snapshot
 └─ loop
    ├─ App::poll_background_events → FileSearchManager::poll → Mentions
    ├─ if active/waiting/cancelling: refresh_turn
@@ -174,7 +196,9 @@ run(client, options)
    ├─ event::poll(25 ms)
    └─ event::read
       ├─ key → App::handle_key
-      │  ├─ local input → ChatWidget → TopPane → ChatComposer → TextArea
+      │  ├─ local input → ChatWidget → InteractionPane
+      │  │  ├─ active selection view → local view state
+      │  │  └─ no active view → ChatComposer → TextArea
       │  ├─ Ctrl-V → PasteImage → clipboard::read_image → Attachments
       │  ├─ Quit → return
       │  ├─ Submit → submit_prompt
@@ -182,7 +206,9 @@ run(client, options)
       ├─ left mouse down → render::{mention_index_at,slash_command_index_at}
       │  ├─ mention hit → App::activate_mention → atomic path completion
       │  └─ slash hit → App::activate_slash_command → existing command dispatch
-      └─ Paste → App::handle_paste → ChatWidget → TopPane → ChatComposer
+      └─ Paste → App::handle_paste → ChatWidget → InteractionPane
+         ├─ active selection view → search query
+         └─ no active view → ChatComposer
          ├─ image path → Attachments + TextArea atomic placeholder
          └─ text → PendingPastes + TextArea
 ```
@@ -244,8 +270,12 @@ popup 再校验 query，因此包括 A → B → A 在内的旧结果都不会�
 
 Built-in command 进入 `ActiveConversation::execute`：Session/Thread lifecycle 使用 typed
 Session/Thread API，查询命令读取 authoritative config，`/model` 通过 expected revision mutation
-更新 preferred model。没有对应 typed contract 的产品命令不进入 registry，不显示占位提示，也不
-转成普通 prompt 冒充成功。
+更新 preferred model。`/help` 和 `/skills` 复用 generic interaction selection surface；关闭
+它们会恢复一直保留的 composer。`/skills` 映射 App Server 的 immutable catalog projection；
+`Space` 产生 source-qualified `SkillId` enablement intent，成功写入 config 后重新读取页面。
+catalog/file watcher 变化通过 `skills/changed` 触发同一刷新路径。TUI 不读取 Skill filesystem，
+也没有正文 activation/context injection action。没有对应 typed contract 的产品命令不进入
+registry，不显示占位提示，也不转成普通 prompt 冒充成功。
 
 ## Snapshot → UI mapping
 
@@ -324,12 +354,21 @@ Cleanup error 被忽略是 Drop 路径的刻意选择，避免 panic during unwi
 
 ## Rendering
 
-当前 layout 是固定四段：
+当前 layout 在 composer 模式是固定五段：
 
 1. 两行轻量 header，包括产品名和 canonical status 的 presentation label；
 2. expandable、无外框的 transcript，空会话显示 centered welcome；
-3. 三行圆角 composer；
-4. 一行 recovery/help footer。
+3. 一行右对齐 status line，显示现有接口提供的 model/workspace context；
+4. 三行 composer：上下浅灰水平线，中间一行以浅灰 `❯` 开始；
+5. 一行 recovery/help footer。
+
+所有 interaction surface 都以 terminal 底部为锚点：composer/footer 固定在底部，slash/mention
+popup 从 composer 上沿向上展开；temporary interaction view active 时替换 composer/footer 区域，
+底边保持不动并按 view 的 desired height 只向上扩张。header 保持不变，transcript 至少保留四行。
+temporary view active 时 status line 不占行。普通 composer 模式下，status line 只消费
+`StatusLineModel`，不在 draw 中调用 config、Git 或 Thread 接口。
+Selection surface 当前包含顶部分隔线、标题、可换行 Tabs、搜索框、可滚动窗口和 view-local
+footer；关闭后恢复一直保留的 composer state。
 
 Transcript marker 使用 role-specific color，正文是 plain text。`estimated_wrapped_rows` 使用
 `unicode_width::UnicodeWidthStr`，把 label width 计入首行，然后计算 bottom scroll。它是估算，
@@ -371,9 +410,11 @@ cursor filtering、range completion、bare/inline submission、dynamic metadata�
 structured text/image/paste arguments、popup render/mouse hit testing 与 local quit dispatch、Unicode
 cursor/editing、paste at cursor、large-paste placeholder expansion/binding/deletion、quit/interrupt
 keyboard semantics、duplicate interrupt suppression、图片路径识别/占位符删除重编号/结构化提交、input lock、
-response/error/interrupted transitions、snapshot
+response/error/interrupted transitions、interaction view 的 composer 保留、tabs wrap/左右循环切换、
+搜索过滤/选择修复/Esc-Ctrl-C dismissal、selection render，以及 snapshot
 terminal/wait/resume mapping，以及 transcript chrome、error 去重、role
-label/Unicode/zero-width wrapping。
+label/Unicode/zero-width wrapping，以及 status-line 长短值降级、Unicode-safe truncation 和
+composer 上方的右对齐渲染。
 
 Render tests 使用 Ratatui `TestBackend` 固定 empty/error surface 和 row estimation，但还没有完整
 snapshot/golden terminal test；`run` 也没有完整的 fake transport event-loop integration test。

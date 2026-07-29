@@ -32,6 +32,7 @@ serde / schemars / ts-rs
 | Domain | 主要 symbols | 语义 |
 | --- | --- | --- |
 | Identity | `SessionId`, `ThreadId`, `TurnId`, `ItemId`, `CommandId`, `RequestId`, `ToolCallId` | non-empty typed string identity |
+| Skill identity | `SkillName`, `SkillSourceId`, `SkillId` | Agent Skills name + source-qualified cross-config/catalog identity |
 | Product model | `Session`, `SessionThread`, `Thread`, `Turn`, `ThreadItem` | `Session → Thread → Turn → Item` snapshot |
 | Intent | `SessionCommand`, `ThreadCommand` | 请求改变状态，不表示已发生 |
 | Durable fact | `SessionEvent`, `ThreadEvent`, `ToolExecutionAuthority` | reducer/store 接受的过去式事实 |
@@ -57,6 +58,7 @@ derive `Eq`、serde、`JsonSchema` 与 `TS`。是否生成 TypeScript/schema art
 | --- | --- | --- | --- |
 | `identifier!` | private macro | 为 canonical IDs 生成 constructor、serde、schema、TS | 所有 ID deserialize 必须重用 constructor validation |
 | `validate_identifier` | crate-private | 拒绝 empty/whitespace identity | 不引入 storage/provider-specific syntax |
+| `SkillName::new` / `SkillSourceId::new` | public constructors | 校验 Agent Skills name 与 `<namespace>:skill-source:<local-id>` | 不接受 raw path，也不承担 source trust |
 | `model_identifier!` | private macro | 生成 `ProviderId`/`ModelId` contract | 保持与 canonical ID 相同的 non-empty invariant |
 | `ThreadEvent::kind` | public method | stable internal event-kind label | 与 enum variants exhaustive 同步 |
 | `ThreadEvent::thread_id` | public method | 提取 aggregate identity | 新 event 必须显式加入 match |

@@ -2,7 +2,7 @@ use crate::ClientError;
 use serde::Deserialize;
 use serde_json::Value;
 use zeta_app_server_protocol::protocol::notification::{
-    SessionUpdateEnvelope, ThreadUpdateEnvelope,
+    SessionUpdateEnvelope, SkillsChanged, ThreadUpdateEnvelope,
 };
 use zeta_app_server_protocol::protocol::registry::{
     ServerNotificationMethod, server_notification_method,
@@ -12,6 +12,7 @@ use zeta_app_server_protocol::protocol::registry::{
 pub enum ServerNotification {
     SessionUpdate(SessionUpdateEnvelope),
     ThreadUpdate(Box<ThreadUpdateEnvelope>),
+    SkillsChanged(SkillsChanged),
     Unknown { method: String, params: Value },
 }
 
@@ -31,6 +32,9 @@ pub(crate) fn decode(raw: &str) -> Result<ServerNotification, ClientError> {
         Some(ServerNotificationMethod::ThreadUpdate) => decode_params(envelope.params)
             .map(Box::new)
             .map(ServerNotification::ThreadUpdate),
+        Some(ServerNotificationMethod::SkillsChanged) => {
+            decode_params(envelope.params).map(ServerNotification::SkillsChanged)
+        }
         None => Ok(ServerNotification::Unknown {
             method: envelope.method,
             params: envelope.params,

@@ -42,7 +42,7 @@ impl SlashCommand {
     pub(crate) fn description(self) -> &'static str {
         match self {
             Self::Status => "show the active session, thread, and model",
-            Self::Skills => "list configured skill sources",
+            Self::Skills => "browse configured skill sources",
             Self::Mcp => "list configured MCP tools",
             Self::Resume => "list or resume a saved session",
             Self::Clear => "clear the terminal and start a new chat",

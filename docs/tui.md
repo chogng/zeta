@@ -149,7 +149,8 @@ zeta-rs/tui/
 │   │   ├── thread_navigation/
 │   │   ├── config/
 │   │   ├── resources/
-│   │   └── status/
+│   │   ├── status/
+│   │   └── status_line/
 │   ├── host/
 │   │   ├── mod.rs
 │   │   ├── clipboard.rs
@@ -402,6 +403,47 @@ request/response/notification、顺序、取消、错误与恢复语义，然后
 Feature 之间不能依赖彼此的私有模块。共享机制上移到稳定核心；跨功能协作通过
 `AppEvent`、`AppCommand` 或公开的小型 value type 完成。
 
+### 11.1 `status_line/`：接口结果的展示投影
+
+长期应把 status line 作为完整的 presentation subsystem，但“完整”只表示它独立拥有 item
+选择、排列、宽度降级和渲染，不表示它接管数据来源。各项数据仍由相应领域 crate 或 App
+Server contract 的公开接口拥有，TUI 在事件/更新阶段直接调用这些接口，再把结果映射为可丢弃
+的 `StatusLineModel`。禁止建立通用 `StatusProvider`、`StatusStore`，也禁止在 draw 路径查询
+Git、配置或 Thread。
+
+| Item | 权威接口 | TUI 的职责 | 当前状态 |
+| --- | --- | --- | --- |
+| preferred model | `AppServerClient::read_config` | 把 `ConfigReadResult::preferred_model` 映射为长/短文案 | 已实现 |
+| workspace | `TuiOptions::workspace_root` | 保留完整路径和 basename 两种展示值 | 已实现 |
+| Git branch/state | `zeta-git` public async interface | 在 update path 请求 snapshot，映射所需字段 | 尚未接入 |
+| Thread/Turn/usage | App Server typed snapshot/update | 消费 contract 已提供的字段，不从 transcript 推导 | contract 尚未提供完整 usage |
+| connection/runtime state | `client/` 与 `app/` 本地状态 | 映射为 presentation item | 规划中 |
+
+依赖方向固定为：
+
+```text
+owning crate interface / typed App Server result
+                    │
+                    ▼
+            app update coordination
+                    │
+                    ▼
+              StatusLineModel
+                    │
+                    ▼
+          pure layout + Ratatui render
+```
+
+`status_line/` 未来可以定义稳定的 item identity、用户选择与顺序、separator、alignment 和
+overflow policy；配置持久化必须先进入 typed config contract，不能由 renderer 私存。昂贵或
+异步接口在后台完成后以 event 更新模型；失败只影响对应 item，并保留其明确的 unavailable/
+stale 语义。任何新 item 都应先回答“哪个 crate/interface 拥有这个事实”，再添加展示映射和
+宽度测试。
+
+当前 bootstrap 版本没有先创建目标目录：`src/status_line.rs` 拥有 model 与宽度降级，
+`src/render/status_line.rs` 只负责右对齐渲染。这是上述边界的首个垂直切片，不代表 Git、
+usage 或可配置 item 已经完成。
+
 ## 12. `host/`：窄宿主能力
 
 `host/` 只放非终端 OS adapter，例如 clipboard、external editor、desktop notification 和
@@ -552,11 +594,13 @@ render/
 ├── mod.rs
 ├── header.rs
 ├── history.rs
+├── status_line.rs
 ├── composer.rs
 ├── slash_command_popup.rs
 ├── footer.rs
 ├── layout.rs
 └── theme.rs
+status_line.rs
 terminal.rs
 lib.rs
 ```
@@ -565,7 +609,21 @@ lib.rs
 
 - 通过 `zeta-app-server-client` 的 typed method 工作；
 - 明确声明权威 Thread/Turn 状态留在 App Server 后面。
-- `App` 处理全局状态/键，`ChatWidget` 协调 transcript 与 sibling `TopPane`；
+- `App` 处理全局状态/键，`ChatWidget` 协调 transcript 与 sibling `InteractionPane`；该类型
+  当前仍物理位于过渡目录 `toppane/`；
+- `InteractionPane` 保留 composer 并拥有 temporary view stack；generic selection view 已支持
+  tabs、直接输入搜索、过滤、循环选择、左右/Tab 切页和 Esc/Ctrl-C 出栈；`/help` 提供
+  Commands/Keys，`/skills` 从 typed `skills/list` 提供
+  All/Enabled/Disabled/Errors catalog tabs；
+- `/skills` 只消费 App Server metadata projection，不读取 `zeta-skills` filesystem；
+  `Space` 将 exact `SkillId` 转成 revision-checked `skill/enablement/set`，成功后刷新页面；
+  `skills/changed` 也会刷新前台页面。enablement 不等于正文 activation，TUI 当前没有
+  Skill context injection；
+- rendering layout 把所有 interaction surface 显式锚定在 terminal 底部：composer/footer
+  固定到底部，slash/mention popup 从 composer 上沿向上展开，temporary view 保持底边不动并
+  只向上占用 transcript 空间；
+- `StatusLineModel` 直接映射 typed `config/read` 与 `TuiOptions::workspace_root` 的结果；
+  renderer 只读取模型，并按可用宽度从完整 model/workspace 降级到短值或省略号；
 - `ChatComposer` 协调提交、popup keys、range completion application 与 structured local
   command dispatch，`SlashInput` 解释 cursor 下的 slash composer text，`TextArea` 拥有 UTF-8
   编辑状态、原子 command element 和未来 Vim keymap 边界；
@@ -586,7 +644,8 @@ lib.rs
   `/resume <session-id>` 可以切换当前 conversation，但尚无 picker/browser；
 - `ChatWidget` 只保存扁平 `Vec<Message>`，没有 canonical projection；
 - `turn/start` 执行期间暂停输入；
-- 请求结束后一次性 drain notification；
+- event loop 会轮询 drain notification，并用 `skills/changed` 刷新前台 Skill 页面，但仍没有
+  独立可唤醒的 event stream；
 - 没有 Session/Thread subscribe、gap detection 或 resync；
 - 只提取最终 AgentMessage，忽略 Turn/Item 的完整 typed lifecycle；
 - 没有 archive UI、resume picker 或多 Thread navigation surface；interrupt、exact-ID resume
@@ -597,7 +656,7 @@ lib.rs
   Session 前合并进 registry，非法名称、空描述、重复项和 built-in shadowing 都会使启动失败；
   dynamic command 恢复完整 `/name` 与 ordered arguments 后作为普通 Turn input 提交。
   Built-in registry 只保留真实执行流：Session/Thread lifecycle、status/config/MCP/Skill 查询、
-  revision-checked model selection、help 与退出；缺少 backend contract 的命令不显示。
+  revision-checked model selection、interactive help 与退出；缺少 backend contract 的命令不显示。
   workspace file mention popup 也支持
   keyboard/mouse selection，两者之外的 mouse surface 尚未接通；结构化 app/plugin Mention
   仍无 catalog 与执行流；
@@ -607,6 +666,8 @@ lib.rs
   contract；
 - `lib.rs` 同时承担 public API、启动编排、Turn 请求执行和通知解释；built-in product commands
   已抽到 `slash_command_dispatch.rs`。
+- status line 当前只有 model/workspace 两项；尚无 Git、usage、稳定 item 配置 contract 或
+  background refresh。
 
 这些限制可以作为 bootstrap 阶段存在，但不应在其上继续堆叠 feature。
 
@@ -619,7 +680,8 @@ lib.rs
 3. 将 typed request 与 notification 适配移入 `client/`；
 4. 建立 `projection/`，用 Session/Thread snapshot 替换扁平 message authority；
 5. 随 projection 落地，把 bootstrap `chatwidget/` 与 `toppane/` 迁入 `conversation/`，保留
-   `ChatWidget → TopPane → ChatComposer → TextArea` 的局部 ownership；
+   `ChatWidget → InteractionPane → ChatComposer → TextArea` 的局部 ownership；迁移时继续保留
+   已实现的 composer + temporary view stack 语义；
 6. 保持现有同步行为和 public `run` API 可用。
 
 ### 阶段二：订阅与恢复

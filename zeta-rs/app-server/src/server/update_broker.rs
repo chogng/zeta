@@ -3,6 +3,7 @@ use serde_json::Value;
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex, Weak};
 use zeta_app_server_protocol::protocol::registry::ServerNotificationMethod;
+use zeta_app_server_protocol::protocol::skills::SkillsChanged;
 use zeta_app_server_protocol::rpc::JsonRpcNotification;
 use zeta_protocol::{
     SessionId, SessionUpdateEnvelope, ThreadId, ThreadUpdate, ThreadUpdateEnvelope,
@@ -137,6 +138,24 @@ impl UpdateBroker {
             | ThreadUpdate::ItemDelta { .. }
             | ThreadUpdate::PlanUpdated { .. } => self.publish_thread_transient(&update),
         }
+    }
+
+    pub(super) fn publish_skills_changed(&self, generation: u64) {
+        let Ok(mut subscribers) = self.subscribers.lock() else {
+            return;
+        };
+        subscribers.retain(|_, subscriber| {
+            let Some(queue) = subscriber.queue.upgrade() else {
+                return false;
+            };
+            if let Ok(mut queue) = queue.lock() {
+                queue.push(notification(
+                    ServerNotificationMethod::SkillsChanged,
+                    &SkillsChanged { generation },
+                ));
+            }
+            true
+        });
     }
 
     fn publish_thread_transient(&self, update: &ThreadUpdateEnvelope) {

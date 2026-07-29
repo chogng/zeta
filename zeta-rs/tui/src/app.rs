@@ -3,8 +3,13 @@ use crate::chatwidget::ChatWidgetOutcome;
 pub(crate) use crate::chatwidget::Message;
 pub(crate) use crate::chatwidget::MessageRole;
 use crate::file_search::FileSearchManager;
+use crate::selection_views::{SkillSelectionAction, SkillSelectionView};
+use crate::status_line::StatusLineModel;
 use crate::toppane::ComposerSubmission;
 use crate::toppane::MentionPopupView;
+use crate::toppane::SelectionItemId;
+use crate::toppane::SelectionViewModel;
+use crate::toppane::SelectionViewState;
 use crate::toppane::SlashCommand;
 use crate::toppane::SlashCommandInvocation;
 use crate::toppane::SlashCommandItem;
@@ -13,8 +18,11 @@ use crate::toppane::SlashPopupView;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
+use std::collections::BTreeMap;
 use std::path::Path;
-use zeta_protocol::{Thread, ThreadItem};
+use zeta_app_server_protocol::protocol::config::ConfigReadResult;
+use zeta_app_server_protocol::protocol::skills::SkillEnablementDto;
+use zeta_protocol::{SkillId, Thread, ThreadItem};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum Action {
@@ -22,6 +30,10 @@ pub(crate) enum Action {
     Quit,
     Interrupt,
     PasteImage,
+    SetSkillEnablement {
+        skill_id: SkillId,
+        enablement: SkillEnablementDto,
+    },
     Submit(ComposerSubmission),
 }
 
@@ -40,7 +52,15 @@ pub(crate) enum Status {
 pub(crate) struct App {
     chat_widget: ChatWidget,
     file_search: Option<FileSearchManager>,
+    selection_actions: Vec<SelectionActions>,
     status: Status,
+    status_line: StatusLineModel,
+}
+
+#[derive(Debug)]
+enum SelectionActions {
+    ReadOnly,
+    Skills(BTreeMap<SelectionItemId, SkillSelectionAction>),
 }
 
 impl App {
@@ -49,7 +69,9 @@ impl App {
         Self {
             chat_widget: ChatWidget::new(),
             file_search: None,
+            selection_actions: Vec::new(),
             status: Status::Ready,
+            status_line: StatusLineModel::for_workspace(Path::new(".")),
         }
     }
 
@@ -65,7 +87,9 @@ impl App {
         Self {
             chat_widget: ChatWidget::with_slash_commands(slash_commands),
             file_search: Some(FileSearchManager::new(workspace_root.to_path_buf())),
+            selection_actions: Vec::new(),
             status: Status::Ready,
+            status_line: StatusLineModel::for_workspace(workspace_root),
         }
     }
 
@@ -84,6 +108,9 @@ impl App {
 
     fn handle_chat_widget_outcome(&mut self, outcome: ChatWidgetOutcome) -> Option<Action> {
         match outcome {
+            ChatWidgetOutcome::ActivateSelectionItem(item_id) => {
+                self.activate_selection_item(&item_id)
+            }
             ChatWidgetOutcome::Command(command) => self.handle_slash_command(command),
             ChatWidgetOutcome::Submit(submission) => {
                 self.status = Status::Working;
@@ -91,6 +118,25 @@ impl App {
             }
             ChatWidgetOutcome::Consumed => None,
             ChatWidgetOutcome::Unhandled => None,
+            ChatWidgetOutcome::ViewDismissed => {
+                self.selection_actions.pop();
+                None
+            }
+        }
+    }
+
+    fn activate_selection_item(&self, item_id: &SelectionItemId) -> Option<Action> {
+        let SelectionActions::Skills(actions) = self.selection_actions.last()? else {
+            return None;
+        };
+        match actions.get(item_id)? {
+            SkillSelectionAction::SetEnablement {
+                skill_id,
+                enablement,
+            } => Some(Action::SetSkillEnablement {
+                skill_id: skill_id.clone(),
+                enablement: *enablement,
+            }),
         }
     }
 
@@ -153,6 +199,38 @@ impl App {
         self.chat_widget.mention_popup()
     }
 
+    pub(crate) fn show_selection_view(&mut self, model: SelectionViewModel) {
+        self.chat_widget.show_selection_view(model);
+        self.selection_actions.push(SelectionActions::ReadOnly);
+    }
+
+    pub(crate) fn show_skills_view(&mut self, view: SkillSelectionView) {
+        self.chat_widget.show_selection_view(view.model);
+        self.selection_actions
+            .push(SelectionActions::Skills(view.actions));
+    }
+
+    pub(crate) fn replace_skills_view(&mut self, view: SkillSelectionView) {
+        self.chat_widget.replace_selection_view(view.model);
+        match self.selection_actions.last_mut() {
+            Some(actions) => *actions = SelectionActions::Skills(view.actions),
+            None => self
+                .selection_actions
+                .push(SelectionActions::Skills(view.actions)),
+        }
+    }
+
+    pub(crate) fn skills_view_is_active(&self) -> bool {
+        matches!(
+            self.selection_actions.last(),
+            Some(SelectionActions::Skills(_))
+        )
+    }
+
+    pub(crate) fn selection_view(&self) -> Option<&SelectionViewState> {
+        self.chat_widget.selection_view()
+    }
+
     pub(crate) fn activate_mention(&mut self, index: usize) -> bool {
         let activated = self.accepts_input() && self.chat_widget.activate_mention(index);
         self.sync_file_search_query();
@@ -176,6 +254,14 @@ impl App {
 
     pub(crate) fn status(&self) -> &Status {
         &self.status
+    }
+
+    pub(crate) fn status_line(&self) -> &StatusLineModel {
+        &self.status_line
+    }
+
+    pub(crate) fn apply_config_snapshot(&mut self, config: &ConfigReadResult) {
+        self.status_line.apply_config(config);
     }
 
     pub(crate) fn accepts_input(&self) -> bool {

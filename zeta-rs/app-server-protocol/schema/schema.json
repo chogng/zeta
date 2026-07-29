@@ -262,7 +262,10 @@
         "SearchNotOwner",
         "SearchBusy",
         "ConfigUnavailable",
-        "ConfigRevisionConflict"
+        "ConfigRevisionConflict",
+        "SkillsUnavailable",
+        "SkillOperationFailed",
+        "SkillNotFound"
       ]
     },
     "ApprovalReviewModelSelectionDto": {
@@ -738,6 +741,38 @@
             },
             "params": {
               "$ref": "#/$defs/SkillSourceSetEnablementParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "skills/list"
+            },
+            "params": {
+              "$ref": "#/$defs/SkillListParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "skill/enablement/set"
+            },
+            "params": {
+              "$ref": "#/$defs/SkillSetEnablementParams"
             }
           },
           "required": [
@@ -1331,6 +1366,38 @@
             "method": {
               "type": "string",
               "const": "skill/source/enablement/set"
+            },
+            "result": {
+              "$ref": "#/$defs/ConfigCommandResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "skills/list"
+            },
+            "result": {
+              "$ref": "#/$defs/SkillListResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "skill/enablement/set"
             },
             "result": {
               "$ref": "#/$defs/ConfigCommandResult"
@@ -2843,6 +2910,22 @@
             "method",
             "params"
           ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "skills/changed"
+            },
+            "params": {
+              "$ref": "#/$defs/SkillsChanged"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
         }
       ]
     },
@@ -3295,6 +3378,204 @@
         "update"
       ]
     },
+    "SkillCatalogReloadDto": {
+      "type": "string",
+      "enum": [
+        "cached",
+        "refresh"
+      ]
+    },
+    "SkillCompatibilityDto": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "compatible"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "note": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "unknown"
+            }
+          },
+          "required": [
+            "type",
+            "note"
+          ]
+        }
+      ]
+    },
+    "SkillDiagnosticCodeDto": {
+      "type": "string",
+      "enum": [
+        "sourceUnavailable",
+        "sourceLimitExceeded",
+        "skillNotFound",
+        "invalidFrontmatter",
+        "invalidSkillName",
+        "descriptionInvalid",
+        "pathEscapesRoot",
+        "unsupportedFileType",
+        "contentTooLarge"
+      ]
+    },
+    "SkillDiagnosticDto": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "$ref": "#/$defs/SkillDiagnosticCodeDto"
+        },
+        "message": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        },
+        "subject": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "source",
+        "code",
+        "message"
+      ]
+    },
+    "SkillDto": {
+      "type": "object",
+      "properties": {
+        "compatibility": {
+          "$ref": "#/$defs/SkillCompatibilityDto"
+        },
+        "contentDigest": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "enablement": {
+          "$ref": "#/$defs/SkillEnablementDto"
+        },
+        "id": {
+          "$ref": "#/$defs/SkillId"
+        },
+        "sourceKind": {
+          "$ref": "#/$defs/SkillSourceKindDto"
+        }
+      },
+      "required": [
+        "id",
+        "description",
+        "sourceKind",
+        "contentDigest",
+        "enablement",
+        "compatibility"
+      ]
+    },
+    "SkillEnablementDto": {
+      "type": "string",
+      "enum": [
+        "disabled",
+        "enabled"
+      ]
+    },
+    "SkillId": {
+      "description": "Source-qualified stable identity for one Skill.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/SkillName"
+        },
+        "source": {
+          "$ref": "#/$defs/SkillSourceId"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "name"
+      ]
+    },
+    "SkillListParams": {
+      "type": "object",
+      "properties": {
+        "reload": {
+          "$ref": "#/$defs/SkillCatalogReloadDto",
+          "default": "cached"
+        }
+      }
+    },
+    "SkillListResult": {
+      "type": "object",
+      "properties": {
+        "diagnostics": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SkillDiagnosticDto"
+          }
+        },
+        "generation": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "skills": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SkillDto"
+          }
+        }
+      },
+      "required": [
+        "generation",
+        "skills",
+        "diagnostics"
+      ]
+    },
+    "SkillName": {
+      "description": "Agent Skills-compatible name, unique within one Skill source.",
+      "type": "string"
+    },
+    "SkillSetEnablementParams": {
+      "type": "object",
+      "properties": {
+        "commandId": {
+          "$ref": "#/$defs/CommandId"
+        },
+        "enablement": {
+          "$ref": "#/$defs/SkillEnablementDto"
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "skillId": {
+          "$ref": "#/$defs/SkillId"
+        }
+      },
+      "required": [
+        "commandId",
+        "expectedRevision",
+        "skillId",
+        "enablement"
+      ]
+    },
     "SkillSourceAddParams": {
       "description": "Adds a user-owned, runtime-free Skill source declaration.",
       "type": "object",
@@ -3347,6 +3628,17 @@
         "enabled"
       ]
     },
+    "SkillSourceId": {
+      "description": "Stable identity for one configured, built-in, Workspace, or Plugin Skill source.",
+      "type": "string"
+    },
+    "SkillSourceKindDto": {
+      "type": "string",
+      "enum": [
+        "builtIn",
+        "user"
+      ]
+    },
     "SkillSourceRemoveParams": {
       "description": "Removes one user-owned Skill source declaration.",
       "type": "object",
@@ -3395,6 +3687,19 @@
         "expectedRevision",
         "sourceId",
         "enablement"
+      ]
+    },
+    "SkillsChanged": {
+      "type": "object",
+      "properties": {
+        "generation": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "generation"
       ]
     },
     "SlashCommandArgumentModeDto": {

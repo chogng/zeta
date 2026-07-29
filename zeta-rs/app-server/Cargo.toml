@@ -23,6 +23,7 @@ zeta-auto-review = { workspace = true }
 zeta-config = { workspace = true }
 zeta-core = { workspace = true }
 zeta-file-system = { workspace = true }
+zeta-file-watcher = { workspace = true }
 zeta-install-context = { workspace = true }
 zeta-model-provider = { workspace = true }
 zeta-model-provider-config = { workspace = true }
@@ -33,6 +34,7 @@ zeta-rollout = { workspace = true }
 zeta-rmcp-client = { workspace = true }
 zeta-sandboxing = { workspace = true }
 zeta-shell-command = { workspace = true }
+zeta-skills = { workspace = true }
 zeta-tools = { workspace = true }
 zeta-typst = { workspace = true }
 

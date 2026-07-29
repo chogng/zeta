@@ -1,18 +1,21 @@
 use crate::app::App;
 use crate::request_key;
+use crate::selection_views::help_selection_view;
+use crate::selection_views::skills_selection_view;
 use crate::toppane::ComposerInput;
 use crate::toppane::SlashCommand;
 use crate::toppane::SlashCommandInvocation;
 use crate::toppane::SlashCommandItem;
-use crate::toppane::built_in_slash_commands;
 use std::fmt;
 use zeta_app_server_client::{AppServerClient, ClientError, JsonRpcTransport};
 use zeta_app_server_protocol::protocol::config::{
     ConfigReadResult, ConfigUpdateParams, McpServerEnablementDto, ModelRefDto,
-    SkillSourceEnablementDto,
 };
 use zeta_app_server_protocol::protocol::session::{
     SessionCreateParams, SessionReadParams, SessionThreadCreateParams, SessionThreadForkParams,
+};
+use zeta_app_server_protocol::protocol::skills::{
+    SkillCatalogReloadDto, SkillEnablementDto, SkillListParams, SkillSetEnablementParams,
 };
 use zeta_app_server_protocol::protocol::thread::ThreadReadParams;
 use zeta_protocol::{CommandId, Patch, Session, SessionId, SessionThreadStatus, ThreadId};
@@ -64,6 +67,39 @@ impl ActiveConversation {
         }
     }
 
+    pub(crate) fn refresh_skills<T>(&self, client: &mut AppServerClient<T>, app: &mut App)
+    where
+        T: JsonRpcTransport,
+    {
+        match client.list_skills(SkillListParams::default()) {
+            Ok(catalog) => app.replace_skills_view(skills_selection_view(&catalog)),
+            Err(error) => app.record_error(error.to_string()),
+        }
+    }
+
+    pub(crate) fn set_skill_enablement<T>(
+        &self,
+        client: &mut AppServerClient<T>,
+        skill_id: zeta_protocol::SkillId,
+        enablement: SkillEnablementDto,
+        app: &mut App,
+    ) where
+        T: JsonRpcTransport,
+    {
+        let result = client.read_config().and_then(|config| {
+            client.set_skill_enablement(SkillSetEnablementParams {
+                command_id: command_id("skill-enablement"),
+                expected_revision: config.revision,
+                skill_id,
+                enablement,
+            })
+        });
+        match result {
+            Ok(_) => self.refresh_skills(client, app),
+            Err(error) => app.record_error(error.to_string()),
+        }
+    }
+
     fn try_execute<T>(
         &mut self,
         client: &mut AppServerClient<T>,
@@ -91,7 +127,7 @@ impl ActiveConversation {
             SlashCommand::Config => show_config(client, app),
             SlashCommand::Fork => self.fork(client, &arguments, app),
             SlashCommand::Help => {
-                app.record_notice(help_text());
+                app.show_selection_view(help_selection_view());
                 Ok(())
             }
             SlashCommand::Model => set_or_show_model(client, &arguments, app),
@@ -322,24 +358,10 @@ fn show_skills<T>(
 where
     T: JsonRpcTransport,
 {
-    let config = client.read_config()?;
-    let text = if config.skill_sources.is_empty() {
-        "No skill sources configured.".into()
-    } else {
-        config
-            .skill_sources
-            .values()
-            .map(|source| {
-                let state = match source.enablement {
-                    SkillSourceEnablementDto::Disabled => "disabled",
-                    SkillSourceEnablementDto::Enabled => "enabled",
-                };
-                format!("{}  {}  {state}", source.id, source.root_reference)
-            })
-            .collect::<Vec<_>>()
-            .join("\n")
-    };
-    app.record_notice(text);
+    let catalog = client.list_skills(SkillListParams {
+        reload: SkillCatalogReloadDto::Refresh,
+    })?;
+    app.show_skills_view(skills_selection_view(&catalog));
     Ok(())
 }
 
@@ -393,6 +415,7 @@ where
         theme: Patch::Missing,
     })?;
     let updated = client.read_config()?;
+    app.apply_config_snapshot(&updated);
     app.record_notice(format!("Preferred model: {}", preferred_model(&updated)));
     Ok(())
 }
@@ -403,14 +426,6 @@ fn preferred_model(config: &ConfigReadResult) -> String {
         .as_ref()
         .map(|model| format!("{}/{}", model.provider, model.model))
         .unwrap_or_else(|| "not configured".into())
-}
-
-fn help_text() -> String {
-    built_in_slash_commands()
-        .into_iter()
-        .map(|(name, command)| format!("/{name}  {}", command.description()))
-        .collect::<Vec<_>>()
-        .join("\n")
 }
 
 fn text_arguments(arguments: &[ComposerInput]) -> Result<String, CommandExecutionError> {

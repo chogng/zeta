@@ -18,11 +18,11 @@ pub use catalog::{
 pub use compatibility::SkillCompatibility;
 pub use diagnostic::{SkillDiagnostic, SkillDiagnosticCode};
 pub use error::{SkillError, SkillErrorKind};
-pub use identity::{
-    ContentDigest, InvalidContentDigest, InvalidSkillName, InvalidSkillSourceId,
-    SkillCatalogGeneration, SkillId, SkillName, SkillSourceId,
-};
+pub use identity::{ContentDigest, InvalidContentDigest, SkillCatalogGeneration};
 pub use source::{SkillSourceKind, SkillSourceRoot, SkillSourceView, SkillTrust};
+pub use zeta_protocol::{
+    InvalidSkillName, InvalidSkillSourceId, SkillId, SkillName, SkillSourceId,
+};
 
 #[cfg(test)]
 #[path = "built_in_assets_tests.rs"]

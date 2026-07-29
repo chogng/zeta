@@ -282,7 +282,8 @@ pub enum AppServerEvent {
 }
 ```
 
-当前 App Server API 只包含 `session/update` 与 `thread/update` notification；
+当前 App Server API 包含 `session/update`、`thread/update` 与 metadata-only
+`skills/changed` notification；
 `ServerRequest` 是 approval/user-input 等双向交互落地后的目标 variant，在 protocol method
 registry 接受前不能提前声称可用。
 
@@ -418,20 +419,21 @@ TUI 不再接收一个同步 `&mut AppServerClient<T>`，也不调用 `drain_not
 - schema hash 校验；
 - successful `InitializeResult` 保存在 `AppServerClient::initialization` snapshot 中，consumer
   可读取 server capabilities 与动态 slash catalog，而无需重复 handshake；
-- known notification typed decode。
+- typed `list_skills` / `set_skill_enablement` method；
+- known notification typed decode，包括 `skills/changed`。
 
 需要替换的部分：
 
 | 当前实现 | 问题 |
 | --- | --- |
 | `JsonRpcTransport::round_trip` | 请求、响应和事件被绑成同步调用，不能形成持续 connection driver |
-| `drain_notifications` | notification 只能在 request 完成后批量拉取 |
+| `drain_notifications` | in-process transport 可在空闲时直接拉取 server queue，但仍需 consumer polling，没有可唤醒 event stream |
 | `AppServerClient<T>` 要求 `&mut self` | TUI 被阻塞，多个 feature 不能共享请求 handle |
 | `start_in_process_client` 只返回 client | 没有 session owner、event receiver 或显式 shutdown |
 | `InProcessTransport` 只持有 `Arc<AppServer>` | 可以共享 host，但仍没有显式 session shutdown、connection driver 或 task join |
 | initialize gate 只存在于一个 helper | 裸 `AppServerClient::new` 可以在未初始化时发送业务请求 |
 | server error 被压成 code/string | 丢失 typed error name/data |
-| App Server notification queue 依靠 drain | server event 无法主动唤醒 client/TUI |
+| App Server notification queue 依靠 drain | server event 无法主动唤醒 client/TUI；Skill watcher 更新也依赖 event-loop polling 才可见 |
 
 因此当前实现不是“client crate 不该启动 App Server”，而是“启动后没有把请求、事件与关闭组成
 一个完整的 owned session”。

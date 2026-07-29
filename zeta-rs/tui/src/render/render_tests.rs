@@ -2,9 +2,13 @@ use super::draw;
 use super::history::estimated_wrapped_rows;
 use super::mention_index_at;
 use super::slash_command_index_at;
+use super::theme::COMPOSER_CHROME;
 use super::theme::HIGHLIGHT;
 use super::theme::MUTED;
 use crate::app::App;
+use crate::toppane::SelectionItem;
+use crate::toppane::SelectionTab;
+use crate::toppane::SelectionViewModel;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
@@ -15,6 +19,7 @@ use ratatui::layout::Rect;
 use ratatui::style::Color;
 use ratatui::style::Modifier;
 use std::fs;
+use std::path::Path;
 use std::time::Duration;
 use std::time::Instant;
 use std::time::SystemTime;
@@ -45,6 +50,68 @@ fn empty_state_uses_lightweight_chrome_and_a_welcome_message() {
     assert!(rendered.contains("Ask anything about your workspace."));
     assert!(rendered.contains("enter send  ·  ctrl-v image  ·  esc quit"));
     assert!(!rendered.contains("┌ Zeta"));
+}
+
+#[test]
+fn status_line_renders_workspace_context_above_the_composer() {
+    let app = App::for_workspace(Path::new("/work/zeta"));
+    let buffer = render_buffer(&app, 80, 20);
+    let status_row = (0..80)
+        .map(|x| buffer[(x, 15)].symbol())
+        .collect::<String>();
+
+    assert!(status_row.contains("/work/zeta"));
+    assert_eq!(buffer[(77, 15)].fg, COMPOSER_CHROME);
+}
+
+#[test]
+fn composer_uses_light_gray_edge_to_edge_horizontal_rules_and_prompt() {
+    let buffer = render_buffer(&App::new(), 80, 20);
+
+    for y in [16, 18] {
+        assert_eq!(buffer[(0, y)].symbol(), "─");
+        assert_eq!(buffer[(0, y)].fg, COMPOSER_CHROME);
+        assert_eq!(buffer[(79, y)].symbol(), "─");
+        assert_eq!(buffer[(79, y)].fg, COMPOSER_CHROME);
+    }
+    assert_eq!(buffer[(0, 17)].symbol(), "❯");
+    assert_eq!(buffer[(0, 17)].fg, COMPOSER_CHROME);
+    assert_eq!(buffer[(79, 17)].symbol(), " ");
+}
+
+#[test]
+fn selection_view_replaces_the_composer_but_keeps_the_transcript_surface() {
+    let mut app = App::new();
+    app.record_notice("Conversation remains visible.");
+    app.show_selection_view(help_view());
+
+    let rendered = render(&app, 80, 24);
+
+    assert!(rendered.contains("Conversation remains visible."));
+    assert!(rendered.contains("Help"));
+    assert!(rendered.contains("Commands"));
+    assert!(rendered.contains("Keys"));
+    assert!(rendered.contains("Search commands and shortcuts"));
+    assert!(rendered.contains("←/→ tabs"));
+    assert!(!rendered.contains("enter send"));
+}
+
+#[test]
+fn selection_view_supports_keyboard_tab_switching_and_search() {
+    let mut app = App::new();
+    app.show_selection_view(help_view());
+
+    app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Char('e'), KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Char('s'), KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::NONE));
+
+    let rendered = render(&app, 80, 24);
+    assert!(rendered.contains("Esc"));
+    assert!(!rendered.contains("move selection"));
+
+    app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+    assert!(app.selection_view().is_none());
 }
 
 #[test]
@@ -87,12 +154,12 @@ fn slash_popup_uses_gray_text_and_a_foreground_only_selection_highlight() {
     app.insert_text("/");
 
     let buffer = render_buffer(&app, 80, 20);
-    let selected = &buffer[(2, 10)];
-    let unselected = &buffer[(2, 11)];
+    let selected = &buffer[(2, 9)];
+    let unselected = &buffer[(2, 10)];
 
     assert_eq!(selected.fg, HIGHLIGHT);
     assert_eq!(selected.bg, Color::Reset);
-    assert!(selected.modifier.contains(Modifier::BOLD));
+    assert!(!selected.modifier.contains(Modifier::BOLD));
     assert_eq!(unselected.fg, MUTED);
     assert_eq!(unselected.bg, Color::Reset);
 }
@@ -103,16 +170,16 @@ fn slash_popup_hit_testing_maps_visible_rows_and_rejects_outside_clicks() {
     app.insert_text("/");
     let terminal_area = Rect::new(0, 0, 80, 20);
 
-    assert_eq!(slash_command_index_at(&app, terminal_area, 2, 10), Some(0));
-    assert_eq!(slash_command_index_at(&app, terminal_area, 77, 15), Some(5));
-    assert_eq!(slash_command_index_at(&app, terminal_area, 1, 10), None);
-    assert_eq!(slash_command_index_at(&app, terminal_area, 2, 16), None);
+    assert_eq!(slash_command_index_at(&app, terminal_area, 2, 9), Some(0));
+    assert_eq!(slash_command_index_at(&app, terminal_area, 77, 14), Some(5));
+    assert_eq!(slash_command_index_at(&app, terminal_area, 1, 9), None);
+    assert_eq!(slash_command_index_at(&app, terminal_area, 2, 15), None);
 
     for _ in 0..7 {
         app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     }
-    assert_eq!(slash_command_index_at(&app, terminal_area, 2, 10), Some(2));
-    assert_eq!(slash_command_index_at(&app, terminal_area, 2, 15), Some(7));
+    assert_eq!(slash_command_index_at(&app, terminal_area, 2, 9), Some(2));
+    assert_eq!(slash_command_index_at(&app, terminal_area, 2, 14), Some(7));
 }
 
 #[test]
@@ -184,7 +251,7 @@ fn mention_popup_renders_workspace_paths_and_exposes_the_same_click_rows() {
     for (row, matched) in popup.matches.iter().take(2).enumerate() {
         for (column, character) in matched.path.chars().enumerate() {
             assert_eq!(
-                buffer[(column as u16 + 2, row as u16 + 14)].symbol(),
+                buffer[(column as u16 + 2, row as u16 + 13)].symbol(),
                 character.to_string()
             );
         }
@@ -195,18 +262,18 @@ fn mention_popup_renders_workspace_paths_and_exposes_the_same_click_rows() {
         .find(|index| !second.indices.contains(index))
         .unwrap();
     assert!(
-        buffer[(matched_index as u16 + 2, 15)]
+        buffer[(matched_index as u16 + 2, 14)]
             .modifier
             .contains(Modifier::BOLD)
     );
     assert!(
-        !buffer[(unmatched_index as u16 + 2, 15)]
+        !buffer[(unmatched_index as u16 + 2, 14)]
             .modifier
             .contains(Modifier::BOLD)
     );
-    assert_eq!(mention_index_at(&app, terminal_area, 2, 14), Some(0));
-    assert_eq!(mention_index_at(&app, terminal_area, 2, 15), Some(1));
-    assert_eq!(mention_index_at(&app, terminal_area, 1, 15), None);
+    assert_eq!(mention_index_at(&app, terminal_area, 2, 13), Some(0));
+    assert_eq!(mention_index_at(&app, terminal_area, 2, 14), Some(1));
+    assert_eq!(mention_index_at(&app, terminal_area, 1, 14), None);
     let _ = fs::remove_dir_all(workspace);
 }
 
@@ -220,6 +287,29 @@ fn render(app: &App, width: u16, height: u16) -> String {
         })
         .collect::<Vec<_>>()
         .join("\n")
+}
+
+fn help_view() -> SelectionViewModel {
+    SelectionViewModel::new(
+        "Help",
+        vec![
+            SelectionTab::new(
+                "Commands",
+                vec![
+                    SelectionItem::new("/status").with_description("show status"),
+                    SelectionItem::new("/model").with_description("show model"),
+                ],
+            ),
+            SelectionTab::new(
+                "Keys",
+                vec![
+                    SelectionItem::new("↑ / ↓").with_description("move selection"),
+                    SelectionItem::new("Esc").with_description("return to composer"),
+                ],
+            ),
+        ],
+    )
+    .with_search_placeholder("Search commands and shortcuts")
 }
 
 fn wait_for_mention_results(app: &mut App) {

@@ -1,4 +1,5 @@
 use crate::resource_store::{ResourceError, ResourceStore};
+use crate::server::skills_runtime::{SkillConfigSnapshotProvider, SkillRuntime, SkillWatcher};
 use crate::slash_commands::SlashCommandCatalog;
 use serde::Deserialize;
 use serde_json::Value;
@@ -26,6 +27,8 @@ mod config_operations;
 mod fs_operations;
 mod operations;
 mod search_operations;
+mod skill_operations;
+pub(crate) mod skills_runtime;
 mod update_broker;
 
 use update_broker::{NotificationQueue, UpdateBroker};
@@ -41,6 +44,8 @@ pub struct AppServer {
     pub(super) workspace_search: Option<crate::workspace_search::WorkspaceSearchService>,
     pub(super) typst: TypstCompiler,
     pub(super) slash_commands: SlashCommandCatalog,
+    pub(super) skills: Option<Arc<SkillRuntime>>,
+    _skill_watcher: Option<SkillWatcher>,
     updates: Arc<UpdateBroker>,
 }
 
@@ -70,6 +75,8 @@ impl AppServer {
             workspace_search: None,
             typst: TypstCompiler::new(),
             slash_commands: SlashCommandCatalog::default(),
+            skills: None,
+            _skill_watcher: None,
             updates,
         }
     }
@@ -92,6 +99,17 @@ impl AppServer {
     pub fn with_slash_command_catalog(mut self, slash_commands: SlashCommandCatalog) -> Self {
         self.slash_commands = slash_commands;
         self
+    }
+
+    pub(crate) fn with_skill_runtime(
+        mut self,
+        built_in_source: skills_runtime::BuiltInSkillSource,
+        config: Arc<dyn SkillConfigSnapshotProvider>,
+    ) -> Result<Self, String> {
+        let runtime = SkillRuntime::new(built_in_source, config, Arc::clone(&self.updates))?;
+        self._skill_watcher = Some(runtime.start_watching());
+        self.skills = Some(runtime);
+        Ok(self)
     }
 
     pub fn with_file_system(mut self, file_system: Arc<dyn WorkspaceFileSystem>) -> Self {
@@ -290,6 +308,8 @@ impl AppServer {
             Some(ClientMethod::SkillSourceSetEnablement) => {
                 self.skill_source_set_enablement(&request.params)
             }
+            Some(ClientMethod::SkillList) => self.skill_list(&request.params),
+            Some(ClientMethod::SkillSetEnablement) => self.skill_set_enablement(&request.params),
             Some(ClientMethod::ResourceMetadata) => {
                 self.resource_metadata(connection, &request.params)
             }

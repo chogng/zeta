@@ -9,6 +9,9 @@ use zeta_app_server::SlashCommandCatalog;
 use zeta_app_server_protocol::protocol::common::{ClientCapabilities, ClientInfo};
 use zeta_app_server_protocol::protocol::initialize::InitializeParams;
 use zeta_app_server_protocol::protocol::session::{SessionCreateParams, SessionThreadCreateParams};
+use zeta_app_server_protocol::protocol::skills::{
+    SkillCatalogReloadDto, SkillEnablementDto, SkillListParams, SkillSetEnablementParams,
+};
 use zeta_app_server_protocol::protocol::slash_commands::{
     SlashCommandArgumentModeDto, SlashCommandDefinition,
 };
@@ -270,4 +273,130 @@ fn shared_embedded_host_opens_independent_initialized_connections() {
 
     drop((first, second, host));
     let _ = fs::remove_dir_all(state_root);
+}
+
+#[test]
+fn embedded_skill_catalog_lists_built_ins_and_persists_enablement() {
+    let state_root = unique_directory("skills-state");
+    let skills_root = unique_directory("skills-root");
+    write_skill(&skills_root, "skill-creator", "Create or update a Skill");
+    let mut client = start_in_process_client(
+        InProcessClientOptions::new(
+            &state_root,
+            ClientInfo {
+                name: "skills-client".into(),
+                version: "1".into(),
+            },
+        )
+        .with_built_in_skill_root(&skills_root),
+    )
+    .unwrap();
+
+    let listed = client
+        .list_skills(SkillListParams {
+            reload: SkillCatalogReloadDto::Refresh,
+        })
+        .unwrap();
+    assert_eq!(listed.skills.len(), 1);
+    assert_eq!(listed.skills[0].id.name.as_str(), "skill-creator");
+    assert_eq!(listed.skills[0].enablement, SkillEnablementDto::Enabled);
+
+    let revision = client.read_config().unwrap().revision;
+    client
+        .set_skill_enablement(SkillSetEnablementParams {
+            command_id: CommandId::new("disable-skill-creator").unwrap(),
+            expected_revision: revision,
+            skill_id: listed.skills[0].id.clone(),
+            enablement: SkillEnablementDto::Disabled,
+        })
+        .unwrap();
+    let disabled = client.list_skills(SkillListParams::default()).unwrap();
+    assert_eq!(disabled.generation, listed.generation + 1);
+    assert_eq!(disabled.skills[0].enablement, SkillEnablementDto::Disabled);
+    assert!(
+        client
+            .drain_notifications()
+            .unwrap()
+            .iter()
+            .any(|notification| matches!(
+                notification,
+                ServerNotification::SkillsChanged(changed)
+                    if changed.generation == disabled.generation
+            ))
+    );
+
+    drop(client);
+    let _ = fs::remove_dir_all(state_root);
+    let _ = fs::remove_dir_all(skills_root);
+}
+
+#[test]
+fn embedded_skill_watcher_invalidates_changed_content() {
+    let state_root = unique_directory("watch-state");
+    let skills_root = unique_directory("watch-root");
+    write_skill(&skills_root, "review", "Review code");
+    let mut client = start_in_process_client(
+        InProcessClientOptions::new(
+            &state_root,
+            ClientInfo {
+                name: "skills-watch-client".into(),
+                version: "1".into(),
+            },
+        )
+        .with_built_in_skill_root(&skills_root),
+    )
+    .unwrap();
+    let initial = client.list_skills(SkillListParams::default()).unwrap();
+    thread::sleep(Duration::from_millis(150));
+
+    write_skill(&skills_root, "review", "Review code and tests");
+
+    let deadline = Instant::now() + Duration::from_secs(3);
+    let changed_generation = loop {
+        let notification =
+            client
+                .drain_notifications()
+                .unwrap()
+                .into_iter()
+                .find_map(|notification| match notification {
+                    ServerNotification::SkillsChanged(changed) => Some(changed.generation),
+                    _ => None,
+                });
+        if let Some(generation) = notification {
+            break generation;
+        }
+        assert!(Instant::now() < deadline, "Skill watcher did not publish");
+        thread::sleep(Duration::from_millis(10));
+    };
+    let refreshed = client.list_skills(SkillListParams::default()).unwrap();
+    assert_eq!(refreshed.generation, changed_generation);
+    assert_eq!(refreshed.skills[0].description, "Review code and tests");
+    assert!(refreshed.generation > initial.generation);
+
+    drop(client);
+    let _ = fs::remove_dir_all(state_root);
+    let _ = fs::remove_dir_all(skills_root);
+}
+
+fn unique_directory(label: &str) -> std::path::PathBuf {
+    let directory = std::env::temp_dir().join(format!(
+        "zeta-app-server-client-{label}-{}-{}",
+        std::process::id(),
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    fs::create_dir_all(&directory).unwrap();
+    directory
+}
+
+fn write_skill(root: &std::path::Path, name: &str, description: &str) {
+    let directory = root.join(name);
+    fs::create_dir_all(&directory).unwrap();
+    fs::write(
+        directory.join("SKILL.md"),
+        format!("---\nname: {name}\ndescription: {description}\n---\n\nInstructions.\n"),
+    )
+    .unwrap();
 }

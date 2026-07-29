@@ -1,9 +1,9 @@
+use super::layout::{bottom_anchored_area, horizontal_margin};
 use super::theme::HIGHLIGHT;
 use super::theme::MUTED;
 use crate::app::App;
 use ratatui::Frame;
 use ratatui::layout::Rect;
-use ratatui::style::Modifier;
 use ratatui::style::Style;
 use ratatui::text::Line;
 use ratatui::text::Span;
@@ -41,7 +41,7 @@ pub(super) fn draw(frame: &mut Frame<'_>, area: Rect, app: &App) {
             .map(|(index, command)| {
                 let selected = index == popup.selected;
                 let command_style = if selected {
-                    Style::default().fg(HIGHLIGHT).add_modifier(Modifier::BOLD)
+                    Style::default().fg(HIGHLIGHT)
                 } else {
                     Style::default().fg(MUTED)
                 };
@@ -91,12 +91,7 @@ fn popup_layout(area: Rect, command_count: usize, selected: usize) -> Option<Pop
         .saturating_sub(max_rows)
         .min(command_count.saturating_sub(visible_rows));
     Some(PopupLayout {
-        area: Rect {
-            x: area.x.saturating_add(2),
-            y: area.bottom().saturating_sub(visible_rows as u16),
-            width: area.width.saturating_sub(4),
-            height: visible_rows as u16,
-        },
+        area: horizontal_margin(bottom_anchored_area(area, visible_rows as u16), 2),
         first_command,
         visible_rows,
     })

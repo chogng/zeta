@@ -264,6 +264,12 @@ fn apply_command(
             })?;
             source.enablement = *enablement;
         }
+        UserConfigCommand::SetSkillEnablement {
+            skill_id,
+            enablement,
+        } => {
+            document.skills.set_skill_enablement(skill_id, *enablement);
+        }
     }
     Ok(())
 }

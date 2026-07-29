@@ -168,6 +168,10 @@ fn dto_driven_typescript_preserves_model_ref_and_patch_shape() {
     assert!(typescript.contains("export type SkillSourceConfigDto ="));
     assert!(typescript.contains(r#""mcp/server/upsert": { method: "mcp/server/upsert" }"#));
     assert!(typescript.contains(r#""skill/source/add": { method: "skill/source/add" }"#));
+    assert!(typescript.contains("export type SkillName = string;"));
+    assert!(typescript.contains("export type SkillSourceId = string;"));
+    assert!(typescript.contains(r#""skills/list": { method: "skills/list" }"#));
+    assert!(typescript.contains(r#""skills/changed": { method: "skills/changed" }"#));
     assert!(!typescript.contains("preferredModel: string"));
     assert!(typescript.contains(r#""type": "toolResult""#));
     assert!(typescript.contains("export type ToolName = string;"));

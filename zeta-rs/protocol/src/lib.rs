@@ -7,6 +7,7 @@ mod interaction;
 mod item;
 mod model;
 mod session;
+mod skill;
 mod stream;
 mod thread;
 mod tool_execution;
@@ -37,6 +38,7 @@ pub use session::{
     Session, SessionCommand, SessionEvent, SessionStatus, SessionThread, SessionThreadStatus,
     SessionUpdate, SessionUpdateEnvelope, ThreadOrigin,
 };
+pub use skill::{InvalidSkillName, InvalidSkillSourceId, SkillId, SkillName, SkillSourceId};
 pub use stream::{StreamCursor, StreamInstanceId};
 pub use thread::{
     ItemDelta, Thread, ThreadCommand, ThreadEvent, ThreadStatus, ThreadUpdate,

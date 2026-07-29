@@ -7,7 +7,9 @@
 `zeta-skills` 当前实现 Phase S0：验证 built-in/user source root，流式读取并严格校验
 Agent Skills `SKILL.md` frontmatter，计算完整文件 SHA-256 digest，并发布 deterministic、
 immutable catalog snapshot。它不激活正文、不读取 references/assets/scripts、不执行命令，也不
-拥有 config、watcher、App Server 或 Core integration。
+拥有 config、watcher、App Server 或 Core integration。当前 App Server adapter、watcher 和
+enablement overlay 属于 [`zeta-app-server`](../app-server/README.md)；该 adapter 只调用本 crate
+的受控 source/catalog API，不改变这里的 ownership。
 
 Repository-owned built-in content 位于 [`assets/`](assets)，打包后位于
 `zeta-resources/skills/`。package host 通过
@@ -20,8 +22,8 @@ Repository-owned built-in content 位于 [`assets/`](assets)，打包后位于
 
 | Symbol | 当前职责 | 不承担 |
 | --- | --- | --- |
-| `SkillName` | Agent Skills 的 lowercase ASCII、数字、单连字符、1–64 字符 identity | display alias、Unicode normalization |
-| `SkillSourceId` / `SkillId` | source-qualified stable identity | raw host path、版本选择 |
+| `zeta_protocol::SkillName` | Agent Skills 的 lowercase ASCII、数字、单连字符、1–64 字符 identity | display alias、Unicode normalization |
+| `zeta_protocol::{SkillSourceId, SkillId}` | 跨 config/catalog/App Server 的 source-qualified stable identity | raw host path、版本选择 |
 | `SkillSourceRoot` | host 注入并验证的 built-in/user real directory handle | config resolution、安装、immutability |
 | `SkillCatalog::discover` | 对受控 roots 做首次 bounded metadata scan | arbitrary path search、recursive source search |
 | `SkillCatalog::refresh` | 重扫并仅在 visible projection 改变时 bump generation | filesystem watching、safe-point scheduling |
@@ -76,12 +78,13 @@ entries 按 exact `SkillId` 排序，同名不同 source 同时保留。refresh 
 digest、compatibility、availability 与 diagnostics 完全不变，会复用同一个 `Arc` snapshot 和
 generation。任何 consumer-visible 变化才发布下一 generation。
 
-当前没有 watcher subscription、App Server `skill/list/read` transport、显式 activation 或
-rooted resource resolver。`zeta-config::SkillSourceId` 当前仍是 config-local value；接入 runtime
-composition 时必须显式校验转换，或在 S1 将获准的共享 identity 下沉到 `zeta-protocol`，不能靠
-raw string/path 隐式绑定。接入这些能力时应新增窄 adapter/module；如果 scanner 开始执行
-script、读取 optional resource、解释 Plugin grant，或 catalog 依赖 Core/App Server，表示 crate
-ownership 已经漂移。
+当前 App Server 已通过窄 adapter 组合 built-in/user roots、订阅 watcher，并以
+`skills/list`/`skills/changed` 投影 catalog；per-Skill enablement 也由 config authority 与 adapter
+叠加。共享 identity 位于 `zeta-protocol`，本 crate 只 re-export，不能重新定义一套。
+
+本 crate 仍没有显式 activation、rooted resource resolver 或 safe-point scheduler。接入这些能力
+应继续使用窄 adapter/module；如果 scanner 开始执行 script、读取 optional resource、解释 Plugin
+grant，或 catalog 反向依赖 Core/App Server，表示 crate ownership 已经漂移。
 
 ## 验证
 

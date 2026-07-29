@@ -64,7 +64,10 @@ Renderer 不能因为已经校验过输入，就获得直接使用 `fs`、网络
 `Files` 按下表拆分所有权；“当前状态”用于区分本阶段实现和后续能力：
 Rust primitive 与 model adapter 的实现细节分别见
 [`zeta-rs/file-system/README.md`](../zeta-rs/file-system/README.md) 和
-[`zeta-rs/file-system-tool/README.md`](../zeta-rs/file-system-tool/README.md)。
+[`zeta-rs/file-system-tool/README.md`](../zeta-rs/file-system-tool/README.md)。跨平台 Rust
+`file:` URI 的 canonical implementation contract 见
+[`zeta-rs/utils/path-uri/README.md`](../zeta-rs/utils/path-uri/README.md)；该 crate 当前尚未接入
+production consumer，因此下表的共享 URI 状态仍为“部分具备”。
 
 | 能力 | Owner | 当前状态 |
 | --- | --- | --- |

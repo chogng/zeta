@@ -208,7 +208,7 @@ fn config_error(_: zeta_config::ConfigError) -> RpcError {
     RpcError::new(-32030, AppServerErrorName::ConfigUnavailable)
 }
 
-fn config_operation_error(error: ConfigCommandError) -> RpcError {
+pub(super) fn config_operation_error(error: ConfigCommandError) -> RpcError {
     match error {
         ConfigCommandError::CommandConflict => {
             RpcError::new(-32004, AppServerErrorName::CommandConflict)
@@ -250,7 +250,9 @@ fn config_read_result(snapshot: ResolvedConfigSnapshot) -> ConfigReadResult {
     }
 }
 
-fn config_command_result(outcome: zeta_config::ConfigCommandResult) -> ConfigCommandResult {
+pub(super) fn config_command_result(
+    outcome: zeta_config::ConfigCommandResult,
+) -> ConfigCommandResult {
     ConfigCommandResult {
         revision: outcome.revision.get(),
         generation: outcome.generation.get(),

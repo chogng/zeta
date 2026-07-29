@@ -137,6 +137,8 @@ inline argument parsing；提交仍通过 `turn/start.input`，并保留 `/name`
 | `turn/interaction/resolve` | Thread | 用 exact request identity 解决一个 outstanding interaction |
 | `config/read` | config | 读取配置 |
 | `config/update` | config | typed command 更新配置 |
+| `skills/list` | global Skill catalog | 读取 cached projection 或请求完整 refresh |
+| `skill/enablement/set` | config + Skill catalog | revision-checked 启用/禁用 exact `SkillId` |
 | `resource/metadata` | Resource | 读取元数据 |
 | `resource/read` | Resource | 分块读取 |
 | `resource/release` | Resource | 释放 connection-owned resource |
@@ -282,10 +284,11 @@ interaction 的同一 request kind；相同 `commandId + typed payload` 会重�
 
 ## 8. Update stream
 
-只有两个 notification method：
+当前有三个 notification method：
 
 - `session/update`，payload 为 `SessionUpdateEnvelope`；
-- `thread/update`，payload 为 `ThreadUpdateEnvelope`。
+- `thread/update`，payload 为 `ThreadUpdateEnvelope`；
+- `skills/changed`，payload 为新的 catalog `generation`。
 
 durable update 使用 `durableSequence`。Thread 的低延迟非 durable update 可额外携带
 `streamCursor { streamInstanceId, sequence }`，两者不能混为一个计数器：
@@ -306,6 +309,14 @@ notification；发现 durable 空洞时重新 subscribe。
 - `null`：清除；
 - value：替换。
 
+`skills/list` 返回 source-qualified `SkillId`、description、source kind、content digest、
+compatibility、effective enablement 和 isolated diagnostics。`reload: "cached"` 可复用当前
+projection；`reload: "refresh"` 要求 server 重扫受控 roots。`skill/enablement/set` 必须携带
+config `expectedRevision` 与 exact discovered `SkillId`，结果使用标准 config command receipt。
+enablement 或 filesystem/config invalidation 导致可见 projection 变化时发布
+`skills/changed`；notification 是重新 list 的提示，不包含 catalog body，也不表示 Skill 已注入
+正在运行的 Turn。
+
 Resource bytes 使用标准 RFC 4648 Base64；`decodedLength` 是原始 byte 数，单 chunk 最大
 262,144 bytes。客户端用 `decodedLength` 推进 offset，并在结束后校验 size 与 SHA-256。
 
@@ -325,6 +336,9 @@ Resource bytes 使用标准 RFC 4648 Base64；`decodedLength` 是原始 byte 数
 - `InvalidResourceChunkSize`
 - `InvalidResourceOffset`
 - `ConfigUnavailable`
+- `SkillsUnavailable`
+- `SkillNotFound`
+- `SkillOperationFailed`
 
 当前 `error.data` 为 `null`。客户端必须匹配稳定 code/name，不能解析人类错误文本。
 

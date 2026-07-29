@@ -1,59 +1,7 @@
 use crate::ConfigError;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
-
-/// Stable, namespaced identity for one Skill source declaration.
-#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize)]
-#[serde(transparent)]
-pub struct SkillSourceId(String);
-
-impl SkillSourceId {
-    pub fn new(value: impl Into<String>) -> Result<Self, ConfigError> {
-        let value = value.into();
-        let Some((namespace, local_id)) = value.split_once(":skill-source:") else {
-            return Err(ConfigError(
-                "Skill source id must use '<namespace>:skill-source:<local-id>' form".into(),
-            ));
-        };
-        if namespace.trim().is_empty()
-            || local_id.trim().is_empty()
-            || local_id.contains(':')
-            || namespace.contains(char::is_whitespace)
-            || local_id.contains(char::is_whitespace)
-            || value.contains('\0')
-        {
-            return Err(ConfigError(
-                "Skill source id must have a non-empty local identifier".into(),
-            ));
-        }
-        Ok(Self(value))
-    }
-
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-
-    pub(crate) fn belongs_to_namespace(&self, namespace: &str) -> bool {
-        self.0
-            .strip_prefix(namespace)
-            .is_some_and(|suffix| suffix.starts_with(":skill-source:"))
-    }
-}
-
-impl std::fmt::Display for SkillSourceId {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        formatter.write_str(&self.0)
-    }
-}
-
-impl<'de> Deserialize<'de> for SkillSourceId {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        Self::new(String::deserialize(deserializer)?).map_err(serde::de::Error::custom)
-    }
-}
+use zeta_protocol::{SkillId, SkillName, SkillSourceId};
 
 /// Desired enablement for one configured Skill source.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
@@ -61,6 +9,15 @@ impl<'de> Deserialize<'de> for SkillSourceId {
 pub enum SkillSourceEnablement {
     #[default]
     Disabled,
+    Enabled,
+}
+
+/// Desired user enablement for one discovered Skill.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum SkillEnablement {
+    Disabled,
+    #[default]
     Enabled,
 }
 
@@ -97,6 +54,8 @@ impl SkillSourceConfig {
 pub struct SkillsConfig {
     #[serde(default)]
     pub sources: BTreeMap<SkillSourceId, SkillSourceConfig>,
+    #[serde(default)]
+    pub enablement: BTreeMap<SkillSourceId, BTreeMap<SkillName, SkillEnablement>>,
 }
 
 impl SkillsConfig {
@@ -117,5 +76,29 @@ impl SkillsConfig {
             source.validate()?;
         }
         Ok(())
+    }
+
+    pub fn skill_enablement(&self, skill_id: &SkillId) -> SkillEnablement {
+        self.enablement
+            .get(&skill_id.source)
+            .and_then(|skills| skills.get(&skill_id.name))
+            .copied()
+            .unwrap_or_default()
+    }
+
+    pub(crate) fn set_skill_enablement(&mut self, skill_id: &SkillId, enablement: SkillEnablement) {
+        if enablement == SkillEnablement::Enabled {
+            if let Some(skills) = self.enablement.get_mut(&skill_id.source) {
+                skills.remove(&skill_id.name);
+                if skills.is_empty() {
+                    self.enablement.remove(&skill_id.source);
+                }
+            }
+            return;
+        }
+        self.enablement
+            .entry(skill_id.source.clone())
+            .or_default()
+            .insert(skill_id.name.clone(), enablement);
     }
 }

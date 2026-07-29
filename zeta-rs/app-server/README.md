@@ -26,8 +26,9 @@ JSONL / in-process caller
    ├─ optional WorkspaceFileSystem
    ├─ optional WorkspaceSearchService
    ├─ optional McpRuntimeOwner → zeta-mcp
+   ├─ SkillRuntime → zeta-skills + zeta-file-watcher
    ├─ connection-owned ResourceStore
-   └─ UpdateBroker → session/update, thread/update
+   └─ UpdateBroker → session/update, thread/update, skills/changed
 ```
 
 App Server connection 不是 product Session。关闭 connection 只失去 connection-local subscription、
@@ -52,7 +53,8 @@ request-ID set、notification queue 与 resource ownership；Session/Thread dura
 | `AppServer::with_workspace_search` | 注入 workspace root 与冻结的 ripgrep executable |
 | `AppServer::with_tool_service` | 安装同一 server 内所有 Turn 使用的 Core Tool/Policy ports |
 | `open_local_app_server` | 打开 rollout/config、恢复 coordinator、组合 provider-backed model |
-| `LocalAppServerOptions` | local state root + optional config/runtime Workspace + validated slash catalog |
+| `LocalAppServerOptions` | local state root + optional config/runtime Workspace + validated slash catalog + built-in Skill root selection |
+| `BuiltInSkillRoot` | auto-detected release root、explicit test/host root 或 unavailable 的自解释选择 |
 | `SlashCommandCatalog` | 校验动态命令名称、描述与唯一性，并冻结 server-advertised snapshot |
 | `ReviewModelResolver` | 从 frozen config snapshot 选择 review-only model |
 | `ProviderReviewModel` | `ModelInvoker → zeta_auto_review::ReviewModel` adapter |
@@ -76,6 +78,8 @@ src/
 │   └── server/
 │       ├── operations.rs          # Session/Thread/Turn/Resource methods
 │       ├── config_operations.rs   # Config/provider/MCP/Skill methods + DTO conversion
+│       ├── skill_operations.rs    # Skill catalog/enablement DTO conversion and error mapping
+│       ├── skills_runtime.rs       # source composition、catalog cache、watcher、projection
 │       ├── fs_operations.rs       # root-relative filesystem DTO conversion/error mapping
 │       ├── search_operations.rs   # search RPC decode、ownership 与稳定错误映射
 │       └── update_broker.rs       # per-connection subscription/cursor/fanout
@@ -102,6 +106,10 @@ src/
 | `AppServerThreadUpdates` | private sink | 将 TurnExecutor live/committed update 接入 broker | 不修改 canonical update |
 | `UpdateBroker` | private | subscription、durable cursor、weak queue fanout | 不持有 connection/session runtime authority |
 | `UpdateBroker::publish_thread_update` | private | committed 按 durable cursor；transient 直接给 subscriber | 两类 cursor semantics 不得混合 |
+| `SkillRuntime` | crate-private | 组合 built-in/user roots、缓存 metadata projection、叠加 config enablement | 不读取正文、不执行 Skill、不拥有 config durability |
+| `SkillConfigSnapshotProvider` | crate-private trait | 给 runtime 最新 `SkillsConfig` 与待监听 config path | implementation 不把客户端 path 直接升级为 trusted root |
+| `compose_sources` | private | enabled user absolute root + release root → validated `SkillSourceRoot` | Workspace/Plugin source 尚不在当前 composition |
+| `watch_skill_sources` | private | watcher invalidation 后完整 reconcile 并更新 watched path registration | watch event 不是文件事实，不直接推进 generation |
 | `notification<T>` | private | canonical update → JSON-RPC notification | method 来自 `ServerNotificationMethod` |
 | `ResourceStore::resource` | private | cleanup + owner check | 所有 read/release 必须经过这里 |
 | `ResourceStore::cleanup` | private | lazy TTL eviction | resource 不持久化 |
@@ -222,12 +230,49 @@ optional WorkspaceConfigStore
 
 ConfigBackedModelService
 └─ AppServer::new(...).with_config_store(...)
+   └─ SkillRuntime::new(...)
+      ├─ release built-in root
+      ├─ enabled user Skill source roots
+      └─ SkillWatcher
 ```
 
 每次 `ModelService::invoke` 重新读取 user config，与 optional workspace document 合并，再由
 `ModelSnapshotResolver` 生成 immutable invoker。因此 config change 影响下一次 invocation，不会
 改变已经运行的 invocation。`ProviderModelService` 在 invoker 调用前后检查 cancellation；底层同步
 provider request 能否中途停止仍取决于 provider transport。
+
+## Skill catalog runtime
+
+Local composition 总会安装 `SkillRuntime`。`BuiltInSkillRoot::AutoDetect` 先查询
+`InstallContext::bundled_resource_directory("skills")`，Cargo 开发构建再回退到仓库
+`skills/assets`；测试与自定义 host 可用 explicit root，明确不提供时使用 `Unavailable`。
+AutoDetect 两处都找不到时 runtime 发布 built-in `SourceUnavailable` diagnostic，使客户端的 Errors
+tab 可解释“为什么没有内置 Skill”；显式 `Unavailable` 才表示 host 有意省略 built-in。
+User source 只接受 config authority 中 enabled 的 absolute root reference，之后仍由
+`SkillSourceRoot::user` 做目录、canonicalization 与 source-kind 校验。
+
+```text
+skills/list
+└─ SkillRuntime::list(Cached | Refresh)
+   ├─ read current SkillsConfig
+   ├─ rebuild catalog when source composition changes
+   ├─ otherwise reuse cache or call SkillCatalog::refresh
+   └─ overlay durable per-Skill enablement
+
+skill/enablement/set
+├─ require exact discovered SkillId
+├─ ConfigStore::apply(SetSkillEnablement)
+└─ reconcile → publish skills/changed when projection changes
+```
+
+Watcher 订阅当前 source roots 与 user config authority path。change、overflow 或 backend rescan
+提示都只触发完整 reconcile；entry、diagnostic 或 enablement projection 没变时 generation 不变，
+也不发 notification。Watcher 启动失败时 local App Server 仍可用，显式
+`skills/list { reload: "refresh" }` 是恢复路径。
+
+当前只组合 built-in 与 user source。Workspace/Plugin source、正文 activation、context assembly
+和 invocation safe-point freezing 尚未实现；禁用只影响 catalog eligibility，不能改变已经运行的
+Turn。
 
 MCP runtime 当前只在 `open_local_app_server` safe point 构造。`enabled` 是建立连接/启动 server
 的显式用户 intent；它不批准任何 tool call。stdio command 必须是存在的 absolute executable，
@@ -285,6 +330,9 @@ Resource 不跨重启恢复，也不能被另一 connection 读取或 release。
 | other Core failure | `CoreOperationFailed` |
 | missing config store | `ConfigUnavailable` |
 | config sequence mismatch | `ConfigRevisionConflict` |
+| missing Skill runtime | `SkillsUnavailable` |
+| invalid/missing exact Skill target | `SkillNotFound` |
+| Skill config/catalog failure | `SkillOperationFailed` |
 | resource ownership/bounds | corresponding stable resource error |
 | missing filesystem authority | `FileSystemUnavailable` |
 | filesystem path/I/O failure | `FileSystemOperationFailed` |
@@ -335,7 +383,8 @@ Tests 覆盖 initialization/request IDs、Session-first flow、command replay/co
 Turn replay/model-once、multi-connection update、reconnect durable gap、connection-owned resources、
 config command、interaction/approval resolve、response-before-notification、model config safe point、
 Workspace override、review-only request、只读 `rg` definition/materialization/policy/execution，
-以及 MCP worker bridge、exact provenance/approval policy、local/MCP 路由与 collision rejection。
+MCP worker bridge、exact provenance/approval policy、local/MCP 路由与 collision rejection，以及
+Skill built-in/user composition、enablement overlay、watcher refresh 与 `skills/changed`。
 
 local tool 的参数白名单、discovery、取消与输出限制由
 [`zeta-shell-command`](../shell-command/README.md) 和 [`zeta-exec`](../exec/README.md) 维护；

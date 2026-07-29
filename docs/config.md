@@ -3,9 +3,10 @@
 > 物理位置：`zeta-rs/config/`  
 > Rust crate：`zeta_config`  
 > 当前状态：User Config authority、revision、Provider map、standalone MCP declaration、Skill
-> source declaration、Workspace read-only document 和 scoped resolution 已实现。Local App Server
-> 会在 model safe point 应用合法的 Workspace model default；Plugin/MCP/Skill runtime、grant 和
-> 环境组合仍是后续 vertical slice。本文定义完整长期边界。  
+> source/per-Skill enablement、Workspace read-only document 和 scoped resolution 已实现。Local
+> App Server 会在 model safe point 应用合法的 Workspace model default，并已组合 built-in/user
+> metadata-only Skill catalog；Plugin contribution、Skill activation、grant 和完整环境组合仍是
+> 后续 vertical slice。本文定义完整长期边界。
 > Core 边界：[`core.md`](core.md)  
 > Plugin 控制面：[`plugins.md`](plugins.md)  
 > MCP runtime：[`mcp.md`](mcp.md)  
@@ -336,6 +337,11 @@ PID、OAuth verifier、access token、request ID、SSE cursor 和 live session I
 普通 Config 只定义显式 user/workspace Skill source。Built-in Skill 来自 Zeta release，
 Plugin Skill 来自 `PluginActivationSnapshot`。
 
+当前 User Config 还保存 source-qualified per-Skill disabled override。Enabled 是默认值，因此
+重新启用会删除 override，不为每个已发现 Skill 写冗余记录。App Server 读取该 overlay 并投影
+effective enablement；catalog entry 消失时 desired override 可以保留，重新出现后仍按同一
+`SkillId` 生效。
+
 Skill manager 负责：
 
 ```text
@@ -363,6 +369,7 @@ resolved sources
 | Plugin Package | `plugin/install`、`plugin/update`、`plugin/uninstall` | Plugin authority（Proposed） |
 | Plugin Activation | `plugin/enable`、`plugin/disable`、`plugin/version/pin` | Plugin authority（Proposed） |
 | Skill Source | `skill/source/add`、`skill/source/remove`、`skill/source/enablement/set` | Config authority 的 Skill section（已实现 desired config） |
+| Skill Catalog | `skills/list`、`skill/enablement/set` | App Server metadata projection + Config authority per-Skill overlay（已实现 built-in/user） |
 
 所有 durable mutation 使用 `CommandId`、对应 authority 的 expected revision、payload conflict
 检查和 exact typed response replay。Runtime connect/disconnect 不占用 Config、Session 或 Thread
@@ -502,10 +509,11 @@ Workspace Config → grant or secret authority
    diagnostics；Session/launch/System requirements 的 merge rule 仍待实现；
 4. ✅ 将 Provider 配置改为 `ProviderId` keyed map；
 5. ✅ 实现 standalone MCP 和 Skill source 的 desired-config section；
-6. 实现 Plugin authority 与 `PluginActivationSnapshot`；
-7. 接通 Plugin contribution 到 MCP/Skill manager；
-8. 由 App Server 原子发布 `AgentEnvironmentSnapshot`；
-9. Core 在 Turn/model/tool safe point 消费窄 snapshot；
-10. 增加 crash、replay、scope conflict、permission monotonicity 和 generation consistency 测试。
+6. ✅ 实现 built-in/user Skill catalog、watcher refresh 与 durable per-Skill enablement overlay；
+7. 实现 Plugin authority 与 `PluginActivationSnapshot`；
+8. 接通 Plugin contribution 到 MCP/Skill manager；
+9. 由 App Server 原子发布 `AgentEnvironmentSnapshot`；
+10. Core 在 Turn/model/tool safe point 消费窄 snapshot；
+11. 增加 crash、replay、scope conflict、permission monotonicity 和 generation consistency 测试。
 
 开发期直接修改现有 JSON、RPC 和存储模型，不保留旧格式兼容层或 upcast。

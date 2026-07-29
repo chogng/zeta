@@ -2,7 +2,7 @@
 
 > 物理位置：`zeta-rs/skills/`
 > Rust crate：`zeta_skills`
-> 当前状态：Phase S0 已实现；S1–S4 Proposed
+> 当前状态：Phase S0 与 catalog runtime slice 已实现；activation 及 S1–S4 其余部分 Proposed
 > Crate 实现契约：[`zeta-rs/skills/README.md`](../zeta-rs/skills/README.md)
 > Core architecture：[`core.md`](core.md)
 > Agent runtime：[`zeta-agent-runtime-architecture.md`](zeta-agent-runtime-architecture.md)
@@ -46,6 +46,17 @@ catalog generation。内置内容由 `zeta-rs/skills/assets/` 拥有，release s
 产品语义、触发边界和选择评测，不能把 catalog fixture 直接升级为产品能力。实现细节与 limits 由
 [`zeta-rs/skills/README.md`](../zeta-rs/skills/README.md) 维护。
 
+App Server 当前拥有 catalog runtime adapter：它组合 release built-in root 与 user config 中
+明确 enabled 的绝对 source root，叠加 durable per-Skill enablement，缓存 immutable projection，
+并提供 `skills/list`、`skill/enablement/set` 与 `skills/changed`。`zeta-file-watcher` 的
+invalidation 会触发完整重扫；只有 entry、diagnostic 或 enablement 的 consumer-visible projection
+变化才推进 runtime generation。共享的 `SkillName`、`SkillSourceId` 与 `SkillId` 已下沉到
+`zeta-protocol`，因此 config、catalog、App Server 与客户端不再靠 raw string 隐式绑定。
+
+TUI `/skills` 消费同一 typed catalog，提供 All/Enabled/Disabled/Errors tabs、搜索、左右切页、
+上下选择和 `Space` 启用/禁用。该动作只改变后续 catalog eligibility，不等于把正文注入当前
+Turn。
+
 当前仍没有 Skill activation manager。protocol 中唯一已实现的选择相关 value 是：
 
 ```rust
@@ -61,7 +72,13 @@ UserInput::Skill { name: String, path: String }
 - 同名 Skill 无法稳定消歧。
 
 因此长期应将其演进为 validated `SkillRef`/`SkillSelection`，由 Skill manager 解析，不允许 Agent
-runtime 或 App Server 直接读取用户提交的裸路径。
+runtime 或 App Server 直接读取用户提交的裸路径。当前 catalog toggle 也不是显式 activation：
+已经运行的 invocation 没有 Skill snapshot，正文加载、safe-point freezing 与 context assembly
+仍属于 S1。
+
+当前 runtime source composition 只包含 built-in 与 user source。Workspace config 中的 Skill
+source intent、Plugin contribution、compatibility enforcement、正文读取和 explicit/automatic
+activation 尚未接入。
 
 仓库已有可复用边界：
 
@@ -281,10 +298,12 @@ availability 或 diagnostic 变化才递增 generation。
 `RescanRequired` 传递 subscriber 自己的 watched roots。其 backend/ref-count/path fallback contract
 由 [`zeta-rs/file-watcher/README.md`](../zeta-rs/file-watcher/README.md) 维护。
 
-Watcher 仍只发 invalidation hint。当前 S0 `SkillCatalog::refresh` 会重新扫描/校验后再发布
-snapshot，但 watcher subscription 与 App Server refresh path 尚未接入；后续 adapter 不能把 watch
-event 当作事实，`RescanRequired` 必须触发 scoped full rescan。`zeta-file-watcher` 已实现不代表
-safe-point composition 已完成。
+Watcher 仍只发 invalidation hint。当前 App Server adapter 订阅 built-in/user roots 与 user
+config authority path；收到普通 change、backend error 或 overflow 后都调用
+`SkillCatalog::refresh` 重新扫描/校验，再按可见 projection 决定是否发布 `skills/changed`。
+Watcher backend 无法启动时不会阻止 App Server 启动，调用方仍可用
+`skills/list { reload: "refresh" }` 显式重扫；当前没有对外 watcher-health projection。
+这条 catalog refresh 路径不代表 activation safe-point composition 已完成。
 
 ## 8. Selection
 
@@ -667,19 +686,21 @@ catalog/selection/activation 拆分；新 trait 必须有职责和实现约束 d
 
 ## 19. 分阶段实施
 
-### Phase S0：format 与 catalog（Current）
+### Phase S0：format、catalog 与 runtime browser（Current）
 
 - Agent Skills frontmatter/parser/validator；
 - BuiltIn + controlled user source；
 - metadata-only scan、digest 和 immutable catalog；
 - path/size/cycle security fixtures；
-- `skill/list/read` read-only API。
+- App Server `skills/list`、`skills/changed` 与 watcher refresh；
+- durable per-Skill enablement overlay 和 TUI catalog browser/toggle。
 
-完成条件：启动不会加载所有 Skill body，坏 entry 不会逃出 root 或拖垮整个 catalog。
+完成条件：启动不会加载所有 Skill body，坏 entry 不会逃出 root 或拖垮整个 catalog；source
+变化与 enablement 变化只发布新的 metadata projection。
 
 ### Phase S1：显式选择 vertical slice
 
-- `SkillId`/`SkillRef` contract；
+- 在 current `SkillId` 基础上增加 `SkillRef`/version contract；
 - 迁移 `UserInput::Skill { name, path }`；
 - 激活时完整加载 `SKILL.md`；
 - Core ContextAssembler layering、budget 和 provenance；

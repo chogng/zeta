@@ -1,7 +1,7 @@
 use crate::{
     ApprovalReviewModelSelection, ConfigGeneration, ConfigRevision, McpServerConfig,
-    McpServerEnablement, McpServerId, ModelRef, SkillSourceConfig, SkillSourceEnablement,
-    SkillSourceId, Theme,
+    McpServerEnablement, McpServerId, ModelRef, SkillEnablement, SkillId, SkillSourceConfig,
+    SkillSourceEnablement, SkillSourceId, Theme,
 };
 use serde::{Deserialize, Serialize};
 use zeta_model_provider_config::ModelProviderConfig;
@@ -50,6 +50,10 @@ pub enum UserConfigCommand {
     SetSkillSourceEnablement {
         source_id: SkillSourceId,
         enablement: SkillSourceEnablement,
+    },
+    SetSkillEnablement {
+        skill_id: SkillId,
+        enablement: SkillEnablement,
     },
 }
 

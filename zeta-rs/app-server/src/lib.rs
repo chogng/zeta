@@ -13,7 +13,7 @@ mod workspace_search;
 
 pub use local::OpenAppServerError;
 pub use local::open_local_app_server;
-pub use local::{LocalAppServerOptions, LocalWorkspaceConfigOptions};
+pub use local::{BuiltInSkillRoot, LocalAppServerOptions, LocalWorkspaceConfigOptions};
 pub use review::{ProviderReviewModel, ReviewModelResolutionError, ReviewModelResolver};
 pub use server::AppServer;
 pub use server::ConnectionState;

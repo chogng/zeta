@@ -4,6 +4,7 @@ use crate::JsonRpcTransport;
 use std::path::PathBuf;
 use std::sync::Arc;
 use zeta_app_server::AppServer;
+use zeta_app_server::BuiltInSkillRoot;
 use zeta_app_server::ConnectionState;
 use zeta_app_server::LocalAppServerOptions;
 use zeta_app_server::SlashCommandCatalog;
@@ -20,6 +21,7 @@ pub struct InProcessClientOptions {
     pub client_info: ClientInfo,
     pub capabilities: ClientCapabilities,
     pub slash_commands: SlashCommandCatalog,
+    pub built_in_skills: BuiltInSkillRoot,
 }
 
 impl InProcessClientOptions {
@@ -30,6 +32,7 @@ impl InProcessClientOptions {
             client_info,
             capabilities: ClientCapabilities::default(),
             slash_commands: SlashCommandCatalog::default(),
+            built_in_skills: BuiltInSkillRoot::AutoDetect,
         }
     }
 
@@ -46,6 +49,16 @@ impl InProcessClientOptions {
     /// Enables local filesystem and shell tools under one Workspace root.
     pub fn with_workspace_root(mut self, workspace: impl Into<PathBuf>) -> Self {
         self.workspace_root = Some(workspace.into());
+        self
+    }
+
+    pub fn with_built_in_skill_root(mut self, root: impl Into<PathBuf>) -> Self {
+        self.built_in_skills = BuiltInSkillRoot::Explicit(root.into());
+        self
+    }
+
+    pub fn without_built_in_skills(mut self) -> Self {
+        self.built_in_skills = BuiltInSkillRoot::Unavailable;
         self
     }
 }
@@ -105,6 +118,8 @@ impl JsonRpcTransport for InProcessTransport {
     }
 
     fn drain_notifications(&mut self) -> Result<Vec<String>, ClientError> {
+        self.notifications
+            .extend(self.server.drain_notifications(&mut self.connection));
         Ok(std::mem::take(&mut self.notifications))
     }
 }
@@ -122,6 +137,7 @@ pub fn open_in_process_app_server(
 ) -> Result<InProcessAppServer, ClientError> {
     let mut server_options = LocalAppServerOptions::new(options.state_root)
         .with_slash_command_catalog(options.slash_commands);
+    server_options.built_in_skills = options.built_in_skills;
     if let Some(workspace_root) = options.workspace_root {
         server_options = server_options.with_workspace_root(workspace_root);
     }

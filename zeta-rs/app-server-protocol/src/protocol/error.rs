@@ -27,6 +27,9 @@ pub enum AppServerErrorName {
     SearchBusy,
     ConfigUnavailable,
     ConfigRevisionConflict,
+    SkillsUnavailable,
+    SkillOperationFailed,
+    SkillNotFound,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

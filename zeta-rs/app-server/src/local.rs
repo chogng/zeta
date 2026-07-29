@@ -2,6 +2,7 @@ use crate::AppServer;
 use crate::SlashCommandCatalog;
 use crate::local_tools::compose_local_tools;
 use crate::mcp_tools::compose_mcp_tools;
+use crate::server::skills_runtime::{BuiltInSkillSource, SkillConfigSnapshotProvider};
 use crate::tool_composition::{ToolPort, combine_tool_ports};
 use std::fmt;
 use std::path::PathBuf;
@@ -14,6 +15,7 @@ use zeta_config::{
 };
 use zeta_core::{CoreError, ModelService};
 use zeta_file_system::LocalFileSystem;
+use zeta_install_context::InstallContext;
 use zeta_model_provider::{
     ModelInvoker, ModelProvider, ModelProviderRuntime, ModelRuntimeRequest, UnavailableModel,
 };
@@ -27,6 +29,7 @@ pub struct LocalAppServerOptions {
     pub workspace: Option<LocalWorkspaceConfigOptions>,
     pub slash_commands: SlashCommandCatalog,
     pub workspace_root: Option<PathBuf>,
+    pub built_in_skills: BuiltInSkillRoot,
 }
 
 impl LocalAppServerOptions {
@@ -36,6 +39,7 @@ impl LocalAppServerOptions {
             workspace: None,
             slash_commands: SlashCommandCatalog::default(),
             workspace_root: None,
+            built_in_skills: BuiltInSkillRoot::AutoDetect,
         }
     }
 
@@ -54,6 +58,23 @@ impl LocalAppServerOptions {
         self.workspace_root = Some(workspace_root.into());
         self
     }
+
+    pub fn with_built_in_skill_root(mut self, root: impl Into<PathBuf>) -> Self {
+        self.built_in_skills = BuiltInSkillRoot::Explicit(root.into());
+        self
+    }
+
+    pub fn without_built_in_skills(mut self) -> Self {
+        self.built_in_skills = BuiltInSkillRoot::Unavailable;
+        self
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum BuiltInSkillRoot {
+    AutoDetect,
+    Explicit(PathBuf),
+    Unavailable,
 }
 
 /// Read-only Workspace configuration source used by one local App Server composition root.
@@ -120,9 +141,16 @@ pub fn open_local_app_server(
     let runtime_config = model
         .resolve_config(&user_config)
         .map_err(|error| OpenAppServerError(error.to_string()))?;
+    let skill_config = Arc::new(LocalSkillConfigProvider {
+        config: Arc::clone(&config),
+        config_path: options.state_root.join("config.authority.json"),
+    });
+    let built_in_skill_root = resolve_built_in_skill_root(options.built_in_skills);
     let mut server = AppServer::new(sessions, model)
         .with_config_store(config)
-        .with_slash_command_catalog(options.slash_commands);
+        .with_slash_command_catalog(options.slash_commands)
+        .with_skill_runtime(built_in_skill_root, skill_config)
+        .map_err(OpenAppServerError)?;
     let mut tool_ports = Vec::new();
     if let Some(workspace_root) = options.workspace_root {
         let workspace = WorkspaceRoot::open(workspace_root).map_err(open_error)?;
@@ -144,6 +172,41 @@ pub fn open_local_app_server(
         server = server.with_tool_service(tools.tools, tools.policy);
     }
     Ok(server)
+}
+
+struct LocalSkillConfigProvider {
+    config: Arc<ConfigStore>,
+    config_path: PathBuf,
+}
+
+impl SkillConfigSnapshotProvider for LocalSkillConfigProvider {
+    fn snapshot(&self) -> Result<zeta_config::SkillsConfig, String> {
+        self.config
+            .read_snapshot()
+            .map(|snapshot| snapshot.values.skills)
+            .map_err(|error| error.0)
+    }
+
+    fn watched_config_paths(&self) -> Vec<PathBuf> {
+        vec![self.config_path.clone()]
+    }
+}
+
+fn resolve_built_in_skill_root(selection: BuiltInSkillRoot) -> BuiltInSkillSource {
+    match selection {
+        BuiltInSkillRoot::Explicit(root) => BuiltInSkillSource::Root(root),
+        BuiltInSkillRoot::Unavailable => BuiltInSkillSource::Omitted,
+        BuiltInSkillRoot::AutoDetect => InstallContext::current()
+            .bundled_resource_directory("skills")
+            .or_else(development_built_in_skill_root)
+            .map(BuiltInSkillSource::Root)
+            .unwrap_or(BuiltInSkillSource::Missing),
+    }
+}
+
+fn development_built_in_skill_root() -> Option<PathBuf> {
+    let candidate = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../skills/assets");
+    candidate.is_dir().then_some(candidate)
 }
 
 /// Resolves an immutable model runtime from one persisted configuration snapshot.

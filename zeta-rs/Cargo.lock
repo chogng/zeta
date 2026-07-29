@@ -3912,6 +3912,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "tempfile"
+version = "3.27.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
+dependencies = [
+ "fastrand",
+ "getrandom 0.4.3",
+ "once_cell",
+ "rustix 1.1.4",
+ "windows-sys 0.61.2",
+]
+
+[[package]]
 name = "termcolor"
 version = "1.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4802,6 +4815,12 @@ dependencies = [
  "serde",
  "serde_derive",
 ]
+
+[[package]]
+name = "urlencoding"
+version = "2.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "daf8dba3b7eb870caf1ddeed7bc9d2a049f3cfdfae7cb521b087cc33ae4c49da"
 
 [[package]]
 name = "usvg"
@@ -5737,6 +5756,7 @@ dependencies = [
  "zeta-config",
  "zeta-core",
  "zeta-file-system",
+ "zeta-file-watcher",
  "zeta-install-context",
  "zeta-linux-sandbox",
  "zeta-mcp",
@@ -5748,6 +5768,7 @@ dependencies = [
  "zeta-rollout",
  "zeta-sandboxing",
  "zeta-shell-command",
+ "zeta-skills",
  "zeta-tools",
  "zeta-typst",
  "zeta-windows-sandbox",
@@ -6115,6 +6136,7 @@ dependencies = [
  "serde",
  "serde_yaml",
  "sha2",
+ "zeta-protocol",
 ]
 
 [[package]]
@@ -6173,6 +6195,31 @@ dependencies = [
  "typst",
  "typst-assets",
  "typst-pdf",
+]
+
+[[package]]
+name = "zeta-utils-path"
+version = "0.1.0"
+dependencies = [
+ "dunce",
+ "pretty_assertions",
+ "tempfile",
+]
+
+[[package]]
+name = "zeta-utils-path-uri"
+version = "0.1.0"
+dependencies = [
+ "base64",
+ "pretty_assertions",
+ "schemars",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.19",
+ "ts-rs",
+ "url",
+ "urlencoding",
 ]
 
 [[package]]

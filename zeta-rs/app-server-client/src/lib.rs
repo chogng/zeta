@@ -29,6 +29,9 @@ use zeta_app_server_protocol::protocol::session::{
     SessionThreadCreateParams, SessionThreadForkParams, SessionThreadResult,
     SessionUnsubscribeParams,
 };
+use zeta_app_server_protocol::protocol::skills::{
+    SkillListParams, SkillListResult, SkillSetEnablementParams,
+};
 use zeta_app_server_protocol::protocol::thread::{
     ThreadReadParams, ThreadReadResult, ThreadSubscribeParams, ThreadSubscribeResult,
     ThreadUnsubscribeParams,
@@ -252,6 +255,17 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
         params: SkillSourceSetEnablementParams,
     ) -> Result<ConfigCommandResult, ClientError> {
         self.call(ClientMethod::SkillSourceSetEnablement, params)
+    }
+
+    pub fn list_skills(&mut self, params: SkillListParams) -> Result<SkillListResult, ClientError> {
+        self.call(ClientMethod::SkillList, params)
+    }
+
+    pub fn set_skill_enablement(
+        &mut self,
+        params: SkillSetEnablementParams,
+    ) -> Result<ConfigCommandResult, ClientError> {
+        self.call(ClientMethod::SkillSetEnablement, params)
     }
 
     pub fn start_turn(&mut self, params: TurnStartParams) -> Result<TurnStartResult, ClientError> {
