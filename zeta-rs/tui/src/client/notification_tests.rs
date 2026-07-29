@@ -1,8 +1,9 @@
 use super::ClientEvent;
 use super::map_event;
 use zeta_app_server_client::{AppServerEvent, ConnectionCloseReason, ServerNotification};
+use zeta_app_server_protocol::protocol::git::{GitHeadDto, GitStatusChanged, GitStatusResult};
 use zeta_app_server_protocol::protocol::notification::{SkillsChanged, ThreadUpdateEnvelope};
-use zeta_protocol::{SessionId, ThreadEvent, ThreadId, ThreadUpdate};
+use zeta_protocol::{SessionId, StreamInstanceId, ThreadEvent, ThreadId, ThreadUpdate};
 
 #[test]
 fn skills_changed_is_mapped_without_exposing_the_wire_notification() {
@@ -39,6 +40,27 @@ fn thread_update_preserves_typed_scope_and_sequence() {
     assert_eq!(update.session_id.as_str(), "session-1");
     assert_eq!(update.thread_id.as_str(), "thread-1");
     assert_eq!(update.durable_sequence, 1);
+}
+
+#[test]
+fn git_status_changed_is_ignored_without_an_scm_consumer() {
+    let notification = GitStatusChanged {
+        status: GitStatusResult {
+            stream_instance_id: StreamInstanceId::new("git_stream_1").unwrap(),
+            revision: 1,
+            head: GitHeadDto::Unborn {
+                name: "main".into(),
+            },
+            changes: Vec::new(),
+        },
+    };
+
+    assert_eq!(
+        map_event(AppServerEvent::Notification(
+            ServerNotification::GitStatusChanged(notification)
+        )),
+        None
+    );
 }
 
 #[test]

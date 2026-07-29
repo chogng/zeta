@@ -77,6 +77,7 @@ fn thread_snapshot() -> Thread {
         turns: vec![Turn {
             turn_id: turn_id.clone(),
             status: TurnStatus::Completed,
+            model: None,
             items: vec![
                 ThreadItem::UserMessage {
                     item_id: ItemId::new("item_1").unwrap(),

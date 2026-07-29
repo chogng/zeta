@@ -30,6 +30,7 @@ fn completed_active_turn_only_updates_lifecycle_after_snapshot_mapping() {
     let turn = Turn {
         turn_id: turn_id.clone(),
         status: TurnStatus::Completed,
+        model: None,
         items: vec![
             ThreadItem::UserMessage {
                 item_id: ItemId::new("item_1").unwrap(),
@@ -71,6 +72,7 @@ fn waiting_active_turn_remains_interruptible() {
     let turn = Turn {
         turn_id,
         status: TurnStatus::WaitingForUserInput,
+        model: None,
         items: Vec::new(),
         pending_interaction: None,
         error: None,
@@ -94,6 +96,7 @@ fn resumed_active_turn_returns_from_waiting_to_working() {
     let waiting_turn = Turn {
         turn_id: turn_id.clone(),
         status: TurnStatus::WaitingForUserInput,
+        model: None,
         items: Vec::new(),
         pending_interaction: None,
         error: None,
@@ -103,6 +106,7 @@ fn resumed_active_turn_returns_from_waiting_to_working() {
     let resumed_turn = Turn {
         turn_id,
         status: TurnStatus::Running,
+        model: None,
         items: Vec::new(),
         pending_interaction: None,
         error: None,
@@ -120,6 +124,7 @@ fn failed_turn_uses_a_friendly_error_instead_of_debug_output() {
     let turn = Turn {
         turn_id,
         status: TurnStatus::Failed,
+        model: None,
         items: Vec::new(),
         pending_interaction: None,
         error: Some(StableTurnError::model_invocation_failed()),

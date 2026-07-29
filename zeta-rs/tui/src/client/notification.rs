@@ -19,7 +19,9 @@ pub(crate) fn map_event(event: AppServerEvent) -> Option<ClientEvent> {
             Some(ClientEvent::ThreadUpdated(update))
         }
         AppServerEvent::Notification(
-            ServerNotification::SessionUpdate(_) | ServerNotification::Unknown { .. },
+            ServerNotification::SessionUpdate(_)
+            | ServerNotification::GitStatusChanged(_)
+            | ServerNotification::Unknown { .. },
         ) => None,
         AppServerEvent::ConnectionClosed(reason) => Some(ClientEvent::Failed(format!(
             "App Server connection closed: {reason:?}"
