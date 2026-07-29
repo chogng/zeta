@@ -82,7 +82,7 @@ Zeta 已有 durable aggregate sequence、snapshot + gap subscribe 和 typed comm
 - timeout、sandbox 与 approval。
 
 这些是底层 tool process execution，不是 headless Agent runner。
-Sandbox 的共享 policy、macOS backend、Linux Bubblewrap 和 Windows restricted-token crate
+Sandbox 的共享 policy、macOS backend、Linux Bubblewrap 和 Windows AppContainer crate
 边界见 [`sandboxing.md`](sandboxing.md)。
 
 目标迁移：

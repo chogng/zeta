@@ -12,6 +12,7 @@ path = "src/lib.rs"
 
 [dependencies]
 zeta-bwrap = { workspace = true }
+zeta-install-context = { workspace = true }
 zeta-sandboxing = { workspace = true }
 
 [lints]

@@ -5,13 +5,28 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 #[test]
-fn discovery_freezes_an_executable_from_supplied_directories() {
+fn discovery_freezes_the_first_valid_supplied_candidate() {
     let directory = TestDirectory::new();
+    let missing = directory.path().join("missing-rg");
     let executable = directory.executable("rg");
 
-    let discovered = discover_in_directories([directory.path()]).unwrap();
+    let discovered = RipgrepExecutable::discover_candidates([missing, executable.clone()]).unwrap();
 
     assert_eq!(discovered.path(), executable.canonicalize().unwrap());
+}
+
+#[test]
+fn invalid_explicit_override_does_not_fall_back() {
+    let directory = TestDirectory::new();
+    let missing = directory.path().join("missing-rg");
+
+    assert!(matches!(
+        RipgrepExecutable::from_override("ZETA_RG_PATH", missing),
+        Err(RipgrepDiscoveryError::InvalidOverride {
+            variable: "ZETA_RG_PATH",
+            ..
+        })
+    ));
 }
 
 #[test]
@@ -33,13 +48,51 @@ fn materialization_forces_no_config_and_rejects_process_spawning_flags() {
         executable.materialize(unsafe_request),
         Err(RipgrepRequestError::UnsafeArgument(argument)) if argument == "--pre"
     ));
-    for argument in ["--search-zip", "--follow", "--file", "--ignore-file=rules"] {
+    for argument in [
+        "--search-zip",
+        "--follow",
+        "--file",
+        "--ignore-file=rules",
+        "--hostname-bin",
+        "--hostname-bin=/bin/hostname",
+        "-f/etc/hosts",
+        "-LH",
+        "-nz",
+    ] {
         let request = ShellCommandRequest::new("rg", [argument, "needle"], ".").unwrap();
         assert!(matches!(
             executable.materialize(request),
             Err(RipgrepRequestError::UnsafeArgument(rejected)) if rejected == argument
         ));
     }
+}
+
+#[test]
+fn compact_safe_options_do_not_treat_their_values_as_option_clusters() {
+    let directory = TestDirectory::new();
+    let executable = RipgrepExecutable::from_path(directory.executable("rg")).unwrap();
+
+    for argument in ["-g*.foo", "-e-L", "-C2", "-tjson"] {
+        let request = ShellCommandRequest::new("rg", [argument, "."], ".").unwrap();
+        assert!(
+            executable.materialize(request).is_ok(),
+            "{argument} should remain available"
+        );
+    }
+}
+
+#[test]
+fn option_delimiter_keeps_dash_prefixed_positional_paths_available() {
+    let directory = TestDirectory::new();
+    let executable = RipgrepExecutable::from_path(directory.executable("rg")).unwrap();
+    let request = ShellCommandRequest::new("rg", ["--files", "--", "-L"], ".").unwrap();
+
+    let materialized = executable.materialize(request).unwrap();
+
+    assert_eq!(
+        materialized.arguments(),
+        ["--no-config", "--files", "--", "-L"]
+    );
 }
 
 static NEXT_DIRECTORY: AtomicUsize = AtomicUsize::new(0);

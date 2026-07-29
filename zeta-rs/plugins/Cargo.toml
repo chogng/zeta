@@ -1,0 +1,20 @@
+[package]
+name = "zeta-plugins"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[lib]
+doctest = false
+name = "zeta_plugins"
+path = "src/lib.rs"
+
+[dependencies]
+semver = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+
+[lints]
+workspace = true

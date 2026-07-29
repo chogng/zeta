@@ -55,6 +55,8 @@
   MCP/dynamic adapter、tool search、Plugin discovery、code mode 与图片精度。
 - [`zeta-mcp` 架构与演进方案](mcp.md)：MCP client session、transport、capability negotiation
   与 tools/resources/prompts adapter。
+- [`zeta-mcp-server` 架构与演进方案](mcp-server.md)：将 Zeta Agent 暴露给外部 MCP Host，
+  并通过 App Server 复用 canonical Session/Thread/Turn 执行路径。
 - [`zeta-plugins` 架构与演进方案](plugins.md)：扩展包 manifest、安装、权限、activation
   snapshot、更新与回滚。
 - [`zeta-skills` 架构与演进方案](skills.md)：Agent Skills 发现、选择、渐进加载、context
@@ -76,6 +78,9 @@ canonical contract 和全部调用方，不建立旧 API、旧 DTO 或旧 storag
 - typed CommandId receipt、payload conflict detection 与 response replay；
 - Session-first App Server API、snapshot + durable gap subscription，以及
   `session/update` / `thread/update`；
+- `zeta-mcp-server` stdio/Streamable HTTP initialize、Agent tool start/reply、
+  principal-scoped durable continuation/replay、bounded progress、form interaction、cancel 和
+  bounded final result；
 - Rust DTO 生成 JSON Schema/TypeScript/schema hash；
 - CLI/TUI in-process client 与 Desktop JSONL client 共用同一 dispatcher；
 - Electron supervisor、strict JSONL framing、typed peer、trusted IPC 与 generated renderer

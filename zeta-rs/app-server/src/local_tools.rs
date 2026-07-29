@@ -5,6 +5,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use zeta_async_utils::CancellationToken;
 use zeta_core::{CoreError, PolicyService, ToolAuthorization, ToolService};
+use zeta_install_context::{ExecutableCandidates, InstallContext, ManagedExecutable};
 use zeta_policy::{
     ActionDigest, ActionKind, ActionProvenance, ActionReviewPhase, ActionReviewRequest,
     ActionSource, Capability, CapabilityKind, CapabilitySet, ExecutionDecision, PolicyRevision,
@@ -16,7 +17,8 @@ use zeta_sandboxing::{
 };
 use zeta_shell_command::{
     ApprovalPolicy, ApprovalRequirement, CommandExecutionAuthority, CommandExecutionOutcome,
-    ExecutionError, RipgrepExecutable, ShellCommandLimits, ShellCommandRequest, ShellCommandTool,
+    ExecutionError, RipgrepDiscoveryError, RipgrepExecutable, ShellCommandLimits,
+    ShellCommandRequest, ShellCommandTool,
 };
 use zeta_tools::{ToolPayload, to_protocol_tool_definition};
 
@@ -27,26 +29,34 @@ const DEFAULT_OUTPUT_BYTES: usize = 256 * 1024;
 pub(crate) struct LocalToolComposition {
     pub(crate) tools: Arc<dyn ToolService>,
     pub(crate) policy: Arc<dyn PolicyService>,
+    pub(crate) ripgrep: RipgrepExecutable,
 }
 
 pub(crate) fn compose_local_tools(
-    workspace_path: impl AsRef<Path>,
+    workspace: WorkspaceRoot,
 ) -> Result<LocalToolComposition, LocalToolError> {
-    let ripgrep = RipgrepExecutable::discover().map_err(LocalToolError::ripgrep)?;
-    compose_local_tools_with_ripgrep(workspace_path, ripgrep)
-}
-
-pub(crate) fn compose_local_tools_with_ripgrep(
-    workspace_path: impl AsRef<Path>,
-    ripgrep: RipgrepExecutable,
-) -> Result<LocalToolComposition, LocalToolError> {
-    let workspace = WorkspaceRoot::open(workspace_path).map_err(LocalToolError::workspace)?;
+    let install_context = InstallContext::current();
+    let ripgrep = resolve_ripgrep(&install_context).map_err(LocalToolError::ripgrep)?;
     let policy = LocalReadOnlyPolicy::new(&workspace, &ripgrep);
-    let service = LocalShellToolService::new(workspace, ripgrep, native_sandbox())?;
+    let service = LocalShellToolService::new(
+        workspace,
+        ripgrep.clone(),
+        native_sandbox(&install_context)?,
+    )?;
     Ok(LocalToolComposition {
         tools: Arc::new(service),
         policy: Arc::new(policy),
+        ripgrep,
     })
+}
+
+fn resolve_ripgrep(context: &InstallContext) -> Result<RipgrepExecutable, RipgrepDiscoveryError> {
+    match context.executable_candidates(ManagedExecutable::Ripgrep) {
+        ExecutableCandidates::ExplicitOverride(explicit_override) => {
+            RipgrepExecutable::from_override(explicit_override.variable(), explicit_override.path())
+        }
+        ExecutableCandidates::SearchPaths(paths) => RipgrepExecutable::discover_candidates(paths),
+    }
 }
 
 struct CoreAuthorized;
@@ -321,22 +331,22 @@ fn execution_error(error: ExecutionError) -> String {
 #[cfg(target_os = "macos")]
 type NativeSandbox = zeta_sandboxing::MacosSeatbeltSandbox;
 #[cfg(target_os = "macos")]
-fn native_sandbox() -> NativeSandbox {
-    NativeSandbox::new()
+fn native_sandbox(_: &InstallContext) -> Result<NativeSandbox, LocalToolError> {
+    Ok(NativeSandbox::new())
 }
 
 #[cfg(target_os = "linux")]
 type NativeSandbox = zeta_linux_sandbox::LinuxSandbox;
 #[cfg(target_os = "linux")]
-fn native_sandbox() -> NativeSandbox {
-    NativeSandbox::from_path()
+fn native_sandbox(context: &InstallContext) -> Result<NativeSandbox, LocalToolError> {
+    NativeSandbox::discover(context).map_err(LocalToolError::sandbox)
 }
 
 #[cfg(target_os = "windows")]
 type NativeSandbox = zeta_windows_sandbox::WindowsSandbox;
 #[cfg(target_os = "windows")]
-fn native_sandbox() -> NativeSandbox {
-    NativeSandbox::new()
+fn native_sandbox(context: &InstallContext) -> Result<NativeSandbox, LocalToolError> {
+    NativeSandbox::discover(context).map_err(LocalToolError::sandbox)
 }
 
 #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
@@ -346,16 +356,17 @@ compile_error!("local shell tools require a supported sandbox backend");
 pub(crate) struct LocalToolError(String);
 
 impl LocalToolError {
-    fn workspace(error: impl fmt::Display) -> Self {
-        Self(format!("could not open the tool workspace: {error}"))
-    }
-
     fn ripgrep(error: impl fmt::Display) -> Self {
         Self(format!("could not resolve ripgrep: {error}"))
     }
 
     fn definition(error: impl fmt::Display) -> Self {
         Self(format!("could not construct local tool registry: {error}"))
+    }
+
+    #[cfg(any(target_os = "linux", target_os = "windows"))]
+    fn sandbox(error: impl fmt::Display) -> Self {
+        Self(format!("could not resolve platform sandbox: {error}"))
     }
 }
 

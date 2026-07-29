@@ -1,8 +1,9 @@
 # `zeta-plugins` 架构与演进方案
 
-> 计划物理位置：`zeta-rs/plugins/`
+> 物理位置：`zeta-rs/plugins/`
 > Rust crate：`zeta_plugins`
-> 当前状态：Proposed，尚未创建 crate
+> 当前状态：PL0 已实现；PL1–PL4 Proposed
+> 当前 crate 实现契约：[`zeta-rs/plugins/README.md`](../zeta-rs/plugins/README.md)
 > MCP runtime：[`mcp.md`](mcp.md)
 > Skill runtime：[`skills.md`](skills.md)
 > Config authority 与 runtime snapshot 接入：[`config.md`](config.md)
@@ -51,8 +52,14 @@ Agent runtime
 
 ## 2. 当前仓库审计
 
-当前没有 Plugin manifest、store、manager 或 App Server API。`docs/tui.md` 也明确要求 plugins
-先进入 canonical domain 和 App Server contract，TUI 才能增加 feature。
+当前已创建 `zeta-plugins`，实现 strict v1 manifest、Plugin identity/SemVer、portable
+package-relative path、本地 package 安全校验、确定性 digest 和只读 local-development
+discovery。实现细节、limits 与 failure semantics 由 crate
+[`README`](../zeta-rs/plugins/README.md) 维护。
+
+尚未实现 Plugin store、authority、activation、grant、runtime injection 或 App Server API。
+`docs/tui.md` 也明确要求 plugins 先进入 canonical domain 和 App Server contract，TUI 才能增加
+feature。
 
 已有可复用边界：
 
@@ -164,7 +171,7 @@ slash-separated path；绝对路径、`..`、空 segment、NUL、平台 device p
 
 ### 5.2 Manifest shape
 
-以下是目标语义示例，不是已经发布的 JSON Schema：
+以下是当前 v1 语义示例；当前 authority 是 Rust strict parser，尚未发布独立 JSON Schema：
 
 ```json
 {
@@ -179,10 +186,13 @@ slash-separated path；绝对路径、`..`、空 segment、NUL、平台 device p
   },
   "contributions": {
     "skills": [
-      { "path": "skills/code-review" }
+      { "id": "code-review", "path": "skills/code-review" }
     ],
     "mcpServers": [
       { "id": "review", "definition": "mcp/review-server.json" }
+    ],
+    "assets": [
+      { "id": "icon", "path": "assets/icon.png" }
     ]
   },
   "permissions": [
@@ -601,9 +611,9 @@ CommandConflict
 - 当前 active generation 与上一个 rollback generation；
 - 哪个 MCP/Skill consumer 拒绝了 contribution。
 
-## 17. 目标目录
+## 17. PL1+ 目标目录
 
-第一版单 crate：
+PL1+ 继续保持单 crate，目标扩展为：
 
 ```text
 zeta-rs/plugins/src/
@@ -640,14 +650,16 @@ zeta-rs/plugins/src/
 
 ## 18. 分阶段实施
 
-### Phase PL0：manifest + local validation
+### Phase PL0：manifest + local validation（Current）
 
 - 固定 v1 schema、identity、path 和 digest；
 - local development package discovery；
-- archive/path/schema 安全 fixtures；
-- 只读 `plugin/list/read` projection。
+- filesystem path/schema 安全 fixtures；Archive source 尚未启用，因此 archive ingestion
+  fixtures 随对应 source 一起加入；
+- 只读 local package list/read projection；App Server `plugin/list/read` 尚未接入。
 
-完成条件：任何 contribution path 都不能逃出 immutable package root。
+当前完成条件：任何 contribution path 都不能逃出已验证 local snapshot root，且该 mutable
+local root 不会被发布给 runtime。content-addressed immutable runtime root 属于 PL1。
 
 ### Phase PL1：authority + activation
 

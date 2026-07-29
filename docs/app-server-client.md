@@ -5,6 +5,7 @@
 > Wire contract：[`zeta-app-server-api.md`](zeta-app-server-api.md)  
 > Canonical 产品模型：[`protocol.md`](protocol.md)  
 > Headless 与远程调度：[`exec.md`](exec.md)
+> MCP Agent server consumer：[`mcp-server.md`](mcp-server.md)
 
 ## 1. 结论
 
@@ -37,6 +38,12 @@ zeta-tui ──┘             │
 `zeta-exec` 是无交互界面的 Agent 执行宿主。当前它与 TUI 一样启动 embedded App Server；
 后续远程调度系统以它作为 headless execution entry。Job/Attempt/lease/event cursor 属于
 [`exec.md`](exec.md) 定义的 scheduler adapter，不进入 App Server Client。
+
+Current `zeta-mcp-server` 已通过同步 client、Thread subscription 和 bounded polling/drain 把
+MCP tool call 映射到 App Server 的 Session/Thread/Turn API，并投影 bounded progress 与
+approval/user-input interaction，且不直接依赖 Core 或 stores。这是 adapter 局部实现，不替代
+本文件 Proposed 的独立 event stream 和显式 shutdown；通用 consumer 不能把同步
+`drain_notifications()` 当成最终事件架构。
 
 ## 2. 抽象单位：一个运行中的 App Server Session
 
@@ -399,6 +406,11 @@ TUI 不再接收一个同步 `&mut AppServerClient<T>`，也不调用 `drain_not
 当前实现中可以保留的部分：
 
 - `start_in_process_client` 已经体现“由共享 crate 创建本地 App Server”的正确方向；
+- `open_in_process_app_server` 返回可克隆的 `InProcessAppServer` host；
+- `InProcessAppServer::connect` 为同一个 `Arc<AppServer>` 建立各自 initialize 完成的 typed
+  connection，当前供 MCP HTTP session 共享一个 embedded composition；
+- `InProcessTransport::from_shared_server` 明确表达共享 host，不要求每个 transport 重建
+  rollout/config/model composition；
 - typed client methods；
 - protocol method registry；
 - external JSON-RPC request/response 编解码；
@@ -416,7 +428,7 @@ TUI 不再接收一个同步 `&mut AppServerClient<T>`，也不调用 `drain_not
 | `drain_notifications` | notification 只能在 request 完成后批量拉取 |
 | `AppServerClient<T>` 要求 `&mut self` | TUI 被阻塞，多个 feature 不能共享请求 handle |
 | `start_in_process_client` 只返回 client | 没有 session owner、event receiver 或显式 shutdown |
-| `InProcessTransport` 隐式拥有 server | 生命周期藏在 transport drop 中，不能 join runner |
+| `InProcessTransport` 只持有 `Arc<AppServer>` | 可以共享 host，但仍没有显式 session shutdown、connection driver 或 task join |
 | initialize gate 只存在于一个 helper | 裸 `AppServerClient::new` 可以在未初始化时发送业务请求 |
 | server error 被压成 code/string | 丢失 typed error name/data |
 | App Server notification queue 依靠 drain | server event 无法主动唤醒 client/TUI |

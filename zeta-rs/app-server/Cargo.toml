@@ -22,6 +22,7 @@ zeta-auto-review = { workspace = true }
 zeta-config = { workspace = true }
 zeta-core = { workspace = true }
 zeta-file-system = { workspace = true }
+zeta-install-context = { workspace = true }
 zeta-model-provider = { workspace = true }
 zeta-model-provider-config = { workspace = true }
 zeta-policy = { workspace = true }

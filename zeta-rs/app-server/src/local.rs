@@ -17,15 +17,12 @@ use zeta_model_provider::{
 };
 use zeta_rollout::RolloutRepository;
 use zeta_sandboxing::WorkspaceRoot;
-use zeta_shell_command::{RipgrepDiscoveryError, RipgrepExecutable};
 
 /// Filesystem locations needed to open one persistent local App Server.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct LocalAppServerOptions {
     pub state_root: PathBuf,
     pub workspace: Option<LocalWorkspaceConfigOptions>,
-    pub tool_workspace: Option<PathBuf>,
-    pub optional_tool_workspace: Option<PathBuf>,
     pub slash_commands: SlashCommandCatalog,
     pub workspace_root: Option<PathBuf>,
 }
@@ -35,8 +32,6 @@ impl LocalAppServerOptions {
         Self {
             state_root: state_root.into(),
             workspace: None,
-            tool_workspace: None,
-            optional_tool_workspace: None,
             slash_commands: SlashCommandCatalog::default(),
             workspace_root: None,
         }
@@ -52,24 +47,9 @@ impl LocalAppServerOptions {
         self
     }
 
+    /// Enables local filesystem and shell tools under one canonical Workspace root.
     pub fn with_workspace_root(mut self, workspace_root: impl Into<PathBuf>) -> Self {
         self.workspace_root = Some(workspace_root.into());
-        self
-    }
-
-    /// Enables the local read-only tool registry rooted at `workspace`.
-    pub fn with_tool_workspace(mut self, workspace: impl Into<PathBuf>) -> Self {
-        self.tool_workspace = Some(workspace.into());
-        self
-    }
-
-    /// Enables local read-only tools when ripgrep is available.
-    ///
-    /// A missing executable leaves tools disabled so capability-optional hosts
-    /// can still start. An invalid explicit override or other composition
-    /// failure remains fatal.
-    pub fn with_optional_tool_workspace(mut self, workspace: impl Into<PathBuf>) -> Self {
-        self.optional_tool_workspace = Some(workspace.into());
         self
     }
 }
@@ -140,35 +120,14 @@ pub fn open_local_app_server(
         .with_slash_command_catalog(options.slash_commands);
     if let Some(workspace_root) = options.workspace_root {
         let workspace = WorkspaceRoot::open(workspace_root).map_err(open_error)?;
-        server = server.with_file_system(Arc::new(LocalFileSystem::new(workspace.clone())));
-        if let Ok(ripgrep) = RipgrepExecutable::discover() {
-            server = server.with_workspace_search(workspace, ripgrep);
-        }
-    }
-    if let Some(tool_workspace) = options.tool_workspace {
-        let tools = compose_local_tools(tool_workspace)
+        let tools = compose_local_tools(workspace.clone())
             .map_err(|error| OpenAppServerError(error.to_string()))?;
-        server = server.with_tool_service(tools.tools, tools.policy);
-    } else if let Some(tool_workspace) = options.optional_tool_workspace
-        && let Some(ripgrep) = optional_ripgrep(RipgrepExecutable::discover())?
-    {
-        let tools = crate::local_tools::compose_local_tools_with_ripgrep(tool_workspace, ripgrep)
-            .map_err(|error| OpenAppServerError(error.to_string()))?;
-        server = server.with_tool_service(tools.tools, tools.policy);
+        server = server
+            .with_file_system(Arc::new(LocalFileSystem::new(workspace.clone())))
+            .with_workspace_search(workspace, tools.ripgrep)
+            .with_tool_service(tools.tools, tools.policy);
     }
     Ok(server)
-}
-
-fn optional_ripgrep(
-    discovery: Result<RipgrepExecutable, RipgrepDiscoveryError>,
-) -> Result<Option<RipgrepExecutable>, OpenAppServerError> {
-    match discovery {
-        Ok(ripgrep) => Ok(Some(ripgrep)),
-        Err(RipgrepDiscoveryError::NotFound) => Ok(None),
-        Err(error) => Err(OpenAppServerError(format!(
-            "could not resolve ripgrep: {error}"
-        ))),
-    }
 }
 
 /// Resolves an immutable model runtime from one persisted configuration snapshot.

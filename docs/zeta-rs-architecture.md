@@ -28,6 +28,7 @@ zeta-rs/
 ├── file-search/          # workspace path fuzzy search + CLI
 ├── file-watcher/         # shared filesystem invalidation hints
 ├── git/                  # bounded Git repository operations and structured parsing
+├── install-context/      # runtime install method, package layout and resource candidates
 ├── apply-patch/          # concrete validated write executor
 ├── session-store/        # Session persistence port + envelope
 ├── thread-store/         # Thread persistence port + envelope
@@ -39,6 +40,7 @@ zeta-rs/
 ├── app-server-transport/
 ├── app-server-client/
 ├── app-server/
+├── mcp-server/           # current stdio/HTTP Agent-as-tool App Server adapter
 ├── config/
 ├── secrets/              # provider-neutral secret persistence primitives
 ├── login/                # target interactive account-login control plane
@@ -213,6 +215,12 @@ channel wiring 和显式 shutdown，详细边界见
 [`app-server-client.md`](app-server-client.md)。进程内 typed channel 是性能优化，不是语义
 捷径；Rust 本地路径与 Desktop JSONL 路径都必须经过 typed request/response、initialize、
 dispatcher 和 notification contract。长期可增加相同 contract 的 remote App Server backend。
+
+`zeta-mcp-server` 当前通过该 client 将 stdio/Streamable HTTP MCP `zeta` / `zeta-reply` tool
+call 映射到 canonical Session/Thread/Turn，并提供 bounded progress、approval/user-input form
+interaction 与 principal-scoped durable invocation recovery。它是外层 adapter，不直接依赖
+Core 或 stores；HTTP security、SSE recovery、remote App Server 和 remote Agent bridge 边界见
+[`mcp-server.md`](mcp-server.md)。
 
 产品 Session、App Server connection session 与 terminal session 是三种不同生命周期，命名
 时必须带领域限定。

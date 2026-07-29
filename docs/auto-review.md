@@ -15,7 +15,10 @@ Zeta 把 auto review 定义为“受 deterministic policy 约束的 advisory ris
 核心决策：
 
 - host 先解析 exact action、provenance、minimum capabilities 和 sandbox compatibility；
-- deterministic deny、sandbox requirement 和既存 exact grant 优先于 LLM；
+- `BuiltInSafetyPolicy` 的 deterministic deny / sandbox requirement 优先于
+  `UserAllowlist`，两者都优先于 LLM；
+- `UserAllowlist` 只接受绑定 action digest、完整 capabilities 与 policy revision 的 exact
+  unsandboxed grant，不接受 Tool name 或命令前缀；
 - classifier 只给出 `Approve / ReviseAction / AskUser / Deny` recommendation；
 - `PolicyEngine` 是唯一把 recommendation 转成 execution decision 并签发 grant 的 authority；
 - 自动授权绑定 assessment、action digest、完整 capabilities 和 policy revision；
@@ -85,7 +88,7 @@ flowchart TD
     A["Agent proposes Tool action"] --> B["Host resolves exact action<br/>scope / provenance / capabilities"]
     B --> C{"Deterministic policy"}
     C -- "deny" --> X["Block"]
-    C -- "matching grant" --> G["Execute with exact grant"]
+    C -- "matching UserAllowlist grant" --> G["Execute with exact unsandboxed grant"]
     C -- "sandbox available" --> S["Execute sandboxed"]
     C -- "needs contextual judgment" --> R["Auto reviewer"]
     R --> V{"Host validates recommendation"}
@@ -106,10 +109,13 @@ flowchart TD
 顺序本身是安全 contract：
 
 1. exact deterministic rule 不得被 model 覆盖；
-2. sandbox 能满足 action 时，不需要 classifier 扩权；
-3. classifier recommendation 必须重新经过 host invariant；
-4. grant 必须绑定当前 action，而不是绑定 Tool name 或自然语言摘要；
-5. durable start marker 必须先于 side effect。
+2. built-in sandbox requirement 不得被 user allowlist 覆盖；
+3. user allowlist grant 必须显式表示 unsandboxed authority，不能由普通 command allowlist
+   静默生成；
+4. sandbox 能满足 action 时，不需要 classifier 扩权；
+5. classifier recommendation 必须重新经过 host invariant；
+6. grant 必须绑定当前 action，而不是绑定 Tool name 或自然语言摘要；
+7. durable start marker 必须先于 side effect。
 
 ### 4.2 Current：sandbox denial 回流
 
@@ -290,8 +296,9 @@ assessment；review protocol 或 policy 语义变化必须有新 revision。
 当前仍有限：
 
 - reviewer 是 one-shot completion，没有 tiered review 或 ensemble；
-- sandbox denial classifier 当前只覆盖 macOS Seatbelt 与 Linux Bubblewrap 的已知 signature；
-- Windows sandbox denial classification 尚未实现；
+- sandbox denial classifier 覆盖 macOS Seatbelt、Linux Bubblewrap 的已知 signature，以及
+  Windows AppContainer helper 的可信 pre-launch enforcement marker；真实平台 denial corpus
+  仍不足；
 - denial 后的 `AskUser` 当前终止原 Tool Call，由 Agent 发起新的批准路径，不在同一 started call
   上建立可恢复的 approval wait；
 - prompt policy 是 compile-time constant；

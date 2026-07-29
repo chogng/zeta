@@ -24,8 +24,10 @@ assets.
 
 | Runtime | Purpose | Distribution policy |
 | --- | --- | --- |
+| `bubblewrap` | Linux filesystem/network namespace enforcement | Required by canonical Linux releases |
 | `pdfium` | Agent PDF extraction and page rendering | Required by PDF ingestion releases |
 | `powershell` | Optional Windows PowerShell 7 runtime | Bundle only for releases that require a consistent `pwsh` runtime |
+| `ripgrep` | Model-visible content and path search executable | Required in every canonical Zeta package |
 | `wezterm` | Provenance for reused PTY implementation code | Do not bundle the WezTerm GUI application |
 
 Downloaded artifacts are intentionally ignored under `third_party/.cache/`.

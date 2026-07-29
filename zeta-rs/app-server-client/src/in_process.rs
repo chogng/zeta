@@ -2,6 +2,7 @@ use crate::AppServerClient;
 use crate::ClientError;
 use crate::JsonRpcTransport;
 use std::path::PathBuf;
+use std::sync::Arc;
 use zeta_app_server::AppServer;
 use zeta_app_server::ConnectionState;
 use zeta_app_server::LocalAppServerOptions;
@@ -15,7 +16,7 @@ use zeta_app_server_protocol::schema_hash;
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct InProcessClientOptions {
     pub state_root: PathBuf,
-    pub tool_workspace: Option<PathBuf>,
+    pub workspace_root: Option<PathBuf>,
     pub client_info: ClientInfo,
     pub capabilities: ClientCapabilities,
     pub slash_commands: SlashCommandCatalog,
@@ -25,7 +26,7 @@ impl InProcessClientOptions {
     pub fn new(state_root: impl Into<PathBuf>, client_info: ClientInfo) -> Self {
         Self {
             state_root: state_root.into(),
-            tool_workspace: None,
+            workspace_root: None,
             client_info,
             capabilities: ClientCapabilities::default(),
             slash_commands: SlashCommandCatalog::default(),
@@ -42,16 +43,16 @@ impl InProcessClientOptions {
         self
     }
 
-    /// Enables local read-only workspace tools for the embedded server.
-    pub fn with_tool_workspace(mut self, workspace: impl Into<PathBuf>) -> Self {
-        self.tool_workspace = Some(workspace.into());
+    /// Enables local filesystem and shell tools under one Workspace root.
+    pub fn with_workspace_root(mut self, workspace: impl Into<PathBuf>) -> Self {
+        self.workspace_root = Some(workspace.into());
         self
     }
 }
 
 /// In-memory transport that still exercises the versioned JSON-RPC dispatcher.
 pub struct InProcessTransport {
-    server: AppServer,
+    server: Arc<AppServer>,
     connection: ConnectionState,
     notifications: Vec<String>,
 }
@@ -62,12 +63,36 @@ impl InProcessTransport {
     /// Hosts that provide their own composition root can use this instead of the local filesystem
     /// composition used by [`start_in_process_client`].
     pub fn from_server(server: AppServer) -> Self {
+        Self::from_shared_server(Arc::new(server))
+    }
+
+    /// Creates one logical connection to a shared embedded App Server composition root.
+    pub fn from_shared_server(server: Arc<AppServer>) -> Self {
         let connection = server.connection();
         Self {
             server,
             connection,
             notifications: Vec::new(),
         }
+    }
+}
+
+/// Shared embedded App Server composition that can open multiple isolated logical connections.
+#[derive(Clone)]
+pub struct InProcessAppServer {
+    server: Arc<AppServer>,
+    client_info: ClientInfo,
+    capabilities: ClientCapabilities,
+}
+
+impl InProcessAppServer {
+    /// Opens and initializes one typed client connection to the shared App Server.
+    pub fn connect(&self) -> Result<AppServerClient<InProcessTransport>, ClientError> {
+        initialize_client(
+            InProcessTransport::from_shared_server(self.server.clone()),
+            self.client_info.clone(),
+            self.capabilities.clone(),
+        )
     }
 }
 
@@ -88,17 +113,36 @@ impl JsonRpcTransport for InProcessTransport {
 pub fn start_in_process_client(
     options: InProcessClientOptions,
 ) -> Result<AppServerClient<InProcessTransport>, ClientError> {
+    open_in_process_app_server(options)?.connect()
+}
+
+/// Opens one embedded App Server composition that may serve multiple client connections.
+pub fn open_in_process_app_server(
+    options: InProcessClientOptions,
+) -> Result<InProcessAppServer, ClientError> {
     let mut server_options = LocalAppServerOptions::new(options.state_root)
         .with_slash_command_catalog(options.slash_commands);
-    if let Some(tool_workspace) = options.tool_workspace {
-        server_options = server_options.with_tool_workspace(tool_workspace);
+    if let Some(workspace_root) = options.workspace_root {
+        server_options = server_options.with_workspace_root(workspace_root);
     }
     let server = open_local_app_server(server_options)
         .map_err(|error| ClientError::Transport(error.to_string()))?;
-    let mut client = AppServerClient::new(InProcessTransport::from_server(server));
-    let initialized = client.initialize(InitializeParams {
+    Ok(InProcessAppServer {
+        server: Arc::new(server),
         client_info: options.client_info,
         capabilities: options.capabilities,
+    })
+}
+
+fn initialize_client(
+    transport: InProcessTransport,
+    client_info: ClientInfo,
+    capabilities: ClientCapabilities,
+) -> Result<AppServerClient<InProcessTransport>, ClientError> {
+    let mut client = AppServerClient::new(transport);
+    let initialized = client.initialize(InitializeParams {
+        client_info,
+        capabilities,
     })?;
     let expected_schema = schema_hash();
     if initialized.schema_hash.0 != expected_schema {

@@ -16,7 +16,8 @@ approval UI、不选择 model、不持久化 rule/grant。
 | Capability | `CapabilityKind`, `Capability`, `CapabilitySet` | exact `kind + scope`，BTreeSet canonical order |
 | Review input | `ActionReviewRequest`, `ActionReviewPhase`, `SandboxDenialEvidence`, `SandboxCompatibility`, `PolicyRevision`, `ReviewContext` | immutable safe-point snapshot；denial phase 保持 exact action binding |
 | Evidence | `ReviewEvidence`, `ReviewEvidenceKind`, `ReviewEvidenceTrust` | host 标注；repository/Tool/Agent 内容不可信 |
-| Deterministic policy | `ActionRule`, `RuleEffect`, `UnsandboxedGrant` | exact digest/revision/capability matching |
+| Built-in safety | `BuiltInSafetyPolicy`, `ActionRule`, `RuleEffect` | exact deny 与 require-sandbox，优先于用户授权 |
+| User allowlist | `UserAllowlist`, `UnsandboxedGrant` | exact digest/revision/capability matching；显式 unsandboxed authority |
 | Advisory port | `ActionClassifier`, `ClassifierAssessment`, `ClassifierRecommendation` | implementation 不能执行或授权 |
 | Final outcome | `ExecutionDecision`, `BlockReason`, `ApprovalRequest`, `SaferActionRequest` | caller 必须按 typed branch 处理 |
 | Authority | `AutoReviewGrant` | constructor crate-private，只能由 engine 签发 |
@@ -32,6 +33,7 @@ src/
 ├── action.rs       # action/capability/review request
 ├── context.rs      # trust-labeled reviewer context
 ├── classifier.rs   # advisory port、assessment identity/recommendation constraints
+├── layers.rs       # built-in safety policy 与 exact user allowlist
 ├── rule.rs         # exact rules 与 existing grant
 ├── decision.rs     # final typed decisions 与 grant
 ├── engine.rs       # precedence、binding、risk gate
@@ -42,7 +44,8 @@ src/
 | --- | --- | --- | --- |
 | `PolicyEngine::decide` | public | 唯一 top-level precedence entry | classifier 不能绕过 earlier deterministic branches |
 | `ensure_revision` | private | engine/request safe-point equality | mismatch 是 `PolicyError`，不是 classifier question |
-| `deterministic_rule_decision` | private | deny first，再 require-sandbox | deterministic deny 必须优先 |
+| `BuiltInSafetyPolicy::decision` | crate-private | deny first，再 require-sandbox | built-in constraint 必须优先于 user allowlist |
+| `UserAllowlist::matching_grant` | crate-private | exact user grant lookup | 不接受 Tool name、摘要或命令前缀 |
 | `ClassifierRecommendation::validate_against` | public method | enforce approve exact/non-empty 与 revise subset | classifier 可提前调用，engine 对所有实现统一复检 |
 | `apply_assessment` | private | 验证 assessment binding/constraints，映射四种 recommendation | identity mismatch 不能降级 AskUser，invalid constraints 必须 fail closed |
 | `automatic_approval_decision` | private | risk/auth matrix 与 grant construction | 只有这里可构造 `AutoReviewGrant` |
@@ -57,13 +60,13 @@ src/
 ```text
 PolicyEngine::decide(request, cancellation)
 ├─ ensure_revision
-├─ deterministic_rule_decision
+├─ BuiltInSafetyPolicy::decision
 │  ├─ exact Deny → Block
 │  └─ exact RequireSandbox
 │     ├─ supported → RunSandboxed
 │     ├─ unavailable → Block
 │     └─ confirmed denial → Block
-├─ exact UnsandboxedGrant::matches → RunUnsandboxed
+├─ UserAllowlist::matching_grant → RunUnsandboxed
 ├─ Initial + SandboxCompatibility::Supported → RunSandboxed
 ├─ ActionClassifier::classify
 │  └─ error → review_failure_decision

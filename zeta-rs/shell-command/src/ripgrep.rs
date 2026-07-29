@@ -1,9 +1,33 @@
 use crate::ShellCommandRequest;
-use std::env;
 use std::fmt;
 use std::path::{Path, PathBuf};
 
-const RIPGREP_OVERRIDE: &str = "ZETA_RG_PATH";
+/// Built-in restrictions that keep model-authored ripgrep arguments read-only and self-contained.
+///
+/// This policy rejects ripgrep features that can spawn child processes, read auxiliary files, or
+/// follow symbolic links. It is an argument-validation layer, not a replacement for the platform
+/// sandbox that enforces the Workspace filesystem and network boundary.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct BuiltInRipgrepPolicy;
+
+impl BuiltInRipgrepPolicy {
+    pub fn validate(&self, request: &ShellCommandRequest) -> Result<(), RipgrepRequestError> {
+        let mut options_ended = false;
+        for argument in request.arguments() {
+            if options_ended {
+                continue;
+            }
+            if argument == "--" {
+                options_ended = true;
+                continue;
+            }
+            if is_forbidden_option(argument) {
+                return Err(RipgrepRequestError::UnsafeArgument(argument.clone()));
+            }
+        }
+        Ok(())
+    }
+}
 
 /// Frozen absolute identity of the ripgrep executable selected at host startup.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -12,28 +36,27 @@ pub struct RipgrepExecutable {
 }
 
 impl RipgrepExecutable {
-    /// Resolves ripgrep from `ZETA_RG_PATH`, beside the current executable, or from `PATH`.
-    ///
-    /// The selected path is canonicalized once so later Tool Calls cannot change executable
-    /// identity by mutating `PATH`.
-    pub fn discover() -> Result<Self, RipgrepDiscoveryError> {
-        if let Some(path) = env::var_os(RIPGREP_OVERRIDE) {
-            return Self::from_path(path).map_err(|error| RipgrepDiscoveryError::InvalidOverride {
-                variable: RIPGREP_OVERRIDE,
-                reason: error.to_string(),
-            });
+    /// Selects and freezes the first valid path from a host-provided candidate sequence.
+    pub fn discover_candidates(
+        candidates: impl IntoIterator<Item = impl AsRef<Path>>,
+    ) -> Result<Self, RipgrepDiscoveryError> {
+        for candidate in candidates {
+            if let Ok(executable) = Self::from_path(candidate) {
+                return Ok(executable);
+            }
         }
+        Err(RipgrepDiscoveryError::NotFound)
+    }
 
-        if let Ok(current_executable) = env::current_exe()
-            && let Some(directory) = current_executable.parent()
-            && let Some(executable) = discover_in_directories([directory])
-        {
-            return Ok(executable);
-        }
-        let Some(path) = env::var_os("PATH") else {
-            return Err(RipgrepDiscoveryError::NotFound);
-        };
-        discover_in_directories(env::split_paths(&path)).ok_or(RipgrepDiscoveryError::NotFound)
+    /// Validates an authoritative environment override without falling back to another candidate.
+    pub fn from_override(
+        variable: &'static str,
+        path: impl AsRef<Path>,
+    ) -> Result<Self, RipgrepDiscoveryError> {
+        Self::from_path(path).map_err(|error| RipgrepDiscoveryError::InvalidOverride {
+            variable,
+            reason: error.to_string(),
+        })
     }
 
     /// Freezes one explicit ripgrep executable path.
@@ -73,11 +96,7 @@ impl RipgrepExecutable {
                 request.program().to_owned(),
             ));
         }
-        for argument in request.arguments() {
-            if is_forbidden_argument(argument) {
-                return Err(RipgrepRequestError::UnsafeArgument(argument.clone()));
-            }
-        }
+        BuiltInRipgrepPolicy.validate(&request)?;
         let mut arguments = Vec::with_capacity(request.arguments().len() + 1);
         arguments.push("--no-config".to_owned());
         arguments.extend(request.arguments().iter().cloned());
@@ -86,42 +105,44 @@ impl RipgrepExecutable {
     }
 }
 
-fn discover_in_directories(
-    directories: impl IntoIterator<Item = impl AsRef<Path>>,
-) -> Option<RipgrepExecutable> {
-    for directory in directories {
-        for name in executable_names() {
-            let candidate = directory.as_ref().join(name);
-            if let Ok(executable) = RipgrepExecutable::from_path(candidate) {
-                return Some(executable);
-            }
+fn is_forbidden_option(argument: &str) -> bool {
+    if argument.starts_with("--") {
+        return argument == "--pre"
+            || argument.starts_with("--pre=")
+            || argument == "--pre-glob"
+            || argument.starts_with("--pre-glob=")
+            || argument == "--hostname-bin"
+            || argument.starts_with("--hostname-bin=")
+            || argument == "--file"
+            || argument.starts_with("--file=")
+            || argument == "--ignore-file"
+            || argument.starts_with("--ignore-file=")
+            || argument == "--search-zip"
+            || argument == "--follow";
+    }
+    if !argument.starts_with('-') || argument == "-" {
+        return false;
+    }
+    short_option_cluster_is_forbidden(&argument[1..])
+}
+
+fn short_option_cluster_is_forbidden(cluster: &str) -> bool {
+    for option in cluster.chars() {
+        if matches!(option, 'f' | 'L' | 'z') {
+            return true;
+        }
+        if short_option_takes_value(option) {
+            return false;
         }
     }
-    None
+    false
 }
 
-fn executable_names() -> &'static [&'static str] {
-    if cfg!(windows) {
-        &["rg.exe", "rg"]
-    } else {
-        &["rg"]
-    }
-}
-
-fn is_forbidden_argument(argument: &str) -> bool {
-    argument == "--pre"
-        || argument.starts_with("--pre=")
-        || argument == "--pre-glob"
-        || argument.starts_with("--pre-glob=")
-        || argument == "--file"
-        || argument.starts_with("--file=")
-        || argument == "-f"
-        || argument == "--ignore-file"
-        || argument.starts_with("--ignore-file=")
-        || argument == "--search-zip"
-        || argument == "-z"
-        || argument == "--follow"
-        || argument == "-L"
+fn short_option_takes_value(option: char) -> bool {
+    matches!(
+        option,
+        'A' | 'B' | 'C' | 'E' | 'M' | 'T' | 'd' | 'e' | 'f' | 'g' | 'j' | 'm' | 'r' | 't'
+    )
 }
 
 /// Failure to locate and freeze the product ripgrep executable.
@@ -138,9 +159,8 @@ pub enum RipgrepDiscoveryError {
 impl fmt::Display for RipgrepDiscoveryError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::NotFound => formatter.write_str(
-                "ripgrep was not found beside the Zeta executable or on PATH; set ZETA_RG_PATH",
-            ),
+            Self::NotFound => formatter
+                .write_str("ripgrep was not found in the host-provided installation candidates"),
             Self::InvalidExecutable(reason) => {
                 write!(formatter, "invalid ripgrep executable: {reason}")
             }

@@ -20,16 +20,22 @@ members = [
     "file-watcher",
     "git",
     "http-client",
+    "install-context",
     "linux-sandbox",
     "model-provider",
     "model-provider-config",
+    "mcp",
+    "mcp-server",
     "policy",
+    "plugins",
     "protocol",
     "rollout",
     "rollout-trace",
+    "rmcp-client",
     "sandboxing",
     "session-store",
     "shell-command",
+    "skills",
     "storage",
     "thread-store",
     "tools",
@@ -53,7 +59,9 @@ version = "0.1.0"
 anyhow = "1"
 arboard = { version = "3", features = ["wayland-data-control"] }
 base64 = "0.22"
+cc = "1"
 clap = "4"
+getrandom = "0.2"
 image = { version = "0.25.10", default-features = false }
 ignore = "0.4"
 lazy_static = "1"
@@ -63,14 +71,18 @@ notify = { version = "8.2.0", default-features = false, features = ["macos_kqueu
 nucleo = { git = "https://github.com/helix-editor/nucleo.git", rev = "4253de9faabb4e5c6d81d946a5e35a90f87347ee" }
 pdfium-render = { version = "0.9.3", default-features = false, features = ["pdfium_7763", "thread_safe"] }
 portable-pty = "0.9.0"
+pkg-config = "0.3"
 pretty_assertions = "1"
 crossterm = "0.28.1"
 ratatui = "0.29.0"
 schemars = "1.2.1"
+semver = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+serde_yaml = "0.9"
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
 rustls-native-certs = "0.7"
+rmcp = { version = "=3.0.0-beta.3", default-features = false }
 sha2 = "0.10"
 strum = "0.27"
 strum_macros = "0.27"
@@ -79,8 +91,10 @@ typst = "=0.15.1"
 typst-assets = { version = "=0.15.1", features = ["fonts"] }
 typst-pdf = "=0.15.1"
 tokio = "1"
+thiserror = "2"
 unicode-width = "0.2"
 ureq = { version = "2.12", features = ["json", "native-certs"] }
+windows-sys = "0.59"
 zeroize = "1"
 zeta-app-server = { path = "app-server" }
 zeta-app-server-client = { path = "app-server-client" }
@@ -103,16 +117,22 @@ zeta-file-system-tool = { path = "file-system-tool" }
 zeta-file-watcher = { path = "file-watcher" }
 zeta-git = { path = "git" }
 zeta-http-client = { path = "http-client" }
+zeta-install-context = { path = "install-context" }
 zeta-linux-sandbox = { path = "linux-sandbox" }
 zeta-model-provider = { path = "model-provider" }
 zeta-model-provider-config = { path = "model-provider-config" }
+zeta-mcp = { path = "mcp" }
+zeta-mcp-server = { path = "mcp-server" }
 zeta-policy = { path = "policy" }
+zeta-plugins = { path = "plugins" }
 zeta-protocol = { path = "protocol" }
 zeta-rollout = { path = "rollout" }
 zeta-rollout-trace = { path = "rollout-trace" }
+zeta-rmcp-client = { path = "rmcp-client" }
 zeta-sandboxing = { path = "sandboxing" }
 zeta-session-store = { path = "session-store" }
 zeta-shell-command = { path = "shell-command" }
+zeta-skills = { path = "skills" }
 zeta-storage = { path = "storage" }
 zeta-thread-store = { path = "thread-store" }
 zeta-tools = { path = "tools" }

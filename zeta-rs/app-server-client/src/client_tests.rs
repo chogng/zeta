@@ -242,3 +242,32 @@ fn embedded_startup_propagates_the_host_slash_command_catalog() {
     drop(client);
     let _ = fs::remove_dir_all(state_root);
 }
+
+#[test]
+fn shared_embedded_host_opens_independent_initialized_connections() {
+    let state_root = std::env::temp_dir().join(format!(
+        "zeta-app-server-client-shared-{}",
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    let host = open_in_process_app_server(InProcessClientOptions::new(
+        &state_root,
+        ClientInfo {
+            name: "shared-client".into(),
+            version: "1".into(),
+        },
+    ))
+    .unwrap();
+    let first = host.connect().unwrap();
+    let second = host.connect().unwrap();
+
+    assert_eq!(
+        first.initialization().unwrap().schema_hash,
+        second.initialization().unwrap().schema_hash
+    );
+
+    drop((first, second, host));
+    let _ = fs::remove_dir_all(state_root);
+}

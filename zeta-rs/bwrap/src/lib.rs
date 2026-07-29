@@ -3,6 +3,8 @@
 //! This crate deliberately contains no Zeta sandbox policy. It only translates explicit,
 //! already-authorized construction choices into an argv vector without invoking a shell.
 
+#![forbid(unsafe_code)]
+
 mod builder;
 
 pub use builder::{BwrapCommand, BwrapCommandBuilder, MountAccess};

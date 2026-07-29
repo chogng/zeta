@@ -1,8 +1,8 @@
 use super::*;
 use crate::{
-    ActionDigest, ActionKind, ActionProvenance, ActionSource, AssessmentId, Capability,
-    CapabilityKind, CapabilitySet, GrantId, ProcessInvocationKind, ResolvedAction, RuleId,
-    SandboxDenialEvidence,
+    ActionDigest, ActionKind, ActionProvenance, ActionRule, ActionSource, AssessmentId,
+    BuiltInSafetyPolicy, Capability, CapabilityKind, CapabilitySet, GrantId, ProcessInvocationKind,
+    ResolvedAction, RuleEffect, RuleId, SandboxDenialEvidence, UnsandboxedGrant, UserAllowlist,
 };
 use std::fmt;
 use zeta_async_utils::{CancellationSource, CancellationToken};
@@ -119,7 +119,7 @@ fn confirmed_sandbox_denial_reaches_the_classifier() {
 }
 
 #[test]
-fn exact_preexisting_grant_remains_an_unsandboxed_path() {
+fn exact_user_allowlist_entry_remains_an_explicit_unsandboxed_path() {
     let request = request(SandboxCompatibility::Unsupported {
         reason: "network unavailable".to_owned(),
     });
@@ -134,7 +134,7 @@ fn exact_preexisting_grant_remains_an_unsandboxed_path() {
         PanicClassifier,
         ReviewFailurePolicy::Block,
     )
-    .with_grants([grant]);
+    .with_user_allowlist(UserAllowlist::new([grant]));
 
     assert_eq!(
         decide(&engine, &request).unwrap(),
@@ -319,7 +319,7 @@ fn deterministic_deny_never_calls_the_classifier() {
         PanicClassifier,
         ReviewFailurePolicy::Block,
     )
-    .with_rules([rule]);
+    .with_builtin_policy(BuiltInSafetyPolicy::new([rule]));
 
     assert!(matches!(
         decide(&engine, &request).unwrap(),
@@ -371,7 +371,7 @@ fn rejects_assessment_bound_to_another_action() {
 }
 
 #[test]
-fn require_sandbox_rule_overrides_an_unsandboxed_grant() {
+fn built_in_sandbox_requirement_overrides_the_user_allowlist() {
     let request = request(SandboxCompatibility::Unsupported {
         reason: "network unavailable".to_owned(),
     });
@@ -391,8 +391,8 @@ fn require_sandbox_rule_overrides_an_unsandboxed_grant() {
         PanicClassifier,
         ReviewFailurePolicy::Block,
     )
-    .with_rules([rule])
-    .with_grants([grant]);
+    .with_builtin_policy(BuiltInSafetyPolicy::new([rule]))
+    .with_user_allowlist(UserAllowlist::new([grant]));
 
     assert!(matches!(
         decide(&engine, &request).unwrap(),
@@ -416,7 +416,7 @@ fn require_sandbox_rule_blocks_after_the_sandbox_denies_execution() {
         PanicClassifier,
         ReviewFailurePolicy::Block,
     )
-    .with_rules([rule]);
+    .with_builtin_policy(BuiltInSafetyPolicy::new([rule]));
 
     assert!(matches!(
         decide(&engine, &request).unwrap(),

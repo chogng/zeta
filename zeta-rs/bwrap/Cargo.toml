@@ -1,14 +1,27 @@
 [package]
+build = "build.rs"
 name = "zeta-bwrap"
 version.workspace = true
 edition.workspace = true
 license-file.workspace = true
 publish.workspace = true
 
+[[bin]]
+name = "bwrap"
+path = "src/main.rs"
+
 [lib]
 doctest = false
 name = "zeta_bwrap"
 path = "src/lib.rs"
 
-[lints]
-workspace = true
+[target.'cfg(target_os = "linux")'.dependencies]
+libc = { workspace = true }
+
+[build-dependencies]
+cc = { workspace = true }
+pkg-config = { workspace = true }
+
+[lints.rust]
+# This executable is the narrow FFI boundary to Bubblewrap's upstream C entry point.
+unsafe_code = "allow"

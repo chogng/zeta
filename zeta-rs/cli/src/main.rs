@@ -26,6 +26,7 @@ fn main() {
             "ask" => ask(arguments.collect::<Vec<_>>().join(" ")),
             "exec" => execute(arguments.collect()),
             "app-server" => app_server_command(arguments.collect()),
+            "mcp-server" => mcp_server_command(arguments.collect()),
             _ => Err(format!("unknown command: {command}")),
         },
     };
@@ -60,11 +61,8 @@ fn run_app_server(arguments: Vec<String>) -> Result<(), String> {
     if arguments.as_slice() != ["--listen", "stdio://"] {
         return Err("usage: zeta app-server --listen stdio://".into());
     }
-    let mut options = LocalAppServerOptions::new(state_root());
-    if let Some(workspace_root) = env::var_os("ZETA_WORKSPACE_ROOT") {
-        options = options.with_workspace_root(workspace_root);
-    }
-    options = options.with_optional_tool_workspace(current_workspace()?);
+    let options =
+        LocalAppServerOptions::new(state_root()).with_workspace_root(configured_workspace()?);
     open_local_app_server(options)
         .map_err(|error| error.to_string())?
         .serve_stdio()
@@ -75,6 +73,40 @@ fn app_server_command(arguments: Vec<String>) -> Result<(), String> {
     run_app_server(arguments)
 }
 
+fn mcp_server_command(arguments: Vec<String>) -> Result<(), String> {
+    let options = zeta_mcp_server::McpServerOptions::new(state_root(), configured_workspace()?);
+    match arguments.as_slice() {
+        [] => zeta_mcp_server::run_stdio(options).map_err(|error| error.to_string()),
+        [listen, address] if listen == "--listen" && address == "stdio://" => {
+            zeta_mcp_server::run_stdio(options).map_err(|error| error.to_string())
+        }
+        [listen, address] if listen == "--listen" => {
+            let (socket, path) = parse_mcp_http_address(address)?;
+            let token = env::var("ZETA_MCP_BEARER_TOKEN")
+                .map_err(|_| "ZETA_MCP_BEARER_TOKEN is required for Streamable HTTP".to_string())?;
+            let mut http_options = zeta_mcp_server::HttpServerOptions::new(socket, path, token);
+            if let Ok(origin) = env::var("ZETA_MCP_ALLOWED_ORIGIN") {
+                http_options = http_options.with_allowed_origin(origin);
+            }
+            zeta_mcp_server::run_http(options, http_options).map_err(|error| error.to_string())
+        }
+        _ => Err("usage: zeta mcp-server [--listen stdio://|http://IP:PORT/PATH]".into()),
+    }
+}
+
+fn parse_mcp_http_address(address: &str) -> Result<(std::net::SocketAddr, String), String> {
+    let remainder = address.strip_prefix("http://").ok_or_else(|| {
+        "MCP HTTP listener must use http:// behind a TLS reverse proxy".to_string()
+    })?;
+    let (authority, path) = remainder
+        .split_once('/')
+        .ok_or_else(|| "MCP HTTP listener must include an endpoint path".to_string())?;
+    let socket = authority
+        .parse()
+        .map_err(|_| "MCP HTTP listener authority must be an IP:PORT pair".to_string())?;
+    Ok((socket, format!("/{path}")))
+}
+
 fn state_root() -> PathBuf {
     env::var_os("ZETA_STATE_ROOT")
         .map(PathBuf::from)
@@ -83,6 +115,13 @@ fn state_root() -> PathBuf {
 
 fn current_workspace() -> Result<PathBuf, String> {
     env::current_dir().map_err(|error| format!("could not resolve current workspace: {error}"))
+}
+
+fn configured_workspace() -> Result<PathBuf, String> {
+    env::var_os("ZETA_WORKSPACE_ROOT")
+        .map(PathBuf::from)
+        .map(Ok)
+        .unwrap_or_else(current_workspace)
 }
 
 fn execute(arguments: Vec<String>) -> Result<(), String> {
@@ -171,10 +210,14 @@ fn in_process_client() -> Result<AppServerClient<InProcessTransport>, String> {
                 version: env!("CARGO_PKG_VERSION").into(),
             },
         )
-        .with_tool_workspace(current_workspace()?),
+        .with_workspace_root(configured_workspace()?),
     )
     .map_err(|error| error.to_string())
 }
+
+#[cfg(test)]
+#[path = "main_tests.rs"]
+mod tests;
 
 fn request_key(prefix: &str) -> String {
     let timestamp = SystemTime::now()

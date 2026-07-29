@@ -5,14 +5,16 @@
 > [`docs/sandboxing.md`](../../docs/sandboxing.md)。
 
 本 crate 拥有 `shell-command` host definition、结构化请求解析和冻结的 `rg` executable
-materialization。它不隐式启动 shell，不决定 Core approval，也不持有 Thread/Turn 状态。
+materialization。安装布局与候选位置由 [`zeta-install-context`](../install-context/README.md)
+提供；本 crate 不读取安装方式，不隐式启动 shell，不决定 Core approval，也不持有 Thread/Turn
+状态。
 
 ## 文件与职责
 
 | 文件 | 职责 |
 | --- | --- |
 | `src/lib.rs` | `ShellCommandTool`、`ShellCommandRequest`、definition 与 executor bridge |
-| `src/ripgrep.rs` | `RipgrepExecutable` discovery、identity freeze 和只读参数约束 |
+| `src/ripgrep.rs` | `RipgrepExecutable` candidate validation/identity freeze 与 `BuiltInRipgrepPolicy` 参数约束 |
 | `src/shell_command_tests.rs` | binding、authority、sandbox denial 与 validation |
 | `src/ripgrep_tests.rs` | executable discovery 和 unsafe flag rejection |
 
@@ -29,7 +31,8 @@ ToolExecutor::execute
    └─ CommandExecutor::execute
 
 App Server local adapter
-├─ RipgrepExecutable::discover
+├─ InstallContext::executable_candidates(Ripgrep)
+├─ RipgrepExecutable::from_override / discover_candidates
 ├─ ShellCommandRequest::from_arguments
 ├─ workspace argument validation
 ├─ RipgrepExecutable::materialize
@@ -42,22 +45,31 @@ globbing、environment expansion 或 shell parsing。`ShellCommandTool::execute_
 
 ## 只读 `rg` profile
 
-`RipgrepExecutable::discover` 按以下顺序选择一次并 canonicalize：
+App Server 先从 `InstallContext` 获取以下候选：
 
 1. `ZETA_RG_PATH`；
-2. 当前 Zeta executable 同目录的 `rg`/`rg.exe`；
-3. 启动时 `PATH`。
+2. package layout 的 `zeta-path/rg[.exe]`；
+3. 当前 Zeta executable 同目录的 legacy `rg`/`rg.exe`；
+4. 启动时 `PATH`。
 
-显式 override 无效时直接失败，不回退到其他 candidate。`materialize` 只接受模型别名 `rg`，
-替换成冻结的绝对 executable，并在 argv 前加入 `--no-config`。preprocessor、archive search、
-symlink follow、pattern file 与 ignore file 参数会被拒绝，因为它们会扩大进程或文件读取边界。
+显式 override 通过 `from_override` 单独验证，无效时直接失败；普通候选由
+`discover_candidates` 逐个验证。选中的 executable canonicalize 并冻结后，`materialize` 只接受
+模型别名 `rg`，替换成冻结的绝对 executable，并在 argv 前加入 `--no-config`。
+`BuiltInRipgrepPolicy` 拒绝
+preprocessor、hostname command、archive search、symlink follow、pattern file 与 ignore file
+参数，包括 `-f/path`、`-LH` 等紧凑短参数形式，因为它们会扩大进程或文件读取边界。该 policy
+只负责 built-in 参数安全，不替代下层 OS sandbox。
 App Server adapter 还拒绝绝对路径和含 `..` component 的参数。
 已存在的相对 path argument 会在 review 前 canonicalize；通过 Workspace 内 symlink 指向外部的
 路径同样被拒绝。
 
-当前 discovery 不等于 bundled distribution：仓库尚未打包 `rg`，也没有执行版本/capability
-probe。Packaging 可以把兼容 binary 放到 Zeta executable 同目录，但不能改变上述 identity freeze
-和 fail-closed 语义。
+canonical package builder 当前按 checksum-locked manifest 把 ripgrep 放到
+`zeta-path/rg[.exe]`，并在 `zeta-package.json` 记录版本和 digest；具体 staging contract 见
+[`scripts/zeta_package/README.md`](../../scripts/zeta_package/README.md)。本 crate 仍不信任
+metadata，也尚未执行版本/capability probe。Packaging 不能改变上述 executable validation、
+identity freeze 和 fail-closed 语义。Linux package 同时携带经过 source lock 构建的
+`zeta-resources/bwrap`；它的 discovery/probe contract 由
+[`zeta-linux-sandbox`](../linux-sandbox/README.md) 拥有。
 
 ## Failure、取消与输出
 

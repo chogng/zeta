@@ -52,6 +52,28 @@ cargo run --manifest-path zeta-rs/Cargo.toml -p zeta-cli -- ask "explain this re
 cargo run --manifest-path zeta-rs/Cargo.toml -p zeta-cli -- exec "summarize the current changes"
 ```
 
+## Package
+
+Build a canonical package directory containing Zeta, its built-in Skills, and
+the pinned ripgrep runtime:
+
+```bash
+python3 scripts/build_zeta_package.py \
+  --package-dir /absolute/path/to/zeta-package
+```
+
+The builder compiles a release `zeta` executable when `--zeta-bin` is omitted,
+downloads the target-specific ripgrep archive, verifies its locked size and
+SHA-256 digest, and creates `bin/`, `zeta-path/`, `zeta-resources/`, and
+`zeta-package.json`. Repository-owned Skills are staged from
+`zeta-rs/skills/assets/` to `zeta-resources/skills/`. Linux packages additionally
+build and include the locked Bubblewrap runtime; Windows packages build and
+include both first-party AppContainer helpers. Cross-platform release jobs pass
+`--target`; jobs that already built or signed binaries pass the corresponding
+Zeta, rg, Bubblewrap, or Windows helper override flags. The exact layout and
+failure contract are documented in the
+[package builder README](scripts/zeta_package/README.md).
+
 ## Model-provider setup
 
 The local App Server resolves models through a provider registry rather than hard-coding a

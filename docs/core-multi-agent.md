@@ -3,6 +3,7 @@
 > Core 总体边界：[`core.md`](core.md)
 > Context 与 ContextManager：[`core-context.md`](core-context.md)
 > Canonical Session/Thread/Turn contract：[`protocol.md`](protocol.md)
+> 外部 MCP Host 调用 Zeta 与 remote Agent bridge：[`mcp-server.md`](mcp-server.md)
 
 ## 1. 结论
 
@@ -26,6 +27,10 @@ Session
 
 多 Agent 不是多个执行 task 共享一份 `SessionHistory`。父子和 sibling 不共享 mutable context、
 projection、provider conversation ID 或 Tool state。
+
+同进程 child Agent 由本架构定义的 `MultiAgentCoordinator` 创建，不通过 `zeta-mcp-server`
+自调用。跨 runtime Zeta 可以使用 MCP transport，但调用方仍必须在本地拥有 delegation、budget、
+cancellation 和 result delivery；MCP 只承担远端执行通信。
 
 长期必须把三种关系分开：
 

@@ -39,8 +39,10 @@ use zeta_app_server_protocol::protocol::turn::{
 };
 use zeta_app_server_protocol::rpc::{JsonRpcId, JsonRpcRequest, JsonRpcResponse};
 
+pub use in_process::InProcessAppServer;
 pub use in_process::InProcessClientOptions;
 pub use in_process::InProcessTransport;
+pub use in_process::open_in_process_app_server;
 pub use in_process::start_in_process_client;
 pub use notification::ServerNotification;
 

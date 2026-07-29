@@ -1,12 +1,17 @@
 //! Linux sandbox backend built on typed Bubblewrap command construction.
 
+mod discovery;
+
 use std::path::{Path, PathBuf};
 use zeta_bwrap::{BwrapCommandBuilder, MountAccess};
+use zeta_install_context::InstallContext;
 use zeta_sandboxing::{
     FileSystemAccess, NetworkAccess, PROTECTED_WORKSPACE_METADATA_NAMES, PreparedCommand,
     SandboxBackend, SandboxCommand, SandboxError, SandboxKind, SandboxPolicy, SandboxProcessDenial,
     SandboxProcessExitStatus, WorkspaceRoot,
 };
+
+pub use discovery::LinuxSandboxDiscoveryError;
 
 /// Translates shared sandbox policy into a Bubblewrap launch command.
 pub struct LinuxSandbox {
@@ -20,8 +25,16 @@ impl LinuxSandbox {
         }
     }
 
-    pub fn from_path() -> Self {
-        Self::new("bwrap")
+    /// Resolves and probes the bundled or host Bubblewrap executable.
+    ///
+    /// Package resources precede host `PATH`; an explicit `ZETA_BWRAP_PATH` override is
+    /// authoritative and therefore cannot silently fall back.
+    pub fn discover(install_context: &InstallContext) -> Result<Self, LinuxSandboxDiscoveryError> {
+        discovery::discover(install_context)
+    }
+
+    pub fn binary(&self) -> &Path {
+        &self.bwrap_binary
     }
 
     /// Builds the Linux Bubblewrap launch command without spawning it.

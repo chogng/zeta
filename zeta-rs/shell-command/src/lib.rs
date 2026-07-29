@@ -6,7 +6,9 @@
 
 mod ripgrep;
 
-pub use ripgrep::{RipgrepDiscoveryError, RipgrepExecutable, RipgrepRequestError};
+pub use ripgrep::{
+    BuiltInRipgrepPolicy, RipgrepDiscoveryError, RipgrepExecutable, RipgrepRequestError,
+};
 
 use serde::Deserialize;
 use serde_json::json;

@@ -13,6 +13,12 @@ lastUpdated: 2026-07-25
 本文描述当前开发期的唯一 App Server 契约。项目不保留旧 wire API、旧 DTO 或旧持久化格式
 的兼容入口；Rust DTO、生成的 TypeScript 和 JSON Schema 必须始终一致。
 
+Current [`zeta-mcp-server`](mcp-server.md) stdio/Streamable HTTP surface 是本 API 的外层
+Agent-as-tool adapter；它通过 App Server client 复用这里定义的 Session/Thread/Turn contract，
+不建立第二套 execution API。该 adapter 已将 Thread subscription/update 投影为 MCP progress，
+将 approval/user-input 映射为 form elicitation，并在自己的 state root 中持久化外部 invocation
+receipt。Receipt 只拥有 MCP correlation/recovery，不改变本 API 的 durable authority。
+
 具体 method registry、artifact generator 与 schema fixture 见
 [`zeta-app-server-protocol` README](../zeta-rs/app-server-protocol/README.md)；JSON-RPC dispatch、
 subscription broker、resource store 与 local composition 见

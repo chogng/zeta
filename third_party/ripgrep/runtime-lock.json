@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 1,
+  "runtime": "ripgrep",
+  "version": "15.2.0",
+  "source": {
+    "repository": "https://github.com/BurntSushi/ripgrep",
+    "release": "15.2.0"
+  },
+  "packageTargets": {
+    "aarch64-apple-darwin": "aarch64-apple-darwin",
+    "aarch64-pc-windows-msvc": "aarch64-pc-windows-msvc",
+    "aarch64-unknown-linux-gnu": "aarch64-unknown-linux-gnu",
+    "aarch64-unknown-linux-musl": "aarch64-unknown-linux-musl",
+    "x86_64-apple-darwin": "x86_64-apple-darwin",
+    "x86_64-pc-windows-msvc": "x86_64-pc-windows-msvc",
+    "x86_64-unknown-linux-gnu": "x86_64-unknown-linux-musl",
+    "x86_64-unknown-linux-musl": "x86_64-unknown-linux-musl"
+  },
+  "artifacts": {
+    "aarch64-apple-darwin": {
+      "archive": "ripgrep-15.2.0-aarch64-apple-darwin.tar.gz",
+      "size": 1764284,
+      "sha256": "3750b2e93f37e0c692657da574d7019a101c0084da05a790c83fd335bad973e4",
+      "format": "tar.gz",
+      "executable": "ripgrep-15.2.0-aarch64-apple-darwin/rg"
+    },
+    "aarch64-pc-windows-msvc": {
+      "archive": "ripgrep-15.2.0-aarch64-pc-windows-msvc.zip",
+      "size": 1640124,
+      "sha256": "e4abca10c3a64ebea742667dd7009449d49403db5460dd6873e389fa2945360f",
+      "format": "zip",
+      "executable": "ripgrep-15.2.0-aarch64-pc-windows-msvc/rg.exe"
+    },
+    "aarch64-unknown-linux-gnu": {
+      "archive": "ripgrep-15.2.0-aarch64-unknown-linux-gnu.tar.gz",
+      "size": 1854661,
+      "sha256": "a740b91c82eaf9914cfedd353572f2791cbe0162c84101ee0951058f4dcbc90d",
+      "format": "tar.gz",
+      "executable": "ripgrep-15.2.0-aarch64-unknown-linux-gnu/rg"
+    },
+    "aarch64-unknown-linux-musl": {
+      "archive": "ripgrep-15.2.0-aarch64-unknown-linux-musl.tar.gz",
+      "size": 1982561,
+      "sha256": "800b1e7206afe799dfb5a6901f23147cfaabe0e52210538100f61e86e1740915",
+      "format": "tar.gz",
+      "executable": "ripgrep-15.2.0-aarch64-unknown-linux-musl/rg"
+    },
+    "x86_64-apple-darwin": {
+      "archive": "ripgrep-15.2.0-x86_64-apple-darwin.tar.gz",
+      "size": 1878284,
+      "sha256": "af7825fcc69a2afc7a7aea55fc9af90e26421d8f20fe59df32e233c0b8a231c1",
+      "format": "tar.gz",
+      "executable": "ripgrep-15.2.0-x86_64-apple-darwin/rg"
+    },
+    "x86_64-pc-windows-msvc": {
+      "archive": "ripgrep-15.2.0-x86_64-pc-windows-msvc.zip",
+      "size": 1789611,
+      "sha256": "71b2fef860abe467217a538ff31de02f5258807c0129f771846f87bd029aafc5",
+      "format": "zip",
+      "executable": "ripgrep-15.2.0-x86_64-pc-windows-msvc/rg.exe"
+    },
+    "x86_64-unknown-linux-musl": {
+      "archive": "ripgrep-15.2.0-x86_64-unknown-linux-musl.tar.gz",
+      "size": 2265718,
+      "sha256": "33e15bcf1624b25cdd2a55813a47a2f95dbe126268203e76aa6a585d1e7b149c",
+      "format": "tar.gz",
+      "executable": "ripgrep-15.2.0-x86_64-unknown-linux-musl/rg"
+    }
+  }
+}

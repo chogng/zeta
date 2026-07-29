@@ -10,8 +10,32 @@ doctest = false
 name = "zeta_windows_sandbox"
 path = "src/lib.rs"
 
+[[bin]]
+name = "zeta-command-runner"
+path = "src/bin/command_runner.rs"
+
+[[bin]]
+name = "zeta-windows-sandbox-setup"
+path = "src/bin/sandbox_setup.rs"
+
 [dependencies]
+sha2 = { workspace = true }
+zeta-install-context = { workspace = true }
 zeta-sandboxing = { workspace = true }
 
-[lints]
-workspace = true
+[target.'cfg(target_os = "windows")'.dependencies]
+windows-sys = { workspace = true, features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_Security_Authorization",
+    "Win32_Security_Isolation",
+    "Win32_Storage_FileSystem",
+    "Win32_System_Console",
+    "Win32_System_JobObjects",
+    "Win32_System_Threading",
+    "Win32_System_WindowsProgramming",
+] }
+
+[lints.rust]
+# Windows AppContainer, ACL, process, and Job Object integration is a narrow Win32 FFI boundary.
+unsafe_code = "allow"

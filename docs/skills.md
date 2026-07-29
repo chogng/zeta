@@ -1,15 +1,16 @@
 # `zeta-skills` 架构与演进方案
 
-> 计划物理位置：`zeta-rs/skills/`
+> 物理位置：`zeta-rs/skills/`
 > Rust crate：`zeta_skills`
-> 当前状态：Proposed，尚未创建 crate
+> 当前状态：Phase S0 已实现；S1–S4 Proposed
+> Crate 实现契约：[`zeta-rs/skills/README.md`](../zeta-rs/skills/README.md)
 > Core architecture：[`core.md`](core.md)
 > Agent runtime：[`zeta-agent-runtime-architecture.md`](zeta-agent-runtime-architecture.md)
 > Config authority 与 runtime snapshot 接入：[`config.md`](config.md)
 > Plugin 分发边界：[`plugins.md`](plugins.md)
 > MCP runtime：[`mcp.md`](mcp.md)
 
-> 外部格式核对日期：2026-07-25。Skill package 以
+> 外部格式核对日期：2026-07-28。Skill package 以
 > [Agent Skills specification](https://agentskills.io/specification) 为兼容基线；Zeta 自己的
 > source、trust、activation 和执行权限语义由本文定义。
 
@@ -35,9 +36,17 @@ Skill 内容是带来源的外部 instruction：
 - 它不能通过“忽略上层规则”改变 instruction precedence；
 - 未激活 Skill 的正文不得占用每次模型调用 context。
 
-## 2. 当前仓库审计
+## 2. 当前仓库状态
 
-当前没有 Skill manager。唯一已实现的相关 value 是：
+当前 `zeta-skills` 已实现 S0 format/catalog：built-in/user controlled root、bounded
+frontmatter parse、metadata-only scan、完整 `SKILL.md` digest、isolated diagnostic 和 immutable
+catalog generation。内置内容由 `zeta-rs/skills/assets/` 拥有，release staging 将其复制到
+`zeta-resources/skills/`，`zeta-install-context` 提供 directory candidate，host 再构造
+`SkillSourceRoot::built_in`。当前正式内置内容只有 `skill-creator`；新增 built-in 需要明确的
+产品语义、触发边界和选择评测，不能把 catalog fixture 直接升级为产品能力。实现细节与 limits 由
+[`zeta-rs/skills/README.md`](../zeta-rs/skills/README.md) 维护。
+
+当前仍没有 Skill activation manager。protocol 中唯一已实现的选择相关 value 是：
 
 ```rust
 UserInput::Skill { name: String, path: String }
@@ -272,9 +281,10 @@ availability 或 diagnostic 变化才递增 generation。
 `RescanRequired` 传递 subscriber 自己的 watched roots。其 backend/ref-count/path fallback contract
 由 [`zeta-rs/file-watcher/README.md`](../zeta-rs/file-watcher/README.md) 维护。
 
-Watcher 仍只发 invalidation hint。Skill manager（尚未实现）必须重新扫描/校验后再发布 snapshot，
-不能把 watch event 当作事实；`RescanRequired` 触发 scoped full rescan。`zeta-file-watcher`
-已实现不代表 Skill catalog manager、generation 发布或 App Server refresh path 已完成。
+Watcher 仍只发 invalidation hint。当前 S0 `SkillCatalog::refresh` 会重新扫描/校验后再发布
+snapshot，但 watcher subscription 与 App Server refresh path 尚未接入；后续 adapter 不能把 watch
+event 当作事实，`RescanRequired` 必须触发 scoped full rescan。`zeta-file-watcher` 已实现不代表
+safe-point composition 已完成。
 
 ## 8. Selection
 
@@ -657,7 +667,7 @@ catalog/selection/activation 拆分；新 trait 必须有职责和实现约束 d
 
 ## 19. 分阶段实施
 
-### Phase S0：format 与 catalog
+### Phase S0：format 与 catalog（Current）
 
 - Agent Skills frontmatter/parser/validator；
 - BuiltIn + controlled user source；

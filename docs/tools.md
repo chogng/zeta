@@ -83,7 +83,9 @@ Core durable Tool Call / Tool Result lifecycle
 - `zeta-shell-command`、`zeta-file-system` 与 `zeta-apply-patch`
   已各自提供一个独立 executor；App Server 当前只组合 `zeta-shell-command` 的只读 `rg`
   profile；
-- `zeta-mcp`、`zeta-plugins`、通用 Tool registry/search、code mode 仍处于 Proposed；
+- `zeta-plugins` 已实现 PL0 manifest/local validation，但 authority、activation 与 App Server
+  API 仍处于 Proposed；`zeta-mcp` 的 tools-only catalog/binding runtime 已实现，但其 Core
+  adapter、通用 Tool registry/search 和 code mode 仍处于 Proposed；
   当前 Core port adapter 是 App Server 私有的固定 `rg` registry，不代表通用 registry 已完成。
 
 当前问题不是缺少一个更大的 `tools` module，而是共享语义没有统一落点：
@@ -190,6 +192,7 @@ Core 的 `ToolService` 是 consumer-owned port；它可以由外层 `ToolRegistr
 - `zeta-core → zeta-tools + zeta-protocol`；
 - `zeta-mcp → zeta-tools`；
 - `zeta-shell-command → zeta-tools + zeta-exec + zeta-sandboxing`；
+- local App Server composition → `zeta-install-context + zeta-shell-command`；
 - `zeta-file-system → zeta-tools + zeta-sandboxing`；
 - `zeta-tui → zeta-file-search`；后者提供只读路径索引，不依赖 `zeta-tools`，也不注册为模型
   Tool；
@@ -264,15 +267,25 @@ containment；调用方仍拥有项目根语义和搜索边界。实现与错误
 RAII 与 failure contract 由
 [`zeta-rs/file-watcher/README.md`](../zeta-rs/file-watcher/README.md) 维护。
 
-当前 local App Server 启动时按 `ZETA_RG_PATH`、Zeta executable 同目录、host `PATH` 的顺序发现
-`rg`，随后冻结 canonical executable identity；未找到时启用本地工具的 composition 直接失败。
-模型只看到 `program = "rg"`，host 强制加入 `--no-config`，拒绝 preprocessor、archive search、
-symlink follow 和外部 pattern/ignore file 参数，并用只读、断网 sandbox 执行。进程输出采用总
-byte budget 截断并返回显式 truncation marker，Turn cancellation 会终止已启动的子进程。
+当前 local App Server 启动时通过 `zeta-install-context` 按 `ZETA_RG_PATH`、package
+`zeta-path/`、Zeta executable 同目录、host `PATH` 的顺序生成 `rg` candidates，再由
+`zeta-shell-command` 验证并冻结 canonical executable identity；未找到时启用本地工具的
+composition 直接失败。canonical release package 由
+[`scripts/build_zeta_package.py`](../scripts/build_zeta_package.py) 按
+[`third_party/ripgrep/runtime-lock.json`](../third_party/ripgrep/runtime-lock.json) 下载并校验
+target-specific ripgrep archive，把 executable 放到 `zeta-path/rg[.exe]`；源码开发启动仍可使用
+`ZETA_RG_PATH` 或 host `PATH`。
+filesystem 与 shell Tool 复用同一个启动时 canonicalized `WorkspaceRoot`，CLI 优先采用
+`ZETA_WORKSPACE_ROOT`，否则采用当前目录。模型只看到 `program = "rg"`，host 强制加入
+`--no-config`，拒绝 preprocessor、hostname command、archive search、symlink follow 和外部
+pattern/ignore file 参数，包括 `-f/path`、`-LH` 等紧凑短参数形式，并用只读、断网 sandbox
+执行。进程输出采用总 byte budget 截断并返回显式 truncation marker，Turn cancellation 会终止
+已启动的子进程。
 
-当前限制：仓库尚未打包 `rg` binary，也未做版本/capability probe；同目录发现只是 packaging
-extension point。该 runtime prerequisite 属于命令执行与安装诊断，不应通过重新增加一套内容
-搜索 Tool 解决。crate 内实现契约见
+当前限制：package metadata 记录锁定的 ripgrep version、archive digest 与 binary digest，但
+App Server 尚未执行 `rg --version` capability probe；本地 override/PATH candidate 也不保证与
+package 锁定版本相同。该 runtime prerequisite 属于命令执行与安装诊断，不应通过重新增加一套
+内容搜索 Tool 解决。crate 内实现契约见
 [`zeta-rs/shell-command/README.md`](../zeta-rs/shell-command/README.md)。
 
 ## 5. Identity、来源与 binding
@@ -1372,13 +1385,14 @@ mod tests;
 
 完成条件：registry 更新不能劫持 in-flight call，stale binding 被明确拒绝。
 
-### Phase T2：MCP 与 dynamic adapter
+### Phase T2：MCP 与 dynamic adapter（MCP 独立 runtime 部分完成）
 
-- `zeta-mcp` 输出 `McpToolProjection`；
-- 接通 schema/name/result conversion；
+- ✅ `zeta-mcp` 输出 `McpToolProjection` 并建立 immutable catalog/binding；
+- ✅ 接通 MCP schema/name/result conversion 与调用取消；
 - dynamic definition 与 interaction execution 使用同一 output contract；
 - Tool Call durable provenance 增加 source/digest；
-- 覆盖 transport-lost 和 owner-disconnect uncertain outcome。
+- MCP App Server/Core adapter 接入 approval、durable commit 和 recovery；
+- 覆盖 transport-lost 和 owner-disconnect uncertain outcome 的端到端语义。
 
 完成条件：MCP/dynamic 工具都不能绕过普通 approval、commit 和 recovery。
 

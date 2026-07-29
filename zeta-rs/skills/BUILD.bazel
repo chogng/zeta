@@ -1,0 +1,12 @@
+load("//:defs.bzl", "zeta_rust_crate")
+
+filegroup(
+    name = "built-in-skills",
+    srcs = glob(["assets/*/SKILL.md"]),
+)
+
+zeta_rust_crate(
+    name = "skills",
+    crate_name = "zeta_skills",
+    data = [":built-in-skills"],
+)

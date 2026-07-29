@@ -90,7 +90,7 @@ pub enum SandboxKind {
     Unrestricted,
     MacosSeatbelt,
     LinuxBubblewrap,
-    WindowsRestrictedToken,
+    WindowsAppContainer,
 }
 
 /// Process termination shape used by a backend when classifying enforcement output.

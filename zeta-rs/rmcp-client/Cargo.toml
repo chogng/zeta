@@ -1,0 +1,28 @@
+[package]
+name = "zeta-rmcp-client"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[lib]
+doctest = false
+name = "zeta_rmcp_client"
+path = "src/lib.rs"
+
+[dependencies]
+rmcp = { workspace = true, features = [
+    "client",
+    "reqwest",
+    "transport-child-process",
+    "transport-streamable-http-client-reqwest",
+] }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["macros", "process", "time"] }
+
+[dev-dependencies]
+rmcp = { workspace = true, features = ["server", "transport-async-rw"] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+
+[lints]
+workspace = true

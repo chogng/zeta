@@ -6,6 +6,7 @@
 > 当前开发基线：[`zeta-app-server-api.md`](zeta-app-server-api.md)
 > 本地启动与连接基线：[`app-server-client.md`](app-server-client.md)
 > 无交互执行基线：[`exec.md`](exec.md)
+> MCP Agent server：[`mcp-server.md`](mcp-server.md)
 
 ## 1. 目标
 
@@ -21,6 +22,8 @@ zeta exec "检查测试失败"
 zeta login
 zeta config
 zeta app-server --listen stdio://
+zeta mcp-server
+zeta mcp-server --listen http://127.0.0.1:8787/mcp
 ```
 
 `ask` 和 `exec` 当前通过 Session-first API 工作：先创建 Session，再在其中创建 Thread，
@@ -76,6 +79,13 @@ CLI 可以依赖产品层 `zeta-exec` 运行无交互 Agent，但不依赖目标
 
 `zeta app-server` 子命令可以作为明确的宿主入口依赖 `zeta-app-server`，但不能绕过
 dispatcher 直接调用 Core 用例。
+
+`zeta mcp-server` 是 `zeta-mcp-server` binary 的 CLI 入口。该 crate 依赖
+`zeta-app-server-client`，将外部 MCP tool call 映射到同一 Session/Thread/Turn dispatcher；
+CLI 不复制 MCP framing、Agent polling、interaction 或 invocation identity 逻辑。CLI 只解析
+`stdio://` 或 `http://IP:PORT/PATH` listener；HTTP bearer 由
+`ZETA_MCP_BEARER_TOKEN` 提供，可选 exact Origin 由 `ZETA_MCP_ALLOWED_ORIGIN` 提供。非 loopback
+远程部署必须在 TLS/auth reverse proxy 后运行，CLI 本身不拥有 OAuth 或 tenant provisioning。
 
 禁止新增名为 `runtime`、`service`、`common` 或 `platform` 的泛化 CLI facade 来聚合内部
 能力。这类层会重复 App Server 契约并逐渐成为职责不清的杂物桶。

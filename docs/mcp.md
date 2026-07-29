@@ -1,14 +1,18 @@
-# `zeta-mcp` 架构与演进方案
+# `zeta-mcp` / `zeta-rmcp-client` 架构与演进方案
 
-> 计划物理位置：`zeta-rs/mcp/`
+> Product runtime 当前实现：[`zeta-rs/mcp/`](../zeta-rs/mcp/README.md)，
 > Rust crate：`zeta_mcp`
-> 当前状态：Proposed，尚未创建 crate
+> Low-level client 当前实现：[`zeta-rs/rmcp-client/`](../zeta-rs/rmcp-client/README.md)，
+> Rust crate：`zeta_rmcp_client`
+> 当前状态：low-level client 与 tools-only product runtime 已实现；App Server/Core vertical
+> slice 尚未接线
 > Core architecture：[`core.md`](core.md)
 > Agent runtime：[`zeta-agent-runtime-architecture.md`](zeta-agent-runtime-architecture.md)
 > Tool shared contract 与纯转换：[`tools.md`](tools.md)
 > Config authority 与 runtime snapshot 接入：[`config.md`](config.md)
 > Plugin 分发边界：[`plugins.md`](plugins.md)
 > Skill 指令边界：[`skills.md`](skills.md)
+> 将 Zeta Agent 暴露为 MCP server：[`mcp-server.md`](mcp-server.md)
 
 > 官方规范核对日期：2026-07-25。第一版以 MCP `2025-11-25` protocol revision 为实现目标。
 > MCP 仍会演进；wire schema、授权流程和 experimental capability 必须以实现时的
@@ -17,9 +21,14 @@
 
 ## 1. 结论
 
-`zeta-mcp` 是 Zeta 的 MCP client runtime 和 provider-neutral capability adapter。它负责连接
-本地或远程 MCP server，完成 version/capability negotiation，将 MCP tools、resources 和 prompts
-投影为 Zeta 可消费的能力，并在连接、取消、超时和断线之间保持准确语义。
+MCP client 分成两个边界：Current `zeta-rmcp-client` 负责官方 RMCP SDK、单 server session、
+initialize、原始 tools API 和 stdio/Streamable HTTP transport；Current `zeta-mcp` tools-only
+runtime 负责多 server 启动、provider-neutral tool catalog/binding、分页/大小限制、调用路由、
+取消与失效标记。resources、prompts、reconnect/health、credential lifecycle、policy 和
+App Server/Core 接线仍是 Proposed。
+
+方向相反的 `zeta-mcp-server` 通过 App Server 将 Zeta Agent 暴露给外部 MCP Host。两者不共享
+runtime ownership，也不互相依赖；具体边界见 [`mcp-server.md`](mcp-server.md)。
 
 它不是：
 
@@ -43,22 +52,34 @@ MCP    = 如何与一个外部 capability server 建立有状态协议会话
 
 ## 2. 当前仓库审计
 
-当前仓库只有 MCP 的目标边界，没有 MCP client 实现：
+当前仓库已有低层 client、tools-only product runtime 和配置面，但还没有端到端产品接线：
 
 - [`core.md`](core.md) 与
   [`zeta-agent-runtime-architecture.md`](zeta-agent-runtime-architecture.md) 已将 MCP adapter
   放在 Core tool port 之外，并要求 HTTP/MCP cancellation 贯穿工具执行；
+- `zeta-rmcp-client` 已用官方 RMCP SDK 实现单连接 initialize、tools list/call、
+  progress/list-changed/elicitation host callback、caller cancellation、request deadline、有界
+  shutdown，以及 local stdio 与 reqwest Streamable HTTP connector；其实现契约见
+  [`zeta-rs/rmcp-client/README.md`](../zeta-rs/rmcp-client/README.md)；
+- `zeta-mcp` 已实现多 server `RequireAll` / `AllowPartial` 启动、分页和 byte/tool limits、
+  deterministic alias、exact remote identity、connection/catalog generation、不可变
+  catalog/binding、list-changed stale 标记、可取消 tools/call、结果大小限制和有界 shutdown；
+  其实现契约见 [`zeta-rs/mcp/README.md`](../zeta-rs/mcp/README.md)；
+- `zeta-config` 与 App Server config operations 已有 MCP server declaration CRUD；配置存在不
+  等于 runtime 已启用；
 - `zeta-protocol` 已有 provider-independent `ToolDefinition`、`ToolCall`、`ToolResult`、
   `ToolName` 和 durable Thread tool item；
 - `zeta-core` 已有 approval policy 基础，目标 `zeta-tool-executor` /
   `zeta-sandboxing` 已有本地执行边界；当前 process executor 的物理 crate 仍名为
   `zeta-exec`，后续按 [`exec.md`](exec.md) 迁移；
-- App Server 尚无 MCP config、catalog、authorization 或 health method；
-- 当前没有 JSON-RPC MCP codec、stdio/Streamable HTTP transport、MCP process supervisor、
-  capability negotiation 或 tool/resource/prompt adapter。
+- App Server 尚未把 Config/Plugin declaration materialize 为 `McpServerDefinition`，也没有把
+  MCP catalog/binding 接入 Core `ToolService`、approval 和 durable Tool Call/Result；
+- 当前没有 credential materialization、OAuth、自动 reconnect/health state machine、
+  resource/prompt product adapter 或跨重启 remote request 恢复。
 
-因此本文描述目标架构。任何 phase 在 crate、测试和 App Server vertical slice 完成前都必须标记
-为 Proposed，不能只因存在配置字段或 UI 入口就声称 MCP 可用。
+因此 low-level protocol/transport 与独立 tools-only runtime 是 Current；App Server vertical
+slice 及其 authorization/durability 仍是 Proposed。不能只因 crate、配置或底层 connector 已存在
+就声称用户可用的 MCP 已完成。
 
 ## 3. 标准基线
 
@@ -67,20 +88,20 @@ MCP 是 host-client-server 架构：host 为每个 server 创建隔离 client，
 operation。[官方架构](https://modelcontextprotocol.io/specification/2025-11-25/architecture/index)
 同时要求 host 控制权限、用户授权、模型集成和跨 server 隔离。
 
-第一版支持矩阵：
+支持矩阵明确区分低层代码与产品可用性：
 
-| MCP surface | 第一版策略 | 原因 |
+| MCP surface | Low-level client | Product runtime 策略 |
 | --- | --- | --- |
-| Base JSON-RPC lifecycle | 支持 | 所有其他 capability 的前提 |
-| stdio | 首发支持 | 本地开发和 Plugin 集成的最小闭环 |
-| Streamable HTTP | 第二个 vertical slice | 需要 OAuth、SSE resume 和连接安全完整落地 |
-| Tools | 首发支持 | 可适配目标 Core Turn tool loop |
-| Resources | 首发只做 list/read | 由应用或用户选择后进入 context，不自动注入 |
-| Prompts | 首发只做 list/get | 作为用户显式选择的模板，不当作 Skill |
-| Roots | stdio 首发支持 | 只暴露已授权 workspace root，不能替代 OS sandbox |
-| Sampling | 默认不声明 | 会让 server 发起模型调用，需要独立预算、隐私和审批设计 |
-| Elicitation | 默认不声明 | 依赖完整 Server → Client interaction delivery/recovery |
-| Tasks | 暂不支持 | `2025-11-25` 中仍为 experimental，不能等同 Zeta Turn/Task |
+| Base JSON-RPC lifecycle | Current | Current 多 session startup/shutdown；reconnect/health Proposed |
+| stdio | Current direct-local + injectable transport | Current runtime-ready definition；App Server 接线 Proposed |
+| Streamable HTTP | Current unauthenticated/bearer transport | Current runtime-ready definition；OAuth/安全 header policy Proposed |
+| Tools | Current 原始 list/call | Current catalog/binding/call；Core approval/durability 接线 Proposed |
+| Resources | 尚未暴露 | 首发只做 list/read，显式进入 context |
+| Prompts | 尚未暴露 | 首发只做 list/get，不当作 Skill |
+| Roots | 尚未暴露 | 只暴露已授权 workspace root，不能替代 OS sandbox |
+| Sampling | 尚未暴露 | 默认不声明；需独立预算、隐私和审批 |
+| Elicitation | Current host callback，默认 decline | interaction delivery/recovery 完成前不声明 |
+| Tasks | 尚未暴露 | experimental，不等同 Zeta Turn/Task |
 
 MCP 标准 transport 是
 [stdio 与 Streamable HTTP](https://modelcontextprotocol.io/specification/2025-11-25/basic/transports)。
@@ -88,21 +109,28 @@ HTTP+SSE 是旧 revision 的兼容面，不进入 Zeta 第一版。
 
 ## 4. 职责与非职责
 
-### 4.1 `zeta-mcp` 拥有
+### 4.1 Current `zeta-rmcp-client` 拥有
 
 - MCP wire request/response/notification codec 和 protocol revision negotiation；
 - 每个 configured server 的隔离 client session；
 - stdio 与 Streamable HTTP transport adapter；
 - initialize → operation → shutdown lifecycle；
-- request ID correlation、per-request deadline、cancel propagation 和 late response discard；
-- tools/resources/prompts 的分页 discovery、list-changed invalidation 和 immutable catalog；
-- MCP schema、content 和 error 的 revision-specific 校验，以及到 `McpToolProjection` /
-  source result projection 的转换；
-- exact remote tool identity、catalog generation 和 host binding 所需的 source correlation；
-- server process/connection health、bounded queue 和不含秘密的 diagnostics；
-- roots、sampling、elicitation 等 client feature 的 capability gate。
+- request ID correlation、per-request deadline 和 cancel propagation；
+- 原始 tools list/call 与 progress、list-changed、elicitation host callback；
+- caller-provided RMCP transport 接入点。
 
-### 4.2 `zeta-mcp` 不拥有
+### 4.2 Current `zeta-mcp` 拥有
+
+- runtime-ready server set、connection/catalog generation 与原子/部分启动策略；
+- tools 的分页 discovery、list-changed invalidation 和 immutable catalog；
+- MCP tool schema、content 和 error 到 `McpToolProjection` / source result 的转换与大小限制；
+- exact remote tool identity、catalog generation 和 host binding 所需的 source correlation；
+- startup/shutdown diagnostics 和 caller cancellation 传播。
+
+Proposed 扩展仍包括 resources/prompts、reconnect/health state machine、credential/OAuth lifecycle，
+以及 roots、sampling、elicitation 等 client feature 的产品 capability gate。
+
+### 4.3 两个 MCP client crate 都不拥有
 
 - Plugin package 下载、签名、解压、版本解析、enable/disable authority；
 - API token、OAuth refresh token、client secret 的持久化；
@@ -129,6 +157,8 @@ MCP auth runtime 拥有 credential/OAuth lifecycle，并把 opaque token persist
                          │             │
                     zeta-mcp       zeta-core ─────► Session/Thread stores
                          ▲             ▲
+                  zeta-rmcp-client     │
+                         ▲             │
                          │             │ Core ToolService adapter
                          └──────┬──────┘
                             App Server
@@ -140,7 +170,8 @@ MCP auth runtime 拥有 credential/OAuth lifecycle，并把 opaque token persist
 
 规则：
 
-- `zeta-mcp` 可以依赖 `zeta-tools`、`zeta-protocol` 和通用 async/JSON/HTTP 库；
+- `zeta-rmcp-client` 依赖官方 `rmcp` 和通用 async/HTTP 库，不依赖 Zeta product crate；
+- `zeta-mcp` 可以依赖 `zeta-rmcp-client`、`zeta-tools`、`zeta-protocol` 和通用 async/JSON 库；
 - `zeta-mcp` 不依赖 `zeta-core`、stores、App Server、Desktop、CLI 或 Plugin manager；
 - `zeta-mcp` 将 revision-specific wire descriptor 转成纯 `McpToolProjection`；
   `zeta-tools` 再负责 schema normalization、model-facing definition 和 source-neutral output；
@@ -149,7 +180,8 @@ MCP auth runtime 拥有 credential/OAuth lifecycle，并把 opaque token persist
 - Plugin manager 只产出经过验证的 server declaration，不持有 live MCP session；
 - App Server 注入 credential materializer、process launcher、HTTP transport、workspace roots 和
   policy，不能让 `zeta-mcp` 自己扫描全局环境；
-- MCP wire DTO 留在 `zeta-mcp` private module，不进入 `zeta-protocol`。
+- RMCP wire DTO 停在 `zeta-rmcp-client` / `zeta-mcp` adapter boundary，不进入
+  `zeta-protocol`、Core 或 App Server protocol。
 
 每个 live server 运行时：
 
@@ -547,62 +579,42 @@ queue saturation 和 output rejection。
 
 ## 15. 目标目录
 
-第一版保持单 crate、private modules 和显式 public export：
+Current tools-only runtime 保持单 crate、private modules 和显式 public export：
 
 ```text
 zeta-rs/mcp/src/
 ├── lib.rs
 ├── definition.rs
-├── identity.rs
 ├── error.rs
-├── session/
-│   ├── mod.rs
-│   ├── lifecycle.rs
-│   ├── router.rs
-│   └── catalog.rs
-├── protocol/
-│   ├── mod.rs
-│   ├── message.rs
-│   ├── capability.rs
-│   └── content.rs
-├── transport/
-│   ├── mod.rs
-│   ├── stdio.rs
-│   └── streamable_http.rs
-├── adapter/
-│   ├── mod.rs
-│   ├── tool.rs
-│   ├── resource.rs
-│   └── prompt.rs
-├── client_feature/
-│   ├── mod.rs
-│   ├── roots.rs
-│   ├── sampling.rs
-│   └── elicitation.rs
+├── session.rs
+├── catalog.rs
+├── output.rs
+├── runtime.rs
 └── *_tests.rs
 ```
 
 不预建空模块。每个新增 trait 必须带 doc comment，说明实现方如何处理 cancellation、deadline、
-security 和 identity。实现模块超过约 500 LoC 时按 lifecycle/primitive/transport 拆分；测试使用
-显式 sibling `#[path = "..._tests.rs"]`。
+security 和 identity。resources/prompts/auth/reconnect 落地时按独立 ownership 新增模块，不扩充
+现有 runtime 大文件；测试使用显式 sibling `#[path = "..._tests.rs"]`。
 
 ## 16. 分阶段实施
 
-### Phase M0：contract fixture
+### Phase M0：低层 contract 与 fixture（tools 范围完成）
 
-- 固定支持的 protocol revision；
-- 建立 JSON-RPC/schema fixtures 和 fake in-memory transport；
-- 实现 initialize/version/capability negotiation；
-- 验证 frame、page、schema、content 和 queue limits。
+- ✅ RMCP SDK 固定 protocol lifecycle 与 capability negotiation；
+- ✅ 使用 fake/in-process transport 覆盖 initialize、tools 与 cancellation；
+- ✅ 验证 catalog page/tool/byte 和 output byte limits；
+- revision mismatch、oversized frame/schema bomb 与 late response fixture 尚待补充。
 
 完成条件：fake server 可覆盖正常、错误、late response、cancel 和 version mismatch。
 
-### Phase M1：stdio + tools vertical slice
+### Phase M1：stdio + tools vertical slice（独立 runtime 完成，产品接线未完成）
 
-- process supervisor、stdio framing 和 graceful shutdown；
-- tools/list pagination、catalog snapshot 和 list-changed；
-- frozen tool binding、argument/output validation；
-- 接入 Core Turn tool loop、approval、durable Tool Call/Result 和 UnknownOutcome。
+- ✅ direct stdio connector 与 graceful shutdown；
+- ✅ tools/list pagination、catalog snapshot 和 list-changed stale 标记；
+- ✅ frozen tool binding、argument shape/output size validation 与 protocol cancellation；
+- 尚未接入 sandbox/process supervisor、Core Turn tool loop、approval、durable Tool Call/Result
+  和 UnknownOutcome recovery。
 
 完成条件：server crash、取消和 Thread recovery 不会静默重放有副作用调用。
 
@@ -615,11 +627,11 @@ security 和 identity。实现模块超过约 500 LoC 时按 lifecycle/primitive
 
 完成条件：任何 MCP 内容都不会在未选择时自动进入模型 context。
 
-### Phase M3：Streamable HTTP + OAuth
+### Phase M3：Streamable HTTP + OAuth（基础 transport 部分具备）
 
-- POST/GET/SSE、session、resume 和 reconnect；
-- protected resource metadata、PKCE、credential reference 和 revoke；
-- endpoint/origin/redirect/egress policy。
+- ✅ RMCP reqwest Streamable HTTP connector 支持 unauthenticated/bearer session；
+- session resume/reconnect、protected resource metadata、PKCE、credential reference 和 revoke；
+- 完整 endpoint/origin/redirect/egress policy 与 App Server credential materialization。
 
 完成条件：token 不进入 config/log/event，断线不被误判为取消或成功。
 

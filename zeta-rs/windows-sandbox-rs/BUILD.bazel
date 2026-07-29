@@ -1,6 +1,20 @@
-load("//:defs.bzl", "zeta_rust_crate")
+load("//:defs.bzl", "zeta_rust_binary", "zeta_rust_crate")
 
 zeta_rust_crate(
     name = "windows-sandbox-rs",
     crate_name = "zeta_windows_sandbox",
+)
+
+zeta_rust_binary(
+    name = "zeta-command-runner",
+    crate_name = "zeta_command_runner",
+    crate_root = "src/bin/command_runner.rs",
+    deps = [":windows-sandbox-rs"],
+)
+
+zeta_rust_binary(
+    name = "zeta-windows-sandbox-setup",
+    crate_name = "zeta_windows_sandbox_setup",
+    crate_root = "src/bin/sandbox_setup.rs",
+    deps = [":windows-sandbox-rs"],
 )

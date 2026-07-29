@@ -23,13 +23,27 @@ Action review、grant 与最终 execution decision 见 [`auto-review.md`](auto-r
 
 ## 2. Crate 边界
 
+### 2.0 `zeta-install-context`
+
+`zeta-install-context` 描述当前 executable 所在的 package layout，并提供 `zeta-path/` executable
+candidates 与 `zeta-resources/` file candidates。它不选择 sandbox policy，不验证 helper
+capability/digest，也不启动或复制资源。
+
+当前 local `rg`、Linux Bubblewrap 与 Windows AppContainer composition 已消费该 contract。
+canonical package 写入 `zeta-package.json` 与 `zeta-path/rg`；Linux 另带
+`zeta-resources/bwrap`，Windows 另带 command runner 和 sandbox setup helper。平台 backend
+在 host composition 时完成 candidate validation、capability/protocol probe 和 canonical
+identity freeze。
+
 ### 2.1 `zeta-bwrap`
 
-`zeta-bwrap` 是 Linux Bubblewrap 的 typed argv builder：
+`zeta-bwrap` 同时提供 Linux Bubblewrap typed argv builder 与很薄的 upstream C entrypoint
+wrapper：
 
 - 接受显式 mount access、namespace、工作目录和 inner command；
 - 始终使用 program/arguments，不经过 shell；
 - 生成可检查的 `BwrapCommand`，不自行启动 Tool；
+- package build 从 checksum-locked upstream source 编译 `bwrap_main`，不启用 setuid support；
 - 不拥有 Zeta `SandboxPolicy`、Workspace grant、approval 或 fallback 决策。
 
 调用方不能注入任意拼接后的 bwrap 参数。新增 Bubblewrap 能力应先成为 typed operation，再由
@@ -60,8 +74,9 @@ macOS 实现暂时保留在本 crate，因为 Seatbelt transform 很薄，且平
 - 添加 user/PID namespace、fresh `/proc`、`/dev`、session 与 parent-death containment；
 - Bubblewrap 不可用或不支持所需能力时必须返回错误。
 
-该 crate 后续拥有 system/bundled bwrap discovery、版本/`--argv0` capability probe、WSL 检查、
-seccomp 与 managed-network bridge；这些细节不能进入共享 policy。
+该 crate 当前拥有 system/bundled bwrap discovery、所需 CLI capability probe 与 canonical
+identity freeze。后续仍拥有 version diagnostics、WSL 检查、seccomp 与 managed-network bridge；
+这些细节不能进入共享 policy。
 
 ### 2.4 `zeta-windows-sandbox`
 
@@ -69,12 +84,23 @@ seccomp 与 managed-network bridge；这些细节不能进入共享 policy。
 `zeta-windows-sandbox` / `zeta_windows_sandbox`。它拥有：
 
 - shared policy 到 Windows filesystem/network authority 的解析；
-- restricted token、ACL、Job Object、private desktop 与 network enforcement；
+- AppContainer profile/capability、ACL、child-process policy 与 Job Object enforcement；
 - Windows helper/launcher 的生命周期和平台 diagnostics。
 
-当前已提供 `WindowsSandboxPlan`，受限请求在原生 launcher 接入前显式
-`BackendUnavailable`，不能降级为普通 `std::process::Command`。Job Object 只能补充进程树和资源
-控制，不能单独被视为 filesystem/network sandbox。
+当前 `zeta-command-runner.exe` 先调用 `zeta-windows-sandbox-setup.exe` 创建或复用按
+canonical Workspace + ro/rw mode 隔离的 AppContainer profile，为 Workspace 和冻结的 inner
+executable 安装 ACL，再以零 capability AppContainer token 启动进程。零 network capability
+承担断网，profile SID + ACL 承担文件访问；
+child-process restriction 与单进程 Job Object 补充进程树控制。当前只支持
+ReadOnly/WorkspaceWrite + NetworkDenied；其他受限组合 fail closed。
+
+这不是 Codex dedicated local user + WFP firewall 实现的复制。Zeta v1 选择 Windows 原生
+AppContainer 边界，并明确记录 ACL 是持久 filesystem metadata。helper 已接入 package、
+discovery、App Server 与 MSVC target 交叉检查；真实 Windows AppContainer/ACL/network
+integration tests 尚未完成，因此暂不标记为 production-enforced。
+Windows 测试人员应按
+[`windows-sandbox-acceptance-runbook.md`](windows-sandbox-acceptance-runbook.md)
+回填实际结果、exit code、transcript 和 ACL 证据，再与固定 golden expectations 比对。
 
 ## 3. 依赖方向
 
@@ -82,7 +108,8 @@ seccomp 与 managed-network bridge；这些细节不能进入共享 policy。
 
 ```text
 zeta-linux-sandbox   → zeta-bwrap + zeta-sandboxing
-zeta-windows-sandbox → zeta-sandboxing
+zeta-windows-sandbox → zeta-install-context + zeta-sandboxing
+host composition     → zeta-install-context + platform sandbox + tool runtime
 zeta-policy          → zeta-sandboxing
 zeta-auto-review     → zeta-policy + zeta-sandboxing
 host executor        → zeta-sandboxing + 当前平台 backend
@@ -95,6 +122,7 @@ zeta-bwrap → zeta-sandboxing / protocol / core
 platform sandbox → zeta-core / ThreadStore / approval UI
 zeta-sandboxing → shell-command / file-system / apply-patch / app-server / provider
 zeta-sandboxing → zeta-policy / zeta-auto-review
+zeta-install-context → zeta-sandboxing / platform sandbox / shell-command
 ```
 
 平台 backend 通过 `SandboxBackend` 注入。共享 manager 不依赖所有平台实现，因此不会形成
@@ -115,9 +143,12 @@ zeta-sandboxing → zeta-policy / zeta-auto-review
 
 1. typed policy、backend contract 与 command construction；
 2. 将 process executor 改为消费 `PreparedCommand`；
-3. Linux bwrap discovery/probe、真实 integration tests 与 seccomp；
-4. Windows restricted-token launcher、ACL/network enforcement 与 Windows CI；
-5. macOS Seatbelt profile compatibility/integration tests；
-6. managed network proxy、PTY 与 cancellation/kill-tree integration。
+3. Linux bwrap discovery/probe 与 bundled package；
+4. Linux 真实 namespace integration tests 与 seccomp；
+5. Windows AppContainer launcher、ACL/network enforcement 与 Windows CI；
+6. macOS Seatbelt profile compatibility/integration tests；
+7. managed network proxy、PTY 与 cancellation/kill-tree integration。
 
-在第 2～5 步完成前，不应把某个平台标记为 production-enforced。
+Linux bundled source/build/discovery 已完成；真实 Linux namespace integration 与 seccomp 仍是
+当前限制。Windows helper/build/discovery/enforcement path 已完成，仍需真实 Windows
+integration tests 后才能标记为 production-enforced。

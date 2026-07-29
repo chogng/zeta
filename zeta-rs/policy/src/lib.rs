@@ -9,6 +9,7 @@ mod classifier;
 mod context;
 mod decision;
 mod engine;
+mod layers;
 mod rule;
 
 pub use action::{
@@ -26,4 +27,5 @@ pub use decision::{
     ReviewFailurePolicy, SaferActionRequest,
 };
 pub use engine::PolicyEngine;
+pub use layers::{BuiltInSafetyPolicy, UserAllowlist};
 pub use rule::{ActionRule, GrantId, RuleEffect, RuleId, UnsandboxedGrant};

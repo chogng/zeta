@@ -50,19 +50,19 @@ request-ID set、notification queue 与 resource ownership；Session/Thread dura
 | `AppServer::with_workspace_search` | 注入 workspace root 与冻结的 ripgrep executable |
 | `AppServer::with_tool_service` | 安装同一 server 内所有 Turn 使用的 Core Tool/Policy ports |
 | `open_local_app_server` | 打开 rollout/config、恢复 coordinator、组合 provider-backed model |
-| `LocalAppServerOptions` | local state root + optional config/tool Workspace + validated slash catalog |
-| `LocalAppServerOptions::with_optional_tool_workspace` | `rg` 缺失时保持 Tool capability disabled，而不阻止 capability-optional host 启动 |
+| `LocalAppServerOptions` | local state root + optional config/runtime Workspace + validated slash catalog |
 | `SlashCommandCatalog` | 校验动态命令名称、描述与唯一性，并冻结 server-advertised snapshot |
 | `ReviewModelResolver` | 从 frozen config snapshot 选择 review-only model |
 | `ProviderReviewModel` | `ModelInvoker → zeta_auto_review::ReviewModel` adapter |
 
 `AppServer::new` 默认用 `TurnExecutor::without_tools`。`with_tool_service` 才会替换为有 Tool 和
 Policy port 的 executor。`open_local_app_server` 仅在调用方通过
-`LocalAppServerOptions::with_tool_workspace` 提供工具根时要求成功组合只读 `rg` registry；
-in-process CLI 使用这条 required 路径。stdio App Server 使用
-`with_optional_tool_workspace`，因此没有发现 `rg` 时仍可启动，但不会暴露模型 Tool 或
-workspace search capability。显式但无效的 `ZETA_RG_PATH` 仍会使启动失败。不能因为 protocol
-暴露 approval interaction 就假设任意自定义 host 已经拥有 Tool registry。
+`LocalAppServerOptions::with_workspace_root` 提供统一 Workspace 根时同时组合 filesystem 与
+workspace search、只读 `rg` registry；Zeta CLI 的 stdio 与 in-process 路径都会使用同一个启动时解析结果：
+`ZETA_WORKSPACE_ROOT` 优先，否则使用当前目录。不能因为 protocol 暴露 approval interaction 就
+假设任意自定义 host 已经拥有 Tool registry。`rg` 安装候选来自
+[`zeta-install-context`](../install-context/README.md)，App Server 只负责把候选交给
+`RipgrepExecutable` 验证并组合成 Tool service。
 
 ## 文件与职责
 
@@ -105,7 +105,7 @@ src/
 | `parse_match` | private | rg JSON line → root-relative DTO，并把 byte range 转为 UTF-16 | 不执行 UI 分组或 editor opening |
 | `ConfigBackedModelService::resolve_config` | private | user snapshot + optional Workspace snapshot merge | 每次 invocation safe point 重新解析 |
 | `WorkspaceConfigTracker::read` | private | 内容变化才推进 synthetic workspace revision | 不监听/修改 workspace file |
-| `compose_local_tools` | crate-private | 固定 WorkspaceRoot、发现 rg、选择 native sandbox | discovery 失败时不降级成 unrestricted |
+| `compose_local_tools` | crate-private | 复用 App Server 已固定的 WorkspaceRoot、解析安装候选、冻结 rg、选择 native sandbox | discovery 失败时不降级成 unrestricted |
 | `LocalShellToolService::materialize` | private | parse call、约束 workspace 参数、冻结 rg executable | policy review 前不启动进程 |
 | `LocalReadOnlyPolicy::decide` | private | 只接受 exact revision/provenance/capability/sandbox | 不产生 unsandboxed grant |
 | `ModelSnapshotResolver` | private trait | frozen config → immutable invoker | implementation 不持有 mutable config view |

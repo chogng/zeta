@@ -1,8 +1,8 @@
 use crate::{
-    ActionClassifier, ActionReviewPhase, ActionReviewRequest, ActionRule, ApprovalRequest,
-    AutoReviewGrant, BlockReason, ClassifierAssessment, ClassifierRecommendation,
-    ExecutionDecision, PolicyError, PolicyRevision, ReviewFailurePolicy, RiskLevel, RuleEffect,
-    SaferActionRequest, SandboxCompatibility, UnsandboxedGrant, UserAuthorization,
+    ActionClassifier, ActionReviewPhase, ActionReviewRequest, ApprovalRequest, AutoReviewGrant,
+    BlockReason, BuiltInSafetyPolicy, ClassifierAssessment, ClassifierRecommendation,
+    ExecutionDecision, PolicyError, PolicyRevision, ReviewFailurePolicy, RiskLevel,
+    SaferActionRequest, SandboxCompatibility, UserAllowlist, UserAuthorization,
 };
 use zeta_async_utils::CancellationToken;
 
@@ -10,8 +10,8 @@ use zeta_async_utils::CancellationToken;
 pub struct PolicyEngine<C> {
     revision: PolicyRevision,
     classifier: C,
-    rules: Vec<ActionRule>,
-    grants: Vec<UnsandboxedGrant>,
+    built_in_policy: BuiltInSafetyPolicy,
+    user_allowlist: UserAllowlist,
     review_failure_policy: ReviewFailurePolicy,
 }
 
@@ -24,19 +24,21 @@ impl<C: ActionClassifier> PolicyEngine<C> {
         Self {
             revision,
             classifier,
-            rules: Vec::new(),
-            grants: Vec::new(),
+            built_in_policy: BuiltInSafetyPolicy::default(),
+            user_allowlist: UserAllowlist::default(),
             review_failure_policy,
         }
     }
 
-    pub fn with_rules(mut self, rules: impl IntoIterator<Item = ActionRule>) -> Self {
-        self.rules.extend(rules);
+    /// Installs host-owned rules that take precedence over user authorization and model review.
+    pub fn with_builtin_policy(mut self, policy: BuiltInSafetyPolicy) -> Self {
+        self.built_in_policy = policy;
         self
     }
 
-    pub fn with_grants(mut self, grants: impl IntoIterator<Item = UnsandboxedGrant>) -> Self {
-        self.grants.extend(grants);
+    /// Installs exact user-authorized actions that may run without sandbox enforcement.
+    pub fn with_user_allowlist(mut self, allowlist: UserAllowlist) -> Self {
+        self.user_allowlist = allowlist;
         self
     }
 
@@ -46,18 +48,10 @@ impl<C: ActionClassifier> PolicyEngine<C> {
         cancellation: &CancellationToken,
     ) -> Result<ExecutionDecision, PolicyError> {
         self.ensure_revision(request)?;
-        let digest = request.action().digest();
-
-        if let Some(decision) = self.deterministic_rule_decision(request) {
+        if let Some(decision) = self.built_in_policy.decision(request) {
             return Ok(decision);
         }
-        if let Some(grant) = self.grants.iter().find(|grant| {
-            grant.matches(
-                digest,
-                request.action().required_capabilities(),
-                request.policy_revision(),
-            )
-        }) {
+        if let Some(grant) = self.user_allowlist.matching_grant(request) {
             return Ok(ExecutionDecision::RunUnsandboxed {
                 grant_id: grant.id().clone(),
             });
@@ -83,55 +77,6 @@ impl<C: ActionClassifier> PolicyEngine<C> {
                 engine: self.revision.clone(),
                 request: request.policy_revision().clone(),
             })
-        }
-    }
-
-    fn deterministic_rule_decision(
-        &self,
-        request: &ActionReviewRequest,
-    ) -> Option<ExecutionDecision> {
-        if let Some(rule) = self.rules.iter().find(|rule| {
-            rule.action_digest() == request.action().digest()
-                && matches!(rule.effect(), RuleEffect::Deny { .. })
-        }) {
-            let RuleEffect::Deny { reason } = rule.effect() else {
-                unreachable!("rule was selected by its deny effect");
-            };
-            return Some(ExecutionDecision::Block(BlockReason::DeterministicRule {
-                rule_id: rule.id().clone(),
-                reason: reason.clone(),
-            }));
-        }
-        let rule = self.rules.iter().find(|rule| {
-            rule.action_digest() == request.action().digest()
-                && matches!(rule.effect(), RuleEffect::RequireSandbox)
-        })?;
-        match rule.effect() {
-            RuleEffect::RequireSandbox => match (request.phase(), request.sandbox()) {
-                (ActionReviewPhase::SandboxDenial(denial), _) => Some(ExecutionDecision::Block(
-                    BlockReason::SandboxRequiredButUnavailable {
-                        rule_id: rule.id().clone(),
-                        reason: format!(
-                            "the required sandbox denied the action: {}",
-                            denial.reason()
-                        ),
-                    },
-                )),
-                (ActionReviewPhase::Initial, SandboxCompatibility::Supported(policy)) => {
-                    Some(ExecutionDecision::RunSandboxed(*policy))
-                }
-                (
-                    ActionReviewPhase::Initial,
-                    SandboxCompatibility::Unsupported { reason }
-                    | SandboxCompatibility::NotApplicable { reason },
-                ) => Some(ExecutionDecision::Block(
-                    BlockReason::SandboxRequiredButUnavailable {
-                        rule_id: rule.id().clone(),
-                        reason: reason.clone(),
-                    },
-                )),
-            },
-            RuleEffect::Deny { .. } => unreachable!("deny rules were handled first"),
         }
     }
 
