@@ -61,8 +61,8 @@ SessionCoordinator 已作为产品根 aggregate 落地。
 | 状态投影 | `ThreadSnapshot` 可由 rollout 重建 | 作为读取模型，不是第二份权威状态 |
 | 模型调用 | `ModelService::stream` 产生 canonical text/reasoning delta，并接受 cancellation token | provider adapter 仍需实现 wire-level SSE decoder |
 | Turn 执行 | `turn/start` durable accepted 后投递 Core `TurnExecutor` mailbox | App Server stdio 仍缺独立 outbound writer，实时通知由下一次 transport poll 取走 |
-| 并发 | 每个已执行 Thread 有有界 execution mailbox；durable projection 使用短全局临界区 | 全部结构性 command 尚未进入同一 mailbox，尚无 idle eviction/incarnation |
-| 工具执行 | 已有顺序模型—工具循环，Tool Call/Tool Result 均先后 durable | 尚无 approval、并行调度和 unknown-outcome 恢复语义 |
+| 并发 | 每个 loaded Thread 有独立 projection lock、FIFO mutation gate、有界 execution mailbox、explicit incarnation 与 idle eviction | App Server transport 仍缺独立 outbound worker |
+| 工具执行 | 已有顺序模型—工具循环、durable one-time approval、sandbox denial 二次审查与 exact retry 边界 | 并行计划、通用 deadline/reconciliation 与声明式 retry policy 尚未完成 |
 | 取消 | `zeta-async-utils` 已有 cancellation tree | 可以复用到 provider、tool 和 child process |
 | Provider 配置 | 每次模型调用读取最新配置快照 | 已具备安全切换基础，不需要先做持久 Provider Lane |
 | App Server | Rust server 仍是同步 read-dispatch-write | 需要 processor、outbound writer 和 keyed queue |
@@ -402,7 +402,11 @@ Tool adapter 不得直接修改 Thread state。
 取消是 best effort：
 
 - 本地 child process 应尝试终止整个受控进程树；
-- HTTP/MCP 调用应传播 cancellation；
+- `turn/interrupt` 取消 Core execution operation；同一个 token 传播到正在运行的
+  `ModelService`、provider `ModelInvoker`、`OperationClient` 和 `ToolService`；
+- 同步 HTTP adapter 在取消后立即停止本地等待、禁止 retry，并丢弃迟到 response；底层 socket
+  attempt 仍由 `zeta-http-client` 的 bounded transport timeout 收束；
+- MCP 与本地 process tool 继续把 token 传播到 protocol cancellation 或进程树终止；
 - 远端副作用可能在本地取消前已经完成；
 - crash 时不能假设 Running Tool 仍在，也不能自动重放。
 
@@ -507,23 +511,30 @@ Session-first 基础迁移已经完成；准确范围和仍未完成的 protocol
 
 - 已在 `zeta-core` 内新建私有 `turn` 模块，没有提前创建 facade crate；
 - 已定义 canonical `ModelService`、`ToolService` 与 cancellation contract；
-- 已用 deterministic fake service 覆盖文本完成、顺序 Tool loop、取消与模型失败；
+- 已用 deterministic fake service 覆盖文本完成、顺序 Tool loop、运行中模型/Tool 取消与模型失败；
 - 已通过 App Server composition adapter 接入 model-provider，Core 与 provider 均不反向依赖；
 - 待在 Phase 3 将同步端口和调用路径演进为 async streaming。
 
 基础完成条件已满足：Agent loop 不依赖 storage/App Server，提交顺序和取消有单元测试。完整
 完成仍依赖异步 streaming 与 execution incarnation。
 
-### Phase 3：ThreadController 与异步协议（基础完成）
+### Phase 3：ThreadController execution isolation（完成）与异步协议（基础完成）
 
 - 已引入 per-Thread bounded execution mailbox；
 - `turn/start` acceptance commit 后返回；
 - 已实现 keyed model/tool scheduling、有界 backlog 和多 Thread 并发；
-- interrupt 会取消 active model execution；
-- 待拆分 App Server reader、processor、outbound writer，并加入 explicit incarnation 与 idle eviction。
+- interrupt 会取消 exact active execution，并把同一 token 传播到当前 model provider operation
+  或 Tool execution；模型迟到 response 不提交，已开始 Tool 保留 durable execution-start marker
+  且不伪造 Tool Result，恢复时按 unknown outcome 处理；
+- 已将 durable projection 从全局状态锁拆为 per-Thread loaded state，并以 FIFO mutation gate
+  串行同 Thread 的结构性提交；
+- 每次 load 使用 explicit incarnation；旧 incarnation 的 queued execution 在运行前拒绝；
+- mailbox worker 空闲后退出并回收对应 projection，下一次访问只从 durable store 重建；
+- 待拆分 App Server reader、processor 与 outbound writer。
 
-基础完成条件已满足：一个 Thread 的长模型调用不阻塞另一个 Thread，且同 Thread execution FIFO。
-完整完成仍依赖所有 command 的同一 mailbox 和独立 outbound transport worker。
+Thread execution isolation 的完成条件已满足：同 Thread mutation/execution FIFO，不同 Thread 的
+durable commit 和长模型调用可并发，backlog 有界，idle state 可回收，旧 incarnation 工作不会
+启动。异步 App Server protocol 的完整完成仍依赖独立 outbound transport worker。
 
 ### Phase 4：SessionCoordinator、fork 与一致性（基础完成）
 
@@ -534,11 +545,15 @@ Session-first 基础迁移已经完成；准确范围和仍未完成的 protocol
 
 完成条件：故障注入不能产生不可回收的 orphan Thread 或永久 pending membership。
 
-### Phase 5：Tool loop、approval 与 capability（顺序基础完成）
+### Phase 5：Tool loop、approval 与 capability（顺序 approval 闭环完成）
 
 - 已实现 durable Tool Call 后顺序执行并提交 Tool Result；
-- approval/user-input/capability 使用有 owner、deadline、cancel 的 Server → Client request；
-- Tool Result、UnknownOutcome 和 retry policy 完整建模；
+- 初始高风险调用与安全 sandbox denial 均可进入 durable one-time approval，批准后只恢复 exact
+  Tool Call；
+- sandbox denial 只有标记为 `SafeToRetry` 才能进入二次审查；批准的非 sandbox 重试在执行前提交
+  escalation marker，恢复时不会静默重放；
+- Tool Result 与 started-without-result 的 unknown-outcome 基线已实现；通用 retry policy、
+  reconciliation、并行计划和 deadline 尚未完成；
 - cancellation 贯穿 tool、exec、sandbox 和 MCP adapter。
 
 完成条件：在每个 durable boundary 注入故障后，不会静默重复副作用或留下永久 Running。

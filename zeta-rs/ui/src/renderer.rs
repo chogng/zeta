@@ -1,0 +1,251 @@
+use glyphon::{
+    Attrs, Buffer, Cache, Color as GlyphColor, Family, Metrics, Resolution, Shaping, SwashCache,
+    TextArea, TextAtlas, TextBounds, TextRenderer, Viewport,
+};
+
+use crate::{FontFamily, FontStyle, FontWeight, TextBlock, UiScene};
+
+/// Physical render-target extent paired with the logical-to-physical UI scale.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct UiViewport {
+    width: u32,
+    height: u32,
+    scale_factor: f32,
+}
+
+impl UiViewport {
+    pub const fn new(width: u32, height: u32, scale_factor: f32) -> Self {
+        Self {
+            width,
+            height,
+            scale_factor,
+        }
+    }
+}
+
+struct PreparedArea {
+    left: f32,
+    top: f32,
+    bounds: TextBounds,
+    color: GlyphColor,
+}
+
+/// Owns the font shaping, glyph cache, atlas, and GPU pipeline for a native UI surface.
+pub struct UiRenderer {
+    font_system: glyphon::FontSystem,
+    swash_cache: SwashCache,
+    viewport: Viewport,
+    atlas: TextAtlas,
+    text_renderer: TextRenderer,
+    buffers: Vec<Buffer>,
+    areas: Vec<PreparedArea>,
+}
+
+impl UiRenderer {
+    pub fn new(
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        surface_format: wgpu::TextureFormat,
+    ) -> Self {
+        let cache = Cache::new(device);
+        let viewport = Viewport::new(device, &cache);
+        let mut atlas = TextAtlas::new(device, queue, &cache, surface_format);
+        let text_renderer =
+            TextRenderer::new(&mut atlas, device, wgpu::MultisampleState::default(), None);
+        Self {
+            font_system: glyphon::FontSystem::new(),
+            swash_cache: SwashCache::new(),
+            viewport,
+            atlas,
+            text_renderer,
+            buffers: Vec::new(),
+            areas: Vec::new(),
+        }
+    }
+
+    pub fn prepare(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        scene: &UiScene,
+        target: UiViewport,
+    ) -> Result<(), UiRenderError> {
+        let scale_factor = target.scale_factor;
+        if !scale_factor.is_finite() || scale_factor <= 0.0 {
+            return Err(UiRenderError::InvalidScaleFactor(scale_factor));
+        }
+        self.viewport.update(
+            queue,
+            Resolution {
+                width: target.width,
+                height: target.height,
+            },
+        );
+        self.buffers.clear();
+        self.areas.clear();
+
+        for (index, block) in scene.text_blocks().iter().enumerate() {
+            validate_text_block(index, block)?;
+            let style = block.style();
+            let metrics = Metrics::new(
+                style.font_size() * scale_factor,
+                style.line_height() * scale_factor,
+            );
+            let mut buffer = Buffer::new(&mut self.font_system, metrics);
+            let bounds = block.bounds();
+            buffer.set_size(
+                Some(bounds.width * scale_factor),
+                Some(bounds.height * scale_factor),
+            );
+            let attrs = Attrs::new()
+                .family(glyphon_family(style.family()))
+                .weight(glyphon_weight(style.weight()))
+                .style(glyphon_style(style.style()));
+            buffer.set_text(block.text(), &attrs, Shaping::Advanced, None);
+            buffer.shape_until_scroll(&mut self.font_system, false);
+            self.buffers.push(buffer);
+            self.areas
+                .push(prepared_area(block, scale_factor, style.color()));
+        }
+
+        let Self {
+            font_system,
+            swash_cache,
+            viewport,
+            atlas,
+            text_renderer,
+            buffers,
+            areas,
+        } = self;
+        let text_areas = buffers
+            .iter()
+            .zip(areas.iter())
+            .map(|(buffer, area)| TextArea {
+                buffer,
+                left: area.left,
+                top: area.top,
+                scale: 1.0,
+                bounds: area.bounds,
+                default_color: area.color,
+                custom_glyphs: &[],
+            });
+        text_renderer.prepare(
+            device,
+            queue,
+            font_system,
+            atlas,
+            viewport,
+            text_areas,
+            swash_cache,
+        )?;
+        Ok(())
+    }
+
+    pub fn render<'pass>(
+        &'pass self,
+        render_pass: &mut wgpu::RenderPass<'pass>,
+    ) -> Result<(), UiRenderError> {
+        self.text_renderer
+            .render(&self.atlas, &self.viewport, render_pass)?;
+        Ok(())
+    }
+
+    pub fn trim(&mut self) {
+        self.atlas.trim();
+    }
+}
+
+fn validate_text_block(index: usize, block: &TextBlock) -> Result<(), UiRenderError> {
+    let origin = block.origin();
+    let bounds = block.bounds();
+    let style = block.style();
+    let values = [
+        origin.x,
+        origin.y,
+        bounds.width,
+        bounds.height,
+        style.font_size(),
+        style.line_height(),
+    ];
+    if values.into_iter().any(|value| !value.is_finite()) {
+        return Err(UiRenderError::InvalidTextBlock {
+            index,
+            reason: "coordinates and metrics must be finite",
+        });
+    }
+    if bounds.width <= 0.0 || bounds.height <= 0.0 {
+        return Err(UiRenderError::InvalidTextBlock {
+            index,
+            reason: "bounds must be positive",
+        });
+    }
+    if style.font_size() <= 0.0 || style.line_height() <= 0.0 {
+        return Err(UiRenderError::InvalidTextBlock {
+            index,
+            reason: "font size and line height must be positive",
+        });
+    }
+    Ok(())
+}
+
+fn prepared_area(block: &TextBlock, scale_factor: f32, color: crate::Color) -> PreparedArea {
+    let origin = block.origin();
+    let size = block.bounds();
+    let left = origin.x * scale_factor;
+    let top = origin.y * scale_factor;
+    PreparedArea {
+        left,
+        top,
+        bounds: TextBounds {
+            left: left.floor() as i32,
+            top: top.floor() as i32,
+            right: (left + size.width * scale_factor).ceil() as i32,
+            bottom: (top + size.height * scale_factor).ceil() as i32,
+        },
+        color: glyphon_color(color),
+    }
+}
+
+fn glyphon_family(family: &FontFamily) -> Family<'_> {
+    match family {
+        FontFamily::SansSerif => Family::SansSerif,
+        FontFamily::Serif => Family::Serif,
+        FontFamily::Monospace => Family::Monospace,
+        FontFamily::Named(name) => Family::Name(name),
+    }
+}
+
+fn glyphon_weight(weight: FontWeight) -> glyphon::Weight {
+    match weight {
+        FontWeight::Normal => glyphon::Weight::NORMAL,
+        FontWeight::Bold => glyphon::Weight::BOLD,
+    }
+}
+
+fn glyphon_style(style: FontStyle) -> glyphon::Style {
+    match style {
+        FontStyle::Normal => glyphon::Style::Normal,
+        FontStyle::Italic => glyphon::Style::Italic,
+    }
+}
+
+fn glyphon_color(color: crate::Color) -> GlyphColor {
+    let [red, green, blue, alpha] = color.components();
+    GlyphColor::rgba(red, green, blue, alpha)
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum UiRenderError {
+    #[error("UI scale factor must be finite and positive, got {0}")]
+    InvalidScaleFactor(f32),
+    #[error("text block {index} is invalid: {reason}")]
+    InvalidTextBlock { index: usize, reason: &'static str },
+    #[error("failed to prepare UI text: {0}")]
+    Prepare(#[from] glyphon::PrepareError),
+    #[error("failed to render UI text: {0}")]
+    Render(#[from] glyphon::RenderError),
+}
+
+#[cfg(test)]
+#[path = "renderer_tests.rs"]
+mod tests;

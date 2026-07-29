@@ -122,6 +122,11 @@ impl ResourceStore {
         Ok(())
     }
 
+    pub fn release_owner(&mut self, owner_connection_id: u64) {
+        self.resources
+            .retain(|_, resource| resource.owner_connection_id != owner_connection_id);
+    }
+
     fn resource(
         &mut self,
         owner_connection_id: u64,

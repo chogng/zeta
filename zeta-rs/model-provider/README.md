@@ -109,9 +109,15 @@ bazel test //zeta-rs/model-provider:model-provider-unit-tests
 ```
 
 Tests 使用 injected `OperationClient` 捕获 request，覆盖 Responses/Chat/Anthropic profile、structured
-tools、custom endpoint、defaults、provider mismatch、catalog policy、fixed header 和默认 HTTP
-transport。
+tools、custom endpoint、defaults、provider mismatch、catalog policy、fixed header、cancellation
+传播和默认 HTTP transport。
 
 当前 invocation 是同步 unary；credential materialization、subscription backend、streaming 与动态
 catalog 的长期设计仍在系统文档中演进。新增能力应保持 invoker immutable、profile explicit、
 provider adapter private，以及 config/codec/operation/network 四层分离。
+
+`RegisteredModelInvoker::invoke_with_cancellation` 把 caller token 逐层传给 private
+`ProviderAdapter::complete` 和 `OperationClient::execute_with_cancellation`。取消是独立的
+`ModelProviderError::Cancelled`，App Server 不会把它误报为 model failure。同步 HTTP attempt
+可能已进入底层 socket；operation 立即停止等待且不 retry，attempt 本身由 transport timeout
+有界结束，迟到 response 不会被接受。

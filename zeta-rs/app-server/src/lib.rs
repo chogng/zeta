@@ -18,6 +18,7 @@ pub use local::open_local_app_server;
 pub use local::{BuiltInSkillRoot, LocalAppServerOptions, LocalWorkspaceConfigOptions};
 pub use review::{ProviderReviewModel, ReviewModelResolutionError, ReviewModelResolver};
 pub use server::AppServer;
+pub use server::ConnectionNotifications;
 pub use server::ConnectionState;
 pub use slash_commands::{SlashCommandCatalog, SlashCommandCatalogError};
 

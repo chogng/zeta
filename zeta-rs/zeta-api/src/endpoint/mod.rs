@@ -6,6 +6,7 @@
 //! after the runtime has resolved those concerns.
 
 use crate::{ApiError, ModelRequest, ModelResponse, requests};
+use zeta_async_utils::{CancellationSource, CancellationToken};
 use zeta_client::{OperationClient, ResolvedApiTarget};
 use zeta_http_client::{HttpHeader, HttpMethod};
 
@@ -85,17 +86,50 @@ impl ApiEndpoint {
         request: &ModelRequest,
         client: &dyn OperationClient,
     ) -> Result<ModelResponse, ApiError> {
+        self.complete_with_client_and_cancellation(
+            target,
+            model,
+            request,
+            client,
+            &CancellationSource::new().token(),
+        )
+    }
+
+    /// Completes a normalized request while observing one caller-owned cancellation scope.
+    pub fn complete_with_client_and_cancellation(
+        self,
+        target: &ResolvedApiTarget,
+        model: &str,
+        request: &ModelRequest,
+        client: &dyn OperationClient,
+        cancellation: &CancellationToken,
+    ) -> Result<ModelResponse, ApiError> {
         validate_request(model, request)?;
         match self {
-            Self::OpenAiResponses => {
-                requests::openai_responses::complete(self, target, model, request, client)
-            }
-            Self::OpenAiChatCompletions => {
-                requests::openai_chat_completions::complete(self, target, model, request, client)
-            }
-            Self::AnthropicMessages => {
-                requests::anthropic_messages::complete(self, target, model, request, client)
-            }
+            Self::OpenAiResponses => requests::openai_responses::complete(
+                self,
+                target,
+                model,
+                request,
+                client,
+                cancellation,
+            ),
+            Self::OpenAiChatCompletions => requests::openai_chat_completions::complete(
+                self,
+                target,
+                model,
+                request,
+                client,
+                cancellation,
+            ),
+            Self::AnthropicMessages => requests::anthropic_messages::complete(
+                self,
+                target,
+                model,
+                request,
+                client,
+                cancellation,
+            ),
         }
     }
 }

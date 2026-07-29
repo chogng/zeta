@@ -386,7 +386,7 @@ Per-invocation context budget
   ContextManager 负责
 
 Per-Turn execution limits
-  TurnExecutor 负责
+  TurnExecutor 负责 token / cost / deadline 等 durable policy；不使用固定模型调用次数
 
 Per-Agent-tree resource budget
   MultiAgentCoordinator 负责

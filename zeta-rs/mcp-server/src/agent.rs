@@ -345,7 +345,7 @@ impl<T: JsonRpcTransport + Send> AppServerAgentService<T> {
                             session_id: session_id.clone(),
                             thread_id: thread_id.clone(),
                             turn_id: turn_id.clone(),
-                            interaction: interaction.clone(),
+                            interaction: interaction.as_ref().clone(),
                         };
                         if let InteractionResolution::Respond(response) =
                             events.resolve_interaction(&envelope)

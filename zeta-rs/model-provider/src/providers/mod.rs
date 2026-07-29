@@ -1,6 +1,7 @@
 use crate::ModelProviderError;
 use std::sync::Arc;
 use zeta_api::{ApiEndpoint, ApiProtocol, ModelRequest, ModelResponse};
+use zeta_async_utils::CancellationToken;
 use zeta_client::OperationClient;
 use zeta_model_provider_config::{
     ApiProfile, NormalizedModelProviderConfig, ProviderAdapter as ProviderAdapterKind,
@@ -33,6 +34,7 @@ pub(crate) trait ProviderAdapter: Send + Sync {
         model: &str,
         request: &ModelRequest,
         client: &dyn OperationClient,
+        cancellation: &CancellationToken,
     ) -> Result<ModelResponse, ModelProviderError>;
 }
 

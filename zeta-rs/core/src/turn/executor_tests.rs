@@ -6,7 +6,7 @@ use crate::{
 };
 use serde_json::json;
 use std::collections::VecDeque;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -79,7 +79,6 @@ fn executes_a_durable_tool_loop_before_the_next_model_invocation() {
         model.clone(),
         tools,
         Arc::new(SandboxPolicyService),
-        TurnExecutionLimits::default(),
     );
 
     executor
@@ -99,6 +98,37 @@ fn executes_a_durable_tool_loop_before_the_next_model_invocation() {
         requests[1].input.last(),
         Some(InputItem::ToolResult(result)) if result.call_id == call.id
     ));
+}
+
+#[test]
+fn continues_beyond_two_hundred_model_invocations() {
+    const TOOL_ROUNDS: usize = 200;
+
+    let (threads, thread_id, turn_id) = started_turn();
+    let model = Arc::new(LongRunningToolModel::new(TOOL_ROUNDS));
+    let executor = TurnExecutor::new(
+        threads.clone(),
+        model.clone(),
+        Arc::new(WeatherTool),
+        Arc::new(SandboxPolicyService),
+    );
+
+    let outcome = executor
+        .execute(&thread_id, &turn_id, &CancellationSource::new().token())
+        .unwrap();
+
+    assert!(matches!(outcome, TurnExecutionOutcome::Completed(_)));
+    assert_eq!(model.invocations(), TOOL_ROUNDS + 1);
+    assert_eq!(
+        threads
+            .read_thread(&thread_id)
+            .unwrap()
+            .turns
+            .last()
+            .unwrap()
+            .status,
+        TurnStatus::Completed
+    );
 }
 
 #[test]
@@ -254,9 +284,95 @@ fn per_thread_mailboxes_run_independently_and_interrupt_the_active_turn() {
     wait_for_flag(&model.slow_was_cancelled, "slow model was not cancelled");
 }
 
+#[test]
+fn interrupt_propagates_to_the_active_tool_call() {
+    let (threads, thread_id, turn_id) = started_turn();
+    let call = ToolCall {
+        id: ToolCallId::new("blocking_call").unwrap(),
+        name: ToolName::new("blocking").unwrap(),
+        arguments: json!({}),
+    };
+    let model = Arc::new(ScriptedModel::new([Ok(ModelResponse {
+        output: vec![ResponseItem::ToolCall(call)],
+        usage: None,
+        stop_reason: StopReason::ToolUse,
+    })]));
+    let tool = Arc::new(BlockingTool::default());
+    let executor = TurnExecutor::new(
+        threads.clone(),
+        model,
+        tool.clone(),
+        Arc::new(SandboxPolicyService),
+    );
+
+    executor.start(&thread_id, &turn_id).unwrap();
+    tool.wait_until_entered();
+    threads
+        .interrupt_turn(
+            &thread_id,
+            crate::InterruptTurnRequest {
+                command_id: CommandId::new("tool-interrupt").unwrap(),
+                expected_sequence: SequenceExpectation::Any,
+                turn_id: turn_id.clone(),
+            },
+        )
+        .unwrap();
+
+    wait_for_turn_status(&threads, &thread_id, &turn_id, TurnStatus::Interrupted);
+    wait_for_flag(
+        &tool.was_cancelled,
+        "active tool did not observe cancellation",
+    );
+    let snapshot = threads.read_thread(&thread_id).unwrap();
+    assert!(
+        snapshot
+            .started_tool_calls
+            .contains(&ToolCallId::new("blocking_call").unwrap())
+    );
+    assert!(!snapshot.items.iter().any(
+        |item| matches!(item, ThreadItem::ToolResult { tool_call_id, .. } if tool_call_id.as_str() == "blocking_call")
+    ));
+}
+
 struct ScriptedModel {
     responses: Mutex<VecDeque<Result<ModelResponse, CoreError>>>,
     requests: Mutex<Vec<ModelRequest>>,
+}
+
+struct LongRunningToolModel {
+    tool_rounds: usize,
+    invocations: AtomicUsize,
+}
+
+impl LongRunningToolModel {
+    fn new(tool_rounds: usize) -> Self {
+        Self {
+            tool_rounds,
+            invocations: AtomicUsize::new(0),
+        }
+    }
+
+    fn invocations(&self) -> usize {
+        self.invocations.load(Ordering::Relaxed)
+    }
+}
+
+impl ModelService for LongRunningToolModel {
+    fn invoke(&self, _: &ModelRequest, _: &CancellationToken) -> Result<ModelResponse, CoreError> {
+        let invocation = self.invocations.fetch_add(1, Ordering::Relaxed);
+        if invocation == self.tool_rounds {
+            return Ok(text_response("done"));
+        }
+        Ok(ModelResponse {
+            output: vec![ResponseItem::ToolCall(ToolCall {
+                id: ToolCallId::new(format!("call_{invocation}")).unwrap(),
+                name: ToolName::new("weather").unwrap(),
+                arguments: json!({"city": "Paris"}),
+            })],
+            usage: None,
+            stop_reason: StopReason::ToolUse,
+        })
+    }
 }
 
 #[derive(Default)]
@@ -382,6 +498,72 @@ impl ModelService for ScriptedModel {
 }
 
 struct WeatherTool;
+
+#[derive(Default)]
+struct BlockingTool {
+    entered: AtomicBool,
+    was_cancelled: AtomicBool,
+    entered_lock: Mutex<()>,
+    entered_changed: Condvar,
+}
+
+impl BlockingTool {
+    fn wait_until_entered(&self) {
+        let deadline = Instant::now() + Duration::from_secs(1);
+        let mut lock = self.entered_lock.lock().unwrap();
+        while !self.entered.load(Ordering::Relaxed) {
+            let remaining = deadline.saturating_duration_since(Instant::now());
+            assert!(!remaining.is_zero(), "blocking tool did not start");
+            let (next_lock, _) = self.entered_changed.wait_timeout(lock, remaining).unwrap();
+            lock = next_lock;
+        }
+    }
+}
+
+impl ToolService for BlockingTool {
+    fn definitions(&self) -> Vec<ToolDefinition> {
+        vec![ToolDefinition {
+            name: ToolName::new("blocking").unwrap(),
+            description: "Wait for cancellation".into(),
+            parameters: json!({"type": "object"}),
+            strict: true,
+        }]
+    }
+
+    fn prepare(&self, call: &ToolCall) -> Result<ActionReviewRequest, CoreError> {
+        Ok(ActionReviewRequest::new(
+            ResolvedAction::new(
+                ActionDigest::from_canonical_bytes(serde_json::to_vec(call).unwrap()),
+                ActionKind::LocalProcess(zeta_policy::ProcessInvocationKind::Direct),
+                "wait for cancellation",
+                CapabilitySet::new([]),
+            ),
+            ActionProvenance::new(ActionSource::BuiltInTool, "blocking"),
+            SandboxCompatibility::Supported(SandboxPolicy::new(
+                FileSystemAccess::ReadOnly,
+                NetworkAccess::Denied,
+            )),
+            PolicyRevision::new("test-policy"),
+        ))
+    }
+
+    fn execute(
+        &self,
+        _: &ToolCall,
+        _: &ToolAuthorization,
+        cancellation: &CancellationToken,
+    ) -> Result<ToolExecutionOutput, CoreError> {
+        self.entered.store(true, Ordering::Relaxed);
+        self.entered_changed.notify_all();
+        while !cancellation.is_cancelled() {
+            thread::sleep(Duration::from_millis(1));
+        }
+        self.was_cancelled.store(true, Ordering::Relaxed);
+        Err(CoreError::Cancelled(
+            "cancelled during tool execution".into(),
+        ))
+    }
+}
 
 impl ToolService for WeatherTool {
     fn definitions(&self) -> Vec<ToolDefinition> {

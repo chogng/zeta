@@ -11,6 +11,9 @@ members = [
     "cli",
     "config",
     "core",
+    "ui",
+    "wgpu",
+    "winit",
     "secrets",
     "exec",
     "file-icons",
@@ -66,6 +69,7 @@ cc = "1"
 clap = "4"
 dunce = "1"
 getrandom = "0.2"
+glyphon = "0.12.0"
 image = { version = "0.25.10", default-features = false }
 ignore = "0.4"
 lazy_static = "1"
@@ -74,6 +78,7 @@ log = "0.4"
 notify = { version = "8.2.0", default-features = false, features = ["macos_kqueue"] }
 nucleo = { git = "https://github.com/helix-editor/nucleo.git", rev = "4253de9faabb4e5c6d81d946a5e35a90f87347ee" }
 pdfium-render = { version = "0.9.3", default-features = false, features = ["pdfium_7763", "thread_safe"] }
+pollster = "1.0.1"
 portable-pty = "0.9.0"
 pkg-config = "0.3"
 pretty_assertions = "1"
@@ -101,7 +106,9 @@ unicode-width = "0.2"
 url = "2"
 urlencoding = "2"
 ureq = { version = "2.12", features = ["json", "native-certs"] }
+wgpu = "30.0.0"
 windows-sys = "0.59"
+winit = "0.30.13"
 zeroize = "1"
 zeta-app-server = { path = "app-server" }
 zeta-app-server-client = { path = "app-server-client" }
@@ -115,6 +122,7 @@ zeta-api = { path = "zeta-api" }
 zeta-client = { path = "zeta-client" }
 zeta-config = { path = "config" }
 zeta-core = { path = "core" }
+zeta-ui = { path = "ui" }
 zeta-secrets = { path = "secrets" }
 zeta-exec = { path = "exec" }
 zeta-file-icons = { path = "file-icons" }
@@ -137,6 +145,8 @@ zeta-protocol = { path = "protocol" }
 zeta-rollout = { path = "rollout" }
 zeta-rollout-trace = { path = "rollout-trace" }
 zeta-rmcp-client = { path = "rmcp-client" }
+zeta-wgpu = { path = "wgpu" }
+zeta-winit = { path = "winit" }
 zeta-sandboxing = { path = "sandboxing" }
 zeta-session-store = { path = "session-store" }
 zeta-shell-command = { path = "shell-command" }

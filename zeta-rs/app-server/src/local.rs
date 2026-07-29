@@ -356,8 +356,13 @@ impl ModelService for ProviderModelService {
             .map_err(|signal| CoreError::Cancelled(signal.reason().to_string()))?;
         let response = self
             .invoker
-            .invoke(request)
-            .map_err(|error| CoreError::Model(error.to_string()))?;
+            .invoke_with_cancellation(request, cancellation)
+            .map_err(|error| match error {
+                zeta_model_provider::ModelProviderError::Cancelled(message) => {
+                    CoreError::Cancelled(message)
+                }
+                error => CoreError::Model(error.to_string()),
+            })?;
         cancellation
             .check()
             .map_err(|signal| CoreError::Cancelled(signal.reason().to_string()))?;

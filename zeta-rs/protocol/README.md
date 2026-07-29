@@ -125,6 +125,10 @@ Thread history。
 `TurnInteraction::pending_state()` 只保留 request ID、kind、item ID 和 deadline，避免普通 snapshot
 成为敏感 request delivery channel。
 
+`ActionApprovalRequest::sandbox_denial` 只用于 sandbox 已明确拒绝且原 attempt
+`SafeToRetry` 的升级审批。它保存 bounded `SandboxDenialOutput`，使 Core 在审批、进程重启后仍能
+验证并审计同一个 exact Tool Call 的一次性非 sandbox authority；字段缺失表示执行前的普通审批。
+
 ```text
 ThreadEvent::InteractionRequested
 └─ Turn.pending_interaction = PendingInteraction

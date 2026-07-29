@@ -213,9 +213,11 @@ Tests 使用 local TCP fixtures，不访问真实 provider，覆盖：
 
 ## 当前限制与潜在演进
 
-当前实现是 synchronous、unary、fully buffered、one-attempt HTTP。尚无 cancellation、stream body、
-WebSocket、async port、per-phase diagnostics、custom redirect security policy 或 config-generation
-rollover manager。
+当前实现是 synchronous、unary、fully buffered、one-attempt HTTP。它使用 bounded transport
+timeout，但不直接接收 caller cancellation token；上层 `zeta-client` 可以在取消后停止等待并丢弃
+迟到 response，不能强制关闭已经进入 `ureq` 的 socket attempt。stream body、WebSocket、async
+port、per-phase diagnostics、custom redirect security policy 和 config-generation rollover
+manager 仍未实现。
 
 这些能力可以演进，但顺序应保持：先定义 provider-neutral typed contract 与 failure/redaction
 invariant，再实现 private backend；不要先暴露 backend-specific future/stream/socket types。Retry、

@@ -4,7 +4,6 @@ use crate::{
     CompletedTurn, ContextAssembler, CoreError, ModelService, ModelStreamSink, NoThreadUpdates,
     NoTools, PolicyService, ThreadController, ThreadUpdateSink, ToolService,
 };
-use std::num::NonZeroUsize;
 use std::sync::Arc;
 use zeta_async_utils::{Cancellation, CancellationReason, CancellationToken};
 use zeta_protocol::{
@@ -13,38 +12,18 @@ use zeta_protocol::{
     TurnStatus,
 };
 
-/// Bounds one Turn's model-tool loop.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct TurnExecutionLimits {
-    max_model_invocations: NonZeroUsize,
-}
-
-impl TurnExecutionLimits {
-    pub fn new(max_model_invocations: NonZeroUsize) -> Self {
-        Self {
-            max_model_invocations,
-        }
-    }
-}
-
-impl Default for TurnExecutionLimits {
-    fn default() -> Self {
-        Self::new(NonZeroUsize::new(32).expect("default limit is non-zero"))
-    }
-}
-
 /// Executes provider-independent model and tool steps for one already-started Turn.
 ///
 /// The executor derives every invocation from the latest durable Thread snapshot. It delegates
 /// all mutations to [`ThreadController`], so model and tool I/O never owns the Thread projection
-/// lock or writer lease.
+/// lock or writer lease. The loop continues while the model requests follow-up work; it does not
+/// impose a process-local model-invocation count that would reset after approval or recovery.
 #[derive(Clone)]
 pub struct TurnExecutor {
     threads: Arc<ThreadController>,
     model: Arc<dyn ModelService>,
     tools: Arc<dyn ToolService>,
     policy: Arc<dyn PolicyService>,
-    limits: TurnExecutionLimits,
     updates: Arc<dyn ThreadUpdateSink>,
 }
 
@@ -60,14 +39,12 @@ impl TurnExecutor {
         model: Arc<dyn ModelService>,
         tools: Arc<dyn ToolService>,
         policy: Arc<dyn PolicyService>,
-        limits: TurnExecutionLimits,
     ) -> Self {
         Self {
             threads,
             model,
             tools,
             policy,
-            limits,
             updates: Arc::new(NoThreadUpdates),
         }
     }
@@ -78,7 +55,6 @@ impl TurnExecutor {
             model,
             Arc::new(NoTools),
             Arc::new(UnavailablePolicyService),
-            TurnExecutionLimits::default(),
         )
     }
 
@@ -97,8 +73,14 @@ impl TurnExecutor {
         let queued_thread_id = thread_id.clone();
         let queued_turn_id = turn_id.clone();
         self.threads
-            .enqueue_turn_execution(thread_id, turn_id, move |cancellation| {
-                let _ = executor.execute(&queued_thread_id, &queued_turn_id, &cancellation);
+            .enqueue_turn_execution(thread_id, turn_id, move |execution| {
+                if execution.check_current().is_ok() {
+                    let _ = executor.execute(
+                        &queued_thread_id,
+                        &queued_turn_id,
+                        execution.cancellation(),
+                    );
+                }
             })
     }
 
@@ -122,7 +104,7 @@ impl TurnExecutor {
         Ok(resumed)
     }
 
-    pub fn execute(
+    fn execute(
         &self,
         thread_id: &ThreadId,
         turn_id: &TurnId,
@@ -170,7 +152,7 @@ impl TurnExecutor {
         }
         let tools = self.tools.definitions();
 
-        for _ in 0..self.limits.max_model_invocations.get() {
+        loop {
             check_cancellation(cancellation)?;
             let snapshot = self
                 .threads
@@ -229,11 +211,6 @@ impl TurnExecutor {
                 return Ok(TurnExecutionOutcome::WaitingForApproval);
             }
         }
-
-        Err(ExecutionFailure::model(CoreError::Execution(format!(
-            "Turn exceeded its model invocation limit ({})",
-            self.limits.max_model_invocations
-        ))))
     }
 
     fn require_running_turn(

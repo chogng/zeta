@@ -16,8 +16,8 @@ fn broker_fans_out_and_advances_each_connection_cursor() {
     broker.publish_session(&session_id, &updates);
     broker.publish_session(&session_id, &updates);
 
-    assert_eq!(first.lock().unwrap().len(), 2);
-    assert_eq!(second.lock().unwrap().len(), 1);
+    assert_eq!(first.len(), 2);
+    assert_eq!(second.len(), 1);
 }
 
 fn update(session_id: &SessionId, sequence: u64) -> SessionUpdateEnvelope {

@@ -50,6 +50,8 @@ zeta-rs/
 ├── zeta-api/
 ├── http-client/           # shared proxy/TLS/unary HTTP substrate；stream/WebSocket 尚未实现
 ├── zeta-client/           # API operation retry 与 SSE framing layer
+├── winit/                 # App Server 下方的底层 event-loop/native-window crate
+├── wgpu/                  # App Server 下方的底层 GPU/surface crate；不拥有 product identity
 ├── exec/                  # target headless Agent runner
 ├── tool-executor/         # target local process execution boundary
 ├── tui/

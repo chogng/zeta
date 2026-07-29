@@ -6,6 +6,7 @@
 > Canonical 产品模型：[`protocol.md`](protocol.md)  
 > Headless 与远程调度：[`exec.md`](exec.md)
 > MCP Agent server consumer：[`mcp-server.md`](mcp-server.md)
+> 当前 crate contract：[`zeta-rs/app-server-client/README.md`](../zeta-rs/app-server-client/README.md)
 
 ## 1. 结论
 
@@ -39,11 +40,10 @@ zeta-tui ──┘             │
 后续远程调度系统以它作为 headless execution entry。Job/Attempt/lease/event cursor 属于
 [`exec.md`](exec.md) 定义的 scheduler adapter，不进入 App Server Client。
 
-Current `zeta-mcp-server` 已通过同步 client、Thread subscription 和 bounded polling/drain 把
-MCP tool call 映射到 App Server 的 Session/Thread/Turn API，并投影 bounded progress 与
-approval/user-input interaction，且不直接依赖 Core 或 stores。这是 adapter 局部实现，不替代
-本文件 Proposed 的独立 event stream 和显式 shutdown；通用 consumer 不能把同步
-`drain_notifications()` 当成最终事件架构。
+Current `zeta-cli` 的 interactive 与 headless prompt 路径已经使用 owned
+`AppServerSession`、cloneable request handle、独立 `AppServerEvents` 与显式 shutdown。
+`zeta-mcp-server` 为兼容其既有 per-session adapter，仍使用 legacy 同步 client 和 bounded
+polling/drain；该兼容入口不再是通用 consumer 的目标架构。
 
 ## 2. 抽象单位：一个运行中的 App Server Session
 
@@ -51,10 +51,9 @@ approval/user-input interaction，且不直接依赖 Core 或 stores。这是 ad
 
 ```rust
 pub struct AppServerSession {
-    client: AppServerClient,
+    client: AppServerRequestHandle,
     events: Option<AppServerEvents>,
-    shutdown: ShutdownHandle,
-    tasks: AppServerTasks,
+    // private shutdown state and joined driver tasks
 }
 ```
 
@@ -72,13 +71,14 @@ pub struct AppServerSession {
 
 ```rust
 impl AppServerSession {
-    pub fn client(&self) -> AppServerClient;
+    pub fn client(&self) -> AppServerRequestHandle;
     pub fn take_events(&mut self) -> Result<AppServerEvents, TakeEventsError>;
-    pub async fn shutdown(self) -> Result<(), ShutdownError>;
+    pub fn shutdown(self) -> Result<(), ShutdownError>;
 }
 ```
 
-- `AppServerClient` 是可克隆的请求 handle，供 feature/task 发送 typed request；
+- `AppServerRequestHandle` 是共享 request ID allocator 的可克隆 typed request handle，供
+  feature/task 发送 request；
 - `AppServerEvents` 是单消费者事件流，供 app event loop 持续接收 notification 与 connection
   lifecycle event；
 - `AppServerSession` 保持所有权直到显式 shutdown，避免最后一个 client clone 的偶然 drop
@@ -117,7 +117,7 @@ zeta-exec / zeta-tui
 zeta-app-server-client
    ├─► zeta-app-server
    ├─► zeta-app-server-protocol
-   └─► async/channel runtime
+   └─► channel/task runtime
 ```
 
 Consumer 不直接创建 `AppServer`、`ConnectionState`、dispatcher 或 notification broker。
@@ -148,11 +148,12 @@ pub enum AppServerTarget {
 建议暴露两个自解释入口，并可由 target enum 统一选择：
 
 ```rust
-let mut session = AppServerSession::start_embedded(options).await?;
-// 或 AppServerSession::connect_remote(options).await?;
+let mut session = AppServerSession::start_embedded(options)?;
 let client = session.client();
 let events = session.take_events()?;
 ```
+
+`connect_remote` 仍是 Proposed backend；当前 Current backend 是 embedded。
 
 Embedded start 必须按以下顺序执行：
 
@@ -240,10 +241,12 @@ result/error envelope 和 notification contract。JSON/JSONL/WebSocket backend �
 Public API 仍然是 typed method：
 
 ```rust
-let result = client.start_turn(TurnStartParams { /* ... */ }).await?;
+let result = client.start_turn(TurnStartParams { /* ... */ })?;
 ```
 
 调用方不拼 method string、不处理 JSON-RPC request ID，也不直接操作 request channel。
+当前 typed method 同步等待自己的 completion，但 request 在独立 driver 上执行；需要在 UI
+主循环中避免等待异常缓慢 request 时，由 consumer 把 completion 重新投递成 app event。
 
 请求 driver 负责：
 
@@ -269,23 +272,19 @@ App Server outbound ─────┤
                          └─ notification ──────► AppServerEvents
 ```
 
-`AppServerEvents` 至少表达：
+Current public event contract 是：
 
 ```rust
 pub enum AppServerEvent {
-    SessionUpdate(SessionUpdateEnvelope),
-    ThreadUpdate(ThreadUpdateEnvelope),
-    ServerRequest(ServerRequest),
-    Lagged { skipped: usize },
-    Desynced { aggregate: AggregateRef },
+    Notification(ServerNotification),
     ConnectionClosed(ConnectionCloseReason),
 }
 ```
 
 当前 App Server API 包含 `session/update`、`thread/update` 与 metadata-only
-`skills/changed` notification；
-`ServerRequest` 是 approval/user-input 等双向交互落地后的目标 variant，在 protocol method
-registry 接受前不能提前声称可用。
+`skills/changed` notification，均由 `ServerNotification` typed enum 表达。`ServerRequest`
+是 approval/user-input 等双向交互落地后的目标 variant；`Lagged`/`Desynced` 是 bounded data
+plane 的目标 lifecycle event，在 protocol/queue contract 实现前不能提前声称可用。
 
 事件 driver 负责：
 
@@ -331,9 +330,9 @@ connection driver
 stdio 与子进程开销，但不能直接调用 Core、Store 或私有 App Server operation。它复用相同
 request/result/error/notification 语义，而不是复制第二份 in-process response contract。
 
-App Server 必须向 runner 提供可唤醒的 outbound notification source。当前
-`drain_notifications` 只在 client 发 request 后检查队列，无法支持空闲连接上的事件，也无法
-支持长 Turn 运行期间的实时 update。修正需要让 runner 能同时等待：
+App Server 当前通过 connection-scoped `ConnectionNotifications` 提供条件变量唤醒的 outbound
+source；client event pump 与 request driver 独立，因此空闲连接和长 Turn 的 update 都无需
+新 request 即可到达。runner 同时处理：
 
 - 新 client request；
 - 新 server notification；
@@ -404,8 +403,16 @@ TUI 不再接收一个同步 `&mut AppServerClient<T>`，也不调用 `drain_not
 
 ## 10. 当前实现审计
 
-当前实现中可以保留的部分：
+当前已经落地：
 
+- `AppServerSession::start_embedded` 只在 initialize 与 schema gate 成功后返回 ready session；
+- `AppServerRequestHandle` 可克隆，clone 共享 connection-local atomic request ID allocator；
+- bounded request channel、per-request completion 与独立 connection driver；
+- `ConnectionNotifications` 在 server publish 时主动唤醒独立 event pump；
+- response completion 在同一 request 产生的 causal notification 交付前发送；
+- `AppServerEvents` 是单消费者 typed notification/connection lifecycle stream；
+- `shutdown` 拒绝后续请求、关闭 connection、唤醒 event pump 并 join 两个 background task；
+- CLI interactive/headless 路径使用同一个 `AppServerSession::start_embedded` composition；
 - `start_in_process_client` 已经体现“由共享 crate 创建本地 App Server”的正确方向；
 - `open_in_process_app_server` 返回可克隆的 `InProcessAppServer` host；
 - `InProcessAppServer::connect` 为同一个 `Arc<AppServer>` 建立各自 initialize 完成的 typed
@@ -422,21 +429,20 @@ TUI 不再接收一个同步 `&mut AppServerClient<T>`，也不调用 `drain_not
 - typed `list_skills` / `set_skill_enablement` method；
 - known notification typed decode，包括 `skills/changed`。
 
-需要替换的部分：
+保留的兼容面与剩余工作：
 
-| 当前实现 | 问题 |
+| 边界 | 状态 |
 | --- | --- |
-| `JsonRpcTransport::round_trip` | 请求、响应和事件被绑成同步调用，不能形成持续 connection driver |
-| `drain_notifications` | in-process transport 可在空闲时直接拉取 server queue，但仍需 consumer polling，没有可唤醒 event stream |
-| `AppServerClient<T>` 要求 `&mut self` | TUI 被阻塞，多个 feature 不能共享请求 handle |
-| `start_in_process_client` 只返回 client | 没有 session owner、event receiver 或显式 shutdown |
-| `InProcessTransport` 只持有 `Arc<AppServer>` | 可以共享 host，但仍没有显式 session shutdown、connection driver 或 task join |
+| `start_in_process_client` / generic `AppServerClient<T>` | legacy MCP、rust-app 与 contract tests 仍可用；TUI/CLI 不再依赖 drain |
+| typed method 同步等待 completion | request driver 独立，但异常缓慢 request 的 UI completion dispatch 仍需迁移 |
+| event channel 当前无界 | durable notification 不会静默丢失；按 aggregate bounded data plane 与 `Lagged` policy 尚未落地 |
+| remote backend | 尚未实现；不能声称 reconnect/subscription restoration |
 | initialize gate 只存在于一个 helper | 裸 `AppServerClient::new` 可以在未初始化时发送业务请求 |
 | server error 被压成 code/string | 丢失 typed error name/data |
-| App Server notification queue 依靠 drain | server event 无法主动唤醒 client/TUI；Skill watcher 更新也依赖 event-loop polling 才可见 |
 
-因此当前实现不是“client crate 不该启动 App Server”，而是“启动后没有把请求、事件与关闭组成
-一个完整的 owned session”。
+因此 owned embedded session 的 request/event/shutdown 主路径已经完成；下一阶段集中在 bounded
+data plane、typed error、remote backend 与 consumer-side nonblocking completion routing，不再
+回退到 notification drain。
 
 ## 11. 目标模块
 

@@ -11,6 +11,7 @@ name = "zeta_client"
 path = "src/lib.rs"
 
 [dependencies]
+zeta-async-utils = { workspace = true }
 zeta-http-client = { workspace = true }
 
 [lints]

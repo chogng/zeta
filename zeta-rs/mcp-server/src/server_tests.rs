@@ -334,6 +334,7 @@ fn approval_envelope() -> AgentRequestEnvelope {
                         scope: "api.example.com".into(),
                     }],
                     reason: "Network access is required".into(),
+                    sandbox_denial: None,
                 },
             },
             deadline: None,

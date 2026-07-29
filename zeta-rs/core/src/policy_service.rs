@@ -6,6 +6,7 @@ use zeta_policy::{
 };
 use zeta_protocol::{
     ActionApprovalCapability, ActionApprovalCapabilityKind, ActionApprovalRequest,
+    SandboxDenialOutput, ToolReplaySafety,
 };
 
 /// Evaluates one fully resolved action without executing it or mutating durable Thread state.
@@ -93,7 +94,24 @@ pub fn durable_approval_request(
         policy_revision: reviewed.policy_revision().as_str().to_owned(),
         capabilities,
         reason: approval.reason().to_owned(),
+        sandbox_denial: None,
     })
+}
+
+pub(crate) fn durable_sandbox_escalation_approval_request(
+    reviewed: &ActionReviewRequest,
+    approval: &ApprovalRequest,
+    denial: SandboxDenialOutput,
+) -> Result<ActionApprovalRequest, CoreError> {
+    if denial.replay_safety() != ToolReplaySafety::SafeToRetry || denial.reason().trim().is_empty()
+    {
+        return Err(CoreError::Policy(
+            "sandbox escalation approval requires a safe-to-retry denial".into(),
+        ));
+    }
+    let mut request = durable_approval_request(reviewed, approval)?;
+    request.sandbox_denial = Some(denial);
+    Ok(request)
 }
 
 pub(crate) fn approval_matches_review(

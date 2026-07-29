@@ -199,6 +199,14 @@ fn approval_interaction_serializes_its_exact_policy_binding() {
                     scope: "api.example.com".into(),
                 }],
                 reason: "network requires unsandboxed execution".into(),
+                sandbox_denial: Some(SandboxDenialOutput::safe_to_retry(
+                    "network access denied",
+                    ProcessExecutionOutput::from_captured_streams(
+                        ProcessExitStatus::Code(1),
+                        "",
+                        "operation not permitted",
+                    ),
+                )),
             },
         },
         deadline: None,
@@ -217,7 +225,20 @@ fn approval_interaction_serializes_its_exact_policy_binding() {
                         "kind": "network",
                         "scope": "api.example.com"
                     }],
-                    "reason": "network requires unsandboxed execution"
+                    "reason": "network requires unsandboxed execution",
+                    "sandboxDenial": {
+                        "reason": "network access denied",
+                        "output": {
+                            "exitStatus": {
+                                "type": "code",
+                                "code": 1
+                            },
+                            "stdout": "",
+                            "stderr": "operation not permitted",
+                            "aggregatedOutput": "operation not permitted"
+                        },
+                        "replaySafety": "safeToRetry"
+                    }
                 }
             }
         })
@@ -240,6 +261,27 @@ fn approval_interaction_serializes_its_exact_policy_binding() {
             "type": "approval",
             "response": {"decision": "approveOnce"}
         })
+    );
+}
+
+#[test]
+fn ordinary_approval_omits_the_sandbox_escalation_payload() {
+    let request = ActionApprovalRequest {
+        action_digest: "a".repeat(64),
+        policy_revision: "policy-7".into(),
+        capabilities: vec![ActionApprovalCapability {
+            kind: ActionApprovalCapabilityKind::Network,
+            scope: "api.example.com".into(),
+        }],
+        reason: "network requires unsandboxed execution".into(),
+        sandbox_denial: None,
+    };
+
+    assert!(
+        serde_json::to_value(request)
+            .unwrap()
+            .get("sandboxDenial")
+            .is_none()
     );
 }
 

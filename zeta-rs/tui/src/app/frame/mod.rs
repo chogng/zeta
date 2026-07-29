@@ -1,0 +1,71 @@
+mod footer;
+mod header;
+
+use crate::app::App;
+use crate::components::composer;
+use crate::components::selection;
+use crate::components::transcript;
+use crate::features::status_line;
+use crate::ui::InteractionLayout;
+use crate::ui::frame_areas;
+use ratatui::Frame;
+use ratatui::layout::Rect;
+
+pub(crate) fn draw(frame: &mut Frame<'_>, app: &App) {
+    let areas = frame_areas(frame.area(), interaction_layout(app, frame.area()));
+
+    header::draw(frame, areas.header, app.status());
+    transcript::draw(frame, areas.history, app.messages());
+    if let Some(view) = app.selection_view() {
+        selection::draw(frame, areas.interaction, view);
+    } else {
+        composer::draw_slash_popup(frame, areas.history, app.slash_popup());
+        composer::draw_mention_popup(frame, areas.history, app.mention_popup());
+        status_line::draw(frame, areas.status_line, app.status_line());
+        let cursor = if app.accepts_input() {
+            composer::ComposerCursor::Visible
+        } else {
+            composer::ComposerCursor::Hidden
+        };
+        composer::draw_composer(
+            frame,
+            areas.interaction,
+            app.input(),
+            app.input_cursor_width(),
+            cursor,
+        );
+        footer::draw(frame, areas.footer, app.status());
+    }
+}
+
+pub(crate) fn mention_index_at(
+    app: &App,
+    terminal_area: Rect,
+    column: u16,
+    row: u16,
+) -> Option<usize> {
+    let areas = frame_areas(terminal_area, interaction_layout(app, terminal_area));
+    composer::mention_index_at(areas.history, app.mention_popup(), column, row)
+}
+
+pub(crate) fn slash_command_index_at(
+    app: &App,
+    terminal_area: Rect,
+    column: u16,
+    row: u16,
+) -> Option<usize> {
+    let areas = frame_areas(terminal_area, interaction_layout(app, terminal_area));
+    composer::command_index_at(areas.history, app.slash_popup(), column, row)
+}
+
+fn interaction_layout(app: &App, terminal_area: Rect) -> InteractionLayout {
+    app.selection_view()
+        .map(|view| InteractionLayout::Expanded {
+            desired_height: view.desired_height(terminal_area.width),
+        })
+        .unwrap_or(InteractionLayout::Composer)
+}
+
+#[cfg(test)]
+#[path = "frame_tests.rs"]
+mod tests;

@@ -10,6 +10,7 @@ pub enum ModelProviderError {
         model: ModelId,
     },
     Api(ApiError),
+    Cancelled(String),
     Unavailable(String),
 }
 
@@ -22,6 +23,7 @@ impl fmt::Display for ModelProviderError {
                 "model '{model}' is not registered under provider '{provider}'"
             ),
             Self::Api(error) => error.fmt(formatter),
+            Self::Cancelled(message) => write!(formatter, "model invocation cancelled: {message}"),
             Self::Unavailable(message) => formatter.write_str(message),
         }
     }
@@ -37,6 +39,9 @@ impl From<ProviderConfigError> for ModelProviderError {
 
 impl From<ApiError> for ModelProviderError {
     fn from(error: ApiError) -> Self {
-        Self::Api(error)
+        match error {
+            ApiError::Cancelled(message) => Self::Cancelled(message),
+            error => Self::Api(error),
+        }
     }
 }

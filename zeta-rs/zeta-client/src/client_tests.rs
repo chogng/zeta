@@ -2,8 +2,9 @@ use super::*;
 use std::io::{Read, Write};
 use std::net::TcpListener;
 use std::num::NonZeroU8;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Condvar, Mutex};
 use std::time::Duration;
+use zeta_async_utils::CancellationSource;
 use zeta_http_client::{HttpHeader, HttpMethod, UreqHttpClient};
 
 #[test]
@@ -75,6 +76,33 @@ fn idempotent_request_retries_a_retryable_http_status() {
     assert_eq!(response.status(), 200);
     assert_eq!(response.body(), b"ok");
     server.join().unwrap();
+}
+
+#[test]
+fn cancellation_stops_waiting_for_an_active_transport_attempt() {
+    let transport = Arc::new(BlockingHttpClient::default());
+    let client = ZetaClient::new(transport.clone());
+    let request = ClientRequest::post(
+        "https://example.test/responses",
+        Vec::new(),
+        Vec::new(),
+        RetryPolicy::never(),
+    )
+    .unwrap();
+    let cancellation = CancellationSource::new();
+    let canceller_source = cancellation.clone();
+    let canceller_transport = transport.clone();
+    let canceller = std::thread::spawn(move || {
+        canceller_transport.wait_until_entered();
+        canceller_source.cancel();
+    });
+
+    let result = client.execute_with_cancellation(&request, &cancellation.token());
+
+    assert!(matches!(result, Err(ClientError::Cancelled(_))));
+    transport.release();
+    transport.wait_until_finished();
+    canceller.join().unwrap();
 }
 
 #[test]
@@ -164,6 +192,58 @@ impl OperationClient for StaticClient {
             Vec::new(),
             br#"{"ok":true}"#.to_vec(),
         ))
+    }
+}
+
+#[derive(Default)]
+struct BlockingHttpClient {
+    state: Mutex<BlockingHttpState>,
+    changed: Condvar,
+}
+
+#[derive(Default)]
+struct BlockingHttpState {
+    entered: bool,
+    released: bool,
+    finished: bool,
+}
+
+impl BlockingHttpClient {
+    fn wait_until_entered(&self) {
+        let mut state = self.state.lock().unwrap();
+        while !state.entered {
+            state = self.changed.wait(state).unwrap();
+        }
+    }
+
+    fn release(&self) {
+        let mut state = self.state.lock().unwrap();
+        state.released = true;
+        self.changed.notify_all();
+    }
+
+    fn wait_until_finished(&self) {
+        let mut state = self.state.lock().unwrap();
+        while !state.finished {
+            state = self.changed.wait(state).unwrap();
+        }
+    }
+}
+
+impl zeta_http_client::HttpClient for BlockingHttpClient {
+    fn execute(
+        &self,
+        _: &zeta_http_client::HttpRequest,
+    ) -> Result<ClientResponse, zeta_http_client::HttpClientError> {
+        let mut state = self.state.lock().unwrap();
+        state.entered = true;
+        self.changed.notify_all();
+        while !state.released {
+            state = self.changed.wait(state).unwrap();
+        }
+        state.finished = true;
+        self.changed.notify_all();
+        Ok(ClientResponse::new(200, Vec::new(), Vec::new()))
     }
 }
 

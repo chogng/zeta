@@ -4,6 +4,7 @@ use std::fmt;
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ClientError {
     InvalidRequest(String),
+    Cancelled(String),
     Transport(String),
     InvalidResponse(String),
     Framing(String),
@@ -13,6 +14,7 @@ impl fmt::Display for ClientError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::InvalidRequest(message) => write!(formatter, "invalid client request: {message}"),
+            Self::Cancelled(message) => write!(formatter, "client request cancelled: {message}"),
             Self::Transport(message) => write!(formatter, "HTTP client failed: {message}"),
             Self::InvalidResponse(message) => {
                 write!(formatter, "invalid client response: {message}")

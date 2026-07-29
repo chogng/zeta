@@ -1,6 +1,7 @@
 use crate::{ClientError, ClientRequest, ClientResponse, OperationClient};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+use zeta_async_utils::CancellationToken;
 
 /// Low-cardinality, non-sensitive operation metadata for client telemetry.
 ///
@@ -25,6 +26,7 @@ impl ClientOperation {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ClientTelemetryOutcome {
     Succeeded,
+    Cancelled,
     Failed,
 }
 
@@ -68,12 +70,29 @@ impl TelemetryOperationClient {
 
 impl OperationClient for TelemetryOperationClient {
     fn execute(&self, request: &ClientRequest) -> Result<ClientResponse, ClientError> {
+        self.record(|| self.inner.execute(request))
+    }
+
+    fn execute_with_cancellation(
+        &self,
+        request: &ClientRequest,
+        cancellation: &CancellationToken,
+    ) -> Result<ClientResponse, ClientError> {
+        self.record(|| self.inner.execute_with_cancellation(request, cancellation))
+    }
+}
+
+impl TelemetryOperationClient {
+    fn record(
+        &self,
+        operation: impl FnOnce() -> Result<ClientResponse, ClientError>,
+    ) -> Result<ClientResponse, ClientError> {
         let started = Instant::now();
-        let result = self.inner.execute(request);
-        let outcome = if result.is_ok() {
-            ClientTelemetryOutcome::Succeeded
-        } else {
-            ClientTelemetryOutcome::Failed
+        let result = operation();
+        let outcome = match &result {
+            Ok(_) => ClientTelemetryOutcome::Succeeded,
+            Err(ClientError::Cancelled(_)) => ClientTelemetryOutcome::Cancelled,
+            Err(_) => ClientTelemetryOutcome::Failed,
         };
         self.telemetry.record(ClientTelemetryEvent {
             operation: self.operation,

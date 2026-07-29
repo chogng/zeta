@@ -63,7 +63,7 @@
       ]
     },
     "ActionApprovalRequest": {
-      "description": "Durable request for approval of one policy-bound action.",
+      "description": "Durable request for approval of one policy-bound action.\n\n`sandbox_denial` is present only for one exact retry after a safe sandbox denial.",
       "type": "object",
       "properties": {
         "actionDigest": {
@@ -84,6 +84,16 @@
         "reason": {
           "type": "string",
           "minLength": 1
+        },
+        "sandboxDenial": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SandboxDenialOutput"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [

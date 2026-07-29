@@ -2,9 +2,11 @@ use super::*;
 use serde_json::{Value, json};
 use std::io::{Read, Write};
 use std::net::TcpListener;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use zeta_api::{ModelRequest, StopReason, ToolDefinition, ToolName};
+use zeta_async_utils::CancellationSource;
 use zeta_client::{ClientError, ClientRequest, ClientResponse, OperationClient};
 use zeta_http_client::HttpHeader;
 use zeta_model_provider_config::{
@@ -92,6 +94,28 @@ fn invoke_text(model: &dyn ModelInvoker, prompt: &str) -> String {
 }
 
 #[test]
+fn registered_model_propagates_cancellation_to_the_operation_client() {
+    let transport = Arc::new(CancellationRecordingTransport::default());
+    let runtime = ModelProviderRuntime::builtin_with_client(transport.clone());
+    let model = runtime
+        .build_model(&provider_config("openai"), &model_ref("openai", "gpt-5.6"))
+        .unwrap();
+
+    let result = model.invoke_with_cancellation(
+        &ModelRequest::text("hello"),
+        &CancellationSource::new().token(),
+    );
+
+    assert_eq!(
+        result,
+        Err(ModelProviderError::Cancelled(
+            "cancelled inside operation client".into()
+        ))
+    );
+    assert!(transport.cancellable_path.load(Ordering::Relaxed));
+}
+
+#[test]
 fn provider_and_model_ids_reject_empty_values() {
     assert_eq!(
         ProviderId::new(" ").unwrap_err().to_string(),
@@ -101,6 +125,28 @@ fn provider_and_model_ids_reject_empty_values() {
         ModelId::new("").unwrap_err().to_string(),
         "model ID must not be empty"
     );
+}
+
+#[derive(Default)]
+struct CancellationRecordingTransport {
+    cancellable_path: AtomicBool,
+}
+
+impl OperationClient for CancellationRecordingTransport {
+    fn execute(&self, _: &ClientRequest) -> Result<ClientResponse, ClientError> {
+        panic!("registered models must use the cancellable operation path")
+    }
+
+    fn execute_with_cancellation(
+        &self,
+        _: &ClientRequest,
+        _: &zeta_async_utils::CancellationToken,
+    ) -> Result<ClientResponse, ClientError> {
+        self.cancellable_path.store(true, Ordering::Relaxed);
+        Err(ClientError::Cancelled(
+            "cancelled inside operation client".into(),
+        ))
+    }
 }
 
 #[test]

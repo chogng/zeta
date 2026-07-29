@@ -290,8 +290,11 @@ Deadline 分层：
 Operation client 在每次 attempt 前计算 remaining budget，并把 bounded attempt deadline 交给
 `zeta-http-client`。任一上层 deadline 结束后不能启动新 attempt。
 
-Cancellation 从 runtime 贯穿 retry timer、活跃 HTTP attempt、raw byte stream、framer 和 bounded
-frame channel。Cancellation 是独立终态，不包装成 retryable network failure。
+当前 unary 路径的 cancellation 从 runtime 贯穿 operation preflight、活跃 attempt 的本地等待和
+retry timer。取消返回独立 `ClientError::Cancelled`，不会包装成 retryable network failure，也
+不会启动下一次 attempt。由于 `zeta-http-client` 仍使用同步 `ureq`，已经进入 socket 的 attempt
+不能被 token 强制关闭；它由 bounded transport timeout 收束，response 即使迟到也不再被接受。
+未来 streaming 路径还需把 token 继续贯穿 raw byte stream、framer 和 bounded frame channel。
 
 Raw stream 的 socket/buffer backpressure 属于 `zeta-http-client`；SSE/NDJSON framed channel 的
 backpressure 属于 `zeta-client`。Client 不能合并或丢弃它不理解的 Provider payload。

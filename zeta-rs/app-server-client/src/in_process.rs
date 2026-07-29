@@ -93,9 +93,9 @@ impl InProcessTransport {
 /// Shared embedded App Server composition that can open multiple isolated logical connections.
 #[derive(Clone)]
 pub struct InProcessAppServer {
-    server: Arc<AppServer>,
-    client_info: ClientInfo,
-    capabilities: ClientCapabilities,
+    pub(crate) server: Arc<AppServer>,
+    pub(crate) client_info: ClientInfo,
+    pub(crate) capabilities: ClientCapabilities,
 }
 
 impl InProcessAppServer {

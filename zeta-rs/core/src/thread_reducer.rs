@@ -19,6 +19,9 @@ use zeta_protocol::TurnInteraction;
 use zeta_protocol::TurnStatus;
 use zeta_thread_store::{CURRENT_STORED_EVENT_SCHEMA_VERSION, StoredEvent, ThreadCommandReceipt};
 
+#[path = "thread_reducer_approval.rs"]
+mod approval;
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ThreadSnapshot {
     pub session_id: SessionId,
@@ -539,15 +542,15 @@ pub fn reduce_thread_event(
                     "tool escalation requires a safe-to-retry sandbox denial".into(),
                 ));
             }
-            if !matches!(
+            approval::validate_escalation_authority(
+                &snapshot,
+                turn_id,
+                tool_call_id,
+                action_digest,
+                policy_revision,
+                denial,
                 authority,
-                zeta_protocol::ToolExecutionAuthority::UnsandboxedGrant { .. }
-                    | zeta_protocol::ToolExecutionAuthority::AutoReviewed { .. }
-            ) {
-                return Err(CoreError::Journal(
-                    "tool escalation requires a validated unsandboxed authority".into(),
-                ));
-            }
+            )?;
             if !snapshot.escalated_tool_calls.insert(tool_call_id.clone()) {
                 return Err(CoreError::Journal(format!(
                     "tool execution already escalated: {tool_call_id}"
@@ -674,6 +677,12 @@ pub(crate) fn validate_agent_request(request: &AgentRequest) -> Result<(), Strin
     }
     if request.reason.trim().is_empty() {
         return Err("approval reason must not be empty".into());
+    }
+    if let Some(denial) = &request.sandbox_denial
+        && (denial.replay_safety() != zeta_protocol::ToolReplaySafety::SafeToRetry
+            || denial.reason().trim().is_empty())
+    {
+        return Err("sandbox escalation approval requires a safe-to-retry denial".into());
     }
     if request.capabilities.is_empty() {
         return Err("approval capabilities must not be empty".into());

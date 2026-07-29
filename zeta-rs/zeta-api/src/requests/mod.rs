@@ -5,6 +5,7 @@
 
 use crate::{ApiEndpoint, ApiError};
 use serde_json::Value;
+use zeta_async_utils::CancellationToken;
 use zeta_client::{ClientRequest, OperationClient, ResolvedApiTarget};
 
 pub(crate) fn post_json(
@@ -12,6 +13,7 @@ pub(crate) fn post_json(
     target: &ResolvedApiTarget,
     endpoint: ApiEndpoint,
     body: Value,
+    cancellation: &CancellationToken,
 ) -> Result<Value, ApiError> {
     let body = serde_json::to_vec(&body)
         .map_err(|error| ApiError::InvalidRequest(format!("failed to encode API JSON: {error}")))?;
@@ -22,7 +24,7 @@ pub(crate) fn post_json(
         body,
         target.retry_policy,
     )?;
-    let response = client.execute(&request)?;
+    let response = client.execute_with_cancellation(&request, cancellation)?;
     if !response.is_success() {
         return Err(ApiError::HttpStatus(response.status()));
     }

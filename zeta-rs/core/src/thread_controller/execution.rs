@@ -3,7 +3,6 @@ use super::{
     ThreadController,
 };
 use crate::CoreError;
-use zeta_async_utils::CancellationToken;
 use zeta_protocol::{
     ItemId, RequestId, StreamInstanceId, ThreadEvent, ThreadId, ThreadItem, ToolCall, TurnId,
 };
@@ -103,36 +102,30 @@ impl ThreadController {
         item_id: ItemId,
         output: String,
     ) -> Result<CompletedTurn, CoreError> {
-        let _lease = self.acquire_writer_lease(thread_id)?;
-        let mut threads = self
-            .threads
-            .lock()
-            .map_err(|_| CoreError::Journal("thread state lock poisoned".into()))?;
-        let snapshot = threads
-            .get_mut(thread_id)
-            .ok_or_else(|| CoreError::NotFound(thread_id.to_string()))?;
-        let item = ThreadItem::AgentMessage {
-            item_id,
-            turn_id: turn_id.clone(),
-            text: output,
-        };
-        self.record_batch(
-            snapshot,
-            vec![
-                ThreadEvent::ItemCompleted {
-                    thread_id: thread_id.clone(),
-                    turn_id: turn_id.clone(),
-                    item: item.clone(),
-                },
-                ThreadEvent::TurnCompleted {
-                    thread_id: thread_id.clone(),
-                    turn_id: turn_id.clone(),
-                },
-            ],
-        )?;
-        Ok(CompletedTurn {
-            item,
-            sequence: snapshot.sequence,
+        self.mutate_thread(thread_id, |snapshot| {
+            let item = ThreadItem::AgentMessage {
+                item_id,
+                turn_id: turn_id.clone(),
+                text: output,
+            };
+            self.record_batch(
+                snapshot,
+                vec![
+                    ThreadEvent::ItemCompleted {
+                        thread_id: thread_id.clone(),
+                        turn_id: turn_id.clone(),
+                        item: item.clone(),
+                    },
+                    ThreadEvent::TurnCompleted {
+                        thread_id: thread_id.clone(),
+                        turn_id: turn_id.clone(),
+                    },
+                ],
+            )?;
+            Ok(CompletedTurn {
+                item,
+                sequence: snapshot.sequence,
+            })
         })
     }
 
@@ -193,7 +186,7 @@ impl ThreadController {
         &self,
         thread_id: &ThreadId,
         turn_id: &TurnId,
-        task: impl FnOnce(CancellationToken) + Send + 'static,
+        task: impl FnOnce(super::mailbox::ThreadExecutionContext) + Send + 'static,
     ) -> Result<(), CoreError> {
         self.execution_mailboxes.enqueue(thread_id, turn_id, task)
     }
@@ -203,44 +196,38 @@ impl ThreadController {
         thread_id: &ThreadId,
         turn_id: &TurnId,
     ) -> Result<(), CoreError> {
-        let _lease = self.acquire_writer_lease(thread_id)?;
-        let mut threads = self
-            .threads
-            .lock()
-            .map_err(|_| CoreError::Journal("thread state lock poisoned".into()))?;
-        let snapshot = threads
-            .get_mut(thread_id)
-            .ok_or_else(|| CoreError::NotFound(thread_id.to_string()))?;
-        let status = snapshot
-            .turns
-            .iter()
-            .find(|turn| &turn.turn_id == turn_id)
-            .map(|turn| turn.status)
-            .ok_or_else(|| CoreError::NotFound(turn_id.to_string()))?;
-        let events = match status {
-            crate::TurnStatus::Created
-            | crate::TurnStatus::Running
-            | crate::TurnStatus::WaitingForApproval
-            | crate::TurnStatus::WaitingForUserInput
-            | crate::TurnStatus::WaitingForCapability => vec![
-                ThreadEvent::TurnCancelling {
+        self.mutate_thread(thread_id, |snapshot| {
+            let status = snapshot
+                .turns
+                .iter()
+                .find(|turn| &turn.turn_id == turn_id)
+                .map(|turn| turn.status)
+                .ok_or_else(|| CoreError::NotFound(turn_id.to_string()))?;
+            let events = match status {
+                crate::TurnStatus::Created
+                | crate::TurnStatus::Running
+                | crate::TurnStatus::WaitingForApproval
+                | crate::TurnStatus::WaitingForUserInput
+                | crate::TurnStatus::WaitingForCapability => vec![
+                    ThreadEvent::TurnCancelling {
+                        thread_id: thread_id.clone(),
+                        turn_id: turn_id.clone(),
+                    },
+                    ThreadEvent::TurnInterrupted {
+                        thread_id: thread_id.clone(),
+                        turn_id: turn_id.clone(),
+                    },
+                ],
+                crate::TurnStatus::Cancelling => vec![ThreadEvent::TurnInterrupted {
                     thread_id: thread_id.clone(),
                     turn_id: turn_id.clone(),
-                },
-                ThreadEvent::TurnInterrupted {
-                    thread_id: thread_id.clone(),
-                    turn_id: turn_id.clone(),
-                },
-            ],
-            crate::TurnStatus::Cancelling => vec![ThreadEvent::TurnInterrupted {
-                thread_id: thread_id.clone(),
-                turn_id: turn_id.clone(),
-            }],
-            crate::TurnStatus::Completed
-            | crate::TurnStatus::Failed
-            | crate::TurnStatus::Interrupted => return Ok(()),
-        };
-        self.record_batch(snapshot, events)
+                }],
+                crate::TurnStatus::Completed
+                | crate::TurnStatus::Failed
+                | crate::TurnStatus::Interrupted => return Ok(()),
+            };
+            self.record_batch(snapshot, events)
+        })
     }
 
     pub(crate) fn cancel_turn_execution(&self, thread_id: &ThreadId, turn_id: &TurnId) {

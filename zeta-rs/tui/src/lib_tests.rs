@@ -1,9 +1,10 @@
 use super::app::App;
-use super::app::MessageRole;
+use super::app::AppEvent;
 use super::app::Status;
-use super::apply_active_turn_snapshot;
-use super::present_turn_error;
-use super::slash_command_registry;
+use crate::app::apply_active_turn_snapshot;
+use crate::app::slash_command_registry;
+use crate::components::transcript::MessageRole;
+use crate::features::thread::present_turn_error;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
@@ -11,33 +12,53 @@ use zeta_app_server_protocol::protocol::slash_commands::{
     SlashCommandArgumentModeDto, SlashCommandDefinition,
 };
 use zeta_protocol::ItemId;
+use zeta_protocol::SessionId;
 use zeta_protocol::StableTurnError;
+use zeta_protocol::Thread;
+use zeta_protocol::ThreadId;
 use zeta_protocol::ThreadItem;
+use zeta_protocol::ThreadStatus;
 use zeta_protocol::Turn;
 use zeta_protocol::TurnId;
 use zeta_protocol::TurnStatus;
 
 #[test]
-fn completed_active_turn_uses_the_snapshot_agent_message_once() {
+fn completed_active_turn_only_updates_lifecycle_after_snapshot_mapping() {
     let turn_id = turn_id();
     let mut active_turn = Some(turn_id.clone());
     let mut app = working_app();
     let turn = Turn {
         turn_id: turn_id.clone(),
         status: TurnStatus::Completed,
-        items: vec![ThreadItem::AgentMessage {
-            item_id: ItemId::new("item_1").unwrap(),
-            turn_id,
-            text: "complete response".into(),
-        }],
+        items: vec![
+            ThreadItem::UserMessage {
+                item_id: ItemId::new("item_1").unwrap(),
+                turn_id: turn_id.clone(),
+                text: "prompt".into(),
+            },
+            ThreadItem::AgentMessage {
+                item_id: ItemId::new("item_2").unwrap(),
+                turn_id,
+                text: "complete response".into(),
+            },
+        ],
         pending_interaction: None,
         error: None,
     };
+    app.update(AppEvent::ThreadSnapshotReceived(Thread {
+        session_id: SessionId::new("session_1").unwrap(),
+        thread_id: ThreadId::new("thread_1").unwrap(),
+        title: "Thread".into(),
+        status: ThreadStatus::Active,
+        sequence: 3,
+        turns: vec![turn.clone()],
+    }));
 
     apply_active_turn_snapshot(&mut app, &mut active_turn, &[turn]);
 
     assert_eq!(active_turn, None);
     assert_eq!(app.status(), &Status::Ready);
+    assert_eq!(app.messages().len(), 2);
     assert_eq!(app.messages().last().unwrap().role, MessageRole::Agent);
     assert_eq!(app.messages().last().unwrap().text, "complete response");
 }
@@ -61,7 +82,7 @@ fn waiting_active_turn_remains_interruptible() {
     assert_eq!(app.status(), &Status::WaitingForUserInput);
     assert_eq!(
         app.handle_key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL)),
-        Some(super::app::Action::Interrupt)
+        Some(super::app::AppCommand::Interrupt)
     );
 }
 

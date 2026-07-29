@@ -1,14 +1,16 @@
 use super::policy_feedback::{denied_feedback, safer_action_feedback};
+use crate::policy_service::durable_sandbox_escalation_approval_request;
 use crate::thread_controller::{RecordToolExecutionEscalation, RecordToolExecutionStart};
 use crate::{
-    AutoReviewedToolGrant, CoreError, PolicyService, RecordToolResultRequest, SandboxDenialOutput,
-    ThreadController, ToolAuthorization, ToolCallOutput, ToolExecutionOutput, ToolReplaySafety,
-    ToolService,
+    AutoReviewedToolGrant, CoreError, PolicyService, RecordToolResultRequest,
+    RequestTurnInteraction, SandboxDenialOutput, ThreadController, ToolAuthorization,
+    ToolCallOutput, ToolExecutionOutput, ToolReplaySafety, ToolService,
 };
 use zeta_async_utils::CancellationToken;
 use zeta_policy::{ActionReviewRequest, ExecutionDecision, SandboxDenialEvidence};
 use zeta_protocol::{
-    ThreadId, ToolCall, ToolExecutionAuthority, ToolExecutionAuthority::Sandboxed, TurnId,
+    AgentRequest, ItemId, ThreadId, ToolCall, ToolExecutionAuthority,
+    ToolExecutionAuthority::Sandboxed, TurnId,
 };
 
 const MAX_DENIAL_REASON_CHARS: usize = 500;
@@ -17,6 +19,46 @@ const MAX_DENIAL_OUTPUT_CHARS: usize = 2_000;
 pub(super) enum ToolExecutionCompletion {
     Complete,
     PolicyRejected,
+    WaitingForApproval,
+}
+
+pub(super) struct ToolExecutionContext<'a> {
+    thread_id: &'a ThreadId,
+    turn_id: &'a TurnId,
+    item_id: &'a ItemId,
+    cancellation: &'a CancellationToken,
+}
+
+impl<'a> ToolExecutionContext<'a> {
+    pub(super) fn new(
+        thread_id: &'a ThreadId,
+        turn_id: &'a TurnId,
+        item_id: &'a ItemId,
+        cancellation: &'a CancellationToken,
+    ) -> Self {
+        Self {
+            thread_id,
+            turn_id,
+            item_id,
+            cancellation,
+        }
+    }
+
+    pub(super) fn thread_id(&self) -> &ThreadId {
+        self.thread_id
+    }
+
+    pub(super) fn turn_id(&self) -> &TurnId {
+        self.turn_id
+    }
+}
+
+enum ToolAttempt {
+    Commit {
+        output: ToolCallOutput,
+        completion: ToolExecutionCompletion,
+    },
+    WaitingForApproval,
 }
 
 pub(super) struct ToolExecutionOrchestrator<'a> {
@@ -40,16 +82,14 @@ impl<'a> ToolExecutionOrchestrator<'a> {
 
     pub(super) fn execute(
         &self,
-        thread_id: &ThreadId,
-        turn_id: &TurnId,
+        context: &ToolExecutionContext<'_>,
         call: ToolCall,
         reviewed: &ActionReviewRequest,
         authorization: ToolAuthorization,
-        cancellation: &CancellationToken,
     ) -> Result<ToolExecutionCompletion, CoreError> {
         self.threads.record_tool_execution_started(
-            thread_id,
-            turn_id,
+            context.thread_id,
+            context.turn_id,
             RecordToolExecutionStart {
                 tool_call_id: call.id.clone(),
                 action_digest: reviewed.action().digest().as_str().to_owned(),
@@ -58,25 +98,23 @@ impl<'a> ToolExecutionOrchestrator<'a> {
             },
         )?;
 
-        let (output, completion) = match self.execute_initial_attempt(
-            thread_id,
-            turn_id,
-            &call,
-            reviewed,
-            authorization,
-            cancellation,
-        ) {
-            Ok(result) => result,
-            Err(error) => (
-                ToolCallOutput::Failure(format!(
-                    "tool execution outcome is unknown after execution started: {error}"
-                )),
-                ToolExecutionCompletion::Complete,
-            ),
-        };
+        let (output, completion) =
+            match self.execute_initial_attempt(context, &call, reviewed, authorization) {
+                Ok(ToolAttempt::WaitingForApproval) => {
+                    return Ok(ToolExecutionCompletion::WaitingForApproval);
+                }
+                Ok(ToolAttempt::Commit { output, completion }) => (output, completion),
+                Err(error @ CoreError::Cancelled(_)) => return Err(error),
+                Err(error) => (
+                    ToolCallOutput::Failure(format!(
+                        "tool execution outcome is unknown after execution started: {error}"
+                    )),
+                    ToolExecutionCompletion::Complete,
+                ),
+            };
         self.threads.record_tool_result(
-            thread_id,
-            turn_id,
+            context.thread_id,
+            context.turn_id,
             RecordToolResultRequest {
                 tool_call_id: call.id,
                 output,
@@ -85,59 +123,108 @@ impl<'a> ToolExecutionOrchestrator<'a> {
         Ok(completion)
     }
 
+    pub(super) fn execute_approved_escalation(
+        &self,
+        context: &ToolExecutionContext<'_>,
+        call: ToolCall,
+        reviewed: &ActionReviewRequest,
+        denial: SandboxDenialOutput,
+        authorization: ToolAuthorization,
+    ) -> Result<ToolExecutionCompletion, CoreError> {
+        context
+            .cancellation
+            .check()
+            .map_err(|signal| CoreError::Cancelled(signal.reason().to_string()))?;
+        self.threads.record_tool_execution_escalated(
+            context.thread_id,
+            context.turn_id,
+            RecordToolExecutionEscalation {
+                tool_call_id: call.id.clone(),
+                action_digest: reviewed.action().digest().as_str().to_owned(),
+                policy_revision: reviewed.policy_revision().as_str().to_owned(),
+                denial,
+                authority: execution_authority(&authorization),
+            },
+        )?;
+        let output = match self
+            .tools
+            .execute(&call, &authorization, context.cancellation)
+        {
+            Ok(ToolExecutionOutput::Success(text)) => ToolCallOutput::Success(text),
+            Ok(ToolExecutionOutput::Failure(text)) => ToolCallOutput::Failure(text),
+            Ok(ToolExecutionOutput::OutcomeUnknown(reason)) => ToolCallOutput::Failure(format!(
+                "approved outside-sandbox retry outcome is unknown: {reason}"
+            )),
+            Ok(ToolExecutionOutput::SandboxDenied(denial)) => ToolCallOutput::Failure(format!(
+                "tool service reported a sandbox denial during an approved outside-sandbox \
+                 retry: {}",
+                denial.reason()
+            )),
+            Err(error @ CoreError::Cancelled(_)) => return Err(error),
+            Err(error) => ToolCallOutput::Failure(format!(
+                "approved outside-sandbox retry outcome is unknown after execution started: \
+                 {error}"
+            )),
+        };
+        self.threads.record_tool_result(
+            context.thread_id,
+            context.turn_id,
+            RecordToolResultRequest {
+                tool_call_id: call.id,
+                output,
+            },
+        )?;
+        Ok(ToolExecutionCompletion::Complete)
+    }
+
     fn execute_initial_attempt(
         &self,
-        thread_id: &ThreadId,
-        turn_id: &TurnId,
+        context: &ToolExecutionContext<'_>,
         call: &ToolCall,
         reviewed: &ActionReviewRequest,
         authorization: ToolAuthorization,
-        cancellation: &CancellationToken,
-    ) -> Result<(ToolCallOutput, ToolExecutionCompletion), CoreError> {
-        let result = self.tools.execute(call, &authorization, cancellation);
+    ) -> Result<ToolAttempt, CoreError> {
+        let result = self
+            .tools
+            .execute(call, &authorization, context.cancellation);
         match result {
-            Ok(ToolExecutionOutput::Success(text)) => Ok((
-                ToolCallOutput::Success(text),
-                ToolExecutionCompletion::Complete,
-            )),
-            Ok(ToolExecutionOutput::Failure(text)) => Ok((
-                ToolCallOutput::Failure(text),
-                ToolExecutionCompletion::Complete,
-            )),
-            Ok(ToolExecutionOutput::OutcomeUnknown(reason)) => Ok((
-                ToolCallOutput::Failure(format!("tool execution outcome is unknown: {reason}")),
-                ToolExecutionCompletion::Complete,
-            )),
+            Ok(ToolExecutionOutput::Success(text)) => Ok(ToolAttempt::Commit {
+                output: ToolCallOutput::Success(text),
+                completion: ToolExecutionCompletion::Complete,
+            }),
+            Ok(ToolExecutionOutput::Failure(text)) => Ok(ToolAttempt::Commit {
+                output: ToolCallOutput::Failure(text),
+                completion: ToolExecutionCompletion::Complete,
+            }),
+            Ok(ToolExecutionOutput::OutcomeUnknown(reason)) => Ok(ToolAttempt::Commit {
+                output: ToolCallOutput::Failure(format!(
+                    "tool execution outcome is unknown: {reason}"
+                )),
+                completion: ToolExecutionCompletion::Complete,
+            }),
             Ok(ToolExecutionOutput::SandboxDenied(denial)) => {
                 if !matches!(authorization, ToolAuthorization::Sandboxed(_)) {
-                    return Ok((
-                        ToolCallOutput::Failure(format!(
+                    return Ok(ToolAttempt::Commit {
+                        output: ToolCallOutput::Failure(format!(
                             "tool service reported a sandbox denial for an execution that was not \
                              sandboxed: {}",
                             denial.reason()
                         )),
-                        ToolExecutionCompletion::Complete,
-                    ));
+                        completion: ToolExecutionCompletion::Complete,
+                    });
                 }
                 if denial.replay_safety() == ToolReplaySafety::MayHaveSideEffects {
-                    return Ok((
-                        ToolCallOutput::Failure(format!(
+                    return Ok(ToolAttempt::Commit {
+                        output: ToolCallOutput::Failure(format!(
                             "sandbox denied the action, but the attempt may have produced side \
                              effects, so the exact call was not retried; reason: {}; output: {}",
                             denial.reason(),
                             denial.output().aggregated_output()
                         )),
-                        ToolExecutionCompletion::Complete,
-                    ));
+                        completion: ToolExecutionCompletion::Complete,
+                    });
                 }
-                self.review_denial_and_retry(
-                    thread_id,
-                    turn_id,
-                    call,
-                    reviewed,
-                    denial,
-                    cancellation,
-                )
+                self.review_denial_and_retry(context, call, reviewed, denial)
             }
             Err(error) => Err(error),
         }
@@ -145,13 +232,11 @@ impl<'a> ToolExecutionOrchestrator<'a> {
 
     fn review_denial_and_retry(
         &self,
-        thread_id: &ThreadId,
-        turn_id: &TurnId,
+        context: &ToolExecutionContext<'_>,
         call: &ToolCall,
         reviewed: &ActionReviewRequest,
         denial: SandboxDenialOutput,
-        cancellation: &CancellationToken,
-    ) -> Result<(ToolCallOutput, ToolExecutionCompletion), CoreError> {
+    ) -> Result<ToolAttempt, CoreError> {
         let denial_reason = truncate(denial.reason(), MAX_DENIAL_REASON_CHARS);
         let denial_output = truncate(denial.output().aggregated_output(), MAX_DENIAL_OUTPUT_CHARS);
         let second_review = reviewed
@@ -160,16 +245,17 @@ impl<'a> ToolExecutionOrchestrator<'a> {
                 denial_reason.clone(),
                 denial_output,
             ));
-        let decision = match self.policy.decide(&second_review, cancellation) {
+        let decision = match self.policy.decide(&second_review, context.cancellation) {
             Ok(decision) => decision,
+            Err(error @ CoreError::Cancelled(_)) => return Err(error),
             Err(error) => {
-                return Ok((
-                    ToolCallOutput::Failure(format!(
+                return Ok(ToolAttempt::Commit {
+                    output: ToolCallOutput::Failure(format!(
                         "sandbox denied the action and secondary review failed closed; the exact \
                          call was not retried: {error}"
                     )),
-                    ToolExecutionCompletion::Complete,
-                ));
+                    completion: ToolExecutionCompletion::Complete,
+                });
             }
         };
 
@@ -190,30 +276,35 @@ impl<'a> ToolExecutionOrchestrator<'a> {
                 ToolAuthorization::AutoReviewed(AutoReviewedToolGrant::new(call.id.clone(), grant))
             }
             ExecutionDecision::RunSandboxed(_) => {
-                return Ok((
-                    ToolCallOutput::Failure(
+                return Ok(ToolAttempt::Commit {
+                    output: ToolCallOutput::Failure(
                         "sandbox-denial review did not authorize execution outside the sandbox; \
                          the exact call was not retried"
                             .into(),
                     ),
-                    ToolExecutionCompletion::Complete,
-                ));
+                    completion: ToolExecutionCompletion::Complete,
+                });
             }
             ExecutionDecision::ReviseAction(revision) => {
-                return Ok((
-                    ToolCallOutput::Failure(safer_action_feedback(&revision)),
-                    ToolExecutionCompletion::PolicyRejected,
-                ));
+                return Ok(ToolAttempt::Commit {
+                    output: ToolCallOutput::Failure(safer_action_feedback(&revision)),
+                    completion: ToolExecutionCompletion::PolicyRejected,
+                });
             }
             ExecutionDecision::AskUser(approval) => {
-                return Ok((
-                    ToolCallOutput::Failure(format!(
-                        "sandbox denied the action and review requires user approval before any \
-                         outside-sandbox retry; the exact call was not retried: {}",
-                        approval.reason()
-                    )),
-                    ToolExecutionCompletion::Complete,
-                ));
+                let request =
+                    durable_sandbox_escalation_approval_request(&second_review, &approval, denial)?;
+                self.threads.request_turn_interaction(
+                    context.thread_id,
+                    context.turn_id,
+                    RequestTurnInteraction {
+                        request_id: self.threads.next_interaction_request_id(),
+                        item_id: Some(context.item_id.clone()),
+                        request: AgentRequest::Approval { request },
+                        deadline: None,
+                    },
+                )?;
+                return Ok(ToolAttempt::WaitingForApproval);
             }
             ExecutionDecision::Block(reason) => {
                 let feedback = denied_feedback(&reason);
@@ -222,32 +313,26 @@ impl<'a> ToolExecutionOrchestrator<'a> {
                 } else {
                     ToolExecutionCompletion::Complete
                 };
-                return Ok((
-                    ToolCallOutput::Failure(feedback.unwrap_or_else(|| {
+                return Ok(ToolAttempt::Commit {
+                    output: ToolCallOutput::Failure(feedback.unwrap_or_else(|| {
                         format!(
                             "sandbox denied the action and policy blocked an outside-sandbox \
                              retry: {reason:?}"
                         )
                     })),
                     completion,
-                ));
+                });
             }
         };
 
-        if let Err(error) = cancellation.check() {
-            return Ok((
-                ToolCallOutput::Failure(format!(
-                    "sandbox denied the action and execution was cancelled before the \
-                     outside-sandbox retry: {}",
-                    error.reason()
-                )),
-                ToolExecutionCompletion::Complete,
-            ));
-        }
+        context
+            .cancellation
+            .check()
+            .map_err(|signal| CoreError::Cancelled(signal.reason().to_string()))?;
         let authority = execution_authority(&authorization);
         self.threads.record_tool_execution_escalated(
-            thread_id,
-            turn_id,
+            context.thread_id,
+            context.turn_id,
             RecordToolExecutionEscalation {
                 tool_call_id: call.id.clone(),
                 action_digest: reviewed.action().digest().as_str().to_owned(),
@@ -257,7 +342,10 @@ impl<'a> ToolExecutionOrchestrator<'a> {
             },
         )?;
 
-        let output = match self.tools.execute(call, &authorization, cancellation) {
+        let output = match self
+            .tools
+            .execute(call, &authorization, context.cancellation)
+        {
             Ok(ToolExecutionOutput::Success(text)) => ToolCallOutput::Success(text),
             Ok(ToolExecutionOutput::Failure(text)) => ToolCallOutput::Failure(text),
             Ok(ToolExecutionOutput::OutcomeUnknown(reason)) => ToolCallOutput::Failure(format!(
@@ -270,7 +358,10 @@ impl<'a> ToolExecutionOrchestrator<'a> {
             )),
             Err(error) => return Err(error),
         };
-        Ok((output, ToolExecutionCompletion::Complete))
+        Ok(ToolAttempt::Commit {
+            output,
+            completion: ToolExecutionCompletion::Complete,
+        })
     }
 }
 

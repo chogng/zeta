@@ -1,0 +1,21 @@
+[package]
+name = "zeta-wgpu"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[lib]
+doctest = false
+name = "zeta_wgpu"
+path = "src/lib.rs"
+
+[dependencies]
+pollster = { workspace = true }
+thiserror = { workspace = true }
+wgpu = { workspace = true }
+zeta-ui = { workspace = true }
+zeta-winit = { workspace = true }
+
+[lints]
+workspace = true

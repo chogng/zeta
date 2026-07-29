@@ -67,7 +67,6 @@ pub use thread_reducer::ThreadSnapshot;
 pub use thread_reducer::ToolExecutionStartSnapshot;
 pub use thread_reducer::TurnSnapshot;
 pub use thread_reducer::reduce_thread_event;
-pub use turn::TurnExecutionLimits;
 pub use turn::TurnExecutionOutcome;
 pub use turn::TurnExecutor;
 pub use zeta_protocol::TurnStatus;

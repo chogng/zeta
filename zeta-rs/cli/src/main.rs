@@ -1,20 +1,19 @@
 use std::env;
 use std::io::IsTerminal;
 use std::path::PathBuf;
-use std::thread;
 use std::time::Duration;
 use std::time::Instant;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 use zeta_app_server::LocalAppServerOptions;
 use zeta_app_server::open_local_app_server;
-use zeta_app_server_client::AppServerClient;
+use zeta_app_server_client::AppServerEvent;
+use zeta_app_server_client::AppServerSession;
 use zeta_app_server_client::InProcessClientOptions;
-use zeta_app_server_client::InProcessTransport;
-use zeta_app_server_client::start_in_process_client;
+use zeta_app_server_client::ServerNotification;
 use zeta_app_server_protocol::protocol::common::ClientInfo;
 use zeta_app_server_protocol::protocol::session::{SessionCreateParams, SessionThreadCreateParams};
-use zeta_app_server_protocol::protocol::thread::ThreadReadParams;
+use zeta_app_server_protocol::protocol::thread::{ThreadReadParams, ThreadSubscribeParams};
 use zeta_app_server_protocol::protocol::turn::{InputItem, TurnStartParams};
 use zeta_protocol::{CommandId, ThreadItem, TurnStatus};
 
@@ -51,8 +50,8 @@ fn interactive() -> Result<(), String> {
             "interactive mode requires a TTY; use `zeta ask` or `zeta exec` instead".into(),
         );
     }
-    let client = in_process_client()?;
-    zeta_tui::run(client, zeta_tui::TuiOptions::new("TUI conversation"))
+    let session = in_process_session()?;
+    zeta_tui::run(session, zeta_tui::TuiOptions::new("TUI conversation"))
         .map(|_| ())
         .map_err(|error| error.to_string())
 }
@@ -134,7 +133,22 @@ fn execute(arguments: Vec<String>) -> Result<(), String> {
 }
 
 fn run_prompt(prompt: String, title: &str) -> Result<String, String> {
-    let mut client = in_process_client()?;
+    let mut app_server = in_process_session()?;
+    let result = run_prompt_in_session(&mut app_server, prompt, title);
+    let shutdown = app_server.shutdown().map_err(|error| error.to_string());
+    match (result, shutdown) {
+        (Err(error), _) => Err(error),
+        (Ok(_), Err(error)) => Err(error),
+        (Ok(response), Ok(())) => Ok(response),
+    }
+}
+
+fn run_prompt_in_session(
+    app_server: &mut AppServerSession,
+    prompt: String,
+    title: &str,
+) -> Result<String, String> {
+    let mut client = app_server.client();
     let session = client
         .create_session(SessionCreateParams {
             command_id: CommandId::new(request_key("session"))
@@ -152,6 +166,15 @@ fn run_prompt(prompt: String, title: &str) -> Result<String, String> {
         })
         .map_err(|error| error.to_string())?;
     client
+        .subscribe_thread(ThreadSubscribeParams {
+            thread_id: thread.thread_id.clone(),
+            after_sequence: 0,
+        })
+        .map_err(|error| error.to_string())?;
+    let events = app_server
+        .take_events()
+        .map_err(|error| error.to_string())?;
+    client
         .start_turn(TurnStartParams {
             command_id: CommandId::new(request_key("turn"))
                 .expect("generated command ID is non-empty"),
@@ -163,6 +186,21 @@ fn run_prompt(prompt: String, title: &str) -> Result<String, String> {
         .map_err(|error| error.to_string())?;
     let deadline = Instant::now() + Duration::from_secs(60);
     loop {
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        if remaining.is_zero() {
+            return Err("timed out waiting for the Turn to complete".into());
+        }
+        let event = events
+            .recv_timeout(remaining)
+            .map_err(|error| format!("could not receive App Server progress: {error}"))?;
+        match event {
+            AppServerEvent::Notification(ServerNotification::ThreadUpdate(update))
+                if update.thread_id == thread.thread_id => {}
+            AppServerEvent::ConnectionClosed(reason) => {
+                return Err(format!("App Server connection closed: {reason:?}"));
+            }
+            AppServerEvent::Notification(_) => continue,
+        }
         let snapshot = client
             .read_thread(ThreadReadParams {
                 thread_id: thread.thread_id.clone(),
@@ -191,18 +229,13 @@ fn run_prompt(prompt: String, title: &str) -> Result<String, String> {
             | TurnStatus::WaitingForApproval
             | TurnStatus::WaitingForUserInput
             | TurnStatus::WaitingForCapability
-            | TurnStatus::Cancelling => {
-                if Instant::now() >= deadline {
-                    return Err("timed out waiting for the Turn to complete".into());
-                }
-                thread::sleep(Duration::from_millis(10));
-            }
+            | TurnStatus::Cancelling => {}
         }
     }
 }
 
-fn in_process_client() -> Result<AppServerClient<InProcessTransport>, String> {
-    start_in_process_client(
+fn in_process_session() -> Result<AppServerSession, String> {
+    AppServerSession::start_embedded(
         InProcessClientOptions::new(
             state_root(),
             ClientInfo {

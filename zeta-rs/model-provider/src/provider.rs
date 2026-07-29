@@ -4,6 +4,7 @@ use std::sync::Arc;
 use zeta_api::{
     ApiProtocol, ContentPart, InputItem, ModelRequest, ModelResponse, OutputItem, StopReason,
 };
+use zeta_async_utils::{CancellationSource, CancellationToken};
 use zeta_client::{OperationClient, ZetaClient};
 use zeta_http_client::UreqHttpClient;
 use zeta_model_provider_config::{
@@ -74,9 +75,22 @@ impl Provider {
         model_id: &ModelId,
         request: &ModelRequest,
     ) -> Result<ModelResponse, ModelProviderError> {
+        self.complete_with_cancellation(model_id, request, &CancellationSource::new().token())
+    }
+
+    pub fn complete_with_cancellation(
+        &self,
+        model_id: &ModelId,
+        request: &ModelRequest,
+        cancellation: &CancellationToken,
+    ) -> Result<ModelResponse, ModelProviderError> {
         let model = self.resolve_model(model_id)?;
-        self.adapter
-            .complete(model.id.as_str(), request, self.client.as_ref())
+        self.adapter.complete(
+            model.id.as_str(),
+            request,
+            self.client.as_ref(),
+            cancellation,
+        )
     }
 
     fn resolve_model(&self, model_id: &ModelId) -> Result<Model, ModelProviderError> {
@@ -193,6 +207,22 @@ impl ModelRuntimeRequest {
 /// changes should affect a later invocation.
 pub trait ModelInvoker: Send + Sync {
     fn invoke(&self, request: &ModelRequest) -> Result<ModelResponse, ModelProviderError>;
+
+    /// Invokes this immutable model snapshot within one caller-owned cancellation scope.
+    ///
+    /// Implementations with a cancellable transport must override this method and propagate the
+    /// token to the active operation. The compatibility default rejects cancellation before and
+    /// after synchronous implementations so their late result cannot be accepted.
+    fn invoke_with_cancellation(
+        &self,
+        request: &ModelRequest,
+        cancellation: &CancellationToken,
+    ) -> Result<ModelResponse, ModelProviderError> {
+        check_cancellation(cancellation)?;
+        let response = self.invoke(request)?;
+        check_cancellation(cancellation)?;
+        Ok(response)
+    }
 }
 
 /// Resolves declarative provider configuration into immutable Zeta model runtimes.
@@ -223,9 +253,18 @@ struct RegisteredModelInvoker {
 
 impl ModelInvoker for RegisteredModelInvoker {
     fn invoke(&self, request: &ModelRequest) -> Result<ModelResponse, ModelProviderError> {
+        self.invoke_with_cancellation(request, &CancellationSource::new().token())
+    }
+
+    fn invoke_with_cancellation(
+        &self,
+        request: &ModelRequest,
+        cancellation: &CancellationToken,
+    ) -> Result<ModelResponse, ModelProviderError> {
         let mut request = request.clone();
         request.max_output_tokens = self.provider.config.max_output_tokens;
-        self.provider.complete(&self.model.id, &request)
+        self.provider
+            .complete_with_cancellation(&self.model.id, &request, cancellation)
     }
 }
 
@@ -273,4 +312,10 @@ impl ModelInvoker for EchoModel {
             stop_reason: StopReason::Completed,
         })
     }
+}
+
+fn check_cancellation(cancellation: &CancellationToken) -> Result<(), ModelProviderError> {
+    cancellation
+        .check()
+        .map_err(|signal| ModelProviderError::Cancelled(signal.reason().to_string()))
 }

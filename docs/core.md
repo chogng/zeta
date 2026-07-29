@@ -48,7 +48,8 @@ Agent 生命周期能够成为 authority 的前提。
 - Session/Thread reducer、projection 与 store port；
 - `SessionCoordinator` 及可恢复 create/fork saga；
 - `ThreadController`、command receipt、replay、conflict detection 与 recovery；
-- per-Thread bounded execution mailbox；
+- per-Thread loaded projection、FIFO mutation gate、explicit incarnation、bounded execution mailbox
+  与 idle eviction；
 - durable Turn、Tool Call、Tool Result 与 interaction lifecycle；
 - provider-independent `ModelService`；
 - `TextDelta` / `ReasoningDelta` Core streaming contract；
@@ -57,11 +58,10 @@ Agent 生命周期能够成为 authority 的前提。
 
 尚未完成：
 
-- 真正按 Thread 隔离的 loaded projection state、idle eviction 与显式 incarnation；
 - provider wire-level streaming 与 App Server 独立 outbound worker；
 - `TurnPolicySnapshot` / `ModelInvocationSnapshot` 的完整闭环；
 - `ContextManager`、instruction precedence、context budget 与 compaction；
-- approval、并行 Tool、deadline、retry 与 `UnknownOutcome` 恢复；
+- 并行 Tool、通用 deadline、声明式 retry 与 reconciliation；
 - durable multi-Agent delegation、跨 Thread message/result 与 Agent tree resource budget；
 - 所有 durable boundary 的 fault injection。
 
@@ -239,6 +239,14 @@ LoadedThreadState
 
 它不能进入 protocol，也不能成为第二个 durable aggregate。进程重启后必须能够丢弃并重建。
 
+当前实现由 private `loaded_thread::LoadedThreads` 保存轻量 Thread slot registry；
+`loaded_thread::ThreadSlot` 的 ticket gate 串行结构性 mutation，slot 内的
+`LoadedThreadState` 保存 projection 与 incarnation。`mailbox::ThreadExecutionMailboxes`
+为每个 incarnation 创建有界 FIFO lane，`ThreadExecutionContext` 将 operation ID、
+incarnation 与 cancellation 绑定。worker 空闲 30 秒后只回收匹配 incarnation 的 lane 和
+projection；下一次访问从 `ThreadStore` 重建。运行中的 execution 会阻止显式 recovery，
+因此 completion 不可能跨越 incarnation；测试中的强制 stale context 也会被拒绝。
+
 ### 5.4 TurnExecutor
 
 负责一个已经 accepted 的 Turn：
@@ -260,6 +268,10 @@ freeze TurnPolicySnapshot
 
 TurnExecutor 只能提出 typed effect；ThreadController 负责实际 durable append。它不能直接修改
 projection、写 store 或提前发布 committed update。
+
+当前单 Agent loop 不设置固定的模型调用次数上限：只要模型仍产生 Tool Call 等 follow-up，
+Turn 就继续执行。安全边界应由可取消的 token/cost/deadline policy 和 durable usage accounting
+表达，不能使用 approval 或 recovery 后会重置的进程内计数器。
 
 ### 5.5 ContextManager 与 ContextAssembler
 
@@ -413,6 +425,22 @@ Core shutdown source
 父取消传播到所有后代；取消 child 不影响 parent 或 sibling。Cancellation 是协作式 best effort，
 不能证明外部副作用未发生，也不能越过 durable terminal event 提前对外宣称完成。
 
+当前单 Agent execution 的实际链路已经闭合：
+
+```text
+turn/interrupt
+→ ThreadExecutionMailboxes::cancel(exact ThreadId + TurnId)
+→ TurnExecutor-owned CancellationToken
+├─ ModelService → ModelInvoker → OperationClient
+└─ ToolScheduler → ToolService → exec / MCP adapter
+```
+
+同步 provider HTTP 在 token 取消后停止 Core/operation 层等待并禁止 retry；因为当前
+`zeta-http-client` 仍是同步 unary transport，已经进入 socket 的 attempt 由 bounded transport
+timeout 收束，其迟到 response 被丢弃。已越过 durable execution-start boundary 的 Tool 不会被
+伪装为安全未执行：terminal Turn 保留 execution-start marker 且没有 Tool Result，恢复时按 unknown
+outcome 处理，exact call 不自动重放。
+
 ## 8. Model invocation 与 streaming
 
 一个 Turn 固定：
@@ -563,6 +591,7 @@ ActionApprovalRequest
   policy_revision
   complete capability set
   reason
+  sandbox_denial?: structured safe-to-retry denial
 
 ActionApprovalResponse
   ApproveOnce | Decline
@@ -575,6 +604,13 @@ capability，并把 Turn 转为 `WaitingForApproval`。响应通过原有的 Req
 和 sequence gate 提交；`ApproveOnce` 只表示该 exact request 获得一次性批准，不创建持久或
 跨 action grant。Tool scheduler 将它物化为绑定 RequestId、ToolCallId 和完整 approval payload
 的 `OneTimeToolGrant`，并在恢复时重新验证 action digest、policy revision 与 capability。
+
+当 sandboxed attempt 返回结构化 `SafeToRetry` denial 时，Core 先执行二次 policy review。
+`AskUser` 会把完整 denial 写入新的 durable `ActionApprovalRequest`，不先提交 Tool Result。
+`ApproveOnce` 只授权原始 action/policy/capability/ToolCall 组合的一次非 sandbox 重试；Core 在重试前
+提交 `ToolExecutionEscalated`。若重启后已有 escalation marker 而没有 Tool Result，scheduler
+提交 outcome-unknown failure 并禁止再次执行。`Decline`、`MayHaveSideEffects` denial 或 binding
+漂移都不会触发重试。
 
 副作用开始前必须提交 `ToolExecutionStarted`。如果恢复时存在 unresolved Tool Call 但没有
 start marker，scheduler 可以从 policy safe point 继续；如果 start marker 已存在而 Tool Result
@@ -715,6 +751,7 @@ Concurrency tests：
 - 同 Thread FIFO、不同 Thread/Agent 并行；
 - I/O 期间 projection lock 和 writer lease 已释放；
 - interrupt/completion race；
+- interrupt during active model transport / Tool execution；
 - duplicate/late/stale-incarnation completion；
 - child cancellation 不影响 parent/sibling；
 - mailbox、Tool、Agent capacity saturation；
@@ -732,11 +769,13 @@ Fault-injection tests：
 ### 14.2 落地顺序
 
 1. 将现有 Session/Thread 大文件按 aggregate 拆入目标目录；
-2. 引入 `LoadedThreadState`、显式 incarnation、idle eviction 和统一 mailbox；
+2. 已引入 `LoadedThreadState`、显式 incarnation、idle eviction、FIFO mutation gate 和有界
+   execution mailbox；
 3. 落地 `TurnPolicySnapshot` / `ModelInvocationSnapshot`；
 4. 引入独立 `context/` 与 `context_manager/`，完成 budget/compaction；
-5. 扩展现有 ToolScheduler：已完成 durable approval/顺序 Tool/UnknownOutcome 基线，后续增加
-   并行计划、deadline、reconciliation 与 resource conflict；
+5. 扩展现有 ToolScheduler：已完成 durable one-time approval、safe sandbox escalation、顺序
+   Tool 与 UnknownOutcome 基线，后续增加并行计划、deadline、声明式 retry、reconciliation 与
+   resource conflict；
 6. 增加 `multi_agent/`、MultiAgentCoordinator、delegation protocol 与 context inheritance；
 7. 完成 provider wire streaming、outbound writer 与 fault injection；
 8. 通过 context continuity、多 Agent 隔离、取消和副作用恢复评测。

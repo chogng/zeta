@@ -2,7 +2,7 @@ use zeta_protocol::{ThreadEvent, ThreadUpdate, ThreadUpdateEnvelope, TurnId, Tur
 
 pub(super) enum TurnUpdate {
     Progress(String),
-    Interaction(TurnInteraction),
+    Interaction(Box<TurnInteraction>),
 }
 
 pub(super) fn project(update: &ThreadUpdateEnvelope, turn_id: &TurnId) -> Option<TurnUpdate> {
@@ -41,7 +41,9 @@ fn committed(event: &ThreadEvent, turn_id: &TurnId) -> Option<TurnUpdate> {
             turn_id: event_turn,
             interaction,
             ..
-        } if event_turn == turn_id => return Some(TurnUpdate::Interaction(interaction.clone())),
+        } if event_turn == turn_id => {
+            return Some(TurnUpdate::Interaction(Box::new(interaction.clone())));
+        }
         ThreadEvent::InteractionResolved { turn_id, .. } => (turn_id, "Interaction resolved"),
         ThreadEvent::ToolExecutionStarted { turn_id, .. } => (turn_id, "Tool execution started"),
         ThreadEvent::ToolExecutionEscalated { turn_id, .. } => {

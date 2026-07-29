@@ -1,6 +1,8 @@
 use super::policy_feedback::{denied_feedback, rejection_circuit_breaker, safer_action_feedback};
 use super::review_context::attach_review_context;
-use super::tool_execution::{ToolExecutionCompletion, ToolExecutionOrchestrator};
+use super::tool_execution::{
+    ToolExecutionCompletion, ToolExecutionContext, ToolExecutionOrchestrator,
+};
 use crate::policy_service::approval_matches_review;
 use crate::{
     AutoReviewedToolGrant, CoreError, OneTimeToolGrant, PolicyService, RecordToolResultRequest,
@@ -53,16 +55,8 @@ impl ToolScheduler {
             let Some(pending) = next_pending_call(&snapshot.items, turn_id)? else {
                 return Ok(ToolSchedulingProgress::Complete);
             };
-
-            if snapshot.started_tool_calls.contains(&pending.call.id) {
-                self.record_failure(
-                    thread_id,
-                    turn_id,
-                    pending.call.id,
-                    "tool execution outcome is unknown after process interruption; the exact call was not retried",
-                )?;
-                continue;
-            }
+            let execution =
+                ToolExecutionContext::new(thread_id, turn_id, &pending.item_id, cancellation);
 
             if let Some((request_id, request, decision)) =
                 resolved_approval(&snapshot.resolved_interactions, turn_id, &pending.item_id)
@@ -97,16 +91,62 @@ impl ToolScheduler {
                             pending.call.id.clone(),
                             request.clone(),
                         ));
-                        self.execute(
-                            thread_id,
-                            turn_id,
-                            pending.call,
-                            &reviewed,
-                            authorization,
-                            cancellation,
-                        )?;
+                        if let Some(denial) = request.sandbox_denial.clone() {
+                            if !snapshot.started_tool_calls.contains(&pending.call.id) {
+                                self.record_failure(
+                                    thread_id,
+                                    turn_id,
+                                    pending.call.id,
+                                    "sandbox escalation approval does not reference a started Tool Call",
+                                )?;
+                                continue;
+                            }
+                            if snapshot.escalated_tool_calls.contains(&pending.call.id) {
+                                self.record_failure(
+                                    thread_id,
+                                    turn_id,
+                                    pending.call.id,
+                                    "approved outside-sandbox retry outcome is unknown after process interruption; the exact call was not retried",
+                                )?;
+                                continue;
+                            }
+                            ToolExecutionOrchestrator::new(
+                                self.threads.as_ref(),
+                                self.tools.as_ref(),
+                                self.policy.as_ref(),
+                            )
+                            .execute_approved_escalation(
+                                &execution,
+                                pending.call,
+                                &reviewed,
+                                denial,
+                                authorization,
+                            )?;
+                        } else if snapshot.started_tool_calls.contains(&pending.call.id) {
+                            self.record_failure(
+                                thread_id,
+                                turn_id,
+                                pending.call.id,
+                                "tool execution outcome is unknown after process interruption; the exact call was not retried",
+                            )?;
+                        } else if matches!(
+                            self.execute(&execution, pending.call, &reviewed, authorization)?,
+                            ToolSchedulingProgress::WaitingForApproval
+                        ) {
+                            return Ok(ToolSchedulingProgress::WaitingForApproval);
+                        }
                     }
                 }
+                continue;
+            }
+
+            if snapshot.started_tool_calls.contains(&pending.call.id) {
+                self.record_failure(
+                    thread_id,
+                    turn_id,
+                    pending.call.id,
+                    "tool execution outcome is unknown after process interruption; the exact call was not retried",
+                )?;
                 continue;
             }
 
@@ -114,24 +154,30 @@ impl ToolScheduler {
                 self.prepare_review(&snapshot, turn_id, &pending.item_id, &pending.call)?;
             match self.policy.decide(&reviewed, cancellation)? {
                 ExecutionDecision::RunSandboxed(sandbox) => {
-                    self.execute(
-                        thread_id,
-                        turn_id,
-                        pending.call,
-                        &reviewed,
-                        ToolAuthorization::Sandboxed(sandbox),
-                        cancellation,
-                    )?;
+                    if matches!(
+                        self.execute(
+                            &execution,
+                            pending.call,
+                            &reviewed,
+                            ToolAuthorization::Sandboxed(sandbox),
+                        )?,
+                        ToolSchedulingProgress::WaitingForApproval
+                    ) {
+                        return Ok(ToolSchedulingProgress::WaitingForApproval);
+                    }
                 }
                 ExecutionDecision::RunUnsandboxed { grant_id } => {
-                    self.execute(
-                        thread_id,
-                        turn_id,
-                        pending.call,
-                        &reviewed,
-                        ToolAuthorization::UnsandboxedGrant { grant_id },
-                        cancellation,
-                    )?;
+                    if matches!(
+                        self.execute(
+                            &execution,
+                            pending.call,
+                            &reviewed,
+                            ToolAuthorization::UnsandboxedGrant { grant_id },
+                        )?,
+                        ToolSchedulingProgress::WaitingForApproval
+                    ) {
+                        return Ok(ToolSchedulingProgress::WaitingForApproval);
+                    }
                 }
                 ExecutionDecision::RunAutoReviewed(grant) => {
                     if !grant.matches(
@@ -146,14 +192,12 @@ impl ToolScheduler {
                     let authorization = ToolAuthorization::AutoReviewed(
                         AutoReviewedToolGrant::new(pending.call.id.clone(), grant),
                     );
-                    self.execute(
-                        thread_id,
-                        turn_id,
-                        pending.call,
-                        &reviewed,
-                        authorization,
-                        cancellation,
-                    )?;
+                    if matches!(
+                        self.execute(&execution, pending.call, &reviewed, authorization)?,
+                        ToolSchedulingProgress::WaitingForApproval
+                    ) {
+                        return Ok(ToolSchedulingProgress::WaitingForApproval);
+                    }
                 }
                 ExecutionDecision::ReviseAction(revision) => {
                     self.record_failure(
@@ -228,30 +272,27 @@ impl ToolScheduler {
 
     fn execute(
         &self,
-        thread_id: &ThreadId,
-        turn_id: &TurnId,
+        context: &ToolExecutionContext<'_>,
         call: ToolCall,
         reviewed: &zeta_policy::ActionReviewRequest,
         authorization: ToolAuthorization,
-        cancellation: &CancellationToken,
-    ) -> Result<(), CoreError> {
+    ) -> Result<ToolSchedulingProgress, CoreError> {
         let completion = ToolExecutionOrchestrator::new(
             self.threads.as_ref(),
             self.tools.as_ref(),
             self.policy.as_ref(),
         )
-        .execute(
-            thread_id,
-            turn_id,
-            call,
-            reviewed,
-            authorization,
-            cancellation,
-        )?;
-        if matches!(completion, ToolExecutionCompletion::PolicyRejected) {
-            self.enforce_rejection_circuit_breaker(thread_id, turn_id)?;
+        .execute(context, call, reviewed, authorization)?;
+        match completion {
+            ToolExecutionCompletion::Complete => Ok(ToolSchedulingProgress::Complete),
+            ToolExecutionCompletion::PolicyRejected => {
+                self.enforce_rejection_circuit_breaker(context.thread_id(), context.turn_id())?;
+                Ok(ToolSchedulingProgress::Complete)
+            }
+            ToolExecutionCompletion::WaitingForApproval => {
+                Ok(ToolSchedulingProgress::WaitingForApproval)
+            }
         }
-        Ok(())
     }
 
     fn record_failure(

@@ -17,7 +17,7 @@ use zeta_app_server_transport::{DEFAULT_MAX_MESSAGE_BYTES, JsonlTransport};
 use zeta_config::ConfigStore;
 use zeta_core::{
     CoreError, ModelService, PolicyService, SessionCoordinator, ThreadUpdateSink, ToolService,
-    TurnExecutionLimits, TurnExecutor,
+    TurnExecutor,
 };
 use zeta_file_system::WorkspaceFileSystem;
 use zeta_protocol::ThreadUpdateEnvelope;
@@ -32,7 +32,7 @@ pub(crate) mod skills_runtime;
 mod terminal_operations;
 mod update_broker;
 
-use update_broker::{NotificationQueue, UpdateBroker};
+use update_broker::{NotificationListener, NotificationQueue, UpdateBroker};
 
 pub struct AppServer {
     pub(super) sessions: Arc<SessionCoordinator>,
@@ -57,6 +57,35 @@ pub struct ConnectionState {
     initialized: bool,
     request_ids: BTreeSet<u64>,
     outbound_notifications: NotificationQueue,
+}
+
+/// A wakeable source for outbound notifications owned by one App Server connection.
+///
+/// Connection hosts wait on this source independently from request dispatch, then drain the
+/// pending protocol notifications. Closing the connection wakes any blocked listener.
+pub struct ConnectionNotifications {
+    listener: NotificationListener,
+}
+
+impl ConnectionNotifications {
+    /// Blocks until notifications are available or the connection closes.
+    pub fn wait(&self) -> bool {
+        self.listener.wait()
+    }
+
+    /// Drains all currently queued notifications as JSON-RPC messages.
+    pub fn drain(&self) -> Vec<String> {
+        self.listener
+            .drain()
+            .into_iter()
+            .map(serialize_response)
+            .collect()
+    }
+
+    /// Closes this notification source and wakes blocked listeners.
+    pub fn close(&self) {
+        self.listener.close();
+    }
 }
 
 impl AppServer {
@@ -92,6 +121,28 @@ impl AppServer {
         self.updates
             .register(connection.connection_id, &connection.outbound_notifications);
         connection
+    }
+
+    /// Opens a wakeable outbound-notification source for `connection`.
+    pub fn connection_notifications(
+        &self,
+        connection: &ConnectionState,
+    ) -> ConnectionNotifications {
+        ConnectionNotifications {
+            listener: connection.outbound_notifications.listener(),
+        }
+    }
+
+    /// Releases connection-scoped subscriptions and runtime resources.
+    pub fn close_connection(&self, connection: ConnectionState) {
+        self.updates.unregister(connection.connection_id);
+        connection.outbound_notifications.close();
+        if let Ok(mut resources) = self.resources.lock() {
+            resources.release_owner(connection.connection_id);
+        }
+        if let Some(terminals) = &self.terminals {
+            terminals.close_owner(connection.connection_id);
+        }
     }
 
     pub fn with_config_store(mut self, config: Arc<ConfigStore>) -> Self {
@@ -154,7 +205,6 @@ impl AppServer {
             self.model.clone(),
             tools,
             policy,
-            TurnExecutionLimits::default(),
         )
         .with_thread_updates(Arc::new(AppServerThreadUpdates {
             updates: self.updates.clone(),
@@ -167,15 +217,12 @@ impl AppServer {
     }
 
     pub fn drain_notifications(&self, connection: &mut ConnectionState) -> Vec<String> {
-        std::mem::take(
-            &mut *connection
-                .outbound_notifications
-                .lock()
-                .expect("notification queue lock poisoned"),
-        )
-        .into_iter()
-        .map(serialize_response)
-        .collect()
+        connection
+            .outbound_notifications
+            .drain()
+            .into_iter()
+            .map(serialize_response)
+            .collect()
     }
 
     pub fn create_resource(
@@ -260,9 +307,7 @@ impl AppServer {
             }
             Ok(())
         })();
-        if let Some(terminals) = &self.terminals {
-            terminals.close_owner(connection.connection_id);
-        }
+        self.close_connection(connection);
         result
     }
 

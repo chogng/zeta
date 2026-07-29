@@ -39,6 +39,7 @@ use zeta_thread_store::{
 };
 
 mod execution;
+mod loaded_thread;
 mod mailbox;
 mod user_input;
 
@@ -185,18 +186,19 @@ enum BatchCommand {
 pub struct ThreadController {
     store: Arc<dyn ThreadStore>,
     writer_lease: Option<Arc<dyn WriterLease<ThreadId>>>,
-    threads: Mutex<BTreeMap<ThreadId, ThreadSnapshot>>,
+    loaded_threads: Arc<loaded_thread::LoadedThreads>,
     execution_mailboxes: mailbox::ThreadExecutionMailboxes,
     next_id: AtomicU64,
 }
 
 impl ThreadController {
     pub fn with_store(store: Arc<dyn ThreadStore>) -> Self {
+        let loaded_threads = Arc::new(loaded_thread::LoadedThreads::new(store.clone()));
         Self {
             store,
             writer_lease: None,
-            threads: Mutex::new(BTreeMap::new()),
-            execution_mailboxes: mailbox::ThreadExecutionMailboxes::default(),
+            execution_mailboxes: mailbox::ThreadExecutionMailboxes::new(loaded_threads.clone()),
+            loaded_threads,
             next_id: AtomicU64::new(1),
         }
     }
@@ -207,11 +209,12 @@ impl ThreadController {
         store: Arc<dyn ThreadStore>,
         writer_lease: Arc<dyn WriterLease<ThreadId>>,
     ) -> Self {
+        let loaded_threads = Arc::new(loaded_thread::LoadedThreads::new(store.clone()));
         Self {
             store,
             writer_lease: Some(writer_lease),
-            threads: Mutex::new(BTreeMap::new()),
-            execution_mailboxes: mailbox::ThreadExecutionMailboxes::default(),
+            execution_mailboxes: mailbox::ThreadExecutionMailboxes::new(loaded_threads.clone()),
+            loaded_threads,
             next_id: AtomicU64::new(1),
         }
     }
@@ -221,19 +224,21 @@ impl ThreadController {
     /// Repeating the same request is safe when the durable Thread identity, owner, and title all
     /// match. A conflicting existing stream is rejected.
     pub fn create_thread(&self, request: CreateThreadRequest) -> Result<ThreadSnapshot, CoreError> {
+        let slot = self.loaded_threads.slot(&request.thread_id)?;
+        let _permit = slot.enter_mutation()?;
         let _lease = self.acquire_writer_lease(&request.thread_id)?;
-        let mut threads = self
-            .threads
+        let mut loaded = slot
+            .loaded
             .lock()
-            .map_err(|_| CoreError::Journal("thread state lock poisoned".into()))?;
-        if let Some(existing) = threads.get(&request.thread_id) {
-            return matching_created_thread(existing, &request);
+            .map_err(|_| CoreError::Journal("loaded Thread state lock poisoned".into()))?;
+        if let Some(existing) = loaded.as_ref() {
+            return matching_created_thread(&existing.snapshot, &request);
         }
         let durable = self.store.load(&request.thread_id)?;
         if !durable.is_empty() {
             let existing = self.load_snapshot(&request.thread_id)?;
             let existing = matching_created_thread(&existing, &request)?;
-            threads.insert(request.thread_id, existing.clone());
+            *loaded = Some(self.loaded_threads.install(existing.clone()));
             return Ok(existing);
         }
         let (snapshot, batch) = self.project_batch(
@@ -247,7 +252,7 @@ impl ThreadController {
             BatchCommand::None,
         )?;
         self.commit_batch(&batch)?;
-        threads.insert(request.thread_id, snapshot.clone());
+        *loaded = Some(self.loaded_threads.install(snapshot.clone()));
         Ok(snapshot)
     }
 
@@ -261,75 +266,69 @@ impl ThreadController {
         let command = ThreadCommand::StartTurn {
             input: request.input.clone(),
         };
-        let _lease = self.acquire_writer_lease(thread_id)?;
-        let mut threads = self
-            .threads
-            .lock()
-            .map_err(|_| CoreError::Journal("thread state lock poisoned".into()))?;
-        let snapshot = threads
-            .get_mut(thread_id)
-            .ok_or_else(|| CoreError::NotFound(thread_id.to_string()))?;
-        if let Some(existing) = snapshot
-            .commands
-            .iter()
-            .find(|existing| existing.receipt.command_id == request.command_id)
-        {
-            if existing.receipt.command != command {
-                return Err(CoreError::CommandConflict);
-            }
-            let ThreadCommandResult::TurnAccepted { turn_id } = &existing.result else {
-                return Err(CoreError::Journal(
-                    "start-Turn command has an invalid result".into(),
-                ));
-            };
-            return Ok(StartTurnResult {
-                turn_id: turn_id.clone(),
-                sequence: existing.response_sequence,
-                disposition: StartTurnDisposition::Replayed,
-            });
-        }
-        validate_thread_expectation(request.expected_sequence, snapshot.sequence)?;
-        let turn_id =
-            TurnId::new(self.next_identifier("turn")).expect("generated Turn ID is non-empty");
-        let input_items = user_input::thread_items(&validated_input, &turn_id, || {
-            ItemId::new(self.next_identifier("item")).expect("generated Item ID is non-empty")
-        });
-        let mut events = Vec::with_capacity(input_items.len() + 2);
-        events.push(ThreadEvent::TurnAccepted {
-            thread_id: thread_id.clone(),
-            turn_id: turn_id.clone(),
-        });
-        events.extend(
-            input_items
-                .into_iter()
-                .map(|item| ThreadEvent::ItemCompleted {
-                    thread_id: thread_id.clone(),
+        self.mutate_thread(thread_id, |snapshot| {
+            if let Some(existing) = snapshot
+                .commands
+                .iter()
+                .find(|existing| existing.receipt.command_id == request.command_id)
+            {
+                if existing.receipt.command != command {
+                    return Err(CoreError::CommandConflict);
+                }
+                let ThreadCommandResult::TurnAccepted { turn_id } = &existing.result else {
+                    return Err(CoreError::Journal(
+                        "start-Turn command has an invalid result".into(),
+                    ));
+                };
+                return Ok(StartTurnResult {
                     turn_id: turn_id.clone(),
-                    item,
-                }),
-        );
-        events.push(ThreadEvent::TurnStarted {
-            thread_id: thread_id.clone(),
-            turn_id: turn_id.clone(),
-        });
-        let (next_snapshot, batch) = self.project_batch(
-            Some(snapshot.clone()),
-            &snapshot.thread_id,
-            events,
-            BatchCommand::AtEvent {
-                index: 0,
-                receipt: ThreadCommandReceipt {
-                    command_id: request.command_id,
-                    command,
+                    sequence: existing.response_sequence,
+                    disposition: StartTurnDisposition::Replayed,
+                });
+            }
+            validate_thread_expectation(request.expected_sequence, snapshot.sequence)?;
+            let turn_id =
+                TurnId::new(self.next_identifier("turn")).expect("generated Turn ID is non-empty");
+            let input_items = user_input::thread_items(&validated_input, &turn_id, || {
+                ItemId::new(self.next_identifier("item")).expect("generated Item ID is non-empty")
+            });
+            let mut events = Vec::with_capacity(input_items.len() + 2);
+            events.push(ThreadEvent::TurnAccepted {
+                thread_id: thread_id.clone(),
+                turn_id: turn_id.clone(),
+            });
+            events.extend(
+                input_items
+                    .into_iter()
+                    .map(|item| ThreadEvent::ItemCompleted {
+                        thread_id: thread_id.clone(),
+                        turn_id: turn_id.clone(),
+                        item,
+                    }),
+            );
+            events.push(ThreadEvent::TurnStarted {
+                thread_id: thread_id.clone(),
+                turn_id: turn_id.clone(),
+            });
+            let (next_snapshot, batch) = self.project_batch(
+                Some(snapshot.clone()),
+                &snapshot.thread_id,
+                events,
+                BatchCommand::AtEvent {
+                    index: 0,
+                    receipt: ThreadCommandReceipt {
+                        command_id: request.command_id,
+                        command,
+                    },
                 },
-            },
-        )?;
-        self.commit_batch(&batch)?;
-        *snapshot = next_snapshot;
-        Ok(StartTurnResult {
-            turn_id,
-            sequence: snapshot.sequence,
-            disposition: StartTurnDisposition::Created,
+            )?;
+            self.commit_batch(&batch)?;
+            *snapshot = next_snapshot;
+            Ok(StartTurnResult {
+                turn_id,
+                sequence: snapshot.sequence,
+                disposition: StartTurnDisposition::Created,
+            })
         })
     }
 
@@ -365,25 +364,19 @@ impl ThreadController {
             request: request.request,
             deadline: request.deadline,
         };
-        let _lease = self.acquire_writer_lease(thread_id)?;
-        let mut threads = self
-            .threads
-            .lock()
-            .map_err(|_| CoreError::Journal("thread state lock poisoned".into()))?;
-        let snapshot = threads
-            .get_mut(thread_id)
-            .ok_or_else(|| CoreError::NotFound(thread_id.to_string()))?;
-        self.record_batch(
-            snapshot,
-            vec![ThreadEvent::InteractionRequested {
-                thread_id: thread_id.clone(),
-                turn_id: turn_id.clone(),
-                interaction: interaction.clone(),
-            }],
-        )?;
-        Ok(RequestedTurnInteraction {
-            interaction,
-            sequence: snapshot.sequence,
+        self.mutate_thread(thread_id, |snapshot| {
+            self.record_batch(
+                snapshot,
+                vec![ThreadEvent::InteractionRequested {
+                    thread_id: thread_id.clone(),
+                    turn_id: turn_id.clone(),
+                    interaction: interaction.clone(),
+                }],
+            )?;
+            Ok(RequestedTurnInteraction {
+                interaction,
+                sequence: snapshot.sequence,
+            })
         })
     }
 
@@ -396,59 +389,53 @@ impl ThreadController {
         validate_command_id(&request.command_id)?;
         validate_request_id(&request.request_id)?;
         let command = resolution_command(&request);
-        let _lease = self.acquire_writer_lease(thread_id)?;
-        let mut threads = self
-            .threads
-            .lock()
-            .map_err(|_| CoreError::Journal("thread state lock poisoned".into()))?;
-        let snapshot = threads
-            .get_mut(thread_id)
-            .ok_or_else(|| CoreError::NotFound(thread_id.to_string()))?;
-        if let Some(existing) = snapshot
-            .commands
-            .iter()
-            .find(|existing| existing.receipt.command_id == request.command_id)
-        {
-            if existing.receipt.command != command {
-                return Err(CoreError::CommandConflict);
+        self.mutate_thread(thread_id, |snapshot| {
+            if let Some(existing) = snapshot
+                .commands
+                .iter()
+                .find(|existing| existing.receipt.command_id == request.command_id)
+            {
+                if existing.receipt.command != command {
+                    return Err(CoreError::CommandConflict);
+                }
+                if !matches!(
+                    &existing.result,
+                    ThreadCommandResult::InteractionResolved { turn_id, request_id }
+                        if turn_id == &request.turn_id && request_id == &request.request_id
+                ) {
+                    return Err(CoreError::Journal(
+                        "interaction resolution command has an invalid result".into(),
+                    ));
+                }
+                return Ok(ResolveTurnInteractionResult {
+                    sequence: existing.response_sequence,
+                    disposition: ResolveTurnInteractionDisposition::Replayed,
+                });
             }
-            if !matches!(
-                &existing.result,
-                ThreadCommandResult::InteractionResolved { turn_id, request_id }
-                    if turn_id == &request.turn_id && request_id == &request.request_id
-            ) {
-                return Err(CoreError::Journal(
-                    "interaction resolution command has an invalid result".into(),
-                ));
-            }
-            return Ok(ResolveTurnInteractionResult {
-                sequence: existing.response_sequence,
-                disposition: ResolveTurnInteractionDisposition::Replayed,
-            });
-        }
-        validate_thread_expectation(request.expected_sequence, snapshot.sequence)?;
-        let (next_snapshot, batch) = self.project_batch(
-            Some(snapshot.clone()),
-            thread_id,
-            vec![ThreadEvent::InteractionResolved {
-                thread_id: thread_id.clone(),
-                turn_id: request.turn_id.clone(),
-                request_id: request.request_id.clone(),
-                response: request.response,
-            }],
-            BatchCommand::AtEvent {
-                index: 0,
-                receipt: ThreadCommandReceipt {
-                    command_id: request.command_id,
-                    command,
+            validate_thread_expectation(request.expected_sequence, snapshot.sequence)?;
+            let (next_snapshot, batch) = self.project_batch(
+                Some(snapshot.clone()),
+                thread_id,
+                vec![ThreadEvent::InteractionResolved {
+                    thread_id: thread_id.clone(),
+                    turn_id: request.turn_id.clone(),
+                    request_id: request.request_id.clone(),
+                    response: request.response,
+                }],
+                BatchCommand::AtEvent {
+                    index: 0,
+                    receipt: ThreadCommandReceipt {
+                        command_id: request.command_id,
+                        command,
+                    },
                 },
-            },
-        )?;
-        self.commit_batch(&batch)?;
-        *snapshot = next_snapshot;
-        Ok(ResolveTurnInteractionResult {
-            sequence: snapshot.sequence,
-            disposition: ResolveTurnInteractionDisposition::Resolved,
+            )?;
+            self.commit_batch(&batch)?;
+            *snapshot = next_snapshot;
+            Ok(ResolveTurnInteractionResult {
+                sequence: snapshot.sequence,
+                disposition: ResolveTurnInteractionDisposition::Resolved,
+            })
         })
     }
 
@@ -462,25 +449,19 @@ impl ThreadController {
         request: CancelTurnInteractionRequest,
     ) -> Result<CancelledTurnInteraction, CoreError> {
         validate_request_id(&request.request_id)?;
-        let _lease = self.acquire_writer_lease(thread_id)?;
-        let mut threads = self
-            .threads
-            .lock()
-            .map_err(|_| CoreError::Journal("thread state lock poisoned".into()))?;
-        let snapshot = threads
-            .get_mut(thread_id)
-            .ok_or_else(|| CoreError::NotFound(thread_id.to_string()))?;
-        self.record_batch(
-            snapshot,
-            vec![ThreadEvent::InteractionCancelled {
-                thread_id: thread_id.clone(),
-                turn_id: request.turn_id,
-                request_id: request.request_id,
-                reason: request.reason,
-            }],
-        )?;
-        Ok(CancelledTurnInteraction {
-            sequence: snapshot.sequence,
+        self.mutate_thread(thread_id, |snapshot| {
+            self.record_batch(
+                snapshot,
+                vec![ThreadEvent::InteractionCancelled {
+                    thread_id: thread_id.clone(),
+                    turn_id: request.turn_id,
+                    request_id: request.request_id,
+                    reason: request.reason,
+                }],
+            )?;
+            Ok(CancelledTurnInteraction {
+                sequence: snapshot.sequence,
+            })
         })
     }
 
@@ -556,103 +537,87 @@ impl ThreadController {
         let command = ThreadCommand::InterruptTurn {
             turn_id: request.turn_id.clone(),
         };
-        let _lease = self.acquire_writer_lease(thread_id)?;
-        let mut threads = self
-            .threads
-            .lock()
-            .map_err(|_| CoreError::Journal("thread state lock poisoned".into()))?;
-        let snapshot = threads
-            .get_mut(thread_id)
-            .ok_or_else(|| CoreError::NotFound(thread_id.to_string()))?;
-        if let Some(existing) = snapshot
-            .commands
-            .iter()
-            .find(|existing| existing.receipt.command_id == request.command_id)
-        {
-            if existing.receipt.command != command {
-                return Err(CoreError::CommandConflict);
+        let result = self.mutate_thread(thread_id, |snapshot| {
+            if let Some(existing) = snapshot
+                .commands
+                .iter()
+                .find(|existing| existing.receipt.command_id == request.command_id)
+            {
+                if existing.receipt.command != command {
+                    return Err(CoreError::CommandConflict);
+                }
+                if !matches!(
+                    &existing.result,
+                    ThreadCommandResult::TurnInterrupted { turn_id }
+                        if turn_id == &request.turn_id
+                ) {
+                    return Err(CoreError::Journal(
+                        "interrupt-Turn command has an invalid result".into(),
+                    ));
+                }
+                return Ok(InterruptTurnResult {
+                    sequence: existing.response_sequence,
+                    disposition: InterruptTurnDisposition::Replayed,
+                });
             }
-            if !matches!(
-                &existing.result,
-                ThreadCommandResult::TurnInterrupted { turn_id }
-                    if turn_id == &request.turn_id
-            ) {
-                return Err(CoreError::Journal(
-                    "interrupt-Turn command has an invalid result".into(),
-                ));
+            validate_thread_expectation(request.expected_sequence, snapshot.sequence)?;
+            let pending_interaction = snapshot
+                .turns
+                .iter()
+                .find(|turn| turn.turn_id == request.turn_id)
+                .ok_or_else(|| CoreError::NotFound(request.turn_id.to_string()))?
+                .pending_interaction
+                .clone();
+            let command_event_index = usize::from(pending_interaction.is_some());
+            let mut events = Vec::with_capacity(3);
+            if let Some(interaction) = pending_interaction {
+                events.push(ThreadEvent::InteractionCancelled {
+                    thread_id: thread_id.clone(),
+                    turn_id: request.turn_id.clone(),
+                    request_id: interaction.request_id,
+                    reason: InteractionCancelReason::TurnInterrupted,
+                });
             }
-            return Ok(InterruptTurnResult {
-                sequence: existing.response_sequence,
-                disposition: InterruptTurnDisposition::Replayed,
-            });
-        }
-        validate_thread_expectation(request.expected_sequence, snapshot.sequence)?;
-        let pending_interaction = snapshot
-            .turns
-            .iter()
-            .find(|turn| turn.turn_id == request.turn_id)
-            .ok_or_else(|| CoreError::NotFound(request.turn_id.to_string()))?
-            .pending_interaction
-            .clone();
-        let command_event_index = usize::from(pending_interaction.is_some());
-        let mut events = Vec::with_capacity(3);
-        if let Some(interaction) = pending_interaction {
-            events.push(ThreadEvent::InteractionCancelled {
-                thread_id: thread_id.clone(),
-                turn_id: request.turn_id.clone(),
-                request_id: interaction.request_id,
-                reason: InteractionCancelReason::TurnInterrupted,
-            });
-        }
-        events.extend([
-            ThreadEvent::TurnCancelling {
-                thread_id: thread_id.clone(),
-                turn_id: request.turn_id.clone(),
-            },
-            ThreadEvent::TurnInterrupted {
-                thread_id: thread_id.clone(),
-                turn_id: request.turn_id,
-            },
-        ]);
-        let (next_snapshot, batch) = self.project_batch(
-            Some(snapshot.clone()),
-            thread_id,
-            events,
-            BatchCommand::AtEvent {
-                index: command_event_index,
-                receipt: ThreadCommandReceipt {
-                    command_id: request.command_id,
-                    command,
+            events.extend([
+                ThreadEvent::TurnCancelling {
+                    thread_id: thread_id.clone(),
+                    turn_id: request.turn_id.clone(),
                 },
-            },
-        )?;
-        self.commit_batch(&batch)?;
-        *snapshot = next_snapshot;
+                ThreadEvent::TurnInterrupted {
+                    thread_id: thread_id.clone(),
+                    turn_id: request.turn_id,
+                },
+            ]);
+            let (next_snapshot, batch) = self.project_batch(
+                Some(snapshot.clone()),
+                thread_id,
+                events,
+                BatchCommand::AtEvent {
+                    index: command_event_index,
+                    receipt: ThreadCommandReceipt {
+                        command_id: request.command_id,
+                        command,
+                    },
+                },
+            )?;
+            self.commit_batch(&batch)?;
+            *snapshot = next_snapshot;
+            Ok(InterruptTurnResult {
+                sequence: snapshot.sequence,
+                disposition: InterruptTurnDisposition::Interrupted,
+            })
+        })?;
         self.cancel_turn_execution(thread_id, &turn_id_for_cancellation);
-        Ok(InterruptTurnResult {
-            sequence: snapshot.sequence,
-            disposition: InterruptTurnDisposition::Interrupted,
-        })
+        Ok(result)
     }
 
     pub fn read_thread(&self, thread_id: &ThreadId) -> Result<ThreadSnapshot, CoreError> {
-        self.threads
-            .lock()
-            .map_err(|_| CoreError::Journal("thread state lock poisoned".into()))?
-            .get(thread_id)
-            .cloned()
-            .ok_or_else(|| CoreError::NotFound(thread_id.to_string()))
+        self.with_loaded_thread(thread_id, |loaded| Ok(loaded.snapshot.clone()))
     }
 
     /// Returns the in-memory projections currently loaded by this manager.
     pub fn list_threads(&self) -> Result<Vec<ThreadSnapshot>, CoreError> {
-        Ok(self
-            .threads
-            .lock()
-            .map_err(|_| CoreError::Journal("thread state lock poisoned".into()))?
-            .values()
-            .cloned()
-            .collect())
+        self.loaded_threads.loaded_snapshots()
     }
 
     /// Replays committed updates after a durable Thread sequence for reconnecting consumers.
@@ -681,7 +646,14 @@ impl ThreadController {
     /// previous process stopped. The recovery markers are appended before the restored projection
     /// becomes observable.
     pub fn recover_thread(&self, thread_id: &ThreadId) -> Result<ThreadSnapshot, CoreError> {
+        self.execution_mailboxes.retire_idle(thread_id)?;
+        let slot = self.loaded_threads.slot(thread_id)?;
+        let _permit = slot.enter_mutation()?;
         let _lease = self.acquire_writer_lease(thread_id)?;
+        let mut loaded = slot
+            .loaded
+            .lock()
+            .map_err(|_| CoreError::Journal("loaded Thread state lock poisoned".into()))?;
         let mut snapshot = self.load_snapshot(thread_id)?;
         let mut recovery_events = Vec::new();
         for turn in snapshot.turns.clone() {
@@ -710,10 +682,7 @@ impl ThreadController {
         if !recovery_events.is_empty() {
             self.record_batch(&mut snapshot, recovery_events)?;
         }
-        self.threads
-            .lock()
-            .map_err(|_| CoreError::Journal("thread state lock poisoned".into()))?
-            .insert(thread_id.clone(), snapshot.clone());
+        *loaded = Some(self.loaded_threads.install(snapshot.clone()));
         Ok(snapshot)
     }
 
@@ -735,15 +704,7 @@ impl ThreadController {
         thread_id: &ThreadId,
         events: Vec<ThreadEvent>,
     ) -> Result<(), CoreError> {
-        let _lease = self.acquire_writer_lease(thread_id)?;
-        let mut threads = self
-            .threads
-            .lock()
-            .map_err(|_| CoreError::Journal("thread state lock poisoned".into()))?;
-        let snapshot = threads
-            .get_mut(thread_id)
-            .ok_or_else(|| CoreError::NotFound(thread_id.to_string()))?;
-        self.record_batch(snapshot, events)
+        self.mutate_thread(thread_id, |snapshot| self.record_batch(snapshot, events))
     }
 
     fn record_item(
@@ -752,23 +713,62 @@ impl ThreadController {
         turn_id: &TurnId,
         item: ThreadItem,
     ) -> Result<u64, CoreError> {
+        self.mutate_thread(thread_id, |snapshot| {
+            self.record_batch(
+                snapshot,
+                vec![ThreadEvent::ItemCompleted {
+                    thread_id: thread_id.clone(),
+                    turn_id: turn_id.clone(),
+                    item,
+                }],
+            )?;
+            Ok(snapshot.sequence)
+        })
+    }
+
+    fn mutate_thread<R>(
+        &self,
+        thread_id: &ThreadId,
+        mutation: impl FnOnce(&mut ThreadSnapshot) -> Result<R, CoreError>,
+    ) -> Result<R, CoreError> {
+        let slot = self.loaded_threads.slot(thread_id)?;
+        let _permit = slot.enter_mutation()?;
         let _lease = self.acquire_writer_lease(thread_id)?;
-        let mut threads = self
-            .threads
+        let mut loaded = slot
+            .loaded
             .lock()
-            .map_err(|_| CoreError::Journal("thread state lock poisoned".into()))?;
-        let snapshot = threads
-            .get_mut(thread_id)
-            .ok_or_else(|| CoreError::NotFound(thread_id.to_string()))?;
-        self.record_batch(
-            snapshot,
-            vec![ThreadEvent::ItemCompleted {
-                thread_id: thread_id.clone(),
-                turn_id: turn_id.clone(),
-                item,
-            }],
-        )?;
-        Ok(snapshot.sequence)
+            .map_err(|_| CoreError::Journal("loaded Thread state lock poisoned".into()))?;
+        if loaded.is_none() {
+            let snapshot = self.load_snapshot(thread_id)?;
+            *loaded = Some(self.loaded_threads.install(snapshot));
+        }
+        mutation(
+            &mut loaded
+                .as_mut()
+                .expect("loaded Thread state was installed above")
+                .snapshot,
+        )
+    }
+
+    fn with_loaded_thread<R>(
+        &self,
+        thread_id: &ThreadId,
+        operation: impl FnOnce(&mut loaded_thread::LoadedThreadState) -> Result<R, CoreError>,
+    ) -> Result<R, CoreError> {
+        let slot = self.loaded_threads.slot(thread_id)?;
+        let mut loaded = slot
+            .loaded
+            .lock()
+            .map_err(|_| CoreError::Journal("loaded Thread state lock poisoned".into()))?;
+        if loaded.is_none() {
+            let snapshot = self.load_snapshot(thread_id)?;
+            *loaded = Some(self.loaded_threads.install(snapshot));
+        }
+        operation(
+            loaded
+                .as_mut()
+                .expect("loaded Thread state was installed above"),
+        )
     }
 
     fn record_batch(

@@ -735,6 +735,11 @@ pub enum ToolExecutionOutcome {
 取消只是一种执行信号，不自动等于 `NotStarted`。Executor 必须根据外部动作是否可能开始返回准确
 outcome。
 
+当前 Core 的 sandbox escalation 已采用更窄的恢复规则：只有 executor 明确返回
+`SafeToRetry` denial 才进入二次 policy review；需要用户决定时先 durable 保存 denial 和 exact
+approval binding。批准后在非 sandbox 重试前提交 escalation marker；若 marker 已存在而结果缺失，
+恢复只产生 unknown-outcome failure，不重复调用工具。`MayHaveSideEffects` denial 永不自动重放。
+
 ### 9.3 Output adapters
 
 共享 adapter 负责：

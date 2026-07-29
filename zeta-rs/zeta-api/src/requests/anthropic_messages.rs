@@ -4,6 +4,7 @@ use crate::{
     ToolDefinition, ToolName,
 };
 use serde_json::{Map, Value, json};
+use zeta_async_utils::CancellationToken;
 use zeta_client::{OperationClient, ResolvedApiTarget};
 
 pub(crate) fn complete(
@@ -12,14 +13,20 @@ pub(crate) fn complete(
     model: &str,
     request: &ModelRequest,
     client: &dyn OperationClient,
+    cancellation: &CancellationToken,
 ) -> Result<ModelResponse, ApiError> {
     if request.reasoning.is_some() {
         return Err(ApiError::InvalidRequest(
             "Anthropic reasoning requires a provider-specific thinking configuration".into(),
         ));
     }
-    let response =
-        crate::requests::post_json(client, target, endpoint, build_request(model, request)?)?;
+    let response = crate::requests::post_json(
+        client,
+        target,
+        endpoint,
+        build_request(model, request)?,
+        cancellation,
+    )?;
     parse_response(response)
 }
 

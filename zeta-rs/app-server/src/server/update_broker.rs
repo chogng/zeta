@@ -1,7 +1,7 @@
 use serde::Serialize;
 use serde_json::Value;
 use std::collections::BTreeMap;
-use std::sync::{Arc, Mutex, Weak};
+use std::sync::{Arc, Condvar, Mutex, Weak};
 use zeta_app_server_protocol::protocol::registry::ServerNotificationMethod;
 use zeta_app_server_protocol::protocol::skills::SkillsChanged;
 use zeta_app_server_protocol::rpc::JsonRpcNotification;
@@ -9,7 +9,103 @@ use zeta_protocol::{
     SessionId, SessionUpdateEnvelope, ThreadId, ThreadUpdate, ThreadUpdateEnvelope,
 };
 
-pub(super) type NotificationQueue = Arc<Mutex<Vec<Value>>>;
+#[derive(Clone, Debug, Default)]
+pub(super) struct NotificationQueue {
+    inner: Arc<NotificationQueueInner>,
+}
+
+#[derive(Debug, Default)]
+struct NotificationQueueInner {
+    state: Mutex<NotificationQueueState>,
+    changed: Condvar,
+}
+
+#[derive(Debug, Default)]
+struct NotificationQueueState {
+    values: Vec<Value>,
+    closed: bool,
+}
+
+pub(crate) struct NotificationListener {
+    queue: NotificationQueue,
+}
+
+impl NotificationQueue {
+    fn downgrade(&self) -> Weak<NotificationQueueInner> {
+        Arc::downgrade(&self.inner)
+    }
+
+    fn from_inner(inner: Arc<NotificationQueueInner>) -> Self {
+        Self { inner }
+    }
+
+    pub(super) fn listener(&self) -> NotificationListener {
+        NotificationListener {
+            queue: self.clone(),
+        }
+    }
+
+    pub(super) fn push(&self, value: Value) {
+        self.extend([value]);
+    }
+
+    pub(super) fn extend(&self, values: impl IntoIterator<Item = Value>) {
+        if let Ok(mut state) = self.inner.state.lock() {
+            let was_empty = state.values.is_empty();
+            state.values.extend(values);
+            if was_empty && !state.values.is_empty() {
+                self.inner.changed.notify_all();
+            }
+        }
+    }
+
+    pub(super) fn drain(&self) -> Vec<Value> {
+        self.inner
+            .state
+            .lock()
+            .map(|mut state| std::mem::take(&mut state.values))
+            .unwrap_or_default()
+    }
+
+    pub(super) fn close(&self) {
+        if let Ok(mut state) = self.inner.state.lock() {
+            state.closed = true;
+            self.inner.changed.notify_all();
+        }
+    }
+
+    #[cfg(test)]
+    fn len(&self) -> usize {
+        self.inner
+            .state
+            .lock()
+            .map(|state| state.values.len())
+            .unwrap_or_default()
+    }
+}
+
+impl NotificationListener {
+    pub(crate) fn wait(&self) -> bool {
+        let Ok(mut state) = self.queue.inner.state.lock() else {
+            return false;
+        };
+        while state.values.is_empty() && !state.closed {
+            let Ok(next) = self.queue.inner.changed.wait(state) else {
+                return false;
+            };
+            state = next;
+        }
+        !state.values.is_empty()
+    }
+
+    pub(crate) fn drain(&self) -> Vec<Value> {
+        self.queue.drain()
+    }
+
+    pub(crate) fn close(&self) {
+        self.queue.close();
+    }
+}
 
 #[derive(Default)]
 pub(super) struct UpdateBroker {
@@ -17,7 +113,7 @@ pub(super) struct UpdateBroker {
 }
 
 struct Subscriber {
-    queue: Weak<Mutex<Vec<Value>>>,
+    queue: Weak<NotificationQueueInner>,
     sessions: BTreeMap<SessionId, u64>,
     threads: BTreeMap<ThreadId, u64>,
 }
@@ -28,11 +124,17 @@ impl UpdateBroker {
             subscribers.insert(
                 connection_id,
                 Subscriber {
-                    queue: Arc::downgrade(queue),
+                    queue: queue.downgrade(),
                     sessions: BTreeMap::new(),
                     threads: BTreeMap::new(),
                 },
             );
+        }
+    }
+
+    pub(super) fn unregister(&self, connection_id: u64) {
+        if let Ok(mut subscribers) = self.subscribers.lock() {
+            subscribers.remove(&connection_id);
         }
     }
 
@@ -82,7 +184,11 @@ impl UpdateBroker {
             return;
         };
         subscribers.retain(|_, subscriber| {
-            let Some(queue) = subscriber.queue.upgrade() else {
+            let Some(queue) = subscriber
+                .queue
+                .upgrade()
+                .map(NotificationQueue::from_inner)
+            else {
                 return false;
             };
             let Some(cursor) = subscriber.sessions.get_mut(session_id) else {
@@ -96,9 +202,7 @@ impl UpdateBroker {
             if let Some(last) = updates.last() {
                 *cursor = (*cursor).max(last.durable_sequence);
             }
-            if let Ok(mut queue) = queue.lock() {
-                queue.extend(pending);
-            }
+            queue.extend(pending);
             true
         });
     }
@@ -108,7 +212,11 @@ impl UpdateBroker {
             return;
         };
         subscribers.retain(|_, subscriber| {
-            let Some(queue) = subscriber.queue.upgrade() else {
+            let Some(queue) = subscriber
+                .queue
+                .upgrade()
+                .map(NotificationQueue::from_inner)
+            else {
                 return false;
             };
             let Some(cursor) = subscriber.threads.get_mut(thread_id) else {
@@ -122,9 +230,7 @@ impl UpdateBroker {
             if let Some(last) = updates.last() {
                 *cursor = (*cursor).max(last.durable_sequence);
             }
-            if let Ok(mut queue) = queue.lock() {
-                queue.extend(pending);
-            }
+            queue.extend(pending);
             true
         });
     }
@@ -145,15 +251,17 @@ impl UpdateBroker {
             return;
         };
         subscribers.retain(|_, subscriber| {
-            let Some(queue) = subscriber.queue.upgrade() else {
+            let Some(queue) = subscriber
+                .queue
+                .upgrade()
+                .map(NotificationQueue::from_inner)
+            else {
                 return false;
             };
-            if let Ok(mut queue) = queue.lock() {
-                queue.push(notification(
-                    ServerNotificationMethod::SkillsChanged,
-                    &SkillsChanged { generation },
-                ));
-            }
+            queue.push(notification(
+                ServerNotificationMethod::SkillsChanged,
+                &SkillsChanged { generation },
+            ));
             true
         });
     }
@@ -163,15 +271,17 @@ impl UpdateBroker {
             return;
         };
         subscribers.retain(|_, subscriber| {
-            let Some(queue) = subscriber.queue.upgrade() else {
+            let Some(queue) = subscriber
+                .queue
+                .upgrade()
+                .map(NotificationQueue::from_inner)
+            else {
                 return false;
             };
             if !subscriber.threads.contains_key(&update.thread_id) {
                 return true;
             }
-            if let Ok(mut queue) = queue.lock() {
-                queue.push(notification(ServerNotificationMethod::ThreadUpdate, update));
-            }
+            queue.push(notification(ServerNotificationMethod::ThreadUpdate, update));
             true
         });
     }

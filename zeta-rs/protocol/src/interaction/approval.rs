@@ -2,6 +2,8 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
+use crate::SandboxDenialOutput;
+
 /// Capability kind displayed and approved through a durable Agent interaction.
 #[derive(
     Clone, Copy, Debug, Deserialize, Eq, JsonSchema, Ord, PartialEq, PartialOrd, Serialize, TS,
@@ -28,6 +30,8 @@ pub struct ActionApprovalCapability {
 }
 
 /// Durable request for approval of one policy-bound action.
+///
+/// `sandbox_denial` is present only for one exact retry after a safe sandbox denial.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ActionApprovalRequest {
@@ -39,6 +43,9 @@ pub struct ActionApprovalRequest {
     pub capabilities: Vec<ActionApprovalCapability>,
     #[schemars(length(min = 1))]
     pub reason: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub sandbox_denial: Option<SandboxDenialOutput>,
 }
 
 /// User decision for one exact action approval interaction.

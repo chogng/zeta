@@ -1023,6 +1023,7 @@ fn approval_interaction_resolves_through_the_typed_app_server_contract() {
                             scope: "api.example.com".into(),
                         }],
                         reason: "network requires approval".into(),
+                        sandbox_denial: None,
                     },
                 },
                 deadline: None,

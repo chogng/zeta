@@ -2,9 +2,12 @@
 
 mod in_process;
 mod notification;
+mod session;
 
 use serde_json::Value;
 use std::fmt;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, OnceLock};
 use zeta_app_server_protocol::protocol::common::EmptyParams;
 use zeta_app_server_protocol::protocol::config::{
     ConfigCommandResult, ConfigReadResult, ConfigUpdateParams, McpServerRemoveParams,
@@ -48,6 +51,10 @@ pub use in_process::InProcessTransport;
 pub use in_process::open_in_process_app_server;
 pub use in_process::start_in_process_client;
 pub use notification::ServerNotification;
+pub use session::{
+    AppServerEvent, AppServerEvents, AppServerRequestHandle, AppServerSession,
+    ConnectionCloseReason, ShutdownError, TakeEventsError,
+};
 
 /// Exchanges one complete JSON-RPC request with a connected app-server transport.
 ///
@@ -64,8 +71,18 @@ pub trait JsonRpcTransport {
 
 pub struct AppServerClient<T> {
     transport: T,
-    next_request_id: u64,
-    initialization: Option<InitializeResult>,
+    next_request_id: Arc<AtomicU64>,
+    initialization: Arc<OnceLock<InitializeResult>>,
+}
+
+impl<T: Clone> Clone for AppServerClient<T> {
+    fn clone(&self) -> Self {
+        Self {
+            transport: self.transport.clone(),
+            next_request_id: Arc::clone(&self.next_request_id),
+            initialization: Arc::clone(&self.initialization),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -79,8 +96,8 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
     pub fn new(transport: T) -> Self {
         Self {
             transport,
-            next_request_id: 1,
-            initialization: None,
+            next_request_id: Arc::new(AtomicU64::new(1)),
+            initialization: Arc::new(OnceLock::new()),
         }
     }
 
@@ -89,13 +106,17 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
         params: InitializeParams,
     ) -> Result<InitializeResult, ClientError> {
         let initialization: InitializeResult = self.call(ClientMethod::Initialize, params)?;
-        self.initialization = Some(initialization.clone());
+        self.initialization
+            .set(initialization.clone())
+            .map_err(|_| {
+                ClientError::Protocol("App Server client is already initialized".into())
+            })?;
         Ok(initialization)
     }
 
     /// Returns the immutable server snapshot captured by the successful initialize handshake.
     pub fn initialization(&self) -> Result<&InitializeResult, ClientError> {
-        self.initialization.as_ref().ok_or_else(|| {
+        self.initialization.get().ok_or_else(|| {
             ClientError::Protocol(
                 "App Server client has not completed the initialize handshake".into(),
             )
@@ -349,8 +370,7 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
         method: ClientMethod,
         params: P,
     ) -> Result<R, ClientError> {
-        let request_id = self.next_request_id;
-        self.next_request_id += 1;
+        let request_id = self.next_request_id.fetch_add(1, Ordering::Relaxed);
         let params = serde_json::to_value(params)
             .map_err(|error| ClientError::Protocol(error.to_string()))?;
         let request = JsonRpcRequest::new(

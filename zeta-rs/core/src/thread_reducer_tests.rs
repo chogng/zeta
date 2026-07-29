@@ -345,7 +345,27 @@ fn reducer_rejects_unsafe_or_rebound_tool_escalation() {
             assessment_id: "assessment-1".into(),
         },
     };
-    assert!(reduce_thread_event(Some(thread), &envelope(6, rebound_escalation)).is_err());
+    assert!(reduce_thread_event(Some(thread.clone()), &envelope(6, rebound_escalation)).is_err());
+
+    let unbound_approval_escalation = ThreadEvent::ToolExecutionEscalated {
+        thread_id: ThreadId::new("thread_1").unwrap(),
+        turn_id: TurnId::new("turn_1").unwrap(),
+        tool_call_id: ToolCallId::new("tool_1").unwrap(),
+        action_digest: "action-1".into(),
+        policy_revision: "policy-1".into(),
+        denial: zeta_protocol::SandboxDenialOutput::safe_to_retry(
+            "sandbox setup failed",
+            zeta_protocol::ProcessExecutionOutput::from_captured_streams(
+                zeta_protocol::ProcessExitStatus::Code(1),
+                "",
+                "operation not permitted",
+            ),
+        ),
+        authority: zeta_protocol::ToolExecutionAuthority::ApprovedOnce {
+            request_id: zeta_protocol::RequestId::new("missing-approval").unwrap(),
+        },
+    };
+    assert!(reduce_thread_event(Some(thread), &envelope(6, unbound_approval_escalation)).is_err());
 }
 
 fn started_sandboxed_tool_snapshot() -> ThreadSnapshot {

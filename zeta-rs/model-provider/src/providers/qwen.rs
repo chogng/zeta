@@ -1,6 +1,7 @@
 use super::{ProviderAdapter, api_endpoint};
 use crate::ModelProviderError;
 use zeta_api::{ApiEndpoint, ApiProtocol, ModelRequest, ModelResponse};
+use zeta_async_utils::CancellationToken;
 use zeta_client::{OperationClient, ResolvedApiTarget};
 use zeta_model_provider_config::NormalizedModelProviderConfig;
 
@@ -28,9 +29,16 @@ impl ProviderAdapter for QwenAdapter {
         model: &str,
         request: &ModelRequest,
         client: &dyn OperationClient,
+        cancellation: &CancellationToken,
     ) -> Result<ModelResponse, ModelProviderError> {
         self.endpoint
-            .complete_with_client(&self.target, model, request, client)
+            .complete_with_client_and_cancellation(
+                &self.target,
+                model,
+                request,
+                client,
+                cancellation,
+            )
             .map_err(Into::into)
     }
 }

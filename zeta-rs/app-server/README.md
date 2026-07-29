@@ -44,8 +44,10 @@ request-ID set、notification queue 与 resource ownership；Session/Thread dura
 | `ConnectionState` | 每个 logical connection 的 initialized/request-ID/notification state |
 | `AppServer::new` | 用 recovered `SessionCoordinator` + `ModelService` 构造 server |
 | `AppServer::connection` | 分配 connection ID 并注册 notification queue |
+| `AppServer::connection_notifications` | 返回可阻塞等待、主动唤醒的 connection outbound source |
+| `AppServer::close_connection` | 注销 subscription、关闭 notification source，并释放 Resource/Terminal owner |
 | `AppServer::handle_json` | 处理一个 JSON-RPC request string |
-| `AppServer::drain_notifications` | 取出该 connection 的 serialized notifications |
+| `AppServer::drain_notifications` | legacy/JSONL caller 取出该 connection 的 serialized notifications |
 | `AppServer::{serve_stdio,serve_jsonl}` | 同步 JSON Lines service loop |
 | `AppServer::create_resource` | 创建 5 分钟 TTL 的 connection-owned resource |
 | `AppServer::with_config_store` | 开启 config/provider/MCP/Skill RPC |
@@ -164,8 +166,10 @@ AppServer::handle_json(connection, raw)
 └─ JsonRpcSuccess or JsonRpcFailure → JSON string
 ```
 
-`serve_jsonl` 对每一行先写 response，再 drain/write causal notifications。当前 loop 是同步串行的；
-protocol registry 中的 `SerializationScopeDefinition` 尚未接入并发 scheduler。
+`serve_jsonl` 对每一行先写 response，再 drain/write causal notifications。当前 JSONL loop 是
+同步串行的；owned embedded client 通过 `ConnectionNotifications` 在独立 event pump 中等待同一
+queue 的 condition-variable wake。protocol registry 中的 `SerializationScopeDefinition`
+尚未接入并发 scheduler。
 
 Terminal 因此使用 bounded `terminal/read` pull：`TerminalService` 在独立 runtime 中持续 drain
 PTY raw bytes，保留最多 1 MiB，并按 sequence 返回最多 128 个 chunk。`terminal/write` 的单批
@@ -210,6 +214,9 @@ session/thread/create
 `turn/interaction/resolve` 使用 exact durable `RequestId`。当 response 是 Tool Call 对应的 approval，
 且 Core 确实产生 `Resolved` disposition，App Server 再启动 executor 恢复 Tool path。这个判断依赖
 pending interaction 的 item binding，不能简化为“所有 approval 都 restart”。
+同一路径同时恢复执行前 approval 与带结构化 `sandboxDenial` 的 sandbox escalation approval；
+App Server 不解释或扩大授权，Core 会在恢复后重新校验 action、policy、capability 与 ToolCall
+binding，并保证升级重试最多启动一次。
 
 ## Update broker
 
@@ -227,8 +234,10 @@ transient Thread update
    └─ do not advance durable cursor
 ```
 
-Queue 的最后一个 strong owner 是 `ConnectionState`；connection drop 后 broker 在下一次 publish 时
-通过 `Weak::upgrade` 失败清除 subscriber。目前没有 queue length/backpressure limit，slow consumer
+`NotificationQueue::{push,extend}` 在空 queue 获得新值时唤醒 listener；
+`AppServer::close_connection` 显式 unregister subscriber 并唤醒 blocked listener。Legacy
+connection 若未显式 close，最后一个 strong owner drop 后 broker 仍会在下一次 publish 时通过
+`Weak::upgrade` 失败清除 subscriber。目前没有 queue length/backpressure limit，slow consumer
 可能积累内存，这是当前限制。
 
 ## Local composition 与 model safe point
@@ -259,8 +268,10 @@ ConfigBackedModelService
 
 每次 `ModelService::invoke` 重新读取 user config，与 optional workspace document 合并，再由
 `ModelSnapshotResolver` 生成 immutable invoker。因此 config change 影响下一次 invocation，不会
-改变已经运行的 invocation。`ProviderModelService` 在 invoker 调用前后检查 cancellation；底层同步
-provider request 能否中途停止仍取决于 provider transport。
+改变已经运行的 invocation。`ProviderModelService` 把 Core token 传入
+`ModelInvoker::invoke_with_cancellation`；取消被保留为 `CoreError::Cancelled`，不会降级为普通
+model failure。production provider operation 会立即停止本地等待、禁止 retry，并丢弃同步 HTTP
+attempt 的迟到 response。
 
 ## Skill catalog runtime
 
@@ -415,10 +426,11 @@ local tool 的参数白名单、discovery、取消与输出限制由
 [`zeta-shell-command`](../shell-command/README.md) 和 [`zeta-exec`](../exec/README.md) 维护；
 本 README 只拥有 App Server 组合与 Core port binding。
 
-当前 server 是 synchronous JSONL/in-process boundary；没有 async multi-connection scheduler、
-serialization-scope enforcement、notification backpressure、durable resource、immediate disconnect
-cleanup 或 complete network server lifecycle。MCP 当前没有 credential materialization、stdio
-process sandbox、runtime hot reload、list-changed rebuild、progress/elicitation delivery 或 image
-result 的原生 Core content path；MCP image 暂时编码进 bounded JSON text result。演进这些能力时
-应保留 protocol registry唯一性、Core/store authority、snapshot + durable gap 和
-per-invocation config safe point。
+当前 JSONL server 仍是 synchronous loop，owned embedded connection 已具备 wakeable
+notification source 与显式 subscription/Resource/Terminal cleanup；尚无 async
+multi-connection scheduler、serialization-scope enforcement、notification backpressure、
+durable resource 或 complete network server lifecycle。MCP 当前没有 credential
+materialization、stdio process sandbox、runtime hot reload、list-changed rebuild、
+progress/elicitation delivery 或 image result 的原生 Core content path；MCP image 暂时编码进
+bounded JSON text result。演进这些能力时应保留 protocol registry唯一性、Core/store authority、
+snapshot + durable gap 和 per-invocation config safe point。

@@ -16,8 +16,9 @@ use zeta_policy::{
     ReviewFailurePolicy, RiskLevel, SandboxCompatibility, UserAuthorization,
 };
 use zeta_protocol::{
-    ActionApprovalDecision, ActionApprovalResponse, AgentResponse, CommandId, SessionId, ThreadId,
-    ThreadItem, ToolCallId, ToolDefinition, ToolName, TurnStatus, UserInput,
+    ActionApprovalDecision, ActionApprovalResponse, AgentRequest, AgentResponse, CommandId,
+    SessionId, ThreadId, ThreadItem, ToolCallId, ToolDefinition, ToolExecutionAuthority, ToolName,
+    TurnStatus, UserInput,
 };
 use zeta_sandboxing::{FileSystemAccess, NetworkAccess, SandboxPolicy};
 
@@ -231,6 +232,223 @@ fn safe_sandbox_denial_is_reviewed_and_retried_once() {
             .unwrap()
             .action_digest
     );
+}
+
+#[test]
+fn safe_sandbox_denial_waits_for_one_time_approval_and_resumes_after_recovery() {
+    let tools = Arc::new(ReviewTool {
+        outputs: Mutex::new(VecDeque::from([
+            safe_sandbox_denial(),
+            ToolExecutionOutput::Success("approved outside sandbox".into()),
+        ])),
+        ..ReviewTool::default()
+    });
+    let engine = PolicyEngine::new(
+        PolicyRevision::new("policy-v1"),
+        DenialAskingClassifier,
+        ReviewFailurePolicy::Block,
+    );
+    let fixture = fixture_with(tools, Arc::new(engine));
+
+    assert!(matches!(
+        fixture.scheduler.run_pending(
+            &fixture.thread_id,
+            &fixture.turn_id,
+            &CancellationSource::new().token()
+        ),
+        Ok(ToolSchedulingProgress::WaitingForApproval)
+    ));
+    assert!(matches!(
+        fixture.tools.authorizations.lock().unwrap().as_slice(),
+        [ToolAuthorization::Sandboxed(_)]
+    ));
+    let snapshot = fixture.threads.read_thread(&fixture.thread_id).unwrap();
+    let interaction = snapshot
+        .turns
+        .last()
+        .and_then(|turn| turn.pending_interaction.as_ref())
+        .unwrap();
+    let AgentRequest::Approval { request } = &interaction.request else {
+        panic!("sandbox escalation must request approval");
+    };
+    let denial = request.sandbox_denial.as_ref().unwrap();
+    assert_eq!(denial.reason(), "network access denied");
+    assert_eq!(denial.replay_safety(), crate::ToolReplaySafety::SafeToRetry);
+
+    resolve(&fixture, ActionApprovalDecision::ApproveOnce);
+    let recovered = Arc::new(ThreadController::with_store(fixture.store.clone()));
+    recovered.recover_thread(&fixture.thread_id).unwrap();
+    ToolScheduler::new(
+        recovered.clone(),
+        fixture.tools.clone(),
+        Arc::new(AskPolicy),
+    )
+    .run_pending(
+        &fixture.thread_id,
+        &fixture.turn_id,
+        &CancellationSource::new().token(),
+    )
+    .unwrap();
+
+    let authorizations = fixture.tools.authorizations.lock().unwrap();
+    assert!(matches!(
+        authorizations.as_slice(),
+        [ToolAuthorization::Sandboxed(_), ToolAuthorization::ApprovedOnce(grant)]
+            if grant.tool_call_id() == &fixture.call_id
+    ));
+    let snapshot = recovered.read_thread(&fixture.thread_id).unwrap();
+    assert!(snapshot.escalated_tool_calls.contains(&fixture.call_id));
+    assert!(snapshot.items.iter().any(|item| matches!(
+        item,
+        ThreadItem::ToolResult {
+            tool_call_id,
+            text,
+            is_error: false,
+            ..
+        } if tool_call_id == &fixture.call_id && text == "approved outside sandbox"
+    )));
+}
+
+#[test]
+fn declining_sandbox_escalation_does_not_retry_the_tool() {
+    let tools = Arc::new(ReviewTool {
+        outputs: Mutex::new(VecDeque::from([safe_sandbox_denial()])),
+        ..ReviewTool::default()
+    });
+    let engine = PolicyEngine::new(
+        PolicyRevision::new("policy-v1"),
+        DenialAskingClassifier,
+        ReviewFailurePolicy::Block,
+    );
+    let fixture = fixture_with(tools, Arc::new(engine));
+
+    assert!(matches!(
+        fixture.scheduler.run_pending(
+            &fixture.thread_id,
+            &fixture.turn_id,
+            &CancellationSource::new().token()
+        ),
+        Ok(ToolSchedulingProgress::WaitingForApproval)
+    ));
+    resolve(&fixture, ActionApprovalDecision::Decline);
+    fixture
+        .scheduler
+        .run_pending(
+            &fixture.thread_id,
+            &fixture.turn_id,
+            &CancellationSource::new().token(),
+        )
+        .unwrap();
+
+    assert!(matches!(
+        fixture.tools.authorizations.lock().unwrap().as_slice(),
+        [ToolAuthorization::Sandboxed(_)]
+    ));
+    let snapshot = fixture.threads.read_thread(&fixture.thread_id).unwrap();
+    assert!(!snapshot.escalated_tool_calls.contains(&fixture.call_id));
+    assert!(snapshot.items.iter().any(|item| matches!(
+        item,
+        ThreadItem::ToolResult {
+            tool_call_id,
+            text,
+            is_error: true,
+            ..
+        } if tool_call_id == &fixture.call_id && text.contains("declined")
+    )));
+}
+
+#[test]
+fn interrupted_approved_sandbox_escalation_is_not_retried() {
+    let tools = Arc::new(ReviewTool {
+        outputs: Mutex::new(VecDeque::from([safe_sandbox_denial()])),
+        ..ReviewTool::default()
+    });
+    let engine = PolicyEngine::new(
+        PolicyRevision::new("policy-v1"),
+        DenialAskingClassifier,
+        ReviewFailurePolicy::Block,
+    );
+    let fixture = fixture_with(tools, Arc::new(engine));
+    fixture
+        .scheduler
+        .run_pending(
+            &fixture.thread_id,
+            &fixture.turn_id,
+            &CancellationSource::new().token(),
+        )
+        .unwrap();
+    let snapshot = fixture.threads.read_thread(&fixture.thread_id).unwrap();
+    let interaction = snapshot
+        .turns
+        .last()
+        .and_then(|turn| turn.pending_interaction.clone())
+        .unwrap();
+    let denial = match &interaction.request {
+        AgentRequest::Approval { request } => request.sandbox_denial.clone().unwrap(),
+        _ => panic!("sandbox escalation must request approval"),
+    };
+    resolve(&fixture, ActionApprovalDecision::ApproveOnce);
+    let reviewed = review_request(&durable_call(&fixture), false);
+    fixture
+        .threads
+        .record_tool_execution_escalated(
+            &fixture.thread_id,
+            &fixture.turn_id,
+            crate::thread_controller::RecordToolExecutionEscalation {
+                tool_call_id: fixture.call_id.clone(),
+                action_digest: reviewed.action().digest().as_str().to_owned(),
+                policy_revision: reviewed.policy_revision().as_str().to_owned(),
+                denial,
+                authority: ToolExecutionAuthority::ApprovedOnce {
+                    request_id: interaction.request_id,
+                },
+            },
+        )
+        .unwrap();
+
+    fixture
+        .scheduler
+        .run_pending(
+            &fixture.thread_id,
+            &fixture.turn_id,
+            &CancellationSource::new().token(),
+        )
+        .unwrap();
+
+    assert!(matches!(
+        fixture.tools.authorizations.lock().unwrap().as_slice(),
+        [ToolAuthorization::Sandboxed(_)]
+    ));
+    assert!(
+        fixture
+            .threads
+            .read_thread(&fixture.thread_id)
+            .unwrap()
+            .items
+            .iter()
+            .any(|item| matches!(
+                item,
+                ThreadItem::ToolResult {
+                    tool_call_id,
+                    text,
+                    is_error: true,
+                    ..
+                } if tool_call_id == &fixture.call_id
+                    && text.contains("process interruption")
+                    && text.contains("not retried")
+            ))
+    );
+}
+
+fn safe_sandbox_denial() -> ToolExecutionOutput {
+    ToolExecutionOutput::SandboxDenied(SandboxDenialOutput::safe_to_retry(
+        "network access denied",
+        ProcessExecutionOutput::from_captured_streams(
+            ProcessExitStatus::Code(1),
+            "",
+            "connect: operation not permitted",
+        ),
+    ))
 }
 
 #[test]
@@ -603,6 +821,8 @@ struct DenialApprovingClassifier {
     observed: Arc<Mutex<Vec<ActionReviewPhase>>>,
 }
 
+struct DenialAskingClassifier;
+
 #[derive(Debug)]
 struct ContextClassifierError;
 
@@ -657,6 +877,33 @@ impl ActionClassifier for DenialApprovingClassifier {
                 risk: RiskLevel::Medium,
                 user_authorization: UserAuthorization::Implicit,
                 reason: "outside-sandbox retry is allowed".into(),
+            },
+        ))
+    }
+}
+
+impl ActionClassifier for DenialAskingClassifier {
+    type Error = ContextClassifierError;
+
+    fn classify(
+        &self,
+        request: &ActionReviewRequest,
+        _: &CancellationToken,
+    ) -> Result<ClassifierAssessment, Self::Error> {
+        assert!(matches!(
+            request.phase(),
+            ActionReviewPhase::SandboxDenial(_)
+        ));
+        Ok(ClassifierAssessment::new(
+            AssessmentId::new("denial-user-assessment"),
+            request.action().digest().clone(),
+            request.policy_revision().clone(),
+            "test-prompt",
+            ClassifierRecommendation::Approve {
+                capabilities: request.action().required_capabilities().clone(),
+                risk: RiskLevel::High,
+                user_authorization: UserAuthorization::Implicit,
+                reason: "outside-sandbox retry requires explicit user approval".into(),
             },
         ))
     }

@@ -1,7 +1,9 @@
 use super::*;
 use std::collections::BTreeMap;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::{Arc, Condvar, Mutex, mpsc};
+use std::thread;
+use std::time::Duration;
 use zeta_protocol::{
     ActionApprovalCapability, ActionApprovalCapabilityKind, ActionApprovalDecision,
     ActionApprovalRequest, ActionApprovalResponse, AgentRequest, AgentResponse, CommandId,
@@ -78,6 +80,7 @@ fn approval_interaction() -> AgentRequest {
                 scope: "api.example.com".into(),
             }],
             reason: "network requires unsandboxed execution".into(),
+            sandbox_denial: None,
         },
     }
 }
@@ -222,6 +225,38 @@ fn failed_thread_creation_does_not_register_a_projection() {
 }
 
 #[test]
+fn one_thread_durable_commit_does_not_block_another_thread() {
+    let store = Arc::new(PerThreadBlockingStore::default());
+    let threads = Arc::new(ThreadController::with_store(store.clone()));
+    let blocked_thread = create_thread(&threads, "blocked");
+    let independent_thread = create_thread(&threads, "independent");
+    store.block_next_append_for(blocked_thread.clone());
+    let blocked_threads = threads.clone();
+    let blocked_thread_for_task = blocked_thread.clone();
+    let blocked = thread::spawn(move || {
+        blocked_threads
+            .start_turn(&blocked_thread_for_task, start_request("blocked-start"))
+            .unwrap();
+    });
+    store.wait_until_blocked();
+    let independent_threads = threads.clone();
+    let (completed_tx, completed_rx) = mpsc::channel();
+
+    thread::spawn(move || {
+        let result =
+            independent_threads.start_turn(&independent_thread, start_request("independent-start"));
+        completed_tx.send(result).unwrap();
+    });
+
+    let independent = completed_rx.recv_timeout(Duration::from_secs(1));
+    store.release();
+    blocked.join().unwrap();
+    independent
+        .expect("independent Thread commit was blocked")
+        .unwrap();
+}
+
+#[test]
 fn recovery_interrupts_non_terminal_turns() {
     let journal = Arc::new(InMemoryThreadStore::default());
     let original = ThreadController::with_store(journal.clone());
@@ -232,6 +267,75 @@ fn recovery_interrupts_non_terminal_turns() {
     assert_eq!(snapshot.title, "recover me");
     assert_eq!(snapshot.turns[0].turn_id, turn);
     assert_eq!(snapshot.turns[0].status, TurnStatus::Interrupted);
+}
+
+#[derive(Default)]
+struct PerThreadBlockingStore {
+    inner: InMemoryThreadStore,
+    state: Mutex<PerThreadBlockingState>,
+    changed: Condvar,
+}
+
+#[derive(Default)]
+struct PerThreadBlockingState {
+    blocked_thread: Option<ThreadId>,
+    entered: bool,
+    released: bool,
+}
+
+impl PerThreadBlockingStore {
+    fn block_next_append_for(&self, thread_id: ThreadId) {
+        let mut state = self.state.lock().unwrap();
+        state.blocked_thread = Some(thread_id);
+        state.entered = false;
+        state.released = false;
+    }
+
+    fn wait_until_blocked(&self) {
+        let mut state = self.state.lock().unwrap();
+        while !state.entered {
+            state = self.changed.wait(state).unwrap();
+        }
+    }
+
+    fn release(&self) {
+        let mut state = self.state.lock().unwrap();
+        state.released = true;
+        self.changed.notify_all();
+    }
+}
+
+impl ThreadStore for PerThreadBlockingStore {
+    fn list_thread_ids(&self) -> Result<Vec<ThreadId>, ThreadStoreError> {
+        self.inner.list_thread_ids()
+    }
+
+    fn load(&self, thread_id: &ThreadId) -> Result<Vec<StoredEvent>, ThreadStoreError> {
+        self.inner.load(thread_id)
+    }
+
+    fn append_batch(
+        &self,
+        batch: &ThreadEventBatch,
+    ) -> Result<AppendBatchResult, ThreadStoreError> {
+        let should_block = self
+            .state
+            .lock()
+            .unwrap()
+            .blocked_thread
+            .as_ref()
+            .is_some_and(|thread_id| thread_id == &batch.thread_id);
+        if should_block {
+            let mut state = self.state.lock().unwrap();
+            state.blocked_thread = None;
+            state.entered = true;
+            self.changed.notify_all();
+            while !state.released {
+                state = self.changed.wait(state).unwrap();
+            }
+        }
+        self.inner.append_batch(batch)
+    }
 }
 
 #[test]

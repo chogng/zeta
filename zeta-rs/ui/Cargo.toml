@@ -1,0 +1,22 @@
+[package]
+name = "zeta-ui"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[lib]
+doctest = false
+name = "zeta_ui"
+path = "src/lib.rs"
+
+[dependencies]
+glyphon = { workspace = true }
+thiserror = { workspace = true }
+wgpu = { workspace = true }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+coretext-rs = "0.7.2"
+
+[lints]
+workspace = true
