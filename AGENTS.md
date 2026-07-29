@@ -8,7 +8,7 @@
   `尚未完成`, `协调`, or `委托` when those are more accurate.
 - Lead with the conclusion; use surrounding prose only to explain important boundaries or caveats.
 
-# Rust Crates
+# Only for Rust Crates
 
 - Newly added traits should include doc comments that explain their role and how implementations are expected to use them.
 - Avoid bool or ambiguous `Option` parameters that force callers to write hard-to-read code such as `foo(false)` or `bar(None)`. Prefer enums, named methods, newtypes, or other idiomatic Rust API shapes when they keep the callsite self-documenting.
@@ -49,7 +49,7 @@
   ```
 
 
-# TypeScript
+# Only for TypeScript
 
 ## Interface design
 
