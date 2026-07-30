@@ -37,7 +37,7 @@ shaping geometry 和真实平台接入可以分别测试。
 | 能力 | 当前 owner | 状态 |
 | --- | --- | --- |
 | 原生 keyboard/IME event 与候选框 API | `zeta-winit` / `winit` | 委托 |
-| Composer focus、event routing、IME activation | `zeta-native::NativeApp` | ✅ |
+| Composer 与 Session Search focus、event routing、IME activation | `zeta-native::NativeApp` | ✅ |
 | Committed text、selection、grapheme movement | `zeta-ui::TextInput` | ✅ |
 | Preedit/commit/cancel composition state | `zeta-ui::TextInput` | ✅ |
 | 单行 shaping、selection/caret/preedit geometry | `zeta-ui::TextInputLayoutEngine` | ✅ |
@@ -61,7 +61,7 @@ shaping geometry 和真实平台接入可以分别测试。
 - composition 在视觉上临时替换 active selection，但不修改 committed text；只有 `Commit` 才原子
   替换 selection，cancel 保留原始文本和选择；
 - IME 没有提供 preedit cursor 时隐藏 caret；提供 range 时使用 range end 定位 caret；
-- composer 获得焦点时启用 IME，失焦时禁用 IME 并清除未提交的 preedit；
+- composer 或 session search 获得焦点时启用 IME；输入目标切换时清除原目标未提交的 preedit；
 - 获得焦点或发生 editing/composition activity 时 caret 立即可见，之后按 deadline 切换相位；
 - active selection 隐藏普通 caret；IME preedit cursor 仍遵守平台提供的 visible/hidden range；
 - 候选框锚点来自 shaped caret 的 logical window coordinates，不使用字符数估算；
@@ -70,15 +70,15 @@ shaping geometry 和真实平台接入可以分别测试。
 ## 4. 当前端到端路径
 
 ```text
-pointer release on composer
-  → ShellInteraction focuses composer
+pointer release on composer / session search
+  → ShellInteraction focuses the selected text input
   → NativeWindow::enable_ime
   → rebuild ShellPresentation
   → TextInputLayoutEngine shapes content
   → NativeWindow::set_ime_cursor_area(shaped caret)
 
 WindowEvent::KeyboardInput
-  → NativeApp maps platform key to TextInputCommand
+  → NativeApp routes to composer or session search and maps to TextInputCommand
   → TextInput updates committed text / selection
   → rebuild and redraw
 

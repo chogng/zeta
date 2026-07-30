@@ -162,6 +162,7 @@ inline argument parsing；提交仍通过 `turn/start.input`，并保留 `/name`
 | `fs/getMetadata` | workspace | 读取根相对路径的 metadata |
 | `fs/readDirectory` | workspace | 枚举根相对目录的直接子项 |
 | `fs/readFile` | workspace | 读取不超过 10 MiB 的 UTF-8 文件 |
+| `fs/writeFile` | workspace | 原子替换或新建不超过 10 MiB 的 UTF-8 文件 |
 | `git/status` | workspace | 读取 HEAD、upstream 和 index/worktree change snapshot |
 | `git/stage` | workspace | stage 一组 workspace-relative path |
 | `git/unstage` | workspace | 从 index 移除一组 path 的 staged change |
@@ -189,10 +190,17 @@ Filesystem method 的 `path` 是配置 workspace root 下的相对路径；空�
 绝对路径、父目录逃逸和解析后越过 root 的 symlink 会在可信 Rust 边界被拒绝。Desktop 的
 IPC 层会先做同形状校验以便快速失败，但不承担最终授权。
 
-当前 contract 提供 `fs/getMetadata`、`fs/readDirectory` 和 `fs/readFile`，用于单根
-Folder 的 Explorer 与文本文件打开。`fs/readFile` 只接受不超过 10 MiB 的 UTF-8 文件。
-Filesystem contract 本身不包含写入、重命名、删除、watcher、多根 Workspace，也不保证
-跨请求 snapshot 一致性。客户端应把目录展开状态和重新加载策略视为可丢弃 UI 状态。
+当前 contract 提供 `fs/getMetadata`、`fs/readDirectory`、`fs/readFile` 和 `fs/writeFile`，
+用于单根 Folder 的 Explorer、文本文件打开和后端保存。读写均限制为不超过 10 MiB 的 UTF-8；
+写入在目标同目录完成有界临时写、flush 和原子替换，保留现有文件权限，不隐式创建父目录。
+
+App Server 对整个 workspace root 建立递归 watcher。普通变化经 75ms debounce 后发布
+`fs/changed { type: "pathsChanged", paths }`，其中 path 全部是 workspace-relative；backend
+可能丢失事件时发布 `fs/changed { type: "rescanRequired" }`。两种通知都是失效 hint，不是
+durable event 或文件内容事实，客户端收到后必须重新读取自己拥有的视图。
+
+Filesystem contract 仍不包含重命名、删除、多根 Workspace 或跨请求 snapshot 一致性。当前
+Desktop 尚未调用 `fs/writeFile` 或消费 `fs/changed`；这些属于独立的前端接入阶段。
 
 ### Git SCM
 
@@ -373,11 +381,13 @@ interaction 的同一 request kind；相同 `commandId + typed payload` 会重�
 
 ## 8. 更新流
 
-当前有三个 notification method：
+当前有五个 notification method：
 
 - `session/update`，payload 为 `SessionUpdateEnvelope`；
 - `thread/update`，payload 为 `ThreadUpdateEnvelope`；
-- `skills/changed`，payload 为新的 catalog `generation`。
+- `skills/changed`，payload 为新的 catalog `generation`；
+- `git/statusChanged`，payload 为新的 workspace Git status；
+- `fs/changed`，payload 为相对路径变化或 scoped rescan hint。
 
 durable update 使用 `durableSequence`。Thread 的低延迟非 durable update 可额外携带
 `streamCursor { streamInstanceId, sequence }`，两者不能混为一个计数器：

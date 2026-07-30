@@ -42,6 +42,9 @@ zeta-rs/
 ├── file-search/          # workspace path fuzzy search + CLI
 ├── file-watcher/         # shared filesystem invalidation hints
 ├── git/                  # bounded Git repository operations and structured parsing
+├── diff/                 # shared bounded line/inline diff mapping for Native and TUI
+├── editor/               # Native CodeEditor/DiffEditor/MultiDiffEditor presentation；不拥有文件或产品宿主
+├── markdown/             # bounded CommonMark/GFM parsing、layout 与 Native presentation
 ├── install-context/      # runtime install method, package layout and resource candidates
 ├── apply-patch/          # concrete validated write executor
 ├── session-store/        # Session persistence port + envelope
@@ -84,6 +87,29 @@ zeta-rs/
 Git 状态/修改适配器、工作区范围运行时、监听失效/版本通知与 SCM View 已在各自层实现；
 它们不改变 `zeta-git` 的 crate 所有权。当前 API 和失败语义见
 [`git/README.md`](../zeta-rs/git/README.md)，跨层状态见 [`git.md`](git.md)。
+
+`zeta-diff` 当前拥有 Native 与 TUI 共享的 bounded text diff：精确 line ending、Myers 行映射、
+Unicode 字素级内联范围、Git-style hunk、比较策略、取消和资源上限；不读取文件、不调用 Git，
+也不拥有 Editor/TUI presentation。当前 API、失败和修改影响见
+[`diff/README.md`](../zeta-rs/diff/README.md)。
+
+`zeta-editor` 当前拥有 Native 使用的多行编辑、caret/selection、undo/redo、IME/syntax
+projection、代码视口绘制、复用两个 CodeEditor pane 的 side-by-side DiffEditor，以及纵向组合
+多个文件 section 的 MultiDiffEditor；它依赖
+`zeta-ui` 和 `zeta-diff`，但不依赖 `zeta-native`，也不拥有文件 Tab、平台事件、EditorHost 或
+TUI presentation。当前 API、接入义务和限制见
+[`editor/README.md`](../zeta-rs/editor/README.md)。
+
+`zeta-markdown` 当前拥有有资源上限的 CommonMark/GFM parsing、只读文档 snapshot、富文本与
+block layout 和 Native presentation，并消费 `zeta-ui::ScrollState`；它依赖 `zeta-ui`，但不依赖
+`zeta-native`，也不拥有消息 identity、网络图片、链接激活、平台输入或持久化。当前 API、
+信任边界和限制见 [`markdown/README.md`](../zeta-rs/markdown/README.md)。
+
+`zeta-ui::ScrollState`、`ScrollMetrics`、`ScrollView` 与 `ScrollbarController` 提供
+domain-agnostic logical-pixel offset、clamp、viewport clip、内容坐标、同源 scrollbar
+paint/hit/track-page/thumb-drag geometry，以及 hover/active/fade deadline。MultiDiffEditor
+复用这套基座；平台 wheel normalization、pointer capture，以及 Terminal scrollback 的距底部
+行偏移、输出增长锚定和 alternate-screen 分流仍由 `zeta-native` 拥有，不能迁入通用 ScrollView。
 
 Direct-provider credential ownership 由 [`model-provider.md`](model-provider.md) 维护；通用 secret
 persistence 由 [`secrets.md`](secrets.md) 维护；interactive login control plane 由
