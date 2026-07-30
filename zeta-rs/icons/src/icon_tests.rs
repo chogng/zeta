@@ -13,6 +13,11 @@ fn semantic_library_is_sorted_and_has_unique_ids() {
 #[test]
 fn catalog_resolves_semantic_ids_without_exposing_filenames() {
     assert_eq!(icon_by_id("files"), Some(icons::FILES));
+    assert_eq!(icon_by_id("git-branch"), Some(icons::GIT_BRANCH));
+    assert_eq!(
+        icon_by_id("working-directory"),
+        Some(icons::WORKING_DIRECTORY)
+    );
     assert_eq!(icon_by_id("refresh"), None);
     assert_eq!(icon_by_id("missing"), None);
 }
@@ -26,6 +31,18 @@ fn semantic_library_distinguishes_symbolic_and_multicolor_artwork() {
     assert_eq!(
         icons::LAYOUT_PANEL_OFF.definition().rendering(),
         IconRendering::Multicolor
+    );
+}
+
+#[test]
+fn sidebar_toggle_icons_are_supported_by_the_symbolic_atlas() {
+    assert_eq!(
+        icons::LAYOUT_SIDEBAR_LEFT_EMPTY.definition().rendering(),
+        IconRendering::Symbolic
+    );
+    assert_eq!(
+        icons::LAYOUT_SIDEBAR_LEFT_OFF.definition().rendering(),
+        IconRendering::Symbolic
     );
 }
 

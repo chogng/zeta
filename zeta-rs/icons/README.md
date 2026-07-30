@@ -38,6 +38,8 @@ resources/icons/*.svg
 `library::icons` 可以让多个 identity 共享 artwork，例如 `HISTORY` 使用 `REFRESH`，
 `DROPDOWN_INDICATOR` 使用 `CHEVRON_DOWN`。因此 SVG 文件重命名或替换不要求调用方迁移
 `IconId`。新增 SVG 不会自动扩大公共 API；只有产品语义确定后才应在 `library.rs` 登记。
+Native input context toolbar 当前登记并消费 `LOCAL`、`WORKING_DIRECTORY`、`GIT_BRANCH` 与
+`DIFF`；这些是稳定语义 identity，不把底层 artwork filename 暴露给 Toolbar。
 
 ## 生成与失败语义
 
