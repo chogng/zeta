@@ -15,7 +15,7 @@ export function registerGitViews(
     id: WorkbenchViewContainerId.Git,
     title: "Git",
     location: ViewContainerLocation.Sidebar,
-    icon: lxiconsLibrary.gitCommit,
+    icon: lxiconsLibrary.gitBranch,
     order: 3,
   });
   registry.registerStaticViews(WorkbenchViewContainerId.Git, [{
