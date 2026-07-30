@@ -1,6 +1,6 @@
 use zeta_icons::{Icon, IconDefinition, IconId};
 
-use super::{FontFamily, FontWeight, TextBlock, TextStyle, UiScene};
+use super::{FontFamily, FontWeight, TextBlock, TextSpan, TextStyle, UiScene};
 use crate::{Color, PaintIcon, PaintRect, Point, Rect, Size};
 
 const TEST_ICON: Icon = Icon::new(
@@ -36,6 +36,24 @@ fn scene_retains_text_in_paint_order() {
     assert!(scene.rects().is_empty());
     assert!(scene.icons().is_empty());
     assert_eq!(scene.background().components(), [10, 20, 30, 255]);
+}
+
+#[test]
+fn rich_text_block_preserves_span_styles_and_plain_text_projection() {
+    let base = TextStyle::new(13.0, Color::rgb(10, 20, 30));
+    let rich = TextBlock::from_spans(
+        [
+            TextSpan::new("normal ", base.clone()),
+            TextSpan::new("bold", base.clone().with_weight(FontWeight::Bold)),
+        ],
+        Point::new(1.0, 2.0),
+        Size::new(100.0, 40.0),
+        base,
+    );
+
+    assert_eq!(rich.text(), "normal bold");
+    assert_eq!(rich.spans().len(), 2);
+    assert_eq!(rich.spans()[1].style().weight(), FontWeight::Bold);
 }
 
 #[test]
@@ -90,4 +108,62 @@ fn scene_restores_outer_clip_after_nested_draw() {
         scene.rects()[0].clip_bounds(),
         Some(Rect::from_xywh(10.0, 10.0, 100.0, 80.0))
     );
+}
+
+#[test]
+fn overlays_are_ordered_and_restore_the_callers_layer() {
+    let mut scene = UiScene::new(Color::TRANSPARENT);
+    scene.draw_rect(PaintRect::new(
+        Rect::from_xywh(0.0, 0.0, 20.0, 20.0),
+        Color::WHITE,
+    ));
+    scene.with_overlay(|scene| {
+        scene.draw_text(TextBlock::new(
+            "first overlay",
+            Point::new(0.0, 0.0),
+            Size::new(100.0, 20.0),
+            TextStyle::new(14.0, Color::WHITE),
+        ));
+        scene.with_overlay(|scene| {
+            scene.draw_icon(PaintIcon::new(
+                TEST_ICON,
+                Rect::from_xywh(0.0, 0.0, 16.0, 16.0),
+                Color::WHITE,
+            ));
+        });
+        scene.draw_rect(PaintRect::new(
+            Rect::from_xywh(0.0, 0.0, 10.0, 10.0),
+            Color::WHITE,
+        ));
+    });
+    scene.draw_rect(PaintRect::new(
+        Rect::from_xywh(20.0, 20.0, 20.0, 20.0),
+        Color::WHITE,
+    ));
+
+    assert_eq!(scene.layer_count(), 3);
+    assert_eq!(scene.rect_layers(), &[0, 1, 0]);
+    assert_eq!(scene.text_layers(), &[1]);
+    assert_eq!(scene.icon_layers(), &[2]);
+}
+
+#[test]
+fn overlay_escapes_and_then_restores_the_callers_clip() {
+    let mut scene = UiScene::new(Color::TRANSPARENT);
+    let host_clip = Rect::from_xywh(10.0, 10.0, 40.0, 40.0);
+    scene.with_clip(host_clip, |scene| {
+        scene.with_overlay(|scene| {
+            scene.draw_rect(PaintRect::new(
+                Rect::from_xywh(0.0, 0.0, 100.0, 100.0),
+                Color::WHITE,
+            ));
+        });
+        scene.draw_rect(PaintRect::new(
+            Rect::from_xywh(0.0, 0.0, 100.0, 100.0),
+            Color::WHITE,
+        ));
+    });
+
+    assert_eq!(scene.rects()[0].clip_bounds(), None);
+    assert_eq!(scene.rects()[1].clip_bounds(), Some(host_clip));
 }

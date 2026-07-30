@@ -6,6 +6,7 @@ struct RectInstance {
     @location(4) corner_radii: vec4<f32>,
     @location(5) clip_bounds: vec4<f32>,
     @location(6) viewport: vec4<f32>,
+    @location(7) effect: vec4<f32>,
 };
 
 struct VertexOutput {
@@ -17,6 +18,7 @@ struct VertexOutput {
     @location(4) @interpolate(flat) border_widths: vec4<f32>,
     @location(5) @interpolate(flat) corner_radii: vec4<f32>,
     @location(6) @interpolate(flat) clip_bounds: vec4<f32>,
+    @location(7) @interpolate(flat) effect: vec4<f32>,
 };
 
 const QUAD_VERTICES = array<vec2<f32>, 6>(
@@ -42,6 +44,7 @@ fn vs_main(instance: RectInstance, @builtin(vertex_index) vertex_index: u32) -> 
     output.border_widths = instance.border_widths;
     output.corner_radii = instance.corner_radii;
     output.clip_bounds = instance.clip_bounds;
+    output.effect = instance.effect;
     return output;
 }
 
@@ -69,6 +72,22 @@ fn coverage(distance: f32) -> f32 {
     return 1.0 - smoothstep(-0.5, 0.5, distance);
 }
 
+fn erf_approximation(value: f32) -> f32 {
+    let coefficient = 0.147;
+    let magnitude = abs(value);
+    let squared = magnitude * magnitude;
+    let exponent = -squared * (4.0 / 3.14159265 + coefficient * squared)
+        / (1.0 + coefficient * squared);
+    let result = sqrt(max(1.0 - exp(exponent), 0.0));
+    return select(-result, result, value >= 0.0);
+}
+
+fn gaussian_shadow_coverage(distance: f32, blur_radius: f32) -> f32 {
+    let standard_deviation = max(blur_radius / 3.0, 0.16666667);
+    let normalized_distance = distance / (standard_deviation * 1.41421356);
+    return 0.5 * (1.0 - erf_approximation(normalized_distance));
+}
+
 @fragment
 fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
     let clip_max = input.clip_bounds.xy + input.clip_bounds.zw;
@@ -77,6 +96,28 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
         || input.screen_position.x >= clip_max.x
         || input.screen_position.y >= clip_max.y {
         discard;
+    }
+
+    if input.effect.z > 0.5 {
+        let shadow_extent = input.effect.y;
+        let shape_origin = input.bounds.xy + vec2<f32>(shadow_extent);
+        let shape_size = max(
+            input.bounds.zw - vec2<f32>(shadow_extent * 2.0),
+            vec2<f32>(0.0),
+        );
+        let shadow_distance = rounded_rect_distance(
+            input.screen_position,
+            shape_origin,
+            shape_size,
+            input.corner_radii,
+        );
+        let blur_radius = max(input.effect.x, 0.5);
+        let shadow_coverage = gaussian_shadow_coverage(shadow_distance, blur_radius);
+        let shadow_alpha = input.fill.a * shadow_coverage;
+        if shadow_alpha <= 0.001 {
+            discard;
+        }
+        return vec4<f32>(input.fill.rgb, shadow_alpha);
     }
 
     let outer_distance = rounded_rect_distance(

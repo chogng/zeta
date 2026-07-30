@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::mem;
+use std::ops::Range;
 
 use bytemuck::{Pod, Zeroable};
 use resvg::tiny_skia::{Pixmap, Transform};
@@ -89,7 +90,7 @@ pub(crate) struct IconRenderer {
     _atlas: wgpu::Texture,
     instance_buffer: wgpu::Buffer,
     instance_capacity: usize,
-    instance_count: u32,
+    layer_ranges: Vec<Range<u32>>,
     allocator: ShelfAllocator,
     regions: HashMap<RasterKey, AtlasRegion>,
 }
@@ -198,7 +199,7 @@ impl IconRenderer {
             _atlas: atlas,
             instance_buffer: create_instance_buffer(device, instance_capacity),
             instance_capacity,
-            instance_count: 0,
+            layer_ranges: Vec::new(),
             allocator: ShelfAllocator::new(),
             regions: HashMap::new(),
         }
@@ -211,8 +212,9 @@ impl IconRenderer {
         scene: &UiScene,
         target: UiViewport,
     ) -> Result<(), UiRenderError> {
-        let instances = self.prepare_instances(queue, scene, target)?;
-        self.instance_count = instances.len() as u32;
+        let prepared = self.prepare_instances(queue, scene, target)?;
+        let instances = prepared.instances;
+        self.layer_ranges = prepared.layer_ranges;
         if instances.is_empty() {
             return Ok(());
         }
@@ -229,7 +231,7 @@ impl IconRenderer {
         queue: &wgpu::Queue,
         scene: &UiScene,
         target: UiViewport,
-    ) -> Result<Vec<IconInstance>, UiRenderError> {
+    ) -> Result<PreparedIconInstances, UiRenderError> {
         let scale_factor = target.scale_factor();
         let viewport = [target.width() as f32, target.height() as f32, 0.0, 0.0];
         let logical_viewport = Rect::from_xywh(
@@ -239,28 +241,39 @@ impl IconRenderer {
             target.height() as f32 / scale_factor,
         );
         let mut instances = Vec::with_capacity(scene.icons().len());
-        for (index, icon) in scene.icons().iter().copied().enumerate() {
-            validate_paint_icon(index, icon)?;
-            let bounds = icon.bounds();
-            let clip_bounds = icon
-                .clip_bounds()
-                .map(|clip| clip.intersection(logical_viewport))
-                .unwrap_or(logical_viewport);
-            if bounds.is_empty() || bounds.intersection(clip_bounds).is_empty() {
-                continue;
+        let mut layer_ranges = Vec::with_capacity(scene.layer_count());
+        for layer in 0..scene.layer_count() {
+            let start = instances.len() as u32;
+            for (index, icon) in scene.icons().iter().copied().enumerate() {
+                if scene.icon_layers()[index] != layer {
+                    continue;
+                }
+                validate_paint_icon(index, icon)?;
+                let bounds = icon.bounds();
+                let clip_bounds = icon
+                    .clip_bounds()
+                    .map(|clip| clip.intersection(logical_viewport))
+                    .unwrap_or(logical_viewport);
+                if bounds.is_empty() || bounds.intersection(clip_bounds).is_empty() {
+                    continue;
+                }
+                let width = (bounds.size.width * scale_factor).ceil() as u32;
+                let height = (bounds.size.height * scale_factor).ceil() as u32;
+                let region = self.region_for(queue, icon.icon(), width, height)?;
+                instances.push(IconInstance {
+                    bounds: scaled_rect(bounds, scale_factor),
+                    uv_bounds: region.uv_bounds(),
+                    color: linear_color(icon.color()),
+                    clip_bounds: scaled_rect(clip_bounds, scale_factor),
+                    viewport,
+                });
             }
-            let width = (bounds.size.width * scale_factor).ceil() as u32;
-            let height = (bounds.size.height * scale_factor).ceil() as u32;
-            let region = self.region_for(queue, icon.icon(), width, height)?;
-            instances.push(IconInstance {
-                bounds: scaled_rect(bounds, scale_factor),
-                uv_bounds: region.uv_bounds(),
-                color: linear_color(icon.color()),
-                clip_bounds: scaled_rect(clip_bounds, scale_factor),
-                viewport,
-            });
+            layer_ranges.push(start..instances.len() as u32);
         }
-        Ok(instances)
+        Ok(PreparedIconInstances {
+            instances,
+            layer_ranges,
+        })
     }
 
     fn region_for(
@@ -312,15 +325,27 @@ impl IconRenderer {
         Ok(region)
     }
 
-    pub(crate) fn render<'pass>(&'pass self, pass: &mut wgpu::RenderPass<'pass>) {
-        if self.instance_count == 0 {
+    pub(crate) fn render_layer<'pass>(
+        &'pass self,
+        pass: &mut wgpu::RenderPass<'pass>,
+        layer: usize,
+    ) {
+        let Some(range) = self.layer_ranges.get(layer) else {
+            return;
+        };
+        if range.is_empty() {
             return;
         }
         pass.set_pipeline(&self.pipeline);
         pass.set_bind_group(0, &self.bind_group, &[]);
         pass.set_vertex_buffer(0, self.instance_buffer.slice(..));
-        pass.draw(0..6, 0..self.instance_count);
+        pass.draw(0..6, range.clone());
     }
+}
+
+struct PreparedIconInstances {
+    instances: Vec<IconInstance>,
+    layer_ranges: Vec<Range<u32>>,
 }
 
 impl AtlasRegion {

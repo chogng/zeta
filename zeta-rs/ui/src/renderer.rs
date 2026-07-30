@@ -7,7 +7,7 @@ use crate::font::mapping::{glyphon_family, glyphon_style, glyphon_weight};
 use crate::font::new_font_system;
 use crate::icon_renderer::IconRenderer;
 use crate::rect_renderer::RectRenderer;
-use crate::{Rect, TextBlock, UiScene};
+use crate::{Rect, TextBlock, TextStyle, UiScene};
 
 /// Physical render-target extent paired with the logical-to-physical UI scale.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -46,6 +46,22 @@ struct PreparedArea {
     color: GlyphColor,
 }
 
+struct TextLayer {
+    renderer: TextRenderer,
+    buffers: Vec<Buffer>,
+    areas: Vec<PreparedArea>,
+}
+
+impl TextLayer {
+    fn new(atlas: &mut TextAtlas, device: &wgpu::Device) -> Self {
+        Self {
+            renderer: TextRenderer::new(atlas, device, wgpu::MultisampleState::default(), None),
+            buffers: Vec::new(),
+            areas: Vec::new(),
+        }
+    }
+}
+
 /// Owns the font shaping, glyph cache, atlas, and GPU pipeline for a native UI surface.
 pub struct UiRenderer {
     rect_renderer: RectRenderer,
@@ -54,9 +70,8 @@ pub struct UiRenderer {
     swash_cache: SwashCache,
     viewport: Viewport,
     atlas: TextAtlas,
-    text_renderer: TextRenderer,
-    buffers: Vec<Buffer>,
-    areas: Vec<PreparedArea>,
+    text_layers: Vec<TextLayer>,
+    prepared_layer_count: usize,
 }
 
 impl UiRenderer {
@@ -68,8 +83,7 @@ impl UiRenderer {
         let cache = Cache::new(device);
         let viewport = Viewport::new(device, &cache);
         let mut atlas = TextAtlas::new(device, queue, &cache, surface_format);
-        let text_renderer =
-            TextRenderer::new(&mut atlas, device, wgpu::MultisampleState::default(), None);
+        let text_layers = vec![TextLayer::new(&mut atlas, device)];
         Self {
             rect_renderer: RectRenderer::new(device, surface_format),
             icon_renderer: IconRenderer::new(device, surface_format),
@@ -77,9 +91,8 @@ impl UiRenderer {
             swash_cache: SwashCache::new(),
             viewport,
             atlas,
-            text_renderer,
-            buffers: Vec::new(),
-            areas: Vec::new(),
+            text_layers,
+            prepared_layer_count: 0,
         }
     }
 
@@ -101,66 +114,80 @@ impl UiRenderer {
                 height: target.height,
             },
         );
-        self.buffers.clear();
-        self.areas.clear();
         self.rect_renderer.prepare(device, queue, scene, target)?;
         self.icon_renderer.prepare(device, queue, scene, target)?;
-
-        for (index, block) in scene.text_blocks().iter().enumerate() {
-            validate_text_block(index, block)?;
-            let style = block.style();
-            let metrics = Metrics::new(
-                style.font_size() * scale_factor,
-                style.line_height() * scale_factor,
-            );
-            let mut buffer = Buffer::new(&mut self.font_system, metrics);
-            let bounds = block.bounds();
-            buffer.set_size(
-                Some(bounds.width * scale_factor),
-                Some(bounds.height * scale_factor),
-            );
-            let attrs = Attrs::new()
-                .family(glyphon_family(style.family()))
-                .weight(glyphon_weight(style.weight()))
-                .style(glyphon_style(style.style()));
-            buffer.set_text(block.text(), &attrs, Shaping::Advanced, None);
-            buffer.shape_until_scroll(&mut self.font_system, false);
-            self.buffers.push(buffer);
-            self.areas
-                .push(prepared_area(block, scale_factor, style.color()));
+        while self.text_layers.len() < scene.layer_count() {
+            self.text_layers
+                .push(TextLayer::new(&mut self.atlas, device));
         }
-
-        let Self {
-            font_system,
-            swash_cache,
-            viewport,
-            atlas,
-            text_renderer,
-            buffers,
-            areas,
-            ..
-        } = self;
-        let text_areas = buffers
-            .iter()
-            .zip(areas.iter())
-            .map(|(buffer, area)| TextArea {
-                buffer,
-                left: area.left,
-                top: area.top,
-                scale: 1.0,
-                bounds: area.bounds,
-                default_color: area.color,
-                custom_glyphs: &[],
-            });
-        text_renderer.prepare(
-            device,
-            queue,
-            font_system,
-            atlas,
-            viewport,
-            text_areas,
-            swash_cache,
-        )?;
+        self.prepared_layer_count = scene.layer_count();
+        for layer in 0..scene.layer_count() {
+            let text_layer = &mut self.text_layers[layer];
+            text_layer.buffers.clear();
+            text_layer.areas.clear();
+            for (index, block) in scene.text_blocks().iter().enumerate() {
+                if scene.text_layers()[index] != layer {
+                    continue;
+                }
+                validate_text_block(index, block)?;
+                let style = block.style();
+                let metrics = Metrics::new(
+                    style.font_size() * scale_factor,
+                    style.line_height() * scale_factor,
+                );
+                let mut buffer = Buffer::new(&mut self.font_system, metrics);
+                let bounds = block.bounds();
+                buffer.set_size(
+                    Some(bounds.width * scale_factor),
+                    Some(bounds.height * scale_factor),
+                );
+                let attrs = Attrs::new()
+                    .family(glyphon_family(style.family()))
+                    .weight(glyphon_weight(style.weight()))
+                    .style(glyphon_style(style.style()));
+                if block.spans().is_empty() {
+                    buffer.set_text(block.text(), &attrs, Shaping::Advanced, None);
+                } else {
+                    buffer.set_rich_text(
+                        block
+                            .spans()
+                            .iter()
+                            .map(|span| (span.text(), attrs_for_style(span.style(), scale_factor))),
+                        &attrs,
+                        Shaping::Advanced,
+                        None,
+                    );
+                }
+                buffer.shape_until_scroll(&mut self.font_system, false);
+                text_layer.buffers.push(buffer);
+                text_layer
+                    .areas
+                    .push(prepared_area(block, scale_factor, style.color()));
+            }
+            let text_areas =
+                text_layer
+                    .buffers
+                    .iter()
+                    .zip(text_layer.areas.iter())
+                    .map(|(buffer, area)| TextArea {
+                        buffer,
+                        left: area.left,
+                        top: area.top,
+                        scale: 1.0,
+                        bounds: area.bounds,
+                        default_color: area.color,
+                        custom_glyphs: &[],
+                    });
+            text_layer.renderer.prepare(
+                device,
+                queue,
+                &mut self.font_system,
+                &mut self.atlas,
+                &self.viewport,
+                text_areas,
+                &mut self.swash_cache,
+            )?;
+        }
         Ok(())
     }
 
@@ -168,10 +195,13 @@ impl UiRenderer {
         &'pass self,
         render_pass: &mut wgpu::RenderPass<'pass>,
     ) -> Result<(), UiRenderError> {
-        self.rect_renderer.render(render_pass);
-        self.icon_renderer.render(render_pass);
-        self.text_renderer
-            .render(&self.atlas, &self.viewport, render_pass)?;
+        for layer in 0..self.prepared_layer_count {
+            self.rect_renderer.render_layer(render_pass, layer);
+            self.icon_renderer.render_layer(render_pass, layer);
+            self.text_layers[layer]
+                .renderer
+                .render(&self.atlas, &self.viewport, render_pass)?;
+        }
         Ok(())
     }
 
@@ -210,6 +240,19 @@ fn validate_text_block(index: usize, block: &TextBlock) -> Result<(), UiRenderEr
             reason: "font size and line height must be positive",
         });
     }
+    for span in block.spans() {
+        let style = span.style();
+        if !style.font_size().is_finite()
+            || !style.line_height().is_finite()
+            || style.font_size() <= 0.0
+            || style.line_height() <= 0.0
+        {
+            return Err(UiRenderError::InvalidTextBlock {
+                index,
+                reason: "span font size and line height must be finite and positive",
+            });
+        }
+    }
     if let Some(clip) = block.clip_bounds() {
         let values = [
             clip.origin.x,
@@ -231,6 +274,18 @@ fn validate_text_block(index: usize, block: &TextBlock) -> Result<(), UiRenderEr
         }
     }
     Ok(())
+}
+
+fn attrs_for_style(style: &TextStyle, scale_factor: f32) -> Attrs<'_> {
+    Attrs::new()
+        .family(glyphon_family(style.family()))
+        .weight(glyphon_weight(style.weight()))
+        .style(glyphon_style(style.style()))
+        .color(glyphon_color(style.color()))
+        .metrics(Metrics::new(
+            style.font_size() * scale_factor,
+            style.line_height() * scale_factor,
+        ))
 }
 
 fn prepared_area(block: &TextBlock, scale_factor: f32, color: crate::Color) -> PreparedArea {

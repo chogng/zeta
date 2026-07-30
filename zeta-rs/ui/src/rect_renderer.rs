@@ -1,17 +1,18 @@
-use std::mem;
+use std::{mem, ops::Range};
 
 use bytemuck::{Pod, Zeroable};
 
-use crate::{Color, PaintRect, Rect, UiRenderError, UiScene, UiViewport};
+use crate::{BoxShadow, Color, PaintRect, Rect, UiRenderError, UiScene, UiViewport};
 
-const INSTANCE_ATTRIBUTES: [wgpu::VertexAttribute; 7] = wgpu::vertex_attr_array![
+const INSTANCE_ATTRIBUTES: [wgpu::VertexAttribute; 8] = wgpu::vertex_attr_array![
     0 => Float32x4,
     1 => Float32x4,
     2 => Float32x4,
     3 => Float32x4,
     4 => Float32x4,
     5 => Float32x4,
-    6 => Float32x4
+    6 => Float32x4,
+    7 => Float32x4
 ];
 
 #[repr(C)]
@@ -24,13 +25,14 @@ struct RectInstance {
     corner_radii: [f32; 4],
     clip_bounds: [f32; 4],
     viewport: [f32; 4],
+    effect: [f32; 4],
 }
 
 pub(crate) struct RectRenderer {
     pipeline: wgpu::RenderPipeline,
     instance_buffer: wgpu::Buffer,
     instance_capacity: usize,
-    instance_count: u32,
+    layer_ranges: Vec<Range<u32>>,
 }
 
 impl RectRenderer {
@@ -74,7 +76,7 @@ impl RectRenderer {
             pipeline,
             instance_buffer,
             instance_capacity,
-            instance_count: 0,
+            layer_ranges: Vec::new(),
         }
     }
 
@@ -85,8 +87,9 @@ impl RectRenderer {
         scene: &UiScene,
         target: UiViewport,
     ) -> Result<(), UiRenderError> {
-        let instances = prepare_instances(scene, target)?;
-        self.instance_count = instances.len() as u32;
+        let prepared = prepare_instances(scene, target)?;
+        let instances = prepared.instances;
+        self.layer_ranges = prepared.layer_ranges;
         if instances.is_empty() {
             return Ok(());
         }
@@ -98,13 +101,20 @@ impl RectRenderer {
         Ok(())
     }
 
-    pub(crate) fn render<'pass>(&'pass self, pass: &mut wgpu::RenderPass<'pass>) {
-        if self.instance_count == 0 {
+    pub(crate) fn render_layer<'pass>(
+        &'pass self,
+        pass: &mut wgpu::RenderPass<'pass>,
+        layer: usize,
+    ) {
+        let Some(range) = self.layer_ranges.get(layer) else {
+            return;
+        };
+        if range.is_empty() {
             return;
         }
         pass.set_pipeline(&self.pipeline);
         pass.set_vertex_buffer(0, self.instance_buffer.slice(..));
-        pass.draw(0..6, 0..self.instance_count);
+        pass.draw(0..6, range.clone());
     }
 }
 
@@ -120,7 +130,7 @@ fn create_instance_buffer(device: &wgpu::Device, capacity: usize) -> wgpu::Buffe
 fn prepare_instances(
     scene: &UiScene,
     target: UiViewport,
-) -> Result<Vec<RectInstance>, UiRenderError> {
+) -> Result<PreparedRectInstances, UiRenderError> {
     let scale_factor = target.scale_factor();
     let viewport = [target.width() as f32, target.height() as f32, 0.0, 0.0];
     let logical_viewport = Rect::from_xywh(
@@ -129,41 +139,83 @@ fn prepare_instances(
         target.width() as f32 / scale_factor,
         target.height() as f32 / scale_factor,
     );
-    let mut instances = Vec::with_capacity(scene.rects().len());
-    for (index, rect) in scene.rects().iter().copied().enumerate() {
-        validate_paint_rect(index, rect)?;
-        let clip_bounds = rect
-            .clip_bounds()
-            .map(|clip| clip.intersection(logical_viewport))
-            .unwrap_or(logical_viewport);
-        if rect.bounds().is_empty() || clip_bounds.is_empty() {
-            continue;
+    let mut instances = Vec::with_capacity(scene.rects().len() * 2);
+    let mut layer_ranges = Vec::with_capacity(scene.layer_count());
+    for layer in 0..scene.layer_count() {
+        let start = instances.len() as u32;
+        for (index, rect) in scene.rects().iter().copied().enumerate() {
+            if scene.rect_layers()[index] != layer {
+                continue;
+            }
+            validate_paint_rect(index, rect)?;
+            let clip_bounds = rect
+                .clip_bounds()
+                .map(|clip| clip.intersection(logical_viewport))
+                .unwrap_or(logical_viewport);
+            if rect.bounds().is_empty() || clip_bounds.is_empty() {
+                continue;
+            }
+            let bounds = rect.bounds();
+            let border = rect.border();
+            let widths = border.widths();
+            let radii = rect.corner_radii();
+            if let Some(shadow) = rect.shadow() {
+                let blur_radius = shadow.blur_radius();
+                let shadow_extent = blur_radius;
+                let shadow_bounds = shadow_draw_bounds(bounds, shadow, shadow_extent);
+                instances.push(RectInstance {
+                    bounds: scaled_rect(shadow_bounds, scale_factor),
+                    fill: linear_color(shadow.color()),
+                    border_color: linear_color(Color::TRANSPARENT),
+                    border_widths: [0.0; 4],
+                    corner_radii: [
+                        radii.top_left * scale_factor,
+                        radii.top_right * scale_factor,
+                        radii.bottom_right * scale_factor,
+                        radii.bottom_left * scale_factor,
+                    ],
+                    clip_bounds: scaled_rect(clip_bounds, scale_factor),
+                    viewport,
+                    effect: [
+                        blur_radius * scale_factor,
+                        shadow_extent * scale_factor,
+                        1.0,
+                        0.0,
+                    ],
+                });
+            }
+            instances.push(RectInstance {
+                bounds: scaled_rect(bounds, scale_factor),
+                fill: linear_color(rect.fill()),
+                border_color: linear_color(border.color()),
+                border_widths: [
+                    widths.top * scale_factor,
+                    widths.right * scale_factor,
+                    widths.bottom * scale_factor,
+                    widths.left * scale_factor,
+                ],
+                corner_radii: [
+                    radii.top_left * scale_factor,
+                    radii.top_right * scale_factor,
+                    radii.bottom_right * scale_factor,
+                    radii.bottom_left * scale_factor,
+                ],
+                clip_bounds: scaled_rect(clip_bounds, scale_factor),
+                viewport,
+                effect: [0.0; 4],
+            });
         }
-        let bounds = rect.bounds();
-        let border = rect.border();
-        let widths = border.widths();
-        let radii = rect.corner_radii();
-        instances.push(RectInstance {
-            bounds: scaled_rect(bounds, scale_factor),
-            fill: linear_color(rect.fill()),
-            border_color: linear_color(border.color()),
-            border_widths: [
-                widths.top * scale_factor,
-                widths.right * scale_factor,
-                widths.bottom * scale_factor,
-                widths.left * scale_factor,
-            ],
-            corner_radii: [
-                radii.top_left * scale_factor,
-                radii.top_right * scale_factor,
-                radii.bottom_right * scale_factor,
-                radii.bottom_left * scale_factor,
-            ],
-            clip_bounds: scaled_rect(clip_bounds, scale_factor),
-            viewport,
-        });
+        layer_ranges.push(start..instances.len() as u32);
     }
-    Ok(instances)
+    Ok(PreparedRectInstances {
+        instances,
+        layer_ranges,
+    })
+}
+
+struct PreparedRectInstances {
+    instances: Vec<RectInstance>,
+    layer_ranges: Vec<Range<u32>>,
 }
 
 fn validate_paint_rect(index: usize, rect: PaintRect) -> Result<(), UiRenderError> {
@@ -214,6 +266,22 @@ fn validate_paint_rect(index: usize, rect: PaintRect) -> Result<(), UiRenderErro
             reason: "border widths and corner radii must not be negative",
         });
     }
+    if let Some(shadow) = rect.shadow() {
+        let offset = shadow.offset();
+        let values = [offset.x, offset.y, shadow.blur_radius()];
+        if values.into_iter().any(|value| !value.is_finite()) {
+            return Err(UiRenderError::InvalidPaintRect {
+                index,
+                reason: "shadow metrics must be finite",
+            });
+        }
+        if shadow.blur_radius() < 0.0 {
+            return Err(UiRenderError::InvalidPaintRect {
+                index,
+                reason: "shadow blur radius must not be negative",
+            });
+        }
+    }
     if let Some(clip) = rect.clip_bounds() {
         let values = [
             clip.origin.x,
@@ -235,6 +303,16 @@ fn validate_paint_rect(index: usize, rect: PaintRect) -> Result<(), UiRenderErro
         }
     }
     Ok(())
+}
+
+fn shadow_draw_bounds(bounds: Rect, shadow: BoxShadow, extent: f32) -> Rect {
+    let offset = shadow.offset();
+    Rect::from_xywh(
+        bounds.origin.x + offset.x - extent,
+        bounds.origin.y + offset.y - extent,
+        bounds.size.width + extent * 2.0,
+        bounds.size.height + extent * 2.0,
+    )
 }
 
 fn scaled_rect(rect: Rect, scale_factor: f32) -> [f32; 4] {

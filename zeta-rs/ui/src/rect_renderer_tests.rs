@@ -1,6 +1,7 @@
 use super::{linear_color, prepare_instances, validate_paint_rect};
 use crate::{
-    Border, Color, CornerRadii, Edges, PaintRect, Rect, UiRenderError, UiScene, UiViewport,
+    Border, BoxShadow, Color, CornerRadii, Edges, PaintRect, Point, Rect, UiRenderError, UiScene,
+    UiViewport,
 };
 
 #[test]
@@ -17,7 +18,8 @@ fn prepares_logical_rect_in_physical_pixels() {
         );
     });
 
-    let instances = prepare_instances(&scene, UiViewport::new(200, 120, 2.0)).unwrap();
+    let prepared = prepare_instances(&scene, UiViewport::new(200, 120, 2.0)).unwrap();
+    let instances = prepared.instances;
 
     assert_eq!(instances.len(), 1);
     assert_eq!(instances[0].bounds, [20.0, 24.0, 100.0, 40.0]);
@@ -36,9 +38,53 @@ fn skips_rect_outside_empty_clip() {
         ));
     });
 
-    let instances = prepare_instances(&scene, UiViewport::new(100, 100, 1.0)).unwrap();
+    let prepared = prepare_instances(&scene, UiViewport::new(100, 100, 1.0)).unwrap();
 
-    assert!(instances.is_empty());
+    assert!(prepared.instances.is_empty());
+}
+
+#[test]
+fn prepares_soft_shadow_before_its_source_rect() {
+    let mut scene = UiScene::new(Color::TRANSPARENT);
+    scene.draw_rect(
+        PaintRect::new(Rect::from_xywh(10.0, 12.0, 50.0, 20.0), Color::WHITE)
+            .with_shadow(
+                BoxShadow::new(Color::rgba(0, 0, 0, 64))
+                    .with_offset(Point::new(0.0, 4.0))
+                    .with_blur_radius(8.0),
+            )
+            .with_corner_radii(CornerRadii::uniform(5.0)),
+    );
+
+    let prepared = prepare_instances(&scene, UiViewport::new(200, 120, 2.0)).unwrap();
+    let instances = prepared.instances;
+
+    assert_eq!(instances.len(), 2);
+    assert_eq!(instances[0].bounds, [4.0, 16.0, 132.0, 72.0]);
+    assert_eq!(instances[0].corner_radii, [10.0; 4]);
+    assert_eq!(instances[0].effect, [16.0, 16.0, 1.0, 0.0]);
+    assert_eq!(instances[1].bounds, [20.0, 24.0, 100.0, 40.0]);
+    assert_eq!(instances[1].effect, [0.0; 4]);
+}
+
+#[test]
+fn groups_rect_instances_into_scene_layer_ranges() {
+    let mut scene = UiScene::new(Color::TRANSPARENT);
+    scene.draw_rect(PaintRect::new(
+        Rect::from_xywh(0.0, 0.0, 20.0, 20.0),
+        Color::WHITE,
+    ));
+    scene.with_overlay(|scene| {
+        scene.draw_rect(PaintRect::new(
+            Rect::from_xywh(5.0, 5.0, 10.0, 10.0),
+            Color::rgb(10, 20, 30),
+        ));
+    });
+
+    let prepared = prepare_instances(&scene, UiViewport::new(100, 100, 1.0)).unwrap();
+
+    assert_eq!(prepared.instances.len(), 2);
+    assert_eq!(prepared.layer_ranges, [0..1, 1..2]);
 }
 
 #[test]
@@ -65,6 +111,20 @@ fn rejects_non_finite_requested_corner_radius() {
         Err(UiRenderError::InvalidPaintRect {
             index: 2,
             reason: "coordinates and visual metrics must be finite",
+        })
+    ));
+}
+
+#[test]
+fn rejects_negative_shadow_blur_radius() {
+    let rect = PaintRect::new(Rect::from_xywh(0.0, 0.0, 20.0, 20.0), Color::WHITE)
+        .with_shadow(BoxShadow::new(Color::rgba(0, 0, 0, 64)).with_blur_radius(-1.0));
+
+    assert!(matches!(
+        validate_paint_rect(3, rect),
+        Err(UiRenderError::InvalidPaintRect {
+            index: 3,
+            reason: "shadow blur radius must not be negative",
         })
     ));
 }

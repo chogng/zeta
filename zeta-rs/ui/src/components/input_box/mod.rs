@@ -112,6 +112,10 @@ impl InputBoxStyle {
         self
     }
 
+    pub const fn padding(&self) -> Edges {
+        self.padding
+    }
+
     fn content_bounds(&self, bounds: Rect) -> Rect {
         Rect::from_xywh(
             bounds.origin.x + self.padding.left,

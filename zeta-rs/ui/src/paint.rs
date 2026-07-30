@@ -1,4 +1,4 @@
-use crate::{CornerRadii, Edges, Rect};
+use crate::{CornerRadii, Edges, Point, Rect};
 
 /// An sRGB color with straight alpha.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -62,11 +62,52 @@ impl Default for Border {
     }
 }
 
-/// A filled rectangular paint primitive with an optional visible border and rounded corners.
+/// Soft shadow cast by a rounded rectangular paint primitive.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct BoxShadow {
+    color: Color,
+    offset: Point,
+    blur_radius: f32,
+}
+
+impl BoxShadow {
+    pub const fn new(color: Color) -> Self {
+        Self {
+            color,
+            offset: Point::new(0.0, 0.0),
+            blur_radius: 0.0,
+        }
+    }
+
+    pub const fn with_offset(mut self, offset: Point) -> Self {
+        self.offset = offset;
+        self
+    }
+
+    pub const fn with_blur_radius(mut self, blur_radius: f32) -> Self {
+        self.blur_radius = blur_radius;
+        self
+    }
+
+    pub const fn color(self) -> Color {
+        self.color
+    }
+
+    pub const fn offset(self) -> Point {
+        self.offset
+    }
+
+    pub const fn blur_radius(self) -> f32 {
+        self.blur_radius
+    }
+}
+
+/// A filled rectangular paint primitive with an optional shadow, border, and rounded corners.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct PaintRect {
     bounds: Rect,
     fill: Color,
+    shadow: Option<BoxShadow>,
     border: Border,
     corner_radii: CornerRadii,
     clip_bounds: Option<Rect>,
@@ -77,10 +118,16 @@ impl PaintRect {
         Self {
             bounds,
             fill,
+            shadow: None,
             border: Border::uniform(0.0, Color::TRANSPARENT),
             corner_radii: CornerRadii::uniform(0.0),
             clip_bounds: None,
         }
+    }
+
+    pub const fn with_shadow(mut self, shadow: BoxShadow) -> Self {
+        self.shadow = Some(shadow);
+        self
     }
 
     pub const fn with_border(mut self, border: Border) -> Self {
@@ -99,6 +146,10 @@ impl PaintRect {
 
     pub const fn fill(self) -> Color {
         self.fill
+    }
+
+    pub const fn shadow(self) -> Option<BoxShadow> {
+        self.shadow
     }
 
     pub const fn border(self) -> Border {

@@ -93,10 +93,38 @@ impl TextStyle {
     }
 }
 
+/// One owned text run with a uniform style inside a rich [`TextBlock`].
+///
+/// Callers should split spans only where presentation changes. The renderer shapes every span in
+/// the same paragraph buffer so wrapping, bidirectional text, and fallback remain coordinated.
+#[derive(Clone, Debug, PartialEq)]
+pub struct TextSpan {
+    text: String,
+    style: TextStyle,
+}
+
+impl TextSpan {
+    pub fn new(text: impl Into<String>, style: TextStyle) -> Self {
+        Self {
+            text: text.into(),
+            style,
+        }
+    }
+
+    pub fn text(&self) -> &str {
+        &self.text
+    }
+
+    pub const fn style(&self) -> &TextStyle {
+        &self.style
+    }
+}
+
 /// A shaped-on-demand block of text placed in logical UI coordinates.
 #[derive(Clone, Debug, PartialEq)]
 pub struct TextBlock {
     text: String,
+    spans: Vec<TextSpan>,
     origin: Point,
     bounds: Size,
     style: TextStyle,
@@ -107,6 +135,29 @@ impl TextBlock {
     pub fn new(text: impl Into<String>, origin: Point, bounds: Size, style: TextStyle) -> Self {
         Self {
             text: text.into(),
+            spans: Vec::new(),
+            origin,
+            bounds,
+            style,
+            clip_bounds: None,
+        }
+    }
+
+    /// Creates one paragraph from differently styled spans.
+    ///
+    /// `style` supplies the paragraph's default metrics and fallback attributes. Individual spans
+    /// may override font metrics, family, weight, style, and color.
+    pub fn from_spans(
+        spans: impl IntoIterator<Item = TextSpan>,
+        origin: Point,
+        bounds: Size,
+        style: TextStyle,
+    ) -> Self {
+        let spans = spans.into_iter().collect::<Vec<_>>();
+        let text = spans.iter().map(TextSpan::text).collect::<String>();
+        Self {
+            text,
+            spans,
             origin,
             bounds,
             style,
@@ -116,6 +167,10 @@ impl TextBlock {
 
     pub fn text(&self) -> &str {
         &self.text
+    }
+
+    pub fn spans(&self) -> &[TextSpan] {
+        &self.spans
     }
 
     pub fn origin(&self) -> Point {
@@ -147,9 +202,14 @@ impl TextBlock {
 pub struct UiScene {
     background: Color,
     rects: Vec<PaintRect>,
+    rect_layers: Vec<usize>,
     icons: Vec<PaintIcon>,
+    icon_layers: Vec<usize>,
     text_blocks: Vec<TextBlock>,
+    text_layers: Vec<usize>,
     active_clip: Option<Rect>,
+    active_layer: usize,
+    layer_count: usize,
 }
 
 impl UiScene {
@@ -157,9 +217,14 @@ impl UiScene {
         Self {
             background,
             rects: Vec::new(),
+            rect_layers: Vec::new(),
             icons: Vec::new(),
+            icon_layers: Vec::new(),
             text_blocks: Vec::new(),
+            text_layers: Vec::new(),
             active_clip: None,
+            active_layer: 0,
+            layer_count: 1,
         }
     }
 
@@ -168,6 +233,7 @@ impl UiScene {
             rect.apply_clip(clip_bounds);
         }
         self.rects.push(rect);
+        self.rect_layers.push(self.active_layer);
     }
 
     pub fn draw_icon(&mut self, mut icon: PaintIcon) {
@@ -175,6 +241,7 @@ impl UiScene {
             icon.apply_clip(clip_bounds);
         }
         self.icons.push(icon);
+        self.icon_layers.push(self.active_layer);
     }
 
     pub fn draw_text(&mut self, mut block: TextBlock) {
@@ -182,6 +249,7 @@ impl UiScene {
             block.apply_clip(clip_bounds);
         }
         self.text_blocks.push(block);
+        self.text_layers.push(self.active_layer);
     }
 
     pub fn draw_component<C: Component + ?Sized>(&mut self, component: &C) {
@@ -195,6 +263,23 @@ impl UiScene {
             None => clip_bounds,
         });
         let result = draw(self);
+        self.active_clip = previous_clip;
+        result
+    }
+
+    /// Draws into a new layer composited above every previously created scene layer.
+    ///
+    /// The new layer does not inherit the caller's active clip, allowing anchored views to escape
+    /// their host component. Nested overlays receive their own later layer. After the closure
+    /// returns, drawing resumes with the caller's layer and clip.
+    pub fn with_overlay<R>(&mut self, draw: impl FnOnce(&mut Self) -> R) -> R {
+        let previous_layer = self.active_layer;
+        let previous_clip = self.active_clip;
+        self.active_layer = self.layer_count;
+        self.active_clip = None;
+        self.layer_count += 1;
+        let result = draw(self);
+        self.active_layer = previous_layer;
         self.active_clip = previous_clip;
         result
     }
@@ -213,6 +298,22 @@ impl UiScene {
 
     pub fn text_blocks(&self) -> &[TextBlock] {
         &self.text_blocks
+    }
+
+    pub(crate) const fn layer_count(&self) -> usize {
+        self.layer_count
+    }
+
+    pub(crate) fn rect_layers(&self) -> &[usize] {
+        &self.rect_layers
+    }
+
+    pub(crate) fn icon_layers(&self) -> &[usize] {
+        &self.icon_layers
+    }
+
+    pub(crate) fn text_layers(&self) -> &[usize] {
+        &self.text_layers
     }
 }
 
