@@ -147,6 +147,24 @@ Agent 提出工具调用
 这些能力未来即使加入，也必须拥有独立、可审计的作用范围和撤销语义，不能改变
 `ApproveOnce` 的含义。
 
+### 受控内容来源不是长期执行批准
+
+Desktop 外部 Agent 配置导入计划允许用户把明确选择的 Codex `~/.agents/skills`、Claude
+`~/.claude/skills` 等目录注册为可撤销的只读内容来源。当前 `zeta-agent-import` 只实现已知
+路径的 metadata-only 发现和 `AgentImportPlan`，尚未实现 Desktop 确认与 Config apply。未来
+apply 操作产生类型化配置和受控来源身份，不产生按工具、命令前缀或路径模式匹配的执行授权，
+因此不属于“是，不再询问”或“此项目始终允许”。
+
+注册后的读取只能发生在经过规范化和 containment 校验的窄来源根内；整个 `~/.codex`、
+`~/.claude` 或用户主目录不会因此变成 Agent 可浏览范围，`~/.codex/auth.json` 和包含 OAuth
+session/cache 的 `~/.claude.json` 也不会进入当前发现计划。Skill 中的脚本、网络请求或其他
+副作用仍按当前动作单独进入权限与沙箱判断。
+
+该导入入口仅由 Desktop 提供；TUI 可以消费 App Server 已发布的统一 Skill catalog，但不能创建
+或管理外部来源。完整产品边界见
+[`zeta-desktop-architecture.md`](zeta-desktop-architecture.md#22-外部-agent-配置导入仅限-desktop)
+和 [`skills.md`](skills.md#151-外部-agent-skill-导入仅限-desktop)。
+
 ## 沙箱在权限系统中的位置
 
 本地执行的沙箱策略由文件系统约束和网络约束组成：

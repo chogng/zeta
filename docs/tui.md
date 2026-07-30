@@ -21,6 +21,7 @@ TUI 把 App Server 的权威状态转换成终端中的可交互呈现；它拥�
 | 检测到序列缺口 | 暂停推断并请求权威快照 | 用本地状态填补缺口 |
 | 请求完成、过期或取消 | 按关联身份丢弃过期结果并更新交互 | 决定工具重试或 Agent 恢复 |
 | 渲染一帧 | 纯读取当前呈现状态 | 在绘制过程中触发业务副作用 |
+| 外部 Agent 来源已经进入统一 Skill catalog | 浏览、启用或禁用已有条目 | 导入外部 Agent 配置、选择目录或扫描用户主目录 |
 
 ## 1. 结论
 
@@ -583,6 +584,14 @@ resources 等已经有 typed contract、但尚未开始 TUI 工作的能力不�
 request/response/notification、顺序、取消、错误与恢复语义，然后 TUI 才添加对应垂直切片。
 例如 approval 在 App Server 尚未提供 server-to-client request 和 typed response 前，TUI
 不能靠检查 ToolCall 名称或 arguments JSON 自行弹窗并决定策略。
+
+外部 Agent 配置导入是明确的 Desktop-only 产品边界，不属于上述“等待 canonical contract
+后再进入 TUI”的潜在功能。TUI 不提供 `/add-dir`、`/import-agent`、目录选择器或等价的
+配置 mutation，也不主动扫描 `~/.codex`、`~/.claude` 等目录。Desktop 已经导入的外部 Skill
+仍可通过 App Server 统一 catalog 出现在 TUI `/skills` 中；这只是消费既有来源，不使 TUI
+成为导入或文件访问授权 owner。Desktop 工作流见
+[`zeta-desktop-architecture.md`](zeta-desktop-architecture.md#22-外部-agent-配置导入仅限-desktop)，
+Skill 来源边界见 [`skills.md`](skills.md#151-外部-agent-skill-导入仅限-desktop)。
 
 Feature 之间不能依赖彼此的私有模块。跨功能结果由 `app/` 协调，交互复用通过
 `components/`，纯布局复用通过 `ui/`；只有重复已经出现且语义一致时才提取公开的小型 value

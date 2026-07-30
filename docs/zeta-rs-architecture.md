@@ -35,6 +35,7 @@ Desktop UI、Electron IPC、终端渲染和第三方网页 UI 不属于 Rust Cor
 ```text
 zeta-rs/
 ├── protocol/             # canonical shared domain contract
+├── agent-import/         # Codex/Claude known-path discovery + metadata-only import plan
 ├── tools/                # target host-side tool types, interfaces and pure adapters
 ├── shell-command/        # concrete approved-process executor
 ├── file-system/          # concrete read-only filesystem executor

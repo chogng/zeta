@@ -627,6 +627,38 @@ Skill install/remove 不属于 Skill manager：
 Client picker 展示 name、description、source、version/digest 摘要、compatibility、availability 和
 trust；同名 Skill 不合并。自动激活结果在 Turn/status 中可解释，但 UI 不需要显示 Skill 正文。
 
+### 15.1 外部 Agent Skill 导入（仅限 Desktop）
+
+[`zeta-agent-import`](../zeta-rs/agent-import/README.md) 当前已经能只读发现 Codex 的
+`~/.agents/skills`、项目 `.agents/skills`、Claude 的 `~/.claude/skills` 和项目
+`.claude/skills`，并把 canonical path、来源、scope 与 review category 放入 metadata-only
+`AgentImportPlan`；它不读取或转换 Skill 正文，也不修改 Config。
+
+用户可见的导入工作流只在 Desktop 提供。Desktop 的目录选择、导入预览、冲突确认和撤销入口，
+以及 App Server/Config authority 把用户确认结果保存为明确用户 Skill 来源的 apply path 仍是
+计划设计。Skill manager 继续拥有来源 containment、格式、摘要和身份校验。
+
+TUI `/skills` 只浏览、启用或禁用 App Server 已发布的统一 catalog。若某个外部来源已经通过
+Desktop 导入，其 Skill 可以与其他来源一起出现在 TUI catalog 中；TUI 不提供外部目录发现、
+`/add-dir`、`/import-agent`、导入配置 mutation 或用户主目录扫描。
+
+外部导入必须遵守以下边界：
+
+- 只注册用户明确选择的窄 Skill 根，不开放整个 `~/.codex`、`~/.claude` 或用户主目录；
+- 不读取或导入认证文件、凭据、日志与历史记录，`~/.codex/auth.json` 明确排除；
+- Claude 的 `~/.claude.json` 同时包含 OAuth session、MCP、per-project state 和 cache，当前
+  整体排除；
+- 保留外部 Agent 类型、规范化来源根和内容摘要，不能把外部 Skill 冒充 built-in 或 workspace
+  来源；
+- 导入来源必须可查询、禁用和移除，移除后不能继续激活其中的 Skill；
+- 导入只建立只读内容来源，不授予脚本执行、网络、凭据或沙箱绕过能力。
+
+外部路径发现和导入计划由 `zeta-agent-import` 拥有，来源注册与内容解析仍属于 Config/Skill
+边界，不属于通用 `utils`；只有不理解外部 Agent 格式的路径规范化、目录 containment 和文件
+identity 原语可以下沉到已有基础 crate。Desktop 交互所有权与其他外部配置类型的映射见
+[`zeta-desktop-architecture.md`](zeta-desktop-architecture.md#22-外部-agent-配置导入仅限-desktop)；
+TUI 的长期非职责见 [`tui.md`](tui.md#11-featureszeta-功能的垂直切片)。
+
 ## 16. 错误与诊断
 
 至少区分：

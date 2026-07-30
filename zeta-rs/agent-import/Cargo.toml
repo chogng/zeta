@@ -1,0 +1,18 @@
+[package]
+name = "zeta-agent-import"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+readme = "README.md"
+
+[lib]
+doctest = false
+name = "zeta_agent_import"
+path = "src/lib.rs"
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[lints]
+workspace = true

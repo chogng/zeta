@@ -1,5 +1,6 @@
 [workspace]
 members = [
+    "agent-import",
     "app-server",
     "app-server-client",
     "app-server-protocol",
@@ -116,6 +117,7 @@ wgpu = "30.0.0"
 windows-sys = "0.59"
 winit = "0.30.13"
 zeroize = "1"
+zeta-agent-import = { path = "agent-import" }
 zeta-app-server = { path = "app-server" }
 zeta-app-server-client = { path = "app-server-client" }
 zeta-app-server-protocol = { path = "app-server-protocol" }

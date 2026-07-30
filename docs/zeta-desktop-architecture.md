@@ -7,6 +7,8 @@
 > Renderer 控件、Workbench Part 与 CSS 状态所有权：[`ui-styling-ownership.md`](ui-styling-ownership.md)
 > Renderer Command、MenuId 与 UI Action 组合系统：[`menu-system.md`](menu-system.md)
 > Chat 内 Session Inspector 的信息架构与 Plan 演进：[`chat-session-inspector.md`](chat-session-inspector.md)
+> 外部 Agent Skill 来源与加载边界：[`skills.md`](skills.md)
+> TUI 明确不提供外部 Agent 导入入口：[`tui.md`](tui.md)
 
 ## 快速理解
 
@@ -130,6 +132,36 @@ Renderer component
   → typed App Server method
   → Rust authority
 ```
+
+### 2.2 外部 Agent 配置导入（仅限 Desktop）
+
+外部 Agent 配置导入是 Desktop 专属的用户工作流。当前
+[`zeta-agent-import`](../zeta-rs/agent-import/README.md) 已实现 Codex/Claude 已知路径的
+metadata-only 发现、canonical containment、symlink 拒绝、确定性 `AgentImportPlan` 和安全诊断；
+它不读取候选正文。Desktop 的目录选择、内容预览、冲突确认、导入进度和撤销入口，以及 App
+Server 的 apply orchestration 仍是计划设计。TUI 不提供对应命令、目录选择器或配置界面。
+
+底层解析、来源身份、安全校验和持久化仍由各 Rust 领域 authority 与 App Server typed
+contract 拥有，Renderer 不能直接扫描用户主目录或自行解释外部配置。
+
+| 外部内容 | Desktop 导入行为 | 权威 owner 与安全边界 |
+| --- | --- | --- |
+| Codex 的 `~/.agents/skills` 与 Claude 的 `~/.claude/skills` | 用户明确选择后注册为窄的只读外部来源 | Config authority 保存来源；Skill manager 校验 containment、格式、摘要和来源身份 |
+| 规则或 instruction 文件 | 预览并按明确映射导入；没有 canonical contract 时不可导入 | 对应 instruction/config 领域定义优先级，外部内容不能覆盖系统、开发者或产品策略 |
+| Sub-agent 定义 | 仅在 multi-agent 领域提供 typed import contract 后开放 | Multi-Agent authority 校验角色、工具请求和生命周期；Desktop 只呈现映射与诊断 |
+| MCP 声明 | 单独展示并要求用户确认，不因导入自动连接或获得凭据 | MCP/config authority 保存声明；连接、网络和凭据继续走各自授权 |
+| 认证文件、密钥、日志和历史记录 | ❌ 不导入 | Desktop 不读取 `~/.codex/auth.json`，也不把整个 `~/.codex` 或 `~/.claude` 注册为可浏览根 |
+
+导入操作只授予已选择且经过规范化的内容根只读访问，并且必须可查询、禁用和移除。它不是
+“以后同类工具都允许”的长期执行批准；导入 Skill 附带的脚本仍通过普通工具、权限与沙箱流程。
+具体来源和激活语义由 [`skills.md`](skills.md) 定义，批准语义由
+[`permissions.md`](permissions.md) 定义。
+
+该功能即使首版很小，也不能整体放入 `zeta-rs/utils`。外部目录识别、格式映射、敏感内容排除和
+配置 mutation 都属于产品领域语义；`zeta-agent-import` 拥有只读发现与计划模型，Desktop 只
+拥有交互，App Server 负责协调，各目标领域负责校验和落库。只有不理解 Codex、Claude、Skill、
+MCP 或 Sub-agent 的路径规范化、目录 containment 和文件 identity 原语可以复用
+`zeta-rs/utils/path-utils`、`zeta-rs/utils/path-uri` 等基础 crate。
 
 ## 3. 目录边界
 

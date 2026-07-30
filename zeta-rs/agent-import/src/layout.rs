@@ -1,0 +1,205 @@
+use crate::{ExternalAgent, ImportItemKind, ImportReviewCategory, ImportScope};
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum ExpectedPathKind {
+    File,
+    Directory,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) struct CandidateSpec {
+    pub relative_path: &'static str,
+    pub kind: ImportItemKind,
+    pub review: ImportReviewCategory,
+    pub expected: ExpectedPathKind,
+}
+
+const CODEX_USER: &[CandidateSpec] = &[
+    file(
+        ".codex/AGENTS.override.md",
+        ImportItemKind::Instructions,
+        ImportReviewCategory::Content,
+    ),
+    file(
+        ".codex/AGENTS.md",
+        ImportItemKind::Instructions,
+        ImportReviewCategory::Content,
+    ),
+    file(
+        ".codex/config.toml",
+        ImportItemKind::Settings,
+        ImportReviewCategory::Configuration,
+    ),
+    directory(
+        ".agents/skills",
+        ImportItemKind::Skills,
+        ImportReviewCategory::Content,
+    ),
+    directory(
+        ".codex/agents",
+        ImportItemKind::Subagents,
+        ImportReviewCategory::Configuration,
+    ),
+    directory(
+        ".codex/rules",
+        ImportItemKind::ExecutionRules,
+        ImportReviewCategory::ExecutionPolicy,
+    ),
+];
+
+const CODEX_PROJECT: &[CandidateSpec] = &[
+    file(
+        "AGENTS.override.md",
+        ImportItemKind::Instructions,
+        ImportReviewCategory::Content,
+    ),
+    file(
+        "AGENTS.md",
+        ImportItemKind::Instructions,
+        ImportReviewCategory::Content,
+    ),
+    file(
+        ".codex/config.toml",
+        ImportItemKind::Settings,
+        ImportReviewCategory::Configuration,
+    ),
+    directory(
+        ".agents/skills",
+        ImportItemKind::Skills,
+        ImportReviewCategory::Content,
+    ),
+    directory(
+        ".codex/agents",
+        ImportItemKind::Subagents,
+        ImportReviewCategory::Configuration,
+    ),
+    directory(
+        ".codex/rules",
+        ImportItemKind::ExecutionRules,
+        ImportReviewCategory::ExecutionPolicy,
+    ),
+];
+
+const CLAUDE_USER: &[CandidateSpec] = &[
+    file(
+        ".claude/CLAUDE.md",
+        ImportItemKind::Instructions,
+        ImportReviewCategory::Content,
+    ),
+    file(
+        ".claude/settings.json",
+        ImportItemKind::Settings,
+        ImportReviewCategory::Configuration,
+    ),
+    directory(
+        ".claude/skills",
+        ImportItemKind::Skills,
+        ImportReviewCategory::Content,
+    ),
+    directory(
+        ".claude/agents",
+        ImportItemKind::Subagents,
+        ImportReviewCategory::Configuration,
+    ),
+    directory(
+        ".claude/commands",
+        ImportItemKind::SlashCommands,
+        ImportReviewCategory::Content,
+    ),
+    directory(
+        ".claude/rules",
+        ImportItemKind::InstructionRules,
+        ImportReviewCategory::Content,
+    ),
+];
+
+const CLAUDE_PROJECT: &[CandidateSpec] = &[
+    file(
+        "CLAUDE.md",
+        ImportItemKind::Instructions,
+        ImportReviewCategory::Content,
+    ),
+    file(
+        "CLAUDE.local.md",
+        ImportItemKind::Instructions,
+        ImportReviewCategory::Content,
+    ),
+    file(
+        ".claude/CLAUDE.md",
+        ImportItemKind::Instructions,
+        ImportReviewCategory::Content,
+    ),
+    file(
+        ".claude/settings.json",
+        ImportItemKind::Settings,
+        ImportReviewCategory::Configuration,
+    ),
+    file(
+        ".claude/settings.local.json",
+        ImportItemKind::Settings,
+        ImportReviewCategory::Configuration,
+    ),
+    directory(
+        ".claude/skills",
+        ImportItemKind::Skills,
+        ImportReviewCategory::Content,
+    ),
+    directory(
+        ".claude/agents",
+        ImportItemKind::Subagents,
+        ImportReviewCategory::Configuration,
+    ),
+    directory(
+        ".claude/commands",
+        ImportItemKind::SlashCommands,
+        ImportReviewCategory::Content,
+    ),
+    directory(
+        ".claude/rules",
+        ImportItemKind::InstructionRules,
+        ImportReviewCategory::Content,
+    ),
+    file(
+        ".mcp.json",
+        ImportItemKind::McpServers,
+        ImportReviewCategory::Connection,
+    ),
+];
+
+pub(super) fn candidate_specs(
+    agent: ExternalAgent,
+    scope: ImportScope,
+) -> &'static [CandidateSpec] {
+    match (agent, scope) {
+        (ExternalAgent::Codex, ImportScope::User) => CODEX_USER,
+        (ExternalAgent::Codex, ImportScope::Project) => CODEX_PROJECT,
+        (ExternalAgent::Claude, ImportScope::User) => CLAUDE_USER,
+        (ExternalAgent::Claude, ImportScope::Project) => CLAUDE_PROJECT,
+    }
+}
+
+const fn file(
+    relative_path: &'static str,
+    kind: ImportItemKind,
+    review: ImportReviewCategory,
+) -> CandidateSpec {
+    CandidateSpec {
+        relative_path,
+        kind,
+        review,
+        expected: ExpectedPathKind::File,
+    }
+}
+
+const fn directory(
+    relative_path: &'static str,
+    kind: ImportItemKind,
+    review: ImportReviewCategory,
+) -> CandidateSpec {
+    CandidateSpec {
+        relative_path,
+        kind,
+        review,
+        expected: ExpectedPathKind::Directory,
+    }
+}
