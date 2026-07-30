@@ -6,7 +6,7 @@ mod window_chrome;
 
 pub use host::{run_application, run_application_with_user_events};
 pub use window::{ImeCursorArea, NativeWindow, PhysicalExtent};
-pub use window_chrome::{WindowChrome, apply_window_chrome};
+pub use window_chrome::{WindowChrome, WindowControlInsets};
 
 pub use winit::application::ApplicationHandler;
 pub use winit::dpi::LogicalSize;
@@ -22,5 +22,6 @@ pub use winit::event_loop::ControlFlow;
 pub use winit::event_loop::EventLoopProxy;
 pub use winit::keyboard::{Key, ModifiersState, NamedKey};
 pub use winit::window::CursorIcon;
+pub use winit::window::Theme;
 pub use winit::window::WindowAttributes;
 pub use winit::window::WindowId;

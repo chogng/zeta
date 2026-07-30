@@ -5,6 +5,10 @@ use winit::error::{ExternalError, OsError};
 use winit::event_loop::{ActiveEventLoop, OwnedDisplayHandle};
 use winit::window::{CursorIcon, Window, WindowAttributes, WindowId};
 
+use crate::window_chrome::{
+    WindowChrome, WindowControlInsets, apply_window_chrome, window_control_insets,
+};
+
 /// Physical pixel extent reported by the native window system.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct PhysicalExtent {
@@ -47,18 +51,22 @@ impl ImeCursorArea {
 pub struct NativeWindow {
     window: Arc<Window>,
     display_handle: OwnedDisplayHandle,
+    chrome: WindowChrome,
 }
 
 impl NativeWindow {
-    /// Creates a native window from product-owned attributes.
+    /// Creates a native window from product-owned attributes and a named chrome policy.
     pub fn create(
         event_loop: &ActiveEventLoop,
         attributes: WindowAttributes,
+        chrome: WindowChrome,
     ) -> Result<Self, OsError> {
+        let attributes = apply_window_chrome(attributes, chrome);
         let window = Arc::new(event_loop.create_window(attributes)?);
         Ok(Self {
             window,
             display_handle: event_loop.owned_display_handle(),
+            chrome,
         })
     }
 
@@ -76,6 +84,11 @@ impl NativeWindow {
     /// Returns the current logical-to-physical scale factor.
     pub fn scale_factor(&self) -> f64 {
         self.window.scale_factor()
+    }
+
+    /// Returns logical insets occupied by native controls for the selected chrome policy.
+    pub fn window_control_insets(&self) -> WindowControlInsets {
+        window_control_insets(self.chrome)
     }
 
     /// Schedules a redraw request through the platform event loop.
