@@ -5,7 +5,7 @@ use zeta_ui::{TextInputCommand, TextInputSelectionMode};
 use zeta_winit::{ElementState, Key, KeyEvent, ModifiersState, NamedKey};
 
 use crate::NativeApp;
-use crate::shell_interaction::COMPOSER;
+use crate::shell_interaction::{COMPOSER, SESSION_SEARCH_INPUT};
 use crate::terminal_selection::{read_clipboard_text, write_clipboard_text};
 use zeta_ui_dispatch::{FocusDirection, NavigationAxis};
 
@@ -14,10 +14,19 @@ impl NativeApp {
         if event.state != ElementState::Pressed {
             return;
         }
-        if self.active_screen() == ScreenBuffer::Alternate {
+        if self.route_session_context_menu_keyboard(&event) {
+            return;
+        }
+        if self.active_screen() == ScreenBuffer::Alternate
+            && !self.ui_dispatch.is_focused(SESSION_SEARCH_INPUT)
+        {
             self.direct_terminal_keyboard_input(&event);
         } else if !self.dispatch_primary_keyboard_input(&event) {
-            self.composer_keyboard_input(&event);
+            if self.ui_dispatch.is_focused(SESSION_SEARCH_INPUT) {
+                self.session_search_keyboard_input(&event);
+            } else {
+                self.composer_keyboard_input(&event);
+            }
         }
     }
 
@@ -41,31 +50,41 @@ impl NativeApp {
             self.composer_changed();
             return;
         }
-        let selection_mode = if self.modifiers.shift_key() {
-            TextInputSelectionMode::Extend
-        } else {
-            TextInputSelectionMode::Move
-        };
-        let shortcut = self.modifiers.control_key() || self.modifiers.super_key();
-        let command = match &event.logical_key {
-            Key::Named(NamedKey::Backspace) => Some(TextInputCommand::Backspace),
-            Key::Named(NamedKey::Delete) => Some(TextInputCommand::DeleteForward),
-            Key::Named(NamedKey::ArrowLeft) => Some(TextInputCommand::MoveLeft(selection_mode)),
-            Key::Named(NamedKey::ArrowRight) => Some(TextInputCommand::MoveRight(selection_mode)),
-            Key::Named(NamedKey::Home) => Some(TextInputCommand::MoveToStart(selection_mode)),
-            Key::Named(NamedKey::End) => Some(TextInputCommand::MoveToEnd(selection_mode)),
-            Key::Character(text) if shortcut && text.eq_ignore_ascii_case("a") => {
-                Some(TextInputCommand::SelectAll)
-            }
-            _ if !shortcut => event
-                .text
-                .as_ref()
-                .map(|text| TextInputCommand::Insert(text.to_string())),
-            _ => None,
-        };
-        if let Some(command) = command {
+        if let Some(command) = text_input_command(event, self.modifiers) {
             self.terminal_composer.apply(command);
             self.composer_changed();
+        }
+    }
+
+    fn session_search_keyboard_input(&mut self, event: &KeyEvent) {
+        if is_clipboard_shortcut(&event.logical_key, "c", self.modifiers, false) {
+            if let Some(text) = self.session_search.selected_text()
+                && let Err(error) = write_clipboard_text(text.to_owned())
+            {
+                eprintln!("could not copy session search text: {error}");
+            }
+            return;
+        }
+        if is_clipboard_shortcut(&event.logical_key, "v", self.modifiers, false) {
+            let text = match read_clipboard_text() {
+                Ok(text) => text,
+                Err(error) => {
+                    eprintln!("could not paste session search text: {error}");
+                    return;
+                }
+            };
+            self.session_search.apply(TextInputCommand::Insert(text));
+            self.session_search_changed();
+            return;
+        }
+        if event.logical_key == Key::Named(NamedKey::Escape) {
+            self.session_search.clear();
+            self.session_search_changed();
+            return;
+        }
+        if let Some(command) = text_input_command(event, self.modifiers) {
+            self.session_search.apply(command);
+            self.session_search_changed();
         }
     }
 
@@ -81,7 +100,10 @@ impl NativeApp {
                 FocusDirection::Next
             };
             Some(self.ui_dispatch.focus_in_order(frame, direction))
-        } else if self.ui_dispatch.focused() != Some(COMPOSER) {
+        } else if !matches!(
+            self.ui_dispatch.focused(),
+            Some(COMPOSER | SESSION_SEARCH_INPUT)
+        ) {
             match &event.logical_key {
                 Key::Named(NamedKey::ArrowLeft) => Some(self.ui_dispatch.focus_within_group(
                     frame,
@@ -200,6 +222,13 @@ impl NativeApp {
         self.request_redraw();
     }
 
+    fn session_search_changed(&mut self) {
+        self.caret_blink.activity(Instant::now());
+        self.rebuild_presentation();
+        self.update_ime_cursor_area();
+        self.request_redraw();
+    }
+
     pub(super) fn send_terminal_input(&mut self, input: Vec<u8>, error_context: &str) {
         if input.is_empty() {
             return;
@@ -214,6 +243,31 @@ impl NativeApp {
         self.terminal_selection.clear();
         self.rebuild_presentation();
         self.request_redraw();
+    }
+}
+
+fn text_input_command(event: &KeyEvent, modifiers: ModifiersState) -> Option<TextInputCommand> {
+    let selection_mode = if modifiers.shift_key() {
+        TextInputSelectionMode::Extend
+    } else {
+        TextInputSelectionMode::Move
+    };
+    let shortcut = modifiers.control_key() || modifiers.super_key();
+    match &event.logical_key {
+        Key::Named(NamedKey::Backspace) => Some(TextInputCommand::Backspace),
+        Key::Named(NamedKey::Delete) => Some(TextInputCommand::DeleteForward),
+        Key::Named(NamedKey::ArrowLeft) => Some(TextInputCommand::MoveLeft(selection_mode)),
+        Key::Named(NamedKey::ArrowRight) => Some(TextInputCommand::MoveRight(selection_mode)),
+        Key::Named(NamedKey::Home) => Some(TextInputCommand::MoveToStart(selection_mode)),
+        Key::Named(NamedKey::End) => Some(TextInputCommand::MoveToEnd(selection_mode)),
+        Key::Character(text) if shortcut && text.eq_ignore_ascii_case("a") => {
+            Some(TextInputCommand::SelectAll)
+        }
+        _ if !shortcut => event
+            .text
+            .as_ref()
+            .map(|text| TextInputCommand::Insert(text.to_string())),
+        _ => None,
     }
 }
 

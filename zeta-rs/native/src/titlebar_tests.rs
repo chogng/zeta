@@ -1,6 +1,9 @@
 use super::Titlebar;
-use crate::shell_interaction::{SIDEBAR_TOGGLE, SessionSidebarState, TITLEBAR};
+use crate::agent_sidebar::AgentSidebarState;
+use crate::session_sidebar::SessionSidebarState;
+use crate::shell_interaction::{AGENT_SIDEBAR_TOGGLE, SESSION_SIDEBAR_TOGGLE, TITLEBAR};
 use crate::shell_style::SHELL_PALETTE;
+use zeta_icons::icons;
 use zeta_ui::{Color, Component, Point, Rect, UiScene};
 use zeta_ui_dispatch::{InteractionFrame, UiDispatch, UiIntent};
 use zeta_winit::WindowControlInsets;
@@ -12,19 +15,26 @@ fn titlebar_places_actions_after_native_window_controls_and_component_gap() {
     let titlebar = Titlebar::new(
         Rect::from_xywh(0.0, 0.0, 1000.0, 32.0),
         SHELL_PALETTE,
-        SessionSidebarState::Collapsed,
-        WindowControlInsets::from_logical_sides(70.0, 0.0),
+        SessionSidebarState::default(),
+        AgentSidebarState::default(),
+        WindowControlInsets::from_logical_sides(70.0, 110.0),
         &dispatch,
     );
     titlebar.register_interactions(&mut frame);
     let mut scene = UiScene::new(Color::TRANSPARENT);
     titlebar.paint(&mut scene);
 
-    assert_eq!(scene.icons().len(), 1);
+    assert_eq!(scene.icons().len(), 2);
     assert!(scene.text_blocks().is_empty());
+    assert_eq!(scene.icons()[0].icon(), icons::LAYOUT_SIDEBAR_LEFT_EMPTY);
+    assert_eq!(scene.icons()[1].icon(), icons::LAYOUT_SIDEBAR_RIGHT_EMPTY);
     assert_eq!(
         scene.icons()[0].bounds(),
-        Rect::from_xywh(83.0, 7.0, 18.0, 18.0)
+        Rect::from_xywh(81.0, 7.0, 18.0, 18.0)
+    );
+    assert_eq!(
+        scene.icons()[1].bounds(),
+        Rect::from_xywh(861.0, 7.0, 18.0, 18.0)
     );
     dispatch.pointer_moved(Point::new(400.0, 16.0), &frame);
     assert_eq!(
@@ -37,11 +47,41 @@ fn titlebar_places_actions_after_native_window_controls_and_component_gap() {
         dispatch.press_primary(&frame).invalidation,
         zeta_ui_dispatch::DispatchInvalidation::Paint
     );
-    assert!(dispatch.is_pressed(SIDEBAR_TOGGLE));
+    assert!(dispatch.is_pressed(SESSION_SIDEBAR_TOGGLE));
     assert_eq!(
         dispatch
             .release_primary(Point::new(83.0, 16.0), &frame)
             .intent,
-        Some(UiIntent::Activate(SIDEBAR_TOGGLE))
+        Some(UiIntent::Activate(SESSION_SIDEBAR_TOGGLE))
     );
+
+    dispatch.pointer_moved(Point::new(859.0, 16.0), &frame);
+    assert_eq!(
+        dispatch.press_primary(&frame).invalidation,
+        zeta_ui_dispatch::DispatchInvalidation::Paint
+    );
+    assert!(dispatch.is_pressed(AGENT_SIDEBAR_TOGGLE));
+    assert_eq!(
+        dispatch
+            .release_primary(Point::new(859.0, 16.0), &frame)
+            .intent,
+        Some(UiIntent::Activate(AGENT_SIDEBAR_TOGGLE))
+    );
+}
+
+#[test]
+fn expanded_agent_sidebar_uses_the_right_off_icon() {
+    let titlebar = Titlebar::new(
+        Rect::from_xywh(0.0, 0.0, 1000.0, 32.0),
+        SHELL_PALETTE,
+        SessionSidebarState::default(),
+        AgentSidebarState::expanded(),
+        WindowControlInsets::NONE,
+        &UiDispatch::default(),
+    );
+    let mut scene = UiScene::new(Color::TRANSPARENT);
+
+    titlebar.paint(&mut scene);
+
+    assert_eq!(scene.icons()[1].icon(), icons::LAYOUT_SIDEBAR_RIGHT_OFF);
 }

@@ -160,6 +160,7 @@ impl NativeApp {
             self.logical_viewport(),
             self.active_screen(),
             self.session_sidebar,
+            self.agent_sidebar,
             point,
         )
     }

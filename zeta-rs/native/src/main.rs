@@ -1,7 +1,12 @@
 use std::process::ExitCode;
 use std::time::Instant;
 
-use shell_interaction::{COMPOSER, ContextAction, SessionSidebarState};
+use agent_sidebar::AgentSidebarState;
+use agent_sidebar_workspace::AgentSidebarWorkspace;
+use session_context_menu::SessionContextMenuState;
+use session_search::SessionSearch;
+use session_sidebar::SessionSidebarState;
+use shell_interaction::{COMPOSER, ContextAction, SessionContextMenuAction};
 use shell_scene::{
     LogicalViewport, ShellPresentation, ShellPresentationModel, build_shell_presentation,
     terminal_grid_size_for_viewport,
@@ -23,8 +28,17 @@ use zeta_winit::{
     WindowChrome, WindowControlInsets, WindowEvent, WindowId, run_application_with_user_events,
 };
 
+mod agent_sidebar;
+mod agent_sidebar_layout;
+mod agent_sidebar_workspace;
+mod editor_pane;
+mod explorer_pane;
 mod input_context_toolbar;
 mod input_method;
+mod session_context_menu;
+mod session_search;
+mod session_sidebar;
+mod session_sidebar_toolbar;
 mod session_tab_list;
 mod shell_interaction;
 mod shell_scene;
@@ -37,6 +51,7 @@ mod terminal_projection;
 mod terminal_scrollback;
 mod terminal_selection;
 mod terminal_session;
+mod terminal_workspace_layout;
 mod titlebar;
 mod workspace_context;
 
@@ -64,7 +79,11 @@ struct NativeApp {
     window: Option<NativeWindow>,
     renderer: Option<WgpuRenderer>,
     presentation: Option<ShellPresentation>,
+    agent_sidebar: AgentSidebarState,
+    agent_sidebar_workspace: AgentSidebarWorkspace,
     session_sidebar: SessionSidebarState,
+    session_search: SessionSearch,
+    session_context_menu: SessionContextMenuState,
     ui_dispatch: UiDispatch,
     terminal: Option<TerminalSession>,
     workspace_context: WorkspaceContext,
@@ -89,7 +108,11 @@ impl NativeApp {
             window: None,
             renderer: None,
             presentation: None,
-            session_sidebar: SessionSidebarState::Collapsed,
+            agent_sidebar: AgentSidebarState::default(),
+            agent_sidebar_workspace: AgentSidebarWorkspace::default(),
+            session_sidebar: SessionSidebarState::default(),
+            session_search: SessionSearch::default(),
+            session_context_menu: SessionContextMenuState::default(),
             ui_dispatch: UiDispatch::default(),
             terminal: None,
             workspace_context: WorkspaceContext::capture_current(),
@@ -147,9 +170,14 @@ impl NativeApp {
     fn rebuild_presentation(&mut self) {
         let viewport = self.logical_viewport();
         let active_screen = self.active_screen();
-        let terminal_size =
-            terminal_grid_size_for_viewport(viewport, active_screen, self.session_sidebar);
+        let terminal_size = terminal_grid_size_for_viewport(
+            viewport,
+            active_screen,
+            self.session_sidebar,
+            self.agent_sidebar,
+        );
         if let Some(terminal) = self.terminal.as_mut()
+            && terminal.core().grid().size() != terminal_size
             && let Err(error) = terminal.resize(terminal_size)
         {
             eprintln!("could not resize terminal: {error}");
@@ -169,9 +197,13 @@ impl NativeApp {
                 terminal_selection: self.terminal_selection.range(),
                 workspace_context: &self.workspace_context,
                 composer: self.terminal_composer.input(),
+                session_search: &self.session_search,
                 caret_visibility: self.caret_blink.visibility(),
                 dispatch: &self.ui_dispatch,
                 session_sidebar: self.session_sidebar,
+                agent_sidebar: self.agent_sidebar,
+                agent_sidebar_workspace: &self.agent_sidebar_workspace,
+                session_context_menu: self.session_context_menu,
                 window_control_insets,
             },
             &mut self.text_layout,
@@ -188,9 +220,13 @@ impl NativeApp {
                     terminal_selection: self.terminal_selection.range(),
                     workspace_context: &self.workspace_context,
                     composer: self.terminal_composer.input(),
+                    session_search: &self.session_search,
                     caret_visibility: self.caret_blink.visibility(),
                     dispatch: &self.ui_dispatch,
                     session_sidebar: self.session_sidebar,
+                    agent_sidebar: self.agent_sidebar,
+                    agent_sidebar_workspace: &self.agent_sidebar_workspace,
+                    session_context_menu: self.session_context_menu,
                     window_control_insets,
                 },
                 &mut self.text_layout,
@@ -211,9 +247,13 @@ impl NativeApp {
                     terminal_selection: self.terminal_selection.range(),
                     workspace_context: &self.workspace_context,
                     composer: self.terminal_composer.input(),
+                    session_search: &self.session_search,
                     caret_visibility: self.caret_blink.visibility(),
                     dispatch: &self.ui_dispatch,
                     session_sidebar: self.session_sidebar,
+                    agent_sidebar: self.agent_sidebar,
+                    agent_sidebar_workspace: &self.agent_sidebar_workspace,
+                    session_context_menu: self.session_context_menu,
                     window_control_insets,
                 },
                 &mut self.text_layout,
@@ -250,10 +290,15 @@ impl NativeApp {
                     .pointer_feedback(&presentation.interaction_frame)
             })
             .unwrap_or_default();
-        let cursor = match feedback {
-            CursorFeedback::Default => CursorIcon::Default,
-            CursorFeedback::Text => CursorIcon::Text,
-            CursorFeedback::Pointer => CursorIcon::Pointer,
+        let cursor = if self.session_sidebar.is_resizing() {
+            CursorIcon::ColResize
+        } else {
+            match feedback {
+                CursorFeedback::Default => CursorIcon::Default,
+                CursorFeedback::Text => CursorIcon::Text,
+                CursorFeedback::Pointer => CursorIcon::Pointer,
+                CursorFeedback::ResizeHorizontal => CursorIcon::ColResize,
+            }
         };
         if let Some(window) = self.window.as_ref() {
             window.set_cursor(cursor);
@@ -281,11 +326,34 @@ impl NativeApp {
     }
 
     fn activate_shell_element(&mut self, id: zeta_ui_dispatch::ElementId) {
-        if id == shell_interaction::SIDEBAR_TOGGLE {
-            self.session_sidebar = self.session_sidebar.toggled();
+        if id == shell_interaction::SESSION_SIDEBAR_TOGGLE {
+            self.session_sidebar.toggle();
+            return;
+        }
+        if id == shell_interaction::AGENT_SIDEBAR_TOGGLE {
+            self.agent_sidebar.toggle();
             return;
         }
         if id == shell_interaction::ACTIVE_SESSION_TAB {
+            return;
+        }
+        if id == shell_interaction::ADD_SESSION {
+            // The action is intentionally routed at the product boundary now. Creating a second
+            // tab requires the future multi-Session runtime to own distinct PTYs and active state.
+            return;
+        }
+        if let Some(action) = SessionContextMenuAction::from_element_id(id) {
+            let _target_session = self.session_context_menu.target_session();
+            self.dismiss_session_context_menu();
+            match action {
+                SessionContextMenuAction::Pin
+                | SessionContextMenuAction::Close
+                | SessionContextMenuAction::Rename
+                | SessionContextMenuAction::Fork => {
+                    // The menu owns only command presentation. These transitions require the
+                    // future multi-Session runtime rather than mutating the single PTY preview.
+                }
+            }
             return;
         }
         let Some(action) = ContextAction::from_element_id(id) else {
@@ -304,6 +372,15 @@ impl NativeApp {
     fn pointer_moved(&mut self, physical_x: f64, physical_y: f64) {
         let point = self.logical_pointer_position(physical_x, physical_y);
         self.cursor_position = Some(point);
+        if self.route_session_context_menu_pointer_move(point) {
+            return;
+        }
+        if self.route_session_sidebar_resize_move(point) {
+            return;
+        }
+        if self.route_multi_diff_scrollbar_move(point) {
+            return;
+        }
         let terminal_position = self.terminal_mouse_position(point);
         let terminal_captured = self.route_terminal_pointer_move(terminal_position);
         if !terminal_captured && self.route_terminal_selection_move(terminal_position) {
@@ -323,6 +400,13 @@ impl NativeApp {
 
     fn pointer_left(&mut self) {
         self.cursor_position = None;
+        if self
+            .agent_sidebar_workspace
+            .leave_multi_diff_scrollbar(Instant::now())
+        {
+            self.rebuild_presentation();
+            self.request_redraw();
+        }
         let outcome = self.ui_dispatch.pointer_left();
         self.update_cursor();
         self.apply_dispatch_outcome(outcome);
@@ -346,6 +430,15 @@ impl NativeApp {
     }
 
     fn mouse_button_changed(&mut self, state: ElementState, button: MouseButton) {
+        if self.route_session_context_menu_button(state, button) {
+            return;
+        }
+        if button == MouseButton::Left && self.route_session_sidebar_resize_button(state) {
+            return;
+        }
+        if button == MouseButton::Left && self.route_multi_diff_scrollbar_button(state) {
+            return;
+        }
         let position = self
             .cursor_position
             .and_then(|point| self.terminal_mouse_position(point));
@@ -358,6 +451,50 @@ impl NativeApp {
         if button == MouseButton::Left {
             self.primary_button_changed(state);
         }
+    }
+
+    fn multi_diff_bounds(&self) -> Option<zeta_ui::Rect> {
+        self.presentation
+            .as_ref()?
+            .accessibility_nodes
+            .iter()
+            .find(|node| node.id == shell_interaction::MULTI_DIFF_EDITOR)
+            .map(|node| node.bounds)
+    }
+
+    fn route_multi_diff_scrollbar_move(&mut self, point: Point) -> bool {
+        let Some(bounds) = self.multi_diff_bounds() else {
+            return false;
+        };
+        let outcome =
+            self.agent_sidebar_workspace
+                .move_multi_diff_scrollbar(point, bounds, Instant::now());
+        if outcome.presentation_changed {
+            self.rebuild_presentation();
+            self.request_redraw();
+        }
+        outcome.handled
+    }
+
+    fn route_multi_diff_scrollbar_button(&mut self, state: ElementState) -> bool {
+        let Some(bounds) = self.multi_diff_bounds() else {
+            return false;
+        };
+        let point = self.cursor_position.unwrap_or(Point::new(-1.0, -1.0));
+        let now = Instant::now();
+        let outcome = match state {
+            ElementState::Pressed => self
+                .agent_sidebar_workspace
+                .press_multi_diff_scrollbar(point, bounds, now),
+            ElementState::Released => self
+                .agent_sidebar_workspace
+                .release_multi_diff_scrollbar(point, bounds, now),
+        };
+        if outcome.presentation_changed {
+            self.rebuild_presentation();
+            self.request_redraw();
+        }
+        outcome.handled
     }
 }
 
@@ -390,6 +527,7 @@ impl ApplicationHandler<TerminalSessionEvent> for NativeApp {
             self.logical_viewport(),
             ScreenBuffer::Primary,
             self.session_sidebar,
+            self.agent_sidebar,
         );
         self.terminal = match TerminalSession::spawn(terminal_size, self.event_proxy.clone()) {
             Ok(terminal) => Some(terminal),
@@ -453,6 +591,9 @@ impl ApplicationHandler<TerminalSessionEvent> for NativeApp {
             WindowEvent::Focused(false) => {
                 self.modifiers = ModifiersState::default();
                 self.terminal_pointer.cancel();
+                self.cancel_session_sidebar_resize();
+                self.agent_sidebar_workspace.cancel_multi_diff_scrollbar();
+                self.session_context_menu.dismiss();
                 self.ui_dispatch.window_blurred();
                 self.sync_input_focus();
                 self.rebuild_presentation();
@@ -521,11 +662,26 @@ impl ApplicationHandler<TerminalSessionEvent> for NativeApp {
     }
 
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
-        if let CaretBlinkAdvance::VisibilityChanged(_) = self.caret_blink.advance(Instant::now()) {
+        let now = Instant::now();
+        let caret_changed = matches!(
+            self.caret_blink.advance(now),
+            CaretBlinkAdvance::VisibilityChanged(_)
+        );
+        let scrollbar_changed = self
+            .agent_sidebar_workspace
+            .advance_multi_diff_scrollbar(now);
+        if caret_changed || scrollbar_changed {
             self.rebuild_presentation();
             self.request_redraw();
         }
-        let control_flow = match self.caret_blink.next_deadline() {
+        let next_deadline = [
+            self.caret_blink.next_deadline(),
+            self.agent_sidebar_workspace.multi_diff_scrollbar_deadline(),
+        ]
+        .into_iter()
+        .flatten()
+        .min();
+        let control_flow = match next_deadline {
             Some(deadline) => ControlFlow::WaitUntil(deadline),
             None => ControlFlow::Wait,
         };

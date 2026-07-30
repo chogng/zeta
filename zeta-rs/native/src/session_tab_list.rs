@@ -11,8 +11,6 @@ use zeta_ui_dispatch::{
 use crate::shell_interaction::{SESSION_SIDEBAR, SESSION_TAB_LIST};
 use crate::shell_style::ShellPalette;
 
-const SIDEBAR_PADDING: f32 = 10.0;
-const HEADER_HEIGHT: f32 = 28.0;
 const TAB_HEIGHT: f32 = 52.0;
 const TAB_CONTENT_PADDING: f32 = 8.0;
 const TAB_INFORMATION_HEIGHT: f32 = 36.0;
@@ -60,7 +58,6 @@ impl<'a> SessionTabList<'a> {
         palette: ShellPalette,
         dispatch: &'a UiDispatch,
     ) -> Self {
-        debug_assert!(tabs.iter().any(|tab| tab.id == selected_id));
         Self {
             bounds,
             tabs,
@@ -117,12 +114,6 @@ impl<'a> SessionTabList<'a> {
         let tab_style = TabStyle::new(backgrounds)
             .with_selected_backgrounds(selected_backgrounds)
             .with_corner_radii(CornerRadii::uniform(4.0));
-        let list_bounds = Rect::from_xywh(
-            self.bounds.origin.x + SIDEBAR_PADDING,
-            self.bounds.origin.y + SIDEBAR_PADDING + HEADER_HEIGHT,
-            (self.bounds.size.width - SIDEBAR_PADDING * 2.0).max(1.0),
-            (self.bounds.size.height - SIDEBAR_PADDING * 2.0 - HEADER_HEIGHT).max(1.0),
-        );
         let tabs = self
             .tabs
             .iter()
@@ -135,10 +126,10 @@ impl<'a> SessionTabList<'a> {
             })
             .collect();
         TabList::new(
-            list_bounds,
+            self.bounds,
             TabListOrientation::Vertical,
             tabs,
-            TabListStyle::new(tab_style, Size::new(list_bounds.size.width, TAB_HEIGHT))
+            TabListStyle::new(tab_style, Size::new(self.bounds.size.width, TAB_HEIGHT))
                 .with_gap(6.0),
         )
     }
@@ -158,18 +149,6 @@ impl<'a> SessionTabList<'a> {
 
 impl Component for SessionTabList<'_> {
     fn paint(&self, scene: &mut UiScene) {
-        scene.draw_text(TextBlock::new(
-            "SESSIONS",
-            zeta_ui::Point::new(
-                self.bounds.origin.x + SIDEBAR_PADDING + 4.0,
-                self.bounds.origin.y + SIDEBAR_PADDING + 5.0,
-            ),
-            zeta_ui::Size::new(
-                (self.bounds.size.width - SIDEBAR_PADDING * 2.0 - 8.0).max(1.0),
-                18.0,
-            ),
-            TextStyle::new(11.0, self.palette.text_muted).with_weight(FontWeight::Bold),
-        ));
         let tab_list = self.tab_list();
         tab_list.paint(scene);
         for (index, tab) in self.tabs.iter().enumerate() {

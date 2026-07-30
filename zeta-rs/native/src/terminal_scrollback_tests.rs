@@ -1,4 +1,4 @@
-use super::TerminalScroll;
+use super::{TerminalScroll, multi_diff_scroll_pixels};
 use zeta_winit::{MouseScrollDelta, PhysicalPosition};
 
 #[test]
@@ -30,6 +30,20 @@ fn pixel_wheel_accumulates_sub_line_motion() {
         8,
     ));
     assert_eq!(scroll.offset(), 1);
+}
+
+#[test]
+fn multi_diff_wheel_maps_downward_motion_to_positive_content_offset() {
+    assert_eq!(
+        multi_diff_scroll_pixels(MouseScrollDelta::LineDelta(0.0, -1.0)),
+        54.0
+    );
+    assert_eq!(
+        multi_diff_scroll_pixels(MouseScrollDelta::PixelDelta(PhysicalPosition::new(
+            0.0, -12.0
+        ))),
+        12.0
+    );
 }
 
 #[test]

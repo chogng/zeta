@@ -40,7 +40,6 @@ fn session_tabs_render_status_and_two_line_information_with_selected_semantics()
             .map(|text| text.text())
             .collect::<Vec<_>>(),
         [
-            "SESSIONS",
             "zeterm",
             "~/Desktop/zeta",
             "Review terminal navigation",
@@ -91,8 +90,8 @@ fn session_tabs_render_status_and_two_line_information_with_selected_semantics()
     assert_eq!(scene.rects()[2].fill(), Color::WHITE);
     assert_eq!(scene.rects()[2].corner_radii(), CornerRadii::uniform(18.0));
 
-    let name = &scene.text_blocks()[1];
-    let workspace = &scene.text_blocks()[2];
+    let name = &scene.text_blocks()[0];
+    let workspace = &scene.text_blocks()[1];
     assert_eq!(name.style().weight(), FontWeight::Bold);
     assert_eq!(name.style().color(), SHELL_PALETTE.text);
     assert_eq!(name.bounds().width, workspace.bounds().width);

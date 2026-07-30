@@ -1,10 +1,12 @@
 use zeta_winit::MouseScrollDelta;
 
 use crate::NativeApp;
+use crate::shell_interaction::MULTI_DIFF_EDITOR;
 use crate::terminal_projection::scroll_limit;
 
 const LINES_PER_WHEEL_STEP: f32 = 3.0;
 const PIXELS_PER_LINE: f64 = 18.0;
+const MULTI_DIFF_PIXELS_PER_LINE: f32 = 18.0;
 
 /// Ephemeral viewport position over terminal-owned retained output.
 #[derive(Default)]
@@ -56,6 +58,12 @@ impl TerminalScroll {
 
 impl NativeApp {
     pub(super) fn mouse_wheel(&mut self, delta: MouseScrollDelta) {
+        if self.session_context_menu.is_open() {
+            return;
+        }
+        if self.route_multi_diff_wheel(delta) {
+            return;
+        }
         let position = self
             .cursor_position
             .and_then(|point| self.terminal_mouse_position(point));
@@ -84,6 +92,43 @@ impl NativeApp {
         }
     }
 
+    fn route_multi_diff_wheel(&mut self, delta: MouseScrollDelta) -> bool {
+        let Some(point) = self.cursor_position else {
+            return false;
+        };
+        let Some(presentation) = self.presentation.as_ref() else {
+            return false;
+        };
+        let Some(target) = presentation.interaction_frame.target_at(point) else {
+            return false;
+        };
+        if !presentation
+            .interaction_frame
+            .ancestry(target)
+            .contains(&MULTI_DIFF_EDITOR)
+        {
+            return false;
+        }
+        let Some(viewport) = presentation
+            .accessibility_nodes
+            .iter()
+            .find(|node| node.id == MULTI_DIFF_EDITOR)
+            .map(|node| node.bounds.size)
+        else {
+            return false;
+        };
+        let changed = self.agent_sidebar_workspace.scroll_multi_diff(
+            multi_diff_scroll_pixels(delta),
+            viewport,
+            std::time::Instant::now(),
+        );
+        if changed {
+            self.rebuild_presentation();
+            self.request_redraw();
+        }
+        true
+    }
+
     pub(super) fn terminal_scroll_limit(&self) -> usize {
         self.terminal
             .as_ref()
@@ -94,6 +139,15 @@ impl NativeApp {
                 )
             })
             .unwrap_or(0)
+    }
+}
+
+fn multi_diff_scroll_pixels(delta: MouseScrollDelta) -> f32 {
+    match delta {
+        MouseScrollDelta::LineDelta(_, vertical) => {
+            -vertical * LINES_PER_WHEEL_STEP * MULTI_DIFF_PIXELS_PER_LINE
+        }
+        MouseScrollDelta::PixelDelta(position) => -position.y as f32,
     }
 }
 

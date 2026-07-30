@@ -1,5 +1,6 @@
 use zeta_ui::{
-    Color, CornerRadii, Edges, FontFamily, InputBoxStateColors, InputBoxStyle, TextStyle,
+    Color, CornerRadii, Edges, FontFamily, InputBoxStateColors, InputBoxStyle, SearchBoxStyle,
+    TextStyle,
 };
 
 #[derive(Clone, Copy)]
@@ -75,5 +76,21 @@ impl ShellPalette {
         .with_selection_color(self.terminal_selection)
         .with_caret_color(self.accent)
         .with_preedit_underline_color(self.accent)
+    }
+
+    pub(crate) fn session_search_style(self) -> SearchBoxStyle {
+        let input_box = InputBoxStyle::new(
+            InputBoxStateColors::new(Color::TRANSPARENT, Color::TRANSPARENT, Color::TRANSPARENT),
+            InputBoxStateColors::new(Color::TRANSPARENT, Color::TRANSPARENT, Color::TRANSPARENT),
+            TextStyle::new(12.0, self.text).with_line_height(16.0),
+            TextStyle::new(12.0, self.text_muted).with_line_height(16.0),
+        )
+        .with_border_width(0.0)
+        .with_corner_radii(CornerRadii::uniform(4.0))
+        .with_padding(Edges::new(4.0, 8.0, 4.0, 8.0))
+        .with_selection_color(self.terminal_selection)
+        .with_caret_color(self.accent)
+        .with_preedit_underline_color(self.accent);
+        SearchBoxStyle::new(input_box, self.text_muted).with_icon_size(18.0)
     }
 }

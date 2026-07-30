@@ -5,7 +5,9 @@ use zeta_ui::{
     Size, TextStyle, UiScene,
 };
 
-use crate::shell_interaction::{SIDEBAR_TOGGLE, SessionSidebarState, TITLEBAR, WINDOW};
+use crate::agent_sidebar::AgentSidebarState;
+use crate::session_sidebar::SessionSidebarState;
+use crate::shell_interaction::{AGENT_SIDEBAR_TOGGLE, SESSION_SIDEBAR_TOGGLE, TITLEBAR, WINDOW};
 use crate::shell_style::ShellPalette;
 use zeta_ui_dispatch::{
     AccessibilityRole, CursorFeedback, FocusBehavior, InteractionFrame, NodeAction, UiDispatch,
@@ -15,15 +17,17 @@ use zeta_winit::WindowControlInsets;
 
 pub(crate) const TITLEBAR_HEIGHT: f32 = 32.0;
 const TITLEBAR_ACTION_GAP: f32 = 8.0;
-const TOGGLE_SIZE: f32 = 28.0;
+const TOGGLE_SIZE: f32 = 24.0;
 const TOGGLE_ICON_SIZE: f32 = 18.0;
 
 /// Product-owned draggable titlebar for the single terminal surface.
 pub(crate) struct Titlebar {
     bounds: Rect,
     palette: ShellPalette,
-    action_bar: ActionBar,
-    toggle_label: &'static str,
+    left_action_bar: ActionBar,
+    right_action_bar: ActionBar,
+    session_toggle_label: &'static str,
+    agent_toggle_label: &'static str,
 }
 
 impl Titlebar {
@@ -31,37 +35,67 @@ impl Titlebar {
         bounds: Rect,
         palette: ShellPalette,
         session_sidebar: SessionSidebarState,
+        agent_sidebar: AgentSidebarState,
         window_control_insets: WindowControlInsets,
         dispatch: &UiDispatch,
     ) -> Self {
         let content_left = bounds.origin.x + window_control_insets.left();
         let content_right = (bounds.right() - window_control_insets.right()).max(content_left);
-        let toggle_x = (content_left + TITLEBAR_ACTION_GAP)
+        let session_toggle_x = (content_left + TITLEBAR_ACTION_GAP)
             .min((content_right - TOGGLE_SIZE).max(content_left));
-        let toggle_bounds = Rect::from_xywh(
-            toggle_x,
+        let session_toggle_bounds = Rect::from_xywh(
+            session_toggle_x,
             bounds.origin.y + (bounds.size.height - TOGGLE_SIZE) / 2.0,
             TOGGLE_SIZE,
             TOGGLE_SIZE,
         );
-        let state = if dispatch.is_pressed(SIDEBAR_TOGGLE) {
+        let agent_toggle_max_x = (content_right - TOGGLE_SIZE).max(content_left);
+        let agent_toggle_x = (content_right - TITLEBAR_ACTION_GAP - TOGGLE_SIZE)
+            .max(session_toggle_bounds.right() + TITLEBAR_ACTION_GAP)
+            .min(agent_toggle_max_x);
+        let agent_toggle_bounds = Rect::from_xywh(
+            agent_toggle_x,
+            bounds.origin.y + (bounds.size.height - TOGGLE_SIZE) / 2.0,
+            TOGGLE_SIZE,
+            TOGGLE_SIZE,
+        );
+        let session_toggle_state = if dispatch.is_pressed(SESSION_SIDEBAR_TOGGLE) {
             ButtonState::Pressed
-        } else if dispatch.is_focused(SIDEBAR_TOGGLE) {
+        } else if dispatch.is_focused(SESSION_SIDEBAR_TOGGLE) {
             ButtonState::Focused
-        } else if dispatch.is_hovered(SIDEBAR_TOGGLE) {
+        } else if dispatch.is_hovered(SESSION_SIDEBAR_TOGGLE) {
             ButtonState::Hovered
         } else {
             ButtonState::Resting
         };
-        let toggle_label = if session_sidebar.is_expanded() {
+        let agent_toggle_state = if dispatch.is_pressed(AGENT_SIDEBAR_TOGGLE) {
+            ButtonState::Pressed
+        } else if dispatch.is_focused(AGENT_SIDEBAR_TOGGLE) {
+            ButtonState::Focused
+        } else if dispatch.is_hovered(AGENT_SIDEBAR_TOGGLE) {
+            ButtonState::Hovered
+        } else {
+            ButtonState::Resting
+        };
+        let session_toggle_label = if session_sidebar.is_expanded() {
             "Collapse sessions sidebar"
         } else {
             "Expand sessions sidebar"
         };
-        let icon = if session_sidebar.is_expanded() {
+        let session_toggle_icon = if session_sidebar.is_expanded() {
             icons::LAYOUT_SIDEBAR_LEFT_OFF
         } else {
             icons::LAYOUT_SIDEBAR_LEFT_EMPTY
+        };
+        let agent_toggle_label = if agent_sidebar.is_expanded() {
+            "Collapse agent sidebar"
+        } else {
+            "Expand agent sidebar"
+        };
+        let agent_toggle_icon = if agent_sidebar.is_expanded() {
+            icons::LAYOUT_SIDEBAR_RIGHT_OFF
+        } else {
+            icons::LAYOUT_SIDEBAR_RIGHT_EMPTY
         };
         let button_style = ButtonStyle::new(
             ButtonBackgrounds::new(palette.surface_raised)
@@ -71,22 +105,33 @@ impl Titlebar {
             TextStyle::new(12.0, palette.text_muted),
         )
         .with_corner_radii(CornerRadii::uniform(4.0))
-        .with_padding(Edges::uniform(5.0))
+        .with_padding(Edges::uniform(3.0))
         .with_icon_size(TOGGLE_ICON_SIZE);
         Self {
             bounds,
             palette,
-            action_bar: ActionBar::new(
-                toggle_bounds,
+            left_action_bar: ActionBar::new(
+                session_toggle_bounds,
                 ActionBarOrientation::Horizontal,
                 vec![ActionBarItem::Button(ActionBarButton::icon(
-                    icon,
-                    toggle_label,
-                    state,
+                    session_toggle_icon,
+                    session_toggle_label,
+                    session_toggle_state,
+                ))],
+                ActionBarStyle::new(button_style.clone(), Size::new(TOGGLE_SIZE, TOGGLE_SIZE)),
+            ),
+            right_action_bar: ActionBar::new(
+                agent_toggle_bounds,
+                ActionBarOrientation::Horizontal,
+                vec![ActionBarItem::Button(ActionBarButton::icon(
+                    agent_toggle_icon,
+                    agent_toggle_label,
+                    agent_toggle_state,
                 ))],
                 ActionBarStyle::new(button_style, Size::new(TOGGLE_SIZE, TOGGLE_SIZE)),
             ),
-            toggle_label,
+            session_toggle_label,
+            agent_toggle_label,
         }
     }
 
@@ -101,13 +146,27 @@ impl Titlebar {
             .with_parent(WINDOW)
             .with_action(NodeAction::StartWindowDrag),
         );
-        if let Some(bounds) = self.action_bar.interactive_item_bounds(0) {
+        if let Some(bounds) = self.left_action_bar.interactive_item_bounds(0) {
             frame.register(
                 UiNode::new(
-                    SIDEBAR_TOGGLE,
+                    SESSION_SIDEBAR_TOGGLE,
                     bounds,
                     AccessibilityRole::Button,
-                    self.toggle_label,
+                    self.session_toggle_label,
+                )
+                .with_parent(TITLEBAR)
+                .with_cursor(CursorFeedback::Pointer)
+                .with_focus(FocusBehavior::TabStop)
+                .with_action(NodeAction::Activate),
+            );
+        }
+        if let Some(bounds) = self.right_action_bar.interactive_item_bounds(0) {
+            frame.register(
+                UiNode::new(
+                    AGENT_SIDEBAR_TOGGLE,
+                    bounds,
+                    AccessibilityRole::Button,
+                    self.agent_toggle_label,
                 )
                 .with_parent(TITLEBAR)
                 .with_cursor(CursorFeedback::Pointer)
@@ -126,7 +185,8 @@ impl Component for Titlebar {
                 self.palette.border,
             )),
         );
-        self.action_bar.paint(scene);
+        self.left_action_bar.paint(scene);
+        self.right_action_bar.paint(scene);
     }
 }
 

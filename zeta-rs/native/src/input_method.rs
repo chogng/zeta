@@ -5,12 +5,13 @@ use zeta_ui::{TextInputCompositionCursor, TextInputCompositionEvent};
 use zeta_winit::{Ime, ImeCursorArea};
 
 use crate::NativeApp;
-use crate::shell_interaction::COMPOSER;
+use crate::shell_interaction::{COMPOSER, SESSION_SEARCH_INPUT};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum InputMethodTarget {
     Disabled,
     Composer,
+    SessionSearch,
     TerminalGrid,
 }
 
@@ -19,12 +20,16 @@ struct InputMethodContext {
     window_active: bool,
     screen: ScreenBuffer,
     composer_focused: bool,
+    session_search_focused: bool,
 }
 
 impl InputMethodTarget {
     fn for_context(context: InputMethodContext) -> Self {
         if !context.window_active {
             return Self::Disabled;
+        }
+        if context.session_search_focused {
+            return Self::SessionSearch;
         }
         match context.screen {
             ScreenBuffer::Primary if context.composer_focused => Self::Composer,
@@ -50,11 +55,20 @@ impl NativeApp {
         match target {
             InputMethodTarget::Disabled => {}
             InputMethodTarget::Composer => {
-                let Some(composition) = composer_composition_event(event) else {
+                let Some(composition) = text_input_composition_event(event) else {
                     return;
                 };
                 self.caret_blink.activity(Instant::now());
                 self.terminal_composer.apply_composition(composition);
+                self.rebuild_presentation();
+                self.request_redraw();
+            }
+            InputMethodTarget::SessionSearch => {
+                let Some(composition) = text_input_composition_event(event) else {
+                    return;
+                };
+                self.caret_blink.activity(Instant::now());
+                self.session_search.apply_composition(composition);
                 self.rebuild_presentation();
                 self.request_redraw();
             }
@@ -91,11 +105,19 @@ impl NativeApp {
 
     pub(super) fn sync_input_focus(&mut self) {
         let target = self.input_method_target();
-        if target == InputMethodTarget::Composer {
+        if matches!(
+            target,
+            InputMethodTarget::Composer | InputMethodTarget::SessionSearch
+        ) {
             self.caret_blink.focus(Instant::now());
         } else {
-            self.terminal_composer.cancel_composition();
             self.caret_blink.blur();
+        }
+        if target != InputMethodTarget::Composer {
+            self.terminal_composer.cancel_composition();
+        }
+        if target != InputMethodTarget::SessionSearch {
+            self.session_search.cancel_composition();
         }
         if let Some(window) = self.window.as_ref() {
             if target.is_enabled() {
@@ -111,11 +133,12 @@ impl NativeApp {
             window_active: self.ui_dispatch.window_active(),
             screen: self.active_screen(),
             composer_focused: self.ui_dispatch.is_focused(COMPOSER),
+            session_search_focused: self.ui_dispatch.is_focused(SESSION_SEARCH_INPUT),
         })
     }
 }
 
-fn composer_composition_event(event: Ime) -> Option<TextInputCompositionEvent> {
+fn text_input_composition_event(event: Ime) -> Option<TextInputCompositionEvent> {
     match event {
         Ime::Preedit(text, Some((start, end))) => Some(TextInputCompositionEvent::Preedit {
             text,

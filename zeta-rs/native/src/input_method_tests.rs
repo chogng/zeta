@@ -1,5 +1,5 @@
 use super::{
-    InputMethodContext, InputMethodTarget, composer_composition_event, encode_terminal_ime_event,
+    InputMethodContext, InputMethodTarget, encode_terminal_ime_event, text_input_composition_event,
 };
 use zeta_terminal::{GridSize, ScreenBuffer, TerminalCore};
 use zeta_ui::{TextInputCompositionCursor, TextInputCompositionEvent};
@@ -11,6 +11,7 @@ fn target_requires_an_active_window_and_the_appropriate_editable_surface() {
         window_active: true,
         screen: ScreenBuffer::Primary,
         composer_focused: true,
+        session_search_focused: false,
     };
     let toolbar = InputMethodContext {
         composer_focused: false,
@@ -20,6 +21,10 @@ fn target_requires_an_active_window_and_the_appropriate_editable_surface() {
         screen: ScreenBuffer::Alternate,
         composer_focused: false,
         ..composer
+    };
+    let session_search = InputMethodContext {
+        session_search_focused: true,
+        ..terminal_grid
     };
     let inactive_window = InputMethodContext {
         window_active: false,
@@ -39,6 +44,10 @@ fn target_requires_an_active_window_and_the_appropriate_editable_surface() {
         InputMethodTarget::TerminalGrid
     );
     assert_eq!(
+        InputMethodTarget::for_context(session_search),
+        InputMethodTarget::SessionSearch
+    );
+    assert_eq!(
         InputMethodTarget::for_context(inactive_window),
         InputMethodTarget::Disabled
     );
@@ -47,28 +56,28 @@ fn target_requires_an_active_window_and_the_appropriate_editable_surface() {
 #[test]
 fn composer_conversion_preserves_preedit_cursor_and_commit_boundaries() {
     assert_eq!(
-        composer_composition_event(Ime::Preedit("你好".to_owned(), Some((0, 3)))),
+        text_input_composition_event(Ime::Preedit("你好".to_owned(), Some((0, 3)))),
         Some(TextInputCompositionEvent::Preedit {
             text: "你好".to_owned(),
             cursor: TextInputCompositionCursor::Visible(0..3),
         })
     );
     assert_eq!(
-        composer_composition_event(Ime::Preedit("世界".to_owned(), None)),
+        text_input_composition_event(Ime::Preedit("世界".to_owned(), None)),
         Some(TextInputCompositionEvent::Preedit {
             text: "世界".to_owned(),
             cursor: TextInputCompositionCursor::Hidden,
         })
     );
     assert_eq!(
-        composer_composition_event(Ime::Commit("完成".to_owned())),
+        text_input_composition_event(Ime::Commit("完成".to_owned())),
         Some(TextInputCompositionEvent::Commit("完成".to_owned()))
     );
     assert_eq!(
-        composer_composition_event(Ime::Disabled),
+        text_input_composition_event(Ime::Disabled),
         Some(TextInputCompositionEvent::Cancel)
     );
-    assert_eq!(composer_composition_event(Ime::Enabled), None);
+    assert_eq!(text_input_composition_event(Ime::Enabled), None);
 }
 
 #[test]

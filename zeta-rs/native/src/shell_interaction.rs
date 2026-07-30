@@ -13,30 +13,26 @@ pub(crate) const CONTEXT_LOCATION: ElementId = ElementId::scoped(SHELL_SCOPE, 8)
 pub(crate) const CONTEXT_WORKING_DIRECTORY: ElementId = ElementId::scoped(SHELL_SCOPE, 9);
 pub(crate) const CONTEXT_GIT_BRANCH: ElementId = ElementId::scoped(SHELL_SCOPE, 10);
 pub(crate) const CONTEXT_DIFF: ElementId = ElementId::scoped(SHELL_SCOPE, 11);
-pub(crate) const SIDEBAR_TOGGLE: ElementId = ElementId::scoped(SHELL_SCOPE, 12);
+pub(crate) const SESSION_SIDEBAR_TOGGLE: ElementId = ElementId::scoped(SHELL_SCOPE, 12);
 pub(crate) const SESSION_SIDEBAR: ElementId = ElementId::scoped(SHELL_SCOPE, 13);
 pub(crate) const SESSION_TAB_LIST: ElementId = ElementId::scoped(SHELL_SCOPE, 14);
 pub(crate) const ACTIVE_SESSION_TAB: ElementId = ElementId::scoped(SHELL_SCOPE, 15);
-
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub(crate) enum SessionSidebarState {
-    #[default]
-    Collapsed,
-    Expanded,
-}
-
-impl SessionSidebarState {
-    pub(crate) const fn is_expanded(self) -> bool {
-        matches!(self, Self::Expanded)
-    }
-
-    pub(crate) const fn toggled(self) -> Self {
-        match self {
-            Self::Collapsed => Self::Expanded,
-            Self::Expanded => Self::Collapsed,
-        }
-    }
-}
+pub(crate) const SESSION_SIDEBAR_RESIZE_HANDLE: ElementId = ElementId::scoped(SHELL_SCOPE, 16);
+pub(crate) const SESSION_CONTEXT_MENU: ElementId = ElementId::scoped(SHELL_SCOPE, 17);
+const SESSION_CONTEXT_MENU_PIN: ElementId = ElementId::scoped(SHELL_SCOPE, 18);
+const SESSION_CONTEXT_MENU_CLOSE: ElementId = ElementId::scoped(SHELL_SCOPE, 19);
+const SESSION_CONTEXT_MENU_RENAME: ElementId = ElementId::scoped(SHELL_SCOPE, 20);
+const SESSION_CONTEXT_MENU_FORK: ElementId = ElementId::scoped(SHELL_SCOPE, 21);
+pub(crate) const AGENT_SIDEBAR_TOGGLE: ElementId = ElementId::scoped(SHELL_SCOPE, 22);
+pub(crate) const AGENT_SIDEBAR: ElementId = ElementId::scoped(SHELL_SCOPE, 23);
+pub(crate) const SESSION_SIDEBAR_TOOLBAR: ElementId = ElementId::scoped(SHELL_SCOPE, 24);
+pub(crate) const SESSION_SEARCH_INPUT: ElementId = ElementId::scoped(SHELL_SCOPE, 25);
+pub(crate) const SESSION_SIDEBAR_ACTION_BAR: ElementId = ElementId::scoped(SHELL_SCOPE, 26);
+pub(crate) const ADD_SESSION: ElementId = ElementId::scoped(SHELL_SCOPE, 27);
+pub(crate) const AGENT_EXPLORER_PANE: ElementId = ElementId::scoped(SHELL_SCOPE, 28);
+pub(crate) const AGENT_EDITOR_PANE: ElementId = ElementId::scoped(SHELL_SCOPE, 29);
+pub(crate) const MULTI_DIFF_EDITOR: ElementId = ElementId::scoped(SHELL_SCOPE, 30);
+pub(crate) const MULTI_DIFF_SCROLLBAR: ElementId = ElementId::scoped(SHELL_SCOPE, 31);
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum ContextAction {
@@ -71,6 +67,50 @@ impl ContextAction {
             CONTEXT_DIFF => Some(Self::Diff),
             _ => None,
         }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum SessionContextMenuAction {
+    Pin,
+    Close,
+    Rename,
+    Fork,
+}
+
+impl SessionContextMenuAction {
+    pub(crate) const ALL: [Self; 4] = [Self::Pin, Self::Close, Self::Rename, Self::Fork];
+
+    pub(crate) const fn element_id(self) -> ElementId {
+        match self {
+            Self::Pin => SESSION_CONTEXT_MENU_PIN,
+            Self::Close => SESSION_CONTEXT_MENU_CLOSE,
+            Self::Rename => SESSION_CONTEXT_MENU_RENAME,
+            Self::Fork => SESSION_CONTEXT_MENU_FORK,
+        }
+    }
+
+    pub(crate) const fn label(self) -> &'static str {
+        match self {
+            Self::Pin => "Pin",
+            Self::Close => "Close",
+            Self::Rename => "Rename",
+            Self::Fork => "Fork",
+        }
+    }
+
+    pub(crate) const fn from_element_id(id: ElementId) -> Option<Self> {
+        match id {
+            SESSION_CONTEXT_MENU_PIN => Some(Self::Pin),
+            SESSION_CONTEXT_MENU_CLOSE => Some(Self::Close),
+            SESSION_CONTEXT_MENU_RENAME => Some(Self::Rename),
+            SESSION_CONTEXT_MENU_FORK => Some(Self::Fork),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn is_menu_element(id: ElementId) -> bool {
+        id == SESSION_CONTEXT_MENU || Self::from_element_id(id).is_some()
     }
 }
 

@@ -1,20 +1,31 @@
 use zeta_terminal::{GridSize, ScreenBuffer, TerminalColor, TerminalCore, TerminalMousePosition};
 use zeta_ui::{
     Border, CaretVisibility, Color, CornerRadii, FontFamily, FontWeight, InputBox, InputBoxState,
-    PaintRect, Rect, TextBlock, TextInput, TextInputLayoutEngine, TextStyle, UiScene,
+    PaintRect, Rect, Sash, SashOrientation, SashState, SashStyle, TextBlock, TextInput,
+    TextInputLayoutEngine, TextStyle, UiScene,
 };
 
 use crate::PRODUCT_DISPLAY_NAME;
+use crate::agent_sidebar::AgentSidebarState;
+use crate::agent_sidebar_layout::AgentSidebarLayout;
+use crate::agent_sidebar_workspace::AgentSidebarWorkspace;
+use crate::editor_pane::EditorPane;
+use crate::explorer_pane::ExplorerPane;
 use crate::input_context_toolbar::InputContextToolbar;
+use crate::session_context_menu::{SessionContextMenu, SessionContextMenuState};
+use crate::session_search::SessionSearch;
+use crate::session_sidebar::SessionSidebarState;
+use crate::session_sidebar_toolbar::SessionSidebarToolbar;
 use crate::session_tab_list::{SessionTab, SessionTabList};
 use crate::shell_interaction::{
-    ACTIVE_SESSION_TAB, COMPOSER, COMPOSER_PANEL, MAIN_SURFACE, SESSION_SIDEBAR,
-    SessionSidebarState, TERMINAL_OUTPUT, WINDOW,
+    ACTIVE_SESSION_TAB, AGENT_SIDEBAR, COMPOSER, COMPOSER_PANEL, MAIN_SURFACE,
+    SESSION_SEARCH_INPUT, SESSION_SIDEBAR, SESSION_SIDEBAR_RESIZE_HANDLE, TERMINAL_OUTPUT, WINDOW,
 };
 use crate::shell_style::{SHELL_PALETTE, ShellPalette};
 use crate::terminal_blocks::{TerminalBlockLineKind, project_block_lines};
 use crate::terminal_projection::block_view_range;
 use crate::terminal_selection::{TerminalSelectionRange, paint_terminal_selection};
+use crate::terminal_workspace_layout::TerminalWorkspaceLayout;
 use crate::titlebar::{TITLEBAR_HEIGHT, Titlebar};
 use crate::workspace_context::WorkspaceContext;
 use zeta_ui_dispatch::{
@@ -29,8 +40,6 @@ const TERMINAL_PADDING: f32 = 24.0;
 const COMPOSER_PANEL_HEIGHT: f32 = 112.0;
 const COMPOSER_TOOLBAR_HEIGHT: f32 = 24.0;
 const COMPOSER_HEIGHT: f32 = 44.0;
-const SESSION_SIDEBAR_WIDTH: f32 = 200.0;
-const MIN_TERMINAL_WIDTH_WITH_SIDEBAR: f32 = 240.0;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct LogicalViewport {
@@ -56,6 +65,8 @@ impl LogicalViewport {
 struct ShellLayout {
     titlebar: Rect,
     session_sidebar: Option<Rect>,
+    session_sidebar_sash_track: Option<Rect>,
+    agent_sidebar: Option<Rect>,
     main: Rect,
     output: Rect,
     composer_panel: Rect,
@@ -67,27 +78,25 @@ impl ShellLayout {
     fn for_viewport(
         viewport: LogicalViewport,
         session_sidebar: SessionSidebarState,
+        agent_sidebar: AgentSidebarState,
     ) -> Option<Self> {
         if viewport.width < 240.0 || viewport.height < 180.0 {
             return None;
         }
         let titlebar = Rect::from_xywh(0.0, 0.0, viewport.width, TITLEBAR_HEIGHT);
         let body_height = viewport.height - titlebar.size.height;
-        let sidebar_width = if session_sidebar.is_expanded()
-            && viewport.width >= SESSION_SIDEBAR_WIDTH + MIN_TERMINAL_WIDTH_WITH_SIDEBAR
-        {
-            SESSION_SIDEBAR_WIDTH
-        } else {
-            0.0
-        };
-        let session_sidebar = (sidebar_width > 0.0)
-            .then(|| Rect::from_xywh(0.0, titlebar.bottom(), sidebar_width, body_height));
-        let main = Rect::from_xywh(
-            sidebar_width,
-            titlebar.bottom(),
-            viewport.width - sidebar_width,
-            body_height,
-        );
+        let body = Rect::from_xywh(0.0, titlebar.bottom(), viewport.width, body_height);
+        let body_split = session_sidebar.layout(body);
+        let session_sidebar = body_split
+            .pane_bounds(0)
+            .filter(|bounds| !bounds.is_empty());
+        let remaining = body_split
+            .pane_bounds(1)
+            .expect("Sessions split must retain its main pane");
+        let session_sidebar_sash_track = body_split.sash(0).map(|sash| sash.track_bounds());
+        let terminal_workspace = TerminalWorkspaceLayout::for_bounds(remaining, agent_sidebar);
+        let main = terminal_workspace.active_pane_bounds();
+        let agent_sidebar = terminal_workspace.agent_sidebar_bounds();
         let composer_panel = Rect::from_xywh(
             main.origin.x,
             main.bottom() - COMPOSER_PANEL_HEIGHT,
@@ -115,6 +124,8 @@ impl ShellLayout {
         Some(Self {
             titlebar,
             session_sidebar,
+            session_sidebar_sash_track,
+            agent_sidebar,
             main,
             output,
             composer_panel,
@@ -144,9 +155,13 @@ pub(crate) struct ShellPresentationModel<'a> {
     pub(crate) terminal_selection: Option<TerminalSelectionRange>,
     pub(crate) workspace_context: &'a WorkspaceContext,
     pub(crate) composer: &'a TextInput,
+    pub(crate) session_search: &'a SessionSearch,
     pub(crate) caret_visibility: CaretVisibility,
     pub(crate) dispatch: &'a UiDispatch,
     pub(crate) session_sidebar: SessionSidebarState,
+    pub(crate) agent_sidebar: AgentSidebarState,
+    pub(crate) agent_sidebar_workspace: &'a AgentSidebarWorkspace,
+    pub(crate) session_context_menu: SessionContextMenuState,
     pub(crate) window_control_insets: WindowControlInsets,
 }
 
@@ -154,6 +169,15 @@ pub(crate) struct ShellPresentationModel<'a> {
 struct ComposerView<'a> {
     context: &'a WorkspaceContext,
     input: &'a TextInput,
+    caret_visibility: CaretVisibility,
+    dispatch: &'a UiDispatch,
+}
+
+#[derive(Clone, Copy)]
+struct SessionSidebarView<'a> {
+    title: &'a str,
+    context: &'a WorkspaceContext,
+    search: &'a SessionSearch,
     caret_visibility: CaretVisibility,
     dispatch: &'a UiDispatch,
 }
@@ -172,7 +196,9 @@ pub(crate) fn build_shell_presentation(
         AccessibilityRole::Window,
         PRODUCT_DISPLAY_NAME,
     ));
-    let Some(layout) = ShellLayout::for_viewport(viewport, model.session_sidebar) else {
+    let Some(layout) =
+        ShellLayout::for_viewport(viewport, model.session_sidebar, model.agent_sidebar)
+    else {
         draw_compact_scene(&mut scene, viewport, palette);
         return ShellPresentation {
             scene,
@@ -190,23 +216,40 @@ pub(crate) fn build_shell_presentation(
         layout.titlebar,
         palette,
         model.session_sidebar,
+        model.agent_sidebar,
         model.window_control_insets,
         model.dispatch,
     );
     titlebar.register_interactions(&mut interaction_frame);
     scene.draw_component(&titlebar);
-    if let Some(bounds) = layout.session_sidebar {
+    let session_search_caret = if let Some(bounds) = layout.session_sidebar {
         draw_session_sidebar(
             &mut scene,
             &mut interaction_frame,
             bounds,
-            title,
-            model.workspace_context,
-            model.dispatch,
+            SessionSidebarView {
+                title,
+                context: model.workspace_context,
+                search: model.session_search,
+                caret_visibility: model.caret_visibility,
+                dispatch: model.dispatch,
+            },
+            text_layout,
+            palette,
+        )
+    } else {
+        None
+    };
+    if let Some(bounds) = layout.agent_sidebar {
+        draw_agent_sidebar(
+            &mut scene,
+            &mut interaction_frame,
+            bounds,
+            model.agent_sidebar_workspace,
             palette,
         );
     }
-    let ime_cursor_area = draw_main(
+    let composer_caret = draw_main(
         &mut scene,
         &mut interaction_frame,
         layout,
@@ -223,6 +266,30 @@ pub(crate) fn build_shell_presentation(
         },
         text_layout,
     );
+    let ime_cursor_area = if model.dispatch.is_focused(SESSION_SEARCH_INPUT) {
+        session_search_caret
+    } else {
+        composer_caret
+    };
+    if let Some(bounds) = layout.session_sidebar_sash_track {
+        draw_session_sidebar_sash(
+            &mut scene,
+            &mut interaction_frame,
+            bounds,
+            model.session_sidebar,
+            model.dispatch,
+            palette,
+        );
+    }
+    if let Some(context_menu) = SessionContextMenu::new(
+        Rect::from_xywh(0.0, 0.0, viewport.width, viewport.height),
+        model.session_context_menu,
+        palette,
+        model.dispatch,
+    ) {
+        context_menu.register_interactions(&mut interaction_frame);
+        scene.draw_component(&context_menu);
+    }
     let accessibility_nodes = interaction_frame.accessibility_nodes(model.dispatch);
     ShellPresentation {
         scene,
@@ -236,8 +303,9 @@ pub(crate) fn terminal_grid_size_for_viewport(
     viewport: LogicalViewport,
     active_screen: ScreenBuffer,
     session_sidebar: SessionSidebarState,
+    agent_sidebar: AgentSidebarState,
 ) -> GridSize {
-    let Some(layout) = ShellLayout::for_viewport(viewport, session_sidebar) else {
+    let Some(layout) = ShellLayout::for_viewport(viewport, session_sidebar, agent_sidebar) else {
         return GridSize::default();
     };
     let bounds = terminal_content_bounds(layout, active_screen);
@@ -255,28 +323,60 @@ pub(crate) fn terminal_mouse_position_for_viewport(
     viewport: LogicalViewport,
     active_screen: ScreenBuffer,
     session_sidebar: SessionSidebarState,
+    agent_sidebar: AgentSidebarState,
     point: zeta_ui::Point,
 ) -> Option<TerminalMousePosition> {
-    let layout = ShellLayout::for_viewport(viewport, session_sidebar)?;
+    let layout = ShellLayout::for_viewport(viewport, session_sidebar, agent_sidebar)?;
     let bounds = terminal_content_bounds(layout, active_screen);
     if !bounds.contains(point) {
         return None;
     }
     let row = ((point.y - bounds.origin.y) / TERMINAL_LINE_HEIGHT).floor() as u16;
     let col = ((point.x - bounds.origin.x) / TERMINAL_CELL_WIDTH).floor() as u16;
-    let size = terminal_grid_size_for_viewport(viewport, active_screen, session_sidebar);
+    let size =
+        terminal_grid_size_for_viewport(viewport, active_screen, session_sidebar, agent_sidebar);
     (row < size.rows() && col < size.cols()).then(|| TerminalMousePosition::new(row, col))
+}
+
+fn draw_agent_sidebar(
+    scene: &mut UiScene,
+    interaction_frame: &mut InteractionFrame,
+    bounds: Rect,
+    workspace: &AgentSidebarWorkspace,
+    palette: ShellPalette,
+) {
+    scene.draw_rect(
+        PaintRect::new(bounds, palette.surface_raised).with_border(Border::new(
+            zeta_ui::Edges::new(0.0, 0.0, 0.0, 1.0),
+            palette.border,
+        )),
+    );
+    interaction_frame.register(
+        UiNode::new(
+            AGENT_SIDEBAR,
+            bounds,
+            AccessibilityRole::Group,
+            "Agent sidebar",
+        )
+        .with_parent(WINDOW),
+    );
+    let layout = AgentSidebarLayout::for_bounds(bounds);
+    let explorer = ExplorerPane::new(layout.explorer(), palette);
+    explorer.register_interactions(interaction_frame);
+    scene.draw_component(&explorer);
+    let editor = EditorPane::new(layout.editor(), workspace.editor(), palette);
+    editor.register_interactions(interaction_frame);
+    scene.draw_component(&editor);
 }
 
 fn draw_session_sidebar(
     scene: &mut UiScene,
     interaction_frame: &mut InteractionFrame,
     bounds: Rect,
-    title: &str,
-    context: &WorkspaceContext,
-    dispatch: &UiDispatch,
+    view: SessionSidebarView<'_>,
+    text_layout: &mut TextInputLayoutEngine,
     palette: ShellPalette,
-) {
+) -> Option<Rect> {
     scene.draw_rect(
         PaintRect::new(bounds, palette.surface_raised).with_border(Border::new(
             zeta_ui::Edges::new(0.0, 1.0, 0.0, 0.0),
@@ -292,15 +392,77 @@ fn draw_session_sidebar(
         )
         .with_parent(WINDOW),
     );
-    let tabs = [SessionTab::new(
+    let toolbar = SessionSidebarToolbar::new(
+        bounds,
+        view.search.input(),
+        view.caret_visibility,
+        palette,
+        text_layout,
+        view.dispatch,
+    );
+    toolbar.register_interactions(interaction_frame);
+    scene.draw_component(&toolbar);
+    let tabs = view
+        .search
+        .matches_session_name(view.title)
+        .then(|| {
+            SessionTab::new(
+                ACTIVE_SESSION_TAB,
+                view.title,
+                view.context.working_directory_label(),
+                "Active",
+            )
+        })
+        .into_iter()
+        .collect::<Vec<_>>();
+    let tab_list = SessionTabList::new(
+        SessionSidebarToolbar::content_bounds(bounds),
+        &tabs,
         ACTIVE_SESSION_TAB,
-        title,
-        context.working_directory_label(),
-        "Active",
-    )];
-    let tab_list = SessionTabList::new(bounds, &tabs, ACTIVE_SESSION_TAB, palette, dispatch);
+        palette,
+        view.dispatch,
+    );
     tab_list.register_interactions(interaction_frame);
     scene.draw_component(&tab_list);
+    view.dispatch
+        .is_focused(SESSION_SEARCH_INPUT)
+        .then_some(toolbar.search_caret_bounds())
+        .flatten()
+}
+
+fn draw_session_sidebar_sash(
+    scene: &mut UiScene,
+    interaction_frame: &mut InteractionFrame,
+    bounds: Rect,
+    session_sidebar: SessionSidebarState,
+    dispatch: &UiDispatch,
+    palette: ShellPalette,
+) {
+    let state = if session_sidebar.is_resizing() {
+        SashState::Active
+    } else if dispatch.is_hovered(SESSION_SIDEBAR_RESIZE_HANDLE) {
+        SashState::Hovered
+    } else {
+        SashState::Resting
+    };
+    let sash = Sash::new(
+        bounds,
+        SashOrientation::Vertical,
+        state,
+        SashStyle::new(palette.accent),
+    );
+    interaction_frame.register(
+        UiNode::new(
+            SESSION_SIDEBAR_RESIZE_HANDLE,
+            sash.interaction_bounds(),
+            AccessibilityRole::Separator,
+            "Resize sessions sidebar",
+        )
+        .with_parent(WINDOW)
+        .with_cursor(CursorFeedback::ResizeHorizontal)
+        .with_value(format!("{} pixels", bounds.origin.x.round())),
+    );
+    scene.draw_component(&sash);
 }
 
 fn draw_main(

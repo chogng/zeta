@@ -20,6 +20,7 @@ unicode-width = { workspace = true }
 zeta-app-server-client = { workspace = true }
 zeta-app-server-protocol = { workspace = true }
 zeta-file-search = { workspace = true }
+zeta-diff = { workspace = true }
 zeta-protocol = { workspace = true }
 
 [target.'cfg(unix)'.dependencies]
