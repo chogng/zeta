@@ -26,7 +26,8 @@
 | Titlebar 背景、窗口拖拽区与侧栏开关 | `titlebar::Titlebar` | ✅；不绘制可见窗口标题 |
 | Top Bar sidebar toggle `ActionBar` | `titlebar::Titlebar` | ✅ |
 | 原生窗口控件占位 | `zeta-winit::WindowControlInsets` | 委托；Titlebar 只增加自身内容间距 |
-| 可折叠 Session Sidebar 与当前真实 Session Tab | `session_tab_list::SessionTabList` | ✅；多会话尚无 |
+| 通用 Tab surface 与横/纵排列 | `zeta-ui::Tab` / `TabList` | 委托；不拥有 Session content 或 tabpanel |
+| 可折叠 Session Sidebar 与当前真实 Session Tab | `session_tab_list::SessionTabList` | ✅；组合通用 TabList，多会话 runtime 尚无 |
 | 浅色扁平 Shell presentation tokens | `shell_style::ShellPalette` | ✅ |
 | 稳定控件身份与 shell action 映射 | `shell_interaction` | ✅ |
 | 命中、hover/press/capture、focus、键盘导航、cursor 与 accessibility semantics | `zeta-ui-dispatch` | 委托 |
@@ -74,7 +75,7 @@ Native App 的目标不是通用 Workbench Part 容器，而是一块以活动�
 | `shell_scene` | primary 绘制 BlockList/composer，alternate 绘制活动 grid | Terminal Session 的 Output/BlockList | 基础纵切已完成 |
 | `terminal_composer` / `terminal_input` | primary 编辑 `TextInput` 并提交整条命令；alternate direct input | Block Input Editor 与 TUI compatibility | ✅ |
 | `input_context_toolbar` | `ActionBar` 排列四个 icon-and-label `Button`，投影 Local、cwd、branch 与 diff count | Input/Chat context toolbar | ✅ |
-| `session_tab_list` | 展开时投影当前真实 PTY Session，语义为纵向 TabList/selected Tab | 多会话导航 | 单 Session 纵切已完成 |
+| `session_tab_list` | 组合 `zeta-ui::TabList` 投影当前真实 PTY Session；自身拥有白色状态容器、会话名和工作区两行截断信息，以及纵向 TabList/selected Tab 语义 | 多会话导航 | 通用 TabList 已支持 6px 间隔的多项布局；runtime 仍只有单 Session |
 | terminal grid / PTY / scrollback | grid、PTY 与会话内有界回滚已接通，跨重启持久化尚无 | 活动 Terminal Session runtime | 部分具备 |
 | multi-session projection / switching | 当前只有一个真实 Session Tab | 多会话入口 | 尚未完成 |
 
@@ -141,7 +142,7 @@ action 映射回产品命令；实际 state 由 `NativeApp` 保存，它不保�
 accessibility role、label、bounds 与 focused state；`UiDispatch` 跨 frame 保存
 hover path、press/capture 和 focused identity，最后只返回 `UiIntent`。
 
-标题栏、侧栏开关、会话 `TabList`、终端输出、`ComposerPanel`、`InputBox`、
+标题栏、侧栏开关、会话 `SessionTabList`、通用 `zeta-ui::TabList`、终端输出、`ComposerPanel`、`InputBox`、
 `ActionBar` 和四个上下文 `Button` 都走这条路径。
 ComposerPanel 使用默认指针，输入与终端文本使用文本指针，Button 使用 pointer 指针；绘制、
 命中与语义 bounds 共享 `ActionBar::interactive_item_bounds`。primary screen 默认聚焦 composer；
@@ -168,6 +169,10 @@ placement，不作为 Toolbar 的直接 action representation。每条命令完�
 count；四项 Button 已接入 hover、press、focus、键盘导航和 pointer feedback，当前尚未绑定
 environment/directory/branch/diff picker command。在 shell integration
 提供 cwd 事件前，目录标签仍表示 Session 启动目录。
+`SessionTabList` 的白色状态圆形保留独立可访问性 label，后续可在其中绘制状态 SVG；当前
+native runtime 只投影通用 `Active`，尚不能声称已接入 Planning、Thinking、Editing 等 Agent
+执行阶段。这些状态必须在 App Server 提供权威 Session projection 后映射，不能由 UI 根据输出
+推断。
 PTY output 中的 device/status/cursor query 由 `TerminalCore` 生成 reply bytes；
 `TerminalSession::handle_event` 在同一次 output event 后取出并写回同一 PTY，renderer 不参与。
 `terminal_pointer::TerminalPointer` 只在 alternate screen 且应用启用 tracking mode 时接管 terminal

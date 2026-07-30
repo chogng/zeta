@@ -1,28 +1,53 @@
-use zeta_icons::icons;
 use zeta_ui::{
-    Border, Component, FontFamily, FontWeight, PaintIcon, PaintRect, Rect, TextBlock, TextStyle,
+    Color, Component, CornerRadii, FontWeight, PaintRect, Rect, Size, Tab, TabBackgrounds, TabList,
+    TabListOrientation, TabListStyle, TabSelection, TabState, TabStyle, TextBlock, TextStyle,
     UiScene,
 };
 use zeta_ui_dispatch::{
-    AccessibilityRole, AccessibilitySelection, CursorFeedback, FocusBehavior, InteractionFrame,
-    NavigationAxis, NavigationGroupId, NodeAction, UiDispatch, UiNode,
+    AccessibilityRole, AccessibilitySelection, CursorFeedback, ElementId, FocusBehavior,
+    InteractionFrame, NavigationAxis, NavigationGroupId, NodeAction, UiDispatch, UiNode,
 };
 
-use crate::shell_interaction::{ACTIVE_SESSION_TAB, SESSION_SIDEBAR, SESSION_TAB_LIST};
+use crate::shell_interaction::{SESSION_SIDEBAR, SESSION_TAB_LIST};
 use crate::shell_style::ShellPalette;
 
 const SIDEBAR_PADDING: f32 = 10.0;
 const HEADER_HEIGHT: f32 = 28.0;
-const TAB_HEIGHT: f32 = 62.0;
-const TAB_ICON_SIZE: f32 = 16.0;
+const TAB_HEIGHT: f32 = 52.0;
+const TAB_CONTENT_PADDING: f32 = 8.0;
+const TAB_INFORMATION_HEIGHT: f32 = 36.0;
+const STATUS_CONTAINER_SIZE: f32 = TAB_INFORMATION_HEIGHT;
+const STATUS_CONTENT_GAP: f32 = 10.0;
+
+#[derive(Clone, Copy)]
+pub(crate) struct SessionTab<'a> {
+    id: ElementId,
+    name: &'a str,
+    workspace: &'a str,
+    status_label: &'a str,
+}
+
+impl<'a> SessionTab<'a> {
+    pub(crate) const fn new(
+        id: ElementId,
+        name: &'a str,
+        workspace: &'a str,
+        status_label: &'a str,
+    ) -> Self {
+        Self {
+            id,
+            name,
+            workspace,
+            status_label,
+        }
+    }
+}
 
 /// Product-owned vertical TabList for real terminal sessions.
 pub(crate) struct SessionTabList<'a> {
     bounds: Rect,
-    tab_bounds: Rect,
-    title: &'a str,
-    working_directory: &'a str,
-    git_branch: &'a str,
+    tabs: &'a [SessionTab<'a>],
+    selected_id: ElementId,
     palette: ShellPalette,
     dispatch: &'a UiDispatch,
 }
@@ -30,24 +55,16 @@ pub(crate) struct SessionTabList<'a> {
 impl<'a> SessionTabList<'a> {
     pub(crate) fn new(
         bounds: Rect,
-        title: &'a str,
-        working_directory: &'a str,
-        git_branch: &'a str,
+        tabs: &'a [SessionTab<'a>],
+        selected_id: ElementId,
         palette: ShellPalette,
         dispatch: &'a UiDispatch,
     ) -> Self {
-        let tab_bounds = Rect::from_xywh(
-            bounds.origin.x + SIDEBAR_PADDING,
-            bounds.origin.y + SIDEBAR_PADDING + HEADER_HEIGHT,
-            (bounds.size.width - SIDEBAR_PADDING * 2.0).max(1.0),
-            TAB_HEIGHT,
-        );
+        debug_assert!(tabs.iter().any(|tab| tab.id == selected_id));
         Self {
             bounds,
-            tab_bounds,
-            title,
-            working_directory,
-            git_branch,
+            tabs,
+            selected_id,
             palette,
             dispatch,
         }
@@ -63,31 +80,79 @@ impl<'a> SessionTabList<'a> {
             )
             .with_parent(SESSION_SIDEBAR),
         );
-        frame.register(
-            UiNode::new(
-                ACTIVE_SESSION_TAB,
-                self.tab_bounds,
-                AccessibilityRole::Tab,
-                format!(
-                    "{}, {}, Git branch {}",
-                    self.title, self.working_directory, self.git_branch
-                ),
-            )
-            .with_parent(SESSION_TAB_LIST)
-            .with_cursor(CursorFeedback::Pointer)
-            .with_focus(FocusBehavior::TabStop)
-            .with_action(NodeAction::Activate)
-            .with_navigation(
-                NavigationGroupId::new(SESSION_TAB_LIST),
-                NavigationAxis::Vertical,
-            )
-            .with_selection(AccessibilitySelection::Selected),
-        );
+        let tab_list = self.tab_list();
+        for (index, tab) in self.tabs.iter().enumerate() {
+            let tab_bounds = tab_list.tab_bounds(index).expect("registered tab");
+            frame.register(
+                UiNode::new(
+                    tab.id,
+                    tab_bounds,
+                    AccessibilityRole::Tab,
+                    format!("{}, {}, {}", tab.name, tab.workspace, tab.status_label),
+                )
+                .with_parent(SESSION_TAB_LIST)
+                .with_cursor(CursorFeedback::Pointer)
+                .with_focus(FocusBehavior::TabStop)
+                .with_action(NodeAction::Activate)
+                .with_navigation(
+                    NavigationGroupId::new(SESSION_TAB_LIST),
+                    NavigationAxis::Vertical,
+                )
+                .with_selection(if tab.id == self.selected_id {
+                    AccessibilitySelection::Selected
+                } else {
+                    AccessibilitySelection::Unselected
+                }),
+            );
+        }
     }
 
-    #[cfg(test)]
-    pub(crate) const fn tab_bounds(&self) -> Rect {
-        self.tab_bounds
+    fn tab_list(&self) -> TabList {
+        let highlight = self.palette.session_tab_highlight;
+        let backgrounds = TabBackgrounds::new(Color::TRANSPARENT)
+            .with_hovered(highlight)
+            .with_focused(highlight)
+            .with_pressed(highlight);
+        let selected_backgrounds = TabBackgrounds::new(highlight);
+        let tab_style = TabStyle::new(backgrounds)
+            .with_selected_backgrounds(selected_backgrounds)
+            .with_corner_radii(CornerRadii::uniform(4.0));
+        let list_bounds = Rect::from_xywh(
+            self.bounds.origin.x + SIDEBAR_PADDING,
+            self.bounds.origin.y + SIDEBAR_PADDING + HEADER_HEIGHT,
+            (self.bounds.size.width - SIDEBAR_PADDING * 2.0).max(1.0),
+            (self.bounds.size.height - SIDEBAR_PADDING * 2.0 - HEADER_HEIGHT).max(1.0),
+        );
+        let tabs = self
+            .tabs
+            .iter()
+            .map(|tab| {
+                Tab::new(self.tab_state(tab.id)).with_selection(if tab.id == self.selected_id {
+                    TabSelection::Selected
+                } else {
+                    TabSelection::Unselected
+                })
+            })
+            .collect();
+        TabList::new(
+            list_bounds,
+            TabListOrientation::Vertical,
+            tabs,
+            TabListStyle::new(tab_style, Size::new(list_bounds.size.width, TAB_HEIGHT))
+                .with_gap(6.0),
+        )
+    }
+
+    fn tab_state(&self, id: ElementId) -> TabState {
+        if self.dispatch.is_pressed(id) {
+            TabState::Pressed
+        } else if self.dispatch.is_focused(id) {
+            TabState::Focused
+        } else if self.dispatch.is_hovered(id) {
+            TabState::Hovered
+        } else {
+            TabState::Resting
+        }
     }
 }
 
@@ -105,61 +170,39 @@ impl Component for SessionTabList<'_> {
             ),
             TextStyle::new(11.0, self.palette.text_muted).with_weight(FontWeight::Bold),
         ));
-        let fill = if self.dispatch.is_pressed(ACTIVE_SESSION_TAB) {
-            self.palette.border
-        } else if self.dispatch.is_hovered(ACTIVE_SESSION_TAB)
-            || self.dispatch.is_focused(ACTIVE_SESSION_TAB)
-        {
-            self.palette.surface_hovered
-        } else {
-            self.palette.surface
-        };
-        scene.draw_rect(
-            PaintRect::new(self.tab_bounds, fill)
-                .with_border(Border::uniform(1.0, self.palette.border)),
-        );
-        scene.draw_rect(PaintRect::new(
-            Rect::from_xywh(
-                self.tab_bounds.origin.x,
-                self.tab_bounds.origin.y,
-                2.0,
-                self.tab_bounds.size.height,
-            ),
-            self.palette.accent,
-        ));
-        scene.draw_icon(PaintIcon::new(
-            icons::LOCAL,
-            Rect::from_xywh(
-                self.tab_bounds.origin.x + 12.0,
-                self.tab_bounds.origin.y + 10.0,
-                TAB_ICON_SIZE,
-                TAB_ICON_SIZE,
-            ),
-            self.palette.accent,
-        ));
-        let text_x = self.tab_bounds.origin.x + 38.0;
-        let text_width = (self.tab_bounds.right() - text_x - 10.0).max(1.0);
-        scene.draw_text(TextBlock::new(
-            self.title,
-            zeta_ui::Point::new(text_x, self.tab_bounds.origin.y + 6.0),
-            zeta_ui::Size::new(text_width, 18.0),
-            TextStyle::new(13.0, self.palette.text).with_weight(FontWeight::Bold),
-        ));
-        let metadata_style = TextStyle::new(11.0, self.palette.text_muted)
-            .with_family(FontFamily::Monospace)
-            .with_line_height(15.0);
-        scene.draw_text(TextBlock::new(
-            self.working_directory,
-            zeta_ui::Point::new(text_x, self.tab_bounds.origin.y + 24.0),
-            zeta_ui::Size::new(text_width, 15.0),
-            metadata_style.clone(),
-        ));
-        scene.draw_text(TextBlock::new(
-            format!("git:({})", self.git_branch),
-            zeta_ui::Point::new(text_x, self.tab_bounds.origin.y + 42.0),
-            zeta_ui::Size::new(text_width, 15.0),
-            metadata_style,
-        ));
+        let tab_list = self.tab_list();
+        tab_list.paint(scene);
+        for (index, tab) in self.tabs.iter().enumerate() {
+            let tab_bounds = tab_list.tab_bounds(index).expect("painted tab");
+            let status_bounds = Rect::from_xywh(
+                tab_bounds.origin.x + TAB_CONTENT_PADDING,
+                tab_bounds.origin.y + (tab_bounds.size.height - STATUS_CONTAINER_SIZE) * 0.5,
+                STATUS_CONTAINER_SIZE,
+                STATUS_CONTAINER_SIZE,
+            );
+            // Keep this white status container independent from Session lifecycle data. Planning,
+            // Thinking, Editing, and any later Session states can project their own SVG inside it
+            // once the App Server exposes an authoritative typed activity status.
+            scene.draw_rect(
+                PaintRect::new(status_bounds, Color::WHITE)
+                    .with_corner_radii(CornerRadii::uniform(STATUS_CONTAINER_SIZE * 0.5)),
+            );
+
+            let text_x = status_bounds.right() + STATUS_CONTENT_GAP;
+            let text_width = (tab_bounds.right() - text_x - TAB_CONTENT_PADDING).max(1.0);
+            scene.draw_text(TextBlock::new(
+                tab.name,
+                zeta_ui::Point::new(text_x, tab_bounds.origin.y + 7.0),
+                zeta_ui::Size::new(text_width, 18.0),
+                TextStyle::new(13.0, self.palette.text).with_weight(FontWeight::Bold),
+            ));
+            scene.draw_text(TextBlock::new(
+                tab.workspace,
+                zeta_ui::Point::new(text_x, tab_bounds.origin.y + 27.0),
+                zeta_ui::Size::new(text_width, 15.0),
+                TextStyle::new(11.0, self.palette.text_muted).with_line_height(15.0),
+            ));
+        }
     }
 }
 

@@ -6,10 +6,10 @@ use zeta_ui::{
 
 use crate::PRODUCT_DISPLAY_NAME;
 use crate::input_context_toolbar::InputContextToolbar;
-use crate::session_tab_list::SessionTabList;
+use crate::session_tab_list::{SessionTab, SessionTabList};
 use crate::shell_interaction::{
-    COMPOSER, COMPOSER_PANEL, MAIN_SURFACE, SESSION_SIDEBAR, SessionSidebarState, TERMINAL_OUTPUT,
-    WINDOW,
+    ACTIVE_SESSION_TAB, COMPOSER, COMPOSER_PANEL, MAIN_SURFACE, SESSION_SIDEBAR,
+    SessionSidebarState, TERMINAL_OUTPUT, WINDOW,
 };
 use crate::shell_style::{SHELL_PALETTE, ShellPalette};
 use crate::terminal_blocks::{TerminalBlockLineKind, project_block_lines};
@@ -292,14 +292,13 @@ fn draw_session_sidebar(
         )
         .with_parent(WINDOW),
     );
-    let tab_list = SessionTabList::new(
-        bounds,
+    let tabs = [SessionTab::new(
+        ACTIVE_SESSION_TAB,
         title,
         context.working_directory_label(),
-        context.git_branch_label(),
-        palette,
-        dispatch,
-    );
+        "Active",
+    )];
+    let tab_list = SessionTabList::new(bounds, &tabs, ACTIVE_SESSION_TAB, palette, dispatch);
     tab_list.register_interactions(interaction_frame);
     scene.draw_component(&tab_list);
 }

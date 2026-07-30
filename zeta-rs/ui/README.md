@@ -7,7 +7,7 @@
 > [`docs/icons.md`](../../docs/icons.md)。
 
 `zeta-ui` 定义与窗口系统无关的 immutable frame scene，以及 presentation-only Button、
-ActionBar 和输入框等组合控件；底层实现 instanced rect、symbolic SVG icon 与 text GPU
+ActionBar、TabList 和输入框等组合控件；底层实现 instanced rect、symbolic SVG icon 与 text GPU
 pipeline。SVG icon 由 `resvg` 栅格为按 physical size 缓存的 alpha mask，`glyphon` 完成
 shaping、glyph cache、texture atlas 和 text draw。macOS 的系统字体目录通过 CoreText 读取；
 CoreText 当前不承担文本 shaping 或 glyph rasterization。
@@ -19,6 +19,7 @@ CoreText 当前不承担文本 shaping 或 glyph rasterization。
 | Presentation-only component contract 与 scene composition | `zeta-ui::Component` / `UiScene` | ✅ |
 | Text、symbolic-icon 与 icon-only button 的状态、样式和内部布局 | `zeta-ui::Button` | ✅ |
 | Button/Separator action 排列、绘制和可查询命中几何 | `zeta-ui::ActionBar` | ✅ |
+| Tab surface 状态与横/纵 TabList 排列 | `zeta-ui::Tab` / `TabList` | ✅；product content 与 tabpanel 不在本 crate |
 | Icon+text label 的内部布局 | `zeta-ui::IconLabel` | ✅ |
 | Semantic icon identity、SVG definition 与 rendering mode | `zeta-icons` | 委托 |
 | 非 component 单行编辑基座与 shaping | `TextInput` / `TextInputLayoutEngine` | ✅ |
@@ -59,6 +60,9 @@ DirectWrite 或 fontconfig 类型。
 | `components::action_bar::ActionBar` | public | 在 caller bounds 内排列和绘制 action representation，并公开同源 visual/interactive bounds 与 hit-test |
 | `components::action_bar::{ActionBarItem, ActionBarButton}` | public | 分别表达 Button/Separator representation 与单个 Button 的 presentation data；Button 可命名覆盖 main-axis extent |
 | `components::action_bar::{ActionBarStyle, ActionBarSeparatorStyle, ActionBarOrientation}` | public | 定义 item size、gap、separator metrics、共享 Button style 与排列轴 |
+| `components::tab_list::{Tab, TabState, TabSelection}` | public | 表达无产品 identity/content 的 Tab surface 交互与选中 presentation |
+| `components::tab_list::{TabList, TabListStyle, TabListOrientation}` | public | 横向或纵向排列 Tab surface，拥有 item size/gap，并公开同源 tab bounds |
+| `components::tab_list::{TabStyle, TabBackgrounds}` | public | 定义 border、corner radii 及普通/selected 的状态背景 |
 | `components::icon_label::{IconLabel, IconLabelStyle}` | public | 对齐 semantic icon 与单行 text；不选择产品 icon |
 | `text_input::model::TextInput` | public | 拥有 single-line text、selection、grapheme editing 与 composition；`selected_text` 投影非空 committed selection，不实现 `Component` |
 | `text_input::caret_blink::CaretBlinkController` | public | 计算 focus/activity/deadline 驱动的 caret visibility；不创建 timer |
@@ -99,6 +103,7 @@ host
           ├─ ActionBar → item bounds
           │   ├─ ActionBarButton → Button → icon/text primitives
           │   └─ Separator → rect primitive
+          ├─ TabList → Tab bounds → state/selection surface rect
           ├─ Button state/style → IconLabel → icon/text primitives
           └─ InputBox → rect/text primitives
   → UiScene::draw_rect / UiScene::draw_icon / UiScene::with_clip
@@ -181,6 +186,11 @@ bounds；`ActionBar::interactive_item_bounds` 与
 `ActionBar::hit_test` 复用相同几何并排除 disabled Button 和 Separator。Host 必须把返回的 item
 index 映射到自己的 action identity 和命令。ActionBar 不持有 callback、命令、hover/focus
 state 或 product action registry。
+`TabList` 同样只消费 caller-provided bounds、排列轴、Tab presentation 和 style。
+`TabList::tab_bounds` 是 host 注册命中范围和组合 label/icon/status content 的唯一几何来源；
+`TabList` 不持有 tab identity、activation、focus、accessibility、关闭动作或对应 tabpanel。
+Session navigation 和后续 Editor tabs 可以复用同一 surface/排列 primitive，但各自保留内容
+布局与 active panel 生命周期。
 `TextInput` 拥有 local editing state 和 composition，但不拥有 focus、platform IME lifecycle、
 component chrome 或产品 reducer。`InputBox::new` 使用 `TextInputLayoutEngine` 从 base state
 生成 immutable layout，再组合 background、border、placeholder、selection、caret 和 preedit
@@ -195,7 +205,8 @@ cargo test --manifest-path zeta-rs/Cargo.toml -p zeta-ui
 bazel test //zeta-rs/ui:ui-unit-tests
 ```
 
-单元测试覆盖组件裁剪组合，ActionBar 排列与命中、按钮、图标标签和输入框的状态/样式/布局，
+单元测试覆盖组件裁剪组合，ActionBar 排列与命中、TabList 横纵排列与 surface 状态、按钮、
+图标标签和输入框的状态/样式/布局，
 以及 `TextInput` 的字素编辑/组合、光标闪烁阶段、选择/光标/预编辑塑形、几何相交、圆角限制、
 嵌套裁剪、SVG alpha 栅格化、图集分配、矩形实例 conversion、paint/icon/text validation、
 style defaults 与 font family canonicalization。macOS 测试还验证简中、日文、韩文、组合音标、
@@ -221,6 +232,8 @@ snapshot harness。
   leading icon，但尚无独立 focus ring、trailing content 或真实 accessibility adapter；
 - `ActionBar` 当前支持 horizontal/vertical Button 与 Separator、同源 item bounds 和 hit-test，
   但尚无 roving focus、keyboard navigation、overflow、dropdown 或 custom representation；
+- `TabList` 当前只拥有固定 item size、gap 和 Tab surface paint；custom content、动态宽度、
+  overflow、close action、identity、interaction 与 tabpanel 均由 composed control/host 拥有；
 - symbolic atlas 尚不支持 `IconRendering::Multicolor`；
 - `TextInput` 是 single-line base，没有 focus/platform IME owner、undo/redo、clipboard 或
   accessibility contract；

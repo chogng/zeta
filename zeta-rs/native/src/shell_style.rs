@@ -13,6 +13,7 @@ pub(crate) struct ShellPalette {
     pub(crate) accent: Color,
     pub(crate) terminal_selection: Color,
     pub(crate) surface_hovered: Color,
+    pub(crate) session_tab_highlight: Color,
     pub(crate) border_focused: Color,
 }
 
@@ -26,6 +27,7 @@ pub(crate) const SHELL_PALETTE: ShellPalette = ShellPalette {
     accent: Color::rgb(15, 110, 96),
     terminal_selection: Color::rgba(68, 139, 202, 72),
     surface_hovered: Color::rgb(248, 248, 249),
+    session_tab_highlight: Color::rgb(235, 235, 237),
     border_focused: Color::TRANSPARENT,
 };
 

@@ -80,6 +80,7 @@ Sidebar Part。TabList 只投影当前真实 PTY Session；在多会话模型接
 | --- | --- | --- |
 | Window、Top Bar 与 Terminal Workspace 外部布局 | `zeta-native` product host | 决定窗口区域和活动会话，不进入 `zeta-ui` |
 | Top Bar 内部 action 排列 | `zeta-ui::ActionBar` | 后续有真实 action 时使用；只拥有 representation geometry 和 paint |
+| 通用 Tab surface 与横/纵排列 | `zeta-ui::Tab` / `TabList` | 只拥有 presentation state、item size/gap、surface paint 和同源 bounds；不拥有 product content 或 tabpanel |
 | Session Tabs 与活动 Session presentation | Native session navigation control | 消费权威 Session projection，不复制 Session lifecycle |
 | Terminal Session product state | App Server/terminal session runtime | 拥有进程、cwd、环境、输出与退出状态 |
 | Terminal grid、screen/mode state、基础 escape sequence 与 BlockList | `zeta-terminal::TerminalCore` | 不由 `UiScene` 或 `InputBox` 推断 |
@@ -105,7 +106,7 @@ Session、Thread、Turn、PTY process 和 durable output 必须来自对应 runt
 | --- | --- | --- |
 | `titlebar::Titlebar` | 绘制 32px 窗口顶区、拖拽区和 sidebar toggle `ActionBar`；不显示标题文案 | Top Bar |
 | `zeta-winit::WindowControlInsets` | 按 native chrome policy 提供覆盖产品内容的左右逻辑占位；macOS full-size titlebar 当前为左侧 70px | 原生窗口控件安全区 |
-| `session_tab_list::SessionTabList` | 展开后显示当前真实 PTY Session，注册为 TabList/selected Tab | 多 Session 接入后复用同一控件 |
+| `session_tab_list::SessionTabList` | 组合 `zeta-ui::TabList` 的无边框 4px 圆角 surface；自身绘制与两行信息块等高的白色状态容器及会话名/工作区截断文字，并注册 Session Tab 语义 | 通用 TabList 已支持 6px 间隔的多项布局；多 Session projection/switching 尚未接入 |
 | `ShellLayout` | 计算扁平 titlebar、上方 output viewport 与固定底部 composer panel | primary screen 窗口外层布局；alternate screen 使用全幅 workspace |
 | `TerminalCore` / `TerminalGrid` | 增量解析 ANSI，维护 cell、cursor、wrap、erase 与基础 SGR | 当前最小 terminal emulator core |
 | Unicode terminal text | CJK 按双 cell 保存；组合符、ZWJ Emoji 与 flag 序列保留在 leading cell；renderer 使用系统 outline fallback | macOS 已规避不可栅格化的 `GB18030 Bitmap`；复杂 BiDi 行级布局尚未完成 |
@@ -126,6 +127,7 @@ Session、Thread、Turn、PTY process 和 durable output 必须来自对应 runt
 | 统一 UI 分发 | `zeta-ui-dispatch` 的 `ElementId`、父子 `UiNode`、反向 hit-test、focus order、同组导航、`UiIntent` 与每帧 accessibility snapshot | 当前 Titlebar、Session TabList、terminal output、composer、toolbar 和 Button 已接入；平台 accessibility adapter 尚无 |
 | primary/alternate Native presentation | primary 绘制 BlockList + 固定底部 composer；alternate 绘制全幅 active grid/cursor | Warp 式主屏与 TUI compatibility 已分流 |
 | `ActionBar` / `Button` | presentation-only action 与 icon button | 保持通用 primitive，不接收 terminal domain state |
+| `TabList` / `Tab` | presentation-only Tab 排列与 surface | Session 与后续 Editor tabs 复用；不接收 Session、文件或 CodeEditor state |
 | 完整 DEC/query/mouse family、跨重启历史持久化 | 尚未实现 | 后续 terminal compatibility / Session durability 纵切 |
 | terminal tabs、session restoration、split panes | 尚未实现 | 后续产品能力 |
 
@@ -172,6 +174,10 @@ macOS 当前使用集中且受测试的 70 logical pixel policy；由于 `winit`
 geometry API，RTL 换边和未来 Windows controls overlay 仍是 adapter 扩展点，不能描述为当前
 能力，也不能在 `titlebar::Titlebar` 再引入平台常量。实现契约见
 [`zeta-winit/README.md`](../zeta-rs/winit/README.md)。
+
+当前 Session Tab 的白色状态圆形只投影 native runtime 可确认的通用 `Active` 语义，尚未绘制
+状态 SVG。Planning、Thinking、Editing 等 Agent 阶段尚无权威 Session projection，不能由 UI
+从 terminal 输出推断；后续应由 App Server 提供 typed 状态，再把对应 SVG 映射到同一圆形容器。
 
 ## 6. 分阶段演进
 

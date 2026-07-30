@@ -15,7 +15,8 @@ pub use components::{
     ActionBar, ActionBarButton, ActionBarItem, ActionBarOrientation, ActionBarSeparatorStyle,
     ActionBarStyle, Button, ButtonBackgrounds, ButtonSelection, ButtonState, ButtonStyle,
     Component, IconLabel, IconLabelStyle, InputBox, InputBoxState, InputBoxStateColors,
-    InputBoxStyle,
+    InputBoxStyle, Tab, TabBackgrounds, TabList, TabListOrientation, TabListStyle, TabSelection,
+    TabState, TabStyle,
 };
 pub use font::{FontCatalog, FontCatalogError};
 pub use geometry::{CornerRadii, Edges, Point, Rect, Size};
