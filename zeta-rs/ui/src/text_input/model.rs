@@ -66,12 +66,25 @@ impl TextInput {
         &self.text
     }
 
+    /// Removes and returns committed text while resetting selection and composition state.
+    pub fn take_text(&mut self) -> String {
+        self.anchor = 0;
+        self.cursor = 0;
+        self.composition = None;
+        std::mem::take(&mut self.text)
+    }
+
     pub const fn anchor(&self) -> usize {
         self.anchor
     }
 
     pub const fn cursor(&self) -> usize {
         self.cursor
+    }
+
+    /// Returns the currently selected committed text, or `None` for a collapsed selection.
+    pub fn selected_text(&self) -> Option<&str> {
+        self.has_selection().then(|| &self.text[self.selection()])
     }
 
     pub fn composition(&self) -> Option<(&str, &TextInputCompositionCursor)> {

@@ -1,0 +1,46 @@
+use super::TerminalScroll;
+use zeta_winit::{MouseScrollDelta, PhysicalPosition};
+
+#[test]
+fn line_wheel_moves_within_the_available_history() {
+    let mut scroll = TerminalScroll::default();
+
+    assert!(scroll.scroll(MouseScrollDelta::LineDelta(0.0, 1.0), 8));
+    assert_eq!(scroll.offset(), 3);
+    assert!(scroll.scroll(MouseScrollDelta::LineDelta(0.0, 10.0), 8));
+    assert_eq!(scroll.offset(), 8);
+    assert!(scroll.scroll(MouseScrollDelta::LineDelta(0.0, -1.0), 8));
+    assert_eq!(scroll.offset(), 5);
+}
+
+#[test]
+fn pixel_wheel_accumulates_sub_line_motion() {
+    let mut scroll = TerminalScroll::default();
+
+    assert!(!scroll.scroll(
+        MouseScrollDelta::PixelDelta(PhysicalPosition::new(0.0, 6.0)),
+        8,
+    ));
+    assert!(!scroll.scroll(
+        MouseScrollDelta::PixelDelta(PhysicalPosition::new(0.0, 6.0)),
+        8,
+    ));
+    assert!(scroll.scroll(
+        MouseScrollDelta::PixelDelta(PhysicalPosition::new(0.0, 6.0)),
+        8,
+    ));
+    assert_eq!(scroll.offset(), 1);
+}
+
+#[test]
+fn retained_view_stays_anchored_when_output_grows() {
+    let mut scroll = TerminalScroll::default();
+    scroll.scroll(MouseScrollDelta::LineDelta(0.0, 1.0), 20);
+
+    scroll.preserve_view_after_growth(2, 22);
+    assert_eq!(scroll.offset(), 5);
+
+    scroll.reset();
+    scroll.preserve_view_after_growth(2, 22);
+    assert_eq!(scroll.offset(), 0);
+}

@@ -4,6 +4,7 @@ use glyphon::{
 };
 
 use crate::font::mapping::{glyphon_family, glyphon_style, glyphon_weight};
+use crate::font::new_font_system;
 use crate::icon_renderer::IconRenderer;
 use crate::rect_renderer::RectRenderer;
 use crate::{Rect, TextBlock, UiScene};
@@ -72,7 +73,7 @@ impl UiRenderer {
         Self {
             rect_renderer: RectRenderer::new(device, surface_format),
             icon_renderer: IconRenderer::new(device, surface_format),
-            font_system: glyphon::FontSystem::new(),
+            font_system: new_font_system(),
             swash_cache: SwashCache::new(),
             viewport,
             atlas,

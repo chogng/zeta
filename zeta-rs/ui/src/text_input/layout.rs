@@ -1,6 +1,7 @@
 use glyphon::{Attrs, Buffer, Cursor, FontSystem, Metrics, Shaping, Wrap};
 
 use crate::font::mapping::{glyphon_family, glyphon_style, glyphon_weight};
+use crate::font::new_font_system;
 use crate::{Point, Rect, Size, TextStyle};
 
 use super::{TextInput, TextInputCompositionCursor};
@@ -79,7 +80,7 @@ pub struct TextInputLayoutEngine {
 impl TextInputLayoutEngine {
     pub fn new() -> Self {
         Self {
-            font_system: FontSystem::new(),
+            font_system: new_font_system(),
         }
     }
 

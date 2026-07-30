@@ -44,6 +44,7 @@ members = [
     "shell-command",
     "skills",
     "storage",
+    "terminal",
     "thread-store",
     "tools",
     "tui",
@@ -94,6 +95,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde_yaml = "0.9"
 signal-hook = "0.3"
+sys-locale = "0.3"
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
 rustls-native-certs = "0.7"
 rmcp = { version = "=3.0.0-beta.3", default-features = false }
@@ -113,6 +115,7 @@ unicode-width = "0.2"
 url = "2"
 urlencoding = "2"
 ureq = { version = "2.12", features = ["json", "native-certs"] }
+vte = "0.15.0"
 wgpu = "30.0.0"
 windows-sys = "0.59"
 winit = "0.30.13"
@@ -161,6 +164,7 @@ zeta-session-store = { path = "session-store" }
 zeta-shell-command = { path = "shell-command" }
 zeta-skills = { path = "skills" }
 zeta-storage = { path = "storage" }
+zeta-terminal = { path = "terminal" }
 zeta-thread-store = { path = "thread-store" }
 zeta-tools = { path = "tools" }
 zeta-tui = { path = "tui" }

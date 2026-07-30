@@ -1,5 +1,6 @@
 use super::{
-    TextInput, TextInputCompositionCursor, TextInputCompositionEvent, TextInputSelectionMode,
+    TextInput, TextInputCommand, TextInputCompositionCursor, TextInputCompositionEvent,
+    TextInputSelectionMode,
 };
 
 #[test]
@@ -30,6 +31,18 @@ fn replacing_a_selection_is_atomic() {
     assert_eq!(model.text(), "Hello");
     assert_eq!(model.anchor(), 1);
     assert_eq!(model.cursor(), 1);
+}
+
+#[test]
+fn selected_text_exposes_only_a_non_empty_selection() {
+    let mut input = TextInput::new();
+    input.apply(TextInputCommand::Insert("hello".into()));
+    assert_eq!(input.selected_text(), None);
+
+    input.apply(TextInputCommand::MoveLeft(TextInputSelectionMode::Extend));
+    input.apply(TextInputCommand::MoveLeft(TextInputSelectionMode::Extend));
+
+    assert_eq!(input.selected_text(), Some("lo"));
 }
 
 #[test]
@@ -79,6 +92,22 @@ fn composition_replaces_the_active_selection_only_on_commit() {
 
     model.apply_composition(TextInputCompositionEvent::Commit("世界".to_owned()));
     assert_eq!(model.text(), "世界");
+}
+
+#[test]
+fn taking_text_resets_editing_and_composition_state() {
+    let mut model = TextInput::new();
+    model.apply(super::TextInputCommand::Insert("echo hello".to_string()));
+    model.apply_composition(TextInputCompositionEvent::Preedit {
+        text: " pending".to_string(),
+        cursor: TextInputCompositionCursor::Hidden,
+    });
+
+    assert_eq!(model.take_text(), "echo hello");
+    assert_eq!(model.text(), "");
+    assert_eq!(model.cursor(), 0);
+    assert_eq!(model.anchor(), 0);
+    assert_eq!(model.composition(), None);
 }
 
 #[test]

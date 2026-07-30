@@ -1,24 +1,14 @@
-use zeta_ui::{Point, Rect, TextInput, TextInputCommand, TextInputCompositionEvent};
-
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub(crate) enum SessionId {
-    #[default]
-    Foundation,
-    Renderer,
-    AppServer,
-}
+use zeta_ui::{Point, Rect};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum ShellTarget {
     WindowDrag,
-    Session(SessionId),
     Composer,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum PointerFeedback {
     Default,
-    Clickable,
     Text,
 }
 
@@ -26,8 +16,6 @@ pub(crate) enum PointerFeedback {
 pub(crate) enum InteractionEffect {
     None,
     Redraw,
-    FocusComposer,
-    BlurComposer,
     StartWindowDrag,
 }
 
@@ -47,7 +35,7 @@ impl ShellHitMap {
         self.regions.push(HitRegion { bounds, target });
     }
 
-    fn target_at(&self, point: Point) -> Option<ShellTarget> {
+    pub(crate) fn target_at(&self, point: Point) -> Option<ShellTarget> {
         self.regions
             .iter()
             .rev()
@@ -59,33 +47,9 @@ impl ShellHitMap {
 #[derive(Clone, Debug, Default, PartialEq)]
 pub(crate) struct ShellInteraction {
     hovered: Option<ShellTarget>,
-    pressed: Option<ShellTarget>,
-    selected_session: SessionId,
-    composer_focused: bool,
-    composer: TextInput,
 }
 
 impl ShellInteraction {
-    pub(crate) const fn selected_session(&self) -> SessionId {
-        self.selected_session
-    }
-
-    pub(crate) const fn composer_focused(&self) -> bool {
-        self.composer_focused
-    }
-
-    pub(crate) const fn composer(&self) -> &TextInput {
-        &self.composer
-    }
-
-    pub(crate) fn is_hovered(&self, target: ShellTarget) -> bool {
-        self.hovered == Some(target)
-    }
-
-    pub(crate) fn is_pressed(&self, target: ShellTarget) -> bool {
-        self.pressed == Some(target) && self.hovered == Some(target)
-    }
-
     pub(crate) fn pointer_moved(
         &mut self,
         point: Point,
@@ -110,79 +74,18 @@ impl ShellInteraction {
     pub(crate) fn press_primary(&mut self) -> InteractionEffect {
         match self.hovered {
             Some(ShellTarget::WindowDrag) => InteractionEffect::StartWindowDrag,
-            target => {
-                let focus_changed = self.composer_focused && target != Some(ShellTarget::Composer);
-                if focus_changed {
-                    self.composer_focused = false;
-                    self.composer.cancel_composition();
-                }
-                self.pressed = target;
-                if focus_changed {
-                    InteractionEffect::BlurComposer
-                } else if target.is_some() {
-                    InteractionEffect::Redraw
-                } else {
-                    InteractionEffect::None
-                }
-            }
+            Some(ShellTarget::Composer) | None => InteractionEffect::None,
         }
     }
 
     pub(crate) fn release_primary(&mut self) -> InteractionEffect {
-        let pressed = self.pressed.take();
-        let activated = pressed.filter(|target| Some(*target) == self.hovered);
-        match activated {
-            Some(ShellTarget::Session(session)) => {
-                self.selected_session = session;
-                self.composer_focused = false;
-            }
-            Some(ShellTarget::Composer) if !self.composer_focused => {
-                self.composer_focused = true;
-                return InteractionEffect::FocusComposer;
-            }
-            Some(ShellTarget::Composer) => {}
-            Some(ShellTarget::WindowDrag) | None => {}
-        };
-        if pressed.is_some() || activated.is_some() {
-            InteractionEffect::Redraw
-        } else {
-            InteractionEffect::None
-        }
-    }
-
-    pub(crate) fn edit_composer(&mut self, command: TextInputCommand) -> InteractionEffect {
-        if !self.composer_focused {
-            return InteractionEffect::None;
-        }
-        self.composer.apply(command);
-        InteractionEffect::Redraw
-    }
-
-    pub(crate) fn update_composition(
-        &mut self,
-        event: TextInputCompositionEvent,
-    ) -> InteractionEffect {
-        if !self.composer_focused {
-            return InteractionEffect::None;
-        }
-        self.composer.apply_composition(event);
-        InteractionEffect::Redraw
-    }
-
-    pub(crate) fn window_focus_lost(&mut self) -> InteractionEffect {
-        if !self.composer_focused {
-            return InteractionEffect::None;
-        }
-        self.composer_focused = false;
-        self.composer.cancel_composition();
-        InteractionEffect::BlurComposer
+        InteractionEffect::None
     }
 
     pub(crate) const fn pointer_feedback(&self) -> PointerFeedback {
         match self.hovered {
-            Some(ShellTarget::Session(_)) => PointerFeedback::Clickable,
-            Some(ShellTarget::Composer) => PointerFeedback::Text,
-            Some(ShellTarget::WindowDrag) | None => PointerFeedback::Default,
+            Some(ShellTarget::WindowDrag) => PointerFeedback::Default,
+            Some(ShellTarget::Composer) | None => PointerFeedback::Text,
         }
     }
 }

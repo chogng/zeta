@@ -1,6 +1,6 @@
 use zeta_icons::{Icon, IconDefinition, IconId};
 
-use super::{Button, ButtonBackgrounds, ButtonState, ButtonStyle};
+use super::{Button, ButtonBackgrounds, ButtonSelection, ButtonState, ButtonStyle};
 use crate::{Border, Color, CornerRadii, Edges, FontWeight, Rect, TextStyle, UiScene};
 
 const TEST_ICON: Icon = Icon::new(
@@ -12,13 +12,19 @@ const TEST_ICON: Icon = Icon::new(
 
 fn test_style() -> ButtonStyle {
     ButtonStyle::new(
-        ButtonBackgrounds::new(
-            Color::rgb(10, 20, 30),
-            Color::rgb(20, 30, 40),
-            Color::rgb(30, 40, 50),
-        ),
+        ButtonBackgrounds::new(Color::rgb(10, 20, 30))
+            .with_hovered(Color::rgb(20, 30, 40))
+            .with_pressed(Color::rgb(30, 40, 50))
+            .with_disabled(Color::rgb(5, 10, 15)),
         TextStyle::new(11.0, Color::rgb(80, 120, 160)).with_weight(FontWeight::Bold),
     )
+    .with_selected_backgrounds(
+        ButtonBackgrounds::new(Color::rgb(40, 50, 60))
+            .with_hovered(Color::rgb(50, 60, 70))
+            .with_pressed(Color::rgb(60, 70, 80))
+            .with_disabled(Color::rgb(20, 25, 30)),
+    )
+    .with_disabled_text_style(TextStyle::new(11.0, Color::rgb(50, 60, 70)))
     .with_border(Border::uniform(1.0, Color::WHITE))
     .with_corner_radii(CornerRadii::uniform(8.0))
     .with_padding(Edges::new(5.0, 8.0, 5.0, 10.0))
@@ -45,13 +51,13 @@ fn button_selects_background_from_host_provided_state() {
 
 #[test]
 fn button_lays_out_icon_and_label_inside_content_padding() {
-    let button = Button::new(
+    let button = Button::icon_and_label(
         Rect::from_xywh(20.0, 4.0, 100.0, 27.0),
+        TEST_ICON,
         "Open files",
         ButtonState::Pressed,
         test_style(),
-    )
-    .with_icon(TEST_ICON);
+    );
     let mut scene = UiScene::new(Color::TRANSPARENT);
 
     scene.draw_component(&button);
@@ -70,13 +76,13 @@ fn button_lays_out_icon_and_label_inside_content_padding() {
 #[test]
 fn button_skips_content_when_padding_consumes_bounds() {
     let style = test_style().with_padding(Edges::uniform(20.0));
-    let button = Button::new(
+    let button = Button::icon_and_label(
         Rect::from_xywh(0.0, 0.0, 24.0, 24.0),
+        TEST_ICON,
         "Hidden",
         ButtonState::Resting,
         style,
-    )
-    .with_icon(TEST_ICON);
+    );
     let mut scene = UiScene::new(Color::TRANSPARENT);
 
     scene.draw_component(&button);
@@ -84,4 +90,45 @@ fn button_skips_content_when_padding_consumes_bounds() {
     assert_eq!(scene.rects().len(), 1);
     assert!(scene.icons().is_empty());
     assert!(scene.text_blocks().is_empty());
+}
+
+#[test]
+fn icon_button_centers_artwork_and_retains_accessible_label() {
+    let button = Button::icon(
+        Rect::from_xywh(10.0, 5.0, 28.0, 28.0),
+        TEST_ICON,
+        "Toggle sidebar",
+        ButtonState::Resting,
+        test_style().with_padding(Edges::uniform(4.0)),
+    );
+    let mut scene = UiScene::new(Color::TRANSPARENT);
+
+    scene.draw_component(&button);
+
+    assert_eq!(button.accessible_label(), "Toggle sidebar");
+    assert_eq!(
+        scene.icons()[0].bounds(),
+        Rect::from_xywh(17.5, 12.5, 13.0, 13.0)
+    );
+    assert!(scene.text_blocks().is_empty());
+}
+
+#[test]
+fn button_projects_selected_and_disabled_presentation_independently() {
+    let button = Button::new(
+        Rect::from_xywh(0.0, 0.0, 100.0, 27.0),
+        "Unavailable",
+        ButtonState::Disabled,
+        test_style(),
+    )
+    .with_selection(ButtonSelection::Selected);
+    let mut scene = UiScene::new(Color::TRANSPARENT);
+
+    scene.draw_component(&button);
+
+    assert_eq!(scene.rects()[0].fill(), Color::rgb(20, 25, 30));
+    assert_eq!(
+        scene.text_blocks()[0].style().color(),
+        Color::rgb(50, 60, 70)
+    );
 }

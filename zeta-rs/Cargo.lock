@@ -6081,6 +6081,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
+name = "vte"
+version = "0.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a5924018406ce0063cd67f8e008104968b74b563ee1b85dde3ed1f7cb87d3dbd"
+dependencies = [
+ "arrayvec",
+ "memchr",
+]
+
+[[package]]
 name = "walkdir"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7535,7 +7545,13 @@ dependencies = [
 name = "zeta-native"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
+ "arboard",
+ "tokio",
+ "unicode-width 0.2.0",
+ "zeta-terminal",
  "zeta-ui",
+ "zeta-utils-pty",
  "zeta-wgpu",
  "zeta-winit",
 ]
@@ -7664,6 +7680,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "zeta-terminal"
+version = "0.1.0"
+dependencies = [
+ "pretty_assertions",
+ "unicode-segmentation",
+ "unicode-width 0.2.0",
+ "vte",
+]
+
+[[package]]
 name = "zeta-thread-store"
 version = "0.1.0"
 dependencies = [
@@ -7718,6 +7744,7 @@ dependencies = [
  "coretext-rs",
  "glyphon",
  "resvg",
+ "sys-locale",
  "thiserror 2.0.19",
  "unicode-segmentation",
  "wgpu",

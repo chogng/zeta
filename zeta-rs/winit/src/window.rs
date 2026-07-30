@@ -93,6 +93,11 @@ impl NativeWindow {
         self.window.set_cursor(cursor);
     }
 
+    /// Updates the platform window title from product-owned session state.
+    pub fn set_title(&self, title: &str) {
+        self.window.set_title(title);
+    }
+
     /// Enables platform text input and IME events for the focused editable control.
     pub fn enable_ime(&self) {
         self.window.set_ime_allowed(true);

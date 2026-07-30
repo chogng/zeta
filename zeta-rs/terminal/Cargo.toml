@@ -1,0 +1,22 @@
+[package]
+name = "zeta-terminal"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[lib]
+doctest = false
+name = "zeta_terminal"
+path = "src/lib.rs"
+
+[dependencies]
+unicode-segmentation = { workspace = true }
+unicode-width = { workspace = true }
+vte = { workspace = true }
+
+[dev-dependencies]
+pretty_assertions = { workspace = true }
+
+[lints]
+workspace = true

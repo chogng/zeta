@@ -1,8 +1,8 @@
 use zeta_icons::Icon;
 
 use crate::{
-    Border, Color, Component, CornerRadii, Edges, PaintRect, Point, Rect, TextBlock, TextStyle,
-    UiScene,
+    Border, Color, Component, CornerRadii, Edges, PaintIcon, PaintRect, Point, Rect, TextBlock,
+    TextStyle, UiScene,
 };
 
 use super::icon_label::{IconLabel, IconLabelStyle};
@@ -14,6 +14,15 @@ pub enum ButtonState {
     Resting,
     Hovered,
     Pressed,
+    Disabled,
+}
+
+/// Selection presentation projected by a button's host.
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+pub enum ButtonSelection {
+    #[default]
+    Unselected,
+    Selected,
 }
 
 /// State-dependent background colors for a button.
@@ -22,15 +31,32 @@ pub struct ButtonBackgrounds {
     resting: Color,
     hovered: Color,
     pressed: Color,
+    disabled: Color,
 }
 
 impl ButtonBackgrounds {
-    pub const fn new(resting: Color, hovered: Color, pressed: Color) -> Self {
+    pub const fn new(resting: Color) -> Self {
         Self {
             resting,
-            hovered,
-            pressed,
+            hovered: resting,
+            pressed: resting,
+            disabled: resting,
         }
+    }
+
+    pub const fn with_hovered(mut self, hovered: Color) -> Self {
+        self.hovered = hovered;
+        self
+    }
+
+    pub const fn with_pressed(mut self, pressed: Color) -> Self {
+        self.pressed = pressed;
+        self
+    }
+
+    pub const fn with_disabled(mut self, disabled: Color) -> Self {
+        self.disabled = disabled;
+        self
     }
 
     const fn for_state(self, state: ButtonState) -> Color {
@@ -38,6 +64,7 @@ impl ButtonBackgrounds {
             ButtonState::Resting => self.resting,
             ButtonState::Hovered => self.hovered,
             ButtonState::Pressed => self.pressed,
+            ButtonState::Disabled => self.disabled,
         }
     }
 }
@@ -46,10 +73,12 @@ impl ButtonBackgrounds {
 #[derive(Clone, Debug, PartialEq)]
 pub struct ButtonStyle {
     backgrounds: ButtonBackgrounds,
+    selected_backgrounds: ButtonBackgrounds,
     border: Border,
     corner_radii: CornerRadii,
     padding: Edges,
     text_style: TextStyle,
+    disabled_text_style: TextStyle,
     icon_size: f32,
     content_gap: f32,
 }
@@ -58,13 +87,28 @@ impl ButtonStyle {
     pub fn new(backgrounds: ButtonBackgrounds, text_style: TextStyle) -> Self {
         Self {
             backgrounds,
+            selected_backgrounds: backgrounds,
             border: Border::default(),
             corner_radii: CornerRadii::uniform(0.0),
             padding: Edges::uniform(8.0),
+            disabled_text_style: text_style.clone(),
             text_style,
             icon_size: 16.0,
             content_gap: 6.0,
         }
+    }
+
+    pub const fn with_selected_backgrounds(
+        mut self,
+        selected_backgrounds: ButtonBackgrounds,
+    ) -> Self {
+        self.selected_backgrounds = selected_backgrounds;
+        self
+    }
+
+    pub fn with_disabled_text_style(mut self, disabled_text_style: TextStyle) -> Self {
+        self.disabled_text_style = disabled_text_style;
+        self
     }
 
     pub const fn with_border(mut self, border: Border) -> Self {
@@ -91,16 +135,43 @@ impl ButtonStyle {
         self.content_gap = content_gap;
         self
     }
+
+    const fn backgrounds_for(&self, selection: ButtonSelection) -> ButtonBackgrounds {
+        match selection {
+            ButtonSelection::Unselected => self.backgrounds,
+            ButtonSelection::Selected => self.selected_backgrounds,
+        }
+    }
+
+    fn text_style_for(&self, state: ButtonState) -> &TextStyle {
+        match state {
+            ButtonState::Disabled => &self.disabled_text_style,
+            ButtonState::Resting | ButtonState::Hovered | ButtonState::Pressed => &self.text_style,
+        }
+    }
 }
 
-/// A reusable button that paints its background, optional symbolic icon, and label.
+#[derive(Clone, Debug, PartialEq)]
+enum ButtonContent {
+    Label(String),
+    Icon {
+        icon: Icon,
+        accessible_label: String,
+    },
+    IconAndLabel {
+        icon: Icon,
+        label: String,
+    },
+}
+
+/// A reusable button that paints text, icon-only, or icon-and-label content.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Button {
     bounds: Rect,
-    label: String,
+    content: ButtonContent,
     state: ButtonState,
+    selection: ButtonSelection,
     style: ButtonStyle,
-    icon: Option<Icon>,
 }
 
 impl Button {
@@ -112,64 +183,145 @@ impl Button {
     ) -> Self {
         Self {
             bounds,
-            label: label.into(),
+            content: ButtonContent::Label(label.into()),
             state,
+            selection: ButtonSelection::Unselected,
             style,
-            icon: None,
         }
     }
 
-    pub const fn with_icon(mut self, icon: Icon) -> Self {
-        self.icon = Some(icon);
+    /// Creates an icon-only button while retaining a non-visual label for host accessibility.
+    pub fn icon(
+        bounds: Rect,
+        icon: Icon,
+        accessible_label: impl Into<String>,
+        state: ButtonState,
+        style: ButtonStyle,
+    ) -> Self {
+        Self {
+            bounds,
+            content: ButtonContent::Icon {
+                icon,
+                accessible_label: accessible_label.into(),
+            },
+            state,
+            selection: ButtonSelection::Unselected,
+            style,
+        }
+    }
+
+    /// Creates a button that paints a leading icon followed by a visible label.
+    pub fn icon_and_label(
+        bounds: Rect,
+        icon: Icon,
+        label: impl Into<String>,
+        state: ButtonState,
+        style: ButtonStyle,
+    ) -> Self {
+        Self {
+            bounds,
+            content: ButtonContent::IconAndLabel {
+                icon,
+                label: label.into(),
+            },
+            state,
+            selection: ButtonSelection::Unselected,
+            style,
+        }
+    }
+
+    pub const fn with_selection(mut self, selection: ButtonSelection) -> Self {
+        self.selection = selection;
         self
     }
 
     pub const fn bounds(&self) -> Rect {
         self.bounds
     }
+
+    /// Returns the label that the host should expose to its accessibility adapter.
+    pub fn accessible_label(&self) -> &str {
+        match &self.content {
+            ButtonContent::Label(label)
+            | ButtonContent::Icon {
+                accessible_label: label,
+                ..
+            }
+            | ButtonContent::IconAndLabel { label, .. } => label,
+        }
+    }
 }
 
 impl Component for Button {
     fn paint(&self, scene: &mut UiScene) {
         scene.draw_rect(
-            PaintRect::new(self.bounds, self.style.backgrounds.for_state(self.state))
-                .with_border(self.style.border)
-                .with_corner_radii(self.style.corner_radii),
+            PaintRect::new(
+                self.bounds,
+                self.style
+                    .backgrounds_for(self.selection)
+                    .for_state(self.state),
+            )
+            .with_border(self.style.border)
+            .with_corner_radii(self.style.corner_radii),
         );
 
         let content = content_bounds(self.bounds, self.style.padding);
         if content.is_empty() {
             return;
         }
-        if let Some(icon) = self.icon {
-            let label = IconLabel::new(
-                content,
+        let text_style = self.style.text_style_for(self.state);
+        match &self.content {
+            ButtonContent::Icon {
                 icon,
-                self.label.clone(),
-                IconLabelStyle::new(self.style.text_style.clone())
-                    .with_icon_size(self.style.icon_size)
-                    .with_content_gap(self.style.content_gap),
-            );
-            label.paint(scene);
-            return;
+                accessible_label: _,
+            } => {
+                let icon_size = self
+                    .style
+                    .icon_size
+                    .max(0.0)
+                    .min(content.size.width)
+                    .min(content.size.height);
+                if icon_size <= 0.0 {
+                    return;
+                }
+                let icon_x = content.origin.x + (content.size.width - icon_size) * 0.5;
+                let icon_y = content.origin.y + (content.size.height - icon_size) * 0.5;
+                scene.draw_icon(PaintIcon::new(
+                    *icon,
+                    Rect::from_xywh(icon_x, icon_y, icon_size, icon_size),
+                    text_style.color(),
+                ));
+                return;
+            }
+            ButtonContent::IconAndLabel { icon, label } => {
+                let label = IconLabel::new(
+                    content,
+                    *icon,
+                    label.clone(),
+                    IconLabelStyle::new(text_style.clone())
+                        .with_icon_size(self.style.icon_size)
+                        .with_content_gap(self.style.content_gap),
+                );
+                label.paint(scene);
+                return;
+            }
+            ButtonContent::Label(_) => {}
         }
+        let ButtonContent::Label(label) = &self.content else {
+            return;
+        };
         let text_x = content.origin.x;
         let text_width = content.size.width;
-        let text_height = self
-            .style
-            .text_style
-            .line_height()
-            .max(0.0)
-            .min(content.size.height);
-        if self.label.is_empty() || text_width <= 0.0 || text_height <= 0.0 {
+        let text_height = text_style.line_height().max(0.0).min(content.size.height);
+        if label.is_empty() || text_width <= 0.0 || text_height <= 0.0 {
             return;
         }
         let text_y = content.origin.y + (content.size.height - text_height) * 0.5;
         scene.draw_text(TextBlock::new(
-            self.label.clone(),
+            label.clone(),
             Point::new(text_x, text_y),
             crate::Size::new(text_width, text_height),
-            self.style.text_style.clone(),
+            text_style.clone(),
         ));
     }
 }

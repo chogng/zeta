@@ -1,14 +1,23 @@
+use zeta_terminal::{GridSize, ScreenBuffer, TerminalColor, TerminalCore, TerminalMousePosition};
 use zeta_ui::{
-    Border, CaretVisibility, Color, CornerRadii, Edges, FontWeight, InputBox, InputBoxState,
-    PaintRect, Rect, TextBlock, TextInputLayoutEngine, TextStyle, UiScene,
+    Border, CaretVisibility, Color, CornerRadii, FontFamily, FontWeight, InputBox, InputBoxState,
+    PaintRect, Rect, TextBlock, TextInput, TextInputLayoutEngine, TextStyle, UiScene,
 };
 
-use crate::shell_interaction::{SessionId, ShellHitMap, ShellInteraction, ShellTarget};
+use crate::PRODUCT_DISPLAY_NAME;
+use crate::shell_interaction::{ShellHitMap, ShellTarget};
 use crate::shell_style::{SHELL_PALETTE, ShellPalette};
+use crate::terminal_blocks::{TerminalBlockLineKind, project_block_lines};
+use crate::terminal_projection::block_view_range;
+use crate::terminal_selection::{TerminalSelectionRange, paint_terminal_selection};
+use crate::titlebar::{TITLEBAR_HEIGHT, Titlebar};
 
-const TITLEBAR_HEIGHT: f32 = 35.0;
-const SIDEBAR_TARGET_WIDTH: f32 = 232.0;
-const COMPOSER_HEIGHT: f32 = 68.0;
+const TERMINAL_CELL_WIDTH: f32 = 8.0;
+const TERMINAL_LINE_HEIGHT: f32 = 18.0;
+const TERMINAL_PADDING: f32 = 24.0;
+const COMPOSER_HEIGHT: f32 = 54.0;
+const COMPOSER_GAP: f32 = 12.0;
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct LogicalViewport {
     pub width: f32,
@@ -32,45 +41,35 @@ impl LogicalViewport {
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct ShellLayout {
     titlebar: Rect,
-    sidebar: Rect,
     main: Rect,
-    transcript: Rect,
+    output: Rect,
     composer: Rect,
 }
 
 impl ShellLayout {
     fn for_viewport(viewport: LogicalViewport) -> Option<Self> {
-        if viewport.width < 520.0 || viewport.height < 300.0 {
+        if viewport.width < 240.0 || viewport.height < 180.0 {
             return None;
         }
         let titlebar = Rect::from_xywh(0.0, 0.0, viewport.width, TITLEBAR_HEIGHT);
         let body_height = viewport.height - titlebar.size.height;
-        let sidebar_width = SIDEBAR_TARGET_WIDTH.min((viewport.width * 0.32).max(176.0));
-        let sidebar = Rect::from_xywh(0.0, titlebar.bottom(), sidebar_width, body_height);
-        let main = Rect::from_xywh(
-            sidebar.right(),
-            titlebar.bottom(),
-            viewport.width - sidebar_width,
-            body_height,
-        );
-        let composer_margin = 20.0_f32.min(main.size.width * 0.08);
+        let main = Rect::from_xywh(0.0, titlebar.bottom(), viewport.width, body_height);
         let composer = Rect::from_xywh(
-            main.origin.x + composer_margin,
-            main.bottom() - COMPOSER_HEIGHT - composer_margin,
-            (main.size.width - composer_margin * 2.0).max(0.0),
+            TERMINAL_PADDING,
+            main.bottom() - TERMINAL_PADDING - COMPOSER_HEIGHT,
+            (main.size.width - TERMINAL_PADDING * 2.0).max(1.0),
             COMPOSER_HEIGHT,
         );
-        let transcript = Rect::from_xywh(
+        let output = Rect::from_xywh(
             main.origin.x,
             main.origin.y,
             main.size.width,
-            (composer.origin.y - main.origin.y - 12.0).max(0.0),
+            (composer.origin.y - main.origin.y - COMPOSER_GAP).max(1.0),
         );
         Some(Self {
             titlebar,
-            sidebar,
             main,
-            transcript,
+            output,
             composer,
         })
     }
@@ -82,9 +81,19 @@ pub(crate) struct ShellPresentation {
     pub(crate) ime_cursor_area: Option<Rect>,
 }
 
+#[derive(Clone, Copy)]
+struct TerminalView<'a> {
+    core: Option<&'a TerminalCore>,
+    scroll_offset: usize,
+    selection: Option<TerminalSelectionRange>,
+}
+
 pub(crate) fn build_shell_presentation(
     viewport: LogicalViewport,
-    interaction: &ShellInteraction,
+    terminal: Option<&TerminalCore>,
+    terminal_scroll_offset: usize,
+    terminal_selection: Option<TerminalSelectionRange>,
+    composer: &TextInput,
     text_layout: &mut TextInputLayoutEngine,
     caret_visibility: CaretVisibility,
 ) -> ShellPresentation {
@@ -100,14 +109,22 @@ pub(crate) fn build_shell_presentation(
         };
     };
 
-    draw_titlebar(&mut scene, &mut hit_map, layout, palette);
-    draw_sidebar(&mut scene, &mut hit_map, layout, interaction, palette);
+    let title = terminal
+        .and_then(TerminalCore::title)
+        .unwrap_or(PRODUCT_DISPLAY_NAME);
+    let titlebar = Titlebar::new(layout.titlebar, title, palette);
+    titlebar.register_hit_regions(&mut hit_map);
+    scene.draw_component(&titlebar);
     let ime_cursor_area = draw_main(
         &mut scene,
         &mut hit_map,
         layout,
-        interaction,
-        palette,
+        TerminalView {
+            core: terminal,
+            scroll_offset: terminal_scroll_offset,
+            selection: terminal_selection,
+        },
+        composer,
         text_layout,
         caret_visibility,
     );
@@ -118,243 +135,178 @@ pub(crate) fn build_shell_presentation(
     }
 }
 
-fn draw_titlebar(
-    scene: &mut UiScene,
-    hit_map: &mut ShellHitMap,
-    layout: ShellLayout,
-    palette: ShellPalette,
-) {
-    scene.draw_rect(
-        PaintRect::new(layout.titlebar, palette.surface_raised)
-            .with_border(Border::new(Edges::new(0.0, 0.0, 1.0, 0.0), palette.border)),
-    );
-    hit_map.register(layout.titlebar, ShellTarget::WindowDrag);
-    draw_text(
-        scene,
-        "Zeta",
-        Rect::from_xywh(78.0, 7.0, 180.0, 22.0),
-        TextStyle::new(17.0, palette.text).with_weight(FontWeight::Bold),
-    );
-}
-
-fn draw_sidebar(
-    scene: &mut UiScene,
-    hit_map: &mut ShellHitMap,
-    layout: ShellLayout,
-    interaction: &ShellInteraction,
-    palette: ShellPalette,
-) {
-    scene.draw_rect(
-        PaintRect::new(layout.sidebar, palette.surface)
-            .with_border(Border::new(Edges::new(0.0, 1.0, 0.0, 0.0), palette.border)),
-    );
-    scene.with_clip(layout.sidebar, |scene| {
-        draw_text(
-            scene,
-            "SESSIONS",
-            Rect::from_xywh(
-                layout.sidebar.origin.x + 18.0,
-                layout.sidebar.origin.y + 20.0,
-                layout.sidebar.size.width - 36.0,
-                20.0,
-            ),
-            TextStyle::new(11.0, palette.text_muted).with_weight(FontWeight::Bold),
-        );
-        for (index, session) in [
-            SessionId::Foundation,
-            SessionId::Renderer,
-            SessionId::AppServer,
-        ]
-        .into_iter()
-        .enumerate()
-        {
-            let row = Rect::from_xywh(
-                layout.sidebar.origin.x + 14.0,
-                layout.sidebar.origin.y + 52.0 + index as f32 * 64.0,
-                layout.sidebar.size.width - 28.0,
-                52.0,
-            );
-            draw_session_row(scene, hit_map, row, session, interaction, palette);
-        }
-    });
-}
-
-fn draw_session_row(
-    scene: &mut UiScene,
-    hit_map: &mut ShellHitMap,
-    row: Rect,
-    session: SessionId,
-    interaction: &ShellInteraction,
-    palette: ShellPalette,
-) {
-    let target = ShellTarget::Session(session);
-    hit_map.register(row, target);
-    let resting = if interaction.selected_session() == session {
-        palette.surface_selected
-    } else {
-        palette.surface
+pub(crate) fn terminal_grid_size_for_viewport(
+    viewport: LogicalViewport,
+    active_screen: ScreenBuffer,
+) -> GridSize {
+    let Some(layout) = ShellLayout::for_viewport(viewport) else {
+        return GridSize::default();
     };
-    scene.draw_rect(
-        PaintRect::new(row, interactive_fill(interaction, target, resting, palette))
-            .with_border(Border::uniform(
-                1.0,
-                if interaction.selected_session() == session {
-                    palette.border_focused
-                } else {
-                    Color::TRANSPARENT
-                },
-            ))
-            .with_corner_radii(CornerRadii::uniform(8.0)),
-    );
-    let (title, subtitle) = session_labels(session);
-    draw_text(
-        scene,
-        title,
-        Rect::from_xywh(
-            row.origin.x + 12.0,
-            row.origin.y + 8.0,
-            row.size.width - 24.0,
-            20.0,
-        ),
-        TextStyle::new(13.0, palette.text).with_weight(FontWeight::Bold),
-    );
-    draw_text(
-        scene,
-        subtitle,
-        Rect::from_xywh(
-            row.origin.x + 12.0,
-            row.origin.y + 29.0,
-            row.size.width - 24.0,
-            17.0,
-        ),
-        TextStyle::new(11.0, palette.text_muted),
-    );
+    let bounds = terminal_content_bounds(layout, active_screen);
+    GridSize::new(
+        (bounds.size.height / TERMINAL_LINE_HEIGHT)
+            .floor()
+            .clamp(1.0, u16::MAX as f32) as u16,
+        (bounds.size.width / TERMINAL_CELL_WIDTH)
+            .floor()
+            .clamp(1.0, u16::MAX as f32) as u16,
+    )
+}
+
+pub(crate) fn terminal_mouse_position_for_viewport(
+    viewport: LogicalViewport,
+    active_screen: ScreenBuffer,
+    point: zeta_ui::Point,
+) -> Option<TerminalMousePosition> {
+    let layout = ShellLayout::for_viewport(viewport)?;
+    let bounds = terminal_content_bounds(layout, active_screen);
+    if !bounds.contains(point) {
+        return None;
+    }
+    let row = ((point.y - bounds.origin.y) / TERMINAL_LINE_HEIGHT).floor() as u16;
+    let col = ((point.x - bounds.origin.x) / TERMINAL_CELL_WIDTH).floor() as u16;
+    let size = terminal_grid_size_for_viewport(viewport, active_screen);
+    (row < size.rows() && col < size.cols()).then(|| TerminalMousePosition::new(row, col))
 }
 
 fn draw_main(
     scene: &mut UiScene,
     hit_map: &mut ShellHitMap,
     layout: ShellLayout,
-    interaction: &ShellInteraction,
-    palette: ShellPalette,
+    terminal_view: TerminalView<'_>,
+    composer: &TextInput,
     text_layout: &mut TextInputLayoutEngine,
     caret_visibility: CaretVisibility,
 ) -> Option<Rect> {
+    let palette = SHELL_PALETTE;
+    let active_screen = terminal_view
+        .core
+        .map(TerminalCore::active_screen)
+        .unwrap_or_default();
     scene.draw_rect(PaintRect::new(layout.main, palette.background));
     let mut ime_cursor_area = None;
     scene.with_clip(layout.main, |scene| {
-        let (heading, summary, message) = session_content(interaction.selected_session());
-        draw_text(
+        draw_terminal(
             scene,
-            heading,
-            Rect::from_xywh(
-                layout.main.origin.x + 24.0,
-                layout.main.origin.y + 22.0,
-                layout.main.size.width - 48.0,
-                30.0,
-            ),
-            TextStyle::new(18.0, palette.text).with_weight(FontWeight::Bold),
-        );
-        draw_text(
-            scene,
-            summary,
-            Rect::from_xywh(
-                layout.main.origin.x + 24.0,
-                layout.main.origin.y + 54.0,
-                layout.main.size.width - 48.0,
-                44.0,
-            ),
-            TextStyle::new(14.0, palette.text_muted),
-        );
-        draw_message_card(scene, layout, message, palette);
-        ime_cursor_area = draw_composer(
-            scene,
-            hit_map,
             layout,
-            interaction,
+            terminal_view.core,
+            active_screen,
+            terminal_view.scroll_offset,
+            terminal_view.selection,
             palette,
-            text_layout,
-            caret_visibility,
         );
+        if active_screen == ScreenBuffer::Primary {
+            ime_cursor_area = draw_composer(
+                scene,
+                hit_map,
+                layout,
+                composer,
+                text_layout,
+                caret_visibility,
+                palette,
+            );
+        }
     });
-    ime_cursor_area
+    if active_screen == ScreenBuffer::Alternate {
+        terminal_view.core.and_then(|terminal| {
+            terminal_cursor_area(layout, terminal, terminal_view.scroll_offset)
+        })
+    } else {
+        ime_cursor_area
+    }
 }
 
-fn draw_message_card(
+fn terminal_content_bounds(layout: ShellLayout, active_screen: ScreenBuffer) -> Rect {
+    let viewport = if active_screen == ScreenBuffer::Alternate {
+        layout.main
+    } else {
+        layout.output
+    };
+    Rect::from_xywh(
+        viewport.origin.x + TERMINAL_PADDING,
+        viewport.origin.y + TERMINAL_PADDING,
+        (viewport.size.width - TERMINAL_PADDING * 2.0).max(1.0),
+        (viewport.size.height - TERMINAL_PADDING * 2.0).max(1.0),
+    )
+}
+
+fn terminal_cursor_area(
+    layout: ShellLayout,
+    terminal: &TerminalCore,
+    scroll_offset: usize,
+) -> Option<Rect> {
+    if scroll_offset != 0 || !terminal.modes().cursor_visible() {
+        return None;
+    }
+    let bounds = terminal_content_bounds(layout, ScreenBuffer::Alternate);
+    let (row, col) = terminal.grid().cursor();
+    Some(Rect::from_xywh(
+        bounds.origin.x + col as f32 * TERMINAL_CELL_WIDTH,
+        bounds.origin.y + row as f32 * TERMINAL_LINE_HEIGHT,
+        TERMINAL_CELL_WIDTH,
+        TERMINAL_LINE_HEIGHT,
+    ))
+}
+
+fn draw_terminal(
     scene: &mut UiScene,
     layout: ShellLayout,
-    message_text: &str,
+    terminal: Option<&TerminalCore>,
+    active_screen: ScreenBuffer,
+    scroll_offset: usize,
+    selection: Option<TerminalSelectionRange>,
     palette: ShellPalette,
 ) {
-    let message = Rect::from_xywh(
-        layout.transcript.origin.x + 24.0,
-        layout.transcript.origin.y + 108.0,
-        (layout.transcript.size.width - 48.0).clamp(0.0, 560.0),
-        92.0,
-    );
-    scene.draw_rect(
-        PaintRect::new(message, palette.surface_raised)
-            .with_border(Border::uniform(1.0, palette.border))
-            .with_corner_radii(CornerRadii::uniform(10.0)),
-    );
-    draw_text(
-        scene,
-        "Zeta",
-        Rect::from_xywh(
-            message.origin.x + 16.0,
-            message.origin.y + 13.0,
-            message.size.width - 32.0,
-            22.0,
-        ),
-        TextStyle::new(13.0, palette.accent).with_weight(FontWeight::Bold),
-    );
-    draw_text(
-        scene,
-        message_text,
-        Rect::from_xywh(
-            message.origin.x + 16.0,
-            message.origin.y + 40.0,
-            message.size.width - 32.0,
-            42.0,
-        ),
-        TextStyle::new(14.0, palette.text),
-    );
+    let bounds = terminal_content_bounds(layout, active_screen);
+    let Some(terminal) = terminal else {
+        draw_terminal_text(scene, "Starting shell…", bounds, palette.text_muted);
+        return;
+    };
+    if active_screen == ScreenBuffer::Alternate {
+        draw_grid(scene, terminal, bounds, scroll_offset, palette);
+    } else {
+        draw_block_list(scene, terminal, bounds, scroll_offset, palette);
+    }
+    if active_screen == ScreenBuffer::Primary
+        && let Some(selection) = selection
+    {
+        paint_terminal_selection(
+            scene,
+            bounds,
+            terminal.grid().size().cols() as usize,
+            selection,
+            TERMINAL_CELL_WIDTH,
+            TERMINAL_LINE_HEIGHT,
+            palette.terminal_selection,
+        );
+    }
 }
 
 fn draw_composer(
     scene: &mut UiScene,
     hit_map: &mut ShellHitMap,
     layout: ShellLayout,
-    interaction: &ShellInteraction,
-    palette: ShellPalette,
+    composer: &TextInput,
     text_layout: &mut TextInputLayoutEngine,
     caret_visibility: CaretVisibility,
+    palette: ShellPalette,
 ) -> Option<Rect> {
     scene.draw_rect(PaintRect::new(
         Rect::from_xywh(
             layout.main.origin.x,
-            layout.composer.origin.y - 12.0,
+            layout.output.bottom(),
             layout.main.size.width,
             1.0,
         ),
         palette.border,
     ));
-    let target = ShellTarget::Composer;
-    hit_map.register(layout.composer, target);
-    let state = if interaction.composer_focused() {
-        InputBoxState::Focused(caret_visibility)
-    } else if interaction.is_hovered(target) {
-        InputBoxState::Hovered
-    } else {
-        InputBoxState::Resting
-    };
-    let style = palette.composer_style();
+    hit_map.register(layout.composer, ShellTarget::Composer);
     let input_box = InputBox::new(
         layout.composer,
-        "Message Zeta…",
-        state,
-        style,
-        interaction.composer(),
+        "Enter a command…",
+        InputBoxState::Focused(caret_visibility),
+        palette.composer_style(),
+        composer,
         text_layout,
     );
     let caret_bounds = input_box.caret_bounds();
@@ -362,47 +314,140 @@ fn draw_composer(
     caret_bounds
 }
 
-fn interactive_fill(
-    interaction: &ShellInteraction,
-    target: ShellTarget,
-    resting: Color,
+fn draw_grid(
+    scene: &mut UiScene,
+    terminal: &TerminalCore,
+    bounds: Rect,
+    scroll_offset: usize,
     palette: ShellPalette,
-) -> Color {
-    if interaction.is_pressed(target) {
-        palette.surface_pressed
-    } else if interaction.is_hovered(target) {
-        palette.surface_hovered
-    } else {
-        resting
+) {
+    let cursor = terminal.grid().cursor();
+    let cursor_visible = terminal.modes().cursor_visible() && scroll_offset == 0;
+    for (row, line) in terminal.grid().viewport_lines(scroll_offset).enumerate() {
+        let y = bounds.origin.y + row as f32 * TERMINAL_LINE_HEIGHT;
+        if y + TERMINAL_LINE_HEIGHT > bounds.bottom() {
+            break;
+        }
+        for (col, cell) in line.cells().iter().enumerate() {
+            if cell.is_continuation() {
+                continue;
+            }
+            let x = bounds.origin.x + col as f32 * TERMINAL_CELL_WIDTH;
+            if x + TERMINAL_CELL_WIDTH > bounds.right() {
+                break;
+            }
+            let style = cell.style();
+            let (foreground, background) = terminal_cell_colors(style, palette);
+            if background != Color::TRANSPARENT {
+                scene.draw_rect(PaintRect::new(
+                    Rect::from_xywh(x, y, TERMINAL_CELL_WIDTH, TERMINAL_LINE_HEIGHT),
+                    background,
+                ));
+            }
+            if cursor_visible && cursor == (row, col) {
+                scene.draw_rect(PaintRect::new(
+                    Rect::from_xywh(x, y + TERMINAL_LINE_HEIGHT - 2.0, TERMINAL_CELL_WIDTH, 2.0),
+                    palette.accent,
+                ));
+            }
+            if !cell.text().is_empty() {
+                let mut text_style = terminal_text_style(foreground);
+                if style.bold {
+                    text_style = text_style.with_weight(FontWeight::Bold);
+                }
+                draw_text(
+                    scene,
+                    cell.text(),
+                    Rect::from_xywh(x, y, TERMINAL_CELL_WIDTH * 2.0, TERMINAL_LINE_HEIGHT),
+                    text_style,
+                );
+            }
+        }
     }
 }
 
-fn session_labels(session: SessionId) -> (&'static str, &'static str) {
-    match session {
-        SessionId::Foundation => ("Native UI foundation", "Active now"),
-        SessionId::Renderer => ("Renderer architecture", "GPU scene"),
-        SessionId::AppServer => ("App Server integration", "Planned"),
+fn draw_block_list(
+    scene: &mut UiScene,
+    terminal: &TerminalCore,
+    bounds: Rect,
+    scroll_offset: usize,
+    palette: ShellPalette,
+) {
+    let lines = project_block_lines(terminal);
+    let capacity = terminal_line_capacity(bounds);
+    let range = block_view_range(lines.len(), capacity, scroll_offset);
+    for (row, line) in lines[range].iter().enumerate() {
+        let color = match line.kind {
+            TerminalBlockLineKind::Preamble => palette.text_muted,
+            TerminalBlockLineKind::Command => palette.accent,
+            TerminalBlockLineKind::Output => palette.text,
+            TerminalBlockLineKind::Status => palette.text_muted,
+        };
+        draw_terminal_text(
+            scene,
+            &line.text,
+            Rect::from_xywh(
+                bounds.origin.x,
+                bounds.origin.y + row as f32 * TERMINAL_LINE_HEIGHT,
+                bounds.size.width,
+                TERMINAL_LINE_HEIGHT,
+            ),
+            color,
+        );
     }
 }
 
-fn session_content(session: SessionId) -> (&'static str, &'static str, &'static str) {
-    match session {
-        SessionId::Foundation => (
-            "Conversation",
-            "Rect, border, rounded corners and clipping share one scene.",
-            "The native shell now owns hover, pressed, selected and focus state.",
-        ),
-        SessionId::Renderer => (
-            "Renderer architecture",
-            "Logical scene primitives are prepared into physical GPU instances.",
-            "The renderer stays presentation-only; product interaction remains in the host.",
-        ),
-        SessionId::AppServer => (
-            "App Server integration",
-            "Product state will arrive through the typed App Server client contract.",
-            "This preview does not duplicate Session, Thread or Turn state machines.",
-        ),
+fn terminal_line_capacity(bounds: Rect) -> usize {
+    ((bounds.size.height / TERMINAL_LINE_HEIGHT).floor() as usize).max(1)
+}
+
+fn terminal_cell_colors(style: zeta_terminal::CellStyle, palette: ShellPalette) -> (Color, Color) {
+    let mut foreground = terminal_color(style.foreground, palette.text, palette);
+    let mut background = terminal_color(style.background, Color::TRANSPARENT, palette);
+    if style.inverse {
+        std::mem::swap(&mut foreground, &mut background);
     }
+    (foreground, background)
+}
+
+fn terminal_color(color: TerminalColor, default: Color, palette: ShellPalette) -> Color {
+    match color {
+        TerminalColor::Default => default,
+        TerminalColor::Indexed(index) => indexed_terminal_color(index, palette),
+        TerminalColor::Rgb(red, green, blue) => Color::rgb(red, green, blue),
+    }
+}
+
+fn indexed_terminal_color(index: u8, palette: ShellPalette) -> Color {
+    match index {
+        0 => Color::rgb(35, 39, 46),
+        1 => Color::rgb(224, 108, 117),
+        2 => Color::rgb(152, 195, 121),
+        3 => Color::rgb(229, 192, 123),
+        4 => Color::rgb(97, 175, 239),
+        5 => Color::rgb(198, 120, 221),
+        6 => Color::rgb(86, 182, 194),
+        7 => palette.text,
+        8 => Color::rgb(92, 99, 112),
+        9 => Color::rgb(240, 113, 120),
+        10 => Color::rgb(126, 198, 153),
+        11 => Color::rgb(224, 175, 104),
+        12 => Color::rgb(106, 169, 255),
+        13 => Color::rgb(210, 137, 241),
+        14 => Color::rgb(91, 192, 222),
+        15 => Color::rgb(248, 248, 242),
+        _ => palette.text,
+    }
+}
+
+fn terminal_text_style(color: Color) -> TextStyle {
+    TextStyle::new(13.0, color)
+        .with_family(FontFamily::Monospace)
+        .with_line_height(TERMINAL_LINE_HEIGHT)
+}
+
+fn draw_terminal_text(scene: &mut UiScene, text: &str, bounds: Rect, color: Color) {
+    draw_text(scene, text, bounds, terminal_text_style(color));
 }
 
 fn draw_compact_scene(scene: &mut UiScene, viewport: LogicalViewport, palette: ShellPalette) {
@@ -419,7 +464,7 @@ fn draw_compact_scene(scene: &mut UiScene, viewport: LogicalViewport, palette: S
     );
     draw_text(
         scene,
-        "Zeta Native",
+        PRODUCT_DISPLAY_NAME,
         Rect::from_xywh(
             bounds.origin.x + 18.0,
             bounds.origin.y + 18.0,

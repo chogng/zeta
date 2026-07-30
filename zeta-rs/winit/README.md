@@ -14,18 +14,21 @@ App Server connection、UI tree 或渲染状态。
 | Symbol | 可见性 | 职责 | 不拥有 |
 | --- | --- | --- | --- |
 | `run_application` | public | 创建 event loop 并运行 product-owned handler | 产品 lifecycle 或错误策略 |
+| `run_application_with_user_events` | public | 创建 typed event loop，并把 `EventLoopProxy<T>` 交给产品构造器 | user-event 类型或后台任务 |
 | `NativeWindow::create` | public | 从 `ActiveEventLoop` 和 attributes 创建窗口 | 产品窗口策略 |
 | `NativeWindow` | public | 安全持有 window 与 display handle | GPU surface、widget 或 workspace |
 | `PhysicalExtent` | public | 跨底层 crate 传递 physical pixel dimensions | logical layout |
 | `WindowChrome` / `apply_window_chrome` | public | 把命名 chrome policy 转换为平台 attributes | titlebar paint/layout |
 | `NativeWindow::start_window_drag` | public | 转发产品 titlebar 命中的平台窗口拖动 | hit testing |
 | `NativeWindow::set_cursor` | public | 应用产品 hit testing 选择的 cursor | hover state |
+| `NativeWindow::set_title` | public | 把 product/session title 转发给 platform window | title 来源或 OSC parsing |
 | `NativeWindow::enable_ime` / `disable_ime` | public | 转发产品 focus 选择的 IME activation | focus 或 composition |
 | `ImeCursorArea` / `set_ime_cursor_area` | public | 把 logical caret area 转发给平台候选框 | shaping 或 caret policy |
 
-`ApplicationHandler`、`ActiveEventLoop`、`ControlFlow`、`WindowEvent`、keyboard/IME event values、
-`WindowAttributes`、`WindowId` 和 `LogicalSize` 由本 crate 重新导出，使上层 host 不需要
-绕过 adapter 建立另一套 `winit` integration。
+`ApplicationHandler`、`ActiveEventLoop`、`ControlFlow`、`WindowEvent`、keyboard/IME/pointer
+event values（包括 `MouseButton` 与 `MouseScrollDelta`）、`WindowAttributes`、`WindowId` 和
+`LogicalSize`/`PhysicalPosition` 由本 crate 重新导出，使上层 host 不需要绕过 adapter 建立另一套 `winit`
+integration。
 
 真实调用关系：
 
@@ -65,5 +68,5 @@ cargo test --manifest-path zeta-rs/Cargo.toml -p zeta-winit
 当前单元测试只验证无平台依赖的值语义。CI 编译不能代替 macOS、Windows、Linux 的真实窗口、
 resume/suspend、DPI 与多窗口 smoke。
 
-当前没有产品 event handler、默认窗口策略、clipboard、accessibility、file drag/drop 或
+当前没有产品 event handler、默认窗口策略、clipboard ownership、accessibility、file drag/drop 或
 platform menu。IME 仅有 platform forwarding，不拥有 focus、composition 或文本编辑语义。
