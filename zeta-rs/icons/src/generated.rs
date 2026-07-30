@@ -58,6 +58,7 @@ pub(crate) mod artwork {
     pub(crate) const DATABASE: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/database.svg"));
     pub(crate) const DATABASE_FLAT: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/database-flat.svg"));
     pub(crate) const DIAGNOSTICS: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/diagnostics.svg"));
+    pub(crate) const DIFF: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/diff.svg"));
     pub(crate) const DOCX: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/docx.svg"));
     pub(crate) const DOCX_BLUE: IconDefinition = IconDefinition::multicolor(include_bytes!("../../../resources/icons/docx-blue.svg"));
     pub(crate) const DOCX_FILLED: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/docx-filled.svg"));
@@ -99,11 +100,9 @@ pub(crate) mod artwork {
     pub(crate) const LAYOUT_SIDEBAR_LEFT: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/layout-sidebar-left.svg"));
     pub(crate) const LAYOUT_SIDEBAR_LEFT_EMPTY: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/layout-sidebar-left-empty.svg"));
     pub(crate) const LAYOUT_SIDEBAR_LEFT_OFF: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/layout-sidebar-left-off.svg"));
-    pub(crate) const LAYOUT_SIDEBAR_LEFT_OFF_EMPTY: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/layout-sidebar-left-off-empty.svg"));
     pub(crate) const LAYOUT_SIDEBAR_RIGHT: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/layout-sidebar-right.svg"));
     pub(crate) const LAYOUT_SIDEBAR_RIGHT_EMPTY: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/layout-sidebar-right-empty.svg"));
-    pub(crate) const LAYOUT_SIDEBAR_RIGHT_OFF: IconDefinition = IconDefinition::multicolor(include_bytes!("../../../resources/icons/layout-sidebar-right-off.svg"));
-    pub(crate) const LAYOUT_SIDEBAR_RIGHT_OFF_EMPTY: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/layout-sidebar-right-off-empty.svg"));
+    pub(crate) const LAYOUT_SIDEBAR_RIGHT_OFF: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/layout-sidebar-right-off.svg"));
     pub(crate) const LEGEND: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/legend.svg"));
     pub(crate) const LETTER_B: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/letter-b.svg"));
     pub(crate) const LETTER_H: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/letter-h.svg"));
@@ -228,6 +227,7 @@ pub(crate) const ALL_ARTWORK: &[(&str, IconDefinition)] = &[
     ("database", artwork::DATABASE),
     ("database-flat", artwork::DATABASE_FLAT),
     ("diagnostics", artwork::DIAGNOSTICS),
+    ("diff", artwork::DIFF),
     ("docx", artwork::DOCX),
     ("docx-blue", artwork::DOCX_BLUE),
     ("docx-filled", artwork::DOCX_FILLED),
@@ -269,11 +269,9 @@ pub(crate) const ALL_ARTWORK: &[(&str, IconDefinition)] = &[
     ("layout-sidebar-left", artwork::LAYOUT_SIDEBAR_LEFT),
     ("layout-sidebar-left-empty", artwork::LAYOUT_SIDEBAR_LEFT_EMPTY),
     ("layout-sidebar-left-off", artwork::LAYOUT_SIDEBAR_LEFT_OFF),
-    ("layout-sidebar-left-off-empty", artwork::LAYOUT_SIDEBAR_LEFT_OFF_EMPTY),
     ("layout-sidebar-right", artwork::LAYOUT_SIDEBAR_RIGHT),
     ("layout-sidebar-right-empty", artwork::LAYOUT_SIDEBAR_RIGHT_EMPTY),
     ("layout-sidebar-right-off", artwork::LAYOUT_SIDEBAR_RIGHT_OFF),
-    ("layout-sidebar-right-off-empty", artwork::LAYOUT_SIDEBAR_RIGHT_OFF_EMPTY),
     ("legend", artwork::LEGEND),
     ("letter-b", artwork::LETTER_B),
     ("letter-h", artwork::LETTER_H),
