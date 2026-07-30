@@ -8,7 +8,7 @@
 > 拥有；Skill 来源与激活语义由 [`docs/skills.md`](../../docs/skills.md) 拥有。
 
 `zeta-agent-import` 只识别 Codex 和 Claude 已知的用户级、项目级配置位置，并生成仅元数据
-（metadata-only）的 `AgentImportPlan`。当前实现不读取候选正文、不递归扫描未知目录、不修改
+（metadata-only）的 `AgentPathInspection`。当前实现不读取候选正文、不递归扫描未知目录、不修改
 Zeta 配置，也不导入认证、会话、日志或历史记录。
 
 ## 1. Crate 边界与依赖方向
@@ -41,7 +41,7 @@ crate，但不能为了落库或 UI 方便引入上述高层领域。
 | `ExternalAgent` | 区分 `Codex` 与 `Claude` 布局 | 动态 provider registry |
 | `ImportScope` | 区分 `User` 与 `Project` 来源 | workspace trust 或配置优先级 |
 | `AgentImportLocation::{codex_user,codex_project,claude_user,claude_project}` | 将来源、作用范围和调用方选择的根目录绑定为一个发现输入 | 环境变量解析、文件访问授权 |
-| `AgentImportPlan::discover` | 校验所有输入根并发现已知相对位置 | 读取正文、转换内容或应用配置 |
+| `inspect_agent_paths` | 校验所有输入根并检查已知相对位置 | 读取正文、转换内容或应用配置 |
 | `AgentImportCandidate` | 返回来源、作用范围、条目类型、审查类别、相对路径和 canonical host path | 表示内容已受信任、已批准或可执行 |
 | `AgentImportDiagnostic` | 说明一个已存在的已知路径为什么未进入候选 | 暴露根目录、正文或凭据 |
 | `AgentImportError` | 表达调用方选择的根目录整体无效 | 表达单个候选的隔离错误 |
@@ -49,20 +49,20 @@ crate，但不能为了落库或 UI 方便引入上述高层领域。
 典型调用点保持自解释，不传递布尔模式或裸来源字符串：
 
 ```rust
-use zeta_agent_import::{AgentImportLocation, AgentImportPlan};
+use zeta_agent_import::{AgentImportLocation, inspect_agent_paths};
 
-let plan = AgentImportPlan::discover([
+let inspection = inspect_agent_paths([
     AgentImportLocation::codex_user(user_home),
     AgentImportLocation::claude_project(project_root),
 ])?;
 ```
 
-`AgentImportPlan` 只是预览输入。调用方仍须让用户选择具体候选，并把确认结果交给相应领域重新
+`AgentPathInspection` 只是检查结果和预览输入。调用方仍须让用户选择具体候选，并把确认结果交给相应领域重新
 解析和校验；不能把 `candidates()` 非空解释为可自动导入。
 
 ## 3. 已知布局与审查分类
 
-`layout.rs` 是外部路径映射的唯一实现 owner。当前固定布局如下：
+`agent_paths.rs` 是外部 Agent 路径映射的唯一实现 owner。当前固定布局如下：
 
 | 来源 | 用户级路径 | 项目级路径 |
 | --- | --- | --- |
@@ -74,7 +74,7 @@ let plan = AgentImportPlan::discover([
 [Skill 位置说明](https://learn.chatgpt.com/docs/build-skills)，以及 Claude 的
 [设置位置说明](https://code.claude.com/docs/en/settings)和
 [Skill 位置说明](https://code.claude.com/docs/en/slash-commands)。外部产品改变路径时，先更新
-官方契约证据和 fixture，再修改 `layout.rs`；不能靠扫描整个 home 猜测新位置。
+官方契约证据和 fixture，再修改 `agent_paths.rs`；不能靠扫描整个 home 猜测新位置。
 
 | `ImportItemKind` | `ImportReviewCategory` | 原因 |
 | --- | --- | --- |
@@ -94,40 +94,39 @@ per-project state 和 cache，当前整体排除。未来若需要其中的非�
 
 | 文件 / private symbol | 单一职责 | 修改时同步检查 |
 | --- | --- | --- |
-| `model.rs` | 公共值类型、named constructor、getter 和私有路径 `Debug` | App Server DTO、Desktop preview、隐私测试 |
-| `layout.rs::candidate_specs` | `ExternalAgent + ImportScope` 到固定 `CandidateSpec` 的穷尽映射 | 官方路径、review category、fixture 和本表 |
-| `layout.rs::{file,directory}` | 构造带预期文件类型的静态 specification | type-mismatch diagnostic |
-| `discovery.rs::discover` | 逐 root 发现、排序、去重并构造 immutable plan | 多 root 失败语义和顺序测试 |
-| `discovery.rs::validate_root` | 拒绝不可用、非目录或 symlink root，并建立 `CanonicalPathRoot` | `AgentImportError` 与错误脱敏 |
-| `discovery.rs::inspect_candidate` | 检查一个已知相对路径的 metadata、类型和 symlink，再委托通用 canonical containment | diagnostic code、候选 canonical path |
+| `import.rs` | 公共导入值类型、named constructor、getter 和私有路径 `Debug` | App Server DTO、Desktop preview、隐私测试 |
+| `agent_paths.rs::paths_for` | `ExternalAgent + ImportScope` 到固定 `AgentPath` 的穷尽映射 | 官方路径、review category、fixture 和本表 |
+| `agent_paths.rs::{file,directory}` | 构造带预期 entry 类型的 Agent 路径 | type-mismatch diagnostic |
+| `inspect_path.rs::inspect_agent_paths` | 逐 root 检查 Agent 路径、排序、去重并构造 immutable inspection | 多 root 失败语义和顺序测试 |
+| `inspect_path.rs::validate_import_root` | 拒绝不可用、非目录或 symlink root，并建立 `CanonicalPathRoot` | `AgentImportError` 与错误脱敏 |
+| `inspect_path.rs::inspect_path` | 检查一个 Agent 相对路径的 metadata、类型和 symlink，再委托通用 canonical containment | diagnostic code、候选 canonical path |
 | `error.rs` | 根目录级类型化错误与不含绝对路径的显示文本 | Desktop 错误映射与日志 |
-| `discovery_tests.rs` | 临时目录上的领域级发现与隐私回归 | 新来源、路径、错误或 redaction |
+| `inspect_path_tests.rs` | 临时目录上的路径检查与隐私回归 | 新来源、路径、错误或 redaction |
 
-`lib.rs` 保持私有模块和显式 re-export。若调用方开始依赖 `layout`/`discovery` 私有函数，或 crate
+`lib.rs` 保持私有模块和显式 re-export。若调用方开始依赖 `agent_paths`/`inspect_path` 私有函数，或 crate
 root 重新实现路径判断，说明公共 API 或 ownership 已经漂移。
 
 ## 5. 真实调用路径
 
 ```text
-AgentImportPlan::discover
-  → discovery::discover
-      → validate_root
-          → symlink_metadata(root)
-          → reject symlink / non-directory
-          → CanonicalPathRoot::new(root)
-      → layout::candidate_specs(agent, scope)
-      → inspect_candidate for each fixed relative path
-          → missing: omit
-          → symlink_metadata(candidate)
-          → expected file/directory check
-          → CanonicalPathRoot::canonicalize_within(candidate)
-          → AgentImportCandidate | AgentImportDiagnostic
-      → sort + dedup candidates and diagnostics
-      → AgentImportPlan::new
+inspect_agent_paths
+  → validate_import_root
+      → symlink_metadata(root)
+      → reject symlink / non-directory
+      → CanonicalPathRoot::new(root)
+  → agent_paths::paths_for(agent, scope)
+  → inspect_path for each fixed relative path
+      → missing: omit
+      → symlink_metadata(candidate)
+      → expected file/directory check
+      → CanonicalPathRoot::canonicalize_within(candidate)
+      → AgentImportCandidate | AgentImportDiagnostic
+  → sort + dedup candidates and diagnostics
+  → AgentPathInspection::new
 ```
 
-发现只访问根目录和静态 `CandidateSpec` 指向的 metadata。它不会枚举 `.codex`、`.claude` 或
-Skill 目录的子项，也不会打开文件，因此当前 plan 不能证明正文有效。
+发现只访问根目录和静态 `AgentPath` 指向的 metadata。它不会枚举 `.codex`、`.claude` 或
+Skill 目录的子项，也不会打开文件，因此当前 inspection 不能证明正文有效。
 
 ## 6. 失败、隔离与隐私语义
 
@@ -143,7 +142,7 @@ Skill 目录的子项，也不会打开文件，因此当前 plan 不能证明�
 | ancestor symlink 使 canonical candidate 逃出 root | `EscapesSelectedRoot` | ✅ |
 | 候选合法 | 保存 canonical path | ✅ |
 
-多 root 调用不是部分成功协议：任一输入 root 无效都会返回 `Err`，不会返回其他 root 的半份 plan。
+多 root 调用不是部分成功协议：任一输入 root 无效都会返回 `Err`，不会返回其他 root 的半份 inspection。
 单候选问题则通过 diagnostic 隔离，不影响同一 root 的其他候选。
 
 `AgentImportLocation` 和 `AgentImportCandidate` 的 `Debug` 隐藏绝对路径，错误和 diagnostic 只携带
@@ -163,14 +162,14 @@ Desktop/App Server 接入时必须：
 6. 对读取与应用之间的文件变化重新校验 identity/digest，不能把 preview 当作冻结内容；
 7. 认证、凭据、连接批准和执行批准继续走各自 authority。
 
-当前没有 App Server DTO 或 plan identity。任何 wire contract 都应传 source-qualified identity
+当前没有 App Server DTO 或 inspection identity。任何 wire contract 都应传 source-qualified identity
 和受控相对路径，不应直接把 `source_path()` 序列化给 Renderer。
 
 ## 8. 常见修改及影响面
 
 ### 增加一个已知路径
 
-1. 在对应 `layout.rs` source/scope 数组增加 `CandidateSpec`；
+1. 在对应 `agent_paths.rs` source/scope 数组增加 `AgentPath`；
 2. 选择准确的 `ImportItemKind`、`ImportReviewCategory` 和 expected file/directory；
 3. 增加存在、缺失、错误类型和敏感排除测试；
 4. 更新本 README 的布局表，并检查 Desktop/Skill/权限文档是否受影响。
@@ -178,7 +177,7 @@ Desktop/App Server 接入时必须：
 ### 增加一种外部 Agent
 
 1. 扩展 `ExternalAgent` 和 named `AgentImportLocation` constructor；
-2. 为 User/Project 分别定义静态 layout，保持 `candidate_specs` 穷尽匹配；
+2. 为 User/Project 分别定义静态已知路径，保持 `paths_for` 穷尽匹配；
 3. 增加官方路径证据、完整 fixture 和 redaction 测试；
 4. 定义目标领域映射前只返回 preview candidate，不增加隐式 apply；
 5. 同步 App Server DTO、Desktop picker 和系统文档。
@@ -205,24 +204,24 @@ bazel test //zeta-rs/agent-import:agent-import-unit-tests
 - Claude project 内容、配置和连接审查分类；
 - 已知路径错误文件类型的 diagnostic；
 - ancestor symlink 逃逸；
-- plan `Debug` 不泄露临时 root。
+- inspection `Debug` 不泄露临时 root。
 
 测试只使用 `tempfile`，不读取真实 home。修改根目录错误分支、去重或多 root 行为时，应补充对应
 failure fixture；当前测试尚未覆盖所有 `AgentImportError` 分支，这是明确的测试缺口。
 
 ## 10. 当前限制与扩展点
 
-- **Current**：Codex/Claude 已知路径的 metadata-only 发现、根目录/候选校验、确定性 plan、
+- **Current**：Codex/Claude 已知路径的 metadata-only 检查、根目录/候选校验、确定性 inspection、
   diagnostic 与私有路径 `Debug` 隐藏。
 - **Current limitation**：不解析正文，不能生成按条目选择的转换 diff，也不能识别设置文件内嵌
   的 hook、Plugin、MCP 或 Sub-agent 声明。
 - **Current limitation**：user constructor 只识别默认 home layout；自定义 `CODEX_HOME`、
   `CLAUDE_CONFIG_DIR` 或独立外部 source root 尚无公共构造契约。
-- **Current limitation**：没有 stable plan identity、TOCTOU revalidation 或 App Server wire
+- **Current limitation**：没有 stable inspection identity、TOCTOU revalidation 或 App Server wire
   contract。
 - **Proposed**：增加有界的 source-specific parser，输出不含 secret 的 typed preview fragment。
 - **Proposed**：App Server 组合 parser 结果并调用各 authority；Desktop 只提交用户确认后的
-  exact plan identity。
+  exact inspection identity。
 
 无论后续实现如何演进，以下不变量保持不变：不扫描整个 home、不导入认证状态、不把 preview
 当作执行授权、不让 Desktop 或本 crate 绕过目标领域的最终校验。

@@ -137,7 +137,7 @@ Renderer component
 
 外部 Agent 配置导入是 Desktop 专属的用户工作流。当前
 [`zeta-agent-import`](../zeta-rs/agent-import/README.md) 已实现 Codex/Claude 已知路径的
-metadata-only 发现、canonical containment、symlink 拒绝、确定性 `AgentImportPlan` 和安全诊断；
+metadata-only 检查、canonical containment、symlink 拒绝、确定性 `AgentPathInspection` 和安全诊断；
 它不读取候选正文。Desktop 的目录选择、内容预览、冲突确认、导入进度和撤销入口，以及 App
 Server 的 apply orchestration 仍是计划设计。TUI 不提供对应命令、目录选择器或配置界面。
 

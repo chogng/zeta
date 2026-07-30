@@ -1,7 +1,7 @@
 use std::fmt;
 use std::io;
 
-use crate::{ExternalAgent, ImportScope};
+use crate::import::{ExternalAgent, ImportScope};
 
 /// Failure to validate a caller-selected external configuration root.
 #[derive(Clone, Debug, Eq, PartialEq)]

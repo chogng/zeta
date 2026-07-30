@@ -1,9 +1,6 @@
 use std::fmt;
 use std::path::{Path, PathBuf};
 
-use crate::AgentImportError;
-use crate::discovery::discover;
-
 /// External coding-agent setup whose documented filesystem layout can be discovered.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum ExternalAgent {
@@ -173,7 +170,7 @@ impl fmt::Debug for AgentImportCandidate {
     }
 }
 
-/// Non-fatal reason why an existing known path was excluded from an import plan.
+/// Non-fatal reason why an existing known path was excluded from an inspection.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum AgentImportDiagnosticCode {
     MetadataUnavailable,
@@ -229,21 +226,14 @@ impl AgentImportDiagnostic {
     }
 }
 
-/// Deterministically ordered metadata-only preview of supported external configuration.
+/// Deterministically ordered result of inspecting supported external-agent paths.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct AgentImportPlan {
+pub struct AgentPathInspection {
     candidates: Vec<AgentImportCandidate>,
     diagnostics: Vec<AgentImportDiagnostic>,
 }
 
-impl AgentImportPlan {
-    /// Discovers known files and directories below caller-selected roots without reading contents.
-    pub fn discover(
-        locations: impl IntoIterator<Item = AgentImportLocation>,
-    ) -> Result<Self, AgentImportError> {
-        discover(locations)
-    }
-
+impl AgentPathInspection {
     pub(crate) fn new(
         candidates: Vec<AgentImportCandidate>,
         diagnostics: Vec<AgentImportDiagnostic>,

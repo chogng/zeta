@@ -632,7 +632,7 @@ trust；同名 Skill 不合并。自动激活结果在 Turn/status 中可解释�
 [`zeta-agent-import`](../zeta-rs/agent-import/README.md) 当前已经能只读发现 Codex 的
 `~/.agents/skills`、项目 `.agents/skills`、Claude 的 `~/.claude/skills` 和项目
 `.claude/skills`，并把 canonical path、来源、scope 与 review category 放入 metadata-only
-`AgentImportPlan`；它不读取或转换 Skill 正文，也不修改 Config。
+`AgentPathInspection`；它不读取或转换 Skill 正文，也不修改 Config。
 
 用户可见的导入工作流只在 Desktop 提供。Desktop 的目录选择、导入预览、冲突确认和撤销入口，
 以及 App Server/Config authority 把用户确认结果保存为明确用户 Skill 来源的 apply path 仍是

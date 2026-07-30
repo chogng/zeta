@@ -3,8 +3,8 @@ use std::fs;
 use tempfile::tempdir;
 
 use crate::{
-    AgentImportDiagnosticCode, AgentImportLocation, AgentImportPlan, ExternalAgent, ImportItemKind,
-    ImportReviewCategory, ImportScope,
+    AgentImportDiagnosticCode, AgentImportLocation, ExternalAgent, ImportItemKind,
+    ImportReviewCategory, ImportScope, inspect_agent_paths,
 };
 
 #[test]
@@ -16,20 +16,20 @@ fn discovers_codex_user_items_without_authentication_state() {
     fs::write(home.path().join(".codex/config.toml"), "model = \"test\"").unwrap();
     fs::write(home.path().join(".codex/auth.json"), "secret").unwrap();
 
-    let plan = AgentImportPlan::discover([AgentImportLocation::codex_user(home.path())]).unwrap();
+    let inspection = inspect_agent_paths([AgentImportLocation::codex_user(home.path())]).unwrap();
 
-    assert_eq!(plan.candidates().len(), 4);
-    assert!(plan.diagnostics().is_empty());
-    assert!(plan.candidates().iter().any(|candidate| {
+    assert_eq!(inspection.candidates().len(), 4);
+    assert!(inspection.diagnostics().is_empty());
+    assert!(inspection.candidates().iter().any(|candidate| {
         candidate.kind() == ImportItemKind::Skills
             && candidate.relative_path() == std::path::Path::new(".agents/skills")
     }));
-    assert!(plan.candidates().iter().all(|candidate| {
+    assert!(inspection.candidates().iter().all(|candidate| {
         candidate.agent() == ExternalAgent::Codex
             && candidate.scope() == ImportScope::User
             && candidate.relative_path() != std::path::Path::new(".codex/auth.json")
     }));
-    assert!(!format!("{plan:?}").contains(&home.path().display().to_string()));
+    assert!(!format!("{inspection:?}").contains(&home.path().display().to_string()));
 }
 
 #[test]
@@ -43,10 +43,10 @@ fn discovers_claude_user_items_without_profile_state() {
     )
     .unwrap();
 
-    let plan = AgentImportPlan::discover([AgentImportLocation::claude_user(home.path())]).unwrap();
+    let inspection = inspect_agent_paths([AgentImportLocation::claude_user(home.path())]).unwrap();
 
-    assert_eq!(plan.candidates().len(), 2);
-    assert!(plan.candidates().iter().all(|candidate| {
+    assert_eq!(inspection.candidates().len(), 2);
+    assert!(inspection.candidates().iter().all(|candidate| {
         candidate.agent() == ExternalAgent::Claude
             && candidate.relative_path() != std::path::Path::new(".claude.json")
     }));
@@ -61,19 +61,19 @@ fn discovers_claude_project_items_with_review_categories() {
     fs::write(project.path().join(".claude/settings.json"), "{}").unwrap();
     fs::write(project.path().join(".mcp.json"), "{\"mcpServers\":{}}").unwrap();
 
-    let plan =
-        AgentImportPlan::discover([AgentImportLocation::claude_project(project.path())]).unwrap();
+    let inspection =
+        inspect_agent_paths([AgentImportLocation::claude_project(project.path())]).unwrap();
 
-    assert_eq!(plan.candidates().len(), 5);
-    assert!(plan.candidates().iter().any(|candidate| {
+    assert_eq!(inspection.candidates().len(), 5);
+    assert!(inspection.candidates().iter().any(|candidate| {
         candidate.kind() == ImportItemKind::Instructions
             && candidate.review() == ImportReviewCategory::Content
     }));
-    assert!(plan.candidates().iter().any(|candidate| {
+    assert!(inspection.candidates().iter().any(|candidate| {
         candidate.kind() == ImportItemKind::Settings
             && candidate.review() == ImportReviewCategory::Configuration
     }));
-    assert!(plan.candidates().iter().any(|candidate| {
+    assert!(inspection.candidates().iter().any(|candidate| {
         candidate.kind() == ImportItemKind::McpServers
             && candidate.review() == ImportReviewCategory::Connection
     }));
@@ -85,17 +85,17 @@ fn reports_known_paths_with_the_wrong_file_type() {
     fs::create_dir_all(project.path().join(".agents/skills")).unwrap();
     fs::create_dir_all(project.path().join(".codex/config.toml")).unwrap();
 
-    let plan =
-        AgentImportPlan::discover([AgentImportLocation::codex_project(project.path())]).unwrap();
+    let inspection =
+        inspect_agent_paths([AgentImportLocation::codex_project(project.path())]).unwrap();
 
-    assert_eq!(plan.candidates().len(), 1);
-    assert_eq!(plan.diagnostics().len(), 1);
+    assert_eq!(inspection.candidates().len(), 1);
+    assert_eq!(inspection.diagnostics().len(), 1);
     assert_eq!(
-        plan.diagnostics()[0].code(),
+        inspection.diagnostics()[0].code(),
         AgentImportDiagnosticCode::UnexpectedFileType
     );
     assert_eq!(
-        plan.diagnostics()[0].relative_path(),
+        inspection.diagnostics()[0].relative_path(),
         std::path::Path::new(".codex/config.toml")
     );
 }
@@ -110,13 +110,13 @@ fn rejects_known_paths_that_escape_through_an_ancestor_symlink() {
     fs::write(outside.path().join("settings.json"), "{}").unwrap();
     symlink(outside.path(), project.path().join(".claude")).unwrap();
 
-    let plan =
-        AgentImportPlan::discover([AgentImportLocation::claude_project(project.path())]).unwrap();
+    let inspection =
+        inspect_agent_paths([AgentImportLocation::claude_project(project.path())]).unwrap();
 
-    assert!(plan.candidates().is_empty());
-    assert_eq!(plan.diagnostics().len(), 1);
+    assert!(inspection.candidates().is_empty());
+    assert_eq!(inspection.diagnostics().len(), 1);
     assert_eq!(
-        plan.diagnostics()[0].code(),
+        inspection.diagnostics()[0].code(),
         AgentImportDiagnosticCode::EscapesSelectedRoot
     );
 }

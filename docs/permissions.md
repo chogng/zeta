@@ -151,7 +151,7 @@ Agent 提出工具调用
 
 Desktop 外部 Agent 配置导入计划允许用户把明确选择的 Codex `~/.agents/skills`、Claude
 `~/.claude/skills` 等目录注册为可撤销的只读内容来源。当前 `zeta-agent-import` 只实现已知
-路径的 metadata-only 发现和 `AgentImportPlan`，尚未实现 Desktop 确认与 Config apply。未来
+路径的 metadata-only 检查和 `AgentPathInspection`，尚未实现 Desktop 确认与 Config apply。未来
 apply 操作产生类型化配置和受控来源身份，不产生按工具、命令前缀或路径模式匹配的执行授权，
 因此不属于“是，不再询问”或“此项目始终允许”。
 

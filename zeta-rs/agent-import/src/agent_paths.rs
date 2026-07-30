@@ -1,20 +1,20 @@
-use crate::{ExternalAgent, ImportItemKind, ImportReviewCategory, ImportScope};
+use crate::import::{ExternalAgent, ImportItemKind, ImportReviewCategory, ImportScope};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) enum ExpectedPathKind {
+pub(super) enum ExpectedEntryKind {
     File,
     Directory,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) struct CandidateSpec {
+pub(super) struct AgentPath {
     pub relative_path: &'static str,
     pub kind: ImportItemKind,
     pub review: ImportReviewCategory,
-    pub expected: ExpectedPathKind,
+    pub expected: ExpectedEntryKind,
 }
 
-const CODEX_USER: &[CandidateSpec] = &[
+const CODEX_USER: &[AgentPath] = &[
     file(
         ".codex/AGENTS.override.md",
         ImportItemKind::Instructions,
@@ -47,7 +47,7 @@ const CODEX_USER: &[CandidateSpec] = &[
     ),
 ];
 
-const CODEX_PROJECT: &[CandidateSpec] = &[
+const CODEX_PROJECT: &[AgentPath] = &[
     file(
         "AGENTS.override.md",
         ImportItemKind::Instructions,
@@ -80,7 +80,7 @@ const CODEX_PROJECT: &[CandidateSpec] = &[
     ),
 ];
 
-const CLAUDE_USER: &[CandidateSpec] = &[
+const CLAUDE_USER: &[AgentPath] = &[
     file(
         ".claude/CLAUDE.md",
         ImportItemKind::Instructions,
@@ -113,7 +113,7 @@ const CLAUDE_USER: &[CandidateSpec] = &[
     ),
 ];
 
-const CLAUDE_PROJECT: &[CandidateSpec] = &[
+const CLAUDE_PROJECT: &[AgentPath] = &[
     file(
         "CLAUDE.md",
         ImportItemKind::Instructions,
@@ -166,10 +166,7 @@ const CLAUDE_PROJECT: &[CandidateSpec] = &[
     ),
 ];
 
-pub(super) fn candidate_specs(
-    agent: ExternalAgent,
-    scope: ImportScope,
-) -> &'static [CandidateSpec] {
+pub(super) fn paths_for(agent: ExternalAgent, scope: ImportScope) -> &'static [AgentPath] {
     match (agent, scope) {
         (ExternalAgent::Codex, ImportScope::User) => CODEX_USER,
         (ExternalAgent::Codex, ImportScope::Project) => CODEX_PROJECT,
@@ -182,12 +179,12 @@ const fn file(
     relative_path: &'static str,
     kind: ImportItemKind,
     review: ImportReviewCategory,
-) -> CandidateSpec {
-    CandidateSpec {
+) -> AgentPath {
+    AgentPath {
         relative_path,
         kind,
         review,
-        expected: ExpectedPathKind::File,
+        expected: ExpectedEntryKind::File,
     }
 }
 
@@ -195,11 +192,11 @@ const fn directory(
     relative_path: &'static str,
     kind: ImportItemKind,
     review: ImportReviewCategory,
-) -> CandidateSpec {
-    CandidateSpec {
+) -> AgentPath {
+    AgentPath {
         relative_path,
         kind,
         review,
-        expected: ExpectedPathKind::Directory,
+        expected: ExpectedEntryKind::Directory,
     }
 }
