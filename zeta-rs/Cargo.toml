@@ -15,6 +15,7 @@ members = [
     "diff",
     "editor",
     "icons",
+    "markdown",
     "ui",
     "ui-dispatch",
     "wgpu",
@@ -88,6 +89,7 @@ nucleo = { git = "https://github.com/helix-editor/nucleo.git", rev = "4253de9faa
 pdfium-render = { version = "0.9.3", default-features = false, features = ["pdfium_7763", "thread_safe"] }
 pollster = "1.0.1"
 portable-pty = "0.9.0"
+pulldown-cmark = { version = "0.13.4", default-features = false }
 pkg-config = "0.3"
 pretty_assertions = "1"
 crossterm = "0.28.1"
@@ -139,6 +141,7 @@ zeta-core = { path = "core" }
 zeta-diff = { path = "diff" }
 zeta-editor = { path = "editor" }
 zeta-icons = { path = "icons" }
+zeta-markdown = { path = "markdown" }
 zeta-ui = { path = "ui" }
 zeta-ui-dispatch = { path = "ui-dispatch" }
 zeta-secrets = { path = "secrets" }
