@@ -326,15 +326,13 @@ pub enum UiRenderError {
     InvalidPaintIcon { index: usize, reason: &'static str },
     #[error("SVG icon {name} is invalid: {reason}")]
     InvalidSvgIcon { name: &'static str, reason: String },
-    #[error("multicolor icon {name} is not supported by the symbolic icon atlas")]
-    UnsupportedMulticolorIcon { name: &'static str },
     #[error("SVG icon {name} cannot be rasterized at {width}x{height}")]
     IconRasterTooLarge {
         name: &'static str,
         width: u32,
         height: u32,
     },
-    #[error("symbolic icon atlas is full at {width}x{height}")]
+    #[error("icon atlas is full at {width}x{height}")]
     IconAtlasFull { width: u32, height: u32 },
     #[error("text block {index} is invalid: {reason}")]
     InvalidTextBlock { index: usize, reason: &'static str },

@@ -102,7 +102,7 @@ pub(crate) mod artwork {
     pub(crate) const LAYOUT_SIDEBAR_LEFT_OFF: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/layout-sidebar-left-off.svg"));
     pub(crate) const LAYOUT_SIDEBAR_RIGHT: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/layout-sidebar-right.svg"));
     pub(crate) const LAYOUT_SIDEBAR_RIGHT_EMPTY: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/layout-sidebar-right-empty.svg"));
-    pub(crate) const LAYOUT_SIDEBAR_RIGHT_OFF: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/layout-sidebar-right-off.svg"));
+    pub(crate) const LAYOUT_SIDEBAR_RIGHT_OFF: IconDefinition = IconDefinition::multicolor(include_bytes!("../../../resources/icons/layout-sidebar-right-off.svg"));
     pub(crate) const LEGEND: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/legend.svg"));
     pub(crate) const LETTER_B: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/letter-b.svg"));
     pub(crate) const LETTER_H: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/letter-h.svg"));

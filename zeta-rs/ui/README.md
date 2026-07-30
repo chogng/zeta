@@ -163,7 +163,7 @@ host
           → RectRenderer::prepare / validate_paint_rect / group layer ranges
           → IconRenderer::prepare / group layer ranges
               → resvg rasterize on cache miss
-              → icon atlas upload / instance preparation
+              → symbolic-mask + fixed-color atlas upload / instance preparation
           → validate_text_block
           → glyphon::Buffer::set_text / shape_until_scroll
           → glyphon::TextRenderer::prepare
@@ -177,11 +177,11 @@ host
 ```
 
 `UiRenderer::prepare` 每帧上传当前 rect/icon instances 并重建 text buffers，但保留 GPU
-pipeline、symbolic icon atlas、`FontSystem`、`SwashCache`、`TextAtlas` 和 `TextRenderer`。
+pipeline、icon mask/fixed-color atlases、`FontSystem`、`SwashCache`、`TextAtlas` 和 `TextRenderer`。
 Icon cache key 是 semantic definition 与 physical width/height；scale factor 或 logical size
-改变时生成新的 mask，caller tint 不进入缓存键。Instance buffer 按需扩展到下一个
+改变时生成新的 raster，caller tint 不进入缓存键。Instance buffer 按需扩展到下一个
 power-of-two capacity；
-glyph cache 与两个 atlas 跨帧存活。背景色由 `zeta-wgpu` 做 sRGB 到 linear 转换；rect/icon
+glyph cache 与各 atlas 跨帧存活。背景色由 `zeta-wgpu` 做 sRGB 到 linear 转换；rect/icon
 color 在 renderer 中转 linear，glyph color 保持 sRGB bytes 交给 glyphon。
 
 ## 4. 字体与 CoreText
@@ -210,11 +210,11 @@ CoreGraphics raster 或原生 typographic metrics 已经成为绘制事实。
 - rect/icon/text origin、bounds、clip 与 visual metrics 必须 finite；
 - rect bounds 不能为负，border widths 和 corner radii 不能为负；
 - icon bounds 不能为负，SVG 必须可解析，且 physical raster 必须能放入固定 icon atlas；
-- `IconRendering::Multicolor` 当前返回 `UnsupportedMulticolorIcon`，不能进入 symbolic atlas；
+- symbolic SVG coverage 进入 R8 mask atlas；multicolor 固定色进入 sRGB RGBA atlas，纯黑
+  coverage 继续使用 caller tint；
 - text bounds、font size 与 line height 必须大于零；
 - 校验失败返回对应的 `InvalidScaleFactor`、`InvalidPaintRect`、`InvalidPaintIcon`、
-  `InvalidSvgIcon`、`UnsupportedMulticolorIcon`、`IconRasterTooLarge`、`IconAtlasFull` 或
-  `InvalidTextBlock`；
+  `InvalidSvgIcon`、`IconRasterTooLarge`、`IconAtlasFull` 或 `InvalidTextBlock`；
 - glyphon atlas preparation/render failure 分别保留为 `Prepare` 与 `Render`；
 - surface retry、lost 与 presentation failure 仍由 `zeta-wgpu` 负责。
 
@@ -354,7 +354,8 @@ snapshot harness。
   active Pane、产品绑定或序列化 API；这些 retained topology/state 仍由 product host 拥有；
 - `Sash` 当前只拥有 presentation geometry，没有 pointer capture、keyboard resize 或
   accessibility adapter；这些交互由 host 与 `zeta-ui-dispatch` 组合；
-- symbolic atlas 尚不支持 `IconRendering::Multicolor`；
+- multicolor 分层当前按栅格化后的纯黑像素识别 symbolic coverage；若未来 artwork 需要把固定
+  黑色与 caller-tinted 黑色同时表达，必须扩展显式资源标注，不能依赖颜色猜测；
 - `TextInput` 是 single-line base，没有 focus/platform IME owner、undo/redo、clipboard 或
   accessibility contract；
 - `InputBox` 消费显式 blink phase，但没有 mouse caret hit testing、drag selection 或

@@ -60,5 +60,5 @@ generator。`syncRustIcons` 拒绝不规范的 filename、多 SVG root、active/
 不修改 semantic ID。任何 runtime registry、GPU type、component style 或 file-extension matching
 进入本 crate 都表示 ownership 漂移；Seti file-icon resolution 继续由 `zeta-file-icons` 拥有。
 
-当前 crate 能携带 multicolor definition；`zeta-ui` 的 native atlas 当前仍会显式拒绝它，跨
-renderer 状态和演进见 [`docs/icons.md`](../../docs/icons.md)。
+当前 crate 能携带 multicolor definition；`zeta-ui` 使用 fixed-color atlas 与 symbolic-mask
+atlas 实现该 contract。跨 renderer 状态和演进见 [`docs/icons.md`](../../docs/icons.md)。

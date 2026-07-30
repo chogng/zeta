@@ -1,7 +1,10 @@
 @group(0) @binding(0)
-var icon_atlas: texture_2d<f32>;
+var icon_mask_atlas: texture_2d<f32>;
 
 @group(0) @binding(1)
+var icon_color_atlas: texture_2d<f32>;
+
+@group(0) @binding(2)
 var icon_sampler: sampler;
 
 struct IconInstance {
@@ -52,10 +55,13 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
         || input.screen_position.y >= clip_max.y {
         discard;
     }
-    let mask = textureSample(icon_atlas, icon_sampler, input.atlas_position).r;
-    let alpha = mask * input.color.a;
-    if alpha <= 0.0 {
+    let mask = textureSample(icon_mask_atlas, icon_sampler, input.atlas_position).r;
+    let fixed = textureSample(icon_color_atlas, icon_sampler, input.atlas_position);
+    let symbolic_alpha = mask * (1.0 - fixed.a);
+    let coverage = fixed.a + symbolic_alpha;
+    if coverage <= 0.0 {
         discard;
     }
-    return vec4<f32>(input.color.rgb, alpha);
+    let premultiplied_rgb = fixed.rgb * fixed.a + input.color.rgb * symbolic_alpha;
+    return vec4<f32>(premultiplied_rgb / coverage, coverage * input.color.a);
 }

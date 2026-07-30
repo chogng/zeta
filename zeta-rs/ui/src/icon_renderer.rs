@@ -87,7 +87,8 @@ impl ShelfAllocator {
 pub(crate) struct IconRenderer {
     pipeline: wgpu::RenderPipeline,
     bind_group: wgpu::BindGroup,
-    _atlas: wgpu::Texture,
+    mask_atlas: wgpu::Texture,
+    color_atlas: wgpu::Texture,
     instance_buffer: wgpu::Buffer,
     instance_capacity: usize,
     layer_ranges: Vec<Range<u32>>,
@@ -97,8 +98,8 @@ pub(crate) struct IconRenderer {
 
 impl IconRenderer {
     pub(crate) fn new(device: &wgpu::Device, surface_format: wgpu::TextureFormat) -> Self {
-        let atlas = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("zeta-ui symbolic icon atlas"),
+        let mask_atlas = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("zeta-ui icon symbolic-mask atlas"),
             size: wgpu::Extent3d {
                 width: ATLAS_SIZE,
                 height: ATLAS_SIZE,
@@ -111,16 +112,31 @@ impl IconRenderer {
             usage: wgpu::TextureUsages::COPY_DST | wgpu::TextureUsages::TEXTURE_BINDING,
             view_formats: &[],
         });
-        let atlas_view = atlas.create_view(&wgpu::TextureViewDescriptor::default());
+        let color_atlas = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("zeta-ui icon fixed-color atlas"),
+            size: wgpu::Extent3d {
+                width: ATLAS_SIZE,
+                height: ATLAS_SIZE,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8UnormSrgb,
+            usage: wgpu::TextureUsages::COPY_DST | wgpu::TextureUsages::TEXTURE_BINDING,
+            view_formats: &[],
+        });
+        let mask_atlas_view = mask_atlas.create_view(&wgpu::TextureViewDescriptor::default());
+        let color_atlas_view = color_atlas.create_view(&wgpu::TextureViewDescriptor::default());
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-            label: Some("zeta-ui symbolic icon sampler"),
+            label: Some("zeta-ui icon sampler"),
             min_filter: wgpu::FilterMode::Linear,
             mag_filter: wgpu::FilterMode::Linear,
             mipmap_filter: wgpu::MipmapFilterMode::Nearest,
             ..Default::default()
         });
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("zeta-ui symbolic icon bind group layout"),
+            label: Some("zeta-ui icon bind group layout"),
             entries: &[
                 wgpu::BindGroupLayoutEntry {
                     binding: 0,
@@ -135,36 +151,50 @@ impl IconRenderer {
                 wgpu::BindGroupLayoutEntry {
                     binding: 1,
                     visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        multisampled: false,
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 2,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
                     ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                     count: None,
                 },
             ],
         });
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("zeta-ui symbolic icon bind group"),
+            label: Some("zeta-ui icon bind group"),
             layout: &bind_group_layout,
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&atlas_view),
+                    resource: wgpu::BindingResource::TextureView(&mask_atlas_view),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
+                    resource: wgpu::BindingResource::TextureView(&color_atlas_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
                     resource: wgpu::BindingResource::Sampler(&sampler),
                 },
             ],
         });
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("zeta-ui symbolic icon shader"),
+            label: Some("zeta-ui icon shader"),
             source: wgpu::ShaderSource::Wgsl(include_str!("icon.wgsl").into()),
         });
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("zeta-ui symbolic icon pipeline layout"),
+            label: Some("zeta-ui icon pipeline layout"),
             bind_group_layouts: &[Some(&bind_group_layout)],
             immediate_size: 0,
         });
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("zeta-ui symbolic icon pipeline"),
+            label: Some("zeta-ui icon pipeline"),
             layout: Some(&pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &shader,
@@ -196,7 +226,8 @@ impl IconRenderer {
         Self {
             pipeline,
             bind_group,
-            _atlas: atlas,
+            mask_atlas,
+            color_atlas,
             instance_buffer: create_instance_buffer(device, instance_capacity),
             instance_capacity,
             layer_ranges: Vec::new(),
@@ -291,7 +322,7 @@ impl IconRenderer {
         if let Some(region) = self.regions.get(&key) {
             return Ok(*region);
         }
-        let mask = rasterize_icon(icon, width, height)?;
+        let raster = rasterize_icon(icon, width, height)?;
         let Some(region) = self.allocator.allocate(width, height) else {
             return Err(UiRenderError::IconAtlasFull {
                 width: ATLAS_SIZE,
@@ -300,7 +331,7 @@ impl IconRenderer {
         };
         queue.write_texture(
             wgpu::TexelCopyTextureInfo {
-                texture: &self._atlas,
+                texture: &self.mask_atlas,
                 mip_level: 0,
                 origin: wgpu::Origin3d {
                     x: region.x,
@@ -309,10 +340,33 @@ impl IconRenderer {
                 },
                 aspect: wgpu::TextureAspect::All,
             },
-            &mask,
+            &raster.mask,
             wgpu::TexelCopyBufferLayout {
                 offset: 0,
                 bytes_per_row: Some(width),
+                rows_per_image: None,
+            },
+            wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+        );
+        queue.write_texture(
+            wgpu::TexelCopyTextureInfo {
+                texture: &self.color_atlas,
+                mip_level: 0,
+                origin: wgpu::Origin3d {
+                    x: region.x,
+                    y: region.y,
+                    z: 0,
+                },
+                aspect: wgpu::TextureAspect::All,
+            },
+            &raster.color,
+            wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(width * 4),
                 rows_per_image: None,
             },
             wgpu::Extent3d {
@@ -412,12 +466,12 @@ fn validate_paint_icon(index: usize, icon: PaintIcon) -> Result<(), UiRenderErro
     Ok(())
 }
 
-fn rasterize_icon(icon: Icon, width: u32, height: u32) -> Result<Vec<u8>, UiRenderError> {
-    if icon.definition().rendering() == IconRendering::Multicolor {
-        return Err(UiRenderError::UnsupportedMulticolorIcon {
-            name: icon.id().as_str(),
-        });
-    }
+struct RasterizedIcon {
+    mask: Vec<u8>,
+    color: Vec<u8>,
+}
+
+fn rasterize_icon(icon: Icon, width: u32, height: u32) -> Result<RasterizedIcon, UiRenderError> {
     let tree = usvg::Tree::from_data(icon.definition().svg(), &usvg::Options::default()).map_err(
         |error| UiRenderError::InvalidSvgIcon {
             name: icon.id().as_str(),
@@ -435,11 +489,20 @@ fn rasterize_icon(icon: Icon, width: u32, height: u32) -> Result<Vec<u8>, UiRend
     let offset_y = (height as f32 - source_size.height() * scale) * 0.5;
     let transform = Transform::from_row(scale, 0.0, 0.0, scale, offset_x, offset_y);
     resvg::render(&tree, transform, &mut pixmap.as_mut());
-    Ok(pixmap
-        .data()
-        .chunks_exact(4)
-        .map(|pixel| pixel[3])
-        .collect())
+    let mut mask = Vec::with_capacity((width * height) as usize);
+    let mut color = Vec::with_capacity((width * height * 4) as usize);
+    for pixel in pixmap.pixels() {
+        let pixel = pixel.demultiply();
+        let is_symbolic = icon.definition().rendering() == IconRendering::Symbolic
+            || (pixel.red() == 0 && pixel.green() == 0 && pixel.blue() == 0);
+        mask.push(if is_symbolic { pixel.alpha() } else { 0 });
+        if is_symbolic {
+            color.extend_from_slice(&[0, 0, 0, 0]);
+        } else {
+            color.extend_from_slice(&[pixel.red(), pixel.green(), pixel.blue(), pixel.alpha()]);
+        }
+    }
+    Ok(RasterizedIcon { mask, color })
 }
 
 fn scaled_rect(rect: Rect, scale_factor: f32) -> [f32; 4] {

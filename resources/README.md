@@ -84,5 +84,5 @@ output is current. The generated Rust source is checked in so Cargo and Bazel
 builds remain hermetic. Generated artwork is crate-private: resource filenames
 do not automatically become public icon IDs. Add or change public semantics in
 `zeta-rs/icons/src/library.rs`. `zeta-icons` classifies fixed non-symbolic colors
-as multicolor; `zeta-ui` currently rejects those definitions until it has a
-multicolor atlas.
+as multicolor; `zeta-ui` preserves those colors in an sRGB atlas while routing
+black symbolic coverage through the caller-tinted mask atlas.

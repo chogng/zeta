@@ -1,4 +1,4 @@
-use zeta_icons::{Icon, IconDefinition, IconId, icons};
+use zeta_icons::{Icon, IconDefinition, IconId, IconRendering, icons};
 
 use super::{ATLAS_PADDING, ATLAS_SIZE, ShelfAllocator, rasterize_icon, validate_paint_icon};
 use crate::{Color, PaintIcon, Rect, UiRenderError};
@@ -12,11 +12,13 @@ const TEST_ICON: Icon = Icon::new(
 
 #[test]
 fn rasterizes_svg_as_alpha_mask_at_requested_physical_size() {
-    let mask = rasterize_icon(TEST_ICON, 32, 24).unwrap();
+    let raster = rasterize_icon(TEST_ICON, 32, 24).unwrap();
 
-    assert_eq!(mask.len(), 32 * 24);
-    assert_eq!(mask[0], 0);
-    assert!(mask.contains(&255));
+    assert_eq!(raster.mask.len(), 32 * 24);
+    assert_eq!(raster.color.len(), 32 * 24 * 4);
+    assert_eq!(raster.mask[0], 0);
+    assert!(raster.mask.contains(&255));
+    assert!(raster.color.iter().all(|channel| *channel == 0));
 }
 
 #[test]
@@ -66,11 +68,19 @@ fn reports_invalid_svg_with_icon_name() {
 }
 
 #[test]
-fn rejects_multicolor_artwork_before_symbolic_rasterization() {
-    assert!(matches!(
-        rasterize_icon(icons::LAYOUT_PANEL_OFF, 16, 16),
-        Err(UiRenderError::UnsupportedMulticolorIcon {
-            name: "layout-panel-off"
-        })
-    ));
+fn separates_multicolor_artwork_into_symbolic_mask_and_fixed_color_pixels() {
+    assert_eq!(
+        icons::LAYOUT_SIDEBAR_RIGHT_OFF.definition().rendering(),
+        IconRendering::Multicolor
+    );
+
+    let raster = rasterize_icon(icons::LAYOUT_SIDEBAR_RIGHT_OFF, 16, 16).unwrap();
+
+    assert!(raster.mask.contains(&255));
+    assert!(
+        raster
+            .color
+            .chunks_exact(4)
+            .any(|pixel| pixel == [199, 199, 199, 255])
+    );
 }

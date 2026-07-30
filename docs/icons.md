@@ -34,11 +34,11 @@ resources/icons/*.svg
 | Desktop generated SVG factories | `desktop/generated/product-icons.ts` | ✅ |
 | Desktop semantic registration与resolution | `base/common/icon.ts` / `lxiconsLibrary.ts` | ✅ |
 | Rust semantic identity、definition 与 rendering mode | `zeta-icons` | ✅ |
-| Rust logical placement、tint、clip 与 symbolic atlas | `zeta-ui` | ✅ |
+| Rust logical placement、tint、clip、symbolic mask 与 fixed-color atlas | `zeta-ui` | ✅ |
 | Rust icon+text component geometry | `zeta-ui::IconLabel` | ✅ |
 | Product command 与 icon selection | 各 product host | ✅ |
 | Seti file-extension/theme resolution | `zeta-file-icons` | ✅，独立系统 |
-| Native multicolor atlas/render path | 尚无 owner | 尚未完成 |
+| Native multicolor atlas/render path | `zeta-ui::IconRenderer` | ✅ |
 
 `zeta-icons` 不依赖 `zeta-ui`。`IconLabel`、`Button` 和 `InputBox` 可以依赖 icon identity，但
 资源 crate 不得包含 component、font、layout、theme color、GPU 或 input routing。
@@ -57,16 +57,17 @@ resources/icons/*.svg
 
 ## 4. 当前实现
 
-Rust generator 扫描全部 canonical SVG，生成 165 个 crate-private `IconDefinition` binding；
+Rust generator 扫描全部 canonical SVG，生成 164 个 crate-private `IconDefinition` binding；
 `library.rs` 显式登记与 Desktop `lxiconsLibrary` 对齐的公共 semantic constants、排序后的
 `ALL_ICONS` 和 `icon_by_id` lookup。`history → refresh.svg`、`dropdown-indicator →
 chevron-down.svg` 等映射证明 semantic identity 不依赖 filename。`Button` 的 icon+text paint
 path 复用 `IconLabel`。
-`zeta-ui` 当前只实现 symbolic alpha-mask atlas；遇到 multicolor definition 返回
-`UnsupportedMulticolorIcon`。
+`zeta-ui` 使用共享区域分配的 R8 symbolic-mask atlas 与 sRGB RGBA fixed-color atlas。Symbolic
+artwork 只写 mask；multicolor artwork 经 `resvg` 栅格化后，把纯黑 coverage 写入 mask、其余
+颜色写入 fixed-color atlas，shader 再把 caller tint 与固定色合成为一个 icon draw。
 
-Native shell 当前没有产品 icon consumer，也不再保存本地 icon copy。增加真实 action 时，由
-host 从 `zeta-icons::icons` 选择语义 icon，再交给 component。
+Native shell 从 `zeta-icons::icons` 选择语义 icon，再交给 component；titlebar sidebar toggle
+已同时消费 symbolic 与 multicolor artwork。
 
 ## 5. 修改路径
 
