@@ -5,6 +5,7 @@ import test from "node:test";
 
 const sharedInteractionSelector = /\.zeta-(?:action-bar|button|tab(?:\b|-)|view-pane(?:\b|-))/;
 const ariaStateSelector = /\[aria-(?:checked|pressed|selected)\b/;
+const actionIdentitySelector = /\[data-action-id(?:\b|=)/;
 const negatedProjectedStateSelector = /:not\(\.(?:active|checked|selected)\)/;
 
 test("Workbench Part CSS does not reach into shared interaction controls", async () => {
@@ -41,6 +42,19 @@ test("CSS state precedence does not negate projected state classes", async () =>
     const name = relative(sourceRoot, file).replaceAll("\\", "/");
     for (const [index, line] of source.split(/\r?\n/).entries()) {
       if (negatedProjectedStateSelector.test(line)) violations.push(`${name}:${index + 1}: ${line.trim()}`);
+    }
+  }
+  assert.deepEqual(violations, []);
+});
+
+test("CSS does not style action identity attributes", async () => {
+  const sourceRoot = join(process.cwd(), "src", "zeta");
+  const violations: string[] = [];
+  for (const file of await cssFiles(sourceRoot)) {
+    const source = await readFile(file, "utf8");
+    const name = relative(sourceRoot, file).replaceAll("\\", "/");
+    for (const [index, line] of source.split(/\r?\n/).entries()) {
+      if (actionIdentitySelector.test(line)) violations.push(`${name}:${index + 1}: ${line.trim()}`);
     }
   }
   assert.deepEqual(violations, []);

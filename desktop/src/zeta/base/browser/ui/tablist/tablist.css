@@ -40,12 +40,12 @@
   gap: 0;
 }
 
-.zeta-tab-actions [data-action-id="zeta.tab.close"] {
+.zeta-tab-close-action {
   visibility: hidden;
 }
 
-.zeta-tab.checked .zeta-tab-actions [data-action-id="zeta.tab.close"],
-.zeta-tab:hover .zeta-tab-actions [data-action-id="zeta.tab.close"] {
+.zeta-tab.checked .zeta-tab-close-action,
+.zeta-tab:hover .zeta-tab-close-action {
   visibility: visible;
 }
 

@@ -196,6 +196,13 @@ class TabActionViewItem<T> extends ActionViewItem {
         ariaLabel: item.actions?.ariaLabel ?? `${item.label} actions`,
       }));
       actionBar.element.classList.add("zeta-tab-actions");
+      if (this.#onClose) {
+        const closeActionContainer = actionBar.element.querySelector<HTMLElement>(`[data-action-id="${TAB_CLOSE_ACTION_ID}"]`);
+        if (!closeActionContainer) {
+          throw new Error("TabList close action was not rendered");
+        }
+        closeActionContainer.classList.add("zeta-tab-close-action");
+      }
       container.append(actionBar.element);
     }
   }

@@ -59,6 +59,31 @@
 
 需要让选中状态覆盖 hover 时，先写一般 `:hover` 规则，再写同等或更高 specificity 的 `.checked` 规则；不要使用 `:not(.checked):hover` 表达状态优先级。
 
+## 行为身份与视觉身份
+
+行为身份和视觉身份必须使用不同契约：
+
+| 身份 | 表达方式 | 允许用途 | 禁止用途 |
+| --- | --- | --- | --- |
+| 行为身份 | `IAction.id`、`data-action-id` | TypeScript 路由、动作查找、诊断和测试 | CSS selector、颜色、显隐和布局 |
+| 视觉身份 | 组件拥有的稳定 class，例如 `.zeta-tab-close-action` | 组件 CSS、交互状态和 presentation | 命令分派、持久化身份和业务查找 |
+
+组合控件定义某个 item 的语义时，也负责把该语义投影为稳定的视觉 class。底层控件可以继续保留行为 ID，但 CSS 不得把 ID 当作公开样式 API：
+
+```css
+/* 禁止：行为身份泄漏为视觉契约 */
+.zeta-tab-actions [data-action-id="zeta.tab.close"] {
+  visibility: hidden;
+}
+
+/* 允许：TabList 投影并拥有视觉身份 */
+.zeta-tab-close-action {
+  visibility: hidden;
+}
+```
+
+添加视觉 class 不等于需要新的 representation。只有 DOM 结构、交互行为、ARIA 语义或生命周期确实不同，才新增 `ActionViewItem` 等专用表示。仅有颜色、显隐、间距或状态皮肤差异时，由语义 owner 在现有直接托管 shell 上投影 class。只有多个真实消费者需要同一项通用能力时，才扩展 `ActionBar`、`Button` 等基座接口；不要为了单个样式差异增加转发层、模糊选项或具体实现继承。
+
 ## Selector 规则
 
 允许组件修改自己的内部结构：
@@ -166,6 +191,8 @@ Theme 不判断某个 tab 是否 active，Part 也不选择 active token。`Comp
 | tab 与 tabpanel 使用 `aria-controls` / `aria-labelledby` 配对 | ✅ |
 | Workbench Part CSS 共享交互控件 selector 门禁 | ✅ |
 | CSS 禁止使用 ARIA state attribute 作为视觉 selector 的门禁 | ✅ |
+| CSS 禁止使用 `data-action-id` 作为视觉 selector 的门禁 | ✅ |
+| CSS 禁止通过 `:not(.checked)` 等否定投影状态表达优先级 | ✅ |
 | 全仓所有组合控件的深层 selector 自动判定 | 尚未完成 |
 | Button 并行投影 `.checked` 与 `aria-pressed`，CSS 不依赖 ARIA selector | ✅ |
 | ActionBar/ToolBar 通过 `highlightToggledItems` 选择通用 checked 背景 | ✅ |
@@ -182,4 +209,7 @@ Theme 不判断某个 tab 是否 active，Part 也不选择 active token。`Comp
 - 是否错误地把 `ActionBar` 当成所有 action 状态的 owner？
 - 是否使用语义 token，而不是硬编码颜色或位置型 token？
 - ARIA 状态、逻辑状态和视觉状态是否由同一个控件链路投影？
+- selector 是否把 `data-action-id` 等行为身份误当成视觉身份？
+- 新增专用 `ActionViewItem` 是否真的改变了 DOM、行为、ARIA 或生命周期，而不只是添加样式 class？
+- 对基座的扩展是否已有多个真实消费者，而不是为单个 host 的皮肤差异预留？
 - 文档描述的是当前行为，还是尚未实现的计划？

@@ -98,7 +98,7 @@ test("TabList renders IconLabel content, custom actions, and its standard close 
     "[role='tab']",
   );
   const closeButton = tabList.element.querySelector<HTMLButtonElement>(
-    `[data-action-id="${TAB_CLOSE_ACTION_ID}"] button`,
+    ".zeta-tab-close-action button",
   );
   assert.ok(selected);
   assert.ok(closeButton);
@@ -122,6 +122,7 @@ test("TabList renders IconLabel content, custom actions, and its standard close 
     ["pin", TAB_CLOSE_ACTION_ID],
   );
   assert.equal(closeButton.title, "Close first");
+  assert.equal(closeButton.closest(".zeta-action-view-item")?.getAttribute("data-action-id"), TAB_CLOSE_ACTION_ID);
   assert.ok(closeButton.querySelector("svg.zeta-icon"));
 
   selected.dispatchEvent(keyboardEvent(dom.window, "Delete"));
