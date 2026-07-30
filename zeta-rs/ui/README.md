@@ -9,7 +9,8 @@
 `zeta-ui` 定义与窗口系统无关的 immutable frame scene、单轴 SplitView 几何，并提供
 presentation-only 的 Button、ActionBar、ContextMenu、Dropdown、TabList、Sash、ContextView、
 ScrollView 和输入框等组合控件；底层
-实现分层的 instanced rect、symbolic SVG icon 与 text GPU pipeline。SVG icon 由 `resvg`
+实现分层的 instanced rect、decoded RGBA image、symbolic/multicolor SVG icon 与 text GPU
+pipeline。SVG icon 由 `resvg`
 栅格为按 physical size 缓存的 alpha mask，`glyphon` 完成 shaping、glyph cache、texture
 atlas 和 text draw。macOS 的系统字体目录通过 CoreText 读取；CoreText 当前不承担文本
 shaping 或 glyph rasterization。
@@ -34,12 +35,12 @@ shaping 或 glyph rasterization。
 | 非 component 单行编辑基座与 shaping | `TextInput` / `TextInputLayoutEngine` | ✅ |
 | Input-box chrome、状态与 scene composition | `InputBox` | ✅ |
 | 带左侧语义图标的单行搜索框 composition | `SearchBox` | ✅；过滤策略与输入状态仍归 host |
-| Rect、symbolic SVG icon、clip 与文本 scene | `zeta-ui::UiScene` | ✅ |
-| 同段富文本 span、renderer-compatible 测量与 span visual fragments | `TextSpan` / `TextLayoutEngine` / `TextLayout` | ✅；Markdown 语义归 `zeta-markdown` |
+| Rect、decoded RGBA image、SVG icon、clip 与文本 scene | `zeta-ui::UiScene` | ✅ |
+| 同段富文本 span、renderer-compatible 测量与 span/UTF-8 range visual fragments | `TextSpan` / `TextLayoutEngine` / `TextLayout` | ✅；Markdown 语义归 `zeta-markdown` |
 | 系统 font-family 枚举 | `zeta-ui::FontCatalog` | ✅ |
 | macOS CoreText font catalog adapter | `font::platform::macos` | ✅ |
 | shaping、fallback、glyph raster/cache | `glyphon` / `cosmic-text` / `swash` | 委托 |
-| Instanced rect、icon atlas 与 glyph text draw pipeline | `zeta-ui::UiRenderer` | ✅ |
+| Instanced rect、RGBA image/icon atlas 与 glyph text draw pipeline | `zeta-ui::UiRenderer` | ✅ |
 | Surface acquire/configure/present | `zeta-wgpu::WgpuRenderer` | ❌ |
 | Focus、input routing 与 accessibility semantics | `zeta-ui-dispatch` + product host | ❌；Button 只消费 host 投影的 focused presentation |
 
@@ -103,9 +104,10 @@ DirectWrite 或 fontconfig 类型。
 | `geometry::{Rect, Edges, CornerRadii}` | public | 使用 logical UI pixels 表达几何与 visual metrics |
 | `paint::{PaintRect, BoxShadow, Border, Color}` | public | 表达 fill、柔和 rounded-rect shadow、per-edge border、rounded corners 与 sRGB color |
 | `icon::PaintIcon` | public | 把 `zeta-icons::Icon` 绑定到 logical bounds、caller tint 与 clip |
-| `scene::UiScene` | public | 保存一帧背景、分层 rect/icon/text、构建时的 nested clip 和显式 overlay composition |
+| `image::{ImageData, ImageId, PaintImage}` | public | 校验 immutable RGBA8 sRGB pixels，以稳定 identity 绑定 logical bounds 与 clip |
+| `scene::UiScene` | public | 保存一帧背景、分层 rect/image/icon/text、构建时的 nested clip 和显式 overlay composition |
 | `scene::{TextBlock, TextSpan, TextStyle}` | public | 使用 logical UI pixels 表达普通/同段富文本、bounds 和样式；不拥有 Markdown 语义 |
-| `text_layout::{TextLayoutEngine, TextLayoutWidth, TextLayout}` | public | 用 renderer-compatible font policy 测量普通/富文本，并从同一次 shaping 返回 wrapped/BiDi per-span visual fragments |
+| `text_layout::{TextLayoutEngine, TextLayoutWidth, TextLayout}` | public | 用 renderer-compatible font policy 测量普通/富文本，并从同一次 shaping 返回 wrapped/BiDi per-span/UTF-8-range geometry 与 point hit |
 | `font::catalog::FontCatalog` | public | 加载、排序并去重系统 family names |
 | `font::platform::system_family_names` | private | 选择 macOS CoreText 或 portable font database |
 | `font::system::new_font_system` | private | 建立 renderer/layout 共用的 locale-aware font database，并应用平台 raster compatibility filter |
@@ -113,6 +115,7 @@ DirectWrite 或 fontconfig 类型。
 | `renderer::UiRenderer` | public | 持有 rect pipeline、font system、Swash cache、glyph atlas 与 text pipeline |
 | `rect_renderer::RectRenderer` | private | 上传 instanced rect 并执行 WGSL rounded-rect/border/clip draw |
 | `icon_renderer::IconRenderer` | private | 按 SVG/physical size 栅格化 alpha mask、分配 atlas 并执行 tinted quad draw |
+| `image_renderer::ImageRenderer` | private | 按稳定 `ImageId` 把 immutable RGBA8 pixels 上传到 4096² sRGB atlas，并执行 clipped/scaled quad draw |
 | `rect_renderer::validate_paint_rect` | private | 在 buffer upload 前校验 rect、border、radii 与 clip |
 | `renderer::validate_text_block` | private | 在 glyph prepare 前拒绝非有限或非正 metrics |
 | `renderer::PreparedArea` | private | 保存转换到 physical pixels 的 origin、clip bounds 与颜色 |
@@ -156,11 +159,12 @@ host
           ├─ TabList → Tab bounds → state/selection surface rect
           ├─ Button state/style → IconLabel → icon/text primitives
           └─ InputBox → rect/text primitives
-  → UiScene::draw_rect / UiScene::draw_icon / UiScene::with_clip
+  → UiScene::draw_rect / UiScene::draw_image / UiScene::draw_icon / UiScene::with_clip
   → UiScene::draw_text
   → zeta_wgpu::WgpuRenderer::render_scene
       → UiRenderer::prepare
           → RectRenderer::prepare / validate_paint_rect / group layer ranges
+          → ImageRenderer::prepare / validate bounds / atlas upload on cache miss
           → IconRenderer::prepare / group layer ranges
               → resvg rasterize on cache miss
               → symbolic-mask + fixed-color atlas upload / instance preparation
@@ -170,14 +174,15 @@ host
       → UiRenderer::render
           → for each base/overlay layer in creation order
               → RectRenderer::render_layer
+              → ImageRenderer::render_layer
               → IconRenderer::render_layer
               → glyphon::TextRenderer::render
       → zeta-wgpu submit / present
       → UiRenderer::trim
 ```
 
-`UiRenderer::prepare` 每帧上传当前 rect/icon instances 并重建 text buffers，但保留 GPU
-pipeline、icon mask/fixed-color atlases、`FontSystem`、`SwashCache`、`TextAtlas` 和 `TextRenderer`。
+`UiRenderer::prepare` 每帧上传当前 rect/image/icon instances 并重建 text buffers，但保留 GPU
+pipeline、image/icon atlases、`FontSystem`、`SwashCache`、`TextAtlas` 和 `TextRenderer`。
 Icon cache key 是 semantic definition 与 physical width/height；scale factor 或 logical size
 改变时生成新的 raster，caller tint 不进入缓存键。Instance buffer 按需扩展到下一个
 power-of-two capacity；
@@ -207,14 +212,16 @@ CoreGraphics raster 或原生 typographic metrics 已经成为绘制事实。
 ## 5. 校验、失败与接入义务
 
 - scale factor 必须 finite 且大于零；
-- rect/icon/text origin、bounds、clip 与 visual metrics 必须 finite；
+- rect/image/icon/text origin、bounds、clip 与 visual metrics 必须 finite；
 - rect bounds 不能为负，border widths 和 corner radii 不能为负；
 - icon bounds 不能为负，SVG 必须可解析，且 physical raster 必须能放入固定 icon atlas；
+- image bounds 必须为正，RGBA byte length 必须与 dimensions 一致，pixels 必须能放入固定 image atlas；
 - symbolic SVG coverage 进入 R8 mask atlas；multicolor 固定色进入 sRGB RGBA atlas，纯黑
   coverage 继续使用 caller tint；
 - text bounds、font size 与 line height 必须大于零；
-- 校验失败返回对应的 `InvalidScaleFactor`、`InvalidPaintRect`、`InvalidPaintIcon`、
-  `InvalidSvgIcon`、`IconRasterTooLarge`、`IconAtlasFull` 或 `InvalidTextBlock`；
+- 校验失败返回对应的 `InvalidScaleFactor`、`InvalidPaintRect`、`InvalidPaintImage`、
+  `InvalidPaintIcon`、`InvalidSvgIcon`、`IconRasterTooLarge`、`ImageAtlasFull`、
+  `IconAtlasFull` 或 `InvalidTextBlock`；
 - glyphon atlas preparation/render failure 分别保留为 `Prepare` 与 `Render`；
 - surface retry、lost 与 presentation failure 仍由 `zeta-wgpu` 负责。
 
@@ -251,7 +258,8 @@ Host 把平台 wheel、键盘或 scrollbar drag 归一化为 `ScrollCommand`，�
 `ScrollViewport` 返回 translated content origin 和 content-coordinate visible bounds；
 `ScrollbarLayout` 与最终 track/thumb paint 使用同一 geometry。内容高度、可见项
 virtualization、scroll anchoring、focus reveal policy 和交互 identity 仍归 composed control 或
-产品 host。Terminal 从底部计数和输出增长锚定不属于通用 `ScrollState`。
+产品 host。Terminal 从底部计数和输出增长锚定不属于通用 `ScrollState`；Native 的
+`TerminalOutputScrollView` 只负责把该产品状态适配为 `ScrollView` 的顶部相对内容坐标。
 
 `ActionBar` 接收 caller-provided outer bounds，内部拥有 Button/Separator 的方向、间距和 item
 几何。默认 item extent 来自共享 style；label 长度不同的正式 Toolbar 可以通过

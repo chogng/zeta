@@ -58,6 +58,11 @@ impl TextStyle {
         self
     }
 
+    pub fn with_color(mut self, color: Color) -> Self {
+        self.color = color;
+        self
+    }
+
     pub fn with_weight(mut self, weight: FontWeight) -> Self {
         self.weight = weight;
         self
@@ -205,6 +210,8 @@ pub struct UiScene {
     rect_layers: Vec<usize>,
     icons: Vec<PaintIcon>,
     icon_layers: Vec<usize>,
+    images: Vec<crate::PaintImage>,
+    image_layers: Vec<usize>,
     text_blocks: Vec<TextBlock>,
     text_layers: Vec<usize>,
     active_clip: Option<Rect>,
@@ -220,6 +227,8 @@ impl UiScene {
             rect_layers: Vec::new(),
             icons: Vec::new(),
             icon_layers: Vec::new(),
+            images: Vec::new(),
+            image_layers: Vec::new(),
             text_blocks: Vec::new(),
             text_layers: Vec::new(),
             active_clip: None,
@@ -242,6 +251,14 @@ impl UiScene {
         }
         self.icons.push(icon);
         self.icon_layers.push(self.active_layer);
+    }
+
+    pub fn draw_image(&mut self, mut image: crate::PaintImage) {
+        if let Some(clip_bounds) = self.active_clip {
+            image.apply_clip(clip_bounds);
+        }
+        self.images.push(image);
+        self.image_layers.push(self.active_layer);
     }
 
     pub fn draw_text(&mut self, mut block: TextBlock) {
@@ -296,6 +313,10 @@ impl UiScene {
         &self.icons
     }
 
+    pub fn images(&self) -> &[crate::PaintImage] {
+        &self.images
+    }
+
     pub fn text_blocks(&self) -> &[TextBlock] {
         &self.text_blocks
     }
@@ -310,6 +331,10 @@ impl UiScene {
 
     pub(crate) fn icon_layers(&self) -> &[usize] {
         &self.icon_layers
+    }
+
+    pub(crate) fn image_layers(&self) -> &[usize] {
+        &self.image_layers
     }
 
     pub(crate) fn text_layers(&self) -> &[usize] {

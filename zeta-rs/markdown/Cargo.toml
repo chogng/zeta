@@ -11,8 +11,17 @@ name = "zeta_markdown"
 path = "src/lib.rs"
 
 [dependencies]
+image = { workspace = true, features = ["gif", "jpeg", "png", "webp"] }
 pulldown-cmark = { workspace = true }
+ratex-layout = { workspace = true }
+ratex-parser = { workspace = true }
+ratex-svg = { workspace = true }
+ratex-types = { workspace = true }
+resvg = { workspace = true }
+sha2 = { workspace = true }
+syntect = { workspace = true }
 thiserror = { workspace = true }
+url = { workspace = true }
 zeta-ui = { workspace = true }
 
 [lints]

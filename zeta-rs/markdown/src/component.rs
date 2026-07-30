@@ -1,19 +1,23 @@
 use zeta_ui::{
-    Border, Component, CornerRadii, PaintRect, Point, Rect, ScrollMetrics, ScrollState, Size,
-    TextBlock, TextLayoutEngine, TextLayoutWidth, TextStyle, UiScene,
+    ImageData, PaintImage, PaintRect, Point, Rect, ScrollMetrics, ScrollState, Size, TextBlock,
+    TextLayout, TextLayoutEngine, TextLayoutWidth, TextSpan, TextStyle,
 };
 
+use crate::accessibility::{MarkdownSemanticNode, MarkdownSemanticRole, enclosing_bounds};
 use crate::document::{BlockContext, InlineRun, MarkdownBlockKind};
-use crate::inline_layout::{InlineDecoration, InlineLayout, layout_inline, offset_rect};
-use crate::table_layout::{
-    CELL_HORIZONTAL_PADDING, CELL_VERTICAL_PADDING, TableLayout, layout_table,
+use crate::highlight::{
+    MarkdownSyntaxHighlighter, SyntectMarkdownHighlighter, highlighted_code_spans,
 };
+use crate::inline_layout::{InlineLayout, layout_inline};
+use crate::math::{MarkdownMathCache, MarkdownMathImages, MarkdownMathMode};
+use crate::presentation::MarkdownPresentation;
+use crate::table_layout::{TableLayout, layout_table};
 use crate::{MarkdownDocument, MarkdownStyle};
 
-const QUOTE_BAR_WIDTH: f32 = 3.0;
-const INLINE_CODE_HORIZONTAL_PADDING: f32 = 3.0;
-const INLINE_CODE_VERTICAL_INSET: f32 = 1.0;
-const DECORATION_THICKNESS: f32 = 1.0;
+pub(crate) const QUOTE_BAR_WIDTH: f32 = 3.0;
+pub(crate) const INLINE_CODE_HORIZONTAL_PADDING: f32 = 3.0;
+pub(crate) const INLINE_CODE_VERTICAL_INSET: f32 = 1.0;
+pub(crate) const DECORATION_THICKNESS: f32 = 1.0;
 
 /// Reusable Markdown paragraph shaper and block layout engine.
 ///
@@ -22,13 +26,25 @@ const DECORATION_THICKNESS: f32 = 1.0;
 /// input remain with the host.
 pub struct MarkdownLayoutEngine {
     text: TextLayoutEngine,
+    highlighter: Box<dyn MarkdownSyntaxHighlighter>,
+    math: MarkdownMathCache,
 }
 
 impl MarkdownLayoutEngine {
     pub fn new() -> Self {
         Self {
             text: TextLayoutEngine::new(),
+            highlighter: Box::new(SyntectMarkdownHighlighter::new()),
+            math: MarkdownMathCache::new(),
         }
+    }
+
+    pub fn with_syntax_highlighter(
+        mut self,
+        highlighter: impl MarkdownSyntaxHighlighter + 'static,
+    ) -> Self {
+        self.highlighter = Box::new(highlighter);
+        self
     }
 
     pub fn layout(
@@ -38,25 +54,58 @@ impl MarkdownLayoutEngine {
         scroll: ScrollState,
         style: &MarkdownStyle,
     ) -> Markdown {
+        self.layout_with(
+            bounds,
+            document,
+            scroll,
+            style,
+            &MarkdownPresentation::default(),
+        )
+    }
+
+    pub fn layout_with(
+        &mut self,
+        bounds: Rect,
+        document: &MarkdownDocument,
+        scroll: ScrollState,
+        style: &MarkdownStyle,
+        presentation: &MarkdownPresentation,
+    ) -> Markdown {
         if bounds.is_empty() || document.is_empty() {
             return Markdown {
                 bounds,
                 content_height: 0.0,
                 vertical_offset: 0.0,
                 rects: Vec::new(),
+                images: Vec::new(),
                 text: Vec::new(),
                 links: Vec::new(),
+                text_regions: Vec::new(),
+                semantics: MarkdownSemanticNode::new(
+                    MarkdownSemanticRole::Document,
+                    String::new(),
+                    bounds,
+                ),
             };
         }
+        let inline_math = self.math.prepare_inline(document, style);
         let mut blocks = Vec::with_capacity(document.blocks.len());
         let mut top = 0.0;
-        for block in &document.blocks {
-            let projected =
-                self.project_block(bounds.size.width, &block.kind, &block.context, style);
+        for (index, block) in document.blocks.iter().enumerate() {
+            let projected = self.project_block(
+                bounds.size.width,
+                &block.kind,
+                &block.context,
+                style,
+                presentation,
+                &inline_math,
+            );
             let height = projected.height();
             blocks.push(PositionedBlock {
+                index,
                 top,
                 context: block.context.clone(),
+                semantic: semantic_projection(&block.kind, &block.context),
                 projected,
             });
             top += height + style.block_gap();
@@ -71,11 +120,31 @@ impl MarkdownLayoutEngine {
             content_height,
             vertical_offset,
             rects: Vec::new(),
+            images: Vec::new(),
             text: Vec::new(),
             links: Vec::new(),
+            text_regions: Vec::new(),
+            semantics: MarkdownSemanticNode::new(
+                MarkdownSemanticRole::Document,
+                String::new(),
+                bounds,
+            ),
         };
         for block in blocks {
             markdown.emit(block, style);
+        }
+        markdown.apply_presentation(presentation, style);
+        for link in &markdown.links {
+            if let Some(bounds) = enclosing_bounds(&link.bounds) {
+                markdown.semantics.push_child(
+                    MarkdownSemanticNode::new(
+                        MarkdownSemanticRole::Link,
+                        link.destination.clone(),
+                        bounds,
+                    )
+                    .with_destination(link.destination.clone()),
+                );
+            }
         }
         markdown
     }
@@ -86,37 +155,116 @@ impl MarkdownLayoutEngine {
         kind: &MarkdownBlockKind,
         context: &BlockContext,
         style: &MarkdownStyle,
+        presentation: &MarkdownPresentation,
+        inline_math: &MarkdownMathImages,
     ) -> ProjectedBlock {
         let leading = context.quote_depth as f32 * style.quote_indent()
             + context.list_depth as f32 * style.list_indent();
         let width = (total_width - leading).max(1.0);
         match kind {
-            MarkdownBlockKind::Paragraph(runs) => {
-                self.project_text(runs, style.body().clone(), width, style)
-            }
-            MarkdownBlockKind::Heading { level, runs } => {
-                self.project_text(runs, style.heading(*level), width, style)
-            }
-            MarkdownBlockKind::Table(table) => {
-                ProjectedBlock::Table(layout_table(&mut self.text, table, width, style))
-            }
+            MarkdownBlockKind::Paragraph(runs) => self.project_text(
+                runs,
+                style.body().clone(),
+                width,
+                style,
+                presentation.images(),
+                inline_math,
+            ),
+            MarkdownBlockKind::Heading { level, runs } => self.project_text(
+                runs,
+                style.heading(*level),
+                width,
+                style,
+                presentation.images(),
+                inline_math,
+            ),
+            MarkdownBlockKind::Table(table) => ProjectedBlock::Table(layout_table(
+                &mut self.text,
+                table,
+                width,
+                style,
+                presentation.images(),
+                inline_math,
+            )),
             MarkdownBlockKind::CodeBlock { language, text } => {
                 let padding = style.code_padding();
                 let text_style = style.code_block();
                 let text_width = (width - padding * 2.0).max(1.0);
                 let label_height = language.as_ref().map_or(0.0, |_| text_style.line_height());
-                let measured =
+                let spans = highlighted_code_spans(
+                    self.highlighter.as_ref(),
+                    language.as_deref(),
+                    text,
+                    &text_style,
+                );
+                let layout =
                     self.text
-                        .measure_text(text, &text_style, TextLayoutWidth::Wrap(text_width));
+                        .layout_spans(&spans, &text_style, TextLayoutWidth::Wrap(text_width));
                 ProjectedBlock::Code {
                     language: language.clone(),
+                    spans,
                     text: text.clone(),
+                    layout,
                     style: text_style,
                     width,
-                    text_height: measured.height,
                     label_height,
                     padding,
                 }
+            }
+            MarkdownBlockKind::Image(source) => {
+                let loaded = presentation.images().get(source.destination()).cloned();
+                let (image_width, image_height) = loaded.as_ref().map_or((width, 64.0), |image| {
+                    let scale = (width / image.width() as f32).min(1.0);
+                    (image.width() as f32 * scale, image.height() as f32 * scale)
+                });
+                ProjectedBlock::Image {
+                    source: source.clone(),
+                    image: loaded,
+                    width: image_width,
+                    height: image_height.max(style.body().line_height()),
+                }
+            }
+            MarkdownBlockKind::Math { text, display } => {
+                let math_style = style.math_block();
+                let mode = if *display {
+                    MarkdownMathMode::Display
+                } else {
+                    MarkdownMathMode::Inline
+                };
+                if let Some(image) =
+                    self.math
+                        .render(text, mode, math_style.color(), math_style.font_size())
+                {
+                    let scale = (width / image.width() as f32).min(1.0);
+                    let image_width = image.width() as f32 * scale;
+                    let source_layout = self.text.layout_spans(
+                        &[TextSpan::new(text, math_style.clone())],
+                        &math_style,
+                        TextLayoutWidth::Wrap(image_width.max(1.0)),
+                    );
+                    return ProjectedBlock::Math {
+                        source: text.clone(),
+                        source_layout,
+                        width: image_width,
+                        height: image.height() as f32 * scale,
+                        image,
+                    };
+                }
+                let runs = vec![InlineRun {
+                    text: text.clone(),
+                    format: crate::document::InlineFormat {
+                        math: true,
+                        ..Default::default()
+                    },
+                }];
+                self.project_text(
+                    &runs,
+                    math_style,
+                    width,
+                    style,
+                    presentation.images(),
+                    inline_math,
+                )
             }
             MarkdownBlockKind::Rule => ProjectedBlock::Rule { width },
         }
@@ -128,6 +276,8 @@ impl MarkdownLayoutEngine {
         base: TextStyle,
         width: f32,
         style: &MarkdownStyle,
+        images: &crate::MarkdownImages,
+        inline_math: &MarkdownMathImages,
     ) -> ProjectedBlock {
         ProjectedBlock::Text {
             inline: layout_inline(
@@ -136,6 +286,8 @@ impl MarkdownLayoutEngine {
                 base,
                 TextLayoutWidth::Wrap(width.max(1.0)),
                 style,
+                images,
+                inline_math,
             ),
             width,
         }
@@ -150,19 +302,22 @@ impl Default for MarkdownLayoutEngine {
 
 /// Immutable, already-shaped Markdown component for one viewport frame.
 pub struct Markdown {
-    bounds: Rect,
-    content_height: f32,
-    vertical_offset: f32,
-    rects: Vec<PaintRect>,
-    text: Vec<TextBlock>,
-    links: Vec<MarkdownLink>,
+    pub(crate) bounds: Rect,
+    pub(crate) content_height: f32,
+    pub(crate) vertical_offset: f32,
+    pub(crate) rects: Vec<PaintRect>,
+    pub(crate) images: Vec<PaintImage>,
+    pub(crate) text: Vec<TextBlock>,
+    pub(crate) links: Vec<MarkdownLink>,
+    pub(crate) text_regions: Vec<MarkdownTextRegion>,
+    pub(crate) semantics: MarkdownSemanticNode,
 }
 
 /// A laid-out link whose destination remains untrusted until the host activates it.
 #[derive(Clone, Debug, PartialEq)]
 pub struct MarkdownLink {
-    destination: String,
-    bounds: Vec<Rect>,
+    pub(crate) destination: String,
+    pub(crate) bounds: Vec<Rect>,
 }
 
 impl MarkdownLink {
@@ -176,281 +331,15 @@ impl MarkdownLink {
     }
 }
 
-impl Markdown {
-    pub const fn bounds(&self) -> Rect {
-        self.bounds
-    }
-
-    pub const fn content_height(&self) -> f32 {
-        self.content_height
-    }
-
-    pub const fn vertical_offset(&self) -> f32 {
-        self.vertical_offset
-    }
-
-    pub fn links(&self) -> &[MarkdownLink] {
-        &self.links
-    }
-
-    pub fn link_at(&self, point: Point) -> Option<&MarkdownLink> {
-        self.bounds.contains(point).then_some(())?;
-        self.links
-            .iter()
-            .find(|link| link.bounds.iter().any(|bounds| bounds.contains(point)))
-    }
-
-    fn emit(&mut self, block: PositionedBlock, style: &MarkdownStyle) {
-        let leading = block.context.quote_depth as f32 * style.quote_indent()
-            + block.context.list_depth as f32 * style.list_indent();
-        let x = self.bounds.origin.x + leading;
-        let y = self.bounds.origin.y + block.top - self.vertical_offset;
-        let height = block.projected.height();
-        let block_bounds = Rect::from_xywh(x, y, block.projected.width(), height);
-        if block_bounds.intersection(self.bounds).is_empty() {
-            return;
-        }
-        self.emit_quotes(y, height, block.context.quote_depth, style);
-        self.emit_marker(y, height, &block.context, style);
-        match block.projected {
-            ProjectedBlock::Text { inline, width } => {
-                self.emit_inline(inline, Point::new(x, y), width, style);
-            }
-            ProjectedBlock::Code {
-                language,
-                text,
-                style: text_style,
-                width,
-                text_height,
-                label_height,
-                padding,
-            } => {
-                self.rects.push(
-                    PaintRect::new(
-                        Rect::from_xywh(x, y, width, height),
-                        style.code_background(),
-                    )
-                    .with_border(Border::uniform(1.0, style.border()))
-                    .with_corner_radii(CornerRadii::uniform(4.0)),
-                );
-                let mut text_y = y + padding;
-                if let Some(language) = language {
-                    self.text.push(TextBlock::new(
-                        language,
-                        Point::new(x + padding, text_y),
-                        Size::new((width - padding * 2.0).max(1.0), label_height.max(1.0)),
-                        TextStyle::new(text_style.font_size(), style.muted())
-                            .with_family(text_style.family().clone())
-                            .with_line_height(text_style.line_height()),
-                    ));
-                    text_y += label_height;
-                }
-                if !text.is_empty() {
-                    self.text.push(TextBlock::new(
-                        text,
-                        Point::new(x + padding, text_y),
-                        Size::new((width - padding * 2.0).max(1.0), text_height.max(1.0)),
-                        text_style,
-                    ));
-                }
-            }
-            ProjectedBlock::Rule { width } => {
-                self.rects.push(PaintRect::new(
-                    Rect::from_xywh(x, y, width, 1.0),
-                    style.border(),
-                ));
-            }
-            ProjectedBlock::Table(table) => self.emit_table(table, Point::new(x, y), style),
-        }
-    }
-
-    fn emit_inline(
-        &mut self,
-        inline: InlineLayout,
-        origin: Point,
-        width: f32,
-        style: &MarkdownStyle,
-    ) {
-        for decoration in inline.decorations {
-            match decoration {
-                InlineDecoration::Code { fragments } => {
-                    for fragment in fragments {
-                        let bounds = offset_rect(fragment, origin);
-                        self.rects.push(
-                            PaintRect::new(
-                                Rect::from_xywh(
-                                    bounds.origin.x - INLINE_CODE_HORIZONTAL_PADDING,
-                                    bounds.origin.y + INLINE_CODE_VERTICAL_INSET,
-                                    bounds.size.width + INLINE_CODE_HORIZONTAL_PADDING * 2.0,
-                                    (bounds.size.height - INLINE_CODE_VERTICAL_INSET * 2.0)
-                                        .max(1.0),
-                                ),
-                                style.inline_code_background(),
-                            )
-                            .with_corner_radii(CornerRadii::uniform(3.0)),
-                        );
-                    }
-                }
-                InlineDecoration::Link {
-                    destination,
-                    fragments,
-                } => {
-                    let bounds = fragments
-                        .into_iter()
-                        .map(|fragment| offset_rect(fragment, origin))
-                        .map(|fragment| fragment.intersection(self.bounds))
-                        .filter(|fragment| !fragment.is_empty())
-                        .collect::<Vec<_>>();
-                    for fragment in &bounds {
-                        self.rects.push(PaintRect::new(
-                            Rect::from_xywh(
-                                fragment.origin.x,
-                                fragment.bottom() - DECORATION_THICKNESS,
-                                fragment.size.width,
-                                DECORATION_THICKNESS,
-                            ),
-                            style.link(),
-                        ));
-                    }
-                    if !bounds.is_empty() {
-                        self.links.push(MarkdownLink {
-                            destination,
-                            bounds,
-                        });
-                    }
-                }
-                InlineDecoration::Strikethrough { color, fragments } => {
-                    for fragment in fragments {
-                        let fragment = offset_rect(fragment, origin);
-                        self.rects.push(PaintRect::new(
-                            Rect::from_xywh(
-                                fragment.origin.x,
-                                fragment.origin.y + fragment.size.height * 0.52,
-                                fragment.size.width,
-                                DECORATION_THICKNESS,
-                            ),
-                            color,
-                        ));
-                    }
-                }
-            }
-        }
-        if !inline.spans.is_empty() {
-            self.text.push(TextBlock::from_spans(
-                inline.spans,
-                origin,
-                Size::new(width, inline.size.height.max(1.0)),
-                inline.style,
-            ));
-        }
-    }
-
-    fn emit_table(&mut self, table: TableLayout, origin: Point, style: &MarkdownStyle) {
-        let mut row_y = origin.y;
-        for row in table.rows {
-            if row.header {
-                self.rects.push(PaintRect::new(
-                    Rect::from_xywh(origin.x, row_y, table.width, row.height),
-                    style.table_header_background(),
-                ));
-            }
-            let mut cell_x = origin.x;
-            for (index, cell) in row.cells.into_iter().enumerate() {
-                self.emit_inline(
-                    cell,
-                    Point::new(
-                        cell_x + CELL_HORIZONTAL_PADDING,
-                        row_y + CELL_VERTICAL_PADDING,
-                    ),
-                    (table.column_widths[index] - CELL_HORIZONTAL_PADDING * 2.0).max(1.0),
-                    style,
-                );
-                cell_x += table.column_widths[index];
-            }
-            row_y += row.height;
-            self.rects.push(PaintRect::new(
-                Rect::from_xywh(origin.x, row_y - DECORATION_THICKNESS, table.width, 1.0),
-                style.border(),
-            ));
-        }
-        self.rects.push(PaintRect::new(
-            Rect::from_xywh(origin.x, origin.y, table.width, DECORATION_THICKNESS),
-            style.border(),
-        ));
-        let mut boundary_x = origin.x;
-        self.rects.push(PaintRect::new(
-            Rect::from_xywh(boundary_x, origin.y, DECORATION_THICKNESS, table.height),
-            style.border(),
-        ));
-        for column_width in table.column_widths {
-            boundary_x += column_width;
-            self.rects.push(PaintRect::new(
-                Rect::from_xywh(
-                    boundary_x - DECORATION_THICKNESS,
-                    origin.y,
-                    DECORATION_THICKNESS,
-                    table.height,
-                ),
-                style.border(),
-            ));
-        }
-    }
-
-    fn emit_quotes(&mut self, y: f32, height: f32, depth: usize, style: &MarkdownStyle) {
-        for index in 0..depth {
-            self.rects.push(PaintRect::new(
-                Rect::from_xywh(
-                    self.bounds.origin.x + index as f32 * style.quote_indent(),
-                    y,
-                    QUOTE_BAR_WIDTH,
-                    height,
-                ),
-                style.border(),
-            ));
-        }
-    }
-
-    fn emit_marker(&mut self, y: f32, height: f32, context: &BlockContext, style: &MarkdownStyle) {
-        let Some(marker) = context.marker.as_ref() else {
-            return;
-        };
-        let x = self.bounds.origin.x
-            + context.quote_depth as f32 * style.quote_indent()
-            + context.list_depth.saturating_sub(1) as f32 * style.list_indent();
-        self.text.push(TextBlock::new(
-            marker,
-            Point::new(x, y),
-            Size::new(style.list_indent(), height.max(1.0)),
-            TextStyle::new(style.body().font_size(), style.muted())
-                .with_family(style.body().family().clone())
-                .with_line_height(style.body().line_height()),
-        ));
-    }
+pub(crate) struct PositionedBlock {
+    pub(crate) index: usize,
+    pub(crate) top: f32,
+    pub(crate) context: BlockContext,
+    pub(crate) semantic: SemanticProjection,
+    pub(crate) projected: ProjectedBlock,
 }
 
-impl Component for Markdown {
-    fn paint(&self, scene: &mut UiScene) {
-        if self.bounds.is_empty() {
-            return;
-        }
-        scene.with_clip(self.bounds, |scene| {
-            for rect in &self.rects {
-                scene.draw_rect(*rect);
-            }
-            for text in &self.text {
-                scene.draw_text(text.clone());
-            }
-        });
-    }
-}
-
-struct PositionedBlock {
-    top: f32,
-    context: BlockContext,
-    projected: ProjectedBlock,
-}
-
-enum ProjectedBlock {
+pub(crate) enum ProjectedBlock {
     Text {
         inline: InlineLayout,
         width: f32,
@@ -458,11 +347,25 @@ enum ProjectedBlock {
     Code {
         language: Option<String>,
         text: String,
+        spans: Vec<TextSpan>,
+        layout: TextLayout,
         style: TextStyle,
         width: f32,
-        text_height: f32,
         label_height: f32,
         padding: f32,
+    },
+    Image {
+        source: crate::MarkdownImageSource,
+        image: Option<ImageData>,
+        width: f32,
+        height: f32,
+    },
+    Math {
+        source: String,
+        source_layout: TextLayout,
+        image: ImageData,
+        width: f32,
+        height: f32,
     },
     Rule {
         width: f32,
@@ -471,24 +374,110 @@ enum ProjectedBlock {
 }
 
 impl ProjectedBlock {
-    fn height(&self) -> f32 {
+    pub(crate) fn height(&self) -> f32 {
         match self {
             Self::Text { inline, .. } => inline.size.height,
             Self::Code {
-                text_height,
+                layout,
                 label_height,
                 padding,
                 ..
-            } => text_height + label_height + padding * 2.0,
+            } => layout.size().height + label_height + padding * 2.0,
+            Self::Image { height, .. } | Self::Math { height, .. } => *height,
             Self::Rule { .. } => 1.0,
             Self::Table(table) => table.height,
         }
     }
 
-    const fn width(&self) -> f32 {
+    pub(crate) const fn width(&self) -> f32 {
         match self {
-            Self::Text { width, .. } | Self::Code { width, .. } | Self::Rule { width } => *width,
+            Self::Text { width, .. }
+            | Self::Code { width, .. }
+            | Self::Image { width, .. }
+            | Self::Math { width, .. }
+            | Self::Rule { width } => *width,
             Self::Table(table) => table.width,
         }
     }
+}
+
+pub(crate) struct MarkdownTextRegion {
+    pub(crate) block: usize,
+    pub(crate) source_start: usize,
+    pub(crate) text: String,
+    pub(crate) origin: Point,
+    pub(crate) layout: TextLayout,
+}
+
+impl MarkdownTextRegion {
+    pub(crate) fn bounds(&self) -> Rect {
+        Rect::new(self.origin, self.layout.size())
+    }
+}
+
+pub(crate) struct SemanticProjection {
+    pub(crate) role: MarkdownSemanticRole,
+    pub(crate) label: String,
+    pub(crate) level: Option<u8>,
+    pub(crate) identifier: Option<String>,
+}
+
+fn semantic_projection(kind: &MarkdownBlockKind, context: &BlockContext) -> SemanticProjection {
+    let label = match kind {
+        MarkdownBlockKind::Paragraph(runs) | MarkdownBlockKind::Heading { runs, .. } => {
+            runs.iter().map(|run| run.text.as_str()).collect()
+        }
+        MarkdownBlockKind::CodeBlock { text, .. } | MarkdownBlockKind::Math { text, .. } => {
+            text.clone()
+        }
+        MarkdownBlockKind::Image(image) => image.alt().to_owned(),
+        MarkdownBlockKind::Table(_) => "Table".to_owned(),
+        MarkdownBlockKind::Rule => String::new(),
+    };
+    let (role, level, identifier) = match kind {
+        MarkdownBlockKind::Heading { level, .. } => {
+            (MarkdownSemanticRole::Heading, Some(*level), None)
+        }
+        MarkdownBlockKind::CodeBlock { .. } => (MarkdownSemanticRole::Code, None, None),
+        MarkdownBlockKind::Image(_) => (MarkdownSemanticRole::Image, None, None),
+        MarkdownBlockKind::Math { .. } => (MarkdownSemanticRole::Math, None, None),
+        MarkdownBlockKind::Table(_) => (MarkdownSemanticRole::Table, None, None),
+        MarkdownBlockKind::Rule => (MarkdownSemanticRole::Separator, None, None),
+        MarkdownBlockKind::Paragraph(_) if context.footnote.is_some() => (
+            MarkdownSemanticRole::Footnote,
+            None,
+            context.footnote.as_ref().map(|label| format!("fn-{label}")),
+        ),
+        MarkdownBlockKind::Paragraph(_) if context.marker.is_some() => {
+            (MarkdownSemanticRole::ListItem, None, None)
+        }
+        MarkdownBlockKind::Paragraph(_) => (MarkdownSemanticRole::Paragraph, None, None),
+    };
+    let identifier = identifier.or_else(|| {
+        matches!(kind, MarkdownBlockKind::Heading { .. }).then(|| heading_identifier(&label))
+    });
+    SemanticProjection {
+        role,
+        label,
+        level,
+        identifier,
+    }
+}
+
+fn heading_identifier(label: &str) -> String {
+    label
+        .chars()
+        .flat_map(char::to_lowercase)
+        .map(|character| {
+            if character.is_alphanumeric() || character == '_' || character == '-' {
+                character
+            } else {
+                '-'
+            }
+        })
+        .collect::<String>()
+        .split('-')
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>()
+        .join("-")
 }

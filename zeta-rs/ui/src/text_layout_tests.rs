@@ -1,5 +1,5 @@
 use super::{TextLayoutEngine, TextLayoutWidth};
-use crate::{Color, FontWeight, TextSpan, TextStyle};
+use crate::{Color, FontWeight, Point, TextSpan, TextStyle};
 
 #[test]
 fn measures_wrapped_rich_text_as_one_shaped_paragraph() {
@@ -58,4 +58,23 @@ fn exposes_wrapped_visual_fragments_for_each_rich_text_span() {
             .all(|fragment| fragment.size.width > 0.0 && fragment.size.height == 18.0)
     );
     assert!(layout.span_fragments(99).is_empty());
+}
+
+#[test]
+fn maps_points_and_utf8_ranges_to_shaped_visual_geometry() {
+    let style = TextStyle::new(14.0, Color::rgb(30, 30, 30)).with_line_height(20.0);
+    let spans = [TextSpan::new("alpha 世界 beta", style.clone())];
+    let mut engine = TextLayoutEngine::new();
+    let layout = engine.layout_spans(&spans, &style, TextLayoutWidth::Wrap(70.0));
+
+    let fragments = layout.range_fragments(6.."alpha 世界".len());
+    assert!(!fragments.is_empty());
+    let first = fragments[0];
+    let hit = layout
+        .hit_test(Point::new(
+            first.origin.x + first.size.width * 0.5,
+            first.origin.y + first.size.height * 0.5,
+        ))
+        .unwrap();
+    assert!((6..="alpha 世界".len()).contains(&hit));
 }

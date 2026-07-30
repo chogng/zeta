@@ -6,6 +6,7 @@ use glyphon::{
 use crate::font::mapping::{glyphon_family, glyphon_style, glyphon_weight};
 use crate::font::new_font_system;
 use crate::icon_renderer::IconRenderer;
+use crate::image_renderer::ImageRenderer;
 use crate::rect_renderer::RectRenderer;
 use crate::{Rect, TextBlock, TextStyle, UiScene};
 
@@ -66,6 +67,7 @@ impl TextLayer {
 pub struct UiRenderer {
     rect_renderer: RectRenderer,
     icon_renderer: IconRenderer,
+    image_renderer: ImageRenderer,
     font_system: glyphon::FontSystem,
     swash_cache: SwashCache,
     viewport: Viewport,
@@ -87,6 +89,7 @@ impl UiRenderer {
         Self {
             rect_renderer: RectRenderer::new(device, surface_format),
             icon_renderer: IconRenderer::new(device, surface_format),
+            image_renderer: ImageRenderer::new(device, surface_format),
             font_system: new_font_system(),
             swash_cache: SwashCache::new(),
             viewport,
@@ -116,6 +119,7 @@ impl UiRenderer {
         );
         self.rect_renderer.prepare(device, queue, scene, target)?;
         self.icon_renderer.prepare(device, queue, scene, target)?;
+        self.image_renderer.prepare(device, queue, scene, target)?;
         while self.text_layers.len() < scene.layer_count() {
             self.text_layers
                 .push(TextLayer::new(&mut self.atlas, device));
@@ -197,6 +201,7 @@ impl UiRenderer {
     ) -> Result<(), UiRenderError> {
         for layer in 0..self.prepared_layer_count {
             self.rect_renderer.render_layer(render_pass, layer);
+            self.image_renderer.render_layer(render_pass, layer);
             self.icon_renderer.render_layer(render_pass, layer);
             self.text_layers[layer]
                 .renderer
@@ -324,6 +329,8 @@ pub enum UiRenderError {
     InvalidPaintRect { index: usize, reason: &'static str },
     #[error("paint icon {index} is invalid: {reason}")]
     InvalidPaintIcon { index: usize, reason: &'static str },
+    #[error("paint image {index} is invalid: {reason}")]
+    InvalidPaintImage { index: usize, reason: &'static str },
     #[error("SVG icon {name} is invalid: {reason}")]
     InvalidSvgIcon { name: &'static str, reason: String },
     #[error("SVG icon {name} cannot be rasterized at {width}x{height}")]
@@ -334,6 +341,8 @@ pub enum UiRenderError {
     },
     #[error("icon atlas is full at {width}x{height}")]
     IconAtlasFull { width: u32, height: u32 },
+    #[error("image atlas is full at {width}x{height}")]
+    ImageAtlasFull { width: u32, height: u32 },
     #[error("text block {index} is invalid: {reason}")]
     InvalidTextBlock { index: usize, reason: &'static str },
     #[error("failed to prepare UI text: {0}")]

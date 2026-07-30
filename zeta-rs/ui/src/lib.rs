@@ -5,6 +5,8 @@ mod font;
 mod geometry;
 mod icon;
 mod icon_renderer;
+mod image;
+mod image_renderer;
 mod layout;
 mod paint;
 mod rect_renderer;
@@ -30,6 +32,7 @@ pub use components::{
 pub use font::{FontCatalog, FontCatalogError};
 pub use geometry::{CornerRadii, Edges, Point, Rect, Size};
 pub use icon::PaintIcon;
+pub use image::{ImageData, ImageDataError, ImageId, PaintImage};
 pub use layout::{
     GridLayout, GridLeafLayout, GridNode, GridPane, GridSashLayout, GridSplitLayout,
     SplitViewLayout, SplitViewLayoutPriority, SplitViewOrientation, SplitViewPane, SplitViewResize,

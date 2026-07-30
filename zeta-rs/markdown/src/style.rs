@@ -15,6 +15,8 @@ pub struct MarkdownStyle {
     code_background: Color,
     inline_code_background: Color,
     table_header_background: Color,
+    selection_background: Color,
+    search_match_background: Color,
     block_gap: f32,
     quote_indent: f32,
     list_indent: f32,
@@ -37,6 +39,8 @@ impl MarkdownStyle {
             code_background,
             inline_code_background: Color::rgb(244, 231, 236),
             table_header_background: Color::rgba(127, 127, 127, 18),
+            selection_background: Color::rgba(65, 125, 205, 92),
+            search_match_background: Color::rgba(255, 190, 40, 110),
             block_gap: 10.0,
             quote_indent: 14.0,
             list_indent: 22.0,
@@ -67,6 +71,16 @@ impl MarkdownStyle {
 
     pub fn with_inline_code_background(mut self, background: Color) -> Self {
         self.inline_code_background = background;
+        self
+    }
+
+    pub fn with_selection_background(mut self, background: Color) -> Self {
+        self.selection_background = background;
+        self
+    }
+
+    pub fn with_search_match_background(mut self, background: Color) -> Self {
+        self.search_match_background = background;
         self
     }
 
@@ -105,6 +119,8 @@ impl MarkdownStyle {
         TextStyle::new(base.font_size(), color)
             .with_family(if format.code {
                 FontFamily::Monospace
+            } else if format.math {
+                FontFamily::Serif
             } else {
                 base.family().clone()
             })
@@ -114,7 +130,7 @@ impl MarkdownStyle {
             } else {
                 base.weight()
             })
-            .with_style(if format.emphasis {
+            .with_style(if format.emphasis || format.math {
                 FontStyle::Italic
             } else {
                 base.style()
@@ -143,6 +159,21 @@ impl MarkdownStyle {
 
     pub(crate) const fn table_header_background(&self) -> Color {
         self.table_header_background
+    }
+
+    pub(crate) const fn selection_background(&self) -> Color {
+        self.selection_background
+    }
+
+    pub(crate) const fn search_match_background(&self) -> Color {
+        self.search_match_background
+    }
+
+    pub(crate) fn math_block(&self) -> TextStyle {
+        TextStyle::new(self.body.font_size() * 1.1, self.body.color())
+            .with_family(FontFamily::Serif)
+            .with_line_height(self.body.line_height() * 1.25)
+            .with_style(FontStyle::Italic)
     }
 
     pub(crate) fn block_gap(&self) -> f32 {

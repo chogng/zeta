@@ -1,6 +1,7 @@
 use pulldown_cmark::{CodeBlockKind, Event, HeadingLevel, Options, Parser, Tag, TagEnd};
 use thiserror::Error;
 
+use crate::image::MarkdownImageSource;
 use crate::table::{MarkdownTable, TableBuilder};
 
 const MAX_MARKDOWN_BYTES: usize = 4 * 1024 * 1024;
@@ -11,6 +12,7 @@ const MAX_NESTING_DEPTH: usize = 64;
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct MarkdownDocument {
     pub(crate) blocks: Vec<MarkdownBlock>,
+    images: Vec<MarkdownImageSource>,
 }
 
 impl MarkdownDocument {
@@ -33,6 +35,11 @@ impl MarkdownDocument {
 
     pub fn block_count(&self) -> usize {
         self.blocks.len()
+    }
+
+    /// Returns parsed image references in document order; this does not load them.
+    pub fn images(&self) -> impl Iterator<Item = &MarkdownImageSource> {
+        self.images.iter()
     }
 }
 
@@ -64,6 +71,11 @@ pub(crate) enum MarkdownBlockKind {
         language: Option<String>,
         text: String,
     },
+    Image(MarkdownImageSource),
+    Math {
+        text: String,
+        display: bool,
+    },
     Table(MarkdownTable),
     Rule,
 }
@@ -73,6 +85,7 @@ pub(crate) struct BlockContext {
     pub(crate) quote_depth: usize,
     pub(crate) list_depth: usize,
     pub(crate) marker: Option<String>,
+    pub(crate) footnote: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -88,6 +101,8 @@ pub(crate) struct InlineFormat {
     pub(crate) code: bool,
     pub(crate) strikethrough: bool,
     pub(crate) link: Option<String>,
+    pub(crate) image: Option<MarkdownImageSource>,
+    pub(crate) math: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -117,6 +132,13 @@ struct ListState {
     next: Option<u64>,
 }
 
+#[derive(Clone, Debug)]
+struct ImageBuilder {
+    destination: String,
+    title: String,
+    alt: String,
+}
+
 #[derive(Default)]
 struct DocumentBuilder {
     blocks: Vec<MarkdownBlock>,
@@ -128,7 +150,9 @@ struct DocumentBuilder {
     lists: Vec<ListState>,
     pending_marker: Option<String>,
     table: Option<TableBuilder>,
-    image_depth: usize,
+    image: Option<ImageBuilder>,
+    images: Vec<MarkdownImageSource>,
+    footnote: Option<String>,
 }
 
 impl DocumentBuilder {
@@ -136,7 +160,9 @@ impl DocumentBuilder {
         let options = Options::ENABLE_TABLES
             | Options::ENABLE_STRIKETHROUGH
             | Options::ENABLE_TASKLISTS
-            | Options::ENABLE_GFM;
+            | Options::ENABLE_GFM
+            | Options::ENABLE_FOOTNOTES
+            | Options::ENABLE_MATH;
         let mut builder = Self::default();
         for event in Parser::new_ext(markdown, options) {
             builder.consume(event)?;
@@ -144,6 +170,7 @@ impl DocumentBuilder {
         builder.finish_current()?;
         Ok(MarkdownDocument {
             blocks: builder.blocks,
+            images: builder.images,
         })
     }
 
@@ -153,9 +180,24 @@ impl DocumentBuilder {
             Event::End(tag) => self.end(tag)?,
             Event::Text(text) => self.push_text(&text),
             Event::Code(text) => self.push_code(&text),
-            Event::InlineMath(text) | Event::DisplayMath(text) => self.push_text(&text),
+            Event::InlineMath(text) => self.push_math(&text),
+            Event::DisplayMath(text) => {
+                self.finish_current()?;
+                let context = self.context();
+                self.push_block(
+                    MarkdownBlockKind::Math {
+                        text: text.into_string(),
+                        display: true,
+                    },
+                    context,
+                )?;
+            }
             Event::Html(html) | Event::InlineHtml(html) => self.push_text(&html),
-            Event::FootnoteReference(label) => self.push_text(&format!("[^{label}]")),
+            Event::FootnoteReference(label) => {
+                let previous = self.format.link.replace(format!("#fn-{label}"));
+                self.push_text(&format!("[{label}]"));
+                self.format.link = previous;
+            }
             Event::SoftBreak => self.push_text(" "),
             Event::HardBreak => self.push_text("\n"),
             Event::Rule => {
@@ -253,12 +295,20 @@ impl DocumentBuilder {
                 self.links.push(dest_url.into_string());
                 self.format.link = self.links.last().cloned();
             }
-            Tag::Image { .. } => {
-                self.image_depth += 1;
-                self.push_text("[Image: ");
+            Tag::Image {
+                dest_url, title, ..
+            } => {
+                self.image = Some(ImageBuilder {
+                    destination: dest_url.into_string(),
+                    title: title.into_string(),
+                    alt: String::new(),
+                });
             }
-            Tag::FootnoteDefinition(_)
-            | Tag::DefinitionList
+            Tag::FootnoteDefinition(label) => {
+                self.finish_current()?;
+                self.footnote = Some(label.into_string());
+            }
+            Tag::DefinitionList
             | Tag::DefinitionListTitle
             | Tag::DefinitionListDefinition
             | Tag::Superscript
@@ -322,11 +372,38 @@ impl DocumentBuilder {
                 self.format.link = self.links.last().cloned();
             }
             TagEnd::Image => {
-                self.push_text("]");
-                self.image_depth = self.image_depth.saturating_sub(1);
+                if let Some(image) = self.image.take() {
+                    let source = MarkdownImageSource::new(
+                        image.destination.clone(),
+                        image.title,
+                        image.alt.clone(),
+                    );
+                    self.images.push(source.clone());
+                    let standalone = self
+                        .current
+                        .as_ref()
+                        .is_none_or(|current| current.runs.is_empty());
+                    if standalone {
+                        let context = self.take_empty_current_context();
+                        self.push_block(MarkdownBlockKind::Image(source), context)?;
+                    } else {
+                        let previous_link = self.format.link.replace(image.destination);
+                        let previous_image = self.format.image.replace(source);
+                        self.push_text(if image.alt.is_empty() {
+                            "[Image]"
+                        } else {
+                            &image.alt
+                        });
+                        self.format.image = previous_image;
+                        self.format.link = previous_link;
+                    }
+                }
             }
-            TagEnd::FootnoteDefinition
-            | TagEnd::DefinitionList
+            TagEnd::FootnoteDefinition => {
+                self.finish_current()?;
+                self.footnote = None;
+            }
+            TagEnd::DefinitionList
             | TagEnd::DefinitionListTitle
             | TagEnd::DefinitionListDefinition
             | TagEnd::Superscript
@@ -390,7 +467,9 @@ impl DocumentBuilder {
     }
 
     fn push_text(&mut self, text: &str) {
-        if let Some(code) = self.code.as_mut() {
+        if let Some(image) = self.image.as_mut() {
+            image.alt.push_str(text);
+        } else if let Some(code) = self.code.as_mut() {
             code.text.push_str(text);
         } else if let Some(current) = self.current.as_mut() {
             push_run(&mut current.runs, text, self.format.clone());
@@ -402,6 +481,13 @@ impl DocumentBuilder {
         self.format.code = true;
         self.push_text(text);
         self.format.code = previous;
+    }
+
+    fn push_math(&mut self, text: &str) {
+        let previous = self.format.math;
+        self.format.math = true;
+        self.push_text(text);
+        self.format.math = previous;
     }
 
     fn push_block(
@@ -420,7 +506,8 @@ impl DocumentBuilder {
         BlockContext {
             quote_depth: self.quote_depth,
             list_depth: self.lists.len(),
-            marker: None,
+            marker: self.footnote.as_ref().map(|label| format!("[{label}]")),
+            footnote: self.footnote.clone(),
         }
     }
 

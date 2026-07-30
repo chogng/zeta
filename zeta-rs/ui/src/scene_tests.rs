@@ -1,7 +1,7 @@
 use zeta_icons::{Icon, IconDefinition, IconId};
 
 use super::{FontFamily, FontWeight, TextBlock, TextSpan, TextStyle, UiScene};
-use crate::{Color, PaintIcon, PaintRect, Point, Rect, Size};
+use crate::{Color, ImageData, ImageId, PaintIcon, PaintImage, PaintRect, Point, Rect, Size};
 
 const TEST_ICON: Icon = Icon::new(
     IconId::new("test"),
@@ -36,6 +36,23 @@ fn scene_retains_text_in_paint_order() {
     assert!(scene.rects().is_empty());
     assert!(scene.icons().is_empty());
     assert_eq!(scene.background().components(), [10, 20, 30, 255]);
+}
+
+#[test]
+fn scene_retains_decoded_images_and_applies_active_clip() {
+    let image = ImageData::from_rgba8(ImageId::new(7), 1, 1, vec![255, 0, 0, 255]).unwrap();
+    let mut scene = UiScene::new(Color::TRANSPARENT);
+    let clip = Rect::from_xywh(2.0, 3.0, 8.0, 9.0);
+
+    scene.with_clip(clip, |scene| {
+        scene.draw_image(PaintImage::new(
+            image,
+            Rect::from_xywh(0.0, 0.0, 20.0, 20.0),
+        ));
+    });
+
+    assert_eq!(scene.images().len(), 1);
+    assert_eq!(scene.images()[0].clip_bounds(), Some(clip));
 }
 
 #[test]

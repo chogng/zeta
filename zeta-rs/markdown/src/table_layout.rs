@@ -1,8 +1,9 @@
 use zeta_ui::{FontWeight, TextLayoutEngine, TextLayoutWidth};
 
-use crate::MarkdownStyle;
 use crate::inline_layout::{InlineLayout, layout_inline};
+use crate::math::MarkdownMathImages;
 use crate::table::MarkdownTable;
+use crate::{MarkdownImages, MarkdownStyle};
 
 pub(crate) const CELL_HORIZONTAL_PADDING: f32 = 10.0;
 pub(crate) const CELL_VERTICAL_PADDING: f32 = 5.0;
@@ -26,6 +27,8 @@ pub(crate) fn layout_table(
     table: &MarkdownTable,
     width: f32,
     style: &MarkdownStyle,
+    images: &MarkdownImages,
+    inline_math: &MarkdownMathImages,
 ) -> TableLayout {
     let column_count = table.column_count();
     if column_count == 0 {
@@ -40,7 +43,15 @@ pub(crate) fn layout_table(
     for row in &table.rows {
         let base = table_text_style(row.header, style);
         for (index, cell) in row.cells.iter().enumerate() {
-            let layout = layout_inline(text, cell, base.clone(), TextLayoutWidth::Unbounded, style);
+            let layout = layout_inline(
+                text,
+                cell,
+                base.clone(),
+                TextLayoutWidth::Unbounded,
+                style,
+                images,
+                inline_math,
+            );
             preferred[index] =
                 preferred[index].max(layout.size.width + CELL_HORIZONTAL_PADDING * 2.0);
         }
@@ -63,6 +74,8 @@ pub(crate) fn layout_table(
                         (column_widths[index] - CELL_HORIZONTAL_PADDING * 2.0).max(1.0),
                     ),
                     style,
+                    images,
+                    inline_math,
                 )
             })
             .collect::<Vec<_>>();
