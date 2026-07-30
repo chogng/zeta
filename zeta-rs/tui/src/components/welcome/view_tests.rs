@@ -1,7 +1,10 @@
 use super::draw;
+use crate::ui::ACCENT;
+use crate::ui::COMPOSER_CHROME;
 use crate::ui::HIGHLIGHT;
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
+use ratatui::style::Modifier;
 
 #[test]
 fn wide_banner_uses_the_two_column_welcome_presentation() {
@@ -12,7 +15,7 @@ fn wide_banner_uses_the_two_column_welcome_presentation() {
         .map(|cell| cell.symbol())
         .collect::<String>();
 
-    assert!(rendered.contains(concat!("Zeta v", env!("CARGO_PKG_VERSION"))));
+    assert!(rendered.contains(concat!("Zeta Code v", env!("CARGO_PKG_VERSION"))));
     assert!(rendered.contains("Welcome back!"));
     assert!(rendered.contains("Tips for getting started"));
     assert!(rendered.contains("Use @ to mention workspace files"));
@@ -21,6 +24,13 @@ fn wide_banner_uses_the_two_column_welcome_presentation() {
     assert_eq!(buffer[(77, 11)].fg, HIGHLIGHT);
     assert_eq!(buffer[(30, 2)].fg, HIGHLIGHT);
     assert_eq!(buffer[(33, 5)].fg, HIGHLIGHT);
+    assert_eq!(buffer[(9, 1)].symbol(), "Z");
+    assert_eq!(buffer[(9, 1)].fg, ACCENT);
+    assert!(!buffer[(9, 1)].modifier.contains(Modifier::BOLD));
+    assert_eq!(buffer[(19, 1)].symbol(), "v");
+    assert_eq!(buffer[(19, 1)].fg, COMPOSER_CHROME);
+    assert_eq!(buffer[(10, 2)].symbol(), " ");
+    assert_eq!(buffer[(11, 3)].symbol(), "W");
 }
 
 #[test]

@@ -1,6 +1,7 @@
 //! Responsive empty-Thread welcome banner presentation.
 
 use crate::ui::ACCENT;
+use crate::ui::COMPOSER_CHROME;
 use crate::ui::HIGHLIGHT;
 use crate::ui::MUTED;
 use crate::ui::horizontal_margin;
@@ -21,7 +22,7 @@ use ratatui::widgets::Wrap;
 
 const EXPANDED_MIN_WIDTH: u16 = 70;
 const EXPANDED_HEIGHT: u16 = 11;
-const COMPACT_HEIGHT: u16 = 10;
+const COMPACT_HEIGHT: u16 = 11;
 
 pub(crate) fn draw(frame: &mut Frame<'_>, area: Rect) {
     let available = horizontal_margin(area, 2);
@@ -44,20 +45,28 @@ pub(crate) fn draw(frame: &mut Frame<'_>, area: Rect) {
     };
     let block = Block::default()
         .borders(Borders::ALL)
-        .border_style(Style::default().fg(HIGHLIGHT))
-        .title(Line::from(vec![
-            Span::raw(" "),
-            Span::styled(
-                format!("Zeta v{}", env!("CARGO_PKG_VERSION")),
-                Style::default().fg(ACCENT).add_modifier(Modifier::BOLD),
-            ),
-            Span::raw(" "),
-        ]));
+        .border_style(Style::default().fg(HIGHLIGHT));
     let content = block.inner(banner_area);
     frame.render_widget(block, banner_area);
     if content.is_empty() {
         return;
     }
+
+    let title_area = if expanded {
+        let columns = expanded_columns(content);
+        Rect {
+            y: banner_area.y,
+            height: 1,
+            ..columns[0]
+        }
+    } else {
+        Rect {
+            y: banner_area.y,
+            height: 1,
+            ..content
+        }
+    };
+    draw_title(frame, title_area);
 
     if expanded {
         draw_expanded(frame, content);
@@ -67,16 +76,18 @@ pub(crate) fn draw(frame: &mut Frame<'_>, area: Rect) {
 }
 
 fn draw_expanded(frame: &mut Frame<'_>, area: Rect) {
-    let columns = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([Constraint::Percentage(38), Constraint::Percentage(62)])
-        .split(area);
+    let columns = expanded_columns(area);
     frame.render_widget(
         Block::default()
             .borders(Borders::RIGHT)
             .border_style(Style::default().fg(HIGHLIGHT)),
         columns[0],
     );
+    let welcome_area = Rect {
+        y: columns[0].y.saturating_add(1),
+        height: columns[0].height.saturating_sub(1),
+        ..columns[0]
+    };
     frame.render_widget(
         Paragraph::new(vec![
             Line::from(Span::styled(
@@ -101,7 +112,7 @@ fn draw_expanded(frame: &mut Frame<'_>, area: Rect) {
             )),
         ])
         .alignment(Alignment::Center),
-        columns[0],
+        welcome_area,
     );
 
     let guide = horizontal_margin(columns[1], 2);
@@ -133,8 +144,37 @@ fn draw_expanded(frame: &mut Frame<'_>, area: Rect) {
     );
 }
 
+fn expanded_columns(area: Rect) -> [Rect; 2] {
+    let columns = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Percentage(38), Constraint::Percentage(62)])
+        .split(area);
+    [columns[0], columns[1]]
+}
+
+fn draw_title(frame: &mut Frame<'_>, area: Rect) {
+    frame.render_widget(
+        Paragraph::new(Line::from(vec![
+            Span::raw(" "),
+            Span::styled("Zeta Code", Style::default().fg(ACCENT)),
+            Span::styled(
+                format!(" v{}", env!("CARGO_PKG_VERSION")),
+                Style::default().fg(COMPOSER_CHROME),
+            ),
+            Span::raw(" "),
+        ]))
+        .alignment(Alignment::Center),
+        area,
+    );
+}
+
 fn draw_compact(frame: &mut Frame<'_>, area: Rect) {
     let content = horizontal_margin(area, 1);
+    let content = Rect {
+        y: content.y.saturating_add(1),
+        height: content.height.saturating_sub(1),
+        ..content
+    };
     frame.render_widget(
         Paragraph::new(vec![
             Line::from(vec![

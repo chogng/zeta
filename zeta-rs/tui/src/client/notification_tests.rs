@@ -43,10 +43,10 @@ fn thread_update_preserves_typed_scope_and_sequence() {
 }
 
 #[test]
-fn git_status_changed_is_ignored_without_an_scm_consumer() {
-    let notification = GitStatusChanged {
+fn git_status_change_is_explicitly_ignored_until_the_tui_owns_git_state() {
+    let changed = GitStatusChanged {
         status: GitStatusResult {
-            stream_instance_id: StreamInstanceId::new("git_stream_1").unwrap(),
+            stream_instance_id: StreamInstanceId::new("git-stream").unwrap(),
             revision: 1,
             head: GitHeadDto::Unborn {
                 name: "main".into(),
@@ -57,7 +57,7 @@ fn git_status_changed_is_ignored_without_an_scm_consumer() {
 
     assert_eq!(
         map_event(AppServerEvent::Notification(
-            ServerNotification::GitStatusChanged(notification)
+            ServerNotification::GitStatusChanged(changed)
         )),
         None
     );

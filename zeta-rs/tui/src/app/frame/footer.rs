@@ -13,7 +13,7 @@ use ratatui::widgets::Paragraph;
 pub(super) fn draw(frame: &mut Frame<'_>, area: Rect, status: &Status) {
     let (text, style) = match status {
         Status::Ready => (
-            "enter send  ·  ctrl-v image  ·  esc quit",
+            "policy  (shift + tab to cycle)  ·  enter send  ·  ctrl-v image  ·  esc quit",
             Style::default().fg(MUTED),
         ),
         Status::Working => (

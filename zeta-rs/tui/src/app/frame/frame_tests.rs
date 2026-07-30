@@ -31,12 +31,15 @@ fn empty_frame_uses_lightweight_chrome_and_a_welcome_banner() {
     let rendered = render(&App::new(), 80, 20);
 
     assert!(!rendered.contains("workspace assistant"));
-    assert!(rendered.contains(concat!("Zeta v", env!("CARGO_PKG_VERSION"))));
+    assert!(rendered.contains(concat!("Zeta Code v", env!("CARGO_PKG_VERSION"))));
     assert!(rendered.contains("Welcome back!"));
     assert!(rendered.contains("Tips for getting started"));
     assert!(rendered.contains("Try asking"));
-    assert!(rendered.contains("enter send  ·  ctrl-v image  ·  esc quit"));
-    assert!(rendered.contains("┌ Zeta v"));
+    assert!(
+        rendered.contains(
+            "policy  (shift + tab to cycle)  ·  enter send  ·  ctrl-v image  ·  esc quit"
+        )
+    );
 }
 
 #[test]
