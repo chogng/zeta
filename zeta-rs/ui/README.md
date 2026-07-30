@@ -29,7 +29,7 @@ CoreText 当前不承担文本 shaping 或 glyph rasterization。
 | shaping、fallback、glyph raster/cache | `glyphon` / `cosmic-text` / `swash` | 委托 |
 | Instanced rect、icon atlas 与 glyph text draw pipeline | `zeta-ui::UiRenderer` | ✅ |
 | Surface acquire/configure/present | `zeta-wgpu::WgpuRenderer` | ❌ |
-| Focus、input routing、IME lifecycle、accessibility | product host | ❌ |
+| Focus、input routing 与 accessibility semantics | `zeta-ui-dispatch` + product host | ❌；Button 只消费 host 投影的 focused presentation |
 
 依赖方向：
 
@@ -57,7 +57,7 @@ DirectWrite 或 fontconfig 类型。
 | `components::component::Component` | public | 把 caller-provided presentation state 转成 scene primitives；不拥有 input 或 lifecycle |
 | `components::button::{Button, ButtonState, ButtonSelection}` | public | 根据 host 投影的交互、disabled 与 selected 状态绘制 text、icon+text 或 icon-only button |
 | `components::action_bar::ActionBar` | public | 在 caller bounds 内排列和绘制 action representation，并公开同源 visual/interactive bounds 与 hit-test |
-| `components::action_bar::{ActionBarItem, ActionBarButton}` | public | 分别表达 Button/Separator representation 与单个 Button 的 presentation data |
+| `components::action_bar::{ActionBarItem, ActionBarButton}` | public | 分别表达 Button/Separator representation 与单个 Button 的 presentation data；Button 可命名覆盖 main-axis extent |
 | `components::action_bar::{ActionBarStyle, ActionBarSeparatorStyle, ActionBarOrientation}` | public | 定义 item size、gap、separator metrics、共享 Button style 与排列轴 |
 | `components::icon_label::{IconLabel, IconLabelStyle}` | public | 对齐 semantic icon 与单行 text；不选择产品 icon |
 | `text_input::model::TextInput` | public | 拥有 single-line text、selection、grapheme editing 与 composition；`selected_text` 投影非空 committed selection，不实现 `Component` |
@@ -170,11 +170,14 @@ component bounds、hit registration、event dispatch 和 authoritative state tra
 instance、隐式 identity 或 lifecycle。`Button` 拥有 control 内部 padding 和 state-specific
 background selection，并把 icon/text placement 委托给 `IconLabel`；`Button::icon` 保留不参与
 绘制的 accessible label，供 host 的后续 accessibility adapter 使用。Caller 必须显式提供
-`ButtonState`、`ButtonStyle`、bounds 与具体 content constructor，selected presentation 通过
+`ButtonState`、`ButtonStyle`、bounds 与具体 content constructor。`ButtonState::Focused`
+让 host 明确投影键盘 focus，不让组件自行监听键盘；selected presentation 通过
 `ButtonSelection` 独立投影。
 
 `ActionBar` 接收 caller-provided outer bounds，内部拥有 Button/Separator 的方向、间距和 item
-几何。`ActionBar::item_bounds` 暴露 visual bounds；`ActionBar::interactive_item_bounds` 与
+几何。默认 item extent 来自共享 style；label 长度不同的正式 Toolbar 可以通过
+`ActionBarButton::with_main_axis_extent` 覆盖单项主轴尺寸。`ActionBar::item_bounds` 暴露 visual
+bounds；`ActionBar::interactive_item_bounds` 与
 `ActionBar::hit_test` 复用相同几何并排除 disabled Button 和 Separator。Host 必须把返回的 item
 index 映射到自己的 action identity 和命令。ActionBar 不持有 callback、命令、hover/focus
 state 或 product action registry。
@@ -214,8 +217,8 @@ snapshot harness。
   primitive z-order；当前 render order 固定为 rect → icon → text；
 - component contract 当前是 immediate presentation composition，没有 component tree、identity、
   mount/unmount lifecycle、invalidation propagation 或 retained layout；
-- `Button` 当前支持 resting、hovered、pressed、disabled、selected、icon-only 与 leading icon，
-  但尚无 focus ring、trailing content 或真实 accessibility adapter；
+- `Button` 当前支持 resting、hovered、focused、pressed、disabled、selected、icon-only 与
+  leading icon，但尚无独立 focus ring、trailing content 或真实 accessibility adapter；
 - `ActionBar` 当前支持 horizontal/vertical Button 与 Separator、同源 item bounds 和 hit-test，
   但尚无 roving focus、keyboard navigation、overflow、dropdown 或 custom representation；
 - symbolic atlas 尚不支持 `IconRendering::Multicolor`；

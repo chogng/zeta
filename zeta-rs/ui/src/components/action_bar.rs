@@ -31,6 +31,7 @@ pub struct ActionBarButton {
     content: ActionBarButtonContent,
     state: ButtonState,
     selection: ButtonSelection,
+    main_axis_extent: Option<f32>,
 }
 
 impl ActionBarButton {
@@ -39,6 +40,7 @@ impl ActionBarButton {
             content: ActionBarButtonContent::Label(label.into()),
             state,
             selection: ButtonSelection::Unselected,
+            main_axis_extent: None,
         }
     }
 
@@ -50,6 +52,7 @@ impl ActionBarButton {
             },
             state,
             selection: ButtonSelection::Unselected,
+            main_axis_extent: None,
         }
     }
 
@@ -61,7 +64,14 @@ impl ActionBarButton {
             },
             state,
             selection: ButtonSelection::Unselected,
+            main_axis_extent: None,
         }
+    }
+
+    /// Overrides this item's extent along its ActionBar's orientation axis.
+    pub const fn with_main_axis_extent(mut self, extent: f32) -> Self {
+        self.main_axis_extent = Some(extent);
+        self
     }
 
     pub const fn with_selection(mut self, selection: ButtonSelection) -> Self {
@@ -237,12 +247,14 @@ impl ActionBar {
     fn item_extent(&self, item: &ActionBarItem) -> f32 {
         match (self.orientation, item) {
             (_, ActionBarItem::Separator) => self.style.separator_style.extent.max(0.0),
-            (ActionBarOrientation::Horizontal, ActionBarItem::Button(_)) => {
-                self.style.item_size.width.max(0.0)
-            }
-            (ActionBarOrientation::Vertical, ActionBarItem::Button(_)) => {
-                self.style.item_size.height.max(0.0)
-            }
+            (ActionBarOrientation::Horizontal, ActionBarItem::Button(button)) => button
+                .main_axis_extent
+                .unwrap_or(self.style.item_size.width)
+                .max(0.0),
+            (ActionBarOrientation::Vertical, ActionBarItem::Button(button)) => button
+                .main_axis_extent
+                .unwrap_or(self.style.item_size.height)
+                .max(0.0),
         }
     }
 

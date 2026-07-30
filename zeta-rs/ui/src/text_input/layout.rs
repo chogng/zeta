@@ -84,6 +84,29 @@ impl TextInputLayoutEngine {
         }
     }
 
+    /// Measures one unwrapped line with the same shaping and fallback fonts used by UI text.
+    pub fn measure_text(&mut self, text: &str, style: &TextStyle) -> Size {
+        if text.is_empty() {
+            return Size::new(0.0, style.line_height().max(0.0));
+        }
+        let metrics = Metrics::new(style.font_size(), style.line_height());
+        let mut buffer = Buffer::new(&mut self.font_system, metrics);
+        buffer.set_wrap(Wrap::None);
+        buffer.set_size(None, Some(style.line_height()));
+        let attrs = Attrs::new()
+            .family(glyphon_family(style.family()))
+            .weight(glyphon_weight(style.weight()))
+            .style(glyphon_style(style.style()));
+        buffer.set_text(text, &attrs, Shaping::Advanced, None);
+        buffer.shape_until_scroll(&mut self.font_system, false);
+        let width = buffer
+            .layout_runs()
+            .next()
+            .map(|run| run.line_w)
+            .unwrap_or(0.0);
+        Size::new(width, style.line_height().max(0.0))
+    }
+
     pub fn layout(
         &mut self,
         bounds: Rect,

@@ -14,6 +14,7 @@ fn test_style() -> ButtonStyle {
     ButtonStyle::new(
         ButtonBackgrounds::new(Color::rgb(10, 20, 30))
             .with_hovered(Color::rgb(20, 30, 40))
+            .with_focused(Color::rgb(25, 35, 45))
             .with_pressed(Color::rgb(30, 40, 50))
             .with_disabled(Color::rgb(5, 10, 15)),
         TextStyle::new(11.0, Color::rgb(80, 120, 160)).with_weight(FontWeight::Bold),
@@ -21,6 +22,7 @@ fn test_style() -> ButtonStyle {
     .with_selected_backgrounds(
         ButtonBackgrounds::new(Color::rgb(40, 50, 60))
             .with_hovered(Color::rgb(50, 60, 70))
+            .with_focused(Color::rgb(55, 65, 75))
             .with_pressed(Color::rgb(60, 70, 80))
             .with_disabled(Color::rgb(20, 25, 30)),
     )
@@ -30,6 +32,21 @@ fn test_style() -> ButtonStyle {
     .with_padding(Edges::new(5.0, 8.0, 5.0, 10.0))
     .with_icon_size(13.0)
     .with_content_gap(6.0)
+}
+
+#[test]
+fn button_projects_keyboard_focus_independently_from_pointer_hover() {
+    let button = Button::new(
+        Rect::from_xywh(0.0, 0.0, 100.0, 27.0),
+        "Focused action",
+        ButtonState::Focused,
+        test_style(),
+    );
+    let mut scene = UiScene::new(Color::TRANSPARENT);
+
+    scene.draw_component(&button);
+
+    assert_eq!(scene.rects()[0].fill(), Color::rgb(25, 35, 45));
 }
 
 #[test]
@@ -71,6 +88,14 @@ fn button_lays_out_icon_and_label_inside_content_padding() {
     assert_eq!(scene.icons()[0].color(), Color::rgb(80, 120, 160));
     assert_eq!(scene.text_blocks()[0].origin().x, 49.0);
     assert_eq!(scene.text_blocks()[0].text(), "Open files");
+}
+
+#[test]
+fn button_style_derives_icon_and_label_width_from_internal_geometry() {
+    assert_eq!(
+        test_style().preferred_icon_and_label_width(42.0),
+        10.0 + 13.0 + 6.0 + 42.0 + 8.0
+    );
 }
 
 #[test]

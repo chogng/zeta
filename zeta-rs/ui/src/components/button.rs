@@ -13,6 +13,7 @@ pub enum ButtonState {
     #[default]
     Resting,
     Hovered,
+    Focused,
     Pressed,
     Disabled,
 }
@@ -30,6 +31,7 @@ pub enum ButtonSelection {
 pub struct ButtonBackgrounds {
     resting: Color,
     hovered: Color,
+    focused: Color,
     pressed: Color,
     disabled: Color,
 }
@@ -39,6 +41,7 @@ impl ButtonBackgrounds {
         Self {
             resting,
             hovered: resting,
+            focused: resting,
             pressed: resting,
             disabled: resting,
         }
@@ -46,6 +49,11 @@ impl ButtonBackgrounds {
 
     pub const fn with_hovered(mut self, hovered: Color) -> Self {
         self.hovered = hovered;
+        self
+    }
+
+    pub const fn with_focused(mut self, focused: Color) -> Self {
+        self.focused = focused;
         self
     }
 
@@ -63,6 +71,7 @@ impl ButtonBackgrounds {
         match state {
             ButtonState::Resting => self.resting,
             ButtonState::Hovered => self.hovered,
+            ButtonState::Focused => self.focused,
             ButtonState::Pressed => self.pressed,
             ButtonState::Disabled => self.disabled,
         }
@@ -136,6 +145,23 @@ impl ButtonStyle {
         self
     }
 
+    /// Returns the preferred button width for a shaped label paired with the leading icon.
+    pub fn preferred_icon_and_label_width(&self, text_width: f32) -> f32 {
+        let text_width = if text_width.is_finite() {
+            text_width.max(0.0)
+        } else {
+            0.0
+        };
+        self.padding.left.max(0.0)
+            + self.icon_size.max(0.0)
+            + if text_width > 0.0 {
+                self.content_gap.max(0.0) + text_width
+            } else {
+                0.0
+            }
+            + self.padding.right.max(0.0)
+    }
+
     const fn backgrounds_for(&self, selection: ButtonSelection) -> ButtonBackgrounds {
         match selection {
             ButtonSelection::Unselected => self.backgrounds,
@@ -146,7 +172,10 @@ impl ButtonStyle {
     fn text_style_for(&self, state: ButtonState) -> &TextStyle {
         match state {
             ButtonState::Disabled => &self.disabled_text_style,
-            ButtonState::Resting | ButtonState::Hovered | ButtonState::Pressed => &self.text_style,
+            ButtonState::Resting
+            | ButtonState::Hovered
+            | ButtonState::Focused
+            | ButtonState::Pressed => &self.text_style,
         }
     }
 }

@@ -122,3 +122,29 @@ fn vertical_action_bar_maps_item_extent_to_the_vertical_axis() {
         Some(Rect::from_xywh(3.0, 31.0, 24.0, 20.0))
     );
 }
+
+#[test]
+fn action_buttons_can_override_their_main_axis_extent() {
+    let action_bar = ActionBar::new(
+        Rect::from_xywh(10.0, 5.0, 140.0, 20.0),
+        ActionBarOrientation::Horizontal,
+        vec![
+            ActionBarItem::Button(
+                ActionBarButton::label("Short", ButtonState::Resting).with_main_axis_extent(40.0),
+            ),
+            ActionBarItem::Button(
+                ActionBarButton::label("Long", ButtonState::Resting).with_main_axis_extent(72.0),
+            ),
+        ],
+        test_style(),
+    );
+
+    assert_eq!(
+        action_bar.item_bounds(0),
+        Some(Rect::from_xywh(10.0, 5.0, 40.0, 20.0))
+    );
+    assert_eq!(
+        action_bar.item_bounds(1),
+        Some(Rect::from_xywh(54.0, 5.0, 72.0, 20.0))
+    );
+}

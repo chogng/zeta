@@ -47,3 +47,17 @@ fn preedit_temporarily_replaces_selection_without_mutating_input() {
     assert!(layout.selection_bounds().is_empty());
     assert!(!layout.preedit_underline_bounds().is_empty());
 }
+
+#[test]
+fn text_measurement_uses_shaped_content_instead_of_character_slots() {
+    let mut engine = TextInputLayoutEngine::new();
+    let style = TextStyle::new(14.0, Color::WHITE).with_line_height(18.0);
+
+    let short = engine.measure_text("main", &style);
+    let long = engine.measure_text("feature/content-width", &style);
+    let multilingual = engine.measure_text("工作目录", &style);
+
+    assert!(long.width > short.width);
+    assert!(multilingual.width > 0.0);
+    assert_eq!(short.height, 18.0);
+}
