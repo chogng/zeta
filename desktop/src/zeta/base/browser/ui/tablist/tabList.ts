@@ -3,13 +3,11 @@ import { addDisposableListener } from "../../dom.js";
 import type { Icon } from "../../../common/icon.js";
 import type { IAction } from "../../../common/actions.js";
 import { DisposableOwner } from "../../../common/lifecycle.js";
-import { lxiconsLibrary } from "../../../common/lxiconsLibrary.js";
 import { ActionBar } from "../actionbar/actionbar.js";
-import { ActionViewItem } from "../actionbar/actionViewItems.js";
-import { IconLabel } from "../iconlabel/iconlabel.js";
 import { ScrollableElement } from "../scrollbar/scrollableElement.js";
+import { TabAction, TabActionViewItem } from "./tabActionViewItem.js";
 
-export const TAB_CLOSE_ACTION_ID = "zeta.tab.close";
+export { TAB_CLOSE_ACTION_ID } from "./tabActionViewItem.js";
 
 /** Accessible actions rendered after one Tab's label content. */
 export interface TabListActions {
@@ -48,11 +46,12 @@ export class TabList<T> extends DisposableOwner {
   readonly element: HTMLDivElement;
   readonly #actionBar: ActionBar;
   readonly #scrollable: ScrollableElement;
-  readonly #options: TabListOptions<T>;
+  readonly #activate: (value: T) => void;
 
   constructor(options: TabListOptions<T>) {
     super();
-    this.#options = options;
+    this.#activate = options.onActivate;
+    const onClose = options.onClose;
     this.#actionBar = this.own(new ActionBar({
       ownerDocument: options.ownerDocument,
       ariaLabel: options.ariaLabel,
@@ -62,7 +61,7 @@ export class TabList<T> extends DisposableOwner {
         if (!(action instanceof TabAction)) {
           throw new TypeError(`Unsupported TabList action: ${action.id}`);
         }
-        return new TabActionViewItem(action, this.#options.onClose);
+        return new TabActionViewItem(action, onClose);
       },
     }));
     this.#scrollable = this.own(new ScrollableElement({
@@ -102,135 +101,9 @@ export class TabList<T> extends DisposableOwner {
     this.#actionBar.setActions(tabs.map((tab) => new TabAction(
       tab,
       tab.id === selectedId,
-      this.#options.onActivate,
+      this.#activate,
     )));
     if (selectedId !== undefined) this.#actionBar.setTabStop(selectedId);
     this.#scrollable.layout();
   }
-}
-
-class TabAction<T> implements IAction {
-  readonly label: string;
-  readonly tooltip: string;
-  readonly enabled = true;
-
-  constructor(
-    readonly tab: TabListItem<T>,
-    readonly checked: boolean,
-    readonly activate: (value: T) => void,
-  ) {
-    this.label = tab.label;
-    this.tooltip = tab.tooltip ?? tab.label;
-  }
-
-  get id(): string {
-    return this.tab.id;
-  }
-
-  run(): void {
-    this.activate(this.tab.value);
-  }
-}
-
-class TabActionViewItem<T> extends ActionViewItem {
-  readonly #tabAction: TabAction<T>;
-  readonly #onClose: ((value: T) => void) | undefined;
-  #tab: HTMLButtonElement | undefined;
-
-  constructor(action: TabAction<T>, onClose: ((value: T) => void) | undefined) {
-    super(action);
-    this.#tabAction = action;
-    this.#onClose = onClose;
-  }
-
-  override render(container: HTMLElement): void {
-    if (this.#tab) {
-      throw new Error(`TabList item is already rendered: ${this.action.id}`);
-    }
-    const item = this.#tabAction.tab;
-    container.classList.add("zeta-tab");
-    container.classList.toggle("checked", this.#tabAction.checked);
-    container.classList.toggle("icon", item.icon !== undefined);
-
-    const tab = container.ownerDocument.createElement("button");
-    this.#tab = tab;
-    tab.id = item.tabId;
-    tab.className = "zeta-tab-label";
-    tab.type = "button";
-    tab.setAttribute("role", "tab");
-    tab.setAttribute("aria-selected", String(this.#tabAction.checked));
-    tab.setAttribute("aria-label", item.ariaLabel ?? item.label);
-    if (item.panelId) tab.setAttribute("aria-controls", item.panelId);
-    tab.title = this.#tabAction.tooltip;
-    const label = this.own(new IconLabel({
-      label: item.label,
-      icon: item.icon,
-      ownerDocument: container.ownerDocument,
-      title: this.#tabAction.tooltip,
-    }));
-    tab.append(label.element);
-    container.append(tab);
-
-    this.own(addDisposableListener(tab, "click", (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      this.#tabAction.run();
-    }));
-    if (this.#onClose) {
-      tab.setAttribute("aria-keyshortcuts", "Delete");
-      this.own(addDisposableListener(tab, "keydown", (event) => {
-        if (event.key !== "Delete") return;
-        event.preventDefault();
-        event.stopPropagation();
-        this.#onClose?.(item.value);
-      }));
-    }
-    const actions = [
-      ...(item.actions?.items ?? []),
-      ...(this.#onClose ? [closeTabAction(item, this.#onClose)] : []),
-    ];
-    if (actions.length > 0) {
-      const actionBar = this.own(new ActionBar({
-        ownerDocument: container.ownerDocument,
-        actions,
-        ariaLabel: item.actions?.ariaLabel ?? `${item.label} actions`,
-      }));
-      actionBar.element.classList.add("zeta-tab-actions");
-      if (this.#onClose) {
-        const closeActionContainer = actionBar.element.querySelector<HTMLElement>(`[data-action-id="${TAB_CLOSE_ACTION_ID}"]`);
-        if (!closeActionContainer) {
-          throw new Error("TabList close action was not rendered");
-        }
-        closeActionContainer.classList.add("zeta-tab-close-action");
-      }
-      container.append(actionBar.element);
-    }
-  }
-
-  override focus(): void {
-    this.#requireTab().focus();
-  }
-
-  override setTabbable(tabbable: boolean): void {
-    this.#requireTab().tabIndex = tabbable ? 0 : -1;
-  }
-
-  #requireTab(): HTMLButtonElement {
-    if (!this.#tab) {
-      throw new Error(`TabList item is not rendered: ${this.action.id}`);
-    }
-    return this.#tab;
-  }
-}
-
-function closeTabAction<T>(item: TabListItem<T>, close: (value: T) => void): IAction {
-  const label = `Close ${item.label}`;
-  return {
-    id: TAB_CLOSE_ACTION_ID,
-    label,
-    tooltip: label,
-    icon: lxiconsLibrary.close,
-    enabled: true,
-    run: () => close(item.value),
-  };
 }
