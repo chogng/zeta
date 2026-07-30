@@ -1,6 +1,4 @@
-use zeta_ui::{Point, Rect};
-
-use crate::shell_theme::ShellTheme;
+use zeta_ui::{Point, Rect, TextInput, TextInputCommand, TextInputCompositionEvent};
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub(crate) enum SessionId {
@@ -13,7 +11,6 @@ pub(crate) enum SessionId {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum ShellTarget {
     WindowDrag,
-    ThemeToggle,
     Session(SessionId),
     Composer,
 }
@@ -29,6 +26,8 @@ pub(crate) enum PointerFeedback {
 pub(crate) enum InteractionEffect {
     None,
     Redraw,
+    FocusComposer,
+    BlurComposer,
     StartWindowDrag,
 }
 
@@ -59,24 +58,24 @@ impl ShellHitMap {
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub(crate) struct ShellInteraction {
-    theme: ShellTheme,
     hovered: Option<ShellTarget>,
     pressed: Option<ShellTarget>,
     selected_session: SessionId,
     composer_focused: bool,
+    composer: TextInput,
 }
 
 impl ShellInteraction {
-    pub(crate) const fn theme(&self) -> ShellTheme {
-        self.theme
-    }
-
     pub(crate) const fn selected_session(&self) -> SessionId {
         self.selected_session
     }
 
     pub(crate) const fn composer_focused(&self) -> bool {
         self.composer_focused
+    }
+
+    pub(crate) const fn composer(&self) -> &TextInput {
+        &self.composer
     }
 
     pub(crate) fn is_hovered(&self, target: ShellTarget) -> bool {
@@ -115,9 +114,12 @@ impl ShellInteraction {
                 let focus_changed = self.composer_focused && target != Some(ShellTarget::Composer);
                 if focus_changed {
                     self.composer_focused = false;
+                    self.composer.cancel_composition();
                 }
                 self.pressed = target;
-                if target.is_some() || focus_changed {
+                if focus_changed {
+                    InteractionEffect::BlurComposer
+                } else if target.is_some() {
                     InteractionEffect::Redraw
                 } else {
                     InteractionEffect::None
@@ -130,14 +132,17 @@ impl ShellInteraction {
         let pressed = self.pressed.take();
         let activated = pressed.filter(|target| Some(*target) == self.hovered);
         match activated {
-            Some(ShellTarget::ThemeToggle) => self.theme = self.theme.next(),
             Some(ShellTarget::Session(session)) => {
                 self.selected_session = session;
                 self.composer_focused = false;
             }
-            Some(ShellTarget::Composer) => self.composer_focused = true,
+            Some(ShellTarget::Composer) if !self.composer_focused => {
+                self.composer_focused = true;
+                return InteractionEffect::FocusComposer;
+            }
+            Some(ShellTarget::Composer) => {}
             Some(ShellTarget::WindowDrag) | None => {}
-        }
+        };
         if pressed.is_some() || activated.is_some() {
             InteractionEffect::Redraw
         } else {
@@ -145,9 +150,37 @@ impl ShellInteraction {
         }
     }
 
+    pub(crate) fn edit_composer(&mut self, command: TextInputCommand) -> InteractionEffect {
+        if !self.composer_focused {
+            return InteractionEffect::None;
+        }
+        self.composer.apply(command);
+        InteractionEffect::Redraw
+    }
+
+    pub(crate) fn update_composition(
+        &mut self,
+        event: TextInputCompositionEvent,
+    ) -> InteractionEffect {
+        if !self.composer_focused {
+            return InteractionEffect::None;
+        }
+        self.composer.apply_composition(event);
+        InteractionEffect::Redraw
+    }
+
+    pub(crate) fn window_focus_lost(&mut self) -> InteractionEffect {
+        if !self.composer_focused {
+            return InteractionEffect::None;
+        }
+        self.composer_focused = false;
+        self.composer.cancel_composition();
+        InteractionEffect::BlurComposer
+    }
+
     pub(crate) const fn pointer_feedback(&self) -> PointerFeedback {
         match self.hovered {
-            Some(ShellTarget::ThemeToggle | ShellTarget::Session(_)) => PointerFeedback::Clickable,
+            Some(ShellTarget::Session(_)) => PointerFeedback::Clickable,
             Some(ShellTarget::Composer) => PointerFeedback::Text,
             Some(ShellTarget::WindowDrag) | None => PointerFeedback::Default,
         }

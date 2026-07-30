@@ -18,7 +18,7 @@ Workbench 或其他产品状态。
 | UI scene/paint/font/text semantics | ❌ | `zeta-ui` |
 | Rect/text GPU pipelines 与 glyph resources | 协调 | `zeta-ui::UiRenderer` |
 | Event loop、窗口策略 | ❌ | `zeta-winit` / product host |
-| Widget、layout、input、IME、accessibility | ❌ | 尚无 owner |
+| Widget、layout、input、IME、accessibility | ❌ | `zeta-ui` / product host / platform adapter |
 | App Server、workspace、durable state | ❌ | 上层产品 |
 
 依赖方向：

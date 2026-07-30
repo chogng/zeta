@@ -4,6 +4,5 @@ zeta_rust_binary(
     name = "zeta-native",
     crate_name = "zeta_native",
     crate_root = "src/main.rs",
-    data = ["assets/theme.svg"],
     deps = [],
 )

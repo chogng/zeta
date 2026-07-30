@@ -38,6 +38,8 @@
 - [Zeta App Server API](zeta-app-server-api.md)
 - [App Server Client 架构与演进方案](app-server-client.md)
 - [Zeta Desktop 架构与协作边界](zeta-desktop-architecture.md)
+- [Product Icon System：资源、语义与渲染边界](icons.md)
+- [Native Text Input 分层、IME 与当前实现](native-text-input.md)
 - [Zeta CLI 架构与协作边界](zeta-cli-architecture.md)
 - [TUI 架构与演进方案](tui.md)
 - [Zeta API 接口文档规范](zeta-api-interface-requirements.md)
@@ -87,4 +89,6 @@ canonical contract 和全部调用方，不建立旧 API、旧 DTO 或旧 storag
 - CLI/TUI in-process client 与 Desktop JSONL client 共用同一 dispatcher；
 - Electron supervisor、strict JSONL framing、typed peer、trusted IPC 与 generated renderer
   contract；
+- `resources/icons` canonical artwork、Desktop generated registry 与 Rust `zeta-icons` typed
+  catalog；
 - Config authority、provider registry、Resource 和 sandbox 基础。

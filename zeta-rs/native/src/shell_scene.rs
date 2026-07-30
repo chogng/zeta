@@ -1,16 +1,14 @@
 use zeta_ui::{
-    Border, Color, CornerRadii, Edges, FontWeight, PaintIcon, PaintRect, Rect, SvgIcon, TextBlock,
-    TextStyle, UiScene,
+    Border, CaretVisibility, Color, CornerRadii, Edges, FontWeight, InputBox, InputBoxState,
+    PaintRect, Rect, TextBlock, TextInputLayoutEngine, TextStyle, UiScene,
 };
 
 use crate::shell_interaction::{SessionId, ShellHitMap, ShellInteraction, ShellTarget};
-use crate::shell_theme::ShellPalette;
+use crate::shell_style::{SHELL_PALETTE, ShellPalette};
 
 const TITLEBAR_HEIGHT: f32 = 35.0;
 const SIDEBAR_TARGET_WIDTH: f32 = 232.0;
 const COMPOSER_HEIGHT: f32 = 68.0;
-const THEME_ICON: SvgIcon = SvgIcon::new("theme", include_bytes!("../assets/theme.svg"));
-
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct LogicalViewport {
     pub width: f32,
@@ -81,31 +79,49 @@ impl ShellLayout {
 pub(crate) struct ShellPresentation {
     pub(crate) scene: UiScene,
     pub(crate) hit_map: ShellHitMap,
+    pub(crate) ime_cursor_area: Option<Rect>,
 }
 
 pub(crate) fn build_shell_presentation(
     viewport: LogicalViewport,
     interaction: &ShellInteraction,
+    text_layout: &mut TextInputLayoutEngine,
+    caret_visibility: CaretVisibility,
 ) -> ShellPresentation {
-    let palette = interaction.theme().palette();
+    let palette = SHELL_PALETTE;
     let mut scene = UiScene::new(palette.background);
     let mut hit_map = ShellHitMap::default();
     let Some(layout) = ShellLayout::for_viewport(viewport) else {
         draw_compact_scene(&mut scene, viewport, palette);
-        return ShellPresentation { scene, hit_map };
+        return ShellPresentation {
+            scene,
+            hit_map,
+            ime_cursor_area: None,
+        };
     };
 
-    draw_titlebar(&mut scene, &mut hit_map, layout, interaction, palette);
+    draw_titlebar(&mut scene, &mut hit_map, layout, palette);
     draw_sidebar(&mut scene, &mut hit_map, layout, interaction, palette);
-    draw_main(&mut scene, &mut hit_map, layout, interaction, palette);
-    ShellPresentation { scene, hit_map }
+    let ime_cursor_area = draw_main(
+        &mut scene,
+        &mut hit_map,
+        layout,
+        interaction,
+        palette,
+        text_layout,
+        caret_visibility,
+    );
+    ShellPresentation {
+        scene,
+        hit_map,
+        ime_cursor_area,
+    }
 }
 
 fn draw_titlebar(
     scene: &mut UiScene,
     hit_map: &mut ShellHitMap,
     layout: ShellLayout,
-    interaction: &ShellInteraction,
     palette: ShellPalette,
 ) {
     scene.draw_rect(
@@ -118,39 +134,6 @@ fn draw_titlebar(
         "Zeta",
         Rect::from_xywh(78.0, 7.0, 180.0, 22.0),
         TextStyle::new(17.0, palette.text).with_weight(FontWeight::Bold),
-    );
-
-    let theme_button = Rect::from_xywh(layout.titlebar.right() - 112.0, 4.0, 100.0, 27.0);
-    let target = ShellTarget::ThemeToggle;
-    hit_map.register(theme_button, target);
-    scene.draw_rect(
-        PaintRect::new(
-            theme_button,
-            interactive_fill(interaction, target, palette.surface, palette),
-        )
-        .with_border(Border::uniform(1.0, palette.border))
-        .with_corner_radii(CornerRadii::uniform(8.0)),
-    );
-    scene.draw_icon(PaintIcon::new(
-        THEME_ICON,
-        Rect::from_xywh(
-            theme_button.origin.x + 10.0,
-            theme_button.origin.y + 7.0,
-            13.0,
-            13.0,
-        ),
-        palette.accent,
-    ));
-    draw_text(
-        scene,
-        interaction.theme().toggle_label(),
-        Rect::from_xywh(
-            theme_button.origin.x + 29.0,
-            theme_button.origin.y + 6.0,
-            theme_button.size.width - 37.0,
-            17.0,
-        ),
-        TextStyle::new(11.0, palette.accent).with_weight(FontWeight::Bold),
     );
 }
 
@@ -254,8 +237,11 @@ fn draw_main(
     layout: ShellLayout,
     interaction: &ShellInteraction,
     palette: ShellPalette,
-) {
+    text_layout: &mut TextInputLayoutEngine,
+    caret_visibility: CaretVisibility,
+) -> Option<Rect> {
     scene.draw_rect(PaintRect::new(layout.main, palette.background));
+    let mut ime_cursor_area = None;
     scene.with_clip(layout.main, |scene| {
         let (heading, summary, message) = session_content(interaction.selected_session());
         draw_text(
@@ -281,8 +267,17 @@ fn draw_main(
             TextStyle::new(14.0, palette.text_muted),
         );
         draw_message_card(scene, layout, message, palette);
-        draw_composer(scene, hit_map, layout, interaction, palette);
+        ime_cursor_area = draw_composer(
+            scene,
+            hit_map,
+            layout,
+            interaction,
+            palette,
+            text_layout,
+            caret_visibility,
+        );
     });
+    ime_cursor_area
 }
 
 fn draw_message_card(
@@ -332,7 +327,9 @@ fn draw_composer(
     layout: ShellLayout,
     interaction: &ShellInteraction,
     palette: ShellPalette,
-) {
+    text_layout: &mut TextInputLayoutEngine,
+    caret_visibility: CaretVisibility,
+) -> Option<Rect> {
     scene.draw_rect(PaintRect::new(
         Rect::from_xywh(
             layout.main.origin.x,
@@ -344,38 +341,25 @@ fn draw_composer(
     ));
     let target = ShellTarget::Composer;
     hit_map.register(layout.composer, target);
-    scene.draw_rect(
-        PaintRect::new(
-            layout.composer,
-            interactive_fill(interaction, target, palette.surface_raised, palette),
-        )
-        .with_border(Border::uniform(
-            1.0,
-            if interaction.composer_focused() {
-                palette.accent
-            } else {
-                palette.border
-            },
-        ))
-        .with_corner_radii(CornerRadii::uniform(11.0)),
+    let state = if interaction.composer_focused() {
+        InputBoxState::Focused(caret_visibility)
+    } else if interaction.is_hovered(target) {
+        InputBoxState::Hovered
+    } else {
+        InputBoxState::Resting
+    };
+    let style = palette.composer_style();
+    let input_box = InputBox::new(
+        layout.composer,
+        "Message Zeta…",
+        state,
+        style,
+        interaction.composer(),
+        text_layout,
     );
-    scene.with_clip(layout.composer, |scene| {
-        draw_text(
-            scene,
-            if interaction.composer_focused() {
-                "Composer focused"
-            } else {
-                "Click to focus…"
-            },
-            Rect::from_xywh(
-                layout.composer.origin.x + 18.0,
-                layout.composer.origin.y + 22.0,
-                layout.composer.size.width - 36.0,
-                28.0,
-            ),
-            TextStyle::new(15.0, palette.text_muted),
-        );
-    });
+    let caret_bounds = input_box.caret_bounds();
+    scene.draw_component(&input_box);
+    caret_bounds
 }
 
 fn interactive_fill(

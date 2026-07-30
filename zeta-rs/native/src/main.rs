@@ -1,18 +1,23 @@
 use std::process::ExitCode;
+use std::time::Instant;
 
 use shell_interaction::{InteractionEffect, PointerFeedback, ShellInteraction};
 use shell_scene::{LogicalViewport, ShellPresentation, build_shell_presentation};
-use zeta_ui::Point;
+use zeta_ui::{
+    CaretBlinkAdvance, CaretBlinkController, Point, TextInputCommand, TextInputCompositionCursor,
+    TextInputCompositionEvent, TextInputLayoutEngine, TextInputSelectionMode,
+};
 use zeta_wgpu::{RenderOutcome, WgpuRenderer};
 use zeta_winit::{
-    ActiveEventLoop, ApplicationHandler, CursorIcon, ElementState, LogicalSize, MouseButton,
-    NativeWindow, PhysicalExtent, WindowAttributes, WindowChrome, WindowEvent, WindowId,
-    apply_window_chrome, run_application,
+    ActiveEventLoop, ApplicationHandler, ControlFlow, CursorIcon, ElementState, Ime, ImeCursorArea,
+    Key, KeyEvent, LogicalSize, ModifiersState, MouseButton, NamedKey, NativeWindow,
+    PhysicalExtent, WindowAttributes, WindowChrome, WindowEvent, WindowId, apply_window_chrome,
+    run_application,
 };
 
 mod shell_interaction;
 mod shell_scene;
-mod shell_theme;
+mod shell_style;
 
 const WINDOW_TITLE: &str = "Zeta Native";
 const INITIAL_WIDTH: f64 = 1_000.0;
@@ -37,7 +42,10 @@ struct NativeApp {
     renderer: Option<WgpuRenderer>,
     presentation: Option<ShellPresentation>,
     interaction: ShellInteraction,
+    text_layout: TextInputLayoutEngine,
+    caret_blink: CaretBlinkController,
     cursor_position: Option<Point>,
+    modifiers: ModifiersState,
     physical_extent: PhysicalExtent,
     scale_factor: f64,
     failed: bool,
@@ -51,7 +59,10 @@ impl NativeApp {
             renderer: None,
             presentation: None,
             interaction: ShellInteraction::default(),
+            text_layout: TextInputLayoutEngine::new(),
+            caret_blink: CaretBlinkController::default(),
             cursor_position: None,
+            modifiers: ModifiersState::default(),
             physical_extent: PhysicalExtent::new(0, 0),
             scale_factor: 1.0,
             failed: false,
@@ -88,14 +99,25 @@ impl NativeApp {
 
     fn rebuild_presentation(&mut self) {
         let viewport = self.logical_viewport();
-        let mut presentation = build_shell_presentation(viewport, &self.interaction);
+        let mut presentation = build_shell_presentation(
+            viewport,
+            &self.interaction,
+            &mut self.text_layout,
+            self.caret_blink.visibility(),
+        );
         if let Some(point) = self.cursor_position
             && self.interaction.pointer_moved(point, &presentation.hit_map)
                 == InteractionEffect::Redraw
         {
-            presentation = build_shell_presentation(viewport, &self.interaction);
+            presentation = build_shell_presentation(
+                viewport,
+                &self.interaction,
+                &mut self.text_layout,
+                self.caret_blink.visibility(),
+            );
         }
         self.presentation = Some(presentation);
+        self.update_ime_cursor_area();
     }
 
     fn logical_pointer_position(&self, physical_x: f64, physical_y: f64) -> Point {
@@ -127,10 +149,47 @@ impl NativeApp {
         }
     }
 
+    fn update_ime_cursor_area(&self) {
+        if !self.interaction.composer_focused() {
+            return;
+        }
+        let Some(bounds) = self
+            .presentation
+            .as_ref()
+            .and_then(|presentation| presentation.ime_cursor_area)
+        else {
+            return;
+        };
+        if let Some(window) = self.window.as_ref() {
+            window.set_ime_cursor_area(ImeCursorArea::new(
+                bounds.origin.x as f64,
+                bounds.origin.y as f64,
+                bounds.size.width as f64,
+                bounds.size.height as f64,
+            ));
+        }
+    }
+
     fn apply_interaction_effect(&mut self, effect: InteractionEffect) {
         match effect {
             InteractionEffect::None => {}
             InteractionEffect::Redraw => {
+                self.rebuild_presentation();
+                self.request_redraw();
+            }
+            InteractionEffect::FocusComposer => {
+                self.caret_blink.focus(Instant::now());
+                if let Some(window) = self.window.as_ref() {
+                    window.enable_ime();
+                }
+                self.rebuild_presentation();
+                self.request_redraw();
+            }
+            InteractionEffect::BlurComposer => {
+                self.caret_blink.blur();
+                if let Some(window) = self.window.as_ref() {
+                    window.disable_ime();
+                }
                 self.rebuild_presentation();
                 self.request_redraw();
             }
@@ -168,6 +227,69 @@ impl NativeApp {
             ElementState::Pressed => self.interaction.press_primary(),
             ElementState::Released => self.interaction.release_primary(),
         };
+        self.apply_interaction_effect(effect);
+    }
+
+    fn keyboard_input(&mut self, event: KeyEvent) {
+        if event.state != ElementState::Pressed || !self.interaction.composer_focused() {
+            return;
+        }
+        if event.logical_key == Key::Named(NamedKey::Escape) {
+            self.caret_blink.activity(Instant::now());
+            let effect = self
+                .interaction
+                .update_composition(TextInputCompositionEvent::Cancel);
+            self.apply_interaction_effect(effect);
+            return;
+        }
+        let selection_mode = if self.modifiers.shift_key() {
+            TextInputSelectionMode::Extend
+        } else {
+            TextInputSelectionMode::Move
+        };
+        let shortcut = self.modifiers.control_key() || self.modifiers.super_key();
+        let command = match &event.logical_key {
+            Key::Named(NamedKey::Backspace) => Some(TextInputCommand::Backspace),
+            Key::Named(NamedKey::Delete) => Some(TextInputCommand::DeleteForward),
+            Key::Named(NamedKey::ArrowLeft) => Some(TextInputCommand::MoveLeft(selection_mode)),
+            Key::Named(NamedKey::ArrowRight) => Some(TextInputCommand::MoveRight(selection_mode)),
+            Key::Named(NamedKey::Home) => Some(TextInputCommand::MoveToStart(selection_mode)),
+            Key::Named(NamedKey::End) => Some(TextInputCommand::MoveToEnd(selection_mode)),
+            Key::Character(text) if shortcut && text.eq_ignore_ascii_case("a") => {
+                Some(TextInputCommand::SelectAll)
+            }
+            _ if !shortcut => event
+                .text
+                .as_ref()
+                .map(|text| TextInputCommand::Insert(text.to_string())),
+            _ => None,
+        };
+        if let Some(command) = command {
+            self.caret_blink.activity(Instant::now());
+            let effect = self.interaction.edit_composer(command);
+            self.apply_interaction_effect(effect);
+        }
+    }
+
+    fn ime_input(&mut self, event: Ime) {
+        let event = match event {
+            Ime::Enabled => {
+                self.update_ime_cursor_area();
+                return;
+            }
+            Ime::Preedit(text, Some((start, end))) => TextInputCompositionEvent::Preedit {
+                text,
+                cursor: TextInputCompositionCursor::Visible(start..end),
+            },
+            Ime::Preedit(text, None) => TextInputCompositionEvent::Preedit {
+                text,
+                cursor: TextInputCompositionCursor::Hidden,
+            },
+            Ime::Commit(text) => TextInputCompositionEvent::Commit(text),
+            Ime::Disabled => TextInputCompositionEvent::Cancel,
+        };
+        self.caret_blink.activity(Instant::now());
+        let effect = self.interaction.update_composition(event);
         self.apply_interaction_effect(effect);
     }
 }
@@ -239,6 +361,17 @@ impl ApplicationHandler for NativeApp {
                 self.pointer_moved(position.x, position.y);
             }
             WindowEvent::CursorLeft { .. } => self.pointer_left(),
+            WindowEvent::ModifiersChanged(modifiers) => {
+                self.modifiers = modifiers.state();
+            }
+            WindowEvent::KeyboardInput { event, .. } => self.keyboard_input(event),
+            WindowEvent::Ime(event) => self.ime_input(event),
+            WindowEvent::Focused(false) => {
+                self.modifiers = ModifiersState::default();
+                let effect = self.interaction.window_focus_lost();
+                self.apply_interaction_effect(effect);
+            }
+            WindowEvent::Focused(true) => {}
             WindowEvent::MouseInput {
                 state,
                 button: MouseButton::Left,
@@ -255,5 +388,17 @@ impl ApplicationHandler for NativeApp {
             WindowEvent::RedrawRequested => self.redraw(event_loop),
             _ => {}
         }
+    }
+
+    fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+        if let CaretBlinkAdvance::VisibilityChanged(_) = self.caret_blink.advance(Instant::now()) {
+            self.rebuild_presentation();
+            self.request_redraw();
+        }
+        let control_flow = match self.caret_blink.next_deadline() {
+            Some(deadline) => ControlFlow::WaitUntil(deadline),
+            None => ControlFlow::Wait,
+        };
+        event_loop.set_control_flow(control_flow);
     }
 }

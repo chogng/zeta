@@ -1,5 +1,7 @@
 use super::{InteractionEffect, SessionId, ShellHitMap, ShellInteraction, ShellTarget};
-use zeta_ui::{Point, Rect};
+use zeta_ui::{
+    Point, Rect, TextInputCommand, TextInputCompositionCursor, TextInputCompositionEvent,
+};
 
 #[test]
 fn last_registered_hit_region_has_priority() {
@@ -10,34 +12,12 @@ fn last_registered_hit_region_has_priority() {
     );
     hit_map.register(
         Rect::from_xywh(60.0, 5.0, 35.0, 30.0),
-        ShellTarget::ThemeToggle,
+        ShellTarget::Session(SessionId::Renderer),
     );
     let mut interaction = ShellInteraction::default();
 
     interaction.pointer_moved(Point::new(70.0, 20.0), &hit_map);
     assert_eq!(interaction.press_primary(), InteractionEffect::Redraw);
-}
-
-#[test]
-fn theme_toggle_activates_only_on_matching_release_target() {
-    let mut hit_map = ShellHitMap::default();
-    hit_map.register(
-        Rect::from_xywh(0.0, 0.0, 80.0, 32.0),
-        ShellTarget::ThemeToggle,
-    );
-    let mut interaction = ShellInteraction::default();
-    let initial_theme = interaction.theme();
-
-    interaction.pointer_moved(Point::new(10.0, 10.0), &hit_map);
-    interaction.press_primary();
-    interaction.pointer_left();
-    interaction.release_primary();
-    assert_eq!(interaction.theme(), initial_theme);
-
-    interaction.pointer_moved(Point::new(10.0, 10.0), &hit_map);
-    interaction.press_primary();
-    interaction.release_primary();
-    assert_eq!(interaction.theme(), initial_theme.next());
 }
 
 #[test]
@@ -78,4 +58,38 @@ fn titlebar_press_requests_native_window_drag() {
         interaction.press_primary(),
         InteractionEffect::StartWindowDrag
     );
+}
+
+#[test]
+fn composer_focus_gates_editing_and_clears_preedit_on_blur() {
+    let mut hit_map = ShellHitMap::default();
+    hit_map.register(
+        Rect::from_xywh(0.0, 0.0, 120.0, 40.0),
+        ShellTarget::Composer,
+    );
+    let mut interaction = ShellInteraction::default();
+
+    assert_eq!(
+        interaction.edit_composer(TextInputCommand::Insert("ignored".to_owned())),
+        InteractionEffect::None
+    );
+    interaction.pointer_moved(Point::new(10.0, 10.0), &hit_map);
+    interaction.press_primary();
+    assert_eq!(
+        interaction.release_primary(),
+        InteractionEffect::FocusComposer
+    );
+    interaction.edit_composer(TextInputCommand::Insert("hello".to_owned()));
+    interaction.update_composition(TextInputCompositionEvent::Preedit {
+        text: "世".to_owned(),
+        cursor: TextInputCompositionCursor::Visible(3..3),
+    });
+
+    assert_eq!(interaction.composer().text(), "hello");
+    assert!(interaction.composer().composition().is_some());
+    assert_eq!(
+        interaction.window_focus_lost(),
+        InteractionEffect::BlurComposer
+    );
+    assert!(interaction.composer().composition().is_none());
 }

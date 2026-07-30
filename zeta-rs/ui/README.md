@@ -2,7 +2,9 @@
 
 > 本 README 是 native UI scene、paint primitives、font catalog 与 GPU 绘制路径的当前实现说明。
 > Surface 生命周期与 presentation 的 canonical 文档在
-> [`zeta-wgpu`](../wgpu/README.md)；产品 UI 架构尚无独立系统文档。
+> [`zeta-wgpu`](../wgpu/README.md)；native 文本输入的跨 crate ownership 见
+> [`docs/native-text-input.md`](../../docs/native-text-input.md)；product icon system 见
+> [`docs/icons.md`](../../docs/icons.md)。
 
 `zeta-ui` 定义与窗口系统无关的 immutable frame scene，实现 instanced rect、symbolic SVG
 icon 与 text GPU pipeline。SVG icon 由 `resvg` 栅格为按 physical size 缓存的 alpha mask，
@@ -13,13 +15,19 @@ CoreText 读取；CoreText 当前不承担文本 shaping 或 glyph rasterization
 
 | 能力 | 当前 owner | 状态 |
 | --- | --- | --- |
+| Presentation-only component contract 与 scene composition | `zeta-ui::Component` / `UiScene` | ✅ |
+| Text 与 symbolic-icon button 的状态、样式和内部布局 | `zeta-ui::Button` | ✅ |
+| Icon+text label 的内部布局 | `zeta-ui::IconLabel` | ✅ |
+| Semantic icon identity、SVG definition 与 rendering mode | `zeta-icons` | 委托 |
+| 非 component 单行编辑基座与 shaping | `TextInput` / `TextInputLayoutEngine` | ✅ |
+| Input-box chrome、状态与 scene composition | `InputBox` | ✅ |
 | Rect、symbolic SVG icon、clip 与文本 scene | `zeta-ui::UiScene` | ✅ |
 | 系统 font-family 枚举 | `zeta-ui::FontCatalog` | ✅ |
 | macOS CoreText font catalog adapter | `font::platform::macos` | ✅ |
 | shaping、fallback、glyph raster/cache | `glyphon` / `cosmic-text` / `swash` | 委托 |
 | Instanced rect、icon atlas 与 glyph text draw pipeline | `zeta-ui::UiRenderer` | ✅ |
 | Surface acquire/configure/present | `zeta-wgpu::WgpuRenderer` | ❌ |
-| Widget、layout、input、IME、accessibility | 尚无 owner | 尚未完成 |
+| Focus、input routing、IME lifecycle、accessibility | product host | ❌ |
 
 依赖方向：
 
@@ -29,6 +37,7 @@ product host → zeta-wgpu → zeta-ui
 
 zeta-ui → glyphon → cosmic-text / swash
         → resvg → usvg / tiny-skia
+        → zeta-icons
 zeta-ui(macOS font catalog) → coretext-rs → CoreText
 
 zeta-ui -X→ zeta-winit
@@ -43,9 +52,17 @@ DirectWrite 或 fontconfig 类型。
 
 | Symbol | 可见性 | 精确职责 |
 | --- | --- | --- |
+| `components::component::Component` | public | 把 caller-provided presentation state 转成 scene primitives；不拥有 input 或 lifecycle |
+| `components::button::{Button, ButtonState}` | public | 根据 host 投影的 resting/hovered/pressed 状态绘制 text 或 icon+text button |
+| `components::icon_label::{IconLabel, IconLabelStyle}` | public | 对齐 semantic icon 与单行 text；不选择产品 icon |
+| `text_input::model::TextInput` | public | 拥有 single-line text、selection、grapheme editing 与 composition；不实现 `Component` |
+| `text_input::caret_blink::CaretBlinkController` | public | 计算 focus/activity/deadline 驱动的 caret visibility；不创建 timer |
+| `text_input::layout::TextInputLayoutEngine` | public | 使用 cosmic-text 生成单行 text、selection、caret、preedit 几何 |
+| `text_input::layout::DisplayProjection` | private | 把 committed text 与临时 preedit 投影为单次 shaping 输入 |
+| `components::input_box::InputBox` | public | 组合 base layout 与 input-box chrome/style，并实现 `Component` |
 | `geometry::{Rect, Edges, CornerRadii}` | public | 使用 logical UI pixels 表达几何与 visual metrics |
 | `paint::{PaintRect, Border, Color}` | public | 表达 fill、per-edge border、rounded corners 与 sRGB color |
-| `icon::{SvgIcon, PaintIcon}` | public | 绑定静态 SVG bytes，并以 logical bounds 和主题色表达 symbolic icon |
+| `icon::PaintIcon` | public | 把 `zeta-icons::Icon` 绑定到 logical bounds、caller tint 与 clip |
 | `scene::UiScene` | public | 保存一帧背景、rect、icon、text 和构建时的 nested clip |
 | `scene::TextBlock` / `TextStyle` | public | 使用 logical UI pixels 表达文本、bounds 和样式 |
 | `font::catalog::FontCatalog` | public | 加载、排序并去重系统 family names |
@@ -66,7 +83,15 @@ height 都使用 logical UI pixels；`UiRenderer::prepare` 是唯一 logical-to-
 
 ```text
 host
+  → TextInput::apply / apply_composition (editing only)
+  → CaretBlinkController::focus / activity / advance
+  → InputBox::new
+      → TextInputLayoutEngine::layout
   → UiScene::new
+  → UiScene::draw_component
+      → Component::paint
+          ├─ Button state/style → IconLabel → icon/text primitives
+          └─ InputBox → rect/text primitives
   → UiScene::draw_rect / UiScene::draw_icon / UiScene::with_clip
   → UiScene::draw_text
   → zeta_wgpu::WgpuRenderer::render_scene
@@ -88,8 +113,9 @@ host
 
 `UiRenderer::prepare` 每帧上传当前 rect/icon instances 并重建 text buffers，但保留 GPU
 pipeline、symbolic icon atlas、`FontSystem`、`SwashCache`、`TextAtlas` 和 `TextRenderer`。
-Icon cache key 是 SVG 内容与 physical width/height；scale factor 或 logical size 改变时生成新的
-mask，主题 tint 不进入缓存键。Instance buffer 按需扩展到下一个 power-of-two capacity；
+Icon cache key 是 semantic definition 与 physical width/height；scale factor 或 logical size
+改变时生成新的 mask，caller tint 不进入缓存键。Instance buffer 按需扩展到下一个
+power-of-two capacity；
 glyph cache 与两个 atlas 跨帧存活。背景色由 `zeta-wgpu` 做 sRGB 到 linear 转换；rect/icon
 color 在 renderer 中转 linear，glyph color 保持 sRGB bytes 交给 glyphon。
 
@@ -113,14 +139,28 @@ CoreGraphics raster 或原生 typographic metrics 已经成为绘制事实。
 - rect/icon/text origin、bounds、clip 与 visual metrics 必须 finite；
 - rect bounds 不能为负，border widths 和 corner radii 不能为负；
 - icon bounds 不能为负，SVG 必须可解析，且 physical raster 必须能放入固定 icon atlas；
+- `IconRendering::Multicolor` 当前返回 `UnsupportedMulticolorIcon`，不能进入 symbolic atlas；
 - text bounds、font size 与 line height 必须大于零；
 - 校验失败返回对应的 `InvalidScaleFactor`、`InvalidPaintRect`、`InvalidPaintIcon`、
-  `InvalidSvgIcon`、`IconRasterTooLarge`、`IconAtlasFull` 或 `InvalidTextBlock`；
+  `InvalidSvgIcon`、`UnsupportedMulticolorIcon`、`IconRasterTooLarge`、`IconAtlasFull` 或
+  `InvalidTextBlock`；
 - glyphon atlas preparation/render failure 分别保留为 `Prepare` 与 `Render`；
 - surface retry、lost 与 presentation failure 仍由 `zeta-wgpu` 负责。
 
 Host 必须先根据当前 logical layout 构造完整 `UiScene`，再把同一帧的 physical extent 与 scale
 factor 交给 renderer。不要预先把 text coordinates 乘 DPI，否则会发生二次缩放。
+`Component` implementation 只能消费 caller 已投影好的 presentation state 并发出 primitives；
+component bounds、hit registration、event dispatch 和 authoritative state transition 仍由 host
+拥有。`UiScene::draw_component` 在当前 nested clip 内同步 paint，不引入 retained component
+instance、隐式 identity 或 lifecycle。`Button` 拥有 control 内部 padding 和 state-specific
+background selection，并把 icon/text placement 委托给 `IconLabel`；caller 必须显式提供
+`ButtonState`、`ButtonStyle`、bounds 与可选 semantic `Icon`。
+`TextInput` 拥有 local editing state 和 composition，但不拥有 focus、platform IME lifecycle、
+component chrome 或产品 reducer。`InputBox::new` 使用 `TextInputLayoutEngine` 从 base state
+生成 immutable layout，再组合 background、border、placeholder、selection、caret 和 preedit
+presentation。`InputBoxState::Focused(CaretVisibility)` 显式投影 blink phase；组件不读取时钟。
+IME 候选框定位读取同一个 `InputBox::caret_bounds`，即使 blink phase 隐藏也不能按字符数量另行
+估算。
 
 ## 6. 测试与修改路径
 
@@ -129,10 +169,12 @@ cargo test --manifest-path zeta-rs/Cargo.toml -p zeta-ui
 bazel test //zeta-rs/ui:ui-unit-tests
 ```
 
-单元测试覆盖 geometry intersection、radii clamp、nested clip、SVG alpha raster、atlas
-allocation、rect instance conversion、paint/icon/text validation、style defaults 与 font
-family canonicalization。它们不创建真实 GPU device；真实 shader、icon/glyph output、
-fallback 和 HiDPI 需要各平台的 surface smoke 或 snapshot harness。
+单元测试覆盖 component clip composition、button/icon-label/input-box state/style/layout、TextInput
+grapheme editing/composition、caret blink phase、selection/caret/preedit shaping、geometry
+intersection、radii clamp、nested clip、SVG alpha raster、atlas allocation、rect instance
+conversion、paint/icon/text validation、style defaults 与 font family canonicalization。它们不
+创建真实 GPU device；真实 shader、icon/glyph output、fallback 和 HiDPI 需要各平台的 surface
+smoke 或 snapshot harness。
 
 - 扩展 text style：同步修改 `scene.rs`、glyphon mapping、tests 与本 README；
 - 更换 shaping/raster backend：保持 `UiScene` 平台无关，并更新字体语义与 failure contract；
@@ -146,8 +188,19 @@ Current limitations：
 
 - scene 有背景、rect、symbolic icon 和 text，没有 RGBA image、path、transform 或统一的跨
   primitive z-order；当前 render order 固定为 rect → icon → text；
+- component contract 当前是 immediate presentation composition，没有 component tree、identity、
+  mount/unmount lifecycle、invalidation propagation 或 retained layout；
+- `Button` 当前支持 resting、hovered、pressed 和可选 leading icon，尚无 disabled、focus ring、
+  trailing content 或 accessibility contract；
+- symbolic atlas 尚不支持 `IconRendering::Multicolor`；
+- `TextInput` 是 single-line base，没有 focus/platform IME owner、undo/redo、clipboard 或
+  accessibility contract；
+- `InputBox` 消费显式 blink phase，但没有 mouse caret hit testing、drag selection 或
+  disabled/read-only presentation；
+- native 当前使用 `CaretBlinkController::default` 的 530ms half-period，尚未读取系统 caret
+  blink preference 或 reduced-motion setting；
 - clip 当前是 axis-aligned logical rect；不支持 rounded/path clip 或 nested GPU scissor stack；
-- 没有 widget tree、layout engine、focus、input、IME 或 accessibility；
+- 没有 widget tree、通用 layout engine、focus、input routing、IME lifecycle 或 accessibility；
 - 每帧重建 glyphon text buffers，尚无 paragraph-level retained cache；
 - `FontWeight` 与 `FontStyle` 只有常用 semantic variants；
 - CoreText 只做 catalog，不做 shaping/raster，也没有 app font registration；

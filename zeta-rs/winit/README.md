@@ -2,6 +2,8 @@
 
 > 本 README 负责 native event-loop/window crate 的当前实现、集成义务和修改路径。
 > GPU surface 与 presentation 由 [`zeta-wgpu`](../wgpu/README.md) 拥有。
+> Native 文本输入的跨 crate ownership 见
+> [`docs/native-text-input.md`](../../docs/native-text-input.md)。
 
 `zeta-winit` 是架构分类中位于 App Server 下方的底层 native host adapter。它封装 `winit`
 event-loop bootstrap、window ownership 与 persistent display handle，但不拥有任何产品身份、
@@ -18,10 +20,12 @@ App Server connection、UI tree 或渲染状态。
 | `WindowChrome` / `apply_window_chrome` | public | 把命名 chrome policy 转换为平台 attributes | titlebar paint/layout |
 | `NativeWindow::start_window_drag` | public | 转发产品 titlebar 命中的平台窗口拖动 | hit testing |
 | `NativeWindow::set_cursor` | public | 应用产品 hit testing 选择的 cursor | hover state |
+| `NativeWindow::enable_ime` / `disable_ime` | public | 转发产品 focus 选择的 IME activation | focus 或 composition |
+| `ImeCursorArea` / `set_ime_cursor_area` | public | 把 logical caret area 转发给平台候选框 | shaping 或 caret policy |
 
-`ApplicationHandler`、`ActiveEventLoop`、`WindowEvent`、`WindowAttributes`、`WindowId` 和
-`LogicalSize` 由本 crate 重新导出，使上层 host 不需要绕过 adapter 建立另一套 `winit`
-integration。
+`ApplicationHandler`、`ActiveEventLoop`、`ControlFlow`、`WindowEvent`、keyboard/IME event values、
+`WindowAttributes`、`WindowId` 和 `LogicalSize` 由本 crate 重新导出，使上层 host 不需要
+绕过 adapter 建立另一套 `winit` integration。
 
 真实调用关系：
 
@@ -32,6 +36,8 @@ product-owned ApplicationHandler
        ├─ ActiveEventLoop::create_window
        └─ ActiveEventLoop::owned_display_handle
   → NativeWindow event/redraw methods
+  → ActiveEventLoop::set_control_flow (product-owned wakeup deadline)
+  → enable_ime / disable_ime / set_ime_cursor_area
   → apply_window_chrome (optional platform chrome adaptation)
   → zeta-wgpu consumes surface_target + display_handle
 ```
@@ -45,6 +51,8 @@ product-owned ApplicationHandler
 - event-loop 与 window creation error 原样返回，产品决定诊断、恢复或退出；
 - `NativeWindow` 只提供 handle、identity、extent、scale factor、redraw/present hooks 与原生窗口
   交互 forwarding；
+- IME 默认保持关闭；product host 必须根据 editable focus 显式启停，并只在 active composition
+  contract 内更新 logical candidate area；
 - 出现 App Server method、workspace state、widget、paint scene 或 GPU resource 意味着 ownership
   已漂移。
 
@@ -57,5 +65,5 @@ cargo test --manifest-path zeta-rs/Cargo.toml -p zeta-winit
 当前单元测试只验证无平台依赖的值语义。CI 编译不能代替 macOS、Windows、Linux 的真实窗口、
 resume/suspend、DPI 与多窗口 smoke。
 
-当前没有产品 event handler、默认窗口策略、clipboard、IME、accessibility、file drag/drop 或
-platform menu；这些能力必须在出现明确 owner 与 representative product vertical 后分层加入。
+当前没有产品 event handler、默认窗口策略、clipboard、accessibility、file drag/drop 或
+platform menu。IME 仅有 platform forwarding，不拥有 focus、composition 或文本编辑语义。

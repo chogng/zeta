@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use winit::dpi::{LogicalPosition, LogicalSize};
 use winit::error::{ExternalError, OsError};
 use winit::event_loop::{ActiveEventLoop, OwnedDisplayHandle};
 use winit::window::{CursorIcon, Window, WindowAttributes, WindowId};
@@ -14,6 +15,26 @@ pub struct PhysicalExtent {
 impl PhysicalExtent {
     pub const fn new(width: u32, height: u32) -> Self {
         Self { width, height }
+    }
+}
+
+/// Logical window coordinates used to position the platform IME candidate UI.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ImeCursorArea {
+    pub x: f64,
+    pub y: f64,
+    pub width: f64,
+    pub height: f64,
+}
+
+impl ImeCursorArea {
+    pub const fn new(x: f64, y: f64, width: f64, height: f64) -> Self {
+        Self {
+            x,
+            y,
+            width,
+            height,
+        }
     }
 }
 
@@ -70,6 +91,24 @@ impl NativeWindow {
     /// Updates the pointer cursor requested by product-owned hit testing.
     pub fn set_cursor(&self, cursor: CursorIcon) {
         self.window.set_cursor(cursor);
+    }
+
+    /// Enables platform text input and IME events for the focused editable control.
+    pub fn enable_ime(&self) {
+        self.window.set_ime_allowed(true);
+    }
+
+    /// Disables platform text input and IME events when no editable control is focused.
+    pub fn disable_ime(&self) {
+        self.window.set_ime_allowed(false);
+    }
+
+    /// Updates the logical caret area used to place platform IME candidate UI.
+    pub fn set_ime_cursor_area(&self, area: ImeCursorArea) {
+        self.window.set_ime_cursor_area(
+            LogicalPosition::new(area.x, area.y),
+            LogicalSize::new(area.width, area.height),
+        );
     }
 
     /// Notifies the platform immediately before a rendered frame is presented.
