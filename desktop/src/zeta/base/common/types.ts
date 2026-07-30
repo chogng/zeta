@@ -3,10 +3,12 @@
  */
 export function assert(
   condition: unknown,
-  message: string,
+  messageOrError: string | Error,
 ): asserts condition {
   if (!condition) {
-    throw new Error(message);
+    throw typeof messageOrError === "string"
+      ? new Error(messageOrError)
+      : messageOrError;
   }
 }
 
@@ -15,7 +17,7 @@ export function assert(
  */
 export function assertDefined<T>(
   value: T,
-  message: string,
+  messageOrError: string | Error,
 ): asserts value is NonNullable<T> {
-  assert(value !== undefined && value !== null, message);
+  assert(value !== undefined && value !== null, messageOrError);
 }

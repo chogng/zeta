@@ -3,6 +3,7 @@ import { ActionViewItem } from "../../../../../base/browser/ui/actionbar/actionV
 import type { IAction } from "../../../../../base/common/actions.js";
 import { lxiconsLibrary } from "../../../../../base/common/lxiconsLibrary.js";
 import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
+import { assertDefined } from "../../../../../base/common/types.js";
 import { MenuWorkbenchToolBar } from "../../../../../platform/actions/browser/toolbar.js";
 import { MenuId, MenusRegistry } from "../../../../../platform/actions/common/actions.js";
 import type { IMenuService } from "../../../../../platform/actions/common/menuService.js";
@@ -158,14 +159,14 @@ export class TerminalTitleActions extends DisposableOwner {
 }
 
 class TerminalProfileActionViewItem extends ActionViewItem {
-  private select: HTMLSelectElement | undefined;
+  private _select: HTMLSelectElement | undefined;
 
   constructor(action: IAction, readonly profiles: () => readonly ITerminalProfile[], readonly selectedProfileId: () => string | undefined) { super(action); }
 
   override render(container: HTMLElement): void {
     container.classList.add("zeta-terminal-profile-action");
     const select = container.ownerDocument.createElement("select");
-    this.select = select;
+    this._select = select;
     select.className = "zeta-terminal-profile";
     select.setAttribute("aria-label", "Terminal profile");
     select.disabled = !this.action.enabled;
@@ -185,15 +186,15 @@ class TerminalProfileActionViewItem extends ActionViewItem {
   }
 
   override focus(): void {
-    this.requireSelect().focus();
+    this.select.focus();
   }
 
   override setTabbable(tabbable: boolean): void {
-    this.requireSelect().tabIndex = tabbable ? 0 : -1;
+    this.select.tabIndex = tabbable ? 0 : -1;
   }
 
-  private requireSelect(): HTMLSelectElement {
-    if (!this.select) throw new Error("Terminal profile action is not rendered");
-    return this.select;
+  private get select(): HTMLSelectElement {
+    assertDefined(this._select, "Terminal profile action is not rendered");
+    return this._select;
   }
 }

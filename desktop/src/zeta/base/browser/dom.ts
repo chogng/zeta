@@ -35,7 +35,9 @@ export function addDisposableListener(
   let activeTarget: EventTarget | undefined = target;
   let activeListener: EventListener | undefined = eventListener;
   return toDisposable(() => {
-    activeTarget?.removeEventListener(type, activeListener!, options);
+    if (activeTarget && activeListener) {
+      activeTarget.removeEventListener(type, activeListener, options);
+    }
     activeTarget = undefined;
     activeListener = undefined;
   });

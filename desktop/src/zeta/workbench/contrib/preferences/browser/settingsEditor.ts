@@ -290,7 +290,8 @@ export class SettingsEditor extends DisposableOwner {
     this.sectionBindings.add(addDisposableListener(customize, "click", () => this.startThemeEditing()));
     customization.append(customize);
     group.append(legend, hint, options, status, customization);
-    if (this.themeDraft) group.append(this.renderThemeEditor(document, group, status));
+    const draft = this.themeDraft;
+    if (draft) group.append(this.renderThemeEditor(document, group, status, draft));
     const userThemeStatus = renderUserThemeStatus(document, this.userThemeService);
     if (userThemeStatus) group.append(userThemeStatus);
     this.sectionContent.replaceChildren(group);
@@ -306,18 +307,20 @@ export class SettingsEditor extends DisposableOwner {
     const currentTheme = this.themeService.getColorTheme();
     const userThemeId = this.activeUserThemeId();
     const existingSource = userThemeId ? this.userThemeService.getSource(userThemeId) : undefined;
-    if (userThemeId && !existingSource) {
-      this.themeMessage = `Unable to read the JSON source for '${userThemeId}'.`;
-      this.renderAppearance();
-      return;
+    if (userThemeId) {
+      if (!existingSource) {
+        this.themeMessage = `Unable to read the JSON source for '${userThemeId}'.`;
+        this.renderAppearance();
+        return;
+      }
+      this.themeDraft = { kind: "update", originalTheme: currentTheme, source: existingSource, themeId: userThemeId };
+    } else {
+      this.themeDraft = {
+        kind: "create",
+        originalTheme: currentTheme,
+        source: serializeUserColorThemeDraft(currentTheme, this.availableDraftId(currentTheme), `My ${currentTheme.colorScheme === "light" ? "Light" : "Dark"} Theme`),
+      };
     }
-    this.themeDraft = userThemeId
-      ? { kind: "update", originalTheme: currentTheme, source: existingSource!, themeId: userThemeId }
-      : {
-          kind: "create",
-          originalTheme: currentTheme,
-          source: serializeUserColorThemeDraft(currentTheme, this.availableDraftId(currentTheme), `My ${currentTheme.colorScheme === "light" ? "Light" : "Dark"} Theme`),
-        };
     this.themeMessage = "";
     this.renderAppearance();
     this.sectionContent.querySelector<HTMLTextAreaElement>(".zeta-theme-json-editor")?.focus();
@@ -331,8 +334,7 @@ export class SettingsEditor extends DisposableOwner {
     return candidate;
   }
 
-  private renderThemeEditor(document: Document, group: HTMLFieldSetElement, status: HTMLParagraphElement): HTMLElement {
-    const draft = this.themeDraft!;
+  private renderThemeEditor(document: Document, group: HTMLFieldSetElement, status: HTMLParagraphElement, draft: ThemeDraft): HTMLElement {
     const editor = document.createElement("section");
     editor.className = "zeta-theme-json";
     const heading = document.createElement("h4");
@@ -505,14 +507,15 @@ function themeOptions(userThemeService: IUserThemeService): readonly ThemeOption
       description: "Automatically follow the operating system.",
       previewThemes: [lightColorTheme, darkColorTheme],
     },
-    ...WorkbenchThemesRegistry.getColorThemes().map((theme) => ({
-      value: theme.id,
-      label: theme.label,
-      description: userThemeService.sourceFor(theme.id)
-        ? `User theme · ${userThemeService.sourceFor(theme.id)!.file}`
-        : `Use ${theme.label} on this device.`,
-      previewThemes: [theme],
-    })),
+    ...WorkbenchThemesRegistry.getColorThemes().map((theme) => {
+      const source = userThemeService.sourceFor(theme.id);
+      return {
+        value: theme.id,
+        label: theme.label,
+        description: source ? `User theme · ${source.file}` : `Use ${theme.label} on this device.`,
+        previewThemes: [theme],
+      };
+    }),
   ];
 }
 

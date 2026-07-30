@@ -3,6 +3,7 @@ import {
   type IDisposable,
   DisposableOwner,
 } from "../../base/common/lifecycle.js";
+import { assertDefined } from "../../base/common/types.js";
 import type {
   ProductConfiguration,
 } from "../../product/common/product.js";
@@ -425,7 +426,9 @@ export class Workbench extends DisposableOwner {
       }
       sidebar.showComposite(viewContainer.id);
       sidebar.setActiveComposite(viewContainer.id);
-      return sidebar.getComposite(viewContainer.id)!;
+      const composite = sidebar.getComposite(viewContainer.id);
+      assertDefined(composite, `Sidebar Composite is not available: ${viewContainer.id}`);
+      return composite;
     };
     openSidebarComposite(sidebarCompositeDescriptor.id);
     const panel = this.own(new PanelPart({
@@ -460,7 +463,9 @@ export class Workbench extends DisposableOwner {
       }
       panel.showComposite(viewContainer.id);
       panel.setActiveComposite(viewContainer.id);
-      return panel.getComposite(viewContainer.id)!;
+      const composite = panel.getComposite(viewContainer.id);
+      assertDefined(composite, `Panel Composite is not available: ${viewContainer.id}`);
+      return composite;
     };
     openPanelComposite(panelCompositeDescriptor.id);
     const auxiliarybar = this.own(new AuxiliarybarPart(ownerDocument));

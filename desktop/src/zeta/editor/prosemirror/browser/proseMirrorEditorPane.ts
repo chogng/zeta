@@ -11,6 +11,7 @@ import type {
 import {
   DisposableOwner,
 } from "../../../base/common/lifecycle.js";
+import { assertDefined } from "../../../base/common/types.js";
 import type {
   EditorInput,
 } from "../../../workbench/browser/parts/editor/editorInput.js";
@@ -32,11 +33,11 @@ export class ProseMirrorEditorPane extends DisposableOwner
   implements IEditorPane {
   readonly id = PROSEMIRROR_EDITOR_ID;
 
-  private container: HTMLDivElement | undefined;
-  private view: EditorView | undefined;
+  private _container: HTMLDivElement | undefined;
+  private _view: EditorView | undefined;
 
   create(parent: HTMLElement): void {
-    if (this.container) {
+    if (this._container) {
       throw new ReferenceError(
         "ProseMirrorEditorPane has already been created",
       );
@@ -44,11 +45,11 @@ export class ProseMirrorEditorPane extends DisposableOwner
     const container = parent.ownerDocument.createElement("div");
     container.className = "zeta-prosemirror-editor-pane";
     parent.append(container);
-    this.container = container;
+    this._container = container;
     this.defer(() => {
       this.destroyView();
       container.remove();
-      this.container = undefined;
+      this._container = undefined;
     });
   }
 
@@ -56,7 +57,7 @@ export class ProseMirrorEditorPane extends DisposableOwner
     input: EditorInput,
     signal: AbortSignal,
   ): Promise<void> {
-    const container = this.requireContainer();
+    const container = this.container;
     throwIfAborted(signal);
     const state = createProseMirrorEditorState(input.initialText ?? "");
     throwIfAborted(signal);
@@ -73,7 +74,7 @@ export class ProseMirrorEditorPane extends DisposableOwner
       view.destroy();
       throw abortError();
     }
-    this.view = view;
+    this._view = view;
   }
 
   clearInput(): void {
@@ -81,52 +82,41 @@ export class ProseMirrorEditorPane extends DisposableOwner
   }
 
   layout(dimension: IDimension): void {
-    const container = this.container;
+    const container = this._container;
     if (!container) return;
     container.style.width = `${Math.max(0, dimension.width)}px`;
     container.style.height = `${Math.max(0, dimension.height)}px`;
   }
 
   setVisible(visibility: EditorPaneVisibility): void {
-    if (this.container) {
-      this.container.hidden =
+    if (this._container) {
+      this._container.hidden =
         visibility === EditorPaneVisibility.Hidden;
     }
   }
 
   focus(): void {
-    const view = this.view;
-    if (!view) {
-      throw new ReferenceError(
-        "ProseMirrorEditorPane has no active input",
-      );
-    }
-    view.focus();
+    this.view.focus();
   }
 
   getDocument(): ProseMirrorNode {
-    const view = this.view;
-    if (!view) {
-      throw new ReferenceError(
-        "ProseMirrorEditorPane has no active input",
-      );
-    }
-    return view.state.doc;
+    return this.view.state.doc;
   }
 
   private destroyView(): void {
-    this.view?.destroy();
-    this.view = undefined;
-    this.container?.replaceChildren();
+    this._view?.destroy();
+    this._view = undefined;
+    this._container?.replaceChildren();
   }
 
-  private requireContainer(): HTMLDivElement {
-    if (!this.container) {
-      throw new ReferenceError(
-        "ProseMirrorEditorPane has not been created",
-      );
-    }
-    return this.container;
+  private get container(): HTMLDivElement {
+    assertDefined(this._container, new ReferenceError("ProseMirrorEditorPane has not been created"));
+    return this._container;
+  }
+
+  private get view(): EditorView {
+    assertDefined(this._view, new ReferenceError("ProseMirrorEditorPane has no active input"));
+    return this._view;
   }
 }
 

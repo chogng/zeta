@@ -43,14 +43,15 @@ export function acquireMonacoModel(input: EditorInput): IMonacoModelReference {
       monacoLanguageForInput(input),
     );
   }
-  entry.references += 1;
+  const acquiredEntry = entry;
+  acquiredEntry.references += 1;
   let released = false;
   return {
-    model: entry.model,
+    model: acquiredEntry.model,
     dispose: () => {
       if (released) return;
       released = true;
-      releaseModel(key, entry!);
+      releaseModel(key, acquiredEntry);
     },
   };
 }

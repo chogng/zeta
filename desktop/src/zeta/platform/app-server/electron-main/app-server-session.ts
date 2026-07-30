@@ -19,6 +19,7 @@ import {
   setDisposableOwner,
   trackDisposable,
 } from "../../../base/common/lifecycle.js";
+import { assertDefined } from "../../../base/common/types.js";
 import { AppServerClient } from "./app-server-client.js";
 import type {
   RpcMethodDefinition,
@@ -41,7 +42,7 @@ export interface AppServerSessionOptions {
  */
 export class AppServerSession implements IDisposable {
   private _state: AppServerSessionState = "created";
-  private initializeResult?: InitializeResult;
+  private _initializeResult: InitializeResult | undefined;
 
   constructor(
     readonly client: AppServerClient,
@@ -56,17 +57,11 @@ export class AppServerSession implements IDisposable {
   }
 
   get capabilities(): ServerCapabilities {
-    if (!this.initializeResult) {
-      throw new Error("App Server session is not initialized");
-    }
-    return this.initializeResult.capabilities;
+    return this.initialization.capabilities;
   }
 
   get serverInfo(): InitializeResult["serverInfo"] {
-    if (!this.initializeResult) {
-      throw new Error("App Server session is not initialized");
-    }
-    return this.initializeResult.serverInfo;
+    return this.initialization.serverInfo;
   }
 
   async initialize(): Promise<InitializeResult> {
@@ -100,7 +95,7 @@ export class AppServerSession implements IDisposable {
           `Zeta app-server schema mismatch: expected ${this.options.schemaHash}, received ${initialized.schemaHash}`,
         );
       }
-      this.initializeResult = initialized;
+      this._initializeResult = initialized;
       this._state = "ready";
       return initialized;
     } catch (error) {
@@ -169,6 +164,11 @@ export class AppServerSession implements IDisposable {
 
   [Symbol.dispose](): void {
     this.dispose();
+  }
+
+  private get initialization(): InitializeResult {
+    assertDefined(this._initializeResult, "App Server session is not initialized");
+    return this._initializeResult;
   }
 }
 

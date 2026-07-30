@@ -116,7 +116,9 @@ export class BrowserKeyboardLayoutService
 
   private async readKeyboardLayout(): Promise<void> {
     try {
-      const layoutMap = await this.navigator.keyboard!.getLayoutMap();
+      const keyboard = this.navigator.keyboard;
+      if (!keyboard) return;
+      const layoutMap = await keyboard.getLayoutMap();
       if (this.disposed) return;
       const nextLabels = new Map<string, string>();
       for (const [code, label] of layoutMap) {

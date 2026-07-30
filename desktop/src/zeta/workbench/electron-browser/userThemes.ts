@@ -1,4 +1,5 @@
 import { DisposableOwner, ResettableDisposableGroup } from "../../base/common/lifecycle.js";
+import { assertDefined } from "../../base/common/types.js";
 import { parseUserColorTheme } from "../../platform/theme/common/userColorTheme.js";
 import { type IUserThemeFileList, type IUserThemeFilesApi, validateUserThemeFileList } from "../../platform/theme/common/userThemeFiles.js";
 import { WorkbenchThemesRegistry } from "../common/theme.js";
@@ -93,10 +94,12 @@ export class ElectronUserThemeService extends DisposableOwner implements IUserTh
         continue;
       }
       try {
-        const theme = parseUserColorTheme(file.content!);
+        assertDefined(file.content, `User theme '${file.name}' has no content`);
+        const content = file.content;
+        const theme = parseUserColorTheme(content);
         this.registrations.add(WorkbenchThemesRegistry.registerColorTheme(theme));
         sources.push({ id: theme.id, file: file.name });
-        contents.set(theme.id, file.content!);
+        contents.set(theme.id, content);
       } catch (error) {
         issues.push({
           file: file.name,

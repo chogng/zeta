@@ -7,6 +7,7 @@ import type {
 import {
   DisposableOwner,
 } from "../../../base/common/lifecycle.js";
+import { assertDefined } from "../../../base/common/types.js";
 import type {
   IConfigurationService,
 } from "../../../platform/configuration/common/configuration.js";
@@ -36,8 +37,8 @@ export class MonacoEditorPane extends DisposableOwner
   implements IEditorPane {
   readonly id = MONACO_EDITOR_ID;
 
-  private container: HTMLDivElement | undefined;
-  private editor: monaco.editor.IStandaloneCodeEditor | undefined;
+  private _container: HTMLDivElement | undefined;
+  private _editor: monaco.editor.IStandaloneCodeEditor | undefined;
   private model: monaco.editor.ITextModel | undefined;
   private modelReference: IMonacoModelReference | undefined;
   private dimension: IDimension = { width: 0, height: 0 };
@@ -58,14 +59,14 @@ export class MonacoEditorPane extends DisposableOwner
   }
 
   create(parent: HTMLElement): void {
-    if (this.container) {
+    if (this._container) {
       throw new ReferenceError("MonacoEditorPane has already been created");
     }
     const container = parent.ownerDocument.createElement("div");
     container.className = "zeta-monaco-editor-pane";
     parent.append(container);
-    this.container = container;
-    this.editor = monaco.editor.create(container, {
+    this._container = container;
+    this._editor = monaco.editor.create(container, {
       automaticLayout: false,
       ...this.fontOptions(),
       minimap: { enabled: true },
@@ -74,10 +75,10 @@ export class MonacoEditorPane extends DisposableOwner
     });
     this.defer(() => {
       this.clearModel();
-      this.editor?.dispose();
-      this.editor = undefined;
+      this._editor?.dispose();
+      this._editor = undefined;
       container.remove();
-      this.container = undefined;
+      this._container = undefined;
     });
   }
 
@@ -85,7 +86,7 @@ export class MonacoEditorPane extends DisposableOwner
     input: EditorInput,
     signal: AbortSignal,
   ): Promise<void> {
-    const editor = this.requireEditor();
+    const editor = this.editor;
     throwIfAborted(signal);
     const modelReference = acquireMonacoModel(input);
     const model = modelReference.model;
@@ -112,19 +113,19 @@ export class MonacoEditorPane extends DisposableOwner
       width: Math.max(0, dimension.width),
       height: Math.max(0, dimension.height),
     };
-    this.editor?.layout(this.dimension);
+    this._editor?.layout(this.dimension);
   }
 
   setVisible(visibility: EditorPaneVisibility): void {
-    if (!this.container) return;
-    this.container.hidden = visibility === EditorPaneVisibility.Hidden;
+    if (!this._container) return;
+    this._container.hidden = visibility === EditorPaneVisibility.Hidden;
     if (visibility === EditorPaneVisibility.Visible) {
-      this.editor?.layout(this.dimension);
+      this._editor?.layout(this.dimension);
     }
   }
 
   focus(): void {
-    this.requireEditor().focus();
+    this.editor.focus();
   }
 
   getValue(): string {
@@ -140,14 +141,14 @@ export class MonacoEditorPane extends DisposableOwner
   }
 
   private clearModel(): void {
-    this.editor?.setModel(null);
+    this._editor?.setModel(null);
     this.modelReference?.dispose();
     this.modelReference = undefined;
     this.model = undefined;
   }
 
   private applyFontConfiguration(): void {
-    this.editor?.updateOptions(this.fontOptions());
+    this._editor?.updateOptions(this.fontOptions());
   }
 
   private fontOptions(): monaco.editor.IEditorOptions {
@@ -165,11 +166,9 @@ export class MonacoEditorPane extends DisposableOwner
     };
   }
 
-  private requireEditor(): monaco.editor.IStandaloneCodeEditor {
-    if (!this.editor) {
-      throw new ReferenceError("MonacoEditorPane has not been created");
-    }
-    return this.editor;
+  private get editor(): monaco.editor.IStandaloneCodeEditor {
+    assertDefined(this._editor, new ReferenceError("MonacoEditorPane has not been created"));
+    return this._editor;
   }
 }
 

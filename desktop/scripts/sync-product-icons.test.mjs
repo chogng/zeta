@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
+import { EventEmitter } from "node:events";
 import { mkdtemp, mkdir, readFile, rm, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
+import { productIconsPlugin } from "./product-icons-vite-plugin.mjs";
 import { syncProductIcons } from "./sync-product-icons.mjs";
 
 const addSvg = `<svg width="16" height="16" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
@@ -87,6 +89,44 @@ test("product icon generation rejects linked or active SVG content", async () =>
     await mkdir(sourceDirectory);
     await writeFile(join(sourceDirectory, "linked.svg"), `<svg viewBox="0 0 16 16"><a href="https://example.test"><path d="M0 0h1v1z"/></a></svg>`);
     await assert.rejects(syncProductIcons({ outputFile, sourceDirectory }), /unsupported active or external content/);
+  } finally {
+    await rm(root, { force: true, recursive: true });
+  }
+});
+
+test("Vite product icon integration regenerates and reloads after an SVG replacement", async () => {
+  const root = await mkdtemp(join(tmpdir(), "zeta-product-icons-vite-"));
+  const sourceDirectory = join(root, "icons");
+  const outputFile = join(root, "generated", "product-icons.ts");
+  try {
+    await mkdir(sourceDirectory);
+    const sourceFile = join(sourceDirectory, "close.svg");
+    await writeFile(sourceFile, '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path d="M3 3l10 10"/></svg>\n');
+
+    const watcher = new EventEmitter();
+    watcher.add = () => undefined;
+    const reload = Promise.withResolvers();
+    const plugin = productIconsPlugin({ sourceDirectory, outputFile, debounceMilliseconds: 0 });
+    plugin.configureServer({
+      watcher,
+      ws: {
+        send(message) {
+          reload.resolve(message);
+        },
+      },
+      config: {
+        logger: {
+          error(message) {
+            reload.reject(new Error(message));
+          },
+        },
+      },
+    });
+
+    await writeFile(sourceFile, '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path d="M1 1l14 14"/></svg>\n');
+    watcher.emit("all", "change", sourceFile);
+    assert.deepEqual(await reload.promise, { type: "full-reload" });
+    assert.match(await readFile(outputFile, "utf8"), /d=\\"m1 1 14 14\\"/);
   } finally {
     await rm(root, { force: true, recursive: true });
   }

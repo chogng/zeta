@@ -28,6 +28,11 @@ test("assertDefined rejects nullish values with caller context", () => {
   );
 });
 
+test("assertDefined preserves caller-owned errors", () => {
+  const error = new ReferenceError("value was not initialized");
+  assert.throws(() => assertDefined(undefined, error), (thrown) => thrown === error);
+});
+
 function requireString(value: string | undefined): string {
   assertDefined(value, "string was not initialized");
   return value;

@@ -3,6 +3,7 @@ import {
   type IAction,
 } from "../../../common/actions.js";
 import { DisposableOwner } from "../../../common/lifecycle.js";
+import { assertDefined } from "../../../common/types.js";
 import { Button } from "../button/button.js";
 
 /**
@@ -57,9 +58,7 @@ export class ButtonActionViewItem extends ActionViewItem {
   }
 
   protected get button(): Button {
-    if (!this._button) {
-      throw new Error(`Action view item is not rendered: ${this.action.id}`);
-    }
+    assertDefined(this._button, `Action view item is not rendered: ${this.action.id}`);
     return this._button;
   }
 

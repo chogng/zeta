@@ -23,7 +23,7 @@ export const lxiconsLibrary = {
   files: register("files", svg.files),
   gear: register("gear", svg.gear),
   gitCommit: register("git-commit", svg.gitCommit),
-  history: register("history", svg.refresh),
+  history: register("history", svg.history),
   layoutSidebarLeft: register("layout-sidebar-left", svg.layoutSidebarLeft),
   layoutSidebarLeftOff: register("layout-sidebar-left-off", svg.layoutSidebarLeftOff),
   layoutSidebarRight: register("layout-sidebar-right", svg.layoutSidebarRight),

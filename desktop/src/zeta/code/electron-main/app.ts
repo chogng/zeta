@@ -17,6 +17,7 @@ import {
   DisposableStore,
   type IDisposable,
 } from "../../base/common/lifecycle.js";
+import { assertDefined } from "../../base/common/types.js";
 import {
   DisposableTracker,
   installDisposableTracker,
@@ -101,6 +102,12 @@ export interface ZetaApplicationOptions {
   readonly rendererRoot: string;
 }
 
+interface PersistentServices {
+  readonly state: StateService;
+  readonly configuration: ConfigurationMainService;
+  readonly keybindings: KeybindingsResourceMainService;
+}
+
 /**
  * Owns the Electron application's services, primary window, IPC, and shutdown.
  */
@@ -112,10 +119,8 @@ export class ZetaApplication extends DisposableOwner {
 
   private supervisor: AppServerSupervisor | undefined;
   private mainWindow: BrowserWindow | undefined;
-  private stateService: StateService | undefined;
-  private configurationService: ConfigurationMainService | undefined;
-  private keybindingsResourceService: KeybindingsResourceMainService | undefined;
-  private windowsStateHandler: WindowsStateHandler | undefined;
+  private persistentServices: PersistentServices | undefined;
+  private _windowsStateHandler: WindowsStateHandler | undefined;
   private windowStateTracking: IDisposable | undefined;
   private closePersistentServicesPromise: Promise<void> | undefined;
   private quitRequested = false;
@@ -160,9 +165,10 @@ export class ZetaApplication extends DisposableOwner {
     }
 
     await this.createPersistentServices();
+    const services = this.services;
     const workspace = await this.resolveWorkspace();
-    this.windowsStateHandler = new WindowsStateHandler({
-      stateService: this.stateService!,
+    this._windowsStateHandler = new WindowsStateHandler({
+      stateService: services.state,
       workspace,
       displayService: {
         getAllDisplays: () => screen.getAllDisplays(),
@@ -193,26 +199,34 @@ export class ZetaApplication extends DisposableOwner {
   }
 
   private async createPersistentServices(): Promise<void> {
-    this.stateService = await StateService.create(
+    const state = await StateService.create(
       join(app.getPath("userData"), "state.json"),
     );
-    this.configurationService = await ConfigurationMainService.create({
-      filePath: join(app.getPath("userData"), "configuration.json"),
-      onError: (error) => {
-        console.error("Failed to process configuration", error);
-      },
-    });
-    this.keybindingsResourceService =
-      await KeybindingsResourceMainService.create({
+    let configuration: ConfigurationMainService | undefined;
+    let keybindings: KeybindingsResourceMainService | undefined;
+    try {
+      configuration = await ConfigurationMainService.create({
+        filePath: join(app.getPath("userData"), "configuration.json"),
+        onError: (error) => {
+          console.error("Failed to process configuration", error);
+        },
+      });
+      keybindings = await KeybindingsResourceMainService.create({
         filePath: join(app.getPath("userData"), "keybindings.json"),
         onError: (error) => {
           console.error("Failed to process keybindings resource", error);
         },
       });
-    await migrateLegacyKeybindings(
-      this.configurationService,
-      this.keybindingsResourceService,
-    );
+      await migrateLegacyKeybindings(configuration, keybindings);
+      this.persistentServices = { state, configuration, keybindings };
+    } catch (error) {
+      await Promise.all([
+        state.close(),
+        configuration?.close(),
+        keybindings?.close(),
+      ]);
+      throw error;
+    }
   }
 
   private async resolveWorkspace(): Promise<IAnyWorkspaceIdentifier> {
@@ -305,7 +319,7 @@ export class ZetaApplication extends DisposableOwner {
     workspace: IAnyWorkspaceIdentifier,
     supervisor: AppServerSupervisor,
   ): Promise<void> {
-    const windowsStateHandler = this.windowsStateHandler!;
+    const windowsStateHandler = this.windowsStateHandler;
     const windowState = windowsStateHandler.restoreWindowState();
     const browserWindowOptions = resolveBrowserWindowOptions({
       state: windowState,
@@ -362,13 +376,12 @@ export class ZetaApplication extends DisposableOwner {
         },
       }),
     );
-    const configurationService = this.configurationService!;
-    const keybindingsResourceService = this.keybindingsResourceService!;
+    const { configuration, keybindings } = this.services;
     const ipcRoutes = [
       ...appServerIpcRoutes(supervisor),
       ...browserViewIpcRoutes(browserViewMainService),
-      ...configurationIpcRoutes(configurationService),
-      ...keybindingsResourceIpcRoutes(keybindingsResourceService),
+      ...configurationIpcRoutes(configuration),
+      ...keybindingsResourceIpcRoutes(keybindings),
       ...nativeHostIpcRoutes({
         openFolder: async () => {
           const result = await dialog.showOpenDialog(window, {
@@ -420,10 +433,10 @@ export class ZetaApplication extends DisposableOwner {
     windowDisposables.add(supervisor.onStateChange((state) =>
       window.webContents.send("zeta:app-server:stateChanged", state)
     ));
-    windowDisposables.add(configurationService.onDidChange((snapshot) =>
+    windowDisposables.add(configuration.onDidChange((snapshot) =>
       window.webContents.send(CONFIGURATION_CHANGED_CHANNEL, snapshot)
     ));
-    windowDisposables.add(keybindingsResourceService.onDidChange((snapshot) =>
+    windowDisposables.add(keybindings.onDidChange((snapshot) =>
       window.webContents.send(KEYBINDINGS_RESOURCE_CHANGED_CHANNEL, snapshot)
     ));
     window.once("closed", () => {
@@ -444,7 +457,7 @@ export class ZetaApplication extends DisposableOwner {
   private readonly onBeforeQuit = (event: ElectronEvent): void => {
     this.quitRequested = true;
     this.supervisor?.dispose();
-    if (this.quitAfterStateSaved || !this.stateService) {
+    if (this.quitAfterStateSaved || !this.persistentServices) {
       return;
     }
     event.preventDefault();
@@ -457,7 +470,7 @@ export class ZetaApplication extends DisposableOwner {
     void (async () => {
       try {
         if (this.mainWindow && !this.mainWindow.isDestroyed()) {
-          await this.windowsStateHandler?.saveWindowState(this.mainWindow);
+          await this._windowsStateHandler?.saveWindowState(this.mainWindow);
         }
         await this.closePersistentServices();
       } catch (error) {
@@ -475,12 +488,25 @@ export class ZetaApplication extends DisposableOwner {
   };
 
   private closePersistentServices(): Promise<void> {
-    this.closePersistentServicesPromise ??= Promise.all([
-      this.stateService?.close(),
-      this.configurationService?.close(),
-      this.keybindingsResourceService?.close(),
-    ]).then(() => undefined);
+    const services = this.persistentServices;
+    this.closePersistentServicesPromise ??= services
+      ? Promise.all([
+          services.state.close(),
+          services.configuration.close(),
+          services.keybindings.close(),
+        ]).then(() => undefined)
+      : Promise.resolve();
     return this.closePersistentServicesPromise;
+  }
+
+  private get services(): PersistentServices {
+    assertDefined(this.persistentServices, "Persistent application services are not initialized");
+    return this.persistentServices;
+  }
+
+  private get windowsStateHandler(): WindowsStateHandler {
+    assertDefined(this._windowsStateHandler, "Window state handling is not initialized");
+    return this._windowsStateHandler;
   }
 
   private releaseDisposableTracker(): void {
