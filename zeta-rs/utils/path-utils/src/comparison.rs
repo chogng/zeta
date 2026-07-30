@@ -33,6 +33,10 @@ fn normalize_for_wsl(path: PathBuf) -> PathBuf {
     normalize_for_wsl_on(path, is_wsl())
 }
 
+pub(super) fn normalize_canonical_for_comparison(path: PathBuf) -> PathBuf {
+    normalize_for_wsl(path)
+}
+
 pub(super) fn normalize_for_native_workdir_on(path: PathBuf, is_windows: bool) -> PathBuf {
     if is_windows {
         dunce::simplified(&path).to_path_buf()

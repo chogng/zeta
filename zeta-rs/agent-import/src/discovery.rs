@@ -1,6 +1,8 @@
 use std::fs;
 use std::io;
 
+use zeta_utils_path::{CanonicalContainmentError, CanonicalPathRoot};
+
 use crate::layout::{CandidateSpec, ExpectedPathKind, candidate_specs};
 use crate::{
     AgentImportCandidate, AgentImportDiagnostic, AgentImportDiagnosticCode, AgentImportError,
@@ -64,7 +66,7 @@ pub(super) fn discover(
     Ok(AgentImportPlan::new(candidates, diagnostics))
 }
 
-fn validate_root(location: &AgentImportLocation) -> Result<std::path::PathBuf, AgentImportError> {
+fn validate_root(location: &AgentImportLocation) -> Result<CanonicalPathRoot, AgentImportError> {
     let metadata = fs::symlink_metadata(location.root()).map_err(|error| {
         AgentImportError::RootUnavailable {
             agent: location.agent(),
@@ -84,7 +86,7 @@ fn validate_root(location: &AgentImportLocation) -> Result<std::path::PathBuf, A
             scope: location.scope(),
         });
     }
-    fs::canonicalize(location.root()).map_err(|error| AgentImportError::RootUnavailable {
+    CanonicalPathRoot::new(location.root()).map_err(|error| AgentImportError::RootUnavailable {
         agent: location.agent(),
         scope: location.scope(),
         error_kind: error.kind(),
@@ -93,13 +95,13 @@ fn validate_root(location: &AgentImportLocation) -> Result<std::path::PathBuf, A
 
 fn inspect_candidate(
     location: &AgentImportLocation,
-    canonical_root: &std::path::Path,
+    canonical_root: &CanonicalPathRoot,
     spec: &CandidateSpec,
     candidates: &mut Vec<AgentImportCandidate>,
     diagnostics: &mut Vec<AgentImportDiagnostic>,
 ) {
     let relative_path = std::path::PathBuf::from(spec.relative_path);
-    let candidate = canonical_root.join(&relative_path);
+    let candidate = canonical_root.path().join(&relative_path);
     let metadata = match fs::symlink_metadata(&candidate) {
         Ok(metadata) => metadata,
         Err(error) if error.kind() == io::ErrorKind::NotFound => return,
@@ -135,9 +137,9 @@ fn inspect_candidate(
         ));
         return;
     }
-    let canonical_candidate = match fs::canonicalize(&candidate) {
+    let canonical_candidate = match canonical_root.canonicalize_within(&candidate) {
         Ok(path) => path,
-        Err(_) => {
+        Err(CanonicalContainmentError::Unavailable(_)) => {
             diagnostics.push(AgentImportDiagnostic::new(
                 location,
                 spec.kind,
@@ -146,16 +148,16 @@ fn inspect_candidate(
             ));
             return;
         }
+        Err(CanonicalContainmentError::OutsideRoot) => {
+            diagnostics.push(AgentImportDiagnostic::new(
+                location,
+                spec.kind,
+                relative_path,
+                AgentImportDiagnosticCode::EscapesSelectedRoot,
+            ));
+            return;
+        }
     };
-    if !canonical_candidate.starts_with(canonical_root) {
-        diagnostics.push(AgentImportDiagnostic::new(
-            location,
-            spec.kind,
-            relative_path,
-            AgentImportDiagnosticCode::EscapesSelectedRoot,
-        ));
-        return;
-    }
     candidates.push(AgentImportCandidate::new(
         location,
         spec.kind,

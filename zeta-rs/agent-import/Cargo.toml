@@ -11,6 +11,9 @@ doctest = false
 name = "zeta_agent_import"
 path = "src/lib.rs"
 
+[dependencies]
+zeta-utils-path = { workspace = true }
+
 [dev-dependencies]
 tempfile = { workspace = true }
 

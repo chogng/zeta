@@ -35,6 +35,51 @@ fn symlink_targets_compare_as_the_same_path() {
     assert!(paths_match_after_normalization(target, alias));
 }
 
+#[test]
+fn canonical_path_root_accepts_existing_descendants() {
+    let directory = tempfile::tempdir().expect("temporary directory");
+    let child = directory.path().join("nested").join("item");
+    std::fs::create_dir_all(&child).expect("nested directory");
+    let root = CanonicalPathRoot::new(directory.path()).expect("canonical root");
+
+    assert_eq!(
+        root.canonicalize_within(&child)
+            .expect("contained canonical path"),
+        child.canonicalize().expect("canonical child")
+    );
+}
+
+#[test]
+fn canonical_path_root_reports_unavailable_candidates() {
+    let directory = tempfile::tempdir().expect("temporary directory");
+    let root = CanonicalPathRoot::new(directory.path()).expect("canonical root");
+
+    assert!(matches!(
+        root.canonicalize_within(directory.path().join("missing")),
+        Err(CanonicalContainmentError::Unavailable(error))
+            if error.kind() == std::io::ErrorKind::NotFound
+    ));
+}
+
+#[cfg(unix)]
+#[test]
+fn canonical_path_root_rejects_ancestor_symlink_escape() {
+    use std::os::unix::fs::symlink;
+
+    let directory = tempfile::tempdir().expect("temporary directory");
+    let outside = tempfile::tempdir().expect("outside directory");
+    let outside_item = outside.path().join("item");
+    std::fs::create_dir(&outside_item).expect("outside item");
+    let alias = directory.path().join("alias");
+    symlink(outside.path(), &alias).expect("ancestor symlink");
+    let root = CanonicalPathRoot::new(directory.path()).expect("canonical root");
+
+    assert!(matches!(
+        root.canonicalize_within(alias.join("item")),
+        Err(CanonicalContainmentError::OutsideRoot)
+    ));
+}
+
 #[cfg(unix)]
 #[test]
 fn relative_symlink_write_target_is_resolved() {

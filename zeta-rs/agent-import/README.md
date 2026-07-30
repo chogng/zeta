@@ -29,7 +29,8 @@ Zeta 配置，也不导入认证、会话、日志或历史记录。
 - 内容信任、工具批准、脚本执行、网络连接或凭据解析；
 - `CODEX_HOME`、`CLAUDE_CONFIG_DIR` 等宿主环境解析。
 
-生产代码当前只依赖 Rust 标准库，测试使用 workspace `tempfile`。它不得反向依赖
+生产代码依赖 [`zeta-utils-path`](../utils/path-utils/README.md) 的 host canonical containment
+primitive，测试使用 workspace `tempfile`。它不得反向依赖
 `zeta-config`、`zeta-skills`、App Server、Core 或 Desktop。后续内容 parser 可以依赖窄格式
 crate，但不能为了落库或 UI 方便引入上述高层领域。
 
@@ -97,8 +98,8 @@ per-project state 和 cache，当前整体排除。未来若需要其中的非�
 | `layout.rs::candidate_specs` | `ExternalAgent + ImportScope` 到固定 `CandidateSpec` 的穷尽映射 | 官方路径、review category、fixture 和本表 |
 | `layout.rs::{file,directory}` | 构造带预期文件类型的静态 specification | type-mismatch diagnostic |
 | `discovery.rs::discover` | 逐 root 发现、排序、去重并构造 immutable plan | 多 root 失败语义和顺序测试 |
-| `discovery.rs::validate_root` | 拒绝不可用、非目录或 symlink root，并冻结 canonical root | `AgentImportError` 与错误脱敏 |
-| `discovery.rs::inspect_candidate` | 检查一个已知相对路径的 metadata、类型、symlink 和 containment | diagnostic code、候选 canonical path |
+| `discovery.rs::validate_root` | 拒绝不可用、非目录或 symlink root，并建立 `CanonicalPathRoot` | `AgentImportError` 与错误脱敏 |
+| `discovery.rs::inspect_candidate` | 检查一个已知相对路径的 metadata、类型和 symlink，再委托通用 canonical containment | diagnostic code、候选 canonical path |
 | `error.rs` | 根目录级类型化错误与不含绝对路径的显示文本 | Desktop 错误映射与日志 |
 | `discovery_tests.rs` | 临时目录上的领域级发现与隐私回归 | 新来源、路径、错误或 redaction |
 
@@ -113,14 +114,13 @@ AgentImportPlan::discover
       → validate_root
           → symlink_metadata(root)
           → reject symlink / non-directory
-          → canonicalize(root)
+          → CanonicalPathRoot::new(root)
       → layout::candidate_specs(agent, scope)
       → inspect_candidate for each fixed relative path
           → missing: omit
           → symlink_metadata(candidate)
           → expected file/directory check
-          → canonicalize(candidate)
-          → canonical candidate starts_with canonical root
+          → CanonicalPathRoot::canonicalize_within(candidate)
           → AgentImportCandidate | AgentImportDiagnostic
       → sort + dedup candidates and diagnostics
       → AgentImportPlan::new

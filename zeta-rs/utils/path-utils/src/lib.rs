@@ -1,9 +1,13 @@
-//! Host-filesystem path comparison, symlink-aware write targeting, and atomic writes.
+//! Host-filesystem path comparison, canonical containment, symlink-aware write targeting,
+//! and atomic writes.
 
+mod canonical_root;
 mod comparison;
 mod environment;
 mod persistence;
 
+pub use canonical_root::CanonicalContainmentError;
+pub use canonical_root::CanonicalPathRoot;
 pub use comparison::normalize_for_native_workdir;
 pub use comparison::normalize_for_path_comparison;
 pub use comparison::paths_match_after_normalization;

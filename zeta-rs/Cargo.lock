@@ -7211,6 +7211,7 @@ name = "zeta-agent-import"
 version = "0.1.0"
 dependencies = [
  "tempfile",
+ "zeta-utils-path",
 ]
 
 [[package]]
