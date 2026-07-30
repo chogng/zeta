@@ -1,19 +1,21 @@
 import { Dimension, getClientArea, type IDimension, type IRectangle } from "../../base/browser/geometry.js";
-import { SerializableGrid, type ISerializableGridView, type SerializedGridDescriptor } from "../../base/browser/ui/grid/grid.js";
+import { SerializableGrid, type ISerializableView, type SerializedGridDescriptor } from "../../base/browser/ui/grid/grid.js";
 import { type Event, Emitter } from "../../base/common/event.js";
 import { DisposableOwner } from "../../base/common/lifecycle.js";
+import { type IStorageService, type IStorageValueChangeEvent, StorageScope, StorageTarget } from "../../platform/storage/common/storage.js";
 import { type IWorkbenchLayoutService, type WorkbenchPartId, type WorkbenchPartVisibilityChangeEvent, workbenchPartIds } from "../services/layout/browser/layoutService.js";
 import { type WorkbenchPart } from "./part.js";
 
 const DEFAULT_LAYOUT_WIDTH = 1_024;
 const DEFAULT_LAYOUT_HEIGHT = 768;
 const DEFAULT_SIDEBAR_WIDTH = 220;
-const DEFAULT_AUXILIARYBAR_WIDTH = 260;
+const DEFAULT_AUXILIARYBAR_WIDTH = 380;
 const DEFAULT_PANEL_HEIGHT = 200;
 const EDITOR_LAYOUT_PRIORITY = "high" as const;
 
 export interface WorkbenchLayoutOptions {
   readonly initialDimension?: IDimension;
+  readonly storageService?: IStorageService;
 }
 
 /**
@@ -49,6 +51,7 @@ export class WorkbenchLayout
   implements IWorkbenchLayoutService {
   private readonly views = new Map<WorkbenchPartId, WorkbenchPartView>();
   private readonly grid: SerializableGrid<WorkbenchPartView>;
+  private readonly stateModel: WorkbenchLayoutStateModel;
   private readonly partVisibility = new Map<WorkbenchPartId, boolean>();
   private readonly _onDidChangePartVisibility = this.own(new Emitter<WorkbenchPartVisibilityChangeEvent>());
 
@@ -74,13 +77,27 @@ export class WorkbenchLayout
       );
     }
     const initialDimension = resolveInitialDimension(this.element, options);
-    const initialState = createDefaultWorkbenchLayoutState();
+    this.stateModel = new WorkbenchLayoutStateModel(
+      options.storageService,
+      createDefaultWorkbenchLayoutState(),
+    );
+    const initialState = this.stateModel.state;
     this.grid = this.own(SerializableGrid.deserialize(
       createWorkbenchGridDescriptor(this.views, initialDimension, initialState),
       { fromJSON: (data) => this.view(parseWorkbenchPartId(data)) },
       container.ownerDocument,
     ));
     this.element.append(this.grid.element);
+    if (options.storageService) {
+      this.own(options.storageService.onWillSaveState(() => {
+        this.stateModel.save(this.state);
+      }));
+      this.own(options.storageService.onDidChangeValue((event) => {
+        if (event.external && this.stateModel.affects(event)) {
+          this.applyState(this.stateModel.state);
+        }
+      }));
+    }
 
     const ResizeObserverConstructor =
       container.ownerDocument.defaultView?.ResizeObserver;
@@ -127,6 +144,11 @@ export class WorkbenchLayout
 
   restoreState(value: unknown): void {
     const state = parseWorkbenchLayoutState(value);
+    this.applyState(state);
+    this.stateModel.save(this.state);
+  }
+
+  private applyState(state: WorkbenchLayoutState): void {
     this.resizePart("sidebar", this.getPartSize("sidebar").with(state.sidebar.width));
     this.resizePart("auxiliarybar", this.getPartSize("auxiliarybar").with(state.auxiliarybar.width));
     this.resizePart("panel", new Dimension(this.getPartSize("panel").width, state.panel.height));
@@ -196,7 +218,7 @@ export class WorkbenchLayout
   }
 }
 
-class WorkbenchPartView implements ISerializableGridView {
+class WorkbenchPartView implements ISerializableView {
   constructor(
     readonly partId: WorkbenchPartId,
     readonly part: WorkbenchPart,
@@ -383,7 +405,7 @@ function parseWorkbenchLayoutState(value: unknown): WorkbenchLayoutState {
   }
   let panel: { readonly height: number; readonly visible: boolean };
   if (value.version === 1) {
-    panel = { height: 200, visible: true };
+    panel = { height: DEFAULT_PANEL_HEIGHT, visible: true };
   } else if (value.version === 2 && isVerticalLayoutRegionState(value.panel)) {
     panel = value.panel;
   } else {
@@ -420,4 +442,119 @@ function isLayoutDimension(value: unknown): value is number {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
+}
+
+interface WorkbenchLayoutStorageKey {
+  readonly key: string;
+  readonly scope: StorageScope;
+  readonly target: StorageTarget;
+}
+
+const WorkbenchLayoutStorageKeys = {
+  SIDEBAR_WIDTH: {
+    key: "workbench.layout.sidebar.width",
+    scope: StorageScope.PROFILE,
+    target: StorageTarget.MACHINE,
+  },
+  SIDEBAR_VISIBLE: {
+    key: "workbench.layout.sidebar.visible",
+    scope: StorageScope.WORKSPACE,
+    target: StorageTarget.MACHINE,
+  },
+  AUXILIARYBAR_WIDTH: {
+    key: "workbench.layout.auxiliarybar.width",
+    scope: StorageScope.PROFILE,
+    target: StorageTarget.MACHINE,
+  },
+  AUXILIARYBAR_VISIBLE: {
+    key: "workbench.layout.auxiliarybar.visible",
+    scope: StorageScope.WORKSPACE,
+    target: StorageTarget.MACHINE,
+  },
+  PANEL_HEIGHT: {
+    key: "workbench.layout.panel.height",
+    scope: StorageScope.PROFILE,
+    target: StorageTarget.MACHINE,
+  },
+  PANEL_VISIBLE: {
+    key: "workbench.layout.panel.visible",
+    scope: StorageScope.WORKSPACE,
+    target: StorageTarget.MACHINE,
+  },
+} as const satisfies Record<string, WorkbenchLayoutStorageKey>;
+
+const workbenchLayoutStorageKeys = Object.values(WorkbenchLayoutStorageKeys);
+
+/** Private bridge between Layout semantics and the generic scoped storage service. */
+class WorkbenchLayoutStateModel {
+  constructor(
+    private readonly storageService: IStorageService | undefined,
+    private readonly defaults: WorkbenchLayoutState,
+  ) {}
+
+  get state(): WorkbenchLayoutState {
+    const storage = this.storageService;
+    if (!storage) return this.defaults;
+    return {
+      version: 2,
+      sidebar: {
+        width: storedDimension(storage.getNumber(
+          WorkbenchLayoutStorageKeys.SIDEBAR_WIDTH.key,
+          WorkbenchLayoutStorageKeys.SIDEBAR_WIDTH.scope,
+        ), this.defaults.sidebar.width),
+        visible: storage.getBoolean(
+          WorkbenchLayoutStorageKeys.SIDEBAR_VISIBLE.key,
+          WorkbenchLayoutStorageKeys.SIDEBAR_VISIBLE.scope,
+          this.defaults.sidebar.visible,
+        ),
+      },
+      auxiliarybar: {
+        width: storedDimension(storage.getNumber(
+          WorkbenchLayoutStorageKeys.AUXILIARYBAR_WIDTH.key,
+          WorkbenchLayoutStorageKeys.AUXILIARYBAR_WIDTH.scope,
+        ), this.defaults.auxiliarybar.width),
+        visible: storage.getBoolean(
+          WorkbenchLayoutStorageKeys.AUXILIARYBAR_VISIBLE.key,
+          WorkbenchLayoutStorageKeys.AUXILIARYBAR_VISIBLE.scope,
+          this.defaults.auxiliarybar.visible,
+        ),
+      },
+      panel: {
+        height: storedDimension(storage.getNumber(
+          WorkbenchLayoutStorageKeys.PANEL_HEIGHT.key,
+          WorkbenchLayoutStorageKeys.PANEL_HEIGHT.scope,
+        ), this.defaults.panel.height),
+        visible: storage.getBoolean(
+          WorkbenchLayoutStorageKeys.PANEL_VISIBLE.key,
+          WorkbenchLayoutStorageKeys.PANEL_VISIBLE.scope,
+          this.defaults.panel.visible,
+        ),
+      },
+    };
+  }
+
+  save(state: WorkbenchLayoutState): void {
+    const storage = this.storageService;
+    if (!storage) return;
+    storeLayoutValue(storage, WorkbenchLayoutStorageKeys.SIDEBAR_WIDTH, state.sidebar.width);
+    storeLayoutValue(storage, WorkbenchLayoutStorageKeys.SIDEBAR_VISIBLE, state.sidebar.visible);
+    storeLayoutValue(storage, WorkbenchLayoutStorageKeys.AUXILIARYBAR_WIDTH, state.auxiliarybar.width);
+    storeLayoutValue(storage, WorkbenchLayoutStorageKeys.AUXILIARYBAR_VISIBLE, state.auxiliarybar.visible);
+    storeLayoutValue(storage, WorkbenchLayoutStorageKeys.PANEL_HEIGHT, state.panel.height);
+    storeLayoutValue(storage, WorkbenchLayoutStorageKeys.PANEL_VISIBLE, state.panel.visible);
+  }
+
+  affects(event: IStorageValueChangeEvent): boolean {
+    return workbenchLayoutStorageKeys.some((candidate) =>
+      candidate.key === event.key && candidate.scope === event.scope
+    );
+  }
+}
+
+function storeLayoutValue(storage: IStorageService, key: WorkbenchLayoutStorageKey, value: number | boolean): void {
+  storage.store(key.key, value, key.scope, key.target);
+}
+
+function storedDimension(value: number | undefined, fallback: number): number {
+  return value !== undefined && value >= 0 ? value : fallback;
 }

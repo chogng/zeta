@@ -36,14 +36,25 @@ export {
   type DropdownMenuActions,
 } from "./dropdown/dropdownMenuActionViewItem.js";
 export {
+  Direction,
   Grid,
   SerializableGrid,
+  Sizing,
   type GridDescriptor,
-  type IGridViewDeserializer,
-  type IGridView,
-  type ISerializableGridView,
+  type ISerializableView,
+  type IView,
   type SerializedGridDescriptor,
 } from "./grid/grid.js";
+export {
+  GridView,
+  type GridLocation,
+  type GridViewDescriptor,
+  type GridViewSizing,
+  type ISerializableView as ISerializableGridView,
+  type IView as IGridView,
+  type IViewDeserializer,
+  type SerializedGridViewDescriptor,
+} from "./grid/gridview.js";
 export {
   Hover,
   type HoverContent,

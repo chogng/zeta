@@ -31,25 +31,26 @@ resources/icons/*.svg
   -> browser appendIcon
 ```
 
-The generated module exposes one named factory per SVG, and the watcher
-regenerates it after an SVG is added, changed, or removed. `lxiconsLibrary`
-registers only artwork that product code actually uses. This explicit semantic
-registry boundary lets Renderer builds remove unused SVG factories; registering
-the complete asset catalog eagerly would pull every icon into the bundle.
+The generated module exposes one named factory per SVG. The normal package
+lifecycle synchronizes it before development and builds, while the Vite plugin
+keeps it synchronized after an SVG is added, changed, or removed.
+`lxiconsLibrary` registers only artwork that product code actually uses. This
+explicit semantic registry boundary lets Renderer builds remove unused SVG
+factories; registering the complete asset catalog eagerly would pull every icon
+into the bundle.
 
 Use these commands from `desktop/`:
 
 | Command | Purpose |
 | --- | --- |
-| `pnpm icons:generate` | Regenerate factories without rewriting source SVGs |
-| `pnpm icons:watch` | Regenerate after files are added, changed, or removed |
+| `pnpm icons:sync` | Canonicalize source SVGs and synchronize generated factories |
 | `pnpm icons:check` | Fail when source SVGs are not in canonical optimized form |
-| `pnpm icons:optimize` | Optimize source SVGs and regenerate factories |
 | `pnpm test:icons` | Test generation, optimization, deletion, and safety checks |
 
-The normal `dev` and `dev:renderer` commands already run the icon watcher.
-Prebuild also regenerates the module, so a stale generated file cannot reach a
-production build.
+The normal `dev` and `dev:renderer` commands activate the Vite integration.
+Prebuild also synchronizes the module, so a stale generated file cannot reach a
+production build. Synchronization writes source and generated files only when
+their canonical content changes.
 
 Optimization uses SVGO with multiple passes. It removes editor metadata,
 comments, redundant groups and attributes, minifies path data, removes fixed

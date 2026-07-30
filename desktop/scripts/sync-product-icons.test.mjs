@@ -4,9 +4,10 @@ import { mkdtemp, mkdir, readFile, rm, unlink, writeFile } from "node:fs/promise
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
+import { setTimeout as delay } from "node:timers/promises";
 
 import { productIconsPlugin } from "./product-icons-vite-plugin.mjs";
-import { syncProductIcons } from "./sync-product-icons.mjs";
+import { checkProductIcons, syncProductIcons } from "./sync-product-icons.mjs";
 
 const addSvg = `<svg width="16" height="16" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
   <path stroke="black" d="M2.5 8h11M8 2.5v11"/>
@@ -23,10 +24,12 @@ test("product icon generation tracks added, changed, and removed SVG files", asy
     let report = await syncProductIcons({ outputFile, sourceDirectory });
     let generated = await readFile(outputFile, "utf8");
     assert.equal(report.count, 1);
+    assert.equal(report.outputChanged, true);
     assert.match(generated, /export \{ iconAdd as add \}/);
     assert.match(generated, /viewBox=\\"0 0 16 16\\"/);
     assert.doesNotMatch(generated, /\bwidth=\\"16\\"/);
     assert.doesNotMatch(generated, /\bheight=\\"16\\"/);
+    assert.equal((await syncProductIcons({ outputFile, sourceDirectory })).outputChanged, false);
 
     await writeFile(join(sourceDirectory, "close.svg"), addSvg.replace("black", "red"));
     report = await syncProductIcons({ outputFile, sourceDirectory });
@@ -61,21 +64,21 @@ test("product icon generation exposes prefix-free names including reserved words
   }
 });
 
-test("product icon optimization has explicit check and rewrite modes", async () => {
+test("product icon synchronization canonicalizes sources and supports a read-only check", async () => {
   const root = await mkdtemp(join(tmpdir(), "zeta-product-icons-"));
   const sourceDirectory = join(root, "icons");
   const outputFile = join(root, "generated", "product-icons.ts");
   try {
     await mkdir(sourceDirectory);
     await writeFile(join(sourceDirectory, "add.svg"), addSvg);
-    await assert.rejects(syncProductIcons({ mode: "check", outputFile, sourceDirectory }), /require optimization/);
-    const report = await syncProductIcons({ mode: "optimize", outputFile, sourceDirectory });
+    await assert.rejects(checkProductIcons({ sourceDirectory }), /require synchronization/);
+    const report = await syncProductIcons({ outputFile, sourceDirectory });
     const optimized = await readFile(join(sourceDirectory, "add.svg"), "utf8");
-    assert.equal(report.unoptimized.length, 1);
+    assert.equal(report.sourceChanged, true);
     assert.doesNotMatch(optimized, /\bwidth="16"/);
     assert.doesNotMatch(optimized, /\bheight="16"/);
     assert.match(optimized, /viewBox="0 0 16 16"/);
-    assert.equal((await syncProductIcons({ mode: "check", outputFile, sourceDirectory })).unoptimized.length, 0);
+    assert.equal((await checkProductIcons({ sourceDirectory })).count, 1);
   } finally {
     await rm(root, { force: true, recursive: true });
   }
@@ -106,11 +109,13 @@ test("Vite product icon integration regenerates and reloads after an SVG replace
     const watcher = new EventEmitter();
     watcher.add = () => undefined;
     const reload = Promise.withResolvers();
+    const reloadMessages = [];
     const plugin = productIconsPlugin({ sourceDirectory, outputFile, debounceMilliseconds: 0 });
     plugin.configureServer({
       watcher,
       ws: {
         send(message) {
+          reloadMessages.push(message);
           reload.resolve(message);
         },
       },
@@ -127,6 +132,11 @@ test("Vite product icon integration regenerates and reloads after an SVG replace
     watcher.emit("all", "change", sourceFile);
     assert.deepEqual(await reload.promise, { type: "full-reload" });
     assert.match(await readFile(outputFile, "utf8"), /d=\\"m1 1 14 14\\"/);
+    assert.equal(await readFile(sourceFile, "utf8"), '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path d="m1 1 14 14"/></svg>\n');
+
+    watcher.emit("all", "change", sourceFile);
+    await delay(25);
+    assert.equal(reloadMessages.length, 1);
   } finally {
     await rm(root, { force: true, recursive: true });
   }

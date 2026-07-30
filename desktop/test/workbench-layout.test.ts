@@ -26,6 +26,7 @@ for (const [name, value] of Object.entries({
 
 const { Dimension } = await import("../src/zeta/base/browser/geometry.js");
 const { lxiconsLibrary } = await import("../src/zeta/base/common/lxiconsLibrary.js");
+const { WillSaveStateReason } = await import("../src/zeta/platform/storage/common/storage.js");
 const { MenuId } = await import(
   "../src/zeta/platform/actions/common/actions.js"
 );
@@ -36,6 +37,7 @@ const {
   WorkbenchLayout,
 } = await import("../src/zeta/workbench/browser/layout.js");
 const { IWorkbenchLayoutService, workbenchPartIds } = await import("../src/zeta/workbench/services/layout/browser/layoutService.js");
+const { BrowserStorageService } = await import("../src/zeta/workbench/services/storage/browser/storageService.js");
 const {
   bindWorkbenchPartVisibilityContextKeys,
 } = await import("../src/zeta/workbench/browser/contextkeys.js");
@@ -308,6 +310,63 @@ test("Workbench layout validates and restores mutable state only", () => {
   );
 
   harness.disposables.dispose();
+  dom.window.close();
+});
+
+test("Workbench layout restores scoped state through the storage service", async () => {
+  const dom = new JSDOM("<!doctype html><body></body>", {
+    url: "https://zeta.test",
+  });
+  const createStorage = (workspaceId: string) => new BrowserStorageService({
+    ownerWindow: dom.window as unknown as Window,
+    applicationId: "code",
+    workspaceId,
+    backend: dom.window.localStorage,
+    flushInterval: 0,
+  });
+  const firstStorage = createStorage("workspace-a");
+  const first = createLayoutHarness(dom.window.document, {
+    initialDimension: new Dimension(1_000, 700),
+    storageService: firstStorage,
+  });
+  first.layout.layout(new Dimension(1_000, 700));
+  first.layout.resizePart(
+    "auxiliarybar",
+    first.layout.getPartSize("auxiliarybar").with(310),
+  );
+  first.layout.hidePart("auxiliarybar");
+  first.layout.resizePart(
+    "panel",
+    new Dimension(first.layout.getPartSize("panel").width, 175),
+  );
+  await firstStorage.flush(WillSaveStateReason.SHUTDOWN);
+  first.disposables.dispose();
+  firstStorage.dispose();
+
+  const restoredStorage = createStorage("workspace-a");
+  const restored = createLayoutHarness(dom.window.document, {
+    initialDimension: new Dimension(1_000, 700),
+    storageService: restoredStorage,
+  });
+  restored.layout.layout(new Dimension(1_000, 700));
+  assert.equal(restored.layout.getPartSize("auxiliarybar").width, 310);
+  assert.equal(restored.layout.isPartVisible("auxiliarybar"), false);
+  assert.equal(restored.layout.getPartSize("panel").height, 175);
+  restored.disposables.dispose();
+  restoredStorage.dispose();
+
+  const otherWorkspaceStorage = createStorage("workspace-b");
+  const otherWorkspace = createLayoutHarness(dom.window.document, {
+    initialDimension: new Dimension(1_000, 700),
+    storageService: otherWorkspaceStorage,
+  });
+  otherWorkspace.layout.layout(new Dimension(1_000, 700));
+  assert.equal(otherWorkspace.layout.getPartSize("auxiliarybar").width, 310);
+  assert.equal(otherWorkspace.layout.isPartVisible("auxiliarybar"), true);
+  assert.equal(otherWorkspace.layout.getPartSize("panel").height, 175);
+
+  otherWorkspace.disposables.dispose();
+  otherWorkspaceStorage.dispose();
   dom.window.close();
 });
 

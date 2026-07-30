@@ -391,11 +391,12 @@ sanitizer 实例，防止 hook 跨窗口或跨消费者泄漏。`base/browser/ma
 
 ### 6.4 Workbench 布局
 
-`base/browser/ui/grid/Grid` 是不感知 Workbench 语义的二维布局原语。它用 branch/leaf
-descriptor 创建嵌套 `SplitView`，运行时拥有尺寸、显隐和隐藏 leaf 的 cached visible
-size。`SerializableGrid` 在该原语之上通过 view 的 `toJSON()` 与显式 deserializer
-生成和恢复 Grid 快照；该能力不授权 base 引用 Part、ViewContainer 或其他 Workbench
-domain。
+`base/browser/ui/grid/GridView` 是不感知 Workbench 语义的索引路径布局引擎：它用
+branch/leaf descriptor 创建嵌套 `SplitView`，拥有运行时拓扑、尺寸、显隐和隐藏 leaf
+的 cached visible size，并通过 `GridLocation` 执行 add/remove/move。`Grid` 在其上提供
+以 View identity 为参数的常用 API，Workbench 调用方不持有索引路径。`SerializableGrid`
+通过底层 `GridView` 的 `toJSON()` 与显式 deserializer 生成和恢复完整拓扑快照；这些
+base 能力不引用 Part、ViewContainer 或其他 Workbench domain。
 
 `workbench/services/layout/browser/layoutService.ts` 拥有面向 contribution 的窗口级布局
 契约、Part identity 和 service identifier。`workbench/browser/layout.ts` 是具体实现，
@@ -409,16 +410,24 @@ Editor 区域吸收，Part 即使隐藏也保持挂载，尺寸查询返回其�
 ```text
 Layout static defaults
   → initialization state
-  → validated restore input（如调用方提供）
+  → Profile/Workspace scoped stored values
   → SerializableGrid runtime
   → resize / visibility event
+  → onWillSaveState
+  → scoped Storage Service
 ```
 
-Renderer 尚未建立带 scope 和 lifecycle 的通用 Storage Service，因此 Layout 不直接绑定
-`localStorage`。未来持久化必须依赖平台存储契约，并由具体 Layout 的私有状态模型协调，
-不能把浏览器适配器包装成 Layout State service。Panel 换边、Sidebar 换边、任意 Part
-移动和多窗口拓扑尚未实现，出现真实产品需求时应扩展具体 Layout，而不是让 contribution
-直接操作 Grid。
+`platform/storage/common/storage.ts` 定义 Renderer 通用存储契约，包括 Application、
+Profile、Workspace scope，User/Machine target，值变更事件和 will-save lifecycle。
+`workbench/services/storage/browser/storageService.ts` 是浏览器适配器：以产品、profile 和
+workspace identity 隔离 versioned `localStorage` 文档，周期 flush，并在 `pagehide` 和
+Workbench 释放前发布 shutdown flush；存储不可用或文档损坏时回退到内存 projection。
+
+具体 Layout 内的私有 `WorkbenchLayoutStateModel` 负责把 domain state 映射为存储 key：
+Sidebar、Auxiliary Bar 和 Panel 的尺寸使用 Profile/Machine，显隐使用
+Workspace/Machine。Layout Service 契约和通用 Storage Service 都不包含这组 key 或状态
+schema。Panel 换边、Sidebar 换边、任意 Part 移动和多窗口拓扑尚未实现，出现真实产品需求
+时应扩展具体 Layout，而不是让 contribution 直接操作 Grid。
 
 Renderer Part 的视觉所有权仍以
 [`ui-styling-ownership.md`](ui-styling-ownership.md) 为准；Grid 只拥有几何和 sash，

@@ -27,7 +27,11 @@ export function productIconsPlugin(options = {}) {
           pending = pending
             .catch(() => undefined)
             .then(() => syncProductIcons({ sourceDirectory, outputFile }))
-            .then(() => server.ws.send({ type: "full-reload" }))
+            .then((report) => {
+              if (report.outputChanged) {
+                server.ws.send({ type: "full-reload" });
+              }
+            })
             .catch((error) => server.config.logger.error(error instanceof Error ? error.message : String(error), { error }));
         }, debounceMilliseconds);
       });

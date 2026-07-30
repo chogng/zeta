@@ -1,610 +1,225 @@
-import { type IDimension, type IRectangle } from "../../geometry.js";
-import { Emitter, type Event } from "../../../common/event.js";
+import { type IDimension } from "../../geometry.js";
+import { type Event } from "../../../common/event.js";
 import { DisposableOwner } from "../../../common/lifecycle.js";
-import { type ISplitViewView, SplitView, type SplitViewLayoutPriority, type SplitViewOrientation } from "../splitview/splitview.js";
+import { GridView, type GridLocation, type GridViewDescriptor, type GridViewSizing, type ISerializableView as ISerializableGridView, type IView as IGridView, type IViewDeserializer, type SerializedGridViewDescriptor } from "./gridview.js";
 
-/** A two-dimensional leaf hosted by Grid. */
-export interface IGridView {
-  readonly element: HTMLElement;
-  readonly minimumWidth: number;
-  readonly maximumWidth: number;
-  readonly minimumHeight: number;
-  readonly maximumHeight: number;
-  readonly onDidChange?: Event<void>;
-  layout(bounds: IRectangle): void;
-  setVisible?(visible: boolean): void;
-}
+/** A view hosted by the identity-addressed {@link Grid}. */
+export type IView = IGridView;
 
-export type GridDescriptor<TView extends IGridView> =
-  | {
-    readonly type: "leaf";
-    readonly view: TView;
-    readonly size: number;
-    readonly visible?: boolean;
-    readonly priority?: SplitViewLayoutPriority;
-  }
-  | {
-    readonly type: "branch";
-    readonly orientation: SplitViewOrientation;
-    readonly size: number;
-    readonly children: readonly GridDescriptor<TView>[];
-    readonly priority?: SplitViewLayoutPriority;
-  };
+export type ISerializableView = ISerializableGridView;
 
-export interface ISerializableGridView extends IGridView {
-  toJSON(): unknown;
-}
+export type GridDescriptor<TView extends IView> = GridViewDescriptor<TView>;
 
-export interface IGridViewDeserializer<TView extends ISerializableGridView> {
-  fromJSON(data: unknown): TView;
-}
+export type SerializedGridDescriptor = SerializedGridViewDescriptor;
 
-export type SerializedGridDescriptor =
-  | {
-    readonly type: "leaf";
-    readonly data: unknown;
-    readonly size: number;
-    readonly visible: boolean;
-    readonly priority: SplitViewLayoutPriority;
-  }
-  | {
-    readonly type: "branch";
-    readonly orientation: SplitViewOrientation;
-    readonly size: number;
-    readonly children: readonly SerializedGridDescriptor[];
-    readonly priority: SplitViewLayoutPriority;
-  };
+export type Direction = "up" | "right" | "down" | "left";
 
-interface ParentLink {
-  readonly branch: BranchNode;
-  readonly index: number;
-}
+export const Direction = {
+  Up: "up",
+  Right: "right",
+  Down: "down",
+  Left: "left",
+} as const;
 
-interface GridNodeHost {
-  readonly ownerDocument: Document;
-  ownSplitView(splitView: SplitView): SplitView;
-  ownEvent(disposable: Disposable): void;
-  createNode(descriptor: GridDescriptor<IGridView>): GridNode;
-  handleSplitViewChange(): void;
-}
+export type Sizing =
+  | { readonly type: "distribute" }
+  | { readonly type: "split" }
+  | { readonly type: "invisible"; readonly cachedVisibleSize: number };
 
-abstract class GridNode {
-  constructor(readonly initialSize: number) {}
-
-  abstract readonly element: HTMLElement;
-  parent: ParentLink | undefined;
-  width = 0;
-  height = 0;
-  top = 0;
-  left = 0;
-  priority: SplitViewLayoutPriority = "normal";
-
-  abstract get minimumWidth(): number;
-  abstract get maximumWidth(): number;
-  abstract get minimumHeight(): number;
-  abstract get maximumHeight(): number;
-  abstract isVisible(): boolean;
-  abstract setDisplayed(visible: boolean): void;
-  abstract layout(
-    width: number,
-    height: number,
-    top: number,
-    left: number,
-  ): void;
-}
-
-class LeafNode<TView extends IGridView> extends GridNode {
-  visible: boolean;
-
-  constructor(
-    readonly view: TView,
-    visible: boolean,
-    initialSize: number,
-  ) {
-    super(initialSize);
-    this.visible = visible;
-  }
-
-  get element(): HTMLElement { return this.view.element; }
-  get minimumWidth(): number { return this.view.minimumWidth; }
-  get maximumWidth(): number { return this.view.maximumWidth; }
-  get minimumHeight(): number { return this.view.minimumHeight; }
-  get maximumHeight(): number { return this.view.maximumHeight; }
-  isVisible(): boolean { return this.visible; }
-
-  setDisplayed(visible: boolean): void {
-    this.element.hidden = !visible;
-    this.view.setVisible?.(visible);
-  }
-
-  layout(
-    width: number,
-    height: number,
-    top: number,
-    left: number,
-  ): void {
-    this.width = width;
-    this.height = height;
-    this.top = top;
-    this.left = left;
-    this.view.layout({ width, height, top, left });
-  }
-}
-
-class BranchNode extends GridNode {
-  readonly element: HTMLElement;
-  readonly children: readonly GridNode[];
-  readonly splitView: SplitView;
-
-  constructor(
-    readonly orientation: SplitViewOrientation,
-    descriptors: readonly GridDescriptor<IGridView>[],
-    priority: SplitViewLayoutPriority,
-    initialSize: number,
-    host: GridNodeHost,
-  ) {
-    super(initialSize);
-    this.priority = priority;
-    if (descriptors.length === 0) {
-      throw new TypeError("Grid branches must contain at least one child");
-    }
-    this.splitView = host.ownSplitView(
-      new SplitView(orientation, host.ownerDocument),
-    );
-    this.element = this.splitView.element;
-    this.children = descriptors.map((descriptor) =>
-      host.createNode(descriptor)
-    );
-    for (const [index, child] of this.children.entries()) {
-      child.parent = { branch: this, index };
-      this.splitView.addView(
-        new AxisView(child, orientation),
-        descriptorSizing(descriptors[index]!),
-      );
-    }
-    host.ownEvent(this.splitView.onDidChangeViewSizes(() => {
-      host.handleSplitViewChange();
-    }));
-  }
-
-  get minimumWidth(): number {
-    return this.axisConstraint("minimumWidth", Math.max, 0);
-  }
-
-  get maximumWidth(): number {
-    return this.axisConstraint(
-      "maximumWidth",
-      Math.min,
-      Number.POSITIVE_INFINITY,
-    );
-  }
-
-  get minimumHeight(): number {
-    return this.axisConstraint("minimumHeight", Math.max, 0);
-  }
-
-  get maximumHeight(): number {
-    return this.axisConstraint(
-      "maximumHeight",
-      Math.min,
-      Number.POSITIVE_INFINITY,
-    );
-  }
-
-  isVisible(): boolean {
-    return this.children.some((child) => child.isVisible());
-  }
-
-  setDisplayed(visible: boolean): void {
-    this.element.hidden = !visible;
-  }
-
-  layout(
-    width: number,
-    height: number,
-    top: number,
-    left: number,
-  ): void {
-    this.width = width;
-    this.height = height;
-    this.top = top;
-    this.left = left;
-    if (this.orientation === "horizontal") {
-      this.splitView.layout(width, height);
-    } else {
-      this.splitView.layout(height, width);
-    }
-  }
-
-  private axisConstraint(
-    property:
-      | "minimumWidth"
-      | "maximumWidth"
-      | "minimumHeight"
-      | "maximumHeight",
-    orthogonalReducer: (left: number, right: number) => number,
-    orthogonalInitial: number,
-  ): number {
-    const visible = this.children.filter((child) => child.isVisible());
-    if (visible.length === 0) return 0;
-    const isPrimary = this.orientation === "horizontal"
-      ? property.endsWith("Width")
-      : property.endsWith("Height");
-    if (isPrimary) {
-      return visible.reduce((total, child) => total + child[property], 0);
-    }
-    return visible.reduce(
-      (result, child) => orthogonalReducer(result, child[property]),
-      orthogonalInitial,
-    );
-  }
-}
-
-class AxisView implements ISplitViewView {
-  constructor(
-    readonly node: GridNode,
-    readonly orientation: SplitViewOrientation,
-  ) {}
-
-  get element(): HTMLElement { return this.node.element; }
-  get priority(): SplitViewLayoutPriority { return this.node.priority; }
-  get minimumSize(): number {
-    return this.orientation === "horizontal"
-      ? this.node.minimumWidth
-      : this.node.minimumHeight;
-  }
-  get maximumSize(): number {
-    return this.orientation === "horizontal"
-      ? this.node.maximumWidth
-      : this.node.maximumHeight;
-  }
-
-  layout(size: number, offset: number, orthogonalSize: number): void {
-    const parent = this.node.parent?.branch;
-    const parentTop = parent?.top ?? 0;
-    const parentLeft = parent?.left ?? 0;
-    if (this.orientation === "horizontal") {
-      this.node.layout(
-        size,
-        orthogonalSize,
-        parentTop,
-        parentLeft + offset,
-      );
-    } else {
-      this.node.layout(
-        orthogonalSize,
-        size,
-        parentTop + offset,
-        parentLeft,
-      );
-    }
-  }
-
-  setVisible(visible: boolean): void {
-    this.node.setDisplayed(visible);
-  }
-}
+export const Sizing = {
+  Distribute: { type: "distribute" } as const,
+  Split: { type: "split" } as const,
+  Invisible(cachedVisibleSize: number): Sizing {
+    return { type: "invisible", cachedVisibleSize };
+  },
+};
 
 /**
- * A two-dimensional layout implemented as a nested tree of SplitViews.
+ * Identity-addressed wrapper over GridView.
  *
- * The descriptor is structural input only. Runtime sizes and visibility are
- * owned by the SplitViews so callers do not need to rebuild the tree.
+ * Grid keeps common call sites independent of GridLocation while GridView owns
+ * the indexed tree and nested SplitViews.
  */
-export class Grid<TView extends IGridView> extends DisposableOwner {
-  readonly element: HTMLDivElement;
-  protected readonly root: GridNode;
-  private readonly leaves = new Map<TView, LeafNode<TView>>();
-  private readonly _onDidChange = this.own(new Emitter<void>());
-  private layoutWidth = 0;
-  private layoutHeight = 0;
-  protected didLayout = false;
-  private layingOut = false;
+export class Grid<TView extends IView = IView> extends DisposableOwner {
+  protected readonly gridview: GridView;
+  private readonly views = new Set<TView>();
 
-  readonly onDidChange: Event<void> = this._onDidChange.event;
+  readonly onDidChange: Event<void>;
+
+  get element(): HTMLDivElement { return this.gridview.element; }
+  get orientation(): "horizontal" | "vertical" { return this.gridview.orientation; }
+  get width(): number { return this.gridview.width; }
+  get height(): number { return this.gridview.height; }
+  get minimumWidth(): number { return this.gridview.minimumWidth; }
+  get maximumWidth(): number { return this.gridview.maximumWidth; }
+  get minimumHeight(): number { return this.gridview.minimumHeight; }
+  get maximumHeight(): number { return this.gridview.maximumHeight; }
 
   constructor(
-    descriptor: GridDescriptor<TView>,
+    descriptorOrGridView: GridDescriptor<TView> | GridView,
     ownerDocument: Document = document,
   ) {
     super();
-    validateDescriptor(descriptor, new Set());
-    this.element = ownerDocument.createElement("div");
-    this.element.className = "zeta-grid";
-    this.defer(() => this.element.remove());
-    const host: GridNodeHost = {
-      ownerDocument,
-      ownSplitView: (splitView) => this.own(splitView),
-      ownEvent: (disposable) => {
-        this.own(disposable);
-      },
-      createNode: (nodeDescriptor) =>
-        this.createNode(nodeDescriptor, host),
-      handleSplitViewChange: () => {
-        if (!this.layingOut) this._onDidChange.fire();
-      },
-    };
-    this.root = this.createNode(
-      descriptor as GridDescriptor<IGridView>,
-      host,
+    this.gridview = this.own(
+      descriptorOrGridView instanceof GridView
+        ? descriptorOrGridView
+        : new GridView(descriptorOrGridView, ownerDocument),
     );
-    this.element.append(this.root.element);
-    for (const [view, leaf] of this.leaves) {
-      leaf.setDisplayed(leaf.visible);
-      if (view.onDidChange) {
-        this.own(view.onDidChange(() => {
-          if (this.didLayout) {
-            this.layout(this.layoutWidth, this.layoutHeight);
-          }
-        }));
-      }
+    for (const view of this.gridview.getViews()) {
+      this.views.add(view as TView);
     }
+    this.onDidChange = this.gridview.onDidChange;
   }
 
   layout(width: number, height: number): void {
-    assertDimension(width, "width");
-    assertDimension(height, "height");
-    this.layoutWidth = width;
-    this.layoutHeight = height;
-    this.didLayout = true;
-    this.layingOut = true;
-    try {
-      this.root.layout(width, height, 0, 0);
-    } finally {
-      this.layingOut = false;
+    this.gridview.layout(width, height);
+  }
+
+  addView(
+    newView: TView,
+    sizing: number | Sizing,
+    referenceView: TView,
+    direction: Direction,
+  ): void {
+    if (this.views.has(newView)) {
+      throw new Error("Grid cannot contain the same view twice");
     }
+    const referenceLocation = this.getViewLocation(referenceView);
+    const location = getRelativeLocation(
+      this.gridview.orientation,
+      referenceLocation,
+      direction,
+    );
+    this.gridview.addView(
+      newView,
+      toGridViewSizing(sizing, referenceLocation),
+      location,
+    );
+    this.views.add(newView);
+  }
+
+  removeView(view: TView): void {
+    this.gridview.removeView(this.getViewLocation(view));
+    this.views.delete(view);
+  }
+
+  moveView(
+    view: TView,
+    sizing: number | Sizing,
+    referenceView: TView,
+    direction: Direction,
+  ): void {
+    if (view === referenceView) {
+      throw new Error("Grid cannot move a view relative to itself");
+    }
+    const sourceLocation = this.getViewLocation(view);
+    const referenceLocation = this.getViewLocation(referenceView);
+    const targetLocation = getRelativeLocation(
+      this.gridview.orientation,
+      referenceLocation,
+      direction,
+    );
+    const sourceParent = sourceLocation.slice(0, -1);
+    const targetParent = targetLocation.slice(0, -1);
+    if (locationsEqual(sourceParent, targetParent)) {
+      const from = sourceLocation[sourceLocation.length - 1]!;
+      let to = targetLocation[targetLocation.length - 1]!;
+      if (from < to) to -= 1;
+      this.gridview.moveView(sourceParent, from, to);
+      return;
+    }
+    this.removeView(view);
+    this.addView(view, sizing, referenceView, direction);
   }
 
   getViewSize(view: TView): IDimension {
-    const leaf = this.leaf(view);
-    if (!leaf.visible && leaf.parent) {
-      const { branch, index } = leaf.parent;
-      const primarySize =
-        branch.splitView.getViewCachedVisibleSize(index) ??
-        branch.splitView.getViewSize(index);
-      return branch.orientation === "horizontal"
-        ? { width: primarySize, height: branch.height }
-        : { width: branch.width, height: primarySize };
-    }
-    return { width: leaf.width, height: leaf.height };
+    return this.gridview.getViewSize(this.getViewLocation(view));
   }
 
   resizeView(view: TView, dimension: IDimension): void {
-    assertDimension(dimension.width, "view width");
-    assertDimension(dimension.height, "view height");
-    const leaf = this.leaf(view);
-    this.resizeOnAxis(leaf, "horizontal", dimension.width);
-    this.resizeOnAxis(leaf, "vertical", dimension.height);
+    this.gridview.resizeView(this.getViewLocation(view), dimension);
   }
 
   isViewVisible(view: TView): boolean {
-    return this.leaf(view).visible;
+    return this.gridview.isViewVisible(this.getViewLocation(view));
   }
 
   setViewVisible(view: TView, visible: boolean): void {
-    const leaf = this.leaf(view);
-    if (leaf.visible === visible) return;
-    leaf.visible = visible;
-    leaf.setDisplayed(visible);
-    let node: GridNode = leaf;
-    while (node.parent) {
-      const { branch, index } = node.parent;
-      branch.splitView.setViewVisible(index, node.isVisible());
-      node = branch;
-    }
-    if (this.didLayout) {
-      this.layout(this.layoutWidth, this.layoutHeight);
-    }
-    this._onDidChange.fire();
+    this.gridview.setViewVisible(this.getViewLocation(view), visible);
   }
 
-  private createNode(
-    descriptor: GridDescriptor<IGridView>,
-    host: GridNodeHost,
-  ): GridNode {
-    if (descriptor.type === "leaf") {
-      const leaf = new LeafNode(descriptor.view, descriptor.visible !== false, descriptor.size);
-      leaf.priority = descriptor.priority ?? "normal";
-      if (this.leaves.has(descriptor.view as TView)) {
-        throw new Error("Grid cannot contain the same view twice");
-      }
-      this.leaves.set(descriptor.view as TView, leaf as LeafNode<TView>);
-      return leaf;
+  private getViewLocation(view: TView): GridLocation {
+    if (!this.views.has(view)) {
+      throw new Error("Grid view is not registered");
     }
-    return new BranchNode(
-      descriptor.orientation,
-      descriptor.children,
-      descriptor.priority ?? "normal",
-      descriptor.size,
-      host,
-    );
-  }
-
-  private resizeOnAxis(
-    leaf: LeafNode<TView>,
-    orientation: SplitViewOrientation,
-    size: number,
-  ): void {
-    let node: GridNode = leaf;
-    while (node.parent) {
-      const { branch, index } = node.parent;
-      if (branch.orientation === orientation) {
-        branch.splitView.resizeView(index, size);
-        return;
-      }
-      node = branch;
-    }
-  }
-
-  private leaf(view: TView): LeafNode<TView> {
-    const leaf = this.leaves.get(view);
-    if (!leaf) throw new Error("Grid view is not registered");
-    return leaf;
+    return this.gridview.getViewLocation(view);
   }
 }
 
 /** A Grid whose view identity and runtime geometry can cross persistence boundaries. */
-export class SerializableGrid<TView extends ISerializableGridView> extends Grid<TView> {
-  static deserialize<TView extends ISerializableGridView>(
+export class SerializableGrid<TView extends ISerializableView> extends Grid<TView> {
+  static deserialize<TView extends ISerializableView>(
     descriptor: SerializedGridDescriptor,
-    deserializer: IGridViewDeserializer<TView>,
+    deserializer: IViewDeserializer<TView>,
     ownerDocument: Document = document,
   ): SerializableGrid<TView> {
-    validateSerializedDescriptor(descriptor);
     return new SerializableGrid(
-      deserializeGridDescriptor(descriptor, deserializer),
-      ownerDocument,
+      GridView.deserialize(descriptor, deserializer, ownerDocument),
     );
   }
 
   serialize(): SerializedGridDescriptor {
-    return serializeGridNode(this.root, this.didLayout);
+    return this.gridview.serialize();
   }
 }
 
-function serializeGridNode(node: GridNode, didLayout: boolean): SerializedGridDescriptor {
-  const size = gridNodeSize(node, didLayout);
-  if (node instanceof LeafNode) {
-    const view = node.view;
-    if (!isSerializableGridView(view)) {
-      throw new TypeError("SerializableGrid contains a non-serializable view");
-    }
+function toGridViewSizing(
+  sizing: number | Sizing,
+  referenceLocation: GridLocation,
+): GridViewSizing {
+  if (typeof sizing === "number") return sizing;
+  if (sizing.type === "split") {
     return {
-      type: "leaf",
-      data: view.toJSON(),
-      size,
-      visible: node.visible,
-      priority: node.priority,
+      type: "split",
+      index: referenceLocation[referenceLocation.length - 1]!,
     };
   }
-  if (!(node instanceof BranchNode)) {
-    throw new TypeError("SerializableGrid contains an unsupported node");
-  }
-  return {
-    type: "branch",
-    orientation: node.orientation,
-    size,
-    children: node.children.map((child) => serializeGridNode(child, didLayout)),
-    priority: node.priority,
-  };
+  return sizing;
 }
 
-function gridNodeSize(node: GridNode, didLayout: boolean): number {
-  if (node.parent) {
-    const { branch, index } = node.parent;
-    return branch.splitView.getViewCachedVisibleSize(index) ?? branch.splitView.getViewSize(index);
+function getRelativeLocation(
+  rootOrientation: "horizontal" | "vertical",
+  location: GridLocation,
+  direction: Direction,
+): GridLocation {
+  const parentDepth = location.length - 1;
+  const parentOrientation = parentDepth % 2 === 0
+    ? rootOrientation
+    : orthogonal(rootOrientation);
+  const directionOrientation =
+    direction === "left" || direction === "right"
+      ? "horizontal"
+      : "vertical";
+  if (parentOrientation === directionOrientation) {
+    const parentLocation = location.slice(0, -1);
+    const referenceIndex = location[location.length - 1]!;
+    const index =
+      direction === "right" || direction === "down"
+        ? referenceIndex + 1
+        : referenceIndex;
+    return [...parentLocation, index];
   }
-  if (!didLayout) return node.initialSize;
-  return node instanceof BranchNode && node.orientation === "vertical" ? node.height : node.width;
+  const index = direction === "right" || direction === "down" ? 1 : 0;
+  return [...location, index];
 }
 
-function deserializeGridDescriptor<TView extends ISerializableGridView>(
-  descriptor: SerializedGridDescriptor,
-  deserializer: IGridViewDeserializer<TView>,
-): GridDescriptor<TView> {
-  if (descriptor.type === "leaf") {
-    return {
-      type: "leaf",
-      view: deserializer.fromJSON(descriptor.data),
-      size: descriptor.size,
-      visible: descriptor.visible,
-      priority: descriptor.priority,
-    };
-  }
-  return {
-    type: "branch",
-    orientation: descriptor.orientation,
-    size: descriptor.size,
-    children: descriptor.children.map((child) => deserializeGridDescriptor(child, deserializer)),
-    priority: descriptor.priority,
-  };
+function orthogonal(
+  orientation: "horizontal" | "vertical",
+): "horizontal" | "vertical" {
+  return orientation === "horizontal" ? "vertical" : "horizontal";
 }
 
-function validateSerializedDescriptor(descriptor: SerializedGridDescriptor): void {
-  assertDimension(descriptor.size, "serialized descriptor size");
-  assertPriority(descriptor.priority);
-  if (descriptor.type === "leaf") {
-    if (typeof descriptor.visible !== "boolean") {
-      throw new TypeError("Grid serialized leaf visibility is invalid");
-    }
-    return;
-  }
-  if (descriptor.orientation !== "horizontal" && descriptor.orientation !== "vertical") {
-    throw new TypeError("Grid serialized branch orientation is invalid");
-  }
-  if (descriptor.children.length === 0) {
-    throw new TypeError("Grid serialized branches must contain at least one child");
-  }
-  for (const child of descriptor.children) validateSerializedDescriptor(child);
-}
-
-function assertPriority(priority: SplitViewLayoutPriority): void {
-  if (priority !== "low" && priority !== "normal" && priority !== "high") {
-    throw new TypeError("Grid serialized descriptor priority is invalid");
-  }
-}
-
-function isSerializableGridView(view: IGridView): view is ISerializableGridView {
-  return "toJSON" in view && typeof view.toJSON === "function";
-}
-
-function descriptorSizing(
-  descriptor: GridDescriptor<IGridView>,
-): number | { readonly type: "invisible"; readonly cachedVisibleSize: number } {
-  return descriptor.type === "leaf" && descriptor.visible === false
-    ? { type: "invisible", cachedVisibleSize: descriptor.size }
-    : descriptor.size;
-}
-
-function validateDescriptor<TView extends IGridView>(
-  descriptor: GridDescriptor<TView>,
-  seenViews: Set<IGridView>,
-): void {
-  assertDimension(descriptor.size, "descriptor size");
-  if (descriptor.type === "leaf") {
-    if (seenViews.has(descriptor.view)) {
-      throw new Error("Grid cannot contain the same view twice");
-    }
-    seenViews.add(descriptor.view);
-    validateViewConstraints(descriptor.view);
-    return;
-  }
-  if (
-    descriptor.orientation !== "horizontal" &&
-    descriptor.orientation !== "vertical"
-  ) {
-    throw new TypeError("Grid branch orientation is invalid");
-  }
-  if (descriptor.children.length === 0) {
-    throw new TypeError("Grid branches must contain at least one child");
-  }
-  for (const child of descriptor.children) {
-    validateDescriptor(child, seenViews);
-  }
-}
-
-function assertDimension(value: number, name: string): void {
-  if (!Number.isFinite(value) || value < 0) {
-    throw new RangeError(`Grid ${name} must be a non-negative finite number`);
-  }
-}
-
-function validateViewConstraints(view: IGridView): void {
-  for (
-    const [minimum, maximum, axis] of [
-      [view.minimumWidth, view.maximumWidth, "width"],
-      [view.minimumHeight, view.maximumHeight, "height"],
-    ] as const
-  ) {
-    assertDimension(minimum, `view minimum ${axis}`);
-    if (
-      typeof maximum !== "number" ||
-      Number.isNaN(maximum) ||
-      maximum < minimum
-    ) {
-      throw new RangeError(
-        `Grid view maximum ${axis} must be at least its minimum ${axis}`,
-      );
-    }
-  }
+function locationsEqual(left: GridLocation, right: GridLocation): boolean {
+  return left.length === right.length &&
+    left.every((index, position) => index === right[position]);
 }

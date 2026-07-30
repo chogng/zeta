@@ -32,6 +32,7 @@ import {
   type IConfigurationApi,
   IConfigurationService,
 } from "../../platform/configuration/common/configuration.js";
+import { IStorageService, WillSaveStateReason } from "../../platform/storage/common/storage.js";
 import {
   IContextMenuService,
 } from "../../platform/contextview/browser/contextMenu.js";
@@ -156,6 +157,7 @@ import {
 import { WorkbenchThemeController } from "./theme.js";
 import { WorkbenchLayout } from "./layout.js";
 import { IWorkbenchLayoutService, type WorkbenchPartId } from "../services/layout/browser/layoutService.js";
+import { BrowserStorageService } from "../services/storage/browser/storageService.js";
 import {
   IWorkspaceSearchService,
 } from "../../platform/search/common/search.js";
@@ -275,6 +277,12 @@ export class Workbench extends DisposableOwner {
     if (!ownerWindow) {
       throw new Error("Workbench requires an owner window");
     }
+    const storage = this.own(new BrowserStorageService({
+      ownerWindow,
+      applicationId: product.id,
+      workspaceId: workspace.id,
+    }));
+    services.set(IStorageService, storage);
     const themeService = this.own(new ThemeService(
       resolveWorkbenchColorTheme(
         configuration.getValue(WorkbenchConfiguration.colorTheme),
@@ -491,7 +499,9 @@ export class Workbench extends DisposableOwner {
       ["editor", editor],
       ["panel", panel],
     ]);
-    const layout = this.own(new WorkbenchLayout(workbenchRoot, parts));
+    const layout = this.own(new WorkbenchLayout(workbenchRoot, parts, {
+      storageService: storage,
+    }));
     services.set(IWorkbenchLayoutService, layout);
     services.set(IViewsService, new ViewsService({
       viewDescriptorService: viewDescriptors,
@@ -533,6 +543,9 @@ export class Workbench extends DisposableOwner {
       2_000,
     );
     this.defer(() => globalThis.clearTimeout(eventuallyTimer));
+    this.defer(() => {
+      void storage.flush(WillSaveStateReason.SHUTDOWN);
+    });
   }
 }
 
