@@ -1,36 +1,31 @@
 # `zeta-typst`
 
-> This README owns implementation details for the in-memory compiler boundary.
-> Cross-process ownership, product semantics, and staged evolution are
-> canonical in [`docs/typst.md`](../../../docs/typst.md).
+> 本 README 负责内存编译器边界的实现细节。跨进程所有权、产品语义和分阶段演进以
+> [`docs/typst.md`](../../../docs/typst.md) 为准。
 
-`zeta-typst` compiles one caller-provided Typst source string to PDF. It owns
-the Typst `World` implementation and deliberately provides no operating-system
-filesystem, package registry, network, environment, or clock access.
+`zeta-typst` 把调用方提供的一段 Typst 源码编译为 PDF。它拥有 Typst `World` 实现，明确不
+提供操作系统文件系统、包注册表、网络、环境变量或时钟访问。
 
-## Boundary and public contract
+## 边界与公共契约
 
-`TypstCompiler` caches Typst's standard library, bundled fonts, and font book.
-`TypstCompiler::compile` accepts UTF-8 source by reference and returns:
+`TypstCompiler` 缓存 Typst 标准库、内置字体和字体目录。`TypstCompiler::compile` 借用 UTF-8
+源码并返回：
 
-- `TypstCompileOutcome::Success` with PDF bytes and non-fatal diagnostics;
-- `TypstCompileOutcome::Failed` for normal source or PDF-generation
-  diagnostics;
-- `TypstCompileError::SourceTooLarge` when source exceeds
-  `MAX_TYPST_SOURCE_BYTES` (1 MiB, measured as UTF-8 bytes).
+- `TypstCompileOutcome::Success`：PDF 字节和非致命诊断；
+- `TypstCompileOutcome::Failed`：普通源码错误或 PDF 生成诊断；
+- `TypstCompileError::SourceTooLarge`：源码超过 `MAX_TYPST_SOURCE_BYTES`，即按 UTF-8 字节
+  计算的 1 MiB。
 
-Source errors are outcomes rather than infrastructure errors so UI clients can
-display them without parsing internal error strings. Ranges are half-open UTF-8
-byte offsets into the exact submitted source.
+源码错误属于编译结果而不是基础设施错误，因此 UI 无需解析内部错误字符串即可展示。诊断范围
+使用半开区间，表示提交源码中的 UTF-8 字节偏移。
 
-The crate does not own RPC DTOs, PDF resource retention, editor models,
-preview UI, or document persistence.
+本 crate 不拥有 RPC 数据结构、PDF 资源保留、编辑器模型、预览 UI 或文档持久化。
 
-## Internal ownership and call path
+## 内部所有权与调用路径
 
 ```text
 TypstCompiler::compile
-|- size validation
+|- 大小校验
 |- InMemoryWorld::new(source)
 |- typst::compile
 |  `- World::{source,file,font,today}
@@ -38,62 +33,46 @@ TypstCompiler::compile
 `- typst_pdf::pdf
 ```
 
-Key private symbols:
+关键私有符号：
 
-- `InMemoryWorld` binds `/main.typ` to the submitted source. `source` and
-  `file` return `FileError::AccessDenied` for every other `FileId`; changing
-  this is a trust-boundary change and requires updating tests and
-  `docs/typst.md`.
-- `map_diagnostics` removes Typst-internal types and translates spans through
-  `WorldExt::range`. Moving this conversion into desktop code would leak the
-  compiler dependency across the process boundary.
-- `TypstCompiler::{library,book,fonts}` own immutable reusable compiler state.
-  Per-document mutable state belongs to `InMemoryWorld`.
+- `InMemoryWorld` 把 `/main.typ` 绑定到提交的源码。`source` 和 `file` 对其他所有 `FileId`
+  返回 `FileError::AccessDenied`；修改该行为会改变信任边界，必须同步更新测试和
+  `docs/typst.md`。
+- `map_diagnostics` 移除 Typst 内部类型，并通过 `WorldExt::range` 转换范围。把该转换移到
+  Desktop 会让编译器依赖越过进程边界。
+- `TypstCompiler::{library,book,fonts}` 拥有可复用的不可变编译器状态。单份文档的可变状态
+  属于 `InMemoryWorld`。
 
-`today` always returns `None`. This keeps compilation independent of the host
-clock; Typst documents that request the current date receive a source
-diagnostic.
+`today` 始终返回 `None`，使编译结果不依赖宿主时钟。Typst 文档请求当前日期时会得到源码诊断。
 
-## Fonts and licensing
+## 字体与许可证
 
-The `typst-assets` `fonts` feature supplies the current fixed font set. The
-`zeta-typst` crate itself remains proprietary under the repository root
-`LICENSE`; the upstream Apache license does not relicense this wrapper.
+`typst-assets` 的 `fonts` 功能提供当前固定字体集。`zeta-typst` 仍受仓库根目录 `LICENSE`
+约束；上游 Apache 许可证不会改变这一自有包装层的许可证。
 
-The exact upstream texts owned by this integration live in `licenses/`:
+本集成拥有的上游许可证文本位于 `licenses/`：
 
-- `Typst.txt` is the Apache-2.0 license used by Typst;
-- `Typst-NOTICE.txt` preserves Typst's required third-party attributions;
-- `Typst-Assets-NOTICE.txt` preserves the licenses and attributions for the
-  bundled fonts and other `typst-assets` material.
+- `Typst.txt`：Typst 使用的 Apache-2.0 许可证；
+- `Typst-NOTICE.txt`：Typst 要求保留的第三方声明；
+- `Typst-Assets-NOTICE.txt`：内置字体和其他 `typst-assets` 材料的许可证与声明。
 
-The desktop release must also ship `desktop/THIRD_PARTY_NOTICES.md` and the
-matching files under `desktop/licenses/`. Those files are release-facing copies
-of the component-local texts and must remain byte-for-byte synchronized.
-Changing the Typst version, asset feature, or font source requires a license
-review, synchronization of both locations, and a deterministic-output review.
+Desktop 发布包还必须携带 `desktop/THIRD_PARTY_NOTICES.md` 以及 `desktop/licenses/` 下的
+对应文件。这些是面向发布的副本，必须与组件目录逐字节一致。改变 Typst 版本、资源功能或字体
+来源时，必须重新审查许可证、同步两个位置，并检查确定性输出。
 
-## Tests and modification impact
-
-Run:
+## 测试与修改影响
 
 ```text
 cargo test -p zeta-typst
 ```
 
-Tests cover PDF output, ranged diagnostics, denied host-file access, and the
-source byte limit. Changes to public result types also require protocol
-fixture regeneration and app-server/desktop tests. Changes to file/package
-access require a threat-model update before implementation.
+测试覆盖 PDF 输出、带范围的诊断、宿主文件访问拒绝和源码字节上限。修改公共结果类型时，还要
+重新生成协议样例，并运行 App Server 与 Desktop 测试。修改文件或包访问前必须更新威胁模型。
 
-## Current limitations and extension point
+## 当前限制与扩展点
 
-Current implementation accepts only `/main.typ`. It does not yet support
-images, bibliography files, multi-file projects, Typst Universe packages,
-system fonts, cancellation, execution time limits, or incremental
-compilation.
+当前只接受 `/main.typ`，尚不支持图片、参考文献、多文件项目、Typst Universe 包、系统字体、
+取消、执行时间限制或增量编译。
 
-The intended next extension is an immutable, size-bounded in-memory project
-file map supplied by the app-server. It must not be implemented by accepting a
-host root path. Cancellation and worker/process isolation must be designed
-before enabling untrusted long-running workloads.
+下一扩展点是由 App Server 提供不可变、有大小限制的内存项目文件映射，不能通过接受宿主根路径
+实现。启用不可信的长时间任务前，还必须先设计取消以及工作进程/进程隔离。

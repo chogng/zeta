@@ -10,7 +10,7 @@
 remote execution boundary 上传递文件位置的 contract，不替代当前 App Server filesystem API
 的 workspace-relative `PathBuf`，也不授予 URI 指向文件的访问权限。
 
-## Public contract
+## 公共契约
 
 | API / type | 当前职责 | 明确不做 |
 | --- | --- | --- |
@@ -26,7 +26,7 @@ Serde 和 `TS` 将 `PathUri` 表示为 canonical URI string。Windows drive lett
 使用保留的 opaque URI；opaque URI 只能在相同 host convention 上恢复，且除自身相等外不参与
 lexical containment。
 
-## 文件与内部 ownership
+## 文件与内部所有权
 
 | 文件 / private symbol | Ownership |
 | --- | --- |
@@ -56,7 +56,7 @@ PathUri::starts_with / relative_path_from
 漂移到 `zeta-utils-path`、`zeta-sandboxing` 或具体 filesystem domain。Rust `PathUri` 若开始
 接受任意 URI scheme，则必须先与 Desktop 通用 `URI` contract 统一，而不是私自扩张。
 
-## Integration
+## 集成
 
 - local-only API 可以继续使用 `Path`/`PathBuf`；
 - workspace-relative RPC 继续使用相对 path，由 Rust authority 执行 root confinement；
@@ -64,7 +64,7 @@ PathUri::starts_with / relative_path_from
 - 收到 `PathUri` 不等于获得读写授权，consumer 必须另行验证 capability/workspace boundary；
 - domain 若需要忽略 fragment 等替代 identity，必须显式选择；`PathUri` 本身拒绝 fragment。
 
-## Tests 与修改影响
+## 测试与修改影响
 
 ```text
 cargo test -p zeta-utils-path-uri

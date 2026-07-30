@@ -21,7 +21,7 @@ Desktop SCM View
 这条依赖方向让 workspace path authority、Git executable identity、process limits 和 output
 parsing 留在 Rust host。Renderer 只拥有展示状态和用户 intent。
 
-## Ownership
+## 所有权
 
 | 层级 | 当前职责 | 不拥有 |
 | --- | --- | --- |
@@ -32,7 +32,7 @@ parsing 留在 Rust host。Renderer 只拥有展示状态和用户 intent。
 | `zeta-app-server-protocol` | Git query/mutation、`git/statusChanged`、DTO、capability 和 stable error name | process/runtime state |
 | `zeta-git` | system Git identity、仓库发现、porcelain-v2 snapshot、typed mutation 与结构化 parsing | App Server lifecycle、workspace product boundary、Renderer state |
 
-## Current
+## 当前状态
 
 当前已经实现 status 与常用用户 mutation 的完整纵向切片：
 
@@ -63,7 +63,7 @@ parsing 留在 Rust host。Renderer 只拥有展示状态和用户 intent。
 稳定失败边界为 `GitUnavailable`、`GitNotRepository` 和 `GitOperationFailed`。内部 executable、
 stderr、磁盘绝对路径和非 UTF-8 path 不进入 Renderer。
 
-## Current limitations
+## 当前限制
 
 - 当前是单 workspace `GitRuntime`，尚无 multi-repository registry；
 - operation 由 runtime mutex 串行化，但尚无可观测 queue、progress、caller cancellation 或 retry；
@@ -74,7 +74,7 @@ stderr、磁盘绝对路径和非 UTF-8 path 不进入 Renderer。
 
 这些限制必须在 UI 中保持可见：未实现的 mutation 不注册空命令，也不显示会误导用户的按钮。
 
-## Staged evolution
+## 分阶段演进
 
 近期扩展顺序：
 

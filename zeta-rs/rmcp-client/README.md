@@ -1,4 +1,4 @@
-# zeta-rmcp-client
+# zeta-rmcp-客户端
 
 > 本 README 是外部 MCP client 协议与 transport 实现的 canonical 文档。跨 crate 产品语义、
 > catalog/approval/durability 边界及 `zeta-mcp` 演进见
@@ -10,7 +10,7 @@ initialize、原始 tool discovery/call、server notification/elicitation 回调
 Streamable HTTP transport convenience connector；它不拥有 server 配置解析、credential
 持久化、tool alias/catalog、approval、Core tool loop 或 durable Thread result。
 
-## 文件与 public contract
+## 文件与公共契约
 
 | 文件 / symbol | 职责 |
 | --- | --- |
@@ -23,7 +23,7 @@ Streamable HTTP transport convenience connector；它不拥有 server 配置解�
 | `transport.rs` | `StdioServerCommand`、`StreamableHttpServer`、redacted `BearerToken` |
 | `error.rs` / `RmcpClientError` | transport start、handshake、request deadline、service 与 shutdown failure |
 
-Public tool request/result 直接 re-export RMCP model。这是有意的低层边界；revision-specific DTO
+公共工具请求/结果直接重新导出 RMCP 模型。这是有意的低层边界；特定协议版本的数据结构
 不能从本 crate继续向 Core 或 App Server protocol 泄漏。当前 `zeta-mcp` 已把这些类型投影为
 provider-neutral catalog、冻结 binding 与 result。
 
@@ -94,7 +94,7 @@ scheme、header injection 和 bearer token redaction。修改 RMCP feature、lif
 timeout/cancellation、callback 或 transport 时需同步检查本 README 与
 [`../../docs/mcp.md`](../../docs/mcp.md)。
 
-## Current limitations / Extension points
+## 当前限制与扩展点
 
 - Current：低层 client 已通过 `zeta-mcp` 接入 App Server/Core tools vertical slice。
 - Current：支持 tools list/call；resources、prompts、roots 与 custom request 尚未暴露。

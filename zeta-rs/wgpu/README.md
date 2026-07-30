@@ -8,7 +8,7 @@
 `zeta-ui::UiScene` 组合进同一 render pass。它不知道 App Server、Session、Thread、Agent、
 Workbench 或其他产品状态。
 
-## 1. Ownership
+## 1. 所有权
 
 | 能力 | 本 crate | 委托/不拥有 |
 | --- | --- | --- |
@@ -35,7 +35,7 @@ native product host
 出现 App Server method、product command、workspace model、widget state 或 font-platform
 implementation，意味着 crate ownership 已经漂移。
 
-## 2. Public 与内部接口
+## 2. 公共与内部接口
 
 | Symbol | 可见性 | 职责 | 不能承担 |
 | --- | --- | --- | --- |
@@ -52,7 +52,7 @@ implementation，意味着 crate ownership 已经漂移。
 | `WgpuRenderer::render_frame` | private | 统一 clear-only 与 scene frame 顺序 | 业务 invalidation |
 | `wgpu_color` | private | sRGB background → linear `wgpu::Color` | glyph color mapping |
 
-## 3. 执行路径与 Surface 语义
+## 3. 执行路径与接口面语义
 
 ```text
 product-owned ApplicationHandler
@@ -106,7 +106,7 @@ binary 在各平台执行。
 - window/event-loop policy：属于 `zeta-winit` 和 product host；
 - App Server/product 功能：禁止在本 crate 接入。
 
-Current limitations：
+当前限制：
 
 - 一个 `WgpuRenderer` 只服务一个 window/surface；
 - 没有 frame telemetry、device-lost migration 或显式 pipeline warmup；

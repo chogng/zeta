@@ -1,4 +1,4 @@
-# zeta-file-system-tool
+# zeta-file-system-工具
 
 > 本 README 是 model-visible filesystem adapter 的 canonical 实现文档。共享 filesystem
 > authority 见 [`../file-system/README.md`](../file-system/README.md)，跨客户端 ownership
@@ -8,7 +8,7 @@
 definition、binding 校验、UTF-8 text 解码和输出上限；不拥有宿主 filesystem access、
 workspace confinement、App Server RPC、mutation 或 watcher。
 
-## Public contract 与内部接口
+## 公共契约与内部接口
 
 | Symbol | 可见性 | 职责 |
 | --- | --- | --- |
@@ -36,7 +36,7 @@ ToolExecutor::execute
 `list` 在 foundation 已排序的 direct children 上截断并返回 `truncated`。`metadata` 不返回
 `modified_at_millis`，因为当前 Tool output contract 未声明该字段。
 
-## Failure、接入与验证
+## 失败、接入与验证
 
 取消只在执行开始前观察。binding/environment mismatch 返回 `NotStarted`；输入、filesystem、
 UTF-8 与编码 failure 返回正常完成的 error `ToolOutput`。底层 filesystem error 会进入
@@ -54,7 +54,7 @@ bazel test //zeta-rs/file-system-tool:file-system-tool-unit-tests
 `zeta-file-system` 与 App Server adapter。若本 crate 开始直接调用 `std::fs`、持有
 `WorkspaceRoot`、实现 client RPC 或维护目录展开/刷新状态，即表示 ownership 漂移。
 
-## Current limitations / Potential
+## 当前限制与潜在方向
 
 - Current：只读 text/list/metadata，单次同步 foundation call。
 - Current：list 最多输出 configured direct entries，不分页。

@@ -1,4 +1,4 @@
-# Typst document compilation
+# Typst 文档编译
 
 ```yaml
 status: current narrow integration
@@ -8,106 +8,90 @@ consumers:
 lastUpdated: 2026-07-28
 ```
 
-This document owns the cross-crate architecture and trust model. Compiler
-implementation details are canonical in
-[`zeta-rs/utils/typst/README.md`](../zeta-rs/utils/typst/README.md).
+本文负责跨 crate 的架构与信任模型。编译器实现细节以
+[`zeta-rs/utils/typst/README.md`](../zeta-rs/utils/typst/README.md) 为准。
 
-## Decision
+## 决策
 
-Zeta embeds Typst 0.15.1 as Rust libraries instead of invoking a system
-`typst` executable. The initial product capability converts an in-memory Typst
-source string to a connection-owned PDF resource. This gives an agent-editable
-text representation and a typeset paper output without granting the renderer
-or compiler access to host paths.
+Zeta 将 Typst 0.15.1 作为 Rust 库嵌入，不调用系统安装的 `typst` 可执行文件。第一阶段能力把
+内存中的 Typst 源码字符串转换为当前连接拥有的 PDF 资源。这样既能让 Agent 编辑文本表示并
+生成排版后的论文，也不需要授予渲染进程或编译器访问宿主路径的权限。
 
-This capability complements rather than replaces the Academic editor.
-ProseMirror owns structured paper editing and agent-visible document state; a
-deterministic serializer must translate that state into Typst source. Typst
-then owns typesetting and PDF output. Monaco remains a Code product editor and
-is not part of this paper pipeline.
+这项能力补充而不取代 Academic 编辑器。ProseMirror 拥有结构化论文编辑和 Agent 可见的文档
+状态；确定性序列化器负责把该状态转换为 Typst 源码；Typst 只负责排版和 PDF 输出。Monaco
+仍然是 Code 产品的编辑器，不属于这条论文处理路径。
 
-## Ownership and end-to-end flow
+## 所有权与端到端流程
 
-| Component | Ownership |
+| 组件 | 职责 |
 | --- | --- |
-| `zeta-typst` | compiler `World`, bundled fonts, source limits, diagnostics, PDF bytes |
-| `zeta-app-server-protocol` | `document/typst/compile` DTOs and capability negotiation |
-| `zeta-app-server` | request dispatch and connection-owned PDF resource creation |
-| Desktop main/preload | exact IPC validation and typed capability bridge |
-| Academic Workbench contribution | ProseMirror editor; future Typst serialization, diagnostics, preview, save/export |
+| `zeta-typst` | 编译器 `World`、内置字体、源码限制、诊断和 PDF 字节 |
+| `zeta-app-server-protocol` | `document/typst/compile` 数据结构与能力协商 |
+| `zeta-app-server` | 请求分发和当前连接拥有的 PDF 资源创建 |
+| Desktop Main/Preload | 精确 IPC 校验和类型化能力桥接 |
+| Academic Workbench 贡献 | ProseMirror 编辑器；未来的 Typst 序列化、诊断、预览和保存/导出 |
 
-Proposed Academic rendering flow (the serializer and preview are not yet
-implemented):
+计划中的 Academic 渲染流程如下；序列化器和预览尚未实现：
 
 ```text
-Academic ProseMirror document
--> deterministic Typst serializer
--> Typst source string
--> sandboxed preload API: typst.compile
--> trusted Electron main IPC route
--> document/typst/compile
--> zeta-typst in-memory World
--> PDF bytes
--> app-server ResourceStore
--> resource/read chunks
--> workbench PDF preview or explicit export
+Academic ProseMirror 文档
+→ 确定性 Typst 序列化器
+→ Typst 源码字符串
+→ 沙箱化 Preload API：typst.compile
+→ 可信 Electron Main IPC 路由
+→ document/typst/compile
+→ zeta-typst 内存 World
+→ PDF 字节
+→ App Server ResourceStore
+→ resource/read 分块读取
+→ Workbench PDF 预览或显式导出
 ```
 
-Compilation failures return `{ status: "failed", diagnostics }`. Successful
-compilation returns `{ status: "success", resource, warnings }`; the resource
-uses `application/pdf`, a 300-second TTL, a 16 MiB resource limit, connection
-ownership, and the existing chunked Base64 read contract.
+编译失败返回 `{ status: "failed", diagnostics }`。编译成功返回
+`{ status: "success", resource, warnings }`。生成的资源使用 `application/pdf`，生存期为
+300 秒，大小上限为 16 MiB，由当前连接拥有，并沿用现有的 Base64 分块读取契约。
 
-## Security and determinism
+## 安全性与确定性
 
-Current invariants:
+当前不变量：
 
-- source is capped at 1 MiB measured as UTF-8 bytes;
-- only the virtual `/main.typ` file exists;
-- other project files and packages are denied;
-- no network or Typst Universe package download occurs;
-- no system fonts or arbitrary font files are loaded;
-- current date access is unavailable;
-- PDF bytes never receive a host path and remain connection-owned;
-- Typst and related direct crates are exactly pinned to 0.15.1.
+- 源码按 UTF-8 字节计算，最大 1 MiB；
+- 只存在虚拟文件 `/main.typ`；
+- 拒绝其他项目文件和包；
+- 不访问网络，也不下载 Typst Universe 包；
+- 不加载系统字体或任意字体文件；
+- 不能读取当前日期；
+- PDF 字节从不获得宿主路径，并始终由当前连接拥有；
+- Typst 及其直接依赖精确固定在 0.15.1。
 
-The renderer sandbox and this compiler boundary solve different problems.
-Electron's sandbox limits renderer privileges. `InMemoryWorld` limits what
-Typst source can request from the Rust host. Both boundaries remain necessary.
+渲染进程沙箱与编译器边界解决的是不同问题。Electron 沙箱限制渲染进程权限；
+`InMemoryWorld` 限制 Typst 源码可以向 Rust 宿主请求什么。两层边界都必须保留。
 
-## Current status
+## 当前状态
 
-Implemented:
+已实现：
 
-- embedded Typst-to-PDF compilation with bundled fonts;
-- typed app-server method, capability, diagnostics, and generated artifacts;
-- desktop preload API plus resource metadata/read/release APIs;
-- Academic ProseMirror editor pane and product-scoped registration;
-- upstream Typst and bundled-font license notices;
-- unit and integration tests for PDF output, diagnostics, ownership, and
-  denied host-file access.
+- 使用内置字体把 Typst 编译为 PDF；
+- 类型化 App Server 方法、能力、诊断和生成产物；
+- Desktop Preload API 以及资源元数据、读取和释放接口；
+- Academic ProseMirror 编辑器面板和产品级注册；
+- 上游 Typst 与内置字体许可证声明；
+- PDF 输出、诊断、所有权和宿主文件访问拒绝的单元及集成测试。
 
-Current limitations:
+当前限制：
 
-- no multi-file projects, images, bibliographies, package imports, system
-  fonts, incremental compilation, cancellation, or hard CPU deadline;
-- no ProseMirror-to-Typst serializer, diagnostic projection, or PDF preview
-  contribution;
-- output is ephemeral until a caller explicitly reads and persists it;
-- compilation currently runs synchronously and the method is declared global
-  exclusive.
+- 不支持多文件项目、图片、参考文献、包导入、系统字体、增量编译、取消或强制 CPU 截止时间；
+- 尚无 ProseMirror 到 Typst 的序列化器、诊断投影或 PDF 预览贡献；
+- 调用方显式读取并持久化前，输出只是临时资源；
+- 编译当前同步执行，方法被声明为全局独占。
 
-## Staged evolution
+## 分阶段演进
 
-Near-term proposed work is the deterministic ProseMirror-to-Typst serializer,
-followed by diagnostic projection into the structured document and preview of
-the returned PDF.
+近期计划先实现确定性的 ProseMirror 到 Typst 序列化器，再把诊断投影回结构化文档，并预览
+返回的 PDF。
 
-Multi-file papers should later use a bounded immutable in-memory file map.
-Bibliographies and images can be admitted only through explicit resource
-types, aggregate byte/count limits, canonical virtual paths, and tests proving
-that paths cannot escape the project root.
+多文件论文后续应使用有大小限制、不可变的内存文件映射。参考文献和图片只能通过显式资源类型、
+总字节数与数量限制、规范化虚拟路径以及无法逃逸项目根目录的测试接入。
 
-Package support, if required, needs a separate policy for version pinning,
-download authority, cache integrity, notices, offline behavior, and malicious
-WASM/plugin isolation. It is not part of the current capability.
+如果确实需要包支持，必须另行定义版本固定、下载权限、缓存完整性、许可证声明、离线行为以及
+恶意 WASM/插件隔离策略。这些不属于当前能力。

@@ -8,7 +8,7 @@
 
 Zeta 采用“注册表优先、编译器兜底”的两阶段模型。功能模块注册有稳定 ID、owner、描述和默认值的语义 token；主题创建时将 token 引用图与主题覆盖编译为不可变快照；浏览器层再把同一快照投影给 CSS、Terminal 等消费者。用户选择 `light`、`dark` 或 `system`，其中 `system` 只负责跟随操作系统并选择一个具体快照，不是第四套主题数据。
 
-## Ownership
+## 所有权
 
 | 边界 | Owner | 职责 |
 | --- | --- | --- |
@@ -47,7 +47,7 @@ flowchart LR
 - 主题是已解析快照。消费层不能修改快照，也不能自行解释别名或变换。
 - 新注册或默认值变更后运行 `pnpm tokens:generate`，提交生成的 manifest、schema 和目录。
 
-## Current / 已实现
+## 当前状态/已实现
 
 - `light`、`dark` 与跟随操作系统的 `system` 偏好。
 - 启动时发现并隔离加载 `userData/themes/*.json` 用户主题；用户主题无需重新构建 App。
@@ -58,7 +58,7 @@ flowchart LR
 - Electron renderer 通过受校验的 window-theme IPC 将标题栏背景和按钮颜色投影到主进程；Terminal canvas 使用当前编辑器背景，不依赖 xterm 黑色回退。
 - 单元测试覆盖颜色运算、重复注册、依赖循环、未知引用、覆盖校验、尺寸序列化、快照和 DOM 恢复。
 
-## Current limitation / 当前限制
+## 当前状态 limitation /当前限制
 
 - 高对比度使用明暗默认值回退，尚未提供独立视觉设计；类型、解析路径和 manifest 已保留独立 scheme。
 - 字体族仍由平台 CSS 按操作系统选择，不属于当前尺寸注册表。

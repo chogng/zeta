@@ -1,32 +1,43 @@
-# Zeta Auto Review：产品语义、系统边界与演进
+# Auto 审查：产品语义、系统边界与演进
 
-> 文档所有权：本文件是 Auto Review 跨 crate 产品语义、权限边界和演进方向的 canonical
-> 文档。`zeta-auto-review` 的实现细节、错误语义和修改指南见
-> [crate README](../zeta-rs/auto-review/README.md)。
-> Deterministic decision engine 与 grant 实现见
-> [`zeta-policy` README](../zeta-rs/policy/README.md)。
-> 文档状态：Current architecture + explicit future evolution。
+> 文档所有权：本文件是 Auto Review 跨 crate 风险判断语义和演进方向的权威文档。
+>
+> 文档状态：当前架构 + 明确的未来演进。
+
+## 快速理解
+
+Auto Review 只在确定性规则无法独立判断时提供风险建议；它不能覆盖安全规则，也不能自行签发
+执行授权。
+
+| 用户或开发者会遇到的情况 | 系统行为 | 最终责任方 |
+| --- | --- | --- |
+| 动作明确安全且沙箱足够 | 直接选择受限执行，不调用风险审查器 | 权限策略 |
+| 动作命中确定性禁止规则 | 直接阻止，模型不能覆盖 | 权限策略 |
+| 风险依赖用户意图和目标范围 | 请求 Auto Review 给出批准、修改、询问或拒绝建议 | 风险审查器给建议，策略引擎作决定 |
+| 建议不完整、越权或解析失败 | 失败即关闭，转为阻止或询问用户 | 策略引擎 |
+| 沙箱报告结构化能力不足 | 只有确认未产生副作用且可安全重试时才重新审查 | Core 与权限策略 |
+| 动作已开始但结果未知 | 不自动重放或提权重试 | Core 恢复逻辑 |
 
 ## 1. 决策摘要
 
-Zeta 把 auto review 定义为“受 deterministic policy 约束的 advisory risk review”，而不是
-第二套权限系统。
+Zeta 把 Auto Review 定义为“受确定性策略约束的风险审查建议层”，而不是第二套权限系统。
 
 核心决策：
 
-- host 先解析 exact action、provenance、minimum capabilities 和 sandbox compatibility；
-- `BuiltInSafetyPolicy` 的 deterministic deny / sandbox requirement 优先于
+- 主机先解析精确动作、来源、最小能力和沙箱兼容性；
+- 内置安全策略 `BuiltInSafetyPolicy` 的确定性拒绝和强制沙箱规则优先于用户授权列表
   `UserAllowlist`，两者都优先于 LLM；
-- `UserAllowlist` 只接受绑定 action digest、完整 capabilities 与 policy revision 的 exact
-  unsandboxed grant，不接受 Tool name 或命令前缀；
-- classifier 只给出 `Approve / ReviseAction / AskUser / Deny` recommendation；
-- `PolicyEngine` 是唯一把 recommendation 转成 execution decision 并签发 grant 的 authority；
-- 自动授权绑定 assessment、action digest、完整 capabilities 和 policy revision；
-- user intent 与 evidence 必须带明确 trust boundary，repository/Tool/Agent 内容默认不可信；
-- review failure 必须 fail closed；
-- Tool crossing side-effect boundary 前必须 durable 记录 authority；
-- started-but-unknown action 不得由 classifier 自动重放；
-- 确认且可安全重放的 sandbox denial 可以携带结构化执行证据回到 classifier；普通命令失败、
+- `UserAllowlist` 只接受绑定动作摘要、完整能力集合与策略版本的精确沙箱外授权，不接受工具名称
+  或命令前缀；
+- 风险审查器只给出批准 `Approve`、修改动作 `ReviseAction`、询问用户 `AskUser` 或拒绝 `Deny`
+  四种建议；
+- 策略引擎 `PolicyEngine` 是唯一把建议转成执行决定并签发授权的责任方；
+- 自动授权绑定审查结论、动作摘要、完整能力集合和策略版本；
+- 用户意图与证据必须带有明确的信任边界，仓库、工具和 Agent 内容默认不可信；
+- 审查失败必须失败即关闭；
+- 工具跨过副作用边界前必须持久化记录执行授权；
+- 已开始但结果未知的动作不得由风险审查器自动重放；
+- 确认且可安全重放的沙箱拒绝可以携带结构化执行证据回到风险审查器；普通命令失败、
   部分副作用可能发生或结果未知时不得自动提权重跑。
 
 这套设计追求的不是“尽量少弹窗”，而是在危险自动批准率接近零的前提下，减少可确定安全场景的
@@ -34,317 +45,318 @@ Zeta 把 auto review 定义为“受 deterministic policy 约束的 advisory ris
 
 ## 2. 产品问题
 
-纯 sandbox 模式无法覆盖所有真实 Agent action：
+纯沙箱模式无法覆盖所有真实 Agent 动作：
 
-- 某些工作需要 network、external service mutation、credential 或 UI capability；
-- 某些 Tool 本身不适用本地 process sandbox；
+- 某些工作需要网络访问、外部服务修改、凭证或 UI 能力；
+- 某些工具本身不适用本地进程沙箱；
 - 用户经常明确请求一个有副作用但合理的动作；
-- action 的安全性依赖用户意图、目标 scope、provenance 和上下文，而不只依赖 Tool 名称。
+- 动作的安全性依赖用户意图、目标作用范围、来源和上下文，而不只依赖工具名称。
 
-只使用静态 allowlist 会过度阻塞；把权限直接交给 LLM 又不可接受。Auto Review 位于两者之间：
-用 model 解释 context 和风险，用 deterministic policy 保留最终授权权。
+只使用静态授权列表会过度阻塞；把权限直接交给 LLM 又不可接受。Auto Review 位于两者之间：
+用模型理解上下文和风险，用确定性策略保留最终授权权。
 
 Auto Review 不解决：
 
-- Tool 是否正确实现 OS enforcement；
-- credential 是否可用；
-- external service 是否接受请求；
-- action 执行后的业务成功与否；
-- started action 的 exactly-once 保证；
-- 用户组织的完整 policy language。
+- 工具是否正确实现操作系统强制执行；
+- 凭证是否可用；
+- 外部服务是否接受请求；
+- 动作执行后的业务成功与否；
+- 已开始动作的严格单次执行保证；
+- 用户组织的完整策略语言。
 
 ## 3. 系统所有权
 
 | 组件 | 拥有 | 不拥有 |
 | --- | --- | --- |
-| Tool host | exact action materialization、provenance、minimum capabilities、review evidence | 最终 policy decision |
-| `zeta-policy` | rules、grants、classifier port、risk/authorization gate、final decision | LLM prompt 与 provider |
-| `zeta-auto-review` | review prompt、strict response、assessment binding | grant、Tool execution、approval UI |
-| App Server | config safe point、review model resolution、provider adapter | recommendation 的授权语义 |
-| Core | Tool scheduling、typed approval、durable start/escalation、safe-retry gate、recovery、rejection breaker | model risk judgment、OS sandbox |
-| Tool executor / sandbox | 执行 selected authority、结构化执行结果、平台 denial 分类、资源隔离 | 放宽 capability 或重新解释用户意图 |
-| Desktop/CLI/TUI | 展示 approval 和风险信息、收集 user decision | 自行创建 grant |
+| 工具主机 | 精确解析动作、来源、最小能力和审查证据 | 最终策略决定 |
+| `zeta-policy` | 规则、授权、风险审查接口、风险与授权门槛和最终决定 | LLM 提示词与模型提供方 |
+| `zeta-auto-review` | 审查提示词、严格响应和审查结论绑定 | 签发授权、执行工具、批准界面 |
+| App Server | 配置安全点、审查模型解析和模型提供方适配器 | 审查建议的授权语义 |
+| Core | 工具调度、类型化批准、持久化执行起点与提权、安全重试门槛、恢复和拒绝断路器 | 模型风险判断、操作系统沙箱 |
+| 工具执行器与沙箱 | 执行选定授权、返回结构化结果、分类平台拒绝和隔离资源 | 放宽能力或重新解释用户意图 |
+| Desktop、CLI 与 TUI | 展示批准和风险信息、收集用户决定 | 自行创建授权 |
 
 关键依赖方向：
 
 ```text
-Tool host ──prepared action/evidence──► Core
-Core ──review request──► zeta-policy
-zeta-policy ──advisory call──► zeta-auto-review
-zeta-auto-review ──model request──► App Server review adapter
-zeta-policy ──final decision──► Core
-Core ──exact authority──► Tool executor / sandbox
+工具主机 ──准备完成的动作与证据──► Core
+Core ──审查请求──► zeta-policy
+zeta-policy ──建议调用──► zeta-auto-review
+zeta-auto-review ──模型请求──► App Server 审查适配器
+zeta-policy ──最终决定──► Core
+Core ──精确执行授权──► 工具执行器与沙箱
 ```
 
-`zeta-policy` 不能依赖 `zeta-auto-review`。它依赖自己定义的 `ActionClassifier` port，因此未来可以
-替换模型实现、关闭 auto review 或增加 deterministic classifier，而不改变权限 authority。
+`zeta-policy` 不能依赖 `zeta-auto-review`。它依赖自己定义的风险审查接口
+`ActionClassifier`，因此未来可以替换模型实现、关闭 Auto Review 或增加确定性审查器，而不改变
+权限系统的最终授权责任。
 
 ## 4. 端到端决策模型
 
-### 4.1 Current：执行前决策
+### 4.1 当前：执行前决策
 
 ```mermaid
 flowchart TD
-    A["Agent proposes Tool action"] --> B["Host resolves exact action<br/>scope / provenance / capabilities"]
-    B --> C{"Deterministic policy"}
-    C -- "deny" --> X["Block"]
-    C -- "matching UserAllowlist grant" --> G["Execute with exact unsandboxed grant"]
-    C -- "sandbox available" --> S["Execute sandboxed"]
-    C -- "needs contextual judgment" --> R["Auto reviewer"]
-    R --> V{"Host validates recommendation"}
-    V -- "eligible approve" --> AG["PolicyEngine signs AutoReviewGrant"]
-    V -- "safer path exists" --> SA["Return structured ReviseAction"]
-    V -- "authorization ambiguous" --> U["Ask user"]
-    V -- "dangerous / critical" --> X
-    V -- "review failure" --> F["Explicit Block or AskUser failure policy"]
-    U -- "approve once" --> UG["Create request- and call-bound user grant"]
-    U -- "decline" --> D["Record declined Tool result"]
-    AG --> E["Durably record ToolExecutionStarted"]
+    A["Agent 提出工具动作"] --> B["主机解析精确动作<br/>作用范围 / 来源 / 能力"]
+    B --> C{"确定性策略"}
+    C -- "拒绝" --> X["阻止"]
+    C -- "匹配精确用户授权" --> G["使用精确沙箱外授权执行"]
+    C -- "沙箱可用" --> S["在沙箱中执行"]
+    C -- "需要上下文判断" --> R["Auto Review 风险审查器"]
+    R --> V{"主机验证建议"}
+    V -- "符合自动批准条件" --> AG["PolicyEngine 签发 AutoReviewGrant"]
+    V -- "存在更安全路径" --> SA["返回结构化 ReviseAction"]
+    V -- "授权含糊" --> U["询问用户"]
+    V -- "危险或极高风险" --> X
+    V -- "审查失败" --> F["按明确失败策略 Block 或 AskUser"]
+    U -- "一次性批准" --> UG["创建绑定请求与调用的用户授权"]
+    U -- "拒绝" --> D["记录被拒绝的工具结果"]
+    AG --> E["持久化记录 ToolExecutionStarted"]
     UG --> E
     G --> E
     S --> E
-    E --> T["Tool executor enforces selected authority"]
+    E --> T["工具执行器落实选定执行授权"]
 ```
 
-顺序本身是安全 contract：
+顺序本身是安全契约：
 
-1. exact deterministic rule 不得被 model 覆盖；
-2. built-in sandbox requirement 不得被 user allowlist 覆盖；
-3. user allowlist grant 必须显式表示 unsandboxed authority，不能由普通 command allowlist
-   静默生成；
-4. sandbox 能满足 action 时，不需要 classifier 扩权；
-5. classifier recommendation 必须重新经过 host invariant；
-6. grant 必须绑定当前 action，而不是绑定 Tool name 或自然语言摘要；
-7. durable start marker 必须先于 side effect。
+1. 精确确定性规则不得被模型覆盖；
+2. 内置强制沙箱规则不得被用户授权列表覆盖；
+3. 用户授权必须显式表示沙箱外执行权，不能由普通命令授权列表静默生成；
+4. 沙箱能够满足动作时，不需要风险审查器扩权；
+5. 风险审查建议必须重新经过主机不变量验证；
+6. 授权必须绑定当前动作，而不是绑定工具名称或自然语言摘要；
+7. 持久化执行起点必须先于副作用。
 
-### 4.2 Current：sandbox denial 回流
+### 4.2 当前：沙箱拒绝回流
 
-为了减少 sandbox 权限不足造成的人工中断，执行前决策后有一条窄的失败回流：
+为了减少沙箱权限不足造成的人工中断，执行前决策后有一条严格受限的失败回流：
 
 ```text
-Sandboxed execution
-├─ success → 完成
-├─ ordinary command failure → 返回 Agent
-├─ timeout / signal → 返回 Agent
-└─ confirmed sandbox denial
-   ├─ safe to replay → 带 denial evidence 重新 review
-   └─ partial effects possible / unknown → 不自动重放
+沙箱内执行
+├─ 成功 → 完成
+├─ 普通命令失败 → 返回 Agent
+├─ 超时或信号终止 → 返回 Agent
+└─ 已确认的沙箱拒绝
+   ├─ 可安全重放 → 带拒绝证据重新审查
+   └─ 可能已有部分副作用或结果未知 → 不自动重放
 
-重新 review
-└─ classifier recommendation → PolicyEngine 校验
-   ├─ eligible Approve → exact grant 下重试
-   ├─ ReviseAction → Agent 提出更安全的 action
+重新审查
+└─ 风险审查建议 → PolicyEngine 校验
+   ├─ 符合 Approve 条件 → 使用精确授权重试
+   ├─ ReviseAction → Agent 提出更安全的动作
    ├─ AskUser → 请求用户批准
    └─ Deny → Block
 ```
 
-这条回流只适用于 platform backend 能结构化确认的 sandbox enforcement denial。Core 和
-classifier 不能从任意 stderr、non-zero exit 或自然语言猜测 denial；Seatbelt/Bubblewrap backend
-只对各自认识的 enforcement/setup signature 产生 typed classification。回流 request 必须继续
-绑定原 action digest、capabilities、policy revision 与 Tool Call，并携带 bounded、secret-free
-的 denial evidence。
+这条回流只适用于平台后端能够结构化确认的沙箱强制拒绝。Core 和风险审查器不能从任意标准错误
+输出、非零退出码或自然语言猜测沙箱拒绝；Seatbelt 与 Bubblewrap 后端只对各自认识的强制执行或
+设置特征产生类型化分类。回流请求必须继续绑定原动作摘要、能力集合、策略版本与工具调用，并携带
+长度受限且不含密钥的拒绝证据。
 
-是否自动重试是 Core 的 durable execution 决策，不是 classifier recommendation 的隐含效果。
-如果第一次尝试可能已写入文件、发出请求或产生其他副作用，即使 classifier 返回 `Approve`，
-Core 也不得自动重放原调用；它只能记录 terminal/unknown outcome，并让 Agent 修改 action 或
-请求用户决定。
+是否自动重试是 Core 的持久化执行决定，不是风险审查建议的隐含效果。如果第一次尝试可能已写入
+文件、发出请求或产生其他副作用，即使风险审查器返回批准 `Approve`，Core 也不得自动重放原调用；
+它只能记录终止或未知结果，并让 Agent 修改动作或请求用户决定。
 
-`zeta-protocol::SandboxDenialOutput` 保存 reason、exit status、stdout、stderr、
-aggregated output 与 replay safety。Core 从中截取最多 500 字符的 reason 和 2,000 字符的
-aggregated output 给 reviewer；原结构化 denial 与第二次 authority 一起 durable 写入
-`ThreadEvent::ToolExecutionEscalated`。第二次执行只允许一次，不形成循环。
+`zeta-protocol::SandboxDenialOutput` 保存原因、退出状态、标准输出、标准错误输出、聚合输出和
+重放安全性。Core 从中截取最多 500 字符的原因和 2,000 字符的聚合输出给风险审查器；原结构化
+拒绝与第二次执行授权一起持久化写入 `ThreadEvent::ToolExecutionEscalated`。第二次执行只允许
+一次，不形成循环。
 
 ## 5. 风险与用户授权矩阵
 
-Classifier 对 `Approve` 同时输出 risk 和 user authorization。`PolicyEngine` 使用固定矩阵：
+风险审查器对批准 `Approve` 同时输出风险等级和用户授权状态。策略引擎 `PolicyEngine` 使用固定
+矩阵：
 
-| Risk | Explicit | Implicit | Absent / Ambiguous |
+| 风险 | 明确授权 | 隐含授权 | 缺少或含糊 |
 | --- | --- | --- | --- |
-| Low | 自动批准 | 自动批准 | AskUser |
-| Medium | 自动批准 | 自动批准 | AskUser |
-| High | 自动批准 | AskUser | AskUser |
-| Critical | Block | Block | Block |
+| 低 | 自动批准 | 自动批准 | 询问用户 `AskUser` |
+| 中 | 自动批准 | 自动批准 | 询问用户 `AskUser` |
+| 高 | 自动批准 | 询问用户 `AskUser` | 询问用户 `AskUser` |
+| 极高 | 阻止 `Block` | 阻止 `Block` | 阻止 `Block` |
 
 这里的“自动批准”仍然要求：
 
-- recommendation capabilities 与 resolved action 完全一致；
-- assessment action digest 与 policy revision 精确匹配；
-- policy 没有 deterministic deny 或 require-sandbox conflict；
-- Core 在执行前验证 grant 与当前 Tool Call binding。
+- 建议的能力集合与已解析动作完全一致；
+- 审查结论的动作摘要与策略版本精确匹配；
+- 策略没有确定性拒绝或强制沙箱冲突；
+- Core 在执行前验证授权与当前工具调用的绑定。
 
-矩阵是当前 policy，不是永恒产品规则。调整它需要安全 eval、用户交互影响分析和 policy regression
-test，不能只修改 prompt wording。
+矩阵是当前策略，不是永恒产品规则。调整它需要安全评测、用户交互影响分析和策略回归测试，不能
+只修改提示词措辞。
 
 ## 6. 四种用户可见结果
 
 ### `Approve`
 
-表示 reviewer 认为 exact action 与用户意图相符。它不会直接执行；只有符合上一节矩阵时，
-`PolicyEngine` 才签发 `AutoReviewGrant`。
+表示风险审查器认为精确动作与用户意图相符。它不会直接执行；只有符合上一节矩阵时，策略引擎
+`PolicyEngine` 才签发自动审查授权 `AutoReviewGrant`。
 
 用户体验目标：明确、低到可控风险的动作不产生重复确认。
 
 ### `ReviseAction`
 
-表示目标可以继续，但当前 action 的 capability 或 scope 过宽。返回值携带
-`maximum_capabilities`，父 Agent 必须选择 materially safer action，而不是换一种命令重试同一
-危险动作。
+表示目标可以继续，但当前动作的能力或作用范围过宽。返回值携带最大能力集合
+`maximum_capabilities`，父 Agent 必须选择实质上更安全的动作，而不是换一种命令重试同一危险
+动作。
 
 用户体验目标：优先产生安全进展，而不是简单拒绝或把所有判断推给用户。
 
 ### `AskUser`
 
-用于授权缺失、目标含糊或 high-risk action 没有 explicit authorization。Approval request 绑定
-action digest、capabilities 和 policy revision；批准只对当前 Tool Call 生效。
+用于授权缺失、目标含糊或高风险动作没有明确用户授权。批准请求绑定动作摘要、能力集合和策略
+版本；批准只对当前工具调用生效。
 
-用户体验目标：问题应描述具体副作用与 scope，而不是只显示“需要权限”。
+用户体验目标：问题应描述具体副作用与作用范围，而不是只显示“需要权限”。
 
 ### `Deny`
 
-用于 critical、破坏性、exfiltration、credential probing 或 policy circumvention。Deny 作为
-结构化 Tool failure 返回，要求 Agent 不得通过间接命令或替代 Tool 绕过。
+用于极高风险、破坏性操作、数据外泄、凭证探测或规避策略。拒绝 `Deny` 作为结构化工具失败返回，
+要求 Agent 不得通过间接命令或替代工具绕过。
 
 用户体验目标：停止危险路径，同时在可能时允许选择不同的安全目标。
 
-## 7. Context、信任与隐私
+## 7. 上下文、信任与隐私
 
-Reviewer 需要理解用户意图，但“更多上下文”并不天然更安全。Zeta 使用 evidence broker，而不是
-复制完整 transcript：
+风险审查器需要理解用户意图，但“更多上下文”并不天然更安全。Zeta 使用证据代理，而不是复制
+完整对话记录：
 
-- direct user instruction 标记为 trusted user intent；
-- host-resolved action/provenance 标记为 trusted host metadata；
-- Agent message、plan、repository file 和 Tool result 标记为 untrusted content；
-- evidence 限制 item 数和字符数；
-- credential、secret 和无关 Tool output 必须在进入 reviewer 前移除。
+- 用户直接指令标记为可信用户意图；
+- 主机解析的动作与来源标记为可信主机元数据；
+- Agent 消息、计划、仓库文件和工具结果标记为不可信内容；
+- 证据限制条目数和字符数；
+- 凭证、密钥和无关工具输出必须在进入风险审查器前移除。
 
-Trust label 只说明来源，不能证明内容真实。例如通过 trusted filesystem adapter 读取的 README
-仍是 untrusted repository content。
+信任标签只说明来源，不能证明内容真实。例如通过可信文件系统适配器读取的 README，内容仍属于
+不可信仓库内容。
 
 当前边界：
 
-- Core 选择当前 Turn 最近的 direct user message；
-- Tool host 可提供 action-specific、只读、secret-free evidence；
-- reviewer 无 Tool、credential、mutation capability 或 mutable Agent memory；
-- action/context 中的 prompt injection 只能作为 data，不能改变 reviewer policy。
+- Core 选择当前 Turn 最近的用户直接消息；
+- 工具主机可提供动作专用、只读且不含密钥的证据；
+- 风险审查器没有工具、凭证、修改能力或可变 Agent 记忆；
+- 动作与上下文中的提示词注入只能作为数据，不能改变风险审查策略。
 
-未来若引入 memory、organization policy 或 external reputation evidence，必须定义独立 provenance
-和 precedence，不能把它们拼成无类型 prompt。
+未来若引入记忆、组织策略或外部信誉证据，必须定义独立来源和优先级，不能把它们拼成无类型
+提示词。
 
-## 8. Failure、重试与恢复原则
+## 8. 失败、重试与恢复原则
 
-Auto review 的 failure mode 必须显式：
+Auto Review 的失败模式必须显式：
 
-- model unavailable、timeout、cancellation、malformed JSON 和 capability mismatch 都不能授权；
-- host 使用 `ReviewFailurePolicy::Block` 或 `AskUser`，不存在隐式 fail-open；
-- sandboxed process 返回 non-zero 不代表应自动 unsandboxed retry；
-- 只有 executor 结构化确认且标记为 `SafeToRetry` 的 sandbox enforcement denial 才能进入二次
-  review；
-- denial 发生前可能已完成部分副作用；不能证明 safe-to-replay 时，即使获得新 grant 也不得自动
-  重放原 Tool Call；
-- action、capabilities、cwd、environment、provenance 或 policy revision 改变后必须重新 review；
-- Tool 已 durable start 但没有 terminal result 时，结果视为 unknown，不自动重放。
+- 模型不可用、超时、取消、JSON 格式错误和能力不匹配都不能产生授权；
+- 主机使用 `ReviewFailurePolicy::Block` 或 `AskUser`，不存在失败即放行；
+- 沙箱内进程返回非零退出码，不代表应该自动进行沙箱外重试；
+- 只有执行器结构化确认且标记为可安全重试 `SafeToRetry` 的沙箱强制拒绝才能进入二次审查；
+- 沙箱拒绝前可能已经完成部分副作用；不能证明可安全重放时，即使获得新授权也不得自动重放原
+  工具调用；
+- 动作、能力集合、工作目录、环境、来源或策略版本改变后必须重新审查；
+- 工具已持久化记录执行开始但没有终止结果时，结果视为未知，不自动重放。
 
-Reviewer rejection 会作为结构化 feedback 返回 Agent。单 Turn 连续 3 次，或最近 50 个 Tool
-Result 中累计 10 次 review rejection，会触发 circuit breaker 并中断该 Turn。这是防止模型通过
-不断改写命令试探 policy boundary，不是限制用户重新发起一个明确的新请求。
+风险审查拒绝会作为结构化反馈返回 Agent。单个 Turn 连续 3 次，或最近 50 个工具结果中累计
+10 次审查拒绝，会触发断路器并中断该 Turn。这是为了防止模型通过不断改写命令试探策略边界，
+不是限制用户重新发起一个明确的新请求。
 
-## 9. Audit 与可观测性
+## 9. 审计与可观测性
 
 一次可审计的执行至少关联：
 
-- action digest 与 Tool Call identity；
-- policy revision、review protocol revision 和 assessment ID；
-- recommendation 与 final decision；
-- matched deterministic rule、existing grant 或 user approval identity；
-- durable execution authority；
-- sandbox denial 的原始结构化输出、replay safety 与 durable escalation authority；
-- execution start certainty 与 terminal/unknown outcome。
+- 动作摘要与工具调用标识；
+- 策略版本、审查协议版本和审查结论 ID；
+- 审查建议与最终决定；
+- 匹配的确定性规则、现有授权或用户批准标识；
+- 持久化执行授权；
+- 沙箱拒绝的原始结构化输出、重放安全性与持久化提权授权；
+- 执行是否已开始，以及终止或未知结果。
 
-Assessment ID 对 canonical recommendation 建立稳定身份，因此 model JSON 的空格变化不会制造新
-assessment；review protocol 或 policy 语义变化必须有新 revision。
+审查结论 ID 对规范化建议建立稳定身份，因此模型 JSON 的空格变化不会制造新结论；审查协议或
+策略语义变化必须使用新版本。
 
 安全指标按优先级排序：
 
-1. dangerous-action false auto-approval rate；
-2. prompt-injection / policy-circumvention pass rate；
-3. unnecessary AskUser rate；
-4. recommendation、risk 与 authorization accuracy；
+1. 危险动作错误自动批准率；
+2. 提示词注入与规避策略通过率；
+3. 不必要的询问用户比例；
+4. 建议、风险与授权准确率；
 5. `ReviseAction` 后安全完成目标的比例；
-6. 不同 model/review protocol revision 的一致性与漂移。
+6. 不同模型与审查协议版本的一致性和漂移。
 
 ## 10. 当前实现状态
 
 已经实现：
 
-- deterministic-first `PolicyEngine` 顺序；
-- 四种 classifier recommendation；
-- recommendation/capability 两层 strict JSON parse、policy-owned exact/subset validation；
-- 64 KiB serialized input limit 与 adapter/classifier 两层 16 KiB response limit；
-- prompt、response schema 和 review protocol revision 的原子绑定；
-- risk × user authorization 自动授权矩阵；
-- assessment-bound `AutoReviewGrant` 与 Tool Call-bound execution authority；
-- bounded user intent 与 trust-labeled evidence；
-- typed durable approval、execution start marker 和 unknown-outcome no-replay；
-- protocol-owned structured process/sandbox outcome；
-- Seatbelt/Bubblewrap backend-specific denial classification；
-- safe sandbox denial 的 second review、exact grant、durable escalation 与单次 retry；
-- possible-side-effect denial 的 no-replay gate；
-- structured safer-action/deny feedback 与 per-turn circuit breaker；
-- App Server immutable, tool-less review model adapter；
-- synthetic seed corpus、Cargo/Bazel offline contract test。
+- 确定性策略优先的 `PolicyEngine` 决策顺序；
+- 四种风险审查建议；
+- 建议与能力集合两层严格 JSON 解析，以及策略拥有的精确或子集验证；
+- 64 KiB 序列化输入上限，以及适配器和风险审查器两层 16 KiB 响应上限；
+- 提示词、响应模式与审查协议版本的原子绑定；
+- 风险 × 用户授权自动批准矩阵；
+- 绑定审查结论的 `AutoReviewGrant` 与绑定工具调用的执行授权；
+- 长度受限的用户意图和带信任标签的证据；
+- 类型化持久化批准、执行起点标记和未知结果不重放；
+- 协议拥有的结构化进程与沙箱结果；
+- Seatbelt 与 Bubblewrap 后端专用的拒绝分类；
+- 可安全重试的沙箱拒绝二次审查、精确授权、持久化提权与单次重试；
+- 可能已有副作用时禁止重放；
+- 结构化的安全动作建议、拒绝反馈与单 Turn 断路器；
+- App Server 不可变且不带工具的审查模型适配器；
+- 合成种子样本集和 Cargo、Bazel 离线契约测试。
 
 当前仍有限：
 
-- reviewer 是 one-shot completion，没有 tiered review 或 ensemble；
-- sandbox denial classifier 覆盖 macOS Seatbelt、Linux Bubblewrap 的已知 signature，以及
-  Windows AppContainer helper 的可信 pre-launch enforcement marker；真实平台 denial corpus
+- 风险审查器是单次模型调用，没有分层审查或多审查器协作；
+- 沙箱拒绝分类器覆盖 macOS Seatbelt、Linux Bubblewrap 的已知特征，以及 Windows AppContainer
+  辅助程序可信的启动前强制执行标记；真实平台拒绝样本集
   仍不足；
-- denial 后的 `AskUser` 当前终止原 Tool Call，由 Agent 发起新的批准路径，不在同一 started call
-  上建立可恢复的 approval wait；
-- prompt policy 是 compile-time constant；
-- 没有真实 model benchmark runner、shadow-mode telemetry 或 human-label pipeline；
-- 没有 organization policy steering；
-- corpus 规模小，主要证明 contract 与建立回归入口，不能代表生产分布；
-- 没有足够数据支持 fine-tuning 决策。
+- 沙箱拒绝后的询问用户 `AskUser` 当前终止原工具调用，由 Agent 发起新的批准路径，不在同一个
+  已开始调用上建立可恢复的批准等待；
+- 提示词策略是编译期常量；
+- 没有真实模型基准运行器、影子模式遥测或人工标注流水线；
+- 没有组织策略引导；
+- 样本集规模小，主要用于证明契约与建立回归入口，不能代表生产分布；
+- 没有足够数据支持微调决策。
 
 ## 11. 演进方向
 
 ### 近期：建立可测量性
 
-- 实现显式 model eval runner，不进入默认 CI；
-- 按 model + review protocol revision 输出安全指标；
-- 扩充真实 bug、human override 和 policy regression 的匿名 synthetic reproduction；
-- 为 false auto-approval 设置 release gate；
-- 先运行 shadow mode，再讨论扩大自动批准覆盖率；
-- 用真实平台 denial corpus 评估 classifier 的 false-positive/false-negative，并扩展 Windows
-  backend。
+- 实现显式模型评测运行器，不进入默认 CI；
+- 按模型和审查协议版本输出安全指标；
+- 扩充真实缺陷、人工改判和策略回归的匿名合成复现；
+- 为错误自动批准设置发布门槛；
+- 先运行影子模式，再讨论扩大自动批准覆盖率；
+- 用真实平台拒绝样本评估分类器的误报与漏报，并扩展 Windows 后端。
 
 ### 中期：提高可控性
 
-- 将 private versioned response schema 导出为 eval/tooling 可消费的 artifact；
-- 增加 organization policy steering，并与 untrusted context 分层；
-- 改善 AskUser reason 和 ReviseAction 的可执行性评测；
-- 增加 classifier calibration 与高风险 double-check，但保持 deterministic authority。
+- 将私有版本化响应模式导出为评测和工具可消费的产物；
+- 增加组织策略引导，并与不可信上下文分层；
+- 改善询问原因和 `ReviseAction` 的可执行性评测；
+- 增加风险审查器校准与高风险二次检查，但保持确定性授权责任。
 
 ### 潜在方向：专用模型
 
-只有在积累足够高质量、经过隐私审查的 label 后，才评估：
+只有在积累足够高质量、经过隐私审查的标签后，才评估：
 
-- 小型专用 classifier；
-- fine-tuning；
-- tiered model routing；
-- 多 reviewer disagreement escalation。
+- 小型专用风险分类器；
+- 模型微调；
+- 分层模型路由；
+- 多风险审查器意见不一致时的升级处理。
 
-训练模型不是 eval 的前置条件。没有可靠评测集时训练只会把未知错误固化进模型。
+训练模型不是评测的前置条件。没有可靠评测集时训练只会把未知错误固化进模型。
 
 ## 12. 长期不变量
 
 无论未来使用何种模型或数据，以下边界不变：
 
-- classifier 不成为 capability authority；
-- model output 不能覆盖 host-resolved action identity；
-- untrusted content 不能改变 reviewer policy；
-- review failure 不产生授权；
-- high/critical risk 的放宽必须经过 deterministic policy 与可审计 revision；
-- unknown execution outcome 不由 classifier 自动重放；
-- credential 和 secret 不进入 eval corpus 或普通 review context。
+- 风险审查器不成为能力授权方；
+- 模型输出不能覆盖主机解析的动作标识；
+- 不可信内容不能改变风险审查策略；
+- 审查失败不产生授权；
+- 高风险或极高风险的放宽必须经过确定性策略和可审计版本；
+- 未知执行结果不由风险审查器自动重放；
+- 凭证和密钥不进入评测样本集或普通审查上下文。
+
+Auto Review 的实现细节、错误语义和修改指南见
+[`zeta-auto-review` README](../zeta-rs/auto-review/README.md)；确定性决策引擎与授权实现见
+[`zeta-policy` README](../zeta-rs/policy/README.md)。

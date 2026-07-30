@@ -7,7 +7,7 @@
 本 crate 拥有 workspace-scoped、consumer-neutral 的只读 filesystem contract。App Server 与
 model tool adapter 都依赖它；本 crate 不依赖 JSON-RPC、Desktop、Tool schema 或 UI 状态。
 
-## 文件与 public contract
+## 文件与公共契约
 
 | 文件 / symbol | 职责 |
 | --- | --- |
@@ -55,7 +55,7 @@ bazel test //zeta-rs/file-system:file-system-unit-tests
 `zeta-app-server-protocol`。把 Tool schema、RPC DTO 或 Renderer URI 塞入本 crate，或绕过
 `WorkspaceRoot` 直接拼接不可信路径，都表示 ownership 漂移。
 
-## Current limitations / Extension points
+## 当前限制与扩展点
 
 - Current：只有 in-process local implementation；mutation 与 watcher 不在 contract 中。
 - Current：non-UTF-8 directory entry name 使用 lossy conversion。

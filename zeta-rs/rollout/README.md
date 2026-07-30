@@ -10,7 +10,7 @@
 lease，并按 dependency order 恢复 `SessionCoordinator`。它不定义 event、framing、reducer 或
 trace format。
 
-## Public 与内部接口
+## 公共与内部接口
 
 | Symbol | 可见性 | 职责 |
 | --- | --- | --- |
@@ -49,7 +49,7 @@ Thread 必须先恢复，因为 Session recovery 可能 reconcile 一个 durable
 - trace/export write 回 repository：read-only diagnostics 变成第二 authority；
 - 一个 store 或 lease 使用不同 root generation：runtime 不再代表一致 repository。
 
-## Failure 与生命周期
+## 失败与生命周期
 
 `RolloutError` 不扁平化来源：open/recovery caller 可以区分 Core recovery、Session store 与 Thread
 store failure。`open` 只创建 storage handles；只有 `recover_coordinator` 构造并恢复 runtime。

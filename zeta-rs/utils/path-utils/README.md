@@ -7,7 +7,7 @@
 `zeta-utils-path` 只处理当前 host 文件系统上的路径比较、symlink 写入目标解析和原子替换。
 它不定义远程文件身份、workspace 授权边界或 Session 恢复策略。
 
-## 边界与 public contract
+## 边界与公共契约
 
 | API | 当前职责 | Failure semantics |
 | --- | --- | --- |
@@ -20,7 +20,7 @@
 `paths_match_after_normalization` 适合 Resume cwd 或本地 session filter，但本 crate 不决定何时
 恢复会话或提示用户。`write_atomically` 也不拥有上层配置 schema、revision 或 locking。
 
-## 文件、内部 ownership 与调用关系
+## 文件、内部所有权与调用关系
 
 | 文件 / private symbol | Ownership |
 | --- | --- |
@@ -49,7 +49,7 @@ write_atomically
 
 如果这里开始保存 Session 状态、解析 URI、实施 workspace containment，表示 ownership 已经漂移。
 
-## Integration 与 tests
+## 集成与测试
 
 consumer 只应依赖本 crate 导出的函数，不应依赖 private module。需要跨 RPC 序列化的路径应使用
 `zeta-utils-path-uri` 或所属 protocol 的 root-relative path contract。

@@ -7,7 +7,7 @@
 它定义 ID、产品模型、command、durable event、consumer update、interaction 与 model invocation
 values；它没有 I/O、reducer、store、actor、transport、provider wire codec 或 effect policy。
 
-## Ownership rule
+## 所有权规则
 
 一个 type 只有在至少两个独立组件需要以相同语义理解它时才适合进入本 crate。执行层 private
 message、store envelope、JSON-RPC params、provider payload 和 UI view state 不应为了“复用”进入
@@ -27,7 +27,7 @@ serde / schemars / ts-rs
 `lib.rs` 保持所有实现 module private，并显式 export public contract。新增 module 不应直接公开，
 避免调用方依赖内部文件布局。
 
-## Public contract map
+## 公共契约地图
 
 | Domain | 主要 symbols | 语义 |
 | --- | --- | --- |
@@ -110,7 +110,7 @@ authority 后，`ThreadEvent::ToolExecutionEscalated` 在重试前保存完整
 `SandboxDenialOutput` 与新 authority；Core reducer 负责验证它只能引用 started、未完成且尚未
 escalate 的 Tool Call。
 
-### Update
+### 更新
 
 `ThreadUpdate::Committed { event }` 是 durable；`ItemStarted`、`ItemDelta` 与 `PlanUpdated` 是可丢失
 的低延迟 projection。`ThreadUpdateEnvelope` 同时区分：
@@ -121,7 +121,7 @@ escalate 的 Tool Call。
 重启后 stream cursor 可以失效，durable sequence 不可以。客户端不能把 transient delta 当成最终
 Thread history。
 
-### Interaction
+### 交互
 
 `TurnInteraction` 保存完整 durable request、request ID、optional item ID 与 absolute deadline。
 `TurnInteraction::pending_state()` 只保留 request ID、kind、item ID 和 deadline，避免普通 snapshot
@@ -142,7 +142,7 @@ ThreadEvent::InteractionRequested
 
 Connection ownership、delivery retry、deadline timer 与 disconnect policy不属于 protocol。
 
-## Serialization contract
+## 序列化契约
 
 Domain enums 通常使用 internally tagged camelCase JSON：
 
@@ -161,7 +161,7 @@ change，不能只修 Rust compile error。
 Typed IDs 的 `new` 和 serde deserialize 都拒绝 empty/whitespace values。不要为外部 payload
 derive 一个绕过 constructor 的 deserialize path。
 
-## Model contract
+## 模型契约
 
 Model types是 provider-neutral semantic IR：
 
@@ -216,10 +216,9 @@ cargo test -p zeta-protocol
 bazel test //zeta-rs/protocol:protocol-unit-tests
 ```
 
-`contract_tests.rs` 当前验证 JSON shape、Session lineage、durable/transient cursor 分离、interaction
-payload redaction、approval binding、structured sandbox escalation、UserInput variants、
-ToolName/ID validation、tool identity 和 auto-compact limit。新增测试继续放在独立 sibling
-test file。
+`contract_tests.rs` 当前验证 JSON 结构、Session 谱系、持久化/临时游标分离、交互载荷脱敏、
+批准绑定、结构化沙箱升级、`UserInput` 分支、`ToolName`/ID 校验、工具身份和自动压缩限制。
+新增测试继续放在独立的相邻测试文件。
 
 当前 protocol 已覆盖 Session-first product contract 与 durable interaction 基础；multi-agent
 delegation、shared session settings、完整 streaming tool-call delta 和更强 schema compatibility

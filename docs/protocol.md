@@ -9,6 +9,20 @@
 > 文档所有权：本文件拥有跨组件语义、当前审计与演进方向；crate README 拥有当前源码接口、
 > serialization invariant 与修改路径。
 
+## 快速理解
+
+协议层定义 Zeta 各组件共同使用的对象、意图、事实和更新；它让不同进程说同一种语言，但不执行
+业务逻辑，也不选择存储或传输。
+
+| 概念 | 回答的问题 | 不包含 |
+| --- | --- | --- |
+| Session、Thread、Turn、ThreadItem | 系统中的产品对象是什么？ | actor、锁、任务和数据库 |
+| Command | 调用方想改变什么？ | 实际状态迁移和副作用 |
+| Event | 哪个事实已经可靠提交？ | 文件格式和写盘策略 |
+| Update | 消费方应该观察到什么变化？ | UI 呈现和重连策略 |
+| 请求与响应 | Turn 正在等待什么外部输入？ | 批准界面和工具实现 |
+| 稳定 ID、序列与游标 | 对象是谁、状态到第几版、从哪里继续？ | 传输 request ID 和连接状态 |
+
 ## 1. 结论
 
 `zeta-protocol` 是 Zeta 跨 crate、跨进程和跨客户端共享的语义词汇表。它定义“系统中的对象、
@@ -212,7 +226,7 @@ Event 不携带 storage sequence、timestamp、schema version、event ID 或 com
 - transient delta、delivery ack、RPC request 和 provider response 不进入 Event；
 - reducer policy 不编码进 Event helper。
 
-### 4.3 Update：面向消费者的变化
+### 4.3 更新：面向消费者的变化
 
 `SessionUpdate` / `ThreadUpdate` 服务于 UI、CLI、TUI 和订阅客户端。
 
@@ -232,7 +246,7 @@ StreamCursor { streamInstanceId, sequence }
 当前瞬态 update 类型已经存在，但生产运行路径还没有完整的 streaming model loop，因此属于
 部分落地。
 
-### 4.4 Agent Request/Response：Turn 中的双向等待
+### 4.4 Agent 请求/响应：Turn 中的双向等待
 
 `TurnInteraction` 是一个 Turn 当前未完成交互的 durable value，拥有 `RequestId`、可选 `ItemId`、
 typed `AgentRequest` 与可选绝对 deadline。Readable `Turn` 只公开不含 payload 的
@@ -330,7 +344,7 @@ deserialize。JSON Schema 的最小长度只是外部提示，不能替代 Rust 
 - ID 格式只规定必要约束，不把当前生成算法写入 protocol；
 - 不使用裸 `String` 表达已经拥有专用 ID/newtype 的概念。
 
-## 6. Provider-independent model contract
+## 6. 供应商无关的模型契约
 
 `models.rs` 定义 model invocation 的 canonical value：
 
@@ -365,7 +379,7 @@ checkpoint 和 compaction 执行都不属于 protocol。
 | Model response provenance | 无真实消费者 | 已删除 speculative `ResponseItemId` 与 provider raw response ID；有可证明的跨 provider 需求后再引入 |
 | Usage | model response 有 usage，Thread history 未建模 | 先明确 billing/diagnostic/product ownership |
 
-## 7. Config value 的边界
+## 7. Config 值的边界
 
 `Theme`、`Personality`、`ApprovalMode`、`SandboxMode`、`WebSearchMode` 可以留在 protocol，
 前提是它们确实被多个组件以同一语义使用。
@@ -544,7 +558,7 @@ zeta-rs/protocol/
 
 ## 10. 演进方案
 
-### Phase P0：冻结职责边界
+### 阶段 P0：冻结职责边界
 
 - 以本文作为 `zeta-protocol` crate 架构基线；
 - 新类型必须说明至少两个真实消费者；
@@ -553,7 +567,7 @@ zeta-rs/protocol/
 
 完成条件：新增 protocol 类型都能明确回答“谁拥有行为，谁只是共享语义”。
 
-### Phase P1：统一 identity 与公共 API（完成）
+### 阶段 P1：统一身份与公共 API（完成）
 
 - 产品 ID 已使用 validated construction/deserialization；
 - 同一工具概念的裸 `String` 已迁移到 `ToolName` / `ToolCallId`；
@@ -562,7 +576,7 @@ zeta-rs/protocol/
 
 完成条件：无效 ID 无法通过公开 constructor 或 deserialize 创建，公共 API 可被显式审计。
 
-### Phase P2：补齐异步 Turn interaction contract（进行中）
+### 阶段 P2：补齐异步 Turn 交互契约（进行中）
 
 该阶段必须与 `zeta-agent`、Core 和 App Server 的 vertical slice 同步完成：
 
@@ -580,7 +594,7 @@ zeta-rs/protocol/
 当前子阶段完成条件已满足：进程在等待用户/工具响应时重启，能恢复为明确 waiting 状态，不留下
 永久 Running。P2 完整完成仍要求 owner/delivery/timer 的 async vertical slice。
 
-### Phase P3：收敛 model/tool contract
+### 阶段 P3：收敛模型/工具契约
 
 - Context builder 只输出一套 canonical `ModelRequest`；
 - provider adapter 不读取 ThreadItem 或 Core snapshot；
@@ -591,7 +605,7 @@ zeta-rs/protocol/
 完成条件：同一 canonical request 可通过不同 provider adapter，结果可无损回到 Agent loop
 需要的共享语义。
 
-### Phase P4：补齐 streaming、usage 与 compaction provenance
+### 阶段 P4：补齐流式处理、usage 与压缩来源
 
 - 根据真实 streaming producer 增加最小必要 delta；
 - 明确 transient update 的 stream cursor 和重连降级；
@@ -602,7 +616,7 @@ zeta-rs/protocol/
 完成条件：客户端丢失所有 transient update 后仍能从 snapshot + durable gap 恢复，compaction
 不会破坏原始历史可追溯性。
 
-### Phase P5：发布后的版本政策
+### 阶段 P5：发布后的版本政策
 
 当前开发阶段直接修改 canonical 类型并同步所有调用方，不保留 deprecated alias 或双写。
 

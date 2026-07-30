@@ -1,106 +1,120 @@
-# Zeta Sandbox 架构
+# 沙箱架构
+
+> 文档所有权：本文件是操作系统沙箱策略、平台后端和强制执行边界的权威文档。
+
+## 快速理解
+
+沙箱系统落实已经决定好的执行能力：它限制文件、网络和进程范围，但不判断用户意图，也不负责
+批准动作。
+
+| 执行请求 | 系统行为 | 当前边界 |
+| --- | --- | --- |
+| 工作区只读且禁止网络 | 选择当前平台的只读沙箱后端 | macOS、Linux 已接入；Windows 仍需真实平台验收 |
+| 工作区可写且禁止网络 | 只开放工作区写入，继续限制其他路径和网络 | 各平台按自身机制翻译相同共享策略 |
+| 完全文件访问且允许网络 | 共享策略允许直接执行，不伪装成受限沙箱 | 仍须先经过权限决定 |
+| 后端缺失或无法表达策略 | 失败即关闭，不降级为普通进程 | 返回明确的后端不可用错误 |
+| 沙箱拒绝动作 | 返回结构化执行证据 | 是否重试或扩权由 Core 与权限系统决定 |
 
 ## 1. 定位
 
-Zeta 将 action review、sandbox policy、平台选择、命令构建和 OS enforcement 分开：
+Zeta 将动作审查、沙箱策略、平台选择、命令构建和操作系统强制执行分开：
 
-```text
-Core ToolScheduler
-  → zeta-policy
-    → zeta-auto-review（需要时）
-    → local Tool/command executor
-      → zeta-sandboxing
-      ├─ macOS Seatbelt backend
-      ├─ zeta-linux-sandbox
-      │    └─ zeta-bwrap
-      └─ zeta-windows-sandbox
+```mermaid
+flowchart TD
+    scheduler["Core 工具调度器<br/><code>ToolScheduler</code>"] --> policy["策略判断<br/><code>zeta-policy</code>"]
+    policy --> review{"需要动作审查？"}
+    review -- "是" --> autoReview["动作审查<br/><code>zeta-auto-review</code>"]
+    review -- "否" --> executor["本地工具或命令执行器"]
+    autoReview --> executor
+    executor --> sandboxing["共享沙箱层<br/><code>zeta-sandboxing</code>"]
+    sandboxing --> macos["macOS Seatbelt 后端"]
+    sandboxing --> linux["Linux 后端<br/><code>zeta-linux-sandbox</code>"]
+    linux --> bwrap["Bubblewrap 参数与入口<br/><code>zeta-bwrap</code>"]
+    sandboxing --> windows["Windows AppContainer 后端<br/><code>zeta-windows-sandbox</code>"]
 ```
 
-这里的 `SandboxManager` 只调度 sandbox backend：它验证 Workspace 相对路径、解析当前平台的
-policy，并生成可执行的 host launch plan。它不负责 Tool 并行计划、approval、retry、
-deterministic result ordering 或 durable Tool Call/Result；这些仍属于 Core `ToolScheduler`。
-Action review、grant 与最终 execution decision 见 [`auto-review.md`](auto-review.md)。
+沙箱管理器 `SandboxManager` 只调度沙箱后端：它验证工作区相对路径、解析当前平台的策略，并生成
+可执行的主机启动计划。它不负责工具并行计划、用户批准、重试、确定性结果排序或工具调用与结果的
+持久化；这些仍属于 Core 的工具调度器 `ToolScheduler`。动作审查的风险判断见
+[`auto-review.md`](auto-review.md)；授权、用户批准与最终执行决定的整体语义见
+[`permissions.md`](permissions.md)。
 
-## 2. Crate 边界
+## 2. crate 边界
 
 ### 2.0 `zeta-install-context`
 
-`zeta-install-context` 描述当前 executable 所在的 package layout，并提供 `zeta-path/` executable
-candidates 与 `zeta-resources/` file candidates。它不选择 sandbox policy，不验证 helper
-capability/digest，也不启动或复制资源。
+`zeta-install-context` 描述当前可执行文件所在的包布局，并提供 `zeta-path/` 可执行文件候选路径
+与 `zeta-resources/` 资源候选路径。它不选择沙箱策略，不验证辅助程序的能力或摘要，也不启动或
+复制资源。
 
-当前 local `rg`、Linux Bubblewrap 与 Windows AppContainer composition 已消费该 contract。
-canonical package 写入 `zeta-package.json` 与 `zeta-path/rg`；Linux 另带
-`zeta-resources/bwrap`，Windows 另带 command runner 和 sandbox setup helper。平台 backend
-在 host composition 时完成 candidate validation、capability/protocol probe 和 canonical
-identity freeze。
+当前本地 `rg`、Linux Bubblewrap 与 Windows AppContainer 的运行时组合已经接入该契约。规范包
+写入 `zeta-package.json` 与 `zeta-path/rg`；Linux 另带 `zeta-resources/bwrap`，Windows 另带
+命令运行器和沙箱设置辅助程序。平台后端在主机组合阶段完成候选项验证、能力与协议探测，并冻结
+规范身份。
 
 ### 2.1 `zeta-bwrap`
 
-`zeta-bwrap` 同时提供 Linux Bubblewrap typed argv builder 与很薄的 upstream C entrypoint
-wrapper：
+`zeta-bwrap` 同时提供 Linux Bubblewrap 的类型化参数构建器和很薄的上游 C 入口包装器：
 
-- 接受显式 mount access、namespace、工作目录和 inner command；
-- 始终使用 program/arguments，不经过 shell；
-- 生成可检查的 `BwrapCommand`，不自行启动 Tool；
-- package build 从 checksum-locked upstream source 编译 `bwrap_main`，不启用 setuid support；
-- 不拥有 Zeta `SandboxPolicy`、Workspace grant、approval 或 fallback 决策。
+- 接受显式挂载权限、命名空间、工作目录和内部命令；
+- 始终使用程序与参数数组，不经过 Shell；
+- 生成可检查的 `BwrapCommand`，不自行启动工具；
+- 包构建从校验和锁定的上游源码编译 `bwrap_main`，不启用 setuid 支持；
+- 不拥有 Zeta 的沙箱策略 `SandboxPolicy`、工作区授权、用户批准或降级决策。
 
-调用方不能注入任意拼接后的 bwrap 参数。新增 Bubblewrap 能力应先成为 typed operation，再由
-Linux policy adapter 决定是否使用。
+调用方不能注入任意拼接后的 `bwrap` 参数。新增 Bubblewrap 能力应先成为类型化操作，再由 Linux
+策略适配器决定是否使用。
 
 ### 2.2 `zeta-sandboxing`
 
-`zeta-sandboxing` 是共享 contract 与 backend manager：
+`zeta-sandboxing` 是共享契约与后端管理器：
 
 - `SandboxPolicy`、`FileSystemAccess`、`NetworkAccess`；
 - `SandboxCommand` 与 `PreparedCommand`；
-- `SandboxBackend` contract；
-- `SandboxManager` 的 Workspace path validation 与 backend dispatch；
-- 当前 macOS Seatbelt command transform；
-- 现有 `WorkspaceRoot` containment。
+- 沙箱后端契约 `SandboxBackend`；
+- `SandboxManager` 的工作区路径验证与后端分派；
+- 当前 macOS Seatbelt 命令转换；
+- 现有工作区根目录约束 `WorkspaceRoot`。
 
-macOS 实现暂时保留在本 crate，因为 Seatbelt transform 很薄，且平台选择与共享 policy 紧密。
-当 macOS 原生实现需要独立 FFI、helper binary、较重依赖，或接近 500 LoC 时，再提取为
-`zeta-macos-sandbox`；提取不能改变共享 policy。
+macOS 实现暂时保留在本 crate，因为 Seatbelt 转换层很薄，且平台选择与共享策略紧密。
+当 macOS 原生实现需要独立 FFI、辅助程序、较重依赖，或接近 500 行代码时，再提取为
+`zeta-macos-sandbox`；提取不能改变共享策略。
 
 ### 2.3 `zeta-linux-sandbox`
 
-`zeta-linux-sandbox` 把共享 policy 翻译为 `zeta-bwrap` operations：
+`zeta-linux-sandbox` 把共享策略翻译为 `zeta-bwrap` 操作：
 
-- 非 FullAccess filesystem 默认以只读 root 开始；
-- WorkspaceWrite 通过更具体的读写 mount 重开 Workspace；
-- denied network 使用独立 network namespace；
-- 添加 user/PID namespace、fresh `/proc`、`/dev`、session 与 parent-death containment；
+- 非完全访问 `FullAccess` 的文件系统默认从只读根目录开始；
+- 工作区可写 `WorkspaceWrite` 通过更具体的读写挂载重新开放工作区；
+- 禁止网络时使用独立网络命名空间；
+- 添加用户与进程命名空间、新建的 `/proc`、`/dev`、会话和父进程退出约束；
 - Bubblewrap 不可用或不支持所需能力时必须返回错误。
 
-该 crate 当前拥有 system/bundled bwrap discovery、所需 CLI capability probe 与 canonical
-identity freeze。后续仍拥有 version diagnostics、WSL 检查、seccomp 与 managed-network bridge；
-这些细节不能进入共享 policy。
+该 crate 当前拥有系统或随包提供的 `bwrap` 发现、所需 CLI 能力探测和规范身份冻结。后续仍拥有
+版本诊断、WSL 检查、seccomp 与受管网络桥接；这些细节不能进入共享策略。
 
 ### 2.4 `zeta-windows-sandbox`
 
-物理目录保留上游习惯名 `windows-sandbox-rs/`，Cargo package/API 名为
+物理目录保留上游习惯名 `windows-sandbox-rs/`，Cargo 包与 API 名为
 `zeta-windows-sandbox` / `zeta_windows_sandbox`。它拥有：
 
-- shared policy 到 Windows filesystem/network authority 的解析；
-- AppContainer profile/capability、ACL、child-process policy 与 Job Object enforcement；
-- Windows helper/launcher 的生命周期和平台 diagnostics。
+- 从共享策略到 Windows 文件系统与网络授权的解析；
+- AppContainer 配置文件与能力、ACL、子进程策略和 Job Object 强制执行；
+- Windows 辅助程序与启动器的生命周期和平台诊断。
 
 当前 `zeta-command-runner.exe` 先调用 `zeta-windows-sandbox-setup.exe` 创建或复用按
-canonical Workspace + ro/rw mode 隔离的 AppContainer profile，为 Workspace 和冻结的 inner
-executable 安装 ACL，再以零 capability AppContainer token 启动进程。零 network capability
-承担断网，profile SID + ACL 承担文件访问；
-child-process restriction 与单进程 Job Object 补充进程树控制。当前只支持
-ReadOnly/WorkspaceWrite + NetworkDenied；其他受限组合 fail closed。
+规范工作区与读写模式隔离的 AppContainer 配置文件，为工作区和冻结的内部可执行文件安装 ACL，
+再以零能力的 AppContainer 令牌启动进程。零网络能力负责断网，配置文件 SID 与 ACL 负责文件
+访问；子进程限制与单进程 Job Object 补充进程树控制。当前只支持只读或工作区可写模式
+`ReadOnly` / `WorkspaceWrite` 与禁止网络 `NetworkDenied` 的组合；其他受限组合必须失败即关闭。
 
-这不是 Codex dedicated local user + WFP firewall 实现的复制。Zeta v1 选择 Windows 原生
-AppContainer 边界，并明确记录 ACL 是持久 filesystem metadata。helper 已接入 package、
-discovery、App Server 与 MSVC target 交叉检查；真实 Windows AppContainer/ACL/network
-integration tests 尚未完成，因此暂不标记为 production-enforced。
+这不是 Codex 专用本地用户与 WFP 防火墙实现的复制。Zeta v1 选择 Windows 原生 AppContainer
+边界，并明确记录 ACL 是持久化的文件系统元数据。辅助程序已接入包、资源发现、App Server 与
+MSVC 目标交叉检查；真实 Windows AppContainer、ACL 和网络集成测试尚未完成，因此暂不标记为
+生产环境强制执行。
 Windows 测试人员应按
 [`windows-sandbox-acceptance-runbook.md`](windows-sandbox-acceptance-runbook.md)
-回填实际结果、exit code、transcript 和 ACL 证据，再与固定 golden expectations 比对。
+回填实际结果、退出码、执行记录和 ACL 证据，再与固定预期结果比对。
 
 ## 3. 依赖方向
 
@@ -109,46 +123,46 @@ Windows 测试人员应按
 ```text
 zeta-linux-sandbox   → zeta-bwrap + zeta-sandboxing
 zeta-windows-sandbox → zeta-install-context + zeta-sandboxing
-host composition     → zeta-install-context + platform sandbox + tool runtime
+主机组合              → zeta-install-context + 平台沙箱 + 工具运行时
 zeta-policy          → zeta-sandboxing
 zeta-auto-review     → zeta-policy + zeta-sandboxing
-host executor        → zeta-sandboxing + 当前平台 backend
+主机执行器            → zeta-sandboxing + 当前平台后端
 ```
 
 禁止：
 
 ```text
 zeta-bwrap → zeta-sandboxing / protocol / core
-platform sandbox → zeta-core / ThreadStore / approval UI
+平台沙箱 → zeta-core / ThreadStore / 批准界面
 zeta-sandboxing → shell-command / file-system / apply-patch / app-server / provider
 zeta-sandboxing → zeta-policy / zeta-auto-review
-zeta-install-context → zeta-sandboxing / platform sandbox / shell-command
+zeta-install-context → zeta-sandboxing / 平台沙箱 / shell-command
 ```
 
-平台 backend 通过 `SandboxBackend` 注入。共享 manager 不依赖所有平台实现，因此不会形成
-`sandboxing ↔ platform crate` 循环，也不会把 Windows native 依赖带入 Linux/macOS binary。
+平台后端通过 `SandboxBackend` 注入。共享管理器不依赖所有平台实现，因此不会形成
+“共享沙箱 ↔ 平台 crate”循环，也不会把 Windows 原生依赖带入 Linux 或 macOS 可执行文件。
 
 ## 4. 安全不变量
 
-- 非 `FullAccess + AllowedNetwork` 请求必须由平台 sandbox enforcement 承担；
-- backend 缺失、版本过旧或 policy 无法完整表达时 fail closed；
-- `WorkspaceRoot` path containment 不是 OS sandbox，不能作为 fallback；
-- model/tool arguments 不能选择 backend、扩大 mount、授予网络或要求降级；
-- command 与 bwrap 参数始终以结构化 argv 传递；
-- symlink、non-existent write path、nested deny/readonly carveout 必须在进入真实执行前处理；
-- capability probe 与实际 spawn 使用同一 resolved executable，避免检查/执行竞态；
-- diagnostics 必须区分 unavailable、unsupported policy、setup failure 和 sandbox denial。
+- 非“完全访问 + 允许网络” `FullAccess + AllowedNetwork` 请求必须由平台沙箱强制执行；
+- 后端缺失、版本过旧或策略无法完整表达时必须失败即关闭；
+- 工作区根目录约束 `WorkspaceRoot` 不是操作系统沙箱，不能作为降级方案；
+- 模型或工具参数不能选择后端、扩大挂载、授予网络或要求降级；
+- 命令与 `bwrap` 参数始终以结构化参数数组传递；
+- 符号链接、不存在的写入路径、嵌套拒绝和只读例外必须在进入真实执行前处理；
+- 能力探测与实际启动使用同一个已解析可执行文件，避免检查与执行之间的竞态；
+- 诊断必须区分后端不可用、策略不受支持、设置失败和沙箱拒绝。
 
 ## 5. 实施顺序
 
-1. typed policy、backend contract 与 command construction；
-2. 将 process executor 改为消费 `PreparedCommand`；
-3. Linux bwrap discovery/probe 与 bundled package；
-4. Linux 真实 namespace integration tests 与 seccomp；
-5. Windows AppContainer launcher、ACL/network enforcement 与 Windows CI；
-6. macOS Seatbelt profile compatibility/integration tests；
-7. managed network proxy、PTY 与 cancellation/kill-tree integration。
+1. 类型化策略、后端契约与命令构建；
+2. 将进程执行器改为消费准备命令 `PreparedCommand`；
+3. Linux 的 `bwrap` 发现、探测与随包分发；
+4. Linux 真实命名空间集成测试与 seccomp；
+5. Windows AppContainer 启动器、ACL 与网络强制执行和 Windows CI；
+6. macOS Seatbelt 配置文件兼容性与集成测试；
+7. 受管网络代理、PTY、取消和进程树终止集成。
 
-Linux bundled source/build/discovery 已完成；真实 Linux namespace integration 与 seccomp 仍是
-当前限制。Windows helper/build/discovery/enforcement path 已完成，仍需真实 Windows
-integration tests 后才能标记为 production-enforced。
+Linux 随包源码、构建和发现已完成；真实 Linux 命名空间集成与 seccomp 仍是当前限制。Windows
+辅助程序、构建、发现和强制执行路径已完成，仍需通过真实 Windows 集成测试后才能标记为生产环境
+强制执行。

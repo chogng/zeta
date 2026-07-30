@@ -1,4 +1,4 @@
-# Workspace Search：Rust 权威执行与 Desktop 投影
+# Workspace 搜索：Rust 权威执行与 Desktop 投影
 
 > 本文是 workspace 内容搜索的跨进程 ownership、产品语义和演进边界的 canonical 文档。
 > App Server 内部实现细节见
@@ -15,7 +15,7 @@ Workspace Search 由 Rust / App Server 承担权威执行，Desktop Search contr
 这套 RPC 是产品搜索能力，不是模型 Tool。模型是否可以调用搜索、如何审批以及如何向模型压缩
 结果属于另一条 Tool/Policy contract；两者不能共享隐式权限或生命周期。
 
-## Ownership
+## 所有权
 
 | 能力 | Owner | 当前状态 |
 | --- | --- | --- |
@@ -28,7 +28,7 @@ Workspace Search 由 Rust / App Server 承担权威执行，Desktop Search contr
 | 点击结果后读取文件并打开编辑器 | Files / Editor vertical | 尚未完成 |
 | replace、索引、multi-root 和 watcher 驱动的结果失效 | 未确定 | 尚未完成 |
 
-## End-to-end flow
+## 端到端流程
 
 ```text
 SearchViewPane

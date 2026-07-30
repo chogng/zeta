@@ -8,6 +8,20 @@
 > 无交互执行基线：[`exec.md`](exec.md)
 > MCP Agent server：[`mcp-server.md`](mcp-server.md)
 
+## 快速理解
+
+CLI 是 Zeta 的终端产品入口：它负责命令、输入输出和退出码，但所有 Agent 工作都通过统一的
+Session-first App Server 契约执行。
+
+| 用户命令 | CLI 负责 | 后端负责 |
+| --- | --- | --- |
+| `zeta` | 启动交互式终端体验 | Session、Thread 和 Agent 状态 |
+| `zeta ask` | 解析参数、创建工作并流式显示更新 | 模型、工具、权限和持久化 |
+| `zeta exec` | 提供无交互输入和机器可消费输出 | 执行同一 Agent/Tool 路径，不绕过工具系统 |
+| `zeta login` / `zeta config` | 收集用户意图并调用类型化方法 | 登录、秘密和配置权威 |
+| `zeta app-server` / `zeta mcp-server` | 选择进程入口和监听方式 | 对应服务的协议与生命周期 |
+| 连接中断或失败 | 输出稳定错误、诊断和退出码 | 决定领域失败和恢复语义 |
+
 ## 1. 目标
 
 CLI 是正式产品客户端。它负责终端体验，不拥有 Agent 状态机，也不建立第二套 Rust 业务
@@ -90,7 +104,7 @@ CLI 不复制 MCP framing、Agent polling、interaction 或 invocation identity 
 禁止新增名为 `runtime`、`service`、`common` 或 `platform` 的泛化 CLI facade 来聚合内部
 能力。这类层会重复 App Server 契约并逐渐成为职责不清的杂物桶。
 
-## 4. Transport 模式
+## 4. 传输模式
 
 所有模式使用相同的 Params、Result、Notification 和 Error DTO：
 

@@ -19,7 +19,7 @@ resources/icons/*.svg
                        → native product host
 ```
 
-## 2. Ownership
+## 2. 所有权
 
 | 能力 | 当前 owner | 状态 |
 | --- | --- | --- |
@@ -36,7 +36,7 @@ resources/icons/*.svg
 `zeta-icons` 不依赖 `zeta-ui`。`IconLabel`、`Button` 和 `InputBox` 可以依赖 icon identity，但
 资源 crate 不得包含 component、font、layout、theme color、GPU 或 input routing。
 
-## 3. Identity 与 artwork
+## 3. 身份与图稿
 
 - 产品接口传递 `Icon` / `IconId`，不传 filename 或 raw SVG；
 - public semantic library 由产品显式登记，不能由 resource filename 自动扩张；
@@ -48,7 +48,7 @@ resources/icons/*.svg
 - renderer 不支持某种 mode 时必须显式失败，不能静默降级为错误颜色；
 - resource filename 是 artwork generation input，不是 component API。
 
-## 4. Current implementation
+## 4. 当前实现
 
 Rust generator 扫描全部 canonical SVG，生成 165 个 crate-private `IconDefinition` binding；
 `library.rs` 显式登记与 Desktop `lxiconsLibrary` 对齐的公共 semantic constants、排序后的

@@ -106,7 +106,7 @@ transport 本身不创造 parent/child 语义。
 本文以下章节同时固定 Current surface 与 Proposed 演进；当前 HTTP listener 是 remote MCP
 adapter，不等于已具备公网 multi-tenant service 或 remote App Server execution plane。
 
-## 4. Ownership
+## 4. 所有权
 
 ### 4.1 `zeta-mcp-server` 拥有
 
@@ -124,7 +124,7 @@ adapter，不等于已具备公网 multi-tenant service 或 remote App Server ex
 - Proposed：artifact reference、MCP task capability、SSE resume、OAuth/multi-tenant control
   plane、remote App Server backend 和 remote Agent bridge。
 
-### 4.2 App Server 与 Core 保持拥有
+### 4.2 App Server 与核心保持拥有
 
 | 能力 | Canonical owner |
 | --- | --- |
@@ -167,7 +167,7 @@ composition。HTTP MCP session 拥有独立 App Server connection，但共享同
 receipt authority；它不会引入另一套 execution engine。Remote App Server backend 仍为
 Proposed。
 
-## 6. Agent tool surface
+## 6. Agent 工具接口面
 
 当前开发期只暴露最小 Agent-as-tool surface：
 
@@ -215,9 +215,9 @@ stdio 使用 local-user principal；HTTP principal 由 bearer token 的不可逆
 caller-to-Thread binding 持久化在 state root，因此新的 connection/process 仍可恢复授权，但
 不能跨 principal 猜测 `thread_id`。
 
-## 7. End-to-end flow
+## 7. 端到端流程
 
-### 7.1 Start
+### 7.1 启动（Start）
 
 ```text
 MCP tools/call(zeta)
@@ -239,7 +239,7 @@ MCP tools/call(zeta)
 progress 和 interaction，但 correctness 仍以 App Server durable snapshot/update 和最终 result
 为准。目标独立 event driver 将替换轮询，而不改变 authority。
 
-### 7.2 Continue
+### 7.2 继续（Continue）
 
 ```text
 MCP tools/call(zeta-reply)
@@ -253,7 +253,7 @@ MCP tools/call(zeta-reply)
 继续已有 Thread 不创建新的 Session，也不把调用方当前对话自动复制进 Zeta context。调用方想
 传递的新信息必须存在于本次显式 prompt 或授权 artifact reference 中。
 
-### 7.3 Cancel and disconnect
+### 7.3 取消与断开连接
 
 MCP cancel notification 必须映射到该 MCP request 对应的精确 Turn/operation。Transport EOF 或
 HTTP disconnect 不自动证明 Turn cancelled：
@@ -294,7 +294,7 @@ parent Thread
 
 远端 Zeta 的 `thread_id` 是 execution correlation，不替代调用方的 `DelegationId`。
 
-## 9. Interaction、权限与信任
+## 9. 交互、权限与信任
 
 Agent invocation 可能触发 shell、filesystem、network、credential 或 external mutation。MCP
 server 不能因为调用者请求了某种能力就自动批准。
@@ -315,7 +315,7 @@ server 不能因为调用者请求了某种能力就自动批准。
 尚无 tenant/workspace provisioning、OAuth、redirect/egress control plane、built-in TLS 或
 per-principal distributed rate limit。公网部署必须由 TLS/auth reverse proxy 补齐这些边界。
 
-## 10. Progress、result 与兼容性
+## 10. Progress、结果与兼容性
 
 MCP client 对 progress 和 custom notification 的支持不一致。最终 `tools/call` result 是唯一必须
 可消费的完成载体；notification 只提供增量体验，不能成为 correctness authority。
@@ -330,7 +330,7 @@ MCP client 对 progress 和 custom notification 的支持不一致。最终 `too
 - 客户端忽略所有 progress 时仍能从最终 result 得到有界、准确的 terminal outcome；
 - App Server event schema 演进先在 typed adapter 内处理，不把内部 DTO 原样变成 MCP public API。
 
-## 11. Failure 与恢复
+## 11. 失败与恢复
 
 | Failure | Required semantics |
 | --- | --- |
@@ -349,7 +349,7 @@ principal-scoped receipt 原子持久化到 `<ZETA_STATE_ROOT>/mcp-server/receip
 负责外部 invocation correlation 与 Thread authorization，canonical Session/Thread/Turn 状态
 仍以 App Server/Core 为准。当前无多进程 file lock，同一 state root 只能有一个 server writer。
 
-## 12. Observability
+## 12. 可观测性
 
 允许记录：
 
@@ -369,7 +369,7 @@ principal-scoped receipt 原子持久化到 `<ZETA_STATE_ROOT>/mcp-server/receip
 
 ## 13. 分阶段落地
 
-### Phase MS0：contract 与 App Server prerequisite
+### 阶段 MS0：契约与 App Server 前置条件
 
 状态：部分具备。
 
@@ -384,7 +384,7 @@ principal-scoped receipt 原子持久化到 `<ZETA_STATE_ROOT>/mcp-server/receip
 async `AppServerSession` 与独立 event stream 尚未完成。MCP adapter 当前用 subscription +
 bounded polling/drain 提供实时能力，仍应迁移到该通用 session。
 
-### Phase MS1：stdio `zeta` vertical slice
+### 阶段 MS1：stdio `zeta` 纵向切片
 
 状态：Current 已完成。
 
@@ -400,7 +400,7 @@ bounded polling/drain 提供实时能力，仍应迁移到该通用 session。
 当前已完成 stdio、embedded composition、Session/root Thread/Turn、deadline、cancel、graceful
 shutdown、bounded progress 和 final result。
 
-### Phase MS2：continue 与 interaction
+### 阶段 MS2：continue 与交互
 
 状态：Current 部分完成。
 
@@ -415,20 +415,20 @@ shutdown、bounded progress 和 final result。
 delivery、跨重启 replay/resume 和 output truncation；dynamic Tool interaction 与 artifact
 reference 尚未完成。
 
-### Phase MS3：remote deployment
+### 阶段 MS3：远程部署
 
 状态：Current 部分完成。
 
-- 已完成 Streamable HTTP POST/DELETE、JSON/SSE response、bearer authentication、Origin
-  allowlist、secure session ID、protocol header validation 和 process connection limit；
-- 已完成 HTTP session 重建后用 durable invocation identity 恢复 Agent call；
-- 未完成 independent GET SSE、`Last-Event-ID` redelivery、OAuth、tenant/workspace binding、
-  per-principal distributed rate limit、built-in TLS、redirect/egress control plane；
-- remote App Server backend 仍为 Proposed。
+- 已完成 Streamable HTTP POST/DELETE、JSON/SSE 响应、Bearer 认证、Origin 白名单、安全会话
+  ID、协议标头校验和进程连接数量限制；
+- 已完成 HTTP 会话重建后，使用持久化调用身份恢复 Agent 调用；
+- 尚未实现独立 GET SSE、`Last-Event-ID` 重投递、OAuth、租户/工作区绑定、按主体分布式限流、
+  内置 TLS 以及重定向/数据外发控制面；
+- 远程 App Server 后端仍处于计划阶段。
 
-完成条件：公网暴露前完成 tenant isolation、credential、disconnect 和 abuse tests。
+完成条件：向公网暴露前完成租户隔离、凭据、断开连接和滥用防护测试。
 
-### Phase MS4：remote Agent bridge
+### 阶段 MS4：远程 Agent 桥接
 
 - `MultiAgentCoordinator` 的 remote Agent port；
 - local `DelegationId` 到 remote invocation 的绑定；

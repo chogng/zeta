@@ -200,7 +200,7 @@ Theme 不判断某个 tab 是否 active，Part 也不选择 active token。`Comp
 
 历史 CSS 中可能仍有不符合本规范的穿透 selector。它们是待迁移实现，不构成新的先例；修改相关区域时应就地迁移到 owner 或公开 variant。
 
-## Review Checklist
+## 审查清单
 
 - 这个 selector 的 root class 是否由当前模块创建？
 - 这个状态是否由当前模块定义？

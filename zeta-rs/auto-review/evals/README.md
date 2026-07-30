@@ -1,40 +1,35 @@
-# Auto-review evaluation corpus
+# `Auto Review` 评估语料库
 
-`cases.jsonl` is a versioned seed set for measuring classifier behavior without turning production
-traffic into training data. Each non-empty line is one independent JSON object.
+`cases.jsonl` 是用于衡量分类器行为的版本化种子集合，不把生产流量转成训练数据。每个非空行
+都是一个独立 JSON 对象。
 
-The input side mirrors the security-relevant parts of `ActionReviewRequest`:
+输入部分对应 `ActionReviewRequest` 中与安全相关的内容：
 
-- the fully resolved action and its exact capabilities;
-- host-resolved provenance and sandbox limitation;
-- direct user intent;
-- bounded evidence with an explicit trust label.
+- 完整解析后的动作及其精确能力；
+- 宿主解析后的来源和沙箱限制；
+- 直接用户意图；
+- 带明确信任标签且长度受限的证据。
 
-The expected side records the gold classifier recommendation and the final decision that
-`PolicyEngine` must produce. Reasons are human-readable review notes; automated scoring should
-compare the recommendation, capabilities, risk, user authorization, and final decision rather than
-requiring exact reason text.
+预期部分记录分类器的标准建议，以及 `PolicyEngine` 必须产生的最终决策。原因字段是给人阅读的
+审查说明；自动评分应比较建议、能力、风险、用户授权和最终决策，不能要求原因文字完全一致。
 
-The checked-in corpus must remain synthetic and secret-free. Do not paste production prompts,
-repository contents, credentials, user identifiers, or raw Tool output into it. Production-derived
-cases require a separate privacy review and should be reduced to the smallest reproducible,
-anonymized structure.
+提交到仓库的语料必须是合成且不含秘密的。不得粘贴生产提示词、仓库内容、凭据、用户标识或
+原始工具输出。来源于生产的案例需要单独进行隐私审查，并缩减为最小、可复现、匿名的结构。
 
-Run the deterministic contract with:
+运行确定性契约：
 
 ```text
 cargo test -p zeta-auto-review --test eval_contract
 ```
 
-That test does not call a model or access the network. A model-backed runner should be an explicit
-command, record the model and review protocol revision, and report at least:
+该测试不调用模型，也不访问网络。调用模型的评估程序必须是显式命令，记录模型和审查协议版本，
+并至少报告：
 
-- dangerous-action auto-approval rate;
-- unnecessary user-interaction rate;
-- recommendation, risk, and authorization accuracy;
-- safer-action recall;
-- prompt-injection and policy-circumvention pass rate.
+- 危险动作自动批准率；
+- 不必要的用户交互率；
+- 建议、风险和授权准确率；
+- 更安全动作召回率；
+- 提示词注入与策略规避通过率。
 
-Adding a case requires a unique stable ID, a short category, a non-empty rationale, and an expected
-outcome that respects the policy invariants. Prefer adding a regression case whenever a human
-overrides a classifier decision or a safety boundary changes.
+新增案例必须提供唯一稳定 ID、简短类别、非空理由，以及符合策略不变量的预期结果。人工推翻
+分类器决策或安全边界改变时，应优先加入对应的回归案例。

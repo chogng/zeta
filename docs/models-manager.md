@@ -13,6 +13,19 @@
 > 合并语义；具体 endpoint、字段映射与内置 metadata 必须以实现时的官方文档和 contract test
 > 为准。
 
+## 快速理解
+
+模型目录系统回答“当前有哪些模型可选、这些信息有多可信”；它管理发现、缓存和合并，不执行
+模型调用。该系统目前仍是计划设计。
+
+| 读者首先会问 | 直接答案 | 深入阅读 |
+| --- | --- | --- |
+| 模型列表来自哪里？ | 供应商发现、内置资料、用户配置和本地状态按字段来源合并 | [核心领域模型](#5-核心领域模型) |
+| 为什么某个模型没有出现？ | 可能是供应商不支持发现、缓存尚未刷新、生命周期过滤或能力不匹配 | [供应商发现策略](#6-供应商发现策略) |
+| 什么时候访问供应商？ | 依据新鲜度、显式刷新和缓存状态决定，并使用 singleflight 合并并发刷新 | [何时请求](#7-何时请求) |
+| 模型目录能否证明模型支持某项能力？ | 不能；缺失字段表示未知，不能被解释为明确不支持 | [发现能力不是模型能力](#63-发现能力不是模型能力) |
+| 谁真正调用模型？ | 已选模型交给模型运行时，目录系统不拥有请求、重试或传输 | [职责与非职责](#3-职责与非职责) |
+
 ## 1. 结论
 
 `zeta-models-manager` 是 Zeta 的模型目录控制面。它统一管理各个 provider 可用模型的发现、
@@ -200,7 +213,7 @@ Provider definition 应显式声明 discovery strategy 或由具体 adapter 解�
 
 以下是目标语义，不要求第一版逐字采用这些 Rust 名称。
 
-### 5.1 Catalog scope
+### 5.1 目录范围
 
 模型可用性不仅取决于 `ProviderId`，还可能取决于：
 
@@ -226,7 +239,7 @@ pub struct CatalogScopeKey {
 凭据内容轮换但 identity 不变时，credential layer 必须提供 revision，使新旧权限不会错误复用
 同一 cache。旧 scope 由 LRU/保留期回收，不做危险的全局 cache clear。
 
-### 5.2 Discovery result
+### 5.2 发现结果
 
 Source port 返回 provider-neutral、带覆盖范围的结果：
 
@@ -264,7 +277,7 @@ pub enum CatalogCacheHint {
   其他 OpenAI-compatible 服务的行为类推；
 - raw response、认证 header 和 provider request ID 不进入 snapshot。
 
-### 5.3 Metadata patch 与 provenance
+### 5.3 元数据 patch 与来源
 
 Discovery、内置 catalog 和配置 override 都转换为 patch，而不是直接构造最终 `ModelInfo`：
 
@@ -290,7 +303,7 @@ pub enum MetadataSource {
 `CapabilitySupport::{Supported, Unsupported, Unknown}` 的三态必须保留。`Unknown` 不是
 `Unsupported`，缺失字段也不是否定证据。
 
-### 5.4 Snapshot
+### 5.4 快照
 
 所有消费者读取 immutable snapshot：
 
@@ -317,7 +330,7 @@ pub enum CatalogFreshness {
 排序必须确定，snapshot 中 model ID 不得重复。相同 generation 的序列化结果必须稳定，便于
 App Server、Desktop 和 contract tests 比较。
 
-## 6. Provider discovery 策略
+## 6. 供应商发现策略
 
 ### 6.1 官方能力矩阵
 
@@ -348,7 +361,7 @@ App Server、Desktop 和 contract tests 比较。
 Last-Modified、固定 TTL、catalog push 或 heartbeat。实现时还必须通过不含秘密的 contract test
 记录真实响应头；观察到但未文档化的 header 只能作为优化，不能成为正确性前提。
 
-### 6.2 Provider 验证记录
+### 6.2 供应商验证记录
 
 每个内置 provider 必须维护一份可审阅的 profile，可以是对应 adapter module 的测试 fixture 和
 文档注释，不要求拆成独立 crate。至少记录：
@@ -369,7 +382,7 @@ negative-cache-invalidators
 其中“官方未说明”和“尚未验证”必须保持为 `Unknown`，不能填写从相似 provider 推导出的默认值。
 官方文档变化后，先更新 profile/fixture，再调整 adapter 和内置 metadata。
 
-### 6.3 Discovery capability 不是 model capability
+### 6.3 发现能力不是模型能力
 
 Provider definition 需要显式表达目录能力：
 
@@ -390,7 +403,7 @@ Discovery wire strategy 与 refresh mode 也要分开：前者决定 endpoint/co
 source profile、HTTP cache hint、本地 policy 和当前错误状态计算。不能因为实现了 `GET /models`
 就自动启动固定周期轮询，也不能因为存在静态 seed 就跳过用户显式 refresh。
 
-### 6.4 禁止 inference probing
+### 6.4 禁止推理探测
 
 Manager 不通过发送“hello”、空 prompt、tool call 或超小 `max_tokens` 请求探测能力，原因是：
 
@@ -403,7 +416,7 @@ Manager 不通过发送“hello”、空 prompt、tool call 或超小 `max_token
 
 ## 7. 何时请求
 
-### 7.1 Read policy
+### 7.1 Read 策略
 
 调用方使用具名策略，不传 `fresh: bool`：
 
@@ -425,7 +438,7 @@ pub enum CatalogReadPolicy {
 | 无 cache | 等待首次 discovery | 等待首次 discovery | 返回 cache miss |
 | StaticOnly | 返回静态 snapshot | 返回静态 snapshot 和不可动态刷新的状态 | 返回静态 snapshot |
 
-### 7.2 Refresh trigger
+### 7.2 刷新触发条件
 
 允许触发请求的事件：
 
@@ -460,13 +473,13 @@ Turn 创建 `ModelInvocationSnapshot` 时只解析已经选定的 `ModelRef`。�
 分页 discovery 要么产生声明为 `CompleteFor` 的完整结果，要么失败/降级为 `Partial`，不能把只取到
 第一页的结果伪装成完整目录。
 
-## 8. Catalog cache 语义
+## 8. 目录缓存语义
 
 本章只讨论 Zeta 对模型目录 observation 的缓存，不讨论厂商 prompt/context cache、stream
 keep-alive 或本地模型驻留。后三者的 provider-specific 行为分别留在 `zeta-api` codec、
 `zeta-http-client` transport、`zeta-client` framing 和本地 runtime。
 
-### 8.1 两层 cache
+### 8.1 两层缓存
 
 第一版至少提供：
 
@@ -483,7 +496,7 @@ keep-alive 或本地模型驻留。后三者的 provider-specific 行为分别�
 - 完整 endpoint query 中可能包含的秘密；
 - provider 返回的非必要账号信息。
 
-### 8.2 Freshness policy
+### 8.2 Freshness 策略
 
 使用具名 policy：
 
@@ -507,7 +520,7 @@ pub struct CatalogFreshnessPolicy {
 这些值由 manager policy/config 调整，不进入 `zeta-protocol`。测试必须使用注入 clock，禁止真实
 sleep。
 
-### 8.3 HTTP validator 与 backoff
+### 8.3 HTTP 校验器与退避
 
 - provider 官方文档或实际响应支持 ETag/Last-Modified 时使用 conditional request；
 - `304` 只延长 freshness，不重建 generation；
@@ -541,7 +554,7 @@ activity 由 `zeta-client` 管理；manager 只接收
 
 ## 9. 合并规则
 
-### 9.1 Identity
+### 9.1 身份
 
 唯一 identity 始终是：
 
@@ -610,7 +623,7 @@ Policy override 不改变事实 metadata。Trust override 用于自定义 gatewa
 
 ## 10. 筛选、解析与排序
 
-### 10.1 Filter pipeline
+### 10.1 筛选流程
 
 面向 Agent 模型 picker 的顺序固定为：
 
@@ -645,7 +658,7 @@ pub enum UnknownCapabilityPolicy {
 
 禁止使用 `tools: bool`、`include_unknown: bool` 等难以扩展的参数组合。
 
-### 10.2 Resolve 不是简单 list lookup
+### 10.2 解析不是简单列表查找
 
 Agent runtime 应调用 manager 的 typed resolution：
 
@@ -671,7 +684,7 @@ Catalog 不应成为错误的授权替代品：
 - provider 最终仍可能因权限、region 或下线返回错误，runtime 必须保留真实 provider error；
 - manager 不把一次调用失败永久改写为 model unavailable，除非随后完整 refresh 证实。
 
-### 10.3 Stable sort
+### 10.3 稳定排序
 
 默认排序建议使用：
 
@@ -688,7 +701,7 @@ alias 展示，并明确 lifecycle，不自动排在 pinned version 之前。
 
 ## 11. 向上暴露
 
-### 11.1 Protocol values
+### 11.1 协议值
 
 建议在 `zeta-protocol` 演进共享值，而不是在 App Server wire 层复制：
 
@@ -740,7 +753,7 @@ model/updated
 Provider credential 缺失时，静态模型仍可展示为 `AuthenticationRequired/Unverified`；API 不返回
 credential account 的秘密信息。普通客户端也不需要看到 opaque cache scope fingerprint。
 
-### 11.3 Agent runtime
+### 11.3 Agent 运行时
 
 `ResolvedModel` 在一次 model invocation 开始时进入 immutable `ModelInvocationSnapshot`：
 
@@ -788,7 +801,7 @@ ModelRef
 - persisted cache 使用与本地配置相同或更严格的文件权限；
 - cache delete 是可恢复操作，不影响 durable Session/Thread。
 
-### 13.2 Telemetry
+### 13.2 遥测
 
 建议指标：
 
@@ -838,7 +851,7 @@ table-driven test。
 
 ## 15. 测试要求
 
-### 15.1 Contract tests
+### 15.1 契约测试
 
 每个动态 provider adapter 至少保存经过脱敏和裁剪的官方响应 fixture，验证：
 
@@ -853,7 +866,7 @@ table-driven test。
 
 Fixture 不是 provider 当前模型列表的 authority，只用于 wire contract。
 
-### 15.2 Manager tests
+### 15.2 Manager 测试
 
 必须覆盖：
 
@@ -891,7 +904,7 @@ model/list(stale)
 
 ## 16. 分阶段落地
 
-### Phase 1：纯 catalog core
+### 阶段 1：纯目录核心
 
 - 创建 `zeta-models-manager`；
 - 定义 source port、scope、snapshot、read/refresh policy；
@@ -902,7 +915,7 @@ model/list(stale)
 
 完成条件：无网络也能从统一 manager 获得确定 catalog，且不再由 UI/provider runtime 各自筛选。
 
-### Phase 2：高价值动态 provider
+### 阶段 2：高价值动态供应商
 
 按 metadata 质量和现有产品价值优先接入：
 
@@ -919,7 +932,7 @@ model/list(stale)
 完成条件：动态列表失败时可稳定回退静态 snapshot；各 provider 的 coverage 与 Unknown 语义经过
 contract test；未文档化 cache header 不成为正确性依赖。
 
-### Phase 3：App Server 与客户端
+### 阶段 3：App Server 与客户端
 
 - 增加 `model/list`、`model/refresh`、`model/updated`；
 - Desktop/CLI/TUI picker 迁移到统一 snapshot；
@@ -929,7 +942,7 @@ contract test；未文档化 cache header 不成为正确性依赖。
 完成条件：所有产品入口看到相同目录、相同 warning 和相同排序，refresh 不影响 in-flight
 invocation。
 
-### Phase 4：持久 cache 与维护流程
+### 阶段 4：持久缓存与维护流程
 
 - 增加可删除的 persisted observation cache；
 - 内置 metadata 加 source URL、reviewed_at 和维护校验；

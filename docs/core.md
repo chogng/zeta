@@ -16,6 +16,19 @@
 > [`zeta-thread-store`](../zeta-rs/thread-store/README.md)
 > Local recovery composition：[`zeta-rollout`](../zeta-rs/rollout/README.md)
 
+## 快速理解
+
+Core 是一次 Agent 工作的权威协调者：它推进 Turn、安排模型和工具调用，并保证状态按可恢复的
+顺序提交，但不亲自实现模型、工具、网络或界面。
+
+| 读者首先会问 | 直接答案 | 深入阅读 |
+| --- | --- | --- |
+| 一次工作保存在哪里？ | Session 聚合多个 Thread；每个 Thread 独立保存 Turn、Item 和逻辑序列 | [产品模型](#4-产品模型与执行模型) |
+| 谁推进一个 Turn？ | `ThreadController` 保持单写者顺序，`TurnExecutor` 协调一次执行 | [核心组件](#5-核心组件) |
+| 模型、工具和策略由谁实现？ | Core 只拥有消费方端口和调用顺序，具体实现由外部服务注入 | [依赖方向](#6-依赖方向与服务端口) |
+| 什么时候算已经执行？ | 执行授权和开始事实必须先持久化，之后才能跨过副作用边界 | [提交与安全点](#7-durable-commit并发与安全点) |
+| Core 是否拥有 UI 或传输？ | 不拥有；Desktop、CLI、TUI 和 App Server 只是不同入口 | [所有权边界](#3-所有权边界) |
+
 ## 1. 定位
 
 `zeta-core` 是 Zeta 的 Agent 执行控制面，只负责五类事情：
@@ -69,7 +82,7 @@ Agent 生命周期能够成为 authority 的前提。
 
 ## 3. 所有权边界
 
-### 3.1 Core 拥有
+### 3.1 核心拥有
 
 - Session membership、lineage、shared defaults 与 lifecycle 的协调；
 - 每个 Thread 的逻辑单写者、durable commit、加载和恢复；
@@ -85,7 +98,7 @@ Agent 生命周期能够成为 authority 的前提。
 - crash 后模型、Tool、interaction 与 delegation 的恢复决策；
 - 将外部错误映射为稳定 Core outcome。
 
-### 3.2 Core 不拥有
+### 3.2 核心不拥有
 
 - canonical shared value 的定义；它属于 `zeta-protocol`；
 - stored envelope、event framing、JSONL/SQLite 和 fsync；
@@ -146,7 +159,7 @@ Thread 的 authority；它只能从 durable Thread facts 和不可变 snapshot �
 只有未来出现“一个 Agent 身份需要跨多个 Thread 延续”的真实需求时，才引入 `AgentId`。
 无论是否引入，context 始终绑定 Thread，而不是绑定 Session 或整个 Agent tree。
 
-### 4.4 Turn 与 operation
+### 4.4 Turn 与操作
 
 必须区分：
 
@@ -369,9 +382,9 @@ decision，并负责 durable approval、retry 与 unknown-outcome lifecycle。
 Composition root 负责读取各 authority、构造 provider/tool/store/policy adapter、materialize
 credential、注入 Core 并启动 transport。Core 不提供隐藏全局状态的 service registry。
 
-## 7. Durable commit、并发与 safe point
+## 7. Durable commit、并发与安全点
 
-### 7.1 Commit ordering
+### 7.1 提交顺序
 
 所有权威 mutation 使用同一顺序：
 
@@ -395,7 +408,7 @@ receive intent/completion
 - transient delta 可以丢失，final Item 必须 durable；
 - model/Tool/Agent completion 不冒用用户 `CommandId`。
 
-### 7.2 Safe point
+### 7.2 安全点
 
 默认 safe point：
 
@@ -409,7 +422,7 @@ receive intent/completion
 model、provider、tool availability、context policy 与非安全配置只在 safe point 进入新 snapshot。
 安全策略允许执行中单调收紧，不能静默放宽。
 
-### 7.3 Cancellation
+### 7.3 取消
 
 ```text
 Core shutdown source
@@ -441,7 +454,7 @@ timeout 收束，其迟到 response 被丢弃。已越过 durable execution-star
 伪装为安全未执行：terminal Turn 保留 execution-start marker 且没有 Tool Result，恢复时按 unknown
 outcome 处理，exact call 不自动重放。
 
-## 8. Model invocation 与 streaming
+## 8. 模型调用与流式处理
 
 一个 Turn 固定：
 
@@ -474,7 +487,7 @@ Transient streaming 必须携带 stream incarnation 与 cursor，通过有界 ch
 饱和时允许合并或丢弃非关键 delta；durable completion 不能依赖 transient stream，也不能被它
 阻塞。
 
-## 9. Context
+## 9. 上下文
 
 每次 model invocation 都从以下不可变输入派生：
 
@@ -531,9 +544,9 @@ Session 只串行拓扑提交；MultiAgentCoordinator 负责 delegation；Thread
 Thread；ContextManager 负责各自 context。详细契约见
 [`core-multi-agent.md`](core-multi-agent.md)。
 
-## 11. Tool、interaction 与 capability
+## 11. 工具、交互与能力
 
-### 11.1 Tool boundary
+### 11.1 工具边界
 
 ```text
 model emits Tool Calls
@@ -567,7 +580,7 @@ ReconcileBeforeRetry
 
 未声明幂等性的写操作和 outcome 未知的副作用默认不自动重试。
 
-### 11.2 Interaction
+### 11.2 交互
 
 Approval、structured user input、dynamic tool 和 capability request 使用同一模式：
 
@@ -617,7 +630,7 @@ start marker，scheduler 可以从 policy safe point 继续；如果 start marke
 缺失，则提交 outcome-unknown Tool failure，禁止自动重放。Host 在完成 Tool/Policy service
 装配后通过 `TurnExecutor::resume_recovered_tool_continuations` 恢复这些 Turn。
 
-## 12. 恢复、错误与 backpressure
+## 12. 恢复、错误与背压
 
 ### 12.1 恢复原则
 
@@ -650,7 +663,7 @@ Core error 至少区分：
 
 内部错误可以保留 source chain；wire mapping 只暴露稳定、安全的 code 与 message。
 
-### 12.3 Backpressure
+### 12.3 背压
 
 以下集合必须有界：
 

@@ -1,17 +1,16 @@
-# zeta-mcp-server
+# `zeta-mcp-server`
 
-> Current crate implementation contract. Cross-crate product architecture and staged evolution:
-> [`docs/mcp-server.md`](../../docs/mcp-server.md). MCP client runtime in the opposite direction:
-> [`docs/mcp.md`](../../docs/mcp.md).
+> 本 README 负责当前 crate 的实现契约。跨 crate 产品架构和分阶段演进见
+> [`docs/mcp-server.md`](../../docs/mcp-server.md)；反方向的 MCP 客户端运行时见
+> [`docs/mcp.md`](../../docs/mcp.md)。
 
-`zeta-mcp-server` exposes Zeta Agent execution to MCP clients over stdio or authenticated
-Streamable HTTP. It is an adapter over `zeta-app-server-client`; the embedded App Server remains
-the only composition root and the canonical owner of Session, Thread, Turn, model, Tool, policy,
-workspace and durable state.
+`zeta-mcp-server` 通过 stdio 或已认证的 Streamable HTTP，把 Zeta Agent 执行能力暴露给 MCP
+客户端。它是 `zeta-app-server-client` 上方的适配器；嵌入式 App Server 仍是唯一组合根，也是
+Session、Thread、Turn、模型、工具、策略、工作区和持久化状态的权威所有者。
 
-## 1. Current surface
+## 1. 当前接口面
 
-Start a local stdio server:
+启动本地 stdio 服务：
 
 ```text
 zeta-mcp-server
@@ -19,202 +18,187 @@ zeta mcp-server
 zeta mcp-server --listen stdio://
 ```
 
-Start an HTTP endpoint:
+启动 HTTP 端点：
 
 ```text
 ZETA_MCP_BEARER_TOKEN=<at-least-32-visible-ASCII-characters> \
   zeta mcp-server --listen http://127.0.0.1:8787/mcp
 ```
 
-Both entry points read `ZETA_STATE_ROOT`, defaulting to `.zeta`, and
-`ZETA_WORKSPACE_ROOT`, defaulting to the process working directory. HTTP additionally requires
-`ZETA_MCP_BEARER_TOKEN`; `ZETA_MCP_ALLOWED_ORIGIN` optionally permits one exact browser origin.
-The built-in listener is plain HTTP and should be placed behind an authenticated TLS reverse proxy
-for remote deployment.
+两个入口都读取 `ZETA_STATE_ROOT` 和 `ZETA_WORKSPACE_ROOT`，默认值分别为 `.zeta` 和进程工作
+目录。HTTP 还必须提供 `ZETA_MCP_BEARER_TOKEN`；`ZETA_MCP_ALLOWED_ORIGIN` 可以额外允许一个
+精确浏览器来源。内置监听器只提供普通 HTTP，远程部署时应放在已认证的 TLS 反向代理之后。
 
-The server implements MCP `2025-11-25`:
+服务实现 MCP `2025-11-25`：
 
-| Method | Current behavior |
+| 方法 | 当前行为 |
 | --- | --- |
-| `initialize` | advertises Tool capability and negotiates form elicitation support |
-| `ping` | returns an empty result |
-| `tools/list` | returns `zeta` and `zeta-reply` |
-| `tools/call` | starts or continues one App Server Thread |
-| `notifications/cancelled` | requests interruption of the correlated Turn |
-| server `elicitation/create` | forwards approval and user-input requests to capable clients |
-| `notifications/progress` | projects bounded, redacted Turn lifecycle updates |
+| `initialize` | 公布工具能力，并协商表单询问支持 |
+| `ping` | 返回空结果 |
+| `tools/list` | 返回 `zeta` 和 `zeta-reply` |
+| `tools/call` | 启动或继续一个 App Server Thread |
+| `notifications/cancelled` | 请求中断相关 Turn |
+| 服务端 `elicitation/create` | 把批准和用户输入请求转发给支持该能力的客户端 |
+| `notifications/progress` | 投影数量受限且已脱敏的 Turn 生命周期更新 |
 
-`zeta` requires a caller-generated `invocationId` and a prompt. `zeta-reply` requires a new
-`invocationId`, a `threadId` authorized for the same principal and a prompt. Both return stable Zeta
-identities, terminal or blocked status and bounded content in `structuredContent`.
+`zeta` 要求调用方生成 `invocationId` 并提供提示词。`zeta-reply` 要求新的 `invocationId`、同一
+主体已获授权的 `threadId` 和提示词。两者都在 `structuredContent` 中返回稳定 Zeta 身份、
+终态或阻塞状态，以及长度受限的内容。
 
-## 2. Crate boundary
+## 2. Crate 边界
 
-The crate owns:
+本 crate 拥有：
 
-- MCP framing, initialize gate, Tool schemas and wire validation;
-- stdio lifecycle and Streamable HTTP endpoint/session lifecycle;
-- bearer authentication, exact Origin validation and per-process connection limiting;
-- request cancellation and progress-token correlation;
-- App Server interaction to MCP form-elicitation projection;
-- principal-scoped durable invocation receipts and caller-to-Thread bindings;
-- App Server result projection and output truncation.
+- MCP 分帧、初始化门控、工具模式和线协议校验；
+- stdio 生命周期以及 Streamable HTTP 端点和会话生命周期；
+- Bearer 认证、精确 Origin 校验和单进程连接数量限制；
+- 请求取消与进度令牌关联；
+- App Server 交互到 MCP 表单询问的投影；
+- 按主体隔离的持久化调用回执，以及调用方到 Thread 的绑定；
+- App Server 结果投影和输出截断。
 
-It does not own:
+本 crate 不拥有：
 
-- Session/Thread/Turn state transitions or storage;
-- model, Tool, policy, sandbox, credential or workspace authority;
-- local parent/child delegation;
-- App Server protocol definitions;
-- OAuth, tenant provisioning, TLS termination or a remote App Server backend.
+- Session、Thread、Turn 的状态迁移或存储；
+- 模型、工具、策略、沙箱、凭据或工作区权威；
+- 本地父子委托；
+- App Server 协议定义；
+- OAuth、租户配置、TLS 终止或远程 App Server 后端。
 
-Code that directly opens product stores, constructs `TurnExecutor`, invokes providers or writes
-Thread events from this crate is architectural drift. Those operations remain behind the App
-Server client.
+如果本 crate 直接打开产品存储、构造 `TurnExecutor`、调用供应商或写入 Thread 事件，就说明
+架构所有权已经漂移。这些操作必须继续位于 App Server 客户端之后。
 
-## 3. Modules and key symbols
+## 3. 模块与关键符号
 
-| Module/symbol | Responsibility | Must not absorb |
+| 模块/符号 | 职责 | 不得吸收 |
 | --- | --- | --- |
-| `lib.rs::{run_stdio,run_http}` | validate options, open one embedded App Server host and receipt store | protocol dispatch or Agent state |
-| `options.rs::{McpServerOptions,HttpServerOptions}` | host-owned roots, runtime limits and HTTP security configuration | caller permission overrides |
-| `server.rs::McpServer` | initialize gate, JSON-RPC dispatch and active-call cancellation | Session/Thread business logic |
-| `server/events.rs::McpAgentEvents` | progress and elicitation wire projection | policy decisions |
-| `http.rs` / `http/wire.rs` | authenticated endpoint, MCP sessions and SSE framing | durable Agent authority |
-| `protocol.rs` | wire DTOs, Tool schemas and input limits | App Server DTO passthrough |
-| `agent.rs::AgentService` | narrow testable Agent execution boundary | model/Tool implementation |
-| `agent.rs::AppServerAgentService` | map start/reply to typed App Server calls and exact Turn updates | direct Core/store access |
-| `agent/progress.rs` | redact and bound Thread updates for MCP progress | full transcript projection |
-| `interaction.rs` | typed approval/user-input and MCP form-elicitation mapping | automatic approval |
-| `receipt.rs::ReceiptStore` | principal-scoped replay, single-flight and Thread authorization | product transcript storage |
-| `agent/outcome.rs` | terminal/waiting Turn projection | Thread mutation or MCP framing |
+| `lib.rs::{run_stdio,run_http}` | 校验选项，打开一个嵌入式 App Server 宿主和回执存储 | 协议分发或 Agent 状态 |
+| `options.rs::{McpServerOptions,HttpServerOptions}` | 宿主拥有的根目录、运行时限制和 HTTP 安全配置 | 调用方权限覆盖 |
+| `server.rs::McpServer` | 初始化门控、JSON-RPC 分发和活动调用取消 | Session/Thread 业务逻辑 |
+| `server/events.rs::McpAgentEvents` | 进度和询问的线协议投影 | 策略决策 |
+| `http.rs` / `http/wire.rs` | 已认证端点、MCP 会话和 SSE 分帧 | 持久化 Agent 权威 |
+| `protocol.rs` | 线协议数据结构、工具模式和输入限制 | 直接透传 App Server 数据结构 |
+| `agent.rs::AgentService` | 窄且可测试的 Agent 执行边界 | 模型/工具实现 |
+| `agent.rs::AppServerAgentService` | 把启动/回复映射到类型化 App Server 调用和精确 Turn 更新 | 直接访问 Core/存储 |
+| `agent/progress.rs` | 脱敏并限制供 MCP 进度使用的 Thread 更新 | 完整会话记录投影 |
+| `interaction.rs` | 类型化批准/用户输入和 MCP 表单询问映射 | 自动批准 |
+| `receipt.rs::ReceiptStore` | 按主体隔离的重放、单航班执行和 Thread 授权 | 产品会话记录存储 |
+| `agent/outcome.rs` | 终态/等待中 Turn 投影 | Thread 修改或 MCP 分帧 |
 
-The current call path is:
+当前调用路径：
 
 ```text
-run_stdio or run_http
+run_stdio 或 run_http
 → open_in_process_app_server
-→ create a principal-scoped AppServerAgentService
+→ 创建按主体隔离的 AppServerAgentService
 → McpServer::handle_message
 → tools/call
-→ session/create or authorized thread/read
-→ session/thread/create when starting
+→ session/create 或已授权的 thread/read
+→ 启动时调用 session/thread/create
 → thread/subscribe + turn/start
-→ bounded thread/read polling + notification draining
-→ progress and optional elicitation/create
-→ turn/interaction/resolve when accepted
-→ bounded MCP CallToolResult
+→ 有界 thread/read 轮询和通知排空
+→ progress 和可选 elicitation/create
+→ 接受后调用 turn/interaction/resolve
+→ 有界 MCP CallToolResult
 ```
 
-Each HTTP MCP session gets a separate App Server connection but shares the same embedded App Server
-host and receipt authority.
+每个 HTTP MCP 会话获得独立的 App Server 连接，但共享同一个嵌入式 App Server 宿主和回执权威。
 
-## 4. Validation and limits
+## 4. 校验与限制
 
-- `invocationId`: 1–128 ASCII letters, digits, `.`, `_` or `-`;
-- prompt: non-blank and at most 256 KiB;
-- default Turn timeout: 60 seconds;
-- maximum caller-requested Turn timeout: 10 minutes;
-- polling interval: 10 milliseconds;
-- MCP Tool result content: at most 256 KiB including the truncation marker;
-- progress: at most 256 lifecycle notifications per call with consecutive duplicates removed;
-- HTTP request body: at most 1 MiB; headers: at most 32 KiB;
-- default maximum HTTP connections: 64;
-- early cancellation identities: at most 1024 per MCP session.
+- `invocationId`：1–128 个 ASCII 字母、数字、`.`、`_` 或 `-`；
+- 提示词：非空，最大 256 KiB；
+- 默认 Turn 超时：60 秒；
+- 调用方可请求的最大 Turn 超时：10 分钟；
+- 轮询间隔：10 毫秒；
+- MCP 工具结果内容：最大 256 KiB，包含截断标记；
+- 进度：每次调用最多 256 条生命周期通知，并移除连续重复项；
+- HTTP 请求体：最大 1 MiB；标头：最大 32 KiB；
+- 默认最大 HTTP 连接数：64；
+- 每个 MCP 会话最多保留 1024 个提前取消身份。
 
-The server does not accept a workspace path, raw config map, secret, developer instruction or
-sandbox override through Tool arguments. Workspace and execution authority are fixed by the host.
+服务不通过工具参数接受工作区路径、原始配置映射、秘密、开发者指令或沙箱覆盖。工作区和执行
+权威由宿主固定。
 
-## 5. Identity, recovery and continuation
+## 5. 身份、恢复与继续
 
-`invocationId` is separate from MCP JSON-RPC request ID and all Zeta product identities. The
-adapter derives principal-namespaced stable App Server command IDs for Session, Thread, Turn,
-interaction resolution and cancellation.
+`invocationId` 与 MCP JSON-RPC 请求 ID 以及所有 Zeta 产品身份互相独立。适配器为 Session、
+Thread、Turn、交互解决和取消派生按主体命名空间隔离的稳定 App Server 命令 ID。
 
-Receipts are atomically persisted at
-`<ZETA_STATE_ROOT>/mcp-server/receipts-v1.json` and scoped by principal:
+回执以原子方式持久化到 `<ZETA_STATE_ROOT>/mcp-server/receipts-v1.json`，并按主体隔离：
 
-- stdio uses the local-user principal;
-- HTTP derives a non-reversible principal identifier from the bearer token;
-- a finished invocation with identical arguments replays its saved outcome;
-- the same identity with different arguments returns a conflict;
-- a concurrent duplicate returns in-progress;
-- an invocation left running by process failure re-enters the same deterministic App Server
-  commands after restart rather than allocating new product identities;
-- `zeta-reply` accepts only Threads durably bound to the same principal.
+- stdio 使用本地用户主体；
+- HTTP 从 Bearer 令牌派生不可逆主体标识；
+- 参数相同的已完成调用会重放已保存结果；
+- 同一身份配不同参数返回冲突；
+- 并发重复调用返回执行中；
+- 进程失败留下的运行中调用在重启后重新进入相同的确定性 App Server 命令，不分配新产品身份；
+- `zeta-reply` 只接受持久绑定到同一主体的 Thread。
 
-The receipt file is an adapter recovery index, not the canonical Agent state. Session/Thread/Turn
-state remains in App Server storage. A state root currently supports one MCP server process at a
-time; cross-process file locking and distributed receipt storage are not implemented.
+回执文件是适配器恢复索引，不是权威 Agent 状态。Session、Thread、Turn 状态仍在 App Server
+存储中。一个状态根目录当前只能由一个 MCP Server 进程使用；跨进程文件锁和分布式回执存储
+尚未实现。
 
-Waiting-for-interaction outcomes remain resumable rather than being sealed as finished. A retry
-with the same invocation can continue the exact outstanding interaction after restart.
+等待交互的结果保持可恢复，不会被封存为已完成。使用相同调用身份重试时，即使进程重启，也能
+继续精确的未完成交互。
 
-## 6. Progress, interaction and failure
+## 6. 进度、交互与失败
 
-When the caller provides `_meta.progressToken`, the server emits monotonically increasing
-`notifications/progress` with the exact token. Messages describe bounded lifecycle state only; they
-do not expose reasoning, prompt text, Tool arguments/results, credentials or environment data.
+调用方提供 `_meta.progressToken` 时，服务以同一精确令牌发出单调递增的
+`notifications/progress`。消息只描述数量受限的生命周期状态，不暴露推理、提示词、工具参数
+与结果、凭据或环境数据。
 
-Approval and user-input requests are mapped to MCP `elicitation/create` only when the initialized
-client declares form elicitation. An accepted response is converted back to the exact typed App
-Server request identity and sent through `turn/interaction/resolve`. Decline, cancellation or an
-unsupported client returns a blocked Tool result and never auto-approves. User-input questions
-that appear to request credentials or other sensitive values are not sent through form elicitation.
-Dynamic Tool-defined interaction kinds are not yet projected.
+只有初始化后的客户端声明支持表单询问时，批准和用户输入请求才映射为 MCP
+`elicitation/create`。接受的响应会转换回精确的类型化 App Server 请求身份，并通过
+`turn/interaction/resolve` 发送。拒绝、取消或客户端不支持时返回阻塞的工具结果，绝不自动
+批准。看起来在索要凭据或其他敏感值的用户输入问题不会通过表单询问发送。动态工具定义的交互
+类型尚未投影。
 
-Stdio keeps reading while a long call runs, so `notifications/cancelled` can interrupt the exact
-Turn. Stdio EOF cancels active work because the process owns that connection. An HTTP/SSE write
-failure does not prove the durable Turn was cancelled; explicit MCP cancellation remains the
-authority. Client-cancelled requests suppress their JSON-RPC response.
+长调用期间 stdio 继续读取，因此 `notifications/cancelled` 可以中断精确 Turn。stdio EOF
+会取消活动工作，因为进程拥有该连接。HTTP/SSE 写入失败不能证明持久化 Turn 已取消；显式
+MCP 取消仍是权威。客户端取消的请求不会返回 JSON-RPC 响应。
 
-Cancellation has a two-second grace period. If a server deadline fires and the Turn does not reach
-a canonical terminal state, the result is `outcomeUnknown`. Invalid JSON-RPC or protocol requests
-use JSON-RPC errors; Tool argument, App Server and Agent outcome failures use
-`CallToolResult.isError`.
+取消有两秒宽限期。服务端截止时间到达后，如果 Turn 没有进入权威终态，结果为
+`outcomeUnknown`。无效 JSON-RPC 或协议请求使用 JSON-RPC 错误；工具参数、App Server 和
+Agent 结果失败使用 `CallToolResult.isError`。
 
-## 7. Streamable HTTP security and lifecycle
+## 7. Streamable HTTP 安全性与生命周期
 
-The HTTP endpoint:
+HTTP 端点：
 
-- accepts `POST` for MCP messages and returns JSON or SSE;
-- returns `202 Accepted` for notifications and client responses;
-- uses secure random `MCP-Session-Id` values after successful initialize;
-- requires `MCP-Protocol-Version: 2025-11-25` on subsequent requests;
-- supports `DELETE` to terminate a session;
-- returns `405` for independent `GET` streams;
-- validates an exact configured `Origin` when the header is present;
-- compares bearer credentials without an early-exit string comparison.
+- 接受 MCP 消息的 `POST`，返回 JSON 或 SSE；
+- 对通知和客户端响应返回 `202 Accepted`；
+- 初始化成功后使用安全随机 `MCP-Session-Id`；
+- 后续请求必须提供 `MCP-Protocol-Version: 2025-11-25`；
+- 支持通过 `DELETE` 终止会话；
+- 独立 `GET` 流返回 `405`；
+- 提供 Origin 标头时，必须精确匹配已配置值；
+- 比较 Bearer 凭据时不使用提前退出的字符串比较。
 
-HTTP session state is intentionally process-local. After server restart, the client initializes a
-new MCP session and retries the same durable `invocationId`. Independent GET SSE streams,
-`Last-Event-ID` redelivery, OAuth, multi-tenant workspace binding and built-in TLS are not
-implemented.
+HTTP 会话状态有意保持为进程本地状态。服务重启后，客户端重新初始化 MCP 会话，并以相同的
+持久化 `invocationId` 重试。独立 GET SSE 流、`Last-Event-ID` 重投递、OAuth、多租户工作区
+绑定和内置 TLS 均未实现。
 
-## 8. Tests and extension points
+## 8. 测试与扩展点
 
-Sibling unit/integration modules cover protocol validation, progress tokens, elicitation identity,
-real App Server start/reply/progress, durable receipt reopen, HTTP auth/origin/session/protocol/SSE,
-cancellation and truncation. `tests/stdio.rs` launches the real binary and verifies live progress,
-restart replay and `zeta-reply` after restart.
-
-Run:
+相邻单元和集成测试覆盖协议校验、进度令牌、询问身份、真实 App Server 启动/回复/进度、持久化
+回执重开、HTTP 认证/Origin/会话/协议/SSE、取消和截断。`tests/stdio.rs` 启动真实二进制，
+验证实时进度、重启重放以及重启后的 `zeta-reply`。
 
 ```text
 cargo test -p zeta-mcp-server
 cargo clippy -p zeta-mcp-server --all-targets -- -D warnings
 ```
 
-Current extension points and limitations:
+当前扩展点与限制：
 
-- synchronous App Server requests plus bounded Thread polling/draining are still used; the proposed
-  owned async `AppServerSession` would provide a general independent event driver;
-- no resource, prompt, root, sampling or MCP task capability;
-- no artifact reference for oversized output;
-- no dynamic Tool interaction projection;
-- no HTTP event replay, OAuth/tenant control plane, built-in TLS or remote App Server backend;
-- no native remote-Agent-to-`DelegationId` bridge.
+- 仍使用同步 App Server 请求和有界 Thread 轮询/排空；计划中的自有异步
+  `AppServerSession` 将提供通用独立事件驱动；
+- 不支持资源、提示词、根目录、采样或 MCP task 能力；
+- 超大输出没有产物引用；
+- 不支持动态工具交互投影；
+- 不支持 HTTP 事件重放、OAuth/租户控制面、内置 TLS 或远程 App Server 后端；
+- 没有原生远程 Agent 到 `DelegationId` 的桥接。
 
-Changes to Tool schemas, limits, status mapping, receipt identities, HTTP security or continuation
-authorization require synchronized updates to fixtures, tests, this README and
-[`docs/mcp-server.md`](../../docs/mcp-server.md).
+修改工具模式、限制、状态映射、回执身份、HTTP 安全或继续授权时，必须同步更新样例、测试、
+本 README 和 [`docs/mcp-server.md`](../../docs/mcp-server.md)。

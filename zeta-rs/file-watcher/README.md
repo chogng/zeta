@@ -27,7 +27,7 @@ src/
 所有实现模块均为 private；crate 只显式导出 `FileWatcher`、subscriber/registration handle、
 receiver wrapper、`WatchPath` 和 `FileWatcherEvent`。
 
-## Public contract
+## 公共契约
 
 `FileWatcher::new()` 必须在当前 Tokio runtime 内调用。成功后，一个 OS watcher 被所有逻辑
 subscriber 共享：
@@ -80,7 +80,7 @@ shutdown 前已 pending 的事件。
 Backend 只转发 create、modify 和 remove；access/open 事件被过滤。所有 backend callback error
 都按可能丢事件处理，并通过 `watcher::require_rescan` 向每个 subscriber 发送其 own watched roots。
 
-## Failure、并发与关闭
+## 失败、并发与关闭
 
 - `FileWatcher::new()` 在 backend 初始化失败或当前线程没有 Tokio runtime 时返回
   `notify::Error`；

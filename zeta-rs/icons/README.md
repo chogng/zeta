@@ -9,7 +9,7 @@
 `IconRendering::Multicolor`。它不依赖 `zeta-ui`，也不拥有布局、主题颜色、GPU atlas、
 rasterization 或 component。
 
-## Ownership
+## 所有权
 
 | Symbol | 可见性 | 精确职责 |
 | --- | --- | --- |
@@ -39,7 +39,7 @@ resources/icons/*.svg
 `DROPDOWN_INDICATOR` 使用 `CHEVRON_DOWN`。因此 SVG 文件重命名或替换不要求调用方迁移
 `IconId`。新增 SVG 不会自动扩大公共 API；只有产品语义确定后才应在 `library.rs` 登记。
 
-## Generation 与 failure semantics
+## 生成与失败语义
 
 新增、删除或重命名 SVG 后运行：
 

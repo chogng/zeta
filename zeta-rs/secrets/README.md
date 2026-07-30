@@ -6,7 +6,7 @@
 `zeta-secrets` 只保存 opaque bytes。OAuth、token refresh、account metadata、credential scope、
 request signing 和 Provider header materialization 均属于消费它的 domain runtime。
 
-## Public contract
+## 公共契约
 
 | Symbol | 职责 | 安全语义 |
 | --- | --- | --- |
@@ -56,9 +56,9 @@ delete/drop
 - unavailable host 返回空值而非 error：credential absence 与 backend failure 混淆；
 - API/network layer 直接读 `SecretStore`：credential lifecycle ownership 下沉错误。
 
-## Backend implementation checklist
+## 后端实现清单
 
-Production backend 必须实现完整 load/store/delete、隔离 Zeta namespace、定义 overwrite atomicity、
+生产后端必须实现完整 load/store/delete、隔离 Zeta namespace、定义 overwrite atomicity、
 sanitized errors 和 negative logging tests。只有 load 没有 delete 的 backend 不满足 trait 语义。
 
 内存 zeroize 降低残留风险，但不保证编译器、allocator、swap、core dump 或 backend copy 中不存在

@@ -67,7 +67,7 @@ Context 和 Artifacts。无论增加多少功能，Inspector 都只跟随当前
 4. 防止第二条订阅、文本解析或本地持久化形成冲突状态；
 5. 为后续辅助能力提供受控扩展方向。
 
-## 3. Non-goals
+## 3. 不包含的目标
 
 Session Inspector 不负责：
 
@@ -285,9 +285,9 @@ Thread projection service。提取前必须有至少两个真实消费者，并�
 不得为了让 Inspector 快速工作而把 `ChatPaneModel` 整体注册成全局 service，或让
 `SessionInspector` 通过 DOM 查找当前 ChatPane。
 
-## 8. Plan 的可靠性与 durability
+## 8. Plan 的可靠性与持久性
 
-### 8.1 Current contract
+### 8.1 当前契约
 
 当前存在两种不同的 Plan 表示：
 
@@ -299,7 +299,7 @@ Thread projection service。提取前必须有至少两个真实消费者，并�
 两者不能互相冒充。Renderer 解析 Markdown 会丢失状态、顺序语义和未来兼容性；把 transient
 Plan 写入 local storage 又会产生服务端无法确认的陈旧状态。
 
-### 8.2 Proposed durable contract
+### 8.2 计划中的持久化契约
 
 生产完整版本应让 Plan 成为 Turn 的可恢复 readable state。推荐方向是：
 
@@ -351,7 +351,7 @@ type PlanPresentation =
 
 这是 Proposed 示例，用于说明调用方可读性，不表示当前 API 已经存在。
 
-### 9.1 Action 与 context state
+### 9.1 Action 与上下文状态
 
 用户可见名称应从泛化的 `Agent Sidebar` 收敛为 `Session Inspector`：
 
@@ -376,7 +376,7 @@ type PlanPresentation =
 无障碍语义，不作为 CSS 状态 selector。Host CSS 不穿透修改共享 Button、TabList 或
 ScrollableElement 的内部状态。
 
-### 9.3 Accessibility
+### 9.3 无障碍
 
 - Inspector root 使用明确的 `aria-label="Session Inspector"`；
 - Plan 使用有序列表语义；
@@ -402,8 +402,8 @@ Plan 之外的功能只有在数据 owner 明确后才能加入：
 | 完整 Terminal/Browser | ❌ | 属于现有 Workbench surface | 不进入 Inspector |
 
 Threads 进入 Inspector 后仍是当前 Session 内的 Thread topology，不是第二份 Session history。
-Changes 只有在后端能证明变化与当前 Session/Thread 的关联时才显示“本次会话修改”；否则只能
-叫 Workspace Changes，并应留在 SCM/Files 等已有 surface。
+只有后端能证明变化与当前 Session/Thread 的关联时，变更（Changes）才能显示为“本次会话
+修改”；否则只能叫“工作区变更”，并留在 SCM/Files 等已有接口面。
 
 ## 11. 被拒绝的替代方案
 
@@ -468,7 +468,7 @@ Changes 只有在后端能证明变化与当前 Session/Thread 的关联时才�
 - App Server crash/reconnect 后 Plan 与 Thread snapshot 一致；
 - completed Turn 的最终 Plan 显示语义明确。
 
-### P3：Threads 与 Activity
+### P3：Threads 与活动
 
 目标：增加已有 canonical 数据能够支持的辅助投影。
 
@@ -477,7 +477,7 @@ Changes 只有在后端能证明变化与当前 Session/Thread 的关联时才�
 - 不复制 transcript 中完整 Tool Call/Result 内容；
 - 不改变 Session tabs 的主导航职责。
 
-### P4：Changes、Context 与 Artifacts
+### P4：变更、上下文与产物
 
 这些能力必须分别先完成 attribution、identity 和 lifecycle contract。不能为了填充 Inspector
 而从 DOM、Git 全局状态或聊天文本推断。
@@ -495,7 +495,7 @@ Changes 只有在后端能证明变化与当前 Session/Thread 的关联时才�
 | Responsive policy | width breakpoint 对应 drawer/split，不依赖 JSDOM 实际布局猜测 |
 | Regression | Session tabs、composer draft retention、archive、transcript scroll 不受影响 |
 
-### 13.2 P2 contract 测试
+### 13.2 P2 契约测试
 
 - durable Plan event serde/schema；
 - reducer 从空状态重建 `Turn.plan`；

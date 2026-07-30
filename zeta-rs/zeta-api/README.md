@@ -28,7 +28,7 @@ zeta-model-provider
 `ContentPart`、`ToolDefinition`、`ToolCall` 等 canonical types。不要在这里创建第二套
 request/response domain model。
 
-## Public contract
+## 公共契约
 
 | Symbol | 职责 | 不负责 |
 | --- | --- | --- |
@@ -80,7 +80,7 @@ ApiEndpoint::complete_with_client(target, model, request, client)
 三套 codec 都处理 canonical messages、tools、tool choice、reasoning、usage 和 stop reason，但
 只共享 mechanical helpers；不能因为 JSON 外形相似就合并 protocol-specific semantics。
 
-## Streaming decoder
+## 流式处理解码器
 
 Decoder 接收 `zeta-client::SseFrame`，说明 SSE field parsing 已经完成。它们输出
 `zeta_protocol::ModelStreamEvent`：
@@ -117,7 +117,7 @@ end of stream
 当前只有这两个 streaming decoder；Chat Completions streaming codec 尚未实现。拥有 decoder 不表示
 整个 model invocation stack 已经暴露 streaming public API。
 
-## Error 语义
+## 错误语义
 
 | Condition | `ApiError` |
 | --- | --- |

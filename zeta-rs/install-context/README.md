@@ -51,7 +51,7 @@ layout marker，不解析或信任其中的字段。
 为 package `zeta-resources/`、启动时 host `PATH`；两个 helper 分开解析，但 Windows backend
 只有在两者都通过精确 probe 后才可用。
 
-## Public contract
+## 公共契约
 
 | Symbol | 职责 | 不承担 |
 | --- | --- | --- |

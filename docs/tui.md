@@ -8,6 +8,20 @@
 > App Server 启动与连接基线：[`app-server-client.md`](app-server-client.md)  
 > Workspace 边界基线：[`zeta-rs-architecture.md`](zeta-rs-architecture.md)
 
+## 快速理解
+
+TUI 把 App Server 的权威状态转换成终端中的可交互呈现；它拥有单写者的界面状态和事件循环，
+不拥有产品事实或后台执行。
+
+| 发生的事情 | TUI 负责 | 不负责 |
+| --- | --- | --- |
+| 用户按键或提交命令 | 转成类型化界面命令并发给客户端 | 直接修改 Session 或 Thread |
+| 服务端产生更新 | 归约为单写者 presentation state 并请求重绘 | 重新解释领域事件 |
+| 高频流式文本到达 | 通过专用临时数据面更新显示 | 把每个片段伪装成持久事实 |
+| 检测到序列缺口 | 暂停推断并请求权威快照 | 用本地状态填补缺口 |
+| 请求完成、过期或取消 | 按关联身份丢弃过期结果并更新交互 | 决定工具重试或 Agent 恢复 |
+| 渲染一帧 | 纯读取当前呈现状态 | 在绘制过程中触发业务副作用 |
+
 ## 1. 结论
 
 TUI 正式采用以下长期稳态架构基准：
@@ -353,7 +367,7 @@ struct AppDriver<C> {
 Session。CLI 可以构造 start options，但 App Server composition、channel 建立、initialize、
 schema gate 和 shutdown 属于 `zeta-app-server-client`，TUI 不复制这些步骤。
 
-## 6. `client/`：TUI 到 typed client 的窄适配
+## 6. `client/`：TUI 到 typed 客户端的窄适配
 
 `client/` 不是新的 App Server facade。它只负责交互客户端特有的：
 
@@ -405,7 +419,7 @@ notification；下一步是把仍在主 loop 同步等待的 typed completion �
 使异常缓慢的 control-plane request 期间仍能处理键盘和重绘。TUI 不能通过直连 Core、读取
 日志或私有 transport method 绕过。
 
-## 7. `features/thread/`：active Thread 的唯一 TUI owner
+## 7. `features/thread/`：active Thread 的唯一 TUI 所有者
 
 Zeta 的主要交互对象是 Thread，因此不再建立通用 `projection/` 和 `conversation/` 两层。
 `features/thread/` 是 active Thread 在 TUI 内的唯一状态 owner：
@@ -430,7 +444,7 @@ Zeta 的主要交互对象是 Thread，因此不再建立通用 `projection/` �
 Session 列表和 Session 页面状态归 `features/sessions/`，不会进入一个跨领域
 `ProjectionStore`。其他 feature 同样只缓存自己页面真正需要的 typed result。
 
-### 7.1 Durable sequence
+### 7.1 持久化序列
 
 Session 与 Thread 的 durable sequence 由各自 feature 分别跟踪。Thread 收到 committed update
 时：
@@ -451,7 +465,7 @@ subscribe result 必须作为一个完整的 resync package 处理：
 只有 Session 与 Thread 确实出现相同的连续序列算法后，才提取一个只处理
 `aggregate identity + sequence` 的小型 helper；不能重新演变成保存所有领域状态的 store。
 
-### 7.2 Transient stream cursor
+### 7.2 临时流游标
 
 transient update 由 `features/thread/update.rs` 处理，只影响低延迟显示：
 
@@ -670,7 +684,7 @@ TerminalEvent / ClientResult / ServerNotification
 terminal event pump。重绘可以合并，但 committed update、输入和退出事件不能因为 frame
 throttle 丢失。
 
-### 13.1 输入、焦点与 overlay
+### 13.1 输入、焦点与浮层
 
 输入传播顺序固定为：
 
@@ -730,7 +744,7 @@ completion 是控制面 barrier：应用 completion 前必须消费或明确作�
 buffer overflow、receiver lag 或 cursor gap 立即把对应 projection 标为需要 resync，不能静默
 丢弃 Must-deliver 语义。
 
-### 13.3 Presentation mapping
+### 13.3 展示映射
 
 TUI 不应长期保存原始 transport envelope。protocol crate 已经提供稳定 canonical
 snapshot/update 时，feature 直接消费这些 typed value；只有满足以下至少一项时才增加
@@ -1128,7 +1142,7 @@ CI 应以简单、可解释的检查固定依赖方向：
 - feature 不手写 JSON-RPC，不依赖其他 feature 的 private module；
 - 只有 client/protocol boundary 解释 transport notification。
 
-## Evaluation、可观测性与 rollout
+## 评估、可观测性与发布
 
 架构迁移必须以行为与性能不回退为前提。至少跟踪：
 

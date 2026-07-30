@@ -19,6 +19,19 @@ Execution 和 Memory 设计稿。Session-first 领域与存储基础已落地；
 [`core-multi-agent.md`](core-multi-agent.md) 为准。本文只保留跨 Core、App Server、provider
 和 tool 的演进视角。
 
+## 快速理解
+
+本文只描述尚未完成的异步 Agent 执行演进；当前产品对象、Core 边界和上下文语义分别由其权威
+文档负责，不能把计划架构误读成现有能力。
+
+| 审计问题 | 当前结论 | 深入阅读 |
+| --- | --- | --- |
+| Session 和 Thread 谁是执行边界？ | Session 聚合任务；每个 Thread 独立排序、执行、恢复和持久化 | [术语与所有权](#4-术语与所有权) |
+| 模型和工具 I/O 会不会锁住状态？ | 不应占用状态提交临界区；结果返回后先持久化再发布 | [目标架构](#5-目标架构) |
+| Provider 什么时候可以切换？ | 只影响下一个模型调用安全点产生的不可变快照 | [上下文与供应商切换](#9-history上下文与供应商切换) |
+| 工具失败能否自动重试？ | 只有明确未跨副作用或具有精确幂等语义时可以 | [工具执行](#10-工具执行) |
+| 哪些内容已经实现？ | Session-first 基础、Thread 单写者、顺序工具闭环等已有纵向切片，其余按阶段明确标注 | [当前事实与缺口](#2-当前事实与缺口) |
+
 ## 1. 结论
 
 Canonical 产品层级由 [`protocol.md`](protocol.md) 定义。SessionStore、Session reducer 与
@@ -195,7 +208,7 @@ App Server adapters ─────► model-provider / shell-command / file-sys
   command receipt 和 pending request state 永不进入 wire；
 - Tool adapter 不直接修改 Thread projection。
 
-### 5.1 Provider 配置与运行时边界
+### 5.1 供应商配置与运行时边界
 
 Provider 配置拆成单向依赖的两层：
 
@@ -350,7 +363,7 @@ Turn
 - mailbox/backlog 有界，满时返回稳定 retryable error；
 - keyed queue 只串行短的验证和提交阶段，不等待完整模型调用。
 
-## 9. History、Context 与 Provider 切换
+## 9. History、上下文与供应商切换
 
 Context 的 authority、ContextManager、ContextPlan、budget、compaction 和多 Agent isolation
 统一由 [`core-context.md`](core-context.md) 定义。本文只规定 provider 切换的跨层流程。
@@ -380,7 +393,7 @@ response ID、cache key 或连接可以由 adapter 暂存；即使持久化为�
 
 即使引入，Handoff 也只是带 provenance 的派生 context artifact，不是权威历史。
 
-## 10. Tool 执行
+## 10. 工具执行
 
 ### 10.1 生命周期
 
@@ -397,7 +410,7 @@ Model emits Tool Call
 
 Tool adapter 不得直接修改 Thread state。
 
-### 10.2 取消与 unknown outcome
+### 10.2 取消与 unknown 结果
 
 取消是 best effort：
 
@@ -413,7 +426,7 @@ Tool adapter 不得直接修改 Thread state。
 恢复后，未完成且可能有副作用的调用进入明确的 `UnknownOutcome` 或等价终态，并要求用户或
 tool-specific reconciliation。不能把它伪装成 `Cancelled` 或 `Failed`。
 
-### 10.3 Retry
+### 10.3 重试
 
 Retry 不是统一的执行层开关。每个工具显式声明策略：
 
@@ -428,7 +441,7 @@ ReconcileBeforeRetry { reconciliation }
 可以作为 Tool Result 返回模型继续处理；只有执行控制、持久化或不可恢复策略错误才必然使
 Turn 失败。
 
-## 11. Memory 与多 Agent
+## 11. 记忆与多 Agent
 
 ### 11.1 当前只保留三层
 
@@ -490,7 +503,7 @@ Desktop Renderer 仍不持有 raw peer。后续由单一 projection service 消�
 
 ## 13. 分阶段实施
 
-### Phase 0：固定当前地基（完成）
+### 阶段 0：固定当前地基（完成）
 
 - 对当前工作区执行 Rust、协议生成和 Desktop Main tests；
 - 迁移到 Session-first current contract；
@@ -500,14 +513,14 @@ Desktop Renderer 仍不持有 raw peer。后续由单一 projection service 消�
 
 完成条件：当前工作区的实现状态有测试证据，文档不再用虚构 PR 编号表示完成度。
 
-### Phase 1：固定 canonical Session/Thread contract（完成）
+### 阶段 1：固定 canonical Session/Thread 契约（完成）
 
 Session-first 基础迁移已经完成；准确范围和仍未完成的 protocol 契约见
 [`protocol.md` 的当前完成度](protocol.md#9-当前完成度)。本阶段不再维护另一份类型清单。
 
 完成条件：Core、storage 和协议测试不再依赖混合 durable/transient/request 的巨型 `Event`。
 
-### Phase 2：Core TurnExecutor 最小 vertical slice（基础完成）
+### 阶段 2：核心 TurnExecutor 最小纵向切片（基础完成）
 
 - 已在 `zeta-core` 内新建私有 `turn` 模块，没有提前创建 facade crate；
 - 已定义 canonical `ModelService`、`ToolService` 与 cancellation contract；
@@ -518,7 +531,7 @@ Session-first 基础迁移已经完成；准确范围和仍未完成的 protocol
 基础完成条件已满足：Agent loop 不依赖 storage/App Server，提交顺序和取消有单元测试。完整
 完成仍依赖异步 streaming 与 execution incarnation。
 
-### Phase 3：ThreadController execution isolation（完成）与异步协议（基础完成）
+### 阶段 3：ThreadController 执行隔离（完成）与异步协议（基础完成）
 
 - 已引入 per-Thread bounded execution mailbox；
 - `turn/start` acceptance commit 后返回；
@@ -536,7 +549,7 @@ Thread execution isolation 的完成条件已满足：同 Thread mutation/execut
 durable commit 和长模型调用可并发，backlog 有界，idle state 可回收，旧 incarnation 工作不会
 启动。异步 App Server protocol 的完整完成仍依赖独立 outbound transport worker。
 
-### Phase 4：SessionCoordinator、fork 与一致性（基础完成）
+### 阶段 4：SessionCoordinator、fork 与一致性（基础完成）
 
 - 已增加 SessionStore、Session reducer 与只串行结构操作的 SessionCoordinator；
 - Thread 创建/fork 已使用可恢复 saga；
@@ -545,7 +558,7 @@ durable commit 和长模型调用可并发，backlog 有界，idle state 可回�
 
 完成条件：故障注入不能产生不可回收的 orphan Thread 或永久 pending membership。
 
-### Phase 5：Tool loop、approval 与 capability（顺序 approval 闭环完成）
+### 阶段 5：工具 loop、批准与能力（顺序批准闭环完成）
 
 - 已实现 durable Tool Call 后顺序执行并提交 Tool Result；
 - 初始高风险调用与安全 sandbox denial 均可进入 durable one-time approval，批准后只恢复 exact
@@ -558,7 +571,7 @@ durable commit 和长模型调用可并发，backlog 有界，idle state 可回�
 
 完成条件：在每个 durable boundary 注入故障后，不会静默重复副作用或留下永久 Running。
 
-### Phase 6：Context、compaction 与 Provider 切换（Context 基础完成）
+### 阶段 6：上下文、压缩与供应商切换（上下文基础完成）
 
 - 已实现统一 ContextAssembler，重建 durable message 与 Tool Call/Result；
 - 引入 per-Thread ContextManager 与不可变 ContextPlan；
@@ -568,7 +581,7 @@ durable commit 和长模型调用可并发，backlog 有界，idle state 可回�
 
 完成条件：切换 Provider 后能保持约束、决策和 Tool Result 引用；失败时可追溯到原始 Item。
 
-### Phase 7：Projection 与多 Agent
+### 阶段 7：投影与多 Agent
 
 - Renderer projection/resync；
 - `multi_agent/`、MultiAgentCoordinator、durable delegation 与 spawn saga；
@@ -577,7 +590,7 @@ durable commit 和长模型调用可并发，backlog 有界，idle state 可回�
 - Agent tree cancellation 和 resource budget；
 - 根据真实负载决定 controller idle eviction。
 
-### Phase 8：Memory RFC
+### 阶段 8：记忆 RFC
 
 只有隐私、生命周期和质量评测契约被接受后才开始实现跨 Thread memory。
 

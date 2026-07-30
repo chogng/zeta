@@ -9,7 +9,7 @@ binding，并按源文档顺序返回每页原生文字与一基页码。
 当前 crate 不实现 page rendering、OCR、document identity、持久化、chunk、embedding、retrieval
 或 Agent memory。
 
-## Public contract
+## 公共契约
 
 | Symbol | 职责 | 关键语义 |
 | --- | --- | --- |
@@ -25,7 +25,7 @@ binding，并按源文档顺序返回每页原生文字与一基页码。
 `PdfTextExtractor` 持有 `pdfium_render::Pdfium`，但 PDFium handle/page/document types 不进入 public
 result。上层只依赖 owned Rust values。
 
-## Bundled runtime layout
+## 内置运行时布局
 
 `platform_library_relative_path` 当前固定：
 
@@ -84,7 +84,7 @@ PdfTextExtractor::extract_file(path)
 Page count 超过 `u32::MAX` 时，一基页码 conversion 会 panic；这被视为超出当前支持范围，而不是
 可恢复 `DocumentError`。
 
-## Input、output 与 failure
+## 输入、输出与失败
 
 `extract_file` 接受 caller 提供的 filesystem path，并以 `None` password 打开。它不会先复制文件、
 验证 ownership、限制大小、设置 deadline 或 sandbox PDFium。调用方必须确保 source 是

@@ -8,7 +8,7 @@
 `zeta_protocol::ThreadEvent` 与 exact `ThreadCommandReceipt`；`ThreadUpdate`、token delta、
 actor state、RPC payload 和 Session membership 不进入该 stream。
 
-## Public contract
+## 公共契约
 
 | Symbol | 职责 | 关键约束 |
 | --- | --- | --- |
@@ -58,7 +58,7 @@ ThreadStore::append_batch
 - backend 自行接受 gap sequence：单写者与 reducer ordering 被破坏；
 - `SessionId` 在 Thread 创建后可变：Thread immutable ownership 已被破坏。
 
-## 错误与 backend obligation
+## 错误与后端义务
 
 `SequenceConflict` 是正常 concurrency signal，不应被转换为 generic I/O failure。
 `InvalidBatch` 表示 caller/backend contract bug；`Storage` 表示 backend failure。

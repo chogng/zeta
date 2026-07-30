@@ -10,7 +10,7 @@ best-effort process-tree cleanup。
 它不拥有 Tool authorization、sandbox policy、command allow-list、timeout、output persistence 或
 Agent execution lifecycle。
 
-## Source boundary
+## 来源边界
 
 PTY integration 基于 `NOTICE` 中固定的 OpenAI Codex revision 并在 Zeta 内适配，Apache-2.0。
 `src/win/` 的 ConPTY 部分来自 WezTerm，MIT license 位于
@@ -19,7 +19,7 @@ PTY integration 基于 `NOTICE` 中固定的 OpenAI Codex revision 并在 Zeta �
 同步上游实现时必须保留 provenance，并按 Zeta 当前 public contract、process-group tests 和 Windows
 tests 审查行为；不能用“来自上游”替代本地 correctness review。
 
-## Public contract
+## 公共契约
 
 ### Spawn 与统一结果
 
@@ -37,7 +37,7 @@ tests 审查行为；不能用“来自上游”替代本地 correctness review�
 `spawn_*` 参数包括 program、args、cwd、完整 env map、optional arg0 与 Unix inherited FDs；PTY 额外
 接收 `TerminalSize`。Spawn 前 `env_clear`，因此 child 只看到 caller 显式提供的 environment。
 
-### External driver adapter
+### 外部驱动适配器
 
 | Symbol | 职责 | Implementation obligation |
 | --- | --- | --- |
@@ -138,7 +138,7 @@ Windows portable path 在 child 运行期间保留 slave/master pseudoconsole ha
 handles，使 reader 在排空 ConPTY tail 后收到 EOF。只观察 exit code 而不释放 handles，会让
 依赖 output-close 的上层 terminal lifecycle 无法收束。
 
-## Driver 与 output lifecycle
+## 驱动与输出生命周期
 
 `spawn_from_driver` 把 broadcast output 转成 capacity-256 mpsc。它收到 exit code后只标记
 `has_exited/exit_code`，仍等待 driver 的 stdout/stderr broadcast sender关闭，避免丢失 exit signal
@@ -159,7 +159,7 @@ output 的 caller 不应让 producer 超过消费能力。
 `combine_output_receivers` 也使用 capacity-256 broadcast；select 顺序只反映运行时可用性，不构造
 stdout/stderr 的全局 byte order。
 
-## Termination semantics
+## 终止语义
 
 ```text
 request_terminate

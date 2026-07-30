@@ -14,6 +14,20 @@
 > [Agent Skills specification](https://agentskills.io/specification) 为兼容基线；Zeta 自己的
 > source、trust、activation 和执行权限语义由本文定义。
 
+## 快速理解
+
+Skill 是按任务逐步加载的工作方法和参考资料，不是工具权限。Agent 可以按照 Skill 建议行动，
+但任何脚本、网络或文件操作仍经过正常工具、权限和沙箱流程。
+
+| 发生的事情 | 加载什么 | 安全边界 |
+| --- | --- | --- |
+| 启动或刷新 Skill 目录 | 只读取名称、描述和来源等元数据 | 不把全部正文塞入上下文 |
+| 用户显式选择 Skill | 完整读取对应 `SKILL.md` | 仍低于系统和开发者指令 |
+| 系统自动匹配 Skill | 根据元数据和任务选择后再加载正文 | 不能仅凭文件内容自我激活 |
+| 正文引用参考资料 | 只在当前任务确实需要时读取 | 路径必须受来源目录约束 |
+| Skill 建议运行脚本或工具 | 转成普通工具请求 | 不授予文件、网络、凭据或沙箱绕过能力 |
+| Plugin 提供 Skill | 保留 Plugin、版本和内容摘要来源 | Plugin 启用不等于 Skill 自动执行 |
+
 ## 1. 结论
 
 `zeta-skills` 是 Zeta 的 Skill 发现、索引、解析、选择和渐进加载控制面。Skill 是一个以
@@ -89,7 +103,7 @@ activation 尚未接入。
 - 目标 `zeta-tool-executor` / `zeta-sandboxing` 负责脚本执行，而不是 Skill loader；产品层
   `zeta-exec` 是 headless Agent runner。
 
-## 3. Format baseline
+## 3. 格式基线
 
 [Agent Skills specification](https://agentskills.io/specification) 规定：
 
@@ -191,9 +205,9 @@ Plugin manifest/config。独立 Skill 需要额外能力时只能产生明确 co
 - 只有 `SkillId`、`SkillRef`、选择 intent 等至少跨两个组件共享的稳定 value 才进入
   `zeta-protocol`；catalog cache、filesystem handle、parse error 留在 `zeta-skills`。
 
-## 6. Identity、source 与 precedence
+## 6. 身份、来源与优先级
 
-### 6.1 Stable identity
+### 6.1 稳定身份
 
 Skill format 的 `name` 只在一个 source root 内唯一。Zeta identity 必须包含 source：
 
@@ -223,7 +237,7 @@ pub enum SkillVersionSelector {
 }
 ```
 
-### 6.2 Source
+### 6.2 来源
 
 ```text
 BuiltIn { release }
@@ -235,7 +249,7 @@ LocalDevelopment { canonicalRoot }
 
 source root 是 host 验证后的 opaque handle，不是未经校验的字符串 path。
 
-### 6.3 Precedence
+### 6.3 优先级
 
 Precedence 只用于候选排序，不用于静默覆盖：
 
@@ -252,9 +266,9 @@ Precedence 只用于候选排序，不用于静默覆盖：
 
 显式 Skill 可以和自动 Skill 同时激活，但去重按 exact `SkillId + digest`，不是 display name。
 
-## 7. Discovery 与 catalog
+## 7. 发现与目录
 
-### 7.1 Metadata-only discovery
+### 7.1 元数据-only 发现
 
 启动/刷新时只：
 
@@ -277,7 +291,7 @@ Precedence 只用于候选排序，不用于静默覆盖：
 Plugin package 是原子 contribution：Plugin 内声明的 required Skill 无效时，由 Plugin resolver 决定
 整个 generation 是否失败；普通 user source 则可按 entry 隔离错误。
 
-### 7.2 Catalog snapshot
+### 7.2 目录快照
 
 ```rust
 pub struct SkillCatalogSnapshot {
@@ -311,7 +325,7 @@ Watcher backend 无法启动时不会阻止 App Server 启动，调用方仍可�
 `skills/list { reload: "refresh" }` 显式重扫；当前没有对外 watcher-health projection。
 这条 catalog refresh 路径不代表 activation safe-point composition 已完成。
 
-## 8. Selection
+## 8. 选择
 
 ### 8.1 显式选择
 
@@ -360,7 +374,7 @@ enabled catalog
 - 用户明确说不使用某 Skill 时，当前 Turn 不得重新自动加入；
 - Skill 不能通过 description 要求自己在所有任务激活。
 
-## 9. Activation 与渐进加载
+## 9. 激活与渐进加载
 
 [Agent Skills progressive disclosure](https://agentskills.io/specification#progressive-disclosure)
 分三层：
@@ -398,7 +412,7 @@ pub struct SkillActivationSnapshot {
 snapshot 对一次 model invocation 不可变。Skill 文件变化只使 catalog stale；已经开始的调用仍使用
 旧 bytes/digest。下一个 model safe point 重新解析，并在 pinned mismatch 时要求用户决定。
 
-## 10. Context layering
+## 10. 上下文分层
 
 Core ContextAssembler 使用明确层级：
 
@@ -431,9 +445,9 @@ Core ContextAssembler 应用总 token budget。超限时：
 4. references 不预载；
 5. 不能把被截断的 Skill 标成完整激活。
 
-## 11. References、scripts 与 assets
+## 11. 参考资料、脚本与资源
 
-### 11.1 File resolver
+### 11.1 文件解析器
 
 所有 Skill 文件通过 rooted resolver：
 
@@ -456,7 +470,7 @@ request 使用 `SkillRelativePath`、`SkillFileKind` 和具名 size policy，不
 相对引用从 Skill root 解析。按 Agent Skills guidance，文档应避免深层 reference chain；Zeta
 另外施加最大 reference depth 和 visited-set，检测循环。
 
-### 11.2 References
+### 11.2 参考资料
 
 - 作为不可信 data/context 读取，不提升 instruction precedence；
 - 只有当前任务需要时加载；
@@ -465,7 +479,7 @@ request 使用 `SkillRelativePath`、`SkillFileKind` 和具名 size policy，不
 - reference 再引用的文件仍通过同一 resolver 和 depth budget；
 - 超大表格/文档通过 Resource store 分块，而不是塞入单个 model message。
 
-### 11.3 Scripts
+### 11.3 脚本
 
 `scripts/` 中存在文件不代表它可执行。Skill manager 只返回 file metadata/handle。
 
@@ -493,7 +507,7 @@ Skill manager 绝不自动执行：
 - 脚本用来“探测 compatibility”；
 - 首次激活 callback。
 
-### 11.4 Assets
+### 11.4 资源
 
 Assets 是模板、图片或静态数据：
 
@@ -503,7 +517,7 @@ Assets 是模板、图片或静态数据：
 - 模板展开后的结果是新 artifact，不反向修改 immutable Skill；
 - HTML/SVG 等 active content 在 UI preview 中必须 sanitize/sandbox。
 
-## 12. Compatibility
+## 12. 兼容性
 
 Agent Skills `compatibility` 是自由文本，不能作为 machine-enforced permission。Zeta 处理为：
 
@@ -534,7 +548,7 @@ required package-relative asset
 - Skill 激活 snapshot 和 MCP tool catalog snapshot 必须在同一 App Server composition generation
   中解析。
 
-## 13. Trust、prompt injection 与数据安全
+## 13. 信任、prompt injection 与数据安全
 
 Skill instructions 可能恶意或被供应链篡改。所有来源都需要 provenance：
 
@@ -565,7 +579,7 @@ trust label 不改变 instruction precedence。即使 BuiltIn Skill 也不能绕
 默认不把 Skill body、references、scripts 或 assets 写入 telemetry。可记录 ID、source、digest、
 activation reason、bytes/token count、duration 和 error code。
 
-## 14. Persistence、recovery 与 provenance
+## 14. 持久化、恢复与来源
 
 Skill catalog 是可重建 projection，不是 authority。Authority 分布为：
 
@@ -613,7 +627,7 @@ Skill install/remove 不属于 Skill manager：
 Client picker 展示 name、description、source、version/digest 摘要、compatibility、availability 和
 trust；同名 Skill 不合并。自动激活结果在 Turn/status 中可解释，但 UI 不需要显示 Skill 正文。
 
-## 16. 错误与 diagnostics
+## 16. 错误与诊断
 
 至少区分：
 
@@ -638,7 +652,7 @@ CatalogStale
 错误携带安全的 Skill/source identity 和相对 path；不返回 host private absolute root、Skill 正文
 或 secret。diagnostic 必须能解释为什么 Skill 没被发现、没被选择、没被激活或只处于 degraded。
 
-## 17. 性能与 budget
+## 17. 性能与预算
 
 建议第一版本地上限作为 Zeta policy，而不是 Agent Skills 标准：
 
@@ -692,7 +706,7 @@ catalog/selection/activation 拆分；新 trait 必须有职责和实现约束 d
 
 ## 19. 分阶段实施
 
-### Phase S0：format、catalog 与 runtime browser（Current）
+### 阶段 S0：format、目录与运行时 browser（当前状态）
 
 - Agent Skills frontmatter/parser/validator；
 - BuiltIn + controlled user source；
@@ -704,7 +718,7 @@ catalog/selection/activation 拆分；新 trait 必须有职责和实现约束 d
 完成条件：启动不会加载所有 Skill body，坏 entry 不会逃出 root 或拖垮整个 catalog；source
 变化与 enablement 变化只发布新的 metadata projection。
 
-### Phase S1：显式选择 vertical slice
+### 阶段 S1：显式选择纵向切片
 
 - 在 current `SkillId` 基础上增加 `SkillRef`/version contract；
 - 迁移 `UserInput::Skill { name, path }`；
@@ -714,7 +728,7 @@ catalog/selection/activation 拆分；新 trait 必须有职责和实现约束 d
 
 完成条件：客户端不能通过 raw path 激活 catalog 外文件，已开始 invocation 使用 frozen digest。
 
-### Phase S2：references/assets/scripts
+### 阶段 S2：参考资料、资源与脚本
 
 - rooted file resolver 和 Resource integration；
 - 按需 references/assets；
@@ -723,7 +737,7 @@ catalog/selection/activation 拆分；新 trait 必须有职责和实现约束 d
 
 完成条件：读取 Skill 不产生副作用，运行脚本一定产生标准 durable Tool Call/Result。
 
-### Phase S3：Plugin 与 MCP dependency
+### 阶段 S3：Plugin 与 MCP 依赖
 
 - Plugin Skill source；
 - composition generation；
@@ -732,7 +746,7 @@ catalog/selection/activation 拆分；新 trait 必须有职责和实现约束 d
 
 完成条件：Skill 不能按名称碰撞绑定错误工具，Plugin update 不改变 in-flight invocation。
 
-### Phase S4：自动选择
+### 阶段 S4：自动选择
 
 - bounded lexical retrieval；
 - threshold、ambiguity 和 explicit opt-out；

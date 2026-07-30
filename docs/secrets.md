@@ -9,6 +9,19 @@
 > - Interactive login control plane：[`login.md`](login.md)
 > - App Server 登录控制面：[`zeta-app-server-api.md`](zeta-app-server-api.md#11-account-与登录)
 
+## 快速理解
+
+秘密存储只安全保存不透明字节；“这个秘密是什么、何时刷新、谁可以使用”始终由对应业务领域
+负责。
+
+| 调用方需求 | 秘密存储负责 | 秘密存储不负责 |
+| --- | --- | --- |
+| 保存或读取一个敏感值 | 按不透明 `SecretKey` 执行 `load/store/delete` | 解释它是 API key、OAuth token 还是其他凭据 |
+| 在不同宿主持久化 | 使用系统钥匙串、显式文件或临时后端 | 替调用方选择账户、供应商或授权范围 |
+| 后端不可用 | 返回明确错误 | 静默降级到不安全文件或普通配置 |
+| 记录诊断信息 | 只记录脱敏错误和不敏感键 | 输出秘密字节、认证标头或完整命令 |
+| 删除秘密 | 返回已删除或不存在的明确结果 | 撤销远端 token 或完成供应商登出 |
+
 ## 1. 结论
 
 `zeta-secrets` 是长期保留的独立基础设施 crate，但它不是 credential authority，也不是统一 OAuth
@@ -75,7 +88,7 @@ wire and transport
 `zeta-api`、`zeta-client` 和 `zeta-http-client` 都不依赖 `zeta-secrets`。它们接收已经构造完成的
 请求或已经解析的 sensitive transport value，不查 keychain，也不刷新 token。
 
-## 4. Public API
+## 4. 公共接口
 
 ```rust
 pub trait SecretStore: Send + Sync {
@@ -104,7 +117,7 @@ ChatGPT/Codex subscription token 不在 Zeta namespace 中：它由 upstream Cod
 管理，Zeta 只能保存 redacted account reference。
 MCP/Connector 使用自己的 namespace，不能把 Provider key schema 当成通用 credential schema。
 
-## 5. Backend policy
+## 5. Backend 策略
 
 长期 backend：
 

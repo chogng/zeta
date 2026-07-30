@@ -49,7 +49,7 @@ Direction 只能使用：
 transport 不支持该能力，必须通过 initialize capability 明确声明，不能提供绕过 dispatcher
 的隐藏 Rust 方法。
 
-## 3. 每个 Request 必填内容
+## 3. 每个请求必填内容
 
 每个 request 单独一节，包含：
 
@@ -76,7 +76,7 @@ transport 不支持该能力，必须通过 initialize capability 明确声明�
 
 `required` 和 `nullable` 必须分开说明。不能用“可选”同时表达字段缺失和 JSON `null`。
 
-## 4. JSON fixture
+## 4. JSON 样例
 
 请求：
 
@@ -157,7 +157,7 @@ Created → Running → Completed
 - 客户端发现空洞后如何 resync；
 - 哪些通知可以合并，哪些不能丢弃。
 
-## 7. Typed command replay
+## 7. 类型化命令重放
 
 所有持久化副作用请求必须说明：
 
@@ -182,7 +182,7 @@ Server → Client 请求必须定义：
 - deadline 后的迟到 response 是否忽略；
 - UI 如何关闭等待状态。
 
-## 9. Connection 与 owner
+## 9. Connection 与所有者
 
 必须分别说明：
 
@@ -194,7 +194,7 @@ Server → Client 请求必须定义：
 
 不能用“当前活动客户端”或“当前活动 Tab”这种可变全局概念代替稳定 owner。
 
-## 10. Resource
+## 10. 资源
 
 大对象不得在普通业务消息中使用 Base64 或暴露本地路径。接口文档需要定义：
 
@@ -233,7 +233,7 @@ Server → Client 请求必须定义：
 
 不要只写“失败时返回 error”。
 
-## 13. 开发期 breaking change
+## 13. 开发期破坏性变更
 
 文档必须标注：
 

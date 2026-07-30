@@ -19,6 +19,20 @@
 > [官方规范](https://modelcontextprotocol.io/specification/2025-11-25/architecture/index) 与
 > schema fixture 为准。
 
+## 快速理解
+
+MCP 客户端把外部 Server 的工具转换成 Zeta 的工具目录；方向相反的 MCP Server 把 Zeta Agent
+暴露给外部 Host。两条路径共享协议概念，但不共享运行时所有权。
+
+| 场景 | 使用的边界 | 当前状态 |
+| --- | --- | --- |
+| Zeta 连接外部 MCP Server | `zeta-rmcp-client` 建立单连接，`zeta-mcp` 管理多 Server 和工具目录 | 工具纵向切片已实现 |
+| 外部 Host 调用 Zeta Agent | 独立的 `zeta-mcp-server` 通过 App Server 启动和继续 Agent | 见 MCP Server 文档 |
+| MCP 暴露工具 | 转成带来源、绑定和失效 generation 的统一工具 | 已实现基础目录与调用路由 |
+| MCP 暴露资源或提示词 | 进入各自的上下文和产品契约 | 仍属计划设计 |
+| Server 需要凭据或网络 | 由凭据领域、权限和宿主策略处理 | MCP 不自行成为信任根 |
+| Plugin 声明 MCP Server | Plugin 只贡献声明，MCP runtime 决定连接状态 | 安装不等于连接或授权 |
+
 ## 1. 结论
 
 MCP client 分成两个边界：Current `zeta-rmcp-client` 负责官方 RMCP SDK、单 server session、
@@ -111,7 +125,7 @@ HTTP+SSE 是旧 revision 的兼容面，不进入 Zeta 第一版。
 
 ## 4. 职责与非职责
 
-### 4.1 Current `zeta-rmcp-client` 拥有
+### 4.1 当前状态 `zeta-rmcp-client` 拥有
 
 - MCP wire request/response/notification codec 和 protocol revision negotiation；
 - 每个 configured server 的隔离 client session；
@@ -121,7 +135,7 @@ HTTP+SSE 是旧 revision 的兼容面，不进入 Zeta 第一版。
 - 原始 tools list/call 与 progress、list-changed、elicitation host callback；
 - caller-provided RMCP transport 接入点。
 
-### 4.2 Current `zeta-mcp` 拥有
+### 4.2 当前状态 `zeta-mcp` 拥有
 
 - runtime-ready server set、connection/catalog generation 与原子/部分启动策略；
 - tools 的分页 discovery、list-changed invalidation 和 immutable catalog；
@@ -132,7 +146,7 @@ HTTP+SSE 是旧 revision 的兼容面，不进入 Zeta 第一版。
 Proposed 扩展仍包括 resources/prompts、reconnect/health state machine、credential/OAuth lifecycle，
 以及 roots、sampling、elicitation 等 client feature 的产品 capability gate。
 
-### 4.3 两个 MCP client crate 都不拥有
+### 4.3 两个 MCP 客户端 crate 都不拥有
 
 - Plugin package 下载、签名、解压、版本解析、enable/disable authority；
 - API token、OAuth refresh token、client secret 的持久化；
@@ -197,9 +211,9 @@ McpServerDefinition
     → graceful shutdown / reconnect
 ```
 
-## 6. Identity、定义与快照
+## 6. 身份、定义与快照
 
-### 6.1 Server identity
+### 6.1 Server 身份
 
 配置必须为每个 server 分配稳定 `McpServerId`。它标识 Zeta 配置中的逻辑 server，不使用 endpoint、
 child PID、MCP session ID 或 Plugin 显示名称充当 identity。
@@ -229,7 +243,7 @@ pub enum McpCredentialBinding {
 Plugin 贡献的 logical ID 解析为带 Plugin namespace 的 `McpServerId`；用户配置与 workspace 配置
 使用各自 source namespace。不同来源不能通过同名静默覆盖。
 
-### 6.2 Remote primitive identity
+### 6.2 远程 primitive 身份
 
 MCP tool name 只保证在单个 server 内唯一；resource URI 和 prompt name 同样不能脱离 server
 解释。Zeta identity 必须保留二元组：
@@ -243,7 +257,7 @@ McpPromptRef   = (McpServerId, exact prompt name)
 不得 lowercase、重写或丢弃 exact remote identity。model-facing alias 只是一次 catalog snapshot
 内的路由名，不是远端 identity。
 
-### 6.3 Tool alias 与绑定
+### 6.3 工具 alias 与绑定
 
 当前 `zeta-protocol::ToolName` 允许 1–128 个 ASCII 字母、数字、`_`、`-`，而 MCP tool name
 还可能包含 `.`。不能把不兼容字符简单替换成 `_` 后假定没有冲突。
@@ -263,7 +277,7 @@ alias 由可读 server/tool slug 加短 digest 生成，生成后做全 catalog 
 tool call 时必须从冻结的 binding snapshot 解析，不得根据字符串重新猜 server。list-changed 后
 新的 binding 只在下一个 model safe point 生效；旧调用不能被静默路由到另一个工具。
 
-### 6.4 Immutable snapshot
+### 6.4 Immutable 快照
 
 ```rust
 pub struct McpCatalogSnapshot {
@@ -282,7 +296,7 @@ pub struct McpCatalogSnapshot {
 `connection_generation`，即使 catalog 内容相同；这样 late response、旧 subscription 和旧
 request ID 都不能污染新连接。
 
-## 7. Connection lifecycle
+## 7. 连接生命周期
 
 状态不能压成 `connected: bool`：
 
@@ -317,7 +331,7 @@ Disabled
 - 自动重连使用 backoff + jitter，并受全局启动并发限制；
 - reconnect 成功后重新 initialize 和 discovery，不复用旧 server capability。
 
-## 8. Transport
+## 8. 传输
 
 ### 8.1 stdio
 
@@ -352,9 +366,9 @@ state，不进入 Zeta Session/Thread。
 第一版不实现 custom transport。新增 transport 必须先定义 threat model、framing、cancellation、
 authentication 和 shutdown contract，不能只提供 `send(Value)`。
 
-## 9. Server primitives
+## 9. 服务端原语
 
-### 9.1 Tools
+### 9.1 工具
 
 `zeta-mcp` 先将 revision-specific descriptor 转成保留 exact remote identity 的
 `McpToolProjection`，再由 [`tools.md`](tools.md) 的共享 adapter 产生 host tool definition。
@@ -375,7 +389,7 @@ MCP `2025-11-25` 的 embedded schema 默认使用 JSON Schema 2020-12；tool out
 - API failure、业务校验失败等 `isError: true` → `ToolOutputStatus::Error`，再由 Core 映射为
   canonical error Tool Result。
 
-### 9.2 Resources
+### 9.2 资源
 
 Resource 是 application-controlled context，不是可自动执行的 tool。第一版：
 
@@ -390,7 +404,7 @@ Resource 是 application-controlled context，不是可自动执行的 tool。�
 Server 返回的 `file://` URI 不授予本地文件权限。只有 MCP `resources/read` 的返回内容可作为该
 server resource；Zeta 不绕过 server 去读取同名本地路径。
 
-### 9.3 Prompts
+### 9.3 提示词
 
 MCP Prompt 是 user-controlled、带参数的远端模板：
 
@@ -403,9 +417,9 @@ MCP Prompt 是 user-controlled、带参数的远端模板：
 如果用户要将稳定 MCP Prompt 保存为 Skill，应通过显式导入/复制流程生成新的本地 artifact，
 记录来源与 digest；运行时不能把二者自动等同。
 
-## 10. Client features
+## 10. 客户端功能
 
-### 10.1 Roots
+### 10.1 根目录
 
 Roots 只告诉 server 当前 workspace 边界。它不是 sandbox，也不证明 server process 无法读取
 root 之外的文件。
@@ -417,7 +431,7 @@ root 之外的文件。
 - local MCP process 仍必须使用 OS/process sandbox；
 - remote MCP server 只得到 root metadata，不自动得到文件内容。
 
-### 10.2 Sampling
+### 10.2 采样（Sampling）
 
 Sampling 允许 MCP server 请求 host 调用模型，涉及费用、凭据、conversation disclosure 和递归
 tool loop。第一版不声明 sampling capability。
@@ -431,7 +445,7 @@ tool loop。第一版不声明 sampling capability。
 - sampling 不能调用发起它的同一 tool 形成无界递归；
 - request/result 进入可审计 trace，但不伪装成用户 Turn。
 
-### 10.3 Elicitation
+### 10.3 询问（Elicitation）
 
 Elicitation 依赖 Zeta 的 typed Agent request/response delivery。完整 owner selection、deadline、
 disconnect 和 recovery vertical slice 完成前不声明 capability。
@@ -440,13 +454,13 @@ disconnect 和 recovery vertical slice 完成前不声明 capability。
 但 remote MCP connection/request 本身通常不能跨重启恢复；恢复后必须重新建立 server state 或
 明确取消，不能向新 connection 发送旧 response。
 
-### 10.4 Experimental tasks
+### 10.4 实验性任务
 
 MCP task ID 只标识 MCP 协议中的异步 request 状态，不是 Zeta 产品 Session、Thread、Turn 或
 Codex 意义上的“任务”。在官方 capability 稳定且 Zeta 定义好 polling、expiry、authorization
 binding、cancel 和 recovery 前不启用。
 
-## 11. Tool loop、取消与 unknown outcome
+## 11. 工具 loop、取消与 unknown 结果
 
 ```text
 MCP catalog snapshot
@@ -473,7 +487,7 @@ MCP adapter 不直接写 Thread。取消和 retry 遵循 Agent Runtime 的统一
 
 ## 12. 安全与授权
 
-### 12.1 Trust boundary
+### 12.1 信任边界
 
 以下全部默认不可信：
 
@@ -486,7 +500,7 @@ MCP adapter 不直接写 Thread。取消和 retry 遵循 Agent Runtime 的统一
 MCP 内容可能包含 prompt injection。Zeta 必须带 provenance 传入 Core ContextAssembler，用边界标记其
 来源，且不能允许其覆盖 system/developer policy、approval 或 sandbox。
 
-### 12.2 HTTP authorization
+### 12.2 HTTP 授权
 
 远程授权遵循
 [MCP authorization](https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization)
@@ -501,7 +515,7 @@ MCP 内容可能包含 prompt injection。Zeta 必须带 provenance 传入 Core 
 - localhost callback 使用随机 state、短期 listener 和一次性 completion；
 - logout/revoke 后立即停止依赖该 credential 的 session。
 
-### 12.3 Data egress
+### 12.3 数据外发
 
 每次 tool call 前，approval UI 应展示目标 server、tool、materialized arguments 和潜在数据范围。
 Secret field 按 schema/policy 脱敏展示，但实际发送仍需用户已授予的 credential/egress policy。
@@ -527,11 +541,11 @@ local tool policy override
 
 secret、PID、request ID、OAuth verifier、SSE cursor 和 live session ID 不持久化为 ordinary config。
 
-Current App Server 只在启动 safe point 读取 enabled user declaration、建立 runtime 并把 tools
-接入 Core；没有独立 runtime/catalog/auth/diagnostic RPC。Config 更新保留 typed command 语义，
-但需重启 App Server 才会 materialize 新 MCP generation。
+当前 App Server 只在启动安全点读取已启用的用户声明、建立运行时并把工具接入 Core；尚无独立
+的运行时、目录、认证或诊断 RPC。配置更新保留类型化命令语义，但必须重启 App Server 才会
+生成新的 MCP 世代。
 
-Proposed App Server surface 分为：
+计划中的 App Server 接口面分为：
 
 | 类别 | 方法示例 | 语义 |
 | --- | --- | --- |
@@ -585,7 +599,7 @@ queue saturation 和 output rejection。
 
 ## 15. 目标目录
 
-Current tools-only runtime 保持单 crate、private modules 和显式 public export：
+当前仅工具运行时保持单 crate、私有模块和显式公共导出：
 
 ```text
 zeta-rs/mcp/src/
@@ -605,7 +619,7 @@ security 和 identity。resources/prompts/auth/reconnect 落地时按独立 owne
 
 ## 16. 分阶段实施
 
-### Phase M0：低层 contract 与 fixture（tools 范围完成）
+### 阶段 M0：低层契约与样例（工具范围完成）
 
 - ✅ RMCP SDK 固定 protocol lifecycle 与 capability negotiation；
 - ✅ 使用 fake/in-process transport 覆盖 initialize、tools 与 cancellation；
@@ -614,7 +628,7 @@ security 和 identity。resources/prompts/auth/reconnect 落地时按独立 owne
 
 完成条件：fake server 可覆盖正常、错误、late response、cancel 和 version mismatch。
 
-### Phase M1：stdio + tools vertical slice（窄启动时接线完成）
+### 阶段 M1：stdio +工具纵向切片（窄启动时接线完成）
 
 - ✅ direct stdio connector 与 graceful shutdown；
 - ✅ tools/list pagination、catalog snapshot 和 list-changed stale 标记；
@@ -624,7 +638,7 @@ security 和 identity。resources/prompts/auth/reconnect 落地时按独立 owne
 
 完成条件：server crash、取消和 Thread recovery 不会静默重放有副作用调用。
 
-### Phase M2：resources、prompts 与 roots
+### 阶段 M2：资源、提示词与根目录
 
 - resource/prompt list/read/get；
 - context provenance、size/token budget 和 Resource store；
@@ -633,7 +647,7 @@ security 和 identity。resources/prompts/auth/reconnect 落地时按独立 owne
 
 完成条件：任何 MCP 内容都不会在未选择时自动进入模型 context。
 
-### Phase M3：Streamable HTTP + OAuth（基础 transport 部分具备）
+### 阶段 M3：Streamable HTTP + OAuth（基础传输部分具备）
 
 - ✅ RMCP reqwest Streamable HTTP connector 支持 unauthenticated/bearer session；
 - session resume/reconnect、protected resource metadata、PKCE、credential reference 和 revoke；
@@ -641,7 +655,7 @@ security 和 identity。resources/prompts/auth/reconnect 落地时按独立 owne
 
 完成条件：token 不进入 config/log/event，断线不被误判为取消或成功。
 
-### Phase M4：可选 client features
+### 阶段 M4：可选客户端功能
 
 - 先完成 App Server owner-directed interaction；
 - 分别评审 sampling、elicitation 和 tasks；

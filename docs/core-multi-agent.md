@@ -5,6 +5,19 @@
 > Canonical Session/Thread/Turn contract：[`protocol.md`](protocol.md)
 > 外部 MCP Host 调用 Zeta 与 remote Agent bridge：[`mcp-server.md`](mcp-server.md)
 
+## 快速理解
+
+多 Agent 不是多个任务共享一份可变上下文，而是同一 Session 中多个相互关联、可独立恢复的
+Thread。
+
+| 读者首先会问 | 直接答案 | 深入阅读 |
+| --- | --- | --- |
+| 子 Agent 在系统中是什么？ | 一个拥有独立 `ThreadId`、Turn、上下文和取消域的 Thread | [身份与聚合边界](#2-身份与聚合边界) |
+| 父子 Agent 共享历史或模型状态吗？ | 不共享可变状态；只通过明确的种子、消息和结果传递信息 | [上下文隔离](#11-上下文隔离) |
+| 创建、分叉和生成有什么区别？ | 创建建立新 Thread，分叉固定已有序列点，生成额外记录委托关系 | [创建、分叉与生成](#4-创建create分叉fork-与生成spawn) |
+| 子 Agent 如何回传结果？ | 结果通过可持久化消息和委托终态回到调用方，不靠进程内引用 | [结果与汇合](#8-结果与汇合) |
+| 取消父 Agent 会发生什么？ | 按委托树传播取消，同时保留每个 Thread 已提交的事实 | [取消与终态语义](#9-取消与终态语义) |
+
 ## 1. 结论
 
 Zeta 的多 Agent 使用同一 Session 下的独立 Thread：
@@ -116,7 +129,7 @@ ThreadController、TurnExecutor、ContextManager 和 ToolScheduler 已经构成�
 MultiAgentCoordinator 可以协调多个 aggregate，但不能建立跨所有 Thread 的大锁。长 I/O、等待
 child 和等待 delivery receipt 都在 aggregate writer 之外。
 
-## 4. Create、Fork 与 Spawn
+## 4. 创建（Create）、分叉（Fork）与生成（Spawn）
 
 三种操作语义不同：
 
@@ -171,7 +184,7 @@ struct AgentContextSeed {
 }
 ```
 
-### 5.1 Inheritance mode
+### 5.1 继承模式
 
 使用自描述 enum：
 
@@ -200,7 +213,7 @@ enum ForkedContext {
 所有模式都必须固定 source sequence 和 provenance。Spawn 后 parent 继续执行、compaction、
 provider change 或 policy refresh 都不能偷偷改变 child seed。
 
-### 5.2 Policy inheritance
+### 5.2 策略继承
 
 Child policy 必须满足：
 
@@ -214,7 +227,7 @@ effective child policy
 
 Child 可以被进一步收紧，不能静默获得 parent 没有的 capability 或放宽 approval。
 
-### 5.3 Seed persistence
+### 5.3 种子持久化
 
 Seed 可以作为 child creation fact 或 stable artifact reference 持久化，但必须在 child 首次执行
 前 durable。若 seed 引用 parent Item：
@@ -225,7 +238,7 @@ Seed 可以作为 child creation fact 或 stable artifact reference 持久化，
 - visibility/sensitivity policy 必须允许；
 - materialization 失败时 child 不得在不完整上下文下静默启动。
 
-## 6. Spawn saga
+## 6. Spawn 事务
 
 Spawn 跨 parent Thread、Session 和 child Thread，必须使用可恢复 saga：
 
@@ -249,9 +262,9 @@ Spawn 跨 parent Thread、Session 和 child Thread，必须使用可恢复 saga�
 
 如果 storage 将来提供 multi-stream transaction，可以优化提交次数，但不能改变可观察语义。
 
-## 7. Communication
+## 7. 通信
 
-### 7.1 显式 message
+### 7.1 显式消息
 
 Parent、child 和 sibling 只能通过显式 Agent message 交流：
 
@@ -275,7 +288,7 @@ struct AgentMessage {
 - 直接修改 receiver projection；
 - 把跨 Agent message 冒充普通 user input。
 
-### 7.2 Durable delivery
+### 7.2 Durable 投递
 
 跨 Thread delivery 使用 outbox/inbox 语义：
 
@@ -293,7 +306,7 @@ exactly once。
 Receiver terminal/archived、policy rejection 和 delivery timeout 都需要明确 outcome。消息不能
 无声丢失。
 
-### 7.3 Steering
+### 7.3 引导
 
 发送给正在执行 child 的新 instruction 是 steering，不等于修改它已经冻结的 invocation：
 
@@ -303,7 +316,7 @@ Receiver terminal/archived、policy rejection 和 delivery timeout 都需要明�
 - safety tightening 可以立即传播；
 - 普通 steering 不回写历史快照。
 
-## 8. Result 与 Join
+## 8. 结果与汇合
 
 Child 完成时生成有界结果：
 
@@ -344,7 +357,7 @@ Explicit(Vec<DelegationId>)
 
 Join 等待必须 durable；它不能靠一个进程内 `join_all` future 表达。
 
-## 9. Cancellation 与 terminal semantics
+## 9. 取消与终态语义
 
 Cancellation tree：
 
@@ -377,7 +390,7 @@ parent Agent source
 - delivery failed；
 - unknown outcome。
 
-## 10. Resource budget 与调度
+## 10. 资源预算与调度
 
 必须区分：
 
@@ -409,7 +422,7 @@ usage 和 durable delegation 状态不能只存在内存。
 Capacity saturation 返回稳定 retryable/terminal outcome，不能无限排队。不同 Session 之间还需要
 宿主级 fairness，但其全局 scheduler 实现不必进入 Core aggregate。
 
-## 11. Context isolation
+## 11. 上下文隔离
 
 每个 child ContextManager 只读取：
 
@@ -435,7 +448,7 @@ Parent result injection 规则：
 - 不能跳过 instruction precedence；
 - child 的不可信文本不能升级为 system fact。
 
-## 12. Approval 与 capability
+## 12. 批准与能力
 
 Child 的 approval request 仍属于 child Thread/Turn。Interaction 必须携带 child identity 和
 delegation provenance。
@@ -456,7 +469,7 @@ Capability handle 不能跨 Agent 隐式共享。若 child 需要 browser/termin
 - handle lifecycle 仍由宿主拥有；
 - child completion/cancel 触发明确 release policy。
 
-## 13. Recovery
+## 13. 恢复
 
 恢复顺序：
 

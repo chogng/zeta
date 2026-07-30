@@ -1,4 +1,4 @@
-# Native Text Input：分层、IME 与当前实现
+# Native Text 输入：分层、IME 与当前实现
 
 > 状态：Current。
 > 本文拥有 native 单行文本输入的跨 crate ownership、用户语义和演进边界。具体源码接口与
@@ -23,7 +23,7 @@ winit keyboard / IME event
 adapter 不理解 committed text、selection 或 composition。这个边界让 Unicode 编辑语义、
 shaping geometry 和真实平台接入可以分别测试。
 
-## 2. Ownership
+## 2. 所有权
 
 | 能力 | 当前 owner | 状态 |
 | --- | --- | --- |
@@ -101,7 +101,7 @@ ApplicationHandler::about_to_wait
 | `TextInput` base + `InputBox` component | ✅ | 编辑语义可复用，具体组件拥有自己的 chrome |
 | 独立 layout engine + immutable snapshot | ✅ | shaping 几何可复用，InputBox 保持纯 scene composition |
 
-## 6. Current limitations 与演进前提
+## 6. 当前限制与演进前提
 
 当前 vertical slice 是 single-line composer，支持键盘插入、grapheme-safe 左右移动与删除、
 Shift selection、Home/End、Select All、IME composition 和 caret blink。它尚未实现 mouse

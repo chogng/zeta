@@ -169,9 +169,9 @@ cargo test --manifest-path zeta-rs/Cargo.toml -p zeta-ui
 bazel test //zeta-rs/ui:ui-unit-tests
 ```
 
-单元测试覆盖 component clip composition、button/icon-label/input-box state/style/layout、TextInput
-grapheme editing/composition、caret blink phase、selection/caret/preedit shaping、geometry
-intersection、radii clamp、nested clip、SVG alpha raster、atlas allocation、rect instance
+单元测试覆盖组件裁剪组合，按钮、图标标签和输入框的状态/样式/布局，以及 `TextInput` 的
+字素编辑/组合、光标闪烁阶段、选择/光标/预编辑塑形、几何相交、圆角限制、嵌套裁剪、
+SVG alpha 栅格化、图集分配和矩形实例
 conversion、paint/icon/text validation、style defaults 与 font family canonicalization。它们不
 创建真实 GPU device；真实 shader、icon/glyph output、fallback 和 HiDPI 需要各平台的 surface
 smoke 或 snapshot harness。
@@ -184,7 +184,7 @@ smoke 或 snapshot harness。
 
 ## 7. 当前限制与扩展点
 
-Current limitations：
+当前限制：
 
 - scene 有背景、rect、symbolic icon 和 text，没有 RGBA image、path、transform 或统一的跨
   primitive z-order；当前 render order 固定为 rect → icon → text；
@@ -207,7 +207,7 @@ Current limitations：
 - icon atlas 固定为 2048×2048，尚无增长、回收或跨 atlas eviction；
 - 没有 headless GPU golden test。
 
-Extension points：在出现真实编辑器/终端 consumer 后，可分别增加可增长或可回收的 icon
-atlas、retained paragraph cache、rich spans、platform font registration、RGBA image/path
+扩展点：出现真实编辑器/终端消费者后，可以分别增加可增长或可回收的图标图集、保留式段落
+缓存、富文本片段、平台字体注册、RGBA 图像/路径
 primitives 与统一 display list。是否采用 CoreText shaping 应由跨平台 metrics/fallback
 一致性测试决定，不是当前 API 的既定承诺。

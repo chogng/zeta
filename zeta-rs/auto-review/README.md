@@ -10,7 +10,7 @@
 它只产生 advisory recommendation。它不能创建 grant、执行 Tool、修改 sandbox policy，也不拥有
 用户审批流程。
 
-## 核心产品流程（Current）
+## 核心产品流程（当前状态）
 
 本 crate 是下面流程中的 `classifier`，不是整条流程的 owner。跨 crate 的完整产品语义由
 [`docs/auto-review.md`](../../docs/auto-review.md#4-端到端决策模型) canonical 定义；这里保留
@@ -100,7 +100,7 @@ zeta-rs/auto-review/
 不要把 provider adapter 或 Core orchestration 移入本 crate。需要增加内部实现时，保持 module
 private，并从 `lib.rs` 显式导出必要 API。
 
-## 3. Public API
+## 3. 公共接口
 
 | API | 作用 | 实现者或调用者必须保证 |
 | --- | --- | --- |
@@ -202,7 +202,7 @@ ActionClassifier::classify
 - `deny_unknown_fields` 在 recommendation 与嵌套 capability 两层拒绝额外字段；
 - assessment 复制 host-owned action digest 与 policy revision，模型不能覆盖它们。
 
-### 5.1 Assessment identity
+### 5.1 Assessment 身份
 
 `AssessmentId` 是下列内容的 SHA-256：
 
@@ -224,7 +224,7 @@ canonical_recommendation_json
 revision。修改 prompt/schema 语义时必须在 `protocol.rs` 同步 bump revision；caller 不能再传入
 一个与实际 prompt 不一致的 revision。
 
-## 6. Model request
+## 6. 模型请求
 
 `ReviewModelRequest` 包含三个互相分离的 payload 和一个 response budget：
 
@@ -263,7 +263,7 @@ context
 `ReviewModel` 是安全边界而不只是 transport abstraction。trait 本身无法阻止恶意实现调用 Tool
 或读取 credential；可信 host adapter 必须确保 review runtime 没有这些能力。
 
-## 7. Response contract 与本地校验
+## 7. 响应契约与本地校验
 
 模型只能返回以下四种 shape：
 
@@ -290,7 +290,7 @@ implicit authorization 即使被解析为 `Approve` recommendation，仍由 `Pol
 `AskUser`。系统级矩阵见
 [`docs/auto-review.md`](../../docs/auto-review.md#5-风险与用户授权矩阵)。
 
-## 8. 错误与 cancellation
+## 8. 错误与取消
 
 | 条件 | `AutoReviewError` | 是否产生 assessment |
 | --- | --- | --- |
@@ -311,7 +311,7 @@ failure 与 response oversize，不把完整 provider taxonomy 泄漏进 classif
 Cancellation 只能保证本 crate 在调用前后检查。正在进行的网络请求能否及时停止，取决于
 `ReviewModel` implementation 是否在 provider checkpoint 观察 token。
 
-## 9. Host adapter 接入要求
+## 9. Host 适配器接入要求
 
 当前 App Server 的 `ProviderReviewModel` 是参考 adapter。它从 frozen `ResolvedConfig`
 safe-point snapshot 创建 immutable model runtime，并：
@@ -343,7 +343,7 @@ impl ReviewModel for ProviderAdapter {
 不要在 adapter 内重新读取 mutable config、fallback 到未记录的 model，或把普通 Agent runtime
 连同其 Tool registry 直接复用给 reviewer。
 
-## 10. 测试与 eval
+## 10. 测试与评估
 
 运行 crate 全部 Cargo 测试：
 
@@ -372,7 +372,7 @@ review protocol revision，并输出 false-auto-approval 等安全指标。Corpu
 
 ## 11. 常见修改路径
 
-### 修改 prompt 或 review policy wording
+### 修改 prompt 或审查策略表述
 
 1. 修改 [`prompt.md`](prompt.md)；
 2. 在同一 `CURRENT_REVIEW_PROTOCOL` 中 bump review protocol revision；
@@ -380,7 +380,7 @@ review protocol revision，并输出 false-auto-approval 等安全指标。Corpu
 4. 用显式 model eval runner 比较新旧 revision；
 5. 不因 wording 变化放宽本地 schema/validation。
 
-### 增加 recommendation
+### 增加建议
 
 这不是 crate-local change。至少同时审查：
 
@@ -391,7 +391,7 @@ review protocol revision，并输出 false-auto-approval 等安全指标。Corpu
 5. classifier tests、policy tests 和 eval corpus；
 6. `docs/auto-review.md` 的用户可见语义。
 
-### 增加 evidence kind
+### 增加证据类型
 
 Evidence domain type 属于 `zeta-policy`。新增 kind 后需要确认：
 
@@ -401,7 +401,7 @@ Evidence domain type 属于 `zeta-policy`。新增 kind 后需要确认：
 - 长度限制与 secret redaction 在哪里实施；
 - eval corpus 是否覆盖相应 injection path。
 
-### 更换 provider 或增加 model
+### 更换供应商或增加模型
 
 通常不修改本 crate。应在 App Server/provider 组合层实现或选择新的 `ReviewModel`，并保持
 request、cancellation、tool-less runtime 与 immutable config snapshot contract。

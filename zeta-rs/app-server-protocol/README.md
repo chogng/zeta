@@ -68,9 +68,9 @@ zeta-rs/app-server-protocol/
     └── types.ts
 ```
 
-## Public contract
+## 公共契约
 
-### Registry
+### 注册表
 
 | Symbol | 职责 |
 | --- | --- |
@@ -82,8 +82,8 @@ zeta-rs/app-server-protocol/
 | `SERVER_NOTIFICATIONS` | notification name 与 params type |
 | `SerializationScopeDefinition` | dispatcher serialization requirement |
 
-Method registry 当前覆盖 initialize、Session lifecycle/subscription、Thread read/subscription、
-Session model selection、model catalog、Config/provider/MCP/Skill mutation、Turn
+方法注册表当前覆盖初始化、Session 生命周期/订阅、Thread 读取/订阅、Session 模型选择、
+模型目录、配置/供应商/MCP/Skill 修改、Turn
 start/interrupt/interaction resolve 与 Resource
 metadata/read/release，以及 workspace search start/read/cancel。Notification 包含
 `session/update`、`thread/update`、`skills/changed` 与 `git/statusChanged`；Terminal 当前使用 profile/list 与
@@ -99,7 +99,7 @@ global-exclusive mutation；status 带 revision，投影变化通过 `git/status
 
 `JsonRpcVersion` 只接受 `"2.0"`。
 
-### Export
+### 导出
 
 | Symbol | 输出 |
 | --- | --- |
@@ -131,7 +131,7 @@ Generator 只返回字符串，不读写 filesystem。只有 `write_schema_fixtu
 ts-rs 无法从 outer declaration 自动内联，就必须显式加入这里。编译通过不代表 TypeScript fixture
 完整。
 
-## Registry → artifact 调用图
+## 注册表→ artifact 调用图
 
 ```text
 client_methods!
@@ -218,7 +218,7 @@ cargo run -p zeta-app-server-protocol --bin export -- json
 cargo run -p zeta-app-server-protocol --bin export -- typescript
 ```
 
-## Schema hash 与 compatibility
+## 模式哈希与兼容性
 
 `initialize` 返回 `SchemaHash`。当前 hash 是 `protocol_schema()` JSON serialization 的 SHA-256；
 JSON Schema generator/order 的任何确定性变化都可能改变 hash，不只 breaking API change。
@@ -245,19 +245,17 @@ cargo test -p zeta-app-server-protocol
 bazel test //zeta-rs/app-server-protocol:app-server-protocol-unit-tests
 ```
 
-## Typst document contract
+## Typst 文档契约
 
-`protocol::document` owns the request and renderer-safe diagnostic/result DTOs
-for `document/typst/compile`. The method is registered as global-exclusive and
-advertised through `ServerCapabilities::typst`. PDF content is referenced by
-`ResourceMetadataResult`; bytes are not embedded into the compile response.
+`protocol::document` 拥有 `document/typst/compile` 的请求，以及对渲染进程安全的诊断和结果
+数据结构。该方法注册为全局独占，并通过 `ServerCapabilities::typst` 公布。PDF 内容由
+`ResourceMetadataResult` 引用，字节不会嵌入编译响应。
 
-Any change to these DTOs requires regenerating `schema/schema.json` and
-`schema/types.ts`, syncing `desktop/generated/app-server/types.ts`, and
-updating the cross-process contract in
-[`docs/typst.md`](../../docs/typst.md).
+修改这些数据结构时，必须重新生成 `schema/schema.json` 和 `schema/types.ts`，同步
+`desktop/generated/app-server/types.ts`，并更新
+[`docs/typst.md`](../../docs/typst.md) 中的跨进程契约。
 
-Tests 验证 method/notification 唯一性、JSON-RPC 2.0 envelope、TypeScript model/patch shape、root
+测试验证 method/notification 唯一性、JSON-RPC 2.0 envelope、TypeScript model/patch shape、root
 schema coverage、config三态、MCP/Skill round trip、schema hash 和 checked-in fixtures exact match。
 
 当前只有 JSON-RPC 2.0 artifact，schema compatibility 依赖 exact hash + synchronized client build；

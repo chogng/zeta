@@ -8,6 +8,20 @@
 > Renderer Command、MenuId 与 UI Action 组合系统：[`menu-system.md`](menu-system.md)
 > Chat 内 Session Inspector 的信息架构与 Plan 演进：[`chat-session-inspector.md`](chat-session-inspector.md)
 
+## 快速理解
+
+Desktop 是 Zeta 的 Electron 产品界面和平台宿主：它负责窗口、交互和系统能力，只投影后端状态，
+不复制 Agent、权限或持久化规则。
+
+| 用户或开发者需求 | Desktop 负责 | 必须交给后端 |
+| --- | --- | --- |
+| 显示对话、工具和批准状态 | Renderer 组件、交互状态和可访问性 | Session、Thread、Turn 的权威状态 |
+| 启动桌面应用 | Electron Main、Preload、窗口和 App Server 监督 | Agent 生命周期与恢复 |
+| 调用本地产品能力 | 通过类型化 Preload API 和 App Server 客户端 | 领域校验、授权和持久化 |
+| 使用浏览器、终端或系统 UI | 平台桥接、用户可见控制和能力请求 | 是否允许执行的最终决定 |
+| 增加新产品功能 | 界面拥有呈现，App Server 提供类型化能力 | 禁止在 Renderer 中补一套业务状态机 |
+| 断线或后端重启 | 显示连接状态并重新取得快照 | 不根据旧 UI 状态猜测服务端事实 |
+
 ## 1. 目标
 
 Desktop 是 Zeta 的 Electron 富客户端，负责窗口、浏览器、系统能力和 UI，不拥有
@@ -166,7 +180,7 @@ package root，在发布态选择 Electron `resourcesPath`，两者都只启动
 `PATH`，缺失或 digest 不匹配会在 package preparation 阶段失败，而不是推迟到 App Server
 initialize gate。
 
-## 4. Main Process
+## 4. 主进程
 
 Main 必须：
 
@@ -263,7 +277,7 @@ contribution 不得通过该服务直接访问文件系统。单根 Folder 启�
   `backupPath`，无备份的空窗口只能使用 last-active fallback；
 - 启动目标无效时记录错误并安全回退到空窗口。
 
-## 5. Sandbox Bridge 与 Renderer API
+## 5. 沙箱桥接与 Renderer API
 
 Electron sandbox 边界分为两层。`ISandboxGlobals` 是 preload 唯一暴露到主世界的底层桥接：
 它只包含只读进程元数据，以及受 `zeta:` 频道前缀约束的 `invoke` / `on`。preload 必须保持
@@ -465,7 +479,7 @@ thread 的可释放订阅、已提交 transcript 与临时 stream projection。�
 由于 session 列表当前没有最近活动时间，启动时只能按服务端顺序选择首个活动 thread；
 Browser 入口没有 App Server 连接时会明确显示不可用状态。
 
-### 6.6 Integrated Terminal
+### 6.6 集成终端
 
 Terminal contribution 只依赖 Workbench service layer 的 `ITerminalService`。实例管理、输入
 batching、resize coalescing 和 polling 由 `TerminalService` 负责；process contract 位于
@@ -503,7 +517,7 @@ unavailable。PTY
 Relaunch，新 PTY 使用原 Profile，但不会重放未确认输入或冒充旧进程。当前尚无 shell
 integration、跨进程 reconnection attach 或跨应用重启的持久 scrollback。
 
-## 7. Browser Capability
+## 7. 浏览器能力
 
 Electron Main 是 Browser Target 的唯一权威持有者。
 
@@ -554,7 +568,7 @@ popup 请求只以 `openRequested` 事件返回已验证 URL，不会由远程�
 - Browser Target 目前只绑定单个 Desktop 窗口，尚未绑定 App Server connection 或 Tool Call；
 - 尚未向 Rust 暴露 browser capability，也没有开放 CDP。
 
-### 7.2 Proposed：App Server 与 Agent 浏览器能力
+### 7.2 计划：App Server 与 Agent 浏览器能力
 
 Desktop 后续对 Rust 暴露语义动作时，计划使用：
 

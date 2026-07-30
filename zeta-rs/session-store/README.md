@@ -8,7 +8,7 @@
 `SessionEvent` 和 exact typed `SessionCommandReceipt`，但不实现文件格式、reducer、runtime
 mailbox、Thread transcript 或 RPC。
 
-## 边界与 public contract
+## 边界与公共契约
 
 | Symbol | 职责 | 关键约束 |
 | --- | --- | --- |

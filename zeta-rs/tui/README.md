@@ -89,7 +89,7 @@ just tui
 cargo run --manifest-path zeta-rs/Cargo.toml -p zeta-cli
 ```
 
-## Public contract
+## 公共契约
 
 | Symbol | 职责 |
 | --- | --- |
@@ -306,7 +306,7 @@ catalog/file watcher 变化通过 `skills/changed` 触发同一刷新路径。TU
 也没有正文 activation/context injection action。没有对应 typed contract 的产品命令不进入
 registry，不显示占位提示，也不转成普通 prompt 冒充成功。
 
-## Snapshot → UI mapping
+## 快照→ UI 映射
 
 `apply_active_turn_snapshot` 只观察当前 `active_turn`：
 
@@ -332,7 +332,7 @@ Session/Thread scope，并在 durable sequence 新于最后确认 snapshot 时�
 重复、旧 scope update 不覆盖当前 state。当前 transient delta 不进入本地 reducer；snapshot
 read 只由新 durable update 或显式 interrupt/resync 触发。
 
-## Keyboard state machine
+## 键盘状态机
 
 ```text
 Ready / Error
@@ -357,7 +357,7 @@ Cancelling
 `AppEvent::InterruptFailed` 把状态恢复到 Working，使用户可以再次请求 interrupt；ordinary
 client failure 通过 `AppEvent::FailureReported` 进入 Error 并允许输入新 prompt。
 
-## Terminal lifecycle
+## 终端生命周期
 
 `TerminalSession::open` 按以下顺序获取资源：
 
@@ -386,7 +386,7 @@ cleanup 是幂等的；显式 restore 后 guard Drop 不会重复发出控制操
 Drop 路径的刻意选择，避免 panic during unwind。新增 terminal capability 时必须同时更新
 acquisition flag、reverse cleanup 和 `session_tests.rs` 的 partial-failure case。
 
-## Rendering
+## 渲染
 
 当前 layout 在 composer 模式是固定四段：
 
@@ -439,12 +439,12 @@ cargo test -p zeta-tui
 bazel test //zeta-rs/tui:tui-unit-tests
 ```
 
-Tests 当前覆盖后台路径 handle 的增量 query、Git ignore、稳定排序、高亮索引与旧结果过滤，
+测试当前覆盖后台路径句柄的增量查询、Git 忽略规则、稳定排序、高亮索引与旧结果过滤，
 以及局部键到全局键的 routing、trimmed/blank submit、slash registry validation、
 cursor filtering、range completion、bare/inline submission、dynamic metadata、原子 command token、
 structured text/image/paste arguments、popup render/mouse hit testing 与 local quit dispatch、Unicode
 Thread notification decode、active scope/sequence resync 判定、
-cursor/editing、paste at cursor、large-paste placeholder expansion/binding/deletion、quit/interrupt
+并覆盖游标/编辑、在游标处粘贴、大段粘贴占位符展开/绑定/删除、退出/中断、
 keyboard semantics、duplicate interrupt suppression、图片路径识别/占位符删除重编号/结构化提交、input lock、
 canonical Thread snapshot 替换 optimistic transcript、snapshot identity/sequence 保留、
 非 message item 过滤、response lifecycle/error/interrupted transitions、interaction view 的

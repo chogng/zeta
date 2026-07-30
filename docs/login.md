@@ -7,6 +7,19 @@
 > Provider runtime：[`model-provider.md`](model-provider.md)
 > Secret persistence：[`secrets.md`](secrets.md)
 
+## 快速理解
+
+登录系统是面向用户的账户控制面，不是通用 OAuth 实现。当前文档定义计划边界，首个目标是把
+ChatGPT/Codex 订阅登录委托给上游 Codex App Server。
+
+| 用户动作或凭据类型 | 由谁处理 | Zeta 登录系统能看到什么 |
+| --- | --- | --- |
+| ChatGPT/Codex 浏览器或设备码登录 | 上游 Codex App Server | 授权地址、一次性用户码和脱敏账户状态 |
+| 登出、取消或切换账户 | 登录控制面协调，供应商适配器执行 | 稳定状态和脱敏结果 |
+| OpenAI、Anthropic 等 API key | 对应模型凭据领域 | 不属于交互式登录 |
+| AWS 凭据链、Google ADC、Azure 托管身份 | 对应供应商运行时 | 不包装成通用 OAuth |
+| access token、refresh token、cookie | 精确供应商适配器或上游服务 | 不进入 Zeta RPC、日志或遥测 |
+
 ## 1. 结论
 
 `zeta-login` 是用户可见的身份登录控制面。它统一表达开始、取消、完成、登出、账户切换和
@@ -67,7 +80,7 @@ telemetry。
 上游 App Server 的 transport authentication（例如本地 WebSocket capability token）与 ChatGPT
 subscription credential 是两种完全不同的 secret，二者不能复用。
 
-## 4. 最小 public boundary
+## 4. 最小公共边界
 
 以下仅表达目标形态。公共 trait 必须保持小，并由 `zeta-login` 作为消费者拥有：
 

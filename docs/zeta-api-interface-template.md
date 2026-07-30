@@ -4,7 +4,7 @@
 > [Zeta API 接口文档规范](zeta-api-interface-requirements.md)。
 > 删除所有占位说明后再提交评审。
 
-## Metadata
+## 元数据
 
 ```yaml
 title: <Capability / Domain> API
@@ -19,25 +19,25 @@ consumers:
 lastUpdated: YYYY-MM-DD
 ```
 
-## Scope
+## 范围
 
-### In scope
+### 范围内
 
 - `<本接口解决的问题>`
 
-### Out of scope
+### 范围外
 
 - `<明确不处理的能力>`
 
-### State owner
+### 状态所有者
 
 `<说明权威状态属于 Desktop、zeta-rs、connection、thread、turn 或 capability handle。>`
 
-### Compatibility policy
+### 兼容策略
 
 `<开发期说明 breaking change 如何同步更新所有调用方；发布后再说明兼容范围和升级方式。>`
 
-## Method inventory
+## 方法清单
 
 | Method | Direction | Consumers | Side effect | Idempotent | Capability | Summary |
 |---|---|---|---:|---:|---|---|
@@ -45,53 +45,53 @@ lastUpdated: YYYY-MM-DD
 
 ## `<domain/method>`
 
-### Semantics
+### 语义
 
 `<准确描述成功语义，以及它不保证什么。>`
 
-### Preconditions
+### 前置条件
 
 - `<连接、资源、状态或权限前置条件>`
 
-### Params
+### 参数
 
 | Field | Type | Required | Nullable | Constraints | Meaning |
 |---|---|---:|---:|---|---|
 | `<field>` | `<type>` | `<yes/no>` | `<yes/no>` | `<范围/格式>` | `<含义>` |
 
-### Result
+### 结果
 
 | Field | Type | Required | Nullable | Constraints | Meaning |
 |---|---|---:|---:|---|---|
 | `<field>` | `<type>` | `<yes/no>` | `<yes/no>` | `<范围/格式>` | `<含义>` |
 
-### Errors
+### 错误
 
 | Error | Retryable | Client action | Data |
 |---|---:|---|---|
 | `<StableErrorName>` | `<yes/no>` | `<处理方式>` | `<稳定字段>` |
 
-### Routing and ownership
+### 路由与所有权
 
 `<说明 connection、thread、turn、capability、resource 或 browser target 的 owner 和路由。>`
 
-### Idempotency
+### 幂等性
 
 `<副作用请求必须定义 commandId、typed command receipt、expectedSequence、冲突和重启重放语义。>`
 
-### Deadline and cancellation
+### 截止时间与取消
 
 `<定义 deadline 单位、主动取消、断连、Turn 终止和迟到响应处理。>`
 
-### Ordering
+### 顺序
 
 `<定义 durable sequence、stream sequence、response/notification 因果顺序和 resync。>`
 
-### Security
+### 安全性
 
 `<定义验证、allowlist、审批、action digest、脱敏、host policy 和审计。>`
 
-### Request fixture
+### 请求样例
 
 ```json
 {
@@ -102,7 +102,7 @@ lastUpdated: YYYY-MM-DD
 }
 ```
 
-### Success fixture
+### 成功样例
 
 ```json
 {
@@ -112,7 +112,7 @@ lastUpdated: YYYY-MM-DD
 }
 ```
 
-### Error fixtures
+### 错误样例
 
 ```json
 {
@@ -126,11 +126,11 @@ lastUpdated: YYYY-MM-DD
 }
 ```
 
-## Notifications
+## 通知
 
 `<逐项定义通知字段、顺序、丢弃/合并策略。没有通知时写 None。>`
 
-## Lifecycle and state machine
+## 生命周期与状态机
 
 ```text
 <Initial> → <Running> → <Terminal>
@@ -138,11 +138,11 @@ lastUpdated: YYYY-MM-DD
 
 `<说明失败、取消、断连和进程重启后的状态。>`
 
-## Resource lifecycle
+## 资源生命周期
 
 `<如涉及大对象，定义 ResourceRef、digest、TTL、quota、chunk 和 release；否则写 None。>`
 
-## Compatibility
+## 兼容性
 
 - Synchronized callers: `<Rust/Desktop/CLI/TUI 需同一变更迁移的入口>`
 - Existing development data: `<是否必须清空>`
@@ -151,7 +151,7 @@ lastUpdated: YYYY-MM-DD
 - Schema regeneration: `<fixtures/hash/generated TypeScript>`
 - Transport parity: `<in-process/stdio/socket/websocket 的一致性或 capability 限制>`
 
-## Acceptance tests
+## 验收测试
 
 - [ ] Success fixture parses and round-trips.
 - [ ] Every stable error has a fixture.

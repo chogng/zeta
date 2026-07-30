@@ -86,7 +86,7 @@ Menu 系统解决的是 **action 的跨模块发现、条件投影、排序和�
 导出的 canonical 实例；跨模块按字符串取得同一槽位时使用 `MenuId.for(identifier)`。
 不要在多个模块里重复 `new MenuId("same.id")`：构造器会拒绝重复 ID。
 
-## 注册一个 Action
+## 注册操作（Action）
 
 内建、静态加载的功能优先使用 `Action2`。一个声明可以原子地注册 Command、一个或多个
 Menu placement、快捷键和 Command Palette 入口：
@@ -126,7 +126,7 @@ registerAction2(class TogglePanelAction extends Action2 {
 释放 `registerAction2()` 返回的 `IDisposable`。如果任一步注册失败，
 `registerAction2()` 会释放此前已完成的注册，不留下半注册状态。
 
-### 动态添加一个 placement
+### 动态添加位置
 
 Command 已经存在，只需要动态改变 UI 位置时，可以直接使用 `MenusRegistry`：
 
@@ -147,7 +147,7 @@ registration.dispose();
 
 这段代码只注册 placement；`editor.action.preview` 仍必须由 Command 系统注册执行入口。
 
-### 声明一个 Submenu
+### 声明子菜单（Submenu）
 
 Submenu 自己也是一个 `MenuId`，父菜单只贡献一个指向它的入口：
 
@@ -212,7 +212,7 @@ Toolbar/Button 等呈现层负责，详见
 因此 `group` 既参与稳定排序，也会影响菜单型 Toolbar 的 primary/secondary 布局。不要仅为
 得到某种 CSS 外观随意使用 `navigation`；它表达的是主要、直接可达的 action。
 
-## Host 如何消费 MenuId
+## 宿主如何消费 MenuId
 
 Host 只选择槽位，不收集功能模块：
 
@@ -364,7 +364,7 @@ Titlebar、Editor title、Chat title 与 Terminal title 当前都使用
 8. `WorkbenchToolBar` 只接收调用方 actions；MenuId 监听与刷新只能由
    `MenuWorkbenchToolBar` 拥有。
 
-## Review Checklist
+## 审查清单
 
 - 这是一个可执行行为，还是一个 UI 位置？
 - Command 是否只注册一次，并由所有 UI 入口复用？

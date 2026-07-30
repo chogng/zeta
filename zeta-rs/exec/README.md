@@ -8,7 +8,7 @@
 都已固定后启动一个显式进程。它不解析 shell，不决定 Core policy，也不把普通 non-zero exit
 自动分类为 sandbox denial。
 
-## Public contract
+## 公共契约
 
 | Symbol | 职责 |
 | --- | --- |
@@ -38,7 +38,7 @@ cancellation checkpoint
 `Sandboxed` authority 若无法建立 backend boundary，必须失败关闭；调用方不能静默改成
 `Unrestricted`。
 
-## 取消、timeout 与 output
+## 取消、timeout 与输出
 
 spawn 前观察到 cancellation 返回 `CancelledBeforeStart`。spawn 后 cancellation 或 timeout 会
 先 kill/wait child，再 join capture threads；前者返回 `CancelledAfterStart`，后者返回

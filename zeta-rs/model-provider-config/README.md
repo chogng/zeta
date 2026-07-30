@@ -7,7 +7,7 @@
 本 crate 拥有 serializable、runtime-free 的 provider configuration。它不持有 API client、
 credential、secret、connection pool 或 process-local adapter。
 
-## Public model
+## 公共模型
 
 | Symbol | 职责 | 关键语义 |
 | --- | --- | --- |
@@ -52,7 +52,7 @@ src/
 | `providers::builtin` | crate-private function | 13 个 built-in definitions | 每个 provider 在 sibling module 独立定义 |
 | `default_provider` / `configured_provider` | private helpers | shared definition constructors | 不隐藏 provider-specific profile/default differences |
 
-## Normalization 调用图
+## 规范化调用图
 
 ```text
 ProviderConfigRegistry::normalize(config)
@@ -78,7 +78,7 @@ ProviderConfigRegistry::merge(incoming, policy)
 
 Merge 必须 preflight 后一次 extend；在循环中边验证边插入会造成 error 后 registry 部分变化。
 
-## Built-in provider definition
+## 内置供应商定义
 
 每个 `providers/<name>.rs::definition()` 返回一个完整 `ProviderDefinition`。例如 OpenAI 选择
 `OpenAiResponses` 与 provider default URL；Anthropic 选择 `AnthropicMessages` 并声明默认 max

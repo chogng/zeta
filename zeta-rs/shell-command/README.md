@@ -18,7 +18,7 @@ materialization。安装布局与候选位置由 [`zeta-install-context`](../ins
 | `src/shell_command_tests.rs` | binding、authority、sandbox denial 与 validation |
 | `src/ripgrep_tests.rs` | executable discovery 和 unsafe flag rejection |
 
-## Public contract 与调用路径
+## 公共契约与调用路径
 
 ```text
 ShellCommandTool::new
@@ -43,7 +43,7 @@ App Server local adapter
 globbing、environment expansion 或 shell parsing。`ShellCommandTool::execute_authorized` 只供已经
 完成 host materialization 和 Core policy decision 的 adapter 使用。
 
-## 只读 `rg` profile
+## 只读 `rg` 配置档案
 
 App Server 先从 `InstallContext` 获取以下候选：
 
@@ -71,7 +71,7 @@ identity freeze 和 fail-closed 语义。Linux package 同时携带经过 source
 `zeta-resources/bwrap`；它的 discovery/probe contract 由
 [`zeta-linux-sandbox`](../linux-sandbox/README.md) 拥有。
 
-## Failure、取消与输出
+## 失败、取消与输出
 
 - JSON shape、空 program、binding 或 environment 不匹配：子进程启动前失败；
 - Core 选择的 sandbox backend 无法建立边界：返回 structured `SandboxDenied`；

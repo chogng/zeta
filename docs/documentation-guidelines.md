@@ -3,6 +3,17 @@
 > 状态：Current repository convention。
 > 适用范围：crate README、`docs/*.md` 架构/设计文档及两者之间的引用关系。
 
+本文是整个仓库文档系统的全局规范，不是权限、沙箱或少数示例文档的局部写法。所有现有文档、
+新增文档和文档站页面都必须遵守；发现不一致时，将其视为需要修正的文档缺陷，不能把旧页面
+当作例外或先例。
+
+| 规范层 | 作用范围 | 统一入口 |
+| --- | --- | --- |
+| 信息结构与语言 | 全部 `docs/*.md` 和 crate README | 本文 |
+| 页面布局、字体、列表、表格和颜色 | 文档站全部页面 | 文档站全局样式 |
+| 标题展示、导航、目录和源码入口 | 文档站全部页面 | 统一页面组件 |
+| 最低机械约束 | 文档站收录的全部 Markdown | `npm run check:docs` |
+
 ## 1. 目标
 
 同一个主题通常有两类读者：
@@ -105,6 +116,104 @@ README 还应给出一张文本或 Mermaid 调用图，把 public entry point �
 系统文档可以引用准确类型名来固定 contract，但不应复制 private function、文件树或所有错误
 variant。实现细节链接到 crate README。
 
+### 4.1 先回答用户会遇到什么
+
+解释权限、模式、Tool、配置、交互或其他用户可见系统时，优先使用以下顺序：
+
+1. 用一句话说明系统如何解决问题；
+2. 紧接一张行为表，让读者直接比较常见场景；
+3. 再解释内部类型、执行流程、ownership 和例外。
+
+系统地图直接指向的权威子文档统一先提供“快速理解”章节。该章节紧跟文档所有权和状态说明，
+包含一段不依赖内部名词的摘要，以及一张回答常见问题、场景或行为的表格。后续章节才进入
+crate、类型、协议字段和计划阶段。文档检查会验证这些权威子文档没有丢失阅读入口。
+
+第一张表的列名应直接回答用户问题，例如：
+
+| 对象 | 典型示例 | 什么时候发生 | 用户需要做什么 | 决定有效多久 |
+| --- | --- | --- | --- | --- |
+| 某类动作或模式 | 用户能识别的真实操作 | 默认行为和关键条件 | 无需操作、确认、修改或停止 | 单次、会话、项目或永久 |
+
+具体主题可以删减列，但不能用 `ExecutionDecision`、内部 enum 或 crate 名称作为第一层解释。内部
+mapping 另设“系统内部如何表达”表格。表格之后只补充无法放进单元格的重要例外，避免先写多段
+抽象概念再让读者自行归纳行为。
+
+### 4.2 列表、表格与段落
+
+内容结构必须反映信息之间的真实关系，不能只靠换行制造视觉分组：
+
+- 三项及以上并列的概念、职责、规则、限制或选项使用项目符号列表；
+- 每一项需要“名称 + 解释”时，优先使用“**名称**：解释”的列表项；
+- 有先后顺序、执行步骤或优先级时使用编号列表；
+- 多个对象需要沿相同维度比较时使用表格；
+- 因果关系、设计理由、条件和例外使用连续段落；
+- ownership、状态迁移或跨组件流向难以线性表达时才使用图；
+- 调用路径包含分支、汇合或平台分派时使用 Mermaid 流程图，不用带箭头的代码块模拟流程。
+
+不要把并列概念写成用分号隔开的长段落，也不要用连续 `<br>` 或 Markdown 行尾空格伪造列表。
+如果每一行都能独立回答“它是什么、负责什么或有什么限制”，通常就应该是一个真正的列表项。
+
+### 4.3 中英文术语与代码标识符
+
+中文文档的叙述主体使用中文。英文只用于专有名称、行业通用缩写、无法替代的命令和精确代码
+标识符，不能把英文名词直接嵌进中文语法来代替已经明确的中文概念。
+
+| 内容类型 | 写法 | 示例 |
+| --- | --- | --- |
+| 用户可见概念 | 使用中文 | 权限、批准、拒绝、工作区、网络访问 |
+| 技术概念首次出现 | 中文名称（英文名称） | 执行授权（execution authority） |
+| 同一技术概念后续出现 | 只使用中文 | 执行授权 |
+| 代码类型、函数、枚举值 | 中文解释 + 反引号内的真实标识符 | 策略引擎 `PolicyEngine`、只读模式 `ReadOnly` |
+| crate、命令、文件和配置键 | 保留真实名称并使用反引号 | `zeta-policy`、`cargo test`、`policy_revision` |
+| 平台、协议和产品专名 | 保留正式英文名称 | macOS、Linux、Windows、Bubblewrap、Rust、MCP |
+| 行业通用缩写 | 保留大写缩写，必要时首次解释 | API、HTTP、JSON、UI、CLI |
+
+不要机械地为每个英文词补中文括号，也不要在每次出现时重复英文。括号的作用是第一次建立术语
+映射；映射建立后，正文应恢复连续的中文叙述。只有讨论 wire field、public API、枚举分支或源码
+关系时，才再次使用精确标识符。
+
+以下写法不符合规范：
+
+```text
+grant 绑定 action digest、capabilities 和 policy revision。
+```
+
+推荐写成：
+
+```text
+授权凭证绑定动作摘要（action digest）、完整能力集合（capability set）和策略版本
+（policy revision）。后文只写“动作摘要、能力集合和策略版本”。
+```
+
+用户行为表的标题和单元格优先使用中文。内部实现映射表可以出现 `RunSandboxed`、
+`ApproveOnce`、`PolicyEngine` 等标识符，但必须同时解释其用户或系统含义。
+
+#### 核心术语表
+
+| 推荐中文 | 首次出现时的写法 | 相关代码标识符 |
+| --- | --- | --- |
+| 动作 | 动作（action） | `ResolvedAction` |
+| 动作摘要 | 动作摘要（action digest） | `ActionDigest` |
+| 来源 | 来源（provenance） | `ActionProvenance` |
+| 能力 | 能力（capability） | `Capability`、`CapabilityKind` |
+| 能力集合 | 能力集合（capability set） | `CapabilitySet` |
+| 作用范围 | 作用范围（scope） | capability scope |
+| 策略版本 | 策略版本（policy revision） | `PolicyRevision` |
+| 确定性策略 | 确定性策略（deterministic policy） | `BuiltInSafetyPolicy`、`PolicyEngine` |
+| 执行授权 | 执行授权（execution authority） | `ExecutionDecision`、`AutoReviewGrant` |
+| 一次性批准 | 一次性批准 | `ApproveOnce` |
+| 风险审查器 | 风险审查器（reviewer） | `ActionClassifier` |
+| 审查结论 | 审查结论（assessment） | `ClassifierAssessment` |
+| 证据 | 证据（evidence） | `ReviewEvidence` |
+| 信任边界 | 信任边界（trust boundary） | `ReviewEvidenceTrust` |
+| 持久化记录 | 持久化记录（durable record） | `ThreadEvent` |
+| 安全重试 | 可安全重试（safe to retry） | `SafeToRetry` |
+| 未知结果 | 未知执行结果（unknown outcome） | started without terminal result |
+| 失败即关闭 | 失败即关闭（fail closed） | `Block` 或 `AskUser` |
+
+术语表固定的是文档语言，不取代代码 API。代码重命名时同步更新“相关代码标识符”列；中文概念
+只有在产品语义变化时才调整。
+
 ## 5. 状态必须显式
 
 未来设计不能伪装成当前实现。使用下列状态语言：
@@ -175,15 +284,16 @@ variant。实现细节链接到 crate README。
 > canonical ownership、状态与 README 链接
 
 1. 决策摘要
-2. 问题与 non-goal
-3. Ownership
-4. End-to-end model
-5. 用户/调用方语义
-6. 关键安全与可靠性边界
-7. Current status
-8. Evaluation / rollout
-9. 近期与潜在演进
-10. 长期不变量
+2. 用户行为摘要表
+3. 问题与 non-goal
+4. Ownership
+5. End-to-end model
+6. 用户/调用方语义
+7. 关键安全与可靠性边界
+8. Current status
+9. Evaluation / rollout
+10. 近期与潜在演进
+11. 长期不变量
 ```
 
 模板不是要求机械填满标题。小 crate 可以合并章节，但必须保留对维护真正有用的信息。
@@ -191,6 +301,8 @@ variant。实现细节链接到 crate README。
 ## 8. 图表与代码示例
 
 - 只有关系、状态或顺序难以用短段落表达时才使用图；
+- 有分支或汇合的执行路径使用 `flowchart`，强调时间和参与者交互时使用 `sequenceDiagram`；
+- 静态目录、包含关系或单纯依赖集合可以使用短文本树；一旦读者需要沿箭头追踪执行，就改用流程图；
 - system diagram 表达 ownership/control flow，不罗列 private helper；
 - README 的 sequence 可以精确到 public method 和 validation checkpoint；
 - 示例必须与当前 API 一致，无法编译的伪代码应明确标注；
@@ -217,16 +329,22 @@ variant。实现细节链接到 crate README。
 
 同一变更影响两层时，两层都更新，但分别描述各自拥有的信息，不复制同一实现段落。
 
-## 10. Review checklist
+## 10. 审查清单
 
 提交文档前确认：
 
+- [ ] 这些规则应用到了同类文档，而不是只修正当前页面；
 - [ ] 开头说明了文档所有权、读者和关联文档；
 - [ ] 当前事实能在代码、schema 或测试中验证；
 - [ ] crate README 包含实现者真正需要的细节；
 - [ ] README 写出了关键 private symbol 的真实名称、职责和调用关系；
 - [ ] README 指出了能够暴露 ownership/方向漂移的内部变化；
 - [ ] system doc 解释了 why、ownership、tradeoff 和 evolution；
+- [ ] 用户可见系统先用一句话和行为表说明常见场景，再进入内部类型与流程；
+- [ ] 并列概念使用列表，同维度比较使用表格，因果和例外使用段落；
+- [ ] 中文正文没有用裸英文名词代替已经定义的中文概念；
+- [ ] 技术概念首次建立中英文映射，后续优先使用中文；
+- [ ] 代码标识符、命令、crate 和配置键使用反引号并保留真实拼写；
 - [ ] Current、Proposed、Potential 没有混写；
 - [ ] 没有复制另一层已经 canonical 的大段内容；
 - [ ] failure、security、privacy、durability 边界没有只写 happy path；

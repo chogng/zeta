@@ -1,8 +1,21 @@
-# `zeta-core` Context 与 ContextManager
+# `zeta-core` 上下文与 ContextManager
 
 > Core 总体边界：[`core.md`](core.md)
 > Canonical Thread/Turn/Item contract：[`protocol.md`](protocol.md)
 > 多 Agent context inheritance：[`core-multi-agent.md`](core-multi-agent.md)
+
+## 快速理解
+
+上下文系统决定某一次模型调用能看到哪些信息；它从可持久化历史生成模型输入，但不能成为第二份
+对话历史。
+
+| 读者首先会问 | 直接答案 | 深入阅读 |
+| --- | --- | --- |
+| Thread 历史就是模型上下文吗？ | 不是；历史是权威事实，上下文是按预算选择出的派生窗口 | [权威与派生关系](#3-权威与派生关系) |
+| 多个 Thread 会共享上下文吗？ | 不会；每个 Thread 有独立的 `ContextManager`、窗口和压缩检查点 | [为什么不放进 Session](#2-为什么不放进-session) |
+| 一次模型调用使用什么？ | 使用不可变的 `ContextPlan`，再由 `ContextAssembler` 组装请求 | [数据模型](#4-数据模型) |
+| 超出模型预算怎么办？ | 先按规则选择和裁剪；需要压缩时产生可恢复检查点 | [上下文预算](#7-上下文预算)、[压缩](#8-压缩) |
+| 模型或配置变化会污染旧窗口吗？ | 不会静默复用；相关 revision 变化会使派生状态失效并重建 | [供应商变更](#9-上下文窗口与供应商变更) |
 
 ## 1. 结论
 
@@ -45,7 +58,7 @@ lifecycle。若 Session 持有 context，会产生无法接受的问题：
 其他代码库中名为 `Session` 的对象可能实际代表一条 conversation/thread 的加载实例。Zeta 必须
 按领域语义映射，不能按目录或类型名照搬。
 
-## 3. Authority 与派生关系
+## 3. 权威与派生关系
 
 ```text
 Session event stream
@@ -128,7 +141,7 @@ ContextPlan 必须可诊断：
 
 它不要求成为公共 wire model。测试和诊断可以使用 Core-private readable view。
 
-### 4.3 ContextManager state
+### 4.3 ContextManager 状态
 
 ```rust
 struct ContextManager {
@@ -222,7 +235,7 @@ provider-neutral user `Message`，分别映射为 `ContentPart::Text` 与
 该顺序表示 precedence，不要求每个 provider 使用相同 wire role 或数组布局。Provider adapter
 只能做 wire 映射，不能改变 Core 已解析的 precedence。
 
-### 6.2 Instruction precedence
+### 6.2 指令优先级
 
 每段 instruction 必须带：
 
@@ -236,7 +249,7 @@ provider-neutral user `Message`，分别映射为 `ContentPart::Text` 与
 低优先级内容不能覆盖高优先级约束。Agent delegation 可以收紧 policy 或增加任务说明，但不能
 放宽 system/session policy ceiling。
 
-### 6.3 Structural invariants
+### 6.3 结构不变量
 
 任何 ContextPlan 必须满足：
 
@@ -249,9 +262,9 @@ provider-neutral user `Message`，分别映射为 `ContentPart::Text` 与
 - provider 不支持的内容只能按显式降级策略转换或报错；
 - reasoning/plan 是否回灌必须由 canonical contract 明确允许。
 
-## 7. Context budget
+## 7. 上下文预算
 
-### 7.1 Budget input
+### 7.1 预算输入
 
 预算至少包含：
 
@@ -268,7 +281,7 @@ provider-neutral user `Message`，分别映射为 `ContentPart::Text` 与
 不得使用一个含义不明的 `max_tokens: Option<u32>` 同时表达 context window、output limit 和缺省。
 这些值使用独立 newtype/enum。
 
-### 7.2 Budget order
+### 7.2 预算顺序
 
 推荐顺序：
 
@@ -288,7 +301,7 @@ model context window
 - checkpoint + uncovered tail；
 - attachment/artifact reference group。
 
-### 7.3 Overflow outcome
+### 7.3 Overflow 结果
 
 预算不足必须产生明确 outcome：
 
@@ -300,9 +313,9 @@ model context window
 
 不能静默删除当前输入、权限约束或未完成 Tool/Agent continuation。
 
-## 8. Compaction
+## 8. 压缩
 
-### 8.1 Durable checkpoint
+### 8.1 持久化检查点
 
 Checkpoint 至少记录：
 
@@ -319,7 +332,7 @@ Checkpoint 至少记录：
 
 原始 event log 永不因 compaction 删除。
 
-### 8.2 Compaction flow
+### 8.2 压缩流程
 
 ```text
 ContextManager detects pressure
@@ -335,7 +348,7 @@ ContextManager detects pressure
 Summary model I/O 不持有 Thread writer。只有 checkpoint durable commit 后，后续 invocation 才能
 依赖它。
 
-### 8.3 Recovery and invalidation
+### 8.3 恢复与失效
 
 以下情况拒绝 checkpoint 并退回原始 history：
 
@@ -348,7 +361,7 @@ Summary model I/O 不持有 Thread writer。只有 checkpoint durable commit 后
 
 Provider/model 切换不自动使 checkpoint 失效，但必须重新按新 model limits 和 capabilities 规划。
 
-## 9. Context window 与 provider change
+## 9. 上下文窗口与供应商变更
 
 Context window 是模型可见历史的派生窗口，不是新的 history aggregate。
 

@@ -7,6 +7,19 @@
 > Provider runtime：[`model-provider.md`](model-provider.md)
 > 上游依据：[Codex App Server](https://learn.chatgpt.com/docs/app-server)
 
+## 快速理解
+
+Codex App Server 适配器是计划中的本机桥接层：它让 Zeta 使用用户的 ChatGPT/Codex 订阅，
+同时把登录凭据和私有后端兼容性继续留给上游 Codex 管理。
+
+| 场景 | 正确路径 | 明确禁止 |
+| --- | --- | --- |
+| 使用 OpenAI Platform API key | 模型运行时 → API 协议 → 操作客户端 → HTTP 传输 | 转换成 Codex 订阅凭据 |
+| 使用 ChatGPT/Codex 订阅 | 模型运行时 → 本适配器 → 本地 `codex app-server` | 直连私有 ChatGPT 后端 |
+| 用户登录 | Zeta 登录控制面委托上游浏览器或设备码流程 | 读取或复制上游 token |
+| 上游版本不兼容 | 返回明确的版本或能力错误 | 猜测未声明方法仍然可用 |
+| 上游进程崩溃 | 将进行中的操作标记为未知结果 | 盲目重放模型或工具动作 |
+
 ## 1. 结论
 
 `zeta-codex-app-server` 是对**外部上游 `codex app-server`** 的本机 adapter。它与
@@ -90,7 +103,7 @@ login
 composition root 同时将一个 adapter instance 注入 `zeta-login` 和 model-provider runtime；它们共享
 的是受控 runtime，不共享 token 或 provider-global mutable state。
 
-## 6. Versioning and security gates
+## 6. 版本与安全门控
 
 - 固定并检测支持的 Codex CLI/App Server version range；生成的 upstream schema 是版本特定的。
 - account/login 等 upstream method/field 可能受 `experimentalApi` capability gate 约束；adapter

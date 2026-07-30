@@ -129,7 +129,7 @@ pub struct ClientOperationResponse {
 普通 OAuth exchange、catalog discovery、Plugin/MCP request 等不需要 operation retry/framing 的
 调用方可以直接使用 `zeta-http-client`，不强制经过本 crate。
 
-## 4. Retry
+## 4. 重试
 
 ### 4.1 机制和策略分开
 
@@ -185,7 +185,7 @@ RFC 9110 指出，client 不应自动重试非幂等请求，除非它知道请�
 - 一次 auth recovery 不能嵌套出第二套无限 retry；
 - retry budget 同时受 max attempts 和 operation deadline 限制。
 
-### 4.2 Attempt classifier
+### 4.2 尝试分类器
 
 Classifier 可以使用：
 
@@ -200,7 +200,7 @@ Classifier 可以使用：
 Client 不解析 Provider error JSON。需要 body-aware classification 时，`zeta-api` 提供受限的
 classifier hook；hook 只能返回 retry decision 和低敏感 evidence，不把 raw body 写入 telemetry。
 
-### 4.3 Backoff
+### 4.3 退避
 
 - exponential backoff 必须 bounded；
 - jitter 必须可测试并可注入；
@@ -211,7 +211,7 @@ classifier hook；hook 只能返回 retry decision 和低敏感 evidence，不�
 
 ## 5. SSE 与 NDJSON
 
-### 5.1 SSE framing
+### 5.1 SSE 分帧
 
 `zeta-client::stream::sse` 消费 `zeta-http-client` 的 raw byte stream，并按 WHATWG event stream
 format 处理：
@@ -253,7 +253,7 @@ pub enum SseFrame {
 - 未知 event 是否可忽略；
 - 何时形成 canonical completed。
 
-### 5.2 NDJSON framing
+### 5.2 NDJSON 分帧
 
 NDJSON framer 只输出 bounded JSON record bytes，不解析 Ollama `done` 或 `error`：
 
@@ -266,7 +266,7 @@ pub struct NdjsonRecord {
 空行、尾部不完整 JSON、超限 record 和 invalid UTF-8 形成 client framing error；record 中字段的
 语义错误由 `zeta-api` 返回。
 
-### 5.3 Liveness
+### 5.3 活性
 
 `zeta-http-client` 维护 raw wire activity 和 transport idle timeout；`zeta-client` 维护：
 
@@ -277,7 +277,7 @@ pub struct NdjsonRecord {
 Client 不维护“模型是否有语义进展”。Anthropic `ping`、comment heartbeat 和长 reasoning 都可能
 维持连接但不产生 text。`last_semantic_progress` 由 API/runtime 在解码后维护。
 
-## 6. Operation deadline、取消与 backpressure
+## 6. 操作 deadline、取消与背压
 
 Deadline 分层：
 
@@ -299,7 +299,7 @@ retry timer。取消返回独立 `ClientError::Cancelled`，不会包装成 retr
 Raw stream 的 socket/buffer backpressure 属于 `zeta-http-client`；SSE/NDJSON framed channel 的
 backpressure 属于 `zeta-client`。Client 不能合并或丢弃它不理解的 Provider payload。
 
-## 7. Telemetry
+## 7. 遥测
 
 Telemetry 分为两层：
 
@@ -324,7 +324,7 @@ provider.kind = openai | anthropic | custom
 raw response body 或 stream payload 放进 operation log/label。底层完整规则以
 [`zeta-http-client` README](../zeta-rs/http-client/README.md#telemetry) 为准。
 
-## 8. Error
+## 8. 错误
 
 目标 operation error 只增加本层语义：
 
@@ -381,7 +381,7 @@ zeta-rs/zeta-client/
 Backend、proxy、TLS、redirect、raw HTTP types 和 pool implementation 都不出现在该目录；它们属于
 `zeta-http-client`。
 
-## 10. Public API
+## 10. 公共接口
 
 长期 public API 只导出：
 

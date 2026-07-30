@@ -1,4 +1,4 @@
-# App Server Client 架构与演进方案
+# App Server 客户端架构与演进方案
 
 > 物理位置：`zeta-rs/app-server-client/`  
 > 主要消费者：`zeta-exec` 非交互执行宿主、`zeta-tui`  
@@ -7,6 +7,20 @@
 > Headless 与远程调度：[`exec.md`](exec.md)
 > MCP Agent server consumer：[`mcp-server.md`](mcp-server.md)
 > 当前 crate contract：[`zeta-rs/app-server-client/README.md`](../zeta-rs/app-server-client/README.md)
+
+## 快速理解
+
+App Server 客户端把“启动后端、初始化连接、配对请求、转发事件和正确关闭”封装成一个可交付的
+就绪会话，使 CLI、TUI 和无交互宿主不必各自实现一遍。
+
+| 调用方动作 | 客户端保证 | 调用方仍负责 |
+| --- | --- | --- |
+| 启动本地 App Server | 只有进程和双向通道都建立后才开始初始化 | 提供启动配置和产品参数 |
+| 取得 ready client | 已完成能力、版本和模式校验 | 决定接下来调用哪个产品方法 |
+| 发出多个并发请求 | 按请求 ID 配对结果并结束等待者 | 处理领域结果和用户交互 |
+| 接收通知 | 独立转发服务端事件，不阻塞请求结果 | 更新自己的呈现状态 |
+| 关闭宿主 | 拒绝新请求、结束等待者并等待后台任务退出 | 决定产品级退出或重连策略 |
+| 将来连接远程 App Server | 复用同一公共 facade 和产品契约 | 远程调度和工作进程协议不属于本客户端 |
 
 ## 1. 结论
 
@@ -40,8 +54,8 @@ zeta-tui ──┘             │
 后续远程调度系统以它作为 headless execution entry。Job/Attempt/lease/event cursor 属于
 [`exec.md`](exec.md) 定义的 scheduler adapter，不进入 App Server Client。
 
-Current `zeta-cli` 的 interactive 与 headless prompt 路径已经使用 owned
-`AppServerSession`、cloneable request handle、独立 `AppServerEvents` 与显式 shutdown。
+当前 `zeta-cli` 的交互式和无界面提示词路径已经使用自有
+`AppServerSession`、可克隆请求句柄、独立 `AppServerEvents` 与显式关闭。
 `zeta-mcp-server` 为兼容其既有 per-session adapter，仍使用 legacy 同步 client 和 bounded
 polling/drain；该兼容入口不再是通用 consumer 的目标架构。
 
@@ -206,7 +220,7 @@ pub struct AppServerStartOptions {
 若 `zeta-exec` 与 TUI 的 capability 不同，可以分别构造 typed
 `RequiredCapabilities`，不能用 `start(..., true, false)` 表达。
 
-## 5. 请求通道与 result pairing
+## 5. 请求通道与结果配对
 
 `AppServerClient` 的 typed method 将请求送入后台 connection driver：
 
@@ -238,7 +252,7 @@ channel 不需要先序列化为 JSON string，但仍必须经过相同 initiali
 result/error envelope 和 notification contract。JSON/JSONL/WebSocket backend 在 transport
 边界执行 wire encoding。
 
-Public API 仍然是 typed method：
+公共接口仍然是类型化方法：
 
 ```rust
 let result = client.start_turn(TurnStartParams { /* ... */ })?;
@@ -272,7 +286,7 @@ App Server outbound ─────┤
                          └─ notification ──────► AppServerEvents
 ```
 
-Current public event contract 是：
+当前公共事件契约是：
 
 ```rust
 pub enum AppServerEvent {
@@ -370,7 +384,7 @@ source；client event pump 与 request driver 独立，因此空闲连接和长 
 - request completion receiver 被调用方取消；
 - shutdown 被重复触发。
 
-## 9. Consumer 使用方式
+## 9. 消费方使用方式
 
 ### 9.1 `zeta-exec`
 

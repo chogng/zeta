@@ -9,7 +9,7 @@
 event-loop bootstrap、window ownership 与 persistent display handle，但不拥有任何产品身份、
 App Server connection、UI tree 或渲染状态。
 
-## 1. Ownership
+## 1. 所有权
 
 | Symbol | 可见性 | 职责 | 不拥有 |
 | --- | --- | --- | --- |

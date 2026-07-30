@@ -8,7 +8,7 @@
 `ApplicationHandler`，组合 `zeta-winit`、`zeta-wgpu` 与 `zeta-ui`，并在单个原生窗口中绘制
 响应式 shell 骨架。
 
-## Ownership
+## 所有权
 
 | 能力 | 当前 owner | 状态 |
 | --- | --- | --- |

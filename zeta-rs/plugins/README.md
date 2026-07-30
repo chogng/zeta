@@ -8,7 +8,7 @@
 path 与本地文件树，计算确定性 SHA-256 digest，并提供只读 local-development catalog。它不安装、
 启用或执行 Plugin，不保存 grant/credential，也不解析 `SKILL.md` 或 MCP JSON-RPC。
 
-## Public contract
+## 公共契约
 
 | Symbol | 当前职责 | 不承担 |
 | --- | --- | --- |
@@ -24,7 +24,7 @@ path 与本地文件树，计算确定性 SHA-256 digest，并提供只读 local
 schema version、duplicate ID、credential reference 或 permission invariant 的反序列化入口。
 programmatic mutation 后必须再次调用 `PluginManifest::validate`。
 
-## Manifest v1 contract
+## 清单 v1 契约
 
 当前 schema 固定：
 
@@ -43,7 +43,7 @@ segment、Windows device name、非 ASCII 名称、超过 32 层或 1024 bytes �
 有意选择的 portability/security contract；扩大字符集前必须先固定 Unicode normalization 与
 case-collision 规则。
 
-## Package validation path
+## 包校验路径
 
 ```text
 LocalPluginPackage::load
@@ -76,7 +76,7 @@ Digest 与 source root 无关，对 normalized relative path 和每个 regular f
 直接 children。相同 `(PluginId, PluginVersion)` 出现两次会使整个 catalog 失败，不能按扫描顺序
 静默覆盖。
 
-## Internal ownership and drift signals
+## 内部所有权与漂移信号
 
 | Private symbol | Ownership | 修改时同步检查 |
 | --- | --- | --- |
@@ -97,7 +97,7 @@ Digest 与 source root 无关，对 normalized relative path 和每个 regular f
   config-local representation；进入 App Server contract 时应显式转换，或先将获准的共享纯
   identity 下沉到 `zeta-protocol`。
 
-## Failure semantics and integration obligations
+## 失败语义与集成义务
 
 `PluginErrorKind` 区分 source unavailable、unsafe package、invalid manifest、invalid
 contribution 与 exact-version conflict。任何失败都不返回 partial package/catalog，也不改变
@@ -107,7 +107,7 @@ filesystem。error message 只包含稳定 identity、relative path 与 sanitize
 仍可被外部修改。runtime consumer 不能把它当 immutable root；PL1 必须复制到 content-addressed
 store、重新验证并从 immutable object root 绑定 contribution。
 
-## Verification
+## 验证
 
 ```bash
 cargo test --manifest-path zeta-rs/Cargo.toml -p zeta-plugins
@@ -116,11 +116,10 @@ cargo clippy --manifest-path zeta-rs/Cargo.toml \
 bazel test //zeta-rs/plugins:plugins-unit-tests
 ```
 
-当前 tests 覆盖 strict/duplicate schema、identity/SemVer、credential reference、permission、
-traversal/device/normalization path、digest determinism、missing contribution、symlink/hardlink、
-catalog ordering/read 与 exact-version conflict。
+当前测试覆盖严格/重复模式、身份/SemVer、凭据引用、权限、路径穿越/设备名/规范化、摘要确定性、
+缺失贡献、符号链接/硬链接、目录排序与读取，以及精确版本冲突。
 
-## Current limitations and extension points
+## 当前限制与扩展点
 
 PL1 的 content store、authority command/recovery、profile enablement、grant、activation snapshot
 尚未实现；PL2+ 的 MCP activation、registry、signature、update、rollback 和 GC 也尚未实现。

@@ -24,7 +24,7 @@ Catalog scanner 通过 [`zeta-file-identity`](../file-identity/README.md) 从已
 跨平台编译而跳过 hard-link 或换文件检测。symlink、root containment、大小限制和 diagnostic
 语义仍由本 crate 拥有。
 
-## Public contract
+## 公共契约
 
 | Symbol | 当前职责 | 不承担 |
 | --- | --- | --- |
@@ -74,7 +74,7 @@ depth，并拒绝 YAML anchor、alias 与 tag control token。frontmatter 只接
 parent directory 一致；description、compatibility 和 metadata 另有 catalog memory bounds。
 `allowed-tools` 只通过 `SkillMetadata::allowed_tools_hint` 暴露作者意图，绝不代表 approval。
 
-## Failure、generation 与 integration
+## 失败、generation 与集成
 
 一个坏 Skill 产生排序、去重后的 `SkillDiagnostic`，不会丢弃同 source 的有效 entry。source 在
 handle 创建后消失会让下一次 refresh 发布 `SourceUnavailable` diagnostic。重复

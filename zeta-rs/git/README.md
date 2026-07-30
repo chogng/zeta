@@ -29,7 +29,7 @@ Git domain owner 下，而不是建立平级的 `zeta-git-utils`：
 因此，新增 Git 能力时应扩展本 crate，而不是在 App Server、Desktop adapter 或 Tool 中直接新增
 `Command::new("git")`。
 
-## 当前 ownership
+## 当前所有权
 
 | 文件 | 当前职责 | 关键 symbol |
 | --- | --- | --- |
@@ -46,7 +46,7 @@ Git domain owner 下，而不是建立平级的 `zeta-git-utils`：
 所有实现 module 均为 private，`src/lib.rs` 显式导出 crate API。把 App Server repository registry、
 watch subscription、operation queue 或 wire DTO 放进上述 module，意味着 ownership 已经漂移。
 
-## Public API 与真实调用路径
+## 公共接口与真实调用路径
 
 `GitClient` 冻结 executable path 和 `GitExecutionLimits`。`GitClient::system()` 使用进程启动环境
 解析 `git`；需要 bundled/显式 executable identity 的 host 应在启动阶段调用
@@ -92,7 +92,7 @@ GitClient::apply_patch
 `GitRepositoryKind::LinkedWorktree` 表示 per-worktree `git_dir` 与 shared `common_dir` 不同；
 `Standard` 不进一步声称 repository 一定不是 submodule。
 
-## Status contract
+## 状态契约
 
 `snapshot` 是一次有界 query，不是 live state。返回：
 
@@ -112,7 +112,7 @@ branch、remote URL 和 commit subject 当前要求 UTF-8。Snapshot 按 Git 输
 `GitRuntime` 当前使用 watcher invalidation 重新查询，并仅在 workspace projection 改变时推进
 revision；该 revision 仍不是 mutation CAS token。
 
-## Mutation contract
+## 变更契约
 
 `GitPathspecSet` 在启动 Git 前拒绝空集合、空路径、绝对路径、`.`/`..` component 和 NUL。
 `GitCommitRequest` 拒绝空白 message、NUL 和超过 64 KiB 的内容。`stage`、`unstage` 与
@@ -123,7 +123,7 @@ revision；该 revision 仍不是 mutation CAS token。
 成功后返回 HEAD object ID。Remote mutation non-interactive；`fetch` 为 all-remotes prune，
 `pull_fast_forward` 明确使用 `--ff-only`，`push` 使用 repository 当前 upstream/default。
 
-## Patch contract
+## 补丁契约
 
 `GitPatchRequest` 用 `GitPatchExecution` 和 `GitPatchDirection` 避免 `apply(false, true)` 一类不透明
 callsite：
@@ -172,7 +172,7 @@ private `GitCommandProfile` 固定三类执行：
 当前 API 没有调用方 cancellation token。Timeout 是唯一中断机制；未来 service cancellation 必须
 进入 `GitClient` 的 process lifecycle，不能只在 App Server 丢弃 future。
 
-## Integration boundary
+## 集成边界
 
 Current：
 
@@ -185,7 +185,7 @@ Desktop SCM
   → system git
 ```
 
-Current live status projection：
+当前实时状态投影：
 
 ```text
 Desktop
@@ -234,7 +234,7 @@ bazel test //zeta-rs/git:git-unit-tests
 修改 `GitCommandProfile`、env/config override、timeout 或 capture 时同步检查所有 command family；
 修改 porcelain parser 时增加 raw NUL fixture 和 live repository test；修改 patch diagnostics 时
 同时保留 disposition/exit 的 authoritative 边界；新增 public operation 时更新本 README 的
-Current capability 和 failure contract。
+当前能力与失败契约。
 
 ## 当前限制与扩展点
 

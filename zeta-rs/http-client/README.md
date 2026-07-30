@@ -31,9 +31,9 @@ zeta-api / auth / catalog / other HTTP consumers
 Workspace 其他 crate 不应直接创建 `ureq::Agent` 或平行的 proxy/TLS policy。普通 unary HTTP
 consumer 可以直接依赖本 crate；需要 operation retry 或 SSE framing 的调用再经过 `zeta-client`。
 
-## Public contract
+## 公共契约
 
-### Request 与 execution
+### 请求与执行
 
 | Symbol | 职责 |
 | --- | --- |
@@ -45,10 +45,10 @@ consumer 可以直接依赖本 crate；需要 operation retry 或 SSE framing �
 | `HttpHeader` | name/value pair；`Debug` 永远隐藏 value |
 | `HttpClientError` | invalid request/configuration 或 sanitized transport failure |
 
-HTTP status 包括 3xx/4xx/5xx 都是 `HttpResponse` facts，不是 transport error。是否重试或如何解释
-status 由上层 operation/protocol 决定。
+包括 3xx/4xx/5xx 在内的 HTTP 状态都是 `HttpResponse` 事实，不是传输错误。是否重试以及如何
+解释状态，由上层操作或协议决定。
 
-### Configuration
+### 配置
 
 | Symbol | 当前 contract |
 | --- | --- |
@@ -69,7 +69,7 @@ overall timeout、system roots、无 client identity、100/1 idle pool 和 10 Mi
 
 环境 proxy 与 bypass 在 `UreqHttpClient::with_config` 时快照，不在每个 request 重新读取。
 
-### Telemetry
+### 遥测
 
 `TelemetryHttpClient` 包装任意 `Arc<dyn HttpClient>`，向 `HttpClientTelemetry::record` 发出
 `HttpClientTelemetryEvent`。事件只有：
@@ -116,7 +116,7 @@ UreqHttpClient::with_config(config)
 一份 client 对应一份不可变 config generation。配置、certificate 或 proxy 变化应创建新 client；
 不要原地修改正在复用连接的 generation。
 
-## Request 调用图
+## 请求调用图
 
 ```text
 HttpClient::execute(request)
@@ -164,7 +164,7 @@ TLS 使用 rustls：
 PEM/file loading、secret lookup 与 credential rotation 不属于本 crate；caller 在构造 config 前把材料
 解析为 DER。
 
-## Error 与安全语义
+## 错误与安全语义
 
 `HttpClientError` 只有：
 
@@ -201,7 +201,7 @@ cargo test -p zeta-http-client
 bazel test //zeta-rs/http-client:http-client-unit-tests
 ```
 
-Tests 使用 local TCP fixtures，不访问真实 provider，覆盖：
+测试使用本地 TCP 样例，不访问真实供应商，覆盖：
 
 - header/proxy/certificate/private-key debug redaction；
 - invalid URL/config；

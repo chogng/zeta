@@ -33,7 +33,7 @@ zeta-mcp
 `zeta-mcp` 不应依赖 `zeta-core`、App Server、stores、Plugin manager 或 secret store。若本 crate
 开始读取用户配置、决定 approval 或追加 Thread event，即表示 ownership 已漂移。
 
-## Public contract
+## 公共契约
 
 宿主先完成 enablement、trust、可执行文件解析和 credential materialization，再构造
 `McpServerDefinition`。`McpRuntime::start` 使用 production RMCP factory；
@@ -124,7 +124,7 @@ factory 覆盖多 server catalog、冻结 binding 路由、部分启动、失效
 startup policy、cancellation 或 output projection 时，必须同步检查这些测试、本 README 和
 [`../../docs/mcp.md`](../../docs/mcp.md)。
 
-## Current limitations / Extension points
+## 当前限制与扩展点
 
 - Current：tools 的多 server discovery/call 已实现；resources、prompts、roots、sampling 和
   tasks 尚未进入 product runtime。

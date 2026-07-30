@@ -14,7 +14,7 @@
 
 它不实现 reducer，不定义第二套 Session/Thread/Turn model，也不拥有 rollout 文件格式。
 
-## Runtime ownership
+## 运行时所有权
 
 ```text
 JSONL / in-process caller
@@ -38,7 +38,7 @@ App Server connection 不是 product Session。关闭 connection 只失去 conne
 request-ID set、notification queue 与 resource ownership；Session/Thread durable state 由 Core/store
 继续拥有。
 
-## Public contract
+## 公共契约
 
 | Symbol | 职责 |
 | --- | --- |
@@ -196,7 +196,7 @@ Initialize 是每 connection 一次。重复 initialize 返回 `AlreadyInitializ
 成功结果同时包含 composition 时冻结的 `slashCommands`。不同 connection 可获得同一 server
 snapshot；单个 connection 生命周期中不会因 host 后续状态变化而更换 popup contract。
 
-## Session、Thread 与 Turn orchestration
+## Session、Thread 与 Turn 编排
 
 典型 create path：
 
@@ -232,7 +232,7 @@ pending interaction 的 item binding，不能简化为“所有 approval 都 res
 App Server 不解释或扩大授权，Core 会在恢复后重新校验 action、policy、capability 与 ToolCall
 binding，并保证升级重试最多启动一次。
 
-## Update broker
+## 更新代理
 
 每个 `Subscriber` 保存 weak notification queue，以及 `SessionId → durable sequence`、
 `ThreadId → durable sequence`：
@@ -254,7 +254,7 @@ connection 若未显式 close，最后一个 strong owner drop 后 broker 仍会
 `Weak::upgrade` 失败清除 subscriber。目前没有 queue length/backpressure limit，slow consumer
 可能积累内存，这是当前限制。
 
-## Local composition 与 model safe point
+## Local composition 与模型安全点
 
 `open_local_app_server` 的顺序：
 
@@ -287,7 +287,7 @@ ConfigBackedModelService
 model failure。production provider operation 会立即停止本地等待、禁止 retry，并丢弃同步 HTTP
 attempt 的迟到 response。
 
-## Skill catalog runtime
+## Skill 目录运行时
 
 Local composition 总会安装 `SkillRuntime`。`BuiltInSkillRoot::AutoDetect` 先查询
 `InstallContext::bundled_resource_directory("skills")`，Cargo 开发构建再回退到仓库
@@ -331,7 +331,7 @@ generation。启动采用 `RequireAll`，任一 enabled server 无法 initialize
 缺少 preferred model/provider 时创建 `UnavailableModel`，使 invocation 显式失败，不回退到 echo
 或任意默认 provider。
 
-## Review model adapter
+## 审查模型适配器
 
 `ReviewModelResolver::resolve` 使用 frozen `ResolvedConfig`：
 
@@ -350,7 +350,7 @@ user text，并附 response schema；同时清空 tools、设置 `ToolChoice::No
 这里负责选择/隔离 review runtime；classifier schema validation 与 authorization decision分别属于
 `zeta-auto-review` 和 `zeta-policy`。
 
-## Resource store
+## 资源存储
 
 Resource 是 in-memory、connection-owned、TTL-bounded：
 
@@ -365,7 +365,7 @@ Resource 是 in-memory、connection-owned、TTL-bounded：
 Resource 不跨重启恢复，也不能被另一 connection 读取或 release。Connection drop 当前不会立即遍历
 删除资源，只依赖 TTL lazy cleanup。
 
-## Error mapping
+## 错误映射
 
 | Source | External error |
 | --- | --- |
@@ -414,23 +414,20 @@ cargo test -p zeta-app-server
 bazel test //zeta-rs/app-server:app-server-unit-tests
 ```
 
-## Typst integration
+## Typst 集成
 
-`AppServer::typst_compile` owns the application-level bridge from
-`document/typst/compile` to `zeta_typst::TypstCompiler`. It maps expected
-source failures to `TypstCompileResult::Failed`, creates a 300-second
-connection-owned `application/pdf` resource on success, and maps compiler
-diagnostics into protocol DTOs through `typst_diagnostic_dto`.
+`AppServer::typst_compile` 拥有从 `document/typst/compile` 到
+`zeta_typst::TypstCompiler` 的应用级桥接。它把预期内的源码失败映射为
+`TypstCompileResult::Failed`；成功时创建由当前连接拥有、有效期为 300 秒的
+`application/pdf` 资源；并通过 `typst_diagnostic_dto` 把编译器诊断映射为协议数据结构。
 
-The compiler boundary itself belongs to `zeta-typst`; this crate must not add
-host path resolution, package download, or font discovery around it. A change
-from connection-owned ephemeral resources to durable document storage is a
-separate ownership decision. The cross-crate trust model is documented in
-[`docs/typst.md`](../../docs/typst.md).
+编译器边界属于 `zeta-typst`；本 crate 不得在其周围增加宿主路径解析、包下载或字体发现。
+把当前连接拥有的临时资源改为持久化文档存储，是另一项所有权决策。跨 crate 信任模型见
+[`docs/typst.md`](../../docs/typst.md)。
 
-Tests 覆盖 initialization/request IDs、Session-first flow、command replay/conflict、fork lineage、
-Turn replay/model-once、multi-connection update、reconnect durable gap、connection-owned resources、
-config command、interaction/approval resolve、response-before-notification、model config safe point、
+测试覆盖初始化/请求 ID、Session 优先流程、命令重放/冲突、分叉谱系、Turn 重放/模型只调用一次、
+多连接更新、重连后的持久化缺口、连接拥有的资源、配置命令、交互/批准解决、
+先响应后通知、模型配置安全点、
 Workspace override、review-only request、只读 `rg` definition/materialization/policy/execution，
 MCP worker bridge、exact provenance/approval policy、local/MCP 路由与 collision rejection，以及
 可信 Terminal Profile、真实 PTY create/write/read/exit、Terminal owner/error/ring limits，
@@ -442,11 +439,9 @@ local tool 的参数白名单、discovery、取消与输出限制由
 [`zeta-shell-command`](../shell-command/README.md) 和 [`zeta-exec`](../exec/README.md) 维护；
 本 README 只拥有 App Server 组合与 Core port binding。
 
-当前 JSONL server 仍是 synchronous loop，owned embedded connection 已具备 wakeable
-notification source 与显式 subscription/Resource/Terminal cleanup；尚无 async
-multi-connection scheduler、serialization-scope enforcement、notification backpressure、
-durable resource 或 complete network server lifecycle。MCP 当前没有 credential
-materialization、stdio process sandbox、runtime hot reload、list-changed rebuild、
+当前 JSONL 服务仍使用同步循环；自有嵌入式连接已具备可唤醒通知来源，以及显式订阅、资源和
+终端清理；尚无异步多连接调度器、序列化范围强制、通知背压、持久化资源或完整网络服务
+生命周期。MCP 当前没有凭据具体化、stdio 进程沙箱、运行时热更新、列表变化重建、
 progress/elicitation delivery 或 image result 的原生 Core content path；MCP image 暂时编码进
 bounded JSON text result。演进这些能力时应保留 protocol registry唯一性、Core/store authority、
 snapshot + durable gap 和 per-invocation config safe point。

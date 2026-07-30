@@ -4,6 +4,19 @@
 > 状态：开发期目标架构
 > 原则：按长期领域边界直接演进，不保留开发期旧 API 或旧持久化格式的兼容层。
 
+## 快速理解
+
+长期架构固定少数不会随实现替换而改变的边界：Session 管任务拓扑，Thread 管执行顺序，
+共享协议只定义语义，Core 协调状态，存储只实现一套事件流。
+
+| 长期问题 | 固定答案 | 主要边界 |
+| --- | --- | --- |
+| 产品根对象是什么？ | Session 是任务和 Thread 拓扑聚合，Thread 是独立执行聚合 | [聚合并发边界](#3-聚合并发边界) |
+| 谁拥有状态迁移？ | Core 中的纯 reducer 与协调器 | [Session 协调器](#5-session-协调器)、[Thread 控制器](#6-thread-控制器) |
+| 谁拥有持久化格式？ | 一个共享事件流引擎，Session/Thread 只保留类型化适配器 | [唯一物理事件流](#4-唯一物理-event-stream-引擎) |
+| 客户端能否拥有另一套状态？ | 不能；Desktop、CLI、TUI 只消费统一 App Server API | [App Server](#8-app-server) |
+| 开发期旧接口如何处理？ | 直接迁移权威契约和调用方，不建立隐藏兼容层 | 本文固定原则 |
+
 ## 1. 结论
 
 Canonical 产品模型、契约分类与 sequence/ID 语义统一由
@@ -109,7 +122,7 @@ rollout-trace
 禁止 `core → app-server-protocol`、`protocol → tokio/fs/database/JSON-RPC` 或
 `storage → app-server`。
 
-## 3. Aggregate 并发边界
+## 3. 聚合并发边界
 
 Session/Thread sequence 的定义与必须独立的理由见
 [`protocol.md` 的 Sequence、Cursor 与 ID](protocol.md#5-sequencecursor-与-id)。对系统实现
@@ -143,7 +156,7 @@ writer lease，并且保证恢复顺序为 Thread 在前、Session 在后。它�
 Thread stream 导出为只读 artifact。trace 保留每个 aggregate 自己的 sequence，绝不发明全局
 sequence，也不参与任何运行时写入或状态决策。
 
-## 5. Session Coordinator
+## 5. Session 协调器
 
 SessionCoordinator 拥有：
 
@@ -167,7 +180,7 @@ Fork plan 同时保存 `parentThreadId` 与当时的 `parentSequence`。
 
 Session 不代理子 Thread 的执行，也不在每个 Thread event 上递增 Session sequence。
 
-## 6. Thread Controller
+## 6. Thread 控制器
 
 Thread 是独立执行与恢复 aggregate：
 
@@ -180,7 +193,7 @@ Thread 是独立执行与恢复 aggregate：
 
 Thread snapshot 是 rollout 的可重建投影，不是第二份权威状态。
 
-## 7. Typed command receipt
+## 7. 类型化命令回执
 
 Command identity、冲突和重放语义统一见
 [`protocol.md` 的 Command 契约](protocol.md#41-command请求改变状态)。Store 的系统级职责

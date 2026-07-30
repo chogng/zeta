@@ -19,7 +19,7 @@ src/
 └── cli_tests.rs              # CLI 参数、JSON 与 plain-text output
 ```
 
-## Public contract
+## 公共契约
 
 `PathSearchHandle::start(root, options)` 验证 root 是目录，返回后台搜索 handle 和
 `Receiver<PathSearchSnapshot>`：
@@ -86,7 +86,7 @@ limit 截断时，warning 写入 stderr；JSON match 仍写入 stdout，方便�
 如果该 crate 开始读取候选文件内容、实现模型 Tool binding，或保存 TUI popup state，说明 ownership
 已经漂移；这些职责分别属于 `zeta-shell-command`、Tool registry 和 `zeta-tui`。
 
-## Failure 与 cancellation
+## 失败与取消
 
 - root 不存在或不是目录：`PathSearchHandle::start` 返回 `std::io::Error`，不启动 worker；
 - CLI 参数非法、root 不可用或 worker 在 completion 前退出：binary 输出带

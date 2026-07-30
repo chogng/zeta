@@ -24,7 +24,7 @@ consumer 的启动入口。
 | 显式 connection shutdown/task join | ✅ | ❌ |
 | remote backend | 尚未完成 | ❌ |
 
-## Public contract
+## 公共契约
 
 | Symbol | Owner 与 contract |
 | --- | --- |
@@ -95,7 +95,7 @@ App Server background update
 Connection driver 在 request response completion 发送之前持有 delivery barrier；event pump
 通过同一 barrier drain queue，因此同一 request 的 response 先于 causal notification 交付。
 
-## Failure 与 shutdown
+## 失败与关闭
 
 - request channel 已关闭：返回 `ClientError::Transport`；
 - response ID/envelope/decode 不合法：返回 `ClientError::Protocol`；
@@ -108,7 +108,7 @@ Connection driver 在 request response completion 发送之前持有 delivery ba
 当前 event channel 无界，以避免静默丢失 durable update。按 aggregate bounded data plane、
 `Lagged`/resync policy 与 remote reconnect 尚未实现，不能把这些 Proposed 能力写成 Current。
 
-## 内部 ownership 与 drift signal
+## 内部所有权与漂移信号
 
 - `session::drive_connection` 唯一拥有 `ConnectionState` 与 request dispatch；
 - `session::pump_notifications` 唯一解码 session outbound notification；

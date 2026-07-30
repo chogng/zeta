@@ -7,7 +7,7 @@
 `zeta-async-utils` 提供 runtime-independent cooperative cancellation。它只依赖 `std`，不拥有 task
 spawn、deadline timer、signal handling 或 OS interruption。
 
-## Public contract
+## 公共契约
 
 | Symbol | 职责 | 关键语义 |
 | --- | --- | --- |
@@ -85,8 +85,8 @@ future.with_cancellation(token)
 protocol 或释放远端 lease 时，把 `CancellationToken` 传入 worker，并在安全点调用 `check()` 或
 await `cancelled()`。
 
-Cancellation 不能抢占 blocking syscall、CPU loop 或没有观察 token 的 detached work。Deadline
-由 caller timer 决定，再用 `cancel_with(DeadlineExceeded)` 传播。
+取消不能抢占阻塞系统调用、CPU 循环或没有观察令牌的分离任务。截止时间由调用方计时器决定，
+再用 `cancel_with(DeadlineExceeded)` 传播。
 
 ## 测试与演进
 

@@ -1,4 +1,4 @@
-# Windows Sandbox 手工验收 Runbook
+# Windows 沙箱手工验收手册
 
 > 状态：Current validation procedure；真实 Windows 结果待回填。
 >
@@ -104,7 +104,7 @@ Golden expectation：
 
 如果 `Elevated=True`，停止测试并重新打开非管理员 PowerShell。
 
-## 5. WPK-01：构建 canonical Windows package
+## 5. WPK-01：构建 canonical Windows 包
 
 执行：
 
@@ -136,7 +136,7 @@ Golden expectation：
 - `components.windowsSandbox.source` 为 `cargo-build`，或使用显式 prebuilt helper 时为
   `local-override` / `mixed`。
 
-## 6. WPK-02：校验 helper digest
+## 6. WPK-02：校验辅助程序摘要
 
 执行：
 
@@ -159,7 +159,7 @@ Golden expectation：
 - `RunnerHashMatches=True`；
 - `SetupHashMatches=True`。
 
-## 7. WPR-01：helper protocol probe
+## 7. WPR-01：辅助程序协议探测
 
 执行：
 
@@ -188,7 +188,7 @@ SetupProbe  = zeta-windows-sandbox-setup-v1
 
 其他文字、额外 stdout 或不同 protocol version 都判定失败。
 
-## 8. 创建测试 fixture
+## 8. 创建测试样例
 
 执行：
 
@@ -256,7 +256,7 @@ $StagedBefore = @(
 )
 ```
 
-## 9. WRT-01：ReadOnly 可以运行 packaged rg
+## 9. WRT-01：ReadOnly 可以运行打包的 rg
 
 执行：
 
@@ -353,7 +353,7 @@ Golden expectation：
 - `MarkerExists=True`；
 - `MarkerContent=workspace-write-ok`。
 
-## 12. WRT-04：rw profile 不得污染同一 Workspace 的 ro profile
+## 12. WRT-04：rw 配置档案不得污染同一 Workspace 的 ro 配置档案
 
 WRT-03 已经创建过 WorkspaceWrite profile。现在再次以 ReadOnly 执行：
 
@@ -384,7 +384,7 @@ Golden expectation：
 
 如果文件被创建，说明 ro/rw profile authority 发生累积，必须判定失败。
 
-## 13. WRT-05：WorkspaceWrite 拒绝 protected metadata
+## 13. WRT-05：WorkspaceWrite 拒绝 protected 元数据
 
 执行：
 
@@ -465,7 +465,7 @@ Golden expectation：
 - `SecretLeaked=False`；
 - `MarkerExists=False`。
 
-## 15. WRT-07：不同 Workspace 不得共享 profile authority
+## 15. WRT-07：不同 Workspace 不得共享配置档案权威
 
 Workspace A 已经获得 ro 和 rw ACL。以 Workspace B 的 ReadOnly profile 尝试读取 A：
 
@@ -493,7 +493,7 @@ Golden expectation：
 - `ExitCode=31`；
 - `ContentLeaked=False`。
 
-## 16. WRT-08：NetworkDenied 拒绝 host loopback
+## 16. WRT-08：NetworkDenied 拒绝宿主回环
 
 先证明 host server 正常：
 
@@ -621,7 +621,7 @@ Golden expectation：
 - `SpawnWasBlocked=True`；
 - output 不含 `child-started:`。
 
-## 18. WRT-10：inner exit code 不能伪造 enforcement denial
+## 18. WRT-10：inner exit code 不能伪造强制执行拒绝
 
 执行：
 
@@ -651,7 +651,7 @@ Golden expectation：
 
 `125` 是 runner 自己的可信 pre-launch failure code；child 返回的 `125` 必须被重映射。
 
-## 19. WRT-11：真实 pre-launch failure 使用保留状态
+## 19. WRT-11：真实 pre-launch 失败使用保留状态
 
 故意把 cwd 指向 Workspace 外：
 

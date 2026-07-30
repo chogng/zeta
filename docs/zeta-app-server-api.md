@@ -13,7 +13,7 @@ lastUpdated: 2026-07-25
 本文描述当前开发期的唯一 App Server 契约。项目不保留旧 wire API、旧 DTO 或旧持久化格式
 的兼容入口；Rust DTO、生成的 TypeScript 和 JSON Schema 必须始终一致。
 
-Current [`zeta-mcp-server`](mcp-server.md) stdio/Streamable HTTP surface 是本 API 的外层
+当前 [`zeta-mcp-server`](mcp-server.md) stdio/Streamable HTTP 接口面是本 API 的外层
 Agent-as-tool adapter；它通过 App Server client 复用这里定义的 Session/Thread/Turn contract，
 不建立第二套 execution API。该 adapter 已将 Thread subscription/update 投影为 MCP progress，
 将 approval/user-input 映射为 form elicitation，并在自己的 state root 中持久化外部 invocation
@@ -24,6 +24,20 @@ receipt。Receipt 只拥有 MCP correlation/recovery，不改变本 API 的 dura
 subscription broker、resource store 与 local composition 见
 [`zeta-app-server` README](../zeta-rs/app-server/README.md)。本文拥有跨客户端 API 语义与演进方向，
 两个 README 拥有当前实现接口与修改路径。
+
+## 快速理解
+
+App Server API 是 Desktop、CLI、TUI 和其他适配器访问 Zeta 产品能力的唯一版本化接口；它暴露
+Session、Thread、Turn 和更新流，不建立第二套领域模型。
+
+| 客户端需求 | 使用方式 | 关键保证 |
+| --- | --- | --- |
+| 创建一次工作 | 创建 Session，再创建 Thread 并启动 Turn | 产品身份与持久化语义来自统一协议 |
+| 持续显示执行进度 | 订阅 Thread 更新并按序列消费 | 发现缺口时重新读取快照，不猜测丢失状态 |
+| 修改配置或资源 | 调用类型化方法并携带命令身份 | 重复命令可重放结果，冲突载荷会被拒绝 |
+| 响应批准或用户输入 | 回复等待中的类型化请求 | 回复绑定精确请求和当前 Thread |
+| 连接本地 App Server | 先初始化并校验能力和模式哈希 | 初始化前不能调用产品方法 |
+| 协议发生不兼容变化 | 同步修改 Rust 类型、生成物和调用方 | 开发期不保留隐藏的旧 DTO 入口 |
 
 ## 1. 产品模型
 
@@ -54,7 +68,7 @@ Session 与每个 Thread 拥有独立 durable sequence：
 - 修改一个 Thread 不会占用 Session 或其他 Thread 的 sequence；
 - `expectedSequence` 始终针对 method 所修改的 aggregate。
 
-## 3. Transport
+## 3. 传输
 
 当前外部 transport 是 UTF-8 JSONL/stdio：
 
@@ -69,7 +83,7 @@ In-process client 使用 protocol-owned typed request/event channel，可以省�
 notification contract，不能拥有隐藏业务接口。JSONL/stdio、WebSocket 等外部 transport 才在
 边界执行 wire encoding。
 
-## 4. Initialize
+## 4. 初始化
 
 `initialize` 必须是 connection 的首个 request。
 
@@ -116,7 +130,7 @@ schema hash 不一致时客户端必须拒绝继续运行。
 description 不能为空，同一 snapshot 中 name 必须唯一。该 snapshot 负责 discoverability 与
 inline argument parsing；提交仍通过 `turn/start.input`，并保留 `/name`、text/image 顺序。
 
-## 5. Method inventory
+## 5. 方法清单
 
 | Method | Aggregate | Effect |
 | --- | --- | --- |
@@ -169,7 +183,7 @@ inline argument parsing；提交仍通过 `turn/start.input`，并保留 `/name`
 长期 account control plane 另见[第 11 节](#11-account-与登录)。它尚未进入当前 registry/schema，
 加入时必须和 Rust DTO、TypeScript 与 JSON Schema 同步提交。
 
-### Filesystem
+### 文件系统
 
 Filesystem method 的 `path` 是配置 workspace root 下的相对路径；空字符串表示 root。
 绝对路径、父目录逃逸和解析后越过 root 的 symlink 会在可信 Rust 边界被拒绝。Desktop 的
@@ -210,7 +224,7 @@ tracked working tree，不删除 untracked 文件。Operation 在单 workspace r
 没有可观测 queue、progress 或 caller cancellation。跨层 ownership、当前 UI 和演进顺序见
 [`git.md`](git.md)。
 
-### Workspace Search
+### Workspace 搜索
 
 `initialize.capabilities.workspaceSearch` 表示 server 已安装 workspace 内容搜索 backend。
 客户端通过 `workspace/search/start` 获得 connection-owned `searchId`，用
@@ -224,7 +238,7 @@ number、单行 preview 和 UTF-16 match ranges。
 read result 的脱敏 `error` 返回。完整 ownership 与当前 UI 限制见
 [`search.md`](search.md)。
 
-### Integrated Terminal
+### 集成终端
 
 `initialize.capabilities.terminal` 表示 local composition 已提供可信 workspace root 和 PTY
 runtime。`terminal/profile/list` 只返回稳定 `profileId`、显示标题与 default 标记，不暴露
@@ -243,9 +257,9 @@ Terminal ID 绑定创建它的 App Server connection，跨 connection 操作返�
 正常客户端在实例关闭后调用 `terminal/close`；connection 结束时 server 终止该 connection
 拥有的剩余 PTY。App Server 重启后的显式 Relaunch 会创建新 PTY，不能冒充原进程恢复。
 
-## 6. Session commands
+## 6. 会话命令
 
-### Create
+### 创建（Create）
 
 ```json
 {
@@ -260,7 +274,7 @@ Terminal ID 绑定创建它的 App Server connection，跨 connection 操作返�
 返回 `{ "session": Session }`。首次 durable event 为 `sessionCreated`，并在同一 atomic batch
 保存 typed command receipt。
 
-### Create Thread
+### 创建 Thread
 
 ```json
 {
@@ -282,18 +296,18 @@ Terminal ID 绑定创建它的 App Server connection，跨 connection 操作返�
 
 恢复时发现 `creating` membership 会继续完成后两步，而不是创建另一个 Thread。
 
-### Fork Thread
+### 分叉 Thread
 
 `session/thread/fork` 比 create 多一个 `parentThreadId`。Server 在执行命令时读取父 Thread 的
 当前 sequence，并把它持久化进 `ThreadOrigin::Fork`。Fork 只复制 lineage 起点；它不让两个
 Thread 共享后续 sequence。
 
-### Lifecycle
+### 生命周期
 
 `session/thread/archive`、`session/complete` 和 `session/archive` 都要求 `commandId`、
 `sessionId` 与 `expectedSequence`。Archived Session 不允许再修改。
 
-### Session model
+### 会话模型
 
 `session/model/set` 使用 `commandId`、`sessionId`、`expectedSequence` 和 provider-scoped
 `ModelRef`。选择结果写入 Session event stream，只影响该 Session。`turn/start` 将 Session
@@ -357,7 +371,7 @@ interaction 的同一 request kind；相同 `commandId + typed payload` 会重�
 当前同步 App Server 还没有实现 Server → Client request owner selection 或主动投递；未来 runtime
 必须将 connection ownership 作为短暂 delivery state，而不是写入 Thread snapshot 或 event。
 
-## 8. Update stream
+## 8. 更新流
 
 当前有三个 notification method：
 
@@ -376,7 +390,7 @@ durable update 使用 `durableSequence`。Thread 的低延迟非 durable update 
 `afterSequence` 之后的 committed update gap。客户端应先应用 snapshot/gap，再接收实时
 notification；发现 durable 空洞时重新 subscribe。
 
-## 9. Config 与 Resource
+## 9. 配置与资源
 
 `config/update` 使用 `commandId`。Patch 字段三态语义为：
 
@@ -395,7 +409,7 @@ enablement 或 filesystem/config invalidation 导致可见 projection 变化时�
 Resource bytes 使用标准 RFC 4648 Base64；`decodedLength` 是原始 byte 数，单 chunk 最大
 262,144 bytes。客户端用 `decodedLength` 推进 offset，并在结束后校验 size 与 SHA-256。
 
-## 10. Stable errors
+## 10. 稳定错误
 
 标准 JSON-RPC errors 为 `ParseError`、`InvalidRequest`、`MethodNotFound` 和
 `InvalidParams`。产品稳定错误包括：
@@ -504,7 +518,7 @@ Zeta App Server 绝不接触 callback code、OAuth state、PKCE verifier、acces
 `~/.codex/auth.json` 或上游 keychain entry。`account/login/cancel` 必须取消 exact upstream login；
 logout 转发 upstream logout，并将失败映射为稳定的 redacted diagnostic。
 
-## 12. Source of truth
+## 12. 权威来源
 
 - Rust DTO 与 registry：`zeta-rs/app-server-protocol/src/protocol/`
 - JSON Schema：`zeta-rs/app-server-protocol/schema/schema.json`
@@ -521,15 +535,12 @@ node desktop/scripts/sync-app-server-protocol.mjs
 
 生成产物、Rust contract tests 和 Desktop TypeScript 编译必须同时通过。
 
-## 13. Typst document compilation
+## 13. Typst 文档编译
 
-`initialize.capabilities.typst` indicates support for
-`document/typst/compile`. The method accepts `{ "source": string }` and returns
-either a connection-owned `application/pdf` resource plus warnings, or typed
-source diagnostics. Source size is limited to 1 MiB of UTF-8 bytes.
+`initialize.capabilities.typst` 表示支持 `document/typst/compile`。该方法接受
+`{ "source": string }`，返回由当前连接拥有的 `application/pdf` 资源和警告，或者类型化源码
+诊断。源码按 UTF-8 字节计算，最大 1 MiB。
 
-The current compiler exposes only an in-memory `/main.typ`; it does not expose
-host files, network access, package downloads, system fonts, or the current
-date. PDF bytes use the existing `resource/metadata`, `resource/read`, and
-`resource/release` lifecycle. Cross-process ownership and planned evolution
-are documented in [`typst.md`](typst.md).
+当前编译器只暴露内存中的 `/main.typ`，不暴露宿主文件、网络访问、包下载、系统字体或当前
+日期。PDF 字节沿用 `resource/metadata`、`resource/read` 和 `resource/release` 生命周期。
+跨进程所有权和计划演进见 [`typst.md`](typst.md)。

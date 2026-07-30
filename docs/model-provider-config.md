@@ -8,6 +8,19 @@
 > - Provider runtime：[`model-provider.md`](model-provider.md)
 > - API 协议层：[`zeta-api.md`](zeta-api.md)
 
+## 快速理解
+
+模型供应商配置只描述“允许怎样配置”，并以确定性方式校验和归一化；它不读取凭据、不访问网络，
+也不执行模型请求。
+
+| 读者首先会问 | 直接答案 | 深入阅读 |
+| --- | --- | --- |
+| 这里保存什么？ | 可序列化的供应商定义、API 配置档案、默认值和静态模型资料 | [目标配置模型](#4-目标配置模型) |
+| 用户覆盖如何生效？ | 按字段规则合并后进行确定性规范化，相同输入必须得到相同结果 | [合并与规范化](#5-合并与规范化) |
+| 可以在这里读取 API key 吗？ | 不可以；配置只能保存不敏感的凭据引用 | [拥有与不拥有](#2-拥有与不拥有) |
+| 可以探测端点是否可用吗？ | 不可以；网络、凭据和运行时状态不能参与静态配置校验 | [Base URL 边界](#6-base-url-与端点的边界) |
+| 当前完成到哪里？ | 已有基础声明和默认 `ApiProfile`，多档案允许列表与用户覆盖仍待实现 | [当前实现审计](#3-当前实现审计) |
+
 ## 1. 结论
 
 `zeta-model-provider-config` 描述“一个 Provider 可以怎样被配置”。它只包含可序列化、可校验、
@@ -143,7 +156,7 @@ provider_options: serde_json::Value
 
 它会绕过 schema、validation、secret 审计和 profile 配对检查。
 
-## 5. Merge 与 normalization
+## 5. 合并与规范化
 
 输入优先级固定为：
 
@@ -180,7 +193,7 @@ Normalization 不得：
 - 将配置缺失静默替换为另一个 Provider；
 - 根据 model ID 字符串猜 capability。
 
-## 6. Base URL 与 endpoint 的边界
+## 6. Base URL 与端点的边界
 
 三种概念必须分开：
 
@@ -194,7 +207,7 @@ Normalization 不得：
 endpoint。Google 和 Ollama 的 invocation/catalog 地址可能不共享同一个 base path，必须由
 definition/runtime 显式声明。
 
-## 7. 静态 model metadata
+## 7. 静态模型元数据
 
 `ProviderDefinition.seed_models` 是：
 

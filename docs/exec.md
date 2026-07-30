@@ -137,7 +137,7 @@ process lifecycle 和 sandbox authority 会混在同一 crate。
 - 从日志、stderr 或人类文本推断 Turn 终态；
 - 直接读取 Core、store 或 rollout 作为 App Server 旁路。
 
-## 5. 本地 run-once
+## 5. 本地单次运行
 
 第一阶段支持一次进程运行一个 Agent Job：
 
@@ -171,7 +171,7 @@ Preparing
 任意阶段失败都必须产生明确 `ExecOutcome`。Connection EOF 不是 Turn failure；若终态未知，
 exec 应重新连接/read/subscribe 或返回 `OutcomeUnknown`，不能伪造 `Failed`。
 
-## 6. Public API
+## 6. 公共接口
 
 目标 library API 以 typed request 和 sink 为边界：
 
@@ -250,7 +250,7 @@ pub enum ExecOrigin {
 - human 模式默认只把最终 Agent message 写入 stdout，进度写 stderr；
 - event schema 变更必须有 fixture 与 compatibility policy。
 
-## 8. Headless approval 与 server request
+## 8. 无界面批准与服务端请求
 
 无交互运行不能等待不存在的用户界面。
 
@@ -305,7 +305,7 @@ Worker mode 不能简单地在循环中调用 CLI `main`。它需要明确：
 - draining shutdown；
 - tenant、credential、workspace 和 state-root isolation。
 
-### 9.2 Identity
+### 9.2 身份
 
 以下身份不能混用：
 
@@ -333,7 +333,7 @@ JobId + AttemptId
 Scheduler receipt 不是 App Server command receipt。两者可以在同一 Job flow 中关联，但不得放进
 同一个 ID 或假设原子跨系统事务。
 
-### 9.3 Remote Job flow
+### 9.3 远程 Job 流程
 
 ```text
 scheduler assigns Job(attempt, lease)
@@ -355,7 +355,7 @@ scheduler assigns Job(attempt, lease)
 - transient delta 丢失只影响低延迟展示，不能影响 terminal Job result；
 - 过期 lease 的 worker 不得提交 scheduler terminal result。
 
-## 10. Remote Agent scheduling 与 remote execution plane
+## 10. 远程 Agent 调度与远程执行平面
 
 远程调度完整 Agent Job：
 
@@ -379,7 +379,7 @@ Core tool port → zeta-exec-server client → remote zeta-exec-server
 `zeta-exec-server` 不得接受 `turn/start`，`zeta-exec` scheduler adapter 不得提供裸
 `process/start` 旁路。
 
-## 11. Worker isolation 与并发
+## 11. 工作进程隔离与并发
 
 第一版 remote worker 应保守选择：
 
@@ -393,7 +393,7 @@ Core tool port → zeta-exec-server client → remote zeta-exec-server
 并发可以随 App Server per-Thread serialization 演进，但 scheduler placement 不能把“不同
 Thread 可并行”误解为“不同 tenant 可以无隔离共享进程”。
 
-## 12. Backpressure 与重放
+## 12. 背压与重放
 
 所有 queue 有界：
 
@@ -478,13 +478,13 @@ zeta-scheduler-protocol
 
 ## 15. 实施阶段
 
-### Phase 1：消除命名冲突
+### 阶段 1：消除命名冲突
 
 - 将当前 process `zeta-exec` 迁移为 `zeta-tool-executor`；
 - 更新 shell-command、file-system、apply-patch、skills、plugins、MCP 文档与依赖；
 - 为新 headless `zeta-exec` 保留 crate/binary 名称。
 
-### Phase 2：本地 headless vertical slice
+### 阶段 2：本地无界面纵向切片
 
 - 完成异步 App Server Client；
 - 实现 new/resume、Turn start/interrupt；
@@ -492,7 +492,7 @@ zeta-scheduler-protocol
 - terminal status 与退出码；
 - 显式 shutdown。
 
-### Phase 3：可靠 automation
+### 阶段 3：可靠自动化
 
 - 稳定 ExecEvent schema；
 - output schema、last-message file、stdin 与 workspace input；
@@ -500,7 +500,7 @@ zeta-scheduler-protocol
 - reconnect/read/subscribe resync；
 - integration fixtures。
 
-### Phase 4：远程 worker
+### 阶段 4：远程工作进程
 
 - scheduler protocol；
 - Job/Attempt/lease/fencing；
@@ -508,7 +508,7 @@ zeta-scheduler-protocol
 - event cursor/ack 与 reconnect；
 - tenant/workspace isolation。
 
-### Phase 5：远程 execution environment
+### 阶段 5：远程执行环境
 
 - 独立 exec-server protocol；
 - process/PTY/filesystem handlers；

@@ -8,7 +8,7 @@
 `Arc<dyn ModelInvoker>`。它选择 provider runtime 和 API profile；wire codec 属于 `zeta-api`，
 operation retry/framing 属于 `zeta-client`，socket/TLS/proxy 属于 `zeta-http-client`。
 
-## Public contract
+## 公共契约
 
 | Symbol | 职责 | 生命周期 |
 | --- | --- | --- |
@@ -38,7 +38,7 @@ invocation，不原地修改已经运行的 `RegisteredModelInvoker`。
 | `RegisteredModelInvoker` | private struct | bind exact Provider + resolved Model | request 时只应用 normalized defaults |
 | `RegisteredModelInvoker::invoke` | private trait impl | clone canonical request、apply max tokens、complete | 不读取 product config |
 
-## Runtime 调用图
+## 运行时调用图
 
 ```text
 ModelProviderRuntime::runtime(ModelRuntimeRequest)
@@ -65,7 +65,7 @@ RegisteredModelInvoker::invoke(request)
 `Provider::complete` 再次 resolve model，因此 direct Provider callers 与 bound invoker 使用相同
 catalog policy。
 
-## Provider adapter pattern
+## 供应商适配器模式
 
 每个 `src/providers/<name>.rs` 定义 private adapter，通常持有：
 
@@ -79,7 +79,7 @@ profile，但只有 configuration definition 可以决定 profile。
 新增 provider/profile 时同步检查 config enum/definition、`providers::instantiate` exhaustive match、
 `api_endpoint`、fixed headers、codec support、fake transport tests 和系统 provider matrix。
 
-## Error 与 model catalog
+## 错误与模型目录
 
 | Path | Error |
 | --- | --- |
@@ -108,9 +108,8 @@ cargo test -p zeta-model-provider
 bazel test //zeta-rs/model-provider:model-provider-unit-tests
 ```
 
-Tests 使用 injected `OperationClient` 捕获 request，覆盖 Responses/Chat/Anthropic profile、structured
-tools、custom endpoint、defaults、provider mismatch、catalog policy、fixed header、cancellation
-传播和默认 HTTP transport。
+测试使用注入的 `OperationClient` 捕获请求，覆盖 Responses/Chat/Anthropic 配置、结构化工具、
+自定义端点、默认值、供应商不匹配、目录策略、固定标头、取消传播和默认 HTTP 传输。
 
 当前 invocation 是同步 unary；credential materialization、subscription backend、streaming 与动态
 catalog 的长期设计仍在系统文档中演进。新增能力应保持 invoker immutable、profile explicit、

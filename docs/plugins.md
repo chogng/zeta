@@ -8,6 +8,20 @@
 > Skill runtime：[`skills.md`](skills.md)
 > Config authority 与 runtime snapshot 接入：[`config.md`](config.md)
 
+## 快速理解
+
+Plugin 是经过校验和版本管理的扩展包，不是安装后便能执行任意代码的进程内插件。安装、启用、
+授权和实际调用是四个独立阶段。
+
+| 用户动作 | 系统发生什么 | 不会自动发生什么 |
+| --- | --- | --- |
+| 安装 Plugin | 校验不可变包、清单、来源和内容摘要后写入本地存储 | 不启用贡献、不授予权限 |
+| 在用户或 Workspace 中启用 | 允许其贡献参与解析 | 不启动 MCP、不执行脚本 |
+| 批准请求的能力 | 记录精确的进程、网络、目录或凭据授权 | 不批准未来每一次工具调用 |
+| 激活贡献 | 生成带来源和 generation 的不可变快照 | 不把 live manager 注入 Agent |
+| 更新或回滚 | 并存校验后的版本并原子切换 | 不原地修改已安装包 |
+| 卸载 | 撤销后续激活并清理可回收内容 | 不删除其他领域拥有的秘密或历史 |
+
 ## 1. 结论
 
 `zeta-plugins` 是 Zeta 的扩展分发、安装、解析、启用和版本管理控制面。Plugin 是一个不可变、
@@ -145,9 +159,9 @@ Plugin v1 contributions = Skills + MCP server declarations + static assets
 - App Server protocol 只暴露稳定 Plugin view 和 command DTO，不暴露内部 filesystem path、
   lock、transaction journal 或 signature library type。
 
-## 5. Package 与 manifest
+## 5. 包与清单
 
-### 5.1 v1 layout
+### 5.1 v1 布局
 
 ```text
 plugin-root/
@@ -171,7 +185,7 @@ plugin-root/
 slash-separated path；绝对路径、`..`、空 segment、NUL、平台 device path 和 escape symlink
 全部拒绝。
 
-### 5.2 Manifest shape
+### 5.2 清单结构
 
 以下是当前 v1 语义示例；当前 authority 是 Rust strict parser，尚未发布独立 JSON Schema：
 
@@ -219,7 +233,7 @@ Manifest 必须 strict-parse：
 - manifest 只声明 credential slot，不包含 secret value；
 - permission 使用 tagged enum，不使用 `network: true`、`workspace: "all"` 一类含糊开关。
 
-### 5.3 Identity
+### 5.3 身份
 
 推荐 Plugin ID 为 `publisher/name`，两段都使用 lowercase ASCII、数字和单连字符，并限制总长度。
 display name 可本地化且可变化，不能充当 identity。
@@ -244,7 +258,7 @@ Plugin contribution identity 是：
 
 升级时即使 path 改变，只要 manifest-local ID 不变，用户 grant 和配置才能被有控制地重新评估。
 
-## 6. Package source、provenance 与 trust
+## 6. 包来源、来源与信任
 
 Package source 使用显式 enum：
 
@@ -281,7 +295,7 @@ model 完成后再启用。
 
 ## 7. Install store 与事务
 
-### 7.1 Content-addressed immutable store
+### 7.1 内容寻址的不可变存储
 
 Package 解包后放入 content-addressed directory：
 
@@ -312,7 +326,7 @@ resolve source
 
 任何一步失败都不改变 active snapshot。staging cleanup 可恢复且不得把 broad root 当删除目标。
 
-### 7.2 Authority 与 projection
+### 7.2 权威与投影
 
 Plugin authority 至少保存：
 
@@ -328,7 +342,7 @@ health 是可重建 projection。
 
 不得只靠扫描目录推断 enablement，也不得只靠 config 中一个 path 宣布包已验证。
 
-## 8. State model
+## 8. 状态模型
 
 不要用一个巨型 enum 表达所有正交状态。至少拆分：
 
@@ -355,7 +369,7 @@ RuntimeHealth
 
 health 不改变 package authority，MCP crash 也不能让 Plugin 变成“未安装”。
 
-## 9. Scope、优先级与冲突
+## 9. 范围、优先级与冲突
 
 Activation profile 至少区分：
 
@@ -381,7 +395,7 @@ Workspace 声明可以请求某 Plugin/version，但不能静默下载、启用�
 第一版不支持 Plugin 依赖其他 Plugin。长期若加入依赖，必须使用 lock snapshot、cycle detection、
 exact resolved versions 和冲突解释；不能在启动时执行隐式 package-manager install。
 
-## 10. Permission 与 credential
+## 10. 权限与凭据
 
 ### 10.1 两层授权
 
@@ -398,7 +412,7 @@ Invocation approval
 Grant 只限定最大能力，不能预先批准任意未来 side effect。MCP tool annotation 和 Skill
 `allowed-tools` 也不能扩大 grant。
 
-### 10.2 Permission 类型
+### 10.2 权限类型
 
 目标使用 tagged values，例如：
 
@@ -424,7 +438,7 @@ HostCapability { capabilityKind }
 Secret materialization 在启动/请求的最后时刻由 credential adapter 完成。Plugin manager 只看到
 slot → `CredentialRef` binding 和 revision。
 
-## 11. Contribution activation
+## 11. 贡献激活
 
 Resolver 输出 immutable snapshot：
 
@@ -461,9 +475,9 @@ load authority
 Agent/Turn 使用自己开始时捕获的 activation/catalog snapshot。Plugin update 不改变已开始的 model
 invocation；新版本只在下一个 safe point 生效。
 
-## 12. Update、rollback 与 uninstall
+## 12. 更新、回滚与卸载
 
-### 12.1 Update
+### 12.1 更新
 
 ```text
 fetch exact candidate
@@ -479,12 +493,12 @@ fetch exact candidate
 相同 Plugin version 出现不同 digest 必须拒绝，不能当普通 update。permission expansion、new
 credential slot、new executable 或 endpoint 变化都需要重新授权。
 
-### 12.2 Rollback
+### 12.2 回滚
 
 Rollback 是切换 authority 的 exact package ref，不重新下载，也不修改旧 object。若旧版本已被
 revoked/quarantined，则不可 rollback。
 
-### 12.3 Disable 与 uninstall
+### 12.3 Disable 与卸载
 
 Disable：
 
@@ -518,7 +532,7 @@ Uninstall：
 一个 Skill 可以指示 Agent 使用同 Plugin 的 MCP tool，但关联必须通过 stable contribution identity
 解析。Skill 文本不能通过写一句“此工具已批准”跳过 grant 或 approval。
 
-### 13.1 Connector 与 built-in tool
+### 13.1 Connector 与 built-in 工具
 
 `Connector` 是用户配置并授权的外部产品连接，不是 package format。一个 connector 可以由 MCP
 server、内置 host adapter 或将来的其他稳定 port 实现；一个 Plugin 也可以贡献 connector 所需的
@@ -583,7 +597,7 @@ Package ingestion 必须防御：
 Runtime 还必须假定 package 内容含 prompt injection 或恶意程序。签名、安装和启用都不能替代
 sandbox、data egress control 与 per-action approval。
 
-## 16. 错误与 diagnostics
+## 16. 错误与诊断
 
 至少区分：
 
@@ -613,7 +627,7 @@ CommandConflict
 - 当前 active generation 与上一个 rollback generation；
 - 哪个 MCP/Skill consumer 拒绝了 contribution。
 
-## 17. PL1+ 目标目录
+## 17. PL1+目标目录
 
 PL1+ 继续保持单 crate，目标扩展为：
 
@@ -652,7 +666,7 @@ zeta-rs/plugins/src/
 
 ## 18. 分阶段实施
 
-### Phase PL0：manifest + local validation（Current）
+### 阶段 PL0：清单+ local validation（当前状态）
 
 - 固定 v1 schema、identity、path 和 digest；
 - local development package discovery；
@@ -663,7 +677,7 @@ zeta-rs/plugins/src/
 当前完成条件：任何 contribution path 都不能逃出已验证 local snapshot root，且该 mutable
 local root 不会被发布给 runtime。content-addressed immutable runtime root 属于 PL1。
 
-### Phase PL1：authority + activation
+### 阶段 PL1：权威+激活
 
 - content-addressed store；
 - install/enable/disable/grant typed commands；
@@ -673,7 +687,7 @@ local root 不会被发布给 runtime。content-addressed immutable runtime root
 
 完成条件：失败激活不改变上一 generation，重启可恢复唯一 active package set。
 
-### Phase PL2：MCP contribution
+### 阶段 PL2：MCP 贡献
 
 - normalized MCP definition；
 - process/network/credential grant；
@@ -682,7 +696,7 @@ local root 不会被发布给 runtime。content-addressed immutable runtime root
 
 完成条件：安装不启动进程，enable 无 grant 不启动，update 不劫持 in-flight tool binding。
 
-### Phase PL3：registry、signature 与 update
+### 阶段 PL3：注册表、signature 与更新
 
 - registry metadata、digest-pinned download；
 - publisher signature、trust/revocation；
@@ -691,7 +705,7 @@ local root 不会被发布给 runtime。content-addressed immutable runtime root
 
 完成条件：相同 ID/version 不可换内容，grant expansion 必须重新 consent。
 
-### Phase PL4：生态扩展评审
+### 阶段 PL4：生态扩展评审
 
 只有具体需求有独立 threat model 和 stable port 后，才分别评审：
 

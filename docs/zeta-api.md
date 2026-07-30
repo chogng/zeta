@@ -223,7 +223,7 @@ pub trait SseDecoder {
 - idle timer；
 - transport metrics backend。
 
-### 4.4 非 SSE stream
+### 4.4 非 SSE 流
 
 Ollama native API 使用 NDJSON，不能塞进名为 `sse/` 的模块。主架构仍以用户确定的三条同级主轴
 为中心，但遇到已验证的非 SSE 协议时增加同级模块：
@@ -235,7 +235,7 @@ endpoint/    requests/    sse/    websocket/    ndjson/
 `ndjson/` 只解释由 `zeta-client::NdjsonRecord` 完成 framing 的 API object。未来若接入 WebSocket
 或 gRPC，也按真实协议增加同级 codec，不能伪装成 SSE。
 
-### 4.5 OpenAI Platform 与 ChatGPT/Codex endpoint 清单
+### 4.5 OpenAI Platform 与 ChatGPT/Codex 端点清单
 
 此前把候选名仅与公开 OpenAI Platform `/v1` OpenAPI 比对，遗漏了 ChatGPT/Codex service
 surface。这是错误的。`../codex/codex-rs/codex-api/src/endpoint/mod.rs` 的 endpoint 集合明确包含
@@ -279,7 +279,7 @@ ChatGPT subscription 登录与其 backend contract 不进入本 crate：`zeta-co
 路径，连接与 protocol 由 upstream Codex 承担；对公开 Platform API，才按真实协议在
 `zeta-api::websocket`、`zeta-client` 和 `zeta-http-client` 分层实现。
 
-## 5. Provider runtime 联动
+## 5. 供应商运行时联动
 
 `zeta-api` 不知道当前 Provider registry，但可以提供包含兼容差异的 endpoint profile：
 
@@ -324,7 +324,7 @@ pub enum OpenAiChatProfile {
 
 ## 6. 与 `zeta-client` 的边界
 
-### 6.1 Request
+### 6.1 请求
 
 ```text
 model-provider
@@ -352,7 +352,7 @@ Header ownership：
 
 Header merge 必须有冲突规则，禁止简单拼接后让后写值静默覆盖 secret 或协议 header。
 
-### 6.2 Unary response
+### 6.2 Unary 响应
 
 `zeta-client` 通过 `zeta-http-client` 返回：
 
@@ -368,7 +368,7 @@ status + headers + bounded bytes + attempt/timing evidence
 - request ID/retry evidence 的安全提取；
 - canonical response/error。
 
-### 6.3 Streaming response
+### 6.3 流式处理响应
 
 ```text
 zeta-client
@@ -381,7 +381,7 @@ zeta-api::sse/ndjson
 底层 transport idle timer 在任意合法 wire activity 时更新；operation client 维护 frame activity。
 API decoder 维护 semantic progress，并过滤不应暴露为模型输出的 heartbeat。
 
-### 6.4 Retry
+### 6.4 重试
 
 `zeta-client` 执行 retry，`zeta-api` 只提供协议事实：
 
@@ -393,7 +393,7 @@ API decoder 维护 semantic progress，并过滤不应暴露为模型输出的 h
 
 Model-provider 选择最终 typed policy。API 不 sleep、不创建 attempt loop，也不 fallback。
 
-### 6.5 Telemetry
+### 6.5 遥测
 
 `zeta-http-client` 拥有 HTTP/WebSocket diagnostics 与 redaction；`zeta-client` 拥有
 operation/attempt/stream telemetry。API 只提供低基数 protocol classification：
@@ -409,7 +409,7 @@ api.stream.heartbeat_class
 API 不记录 raw request/response/SSE payload。Exact model ID、prompt、tool arguments 和 secret 不得
 进入默认 telemetry。
 
-## 7. Canonical contract
+## 7. Canonical 契约
 
 Canonical values 由 `zeta-protocol` 拥有。`zeta-api` 只引用或显式 re-export 必要类型：
 
@@ -439,7 +439,7 @@ ModelResponse
 
 只有两个以上独立组件需要相同语义时，才将新 value 提升到 protocol。
 
-## 8. Streaming、heartbeat 与完成语义
+## 8. 流式处理、heartbeat 与完成语义
 
 状态机：
 
@@ -470,7 +470,7 @@ truncated stream。
 `last_wire_activity` 属于 client；`last_semantic_progress` 属于 API/runtime。不能因为模型长时间
 reasoning 而把“无文本”误判为连接死亡。
 
-## 9. Prompt/context cache
+## 9. Prompt/上下文缓存
 
 Prompt cache 的 wire 语义属于 `requests/`：
 
@@ -487,7 +487,7 @@ Ollama `keep_alive` 是模型 residency request 字段，不是 prompt cache，�
 
 Models manager 只把 cache capability 当 metadata，不参与一次 invocation 的 cache 生命周期。
 
-## 10. Catalog wire
+## 10. 目录协议格式
 
 Catalog request/response codec 也按同一结构组织：
 
@@ -518,7 +518,7 @@ zeta-client
 
 Inference endpoint 与 catalog endpoint 可能不共享 base URL，model-provider 必须显式解析 target。
 
-## 11. Error
+## 11. 错误
 
 目标错误只表达协议事实：
 
@@ -647,7 +647,7 @@ fixture 把三者重新绑定。目录不是创建空文件的要求；只有实
 任何 Rust module 接近 500 LoC 时按 request/response/error/usage/cache 拆分，超过约 800 LoC
 不继续堆功能。新 test module 使用 sibling `*_tests.rs`。
 
-## 13. Public API
+## 13. 公共接口
 
 只导出：
 
@@ -671,7 +671,7 @@ fixture 把三者重新绑定。目录不是创建空文件的要求；只有实
 新增 public trait 必须说明实现者对 validation、terminal lifecycle、unknown event、secret redaction
 和 final-response parity 的责任。
 
-## 14. Provider/profile 验证矩阵
+## 14. 供应商/配置档案验证矩阵
 
 | Provider runtime | API profile | Streaming | 已确认的协议差异 |
 | --- | --- | --- | --- |
@@ -693,7 +693,7 @@ fixture 把三者重新绑定。目录不是创建空文件的要求；只有实
 
 ## 15. 测试
 
-### 15.1 Endpoint
+### 15.1 端点
 
 - method、relative path、query；
 - required protocol headers；
@@ -702,7 +702,7 @@ fixture 把三者重新绑定。目录不是创建空文件的要求；只有实
 - endpoint/profile 绑定；
 - custom target 不能被 endpoint 替换 origin。
 
-### 15.2 Requests
+### 15.2 请求
 
 - canonical request → exact wire fixture；
 - unary fixture → canonical response；
@@ -731,7 +731,7 @@ idle deadline、proxy/TLS、pool 和 HTTP diagnostics 的测试属于 `zeta-http
 
 ## 16. 迁移计划
 
-### Phase 1：建立共享 client layers
+### 阶段 1：建立共享客户端分层
 
 - 在 `zeta-http-client` 建立 HTTP request/response/config port；
 - 把 `HttpHeader`、raw request/response bytes 和 `UreqHttpClient` 迁入底层 crate；
@@ -739,28 +739,28 @@ idle deadline、proxy/TLS、pool 和 HTTP diagnostics 的测试属于 `zeta-http
 - 保住现有同步 unary 行为；
 - `zeta-api` 开始依赖 operation client port。
 
-### Phase 2：拆 endpoint 与 requests
+### 阶段 2：拆端点与请求
 
 - 已将 `Api` Provider enum 的分派移到 model-provider；
 - 已建立 OpenAI Responses、Anthropic Messages、OpenAI Chat endpoint；
 - 已把现有 JSON conversion 物理移入 `requests/`；
 - 已删除 Provider 级空 facade。
 
-### Phase 3：SSE vertical slice
+### 阶段 3：SSE 纵向切片
 
 - 在 client 实现 SSE framing；
 - 已在 API 实现 OpenAI Responses `sse/` decoder；
 - 已接 Anthropic Messages decoder 与 `ping`/content-block lifecycle；
 - 由 model-provider 暴露 canonical stream。
 
-### Phase 4：兼容差异与 NDJSON
+### 阶段 4：兼容差异与 NDJSON
 
 - DeepSeek comment heartbeat/usage；
 - Ollama native NDJSON；
 - Google native profiles；
 - 逐家补 error/cache/stream fixtures。
 
-### Phase 4.5：ChatGPT/Codex service surface
+### 阶段 4.5：ChatGPT/Codex 服务接口面
 
 - 建立 [`zeta-codex-app-server`](codex-app-server.md)，由 upstream Codex managed login 提供
   ChatGPT/Codex subscription runtime；
@@ -769,7 +769,7 @@ idle deadline、proxy/TLS、pool 和 HTTP diagnostics 的测试属于 `zeta-http
 - 为 realtime call / WebSocket 三套 wire adapter 建立脱敏 contract fixture；
 - 不复制 Codex `EndpointSession` 的 transport/retry/telemetry 所有权。
 
-### Phase 5：Catalog wire
+### 阶段 5：目录协议格式
 
 - 实现 list endpoint/request/response codec；
 - model-provider 实现 models manager source；
@@ -829,7 +829,7 @@ idle deadline、proxy/TLS、pool 和 HTTP diagnostics 的测试属于 `zeta-http
 - [Prompt caching](https://docs.x.ai/developers/advanced-api-usage/prompt-caching)
 - [Model APIs](https://docs.x.ai/developers/rest-api-reference/inference/models)
 
-### Qwen / Alibaba Cloud Model Studio
+### Qwen / Alibaba Cloud 模型 Studio
 
 - [Streaming output](https://help.aliyun.com/en/model-studio/stream)
 - [Context cache](https://help.aliyun.com/en/model-studio/context-cache)

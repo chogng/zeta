@@ -14,6 +14,19 @@
 > - Interactive login control plane：[`login.md`](login.md)
 > - ChatGPT/Codex subscription runtime：[`codex-app-server.md`](codex-app-server.md)
 
+## 快速理解
+
+模型运行时把“供应商、模型和用户配置”解析成一次不可变调用绑定，再组合协议、重试与网络层完成
+调用；它不复制这些下层能力。
+
+| 读者首先会问 | 直接答案 | 深入阅读 |
+| --- | --- | --- |
+| 本次到底使用哪个模型？ | 根据供应商定义、用户选择和调用覆盖生成不可变运行时绑定 | [运行时解析流程](#4-运行时解析流程) |
+| Base URL、API profile 和 deployment 谁决定？ | 声明层限定合法形态，运行时解析出本次调用的最终值 | [供应商与 API 端点](#5-供应商与-api-端点的联动) |
+| 凭据由这里保存吗？ | 不保存；运行时只向凭据领域请求本次调用所需的敏感材料 | [供应商凭据](#6-供应商凭据与订阅后端) |
+| HTTP 重试和流式分帧在哪里？ | 操作重试属于 `zeta-client`，协议编解码属于 `zeta-api`，传输属于 HTTP 客户端 | [重试分工](#8-重试分工)、[流式处理分工](#9-流式处理分工) |
+| 当前已经能做什么？ | 已具备同步 unary 组合；凭据和流式调用仍未完成 | [当前实现审计](#3-当前实现审计) |
+
 ## 1. 结论
 
 `zeta-model-provider` 把声明配置解析为一次不可变、可运行的模型绑定。它回答：
@@ -122,7 +135,7 @@ Arc<dyn ModelInvoker>
 解析结果必须不可变。配置或 credential revision 变化后创建新的 runtime，不在飞行中的调用对象
 上做可变热更新。
 
-## 5. Provider 与 API endpoint 的联动
+## 5. 供应商与 API 端点的联动
 
 Provider 名称不能等同于 API 协议。同一 Provider 可以选择多个正式 endpoint：
 
@@ -154,7 +167,7 @@ let binding = ApiBinding::OpenAiChat {
 - profile 变化必须是显式配置或 built-in definition 变化；
 - 已有配置不能静默迁移到另一正式 API。
 
-### 5.1 OpenAI service surface 不是 OpenAI-compatible profile
+### 5.1 OpenAI 服务接口面不是 OpenAI-compatible 配置档案
 
 公开 OpenAI Platform API 与 ChatGPT/Codex service 都可能使用 `responses`、`models` 或 realtime
 这样的相对 path，但它们的 base URL、credential、可用 operation 和 wire 差异不能由 path 推断。
@@ -183,7 +196,7 @@ ChatGPT/Codex subscription 不构造 `ResolvedApiTarget + Bearer token` binding�
 [`zeta-codex-app-server`](codex-app-server.md) `SubscriptionModelBackend` 构造；上游 Codex 选择
 allow-listed target、管理 credential refresh，并执行实际 backend request。
 
-## 6. Provider credential 与 subscription backend
+## 6. 供应商凭据与订阅后端
 
 Provider 的共同点只到“调用前需要可用身份”为止。API key、AWS credential chain、Google ADC、
 Microsoft identity 和签名请求仍由本 crate 的 direct-provider runtime materialize；它们的 secret
@@ -209,7 +222,7 @@ raw access token、header map 或 arbitrary ChatGPT base URL。Codex adapter 是
 refresh/rebuild；Codex subscription 由 upstream Codex 自己刷新，Zeta 只接收 reauthentication-required
 或稳定 execution error。`zeta-client` 不读取 secrets，也不自行刷新或重试认证。
 
-## 7. Header 和 target
+## 7. 标头和目标
 
 | 内容 | Owner |
 | --- | --- |
@@ -226,7 +239,7 @@ refresh/rebuild；Codex subscription 由 upstream Codex 自己刷新，Zeta 只�
 Runtime 合并 headers 时必须使用 typed origin 和冲突规则。认证 header 不得被协议层覆盖，协议
 必需 header 不得被用户任意删除；所有 secret header 的 `Debug` 必须脱敏。
 
-## 8. Retry 分工
+## 8. 重试分工
 
 `zeta-client` 拥有 retry 机制，但 runtime 选择 retry policy：
 
@@ -252,7 +265,7 @@ Inference 通常是 POST，不能仅因“尚未收到 token”就假定安全�
 - fallback model/provider 是 Agent policy，不是 client retry；
 - runtime 只选择 typed policy，不自己 sleep 或写 attempt loop。
 
-## 9. Streaming 分工
+## 9. 流式处理分工
 
 ```text
 zeta-client (direct-provider path)
@@ -274,7 +287,7 @@ DeepSeek `: keep-alive` 的 frame 边界由 client 识别，作为无 payload �
 协议层确认它不形成 model output。Anthropic `event: ping` 同样由协议层过滤。Runtime 不解析
 `data:` 行或 provider event JSON。
 
-## 10. Catalog source
+## 10. 目录来源
 
 `zeta-model-provider` 是 models manager 与实际 Provider network runtime 的连接点：
 
@@ -381,7 +394,7 @@ zeta-rs/model-provider/
 Provider module 只保留确实属于 runtime selection 的差异。Request DTO、SSE event struct 和 HTTP
 client implementation 不得放入 `providers/`。
 
-## 13. Public API
+## 13. 公共接口
 
 Public API 只暴露：
 

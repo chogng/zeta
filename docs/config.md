@@ -15,6 +15,20 @@
 > Interactive login：[`login.md`](login.md)
 > Secret persistence：[`secrets.md`](secrets.md)
 
+## 快速理解
+
+配置系统回答“在当前作用域下，用户想要什么值”；领域管理器回答“现在实际可用什么”，App Server
+只在安全点把两者组合成运行时快照。
+
+| 用户或调用方的动作 | 直接结果 | 不代表什么 |
+| --- | --- | --- |
+| 修改用户配置 | 产生新的用户配置 revision | 不代表正在运行的 Turn 立即改变 |
+| Workspace 声明模型或 MCP | 进入作用域解析和信任校验 | 不会自动安装、授权或连接 |
+| Session 覆盖默认模型 | 影响后续模型安全点生成的快照 | 不改写用户或 Workspace 配置 |
+| Plugin、MCP 或 Skill 协调失败 | 保留期望配置并更新健康诊断 | 不会静默回滚用户想要的状态 |
+| 配置引用凭据 | 只保存不敏感的凭据引用 | 不保存 token、API key 或 OAuth 状态 |
+| 系统或组织设置安全要求 | 对解析结果施加约束 | 不是可以被低优先级配置覆盖的普通字段 |
+
 ## 1. 结论
 
 Zeta 对外提供统一配置体验，但不建立一个拥有所有产品状态的巨型 Config 数据库。
@@ -45,7 +59,7 @@ Skill catalog、credential 和 action policy 继续由各自领域拥有。App S
 - Workspace 声明可以请求能力，但不能自行安装、授权、绑定 credential 或扩大 sandbox；
 - 运行中的 Turn 或 model request 只使用开始时冻结的 snapshot。
 
-## 2. Authority 分布
+## 2. 权威分布
 
 统一配置体验不等于统一物理 authority。长期 authority 分布如下：
 
@@ -72,7 +86,7 @@ bundle、authorization header 或 refresh 状态。
 的 namespace 或 generation。它 strict-parse 为 JSON document，MCP/Skill ID 必须落在
 `workspace:<workspace-id>:` namespace，且 MCP declaration 不包含 credential binding。
 
-## 3. 配置 source 与 scope
+## 3. 配置来源与范围
 
 配置 source 按以下顺序参与解析：
 
@@ -160,7 +174,7 @@ credential、订阅 entitlement 和远端模型是否实际可调用，由创建
 Workspace 配置不能覆盖审批模型，避免仓库内容自行降低 reviewer 强度。模型不可用或不兼容时
 fail closed，不得静默换成其他审批模型。
 
-## 5. Resolved config snapshot
+## 5. Resolved config 快照
 
 解析结果是不可变、带 generation 和来源信息的值：
 
@@ -246,7 +260,7 @@ validate typed command against ConfigRevision
 任何中间 runtime failure 都不能让 Config authority 回退到另一个用户未请求的值。失败以
 `Blocked`、`Broken`、`Degraded` 或 `Unavailable` 等 typed state 和 diagnostic 表达。
 
-## 7. Plugin contribution 规则
+## 7. Plugin 贡献规则
 
 Plugin manifest 可以贡献 Skill、MCP server declaration 和静态资源。配置只保存 Plugin
 identity、用户请求或与 Plugin authority 关联的稳定 reference，不复制 manifest 内容。
@@ -291,7 +305,7 @@ Workspace request
 
 Workspace request 不能隐含任何后续步骤。
 
-## 8. MCP 配置与 runtime
+## 8. MCP 配置与运行时
 
 MCP 有两类定义来源：
 
@@ -332,7 +346,7 @@ MCP runtime snapshot 可以保存：
 PID、OAuth verifier、access token、request ID、SSE cursor 和 live session ID 既不进入普通 Config，
 也不进入 Thread event。
 
-## 9. Skill 配置与 catalog
+## 9. Skill 配置与目录
 
 普通 Config 只定义显式 user/workspace Skill source。Built-in Skill 来自 Zeta release，
 Plugin Skill 来自 `PluginActivationSnapshot`。
@@ -356,7 +370,7 @@ resolved sources
 `ResolvedConfigSnapshot` 不携带 Skill 正文。Core `ContextAssembler` 只接收已经冻结的 activation
 内容和 provenance，不在 model request 组装期间重新扫描文件系统。
 
-## 10. App Server surface
+## 10. App Server 接口面
 
 外部 API 提供统一产品体验，但 mutation 按领域保持 typed：
 
@@ -377,7 +391,7 @@ revision。
 
 不要把所有领域重新塞回一个无限增长的通用 `config/update` JSON patch。
 
-## 11. Runtime snapshot 与 safe point
+## 11. 运行时快照与安全点
 
 App Server 根据多个 generation 构造不可变环境：
 

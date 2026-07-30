@@ -28,7 +28,7 @@ zeta-rs/file-icons/
 `seti/manifest.json` 是唯一匹配数据源。修改 associations 后必须通过 manifest validation 与
 resolver tests。Desktop 不得复制另一份 filename/extension association table。
 
-## Public API
+## 公共接口
 
 | Symbol | Contract |
 | --- | --- |
@@ -84,7 +84,7 @@ cargo test --manifest-path zeta-rs/Cargo.toml -p zeta-file-icons
 cargo fmt --manifest-path zeta-rs/Cargo.toml -p zeta-file-icons -- --check
 ```
 
-## Failure semantics 与当前限制
+## 失败语义与当前限制
 
 - JSON syntax 或未知字段错误返回 `SetiManifestError::InvalidJson`。
 - association 指向缺失 definition 时返回带键路径的 `UnknownIconDefinition`。

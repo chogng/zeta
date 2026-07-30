@@ -1,14 +1,15 @@
 # `zeta-policy`
 
-> 本 README 解释 action permission domain、deterministic decision engine 和内部决策顺序。跨
-> Auto Review、Core、App Server、Tool 与 sandbox 的系统语义见
+> 本 README 解释 action permission domain、deterministic decision engine 和内部决策顺序。
+> 权限系统的用户语义与跨 Auto Review、Core、App Server、Tool、sandbox 的完整执行路径见
+> [`docs/permissions.md`](../../docs/permissions.md)；Auto Review 风险判断见
 > [`docs/auto-review.md`](../../docs/auto-review.md)。
 
 `zeta-policy` 是 Agent action execution decision 的 deterministic authority。它可以调用 advisory
 `ActionClassifier`，但只有 `PolicyEngine` 能创建 `AutoReviewGrant`。本 crate 不执行 Tool、不显示
 approval UI、不选择 model、不持久化 rule/grant。
 
-## Domain 与 public contract
+## Domain 与公共契约
 
 | 领域 | 关键类型 | 所有权 |
 | --- | --- | --- |
@@ -82,7 +83,7 @@ PolicyEngine::decide(request, cancellation)
 顺序是 contract。尤其是 require-sandbox rule 在 existing unsandboxed grant 之前，因此显式管理员
 约束不能被旧 grant 绕过。
 
-## Auto approval matrix
+## 自动批准矩阵
 
 `apply_assessment` 先通过 `validate_against` 要求 approval capabilities non-empty/exact、revision
 capabilities 是原 action 的 subset，再由 `automatic_approval_decision` 应用：
@@ -96,7 +97,7 @@ capabilities 是原 action 的 subset，再由 `automatic_approval_decision` 应
 `Approve` 仍只是 recommendation。`AutoReviewGrant` 绑定 assessment ID、action digest、完整
 capability set 和 policy revision。Core 在执行时再把它绑定到 exact durable Tool Call。
 
-## Error 与 failure semantics
+## 错误与失败语义
 
 | Condition | Outcome |
 | --- | --- |
@@ -130,9 +131,8 @@ cargo test -p zeta-policy
 bazel test //zeta-rs/policy:policy-unit-tests
 ```
 
-`engine_tests.rs` 使用 panic classifier 证明 deterministic/sandbox paths 不调用 model，并覆盖
-exact grant、risk matrix、recommendation capability constraints、failure policy、binding
-mismatch、sandbox-denial second review 和 rule precedence。
+`engine_tests.rs` 使用会触发 panic 的分类器，证明确定性/沙箱路径不调用模型；并覆盖精确授权、
+风险矩阵、建议能力约束、失败策略、绑定不匹配、沙箱拒绝后的第二次审查和规则优先级。
 
 修改 recommendation 或 final decision 时必须同步更新 `zeta-auto-review` schema、Core scheduler、
 durable authority、eval corpus 和系统文档。新增 capability kind 时同步审查 Tool materializer、
