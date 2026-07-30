@@ -1,4 +1,4 @@
-# `zeta-client` 架构与演进方案
+# 模型调用操作层
 
 > - 物理位置：`zeta-rs/zeta-client/`
 > - Rust crate：`zeta_client`
@@ -15,7 +15,7 @@
 > [W3C Trace Context](https://www.w3.org/TR/trace-context/) 和
 > [OpenTelemetry HTTP semantic conventions](https://opentelemetry.io/docs/specs/semconv/http/)。
 
-## 1. 结论
+## 快速理解
 
 `zeta-client` 是 Provider-neutral 的 API operation client。它把调用方已经构造完成的 request
 通过共享 `zeta-http-client` 执行，并统一处理：
@@ -49,6 +49,14 @@ zeta-api    负责“这个 API 的 bytes/event 表示什么”
 当前实现仍直接导出 `HttpHeader`、`ClientRequest`/`ClientResponse`、`HttpClient` 和
 `UreqHttpClient`。这是新底层 crate 落地前的迁移状态，不是长期 ownership；现有
 `RetryPolicy`、SSE framer 和 operation telemetry 是保留在 `zeta-client` 的能力。
+
+| 调用中发生的事情 | 本层是否负责 | 说明 |
+| --- | --- | --- |
+| 按明确策略重试一次操作 | ✅ | 包含退避、抖动和总截止时间 |
+| 把字节流切成 SSE 或 NDJSON 记录 | ✅ | 不解释记录中的供应商语义 |
+| 选择模型、服务地址或凭据 | ❌ | 由模型调用系统决定 |
+| 解释 OpenAI 或 Anthropic 事件 | ❌ | 由模型 API 协议层负责 |
+| 处理代理、TLS 和连接池 | ❌ | 由网络层负责 |
 
 ## 2. 拥有与不拥有
 

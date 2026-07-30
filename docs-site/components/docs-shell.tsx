@@ -24,6 +24,7 @@ export function DocsShell({ currentDoc, currentIndex, groups, html, nextDoc, pre
   const searchInput = useRef<HTMLInputElement>(null);
   const titles = useMemo(() => new Map(searchItems.map((item) => [item.slug, displayTitle(item)])), [searchItems]);
   const activeGroup = groups.find((group) => group.slugs.includes(currentDoc.slug)) ?? { label: "工程文档", slugs: [] };
+  const sourceUrl = `https://github.com/chogng/zeta/edit/main/${currentDoc.sourcePath}`;
 
   useEffect(() => {
     const saved = window.localStorage.getItem("zeta-docs-theme");
@@ -203,10 +204,14 @@ export function DocsShell({ currentDoc, currentIndex, groups, html, nextDoc, pre
 
       <main className="content-layout">
         <article className="doc">
-          <a className="source-link" href={`/source/${currentDoc.slug}`} target="_blank" rel="noreferrer" aria-label="查看 Markdown 源文件" title="查看 Markdown 源文件">
-            <span aria-hidden="true">↗</span>
-          </a>
-          <div className="breadcrumbs"><span>{currentDoc.group}</span><span>/</span><span>第 {currentIndex + 1} 篇</span></div>
+          <div className="doc-meta">
+            <div className="breadcrumbs"><span>{currentDoc.group}</span><span>/</span><span>第 {currentIndex + 1} 篇</span></div>
+            <a className="source-reference" href={sourceUrl} target="_blank" rel="noreferrer" aria-label={`在 GitHub 编辑 ${currentDoc.sourcePath}`} title="在 GitHub 编辑源文档">
+              <span className="source-reference-label">内容来源</span>
+              <code className="source-path">{currentDoc.sourcePath}</code>
+              <span className="source-link-icon" aria-hidden="true">↗</span>
+            </a>
+          </div>
           <h1>{displayTitle(currentDoc)}</h1>
           <p className="doc-description">{currentDoc.description}</p>
           <div ref={prose} className="prose" dangerouslySetInnerHTML={{ __html: html }} />

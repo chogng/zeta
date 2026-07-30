@@ -5,6 +5,12 @@ Zeta is a Rust-first agent system with CLI, TUI, and app-server product entries.
 The Rust workspace lives in [`zeta-rs`](zeta-rs); Electron is a separate client under
 [`desktop`](desktop).
 
+The native terminal product is distributed as **`zeterm`**. Everything inside the repository
+retains the Zeta namespace, including implementation identifiers such as `zeta-native` and
+`zeta-terminal-*`; the name changes only at the user-facing distribution boundary. The naming
+rule and terminal-first product structure are documented in
+[`docs/native-terminal-ui.md`](docs/native-terminal-ui.md).
+
 Team responsibilities and integration contracts are documented separately:
 
 - [Desktop architecture](docs/zeta-desktop-architecture.md)

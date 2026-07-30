@@ -1,4 +1,4 @@
-# `zeta-core` 架构
+# 会话与执行系统
 
 > 物理位置：`zeta-rs/core/`
 > Rust crate：`zeta_core`

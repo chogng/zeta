@@ -1,4 +1,4 @@
-# `zeta-mcp` / `zeta-rmcp-client` 架构与演进方案
+# MCP 集成系统
 
 > Product runtime 当前实现：[`zeta-rs/mcp/`](../zeta-rs/mcp/README.md)，
 > Rust crate：`zeta_mcp`

@@ -1,4 +1,4 @@
-# `zeta-api` 架构与演进方案
+# 模型 API 协议
 
 > - 物理位置：`zeta-rs/zeta-api/`
 > - Rust crate：`zeta_api`
@@ -17,7 +17,7 @@
 > Provider 官方资料核对日期：2026-07-26。请求字段、事件类型、缓存语义和错误结构会持续变化；
 > 实现必须以官方文档和脱敏 contract fixture 为准，不能仅凭 OpenAI-compatible 标签推断。
 
-## 1. 结论
+## 快速理解
 
 `zeta-api` 是纯模型 API 协议层。它接收 provider-independent canonical model value，负责：
 
@@ -44,6 +44,15 @@ endpoint/    requests/    sse/
 
 通用 HTTP/WebSocket backend、proxy/TLS/pool 与 transport diagnostics 属于 `zeta-http-client`；
 operation retry、SSE/NDJSON framing 和 operation telemetry 属于 `zeta-client`。
+
+| 需要处理的内容 | 本层是否负责 | 交给谁 |
+| --- | --- | --- |
+| 把统一模型请求编码成供应商 JSON | ✅ | 本层 |
+| 解释供应商响应、错误和流式事件 | ✅ | 本层 |
+| 选择供应商、模型和凭据 | ❌ | 模型调用系统 |
+| 判断是否安全重试并执行等待 | ❌ | 模型调用操作层 |
+| 建立 HTTP 连接、代理和 TLS | ❌ | 网络层 |
+| 推进 Agent Turn 和工具循环 | ❌ | 会话与执行系统 |
 
 ## 2. 四层关系
 

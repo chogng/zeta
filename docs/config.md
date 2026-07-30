@@ -1,4 +1,4 @@
-# `zeta-config` 架构与 Plugin/MCP/Skill 接入方案
+# 配置系统
 
 > 物理位置：`zeta-rs/config/`  
 > Rust crate：`zeta_config`  

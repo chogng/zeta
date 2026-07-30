@@ -1,4 +1,4 @@
-# `zeta-models-manager` 架构与演进方案
+# 模型目录系统
 
 > 计划物理位置：`zeta-rs/models-manager/`
 > Rust crate：`zeta_models_manager`

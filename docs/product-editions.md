@@ -4,7 +4,7 @@
 > Desktop 进程与安全边界由
 > [`zeta-desktop-architecture.md`](zeta-desktop-architecture.md) 负责。
 
-## 决策
+## 快速理解
 
 Zeta 的 Desktop 源码保存在同一仓库，但从三个静态产品入口构建：
 

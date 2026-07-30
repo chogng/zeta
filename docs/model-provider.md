@@ -1,4 +1,4 @@
-# `zeta-model-provider` 架构与演进方案
+# 模型调用系统
 
 > - 物理位置：`zeta-rs/model-provider/`
 > - Rust crate：`zeta_model_provider`
@@ -16,69 +16,83 @@
 
 ## 快速理解
 
-模型运行时把“供应商、模型和用户配置”解析成一次不可变调用绑定，再组合协议、重试与网络层完成
-调用；它不复制这些下层能力。
+模型调用系统把用户选择的模型变成一次可执行调用：先确定供应商、模型、服务地址和凭据，再把
+请求交给协议、重试和网络层。配置在调用开始时冻结，因此一次调用不会在执行途中悄悄换模型或
+凭据。
 
-| 读者首先会问 | 直接答案 | 深入阅读 |
+| 常见问题 | 系统行为 | 深入阅读 |
 | --- | --- | --- |
-| 本次到底使用哪个模型？ | 根据供应商定义、用户选择和调用覆盖生成不可变运行时绑定 | [运行时解析流程](#4-运行时解析流程) |
-| Base URL、API profile 和 deployment 谁决定？ | 声明层限定合法形态，运行时解析出本次调用的最终值 | [供应商与 API 端点](#5-供应商与-api-端点的联动) |
-| 凭据由这里保存吗？ | 不保存；运行时只向凭据领域请求本次调用所需的敏感材料 | [供应商凭据](#6-供应商凭据与订阅后端) |
-| HTTP 重试和流式分帧在哪里？ | 操作重试属于 `zeta-client`，协议编解码属于 `zeta-api`，传输属于 HTTP 客户端 | [重试分工](#8-重试分工)、[流式处理分工](#9-流式处理分工) |
-| 当前已经能做什么？ | 已具备同步 unary 组合；凭据和流式调用仍未完成 | [当前实现审计](#3-当前实现审计) |
+| 本次到底使用哪个模型？ | 根据供应商定义、用户选择和本次调用覆盖生成不可变绑定 | [一次调用如何形成](#1-一次调用如何形成) |
+| 自定义服务地址会影响什么？ | 只在供应商配置明确允许时生效，不会把一个服务偷偷当成另一个协议 | [供应商与 API 端点](#5-供应商与-api-端点的联动) |
+| 凭据由这里保存吗？ | 不保存；这里只取得本次调用所需的凭据，保存和登录属于相邻系统 | [供应商凭据](#6-供应商凭据与订阅后端) |
+| 失败后会自动重试吗？ | 只有调用类型明确允许安全重试时才会重试；模型推理默认不能仅凭“没收到输出”重跑 | [重试分工](#8-重试分工) |
+| 当前已经能做什么？ | 已具备同步、非流式调用组合；凭据闭环和真实流式调用尚未完成 | [当前实现审计](#3-当前实现审计) |
 
-## 1. 结论
+## 1. 一次调用如何形成
 
-`zeta-model-provider` 把声明配置解析为一次不可变、可运行的模型绑定。它回答：
-
-- 本次调用选择哪个 Provider 和模型；
-- 使用哪个 API profile；
-- 使用哪个 resolved base URL、deployment 和 credential；
-- 哪些 runtime headers、invocation defaults 和 Provider policy 生效；
-- 如何把 `zeta-api` 的协议 endpoint、`zeta-client` operation policy 与共享 transport 组合起来。
-
-它不再实现第二套 wire codec，也不拥有底层 HTTP transport。边界可以概括为：
-
-```text
-model-provider-config  描述 Provider
-model-provider         选择并组合 Provider runtime
-zeta-api               编解码 endpoint/request/event
-zeta-client            operation retry、framing、telemetry
-zeta-http-client       proxy/TLS/HTTP/WebSocket execution
+```mermaid
+flowchart TD
+    request["Agent 发起模型调用"] --> select["读取用户选择和调用覆盖"]
+    select --> definition["校验供应商定义与模型能力"]
+    definition --> identity{"使用哪种身份？"}
+    identity -- "API key 或云身份" --> credential["凭据系统提供本次调用材料"]
+    identity -- "ChatGPT / Codex 订阅" --> subscription["已认证的订阅后端"]
+    credential --> binding["冻结模型、端点、凭据范围与重试策略"]
+    subscription --> binding
+    binding --> encode["协议层编码请求"]
+    encode --> operation["操作层执行截止时间、重试和流式分帧"]
+    operation --> transport["网络层完成 HTTP / WebSocket 传输"]
+    transport --> result["返回统一模型结果"]
 ```
 
-## 2. 拥有与不拥有
+这条流程中，模型调用系统只拥有“选择并冻结本次调用绑定”。协议层解释请求和响应，操作层处理
+安全重试与分帧，网络层负责真实连接；任何一层都不能根据 URL 或模型名称重新猜测上层已经作出
+的选择。
 
-### 2.1 拥有
+一次绑定必须明确回答：
 
-- Provider runtime registry 和 adapter selection；
-- normalized config 到 immutable runtime 的解析；
-- `(ProviderId, ModelId)` resolution；
-- API profile selection；
-- API-key、cloud identity 等 direct-provider credential reference 解析和 runtime materialization；
-- resolved base URL、deployment、account/region scope；
-- credential、tenant 和 deployment headers；
-- Provider-level invocation defaults；
-- retry policy 的语义选择；
-- `ModelInvoker` 生命周期；
-- `zeta-api` endpoint、`zeta-client` operation 与共享 HTTP client 的组合；
-- 对已注入 subscription backend 的 provider/model binding；
-- Provider/model/target identity 到安全 runtime error 的补充；
-- models manager 所需 `ModelCatalogSource` runtime adapter。
+- 使用哪个供应商和模型；
+- 使用哪个 API 配置档案、服务地址和部署目标；
+- 使用哪种凭据来源和作用范围；
+- 哪些调用默认值与供应商规则生效；
+- 这类操作能否安全重试。
 
-### 2.2 不拥有
+## 2. 谁负责什么
 
-- 可持久化配置 schema 和 built-in definition authority；
-- Provider request/response/SSE DTO；
+| 责任 | 最终所有者 | 模型调用系统在其中做什么 |
+| --- | --- | --- |
+| 供应商和模型选择 | 模型调用系统 | 解析选择并生成不可变调用绑定 |
+| 合法配置形态 | 模型供应商配置 | 提供定义，模型调用系统只消费 |
+| 凭据保存和登录 | 凭据与登录系统 | 请求本次需要的敏感材料，不自行持久化 |
+| API 请求和响应含义 | 模型 API 协议层 | 选择明确的协议配置档案 |
+| 重试、截止时间和流式分帧 | 操作客户端 | 选择重试策略，不执行重试循环 |
+| HTTP、代理和 TLS | 网络层 | 提供解析后的目标和标头 |
+| 模型目录刷新 | 模型目录系统 | 提供目录访问适配器，不保存第二份缓存 |
+
+### 2.1 本系统拥有
+
+- 供应商运行时注册与适配器选择；
+- 规范化配置到不可变运行时的解析；
+- 供应商、模型和 API 配置档案的组合；
+- 服务地址、部署、账户与区域作用范围的最终解析；
+- 凭据引用到本次调用材料的绑定；
+- 供应商级调用默认值与重试策略选择；
+- 模型调用器 `ModelInvoker` 的生命周期；
+- 协议、操作客户端和共享网络客户端的组合；
+- 模型目录系统所需的运行时适配器。
+
+### 2.2 本系统不拥有
+
+- 可持久化配置模式和内置供应商定义；
+- 供应商请求、响应和流式事件的数据结构；
 - `/responses`、`/messages` 等 relative path；
-- JSON、SSE event 或 NDJSON object 的协议解释；
+- JSON、SSE 事件或 NDJSON 对象的协议解释；
 - DNS/TCP/TLS/proxy/connection pool；
-- retry attempt loop、backoff sleep 和 `Retry-After` 等待；
-- SSE framing、byte buffering、idle timer；
-- HTTP client telemetry backend；
-- catalog refresh、TTL、merge、filter 和 snapshot；
-- Agent loop、tool loop、Thread/Turn durable state。
-- 浏览器登录、OAuth callback、token refresh/revoke 或上游 credential persistence。
+- 重试循环、退避等待和 `Retry-After` 处理；
+- 流式分帧、字节缓冲和空闲计时；
+- 模型目录刷新、缓存、合并与筛选；
+- Agent 循环、工具循环和 Thread/Turn 持久状态；
+- 浏览器登录、OAuth 回调、令牌刷新撤销和上游凭据保存。
 
 ## 3. 当前实现审计
 

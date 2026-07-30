@@ -4,9 +4,16 @@
 > 新增具体主题请使用 [`theme-authoring-template.md`](theme-authoring-template.md)。
 > selector、交互状态与组件/Part CSS 的 canonical 所有权见 [`ui-styling-ownership.md`](ui-styling-ownership.md)。
 
-## 决策摘要
+## 快速理解
 
 Zeta 采用“注册表优先、编译器兜底”的两阶段模型。功能模块注册有稳定 ID、owner、描述和默认值的语义 token；主题创建时将 token 引用图与主题覆盖编译为不可变快照；浏览器层再把同一快照投影给 CSS、Terminal 等消费者。用户选择 `light`、`dark` 或 `system`，其中 `system` 只负责跟随操作系统并选择一个具体快照，不是第四套主题数据。
+
+| 想改变什么 | 应该修改哪里 | 不应该怎么做 |
+| --- | --- | --- |
+| 一个组件的语义颜色 | 修改或新增该组件所有者注册的 token | 在组件 CSS 中复制十六进制颜色 |
+| 整套主题外观 | 覆盖公开 token | 重写组件 selector |
+| 跟随操作系统明暗模式 | 选择 `system` | 维护第四套 system 主题值 |
+| 增加新的视觉值类型 | 有真实跨组件消费者后增加独立注册表 | 把阴影、字体或动效伪装成颜色 |
 
 ## 所有权
 

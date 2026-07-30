@@ -1,4 +1,4 @@
-# `zeta-plugins` 架构与演进方案
+# 插件系统
 
 > 物理位置：`zeta-rs/plugins/`
 > Rust crate：`zeta_plugins`

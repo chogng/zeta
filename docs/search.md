@@ -5,7 +5,7 @@
 > [`zeta-rs/app-server/README.md`](../zeta-rs/app-server/README.md)，wire DTO 与生成流程见
 > [`zeta-rs/app-server-protocol/README.md`](../zeta-rs/app-server-protocol/README.md)。
 
-## 决策摘要
+## 快速理解
 
 Workspace Search 由 Rust / App Server 承担权威执行，Desktop Search contrib 只拥有查询表单、
 取消时机、增量结果投影和可丢弃的视图状态。当前实现使用
@@ -14,6 +14,14 @@ Workspace Search 由 Rust / App Server 承担权威执行，Desktop Search contr
 
 这套 RPC 是产品搜索能力，不是模型 Tool。模型是否可以调用搜索、如何审批以及如何向模型压缩
 结果属于另一条 Tool/Policy contract；两者不能共享隐式权限或生命周期。
+
+| 用户操作 | 当前行为 | 当前限制 |
+| --- | --- | --- |
+| 搜索工作区文字 | 分批返回匹配项并持续显示进度 | 最多 5,000 条结果 |
+| 修改查询 | 取消旧任务并启动新任务 | 旧任务结果不会混入新查询 |
+| 使用正则或文件过滤 | 在 Rust 边界重新校验输入 | 只能使用工作区相对 glob |
+| 点击结果打开文件 | 尚未接通编辑器 | 结果当前只用于查看 |
+| 让模型调用搜索 | 走独立工具与权限契约 | 不复用界面搜索权限 |
 
 ## 所有权
 

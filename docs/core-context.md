@@ -1,4 +1,4 @@
-# `zeta-core` 上下文与 ContextManager
+# 上下文系统
 
 > Core 总体边界：[`core.md`](core.md)
 > Canonical Thread/Turn/Item contract：[`protocol.md`](protocol.md)

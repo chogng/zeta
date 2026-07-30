@@ -371,35 +371,6 @@ function sourceDocuments() {
   return [...systemDocs, ...walkReadmes(join(repositoryRoot, "zeta-rs"))];
 }
 
-const humanFirstSystemDocs = new Set([
-  "docs/app-server-client.md",
-  "docs/auto-review.md",
-  "docs/codex-app-server.md",
-  "docs/config.md",
-  "docs/core-context.md",
-  "docs/core-multi-agent.md",
-  "docs/core.md",
-  "docs/login.md",
-  "docs/mcp.md",
-  "docs/model-provider-config.md",
-  "docs/model-provider.md",
-  "docs/models-manager.md",
-  "docs/permissions.md",
-  "docs/plugins.md",
-  "docs/protocol.md",
-  "docs/sandboxing.md",
-  "docs/secrets.md",
-  "docs/skills.md",
-  "docs/tools.md",
-  "docs/tui.md",
-  "docs/zeta-agent-runtime-architecture.md",
-  "docs/zeta-app-server-api.md",
-  "docs/zeta-cli-architecture.md",
-  "docs/zeta-code-architecture-codex-style-v2.md",
-  "docs/zeta-desktop-architecture.md",
-  "docs/zeta-rs-architecture.md",
-]);
-
 function withoutInlineCode(line) {
   return line.replace(/`[^`]*`/g, "");
 }
@@ -480,8 +451,22 @@ function checkDocument(path) {
     failures.push(`一级标题数量应为 1，当前为 ${topLevelHeadings}`);
   }
   const sourcePath = relative(repositoryRoot, path).replaceAll("\\", "/");
-  if (humanFirstSystemDocs.has(sourcePath) && !/^## 快速理解$/m.test(lines.join("\n"))) {
-    failures.push("权威系统文档必须先提供“快速理解”章节，再进入内部实现");
+  if (sourcePath.startsWith("docs/")) {
+    const secondLevelHeadingIndexes = lines.flatMap((line, index) => (/^##\s+/.test(line) ? [index] : []));
+    const secondLevelHeadings = secondLevelHeadingIndexes.map((index) => lines[index]);
+    if (secondLevelHeadings[0] !== "## 快速理解") {
+      failures.push("系统文档必须把“快速理解”作为第一个二级标题，再进入流程和内部实现");
+    } else {
+      const quickStart = secondLevelHeadingIndexes[0] + 1;
+      const quickEnd = secondLevelHeadingIndexes[1] ?? lines.length;
+      const quickLines = lines.slice(quickStart, quickEnd);
+      const hasComparisonTable = quickLines.some((line, index) =>
+        /^\|.+\|$/.test(line) && /^\|\s*:?-{3,}/.test(quickLines[index + 1] ?? ""),
+      );
+      if (!hasComparisonTable) {
+        failures.push("“快速理解”必须包含一张面向场景、问题或行为的摘要表");
+      }
+    }
   }
   if (changed) writeFileSync(path, lines.join("\n"));
 

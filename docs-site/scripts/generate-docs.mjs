@@ -29,6 +29,7 @@ const groups = [
       "icons",
       "search",
       "native-text-input",
+      "native-terminal-ui",
       "pdf",
       "typst",
       "chat-session-inspector",

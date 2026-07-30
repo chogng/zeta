@@ -2,6 +2,19 @@
 
 > 本文是可安装用户主题的 canonical 说明。可以直接复制并修改 [`color-theme.template.json`](../desktop/generated/design-tokens/color-theme.template.json)；架构与可靠性边界见 [`design-tokens.md`](design-tokens.md)，可用 token 见[生成目录](../desktop/generated/design-tokens/design-tokens.md)，格式 Schema 见 [`color-theme.schema.json`](../desktop/generated/design-tokens/color-theme.schema.json)。
 
+## 快速理解
+
+创建主题最简单的方法是在 Settings → Appearance 中从当前主题另存一份，再只修改需要变化的
+语义颜色。主题文件不需要复制完整颜色表；未覆盖的颜色会继续使用所选明暗方案的默认值。
+
+| 想做什么 | 推荐方式 | 生效方式 |
+| --- | --- | --- |
+| 从当前外观开始修改 | 使用“Create from current theme” | 保存后立即预览和切换 |
+| 安装别人提供的主题 | 把 JSON 放入用户主题目录 | 完全重启后加载 |
+| 更新已有主题 | 在设置中保存，或替换同名文件 | 设置内保存立即生效；外部替换需重启 |
+| 删除主题 | 在设置中删除，或移除对应文件 | 自动回到内置明暗主题 |
+| 修复加载失败 | 根据 Appearance 中的错误修改 JSON | 其他有效主题不受影响 |
+
 ## 从当前主题创建
 
 推荐在 Settings → Appearance 中操作：

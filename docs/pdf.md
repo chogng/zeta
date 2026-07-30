@@ -4,7 +4,7 @@
 > [`zeta-rs/utils/pdf/README.md`](../zeta-rs/utils/pdf/README.md)。本文拥有 PDF ingestion、OCR、
 > retrieval 与 citation 的跨系统边界和演进方向。
 
-## 1. 结论
+## 快速理解
 
 `zeta-pdf` 是 Zeta 的 **PDF 原生处理边界**：它通过随安装包发布的
 PDFium 读取页面并提取原生文字。页面渲染是为 OCR 准备的 Proposed extension，当前尚未实现。
@@ -30,6 +30,14 @@ Chromium PDF Viewer            document-library / App Server
 Electron/Chromium 的 PDF Viewer 可以负责普通预览，不需要由 `zeta-pdf`
 渲染页面。只有 Agent 入库、文字定位、扫描页 OCR 或生成缩略图等后端工作才
 使用 PDFium。
+
+| 用户需求 | 当前路径 | 当前状态 |
+| --- | --- | --- |
+| 在 Desktop 中查看 PDF | Chromium PDF Viewer | 可由界面直接承担 |
+| 让 Agent 读取原生文字 | PDF 处理边界提取逐页文字 | 已实现 |
+| 识别扫描版 PDF | 渲染页面后交给 OCR | 计划设计 |
+| 建立可搜索知识库 | 文档库负责身份、切片和索引 | 尚未实现 |
+| 从回答跳回原页 | 文档库保存页码和来源范围 | 计划设计 |
 
 ## 2. 当前基础与发布契约
 

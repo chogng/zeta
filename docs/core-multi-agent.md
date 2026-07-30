@@ -1,4 +1,4 @@
-# `zeta-core` 多 Agent 架构
+# 多 Agent 协作系统
 
 > Core 总体边界：[`core.md`](core.md)
 > Context 与 ContextManager：[`core-context.md`](core-context.md)

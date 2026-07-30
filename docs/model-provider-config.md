@@ -1,4 +1,4 @@
-# `zeta-model-provider-config` 架构与演进方案
+# 模型供应商配置
 
 > - 物理位置：`zeta-rs/model-provider-config/`
 > - Rust crate：`zeta_model_provider_config`

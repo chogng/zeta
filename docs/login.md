@@ -1,4 +1,4 @@
-# `zeta-login` 架构
+# 登录与账户系统
 
 > 计划物理位置：`zeta-rs/login/`
 > Rust crate：`zeta_login`

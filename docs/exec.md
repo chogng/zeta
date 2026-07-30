@@ -1,4 +1,4 @@
-# `zeta-exec` 架构与演进方案
+# 无界面 Agent 执行
 
 > 目标物理位置：`zeta-rs/exec/`  
 > 当前状态：Proposed；现有同名 crate 仍是底层 process executor，必须先迁移职责  
@@ -6,7 +6,7 @@
 > App Server contract：[`zeta-app-server-api.md`](zeta-app-server-api.md)  
 > Canonical 产品模型：[`protocol.md`](protocol.md)
 
-## 1. 结论
+## 快速理解
 
 `zeta-exec` 的长期角色是无交互 Agent runner。它把一次本地 CLI 请求或远程调度 Job 转换为
 canonical Session/Thread/Turn command，持续消费 App Server result/update，并输出机器可处理的
@@ -39,6 +39,13 @@ local CLI / remote scheduler
 - scheduler protocol：提交、租约、取消和观察远程 Agent Job。
 
 这四者不能共享一个含义含糊的 `exec` API。
+
+| 用户或调度器想做什么 | 正确入口 | 当前状态 |
+| --- | --- | --- |
+| 无交互地运行完整 Agent 任务 | 无界面 Agent 执行入口 | 计划设计 |
+| 执行一次已经批准的本地命令 | 工具进程执行器 | 当前同名 crate 暂时承担 |
+| 在远程机器执行进程或文件操作 | 远程执行服务 | 潜在方向 |
+| 排队、租约和取消远程 Agent 任务 | 调度协议 | 潜在方向 |
 
 ## 2. Codex 参考与 Zeta 取舍
 

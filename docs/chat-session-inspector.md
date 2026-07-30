@@ -11,7 +11,7 @@
 > Renderer 组件与 CSS 所有权以
 > [`ui-styling-ownership.md`](ui-styling-ownership.md) 为准。
 
-## 1. 决策摘要
+## 快速理解
 
 Chat 右上角的辅助入口应打开 **Session Inspector**，而不是第二套 Session 导航。
 

@@ -11,7 +11,7 @@ lastUpdated: 2026-07-28
 本文负责跨 crate 的架构与信任模型。编译器实现细节以
 [`zeta-rs/utils/typst/README.md`](../zeta-rs/utils/typst/README.md) 为准。
 
-## 决策
+## 快速理解
 
 Zeta 将 Typst 0.15.1 作为 Rust 库嵌入，不调用系统安装的 `typst` 可执行文件。第一阶段能力把
 内存中的 Typst 源码字符串转换为当前连接拥有的 PDF 资源。这样既能让 Agent 编辑文本表示并
@@ -20,6 +20,14 @@ Zeta 将 Typst 0.15.1 作为 Rust 库嵌入，不调用系统安装的 `typst` �
 这项能力补充而不取代 Academic 编辑器。ProseMirror 拥有结构化论文编辑和 Agent 可见的文档
 状态；确定性序列化器负责把该状态转换为 Typst 源码；Typst 只负责排版和 PDF 输出。Monaco
 仍然是 Code 产品的编辑器，不属于这条论文处理路径。
+
+| 想完成什么 | 当前能力 | 当前限制 |
+| --- | --- | --- |
+| 把 Typst 源码编译成 PDF | 已实现内存编译和临时 PDF 资源 | 仅支持单文件源码 |
+| 从 Academic 文档生成 Typst | 计划由确定性序列化器完成 | 尚未实现 |
+| 在 Workbench 预览结果 | 已有 PDF 资源读取契约 | 预览贡献尚未接通 |
+| 使用本地文件、网络或外部包 | 明确拒绝 | 保持编译器信任边界 |
+| 保存最终 PDF | 调用方显式读取并导出 | 临时资源不会自动持久化 |
 
 ## 所有权与端到端流程
 

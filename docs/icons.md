@@ -5,7 +5,7 @@
 > 文件操作见 [`resources/README.md`](../resources/README.md)，Rust API 与生成路径见
 > [`zeta-icons`](../zeta-rs/icons/README.md)。
 
-## 1. 决策摘要
+## 快速理解
 
 Product icon 是 renderer-independent semantic identity，不是某个 component 或 GPU backend
 的资源私有类型：
@@ -18,6 +18,13 @@ resources/icons/*.svg
                        → zeta-ui PaintIcon / IconLabel / Button
                        → native product host
 ```
+
+| 想做什么 | 使用的契约 | 不应该传递什么 |
+| --- | --- | --- |
+| 在产品界面使用已有图标 | 稳定语义图标 ID | 文件名或原始 SVG |
+| 更换图稿但保留含义 | 更新语义 ID 对应的资源 | 要求所有调用方改名 |
+| 增加新的产品动作图标 | 显式注册新的语义图标 | 让资源目录自动扩张公共 API |
+| 在不同渲染器显示图标 | 各渲染器消费同一语义定义 | 把 GPU 或组件类型放入资源 crate |
 
 ## 2. 所有权
 

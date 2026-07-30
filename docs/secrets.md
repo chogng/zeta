@@ -1,4 +1,4 @@
-# `zeta-secrets` 架构
+# 凭据与秘密系统
 
 > - 物理位置：`zeta-rs/secrets/`
 > - Rust crate：`zeta_secrets`

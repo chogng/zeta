@@ -4,7 +4,7 @@
 > 主题值与 token 注册仍以 [`design-tokens.md`](design-tokens.md) 为准；Desktop 的跨进程和产品所有权仍以 [`zeta-desktop-architecture.md`](zeta-desktop-architecture.md) 为准。
 > Command、MenuId、Context Key 与菜单型 Toolbar 的组合语义以 [`menu-system.md`](menu-system.md) 为准；本文只拥有它们最终投影到控件后的视觉边界。
 
-## 决策摘要
+## 快速理解
 
 每一种视觉规则只能有一个 owner。调用方选择组件、传入语义状态或选择公开的 presentation variant；调用方不得通过深层 selector 重写被调用组件的内部 item、hover、active、focus 或 disabled 样式。
 
@@ -15,6 +15,14 @@
 3. Part 只拥有区域布局、边界、背景和直接子组件的外部尺寸。
 4. 颜色和尺寸值来自 design token；token 不拥有 selector、状态机或 DOM 结构。
 5. 同一组件需要不同外观时，增加有名字的 presentation variant，不在 host CSS 中穿透覆盖。
+
+| 想修改什么 | 样式所有者 | 正确做法 |
+| --- | --- | --- |
+| 组件内部间距和交互状态 | 创建该 DOM 和状态的组件 | 修改组件自己的样式 |
+| Workbench 区域布局和边界 | 对应 Part | 只修改直接托管区域的外部盒子 |
+| 同一组件的另一种正式外观 | 组件公开的展示变体 | 增加有名字的变体 |
+| 主题颜色或标准尺寸 | Design Token | 修改语义 token，不修改 selector |
+| 某个业务动作的显隐 | Command/Menu/Context Key | 不用 CSS 猜业务状态 |
 
 ## 分层所有权
 

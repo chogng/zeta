@@ -1,4 +1,4 @@
-# `zeta-skills` 架构与演进方案
+# Skill 指令系统
 
 > 物理位置：`zeta-rs/skills/`
 > Rust crate：`zeta_skills`

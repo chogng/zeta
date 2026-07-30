@@ -1,4 +1,4 @@
-# `zeta-protocol` 架构与演进方案
+# 产品协议
 
 > 物理位置：`zeta-rs/protocol/`  
 > 当前状态：Session-first canonical contract 基础已落地，Agent 执行相关契约部分完成  

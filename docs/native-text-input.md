@@ -5,7 +5,7 @@
 > 修改路径分别由 [`zeta-native`](../zeta-rs/native/README.md)、
 > [`zeta-ui`](../zeta-rs/ui/README.md) 和 [`zeta-winit`](../zeta-rs/winit/README.md) 说明。
 
-## 1. 决策摘要
+## 快速理解
 
 Native 文本输入采用单向依赖，不建立同时理解窗口事件、编辑状态和 GPU scene 的总括 widget：
 
@@ -22,6 +22,15 @@ winit keyboard / IME event
 `zeta-ui` 不依赖 `zeta-winit`；`TextInput` 不保存 `winit::Ime`、`KeyEvent` 或 GPU 类型；平台
 adapter 不理解 committed text、selection 或 composition。这个边界让 Unicode 编辑语义、
 shaping geometry 和真实平台接入可以分别测试。
+
+| 用户行为 | 当前支持 | 由谁负责 |
+| --- | --- | --- |
+| 键盘输入和光标移动 | ✅ | 文本输入基座 |
+| 中文、日文等输入法预编辑与提交 | ✅ | 平台事件转发 + 文本输入状态 |
+| 选择、退格和字素级移动 | ✅ | 文本输入基座 |
+| 鼠标放置光标和拖选 | ❌ | 尚未实现 |
+| 剪贴板、撤销和重做 | ❌ | 尚未实现 |
+| 多行编辑和自动换行 | ❌ | 不属于当前单行输入 |
 
 ## 2. 所有权
 

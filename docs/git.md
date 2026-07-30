@@ -4,7 +4,7 @@
 > timeout 与失败细节以 [`zeta-rs/git/README.md`](../zeta-rs/git/README.md) 为准；
 > external wire shape 以 [`zeta-app-server-api.md`](zeta-app-server-api.md) 为准。
 
-## 决策摘要
+## 快速理解
 
 Desktop Renderer 不启动 Git 进程，也不解析 Git 输出。Workspace-scoped App Server 接收 typed
 Git intent，调用 `zeta-git`，再把 renderer-safe DTO 返回 TypeScript。
@@ -20,6 +20,14 @@ Desktop SCM View
 
 这条依赖方向让 workspace path authority、Git executable identity、process limits 和 output
 parsing 留在 Rust host。Renderer 只拥有展示状态和用户 intent。
+
+| 用户操作 | 当前行为 | 关键限制 |
+| --- | --- | --- |
+| 查看更改 | 自动读取并投影工作区范围内的 Git 状态 | 当前只支持单工作区 |
+| 暂存或取消暂存 | 使用明确的工作区相对路径 | 不能越过工作区边界 |
+| 丢弃更改 | 只恢复已跟踪文件，并在界面确认 | 不删除未跟踪文件 |
+| 拉取远端 | 只允许 fast-forward | 需要交互认证时失败 |
+| 提交和推送 | 使用系统 Git 的当前仓库配置 | 尚无凭据提示和进度 UI |
 
 ## 所有权
 

@@ -6,7 +6,7 @@
 > 为准；Desktop 的进程与产品边界以
 > [`zeta-desktop-architecture.md`](zeta-desktop-architecture.md) 为准。
 
-## 决策摘要
+## 快速理解
 
 `MenuId` 是一个稳定的 **UI action 贡献位置标识**。功能模块注册 Command，并声明该
 Command 要出现在哪些 `MenuId` 中；Titlebar、Editor、Chat 或 Menubar 等 host 只消费自己
@@ -29,6 +29,14 @@ MenusRegistry + ContextKeyService
 
 Menu 系统解决的是 **action 的跨模块发现、条件投影、排序和呈现组合**，不是任意模块之间
 相互调用的总线。真正执行功能的是 Command；真正决定 CSS 视觉的是控件及其 presentation。
+
+| 读者的问题 | 应该查看的概念 | 它负责什么 |
+| --- | --- | --- |
+| 点击后做什么 | Command | 执行业务行为 |
+| 动作出现在哪里 | `MenuId` | 标识稳定贡献位置 |
+| 什么时候显示或可用 | Context Key | 投影当前上下文条件 |
+| 如何分组和排序 | Menu contribution | 声明组合关系 |
+| 最终长什么样 | Toolbar、Menu 和组件样式 | 渲染与交互视觉 |
 
 ## 核心概念与所有权
 

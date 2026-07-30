@@ -16,7 +16,7 @@
 parent/child delegation、context inheritance、join、budget 和 recovery 由
 [`core-multi-agent.md`](core-multi-agent.md) 拥有。
 
-## 1. 决策
+## 快速理解
 
 Zeta 应提供独立的 MCP server adapter，使 Codex、其他 Agent host 或另一个 Zeta 实例能够把
 Zeta Agent 作为外部能力调用。它通过 App Server 的 canonical Session/Thread/Turn API 启动和
@@ -45,6 +45,13 @@ local parent Agent ──► MultiAgentCoordinator ──► child Thread
 另一个进程或机器上的 Zeta 可以通过 MCP 被调用；若调用方希望把它视为正式 child Agent，
 调用方必须在本地先建立 delegation，再由 remote Agent adapter 将执行映射到 MCP。MCP
 transport 本身不创造 parent/child 语义。
+
+| 调用者想做什么 | 应使用的入口 | 是否建立 Zeta 内部父子关系 |
+| --- | --- | --- |
+| 外部 MCP Host 调用 Zeta | MCP Server | ❌ |
+| 本地 Agent 创建子 Agent | 多 Agent 协调系统 | ✅ |
+| 另一台机器上的 Zeta 执行任务 | MCP 或未来远程适配器 | 默认不建立 |
+| 把远端 Zeta 纳入本地 Agent 树 | 先建立本地委托，再映射远端执行 | ✅ |
 
 ## 2. 产品场景与边界
 
