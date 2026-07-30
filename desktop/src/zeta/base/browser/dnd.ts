@@ -20,7 +20,7 @@ export interface DragAndDropObserverCallbacks {
  * all native listener registrations.
  */
 export class DragAndDropObserver extends DisposableOwner {
-  #dragDepth = 0;
+  private dragDepth = 0;
 
   constructor(
     readonly element: HTMLElement,
@@ -28,22 +28,22 @@ export class DragAndDropObserver extends DisposableOwner {
   ) {
     super();
     this.own(addDisposableListener(element, "dragenter", (event: DragEvent) => {
-      this.#dragDepth++;
-      if (this.#dragDepth === 1) callbacks.onDragEnter?.(event);
+      this.dragDepth++;
+      if (this.dragDepth === 1) callbacks.onDragEnter?.(event);
     }));
     this.own(addDisposableListener(element, "dragover", (event: DragEvent) =>
       callbacks.onDragOver?.(event),
     ));
     this.own(addDisposableListener(element, "dragleave", (event: DragEvent) => {
-      this.#dragDepth = Math.max(0, this.#dragDepth - 1);
-      if (this.#dragDepth === 0) callbacks.onDragLeave?.(event);
+      this.dragDepth = Math.max(0, this.dragDepth - 1);
+      if (this.dragDepth === 0) callbacks.onDragLeave?.(event);
     }));
     this.own(addDisposableListener(element, "drop", (event: DragEvent) => {
-      this.#dragDepth = 0;
+      this.dragDepth = 0;
       callbacks.onDrop?.(event);
     }));
     this.own(addDisposableListener(element, "dragend", (event: DragEvent) => {
-      this.#dragDepth = 0;
+      this.dragDepth = 0;
       callbacks.onDragEnd?.(event);
     }));
   }

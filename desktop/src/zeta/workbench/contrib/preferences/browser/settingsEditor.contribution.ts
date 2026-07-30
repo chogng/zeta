@@ -18,12 +18,12 @@ export interface SettingsEditorContributionOptions {
 
 /** Connects window Settings state to its modal editor host and content. */
 export class SettingsEditorContribution extends DisposableOwner {
-  readonly #editor: SettingsEditor;
-  readonly #modalEditor: ModalEditorPart;
+  private readonly editor: SettingsEditor;
+  private readonly modalEditor: ModalEditorPart;
 
   constructor(options: SettingsEditorContributionOptions) {
     super();
-    this.#editor = this.own(new SettingsEditor({
+    this.editor = this.own(new SettingsEditor({
       ownerDocument: options.container.ownerDocument,
       configurationService: options.configurationService,
       dialogService: options.dialogService,
@@ -31,29 +31,29 @@ export class SettingsEditorContribution extends DisposableOwner {
       themeService: options.themeService,
       userThemeService: options.userThemeService,
     }));
-    this.#modalEditor = this.own(new ModalEditorPart({
+    this.modalEditor = this.own(new ModalEditorPart({
       container: options.container,
       title: "Zeta Settings",
-      content: this.#editor.element,
-      focusContent: () => this.#editor.focus(),
+      content: this.editor.element,
+      focusContent: () => this.editor.focus(),
     }));
-    this.#modalEditor.element.classList.add("zeta-settings-modal");
+    this.modalEditor.element.classList.add("zeta-settings-modal");
 
-    this.own(this.#modalEditor.onDidRequestClose(() => {
+    this.own(this.modalEditor.onDidRequestClose(() => {
       options.settingsService.close();
     }));
     this.own(options.settingsService.onDidChangeVisibility((visible) => {
-      if (visible) this.#show();
+      if (visible) this.show();
       else {
-        this.#editor.cancelThemeEditing();
-        this.#modalEditor.hide();
+        this.editor.cancelThemeEditing();
+        this.modalEditor.hide();
       }
     }));
-    if (options.settingsService.isOpen) this.#show();
+    if (options.settingsService.isOpen) this.show();
   }
 
-  #show(): void {
-    this.#modalEditor.show();
-    this.#editor.layout();
+  private show(): void {
+    this.modalEditor.show();
+    this.editor.layout();
   }
 }

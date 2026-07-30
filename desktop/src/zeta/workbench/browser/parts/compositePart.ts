@@ -8,41 +8,41 @@ import { PaneComposite } from "./views/paneComposite.js";
  * shared content area hosts the active Composite.
  */
 export abstract class CompositePart extends WorkbenchPart {
-  readonly #composites = new Map<string, PaneComposite>();
-  #activeComposite: PaneComposite | undefined;
+  private readonly composites = new Map<string, PaneComposite>();
+  private activeComposite: PaneComposite | undefined;
 
   protected constructor(id: string, ownerDocument: Document) {
     super(id, ownerDocument);
     this.titleElement.remove();
     this.contentElement.classList.add("zeta-composite-content");
-    this.defer(() => this.#composites.clear());
+    this.defer(() => this.composites.clear());
   }
 
   addComposite(composite: PaneComposite): void {
-    if (this.#composites.has(composite.id)) {
+    if (this.composites.has(composite.id)) {
       throw new Error(`Composite already exists in Part: ${composite.id}`);
     }
-    this.#composites.set(composite.id, this.own(composite));
+    this.composites.set(composite.id, this.own(composite));
     composite.setVisible(false);
     this.contentElement.append(composite.element);
   }
 
   getComposite(compositeId: string): PaneComposite | undefined {
-    return this.#composites.get(compositeId);
+    return this.composites.get(compositeId);
   }
 
   showComposite(compositeId: string): void {
-    const composite = this.#composites.get(compositeId);
+    const composite = this.composites.get(compositeId);
     if (!composite) {
       throw new Error(`Composite is not available in Part: ${compositeId}`);
     }
-    if (this.#activeComposite === composite) return;
-    this.#activeComposite?.setVisible(false);
-    this.#activeComposite = composite;
+    if (this.activeComposite === composite) return;
+    this.activeComposite?.setVisible(false);
+    this.activeComposite = composite;
     composite.setVisible(true);
   }
 
   get activeCompositeId(): string | undefined {
-    return this.#activeComposite?.id;
+    return this.activeComposite?.id;
   }
 }

@@ -108,48 +108,48 @@ export const WorkbenchViewContainerId = Object.freeze({
  * previous registry state. Disposing a container also removes its views.
  */
 export class WorkbenchViewRegistry {
-  readonly #containers =
+  private readonly containers =
     new Map<string, IRegisteredViewContainer>();
-  readonly #views = new Map<string, IRegisteredView>();
-  readonly #onDidRegisterViewContainer =
+  private readonly views = new Map<string, IRegisteredView>();
+  private readonly _onDidRegisterViewContainer =
     new Emitter<IViewContainerDescriptor>();
-  readonly #onDidDeregisterViewContainer =
+  private readonly _onDidDeregisterViewContainer =
     new Emitter<IViewContainerDescriptor>();
-  readonly #onDidRegisterViews = new Emitter<IViewsChangeEvent>();
-  readonly #onDidDeregisterViews = new Emitter<IViewsChangeEvent>();
-  #nextOrder = 1;
+  private readonly _onDidRegisterViews = new Emitter<IViewsChangeEvent>();
+  private readonly _onDidDeregisterViews = new Emitter<IViewsChangeEvent>();
+  private nextOrder = 1;
 
   readonly onDidRegisterViewContainer:
     Event<IViewContainerDescriptor> =
-      this.#onDidRegisterViewContainer.event;
+      this._onDidRegisterViewContainer.event;
   readonly onDidDeregisterViewContainer:
     Event<IViewContainerDescriptor> =
-      this.#onDidDeregisterViewContainer.event;
+      this._onDidDeregisterViewContainer.event;
   readonly onDidRegisterViews: Event<IViewsChangeEvent> =
-    this.#onDidRegisterViews.event;
+    this._onDidRegisterViews.event;
   readonly onDidDeregisterViews: Event<IViewsChangeEvent> =
-    this.#onDidDeregisterViews.event;
+    this._onDidDeregisterViews.event;
 
   registerViewContainer(
     descriptor: IViewContainerDescriptor,
   ): IDisposable {
-    const registered = this.#addViewContainer(descriptor);
-    return toDisposable(() => this.#removeViewContainer(registered));
+    const registered = this.addViewContainer(descriptor);
+    return toDisposable(() => this.removeViewContainer(registered));
   }
 
   /** Registers a process-lifetime container contribution. */
   registerStaticViewContainer(
     descriptor: IViewContainerDescriptor,
   ): void {
-    this.#addViewContainer(descriptor);
+    this.addViewContainer(descriptor);
   }
 
-  #addViewContainer(
+  private addViewContainer(
     descriptor: IViewContainerDescriptor,
   ): IRegisteredViewContainer {
     validateId(descriptor.id, "view container");
     validateTitle(descriptor.title, "View container");
-    if (this.#containers.has(descriptor.id)) {
+    if (this.containers.has(descriptor.id)) {
       throw new Error(
         `View container is already registered: ${descriptor.id}`,
       );
@@ -168,34 +168,34 @@ export class WorkbenchViewRegistry {
     }
     const registered: IRegisteredViewContainer = {
       descriptor: Object.freeze({ ...descriptor }),
-      registrationOrder: this.#nextOrder++,
+      registrationOrder: this.nextOrder++,
     };
-    this.#containers.set(descriptor.id, registered);
-    this.#onDidRegisterViewContainer.fire(registered.descriptor);
+    this.containers.set(descriptor.id, registered);
+    this._onDidRegisterViewContainer.fire(registered.descriptor);
     return registered;
   }
 
-  #removeViewContainer(registered: IRegisteredViewContainer): void {
+  private removeViewContainer(registered: IRegisteredViewContainer): void {
     const { descriptor } = registered;
-    if (this.#containers.get(descriptor.id) !== registered) return;
+    if (this.containers.get(descriptor.id) !== registered) return;
     const views = this.getViews(descriptor.id);
-    for (const view of views) this.#views.delete(view.id);
+    for (const view of views) this.views.delete(view.id);
     if (views.length > 0) {
-      this.#onDidDeregisterViews.fire({
+      this._onDidDeregisterViews.fire({
         container: descriptor,
         views,
       });
     }
-    this.#containers.delete(descriptor.id);
-    this.#onDidDeregisterViewContainer.fire(descriptor);
+    this.containers.delete(descriptor.id);
+    this._onDidDeregisterViewContainer.fire(descriptor);
   }
 
   registerViews(
     containerId: string,
     descriptors: readonly IViewDescriptor[],
   ): IDisposable {
-    const registrations = this.#addViews(containerId, descriptors);
-    return toDisposable(() => this.#removeViews(registrations));
+    const registrations = this.addViews(containerId, descriptors);
+    return toDisposable(() => this.removeViews(registrations));
   }
 
   /** Registers process-lifetime view contributions. */
@@ -203,14 +203,14 @@ export class WorkbenchViewRegistry {
     containerId: string,
     descriptors: readonly IViewDescriptor[],
   ): void {
-    this.#addViews(containerId, descriptors);
+    this.addViews(containerId, descriptors);
   }
 
-  #addViews(
+  private addViews(
     containerId: string,
     descriptors: readonly IViewDescriptor[],
   ): readonly IRegisteredView[] {
-    const container = this.#containers.get(containerId)?.descriptor;
+    const container = this.containers.get(containerId)?.descriptor;
     if (!container) {
       throw new Error(`Unknown view container: ${containerId}`);
     }
@@ -221,7 +221,7 @@ export class WorkbenchViewRegistry {
       validateTitle(descriptor.title, "View");
       if (
         batchIds.has(descriptor.id) ||
-        this.#views.has(descriptor.id)
+        this.views.has(descriptor.id)
       ) {
         throw new Error(`View is already registered: ${descriptor.id}`);
       }
@@ -232,34 +232,34 @@ export class WorkbenchViewRegistry {
       (descriptor): IRegisteredView => ({
         descriptor: Object.freeze({ ...descriptor }),
         containerId,
-        registrationOrder: this.#nextOrder++,
+        registrationOrder: this.nextOrder++,
       }),
     );
     for (const registration of registrations) {
-      this.#views.set(registration.descriptor.id, registration);
+      this.views.set(registration.descriptor.id, registration);
     }
     const views = sortViews(registrations);
     if (views.length > 0) {
-      this.#onDidRegisterViews.fire({ container, views });
+      this._onDidRegisterViews.fire({ container, views });
     }
     return registrations;
   }
 
-  #removeViews(registrations: readonly IRegisteredView[]): void {
+  private removeViews(registrations: readonly IRegisteredView[]): void {
     const removed: IRegisteredView[] = [];
     for (const registration of registrations) {
       if (
-        this.#views.get(registration.descriptor.id) === registration
+        this.views.get(registration.descriptor.id) === registration
       ) {
-        this.#views.delete(registration.descriptor.id);
+        this.views.delete(registration.descriptor.id);
         removed.push(registration);
       }
     }
     if (removed.length === 0) return;
     const containerId = removed[0].containerId;
-    const container = this.#containers.get(containerId)?.descriptor;
+    const container = this.containers.get(containerId)?.descriptor;
     if (!container) return;
-    this.#onDidDeregisterViews.fire({
+    this._onDidDeregisterViews.fire({
       container,
       views: sortViews(removed),
     });
@@ -268,7 +268,7 @@ export class WorkbenchViewRegistry {
   getViewContainers(
     location?: ViewContainerLocation,
   ): readonly IViewContainerDescriptor[] {
-    return [...this.#containers.values()]
+    return [...this.containers.values()]
       .filter((registered) =>
         location === undefined ||
         registered.descriptor.location === location
@@ -280,7 +280,7 @@ export class WorkbenchViewRegistry {
   getViewContainer(
     id: string,
   ): IViewContainerDescriptor | undefined {
-    return this.#containers.get(id)?.descriptor;
+    return this.containers.get(id)?.descriptor;
   }
 
   getDefaultViewContainer(
@@ -293,23 +293,23 @@ export class WorkbenchViewRegistry {
 
   getViews(containerId: string): readonly IViewDescriptor[] {
     return sortViews(
-      [...this.#views.values()].filter(
+      [...this.views.values()].filter(
         (registered) => registered.containerId === containerId,
       ),
     );
   }
 
   getView(id: string): IViewDescriptor | undefined {
-    return this.#views.get(id)?.descriptor;
+    return this.views.get(id)?.descriptor;
   }
 
   getViewContainerForView(
     viewId: string,
   ): IViewContainerDescriptor | undefined {
-    const containerId = this.#views.get(viewId)?.containerId;
+    const containerId = this.views.get(viewId)?.containerId;
     return containerId === undefined
       ? undefined
-      : this.#containers.get(containerId)?.descriptor;
+      : this.containers.get(containerId)?.descriptor;
   }
 }
 

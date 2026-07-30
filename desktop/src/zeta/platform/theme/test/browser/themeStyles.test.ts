@@ -53,40 +53,40 @@ interface IStyleProperty {
 }
 
 class FakeStyle {
-  readonly #properties = new Map<string, IStyleProperty>();
+  private readonly properties = new Map<string, IStyleProperty>();
 
   getPropertyValue(name: string): string {
-    return this.#properties.get(name)?.value ?? "";
+    return this.properties.get(name)?.value ?? "";
   }
 
   getPropertyPriority(name: string): string {
-    return this.#properties.get(name)?.priority ?? "";
+    return this.properties.get(name)?.priority ?? "";
   }
 
   setProperty(name: string, value: string, priority = ""): void {
-    this.#properties.set(name, { value, priority });
+    this.properties.set(name, { value, priority });
   }
 
   removeProperty(name: string): string {
     const previous = this.getPropertyValue(name);
-    this.#properties.delete(name);
+    this.properties.delete(name);
     return previous;
   }
 }
 
 class FakeThemeTarget {
   readonly style = new FakeStyle();
-  readonly #attributes = new Map<string, string>();
+  private readonly attributes = new Map<string, string>();
 
   getAttribute(name: string): string | null {
-    return this.#attributes.get(name) ?? null;
+    return this.attributes.get(name) ?? null;
   }
 
   setAttribute(name: string, value: string): void {
-    this.#attributes.set(name, value);
+    this.attributes.set(name, value);
   }
 
   removeAttribute(name: string): void {
-    this.#attributes.delete(name);
+    this.attributes.delete(name);
   }
 }

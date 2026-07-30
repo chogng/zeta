@@ -20,10 +20,10 @@ import {
 
 /** Presents workbench dialogs with browser-native modal semantics. */
 export class BrowserDialogHandler implements IDialogHandler {
-  readonly #container: HTMLElement;
+  private readonly container: HTMLElement;
 
   constructor(container: HTMLElement) {
-    this.#container = container;
+    this.container = container;
   }
 
   async showDialog(
@@ -33,7 +33,7 @@ export class BrowserDialogHandler implements IDialogHandler {
     if (signal.aborted) return DialogResult.Cancel;
 
     const disposables = new DisposableStore();
-    const ownerDocument = this.#container.ownerDocument;
+    const ownerDocument = this.container.ownerDocument;
     const previousFocus = getActiveElement(ownerDocument);
     try {
       const content = createDialogContent(ownerDocument, request);
@@ -63,7 +63,7 @@ export class BrowserDialogHandler implements IDialogHandler {
         content.actions.append(cancelButton.element);
       }
 
-      this.#container.append(dialog.element);
+      this.container.append(dialog.element);
       disposables.add(addDisposableListener(signal, "abort", () => {
         dialog.close(DialogResult.Cancel);
       }, { once: true }));

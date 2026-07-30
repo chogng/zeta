@@ -49,15 +49,15 @@ interface DragSnapshot {
 /** A constrained, explicit-pixel layout with accessible resize sashes. */
 export class SplitView extends DisposableOwner {
   readonly element: HTMLDivElement;
-  readonly #items: ViewItem[] = [];
-  readonly #sashes = this.own(new ResettableDisposableGroup());
-  readonly #onDidChangeViewSizes = this.own(new Emitter<void>());
-  #size = 0;
-  #orthogonalSize = 0;
-  #didLayout = false;
+  private readonly items: ViewItem[] = [];
+  private readonly sashes = this.own(new ResettableDisposableGroup());
+  private readonly _onDidChangeViewSizes = this.own(new Emitter<void>());
+  private size = 0;
+  private orthogonalSize = 0;
+  private didLayout = false;
 
   readonly onDidChangeViewSizes: Event<void> =
-    this.#onDidChangeViewSizes.event;
+    this._onDidChangeViewSizes.event;
 
   constructor(
     readonly orientation: SplitViewOrientation,
@@ -71,18 +71,18 @@ export class SplitView extends DisposableOwner {
   }
 
   get viewCount(): number {
-    return this.#items.length;
+    return this.items.length;
   }
 
   get minimumSize(): number {
-    return this.#visibleItems().reduce(
+    return this.visibleItems().reduce(
       (total, item) => total + item.view.minimumSize,
       0,
     );
   }
 
   get maximumSize(): number {
-    return this.#visibleItems().reduce(
+    return this.visibleItems().reduce(
       (total, item) => total + item.view.maximumSize,
       0,
     );
@@ -91,16 +91,16 @@ export class SplitView extends DisposableOwner {
   addView(
     view: ISplitViewView,
     sizing: SplitViewSizing = { type: "distribute" },
-    index = this.#items.length,
+    index = this.items.length,
   ): void {
-    if (this.#items.some((item) => item.view === view)) {
+    if (this.items.some((item) => item.view === view)) {
       throw new Error("SplitView cannot contain the same view twice");
     }
-    if (!Number.isInteger(index) || index < 0 || index > this.#items.length) {
+    if (!Number.isInteger(index) || index < 0 || index > this.items.length) {
       throw new RangeError(`SplitView view index is out of range: ${index}`);
     }
     validateViewConstraints(view);
-    const resolved = this.#resolveSizing(sizing);
+    const resolved = this.resolveSizing(sizing);
     const container = this.element.ownerDocument.createElement("div");
     container.className = "zeta-split-view-pane";
     container.append(view.element);
@@ -116,7 +116,7 @@ export class SplitView extends DisposableOwner {
       cachedVisibleSize: resolved.visible ? undefined : resolved.size,
       changeListener: undefined,
     };
-    this.#items.splice(index, 0, item);
+    this.items.splice(index, 0, item);
     const next = this.element.children[index];
     this.element.insertBefore(container, next ?? null);
     container.hidden = !item.visible;
@@ -124,57 +124,57 @@ export class SplitView extends DisposableOwner {
     if (view.onDidChange) {
       item.changeListener = this.own(view.onDidChange((preferredSize) => {
         validateViewConstraints(view);
-        if (!this.#didLayout && preferredSize === undefined) return;
+        if (!this.didLayout && preferredSize === undefined) return;
         if (preferredSize === undefined) {
-          this.#fitToSize();
+          this.fitToSize();
         } else {
-          this.resizeView(this.#indexOf(view), preferredSize);
+          this.resizeView(this.indexOf(view), preferredSize);
           return;
         }
-        this.#render();
+        this.render();
       }));
     }
-    if (this.#didLayout) this.#fitToSize();
-    this.#rebuildSashes();
-    if (this.#didLayout) this.#render();
+    if (this.didLayout) this.fitToSize();
+    this.rebuildSashes();
+    if (this.didLayout) this.render();
   }
 
   removeView(index: number): ISplitViewView {
-    const item = this.#item(index);
-    this.#items.splice(index, 1);
+    const item = this.item(index);
+    this.items.splice(index, 1);
     item.changeListener?.dispose();
     item.container.remove();
-    if (this.#didLayout) this.#fitToSize();
-    this.#rebuildSashes();
-    if (this.#didLayout) this.#render();
-    this.#onDidChangeViewSizes.fire();
+    if (this.didLayout) this.fitToSize();
+    this.rebuildSashes();
+    if (this.didLayout) this.render();
+    this._onDidChangeViewSizes.fire();
     return item.view;
   }
 
   layout(size: number, orthogonalSize: number): void {
     assertNonNegativeFinite(size, "size");
     assertNonNegativeFinite(orthogonalSize, "orthogonal size");
-    this.#size = size;
-    this.#orthogonalSize = orthogonalSize;
-    this.#didLayout = true;
-    this.#fitToSize();
-    if (this.#didLayout) this.#render();
+    this.size = size;
+    this.orthogonalSize = orthogonalSize;
+    this.didLayout = true;
+    this.fitToSize();
+    if (this.didLayout) this.render();
   }
 
   getViewSize(index: number): number {
-    return this.#item(index).size;
+    return this.item(index).size;
   }
 
   getViewCachedVisibleSize(index: number): number | undefined {
-    return this.#item(index).cachedVisibleSize;
+    return this.item(index).cachedVisibleSize;
   }
 
   isViewVisible(index: number): boolean {
-    return this.#item(index).visible;
+    return this.item(index).visible;
   }
 
   setViewVisible(index: number, visible: boolean): void {
-    const item = this.#item(index);
+    const item = this.item(index);
     if (item.visible === visible) return;
     if (visible) {
       item.visible = true;
@@ -186,23 +186,23 @@ export class SplitView extends DisposableOwner {
       item.cachedVisibleSize = undefined;
       item.container.hidden = false;
       item.view.setVisible?.(true);
-      if (this.#didLayout) this.#fitToSize(new Set([item]));
+      if (this.didLayout) this.fitToSize(new Set([item]));
     } else {
       item.cachedVisibleSize = item.size;
       item.size = 0;
       item.visible = false;
       item.container.hidden = true;
       item.view.setVisible?.(false);
-      if (this.#didLayout) this.#fitToSize();
+      if (this.didLayout) this.fitToSize();
     }
-    this.#rebuildSashes();
-    if (this.#didLayout) this.#render();
-    this.#onDidChangeViewSizes.fire();
+    this.rebuildSashes();
+    if (this.didLayout) this.render();
+    this._onDidChangeViewSizes.fire();
   }
 
   resizeView(index: number, requestedSize: number): void {
     assertNonNegativeFinite(requestedSize, "view size");
-    const item = this.#item(index);
+    const item = this.item(index);
     if (!item.visible) {
       item.cachedVisibleSize = clamp(
         requestedSize,
@@ -216,19 +216,19 @@ export class SplitView extends DisposableOwner {
       item.view.minimumSize,
       item.view.maximumSize,
     );
-    if (this.#didLayout) this.#fitToSize(new Set([item]));
-    if (this.#didLayout) this.#render();
-    this.#onDidChangeViewSizes.fire();
+    if (this.didLayout) this.fitToSize(new Set([item]));
+    if (this.didLayout) this.render();
+    this._onDidChangeViewSizes.fire();
   }
 
   distributeViewSizes(): void {
-    if (!this.#didLayout) return;
-    const flexible = this.#visibleItems().filter(isResizable);
+    if (!this.didLayout) return;
+    const flexible = this.visibleItems().filter(isResizable);
     if (flexible.length === 0) return;
-    const fixedSize = this.#visibleItems()
+    const fixedSize = this.visibleItems()
       .filter((item) => !isResizable(item))
       .reduce((total, item) => total + item.size, 0);
-    const target = Math.max(0, this.#size - fixedSize);
+    const target = Math.max(0, this.size - fixedSize);
     const share = target / flexible.length;
     for (const item of flexible) {
       item.size = clamp(
@@ -237,12 +237,12 @@ export class SplitView extends DisposableOwner {
         item.view.maximumSize,
       );
     }
-    this.#fitToSize();
-    this.#render();
-    this.#onDidChangeViewSizes.fire();
+    this.fitToSize();
+    this.render();
+    this._onDidChangeViewSizes.fire();
   }
 
-  #resolveSizing(
+  private resolveSizing(
     sizing: SplitViewSizing,
   ): { readonly size: number; readonly visible: boolean } {
     if (typeof sizing === "number") {
@@ -257,24 +257,24 @@ export class SplitView extends DisposableOwner {
       return { size: sizing.cachedVisibleSize, visible: false };
     }
     if (sizing.type === "split") {
-      const target = this.#item(sizing.index);
+      const target = this.item(sizing.index);
       return { size: target.size / 2, visible: true };
     }
     if (sizing.type !== "distribute") {
       throw new TypeError("SplitView sizing has an unknown type");
     }
-    const visible = this.#visibleItems();
+    const visible = this.visibleItems();
     return {
       size: visible.length === 0
-        ? this.#size
+        ? this.size
         : visible.reduce((total, item) => total + item.size, 0) /
           visible.length,
       visible: true,
     };
   }
 
-  #fitToSize(protectedItems: ReadonlySet<ViewItem> = new Set()): void {
-    const visible = this.#visibleItems();
+  private fitToSize(protectedItems: ReadonlySet<ViewItem> = new Set()): void {
+    const visible = this.visibleItems();
     for (const item of visible) {
       validateViewConstraints(item.view);
       item.size = clamp(
@@ -283,7 +283,7 @@ export class SplitView extends DisposableOwner {
         item.view.maximumSize,
       );
     }
-    let delta = this.#size -
+    let delta = this.size -
       visible.reduce((total, item) => total + item.size, 0);
     delta = distributeByPriority(
       visible.filter((item) => !protectedItems.has(item)),
@@ -297,81 +297,81 @@ export class SplitView extends DisposableOwner {
     }
   }
 
-  #render(): void {
+  private render(): void {
     let offset = 0;
-    for (const item of this.#items) {
+    for (const item of this.items) {
       if (!item.visible) continue;
       const primarySize = Math.max(0, item.size);
       if (this.orientation === "horizontal") {
         item.container.style.left = `${offset}px`;
         item.container.style.top = "0px";
         item.container.style.width = `${primarySize}px`;
-        item.container.style.height = `${this.#orthogonalSize}px`;
+        item.container.style.height = `${this.orthogonalSize}px`;
       } else {
         item.container.style.left = "0px";
         item.container.style.top = `${offset}px`;
-        item.container.style.width = `${this.#orthogonalSize}px`;
+        item.container.style.width = `${this.orthogonalSize}px`;
         item.container.style.height = `${primarySize}px`;
       }
-      item.view.layout(primarySize, offset, this.#orthogonalSize);
+      item.view.layout(primarySize, offset, this.orthogonalSize);
       offset += primarySize;
     }
-    this.#positionSashes();
+    this.positionSashes();
   }
 
-  #rebuildSashes(): void {
-    this.#sashes.clear();
+  private rebuildSashes(): void {
+    this.sashes.clear();
     for (const sash of this.element.querySelectorAll(":scope > .zeta-sash")) {
       sash.remove();
     }
-    const visible = this.#items
+    const visible = this.items
       .map((item, index) => ({ item, index }))
       .filter(({ item }) => item.visible);
     for (let index = 1; index < visible.length; index += 1) {
       const previous = visible[index - 1]!;
       const next = visible[index]!;
       if (!isResizable(previous.item) || !isResizable(next.item)) continue;
-      this.#addSash(previous.index, next.index);
+      this.addSash(previous.index, next.index);
     }
-    this.#positionSashes();
+    this.positionSashes();
   }
 
-  #addSash(previousIndex: number, nextIndex: number): void {
-    const sash = this.#sashes.add(new Sash(
+  private addSash(previousIndex: number, nextIndex: number): void {
+    const sash = this.sashes.add(new Sash(
       this.orientation === "horizontal" ? "vertical" : "horizontal",
       this.element.ownerDocument,
     ));
     sash.element.dataset.previousViewIndex = String(previousIndex);
     let snapshot: DragSnapshot | undefined;
-    this.#sashes.add(sash.onDidStart(() => {
+    this.sashes.add(sash.onDidStart(() => {
       snapshot = {
-        previousSize: this.#item(previousIndex).size,
-        nextSize: this.#item(nextIndex).size,
+        previousSize: this.item(previousIndex).size,
+        nextSize: this.item(nextIndex).size,
       };
     }));
-    this.#sashes.add(sash.onDidChange(({ delta }) => {
+    this.sashes.add(sash.onDidChange(({ delta }) => {
       if (!snapshot) return;
-      this.#resizeAdjacent(
+      this.resizeAdjacent(
         previousIndex,
         nextIndex,
         snapshot,
         delta,
       );
     }));
-    this.#sashes.add(sash.onDidEnd(() => {
+    this.sashes.add(sash.onDidEnd(() => {
       snapshot = undefined;
     }));
     this.element.append(sash.element);
   }
 
-  #resizeAdjacent(
+  private resizeAdjacent(
     previousIndex: number,
     nextIndex: number,
     snapshot: DragSnapshot,
     delta: number,
   ): void {
-    const previous = this.#item(previousIndex);
-    const next = this.#item(nextIndex);
+    const previous = this.item(previousIndex);
+    const next = this.item(nextIndex);
     const minimumDelta = Math.max(
       previous.view.minimumSize - snapshot.previousSize,
       snapshot.nextSize - next.view.maximumSize,
@@ -384,11 +384,11 @@ export class SplitView extends DisposableOwner {
     const constrained = clamp(delta, minimumDelta, maximumDelta);
     previous.size = snapshot.previousSize + constrained;
     next.size = snapshot.nextSize - constrained;
-    this.#render();
-    this.#onDidChangeViewSizes.fire();
+    this.render();
+    this._onDidChangeViewSizes.fire();
   }
 
-  #positionSashes(): void {
+  private positionSashes(): void {
     for (
       const sash of this.element.querySelectorAll<HTMLElement>(
         ":scope > .zeta-sash",
@@ -397,20 +397,20 @@ export class SplitView extends DisposableOwner {
       const previousIndex = Number(sash.dataset.previousViewIndex);
       let position = 0;
       for (let index = 0; index <= previousIndex; index += 1) {
-        const item = this.#items[index];
+        const item = this.items[index];
         if (item?.visible) position += item.size;
       }
       if (this.orientation === "horizontal") {
         sash.style.left = `${position}px`;
         sash.style.top = "0px";
-        sash.style.height = `${this.#orthogonalSize}px`;
+        sash.style.height = `${this.orthogonalSize}px`;
       } else {
         sash.style.left = "0px";
         sash.style.top = `${position}px`;
-        sash.style.width = `${this.#orthogonalSize}px`;
+        sash.style.width = `${this.orthogonalSize}px`;
       }
-      const previous = this.#items[previousIndex];
-      const next = this.#items.slice(previousIndex + 1).find(
+      const previous = this.items[previousIndex];
+      const next = this.items.slice(previousIndex + 1).find(
         (item) => item.visible,
       );
       if (previous && next) {
@@ -430,18 +430,18 @@ export class SplitView extends DisposableOwner {
     }
   }
 
-  #visibleItems(): ViewItem[] {
-    return this.#items.filter((item) => item.visible);
+  private visibleItems(): ViewItem[] {
+    return this.items.filter((item) => item.visible);
   }
 
-  #indexOf(view: ISplitViewView): number {
-    const index = this.#items.findIndex((item) => item.view === view);
+  private indexOf(view: ISplitViewView): number {
+    const index = this.items.findIndex((item) => item.view === view);
     if (index < 0) throw new Error("SplitView view is not registered");
     return index;
   }
 
-  #item(index: number): ViewItem {
-    const item = this.#items[index];
+  private item(index: number): ViewItem {
+    const item = this.items[index];
     if (!item) throw new RangeError(`SplitView view index is out of range: ${index}`);
     return item;
   }

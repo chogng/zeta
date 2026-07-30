@@ -62,30 +62,30 @@ export const IWorkbenchDialogHandler =
 export class DialogsModel
   extends DisposableOwner
   implements IDialogsModel {
-  readonly #onWillShowDialog =
+  private readonly _onWillShowDialog =
     this.own(new Emitter<IDialogViewItem>());
-  readonly #onDidCloseDialog =
+  private readonly _onDidCloseDialog =
     this.own(new Emitter<IDialogCloseEvent>());
-  readonly #dialogs: IDialogViewItem[] = [];
-  #disposed = false;
+  private readonly _dialogs: IDialogViewItem[] = [];
+  private disposed = false;
 
-  readonly onWillShowDialog = this.#onWillShowDialog.event;
-  readonly onDidCloseDialog = this.#onDidCloseDialog.event;
+  readonly onWillShowDialog = this._onWillShowDialog.event;
+  readonly onDidCloseDialog = this._onDidCloseDialog.event;
 
   constructor() {
     super();
     this.defer(() => {
-      this.#disposed = true;
-      for (const item of [...this.#dialogs]) item.cancel();
+      this.disposed = true;
+      for (const item of [...this._dialogs]) item.cancel();
     });
   }
 
   get dialogs(): readonly IDialogViewItem[] {
-    return [...this.#dialogs];
+    return [...this._dialogs];
   }
 
   show(request: DialogRequest): IDialogHandle {
-    if (this.#disposed) {
+    if (this.disposed) {
       throw new ReferenceError("DialogsModel is already disposed");
     }
 
@@ -102,9 +102,9 @@ export class DialogsModel
       close: (dialogResult) => {
         if (settled) return;
         settled = true;
-        this.#remove(item);
+        this.remove(item);
         resolveResult(dialogResult);
-        this.#onDidCloseDialog.fire({
+        this._onDidCloseDialog.fire({
           kind: "result",
           item,
           result: dialogResult,
@@ -114,18 +114,18 @@ export class DialogsModel
       fail: (error) => {
         if (settled) return;
         settled = true;
-        this.#remove(item);
+        this.remove(item);
         rejectResult(error);
-        this.#onDidCloseDialog.fire({ kind: "error", item, error });
+        this._onDidCloseDialog.fire({ kind: "error", item, error });
       },
     };
-    this.#dialogs.push(item);
-    this.#onWillShowDialog.fire(item);
+    this._dialogs.push(item);
+    this._onWillShowDialog.fire(item);
     return { item, result };
   }
 
-  #remove(item: IDialogViewItem): void {
-    const index = this.#dialogs.indexOf(item);
-    if (index >= 0) this.#dialogs.splice(index, 1);
+  private remove(item: IDialogViewItem): void {
+    const index = this._dialogs.indexOf(item);
+    if (index >= 0) this._dialogs.splice(index, 1);
   }
 }

@@ -20,24 +20,24 @@ export interface AbstractScrollbarOptions {
 export abstract class AbstractScrollbar extends DisposableOwner {
   readonly track: HTMLDivElement;
   readonly thumb: HTMLDivElement;
-  readonly #trackClickBehavior: "jump" | "page";
-  readonly #getMetrics: () => ScrollbarAxisMetrics;
-  readonly #setPosition: (position: number) => void;
-  readonly #dragListeners: ResettableDisposableGroup;
+  private readonly trackClickBehavior: "jump" | "page";
+  private readonly getMetrics: () => ScrollbarAxisMetrics;
+  private readonly setPosition: (position: number) => void;
+  private readonly dragListeners: ResettableDisposableGroup;
 
   protected constructor(
     axis: ScrollbarAxis,
     options: AbstractScrollbarOptions,
   ) {
     super();
-    this.#trackClickBehavior = options.trackClickBehavior;
-    this.#getMetrics = options.getMetrics;
-    this.#setPosition = options.setPosition;
+    this.trackClickBehavior = options.trackClickBehavior;
+    this.getMetrics = options.getMetrics;
+    this.setPosition = options.setPosition;
     const track = options.ownerDocument.createElement("div");
     const thumb = options.ownerDocument.createElement("div");
     this.track = track;
     this.thumb = thumb;
-    this.#dragListeners = this.own(new ResettableDisposableGroup());
+    this.dragListeners = this.own(new ResettableDisposableGroup());
     this.defer(() => track.remove());
 
     track.className =
@@ -54,14 +54,14 @@ export abstract class AbstractScrollbar extends DisposableOwner {
       track,
       "pointerdown",
       (event: PointerEvent) => {
-        if (event.target === thumb) this.#beginThumbDrag(event);
-        else this.#handleTrackPointerDown(event);
+        if (event.target === thumb) this.beginThumbDrag(event);
+        else this.handleTrackPointerDown(event);
       },
     ));
     this.own(addDisposableListener(
       track,
       "keydown",
-      (event: KeyboardEvent) => this.#handleKeydown(event),
+      (event: KeyboardEvent) => this.handleKeydown(event),
     ));
   }
 
@@ -107,8 +107,8 @@ export abstract class AbstractScrollbar extends DisposableOwner {
     this.applyThumbMetrics(metrics);
   }
 
-  #handleKeydown(event: KeyboardEvent): void {
-    const metrics = this.#getMetrics();
+  private handleKeydown(event: KeyboardEvent): void {
+    const metrics = this.getMetrics();
     const step = event.altKey ? 10 : 40;
     const delta = this.keyboardDelta(event.key, step);
     let next = metrics.position;
@@ -134,18 +134,18 @@ export abstract class AbstractScrollbar extends DisposableOwner {
     }
     event.preventDefault();
     event.stopPropagation();
-    this.#setPosition(next);
+    this.setPosition(next);
   }
 
-  #beginThumbDrag(browserEvent: PointerEvent): void {
+  private beginThumbDrag(browserEvent: PointerEvent): void {
     const event = new StandardPointerEvent(browserEvent);
     if (!event.leftButton) return;
     event.stop();
     const startCoordinate = this.pointerCoordinate(event);
-    const startMetrics = this.#getMetrics();
+    const startMetrics = this.getMetrics();
     const thumbTravel = startMetrics.trackSize - startMetrics.thumbSize;
     if (thumbTravel <= 0 || startMetrics.maximumPosition <= 0) return;
-    this.#dragListeners.clear();
+    this.dragListeners.clear();
     this.track.dataset.active = "true";
     if (
       typeof this.track.setPointerCapture === "function" &&
@@ -166,7 +166,7 @@ export abstract class AbstractScrollbar extends DisposableOwner {
       next.preventDefault();
       const pointerDelta =
         this.pointerCoordinate(next) - startCoordinate;
-      this.#setPosition(
+      this.setPosition(
         startMetrics.position +
           pointerDelta * startMetrics.maximumPosition / thumbTravel,
       );
@@ -179,26 +179,26 @@ export abstract class AbstractScrollbar extends DisposableOwner {
         this.track.releasePointerCapture(event.pointerId);
       }
       delete this.track.dataset.active;
-      this.#dragListeners.clear();
+      this.dragListeners.clear();
     };
-    this.#dragListeners.add(addDisposableListener(
+    this.dragListeners.add(addDisposableListener(
       targetWindow,
       "pointermove",
       move,
     ));
-    this.#dragListeners.add(addDisposableListener(
+    this.dragListeners.add(addDisposableListener(
       targetWindow,
       "pointerup",
       stop,
       { once: true },
     ));
-    this.#dragListeners.add(addDisposableListener(
+    this.dragListeners.add(addDisposableListener(
       targetWindow,
       "pointercancel",
       stop,
       { once: true },
     ));
-    this.#dragListeners.add(addDisposableListener(
+    this.dragListeners.add(addDisposableListener(
       targetWindow,
       "blur",
       stop,
@@ -206,15 +206,15 @@ export abstract class AbstractScrollbar extends DisposableOwner {
     ));
   }
 
-  #handleTrackPointerDown(browserEvent: PointerEvent): void {
+  private handleTrackPointerDown(browserEvent: PointerEvent): void {
     const event = new StandardPointerEvent(browserEvent);
     if (!event.leftButton) return;
     event.stop();
     const bounds = this.track.getBoundingClientRect();
     const coordinate = this.trackPointerCoordinate(event, bounds);
-    const metrics = this.#getMetrics();
+    const metrics = this.getMetrics();
     let next: number;
-    if (this.#trackClickBehavior === "page") {
+    if (this.trackClickBehavior === "page") {
       next = coordinate < metrics.thumbPosition
         ? metrics.position - metrics.viewportSize
         : metrics.position + metrics.viewportSize;
@@ -227,7 +227,7 @@ export abstract class AbstractScrollbar extends DisposableOwner {
           metrics.maximumPosition /
           thumbTravel;
     }
-    this.#setPosition(next);
+    this.setPosition(next);
   }
 }
 

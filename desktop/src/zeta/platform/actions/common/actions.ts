@@ -58,7 +58,7 @@ export function isMenuItem(item: MenuRegistryItem): item is IMenuItem {
 
 /** Identifies an action contribution location, regardless of its final UI. */
 export class MenuId {
-  static readonly #instances = new Map<string, MenuId>();
+  private static readonly instances = new Map<string, MenuId>();
 
   static readonly CommandPalette = new MenuId("CommandPalette");
   static readonly TitleBar = new MenuId("TitleBar");
@@ -82,19 +82,19 @@ export class MenuId {
   static readonly MenubarHelpMenu = new MenuId("MenubarHelpMenu");
 
   static for(identifier: string): MenuId {
-    return this.#instances.get(identifier) ?? new MenuId(identifier);
+    return this.instances.get(identifier) ?? new MenuId(identifier);
   }
 
   readonly id: string;
 
   constructor(identifier: string) {
-    if (MenuId.#instances.has(identifier)) {
+    if (MenuId.instances.has(identifier)) {
       throw new TypeError(
         `MenuId '${identifier}' already exists; use MenuId.for()`,
       );
     }
     this.id = identifier;
-    MenuId.#instances.set(identifier, this);
+    MenuId.instances.set(identifier, this);
   }
 }
 
@@ -104,34 +104,34 @@ export interface IMenuRegistryChangeEvent {
 
 /** Realm-wide registry of static and dynamic action placements. */
 export class MenuRegistry {
-  readonly #items = new Map<MenuId, MenuRegistryItem[]>();
-  readonly #onDidChangeMenu = new Emitter<IMenuRegistryChangeEvent>();
+  private readonly items = new Map<MenuId, MenuRegistryItem[]>();
+  private readonly _onDidChangeMenu = new Emitter<IMenuRegistryChangeEvent>();
 
   readonly onDidChangeMenu: Event<IMenuRegistryChangeEvent> =
-    this.#onDidChangeMenu.event;
+    this._onDidChangeMenu.event;
 
   appendMenuItem(id: MenuId, item: MenuRegistryItem): IDisposable {
-    let items = this.#items.get(id);
+    let items = this.items.get(id);
     if (!items) {
       items = [];
-      this.#items.set(id, items);
+      this.items.set(id, items);
     }
     items.push(item);
-    this.#onDidChangeMenu.fire({ menuId: id });
+    this._onDidChangeMenu.fire({ menuId: id });
 
     return toDisposable(() => {
-      const current = this.#items.get(id);
+      const current = this.items.get(id);
       if (!current) return;
       const index = current.indexOf(item);
       if (index < 0) return;
       current.splice(index, 1);
-      if (current.length === 0) this.#items.delete(id);
-      this.#onDidChangeMenu.fire({ menuId: id });
+      if (current.length === 0) this.items.delete(id);
+      this._onDidChangeMenu.fire({ menuId: id });
     });
   }
 
   getMenuItems(id: MenuId): readonly MenuRegistryItem[] {
-    return [...(this.#items.get(id) ?? [])];
+    return [...(this.items.get(id) ?? [])];
   }
 }
 
@@ -154,8 +154,8 @@ export class MenuItemAction implements IAction {
   readonly icon?: Icon;
   readonly enabled: boolean;
   readonly checked?: boolean;
-  readonly #options: IMenuActionOptions | undefined;
-  readonly #commandService: ICommandService;
+  private readonly options: IMenuActionOptions | undefined;
+  private readonly commandService: ICommandService;
 
   constructor(
     readonly item: ICommandAction,
@@ -164,8 +164,8 @@ export class MenuItemAction implements IAction {
     contextKeyService: IContextKeyService,
     commandService: ICommandService,
   ) {
-    this.#options = options;
-    this.#commandService = commandService;
+    this.options = options;
+    this.commandService = commandService;
     this.id = item.id;
     this.label = options?.renderShortTitle && item.shortTitle
       ? commandActionLabel(item.shortTitle)
@@ -193,13 +193,13 @@ export class MenuItemAction implements IAction {
 
   run(...args: readonly unknown[]): Promise<unknown> {
     const commandArgs: unknown[] = [];
-    if (this.#options?.args) {
-      commandArgs.push(...this.#options.args);
-    } else if (this.#options && "arg" in this.#options) {
-      commandArgs.push(this.#options.arg);
+    if (this.options?.args) {
+      commandArgs.push(...this.options.args);
+    } else if (this.options && "arg" in this.options) {
+      commandArgs.push(this.options.arg);
     }
-    if (this.#options?.shouldForwardArgs) commandArgs.push(...args);
-    return this.#commandService.executeCommand(this.id, ...commandArgs);
+    if (this.options?.shouldForwardArgs) commandArgs.push(...args);
+    return this.commandService.executeCommand(this.id, ...commandArgs);
   }
 }
 

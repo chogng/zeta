@@ -22,167 +22,167 @@ interface SearchFileGroup {
 
 /** Workspace content-search form and incrementally populated result tree. */
 export class SearchViewPane extends ViewPane {
-  readonly #searchService: IWorkspaceSearchService;
-  readonly #queryInput: HTMLInputElement;
-  readonly #caseSensitiveInput: HTMLInputElement;
-  readonly #regexInput: HTMLInputElement;
-  readonly #includeInput: HTMLInputElement;
-  readonly #excludeInput: HTMLInputElement;
-  readonly #submitButton: HTMLButtonElement;
-  readonly #statusElement: HTMLDivElement;
-  readonly #resultsElement: HTMLUListElement;
-  readonly #groups = new Map<string, SearchFileGroup>();
-  #searchController: AbortController | undefined;
-  #searchRevision = 0;
-  #disposed = false;
+  private readonly searchService: IWorkspaceSearchService;
+  private readonly queryInput: HTMLInputElement;
+  private readonly caseSensitiveInput: HTMLInputElement;
+  private readonly regexInput: HTMLInputElement;
+  private readonly includeInput: HTMLInputElement;
+  private readonly excludeInput: HTMLInputElement;
+  private readonly submitButton: HTMLButtonElement;
+  private readonly statusElement: HTMLDivElement;
+  private readonly resultsElement: HTMLUListElement;
+  private readonly groups = new Map<string, SearchFileGroup>();
+  private searchController: AbortController | undefined;
+  private searchRevision = 0;
+  private disposed = false;
 
   constructor(
     options: IViewPaneOptions,
     searchService: IWorkspaceSearchService,
   ) {
     super(options);
-    this.#searchService = searchService;
+    this.searchService = searchService;
     this.contentElement.classList.add("zeta-search");
     const document = options.ownerDocument;
     const form = document.createElement("form");
     form.className = "zeta-search-form";
-    this.#queryInput = input(document, {
+    this.queryInput = input(document, {
       className: "zeta-search-query",
       placeholder: "Search",
       ariaLabel: "Search workspace",
     });
-    this.#submitButton = document.createElement("button");
-    this.#submitButton.type = "submit";
-    this.#submitButton.className = "zeta-search-submit";
-    this.#submitButton.textContent = "Search";
+    this.submitButton = document.createElement("button");
+    this.submitButton.type = "submit";
+    this.submitButton.className = "zeta-search-submit";
+    this.submitButton.textContent = "Search";
     const toggles = document.createElement("div");
     toggles.className = "zeta-search-toggles";
-    this.#caseSensitiveInput = checkbox(
+    this.caseSensitiveInput = checkbox(
       document,
       toggles,
       "Match Case",
     );
-    this.#regexInput = checkbox(document, toggles, "Use Regex");
+    this.regexInput = checkbox(document, toggles, "Use Regex");
     const filters = document.createElement("div");
     filters.className = "zeta-search-filters";
-    this.#includeInput = input(document, {
+    this.includeInput = input(document, {
       className: "zeta-search-filter",
       placeholder: "files to include (for example src/**)",
       ariaLabel: "Files to include",
     });
-    this.#excludeInput = input(document, {
+    this.excludeInput = input(document, {
       className: "zeta-search-filter",
       placeholder: "files to exclude",
       ariaLabel: "Files to exclude",
     });
-    filters.append(this.#includeInput, this.#excludeInput);
+    filters.append(this.includeInput, this.excludeInput);
     form.append(
-      this.#queryInput,
-      this.#submitButton,
+      this.queryInput,
+      this.submitButton,
       toggles,
       filters,
     );
-    this.#statusElement = document.createElement("div");
-    this.#statusElement.className = "zeta-search-status";
-    this.#statusElement.setAttribute("role", "status");
-    this.#statusElement.setAttribute("aria-live", "polite");
-    this.#statusElement.textContent = "Type a query and press Enter.";
-    this.#resultsElement = document.createElement("ul");
-    this.#resultsElement.className = "zeta-search-results";
-    this.#resultsElement.setAttribute("role", "tree");
+    this.statusElement = document.createElement("div");
+    this.statusElement.className = "zeta-search-status";
+    this.statusElement.setAttribute("role", "status");
+    this.statusElement.setAttribute("aria-live", "polite");
+    this.statusElement.textContent = "Type a query and press Enter.";
+    this.resultsElement = document.createElement("ul");
+    this.resultsElement.className = "zeta-search-results";
+    this.resultsElement.setAttribute("role", "tree");
     this.contentElement.append(
       form,
-      this.#statusElement,
-      this.#resultsElement,
+      this.statusElement,
+      this.resultsElement,
     );
     this.own(addDisposableListener(form, "submit", (event) => {
       event.preventDefault();
-      void this.#startSearch();
+      void this.startSearch();
     }));
     this.defer(() => {
-      this.#disposed = true;
-      this.#searchController?.abort();
-      this.#groups.clear();
+      this.disposed = true;
+      this.searchController?.abort();
+      this.groups.clear();
     });
   }
 
-  async #startSearch(): Promise<void> {
-    const text = this.#queryInput.value.trim();
+  private async startSearch(): Promise<void> {
+    const text = this.queryInput.value.trim();
     if (!text) {
-      this.#statusElement.textContent = "Enter text to search.";
-      this.#queryInput.focus();
+      this.statusElement.textContent = "Enter text to search.";
+      this.queryInput.focus();
       return;
     }
-    this.#searchController?.abort();
+    this.searchController?.abort();
     const AbortControllerConstructor =
       this.element.ownerDocument.defaultView?.AbortController ??
       AbortController;
     const controller = new AbortControllerConstructor();
-    this.#searchController = controller;
-    const revision = ++this.#searchRevision;
-    this.#groups.clear();
-    this.#resultsElement.replaceChildren();
-    this.#submitButton.disabled = true;
-    this.#statusElement.textContent = "Searching workspace…";
+    this.searchController = controller;
+    const revision = ++this.searchRevision;
+    this.groups.clear();
+    this.resultsElement.replaceChildren();
+    this.submitButton.disabled = true;
+    this.statusElement.textContent = "Searching workspace…";
     try {
-      const complete = await this.#searchService.search(
-        this.#query(text),
+      const complete = await this.searchService.search(
+        this.query(text),
         {
           signal: controller.signal,
           onProgress: (matches) => {
             if (
-              this.#disposed ||
-              revision !== this.#searchRevision
+              this.disposed ||
+              revision !== this.searchRevision
             ) return;
-            this.#appendMatches(matches);
-            this.#statusElement.textContent =
-              `${resultCount(this.#groups)} results…`;
+            this.appendMatches(matches);
+            this.statusElement.textContent =
+              `${resultCount(this.groups)} results…`;
           },
         },
       );
-      if (this.#disposed || revision !== this.#searchRevision) return;
+      if (this.disposed || revision !== this.searchRevision) return;
       if (complete.error) {
-        this.#statusElement.textContent = complete.error;
+        this.statusElement.textContent = complete.error;
       } else if (complete.resultCount === 0) {
-        this.#statusElement.textContent = "No results found.";
+        this.statusElement.textContent = "No results found.";
       } else {
-        this.#statusElement.textContent =
+        this.statusElement.textContent =
           `${complete.resultCount} results` +
           (complete.limitHit ? " (result limit reached)" : "");
       }
     } catch (error) {
       if (
-        this.#disposed ||
-        revision !== this.#searchRevision ||
+        this.disposed ||
+        revision !== this.searchRevision ||
         isAbortError(error)
       ) return;
-      this.#statusElement.textContent = error instanceof Error
+      this.statusElement.textContent = error instanceof Error
         ? error.message
         : "Workspace search failed.";
     } finally {
-      if (!this.#disposed && revision === this.#searchRevision) {
-        this.#submitButton.disabled = false;
-        this.#searchController = undefined;
+      if (!this.disposed && revision === this.searchRevision) {
+        this.submitButton.disabled = false;
+        this.searchController = undefined;
       }
     }
   }
 
-  #query(text: string): IWorkspaceSearchQuery {
+  private query(text: string): IWorkspaceSearchQuery {
     return {
       text,
-      patternKind: this.#regexInput.checked ? "regex" : "literal",
-      caseSensitivity: this.#caseSensitiveInput.checked
+      patternKind: this.regexInput.checked ? "regex" : "literal",
+      caseSensitivity: this.caseSensitiveInput.checked
         ? "sensitive"
         : "smart",
-      includePatterns: patterns(this.#includeInput.value),
-      excludePatterns: patterns(this.#excludeInput.value),
+      includePatterns: patterns(this.includeInput.value),
+      excludePatterns: patterns(this.excludeInput.value),
     };
   }
 
-  #appendMatches(matches: readonly WorkspaceSearchMatch[]): void {
+  private appendMatches(matches: readonly WorkspaceSearchMatch[]): void {
     const document = this.element.ownerDocument;
     for (const match of matches) {
-      let group = this.#groups.get(match.path);
+      let group = this.groups.get(match.path);
       if (!group) {
         const item = document.createElement("li");
         item.className = "zeta-search-file";
@@ -200,13 +200,13 @@ export class SearchViewPane extends ViewPane {
         resultList.setAttribute("role", "group");
         heading.append(path, count);
         item.append(heading, resultList);
-        this.#resultsElement.append(item);
+        this.resultsElement.append(item);
         group = {
           matches: resultList,
           count,
           resultCount: 0,
         };
-        this.#groups.set(match.path, group);
+        this.groups.set(match.path, group);
       }
       group.resultCount += 1;
       group.count.textContent = String(group.resultCount);

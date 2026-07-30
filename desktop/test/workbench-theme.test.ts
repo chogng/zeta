@@ -42,21 +42,21 @@ test("system theme follows the OS while explicit themes remain stable", async ()
 });
 
 class TestMediaQueryList {
-  readonly #listeners = new Set<() => void>();
+  private readonly listeners = new Set<() => void>();
 
   constructor(public matches: boolean) {}
 
   addEventListener(type: string, listener: () => void): void {
-    if (type === "change") this.#listeners.add(listener);
+    if (type === "change") this.listeners.add(listener);
   }
 
   removeEventListener(type: string, listener: () => void): void {
-    if (type === "change") this.#listeners.delete(listener);
+    if (type === "change") this.listeners.delete(listener);
   }
 
   setMatches(matches: boolean): void {
     if (matches === this.matches) return;
     this.matches = matches;
-    for (const listener of this.#listeners) listener();
+    for (const listener of this.listeners) listener();
   }
 }

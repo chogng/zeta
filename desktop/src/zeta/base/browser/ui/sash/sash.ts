@@ -28,16 +28,16 @@ let nextSashSettingsBindingId = 1;
  * disposed.
  */
 export class SashSettingsBinding extends DisposableOwner {
-  readonly #scopeClass: string;
-  readonly #styleSheet: ManagedStyleSheet;
+  private readonly scopeClass: string;
+  private readonly styleSheet: ManagedStyleSheet;
 
   constructor(container: HTMLElement) {
     super();
-    this.#scopeClass =
+    this.scopeClass =
       `zeta-sash-settings-${nextSashSettingsBindingId++}`;
-    container.classList.add(this.#scopeClass);
-    this.defer(() => container.classList.remove(this.#scopeClass));
-    this.#styleSheet = this.own(new ManagedStyleSheet(
+    container.classList.add(this.scopeClass);
+    this.defer(() => container.classList.remove(this.scopeClass));
+    this.styleSheet = this.own(new ManagedStyleSheet(
       container.ownerDocument,
     ));
   }
@@ -46,8 +46,8 @@ export class SashSettingsBinding extends DisposableOwner {
     assertPositiveFinite(settings.dragAreaSize, "drag area size");
     assertPositiveFinite(settings.hoverFeedbackSize, "hover feedback size");
     assertNonNegativeFinite(settings.hoverDelay, "hover delay");
-    this.#styleSheet.setText(`
-      .${this.#scopeClass} .zeta-sash {
+    this.styleSheet.setText(`
+      .${this.scopeClass} .zeta-sash {
         ${SashDragAreaSizeProperty}: ${settings.dragAreaSize}px;
         ${SashHoverFeedbackSizeProperty}: ${settings.hoverFeedbackSize}px;
         ${SashHoverDelayProperty}: ${settings.hoverDelay}ms;
@@ -59,11 +59,11 @@ export class SashSettingsBinding extends DisposableOwner {
 /** A draggable and keyboard-operable separator owned by a layout control. */
 export class Sash extends DisposableOwner {
   readonly element: HTMLDivElement;
-  #startListeners = new Set<() => void>();
-  #changeListeners = new Set<(event: SashDragEvent) => void>();
-  #endListeners = new Set<() => void>();
-  readonly #dragListeners: ResettableDisposableGroup;
-  readonly #hoverTimer: DisposableSlot<IDisposable>;
+  private startListeners = new Set<() => void>();
+  private changeListeners = new Set<(event: SashDragEvent) => void>();
+  private endListeners = new Set<() => void>();
+  private readonly dragListeners: ResettableDisposableGroup;
+  private readonly hoverTimer: DisposableSlot<IDisposable>;
 
   constructor(
     readonly orientation: SashOrientation,
@@ -77,12 +77,12 @@ export class Sash extends DisposableOwner {
     element.setAttribute("role", "separator");
     element.setAttribute("aria-orientation", orientation);
     element.tabIndex = 0;
-    this.#dragListeners = this.own(new ResettableDisposableGroup());
-    this.#hoverTimer = this.own(new DisposableSlot<IDisposable>());
+    this.dragListeners = this.own(new ResettableDisposableGroup());
+    this.hoverTimer = this.own(new DisposableSlot<IDisposable>());
     this.own(toDisposable(() => {
-      this.#startListeners.clear();
-      this.#changeListeners.clear();
-      this.#endListeners.clear();
+      this.startListeners.clear();
+      this.changeListeners.clear();
+      this.endListeners.clear();
     }));
     this.own(addDisposableListener(element, "pointerdown", (event: PointerEvent) =>
       this.beginDrag(event),
@@ -99,18 +99,18 @@ export class Sash extends DisposableOwner {
   }
 
   onDidStart(listener: () => void): IDisposable {
-    this.#startListeners.add(listener);
-    return toDisposable(() => this.#startListeners.delete(listener));
+    this.startListeners.add(listener);
+    return toDisposable(() => this.startListeners.delete(listener));
   }
 
   onDidChange(listener: (event: SashDragEvent) => void): IDisposable {
-    this.#changeListeners.add(listener);
-    return toDisposable(() => this.#changeListeners.delete(listener));
+    this.changeListeners.add(listener);
+    return toDisposable(() => this.changeListeners.delete(listener));
   }
 
   onDidEnd(listener: () => void): IDisposable {
-    this.#endListeners.add(listener);
-    return toDisposable(() => this.#endListeners.delete(listener));
+    this.endListeners.add(listener);
+    return toDisposable(() => this.endListeners.delete(listener));
   }
 
   private beginDrag(event: PointerEvent): void {
@@ -118,9 +118,9 @@ export class Sash extends DisposableOwner {
     event.preventDefault();
     this.endHover();
     this.element.classList.add("zeta-sash-active");
-    this.#dragListeners.clear();
+    this.dragListeners.clear();
     const start = this.coordinate(event);
-    this.fire(this.#startListeners);
+    this.fire(this.startListeners);
     if (
       typeof event.pointerId === "number" &&
       typeof this.element.setPointerCapture === "function"
@@ -129,10 +129,10 @@ export class Sash extends DisposableOwner {
     }
     const move = (next: PointerEvent) => {
       const dragEvent = { delta: this.coordinate(next) - start };
-      for (const listener of this.#changeListeners) listener(dragEvent);
+      for (const listener of this.changeListeners) listener(dragEvent);
     };
     const stop = () => {
-      this.#dragListeners.clear();
+      this.dragListeners.clear();
       this.element.classList.remove("zeta-sash-active");
       if (
         typeof event.pointerId === "number" &&
@@ -141,27 +141,27 @@ export class Sash extends DisposableOwner {
       ) {
         this.element.releasePointerCapture(event.pointerId);
       }
-      this.fire(this.#endListeners);
+      this.fire(this.endListeners);
     };
     const targetWindow = getWindow(this.element);
-    this.#dragListeners.add(addDisposableListener(
+    this.dragListeners.add(addDisposableListener(
       targetWindow,
       "pointermove",
       move,
     ));
-    this.#dragListeners.add(addDisposableListener(
+    this.dragListeners.add(addDisposableListener(
       targetWindow,
       "pointerup",
       stop,
       { once: true },
     ));
-    this.#dragListeners.add(addDisposableListener(
+    this.dragListeners.add(addDisposableListener(
       targetWindow,
       "pointercancel",
       stop,
       { once: true },
     ));
-    this.#dragListeners.add(addDisposableListener(
+    this.dragListeners.add(addDisposableListener(
       targetWindow,
       "blur",
       stop,
@@ -170,7 +170,7 @@ export class Sash extends DisposableOwner {
   }
 
   private beginHover(): void {
-    this.#hoverTimer.clear();
+    this.hoverTimer.clear();
     const delay = sashHoverDelay(this.element);
     if (delay === 0) {
       this.element.classList.add("zeta-sash-hover");
@@ -180,13 +180,13 @@ export class Sash extends DisposableOwner {
     const handle = targetWindow.setTimeout(() => {
       this.element.classList.add("zeta-sash-hover");
     }, delay);
-    this.#hoverTimer.replace(toDisposable(() => {
+    this.hoverTimer.replace(toDisposable(() => {
       targetWindow.clearTimeout(handle);
     }));
   }
 
   private endHover(): void {
-    this.#hoverTimer.clear();
+    this.hoverTimer.clear();
     this.element.classList.remove("zeta-sash-hover");
   }
 
@@ -194,9 +194,9 @@ export class Sash extends DisposableOwner {
     const delta = this.keyboardDelta(event);
     if (delta === undefined) return;
     event.preventDefault();
-    this.fire(this.#startListeners);
-    for (const listener of this.#changeListeners) listener({ delta });
-    this.fire(this.#endListeners);
+    this.fire(this.startListeners);
+    for (const listener of this.changeListeners) listener({ delta });
+    this.fire(this.endListeners);
   }
 
   private coordinate(event: Pick<PointerEvent, "clientX" | "clientY">): number {

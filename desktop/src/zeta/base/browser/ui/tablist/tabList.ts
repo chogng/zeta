@@ -44,15 +44,15 @@ export interface TabListOptions<T> {
  */
 export class TabList<T> extends DisposableOwner {
   readonly element: HTMLDivElement;
-  readonly #actionBar: ActionBar;
-  readonly #scrollable: ScrollableElement;
-  readonly #activate: (value: T) => void;
+  private readonly actionBar: ActionBar;
+  private readonly scrollable: ScrollableElement;
+  private readonly activate: (value: T) => void;
 
   constructor(options: TabListOptions<T>) {
     super();
-    this.#activate = options.onActivate;
+    this.activate = options.onActivate;
     const onClose = options.onClose;
-    this.#actionBar = this.own(new ActionBar({
+    this.actionBar = this.own(new ActionBar({
       ownerDocument: options.ownerDocument,
       ariaLabel: options.ariaLabel,
       ariaRole: "tablist",
@@ -64,19 +64,19 @@ export class TabList<T> extends DisposableOwner {
         return new TabActionViewItem(action, onClose);
       },
     }));
-    this.#scrollable = this.own(new ScrollableElement({
+    this.scrollable = this.own(new ScrollableElement({
       ownerDocument: options.ownerDocument,
       direction: "horizontal",
       horizontal: "auto",
       tabIndex: -1,
       wheel: { consume: "when-scrolling" },
     }));
-    this.#scrollable.element.classList.add("zeta-tab-list");
-    this.#scrollable.contentElement.classList.add(
+    this.scrollable.element.classList.add("zeta-tab-list");
+    this.scrollable.contentElement.classList.add(
       "zeta-tab-list-scroll-content",
     );
-    this.#scrollable.append(this.#actionBar.element);
-    this.element = this.#scrollable.element;
+    this.scrollable.append(this.actionBar.element);
+    this.element = this.scrollable.element;
   }
 
   setTabs(
@@ -98,12 +98,12 @@ export class TabList<T> extends DisposableOwner {
     if (selectedId !== undefined && !ids.has(selectedId)) {
       throw new RangeError(`Selected TabList item is not available: ${selectedId}`);
     }
-    this.#actionBar.setActions(tabs.map((tab) => new TabAction(
+    this.actionBar.setActions(tabs.map((tab) => new TabAction(
       tab,
       tab.id === selectedId,
-      this.#activate,
+      this.activate,
     )));
-    if (selectedId !== undefined) this.#actionBar.setTabStop(selectedId);
-    this.#scrollable.layout();
+    if (selectedId !== undefined) this.actionBar.setTabStop(selectedId);
+    this.scrollable.layout();
   }
 }

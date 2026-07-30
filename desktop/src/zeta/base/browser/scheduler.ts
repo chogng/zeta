@@ -114,7 +114,7 @@ export function disposableWindowInterval(
 
 /** Coalesces repeated schedule calls into one animation-frame callback. */
 export class AnimationFrameScheduler extends DisposableOwner {
-  readonly #pending = this.own(new DisposableSlot<IDisposable>());
+  private readonly pending = this.own(new DisposableSlot<IDisposable>());
 
   constructor(
     readonly targetWindow: Window,
@@ -124,22 +124,22 @@ export class AnimationFrameScheduler extends DisposableOwner {
   }
 
   get scheduled(): boolean {
-    return this.#pending.value !== undefined;
+    return this.pending.value !== undefined;
   }
 
   schedule(): void {
     if (this.scheduled) return;
-    this.#pending.replace(scheduleAtNextAnimationFrame(
+    this.pending.replace(scheduleAtNextAnimationFrame(
       this.targetWindow,
       () => {
-        this.#pending.clear();
+        this.pending.clear();
         this.callback();
       },
     ));
   }
 
   cancel(): void {
-    this.#pending.clear();
+    this.pending.clear();
   }
 }
 

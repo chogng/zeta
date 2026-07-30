@@ -56,24 +56,24 @@ export function opaque(value: ColorValue, background: ColorValue): ColorTransfor
 }
 
 export class ColorRegistry {
-  readonly #colors = new Map<ColorIdentifier, ColorContribution>();
-  #sealed = false;
+  private readonly colors = new Map<ColorIdentifier, ColorContribution>();
+  private sealed = false;
 
   registerColor(id: ColorIdentifier, defaults: ColorDefaults, metadata: ColorRegistrationMetadata): ColorIdentifier {
-    if (this.#sealed) throw new Error(`Color registry is sealed; cannot register: ${id}`);
+    if (this.sealed) throw new Error(`Color registry is sealed; cannot register: ${id}`);
     validateTokenId(id, "color");
-    if (this.#colors.has(id)) throw new Error(`Color token is already registered: ${id}`);
+    if (this.colors.has(id)) throw new Error(`Color token is already registered: ${id}`);
     const contribution = Object.freeze({ id, defaults: Object.freeze({ ...defaults }), ...metadata });
-    this.#colors.set(id, contribution);
+    this.colors.set(id, contribution);
     return id;
   }
 
   getColors(): readonly ColorContribution[] {
-    return Object.freeze([...this.#colors.values()]);
+    return Object.freeze([...this.colors.values()]);
   }
 
   seal(): void {
-    this.#sealed = true;
+    this.sealed = true;
   }
 
   resolve(scheme: ColorScheme, overrides: Readonly<Record<string, ColorValue>> = {}): readonly ResolvedColorContribution[] {
@@ -83,7 +83,7 @@ export class ColorRegistry {
       if (cache.has(id)) return cache.get(id) ?? null;
       const cycleStart = resolving.indexOf(id);
       if (cycleStart >= 0) throw new Error(`Color token cycle: ${[...resolving.slice(cycleStart), id].join(" -> ")}`);
-      const contribution = this.#colors.get(id);
+      const contribution = this.colors.get(id);
       if (!contribution) throw new Error(`Unknown color token reference: ${id}`);
       resolving.push(id);
       const source = Object.hasOwn(overrides, id) ? overrides[id] : defaultsForScheme(contribution.defaults, scheme);
@@ -96,7 +96,7 @@ export class ColorRegistry {
       return value;
     };
     for (const id of Object.keys(overrides)) {
-      if (!this.#colors.has(id)) throw new Error(`Unknown color token override: ${id}`);
+      if (!this.colors.has(id)) throw new Error(`Unknown color token override: ${id}`);
     }
     return Object.freeze(this.getColors().map((contribution) => Object.freeze({ ...contribution, value: resolveIdentifier(contribution.id) })));
   }

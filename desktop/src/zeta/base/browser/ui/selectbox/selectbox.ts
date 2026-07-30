@@ -45,20 +45,20 @@ let selectBoxId = 0;
 /** A keyboard-accessible custom select backed by an anchored Dropdown. */
 export class SelectBox extends DisposableOwner {
   readonly element: HTMLDivElement;
-  readonly #dropdown: Dropdown;
-  readonly #list: HTMLDivElement;
-  readonly #onDidSelect = this.own(new Emitter<SelectBoxSelection>());
-  readonly onDidSelect = this.#onDidSelect.event;
-  #options: readonly SelectOption[] = [];
-  #selectedIndex = -1;
-  #activeIndex = -1;
-  #enabled = true;
+  private readonly dropdown: Dropdown;
+  private readonly list: HTMLDivElement;
+  private readonly _onDidSelect = this.own(new Emitter<SelectBoxSelection>());
+  readonly onDidSelect = this._onDidSelect.event;
+  private _options: readonly SelectOption[] = [];
+  private _selectedIndex = -1;
+  private activeIndex = -1;
+  private _enabled = true;
 
   constructor(options: SelectBoxOptions) {
     super();
     const ownerDocument = options.ownerDocument ?? document;
     const list = ownerDocument.createElement("div");
-    this.#list = list;
+    this.list = list;
     selectBoxId += 1;
     list.id = `zeta-select-box-list-${selectBoxId}`;
     list.className = "zeta-select-box-list";
@@ -73,7 +73,7 @@ export class SelectBox extends DisposableOwner {
       gap: 2,
       contextViewProvider: options.contextViewProvider,
     }));
-    this.#dropdown = dropdown;
+    this.dropdown = dropdown;
     this.element = dropdown.element;
     this.element.classList.add("zeta-select-box");
     dropdown.button.classList.add("zeta-select-box-button");
@@ -84,27 +84,27 @@ export class SelectBox extends DisposableOwner {
 
     this.own(dropdown.onDidChangeVisibility(({ visible }) => {
       if (!visible) return;
-      this.#setActiveIndex(this.#selectedIndex);
-      this.#focusActiveOption();
+      this.setActiveIndex(this._selectedIndex);
+      this.focusActiveOption();
     }));
     this.own(addDisposableListener(list, "click", (event) => {
-      const index = this.#optionIndexFromTarget(event.target);
+      const index = this.optionIndexFromTarget(event.target);
       if (index === undefined) return;
-      this.#commitSelection(index);
+      this.commitSelection(index);
     }));
     this.own(addDisposableListener(list, "pointermove", (event) => {
-      const index = this.#optionIndexFromTarget(event.target);
-      if (index === undefined || this.#options[index]?.disabled) return;
-      this.#setActiveIndex(index);
+      const index = this.optionIndexFromTarget(event.target);
+      if (index === undefined || this._options[index]?.disabled) return;
+      this.setActiveIndex(index);
     }));
     this.own(addDisposableListener(list, "keydown", (event) => {
-      this.#onListKeyDown(event);
+      this.onListKeyDown(event);
     }));
     this.own(addDisposableListener(dropdown.button, "keydown", (event) => {
       if (event.key === "Home" || event.key === "End") {
         stopEvent(event);
         dropdown.show();
-        this.#moveActive(event.key === "Home" ? "first" : "last");
+        this.moveActive(event.key === "Home" ? "first" : "last");
       }
     }));
 
@@ -115,84 +115,84 @@ export class SelectBox extends DisposableOwner {
   }
 
   get options(): readonly SelectOption[] {
-    return this.#options;
+    return this._options;
   }
 
   get selectedIndex(): number {
-    return this.#selectedIndex;
+    return this._selectedIndex;
   }
 
   get value(): string | undefined {
-    return this.#options[this.#selectedIndex]?.value;
+    return this._options[this._selectedIndex]?.value;
   }
 
   set value(value: string | undefined) {
     if (value === undefined) {
-      this.#applySelection(-1);
+      this.applySelection(-1);
       return;
     }
-    const index = this.#options.findIndex((option) =>
+    const index = this._options.findIndex((option) =>
       option.value === value
     );
     if (index < 0) {
       throw new RangeError(`Unknown select option '${value}'`);
     }
-    if (this.#options[index]?.disabled) {
+    if (this._options[index]?.disabled) {
       throw new RangeError(`Select option '${value}' is disabled`);
     }
-    this.#applySelection(index);
+    this.applySelection(index);
   }
 
   get enabled(): boolean {
-    return this.#enabled;
+    return this._enabled;
   }
 
   set enabled(value: boolean) {
-    this.#enabled = value;
-    this.#syncEnabledState();
+    this._enabled = value;
+    this.syncEnabledState();
   }
 
   setOptions(options: readonly SelectOption[]): void {
     validateOptions(options);
     const previousValue = this.value;
-    this.#options = [...options];
-    this.#renderOptions();
+    this._options = [...options];
+    this.renderOptions();
     const preservedIndex = previousValue === undefined
       ? -1
-      : this.#options.findIndex((option) =>
+      : this._options.findIndex((option) =>
         option.value === previousValue && !option.disabled
       );
-    this.#applySelection(
-      preservedIndex >= 0 ? preservedIndex : this.#firstEnabledIndex(),
+    this.applySelection(
+      preservedIndex >= 0 ? preservedIndex : this.firstEnabledIndex(),
     );
-    this.#syncEnabledState();
+    this.syncEnabledState();
   }
 
   focus(): void {
-    this.#dropdown.focus();
+    this.dropdown.focus();
   }
 
   setAriaLabel(label: string): void {
-    setAriaAttribute(this.#dropdown.button, "label", label);
+    setAriaAttribute(this.dropdown.button, "label", label);
   }
 
   blur(): void {
-    this.#dropdown.button.blur();
+    this.dropdown.button.blur();
   }
 
   show(): void {
-    this.#dropdown.show();
+    this.dropdown.show();
   }
 
   hide(): void {
-    this.#dropdown.hide();
+    this.dropdown.hide();
   }
 
-  #renderOptions(): void {
-    const ownerDocument = this.#list.ownerDocument;
-    const elements = this.#options.map((option, index) => {
+  private renderOptions(): void {
+    const ownerDocument = this.list.ownerDocument;
+    const elements = this._options.map((option, index) => {
       const element = ownerDocument.createElement("div");
-      element.id = `${this.#list.id}-option-${index}`;
+      element.id = `${this.list.id}-option-${index}`;
       element.className = "zeta-select-box-option";
       element.dataset.index = String(index);
       setRole(element, "option");
@@ -214,61 +214,61 @@ export class SelectBox extends DisposableOwner {
       }
       return element;
     });
-    this.#list.replaceChildren(...elements);
+    this.list.replaceChildren(...elements);
   }
 
-  #applySelection(index: number): void {
-    this.#selectedIndex = index;
-    this.#setActiveIndex(index);
-    const option = this.#options[index];
-    this.#dropdown.setLabel(option?.label ?? "");
-    this.#dropdown.button.title = option?.label ?? "";
-    for (const [optionIndex, element] of this.#optionElements().entries()) {
+  private applySelection(index: number): void {
+    this._selectedIndex = index;
+    this.setActiveIndex(index);
+    const option = this._options[index];
+    this.dropdown.setLabel(option?.label ?? "");
+    this.dropdown.button.title = option?.label ?? "";
+    for (const [optionIndex, element] of this.optionElements().entries()) {
       const selected = optionIndex === index;
       element.classList.toggle("zeta-select-box-option-selected", selected);
       setAriaAttribute(element, "selected", selected);
     }
   }
 
-  #commitSelection(index: number): void {
-    const option = this.#options[index];
+  private commitSelection(index: number): void {
+    const option = this._options[index];
     if (!option || option.disabled) return;
-    const changed = index !== this.#selectedIndex;
-    this.#applySelection(index);
-    this.#dropdown.hide();
+    const changed = index !== this._selectedIndex;
+    this.applySelection(index);
+    this.dropdown.hide();
     if (!changed) return;
-    this.#onDidSelect.fire({
+    this._onDidSelect.fire({
       value: option.value,
       index,
       option,
     });
   }
 
-  #onListKeyDown(event: KeyboardEvent): void {
+  private onListKeyDown(event: KeyboardEvent): void {
     switch (event.key) {
       case "ArrowDown":
         stopEvent(event);
-        this.#moveActive("next");
+        this.moveActive("next");
         break;
       case "ArrowUp":
         stopEvent(event);
-        this.#moveActive("previous");
+        this.moveActive("previous");
         break;
       case "Home":
         stopEvent(event);
-        this.#moveActive("first");
+        this.moveActive("first");
         break;
       case "End":
         stopEvent(event);
-        this.#moveActive("last");
+        this.moveActive("last");
         break;
       case "Enter":
       case " ":
         stopEvent(event);
-        this.#commitSelection(this.#activeIndex);
+        this.commitSelection(this.activeIndex);
         break;
       case "Tab":
-        this.#dropdown.hide();
+        this.dropdown.hide();
         break;
       default:
         if (
@@ -278,73 +278,73 @@ export class SelectBox extends DisposableOwner {
           !event.ctrlKey &&
           !event.metaKey
         ) {
-          this.#moveActiveByPrefix(event.key);
+          this.moveActiveByPrefix(event.key);
         }
     }
   }
 
-  #moveActiveByPrefix(prefix: string): void {
+  private moveActiveByPrefix(prefix: string): void {
     const normalized = prefix.toLocaleLowerCase();
-    const start = Math.max(0, this.#activeIndex + 1);
-    for (let offset = 0; offset < this.#options.length; offset += 1) {
-      const index = (start + offset) % this.#options.length;
-      const option = this.#options[index];
+    const start = Math.max(0, this.activeIndex + 1);
+    for (let offset = 0; offset < this._options.length; offset += 1) {
+      const index = (start + offset) % this._options.length;
+      const option = this._options[index];
       if (
         option &&
         !option.disabled &&
         option.label.toLocaleLowerCase().startsWith(normalized)
       ) {
-        this.#setActiveIndex(index);
-        this.#focusActiveOption();
+        this.setActiveIndex(index);
+        this.focusActiveOption();
         return;
       }
     }
   }
 
-  #moveActive(
+  private moveActive(
     direction: "next" | "previous" | "first" | "last",
   ): void {
-    if (this.#options.length === 0) return;
+    if (this._options.length === 0) return;
     let index: number;
     let step: number;
     if (direction === "first") {
       index = 0;
       step = 1;
     } else if (direction === "last") {
-      index = this.#options.length - 1;
+      index = this._options.length - 1;
       step = -1;
     } else {
       step = direction === "next" ? 1 : -1;
-      index = this.#activeIndex < 0
-        ? (step > 0 ? 0 : this.#options.length - 1)
-        : this.#activeIndex + step;
+      index = this.activeIndex < 0
+        ? (step > 0 ? 0 : this._options.length - 1)
+        : this.activeIndex + step;
     }
-    while (index >= 0 && index < this.#options.length) {
-      if (!this.#options[index]?.disabled) {
-        this.#setActiveIndex(index);
-        this.#focusActiveOption();
+    while (index >= 0 && index < this._options.length) {
+      if (!this._options[index]?.disabled) {
+        this.setActiveIndex(index);
+        this.focusActiveOption();
         return;
       }
       index += step;
     }
   }
 
-  #setActiveIndex(index: number): void {
-    this.#activeIndex = index;
+  private setActiveIndex(index: number): void {
+    this.activeIndex = index;
     if (index < 0) {
       setAriaAttribute(
-        this.#dropdown.button,
+        this.dropdown.button,
         "activedescendant",
         undefined,
       );
     } else {
       setAriaAttribute(
-        this.#dropdown.button,
+        this.dropdown.button,
         "activedescendant",
-        `${this.#list.id}-option-${index}`,
+        `${this.list.id}-option-${index}`,
       );
     }
-    for (const [optionIndex, element] of this.#optionElements().entries()) {
+    for (const [optionIndex, element] of this.optionElements().entries()) {
       element.classList.toggle(
         "zeta-select-box-option-active",
         optionIndex === index,
@@ -352,36 +352,36 @@ export class SelectBox extends DisposableOwner {
     }
   }
 
-  #focusActiveOption(): void {
-    const option = this.#optionElements()[this.#activeIndex];
+  private focusActiveOption(): void {
+    const option = this.optionElements()[this.activeIndex];
     if (option) focusPreservingScroll(option);
     option?.scrollIntoView({
       block: "nearest",
     });
   }
 
-  #optionElements(): HTMLElement[] {
+  private optionElements(): HTMLElement[] {
     return Array.from(
-      this.#list.querySelectorAll<HTMLElement>(
+      this.list.querySelectorAll<HTMLElement>(
         ".zeta-select-box-option",
       ),
     );
   }
 
-  #optionIndexFromTarget(target: EventTarget | null): number | undefined {
+  private optionIndexFromTarget(target: EventTarget | null): number | undefined {
     if (!isHTMLElement(target)) return undefined;
     const option = target.closest<HTMLElement>(".zeta-select-box-option");
-    if (!option || !this.#list.contains(option)) return undefined;
+    if (!option || !this.list.contains(option)) return undefined;
     const index = Number.parseInt(option.dataset.index ?? "", 10);
     return Number.isInteger(index) ? index : undefined;
   }
 
-  #firstEnabledIndex(): number {
-    return this.#options.findIndex((option) => !option.disabled);
+  private firstEnabledIndex(): number {
+    return this._options.findIndex((option) => !option.disabled);
   }
 
-  #syncEnabledState(): void {
-    this.#dropdown.enabled = this.#enabled && this.#firstEnabledIndex() >= 0;
+  private syncEnabledState(): void {
+    this.dropdown.enabled = this._enabled && this.firstEnabledIndex() >= 0;
   }
 }
 

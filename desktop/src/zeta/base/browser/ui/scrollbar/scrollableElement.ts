@@ -68,19 +68,19 @@ export class ScrollableElement extends DisposableOwner {
   readonly scrollableElement: HTMLDivElement;
   readonly contentElement: HTMLDivElement;
   readonly onDidScroll: Event<ScrollableScrollEvent>;
-  readonly #horizontal: HorizontalScrollbar;
-  readonly #vertical: VerticalScrollbar;
-  readonly #corner: HTMLDivElement;
-  readonly #options: ResolvedScrollableElementOptions;
-  readonly #onScrollOption: ((position: ScrollPosition) => void) | undefined;
-  readonly #onDidScrollEmitter: Emitter<ScrollableScrollEvent>;
-  #state = initialState;
-  #scrollActivityTimer: number | undefined;
+  private readonly horizontal: HorizontalScrollbar;
+  private readonly vertical: VerticalScrollbar;
+  private readonly corner: HTMLDivElement;
+  private readonly options: ResolvedScrollableElementOptions;
+  private readonly onScrollOption: ((position: ScrollPosition) => void) | undefined;
+  private readonly onDidScrollEmitter: Emitter<ScrollableScrollEvent>;
+  private _state = initialState;
+  private scrollActivityTimer: number | undefined;
 
   constructor(options: ScrollableElementOptions = {}) {
     super();
-    this.#options = resolveScrollableElementOptions(options);
-    this.#onScrollOption = options.onScroll;
+    this.options = resolveScrollableElementOptions(options);
+    this.onScrollOption = options.onScroll;
     const ownerDocument = options.ownerDocument ?? document;
     const element = ownerDocument.createElement("div");
     const viewport = ownerDocument.createElement("div");
@@ -89,35 +89,35 @@ export class ScrollableElement extends DisposableOwner {
     const horizontal = this.own(new HorizontalScrollbar({
       ownerDocument,
       viewport,
-      trackClickBehavior: this.#options.trackClickBehavior,
-      getMetrics: () => this.#axisMetrics("horizontal"),
+      trackClickBehavior: this.options.trackClickBehavior,
+      getMetrics: () => this.axisMetrics("horizontal"),
       setPosition: (position) =>
-        this.#setAxisPosition("horizontal", position),
+        this.setAxisPosition("horizontal", position),
     }));
     const vertical = this.own(new VerticalScrollbar({
       ownerDocument,
       viewport,
-      trackClickBehavior: this.#options.trackClickBehavior,
-      getMetrics: () => this.#axisMetrics("vertical"),
+      trackClickBehavior: this.options.trackClickBehavior,
+      getMetrics: () => this.axisMetrics("vertical"),
       setPosition: (position) =>
-        this.#setAxisPosition("vertical", position),
+        this.setAxisPosition("vertical", position),
     }));
     const corner = ownerDocument.createElement("div");
     this.element = element;
     this.scrollableElement = viewport;
     this.contentElement = content;
-    this.#horizontal = horizontal;
-    this.#vertical = vertical;
-    this.#corner = corner;
-    this.#onDidScrollEmitter = this.own(new Emitter<ScrollableScrollEvent>());
-    this.onDidScroll = this.#onDidScrollEmitter.event;
+    this.horizontal = horizontal;
+    this.vertical = vertical;
+    this.corner = corner;
+    this.onDidScrollEmitter = this.own(new Emitter<ScrollableScrollEvent>());
+    this.onDidScroll = this.onDidScrollEmitter.event;
 
     element.className = "zeta-scrollable-element zeta-scrollbar";
-    element.dataset.scrollDirection = this.#options.direction;
+    element.dataset.scrollDirection = this.options.direction;
     element.tabIndex = options.tabIndex ?? 0;
     element.style.setProperty(
       "--zeta-scrollbar-size",
-      `${this.#options.scrollbarSize}px`,
+      `${this.options.scrollbarSize}px`,
     );
     if (options.ariaLabel) {
       element.setAttribute("role", "region");
@@ -125,8 +125,8 @@ export class ScrollableElement extends DisposableOwner {
     }
     viewport.className = "zeta-scrollbar-viewport";
     content.className = "zeta-scrollbar-content";
-    horizontal.track.dataset.visibility = this.#options.horizontal;
-    vertical.track.dataset.visibility = this.#options.vertical;
+    horizontal.track.dataset.visibility = this.options.horizontal;
+    vertical.track.dataset.visibility = this.options.vertical;
     corner.className = "zeta-scrollbar-corner";
     viewport.append(content);
     element.append(
@@ -137,18 +137,18 @@ export class ScrollableElement extends DisposableOwner {
     );
 
     this.defer(() => {
-      const timer = this.#scrollActivityTimer;
+      const timer = this.scrollActivityTimer;
       if (timer !== undefined) ownerWindow(element).clearTimeout(timer);
       element.remove();
     });
     this.own(addDisposableListener(viewport, "scroll", () =>
-      this.#handleNativeScroll(),
+      this.handleNativeScroll(),
     ));
     this.own(addDisposableListener(viewport, "wheel", (event: WheelEvent) =>
-      this.#handleWheel(event),
+      this.handleWheel(event),
     { passive: false }));
     this.own(addDisposableListener(element, "keydown", (event: KeyboardEvent) =>
-      this.#handleContainerKeydown(event),
+      this.handleContainerKeydown(event),
     ));
 
     const ResizeObserverConstructor = ownerDocument.defaultView?.ResizeObserver;
@@ -162,7 +162,7 @@ export class ScrollableElement extends DisposableOwner {
   }
 
   get state(): ScrollableElementState {
-    return this.#state;
+    return this._state;
   }
 
   setContent(content: Element): void {
@@ -182,10 +182,10 @@ export class ScrollableElement extends DisposableOwner {
   layout(): void {
     const width = Math.max(0, this.scrollableElement.clientWidth);
     const height = Math.max(0, this.scrollableElement.clientHeight);
-    const scrollWidth = this.#options.direction === "vertical"
+    const scrollWidth = this.options.direction === "vertical"
       ? width
       : Math.max(width, this.scrollableElement.scrollWidth);
-    const scrollHeight = this.#options.direction === "horizontal"
+    const scrollHeight = this.options.direction === "horizontal"
       ? height
       : Math.max(height, this.scrollableElement.scrollHeight);
     const maximumLeft = Math.max(0, scrollWidth - width);
@@ -205,7 +205,7 @@ export class ScrollableElement extends DisposableOwner {
       this.scrollableElement.scrollLeft = left;
       this.scrollableElement.scrollTop = top;
     }
-    this.#commitState({
+    this.commitState({
       left,
       top,
       width,
@@ -218,239 +218,239 @@ export class ScrollableElement extends DisposableOwner {
   }
 
   scrollTo(left: number, top: number): void {
-    this.#setScrollPosition(left, top);
+    this.setScrollPosition(left, top);
   }
 
   scrollBy(deltaLeft: number, deltaTop: number): void {
-    this.#setScrollPosition(
-      this.#state.left + deltaLeft,
-      this.#state.top + deltaTop,
+    this.setScrollPosition(
+      this._state.left + deltaLeft,
+      this._state.top + deltaTop,
     );
   }
 
-  #handleNativeScroll(): void {
-    const previous = this.#state;
+  private handleNativeScroll(): void {
+    const previous = this._state;
     this.layout();
     if (
-      previous.left === this.#state.left &&
-      previous.top === this.#state.top
+      previous.left === this._state.left &&
+      previous.top === this._state.top
     ) return;
-    this.#showScrollbars();
+    this.showScrollbars();
   }
 
-  #handleWheel(browserEvent: WheelEvent): void {
+  private handleWheel(browserEvent: WheelEvent): void {
     const wheel = new StandardWheelEvent(browserEvent, {
-      pageWidth: this.#state.width,
-      pageHeight: this.#state.height,
+      pageWidth: this._state.width,
+      pageHeight: this._state.height,
     });
     let deltaX = wheel.deltaX;
     let deltaY = wheel.deltaY;
     if (
       wheel.shiftKey &&
-      this.#options.wheel.shift === "horizontal" &&
+      this.options.wheel.shift === "horizontal" &&
       deltaX === 0
     ) {
       deltaX = deltaY;
       deltaY = 0;
     }
-    if (this.#options.direction === "horizontal") {
+    if (this.options.direction === "horizontal") {
       if (deltaX === 0) deltaX = deltaY;
       deltaY = 0;
-    } else if (this.#options.direction === "vertical") {
+    } else if (this.options.direction === "vertical") {
       deltaX = 0;
     }
     if (
-      this.#options.wheel.axis === "predominant" &&
+      this.options.wheel.axis === "predominant" &&
       deltaX !== 0 &&
       deltaY !== 0
     ) {
       if (Math.abs(deltaX) > Math.abs(deltaY)) deltaY = 0;
       else deltaX = 0;
     }
-    const sensitivity = this.#options.wheel.sensitivity * (
-      wheel.altKey ? this.#options.wheel.fastSensitivity : 1
+    const sensitivity = this.options.wheel.sensitivity * (
+      wheel.altKey ? this.options.wheel.fastSensitivity : 1
     );
-    const changed = this.#setScrollPosition(
-      this.#state.left + deltaX * sensitivity,
-      this.#state.top + deltaY * sensitivity,
+    const changed = this.setScrollPosition(
+      this._state.left + deltaX * sensitivity,
+      this._state.top + deltaY * sensitivity,
     );
     if (
       changed ||
-      this.#options.wheel.consume === "always"
+      this.options.wheel.consume === "always"
     ) {
       wheel.stop();
     }
   }
 
-  #handleContainerKeydown(event: KeyboardEvent): void {
+  private handleContainerKeydown(event: KeyboardEvent): void {
     if (event.target !== this.element) return;
     const step = event.altKey ? 10 : 40;
-    let left = this.#state.left;
-    let top = this.#state.top;
+    let left = this._state.left;
+    let top = this._state.top;
     switch (event.key) {
       case "ArrowLeft":
-        if (this.#options.direction === "vertical") return;
+        if (this.options.direction === "vertical") return;
         left -= step;
         break;
       case "ArrowRight":
-        if (this.#options.direction === "vertical") return;
+        if (this.options.direction === "vertical") return;
         left += step;
         break;
       case "ArrowUp":
-        if (this.#options.direction === "horizontal") return;
+        if (this.options.direction === "horizontal") return;
         top -= step;
         break;
       case "ArrowDown":
-        if (this.#options.direction === "horizontal") return;
+        if (this.options.direction === "horizontal") return;
         top += step;
         break;
       case "PageUp":
-        if (this.#options.direction === "horizontal") {
-          left -= this.#state.width;
+        if (this.options.direction === "horizontal") {
+          left -= this._state.width;
         } else {
-          top -= this.#state.height;
+          top -= this._state.height;
         }
         break;
       case "PageDown":
-        if (this.#options.direction === "horizontal") {
-          left += this.#state.width;
+        if (this.options.direction === "horizontal") {
+          left += this._state.width;
         } else {
-          top += this.#state.height;
+          top += this._state.height;
         }
         break;
       case "Home":
-        if (this.#options.direction === "horizontal") left = 0;
+        if (this.options.direction === "horizontal") left = 0;
         else top = 0;
         break;
       case "End":
-        if (this.#options.direction === "horizontal") {
-          left = this.#state.maximumLeft;
+        if (this.options.direction === "horizontal") {
+          left = this._state.maximumLeft;
         } else {
-          top = this.#state.maximumTop;
+          top = this._state.maximumTop;
         }
         break;
       default: return;
     }
     event.preventDefault();
-    this.#setScrollPosition(left, top);
+    this.setScrollPosition(left, top);
   }
 
-  #setAxisPosition(axis: ScrollbarAxis, position: number): boolean {
+  private setAxisPosition(axis: ScrollbarAxis, position: number): boolean {
     return axis === "horizontal"
-      ? this.#setScrollPosition(position, this.#state.top)
-      : this.#setScrollPosition(this.#state.left, position);
+      ? this.setScrollPosition(position, this._state.top)
+      : this.setScrollPosition(this._state.left, position);
   }
 
-  #setScrollPosition(left: number, top: number): boolean {
-    left = clampScrollbarPosition(left, this.#state.maximumLeft);
-    top = clampScrollbarPosition(top, this.#state.maximumTop);
-    if (left === this.#state.left && top === this.#state.top) return false;
+  private setScrollPosition(left: number, top: number): boolean {
+    left = clampScrollbarPosition(left, this._state.maximumLeft);
+    top = clampScrollbarPosition(top, this._state.maximumTop);
+    if (left === this._state.left && top === this._state.top) return false;
     this.scrollableElement.scrollLeft = left;
     this.scrollableElement.scrollTop = top;
-    this.#commitState({ ...this.#state, left, top });
-    this.#showScrollbars();
+    this.commitState({ ...this._state, left, top });
+    this.showScrollbars();
     return true;
   }
 
-  #commitState(next: ScrollableElementState): void {
-    const previous = this.#state;
-    this.#state = next;
-    this.#render();
+  private commitState(next: ScrollableElementState): void {
+    const previous = this._state;
+    this._state = next;
+    this.render();
     if (previous.left === next.left && previous.top === next.top) return;
     const previousPosition = {
       left: previous.left,
       top: previous.top,
     };
-    this.#onDidScrollEmitter.fire({
+    this.onDidScrollEmitter.fire({
       previous: previousPosition,
       current: next,
     });
-    this.#onScrollOption?.({ left: next.left, top: next.top });
+    this.onScrollOption?.({ left: next.left, top: next.top });
   }
 
-  #render(): void {
-    const horizontalNeeded = this.#state.maximumLeft > 0;
-    const verticalNeeded = this.#state.maximumTop > 0;
+  private render(): void {
+    const horizontalNeeded = this._state.maximumLeft > 0;
+    const verticalNeeded = this._state.maximumTop > 0;
     const horizontalRendered = isRendered(
-      this.#options.horizontal,
+      this.options.horizontal,
       horizontalNeeded,
     );
     const verticalRendered = isRendered(
-      this.#options.vertical,
+      this.options.vertical,
       verticalNeeded,
     );
-    this.#horizontal.track.style.right = verticalRendered
-      ? `${this.#options.scrollbarSize}px`
+    this.horizontal.track.style.right = verticalRendered
+      ? `${this.options.scrollbarSize}px`
       : "0px";
-    this.#vertical.track.style.bottom = horizontalRendered
-      ? `${this.#options.scrollbarSize}px`
+    this.vertical.track.style.bottom = horizontalRendered
+      ? `${this.options.scrollbarSize}px`
       : "0px";
-    this.#corner.hidden = !(horizontalRendered && verticalRendered);
+    this.corner.hidden = !(horizontalRendered && verticalRendered);
     const horizontalTrackSize = Math.max(
       0,
-      this.#state.width -
-        (verticalRendered ? this.#options.scrollbarSize : 0),
+      this._state.width -
+        (verticalRendered ? this.options.scrollbarSize : 0),
     );
     const verticalTrackSize = Math.max(
       0,
-      this.#state.height -
-        (horizontalRendered ? this.#options.scrollbarSize : 0),
+      this._state.height -
+        (horizontalRendered ? this.options.scrollbarSize : 0),
     );
-    this.#horizontal.render(
+    this.horizontal.render(
       createScrollbarAxisMetrics(
-        this.#state.width,
-        this.#state.scrollWidth,
-        this.#state.left,
+        this._state.width,
+        this._state.scrollWidth,
+        this._state.left,
         horizontalTrackSize,
-        this.#options.minimumThumbSize,
+        this.options.minimumThumbSize,
       ),
       horizontalRendered,
     );
-    this.#vertical.render(
+    this.vertical.render(
       createScrollbarAxisMetrics(
-        this.#state.height,
-        this.#state.scrollHeight,
-        this.#state.top,
+        this._state.height,
+        this._state.scrollHeight,
+        this._state.top,
         verticalTrackSize,
-        this.#options.minimumThumbSize,
+        this.options.minimumThumbSize,
       ),
       verticalRendered,
     );
   }
 
-  #axisMetrics(axis: ScrollbarAxis): ScrollbarAxisMetrics {
+  private axisMetrics(axis: ScrollbarAxis): ScrollbarAxisMetrics {
     const oppositeRendered = axis === "horizontal"
-      ? this.#vertical.rendered
-      : this.#horizontal.rendered;
+      ? this.vertical.rendered
+      : this.horizontal.rendered;
     const trackSize = (
-      axis === "horizontal" ? this.#state.width : this.#state.height
-    ) - (oppositeRendered ? this.#options.scrollbarSize : 0);
+      axis === "horizontal" ? this._state.width : this._state.height
+    ) - (oppositeRendered ? this.options.scrollbarSize : 0);
     return axis === "horizontal"
       ? createScrollbarAxisMetrics(
-        this.#state.width,
-        this.#state.scrollWidth,
-        this.#state.left,
+        this._state.width,
+        this._state.scrollWidth,
+        this._state.left,
         trackSize,
-        this.#options.minimumThumbSize,
+        this.options.minimumThumbSize,
       )
       : createScrollbarAxisMetrics(
-        this.#state.height,
-        this.#state.scrollHeight,
-        this.#state.top,
+        this._state.height,
+        this._state.scrollHeight,
+        this._state.top,
         trackSize,
-        this.#options.minimumThumbSize,
+        this.options.minimumThumbSize,
       );
   }
 
-  #showScrollbars(): void {
+  private showScrollbars(): void {
     const targetWindow = ownerWindow(this.element);
-    if (this.#scrollActivityTimer !== undefined) {
-      targetWindow.clearTimeout(this.#scrollActivityTimer);
+    if (this.scrollActivityTimer !== undefined) {
+      targetWindow.clearTimeout(this.scrollActivityTimer);
     }
     this.element.classList.add("zeta-scrollbar-scrolling");
-    this.#scrollActivityTimer = targetWindow.setTimeout(() => {
+    this.scrollActivityTimer = targetWindow.setTimeout(() => {
       this.element.classList.remove("zeta-scrollbar-scrolling");
-      this.#scrollActivityTimer = undefined;
+      this.scrollActivityTimer = undefined;
     }, 700);
   }
 }

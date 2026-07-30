@@ -500,15 +500,15 @@ function nextTask(): Promise<void> {
 }
 
 class TestKeybindingService implements IKeybindingService {
-  readonly #onDidUpdateKeybindings = new Emitter<void>();
-  readonly #bindings = new Map<CommandId, ResolvedKeybinding>();
+  private readonly _onDidUpdateKeybindings = new Emitter<void>();
+  private readonly bindings = new Map<CommandId, ResolvedKeybinding>();
 
   readonly inChordMode = false;
-  readonly onDidUpdateKeybindings = this.#onDidUpdateKeybindings.event;
+  readonly onDidUpdateKeybindings = this._onDidUpdateKeybindings.event;
 
   set(command: CommandId, keybinding: Keybinding): void {
-    this.#bindings.set(command, resolveKeybinding(keybinding));
-    this.#onDidUpdateKeybindings.fire();
+    this.bindings.set(command, resolveKeybinding(keybinding));
+    this._onDidUpdateKeybindings.fire();
   }
 
   resolveKeybinding(keybinding: Keybinding): ResolvedKeybinding {
@@ -531,11 +531,11 @@ class TestKeybindingService implements IKeybindingService {
     command: CommandId,
     _context?: Context,
   ): ResolvedKeybinding | undefined {
-    return this.#bindings.get(command);
+    return this.bindings.get(command);
   }
 
   dispose(): void {
-    this.#onDidUpdateKeybindings.dispose();
+    this._onDidUpdateKeybindings.dispose();
   }
 }
 

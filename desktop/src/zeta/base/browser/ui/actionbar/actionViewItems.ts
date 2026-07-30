@@ -26,17 +26,17 @@ export abstract class ActionViewItem extends DisposableOwner {
 
 /** Default button representation for a runnable action. */
 export class ButtonActionViewItem extends ActionViewItem {
-  #button: Button | undefined;
+  private _button: Button | undefined;
 
   constructor(action: IAction) {
     super(action);
   }
 
   override render(container: HTMLElement): void {
-    if (this.#button) {
+    if (this._button) {
       throw new Error(`Action view item is already rendered: ${this.action.id}`);
     }
-    this.#button = this.own(new Button({
+    this._button = this.own(new Button({
       label: this.action.label,
       ownerDocument: container.ownerDocument,
       icon: this.action.icon,
@@ -45,7 +45,7 @@ export class ButtonActionViewItem extends ActionViewItem {
       checked: this.action.checked,
       onClick: () => this.runAction(),
     }));
-    container.append(this.#button.element);
+    container.append(this._button.element);
   }
 
   override focus(): void {
@@ -57,10 +57,10 @@ export class ButtonActionViewItem extends ActionViewItem {
   }
 
   protected get button(): Button {
-    if (!this.#button) {
+    if (!this._button) {
       throw new Error(`Action view item is not rendered: ${this.action.id}`);
     }
-    return this.#button;
+    return this._button;
   }
 
   protected runAction(): unknown {
@@ -70,17 +70,17 @@ export class ButtonActionViewItem extends ActionViewItem {
 
 /** Non-interactive visual representation of a separator action. */
 export class SeparatorActionViewItem extends ActionViewItem {
-  #rendered = false;
+  private rendered = false;
 
   constructor(action: Separator) {
     super(action);
   }
 
   override render(container: HTMLElement): void {
-    if (this.#rendered) {
+    if (this.rendered) {
       throw new Error(`Action view item is already rendered: ${this.action.id}`);
     }
-    this.#rendered = true;
+    this.rendered = true;
     container.classList.add("zeta-action-view-item-separator");
     container.setAttribute("role", "separator");
   }

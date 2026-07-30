@@ -19,44 +19,44 @@ export interface MarkdownDocumentViewOptions {
  * this view owns the product link-opening policy and editor-compatible shape.
  */
 export class MarkdownDocumentView extends DisposableOwner {
-  readonly #preview: MarkdownPreview;
-  readonly #openLink: (href: string) => void | Promise<void>;
-  #active = true;
+  private readonly preview: MarkdownPreview;
+  private readonly openLink: (href: string) => void | Promise<void>;
+  private active = true;
 
   readonly element: HTMLIFrameElement;
 
   constructor(options: MarkdownDocumentViewOptions) {
     super();
-    this.#openLink = options.openLink;
-    this.#preview = this.own(new MarkdownPreview({
+    this.openLink = options.openLink;
+    this.preview = this.own(new MarkdownPreview({
       ownerDocument: options.ownerDocument,
       markdown: options.markdown,
       title: options.title,
     }));
-    this.element = this.#preview.element;
+    this.element = this.preview.element;
     this.element.classList.add("zeta-markdown-document-view");
-    this.own(this.#preview.onDidOpenLink((href) => {
-      void Promise.resolve(this.#openLink(href)).catch((error: unknown) => {
+    this.own(this.preview.onDidOpenLink((href) => {
+      void Promise.resolve(this.openLink(href)).catch((error: unknown) => {
         console.error("Unable to open Markdown link", error);
       });
     }));
     this.defer(() => {
-      this.#active = false;
+      this.active = false;
     });
   }
 
   setMarkdown(markdown: string): void {
-    this.#requireActive();
-    this.#preview.setMarkdown(markdown);
+    this.requireActive();
+    this.preview.setMarkdown(markdown);
   }
 
   focus(): void {
-    this.#requireActive();
-    this.#preview.focus();
+    this.requireActive();
+    this.preview.focus();
   }
 
-  #requireActive(): void {
-    if (!this.#active) {
+  private requireActive(): void {
+    if (!this.active) {
       throw new ReferenceError("MarkdownDocumentView is already disposed");
     }
   }

@@ -60,19 +60,19 @@ export interface KeybindingResolverOptions {
  * Resolves command conflicts and multi-chord prefixes against one context.
  */
 export class KeybindingResolver {
-  readonly #registry: KeybindingRegistry;
-  readonly #resolveKeybinding: (
+  private readonly registry: KeybindingRegistry;
+  private readonly resolveKeybinding: (
     keybinding: Keybinding,
   ) => ResolvedKeybinding;
 
   constructor(options: KeybindingResolverOptions = {}) {
-    this.#registry = options.registry ?? KeybindingsRegistry;
-    this.#resolveKeybinding = options.resolveKeybinding ??
+    this.registry = options.registry ?? KeybindingsRegistry;
+    this.resolveKeybinding = options.resolveKeybinding ??
       ((keybinding) => resolveKeybinding(keybinding));
   }
 
   get onDidChangeKeybindings(): Event<void> {
-    return this.#registry.onDidChangeKeybindings;
+    return this.registry.onDidChangeKeybindings;
   }
 
   resolve(
@@ -83,7 +83,7 @@ export class KeybindingResolver {
       return { kind: KeybindingResolveKind.NoMatch };
     }
 
-    const candidates = this.#resolvedRules()
+    const candidates = this.resolvedRules()
       .filter(({ rule, keybinding }) =>
         (!rule.when || rule.when.evaluate(context)) &&
         keybinding.chords.length >= events.length &&
@@ -119,7 +119,7 @@ export class KeybindingResolver {
     command: CommandId,
     context: Context,
   ): ResolvedKeybinding | undefined {
-    return this.#winningRules(context)
+    return this.winningRules(context)
       .find(({ rule }) =>
         rule.kind === KeybindingRuleKind.Command &&
         rule.command === command
@@ -130,7 +130,7 @@ export class KeybindingResolver {
     command: CommandId,
     context: Context,
   ): readonly ResolvedKeybinding[] {
-    return this.#winningRules(context)
+    return this.winningRules(context)
       .filter(({ rule }) =>
         rule.kind === KeybindingRuleKind.Command &&
         rule.command === command
@@ -138,10 +138,10 @@ export class KeybindingResolver {
       .map(({ keybinding }) => keybinding);
   }
 
-  #winningRules(context: Context): readonly ResolvedRule[] {
+  private winningRules(context: Context): readonly ResolvedRule[] {
     const winners = new Map<string, ResolvedRule>();
     for (
-      const candidate of this.#resolvedRules()
+      const candidate of this.resolvedRules()
         .filter(({ rule }) =>
           !rule.when || rule.when.evaluate(context)
         )
@@ -153,10 +153,10 @@ export class KeybindingResolver {
     return [...winners.values()];
   }
 
-  #resolvedRules(): readonly ResolvedRule[] {
-    return this.#registry.getKeybindings().map((rule) => ({
+  private resolvedRules(): readonly ResolvedRule[] {
+    return this.registry.getKeybindings().map((rule) => ({
       rule,
-      keybinding: this.#resolveKeybinding(rule.keybinding),
+      keybinding: this.resolveKeybinding(rule.keybinding),
     }));
   }
 }

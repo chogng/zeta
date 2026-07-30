@@ -30,77 +30,77 @@ export type CompositeBarPresentation = "icon" | "label";
  */
 export class CompositeBar extends DisposableOwner {
   readonly element: HTMLElement;
-  readonly #viewDescriptorService: IViewDescriptorService;
-  readonly #location: ViewContainerLocation;
-  readonly #tabList: TabList<string>;
-  readonly #onDidSelectComposite =
+  private readonly viewDescriptorService: IViewDescriptorService;
+  private readonly location: ViewContainerLocation;
+  private readonly tabList: TabList<string>;
+  private readonly _onDidSelectComposite =
     this.own(new Emitter<CompositeBarSelectionEvent>());
-  #activeCompositeId: string | undefined;
+  private _activeCompositeId: string | undefined;
 
   readonly onDidSelectComposite: Event<CompositeBarSelectionEvent> =
-    this.#onDidSelectComposite.event;
+    this._onDidSelectComposite.event;
 
   constructor(options: CompositeBarOptions) {
     super();
-    this.#viewDescriptorService = options.viewDescriptorService;
-    this.#location = options.location;
+    this.viewDescriptorService = options.viewDescriptorService;
+    this.location = options.location;
     this.element = options.ownerDocument.createElement("section");
     this.element.className = `zeta-composite-bar zeta-composite-bar-${options.presentation ?? "icon"}`;
     this.element.setAttribute("aria-label", options.ariaLabel);
     this.element.dataset.viewContainerLocation = options.location;
     this.defer(() => this.element.remove());
-    this.#tabList = this.own(new TabList({
+    this.tabList = this.own(new TabList({
       ownerDocument: options.ownerDocument,
       ariaLabel: options.ariaLabel,
       onActivate: (compositeId) => {
-        if (this.#activeCompositeId === compositeId) return;
-        this.#onDidSelectComposite.fire({ compositeId });
+        if (this._activeCompositeId === compositeId) return;
+        this._onDidSelectComposite.fire({ compositeId });
       },
     }));
-    this.element.append(this.#tabList.element);
-    this.own(this.#viewDescriptorService.onDidChangeViewContainers(() => {
-      this.#render();
+    this.element.append(this.tabList.element);
+    this.own(this.viewDescriptorService.onDidChangeViewContainers(() => {
+      this.render();
     }));
-    this.#render();
+    this.render();
   }
 
   get activeCompositeId(): string | undefined {
-    return this.#activeCompositeId;
+    return this._activeCompositeId;
   }
 
   setActiveComposite(compositeId: string): void {
-    const available = this.#viewDescriptorService
-      .getViewContainers(this.#location)
+    const available = this.viewDescriptorService
+      .getViewContainers(this.location)
       .some((container) => container.id === compositeId);
     if (!available) {
       throw new Error(`Composite Bar item is not available: ${compositeId}`);
     }
-    if (this.#activeCompositeId === compositeId) return;
-    this.#activeCompositeId = compositeId;
-    this.#render();
+    if (this._activeCompositeId === compositeId) return;
+    this._activeCompositeId = compositeId;
+    this.render();
   }
 
-  #render(): void {
-    const containers = this.#viewDescriptorService.getViewContainers(
-      this.#location,
+  private render(): void {
+    const containers = this.viewDescriptorService.getViewContainers(
+      this.location,
     );
     if (
-      this.#activeCompositeId !== undefined &&
-      !containers.some((container) => container.id === this.#activeCompositeId)
+      this._activeCompositeId !== undefined &&
+      !containers.some((container) => container.id === this._activeCompositeId)
     ) {
-      this.#activeCompositeId = undefined;
+      this._activeCompositeId = undefined;
     }
-    this.#tabList.setTabs(
+    this.tabList.setTabs(
       containers.map((container) => ({
         id: container.id,
         value: container.id,
         label: container.title,
         tooltip: container.title,
         icon: container.icon,
-        tabId: compositeTabId(this.#location, container.id),
-        panelId: compositePanelId(this.#location, container.id),
+        tabId: compositeTabId(this.location, container.id),
+        panelId: compositePanelId(this.location, container.id),
       })),
-      this.#activeCompositeId,
+      this._activeCompositeId,
     );
   }
 }

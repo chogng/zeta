@@ -33,48 +33,48 @@ export interface RevisionedJsonFileOptions<T> {
  * cannot overwrite newer UI or external file changes.
  */
 export class RevisionedJsonFile<T> extends DisposableOwner {
-  readonly #filePath: string;
-  readonly #temporaryFilePath: string;
-  readonly #defaultValue: () => T;
-  readonly #validate: (value: unknown) => T;
-  readonly #serialize: (value: T) => string;
-  readonly #label: string;
-  readonly #onError: (error: unknown) => void;
-  readonly #onDidChange = this.own(
+  private readonly filePath: string;
+  private readonly temporaryFilePath: string;
+  private readonly defaultValue: () => T;
+  private readonly validate: (value: unknown) => T;
+  private readonly serialize: (value: T) => string;
+  private readonly label: string;
+  private readonly onError: (error: unknown) => void;
+  private readonly _onDidChange = this.own(
     new Emitter<IRevisionedJsonSnapshot<T>>(),
   );
-  #value: T;
-  #serialized: string;
-  #revision = 0;
-  #writeQueue: Promise<void> = Promise.resolve();
-  #reloadTimer: ReturnType<typeof globalThis.setTimeout> | undefined;
-  #watcher: FSWatcher | undefined;
-  #closing: Promise<void> | undefined;
-  #closed = false;
+  private value: T;
+  private serialized: string;
+  private revision = 0;
+  private writeQueue: Promise<void> = Promise.resolve();
+  private reloadTimer: ReturnType<typeof globalThis.setTimeout> | undefined;
+  private watcher: FSWatcher | undefined;
+  private closing: Promise<void> | undefined;
+  private closed = false;
 
   readonly onDidChange: Event<IRevisionedJsonSnapshot<T>> =
-    this.#onDidChange.event;
+    this._onDidChange.event;
 
   private constructor(options: RevisionedJsonFileOptions<T>) {
     super();
-    this.#filePath = options.filePath;
-    this.#temporaryFilePath = `${options.filePath}.${process.pid}.tmp`;
-    this.#defaultValue = options.defaultValue;
-    this.#validate = options.validate;
-    this.#serialize = options.serialize ??
+    this.filePath = options.filePath;
+    this.temporaryFilePath = `${options.filePath}.${process.pid}.tmp`;
+    this.defaultValue = options.defaultValue;
+    this.validate = options.validate;
+    this.serialize = options.serialize ??
       ((value) => `${JSON.stringify(value, null, 2)}\n`);
-    this.#label = options.label ?? "JSON resource";
-    this.#onError = options.onError ??
-      ((error) => console.error(`Failed to process ${this.#label}`, error));
-    this.#value = this.#validate(this.#defaultValue());
-    this.#serialized = this.#serialize(this.#value);
+    this.label = options.label ?? "JSON resource";
+    this.onError = options.onError ??
+      ((error) => console.error(`Failed to process ${this.label}`, error));
+    this.value = this.validate(this.defaultValue());
+    this.serialized = this.serialize(this.value);
     this.defer(() => {
-      if (this.#reloadTimer !== undefined) {
-        globalThis.clearTimeout(this.#reloadTimer);
-        this.#reloadTimer = undefined;
+      if (this.reloadTimer !== undefined) {
+        globalThis.clearTimeout(this.reloadTimer);
+        this.reloadTimer = undefined;
       }
-      this.#watcher?.close();
-      this.#watcher = undefined;
+      this.watcher?.close();
+      this.watcher = undefined;
     });
   }
 
@@ -83,47 +83,47 @@ export class RevisionedJsonFile<T> extends DisposableOwner {
   ): Promise<RevisionedJsonFile<T>> {
     const resource = new RevisionedJsonFile(options);
     await mkdir(dirname(options.filePath), { recursive: true });
-    await resource.#loadInitial();
-    resource.#startWatching();
+    await resource.loadInitial();
+    resource.startWatching();
     return resource;
   }
 
   read(): IRevisionedJsonSnapshot<T> {
-    return this.#snapshot();
+    return this.snapshot();
   }
 
   update(
     expectedRevision: number,
     candidate: unknown,
   ): Promise<IRevisionedJsonSnapshot<T>> {
-    if (this.#closed) {
+    if (this.closed) {
       return Promise.reject(
-        new ReferenceError(`${this.#label} is closed`),
+        new ReferenceError(`${this.label} is closed`),
       );
     }
-    const operation = this.#writeQueue
+    const operation = this.writeQueue
       .catch(() => undefined)
       .then(async () => {
-        if (expectedRevision !== this.#revision) {
+        if (expectedRevision !== this.revision) {
           throw new Error(
-            `${this.#label} revision conflict: expected ` +
-              `${expectedRevision}, actual ${this.#revision}`,
+            `${this.label} revision conflict: expected ` +
+              `${expectedRevision}, actual ${this.revision}`,
           );
         }
-        const value = this.#validate(candidate);
-        const serialized = this.#serialize(value);
-        if (serialized === this.#serialized) return this.#snapshot();
+        const value = this.validate(candidate);
+        const serialized = this.serialize(value);
+        if (serialized === this.serialized) return this.snapshot();
 
-        await writeFile(this.#temporaryFilePath, serialized, "utf8");
-        await rename(this.#temporaryFilePath, this.#filePath);
-        this.#value = value;
-        this.#serialized = serialized;
-        this.#revision += 1;
-        const snapshot = this.#snapshot();
-        this.#onDidChange.fire(snapshot);
+        await writeFile(this.temporaryFilePath, serialized, "utf8");
+        await rename(this.temporaryFilePath, this.filePath);
+        this.value = value;
+        this.serialized = serialized;
+        this.revision += 1;
+        const snapshot = this.snapshot();
+        this._onDidChange.fire(snapshot);
         return snapshot;
       });
-    this.#writeQueue = operation.then(
+    this.writeQueue = operation.then(
       () => undefined,
       () => undefined,
     );
@@ -131,29 +131,29 @@ export class RevisionedJsonFile<T> extends DisposableOwner {
   }
 
   close(): Promise<void> {
-    if (!this.#closing) {
-      this.#closed = true;
+    if (!this.closing) {
+      this.closed = true;
       this.dispose();
-      this.#closing = this.#writeQueue;
+      this.closing = this.writeQueue;
     }
-    return this.#closing;
+    return this.closing;
   }
 
-  async #loadInitial(): Promise<void> {
+  private async loadInitial(): Promise<void> {
     try {
-      const loaded = await this.#readFile();
+      const loaded = await this.readFile();
       if (!loaded) return;
-      this.#value = loaded.value;
-      this.#serialized = loaded.serialized;
+      this.value = loaded.value;
+      this.serialized = loaded.serialized;
     } catch (error) {
-      this.#onError(error);
+      this.onError(error);
     }
   }
 
-  #startWatching(): void {
-    const fileName = basename(this.#filePath);
-    this.#watcher = watch(
-      dirname(this.#filePath),
+  private startWatching(): void {
+    const fileName = basename(this.filePath);
+    this.watcher = watch(
+      dirname(this.filePath),
       { persistent: false },
       (_eventType, changedName) => {
         if (
@@ -162,37 +162,37 @@ export class RevisionedJsonFile<T> extends DisposableOwner {
         ) {
           return;
         }
-        if (this.#reloadTimer !== undefined) {
-          globalThis.clearTimeout(this.#reloadTimer);
+        if (this.reloadTimer !== undefined) {
+          globalThis.clearTimeout(this.reloadTimer);
         }
-        this.#reloadTimer = globalThis.setTimeout(() => {
-          this.#reloadTimer = undefined;
-          void this.#reloadExternal();
+        this.reloadTimer = globalThis.setTimeout(() => {
+          this.reloadTimer = undefined;
+          void this.reloadExternal();
         }, 75);
       },
     );
-    this.#watcher.on("error", this.#onError);
+    this.watcher.on("error", this.onError);
   }
 
-  #reloadExternal(): Promise<void> {
-    const operation = this.#writeQueue.then(async () => {
-      if (this.#closed) return;
-      const loaded = await this.#readFile();
-      const value = loaded?.value ?? this.#validate(this.#defaultValue());
-      const serialized = loaded?.serialized ?? this.#serialize(value);
-      if (serialized === this.#serialized) return;
-      this.#value = value;
-      this.#serialized = serialized;
-      this.#revision += 1;
-      this.#onDidChange.fire(this.#snapshot());
+  private reloadExternal(): Promise<void> {
+    const operation = this.writeQueue.then(async () => {
+      if (this.closed) return;
+      const loaded = await this.readFile();
+      const value = loaded?.value ?? this.validate(this.defaultValue());
+      const serialized = loaded?.serialized ?? this.serialize(value);
+      if (serialized === this.serialized) return;
+      this.value = value;
+      this.serialized = serialized;
+      this.revision += 1;
+      this._onDidChange.fire(this.snapshot());
     });
-    this.#writeQueue = operation.catch((error: unknown) => {
-      this.#onError(error);
+    this.writeQueue = operation.catch((error: unknown) => {
+      this.onError(error);
     });
-    return this.#writeQueue;
+    return this.writeQueue;
   }
 
-  async #readFile(): Promise<
+  private async readFile(): Promise<
     | {
       readonly value: T;
       readonly serialized: string;
@@ -201,22 +201,22 @@ export class RevisionedJsonFile<T> extends DisposableOwner {
   > {
     let contents: string;
     try {
-      contents = await readFile(this.#filePath, "utf8");
+      contents = await readFile(this.filePath, "utf8");
     } catch (error) {
       if (isFileNotFound(error)) return undefined;
       throw error;
     }
-    const value = this.#validate(JSON.parse(contents));
+    const value = this.validate(JSON.parse(contents));
     return {
       value,
-      serialized: this.#serialize(value),
+      serialized: this.serialize(value),
     };
   }
 
-  #snapshot(): IRevisionedJsonSnapshot<T> {
+  private snapshot(): IRevisionedJsonSnapshot<T> {
     return {
-      revision: this.#revision,
-      value: this.#value,
+      revision: this.revision,
+      value: this.value,
     };
   }
 }

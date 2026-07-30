@@ -13,10 +13,10 @@ export abstract class WorkbenchPart extends DisposableOwner {
   readonly element: HTMLElement;
   protected readonly titleElement: HTMLDivElement;
   protected readonly contentElement: HTMLDivElement;
-  readonly #onDidChangeConstraints = this.own(new Emitter<void>());
+  private readonly _onDidChangeConstraints = this.own(new Emitter<void>());
 
   readonly onDidChangeConstraints: Event<void> =
-    this.#onDidChangeConstraints.event;
+    this._onDidChangeConstraints.event;
 
   protected constructor(id: string, ownerDocument: Document) {
     super();
@@ -45,6 +45,6 @@ export abstract class WorkbenchPart extends DisposableOwner {
 
   /** Notifies the runtime layout after a subclass changes its constraints. */
   protected notifyConstraintsChanged(): void {
-    this.#onDidChangeConstraints.fire();
+    this._onDidChangeConstraints.fire();
   }
 }

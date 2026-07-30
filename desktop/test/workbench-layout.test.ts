@@ -627,20 +627,20 @@ test("Auxiliary Bar directly hosts its fixed View container", () => {
 });
 
 class TestPanelView extends ViewPane {
-  readonly #actions: HTMLDivElement;
+  private readonly actions: HTMLDivElement;
 
   constructor(options: IViewPaneOptions) {
     super(options);
-    this.#actions = options.ownerDocument.createElement("div");
-    this.#actions.setAttribute("role", "toolbar");
-    this.#actions.setAttribute("aria-label", "Test panel actions");
+    this.actions = options.ownerDocument.createElement("div");
+    this.actions.setAttribute("role", "toolbar");
+    this.actions.setAttribute("aria-label", "Test panel actions");
     const button = options.ownerDocument.createElement("button");
     button.textContent = "Run";
-    this.#actions.append(button);
+    this.actions.append(button);
   }
 
   override get titleActionsElement(): HTMLElement {
-    return this.#actions;
+    return this.actions;
   }
 }
 

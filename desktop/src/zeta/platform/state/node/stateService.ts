@@ -22,30 +22,30 @@ function isFileNotFound(error: unknown): boolean {
  * preventing an interrupted write from leaving a partially written JSON file.
  */
 export class StateService implements IStateService {
-  readonly #filePath: string;
-  readonly #temporaryFilePath: string;
-  #items: Record<string, unknown> = Object.create(null);
-  #lastSavedContents = "";
-  #writeQueue: Promise<void> = Promise.resolve();
-  #closing: Promise<void> | undefined;
-  #closed = false;
+  private readonly filePath: string;
+  private readonly temporaryFilePath: string;
+  private items: Record<string, unknown> = Object.create(null);
+  private lastSavedContents = "";
+  private writeQueue: Promise<void> = Promise.resolve();
+  private closing: Promise<void> | undefined;
+  private closed = false;
 
   private constructor(filePath: string) {
-    this.#filePath = filePath;
-    this.#temporaryFilePath = `${filePath}.${process.pid}.tmp`;
+    this.filePath = filePath;
+    this.temporaryFilePath = `${filePath}.${process.pid}.tmp`;
   }
 
   /** Opens a state file, treating a missing or malformed file as empty state. */
   static async create(filePath: string): Promise<StateService> {
     const service = new StateService(filePath);
-    await service.#load();
+    await service.load();
     return service;
   }
 
-  async #load(): Promise<void> {
+  private async load(): Promise<void> {
     let contents: string;
     try {
-      contents = await readFile(this.#filePath, "utf8");
+      contents = await readFile(this.filePath, "utf8");
     } catch (error) {
       if (isFileNotFound(error)) {
         return;
@@ -56,8 +56,8 @@ export class StateService implements IStateService {
     try {
       const parsed: unknown = JSON.parse(contents);
       if (isRecord(parsed)) {
-        this.#items = parsed;
-        this.#lastSavedContents = contents;
+        this.items = parsed;
+        this.lastSavedContents = contents;
       }
     } catch (error) {
       if (!(error instanceof SyntaxError)) {
@@ -67,51 +67,51 @@ export class StateService implements IStateService {
   }
 
   getItem(key: string): unknown {
-    return this.#items[key];
+    return this.items[key];
   }
 
   setItem(key: string, value: unknown): void {
-    this.#assertOpen();
+    this.assertOpen();
     if (value === undefined) {
-      delete this.#items[key];
+      delete this.items[key];
     } else {
-      this.#items[key] = value;
+      this.items[key] = value;
     }
   }
 
   removeItem(key: string): void {
-    this.#assertOpen();
-    delete this.#items[key];
+    this.assertOpen();
+    delete this.items[key];
   }
 
   flush(): Promise<void> {
-    const contents = JSON.stringify(this.#items, null, 2);
-    const write = this.#writeQueue
+    const contents = JSON.stringify(this.items, null, 2);
+    const write = this.writeQueue
       .catch(() => undefined)
       .then(async () => {
-        if (contents === this.#lastSavedContents) {
+        if (contents === this.lastSavedContents) {
           return;
         }
 
-        await mkdir(dirname(this.#filePath), { recursive: true });
-        await writeFile(this.#temporaryFilePath, contents, "utf8");
-        await rename(this.#temporaryFilePath, this.#filePath);
-        this.#lastSavedContents = contents;
+        await mkdir(dirname(this.filePath), { recursive: true });
+        await writeFile(this.temporaryFilePath, contents, "utf8");
+        await rename(this.temporaryFilePath, this.filePath);
+        this.lastSavedContents = contents;
       });
-    this.#writeQueue = write;
+    this.writeQueue = write;
     return write;
   }
 
   close(): Promise<void> {
-    if (!this.#closing) {
-      this.#closed = true;
-      this.#closing = this.flush();
+    if (!this.closing) {
+      this.closed = true;
+      this.closing = this.flush();
     }
-    return this.#closing;
+    return this.closing;
   }
 
-  #assertOpen(): void {
-    if (this.#closed) {
+  private assertOpen(): void {
+    if (this.closed) {
       throw new Error("State service is closed");
     }
   }

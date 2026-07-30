@@ -34,17 +34,17 @@ export interface BrowserFileServiceOptions {
  * Maps workspace resource URIs to the App Server's root-relative filesystem protocol.
  */
 export class BrowserFileService implements IFileService {
-  readonly #api: IFileSystemApi;
-  readonly #workspaceContextService: IWorkspaceContextService;
+  private readonly api: IFileSystemApi;
+  private readonly workspaceContextService: IWorkspaceContextService;
 
   constructor(options: BrowserFileServiceOptions) {
-    this.#api = options.api;
-    this.#workspaceContextService = options.workspaceContextService;
+    this.api = options.api;
+    this.workspaceContextService = options.workspaceContextService;
   }
 
   async stat(resource: URI): Promise<IFileStat> {
-    const result = await this.#api.getMetadata({
-      path: this.#relativePath(resource),
+    const result = await this.api.getMetadata({
+      path: this.relativePath(resource),
     });
     return {
       resource,
@@ -56,8 +56,8 @@ export class BrowserFileService implements IFileService {
   }
 
   async readDirectory(resource: URI): Promise<readonly IFileEntry[]> {
-    const result = await this.#api.readDirectory({
-      path: this.#relativePath(resource),
+    const result = await this.api.readDirectory({
+      path: this.relativePath(resource),
     });
     return result.entries.map((entry) => ({
       resource: childResource(resource, entry.name),
@@ -67,14 +67,14 @@ export class BrowserFileService implements IFileService {
   }
 
   async readFile(resource: URI): Promise<string> {
-    const result = await this.#api.readFile({
-      path: this.#relativePath(resource),
+    const result = await this.api.readFile({
+      path: this.relativePath(resource),
     });
     return result.content;
   }
 
-  #relativePath(resource: URI): string {
-    const folders = this.#workspaceContextService.getWorkspace().folders;
+  private relativePath(resource: URI): string {
+    const folders = this.workspaceContextService.getWorkspace().folders;
     if (folders.length !== 1) {
       throw new Error(
         "The current filesystem protocol requires one workspace folder",

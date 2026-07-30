@@ -53,12 +53,12 @@ export function folderRelaunchArguments({
  * current-window context state.
  */
 export class WorkspacesMainService {
-  readonly #pathService: IWorkspacePathService;
+  private readonly pathService: IWorkspacePathService;
 
   constructor(
     pathService: IWorkspacePathService = nodeWorkspacePathService,
   ) {
-    this.#pathService = pathService;
+    this.pathService = pathService;
   }
 
   async resolveStartupWorkspace({
@@ -69,7 +69,7 @@ export class WorkspacesMainService {
     if (!target) {
       return UNKNOWN_EMPTY_WINDOW_WORKSPACE;
     }
-    return resolveWorkspaceOpenTarget(target, cwd, this.#pathService);
+    return resolveWorkspaceOpenTarget(target, cwd, this.pathService);
   }
 }
 

@@ -41,10 +41,10 @@ test("workbench context menu service owns and forwards its implementation", () =
 class TestContextMenuImplementation
   extends DisposableOwner
   implements IContextMenuService {
-  readonly #onDidShowContextMenu = this.own(new Emitter<void>());
-  readonly #onDidHideContextMenu = this.own(new Emitter<void>());
-  readonly onDidShowContextMenu = this.#onDidShowContextMenu.event;
-  readonly onDidHideContextMenu = this.#onDidHideContextMenu.event;
+  private readonly _onDidShowContextMenu = this.own(new Emitter<void>());
+  private readonly _onDidHideContextMenu = this.own(new Emitter<void>());
+  readonly onDidShowContextMenu = this._onDidShowContextMenu.event;
+  readonly onDidHideContextMenu = this._onDidHideContextMenu.event;
   lastOptions: ContextMenuOptions | undefined;
   disposed = false;
 
@@ -57,10 +57,10 @@ class TestContextMenuImplementation
 
   showContextMenu(options: ContextMenuOptions): void {
     this.lastOptions = options;
-    this.#onDidShowContextMenu.fire();
+    this._onDidShowContextMenu.fire();
   }
 
   hideContextMenu(): void {
-    this.#onDidHideContextMenu.fire();
+    this._onDidHideContextMenu.fire();
   }
 }

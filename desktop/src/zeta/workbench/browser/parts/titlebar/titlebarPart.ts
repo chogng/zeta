@@ -20,9 +20,9 @@ export type TitlebarPartFactory = (
 
 /** The host-neutral workbench title area and its actions. */
 export class BrowserTitlebarPart extends WorkbenchPart {
-  readonly #menubar: IMenubarControl;
-  readonly #leftActions: MenuWorkbenchToolBar;
-  readonly #actions: MenuWorkbenchToolBar;
+  private readonly menubar: IMenubarControl;
+  private readonly leftActions: MenuWorkbenchToolBar;
+  private readonly actions: MenuWorkbenchToolBar;
 
   override get minimumHeight(): number { return 35; }
   override get maximumHeight(): number { return 35; }
@@ -32,8 +32,8 @@ export class BrowserTitlebarPart extends WorkbenchPart {
     menubar: IMenubarControl,
   ) {
     super("titlebar", options.ownerDocument);
-    this.#menubar = this.own(menubar);
-    this.#leftActions = this.own(
+    this.menubar = this.own(menubar);
+    this.leftActions = this.own(
       new MenuWorkbenchToolBar(
         options.menuService,
         options.contextMenuService,
@@ -42,7 +42,7 @@ export class BrowserTitlebarPart extends WorkbenchPart {
         { presentation: "inherit-foreground" },
       ),
     );
-    this.#actions = this.own(
+    this.actions = this.own(
       new MenuWorkbenchToolBar(
         options.menuService,
         options.contextMenuService,
@@ -53,15 +53,15 @@ export class BrowserTitlebarPart extends WorkbenchPart {
     );
     const leftActionsElement = options.ownerDocument.createElement("div");
     leftActionsElement.className = "zeta-titlebar-left-actions zeta-titlebar-interactive-region";
-    leftActionsElement.append(this.#leftActions.element);
+    leftActionsElement.append(this.leftActions.element);
     this.titleElement.append(leftActionsElement);
-    if (this.#menubar.element) {
-      this.#menubar.element.classList.add("zeta-titlebar-interactive-region");
-      this.titleElement.append(this.#menubar.element);
+    if (this.menubar.element) {
+      this.menubar.element.classList.add("zeta-titlebar-interactive-region");
+      this.titleElement.append(this.menubar.element);
     }
     const actionsElement = options.ownerDocument.createElement("div");
     actionsElement.className = "zeta-titlebar-actions zeta-titlebar-interactive-region";
-    actionsElement.append(this.#actions.element);
+    actionsElement.append(this.actions.element);
     this.contentElement.append(actionsElement);
   }
 }

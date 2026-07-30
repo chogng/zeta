@@ -45,19 +45,19 @@ export interface BrowserViewMainServiceOptions {
  */
 export class BrowserViewMainService extends DisposableOwner
   implements IBrowserViewMainService {
-  readonly #window: BrowserWindow;
-  readonly #emitEvent: (event: BrowserViewEvent) => void;
-  readonly #targets = new Map<BrowserViewTargetId, BrowserTarget>();
-  #disposing = false;
+  private readonly window: BrowserWindow;
+  private readonly emitEvent: (event: BrowserViewEvent) => void;
+  private readonly targets = new Map<BrowserViewTargetId, BrowserTarget>();
+  private disposing = false;
 
   constructor(options: BrowserViewMainServiceOptions) {
     super();
-    this.#window = options.window;
-    this.#emitEvent = options.emitEvent;
+    this.window = options.window;
+    this.emitEvent = options.emitEvent;
     this.defer(() => {
-      this.#disposing = true;
-      for (const target of [...this.#targets.values()]) {
-        this.#releaseTarget(target, true);
+      this.disposing = true;
+      for (const target of [...this.targets.values()]) {
+        this.releaseTarget(target, true);
       }
     });
   }
@@ -82,74 +82,74 @@ export class BrowserViewMainService extends DisposableOwner
       laidOut: false,
       visible: false,
     };
-    this.#targets.set(targetId, target);
+    this.targets.set(targetId, target);
 
     try {
       view.setBounds({ x: 0, y: 0, width: 1024, height: 768 });
       view.setVisible(false);
-      this.#window.contentView.addChildView(view);
-      this.#configureSecurity(target);
-      this.#listen(target);
+      this.window.contentView.addChildView(view);
+      this.configureSecurity(target);
+      this.listen(target);
       void view.webContents.loadURL(initialUrl).catch(() => {
         // did-fail-load publishes the structured failure event.
       });
-      return this.#state(target);
+      return this.state(target);
     } catch (error) {
-      this.#releaseTarget(target, true);
+      this.releaseTarget(target, true);
       throw error;
     }
   }
 
   observe(targetId: string): IBrowserViewState {
-    return this.#state(this.#target(targetId));
+    return this.state(this.target(targetId));
   }
 
   layout(request: IBrowserViewLayoutRequest): void {
-    const target = this.#target(request.targetId);
+    const target = this.target(request.targetId);
     target.view.setBounds(request.bounds);
     target.laidOut = true;
   }
 
   setVisibility(request: IBrowserViewVisibilityRequest): void {
-    const target = this.#target(request.targetId);
+    const target = this.target(request.targetId);
     if (request.visible && !target.laidOut) {
       throw new Error("BrowserTargetNotLaidOut");
     }
     if (target.visible === request.visible) return;
     target.visible = request.visible;
     target.view.setVisible(request.visible);
-    this.#emitState(target);
+    this.emitState(target);
   }
 
   async navigate(request: IBrowserViewNavigateRequest): Promise<void> {
-    const target = this.#target(request.targetId);
+    const target = this.target(request.targetId);
     target.url = normalizeBrowserViewUrl(request.url);
     await target.view.webContents.loadURL(target.url);
   }
 
   goBack(targetId: string): void {
-    const history = this.#target(targetId).view.webContents.navigationHistory;
+    const history = this.target(targetId).view.webContents.navigationHistory;
     if (history.canGoBack()) history.goBack();
   }
 
   goForward(targetId: string): void {
-    const history = this.#target(targetId).view.webContents.navigationHistory;
+    const history = this.target(targetId).view.webContents.navigationHistory;
     if (history.canGoForward()) history.goForward();
   }
 
   reload(targetId: string): void {
-    this.#target(targetId).view.webContents.reload();
+    this.target(targetId).view.webContents.reload();
   }
 
   stop(targetId: string): void {
-    this.#target(targetId).view.webContents.stop();
+    this.target(targetId).view.webContents.stop();
   }
 
   close(targetId: string): void {
-    this.#releaseTarget(this.#target(targetId), true);
+    this.releaseTarget(this.target(targetId), true);
   }
 
-  #configureSecurity(target: BrowserTarget): void {
+  private configureSecurity(target: BrowserTarget): void {
     const contents = target.view.webContents;
     const browserSession = contents.session;
     browserSession.setPermissionCheckHandler(() => false);
@@ -167,7 +167,7 @@ export class BrowserViewMainService extends DisposableOwner
 
     contents.setWindowOpenHandler(({ url }) => {
       try {
-        this.#emit({
+        this.emit({
           type: "openRequested",
           targetId: target.id,
           url: normalizeBrowserViewUrl(url),
@@ -179,22 +179,22 @@ export class BrowserViewMainService extends DisposableOwner
     });
   }
 
-  #listen(target: BrowserTarget): void {
+  private listen(target: BrowserTarget): void {
     const contents = target.view.webContents;
-    this.#on(contents, target, "did-start-loading", () =>
-      this.#emitState(target));
-    this.#on(contents, target, "did-stop-loading", () =>
-      this.#emitState(target));
-    this.#on(contents, target, "did-navigate", (
+    this.on(contents, target, "did-start-loading", () =>
+      this.emitState(target));
+    this.on(contents, target, "did-stop-loading", () =>
+      this.emitState(target));
+    this.on(contents, target, "did-navigate", (
       _event: ElectronEvent,
       url: string,
     ) => {
       target.url = normalizeBrowserViewUrl(url);
-      this.#emitState(target);
+      this.emitState(target);
     });
-    this.#on(contents, target, "page-title-updated", () =>
-      this.#emitState(target));
-    this.#on(
+    this.on(contents, target, "page-title-updated", () =>
+      this.emitState(target));
+    this.on(
       contents,
       target,
       "did-fail-load",
@@ -206,45 +206,45 @@ export class BrowserViewMainService extends DisposableOwner
         isMainFrame: boolean,
       ) => {
         if (!isMainFrame) return;
-        this.#emit({
+        this.emit({
           type: "loadFailed",
           targetId: target.id,
           url: validatedURL,
           errorCode,
           errorDescription,
         });
-        this.#emitState(target);
+        this.emitState(target);
       },
     );
-    this.#on(contents, target, "render-process-gone", (
+    this.on(contents, target, "render-process-gone", (
       _event: ElectronEvent,
       details: Electron.RenderProcessGoneDetails,
     ) => {
-      this.#emit({
+      this.emit({
         type: "renderProcessGone",
         targetId: target.id,
         reason: details.reason,
       });
     });
-    this.#on(contents, target, "will-navigate", (
+    this.on(contents, target, "will-navigate", (
       event: ElectronEvent,
       url: string,
     ) =>
-      this.#validateNavigation(event, url));
-    this.#on(contents, target, "will-redirect", (
+      this.validateNavigation(event, url));
+    this.on(contents, target, "will-redirect", (
       event: ElectronEvent,
       url: string,
     ) =>
-      this.#validateNavigation(event, url));
-    this.#on(contents, target, "will-attach-webview", (
+      this.validateNavigation(event, url));
+    this.on(contents, target, "will-attach-webview", (
       event: ElectronEvent,
     ) =>
       event.preventDefault());
-    this.#on(contents, target, "destroyed", () =>
-      this.#releaseTarget(target, false));
+    this.on(contents, target, "destroyed", () =>
+      this.releaseTarget(target, false));
   }
 
-  #validateNavigation(event: ElectronEvent, url: string): void {
+  private validateNavigation(event: ElectronEvent, url: string): void {
     try {
       normalizeBrowserViewUrl(url);
     } catch {
@@ -252,7 +252,7 @@ export class BrowserViewMainService extends DisposableOwner
     }
   }
 
-  #on(
+  private on(
     contents: WebContents,
     target: BrowserTarget,
     event: string,
@@ -263,7 +263,7 @@ export class BrowserViewMainService extends DisposableOwner
     target.disposables.defer(() => emitter.removeListener(event, listener));
   }
 
-  #state(target: BrowserTarget): IBrowserViewState {
+  private state(target: BrowserTarget): IBrowserViewState {
     const contents = target.view.webContents;
     if (contents.isDestroyed()) {
       throw new Error("BrowserTargetUnavailable");
@@ -280,32 +280,32 @@ export class BrowserViewMainService extends DisposableOwner
     };
   }
 
-  #target(targetId: string): BrowserTarget {
-    const target = this.#targets.get(targetId);
+  private target(targetId: string): BrowserTarget {
+    const target = this.targets.get(targetId);
     if (!target || target.view.webContents.isDestroyed()) {
       throw new Error("BrowserTargetUnavailable");
     }
     return target;
   }
 
-  #emitState(target: BrowserTarget): void {
-    if (!this.#targets.has(target.id)) return;
-    this.#emit({ type: "stateChanged", state: this.#state(target) });
+  private emitState(target: BrowserTarget): void {
+    if (!this.targets.has(target.id)) return;
+    this.emit({ type: "stateChanged", state: this.state(target) });
   }
 
-  #emit(event: BrowserViewEvent): void {
-    if (!this.#disposing) this.#emitEvent(event);
+  private emit(event: BrowserViewEvent): void {
+    if (!this.disposing) this.emitEvent(event);
   }
 
-  #releaseTarget(target: BrowserTarget, closeContents: boolean): void {
-    if (!this.#targets.delete(target.id)) return;
+  private releaseTarget(target: BrowserTarget, closeContents: boolean): void {
+    if (!this.targets.delete(target.id)) return;
     target.disposables.dispose();
-    if (!this.#window.isDestroyed()) {
-      this.#window.contentView.removeChildView(target.view);
+    if (!this.window.isDestroyed()) {
+      this.window.contentView.removeChildView(target.view);
     }
     if (closeContents && !target.view.webContents.isDestroyed()) {
       target.view.webContents.close();
     }
-    this.#emit({ type: "closed", targetId: target.id });
+    this.emit({ type: "closed", targetId: target.id });
   }
 }

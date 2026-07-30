@@ -18,11 +18,11 @@ import {
 
 /** Owns the macOS application menu synchronized from one workbench window. */
 export class NativeMenubarMainService extends DisposableOwner {
-  readonly #window: BrowserWindow;
+  private readonly window: BrowserWindow;
 
   constructor(window: BrowserWindow) {
     super();
-    this.#window = window;
+    this.window = window;
     this.defer(() => Menu.setApplicationMenu(null));
   }
 
@@ -31,16 +31,16 @@ export class NativeMenubarMainService extends DisposableOwner {
       applicationMenu(),
       ...data.menus.map(({ label, items }) => ({
         label,
-        submenu: toTemplate(items, (id) => this.#select(data.revision, id)),
+        submenu: toTemplate(items, (id) => this.select(data.revision, id)),
       })),
       windowMenu(),
     ];
     Menu.setApplicationMenu(Menu.buildFromTemplate(template));
   }
 
-  #select(revision: number, id: string): void {
-    if (this.#window.isDestroyed()) return;
-    this.#window.webContents.send(NATIVE_MENUBAR_SELECT_CHANNEL, {
+  private select(revision: number, id: string): void {
+    if (this.window.isDestroyed()) return;
+    this.window.webContents.send(NATIVE_MENUBAR_SELECT_CHANNEL, {
       revision,
       id,
     });

@@ -40,8 +40,8 @@ export interface AppServerSessionOptions {
  * Owns one initialized App Server connection and its negotiated immutable capabilities.
  */
 export class AppServerSession implements IDisposable {
-  #state: AppServerSessionState = "created";
-  #initializeResult?: InitializeResult;
+  private _state: AppServerSessionState = "created";
+  private initializeResult?: InitializeResult;
 
   constructor(
     readonly client: AppServerClient,
@@ -52,28 +52,28 @@ export class AppServerSession implements IDisposable {
   }
 
   get state(): AppServerSessionState {
-    return this.#state;
+    return this._state;
   }
 
   get capabilities(): ServerCapabilities {
-    if (!this.#initializeResult) {
+    if (!this.initializeResult) {
       throw new Error("App Server session is not initialized");
     }
-    return this.#initializeResult.capabilities;
+    return this.initializeResult.capabilities;
   }
 
   get serverInfo(): InitializeResult["serverInfo"] {
-    if (!this.#initializeResult) {
+    if (!this.initializeResult) {
       throw new Error("App Server session is not initialized");
     }
-    return this.#initializeResult.serverInfo;
+    return this.initializeResult.serverInfo;
   }
 
   async initialize(): Promise<InitializeResult> {
-    if (this.#state !== "created") {
-      throw new Error(`Cannot initialize App Server session from ${this.#state}`);
+    if (this._state !== "created") {
+      throw new Error(`Cannot initialize App Server session from ${this._state}`);
     }
-    this.#state = "initializing";
+    this._state = "initializing";
     try {
       const initialized = await this.client.request(
         APP_SERVER_METHODS.initialize,
@@ -100,8 +100,8 @@ export class AppServerSession implements IDisposable {
           `Zeta app-server schema mismatch: expected ${this.options.schemaHash}, received ${initialized.schemaHash}`,
         );
       }
-      this.#initializeResult = initialized;
-      this.#state = "ready";
+      this.initializeResult = initialized;
+      this._state = "ready";
       return initialized;
     } catch (error) {
       await this.close();
@@ -114,8 +114,8 @@ export class AppServerSession implements IDisposable {
     params: MethodParams<M>,
     options?: RpcRequestOptions,
   ): Promise<MethodResult<M>> {
-    if (this.#state !== "ready") {
-      return Promise.reject(new Error(`App Server session is not ready: ${this.#state}`));
+    if (this._state !== "ready") {
+      return Promise.reject(new Error(`App Server session is not ready: ${this._state}`));
     }
     return this.client.request(definition, params, options);
   }
@@ -137,7 +137,7 @@ export class AppServerSession implements IDisposable {
     definition: RpcMethodDefinition<P, R>,
     handler: (params: P, context: RpcRequestContext) => R | Promise<R>,
   ): IDisposable {
-    if (this.#state === "closed") {
+    if (this._state === "closed") {
       throw new Error("Cannot register a handler on a closed App Server session");
     }
     return this.client.peer.registerRequestHandler(definition, handler);
@@ -148,8 +148,8 @@ export class AppServerSession implements IDisposable {
   }
 
   async close(): Promise<void> {
-    if (this.#state === "closed") return;
-    this.#state = "closed";
+    if (this._state === "closed") return;
+    this._state = "closed";
     try {
       await this.client.close();
     } finally {
@@ -158,8 +158,8 @@ export class AppServerSession implements IDisposable {
   }
 
   dispose(): void {
-    if (this.#state === "closed") return;
-    this.#state = "closed";
+    if (this._state === "closed") return;
+    this._state = "closed";
     try {
       this.client.dispose();
     } finally {

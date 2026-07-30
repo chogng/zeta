@@ -18,8 +18,8 @@ export class EditorTitleControl extends DisposableOwner {
   static readonly HEIGHT = 35;
 
   readonly element: HTMLDivElement;
-  readonly #tabs: EditorTabsControl;
-  readonly #toolbar: WorkbenchToolBar;
+  private readonly tabs: EditorTabsControl;
+  private readonly toolbar: WorkbenchToolBar;
 
   constructor(
     ownerDocument: Document,
@@ -29,8 +29,8 @@ export class EditorTitleControl extends DisposableOwner {
     super();
     this.element = ownerDocument.createElement("div");
     this.element.className = "zeta-editor-title-control";
-    this.#tabs = this.own(new EditorTabsControl(ownerDocument, delegate));
-    this.#toolbar = this.own(titleActions
+    this.tabs = this.own(new EditorTabsControl(ownerDocument, delegate));
+    this.toolbar = this.own(titleActions
       ? new MenuWorkbenchToolBar(
         titleActions.menuService,
         titleActions.contextMenuProvider,
@@ -48,8 +48,8 @@ export class EditorTitleControl extends DisposableOwner {
       ));
     const actions = ownerDocument.createElement("div");
     actions.className = "zeta-editor-title-actions";
-    actions.append(this.#toolbar.element);
-    this.element.append(this.#tabs.element, actions);
+    actions.append(this.toolbar.element);
+    this.element.append(this.tabs.element, actions);
     this.defer(() => this.element.remove());
   }
 
@@ -57,7 +57,7 @@ export class EditorTitleControl extends DisposableOwner {
     editors: readonly EditorTabDescriptor[],
     activeInput: EditorInput | undefined,
   ): void {
-    this.#tabs.setEditors(editors, activeInput);
+    this.tabs.setEditors(editors, activeInput);
   }
 }
 

@@ -77,11 +77,11 @@ export class ContextView
   implements IContextViewProvider
 {
   readonly element: HTMLDivElement;
-  readonly #onDidHide = this.own(new Emitter<ContextViewHideReason>());
-  readonly onDidHide = this.#onDidHide.event;
-  readonly #visibleListeners = this.own(new ResettableDisposableGroup());
-  #restoreFocusTo: HTMLElement | undefined;
-  #options: ContextViewOptions | undefined;
+  private readonly _onDidHide = this.own(new Emitter<ContextViewHideReason>());
+  readonly onDidHide = this._onDidHide.event;
+  private readonly visibleListeners = this.own(new ResettableDisposableGroup());
+  private restoreFocusTo: HTMLElement | undefined;
+  private options: ContextViewOptions | undefined;
 
   constructor(container: HTMLElement = mainWindow.document.body) {
     super();
@@ -96,14 +96,14 @@ export class ContextView
   }
 
   get visible(): boolean {
-    return this.#options !== undefined;
+    return this.options !== undefined;
   }
 
   show(options: ContextViewOptions): boolean {
     if (this.visible) {
       this.hide(ContextViewHideReason.Replaced);
     }
-    this.#visibleListeners.clear();
+    this.visibleListeners.clear();
     const ownerDocument = getAnchorDocument(
       options.anchor,
       this.element.ownerDocument,
@@ -114,11 +114,11 @@ export class ContextView
       ownerDocument.body.append(this.element);
     }
     const activeElement = getActiveElement(ownerDocument);
-    this.#restoreFocusTo = isHTMLElement(activeElement)
+    this.restoreFocusTo = isHTMLElement(activeElement)
       ? activeElement
       : undefined;
 
-    this.#options = options;
+    this.options = options;
     this.element.replaceChildren(options.content);
     this.element.className = "zeta-context-view";
     this.element.style.zIndex = String(1000 + (options.layer ?? 0));
@@ -129,7 +129,7 @@ export class ContextView
     this.element.style.visibility = "";
     registerVisibleContextView(this);
 
-    this.#visibleListeners.add(addDisposableListener(
+    this.visibleListeners.add(addDisposableListener(
       ownerDocument,
       "pointerdown",
       (event: PointerEvent) => {
@@ -145,7 +145,7 @@ export class ContextView
       },
       true,
     ));
-    this.#visibleListeners.add(addDisposableListener(
+    this.visibleListeners.add(addDisposableListener(
       ownerDocument,
       "keydown",
       (event: KeyboardEvent) => {
@@ -162,17 +162,17 @@ export class ContextView
       },
       true,
     ));
-    this.#visibleListeners.add(addDisposableListener(
+    this.visibleListeners.add(addDisposableListener(
       targetWindow,
       "blur",
       () => this.hide(ContextViewHideReason.WindowBlur),
     ));
-    this.#visibleListeners.add(addDisposableListener(
+    this.visibleListeners.add(addDisposableListener(
       targetWindow,
       "resize",
       () => this.layout(),
     ));
-    this.#visibleListeners.add(addDisposableListener(
+    this.visibleListeners.add(addDisposableListener(
       ownerDocument,
       "scroll",
       () => this.layout(),
@@ -182,7 +182,7 @@ export class ContextView
   }
 
   layout(): void {
-    const options = this.#options;
+    const options = this.options;
     if (!options) return;
     if (isElementAnchor(options.anchor) && !options.anchor.isConnected) {
       this.hide(ContextViewHideReason.AnchorRemoved);
@@ -221,15 +221,15 @@ export class ContextView
   hide(
     reason: ContextViewHideReason = ContextViewHideReason.Programmatic,
   ): void {
-    const options = this.#options;
+    const options = this.options;
     if (!options) return;
-    this.#options = undefined;
+    this.options = undefined;
     unregisterVisibleContextView(this);
-    this.#visibleListeners.clear();
+    this.visibleListeners.clear();
     this.element.hidden = true;
     this.element.replaceChildren();
-    const restoreFocusTo = this.#restoreFocusTo;
-    this.#restoreFocusTo = undefined;
+    const restoreFocusTo = this.restoreFocusTo;
+    this.restoreFocusTo = undefined;
     if (
       options.focusRestore === ContextViewFocusRestore.Previous &&
       restoreFocusTo
@@ -237,7 +237,7 @@ export class ContextView
       restoreFocus(restoreFocusTo);
     }
     options.onHide?.(reason);
-    this.#onDidHide.fire(reason);
+    this._onDidHide.fire(reason);
   }
 }
 

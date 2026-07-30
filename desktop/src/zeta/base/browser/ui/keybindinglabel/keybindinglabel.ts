@@ -15,30 +15,30 @@ export type KeybindingLabelPresentation = "plain" | "keycap";
 /** Presents a resolved keybinding without owning matching or dispatch policy. */
 export class KeybindingLabel extends DisposableOwner {
   readonly element: HTMLSpanElement;
-  #keybinding: ResolvedKeybinding;
+  private _keybinding: ResolvedKeybinding;
 
   constructor(options: KeybindingLabelOptions) {
     super();
     const ownerDocument = options.ownerDocument ?? document;
-    this.#keybinding = options.keybinding;
+    this._keybinding = options.keybinding;
     this.element = ownerDocument.createElement("span");
     this.defer(() => this.element.remove());
     this.element.className = `zeta-keybinding-label zeta-keybinding-label-${options.presentation ?? "plain"}`;
-    this.#render();
+    this.render();
   }
 
   set keybinding(keybinding: ResolvedKeybinding) {
-    this.#keybinding = keybinding;
-    this.#render();
+    this._keybinding = keybinding;
+    this.render();
   }
 
   get keybinding(): ResolvedKeybinding {
-    return this.#keybinding;
+    return this._keybinding;
   }
 
-  #render(): void {
+  private render(): void {
     const ownerDocument = this.element.ownerDocument;
-    const parts = getKeybindingLabelParts(this.#keybinding);
+    const parts = getKeybindingLabelParts(this._keybinding);
     this.element.replaceChildren(...parts.map((part) => {
       const token = ownerDocument.createElement("kbd");
       token.textContent = part.label;
@@ -49,7 +49,7 @@ export class KeybindingLabel extends DisposableOwner {
       this.element,
       "label",
       getKeybindingLabel(
-        this.#keybinding,
+        this._keybinding,
         KeybindingLabelStyle.Aria,
       ),
     );

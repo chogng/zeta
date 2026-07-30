@@ -29,13 +29,13 @@ export interface ConfigurationMainServiceOptions {
  * Owns the Desktop configuration resource in the Electron main process.
  */
 export class ConfigurationMainService extends DisposableOwner {
-  readonly #resource: RevisionedJsonFile<IConfigurationDocument>;
+  private readonly resource: RevisionedJsonFile<IConfigurationDocument>;
 
   private constructor(
     resource: RevisionedJsonFile<IConfigurationDocument>,
   ) {
     super();
-    this.#resource = this.own(resource);
+    this.resource = this.own(resource);
   }
 
   static async create(
@@ -52,7 +52,7 @@ export class ConfigurationMainService extends DisposableOwner {
   }
 
   get onDidChange(): Event<IConfigurationSnapshot> {
-    return (listener) => this.#resource.onDidChange((snapshot) =>
+    return (listener) => this.resource.onDidChange((snapshot) =>
       listener({
         revision: snapshot.revision,
         document: snapshot.value,
@@ -61,7 +61,7 @@ export class ConfigurationMainService extends DisposableOwner {
   }
 
   read(): IConfigurationSnapshot {
-    const snapshot = this.#resource.read();
+    const snapshot = this.resource.read();
     return {
       revision: snapshot.revision,
       document: snapshot.value,
@@ -71,7 +71,7 @@ export class ConfigurationMainService extends DisposableOwner {
   async update(
     request: IConfigurationUpdateRequest,
   ): Promise<IConfigurationSnapshot> {
-    const snapshot = await this.#resource.update(
+    const snapshot = await this.resource.update(
       request.expectedRevision,
       request.document,
     );
@@ -82,7 +82,7 @@ export class ConfigurationMainService extends DisposableOwner {
   }
 
   async close(): Promise<void> {
-    await this.#resource.close();
+    await this.resource.close();
     this.dispose();
   }
 }

@@ -13,21 +13,21 @@ import {
 
 /** Immutable renderer projection of the workspace hosted by this window. */
 export class WorkspaceContextService implements IWorkspaceContextService {
-  readonly #workspace: IWorkspace;
+  private readonly workspace: IWorkspace;
 
   constructor(workspace: IAnyWorkspaceIdentifier) {
-    this.#workspace = resolveWorkspace(workspace);
+    this.workspace = resolveWorkspace(workspace);
   }
 
   getWorkspace(): IWorkspace {
-    return this.#workspace;
+    return this.workspace;
   }
 
   getWorkbenchState(): WorkbenchState {
-    if (this.#workspace.configuration) {
+    if (this.workspace.configuration) {
       return WorkbenchState.WORKSPACE;
     }
-    if (this.#workspace.folders.length === 1) {
+    if (this.workspace.folders.length === 1) {
       return WorkbenchState.FOLDER;
     }
     return WorkbenchState.EMPTY;

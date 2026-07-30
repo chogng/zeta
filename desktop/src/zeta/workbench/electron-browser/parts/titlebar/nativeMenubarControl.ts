@@ -26,15 +26,15 @@ import type {
 /** Synchronizes the workbench menu model to the macOS application menu. */
 export class NativeMenubarControl extends DisposableOwner
   implements IMenubarControl {
-  readonly #api: INativeMenubarApi;
-  readonly #menu: IMenu & Disposable;
-  readonly #actionsByRevision = new Map<
+  private readonly api: INativeMenubarApi;
+  private readonly menu: IMenu & Disposable;
+  private readonly actionsByRevision = new Map<
     number,
     ReadonlyMap<string, IAction>
   >();
-  #revision = 0;
-  #updateTail = Promise.resolve();
-  #disposed = false;
+  private revision = 0;
+  private updateTail = Promise.resolve();
+  private disposed = false;
 
   readonly element = undefined;
 
@@ -43,39 +43,39 @@ export class NativeMenubarControl extends DisposableOwner
     api: INativeMenubarApi,
   ) {
     super();
-    this.#api = api;
-    this.#menu = this.own(menuService.createMenu(MenuId.MenubarMainMenu));
-    this.own(this.#menu.onDidChange(() => this.#synchronize()));
+    this.api = api;
+    this.menu = this.own(menuService.createMenu(MenuId.MenubarMainMenu));
+    this.own(this.menu.onDidChange(() => this.synchronize()));
     const selection = api.onDidSelect(({ revision, id }) => {
-      const action = this.#actionsByRevision.get(revision)?.get(id);
+      const action = this.actionsByRevision.get(revision)?.get(id);
       if (action) runAction(action);
     });
     this.own(toDisposable(() => selection.dispose()));
     this.defer(() => {
-      this.#disposed = true;
-      this.#actionsByRevision.clear();
+      this.disposed = true;
+      this.actionsByRevision.clear();
     });
-    this.#synchronize();
+    this.synchronize();
   }
 
-  #synchronize(): void {
-    const revision = this.#nextRevision();
+  private synchronize(): void {
+    const revision = this.nextRevision();
     const serialized = serializeMenubar(
-      this.#menu.getActions().flatMap(([, actions]) => actions),
+      this.menu.getActions().flatMap(([, actions]) => actions),
       revision,
     );
 
-    this.#updateTail = this.#updateTail
+    this.updateTail = this.updateTail
       .then(async () => {
-        if (this.#disposed) return;
-        this.#actionsByRevision.set(revision, serialized.actions);
+        if (this.disposed) return;
+        this.actionsByRevision.set(revision, serialized.actions);
         try {
-          await this.#api.update(serialized.data);
+          await this.api.update(serialized.data);
         } finally {
-          while (this.#actionsByRevision.size > 2) {
-            const oldest = this.#actionsByRevision.keys().next().value;
+          while (this.actionsByRevision.size > 2) {
+            const oldest = this.actionsByRevision.keys().next().value;
             if (oldest === undefined) break;
-            this.#actionsByRevision.delete(oldest);
+            this.actionsByRevision.delete(oldest);
           }
         }
       })
@@ -84,11 +84,11 @@ export class NativeMenubarControl extends DisposableOwner
       });
   }
 
-  #nextRevision(): number {
-    this.#revision = this.#revision === Number.MAX_SAFE_INTEGER
+  private nextRevision(): number {
+    this.revision = this.revision === Number.MAX_SAFE_INTEGER
       ? 1
-      : this.#revision + 1;
-    return this.#revision;
+      : this.revision + 1;
+    return this.revision;
   }
 }
 

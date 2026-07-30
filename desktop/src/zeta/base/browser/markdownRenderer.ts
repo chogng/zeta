@@ -86,18 +86,18 @@ const SAFE_DATA_IMAGE =
  * before it enters the document.
  */
 export class MarkdownElement extends DisposableOwner {
-  readonly #ownerDocument: Document;
-  readonly #breaks: boolean;
-  readonly #linkHandler: ((href: string) => void) | undefined;
-  #active = true;
+  private readonly ownerDocument: Document;
+  private readonly breaks: boolean;
+  private readonly linkHandler: ((href: string) => void) | undefined;
+  private active = true;
 
   readonly element: HTMLElement;
 
   constructor(options: MarkdownElementOptions) {
     super();
-    this.#ownerDocument = options.ownerDocument;
-    this.#breaks = options.breaks ?? false;
-    this.#linkHandler = options.linkHandler;
+    this.ownerDocument = options.ownerDocument;
+    this.breaks = options.breaks ?? false;
+    this.linkHandler = options.linkHandler;
     this.element = options.ownerDocument.createElement("div");
     this.element.className = "zeta-markdown";
     this.own(addDisposableListener<MouseEvent>(
@@ -109,29 +109,29 @@ export class MarkdownElement extends DisposableOwner {
         event.preventDefault();
         event.stopPropagation();
         const href = anchor.getAttribute("href");
-        if (href) this.#linkHandler?.(href);
+        if (href) this.linkHandler?.(href);
       },
     ));
     this.defer(() => {
-      this.#active = false;
+      this.active = false;
       this.element.remove();
     });
     this.setMarkdown(options.markdown ?? "");
   }
 
   setMarkdown(markdown: string): void {
-    this.#requireActive();
-    const rawHtml = renderWorkbenchMarkdown(markdown, this.#breaks);
+    this.requireActive();
+    const rawHtml = renderWorkbenchMarkdown(markdown, this.breaks);
     reset(
       this.element,
       sanitizeMarkdownHtmlToFragment({
-        ownerDocument: this.#ownerDocument,
+        ownerDocument: this.ownerDocument,
       }, rawHtml),
     );
   }
 
-  #requireActive(): void {
-    if (!this.#active) {
+  private requireActive(): void {
+    if (!this.active) {
       throw new ReferenceError("MarkdownElement is already disposed");
     }
   }

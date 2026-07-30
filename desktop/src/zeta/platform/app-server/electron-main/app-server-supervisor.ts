@@ -58,23 +58,23 @@ type NotificationListener = (notification: ServerNotification) => void;
  * Supervises App Server process/session replacement without replaying application requests.
  */
 export class AppServerSupervisor implements IDisposable {
-  readonly #spawnProcess: SpawnAppServer;
-  readonly #fileExists: (path: string) => boolean;
-  readonly #wait: (milliseconds: number) => Promise<void>;
-  readonly #stateListeners = new Set<StateListener>();
-  readonly #notificationListeners = new Set<NotificationListener>();
-  readonly #sessionNotification = new DisposableSlot<IDisposable>();
-  readonly #maxRestartAttempts: number;
-  readonly #initialRestartDelayMs: number;
-  readonly #maxRestartDelayMs: number;
-  #state: AppServerConnectionState = "stopped";
-  #process?: ChildProcessWithoutNullStreams;
-  #session?: AppServerSession;
-  #generation = 0;
-  #restartAttempts = 0;
-  #stopping = false;
-  #disposed = false;
-  #lastDiagnostics = "";
+  private readonly spawnProcess: SpawnAppServer;
+  private readonly fileExists: (path: string) => boolean;
+  private readonly wait: (milliseconds: number) => Promise<void>;
+  private readonly stateListeners = new Set<StateListener>();
+  private readonly notificationListeners = new Set<NotificationListener>();
+  private readonly sessionNotification = new DisposableSlot<IDisposable>();
+  private readonly maxRestartAttempts: number;
+  private readonly initialRestartDelayMs: number;
+  private readonly maxRestartDelayMs: number;
+  private _state: AppServerConnectionState = "stopped";
+  private process?: ChildProcessWithoutNullStreams;
+  private session?: AppServerSession;
+  private generation = 0;
+  private restartAttempts = 0;
+  private stopping = false;
+  private disposed = false;
+  private lastDiagnostics = "";
 
   constructor(readonly options: AppServerSupervisorOptions) {
     if (!isAbsolute(options.executable)) {
@@ -89,66 +89,66 @@ export class AppServerSupervisor implements IDisposable {
         throw new Error(`App Server environment variable is not allowed: ${key}`);
       }
     }
-    this.#maxRestartAttempts = nonNegativeInteger(
+    this.maxRestartAttempts = nonNegativeInteger(
       options.maxRestartAttempts,
       3,
       "maxRestartAttempts",
     );
-    this.#initialRestartDelayMs = positiveInteger(
+    this.initialRestartDelayMs = positiveInteger(
       options.initialRestartDelayMs,
       250,
       "initialRestartDelayMs",
     );
-    this.#maxRestartDelayMs = positiveInteger(
+    this.maxRestartDelayMs = positiveInteger(
       options.maxRestartDelayMs,
       2_000,
       "maxRestartDelayMs",
     );
-    this.#spawnProcess = options.spawnProcess ?? defaultSpawn;
-    this.#fileExists = options.fileExists ?? existsSync;
-    this.#wait = options.wait ?? wait;
+    this.spawnProcess = options.spawnProcess ?? defaultSpawn;
+    this.fileExists = options.fileExists ?? existsSync;
+    this.wait = options.wait ?? wait;
     trackDisposable(this);
-    setDisposableOwner(this.#sessionNotification, this);
+    setDisposableOwner(this.sessionNotification, this);
   }
 
   get state(): AppServerConnectionState {
-    return this.#state;
+    return this._state;
   }
 
   onStateChange(listener: StateListener): IDisposable {
-    this.#stateListeners.add(listener);
-    return toDisposable(() => this.#stateListeners.delete(listener));
+    this.stateListeners.add(listener);
+    return toDisposable(() => this.stateListeners.delete(listener));
   }
 
   onNotification(listener: NotificationListener): IDisposable {
-    this.#notificationListeners.add(listener);
-    return toDisposable(() => this.#notificationListeners.delete(listener));
+    this.notificationListeners.add(listener);
+    return toDisposable(() => this.notificationListeners.delete(listener));
   }
 
   async start(): Promise<void> {
-    if (this.#disposed) {
+    if (this.disposed) {
       throw new Error("Cannot start a disposed App Server supervisor");
     }
-    if (this.#state !== "stopped") {
-      throw new Error(`Cannot start App Server supervisor from ${this.#state}`);
+    if (this._state !== "stopped") {
+      throw new Error(`Cannot start App Server supervisor from ${this._state}`);
     }
-    if (!this.#fileExists(this.options.executable)) {
+    if (!this.fileExists(this.options.executable)) {
       throw new Error(`Packaged Zeta binary is missing: ${this.options.executable}`);
     }
-    this.#stopping = false;
-    this.#restartAttempts = 0;
+    this.stopping = false;
+    this.restartAttempts = 0;
     let lastError: unknown;
-    for (let attempt = 0; attempt <= this.#maxRestartAttempts; attempt += 1) {
+    for (let attempt = 0; attempt <= this.maxRestartAttempts; attempt += 1) {
       if (attempt > 0) {
-        this.#setState("restarting");
-        await this.#wait(this.#restartDelay(attempt - 1));
+        this.setState("restarting");
+        await this.wait(this.restartDelay(attempt - 1));
       }
       try {
-        await this.#launch();
+        await this.launch();
         return;
       } catch (error) {
         lastError = error;
-        this.#setState("crashed");
+        this.setState("crashed");
       }
     }
     throw lastError instanceof Error
@@ -161,52 +161,52 @@ export class AppServerSupervisor implements IDisposable {
     params: MethodParams<M>,
     options?: RpcRequestOptions,
   ): Promise<MethodResult<M>> {
-    if (this.#state !== "ready" || !this.#session) {
-      return Promise.reject(new Error(`App Server is not ready: ${this.#state}`));
+    if (this._state !== "ready" || !this.session) {
+      return Promise.reject(new Error(`App Server is not ready: ${this._state}`));
     }
-    return this.#session.request(definition, params, options);
+    return this.session.request(definition, params, options);
   }
 
   diagnostics(): string {
-    return this.#session?.diagnostics() ?? this.#lastDiagnostics;
+    return this.session?.diagnostics() ?? this.lastDiagnostics;
   }
 
   async stop(): Promise<void> {
-    if (this.#state === "stopped") return;
-    this.#stopping = true;
-    this.#generation += 1;
-    this.#setState("stopping");
-    const session = this.#session;
-    this.#session = undefined;
-    this.#process = undefined;
-    this.#sessionNotification.clear();
+    if (this._state === "stopped") return;
+    this.stopping = true;
+    this.generation += 1;
+    this.setState("stopping");
+    const session = this.session;
+    this.session = undefined;
+    this.process = undefined;
+    this.sessionNotification.clear();
     await session?.close();
-    this.#setState("stopped");
+    this.setState("stopped");
   }
 
-  async #launch(): Promise<void> {
-    this.#setState("starting");
-    const generation = ++this.#generation;
-    const child = this.#spawnProcess(
+  private async launch(): Promise<void> {
+    this.setState("starting");
+    const generation = ++this.generation;
+    const child = this.spawnProcess(
       this.options.executable,
       this.options.args,
       { environment: this.options.environment },
     );
-    this.#process = child;
+    this.process = child;
     child.once("exit", () => {
-      if (this.#process !== child || this.#generation !== generation) return;
-      const restart = !this.#stopping && this.#state === "ready";
-      const exitedSession = this.#session;
-      this.#lastDiagnostics = exitedSession?.diagnostics() ?? this.#lastDiagnostics;
-      this.#sessionNotification.clear();
-      this.#process = undefined;
-      this.#session = undefined;
+      if (this.process !== child || this.generation !== generation) return;
+      const restart = !this.stopping && this._state === "ready";
+      const exitedSession = this.session;
+      this.lastDiagnostics = exitedSession?.diagnostics() ?? this.lastDiagnostics;
+      this.sessionNotification.clear();
+      this.process = undefined;
+      this.session = undefined;
       if (exitedSession) {
         queueMicrotask(() => exitedSession.dispose());
       }
       if (restart) {
-        this.#setState("crashed");
-        void this.#restartAfterCrash();
+        this.setState("crashed");
+        void this.restartAfterCrash();
       }
     });
 
@@ -215,10 +215,10 @@ export class AppServerSupervisor implements IDisposable {
       this.options.session,
     );
     setDisposableOwner(session, this);
-    this.#session = session;
-    this.#sessionNotification.replace(session.onAnyNotification((notification) => {
-      if (this.#session !== session) return;
-      for (const listener of this.#notificationListeners) {
+    this.session = session;
+    this.sessionNotification.replace(session.onAnyNotification((notification) => {
+      if (this.session !== session) return;
+      for (const listener of this.notificationListeners) {
         try {
           listener(notification);
         } catch {
@@ -226,54 +226,54 @@ export class AppServerSupervisor implements IDisposable {
         }
       }
     }));
-    this.#setState("initializing");
+    this.setState("initializing");
     try {
       await session.initialize();
     } catch (error) {
-      this.#lastDiagnostics = session.diagnostics();
-      if (this.#session === session) {
-        this.#sessionNotification.clear();
-        this.#session = undefined;
+      this.lastDiagnostics = session.diagnostics();
+      if (this.session === session) {
+        this.sessionNotification.clear();
+        this.session = undefined;
       }
-      if (this.#process === child) this.#process = undefined;
-      this.#generation += 1;
+      if (this.process === child) this.process = undefined;
+      this.generation += 1;
       await session.close();
       throw error;
     }
-    if (this.#stopping || this.#generation !== generation) {
-      if (this.#session === session) this.#sessionNotification.clear();
+    if (this.stopping || this.generation !== generation) {
+      if (this.session === session) this.sessionNotification.clear();
       await session.close();
       throw new Error("App Server startup was superseded");
     }
-    this.#setState("ready");
+    this.setState("ready");
   }
 
-  async #restartAfterCrash(): Promise<void> {
-    while (!this.#stopping && this.#restartAttempts < this.#maxRestartAttempts) {
-      const attempt = this.#restartAttempts++;
-      this.#setState("restarting");
-      await this.#wait(this.#restartDelay(attempt));
-      if (this.#stopping) return;
+  private async restartAfterCrash(): Promise<void> {
+    while (!this.stopping && this.restartAttempts < this.maxRestartAttempts) {
+      const attempt = this.restartAttempts++;
+      this.setState("restarting");
+      await this.wait(this.restartDelay(attempt));
+      if (this.stopping) return;
       try {
-        await this.#launch();
+        await this.launch();
         return;
       } catch {
-        this.#setState("crashed");
+        this.setState("crashed");
       }
     }
   }
 
-  #restartDelay(attempt: number): number {
+  private restartDelay(attempt: number): number {
     return Math.min(
-      this.#initialRestartDelayMs * 2 ** attempt,
-      this.#maxRestartDelayMs,
+      this.initialRestartDelayMs * 2 ** attempt,
+      this.maxRestartDelayMs,
     );
   }
 
-  #setState(state: AppServerConnectionState): void {
-    if (this.#state === state) return;
-    this.#state = state;
-    for (const listener of this.#stateListeners) {
+  private setState(state: AppServerConnectionState): void {
+    if (this._state === state) return;
+    this._state = state;
+    for (const listener of this.stateListeners) {
       try {
         listener(state);
       } catch {
@@ -283,13 +283,13 @@ export class AppServerSupervisor implements IDisposable {
   }
 
   dispose(): void {
-    if (this.#disposed) return;
-    this.#disposed = true;
-    this.#stateListeners.clear();
-    this.#notificationListeners.clear();
+    if (this.disposed) return;
+    this.disposed = true;
+    this.stateListeners.clear();
+    this.notificationListeners.clear();
     try {
       const stopping = this.stop();
-      this.#sessionNotification.dispose();
+      this.sessionNotification.dispose();
       void stopping.catch(() => {
         // Explicit stop callers observe errors; disposal is best-effort.
       });

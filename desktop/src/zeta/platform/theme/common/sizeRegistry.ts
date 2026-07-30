@@ -31,23 +31,23 @@ export function sizeToCss(value: SizeValue): string {
 }
 
 export class SizeRegistry {
-  readonly #sizes = new Map<string, SizeContribution>();
-  #sealed = false;
+  private readonly sizes = new Map<string, SizeContribution>();
+  private sealed = false;
 
   registerSize(id: string, value: SizeValue, metadata: SizeRegistrationMetadata): string {
-    if (this.#sealed) throw new Error(`Size registry is sealed; cannot register: ${id}`);
+    if (this.sealed) throw new Error(`Size registry is sealed; cannot register: ${id}`);
     validateTokenId(id, "size");
-    if (this.#sizes.has(id)) throw new Error(`Size token is already registered: ${id}`);
-    this.#sizes.set(id, Object.freeze({ id, value: Object.freeze({ ...value }), ...metadata }));
+    if (this.sizes.has(id)) throw new Error(`Size token is already registered: ${id}`);
+    this.sizes.set(id, Object.freeze({ id, value: Object.freeze({ ...value }), ...metadata }));
     return id;
   }
 
   getSizes(): readonly SizeContribution[] {
-    return Object.freeze([...this.#sizes.values()]);
+    return Object.freeze([...this.sizes.values()]);
   }
 
   seal(): void {
-    this.#sealed = true;
+    this.sealed = true;
   }
 }
 

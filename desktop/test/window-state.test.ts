@@ -66,7 +66,7 @@ class TestStateService implements IStateService {
 }
 
 class TestWindow implements IStatefulWindow {
-  readonly #listeners = new Map<"blur" | "close", Set<() => void>>();
+  private readonly listeners = new Map<"blur" | "close", Set<() => void>>();
   fullscreen = false;
   maximized = false;
   bounds: IWindowBounds = { x: 0, y: 0, width: 1920, height: 1040 };
@@ -89,20 +89,20 @@ class TestWindow implements IStatefulWindow {
   }
 
   on(event: "blur" | "close", listener: () => void): void {
-    let listeners = this.#listeners.get(event);
+    let listeners = this.listeners.get(event);
     if (!listeners) {
       listeners = new Set();
-      this.#listeners.set(event, listeners);
+      this.listeners.set(event, listeners);
     }
     listeners.add(listener);
   }
 
   removeListener(event: "blur" | "close", listener: () => void): void {
-    this.#listeners.get(event)?.delete(listener);
+    this.listeners.get(event)?.delete(listener);
   }
 
   emit(event: "blur" | "close"): void {
-    for (const listener of this.#listeners.get(event) ?? []) {
+    for (const listener of this.listeners.get(event) ?? []) {
       listener();
     }
   }

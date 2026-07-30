@@ -13,9 +13,9 @@ const DarkColorSchemeQuery = "(prefers-color-scheme: dark)";
  * remain stable when the operating-system preference changes.
  */
 export class WorkbenchThemeController extends DisposableOwner {
-  readonly #configurationService: IConfigurationService;
-  readonly #themeService: IThemeService;
-  readonly #systemDarkQuery: MediaQueryList;
+  private readonly configurationService: IConfigurationService;
+  private readonly themeService: IThemeService;
+  private readonly systemDarkQuery: MediaQueryList;
 
   constructor(
     configurationService: IConfigurationService,
@@ -23,41 +23,41 @@ export class WorkbenchThemeController extends DisposableOwner {
     ownerWindow: Window,
   ) {
     super();
-    this.#configurationService = configurationService;
-    this.#themeService = themeService;
-    this.#systemDarkQuery = ownerWindow.matchMedia(DarkColorSchemeQuery);
+    this.configurationService = configurationService;
+    this.themeService = themeService;
+    this.systemDarkQuery = ownerWindow.matchMedia(DarkColorSchemeQuery);
 
     this.own(configurationService.onDidChangeConfiguration((event) => {
       if (event.affectsConfiguration(WorkbenchConfiguration.colorTheme)) {
-        this.#apply();
+        this.apply();
       }
     }));
     const handleSystemSchemeChange = (): void => {
       if (
-        this.#configurationService.getValue(
+        this.configurationService.getValue(
           WorkbenchConfiguration.colorTheme,
         ) === SystemColorThemePreference
       ) {
-        this.#apply();
+        this.apply();
       }
     };
-    this.#systemDarkQuery.addEventListener(
+    this.systemDarkQuery.addEventListener(
       "change",
       handleSystemSchemeChange,
     );
     this.own(toDisposable(() => {
-      this.#systemDarkQuery.removeEventListener(
+      this.systemDarkQuery.removeEventListener(
         "change",
         handleSystemSchemeChange,
       );
     }));
-    this.#apply();
+    this.apply();
   }
 
-  #apply(): void {
-    this.#themeService.setColorTheme(resolveWorkbenchColorTheme(
-      this.#configurationService.getValue(WorkbenchConfiguration.colorTheme),
-      this.#systemDarkQuery.matches,
+  private apply(): void {
+    this.themeService.setColorTheme(resolveWorkbenchColorTheme(
+      this.configurationService.getValue(WorkbenchConfiguration.colorTheme),
+      this.systemDarkQuery.matches,
     ));
   }
 }

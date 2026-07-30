@@ -42,32 +42,32 @@ export interface BrowserKeyboardLayoutServiceOptions {
 export class BrowserKeyboardLayoutService
   extends DisposableOwner
   implements IKeyboardLayoutService {
-  readonly #onDidChangeKeyboardLayout = this.own(new Emitter<void>());
-  readonly #navigator: NavigatorWithKeyboard;
-  readonly #operatingSystem: OperatingSystem;
-  #physicalKeyLabels = new Map<string, string>();
-  #mapper: IKeyboardMapper;
-  #refreshing: Promise<void> | undefined;
-  #disposed = false;
+  private readonly _onDidChangeKeyboardLayout = this.own(new Emitter<void>());
+  private readonly navigator: NavigatorWithKeyboard;
+  private readonly operatingSystem: OperatingSystem;
+  private physicalKeyLabels = new Map<string, string>();
+  private mapper: IKeyboardMapper;
+  private refreshing: Promise<void> | undefined;
+  private disposed = false;
 
   readonly onDidChangeKeyboardLayout =
-    this.#onDidChangeKeyboardLayout.event;
+    this._onDidChangeKeyboardLayout.event;
 
   constructor(options: BrowserKeyboardLayoutServiceOptions) {
     super();
-    this.#navigator = options.navigator as NavigatorWithKeyboard;
-    this.#operatingSystem = options.operatingSystem ?? operatingSystem;
-    this.#mapper = this.#createMapper();
+    this.navigator = options.navigator as NavigatorWithKeyboard;
+    this.operatingSystem = options.operatingSystem ?? operatingSystem;
+    this.mapper = this.createMapper();
     this.defer(() => {
-      this.#disposed = true;
-      this.#physicalKeyLabels.clear();
+      this.disposed = true;
+      this.physicalKeyLabels.clear();
     });
     void this.refreshKeyboardLayout();
   }
 
   getCurrentKeyboardLayout(): IKeyboardLayoutInfo {
-    const browserMapping = this.#physicalKeyLabels.size > 0;
-    const language = this.#navigator.language || "unknown";
+    const browserMapping = this.physicalKeyLabels.size > 0;
+    const language = this.navigator.language || "unknown";
     return {
       id: browserMapping ? `browser.${language}` : "fallback",
       label: browserMapping ? language : "Fallback keyboard layout",
@@ -76,12 +76,12 @@ export class BrowserKeyboardLayoutService
   }
 
   getKeyboardMapper(): IKeyboardMapper {
-    return this.#mapper;
+    return this.mapper;
   }
 
   validateCurrentKeyboardMapping(event: KeybindingEvent): void {
     if (
-      !this.#navigator.keyboard ||
+      !this.navigator.keyboard ||
       event.ctrlKey ||
       event.shiftKey ||
       event.altKey ||
@@ -90,7 +90,7 @@ export class BrowserKeyboardLayoutService
     ) {
       return;
     }
-    const expected = this.#physicalKeyLabels.get(event.code);
+    const expected = this.physicalKeyLabels.get(event.code);
     if (
       expected === undefined ||
       expected.toLocaleLowerCase("en-US") !==
@@ -101,40 +101,40 @@ export class BrowserKeyboardLayoutService
   }
 
   refreshKeyboardLayout(): Promise<void> {
-    if (!this.#navigator.keyboard || this.#disposed) {
+    if (!this.navigator.keyboard || this.disposed) {
       return Promise.resolve();
     }
-    if (this.#refreshing) return this.#refreshing;
+    if (this.refreshing) return this.refreshing;
 
-    const refreshing = this.#readKeyboardLayout()
+    const refreshing = this.readKeyboardLayout()
       .finally(() => {
-        if (this.#refreshing === refreshing) this.#refreshing = undefined;
+        if (this.refreshing === refreshing) this.refreshing = undefined;
       });
-    this.#refreshing = refreshing;
+    this.refreshing = refreshing;
     return refreshing;
   }
 
-  async #readKeyboardLayout(): Promise<void> {
+  private async readKeyboardLayout(): Promise<void> {
     try {
-      const layoutMap = await this.#navigator.keyboard!.getLayoutMap();
-      if (this.#disposed) return;
+      const layoutMap = await this.navigator.keyboard!.getLayoutMap();
+      if (this.disposed) return;
       const nextLabels = new Map<string, string>();
       for (const [code, label] of layoutMap) {
         if (code && label) nextLabels.set(code, label);
       }
-      if (mapsEqual(this.#physicalKeyLabels, nextLabels)) return;
-      this.#physicalKeyLabels = nextLabels;
-      this.#mapper = this.#createMapper();
-      this.#onDidChangeKeyboardLayout.fire();
+      if (mapsEqual(this.physicalKeyLabels, nextLabels)) return;
+      this.physicalKeyLabels = nextLabels;
+      this.mapper = this.createMapper();
+      this._onDidChangeKeyboardLayout.fire();
     } catch {
       // Browsers may expose the API but deny it without focus or permission.
       // The fallback mapper remains valid and can be refreshed on a later key.
     }
   }
 
-  #createMapper(): IKeyboardMapper {
-    const labels = new Map(this.#physicalKeyLabels);
-    const targetOperatingSystem = this.#operatingSystem;
+  private createMapper(): IKeyboardMapper {
+    const labels = new Map(this.physicalKeyLabels);
+    const targetOperatingSystem = this.operatingSystem;
     return {
       resolveKeybinding(keybinding: Keybinding): ResolvedKeybinding {
         return resolveKeybinding(

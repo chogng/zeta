@@ -17,39 +17,39 @@ export const SystemColorThemePreference = "system";
  * Theme contributions must provide every color required by `IColorTheme`.
  */
 export class WorkbenchThemeRegistry {
-  readonly #themes = new Map<string, IColorTheme>();
+  private readonly themes = new Map<string, IColorTheme>();
 
   constructor(initialThemes: readonly IColorTheme[] = []) {
-    for (const theme of initialThemes) this.#add(theme);
+    for (const theme of initialThemes) this.add(theme);
   }
 
   registerColorTheme(theme: IColorTheme): IDisposable {
-    this.#add(theme);
+    this.add(theme);
     return toDisposable(() => {
-      if (this.#themes.get(theme.id) === theme) {
-        this.#themes.delete(theme.id);
+      if (this.themes.get(theme.id) === theme) {
+        this.themes.delete(theme.id);
       }
     });
   }
 
   getColorTheme(id: string): IColorTheme | undefined {
-    return this.#themes.get(id);
+    return this.themes.get(id);
   }
 
   getColorThemes(): readonly IColorTheme[] {
-    return [...this.#themes.values()];
+    return [...this.themes.values()];
   }
 
-  #add(theme: IColorTheme): void {
+  private add(theme: IColorTheme): void {
     if (!theme.id.trim()) {
       throw new TypeError("Workbench color theme ID must not be empty");
     }
-    if (this.#themes.has(theme.id)) {
+    if (this.themes.has(theme.id)) {
       throw new Error(
         `Workbench color theme is already registered: ${theme.id}`,
       );
     }
-    this.#themes.set(theme.id, theme);
+    this.themes.set(theme.id, theme);
   }
 }
 

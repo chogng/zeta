@@ -80,15 +80,15 @@ export const IWorkbenchLayoutService =
 export class WorkbenchLayout
   extends DisposableOwner
   implements IWorkbenchLayoutService {
-  readonly #views = new Map<WorkbenchPartId, WorkbenchPartView>();
-  readonly #grid: Grid<WorkbenchPartView>;
-  readonly #partVisibility = new Map<WorkbenchPartId, boolean>();
-  readonly #onDidChangePartVisibility =
+  private readonly views = new Map<WorkbenchPartId, WorkbenchPartView>();
+  private readonly grid: Grid<WorkbenchPartView>;
+  private readonly partVisibility = new Map<WorkbenchPartId, boolean>();
+  private readonly _onDidChangePartVisibility =
     this.own(new Emitter<WorkbenchPartVisibilityChangeEvent>());
 
   readonly onDidChangePartVisibility: Event<
     WorkbenchPartVisibilityChangeEvent
-  > = this.#onDidChangePartVisibility.event;
+  > = this._onDidChangePartVisibility.event;
   readonly element: HTMLDivElement;
 
   constructor(
@@ -103,16 +103,16 @@ export class WorkbenchLayout
     this.defer(() => this.element.remove());
 
     for (const partId of workbenchPartIds) {
-      this.#views.set(
+      this.views.set(
         partId,
         new WorkbenchPartView(requiredPart(parts, partId)),
       );
     }
-    this.#grid = this.own(new Grid(
-      createWorkbenchGridDescriptor(this.#views),
+    this.grid = this.own(new Grid(
+      createWorkbenchGridDescriptor(this.views),
       container.ownerDocument,
     ));
-    this.element.append(this.#grid.element);
+    this.element.append(this.grid.element);
 
     const ResizeObserverConstructor =
       container.ownerDocument.defaultView?.ResizeObserver;
@@ -132,8 +132,8 @@ export class WorkbenchLayout
 
   layout(dimension: IDimension = getClientArea(this.element)): void {
     assertDimension(dimension);
-    this.#grid.layout(dimension.width, dimension.height);
-    this.#publishPartVisibility();
+    this.grid.layout(dimension.width, dimension.height);
+    this.publishPartVisibility();
   }
 
   get state(): WorkbenchLayoutState {
@@ -183,7 +183,7 @@ export class WorkbenchLayout
   }
 
   isPartVisible(partId: WorkbenchPartId): boolean {
-    return this.#grid.isViewVisible(this.#view(partId));
+    return this.grid.isViewVisible(this.view(partId));
   }
 
   showPart(partId: WorkbenchPartId): void {
@@ -203,13 +203,13 @@ export class WorkbenchLayout
   }
 
   getPartSize(partId: WorkbenchPartId): Dimension {
-    const size = this.#grid.getViewSize(this.#view(partId));
+    const size = this.grid.getViewSize(this.view(partId));
     return new Dimension(size.width, size.height);
   }
 
   resizePart(partId: WorkbenchPartId, dimension: IDimension): void {
     assertDimension(dimension);
-    this.#grid.resizeView(this.#view(partId), dimension);
+    this.grid.resizeView(this.view(partId), dimension);
   }
 
   private updatePartsVisibility(
@@ -217,27 +217,27 @@ export class WorkbenchLayout
     visible: boolean,
   ): void {
     const uniquePartIds = [...new Set(partIds)];
-    for (const partId of uniquePartIds) this.#view(partId);
+    for (const partId of uniquePartIds) this.view(partId);
     const changed = uniquePartIds.filter(
       (partId) => this.isPartVisible(partId) !== visible,
     );
     for (const partId of changed) {
-      this.#grid.setViewVisible(this.#view(partId), visible);
+      this.grid.setViewVisible(this.view(partId), visible);
     }
-    this.#publishPartVisibility();
+    this.publishPartVisibility();
   }
 
-  #publishPartVisibility(): void {
+  private publishPartVisibility(): void {
     for (const partId of workbenchPartIds) {
       const visible = this.isPartVisible(partId);
-      if (this.#partVisibility.get(partId) === visible) continue;
-      this.#partVisibility.set(partId, visible);
-      this.#onDidChangePartVisibility.fire({ partId, visible });
+      if (this.partVisibility.get(partId) === visible) continue;
+      this.partVisibility.set(partId, visible);
+      this._onDidChangePartVisibility.fire({ partId, visible });
     }
   }
 
-  #view(partId: WorkbenchPartId): WorkbenchPartView {
-    const view = this.#views.get(partId);
+  private view(partId: WorkbenchPartId): WorkbenchPartView {
+    const view = this.views.get(partId);
     if (!view) throw new Error(`Unknown Workbench Part: ${partId}`);
     return view;
   }

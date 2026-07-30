@@ -28,13 +28,13 @@ export interface KeybindingsResourceMainServiceOptions {
  * Owns the active profile's `keybindings.json` in Electron main.
  */
 export class KeybindingsResourceMainService extends DisposableOwner {
-  readonly #resource: RevisionedJsonFile<readonly IKeybindingEntry[]>;
+  private readonly resource: RevisionedJsonFile<readonly IKeybindingEntry[]>;
 
   private constructor(
     resource: RevisionedJsonFile<readonly IKeybindingEntry[]>,
   ) {
     super();
-    this.#resource = this.own(resource);
+    this.resource = this.own(resource);
   }
 
   static async create(
@@ -51,7 +51,7 @@ export class KeybindingsResourceMainService extends DisposableOwner {
   }
 
   get onDidChange(): Event<IKeybindingsResourceSnapshot> {
-    return (listener) => this.#resource.onDidChange((snapshot) =>
+    return (listener) => this.resource.onDidChange((snapshot) =>
       listener({
         revision: snapshot.revision,
         bindings: snapshot.value,
@@ -60,7 +60,7 @@ export class KeybindingsResourceMainService extends DisposableOwner {
   }
 
   read(): IKeybindingsResourceSnapshot {
-    const snapshot = this.#resource.read();
+    const snapshot = this.resource.read();
     return {
       revision: snapshot.revision,
       bindings: snapshot.value,
@@ -70,7 +70,7 @@ export class KeybindingsResourceMainService extends DisposableOwner {
   async update(
     request: IKeybindingsResourceUpdateRequest,
   ): Promise<IKeybindingsResourceSnapshot> {
-    const snapshot = await this.#resource.update(
+    const snapshot = await this.resource.update(
       request.expectedRevision,
       request.bindings,
     );
@@ -81,7 +81,7 @@ export class KeybindingsResourceMainService extends DisposableOwner {
   }
 
   async close(): Promise<void> {
-    await this.#resource.close();
+    await this.resource.close();
     this.dispose();
   }
 }

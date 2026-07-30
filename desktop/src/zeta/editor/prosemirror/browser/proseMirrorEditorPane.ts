@@ -32,11 +32,11 @@ export class ProseMirrorEditorPane extends DisposableOwner
   implements IEditorPane {
   readonly id = PROSEMIRROR_EDITOR_ID;
 
-  #container: HTMLDivElement | undefined;
-  #view: EditorView | undefined;
+  private container: HTMLDivElement | undefined;
+  private view: EditorView | undefined;
 
   create(parent: HTMLElement): void {
-    if (this.#container) {
+    if (this.container) {
       throw new ReferenceError(
         "ProseMirrorEditorPane has already been created",
       );
@@ -44,11 +44,11 @@ export class ProseMirrorEditorPane extends DisposableOwner
     const container = parent.ownerDocument.createElement("div");
     container.className = "zeta-prosemirror-editor-pane";
     parent.append(container);
-    this.#container = container;
+    this.container = container;
     this.defer(() => {
-      this.#destroyView();
+      this.destroyView();
       container.remove();
-      this.#container = undefined;
+      this.container = undefined;
     });
   }
 
@@ -56,11 +56,11 @@ export class ProseMirrorEditorPane extends DisposableOwner
     input: EditorInput,
     signal: AbortSignal,
   ): Promise<void> {
-    const container = this.#requireContainer();
+    const container = this.requireContainer();
     throwIfAborted(signal);
     const state = createProseMirrorEditorState(input.initialText ?? "");
     throwIfAborted(signal);
-    this.#destroyView();
+    this.destroyView();
     const view = new EditorView(container, {
       state,
       attributes: {
@@ -73,29 +73,29 @@ export class ProseMirrorEditorPane extends DisposableOwner
       view.destroy();
       throw abortError();
     }
-    this.#view = view;
+    this.view = view;
   }
 
   clearInput(): void {
-    this.#destroyView();
+    this.destroyView();
   }
 
   layout(dimension: IDimension): void {
-    const container = this.#container;
+    const container = this.container;
     if (!container) return;
     container.style.width = `${Math.max(0, dimension.width)}px`;
     container.style.height = `${Math.max(0, dimension.height)}px`;
   }
 
   setVisible(visibility: EditorPaneVisibility): void {
-    if (this.#container) {
-      this.#container.hidden =
+    if (this.container) {
+      this.container.hidden =
         visibility === EditorPaneVisibility.Hidden;
     }
   }
 
   focus(): void {
-    const view = this.#view;
+    const view = this.view;
     if (!view) {
       throw new ReferenceError(
         "ProseMirrorEditorPane has no active input",
@@ -105,7 +105,7 @@ export class ProseMirrorEditorPane extends DisposableOwner
   }
 
   getDocument(): ProseMirrorNode {
-    const view = this.#view;
+    const view = this.view;
     if (!view) {
       throw new ReferenceError(
         "ProseMirrorEditorPane has no active input",
@@ -114,19 +114,19 @@ export class ProseMirrorEditorPane extends DisposableOwner
     return view.state.doc;
   }
 
-  #destroyView(): void {
-    this.#view?.destroy();
-    this.#view = undefined;
-    this.#container?.replaceChildren();
+  private destroyView(): void {
+    this.view?.destroy();
+    this.view = undefined;
+    this.container?.replaceChildren();
   }
 
-  #requireContainer(): HTMLDivElement {
-    if (!this.#container) {
+  private requireContainer(): HTMLDivElement {
+    if (!this.container) {
       throw new ReferenceError(
         "ProseMirrorEditorPane has not been created",
       );
     }
-    return this.#container;
+    return this.container;
   }
 }
 

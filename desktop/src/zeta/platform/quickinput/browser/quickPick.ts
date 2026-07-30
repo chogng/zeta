@@ -34,129 +34,129 @@ export class BrowserQuickPick<TItem extends IQuickPickItem>
   extends DisposableOwner
   implements IQuickPick<TItem> {
   readonly element: HTMLDivElement;
-  readonly #inputBox: InputBox;
-  readonly #list: QuickInputList<TItem>;
-  readonly #onDidAccept = this.own(new Emitter<TItem>());
-  readonly #onDidChangeValue = this.own(new Emitter<string>());
-  readonly #onDidHide = this.own(new Emitter<void>());
-  readonly #options: BrowserQuickPickOptions;
-  #visible = false;
-  #placeholder = "";
+  private readonly inputBox: InputBox;
+  private readonly list: QuickInputList<TItem>;
+  private readonly _onDidAccept = this.own(new Emitter<TItem>());
+  private readonly _onDidChangeValue = this.own(new Emitter<string>());
+  private readonly _onDidHide = this.own(new Emitter<void>());
+  private readonly options: BrowserQuickPickOptions;
+  private visible = false;
+  private _placeholder = "";
 
-  readonly onDidAccept: Event<TItem> = this.#onDidAccept.event;
+  readonly onDidAccept: Event<TItem> = this._onDidAccept.event;
   readonly onDidChangeValue: Event<string> =
-    this.#onDidChangeValue.event;
-  readonly onDidHide: Event<void> = this.#onDidHide.event;
+    this._onDidChangeValue.event;
+  readonly onDidHide: Event<void> = this._onDidHide.event;
 
   constructor(options: BrowserQuickPickOptions) {
     super();
-    this.#options = options;
+    this.options = options;
     const ownerDocument = options.ownerDocument;
     this.element = ownerDocument.createElement("div");
     this.element.className = "zeta-quick-pick";
     setRole(this.element, "dialog");
     setAriaAttribute(this.element, "label", "Quick Pick");
     this.defer(() => {
-      if (this.#visible) this.hide();
+      if (this.visible) this.hide();
       options.onDispose(this);
       this.element.remove();
     });
 
-    this.#list = this.own(new QuickInputList<TItem>(ownerDocument));
-    this.#inputBox = this.own(new InputBox({
+    this.list = this.own(new QuickInputList<TItem>(ownerDocument));
+    this.inputBox = this.own(new InputBox({
       ownerDocument,
       type: "search",
       ariaLabel: "Quick Pick",
       role: "combobox",
       ariaAutoComplete: "list",
-      ariaControls: this.#list.listId,
+      ariaControls: this.list.listId,
       ariaExpanded: true,
     }));
-    this.#inputBox.element.classList.add("zeta-quick-pick-input");
+    this.inputBox.element.classList.add("zeta-quick-pick-input");
     this.element.append(
-      this.#inputBox.element,
-      this.#list.element,
+      this.inputBox.element,
+      this.list.element,
     );
 
-    this.own(this.#inputBox.onDidChange(
-      (value) => this.#handleValueChange(value),
+    this.own(this.inputBox.onDidChange(
+      (value) => this.handleValueChange(value),
     ));
-    this.own(this.#list.onDidAccept((item) => {
-      this.#onDidAccept.fire(item);
+    this.own(this.list.onDidAccept((item) => {
+      this._onDidAccept.fire(item);
     }));
-    this.own(this.#list.onDidChangeActive(({ rowId }) => {
-      this.#inputBox.ariaActiveDescendant = rowId;
+    this.own(this.list.onDidChangeActive(({ rowId }) => {
+      this.inputBox.ariaActiveDescendant = rowId;
     }));
-    this.own(this.#inputBox.onKeyDown(
-      (event: KeyboardEvent) => this.#handleKeyDown(event),
+    this.own(this.inputBox.onKeyDown(
+      (event: KeyboardEvent) => this.handleKeyDown(event),
     ));
   }
 
   get items(): readonly TItem[] {
-    return this.#list.items;
+    return this.list.items;
   }
 
   set items(items: readonly TItem[]) {
-    this.#list.items = items;
+    this.list.items = items;
   }
 
   get placeholder(): string {
-    return this.#placeholder;
+    return this._placeholder;
   }
 
   set placeholder(value: string) {
-    this.#placeholder = value;
-    this.#inputBox.placeholder = value;
+    this._placeholder = value;
+    this.inputBox.placeholder = value;
   }
 
   get value(): string {
-    return this.#inputBox.value;
+    return this.inputBox.value;
   }
 
   set value(value: string) {
-    this.#inputBox.value = value;
+    this.inputBox.value = value;
   }
 
   show(): void {
-    if (this.#visible) {
+    if (this.visible) {
       this.focus();
       return;
     }
-    this.#visible = true;
-    this.#options.onShow(this);
+    this.visible = true;
+    this.options.onShow(this);
     this.focus();
   }
 
   hide(): void {
-    if (!this.#visible) return;
-    this.#visible = false;
-    this.#options.onHide(this);
-    this.#onDidHide.fire();
+    if (!this.visible) return;
+    this.visible = false;
+    this.options.onHide(this);
+    this._onDidHide.fire();
   }
 
   focus(): void {
-    this.#inputBox.focus();
-    this.#inputBox.select();
+    this.inputBox.focus();
+    this.inputBox.select();
   }
 
-  #handleValueChange(value: string): void {
-    this.#list.filter(value);
-    this.#onDidChangeValue.fire(value);
+  private handleValueChange(value: string): void {
+    this.list.filter(value);
+    this._onDidChangeValue.fire(value);
   }
 
-  #handleKeyDown(event: KeyboardEvent): void {
+  private handleKeyDown(event: KeyboardEvent): void {
     switch (event.key) {
       case "ArrowDown":
         stopEvent(event);
-        this.#list.focusNext();
+        this.list.focusNext();
         break;
       case "ArrowUp":
         stopEvent(event);
-        this.#list.focusPrevious();
+        this.list.focusPrevious();
         break;
       case "Enter":
         stopEvent(event);
-        this.#list.acceptActive();
+        this.list.acceptActive();
         break;
       case "Escape":
         stopEvent(event);

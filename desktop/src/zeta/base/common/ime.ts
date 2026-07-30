@@ -9,27 +9,27 @@ import { Emitter, type Event } from "./event.js";
  * without coupling themselves to the keybinding service.
  */
 export class InputMethodEditorState {
-  readonly #onDidChange = new Emitter<boolean>();
-  #enabled = true;
+  private readonly _onDidChange = new Emitter<boolean>();
+  private _enabled = true;
 
-  readonly onDidChange: Event<boolean> = this.#onDidChange.event;
+  readonly onDidChange: Event<boolean> = this._onDidChange.event;
 
   get enabled(): boolean {
-    return this.#enabled;
+    return this._enabled;
   }
 
   enable(): void {
-    this.#setEnabled(true);
+    this.setEnabled(true);
   }
 
   disable(): void {
-    this.#setEnabled(false);
+    this.setEnabled(false);
   }
 
-  #setEnabled(enabled: boolean): void {
-    if (this.#enabled === enabled) return;
-    this.#enabled = enabled;
-    this.#onDidChange.fire(enabled);
+  private setEnabled(enabled: boolean): void {
+    if (this._enabled === enabled) return;
+    this._enabled = enabled;
+    this._onDidChange.fire(enabled);
   }
 }
 

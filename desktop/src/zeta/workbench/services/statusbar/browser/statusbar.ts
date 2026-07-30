@@ -68,18 +68,18 @@ interface IStoredStatusbarEntry extends IStatusbarEntryItem {
 /** Default window-scoped status bar entry service. */
 export class StatusbarService extends DisposableOwner
   implements IStatusbarService {
-  readonly #onDidChangeEntries = this.own(new Emitter<void>());
-  readonly #entries = new Map<string, IStoredStatusbarEntry>();
-  #nextOrder = 0;
-  #disposed = false;
+  private readonly _onDidChangeEntries = this.own(new Emitter<void>());
+  private readonly entries = new Map<string, IStoredStatusbarEntry>();
+  private nextOrder = 0;
+  private disposed = false;
 
-  readonly onDidChangeEntries = this.#onDidChangeEntries.event;
+  readonly onDidChangeEntries = this._onDidChangeEntries.event;
 
   constructor() {
     super();
     this.defer(() => {
-      this.#disposed = true;
-      this.#entries.clear();
+      this.disposed = true;
+      this.entries.clear();
     });
   }
 
@@ -87,13 +87,13 @@ export class StatusbarService extends DisposableOwner
     entry: IStatusbarEntry,
     options: IStatusbarEntryOptions,
   ): IStatusbarEntryAccessor {
-    if (this.#disposed) {
+    if (this.disposed) {
       throw new ReferenceError("StatusbarService is already disposed");
     }
     if (!options.id) {
       throw new Error("A status bar entry requires a non-empty id");
     }
-    if (this.#entries.has(options.id)) {
+    if (this.entries.has(options.id)) {
       throw new Error(`Status bar entry already exists: ${options.id}`);
     }
 
@@ -107,25 +107,25 @@ export class StatusbarService extends DisposableOwner
       alignment: options.alignment,
       priority,
       entry: { ...entry },
-      order: this.#nextOrder++,
+      order: this.nextOrder++,
     };
-    this.#entries.set(stored.id, stored);
-    this.#onDidChangeEntries.fire();
+    this.entries.set(stored.id, stored);
+    this._onDidChangeEntries.fire();
 
     return new StatusbarEntryAccessor(
       (nextEntry) => {
-        if (this.#disposed || this.#entries.get(stored.id) !== stored) return;
+        if (this.disposed || this.entries.get(stored.id) !== stored) return;
         stored = {
           ...stored,
           entry: { ...nextEntry },
         };
-        this.#entries.set(stored.id, stored);
-        this.#onDidChangeEntries.fire();
+        this.entries.set(stored.id, stored);
+        this._onDidChangeEntries.fire();
       },
       () => {
-        if (this.#disposed || this.#entries.get(stored.id) !== stored) return;
-        this.#entries.delete(stored.id);
-        this.#onDidChangeEntries.fire();
+        if (this.disposed || this.entries.get(stored.id) !== stored) return;
+        this.entries.delete(stored.id);
+        this._onDidChangeEntries.fire();
       },
     );
   }
@@ -133,7 +133,7 @@ export class StatusbarService extends DisposableOwner
   getEntries(
     alignment: StatusbarAlignment,
   ): readonly IStatusbarEntryItem[] {
-    return [...this.#entries.values()]
+    return [...this.entries.values()]
       .filter((item) => item.alignment === alignment)
       .sort(compareEntries)
       .map(({ id, entry, priority, alignment: itemAlignment }) => ({
@@ -147,24 +147,24 @@ export class StatusbarService extends DisposableOwner
 
 class StatusbarEntryAccessor extends DisposableOwner
   implements IStatusbarEntryAccessor {
-  readonly #update: (entry: IStatusbarEntry) => void;
-  #active = true;
+  private readonly _update: (entry: IStatusbarEntry) => void;
+  private active = true;
 
   constructor(
     update: (entry: IStatusbarEntry) => void,
     remove: () => void,
   ) {
     super();
-    this.#update = update;
+    this._update = update;
     this.defer(() => {
-      this.#active = false;
+      this.active = false;
       remove();
     });
   }
 
   update(entry: IStatusbarEntry): void {
-    if (!this.#active) return;
-    this.#update(entry);
+    if (!this.active) return;
+    this._update(entry);
   }
 }
 

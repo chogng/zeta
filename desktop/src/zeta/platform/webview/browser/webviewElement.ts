@@ -46,12 +46,12 @@ let webviewInstanceCounter = 0;
  * connections, Electron APIs, or Zeta renderer capabilities.
  */
 export class WebviewElement extends DisposableOwner {
-  readonly #onDidMessage = this.own(new Emitter<unknown>());
-  readonly #channel: string;
-  #active = true;
+  private readonly _onDidMessage = this.own(new Emitter<unknown>());
+  private readonly channel: string;
+  private active = true;
 
   readonly element: HTMLIFrameElement;
-  readonly onDidMessage: Event<unknown> = this.#onDidMessage.event;
+  readonly onDidMessage: Event<unknown> = this._onDidMessage.event;
 
   constructor(options: WebviewElementOptions) {
     super();
@@ -61,7 +61,7 @@ export class WebviewElement extends DisposableOwner {
     }
 
     const instanceId = `webview_${++webviewInstanceCounter}`;
-    this.#channel = `zeta-webview:${instanceId}`;
+    this.channel = `zeta-webview:${instanceId}`;
     const element = options.ownerDocument.createElement("iframe");
     this.element = element;
     element.name = instanceId;
@@ -71,7 +71,7 @@ export class WebviewElement extends DisposableOwner {
     element.setAttribute("referrerpolicy", "no-referrer");
     element.setAttribute("credentialless", "");
     element.setAttribute("csp", WEBVIEW_CONTENT_SECURITY_POLICY);
-    element.setAttribute("data-zeta-webview-channel", this.#channel);
+    element.setAttribute("data-zeta-webview-channel", this.channel);
     element.setAttribute(
       "title",
       validateTitle(options.title ?? "Webview"),
@@ -81,7 +81,7 @@ export class WebviewElement extends DisposableOwner {
     element.style.width = "100%";
     element.style.height = "100%";
     element.srcdoc = createWebviewDocument(
-      this.#channel,
+      this.channel,
       validateHtml(options.initialHtml ?? ""),
     );
 
@@ -90,12 +90,12 @@ export class WebviewElement extends DisposableOwner {
       "message",
       (event) => {
         if (event.source !== element.contentWindow) return;
-        const envelope = validateEnvelope(event.data, this.#channel);
-        if (envelope) this.#onDidMessage.fire(envelope.message);
+        const envelope = validateEnvelope(event.data, this.channel);
+        if (envelope) this._onDidMessage.fire(envelope.message);
       },
     ));
     this.defer(() => {
-      this.#active = false;
+      this.active = false;
       element.srcdoc = "";
       element.remove();
     });
@@ -103,9 +103,9 @@ export class WebviewElement extends DisposableOwner {
 
   /** Replaces the complete sandbox document body. */
   setHtml(html: string): void {
-    this.#requireActive();
+    this.requireActive();
     this.element.srcdoc = createWebviewDocument(
-      this.#channel,
+      this.channel,
       validateHtml(html),
     );
   }
@@ -120,7 +120,7 @@ export class WebviewElement extends DisposableOwner {
     message: unknown,
     transfer: readonly Transferable[] = [],
   ): boolean {
-    if (!this.#active || !this.element.contentWindow) return false;
+    if (!this.active || !this.element.contentWindow) return false;
     this.element.contentWindow.postMessage(
       message,
       "*",
@@ -130,12 +130,12 @@ export class WebviewElement extends DisposableOwner {
   }
 
   focus(): void {
-    this.#requireActive();
+    this.requireActive();
     this.element.focus();
   }
 
-  #requireActive(): void {
-    if (!this.#active) {
+  private requireActive(): void {
+    if (!this.active) {
       throw new ReferenceError("WebviewElement is already disposed");
     }
   }

@@ -22,7 +22,7 @@ class ProtocolChildProcess extends EventEmitter {
   readonly requests: Array<Record<string, unknown>> = [];
   exitCode: number | null = null;
   signalCode: NodeJS.Signals | null = null;
-  #stdinBuffer = "";
+  private stdinBuffer = "";
 
   constructor(
     readonly schemaHash: string = APP_SERVER_SCHEMA_HASH,
@@ -30,7 +30,7 @@ class ProtocolChildProcess extends EventEmitter {
     readonly serverName = "zeta-test",
   ) {
     super();
-    this.stdin.on("data", (chunk: Buffer) => this.#onStdin(chunk));
+    this.stdin.on("data", (chunk: Buffer) => this.onStdin(chunk));
   }
 
   kill(signal: NodeJS.Signals = "SIGTERM"): boolean {
@@ -50,10 +50,10 @@ class ProtocolChildProcess extends EventEmitter {
     this.stdout.write(`${JSON.stringify({ jsonrpc: "2.0", id, result })}\n`);
   }
 
-  #onStdin(chunk: Buffer): void {
-    this.#stdinBuffer += chunk.toString("utf8");
-    const frames = this.#stdinBuffer.split("\n");
-    this.#stdinBuffer = frames.pop() ?? "";
+  private onStdin(chunk: Buffer): void {
+    this.stdinBuffer += chunk.toString("utf8");
+    const frames = this.stdinBuffer.split("\n");
+    this.stdinBuffer = frames.pop() ?? "";
     for (const frame of frames) {
       const request = JSON.parse(frame) as Record<string, unknown>;
       this.requests.push(request);

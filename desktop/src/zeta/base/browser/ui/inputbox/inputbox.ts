@@ -32,17 +32,17 @@ export interface InputSelection {
 export class InputBox extends DisposableOwner {
   readonly element: HTMLDivElement;
   readonly inputElement: HTMLInputElement;
-  readonly #message: HTMLDivElement;
-  readonly #onDidChange = this.own(new Emitter<string>());
-  readonly #onDidFocus = this.own(new Emitter<void>());
-  readonly #onDidBlur = this.own(new Emitter<void>());
-  readonly #onKeyDown = this.own(new Emitter<KeyboardEvent>());
-  #readOnly: boolean;
+  private readonly message: HTMLDivElement;
+  private readonly _onDidChange = this.own(new Emitter<string>());
+  private readonly _onDidFocus = this.own(new Emitter<void>());
+  private readonly _onDidBlur = this.own(new Emitter<void>());
+  private readonly _onKeyDown = this.own(new Emitter<KeyboardEvent>());
+  private _readOnly: boolean;
 
-  readonly onDidChange: Event<string> = this.#onDidChange.event;
-  readonly onDidFocus: Event<void> = this.#onDidFocus.event;
-  readonly onDidBlur: Event<void> = this.#onDidBlur.event;
-  readonly onKeyDown: Event<KeyboardEvent> = this.#onKeyDown.event;
+  readonly onDidChange: Event<string> = this._onDidChange.event;
+  readonly onDidFocus: Event<void> = this._onDidFocus.event;
+  readonly onDidBlur: Event<void> = this._onDidBlur.event;
+  readonly onKeyDown: Event<KeyboardEvent> = this._onKeyDown.event;
 
   constructor(options: InputBoxOptions = {}) {
     super();
@@ -85,26 +85,26 @@ export class InputBox extends DisposableOwner {
       );
     }
 
-    this.#readOnly = options.readOnly ?? false;
-    this.#message = ownerDocument.createElement("div");
-    this.#message.id = `zeta-input-message-${inputBoxSequence++}`;
-    this.#message.className = "zeta-input-box-message";
-    setRole(this.#message, "alert");
-    this.#message.hidden = true;
-    this.element.append(this.inputElement, this.#message);
-    this.#syncReadOnly();
-    this.own(IME.onDidChange(() => this.#syncReadOnly()));
+    this._readOnly = options.readOnly ?? false;
+    this.message = ownerDocument.createElement("div");
+    this.message.id = `zeta-input-message-${inputBoxSequence++}`;
+    this.message.className = "zeta-input-box-message";
+    setRole(this.message, "alert");
+    this.message.hidden = true;
+    this.element.append(this.inputElement, this.message);
+    this.syncReadOnly();
+    this.own(IME.onDidChange(() => this.syncReadOnly()));
     this.own(addDisposableListener(
       this.inputElement,
       "input",
-      () => this.#onDidChange.fire(this.value),
+      () => this._onDidChange.fire(this.value),
     ));
     this.own(addDisposableListener(
       this.inputElement,
       "focus",
       () => {
         this.element.classList.add("is-focused");
-        this.#onDidFocus.fire();
+        this._onDidFocus.fire();
       },
     ));
     this.own(addDisposableListener(
@@ -112,13 +112,13 @@ export class InputBox extends DisposableOwner {
       "blur",
       () => {
         this.element.classList.remove("is-focused");
-        this.#onDidBlur.fire();
+        this._onDidBlur.fire();
       },
     ));
     this.own(addDisposableListener(
       this.inputElement,
       "keydown",
-      (event: KeyboardEvent) => this.#onKeyDown.fire(event),
+      (event: KeyboardEvent) => this._onKeyDown.fire(event),
     ));
   }
 
@@ -129,7 +129,7 @@ export class InputBox extends DisposableOwner {
   set value(value: string) {
     if (this.inputElement.value === value) return;
     this.inputElement.value = value;
-    this.#onDidChange.fire(value);
+    this._onDidChange.fire(value);
   }
 
   get placeholder(): string {
@@ -141,12 +141,12 @@ export class InputBox extends DisposableOwner {
   }
 
   get readOnly(): boolean {
-    return this.#readOnly;
+    return this._readOnly;
   }
 
   set readOnly(value: boolean) {
-    this.#readOnly = value;
-    this.#syncReadOnly();
+    this._readOnly = value;
+    this.syncReadOnly();
   }
 
   get enabled(): boolean {
@@ -191,15 +191,15 @@ export class InputBox extends DisposableOwner {
   }
 
   showValidation(message: string): void {
-    this.#message.textContent = message;
-    this.#message.hidden = !message;
+    this.message.textContent = message;
+    this.message.hidden = !message;
     this.element.classList.toggle("has-validation", Boolean(message));
     if (message) {
       setAriaAttribute(this.inputElement, "invalid", true);
       setAriaAttribute(
         this.inputElement,
         "describedby",
-        this.#message.id,
+        this.message.id,
       );
     } else {
       setAriaAttribute(this.inputElement, "invalid", undefined);
@@ -207,8 +207,8 @@ export class InputBox extends DisposableOwner {
     }
   }
 
-  #syncReadOnly(): void {
-    this.inputElement.readOnly = this.#readOnly || !IME.enabled;
+  private syncReadOnly(): void {
+    this.inputElement.readOnly = this._readOnly || !IME.enabled;
   }
 }
 

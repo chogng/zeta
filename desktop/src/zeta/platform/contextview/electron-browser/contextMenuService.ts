@@ -31,15 +31,15 @@ import {
 /** macOS implementation backed by Electron's native Menu. */
 export class NativeContextMenuService extends DisposableOwner
   implements IContextMenuService {
-  readonly #onDidShowContextMenu = this.own(new Emitter<void>());
-  readonly #onDidHideContextMenu = this.own(new Emitter<void>());
-  readonly #api: INativeContextMenuApi;
-  readonly #menuService: IMenuService;
-  readonly #keybindingService: IKeybindingService;
-  #open = false;
+  private readonly _onDidShowContextMenu = this.own(new Emitter<void>());
+  private readonly _onDidHideContextMenu = this.own(new Emitter<void>());
+  private readonly api: INativeContextMenuApi;
+  private readonly menuService: IMenuService;
+  private readonly keybindingService: IKeybindingService;
+  private open = false;
 
-  readonly onDidShowContextMenu = this.#onDidShowContextMenu.event;
-  readonly onDidHideContextMenu = this.#onDidHideContextMenu.event;
+  readonly onDidShowContextMenu = this._onDidShowContextMenu.event;
+  readonly onDidHideContextMenu = this._onDidHideContextMenu.event;
 
   constructor(
     api: INativeContextMenuApi,
@@ -47,19 +47,19 @@ export class NativeContextMenuService extends DisposableOwner
     keybindingService: IKeybindingService,
   ) {
     super();
-    this.#api = api;
-    this.#menuService = menuService;
-    this.#keybindingService = keybindingService;
+    this.api = api;
+    this.menuService = menuService;
+    this.keybindingService = keybindingService;
     this.defer(() => this.hideContextMenu());
   }
 
   showContextMenu(options: ContextMenuOptions): void {
-    if (this.#open) {
+    if (this.open) {
       options.onHide?.(true);
       return;
     }
-    const actions = resolveContextMenuActions(options, this.#menuService);
-    const serialized = serializeActions(actions, this.#keybindingService);
+    const actions = resolveContextMenuActions(options, this.menuService);
+    const serialized = serializeActions(actions, this.keybindingService);
     if (serialized.items.length === 0) {
       options.onHide?.(true);
       return;
@@ -71,35 +71,35 @@ export class NativeContextMenuService extends DisposableOwner
       x: point.x,
       y: point.y,
     };
-    this.#open = true;
-    this.#onDidShowContextMenu.fire();
-    void this.#popup(request, serialized.actions, options.onHide);
+    this.open = true;
+    this._onDidShowContextMenu.fire();
+    void this.popup(request, serialized.actions, options.onHide);
   }
 
   hideContextMenu(): void {
-    if (!this.#open) return;
-    void this.#api.close().catch((error: unknown) => {
+    if (!this.open) return;
+    void this.api.close().catch((error: unknown) => {
       console.error("Failed to close native context menu", error);
     });
   }
 
-  async #popup(
+  private async popup(
     request: INativeContextMenuRequest,
     actions: ReadonlyMap<string, IAction>,
     onHide: ((didCancel: boolean) => void) | undefined,
   ): Promise<void> {
     let selected: IAction | undefined;
     try {
-      const result = await this.#api.popup(request);
+      const result = await this.api.popup(request);
       selected = result.selectedId
         ? actions.get(result.selectedId)
         : undefined;
     } catch (error) {
       console.error("Failed to show native context menu", error);
     } finally {
-      this.#open = false;
+      this.open = false;
       onHide?.(!selected);
-      this.#onDidHideContextMenu.fire();
+      this._onDidHideContextMenu.fire();
     }
     if (selected) runAction(selected);
   }

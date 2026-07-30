@@ -49,19 +49,19 @@ export const IMenuService =
 
 /** Resolves registered menu contributions for one workbench context. */
 export class MenuService implements IMenuService {
-  readonly #commandService: ICommandService;
-  readonly #contextKeyService: IContextKeyService;
+  private readonly commandService: ICommandService;
+  private readonly contextKeyService: IContextKeyService;
 
   constructor(
     commandService: ICommandService,
     contextKeyService: IContextKeyService,
   ) {
-    this.#commandService = commandService;
-    this.#contextKeyService = contextKeyService;
+    this.commandService = commandService;
+    this.contextKeyService = contextKeyService;
   }
 
   createMenu(id: MenuId): IMenu & Disposable {
-    return new Menu(id, this.#commandService, this.#contextKeyService);
+    return new Menu(id, this.commandService, this.contextKeyService);
   }
 
   getMenuActions(
@@ -70,8 +70,8 @@ export class MenuService implements IMenuService {
   ): readonly MenuActionGroup[] {
     return resolveMenu(
       id,
-      this.#commandService,
-      this.#contextKeyService,
+      this.commandService,
+      this.contextKeyService,
       options,
       new Set(),
     );
@@ -79,11 +79,11 @@ export class MenuService implements IMenuService {
 }
 
 class Menu extends DisposableOwner implements IMenu {
-  readonly #onDidChange = this.own(new Emitter<void>());
-  readonly onDidChange = this.#onDidChange.event;
-  readonly #id: MenuId;
-  readonly #commandService: ICommandService;
-  readonly #contextKeyService: IContextKeyService;
+  private readonly _onDidChange = this.own(new Emitter<void>());
+  readonly onDidChange = this._onDidChange.event;
+  private readonly id: MenuId;
+  private readonly commandService: ICommandService;
+  private readonly contextKeyService: IContextKeyService;
 
   constructor(
     id: MenuId,
@@ -91,24 +91,24 @@ class Menu extends DisposableOwner implements IMenu {
     contextKeyService: IContextKeyService,
   ) {
     super();
-    this.#id = id;
-    this.#commandService = commandService;
-    this.#contextKeyService = contextKeyService;
+    this.id = id;
+    this.commandService = commandService;
+    this.contextKeyService = contextKeyService;
     this.own(MenusRegistry.onDidChangeMenu(
       (_event: IMenuRegistryChangeEvent) => {
-        this.#onDidChange.fire();
+        this._onDidChange.fire();
       },
     ));
-    this.own(this.#contextKeyService.onDidChangeContext(() => {
-      this.#onDidChange.fire();
+    this.own(this.contextKeyService.onDidChangeContext(() => {
+      this._onDidChange.fire();
     }));
   }
 
   getActions(options?: IMenuActionOptions): readonly MenuActionGroup[] {
     return resolveMenu(
-      this.#id,
-      this.#commandService,
-      this.#contextKeyService,
+      this.id,
+      this.commandService,
+      this.contextKeyService,
       options,
       new Set(),
     );

@@ -145,27 +145,27 @@ function isDocument(value: unknown): value is Document {
 
 class WindowRegistrationLifecycle extends DisposableOwner {
   readonly disposables: DisposableStore;
-  #registration: IRegisteredWindow | undefined;
+  private registration: IRegisteredWindow | undefined;
 
   constructor() {
     super();
     this.defer(() => {
-      const registration = this.#registration;
+      const registration = this.registration;
       if (!registration) return;
       registrations.delete(registration.id);
       windowIds.delete(registration.window);
       onDidUnregisterEmitter.fire(registration.window);
-      this.#registration = undefined;
+      this.registration = undefined;
     });
     this.disposables = this.own(new DisposableStore());
     this.defer(() => {
-      if (this.#registration) {
-        onWillUnregisterEmitter.fire(this.#registration);
+      if (this.registration) {
+        onWillUnregisterEmitter.fire(this.registration);
       }
     });
   }
 
   initialize(registration: IRegisteredWindow): void {
-    this.#registration = registration;
+    this.registration = registration;
   }
 }

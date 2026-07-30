@@ -19,21 +19,21 @@ export interface EditorTabsDelegate {
 /** Maps Editor inputs and lifecycle callbacks onto the shared TabList. */
 export class EditorTabsControl extends DisposableOwner {
   readonly element: HTMLDivElement;
-  readonly #delegate: EditorTabsDelegate;
-  readonly #tabList: TabList<EditorInput>;
+  private readonly delegate: EditorTabsDelegate;
+  private readonly tabList: TabList<EditorInput>;
 
   constructor(ownerDocument: Document, delegate: EditorTabsDelegate) {
     super();
-    this.#delegate = delegate;
+    this.delegate = delegate;
     this.element = ownerDocument.createElement("div");
     this.element.className = "zeta-editor-tabs-control";
-    this.#tabList = this.own(new TabList({
+    this.tabList = this.own(new TabList({
       ownerDocument,
       ariaLabel: "Open editors",
       onActivate: (input) => delegate.activate(input),
       onClose: (input) => delegate.close(input),
     }));
-    this.element.append(this.#tabList.element);
+    this.element.append(this.tabList.element);
     this.defer(() => this.element.remove());
   }
 
@@ -44,7 +44,7 @@ export class EditorTabsControl extends DisposableOwner {
     const activeKey = activeInput
       ? editorInputKey(activeInput)
       : undefined;
-    this.#tabList.setTabs(
+    this.tabList.setTabs(
       editors.map((editor) => {
         const label = editorInputLabel(editor.input);
         return {

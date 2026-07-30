@@ -36,27 +36,27 @@ export interface KeybindingsResourceContributionOptions {
  * last complete rule set.
  */
 export class KeybindingsResourceContribution extends DisposableOwner {
-  readonly #service: IKeybindingsResourceService;
-  readonly #registry: KeybindingRegistry;
-  readonly #operatingSystem: HostOperatingSystem;
-  readonly #registration = this.own(new DisposableSlot<IDisposable>());
+  private readonly service: IKeybindingsResourceService;
+  private readonly registry: KeybindingRegistry;
+  private readonly operatingSystem: HostOperatingSystem;
+  private readonly registration = this.own(new DisposableSlot<IDisposable>());
 
   constructor(options: KeybindingsResourceContributionOptions) {
     super();
-    this.#service = options.service;
-    this.#registry = options.registry ?? KeybindingsRegistry;
-    this.#operatingSystem = options.operatingSystem ?? environment.os;
-    this.#reload(this.#service.getKeybindings());
-    this.own(this.#service.onDidChangeKeybindings((bindings) => {
-      this.#reload(bindings);
+    this.service = options.service;
+    this.registry = options.registry ?? KeybindingsRegistry;
+    this.operatingSystem = options.operatingSystem ?? environment.os;
+    this.reload(this.service.getKeybindings());
+    this.own(this.service.onDidChangeKeybindings((bindings) => {
+      this.reload(bindings);
     }));
   }
 
-  #reload(bindings: readonly IKeybindingEntry[]): void {
+  private reload(bindings: readonly IKeybindingEntry[]): void {
     const registrations: IDisposable[] = [];
     try {
       for (const binding of bindings) {
-        const key = operatingSystemKey(binding, this.#operatingSystem);
+        const key = operatingSystemKey(binding, this.operatingSystem);
         if (key === null) continue;
         const keybinding = parseKeybinding(key);
         if (!keybinding) {
@@ -66,12 +66,12 @@ export class KeybindingsResourceContribution extends DisposableOwner {
           ? undefined
           : parseContextKeyExpression(binding.when);
         registrations.push(binding.command === null
-          ? this.#registry.registerKeybindingBlocker({
+          ? this.registry.registerKeybindingBlocker({
             keybinding,
             when,
             weight: KeybindingWeight.User,
           })
-          : this.#registry.registerKeybindingRule({
+          : this.registry.registerKeybindingRule({
             command: binding.command,
             keybinding,
             when,
@@ -85,7 +85,7 @@ export class KeybindingsResourceContribution extends DisposableOwner {
       }
       throw error;
     }
-    this.#registration.replace(combineRegistrations(registrations));
+    this.registration.replace(combineRegistrations(registrations));
   }
 }
 

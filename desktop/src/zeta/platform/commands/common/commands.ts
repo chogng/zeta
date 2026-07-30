@@ -24,20 +24,20 @@ export interface ICommandEvent {
 
 /** Stores realm-wide command definitions independently of their UI bindings. */
 export class CommandRegistry {
-  readonly #commands = new Map<CommandId, CommandHandler>();
+  private readonly commands = new Map<CommandId, CommandHandler>();
 
   register(id: CommandId, command: CommandHandler): IDisposable {
-    if (this.#commands.has(id)) {
+    if (this.commands.has(id)) {
       throw new Error(`Command is already registered: ${id}`);
     }
-    this.#commands.set(id, command);
+    this.commands.set(id, command);
     return toDisposable(() => {
-      if (this.#commands.get(id) === command) this.#commands.delete(id);
+      if (this.commands.get(id) === command) this.commands.delete(id);
     });
   }
 
   getCommand(id: CommandId): CommandHandler | undefined {
-    return this.#commands.get(id);
+    return this.commands.get(id);
   }
 }
 

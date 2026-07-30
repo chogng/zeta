@@ -8,9 +8,9 @@ import {
 
 /** Browser view of the window-scoped status bar entry service. */
 export class StatusbarPart extends WorkbenchPart {
-  readonly #statusbarService: IStatusbarService;
-  readonly #leftItems: HTMLDivElement;
-  readonly #rightItems: HTMLDivElement;
+  private readonly statusbarService: IStatusbarService;
+  private readonly leftItems: HTMLDivElement;
+  private readonly rightItems: HTMLDivElement;
 
   override get minimumHeight(): number { return 23; }
   override get maximumHeight(): number { return 23; }
@@ -20,28 +20,28 @@ export class StatusbarPart extends WorkbenchPart {
     ownerDocument: Document,
   ) {
     super("statusbar", ownerDocument);
-    this.#statusbarService = statusbarService;
+    this.statusbarService = statusbarService;
     this.contentElement.setAttribute("role", "status");
     this.contentElement.setAttribute("aria-live", "polite");
 
-    this.#leftItems = createItemsContainer(ownerDocument, "left");
-    this.#rightItems = createItemsContainer(ownerDocument, "right");
-    this.contentElement.append(this.#leftItems, this.#rightItems);
+    this.leftItems = createItemsContainer(ownerDocument, "left");
+    this.rightItems = createItemsContainer(ownerDocument, "right");
+    this.contentElement.append(this.leftItems, this.rightItems);
 
-    this.own(this.#statusbarService.onDidChangeEntries(() => this.#render()));
-    this.#render();
+    this.own(this.statusbarService.onDidChangeEntries(() => this.render()));
+    this.render();
   }
 
-  #render(): void {
-    this.#renderItems(this.#leftItems, StatusbarAlignment.Left);
-    this.#renderItems(this.#rightItems, StatusbarAlignment.Right);
+  private render(): void {
+    this.renderItems(this.leftItems, StatusbarAlignment.Left);
+    this.renderItems(this.rightItems, StatusbarAlignment.Right);
   }
 
-  #renderItems(
+  private renderItems(
     container: HTMLDivElement,
     alignment: StatusbarAlignment,
   ): void {
-    const elements = this.#statusbarService
+    const elements = this.statusbarService
       .getEntries(alignment)
       .map((item) => createEntryElement(container.ownerDocument, item));
     container.replaceChildren(...elements);

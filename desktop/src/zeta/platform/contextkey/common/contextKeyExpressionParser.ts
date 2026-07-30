@@ -37,95 +37,95 @@ export function parseContextKeyExpression(
 }
 
 class Parser {
-  readonly #source: string;
-  readonly #tokens: readonly Token[];
-  #position = 0;
+  private readonly source: string;
+  private readonly tokens: readonly Token[];
+  private position = 0;
 
   constructor(source: string) {
-    this.#source = source;
-    this.#tokens = tokenize(source);
+    this.source = source;
+    this.tokens = tokenize(source);
   }
 
   parse(): ContextKeyExpression {
-    if (this.#source.trim().length === 0) {
+    if (this.source.trim().length === 0) {
       throw new SyntaxError("Context key expression must not be empty");
     }
-    const expression = this.#parseOr();
-    this.#expect("end");
+    const expression = this.parseOr();
+    this.expect("end");
     return expression;
   }
 
-  #parseOr(): ContextKeyExpression {
-    const expressions = [this.#parseAnd()];
-    while (this.#match("or")) expressions.push(this.#parseAnd());
+  private parseOr(): ContextKeyExpression {
+    const expressions = [this.parseAnd()];
+    while (this.match("or")) expressions.push(this.parseAnd());
     return ContextKeyExpr.or(...expressions)!;
   }
 
-  #parseAnd(): ContextKeyExpression {
-    const expressions = [this.#parseUnary()];
-    while (this.#match("and")) expressions.push(this.#parseUnary());
+  private parseAnd(): ContextKeyExpression {
+    const expressions = [this.parseUnary()];
+    while (this.match("and")) expressions.push(this.parseUnary());
     return ContextKeyExpr.and(...expressions)!;
   }
 
-  #parseUnary(): ContextKeyExpression {
-    if (this.#match("not")) {
-      const operand = this.#parseUnary();
+  private parseUnary(): ContextKeyExpression {
+    if (this.match("not")) {
+      const operand = this.parseUnary();
       return {
         evaluate: (context) => !operand.evaluate(context),
         keys: () => operand.keys(),
       };
     }
-    if (this.#match("open")) {
-      const expression = this.#parseOr();
-      this.#expect("close");
+    if (this.match("open")) {
+      const expression = this.parseOr();
+      this.expect("close");
       return expression;
     }
-    return this.#parseComparison();
+    return this.parseComparison();
   }
 
-  #parseComparison(): ContextKeyExpression {
-    const identifier = this.#expect("identifier");
+  private parseComparison(): ContextKeyExpression {
+    const identifier = this.expect("identifier");
     const key = identifier.value as string;
-    if (this.#match("equals")) {
-      return ContextKeyExpr.equals(key, this.#comparisonValue());
+    if (this.match("equals")) {
+      return ContextKeyExpr.equals(key, this.comparisonValue());
     }
-    if (this.#match("notEquals")) {
-      return ContextKeyExpr.notEquals(key, this.#comparisonValue());
+    if (this.match("notEquals")) {
+      return ContextKeyExpr.notEquals(key, this.comparisonValue());
     }
     return ContextKeyExpr.has(key);
   }
 
-  #comparisonValue(): ContextKeyValue {
-    const token = this.#current();
+  private comparisonValue(): ContextKeyValue {
+    const token = this.current();
     if (token.kind !== "identifier" && token.kind !== "value") {
-      throw this.#error(token, "Expected a comparison value");
+      throw this.error(token, "Expected a comparison value");
     }
-    this.#position += 1;
+    this.position += 1;
     return token.value;
   }
 
-  #match(kind: TokenKind): boolean {
-    if (this.#current().kind !== kind) return false;
-    this.#position += 1;
+  private match(kind: TokenKind): boolean {
+    if (this.current().kind !== kind) return false;
+    this.position += 1;
     return true;
   }
 
-  #expect(kind: TokenKind): Token {
-    const token = this.#current();
+  private expect(kind: TokenKind): Token {
+    const token = this.current();
     if (token.kind !== kind) {
-      throw this.#error(token, `Expected ${describeToken(kind)}`);
+      throw this.error(token, `Expected ${describeToken(kind)}`);
     }
-    this.#position += 1;
+    this.position += 1;
     return token;
   }
 
-  #current(): Token {
-    return this.#tokens[this.#position];
+  private current(): Token {
+    return this.tokens[this.position];
   }
 
-  #error(token: Token, message: string): SyntaxError {
+  private error(token: Token, message: string): SyntaxError {
     return new SyntaxError(
-      `${message} at offset ${token.offset} in '${this.#source}'`,
+      `${message} at offset ${token.offset} in '${this.source}'`,
     );
   }
 }

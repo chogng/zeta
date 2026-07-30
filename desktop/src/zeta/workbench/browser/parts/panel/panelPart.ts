@@ -15,7 +15,7 @@ export interface PanelPartOptions {
 export class PanelPart extends CompositePart {
   readonly compositeBar: CompositeBar;
   readonly onDidSelectComposite: Event<CompositeBarSelectionEvent>;
-  readonly #actionsElement: HTMLDivElement;
+  private readonly actionsElement: HTMLDivElement;
 
   override get minimumHeight(): number { return 80; }
 
@@ -32,9 +32,9 @@ export class PanelPart extends CompositePart {
     this.onDidSelectComposite = this.compositeBar.onDidSelectComposite;
     const titleControl = options.ownerDocument.createElement("div");
     titleControl.className = "zeta-panel-title-control";
-    this.#actionsElement = options.ownerDocument.createElement("div");
-    this.#actionsElement.className = "zeta-panel-title-actions";
-    titleControl.append(this.compositeBar.element, this.#actionsElement);
+    this.actionsElement = options.ownerDocument.createElement("div");
+    this.actionsElement.className = "zeta-panel-title-actions";
+    titleControl.append(this.compositeBar.element, this.actionsElement);
     this.contentElement.before(titleControl);
   }
 
@@ -44,7 +44,7 @@ export class PanelPart extends CompositePart {
 
   override showComposite(compositeId: string): void {
     super.showComposite(compositeId);
-    this.#actionsElement.replaceChildren(
+    this.actionsElement.replaceChildren(
       ...optionalElement(this.getComposite(compositeId)?.titleActionsElement),
     );
   }

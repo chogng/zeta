@@ -47,18 +47,18 @@ function keyPart(value: string): string {
  * Implements URI comparison with caller-selected path casing semantics.
  */
 export class ExtUri implements IExtUri {
-  readonly #pathCasing: ResourcePathCasingProvider;
+  private readonly pathCasing: ResourcePathCasingProvider;
 
   constructor(pathCasing: ResourcePathCasingProvider) {
-    this.#pathCasing = pathCasing;
+    this.pathCasing = pathCasing;
   }
 
   getComparisonKey(uri: URI): string {
-    return this.#createComparisonKey(uri, true);
+    return this.createComparisonKey(uri, true);
   }
 
   getComparisonKeyIgnoringFragment(uri: URI): string {
-    return this.#createComparisonKey(uri, false);
+    return this.createComparisonKey(uri, false);
   }
 
   isEqual(left: URI | undefined, right: URI | undefined): boolean {
@@ -78,10 +78,10 @@ export class ExtUri implements IExtUri {
   }
 
   ignorePathCasing(uri: URI): boolean {
-    return this.#pathCasing(uri) === ResourcePathCasing.Insensitive;
+    return this.pathCasing(uri) === ResourcePathCasing.Insensitive;
   }
 
-  #createComparisonKey(uri: URI, includeFragment: boolean): string {
+  private createComparisonKey(uri: URI, includeFragment: boolean): string {
     const path = this.ignorePathCasing(uri)
       ? decodeURIComponent(uri.path).toLowerCase()
       : normalizePercentEncoding(uri.path);

@@ -155,8 +155,8 @@ interface ContextKeyState {
 abstract class AbstractContextKeyService
   extends DisposableOwner
   implements IContextKeyService {
-  readonly #values = new Map<string, ContextKeyValue>();
-  readonly #parent: AbstractContextKeyService | undefined;
+  private readonly values = new Map<string, ContextKeyValue>();
+  private readonly parent: AbstractContextKeyService | undefined;
   protected readonly state: ContextKeyState;
 
   protected constructor(
@@ -165,10 +165,10 @@ abstract class AbstractContextKeyService
   ) {
     super();
     this.state = state;
-    this.#parent = parent;
+    this.parent = parent;
     this.defer(() => {
-      const keys = new Set(this.#values.keys());
-      this.#values.clear();
+      const keys = new Set(this.values.keys());
+      this.values.clear();
       fireContextChange(this.state, keys);
     });
   }
@@ -178,10 +178,10 @@ abstract class AbstractContextKeyService
   }
 
   getValue<T extends ContextKeyValue>(key: string): T | undefined {
-    if (this.#values.has(key)) {
-      return this.#values.get(key) as T | undefined;
+    if (this.values.has(key)) {
+      return this.values.get(key) as T | undefined;
     }
-    return this.#parent?.getValue<T>(key);
+    return this.parent?.getValue<T>(key);
   }
 
   contextMatchesRules(
@@ -214,15 +214,15 @@ abstract class AbstractContextKeyService
   }
 
   setContext(key: string, value: ContextKeyValue): void {
-    if (this.#values.has(key) && Object.is(this.#values.get(key), value)) {
+    if (this.values.has(key) && Object.is(this.values.get(key), value)) {
       return;
     }
-    this.#values.set(key, value);
+    this.values.set(key, value);
     fireContextChange(this.state, new Set([key]));
   }
 
   removeContext(key: string): void {
-    if (!this.#values.delete(key)) return;
+    if (!this.values.delete(key)) return;
     fireContextChange(this.state, new Set([key]));
   }
 }
@@ -262,9 +262,9 @@ class ScopedContextKeyService
 
 class BoundContextKey<T extends ContextKeyValue>
   implements IContextKey<T> {
-  readonly #service: IContextKeyService;
-  readonly #key: string;
-  readonly #defaultValue: T;
+  private readonly service: IContextKeyService;
+  private readonly key: string;
+  private readonly defaultValue: T;
 
   constructor(
     service: IContextKeyService,
@@ -272,26 +272,26 @@ class BoundContextKey<T extends ContextKeyValue>
     defaultValue: T,
   ) {
     if (!key) throw new TypeError("Context key must not be empty");
-    this.#service = service;
-    this.#key = key;
-    this.#defaultValue = defaultValue;
+    this.service = service;
+    this.key = key;
+    this.defaultValue = defaultValue;
     this.reset();
   }
 
   set(value: T): void {
-    this.#service.setContext(this.#key, value);
+    this.service.setContext(this.key, value);
   }
 
   reset(): void {
-    if (this.#defaultValue === undefined) {
-      this.#service.removeContext(this.#key);
+    if (this.defaultValue === undefined) {
+      this.service.removeContext(this.key);
     } else {
-      this.#service.setContext(this.#key, this.#defaultValue);
+      this.service.setContext(this.key, this.defaultValue);
     }
   }
 
   get(): T | undefined {
-    return this.#service.getValue<T>(this.#key);
+    return this.service.getValue<T>(this.key);
   }
 }
 

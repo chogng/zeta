@@ -195,39 +195,39 @@ test("legacy configuration keybindings migrate into the standalone resource", as
 });
 
 class TestKeybindingsResourceApi implements IKeybindingsResourceApi {
-  readonly #listeners = new Set<(snapshot: unknown) => void>();
-  #snapshot: IKeybindingsResourceSnapshot;
+  private readonly listeners = new Set<(snapshot: unknown) => void>();
+  private snapshot: IKeybindingsResourceSnapshot;
 
   constructor(snapshot: IKeybindingsResourceSnapshot) {
-    this.#snapshot = snapshot;
+    this.snapshot = snapshot;
   }
 
   read(): Promise<unknown> {
-    return Promise.resolve(this.#snapshot);
+    return Promise.resolve(this.snapshot);
   }
 
   update(request: IKeybindingsResourceUpdateRequest): Promise<unknown> {
-    if (request.expectedRevision !== this.#snapshot.revision) {
+    if (request.expectedRevision !== this.snapshot.revision) {
       return Promise.reject(new Error("revision conflict"));
     }
-    this.#snapshot = {
-      revision: this.#snapshot.revision + 1,
+    this.snapshot = {
+      revision: this.snapshot.revision + 1,
       bindings: request.bindings,
     };
-    return Promise.resolve(this.#snapshot);
+    return Promise.resolve(this.snapshot);
   }
 
   onDidChange(
     listener: (snapshot: unknown) => void,
   ): { dispose(): void } {
-    this.#listeners.add(listener);
+    this.listeners.add(listener);
     return {
-      dispose: () => this.#listeners.delete(listener),
+      dispose: () => this.listeners.delete(listener),
     };
   }
 
   emit(snapshot: IKeybindingsResourceSnapshot): void {
-    this.#snapshot = snapshot;
-    for (const listener of this.#listeners) listener(snapshot);
+    this.snapshot = snapshot;
+    for (const listener of this.listeners) listener(snapshot);
   }
 }

@@ -38,19 +38,19 @@ export interface ViewsServiceOptions {
 
 /** Default browser implementation of the registered-view operations. */
 export class ViewsService implements IViewsService {
-  readonly #viewDescriptorService: IViewDescriptorService;
-  readonly #openViewContainer: OpenViewContainer;
+  private readonly viewDescriptorService: IViewDescriptorService;
+  private readonly openViewContainer: OpenViewContainer;
 
   constructor(options: ViewsServiceOptions) {
-    this.#viewDescriptorService = options.viewDescriptorService;
-    this.#openViewContainer = options.openViewContainer;
+    this.viewDescriptorService = options.viewDescriptorService;
+    this.openViewContainer = options.openViewContainer;
   }
 
   openView(viewId: string): IView | undefined {
-    const container = this.#viewDescriptorService
+    const container = this.viewDescriptorService
       .getViewContainerForView(viewId);
     if (!container) return undefined;
-    return this.#openViewContainer(container)?.openView(viewId);
+    return this.openViewContainer(container)?.openView(viewId);
   }
 
   focusView(viewId: string): boolean {

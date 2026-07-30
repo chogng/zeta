@@ -30,10 +30,10 @@ export interface IWorkspaceSearchApi {
 /** Pulls bounded backend batches and exposes one cancellable renderer search. */
 export class BrowserWorkspaceSearchService
   implements IWorkspaceSearchService {
-  readonly #api: IWorkspaceSearchApi;
+  private readonly api: IWorkspaceSearchApi;
 
   constructor(api: IWorkspaceSearchApi) {
-    this.#api = api;
+    this.api = api;
   }
 
   async search(
@@ -41,7 +41,7 @@ export class BrowserWorkspaceSearchService
     options: IWorkspaceSearchOptions = {},
   ): Promise<IWorkspaceSearchComplete> {
     throwIfAborted(options.signal);
-    const started = await this.#api.start({
+    const started = await this.api.start({
       query: query.text,
       patternKind: query.patternKind,
       caseSensitivity: query.caseSensitivity,
@@ -53,7 +53,7 @@ export class BrowserWorkspaceSearchService
     try {
       while (true) {
         throwIfAborted(options.signal);
-        const snapshot = await this.#api.read({
+        const snapshot = await this.api.read({
           searchId: started.searchId,
           afterMatch: cursor,
           maxMatches: RESULT_BATCH_SIZE,
@@ -72,7 +72,7 @@ export class BrowserWorkspaceSearchService
         await waitForNextPoll(options.signal);
       }
     } finally {
-      await this.#api.cancel({
+      await this.api.cancel({
         searchId: started.searchId,
       }).catch(() => {
         // Cancellation is cleanup after completion or connection loss.

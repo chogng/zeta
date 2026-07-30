@@ -28,18 +28,18 @@ interface DisposableRecord {
  * boundary.
  */
 export class DisposableTracker implements IDisposableTracker {
-  readonly #records = new Map<TrackableDisposable, DisposableRecord>();
-  readonly #disposed = new WeakSet<object>();
+  private readonly records = new Map<TrackableDisposable, DisposableRecord>();
+  private readonly disposed = new WeakSet<object>();
 
   trackDisposable(
     disposable: TrackableDisposable,
     label = disposableLabel(disposable),
   ): void {
-    if (this.#disposed.has(disposable)) {
+    if (this.disposed.has(disposable)) {
       throw new ReferenceError(`Cannot track disposed disposable: ${label}`);
     }
-    if (this.#records.has(disposable)) return;
-    this.#records.set(disposable, {
+    if (this.records.has(disposable)) return;
+    this.records.set(disposable, {
       disposable,
       label,
       createdAt: captureCreationStack(),
@@ -54,21 +54,21 @@ export class DisposableTracker implements IDisposableTracker {
     if (disposable === owner) {
       throw new Error("A disposable cannot own itself");
     }
-    if (this.#disposed.has(disposable)) {
+    if (this.disposed.has(disposable)) {
       throw new ReferenceError(
         `Cannot own disposed disposable: ${disposableLabel(disposable)}`,
       );
     }
-    const existingOwner = this.#records.get(disposable)?.owner;
+    const existingOwner = this.records.get(disposable)?.owner;
     if (existingOwner && existingOwner !== owner) {
       throw new Error(
-        `${this.#label(disposable)} already belongs to ${this.#label(existingOwner)}`,
+        `${this.label(disposable)} already belongs to ${this.label(existingOwner)}`,
       );
     }
     for (
       let ancestor: TrackableDisposable | undefined = owner;
       ancestor;
-      ancestor = this.#records.get(ancestor)?.owner
+      ancestor = this.records.get(ancestor)?.owner
     ) {
       if (ancestor === disposable) {
         throw new Error("Disposable ownership cannot contain a cycle");
@@ -83,31 +83,31 @@ export class DisposableTracker implements IDisposableTracker {
     this.validateDisposableOwner(disposable, owner);
     this.trackDisposable(owner);
     this.trackDisposable(disposable);
-    const record = this.#records.get(disposable);
+    const record = this.records.get(disposable);
     if (!record || record.owner === owner) return;
     record.owner = owner;
-    this.#records.get(owner)?.children.add(disposable);
+    this.records.get(owner)?.children.add(disposable);
   }
 
   markAsDisposed(disposable: TrackableDisposable): void {
-    const record = this.#records.get(disposable);
+    const record = this.records.get(disposable);
     if (record) {
       for (const child of [...record.children]) {
         this.markAsDisposed(child);
       }
       if (record.owner) {
-        this.#records.get(record.owner)?.children.delete(disposable);
+        this.records.get(record.owner)?.children.delete(disposable);
       }
-      this.#records.delete(disposable);
+      this.records.delete(disposable);
     }
-    this.#disposed.add(disposable);
+    this.disposed.add(disposable);
   }
 
   leaks(): readonly DisposableLeak[] {
-    return [...this.#records.values()].map((record) => ({
+    return [...this.records.values()].map((record) => ({
       disposable: record.disposable,
       label: record.label,
-      ownerLabel: record.owner ? this.#label(record.owner) : undefined,
+      ownerLabel: record.owner ? this.label(record.owner) : undefined,
       createdAt: record.createdAt,
     }));
   }
@@ -126,8 +126,8 @@ export class DisposableTracker implements IDisposableTracker {
     );
   }
 
-  #label(disposable: TrackableDisposable): string {
-    return this.#records.get(disposable)?.label ??
+  private label(disposable: TrackableDisposable): string {
+    return this.records.get(disposable)?.label ??
       disposableLabel(disposable);
   }
 }

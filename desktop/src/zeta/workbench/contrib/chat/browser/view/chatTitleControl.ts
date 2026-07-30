@@ -12,13 +12,13 @@ export class ChatTitleControl extends DisposableOwner {
   static readonly HEIGHT = 35;
 
   readonly element: HTMLDivElement;
-  readonly #tabs: ChatTabsControl;
+  private readonly tabs: ChatTabsControl;
 
   constructor(ownerDocument: Document, idPrefix: string, delegate: ChatTabsDelegate, menuService: IMenuService, contextMenuService: IContextMenuService) {
     super();
     this.element = ownerDocument.createElement("div");
     this.element.className = "zeta-chat-title-control";
-    this.#tabs = this.own(new ChatTabsControl(ownerDocument, idPrefix, delegate));
+    this.tabs = this.own(new ChatTabsControl(ownerDocument, idPrefix, delegate));
     const toolbar = this.own(new MenuWorkbenchToolBar(
       menuService,
       contextMenuService,
@@ -37,11 +37,11 @@ export class ChatTitleControl extends DisposableOwner {
     const actions = ownerDocument.createElement("div");
     actions.className = "zeta-chat-title-actions";
     actions.append(toolbar.element, layoutToolbar.element);
-    this.element.append(this.#tabs.element, actions);
+    this.element.append(this.tabs.element, actions);
     this.defer(() => this.element.remove());
   }
 
   setSessions(entries: readonly ChatSessionTab[], activeSessionId: SessionId | undefined): ReadonlyMap<SessionId, string> {
-    return this.#tabs.setSessions(entries, activeSessionId);
+    return this.tabs.setSessions(entries, activeSessionId);
   }
 }

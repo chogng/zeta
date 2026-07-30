@@ -42,20 +42,20 @@ let dropdownId = 0;
 export class Dropdown extends DisposableOwner {
   readonly element: HTMLDivElement;
   readonly button: HTMLButtonElement;
-  readonly #label: HTMLSpanElement;
-  readonly #content: DropdownContent;
-  readonly #contextView: IContextViewProvider;
-  readonly #onDidChangeVisibility = this.own(
+  private readonly label: HTMLSpanElement;
+  private readonly content: DropdownContent;
+  private readonly contextView: IContextViewProvider;
+  private readonly _onDidChangeVisibility = this.own(
     new Emitter<DropdownVisibilityChangeEvent>(),
   );
-  readonly onDidChangeVisibility = this.#onDidChangeVisibility.event;
-  readonly #options: DropdownOptions;
-  #visible = false;
+  readonly onDidChangeVisibility = this._onDidChangeVisibility.event;
+  private readonly options: DropdownOptions;
+  private _visible = false;
 
   constructor(options: DropdownOptions) {
     super();
-    this.#options = options;
-    this.#content = options.content;
+    this.options = options;
+    this.content = options.content;
     const ownerDocument = options.ownerDocument ?? document;
     const element = ownerDocument.createElement("div");
     this.element = element;
@@ -73,7 +73,7 @@ export class Dropdown extends DisposableOwner {
     }
 
     const label = ownerDocument.createElement("span");
-    this.#label = label;
+    this.label = label;
     label.className = "zeta-dropdown-label";
     label.textContent = options.label;
     const indicator = ownerDocument.createElement("span");
@@ -83,7 +83,7 @@ export class Dropdown extends DisposableOwner {
     button.append(label, indicator);
     element.append(button);
 
-    this.#contextView = options.contextViewProvider ??
+    this.contextView = options.contextViewProvider ??
       this.own(new ContextView(ownerDocument.body));
     this.defer(() => this.hide());
     this.own(addDisposableListener(button, "click", () => this.toggle()));
@@ -102,7 +102,7 @@ export class Dropdown extends DisposableOwner {
   }
 
   get visible(): boolean {
-    return this.#visible;
+    return this._visible;
   }
 
   get enabled(): boolean {
@@ -115,44 +115,44 @@ export class Dropdown extends DisposableOwner {
   }
 
   setLabel(label: string): void {
-    this.#label.textContent = label;
+    this.label.textContent = label;
   }
 
   show(): void {
-    if (this.#visible || !this.enabled) return;
-    const content = typeof this.#content === "function"
-      ? this.#content()
-      : this.#content;
+    if (this._visible || !this.enabled) return;
+    const content = typeof this.content === "function"
+      ? this.content()
+      : this.content;
     content.classList.add("zeta-dropdown-content");
     if (!content.id) {
       dropdownId += 1;
       content.id = `zeta-dropdown-content-${dropdownId}`;
     }
     setAriaAttribute(this.button, "controls", content.id);
-    const shown = this.#contextView.show({
+    const shown = this.contextView.show({
       anchor: this.button,
       content,
-      anchorAlignment: this.#options.anchorAlignment,
-      anchorPosition: this.#options.anchorPosition,
-      anchorAxisAlignment: this.#options.anchorAxisAlignment,
-      gap: this.#options.gap,
+      anchorAlignment: this.options.anchorAlignment,
+      anchorPosition: this.options.anchorPosition,
+      anchorAxisAlignment: this.options.anchorAxisAlignment,
+      gap: this.options.gap,
       focusRestore: ContextViewFocusRestore.Previous,
-      onHide: (reason) => this.#didHide(reason),
+      onHide: (reason) => this.didHide(reason),
     });
     if (!shown) return;
-    this.#visible = true;
+    this._visible = true;
     this.element.classList.add("zeta-dropdown-open");
     setAriaAttribute(this.button, "expanded", true);
-    this.#onDidChangeVisibility.fire({ visible: true });
+    this._onDidChangeVisibility.fire({ visible: true });
   }
 
   hide(): void {
-    if (!this.#visible) return;
-    this.#contextView.hide();
+    if (!this._visible) return;
+    this.contextView.hide();
   }
 
   toggle(): void {
-    if (this.#visible) this.hide();
+    if (this._visible) this.hide();
     else this.show();
   }
 
@@ -160,11 +160,11 @@ export class Dropdown extends DisposableOwner {
     this.button.focus();
   }
 
-  #didHide(reason: ContextViewHideReason): void {
-    if (!this.#visible) return;
-    this.#visible = false;
+  private didHide(reason: ContextViewHideReason): void {
+    if (!this._visible) return;
+    this._visible = false;
     this.element.classList.remove("zeta-dropdown-open");
     setAriaAttribute(this.button, "expanded", false);
-    this.#onDidChangeVisibility.fire({ visible: false, reason });
+    this._onDidChangeVisibility.fire({ visible: false, reason });
   }
 }

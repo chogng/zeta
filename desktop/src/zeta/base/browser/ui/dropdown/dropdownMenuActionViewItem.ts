@@ -21,12 +21,12 @@ export type DropdownMenuActions =
  * dismissal. This item owns only its trigger and expanded accessibility state.
  */
 export class DropdownMenuActionViewItem extends ActionViewItem {
-  readonly #actions: DropdownMenuActions;
-  readonly #contextMenuProvider: IContextMenuProvider;
-  readonly #onDidChangeVisibility = this.own(new Emitter<boolean>());
-  readonly onDidChangeVisibility = this.#onDidChangeVisibility.event;
-  #button: Button | undefined;
-  #visible = false;
+  private readonly actions: DropdownMenuActions;
+  private readonly contextMenuProvider: IContextMenuProvider;
+  private readonly _onDidChangeVisibility = this.own(new Emitter<boolean>());
+  readonly onDidChangeVisibility = this._onDidChangeVisibility.event;
+  private button: Button | undefined;
+  private visible = false;
 
   constructor(
     action: IAction,
@@ -34,12 +34,12 @@ export class DropdownMenuActionViewItem extends ActionViewItem {
     contextMenuProvider: IContextMenuProvider,
   ) {
     super(action);
-    this.#actions = actions;
-    this.#contextMenuProvider = contextMenuProvider;
+    this.actions = actions;
+    this.contextMenuProvider = contextMenuProvider;
   }
 
   override render(container: HTMLElement): void {
-    if (this.#button) {
+    if (this.button) {
       throw new Error(`Action view item is already rendered: ${this.action.id}`);
     }
     const button = this.own(new Button({
@@ -50,7 +50,7 @@ export class DropdownMenuActionViewItem extends ActionViewItem {
       enabled: this.action.enabled,
       onClick: () => this.show(),
     }));
-    this.#button = button;
+    this.button = button;
     container.classList.add("zeta-dropdown-menu-action-view-item");
     button.element.setAttribute("aria-haspopup", "menu");
     button.element.setAttribute("aria-expanded", "false");
@@ -67,39 +67,39 @@ export class DropdownMenuActionViewItem extends ActionViewItem {
   }
 
   override focus(): void {
-    this.#button?.element.focus();
+    this.button?.element.focus();
   }
 
   override setTabbable(tabbable: boolean): void {
-    if (this.#button) this.#button.element.tabIndex = tabbable ? 0 : -1;
+    if (this.button) this.button.element.tabIndex = tabbable ? 0 : -1;
   }
 
   show(): void {
-    const button = this.#button;
-    if (!button?.enabled || this.#visible) return;
-    const actions = typeof this.#actions === "function"
-      ? this.#actions()
-      : this.#actions;
+    const button = this.button;
+    if (!button?.enabled || this.visible) return;
+    const actions = typeof this.actions === "function"
+      ? this.actions()
+      : this.actions;
     if (actions.length === 0) return;
 
-    this.#setVisible(true);
+    this.setVisible(true);
     const options: IActionContextMenuOptions = {
       anchor: button.element,
       actions,
-      onHide: () => this.#setVisible(false),
+      onHide: () => this.setVisible(false),
     };
     try {
-      this.#contextMenuProvider.showContextMenu(options);
+      this.contextMenuProvider.showContextMenu(options);
     } catch (error) {
-      this.#setVisible(false);
+      this.setVisible(false);
       throw error;
     }
   }
 
-  #setVisible(visible: boolean): void {
-    if (this.#visible === visible) return;
-    this.#visible = visible;
-    this.#button?.element.setAttribute("aria-expanded", String(visible));
-    this.#onDidChangeVisibility.fire(visible);
+  private setVisible(visible: boolean): void {
+    if (this.visible === visible) return;
+    this.visible = visible;
+    this.button?.element.setAttribute("aria-expanded", String(visible));
+    this._onDidChangeVisibility.fire(visible);
   }
 }

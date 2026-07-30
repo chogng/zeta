@@ -29,31 +29,31 @@ let nextSettingsEditorId = 1;
 /** Search, navigation, and page content hosted by the Workbench modal editor. */
 export class SettingsEditor extends DisposableOwner {
   readonly element: HTMLDivElement;
-  readonly #configurationService: IConfigurationService;
-  readonly #dialogService: IDialogService;
-  readonly #settingsService: ISettingsService;
-  readonly #themeService: IThemeService;
-  readonly #userThemeService: IUserThemeService;
-  readonly #searchInput: InputBox;
-  readonly #navigationItems = new Map<string, HTMLButtonElement>();
-  readonly #navigationEmpty: HTMLParagraphElement;
-  readonly #navigationScrollable: ScrollableElement;
-  readonly #contentScrollable: ScrollableElement;
-  readonly #content: HTMLElement;
-  readonly #contentHeading: HTMLHeadingElement;
-  readonly #contentDescription: HTMLParagraphElement;
-  readonly #sectionContent: HTMLDivElement;
-  readonly #sectionBindings = this.own(new ResettableDisposableGroup());
-  #themeDraft: ThemeDraft | undefined;
-  #themeMessage = "";
+  private readonly configurationService: IConfigurationService;
+  private readonly dialogService: IDialogService;
+  private readonly settingsService: ISettingsService;
+  private readonly themeService: IThemeService;
+  private readonly userThemeService: IUserThemeService;
+  private readonly searchInput: InputBox;
+  private readonly navigationItems = new Map<string, HTMLButtonElement>();
+  private readonly navigationEmpty: HTMLParagraphElement;
+  private readonly navigationScrollable: ScrollableElement;
+  private readonly contentScrollable: ScrollableElement;
+  private readonly content: HTMLElement;
+  private readonly contentHeading: HTMLHeadingElement;
+  private readonly contentDescription: HTMLParagraphElement;
+  private readonly sectionContent: HTMLDivElement;
+  private readonly sectionBindings = this.own(new ResettableDisposableGroup());
+  private themeDraft: ThemeDraft | undefined;
+  private themeMessage = "";
 
   constructor(options: SettingsEditorOptions) {
     super();
-    this.#configurationService = options.configurationService;
-    this.#dialogService = options.dialogService;
-    this.#settingsService = options.settingsService;
-    this.#themeService = options.themeService;
-    this.#userThemeService = options.userThemeService;
+    this.configurationService = options.configurationService;
+    this.dialogService = options.dialogService;
+    this.settingsService = options.settingsService;
+    this.themeService = options.themeService;
+    this.userThemeService = options.userThemeService;
     const editorId = `zeta-settings-editor-${nextSettingsEditorId++}`;
     this.element = options.ownerDocument.createElement("div");
     this.element.className = "zeta-settings-editor";
@@ -61,15 +61,15 @@ export class SettingsEditor extends DisposableOwner {
     const search = options.ownerDocument.createElement("div");
     search.className = "zeta-settings-search";
     search.setAttribute("role", "search");
-    this.#searchInput = this.own(new InputBox({
+    this.searchInput = this.own(new InputBox({
       ownerDocument: options.ownerDocument,
       type: "search",
       placeholder: "Search settings",
       ariaLabel: "Search settings",
       ariaControls: `${editorId}-navigation`,
     }));
-    this.#searchInput.element.classList.add("zeta-settings-search-input");
-    search.append(this.#searchInput.element);
+    this.searchInput.element.classList.add("zeta-settings-search-input");
+    search.append(this.searchInput.element);
 
     const layout = options.ownerDocument.createElement("div");
     layout.className = "zeta-settings-layout";
@@ -77,14 +77,14 @@ export class SettingsEditor extends DisposableOwner {
     const navigation = options.ownerDocument.createElement("nav");
     navigation.className = "zeta-settings-sidebar";
     navigation.setAttribute("aria-label", "Settings categories");
-    this.#navigationScrollable = this.own(new ScrollableElement({
+    this.navigationScrollable = this.own(new ScrollableElement({
       ownerDocument: options.ownerDocument,
       direction: "vertical",
       vertical: "auto",
       tabIndex: -1,
       wheel: { consume: "when-scrolling" },
     }));
-    this.#navigationScrollable.element.classList.add("zeta-settings-sidebar-scrollable");
+    this.navigationScrollable.element.classList.add("zeta-settings-sidebar-scrollable");
     const navigationList = options.ownerDocument.createElement("ul");
     navigationList.className = "zeta-settings-navigation-list";
     navigationList.id = `${editorId}-navigation`;
@@ -95,122 +95,122 @@ export class SettingsEditor extends DisposableOwner {
       button.type = "button";
       button.dataset.settingsSectionId = section.id;
       button.textContent = section.label;
-      this.#navigationItems.set(section.id, button);
+      this.navigationItems.set(section.id, button);
       this.own(addDisposableListener(button, "click", () => {
-        this.#settingsService.open(section.id);
+        this.settingsService.open(section.id);
       }));
       this.own(addDisposableListener(button, "keydown", (event: KeyboardEvent) => {
-        this.#handleNavigationKeydown(event, section.id);
+        this.handleNavigationKeydown(event, section.id);
       }));
       item.append(button);
       navigationList.append(item);
     }
-    this.#navigationEmpty = options.ownerDocument.createElement("p");
-    this.#navigationEmpty.className = "zeta-settings-navigation-empty";
-    this.#navigationEmpty.textContent = "No settings found.";
-    this.#navigationEmpty.setAttribute("role", "status");
-    this.#navigationEmpty.hidden = true;
-    this.#navigationScrollable.append(navigationList, this.#navigationEmpty);
-    navigation.append(this.#navigationScrollable.element);
+    this.navigationEmpty = options.ownerDocument.createElement("p");
+    this.navigationEmpty.className = "zeta-settings-navigation-empty";
+    this.navigationEmpty.textContent = "No settings found.";
+    this.navigationEmpty.setAttribute("role", "status");
+    this.navigationEmpty.hidden = true;
+    this.navigationScrollable.append(navigationList, this.navigationEmpty);
+    navigation.append(this.navigationScrollable.element);
 
-    this.#content = options.ownerDocument.createElement("main");
-    this.#content.className = "zeta-settings-page";
-    this.#content.dataset.settingsContainer = "";
-    this.#content.tabIndex = -1;
-    this.#contentScrollable = this.own(new ScrollableElement({
+    this.content = options.ownerDocument.createElement("main");
+    this.content.className = "zeta-settings-page";
+    this.content.dataset.settingsContainer = "";
+    this.content.tabIndex = -1;
+    this.contentScrollable = this.own(new ScrollableElement({
       ownerDocument: options.ownerDocument,
       direction: "vertical",
       vertical: "auto",
       tabIndex: -1,
       wheel: { consume: "when-scrolling" },
     }));
-    this.#contentScrollable.element.classList.add("zeta-settings-page-scrollable");
+    this.contentScrollable.element.classList.add("zeta-settings-page-scrollable");
     const contentInner = options.ownerDocument.createElement("div");
     contentInner.className = "zeta-settings-page-inner";
-    this.#contentHeading = options.ownerDocument.createElement("h3");
-    this.#contentHeading.id = `${editorId}-section`;
-    this.#content.setAttribute("aria-labelledby", this.#contentHeading.id);
-    this.#contentDescription = options.ownerDocument.createElement("p");
-    this.#contentDescription.className = "zeta-settings-description";
-    this.#sectionContent = options.ownerDocument.createElement("div");
-    this.#sectionContent.className = "zeta-settings-section-content";
-    this.#sectionContent.dataset.settingsSectionContent = "";
-    contentInner.append(this.#contentHeading, this.#contentDescription, this.#sectionContent);
-    this.#contentScrollable.append(contentInner);
-    this.#content.append(this.#contentScrollable.element);
+    this.contentHeading = options.ownerDocument.createElement("h3");
+    this.contentHeading.id = `${editorId}-section`;
+    this.content.setAttribute("aria-labelledby", this.contentHeading.id);
+    this.contentDescription = options.ownerDocument.createElement("p");
+    this.contentDescription.className = "zeta-settings-description";
+    this.sectionContent = options.ownerDocument.createElement("div");
+    this.sectionContent.className = "zeta-settings-section-content";
+    this.sectionContent.dataset.settingsSectionContent = "";
+    contentInner.append(this.contentHeading, this.contentDescription, this.sectionContent);
+    this.contentScrollable.append(contentInner);
+    this.content.append(this.contentScrollable.element);
 
-    layout.append(navigation, this.#content);
+    layout.append(navigation, this.content);
     this.element.append(search, layout);
-    this.#renderSection(getSettingsSection(this.#settingsService.activeSectionId));
+    this.renderSection(getSettingsSection(this.settingsService.activeSectionId));
 
-    this.own(this.#settingsService.onDidChangeActiveSection((sectionId) => {
-      this.#renderSection(getSettingsSection(sectionId));
+    this.own(this.settingsService.onDidChangeActiveSection((sectionId) => {
+      this.renderSection(getSettingsSection(sectionId));
     }));
-    this.own(this.#configurationService.onDidChangeConfiguration((event) => {
+    this.own(this.configurationService.onDidChangeConfiguration((event) => {
       if (
         event.affectsConfiguration(WorkbenchConfiguration.colorTheme) &&
-        this.#settingsService.activeSectionId === "appearance"
+        this.settingsService.activeSectionId === "appearance"
       ) {
-        this.#renderAppearance();
+        this.renderAppearance();
       }
     }));
-    this.own(this.#searchInput.onDidChange((value) => {
-      this.#filterNavigation(value);
+    this.own(this.searchInput.onDidChange((value) => {
+      this.filterNavigation(value);
     }));
-    this.own(this.#searchInput.onKeyDown((event) => {
-      if (event.key === "Escape" && this.#searchInput.value) {
+    this.own(this.searchInput.onKeyDown((event) => {
+      if (event.key === "Escape" && this.searchInput.value) {
         stopEvent(event);
-        this.#searchInput.value = "";
+        this.searchInput.value = "";
         return;
       }
       if (event.key !== "ArrowDown") return;
-      const firstVisible = this.#visibleNavigationSections()[0];
+      const firstVisible = this.visibleNavigationSections()[0];
       if (!firstVisible) return;
       stopEvent(event);
-      this.#navigationItems.get(firstVisible.id)?.focus();
+      this.navigationItems.get(firstVisible.id)?.focus();
     }));
     this.defer(() => {
-      if (this.#themeDraft) this.#themeService.setColorTheme(this.#themeDraft.originalTheme);
+      if (this.themeDraft) this.themeService.setColorTheme(this.themeDraft.originalTheme);
       this.element.remove();
     });
   }
 
   focus(): void {
-    this.#searchInput.focus();
+    this.searchInput.focus();
   }
 
   layout(): void {
-    this.#navigationScrollable.layout();
-    this.#contentScrollable.layout();
+    this.navigationScrollable.layout();
+    this.contentScrollable.layout();
   }
 
   cancelThemeEditing(): void {
-    if (!this.#themeDraft) return;
-    this.#themeService.setColorTheme(this.#themeDraft.originalTheme);
-    this.#themeDraft = undefined;
-    this.#themeMessage = "";
-    if (this.#settingsService.activeSectionId === "appearance") this.#renderAppearance();
+    if (!this.themeDraft) return;
+    this.themeService.setColorTheme(this.themeDraft.originalTheme);
+    this.themeDraft = undefined;
+    this.themeMessage = "";
+    if (this.settingsService.activeSectionId === "appearance") this.renderAppearance();
   }
 
-  #renderSection(section: SettingsSectionDescriptor): void {
-    for (const [sectionId, item] of this.#navigationItems) {
+  private renderSection(section: SettingsSectionDescriptor): void {
+    for (const [sectionId, item] of this.navigationItems) {
       const active = sectionId === section.id;
       item.classList.toggle("is-active", active);
       if (active) item.setAttribute("aria-current", "page");
       else item.removeAttribute("aria-current");
     }
-    this.#content.dataset.activeSettingsSection = section.id;
-    this.#contentHeading.textContent = section.label;
-    this.#contentDescription.textContent = section.description;
-    this.#sectionBindings.clear();
-    this.#sectionContent.replaceChildren();
-    if (section.id === "appearance") this.#renderAppearance();
-    this.#contentScrollable.scrollTo(0, 0);
-    this.#contentScrollable.layout();
+    this.content.dataset.activeSettingsSection = section.id;
+    this.contentHeading.textContent = section.label;
+    this.contentDescription.textContent = section.description;
+    this.sectionBindings.clear();
+    this.sectionContent.replaceChildren();
+    if (section.id === "appearance") this.renderAppearance();
+    this.contentScrollable.scrollTo(0, 0);
+    this.contentScrollable.layout();
   }
 
-  #renderAppearance(): void {
-    this.#sectionBindings.clear();
+  private renderAppearance(): void {
+    this.sectionBindings.clear();
     const document = this.element.ownerDocument;
     const group = document.createElement("fieldset");
     group.className = "zeta-theme-setting";
@@ -221,8 +221,8 @@ export class SettingsEditor extends DisposableOwner {
     hint.textContent = "Choose an appearance or keep Zeta synchronized with your operating system.";
     const options = document.createElement("div");
     options.className = "zeta-theme-options";
-    const preference = this.#configurationService.getValue(WorkbenchConfiguration.colorTheme);
-    for (const descriptor of themeOptions(this.#userThemeService)) {
+    const preference = this.configurationService.getValue(WorkbenchConfiguration.colorTheme);
+    for (const descriptor of themeOptions(this.userThemeService)) {
       const label = document.createElement("label");
       label.className = "zeta-theme-option";
       label.dataset.themePreference = descriptor.value;
@@ -245,23 +245,23 @@ export class SettingsEditor extends DisposableOwner {
       description.textContent = descriptor.description;
       copy.append(title, description);
       label.append(input, preview, copy);
-      this.#sectionBindings.add(addDisposableListener(input, "change", () => {
+      this.sectionBindings.add(addDisposableListener(input, "change", () => {
         if (!input.checked) return;
-        if (this.#themeDraft) {
-          this.#themeService.setColorTheme(this.#themeDraft.originalTheme);
-          this.#themeDraft = undefined;
+        if (this.themeDraft) {
+          this.themeService.setColorTheme(this.themeDraft.originalTheme);
+          this.themeDraft = undefined;
         }
-        this.#themeMessage = "";
+        this.themeMessage = "";
         group.disabled = true;
         status.textContent = "";
-        void this.#configurationService.updateValue(
+        void this.configurationService.updateValue(
           WorkbenchConfiguration.colorTheme,
           descriptor.value,
         ).catch((error: unknown) => {
           status.textContent = error instanceof Error
             ? `Unable to save theme: ${error.message}`
             : "Unable to save theme.";
-          const currentPreference = this.#configurationService.getValue(
+          const currentPreference = this.configurationService.getValue(
             WorkbenchConfiguration.colorTheme,
           );
           for (const candidate of options.querySelectorAll<HTMLInputElement>(
@@ -278,52 +278,52 @@ export class SettingsEditor extends DisposableOwner {
     const status = document.createElement("p");
     status.className = "zeta-theme-setting-status";
     status.setAttribute("role", "status");
-    status.textContent = this.#themeMessage;
-    if (this.#themeMessage) status.classList.add("is-success");
+    status.textContent = this.themeMessage;
+    if (this.themeMessage) status.classList.add("is-success");
     const customization = document.createElement("div");
     customization.className = "zeta-theme-customization";
     const customize = document.createElement("button");
     customize.className = "zeta-theme-action";
     customize.type = "button";
-    customize.disabled = !this.#userThemeService.available;
-    customize.textContent = this.#activeUserThemeId() ? "Edit user theme JSON" : "Create from current theme";
-    this.#sectionBindings.add(addDisposableListener(customize, "click", () => this.#startThemeEditing()));
+    customize.disabled = !this.userThemeService.available;
+    customize.textContent = this.activeUserThemeId() ? "Edit user theme JSON" : "Create from current theme";
+    this.sectionBindings.add(addDisposableListener(customize, "click", () => this.startThemeEditing()));
     customization.append(customize);
     group.append(legend, hint, options, status, customization);
-    if (this.#themeDraft) group.append(this.#renderThemeEditor(document, group, status));
-    const userThemeStatus = renderUserThemeStatus(document, this.#userThemeService);
+    if (this.themeDraft) group.append(this.renderThemeEditor(document, group, status));
+    const userThemeStatus = renderUserThemeStatus(document, this.userThemeService);
     if (userThemeStatus) group.append(userThemeStatus);
-    this.#sectionContent.replaceChildren(group);
-    this.#contentScrollable.layout();
+    this.sectionContent.replaceChildren(group);
+    this.contentScrollable.layout();
   }
 
-  #activeUserThemeId(): string | undefined {
-    const preference = this.#configurationService.getValue(WorkbenchConfiguration.colorTheme);
-    return preference === SystemColorThemePreference || !this.#userThemeService.sourceFor(preference) ? undefined : preference;
+  private activeUserThemeId(): string | undefined {
+    const preference = this.configurationService.getValue(WorkbenchConfiguration.colorTheme);
+    return preference === SystemColorThemePreference || !this.userThemeService.sourceFor(preference) ? undefined : preference;
   }
 
-  #startThemeEditing(): void {
-    const currentTheme = this.#themeService.getColorTheme();
-    const userThemeId = this.#activeUserThemeId();
-    const existingSource = userThemeId ? this.#userThemeService.getSource(userThemeId) : undefined;
+  private startThemeEditing(): void {
+    const currentTheme = this.themeService.getColorTheme();
+    const userThemeId = this.activeUserThemeId();
+    const existingSource = userThemeId ? this.userThemeService.getSource(userThemeId) : undefined;
     if (userThemeId && !existingSource) {
-      this.#themeMessage = `Unable to read the JSON source for '${userThemeId}'.`;
-      this.#renderAppearance();
+      this.themeMessage = `Unable to read the JSON source for '${userThemeId}'.`;
+      this.renderAppearance();
       return;
     }
-    this.#themeDraft = userThemeId
+    this.themeDraft = userThemeId
       ? { kind: "update", originalTheme: currentTheme, source: existingSource!, themeId: userThemeId }
       : {
           kind: "create",
           originalTheme: currentTheme,
-          source: serializeUserColorThemeDraft(currentTheme, this.#availableDraftId(currentTheme), `My ${currentTheme.colorScheme === "light" ? "Light" : "Dark"} Theme`),
+          source: serializeUserColorThemeDraft(currentTheme, this.availableDraftId(currentTheme), `My ${currentTheme.colorScheme === "light" ? "Light" : "Dark"} Theme`),
         };
-    this.#themeMessage = "";
-    this.#renderAppearance();
-    this.#sectionContent.querySelector<HTMLTextAreaElement>(".zeta-theme-json-editor")?.focus();
+    this.themeMessage = "";
+    this.renderAppearance();
+    this.sectionContent.querySelector<HTMLTextAreaElement>(".zeta-theme-json-editor")?.focus();
   }
 
-  #availableDraftId(theme: IColorTheme): string {
+  private availableDraftId(theme: IColorTheme): string {
     const base = theme.colorScheme === "light" ? "my-light-theme" : "my-dark-theme";
     let candidate = base;
     let suffix = 2;
@@ -331,8 +331,8 @@ export class SettingsEditor extends DisposableOwner {
     return candidate;
   }
 
-  #renderThemeEditor(document: Document, group: HTMLFieldSetElement, status: HTMLParagraphElement): HTMLElement {
-    const draft = this.#themeDraft!;
+  private renderThemeEditor(document: Document, group: HTMLFieldSetElement, status: HTMLParagraphElement): HTMLElement {
+    const draft = this.themeDraft!;
     const editor = document.createElement("section");
     editor.className = "zeta-theme-json";
     const heading = document.createElement("h4");
@@ -352,7 +352,7 @@ export class SettingsEditor extends DisposableOwner {
       draft.source = textarea.value;
       try {
         const theme = parseUserColorTheme(draft.source);
-        this.#themeService.setColorTheme(theme);
+        this.themeService.setColorTheme(theme);
         status.textContent = `Previewing ${theme.label}.`;
         status.classList.add("is-success");
         return true;
@@ -362,56 +362,56 @@ export class SettingsEditor extends DisposableOwner {
         return false;
       }
     };
-    this.#sectionBindings.add(addDisposableListener(textarea, "input", () => preview()));
+    this.sectionBindings.add(addDisposableListener(textarea, "input", () => preview()));
     if (draft.kind === "update") {
       const save = themeAction(document, "Save");
-      this.#sectionBindings.add(addDisposableListener(save, "click", () => {
-        if (preview()) void this.#saveThemeDraft("save", group, status);
+      this.sectionBindings.add(addDisposableListener(save, "click", () => {
+        if (preview()) void this.saveThemeDraft("save", group, status);
       }));
       actions.append(save);
     }
     const saveAs = themeAction(document, "Save As");
-    this.#sectionBindings.add(addDisposableListener(saveAs, "click", () => {
-      if (preview()) void this.#saveThemeDraft("saveAs", group, status);
+    this.sectionBindings.add(addDisposableListener(saveAs, "click", () => {
+      if (preview()) void this.saveThemeDraft("saveAs", group, status);
     }));
     if (draft.kind === "update") {
       const remove = themeAction(document, "Delete");
       remove.classList.add("is-danger");
-      this.#sectionBindings.add(addDisposableListener(remove, "click", () => {
-        void this.#deleteThemeDraft(group, status);
+      this.sectionBindings.add(addDisposableListener(remove, "click", () => {
+        void this.deleteThemeDraft(group, status);
       }));
       actions.append(remove);
     }
     const cancel = themeAction(document, "Cancel");
-    this.#sectionBindings.add(addDisposableListener(cancel, "click", () => this.cancelThemeEditing()));
+    this.sectionBindings.add(addDisposableListener(cancel, "click", () => this.cancelThemeEditing()));
     actions.append(saveAs, cancel);
     editor.append(heading, hint, textarea, actions);
     return editor;
   }
 
-  async #saveThemeDraft(operation: "save" | "saveAs", group: HTMLFieldSetElement, status: HTMLParagraphElement): Promise<void> {
-    const draft = this.#themeDraft;
+  private async saveThemeDraft(operation: "save" | "saveAs", group: HTMLFieldSetElement, status: HTMLParagraphElement): Promise<void> {
+    const draft = this.themeDraft;
     if (!draft) return;
     group.disabled = true;
     status.classList.remove("is-success");
     status.textContent = operation === "save" ? "Saving theme…" : "Saving new theme…";
     try {
       const result = operation === "save"
-        ? await this.#userThemeService.save(draft.kind === "update" ? draft.themeId : "", draft.source)
-        : await this.#userThemeService.saveAs(draft.source);
-      this.#themeDraft = undefined;
-      this.#themeService.setColorTheme(result.theme);
-      this.#themeMessage = `Saved ${result.theme.label} to ${result.file}.`;
-      await this.#configurationService.updateValue(WorkbenchConfiguration.colorTheme, result.theme.id);
-      this.#renderAppearance();
+        ? await this.userThemeService.save(draft.kind === "update" ? draft.themeId : "", draft.source)
+        : await this.userThemeService.saveAs(draft.source);
+      this.themeDraft = undefined;
+      this.themeService.setColorTheme(result.theme);
+      this.themeMessage = `Saved ${result.theme.label} to ${result.file}.`;
+      await this.configurationService.updateValue(WorkbenchConfiguration.colorTheme, result.theme.id);
+      this.renderAppearance();
     } catch (error) {
       status.textContent = error instanceof Error ? `Unable to save theme: ${error.message}` : "Unable to save theme.";
       group.disabled = false;
     }
   }
 
-  async #deleteThemeDraft(group: HTMLFieldSetElement, status: HTMLParagraphElement): Promise<void> {
-    const draft = this.#themeDraft;
+  private async deleteThemeDraft(group: HTMLFieldSetElement, status: HTMLParagraphElement): Promise<void> {
+    const draft = this.themeDraft;
     if (!draft || draft.kind !== "update") return;
     const theme = WorkbenchThemesRegistry.getColorTheme(draft.themeId);
     if (!theme) {
@@ -419,10 +419,10 @@ export class SettingsEditor extends DisposableOwner {
       return;
     }
     group.disabled = true;
-    const confirmed = await this.#dialogService.confirm({
+    const confirmed = await this.dialogService.confirm({
       title: "Delete user theme?",
       message: `Delete “${theme.label}”?`,
-      detail: `This permanently deletes ${this.#userThemeService.sourceFor(theme.id)?.file ?? "the theme JSON file"} from the user theme folder.`,
+      detail: `This permanently deletes ${this.userThemeService.sourceFor(theme.id)?.file ?? "the theme JSON file"} from the user theme folder.`,
       primaryButton: "Delete",
       cancelButton: "Cancel",
     });
@@ -431,27 +431,27 @@ export class SettingsEditor extends DisposableOwner {
       return;
     }
     try {
-      const result = await this.#userThemeService.delete(draft.themeId);
+      const result = await this.userThemeService.delete(draft.themeId);
       const fallback = isDarkColorScheme(result.colorScheme) ? darkColorTheme : lightColorTheme;
-      this.#themeDraft = undefined;
-      this.#themeService.setColorTheme(fallback);
-      this.#themeMessage = `Deleted ${theme.label} (${result.file}) and switched to ${fallback.label}.`;
+      this.themeDraft = undefined;
+      this.themeService.setColorTheme(fallback);
+      this.themeMessage = `Deleted ${theme.label} (${result.file}) and switched to ${fallback.label}.`;
       try {
-        await this.#configurationService.updateValue(WorkbenchConfiguration.colorTheme, fallback.id);
+        await this.configurationService.updateValue(WorkbenchConfiguration.colorTheme, fallback.id);
       } catch (error) {
-        this.#themeMessage = error instanceof Error
+        this.themeMessage = error instanceof Error
           ? `Deleted ${theme.label}, but could not save the fallback theme: ${error.message}`
           : `Deleted ${theme.label}, but could not save the fallback theme.`;
       }
-      this.#renderAppearance();
+      this.renderAppearance();
     } catch (error) {
       status.textContent = error instanceof Error ? `Unable to delete theme: ${error.message}` : "Unable to delete theme.";
       group.disabled = false;
     }
   }
 
-  #handleNavigationKeydown(event: KeyboardEvent, sectionId: string): void {
-    const visibleSections = this.#visibleNavigationSections();
+  private handleNavigationKeydown(event: KeyboardEvent, sectionId: string): void {
+    const visibleSections = this.visibleNavigationSections();
     const currentIndex = visibleSections.findIndex((section) => section.id === sectionId);
     let targetIndex: number | undefined;
     if (event.key === "ArrowUp") targetIndex = Math.max(0, currentIndex - 1);
@@ -460,26 +460,26 @@ export class SettingsEditor extends DisposableOwner {
     else if (event.key === "End") targetIndex = visibleSections.length - 1;
     if (targetIndex === undefined || targetIndex === currentIndex) return;
     stopEvent(event);
-    this.#navigationItems.get(visibleSections[targetIndex].id)?.focus();
+    this.navigationItems.get(visibleSections[targetIndex].id)?.focus();
   }
 
-  #filterNavigation(value: string): void {
+  private filterNavigation(value: string): void {
     const query = value.trim().toLocaleLowerCase();
     let matches = 0;
     for (const section of SettingsSections) {
       const visible = !query || `${section.label} ${section.description}`.toLocaleLowerCase().includes(query);
-      const item = this.#navigationItems.get(section.id)?.parentElement;
+      const item = this.navigationItems.get(section.id)?.parentElement;
       if (item) item.hidden = !visible;
       if (visible) matches++;
     }
-    this.#navigationEmpty.hidden = matches !== 0;
-    this.#navigationScrollable.scrollTo(0, 0);
-    this.#navigationScrollable.layout();
+    this.navigationEmpty.hidden = matches !== 0;
+    this.navigationScrollable.scrollTo(0, 0);
+    this.navigationScrollable.layout();
   }
 
-  #visibleNavigationSections(): readonly SettingsSectionDescriptor[] {
+  private visibleNavigationSections(): readonly SettingsSectionDescriptor[] {
     return SettingsSections.filter((section) => {
-      const item = this.#navigationItems.get(section.id)?.parentElement;
+      const item = this.navigationItems.get(section.id)?.parentElement;
       return item ? !item.hidden : false;
     });
   }

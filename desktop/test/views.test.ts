@@ -137,17 +137,17 @@ function testView(
 }
 
 class TestView implements IView {
-  #visible = true;
+  private visible = true;
 
   constructor(readonly id: string) {}
 
   focus(): void {}
 
   isVisible(): boolean {
-    return this.#visible;
+    return this.visible;
   }
 
   setVisible(visible: boolean): void {
-    this.#visible = visible;
+    this.visible = visible;
   }
 }

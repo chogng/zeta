@@ -8,148 +8,148 @@ type GitPathAction = "stage" | "unstage" | "discard";
 
 /** Git status and user mutations routed through the workspace App Server. */
 export class ScmViewPane extends ViewPane {
-  readonly #api: ZetaRendererApi;
-  readonly #branchElement: HTMLDivElement;
-  readonly #refreshButton: HTMLButtonElement;
-  readonly #fetchButton: HTMLButtonElement;
-  readonly #pullButton: HTMLButtonElement;
-  readonly #pushButton: HTMLButtonElement;
-  readonly #commitInput: HTMLTextAreaElement;
-  readonly #commitButton: HTMLButtonElement;
-  readonly #statusElement: HTMLDivElement;
-  readonly #changesElement: HTMLDivElement;
-  #status: GitStatusResult | undefined;
-  readonly #retiredStreamInstanceIds = new Set<string>();
-  #revision = 0;
-  #busy = false;
-  #disposed = false;
+  private readonly api: ZetaRendererApi;
+  private readonly branchElement: HTMLDivElement;
+  private readonly refreshButton: HTMLButtonElement;
+  private readonly fetchButton: HTMLButtonElement;
+  private readonly pullButton: HTMLButtonElement;
+  private readonly pushButton: HTMLButtonElement;
+  private readonly commitInput: HTMLTextAreaElement;
+  private readonly commitButton: HTMLButtonElement;
+  private readonly statusElement: HTMLDivElement;
+  private readonly changesElement: HTMLDivElement;
+  private status: GitStatusResult | undefined;
+  private readonly retiredStreamInstanceIds = new Set<string>();
+  private revision = 0;
+  private busy = false;
+  private disposed = false;
 
   constructor(options: IViewPaneOptions, api: ZetaRendererApi) {
     super(options);
-    this.#api = api;
+    this.api = api;
     this.contentElement.classList.add("zeta-scm");
     const document = options.ownerDocument;
     const summary = document.createElement("div");
     summary.className = "zeta-scm-summary";
-    this.#branchElement = document.createElement("div");
-    this.#branchElement.className = "zeta-scm-branch";
-    this.#branchElement.textContent = "Loading repository…";
+    this.branchElement = document.createElement("div");
+    this.branchElement.className = "zeta-scm-branch";
+    this.branchElement.textContent = "Loading repository…";
     const remoteActions = document.createElement("div");
     remoteActions.className = "zeta-scm-remote-actions";
-    this.#fetchButton = commandButton(document, "Fetch", "Fetch Git remotes");
-    this.#pullButton = commandButton(document, "Pull", "Pull current branch (fast-forward only)");
-    this.#pushButton = commandButton(document, "Push", "Push current branch");
-    this.#refreshButton = commandButton(document, "Refresh", "Refresh Git changes");
-    this.#refreshButton.classList.add("zeta-scm-refresh");
-    remoteActions.append(this.#fetchButton, this.#pullButton, this.#pushButton, this.#refreshButton);
-    summary.append(this.#branchElement, remoteActions);
+    this.fetchButton = commandButton(document, "Fetch", "Fetch Git remotes");
+    this.pullButton = commandButton(document, "Pull", "Pull current branch (fast-forward only)");
+    this.pushButton = commandButton(document, "Push", "Push current branch");
+    this.refreshButton = commandButton(document, "Refresh", "Refresh Git changes");
+    this.refreshButton.classList.add("zeta-scm-refresh");
+    remoteActions.append(this.fetchButton, this.pullButton, this.pushButton, this.refreshButton);
+    summary.append(this.branchElement, remoteActions);
     const commitForm = document.createElement("form");
     commitForm.className = "zeta-scm-commit-form";
-    this.#commitInput = document.createElement("textarea");
-    this.#commitInput.className = "zeta-scm-commit-input";
-    this.#commitInput.rows = 2;
-    this.#commitInput.placeholder = "Message (Ctrl+Enter to commit)";
-    this.#commitInput.setAttribute("aria-label", "Commit message");
-    this.#commitButton = commandButton(document, "Commit", "Commit staged changes");
-    this.#commitButton.classList.add("zeta-scm-commit");
-    this.#commitButton.type = "submit";
-    commitForm.append(this.#commitInput, this.#commitButton);
-    this.#statusElement = document.createElement("div");
-    this.#statusElement.className = "zeta-scm-status";
-    this.#statusElement.setAttribute("role", "status");
-    this.#statusElement.setAttribute("aria-live", "polite");
-    this.#statusElement.textContent = "Reading Git status…";
-    this.#changesElement = document.createElement("div");
-    this.#changesElement.className = "zeta-scm-changes";
-    this.contentElement.append(summary, commitForm, this.#statusElement, this.#changesElement);
-    this.own(addDisposableListener(this.#refreshButton, "click", () => void this.refresh()));
-    this.own(addDisposableListener(this.#fetchButton, "click", () => void this.#runRemote("Fetching", () => this.#api.git.fetch())));
-    this.own(addDisposableListener(this.#pullButton, "click", () => void this.#runRemote("Pulling", () => this.#api.git.pull())));
-    this.own(addDisposableListener(this.#pushButton, "click", () => void this.#runRemote("Pushing", () => this.#api.git.push())));
+    this.commitInput = document.createElement("textarea");
+    this.commitInput.className = "zeta-scm-commit-input";
+    this.commitInput.rows = 2;
+    this.commitInput.placeholder = "Message (Ctrl+Enter to commit)";
+    this.commitInput.setAttribute("aria-label", "Commit message");
+    this.commitButton = commandButton(document, "Commit", "Commit staged changes");
+    this.commitButton.classList.add("zeta-scm-commit");
+    this.commitButton.type = "submit";
+    commitForm.append(this.commitInput, this.commitButton);
+    this.statusElement = document.createElement("div");
+    this.statusElement.className = "zeta-scm-status";
+    this.statusElement.setAttribute("role", "status");
+    this.statusElement.setAttribute("aria-live", "polite");
+    this.statusElement.textContent = "Reading Git status…";
+    this.changesElement = document.createElement("div");
+    this.changesElement.className = "zeta-scm-changes";
+    this.contentElement.append(summary, commitForm, this.statusElement, this.changesElement);
+    this.own(addDisposableListener(this.refreshButton, "click", () => void this.refresh()));
+    this.own(addDisposableListener(this.fetchButton, "click", () => void this.runRemote("Fetching", () => this.api.git.fetch())));
+    this.own(addDisposableListener(this.pullButton, "click", () => void this.runRemote("Pulling", () => this.api.git.pull())));
+    this.own(addDisposableListener(this.pushButton, "click", () => void this.runRemote("Pushing", () => this.api.git.push())));
     this.own(addDisposableListener(commitForm, "submit", (event) => {
       event.preventDefault();
-      void this.#commit();
+      void this.commit();
     }));
-    this.own(addDisposableListener(this.#commitInput, "keydown", (event) => {
+    this.own(addDisposableListener(this.commitInput, "keydown", (event) => {
       const keyboardEvent = event as KeyboardEvent;
       if (keyboardEvent.key === "Enter" && (keyboardEvent.ctrlKey || keyboardEvent.metaKey)) {
         event.preventDefault();
-        void this.#commit();
+        void this.commit();
       }
     }));
-    this.own(addDisposableListener(this.#changesElement, "click", (event) => this.#onChangeAction(event)));
-    const events = this.#api.events.subscribe((event) => this.#onServerNotification(event));
+    this.own(addDisposableListener(this.changesElement, "click", (event) => this.onChangeAction(event)));
+    const events = this.api.events.subscribe((event) => this.onServerNotification(event));
     this.defer(() => events.dispose());
-    const connection = this.#api.appServer.onConnectionState((state) => {
+    const connection = this.api.appServer.onConnectionState((state) => {
       if (state === "ready") void this.refresh();
     });
     this.defer(() => connection.dispose());
     this.defer(() => {
-      this.#disposed = true;
-      this.#revision += 1;
+      this.disposed = true;
+      this.revision += 1;
     });
-    this.#setBusy(true);
+    this.setBusy(true);
     void this.refresh();
   }
 
   async refresh(): Promise<void> {
-    const revision = ++this.#revision;
-    this.#setBusy(true);
-    this.#statusElement.textContent = "Reading Git status…";
+    const revision = ++this.revision;
+    this.setBusy(true);
+    this.statusElement.textContent = "Reading Git status…";
     try {
-      const status = await this.#api.git.status();
-      if (this.#disposed || revision !== this.#revision) return;
-      this.#renderStatus(status);
+      const status = await this.api.git.status();
+      if (this.disposed || revision !== this.revision) return;
+      this.renderStatus(status);
     } catch (error) {
-      this.#renderError(error, revision);
+      this.renderError(error, revision);
     } finally {
-      if (!this.#disposed && revision === this.#revision) this.#setBusy(false);
+      if (!this.disposed && revision === this.revision) this.setBusy(false);
     }
   }
 
-  async #commit(): Promise<void> {
-    const message = this.#commitInput.value.trim();
+  private async commit(): Promise<void> {
+    const message = this.commitInput.value.trim();
     if (!message) {
-      this.#statusElement.textContent = "Enter a commit message.";
-      this.#commitInput.focus();
+      this.statusElement.textContent = "Enter a commit message.";
+      this.commitInput.focus();
       return;
     }
-    const revision = ++this.#revision;
-    this.#setBusy(true);
-    this.#statusElement.textContent = "Committing staged changes…";
+    const revision = ++this.revision;
+    this.setBusy(true);
+    this.statusElement.textContent = "Committing staged changes…";
     try {
-      const result = await this.#api.git.commit({ message });
-      if (this.#disposed || revision !== this.#revision) return;
-      this.#commitInput.value = "";
-      this.#renderStatus(result.status, `Created commit ${result.objectId.slice(0, 7)}.`);
+      const result = await this.api.git.commit({ message });
+      if (this.disposed || revision !== this.revision) return;
+      this.commitInput.value = "";
+      this.renderStatus(result.status, `Created commit ${result.objectId.slice(0, 7)}.`);
     } catch (error) {
-      this.#renderError(error, revision);
+      this.renderError(error, revision);
     } finally {
-      if (!this.#disposed && revision === this.#revision) this.#setBusy(false);
+      if (!this.disposed && revision === this.revision) this.setBusy(false);
     }
   }
 
-  async #runRemote(label: string, operation: () => Promise<{ status: GitStatusResult }>): Promise<void> {
-    const revision = ++this.#revision;
-    this.#setBusy(true);
-    this.#statusElement.textContent = `${label}…`;
+  private async runRemote(label: string, operation: () => Promise<{ status: GitStatusResult }>): Promise<void> {
+    const revision = ++this.revision;
+    this.setBusy(true);
+    this.statusElement.textContent = `${label}…`;
     try {
       const result = await operation();
-      if (this.#disposed || revision !== this.#revision) return;
-      this.#renderStatus(result.status, `${label.replace(/ing$/, "")} complete.`);
+      if (this.disposed || revision !== this.revision) return;
+      this.renderStatus(result.status, `${label.replace(/ing$/, "")} complete.`);
     } catch (error) {
-      this.#renderError(error, revision);
+      this.renderError(error, revision);
     } finally {
-      if (!this.#disposed && revision === this.#revision) this.#setBusy(false);
+      if (!this.disposed && revision === this.revision) this.setBusy(false);
     }
   }
 
-  #onChangeAction(event: Event): void {
+  private onChangeAction(event: Event): void {
     const target = event.target;
     const HTMLElementConstructor = this.element.ownerDocument.defaultView?.HTMLElement;
-    if (!HTMLElementConstructor || !(target instanceof HTMLElementConstructor) || this.#busy) return;
+    if (!HTMLElementConstructor || !(target instanceof HTMLElementConstructor) || this.busy) return;
     const button = target.closest<HTMLButtonElement>("button[data-scm-action]");
-    if (!button || !this.#changesElement.contains(button)) return;
+    if (!button || !this.changesElement.contains(button)) return;
     const action = button.dataset.scmAction as GitPathAction | "stageAll" | "unstageAll";
     const paths = button.dataset.scmPaths
       ? parseActionPaths(button.dataset.scmPaths)
@@ -163,65 +163,65 @@ export class ScmViewPane extends ViewPane {
       ) === true;
       if (!confirmed) return;
     }
-    void this.#runPathAction(action === "stageAll" ? "stage" : action === "unstageAll" ? "unstage" : action, paths);
+    void this.runPathAction(action === "stageAll" ? "stage" : action === "unstageAll" ? "unstage" : action, paths);
   }
 
-  async #runPathAction(action: GitPathAction, paths: readonly string[]): Promise<void> {
-    const revision = ++this.#revision;
-    this.#setBusy(true);
-    this.#statusElement.textContent = `${pathActionLabel(action)} ${paths.length === 1 ? paths[0] : `${paths.length} paths`}…`;
+  private async runPathAction(action: GitPathAction, paths: readonly string[]): Promise<void> {
+    const revision = ++this.revision;
+    this.setBusy(true);
+    this.statusElement.textContent = `${pathActionLabel(action)} ${paths.length === 1 ? paths[0] : `${paths.length} paths`}…`;
     try {
       const result = action === "stage"
-        ? await this.#api.git.stage({ paths: [...paths] })
+        ? await this.api.git.stage({ paths: [...paths] })
         : action === "unstage"
-        ? await this.#api.git.unstage({ paths: [...paths] })
-        : await this.#api.git.discardWorktree({ paths: [...paths] });
-      if (this.#disposed || revision !== this.#revision) return;
-      this.#renderStatus(result.status);
+        ? await this.api.git.unstage({ paths: [...paths] })
+        : await this.api.git.discardWorktree({ paths: [...paths] });
+      if (this.disposed || revision !== this.revision) return;
+      this.renderStatus(result.status);
     } catch (error) {
-      this.#renderError(error, revision);
+      this.renderError(error, revision);
     } finally {
-      if (!this.#disposed && revision === this.#revision) this.#setBusy(false);
+      if (!this.disposed && revision === this.revision) this.setBusy(false);
     }
   }
 
-  #onServerNotification(event: ServerNotification): void {
-    if (event.method !== "git/statusChanged" || this.#disposed) return;
+  private onServerNotification(event: ServerNotification): void {
+    if (event.method !== "git/statusChanged" || this.disposed) return;
     if (
-      this.#status &&
-      event.params.status.streamInstanceId === this.#status.streamInstanceId &&
-      event.params.status.revision <= this.#status.revision
+      this.status &&
+      event.params.status.streamInstanceId === this.status.streamInstanceId &&
+      event.params.status.revision <= this.status.revision
     ) return;
-    this.#renderStatus(event.params.status);
+    this.renderStatus(event.params.status);
   }
 
-  #renderStatus(status: GitStatusResult, announcement?: string): void {
-    if (this.#status) {
-      if (status.streamInstanceId === this.#status.streamInstanceId) {
-        if (status.revision < this.#status.revision) return;
+  private renderStatus(status: GitStatusResult, announcement?: string): void {
+    if (this.status) {
+      if (status.streamInstanceId === this.status.streamInstanceId) {
+        if (status.revision < this.status.revision) return;
       } else {
-        if (this.#retiredStreamInstanceIds.has(status.streamInstanceId)) return;
-        this.#retiredStreamInstanceIds.add(this.#status.streamInstanceId);
+        if (this.retiredStreamInstanceIds.has(status.streamInstanceId)) return;
+        this.retiredStreamInstanceIds.add(this.status.streamInstanceId);
       }
     }
-    this.#status = status;
-    this.#branchElement.textContent = headLabel(status.head);
-    this.#branchElement.title = headTitle(status.head);
-    this.#changesElement.replaceChildren();
+    this.status = status;
+    this.branchElement.textContent = headLabel(status.head);
+    this.branchElement.title = headTitle(status.head);
+    this.changesElement.replaceChildren();
     const conflicts = status.changes.filter((change) => change.conflicted);
     const staged = status.changes.filter((change) => !change.conflicted && change.indexStatus !== "unmodified");
     const working = status.changes.filter((change) => !change.conflicted && change.worktreeStatus !== "unmodified");
     const summary = conflicts.length === 0 && staged.length === 0 && working.length === 0
       ? "No changes."
       : `${status.changes.length} changed ${status.changes.length === 1 ? "file" : "files"}`;
-    this.#statusElement.textContent = announcement ? `${announcement} ${summary}` : summary;
-    this.#appendSection("Merge Changes", conflicts, "worktree", "stageAll");
-    this.#appendSection("Staged Changes", staged, "index", "unstageAll");
-    this.#appendSection("Changes", working, "worktree", "stageAll");
-    this.#updateCommandState();
+    this.statusElement.textContent = announcement ? `${announcement} ${summary}` : summary;
+    this.appendSection("Merge Changes", conflicts, "worktree", "stageAll");
+    this.appendSection("Staged Changes", staged, "index", "unstageAll");
+    this.appendSection("Changes", working, "worktree", "stageAll");
+    this.updateCommandState();
   }
 
-  #appendSection(title: string, changes: readonly GitRepositoryChangeDto[], side: GitChangeSide, action: "stageAll" | "unstageAll"): void {
+  private appendSection(title: string, changes: readonly GitRepositoryChangeDto[], side: GitChangeSide, action: "stageAll" | "unstageAll"): void {
     if (changes.length === 0) return;
     const document = this.element.ownerDocument;
     const section = document.createElement("section");
@@ -242,28 +242,28 @@ export class ScmViewPane extends ViewPane {
     list.className = "zeta-scm-list";
     for (const change of changes) list.append(renderChange(document, change, side));
     section.append(heading, list);
-    this.#changesElement.append(section);
+    this.changesElement.append(section);
   }
 
-  #renderError(error: unknown, revision: number): void {
-    if (this.#disposed || revision !== this.#revision) return;
-    this.#statusElement.textContent = gitErrorMessage(error);
+  private renderError(error: unknown, revision: number): void {
+    if (this.disposed || revision !== this.revision) return;
+    this.statusElement.textContent = gitErrorMessage(error);
   }
 
-  #setBusy(busy: boolean): void {
-    this.#busy = busy;
-    this.#updateCommandState();
+  private setBusy(busy: boolean): void {
+    this.busy = busy;
+    this.updateCommandState();
   }
 
-  #updateCommandState(): void {
-    const hasStagedChanges = (this.#status?.changes ?? []).some((change) => !change.conflicted && change.indexStatus !== "unmodified");
-    this.#commitButton.disabled = this.#busy || !hasStagedChanges;
-    this.#commitInput.disabled = this.#busy;
-    for (const button of [this.#refreshButton, this.#fetchButton, this.#pullButton, this.#pushButton]) {
-      button.disabled = this.#busy;
+  private updateCommandState(): void {
+    const hasStagedChanges = (this.status?.changes ?? []).some((change) => !change.conflicted && change.indexStatus !== "unmodified");
+    this.commitButton.disabled = this.busy || !hasStagedChanges;
+    this.commitInput.disabled = this.busy;
+    for (const button of [this.refreshButton, this.fetchButton, this.pullButton, this.pushButton]) {
+      button.disabled = this.busy;
     }
-    for (const button of this.#changesElement.querySelectorAll<HTMLButtonElement>(".zeta-scm-command")) {
-      button.disabled = this.#busy;
+    for (const button of this.changesElement.querySelectorAll<HTMLButtonElement>(".zeta-scm-command")) {
+      button.disabled = this.busy;
     }
   }
 }

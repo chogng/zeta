@@ -25,19 +25,19 @@ import type { IContextViewService } from "./contextView.js";
 /** HTML implementation used by web, Windows, and Linux workbenches. */
 export class BrowserContextMenuService extends DisposableOwner
   implements IContextMenuService {
-  readonly #onDidShowContextMenu = this.own(new Emitter<void>());
-  readonly #onDidHideContextMenu = this.own(new Emitter<void>());
-  readonly #activeMenu = this.own(new DisposableSlot<Menu>());
-  readonly #contextViewService: IContextViewService;
-  readonly #menuService: IMenuService;
-  readonly #keybindingService: IKeybindingService;
-  #onHide: ((didCancel: boolean) => void) | undefined;
-  #didSelect = false;
-  #active = false;
-  #shown = false;
+  private readonly _onDidShowContextMenu = this.own(new Emitter<void>());
+  private readonly _onDidHideContextMenu = this.own(new Emitter<void>());
+  private readonly activeMenu = this.own(new DisposableSlot<Menu>());
+  private readonly contextViewService: IContextViewService;
+  private readonly menuService: IMenuService;
+  private readonly keybindingService: IKeybindingService;
+  private onHide: ((didCancel: boolean) => void) | undefined;
+  private didSelect = false;
+  private active = false;
+  private shown = false;
 
-  readonly onDidShowContextMenu = this.#onDidShowContextMenu.event;
-  readonly onDidHideContextMenu = this.#onDidHideContextMenu.event;
+  readonly onDidShowContextMenu = this._onDidShowContextMenu.event;
+  readonly onDidHideContextMenu = this._onDidHideContextMenu.event;
 
   constructor(
     menuService: IMenuService,
@@ -45,73 +45,73 @@ export class BrowserContextMenuService extends DisposableOwner
     contextViewService: IContextViewService,
   ) {
     super();
-    this.#menuService = menuService;
-    this.#keybindingService = keybindingService;
-    this.#contextViewService = contextViewService;
+    this.menuService = menuService;
+    this.keybindingService = keybindingService;
+    this.contextViewService = contextViewService;
     this.defer(() => this.hideContextMenu());
   }
 
   showContextMenu(options: ContextMenuOptions): void {
     this.hideContextMenu();
-    const actions = resolveContextMenuActions(options, this.#menuService);
+    const actions = resolveContextMenuActions(options, this.menuService);
     if (actions.length === 0) {
       options.onHide?.(true);
       return;
     }
 
-    this.#didSelect = false;
-    this.#active = true;
-    this.#shown = false;
-    this.#onHide = options.onHide;
+    this.didSelect = false;
+    this.active = true;
+    this.shown = false;
+    this.onHide = options.onHide;
     const menu = new Menu({
       actions,
-      ownerDocument: this.#contextViewService.container.ownerDocument,
-      contextViewContainer: this.#contextViewService.container,
+      ownerDocument: this.contextViewService.container.ownerDocument,
+      contextViewContainer: this.contextViewService.container,
       layer: 10,
       getKeybinding: (action) =>
-        this.#keybindingService.lookupKeybinding(action.id),
+        this.keybindingService.lookupKeybinding(action.id),
       onDidSelect: () => {
-        this.#didSelect = true;
-        this.#contextViewService.hide();
+        this.didSelect = true;
+        this.contextViewService.hide();
       },
     });
-    this.#activeMenu.replace(menu);
-    const shown = this.#contextViewService.show({
+    this.activeMenu.replace(menu);
+    const shown = this.contextViewService.show({
       anchor: toContextViewAnchor(options.anchor),
       content: menu.element,
       anchorPosition: AnchorPosition.Below,
       focusRestore: ContextViewFocusRestore.Previous,
       layer: 10,
       isTargetWithin: (target) => menu.contains(target),
-      onHide: () => this.#didHide(),
+      onHide: () => this.didHide(),
     });
     if (!shown) {
-      this.#didHide();
+      this.didHide();
       return;
     }
 
-    this.#shown = true;
+    this.shown = true;
     menu.focusFirst();
-    this.#onDidShowContextMenu.fire();
+    this._onDidShowContextMenu.fire();
   }
 
   hideContextMenu(): void {
-    if (!this.#active) return;
-    this.#contextViewService.hide();
+    if (!this.active) return;
+    this.contextViewService.hide();
   }
 
-  #didHide(): void {
-    if (!this.#active) return;
-    this.#active = false;
-    const onHide = this.#onHide;
-    const didCancel = !this.#didSelect;
-    const shown = this.#shown;
-    this.#onHide = undefined;
-    this.#didSelect = false;
-    this.#shown = false;
-    this.#activeMenu.clear();
+  private didHide(): void {
+    if (!this.active) return;
+    this.active = false;
+    const onHide = this.onHide;
+    const didCancel = !this.didSelect;
+    const shown = this.shown;
+    this.onHide = undefined;
+    this.didSelect = false;
+    this.shown = false;
+    this.activeMenu.clear();
     onHide?.(didCancel);
-    if (shown) this.#onDidHideContextMenu.fire();
+    if (shown) this._onDidHideContextMenu.fire();
   }
 }
 

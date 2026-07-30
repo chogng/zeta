@@ -80,97 +80,97 @@ export interface WorkbenchKeybindingServiceOptions {
 export class WorkbenchKeybindingService
   extends DisposableOwner
   implements IKeybindingService {
-  readonly #ownerDocument: Document;
-  readonly #commandService: ICommandService;
-  readonly #contextKeyService: IContextKeyService;
-  readonly #keyboardLayoutService: IKeyboardLayoutService;
-  readonly #statusbarService: IStatusbarService | undefined;
-  readonly #resolver: KeybindingResolver;
-  readonly #chordTimeoutMs: number;
-  readonly #onCommandError: (error: unknown, command: CommandId) => void;
-  readonly #onDidUpdateKeybindings = this.own(new Emitter<void>());
-  readonly #chordTimeout = this.own(new DisposableSlot<IDisposable>());
-  readonly #chordStatus = this.own(
+  private readonly ownerDocument: Document;
+  private readonly commandService: ICommandService;
+  private readonly contextKeyService: IContextKeyService;
+  private readonly keyboardLayoutService: IKeyboardLayoutService;
+  private readonly statusbarService: IStatusbarService | undefined;
+  private readonly resolver: KeybindingResolver;
+  private readonly chordTimeoutMs: number;
+  private readonly onCommandError: (error: unknown, command: CommandId) => void;
+  private readonly _onDidUpdateKeybindings = this.own(new Emitter<void>());
+  private readonly chordTimeout = this.own(new DisposableSlot<IDisposable>());
+  private readonly chordStatus = this.own(
     new DisposableSlot<IStatusbarEntryAccessor>(),
   );
-  readonly #inChordModeKey: IContextKey<boolean>;
-  readonly #isComposingKey: IContextKey<boolean>;
-  #currentEvents: KeybindingEvent[] = [];
-  #disabledIme = false;
+  private readonly inChordModeKey: IContextKey<boolean>;
+  private readonly isComposingKey: IContextKey<boolean>;
+  private currentEvents: KeybindingEvent[] = [];
+  private disabledIme = false;
 
-  readonly onDidUpdateKeybindings = this.#onDidUpdateKeybindings.event;
+  readonly onDidUpdateKeybindings = this._onDidUpdateKeybindings.event;
 
   constructor(options: WorkbenchKeybindingServiceOptions) {
     super();
-    this.#ownerDocument = options.ownerDocument;
-    this.#commandService = options.commandService;
-    this.#contextKeyService = options.contextKeyService;
-    this.#keyboardLayoutService = options.keyboardLayoutService;
-    this.#statusbarService = options.statusbarService;
-    this.#resolver = new KeybindingResolver({
+    this.ownerDocument = options.ownerDocument;
+    this.commandService = options.commandService;
+    this.contextKeyService = options.contextKeyService;
+    this.keyboardLayoutService = options.keyboardLayoutService;
+    this.statusbarService = options.statusbarService;
+    this.resolver = new KeybindingResolver({
       registry: options.registry ?? KeybindingsRegistry,
       resolveKeybinding: (keybinding) => this.resolveKeybinding(keybinding),
     });
-    this.#chordTimeoutMs = options.chordTimeoutMs ?? 5_000;
-    this.#onCommandError = options.onCommandError ??
+    this.chordTimeoutMs = options.chordTimeoutMs ?? 5_000;
+    this.onCommandError = options.onCommandError ??
       ((error, command) => {
         console.error(`Keybinding command failed: ${command}`, error);
       });
-    this.#inChordModeKey = KeybindingContextKeys.inChordMode.bindTo(
-      this.#contextKeyService,
+    this.inChordModeKey = KeybindingContextKeys.inChordMode.bindTo(
+      this.contextKeyService,
     );
-    this.#isComposingKey = KeybindingContextKeys.isComposing.bindTo(
-      this.#contextKeyService,
+    this.isComposingKey = KeybindingContextKeys.isComposing.bindTo(
+      this.contextKeyService,
     );
 
     this.defer(() => {
-      this.#leaveChordMode();
-      this.#isComposingKey.reset();
+      this.leaveChordMode();
+      this.isComposingKey.reset();
     });
-    this.own(this.#resolver.onDidChangeKeybindings(() => {
-      this.#onDidUpdateKeybindings.fire();
+    this.own(this.resolver.onDidChangeKeybindings(() => {
+      this._onDidUpdateKeybindings.fire();
     }));
-    this.own(this.#keyboardLayoutService.onDidChangeKeyboardLayout(() => {
-      this.#leaveChordMode();
-      this.#onDidUpdateKeybindings.fire();
+    this.own(this.keyboardLayoutService.onDidChangeKeyboardLayout(() => {
+      this.leaveChordMode();
+      this._onDidUpdateKeybindings.fire();
     }));
     this.own(addDisposableListener(
-      this.#ownerDocument,
+      this.ownerDocument,
       "keydown",
       (event: KeyboardEvent) => this.dispatchEvent(event),
       true,
     ));
     this.own(addDisposableListener(
-      this.#ownerDocument,
+      this.ownerDocument,
       "compositionstart",
       () => {
-        this.#isComposingKey.set(true);
-        this.#leaveChordMode();
+        this.isComposingKey.set(true);
+        this.leaveChordMode();
       },
       true,
     ));
     this.own(addDisposableListener(
-      this.#ownerDocument,
+      this.ownerDocument,
       "compositionend",
-      () => this.#isComposingKey.set(false),
+      () => this.isComposingKey.set(false),
       true,
     ));
-    const targetWindow = this.#ownerDocument.defaultView;
+    const targetWindow = this.ownerDocument.defaultView;
     if (targetWindow) {
       this.own(addDisposableListener(
         targetWindow,
         "blur",
-        () => this.#leaveChordMode(),
+        () => this.leaveChordMode(),
       ));
     }
   }
 
   get inChordMode(): boolean {
-    return this.#currentEvents.length > 0;
+    return this.currentEvents.length > 0;
   }
 
   resolveKeybinding(keybinding: Keybinding): ResolvedKeybinding {
-    return this.#keyboardLayoutService
+    return this.keyboardLayoutService
       .getKeyboardMapper()
       .resolveKeybinding(keybinding);
   }
@@ -184,16 +184,16 @@ export class WorkbenchKeybindingService
 
   lookupKeybindings(
     command: CommandId,
-    context: Context = this.#contextKeyService,
+    context: Context = this.contextKeyService,
   ): readonly ResolvedKeybinding[] {
-    return this.#resolver.lookupKeybindings(command, context);
+    return this.resolver.lookupKeybindings(command, context);
   }
 
   lookupKeybinding(
     command: CommandId,
-    context: Context = this.#contextKeyService,
+    context: Context = this.contextKeyService,
   ): ResolvedKeybinding | undefined {
-    return this.#resolver.lookupKeybinding(command, context);
+    return this.resolver.lookupKeybinding(command, context);
   }
 
   /**
@@ -218,64 +218,64 @@ export class WorkbenchKeybindingService
       altKey: event.altKey,
       metaKey: event.metaKey,
     };
-    this.#keyboardLayoutService.validateCurrentKeyboardMapping(nextEvent);
-    const events = [...this.#currentEvents, nextEvent];
+    this.keyboardLayoutService.validateCurrentKeyboardMapping(nextEvent);
+    const events = [...this.currentEvents, nextEvent];
     const target = keyboardEventTarget(browserEvent);
-    const context = this.#contextKeyService.getContext(target);
-    const result = this.#resolver.resolve(context, events);
+    const context = this.contextKeyService.getContext(target);
+    const result = this.resolver.resolve(context, events);
 
     switch (result.kind) {
       case KeybindingResolveKind.NoMatch:
         if (!this.inChordMode) return false;
-        this.#leaveChordMode();
+        this.leaveChordMode();
         event.stop();
         return true;
 
       case KeybindingResolveKind.MoreChordsNeeded:
-        this.#currentEvents = events;
-        this.#enterChordMode(result.keybinding);
+        this.currentEvents = events;
+        this.enterChordMode(result.keybinding);
         event.stop();
         return true;
 
       case KeybindingResolveKind.Command:
-        this.#leaveChordMode();
+        this.leaveChordMode();
         event.stop();
-        void this.#commandService
+        void this.commandService
           .executeCommand(result.command, ...result.args)
           .catch((error: unknown) =>
-            this.#onCommandError(error, result.command)
+            this.onCommandError(error, result.command)
           );
         return true;
 
       case KeybindingResolveKind.Blocked:
-        this.#leaveChordMode();
+        this.leaveChordMode();
         event.stop();
         return true;
     }
   }
 
-  #enterChordMode(keybinding: ResolvedKeybinding): void {
-    this.#inChordModeKey.set(true);
+  private enterChordMode(keybinding: ResolvedKeybinding): void {
+    this.inChordModeKey.set(true);
     if (IME.enabled) {
       IME.disable();
-      this.#disabledIme = true;
+      this.disabledIme = true;
     }
     const handle = globalThis.setTimeout(
-      () => this.#leaveChordMode(),
-      this.#chordTimeoutMs,
+      () => this.leaveChordMode(),
+      this.chordTimeoutMs,
     );
-    this.#chordTimeout.replace(toDisposable(() =>
+    this.chordTimeout.replace(toDisposable(() =>
       globalThis.clearTimeout(handle)
     ));
 
-    if (this.#statusbarService) {
+    if (this.statusbarService) {
       const prefix = new ResolvedKeybinding(
-        keybinding.chords.slice(0, this.#currentEvents.length),
+        keybinding.chords.slice(0, this.currentEvents.length),
         keybinding.operatingSystem,
       );
       const label = getKeybindingLabel(prefix);
-      this.#chordStatus.clear();
-      this.#chordStatus.replace(this.#statusbarService.addEntry(
+      this.chordStatus.clear();
+      this.chordStatus.replace(this.statusbarService.addEntry(
         {
           text: `${label} was pressed. Waiting for another key…`,
           ariaLabel: `${label} was pressed. Waiting for another key`,
@@ -289,13 +289,13 @@ export class WorkbenchKeybindingService
     }
   }
 
-  #leaveChordMode(): void {
-    this.#chordTimeout.clear();
-    this.#chordStatus.clear();
-    this.#currentEvents = [];
-    this.#inChordModeKey.reset();
-    if (this.#disabledIme) {
-      this.#disabledIme = false;
+  private leaveChordMode(): void {
+    this.chordTimeout.clear();
+    this.chordStatus.clear();
+    this.currentEvents = [];
+    this.inChordModeKey.reset();
+    if (this.disabledIme) {
+      this.disabledIme = false;
       IME.enable();
     }
   }

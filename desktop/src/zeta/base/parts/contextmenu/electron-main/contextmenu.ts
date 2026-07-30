@@ -12,16 +12,16 @@ import {
 
 /** Owns the active Electron context menu for one browser window. */
 export class ElectronContextMenu extends DisposableOwner {
-  readonly #window: BrowserWindow;
-  #activeMenu: Menu | undefined;
-  #settle: ((result: INativeContextMenuResult) => void) | undefined;
+  private readonly window: BrowserWindow;
+  private activeMenu: Menu | undefined;
+  private settle: ((result: INativeContextMenuResult) => void) | undefined;
 
   constructor(window: BrowserWindow) {
     super();
-    this.#window = window;
+    this.window = window;
     this.defer(() => {
       this.close();
-      this.#finish({});
+      this.finish({});
     });
   }
 
@@ -29,8 +29,8 @@ export class ElectronContextMenu extends DisposableOwner {
     request: INativeContextMenuRequest,
   ): Promise<INativeContextMenuResult> {
     this.close();
-    this.#finish({});
-    if (this.#window.isDestroyed()) return Promise.resolve({});
+    this.finish({});
+    if (this.window.isDestroyed()) return Promise.resolve({});
 
     let selectedId: string | undefined;
     const menu = Menu.buildFromTemplate(toTemplate(
@@ -39,40 +39,40 @@ export class ElectronContextMenu extends DisposableOwner {
         selectedId = id;
       },
     ));
-    this.#activeMenu = menu;
+    this.activeMenu = menu;
 
     const result = new Promise<INativeContextMenuResult>((resolve) => {
-      this.#settle = resolve;
+      this.settle = resolve;
     });
     try {
       menu.popup({
-        window: this.#window,
+        window: this.window,
         x: request.x,
         y: request.y,
-        callback: () => this.#finish(
+        callback: () => this.finish(
           selectedId ? { selectedId } : {},
         ),
       });
     } catch (error) {
-      this.#finish({});
+      this.finish({});
       throw error;
     }
     return result;
   }
 
   close(): void {
-    const menu = this.#activeMenu;
+    const menu = this.activeMenu;
     if (!menu) return;
-    this.#activeMenu = undefined;
-    if (!this.#window.isDestroyed()) menu.closePopup(this.#window);
-    this.#finish({});
+    this.activeMenu = undefined;
+    if (!this.window.isDestroyed()) menu.closePopup(this.window);
+    this.finish({});
   }
 
-  #finish(result: INativeContextMenuResult): void {
-    const settle = this.#settle;
+  private finish(result: INativeContextMenuResult): void {
+    const settle = this.settle;
     if (!settle) return;
-    this.#settle = undefined;
-    this.#activeMenu = undefined;
+    this.settle = undefined;
+    this.activeMenu = undefined;
     settle(result);
   }
 }

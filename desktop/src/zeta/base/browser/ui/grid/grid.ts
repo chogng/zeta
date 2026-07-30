@@ -145,11 +145,11 @@ class BranchNode extends GridNode {
   }
 
   get minimumWidth(): number {
-    return this.#axisConstraint("minimumWidth", Math.max, 0);
+    return this.axisConstraint("minimumWidth", Math.max, 0);
   }
 
   get maximumWidth(): number {
-    return this.#axisConstraint(
+    return this.axisConstraint(
       "maximumWidth",
       Math.min,
       Number.POSITIVE_INFINITY,
@@ -157,11 +157,11 @@ class BranchNode extends GridNode {
   }
 
   get minimumHeight(): number {
-    return this.#axisConstraint("minimumHeight", Math.max, 0);
+    return this.axisConstraint("minimumHeight", Math.max, 0);
   }
 
   get maximumHeight(): number {
-    return this.#axisConstraint(
+    return this.axisConstraint(
       "maximumHeight",
       Math.min,
       Number.POSITIVE_INFINITY,
@@ -193,7 +193,7 @@ class BranchNode extends GridNode {
     }
   }
 
-  #axisConstraint(
+  private axisConstraint(
     property:
       | "minimumWidth"
       | "maximumWidth"
@@ -270,15 +270,15 @@ class AxisView implements ISplitViewView {
  */
 export class Grid<TView extends IGridView> extends DisposableOwner {
   readonly element: HTMLDivElement;
-  readonly #root: GridNode;
-  readonly #leaves = new Map<TView, LeafNode<TView>>();
-  readonly #onDidChange = this.own(new Emitter<void>());
-  #layoutWidth = 0;
-  #layoutHeight = 0;
-  #didLayout = false;
-  #layingOut = false;
+  private readonly root: GridNode;
+  private readonly leaves = new Map<TView, LeafNode<TView>>();
+  private readonly _onDidChange = this.own(new Emitter<void>());
+  private layoutWidth = 0;
+  private layoutHeight = 0;
+  private didLayout = false;
+  private layingOut = false;
 
-  readonly onDidChange: Event<void> = this.#onDidChange.event;
+  readonly onDidChange: Event<void> = this._onDidChange.event;
 
   constructor(
     descriptor: GridDescriptor<TView>,
@@ -296,22 +296,22 @@ export class Grid<TView extends IGridView> extends DisposableOwner {
         this.own(disposable);
       },
       createNode: (nodeDescriptor) =>
-        this.#createNode(nodeDescriptor, host),
+        this.createNode(nodeDescriptor, host),
       handleSplitViewChange: () => {
-        if (!this.#layingOut) this.#onDidChange.fire();
+        if (!this.layingOut) this._onDidChange.fire();
       },
     };
-    this.#root = this.#createNode(
+    this.root = this.createNode(
       descriptor as GridDescriptor<IGridView>,
       host,
     );
-    this.element.append(this.#root.element);
-    for (const [view, leaf] of this.#leaves) {
+    this.element.append(this.root.element);
+    for (const [view, leaf] of this.leaves) {
       leaf.setDisplayed(leaf.visible);
       if (view.onDidChange) {
         this.own(view.onDidChange(() => {
-          if (this.#didLayout) {
-            this.layout(this.#layoutWidth, this.#layoutHeight);
+          if (this.didLayout) {
+            this.layout(this.layoutWidth, this.layoutHeight);
           }
         }));
       }
@@ -321,36 +321,36 @@ export class Grid<TView extends IGridView> extends DisposableOwner {
   layout(width: number, height: number): void {
     assertDimension(width, "width");
     assertDimension(height, "height");
-    this.#layoutWidth = width;
-    this.#layoutHeight = height;
-    this.#didLayout = true;
-    this.#layingOut = true;
+    this.layoutWidth = width;
+    this.layoutHeight = height;
+    this.didLayout = true;
+    this.layingOut = true;
     try {
-      this.#root.layout(width, height, 0, 0);
+      this.root.layout(width, height, 0, 0);
     } finally {
-      this.#layingOut = false;
+      this.layingOut = false;
     }
   }
 
   getViewSize(view: TView): IDimension {
-    const leaf = this.#leaf(view);
+    const leaf = this.leaf(view);
     return { width: leaf.width, height: leaf.height };
   }
 
   resizeView(view: TView, dimension: IDimension): void {
     assertDimension(dimension.width, "view width");
     assertDimension(dimension.height, "view height");
-    const leaf = this.#leaf(view);
-    this.#resizeOnAxis(leaf, "horizontal", dimension.width);
-    this.#resizeOnAxis(leaf, "vertical", dimension.height);
+    const leaf = this.leaf(view);
+    this.resizeOnAxis(leaf, "horizontal", dimension.width);
+    this.resizeOnAxis(leaf, "vertical", dimension.height);
   }
 
   isViewVisible(view: TView): boolean {
-    return this.#leaf(view).visible;
+    return this.leaf(view).visible;
   }
 
   setViewVisible(view: TView, visible: boolean): void {
-    const leaf = this.#leaf(view);
+    const leaf = this.leaf(view);
     if (leaf.visible === visible) return;
     leaf.visible = visible;
     leaf.setDisplayed(visible);
@@ -360,23 +360,23 @@ export class Grid<TView extends IGridView> extends DisposableOwner {
       branch.splitView.setViewVisible(index, node.isVisible());
       node = branch;
     }
-    if (this.#didLayout) {
-      this.layout(this.#layoutWidth, this.#layoutHeight);
+    if (this.didLayout) {
+      this.layout(this.layoutWidth, this.layoutHeight);
     }
-    this.#onDidChange.fire();
+    this._onDidChange.fire();
   }
 
-  #createNode(
+  private createNode(
     descriptor: GridDescriptor<IGridView>,
     host: GridNodeHost,
   ): GridNode {
     if (descriptor.type === "leaf") {
       const leaf = new LeafNode(descriptor.view, descriptor.visible !== false);
       leaf.priority = descriptor.priority ?? "normal";
-      if (this.#leaves.has(descriptor.view as TView)) {
+      if (this.leaves.has(descriptor.view as TView)) {
         throw new Error("Grid cannot contain the same view twice");
       }
-      this.#leaves.set(descriptor.view as TView, leaf as LeafNode<TView>);
+      this.leaves.set(descriptor.view as TView, leaf as LeafNode<TView>);
       return leaf;
     }
     return new BranchNode(
@@ -387,7 +387,7 @@ export class Grid<TView extends IGridView> extends DisposableOwner {
     );
   }
 
-  #resizeOnAxis(
+  private resizeOnAxis(
     leaf: LeafNode<TView>,
     orientation: SplitViewOrientation,
     size: number,
@@ -403,8 +403,8 @@ export class Grid<TView extends IGridView> extends DisposableOwner {
     }
   }
 
-  #leaf(view: TView): LeafNode<TView> {
-    const leaf = this.#leaves.get(view);
+  private leaf(view: TView): LeafNode<TView> {
+    const leaf = this.leaves.get(view);
     if (!leaf) throw new Error("Grid view is not registered");
     return leaf;
   }

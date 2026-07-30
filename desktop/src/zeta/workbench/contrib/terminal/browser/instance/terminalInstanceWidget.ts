@@ -9,16 +9,16 @@ import { terminalTheme } from "./terminalTheme.js";
 /** One persistent xterm renderer bound to exactly one Terminal instance. */
 export class TerminalInstanceWidget extends DisposableOwner {
   readonly element: HTMLDivElement;
-  readonly #terminal: Terminal;
-  readonly #fitAddon = new FitAddon();
-  #visible = false;
+  private readonly terminal: Terminal;
+  private readonly fitAddon = new FitAddon();
+  private visible = false;
 
   constructor(readonly instance: ITerminalInstance, ownerDocument: Document, themeService: IThemeService) {
     super();
     this.element = ownerDocument.createElement("div");
     this.element.className = "zeta-terminal-instance";
     this.element.hidden = true;
-    this.#terminal = new Terminal({
+    this.terminal = new Terminal({
       allowTransparency: false,
       cursorBlink: true,
       cursorStyle: "block",
@@ -28,23 +28,23 @@ export class TerminalInstanceWidget extends DisposableOwner {
       theme: terminalTheme(themeService.getColorTheme()),
     });
     this.own(themeService.onDidColorThemeChange((theme) => {
-      this.#terminal.options.theme = terminalTheme(theme);
+      this.terminal.options.theme = terminalTheme(theme);
     }));
-    this.#terminal.loadAddon(this.#fitAddon);
-    this.#terminal.open(this.element);
-    this.defer(() => this.#terminal.dispose());
-    const input = this.#terminal.onData((data) => this.instance.write(data));
+    this.terminal.loadAddon(this.fitAddon);
+    this.terminal.open(this.element);
+    this.defer(() => this.terminal.dispose());
+    const input = this.terminal.onData((data) => this.instance.write(data));
     this.own(toDisposable(() => input.dispose()));
-    this.own(instance.onDidWriteData((data) => this.#terminal.write(data)));
+    this.own(instance.onDidWriteData((data) => this.terminal.write(data)));
     this.own(instance.onDidExit((exitCode) => {
-      this.#terminal.writeln("");
-      this.#terminal.writeln(`[process exited with code ${exitCode ?? "unknown"}]`);
+      this.terminal.writeln("");
+      this.terminal.writeln(`[process exited with code ${exitCode ?? "unknown"}]`);
     }));
     this.own(instance.onDidChangeState((state) => {
       this.element.dataset.state = state;
       if (state === "error") {
-        this.#terminal.writeln("");
-        this.#terminal.writeln("[terminal operation failed]");
+        this.terminal.writeln("");
+        this.terminal.writeln("[terminal operation failed]");
       }
     }));
     this.element.dataset.state = instance.state;
@@ -57,20 +57,20 @@ export class TerminalInstanceWidget extends DisposableOwner {
   }
 
   setVisible(visible: boolean): void {
-    if (this.#visible === visible) return;
-    this.#visible = visible;
+    if (this.visible === visible) return;
+    this.visible = visible;
     this.element.hidden = !visible;
     if (visible) queueMicrotask(() => this.fit());
   }
 
   focus(): void {
-    if (this.#visible) this.#terminal.focus();
+    if (this.visible) this.terminal.focus();
   }
 
   fit(): void {
-    if (!this.#visible) return;
+    if (!this.visible) return;
     try {
-      this.#fitAddon.fit();
+      this.fitAddon.fit();
     } catch {
       return;
     }
@@ -79,8 +79,8 @@ export class TerminalInstanceWidget extends DisposableOwner {
 
   dimensions(): ITerminalDimensions {
     return {
-      rows: Math.min(512, Math.max(1, this.#terminal.rows)),
-      cols: Math.min(512, Math.max(1, this.#terminal.cols)),
+      rows: Math.min(512, Math.max(1, this.terminal.rows)),
+      cols: Math.min(512, Math.max(1, this.terminal.cols)),
     };
   }
 }

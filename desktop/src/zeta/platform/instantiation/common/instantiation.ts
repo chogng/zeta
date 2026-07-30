@@ -72,17 +72,17 @@ export const IInstantiationService =
 
 /** A minimal service collection used as the command execution accessor. */
 export class ServiceCollection implements ServicesAccessor {
-  readonly #services = new Map<ServiceIdentifier<unknown>, unknown>();
+  private readonly services = new Map<ServiceIdentifier<unknown>, unknown>();
 
   set<T>(id: ServiceIdentifier<T>, service: T): void {
-    this.#services.set(id, service);
+    this.services.set(id, service);
   }
 
   get<T>(id: ServiceIdentifier<T>): T {
-    if (!this.#services.has(id)) {
+    if (!this.services.has(id)) {
       throw new Error(`Unknown service: ${id.description ?? String(id)}`);
     }
-    return this.#services.get(id) as T;
+    return this.services.get(id) as T;
   }
 }
 
@@ -92,15 +92,15 @@ export class ServiceCollection implements ServicesAccessor {
  * not depend on TypeScript decorator emit.
  */
 export class InstantiationService implements IInstantiationService {
-  readonly #services: ServiceCollection;
+  private readonly services: ServiceCollection;
 
   constructor(services: ServiceCollection = new ServiceCollection()) {
-    this.#services = services;
-    this.#services.set(IInstantiationService, this);
+    this.services = services;
+    this.services.set(IInstantiationService, this);
   }
 
   get<T>(id: ServiceIdentifier<T>): T {
-    return this.#services.get(id);
+    return this.services.get(id);
   }
 
   createInstance<T>(
@@ -108,7 +108,7 @@ export class InstantiationService implements IInstantiationService {
     ...dynamicArguments: unknown[]
   ): T {
     const serviceArguments = descriptor.serviceDependencies.map(
-      (id) => this.#services.get(id),
+      (id) => this.services.get(id),
     );
     return Reflect.construct(descriptor.ctor, [
       ...descriptor.staticArguments,
@@ -132,7 +132,7 @@ export class InstantiationService implements IInstantiationService {
             "Service accessor is only valid during invocation",
           );
         }
-        return this.#services.get(id);
+        return this.services.get(id);
       },
     };
     try {

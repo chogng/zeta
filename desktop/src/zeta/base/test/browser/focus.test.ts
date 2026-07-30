@@ -41,8 +41,8 @@ class FakeElement extends FakeNode {
   readonly isContentEditable = false;
   readonly scrollLeft = 0;
   readonly scrollTop = 0;
-  readonly #attributes = new Map<string, string>();
-  #children: FakeElement[] = [];
+  private readonly attributes = new Map<string, string>();
+  private children: FakeElement[] = [];
 
   constructor(
     readonly ownerDocument: FakeDocument,
@@ -55,15 +55,15 @@ class FakeElement extends FakeNode {
   }
 
   setChildren(children: readonly FakeElement[]): void {
-    this.#children = [...children];
+    this.children = [...children];
   }
 
   hasAttribute(name: string): boolean {
-    return this.#attributes.has(name);
+    return this.attributes.has(name);
   }
 
   getAttribute(name: string): string | null {
-    return this.#attributes.get(name) ?? null;
+    return this.attributes.get(name) ?? null;
   }
 
   closest(): FakeElement | null {
@@ -83,13 +83,13 @@ class FakeElement extends FakeNode {
   }
 
   querySelectorAll<T extends Element>(): NodeListOf<T> {
-    return this.#children as unknown as NodeListOf<T>;
+    return this.children as unknown as NodeListOf<T>;
   }
 
   contains(candidate: Node | null): boolean {
     const element = candidate as unknown as FakeElement | null;
     return element === this ||
-      this.#children.includes(element as FakeElement);
+      this.children.includes(element as FakeElement);
   }
 
   focus(): void {

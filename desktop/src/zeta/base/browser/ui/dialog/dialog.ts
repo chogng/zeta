@@ -17,8 +17,8 @@ export interface DialogOptions {
 /** A modal dialog backed by the browser's native dialog element. */
 export class Dialog extends DisposableOwner {
   readonly element: HTMLDialogElement;
-  #resolve: ((result: string) => void) | undefined;
-  #shown = false;
+  private resolve: ((result: string) => void) | undefined;
+  private shown = false;
 
   constructor(options: DialogOptions) {
     super();
@@ -41,28 +41,28 @@ export class Dialog extends DisposableOwner {
     }
     element.append(heading, body);
     this.own(addDisposableListener(element, "close", () => {
-      this.#finish(element.returnValue);
+      this.finish(element.returnValue);
     }));
     this.own(trapTabFocus(element));
     this.defer(() => {
       if (element.open) element.close();
-      this.#finish("");
+      this.finish("");
     });
   }
 
   show(): Promise<string> {
-    if (this.#shown) {
+    if (this.shown) {
       throw new Error("Dialog instances can only be shown once");
     }
-    this.#shown = true;
+    this.shown = true;
     const result = new Promise<string>((resolve) => {
-      this.#resolve = resolve;
+      this.resolve = resolve;
     });
     try {
       this.element.showModal();
       focusFirst(this.element);
     } catch (error) {
-      this.#resolve = undefined;
+      this.resolve = undefined;
       throw error;
     }
     return result;
@@ -71,13 +71,13 @@ export class Dialog extends DisposableOwner {
   close(result = ""): void {
     if (!this.element.open) return;
     this.element.close(result);
-    this.#finish(result);
+    this.finish(result);
   }
 
-  #finish(result: string): void {
-    const resolve = this.#resolve;
+  private finish(result: string): void {
+    const resolve = this.resolve;
     if (!resolve) return;
-    this.#resolve = undefined;
+    this.resolve = undefined;
     resolve(result);
   }
 }

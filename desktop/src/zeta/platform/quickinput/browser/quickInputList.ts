@@ -15,19 +15,19 @@ export interface QuickInputListActiveChangeEvent<TItem> {
 export class QuickInputList<TItem extends IQuickPickItem>
   extends DisposableOwner {
   readonly element: HTMLDivElement;
-  readonly #empty: HTMLDivElement;
-  readonly #list: List<TItem>;
-  readonly #onDidAccept = this.own(new Emitter<TItem>());
-  readonly #onDidChangeActive =
+  private readonly empty: HTMLDivElement;
+  private readonly list: List<TItem>;
+  private readonly _onDidAccept = this.own(new Emitter<TItem>());
+  private readonly _onDidChangeActive =
     this.own(new Emitter<QuickInputListActiveChangeEvent<TItem>>());
-  #items: readonly TItem[] = [];
-  #visibleItems: readonly TItem[] = [];
-  #query = "";
+  private _items: readonly TItem[] = [];
+  private _visibleItems: readonly TItem[] = [];
+  private query = "";
 
-  readonly onDidAccept: Event<TItem> = this.#onDidAccept.event;
+  readonly onDidAccept: Event<TItem> = this._onDidAccept.event;
   readonly onDidChangeActive:
     Event<QuickInputListActiveChangeEvent<TItem>> =
-      this.#onDidChangeActive.event;
+      this._onDidChangeActive.event;
 
   constructor(ownerDocument: Document) {
     super();
@@ -35,78 +35,78 @@ export class QuickInputList<TItem extends IQuickPickItem>
     this.element.className = "zeta-quick-pick-list";
     this.defer(() => this.element.remove());
 
-    this.#list = this.own(new List<TItem>({
+    this.list = this.own(new List<TItem>({
       ownerDocument,
       ariaLabel: "Quick Pick results",
-      renderItem: (item) => this.#renderItem(item),
+      renderItem: (item) => this.renderItem(item),
     }));
-    this.#list.element.classList.add("zeta-quick-pick-list-items");
-    this.#empty = ownerDocument.createElement("div");
-    this.#empty.className = "zeta-quick-pick-empty";
-    setRole(this.#empty, "status");
-    this.#empty.textContent = "No matching results";
-    this.#empty.hidden = true;
-    this.element.append(this.#list.element, this.#empty);
+    this.list.element.classList.add("zeta-quick-pick-list-items");
+    this.empty = ownerDocument.createElement("div");
+    this.empty.className = "zeta-quick-pick-empty";
+    setRole(this.empty, "status");
+    this.empty.textContent = "No matching results";
+    this.empty.hidden = true;
+    this.element.append(this.list.element, this.empty);
 
-    this.own(this.#list.onDidAccept(({ item }) => {
-      this.#onDidAccept.fire(item);
+    this.own(this.list.onDidAccept(({ item }) => {
+      this._onDidAccept.fire(item);
     }));
-    this.own(this.#list.onDidChangeActive(({ item, rowId }) => {
-      this.#onDidChangeActive.fire({ item, rowId });
+    this.own(this.list.onDidChangeActive(({ item, rowId }) => {
+      this._onDidChangeActive.fire({ item, rowId });
     }));
   }
 
   get listId(): string {
-    return this.#list.element.id;
+    return this.list.element.id;
   }
 
   get items(): readonly TItem[] {
-    return this.#items;
+    return this._items;
   }
 
   set items(items: readonly TItem[]) {
-    this.#items = [...items];
-    this.#render();
+    this._items = [...items];
+    this.render();
   }
 
   get visibleItems(): readonly TItem[] {
-    return this.#visibleItems;
+    return this._visibleItems;
   }
 
   get activeItem(): TItem | undefined {
-    return this.#list.activeItem;
+    return this.list.activeItem;
   }
 
   filter(query: string): void {
-    if (this.#query === query) return;
-    this.#query = query;
-    this.#render();
+    if (this.query === query) return;
+    this.query = query;
+    this.render();
   }
 
   focusNext(): void {
-    this.#list.focusNext();
+    this.list.focusNext();
   }
 
   focusPrevious(): void {
-    this.#list.focusPrevious();
+    this.list.focusPrevious();
   }
 
   acceptActive(): void {
-    this.#list.acceptActive();
+    this.list.acceptActive();
   }
 
-  #render(): void {
-    this.#visibleItems = filterQuickPickItems(
-      this.#items,
-      this.#query,
+  private render(): void {
+    this._visibleItems = filterQuickPickItems(
+      this._items,
+      this.query,
     );
-    this.#list.items = this.#visibleItems;
-    const empty = this.#visibleItems.length === 0;
-    this.#list.element.hidden = empty;
-    this.#empty.hidden = !empty;
+    this.list.items = this._visibleItems;
+    const empty = this._visibleItems.length === 0;
+    this.list.element.hidden = empty;
+    this.empty.hidden = !empty;
   }
 
-  #renderItem(item: TItem): HTMLDivElement {
+  private renderItem(item: TItem): HTMLDivElement {
     const ownerDocument = this.element.ownerDocument;
     const content = ownerDocument.createElement("div");
     content.className = "zeta-quick-pick-row-content";

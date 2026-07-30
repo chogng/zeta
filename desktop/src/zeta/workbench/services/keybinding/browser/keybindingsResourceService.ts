@@ -23,32 +23,32 @@ export interface WorkbenchKeybindingsResourceServiceOptions {
 export class WorkbenchKeybindingsResourceService
   extends DisposableOwner
   implements IKeybindingsResourceService {
-  readonly #api: IKeybindingsResourceApi | undefined;
-  readonly #onError: (error: unknown) => void;
-  readonly #onDidChangeKeybindings = this.own(
+  private readonly api: IKeybindingsResourceApi | undefined;
+  private readonly onError: (error: unknown) => void;
+  private readonly _onDidChangeKeybindings = this.own(
     new Emitter<readonly IKeybindingEntry[]>(),
   );
-  #revision = 0;
-  #bindings: readonly IKeybindingEntry[] = [];
-  #hasAuthoritativeSnapshot: boolean;
-  #initialLoad: Promise<void> | undefined;
+  private revision = 0;
+  private bindings: readonly IKeybindingEntry[] = [];
+  private hasAuthoritativeSnapshot: boolean;
+  private initialLoad: Promise<void> | undefined;
 
   readonly onDidChangeKeybindings =
-    this.#onDidChangeKeybindings.event;
+    this._onDidChangeKeybindings.event;
 
   constructor(options: WorkbenchKeybindingsResourceServiceOptions = {}) {
     super();
-    this.#api = options.api;
-    this.#onError = options.onError ??
+    this.api = options.api;
+    this.onError = options.onError ??
       ((error) => console.error("Failed to apply keybindings resource", error));
-    this.#hasAuthoritativeSnapshot = this.#api === undefined;
+    this.hasAuthoritativeSnapshot = this.api === undefined;
 
-    if (this.#api) {
-      const subscription = this.#api.onDidChange((candidate) => {
+    if (this.api) {
+      const subscription = this.api.onDidChange((candidate) => {
         try {
-          this.#acceptSnapshot(validateKeybindingsResourceSnapshot(candidate));
+          this.acceptSnapshot(validateKeybindingsResourceSnapshot(candidate));
         } catch (error) {
-          this.#onError(error);
+          this.onError(error);
         }
       });
       this.own(toDisposable(() => subscription.dispose()));
@@ -56,76 +56,76 @@ export class WorkbenchKeybindingsResourceService
   }
 
   getKeybindings(): readonly IKeybindingEntry[] {
-    return this.#bindings;
+    return this.bindings;
   }
 
   async updateKeybindings(
     candidate: readonly IKeybindingEntry[],
   ): Promise<void> {
     const bindings = validateKeybindingsResource(candidate);
-    if (this.#api && !this.#hasAuthoritativeSnapshot) {
+    if (this.api && !this.hasAuthoritativeSnapshot) {
       await this.reload();
     }
-    if (!this.#api) {
-      this.#acceptSnapshot({
-        revision: this.#revision + 1,
+    if (!this.api) {
+      this.acceptSnapshot({
+        revision: this.revision + 1,
         bindings,
       });
       return;
     }
-    const result = await this.#api.update({
-      expectedRevision: this.#revision,
+    const result = await this.api.update({
+      expectedRevision: this.revision,
       bindings,
     });
-    this.#acceptSnapshot(validateKeybindingsResourceSnapshot(result));
+    this.acceptSnapshot(validateKeybindingsResourceSnapshot(result));
   }
 
   async reload(): Promise<void> {
-    if (!this.#api) return;
-    if (!this.#initialLoad) {
-      this.#initialLoad = this.#api.read()
+    if (!this.api) return;
+    if (!this.initialLoad) {
+      this.initialLoad = this.api.read()
         .then((candidate) => {
-          this.#acceptSnapshot(
+          this.acceptSnapshot(
             validateKeybindingsResourceSnapshot(candidate),
           );
         })
         .finally(() => {
-          this.#initialLoad = undefined;
+          this.initialLoad = undefined;
         });
     }
-    await this.#initialLoad;
+    await this.initialLoad;
   }
 
-  #acceptSnapshot(snapshot: IKeybindingsResourceSnapshot): void {
-    if (!this.#hasAuthoritativeSnapshot) {
-      this.#hasAuthoritativeSnapshot = true;
-      this.#applySnapshot(snapshot);
+  private acceptSnapshot(snapshot: IKeybindingsResourceSnapshot): void {
+    if (!this.hasAuthoritativeSnapshot) {
+      this.hasAuthoritativeSnapshot = true;
+      this.applySnapshot(snapshot);
       return;
     }
-    if (snapshot.revision < this.#revision) return;
+    if (snapshot.revision < this.revision) return;
     const serialized = JSON.stringify(snapshot.bindings);
     if (
-      snapshot.revision === this.#revision &&
-      serialized === JSON.stringify(this.#bindings)
+      snapshot.revision === this.revision &&
+      serialized === JSON.stringify(this.bindings)
     ) {
       return;
     }
-    if (snapshot.revision === this.#revision) {
+    if (snapshot.revision === this.revision) {
       throw new Error(
         "Keybindings resource changed without advancing its revision",
       );
     }
-    this.#applySnapshot(snapshot);
+    this.applySnapshot(snapshot);
   }
 
-  #applySnapshot(snapshot: IKeybindingsResourceSnapshot): void {
-    if (JSON.stringify(snapshot.bindings) === JSON.stringify(this.#bindings)) {
-      this.#revision = snapshot.revision;
-      this.#bindings = snapshot.bindings;
+  private applySnapshot(snapshot: IKeybindingsResourceSnapshot): void {
+    if (JSON.stringify(snapshot.bindings) === JSON.stringify(this.bindings)) {
+      this.revision = snapshot.revision;
+      this.bindings = snapshot.bindings;
       return;
     }
-    this.#revision = snapshot.revision;
-    this.#bindings = snapshot.bindings;
-    this.#onDidChangeKeybindings.fire(this.#bindings);
+    this.revision = snapshot.revision;
+    this.bindings = snapshot.bindings;
+    this._onDidChangeKeybindings.fire(this.bindings);
   }
 }

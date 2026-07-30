@@ -117,8 +117,8 @@ class TestTerminalProcessService implements ITerminalProcessService {
   readonly resizeCalls: Array<{ terminalId: string; rows: number; cols: number }> = [];
   readonly readCursors: number[] = [];
   readonly closeCalls: string[] = [];
-  readonly #connectionListeners = new Set<(state: TerminalProcessConnectionState) => void>();
-  #connectionState: TerminalProcessConnectionState = "ready";
+  private readonly connectionListeners = new Set<(state: TerminalProcessConnectionState) => void>();
+  private connectionState: TerminalProcessConnectionState = "ready";
 
   constructor(private readonly reads: ITerminalProcessReadResult[]) {}
 
@@ -152,17 +152,17 @@ class TestTerminalProcessService implements ITerminalProcessService {
   }
 
   async getConnectionState(): Promise<TerminalProcessConnectionState> {
-    return this.#connectionState;
+    return this.connectionState;
   }
 
   onConnectionState(listener: (state: TerminalProcessConnectionState) => void) {
-    this.#connectionListeners.add(listener);
-    return toDisposable(() => this.#connectionListeners.delete(listener));
+    this.connectionListeners.add(listener);
+    return toDisposable(() => this.connectionListeners.delete(listener));
   }
 
   emitConnectionState(state: TerminalProcessConnectionState): void {
-    this.#connectionState = state;
-    for (const listener of this.#connectionListeners) listener(state);
+    this.connectionState = state;
+    for (const listener of this.connectionListeners) listener(state);
   }
 }
 

@@ -39,23 +39,23 @@ export type WorkbenchContextMenuServiceFactory = (
 export class WorkbenchContextMenuService
   extends DisposableOwner
   implements IContextMenuService {
-  readonly #implementation: IContextMenuService;
+  private readonly implementation: IContextMenuService;
 
   readonly onDidShowContextMenu: Event<void>;
   readonly onDidHideContextMenu: Event<void>;
 
   constructor(implementation: IContextMenuService & IDisposable) {
     super();
-    this.#implementation = this.own(implementation);
+    this.implementation = this.own(implementation);
     this.onDidShowContextMenu = implementation.onDidShowContextMenu;
     this.onDidHideContextMenu = implementation.onDidHideContextMenu;
   }
 
   showContextMenu(options: ContextMenuOptions): void {
-    this.#implementation.showContextMenu(options);
+    this.implementation.showContextMenu(options);
   }
 
   hideContextMenu(): void {
-    this.#implementation.hideContextMenu();
+    this.implementation.hideContextMenu();
   }
 }

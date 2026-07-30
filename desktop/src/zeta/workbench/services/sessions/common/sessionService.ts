@@ -54,46 +54,46 @@ export const IWorkbenchSessionService =
 export class WorkbenchSessionService
   extends DisposableOwner
   implements IWorkbenchSessionService {
-  readonly #api: ZetaRendererApi;
-  readonly #onDidChange = this.own(new Emitter<void>());
-  #sessions: readonly Session[] = [];
-  #active: IActiveSessionThread | undefined;
-  #state: WorkbenchSessionState = "loading";
-  #error: string | undefined;
-  #initializePromise: Promise<void> | undefined;
+  private readonly api: ZetaRendererApi;
+  private readonly _onDidChange = this.own(new Emitter<void>());
+  private _sessions: readonly Session[] = [];
+  private _active: IActiveSessionThread | undefined;
+  private _state: WorkbenchSessionState = "loading";
+  private _error: string | undefined;
+  private initializePromise: Promise<void> | undefined;
 
-  readonly onDidChange = this.#onDidChange.event;
+  readonly onDidChange = this._onDidChange.event;
 
   constructor(api: ZetaRendererApi) {
     super();
-    this.#api = api;
+    this.api = api;
   }
 
   get sessions(): readonly Session[] {
-    return this.#sessions;
+    return this._sessions;
   }
 
   get active(): IActiveSessionThread | undefined {
-    return this.#active;
+    return this._active;
   }
 
   get state(): WorkbenchSessionState {
-    return this.#state;
+    return this._state;
   }
 
   get error(): string | undefined {
-    return this.#error;
+    return this._error;
   }
 
   initialize(): Promise<void> {
-    if (!this.#initializePromise || this.#state === "error") {
-      this.#initializePromise = this.#loadSessions();
+    if (!this.initializePromise || this._state === "error") {
+      this.initializePromise = this.loadSessions();
     }
-    return this.#initializePromise;
+    return this.initializePromise;
   }
 
   selectThread(sessionId: SessionId, threadId: ThreadId): void {
-    const session = this.#sessions.find(
+    const session = this._sessions.find(
       (candidate) => candidate.sessionId === sessionId,
     );
     const thread = session?.threads.find(
@@ -105,56 +105,56 @@ export class WorkbenchSessionService
       throw new Error(`Active Session Thread is not available: ${threadId}`);
     }
     if (
-      this.#active?.session.sessionId === sessionId &&
-      this.#active.threadId === threadId
+      this._active?.session.sessionId === sessionId &&
+      this._active.threadId === threadId
     ) return;
-    this.#active = { session, threadId };
-    this.#error = undefined;
-    this.#onDidChange.fire();
+    this._active = { session, threadId };
+    this._error = undefined;
+    this._onDidChange.fire();
   }
 
   async ensureActiveThread(): Promise<IActiveSessionThread> {
     await this.initialize();
-    return this.#active ?? this.startNewSession();
+    return this._active ?? this.startNewSession();
   }
 
   async startNewSession(
     title = "New Chat",
   ): Promise<IActiveSessionThread> {
-    this.#setState("creating");
+    this.setState("creating");
     try {
-      const created = await this.#api.session.create({
+      const created = await this.api.session.create({
         commandId: commandId("session"),
         title,
       });
-      const thread = await this.#api.session.createThread({
+      const thread = await this.api.session.createThread({
         commandId: commandId("thread"),
         sessionId: created.session.sessionId,
         expectedSequence: created.session.sequence,
         title: "Main",
       });
-      this.#sessions = [
+      this._sessions = [
         thread.session,
-        ...this.#sessions.filter(
+        ...this._sessions.filter(
           (session) =>
             session.sessionId !== thread.session.sessionId,
         ),
       ];
-      this.#active = {
+      this._active = {
         session: thread.session,
         threadId: thread.threadId,
       };
-      this.#setState("ready");
-      return this.#active;
+      this.setState("ready");
+      return this._active;
     } catch (error) {
-      this.#setError(error);
+      this.setError(error);
       throw error;
     }
   }
 
   async archiveSession(sessionId: SessionId): Promise<void> {
     await this.initialize();
-    const session = this.#sessions.find(
+    const session = this._sessions.find(
       (candidate) =>
         candidate.sessionId === sessionId &&
         candidate.status === "active",
@@ -162,73 +162,73 @@ export class WorkbenchSessionService
     if (!session) {
       throw new Error(`Active Session is not available: ${sessionId}`);
     }
-    this.#setState("archiving");
+    this.setState("archiving");
     try {
-      const result = await this.#api.session.archive({
+      const result = await this.api.session.archive({
         commandId: commandId("archive-session"),
         sessionId,
         expectedSequence: session.sequence,
       });
-      this.#sessions = this.#sessions.map((candidate) =>
+      this._sessions = this._sessions.map((candidate) =>
         candidate.sessionId === sessionId ? result.session : candidate
       );
-      if (this.#active?.session.sessionId === sessionId) {
-        this.#active = firstActiveThread(this.#sessions);
+      if (this._active?.session.sessionId === sessionId) {
+        this._active = firstActiveThread(this._sessions);
       }
-      this.#setState("ready");
+      this.setState("ready");
     } catch (error) {
-      this.#setError(error);
+      this.setError(error);
       throw error;
     }
   }
 
   async setModel(sessionId: SessionId, model: ModelRef): Promise<void> {
     await this.initialize();
-    const session = this.#sessions.find((candidate) => candidate.sessionId === sessionId && candidate.status === "active");
+    const session = this._sessions.find((candidate) => candidate.sessionId === sessionId && candidate.status === "active");
     if (!session) throw new Error(`Active Session is not available: ${sessionId}`);
     try {
-      const result = await this.#api.session.setModel({
+      const result = await this.api.session.setModel({
         commandId: commandId("session-model"),
         sessionId,
         expectedSequence: session.sequence,
         model,
       });
-      this.#sessions = this.#sessions.map((candidate) => candidate.sessionId === sessionId ? result.session : candidate);
-      if (this.#active?.session.sessionId === sessionId) {
-        this.#active = { session: result.session, threadId: this.#active.threadId };
+      this._sessions = this._sessions.map((candidate) => candidate.sessionId === sessionId ? result.session : candidate);
+      if (this._active?.session.sessionId === sessionId) {
+        this._active = { session: result.session, threadId: this._active.threadId };
       }
-      this.#error = undefined;
-      this.#onDidChange.fire();
+      this._error = undefined;
+      this._onDidChange.fire();
     } catch (error) {
-      this.#setError(error);
+      this.setError(error);
       throw error;
     }
   }
 
-  async #loadSessions(): Promise<void> {
-    this.#setState("loading");
+  private async loadSessions(): Promise<void> {
+    this.setState("loading");
     try {
-      const result = await this.#api.session.list();
-      this.#sessions = result.sessions;
-      this.#active = firstActiveThread(this.#sessions);
-      this.#setState("ready");
+      const result = await this.api.session.list();
+      this._sessions = result.sessions;
+      this._active = firstActiveThread(this._sessions);
+      this.setState("ready");
     } catch (error) {
-      this.#setError(error);
+      this.setError(error);
     }
   }
 
-  #setState(state: WorkbenchSessionState): void {
-    this.#state = state;
-    this.#error = undefined;
-    this.#onDidChange.fire();
+  private setState(state: WorkbenchSessionState): void {
+    this._state = state;
+    this._error = undefined;
+    this._onDidChange.fire();
   }
 
-  #setError(error: unknown): void {
-    this.#state = "error";
-    this.#error = error instanceof Error
+  private setError(error: unknown): void {
+    this._state = "error";
+    this._error = error instanceof Error
       ? error.message
       : "Unable to load sessions.";
-    this.#onDidChange.fire();
+    this._onDidChange.fire();
   }
 }
 

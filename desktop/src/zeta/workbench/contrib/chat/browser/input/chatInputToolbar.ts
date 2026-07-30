@@ -36,36 +36,36 @@ type ChatInputToolbarPresentation = "mode" | "model" | "attachment" | "send" | "
 /** Owns the fixed actions and selector state shown beneath the Chat editor. */
 export class ChatInputToolbar extends DisposableOwner {
   readonly element: HTMLElement;
-  readonly #toolbar: WorkbenchToolBar;
-  readonly #delegate: ChatInputToolbarDelegate;
-  #mode: ChatInputMode = "agent";
-  #state: ChatInputToolbarState = { canSubmit: false, canInterrupt: false, models: [] };
+  private readonly toolbar: WorkbenchToolBar;
+  private readonly delegate: ChatInputToolbarDelegate;
+  private mode: ChatInputMode = "agent";
+  private state: ChatInputToolbarState = { canSubmit: false, canInterrupt: false, models: [] };
 
   constructor(ownerDocument: Document, contextMenuService: IContextMenuService, delegate: ChatInputToolbarDelegate) {
     super();
-    this.#delegate = delegate;
-    this.#toolbar = this.own(new WorkbenchToolBar(contextMenuService, ownerDocument, {
+    this.delegate = delegate;
+    this.toolbar = this.own(new WorkbenchToolBar(contextMenuService, ownerDocument, {
       ariaLabel: "Chat input actions",
-      actionViewItemProvider: (action) => this.#createViewItem(action, contextMenuService),
+      actionViewItemProvider: (action) => this.createViewItem(action, contextMenuService),
     }));
-    this.element = this.#toolbar.element;
+    this.element = this.toolbar.element;
     this.element.classList.add("zeta-chat-input-toolbar");
-    this.#render();
+    this._render();
   }
 
   render(state: ChatInputToolbarState): void {
     if (
-      state.canSubmit === this.#state.canSubmit &&
-      state.canInterrupt === this.#state.canInterrupt &&
-      state.models === this.#state.models &&
-      sameModel(state.selectedModel, this.#state.selectedModel)
+      state.canSubmit === this.state.canSubmit &&
+      state.canInterrupt === this.state.canInterrupt &&
+      state.models === this.state.models &&
+      sameModel(state.selectedModel, this.state.selectedModel)
     ) return;
-    this.#state = state;
-    this.#render();
+    this.state = state;
+    this._render();
   }
 
-  #render(): void {
-    const mode = modeOptions.find((option) => option.id === this.#mode) ?? modeOptions[0]!;
+  private _render(): void {
+    const mode = modeOptions.find((option) => option.id === this.mode) ?? modeOptions[0]!;
     const modeAction = new SelectorAction(
       "zeta.chat.input.mode",
       mode.label,
@@ -80,30 +80,30 @@ export class ChatInputToolbar extends DisposableOwner {
         true,
         "mode",
         () => {
-          this.#mode = option.id;
-          this.#render();
+          this.mode = option.id;
+          this._render();
         },
-        option.id === this.#mode,
+        option.id === this.mode,
       )),
     );
-    const selectedModel = this.#state.models.find((entry) => sameModel(entry.model, this.#state.selectedModel));
+    const selectedModel = this.state.models.find((entry) => sameModel(entry.model, this.state.selectedModel));
     const modelAction = new SelectorAction(
       "zeta.chat.input.model",
       selectedModel?.displayName ?? "Model",
       selectedModel ? `Model: ${selectedModel.displayName}` : "Select model",
       lxiconsLibrary.model,
       "model",
-      this.#state.models.map((entry) => new ChatInputAction(
+      this.state.models.map((entry) => new ChatInputAction(
         `zeta.chat.input.model.${entry.model.provider}.${entry.model.model}`,
         entry.displayName,
         `Use ${entry.displayName}`,
         undefined,
         true,
         "model",
-        () => this.#delegate.selectModel(entry.model),
-        sameModel(entry.model, this.#state.selectedModel),
+        () => this.delegate.selectModel(entry.model),
+        sameModel(entry.model, this.state.selectedModel),
       )),
-      this.#state.models.length > 0,
+      this.state.models.length > 0,
     );
     const attachmentAction = new ChatInputAction(
       "zeta.chat.input.attachment",
@@ -114,7 +114,7 @@ export class ChatInputToolbar extends DisposableOwner {
       "attachment",
       () => {},
     );
-    const trailingAction = this.#state.canInterrupt
+    const trailingAction = this.state.canInterrupt
       ? new ChatInputAction(
         "zeta.chat.input.interrupt",
         "Stop",
@@ -122,21 +122,21 @@ export class ChatInputToolbar extends DisposableOwner {
         lxiconsLibrary.close,
         true,
         "interrupt",
-        () => this.#delegate.interrupt(),
+        () => this.delegate.interrupt(),
       )
       : new ChatInputAction(
         "zeta.chat.input.send",
         "Send",
         "Send message",
         lxiconsLibrary.arrowUp,
-        this.#state.canSubmit,
+        this.state.canSubmit,
         "send",
-        () => this.#delegate.submit(),
+        () => this.delegate.submit(),
       );
-    this.#toolbar.setActions([modeAction, modelAction, attachmentAction, trailingAction]);
+    this.toolbar.setActions([modeAction, modelAction, attachmentAction, trailingAction]);
   }
 
-  #createViewItem(action: IAction, contextMenuService: IContextMenuService): ActionViewItem | undefined {
+  private createViewItem(action: IAction, contextMenuService: IContextMenuService): ActionViewItem | undefined {
     if (!(action instanceof ChatInputAction)) return undefined;
     if (action instanceof SelectorAction) {
       return new ChatInputSelectorViewItem(action, contextMenuService);
@@ -176,29 +176,29 @@ function sameModel(left: ModelRef | undefined, right: ModelRef | undefined): boo
 }
 
 class ChatInputSelectorViewItem extends DropdownMenuActionViewItem {
-  readonly #presentation: "mode" | "model";
+  private readonly presentation: "mode" | "model";
 
   constructor(action: SelectorAction, contextMenuService: IContextMenuService) {
     super(action, action.actions, contextMenuService);
-    this.#presentation = action.presentation as "mode" | "model";
+    this.presentation = action.presentation as "mode" | "model";
   }
 
   override render(container: HTMLElement): void {
     super.render(container);
-    container.classList.add("zeta-chat-input-selector", `zeta-chat-input-${this.#presentation}-selector`);
+    container.classList.add("zeta-chat-input-selector", `zeta-chat-input-${this.presentation}-selector`);
   }
 }
 
 class ChatInputButtonViewItem extends ButtonActionViewItem {
-  readonly #presentation: ChatInputToolbarPresentation;
+  private readonly presentation: ChatInputToolbarPresentation;
 
   constructor(action: ChatInputAction) {
     super(action);
-    this.#presentation = action.presentation;
+    this.presentation = action.presentation;
   }
 
   override render(container: HTMLElement): void {
     super.render(container);
-    container.classList.add(`zeta-chat-input-${this.#presentation}`);
+    container.classList.add(`zeta-chat-input-${this.presentation}`);
   }
 }

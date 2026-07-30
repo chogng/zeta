@@ -11,23 +11,23 @@ export class BrowserContextViewService
   extends DisposableOwner
   implements IContextViewService {
   readonly container: HTMLElement;
-  readonly #contextView: ContextView;
+  private readonly contextView: ContextView;
 
   constructor(container: HTMLElement) {
     super();
     this.container = container;
-    this.#contextView = this.own(new ContextView(container));
+    this.contextView = this.own(new ContextView(container));
   }
 
   show(options: ContextViewOptions): boolean {
-    return this.#contextView.show(options);
+    return this.contextView.show(options);
   }
 
   hide(reason?: ContextViewHideReason): void {
-    this.#contextView.hide(reason);
+    this.contextView.hide(reason);
   }
 
   layout(): void {
-    this.#contextView.layout();
+    this.contextView.layout();
   }
 }

@@ -6,38 +6,38 @@ import type { ISettingsService } from "./settings.js";
 export class SettingsService
   extends DisposableOwner
   implements ISettingsService {
-  readonly #onDidChangeVisibility = this.own(new Emitter<boolean>());
-  readonly #onDidChangeActiveSection = this.own(new Emitter<string>());
-  #isOpen = false;
-  #activeSectionId = "general";
+  private readonly _onDidChangeVisibility = this.own(new Emitter<boolean>());
+  private readonly _onDidChangeActiveSection = this.own(new Emitter<string>());
+  private _isOpen = false;
+  private _activeSectionId = "general";
 
-  readonly onDidChangeVisibility = this.#onDidChangeVisibility.event;
-  readonly onDidChangeActiveSection = this.#onDidChangeActiveSection.event;
+  readonly onDidChangeVisibility = this._onDidChangeVisibility.event;
+  readonly onDidChangeActiveSection = this._onDidChangeActiveSection.event;
 
   get isOpen(): boolean {
-    return this.#isOpen;
+    return this._isOpen;
   }
 
   get activeSectionId(): string {
-    return this.#activeSectionId;
+    return this._activeSectionId;
   }
 
   open(sectionId?: string): void {
-    if (sectionId !== undefined && sectionId !== this.#activeSectionId) {
+    if (sectionId !== undefined && sectionId !== this._activeSectionId) {
       if (sectionId.length === 0) {
         throw new TypeError("Settings section ID must not be empty");
       }
-      this.#activeSectionId = sectionId;
-      this.#onDidChangeActiveSection.fire(sectionId);
+      this._activeSectionId = sectionId;
+      this._onDidChangeActiveSection.fire(sectionId);
     }
-    if (this.#isOpen) return;
-    this.#isOpen = true;
-    this.#onDidChangeVisibility.fire(true);
+    if (this._isOpen) return;
+    this._isOpen = true;
+    this._onDidChangeVisibility.fire(true);
   }
 
   close(): void {
-    if (!this.#isOpen) return;
-    this.#isOpen = false;
-    this.#onDidChangeVisibility.fire(false);
+    if (!this._isOpen) return;
+    this._isOpen = false;
+    this._onDidChangeVisibility.fire(false);
   }
 }

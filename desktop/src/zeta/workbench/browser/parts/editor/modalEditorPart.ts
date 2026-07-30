@@ -24,19 +24,19 @@ let nextModalEditorId = 1;
 export class ModalEditorPart extends DisposableOwner {
   readonly element: HTMLElement;
   readonly onDidRequestClose: Event<void>;
-  readonly #host: HTMLDivElement;
-  readonly #focusContent: () => void;
-  readonly #onDidRequestClose = this.own(new Emitter<void>());
-  #focusToRestore: HTMLElement | undefined;
-  #visible = false;
+  private readonly host: HTMLDivElement;
+  private readonly focusContent: () => void;
+  private readonly _onDidRequestClose = this.own(new Emitter<void>());
+  private focusToRestore: HTMLElement | undefined;
+  private visible = false;
 
   constructor(options: ModalEditorPartOptions) {
     super();
-    this.#focusContent = options.focusContent;
+    this.focusContent = options.focusContent;
     const ownerDocument = options.container.ownerDocument;
-    this.#host = ownerDocument.createElement("div");
-    this.#host.className = "zeta-modal-editor-host";
-    this.#host.hidden = true;
+    this.host = ownerDocument.createElement("div");
+    this.host.className = "zeta-modal-editor-host";
+    this.host.hidden = true;
 
     this.element = ownerDocument.createElement("section");
     this.element.className = "zeta-modal-editor";
@@ -56,7 +56,7 @@ export class ModalEditorPart extends DisposableOwner {
       title: `Close ${options.title}`,
       icon: lxiconsLibrary.close,
       ownerDocument,
-      onClick: () => this.#requestClose(),
+      onClick: () => this.requestClose(),
     }));
     closeButton.element.classList.add("zeta-modal-editor-close");
     header.append(heading, closeButton.element);
@@ -65,60 +65,60 @@ export class ModalEditorPart extends DisposableOwner {
     content.className = "zeta-modal-editor-content";
     content.append(options.content);
     this.element.append(header, content);
-    this.#host.append(this.element);
-    options.container.append(this.#host);
+    this.host.append(this.element);
+    options.container.append(this.host);
 
-    this.onDidRequestClose = this.#onDidRequestClose.event;
+    this.onDidRequestClose = this._onDidRequestClose.event;
     this.own(trapTabFocus(this.element));
-    this.own(addDisposableListener(this.#host, "mousedown", (event: MouseEvent) => {
-      if (event.target !== this.#host) return;
+    this.own(addDisposableListener(this.host, "mousedown", (event: MouseEvent) => {
+      if (event.target !== this.host) return;
       stopEvent(event);
-      this.#requestClose();
+      this.requestClose();
     }));
     this.own(addDisposableListener(this.element, "keydown", (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.isComposing || event.key !== "Escape") return;
       stopEvent(event);
-      this.#requestClose();
+      this.requestClose();
     }));
     this.defer(() => {
       this.hide();
-      this.#host.remove();
+      this.host.remove();
     });
   }
 
   get isVisible(): boolean {
-    return this.#visible;
+    return this.visible;
   }
 
   show(): void {
-    if (this.#visible) {
-      this.#focusEditorContent();
+    if (this.visible) {
+      this.focusEditorContent();
       return;
     }
     const activeElement = this.element.ownerDocument.activeElement;
-    this.#focusToRestore = isHTMLElement(activeElement) ? activeElement : undefined;
-    this.#visible = true;
-    this.#host.hidden = false;
-    this.#focusEditorContent();
+    this.focusToRestore = isHTMLElement(activeElement) ? activeElement : undefined;
+    this.visible = true;
+    this.host.hidden = false;
+    this.focusEditorContent();
   }
 
   hide(): void {
-    if (!this.#visible) return;
-    this.#visible = false;
-    this.#host.hidden = true;
-    const focusToRestore = this.#focusToRestore;
-    this.#focusToRestore = undefined;
+    if (!this.visible) return;
+    this.visible = false;
+    this.host.hidden = true;
+    const focusToRestore = this.focusToRestore;
+    this.focusToRestore = undefined;
     if (focusToRestore) restoreFocus(focusToRestore);
   }
 
-  #focusEditorContent(): void {
-    this.#focusContent();
+  private focusEditorContent(): void {
+    this.focusContent();
     if (!this.element.contains(this.element.ownerDocument.activeElement)) {
       if (!focusFirst(this.element)) this.element.focus();
     }
   }
 
-  #requestClose(): void {
-    this.#onDidRequestClose.fire();
+  private requestClose(): void {
+    this._onDidRequestClose.fire();
   }
 }

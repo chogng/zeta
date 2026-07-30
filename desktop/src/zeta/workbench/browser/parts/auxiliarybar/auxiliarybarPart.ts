@@ -10,7 +10,7 @@ import { ViewPaneContainer } from "../views/viewPaneContainer.js";
  * only Workbench layout, visibility, and the container lifetime.
  */
 export class AuxiliarybarPart extends WorkbenchPart {
-  readonly #viewPaneContainer =
+  private readonly viewPaneContainer =
     this.own(new DisposableSlot<ViewPaneContainer>());
 
   override get minimumWidth(): number { return 180; }
@@ -24,7 +24,7 @@ export class AuxiliarybarPart extends WorkbenchPart {
   }
 
   setViewPaneContainer(container: ViewPaneContainer): void {
-    this.#viewPaneContainer.replace(container);
+    this.viewPaneContainer.replace(container);
     this.contentElement.replaceChildren(container.element);
   }
 }

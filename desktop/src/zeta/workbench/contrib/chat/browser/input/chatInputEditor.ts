@@ -27,34 +27,34 @@ export interface IChatInputEditorProvider {
 
 /** Selects one optional rich Chat editor while retaining a textarea fallback. */
 export class ChatInputEditorRegistry {
-  #provider: IChatInputEditorProvider | undefined;
+  private provider: IChatInputEditorProvider | undefined;
 
   register(provider: IChatInputEditorProvider): IDisposable {
-    this.#add(provider);
+    this.add(provider);
     return toDisposable(() => {
-      if (this.#provider === provider) this.#provider = undefined;
+      if (this.provider === provider) this.provider = undefined;
     });
   }
 
   /** Registers a provider that intentionally lives for the module realm. */
   registerStatic(provider: IChatInputEditorProvider): void {
-    this.#add(provider);
+    this.add(provider);
   }
 
   create(options: ChatInputEditorOptions): IChatInputEditor {
-    return this.#provider?.create(options) ?? new TextareaChatInputEditor(options);
+    return this.provider?.create(options) ?? new TextareaChatInputEditor(options);
   }
 
   get activeProviderId(): string {
-    return this.#provider?.id ?? "textarea";
+    return this.provider?.id ?? "textarea";
   }
 
-  #add(provider: IChatInputEditorProvider): void {
+  private add(provider: IChatInputEditorProvider): void {
     validateProvider(provider);
-    if (this.#provider) {
-      throw new Error(`Chat input editor is already registered: ${this.#provider.id}`);
+    if (this.provider) {
+      throw new Error(`Chat input editor is already registered: ${this.provider.id}`);
     }
-    this.#provider = provider;
+    this.provider = provider;
   }
 }
 
@@ -63,10 +63,10 @@ export const ChatInputEditors = new ChatInputEditorRegistry();
 
 class TextareaChatInputEditor extends DisposableOwner implements IChatInputEditor {
   readonly element: HTMLTextAreaElement;
-  readonly #onDidChange = this.own(new Emitter<string>());
-  readonly #onDidSubmit = this.own(new Emitter<void>());
-  readonly onDidChange = this.#onDidChange.event;
-  readonly onDidSubmit = this.#onDidSubmit.event;
+  private readonly _onDidChange = this.own(new Emitter<string>());
+  private readonly _onDidSubmit = this.own(new Emitter<void>());
+  readonly onDidChange = this._onDidChange.event;
+  readonly onDidSubmit = this._onDidSubmit.event;
 
   constructor(options: ChatInputEditorOptions) {
     super();
@@ -76,12 +76,12 @@ class TextareaChatInputEditor extends DisposableOwner implements IChatInputEdito
     this.element.placeholder = options.placeholder;
     this.element.setAttribute("aria-label", options.ariaLabel);
     options.container.append(this.element);
-    this.own(addDisposableListener(this.element, "input", () => this.#onDidChange.fire(this.value)));
+    this.own(addDisposableListener(this.element, "input", () => this._onDidChange.fire(this.value)));
     this.own(addDisposableListener(this.element, "keydown", (event) => {
       if (event.key !== "Enter" || event.shiftKey || event.isComposing) return;
       event.preventDefault();
       event.stopPropagation();
-      this.#onDidSubmit.fire();
+      this._onDidSubmit.fire();
     }));
     this.defer(() => this.element.remove());
   }
@@ -93,7 +93,7 @@ class TextareaChatInputEditor extends DisposableOwner implements IChatInputEdito
   set value(value: string) {
     if (this.element.value === value) return;
     this.element.value = value;
-    this.#onDidChange.fire(value);
+    this._onDidChange.fire(value);
   }
 
   focus(): void {

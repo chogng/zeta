@@ -105,22 +105,22 @@ export interface ZetaApplicationOptions {
  * Owns the Electron application's services, primary window, IPC, and shutdown.
  */
 export class ZetaApplication extends DisposableOwner {
-  readonly #product: ProductConfiguration;
-  readonly #rendererRoot: string;
-  readonly #disposableTracker: DisposableTracker | undefined;
-  readonly #tracking: Disposable | undefined;
+  private readonly product: ProductConfiguration;
+  private readonly rendererRoot: string;
+  private readonly disposableTracker: DisposableTracker | undefined;
+  private readonly tracking: Disposable | undefined;
 
-  #supervisor: AppServerSupervisor | undefined;
-  #mainWindow: BrowserWindow | undefined;
-  #stateService: StateService | undefined;
-  #configurationService: ConfigurationMainService | undefined;
-  #keybindingsResourceService: KeybindingsResourceMainService | undefined;
-  #windowsStateHandler: WindowsStateHandler | undefined;
-  #windowStateTracking: IDisposable | undefined;
-  #closePersistentServicesPromise: Promise<void> | undefined;
-  #quitRequested = false;
-  #quitAfterStateSaved = false;
-  #quitSaveStarted = false;
+  private supervisor: AppServerSupervisor | undefined;
+  private mainWindow: BrowserWindow | undefined;
+  private stateService: StateService | undefined;
+  private configurationService: ConfigurationMainService | undefined;
+  private keybindingsResourceService: KeybindingsResourceMainService | undefined;
+  private windowsStateHandler: WindowsStateHandler | undefined;
+  private windowStateTracking: IDisposable | undefined;
+  private closePersistentServicesPromise: Promise<void> | undefined;
+  private quitRequested = false;
+  private quitAfterStateSaved = false;
+  private quitSaveStarted = false;
 
   private constructor(
     options: ZetaApplicationOptions,
@@ -128,16 +128,16 @@ export class ZetaApplication extends DisposableOwner {
     tracking: Disposable | undefined,
   ) {
     super();
-    this.#product = options.product;
-    this.#rendererRoot = options.rendererRoot;
-    this.#disposableTracker = disposableTracker;
-    this.#tracking = tracking;
+    this.product = options.product;
+    this.rendererRoot = options.rendererRoot;
+    this.disposableTracker = disposableTracker;
+    this.tracking = tracking;
 
-    app.on("before-quit", this.#onBeforeQuit);
-    app.on("will-quit", this.#onWillQuit);
+    app.on("before-quit", this.onBeforeQuit);
+    app.on("will-quit", this.onWillQuit);
     this.defer(() => {
-      app.removeListener("before-quit", this.#onBeforeQuit);
-      app.removeListener("will-quit", this.#onWillQuit);
+      app.removeListener("before-quit", this.onBeforeQuit);
+      app.removeListener("will-quit", this.onWillQuit);
     });
   }
 
@@ -159,10 +159,10 @@ export class ZetaApplication extends DisposableOwner {
       Menu.setApplicationMenu(null);
     }
 
-    await this.#createPersistentServices();
-    const workspace = await this.#resolveWorkspace();
-    this.#windowsStateHandler = new WindowsStateHandler({
-      stateService: this.#stateService!,
+    await this.createPersistentServices();
+    const workspace = await this.resolveWorkspace();
+    this.windowsStateHandler = new WindowsStateHandler({
+      stateService: this.stateService!,
       workspace,
       displayService: {
         getAllDisplays: () => screen.getAllDisplays(),
@@ -173,36 +173,36 @@ export class ZetaApplication extends DisposableOwner {
       },
     });
 
-    const supervisor = this.own(this.#createAppServerSupervisor(workspace));
-    this.#supervisor = supervisor;
-    const appServerReady = await this.#startAppServerWithRecovery(supervisor);
+    const supervisor = this.own(this.createAppServerSupervisor(workspace));
+    this.supervisor = supervisor;
+    const appServerReady = await this.startAppServerWithRecovery(supervisor);
     if (!appServerReady) {
       return;
     }
-    await this.#openFirstWindow(workspace, supervisor);
+    await this.openFirstWindow(workspace, supervisor);
   }
 
   async disposeAfterStartupFailure(): Promise<void> {
-    this.#supervisor?.dispose();
+    this.supervisor?.dispose();
     try {
-      await this.#closePersistentServices();
+      await this.closePersistentServices();
     } finally {
       this.dispose();
-      this.#releaseDisposableTracker();
+      this.releaseDisposableTracker();
     }
   }
 
-  async #createPersistentServices(): Promise<void> {
-    this.#stateService = await StateService.create(
+  private async createPersistentServices(): Promise<void> {
+    this.stateService = await StateService.create(
       join(app.getPath("userData"), "state.json"),
     );
-    this.#configurationService = await ConfigurationMainService.create({
+    this.configurationService = await ConfigurationMainService.create({
       filePath: join(app.getPath("userData"), "configuration.json"),
       onError: (error) => {
         console.error("Failed to process configuration", error);
       },
     });
-    this.#keybindingsResourceService =
+    this.keybindingsResourceService =
       await KeybindingsResourceMainService.create({
         filePath: join(app.getPath("userData"), "keybindings.json"),
         onError: (error) => {
@@ -210,12 +210,12 @@ export class ZetaApplication extends DisposableOwner {
         },
       });
     await migrateLegacyKeybindings(
-      this.#configurationService,
-      this.#keybindingsResourceService,
+      this.configurationService,
+      this.keybindingsResourceService,
     );
   }
 
-  async #resolveWorkspace(): Promise<IAnyWorkspaceIdentifier> {
+  private async resolveWorkspace(): Promise<IAnyWorkspaceIdentifier> {
     try {
       return await new WorkspacesMainService().resolveStartupWorkspace({
         arguments: process.argv.slice(app.isPackaged ? 1 : 2),
@@ -227,7 +227,7 @@ export class ZetaApplication extends DisposableOwner {
     }
   }
 
-  #createAppServerSupervisor(
+  private createAppServerSupervisor(
     workspace: IAnyWorkspaceIdentifier,
   ): AppServerSupervisor {
     const executable = appServerExecutablePath({
@@ -259,16 +259,16 @@ export class ZetaApplication extends DisposableOwner {
     });
   }
 
-  async #startAppServerWithRecovery(
+  private async startAppServerWithRecovery(
     supervisor: AppServerSupervisor,
   ): Promise<boolean> {
-    while (!this.#quitRequested) {
+    while (!this.quitRequested) {
       try {
         await supervisor.start();
         return true;
       } catch (error) {
         console.error("App Server failed the startup gate", error);
-        if (this.#quitRequested) {
+        if (this.quitRequested) {
           return false;
         }
 
@@ -281,7 +281,7 @@ export class ZetaApplication extends DisposableOwner {
           : message;
         const result = await dialog.showMessageBox({
           type: "error",
-          title: `${this.#product.name} startup failed`,
+          title: `${this.product.name} startup failed`,
           message: "The App Server could not be validated.",
           detail,
           buttons: ["Retry", "Quit"],
@@ -289,8 +289,8 @@ export class ZetaApplication extends DisposableOwner {
           cancelId: 1,
           noLink: true,
         });
-        if (this.#quitRequested || result.response !== 0) {
-          if (!this.#quitRequested) {
+        if (this.quitRequested || result.response !== 0) {
+          if (!this.quitRequested) {
             app.quit();
           }
           return false;
@@ -301,11 +301,11 @@ export class ZetaApplication extends DisposableOwner {
     return false;
   }
 
-  async #openFirstWindow(
+  private async openFirstWindow(
     workspace: IAnyWorkspaceIdentifier,
     supervisor: AppServerSupervisor,
   ): Promise<void> {
-    const windowsStateHandler = this.#windowsStateHandler!;
+    const windowsStateHandler = this.windowsStateHandler!;
     const windowState = windowsStateHandler.restoreWindowState();
     const browserWindowOptions = resolveBrowserWindowOptions({
       state: windowState,
@@ -324,8 +324,8 @@ export class ZetaApplication extends DisposableOwner {
       ...browserWindowOptions,
       show: false,
     });
-    this.#mainWindow = window;
-    this.#windowStateTracking = windowsStateHandler.trackWindow(window);
+    this.mainWindow = window;
+    this.windowStateTracking = windowsStateHandler.trackWindow(window);
     window.once("ready-to-show", () => {
       if (window.isDestroyed()) {
         return;
@@ -336,22 +336,22 @@ export class ZetaApplication extends DisposableOwner {
 
     const rendererUrl = process.env.ZETA_RENDERER_URL;
     const rendererFile = join(
-      this.#rendererRoot,
-      this.#product.id,
+      this.rendererRoot,
+      this.product.id,
       "electron-browser",
       "workbench",
-      `${this.#product.rendererEntry}.html`,
+      `${this.product.rendererEntry}.html`,
     );
     const rendererEntryUrl =
       !app.isPackaged && rendererUrl
         ? new URL(
-          `/electron-browser/workbench/${this.#product.rendererEntry}.html`,
+          `/electron-browser/workbench/${this.product.rendererEntry}.html`,
           rendererUrl,
         ).href
         : pathToFileURL(rendererFile).href;
 
     const windowDisposables = this.own(new DisposableStore());
-    windowDisposables.add(this.#windowStateTracking);
+    windowDisposables.add(this.windowStateTracking);
     const browserViewMainService = windowDisposables.add(
       new BrowserViewMainService({
         window,
@@ -362,8 +362,8 @@ export class ZetaApplication extends DisposableOwner {
         },
       }),
     );
-    const configurationService = this.#configurationService!;
-    const keybindingsResourceService = this.#keybindingsResourceService!;
+    const configurationService = this.configurationService!;
+    const keybindingsResourceService = this.keybindingsResourceService!;
     const ipcRoutes = [
       ...appServerIpcRoutes(supervisor),
       ...browserViewIpcRoutes(browserViewMainService),
@@ -428,9 +428,9 @@ export class ZetaApplication extends DisposableOwner {
     ));
     window.once("closed", () => {
       windowDisposables.dispose();
-      if (this.#mainWindow === window) {
-        this.#mainWindow = undefined;
-        this.#windowStateTracking = undefined;
+      if (this.mainWindow === window) {
+        this.mainWindow = undefined;
+        this.windowStateTracking = undefined;
       }
     });
 
@@ -441,53 +441,53 @@ export class ZetaApplication extends DisposableOwner {
     }
   }
 
-  readonly #onBeforeQuit = (event: ElectronEvent): void => {
-    this.#quitRequested = true;
-    this.#supervisor?.dispose();
-    if (this.#quitAfterStateSaved || !this.#stateService) {
+  private readonly onBeforeQuit = (event: ElectronEvent): void => {
+    this.quitRequested = true;
+    this.supervisor?.dispose();
+    if (this.quitAfterStateSaved || !this.stateService) {
       return;
     }
     event.preventDefault();
-    if (this.#quitSaveStarted) {
+    if (this.quitSaveStarted) {
       return;
     }
 
-    this.#quitSaveStarted = true;
-    this.#windowStateTracking?.dispose();
+    this.quitSaveStarted = true;
+    this.windowStateTracking?.dispose();
     void (async () => {
       try {
-        if (this.#mainWindow && !this.#mainWindow.isDestroyed()) {
-          await this.#windowsStateHandler?.saveWindowState(this.#mainWindow);
+        if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+          await this.windowsStateHandler?.saveWindowState(this.mainWindow);
         }
-        await this.#closePersistentServices();
+        await this.closePersistentServices();
       } catch (error) {
         console.error("Failed to flush application state before quit", error);
       } finally {
-        this.#quitAfterStateSaved = true;
+        this.quitAfterStateSaved = true;
         app.quit();
       }
     })();
   };
 
-  readonly #onWillQuit = (): void => {
+  private readonly onWillQuit = (): void => {
     this.dispose();
-    this.#releaseDisposableTracker();
+    this.releaseDisposableTracker();
   };
 
-  #closePersistentServices(): Promise<void> {
-    this.#closePersistentServicesPromise ??= Promise.all([
-      this.#stateService?.close(),
-      this.#configurationService?.close(),
-      this.#keybindingsResourceService?.close(),
+  private closePersistentServices(): Promise<void> {
+    this.closePersistentServicesPromise ??= Promise.all([
+      this.stateService?.close(),
+      this.configurationService?.close(),
+      this.keybindingsResourceService?.close(),
     ]).then(() => undefined);
-    return this.#closePersistentServicesPromise;
+    return this.closePersistentServicesPromise;
   }
 
-  #releaseDisposableTracker(): void {
+  private releaseDisposableTracker(): void {
     try {
-      this.#disposableTracker?.assertNoLeaks();
+      this.disposableTracker?.assertNoLeaks();
     } finally {
-      this.#tracking?.[Symbol.dispose]();
+      this.tracking?.[Symbol.dispose]();
     }
   }
 }

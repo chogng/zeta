@@ -16,10 +16,10 @@ export interface IMenubarControl extends IDisposable {
 /** Compact application-menu trigger used by web, Windows, and Linux. */
 export class BrowserMenubarControl extends DisposableOwner
   implements IMenubarControl {
-  readonly #menu: IMenu & Disposable;
-  readonly #contextMenuService: IContextMenuService;
-  readonly #button: Button;
-  #active = false;
+  private readonly menu: IMenu & Disposable;
+  private readonly contextMenuService: IContextMenuService;
+  private readonly button: Button;
+  private active = false;
 
   readonly element: HTMLElement;
 
@@ -29,29 +29,29 @@ export class BrowserMenubarControl extends DisposableOwner
     ownerDocument: Document,
   ) {
     super();
-    this.#contextMenuService = contextMenuService;
+    this.contextMenuService = contextMenuService;
     this.element = ownerDocument.createElement("nav");
     this.element.className = "zeta-menubar";
     this.element.setAttribute("aria-label", "Application menu");
     this.defer(() => this.element.remove());
 
-    this.#menu = this.own(menuService.createMenu(MenuId.MenubarMainMenu));
-    this.#button = this.own(new Button({
+    this.menu = this.own(menuService.createMenu(MenuId.MenubarMainMenu));
+    this.button = this.own(new Button({
       label: "Application menu",
       icon: lxiconsLibrary.menu,
       ownerDocument,
-      onClick: () => this.#toggleMenu(),
+      onClick: () => this.toggleMenu(),
     }));
-    this.#button.element.classList.add("zeta-menubar-item");
-    this.#button.element.setAttribute("aria-haspopup", "menu");
-    this.#button.element.setAttribute("aria-expanded", "false");
-    this.element.append(this.#button.element);
+    this.button.element.classList.add("zeta-menubar-item");
+    this.button.element.setAttribute("aria-haspopup", "menu");
+    this.button.element.setAttribute("aria-expanded", "false");
+    this.element.append(this.button.element);
 
-    this.own(this.#menu.onDidChange(() => {
-      if (this.#active) this.#contextMenuService.hideContextMenu();
+    this.own(this.menu.onDidChange(() => {
+      if (this.active) this.contextMenuService.hideContextMenu();
     }));
     this.own(addDisposableListener(
-      this.#button.element,
+      this.button.element,
       "keydown",
       (event: KeyboardEvent) => {
         if (
@@ -63,9 +63,9 @@ export class BrowserMenubarControl extends DisposableOwner
           return;
         }
         if (event.key === "ArrowDown" || event.key === "Enter") {
-          if (!this.#active) this.#showMenu();
-        } else if (event.key === "Escape" && this.#active) {
-          this.#contextMenuService.hideContextMenu();
+          if (!this.active) this.showMenu();
+        } else if (event.key === "Escape" && this.active) {
+          this.contextMenuService.hideContextMenu();
         } else {
           return;
         }
@@ -74,20 +74,20 @@ export class BrowserMenubarControl extends DisposableOwner
       },
     ));
     this.defer(() => {
-      if (this.#active) this.#contextMenuService.hideContextMenu();
+      if (this.active) this.contextMenuService.hideContextMenu();
     });
   }
 
-  #toggleMenu(): void {
-    if (this.#active) {
-      this.#contextMenuService.hideContextMenu();
+  private toggleMenu(): void {
+    if (this.active) {
+      this.contextMenuService.hideContextMenu();
       return;
     }
-    this.#showMenu();
+    this.showMenu();
   }
 
-  #showMenu(): void {
-    const actions = this.#menu.getActions({
+  private showMenu(): void {
+    const actions = this.menu.getActions({
       preserveEmptySubmenus: true,
     })
       .flatMap(([, groupActions]) => groupActions)
@@ -96,16 +96,16 @@ export class BrowserMenubarControl extends DisposableOwner
       );
     if (actions.length === 0) return;
 
-    this.#active = true;
-    this.#button.element.classList.add("active");
-    this.#button.element.setAttribute("aria-expanded", "true");
-    this.#contextMenuService.showContextMenu({
-      anchor: this.#button.element,
+    this.active = true;
+    this.button.element.classList.add("active");
+    this.button.element.setAttribute("aria-expanded", "true");
+    this.contextMenuService.showContextMenu({
+      anchor: this.button.element,
       actions,
       onHide: () => {
-        this.#active = false;
-        this.#button.element.classList.remove("active");
-        this.#button.element.setAttribute("aria-expanded", "false");
+        this.active = false;
+        this.button.element.classList.remove("active");
+        this.button.element.setAttribute("aria-expanded", "false");
       },
     });
   }

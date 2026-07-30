@@ -19,23 +19,23 @@ export const IThemeService =
 /** Owns the active color theme and notifies consumers after it changes. */
 export class ThemeService extends DisposableOwner
   implements IThemeService {
-  readonly #onDidColorThemeChange = this.own(new Emitter<IColorTheme>());
-  #colorTheme: IColorTheme;
+  private readonly _onDidColorThemeChange = this.own(new Emitter<IColorTheme>());
+  private colorTheme: IColorTheme;
 
-  readonly onDidColorThemeChange = this.#onDidColorThemeChange.event;
+  readonly onDidColorThemeChange = this._onDidColorThemeChange.event;
 
   constructor(initialColorTheme: IColorTheme) {
     super();
-    this.#colorTheme = initialColorTheme;
+    this.colorTheme = initialColorTheme;
   }
 
   getColorTheme(): IColorTheme {
-    return this.#colorTheme;
+    return this.colorTheme;
   }
 
   setColorTheme(theme: IColorTheme): void {
-    if (theme === this.#colorTheme) return;
-    this.#colorTheme = theme;
-    this.#onDidColorThemeChange.fire(theme);
+    if (theme === this.colorTheme) return;
+    this.colorTheme = theme;
+    this._onDidColorThemeChange.fire(theme);
   }
 }

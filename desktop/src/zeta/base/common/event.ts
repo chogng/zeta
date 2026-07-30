@@ -37,65 +37,65 @@ interface EventDelivery<T> {
  * so every listener observes events in FIFO order.
  */
 export class Emitter<T> implements IDisposable {
-  readonly #listeners = new Set<ListenerRegistration<T>>();
-  readonly #deliveryQueue: EventDelivery<T>[] = [];
-  readonly #onListenerError: (error: unknown) => void;
-  #delivering = false;
-  #disposed = false;
+  private readonly listeners = new Set<ListenerRegistration<T>>();
+  private readonly deliveryQueue: EventDelivery<T>[] = [];
+  private readonly onListenerError: (error: unknown) => void;
+  private delivering = false;
+  private disposed = false;
 
   readonly event: Event<T> = (listener) => {
-    if (this.#disposed) {
+    if (this.disposed) {
       throw new ReferenceError("Emitter is already disposed");
     }
     const registration: ListenerRegistration<T> = {
       listener,
       active: true,
     };
-    this.#listeners.add(registration);
+    this.listeners.add(registration);
     return toDisposable(() => {
       registration.active = false;
-      this.#listeners.delete(registration);
+      this.listeners.delete(registration);
     });
   };
 
   constructor(options: EmitterOptions = {}) {
-    this.#onListenerError =
+    this.onListenerError =
       options.onListenerError ?? reportListenerError;
     trackDisposable(this);
   }
 
   fire(event: T): void {
-    if (this.#disposed) return;
-    for (const registration of this.#listeners) {
-      this.#deliveryQueue.push({ registration, event });
+    if (this.disposed) return;
+    for (const registration of this.listeners) {
+      this.deliveryQueue.push({ registration, event });
     }
-    if (this.#delivering) return;
-    this.#delivering = true;
+    if (this.delivering) return;
+    this.delivering = true;
     try {
-      for (let index = 0; index < this.#deliveryQueue.length; index += 1) {
-        const delivery = this.#deliveryQueue[index];
+      for (let index = 0; index < this.deliveryQueue.length; index += 1) {
+        const delivery = this.deliveryQueue[index];
         if (!delivery.registration.active) continue;
         try {
           delivery.registration.listener(delivery.event);
         } catch (error) {
-          this.#reportListenerError(error);
+          this.reportListenerError(error);
         }
       }
     } finally {
-      this.#deliveryQueue.length = 0;
-      this.#delivering = false;
+      this.deliveryQueue.length = 0;
+      this.delivering = false;
     }
   }
 
   dispose(): void {
-    if (this.#disposed) return;
-    this.#disposed = true;
+    if (this.disposed) return;
+    this.disposed = true;
     try {
-      for (const registration of this.#listeners) {
+      for (const registration of this.listeners) {
         registration.active = false;
       }
-      this.#listeners.clear();
-      this.#deliveryQueue.length = 0;
+      this.listeners.clear();
+      this.deliveryQueue.length = 0;
     } finally {
       markAsDisposed(this);
     }
@@ -105,9 +105,9 @@ export class Emitter<T> implements IDisposable {
     this.dispose();
   }
 
-  #reportListenerError(error: unknown): void {
+  private reportListenerError(error: unknown): void {
     try {
-      this.#onListenerError(error);
+      this.onListenerError(error);
     } catch (reportingError) {
       reportListenerError(error);
       reportListenerError(reportingError);

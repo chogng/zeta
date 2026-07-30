@@ -27,29 +27,29 @@ export type ToolBarPresentation = "default" | "inherit-foreground";
  */
 export class ToolBar extends DisposableOwner {
   readonly element: HTMLDivElement;
-  readonly #actionBar: ActionBar;
-  readonly #moreActions = new MoreActionsAction();
-  #secondaryActions: readonly IAction[] = [];
+  private readonly actionBar: ActionBar;
+  private readonly moreActions = new MoreActionsAction();
+  private secondaryActions: readonly IAction[] = [];
 
   constructor(options: ToolBarOptions) {
     super();
-    this.#actionBar = this.own(new ActionBar({
+    this.actionBar = this.own(new ActionBar({
       ownerDocument: options.ownerDocument,
       ariaLabel: options.ariaLabel,
       orientation: options.orientation,
       highlightToggledItems: options.highlightToggledItems,
       actionViewItemProvider: (action) => {
-        if (action === this.#moreActions) {
+        if (action === this.moreActions) {
           return new MoreActionsViewItem(
             action,
-            () => this.#secondaryActions,
+            () => this.secondaryActions,
             options.contextMenuProvider,
           );
         }
         return options.actionViewItemProvider?.(action);
       },
     }));
-    this.element = this.#actionBar.element;
+    this.element = this.actionBar.element;
     this.element.classList.add("zeta-toolbar", `zeta-toolbar-${options.presentation ?? "default"}`);
   }
 
@@ -58,10 +58,10 @@ export class ToolBar extends DisposableOwner {
     secondaryActions: readonly IAction[] = [],
   ): void {
     const primary = cleanSeparators(primaryActions);
-    this.#secondaryActions = cleanSeparators(secondaryActions);
-    this.#actionBar.setActions(
-      this.#secondaryActions.length > 0
-        ? [...primary, this.#moreActions]
+    this.secondaryActions = cleanSeparators(secondaryActions);
+    this.actionBar.setActions(
+      this.secondaryActions.length > 0
+        ? [...primary, this.moreActions]
         : primary,
     );
   }

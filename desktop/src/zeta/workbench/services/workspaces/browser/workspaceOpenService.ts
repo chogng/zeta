@@ -19,19 +19,19 @@ export const IWorkspaceOpenService =
  */
 export class WorkspaceOpenService implements IWorkspaceOpenService {
   readonly canOpenFolder: boolean;
-  readonly #nativeHostApi: INativeHostApi | undefined;
+  private readonly nativeHostApi: INativeHostApi | undefined;
 
   constructor(nativeHostApi: INativeHostApi | undefined) {
-    this.#nativeHostApi = nativeHostApi;
+    this.nativeHostApi = nativeHostApi;
     this.canOpenFolder = nativeHostApi !== undefined;
   }
 
   openFolder(): Promise<void> {
-    if (!this.#nativeHostApi) {
+    if (!this.nativeHostApi) {
       return Promise.reject(
         new Error("Opening folders is unavailable in this Workbench host"),
       );
     }
-    return this.#nativeHostApi.openFolder();
+    return this.nativeHostApi.openFolder();
   }
 }

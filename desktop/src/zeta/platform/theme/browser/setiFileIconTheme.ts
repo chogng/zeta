@@ -61,22 +61,22 @@ const LANGUAGE_ID_BY_EXTENSION = new Map<string, string>([
  */
 export class SetiFileIconThemeService extends DisposableOwner
   implements IFileIconThemeService {
-  readonly #onDidFileIconThemeChange = this.own(new Emitter<void>());
-  readonly #themeService: IThemeService;
+  private readonly _onDidFileIconThemeChange = this.own(new Emitter<void>());
+  private readonly themeService: IThemeService;
 
   readonly onDidFileIconThemeChange =
-    this.#onDidFileIconThemeChange.event;
+    this._onDidFileIconThemeChange.event;
 
   constructor(themeService: IThemeService) {
     super();
-    this.#themeService = themeService;
+    this.themeService = themeService;
     this.own(themeService.onDidColorThemeChange(() => {
-      this.#onDidFileIconThemeChange.fire();
+      this._onDidFileIconThemeChange.fire();
     }));
   }
 
   renderFileIcon(resource: URI, container: HTMLElement): void {
-    const definition = this.#resolveDefinition(fileName(resource));
+    const definition = this.resolveDefinition(fileName(resource));
     container.classList.add("zeta-seti-file-icon");
     container.textContent = decodeFontCharacter(
       definition?.fontCharacter ?? "",
@@ -89,9 +89,9 @@ export class SetiFileIconThemeService extends DisposableOwner
     }
   }
 
-  #resolveDefinition(fileName: string): SetiIconDefinition | undefined {
+  private resolveDefinition(fileName: string): SetiIconDefinition | undefined {
     const useLightAssociations = !isDarkColorScheme(
-      this.#themeService.getColorTheme().colorScheme,
+      this.themeService.getColorTheme().colorScheme,
     );
     const iconId = useLightAssociations
       ? resolveSpecificIconId(setiThemeData.light, fileName) ??

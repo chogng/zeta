@@ -24,15 +24,15 @@ let chatPaneInstanceId = 0;
  * internal to that Pane, while the title tabs only switch Sessions.
  */
 export class ChatViewPane extends ViewPane {
-  readonly #api: ZetaRendererApi;
-  readonly #sessionService: IWorkbenchSessionService;
-  readonly #contextMenuService: IContextMenuService;
-  readonly #titleControl: ChatTitleControl;
-  readonly #agentSidebar: SidebarPart;
-  readonly #paneHost: HTMLDivElement;
-  readonly #empty: HTMLDivElement;
-  readonly #panes = new Map<SessionId, ChatPane>();
-  #activePane: ChatPane | undefined;
+  private readonly api: ZetaRendererApi;
+  private readonly sessionService: IWorkbenchSessionService;
+  private readonly contextMenuService: IContextMenuService;
+  private readonly titleControl: ChatTitleControl;
+  private readonly agentSidebar: SidebarPart;
+  private readonly paneHost: HTMLDivElement;
+  private readonly empty: HTMLDivElement;
+  private readonly panes = new Map<SessionId, ChatPane>();
+  private activePane: ChatPane | undefined;
 
   constructor(
     options: IViewPaneOptions,
@@ -44,24 +44,24 @@ export class ChatViewPane extends ViewPane {
     contextKeyService: IContextKeyService,
   ) {
     super(options);
-    this.#api = api;
-    this.#sessionService = sessionService;
-    this.#contextMenuService = contextMenuService;
+    this.api = api;
+    this.sessionService = sessionService;
+    this.contextMenuService = contextMenuService;
     this.element.classList.add("zeta-chat-view-pane");
     this.titleElement.hidden = true;
     this.contentElement.classList.add("zeta-chat-view");
     const viewId = `zeta-chat-view-${++chatViewInstanceId}`;
-    this.#titleControl = this.own(new ChatTitleControl(
+    this.titleControl = this.own(new ChatTitleControl(
       options.ownerDocument,
       viewId,
       {
-        selectSession: (sessionId) => this.#selectSession(sessionId),
-        closeSession: (sessionId) => this.#closeSession(sessionId),
+        selectSession: (sessionId) => this.selectSession(sessionId),
+        closeSession: (sessionId) => this.closeSession(sessionId),
       },
       menuService,
       contextMenuService,
     ));
-    this.#agentSidebar = this.own(new SidebarPart({
+    this.agentSidebar = this.own(new SidebarPart({
       ownerDocument: options.ownerDocument,
       viewDescriptorService,
       id: "agentSidebar",
@@ -69,88 +69,88 @@ export class ChatViewPane extends ViewPane {
       ariaLabel: "Agent sidebar",
       viewsAriaLabel: "Agent sidebar views",
     }));
-    this.#agentSidebar.element.classList.add("zeta-chat-agent-sidebar");
+    this.agentSidebar.element.classList.add("zeta-chat-agent-sidebar");
     const agentSidebarVisible = AgentSidebarVisibleContext.bindTo(contextKeyService);
     this.defer(() => agentSidebarVisible.reset());
-    this.#paneHost = options.ownerDocument.createElement("div");
-    this.#paneHost.className = "zeta-chat-pane-host";
-    this.#empty = options.ownerDocument.createElement("div");
-    this.#empty.className = "zeta-chat-empty zeta-chat-view-empty";
-    this.#empty.textContent = "Start a new chat to begin.";
+    this.paneHost = options.ownerDocument.createElement("div");
+    this.paneHost.className = "zeta-chat-pane-host";
+    this.empty = options.ownerDocument.createElement("div");
+    this.empty.className = "zeta-chat-empty zeta-chat-view-empty";
+    this.empty.textContent = "Start a new chat to begin.";
     const body = options.ownerDocument.createElement("div");
     body.className = "zeta-chat-body";
-    body.append(this.#paneHost, this.#agentSidebar.element);
-    this.contentElement.append(this.#titleControl.element, body);
-    this.own(sessionService.onDidChange(() => this.#syncSessions()));
+    body.append(this.paneHost, this.agentSidebar.element);
+    this.contentElement.append(this.titleControl.element, body);
+    this.own(sessionService.onDidChange(() => this.syncSessions()));
     this.own(contextKeyService.onDidChangeContext((event) => {
       if (event.keys.has(AgentSidebarVisibleContext.key)) {
-        this.#syncAgentSidebarVisibility(contextKeyService);
+        this.syncAgentSidebarVisibility(contextKeyService);
       }
     }));
     this.defer(() => {
-      for (const pane of this.#panes.values()) pane.dispose();
-      this.#panes.clear();
+      for (const pane of this.panes.values()) pane.dispose();
+      this.panes.clear();
     });
-    this.#syncAgentSidebarVisibility(contextKeyService);
-    this.#syncSessions();
+    this.syncAgentSidebarVisibility(contextKeyService);
+    this.syncSessions();
     void sessionService.initialize();
   }
 
   override focus(): void {
-    this.#activePane?.focus();
+    this.activePane?.focus();
   }
 
-  #syncSessions(): void {
+  private syncSessions(): void {
     const entries: { readonly session: Session; readonly pane: ChatPane }[] = [];
     const retainedSessionIds = new Set<SessionId>();
-    for (const session of this.#sessionService.sessions) {
+    for (const session of this.sessionService.sessions) {
       if (session.status !== "active") continue;
-      const selection = this.#selectionForSession(session);
+      const selection = this.selectionForSession(session);
       if (!selection) continue;
       retainedSessionIds.add(session.sessionId);
-      let pane = this.#panes.get(session.sessionId);
+      let pane = this.panes.get(session.sessionId);
       if (!pane) {
         pane = new ChatPane(
           this.element.ownerDocument,
           `zeta-chat-pane-${++chatPaneInstanceId}`,
-          this.#api,
+          this.api,
           selection,
-          this.#sessionService,
-          this.#contextMenuService,
+          this.sessionService,
+          this.contextMenuService,
         );
         setDisposableOwner(pane, this);
-        this.#panes.set(session.sessionId, pane);
+        this.panes.set(session.sessionId, pane);
       } else {
         void pane.selectThread(selection);
       }
       entries.push({ session, pane });
     }
-    for (const [sessionId, pane] of this.#panes) {
+    for (const [sessionId, pane] of this.panes) {
       if (retainedSessionIds.has(sessionId)) continue;
-      this.#panes.delete(sessionId);
+      this.panes.delete(sessionId);
       pane.dispose();
     }
-    this.#paneHost.replaceChildren(...entries.map(({ pane }) => pane.element), this.#empty);
-    const activeSessionId = this.#sessionService.active?.session.sessionId;
-    this.#activePane = activeSessionId ? this.#panes.get(activeSessionId) : undefined;
-    for (const { pane } of entries) pane.setVisible(pane === this.#activePane);
-    this.#empty.hidden = entries.length > 0;
-    const tabIds = this.#titleControl.setSessions(
+    this.paneHost.replaceChildren(...entries.map(({ pane }) => pane.element), this.empty);
+    const activeSessionId = this.sessionService.active?.session.sessionId;
+    this.activePane = activeSessionId ? this.panes.get(activeSessionId) : undefined;
+    for (const { pane } of entries) pane.setVisible(pane === this.activePane);
+    this.empty.hidden = entries.length > 0;
+    const tabIds = this.titleControl.setSessions(
       entries.map(({ session, pane }) => ({ session, panelId: pane.element.id })),
-      this.#activePane?.sessionId,
+      this.activePane?.sessionId,
     );
     for (const { pane } of entries) pane.setTabId(tabIds.get(pane.sessionId));
   }
 
-  #selectionForSession(session: Session): IActiveSessionThread | undefined {
-    const active = this.#sessionService.active;
+  private selectionForSession(session: Session): IActiveSessionThread | undefined {
+    const active = this.sessionService.active;
     if (
       active?.session.sessionId === session.sessionId &&
       isActiveThread(session, active.threadId)
     ) {
       return { session, threadId: active.threadId };
     }
-    const retainedThreadId = this.#panes.get(session.sessionId)?.threadId;
+    const retainedThreadId = this.panes.get(session.sessionId)?.threadId;
     if (retainedThreadId && isActiveThread(session, retainedThreadId)) {
       return { session, threadId: retainedThreadId };
     }
@@ -158,19 +158,19 @@ export class ChatViewPane extends ViewPane {
     return thread ? { session, threadId: thread.threadId } : undefined;
   }
 
-  #selectSession(sessionId: SessionId): void {
-    const pane = this.#panes.get(sessionId);
+  private selectSession(sessionId: SessionId): void {
+    const pane = this.panes.get(sessionId);
     if (!pane) return;
-    this.#sessionService.selectThread(sessionId, pane.threadId);
+    this.sessionService.selectThread(sessionId, pane.threadId);
   }
 
-  #closeSession(sessionId: SessionId): void {
-    void this.#sessionService.archiveSession(sessionId).catch(() => {});
+  private closeSession(sessionId: SessionId): void {
+    void this.sessionService.archiveSession(sessionId).catch(() => {});
   }
 
-  #syncAgentSidebarVisibility(contextKeyService: IContextKeyService): void {
+  private syncAgentSidebarVisibility(contextKeyService: IContextKeyService): void {
     const visible = contextKeyService.getValue<boolean>(AgentSidebarVisibleContext.key) ?? AgentSidebarVisibleContext.defaultValue;
-    this.#agentSidebar.setVisible(visible);
+    this.agentSidebar.setVisible(visible);
   }
 }
 

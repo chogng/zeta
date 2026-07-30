@@ -46,8 +46,8 @@ export interface MenuWorkbenchToolBarOptions extends WorkbenchToolBarOptions {
 
 /** Keeps a WorkbenchToolBar synchronized with one registered menu location. */
 export class MenuWorkbenchToolBar extends WorkbenchToolBar {
-  readonly #menuOptions: IMenuActionOptions | undefined;
-  readonly #menu: IMenu & Disposable;
+  private readonly menuOptions: IMenuActionOptions | undefined;
+  private readonly menu: IMenu & Disposable;
 
   constructor(
     menuService: IMenuService,
@@ -57,23 +57,23 @@ export class MenuWorkbenchToolBar extends WorkbenchToolBar {
     options: MenuWorkbenchToolBarOptions = {},
   ) {
     super(contextMenuProvider, ownerDocument, options);
-    this.#menuOptions = options.menuOptions;
+    this.menuOptions = options.menuOptions;
     const menu = this.own(menuService.createMenu(menuId));
-    this.#menu = menu;
-    this.own(menu.onDidChange(() => this.#update()));
-    this.#update();
+    this.menu = menu;
+    this.own(menu.onDidChange(() => this.update()));
+    this.update();
   }
 
   refresh(): void {
-    this.#update();
+    this.update();
   }
 
   override setActions(_primaryActions: readonly IAction[], _secondaryActions: readonly IAction[] = []): never {
     throw new Error("MenuWorkbenchToolBar actions are owned by its MenuId");
   }
 
-  #update(): void {
-    const groups = this.#menu.getActions(this.#menuOptions);
+  private update(): void {
+    const groups = this.menu.getActions(this.menuOptions);
     const primary = groups
       .filter(([group]) => group === "navigation")
       .flatMap(([, actions]) => actions);

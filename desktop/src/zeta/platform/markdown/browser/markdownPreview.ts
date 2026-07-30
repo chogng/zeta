@@ -93,34 +93,34 @@ const LINK_BRIDGE_SCRIPT = `
  * Renders a full Markdown document inside the opaque-origin iframe boundary.
  */
 export class MarkdownPreview extends DisposableOwner {
-  readonly #ownerDocument: Document;
-  readonly #webview: WebviewElement;
-  readonly #onDidOpenLink = this.own(new Emitter<string>());
-  #active = true;
+  private readonly ownerDocument: Document;
+  private readonly webview: WebviewElement;
+  private readonly _onDidOpenLink = this.own(new Emitter<string>());
+  private active = true;
 
   readonly element: HTMLIFrameElement;
-  readonly onDidOpenLink: Event<string> = this.#onDidOpenLink.event;
+  readonly onDidOpenLink: Event<string> = this._onDidOpenLink.event;
 
   constructor(options: MarkdownPreviewOptions) {
     super();
-    this.#ownerDocument = options.ownerDocument;
-    this.#webview = this.own(new WebviewElement({
+    this.ownerDocument = options.ownerDocument;
+    this.webview = this.own(new WebviewElement({
       ownerDocument: options.ownerDocument,
       title: options.title ?? "Markdown preview",
     }));
-    this.element = this.#webview.element;
-    this.own(this.#webview.onDidMessage((message) => {
+    this.element = this.webview.element;
+    this.own(this.webview.onDidMessage((message) => {
       const openLink = validateOpenLinkMessage(message);
-      if (openLink) this.#onDidOpenLink.fire(openLink.href);
+      if (openLink) this._onDidOpenLink.fire(openLink.href);
     }));
     this.defer(() => {
-      this.#active = false;
+      this.active = false;
     });
     this.setMarkdown(options.markdown ?? "");
   }
 
   setMarkdown(markdown: string): void {
-    this.#requireActive();
+    this.requireActive();
     if (typeof markdown !== "string") {
       throw new TypeError("Markdown must be a string");
     }
@@ -129,9 +129,9 @@ export class MarkdownPreview extends DisposableOwner {
     }
     const parserHtml = markdownParser.render(markdown);
     const safeHtml = sanitizeMarkdownHtmlToString({
-      ownerDocument: this.#ownerDocument,
+      ownerDocument: this.ownerDocument,
     }, parserHtml);
-    this.#webview.setHtml(
+    this.webview.setHtml(
       `<style>${PREVIEW_STYLE}</style>` +
         `<main class="zeta-markdown-preview">${safeHtml}</main>` +
         `<script>${LINK_BRIDGE_SCRIPT}</script>`,
@@ -139,12 +139,12 @@ export class MarkdownPreview extends DisposableOwner {
   }
 
   focus(): void {
-    this.#requireActive();
-    this.#webview.focus();
+    this.requireActive();
+    this.webview.focus();
   }
 
-  #requireActive(): void {
-    if (!this.#active) {
+  private requireActive(): void {
+    if (!this.active) {
       throw new ReferenceError("MarkdownPreview is already disposed");
     }
   }

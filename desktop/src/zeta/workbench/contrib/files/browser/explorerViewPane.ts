@@ -22,17 +22,17 @@ interface ExplorerNode {
 
 /** Workspace file tree backed by `IFileService` and the Workbench editor. */
 export class ExplorerViewPane extends ViewPane {
-  readonly #fileService: IFileService;
-  readonly #workspaceContextService: IWorkspaceContextService;
-  readonly #editorPart: IEditorPart;
-  readonly #fileIconThemeService: IFileIconThemeService;
-  readonly #scrollable: ScrollableElement;
-  readonly #renderedLabels =
+  private readonly fileService: IFileService;
+  private readonly workspaceContextService: IWorkspaceContextService;
+  private readonly editorPart: IEditorPart;
+  private readonly fileIconThemeService: IFileIconThemeService;
+  private readonly scrollable: ScrollableElement;
+  private readonly renderedLabels =
     this.own(new ResettableDisposableGroup());
-  readonly #nodes = new Map<string, ExplorerNode>();
-  #root: ExplorerNode | undefined;
-  #error: string | undefined;
-  #disposed = false;
+  private readonly nodes = new Map<string, ExplorerNode>();
+  private root: ExplorerNode | undefined;
+  private error: string | undefined;
+  private disposed = false;
 
   constructor(
     options: IViewPaneOptions,
@@ -42,50 +42,50 @@ export class ExplorerViewPane extends ViewPane {
     fileIconThemeService: IFileIconThemeService,
   ) {
     super(options);
-    this.#fileService = fileService;
-    this.#workspaceContextService = workspaceContextService;
-    this.#editorPart = editorPart;
-    this.#fileIconThemeService = fileIconThemeService;
+    this.fileService = fileService;
+    this.workspaceContextService = workspaceContextService;
+    this.editorPart = editorPart;
+    this.fileIconThemeService = fileIconThemeService;
     this.element.classList.add("zeta-explorer-view-pane");
     this.titleElement.classList.add("zeta-explorer-title");
     this.contentElement.classList.add("zeta-explorer");
-    this.#scrollable = this.own(new ScrollableElement({
+    this.scrollable = this.own(new ScrollableElement({
       ownerDocument: options.ownerDocument,
       ariaLabel: "Workspace files",
       direction: "vertical",
       vertical: "auto",
     }));
-    this.contentElement.append(this.#scrollable.element);
+    this.contentElement.append(this.scrollable.element);
     this.own(addDisposableListener(
       this.contentElement,
       "click",
-      (event) => this.#onClick(event),
+      (event) => this.onClick(event),
     ));
     this.own(fileIconThemeService.onDidFileIconThemeChange(
-      () => this.#render(),
+      () => this.render(),
     ));
     this.defer(() => {
-      this.#disposed = true;
-      this.#nodes.clear();
+      this.disposed = true;
+      this.nodes.clear();
     });
-    this.#render();
-    void this.#initialize();
+    this.render();
+    void this.initialize();
   }
 
-  async #initialize(): Promise<void> {
-    const folder = this.#workspaceContextService.getWorkspace().folders[0];
+  private async initialize(): Promise<void> {
+    const folder = this.workspaceContextService.getWorkspace().folders[0];
     if (!folder) {
-      this.#error = "Open a folder to browse files.";
-      this.#render();
+      this.error = "Open a folder to browse files.";
+      this.render();
       return;
     }
     try {
       this.setTitle(folder.name);
-      const metadata = await this.#fileService.stat(folder.uri);
-      if (metadata.kind !== FileKind.Directory || this.#disposed) {
+      const metadata = await this.fileService.stat(folder.uri);
+      if (metadata.kind !== FileKind.Directory || this.disposed) {
         throw new Error("Workspace root is not a directory");
       }
-      this.#root = {
+      this.root = {
         resource: folder.uri,
         name: folder.name,
         kind: FileKind.Directory,
@@ -93,38 +93,38 @@ export class ExplorerViewPane extends ViewPane {
         loading: false,
         children: undefined,
       };
-      await this.#loadChildren(this.#root);
+      await this.loadChildren(this.root);
     } catch (error) {
-      if (this.#disposed) return;
-      this.#error = error instanceof Error
+      if (this.disposed) return;
+      this.error = error instanceof Error
         ? error.message
         : "Unable to load workspace files.";
-      this.#render();
+      this.render();
     }
   }
 
-  async #loadChildren(node: ExplorerNode): Promise<void> {
+  private async loadChildren(node: ExplorerNode): Promise<void> {
     if (node.loading) return;
     node.loading = true;
-    this.#render();
+    this.render();
     try {
-      const entries = await this.#fileService.readDirectory(node.resource);
-      if (this.#disposed) return;
+      const entries = await this.fileService.readDirectory(node.resource);
+      if (this.disposed) return;
       node.children = entries.map(explorerNode).sort(compareExplorerNodes);
       node.expanded = true;
-      this.#error = undefined;
+      this.error = undefined;
     } catch (error) {
-      if (this.#disposed) return;
-      this.#error = error instanceof Error
+      if (this.disposed) return;
+      this.error = error instanceof Error
         ? error.message
         : `Unable to read ${node.name}.`;
     } finally {
       node.loading = false;
-      if (!this.#disposed) this.#render();
+      if (!this.disposed) this.render();
     }
   }
 
-  #onClick(event: Event): void {
+  private onClick(event: Event): void {
     const target = event.target;
     const HTMLElementConstructor =
       this.element.ownerDocument.defaultView?.HTMLElement;
@@ -136,70 +136,70 @@ export class ExplorerViewPane extends ViewPane {
       "button[data-explorer-resource]",
     );
     if (!button || !this.contentElement.contains(button)) return;
-    const node = this.#nodes.get(button.dataset.explorerResource ?? "");
+    const node = this.nodes.get(button.dataset.explorerResource ?? "");
     if (!node || node.loading) return;
     if (node.kind === FileKind.Directory) {
       if (node.children === undefined) {
-        void this.#loadChildren(node);
+        void this.loadChildren(node);
         return;
       }
       node.expanded = !node.expanded;
-      this.#render();
+      this.render();
     } else if (node.kind === FileKind.File) {
-      void this.#openFile(node);
+      void this.openFile(node);
     }
   }
 
-  async #openFile(node: ExplorerNode): Promise<void> {
+  private async openFile(node: ExplorerNode): Promise<void> {
     try {
-      const content = await this.#fileService.readFile(node.resource);
-      if (this.#disposed) return;
-      await this.#editorPart.openEditor({
+      const content = await this.fileService.readFile(node.resource);
+      if (this.disposed) return;
+      await this.editorPart.openEditor({
         resource: node.resource,
         label: node.name,
         initialText: content,
       });
-      if (!this.#disposed) this.#editorPart.focus();
+      if (!this.disposed) this.editorPart.focus();
     } catch (error) {
-      if (this.#disposed) return;
-      this.#error = error instanceof Error
+      if (this.disposed) return;
+      this.error = error instanceof Error
         ? error.message
         : `Unable to open ${node.name}.`;
-      this.#render();
+      this.render();
     }
   }
 
-  #render(): void {
+  private render(): void {
     const document = this.element.ownerDocument;
-    this.#renderedLabels.clear();
-    this.#nodes.clear();
+    this.renderedLabels.clear();
+    this.nodes.clear();
     const surface = document.createElement("div");
     surface.className = "zeta-explorer-scroll-content";
-    if (!this.#root) {
+    if (!this.root) {
       const status = document.createElement("div");
       status.className = "zeta-explorer-status";
-      status.textContent = this.#error ?? "Loading files…";
+      status.textContent = this.error ?? "Loading files…";
       surface.append(status);
-      this.#scrollable.replaceChildren(surface);
+      this.scrollable.replaceChildren(surface);
       return;
     }
     const tree = document.createElement("ul");
     tree.className = "zeta-explorer-tree";
     tree.setAttribute("role", "tree");
-    for (const child of this.#root.children ?? []) {
-      tree.append(this.#renderNode(child, document));
+    for (const child of this.root.children ?? []) {
+      tree.append(this.renderNode(child, document));
     }
     surface.append(tree);
-    if (this.#error) {
+    if (this.error) {
       const error = document.createElement("div");
       error.className = "zeta-explorer-status zeta-explorer-error";
-      error.textContent = this.#error;
+      error.textContent = this.error;
       surface.append(error);
     }
-    this.#scrollable.replaceChildren(surface);
+    this.scrollable.replaceChildren(surface);
   }
 
-  #renderNode(node: ExplorerNode, document: Document): HTMLLIElement {
+  private renderNode(node: ExplorerNode, document: Document): HTMLLIElement {
     const item = document.createElement("li");
     item.setAttribute("role", "treeitem");
     if (node.kind === FileKind.Directory) {
@@ -210,7 +210,7 @@ export class ExplorerViewPane extends ViewPane {
     button.className = `zeta-explorer-row zeta-explorer-${node.kind}`;
     const key = node.resource.toString();
     button.dataset.explorerResource = key;
-    this.#nodes.set(key, node);
+    this.nodes.set(key, node);
     const twistie = document.createElement("span");
     twistie.className = "zeta-explorer-twistie";
     twistie.setAttribute("aria-hidden", "true");
@@ -222,12 +222,12 @@ export class ExplorerViewPane extends ViewPane {
         twistie,
       );
     }
-    const label = this.#renderedLabels.add(new IconLabel({
+    const label = this.renderedLabels.add(new IconLabel({
       label: node.name,
       renderIcon: node.kind === FileKind.Directory
         ? undefined
         : (container) => {
-          this.#fileIconThemeService.renderFileIcon(
+          this.fileIconThemeService.renderFileIcon(
             node.resource,
             container,
           );
@@ -242,7 +242,7 @@ export class ExplorerViewPane extends ViewPane {
       const group = document.createElement("ul");
       group.setAttribute("role", "group");
       for (const child of node.children) {
-        group.append(this.#renderNode(child, document));
+        group.append(this.renderNode(child, document));
       }
       item.append(group);
     }

@@ -74,14 +74,14 @@ export interface IWindowsStateHandlerOptions {
  * window of a new session, matching VS Code's restore order.
  */
 export class WindowsStateHandler {
-  readonly #stateService: IStateService;
-  readonly #displayService: IWindowDisplayService;
-  readonly #workspace: IAnyWorkspaceIdentifier;
-  readonly #backupPath: string | undefined;
-  readonly #workbenchState: WorkbenchState;
-  readonly #onError: (error: unknown) => void;
-  #windowsState: IWindowsState;
-  #lastNormalBounds: IWindowBounds | undefined;
+  private readonly stateService: IStateService;
+  private readonly displayService: IWindowDisplayService;
+  private readonly workspace: IAnyWorkspaceIdentifier;
+  private readonly backupPath: string | undefined;
+  private readonly workbenchState: WorkbenchState;
+  private readonly onError: (error: unknown) => void;
+  private windowsState: IWindowsState;
+  private lastNormalBounds: IWindowBounds | undefined;
 
   constructor({
     stateService,
@@ -90,29 +90,29 @@ export class WindowsStateHandler {
     backupPath,
     onError = () => undefined,
   }: IWindowsStateHandlerOptions) {
-    this.#stateService = stateService;
-    this.#displayService = displayService;
-    this.#workspace = workspace;
-    this.#backupPath = backupPath;
-    this.#workbenchState = workbenchStateFromWorkspaceIdentifier(workspace);
-    this.#onError = onError;
-    this.#windowsState = parseWindowsState(
-      this.#stateService.getItem(WINDOWS_STATE_STORAGE_KEY),
+    this.stateService = stateService;
+    this.displayService = displayService;
+    this.workspace = workspace;
+    this.backupPath = backupPath;
+    this.workbenchState = workbenchStateFromWorkspaceIdentifier(workspace);
+    this.onError = onError;
+    this.windowsState = parseWindowsState(
+      this.stateService.getItem(WINDOWS_STATE_STORAGE_KEY),
     );
   }
 
   /** Restores an exact workspace match, then last active state, then defaults. */
   restoreWindowState(): IWindowState {
-    const exactState = this.#windowsState.openedWindows.find((windowState) =>
+    const exactState = this.windowsState.openedWindows.find((windowState) =>
       matchesWindowIdentity(
         windowState,
-        this.#workspace,
-        this.#backupPath,
+        this.workspace,
+        this.backupPath,
       )
     );
     const candidates = [
       exactState?.uiState,
-      this.#windowsState.lastActiveWindow?.uiState,
+      this.windowsState.lastActiveWindow?.uiState,
     ];
 
     for (const candidate of candidates) {
@@ -121,22 +121,22 @@ export class WindowsStateHandler {
       }
       const restoredState = validateWindowState(
         candidate,
-        this.#displayService.getAllDisplays(),
-        this.#workbenchState,
+        this.displayService.getAllDisplays(),
+        this.workbenchState,
       );
       if (restoredState) {
-        this.#lastNormalBounds = toBounds(restoredState);
+        this.lastNormalBounds = toBounds(restoredState);
         return restoredState;
       }
     }
 
-    return defaultWindowState(this.#workbenchState);
+    return defaultWindowState(this.workbenchState);
   }
 
   /** Saves immediately on blur and before the BrowserWindow closes. */
   trackWindow(window: IStatefulWindow): IDisposable {
     const save = (): void => {
-      void this.saveWindowState(window).catch(this.#onError);
+      void this.saveWindowState(window).catch(this.onError);
     };
     window.on("blur", save);
     window.on("close", save);
@@ -149,29 +149,29 @@ export class WindowsStateHandler {
 
   /** Captures normal bounds and flushes the complete window-session state. */
   async saveWindowState(window: IStatefulWindow): Promise<void> {
-    const uiState = this.#captureWindowState(window);
+    const uiState = this.captureWindowState(window);
     if (!uiState) {
       return;
     }
 
     const currentWindow = createWindowStateRecord(
-      this.#workspace,
-      this.#backupPath,
+      this.workspace,
+      this.backupPath,
       uiState,
     );
     const windowsState: IWindowsState = {
       lastActiveWindow: currentWindow,
       openedWindows: [currentWindow],
     };
-    this.#windowsState = windowsState;
-    this.#stateService.setItem(
+    this.windowsState = windowsState;
+    this.stateService.setItem(
       WINDOWS_STATE_STORAGE_KEY,
       serializeWindowsState(windowsState),
     );
-    await this.#stateService.flush();
+    await this.stateService.flush();
   }
 
-  #captureWindowState(window: IStatefulWindow): IWindowState | undefined {
+  private captureWindowState(window: IStatefulWindow): IWindowState | undefined {
     const mode = window.isFullScreen()
       ? WindowMode.Fullscreen
       : window.isMaximized()
@@ -184,16 +184,16 @@ export class WindowsStateHandler {
     );
     const bounds = primaryBounds ??
       readBounds(() => window.getBounds()) ??
-      this.#lastNormalBounds;
+      this.lastNormalBounds;
     if (!bounds) {
       return undefined;
     }
 
-    this.#lastNormalBounds = bounds;
+    this.lastNormalBounds = bounds;
     let displayId: number | undefined;
     if (mode === WindowMode.Fullscreen) {
       const currentBounds = readBounds(() => window.getBounds()) ?? bounds;
-      displayId = this.#displayService.getDisplayMatching(currentBounds).id;
+      displayId = this.displayService.getDisplayMatching(currentBounds).id;
     }
 
     return {

@@ -21,11 +21,11 @@ export abstract class ViewPane extends DisposableOwner implements IView {
   readonly id: string;
   protected readonly titleElement: HTMLDivElement;
   protected readonly contentElement: HTMLDivElement;
-  readonly #titleButton: HTMLButtonElement;
-  readonly #titleLabel: HTMLSpanElement;
-  readonly #focusTracker;
-  #visible = true;
-  #collapsed: boolean;
+  private readonly titleButton: HTMLButtonElement;
+  private readonly titleLabel: HTMLSpanElement;
+  private readonly focusTracker;
+  private visible = true;
+  private collapsed: boolean;
 
   readonly onDidFocus: Event<void>;
   readonly onDidBlur: Event<void>;
@@ -42,9 +42,9 @@ export abstract class ViewPane extends DisposableOwner implements IView {
     this.id = id;
     this.titleElement = ownerDocument.createElement("div");
     this.titleElement.className = "zeta-view-pane-title";
-    this.#titleButton = ownerDocument.createElement("button");
-    this.#titleButton.className = "zeta-view-pane-title-button";
-    this.#titleButton.type = "button";
+    this.titleButton = ownerDocument.createElement("button");
+    this.titleButton.className = "zeta-view-pane-title-button";
+    this.titleButton.type = "button";
     const indicator = ownerDocument.createElement("span");
     indicator.className = "zeta-view-pane-title-chevron";
     indicator.setAttribute("aria-hidden", "true");
@@ -52,36 +52,36 @@ export abstract class ViewPane extends DisposableOwner implements IView {
     collapsedIcon.classList.add("zeta-view-pane-collapsed-icon");
     const expandedIcon = appendIcon(lxiconsLibrary.chevronDown, indicator);
     expandedIcon.classList.add("zeta-view-pane-expanded-icon");
-    this.#titleLabel = ownerDocument.createElement("span");
-    this.#titleLabel.className = "zeta-view-pane-title-label";
-    this.#titleLabel.textContent = title;
-    this.#titleButton.append(indicator, this.#titleLabel);
-    this.titleElement.append(this.#titleButton);
+    this.titleLabel = ownerDocument.createElement("span");
+    this.titleLabel.className = "zeta-view-pane-title-label";
+    this.titleLabel.textContent = title;
+    this.titleButton.append(indicator, this.titleLabel);
+    this.titleElement.append(this.titleButton);
     this.contentElement = ownerDocument.createElement("div");
     this.contentElement.className = "zeta-view-pane-content";
     this.contentElement.id = `zeta-view-pane-content-${encodeURIComponent(id)}`;
-    this.#titleButton.setAttribute("aria-controls", this.contentElement.id);
+    this.titleButton.setAttribute("aria-controls", this.contentElement.id);
     element.append(this.titleElement, this.contentElement);
-    this.#collapsed = options.collapsed === true;
-    this.#renderCollapsedState();
-    this.own(addDisposableListener(this.#titleButton, "click", () => {
-      this.setCollapsed(!this.#collapsed);
+    this.collapsed = options.collapsed === true;
+    this.renderCollapsedState();
+    this.own(addDisposableListener(this.titleButton, "click", () => {
+      this.setCollapsed(!this.collapsed);
     }));
-    this.#focusTracker = this.own(trackFocus(element));
-    this.onDidFocus = this.#focusTracker.onDidFocus;
-    this.onDidBlur = this.#focusTracker.onDidBlur;
+    this.focusTracker = this.own(trackFocus(element));
+    this.onDidFocus = this.focusTracker.onDidFocus;
+    this.onDidBlur = this.focusTracker.onDidBlur;
   }
 
-  setTitle(title: string): void { this.#titleLabel.textContent = title; }
+  setTitle(title: string): void { this.titleLabel.textContent = title; }
 
   isCollapsed(): boolean {
-    return this.#collapsed;
+    return this.collapsed;
   }
 
   setCollapsed(collapsed: boolean): void {
-    if (this.#collapsed === collapsed) return;
-    this.#collapsed = collapsed;
-    this.#renderCollapsedState();
+    if (this.collapsed === collapsed) return;
+    this.collapsed = collapsed;
+    this.renderCollapsedState();
   }
 
   /** Contextual commands rendered by a host title toolbar, when available. */
@@ -94,20 +94,20 @@ export abstract class ViewPane extends DisposableOwner implements IView {
   }
 
   isVisible(): boolean {
-    return this.#visible;
+    return this.visible;
   }
 
   setVisible(visible: boolean): void {
-    if (this.#visible === visible) return;
-    this.#visible = visible;
+    if (this.visible === visible) return;
+    this.visible = visible;
     this.element.hidden = !visible;
   }
 
-  #renderCollapsedState(): void {
-    const expanded = !this.#collapsed;
-    this.element.classList.toggle("collapsed", this.#collapsed);
-    this.#titleButton.classList.toggle("expanded", expanded);
-    this.#titleButton.setAttribute("aria-expanded", String(expanded));
-    this.contentElement.hidden = this.#collapsed;
+  private renderCollapsedState(): void {
+    const expanded = !this.collapsed;
+    this.element.classList.toggle("collapsed", this.collapsed);
+    this.titleButton.classList.toggle("expanded", expanded);
+    this.titleButton.setAttribute("aria-expanded", String(expanded));
+    this.contentElement.hidden = this.collapsed;
   }
 }

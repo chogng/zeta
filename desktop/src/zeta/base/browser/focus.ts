@@ -296,69 +296,69 @@ export function restoreAncestorScrollPositions(
 }
 
 class FocusTracker extends DisposableOwner implements IFocusTracker {
-  readonly #onDidFocus = this.own(new Emitter<void>());
-  readonly #onDidBlur = this.own(new Emitter<void>());
-  readonly #pendingRefresh = this.own(new DisposableSlot<IDisposable>());
-  readonly onDidFocus = this.#onDidFocus.event;
-  readonly onDidBlur = this.#onDidBlur.event;
-  readonly #target: HTMLElement | BrowserWindow;
-  #hasFocus: boolean;
+  private readonly _onDidFocus = this.own(new Emitter<void>());
+  private readonly _onDidBlur = this.own(new Emitter<void>());
+  private readonly pendingRefresh = this.own(new DisposableSlot<IDisposable>());
+  readonly onDidFocus = this._onDidFocus.event;
+  readonly onDidBlur = this._onDidBlur.event;
+  private readonly target: HTMLElement | BrowserWindow;
+  private _hasFocus: boolean;
 
   constructor(target: HTMLElement | BrowserWindow) {
     super();
-    this.#target = target;
+    this.target = target;
     if (isWindow(target)) {
-      this.#hasFocus = target.document.hasFocus();
+      this._hasFocus = target.document.hasFocus();
       this.own(addDisposableListener(target, "focus", () =>
-        this.#setFocused(true),
+        this.setFocused(true),
       ));
       this.own(addDisposableListener(target, "blur", () =>
-        this.#setFocused(false),
+        this.setFocused(false),
       ));
       return;
     }
 
-    this.#hasFocus = isAncestorOfActiveElement(target);
+    this._hasFocus = isAncestorOfActiveElement(target);
     this.own(addDisposableListener(target, "focusin", () => {
-      this.#pendingRefresh.clear();
-      this.#setFocused(true);
+      this.pendingRefresh.clear();
+      this.setFocused(true);
     }));
     this.own(addDisposableListener(target, "focusout", () =>
-      this.#scheduleRefresh()
+      this.scheduleRefresh()
     ));
     this.own(addDisposableListener(getWindow(target), "blur", () =>
-      this.#setFocused(false),
+      this.setFocused(false),
     ));
   }
 
   get hasFocus(): boolean {
-    return this.#hasFocus;
+    return this._hasFocus;
   }
 
   refreshState(): void {
-    this.#pendingRefresh.clear();
-    this.#setFocused(isWindow(this.#target)
-      ? this.#target.document.hasFocus()
-      : isAncestorOfActiveElement(this.#target));
+    this.pendingRefresh.clear();
+    this.setFocused(isWindow(this.target)
+      ? this.target.document.hasFocus()
+      : isAncestorOfActiveElement(this.target));
   }
 
-  #scheduleRefresh(): void {
-    if (this.#pendingRefresh.value) return;
-    const targetWindow = getWindow(this.#target);
+  private scheduleRefresh(): void {
+    if (this.pendingRefresh.value) return;
+    const targetWindow = getWindow(this.target);
     const handle = targetWindow.setTimeout(() => {
-      this.#pendingRefresh.clear();
+      this.pendingRefresh.clear();
       this.refreshState();
     }, 0);
-    this.#pendingRefresh.replace(toDisposable(() =>
+    this.pendingRefresh.replace(toDisposable(() =>
       targetWindow.clearTimeout(handle)
     ));
   }
 
-  #setFocused(focused: boolean): void {
-    if (focused === this.#hasFocus) return;
-    this.#hasFocus = focused;
-    if (focused) this.#onDidFocus.fire();
-    else this.#onDidBlur.fire();
+  private setFocused(focused: boolean): void {
+    if (focused === this._hasFocus) return;
+    this._hasFocus = focused;
+    if (focused) this._onDidFocus.fire();
+    else this._onDidBlur.fire();
   }
 }
 

@@ -33,28 +33,28 @@ export interface TerminalTitleActionsOptions {
 /** Owns the Terminal title Command, Menu, Context Key, and Toolbar projection. */
 export class TerminalTitleActions extends DisposableOwner {
   readonly element: HTMLElement;
-  readonly #toolbar: MenuWorkbenchToolBar;
-  readonly #profilesAvailableContext: IContextKey<boolean>;
-  readonly #creatingContext: IContextKey<boolean>;
-  readonly #hasActiveInstanceContext: IContextKey<boolean>;
-  readonly #activeInstanceStateContext: IContextKey<ITerminalInstance["state"] | "none">;
-  #profiles: readonly ITerminalProfile[] = [];
-  #selectedProfileId: string | undefined;
+  private readonly toolbar: MenuWorkbenchToolBar;
+  private readonly profilesAvailableContext: IContextKey<boolean>;
+  private readonly creatingContext: IContextKey<boolean>;
+  private readonly hasActiveInstanceContext: IContextKey<boolean>;
+  private readonly activeInstanceStateContext: IContextKey<ITerminalInstance["state"] | "none">;
+  private profiles: readonly ITerminalProfile[] = [];
+  private _selectedProfileId: string | undefined;
 
   constructor(options: TerminalTitleActionsOptions) {
     super();
-    this.#profilesAvailableContext = TerminalProfilesAvailableContext.bindTo(options.contextKeyService);
-    this.#creatingContext = TerminalCreatingContext.bindTo(options.contextKeyService);
-    this.#hasActiveInstanceContext = TerminalHasActiveInstanceContext.bindTo(options.contextKeyService);
-    this.#activeInstanceStateContext = TerminalActiveInstanceStateContext.bindTo(options.contextKeyService);
+    this.profilesAvailableContext = TerminalProfilesAvailableContext.bindTo(options.contextKeyService);
+    this.creatingContext = TerminalCreatingContext.bindTo(options.contextKeyService);
+    this.hasActiveInstanceContext = TerminalHasActiveInstanceContext.bindTo(options.contextKeyService);
+    this.activeInstanceStateContext = TerminalActiveInstanceStateContext.bindTo(options.contextKeyService);
     this.defer(() => {
-      this.#activeInstanceStateContext.reset();
-      this.#hasActiveInstanceContext.reset();
-      this.#creatingContext.reset();
-      this.#profilesAvailableContext.reset();
+      this.activeInstanceStateContext.reset();
+      this.hasActiveInstanceContext.reset();
+      this.creatingContext.reset();
+      this.profilesAvailableContext.reset();
     });
-    this.#registerCommandsAndMenu(options);
-    this.#toolbar = this.own(new MenuWorkbenchToolBar(
+    this.registerCommandsAndMenu(options);
+    this.toolbar = this.own(new MenuWorkbenchToolBar(
       options.menuService,
       options.contextMenuService,
       MenuId.TerminalTitle,
@@ -65,45 +65,45 @@ export class TerminalTitleActions extends DisposableOwner {
         actionViewItemProvider: (action) => action.id === SELECT_PROFILE_COMMAND_ID
           ? new TerminalProfileActionViewItem(
             action,
-            () => this.#profiles,
-            () => this.#selectedProfileId,
+            () => this.profiles,
+            () => this._selectedProfileId,
           )
           : undefined,
       },
     ));
-    this.element = this.#toolbar.element;
+    this.element = this.toolbar.element;
     this.element.classList.add("zeta-terminal-title-toolbar");
   }
 
   get selectedProfileId(): string | undefined {
-    return this.#selectedProfileId;
+    return this._selectedProfileId;
   }
 
   setProfiles(profiles: readonly ITerminalProfile[]): void {
-    this.#profiles = profiles;
-    if (!profiles.some((profile) => profile.profileId === this.#selectedProfileId)) {
-      this.#selectedProfileId = profiles.find((profile) => profile.isDefault)?.profileId ?? profiles[0]?.profileId;
+    this.profiles = profiles;
+    if (!profiles.some((profile) => profile.profileId === this._selectedProfileId)) {
+      this._selectedProfileId = profiles.find((profile) => profile.isDefault)?.profileId ?? profiles[0]?.profileId;
     }
-    this.#profilesAvailableContext.set(profiles.length > 0);
-    this.#toolbar.refresh();
+    this.profilesAvailableContext.set(profiles.length > 0);
+    this.toolbar.refresh();
   }
 
   setCreating(creating: boolean): void {
-    this.#creatingContext.set(creating);
+    this.creatingContext.set(creating);
   }
 
   setActiveInstance(instance: ITerminalInstance | undefined): void {
-    this.#hasActiveInstanceContext.set(instance !== undefined);
-    this.#activeInstanceStateContext.set(instance?.state ?? "none");
+    this.hasActiveInstanceContext.set(instance !== undefined);
+    this.activeInstanceStateContext.set(instance?.state ?? "none");
   }
 
-  #registerCommandsAndMenu(options: TerminalTitleActionsOptions): void {
+  private registerCommandsAndMenu(options: TerminalTitleActionsOptions): void {
     this.own(CommandsRegistry.register(SELECT_PROFILE_COMMAND_ID, (_accessor, profileId) => {
-      if (typeof profileId !== "string" || !this.#profiles.some((profile) => profile.profileId === profileId)) {
+      if (typeof profileId !== "string" || !this.profiles.some((profile) => profile.profileId === profileId)) {
         throw new TypeError(`Unknown terminal profile: ${String(profileId)}`);
       }
-      this.#selectedProfileId = profileId;
-      this.#toolbar.refresh();
+      this._selectedProfileId = profileId;
+      this.toolbar.refresh();
     }));
     this.own(CommandsRegistry.register(NEW_TERMINAL_COMMAND_ID, () => options.createTerminal()));
     this.own(CommandsRegistry.register(RELAUNCH_TERMINAL_COMMAND_ID, () => options.relaunchActive()));
@@ -158,14 +158,14 @@ export class TerminalTitleActions extends DisposableOwner {
 }
 
 class TerminalProfileActionViewItem extends ActionViewItem {
-  #select: HTMLSelectElement | undefined;
+  private select: HTMLSelectElement | undefined;
 
   constructor(action: IAction, readonly profiles: () => readonly ITerminalProfile[], readonly selectedProfileId: () => string | undefined) { super(action); }
 
   override render(container: HTMLElement): void {
     container.classList.add("zeta-terminal-profile-action");
     const select = container.ownerDocument.createElement("select");
-    this.#select = select;
+    this.select = select;
     select.className = "zeta-terminal-profile";
     select.setAttribute("aria-label", "Terminal profile");
     select.disabled = !this.action.enabled;
@@ -185,15 +185,15 @@ class TerminalProfileActionViewItem extends ActionViewItem {
   }
 
   override focus(): void {
-    this.#requireSelect().focus();
+    this.requireSelect().focus();
   }
 
   override setTabbable(tabbable: boolean): void {
-    this.#requireSelect().tabIndex = tabbable ? 0 : -1;
+    this.requireSelect().tabIndex = tabbable ? 0 : -1;
   }
 
-  #requireSelect(): HTMLSelectElement {
-    if (!this.#select) throw new Error("Terminal profile action is not rendered");
-    return this.#select;
+  private requireSelect(): HTMLSelectElement {
+    if (!this.select) throw new Error("Terminal profile action is not rendered");
+    return this.select;
   }
 }

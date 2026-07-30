@@ -47,10 +47,10 @@ function validatePercentEncoding(value: string, component: string): void {
  * required for a `file:` URI.
  */
 export class URI {
-  readonly #url: URL;
+  private readonly url: URL;
 
   private constructor(url: URL) {
-    this.#url = url;
+    this.url = url;
   }
 
   /** Parses and canonicalizes an absolute URI. */
@@ -95,23 +95,23 @@ export class URI {
   }
 
   get scheme(): string {
-    return this.#url.protocol.slice(0, -1).toLowerCase();
+    return this.url.protocol.slice(0, -1).toLowerCase();
   }
 
   get authority(): string {
-    return this.#url.host;
+    return this.url.host;
   }
 
   get path(): string {
-    return this.#url.pathname;
+    return this.url.pathname;
   }
 
   get query(): string {
-    return this.#url.search.slice(1);
+    return this.url.search.slice(1);
   }
 
   get fragment(): string {
-    return this.#url.hash.slice(1);
+    return this.url.hash.slice(1);
   }
 
   /**
@@ -122,9 +122,9 @@ export class URI {
       throw new TypeError(`URI scheme is not file: ${this.scheme}`);
     }
 
-    const decodedPath = decodeURIComponent(this.#url.pathname);
-    if (this.#url.host) {
-      return `\\\\${this.#url.host}${decodedPath.replaceAll("/", "\\")}`;
+    const decodedPath = decodeURIComponent(this.url.pathname);
+    if (this.url.host) {
+      return `\\\\${this.url.host}${decodedPath.replaceAll("/", "\\")}`;
     }
     if (WINDOWS_URI_DRIVE_PATH.test(decodedPath)) {
       return decodedPath.slice(1).replaceAll("/", "\\");
@@ -134,14 +134,14 @@ export class URI {
 
   /** Returns a copy with a different percent-encoded path. */
   withPath(path: string): URI {
-    const url = new URL(this.#url.href);
+    const url = new URL(this.url.href);
     url.pathname = path;
     return new URI(parseUrl(url.href));
   }
 
   /** Returns a copy with a different percent-encoded query. */
   withQuery(query: string): URI {
-    const url = new URL(this.#url.href);
+    const url = new URL(this.url.href);
     url.search = query.length === 0 ? "" : `?${query}`;
     return new URI(parseUrl(url.href));
   }
@@ -153,7 +153,7 @@ export class URI {
 
   /** Returns a copy with a different percent-encoded fragment. */
   withFragment(fragment: string): URI {
-    const url = new URL(this.#url.href);
+    const url = new URL(this.url.href);
     url.hash = fragment.length === 0 ? "" : `#${fragment}`;
     return new URI(parseUrl(url.href));
   }
@@ -164,7 +164,7 @@ export class URI {
   }
 
   toString(): string {
-    return this.#url.href;
+    return this.url.href;
   }
 
   toJSON(): string {

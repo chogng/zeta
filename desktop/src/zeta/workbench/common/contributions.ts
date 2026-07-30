@@ -39,19 +39,19 @@ interface IWorkbenchContributionRegistration {
  * each workbench window.
  */
 export class WorkbenchContributionRegistry {
-  readonly #registrations =
+  private readonly registrations =
     new Map<string, IWorkbenchContributionRegistration>();
-  #nextOrder = 1;
+  private nextOrder = 1;
 
   register(
     id: string,
     phase: WorkbenchPhase,
     factory: WorkbenchContributionFactory,
   ): IDisposable {
-    const registration = this.#add(id, phase, factory);
+    const registration = this.add(id, phase, factory);
     return toDisposable(() => {
-      if (this.#registrations.get(id) === registration) {
-        this.#registrations.delete(id);
+      if (this.registrations.get(id) === registration) {
+        this.registrations.delete(id);
       }
     });
   }
@@ -62,26 +62,26 @@ export class WorkbenchContributionRegistry {
     phase: WorkbenchPhase,
     factory: WorkbenchContributionFactory,
   ): void {
-    this.#add(id, phase, factory);
+    this.add(id, phase, factory);
   }
 
-  #add(
+  private add(
     id: string,
     phase: WorkbenchPhase,
     factory: WorkbenchContributionFactory,
   ): IWorkbenchContributionRegistration {
     validateContributionId(id);
     validateWorkbenchPhase(phase);
-    if (this.#registrations.has(id)) {
+    if (this.registrations.has(id)) {
       throw new Error(`Workbench contribution is already registered: ${id}`);
     }
     const registration: IWorkbenchContributionRegistration = {
       id,
       phase,
       factory,
-      order: this.#nextOrder++,
+      order: this.nextOrder++,
     };
-    this.#registrations.set(id, registration);
+    this.registrations.set(id, registration);
     return registration;
   }
 
@@ -94,7 +94,7 @@ export class WorkbenchContributionRegistry {
   ): WorkbenchContributionHost {
     return new WorkbenchContributionHost(
       accessor,
-      [...this.#registrations.values()].sort(
+      [...this.registrations.values()].sort(
         (left, right) => left.order - right.order,
       ),
       onError,
@@ -113,12 +113,12 @@ export type WorkbenchContributionErrorHandler = (
  * startup phases monotonically.
  */
 export class WorkbenchContributionHost extends DisposableOwner {
-  readonly #accessor: ServicesAccessor;
-  readonly #registrations:
+  private readonly accessor: ServicesAccessor;
+  private readonly registrations:
     readonly IWorkbenchContributionRegistration[];
-  readonly #onError: WorkbenchContributionErrorHandler;
-  readonly #instantiated = new Set<string>();
-  #phase = 0;
+  private readonly onError: WorkbenchContributionErrorHandler;
+  private readonly instantiated = new Set<string>();
+  private _phase = 0;
 
   constructor(
     accessor: ServicesAccessor,
@@ -126,15 +126,15 @@ export class WorkbenchContributionHost extends DisposableOwner {
     onError: WorkbenchContributionErrorHandler,
   ) {
     super();
-    this.#accessor = accessor;
-    this.#registrations = registrations;
-    this.#onError = onError;
+    this.accessor = accessor;
+    this.registrations = registrations;
+    this.onError = onError;
   }
 
   get phase(): WorkbenchPhase | undefined {
-    return this.#phase === 0
+    return this._phase === 0
       ? undefined
-      : this.#phase as WorkbenchPhase;
+      : this._phase as WorkbenchPhase;
   }
 
   /**
@@ -142,24 +142,24 @@ export class WorkbenchContributionHost extends DisposableOwner {
    */
   advance(phase: WorkbenchPhase): void {
     validateWorkbenchPhase(phase);
-    if (phase < this.#phase) {
+    if (phase < this._phase) {
       throw new Error("Workbench contribution phases cannot move backwards");
     }
-    if (phase === this.#phase) return;
-    this.#phase = phase;
+    if (phase === this._phase) return;
+    this._phase = phase;
 
-    for (const registration of this.#registrations) {
+    for (const registration of this.registrations) {
       if (
         registration.phase > phase ||
-        this.#instantiated.has(registration.id)
+        this.instantiated.has(registration.id)
       ) {
         continue;
       }
-      this.#instantiated.add(registration.id);
+      this.instantiated.add(registration.id);
       try {
-        this.own(registration.factory(this.#accessor));
+        this.own(registration.factory(this.accessor));
       } catch (error) {
-        this.#onError(error, registration.id);
+        this.onError(error, registration.id);
       }
     }
   }

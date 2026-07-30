@@ -13,24 +13,24 @@ import {
 
 /** Owns the editor implementations available in one product module graph. */
 export class EditorPaneRegistry {
-  readonly #descriptors = new Map<string, IEditorPaneDescriptor>();
+  private readonly descriptors = new Map<string, IEditorPaneDescriptor>();
 
   register(descriptor: IEditorPaneDescriptor): IDisposable {
-    this.#add(descriptor);
+    this.add(descriptor);
     return toDisposable(() => {
-      if (this.#descriptors.get(descriptor.id) === descriptor) {
-        this.#descriptors.delete(descriptor.id);
+      if (this.descriptors.get(descriptor.id) === descriptor) {
+        this.descriptors.delete(descriptor.id);
       }
     });
   }
 
   /** Registers a descriptor that intentionally lives for the module realm. */
   registerStatic(descriptor: IEditorPaneDescriptor): void {
-    this.#add(descriptor);
+    this.add(descriptor);
   }
 
   get(id: string): IEditorPaneDescriptor | undefined {
-    return this.#descriptors.get(id);
+    return this.descriptors.get(id);
   }
 
   /**
@@ -40,7 +40,7 @@ export class EditorPaneRegistry {
    * product contribution order remains deterministic.
    */
   getEditors(input: EditorInput): readonly IEditorPaneDescriptor[] {
-    return Array.from(this.#descriptors.values())
+    return Array.from(this.descriptors.values())
       .map((descriptor, index) => {
         const match = descriptor.canOpen(input);
         validateMatch(match, descriptor.id);
@@ -59,7 +59,7 @@ export class EditorPaneRegistry {
   ): IEditorPaneDescriptor {
     const preferredEditorId = options.preferredEditorId;
     if (preferredEditorId !== undefined) {
-      const preferred = this.#descriptors.get(preferredEditorId);
+      const preferred = this.descriptors.get(preferredEditorId);
       if (!preferred) {
         throw new RangeError(`Unknown editor pane '${preferredEditorId}'`);
       }
@@ -78,12 +78,12 @@ export class EditorPaneRegistry {
     return selected;
   }
 
-  #add(descriptor: IEditorPaneDescriptor): void {
+  private add(descriptor: IEditorPaneDescriptor): void {
     validateDescriptor(descriptor);
-    if (this.#descriptors.has(descriptor.id)) {
+    if (this.descriptors.has(descriptor.id)) {
       throw new Error(`Editor pane is already registered: ${descriptor.id}`);
     }
-    this.#descriptors.set(descriptor.id, descriptor);
+    this.descriptors.set(descriptor.id, descriptor);
   }
 }
 

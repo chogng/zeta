@@ -154,41 +154,41 @@ test("main configuration service persists atomic revisions", async (context) => 
 });
 
 class TestConfigurationApi implements IConfigurationApi {
-  readonly #listeners = new Set<(snapshot: unknown) => void>();
-  #snapshot: IConfigurationSnapshot;
+  private readonly listeners = new Set<(snapshot: unknown) => void>();
+  private snapshot: IConfigurationSnapshot;
 
   constructor(snapshot: IConfigurationSnapshot) {
-    this.#snapshot = snapshot;
+    this.snapshot = snapshot;
   }
 
   read(): Promise<unknown> {
-    return Promise.resolve(this.#snapshot);
+    return Promise.resolve(this.snapshot);
   }
 
   update(
     request: IConfigurationUpdateRequest,
   ): Promise<unknown> {
-    if (request.expectedRevision !== this.#snapshot.revision) {
+    if (request.expectedRevision !== this.snapshot.revision) {
       return Promise.reject(new Error("revision conflict"));
     }
-    this.#snapshot = {
-      revision: this.#snapshot.revision + 1,
+    this.snapshot = {
+      revision: this.snapshot.revision + 1,
       document: request.document,
     };
-    return Promise.resolve(this.#snapshot);
+    return Promise.resolve(this.snapshot);
   }
 
   onDidChange(
     listener: (snapshot: unknown) => void,
   ): { dispose(): void } {
-    this.#listeners.add(listener);
+    this.listeners.add(listener);
     return {
-      dispose: () => this.#listeners.delete(listener),
+      dispose: () => this.listeners.delete(listener),
     };
   }
 
   emit(snapshot: IConfigurationSnapshot): void {
-    this.#snapshot = snapshot;
-    for (const listener of this.#listeners) listener(snapshot);
+    this.snapshot = snapshot;
+    for (const listener of this.listeners) listener(snapshot);
   }
 }

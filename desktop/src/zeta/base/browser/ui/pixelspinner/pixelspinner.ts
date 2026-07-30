@@ -11,7 +11,7 @@ import {
 /** A compact four-pixel activity indicator with no image asset dependency. */
 export class PixelSpinner extends DisposableOwner {
   readonly element: HTMLSpanElement;
-  #step = 0;
+  private step = 0;
 
   constructor() {
     super();
@@ -31,7 +31,7 @@ export class PixelSpinner extends DisposableOwner {
   }
 
   private render(): void {
-    [...this.element.children].forEach((pixel, index) => pixel.classList.toggle("active", index === this.#step));
-    this.#step = (this.#step + 1) % 4;
+    [...this.element.children].forEach((pixel, index) => pixel.classList.toggle("active", index === this.step));
+    this.step = (this.step + 1) % 4;
   }
 }

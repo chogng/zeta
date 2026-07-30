@@ -16,7 +16,7 @@ export interface IConfigurationKeyDefinition<T> {
  * services use the registry to validate complete persisted snapshots.
  */
 export class ConfigurationRegistry {
-  readonly #keys = new Map<string, IConfigurationKey<unknown>>();
+  private readonly keys = new Map<string, IConfigurationKey<unknown>>();
 
   registerConfiguration<T>(
     definition: IConfigurationKeyDefinition<T>,
@@ -24,7 +24,7 @@ export class ConfigurationRegistry {
     if (!isConfigurationKey(definition.key)) {
       throw new TypeError(`Invalid configuration key: ${definition.key}`);
     }
-    if (this.#keys.has(definition.key)) {
+    if (this.keys.has(definition.key)) {
       throw new Error(
         `Configuration key is already registered: ${definition.key}`,
       );
@@ -35,7 +35,7 @@ export class ConfigurationRegistry {
       parse: definition.parse,
       serialize: definition.serialize ?? ((value: T) => value),
     });
-    this.#keys.set(
+    this.keys.set(
       definition.key,
       key as IConfigurationKey<unknown>,
     );
@@ -43,11 +43,11 @@ export class ConfigurationRegistry {
   }
 
   getConfigurations(): readonly IConfigurationKey<unknown>[] {
-    return [...this.#keys.values()];
+    return [...this.keys.values()];
   }
 
   owns<T>(key: IConfigurationKey<T>): boolean {
-    return this.#keys.get(key.key) === key;
+    return this.keys.get(key.key) === key;
   }
 }
 

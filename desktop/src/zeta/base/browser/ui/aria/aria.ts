@@ -84,28 +84,28 @@ export function setRole(
  * Callers should create one region per UI root and dispose it with that root.
  */
 export class AriaLiveRegion extends DisposableOwner {
-  readonly #root: HTMLDivElement;
-  readonly #polite: readonly [HTMLDivElement, HTMLDivElement];
-  readonly #assertive: readonly [HTMLDivElement, HTMLDivElement];
-  readonly #pending = this.own(new DisposableSlot<IDisposable>());
-  #politeIndex = 0;
-  #assertiveIndex = 0;
+  private readonly root: HTMLDivElement;
+  private readonly polite: readonly [HTMLDivElement, HTMLDivElement];
+  private readonly assertive: readonly [HTMLDivElement, HTMLDivElement];
+  private readonly pending = this.own(new DisposableSlot<IDisposable>());
+  private politeIndex = 0;
+  private assertiveIndex = 0;
 
   constructor(ownerDocument: Document) {
     super();
-    this.#root = ownerDocument.createElement("div");
-    this.#root.className = "zeta-aria-live";
-    this.#polite = [
-      this.#createRegion(ownerDocument, "polite"),
-      this.#createRegion(ownerDocument, "polite"),
+    this.root = ownerDocument.createElement("div");
+    this.root.className = "zeta-aria-live";
+    this.polite = [
+      this.createRegion(ownerDocument, "polite"),
+      this.createRegion(ownerDocument, "polite"),
     ];
-    this.#assertive = [
-      this.#createRegion(ownerDocument, "assertive"),
-      this.#createRegion(ownerDocument, "assertive"),
+    this.assertive = [
+      this.createRegion(ownerDocument, "assertive"),
+      this.createRegion(ownerDocument, "assertive"),
     ];
-    this.#root.append(...this.#polite, ...this.#assertive);
-    ownerDocument.body.append(this.#root);
-    this.defer(() => this.#root.remove());
+    this.root.append(...this.polite, ...this.assertive);
+    ownerDocument.body.append(this.root);
+    this.defer(() => this.root.remove());
   }
 
   status(message: string): void {
@@ -121,40 +121,40 @@ export class AriaLiveRegion extends DisposableOwner {
     priority: AriaLivePriority = "polite",
   ): void {
     const regions = priority === "assertive"
-      ? this.#assertive
-      : this.#polite;
+      ? this.assertive
+      : this.polite;
     const index = priority === "assertive"
-      ? this.#assertiveIndex
-      : this.#politeIndex;
+      ? this.assertiveIndex
+      : this.politeIndex;
     const target = regions[index];
     const alternate = regions[index === 0 ? 1 : 0];
     if (priority === "assertive") {
-      this.#assertiveIndex = index === 0 ? 1 : 0;
+      this.assertiveIndex = index === 0 ? 1 : 0;
     } else {
-      this.#politeIndex = index === 0 ? 1 : 0;
+      this.politeIndex = index === 0 ? 1 : 0;
     }
-    this.#pending.clear();
+    this.pending.clear();
     target.textContent = "";
     alternate.textContent = "";
     const targetWindow = target.ownerDocument.defaultView;
     if (!targetWindow) return;
-    this.#pending.replace(scheduleAtNextAnimationFrame(
+    this.pending.replace(scheduleAtNextAnimationFrame(
       targetWindow,
       () => {
-        this.#pending.clear();
+        this.pending.clear();
         target.textContent = message.slice(0, maximumMessageLength);
       },
     ));
   }
 
   clear(): void {
-    this.#pending.clear();
-    for (const region of [...this.#polite, ...this.#assertive]) {
+    this.pending.clear();
+    for (const region of [...this.polite, ...this.assertive]) {
       region.textContent = "";
     }
   }
 
-  #createRegion(
+  private createRegion(
     ownerDocument: Document,
     priority: AriaLivePriority,
   ): HTMLDivElement {

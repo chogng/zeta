@@ -42,16 +42,16 @@ interface MenuActionViewItemOptions {
 
 /** Button view item for an action presented inside a menu. */
 class MenuActionViewItem extends ButtonActionViewItem {
-  readonly #onDidSelect: (() => void) | undefined;
-  readonly #keybinding: ResolvedKeybinding | undefined;
+  private readonly onDidSelect: (() => void) | undefined;
+  private readonly keybinding: ResolvedKeybinding | undefined;
 
   constructor(
     action: IAction,
     options: MenuActionViewItemOptions = {},
   ) {
     super(action);
-    this.#onDidSelect = options.onDidSelect;
-    this.#keybinding = options.keybinding;
+    this.onDidSelect = options.onDidSelect;
+    this.keybinding = options.keybinding;
   }
 
   override render(container: HTMLElement): void {
@@ -66,9 +66,9 @@ class MenuActionViewItem extends ButtonActionViewItem {
       );
       this.button.element.removeAttribute("aria-pressed");
     }
-    if (!this.#keybinding) return;
+    if (!this.keybinding) return;
     const label = this.own(new KeybindingLabel({
-      keybinding: this.#keybinding,
+      keybinding: this.keybinding,
       ownerDocument: container.ownerDocument,
     }));
     label.element.classList.add("zeta-menu-keybinding");
@@ -79,65 +79,65 @@ class MenuActionViewItem extends ButtonActionViewItem {
     try {
       return super.runAction();
     } finally {
-      this.#onDidSelect?.();
+      this.onDidSelect?.();
     }
   }
 }
 
 /** Menu view item that owns the nested Menu for a submenu action. */
 class SubmenuMenuActionViewItem extends ButtonActionViewItem {
-  readonly #submenuAction: SubmenuAction;
-  readonly #onDidSelect: (() => void) | undefined;
-  readonly #submenuLayer: number;
-  readonly #contextViewContainer: HTMLElement | undefined;
-  readonly #getKeybinding:
+  private readonly submenuAction: SubmenuAction;
+  private readonly onDidSelect: (() => void) | undefined;
+  private readonly submenuLayer: number;
+  private readonly contextViewContainer: HTMLElement | undefined;
+  private readonly getKeybinding:
     | ((action: IAction) => ResolvedKeybinding | undefined)
     | undefined;
-  #contextView: ContextView | undefined;
-  #menu: Menu | undefined;
-  #open = false;
+  private contextView: ContextView | undefined;
+  private menu: Menu | undefined;
+  private open = false;
 
   constructor(
     action: SubmenuAction,
     options: MenuActionViewItemOptions = {},
   ) {
     super(action);
-    this.#submenuAction = action;
-    this.#onDidSelect = options.onDidSelect;
-    this.#submenuLayer = options.submenuLayer ?? 20;
-    this.#contextViewContainer = options.contextViewContainer;
-    this.#getKeybinding = options.getKeybinding;
+    this.submenuAction = action;
+    this.onDidSelect = options.onDidSelect;
+    this.submenuLayer = options.submenuLayer ?? 20;
+    this.contextViewContainer = options.contextViewContainer;
+    this.getKeybinding = options.getKeybinding;
   }
 
   override render(container: HTMLElement): void {
     super.render(container);
     const ownerDocument = container.ownerDocument;
     if (
-      this.#contextViewContainer &&
-      this.#contextViewContainer.ownerDocument !== ownerDocument
+      this.contextViewContainer &&
+      this.contextViewContainer.ownerDocument !== ownerDocument
     ) {
       throw new Error("Context view container belongs to another document");
     }
-    this.#contextView = this.own(new ContextView(
-      this.#contextViewContainer ?? ownerDocument.body,
+    this.contextView = this.own(new ContextView(
+      this.contextViewContainer ?? ownerDocument.body,
     ));
-    this.#menu = this.own(new Menu({
-      actions: this.#submenuAction.actions,
+    this.menu = this.own(new Menu({
+      actions: this.submenuAction.actions,
       ownerDocument,
-      contextViewContainer: this.#contextViewContainer,
-      layer: this.#submenuLayer,
-      getKeybinding: this.#getKeybinding,
+      contextViewContainer: this.contextViewContainer,
+      layer: this.submenuLayer,
+      getKeybinding: this.getKeybinding,
       onDidSelect: () => {
-        this.#hide();
-        this.#onDidSelect?.();
+        this.hide();
+        this.onDidSelect?.();
       },
       onDidRequestClose: () => {
-        this.#hide();
+        this.hide();
         this.button.element.focus();
       },
     }));
-    this.own(this.#contextView.onDidHide(() => {
-      this.#open = false;
+    this.own(this.contextView.onDidHide(() => {
+      this.open = false;
       this.button.element.setAttribute("aria-expanded", "false");
     }));
     this.button.element.setAttribute("role", "menuitem");
@@ -150,35 +150,35 @@ class SubmenuMenuActionViewItem extends ButtonActionViewItem {
   }
 
   protected override runAction(): void {
-    if (this.#open) {
-      this.#hide();
+    if (this.open) {
+      this.hide();
       return;
     }
-    if (!this.#contextView || !this.#menu) return;
-    this.#contextView.show({
+    if (!this.contextView || !this.menu) return;
+    this.contextView.show({
       anchor: this.button.element,
-      content: this.#menu.element,
+      content: this.menu.element,
       anchorAxisAlignment: AnchorAxisAlignment.Horizontal,
       anchorPosition: AnchorPosition.Below,
       gap: 2,
-      layer: this.#submenuLayer,
+      layer: this.submenuLayer,
       focusRestore: ContextViewFocusRestore.Previous,
-      isTargetWithin: (target) => this.#menu?.contains(target) ?? false,
+      isTargetWithin: (target) => this.menu?.contains(target) ?? false,
     });
-    this.#open = true;
+    this.open = true;
     this.button.element.setAttribute("aria-expanded", "true");
-    this.#menu.focusFirst();
+    this.menu.focusFirst();
   }
 
-  #hide(): void {
-    if (!this.#open) return;
-    this.#open = false;
-    this.#contextView?.hide();
+  private hide(): void {
+    if (!this.open) return;
+    this.open = false;
+    this.contextView?.hide();
   }
 
   contains(target: Node): boolean {
-    return this.#contextView?.element.contains(target) === true ||
-      this.#menu?.contains(target) === true;
+    return this.contextView?.element.contains(target) === true ||
+      this.menu?.contains(target) === true;
   }
 
   ownsTrigger(target: Element | null): boolean {
@@ -186,7 +186,7 @@ class SubmenuMenuActionViewItem extends ButtonActionViewItem {
   }
 
   openFromKeyboard(): void {
-    if (!this.#open) this.runAction();
+    if (!this.open) this.runAction();
   }
 }
 
@@ -219,7 +219,7 @@ export interface MenuOptions {
 /** Keyboard-focusable action menu with shared nested-submenu behavior. */
 export class Menu extends DisposableOwner {
   readonly element: HTMLDivElement;
-  readonly #submenus: SubmenuMenuActionViewItem[] = [];
+  private readonly submenus: SubmenuMenuActionViewItem[] = [];
 
   constructor(options: MenuOptions) {
     super();
@@ -241,7 +241,7 @@ export class Menu extends DisposableOwner {
         }),
       );
       if (item instanceof SubmenuMenuActionViewItem) {
-        this.#submenus.push(item);
+        this.submenus.push(item);
       }
       const container = ownerDocument.createElement("div");
       container.className = "zeta-action-view-item";
@@ -277,7 +277,7 @@ export class Menu extends DisposableOwner {
         case "ArrowRight":
           {
             const activeElement = element.ownerDocument.activeElement;
-            const submenu = this.#submenus.find((item) =>
+            const submenu = this.submenus.find((item) =>
               item.ownsTrigger(activeElement)
             );
             if (submenu) submenu.openFromKeyboard();
@@ -303,6 +303,6 @@ export class Menu extends DisposableOwner {
 
   contains(target: Node): boolean {
     return this.element.contains(target) ||
-      this.#submenus.some((submenu) => submenu.contains(target));
+      this.submenus.some((submenu) => submenu.contains(target));
   }
 }

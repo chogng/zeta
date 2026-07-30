@@ -111,3 +111,5 @@
 - Every TypeScript import declaration must occupy exactly one physical line. Never wrap imported names or any other part of an import declaration across multiple lines.
 - Prefer compact single-line formatting for other short function calls, parameter lists, conditions, and expressions.
 - Do not preemptively use multiline formatting merely because more items might be added later.
+- Use TypeScript `private` or `protected` members instead of ECMAScript `#private` identifiers so internal call sites read as `this.member`.
+- Prefix a private backing member with `_` only when it must coexist with a public member of the same semantic name, such as `_onDidChange` backing `onDidChange`.

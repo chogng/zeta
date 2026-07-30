@@ -34,50 +34,50 @@ type DialogPresentationOutcome =
  */
 export class DialogHandlerContribution extends DisposableOwner
   implements IWorkbenchContribution {
-  readonly #model: IDialogsModel;
-  readonly #handler: IDialogHandler;
-  #active: IActiveDialog | undefined;
-  #disposed = false;
+  private readonly model: IDialogsModel;
+  private readonly handler: IDialogHandler;
+  private active: IActiveDialog | undefined;
+  private disposed = false;
 
   constructor(model: IDialogsModel, handler: IDialogHandler) {
     super();
-    this.#model = model;
-    this.#handler = handler;
+    this.model = model;
+    this.handler = handler;
     this.defer(() => {
-      this.#disposed = true;
-      const active = this.#active;
-      this.#active = undefined;
+      this.disposed = true;
+      const active = this.active;
+      this.active = undefined;
       active?.controller.abort();
       active?.item.cancel();
     });
     this.own(model.onDidCloseDialog(({ item }) => {
-      if (this.#active?.item === item) {
-        this.#active.controller.abort();
+      if (this.active?.item === item) {
+        this.active.controller.abort();
       }
     }));
-    this.own(model.onWillShowDialog(() => this.#processDialogs()));
-    this.#processDialogs();
+    this.own(model.onWillShowDialog(() => this.processDialogs()));
+    this.processDialogs();
   }
 
-  #processDialogs(): void {
-    if (this.#disposed || this.#active) return;
-    const item = this.#model.dialogs[0];
+  private processDialogs(): void {
+    if (this.disposed || this.active) return;
+    const item = this.model.dialogs[0];
     if (!item) return;
 
     const active: IActiveDialog = {
       item,
       controller: new AbortController(),
     };
-    this.#active = active;
-    void this.#show(active);
+    this.active = active;
+    void this.show(active);
   }
 
-  async #show(active: IActiveDialog): Promise<void> {
+  private async show(active: IActiveDialog): Promise<void> {
     let outcome: DialogPresentationOutcome;
     try {
       outcome = {
         kind: "result",
-        result: await this.#handler.showDialog(
+        result: await this.handler.showDialog(
           active.item.request,
           active.controller.signal,
         ),
@@ -86,8 +86,8 @@ export class DialogHandlerContribution extends DisposableOwner
       outcome = { kind: "error", error: handlerError };
     }
 
-    if (this.#active !== active) return;
-    this.#active = undefined;
+    if (this.active !== active) return;
+    this.active = undefined;
     try {
       if (outcome.kind === "result") {
         active.item.close(outcome.result);
@@ -95,7 +95,7 @@ export class DialogHandlerContribution extends DisposableOwner
         active.item.fail(outcome.error);
       }
     } finally {
-      this.#processDialogs();
+      this.processDialogs();
     }
   }
 }

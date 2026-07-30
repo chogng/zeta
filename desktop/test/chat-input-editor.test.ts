@@ -84,10 +84,10 @@ test("Chat input editor registry selects and releases a product provider", () =>
 
 class FakeChatInputEditor extends DisposableOwner implements IChatInputEditor {
   readonly element: HTMLDivElement;
-  readonly #onDidChange = this.own(new Emitter<string>());
-  readonly #onDidSubmit = this.own(new Emitter<void>());
-  readonly onDidChange: Event<string> = this.#onDidChange.event;
-  readonly onDidSubmit: Event<void> = this.#onDidSubmit.event;
+  private readonly _onDidChange = this.own(new Emitter<string>());
+  private readonly _onDidSubmit = this.own(new Emitter<void>());
+  readonly onDidChange: Event<string> = this._onDidChange.event;
+  readonly onDidSubmit: Event<void> = this._onDidSubmit.event;
   value = "";
 
   constructor(options: ChatInputEditorOptions) {

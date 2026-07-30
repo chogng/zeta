@@ -24,32 +24,32 @@ export interface ChatTabsDelegate {
 /** Maps active Sessions onto the shared TabList. */
 export class ChatTabsControl extends DisposableOwner {
   readonly element: HTMLDivElement;
-  readonly #tabList: TabList<SessionId>;
-  readonly #idPrefix: string;
-  readonly #tabIds = new Map<string, string>();
-  #nextTabId = 0;
+  private readonly tabList: TabList<SessionId>;
+  private readonly idPrefix: string;
+  private readonly tabIds = new Map<string, string>();
+  private nextTabId = 0;
 
   constructor(ownerDocument: Document, idPrefix: string, delegate: ChatTabsDelegate) {
     super();
-    this.#idPrefix = idPrefix;
+    this.idPrefix = idPrefix;
     this.element = ownerDocument.createElement("div");
     this.element.className = "zeta-chat-tabs-control";
-    this.#tabList = this.own(new TabList({
+    this.tabList = this.own(new TabList({
       ownerDocument,
       ariaLabel: "Open chats",
       onActivate: (sessionId) => delegate.selectSession(sessionId),
       onClose: (sessionId) => delegate.closeSession(sessionId),
     }));
-    this.element.append(this.#tabList.element);
+    this.element.append(this.tabList.element);
     this.defer(() => this.element.remove());
   }
 
   setSessions(entries: readonly ChatSessionTab[], activeSessionId: SessionId | undefined): ReadonlyMap<SessionId, string> {
     const tabs = entries.map(({ session, panelId }) => {
-      let tabId = this.#tabIds.get(session.sessionId);
+      let tabId = this.tabIds.get(session.sessionId);
       if (!tabId) {
-        tabId = `${this.#idPrefix}-tab-${++this.#nextTabId}`;
-        this.#tabIds.set(session.sessionId, tabId);
+        tabId = `${this.idPrefix}-tab-${++this.nextTabId}`;
+        this.tabIds.set(session.sessionId, tabId);
       }
       return {
         sessionId: session.sessionId,
@@ -58,7 +58,7 @@ export class ChatTabsControl extends DisposableOwner {
         tabId,
       } satisfies ChatTabDescriptor;
     });
-    this.#tabList.setTabs(
+    this.tabList.setTabs(
       tabs.map((tab) => ({
         id: tab.sessionId,
         value: tab.sessionId,

@@ -58,20 +58,20 @@ export type IRegisteredKeybindingRule =
 
 /** Stores realm-wide keybinding contributions and their override order. */
 export class KeybindingRegistry {
-  readonly #rules: IRegisteredKeybindingRule[] = [];
-  readonly #onDidChangeKeybindings = new Emitter<void>();
-  #nextOrder = 1;
+  private readonly rules: IRegisteredKeybindingRule[] = [];
+  private readonly _onDidChangeKeybindings = new Emitter<void>();
+  private nextOrder = 1;
 
   readonly onDidChangeKeybindings: Event<void> =
-    this.#onDidChangeKeybindings.event;
+    this._onDidChangeKeybindings.event;
 
   registerKeybindingRule(rule: IKeybindingRule): IDisposable {
     const registered: IRegisteredCommandKeybindingRule = {
       ...rule,
       kind: KeybindingRuleKind.Command,
-      order: this.#nextOrder++,
+      order: this.nextOrder++,
     };
-    return this.#register(registered);
+    return this.register(registered);
   }
 
   registerKeybindingBlocker(
@@ -80,24 +80,24 @@ export class KeybindingRegistry {
     const registered: IRegisteredKeybindingBlocker = {
       ...blocker,
       kind: KeybindingRuleKind.Blocker,
-      order: this.#nextOrder++,
+      order: this.nextOrder++,
     };
-    return this.#register(registered);
+    return this.register(registered);
   }
 
-  #register(registered: IRegisteredKeybindingRule): IDisposable {
-    this.#rules.push(registered);
-    this.#onDidChangeKeybindings.fire();
+  private register(registered: IRegisteredKeybindingRule): IDisposable {
+    this.rules.push(registered);
+    this._onDidChangeKeybindings.fire();
     return toDisposable(() => {
-      const index = this.#rules.indexOf(registered);
+      const index = this.rules.indexOf(registered);
       if (index < 0) return;
-      this.#rules.splice(index, 1);
-      this.#onDidChangeKeybindings.fire();
+      this.rules.splice(index, 1);
+      this._onDidChangeKeybindings.fire();
     });
   }
 
   getKeybindings(): readonly IRegisteredKeybindingRule[] {
-    return [...this.#rules];
+    return [...this.rules];
   }
 }
 

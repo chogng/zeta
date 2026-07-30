@@ -69,79 +69,79 @@ export interface ViewDescriptorServiceOptions {
 export class ViewDescriptorService
   extends DisposableOwner
   implements IViewDescriptorService {
-  readonly #contextKeyService: IContextKeyService;
-  readonly #registry: WorkbenchViewRegistry;
-  readonly #models = new Map<string, ViewContainerModel>();
-  readonly #onDidChangeViewContainers =
+  private readonly contextKeyService: IContextKeyService;
+  private readonly registry: WorkbenchViewRegistry;
+  private readonly models = new Map<string, ViewContainerModel>();
+  private readonly _onDidChangeViewContainers =
     this.own(new Emitter<IViewContainersChangeEvent>());
 
   readonly onDidChangeViewContainers =
-    this.#onDidChangeViewContainers.event;
+    this._onDidChangeViewContainers.event;
 
   constructor(options: ViewDescriptorServiceOptions) {
     super();
-    this.#contextKeyService = options.contextKeyService;
-    this.#registry = options.registry ?? ViewsRegistry;
-    for (const container of this.#registry.getViewContainers()) {
-      this.#addContainer(container);
+    this.contextKeyService = options.contextKeyService;
+    this.registry = options.registry ?? ViewsRegistry;
+    for (const container of this.registry.getViewContainers()) {
+      this.addContainer(container);
     }
-    this.own(this.#registry.onDidRegisterViewContainer((container) => {
-      this.#addContainer(container);
-      this.#onDidChangeViewContainers.fire({
+    this.own(this.registry.onDidRegisterViewContainer((container) => {
+      this.addContainer(container);
+      this._onDidChangeViewContainers.fire({
         added: [container],
         removed: [],
       });
     }));
-    this.own(this.#registry.onDidDeregisterViewContainer((container) => {
-      this.#removeContainer(container);
-      this.#onDidChangeViewContainers.fire({
+    this.own(this.registry.onDidDeregisterViewContainer((container) => {
+      this.removeContainer(container);
+      this._onDidChangeViewContainers.fire({
         added: [],
         removed: [container],
       });
     }));
-    this.defer(() => this.#models.clear());
+    this.defer(() => this.models.clear());
   }
 
   getViewContainers(
     location: ViewContainerLocation,
   ): readonly IViewContainerDescriptor[] {
-    return this.#registry.getViewContainers(location);
+    return this.registry.getViewContainers(location);
   }
 
   getDefaultViewContainer(
     location: ViewContainerLocation,
   ): IViewContainerDescriptor | undefined {
-    return this.#registry.getDefaultViewContainer(location);
+    return this.registry.getDefaultViewContainer(location);
   }
 
   getViewContainerForView(
     viewId: string,
   ): IViewContainerDescriptor | undefined {
-    return this.#registry.getViewContainerForView(viewId);
+    return this.registry.getViewContainerForView(viewId);
   }
 
   getViewContainerModel(containerId: string): IViewContainerModel {
-    const model = this.#models.get(containerId);
+    const model = this.models.get(containerId);
     if (!model) throw new Error(`Unknown view container: ${containerId}`);
     return model;
   }
 
-  #addContainer(container: IViewContainerDescriptor): void {
-    if (this.#models.has(container.id)) return;
-    this.#models.set(
+  private addContainer(container: IViewContainerDescriptor): void {
+    if (this.models.has(container.id)) return;
+    this.models.set(
       container.id,
       this.own(new ViewContainerModel(
         container,
-        this.#registry,
-        this.#contextKeyService,
+        this.registry,
+        this.contextKeyService,
       )),
     );
   }
 
-  #removeContainer(container: IViewContainerDescriptor): void {
-    const model = this.#models.get(container.id);
+  private removeContainer(container: IViewContainerDescriptor): void {
+    const model = this.models.get(container.id);
     if (!model) return;
-    this.#models.delete(container.id);
+    this.models.delete(container.id);
     model.dispose();
   }
 }
@@ -149,27 +149,27 @@ export class ViewDescriptorService
 class ViewContainerModel
   extends DisposableOwner
   implements IViewContainerModel {
-  readonly #registry: WorkbenchViewRegistry;
-  readonly #contextKeyService: IContextKeyService;
-  readonly #visibility = new Map<string, boolean>();
-  readonly #visibilityContextKeys =
+  private readonly registry: WorkbenchViewRegistry;
+  private readonly contextKeyService: IContextKeyService;
+  private readonly visibility = new Map<string, boolean>();
+  private readonly visibilityContextKeys =
     new Map<string, IContextKey<boolean>>();
-  readonly #onDidChangeAllViewDescriptors =
+  private readonly _onDidChangeAllViewDescriptors =
     this.own(new Emitter<IViewDescriptorsChangeEvent>());
-  readonly #onDidChangeActiveViewDescriptors =
+  private readonly _onDidChangeActiveViewDescriptors =
     this.own(new Emitter<IViewDescriptorsChangeEvent>());
-  readonly #onDidChangeVisibleViewDescriptors =
+  private readonly _onDidChangeVisibleViewDescriptors =
     this.own(new Emitter<IViewDescriptorsChangeEvent>());
-  #allViewDescriptors: readonly IViewDescriptor[] = [];
-  #activeViewDescriptors: readonly IViewDescriptor[] = [];
-  #visibleViewDescriptors: readonly IViewDescriptor[] = [];
+  private _allViewDescriptors: readonly IViewDescriptor[] = [];
+  private _activeViewDescriptors: readonly IViewDescriptor[] = [];
+  private _visibleViewDescriptors: readonly IViewDescriptor[] = [];
 
   readonly onDidChangeAllViewDescriptors =
-    this.#onDidChangeAllViewDescriptors.event;
+    this._onDidChangeAllViewDescriptors.event;
   readonly onDidChangeActiveViewDescriptors =
-    this.#onDidChangeActiveViewDescriptors.event;
+    this._onDidChangeActiveViewDescriptors.event;
   readonly onDidChangeVisibleViewDescriptors =
-    this.#onDidChangeVisibleViewDescriptors.event;
+    this._onDidChangeVisibleViewDescriptors.event;
 
   constructor(
     readonly viewContainer: IViewContainerDescriptor,
@@ -177,118 +177,118 @@ class ViewContainerModel
     contextKeyService: IContextKeyService,
   ) {
     super();
-    this.#registry = registry;
-    this.#contextKeyService = contextKeyService;
-    this.own(this.#registry.onDidRegisterViews((event) => {
-      if (event.container.id === this.viewContainer.id) this.#recompute();
+    this.registry = registry;
+    this.contextKeyService = contextKeyService;
+    this.own(this.registry.onDidRegisterViews((event) => {
+      if (event.container.id === this.viewContainer.id) this.recompute();
     }));
-    this.own(this.#registry.onDidDeregisterViews((event) => {
-      if (event.container.id === this.viewContainer.id) this.#recompute();
+    this.own(this.registry.onDidDeregisterViews((event) => {
+      if (event.container.id === this.viewContainer.id) this.recompute();
     }));
-    this.own(this.#contextKeyService.onDidChangeContext((event) => {
-      if (this.#affectsActiveViews(event)) this.#recompute();
+    this.own(this.contextKeyService.onDidChangeContext((event) => {
+      if (this.affectsActiveViews(event)) this.recompute();
     }));
     this.defer(() => {
-      for (const key of this.#visibilityContextKeys.values()) key.reset();
-      this.#visibilityContextKeys.clear();
-      this.#visibility.clear();
+      for (const key of this.visibilityContextKeys.values()) key.reset();
+      this.visibilityContextKeys.clear();
+      this.visibility.clear();
     });
-    this.#recompute();
+    this.recompute();
   }
 
   get allViewDescriptors(): readonly IViewDescriptor[] {
-    return this.#allViewDescriptors;
+    return this._allViewDescriptors;
   }
 
   get activeViewDescriptors(): readonly IViewDescriptor[] {
-    return this.#activeViewDescriptors;
+    return this._activeViewDescriptors;
   }
 
   get visibleViewDescriptors(): readonly IViewDescriptor[] {
-    return this.#visibleViewDescriptors;
+    return this._visibleViewDescriptors;
   }
 
   isVisible(viewId: string): boolean {
-    return this.#visibleViewDescriptors.some((view) => view.id === viewId);
+    return this._visibleViewDescriptors.some((view) => view.id === viewId);
   }
 
   setVisible(viewId: string, visible: boolean): void {
-    const descriptor = this.#allViewDescriptors.find(
+    const descriptor = this._allViewDescriptors.find(
       (view) => view.id === viewId,
     );
     if (!descriptor) throw new Error(`Unknown view: ${viewId}`);
     if (descriptor.canToggleVisibility === false) {
       throw new Error(`View visibility cannot be changed: ${viewId}`);
     }
-    if (this.#preferredVisibility(descriptor) === visible) return;
-    this.#visibility.set(viewId, visible);
-    this.#recompute();
+    if (this.preferredVisibility(descriptor) === visible) return;
+    this.visibility.set(viewId, visible);
+    this.recompute();
   }
 
-  #affectsActiveViews(event: ContextKeyChangeEvent): boolean {
-    return this.#allViewDescriptors.some((view) =>
+  private affectsActiveViews(event: ContextKeyChangeEvent): boolean {
+    return this._allViewDescriptors.some((view) =>
       view.when !== undefined && event.affectsSome(view.when.keys())
     );
   }
 
-  #recompute(): void {
-    const previousAll = this.#allViewDescriptors;
-    const previousActive = this.#activeViewDescriptors;
-    const previousVisible = this.#visibleViewDescriptors;
-    const all = this.#registry.getViews(this.viewContainer.id);
+  private recompute(): void {
+    const previousAll = this._allViewDescriptors;
+    const previousActive = this._activeViewDescriptors;
+    const previousVisible = this._visibleViewDescriptors;
+    const all = this.registry.getViews(this.viewContainer.id);
     const active = all.filter((view) =>
-      this.#contextKeyService.contextMatchesRules(view.when)
+      this.contextKeyService.contextMatchesRules(view.when)
     );
     const visible = active.filter((view) =>
-      this.#preferredVisibility(view)
+      this.preferredVisibility(view)
     );
 
-    this.#allViewDescriptors = all;
-    this.#activeViewDescriptors = active;
-    this.#visibleViewDescriptors = visible;
-    this.#updateVisibilityContextKeys(all, visible);
+    this._allViewDescriptors = all;
+    this._activeViewDescriptors = active;
+    this._visibleViewDescriptors = visible;
+    this.updateVisibilityContextKeys(all, visible);
     fireDescriptorChanges(
-      this.#onDidChangeAllViewDescriptors,
+      this._onDidChangeAllViewDescriptors,
       previousAll,
       all,
     );
     fireDescriptorChanges(
-      this.#onDidChangeActiveViewDescriptors,
+      this._onDidChangeActiveViewDescriptors,
       previousActive,
       active,
     );
     fireDescriptorChanges(
-      this.#onDidChangeVisibleViewDescriptors,
+      this._onDidChangeVisibleViewDescriptors,
       previousVisible,
       visible,
     );
   }
 
-  #preferredVisibility(descriptor: IViewDescriptor): boolean {
-    return this.#visibility.get(descriptor.id) ??
+  private preferredVisibility(descriptor: IViewDescriptor): boolean {
+    return this.visibility.get(descriptor.id) ??
       descriptor.hideByDefault !== true;
   }
 
-  #updateVisibilityContextKeys(
+  private updateVisibilityContextKeys(
     all: readonly IViewDescriptor[],
     visible: readonly IViewDescriptor[],
   ): void {
     const allIds = new Set(all.map((view) => view.id));
     const visibleIds = new Set(visible.map((view) => view.id));
-    for (const [viewId, key] of this.#visibilityContextKeys) {
+    for (const [viewId, key] of this.visibilityContextKeys) {
       if (allIds.has(viewId)) continue;
       key.reset();
-      this.#visibilityContextKeys.delete(viewId);
-      this.#visibility.delete(viewId);
+      this.visibilityContextKeys.delete(viewId);
+      this.visibility.delete(viewId);
     }
     for (const descriptor of all) {
-      let key = this.#visibilityContextKeys.get(descriptor.id);
+      let key = this.visibilityContextKeys.get(descriptor.id);
       if (!key) {
-        key = this.#contextKeyService.createKey(
+        key = this.contextKeyService.createKey(
           getVisibleViewContextKey(descriptor.id),
           false,
         );
-        this.#visibilityContextKeys.set(descriptor.id, key);
+        this.visibilityContextKeys.set(descriptor.id, key);
       }
       key.set(visibleIds.has(descriptor.id));
     }

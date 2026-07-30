@@ -43,38 +43,38 @@ export class ManagedStyleSheet extends DisposableOwner {
  * window.
  */
 export class GlobalStyleSheet extends DisposableOwner {
-  readonly #styles = new Map<BrowserWindow, ManagedStyleSheet>();
-  #cssText: string;
+  private readonly styles = new Map<BrowserWindow, ManagedStyleSheet>();
+  private cssText: string;
 
   constructor(cssText = "") {
     super();
-    this.#cssText = cssText;
+    this.cssText = cssText;
     for (const registration of getWindows()) {
-      this.#attach(registration.window);
+      this.attach(registration.window);
     }
-    this.own(onDidRegisterWindow(({ window }) => this.#attach(window)));
-    this.own(onWillUnregisterWindow(({ window }) => this.#detach(window)));
-    this.defer(() => this.#styles.clear());
+    this.own(onDidRegisterWindow(({ window }) => this.attach(window)));
+    this.own(onWillUnregisterWindow(({ window }) => this.detach(window)));
+    this.defer(() => this.styles.clear());
   }
 
   setText(cssText: string): void {
-    if (cssText === this.#cssText) return;
-    this.#cssText = cssText;
-    for (const style of this.#styles.values()) style.setText(cssText);
+    if (cssText === this.cssText) return;
+    this.cssText = cssText;
+    for (const style of this.styles.values()) style.setText(cssText);
   }
 
-  #attach(targetWindow: BrowserWindow): void {
-    if (this.#styles.has(targetWindow)) return;
+  private attach(targetWindow: BrowserWindow): void {
+    if (this.styles.has(targetWindow)) return;
     const style = this.own(
-      new ManagedStyleSheet(targetWindow.document, this.#cssText),
+      new ManagedStyleSheet(targetWindow.document, this.cssText),
     );
-    this.#styles.set(targetWindow, style);
+    this.styles.set(targetWindow, style);
   }
 
-  #detach(targetWindow: BrowserWindow): void {
-    const style = this.#styles.get(targetWindow);
+  private detach(targetWindow: BrowserWindow): void {
+    const style = this.styles.get(targetWindow);
     if (!style) return;
-    this.#styles.delete(targetWindow);
+    this.styles.delete(targetWindow);
     style.dispose();
   }
 }
