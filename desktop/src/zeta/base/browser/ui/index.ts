@@ -37,8 +37,12 @@ export {
 } from "./dropdown/dropdownMenuActionViewItem.js";
 export {
   Grid,
+  SerializableGrid,
   type GridDescriptor,
+  type IGridViewDeserializer,
   type IGridView,
+  type ISerializableGridView,
+  type SerializedGridDescriptor,
 } from "./grid/grid.js";
 export {
   Hover,

@@ -389,7 +389,42 @@ sanitizer 实例，防止 hook 跨窗口或跨消费者泄漏。`base/browser/ma
 或预览状态持久化。这些属于后续能力，加入时必须继续保持“解析后统一 sanitize，再进入隔离
 容器”的顺序。
 
-### 6.4 Workbench View 与 Chat
+### 6.4 Workbench 布局
+
+`base/browser/ui/grid/Grid` 是不感知 Workbench 语义的二维布局原语。它用 branch/leaf
+descriptor 创建嵌套 `SplitView`，运行时拥有尺寸、显隐和隐藏 leaf 的 cached visible
+size。`SerializableGrid` 在该原语之上通过 view 的 `toJSON()` 与显式 deserializer
+生成和恢复 Grid 快照；该能力不授权 base 引用 Part、ViewContainer 或其他 Workbench
+domain。
+
+`workbench/services/layout/browser/layoutService.ts` 拥有面向 contribution 的窗口级布局
+契约、Part identity 和 service identifier。`workbench/browser/layout.ts` 是具体实现，
+拥有合法的 Workbench 拓扑和初始化策略；默认 Sidebar、Auxiliary Bar、Panel 尺寸分别由
+该实现内的静态常量控制，其中 Auxiliary Bar 默认宽度为 260px。窗口变化由高优先级
+Editor 区域吸收，Part 即使隐藏也保持挂载，尺寸查询返回其可恢复尺寸。
+
+当前可变尺寸和显隐快照是具体 `WorkbenchLayout` 的私有实现关注点，不是 Layout Service
+契约，也不存在独立的 `layoutState` service。状态流为：
+
+```text
+Layout static defaults
+  → initialization state
+  → validated restore input（如调用方提供）
+  → SerializableGrid runtime
+  → resize / visibility event
+```
+
+Renderer 尚未建立带 scope 和 lifecycle 的通用 Storage Service，因此 Layout 不直接绑定
+`localStorage`。未来持久化必须依赖平台存储契约，并由具体 Layout 的私有状态模型协调，
+不能把浏览器适配器包装成 Layout State service。Panel 换边、Sidebar 换边、任意 Part
+移动和多窗口拓扑尚未实现，出现真实产品需求时应扩展具体 Layout，而不是让 contribution
+直接操作 Grid。
+
+Renderer Part 的视觉所有权仍以
+[`ui-styling-ownership.md`](ui-styling-ownership.md) 为准；Grid 只拥有几何和 sash，
+不拥有 Part 内部样式。
+
+### 6.5 Workbench View 与 Chat
 
 Workbench 使用 `ViewContainerLocation` 区分 Sidebar、Auxiliary Bar 和 Panel。
 Sidebar 与 Auxiliary Bar 均由 `CompositePart` 持有通用 `CompositeBar`，容器贡献只负责声明
@@ -421,7 +456,7 @@ thread 的可释放订阅、已提交 transcript 与临时 stream projection。�
 由于 session 列表当前没有最近活动时间，启动时只能按服务端顺序选择首个活动 thread；
 Browser 入口没有 App Server 连接时会明确显示不可用状态。
 
-### 6.5 Integrated Terminal
+### 6.6 Integrated Terminal
 
 Terminal contribution 只依赖 Workbench service layer 的 `ITerminalService`。实例管理、输入
 batching、resize coalescing 和 polling 由 `TerminalService` 负责；process contract 位于

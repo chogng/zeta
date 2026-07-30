@@ -2,7 +2,7 @@ import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
 import { Action2, MenuId, registerAction2 } from "../../../../platform/actions/common/actions.js";
 import type { ServicesAccessor } from "../../../../platform/instantiation/common/instantiation.js";
 import { AuxiliaryBarVisibleContext, PanelVisibleContext, SideBarVisibleContext } from "../../../common/contextkeys.js";
-import { IWorkbenchLayoutService } from "../../layout.js";
+import { IWorkbenchLayoutService } from "../../../services/layout/browser/layoutService.js";
 
 export const ToggleSideBarCommandId = "workbench.action.toggleSideBar";
 export const ToggleAuxiliaryBarCommandId = "workbench.action.toggleAuxiliaryBar";

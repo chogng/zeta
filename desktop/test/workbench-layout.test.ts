@@ -33,10 +33,9 @@ const { MenuService } = await import(
   "../src/zeta/platform/actions/common/menuService.js"
 );
 const {
-  IWorkbenchLayoutService,
   WorkbenchLayout,
-  workbenchPartIds,
 } = await import("../src/zeta/workbench/browser/layout.js");
+const { IWorkbenchLayoutService, workbenchPartIds } = await import("../src/zeta/workbench/services/layout/browser/layoutService.js");
 const {
   bindWorkbenchPartVisibilityContextKeys,
 } = await import("../src/zeta/workbench/browser/contextkeys.js");
@@ -84,14 +83,15 @@ const { InstantiationService, ServiceCollection, SyncDescriptor } = await import
 );
 
 type WorkbenchPartId =
-  import("../src/zeta/workbench/browser/layout.js").WorkbenchPartId;
+  import("../src/zeta/workbench/services/layout/browser/layoutService.js").WorkbenchPartId;
 type WorkbenchLayoutInstance =
   import("../src/zeta/workbench/browser/layout.js").WorkbenchLayout;
+type WorkbenchLayoutOptions =
+  import("../src/zeta/workbench/browser/layout.js").WorkbenchLayoutOptions;
 type WorkbenchPartInstance =
   import("../src/zeta/workbench/browser/part.js").WorkbenchPart;
 type EditorPartInstance =
   import("../src/zeta/workbench/browser/parts/editor/editorPart.js").EditorPart;
-
 class TestPart extends WorkbenchPart {
   constructor(
     readonly id: WorkbenchPartId,
@@ -129,7 +129,10 @@ class TestPart extends WorkbenchPart {
   }
 }
 
-function createLayoutHarness(ownerDocument: Document): {
+function createLayoutHarness(
+  ownerDocument: Document,
+  options: WorkbenchLayoutOptions = {},
+): {
   readonly disposables: DisposableStore;
   readonly container: HTMLElement;
   readonly editor: EditorPartInstance;
@@ -152,7 +155,7 @@ function createLayoutHarness(ownerDocument: Document): {
   }
   if (!editor) throw new Error("Test layout requires an editor Part");
 
-  const layout = disposables.add(new WorkbenchLayout(container, parts));
+  const layout = disposables.add(new WorkbenchLayout(container, parts, options));
   return { disposables, container, editor, layout };
 }
 
@@ -234,10 +237,40 @@ test("Workbench layout state is versioned and excludes topology", () => {
   assert.deepEqual(state, {
     version: 2,
     sidebar: { width: 250, visible: true },
-    auxiliarybar: { width: 220, visible: false },
+    auxiliarybar: { width: 260, visible: false },
     panel: { height: 180, visible: true },
   });
   assert.equal("children" in state, false);
+
+  harness.disposables.dispose();
+  dom.window.close();
+});
+
+test("Workbench layout derives flexible editor size from the container", () => {
+  const dom = new JSDOM("<!doctype html><body></body>");
+  const harness = createLayoutHarness(dom.window.document, {
+    initialDimension: new Dimension(1_200, 800),
+  });
+  harness.layout.layout(new Dimension(1_200, 800));
+
+  assert.deepEqual(
+    harness.layout.getPartSize("sidebar"),
+    new Dimension(220, 742),
+  );
+  assert.deepEqual(
+    harness.layout.getPartSize("auxiliarybar"),
+    new Dimension(260, 742),
+  );
+  assert.deepEqual(
+    harness.layout.getPartSize("editor"),
+    new Dimension(720, 542),
+  );
+  assert.equal(harness.layout.getPartSize("panel").height, 200);
+
+  harness.layout.layout(new Dimension(1_300, 800));
+  assert.equal(harness.layout.getPartSize("sidebar").width, 220);
+  assert.equal(harness.layout.getPartSize("auxiliarybar").width, 260);
+  assert.equal(harness.layout.getPartSize("editor").width, 820);
 
   harness.disposables.dispose();
   dom.window.close();

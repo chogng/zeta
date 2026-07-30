@@ -1,15 +1,7 @@
-import {
-  type IDimension,
-  type IRectangle,
-} from "../../geometry.js";
+import { type IDimension, type IRectangle } from "../../geometry.js";
 import { Emitter, type Event } from "../../../common/event.js";
 import { DisposableOwner } from "../../../common/lifecycle.js";
-import {
-  type ISplitViewView,
-  SplitView,
-  type SplitViewLayoutPriority,
-  type SplitViewOrientation,
-} from "../splitview/splitview.js";
+import { type ISplitViewView, SplitView, type SplitViewLayoutPriority, type SplitViewOrientation } from "../splitview/splitview.js";
 
 /** A two-dimensional leaf hosted by Grid. */
 export interface IGridView {
@@ -39,6 +31,30 @@ export type GridDescriptor<TView extends IGridView> =
     readonly priority?: SplitViewLayoutPriority;
   };
 
+export interface ISerializableGridView extends IGridView {
+  toJSON(): unknown;
+}
+
+export interface IGridViewDeserializer<TView extends ISerializableGridView> {
+  fromJSON(data: unknown): TView;
+}
+
+export type SerializedGridDescriptor =
+  | {
+    readonly type: "leaf";
+    readonly data: unknown;
+    readonly size: number;
+    readonly visible: boolean;
+    readonly priority: SplitViewLayoutPriority;
+  }
+  | {
+    readonly type: "branch";
+    readonly orientation: SplitViewOrientation;
+    readonly size: number;
+    readonly children: readonly SerializedGridDescriptor[];
+    readonly priority: SplitViewLayoutPriority;
+  };
+
 interface ParentLink {
   readonly branch: BranchNode;
   readonly index: number;
@@ -53,6 +69,8 @@ interface GridNodeHost {
 }
 
 abstract class GridNode {
+  constructor(readonly initialSize: number) {}
+
   abstract readonly element: HTMLElement;
   parent: ParentLink | undefined;
   width = 0;
@@ -78,8 +96,12 @@ abstract class GridNode {
 class LeafNode<TView extends IGridView> extends GridNode {
   visible: boolean;
 
-  constructor(readonly view: TView, visible: boolean) {
-    super();
+  constructor(
+    readonly view: TView,
+    visible: boolean,
+    initialSize: number,
+  ) {
+    super(initialSize);
     this.visible = visible;
   }
 
@@ -118,9 +140,10 @@ class BranchNode extends GridNode {
     readonly orientation: SplitViewOrientation,
     descriptors: readonly GridDescriptor<IGridView>[],
     priority: SplitViewLayoutPriority,
+    initialSize: number,
     host: GridNodeHost,
   ) {
-    super();
+    super(initialSize);
     this.priority = priority;
     if (descriptors.length === 0) {
       throw new TypeError("Grid branches must contain at least one child");
@@ -270,12 +293,12 @@ class AxisView implements ISplitViewView {
  */
 export class Grid<TView extends IGridView> extends DisposableOwner {
   readonly element: HTMLDivElement;
-  private readonly root: GridNode;
+  protected readonly root: GridNode;
   private readonly leaves = new Map<TView, LeafNode<TView>>();
   private readonly _onDidChange = this.own(new Emitter<void>());
   private layoutWidth = 0;
   private layoutHeight = 0;
-  private didLayout = false;
+  protected didLayout = false;
   private layingOut = false;
 
   readonly onDidChange: Event<void> = this._onDidChange.event;
@@ -334,6 +357,15 @@ export class Grid<TView extends IGridView> extends DisposableOwner {
 
   getViewSize(view: TView): IDimension {
     const leaf = this.leaf(view);
+    if (!leaf.visible && leaf.parent) {
+      const { branch, index } = leaf.parent;
+      const primarySize =
+        branch.splitView.getViewCachedVisibleSize(index) ??
+        branch.splitView.getViewSize(index);
+      return branch.orientation === "horizontal"
+        ? { width: primarySize, height: branch.height }
+        : { width: branch.width, height: primarySize };
+    }
     return { width: leaf.width, height: leaf.height };
   }
 
@@ -371,7 +403,7 @@ export class Grid<TView extends IGridView> extends DisposableOwner {
     host: GridNodeHost,
   ): GridNode {
     if (descriptor.type === "leaf") {
-      const leaf = new LeafNode(descriptor.view, descriptor.visible !== false);
+      const leaf = new LeafNode(descriptor.view, descriptor.visible !== false, descriptor.size);
       leaf.priority = descriptor.priority ?? "normal";
       if (this.leaves.has(descriptor.view as TView)) {
         throw new Error("Grid cannot contain the same view twice");
@@ -383,6 +415,7 @@ export class Grid<TView extends IGridView> extends DisposableOwner {
       descriptor.orientation,
       descriptor.children,
       descriptor.priority ?? "normal",
+      descriptor.size,
       host,
     );
   }
@@ -408,6 +441,111 @@ export class Grid<TView extends IGridView> extends DisposableOwner {
     if (!leaf) throw new Error("Grid view is not registered");
     return leaf;
   }
+}
+
+/** A Grid whose view identity and runtime geometry can cross persistence boundaries. */
+export class SerializableGrid<TView extends ISerializableGridView> extends Grid<TView> {
+  static deserialize<TView extends ISerializableGridView>(
+    descriptor: SerializedGridDescriptor,
+    deserializer: IGridViewDeserializer<TView>,
+    ownerDocument: Document = document,
+  ): SerializableGrid<TView> {
+    validateSerializedDescriptor(descriptor);
+    return new SerializableGrid(
+      deserializeGridDescriptor(descriptor, deserializer),
+      ownerDocument,
+    );
+  }
+
+  serialize(): SerializedGridDescriptor {
+    return serializeGridNode(this.root, this.didLayout);
+  }
+}
+
+function serializeGridNode(node: GridNode, didLayout: boolean): SerializedGridDescriptor {
+  const size = gridNodeSize(node, didLayout);
+  if (node instanceof LeafNode) {
+    const view = node.view;
+    if (!isSerializableGridView(view)) {
+      throw new TypeError("SerializableGrid contains a non-serializable view");
+    }
+    return {
+      type: "leaf",
+      data: view.toJSON(),
+      size,
+      visible: node.visible,
+      priority: node.priority,
+    };
+  }
+  if (!(node instanceof BranchNode)) {
+    throw new TypeError("SerializableGrid contains an unsupported node");
+  }
+  return {
+    type: "branch",
+    orientation: node.orientation,
+    size,
+    children: node.children.map((child) => serializeGridNode(child, didLayout)),
+    priority: node.priority,
+  };
+}
+
+function gridNodeSize(node: GridNode, didLayout: boolean): number {
+  if (node.parent) {
+    const { branch, index } = node.parent;
+    return branch.splitView.getViewCachedVisibleSize(index) ?? branch.splitView.getViewSize(index);
+  }
+  if (!didLayout) return node.initialSize;
+  return node instanceof BranchNode && node.orientation === "vertical" ? node.height : node.width;
+}
+
+function deserializeGridDescriptor<TView extends ISerializableGridView>(
+  descriptor: SerializedGridDescriptor,
+  deserializer: IGridViewDeserializer<TView>,
+): GridDescriptor<TView> {
+  if (descriptor.type === "leaf") {
+    return {
+      type: "leaf",
+      view: deserializer.fromJSON(descriptor.data),
+      size: descriptor.size,
+      visible: descriptor.visible,
+      priority: descriptor.priority,
+    };
+  }
+  return {
+    type: "branch",
+    orientation: descriptor.orientation,
+    size: descriptor.size,
+    children: descriptor.children.map((child) => deserializeGridDescriptor(child, deserializer)),
+    priority: descriptor.priority,
+  };
+}
+
+function validateSerializedDescriptor(descriptor: SerializedGridDescriptor): void {
+  assertDimension(descriptor.size, "serialized descriptor size");
+  assertPriority(descriptor.priority);
+  if (descriptor.type === "leaf") {
+    if (typeof descriptor.visible !== "boolean") {
+      throw new TypeError("Grid serialized leaf visibility is invalid");
+    }
+    return;
+  }
+  if (descriptor.orientation !== "horizontal" && descriptor.orientation !== "vertical") {
+    throw new TypeError("Grid serialized branch orientation is invalid");
+  }
+  if (descriptor.children.length === 0) {
+    throw new TypeError("Grid serialized branches must contain at least one child");
+  }
+  for (const child of descriptor.children) validateSerializedDescriptor(child);
+}
+
+function assertPriority(priority: SplitViewLayoutPriority): void {
+  if (priority !== "low" && priority !== "normal" && priority !== "high") {
+    throw new TypeError("Grid serialized descriptor priority is invalid");
+  }
+}
+
+function isSerializableGridView(view: IGridView): view is ISerializableGridView {
+  return "toJSON" in view && typeof view.toJSON === "function";
 }
 
 function descriptorSizing(

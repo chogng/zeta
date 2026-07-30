@@ -95,7 +95,7 @@ Menu placement、快捷键和 Command Palette 入口：
 import { Action2, MenuId, registerAction2 } from "../../../../platform/actions/common/actions.js";
 import type { ServicesAccessor } from "../../../../platform/instantiation/common/instantiation.js";
 import { PanelVisibleContext } from "../../../common/contextkeys.js";
-import { IWorkbenchLayoutService } from "../../layout.js";
+import { IWorkbenchLayoutService } from "../../../services/layout/browser/layoutService.js";
 
 registerAction2(class TogglePanelAction extends Action2 {
   constructor() {

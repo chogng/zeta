@@ -20,7 +20,7 @@ for (const [name, value] of Object.entries({
   });
 }
 
-const { Grid } = await import("../../browser/ui/grid/grid.js");
+const { Grid, SerializableGrid } = await import("../../browser/ui/grid/grid.js");
 
 class TestGridView {
   readonly element: HTMLDivElement;
@@ -48,6 +48,21 @@ class TestGridView {
 
   setVisible(visible: boolean): void {
     this.visible = visible;
+  }
+}
+
+class SerializableTestGridView extends TestGridView {
+  constructor(
+    ownerDocument: Document,
+    readonly id: string,
+    minimumWidth: number,
+    maximumWidth: number,
+  ) {
+    super(ownerDocument, minimumWidth, maximumWidth);
+  }
+
+  toJSON(): string {
+    return this.id;
   }
 }
 
@@ -151,5 +166,56 @@ test("Grid rejects duplicate views in its descriptor", () => {
     }, dom.window.document),
     /same view twice/,
   );
+  dom.window.close();
+});
+
+test("SerializableGrid restores view identity and runtime geometry", () => {
+  const dom = new JSDOM("<!doctype html><body></body>");
+  const left = new SerializableTestGridView(dom.window.document, "left", 100, 600);
+  const editor = new SerializableTestGridView(dom.window.document, "editor", 120, Infinity);
+  const right = new SerializableTestGridView(dom.window.document, "right", 100, 600);
+  const grid = new SerializableGrid({
+    type: "branch",
+    orientation: "horizontal",
+    size: 800,
+    children: [
+      { type: "leaf", view: left, size: 200 },
+      { type: "leaf", view: editor, size: 400, priority: "high" },
+      { type: "leaf", view: right, size: 200 },
+    ],
+  }, dom.window.document);
+  grid.layout(900, 600);
+  grid.resizeView(right, { width: 250, height: 600 });
+  grid.setViewVisible(left, false);
+
+  const snapshot = grid.serialize();
+  const restoredViews = new Map<string, SerializableTestGridView>();
+  const restored = SerializableGrid.deserialize(
+    snapshot,
+    {
+      fromJSON: (data) => {
+        if (typeof data !== "string") {
+          throw new TypeError("Serialized test view ID must be a string");
+        }
+        const view = new SerializableTestGridView(
+          dom.window.document,
+          data,
+          data === "editor" ? 120 : 100,
+          data === "editor" ? Infinity : 600,
+        );
+        restoredViews.set(data, view);
+        return view;
+      },
+    },
+    dom.window.document,
+  );
+  restored.layout(900, 600);
+
+  assert.equal(restored.isViewVisible(restoredViews.get("left")!), false);
+  assert.equal(restored.getViewSize(restoredViews.get("editor")!).width, 650);
+  assert.equal(restored.getViewSize(restoredViews.get("right")!).width, 250);
+
+  restored.dispose();
+  grid.dispose();
   dom.window.close();
 });

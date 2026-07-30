@@ -1,42 +1,26 @@
-import {
-  Dimension,
-  getClientArea,
-  type IDimension,
-  type IRectangle,
-} from "../../base/browser/geometry.js";
-import {
-  Grid,
-  type GridDescriptor,
-  type IGridView,
-} from "../../base/browser/ui/grid/grid.js";
+import { Dimension, getClientArea, type IDimension, type IRectangle } from "../../base/browser/geometry.js";
+import { SerializableGrid, type ISerializableGridView, type SerializedGridDescriptor } from "../../base/browser/ui/grid/grid.js";
 import { type Event, Emitter } from "../../base/common/event.js";
 import { DisposableOwner } from "../../base/common/lifecycle.js";
-import {
-  createServiceIdentifier,
-} from "../../platform/instantiation/common/instantiation.js";
+import { type IWorkbenchLayoutService, type WorkbenchPartId, type WorkbenchPartVisibilityChangeEvent, workbenchPartIds } from "../services/layout/browser/layoutService.js";
 import { type WorkbenchPart } from "./part.js";
 
-export const workbenchPartIds = [
-  "titlebar",
-  "statusbar",
-  "sidebar",
-  "auxiliarybar",
-  "editor",
-  "panel",
-] as const;
-export type WorkbenchPartId = typeof workbenchPartIds[number];
+const DEFAULT_LAYOUT_WIDTH = 1_024;
+const DEFAULT_LAYOUT_HEIGHT = 768;
+const DEFAULT_SIDEBAR_WIDTH = 220;
+const DEFAULT_AUXILIARYBAR_WIDTH = 260;
+const DEFAULT_PANEL_HEIGHT = 200;
+const EDITOR_LAYOUT_PRIORITY = "high" as const;
 
-/** A Workbench Part whose effective layout visibility changed. */
-export interface WorkbenchPartVisibilityChangeEvent {
-  readonly partId: WorkbenchPartId;
-  readonly visible: boolean;
+export interface WorkbenchLayoutOptions {
+  readonly initialDimension?: IDimension;
 }
 
 /**
  * The stable, mutable portion of Workbench layout state.
  *
- * Topology is intentionally absent: migrations only need to handle user-sized
- * regions and visibility, never an arbitrary external layout tree.
+ * The concrete layout owns this shape. The Layout Service exposes runtime
+ * operations and does not make persisted representation part of its contract.
  */
 export interface WorkbenchLayoutState {
   readonly version: 2;
@@ -54,23 +38,6 @@ export interface WorkbenchLayoutState {
   };
 }
 
-/** Runtime layout operations available to Workbench contributions. */
-export interface IWorkbenchLayoutService {
-  readonly onDidChangePartVisibility: Event<
-    WorkbenchPartVisibilityChangeEvent
-  >;
-  isPartVisible(partId: WorkbenchPartId): boolean;
-  showPart(partId: WorkbenchPartId): void;
-  showParts(partIds: readonly WorkbenchPartId[]): void;
-  hidePart(partId: WorkbenchPartId): void;
-  hideParts(partIds: readonly WorkbenchPartId[]): void;
-  getPartSize(partId: WorkbenchPartId): IDimension;
-  resizePart(partId: WorkbenchPartId, dimension: IDimension): void;
-}
-
-export const IWorkbenchLayoutService =
-  createServiceIdentifier<IWorkbenchLayoutService>("workbenchLayoutService");
-
 /**
  * Owns the Workbench's fixed topology and mutable pixel layout state.
  *
@@ -81,19 +48,17 @@ export class WorkbenchLayout
   extends DisposableOwner
   implements IWorkbenchLayoutService {
   private readonly views = new Map<WorkbenchPartId, WorkbenchPartView>();
-  private readonly grid: Grid<WorkbenchPartView>;
+  private readonly grid: SerializableGrid<WorkbenchPartView>;
   private readonly partVisibility = new Map<WorkbenchPartId, boolean>();
-  private readonly _onDidChangePartVisibility =
-    this.own(new Emitter<WorkbenchPartVisibilityChangeEvent>());
+  private readonly _onDidChangePartVisibility = this.own(new Emitter<WorkbenchPartVisibilityChangeEvent>());
 
-  readonly onDidChangePartVisibility: Event<
-    WorkbenchPartVisibilityChangeEvent
-  > = this._onDidChangePartVisibility.event;
+  readonly onDidChangePartVisibility = this._onDidChangePartVisibility.event;
   readonly element: HTMLDivElement;
 
   constructor(
     private readonly container: Element,
     parts: ReadonlyMap<WorkbenchPartId, WorkbenchPart>,
+    options: WorkbenchLayoutOptions = {},
   ) {
     super();
     validateParts(parts);
@@ -105,11 +70,14 @@ export class WorkbenchLayout
     for (const partId of workbenchPartIds) {
       this.views.set(
         partId,
-        new WorkbenchPartView(requiredPart(parts, partId)),
+        new WorkbenchPartView(partId, requiredPart(parts, partId)),
       );
     }
-    this.grid = this.own(new Grid(
-      createWorkbenchGridDescriptor(this.views),
+    const initialDimension = resolveInitialDimension(this.element, options);
+    const initialState = createDefaultWorkbenchLayoutState();
+    this.grid = this.own(SerializableGrid.deserialize(
+      createWorkbenchGridDescriptor(this.views, initialDimension, initialState),
+      { fromJSON: (data) => this.view(parseWorkbenchPartId(data)) },
       container.ownerDocument,
     ));
     this.element.append(this.grid.element);
@@ -159,26 +127,11 @@ export class WorkbenchLayout
 
   restoreState(value: unknown): void {
     const state = parseWorkbenchLayoutState(value);
-    this.resizePart(
-      "sidebar",
-      this.getPartSize("sidebar").with(state.sidebar.width),
-    );
-    this.resizePart(
-      "auxiliarybar",
-      this.getPartSize("auxiliarybar").with(state.auxiliarybar.width),
-    );
-    this.resizePart(
-      "panel",
-      new Dimension(this.getPartSize("panel").width, state.panel.height),
-    );
-    this.updatePartsVisibility(
-      ["sidebar"],
-      state.sidebar.visible,
-    );
-    this.updatePartsVisibility(
-      ["auxiliarybar"],
-      state.auxiliarybar.visible,
-    );
+    this.resizePart("sidebar", this.getPartSize("sidebar").with(state.sidebar.width));
+    this.resizePart("auxiliarybar", this.getPartSize("auxiliarybar").with(state.auxiliarybar.width));
+    this.resizePart("panel", new Dimension(this.getPartSize("panel").width, state.panel.height));
+    this.updatePartsVisibility(["sidebar"], state.sidebar.visible);
+    this.updatePartsVisibility(["auxiliarybar"], state.auxiliarybar.visible);
     this.updatePartsVisibility(["panel"], state.panel.visible);
   }
 
@@ -243,8 +196,11 @@ export class WorkbenchLayout
   }
 }
 
-class WorkbenchPartView implements IGridView {
-  constructor(readonly part: WorkbenchPart) {}
+class WorkbenchPartView implements ISerializableGridView {
+  constructor(
+    readonly partId: WorkbenchPartId,
+    readonly part: WorkbenchPart,
+  ) {}
 
   get element(): HTMLElement { return this.part.element; }
   get minimumWidth(): number { return this.part.minimumWidth; }
@@ -260,51 +216,116 @@ class WorkbenchPartView implements IGridView {
   setVisible(visible: boolean): void {
     this.part.setVisible(visible);
   }
+
+  toJSON(): WorkbenchPartId {
+    return this.partId;
+  }
 }
 
 function createWorkbenchGridDescriptor(
   views: ReadonlyMap<WorkbenchPartId, WorkbenchPartView>,
-): GridDescriptor<WorkbenchPartView> {
+  dimension: IDimension,
+  state: WorkbenchLayoutState,
+): SerializedGridDescriptor {
   const leaf = (
     partId: WorkbenchPartId,
     size: number,
-  ): GridDescriptor<WorkbenchPartView> => ({
+    visible = true,
+    priority: "normal" | "high" = "normal",
+  ): SerializedGridDescriptor => ({
     type: "leaf",
-    view: requiredView(views, partId),
+    data: partId,
     size,
+    visible,
+    priority,
   });
+  const titlebarHeight = requiredView(views, "titlebar").minimumHeight;
+  const statusbarHeight = requiredView(views, "statusbar").minimumHeight;
+  const bodyHeight = Math.max(
+    0,
+    dimension.height - titlebarHeight - statusbarHeight,
+  );
+  const panelHeight = state.panel.height;
+  const editorHeight = Math.max(
+    0,
+    bodyHeight - (state.panel.visible ? panelHeight : 0),
+  );
+  const editorWidth = Math.max(
+    0,
+    dimension.width -
+      (state.sidebar.visible ? state.sidebar.width : 0) -
+      (state.auxiliarybar.visible ? state.auxiliarybar.width : 0),
+  );
   return {
     type: "branch",
     orientation: "vertical",
-    size: 768,
+    size: dimension.height,
+    priority: "normal",
     children: [
-      leaf("titlebar", 35),
+      leaf("titlebar", titlebarHeight),
       {
         type: "branch",
         orientation: "horizontal",
-        size: 710,
-        priority: "high",
+        size: bodyHeight,
+        priority: EDITOR_LAYOUT_PRIORITY,
         children: [
-          leaf("sidebar", 220),
+          leaf("sidebar", state.sidebar.width, state.sidebar.visible),
           {
             type: "branch",
             orientation: "vertical",
-            size: 584,
-            priority: "high",
+            size: editorWidth,
+            priority: EDITOR_LAYOUT_PRIORITY,
             children: [
-              {
-                ...leaf("editor", 510),
-                priority: "high",
-              },
-              leaf("panel", 200),
+              leaf("editor", editorHeight, true, EDITOR_LAYOUT_PRIORITY),
+              leaf("panel", panelHeight, state.panel.visible),
             ],
           },
-          leaf("auxiliarybar", 220),
+          leaf(
+            "auxiliarybar",
+            state.auxiliarybar.width,
+            state.auxiliarybar.visible,
+          ),
         ],
       },
-      leaf("statusbar", 23),
+      leaf("statusbar", statusbarHeight),
     ],
   };
+}
+
+function createDefaultWorkbenchLayoutState(): WorkbenchLayoutState {
+  return {
+    version: 2,
+    sidebar: {
+      width: DEFAULT_SIDEBAR_WIDTH,
+      visible: true,
+    },
+    auxiliarybar: {
+      width: DEFAULT_AUXILIARYBAR_WIDTH,
+      visible: true,
+    },
+    panel: {
+      height: DEFAULT_PANEL_HEIGHT,
+      visible: true,
+    },
+  };
+}
+
+function resolveInitialDimension(
+  container: HTMLElement,
+  options: WorkbenchLayoutOptions,
+): Dimension {
+  if (options.initialDimension) {
+    assertDimension(options.initialDimension);
+    return new Dimension(
+      options.initialDimension.width,
+      options.initialDimension.height,
+    );
+  }
+  const measured = getClientArea(container);
+  return new Dimension(
+    measured.width > 0 ? measured.width : DEFAULT_LAYOUT_WIDTH,
+    measured.height > 0 ? measured.height : DEFAULT_LAYOUT_HEIGHT,
+  );
 }
 
 function validateParts(
@@ -336,21 +357,34 @@ function requiredView(
   return view;
 }
 
-function parseWorkbenchLayoutState(value: unknown): WorkbenchLayoutState {
+function parseWorkbenchPartId(value: unknown): WorkbenchPartId {
+  if (typeof value === "string" && workbenchPartIds.includes(value as WorkbenchPartId)) {
+    return value as WorkbenchPartId;
+  }
+  throw new TypeError("Workbench Grid contains an unknown Part");
+}
+
+function assertDimension(dimension: IDimension): void {
   if (
-    !isRecord(value) ||
-    !isHorizontalLayoutRegionState(value.sidebar) ||
-    !isHorizontalLayoutRegionState(value.auxiliarybar)
+    !Number.isFinite(dimension.width) ||
+    dimension.width < 0 ||
+    !Number.isFinite(dimension.height) ||
+    dimension.height < 0
   ) {
+    throw new RangeError(
+      "Workbench layout dimensions must be non-negative and finite",
+    );
+  }
+}
+
+function parseWorkbenchLayoutState(value: unknown): WorkbenchLayoutState {
+  if (!isRecord(value) || !isHorizontalLayoutRegionState(value.sidebar) || !isHorizontalLayoutRegionState(value.auxiliarybar)) {
     throw new TypeError("Workbench layout state is invalid or unsupported");
   }
   let panel: { readonly height: number; readonly visible: boolean };
   if (value.version === 1) {
     panel = { height: 200, visible: true };
-  } else if (
-    value.version === 2 &&
-    isVerticalLayoutRegionState(value.panel)
-  ) {
+  } else if (value.version === 2 && isVerticalLayoutRegionState(value.panel)) {
     panel = value.panel;
   } else {
     throw new TypeError("Workbench layout state is invalid or unsupported");
@@ -372,37 +406,16 @@ function parseWorkbenchLayoutState(value: unknown): WorkbenchLayoutState {
   };
 }
 
-function isHorizontalLayoutRegionState(
-  value: unknown,
-): value is { readonly width: number; readonly visible: boolean } {
-  return isRecord(value) &&
-    typeof value.width === "number" &&
-    Number.isFinite(value.width) &&
-    value.width >= 0 &&
-    typeof value.visible === "boolean";
+function isHorizontalLayoutRegionState(value: unknown): value is { readonly width: number; readonly visible: boolean } {
+  return isRecord(value) && isLayoutDimension(value.width) && typeof value.visible === "boolean";
 }
 
-function isVerticalLayoutRegionState(
-  value: unknown,
-): value is { readonly height: number; readonly visible: boolean } {
-  return isRecord(value) &&
-    typeof value.height === "number" &&
-    Number.isFinite(value.height) &&
-    value.height >= 0 &&
-    typeof value.visible === "boolean";
+function isVerticalLayoutRegionState(value: unknown): value is { readonly height: number; readonly visible: boolean } {
+  return isRecord(value) && isLayoutDimension(value.height) && typeof value.visible === "boolean";
 }
 
-function assertDimension(dimension: IDimension): void {
-  if (
-    !Number.isFinite(dimension.width) ||
-    dimension.width < 0 ||
-    !Number.isFinite(dimension.height) ||
-    dimension.height < 0
-  ) {
-    throw new RangeError(
-      "Workbench layout dimensions must be non-negative and finite",
-    );
-  }
+function isLayoutDimension(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

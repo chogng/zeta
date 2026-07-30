@@ -18,10 +18,7 @@ import {
   WorkspaceFolderCountContext,
   workbenchStateToContextValue,
 } from "../common/contextkeys.js";
-import type {
-  IWorkbenchLayoutService,
-  WorkbenchPartId,
-} from "./layout.js";
+import type { IWorkbenchLayoutService, WorkbenchPartId } from "../services/layout/browser/layoutService.js";
 
 /** Installs the initial window-wide Workbench context keys. */
 export function bindWorkbenchContextKeys(

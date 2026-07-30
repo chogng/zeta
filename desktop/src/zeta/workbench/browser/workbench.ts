@@ -154,11 +154,8 @@ import {
   bindWorkbenchPartVisibilityContextKeys,
 } from "./contextkeys.js";
 import { WorkbenchThemeController } from "./theme.js";
-import {
-  IWorkbenchLayoutService,
-  WorkbenchLayout,
-  type WorkbenchPartId,
-} from "./layout.js";
+import { WorkbenchLayout } from "./layout.js";
+import { IWorkbenchLayoutService, type WorkbenchPartId } from "../services/layout/browser/layoutService.js";
 import {
   IWorkspaceSearchService,
 } from "../../platform/search/common/search.js";
@@ -494,9 +491,7 @@ export class Workbench extends DisposableOwner {
       ["editor", editor],
       ["panel", panel],
     ]);
-    const layout = this.own(
-      new WorkbenchLayout(workbenchRoot, parts),
-    );
+    const layout = this.own(new WorkbenchLayout(workbenchRoot, parts));
     services.set(IWorkbenchLayoutService, layout);
     services.set(IViewsService, new ViewsService({
       viewDescriptorService: viewDescriptors,
