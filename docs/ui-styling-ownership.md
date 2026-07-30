@@ -42,6 +42,7 @@
 | --- | --- | --- |
 | `ActionBar` | action 排列、方向键导航、roving tabindex、item shell；可显式启用 toggled 高亮上下文 | 不自动决定业务 selected/checked 视觉 |
 | `Button` | button DOM、hover、focus-visible、disabled，以及 `.checked` 与 `aria-pressed` 的并行状态投影 | checked 的具体皮肤由使用上下文决定 |
+| `ContextView` | 浮层挂载、锚点定位、视口内翻转和裁剪，以及通用浮层外壳 | 下拉框、提示、选择器和菜单各自的内容结构与交互状态 |
 | `ToolBar` | primary/secondary action 编排、icon action 尺寸、More Actions、可选 toggled 高亮 | Button 的状态投影仍归 `Button` |
 | `WorkbenchToolBar` | 把 platform action representation 适配到 base `ToolBar`；actions 仍由调用方提供 | 视觉仍归 base `ToolBar`/`Button` |
 | `MenuWorkbenchToolBar` | 从 `MenuId` 解析并刷新 `WorkbenchToolBar` actions | Menu 来源不改变 toolbar ARIA 与视觉 owner |

@@ -1,24 +1,8 @@
 import { Emitter } from "../../../common/event.js";
-import {
-  DisposableOwner,
-  ResettableDisposableGroup,
-} from "../../../common/lifecycle.js";
-import {
-  AnchorAlignment,
-  AnchorAxisAlignment,
-  AnchorPosition,
-  type IRectangle,
-  layout2d,
-} from "../../../common/layout.js";
-import {
-  addDisposableListener,
-  isHTMLElement,
-  isNode,
-} from "../../dom.js";
-import {
-  getActiveElement,
-  restoreFocus,
-} from "../../focus.js";
+import { DisposableOwner, ResettableDisposableGroup, toDisposable } from "../../../common/lifecycle.js";
+import { AnchorAlignment, AnchorAxisAlignment, AnchorPosition, type IRectangle, layout2d } from "../../../common/layout.js";
+import { addDisposableListener, isHTMLElement, isNode } from "../../dom.js";
+import { getActiveElement, restoreFocus } from "../../focus.js";
 import { getViewport } from "../../geometry.js";
 import { getWindow, mainWindow } from "../../window.js";
 
@@ -172,12 +156,32 @@ export class ContextView
       "resize",
       () => this.layout(),
     ));
+    const visualViewport = targetWindow.visualViewport;
+    if (visualViewport) {
+      this.visibleListeners.add(addDisposableListener(
+        visualViewport,
+        "resize",
+        () => this.layout(),
+      ));
+      this.visibleListeners.add(addDisposableListener(
+        visualViewport,
+        "scroll",
+        () => this.layout(),
+      ));
+    }
     this.visibleListeners.add(addDisposableListener(
       ownerDocument,
       "scroll",
       () => this.layout(),
       true,
     ));
+    const ResizeObserverConstructor = targetWindow.ResizeObserver;
+    if (ResizeObserverConstructor) {
+      const observer = new ResizeObserverConstructor(() => this.layout());
+      observer.observe(this.element);
+      if (isElementAnchor(options.anchor)) observer.observe(options.anchor);
+      this.visibleListeners.add(toDisposable(() => observer.disconnect()));
+    }
     return true;
   }
 
@@ -230,14 +234,20 @@ export class ContextView
     this.element.replaceChildren();
     const restoreFocusTo = this.restoreFocusTo;
     this.restoreFocusTo = undefined;
-    if (
-      options.focusRestore === ContextViewFocusRestore.Previous &&
-      restoreFocusTo
-    ) {
-      restoreFocus(restoreFocusTo);
+    try {
+      if (
+        options.focusRestore === ContextViewFocusRestore.Previous &&
+        restoreFocusTo
+      ) {
+        restoreFocus(restoreFocusTo);
+      }
+    } finally {
+      try {
+        options.onHide?.(reason);
+      } finally {
+        this._onDidHide.fire(reason);
+      }
     }
-    options.onHide?.(reason);
-    this._onDidHide.fire(reason);
   }
 }
 
