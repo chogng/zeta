@@ -1,9 +1,13 @@
-use super::{FontFamily, FontWeight, TextBlock, TextStyle, UiScene};
-use crate::{Color, PaintIcon, PaintRect, Point, Rect, Size, SvgIcon};
+use zeta_icons::{Icon, IconDefinition, IconId};
 
-const TEST_ICON: SvgIcon = SvgIcon::new(
-    "test",
-    br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6"/></svg>"#,
+use super::{FontFamily, FontWeight, TextBlock, TextStyle, UiScene};
+use crate::{Color, PaintIcon, PaintRect, Point, Rect, Size};
+
+const TEST_ICON: Icon = Icon::new(
+    IconId::new("test"),
+    IconDefinition::symbolic(
+        br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6"/></svg>"#,
+    ),
 );
 
 #[test]

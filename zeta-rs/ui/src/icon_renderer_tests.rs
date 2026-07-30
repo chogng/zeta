@@ -1,9 +1,13 @@
-use super::{ATLAS_PADDING, ATLAS_SIZE, ShelfAllocator, rasterize_icon, validate_paint_icon};
-use crate::{Color, PaintIcon, Rect, SvgIcon, UiRenderError};
+use zeta_icons::{Icon, IconDefinition, IconId, icons};
 
-const TEST_ICON: SvgIcon = SvgIcon::new(
-    "circle",
-    br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6"/></svg>"#,
+use super::{ATLAS_PADDING, ATLAS_SIZE, ShelfAllocator, rasterize_icon, validate_paint_icon};
+use crate::{Color, PaintIcon, Rect, UiRenderError};
+
+const TEST_ICON: Icon = Icon::new(
+    IconId::new("circle"),
+    IconDefinition::symbolic(
+        br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6"/></svg>"#,
+    ),
 );
 
 #[test]
@@ -53,10 +57,20 @@ fn rejects_negative_icon_bounds() {
 
 #[test]
 fn reports_invalid_svg_with_icon_name() {
-    let icon = SvgIcon::new("broken", b"<svg");
+    let icon = Icon::new(IconId::new("broken"), IconDefinition::symbolic(b"<svg"));
 
     assert!(matches!(
         rasterize_icon(icon, 16, 16),
         Err(UiRenderError::InvalidSvgIcon { name: "broken", .. })
+    ));
+}
+
+#[test]
+fn rejects_multicolor_artwork_before_symbolic_rasterization() {
+    assert!(matches!(
+        rasterize_icon(icons::LAYOUT_PANEL_OFF, 16, 16),
+        Err(UiRenderError::UnsupportedMulticolorIcon {
+            name: "layout-panel-off"
+        })
     ));
 }

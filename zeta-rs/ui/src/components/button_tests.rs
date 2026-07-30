@@ -1,0 +1,87 @@
+use zeta_icons::{Icon, IconDefinition, IconId};
+
+use super::{Button, ButtonBackgrounds, ButtonState, ButtonStyle};
+use crate::{Border, Color, CornerRadii, Edges, FontWeight, Rect, TextStyle, UiScene};
+
+const TEST_ICON: Icon = Icon::new(
+    IconId::new("test"),
+    IconDefinition::symbolic(
+        br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6"/></svg>"#,
+    ),
+);
+
+fn test_style() -> ButtonStyle {
+    ButtonStyle::new(
+        ButtonBackgrounds::new(
+            Color::rgb(10, 20, 30),
+            Color::rgb(20, 30, 40),
+            Color::rgb(30, 40, 50),
+        ),
+        TextStyle::new(11.0, Color::rgb(80, 120, 160)).with_weight(FontWeight::Bold),
+    )
+    .with_border(Border::uniform(1.0, Color::WHITE))
+    .with_corner_radii(CornerRadii::uniform(8.0))
+    .with_padding(Edges::new(5.0, 8.0, 5.0, 10.0))
+    .with_icon_size(13.0)
+    .with_content_gap(6.0)
+}
+
+#[test]
+fn button_selects_background_from_host_provided_state() {
+    let button = Button::new(
+        Rect::from_xywh(0.0, 0.0, 100.0, 27.0),
+        "Action",
+        ButtonState::Hovered,
+        test_style(),
+    );
+    let mut scene = UiScene::new(Color::TRANSPARENT);
+
+    scene.draw_component(&button);
+
+    assert_eq!(scene.rects()[0].fill(), Color::rgb(20, 30, 40));
+    assert!(scene.icons().is_empty());
+    assert_eq!(scene.text_blocks()[0].text(), "Action");
+}
+
+#[test]
+fn button_lays_out_icon_and_label_inside_content_padding() {
+    let button = Button::new(
+        Rect::from_xywh(20.0, 4.0, 100.0, 27.0),
+        "Open files",
+        ButtonState::Pressed,
+        test_style(),
+    )
+    .with_icon(TEST_ICON);
+    let mut scene = UiScene::new(Color::TRANSPARENT);
+
+    scene.draw_component(&button);
+
+    assert_eq!(button.bounds(), Rect::from_xywh(20.0, 4.0, 100.0, 27.0));
+    assert_eq!(scene.rects()[0].fill(), Color::rgb(30, 40, 50));
+    assert_eq!(
+        scene.icons()[0].bounds(),
+        Rect::from_xywh(30.0, 11.0, 13.0, 13.0)
+    );
+    assert_eq!(scene.icons()[0].color(), Color::rgb(80, 120, 160));
+    assert_eq!(scene.text_blocks()[0].origin().x, 49.0);
+    assert_eq!(scene.text_blocks()[0].text(), "Open files");
+}
+
+#[test]
+fn button_skips_content_when_padding_consumes_bounds() {
+    let style = test_style().with_padding(Edges::uniform(20.0));
+    let button = Button::new(
+        Rect::from_xywh(0.0, 0.0, 24.0, 24.0),
+        "Hidden",
+        ButtonState::Resting,
+        style,
+    )
+    .with_icon(TEST_ICON);
+    let mut scene = UiScene::new(Color::TRANSPARENT);
+
+    scene.draw_component(&button);
+
+    assert_eq!(scene.rects().len(), 1);
+    assert!(scene.icons().is_empty());
+    assert!(scene.text_blocks().is_empty());
+}

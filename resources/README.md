@@ -5,6 +5,9 @@ need a renderer-independent source of truth.
 
 ## Icons
 
+The cross-client ownership and rendering contract is documented in
+[`docs/icons.md`](../docs/icons.md).
+
 `icons/` contains Zeta's canonical, first-party SVG artwork imported from the
 local `lxicons` working repository.
 
@@ -60,5 +63,25 @@ and `Document`, then deep-clones that detached prototype for each rendered
 instance. This avoids repeated `innerHTML` parsing while keeping every rendered
 SVG independently mutable and allowing documents to be garbage-collected.
 
-Native currently embeds its existing local SVG asset. Moving Native onto this
-canonical directory remains a separate integration change.
+## Rust integration
+
+Rust consumes the same source artwork through:
+
+```text
+resources/icons/*.svg
+  -> scripts/sync-rust-icons.mjs
+  -> zeta-rs/icons/src/generated.rs
+  -> private artwork bindings
+  -> zeta-rs/icons/src/library.rs
+  -> stable zeta-icons semantic library
+  -> zeta-ui renderer and components
+```
+
+Run `node scripts/sync-rust-icons.mjs` after adding, removing, or renaming an
+icon; `node scripts/sync-rust-icons.mjs --check` verifies that the checked-in
+output is current. The generated Rust source is checked in so Cargo and Bazel
+builds remain hermetic. Generated artwork is crate-private: resource filenames
+do not automatically become public icon IDs. Add or change public semantics in
+`zeta-rs/icons/src/library.rs`. `zeta-icons` classifies fixed non-symbolic colors
+as multicolor; `zeta-ui` currently rejects those definitions until it has a
+multicolor atlas.

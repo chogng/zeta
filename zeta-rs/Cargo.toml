@@ -11,6 +11,7 @@ members = [
     "cli",
     "config",
     "core",
+    "icons",
     "ui",
     "wgpu",
     "winit",
@@ -106,6 +107,7 @@ typst-pdf = "=0.15.1"
 tokio = "1"
 thiserror = "2"
 tempfile = "3"
+unicode-segmentation = "1"
 unicode-width = "0.2"
 url = "2"
 urlencoding = "2"
@@ -126,6 +128,7 @@ zeta-api = { path = "zeta-api" }
 zeta-client = { path = "zeta-client" }
 zeta-config = { path = "config" }
 zeta-core = { path = "core" }
+zeta-icons = { path = "icons" }
 zeta-ui = { path = "ui" }
 zeta-secrets = { path = "secrets" }
 zeta-exec = { path = "exec" }

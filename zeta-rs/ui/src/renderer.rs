@@ -1,11 +1,12 @@
 use glyphon::{
-    Attrs, Buffer, Cache, Color as GlyphColor, Family, Metrics, Resolution, Shaping, SwashCache,
-    TextArea, TextAtlas, TextBounds, TextRenderer, Viewport,
+    Attrs, Buffer, Cache, Color as GlyphColor, Metrics, Resolution, Shaping, SwashCache, TextArea,
+    TextAtlas, TextBounds, TextRenderer, Viewport,
 };
 
+use crate::font::mapping::{glyphon_family, glyphon_style, glyphon_weight};
 use crate::icon_renderer::IconRenderer;
 use crate::rect_renderer::RectRenderer;
-use crate::{FontFamily, FontStyle, FontWeight, Rect, TextBlock, UiScene};
+use crate::{Rect, TextBlock, UiScene};
 
 /// Physical render-target extent paired with the logical-to-physical UI scale.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -254,29 +255,6 @@ fn prepared_area(block: &TextBlock, scale_factor: f32, color: crate::Color) -> P
     }
 }
 
-fn glyphon_family(family: &FontFamily) -> Family<'_> {
-    match family {
-        FontFamily::SansSerif => Family::SansSerif,
-        FontFamily::Serif => Family::Serif,
-        FontFamily::Monospace => Family::Monospace,
-        FontFamily::Named(name) => Family::Name(name),
-    }
-}
-
-fn glyphon_weight(weight: FontWeight) -> glyphon::Weight {
-    match weight {
-        FontWeight::Normal => glyphon::Weight::NORMAL,
-        FontWeight::Bold => glyphon::Weight::BOLD,
-    }
-}
-
-fn glyphon_style(style: FontStyle) -> glyphon::Style {
-    match style {
-        FontStyle::Normal => glyphon::Style::Normal,
-        FontStyle::Italic => glyphon::Style::Italic,
-    }
-}
-
 fn glyphon_color(color: crate::Color) -> GlyphColor {
     let [red, green, blue, alpha] = color.components();
     GlyphColor::rgba(red, green, blue, alpha)
@@ -292,6 +270,8 @@ pub enum UiRenderError {
     InvalidPaintIcon { index: usize, reason: &'static str },
     #[error("SVG icon {name} is invalid: {reason}")]
     InvalidSvgIcon { name: &'static str, reason: String },
+    #[error("multicolor icon {name} is not supported by the symbolic icon atlas")]
+    UnsupportedMulticolorIcon { name: &'static str },
     #[error("SVG icon {name} cannot be rasterized at {width}x{height}")]
     IconRasterTooLarge {
         name: &'static str,

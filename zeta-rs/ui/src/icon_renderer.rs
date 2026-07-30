@@ -4,9 +4,10 @@ use std::mem;
 use bytemuck::{Pod, Zeroable};
 use resvg::tiny_skia::{Pixmap, Transform};
 use resvg::usvg;
+use zeta_icons::{Icon, IconRendering};
 
 use crate::rect_renderer::linear_color;
-use crate::{PaintIcon, Rect, SvgIcon, UiRenderError, UiScene, UiViewport};
+use crate::{PaintIcon, Rect, UiRenderError, UiScene, UiViewport};
 
 const ATLAS_SIZE: u32 = 2_048;
 const ATLAS_PADDING: u32 = 1;
@@ -30,7 +31,7 @@ struct IconInstance {
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 struct RasterKey {
-    icon: SvgIcon,
+    icon: Icon,
     width: u32,
     height: u32,
 }
@@ -265,7 +266,7 @@ impl IconRenderer {
     fn region_for(
         &mut self,
         queue: &wgpu::Queue,
-        icon: SvgIcon,
+        icon: Icon,
         width: u32,
         height: u32,
     ) -> Result<AtlasRegion, UiRenderError> {
@@ -386,15 +387,20 @@ fn validate_paint_icon(index: usize, icon: PaintIcon) -> Result<(), UiRenderErro
     Ok(())
 }
 
-fn rasterize_icon(icon: SvgIcon, width: u32, height: u32) -> Result<Vec<u8>, UiRenderError> {
-    let tree = usvg::Tree::from_data(icon.data(), &usvg::Options::default()).map_err(|error| {
-        UiRenderError::InvalidSvgIcon {
-            name: icon.name(),
+fn rasterize_icon(icon: Icon, width: u32, height: u32) -> Result<Vec<u8>, UiRenderError> {
+    if icon.definition().rendering() == IconRendering::Multicolor {
+        return Err(UiRenderError::UnsupportedMulticolorIcon {
+            name: icon.id().as_str(),
+        });
+    }
+    let tree = usvg::Tree::from_data(icon.definition().svg(), &usvg::Options::default()).map_err(
+        |error| UiRenderError::InvalidSvgIcon {
+            name: icon.id().as_str(),
             reason: error.to_string(),
-        }
-    })?;
+        },
+    )?;
     let mut pixmap = Pixmap::new(width, height).ok_or(UiRenderError::IconRasterTooLarge {
-        name: icon.name(),
+        name: icon.id().as_str(),
         width,
         height,
     })?;

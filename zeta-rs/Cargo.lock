@@ -7453,6 +7453,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "zeta-icons"
+version = "0.1.0"
+
+[[package]]
 name = "zeta-install-context"
 version = "0.1.0"
 
@@ -7707,7 +7711,9 @@ dependencies = [
  "glyphon",
  "resvg",
  "thiserror 2.0.19",
+ "unicode-segmentation",
  "wgpu",
+ "zeta-icons",
 ]
 
 [[package]]

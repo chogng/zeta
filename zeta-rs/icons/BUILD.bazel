@@ -1,0 +1,7 @@
+load("//:defs.bzl", "zeta_rust_crate")
+
+zeta_rust_crate(
+    name = "icons",
+    crate_name = "zeta_icons",
+    data = ["//resources/icons:product-icons"],
+)

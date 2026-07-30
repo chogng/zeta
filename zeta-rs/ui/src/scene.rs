@@ -1,4 +1,4 @@
-use crate::{Color, PaintIcon, PaintRect, Point, Rect, Size};
+use crate::{Color, Component, PaintIcon, PaintRect, Point, Rect, Size};
 
 /// The font-family selection requested by a text block.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
@@ -182,6 +182,10 @@ impl UiScene {
             block.apply_clip(clip_bounds);
         }
         self.text_blocks.push(block);
+    }
+
+    pub fn draw_component<C: Component + ?Sized>(&mut self, component: &C) {
+        component.paint(self);
     }
 
     pub fn with_clip<R>(&mut self, clip_bounds: Rect, draw: impl FnOnce(&mut Self) -> R) -> R {

@@ -15,7 +15,9 @@ bytemuck = { workspace = true }
 glyphon = { workspace = true }
 resvg = { workspace = true }
 thiserror = { workspace = true }
+unicode-segmentation = { workspace = true }
 wgpu = { workspace = true }
+zeta-icons = { workspace = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 coretext-rs = "0.7.2"
