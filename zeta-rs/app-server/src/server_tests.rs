@@ -1239,6 +1239,26 @@ fn filesystem_rpc_lists_and_describes_workspace_paths() {
             "params":{"path":"src/lib.rs"}
         }),
     );
+    let written = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":5,
+            "method":"fs/writeFile",
+            "params":{"path":"src/lib.rs","content":"updated"}
+        }),
+    );
+    let created = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":6,
+            "method":"fs/writeFile",
+            "params":{"path":"src/new.rs","content":"new"}
+        }),
+    );
 
     assert_eq!(
         listed["result"]["entries"],
@@ -1247,7 +1267,64 @@ fn filesystem_rpc_lists_and_describes_workspace_paths() {
     assert_eq!(metadata["result"]["fileType"], "file");
     assert_eq!(metadata["result"]["sizeBytes"], 5);
     assert_eq!(contents["result"]["content"], "hello");
+    assert_eq!(written["result"]["metadata"]["sizeBytes"], 7);
+    assert_eq!(created["result"]["metadata"]["sizeBytes"], 3);
+    assert_eq!(
+        std::fs::read_to_string(root.join("src/lib.rs")).unwrap(),
+        "updated"
+    );
+    assert_eq!(
+        std::fs::read_to_string(root.join("src/new.rs")).unwrap(),
+        "new"
+    );
     let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn filesystem_watcher_publishes_only_workspace_relative_paths() {
+    let root = std::env::temp_dir().join(format!(
+        "zeta-app-server-files-watch-{}-{}",
+        std::process::id(),
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos(),
+    ));
+    std::fs::create_dir_all(&root).unwrap();
+    let workspace = WorkspaceRoot::open(&root).unwrap();
+    let server = server()
+        .with_file_system(Arc::new(LocalFileSystem::new(workspace.clone())))
+        .with_file_system_watcher(workspace.path().to_path_buf());
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+
+    let mut observed = None;
+    for attempt in 0..60 {
+        std::fs::write(root.join("changed.txt"), format!("external {attempt}\n")).unwrap();
+        thread::sleep(Duration::from_millis(50));
+        for raw in server.drain_notifications(&mut connection) {
+            let notification: serde_json::Value = serde_json::from_str(&raw).unwrap();
+            if notification["method"] == "fs/changed" {
+                observed = Some(notification);
+                break;
+            }
+        }
+        if observed.is_some() {
+            break;
+        }
+    }
+
+    let observed = observed.expect("filesystem watcher should publish an invalidation hint");
+    assert_eq!(observed["params"]["type"], "pathsChanged");
+    let paths = observed["params"]["paths"].as_array().unwrap();
+    assert!(paths.iter().any(|path| path == "changed.txt"));
+    assert!(
+        paths
+            .iter()
+            .all(|path| path.as_str().is_some_and(|path| !path.starts_with('/')))
+    );
+    drop(server);
+    std::fs::remove_dir_all(root).unwrap();
 }
 
 #[test]

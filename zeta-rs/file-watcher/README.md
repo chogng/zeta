@@ -2,7 +2,9 @@
 
 > 本 README 是共享 filesystem invalidation hint 的实现契约。Skill catalog 的扫描、校验与
 > snapshot 发布语义由 [`docs/skills.md`](../../docs/skills.md) 维护；Git status 的重新查询、
-> revision 与 notification 语义由 [`docs/git.md`](../../docs/git.md) 维护。
+> revision 与 notification 语义由 [`docs/git.md`](../../docs/git.md) 维护；workspace
+> `fs/changed` 的 root-relative 投影由
+> [`docs/zeta-app-server-api.md`](../../docs/zeta-app-server-api.md#文件系统) 维护。
 
 `zeta-file-watcher` 提供基于 `notify` 的多订阅者路径监听、共享 backend watch ref-count、
 缺失路径回退、RAII 注销和异步事件合并。它只报告“可能发生了变化”；消费者必须重新读取并验证

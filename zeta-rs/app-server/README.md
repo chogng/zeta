@@ -24,14 +24,14 @@ JSONL / in-process caller
    ├─ SessionCoordinator / ThreadController
    ├─ TurnExecutor
    ├─ ConfigStore
-   ├─ optional WorkspaceFileSystem
+   ├─ optional WorkspaceFileSystem + filesystem watcher
    ├─ optional GitRuntime → zeta-file-watcher + GitService → zeta-git
    ├─ optional WorkspaceSearchService
    ├─ optional TerminalService → zeta-utils-pty
    ├─ optional McpRuntimeOwner → zeta-mcp
    ├─ SkillRuntime → zeta-skills + zeta-file-watcher
    ├─ connection-owned ResourceStore
-   └─ UpdateBroker → session/update, thread/update, skills/changed
+   └─ UpdateBroker → session/update, thread/update, skills/changed, git/statusChanged, fs/changed
 ```
 
 App Server connection 不是 product Session。关闭 connection 只失去 connection-local subscription、
@@ -55,6 +55,7 @@ request-ID set、notification queue 与 resource ownership；Session/Thread dura
 | `AppServer::with_config_store` | 开启 config/provider/MCP/Skill RPC |
 | `AppServer::with_slash_command_catalog` | 安装 initialize 时下发的 immutable 动态命令 snapshot |
 | `AppServer::with_file_system` | 注入受 workspace 约束的 filesystem authority |
+| `AppServer::with_file_system_watcher` | 监听可信 workspace root 并发布相对路径 invalidation hint |
 | `AppServer::with_git_root` | 冻结 workspace root，开启 Git status/mutation、watcher 与 revision notification |
 | `AppServer::with_workspace_search` | 注入 workspace root 与冻结的 ripgrep executable |
 | `AppServer::with_tool_service` | 安装同一 server 内所有 Turn 使用的 Core Tool/Policy ports |
@@ -88,6 +89,7 @@ src/
 │       ├── skill_operations.rs    # Skill catalog/enablement DTO conversion and error mapping
 │       ├── skills_runtime.rs       # source composition、catalog cache、watcher、projection
 │       ├── fs_operations.rs       # root-relative filesystem DTO conversion/error mapping
+│       ├── fs_watcher.rs          # root watcher、相对路径投影与 fs/changed 发布
 │       ├── git_operations.rs      # Git RPC decode 与稳定错误映射
 │       ├── git_runtime.rs         # status projection/revision、watcher、去重与通知
 │       ├── search_operations.rs   # search RPC decode、ownership 与稳定错误映射
@@ -127,6 +129,7 @@ src/
 | `ResourceStore::resource` | private | cleanup + owner check | 所有 read/release 必须经过这里 |
 | `ResourceStore::cleanup` | private | lazy TTL eviction | resource 不持久化 |
 | `AppServer::file_system` | private | 读取注入的 `WorkspaceFileSystem` 或返回稳定 unavailable error | 不绕过 workspace authority |
+| `fs_watcher::project_event` | private | watcher path → root-relative invalidation 或 rescan hint | 不把 event 当作文件内容事实 |
 | `GitService` | crate-private | 冻结 workspace root、映射 repository path、持有 Tokio runtime，并调用 `zeta-git` query/mutation API | 不持有 Renderer 状态、不复制 Git command/parser |
 | `GitRuntime` | crate-private | 串行 operation、为每次 runtime incarnation 创建 `StreamInstanceId`、投影 workspace status、推进实例内 revision 并发布去重 notification | watcher event 不直接成为 Git truth |
 | `project_status` in `git_runtime` | private | `zeta-git` snapshot → renderer-safe protocol DTO | 不回传绝对 metadata path 或 internal stderr |
@@ -433,7 +436,8 @@ MCP worker bridge、exact provenance/approval policy、local/MCP 路由与 colli
 可信 Terminal Profile、真实 PTY create/write/read/exit、Terminal owner/error/ring limits，
 Skill built-in/user composition、enablement overlay、watcher refresh 与 `skills/changed`。
 Git 覆盖 workspace projection、runtime stream identity、revision 去重、`git/statusChanged`、
-path mutation 与 commit。
+path mutation 与 commit。Filesystem 覆盖有界原子写入、权限保留、root containment、
+相对路径 `fs/changed` 与 watcher overflow rescan。
 
 local tool 的参数白名单、discovery、取消与输出限制由
 [`zeta-shell-command`](../shell-command/README.md) 和 [`zeta-exec`](../exec/README.md) 维护；

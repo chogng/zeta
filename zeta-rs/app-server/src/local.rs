@@ -161,6 +161,7 @@ pub fn open_local_app_server(
             .map_err(|error| OpenAppServerError(error.to_string()))?;
         server = server
             .with_file_system(Arc::new(LocalFileSystem::new(workspace.clone())))
+            .with_file_system_watcher(workspace.path().to_path_buf())
             .with_workspace_search(workspace.clone(), tools.ripgrep.clone())
             .with_git_root(workspace.path().to_path_buf())
             .map_err(|_| OpenAppServerError("failed to initialize Git runtime".into()))?

@@ -26,6 +26,7 @@ use zeta_typst::TypstCompiler;
 
 mod config_operations;
 mod fs_operations;
+mod fs_watcher;
 mod git_operations;
 mod git_runtime;
 mod operations;
@@ -52,6 +53,7 @@ pub struct AppServer {
     pub(super) typst: TypstCompiler,
     pub(super) slash_commands: SlashCommandCatalog,
     pub(super) skills: Option<Arc<SkillRuntime>>,
+    _file_system_watcher: Option<fs_watcher::FileSystemWatcher>,
     _git_watcher: Option<git_runtime::GitWatcher>,
     _skill_watcher: Option<SkillWatcher>,
     updates: Arc<UpdateBroker>,
@@ -116,6 +118,7 @@ impl AppServer {
             typst: TypstCompiler::new(),
             slash_commands: SlashCommandCatalog::default(),
             skills: None,
+            _file_system_watcher: None,
             _git_watcher: None,
             _skill_watcher: None,
             updates,
@@ -177,6 +180,14 @@ impl AppServer {
 
     pub fn with_file_system(mut self, file_system: Arc<dyn WorkspaceFileSystem>) -> Self {
         self.file_system = Some(file_system);
+        self
+    }
+
+    pub(crate) fn with_file_system_watcher(mut self, workspace_root: std::path::PathBuf) -> Self {
+        self._file_system_watcher = Some(fs_watcher::FileSystemWatcher::start(
+            workspace_root,
+            Arc::clone(&self.updates),
+        ));
         self
     }
 
@@ -414,6 +425,7 @@ impl AppServer {
             Some(ClientMethod::FsGetMetadata) => self.fs_get_metadata(&request.params),
             Some(ClientMethod::FsReadDirectory) => self.fs_read_directory(&request.params),
             Some(ClientMethod::FsReadFile) => self.fs_read_file(&request.params),
+            Some(ClientMethod::FsWriteFile) => self.fs_write_file(&request.params),
             Some(ClientMethod::GitStatus) => self.git_status(),
             Some(ClientMethod::GitStage) => self.git_stage(&request.params),
             Some(ClientMethod::GitUnstage) => self.git_unstage(&request.params),
