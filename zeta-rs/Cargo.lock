@@ -7549,8 +7549,10 @@ dependencies = [
  "arboard",
  "tokio",
  "unicode-width 0.2.0",
+ "zeta-icons",
  "zeta-terminal",
  "zeta-ui",
+ "zeta-ui-dispatch",
  "zeta-utils-pty",
  "zeta-wgpu",
  "zeta-winit",
@@ -7749,6 +7751,13 @@ dependencies = [
  "unicode-segmentation",
  "wgpu",
  "zeta-icons",
+]
+
+[[package]]
+name = "zeta-ui-dispatch"
+version = "0.1.0"
+dependencies = [
+ "zeta-ui",
 ]
 
 [[package]]

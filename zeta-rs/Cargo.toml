@@ -14,6 +14,7 @@ members = [
     "core",
     "icons",
     "ui",
+    "ui-dispatch",
     "wgpu",
     "winit",
     "secrets",
@@ -135,6 +136,7 @@ zeta-config = { path = "config" }
 zeta-core = { path = "core" }
 zeta-icons = { path = "icons" }
 zeta-ui = { path = "ui" }
+zeta-ui-dispatch = { path = "ui-dispatch" }
 zeta-secrets = { path = "secrets" }
 zeta-exec = { path = "exec" }
 zeta-file-icons = { path = "file-icons" }
