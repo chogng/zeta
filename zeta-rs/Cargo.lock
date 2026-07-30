@@ -3703,6 +3703,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "pulldown-cmark"
+version = "0.13.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e9f068eba8e7071c5f9511831b44f32c740d5adf574e990f946ddb53db2f314e"
+dependencies = [
+ "bitflags 2.13.1",
+ "memchr",
+ "unicase",
+]
+
+[[package]]
 name = "pxfm"
 version = "0.1.30"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5805,6 +5816,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "unicase"
+version = "2.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dbc4bc3a9f746d862c45cb89d705aa10f187bb96c76001afab07a0d35ce60142"
+
+[[package]]
 name = "unicode-bidi"
 version = "0.3.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7388,6 +7405,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "zeta-diff"
+version = "0.1.0"
+dependencies = [
+ "thiserror 2.0.19",
+ "unicode-segmentation",
+]
+
+[[package]]
+name = "zeta-editor"
+version = "0.1.0"
+dependencies = [
+ "unicode-segmentation",
+ "unicode-width 0.2.0",
+ "zeta-diff",
+ "zeta-ui",
+]
+
+[[package]]
 name = "zeta-exec"
 version = "0.1.0"
 dependencies = [
@@ -7425,6 +7460,7 @@ dependencies = [
 name = "zeta-file-system"
 version = "0.1.0"
 dependencies = [
+ "tempfile",
  "zeta-sandboxing",
 ]
 
@@ -7485,6 +7521,15 @@ dependencies = [
  "zeta-bwrap",
  "zeta-install-context",
  "zeta-sandboxing",
+]
+
+[[package]]
+name = "zeta-markdown"
+version = "0.1.0"
+dependencies = [
+ "pulldown-cmark",
+ "thiserror 2.0.19",
+ "zeta-ui",
 ]
 
 [[package]]
@@ -7549,6 +7594,8 @@ dependencies = [
  "arboard",
  "tokio",
  "unicode-width 0.2.0",
+ "zeta-diff",
+ "zeta-editor",
  "zeta-icons",
  "zeta-terminal",
  "zeta-ui",
@@ -7725,6 +7772,7 @@ dependencies = [
  "unicode-width 0.2.0",
  "zeta-app-server-client",
  "zeta-app-server-protocol",
+ "zeta-diff",
  "zeta-file-search",
  "zeta-protocol",
 ]

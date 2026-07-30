@@ -12,6 +12,8 @@ members = [
     "cli",
     "config",
     "core",
+    "diff",
+    "editor",
     "icons",
     "ui",
     "ui-dispatch",
@@ -134,6 +136,8 @@ zeta-api = { path = "zeta-api" }
 zeta-client = { path = "zeta-client" }
 zeta-config = { path = "config" }
 zeta-core = { path = "core" }
+zeta-diff = { path = "diff" }
+zeta-editor = { path = "editor" }
 zeta-icons = { path = "icons" }
 zeta-ui = { path = "ui" }
 zeta-ui-dispatch = { path = "ui-dispatch" }
