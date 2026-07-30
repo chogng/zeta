@@ -4,13 +4,18 @@
 > 当前源码所有权、调用路径和测试入口见
 > [`zeta-native` README](../zeta-rs/native/README.md)；terminal grid 与 BlockList 的实现契约见
 > [`zeta-terminal` README](../zeta-rs/terminal/README.md)；文本输入、IME 与 caret 的跨 crate
-> 所有权见 [`native-text-input.md`](native-text-input.md)。
+> 所有权见 [`native-text-input.md`](native-text-input.md)；原生窗口 chrome 与控件占位的实现
+> 契约见 [`zeta-winit` README](../zeta-rs/winit/README.md)。
 
 ## 快速理解
 
 `zeterm` 的产品根节点是一块完整的现代终端界面，不是由 Sidebar、Panel、Editor 等通用
 Workbench Part 拼装出来的 IDE 外壳。Top Bar、Session 导航和附加操作都服务于终端会话；活动
 终端始终占据窗口的主要内容区域。
+
+当前视觉采用浅色扁平界面：Top Bar、Block 输出画布与底部输入面板只用背景层级和一像素
+分隔线建立结构，不使用悬浮卡片、厚描边或大圆角。未接入真实状态的搜索、Agent、Git 和
+Session action 不以静态装饰出现。
 
 | 用户场景 | 界面行为 | 当前状态 | 深入阅读 |
 | --- | --- | --- | --- |
@@ -19,7 +24,9 @@ Workbench Part 拼装出来的 IDE 外壳。Top Bar、Session 导航和附加操
 | 使用 `vim`、`top` 等交互式 TUI | alternate screen 临时接管 Terminal Workspace，切回 primary 后恢复 BlockList 与底部输入 | 部分具备；scroll region、常见 query 与主流 mouse modes 已接通 | [当前实现](#4-当前实现) |
 | 浏览较早的主屏输出 | 在终端内容区滚轮上翻 Block transcript 或 cell history，新输出不抢走当前阅读位置 | 会话内有界回滚已实现；跨重启持久化尚无 | [当前实现](#4-当前实现) |
 | 复制或粘贴终端文本 | 主屏优先复制 composer selection，再复制 Block 输出 selection；paste 编辑 composer | 基础系统剪贴板闭环已实现；单击不产生选区 | [当前实现](#4-当前实现) |
-| 切换多个会话 | 使用顶部 Tabs 或固定/可隐藏的垂直 Session Tabs | 尚未实现；当前不显示演示导航 | [分阶段演进](#6-分阶段演进) |
+| 查看当前会话导航 | Top Bar 按钮展开固定宽度的垂直 Session TabList | 单个真实 Session Tab 已实现，不显示 fixture | [当前实现](#4-当前实现) |
+| 切换多个会话 | 在同一垂直 TabList 选择另一个真实 Session | 尚未实现；当前只有一个 PTY Session | [分阶段演进](#6-分阶段演进) |
+| 在 macOS 使用 Top Bar | 左侧 action 避开系统红绿灯占位并保留组件间距 | 70px host 占位 + 8px Titlebar 间距已实现 | [尺寸语义](#5-尺寸语义) |
 | 调整窗口尺寸 | 从同一 viewport 重算 rows/columns，并同步 resize grid 与 PTY | 已实现 | [尺寸语义](#5-尺寸语义) |
 | 拆分终端 | 只在 Terminal Workspace 内拆成多个 Pane，并调整 Pane 比例 | 尚未实现 | [潜在 Split Pane](#62-潜在-split-pane) |
 
@@ -44,11 +51,13 @@ Workbench Part 拼装出来的 IDE 外壳。Top Bar、Session 导航和附加操
 zeterm
 ├─ TopBar
 │  ├─ window drag region
-│  └─ terminal title
+│  └─ session sidebar toggle ActionBar
+├─ SessionSidebar (collapsible)
+│  └─ SessionTabList
+│     └─ current real TerminalSession Tab
 └─ TerminalWorkspace
-   └─ TerminalSession
-      ├─ BlockOutputViewport
-      │  └─ BlockList
+   └─ active TerminalSession
+      ├─ BlockOutputViewport → BlockList
       └─ CommandInputEditor (fixed bottom)
 ```
 
@@ -62,8 +71,8 @@ alternate screen 是协议兼容的明确例外：`vim`、`top` 等程序请求 
 composer。这个切换不能改变 primary screen 的 Block 输入语义。
 
 Top Bar 不是独立工作区，也不拥有终端 Session。它只提供窗口拖动、会话入口和少量全局操作。
-Session Navigation 可以使用水平 Tabs 或固定/可隐藏的垂直 Tabs，但不构成能够任意改变宽度的
-通用 Sidebar Part；在真实多会话模型接入前不显示演示数据。
+Session Navigation 当前使用固定宽度、可折叠的垂直 TabList，不构成能够任意改变宽度的通用
+Sidebar Part。TabList 只投影当前真实 PTY Session；在多会话模型接入前不会增加演示行。
 
 ## 3. 所有权
 
@@ -80,8 +89,10 @@ Session Navigation 可以使用水平 Tabs 或固定/可隐藏的垂直 Tabs，�
 | terminal output selection | `zeta-native::terminal_selection` | 可丢弃的 viewport state；文本来自 terminal/Block projection |
 | 跨重启历史持久化与完整 terminal compatibility | 后续 terminal runtime | 尚未完成 |
 | BlockList / TerminalOutput presentation | Native terminal session view | 呈现 runtime output；不能成为第二份权威输出存储 |
-| Primary Block Input Editor 与 IME candidate area | `zeta-native::terminal_composer` + `terminal_input` | 编辑 host-owned `TextInput`；Enter 才提交真实 command boundary |
-| alternate-screen direct input | `zeta-native::terminal_input` + `TerminalCore` | 仅在 TUI 接管期间编码 key/IME/paste 并写入 PTY |
+| Primary Block Input Editor 与 IME candidate area | `zeta-native::terminal_composer` + `input_method` | 编辑 host-owned `TextInput`；Enter 才提交真实 command boundary |
+| 命中、指针状态、focus、键盘导航与 accessibility semantics | `zeta-ui-dispatch` | 只分发稳定控件身份和 activation intent，不保存 Session、文件、对话或文档状态 |
+| 平台 accessibility publication | 后续 `zeta-winit` adapter | 当前尚未接 AccessKit/平台 API，内部语义树不等于屏幕阅读器已可用 |
+| alternate-screen direct input | `zeta-native::terminal_input` + `input_method` + `TerminalCore` | 仅在 TUI 接管期间编码 key/IME/paste 并写入 PTY |
 | shell command completion boundary | `zeta-native::terminal_session` bootstrap + `zeta-terminal::TerminalCore` | 当前 zsh 使用 OSC 133 `D`；其他 shell 只有基础 prompt/echo suppression |
 | Rect、icon、text scene 与 GPU draw | `zeta-ui` / `zeta-wgpu` | 不拥有 Session、PTY、窗口布局或产品 reducer |
 
@@ -92,9 +103,10 @@ Session、Thread、Turn、PTY process 和 durable output 必须来自对应 runt
 
 | 当前实现 | 当前事实 | 目标映射 |
 | --- | --- | --- |
-| `titlebar::Titlebar` | 绘制窗口顶区、终端标题和拖拽区 | 演进为 Top Bar；后续容纳真实 terminal tabs/actions |
-| session navigation | 当前没有控件，也不绘制静态演示数据 | 有真实多会话 projection 后再增加 |
-| `ShellLayout` | 计算 titlebar、上方 output viewport 与固定底部 composer | primary screen 窗口外层布局；alternate screen 使用全幅 workspace |
+| `titlebar::Titlebar` | 绘制 32px 窗口顶区、拖拽区和 sidebar toggle `ActionBar`；不显示标题文案 | Top Bar |
+| `zeta-winit::WindowControlInsets` | 按 native chrome policy 提供覆盖产品内容的左右逻辑占位；macOS full-size titlebar 当前为左侧 70px | 原生窗口控件安全区 |
+| `session_tab_list::SessionTabList` | 展开后显示当前真实 PTY Session，注册为 TabList/selected Tab | 多 Session 接入后复用同一控件 |
+| `ShellLayout` | 计算扁平 titlebar、上方 output viewport 与固定底部 composer panel | primary screen 窗口外层布局；alternate screen 使用全幅 workspace |
 | `TerminalCore` / `TerminalGrid` | 增量解析 ANSI，维护 cell、cursor、wrap、erase 与基础 SGR | 当前最小 terminal emulator core |
 | Unicode terminal text | CJK 按双 cell 保存；组合符、ZWJ Emoji 与 flag 序列保留在 leading cell；renderer 使用系统 outline fallback | macOS 已规避不可栅格化的 `GB18030 Bitmap`；复杂 BiDi 行级布局尚未完成 |
 | primary/alternate screen | 解析 `47/1047/1048/1049`，切换 active grid，并在 resize 时同步两块 grid | 已实现基础 buffer lifecycle |
@@ -105,10 +117,13 @@ Session、Thread、Turn、PTY process 和 durable output 必须来自对应 runt
 | Native 回滚浏览 | 主屏滚轮浏览 Block transcript/cell history，并在阅读旧输出时保持新输出锚定 | alternate screen 的应用鼠标报告优先于产品滚动 |
 | resize reflow | 主屏按 soft-wrap metadata 重排 history/live rows，并映射 cursor、pending wrap 与 wide cells | alternate screen 和自定义 scroll region 保持 fixed-grid resize |
 | selection / clipboard | 主屏复制 composer 或 Block 输出 selection，paste 编辑 composer；alternate screen 按 terminal mode 写入 PTY | 尚无双击词、三击行和 selection auto-scroll |
-| OSC title | 解析 OSC 0/2 并同步产品 Titlebar 与 native window | 标题去 control characters，限制为 256 字符 |
+| OSC title | 解析 OSC 0/2 并同步 native window 与 Session Tab | 标题去 control characters，限制为 256 字符 |
 | `BlockList` | host submit 建立 Block，保存有界 printable output，过滤 PTY echo，并在 OSC 133 `D` 上完成当前 Block | primary screen 的权威 output projection |
 | `terminal_session::TerminalSession` | 启动默认 shell、抑制原生 prompt/echo、提交整条命令、转发 PTY output/exit、处理 resize | zsh 已有最小 completion hook；其他 POSIX shell 只有基础 bootstrap |
-| `TerminalComposer` / `terminal_input` | primary screen 编辑 `TextInput` 并在 Enter 时提交；IME candidate 跟随 composer caret | 当前为单行；preedit 由共享输入模型维护 |
+| `TerminalComposer` / `terminal_input` | primary screen 编辑 `TextInput` 并在 Enter 时提交 | 当前为单行 |
+| `input_method` | 根据 window、screen 与 focus 选择 Disabled/Composer/TerminalGrid，转换 IME 事件并同步 candidate area | preedit 状态由共享 `TextInput` 模型维护 |
+| input context toolbar | Bottom Widget 最底部用 `ActionBar` 排列四个 icon-and-label `Button`：Local、启动 cwd、Git branch 与 diff count | Button geometry 已注册到统一 interaction frame，具备 hover/press/capture/focus、pointer feedback、Tab/左右键导航和 role/label；action/picker 尚未绑定；branch/diff 在命令完成后刷新 |
+| 统一 UI 分发 | `zeta-ui-dispatch` 的 `ElementId`、父子 `UiNode`、反向 hit-test、focus order、同组导航、`UiIntent` 与每帧 accessibility snapshot | 当前 Titlebar、Session TabList、terminal output、composer、toolbar 和 Button 已接入；平台 accessibility adapter 尚无 |
 | primary/alternate Native presentation | primary 绘制 BlockList + 固定底部 composer；alternate 绘制全幅 active grid/cursor | Warp 式主屏与 TUI compatibility 已分流 |
 | `ActionBar` / `Button` | presentation-only action 与 icon button | 保持通用 primitive，不接收 terminal domain state |
 | 完整 DEC/query/mouse family、跨重启历史持久化 | 尚未实现 | 后续 terminal compatibility / Session durability 纵切 |
@@ -125,19 +140,23 @@ Session、Thread、Turn、PTY process 和 durable output 必须来自对应 runt
 - 当前 state 能直接生成 scene、cursor、title 和可复制文本，不从 renderer 反推 terminal state。
 - 简中、日文、韩文、组合音标、阿拉伯文字形与 Emoji 已覆盖 shaping/raster regression；terminal
   model 另覆盖 CJK cell width 和 extended grapheme ownership。
+- 当前交互节点从同一份 bounds 生成 paint state、hit-test、cursor、focus navigation 与
+  accessibility semantics；不存在另一份按坐标猜测控件身份的 hover 表。
 
 这一定义不把“完整 xterm compatibility”、跨重启 Session durability、terminal tabs 或 split
 panes 伪装成本阶段能力；它们仍是表中单独列出的后续纵切。
 
-当前不会显示 sidebar toggle 或静态 session rows。真实 terminal tabs/session navigation 必须
-消费权威多会话 projection 后再进入产品，不能先用 fixture 占据窗口空间。
+当前会显示 sidebar toggle；展开后只有当前真实 PTY Session 对应的一项 selected Tab。后续新增
+Session Tab 必须消费权威多会话 projection，不能用 fixture 占据导航空间。
 
 ## 5. 尺寸语义
 
 窗口 resize 的长期执行顺序是：
 
 1. `NativeApp` 接收 physical extent 与 scale factor；
-2. product layout 计算 logical Top Bar 和 Terminal Workspace；
+2. `NativeApp` 从 `NativeWindow` 读取窗口控件左右占位，product layout 计算 logical Top Bar、
+   可选固定宽度 Session Sidebar 和剩余 Terminal Workspace；Titlebar action 在占位外另加
+   8px 组件间距；
 3. primary screen 用 output viewport 计算 rows/columns，固定底部 composer 不计入输出行数；
    alternate screen 用完整 Terminal Workspace 计算 rows/columns；
 4. `TerminalSession::resize` 更新 primary/alternate grid，并把 active screen 的相同
@@ -145,7 +164,14 @@ panes 伪装成本阶段能力；它们仍是表中单独列出的后续纵切�
 5. host 从同一份 terminal state 构造下一帧 scene。
 
 因此当前不增加通用 Part Sash、`SidebarWidth`/`PanelHeight` 状态或任意区域拖拽系统。Session
-Navigation 使用固定宽度、内容决定宽度或 overlay presentation；窗口主体尺寸留给活动终端。
+Sidebar 展开时固定为 200 logical pixels，并从 Terminal Workspace 扣除相同宽度；grid、
+PTY resize、pointer cell mapping、output 与 composer 共享缩小后的 workspace。
+
+窗口控件占位由 `zeta-winit` 的 chrome adapter 统一拥有，不属于通用 `ActionBar` 样式。
+macOS 当前使用集中且受测试的 70 logical pixel policy；由于 `winit` 尚无安全的 system button
+geometry API，RTL 换边和未来 Windows controls overlay 仍是 adapter 扩展点，不能描述为当前
+能力，也不能在 `titlebar::Titlebar` 再引入平台常量。实现契约见
+[`zeta-winit/README.md`](../zeta-rs/winit/README.md)。
 
 ## 6. 分阶段演进
 
@@ -154,7 +180,13 @@ Navigation 使用固定宽度、内容决定宽度或 overlay presentation；窗
 - 把当前 zsh 最小 bootstrap 演进为可协商版本的 shell integration，可靠产生 command
   start/end、cwd、exit status，并覆盖更多 shell；
 - 把当前单行 composer 演进为支持换行、历史、补全和建议的 Block Input Editor；
-- 接入真实多会话 projection 后，再选择顶部 Tabs 或固定/可隐藏的 Session Navigation；
+- shell integration 提供 cwd 更新后，让 input context toolbar 跟随 shell 内的 `cd`；当前目录标签
+  仍表示 Session 启动目录；
+- 接入真实多会话 projection 后，把新增 Session 作为同一垂直 TabList 的动态 Tab，并实现
+  activation/switching；
+- file tree、tabs、chat 和 editor 接入时复用 `zeta-ui-dispatch`：各组件只注册稳定 identity、
+  父子关系、语义和 intent，业务模型仍由各自 owner 保存；
+- 接入 AccessKit 或平台原生 accessibility adapter，直接发布现有语义树与 focus identity；
 - 让 root layout 继续只决定 Top Bar、可选 Session Navigation 和 Terminal Workspace 的外部
   bounds；
 - 保持 `zeta-ui` presentation-only，不把 Session 或 terminal reducer 下沉到组件层。
@@ -196,6 +228,8 @@ Session Navigation 或任意产品区域的 Workbench Sash。
 - 终端会话是窗口主体，chrome 和导航服务于终端而不是与终端平级；
 - primary screen 始终由上方 BlockOutputViewport 与固定底部 CommandInputEditor 组成；
 - product host 决定活动 Session、布局和事件路由，`zeta-ui` 只消费 presentation state；
+- hit-test、hover/press/capture、focus、键盘导航、cursor 和 accessibility semantics 必须共享
+  同一个 `ElementId`，不能由各组件建立彼此不一致的状态表；
 - terminal viewport、grid rows/columns 和 PTY size 必须来自同一条尺寸链路；
 - Session Navigation 不拥有 Session lifecycle 或 durable output；
 - Split Pane 如果出现，只属于 Terminal Workspace 内部；

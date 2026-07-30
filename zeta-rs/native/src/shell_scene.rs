@@ -5,18 +5,32 @@ use zeta_ui::{
 };
 
 use crate::PRODUCT_DISPLAY_NAME;
-use crate::shell_interaction::{ShellHitMap, ShellTarget};
+use crate::input_context_toolbar::InputContextToolbar;
+use crate::session_tab_list::SessionTabList;
+use crate::shell_interaction::{
+    COMPOSER, COMPOSER_PANEL, MAIN_SURFACE, SESSION_SIDEBAR, SessionSidebarState, TERMINAL_OUTPUT,
+    WINDOW,
+};
 use crate::shell_style::{SHELL_PALETTE, ShellPalette};
 use crate::terminal_blocks::{TerminalBlockLineKind, project_block_lines};
 use crate::terminal_projection::block_view_range;
 use crate::terminal_selection::{TerminalSelectionRange, paint_terminal_selection};
 use crate::titlebar::{TITLEBAR_HEIGHT, Titlebar};
+use crate::workspace_context::WorkspaceContext;
+use zeta_ui_dispatch::{
+    AccessibilityNode, AccessibilityRole, CursorFeedback, FocusBehavior, InteractionFrame,
+    UiDispatch, UiNode,
+};
+use zeta_winit::WindowControlInsets;
 
 const TERMINAL_CELL_WIDTH: f32 = 8.0;
 const TERMINAL_LINE_HEIGHT: f32 = 18.0;
 const TERMINAL_PADDING: f32 = 24.0;
-const COMPOSER_HEIGHT: f32 = 54.0;
-const COMPOSER_GAP: f32 = 12.0;
+const COMPOSER_PANEL_HEIGHT: f32 = 112.0;
+const COMPOSER_TOOLBAR_HEIGHT: f32 = 24.0;
+const COMPOSER_HEIGHT: f32 = 44.0;
+const SESSION_SIDEBAR_WIDTH: f32 = 200.0;
+const MIN_TERMINAL_WIDTH_WITH_SIDEBAR: f32 = 240.0;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct LogicalViewport {
@@ -41,35 +55,70 @@ impl LogicalViewport {
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct ShellLayout {
     titlebar: Rect,
+    session_sidebar: Option<Rect>,
     main: Rect,
     output: Rect,
+    composer_panel: Rect,
+    composer_toolbar: Rect,
     composer: Rect,
 }
 
 impl ShellLayout {
-    fn for_viewport(viewport: LogicalViewport) -> Option<Self> {
+    fn for_viewport(
+        viewport: LogicalViewport,
+        session_sidebar: SessionSidebarState,
+    ) -> Option<Self> {
         if viewport.width < 240.0 || viewport.height < 180.0 {
             return None;
         }
         let titlebar = Rect::from_xywh(0.0, 0.0, viewport.width, TITLEBAR_HEIGHT);
         let body_height = viewport.height - titlebar.size.height;
-        let main = Rect::from_xywh(0.0, titlebar.bottom(), viewport.width, body_height);
+        let sidebar_width = if session_sidebar.is_expanded()
+            && viewport.width >= SESSION_SIDEBAR_WIDTH + MIN_TERMINAL_WIDTH_WITH_SIDEBAR
+        {
+            SESSION_SIDEBAR_WIDTH
+        } else {
+            0.0
+        };
+        let session_sidebar = (sidebar_width > 0.0)
+            .then(|| Rect::from_xywh(0.0, titlebar.bottom(), sidebar_width, body_height));
+        let main = Rect::from_xywh(
+            sidebar_width,
+            titlebar.bottom(),
+            viewport.width - sidebar_width,
+            body_height,
+        );
+        let composer_panel = Rect::from_xywh(
+            main.origin.x,
+            main.bottom() - COMPOSER_PANEL_HEIGHT,
+            main.size.width,
+            COMPOSER_PANEL_HEIGHT,
+        );
         let composer = Rect::from_xywh(
-            TERMINAL_PADDING,
-            main.bottom() - TERMINAL_PADDING - COMPOSER_HEIGHT,
+            main.origin.x + TERMINAL_PADDING,
+            composer_panel.origin.y + 12.0,
             (main.size.width - TERMINAL_PADDING * 2.0).max(1.0),
             COMPOSER_HEIGHT,
+        );
+        let composer_toolbar = Rect::from_xywh(
+            main.origin.x + TERMINAL_PADDING,
+            composer_panel.origin.y + 68.0,
+            (main.size.width - TERMINAL_PADDING * 2.0).max(1.0),
+            COMPOSER_TOOLBAR_HEIGHT,
         );
         let output = Rect::from_xywh(
             main.origin.x,
             main.origin.y,
             main.size.width,
-            (composer.origin.y - main.origin.y - COMPOSER_GAP).max(1.0),
+            (composer_panel.origin.y - main.origin.y).max(1.0),
         );
         Some(Self {
             titlebar,
+            session_sidebar,
             main,
             output,
+            composer_panel,
+            composer_toolbar,
             composer,
         })
     }
@@ -77,7 +126,8 @@ impl ShellLayout {
 
 pub(crate) struct ShellPresentation {
     pub(crate) scene: UiScene,
-    pub(crate) hit_map: ShellHitMap,
+    pub(crate) interaction_frame: InteractionFrame,
+    pub(crate) accessibility_nodes: Vec<AccessibilityNode>,
     pub(crate) ime_cursor_area: Option<Rect>,
 }
 
@@ -88,49 +138,96 @@ struct TerminalView<'a> {
     selection: Option<TerminalSelectionRange>,
 }
 
+pub(crate) struct ShellPresentationModel<'a> {
+    pub(crate) terminal: Option<&'a TerminalCore>,
+    pub(crate) terminal_scroll_offset: usize,
+    pub(crate) terminal_selection: Option<TerminalSelectionRange>,
+    pub(crate) workspace_context: &'a WorkspaceContext,
+    pub(crate) composer: &'a TextInput,
+    pub(crate) caret_visibility: CaretVisibility,
+    pub(crate) dispatch: &'a UiDispatch,
+    pub(crate) session_sidebar: SessionSidebarState,
+    pub(crate) window_control_insets: WindowControlInsets,
+}
+
+#[derive(Clone, Copy)]
+struct ComposerView<'a> {
+    context: &'a WorkspaceContext,
+    input: &'a TextInput,
+    caret_visibility: CaretVisibility,
+    dispatch: &'a UiDispatch,
+}
+
 pub(crate) fn build_shell_presentation(
     viewport: LogicalViewport,
-    terminal: Option<&TerminalCore>,
-    terminal_scroll_offset: usize,
-    terminal_selection: Option<TerminalSelectionRange>,
-    composer: &TextInput,
+    model: ShellPresentationModel<'_>,
     text_layout: &mut TextInputLayoutEngine,
-    caret_visibility: CaretVisibility,
 ) -> ShellPresentation {
     let palette = SHELL_PALETTE;
     let mut scene = UiScene::new(palette.background);
-    let mut hit_map = ShellHitMap::default();
-    let Some(layout) = ShellLayout::for_viewport(viewport) else {
+    let mut interaction_frame = InteractionFrame::default();
+    interaction_frame.register(UiNode::new(
+        WINDOW,
+        Rect::from_xywh(0.0, 0.0, viewport.width, viewport.height),
+        AccessibilityRole::Window,
+        PRODUCT_DISPLAY_NAME,
+    ));
+    let Some(layout) = ShellLayout::for_viewport(viewport, model.session_sidebar) else {
         draw_compact_scene(&mut scene, viewport, palette);
         return ShellPresentation {
             scene,
-            hit_map,
+            accessibility_nodes: interaction_frame.accessibility_nodes(model.dispatch),
+            interaction_frame,
             ime_cursor_area: None,
         };
     };
 
-    let title = terminal
+    let title = model
+        .terminal
         .and_then(TerminalCore::title)
         .unwrap_or(PRODUCT_DISPLAY_NAME);
-    let titlebar = Titlebar::new(layout.titlebar, title, palette);
-    titlebar.register_hit_regions(&mut hit_map);
+    let titlebar = Titlebar::new(
+        layout.titlebar,
+        palette,
+        model.session_sidebar,
+        model.window_control_insets,
+        model.dispatch,
+    );
+    titlebar.register_interactions(&mut interaction_frame);
     scene.draw_component(&titlebar);
+    if let Some(bounds) = layout.session_sidebar {
+        draw_session_sidebar(
+            &mut scene,
+            &mut interaction_frame,
+            bounds,
+            title,
+            model.workspace_context,
+            model.dispatch,
+            palette,
+        );
+    }
     let ime_cursor_area = draw_main(
         &mut scene,
-        &mut hit_map,
+        &mut interaction_frame,
         layout,
         TerminalView {
-            core: terminal,
-            scroll_offset: terminal_scroll_offset,
-            selection: terminal_selection,
+            core: model.terminal,
+            scroll_offset: model.terminal_scroll_offset,
+            selection: model.terminal_selection,
         },
-        composer,
+        ComposerView {
+            context: model.workspace_context,
+            input: model.composer,
+            caret_visibility: model.caret_visibility,
+            dispatch: model.dispatch,
+        },
         text_layout,
-        caret_visibility,
     );
+    let accessibility_nodes = interaction_frame.accessibility_nodes(model.dispatch);
     ShellPresentation {
         scene,
-        hit_map,
+        interaction_frame,
+        accessibility_nodes,
         ime_cursor_area,
     }
 }
@@ -138,8 +235,9 @@ pub(crate) fn build_shell_presentation(
 pub(crate) fn terminal_grid_size_for_viewport(
     viewport: LogicalViewport,
     active_screen: ScreenBuffer,
+    session_sidebar: SessionSidebarState,
 ) -> GridSize {
-    let Some(layout) = ShellLayout::for_viewport(viewport) else {
+    let Some(layout) = ShellLayout::for_viewport(viewport, session_sidebar) else {
         return GridSize::default();
     };
     let bounds = terminal_content_bounds(layout, active_screen);
@@ -156,27 +254,63 @@ pub(crate) fn terminal_grid_size_for_viewport(
 pub(crate) fn terminal_mouse_position_for_viewport(
     viewport: LogicalViewport,
     active_screen: ScreenBuffer,
+    session_sidebar: SessionSidebarState,
     point: zeta_ui::Point,
 ) -> Option<TerminalMousePosition> {
-    let layout = ShellLayout::for_viewport(viewport)?;
+    let layout = ShellLayout::for_viewport(viewport, session_sidebar)?;
     let bounds = terminal_content_bounds(layout, active_screen);
     if !bounds.contains(point) {
         return None;
     }
     let row = ((point.y - bounds.origin.y) / TERMINAL_LINE_HEIGHT).floor() as u16;
     let col = ((point.x - bounds.origin.x) / TERMINAL_CELL_WIDTH).floor() as u16;
-    let size = terminal_grid_size_for_viewport(viewport, active_screen);
+    let size = terminal_grid_size_for_viewport(viewport, active_screen, session_sidebar);
     (row < size.rows() && col < size.cols()).then(|| TerminalMousePosition::new(row, col))
+}
+
+fn draw_session_sidebar(
+    scene: &mut UiScene,
+    interaction_frame: &mut InteractionFrame,
+    bounds: Rect,
+    title: &str,
+    context: &WorkspaceContext,
+    dispatch: &UiDispatch,
+    palette: ShellPalette,
+) {
+    scene.draw_rect(
+        PaintRect::new(bounds, palette.surface_raised).with_border(Border::new(
+            zeta_ui::Edges::new(0.0, 1.0, 0.0, 0.0),
+            palette.border,
+        )),
+    );
+    interaction_frame.register(
+        UiNode::new(
+            SESSION_SIDEBAR,
+            bounds,
+            AccessibilityRole::Group,
+            "Sessions sidebar",
+        )
+        .with_parent(WINDOW),
+    );
+    let tab_list = SessionTabList::new(
+        bounds,
+        title,
+        context.working_directory_label(),
+        context.git_branch_label(),
+        palette,
+        dispatch,
+    );
+    tab_list.register_interactions(interaction_frame);
+    scene.draw_component(&tab_list);
 }
 
 fn draw_main(
     scene: &mut UiScene,
-    hit_map: &mut ShellHitMap,
+    interaction_frame: &mut InteractionFrame,
     layout: ShellLayout,
     terminal_view: TerminalView<'_>,
-    composer: &TextInput,
+    composer_view: ComposerView<'_>,
     text_layout: &mut TextInputLayoutEngine,
-    caret_visibility: CaretVisibility,
 ) -> Option<Rect> {
     let palette = SHELL_PALETTE;
     let active_screen = terminal_view
@@ -184,6 +318,26 @@ fn draw_main(
         .map(TerminalCore::active_screen)
         .unwrap_or_default();
     scene.draw_rect(PaintRect::new(layout.main, palette.background));
+    interaction_frame.register(
+        UiNode::new(
+            MAIN_SURFACE,
+            layout.main,
+            AccessibilityRole::Group,
+            "Terminal workspace",
+        )
+        .with_parent(WINDOW)
+        .with_cursor(CursorFeedback::Text),
+    );
+    interaction_frame.register(
+        UiNode::new(
+            TERMINAL_OUTPUT,
+            terminal_content_bounds(layout, active_screen),
+            AccessibilityRole::Terminal,
+            "Terminal output",
+        )
+        .with_parent(MAIN_SURFACE)
+        .with_cursor(CursorFeedback::Text),
+    );
     let mut ime_cursor_area = None;
     scene.with_clip(layout.main, |scene| {
         draw_terminal(
@@ -198,11 +352,10 @@ fn draw_main(
         if active_screen == ScreenBuffer::Primary {
             ime_cursor_area = draw_composer(
                 scene,
-                hit_map,
+                interaction_frame,
                 layout,
-                composer,
+                composer_view,
                 text_layout,
-                caret_visibility,
                 palette,
             );
         }
@@ -284,34 +437,70 @@ fn draw_terminal(
 
 fn draw_composer(
     scene: &mut UiScene,
-    hit_map: &mut ShellHitMap,
+    interaction_frame: &mut InteractionFrame,
     layout: ShellLayout,
-    composer: &TextInput,
+    composer_view: ComposerView<'_>,
     text_layout: &mut TextInputLayoutEngine,
-    caret_visibility: CaretVisibility,
     palette: ShellPalette,
 ) -> Option<Rect> {
-    scene.draw_rect(PaintRect::new(
-        Rect::from_xywh(
-            layout.main.origin.x,
-            layout.output.bottom(),
-            layout.main.size.width,
-            1.0,
-        ),
-        palette.border,
-    ));
-    hit_map.register(layout.composer, ShellTarget::Composer);
+    scene.draw_rect(
+        PaintRect::new(layout.composer_panel, palette.surface).with_border(Border::new(
+            zeta_ui::Edges::new(1.0, 0.0, 0.0, 0.0),
+            palette.border,
+        )),
+    );
+    interaction_frame.register(
+        UiNode::new(
+            COMPOSER_PANEL,
+            layout.composer_panel,
+            AccessibilityRole::Group,
+            "Command composer",
+        )
+        .with_parent(MAIN_SURFACE),
+    );
+    interaction_frame.register(
+        UiNode::new(
+            COMPOSER,
+            layout.composer,
+            AccessibilityRole::TextInput,
+            "Command input",
+        )
+        .with_parent(COMPOSER_PANEL)
+        .with_cursor(CursorFeedback::Text)
+        .with_focus(FocusBehavior::TabStop)
+        .with_value(composer_view.input.text()),
+    );
+    let toolbar = InputContextToolbar::new(
+        layout.composer_toolbar,
+        composer_view.context,
+        palette,
+        text_layout,
+        composer_view.dispatch,
+    );
+    toolbar.register_interactions(interaction_frame);
+    scene.draw_component(&toolbar);
+    let input_state = if composer_view.dispatch.is_focused(COMPOSER) {
+        InputBoxState::Focused(composer_view.caret_visibility)
+    } else if composer_view.dispatch.is_hovered(COMPOSER) {
+        InputBoxState::Hovered
+    } else {
+        InputBoxState::Resting
+    };
     let input_box = InputBox::new(
         layout.composer,
         "Enter a command…",
-        InputBoxState::Focused(caret_visibility),
+        input_state,
         palette.composer_style(),
-        composer,
+        composer_view.input,
         text_layout,
     );
     let caret_bounds = input_box.caret_bounds();
     scene.draw_component(&input_box);
-    caret_bounds
+    composer_view
+        .dispatch
+        .is_focused(COMPOSER)
+        .then_some(caret_bounds)
+        .flatten()
 }
 
 fn draw_grid(
@@ -413,30 +602,8 @@ fn terminal_cell_colors(style: zeta_terminal::CellStyle, palette: ShellPalette) 
 fn terminal_color(color: TerminalColor, default: Color, palette: ShellPalette) -> Color {
     match color {
         TerminalColor::Default => default,
-        TerminalColor::Indexed(index) => indexed_terminal_color(index, palette),
+        TerminalColor::Indexed(index) => palette.terminal_indexed_color(index),
         TerminalColor::Rgb(red, green, blue) => Color::rgb(red, green, blue),
-    }
-}
-
-fn indexed_terminal_color(index: u8, palette: ShellPalette) -> Color {
-    match index {
-        0 => Color::rgb(35, 39, 46),
-        1 => Color::rgb(224, 108, 117),
-        2 => Color::rgb(152, 195, 121),
-        3 => Color::rgb(229, 192, 123),
-        4 => Color::rgb(97, 175, 239),
-        5 => Color::rgb(198, 120, 221),
-        6 => Color::rgb(86, 182, 194),
-        7 => palette.text,
-        8 => Color::rgb(92, 99, 112),
-        9 => Color::rgb(240, 113, 120),
-        10 => Color::rgb(126, 198, 153),
-        11 => Color::rgb(224, 175, 104),
-        12 => Color::rgb(106, 169, 255),
-        13 => Color::rgb(210, 137, 241),
-        14 => Color::rgb(91, 192, 222),
-        15 => Color::rgb(248, 248, 242),
-        _ => palette.text,
     }
 }
 

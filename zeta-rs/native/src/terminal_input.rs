@@ -1,13 +1,13 @@
 use std::time::Instant;
 
 use zeta_terminal::{KeyModifiers, ScreenBuffer, TerminalCore, TerminalKey};
-use zeta_ui::{
-    TextInputCommand, TextInputCompositionCursor, TextInputCompositionEvent, TextInputSelectionMode,
-};
-use zeta_winit::{ElementState, Ime, Key, KeyEvent, ModifiersState, NamedKey};
+use zeta_ui::{TextInputCommand, TextInputSelectionMode};
+use zeta_winit::{ElementState, Key, KeyEvent, ModifiersState, NamedKey};
 
 use crate::NativeApp;
+use crate::shell_interaction::COMPOSER;
 use crate::terminal_selection::{read_clipboard_text, write_clipboard_text};
+use zeta_ui_dispatch::{FocusDirection, NavigationAxis};
 
 impl NativeApp {
     pub(super) fn keyboard_input(&mut self, event: KeyEvent) {
@@ -16,41 +16,9 @@ impl NativeApp {
         }
         if self.active_screen() == ScreenBuffer::Alternate {
             self.direct_terminal_keyboard_input(&event);
-        } else {
+        } else if !self.dispatch_primary_keyboard_input(&event) {
             self.composer_keyboard_input(&event);
         }
-    }
-
-    pub(super) fn ime_input(&mut self, event: Ime) {
-        if matches!(event, Ime::Enabled) {
-            self.update_ime_cursor_area();
-            return;
-        }
-        if self.active_screen() == ScreenBuffer::Alternate {
-            let Some(terminal) = self.terminal.as_ref() else {
-                return;
-            };
-            let input = encode_ime_event(terminal.core(), &event);
-            self.send_terminal_input(input, "could not send terminal IME commit");
-            return;
-        }
-        let composition = match event {
-            Ime::Preedit(text, Some((start, end))) => TextInputCompositionEvent::Preedit {
-                text,
-                cursor: TextInputCompositionCursor::Visible(start..end),
-            },
-            Ime::Preedit(text, None) => TextInputCompositionEvent::Preedit {
-                text,
-                cursor: TextInputCompositionCursor::Hidden,
-            },
-            Ime::Commit(text) => TextInputCompositionEvent::Commit(text),
-            Ime::Disabled => TextInputCompositionEvent::Cancel,
-            Ime::Enabled => return,
-        };
-        self.caret_blink.activity(Instant::now());
-        self.terminal_composer.apply_composition(composition);
-        self.rebuild_presentation();
-        self.request_redraw();
     }
 
     fn composer_keyboard_input(&mut self, event: &KeyEvent) {
@@ -99,6 +67,59 @@ impl NativeApp {
             self.terminal_composer.apply(command);
             self.composer_changed();
         }
+    }
+
+    fn dispatch_primary_keyboard_input(&mut self, event: &KeyEvent) -> bool {
+        let Some(presentation) = self.presentation.as_ref() else {
+            return false;
+        };
+        let frame = &presentation.interaction_frame;
+        let outcome = if event.logical_key == Key::Named(NamedKey::Tab) {
+            let direction = if self.modifiers.shift_key() {
+                FocusDirection::Previous
+            } else {
+                FocusDirection::Next
+            };
+            Some(self.ui_dispatch.focus_in_order(frame, direction))
+        } else if self.ui_dispatch.focused() != Some(COMPOSER) {
+            match &event.logical_key {
+                Key::Named(NamedKey::ArrowLeft) => Some(self.ui_dispatch.focus_within_group(
+                    frame,
+                    FocusDirection::Previous,
+                    NavigationAxis::Horizontal,
+                )),
+                Key::Named(NamedKey::ArrowRight) => Some(self.ui_dispatch.focus_within_group(
+                    frame,
+                    FocusDirection::Next,
+                    NavigationAxis::Horizontal,
+                )),
+                Key::Named(NamedKey::ArrowUp) => Some(self.ui_dispatch.focus_within_group(
+                    frame,
+                    FocusDirection::Previous,
+                    NavigationAxis::Vertical,
+                )),
+                Key::Named(NamedKey::ArrowDown) => Some(self.ui_dispatch.focus_within_group(
+                    frame,
+                    FocusDirection::Next,
+                    NavigationAxis::Vertical,
+                )),
+                Key::Named(NamedKey::Enter) => Some(self.ui_dispatch.activate_focused(frame)),
+                Key::Character(text) if text == " " => {
+                    Some(self.ui_dispatch.activate_focused(frame))
+                }
+                Key::Named(NamedKey::Escape) => {
+                    Some(self.ui_dispatch.focus_element(frame, COMPOSER))
+                }
+                _ => Some(Default::default()),
+            }
+        } else {
+            None
+        };
+        let Some(outcome) = outcome else {
+            return false;
+        };
+        self.apply_dispatch_outcome(outcome);
+        true
     }
 
     fn direct_terminal_keyboard_input(&mut self, event: &KeyEvent) {
@@ -179,7 +200,7 @@ impl NativeApp {
         self.request_redraw();
     }
 
-    fn send_terminal_input(&mut self, input: Vec<u8>, error_context: &str) {
+    pub(super) fn send_terminal_input(&mut self, input: Vec<u8>, error_context: &str) {
         if input.is_empty() {
             return;
         }
@@ -208,13 +229,6 @@ fn encode_key_event(
         return Vec::new();
     };
     terminal.encode_key(key, terminal_modifiers(modifiers))
-}
-
-fn encode_ime_event(terminal: &TerminalCore, event: &Ime) -> Vec<u8> {
-    match event {
-        Ime::Commit(text) => terminal.encode_key(TerminalKey::Text(text), KeyModifiers::NONE),
-        Ime::Enabled | Ime::Preedit(_, _) | Ime::Disabled => Vec::new(),
-    }
 }
 
 fn terminal_modifiers(modifiers: ModifiersState) -> KeyModifiers {

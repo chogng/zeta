@@ -1,23 +1,31 @@
 use std::process::ExitCode;
 use std::time::Instant;
 
-use shell_interaction::{InteractionEffect, PointerFeedback, ShellInteraction};
+use shell_interaction::{COMPOSER, ContextAction, SessionSidebarState};
 use shell_scene::{
-    LogicalViewport, ShellPresentation, build_shell_presentation, terminal_grid_size_for_viewport,
+    LogicalViewport, ShellPresentation, ShellPresentationModel, build_shell_presentation,
+    terminal_grid_size_for_viewport,
 };
 use terminal_pointer::TerminalPointer;
 use terminal_scrollback::TerminalScroll;
 use terminal_selection::TerminalSelection;
 use terminal_session::{TerminalSession, TerminalSessionEvent};
-use zeta_terminal::ScreenBuffer;
+use workspace_context::WorkspaceContext;
+use zeta_terminal::{BlockStatus, ScreenBuffer};
 use zeta_ui::{CaretBlinkAdvance, CaretBlinkController, Point, TextInputLayoutEngine};
+use zeta_ui_dispatch::{
+    CursorFeedback, DispatchInvalidation, DispatchOutcome, UiDispatch, UiIntent,
+};
 use zeta_wgpu::{RenderOutcome, WgpuRenderer};
 use zeta_winit::{
-    ActiveEventLoop, ApplicationHandler, ControlFlow, CursorIcon, ElementState, ImeCursorArea,
-    LogicalSize, ModifiersState, MouseButton, NativeWindow, PhysicalExtent, WindowAttributes,
-    WindowChrome, WindowEvent, WindowId, apply_window_chrome, run_application_with_user_events,
+    ActiveEventLoop, ApplicationHandler, ControlFlow, CursorIcon, ElementState, LogicalSize,
+    ModifiersState, MouseButton, NativeWindow, PhysicalExtent, Theme, WindowAttributes,
+    WindowChrome, WindowControlInsets, WindowEvent, WindowId, run_application_with_user_events,
 };
 
+mod input_context_toolbar;
+mod input_method;
+mod session_tab_list;
 mod shell_interaction;
 mod shell_scene;
 mod shell_style;
@@ -30,6 +38,7 @@ mod terminal_scrollback;
 mod terminal_selection;
 mod terminal_session;
 mod titlebar;
+mod workspace_context;
 
 pub(crate) const PRODUCT_DISPLAY_NAME: &str = "zeterm";
 const INITIAL_WIDTH: f64 = 1_000.0;
@@ -55,8 +64,10 @@ struct NativeApp {
     window: Option<NativeWindow>,
     renderer: Option<WgpuRenderer>,
     presentation: Option<ShellPresentation>,
-    interaction: ShellInteraction,
+    session_sidebar: SessionSidebarState,
+    ui_dispatch: UiDispatch,
     terminal: Option<TerminalSession>,
+    workspace_context: WorkspaceContext,
     terminal_composer: terminal_composer::TerminalComposer,
     text_layout: TextInputLayoutEngine,
     caret_blink: CaretBlinkController,
@@ -78,8 +89,10 @@ impl NativeApp {
             window: None,
             renderer: None,
             presentation: None,
-            interaction: ShellInteraction::default(),
+            session_sidebar: SessionSidebarState::Collapsed,
+            ui_dispatch: UiDispatch::default(),
             terminal: None,
+            workspace_context: WorkspaceContext::capture_current(),
             terminal_composer: terminal_composer::TerminalComposer::default(),
             text_layout: TextInputLayoutEngine::new(),
             caret_blink: CaretBlinkController::default(),
@@ -105,6 +118,7 @@ impl NativeApp {
         let Some(presentation) = self.presentation.as_ref() else {
             return;
         };
+        debug_assert!(!presentation.accessibility_nodes.is_empty());
         let Some(renderer) = self.renderer.as_mut() else {
             return;
         };
@@ -133,7 +147,8 @@ impl NativeApp {
     fn rebuild_presentation(&mut self) {
         let viewport = self.logical_viewport();
         let active_screen = self.active_screen();
-        let terminal_size = terminal_grid_size_for_viewport(viewport, active_screen);
+        let terminal_size =
+            terminal_grid_size_for_viewport(viewport, active_screen, self.session_sidebar);
         if let Some(terminal) = self.terminal.as_mut()
             && let Err(error) = terminal.resize(terminal_size)
         {
@@ -141,27 +156,67 @@ impl NativeApp {
         }
         let scroll_limit = self.terminal_scroll_limit();
         self.terminal_scroll.clamp(scroll_limit);
+        let window_control_insets = self
+            .window
+            .as_ref()
+            .map(NativeWindow::window_control_insets)
+            .unwrap_or(WindowControlInsets::NONE);
         let mut presentation = build_shell_presentation(
             viewport,
-            self.terminal.as_ref().map(TerminalSession::core),
-            self.terminal_scroll.offset(),
-            self.terminal_selection.range(),
-            self.terminal_composer.input(),
+            ShellPresentationModel {
+                terminal: self.terminal.as_ref().map(TerminalSession::core),
+                terminal_scroll_offset: self.terminal_scroll.offset(),
+                terminal_selection: self.terminal_selection.range(),
+                workspace_context: &self.workspace_context,
+                composer: self.terminal_composer.input(),
+                caret_visibility: self.caret_blink.visibility(),
+                dispatch: &self.ui_dispatch,
+                session_sidebar: self.session_sidebar,
+                window_control_insets,
+            },
             &mut self.text_layout,
-            self.caret_blink.visibility(),
         );
+        let focus_outcome = self
+            .ui_dispatch
+            .reconcile_focus(&presentation.interaction_frame, COMPOSER);
+        if focus_outcome.invalidation == DispatchInvalidation::Paint {
+            presentation = build_shell_presentation(
+                viewport,
+                ShellPresentationModel {
+                    terminal: self.terminal.as_ref().map(TerminalSession::core),
+                    terminal_scroll_offset: self.terminal_scroll.offset(),
+                    terminal_selection: self.terminal_selection.range(),
+                    workspace_context: &self.workspace_context,
+                    composer: self.terminal_composer.input(),
+                    caret_visibility: self.caret_blink.visibility(),
+                    dispatch: &self.ui_dispatch,
+                    session_sidebar: self.session_sidebar,
+                    window_control_insets,
+                },
+                &mut self.text_layout,
+            );
+        }
         if let Some(point) = self.cursor_position
-            && self.interaction.pointer_moved(point, &presentation.hit_map)
-                == InteractionEffect::Redraw
+            && self
+                .ui_dispatch
+                .pointer_moved(point, &presentation.interaction_frame)
+                .invalidation
+                == DispatchInvalidation::Paint
         {
             presentation = build_shell_presentation(
                 viewport,
-                self.terminal.as_ref().map(TerminalSession::core),
-                self.terminal_scroll.offset(),
-                self.terminal_selection.range(),
-                self.terminal_composer.input(),
+                ShellPresentationModel {
+                    terminal: self.terminal.as_ref().map(TerminalSession::core),
+                    terminal_scroll_offset: self.terminal_scroll.offset(),
+                    terminal_selection: self.terminal_selection.range(),
+                    workspace_context: &self.workspace_context,
+                    composer: self.terminal_composer.input(),
+                    caret_visibility: self.caret_blink.visibility(),
+                    dispatch: &self.ui_dispatch,
+                    session_sidebar: self.session_sidebar,
+                    window_control_insets,
+                },
                 &mut self.text_layout,
-                self.caret_blink.visibility(),
             );
         }
         self.presentation = Some(presentation);
@@ -187,46 +242,61 @@ impl NativeApp {
     }
 
     fn update_cursor(&self) {
-        let cursor = match self.interaction.pointer_feedback() {
-            PointerFeedback::Default => CursorIcon::Default,
-            PointerFeedback::Text => CursorIcon::Text,
+        let feedback = self
+            .presentation
+            .as_ref()
+            .map(|presentation| {
+                self.ui_dispatch
+                    .pointer_feedback(&presentation.interaction_frame)
+            })
+            .unwrap_or_default();
+        let cursor = match feedback {
+            CursorFeedback::Default => CursorIcon::Default,
+            CursorFeedback::Text => CursorIcon::Text,
+            CursorFeedback::Pointer => CursorIcon::Pointer,
         };
         if let Some(window) = self.window.as_ref() {
             window.set_cursor(cursor);
         }
     }
 
-    fn update_ime_cursor_area(&self) {
-        let Some(bounds) = self
-            .presentation
-            .as_ref()
-            .and_then(|presentation| presentation.ime_cursor_area)
-        else {
-            return;
-        };
-        if let Some(window) = self.window.as_ref() {
-            window.set_ime_cursor_area(ImeCursorArea::new(
-                bounds.origin.x as f64,
-                bounds.origin.y as f64,
-                bounds.size.width as f64,
-                bounds.size.height as f64,
-            ));
+    fn apply_dispatch_outcome(&mut self, outcome: DispatchOutcome) {
+        if let Some(intent) = outcome.intent {
+            match intent {
+                UiIntent::StartWindowDrag(_) => {
+                    if let Some(window) = self.window.as_ref()
+                        && let Err(error) = window.start_window_drag()
+                    {
+                        eprintln!("could not begin native window drag: {error}");
+                    }
+                }
+                UiIntent::Activate(id) => self.activate_shell_element(id),
+            }
+        }
+        if outcome.invalidation == DispatchInvalidation::Paint {
+            self.sync_input_focus();
+            self.rebuild_presentation();
+            self.request_redraw();
         }
     }
 
-    fn apply_interaction_effect(&mut self, effect: InteractionEffect) {
-        match effect {
-            InteractionEffect::None => {}
-            InteractionEffect::Redraw => {
-                self.rebuild_presentation();
-                self.request_redraw();
-            }
-            InteractionEffect::StartWindowDrag => {
-                if let Some(window) = self.window.as_ref()
-                    && let Err(error) = window.start_window_drag()
-                {
-                    eprintln!("could not begin native window drag: {error}");
-                }
+    fn activate_shell_element(&mut self, id: zeta_ui_dispatch::ElementId) {
+        if id == shell_interaction::SIDEBAR_TOGGLE {
+            self.session_sidebar = self.session_sidebar.toggled();
+            return;
+        }
+        if id == shell_interaction::ACTIVE_SESSION_TAB {
+            return;
+        }
+        let Some(action) = ContextAction::from_element_id(id) else {
+            return;
+        };
+        match action {
+            ContextAction::Location
+            | ContextAction::WorkingDirectory
+            | ContextAction::GitBranch
+            | ContextAction::Diff => {
+                // Pickers are product commands layered above the dispatch foundation.
             }
         }
     }
@@ -239,28 +309,40 @@ impl NativeApp {
         if !terminal_captured && self.route_terminal_selection_move(terminal_position) {
             return;
         }
-        let effect = self
+        let outcome = self
             .presentation
             .as_ref()
-            .map(|presentation| self.interaction.pointer_moved(point, &presentation.hit_map))
-            .unwrap_or(InteractionEffect::None);
+            .map(|presentation| {
+                self.ui_dispatch
+                    .pointer_moved(point, &presentation.interaction_frame)
+            })
+            .unwrap_or_default();
         self.update_cursor();
-        self.apply_interaction_effect(effect);
+        self.apply_dispatch_outcome(outcome);
     }
 
     fn pointer_left(&mut self) {
         self.cursor_position = None;
-        let effect = self.interaction.pointer_left();
+        let outcome = self.ui_dispatch.pointer_left();
         self.update_cursor();
-        self.apply_interaction_effect(effect);
+        self.apply_dispatch_outcome(outcome);
     }
 
     fn primary_button_changed(&mut self, state: ElementState) {
-        let effect = match state {
-            ElementState::Pressed => self.interaction.press_primary(),
-            ElementState::Released => self.interaction.release_primary(),
+        let Some(presentation) = self.presentation.as_ref() else {
+            return;
         };
-        self.apply_interaction_effect(effect);
+        let outcome = match state {
+            ElementState::Pressed => self
+                .ui_dispatch
+                .press_primary(&presentation.interaction_frame),
+            ElementState::Released => {
+                let point = self.cursor_position.unwrap_or(Point::new(-1.0, -1.0));
+                self.ui_dispatch
+                    .release_primary(point, &presentation.interaction_frame)
+            }
+        };
+        self.apply_dispatch_outcome(outcome);
     }
 
     fn mouse_button_changed(&mut self, state: ElementState, button: MouseButton) {
@@ -286,13 +368,15 @@ impl ApplicationHandler<TerminalSessionEvent> for NativeApp {
             return;
         }
 
-        let attributes = apply_window_chrome(
-            WindowAttributes::default()
-                .with_title(PRODUCT_DISPLAY_NAME)
-                .with_inner_size(LogicalSize::new(INITIAL_WIDTH, INITIAL_HEIGHT)),
+        let attributes = WindowAttributes::default()
+            .with_title(PRODUCT_DISPLAY_NAME)
+            .with_theme(Some(Theme::Light))
+            .with_inner_size(LogicalSize::new(INITIAL_WIDTH, INITIAL_HEIGHT));
+        let window = match NativeWindow::create(
+            event_loop,
+            attributes,
             WindowChrome::ContentUnderTitlebar,
-        );
-        let window = match NativeWindow::create(event_loop, attributes) {
+        ) {
             Ok(window) => window,
             Err(error) => {
                 self.fail(event_loop, error);
@@ -302,8 +386,11 @@ impl ApplicationHandler<TerminalSessionEvent> for NativeApp {
         self.window_id = Some(window.id());
         self.physical_extent = window.inner_extent();
         self.scale_factor = window.scale_factor();
-        let terminal_size =
-            terminal_grid_size_for_viewport(self.logical_viewport(), ScreenBuffer::Primary);
+        let terminal_size = terminal_grid_size_for_viewport(
+            self.logical_viewport(),
+            ScreenBuffer::Primary,
+            self.session_sidebar,
+        );
         self.terminal = match TerminalSession::spawn(terminal_size, self.event_proxy.clone()) {
             Ok(terminal) => Some(terminal),
             Err(error) => {
@@ -311,10 +398,9 @@ impl ApplicationHandler<TerminalSessionEvent> for NativeApp {
                 return;
             }
         };
-        self.caret_blink.focus(Instant::now());
-        self.rebuild_presentation();
-        window.enable_ime();
         self.window = Some(window.clone());
+        self.rebuild_presentation();
+        self.sync_input_focus();
         let renderer = match WgpuRenderer::initialize(window) {
             Ok(renderer) => renderer,
             Err(error) => {
@@ -367,23 +453,15 @@ impl ApplicationHandler<TerminalSessionEvent> for NativeApp {
             WindowEvent::Focused(false) => {
                 self.modifiers = ModifiersState::default();
                 self.terminal_pointer.cancel();
-                self.terminal_composer.cancel_composition();
-                self.caret_blink.blur();
-                if let Some(window) = self.window.as_ref() {
-                    window.disable_ime();
-                }
+                self.ui_dispatch.window_blurred();
+                self.sync_input_focus();
                 self.rebuild_presentation();
                 self.request_redraw();
             }
             WindowEvent::Focused(true) => {
-                if self.active_screen() == ScreenBuffer::Primary {
-                    self.caret_blink.focus(Instant::now());
-                }
-                if let Some(window) = self.window.as_ref() {
-                    window.enable_ime();
-                }
+                self.ui_dispatch.window_focused();
+                self.sync_input_focus();
                 self.rebuild_presentation();
-                self.update_ime_cursor_area();
                 self.request_redraw();
             }
             WindowEvent::MouseInput { state, button, .. } => {
@@ -403,7 +481,11 @@ impl ApplicationHandler<TerminalSessionEvent> for NativeApp {
 
     fn user_event(&mut self, _event_loop: &ActiveEventLoop, event: TerminalSessionEvent) {
         let previous_scroll_limit = self.terminal_scroll_limit();
-        let previous_screen = self.active_screen();
+        let previous_block_status = self
+            .terminal
+            .as_ref()
+            .and_then(|terminal| terminal.core().block_list().blocks().last())
+            .map(|block| block.status());
         let active_screen = if let Some(terminal) = self.terminal.as_mut() {
             if let Err(error) = terminal.handle_event(event) {
                 eprintln!("could not reply to terminal query: {error}");
@@ -415,6 +497,16 @@ impl ApplicationHandler<TerminalSessionEvent> for NativeApp {
         } else {
             return;
         };
+        let current_block_status = self
+            .terminal
+            .as_ref()
+            .and_then(|terminal| terminal.core().block_list().blocks().last())
+            .map(|block| block.status());
+        if previous_block_status == Some(BlockStatus::Running)
+            && current_block_status != Some(BlockStatus::Running)
+        {
+            self.workspace_context.refresh_repository();
+        }
         if active_screen == ScreenBuffer::Alternate || self.terminal_scroll.offset() == 0 {
             self.terminal_selection.clear();
         }
@@ -423,14 +515,7 @@ impl ApplicationHandler<TerminalSessionEvent> for NativeApp {
             scroll_limit.saturating_sub(previous_scroll_limit),
             scroll_limit,
         );
-        if active_screen != previous_screen {
-            if active_screen == ScreenBuffer::Primary {
-                self.caret_blink.focus(Instant::now());
-            } else {
-                self.terminal_composer.cancel_composition();
-                self.caret_blink.blur();
-            }
-        }
+        self.sync_input_focus();
         self.rebuild_presentation();
         self.request_redraw();
     }

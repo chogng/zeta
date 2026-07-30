@@ -156,7 +156,12 @@ impl NativeApp {
         &self,
         point: zeta_ui::Point,
     ) -> Option<TerminalMousePosition> {
-        terminal_mouse_position_for_viewport(self.logical_viewport(), self.active_screen(), point)
+        terminal_mouse_position_for_viewport(
+            self.logical_viewport(),
+            self.active_screen(),
+            self.session_sidebar,
+            point,
+        )
     }
 
     pub(super) fn route_terminal_pointer_move(

@@ -1,91 +1,75 @@
-use zeta_ui::{Point, Rect};
+use zeta_ui_dispatch::ElementId;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum ShellTarget {
-    WindowDrag,
-    Composer,
+const SHELL_SCOPE: u32 = 1;
+
+pub(crate) const WINDOW: ElementId = ElementId::scoped(SHELL_SCOPE, 1);
+pub(crate) const TITLEBAR: ElementId = ElementId::scoped(SHELL_SCOPE, 2);
+pub(crate) const MAIN_SURFACE: ElementId = ElementId::scoped(SHELL_SCOPE, 3);
+pub(crate) const TERMINAL_OUTPUT: ElementId = ElementId::scoped(SHELL_SCOPE, 4);
+pub(crate) const COMPOSER_PANEL: ElementId = ElementId::scoped(SHELL_SCOPE, 5);
+pub(crate) const COMPOSER: ElementId = ElementId::scoped(SHELL_SCOPE, 6);
+pub(crate) const CONTEXT_TOOLBAR: ElementId = ElementId::scoped(SHELL_SCOPE, 7);
+pub(crate) const CONTEXT_LOCATION: ElementId = ElementId::scoped(SHELL_SCOPE, 8);
+pub(crate) const CONTEXT_WORKING_DIRECTORY: ElementId = ElementId::scoped(SHELL_SCOPE, 9);
+pub(crate) const CONTEXT_GIT_BRANCH: ElementId = ElementId::scoped(SHELL_SCOPE, 10);
+pub(crate) const CONTEXT_DIFF: ElementId = ElementId::scoped(SHELL_SCOPE, 11);
+pub(crate) const SIDEBAR_TOGGLE: ElementId = ElementId::scoped(SHELL_SCOPE, 12);
+pub(crate) const SESSION_SIDEBAR: ElementId = ElementId::scoped(SHELL_SCOPE, 13);
+pub(crate) const SESSION_TAB_LIST: ElementId = ElementId::scoped(SHELL_SCOPE, 14);
+pub(crate) const ACTIVE_SESSION_TAB: ElementId = ElementId::scoped(SHELL_SCOPE, 15);
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub(crate) enum SessionSidebarState {
+    #[default]
+    Collapsed,
+    Expanded,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum PointerFeedback {
-    Default,
-    Text,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum InteractionEffect {
-    None,
-    Redraw,
-    StartWindowDrag,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-struct HitRegion {
-    bounds: Rect,
-    target: ShellTarget,
-}
-
-#[derive(Clone, Debug, Default, PartialEq)]
-pub(crate) struct ShellHitMap {
-    regions: Vec<HitRegion>,
-}
-
-impl ShellHitMap {
-    pub(crate) fn register(&mut self, bounds: Rect, target: ShellTarget) {
-        self.regions.push(HitRegion { bounds, target });
+impl SessionSidebarState {
+    pub(crate) const fn is_expanded(self) -> bool {
+        matches!(self, Self::Expanded)
     }
 
-    pub(crate) fn target_at(&self, point: Point) -> Option<ShellTarget> {
-        self.regions
-            .iter()
-            .rev()
-            .find(|region| region.bounds.contains(point))
-            .map(|region| region.target)
-    }
-}
-
-#[derive(Clone, Debug, Default, PartialEq)]
-pub(crate) struct ShellInteraction {
-    hovered: Option<ShellTarget>,
-}
-
-impl ShellInteraction {
-    pub(crate) fn pointer_moved(
-        &mut self,
-        point: Point,
-        hit_map: &ShellHitMap,
-    ) -> InteractionEffect {
-        let hovered = hit_map.target_at(point);
-        if self.hovered == hovered {
-            return InteractionEffect::None;
+    pub(crate) const fn toggled(self) -> Self {
+        match self {
+            Self::Collapsed => Self::Expanded,
+            Self::Expanded => Self::Collapsed,
         }
-        self.hovered = hovered;
-        InteractionEffect::Redraw
     }
+}
 
-    pub(crate) fn pointer_left(&mut self) -> InteractionEffect {
-        if self.hovered.take().is_some() {
-            InteractionEffect::Redraw
-        } else {
-            InteractionEffect::None
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum ContextAction {
+    Location,
+    WorkingDirectory,
+    GitBranch,
+    Diff,
+}
+
+impl ContextAction {
+    pub(crate) const ALL: [Self; 4] = [
+        Self::Location,
+        Self::WorkingDirectory,
+        Self::GitBranch,
+        Self::Diff,
+    ];
+
+    pub(crate) const fn element_id(self) -> ElementId {
+        match self {
+            Self::Location => CONTEXT_LOCATION,
+            Self::WorkingDirectory => CONTEXT_WORKING_DIRECTORY,
+            Self::GitBranch => CONTEXT_GIT_BRANCH,
+            Self::Diff => CONTEXT_DIFF,
         }
     }
 
-    pub(crate) fn press_primary(&mut self) -> InteractionEffect {
-        match self.hovered {
-            Some(ShellTarget::WindowDrag) => InteractionEffect::StartWindowDrag,
-            Some(ShellTarget::Composer) | None => InteractionEffect::None,
-        }
-    }
-
-    pub(crate) fn release_primary(&mut self) -> InteractionEffect {
-        InteractionEffect::None
-    }
-
-    pub(crate) const fn pointer_feedback(&self) -> PointerFeedback {
-        match self.hovered {
-            Some(ShellTarget::WindowDrag) => PointerFeedback::Default,
-            Some(ShellTarget::Composer) | None => PointerFeedback::Text,
+    pub(crate) const fn from_element_id(id: ElementId) -> Option<Self> {
+        match id {
+            CONTEXT_LOCATION => Some(Self::Location),
+            CONTEXT_WORKING_DIRECTORY => Some(Self::WorkingDirectory),
+            CONTEXT_GIT_BRANCH => Some(Self::GitBranch),
+            CONTEXT_DIFF => Some(Self::Diff),
+            _ => None,
         }
     }
 }

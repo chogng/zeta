@@ -17,27 +17,49 @@ pub(crate) struct ShellPalette {
 }
 
 pub(crate) const SHELL_PALETTE: ShellPalette = ShellPalette {
-    background: Color::rgb(9, 11, 14),
-    surface: Color::rgb(16, 20, 26),
-    surface_raised: Color::rgb(22, 27, 35),
-    border: Color::rgb(45, 53, 65),
-    text: Color::rgb(235, 239, 244),
-    text_muted: Color::rgb(145, 157, 173),
-    accent: Color::rgb(104, 170, 222),
-    terminal_selection: Color::rgba(104, 170, 222, 96),
-    surface_hovered: Color::rgb(29, 36, 46),
-    border_focused: Color::rgb(74, 125, 171),
+    background: Color::rgb(252, 252, 253),
+    surface: Color::WHITE,
+    surface_raised: Color::rgb(246, 246, 247),
+    border: Color::rgb(222, 222, 224),
+    text: Color::rgb(38, 38, 41),
+    text_muted: Color::rgb(126, 126, 132),
+    accent: Color::rgb(15, 110, 96),
+    terminal_selection: Color::rgba(68, 139, 202, 72),
+    surface_hovered: Color::rgb(248, 248, 249),
+    border_focused: Color::TRANSPARENT,
 };
 
 impl ShellPalette {
+    pub(crate) fn terminal_indexed_color(self, index: u8) -> Color {
+        match index {
+            0 => Color::rgb(36, 41, 47),
+            1 => Color::rgb(207, 34, 46),
+            2 => Color::rgb(17, 99, 41),
+            3 => Color::rgb(154, 103, 0),
+            4 => Color::rgb(9, 105, 218),
+            5 => Color::rgb(130, 80, 223),
+            6 => Color::rgb(27, 124, 131),
+            7 => self.text,
+            8 => Color::rgb(110, 119, 129),
+            9 => Color::rgb(164, 14, 38),
+            10 => Color::rgb(26, 127, 55),
+            11 => Color::rgb(191, 135, 0),
+            12 => Color::rgb(33, 139, 255),
+            13 => Color::rgb(164, 117, 249),
+            14 => Color::rgb(49, 146, 170),
+            15 => Color::rgb(140, 149, 159),
+            _ => self.text,
+        }
+    }
+
     pub(crate) fn composer_style(self) -> InputBoxStyle {
         InputBoxStyle::new(
+            InputBoxStateColors::new(self.surface, self.surface_hovered, self.surface),
             InputBoxStateColors::new(
-                self.surface_raised,
-                self.surface_hovered,
-                self.surface_raised,
+                self.border_focused,
+                self.border_focused,
+                self.border_focused,
             ),
-            InputBoxStateColors::new(self.border, self.border, self.border_focused),
             TextStyle::new(15.0, self.text)
                 .with_family(FontFamily::Monospace)
                 .with_line_height(20.0),
@@ -45,8 +67,9 @@ impl ShellPalette {
                 .with_family(FontFamily::Monospace)
                 .with_line_height(20.0),
         )
-        .with_corner_radii(CornerRadii::uniform(10.0))
-        .with_padding(Edges::new(18.0, 16.0, 18.0, 16.0))
+        .with_border_width(0.0)
+        .with_corner_radii(CornerRadii::uniform(0.0))
+        .with_padding(Edges::new(12.0, 8.0, 12.0, 8.0))
         .with_selection_color(self.terminal_selection)
         .with_caret_color(self.accent)
         .with_preedit_underline_color(self.accent)
