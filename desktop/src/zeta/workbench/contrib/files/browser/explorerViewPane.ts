@@ -2,7 +2,7 @@ import { addDisposableListener } from "../../../../base/browser/dom.js";
 import { IconLabel } from "../../../../base/browser/ui/iconlabel/iconlabel.js";
 import { appendIcon } from "../../../../base/browser/ui/icon/icon.js";
 import { ScrollableElement } from "../../../../base/browser/ui/scrollbar/scrollableElement.js";
-import { LxIcon } from "../../../../base/common/lxicons.js";
+import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
 import { ResettableDisposableGroup } from "../../../../base/common/lifecycle.js";
 import { URI } from "../../../../base/common/uri.js";
 import { FileKind, type IFileEntry, type IFileService } from "../../../../platform/files/common/files.js";
@@ -217,8 +217,8 @@ export class ExplorerViewPane extends ViewPane {
     if (node.kind === FileKind.Directory) {
       appendIcon(
         node.expanded
-          ? LxIcon.dropdownIndicator
-          : LxIcon.submenuIndicator,
+          ? lxiconsLibrary.dropdownIndicator
+          : lxiconsLibrary.submenuIndicator,
         twistie,
       );
     }

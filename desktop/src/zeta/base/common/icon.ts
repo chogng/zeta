@@ -24,7 +24,7 @@ const iconIdPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
  * Product code should register an icon for the meaning it presents and use the
  * returned reference. Icon-library factories stay behind this boundary.
  */
-export function registerIcon(id: string, defaults: IconDefaults): Icon {
+export function register(id: string, defaults: IconDefaults): Icon {
   if (!iconIdPattern.test(id)) {
     throw new TypeError(`Invalid icon ID '${id}'`);
   }

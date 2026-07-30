@@ -67,7 +67,13 @@
   border-color: var(--zeta-focus-border);
 }
 
-.zeta-chat-composer textarea {
+.zeta-chat-input-editor-host {
+  width: 100%;
+  min-width: 0;
+  min-height: 62px;
+}
+
+.zeta-chat-textarea-input {
   box-sizing: border-box;
   width: 100%;
   min-height: 62px;

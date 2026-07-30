@@ -1,4 +1,4 @@
-import { LxIcon } from "../../../../base/common/lxicons.js";
+import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
 import { Action2, MenuId, registerAction2 } from "../../../../platform/actions/common/actions.js";
 import type { ServicesAccessor } from "../../../../platform/instantiation/common/instantiation.js";
 import { IEditorPart } from "./editorPart.js";
@@ -12,7 +12,7 @@ registerAction2(class SplitEditorHorizontalAction extends Action2 {
       id: SplitEditorHorizontalCommandId,
       title: "Split Editor Horizontal",
       tooltip: "Split Editor Horizontal",
-      icon: LxIcon.splitHorizontal,
+      icon: lxiconsLibrary.splitHorizontal,
       f1: true,
       menu: {
         id: MenuId.EditorTitle,

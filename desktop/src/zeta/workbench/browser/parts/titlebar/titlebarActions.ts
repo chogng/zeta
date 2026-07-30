@@ -1,4 +1,4 @@
-import { LxIcon } from "../../../../base/common/lxicons.js";
+import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
 import { Action2, MenuId, registerAction2 } from "../../../../platform/actions/common/actions.js";
 import type { ServicesAccessor } from "../../../../platform/instantiation/common/instantiation.js";
 import { AuxiliaryBarVisibleContext, PanelVisibleContext, SideBarVisibleContext } from "../../../common/contextkeys.js";
@@ -14,12 +14,12 @@ registerAction2(class ToggleSideBarAction extends Action2 {
       id: ToggleSideBarCommandId,
       title: "Show Primary Side Bar",
       tooltip: "Show Primary Side Bar",
-      icon: LxIcon.layoutSidebarLeftOff,
+      icon: lxiconsLibrary.layoutSidebarLeftOff,
       toggled: {
         condition: SideBarVisibleContext.isEqualTo(true),
         title: "Hide Primary Side Bar",
         tooltip: "Hide Primary Side Bar",
-        icon: LxIcon.layoutSidebarLeft,
+        icon: lxiconsLibrary.layoutSidebarLeft,
       },
       menu: [
         {
@@ -53,12 +53,12 @@ registerAction2(class ToggleAuxiliaryBarAction extends Action2 {
       id: ToggleAuxiliaryBarCommandId,
       title: "Show Secondary Side Bar",
       tooltip: "Show Secondary Side Bar",
-      icon: LxIcon.layoutSidebarRightOff,
+      icon: lxiconsLibrary.layoutSidebarRightOff,
       toggled: {
         condition: AuxiliaryBarVisibleContext.isEqualTo(true),
         title: "Hide Secondary Side Bar",
         tooltip: "Hide Secondary Side Bar",
-        icon: LxIcon.layoutSidebarRight,
+        icon: lxiconsLibrary.layoutSidebarRight,
       },
       menu: [
         {
@@ -92,12 +92,12 @@ registerAction2(class TogglePanelAction extends Action2 {
       id: TogglePanelCommandId,
       title: "Show Panel",
       tooltip: "Show Panel",
-      icon: LxIcon.layoutPanelOff,
+      icon: lxiconsLibrary.layoutPanelOff,
       toggled: {
         condition: PanelVisibleContext.isEqualTo(true),
         title: "Hide Panel",
         tooltip: "Hide Panel",
-        icon: LxIcon.layoutPanel,
+        icon: lxiconsLibrary.layoutPanel,
       },
       menu: [
         {

@@ -1,4 +1,4 @@
-import { LxIcon } from "../../../../../base/common/lxicons.js";
+import { lxiconsLibrary } from "../../../../../base/common/lxiconsLibrary.js";
 import { Action2, MenuId, registerAction2 } from "../../../../../platform/actions/common/actions.js";
 import { ContextKeyExpr, IContextKeyService } from "../../../../../platform/contextkey/common/contextkey.js";
 import type { ServicesAccessor } from "../../../../../platform/instantiation/common/instantiation.js";
@@ -15,12 +15,12 @@ registerAction2(class ToggleAgentSidebarAction extends Action2 {
       id: TOGGLE_AGENT_SIDEBAR_COMMAND_ID,
       title: "Show Agent Sidebar",
       tooltip: "Show Agent Sidebar",
-      icon: LxIcon.layoutSidebarRightOff,
+      icon: lxiconsLibrary.layoutSidebarRightOff,
       toggled: {
         condition: AgentSidebarVisibleContext.isEqualTo(true),
         title: "Hide Agent Sidebar",
         tooltip: "Hide Agent Sidebar",
-        icon: LxIcon.layoutSidebarRight,
+        icon: lxiconsLibrary.layoutSidebarRight,
       },
       menu: {
         id: MenuId.ChatTitleLayout,
@@ -43,7 +43,7 @@ registerAction2(class OpenChatBrowserAction extends Action2 {
     super({
       id: OPEN_CHAT_BROWSER_COMMAND_ID,
       title: "Open Browser",
-      icon: LxIcon.browserWeb,
+      icon: lxiconsLibrary.browserWeb,
       precondition: ChatBrowserAvailable,
       menu: {
         id: MenuId.ChatTitle,
@@ -63,7 +63,7 @@ registerAction2(class MoveChatToEditorAction extends Action2 {
     super({
       id: MOVE_CHAT_TO_EDITOR_COMMAND_ID,
       title: "Move Chat to Editor Area",
-      icon: LxIcon.layoutPanel,
+      icon: lxiconsLibrary.layoutPanel,
       precondition: ChatEditorAreaAvailable,
       menu: {
         id: MenuId.ChatTitle,
@@ -83,7 +83,7 @@ registerAction2(class MoveChatToNewWindowAction extends Action2 {
     super({
       id: MOVE_CHAT_TO_NEW_WINDOW_COMMAND_ID,
       title: "Move Chat to New Window",
-      icon: LxIcon.linkExternal,
+      icon: lxiconsLibrary.linkExternal,
       precondition: ChatNewWindowAvailable,
       menu: {
         id: MenuId.ChatTitle,
@@ -103,7 +103,7 @@ registerAction2(class OpenChatSettingsAction extends Action2 {
     super({
       id: OPEN_CHAT_SETTINGS_COMMAND_ID,
       title: "Chat Settings",
-      icon: LxIcon.settings,
+      icon: lxiconsLibrary.settings,
       menu: {
         id: MenuId.ChatTitle,
         group: "chatActions",

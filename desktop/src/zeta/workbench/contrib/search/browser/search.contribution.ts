@@ -1,4 +1,4 @@
-import { LxIcon } from "../../../../base/common/lxicons.js";
+import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
 import {
   SyncDescriptor,
 } from "../../../../platform/instantiation/common/instantiation.js";
@@ -24,7 +24,7 @@ export function registerSearchViews(
     id: WorkbenchViewContainerId.Search,
     title: "Search",
     location: ViewContainerLocation.Sidebar,
-    icon: LxIcon.search,
+    icon: lxiconsLibrary.search,
     order: 2,
   });
   registry.registerStaticViews(WorkbenchViewContainerId.Search, [{

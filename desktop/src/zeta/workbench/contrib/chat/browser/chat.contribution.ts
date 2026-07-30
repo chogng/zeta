@@ -1,6 +1,6 @@
 import "./actions/chatActions.js";
 import "./actions/chatLayoutActions.js";
-import { LxIcon } from "../../../../base/common/lxicons.js";
+import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
 import { IMenuService } from "../../../../platform/actions/common/menuService.js";
 import { IContextKeyService } from "../../../../platform/contextkey/common/contextkey.js";
 import { IContextMenuService } from "../../../../platform/contextview/browser/contextMenu.js";
@@ -18,7 +18,7 @@ export function registerChatViews(registry: WorkbenchViewRegistry = ViewsRegistr
     id: CHAT_VIEW_CONTAINER_ID,
     title: "Chat",
     location: ViewContainerLocation.AuxiliaryBar,
-    icon: LxIcon.chat,
+    icon: lxiconsLibrary.chat,
     order: 1,
     isDefault: true,
   });

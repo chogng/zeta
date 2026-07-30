@@ -57,6 +57,8 @@
 
 和 VS Code 一致，ARIA attribute 用于无障碍语义，稳定 class 用于视觉 selector。不要使用 `[aria-pressed="true"]` 或 `[aria-selected="true"]` 作为皮肤 selector。
 
+需要让选中状态覆盖 hover 时，先写一般 `:hover` 规则，再写同等或更高 specificity 的 `.checked` 规则；不要使用 `:not(.checked):hover` 表达状态优先级。
+
 ## Selector 规则
 
 允许组件修改自己的内部结构：

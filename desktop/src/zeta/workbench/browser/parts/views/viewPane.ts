@@ -4,7 +4,7 @@ import { appendIcon } from "../../../../base/browser/ui/icon/icon.js";
 import { trackFocus } from "../../../../base/browser/focus.js";
 import type { Event } from "../../../../base/common/event.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
-import { LxIcon } from "../../../../base/common/lxicons.js";
+import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
 import type { IView } from "../../../common/views.js";
 
 /** Runtime inputs supplied by a browser view container to every pane. */
@@ -48,9 +48,9 @@ export abstract class ViewPane extends DisposableOwner implements IView {
     const indicator = ownerDocument.createElement("span");
     indicator.className = "zeta-view-pane-title-chevron";
     indicator.setAttribute("aria-hidden", "true");
-    const collapsedIcon = appendIcon(LxIcon.chevronRight, indicator);
+    const collapsedIcon = appendIcon(lxiconsLibrary.chevronRight, indicator);
     collapsedIcon.classList.add("zeta-view-pane-collapsed-icon");
-    const expandedIcon = appendIcon(LxIcon.chevronDown, indicator);
+    const expandedIcon = appendIcon(lxiconsLibrary.chevronDown, indicator);
     expandedIcon.classList.add("zeta-view-pane-expanded-icon");
     this.#titleLabel = ownerDocument.createElement("span");
     this.#titleLabel.className = "zeta-view-pane-title-label";

@@ -8,10 +8,17 @@ import { registerWorkbenchContribution, WorkbenchPhase } from "../../../workbenc
 import {
   MonacoEditorPane,
 } from "../browser/monacoEditorPane.js";
+import { MonacoChatInputEditor } from "../browser/monacoChatInputEditor.js";
 import {
   MONACO_EDITOR_ID,
   matchMonacoEditor,
 } from "../common/monacoEditorInput.js";
+import { ChatInputEditors } from "../../../workbench/contrib/chat/browser/input/chatInputEditor.js";
+
+ChatInputEditors.registerStatic({
+  id: "monaco",
+  create: (options) => new MonacoChatInputEditor(options),
+});
 
 registerEditorPane({
   id: MONACO_EDITOR_ID,

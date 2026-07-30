@@ -16,7 +16,12 @@ It does not own files, persistence, tabs, dirty state, or Markdown rendering.
   overwrite a model that is already in use.
 - `browser/monacoEditorPane.ts` owns Monaco DOM, layout, visibility, focus,
   and one reference to the shared model.
+- `browser/monacoChatInputEditor.ts` owns the ephemeral plaintext model,
+  content-driven height, submit gesture, and Monaco DOM used inside the Chat
+  composer. Chat continues to own drafts, submission, and toolbar semantics.
 - `contrib/monacoEditor.contribution.ts` is the stable registration boundary.
+  Code and Complete register Monaco as their Chat input editor here; products
+  that do not select this contribution retain Chat's textarea fallback.
 - `test/` verifies matching and language policy without loading browser workers.
 
 `EditorInput.initialText` is currently an in-memory bootstrap snapshot. A future

@@ -1,4 +1,4 @@
-import { LxIcon } from "../../../../base/common/lxicons.js";
+import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
 import { SyncDescriptor } from "../../../../platform/instantiation/common/instantiation.js";
 import { ViewContainerLocation, type WorkbenchViewRegistry, WorkbenchViewContainerId, ViewsRegistry } from "../../../common/views.js";
 import { IRendererApiService } from "../../../common/services.js";
@@ -15,7 +15,7 @@ export function registerGitViews(
     id: WorkbenchViewContainerId.Git,
     title: "Git",
     location: ViewContainerLocation.Sidebar,
-    icon: LxIcon.gitCommit,
+    icon: lxiconsLibrary.gitCommit,
     order: 3,
   });
   registry.registerStaticViews(WorkbenchViewContainerId.Git, [{

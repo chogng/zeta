@@ -40,6 +40,15 @@
   gap: 0;
 }
 
+.zeta-tab-actions [data-action-id="zeta.tab.close"] {
+  visibility: hidden;
+}
+
+.zeta-tab.checked .zeta-tab-actions [data-action-id="zeta.tab.close"],
+.zeta-tab:hover .zeta-tab-actions [data-action-id="zeta.tab.close"] {
+  visibility: visible;
+}
+
 .zeta-tab-actions .zeta-action-view-item.icon .zeta-button {
   width: var(--zeta-toolbar-action-size);
   min-width: var(--zeta-toolbar-action-size);

@@ -13,7 +13,7 @@ import {
 } from "../../focus.js";
 import type { ResolvedKeybinding } from "../../../common/keybindings.js";
 import { DisposableOwner } from "../../../common/lifecycle.js";
-import { LxIcon } from "../../../common/lxicons.js";
+import { lxiconsLibrary } from "../../../common/lxiconsLibrary.js";
 import {
   ActionViewItem,
   ButtonActionViewItem,
@@ -145,7 +145,7 @@ class SubmenuMenuActionViewItem extends ButtonActionViewItem {
     this.button.element.setAttribute("aria-expanded", "false");
     const indicator = ownerDocument.createElement("span");
     indicator.className = "zeta-submenu-indicator";
-    appendIcon(LxIcon.submenuIndicator, indicator);
+    appendIcon(lxiconsLibrary.submenuIndicator, indicator);
     this.button.element.append(indicator);
   }
 

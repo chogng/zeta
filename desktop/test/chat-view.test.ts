@@ -5,7 +5,7 @@ import type { ModelRef, ServerNotification, Session, SessionCommandParams, Sessi
 import type { ZetaRendererApi } from "../src/zeta/platform/app-server/common/renderer-api.js";
 import type { IAction } from "../src/zeta/base/common/actions.js";
 import { TAB_CLOSE_ACTION_ID } from "../src/zeta/base/browser/ui/tablist/tabList.js";
-import { LxIcon } from "../src/zeta/base/common/lxicons.js";
+import { lxiconsLibrary } from "../src/zeta/base/common/lxiconsLibrary.js";
 import { toDisposable } from "../src/zeta/base/common/lifecycle.js";
 import { MenuId } from "../src/zeta/platform/actions/common/actions.js";
 import { MenuService } from "../src/zeta/platform/actions/common/menuService.js";
@@ -196,25 +196,25 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
         id: OPEN_CHAT_BROWSER_COMMAND_ID,
         label: "Open Browser",
         enabled: false,
-        icon: LxIcon.browserWeb,
+        icon: lxiconsLibrary.browserWeb,
       },
       {
         id: MOVE_CHAT_TO_EDITOR_COMMAND_ID,
         label: "Move Chat to Editor Area",
         enabled: false,
-        icon: LxIcon.layoutPanel,
+        icon: lxiconsLibrary.layoutPanel,
       },
       {
         id: MOVE_CHAT_TO_NEW_WINDOW_COMMAND_ID,
         label: "Move Chat to New Window",
         enabled: false,
-        icon: LxIcon.linkExternal,
+        icon: lxiconsLibrary.linkExternal,
       },
       {
         id: OPEN_CHAT_SETTINGS_COMMAND_ID,
         label: "Chat Settings",
         enabled: true,
-        icon: LxIcon.settings,
+        icon: lxiconsLibrary.settings,
       },
     ],
   );

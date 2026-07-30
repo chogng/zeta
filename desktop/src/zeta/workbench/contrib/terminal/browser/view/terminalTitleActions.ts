@@ -1,7 +1,7 @@
 import { addDisposableListener } from "../../../../../base/browser/dom.js";
 import { ActionViewItem } from "../../../../../base/browser/ui/actionbar/actionViewItems.js";
 import type { IAction } from "../../../../../base/common/actions.js";
-import { LxIcon } from "../../../../../base/common/lxicons.js";
+import { lxiconsLibrary } from "../../../../../base/common/lxiconsLibrary.js";
 import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
 import { MenuWorkbenchToolBar } from "../../../../../platform/actions/browser/toolbar.js";
 import { MenuId, MenusRegistry } from "../../../../../platform/actions/common/actions.js";
@@ -123,7 +123,7 @@ export class TerminalTitleActions extends DisposableOwner {
         id: NEW_TERMINAL_COMMAND_ID,
         title: "New Terminal",
         tooltip: "New Terminal",
-        icon: LxIcon.add,
+        icon: lxiconsLibrary.add,
         precondition: TerminalCreatingContext.isEqualTo(false),
       },
       group: "navigation",
@@ -134,7 +134,7 @@ export class TerminalTitleActions extends DisposableOwner {
         id: RELAUNCH_TERMINAL_COMMAND_ID,
         title: "Relaunch Terminal",
         tooltip: "Relaunch Terminal",
-        icon: LxIcon.history,
+        icon: lxiconsLibrary.history,
       },
       when: ContextKeyExpr.and(
         TerminalHasActiveInstanceContext.isEqualTo(true),
@@ -148,7 +148,7 @@ export class TerminalTitleActions extends DisposableOwner {
         id: KILL_TERMINAL_COMMAND_ID,
         title: "Kill Terminal",
         tooltip: "Kill Terminal",
-        icon: LxIcon.close,
+        icon: lxiconsLibrary.close,
       },
       when: TerminalHasActiveInstanceContext.isEqualTo(true),
       group: "navigation",

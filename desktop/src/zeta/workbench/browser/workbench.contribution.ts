@@ -27,7 +27,7 @@ import {
 } from "../contrib/chat/browser/chat.contribution.js";
 import { registerPanelPlaceholderViews } from "../contrib/panel/browser/panel.contribution.js";
 import { registerTerminalView } from "../contrib/terminal/browser/terminal.contribution.js";
-import { LxIcon } from "../../base/common/lxicons.js";
+import { lxiconsLibrary } from "../../base/common/lxiconsLibrary.js";
 import "../contrib/markdown/browser/markdown.contribution.js";
 import "../contrib/preferences/browser/preferences.contribution.js";
 import "../contrib/quickaccess/browser/commandsQuickAccess.js";
@@ -41,7 +41,7 @@ ViewsRegistry.registerStaticViewContainer({
   id: WorkbenchViewContainerId.Sidebar,
   title: "Explorer",
   location: ViewContainerLocation.Sidebar,
-  icon: LxIcon.files,
+  icon: lxiconsLibrary.files,
   order: 1,
   isDefault: true,
 });

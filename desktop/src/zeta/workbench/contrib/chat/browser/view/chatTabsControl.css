@@ -13,6 +13,11 @@
   color: var(--zeta-description-foreground);
 }
 
+.zeta-chat-tabs-control .zeta-tab:hover {
+  color: var(--zeta-foreground);
+  background: var(--zeta-button-hover-background);
+}
+
 .zeta-chat-tabs-control .zeta-tab.checked {
   color: var(--zeta-foreground);
   background: var(--zeta-editor-background);

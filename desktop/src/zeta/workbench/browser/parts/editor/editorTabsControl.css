@@ -15,6 +15,11 @@
   background: var(--zeta-workbench-background);
 }
 
+.zeta-editor-tabs-control .zeta-tab:hover {
+  color: var(--zeta-foreground);
+  background: var(--zeta-button-hover-background);
+}
+
 .zeta-editor-tabs-control .zeta-tab.checked {
   color: var(--zeta-foreground);
   background: var(--zeta-editor-background);

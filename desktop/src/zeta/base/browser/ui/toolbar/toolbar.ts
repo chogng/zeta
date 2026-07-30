@@ -2,7 +2,7 @@ import type { IContextMenuProvider } from "../../contextmenu.js";
 import type { IAction } from "../../../common/actions.js";
 import { Separator } from "../../../common/actions.js";
 import { DisposableOwner } from "../../../common/lifecycle.js";
-import { LxIcon } from "../../../common/lxicons.js";
+import { lxiconsLibrary } from "../../../common/lxiconsLibrary.js";
 import { ActionBar, type ActionBarOrientation, type ActionViewItemProvider } from "../actionbar/actionbar.js";
 import { DropdownMenuActionViewItem } from "../dropdown/dropdownMenuActionViewItem.js";
 
@@ -72,7 +72,7 @@ class MoreActionsAction implements IAction {
   readonly id = "zeta.toolbar.moreActions";
   readonly label = "More Actions";
   readonly tooltip = "More Actions";
-  readonly icon = LxIcon.ellipsis;
+  readonly icon = lxiconsLibrary.ellipsis;
   readonly enabled = true;
   readonly checked = undefined;
 

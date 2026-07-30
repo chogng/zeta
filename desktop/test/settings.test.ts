@@ -29,7 +29,7 @@ for (const [name, value] of Object.entries({
 const { DisposableStore, toDisposable } = await import("../src/zeta/base/common/lifecycle.js");
 const { KeybindingLabelStyle, getKeybindingLabel } = await import("../src/zeta/base/common/keybindingLabels.js");
 const { resolveKeybinding } = await import("../src/zeta/base/common/keybindings.js");
-const { LxIcon } = await import("../src/zeta/base/common/lxicons.js");
+const { lxiconsLibrary } = await import("../src/zeta/base/common/lxiconsLibrary.js");
 const { OperatingSystem } = await import("../src/zeta/base/common/platform.js");
 const { MenuId } = await import("../src/zeta/platform/actions/common/actions.js");
 const { MenuService } = await import("../src/zeta/platform/actions/common/menuService.js");
@@ -328,7 +328,7 @@ test("Zeta Settings titlebar action opens the window Settings service", async ()
 
   assert.ok(action);
   assert.equal(action.label, "Zeta Settings");
-  assert.equal(action.icon, LxIcon.gear);
+  assert.equal(action.icon, lxiconsLibrary.gear);
 
   const bindingFor = (operatingSystem: (typeof OperatingSystem)[keyof typeof OperatingSystem]) =>
     new KeybindingResolver({

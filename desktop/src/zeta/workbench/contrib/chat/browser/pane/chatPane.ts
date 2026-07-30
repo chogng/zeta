@@ -64,6 +64,7 @@ export class ChatPane extends DisposableOwner {
 
   setVisible(visible: boolean): void {
     this.element.hidden = !visible;
+    this.#inputWidget.setVisible(visible);
     this.#listWidget.setVisible(visible);
   }
 

@@ -4,7 +4,7 @@ import type { IAction } from "../../../../../base/common/actions.js";
 import type { ModelCatalogEntry, ModelRef } from "../../../../../../../generated/app-server/types.js";
 import type { Icon } from "../../../../../base/common/icon.js";
 import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
-import { LxIcon } from "../../../../../base/common/lxicons.js";
+import { lxiconsLibrary } from "../../../../../base/common/lxiconsLibrary.js";
 import { WorkbenchToolBar } from "../../../../../platform/actions/browser/toolbar.js";
 import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextMenu.js";
 
@@ -33,7 +33,7 @@ const modeOptions: readonly { readonly id: ChatInputMode; readonly label: string
 
 type ChatInputToolbarPresentation = "mode" | "model" | "attachment" | "send" | "interrupt";
 
-/** Owns the fixed actions and selector state shown beneath the Chat textarea. */
+/** Owns the fixed actions and selector state shown beneath the Chat editor. */
 export class ChatInputToolbar extends DisposableOwner {
   readonly element: HTMLElement;
   readonly #toolbar: WorkbenchToolBar;
@@ -70,7 +70,7 @@ export class ChatInputToolbar extends DisposableOwner {
       "zeta.chat.input.mode",
       mode.label,
       `Mode: ${mode.label}`,
-      LxIcon.agent,
+      lxiconsLibrary.agent,
       "mode",
       () => modeOptions.map((option) => new ChatInputAction(
         `zeta.chat.input.mode.${option.id}`,
@@ -91,7 +91,7 @@ export class ChatInputToolbar extends DisposableOwner {
       "zeta.chat.input.model",
       selectedModel?.displayName ?? "Model",
       selectedModel ? `Model: ${selectedModel.displayName}` : "Select model",
-      LxIcon.model,
+      lxiconsLibrary.model,
       "model",
       this.#state.models.map((entry) => new ChatInputAction(
         `zeta.chat.input.model.${entry.model.provider}.${entry.model.model}`,
@@ -109,7 +109,7 @@ export class ChatInputToolbar extends DisposableOwner {
       "zeta.chat.input.attachment",
       "Attach",
       "Attachments are not available yet",
-      LxIcon.add,
+      lxiconsLibrary.add,
       false,
       "attachment",
       () => {},
@@ -119,7 +119,7 @@ export class ChatInputToolbar extends DisposableOwner {
         "zeta.chat.input.interrupt",
         "Stop",
         "Stop response",
-        LxIcon.close,
+        lxiconsLibrary.close,
         true,
         "interrupt",
         () => this.#delegate.interrupt(),
@@ -128,7 +128,7 @@ export class ChatInputToolbar extends DisposableOwner {
         "zeta.chat.input.send",
         "Send",
         "Send message",
-        LxIcon.arrowUp,
+        lxiconsLibrary.arrowUp,
         this.#state.canSubmit,
         "send",
         () => this.#delegate.submit(),

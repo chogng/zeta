@@ -5,7 +5,7 @@ import type {
 import { addDisposableListener, stopEvent } from "../../dom.js";
 import type { IAction } from "../../../common/actions.js";
 import { Emitter } from "../../../common/event.js";
-import { LxIcon } from "../../../common/lxicons.js";
+import { lxiconsLibrary } from "../../../common/lxiconsLibrary.js";
 import { ActionViewItem } from "../actionbar/actionViewItems.js";
 import { Button } from "../button/button.js";
 import { appendIcon } from "../icon/icon.js";
@@ -56,7 +56,7 @@ export class DropdownMenuActionViewItem extends ActionViewItem {
     button.element.setAttribute("aria-expanded", "false");
     const indicator = container.ownerDocument.createElement("span");
     indicator.className = "zeta-dropdown-menu-indicator";
-    appendIcon(LxIcon.dropdownIndicator, indicator);
+    appendIcon(lxiconsLibrary.dropdownIndicator, indicator);
     button.element.append(indicator);
     container.append(button.element);
     this.own(addDisposableListener(button.element, "keydown", (event) => {

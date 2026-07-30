@@ -4,7 +4,7 @@ import { focusFirst, restoreFocus, trapTabFocus } from "../../../../base/browser
 import { Button } from "../../../../base/browser/ui/button/button.js";
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
-import { LxIcon } from "../../../../base/common/lxicons.js";
+import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
 
 export interface ModalEditorPartOptions {
   readonly container: HTMLElement;
@@ -54,7 +54,7 @@ export class ModalEditorPart extends DisposableOwner {
     const closeButton = this.own(new Button({
       label: `Close ${options.title}`,
       title: `Close ${options.title}`,
-      icon: LxIcon.close,
+      icon: lxiconsLibrary.close,
       ownerDocument,
       onClick: () => this.#requestClose(),
     }));

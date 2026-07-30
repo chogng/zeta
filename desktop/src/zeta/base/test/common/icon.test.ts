@@ -1,10 +1,7 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
-import {
-  Icon,
-  registerIcon,
-  resolveIconDefinition,
-} from "../../common/icon.js";
+import { lxiconsLibrary } from "../../common/lxiconsLibrary.js";
+import { Icon, register, resolveIconDefinition } from "../../common/icon.js";
 
 let testIconId = 0;
 
@@ -15,15 +12,23 @@ function nextIconId(suffix: string): string {
 
 test("registered icons resolve to their renderer definition", () => {
   const definition = () => "<svg></svg>";
-  const icon = registerIcon(nextIconId("definition"), definition);
+  const icon = register(nextIconId("definition"), definition);
 
   assert.equal(resolveIconDefinition(icon), definition);
 });
 
+test("lxicons library entries resolve to repository-owned SVG definitions", () => {
+  for (const icon of Object.values(lxiconsLibrary)) {
+    const markup = resolveIconDefinition(icon)();
+    assert.match(markup, /^<svg\b[^>]*>/);
+    assert.match(markup, /<\/svg>$/);
+  }
+});
+
 test("semantic icons resolve through another icon", () => {
   const definition = () => "<svg></svg>";
-  const libraryIcon = registerIcon(nextIconId("library"), definition);
-  const semanticIcon = registerIcon(nextIconId("semantic"), libraryIcon);
+  const libraryIcon = register(nextIconId("library"), definition);
+  const semanticIcon = register(nextIconId("semantic"), libraryIcon);
 
   assert.equal(resolveIconDefinition(semanticIcon), definition);
 });
@@ -40,8 +45,8 @@ test("unknown icon IDs fail at the renderer boundary", () => {
 test("circular icon defaults report the complete alias chain", () => {
   const firstId = nextIconId("cycle-first");
   const secondId = nextIconId("cycle-second");
-  const first = registerIcon(firstId, Icon.fromId(secondId));
-  registerIcon(secondId, first);
+  const first = register(firstId, Icon.fromId(secondId));
+  register(secondId, first);
 
   assert.throws(
     () => resolveIconDefinition(first),
@@ -54,8 +59,8 @@ test("circular icon defaults report the complete alias chain", () => {
 test("duplicate and malformed icon IDs are rejected", () => {
   const id = nextIconId("duplicate");
   const definition = () => "<svg></svg>";
-  registerIcon(id, definition);
+  register(id, definition);
 
-  assert.throws(() => registerIcon(id, definition), TypeError);
-  assert.throws(() => registerIcon("Not Valid", definition), TypeError);
+  assert.throws(() => register(id, definition), TypeError);
+  assert.throws(() => register("Not Valid", definition), TypeError);
 });

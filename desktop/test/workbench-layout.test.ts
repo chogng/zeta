@@ -25,7 +25,7 @@ for (const [name, value] of Object.entries({
 }
 
 const { Dimension } = await import("../src/zeta/base/browser/geometry.js");
-const { LxIcon } = await import("../src/zeta/base/common/lxicons.js");
+const { lxiconsLibrary } = await import("../src/zeta/base/common/lxiconsLibrary.js");
 const { MenuId } = await import(
   "../src/zeta/platform/actions/common/actions.js"
 );
@@ -685,7 +685,7 @@ test("panel toggle action uses state icons in the right titlebar", () => {
     .flatMap(([, actions]) => actions)
     .find((action) => action.id === TogglePanelCommandId);
 
-  assert.equal(panelAction()?.icon, LxIcon.layoutPanelOff);
+  assert.equal(panelAction()?.icon, lxiconsLibrary.layoutPanelOff);
   contextKeys.setContext("panelVisible", true);
-  assert.equal(panelAction()?.icon, LxIcon.layoutPanel);
+  assert.equal(panelAction()?.icon, lxiconsLibrary.layoutPanel);
 });

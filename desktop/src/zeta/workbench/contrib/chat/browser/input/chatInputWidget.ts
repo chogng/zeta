@@ -3,6 +3,7 @@ import { addDisposableListener } from "../../../../../base/browser/dom.js";
 import { DisposableOwner, ResettableDisposableGroup } from "../../../../../base/common/lifecycle.js";
 import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextMenu.js";
 import type { ChatInputDelegate, ChatInputState } from "./chatInput.js";
+import { ChatInputEditors, type IChatInputEditor } from "./chatInputEditor.js";
 import { ChatInputToolbar } from "./chatInputToolbar.js";
 
 /** Owns the composer and all user-facing interactions for one Chat pane. */
@@ -13,7 +14,7 @@ export class ChatInputWidget extends DisposableOwner {
   readonly #status: HTMLDivElement;
   readonly #interaction: HTMLDivElement;
   readonly #form: HTMLFormElement;
-  readonly #input: HTMLTextAreaElement;
+  readonly #input: IChatInputEditor;
   readonly #toolbar: ChatInputToolbar;
   #state: ChatInputState = { phase: "loading", canInterrupt: false, models: [] };
 
@@ -30,16 +31,19 @@ export class ChatInputWidget extends DisposableOwner {
     this.#interaction.setAttribute("aria-live", "polite");
     this.#form = ownerDocument.createElement("form");
     this.#form.className = "zeta-chat-composer";
-    this.#input = ownerDocument.createElement("textarea");
-    this.#input.rows = 3;
-    this.#input.placeholder = "Ask Zeta";
-    this.#input.setAttribute("aria-label", "Chat message");
+    const inputContainer = ownerDocument.createElement("div");
+    inputContainer.className = "zeta-chat-input-editor-host";
+    this.#input = this.own(ChatInputEditors.create({
+      container: inputContainer,
+      placeholder: "Ask Zeta",
+      ariaLabel: "Chat message",
+    }));
     this.#toolbar = this.own(new ChatInputToolbar(ownerDocument, contextMenuService, {
       submit: () => this.#form.requestSubmit(),
       interrupt: () => void this.#delegate.interrupt(),
       selectModel: (model) => void this.#delegate.selectModel(model),
     }));
-    this.#form.append(this.#input, this.#toolbar.element);
+    this.#form.append(inputContainer, this.#toolbar.element);
     this.element.append(this.#status, this.#interaction, this.#form);
     this.own(addDisposableListener(this.#form, "submit", (event) => {
       event.preventDefault();
@@ -54,17 +58,17 @@ export class ChatInputWidget extends DisposableOwner {
         }
       });
     }));
-    this.own(addDisposableListener(this.#input, "input", () => this.#renderToolbar()));
-    this.own(addDisposableListener(this.#input, "keydown", (event: KeyboardEvent) => {
-      if (event.key !== "Enter" || event.shiftKey || event.isComposing) return;
-      event.preventDefault();
-      this.#form.requestSubmit();
-    }));
+    this.own(this.#input.onDidChange(() => this.#renderToolbar()));
+    this.own(this.#input.onDidSubmit(() => this.#form.requestSubmit()));
     this.defer(() => this.element.remove());
   }
 
   focus(): void {
     this.#input.focus();
+  }
+
+  setVisible(visible: boolean): void {
+    if (visible) this.#input.layout();
   }
 
   render(state: ChatInputState): void {

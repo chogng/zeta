@@ -3,7 +3,7 @@ import { addDisposableListener } from "../../dom.js";
 import type { Icon } from "../../../common/icon.js";
 import type { IAction } from "../../../common/actions.js";
 import { DisposableOwner } from "../../../common/lifecycle.js";
-import { LxIcon } from "../../../common/lxicons.js";
+import { lxiconsLibrary } from "../../../common/lxiconsLibrary.js";
 import { ActionBar } from "../actionbar/actionbar.js";
 import { ActionViewItem } from "../actionbar/actionViewItems.js";
 import { IconLabel } from "../iconlabel/iconlabel.js";
@@ -222,7 +222,7 @@ function closeTabAction<T>(item: TabListItem<T>, close: (value: T) => void): IAc
     id: TAB_CLOSE_ACTION_ID,
     label,
     tooltip: label,
-    icon: LxIcon.close,
+    icon: lxiconsLibrary.close,
     enabled: true,
     run: () => close(item.value),
   };

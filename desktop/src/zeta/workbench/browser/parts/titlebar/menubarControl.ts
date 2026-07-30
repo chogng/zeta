@@ -3,7 +3,7 @@ import { addDisposableListener } from "../../../../base/browser/dom.js";
 import { Button } from "../../../../base/browser/ui/button/button.js";
 import { SubmenuAction } from "../../../../base/common/actions.js";
 import { DisposableOwner, type IDisposable } from "../../../../base/common/lifecycle.js";
-import { LxIcon } from "../../../../base/common/lxicons.js";
+import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
 import { MenuId } from "../../../../platform/actions/common/actions.js";
 import type { IMenu, IMenuService } from "../../../../platform/actions/common/menuService.js";
 import type { IContextMenuService } from "../../../../platform/contextview/browser/contextMenu.js";
@@ -38,7 +38,7 @@ export class BrowserMenubarControl extends DisposableOwner
     this.#menu = this.own(menuService.createMenu(MenuId.MenubarMainMenu));
     this.#button = this.own(new Button({
       label: "Application menu",
-      icon: LxIcon.menu,
+      icon: lxiconsLibrary.menu,
       ownerDocument,
       onClick: () => this.#toggleMenu(),
     }));

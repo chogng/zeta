@@ -1,0 +1,12 @@
+.zeta-monaco-chat-input-editor {
+  width: 100%;
+  min-width: 0;
+  min-height: 62px;
+  overflow: hidden;
+}
+
+.zeta-monaco-chat-input-editor .monaco-editor,
+.zeta-monaco-chat-input-editor .monaco-editor-background,
+.zeta-monaco-chat-input-editor .monaco-editor .margin {
+  background: transparent;
+}
