@@ -43,6 +43,74 @@ fn rejects_parent_traversal_and_read_overflow() {
     );
 }
 
+#[test]
+fn atomically_replaces_and_creates_bounded_files() {
+    let workspace = TestWorkspace::new();
+    fs::create_dir(workspace.path.join("src")).unwrap();
+    fs::write(workspace.path.join("src/lib.rs"), "old").unwrap();
+    let file_system = workspace.file_system();
+
+    let replaced = file_system
+        .write_file(Path::new("src/lib.rs"), b"updated", 7)
+        .unwrap();
+    let created = file_system
+        .write_file(Path::new("src/new.rs"), b"new", 7)
+        .unwrap();
+
+    assert_eq!(
+        fs::read(workspace.path.join("src/lib.rs")).unwrap(),
+        b"updated"
+    );
+    assert_eq!(fs::read(workspace.path.join("src/new.rs")).unwrap(), b"new");
+    assert_eq!(replaced.size_bytes, 7);
+    assert_eq!(created.size_bytes, 3);
+}
+
+#[test]
+fn rejects_unsafe_or_oversized_write_targets() {
+    let workspace = TestWorkspace::new();
+    fs::create_dir(workspace.path.join("src")).unwrap();
+    let file_system = workspace.file_system();
+
+    assert!(matches!(
+        file_system.write_file(Path::new("../outside"), b"content", 7),
+        Err(FileSystemError::InvalidPath(_)),
+    ));
+    assert_eq!(
+        file_system.write_file(Path::new("src/large.txt"), b"123456", 5),
+        Err(FileSystemError::WriteLimitExceeded { maximum_bytes: 5 }),
+    );
+    assert!(matches!(
+        file_system.write_file(Path::new("missing/file.txt"), b"content", 7),
+        Err(FileSystemError::Io(_)),
+    ));
+    assert!(matches!(
+        file_system.write_file(Path::new("src"), b"content", 7),
+        Err(FileSystemError::NotFile(_)),
+    ));
+}
+
+#[cfg(unix)]
+#[test]
+fn preserves_existing_file_permissions_during_replacement() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let workspace = TestWorkspace::new();
+    let path = workspace.path.join("script.sh");
+    fs::write(&path, "old").unwrap();
+    fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).unwrap();
+    let file_system = workspace.file_system();
+
+    file_system
+        .write_file(Path::new("script.sh"), b"new", 3)
+        .unwrap();
+
+    assert_eq!(
+        fs::metadata(path).unwrap().permissions().mode() & 0o777,
+        0o755
+    );
+}
+
 struct TestWorkspace {
     path: PathBuf,
 }

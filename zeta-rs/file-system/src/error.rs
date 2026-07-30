@@ -5,8 +5,11 @@ use std::path::PathBuf;
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum FileSystemError {
     InvalidPath(PathBuf),
+    NotFile(PathBuf),
     NotDirectory(PathBuf),
     ReadLimitExceeded { maximum_bytes: usize },
+    WriteLimitExceeded { maximum_bytes: usize },
+    ReadOnly(PathBuf),
     Io(String),
 }
 
@@ -20,6 +23,9 @@ impl fmt::Display for FileSystemError {
                     path.display()
                 )
             }
+            Self::NotFile(path) => {
+                write!(formatter, "path is not a file: {}", path.display())
+            }
             Self::NotDirectory(path) => {
                 write!(formatter, "path is not a directory: {}", path.display())
             }
@@ -28,6 +34,15 @@ impl fmt::Display for FileSystemError {
                     formatter,
                     "file exceeds the {maximum_bytes}-byte read limit"
                 )
+            }
+            Self::WriteLimitExceeded { maximum_bytes } => {
+                write!(
+                    formatter,
+                    "content exceeds the {maximum_bytes}-byte write limit"
+                )
+            }
+            Self::ReadOnly(path) => {
+                write!(formatter, "path is read-only: {}", path.display())
             }
             Self::Io(message) => formatter.write_str(message),
         }

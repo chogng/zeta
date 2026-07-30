@@ -11,6 +11,7 @@ name = "zeta_file_system"
 path = "src/lib.rs"
 
 [dependencies]
+tempfile = { workspace = true }
 zeta-sandboxing = { workspace = true }
 
 [lints]
