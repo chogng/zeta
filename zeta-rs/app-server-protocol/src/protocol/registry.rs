@@ -16,8 +16,9 @@ use crate::protocol::document::{
 };
 use crate::protocol::error::{AppServerError, AppServerErrorName};
 use crate::protocol::fs::{
-    FsFileType, FsGetMetadataParams, FsGetMetadataResult, FsReadDirectoryEntry,
+    FsChanged, FsFileType, FsGetMetadataParams, FsGetMetadataResult, FsReadDirectoryEntry,
     FsReadDirectoryParams, FsReadDirectoryResult, FsReadFileParams, FsReadFileResult,
+    FsWriteFileParams, FsWriteFileResult,
 };
 use crate::protocol::git::{
     GitChangeStatusDto, GitCommitParams, GitCommitResult, GitHeadDto, GitOperationResult,
@@ -394,6 +395,11 @@ client_methods! {
         response: FsReadFileResult,
         serialization: GlobalSharedRead,
     },
+    FsWriteFile => "fs/writeFile" {
+        params: FsWriteFileParams,
+        response: FsWriteFileResult,
+        serialization: GlobalExclusive,
+    },
     GitStatus => "git/status" {
         params: EmptyParams,
         response: GitStatusResult,
@@ -543,6 +549,9 @@ server_notifications! {
     },
     GitStatusChanged => "git/statusChanged" {
         params: GitStatusChanged,
+    },
+    FsChanged => "fs/changed" {
+        params: FsChanged,
     },
 }
 
@@ -707,6 +716,9 @@ typescript_bindings! {
     FsReadDirectoryResult,
     FsReadFileParams,
     FsReadFileResult,
+    FsWriteFileParams,
+    FsWriteFileResult,
+    FsChanged,
     GitChangeStatusDto,
     GitUpstreamDto,
     GitHeadDto,

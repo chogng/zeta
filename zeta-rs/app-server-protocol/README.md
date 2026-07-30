@@ -85,11 +85,14 @@ zeta-rs/app-server-protocol/
 方法注册表当前覆盖初始化、Session 生命周期/订阅、Thread 读取/订阅、Session 模型选择、
 模型目录、配置/供应商/MCP/Skill 修改、Turn
 start/interrupt/interaction resolve 与 Resource
-metadata/read/release，以及 workspace search start/read/cancel。Notification 包含
-`session/update`、`thread/update`、`skills/changed` 与 `git/statusChanged`；Terminal 当前使用 profile/list 与
-create/write/resize/read/close 的有界 pull contract，不伪装成主动 notification stream。
+metadata/read/release、filesystem metadata/read/write，以及 workspace search start/read/cancel。
+Notification 包含 `session/update`、`thread/update`、`skills/changed`、`git/statusChanged` 与
+`fs/changed`；Terminal 当前使用 profile/list 与 create/write/resize/read/close 的有界 pull
+contract，不伪装成主动 notification stream。
 Git 注册 `git/status` snapshot query，以及 stage/unstage/discardWorktree/commit/fetch/pull/push
 global-exclusive mutation；status 带 revision，投影变化通过 `git/statusChanged` 发送完整 snapshot。
+Filesystem 注册 `fs/writeFile` global-exclusive mutation；`fs/changed` 只携带 workspace-relative
+invalidation hint 或 rescan request，不成为 durable 文件事件。
 
 ### JSON-RPC
 

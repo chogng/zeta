@@ -3,6 +3,7 @@ use crate::protocol::config::{
     ApprovalReviewModelSelectionDto, ConfigUpdateParams, McpServerUpsertParams,
     SkillSourceAddParams,
 };
+use crate::protocol::fs::FsChanged;
 use crate::protocol::registry::{CLIENT_METHODS, SERVER_NOTIFICATIONS};
 use crate::protocol::slash_commands::{SlashCommandArgumentModeDto, SlashCommandDefinition};
 use crate::protocol::turn::InputItem;
@@ -32,6 +33,7 @@ fn registry_method_and_notification_names_are_unique() {
     assert!(methods.contains("fs/getMetadata"));
     assert!(methods.contains("fs/readDirectory"));
     assert!(methods.contains("fs/readFile"));
+    assert!(methods.contains("fs/writeFile"));
     assert!(methods.contains("git/status"));
     assert!(methods.contains("git/stage"));
     assert!(methods.contains("git/unstage"));
@@ -52,6 +54,7 @@ fn registry_method_and_notification_names_are_unique() {
     assert!(notifications.contains("session/update"));
     assert!(notifications.contains("thread/update"));
     assert!(notifications.contains("git/statusChanged"));
+    assert!(notifications.contains("fs/changed"));
 }
 
 #[test]
@@ -71,6 +74,21 @@ fn turn_input_items_preserve_ordered_text_and_image_shapes() {
             {"type": "text", "text": "describe"},
             {"type": "image", "url": "https://example.test/image.png"}
         ])
+    );
+}
+
+#[test]
+fn filesystem_change_hints_are_relative_or_request_a_rescan() {
+    assert_eq!(
+        serde_json::to_value(FsChanged::PathsChanged {
+            paths: vec!["src/lib.rs".into()],
+        })
+        .unwrap(),
+        serde_json::json!({"type":"pathsChanged","paths":["src/lib.rs"]}),
+    );
+    assert_eq!(
+        serde_json::to_value(FsChanged::RescanRequired).unwrap(),
+        serde_json::json!({"type":"rescanRequired"}),
     );
 }
 
@@ -221,6 +239,8 @@ fn dto_driven_typescript_preserves_model_ref_and_patch_shape() {
     assert!(typescript.contains(r#""fs/getMetadata": { method: "fs/getMetadata" }"#));
     assert!(typescript.contains(r#""fs/readDirectory": { method: "fs/readDirectory" }"#));
     assert!(typescript.contains(r#""fs/readFile": { method: "fs/readFile" }"#));
+    assert!(typescript.contains(r#""fs/writeFile": { method: "fs/writeFile" }"#));
+    assert!(typescript.contains(r#""fs/changed": { method: "fs/changed" }"#));
     assert!(
         typescript.contains(r#""workspace/search/start": { method: "workspace/search/start" }"#)
     );

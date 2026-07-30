@@ -67,3 +67,29 @@ pub struct FsReadFileParams {
 pub struct FsReadFileResult {
     pub content: String,
 }
+
+/// Atomically write one UTF-8 file relative to the configured workspace root.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct FsWriteFileParams {
+    pub path: PathBuf,
+    pub content: String,
+}
+
+/// Metadata returned after one successful `fs/writeFile`.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct FsWriteFileResult {
+    pub metadata: FsGetMetadataResult,
+}
+
+/// Coarse workspace filesystem invalidation published by `fs/changed`.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", tag = "type")]
+#[ts(tag = "type")]
+pub enum FsChanged {
+    /// The backend observed changes near these sorted workspace-relative paths.
+    PathsChanged { paths: Vec<PathBuf> },
+    /// The watcher may have lost events and consumers must rescan their visible scope.
+    RescanRequired,
+}
