@@ -13,6 +13,8 @@ const INPUT: ElementId = ElementId::scoped(1, 2);
 const TOOLBAR: ElementId = ElementId::scoped(1, 3);
 const FIRST: ElementId = ElementId::scoped(1, 4);
 const SECOND: ElementId = ElementId::scoped(1, 5);
+const MENU: ElementId = ElementId::scoped(1, 6);
+const MENU_ITEM: ElementId = ElementId::scoped(1, 7);
 
 fn frame() -> InteractionFrame {
     let mut frame = InteractionFrame::default();
@@ -58,6 +60,33 @@ fn frame() -> InteractionFrame {
             .with_navigation(group, NavigationAxis::Horizontal),
         );
     }
+    frame
+}
+
+fn frame_with_modal_menu() -> InteractionFrame {
+    let mut frame = frame();
+    frame.register(
+        UiNode::new(
+            MENU,
+            Rect::from_xywh(100.0, 40.0, 120.0, 80.0),
+            AccessibilityRole::Menu,
+            "Actions",
+        )
+        .with_parent(ROOT),
+    );
+    frame.register(
+        UiNode::new(
+            MENU_ITEM,
+            Rect::from_xywh(102.0, 42.0, 116.0, 30.0),
+            AccessibilityRole::MenuItem,
+            "Close",
+        )
+        .with_parent(MENU)
+        .with_cursor(CursorFeedback::Pointer)
+        .with_focus(FocusBehavior::TabStop)
+        .with_action(NodeAction::Activate),
+    );
+    frame.set_modal_root(MENU);
     frame
 }
 
@@ -159,4 +188,57 @@ fn window_blur_clears_transient_pointer_state_but_retains_focus_identity() {
     assert_eq!(dispatch.focused(), Some(FIRST));
     dispatch.window_focused();
     assert!(dispatch.is_focused(FIRST));
+}
+
+#[test]
+fn modal_root_makes_background_pointer_targets_inert() {
+    let frame = frame_with_modal_menu();
+    let mut dispatch = UiDispatch::default();
+
+    assert_eq!(frame.target_at(Point::new(25.0, 25.0)), None);
+    assert_eq!(frame.target_at(Point::new(110.0, 50.0)), Some(MENU_ITEM));
+    dispatch.pointer_moved(Point::new(25.0, 25.0), &frame);
+    assert!(!dispatch.is_hovered(ROOT));
+    assert!(!dispatch.is_hovered(INPUT));
+    dispatch.pointer_moved(Point::new(110.0, 50.0), &frame);
+    assert!(dispatch.is_hovered(MENU));
+    assert!(dispatch.is_hovered(MENU_ITEM));
+    assert!(!dispatch.is_hovered(ROOT));
+}
+
+#[test]
+fn modal_root_traps_focus_and_activation_in_its_subtree() {
+    let base_frame = frame();
+    let modal_frame = frame_with_modal_menu();
+    let mut dispatch = UiDispatch::default();
+    dispatch.reconcile_focus(&base_frame, INPUT);
+
+    dispatch.reconcile_focus(&modal_frame, INPUT);
+
+    assert!(dispatch.is_focused(MENU_ITEM));
+    assert_eq!(
+        modal_frame.focus_order().collect::<Vec<_>>(),
+        vec![MENU_ITEM]
+    );
+    dispatch.focus_element(&modal_frame, INPUT);
+    assert!(dispatch.is_focused(MENU_ITEM));
+    assert_eq!(
+        dispatch.activate_focused(&modal_frame).intent,
+        Some(UiIntent::Activate(MENU_ITEM))
+    );
+    let nodes = modal_frame.accessibility_nodes(&dispatch);
+    assert!(
+        !nodes
+            .iter()
+            .find(|node| node.id == INPUT)
+            .unwrap()
+            .focusable
+    );
+    assert!(
+        nodes
+            .iter()
+            .find(|node| node.id == MENU_ITEM)
+            .unwrap()
+            .focusable
+    );
 }

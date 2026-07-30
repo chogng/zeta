@@ -86,6 +86,9 @@ impl UiDispatch {
         let Some(target) = self.hovered_path.last().copied() else {
             return DispatchOutcome::default();
         };
+        if !frame.is_in_active_scope(target) {
+            return DispatchOutcome::default();
+        }
         let Some(node) = frame.node(target) else {
             return DispatchOutcome::default();
         };
@@ -140,16 +143,20 @@ impl UiDispatch {
         preferred: ElementId,
     ) -> DispatchOutcome {
         let focused_is_valid = self.focused.is_some_and(|focused| {
-            frame
-                .node(focused)
-                .is_some_and(|node| node.focus_behavior() == FocusBehavior::TabStop)
+            frame.is_in_active_scope(focused)
+                && frame
+                    .node(focused)
+                    .is_some_and(|node| node.focus_behavior() == FocusBehavior::TabStop)
         });
         if focused_is_valid {
             return DispatchOutcome::default();
         }
         let next = frame
             .node(preferred)
-            .filter(|node| node.focus_behavior() == FocusBehavior::TabStop)
+            .filter(|node| {
+                frame.is_in_active_scope(node.id())
+                    && node.focus_behavior() == FocusBehavior::TabStop
+            })
             .map(|node| node.id())
             .or_else(|| frame.focus_order().next());
         if self.focused == next {
@@ -183,9 +190,10 @@ impl UiDispatch {
     }
 
     pub fn focus_element(&mut self, frame: &InteractionFrame, id: ElementId) -> DispatchOutcome {
-        let is_focusable = frame
-            .node(id)
-            .is_some_and(|node| node.focus_behavior() == FocusBehavior::TabStop);
+        let is_focusable = frame.is_in_active_scope(id)
+            && frame
+                .node(id)
+                .is_some_and(|node| node.focus_behavior() == FocusBehavior::TabStop);
         if is_focusable {
             self.set_focus(id)
         } else {
@@ -235,6 +243,9 @@ impl UiDispatch {
         let Some(target) = self.focused else {
             return DispatchOutcome::default();
         };
+        if !frame.is_in_active_scope(target) {
+            return DispatchOutcome::default();
+        }
         match frame.node(target).map(|node| node.action()) {
             Some(NodeAction::Activate) => DispatchOutcome::with_intent(
                 UiIntent::Activate(target),
@@ -293,6 +304,7 @@ impl UiDispatch {
     pub fn pointer_feedback(&self, frame: &InteractionFrame) -> CursorFeedback {
         self.hovered_path
             .last()
+            .filter(|id| frame.is_in_active_scope(**id))
             .and_then(|id| frame.node(*id))
             .map(|node| node.cursor())
             .unwrap_or_default()

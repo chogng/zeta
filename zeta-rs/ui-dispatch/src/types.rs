@@ -18,6 +18,7 @@ pub enum CursorFeedback {
     Default,
     Text,
     Pointer,
+    ResizeHorizontal,
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -60,12 +61,16 @@ pub enum UiIntent {
 pub enum AccessibilityRole {
     Window,
     Group,
+    Separator,
     Toolbar,
     Button,
     TextInput,
     Terminal,
     TabList,
     Tab,
+    ScrollBar,
+    Menu,
+    MenuItem,
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]

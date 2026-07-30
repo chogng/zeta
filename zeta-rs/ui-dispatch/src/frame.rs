@@ -109,6 +109,7 @@ impl UiNode {
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct InteractionFrame {
     nodes: Vec<UiNode>,
+    modal_root: Option<ElementId>,
 }
 
 impl InteractionFrame {
@@ -120,6 +121,18 @@ impl InteractionFrame {
         self.nodes.push(node);
     }
 
+    /// Restricts pointer targeting and focus traversal to one modal subtree.
+    ///
+    /// The root must already be registered. Nodes outside the subtree remain available for
+    /// painting and accessibility snapshots, but they are inert for this interaction frame.
+    pub fn set_modal_root(&mut self, root: ElementId) {
+        debug_assert!(
+            self.node(root).is_some(),
+            "the modal root must be registered before it becomes active"
+        );
+        self.modal_root = Some(root);
+    }
+
     pub fn node(&self, id: ElementId) -> Option<&UiNode> {
         self.nodes.iter().find(|node| node.id == id)
     }
@@ -128,24 +141,48 @@ impl InteractionFrame {
         self.nodes
             .iter()
             .rev()
-            .find(|node| node.contains(point))
+            .find(|node| self.is_in_active_scope(node.id()) && node.contains(point))
             .map(UiNode::id)
     }
 
     pub fn ancestry(&self, id: ElementId) -> Vec<ElementId> {
+        if !self.is_in_active_scope(id) {
+            return Vec::new();
+        }
         let mut path = Vec::new();
         let mut current = Some(id);
         while let Some(id) = current {
             path.push(id);
+            if self.modal_root == Some(id) {
+                break;
+            }
             current = self.node(id).and_then(UiNode::parent);
         }
         path.reverse();
         path
     }
 
+    pub(crate) fn is_in_active_scope(&self, id: ElementId) -> bool {
+        let Some(modal_root) = self.modal_root else {
+            return self.node(id).is_some();
+        };
+        let mut current = Some(id);
+        for _ in 0..self.nodes.len() {
+            let Some(id) = current else {
+                return false;
+            };
+            if id == modal_root {
+                return true;
+            }
+            current = self.node(id).and_then(UiNode::parent);
+        }
+        false
+    }
+
     pub fn focus_order(&self) -> impl Iterator<Item = ElementId> + '_ {
         self.nodes.iter().filter_map(|node| {
-            (node.focus_behavior() == FocusBehavior::TabStop).then_some(node.id())
+            (self.is_in_active_scope(node.id()) && node.focus_behavior() == FocusBehavior::TabStop)
+                .then_some(node.id())
         })
     }
 
@@ -160,8 +197,8 @@ impl InteractionFrame {
                 value: node.value.clone(),
                 selection: node.selection,
                 bounds: node.bounds,
-                focusable: node.focus == FocusBehavior::TabStop,
-                focused: dispatch.is_focused(node.id),
+                focusable: self.is_in_active_scope(node.id) && node.focus == FocusBehavior::TabStop,
+                focused: self.is_in_active_scope(node.id) && dispatch.is_focused(node.id),
             })
             .collect()
     }
