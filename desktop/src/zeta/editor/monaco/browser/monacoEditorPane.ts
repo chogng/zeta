@@ -56,7 +56,6 @@ export class MonacoEditorPane extends DisposableOwner
       minimap: { enabled: true },
       model: null,
       scrollBeyondLastLine: false,
-      "semanticHighlighting.enabled": true,
     });
     this.defer(() => {
       this.clearModel();

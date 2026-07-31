@@ -146,22 +146,24 @@ test("App Server IPC validators reject malformed Turn, Typst, resource, filesyst
       }),
     /exactly/,
   );
-  assert.deepEqual(
-    syntaxOpen.validate({
-      documentId: "model-1",
-      documentUri: "file:///main.rs",
-      language: "rust",
-      revision: 1,
-      text: "fn main() {}",
-    }),
-    {
-      documentId: "model-1",
-      documentUri: "file:///main.rs",
-      language: "rust",
-      revision: 1,
-      text: "fn main() {}",
-    },
-  );
+  for (const language of ["json", "jsonc", "rust"] as const) {
+    assert.deepEqual(
+      syntaxOpen.validate({
+        documentId: "model-1",
+        documentUri: `file:///main.${language}`,
+        language,
+        revision: 1,
+        text: "{}",
+      }),
+      {
+        documentId: "model-1",
+        documentUri: `file:///main.${language}`,
+        language,
+        revision: 1,
+        text: "{}",
+      },
+    );
+  }
   assert.throws(
     () => syntaxChange.validate({
       documentId: "model-1",

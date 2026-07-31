@@ -14,12 +14,12 @@ import {
   monacoLanguageForInput,
 } from "../common/monacoEditorInput.js";
 
-test("Monaco defaults Markdown and resolves its language", () => {
+test("Monaco remains an optional Markdown editor and resolves its language", () => {
   const markdown = {
     resource: URI.file("C:\\project\\README.md"),
     contentType: "text/markdown",
   };
-  assert.equal(matchMonacoEditor(markdown), EditorPaneMatch.Default);
+  assert.equal(matchMonacoEditor(markdown), EditorPaneMatch.Optional);
   assert.equal(monacoLanguageForInput(markdown), "markdown");
 });
 

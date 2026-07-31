@@ -6,6 +6,8 @@ use ts_rs::TS;
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub enum SyntaxLanguageDto {
+    Json,
+    Jsonc,
     Rust,
 }
 
@@ -54,7 +56,7 @@ pub struct SyntaxCloseParams {
 /// LSP-compatible relative semantic-token encoding derived from one exact syntax revision.
 ///
 /// Each group of five integers is `deltaLine, deltaStartUtf16, lengthUtf16, tokenType,
-/// modifierBits`. The fixed token-type legend is owned by the Desktop Monaco adapter.
+/// modifierBits`. The fixed token-type legend is owned by the Desktop Alpha adapter.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct SyntaxTokenSnapshotDto {

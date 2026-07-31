@@ -114,3 +114,46 @@ fn semantic_token_encoding_is_relative_and_non_overlapping() {
     }
     assert_eq!(line, 0);
 }
+
+#[test]
+fn syntax_sessions_support_json_and_jsonc_languages() {
+    let service = SyntaxAnalysisService::new();
+    for (index, (language, uri, text, expected_token_type)) in [
+        (
+            SyntaxLanguageDto::Json,
+            "file:///workspace/settings.json",
+            "{\"enabled\":true}",
+            2,
+        ),
+        (
+            SyntaxLanguageDto::Jsonc,
+            "file:///workspace/settings.jsonc",
+            "{// local\n\"enabled\":true}",
+            1,
+        ),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let snapshot = service
+            .open(
+                19,
+                SyntaxOpenParams {
+                    document_id: format!("model-{index}"),
+                    document_uri: uri.into(),
+                    language,
+                    revision: 1,
+                    text: text.into(),
+                },
+            )
+            .expect("JSON-family syntax document should open");
+        assert_eq!(snapshot.revision, 1);
+        assert!(!snapshot.data.is_empty());
+        assert!(
+            snapshot
+                .data
+                .chunks_exact(5)
+                .any(|token| token[3] == expected_token_type)
+        );
+    }
+}

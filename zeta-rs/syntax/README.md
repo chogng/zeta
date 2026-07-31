@@ -4,8 +4,8 @@
 > 跨 Desktop、Native、EditorHost 和 LSP 的语言分析边界由
 > [`docs/syntax-analysis.md`](../../docs/syntax-analysis.md) 拥有。
 
-`zeta-syntax` 对宿主提供有界、增量、与 presentation 无关的源码结构分析。当前实现支持 Rust，
-使用 tree-sitter 保存每个打开文档的增量 parse tree，并为精确的 host revision 派生 syntax
+`zeta-syntax` 对宿主提供有界、增量、与 presentation 无关的源码结构分析。当前实现支持 Rust、
+JSON 和 JSONC，使用 tree-sitter 保存每个打开文档的增量 parse tree，并为精确的 host revision 派生 syntax
 tokens、folding ranges、document symbols 和 parse diagnostics。它不读取文件、不监听 workspace、
 不持久化索引、不启动语言服务器，也不依赖 Monaco、`zeta-editor`、Native paint types 或 App
 Server DTO。
@@ -17,14 +17,14 @@ Server DTO。
 | `SyntaxDocument` | 保存一个打开文档的 text、line index、parser、tree、revision 与 limits | 文件加载、保存、dirty state、并发调度 |
 | `SyntaxLanguage` | 选择 crate 内已注册且经过测试的 grammar/query 组合 | 接受任意 native grammar pointer 或用户 query |
 | `DocumentRevision` | 绑定宿主权威文本和派生 snapshot；更新时必须单调增加 | 充当磁盘 revision、Git identity 或全局 sequence |
-| `SyntaxEdit` | 以当前文档的 UTF-8 byte range 表达 replace/insert/delete；`apply_edits` 原子接收同一旧 revision 上的非重叠 batch | 接受 Monaco UTF-16 position 或猜测编码 |
+| `SyntaxEdit` | 以当前文档的 UTF-8 byte range 表达 replace/insert/delete；`apply_edits` 原子接收同一旧 revision 上的非重叠 batch | 接受编辑器 UTF-16 position 或猜测编码 |
 | `SyntaxSnapshot` | 返回同一 revision 的 tokens、folds、symbols 与 diagnostics | 暴露 `tree_sitter::Tree`、`Node` 或跨语言统一 AST |
 | `AnalysisLimits` | 限制文档和派生 collection 的资源使用 | 限制宿主队列、IPC message 或 workspace 文件数 |
 | `SyntaxTokenKind` | 提供不含主题颜色的语言中立 highlight category | 决定主题、foreground 或 decoration layer |
 | `DocumentSymbol` | 表达 tree-sitter tags query 发现的语法声明 | 类型解析、跨文件 reference、rename 或 completion |
 
 `SyntaxPoint.column` 和 `SyntaxRange.bytes` 都使用 UTF-8 byte offset。Desktop adapter 必须显式在
-Monaco UTF-16 position 与该 contract 之间转换；Native host 可以直接使用 byte range，但仍必须
+Alpha UTF-16 position 与该 contract 之间转换；Native host 可以直接使用 byte range，但仍必须
 拒绝不匹配当前 EditorHost revision 的 snapshot。
 
 ## 内部接口与执行路径
@@ -33,7 +33,7 @@ Monaco UTF-16 position 与该 contract 之间转换；Native host 可以直接�
 | --- | --- | --- |
 | `LanguageConfiguration::load` | 把 `SyntaxLanguage` 绑定到 grammar、highlights query 和 tags query | product language detection 或动态安装 grammar |
 | `LineIndex` | 以增量 line starts 把 byte offset 转换为 tree-sitter row/byte-column | Unicode display column 或 LSP position encoding |
-| `collect_tokens` | 运行 grammar highlight query、映射稳定 category 并应用结果上限 | 主题选择或 Monaco provider registration |
+| `collect_tokens` | 运行 grammar highlight query、映射稳定 category 并应用结果上限 | 主题选择或编辑器 provider registration |
 | `collect_folding_ranges` | 从已解析 tree 的明确容器节点派生多行范围 | UI 折叠状态 |
 | `collect_symbols` | 从 tags query 的 `definition.*` 与 `name` capture 构造声明 | workspace index lifecycle |
 | `collect_diagnostics` | 收集 error/missing node，并应用结果上限 | compiler diagnostics 或 quick fix |
@@ -78,8 +78,8 @@ cargo clippy --manifest-path zeta-rs/Cargo.toml -p zeta-syntax --all-targets -- 
 bazel test //zeta-rs/syntax:syntax-unit-tests
 ```
 
-`src/syntax_tests.rs` 覆盖 Rust token/fold/symbol projection、单行和多行增量编辑、revision
-binding、UTF-8 boundary、更新后的 line index、resource limits，以及失败不修改文档。
+`src/syntax_tests.rs` 覆盖 Rust token/fold/symbol projection、JSON/JSONC token/fold/comment、单行和
+多行增量编辑、revision binding、UTF-8 boundary、更新后的 line index、resource limits，以及失败不修改文档。
 
 新增 grammar 时必须同时增加 `SyntaxLanguage`、`LanguageConfiguration::load` 的 grammar/query
 绑定、capture mapping 测试和语言 fixture。修改 edit coordinate contract 时必须同步检查所有
@@ -88,13 +88,14 @@ host adapter；修改 symbol category 时必须同步检查未来 workspace inde
 
 当前限制：
 
-- Current：只注册 Rust grammar；
+- Current：注册 Rust grammar，以及由独立私有语言模块选择的 JSON/JSONC grammar；JSON 与 JSONC
+  共用上游 comment-capable JSON parser，syntax snapshot 不代替 language server 的严格格式校验；
 - Current：单个 edit 和同一旧 revision 上的非重叠 batch 都使用 UTF-8 byte range；宿主负责事件 coalescing；
 - Current：文本保存在 `String`，中间插入需要移动后续 bytes；超大文档的 rope/chunked input 尚未实现；
 - Current：snapshot 派生为同步调用；异步 worker、debounce 与 cancellation 由产品宿主负责；
-- Current：App Server 使用 connection/model-owned open/change/close session 将 Rust token 投影给
-  Monaco；wire、UTF-16 转换和 provider lifecycle 由 App Server/Desktop 拥有，不进入本 crate；
-- 尚未完成：Native EditorHost adapter，以及 Monaco folding/outline/parse diagnostic 投影；
+- Current：App Server 使用 connection/model-owned open/change/close session 将 Rust、JSON 与 JSONC token 投影给
+  Alpha；wire、UTF-16 转换和 provider lifecycle 由 App Server/Desktop 拥有，不进入本 crate；
+- 尚未完成：Native EditorHost adapter，以及 Alpha folding/outline/parse diagnostic 投影；
 - 尚未完成：workspace symbol index、磁盘/unsaved-buffer arbitration 与持久化；
 - Potential：第二个真实 workspace index consumer 出现后提取 `zeta-symbol-index`，而不是把文件
   authority 和数据库加入本 crate。

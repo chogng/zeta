@@ -699,7 +699,7 @@ function syntaxOpenParams(value: unknown): SyntaxOpenParams {
   return {
     documentId: syntaxDocumentId(params.documentId),
     documentUri: syntaxDocumentUri(params.documentUri),
-    language: stringEnum(params.language, "language", ["rust"] as const),
+    language: stringEnum(params.language, "language", ["json", "jsonc", "rust"] as const),
     revision: nonNegativeInteger(params.revision, "revision"),
     text,
   };

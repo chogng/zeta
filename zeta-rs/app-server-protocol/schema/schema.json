@@ -5554,6 +5554,8 @@
       "description": "Source language selected for one backend syntax-analysis document.",
       "type": "string",
       "enum": [
+        "json",
+        "jsonc",
         "rust"
       ]
     },
@@ -5616,7 +5618,7 @@
       ]
     },
     "SyntaxTokenSnapshotDto": {
-      "description": "LSP-compatible relative semantic-token encoding derived from one exact syntax revision.\n\nEach group of five integers is `deltaLine, deltaStartUtf16, lengthUtf16, tokenType,\nmodifierBits`. The fixed token-type legend is owned by the Desktop Monaco adapter.",
+      "description": "LSP-compatible relative semantic-token encoding derived from one exact syntax revision.\n\nEach group of five integers is `deltaLine, deltaStartUtf16, lengthUtf16, tokenType,\nmodifierBits`. The fixed token-type legend is owned by the Desktop Alpha adapter.",
       "type": "object",
       "properties": {
         "data": {

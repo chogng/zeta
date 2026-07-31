@@ -5,10 +5,10 @@ import { isTextResourceLanguageInput, resolveTextResourceLanguageId } from "../.
 
 export const ALPHA_EDITOR_ID = "zeta.editor.alpha";
 
-/** Keeps Alpha opt-in while its product adoption gates remain incomplete. */
+/** Selects Alpha as the product's canonical plain-text editor. */
 export function matchAlphaEditor(input: EditorInput): EditorPaneMatch {
   if (input.contentType === ACADEMIC_DOCUMENT_CONTENT_TYPE) return EditorPaneMatch.None;
-  return isTextResourceLanguageInput(input) ? EditorPaneMatch.Optional : EditorPaneMatch.None;
+  return isTextResourceLanguageInput(input) ? EditorPaneMatch.Default : EditorPaneMatch.None;
 }
 
 /** Resolves the language identity shared by Alpha input, Analysis, and completion. */

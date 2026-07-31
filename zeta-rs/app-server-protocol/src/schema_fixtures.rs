@@ -230,7 +230,13 @@ fn dto_driven_typescript_preserves_model_ref_and_patch_shape() {
     assert!(typescript.contains("replaySafety: ToolReplaySafety"));
     assert!(typescript.contains("dataBase64: string"));
     assert!(typescript.contains("decodedLength: number"));
-    assert!(!typescript.contains("data: Array<number>"));
+    assert!(!typescript.contains(
+        "ResourceReadResult = { resourceId: string, offset: number, data: Array<number>"
+    ));
+    assert!(typescript.contains(
+        "SyntaxTokenSnapshotDto = { revision: number, resultId: string, data: Array<number>, }"
+    ));
+    assert!(typescript.contains("SyntaxLanguageDto = \"json\" | \"jsonc\" | \"rust\";"));
     assert!(typescript.contains("export const APP_SERVER_METHODS:"));
     assert!(typescript.contains(r#""session/create": { method: "session/create" }"#));
     assert!(typescript.contains(r#""turn/start": { method: "turn/start" }"#));
@@ -247,15 +253,11 @@ fn dto_driven_typescript_preserves_model_ref_and_patch_shape() {
     assert!(
         typescript.contains(r#""document/typst/compile": { method: "document/typst/compile" }"#)
     );
-    assert!(
-        typescript.contains(r#""document/syntax/open": { method: "document/syntax/open" }"#)
-    );
+    assert!(typescript.contains(r#""document/syntax/open": { method: "document/syntax/open" }"#));
     assert!(
         typescript.contains(r#""document/syntax/change": { method: "document/syntax/change" }"#)
     );
-    assert!(
-        typescript.contains(r#""document/syntax/close": { method: "document/syntax/close" }"#)
-    );
+    assert!(typescript.contains(r#""document/syntax/close": { method: "document/syntax/close" }"#));
     assert!(typescript.contains(r#""fs/getMetadata": { method: "fs/getMetadata" }"#));
     assert!(typescript.contains(r#""fs/readDirectory": { method: "fs/readDirectory" }"#));
     assert!(typescript.contains(r#""fs/readFile": { method: "fs/readFile" }"#));

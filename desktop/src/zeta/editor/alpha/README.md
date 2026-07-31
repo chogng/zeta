@@ -4,10 +4,10 @@
 > browser view、Workbench 与 Monaco adapter 的边界见
 > [`docs/editor-architecture.md`](../../../../../docs/editor-architecture.md)。
 
-Alpha owns the editor-domain primitives that must remain independent
-of Monaco, ProseMirror, the DOM, workbench tabs, files, persistence, and
-language services. Monaco is currently a transition renderer; it must not
-define the canonical Zeta text-model contract.
+Alpha owns the editor-domain primitives and is the product's default plain-text
+editor. It remains independent of Monaco, ProseMirror, the DOM, workbench tabs,
+files, persistence, and language services. Monaco is an optional compatibility
+editor and must not define the canonical Zeta text-model contract.
 
 ## Runtime layering and base dependencies
 
@@ -203,6 +203,16 @@ latest-wins and may run concurrently over one Worker/document mirror. The first
 ordered request initializes the mirror with a full snapshot; the peer lane and
 later requests reference it, while model transactions send one incremental
 sync shared by both lanes.
+
+`appServerSyntaxAnalysisWorker.ts` is Alpha's browser adapter for backend Rust,
+JSON, and JSONC syntax tokens. It serializes one model's UTF-16 transactions into the App
+Server `document/syntax/open|change|close` session, validates the returned
+revision, and decodes compact token data into Alpha `LanguageToken` values.
+Only supported token lanes are intercepted. Diagnostics and other languages
+stay with the TextMate/lexical worker. Backend failure delegates to that same
+fallback chain: JSON/JSONC retain their bundled TextMate grammars, while Rust
+currently has no TextMate grammar and therefore yields an empty fallback token
+batch. Monaco has no ownership in this path.
 
 `LanguageAnalysisProviderRegistry` selects the first matching token provider
 and all matching diagnostic providers in registration order. Provider failures
@@ -1072,7 +1082,8 @@ The next implementation stages are:
    styling, and richer diagnostic presentation;
 6. accessibility, decoration hover, and overview-ruler projection;
 7. BiDi, wrapping, and inline-advance layout evaluation;
-8. a Monaco bridge used only while native Alpha view layers remain incomplete.
+8. inventory remaining Monaco-only tools and implement them through Alpha's
+   public contracts without importing Monaco ownership into Alpha.
 
 Tests under `test/common/` cover normalization, coordinates, atomic edits, failure
 atomicity, events, disposal, immutable snapshots, history budgets,

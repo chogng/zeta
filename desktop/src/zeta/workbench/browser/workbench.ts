@@ -408,6 +408,7 @@ export class Workbench extends DisposableOwner {
     const editor = this.own(new EditorPart(ownerDocument, {
       configurationService: configuration,
       keybindingService: keybindings,
+      rendererApi: api,
       textFileService,
       titleActions: {
         menuService: menus,

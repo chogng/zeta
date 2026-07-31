@@ -1,21 +1,22 @@
 # 源码结构分析系统
 
-> 状态：Rust 增量分析内核与 Desktop Monaco Rust syntax-token 接入已实现；Native 与 workspace
+> 状态：Rust/JSON/JSONC 增量分析内核与 Desktop Alpha syntax-token 接入已实现；Native 与 workspace
 > index 接入尚未完成。
 > 本文拥有跨 crate、进程和编辑器的语言分析所有权与演进阶段；当前 crate API、内部调用图和
 > 修改路径见 [`zeta-syntax` README](../zeta-rs/syntax/README.md)。
 
 ## 快速理解
 
-Zeta 把可跨编辑器复用的语法分析放入 Rust，同时保留 Monaco 和 Native editor 各自的输入、
+Zeta 把可跨编辑器复用的语法分析放入 Rust，同时保留 Alpha 和 Native editor 各自的输入、
 布局与绘制职责。tree-sitter 提供快速结构事实，LSP/compiler 提供类型与跨文件语义；两者不能
 互相冒充。
 
 | 使用场景 | 当前结果 | 最终 owner |
 | --- | --- | --- |
-| 对 Rust 文本进行增量 parse | ✅ `zeta-syntax` 已实现 UTF-8 edit、revision binding 与 tree reuse | `zeta-syntax` |
-| 取得 syntax token、fold、document outline 和 parse error | 部分具备：Rust syntax token 已投影到 Monaco；其他 snapshot 尚未投影 | `zeta-syntax` + 产品宿主 |
-| Monaco 输入、光标、DOM、layout、accessibility | ✅ 继续由 Monaco 拥有 | Desktop Renderer |
+| 对 Rust/JSON/JSONC 文本进行增量 parse | ✅ `zeta-syntax` 已实现 UTF-8 edit、revision binding 与 tree reuse | `zeta-syntax` |
+| 取得 syntax token、fold、document outline 和 parse error | 部分具备：Rust/JSON/JSONC syntax token 已投影到 Alpha；其他 snapshot 尚未投影 | `zeta-syntax` + 产品宿主 |
+| Alpha 输入、光标、DOM、layout、accessibility | ✅ 由 Alpha 拥有 | Desktop Renderer |
+| Monaco 工具能力 | 保持现有过渡实现；不拥有后端 syntax 接入 | Monaco adapter |
 | Native code surface 绘制 | 部分具备：`zeta-editor` 已有 syntax projection，adapter 尚未接线 | `zeta-editor` + Native host |
 | completion、type、definition/reference、rename | 部分具备：低层 LSP runtime 已实现，产品接线尚未完成 | `zeta-lsp` + language server |
 | workspace symbol search | 尚未完成 | 后续 workspace index；不属于 parser document |
@@ -27,7 +28,7 @@ Zeta 把可跨编辑器复用的语法分析放入 Rust，同时保留 Monaco �
 flowchart LR
     Document["EditorHost authoritative document"] -->|"UTF-8 edit + revision"| Syntax["zeta-syntax"]
     Syntax --> Snapshot["revision-tagged syntax snapshot"]
-    Snapshot --> Desktop["Monaco adapter"]
+    Snapshot --> Desktop["Alpha analysis adapter"]
     Snapshot --> Native["Native adapter → zeta-editor"]
     Snapshot --> Index["future workspace symbol index"]
     Document --> LSP["zeta-lsp → language server"]
@@ -38,7 +39,7 @@ flowchart LR
 ## 1. 一次编辑
 
 1. EditorHost 保存 authoritative text、document identity 和单调 revision。
-2. Host adapter 把一次变更转换为当前 revision 上的 UTF-8 byte replacement；Monaco adapter
+2. Host adapter 把一次变更转换为当前 revision 上的 UTF-8 byte replacement；Desktop adapter
    必须先从 UTF-16 position 显式转换。
 3. `SyntaxDocument` 校验 revision、range、UTF-8 boundary 和文档大小，在旧 tree clone 上应用
    `InputEdit`，再以旧 tree 为 hint 增量 parse 新文本。
@@ -53,7 +54,7 @@ Parser 接受包含语法错误的中间文本；error/missing node 是正常 sn
 
 ## 2. 所有权边界
 
-| 能力 | `zeta-syntax` | 产品宿主 / EditorHost | Monaco / `zeta-editor` | `zeta-lsp` |
+| 能力 | `zeta-syntax` | 产品宿主 / EditorHost | Alpha / Native view | `zeta-lsp` |
 | --- | --- | --- | --- | --- |
 | tree-sitter grammar、query 与增量 tree | ✅ | ❌ | ❌ | ❌ |
 | authoritative text、URI、language、revision | 消费 snapshot | ✅ | 协调 | 消费 snapshot |
@@ -73,11 +74,12 @@ unsaved buffer 优先级、更新原子性、缓存和可能的持久化。两�
 
 ## 3. 性能与进程边界
 
-把 parser 放进 Rust 不会自动优化 Monaco 的 DOM、glyph measurement 或 layout。收益来自减少
+把 parser 放进 Rust 不会自动优化 Alpha 的 DOM、glyph measurement 或 layout。收益来自减少
 Renderer 的语言 worker/JS heap 工作、共享 Native 实现，以及让大文件结构分析离开 UI thread。
-迁移某项 provider 后必须关闭 Monaco 的重复计算，否则会同时承担两套 parse 成本。
+Alpha 的 Rust/JSON/JSONC token lane 优先使用后端，避免正常路径重复 tokenization。后端失败时委托
+既有 worker provider chain；JSON/JSONC 可回退 TextMate，Rust 当前没有 TextMate grammar。
 
-Desktop 通过版本化 App Server API 使用 Rust。当前 Monaco 接入使用长生命周期、按
+Desktop 通过版本化 App Server API 使用 Rust。当前 Alpha 接入使用长生命周期、按
 connection/model 拥有的 analysis session：
 
 ```text
@@ -89,15 +91,16 @@ document/syntax/open(model ID, URI, full text, revision)
 
 不能把每次按键实现为“发送全文、返回完整 AST”的独立 RPC。当前 Desktop adapter 已定义：
 
-- Monaco UTF-16 absolute offset 到 Rust UTF-8 byte range 的后端转换；
-- 一个 Monaco change event 到一个原子、非重叠 edit batch；
+- Alpha UTF-16 absolute offset 到 Rust UTF-8 byte range 的后端转换；
+- 一个 Alpha model transaction 到一个原子、非重叠 edit batch；
 - 串行 model queue、provider cancellation 检查和 stale revision 丢弃；
 - App Server 文档丢失或重启后的当前全文 reopen；
 - 4 MiB document、1024 edit 和 50,000 token 上限；
-- `registerDocumentSemanticTokensProvider("rust", ...)` 的 compact token 投影。
+- compact token data 到 Alpha `LanguageToken`/viewport presentation 的投影；
+- 后端不可用时委托既有 fallback chain，diagnostic lane 与其他语言 token lane 不改变。
 
 尚未实现 token delta、主动 debounce 和有界跨进程队列 backpressure；当前返回每个 revision 的
-完整紧凑 token 数组。这里的 provider 使用 Monaco semantic-token transport 形状，但内容仍是
+完整紧凑 token 数组。wire 使用 LSP-compatible relative token 形状，但内容仍是
 tree-sitter syntax category，不能描述成 compiler/LSP semantic facts。
 
 Native host 与 Rust 运行在同一进程，可直接依赖 `zeta-syntax`，但仍由 EditorHost 持有文档与
@@ -108,7 +111,7 @@ revision，并把语言中立 token category 映射为 `zeta-editor` presentatio
 ### 当前实现
 
 - 独立 `zeta-syntax` Cargo/Bazel crate；
-- Rust grammar、bundled highlights query 与 tags query；
+- Rust grammar/highlights/tags，以及 JSON/JSONC grammar/highlights；
 - host-owned monotonic `DocumentRevision`；
 - UTF-8 replace/insert/delete 与 tree-sitter `InputEdit`；
 - incremental line index、old-tree reuse 和 parse cancellation rollback；
@@ -116,14 +119,14 @@ revision，并把语言中立 token category 映射为 `zeta-editor` presentatio
 - grammar/tree 类型不泄漏到 public API；
 - 单独测试文件覆盖增量编辑、Unicode boundary、revision 和 limits。
 - App Server `document/syntax/open|change|close`、connection/model ownership、UTF-16 batch 转换与
-  Monaco Rust semantic-token provider adapter。
+  Alpha Rust/JSON/JSONC token provider adapter。
 
 ### 近期计划
 
 1. 建立 authoritative EditorHost/document service，统一 URI、language 和 revision。
 2. 为 Native 增加 snapshot-to-`CodeEditorSyntaxToken` adapter，并按 revision 投影。
 3. 为 token snapshot 增加 result-ID delta 与有界 backpressure，并以 profile 数据决定 debounce。
-4. 在 Monaco 接入 document outline/folding，再按语言逐项替换重复 syntax provider。
+4. 在 Alpha 接入 document outline/folding，再按语言逐项替换重复 syntax provider。
 5. 以真实 Files/Search consumer 验证 open buffer 覆盖 disk snapshot 后，再建立 workspace index。
 
 ### 潜在方向
@@ -135,4 +138,5 @@ revision，并把语言中立 token category 映射为 `zeta-editor` presentatio
   猜测来源。
 
 长期不变量是：EditorHost 拥有文档，`zeta-syntax` 拥有结构分析，LSP/compiler 拥有语义事实，
-Monaco/`zeta-editor` 拥有 presentation；任何异步结果都必须绑定并验证 document revision。
+Alpha/Native view 拥有 presentation；Monaco 只保留过渡工具实现。任何异步结果都必须绑定并验证
+document revision。

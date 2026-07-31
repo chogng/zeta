@@ -6,9 +6,8 @@
 
 ## 决策摘要
 
-Alpha 是 Zeta 从底层向上自建的编辑器栈。Monaco 不再是产品模型或公共
-接口的定义者，而是在 Zeta 原生输入、布局和渲染层完成前继续提供可用
-界面的过渡 renderer。
+Alpha 是 Zeta 从底层向上自建、并由产品默认选择的编辑器栈。Monaco 不再是产品模型或公共
+接口的定义者，只保留为显式选择的兼容 editor 和工具能力参照。
 
 这不是一次性重写。每一阶段必须先形成可独立测试的 Zeta contract，再
 让上层依赖它，最后才能删除 Monaco 中对应的所有权。
@@ -26,7 +25,7 @@ Alpha 是 Zeta 从底层向上自建的编辑器栈。Monaco 不再是产品模�
 | Browser view | 部分具备 | common viewport、虚拟行 DOM、字体行宽、gutter、selection/caret、基础 decoration、hit-test 与 active-position reveal 已完成；富交互与主题细化尚未完成 |
 | Input controller | 部分具备 | IME 内核事务、pointer selection、键盘导航、textarea 编辑、completion 键盘/鼠标接受、Ctrl+Space invoke、trigger character 与 incomplete refresh、选区与空选区整行 copy/cut/paste、基础 composition DOM event 已完成；Android/macOS 特化、富 clipboard 和 drag/drop 尚未接入 |
 | Accessibility | 尚未完成 | screen reader 文本、ARIA、辅助输入和高对比度语义 |
-| Monaco adapter | 过渡 | 在原生 view/input 完成前提供当前编辑体验 |
+| Monaco adapter | 兼容 | 保留显式选择的既有编辑能力，不定义 Alpha contract |
 | Workbench Editor Part | 已有独立实现 | tabs、pane 生命周期、可见性和产品 contribution |
 
 `src/zeta/base` 继续保持领域无关。编辑器位置、文档版本、selection 和
@@ -68,22 +67,20 @@ editor/
 
 ## 当前数据流
 
-当前产品仍然走以下路径：
+当前产品普通文本走以下路径：
 
 ```text
-EditorInput.initialText
+EditorInput → ITextFileService
         ↓
-monacoModelService
+AlphaTextModelService → Alpha TextModel
         ↓
-Monaco ITextModel
+Alpha language session → Analysis/completion workers
         ↓
-Monaco view / input / worker
+Alpha viewport / input
 ```
 
-`editor/alpha/common/TextModel` 已经实现并有独立测试，但尚未接管产品文档。直接
-把它和 Monaco model 双向绑定会产生两个 undo stack、两个版本序列和
-不明确的事务边界，因此在 Zeta command/input bridge 完成前不做这种
-表面集成。
+Monaco 仍可通过显式 `preferredEditorId` 打开，但不与 Alpha model 双向绑定，避免两个 undo
+stack、两个版本序列和不明确的事务边界。
 
 ## 目标数据流
 
@@ -99,13 +96,10 @@ Language snapshots ─────→ Language workers
 Viewport + Layout model
         ↓
 Input controller ←──────→ Native DOM renderer
-        ↓ temporary projection
-Monaco adapter
 ```
 
-Monaco adapter 最终只能消费 Zeta 状态并把暂时无法原生处理的交互转换成
-Zeta transaction。它不能持有权威版本、独立 dirty 状态或产品可见的
-持久化语义。
+Monaco compatibility editor 不在 Alpha 目标数据流内。仍需保留的工具能力必须通过 Alpha 的
+公开 contract 实现；Monaco 不能持有 Alpha 的权威版本、dirty state 或产品持久化语义。
 
 ## 长期不变量
 
@@ -1402,8 +1396,8 @@ revision 变化时为打开文档请求重分析；Current 46 已补齐这两个
 
 Alpha 已从独立内核演进为真实 `IEditorPane`，但仍保持“Workbench 负责资源与宿主、
 编辑器域负责模型和交互语义”的单向依赖。Code 与 Complete 产品注册 Alpha 为
-`Optional` editor；Monaco 继续是普通文本的 `Default` editor，因此迁移不会悄然改变
-现有默认打开行为。显式 `preferredEditorId` 可以选择 Alpha。
+普通文本的 `Default` editor；Monaco 保留为 `Optional` compatibility editor，并可通过显式
+`preferredEditorId` 选择。
 
 | 能力 | 当前所有者 | 状态 |
 | --- | --- | --- |

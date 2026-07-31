@@ -60,6 +60,9 @@ catalog already used by a Worker.
 and JSONC grammars through Vite raw resources. Those files stay under the
 TextMate browser boundary and are transferred as catalog content; neither
 common code nor the dedicated Worker reads product or workspace files.
+Alpha now prefers App Server tree-sitter tokens for JSON/JSONC, so these
+grammars remain the failure fallback and compatibility reference rather than
+the normal token path.
 
 The product Alpha session currently owns one
 `BrowserTextMateAnalysisWorkerSupport`, so its catalog and Analysis Worker

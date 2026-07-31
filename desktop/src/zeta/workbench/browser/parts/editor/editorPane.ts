@@ -7,6 +7,7 @@ import type {
 import type {
   IConfigurationService,
 } from "../../../../platform/configuration/common/configuration.js";
+import { type ZetaRendererApi } from "../../../../platform/app-server/common/renderer-api.js";
 import { type ITextFileService } from "../../../services/textfile/common/textFileService.js";
 import type { EditorInput } from "./editorInput.js";
 
@@ -37,6 +38,7 @@ export interface IEditorPane extends IDisposable {
 export interface EditorPaneCreationOptions {
   readonly ownerDocument: Document;
   readonly configurationService?: IConfigurationService;
+  readonly rendererApi?: ZetaRendererApi;
   readonly textFileService?: ITextFileService;
 }
 

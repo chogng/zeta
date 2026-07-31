@@ -141,7 +141,7 @@ src/
 | `search_operations::{search_query, search_page}` | private | `WorkspaceSearch*` DTO 与 `zeta-search` 领域类型之间的显式转换 | 不复制查询校验、rg argv、job state 或 parsing |
 | `SearchService` | external crate | 持有 active workspace、frozen rg 和 owner-bound job map | App Server 不把 connection/DTO/UI 语义写入该 crate |
 | `SyntaxAnalysisService` | crate-private | 持有 connection/model-owned `SyntaxDocument`，处理 open/change/close 与 revision gate | 不读取文件、不选择主题、不产生 compiler/LSP semantic facts |
-| `syntax_edits` | private | 单次扫描把一批 Monaco UTF-16 offset 转成旧 revision 上的 UTF-8 byte ranges | 不接受 surrogate 中点或重叠 batch |
+| `syntax_edits` | private | 单次扫描把一批编辑器 UTF-16 offset 转成旧 revision 上的 UTF-8 byte ranges | 不接受 surrogate 中点或重叠 batch |
 | `encode_semantic_tokens` | private | 展平 tree-sitter capture precedence，并编码紧凑的行相对 UTF-16 token data | token type legend 只表达 syntax category，不拥有颜色 |
 | `TerminalService` | crate-private | 持有 `ExecuteProcess` 的 `TrustedWorkspace`、Tokio runtime、PTY session map 与 1 MiB output ring | 不从 client path 自行授予 process authority |
 | `TerminalProfileCatalog` | crate-private | 冻结可信 Shell Profile、program 与 environment allowlist | external DTO 不暴露 executable/args |
@@ -460,12 +460,12 @@ bazel test //zeta-rs/app-server:app-server-unit-tests
 
 ## Syntax token 集成
 
-`document/syntax/open|change|close` 维护 connection/model-owned Rust analysis session。Open 只在
-首次同步和恢复时携带全文；Change 接收一个 Monaco change event 的原子 UTF-16 edit batch，后端
+`document/syntax/open|change|close` 维护 connection/model-owned Rust/JSON/JSONC analysis session。Open 只在
+首次同步和恢复时携带全文；Change 接收一个 Alpha model transaction 的原子 UTF-16 edit batch，后端
 一次扫描转换 offset，并委托 `zeta-syntax` 复用旧 tree。返回值是绑定精确 revision、上限为
 50,000 token 的紧凑相对编码；connection 关闭会释放其全部 analysis document。
 
-Monaco provider、主题和 stale-result presentation 属于 Desktop；grammar、query、tree 与稳定
+Alpha provider、主题和 stale-result presentation 属于 Desktop；grammar、query、tree 与稳定
 syntax category 属于 [`zeta-syntax`](../syntax/README.md)。当前未实现 token delta、debounce、LSP
 semantic token 或 Native projection，不能把本接口描述成 compiler 语义高亮。
 

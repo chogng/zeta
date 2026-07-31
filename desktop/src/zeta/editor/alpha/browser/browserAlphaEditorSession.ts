@@ -1,17 +1,19 @@
 import { type Event } from "../../../base/common/event.js";
+import { type ZetaRendererApi } from "../../../platform/app-server/common/renderer-api.js";
 import { BrowserTextMateAnalysisWorkerSupport } from "../../textmate/browser/textMateAnalysisWorkerClient.js";
 import { type TextMateGrammarCatalog } from "../../textmate/common/textMateGrammarCatalog.js";
 import { AlphaEditorSession, type AlphaEditorSessionOptions } from "./alphaEditorSession.js";
+import { createAppServerSyntaxAnalysisWorkerFactory } from "./appServerSyntaxAnalysisWorker.js";
 import { createAlphaCompletionWorkerFactory } from "./languageCompletionWorkerClient.js";
 
-/** Creates Alpha's product browser session with TextMate and word-completion Workers. */
-export function createBrowserAlphaEditorSession(options: AlphaEditorSessionOptions): AlphaEditorSession {
+/** Creates Alpha's product browser session with backend Rust syntax, TextMate, and completion workers. */
+export function createBrowserAlphaEditorSession(options: AlphaEditorSessionOptions, api: ZetaRendererApi): AlphaEditorSession {
   const languageSupport = new BrowserTextMateAnalysisWorkerSupport();
   const onDidChangeLanguageSupport: Event<void> = listener => languageSupport.grammars.onDidChangeCatalog((_catalog: TextMateGrammarCatalog) => listener());
   try {
     return new AlphaEditorSession({
       ...options,
-      analysisWorkerFactory: languageSupport.workerFactory,
+      analysisWorkerFactory: createAppServerSyntaxAnalysisWorkerFactory(api.syntax, options.modelReference.resource.toString(), options.languageId, languageSupport.workerFactory),
       completionWorkerFactory: createAlphaCompletionWorkerFactory(),
       languageSupport,
       onDidChangeLanguageSupport,

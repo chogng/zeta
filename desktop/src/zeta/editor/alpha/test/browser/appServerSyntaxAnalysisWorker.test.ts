@@ -1,0 +1,154 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { type ZetaRendererApi } from "../../../../platform/app-server/common/renderer-api.js";
+import { createAppServerSyntaxAnalysisWorkerFactory } from "../../browser/appServerSyntaxAnalysisWorker.js";
+import { LANGUAGE_DIAGNOSTIC_LANE, LANGUAGE_TOKEN_LANE, type LanguageAnalysisResult, type LanguageAnalysisWorker } from "../../common/languageAnalysisService.js";
+import { type LanguageWorkerModelSynchronizer, type LanguageWorkerRequest } from "../../common/languageRequestCoordinator.js";
+import { TextModelChangeReason, TextPosition, TextRange, type TextModelChange, type TextSnapshot } from "../../common/text.js";
+import { type LanguageAnalysisRequest } from "../../common/languageAnalysisProviders.js";
+import { type SyntaxChangeParams, type SyntaxCloseParams, type SyntaxOpenParams, type SyntaxTokenSnapshotDto } from "../../../../../../generated/app-server/types.js";
+
+type SyntaxApi = ZetaRendererApi["syntax"];
+
+test("Alpha App Server syntax worker decodes Rust tokens and synchronizes model transactions", async () => {
+  const api = new RecordingSyntaxApi();
+  const fallback = new RecordingFallbackWorker();
+  const factory = createAppServerSyntaxAnalysisWorkerFactory(api, "file:///workspace/main.rs", "rust", () => fallback);
+  using worker = factory();
+
+  const first = await worker.run(request(1, LANGUAGE_TOKEN_LANE, "rust", snapshot(1, "fn main() {\n  x\n}")), new AbortController().signal);
+  assert.equal(first.lane, LANGUAGE_TOKEN_LANE);
+  assert.deepEqual(first.value.tokens.map(token => ({
+    start: [token.range.start.lineIndex, token.range.start.columnIndex],
+    end: [token.range.end.lineIndex, token.range.end.columnIndex],
+    type: token.tokenType,
+  })), [
+    { start: [0, 0], end: [0, 2], type: "keyword" },
+    { start: [0, 3], end: [0, 7], type: "function" },
+    { start: [1, 2], end: [1, 3], type: "variable" },
+  ]);
+  assert.deepEqual(api.openCalls, [{
+    documentId: "alpha-syntax-1",
+    documentUri: "file:///workspace/main.rs",
+    language: "rust",
+    revision: 1,
+    text: "fn main() {\n  x\n}",
+  }]);
+
+  (worker as LanguageAnalysisWorker & LanguageWorkerModelSynchronizer).synchronizeModel(change(2, 14, 1, "value"));
+  await worker.run(request(2, LANGUAGE_TOKEN_LANE, "rust", snapshot(2, "fn main() {\n  value\n}")), new AbortController().signal);
+  assert.deepEqual(api.changeCalls, [{
+    documentId: "alpha-syntax-1",
+    previousRevision: 1,
+    revision: 2,
+    edits: [{ startUtf16: 14, endUtf16: 15, text: "value" }],
+  }]);
+
+  const diagnostics = await worker.run(request(3, LANGUAGE_DIAGNOSTIC_LANE, "rust", snapshot(2, "fn main() {\n  value\n}")), new AbortController().signal);
+  const typescript = await worker.run(request(4, LANGUAGE_TOKEN_LANE, "typescript", snapshot(2, "fn main() {\n  value\n}")), new AbortController().signal);
+  assert.equal(diagnostics.lane, LANGUAGE_DIAGNOSTIC_LANE);
+  assert.equal(typescript.lane, LANGUAGE_TOKEN_LANE);
+  assert.deepEqual(fallback.calls, ["diagnostics:rust", "tokens:typescript"]);
+});
+
+test("Alpha App Server syntax worker routes JSON and JSONC through the backend", async () => {
+  for (const languageId of ["json", "jsonc"] as const) {
+    const api = new RecordingSyntaxApi();
+    using worker = createAppServerSyntaxAnalysisWorkerFactory(api, `file:///workspace/settings.${languageId}`, languageId, () => new RecordingFallbackWorker())();
+
+    await worker.run(request(1, LANGUAGE_TOKEN_LANE, languageId, snapshot(1, "{\"enabled\":true}")), new AbortController().signal);
+
+    assert.equal(api.openCalls[0]?.language, languageId);
+  }
+});
+
+test("Alpha App Server syntax worker uses the existing fallback when backend analysis fails", async context => {
+  context.mock.method(console, "error", () => undefined);
+  const api = new RecordingSyntaxApi();
+  api.openError = new Error("backend unavailable");
+  const fallback = new RecordingFallbackWorker();
+  using worker = createAppServerSyntaxAnalysisWorkerFactory(api, "file:///workspace/main.rs", "rust", () => fallback)();
+
+  const result = await worker.run(request(1, LANGUAGE_TOKEN_LANE, "rust", snapshot(1, "fn main() {}")), new AbortController().signal);
+  assert.equal(result.lane, LANGUAGE_TOKEN_LANE);
+  assert.deepEqual(fallback.calls, ["tokens:rust"]);
+});
+
+class RecordingSyntaxApi implements SyntaxApi {
+  readonly openCalls: SyntaxOpenParams[] = [];
+  readonly changeCalls: SyntaxChangeParams[] = [];
+  readonly closeCalls: SyntaxCloseParams[] = [];
+  openError: Error | undefined;
+
+  async open(params: SyntaxOpenParams): Promise<SyntaxTokenSnapshotDto> {
+    this.openCalls.push(params);
+    if (this.openError) throw this.openError;
+    return tokenSnapshot(params.revision);
+  }
+
+  async change(params: SyntaxChangeParams): Promise<SyntaxTokenSnapshotDto> {
+    this.changeCalls.push(params);
+    return tokenSnapshot(params.revision);
+  }
+
+  async close(params: SyntaxCloseParams): Promise<void> {
+    this.closeCalls.push(params);
+  }
+}
+
+class RecordingFallbackWorker implements LanguageAnalysisWorker {
+  readonly calls: string[] = [];
+
+  run(request: LanguageWorkerRequest<"tokens" | "diagnostics", LanguageAnalysisRequest>): Promise<LanguageAnalysisResult> {
+    this.calls.push(`${request.lane}:${request.payload.languageId}`);
+    return Promise.resolve(request.lane === LANGUAGE_TOKEN_LANE ? {
+      lane: LANGUAGE_TOKEN_LANE,
+      value: { tokens: [] },
+    } : {
+      lane: LANGUAGE_DIAGNOSTIC_LANE,
+      value: { diagnostics: [] },
+    });
+  }
+
+  dispose(): void {}
+
+  [Symbol.dispose](): void {
+    this.dispose();
+  }
+}
+
+function request(requestId: number, lane: "tokens" | "diagnostics", languageId: string, value: TextSnapshot): LanguageWorkerRequest<"tokens" | "diagnostics", LanguageAnalysisRequest> {
+  return Object.freeze({ requestId, lane, snapshot: value, payload: Object.freeze({ languageId }) });
+}
+
+function snapshot(version: number, text: string): TextSnapshot {
+  return Object.freeze({
+    version,
+    length: text.length,
+    lineCount: text.split("\n").length,
+    getText: () => text,
+    getTextBetweenOffsets: (startOffset: number, endOffset: number) => text.slice(startOffset, endOffset),
+  });
+}
+
+function change(version: number, rangeOffset: number, rangeLength: number, text: string): TextModelChange {
+  return Object.freeze({
+    version,
+    transactionId: version,
+    reason: TextModelChangeReason.Edit,
+    changes: Object.freeze([Object.freeze({
+      range: TextRange.from(TextPosition.at(1, 2), TextPosition.at(1, 3)),
+      rangeOffset,
+      rangeLength,
+      text,
+    })]),
+  });
+}
+
+function tokenSnapshot(revision: number): SyntaxTokenSnapshotDto {
+  return {
+    revision,
+    resultId: String(revision),
+    data: [0, 0, 2, 6, 0, 0, 3, 4, 5, 0, 1, 2, 1, 13, 0],
+  };
+}

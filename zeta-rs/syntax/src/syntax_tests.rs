@@ -12,6 +12,66 @@ const RUST_SOURCE: &str = r#"mod engine {
 "#;
 
 #[test]
+fn json_snapshot_contains_structural_tokens_and_folds() {
+    let document = SyntaxDocument::open(
+        SyntaxLanguage::Json,
+        DocumentRevision::new(3),
+        "{\n  \"enabled\": true,\n  \"count\": 2\n}\n",
+    )
+    .expect("JSON grammar should load");
+
+    let snapshot = document.snapshot();
+
+    assert!(!snapshot.has_errors());
+    assert!(
+        snapshot
+            .tokens()
+            .iter()
+            .any(|token| token.kind == SyntaxTokenKind::String)
+    );
+    assert!(
+        snapshot
+            .tokens()
+            .iter()
+            .any(|token| token.kind == SyntaxTokenKind::Constant)
+    );
+    assert!(
+        snapshot
+            .tokens()
+            .iter()
+            .any(|token| token.kind == SyntaxTokenKind::Number)
+    );
+    assert!(
+        snapshot
+            .folding_ranges()
+            .iter()
+            .any(|range| range.range.start.row == 0 && range.range.end.row == 3)
+    );
+}
+
+#[test]
+fn jsonc_snapshot_uses_comment_capable_json_grammar() {
+    let document = SyntaxDocument::open(
+        SyntaxLanguage::Jsonc,
+        DocumentRevision::new(5),
+        "{\n  // Keep this local.\n  \"enabled\": true\n}\n",
+    )
+    .expect("JSONC grammar should load");
+
+    let snapshot = document.snapshot();
+
+    assert!(!snapshot.has_errors());
+    assert!(
+        snapshot
+            .tokens()
+            .iter()
+            .any(|token| token.kind == SyntaxTokenKind::Comment)
+    );
+    assert_eq!(SyntaxLanguage::Json.id(), "json");
+    assert_eq!(SyntaxLanguage::Jsonc.id(), "jsonc");
+}
+
+#[test]
 fn rust_snapshot_contains_tokens_folds_and_symbols() {
     let document =
         SyntaxDocument::open(SyntaxLanguage::Rust, DocumentRevision::new(7), RUST_SOURCE)

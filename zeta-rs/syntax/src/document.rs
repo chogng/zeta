@@ -386,10 +386,12 @@ fn is_foldable(kind: &str) -> bool {
     matches!(
         kind,
         "block"
+            | "array"
             | "declaration_list"
             | "enum_variant_list"
             | "field_declaration_list"
             | "match_block"
+            | "object"
             | "token_tree"
             | "use_list"
     )

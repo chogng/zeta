@@ -1,8 +1,8 @@
 # Monaco editor subsystem
 
-The Monaco subsystem is selected by the Code product and composed into Complete.
+The Monaco subsystem remains an optional compatibility editor in Code and Complete.
 It does not own files, persistence, tabs, dirty state, or Markdown rendering.
-It is now a transition renderer and must not define new canonical text-model,
+It is a compatibility editor and must not define new canonical text-model,
 transaction, history, selection, or language contracts. Those move upward from
 the repository-owned
 [`Alpha Editor`](../alpha/README.md) as each native layer becomes usable.
@@ -22,12 +22,6 @@ The canonical staged ownership and removal criteria are documented in
   overwrite a model that is already in use. This is current migration debt:
   Monaco still owns the live model until the Zeta input and command layers can
   preserve native transaction and undo semantics end to end.
-- `browser/monacoSyntaxTokenService.ts` owns the Rust-only Monaco semantic-token
-  provider adapter, per-model serialized App Server synchronization, restart
-  reopen, revision freshness checks, and compact token projection. Its data is
-  tree-sitter syntax categorization, not compiler or LSP semantic facts. The
-  cross-process ownership and evolution contract is canonical in
-  [`docs/syntax-analysis.md`](../../../../../docs/syntax-analysis.md).
 - `browser/monacoEditorPane.ts` owns Monaco DOM, layout, visibility, focus,
   and one reference to the shared model.
 - `browser/monacoChatInputEditor.ts` owns the ephemeral plaintext model,

@@ -2,6 +2,10 @@ use tree_sitter::{Language, Parser, Query};
 
 use crate::SyntaxError;
 
+mod json;
+mod jsonc;
+mod rust;
+
 /// Source language selected for syntax analysis.
 ///
 /// Each variant identifies a grammar and the structural queries that implementations must use.
@@ -9,12 +13,16 @@ use crate::SyntaxError;
 /// supply arbitrary query source or native grammar pointers.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum SyntaxLanguage {
+    Json,
+    Jsonc,
     Rust,
 }
 
 impl SyntaxLanguage {
     pub const fn id(self) -> &'static str {
         match self {
+            Self::Json => "json",
+            Self::Jsonc => "jsonc",
             Self::Rust => "rust",
         }
     }
@@ -30,7 +38,8 @@ impl LanguageConfiguration {
         syntax_language: SyntaxLanguage,
         parser: &mut Parser,
     ) -> Result<Self, SyntaxError> {
-        let language = language(syntax_language);
+        let definition = definition(syntax_language);
+        let language = definition.language;
         parser
             .set_language(&language)
             .map_err(|source| SyntaxError::Language {
@@ -41,21 +50,24 @@ impl LanguageConfiguration {
             syntax_language,
             &language,
             "highlights",
-            tree_sitter_rust::HIGHLIGHTS_QUERY,
+            definition.highlights,
         )?;
-        let tags = query(
-            syntax_language,
-            &language,
-            "tags",
-            tree_sitter_rust::TAGS_QUERY,
-        )?;
+        let tags = query(syntax_language, &language, "tags", definition.tags)?;
         Ok(Self { highlights, tags })
     }
 }
 
-fn language(syntax_language: SyntaxLanguage) -> Language {
+struct LanguageDefinition {
+    language: Language,
+    highlights: &'static str,
+    tags: &'static str,
+}
+
+fn definition(syntax_language: SyntaxLanguage) -> LanguageDefinition {
     match syntax_language {
-        SyntaxLanguage::Rust => tree_sitter_rust::LANGUAGE.into(),
+        SyntaxLanguage::Json => json::definition(),
+        SyntaxLanguage::Jsonc => jsonc::definition(),
+        SyntaxLanguage::Rust => rust::definition(),
     }
 }
 

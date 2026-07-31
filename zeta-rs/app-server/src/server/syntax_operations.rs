@@ -35,6 +35,8 @@ impl SyntaxAnalysisService {
         validate_document_id(&params.document_id)?;
         validate_document_uri(&params.document_uri)?;
         let language = match params.language {
+            SyntaxLanguageDto::Json => SyntaxLanguage::Json,
+            SyntaxLanguageDto::Jsonc => SyntaxLanguage::Jsonc,
             SyntaxLanguageDto::Rust => SyntaxLanguage::Rust,
         };
         let limits = AnalysisLimits {

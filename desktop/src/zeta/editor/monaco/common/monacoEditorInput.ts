@@ -11,13 +11,13 @@ import { isTextResourceLanguageInput, resolveTextResourceLanguageId } from "../.
 
 export const MONACO_EDITOR_ID = "zeta.editor.monaco";
 
-/** Returns the product-level Monaco match without loading Monaco itself. */
+/** Keeps Monaco available as an explicit compatibility editor for text resources. */
 export function matchMonacoEditor(input: EditorInput): EditorPaneMatch {
   if (input.contentType === ACADEMIC_DOCUMENT_CONTENT_TYPE) {
     return EditorPaneMatch.None;
   }
   if (isTextResourceLanguageInput(input)) {
-    return EditorPaneMatch.Default;
+    return EditorPaneMatch.Optional;
   }
   return input.resource.scheme === "file"
     ? EditorPaneMatch.Optional

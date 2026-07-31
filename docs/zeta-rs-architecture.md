@@ -95,7 +95,7 @@ Unicode 字素级内联范围、Git-style hunk、比较策略、取消和资源�
 也不拥有 Editor/TUI presentation。当前 API、失败和修改影响见
 [`diff/README.md`](../zeta-rs/diff/README.md)。
 
-`zeta-syntax` 当前拥有 Rust 文档的有界增量 tree-sitter parse、host revision binding，以及
+`zeta-syntax` 当前拥有 Rust、JSON 与 JSONC 文档的有界增量 tree-sitter parse、host revision binding，以及
 syntax token、folding range、document symbol 和 parse diagnostic snapshot。它不读取文件、
 不监听 workspace、不保存符号索引，也不依赖 Monaco、`zeta-editor` 或 `zeta-lsp`。跨宿主
 所有权与演进阶段见 [`syntax-analysis.md`](syntax-analysis.md)，当前 API 和修改路径见
