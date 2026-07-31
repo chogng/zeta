@@ -120,6 +120,15 @@ pub(crate) fn apply_command(
                 .ok_or_else(|| ConfigError(format!("Hook '{}' is not configured", hook_id)))?;
             hook.enablement = *enablement;
         }
+        UserConfigCommand::SetWorkspaceTrust { workspace, setting } => {
+            document
+                .workspace_trust
+                .roots
+                .insert(workspace.clone(), *setting);
+        }
+        UserConfigCommand::ForgetWorkspaceTrust { workspace } => {
+            document.workspace_trust.roots.remove(workspace);
+        }
     }
     Ok(())
 }

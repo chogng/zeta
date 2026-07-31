@@ -1,6 +1,7 @@
 use super::*;
 use crate::{FileSystemAccess, NetworkAccess};
 use std::path::Path;
+use zeta_workspace::WorkspaceRoot;
 
 struct RecordingBackend;
 
@@ -33,7 +34,7 @@ fn manager_resolves_the_working_directory_before_backend_dispatch() {
         )
         .unwrap();
 
-    assert_eq!(prepared.working_directory(), workspace.path());
+    assert_eq!(prepared.working_directory(), workspace.canonical_path());
     assert_eq!(prepared.program(), "echo");
     assert_eq!(prepared.arguments(), ["hello"]);
     assert_eq!(prepared.kind(), SandboxKind::Unrestricted);

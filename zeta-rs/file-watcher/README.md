@@ -10,8 +10,10 @@
 缺失路径回退、RAII 注销和异步事件合并。它只报告“可能发生了变化”；消费者必须重新读取并验证
 自己拥有的状态，不能把 backend event 当作文件或 catalog 事实。
 
-macOS 显式使用 `notify` 的 FSEvents backend。workspace watcher 会递归覆盖整棵工作区；不能改用
+macOS 默认使用 `notify` 的 FSEvents backend。workspace watcher 会递归覆盖整棵工作区；不能改用
 kqueue，因为它会为大量 watched entry 持有 file descriptor，并在大型工作区耗尽进程资源。
+当宿主确认 requested/canonical namespace 不同（例如 `/var` 与 `/private/var`）时，可显式选择
+`FileWatcherBackend::Polling`；该 fallback 只用于 alias root，不是所有 Workspace 的默认策略。
 hermetic Bazel toolchain 必须提供 FSEvents 所需的 `CoreServices` framework 链接边界；
 Linux/Windows 继续使用 `notify` 的推荐平台 backend。
 
@@ -46,7 +48,8 @@ notify callback
 ```
 
 `Arc<FileWatcher>::add_subscriber()` 返回独立的 `FileWatcherSubscriber` 和 `Receiver`。
-`FileWatcherSubscriber::register_paths()` 接受一组 `WatchPath` 并返回 `WatchRegistration`：
+`FileWatcherSubscriber::register_paths()` 接受一组 `WatchPath`，成功时返回
+`WatchRegistration`，backend 注册失败时返回 `notify::Error`：
 
 - 同一批次内重复的 exact path + recursive scope 会去重；
 - 跨 registration/subscriber 的相同 OS path 通过 `PathWatchCounts` ref-count；
@@ -55,6 +58,8 @@ notify callback
 - `WatchRegistration` drop 只撤销该批注册；subscriber drop 撤销其全部注册并关闭 receiver；
 - `FileWatcher::noop()` 保留注册/生命周期语义但不连接 OS backend，用于明确的 optional-runtime
   fallback；它不会自行产生事件。
+- `FileWatcher::new_with_backend()` 允许 authority owner 显式选择 recommended 或 polling；
+  不允许 backend failure 静默变成 noop。
 
 ### Event 语义
 
@@ -88,6 +93,8 @@ Backend 只转发 create、modify 和 remove；access/open 事件被过滤。所
 
 - `FileWatcher::new()` 在 backend 初始化失败或当前线程没有 Tokio runtime 时返回
   `notify::Error`；
+- registration failure 同步返回；调用方必须选择显式失败、诊断或可解释的 manual-refresh
+  fallback；
 - 单个 backend watch/unwatch reconfiguration 失败会写 warning；现有注册状态仍保留，后续
   reconfiguration 可再次尝试；
 - state lock 与 backend lock 始终按 state → backend 顺序获取，注册、注销和 watch mode

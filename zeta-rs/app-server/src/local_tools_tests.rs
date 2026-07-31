@@ -7,6 +7,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use zeta_async_utils::CancellationSource;
 use zeta_protocol::{ToolCallId, ToolName};
 use zeta_sandboxing::{PreparedCommand, SandboxCommand, SandboxError, SandboxKind};
+use zeta_workspace::{WorkspaceTrustDecision, WorkspaceTrustSource};
 
 struct PassThroughBackend;
 
@@ -30,7 +31,7 @@ impl SandboxBackend for PassThroughBackend {
 fn local_registry_exposes_shell_command_and_preserves_read_only_ripgrep() {
     let workspace = TestWorkspace::new();
     let service = LocalShellToolService::new(
-        workspace.root(),
+        workspace.trusted(),
         RipgrepExecutable::from_path(workspace.ripgrep()).unwrap(),
         PassThroughBackend,
     )
@@ -72,7 +73,7 @@ fn local_registry_exposes_shell_command_and_preserves_read_only_ripgrep() {
 fn local_registry_accepts_shell_processes_but_rejects_ripgrep_workspace_escape_arguments() {
     let workspace = TestWorkspace::new();
     let service = LocalShellToolService::new(
-        workspace.root(),
+        workspace.trusted(),
         RipgrepExecutable::from_path(workspace.ripgrep()).unwrap(),
         PassThroughBackend,
     )
@@ -148,6 +149,15 @@ impl TestWorkspace {
 
     fn root(&self) -> WorkspaceRoot {
         WorkspaceRoot::open(&self.path).unwrap()
+    }
+
+    fn trusted(&self) -> TrustedWorkspace {
+        TrustedWorkspace::require(
+            self.root(),
+            WorkspaceTrustDecision::Trusted(WorkspaceTrustSource::HostConfiguration),
+            WorkspaceCapability::ExecuteProcess,
+        )
+        .unwrap()
     }
 
     fn ripgrep(&self) -> PathBuf {

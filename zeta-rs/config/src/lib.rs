@@ -16,6 +16,7 @@ mod store_file;
 mod store_monitor;
 mod store_schema;
 mod workspace;
+mod workspace_trust;
 
 pub use command::{
     ConfigCommandDisposition, ConfigCommandError, ConfigCommandRequest, ConfigCommandResult,
@@ -47,7 +48,9 @@ pub use workspace::{
     WorkspaceConfigScope, WorkspaceConfigStore, WorkspaceId, WorkspaceMcpConfig,
     WorkspaceMcpServerConfig, WorkspaceSkillsConfig,
 };
+pub use workspace_trust::{WorkspaceTrustConfig, WorkspaceTrustSetting};
 pub use zeta_protocol::{ModelRef, SkillId, SkillName, SkillSourceId};
+pub use zeta_workspace::WorkspaceTrustId;
 
 #[cfg(test)]
 #[path = "config_tests.rs"]

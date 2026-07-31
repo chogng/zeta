@@ -19,7 +19,7 @@ zeta-tools = { workspace = true }
 [dev-dependencies]
 zeta-async-utils = { workspace = true }
 zeta-protocol = { workspace = true }
-zeta-sandboxing = { workspace = true }
+zeta-workspace = { workspace = true }
 
 [lints]
 workspace = true

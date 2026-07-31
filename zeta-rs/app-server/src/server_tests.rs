@@ -28,7 +28,11 @@ use zeta_protocol::{
     RequestId, RequestUserInput, ResponseItem, StopReason, ToolCall, ToolDefinition,
     ToolExecutionOutput, ToolOutputStream, TurnStatus, UserInput,
 };
-use zeta_sandboxing::{FileSystemAccess, NetworkAccess, SandboxPolicy, WorkspaceRoot};
+use zeta_sandboxing::{FileSystemAccess, NetworkAccess, SandboxPolicy};
+use zeta_workspace::{
+    TrustedWorkspace, WorkspaceCapability, WorkspaceRoot, WorkspaceTrustDecision,
+    WorkspaceTrustSource,
+};
 
 fn server_with_model(model: Arc<dyn ModelService>) -> AppServer {
     let threads = Arc::new(ThreadController::with_store(Arc::new(
@@ -243,7 +247,12 @@ fn terminal_profiles_are_server_owned_and_reject_unknown_ids() {
             .as_nanos(),
     ));
     std::fs::create_dir_all(&root).unwrap();
-    let server = server().with_terminal_root(root.clone()).unwrap();
+    let server = server()
+        .with_terminal_root(trusted_workspace(
+            &root,
+            WorkspaceCapability::ExecuteProcess,
+        ))
+        .unwrap();
     let mut connection = server.connection();
     initialize(&server, &mut connection);
 
@@ -303,7 +312,12 @@ fn terminal_rpc_drives_a_workspace_rooted_pty_to_exit() {
             .as_nanos(),
     ));
     std::fs::create_dir_all(&root).unwrap();
-    let server = server().with_terminal_root(root.clone()).unwrap();
+    let server = server()
+        .with_terminal_root(trusted_workspace(
+            &root,
+            WorkspaceCapability::ExecuteProcess,
+        ))
+        .unwrap();
     let mut connection = server.connection();
     initialize(&server, &mut connection);
     let created = call(
@@ -390,7 +404,12 @@ fn terminal_rpc_enforces_connection_ownership_and_close() {
             .as_nanos(),
     ));
     std::fs::create_dir_all(&root).unwrap();
-    let server = server().with_terminal_root(root.clone()).unwrap();
+    let server = server()
+        .with_terminal_root(trusted_workspace(
+            &root,
+            WorkspaceCapability::ExecuteProcess,
+        ))
+        .unwrap();
     let mut owner = server.connection();
     let mut other = server.connection();
     initialize(&server, &mut owner);
@@ -1528,7 +1547,8 @@ fn filesystem_watcher_publishes_only_workspace_relative_paths() {
     let workspace = WorkspaceRoot::open(&root).unwrap();
     let server = server()
         .with_file_system(Arc::new(LocalFileSystem::new(workspace.clone())))
-        .with_file_system_watcher(workspace.path().to_path_buf());
+        .with_file_system_watcher(workspace)
+        .unwrap();
     let mut connection = server.connection();
     initialize(&server, &mut connection);
 
@@ -1584,7 +1604,12 @@ fn git_status_rpc_projects_workspace_repository_state() {
     std::fs::write(workspace.join("new.txt"), "new\n").unwrap();
     std::fs::write(root.join("outside.txt"), "outside changed\n").unwrap();
 
-    let server = server().with_git_root(workspace).unwrap();
+    let server = server()
+        .with_git_root(trusted_workspace(
+            &workspace,
+            WorkspaceCapability::MutateRepository,
+        ))
+        .unwrap();
     let mut connection = server.connection();
     initialize(&server, &mut connection);
     let response = call(
@@ -1736,7 +1761,12 @@ fn git_remote_rpcs_fetch_pull_and_push_against_a_local_bare_remote() {
     run_git(&peer, &["config", "user.email", "zeta@example.test"]);
     run_git(&peer, &["config", "core.autocrlf", "false"]);
 
-    let server = server().with_git_root(workspace.clone()).unwrap();
+    let server = server()
+        .with_git_root(trusted_workspace(
+            &workspace,
+            WorkspaceCapability::MutateRepository,
+        ))
+        .unwrap();
     let mut connection = server.connection();
     initialize(&server, &mut connection);
     std::fs::write(peer.join("shared.txt"), "from peer\n").unwrap();
@@ -1817,7 +1847,12 @@ fn git_watcher_publishes_external_workspace_changes() {
     std::fs::write(root.join("tracked.txt"), "initial\n").unwrap();
     run_git(&root, &["add", "tracked.txt"]);
     run_git(&root, &["commit", "-m", "initial"]);
-    let server = server().with_git_root(root.clone()).unwrap();
+    let server = server()
+        .with_git_root(trusted_workspace(
+            &root,
+            WorkspaceCapability::MutateRepository,
+        ))
+        .unwrap();
     let mut connection = server.connection();
     initialize(&server, &mut connection);
     let initial = call(
@@ -1876,4 +1911,13 @@ fn run_git(root: &std::path::Path, args: &[&str]) {
         args.join(" "),
         String::from_utf8_lossy(&output.stderr),
     );
+}
+
+fn trusted_workspace(root: &std::path::Path, capability: WorkspaceCapability) -> TrustedWorkspace {
+    TrustedWorkspace::require(
+        WorkspaceRoot::open(root).unwrap(),
+        WorkspaceTrustDecision::Trusted(WorkspaceTrustSource::HostConfiguration),
+        capability,
+    )
+    .unwrap()
 }

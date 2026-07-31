@@ -3,6 +3,10 @@ use crate::server::update_broker::{NotificationQueue, UpdateBroker};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::Arc;
+use zeta_workspace::{
+    TrustedWorkspace, WorkspaceCapability, WorkspaceRoot, WorkspaceTrustDecision,
+    WorkspaceTrustSource,
+};
 
 #[test]
 fn runtime_revisions_and_notifies_only_for_changed_workspace_projection() {
@@ -14,7 +18,13 @@ fn runtime_revisions_and_notifies_only_for_changed_workspace_projection() {
     let broker = Arc::new(UpdateBroker::default());
     let queue = NotificationQueue::default();
     broker.register(1, &queue);
-    let runtime = GitRuntime::new(repository.root().join("workspace"), broker).unwrap();
+    let trusted = trusted_workspace(&repository.root().join("workspace"));
+    let workspace_root = trusted.root().canonical_path().to_path_buf();
+    let repository_root = WorkspaceRoot::open(repository.root())
+        .unwrap()
+        .canonical_path()
+        .to_path_buf();
+    let runtime = GitRuntime::new(trusted, broker).unwrap();
 
     let initial = runtime.status().unwrap();
     assert_eq!(initial.revision, 1);
@@ -24,17 +34,17 @@ fn runtime_revisions_and_notifies_only_for_changed_workspace_projection() {
     assert!(
         watched_paths
             .iter()
-            .any(|watch| { watch.path == repository.root().join("workspace") && watch.recursive })
-    );
-    assert!(
-        watched_paths.iter().any(|watch| {
-            watch.path == repository.root().join(".gitignore") && !watch.recursive
-        })
+            .any(|watch| { watch.path == workspace_root && watch.recursive })
     );
     assert!(
         watched_paths
             .iter()
-            .any(|watch| { watch.path == repository.root().join(".git") && watch.recursive })
+            .any(|watch| { watch.path == repository_root.join(".gitignore") && !watch.recursive })
+    );
+    assert!(
+        watched_paths
+            .iter()
+            .any(|watch| { watch.path == repository_root.join(".git") && watch.recursive })
     );
 
     repository.write("outside.txt", "outside change\n");
@@ -67,8 +77,8 @@ fn runtime_revisions_and_notifies_only_for_changed_workspace_projection() {
 fn runtime_incarnations_use_distinct_revision_scopes() {
     let repository = TestRepository::init();
     let broker = Arc::new(UpdateBroker::default());
-    let first = GitRuntime::new(repository.root().to_path_buf(), Arc::clone(&broker)).unwrap();
-    let second = GitRuntime::new(repository.root().to_path_buf(), broker).unwrap();
+    let first = GitRuntime::new(trusted_workspace(repository.root()), Arc::clone(&broker)).unwrap();
+    let second = GitRuntime::new(trusted_workspace(repository.root()), broker).unwrap();
 
     let first_status = first.status().unwrap();
     let second_status = second.status().unwrap();
@@ -139,4 +149,13 @@ fn unique_sequence() -> u64 {
     use std::sync::atomic::{AtomicU64, Ordering};
     static NEXT: AtomicU64 = AtomicU64::new(1);
     NEXT.fetch_add(1, Ordering::Relaxed)
+}
+
+fn trusted_workspace(root: &Path) -> TrustedWorkspace {
+    TrustedWorkspace::require(
+        WorkspaceRoot::open(root).unwrap(),
+        WorkspaceTrustDecision::Trusted(WorkspaceTrustSource::HostConfiguration),
+        WorkspaceCapability::MutateRepository,
+    )
+    .unwrap()
 }

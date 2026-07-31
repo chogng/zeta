@@ -80,6 +80,23 @@ fn discovers_claude_project_items_with_review_categories() {
 }
 
 #[test]
+fn ignores_claude_slash_command_directories() {
+    let home = tempdir().unwrap();
+    fs::create_dir_all(home.path().join(".claude/commands")).unwrap();
+    let project = tempdir().unwrap();
+    fs::create_dir_all(project.path().join(".claude/commands")).unwrap();
+
+    let inspection = inspect_agent_paths([
+        AgentImportLocation::claude_user(home.path()),
+        AgentImportLocation::claude_project(project.path()),
+    ])
+    .unwrap();
+
+    assert!(inspection.candidates().is_empty());
+    assert!(inspection.diagnostics().is_empty());
+}
+
+#[test]
 fn reports_known_paths_with_the_wrong_file_type() {
     let project = tempdir().unwrap();
     fs::create_dir_all(project.path().join(".agents/skills")).unwrap();

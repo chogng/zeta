@@ -284,9 +284,13 @@
         "SkillsUnavailable",
         "SkillOperationFailed",
         "SkillNotFound",
+        "SyntaxDocumentNotOpen",
+        "SyntaxRevisionMismatch",
+        "SyntaxAnalysisFailed",
         "WorkspaceSwitchUnavailable",
         "WorkspaceSwitchBusy",
-        "WorkspaceSwitchFailed"
+        "WorkspaceSwitchFailed",
+        "WorkspaceTrustRequired"
       ]
     },
     "ApprovalReviewModelSelectionDto": {
@@ -1018,6 +1022,54 @@
             },
             "params": {
               "$ref": "#/$defs/TypstCompileParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "document/syntax/open"
+            },
+            "params": {
+              "$ref": "#/$defs/SyntaxOpenParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "document/syntax/change"
+            },
+            "params": {
+              "$ref": "#/$defs/SyntaxChangeParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "document/syntax/close"
+            },
+            "params": {
+              "$ref": "#/$defs/SyntaxCloseParams"
             }
           },
           "required": [
@@ -2046,6 +2098,54 @@
             },
             "result": {
               "$ref": "#/$defs/TypstCompileResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "document/syntax/open"
+            },
+            "result": {
+              "$ref": "#/$defs/SyntaxTokenSnapshotDto"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "document/syntax/change"
+            },
+            "result": {
+              "$ref": "#/$defs/SyntaxTokenSnapshotDto"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "document/syntax/close"
+            },
+            "result": {
+              "type": "null"
             }
           },
           "required": [
@@ -5400,6 +5500,147 @@
       "description": "Stable identity for one transient stream-emitter incarnation.\n\nA new value is created whenever the emitter restarts. Its sequence is meaningful only within\nthat instance, so consumers must discard a previous cursor when this value changes.",
       "type": "string",
       "minLength": 1
+    },
+    "SyntaxChangeParams": {
+      "description": "Applies one atomic, non-overlapping editor change event to an open document.",
+      "type": "object",
+      "properties": {
+        "documentId": {
+          "type": "string",
+          "maxLength": 256,
+          "minLength": 1
+        },
+        "edits": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SyntaxTextEditDto"
+          },
+          "maxItems": 1024,
+          "minItems": 1
+        },
+        "previousRevision": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "revision": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "documentId",
+        "previousRevision",
+        "revision",
+        "edits"
+      ]
+    },
+    "SyntaxCloseParams": {
+      "description": "Closes one connection-owned syntax-analysis document.",
+      "type": "object",
+      "properties": {
+        "documentId": {
+          "type": "string",
+          "maxLength": 256,
+          "minLength": 1
+        }
+      },
+      "required": [
+        "documentId"
+      ]
+    },
+    "SyntaxLanguageDto": {
+      "description": "Source language selected for one backend syntax-analysis document.",
+      "type": "string",
+      "enum": [
+        "rust"
+      ]
+    },
+    "SyntaxOpenParams": {
+      "description": "Opens or replaces one connection-owned incremental syntax-analysis document.",
+      "type": "object",
+      "properties": {
+        "documentId": {
+          "type": "string",
+          "maxLength": 256,
+          "minLength": 1
+        },
+        "documentUri": {
+          "type": "string",
+          "maxLength": 16384,
+          "minLength": 1
+        },
+        "language": {
+          "$ref": "#/$defs/SyntaxLanguageDto"
+        },
+        "revision": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "documentId",
+        "documentUri",
+        "language",
+        "revision",
+        "text"
+      ]
+    },
+    "SyntaxTextEditDto": {
+      "description": "One replacement expressed in UTF-16 offsets against `previous_revision`.",
+      "type": "object",
+      "properties": {
+        "endUtf16": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "startUtf16": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "startUtf16",
+        "endUtf16",
+        "text"
+      ]
+    },
+    "SyntaxTokenSnapshotDto": {
+      "description": "LSP-compatible relative semantic-token encoding derived from one exact syntax revision.\n\nEach group of five integers is `deltaLine, deltaStartUtf16, lengthUtf16, tokenType,\nmodifierBits`. The fixed token-type legend is owned by the Desktop Monaco adapter.",
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          }
+        },
+        "resultId": {
+          "type": "string"
+        },
+        "revision": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "revision",
+        "resultId",
+        "data"
+      ]
     },
     "TerminalCloseParams": {
       "description": "Terminates and releases one connection-owned terminal.",

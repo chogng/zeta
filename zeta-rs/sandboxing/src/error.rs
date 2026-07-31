@@ -35,3 +35,17 @@ impl fmt::Display for SandboxError {
 }
 
 impl std::error::Error for SandboxError {}
+
+impl From<zeta_workspace::WorkspacePathError> for SandboxError {
+    fn from(error: zeta_workspace::WorkspacePathError) -> Self {
+        match error {
+            zeta_workspace::WorkspacePathError::OutsideWorkspace(path) => {
+                Self::OutsideWorkspace(path)
+            }
+            zeta_workspace::WorkspacePathError::InvalidRelativePath(path) => {
+                Self::InvalidRelativePath(path)
+            }
+            error => Self::Io(error.to_string()),
+        }
+    }
+}

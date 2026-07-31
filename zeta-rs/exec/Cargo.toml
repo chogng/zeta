@@ -14,6 +14,7 @@ path = "src/lib.rs"
 zeta-async-utils = { workspace = true }
 zeta-protocol = { workspace = true }
 zeta-sandboxing = { workspace = true }
+zeta-workspace = { workspace = true }
 
 [lints]
 workspace = true

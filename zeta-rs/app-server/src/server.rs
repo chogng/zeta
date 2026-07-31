@@ -34,6 +34,7 @@ mod git_runtime;
 mod operations;
 mod search_operations;
 mod skill_operations;
+mod syntax_operations;
 pub(crate) mod skills_runtime;
 mod terminal_operations;
 mod update_broker;
@@ -41,8 +42,11 @@ mod workspace_operations;
 mod workspace_runtime;
 
 use update_broker::{NotificationListener, NotificationQueue, UpdateBroker};
-pub(crate) use workspace_runtime::WorkspaceToolPorts;
+use syntax_operations::SyntaxAnalysisService;
 use workspace_runtime::{LocalWorkspaceHost, WorkspaceRuntime};
+pub(crate) use workspace_runtime::{
+    WorkspaceRuntimeControl, WorkspaceSwitchTrustPolicy, WorkspaceToolPorts,
+};
 
 pub struct AppServer {
     pub(super) sessions: Arc<SessionCoordinator>,
@@ -51,11 +55,12 @@ pub struct AppServer {
     next_connection_id: AtomicU64,
     pub(super) resources: Mutex<ResourceStore>,
     pub(super) config: Option<Arc<ConfigStore>>,
-    pub(super) workspace_authority_gate: Mutex<()>,
-    workspace_runtime: RwLock<WorkspaceRuntime>,
+    pub(super) workspace_authority_gate: Arc<Mutex<()>>,
+    workspace_runtime: Arc<RwLock<WorkspaceRuntime>>,
     local_workspace_host: Option<LocalWorkspaceHost>,
     pub(super) typst: TypstCompiler,
     pub(super) slash_commands: SlashCommandCatalog,
+    syntax: SyntaxAnalysisService,
     pub(super) skills: Option<Arc<SkillRuntime>>,
     _skill_watcher: Option<SkillWatcher>,
     _config_watcher: Option<config_runtime::ConfigWatcher>,
@@ -114,11 +119,12 @@ impl AppServer {
             next_connection_id: AtomicU64::new(1),
             resources: Mutex::new(ResourceStore::default()),
             config: None,
-            workspace_authority_gate: Mutex::new(()),
-            workspace_runtime: RwLock::new(WorkspaceRuntime::empty(turn_executor)),
+            workspace_authority_gate: Arc::new(Mutex::new(())),
+            workspace_runtime: Arc::new(RwLock::new(WorkspaceRuntime::empty(turn_executor))),
             local_workspace_host: None,
             typst: TypstCompiler::new(),
             slash_commands: SlashCommandCatalog::default(),
+            syntax: SyntaxAnalysisService::new(),
             skills: None,
             _skill_watcher: None,
             _config_watcher: None,
@@ -157,6 +163,7 @@ impl AppServer {
         if let Some(terminals) = self.configured_terminal_service() {
             terminals.close_owner(connection.connection_id);
         }
+        self.syntax.release_owner(connection.connection_id);
     }
 
     pub fn with_config_store(mut self, config: Arc<ConfigStore>) -> Self {
@@ -185,23 +192,18 @@ impl AppServer {
     }
 
     pub fn with_file_system(mut self, file_system: Arc<dyn WorkspaceFileSystem>) -> Self {
-        self.workspace_runtime
-            .get_mut()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .file_system = Some(file_system);
+        self.workspace_runtime_mut().file_system = Some(file_system);
         self
     }
 
     #[cfg_attr(not(test), allow(dead_code))]
-    pub(crate) fn with_file_system_watcher(mut self, workspace_root: std::path::PathBuf) -> Self {
-        self.workspace_runtime
-            .get_mut()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            ._file_system_watcher = Some(fs_watcher::FileSystemWatcher::start(
-            workspace_root,
-            Arc::clone(&self.updates),
-        ));
-        self
+    pub(crate) fn with_file_system_watcher(
+        mut self,
+        workspace: zeta_workspace::WorkspaceRoot,
+    ) -> Result<Self, fs_watcher::FileSystemWatcherError> {
+        let watcher = fs_watcher::FileSystemWatcher::start(workspace, Arc::clone(&self.updates))?;
+        self.workspace_runtime_mut()._file_system_watcher = Some(watcher);
+        Ok(self)
     }
 
     pub(crate) fn with_model_catalog(mut self, model_catalog: Arc<dyn ModelCatalog>) -> Self {
@@ -213,13 +215,10 @@ impl AppServer {
     #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) fn with_git_root(
         mut self,
-        workspace_root: std::path::PathBuf,
+        workspace: zeta_workspace::TrustedWorkspace,
     ) -> Result<Self, git_runtime::GitRuntimeError> {
-        let runtime = git_runtime::GitRuntime::new(workspace_root, Arc::clone(&self.updates))?;
-        let state = self
-            .workspace_runtime
-            .get_mut()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let runtime = git_runtime::GitRuntime::new(workspace, Arc::clone(&self.updates))?;
+        let state = self.workspace_runtime_mut();
         state._git_watcher = Some(runtime.start_watching());
         state.git = Some(runtime);
         Ok(self)
@@ -228,16 +227,11 @@ impl AppServer {
     /// Enables connection-owned workspace content search using one frozen ripgrep executable.
     pub fn with_workspace_search(
         mut self,
-        workspace: zeta_sandboxing::WorkspaceRoot,
+        workspace: zeta_workspace::WorkspaceRoot,
         ripgrep: zeta_shell_command::RipgrepExecutable,
     ) -> Self {
-        let runtime = self
-            .workspace_runtime
-            .get_mut()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        runtime.workspace_search = Some(Arc::new(
-            crate::workspace_search::WorkspaceSearchService::new(workspace, ripgrep),
-        ));
+        let search = Arc::new(zeta_search::SearchService::new(workspace, ripgrep));
+        self.workspace_runtime_mut().workspace_search = Some(search);
         self
     }
 
@@ -245,15 +239,10 @@ impl AppServer {
     #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) fn with_terminal_root(
         mut self,
-        workspace_root: std::path::PathBuf,
+        workspace: zeta_workspace::TrustedWorkspace,
     ) -> Result<Self, crate::terminal_service::TerminalError> {
-        let runtime = self
-            .workspace_runtime
-            .get_mut()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        runtime.terminals = Some(Arc::new(crate::terminal_service::TerminalService::new(
-            workspace_root,
-        )?));
+        let terminals = Arc::new(crate::terminal_service::TerminalService::new(workspace)?);
+        self.workspace_runtime_mut().terminals = Some(terminals);
         Ok(self)
     }
 
@@ -263,11 +252,7 @@ impl AppServer {
         tools: Arc<dyn ToolService>,
         policy: Arc<dyn PolicyService>,
     ) -> Self {
-        let runtime = self
-            .workspace_runtime
-            .get_mut()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        runtime.turn_executor = TurnExecutor::new(
+        let executor = TurnExecutor::new(
             self.sessions.threads().clone(),
             self.model.clone(),
             tools,
@@ -276,6 +261,7 @@ impl AppServer {
         .with_thread_updates(Arc::new(AppServerThreadUpdates {
             updates: self.updates.clone(),
         }));
+        self.workspace_runtime_mut().turn_executor = executor;
         self
     }
 
@@ -285,6 +271,13 @@ impl AppServer {
     ) -> Self {
         self._tool_config_watcher = Some(watcher);
         self
+    }
+
+    fn workspace_runtime_mut(&mut self) -> &mut WorkspaceRuntime {
+        Arc::get_mut(&mut self.workspace_runtime)
+            .expect("Workspace runtime cannot be mutated through a builder after it is shared")
+            .get_mut()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 
     pub fn sessions(&self) -> &Arc<SessionCoordinator> {
@@ -447,6 +440,9 @@ impl AppServer {
                 self.turn_interaction_resolve(connection, &request.params)
             }
             Some(ClientMethod::TypstCompile) => self.typst_compile(connection, &request.params),
+            Some(ClientMethod::SyntaxOpen) => self.syntax_open(connection, &request.params),
+            Some(ClientMethod::SyntaxChange) => self.syntax_change(connection, &request.params),
+            Some(ClientMethod::SyntaxClose) => self.syntax_close(connection, &request.params),
             Some(ClientMethod::ConfigRead) => self.config_read(),
             Some(ClientMethod::ModelList) => self.model_list(),
             Some(ClientMethod::ConfigUpdate) => self.config_update(&request.params),

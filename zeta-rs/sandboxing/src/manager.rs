@@ -1,7 +1,8 @@
 use crate::{
     PreparedCommand, SandboxCommand, SandboxError, SandboxKind, SandboxPolicy,
-    SandboxProcessDenial, SandboxProcessExitStatus, WorkspaceRoot,
+    SandboxProcessDenial, SandboxProcessExitStatus,
 };
+use zeta_workspace::WorkspaceRoot;
 
 /// Converts a validated command and policy into a platform-enforced launch command.
 ///

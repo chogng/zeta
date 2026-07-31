@@ -13,7 +13,6 @@ mod slash_commands;
 mod terminal_profiles;
 mod terminal_service;
 mod tool_composition;
-mod workspace_search;
 
 pub use local::OpenAppServerError;
 pub use local::open_local_app_server;

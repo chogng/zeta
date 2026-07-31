@@ -141,43 +141,59 @@ impl SyntaxDocument {
         next_revision: DocumentRevision,
         edit: &SyntaxEdit,
     ) -> Result<SyntaxSnapshot, SyntaxError> {
+        self.apply_edits(next_revision, std::slice::from_ref(edit))
+    }
+
+    /// Applies one atomic batch of non-overlapping edits expressed against the current revision.
+    ///
+    /// Callers may preserve a host editor's single revision even when one edit event contains
+    /// multiple replacements. Every range is interpreted against the pre-edit text; ambiguous
+    /// overlapping ranges and duplicate insertion points are rejected before mutation.
+    pub fn apply_edits(
+        &mut self,
+        next_revision: DocumentRevision,
+        edits: &[SyntaxEdit],
+    ) -> Result<SyntaxSnapshot, SyntaxError> {
         if next_revision <= self.revision {
             return Err(SyntaxError::NonIncreasingRevision {
                 current: self.revision,
                 requested: next_revision,
             });
         }
-        validate_edit(&self.text, edit)?;
-        let next_len = self.text.len() - edit.range.len() + edit.replacement.len();
+        let edits = validated_edits(&self.text, edits)?;
+        let removed_len = edits.iter().map(|edit| edit.range.len()).sum::<usize>();
+        let replacement_len = edits
+            .iter()
+            .map(|edit| edit.replacement.len())
+            .sum::<usize>();
+        let next_len = self.text.len() - removed_len + replacement_len;
         validate_document_size(next_len, self.limits)?;
 
-        let start_point = self.line_index.point(edit.range.start);
-        let old_end_point = self.line_index.point(edit.range.end);
-        let new_end_point = advance_point(start_point, &edit.replacement);
-        let new_end_byte = edit.range.start + edit.replacement.len();
-        let input_edit = InputEdit {
-            start_byte: edit.range.start,
-            old_end_byte: edit.range.end,
-            new_end_byte,
-            start_position: start_point.into(),
-            old_end_position: old_end_point.into(),
-            new_end_position: new_end_point.into(),
-        };
-
         let mut edited_tree = self.tree.clone();
-        edited_tree.edit(&input_edit);
-        let removed = self.text[edit.range.clone()].to_owned();
-        self.text
-            .replace_range(edit.range.clone(), &edit.replacement);
-        let parsed = self.parser.parse(&self.text, Some(&edited_tree));
-        let Some(tree) = parsed else {
-            self.text
-                .replace_range(edit.range.start..new_end_byte, &removed);
-            return Err(SyntaxError::ParseCancelled);
-        };
+        let mut next_text = self.text.clone();
+        let mut next_line_index = self.line_index.clone();
+        for edit in edits {
+            let start_point = self.line_index.point(edit.range.start);
+            let old_end_point = self.line_index.point(edit.range.end);
+            let new_end_point = advance_point(start_point, &edit.replacement);
+            edited_tree.edit(&InputEdit {
+                start_byte: edit.range.start,
+                old_end_byte: edit.range.end,
+                new_end_byte: edit.range.start + edit.replacement.len(),
+                start_position: start_point.into(),
+                old_end_position: old_end_point.into(),
+                new_end_position: new_end_point.into(),
+            });
+            next_text.replace_range(edit.range.clone(), &edit.replacement);
+            next_line_index.apply_edit(edit.range.clone(), &edit.replacement);
+        }
+        let tree = self
+            .parser
+            .parse(&next_text, Some(&edited_tree))
+            .ok_or(SyntaxError::ParseCancelled)?;
 
-        self.line_index
-            .apply_edit(edit.range.clone(), &edit.replacement);
+        self.text = next_text;
+        self.line_index = next_line_index;
         self.tree = tree;
         self.revision = next_revision;
         Ok(self.snapshot())
@@ -265,6 +281,28 @@ fn validate_edit(text: &str, edit: &SyntaxEdit) -> Result<(), SyntaxError> {
         }
     }
     Ok(())
+}
+
+fn validated_edits<'a>(
+    text: &str,
+    edits: &'a [SyntaxEdit],
+) -> Result<Vec<&'a SyntaxEdit>, SyntaxError> {
+    let mut edits = edits.iter().collect::<Vec<_>>();
+    for edit in &edits {
+        validate_edit(text, edit)?;
+    }
+    edits.sort_by_key(|edit| (Reverse(edit.range.start), Reverse(edit.range.end)));
+    for pair in edits.windows(2) {
+        let later = pair[0];
+        let earlier = pair[1];
+        if earlier.range.end > later.range.start
+            || (earlier.range.start == later.range.start
+                && (earlier.range.is_empty() || later.range.is_empty()))
+        {
+            return Err(SyntaxError::OverlappingEdits);
+        }
+    }
+    Ok(edits)
 }
 
 fn advance_point(start: SyntaxPoint, text: &str) -> SyntaxPoint {

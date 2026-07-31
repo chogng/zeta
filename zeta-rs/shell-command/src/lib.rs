@@ -17,12 +17,13 @@ use std::future;
 use std::path::PathBuf;
 use zeta_async_utils::CancellationToken;
 use zeta_exec::{CommandExecutor, CommandRequest};
-use zeta_sandboxing::{SandboxBackend, WorkspaceRoot};
+use zeta_sandboxing::SandboxBackend;
 use zeta_tools::{
     ToolConcurrency, ToolDefinition, ToolExecutionFuture, ToolExecutionOutcome, ToolExecutor,
     ToolInputSchema, ToolInvocation, ToolLoading, ToolName, ToolOutput, ToolOutputSchema,
     ToolPayload, ToolRuntimeAuthority, ToolSchemaMode, ToolStartFailure,
 };
+use zeta_workspace::WorkspaceRoot;
 
 pub use zeta_exec::{
     ApprovalPolicy, ApprovalRequirement, CommandExecutionAuthority, CommandExecutionOutcome,

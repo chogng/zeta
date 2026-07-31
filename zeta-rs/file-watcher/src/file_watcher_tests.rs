@@ -113,12 +113,14 @@ fn registration_ref_counts_and_raii_drop_are_exact() {
     let root = workspace.create_dir("skills");
     let watcher = Arc::new(FileWatcher::noop());
     let (subscriber, _rx) = watcher.add_subscriber();
-    let first = subscriber.register_paths(vec![
-        watch(&root, false),
-        watch(&root, false),
-        watch(&root, true),
-    ]);
-    let second = subscriber.register_paths(vec![watch(&root, true)]);
+    let first = subscriber
+        .register_paths(vec![
+            watch(&root, false),
+            watch(&root, false),
+            watch(&root, true),
+        ])
+        .unwrap();
+    let second = subscriber.register_paths(vec![watch(&root, true)]).unwrap();
 
     assert_eq!(watcher.watch_counts_for_test(&root), Some((1, 2)));
     drop(first);
@@ -134,7 +136,7 @@ fn dropping_subscriber_removes_all_its_counts() {
     let watcher = Arc::new(FileWatcher::noop());
     let registration = {
         let (subscriber, _rx) = watcher.add_subscriber();
-        subscriber.register_paths(vec![watch(&root, true)])
+        subscriber.register_paths(vec![watch(&root, true)]).unwrap()
     };
 
     assert_eq!(watcher.watch_counts_for_test(&root), None);
@@ -153,7 +155,9 @@ fn missing_target_uses_nearest_existing_directory_non_recursively() {
     let missing = workspace.path.join("not-a-dir/child/file");
     let watcher = Arc::new(FileWatcher::noop());
     let (subscriber, _rx) = watcher.add_subscriber();
-    let _registration = subscriber.register_paths(vec![watch(missing, true)]);
+    let _registration = subscriber
+        .register_paths(vec![watch(missing, true)])
+        .unwrap();
 
     assert_eq!(watcher.watch_counts_for_test(&workspace.path), Some((1, 0)));
 }
@@ -163,8 +167,12 @@ async fn subscribers_only_receive_matching_paths() {
     let watcher = Arc::new(FileWatcher::noop());
     let (skills, mut skills_rx) = watcher.add_subscriber();
     let (plugins, mut plugins_rx) = watcher.add_subscriber();
-    let _skills = skills.register_paths(vec![watch("/tmp/zeta-skills", true)]);
-    let _plugins = plugins.register_paths(vec![watch("/tmp/zeta-plugins", true)]);
+    let _skills = skills
+        .register_paths(vec![watch("/tmp/zeta-skills", true)])
+        .unwrap();
+    let _plugins = plugins
+        .register_paths(vec![watch("/tmp/zeta-plugins", true)])
+        .unwrap();
 
     watcher
         .send_paths_for_test(vec![path("/tmp/zeta-skills/rust/SKILL.md")])
@@ -183,7 +191,9 @@ async fn subscribers_only_receive_matching_paths() {
 async fn non_recursive_watch_ignores_grandchildren() {
     let watcher = Arc::new(FileWatcher::noop());
     let (subscriber, mut rx) = watcher.add_subscriber();
-    let _registration = subscriber.register_paths(vec![watch("/tmp/zeta-skills", false)]);
+    let _registration = subscriber
+        .register_paths(vec![watch("/tmp/zeta-skills", false)])
+        .unwrap();
     watcher
         .send_paths_for_test(vec![path("/tmp/zeta-skills/rust/SKILL.md")])
         .await;
@@ -198,7 +208,9 @@ async fn missing_directory_moves_watch_and_reports_requested_namespace() {
     let skill_file = skills.join("SKILL.md");
     let watcher = Arc::new(FileWatcher::noop());
     let (subscriber, mut rx) = watcher.add_subscriber();
-    let _registration = subscriber.register_paths(vec![watch(&skills, false)]);
+    let _registration = subscriber
+        .register_paths(vec![watch(&skills, false)])
+        .unwrap();
     assert_eq!(watcher.watch_counts_for_test(&workspace.path), Some((1, 0)));
 
     fs::create_dir(&skills).unwrap();
@@ -230,8 +242,10 @@ async fn live_backend_upgrades_and_downgrades_effective_scope() {
     let root = workspace.create_dir("watched");
     let watcher = Arc::new(FileWatcher::new().unwrap());
     let (subscriber, _rx) = watcher.add_subscriber();
-    let non_recursive = subscriber.register_paths(vec![watch(&root, false)]);
-    let recursive = subscriber.register_paths(vec![watch(&root, true)]);
+    let non_recursive = subscriber
+        .register_paths(vec![watch(&root, false)])
+        .unwrap();
+    let recursive = subscriber.register_paths(vec![watch(&root, true)]).unwrap();
     assert_eq!(
         watcher.backend_mode_for_test(&root),
         Some(RecursiveMode::Recursive)
@@ -247,10 +261,38 @@ async fn live_backend_upgrades_and_downgrades_effective_scope() {
 }
 
 #[tokio::test]
+async fn polling_backend_delivers_live_mutations_for_aliased_path_fallback() {
+    let workspace = TestWorkspace::new();
+    let root = workspace.create_dir("watched");
+    let watcher = Arc::new(
+        FileWatcher::new_with_backend(FileWatcherBackend::Polling {
+            interval: Duration::from_millis(20),
+        })
+        .unwrap(),
+    );
+    let (subscriber, mut receiver) = watcher.add_subscriber();
+    let _registration = subscriber.register_paths(vec![watch(&root, true)]).unwrap();
+    tokio::time::sleep(Duration::from_millis(40)).await;
+    let changed = root.join("changed.txt");
+    fs::write(&changed, "changed").unwrap();
+
+    assert_eq!(
+        timeout(Duration::from_secs(2), receiver.recv())
+            .await
+            .unwrap(),
+        Some(FileWatcherEvent::PathsChanged {
+            paths: vec![changed],
+        })
+    );
+}
+
+#[tokio::test]
 async fn backend_filters_access_events_and_routes_mutations() {
     let watcher = Arc::new(FileWatcher::noop());
     let (subscriber, mut rx) = watcher.add_subscriber();
-    let _registration = subscriber.register_paths(vec![watch("/tmp/zeta-skills", true)]);
+    let _registration = subscriber
+        .register_paths(vec![watch("/tmp/zeta-skills", true)])
+        .unwrap();
     let (raw_tx, raw_rx) = mpsc::unbounded_channel();
     watcher.spawn_event_loop_for_test(raw_rx);
 
@@ -280,10 +322,12 @@ async fn backend_filters_access_events_and_routes_mutations() {
 async fn backend_error_requires_scoped_rescan_for_every_subscriber() {
     let watcher = Arc::new(FileWatcher::noop());
     let (subscriber, mut rx) = watcher.add_subscriber();
-    let _registration = subscriber.register_paths(vec![
-        watch("/tmp/zeta-skills", true),
-        watch("/tmp/zeta-plugins", true),
-    ]);
+    let _registration = subscriber
+        .register_paths(vec![
+            watch("/tmp/zeta-skills", true),
+            watch("/tmp/zeta-plugins", true),
+        ])
+        .unwrap();
     let (raw_tx, raw_rx) = mpsc::unbounded_channel();
     watcher.spawn_event_loop_for_test(raw_rx);
     raw_tx
@@ -302,7 +346,9 @@ async fn backend_error_requires_scoped_rescan_for_every_subscriber() {
 async fn backend_rescan_flag_requires_scoped_rescan() {
     let watcher = Arc::new(FileWatcher::noop());
     let (subscriber, mut rx) = watcher.add_subscriber();
-    let _registration = subscriber.register_paths(vec![watch("/tmp/zeta-skills", true)]);
+    let _registration = subscriber
+        .register_paths(vec![watch("/tmp/zeta-skills", true)])
+        .unwrap();
     let (raw_tx, raw_rx) = mpsc::unbounded_channel();
     watcher.spawn_event_loop_for_test(raw_rx);
     raw_tx

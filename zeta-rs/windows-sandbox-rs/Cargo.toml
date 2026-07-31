@@ -22,6 +22,7 @@ path = "src/bin/sandbox_setup.rs"
 sha2 = { workspace = true }
 zeta-install-context = { workspace = true }
 zeta-sandboxing = { workspace = true }
+zeta-workspace = { workspace = true }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 windows-sys = { workspace = true, features = [

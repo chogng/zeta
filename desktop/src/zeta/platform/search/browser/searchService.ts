@@ -1,16 +1,5 @@
-import type {
-  WorkspaceSearchCancelParams,
-  WorkspaceSearchReadParams,
-  WorkspaceSearchReadResult,
-  WorkspaceSearchStartParams,
-  WorkspaceSearchStartResult,
-} from "../../../../../generated/app-server/types.js";
-import type {
-  IWorkspaceSearchComplete,
-  IWorkspaceSearchOptions,
-  IWorkspaceSearchQuery,
-  IWorkspaceSearchService,
-} from "../common/search.js";
+import type { WorkspaceSearchCancelParams, WorkspaceSearchReadParams, WorkspaceSearchReadResult, WorkspaceSearchStartParams, WorkspaceSearchStartResult } from "../../../../../generated/app-server/types.js";
+import type { IWorkspaceSearchOptions, IWorkspaceSearchQuery, IWorkspaceSearchComplete, IWorkspaceSearchService } from "../common/search.js";
 
 const DEFAULT_MAX_RESULTS = 2_000;
 const RESULT_BATCH_SIZE = 100;
@@ -18,18 +7,13 @@ const IDLE_POLL_MILLIS = 20;
 
 /** Narrow App Server capability consumed by the browser search adapter. */
 export interface IWorkspaceSearchApi {
-  start(
-    params: WorkspaceSearchStartParams,
-  ): Promise<WorkspaceSearchStartResult>;
-  read(
-    params: WorkspaceSearchReadParams,
-  ): Promise<WorkspaceSearchReadResult>;
+  start(params: WorkspaceSearchStartParams): Promise<WorkspaceSearchStartResult>;
+  read(params: WorkspaceSearchReadParams): Promise<WorkspaceSearchReadResult>;
   cancel(params: WorkspaceSearchCancelParams): Promise<void>;
 }
 
 /** Pulls bounded backend batches and exposes one cancellable renderer search. */
-export class BrowserWorkspaceSearchService
-  implements IWorkspaceSearchService {
+export class BrowserWorkspaceSearchService implements IWorkspaceSearchService {
   private readonly api: IWorkspaceSearchApi;
 
   constructor(api: IWorkspaceSearchApi) {

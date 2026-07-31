@@ -10,7 +10,7 @@ fn workspace_write_is_a_read_only_root_with_a_writable_workspace_overlay() {
         fs::create_dir_all(fixture.path.join(name)).unwrap();
     }
     let workspace = fixture.root();
-    let command = SandboxCommand::new("echo", ["hello"], workspace.path());
+    let command = SandboxCommand::new("echo", ["hello"], workspace.canonical_path());
     let policy = SandboxPolicy::new(FileSystemAccess::WorkspaceWrite, NetworkAccess::Denied);
 
     let prepared =
@@ -28,14 +28,14 @@ fn workspace_write_is_a_read_only_root_with_a_writable_workspace_overlay() {
             .windows(3)
             .any(|args| args == ["--ro-bind", "/", "/"])
     );
-    let workspace_path = workspace.path().to_string_lossy();
+    let workspace_path = workspace.canonical_path().to_string_lossy();
     assert!(
         arguments
             .windows(3)
             .any(|args| args == ["--bind", workspace_path.as_ref(), workspace_path.as_ref()])
     );
     for name in PROTECTED_WORKSPACE_METADATA_NAMES {
-        let path = workspace.path().join(name);
+        let path = workspace.canonical_path().join(name);
         if !path.exists() {
             continue;
         }

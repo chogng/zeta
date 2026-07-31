@@ -158,12 +158,8 @@ import { WorkbenchThemeController } from "./theme.js";
 import { WorkbenchLayout } from "./layout.js";
 import { IWorkbenchLayoutService, type WorkbenchPartId } from "../services/layout/browser/layoutService.js";
 import { BrowserStorageService } from "../services/storage/browser/storageService.js";
-import {
-  IWorkspaceSearchService,
-} from "../../platform/search/common/search.js";
-import {
-  BrowserWorkspaceSearchService,
-} from "../../platform/search/browser/searchService.js";
+import { IWorkspaceSearchService } from "../../platform/search/common/search.js";
+import { BrowserWorkspaceSearchService } from "../../platform/search/browser/searchService.js";
 import type { WorkbenchPart } from "./part.js";
 import { AuxiliarybarPart } from "./parts/auxiliarybar/auxiliarybarPart.js";
 import { EditorPart, IEditorPart } from "./parts/editor/editorPart.js";

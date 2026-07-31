@@ -9,12 +9,12 @@ use std::task::{Context, Poll, Waker};
 use zeta_async_utils::CancellationSource;
 use zeta_file_system::LocalFileSystem;
 use zeta_protocol::{ToolCallId, TurnId};
-use zeta_sandboxing::WorkspaceRoot;
 use zeta_tools::{
     ToolBinding, ToolBindingId, ToolDefinition, ToolEnvironmentId, ToolExecutionContext,
     ToolExecutionOutcome, ToolExecutor, ToolInvocation, ToolOperationId, ToolOutputStatus,
     ToolPayload, ToolRegistryGeneration, ToolRuntimeAuthority, ToolRuntimeKey,
 };
+use zeta_workspace::WorkspaceRoot;
 
 static NEXT_WORKSPACE: AtomicU64 = AtomicU64::new(1);
 

@@ -57,6 +57,11 @@ export function createDisconnectedRendererApi(): ZetaRendererApi {
     typst: {
       compile: () => unavailable("typst.compile"),
     },
+    syntax: {
+      open: () => unavailable("syntax.open"),
+      change: () => unavailable("syntax.change"),
+      close: () => unavailable("syntax.close"),
+    },
     resource: {
       metadata: () => unavailable("resource.metadata"),
       read: () => unavailable("resource.read"),

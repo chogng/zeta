@@ -1,6 +1,6 @@
 use crate::{
     ConfigDiagnostic, ConfigError, ConfigProvenance, HooksConfig, McpConfig, PluginsConfig,
-    SkillsConfig, WorkspaceConfigIntent,
+    SkillsConfig, WorkspaceConfigIntent, WorkspaceTrustConfig,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -108,6 +108,8 @@ pub struct UserConfigDocument {
     pub plugins: PluginsConfig,
     #[serde(default)]
     pub hooks: HooksConfig,
+    #[serde(default)]
+    pub workspace_trust: WorkspaceTrustConfig,
 }
 
 impl UserConfigDocument {
@@ -160,6 +162,7 @@ pub struct ResolvedConfig {
     pub skills: SkillsConfig,
     pub plugins: PluginsConfig,
     pub hooks: HooksConfig,
+    pub workspace_trust: WorkspaceTrustConfig,
     pub workspace: Option<WorkspaceConfigIntent>,
 }
 
@@ -229,6 +232,7 @@ impl From<&UserConfigDocument> for ResolvedConfig {
             skills: document.skills.clone(),
             plugins: document.plugins.clone(),
             hooks: document.hooks.clone(),
+            workspace_trust: document.workspace_trust.clone(),
             workspace: None,
         }
     }

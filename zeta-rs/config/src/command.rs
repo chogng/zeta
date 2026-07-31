@@ -2,11 +2,12 @@ use crate::{
     ApprovalReviewModelSelection, ConfigGeneration, ConfigRevision, HookConfig, HookEnablement,
     HookId, McpServerConfig, McpServerEnablement, McpServerId, ModelRef, PluginId, PluginRequest,
     PluginRequestEnablement, SkillEnablement, SkillId, SkillSourceConfig, SkillSourceEnablement,
-    SkillSourceId,
+    SkillSourceId, WorkspaceTrustSetting,
 };
 use serde::{Deserialize, Serialize};
 use zeta_model_provider_config::ModelProviderConfig;
 use zeta_protocol::{CommandId, Patch, ProviderId};
+use zeta_workspace::WorkspaceTrustId;
 
 /// A three-state update for user-facing preferences.
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
@@ -73,6 +74,13 @@ pub enum UserConfigCommand {
     SetHookEnablement {
         hook_id: HookId,
         enablement: HookEnablement,
+    },
+    SetWorkspaceTrust {
+        workspace: WorkspaceTrustId,
+        setting: WorkspaceTrustSetting,
+    },
+    ForgetWorkspaceTrust {
+        workspace: WorkspaceTrustId,
     },
 }
 

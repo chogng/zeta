@@ -35,6 +35,8 @@ pub enum SyntaxError {
     },
     #[error("edit offset {offset} is not a UTF-8 character boundary")]
     InvalidEditBoundary { offset: usize },
+    #[error("syntax edit ranges overlap or share an ambiguous insertion point")]
+    OverlappingEdits,
     #[error("document contains {actual} bytes, exceeding the {limit}-byte analysis limit")]
     DocumentTooLarge { actual: usize, limit: usize },
 }

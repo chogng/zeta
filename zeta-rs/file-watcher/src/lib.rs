@@ -14,7 +14,7 @@ pub use channel::Receiver;
 pub use channel::ThrottledWatchReceiver;
 pub use registration::FileWatcherSubscriber;
 pub use registration::WatchRegistration;
-pub use watcher::FileWatcher;
+pub use watcher::{FileWatcher, FileWatcherBackend};
 
 use std::path::PathBuf;
 

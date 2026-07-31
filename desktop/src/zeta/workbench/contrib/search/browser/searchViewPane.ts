@@ -1,18 +1,7 @@
-import {
-  addDisposableListener,
-} from "../../../../base/browser/dom.js";
-import type {
-  WorkspaceSearchMatch,
-  WorkspaceSearchMatchRange,
-} from "../../../../../../generated/app-server/types.js";
-import type {
-  IWorkspaceSearchQuery,
-  IWorkspaceSearchService,
-} from "../../../../platform/search/common/search.js";
-import {
-  ViewPane,
-  type IViewPaneOptions,
-} from "../../../browser/parts/views/viewPane.js";
+import { addDisposableListener } from "../../../../base/browser/dom.js";
+import type { WorkspaceSearchMatch, WorkspaceSearchMatchRange } from "../../../../../../generated/app-server/types.js";
+import type { IWorkspaceSearchQuery, IWorkspaceSearchService } from "../../../../platform/search/common/search.js";
+import { ViewPane, type IViewPaneOptions } from "../../../browser/parts/views/viewPane.js";
 
 interface SearchFileGroup {
   readonly matches: HTMLUListElement;

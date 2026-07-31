@@ -110,5 +110,8 @@ fn git_error(error: GitRuntimeError) -> RpcError {
         GitRuntimeError::Service(GitServiceError::Runtime) => {
             RpcError::new(-32000, AppServerErrorName::ServerOverloaded)
         }
+        GitRuntimeError::Service(GitServiceError::Trust) => {
+            RpcError::new(-32060, AppServerErrorName::GitUnavailable)
+        }
     }
 }

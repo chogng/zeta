@@ -16,8 +16,9 @@ use std::path::{Path, PathBuf};
 use zeta_install_context::InstallContext;
 use zeta_sandboxing::{
     FileSystemAccess, NetworkAccess, PreparedCommand, SandboxBackend, SandboxCommand, SandboxError,
-    SandboxKind, SandboxPolicy, SandboxProcessDenial, SandboxProcessExitStatus, WorkspaceRoot,
+    SandboxKind, SandboxPolicy, SandboxProcessDenial, SandboxProcessExitStatus,
 };
+use zeta_workspace::WorkspaceRoot;
 
 pub use discovery::WindowsSandboxDiscoveryError;
 
@@ -73,7 +74,7 @@ impl WindowsSandbox {
 
     pub fn plan(&self, policy: SandboxPolicy, workspace: &WorkspaceRoot) -> WindowsSandboxPlan {
         WindowsSandboxPlan {
-            workspace: workspace.path().to_path_buf(),
+            workspace: workspace.canonical_path().to_path_buf(),
             file_system: policy.file_system(),
             network: policy.network(),
         }
@@ -117,7 +118,7 @@ impl SandboxBackend for WindowsSandbox {
             protocol::ACCESS_FLAG.into(),
             access.into(),
             protocol::WORKSPACE_FLAG.into(),
-            workspace.path().as_os_str().to_owned(),
+            workspace.canonical_path().as_os_str().to_owned(),
             protocol::CWD_FLAG.into(),
             command.working_directory().as_os_str().to_owned(),
             protocol::COMMAND_SEPARATOR.into(),

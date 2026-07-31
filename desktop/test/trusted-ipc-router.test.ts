@@ -97,6 +97,8 @@ test("App Server IPC validators reject malformed Turn, Typst, resource, filesyst
     (route) => route.channel === "zeta:turn:interaction:resolve",
   )!;
   const typstCompile = routes.find((route) => route.channel === "zeta:typst:compile")!;
+  const syntaxOpen = routes.find((route) => route.channel === "zeta:syntax:open")!;
+  const syntaxChange = routes.find((route) => route.channel === "zeta:syntax:change")!;
   const resourceRead = routes.find((route) => route.channel === "zeta:resource:read")!;
   const fsGetMetadata = routes.find(
     (route) => route.channel === "zeta:fs:get-metadata",
@@ -143,6 +145,31 @@ test("App Server IPC validators reject malformed Turn, Typst, resource, filesyst
         unexpected: true,
       }),
     /exactly/,
+  );
+  assert.deepEqual(
+    syntaxOpen.validate({
+      documentId: "model-1",
+      documentUri: "file:///main.rs",
+      language: "rust",
+      revision: 1,
+      text: "fn main() {}",
+    }),
+    {
+      documentId: "model-1",
+      documentUri: "file:///main.rs",
+      language: "rust",
+      revision: 1,
+      text: "fn main() {}",
+    },
+  );
+  assert.throws(
+    () => syntaxChange.validate({
+      documentId: "model-1",
+      previousRevision: 2,
+      revision: 2,
+      edits: [{ startUtf16: 0, endUtf16: 0, text: "pub " }],
+    }),
+    /increase/,
   );
   assert.throws(
     () =>

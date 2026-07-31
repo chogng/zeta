@@ -11,8 +11,8 @@ use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 
-const CONFIG_DOCUMENT_SCHEMA_VERSION: u32 = 6;
-const LEGACY_CONFIG_DOCUMENT_SCHEMA_VERSION: u32 = 5;
+const CONFIG_DOCUMENT_SCHEMA_VERSION: u32 = 7;
+const LEGACY_CONFIG_DOCUMENT_SCHEMA_VERSION: u32 = 6;
 const CONFIG_AUTHORITY_ID: i64 = 1;
 
 /// Failure while loading, validating, or persisting the user configuration authority.

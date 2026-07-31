@@ -52,6 +52,10 @@ use crate::protocol::skills::{
     SkillSourceKindDto, SkillsChanged,
 };
 use crate::protocol::slash_commands::{SlashCommandArgumentModeDto, SlashCommandDefinition};
+use crate::protocol::syntax::{
+    SyntaxChangeParams, SyntaxCloseParams, SyntaxLanguageDto, SyntaxOpenParams, SyntaxTextEditDto,
+    SyntaxTokenSnapshotDto,
+};
 use crate::protocol::terminal::{
     TerminalCloseParams, TerminalCreateParams, TerminalCreateResult, TerminalOutputChunk,
     TerminalProfile, TerminalProfileListResult, TerminalProfileSelection, TerminalReadParams,
@@ -408,6 +412,21 @@ client_methods! {
     TypstCompile => "document/typst/compile" {
         params: TypstCompileParams,
         response: TypstCompileResult,
+        serialization: GlobalExclusive,
+    },
+    SyntaxOpen => "document/syntax/open" {
+        params: SyntaxOpenParams,
+        response: SyntaxTokenSnapshotDto,
+        serialization: GlobalExclusive,
+    },
+    SyntaxChange => "document/syntax/change" {
+        params: SyntaxChangeParams,
+        response: SyntaxTokenSnapshotDto,
+        serialization: GlobalExclusive,
+    },
+    SyntaxClose => "document/syntax/close" {
+        params: SyntaxCloseParams,
+        response: (),
         serialization: GlobalExclusive,
     },
     ResourceMetadata => "resource/metadata" {
@@ -768,6 +787,12 @@ typescript_bindings! {
     TypstDiagnosticDto,
     TypstDiagnosticSeverityDto,
     TypstSourceRangeDto,
+    SyntaxLanguageDto,
+    SyntaxOpenParams,
+    SyntaxTextEditDto,
+    SyntaxChangeParams,
+    SyntaxCloseParams,
+    SyntaxTokenSnapshotDto,
     ResourceMetadataParams,
     ResourceMetadataResult,
     ResourceReadParams,

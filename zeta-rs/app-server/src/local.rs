@@ -2,6 +2,7 @@ use crate::AppServer;
 use crate::SlashCommandCatalog;
 use crate::mcp_tools::compose_mcp_tools;
 use crate::model_catalog::ModelCatalog;
+use crate::server::WorkspaceSwitchTrustPolicy;
 use crate::server::WorkspaceToolPorts;
 use crate::server::skills_runtime::{BuiltInSkillSource, SkillConfigSnapshotProvider};
 use crate::tool_composition::ToolPort;
@@ -164,11 +165,14 @@ pub fn open_local_app_server(
         .map_err(|error| OpenAppServerError(error.to_string()))?
         .map(|mcp| ToolPort::mcp(mcp.tools, mcp.policy));
     server = server
-        .with_local_workspace_host(mcp)
+        .with_local_workspace_host(
+            mcp,
+            WorkspaceSwitchTrustPolicy::UserConfig(Arc::clone(&config)),
+        )
         .map_err(|error| OpenAppServerError(error.to_string()))?;
     if let Some(workspace_root) = options.workspace_root {
         server
-            .switch_local_workspace_root(workspace_root)
+            .activate_host_configured_workspace_root(workspace_root)
             .map_err(|error| OpenAppServerError(error.to_string()))?;
     }
     server
@@ -177,7 +181,14 @@ pub fn open_local_app_server(
     let workspace_tools = server
         .local_workspace_tool_ports()
         .ok_or_else(|| OpenAppServerError("local Workspace tools are unavailable".into()))?;
-    server = server.with_tool_config_watcher(ToolConfigWatcher::start(config, workspace_tools));
+    let workspace_runtime = server
+        .workspace_runtime_control()
+        .ok_or_else(|| OpenAppServerError("local Workspace runtime is unavailable".into()))?;
+    server = server.with_tool_config_watcher(ToolConfigWatcher::start(
+        config,
+        workspace_tools,
+        workspace_runtime,
+    ));
     Ok(server)
 }
 
@@ -206,7 +217,11 @@ pub(crate) struct ToolConfigWatcher {
 }
 
 impl ToolConfigWatcher {
-    fn start(config: Arc<ConfigStore>, workspace_tools: Arc<WorkspaceToolPorts>) -> Self {
+    fn start(
+        config: Arc<ConfigStore>,
+        workspace_tools: Arc<WorkspaceToolPorts>,
+        workspace_runtime: crate::server::WorkspaceRuntimeControl,
+    ) -> Self {
         let changes = config.subscribe_changes();
         let (shutdown, shutdown_receiver) = std::sync::mpsc::channel();
         let thread = std::thread::Builder::new()
@@ -228,6 +243,12 @@ impl ToolConfigWatcher {
                                     continue;
                                 }
                             };
+                            if let Err(error) =
+                                workspace_runtime.reconcile_user_trust(&snapshot.values)
+                            {
+                                workspace_tools.record_reconcile_failure(error.to_string());
+                                continue;
+                            }
                             let mcp = match compose_mcp_tools(&snapshot.values, change.generation) {
                                 Ok(mcp) => mcp.map(|mcp| ToolPort::mcp(mcp.tools, mcp.policy)),
                                 Err(error) => {

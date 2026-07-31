@@ -1,14 +1,16 @@
-# Workspace 搜索：Rust 权威执行与 Desktop 投影
+# 搜索：Rust 权威执行与桌面端投影
 
 > 本文是 workspace 内容搜索的跨进程 ownership、产品语义和演进边界的 canonical 文档。
-> App Server 内部实现细节见
-> [`zeta-rs/app-server/README.md`](../zeta-rs/app-server/README.md)，wire DTO 与生成流程见
+> 跨文件内容搜索的实现细节见
+> [`zeta-rs/search/README.md`](../zeta-rs/search/README.md)，App Server 的
+> RPC 适配见 [`zeta-rs/app-server/README.md`](../zeta-rs/app-server/README.md)，wire DTO 与生成流程见
 > [`zeta-rs/app-server-protocol/README.md`](../zeta-rs/app-server-protocol/README.md)。
 
 ## 快速理解
 
-Workspace Search 由 Rust / App Server 承担权威执行，Desktop Search contrib 只拥有查询表单、
-取消时机、增量结果投影和可丢弃的视图状态。当前实现使用
+`zeta-search` 承担跨文件内容检索，默认作用域是当前主工作目录；App Server 只把 RPC 映射为
+它的领域请求与结果；
+Desktop Search contrib 只拥有查询表单、取消时机、增量结果投影和可丢弃的视图状态。当前实现使用
 `workspace/search/start`、`workspace/search/read`、`workspace/search/cancel` 三个 pull RPC，
 而不是把 `rg` 进程、路径授权或无界结果流放进 Renderer。
 
@@ -17,7 +19,8 @@ Workspace Search 由 Rust / App Server 承担权威执行，Desktop Search contr
 
 | 用户操作 | 当前行为 | 当前限制 |
 | --- | --- | --- |
-| 搜索工作区文字 | 分批返回匹配项并持续显示进度 | 最多 5,000 条结果 |
+| 搜索主工作目录文字 | 分批返回匹配项并持续显示进度 | 最多 5,000 条结果 |
+| 搜索附加目录 | 目标语义是与主目录一起搜索 | `add-dir` 尚未实现 |
 | 修改查询 | 取消旧任务并启动新任务 | 旧任务结果不会混入新查询 |
 | 使用正则或文件过滤 | 在 Rust 边界重新校验输入 | 只能使用工作区相对 glob |
 | 点击结果打开文件 | 尚未接通编辑器 | 结果当前只用于查看 |
@@ -30,9 +33,12 @@ Workspace Search 由 Rust / App Server 承担权威执行，Desktop Search contr
 | query、大小写、正则和 include/exclude 输入 | Renderer | ✅ |
 | 结果分组、高亮、状态和重新搜索取消 | Renderer | ✅ |
 | IPC sender、exact shape 与输入上限的快速校验 | Electron Main | ✅ |
-| workspace root 授权、`rg` executable 冻结与进程生命周期 | Rust / App Server | ✅ |
-| job identity、connection ownership、分页游标、取消与结果上限 | Rust / App Server | ✅ |
+| workspace root 授权与 `rg` executable 冻结 | Rust / App Server composition | ✅ |
+| 主工作目录与附加目录的 Search scope | `zeta-add-dir` + App Server | 领域模型已实现，runtime 尚未接入 |
+| 查询校验、`rg` 进程、结果解析、分页与取消 | `zeta-search` | ✅ |
+| connection ID → `SearchOwner`、DTO 转换与稳定 RPC error | App Server | ✅ |
 | wire DTO、method registry、schema 与 TypeScript bindings | `zeta-app-server-protocol` | ✅ |
+| 文件路径 fuzzy match | `zeta-file-search` | ✅，与内容搜索无依赖 |
 | 点击结果后读取文件并打开编辑器 | Files / Editor vertical | 尚未完成 |
 | replace、索引、multi-root 和 watcher 驱动的结果失效 | 未确定 | 尚未完成 |
 
@@ -44,14 +50,16 @@ SearchViewPane
   → trusted zeta:workspace-search:* IPC
   → AppServerClient
   → workspace/search/start
-  → connection-owned WorkspaceSearchService job
+  → App Server maps DTO + connection to SearchQuery + SearchOwner
+  → zeta-search::SearchService job
   → frozen RipgrepExecutable under WorkspaceRoot
   → workspace/search/read batches
   → renderer groups and highlights matches
   → workspace/search/cancel releases the job
 ```
 
-`start` 冻结查询参数并返回 opaque `searchId`。`read` 使用 `afterMatch` cursor 读取最多 200 条；
+`start` 冻结查询参数并返回 opaque `searchId`。App Server 把 connection ID 映射成不含传输语义的
+`SearchOwner`；搜索 crate 只比较 owner，不依赖 JSON-RPC。`read` 使用 `afterMatch` cursor 读取最多 200 条；
 没有新结果且作业仍在运行时可以返回空 batch。Renderer 只在结果非空时推进 cursor。
 完成、取消或 Renderer 异常退出当前搜索流程时都会调用 `cancel`；完成作业也会在服务端延迟清理，
 因此 cleanup RPC 失败不改变已返回结果。
@@ -61,7 +69,7 @@ SearchViewPane
 - 查询不能为空，UTF-8 最多 16 KiB；单次搜索最多返回 5,000 条，Desktop 默认 2,000 条。
 - include/exclude 各最多 64 个 workspace-relative glob，每项最多 1 KiB；绝对路径、`..`、
   前导 `!` 和 NUL 被拒绝。
-- App Server 直接启动 discovery 后冻结的 `rg` executable，使用 argument vector 和
+- `zeta-search` 使用 host discovery 后冻结的 `rg` executable，使用 argument vector 和
   `shell: false` 等价的进程 API，不做 shell 拼接。
 - `rg` 未安装时 stdio App Server 仍可启动，但 `workspaceSearch` capability 为 `false`，
   Search 调用返回 `SearchUnavailable`；Desktop 会把显式 `ZETA_RG_PATH` 透传给可信子进程。
@@ -94,7 +102,18 @@ SearchViewPane
 近期只在现有 contract 内完善可用性：空结果/错误呈现、查询历史和搜索中再次提交。结果点击必须
 等待受信 file-content API 与 editor opening contract，不由 Search 绕过。
 
-如果未来数据表明大型仓库的进程启动或重复扫描成为瓶颈，可以评估 Rust-owned index。索引必须
+当前只有一个主工作目录；`zeta-add-dir` 已实现纯 scope contract，但 App Server/Search runtime
+尚未接入。未来 Search scope 由主工作目录和全部具备文件读取权限的附加目录组成，不把附加目录
+提升为独立项目，也不触发项目配置加载。无论目录来自启动参数、会话命令还是持久
+`additionalDirectories`，只要其 file-access grant 有效，Search 都可以消费它；Agent Import 的
+一次性来源则不能自动进入 Search。
+
+多 root Search 不能继续只返回裸 relative path。协议必须增加稳定 root identity 或 root alias，
+使 `src/lib.rs` 能明确归属于主目录或某个附加目录，并避免不同 root 的同名 path 碰撞。Glob、
+ignore 与 containment 也必须逐 root 计算，不能先把多个绝对目录拼成一个伪 Workspace。
+
+如果未来数据表明大型仓库的进程启动或重复扫描成为瓶颈，可以在 `zeta-search` 内评估
+Rust-owned index。索引必须
 先定义 watcher、一致性、ignore 语义、持久化和隐私边界；当前 `searchId` 不承诺索引实现，也
 不应泄漏 backend 类型。只有 transport 获得有界 backpressure 后，才考虑用 notification
 替代 pull。

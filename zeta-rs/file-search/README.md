@@ -2,8 +2,8 @@
 
 > 本 README 是 workspace 文件路径 fuzzy search 的实现契约。TUI `@file` 交互由
 > [`zeta-rs/tui/README.md`](../tui/README.md) 维护。模型侧的文件内容搜索通过
-> `zeta-shell-command` 的只读 `rg` profile 完成；discovery 与执行边界见
-> [`zeta-rs/shell-command/README.md`](../shell-command/README.md)。
+> [`zeta-rs/search/README.md`](../search/README.md) 完成；可执行文件的
+> discovery 与冻结边界见 [`zeta-rs/shell-command/README.md`](../shell-command/README.md)。
 
 `zeta-file-search` 只拥有 workspace-relative 文件路径的后台索引、增量 fuzzy matching 和独立
 CLI。它不读取候选文件内容，不注册模型 Tool，也不拥有 TUI popup/token 状态。
@@ -84,7 +84,7 @@ limit 截断时，warning 写入 stderr；JSON match 仍写入 stdout，方便�
 | `cli::execute` | 等待 final snapshot 并选择 stdout/stderr 编码 | 扫描或 fuzzy matching |
 
 如果该 crate 开始读取候选文件内容、实现模型 Tool binding，或保存 TUI popup state，说明 ownership
-已经漂移；这些职责分别属于 `zeta-shell-command`、Tool registry 和 `zeta-tui`。
+已经漂移；这些职责分别属于 `zeta-search`、Tool registry 和 `zeta-tui`。
 
 ## 失败与取消
 

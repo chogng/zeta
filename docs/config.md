@@ -4,7 +4,8 @@
 > Rust crate：`zeta_config`  
 > 当前状态：TOML User Config authority、SQLite revision/generation 与 exact command receipt、
 > Provider map、standalone MCP declaration、Skill source/per-Skill enablement、Workspace TOML
-> read-only document、exact Plugin request、declarative Hook 和 scoped resolution 已实现。
+> read-only document、exact Plugin request、declarative Hook、User Workspace trust decision 和
+> scoped resolution 已实现。
 > Local App Server 在 profile 下使用
 > `config.toml` 与 `state.sqlite3`，并在提交后原子切换未来的 model、Skill 与 MCP Tool safe point；
 > 已 prepare 的 Tool Call 保留旧 generation。Plugin contribution、grant 和完整环境组合仍是后续
@@ -67,7 +68,7 @@ Skill catalog、credential 和 action policy 继续由各自领域拥有。App S
 
 | Authority | 拥有 | 不拥有 |
 | --- | --- | --- |
-| User Config authority | Agent 默认值、Provider 配置、独立 MCP server、Skill source、Plugin request、Hook declaration | UI/device 偏好、installed Plugin package、live connection、Hook execution、secret、runtime health |
+| User Config authority | Agent 默认值、Provider 配置、独立 MCP server、Skill source、Plugin request、Hook declaration、按 canonical root identity 的 Workspace trust decision | UI/device 偏好、installed Plugin package、live connection、Hook execution、secret、runtime health |
 | Desktop device preference authority | theme、zoom、window/device UI 偏好 | Agent/Provider/MCP/Skill desired config、Session/Thread |
 | Workspace config document | Workspace Agent 默认值、独立 MCP 声明、Plugin 请求、Workspace Skill source、Hook 请求 | 自动安装、grant、Hook 执行、credential value、运行时状态 |
 | Plugin authority | installed exact package、effective activation、activation grant、credential-slot binding、rollback | TOML request、MCP session、Skill catalog、per-call approval |
@@ -126,6 +127,7 @@ ResolvedConfigSnapshot
 | Skill source | User、Workspace | 必须经过 source containment、trust 和 compatibility 校验 |
 | Hook declaration | User、Workspace | 只声明 safe-point、tool matcher 与 process argv；执行仍需 trust、policy、approval 和 sandbox |
 | Sandbox/approval intent | User、Workspace、Session | 低信任 source 只能保持或收紧安全性 |
+| Workspace trust | User、organization policy、trusted host composition | Workspace document 无权自授信；User 缺失决策默认 Restricted |
 | System requirements | System/organization | 是约束，不是“最高优先级普通配置” |
 
 ## 4. Typed 配置模型
@@ -140,6 +142,7 @@ pub struct UserConfigDocument {
     pub skills: SkillsConfig,
     pub plugins: PluginsConfig,
     pub hooks: HooksConfig,
+    pub workspace_trust: WorkspaceTrustConfig,
 }
 
 pub struct WorkspaceConfigDocument {
@@ -189,6 +192,16 @@ review model；没有专用默认值的自定义或本地 provider 才复用当�
 credential、订阅 entitlement 和远端模型是否实际可调用，由创建 review runtime 时再次验证。
 Workspace 配置不能覆盖审批模型，避免仓库内容自行降低 reviewer 强度。模型不可用或不兼容时
 fail closed，不得静默换成其他审批模型。
+
+`WorkspaceTrustConfig` 使用 `WorkspaceTrustId` 作为 key。该 ID 由 `zeta-workspace` 对 canonical
+root 的平台原生 path bytes 做 SHA-256 得到，因此不把本机路径写入 User TOML，symlink/平台别名
+共享决定，移动根目录后必须重新决定。它目前仍是 path-bound identity：同一路径被其他目录内容
+替换时不会自动失效，identity-change detection 属于后续 host 持久化阶段。
+
+Local App Server 把 User trust `ConfigChange` 同时作为撤销信号：Trusted → Restricted 会使当前
+root-bound capability lease 永久失效，拆除 local Tool/Git/search/terminal runtime、终止相关
+进程并中断活跃 Turn；filesystem 与 watcher 作为 Restricted runtime 保留。普通 Workspace
+document 不进入这条 mutation 或撤销 authority。
 
 ## 5. Resolved config 快照
 
@@ -411,12 +424,42 @@ resolved sources
 | Skill Source | `skill/source/add`、`skill/source/remove`、`skill/source/enablement/set` | Config authority 的 Skill section（已实现 desired config） |
 | Skill Catalog | `skills/list`、`skill/enablement/set` | App Server metadata projection + Config authority per-Skill overlay（已实现 built-in/user） |
 | Hook Config | `hook/upsert`、`hook/remove`、`hook/enablement/set` | Config authority 的 Hook declaration（已实现；不执行） |
+| Agent Import Apply | `agent/import/preview`、`agent/import/apply` | App Server 将用户选择的 normalized fragments 原子映射到多个 Config section（Proposed） |
 
 所有 durable mutation 使用 `CommandId`、对应 authority 的 expected revision、payload conflict
 检查和 exact typed response replay。Runtime connect/disconnect 不占用 Config、Session 或 Thread
 revision。
 
 不要把所有领域重新塞回一个无限增长的通用 `config/update` JSON patch。
+
+### 10.1 外部 Agent Import 与 Config
+
+[`zeta-agent-import`](../zeta-rs/agent-import/README.md) 当前只做 metadata-only inspection；它不依赖
+`zeta-config`。未来 App Server import adapter 同时消费 inspection/parser output 与 Config typed
+command，把用户确认的外部内容转换为 Zeta desired state：
+
+| 外部内容 | Config 或目标 authority | Apply 约束 |
+| --- | --- | --- |
+| Skill source | `AddSkillSource` | 保存 source-qualified identity 与 digest，不复制不受限目录 |
+| MCP declaration | `UpsertMcpServer` | credential 不进入 Config；初始连接与 approval 分离 |
+| Plugin request | `UpsertPluginRequest` | 必须解析成 exact package/version；不表示 installed/active |
+| Hook declaration | `UpsertHook` | 默认 disabled；执行 authority 不属于 Import 或 Config |
+| Instructions | content/Skill artifact authority | canonical target 尚未完成前不得 raw passthrough |
+| Subagents | Agent/Subagent definition authority | 不属于普通 Config document |
+| Execution rules | Policy review | 不生成 durable approval，不自动改写成 Hook |
+
+Import apply 不能循环调用多个独立 RPC 后接受 partial success。Config 部分的目标 contract 是一个
+带 `expected_config_revision`、source digest 和 selected item identity 的原子 batch：App Server
+重新读取并校验 source，构造全部 typed mutations，Config authority 对整批 validation 后一次提交
+并生成 exact import receipt。Conflict、unsupported field 或任一 Config mutation failure 都使
+Config 子批次不提交。
+
+Instructions 与 Subagents 等非 Config artifact 必须交给各自 authority；canonical target 尚未完成
+前，Import 必须将其标记为 unsupported，而不是强塞进 Config transaction。
+
+Config 保存 normalized desired state 与必要 provenance reference，不保存外部原始文件、secret、
+preview content 或目录访问 grant。Import source 的文件访问由一次性 host authorization 或
+`zeta-add-dir` 分别拥有，不能通过 Config mutation 反向扩大。
 
 ## 11. 运行时快照与安全点
 
@@ -590,6 +633,7 @@ authority。旧版 `config_authority.document_json` 会在首次打开时一次�
 11. 接通 Plugin contribution 到 MCP/Skill manager；
 12. 发布完整跨领域 `AgentEnvironmentSnapshot`；
 13. 增加 process-kill crash、permission monotonicity 和完整 generation consistency 测试。
+14. 增加 Agent Import 的 normalized fragment、原子 Config batch、receipt 与 rollback contract。
 
 Workspace 配置使用 TOML；RPC 仍使用 typed JSON DTO。旧 DB 内嵌 Config document 只做一次性迁出，
 不继续作为 fallback 或第二 writer。

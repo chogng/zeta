@@ -15,7 +15,6 @@ use zeta_async_utils::CancellationSource;
 use zeta_protocol::{ToolCallId, TurnId};
 use zeta_sandboxing::{
     PreparedCommand, SandboxBackend, SandboxCommand, SandboxError, SandboxKind, SandboxPolicy,
-    WorkspaceRoot,
 };
 use zeta_tools::{
     ProcessExitStatus, ToolBinding, ToolBindingId, ToolDefinition, ToolEnvironmentId,
@@ -23,6 +22,7 @@ use zeta_tools::{
     ToolOutputStatus, ToolPayload, ToolRegistryGeneration, ToolReplaySafety, ToolRuntimeAuthority,
     ToolRuntimeKey,
 };
+use zeta_workspace::WorkspaceRoot;
 
 struct DenyAll;
 

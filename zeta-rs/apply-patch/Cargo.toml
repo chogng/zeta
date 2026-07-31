@@ -13,7 +13,7 @@ path = "src/lib.rs"
 [dependencies]
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
-zeta-sandboxing = { workspace = true }
+zeta-workspace = { workspace = true }
 zeta-tools = { workspace = true }
 
 [dev-dependencies]

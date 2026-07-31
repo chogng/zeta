@@ -12,8 +12,10 @@ use crate::state::SubscriberWatchKey;
 use crate::state::SubscriberWatchRegistration;
 use crate::state::WatchState;
 use log::warn;
+use notify::Config;
 use notify::Event;
 use notify::EventKind;
+use notify::PollWatcher;
 use notify::RecommendedWatcher;
 use notify::RecursiveMode;
 use notify::Watcher;
@@ -27,8 +29,39 @@ use tokio::runtime::Handle;
 use tokio::sync::mpsc;
 
 struct FileWatcherInner {
-    watcher: RecommendedWatcher,
+    watcher: BackendWatcher,
     watched_paths: HashMap<PathBuf, RecursiveMode>,
+}
+
+enum BackendWatcher {
+    Recommended(RecommendedWatcher),
+    Polling(PollWatcher),
+}
+
+impl BackendWatcher {
+    fn watch(&mut self, path: &Path, mode: RecursiveMode) -> notify::Result<()> {
+        match self {
+            Self::Recommended(watcher) => watcher.watch(path, mode),
+            Self::Polling(watcher) => watcher.watch(path, mode),
+        }
+    }
+
+    fn unwatch(&mut self, path: &Path) -> notify::Result<()> {
+        match self {
+            Self::Recommended(watcher) => watcher.unwatch(path),
+            Self::Polling(watcher) => watcher.unwatch(path),
+        }
+    }
+}
+
+/// Selects the OS notification backend for one watcher instance.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum FileWatcherBackend {
+    /// Uses the platform-recommended native backend.
+    Recommended,
+    /// Uses metadata polling for paths whose lexical namespace is incompatible with the native
+    /// backend, such as macOS `/var` versus `/private/var`.
+    Polling { interval: std::time::Duration },
 }
 
 /// Ref-counted, multi-subscriber filesystem invalidation watcher.
@@ -41,13 +74,28 @@ impl FileWatcher {
     /// Creates a live OS watcher and attaches its event loop to the current
     /// Tokio runtime.
     pub fn new() -> notify::Result<Self> {
+        Self::new_with_backend(FileWatcherBackend::Recommended)
+    }
+
+    /// Creates a live watcher using one explicit backend strategy.
+    pub fn new_with_backend(backend: FileWatcherBackend) -> notify::Result<Self> {
         Handle::try_current().map_err(|_| {
             notify::Error::generic("zeta-file-watcher requires a current Tokio runtime")
         })?;
         let (raw_tx, raw_rx) = mpsc::unbounded_channel();
-        let watcher = notify::recommended_watcher(move |result| {
-            let _ = raw_tx.send(result);
-        })?;
+        let watcher = match backend {
+            FileWatcherBackend::Recommended => {
+                BackendWatcher::Recommended(notify::recommended_watcher(move |result| {
+                    let _ = raw_tx.send(result);
+                })?)
+            }
+            FileWatcherBackend::Polling { interval } => BackendWatcher::Polling(PollWatcher::new(
+                move |result| {
+                    let _ = raw_tx.send(result);
+                },
+                Config::default().with_poll_interval(interval),
+            )?),
+        };
         let file_watcher = Self {
             inner: Some(Arc::new(Mutex::new(FileWatcherInner {
                 watcher,
@@ -96,13 +144,14 @@ impl FileWatcher {
         &self,
         subscriber_id: SubscriberId,
         registrations: &[SubscriberWatchRegistration],
-    ) {
+    ) -> notify::Result<()> {
         let mut state = self.write_state();
         let mut inner_guard = None;
+        let mut registered = Vec::new();
         for registration in registrations {
             let actual = {
                 let Some(subscriber) = state.subscribers.get_mut(&subscriber_id) else {
-                    return;
+                    return Ok(());
                 };
                 match subscriber.watched_paths.entry(registration.key.clone()) {
                     std::collections::hash_map::Entry::Occupied(mut entry) => {
@@ -128,9 +177,19 @@ impl FileWatcher {
             counts.increment(actual.recursive, 1);
             let next_mode = counts.effective_mode();
             if previous_mode != next_mode {
-                self.reconfigure_watch(&actual.path, next_mode, &mut inner_guard);
+                if let Err(error) =
+                    self.reconfigure_watch(&actual.path, next_mode, &mut inner_guard)
+                {
+                    registered.push(registration.key.clone());
+                    drop(inner_guard);
+                    drop(state);
+                    self.unregister_paths(subscriber_id, &registered);
+                    return Err(error);
+                }
             }
+            registered.push(registration.key.clone());
         }
+        Ok(())
     }
 
     pub(crate) fn unregister_paths(
@@ -199,7 +258,14 @@ impl FileWatcher {
             counts_by_path.remove(&actual.path);
         }
         if previous_mode != next_mode {
-            Self::reconfigure_watch_inner(inner, &actual.path, next_mode, inner_guard);
+            if let Err(error) =
+                Self::reconfigure_watch_inner(inner, &actual.path, next_mode, inner_guard)
+            {
+                warn!(
+                    "failed to reconfigure watch for {} during unregister: {error}",
+                    actual.path.display()
+                );
+            }
         }
     }
 
@@ -208,8 +274,8 @@ impl FileWatcher {
         path: &Path,
         next_mode: Option<RecursiveMode>,
         inner_guard: &mut Option<std::sync::MutexGuard<'a, FileWatcherInner>>,
-    ) {
-        Self::reconfigure_watch_inner(self.inner.as_ref(), path, next_mode, inner_guard);
+    ) -> notify::Result<()> {
+        Self::reconfigure_watch_inner(self.inner.as_ref(), path, next_mode, inner_guard)
     }
 
     fn reconfigure_watch_inner<'a>(
@@ -217,9 +283,9 @@ impl FileWatcher {
         path: &Path,
         next_mode: Option<RecursiveMode>,
         inner_guard: &mut Option<std::sync::MutexGuard<'a, FileWatcherInner>>,
-    ) {
+    ) -> notify::Result<()> {
         let Some(inner) = inner else {
-            return;
+            return Ok(());
         };
         if inner_guard.is_none() {
             *inner_guard = Some(
@@ -229,11 +295,11 @@ impl FileWatcher {
             );
         }
         let Some(inner) = inner_guard.as_mut() else {
-            return;
+            return Ok(());
         };
         let existing_mode = inner.watched_paths.get(path).copied();
         if existing_mode == next_mode {
-            return;
+            return Ok(());
         }
         if existing_mode.is_some() {
             if let Err(error) = inner.watcher.unwatch(path) {
@@ -242,16 +308,14 @@ impl FileWatcher {
             inner.watched_paths.remove(path);
         }
         let Some(next_mode) = next_mode else {
-            return;
+            return Ok(());
         };
         if !path.exists() {
-            return;
+            return Ok(());
         }
-        if let Err(error) = inner.watcher.watch(path, next_mode) {
-            warn!("failed to watch {}: {error}", path.display());
-            return;
-        }
+        inner.watcher.watch(path, next_mode)?;
         inner.watched_paths.insert(path.to_path_buf(), next_mode);
+        Ok(())
     }
 
     fn apply_actual_watch_move<'a>(
@@ -271,7 +335,14 @@ impl FileWatcher {
         counts.increment(new_actual.recursive, count);
         let next_mode = counts.effective_mode();
         if previous_mode != next_mode {
-            Self::reconfigure_watch_inner(inner, &new_actual.path, next_mode, inner_guard);
+            if let Err(error) =
+                Self::reconfigure_watch_inner(inner, &new_actual.path, next_mode, inner_guard)
+            {
+                warn!(
+                    "failed to move watch to {}: {error}",
+                    new_actual.path.display()
+                );
+            }
         }
     }
 

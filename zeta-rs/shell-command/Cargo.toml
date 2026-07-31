@@ -16,6 +16,7 @@ serde_json = { workspace = true }
 zeta-async-utils = { workspace = true }
 zeta-exec = { workspace = true }
 zeta-sandboxing = { workspace = true }
+zeta-workspace = { workspace = true }
 zeta-tools = { workspace = true }
 
 [dev-dependencies]

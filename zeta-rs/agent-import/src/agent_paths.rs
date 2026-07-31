@@ -102,11 +102,6 @@ const CLAUDE_USER: &[AgentPath] = &[
         ImportReviewCategory::Configuration,
     ),
     directory(
-        ".claude/commands",
-        ImportItemKind::SlashCommands,
-        ImportReviewCategory::Content,
-    ),
-    directory(
         ".claude/rules",
         ImportItemKind::InstructionRules,
         ImportReviewCategory::Content,
@@ -148,11 +143,6 @@ const CLAUDE_PROJECT: &[AgentPath] = &[
         ".claude/agents",
         ImportItemKind::Subagents,
         ImportReviewCategory::Configuration,
-    ),
-    directory(
-        ".claude/commands",
-        ImportItemKind::SlashCommands,
-        ImportReviewCategory::Content,
     ),
     directory(
         ".claude/rules",

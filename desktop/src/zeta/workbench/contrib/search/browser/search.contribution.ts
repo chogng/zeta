@@ -1,16 +1,7 @@
 import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
-import {
-  SyncDescriptor,
-} from "../../../../platform/instantiation/common/instantiation.js";
-import {
-  IWorkspaceSearchService,
-} from "../../../../platform/search/common/search.js";
-import {
-  ViewContainerLocation,
-  type WorkbenchViewRegistry,
-  WorkbenchViewContainerId,
-  ViewsRegistry,
-} from "../../../common/views.js";
+import { SyncDescriptor } from "../../../../platform/instantiation/common/instantiation.js";
+import { IWorkspaceSearchService } from "../../../../platform/search/common/search.js";
+import { ViewContainerLocation, type WorkbenchViewRegistry, WorkbenchViewContainerId, ViewsRegistry } from "../../../common/views.js";
 import { SearchViewPane } from "./searchViewPane.js";
 import "./media/search.css";
 

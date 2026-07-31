@@ -236,7 +236,9 @@ fn watch_skill_sources(
         };
         let mut watched_paths = skill_runtime.watched_paths();
         drop(skill_runtime);
-        let mut registration = subscriber.register_paths(watch_paths(&watched_paths));
+        let Ok(mut registration) = subscriber.register_paths(watch_paths(&watched_paths)) else {
+            return;
+        };
         let mut receiver = DebouncedWatchReceiver::new(receiver, Duration::from_millis(75));
         let mut config_poll = tokio::time::interval(Duration::from_millis(250));
         let _ = ready.send(());
@@ -256,9 +258,12 @@ fn watch_skill_sources(
                     let _ = skill_runtime.list(SkillCatalogReload::Cached);
                     let next_paths = skill_runtime.watched_paths();
                     if next_paths != watched_paths {
-                        drop(registration);
-                        registration = subscriber.register_paths(watch_paths(&next_paths));
-                        watched_paths = next_paths;
+                        if let Ok(next_registration) =
+                            subscriber.register_paths(watch_paths(&next_paths))
+                        {
+                            registration = next_registration;
+                            watched_paths = next_paths;
+                        }
                     }
                 }
                 event = receiver.recv() => {
@@ -271,9 +276,12 @@ fn watch_skill_sources(
                     let _ = skill_runtime.list(SkillCatalogReload::Refresh);
                     let next_paths = skill_runtime.watched_paths();
                     if next_paths != watched_paths {
-                        drop(registration);
-                        registration = subscriber.register_paths(watch_paths(&next_paths));
-                        watched_paths = next_paths;
+                        if let Ok(next_registration) =
+                            subscriber.register_paths(watch_paths(&next_paths))
+                        {
+                            registration = next_registration;
+                            watched_paths = next_paths;
+                        }
                     }
                 }
             }

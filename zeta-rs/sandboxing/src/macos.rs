@@ -1,10 +1,11 @@
 use crate::{
     FileSystemAccess, NetworkAccess, PROTECTED_WORKSPACE_METADATA_NAMES, PreparedCommand,
     SandboxBackend, SandboxCommand, SandboxError, SandboxKind, SandboxPolicy, SandboxProcessDenial,
-    SandboxProcessExitStatus, WorkspaceRoot,
+    SandboxProcessExitStatus,
 };
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
+use zeta_workspace::WorkspaceRoot;
 
 const SANDBOX_EXEC: &str = "/usr/bin/sandbox-exec";
 
@@ -79,10 +80,10 @@ fn seatbelt_profile(policy: SandboxPolicy, workspace: &WorkspaceRoot) -> String 
             profile.push_str("(deny file-write*)\n");
             profile.push_str(&format!(
                 "(allow file-write* (subpath \"{}\"))\n",
-                escape_profile_literal(workspace.path().to_string_lossy().as_ref())
+                escape_profile_literal(workspace.canonical_path().to_string_lossy().as_ref())
             ));
             for name in PROTECTED_WORKSPACE_METADATA_NAMES {
-                push_protected_metadata_policy(&mut profile, workspace.path(), name);
+                push_protected_metadata_policy(&mut profile, workspace.canonical_path(), name);
             }
         }
         FileSystemAccess::FullAccess => {}

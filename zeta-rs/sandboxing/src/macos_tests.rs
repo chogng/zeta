@@ -1,9 +1,10 @@
 use super::*;
+use zeta_workspace::WorkspaceRoot;
 
 #[test]
 fn workspace_write_profile_denies_other_writes_and_network() {
     let workspace = WorkspaceRoot::open(".").unwrap();
-    let command = SandboxCommand::new("echo", ["hello"], workspace.path());
+    let command = SandboxCommand::new("echo", ["hello"], workspace.canonical_path());
     let policy = SandboxPolicy::new(FileSystemAccess::WorkspaceWrite, NetworkAccess::Denied);
 
     let prepared = MacosSeatbeltSandbox::new()
@@ -17,7 +18,7 @@ fn workspace_write_profile_denies_other_writes_and_network() {
     assert!(profile.contains("(allow file-write* (subpath"));
     assert!(profile.contains("(deny network*)"));
     for name in PROTECTED_WORKSPACE_METADATA_NAMES {
-        let path = workspace.path().join(name);
+        let path = workspace.canonical_path().join(name);
         assert!(
             profile.contains(&format!(
                 "(deny file-write* (literal \"{}\"))",

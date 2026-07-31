@@ -10,5 +10,8 @@ doctest = false
 name = "zeta_sandboxing"
 path = "src/lib.rs"
 
+[dependencies]
+zeta-workspace = { workspace = true }
+
 [lints]
 workspace = true

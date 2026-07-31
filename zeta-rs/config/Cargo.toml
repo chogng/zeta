@@ -19,6 +19,7 @@ sha2 = { workspace = true }
 toml = { workspace = true }
 zeta-model-provider-config = { workspace = true }
 zeta-protocol = { workspace = true }
+zeta-workspace = { workspace = true }
 
 [lints]
 workspace = true

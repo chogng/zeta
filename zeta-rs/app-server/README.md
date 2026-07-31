@@ -6,7 +6,9 @@
 > [`docs/protocol.md`](../../docs/protocol.md)，workspace 搜索的跨层 ownership 见
 > [`docs/search.md`](../../docs/search.md)，外部 MCP client runtime 的跨 crate 语义见
 > [`docs/mcp.md`](../../docs/mcp.md)，Git/SCM 跨进程 ownership 见
-> [`docs/git.md`](../../docs/git.md)。
+> [`docs/git.md`](../../docs/git.md)，Workspace identity 与 trust boundary 见
+> [`docs/workspace-security.md`](../../docs/workspace-security.md)。跨文件内容搜索的执行实现见
+> [`zeta-rs/search/README.md`](../search/README.md)。
 
 `zeta-app-server` 是产品客户端与 Zeta domain/runtime 的 application boundary。它解析
 `zeta-app-server-protocol` request，调用 `SessionCoordinator`、Thread controller、
@@ -26,7 +28,7 @@ JSONL / in-process caller
    ├─ ConfigStore
    ├─ optional WorkspaceFileSystem + filesystem watcher
    ├─ optional GitRuntime → zeta-file-watcher + GitService → zeta-git
-   ├─ optional WorkspaceSearchService
+   ├─ optional SearchService → zeta-search
    ├─ optional TerminalService → zeta-utils-pty
    ├─ reloadable MCP Tool generation → zeta-mcp
    ├─ SkillRuntime → zeta-skills + zeta-file-watcher
@@ -47,7 +49,7 @@ request-ID set、notification queue 与 resource ownership；Session/Thread dura
 | `AppServer::new` | 用 recovered `SessionCoordinator` + `ModelService` 构造 server |
 | `AppServer::connection` | 分配 connection ID 并注册 notification queue |
 | `AppServer::connection_notifications` | 返回可阻塞等待、主动唤醒的 connection outbound source |
-| `AppServer::close_connection` | 注销 subscription、关闭 notification source，并释放 Resource/Terminal owner |
+| `AppServer::close_connection` | 注销 subscription、关闭 notification source，并释放 Resource/Terminal/Syntax owner |
 | `AppServer::handle_json` | 处理一个 JSON-RPC request string |
 | `AppServer::drain_notifications` | legacy/JSONL caller 取出该 connection 的 serialized notifications |
 | `AppServer::{serve_stdio,serve_jsonl}` | 同步 JSON Lines service loop |
@@ -57,7 +59,7 @@ request-ID set、notification queue 与 resource ownership；Session/Thread dura
 | `AppServer::with_file_system` | 注入受 workspace 约束的 filesystem authority |
 | `AppServer::with_file_system_watcher` | 监听可信 workspace root 并发布相对路径 invalidation hint |
 | `AppServer::with_git_root` | 冻结 workspace root，开启 Git status/mutation、watcher 与 revision notification |
-| `AppServer::with_workspace_search` | 注入 workspace root 与冻结的 ripgrep executable |
+| `AppServer::with_workspace_search` | 注入 workspace root 与冻结的 ripgrep executable，构造外部内容搜索服务 |
 | `AppServer::with_tool_service` | 安装同一 server 内所有 Turn 使用的 Core Tool/Policy ports |
 | `open_local_app_server` | 打开 profile SQLite/config、恢复 coordinator、组合 provider-backed model |
 | `LocalAppServerOptions` | user profile root + optional config/runtime Workspace + validated slash catalog + built-in Skill root selection |
@@ -95,6 +97,7 @@ src/
 │       ├── git_operations.rs      # Git RPC decode 与稳定错误映射
 │       ├── git_runtime.rs         # status projection/revision、watcher、去重与通知
 │       ├── search_operations.rs   # search RPC decode、ownership 与稳定错误映射
+│       ├── syntax_operations.rs   # incremental syntax session、UTF-16 conversion 与 token encoding
 │       ├── terminal_operations.rs # terminal RPC decode、ownership 与稳定错误映射
 │       └── update_broker.rs       # per-connection subscription/cursor/fanout
 ├── local.rs                       # persistent local composition + model safe point
@@ -105,7 +108,6 @@ src/
 ├── review.rs                      # review-only provider adapter
 ├── resource_store.rs              # bounded in-memory connection-owned resources
 ├── git_service.rs                 # workspace root + GitClient + synchronous RPC runtime bridge
-├── workspace_search.rs            # bounded connection-owned ripgrep jobs
 ├── terminal_profiles.rs           # trusted Shell discovery、ID 与 environment allowlist
 └── terminal_service.rs            # PTY runtime、output ring 与 connection-owned sessions
 ```
@@ -132,21 +134,23 @@ src/
 | `ResourceStore::cleanup` | private | lazy TTL eviction | resource 不持久化 |
 | `AppServer::file_system` | private | 读取注入的 `WorkspaceFileSystem` 或返回稳定 unavailable error | 不绕过 workspace authority |
 | `fs_watcher::project_event` | private | watcher path → root-relative invalidation 或 rescan hint | 不把 event 当作文件内容事实 |
-| `GitService` | crate-private | 冻结 workspace root、映射 repository path、持有 Tokio runtime，并调用 `zeta-git` query/mutation API | 不持有 Renderer 状态、不复制 Git command/parser |
+| `GitService` | crate-private | 持有 `MutateRepository` 的 `TrustedWorkspace`、映射 repository path、持有 Tokio runtime，并调用 `zeta-git` query/mutation API | 不从 client path 或 repository config 自行授予 trust |
 | `GitRuntime` | crate-private | 串行 operation、为每次 runtime incarnation 创建 `StreamInstanceId`、投影 workspace status、推进实例内 revision 并发布去重 notification | watcher event 不直接成为 Git truth |
 | `project_status` in `git_runtime` | private | `zeta-git` snapshot → renderer-safe protocol DTO | 不回传绝对 metadata path 或 internal stderr |
 | `file_type` in `fs_operations` | private | foundation file kind → protocol DTO | wire enum 只由 protocol crate 定义 |
-| `WorkspaceSearchService` | crate-private | 持有 workspace、frozen rg 和 connection-owned job map | 不持有 Renderer 状态或模型 Tool authority |
-| `run_search` | private | 以 typed argv 启动/取消 rg 并收束 terminal state | 不经过 shell，不回传任意 stderr |
-| `parse_match` | private | rg JSON line → root-relative DTO，并把 byte range 转为 UTF-16 | 不执行 UI 分组或 editor opening |
-| `TerminalService` | crate-private | 持有 workspace root、Tokio runtime、PTY session map 与 1 MiB output ring | 不持有 Renderer/xterm 状态 |
+| `search_operations::{search_query, search_page}` | private | `WorkspaceSearch*` DTO 与 `zeta-search` 领域类型之间的显式转换 | 不复制查询校验、rg argv、job state 或 parsing |
+| `SearchService` | external crate | 持有 active workspace、frozen rg 和 owner-bound job map | App Server 不把 connection/DTO/UI 语义写入该 crate |
+| `SyntaxAnalysisService` | crate-private | 持有 connection/model-owned `SyntaxDocument`，处理 open/change/close 与 revision gate | 不读取文件、不选择主题、不产生 compiler/LSP semantic facts |
+| `syntax_edits` | private | 单次扫描把一批 Monaco UTF-16 offset 转成旧 revision 上的 UTF-8 byte ranges | 不接受 surrogate 中点或重叠 batch |
+| `encode_semantic_tokens` | private | 展平 tree-sitter capture precedence，并编码紧凑的行相对 UTF-16 token data | token type legend 只表达 syntax category，不拥有颜色 |
+| `TerminalService` | crate-private | 持有 `ExecuteProcess` 的 `TrustedWorkspace`、Tokio runtime、PTY session map 与 1 MiB output ring | 不从 client path 自行授予 process authority |
 | `TerminalProfileCatalog` | crate-private | 冻结可信 Shell Profile、program 与 environment allowlist | external DTO 不暴露 executable/args |
 | `TerminalService::create` | crate-private | 将 default/profile ID 解析到 catalog 并启动 workspace-rooted PTY | client 不能提交 executable/environment |
 | `spawn_output_drainers` | private | raw output/exit 并发收束；尾部输出 EOF 后才标记 exited | 不在 exit code 到达时提前丢弃尾部 bytes |
 | `read_state` | private | after-sequence cursor → bounded Base64 chunks + gap/exited state | ring eviction 必须显式返回 `output_gap` |
 | `ConfigBackedModelService::resolve_config` | private | user snapshot + optional Workspace snapshot merge | 每次 invocation safe point 重新解析 |
 | `WorkspaceConfigTracker::read` | private | 内容变化才推进 synthetic workspace revision | 不监听/修改 workspace file |
-| `compose_local_tools` | crate-private | 复用 App Server 已固定的 WorkspaceRoot、解析安装候选、冻结 rg、选择 native sandbox | discovery 失败时不降级成 unrestricted |
+| `compose_local_tools` | crate-private | 要求 root-bound `ExecuteProcess` capability、解析安装候选、冻结 rg、选择 native sandbox | containment、trust 或 discovery 失败时不降级成 unrestricted |
 | `LocalShellToolService::materialize` | private | parse call、约束 workspace 参数、冻结 rg executable | policy review 前不启动进程 |
 | `LocalReadOnlyPolicy::decide` | private | 只接受 exact revision/provenance/capability/sandbox | 不产生 unsandboxed grant |
 | `McpRuntimeOwner` | crate-private | worker thread 持有 Tokio runtime 和 live `McpRuntime` | Core thread 不嵌套 `block_on` |
@@ -272,6 +276,19 @@ LocalStateRepository::open(profile_root)
 
 ConfigStore::open_with_paths(profile_root/state.sqlite3, profile_root/config.toml)
 └─ read_snapshot preflight
+
+Workspace authority
+├─ host-configured initial root → HostConfiguration capability
+└─ client workspace/switch → latest WorkspaceTrustConfig lookup
+   ├─ missing / Restricted → filesystem + watcher only
+   └─ Trusted → ExplicitUserDecision capability
+
+ConfigChange trust revocation
+├─ revoke shared capability lease
+├─ remove local Tool / Git / search / terminal ports
+├─ terminate PTY and search processes
+├─ interrupt active Turns
+└─ retain restricted filesystem + watcher
 
 optional WorkspaceConfigStore
 └─ WorkspaceConfigTracker::read preflight
@@ -441,6 +458,17 @@ bazel test //zeta-rs/app-server:app-server-unit-tests
 把当前连接拥有的临时资源改为持久化文档存储，是另一项所有权决策。跨 crate 信任模型见
 [`docs/typst.md`](../../docs/typst.md)。
 
+## Syntax token 集成
+
+`document/syntax/open|change|close` 维护 connection/model-owned Rust analysis session。Open 只在
+首次同步和恢复时携带全文；Change 接收一个 Monaco change event 的原子 UTF-16 edit batch，后端
+一次扫描转换 offset，并委托 `zeta-syntax` 复用旧 tree。返回值是绑定精确 revision、上限为
+50,000 token 的紧凑相对编码；connection 关闭会释放其全部 analysis document。
+
+Monaco provider、主题和 stale-result presentation 属于 Desktop；grammar、query、tree 与稳定
+syntax category 属于 [`zeta-syntax`](../syntax/README.md)。当前未实现 token delta、debounce、LSP
+semantic token 或 Native projection，不能把本接口描述成 compiler 语义高亮。
+
 测试覆盖初始化/请求 ID、Session 优先流程、命令重放/冲突、分叉谱系、Turn 重放/模型只调用一次、
 多连接更新、重连后的持久化缺口、连接拥有的资源、配置命令、交互/批准解决、
 先响应后通知、模型配置安全点、
@@ -453,6 +481,7 @@ Skill built-in/user composition、enablement overlay、watcher refresh 与 `skil
 Git 覆盖 workspace projection、runtime stream identity、revision 去重、`git/statusChanged`、
 path mutation 与 commit。Filesystem 覆盖有界原子写入、权限保留、root containment、
 相对路径 `fs/changed` 与 watcher overflow rescan。
+Syntax 覆盖 connection owner、revision mismatch、Unicode UTF-16 batch 与非重叠 token encoding。
 
 local tool 的参数白名单、discovery、取消与输出限制由
 [`zeta-shell-command`](../shell-command/README.md) 和 [`zeta-exec`](../exec/README.md) 维护；

@@ -1,0 +1,21 @@
+[package]
+name = "zeta-add-dir"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+readme = "README.md"
+
+[lib]
+doctest = false
+name = "zeta_add_dir"
+path = "src/lib.rs"
+
+[dependencies]
+zeta-workspace = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[lints]
+workspace = true

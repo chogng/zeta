@@ -8,12 +8,12 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::task::{Context, Poll, Waker};
 use zeta_async_utils::CancellationSource;
 use zeta_protocol::{ToolCallId, TurnId};
-use zeta_sandboxing::WorkspaceRoot;
 use zeta_tools::{
     ToolBinding, ToolBindingId, ToolDefinition, ToolEnvironmentId, ToolExecutionContext,
     ToolExecutionOutcome, ToolExecutor, ToolInvocation, ToolOperationId, ToolOutputStatus,
     ToolPayload, ToolRegistryGeneration, ToolRuntimeAuthority, ToolRuntimeKey,
 };
+use zeta_workspace::WorkspaceRoot;
 
 #[test]
 fn applies_an_update_and_an_add_after_preparing_the_whole_patch() {

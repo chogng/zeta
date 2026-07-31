@@ -1,16 +1,22 @@
 use super::*;
+use std::path::PathBuf;
 
 #[test]
 fn changed_paths_are_projected_to_sorted_workspace_relative_paths() {
-    let root = Path::new("/workspace");
+    let directory = tempfile::tempdir().unwrap();
+    let root = WorkspaceRoot::open(directory.path()).unwrap();
     let projected = project_event(
-        root,
+        &root,
         FileWatcherEvent::PathsChanged {
             paths: vec![
-                root.join("src/main.rs"),
-                PathBuf::from("/outside/ignored.rs"),
-                root.join("README.md"),
-                root.join("src/main.rs"),
+                root.requested_path().join("src/main.rs"),
+                directory
+                    .path()
+                    .parent()
+                    .unwrap()
+                    .join("outside/ignored.rs"),
+                root.canonical_path().join("README.md"),
+                root.requested_path().join("src/main.rs"),
             ],
         },
     );
@@ -25,10 +31,12 @@ fn changed_paths_are_projected_to_sorted_workspace_relative_paths() {
 
 #[test]
 fn watcher_overflow_becomes_a_root_scoped_rescan_hint() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = WorkspaceRoot::open(directory.path()).unwrap();
     let projected = project_event(
-        Path::new("/workspace"),
+        &root,
         FileWatcherEvent::RescanRequired {
-            watched_paths: vec![PathBuf::from("/workspace")],
+            watched_paths: vec![root.requested_path().to_path_buf()],
         },
     );
 

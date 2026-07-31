@@ -17,7 +17,7 @@ Server DTO。
 | `SyntaxDocument` | 保存一个打开文档的 text、line index、parser、tree、revision 与 limits | 文件加载、保存、dirty state、并发调度 |
 | `SyntaxLanguage` | 选择 crate 内已注册且经过测试的 grammar/query 组合 | 接受任意 native grammar pointer 或用户 query |
 | `DocumentRevision` | 绑定宿主权威文本和派生 snapshot；更新时必须单调增加 | 充当磁盘 revision、Git identity 或全局 sequence |
-| `SyntaxEdit` | 以当前文档的 UTF-8 byte range 表达 replace/insert/delete | 接受 Monaco UTF-16 position 或猜测编码 |
+| `SyntaxEdit` | 以当前文档的 UTF-8 byte range 表达 replace/insert/delete；`apply_edits` 原子接收同一旧 revision 上的非重叠 batch | 接受 Monaco UTF-16 position 或猜测编码 |
 | `SyntaxSnapshot` | 返回同一 revision 的 tokens、folds、symbols 与 diagnostics | 暴露 `tree_sitter::Tree`、`Node` 或跨语言统一 AST |
 | `AnalysisLimits` | 限制文档和派生 collection 的资源使用 | 限制宿主队列、IPC message 或 workspace 文件数 |
 | `SyntaxTokenKind` | 提供不含主题颜色的语言中立 highlight category | 决定主题、foreground 或 decoration layer |
@@ -45,7 +45,7 @@ SyntaxDocument::open / open_with_limits
   → Parser::parse
   → LineIndex::new
 
-SyntaxDocument::apply_edit
+SyntaxDocument::apply_edit / apply_edits
   → revision / range / UTF-8 boundary / size validation
   → LineIndex::point
   → Tree::edit on a cheap tree clone
@@ -89,10 +89,12 @@ host adapter；修改 symbol category 时必须同步检查未来 workspace inde
 当前限制：
 
 - Current：只注册 Rust grammar；
-- Current：每个 edit 使用一个 UTF-8 byte range；batch coalescing 由后续宿主 adapter 负责；
+- Current：单个 edit 和同一旧 revision 上的非重叠 batch 都使用 UTF-8 byte range；宿主负责事件 coalescing；
 - Current：文本保存在 `String`，中间插入需要移动后续 bytes；超大文档的 rope/chunked input 尚未实现；
 - Current：snapshot 派生为同步调用；异步 worker、debounce 与 cancellation 由产品宿主负责；
-- 尚未完成：Desktop/App Server transport、Monaco provider 和 Native EditorHost adapter；
+- Current：App Server 使用 connection/model-owned open/change/close session 将 Rust token 投影给
+  Monaco；wire、UTF-16 转换和 provider lifecycle 由 App Server/Desktop 拥有，不进入本 crate；
+- 尚未完成：Native EditorHost adapter，以及 Monaco folding/outline/parse diagnostic 投影；
 - 尚未完成：workspace symbol index、磁盘/unsaved-buffer arbitration 与持久化；
 - Potential：第二个真实 workspace index consumer 出现后提取 `zeta-symbol-index`，而不是把文件
   authority 和数据库加入本 crate。

@@ -16,13 +16,15 @@ execution、Skill 正文、Session/Thread 或 Core execution。
 | `ConfigCommandRequest` / `UserConfigCommand` | typed mutation、expected revision 与 retry identity |
 | `ResolvedConfigSnapshot` | User authority 的 immutable runtime input |
 | `WorkspaceConfigStore` | strict-read `.zeta/config.toml`，不写 Workspace 文件 |
+| `WorkspaceTrustConfig` | 按 opaque `WorkspaceTrustId` 持久化 User 的 Restricted/Trusted 决策；缺失时 fail closed |
 | `resolve_scoped_config` | User + Workspace 的受限 merge、provenance 与 diagnostic |
 | `ConfigChange` | metadata commit 后的 revision/generation signal，包括 TOML 外部编辑与其他 connection 的提交 |
 
 `UserConfigDocument` 当前包含 Agent defaults、Provider map、standalone MCP declaration、Skill
-source/enablement、exact Plugin request 和 declarative Hook。Plugin request 不安装或授权 package；
-Hook declaration 不执行 process。Theme/UI preference 不在本 crate；Desktop device configuration
-是独立 authority。
+source/enablement、exact Plugin request、declarative Hook 和 Workspace trust decision。Trust key
+由 host 对 canonical root 生成，document 不保存本地路径；User decision 不能冒充 organization
+policy 或 host configuration。Plugin request 不安装或授权 package；Hook declaration 不执行
+process。Theme/UI preference 不在本 crate；Desktop device configuration 是独立 authority。
 
 ## Durable 路径
 
@@ -55,6 +57,14 @@ Workspace 文档不能选择 namespace、credential binding 或 grant。`resolve
 Workspace preferred model 在 User 已配置对应 Provider 时覆盖，并把 MCP/Skill/Plugin/Hook 内容
 保留为 pending intent。
 
+Workspace trust 是另一条解析轴：`.zeta/config.toml` 不能声明 `workspaceTrust`；只有 User
+`config.toml` 的 `WorkspaceTrustConfig`、organization policy 或 trusted host composition 能产生
+信任来源。App Server 对 client 请求的 `workspace/switch` 在切换安全点重新读取 User snapshot，
+按目标根的 `WorkspaceTrustId` 授权；未记录的根保持 Restricted。进程启动时由 trusted host
+明确固定的初始根仍标记为 `HostConfiguration`，不等同于 client 后续选择的任意根。
+User trust 从 Trusted 变为 Restricted 时，Config change 同时触发 App Server 撤销当前
+root-bound lease、移除执行型服务并中断活跃 Turn；filesystem 与 watcher 保留。
+
 App Server 在 model safe point 读取 resolved snapshot；Skill/MCP manager 订阅 `ConfigChange` 后在
 旁路 reconcile。Config commit 成功不等于 MCP 已连接、Skill 已可用、Plugin 已激活或 Hook 已执行，
 reconcile failure 不能回滚 desired document。
@@ -73,6 +83,7 @@ reconcile failure 不能回滚 desired document。
 | `store_monitor::publish` | cross-connection 去重 signal | signal 不能成为未提交状态的来源 |
 | `UserConfigDocument::validate` | 全文 typed invariant | 禁止用 arbitrary JSON escape hatch 绕开 |
 | `resolve_scoped_config` | scope/trust merge | Workspace 不能扩大 credential、grant 或 policy |
+| `workspace_trust::WorkspaceTrustConfig::decision_for` | User trust lookup 与缺失时 Restricted | Workspace document 不能进入这条 mutation/persistence 路径 |
 
 ## 失败与验证
 

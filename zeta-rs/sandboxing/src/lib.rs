@@ -18,7 +18,7 @@ pub use model::{
     FileSystemAccess, NetworkAccess, PreparedCommand, SandboxCommand, SandboxDenialTiming,
     SandboxKind, SandboxPolicy, SandboxProcessDenial, SandboxProcessExitStatus,
 };
-pub use workspace::{PROTECTED_WORKSPACE_METADATA_NAMES, WorkspaceRoot};
+pub use workspace::PROTECTED_WORKSPACE_METADATA_NAMES;
 
 #[cfg(target_os = "macos")]
 pub use macos::MacosSeatbeltSandbox;

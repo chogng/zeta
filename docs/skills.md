@@ -659,6 +659,13 @@ identity 原语可以下沉到已有基础 crate。Desktop 交互所有权与其
 [`zeta-desktop-architecture.md`](zeta-desktop-architecture.md#22-外部-agent-配置导入仅限-desktop)；
 TUI 的长期非职责见 [`tui.md`](tui.md#11-featureszeta-功能的垂直切片)。
 
+附加目录激活不是 Import。`zeta-add-dir` 已拥有 directory source 与 contribution policy 的纯
+领域 contract；未来由启动参数或会话命令加入的目录，可以在授权有效期内投影明确 allowlist 中的
+Skills 与 Subagents；持久 `additionalDirectories` 只授予文件访问，不能发现或激活任何 Skill。
+该临时投影可以复用 `zeta-agent-import` 的安全路径 inspection，但不写入 Config、不产生
+imported source，也不把附加目录提升为 Workspace。完整语义与 `/cd` 的区别见
+[`workspace-security.md`](workspace-security.md#工作目录附加目录与-cd)。
+
 ## 16. 错误与诊断
 
 至少区分：

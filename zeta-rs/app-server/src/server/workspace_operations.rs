@@ -25,6 +25,9 @@ fn workspace_runtime_error(error: WorkspaceRuntimeError) -> RpcError {
         WorkspaceRuntimeError::Busy => {
             RpcError::new(-32071, AppServerErrorName::WorkspaceSwitchBusy)
         }
+        WorkspaceRuntimeError::TrustRequired => {
+            RpcError::new(-32073, AppServerErrorName::WorkspaceTrustRequired)
+        }
         WorkspaceRuntimeError::Failed(_) => {
             RpcError::new(-32072, AppServerErrorName::WorkspaceSwitchFailed)
         }

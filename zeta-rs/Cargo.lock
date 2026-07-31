@@ -7712,6 +7712,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "zeta-add-dir"
+version = "0.1.0"
+dependencies = [
+ "tempfile",
+ "zeta-workspace",
+]
+
+[[package]]
 name = "zeta-agent-import"
 version = "0.1.0"
 dependencies = [
@@ -7739,6 +7747,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.10.9",
+ "tempfile",
  "tokio",
  "zeta-app-server-protocol",
  "zeta-app-server-transport",
@@ -7759,12 +7768,15 @@ dependencies = [
  "zeta-rmcp-client",
  "zeta-rollout",
  "zeta-sandboxing",
+ "zeta-search",
  "zeta-shell-command",
  "zeta-skills",
+ "zeta-syntax",
  "zeta-tools",
  "zeta-typst",
  "zeta-utils-pty",
  "zeta-windows-sandbox",
+ "zeta-workspace",
 ]
 
 [[package]]
@@ -7809,8 +7821,8 @@ dependencies = [
  "serde_json",
  "zeta-async-utils",
  "zeta-protocol",
- "zeta-sandboxing",
  "zeta-tools",
+ "zeta-workspace",
 ]
 
 [[package]]
@@ -7869,6 +7881,7 @@ dependencies = [
  "toml 0.9.12+spec-1.1.0",
  "zeta-model-provider-config",
  "zeta-protocol",
+ "zeta-workspace",
 ]
 
 [[package]]
@@ -7911,6 +7924,7 @@ dependencies = [
  "zeta-async-utils",
  "zeta-protocol",
  "zeta-sandboxing",
+ "zeta-workspace",
 ]
 
 [[package]]
@@ -7943,7 +7957,7 @@ name = "zeta-file-system"
 version = "0.1.0"
 dependencies = [
  "tempfile",
- "zeta-sandboxing",
+ "zeta-workspace",
 ]
 
 [[package]]
@@ -7955,8 +7969,8 @@ dependencies = [
  "zeta-async-utils",
  "zeta-file-system",
  "zeta-protocol",
- "zeta-sandboxing",
  "zeta-tools",
+ "zeta-workspace",
 ]
 
 [[package]]
@@ -8012,6 +8026,7 @@ dependencies = [
  "zeta-bwrap",
  "zeta-install-context",
  "zeta-sandboxing",
+ "zeta-workspace",
 ]
 
 [[package]]
@@ -8196,6 +8211,19 @@ dependencies = [
 [[package]]
 name = "zeta-sandboxing"
 version = "0.1.0"
+dependencies = [
+ "zeta-workspace",
+]
+
+[[package]]
+name = "zeta-search"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "zeta-async-utils",
+ "zeta-shell-command",
+ "zeta-workspace",
+]
 
 [[package]]
 name = "zeta-secrets"
@@ -8223,6 +8251,7 @@ dependencies = [
  "zeta-protocol",
  "zeta-sandboxing",
  "zeta-tools",
+ "zeta-workspace",
 ]
 
 [[package]]
@@ -8398,6 +8427,7 @@ dependencies = [
  "windows-sys 0.59.0",
  "zeta-install-context",
  "zeta-sandboxing",
+ "zeta-workspace",
 ]
 
 [[package]]
@@ -8405,6 +8435,17 @@ name = "zeta-winit"
 version = "0.1.0"
 dependencies = [
  "winit",
+]
+
+[[package]]
+name = "zeta-workspace"
+version = "0.1.0"
+dependencies = [
+ "dunce",
+ "serde",
+ "sha2 0.10.9",
+ "tempfile",
+ "thiserror 2.0.19",
 ]
 
 [[package]]

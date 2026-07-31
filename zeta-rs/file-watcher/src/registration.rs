@@ -15,7 +15,13 @@ pub struct FileWatcherSubscriber {
 
 impl FileWatcherSubscriber {
     /// Registers paths and returns a guard that unregisters them on drop.
-    pub fn register_paths(&self, watched_paths: Vec<WatchPath>) -> WatchRegistration {
+    ///
+    /// Backend failures are returned so authoritative consumers do not silently keep an inert
+    /// registration.
+    pub fn register_paths(
+        &self,
+        watched_paths: Vec<WatchPath>,
+    ) -> notify::Result<WatchRegistration> {
         let registrations = dedupe_watched_paths(watched_paths)
             .into_iter()
             .map(|requested| {
@@ -27,16 +33,16 @@ impl FileWatcherSubscriber {
                 }
             })
             .collect::<Vec<_>>();
-        self.file_watcher.register_paths(self.id, &registrations);
+        self.file_watcher.register_paths(self.id, &registrations)?;
 
-        WatchRegistration {
+        Ok(WatchRegistration {
             file_watcher: Arc::downgrade(&self.file_watcher),
             subscriber_id: self.id,
             watched_paths: registrations
                 .iter()
                 .map(|registration| registration.key.clone())
                 .collect(),
-        }
+        })
     }
 }
 

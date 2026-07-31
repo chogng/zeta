@@ -8,13 +8,15 @@ use zeta_app_server_protocol::protocol::git::{
     GitChangeStatusDto, GitHeadDto, GitRepositoryChangeDto, GitStatusResult, GitSubmoduleStateDto,
     GitUpstreamDto,
 };
-use zeta_file_watcher::{DebouncedWatchReceiver, FileWatcher, WatchPath};
+use zeta_file_watcher::{DebouncedWatchReceiver, FileWatcher, FileWatcherBackend, WatchPath};
 use zeta_git::{
     GitChangeStatus, GitHead, GitRepository, GitRepositoryChange, GitRepositorySnapshot,
 };
 use zeta_protocol::StreamInstanceId;
+use zeta_workspace::TrustedWorkspace;
 
 const GIT_WATCH_DEBOUNCE: Duration = Duration::from_millis(100);
+const ALIASED_PATH_POLL_INTERVAL: Duration = Duration::from_millis(100);
 
 pub(crate) struct GitRuntime {
     service: GitService,
@@ -49,11 +51,11 @@ pub(crate) enum GitRuntimeError {
 
 impl GitRuntime {
     pub(super) fn new(
-        workspace_root: PathBuf,
+        workspace: TrustedWorkspace,
         updates: Arc<UpdateBroker>,
     ) -> Result<Arc<Self>, GitRuntimeError> {
         Ok(Arc::new(Self {
-            service: GitService::new(workspace_root).map_err(GitRuntimeError::Service)?,
+            service: GitService::new(workspace).map_err(GitRuntimeError::Service)?,
             stream_instance_id: new_stream_instance_id()?,
             operation: Mutex::new(()),
             state: Mutex::new(GitRuntimeState {
@@ -200,10 +202,16 @@ impl GitRuntime {
     }
 
     fn watched_paths(&self) -> Vec<WatchPath> {
-        let mut paths = vec![WatchPath {
-            path: self.service.workspace_root().to_path_buf(),
-            recursive: true,
-        }];
+        let mut paths = vec![
+            WatchPath {
+                path: self.service.workspace().requested_path().to_path_buf(),
+                recursive: true,
+            },
+            WatchPath {
+                path: self.service.workspace().canonical_path().to_path_buf(),
+                recursive: true,
+            },
+        ];
         if let Ok(state) = self.state.lock()
             && let Some(repository) = &state.repository
         {
@@ -262,19 +270,30 @@ fn watch_git(
         return;
     };
     tokio_runtime.block_on(async move {
-        let Ok(file_watcher) = FileWatcher::new() else {
+        let Some(git_runtime) = runtime.upgrade() else {
+            return;
+        };
+        let backend = if git_runtime.service.workspace().requested_path()
+            == git_runtime.service.workspace().canonical_path()
+        {
+            FileWatcherBackend::Recommended
+        } else {
+            FileWatcherBackend::Polling {
+                interval: ALIASED_PATH_POLL_INTERVAL,
+            }
+        };
+        let Ok(file_watcher) = FileWatcher::new_with_backend(backend) else {
             return;
         };
         let file_watcher = Arc::new(file_watcher);
         let (subscriber, receiver) = file_watcher.add_subscriber();
-        let Some(git_runtime) = runtime.upgrade() else {
-            return;
-        };
         let refresh_runtime = Arc::clone(&git_runtime);
         let _ = tokio::task::spawn_blocking(move || refresh_runtime.refresh_from_watcher()).await;
         let mut watched_paths = git_runtime.watched_paths();
         drop(git_runtime);
-        let mut registration = subscriber.register_paths(watched_paths.clone());
+        let Ok(mut registration) = subscriber.register_paths(watched_paths.clone()) else {
+            return;
+        };
         let mut receiver = DebouncedWatchReceiver::new(receiver, GIT_WATCH_DEBOUNCE);
         loop {
             tokio::select! {
@@ -292,9 +311,12 @@ fn watch_git(
                     }).await;
                     let next_paths = git_runtime.watched_paths();
                     if next_paths != watched_paths {
-                        drop(registration);
-                        registration = subscriber.register_paths(next_paths.clone());
-                        watched_paths = next_paths;
+                        if let Ok(next_registration) =
+                            subscriber.register_paths(next_paths.clone())
+                        {
+                            registration = next_registration;
+                            watched_paths = next_paths;
+                        }
                     }
                 }
             }

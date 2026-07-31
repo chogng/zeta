@@ -14,7 +14,7 @@ fn resolves_workspace_and_network_authority_for_the_native_launcher() {
 
     let plan = sandbox().plan(policy, &workspace);
 
-    assert_eq!(plan.workspace(), workspace.path());
+    assert_eq!(plan.workspace(), workspace.canonical_path());
     assert_eq!(plan.file_system(), FileSystemAccess::WorkspaceWrite);
     assert_eq!(plan.network(), NetworkAccess::Denied);
 }
@@ -22,7 +22,7 @@ fn resolves_workspace_and_network_authority_for_the_native_launcher() {
 #[test]
 fn prepares_appcontainer_runner_with_frozen_setup_and_inner_command() {
     let workspace = WorkspaceRoot::open(".").unwrap();
-    let command = SandboxCommand::new("rg.exe", ["--files"], workspace.path());
+    let command = SandboxCommand::new("rg.exe", ["--files"], workspace.canonical_path());
     let policy = SandboxPolicy::new(FileSystemAccess::ReadOnly, NetworkAccess::Denied);
 
     let prepared = sandbox().prepare(&command, policy, &workspace).unwrap();
@@ -52,8 +52,11 @@ fn prepares_appcontainer_runner_with_frozen_setup_and_inner_command() {
 #[test]
 fn profile_identity_separates_workspace_and_access_authority() {
     let workspace = WorkspaceRoot::open(".").unwrap();
-    let read_only = profile_name(workspace.path(), READ_ONLY_ACCESS);
-    let workspace_write = profile_name(workspace.path(), crate::protocol::WORKSPACE_WRITE_ACCESS);
+    let read_only = profile_name(workspace.canonical_path(), READ_ONLY_ACCESS);
+    let workspace_write = profile_name(
+        workspace.canonical_path(),
+        crate::protocol::WORKSPACE_WRITE_ACCESS,
+    );
 
     assert_ne!(read_only, workspace_write);
     assert!(read_only.starts_with("Zeta.Agent.v1.ro."));
@@ -65,7 +68,7 @@ fn profile_identity_separates_workspace_and_access_authority() {
 #[test]
 fn unsupported_windows_policy_fails_closed() {
     let workspace = WorkspaceRoot::open(".").unwrap();
-    let command = SandboxCommand::new("rg.exe", ["--files"], workspace.path());
+    let command = SandboxCommand::new("rg.exe", ["--files"], workspace.canonical_path());
     let policy = SandboxPolicy::new(FileSystemAccess::ReadOnly, NetworkAccess::Allowed);
 
     let error = sandbox().prepare(&command, policy, &workspace).unwrap_err();

@@ -15,12 +15,12 @@ use serde_json::json;
 use std::fmt;
 use std::fs;
 use std::future;
-use zeta_sandboxing::WorkspaceRoot;
 use zeta_tools::{
     ToolConcurrency, ToolConflictClass, ToolDefinition, ToolExecutionFuture, ToolExecutionOutcome,
     ToolExecutor, ToolInputSchema, ToolInvocation, ToolLoading, ToolName, ToolOutput,
     ToolOutputSchema, ToolPayload, ToolSchemaMode, ToolStartFailure, ToolUncertainOutcome,
 };
+use zeta_workspace::WorkspaceRoot;
 
 const DEFAULT_MAX_PATCH_BYTES: usize = 512 * 1024;
 const DEFAULT_MAX_CHANGED_FILES: usize = 128;

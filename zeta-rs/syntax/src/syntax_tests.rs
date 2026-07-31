@@ -127,6 +127,57 @@ fn multiline_edit_maintains_byte_columns_for_following_edits() {
 }
 
 #[test]
+fn atomic_edit_batch_preserves_one_host_revision() {
+    let mut document = SyntaxDocument::open(
+        SyntaxLanguage::Rust,
+        DocumentRevision::new(4),
+        "fn first() {}\nfn second() {}\n",
+    )
+    .expect("Rust grammar should load");
+    let first = document.text().find("first").unwrap();
+    let second = document.text().find("second").unwrap();
+
+    let snapshot = document
+        .apply_edits(
+            DocumentRevision::new(5),
+            &[
+                SyntaxEdit::replace(first..first + 5, "one"),
+                SyntaxEdit::replace(second..second + 6, "two"),
+            ],
+        )
+        .expect("non-overlapping edits should apply atomically");
+
+    assert_eq!(document.text(), "fn one() {}\nfn two() {}\n");
+    assert_eq!(snapshot.revision(), DocumentRevision::new(5));
+    assert!(snapshot.symbols().iter().any(|symbol| symbol.name == "one"));
+    assert!(snapshot.symbols().iter().any(|symbol| symbol.name == "two"));
+}
+
+#[test]
+fn overlapping_edit_batch_does_not_mutate_the_document() {
+    let mut document = SyntaxDocument::open(
+        SyntaxLanguage::Rust,
+        DocumentRevision::new(8),
+        "fn original() {}\n",
+    )
+    .expect("Rust grammar should load");
+
+    let error = document
+        .apply_edits(
+            DocumentRevision::new(9),
+            &[
+                SyntaxEdit::replace(3..11, "first"),
+                SyntaxEdit::replace(5..9, "second"),
+            ],
+        )
+        .expect_err("overlapping edits should fail");
+
+    assert!(matches!(error, SyntaxError::OverlappingEdits));
+    assert_eq!(document.text(), "fn original() {}\n");
+    assert_eq!(document.revision(), DocumentRevision::new(8));
+}
+
+#[test]
 fn deleting_a_complete_line_updates_following_symbol_positions() {
     let first_line = "fn first() {}\n";
     let mut document = SyntaxDocument::open(

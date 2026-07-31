@@ -12,15 +12,14 @@ use zeta_policy::{
     PolicyRevision, ProcessInvocationKind, ResolvedAction, SandboxCompatibility,
 };
 use zeta_protocol::{ToolCall, ToolDefinition, ToolExecutionOutput, ToolOutputStream};
-use zeta_sandboxing::{
-    FileSystemAccess, NetworkAccess, SandboxBackend, SandboxPolicy, WorkspaceRoot,
-};
+use zeta_sandboxing::{FileSystemAccess, NetworkAccess, SandboxBackend, SandboxPolicy};
 use zeta_shell_command::{
     ApprovalPolicy, ApprovalRequirement, CommandExecutionAuthority, CommandExecutionOutcome,
     ExecutionError, RipgrepDiscoveryError, RipgrepExecutable, ShellCommandLimits,
     ShellCommandRequest, ShellCommandTool,
 };
 use zeta_tools::{ToolPayload, to_protocol_tool_definition};
+use zeta_workspace::{TrustedWorkspace, WorkspaceCapability, WorkspaceRoot};
 
 const LOCAL_POLICY_REVISION: &str = "local-shell-v2";
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
@@ -33,8 +32,13 @@ pub(crate) struct LocalToolComposition {
 }
 
 pub(crate) fn compose_local_tools(
-    workspace: WorkspaceRoot,
+    workspace: TrustedWorkspace,
 ) -> Result<LocalToolComposition, LocalToolError> {
+    if workspace.capability() != WorkspaceCapability::ExecuteProcess {
+        return Err(LocalToolError::trust(
+            "local tools require the execute-process Workspace capability",
+        ));
+    }
     let install_context = InstallContext::current();
     let ripgrep = resolve_ripgrep(&install_context).map_err(LocalToolError::ripgrep)?;
     let policy = LocalShellPolicy;
@@ -68,7 +72,7 @@ impl ApprovalPolicy for CoreAuthorized {
 }
 
 struct LocalShellToolService<B> {
-    workspace: WorkspaceRoot,
+    workspace: TrustedWorkspace,
     ripgrep: RipgrepExecutable,
     shell: ShellCommandTool<CoreAuthorized, B>,
     definition: ToolDefinition,
@@ -76,14 +80,14 @@ struct LocalShellToolService<B> {
 
 impl<B: SandboxBackend> LocalShellToolService<B> {
     fn new(
-        workspace: WorkspaceRoot,
+        workspace: TrustedWorkspace,
         ripgrep: RipgrepExecutable,
         backend: B,
     ) -> Result<Self, LocalToolError> {
         let shell = ShellCommandTool::new(
             zeta_tools::ToolEnvironmentId::new("local-workspace")
                 .map_err(LocalToolError::definition)?,
-            workspace.clone(),
+            workspace.root().clone(),
             backend,
             CoreAuthorized,
             ShellCommandLimits {
@@ -103,6 +107,9 @@ impl<B: SandboxBackend> LocalShellToolService<B> {
     }
 
     fn materialize(&self, call: &ToolCall) -> Result<ShellCommandRequest, CoreError> {
+        self.workspace
+            .ensure_active()
+            .map_err(|error| CoreError::Policy(error.to_string()))?;
         if call.name != self.definition.name {
             return Err(CoreError::Policy(format!(
                 "tool is not available: {}",
@@ -114,10 +121,11 @@ impl<B: SandboxBackend> LocalShellToolService<B> {
         ))
         .map_err(|error| CoreError::Policy(error.to_string()))?;
         if request.program() == "rg" {
-            validate_workspace_arguments(&self.workspace, &request)?;
+            validate_workspace_arguments(self.workspace.root(), &request)?;
         }
         let working_directory = self
             .workspace
+            .root()
             .resolve_existing(request.working_directory())
             .map_err(|error| CoreError::Policy(error.to_string()))?;
         if !working_directory.is_dir() {
@@ -140,6 +148,7 @@ impl<B: SandboxBackend> LocalShellToolService<B> {
     ) -> Result<ActionReviewRequest, CoreError> {
         let canonical_working_directory = self
             .workspace
+            .root()
             .resolve_existing(request.working_directory())
             .map_err(|error| CoreError::Policy(error.to_string()))?;
         let canonical = serde_json::to_vec(&json!({
@@ -150,7 +159,7 @@ impl<B: SandboxBackend> LocalShellToolService<B> {
         .map_err(|error| CoreError::Policy(error.to_string()))?;
         let is_ripgrep = request.program() == self.ripgrep.path().to_string_lossy();
         let capabilities = if is_ripgrep {
-            local_capabilities(&self.workspace, &self.ripgrep)
+            local_capabilities(self.workspace.root(), &self.ripgrep)
         } else {
             shell_capabilities()
         };
@@ -297,7 +306,10 @@ impl PolicyService for LocalShellPolicy {
 
 fn local_capabilities(workspace: &WorkspaceRoot, ripgrep: &RipgrepExecutable) -> CapabilitySet {
     CapabilitySet::new([
-        Capability::new(CapabilityKind::FileRead, workspace.path().to_string_lossy()),
+        Capability::new(
+            CapabilityKind::FileRead,
+            workspace.canonical_path().to_string_lossy(),
+        ),
         Capability::new(
             CapabilityKind::ProcessSpawn,
             ripgrep.path().to_string_lossy(),
@@ -342,7 +354,11 @@ fn validate_workspace_arguments(
             )));
         }
         let workspace_relative = request.working_directory().join(path);
-        if workspace.path().join(&workspace_relative).exists() {
+        if workspace
+            .canonical_path()
+            .join(&workspace_relative)
+            .exists()
+        {
             workspace
                 .resolve_existing(&workspace_relative)
                 .map_err(|_| {
@@ -401,6 +417,10 @@ compile_error!("local shell tools require a supported sandbox backend");
 pub(crate) struct LocalToolError(String);
 
 impl LocalToolError {
+    fn trust(error: impl fmt::Display) -> Self {
+        Self(format!("workspace trust rejected local tools: {error}"))
+    }
+
     fn ripgrep(error: impl fmt::Display) -> Self {
         Self(format!("could not resolve ripgrep: {error}"))
     }

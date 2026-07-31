@@ -35,11 +35,17 @@ zeta-protocol = { workspace = true }
 zeta-rollout = { workspace = true }
 zeta-rmcp-client = { workspace = true }
 zeta-sandboxing = { workspace = true }
+zeta-workspace = { workspace = true }
+zeta-search = { workspace = true }
 zeta-shell-command = { workspace = true }
 zeta-skills = { workspace = true }
+zeta-syntax = { workspace = true }
 zeta-tools = { workspace = true }
 zeta-typst = { workspace = true }
 zeta-utils-pty = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 zeta-linux-sandbox = { workspace = true }

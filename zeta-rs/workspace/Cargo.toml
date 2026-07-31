@@ -1,0 +1,23 @@
+[package]
+name = "zeta-workspace"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[lib]
+doctest = false
+name = "zeta_workspace"
+path = "src/lib.rs"
+
+[dependencies]
+dunce = { workspace = true }
+serde = { workspace = true }
+sha2 = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[lints]
+workspace = true

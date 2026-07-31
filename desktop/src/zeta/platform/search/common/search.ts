@@ -1,13 +1,7 @@
-import type {
-  WorkspaceSearchCaseSensitivity,
-  WorkspaceSearchMatch,
-  WorkspaceSearchPatternKind,
-} from "../../../../../generated/app-server/types.js";
-import {
-  createServiceIdentifier,
-} from "../../instantiation/common/instantiation.js";
+import type { WorkspaceSearchCaseSensitivity, WorkspaceSearchMatch, WorkspaceSearchPatternKind } from "../../../../../generated/app-server/types.js";
+import { createServiceIdentifier } from "../../instantiation/common/instantiation.js";
 
-/** Typed product query accepted by the workspace content-search service. */
+/** A content query applied to the current workspace. */
 export interface IWorkspaceSearchQuery {
   readonly text: string;
   readonly patternKind: WorkspaceSearchPatternKind;
@@ -34,13 +28,7 @@ export interface IWorkspaceSearchOptions {
 
 /** Renderer-facing workspace search lifecycle independent of Electron IPC. */
 export interface IWorkspaceSearchService {
-  search(
-    query: IWorkspaceSearchQuery,
-    options?: IWorkspaceSearchOptions,
-  ): Promise<IWorkspaceSearchComplete>;
+  search(query: IWorkspaceSearchQuery, options?: IWorkspaceSearchOptions): Promise<IWorkspaceSearchComplete>;
 }
 
-export const IWorkspaceSearchService =
-  createServiceIdentifier<IWorkspaceSearchService>(
-    "workspaceSearchService",
-  );
+export const IWorkspaceSearchService = createServiceIdentifier<IWorkspaceSearchService>("workspaceSearchService");

@@ -31,6 +31,9 @@ fn registry_method_and_notification_names_are_unique() {
     assert!(methods.contains("turn/shell/start"));
     assert!(methods.contains("turn/interaction/resolve"));
     assert!(methods.contains("document/typst/compile"));
+    assert!(methods.contains("document/syntax/open"));
+    assert!(methods.contains("document/syntax/change"));
+    assert!(methods.contains("document/syntax/close"));
     assert!(methods.contains("fs/getMetadata"));
     assert!(methods.contains("fs/readDirectory"));
     assert!(methods.contains("fs/readFile"));
@@ -244,6 +247,15 @@ fn dto_driven_typescript_preserves_model_ref_and_patch_shape() {
     assert!(
         typescript.contains(r#""document/typst/compile": { method: "document/typst/compile" }"#)
     );
+    assert!(
+        typescript.contains(r#""document/syntax/open": { method: "document/syntax/open" }"#)
+    );
+    assert!(
+        typescript.contains(r#""document/syntax/change": { method: "document/syntax/change" }"#)
+    );
+    assert!(
+        typescript.contains(r#""document/syntax/close": { method: "document/syntax/close" }"#)
+    );
     assert!(typescript.contains(r#""fs/getMetadata": { method: "fs/getMetadata" }"#));
     assert!(typescript.contains(r#""fs/readDirectory": { method: "fs/readDirectory" }"#));
     assert!(typescript.contains(r#""fs/readFile": { method: "fs/readFile" }"#));
@@ -289,6 +301,9 @@ fn dto_driven_schema_contains_registered_rpc_envelopes() {
     assert!(definitions.contains_key("ThreadItem"));
     assert!(definitions.contains_key("TypstCompileParams"));
     assert!(definitions.contains_key("TypstCompileResult"));
+    assert!(definitions.contains_key("SyntaxOpenParams"));
+    assert!(definitions.contains_key("SyntaxChangeParams"));
+    assert!(definitions.contains_key("SyntaxTokenSnapshotDto"));
     assert!(definitions.contains_key("WorkspaceSearchStartParams"));
     assert!(definitions.contains_key("WorkspaceSearchReadResult"));
     assert!(definitions.contains_key("TerminalProfile"));

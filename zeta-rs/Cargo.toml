@@ -1,5 +1,6 @@
 [workspace]
 members = [
+    "add-dir",
     "agent-import",
     "app-server",
     "app-server-client",
@@ -61,6 +62,8 @@ members = [
     "utils/pty",
     "utils/typst",
     "windows-sandbox-rs",
+    "workspace",
+    "search",
     "zeta-api",
     "zeta-client",
 ]
@@ -140,6 +143,7 @@ wgpu = "30.0.0"
 windows-sys = "0.59"
 winit = "0.30.13"
 zeroize = "1"
+zeta-add-dir = { path = "add-dir" }
 zeta-agent-import = { path = "agent-import" }
 zeta-app-server = { path = "app-server" }
 zeta-app-server-client = { path = "app-server-client" }
@@ -201,6 +205,8 @@ zeta-pdf = { path = "utils/pdf" }
 zeta-utils-pty = { path = "utils/pty" }
 zeta-typst = { path = "utils/typst" }
 zeta-windows-sandbox = { path = "windows-sandbox-rs" }
+zeta-workspace = { path = "workspace" }
+zeta-search = { path = "search" }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

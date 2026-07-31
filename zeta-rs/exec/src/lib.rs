@@ -9,8 +9,9 @@ use zeta_async_utils::CancellationToken;
 use zeta_protocol::{ProcessExecutionOutput, ProcessExitStatus, SandboxDenialOutput};
 use zeta_sandboxing::{
     FileSystemAccess, NetworkAccess, SandboxBackend, SandboxCommand, SandboxDenialTiming,
-    SandboxError, SandboxManager, SandboxPolicy, SandboxProcessExitStatus, WorkspaceRoot,
+    SandboxError, SandboxManager, SandboxPolicy, SandboxProcessExitStatus,
 };
+use zeta_workspace::WorkspaceRoot;
 
 /// Decides whether a fully materialized local process action can start.
 ///

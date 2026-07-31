@@ -3,6 +3,8 @@
 > 本 README 是 workspace filesystem primitive 的 canonical 实现文档。跨进程 ownership、
 > Desktop 投影与阶段状态见
 > [`../../docs/zeta-desktop-architecture.md`](../../docs/zeta-desktop-architecture.md)。
+> Workspace identity、containment 与 trust 的 canonical ownership 见
+> [`../workspace/README.md`](../workspace/README.md)。
 
 本 crate 拥有 workspace-scoped、consumer-neutral 的 filesystem contract。App Server 与
 model tool adapter 都依赖它；本 crate 不依赖 JSON-RPC、Desktop、Tool schema 或 UI 状态。
@@ -12,7 +14,7 @@ model tool adapter 都依赖它；本 crate 不依赖 JSON-RPC、Desktop、Tool 
 | 文件 / symbol | 职责 |
 | --- | --- |
 | `service.rs` / `WorkspaceFileSystem` | consumer 共享 trait；实现必须约束所有输入到 authority root |
-| `local.rs` / `LocalFileSystem` | 当前 local implementation；组合 `zeta_sandboxing::WorkspaceRoot` 与宿主 I/O |
+| `local.rs` / `LocalFileSystem` | 当前 local implementation；组合 `zeta_workspace::WorkspaceRoot` 与宿主 I/O |
 | `types.rs` | `FileType`、`FileMetadata`、`DirectoryEntry`，不携带 wire/UI DTO |
 | `error.rs` / `FileSystemError` | path、文件/目录类型、读写上限、只读状态与 I/O failure |
 

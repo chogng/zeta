@@ -1,4 +1,4 @@
-import type { FsGetMetadataParams, FsReadDirectoryParams, FsReadFileParams, ResourceMetadataParams, ResourceReadParams, ResourceReleaseParams, SessionCommandParams, SessionCreateParams, SessionModelSetParams, SessionReadParams, SessionSubscribeParams, SessionThreadArchiveParams, SessionThreadCreateParams, SessionThreadForkParams, SessionUnsubscribeParams, ThreadReadParams, ThreadSubscribeParams, ThreadUnsubscribeParams, TurnInterruptParams, TurnInteractionResolveParams, TurnStartParams, TypstCompileParams, WorkspaceSearchCancelParams, WorkspaceSearchReadParams, WorkspaceSearchStartParams } from "../../../../../generated/app-server/types.js";
+import type { FsGetMetadataParams, FsReadDirectoryParams, FsReadFileParams, ResourceMetadataParams, ResourceReadParams, ResourceReleaseParams, SessionCommandParams, SessionCreateParams, SessionModelSetParams, SessionReadParams, SessionSubscribeParams, SessionThreadArchiveParams, SessionThreadCreateParams, SessionThreadForkParams, SessionUnsubscribeParams, SyntaxChangeParams, SyntaxCloseParams, SyntaxOpenParams, SyntaxTextEditDto, ThreadReadParams, ThreadSubscribeParams, ThreadUnsubscribeParams, TurnInterruptParams, TurnInteractionResolveParams, TurnStartParams, TypstCompileParams, WorkspaceSearchCancelParams, WorkspaceSearchReadParams, WorkspaceSearchStartParams } from "../../../../../generated/app-server/types.js";
 import { APP_SERVER_METHODS } from "../../../../../generated/app-server/types.js";
 import type { GitCommitParams, GitPathsParams } from "../../../../../generated/app-server/types.js";
 import type { AppServerSupervisor } from "./app-server-supervisor.js";
@@ -119,6 +119,24 @@ export function appServerIpcRoutes(
       validate: typstCompileParams,
       invoke: (params) =>
         supervisor.request(APP_SERVER_METHODS["document/typst/compile"], params),
+    }),
+    route({
+      channel: "zeta:syntax:open",
+      validate: syntaxOpenParams,
+      invoke: (params) =>
+        supervisor.request(APP_SERVER_METHODS["document/syntax/open"], params),
+    }),
+    route({
+      channel: "zeta:syntax:change",
+      validate: syntaxChangeParams,
+      invoke: (params) =>
+        supervisor.request(APP_SERVER_METHODS["document/syntax/change"], params),
+    }),
+    route({
+      channel: "zeta:syntax:close",
+      validate: syntaxCloseParams,
+      invoke: (params) =>
+        supervisor.request(APP_SERVER_METHODS["document/syntax/close"], params),
     }),
     route({
       channel: "zeta:resource:metadata",
@@ -669,7 +687,73 @@ function gitCommitParams(value: unknown): GitCommitParams {
 }
 
 const MAX_TYPST_SOURCE_BYTES = 1024 * 1024;
+const MAX_SYNTAX_SOURCE_BYTES = 4 * 1024 * 1024;
 const MAX_RESOURCE_READ_BYTES = 262_144;
+
+function syntaxOpenParams(value: unknown): SyntaxOpenParams {
+  const params = record(value, ["documentId", "documentUri", "language", "revision", "text"]);
+  const text = string(params.text, "text");
+  if (new TextEncoder().encode(text).byteLength > MAX_SYNTAX_SOURCE_BYTES) {
+    throw new Error(`text must not exceed ${MAX_SYNTAX_SOURCE_BYTES} UTF-8 bytes`);
+  }
+  return {
+    documentId: syntaxDocumentId(params.documentId),
+    documentUri: syntaxDocumentUri(params.documentUri),
+    language: stringEnum(params.language, "language", ["rust"] as const),
+    revision: nonNegativeInteger(params.revision, "revision"),
+    text,
+  };
+}
+
+function syntaxChangeParams(value: unknown): SyntaxChangeParams {
+  const params = record(value, ["documentId", "previousRevision", "revision", "edits"]);
+  if (!Array.isArray(params.edits) || params.edits.length === 0 || params.edits.length > 1024) {
+    throw new Error("edits must contain between 1 and 1024 entries");
+  }
+  const edits = params.edits.map(syntaxTextEdit);
+  const replacementBytes = edits.reduce((total, edit) => total + new TextEncoder().encode(edit.text).byteLength, 0);
+  if (replacementBytes > MAX_SYNTAX_SOURCE_BYTES) {
+    throw new Error(`edit text must not exceed ${MAX_SYNTAX_SOURCE_BYTES} UTF-8 bytes`);
+  }
+  const previousRevision = nonNegativeInteger(params.previousRevision, "previousRevision");
+  const revision = positiveInteger(params.revision, "revision");
+  if (revision <= previousRevision) throw new Error("revision must increase");
+  return {
+    documentId: syntaxDocumentId(params.documentId),
+    previousRevision,
+    revision,
+    edits,
+  };
+}
+
+function syntaxTextEdit(value: unknown, index: number): SyntaxTextEditDto {
+  const edit = record(value, ["startUtf16", "endUtf16", "text"]);
+  const startUtf16 = nonNegativeInteger(edit.startUtf16, `edits[${index}].startUtf16`);
+  const endUtf16 = nonNegativeInteger(edit.endUtf16, `edits[${index}].endUtf16`);
+  if (endUtf16 < startUtf16) throw new Error(`edits[${index}] range must be ordered`);
+  return {
+    startUtf16,
+    endUtf16,
+    text: string(edit.text, `edits[${index}].text`),
+  };
+}
+
+function syntaxCloseParams(value: unknown): SyntaxCloseParams {
+  const params = record(value, ["documentId"]);
+  return { documentId: syntaxDocumentId(params.documentId) };
+}
+
+function syntaxDocumentId(value: unknown): string {
+  const id = nonEmptyString(value, "documentId");
+  if (id.length > 256 || id.includes("\0")) throw new Error("documentId is invalid");
+  return id;
+}
+
+function syntaxDocumentUri(value: unknown): string {
+  const uri = nonEmptyString(value, "documentUri");
+  if (uri.length > 16_384 || uri.includes("\0")) throw new Error("documentUri is invalid");
+  return uri;
+}
 
 function typstCompileParams(value: unknown): TypstCompileParams {
   const params = record(value, ["source"]);

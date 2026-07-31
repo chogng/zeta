@@ -1,7 +1,6 @@
 use crate::terminal_profiles::TerminalProfileCatalog;
 use base64::Engine;
 use std::collections::{HashMap, VecDeque};
-use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
 use tokio::runtime::Runtime;
@@ -10,6 +9,7 @@ use zeta_app_server_protocol::protocol::terminal::{
     TerminalReadParams, TerminalReadResult, TerminalResizeParams, TerminalWriteParams,
 };
 use zeta_utils_pty::{ProcessHandle, SpawnedProcess, TerminalSize, spawn_pty_process};
+use zeta_workspace::{TrustedWorkspace, WorkspaceCapability};
 
 const MAX_ACTIVE_TERMINALS: usize = 16;
 const MAX_OUTPUT_BYTES: usize = 1024 * 1024;
@@ -17,7 +17,7 @@ const MAX_INPUT_BYTES: usize = 64 * 1024;
 
 /// Owns connection-scoped interactive PTY processes rooted at one trusted workspace.
 pub(crate) struct TerminalService {
-    workspace_root: RwLock<PathBuf>,
+    workspace: RwLock<TrustedWorkspace>,
     next_terminal_id: AtomicU64,
     sessions: Mutex<HashMap<String, TerminalSession>>,
     runtime: Runtime,
@@ -25,7 +25,8 @@ pub(crate) struct TerminalService {
 }
 
 impl TerminalService {
-    pub(crate) fn new(workspace_root: PathBuf) -> Result<Self, TerminalError> {
+    pub(crate) fn new(workspace: TrustedWorkspace) -> Result<Self, TerminalError> {
+        validate_workspace_capability(&workspace)?;
         let runtime = tokio::runtime::Builder::new_multi_thread()
             .worker_threads(2)
             .enable_all()
@@ -33,7 +34,7 @@ impl TerminalService {
             .build()
             .map_err(|_| TerminalError::OperationFailed)?;
         Ok(Self {
-            workspace_root: RwLock::new(workspace_root),
+            workspace: RwLock::new(workspace),
             next_terminal_id: AtomicU64::new(1),
             sessions: Mutex::new(HashMap::new()),
             runtime,
@@ -41,11 +42,16 @@ impl TerminalService {
         })
     }
 
-    pub(crate) fn switch_workspace_root(&self, workspace_root: PathBuf) {
+    pub(crate) fn switch_workspace(
+        &self,
+        workspace: TrustedWorkspace,
+    ) -> Result<(), TerminalError> {
+        validate_workspace_capability(&workspace)?;
         *self
-            .workspace_root
+            .workspace
             .write()
-            .unwrap_or_else(|poisoned| poisoned.into_inner()) = workspace_root;
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = workspace;
+        Ok(())
     }
 
     pub(crate) fn profiles(&self) -> Vec<TerminalProfile> {
@@ -57,6 +63,7 @@ impl TerminalService {
         owner_connection_id: u64,
         params: TerminalCreateParams,
     ) -> Result<TerminalCreateResult, TerminalError> {
+        self.ensure_trusted()?;
         validate_size(params.rows, params.cols)?;
         let profile = self
             .profiles
@@ -67,10 +74,12 @@ impl TerminalService {
             return Err(TerminalError::Busy);
         }
         let workspace_root = self
-            .workspace_root
+            .workspace
             .read()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .clone();
+            .root()
+            .canonical_path()
+            .to_path_buf();
         let spawned = self
             .runtime
             .block_on(spawn_pty_process(
@@ -111,6 +120,7 @@ impl TerminalService {
         owner_connection_id: u64,
         params: TerminalWriteParams,
     ) -> Result<(), TerminalError> {
+        self.ensure_trusted()?;
         if params.data.is_empty() || params.data.len() > MAX_INPUT_BYTES {
             return Err(TerminalError::InvalidInput);
         }
@@ -131,6 +141,7 @@ impl TerminalService {
         owner_connection_id: u64,
         params: TerminalResizeParams,
     ) -> Result<(), TerminalError> {
+        self.ensure_trusted()?;
         validate_size(params.rows, params.cols)?;
         let sessions = self.owned_sessions(owner_connection_id, &params.terminal_id)?;
         sessions
@@ -149,6 +160,7 @@ impl TerminalService {
         owner_connection_id: u64,
         params: TerminalReadParams,
     ) -> Result<TerminalReadResult, TerminalError> {
+        self.ensure_trusted()?;
         if params.max_chunks == 0 || params.max_chunks > 128 {
             return Err(TerminalError::InvalidInput);
         }
@@ -198,6 +210,23 @@ impl TerminalService {
         });
     }
 
+    pub(crate) fn terminate_all(&self) {
+        let Ok(mut sessions) = self.sessions.lock() else {
+            return;
+        };
+        for (_, session) in sessions.drain() {
+            session.process.request_terminate();
+        }
+    }
+
+    fn ensure_trusted(&self) -> Result<(), TerminalError> {
+        self.workspace
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .ensure_active()
+            .map_err(|_| TerminalError::OperationFailed)
+    }
+
     fn owned_sessions(
         &self,
         owner_connection_id: u64,
@@ -209,6 +238,16 @@ impl TerminalService {
             return Err(TerminalError::NotOwner);
         }
         Ok(sessions)
+    }
+}
+
+fn validate_workspace_capability(workspace: &TrustedWorkspace) -> Result<(), TerminalError> {
+    if workspace.capability() == WorkspaceCapability::ExecuteProcess
+        && workspace.ensure_active().is_ok()
+    {
+        Ok(())
+    } else {
+        Err(TerminalError::OperationFailed)
     }
 }
 

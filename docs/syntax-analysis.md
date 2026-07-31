@@ -1,6 +1,7 @@
 # 源码结构分析系统
 
-> 状态：Rust 增量分析内核已实现；Desktop、Native 与 workspace index 接入尚未完成。
+> 状态：Rust 增量分析内核与 Desktop Monaco Rust syntax-token 接入已实现；Native 与 workspace
+> index 接入尚未完成。
 > 本文拥有跨 crate、进程和编辑器的语言分析所有权与演进阶段；当前 crate API、内部调用图和
 > 修改路径见 [`zeta-syntax` README](../zeta-rs/syntax/README.md)。
 
@@ -13,7 +14,7 @@ Zeta 把可跨编辑器复用的语法分析放入 Rust，同时保留 Monaco �
 | 使用场景 | 当前结果 | 最终 owner |
 | --- | --- | --- |
 | 对 Rust 文本进行增量 parse | ✅ `zeta-syntax` 已实现 UTF-8 edit、revision binding 与 tree reuse | `zeta-syntax` |
-| 取得 syntax token、fold、document outline 和 parse error | ✅ 可取得有界 snapshot；尚未投影到产品 UI | `zeta-syntax` + 产品宿主 |
+| 取得 syntax token、fold、document outline 和 parse error | 部分具备：Rust syntax token 已投影到 Monaco；其他 snapshot 尚未投影 | `zeta-syntax` + 产品宿主 |
 | Monaco 输入、光标、DOM、layout、accessibility | ✅ 继续由 Monaco 拥有 | Desktop Renderer |
 | Native code surface 绘制 | 部分具备：`zeta-editor` 已有 syntax projection，adapter 尚未接线 | `zeta-editor` + Native host |
 | completion、type、definition/reference、rename | 部分具备：低层 LSP runtime 已实现，产品接线尚未完成 | `zeta-lsp` + language server |
@@ -76,25 +77,28 @@ unsaved buffer 优先级、更新原子性、缓存和可能的持久化。两�
 Renderer 的语言 worker/JS heap 工作、共享 Native 实现，以及让大文件结构分析离开 UI thread。
 迁移某项 provider 后必须关闭 Monaco 的重复计算，否则会同时承担两套 parse 成本。
 
-Desktop 当前只能通过版本化 App Server API 使用 Rust。后续接入必须使用长生命周期、按
-connection/document 拥有的 analysis session：
+Desktop 通过版本化 App Server API 使用 Rust。当前 Monaco 接入使用长生命周期、按
+connection/model 拥有的 analysis session：
 
 ```text
-open(full text, revision)
-  → change(previous revision, next revision, bounded edits)
-  → pushed/coalesced snapshot delta tagged with next revision
+document/syntax/open(model ID, URI, full text, revision)
+  → document/syntax/change(model ID, previous revision, next revision, bounded UTF-16 edits)
+  → compact LSP-compatible token snapshot tagged with next revision
   → close
 ```
 
-不能把每次按键实现为“发送全文、返回完整 AST”的独立 RPC。Desktop adapter 还必须定义：
+不能把每次按键实现为“发送全文、返回完整 AST”的独立 RPC。当前 Desktop adapter 已定义：
 
-- UTF-16 ↔ UTF-8 position conversion；
-- edit batching 和顺序；
-- debounce、cancellation 与 backpressure；
-- App Server restart 后的 reopen；
-- snapshot/result 上限；
-- stale revision 丢弃；
-- 禁用对应 Monaco worker/provider 的迁移开关。
+- Monaco UTF-16 absolute offset 到 Rust UTF-8 byte range 的后端转换；
+- 一个 Monaco change event 到一个原子、非重叠 edit batch；
+- 串行 model queue、provider cancellation 检查和 stale revision 丢弃；
+- App Server 文档丢失或重启后的当前全文 reopen；
+- 4 MiB document、1024 edit 和 50,000 token 上限；
+- `registerDocumentSemanticTokensProvider("rust", ...)` 的 compact token 投影。
+
+尚未实现 token delta、主动 debounce 和有界跨进程队列 backpressure；当前返回每个 revision 的
+完整紧凑 token 数组。这里的 provider 使用 Monaco semantic-token transport 形状，但内容仍是
+tree-sitter syntax category，不能描述成 compiler/LSP semantic facts。
 
 Native host 与 Rust 运行在同一进程，可直接依赖 `zeta-syntax`，但仍由 EditorHost 持有文档与
 revision，并把语言中立 token category 映射为 `zeta-editor` presentation color。
@@ -111,13 +115,15 @@ revision，并把语言中立 token category 映射为 `zeta-editor` presentatio
 - 有界 token、fold、document symbol 与 parse diagnostic snapshot；
 - grammar/tree 类型不泄漏到 public API；
 - 单独测试文件覆盖增量编辑、Unicode boundary、revision 和 limits。
+- App Server `document/syntax/open|change|close`、connection/model ownership、UTF-16 batch 转换与
+  Monaco Rust semantic-token provider adapter。
 
 ### 近期计划
 
 1. 建立 authoritative EditorHost/document service，统一 URI、language 和 revision。
 2. 为 Native 增加 snapshot-to-`CodeEditorSyntaxToken` adapter，并按 revision 投影。
-3. 设计 connection-owned Desktop analysis session 和显式 UTF-16/UTF-8 wire contract。
-4. 在 Monaco 先接入 document outline/folding，再按语言逐项替换重复 syntax provider。
+3. 为 token snapshot 增加 result-ID delta 与有界 backpressure，并以 profile 数据决定 debounce。
+4. 在 Monaco 接入 document outline/folding，再按语言逐项替换重复 syntax provider。
 5. 以真实 Files/Search consumer 验证 open buffer 覆盖 disk snapshot 后，再建立 workspace index。
 
 ### 潜在方向

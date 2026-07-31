@@ -4,6 +4,7 @@ use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 use zeta_model_provider_config::{ModelProviderConfig, ProviderConfigRegistry};
 use zeta_protocol::{CommandId, Patch, ProviderId};
+use zeta_workspace::{WorkspaceTrustDecision, WorkspaceTrustSource};
 
 fn config_path(label: &str) -> std::path::PathBuf {
     std::env::temp_dir().join(format!(
@@ -75,6 +76,10 @@ fn update_preferences(
             approval_review_model: Patch::Missing,
         }),
     }
+}
+
+fn workspace_trust_id() -> WorkspaceTrustId {
+    format!("sha256:{}", "12".repeat(32)).parse().unwrap()
 }
 
 fn mcp_server() -> McpServerConfig {
@@ -248,11 +253,13 @@ fn legacy_sqlite_document_is_migrated_once_into_toml() {
         )
         .unwrap();
     let mut legacy_document = serde_json::to_value(&document).unwrap();
-    legacy_document.as_object_mut().unwrap().remove("plugins");
-    legacy_document.as_object_mut().unwrap().remove("hooks");
+    legacy_document
+        .as_object_mut()
+        .unwrap()
+        .remove("workspaceTrust");
     connection
         .execute(
-            "INSERT INTO config_authority VALUES (1, 5, 7, 9, ?1)",
+            "INSERT INTO config_authority VALUES (1, 6, 7, 9, ?1)",
             [serde_json::to_string(&legacy_document).unwrap()],
         )
         .unwrap();
@@ -307,7 +314,7 @@ fn additive_document_schema_upgrade_keeps_revision_and_generation() {
                  generation INTEGER NOT NULL,
                  content_digest TEXT NOT NULL
              );
-             INSERT INTO config_metadata VALUES (1, 5, 7, 9, 'legacy-digest');
+             INSERT INTO config_metadata VALUES (1, 6, 7, 9, 'legacy-digest');
              CREATE TABLE config_command_receipts (
                  command_id TEXT PRIMARY KEY,
                  expected_revision INTEGER NOT NULL,
@@ -331,7 +338,7 @@ fn additive_document_schema_upgrade_keeps_revision_and_generation() {
             |row| row.get(0),
         )
         .unwrap();
-    assert_eq!(document_schema_version, 6);
+    assert_eq!(document_schema_version, 7);
     drop(store);
     remove_config_files(&path);
 }
@@ -358,6 +365,54 @@ fn preference_patches_preserve_missing_fields_and_clear_null_fields() {
 
     let snapshot = store.read_snapshot().unwrap();
     assert_eq!(snapshot.values.preferred_model, None);
+    remove_config_files(&path);
+}
+
+#[test]
+fn workspace_trust_commands_persist_user_owned_decisions() {
+    let path = config_path("workspace-trust");
+    let store = ConfigStore::open(&path).unwrap();
+    let workspace = workspace_trust_id();
+    let trusted = store
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("trust-workspace").unwrap(),
+            expected_revision: ConfigRevision::INITIAL,
+            command: UserConfigCommand::SetWorkspaceTrust {
+                workspace: workspace.clone(),
+                setting: WorkspaceTrustSetting::Trusted,
+            },
+        })
+        .unwrap();
+
+    assert_eq!(
+        store
+            .read_snapshot()
+            .unwrap()
+            .values
+            .workspace_trust
+            .decision_for(&workspace),
+        WorkspaceTrustDecision::Trusted(WorkspaceTrustSource::ExplicitUserDecision)
+    );
+    assert!(persisted_config_document(&path).contains("[workspaceTrust.roots]"));
+
+    store
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("forget-workspace").unwrap(),
+            expected_revision: trusted.revision,
+            command: UserConfigCommand::ForgetWorkspaceTrust {
+                workspace: workspace.clone(),
+            },
+        })
+        .unwrap();
+    assert_eq!(
+        store
+            .read_snapshot()
+            .unwrap()
+            .values
+            .workspace_trust
+            .decision_for(&workspace),
+        WorkspaceTrustDecision::Restricted
+    );
     remove_config_files(&path);
 }
 
@@ -1043,6 +1098,20 @@ args = []
     );
 
     std::fs::write(&path, "unknown = true").unwrap();
+    assert!(
+        WorkspaceConfigStore::open(&path, scope.clone())
+            .read_document()
+            .is_err()
+    );
+
+    std::fs::write(
+        &path,
+        format!(
+            "[workspaceTrust.roots]\n\"{}\" = \"trusted\"\n",
+            workspace_trust_id()
+        ),
+    )
+    .unwrap();
     assert!(
         WorkspaceConfigStore::open(&path, scope.clone())
             .read_document()

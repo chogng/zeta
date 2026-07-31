@@ -4,7 +4,7 @@ use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::time::UNIX_EPOCH;
 use tempfile::NamedTempFile;
-use zeta_sandboxing::WorkspaceRoot;
+use zeta_workspace::WorkspaceRoot;
 
 /// Local implementation that confines all operations to one canonical workspace root.
 pub struct LocalFileSystem {

@@ -1,17 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import type {
-  WorkspaceSearchMatch,
-} from "../generated/app-server/types.js";
-import {
-  BrowserWorkspaceSearchService,
-  type IWorkspaceSearchApi,
-} from "../src/zeta/platform/search/browser/searchService.js";
-import type {
-  IWorkspaceSearchQuery,
-  IWorkspaceSearchService,
-} from "../src/zeta/platform/search/common/search.js";
+import type { WorkspaceSearchMatch } from "../generated/app-server/types.js";
+import { BrowserWorkspaceSearchService, type IWorkspaceSearchApi } from "../src/zeta/platform/search/browser/searchService.js";
+import type { IWorkspaceSearchQuery, IWorkspaceSearchService } from "../src/zeta/platform/search/common/search.js";
 
 const matches: readonly WorkspaceSearchMatch[] = [
   {

@@ -8,8 +8,9 @@ use zeta_install_context::InstallContext;
 use zeta_sandboxing::{
     FileSystemAccess, NetworkAccess, PROTECTED_WORKSPACE_METADATA_NAMES, PreparedCommand,
     SandboxBackend, SandboxCommand, SandboxError, SandboxKind, SandboxPolicy, SandboxProcessDenial,
-    SandboxProcessExitStatus, WorkspaceRoot,
+    SandboxProcessExitStatus,
 };
+use zeta_workspace::WorkspaceRoot;
 
 pub use discovery::LinuxSandboxDiscoveryError;
 
@@ -61,9 +62,13 @@ impl LinuxSandbox {
         )
         .mount(Path::new("/"), Path::new("/"), root_access);
         if policy.file_system() == FileSystemAccess::WorkspaceWrite {
-            builder = builder.mount(workspace.path(), workspace.path(), MountAccess::ReadWrite);
+            builder = builder.mount(
+                workspace.canonical_path(),
+                workspace.canonical_path(),
+                MountAccess::ReadWrite,
+            );
             for name in PROTECTED_WORKSPACE_METADATA_NAMES {
-                let path = workspace.path().join(name);
+                let path = workspace.canonical_path().join(name);
                 if path.exists() {
                     builder = builder.mount(&path, &path, MountAccess::ReadOnly);
                 }

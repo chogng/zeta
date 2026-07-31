@@ -5,6 +5,7 @@ use tokio::runtime::Runtime;
 use zeta_git::{
     GitClient, GitCommitRequest, GitError, GitPathspecSet, GitRepository, GitRepositorySnapshot,
 };
+use zeta_workspace::{TrustedWorkspace, WorkspaceCapability, WorkspaceRoot};
 
 pub(crate) struct GitServiceCommit {
     pub(crate) object_id: String,
@@ -28,19 +29,22 @@ enum GitRemoteMutation {
 
 /// Workspace-scoped owner of the async Git runtime used by synchronous RPC dispatch.
 pub(crate) struct GitService {
-    workspace_root: PathBuf,
+    workspace: TrustedWorkspace,
     client: GitClient,
     runtime: Mutex<Runtime>,
 }
 
 impl GitService {
-    pub(crate) fn new(workspace_root: PathBuf) -> Result<Self, GitServiceError> {
+    pub(crate) fn new(workspace: TrustedWorkspace) -> Result<Self, GitServiceError> {
+        if workspace.capability() != WorkspaceCapability::MutateRepository {
+            return Err(GitServiceError::Trust);
+        }
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
             .map_err(|_| GitServiceError::Runtime)?;
         Ok(Self {
-            workspace_root,
+            workspace,
             client: GitClient::system(),
             runtime: Mutex::new(runtime),
         })
@@ -49,11 +53,12 @@ impl GitService {
     pub(crate) fn snapshot(
         &self,
     ) -> Result<(GitRepository, GitRepositorySnapshot), GitServiceError> {
+        self.ensure_trusted()?;
         let runtime = self.runtime.lock().map_err(|_| GitServiceError::Runtime)?;
         runtime.block_on(async {
             let repository = self
                 .client
-                .open_repository(&self.workspace_root)
+                .open_repository(self.workspace.root().canonical_path())
                 .await
                 .map_err(GitServiceError::Git)?;
             let snapshot = self
@@ -66,7 +71,11 @@ impl GitService {
     }
 
     pub(crate) fn workspace_root(&self) -> &Path {
-        &self.workspace_root
+        self.workspace.root().canonical_path()
+    }
+
+    pub(crate) fn workspace(&self) -> &WorkspaceRoot {
+        self.workspace.root()
     }
 
     pub(crate) fn stage(
@@ -91,6 +100,7 @@ impl GitService {
     }
 
     pub(crate) fn commit(&self, message: String) -> Result<GitServiceCommit, GitServiceError> {
+        self.ensure_trusted()?;
         let request = GitCommitRequest::new(message).map_err(GitServiceError::Git)?;
         let runtime = self.runtime.lock().map_err(|_| GitServiceError::Runtime)?;
         runtime.block_on(async {
@@ -132,6 +142,7 @@ impl GitService {
         operation: GitPathMutation,
         paths: Vec<PathBuf>,
     ) -> Result<(GitRepository, GitRepositorySnapshot), GitServiceError> {
+        self.ensure_trusted()?;
         let runtime = self.runtime.lock().map_err(|_| GitServiceError::Runtime)?;
         runtime.block_on(async {
             let repository = self.open_repository().await?;
@@ -157,6 +168,7 @@ impl GitService {
         &self,
         operation: GitRemoteMutation,
     ) -> Result<(GitRepository, GitRepositorySnapshot), GitServiceError> {
+        self.ensure_trusted()?;
         let runtime = self.runtime.lock().map_err(|_| GitServiceError::Runtime)?;
         runtime.block_on(async {
             let repository = self.open_repository().await?;
@@ -179,7 +191,7 @@ impl GitService {
 
     async fn open_repository(&self) -> Result<GitRepository, GitServiceError> {
         self.client
-            .open_repository(&self.workspace_root)
+            .open_repository(self.workspace.root().canonical_path())
             .await
             .map_err(GitServiceError::Git)
     }
@@ -190,8 +202,9 @@ impl GitService {
         paths: Vec<PathBuf>,
     ) -> Result<GitPathspecSet, GitServiceError> {
         let workspace_prefix = self
-            .workspace_root
-            .strip_prefix(repository.worktree_root())
+            .workspace
+            .root()
+            .relative_to_existing_ancestor(repository.worktree_root())
             .map_err(|_| GitServiceError::Boundary)?;
         GitPathspecSet::new(
             paths
@@ -201,6 +214,12 @@ impl GitService {
         )
         .map_err(GitServiceError::Git)
     }
+
+    fn ensure_trusted(&self) -> Result<(), GitServiceError> {
+        self.workspace
+            .ensure_active()
+            .map_err(|_| GitServiceError::Trust)
+    }
 }
 
 #[derive(Debug)]
@@ -208,4 +227,5 @@ pub(crate) enum GitServiceError {
     Boundary,
     Git(GitError),
     Runtime,
+    Trust,
 }

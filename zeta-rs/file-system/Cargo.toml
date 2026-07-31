@@ -12,7 +12,7 @@ path = "src/lib.rs"
 
 [dependencies]
 tempfile = { workspace = true }
-zeta-sandboxing = { workspace = true }
+zeta-workspace = { workspace = true }
 
 [lints]
 workspace = true
