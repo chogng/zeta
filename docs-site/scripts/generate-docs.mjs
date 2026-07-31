@@ -28,6 +28,7 @@ const groups = [
       "menu-system",
       "icons",
       "search",
+      "syntax-analysis",
       "native-text-input",
       "native-terminal-ui",
       "pdf",

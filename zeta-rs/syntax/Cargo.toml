@@ -1,0 +1,19 @@
+[package]
+name = "zeta-syntax"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[lib]
+doctest = false
+name = "zeta_syntax"
+path = "src/lib.rs"
+
+[dependencies]
+thiserror = { workspace = true }
+tree-sitter = { workspace = true }
+tree-sitter-rust = { workspace = true }
+
+[lints]
+workspace = true

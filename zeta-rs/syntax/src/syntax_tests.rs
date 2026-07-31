@@ -1,0 +1,245 @@
+use crate::{
+    AnalysisLimits, DocumentRevision, DocumentSymbolKind, SyntaxDocument, SyntaxEdit, SyntaxError,
+    SyntaxLanguage, SyntaxTokenKind,
+};
+
+const RUST_SOURCE: &str = r#"mod engine {
+    /// Adds two values.
+    pub fn add(left: i32, right: i32) -> i32 {
+        left + right
+    }
+}
+"#;
+
+#[test]
+fn rust_snapshot_contains_tokens_folds_and_symbols() {
+    let document =
+        SyntaxDocument::open(SyntaxLanguage::Rust, DocumentRevision::new(7), RUST_SOURCE)
+            .expect("Rust grammar should load");
+
+    let snapshot = document.snapshot();
+
+    assert_eq!(snapshot.revision(), DocumentRevision::new(7));
+    assert!(!snapshot.has_errors());
+    assert!(
+        snapshot
+            .tokens()
+            .iter()
+            .any(|token| token.kind == SyntaxTokenKind::Keyword)
+    );
+    assert!(
+        snapshot
+            .tokens()
+            .iter()
+            .any(|token| token.kind == SyntaxTokenKind::Function)
+    );
+    assert!(
+        snapshot
+            .folding_ranges()
+            .iter()
+            .any(|range| range.range.start.row < range.range.end.row)
+    );
+    assert!(
+        snapshot
+            .symbols()
+            .iter()
+            .any(|symbol| symbol.name == "engine" && symbol.kind == DocumentSymbolKind::Module)
+    );
+    assert!(
+        snapshot
+            .symbols()
+            .iter()
+            .any(|symbol| symbol.name == "add" && symbol.kind == DocumentSymbolKind::Function)
+    );
+}
+
+#[test]
+fn incremental_edit_updates_text_revision_positions_and_symbols() {
+    let mut document = SyntaxDocument::open(
+        SyntaxLanguage::Rust,
+        DocumentRevision::new(1),
+        "fn first() {}\n",
+    )
+    .expect("Rust grammar should load");
+    let name_start = document
+        .text()
+        .find("first")
+        .expect("fixture should contain the function name");
+    let edit = SyntaxEdit::replace(name_start..name_start + "first".len(), "second");
+
+    let snapshot = document
+        .apply_edit(DocumentRevision::new(2), &edit)
+        .expect("valid edit should apply");
+
+    assert_eq!(document.text(), "fn second() {}\n");
+    assert_eq!(document.revision(), DocumentRevision::new(2));
+    assert_eq!(snapshot.revision(), DocumentRevision::new(2));
+    assert!(
+        snapshot
+            .symbols()
+            .iter()
+            .any(|symbol| symbol.name == "second")
+    );
+    assert!(
+        !snapshot
+            .symbols()
+            .iter()
+            .any(|symbol| symbol.name == "first")
+    );
+}
+
+#[test]
+fn multiline_edit_maintains_byte_columns_for_following_edits() {
+    let mut document = SyntaxDocument::open(
+        SyntaxLanguage::Rust,
+        DocumentRevision::new(1),
+        "fn main() {\n    work();\n}\n",
+    )
+    .expect("Rust grammar should load");
+    let work_start = document
+        .text()
+        .find("work")
+        .expect("fixture should contain work");
+    document
+        .apply_edit(
+            DocumentRevision::new(2),
+            &SyntaxEdit::replace(work_start..work_start + 4, "first();\n    second"),
+        )
+        .expect("multiline edit should apply");
+    let second_start = document
+        .text()
+        .find("second")
+        .expect("first edit should insert second");
+
+    let snapshot = document
+        .apply_edit(
+            DocumentRevision::new(3),
+            &SyntaxEdit::replace(second_start..second_start + 6, "done"),
+        )
+        .expect("following edit should use the updated line index");
+
+    assert_eq!(
+        document.text(),
+        "fn main() {\n    first();\n    done();\n}\n"
+    );
+    assert_eq!(snapshot.revision(), DocumentRevision::new(3));
+    assert!(!snapshot.has_errors());
+}
+
+#[test]
+fn deleting_a_complete_line_updates_following_symbol_positions() {
+    let first_line = "fn first() {}\n";
+    let mut document = SyntaxDocument::open(
+        SyntaxLanguage::Rust,
+        DocumentRevision::new(1),
+        format!("{first_line}fn second() {{}}\n"),
+    )
+    .expect("Rust grammar should load");
+
+    document
+        .apply_edit(
+            DocumentRevision::new(2),
+            &SyntaxEdit::delete(0..first_line.len()),
+        )
+        .expect("complete line deletion should apply");
+    let second_start = document
+        .text()
+        .find("second")
+        .expect("second function should remain");
+    let snapshot = document
+        .apply_edit(
+            DocumentRevision::new(3),
+            &SyntaxEdit::replace(second_start..second_start + 6, "renamed"),
+        )
+        .expect("following edit should use shifted line starts");
+
+    let symbol = snapshot
+        .symbols()
+        .iter()
+        .find(|symbol| symbol.name == "renamed")
+        .expect("renamed function should be indexed");
+    assert_eq!(symbol.selection_range.start.row, 0);
+    assert_eq!(document.text(), "fn renamed() {}\n");
+}
+
+#[test]
+fn invalid_edits_do_not_mutate_the_document() {
+    let mut document = SyntaxDocument::open(
+        SyntaxLanguage::Rust,
+        DocumentRevision::new(4),
+        "fn π() {}\n",
+    )
+    .expect("Rust grammar should load");
+    let original = document.text().to_owned();
+    let inside_pi = original.find('π').expect("fixture should contain pi") + 1;
+
+    let error = document
+        .apply_edit(
+            DocumentRevision::new(5),
+            &SyntaxEdit::insert(inside_pi, "x"),
+        )
+        .expect_err("edit inside a UTF-8 scalar should fail");
+
+    assert!(matches!(
+        error,
+        SyntaxError::InvalidEditBoundary { offset } if offset == inside_pi
+    ));
+    assert_eq!(document.text(), original);
+    assert_eq!(document.revision(), DocumentRevision::new(4));
+}
+
+#[test]
+fn revisions_must_increase_and_document_limits_apply_before_mutation() {
+    let limits = AnalysisLimits {
+        max_document_bytes: 16,
+        ..AnalysisLimits::default()
+    };
+    let mut document = SyntaxDocument::open_with_limits(
+        SyntaxLanguage::Rust,
+        DocumentRevision::new(9),
+        "fn a() {}\n",
+        limits,
+    )
+    .expect("fixture should fit");
+
+    let stale = document
+        .apply_edit(DocumentRevision::new(9), &SyntaxEdit::insert(0, "pub "))
+        .expect_err("equal revision should fail");
+    assert!(matches!(stale, SyntaxError::NonIncreasingRevision { .. }));
+
+    let oversized = document
+        .apply_edit(
+            DocumentRevision::new(10),
+            &SyntaxEdit::insert(0, "pub(crate) "),
+        )
+        .expect_err("oversized result should fail");
+    assert!(matches!(oversized, SyntaxError::DocumentTooLarge { .. }));
+    assert_eq!(document.text(), "fn a() {}\n");
+    assert_eq!(document.revision(), DocumentRevision::new(9));
+}
+
+#[test]
+fn zero_collection_limits_produce_an_empty_bounded_snapshot() {
+    let limits = AnalysisLimits {
+        max_tokens: 0,
+        max_folding_ranges: 0,
+        max_symbols: 0,
+        max_diagnostics: 0,
+        ..AnalysisLimits::default()
+    };
+    let document = SyntaxDocument::open_with_limits(
+        SyntaxLanguage::Rust,
+        DocumentRevision::new(1),
+        "fn broken( {\n",
+        limits,
+    )
+    .expect("recoverable syntax errors should still produce a document");
+
+    let snapshot = document.snapshot();
+
+    assert!(snapshot.tokens().is_empty());
+    assert!(snapshot.folding_ranges().is_empty());
+    assert!(snapshot.symbols().is_empty());
+    assert!(snapshot.diagnostics().is_empty());
+    assert!(snapshot.has_errors());
+}

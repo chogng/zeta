@@ -48,6 +48,7 @@ members = [
     "shell-command",
     "skills",
     "storage",
+    "syntax",
     "terminal",
     "thread-store",
     "tools",
@@ -120,6 +121,8 @@ typst-pdf = "=0.15.1"
 tokio = "1"
 thiserror = "2"
 tempfile = "3"
+tree-sitter = "0.26.11"
+tree-sitter-rust = "0.24.2"
 unicode-segmentation = "1"
 unicode-width = "0.2"
 url = "2"
@@ -178,6 +181,7 @@ zeta-session-store = { path = "session-store" }
 zeta-shell-command = { path = "shell-command" }
 zeta-skills = { path = "skills" }
 zeta-storage = { path = "storage" }
+zeta-syntax = { path = "syntax" }
 zeta-terminal = { path = "terminal" }
 zeta-thread-store = { path = "thread-store" }
 zeta-tools = { path = "tools" }

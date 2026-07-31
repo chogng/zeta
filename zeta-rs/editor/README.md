@@ -3,7 +3,8 @@
 > 本 README 是代码编辑器与差异编辑器 presentation 的 crate-level canonical contract。
 > 跨 crate 的依赖与产品宿主边界见
 > [`docs/zeta-rs-architecture.md`](../../docs/zeta-rs-architecture.md)；`zeta-diff` 算法契约见
-> [`diff/README.md`](../diff/README.md)。
+> [`diff/README.md`](../diff/README.md)；异步结构分析与 revision binding 见
+> [`docs/syntax-analysis.md`](../../docs/syntax-analysis.md)。
 
 `zeta-editor` 拥有 Native UI 使用的多行代码编辑模型、caret/selection、键盘命令、有界
 undo/redo、IME composition、语法 token、代码行与视口绘制，以及由两个代码视口组成的并排差异
