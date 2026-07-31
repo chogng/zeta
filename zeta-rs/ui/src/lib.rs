@@ -22,12 +22,12 @@ pub use components::{
     ContextViewAnchorAlignment, ContextViewAnchorAxis, ContextViewAnchorPosition,
     ContextViewLayout, ContextViewPlacement, ContextViewStyle, Dropdown, DropdownItem,
     DropdownSelection, DropdownStyle, IconLabel, IconLabelStyle, InputBox, InputBoxState,
-    InputBoxStateColors, InputBoxStyle, Sash, SashOrientation, SashState, SashStyle, ScrollAxis,
-    ScrollCommand, ScrollDelta, ScrollMetrics, ScrollState, ScrollView, ScrollViewStyle,
-    ScrollViewport, ScrollbarController, ScrollbarDrag, ScrollbarHit, ScrollbarLayout,
-    ScrollbarPart, ScrollbarPointerPresence, ScrollbarPresentation, ScrollbarState, ScrollbarStyle,
-    ScrollbarVisibility, SearchBox, SearchBoxStyle, Tab, TabBackgrounds, TabList,
-    TabListOrientation, TabListStyle, TabSelection, TabState, TabStyle,
+    InputBoxStateColors, InputBoxStyle, Keycap, KeycapSequence, KeycapStyle, Sash, SashOrientation,
+    SashState, SashStyle, ScrollAxis, ScrollCommand, ScrollDelta, ScrollMetrics, ScrollState,
+    ScrollView, ScrollViewStyle, ScrollViewport, ScrollbarController, ScrollbarDrag, ScrollbarHit,
+    ScrollbarLayout, ScrollbarPart, ScrollbarPointerPresence, ScrollbarPresentation,
+    ScrollbarState, ScrollbarStyle, ScrollbarVisibility, SearchBox, SearchBoxStyle, Tab,
+    TabBackgrounds, TabList, TabListOrientation, TabListStyle, TabSelection, TabState, TabStyle,
 };
 pub use font::{FontCatalog, FontCatalogError};
 pub use geometry::{CornerRadii, Edges, Point, Rect, Size};
@@ -40,7 +40,9 @@ pub use layout::{
 };
 pub use paint::{Border, BoxShadow, Color, PaintRect};
 pub use renderer::{UiRenderError, UiRenderer, UiViewport};
-pub use scene::{FontFamily, FontStyle, FontWeight, TextBlock, TextSpan, TextStyle, UiScene};
+pub use scene::{
+    FontFamily, FontStyle, FontWeight, TextBlock, TextBlockWrap, TextSpan, TextStyle, UiScene,
+};
 pub use text_input::{
     CaretBlinkAdvance, CaretBlinkController, CaretVisibility, TextInput, TextInputCommand,
     TextInputCompositionCursor, TextInputCompositionEvent, TextInputLayout, TextInputLayoutEngine,

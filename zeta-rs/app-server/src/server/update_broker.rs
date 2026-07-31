@@ -2,11 +2,13 @@ use serde::Serialize;
 use serde_json::Value;
 use std::collections::BTreeMap;
 use std::sync::{Arc, Condvar, Mutex, Weak};
+use zeta_app_server_protocol::protocol::config::ConfigChanged;
 use zeta_app_server_protocol::protocol::fs::FsChanged;
 use zeta_app_server_protocol::protocol::git::{GitStatusChanged, GitStatusResult};
 use zeta_app_server_protocol::protocol::registry::ServerNotificationMethod;
 use zeta_app_server_protocol::protocol::skills::SkillsChanged;
 use zeta_app_server_protocol::rpc::JsonRpcNotification;
+use zeta_config::ConfigChange;
 use zeta_protocol::{
     SessionId, SessionUpdateEnvelope, ThreadId, ThreadUpdate, ThreadUpdateEnvelope,
 };
@@ -244,7 +246,8 @@ impl UpdateBroker {
             }
             ThreadUpdate::ItemStarted { .. }
             | ThreadUpdate::ItemDelta { .. }
-            | ThreadUpdate::PlanUpdated { .. } => self.publish_thread_transient(&update),
+            | ThreadUpdate::PlanUpdated { .. }
+            | ThreadUpdate::ToolOutputDelta { .. } => self.publish_thread_transient(&update),
         }
     }
 
@@ -263,6 +266,29 @@ impl UpdateBroker {
             queue.push(notification(
                 ServerNotificationMethod::SkillsChanged,
                 &SkillsChanged { generation },
+            ));
+            true
+        });
+    }
+
+    pub(super) fn publish_config_changed(&self, change: ConfigChange) {
+        let Ok(mut subscribers) = self.subscribers.lock() else {
+            return;
+        };
+        subscribers.retain(|_, subscriber| {
+            let Some(queue) = subscriber
+                .queue
+                .upgrade()
+                .map(NotificationQueue::from_inner)
+            else {
+                return false;
+            };
+            queue.push(notification(
+                ServerNotificationMethod::ConfigChanged,
+                &ConfigChanged {
+                    revision: change.revision.get(),
+                    generation: change.generation.get(),
+                },
             ));
             true
         });

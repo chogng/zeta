@@ -1,30 +1,38 @@
-use crate::RolloutError;
-use std::path::PathBuf;
+use crate::LocalStateError;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use zeta_core::{SessionCoordinator, ThreadController, ThreadStore, WriterLease};
 use zeta_protocol::SessionId;
 use zeta_session_store::SessionStore;
-use zeta_storage::{LeaseDirectory, SessionRolloutStore, ThreadRolloutStore};
+use zeta_storage::{LeaseDirectory, SqliteSessionStore, SqliteThreadStore};
 
-/// Opens and recovers the local authoritative rollout for all Sessions and Threads under one root.
+/// Opens and recovers local authoritative Session and Thread state under one profile root.
 ///
 /// A repository provides the typed store ports needed by consumers that must inspect durable
 /// history. New coordinators must be obtained through [`Self::recover_coordinator`] so every
 /// Thread is recovered before Session saga reconciliation begins.
-pub struct RolloutRepository {
-    session_store: Arc<SessionRolloutStore>,
-    thread_store: Arc<ThreadRolloutStore>,
+pub struct LocalStateRepository {
+    database_path: PathBuf,
+    session_store: Arc<SqliteSessionStore>,
+    thread_store: Arc<SqliteThreadStore>,
     writer_lease: Arc<LeaseDirectory>,
 }
 
-impl RolloutRepository {
-    pub fn open(root: impl Into<PathBuf>) -> Result<Self, RolloutError> {
+impl LocalStateRepository {
+    pub fn open(root: impl Into<PathBuf>) -> Result<Self, LocalStateError> {
         let root = root.into();
+        let database_path = local_database_path(&root);
         Ok(Self {
-            session_store: Arc::new(SessionRolloutStore::open(&root)?),
-            thread_store: Arc::new(ThreadRolloutStore::open(&root)?),
+            session_store: Arc::new(SqliteSessionStore::open(&database_path)?),
+            thread_store: Arc::new(SqliteThreadStore::open(&database_path)?),
             writer_lease: Arc::new(LeaseDirectory::open(root.join("leases"))?),
+            database_path,
         })
+    }
+
+    /// Returns the shared SQLite database used by the repository's local authorities.
+    pub fn database_path(&self) -> &Path {
+        &self.database_path
     }
 
     /// Returns the read/write Session history port for this repository.
@@ -41,7 +49,7 @@ impl RolloutRepository {
     ///
     /// Thread recovery precedes Session recovery because Session reconciliation may finish a
     /// durable `ThreadCreationPlanned` saga by observing or creating its child Thread.
-    pub fn recover_coordinator(&self) -> Result<Arc<SessionCoordinator>, RolloutError> {
+    pub fn recover_coordinator(&self) -> Result<Arc<SessionCoordinator>, LocalStateError> {
         let thread_store: Arc<dyn ThreadStore> = self.thread_store.clone();
         let thread_lease: Arc<dyn WriterLease<zeta_protocol::ThreadId>> = self.writer_lease.clone();
         let threads = Arc::new(ThreadController::with_store_and_lease(
@@ -64,4 +72,8 @@ impl RolloutRepository {
         }
         Ok(sessions)
     }
+}
+
+fn local_database_path(root: &Path) -> PathBuf {
+    root.join("state.sqlite3")
 }

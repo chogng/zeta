@@ -10,8 +10,10 @@
 缺失路径回退、RAII 注销和异步事件合并。它只报告“可能发生了变化”；消费者必须重新读取并验证
 自己拥有的状态，不能把 backend event 当作文件或 catalog 事实。
 
-macOS 显式使用 `notify` 的 kqueue backend，避免 FSEvents 对 `CoreServices` framework 的链接依赖
-污染 hermetic Bazel toolchain；Linux/Windows 继续使用 `notify` 的推荐平台 backend。
+macOS 显式使用 `notify` 的 FSEvents backend。workspace watcher 会递归覆盖整棵工作区；不能改用
+kqueue，因为它会为大量 watched entry 持有 file descriptor，并在大型工作区耗尽进程资源。
+hermetic Bazel toolchain 必须提供 FSEvents 所需的 `CoreServices` framework 链接边界；
+Linux/Windows 继续使用 `notify` 的推荐平台 backend。
 
 ## 文件与职责
 

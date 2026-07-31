@@ -1,5 +1,5 @@
 use crate::{
-    ConfigError, ConfigGeneration, ConfigRevision, McpServerId, PluginId, ResolvedConfig,
+    ConfigError, ConfigGeneration, ConfigRevision, HookId, McpServerId, PluginId, ResolvedConfig,
     ResolvedConfigSnapshot, SkillSourceId, UserConfigDocument, WorkspaceConfigDocument,
     WorkspaceConfigIntent, WorkspaceConfigRevision, WorkspaceConfigScope, WorkspaceId,
 };
@@ -17,19 +17,18 @@ pub enum ConfigValueSource {
 /// Origin information for consumer-visible configuration values.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct ConfigProvenance {
-    pub theme: Option<ConfigValueSource>,
     pub preferred_model: Option<ConfigValueSource>,
     pub approval_review_model: ConfigValueSource,
     pub providers: BTreeMap<ProviderId, ConfigValueSource>,
     pub mcp_servers: BTreeMap<McpServerId, ConfigValueSource>,
     pub skill_sources: BTreeMap<SkillSourceId, ConfigValueSource>,
     pub plugin_requests: BTreeMap<PluginId, ConfigValueSource>,
+    pub hooks: BTreeMap<HookId, ConfigValueSource>,
 }
 
 impl ConfigProvenance {
     pub(crate) fn from_user(document: &UserConfigDocument) -> Self {
         Self {
-            theme: document.ui.theme.map(|_| ConfigValueSource::User),
             preferred_model: document
                 .agent
                 .preferred_model
@@ -56,7 +55,20 @@ impl ConfigProvenance {
                 .cloned()
                 .map(|id| (id, ConfigValueSource::User))
                 .collect(),
-            plugin_requests: BTreeMap::new(),
+            plugin_requests: document
+                .plugins
+                .requests
+                .keys()
+                .cloned()
+                .map(|id| (id, ConfigValueSource::User))
+                .collect(),
+            hooks: document
+                .hooks
+                .hooks
+                .keys()
+                .cloned()
+                .map(|id| (id, ConfigValueSource::User))
+                .collect(),
         }
     }
 }
@@ -67,6 +79,8 @@ pub enum ConfigDiagnosticCode {
     WorkspacePreferredModelProviderUnconfigured,
     WorkspaceMcpPendingTrust,
     WorkspaceSkillPendingTrust,
+    WorkspacePluginPendingTrust,
+    WorkspaceHookPendingTrust,
 }
 
 /// Redacted explanation of why a requested configuration value is not immediately usable.
@@ -169,6 +183,15 @@ pub fn resolve_scoped_config(
                 .cloned()
                 .map(|id| (id, source.clone())),
         );
+        provenance.hooks.extend(
+            workspace
+                .document
+                .hooks
+                .hooks
+                .keys()
+                .cloned()
+                .map(|id| (id, source.clone())),
+        );
         diagnostics.extend(
             workspace
                 .document
@@ -177,6 +200,28 @@ pub fn resolve_scoped_config(
                 .keys()
                 .map(|id| ConfigDiagnostic {
                     code: ConfigDiagnosticCode::WorkspaceMcpPendingTrust,
+                    subject: id.to_string(),
+                }),
+        );
+        diagnostics.extend(
+            workspace
+                .document
+                .plugin_requests
+                .requests
+                .keys()
+                .map(|id| ConfigDiagnostic {
+                    code: ConfigDiagnosticCode::WorkspacePluginPendingTrust,
+                    subject: id.to_string(),
+                }),
+        );
+        diagnostics.extend(
+            workspace
+                .document
+                .hooks
+                .hooks
+                .keys()
+                .map(|id| ConfigDiagnostic {
+                    code: ConfigDiagnosticCode::WorkspaceHookPendingTrust,
                     subject: id.to_string(),
                 }),
         );
@@ -196,6 +241,7 @@ pub fn resolve_scoped_config(
             mcp: workspace.document.mcp.clone(),
             plugin_requests: workspace.document.plugin_requests.clone(),
             skills: workspace.document.skills.clone(),
+            hooks: workspace.document.hooks.clone(),
         });
     }
 

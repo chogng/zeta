@@ -47,6 +47,7 @@ pub struct DropdownStyle {
     corner_radii: CornerRadii,
     button_style: ButtonStyle,
     item_size: Size,
+    header_height: f32,
     placement: ContextViewPlacement,
 }
 
@@ -57,12 +58,19 @@ impl DropdownStyle {
             corner_radii: CornerRadii::uniform(0.0),
             button_style,
             item_size,
+            header_height: 0.0,
             placement: ContextViewPlacement::new(),
         }
     }
 
     pub const fn with_corner_radii(mut self, corner_radii: CornerRadii) -> Self {
         self.corner_radii = corner_radii;
+        self
+    }
+
+    /// Reserves a leading row that the product host can paint with [`Dropdown::paint_with_header`].
+    pub const fn with_header_height(mut self, header_height: f32) -> Self {
+        self.header_height = header_height;
         self
     }
 
@@ -81,6 +89,8 @@ impl DropdownStyle {
 #[derive(Clone, Debug, PartialEq)]
 pub struct Dropdown {
     context_view: ContextView,
+    item_bounds: Rect,
+    header_bounds: Option<Rect>,
     items: Vec<DropdownItem>,
     style: DropdownStyle,
     selection: DropdownSelection,
@@ -95,7 +105,7 @@ impl Dropdown {
     ) -> Self {
         let desired_content_size = Size::new(
             style.item_size.width.max(0.0),
-            style.item_size.height.max(0.0) * items.len() as f32,
+            style.header_height.max(0.0) + style.item_size.height.max(0.0) * items.len() as f32,
         );
         let context_view = ContextView::new(
             viewport,
@@ -104,8 +114,26 @@ impl Dropdown {
             style.placement,
             ContextViewStyle::new(style.background).with_corner_radii(style.corner_radii),
         );
+        let content_bounds = context_view.content_bounds();
+        let header_height = style.header_height.max(0.0).min(content_bounds.size.height);
+        let header_bounds = (header_height > 0.0).then(|| {
+            Rect::from_xywh(
+                content_bounds.origin.x,
+                content_bounds.origin.y,
+                content_bounds.size.width,
+                header_height,
+            )
+        });
+        let item_bounds = Rect::from_xywh(
+            content_bounds.origin.x,
+            content_bounds.origin.y + header_height,
+            content_bounds.size.width,
+            (content_bounds.size.height - header_height).max(0.0),
+        );
         Self {
             context_view,
+            item_bounds,
+            header_bounds,
             items,
             style,
             selection: DropdownSelection::default(),
@@ -123,6 +151,11 @@ impl Dropdown {
 
     pub const fn content_bounds(&self) -> Rect {
         self.context_view.content_bounds()
+    }
+
+    /// Returns the host-owned leading row, when one was reserved by the style.
+    pub const fn header_bounds(&self) -> Option<Rect> {
+        self.header_bounds
     }
 
     pub fn selected_index(&self) -> Option<usize> {
@@ -168,19 +201,36 @@ impl Dropdown {
             })
             .collect();
         ActionBar::new(
-            self.context_view.content_bounds(),
+            self.item_bounds,
             ActionBarOrientation::Vertical,
             items,
             ActionBarStyle::new(self.style.button_style.clone(), self.style.item_size),
         )
     }
+
+    /// Paints the canonical dropdown and items with product-owned content in its header row.
+    pub fn paint_with_header(
+        &self,
+        scene: &mut UiScene,
+        paint_header: impl FnOnce(&mut UiScene, Rect),
+    ) {
+        self.paint_contents(scene, paint_header);
+    }
+
+    fn paint_contents(&self, scene: &mut UiScene, paint_header: impl FnOnce(&mut UiScene, Rect)) {
+        let action_bar = self.action_bar();
+        self.context_view.draw(scene, |scene, _content_bounds| {
+            if let Some(header_bounds) = self.header_bounds {
+                paint_header(scene, header_bounds);
+            }
+            action_bar.paint(scene);
+        });
+    }
 }
 
 impl Component for Dropdown {
     fn paint(&self, scene: &mut UiScene) {
-        let action_bar = self.action_bar();
-        self.context_view
-            .draw(scene, |scene, _content_bounds| action_bar.paint(scene));
+        self.paint_contents(scene, |_scene, _bounds| {});
     }
 }
 

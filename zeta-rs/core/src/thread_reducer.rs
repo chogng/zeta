@@ -214,13 +214,15 @@ pub fn reduce_thread_event(
             let receipt = envelope.command.clone().ok_or_else(|| {
                 CoreError::Journal("Turn acceptance requires a command receipt".into())
             })?;
-            if !matches!(
-                &receipt.command,
+            let matching_start = match &receipt.command {
                 ThreadCommand::StartTurn {
                     model: command_model,
                     ..
-                } if command_model == model
-            ) {
+                } => command_model == model,
+                ThreadCommand::StartShellTurn { .. } => model.is_none(),
+                _ => false,
+            };
+            if !matching_start {
                 return Err(CoreError::Journal(
                     "Turn acceptance requires a matching start-Turn command".into(),
                 ));

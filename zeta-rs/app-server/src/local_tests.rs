@@ -27,7 +27,7 @@ fn config_path(label: &str) -> PathBuf {
 
 fn workspace_config_path(label: &str) -> PathBuf {
     std::env::temp_dir().join(format!(
-        "zeta-app-server-workspace-{label}-{}-{}.json",
+        "zeta-app-server-workspace-{label}-{}-{}.toml",
         std::process::id(),
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -38,8 +38,9 @@ fn workspace_config_path(label: &str) -> PathBuf {
 
 fn remove_config_files(path: &Path) {
     let _ = std::fs::remove_file(path);
-    let _ = std::fs::remove_file(path.with_extension("lock"));
-    let _ = std::fs::remove_file(path.with_extension("tmp"));
+    let _ = std::fs::remove_file(path.with_extension("toml"));
+    let _ = std::fs::remove_file(format!("{}-shm", path.display()));
+    let _ = std::fs::remove_file(format!("{}-wal", path.display()));
 }
 
 fn model_ref(model: &str) -> ModelRef {
@@ -76,7 +77,6 @@ fn select_model(
             command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
                 preferred_model: Patch::Value(model_ref(model)),
                 approval_review_model: Patch::Missing,
-                theme: Patch::Missing,
             }),
         })
         .unwrap()
@@ -186,12 +186,11 @@ fn local_model_resolution_applies_workspace_model_at_the_next_safe_point() {
     let workspace_path = workspace_config_path("workspace-model");
     std::fs::write(
         &workspace_path,
-        serde_json::json!({
-            "agent": {
-                "preferredModel": {"provider": "test", "model": "workspace-model"}
-            }
-        })
-        .to_string(),
+        r#"
+[agent.preferredModel]
+provider = "test"
+model = "workspace-model"
+"#,
     )
     .unwrap();
     let workspace = Arc::new(WorkspaceConfigTracker::new(WorkspaceConfigStore::open(
@@ -218,7 +217,7 @@ fn local_model_resolution_applies_workspace_model_at_the_next_safe_point() {
         "workspace-model"
     );
     let (_, initial_revision) = workspace.read().unwrap();
-    std::fs::write(&workspace_path, "{}").unwrap();
+    std::fs::write(&workspace_path, "").unwrap();
     let (_, changed_revision) = workspace.read().unwrap();
     assert_eq!(changed_revision.get(), initial_revision.get() + 1);
 

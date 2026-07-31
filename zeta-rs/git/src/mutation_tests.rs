@@ -107,3 +107,54 @@ async fn fetches_fast_forward_pulls_and_pushes_against_a_local_remote() {
     assert!(matches!(error, GitError::CommandFailed { .. }));
     assert_eq!(second.git(&["rev-parse", "HEAD"]), local_head);
 }
+
+#[tokio::test]
+async fn switches_to_a_listed_local_branch() {
+    let repository = TestRepository::init();
+    repository.write("tracked.txt", "main\n");
+    repository.commit_all("initial");
+    repository.git(&["branch", "topic"]);
+    let client = GitClient::system();
+    let opened = client.open_repository(repository.root()).await.unwrap();
+    let topic = client
+        .local_branches(&opened)
+        .await
+        .unwrap()
+        .into_iter()
+        .find(|branch| branch.name() == "topic")
+        .unwrap();
+
+    client.switch_branch(&opened, &topic).await.unwrap();
+
+    assert_eq!(repository.git(&["branch", "--show-current"]), "topic");
+}
+
+#[tokio::test]
+async fn rejected_branch_switch_preserves_the_current_branch_and_worktree() {
+    let repository = TestRepository::init();
+    repository.write("tracked.txt", "main\n");
+    repository.commit_all("initial");
+    repository.git(&["switch", "-c", "topic"]);
+    repository.write("tracked.txt", "topic\n");
+    repository.commit_all("topic");
+    repository.git(&["switch", "main"]);
+    repository.write("tracked.txt", "local\n");
+    let client = GitClient::system();
+    let opened = client.open_repository(repository.root()).await.unwrap();
+    let topic = client
+        .local_branches(&opened)
+        .await
+        .unwrap()
+        .into_iter()
+        .find(|branch| branch.name() == "topic")
+        .unwrap();
+
+    let error = client
+        .switch_branch(&opened, &topic)
+        .await
+        .expect_err("conflicting worktree changes must reject the switch");
+
+    assert!(matches!(error, GitError::CommandFailed { .. }));
+    assert_eq!(repository.git(&["branch", "--show-current"]), "main");
+    assert_eq!(repository.read("tracked.txt"), "local\n");
+}

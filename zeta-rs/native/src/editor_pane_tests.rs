@@ -123,7 +123,7 @@ fn overflowing_editor_registers_an_accessible_scrollbar_region() {
 }
 
 #[test]
-fn editor_pane_paints_all_visible_file_diffs_without_tab_selection() {
+fn editor_pane_paints_all_visible_file_diffs_as_unified_sections_without_tab_selection() {
     let mut state = EditorPaneState::default();
     state.open_diff(
         "alpha.rs",
@@ -154,11 +154,13 @@ fn editor_pane_paints_all_visible_file_diffs_without_tab_selection() {
         .map(|text| text.text())
         .collect::<Vec<_>>();
     assert!(visible_text.contains(&"alpha.rs"));
-    assert!(visible_text.contains(&"alpha base"));
-    assert!(visible_text.contains(&"alpha working"));
     assert!(visible_text.contains(&"beta.rs"));
-    assert!(visible_text.contains(&"beta base"));
-    assert!(visible_text.contains(&"beta working"));
+    assert!(visible_text.contains(&"old alpha"));
+    assert!(visible_text.contains(&"new alpha"));
+    assert!(visible_text.contains(&"old beta"));
+    assert!(visible_text.contains(&"new beta"));
+    assert!(!visible_text.contains(&"alpha base"));
+    assert!(!visible_text.contains(&"alpha working"));
 
     let dispatch = UiDispatch::default();
     let nodes = frame.accessibility_nodes(&dispatch);
@@ -193,5 +195,52 @@ fn empty_editor_pane_exposes_an_honest_empty_state() {
             .text_blocks()
             .iter()
             .any(|text| text.text() == "No changed files")
+    );
+}
+
+#[test]
+fn unchanged_region_controls_are_accessible_and_toggle_retained_diff_state() {
+    let original = (1..=20)
+        .map(|line| format!("line {line}"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let modified = original.replace("line 11", "changed 11");
+    let mut state = EditorPaneState::default();
+    state.open_diff(
+        "alpha.rs",
+        "alpha base",
+        "alpha working",
+        document(&original, &modified),
+    );
+    let mut frame = InteractionFrame::default();
+    EditorPane::new(
+        Rect::from_xywh(0.0, 0.0, 320.0, 300.0),
+        &state,
+        SHELL_PALETTE,
+    )
+    .register_interactions(&mut frame);
+    let nodes = frame.accessibility_nodes(&UiDispatch::default());
+    let fold = nodes
+        .iter()
+        .find(|node| node.label == "Show 7 unchanged lines in alpha.rs")
+        .unwrap();
+
+    assert_eq!(fold.parent, Some(MULTI_DIFF_EDITOR));
+    assert_eq!(fold.role, AccessibilityRole::Button);
+    assert!(state.toggle_fold_for_element(fold.id));
+    assert!(state.diffs[0].editor_state.is_unchanged_region_expanded(0));
+
+    let mut expanded_frame = InteractionFrame::default();
+    EditorPane::new(
+        Rect::from_xywh(0.0, 0.0, 320.0, 480.0),
+        &state,
+        SHELL_PALETTE,
+    )
+    .register_interactions(&mut expanded_frame);
+    assert!(
+        expanded_frame
+            .accessibility_nodes(&UiDispatch::default())
+            .iter()
+            .any(|node| node.label == "Hide 7 unchanged lines in alpha.rs")
     );
 }

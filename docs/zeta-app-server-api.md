@@ -16,7 +16,7 @@ lastUpdated: 2026-07-25
 当前 [`zeta-mcp-server`](mcp-server.md) stdio/Streamable HTTP 接口面是本 API 的外层
 Agent-as-tool adapter；它通过 App Server client 复用这里定义的 Session/Thread/Turn contract，
 不建立第二套 execution API。该 adapter 已将 Thread subscription/update 投影为 MCP progress，
-将 approval/user-input 映射为 form elicitation，并在自己的 state root 中持久化外部 invocation
+将 approval/user-input 映射为 form elicitation，并在共享 profile SQLite 中持久化外部 invocation
 receipt。Receipt 只拥有 MCP correlation/recovery，不改变本 API 的 durable authority。
 
 具体 method registry、artifact generator 与 schema fixture 见
@@ -154,6 +154,11 @@ inline argument parsing；提交仍通过 `turn/start.input`，并保留 `/name`
 | `turn/interaction/resolve` | Thread | 用 exact request identity 解决一个 outstanding interaction |
 | `config/read` | config | 读取配置 |
 | `config/update` | config | typed command 更新配置 |
+| `provider/configure` / `provider/remove` | config | 修改 Provider declaration |
+| `mcp/server/upsert` / `mcp/server/remove` / `mcp/server/enablement/set` | config | 修改 standalone MCP desired config |
+| `skill/source/add` / `skill/source/remove` / `skill/source/enablement/set` | config | 修改 User Skill source |
+| `plugin/request/upsert` / `plugin/request/remove` / `plugin/request/enablement/set` | config | 修改 exact Plugin request；不安装或激活 |
+| `hook/upsert` / `hook/remove` / `hook/enablement/set` | config | 修改 declarative Hook；不执行 process |
 | `skills/list` | global Skill catalog | 读取 cached projection 或请求完整 refresh |
 | `skill/enablement/set` | config + Skill catalog | revision-checked 启用/禁用 exact `SkillId` |
 | `resource/metadata` | Resource | 读取元数据 |
@@ -381,10 +386,11 @@ interaction 的同一 request kind；相同 `commandId + typed payload` 会重�
 
 ## 8. 更新流
 
-当前有五个 notification method：
+当前有六个 notification method：
 
 - `session/update`，payload 为 `SessionUpdateEnvelope`；
 - `thread/update`，payload 为 `ThreadUpdateEnvelope`；
+- `config/changed`，payload 为已提交的 Config `revision` 与 `generation`；
 - `skills/changed`，payload 为新的 catalog `generation`；
 - `git/statusChanged`，payload 为新的 workspace Git status；
 - `fs/changed`，payload 为相对路径变化或 scoped rescan hint。
@@ -407,6 +413,16 @@ notification；发现 durable 空洞时重新 subscribe。
 - 缺失：不修改；
 - `null`：清除；
 - value：替换。
+
+Config authority 提交 consumer-visible change 后向所有 connection 发布 `config/changed`。
+notification 是重新 `config/read` 的失效提示，不包含完整 desired document；no-op command 与
+exact replay 不推进 revision/generation，也不发布 change。外部 TOML 编辑与同一 profile 的其他
+SQLite connection 提交也会被观察并投影。
+
+`config/read` 当前返回 Agent preference、Provider、standalone MCP、Skill source、exact Plugin
+request 与 declarative Hook。Plugin request 的 `enabled` 只表示期望参与未来 activation；
+Hook 的 `enabled` 也不表示 process 已获准或已经执行。两者的 runtime/lifecycle projection 必须由
+后续独立领域 API 返回，不能从 Config desired state 推断。
 
 `skills/list` 返回 source-qualified `SkillId`、description、source kind、content digest、
 compatibility、effective enablement 和 isolated diagnostics。`reload: "cached"` 可复用当前

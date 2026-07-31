@@ -84,7 +84,7 @@ pub enum McpTransportConfig {
 
 /// Desired, runtime-free definition for a standalone MCP server.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct McpServerConfig {
     pub id: McpServerId,
     pub display_name: String,
@@ -108,7 +108,7 @@ impl McpServerConfig {
 
 /// MCP declarations owned by the user configuration authority.
 #[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct McpConfig {
     #[serde(default)]
     pub servers: BTreeMap<McpServerId, McpServerConfig>,

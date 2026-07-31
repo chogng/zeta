@@ -2,11 +2,13 @@
 
 > 物理位置：`zeta-rs/config/`  
 > Rust crate：`zeta_config`  
-> 当前状态：User Config authority、revision、Provider map、standalone MCP declaration、Skill
-> source/per-Skill enablement、Workspace read-only document 和 scoped resolution 已实现。Local
-> App Server 会在 model safe point 应用合法的 Workspace model default，并已组合 built-in/user
-> metadata-only Skill catalog；Plugin contribution、Skill activation、grant 和完整环境组合仍是
-> 后续 vertical slice。本文定义完整长期边界。
+> 当前状态：TOML User Config authority、SQLite revision/generation 与 exact command receipt、
+> Provider map、standalone MCP declaration、Skill source/per-Skill enablement、Workspace TOML
+> read-only document、exact Plugin request、declarative Hook 和 scoped resolution 已实现。
+> Local App Server 在 profile 下使用
+> `config.toml` 与 `state.sqlite3`，并在提交后原子切换未来的 model、Skill 与 MCP Tool safe point；
+> 已 prepare 的 Tool Call 保留旧 generation。Plugin contribution、grant 和完整环境组合仍是后续
+> vertical slice。
 > Core 边界：[`core.md`](core.md)  
 > Plugin 控制面：[`plugins.md`](plugins.md)  
 > MCP runtime：[`mcp.md`](mcp.md)  
@@ -54,7 +56,7 @@ Skill catalog、credential 和 action policy 继续由各自领域拥有。App S
 最重要的不变量是：
 
 - 一个 scope 内同一份期望状态只有一个 authority；
-- 配置提交成功不等于 Plugin 已激活、MCP 已连接或 Skill 已可用；
+- 配置提交成功不等于 Plugin 已激活、MCP 已连接、Skill 已可用或 Hook 已执行；
 - runtime reconcile 失败只更新 health/diagnostics，不静默改写用户期望；
 - Workspace 声明可以请求能力，但不能自行安装、授权、绑定 credential 或扩大 sandbox；
 - 运行中的 Turn 或 model request 只使用开始时冻结的 snapshot。
@@ -65,9 +67,10 @@ Skill catalog、credential 和 action policy 继续由各自领域拥有。App S
 
 | Authority | 拥有 | 不拥有 |
 | --- | --- | --- |
-| User Config authority | UI 偏好、Agent 默认值、Provider 配置、独立 MCP server 定义、用户 Skill source | Plugin package、live connection、secret、runtime health |
-| Workspace config document | Workspace Agent 默认值、独立 MCP 声明、Plugin 请求、Workspace Skill source | 自动安装、grant、credential value、运行时状态 |
-| Plugin authority | installed exact package、enablement、version pin、activation grant、credential-slot binding、rollback | MCP session、Skill catalog、per-call approval |
+| User Config authority | Agent 默认值、Provider 配置、独立 MCP server、Skill source、Plugin request、Hook declaration | UI/device 偏好、installed Plugin package、live connection、Hook execution、secret、runtime health |
+| Desktop device preference authority | theme、zoom、window/device UI 偏好 | Agent/Provider/MCP/Skill desired config、Session/Thread |
+| Workspace config document | Workspace Agent 默认值、独立 MCP 声明、Plugin 请求、Workspace Skill source、Hook 请求 | 自动安装、grant、Hook 执行、credential value、运行时状态 |
+| Plugin authority | installed exact package、effective activation、activation grant、credential-slot binding、rollback | TOML request、MCP session、Skill catalog、per-call approval |
 | Domain auth authority | credential type、refresh、scope、credential revision | 普通配置、Plugin manifest、Thread history |
 | Secret store | opaque secret bytes 的 load/store/delete | credential type、OAuth、scope、refresh |
 | Session authority | durable `SessionSettings` 和产品级共享默认值 | 完整 Core/runtime 配置快照 |
@@ -83,8 +86,9 @@ login 由 [`login.md`](login.md) 规定，storage policy 由 [`secrets.md`](secr
 bundle、authorization header 或 refresh 状态。
 
 当前 Workspace document 由 host 提供 `WorkspaceId` 和 content revision；文件本身不能选择自己
-的 namespace 或 generation。它 strict-parse 为 JSON document，MCP/Skill ID 必须落在
-`workspace:<workspace-id>:` namespace，且 MCP declaration 不包含 credential binding。
+的 namespace 或 generation。它 strict-parse 为 TOML document，MCP/Skill/Hook ID 必须落在
+`workspace:<workspace-id>:` namespace，且 MCP declaration 不包含 credential binding。Workspace
+Hook 只是 pending trust 的 process request，不能因为文件存在就执行。
 
 ## 3. 配置来源与范围
 
@@ -114,12 +118,13 @@ ResolvedConfigSnapshot
 
 | 配置 | 允许的 source | 规则 |
 | --- | --- | --- |
-| Theme/UI preference | User/device | Workspace、Session 和 launch 不能覆盖 |
+| Theme/UI preference | Desktop device authority | 不进入 Rust `UserConfigDocument`，Workspace、Session 和 launch 不能覆盖 |
 | Preferred model | User、Workspace、Session、launch | 只影响下一个 model safe point |
 | Provider endpoint/profile | User、host | Workspace 不能静默替换认证或网络边界 |
 | Standalone MCP server | User、Workspace | Workspace declaration 需要 trust/grant 后才能启动 |
-| Plugin request | Workspace | 只能请求 exact package/version，不能自动安装或授权 |
+| Plugin request | User、Workspace | 只能请求 exact package/version 与 desired enablement，不能证明已安装、激活或授权 |
 | Skill source | User、Workspace | 必须经过 source containment、trust 和 compatibility 校验 |
+| Hook declaration | User、Workspace | 只声明 safe-point、tool matcher 与 process argv；执行仍需 trust、policy、approval 和 sandbox |
 | Sandbox/approval intent | User、Workspace、Session | 低信任 source 只能保持或收紧安全性 |
 | System requirements | System/organization | 是约束，不是“最高优先级普通配置” |
 
@@ -129,11 +134,12 @@ ResolvedConfigSnapshot
 
 ```rust
 pub struct UserConfigDocument {
-    pub ui: UiConfig,
     pub agent: AgentConfig,
     pub providers: ProvidersConfig,
     pub mcp: McpConfig,
     pub skills: SkillsConfig,
+    pub plugins: PluginsConfig,
+    pub hooks: HooksConfig,
 }
 
 pub struct WorkspaceConfigDocument {
@@ -141,11 +147,21 @@ pub struct WorkspaceConfigDocument {
     pub mcp: WorkspaceMcpConfig,
     pub plugin_requests: WorkspacePluginRequests,
     pub skills: WorkspaceSkillsConfig,
+    pub hooks: HooksConfig,
 }
 ```
 
-Plugin installed state、enablement、grant 和 rollback 不复制进普通 Config document；这些值属于
-Plugin authority。普通 Config 只携带独立声明和 Workspace 请求。
+User Config 的 `PluginsConfig` 保存 exact package request 与 desired enablement；Workspace 保存
+scoped request。Plugin installed state、effective activation、grant、digest 和 rollback 不复制进
+普通 Config document，这些值属于 Plugin authority。
+
+`HooksConfig` 保存 namespaced Hook ID、`beforeTool`/`afterTool`/`turnCompleted` safe-point、
+exact tool-name matcher、process `program + args` 与 desired enablement。它不保存 PID、环境、
+执行队列、结果或 retry；当前只实现配置和 pending-trust resolution，尚未实现 Hook runtime。
+
+Theme 已从 Rust Config schema、command 和 App Server Config DTO 中移除。Desktop device
+配置只拥有 device/UI preference；它不能再作为 Agent、Provider、MCP、Skill、
+Session 或 Thread 的第二 authority。
 
 所有 section 必须是 typed schema。禁止使用以下通用逃生口：
 
@@ -260,6 +276,10 @@ validate typed command against ConfigRevision
 任何中间 runtime failure 都不能让 Config authority 回退到另一个用户未请求的值。失败以
 `Blocked`、`Broken`、`Degraded` 或 `Unavailable` 等 typed state 和 diagnostic 表达。
 
+当前本地实现同时监听 TOML semantic digest 与 SQLite `data_version`。因此手工编辑文件或同一
+profile 的另一个进程提交 Config 后，本进程都会发布新的
+`ConfigChange { revision, generation }`；不是只有发起 RPC 的进程能刷新 Skill/MCP runtime。
+
 ## 7. Plugin 贡献规则
 
 Plugin manifest 可以贡献 Skill、MCP server declaration 和静态资源。配置只保存 Plugin
@@ -346,6 +366,11 @@ MCP runtime snapshot 可以保存：
 PID、OAuth verifier、access token、request ID、SSE cursor 和 live session ID 既不进入普通 Config，
 也不进入 Thread event。
 
+Local App Server 当前在 Config commit 后重新 materialize standalone MCP definitions，并原子替换
+未来 Tool catalog。新的 prepare 使用新 generation；已经 prepare、正在 review 或执行的调用仍
+绑定旧 Tool/Policy generation，直到该调用结束。新配置无法 materialize 或产生重复 Tool 名时，
+desired Config 保持已提交，runtime 保留上一份可用 generation 并记录 reconcile diagnostic。
+
 ## 9. Skill 配置与目录
 
 普通 Config 只定义显式 user/workspace Skill source。Built-in Skill 来自 Zeta release，
@@ -376,14 +401,16 @@ resolved sources
 
 | 类别 | 方法示例 | Authority/语义 |
 | --- | --- | --- |
-| Ordinary Config | `config/read`、`config/update` | Config authority |
+| Ordinary Config | `config/read`、`config/update`、`config/changed` | Config authority；commit notification 携带 revision/generation，不包含 theme/UI device preference |
 | Provider Config | `provider/configure`、`provider/remove` | Config authority 的 Provider section |
 | Standalone MCP Config | `mcp/server/upsert`、`mcp/server/remove`、`mcp/server/enablement/set` | Config authority 的 MCP section（已实现 desired config） |
 | MCP Runtime | `mcp/server/connect`、`mcp/server/disconnect` | process-local lifecycle intent（Proposed） |
 | Plugin Package | `plugin/install`、`plugin/update`、`plugin/uninstall` | Plugin authority（Proposed） |
 | Plugin Activation | `plugin/enable`、`plugin/disable`、`plugin/version/pin` | Plugin authority（Proposed） |
+| Plugin Request Config | `plugin/request/upsert`、`plugin/request/remove`、`plugin/request/enablement/set` | Config authority 的 exact package request（已实现；不安装或激活） |
 | Skill Source | `skill/source/add`、`skill/source/remove`、`skill/source/enablement/set` | Config authority 的 Skill section（已实现 desired config） |
 | Skill Catalog | `skills/list`、`skill/enablement/set` | App Server metadata projection + Config authority per-Skill overlay（已实现 built-in/user） |
+| Hook Config | `hook/upsert`、`hook/remove`、`hook/enablement/set` | Config authority 的 Hook declaration（已实现；不执行） |
 
 所有 durable mutation 使用 `CommandId`、对应 authority 的 expected revision、payload conflict
 检查和 exact typed response replay。Runtime connect/disconnect 不占用 Config、Session 或 Thread
@@ -432,38 +459,24 @@ ToolRegistrySnapshot
 
 ## 12. `zeta-config` 内部结构
 
-近期保持一个 crate，先按领域划分私有模块：
+当前保持一个 crate，私有模块按已存在的 vertical slice 划分：
 
 ```text
 zeta-rs/config/src/
 ├── lib.rs
-├── schema/
-│   ├── mod.rs
-│   ├── user.rs
-│   ├── workspace.rs
-│   ├── ui.rs
-│   ├── agent.rs
-│   ├── providers.rs
-│   ├── mcp.rs
-│   └── skills.rs
-├── authority/
-│   ├── mod.rs
-│   ├── command.rs
-│   ├── event.rs
-│   ├── reducer.rs
-│   └── state.rs
-├── resolve/
-│   ├── mod.rs
-│   ├── scope.rs
-│   ├── merge.rs
-│   ├── requirements.rs
-│   ├── provenance.rs
-│   └── snapshot.rs
-├── store/
-│   ├── mod.rs
-│   └── authority.rs
-├── diagnostics.rs
-└── test_support.rs
+├── command.rs          # typed mutation 与 receipt payload
+├── document.rs         # user document、revision/generation、resolved values
+├── mcp.rs              # standalone MCP declaration
+├── skills.rs           # source 与 per-Skill enablement
+├── plugins.rs          # exact package request（不拥有 install/activation）
+├── hooks.rs            # safe-point/matcher/process declaration（不执行）
+├── mutation.rs         # typed command reducer
+├── workspace.rs        # strict read-only Workspace document
+├── resolution.rs       # scoped merge、provenance、diagnostic
+├── store.rs            # TOML authority + SQLite transaction coordination
+├── store_file.rs       # strict TOML read、semantic digest 与 atomic replace
+├── store_schema.rs     # schema installation/version gate
+└── store_monitor.rs    # cross-connection commit observation
 ```
 
 目录只随可测试的 vertical slice 创建，不预先生成空模块。模块默认 private，`lib.rs` 精确导出
@@ -515,19 +528,68 @@ Workspace Config → grant or secret authority
 - 已开始的 Turn/model invocation 不被后续配置变化静默修改；
 - 所有新 test module 使用 sibling `*_tests.rs`。
 
-## 15. 实施顺序
+## 15. TOML authority、SQLite state 与 profile 边界
+
+本地 host 解析一个用户级 `profile_root`。`ZETA_PROFILE_ROOT` 显式覆盖；未设置时使用操作系统
+的用户 state 目录。切换 workspace 不会切换用户 Config/Session/Thread authority。
+
+```text
+<profile_root>/
+├── config.toml         # human-authored User desired configuration
+├── state.sqlite3       # transaction metadata + Session/Thread machine state
+├── state.sqlite3-wal   # SQLite WAL（运行时）
+├── state.sqlite3-shm   # SQLite shared memory（运行时）
+└── leases/             # writer lease
+
+<workspace_root>/
+└── .zeta/config.toml   # strict read-only Workspace intent
+```
+
+`state.sqlite3` 当前包含：
+
+| Component | Tables | 事务不变量 |
+| --- | --- | --- |
+| Config metadata | `config_metadata`、`config_command_receipts` | SQLite 串行化 API writer，只保存 semantic digest、revision/generation 与 exact receipt，不保存 desired document |
+| Session | `session_streams`、`session_batches`、`session_events` | sequence CAS、batch/event identity 与完整 typed envelope 原子提交 |
+| Thread | `thread_streams`、`thread_batches`、`thread_events` | sequence CAS、batch/event identity 与完整 typed envelope 原子提交 |
+| MCP server adapter | `mcp_invocation_receipts`、`mcp_thread_bindings` | principal-scoped invocation replay 与 Thread authorization；不拥有 Agent state |
+| Schema | `zeta_schema_migrations` | component 独立 version gate；不支持的版本 fail closed |
+
+| 数据类别 | TOML | SQLite |
+| --- | --- | --- |
+| User/Workspace 声明式配置正文 | ✅ 唯一 authority | ❌ 不保存副本 |
+| revision、generation、semantic digest | ❌ | ✅ |
+| command / MCP invocation receipt | ❌ | ✅ |
+| Session、Thread event 与恢复状态 | ❌ | ✅ |
+| secret bytes | ❌ | ❌，由 Secret Store 拥有 |
+
+Config command 先在 `BEGIN IMMEDIATE` 下校验 expected revision，再以 temp-file + rename 原子替换
+`config.toml`，最后提交 metadata 与 receipt。TOML 与 SQLite 无法组成单个跨文件 ACID 事务；
+若进程在两次提交之间退出，下次读取会根据 semantic digest 恢复并推进 revision，不会从 DB
+覆盖 TOML。外部编辑只有在整份 TOML strict parse 和 typed validation 成功后才进入新 generation；
+注释或格式变化不会推进 generation。
+
+SQLite 连接统一启用 foreign keys、WAL、`synchronous=FULL` 与 bounded busy timeout。Session、
+Thread 和 receipt 是 machine state；`config.toml` 是可读、可审查、可手工编辑的唯一 User Config
+authority。旧版 `config_authority.document_json` 会在首次打开时一次性迁出到 TOML，随后删除正文列。
+
+## 16. 实施顺序
 
 1. ✅ 消除普通配置的双 authority，建立 `ConfigRevision` 和唯一 Config authority；
 2. ✅ 区分 User Config authority 与 Workspace read-only config document；
-3. ◐ 引入 typed `ResolvedConfigSnapshot`、Workspace scoped resolution、provenance 和
+3. 部分具备：引入 typed `ResolvedConfigSnapshot`、Workspace scoped resolution、provenance 和
    diagnostics；Session/launch/System requirements 的 merge rule 仍待实现；
 4. ✅ 将 Provider 配置改为 `ProviderId` keyed map；
 5. ✅ 实现 standalone MCP 和 Skill source 的 desired-config section；
 6. ✅ 实现 built-in/user Skill catalog、watcher refresh 与 durable per-Skill enablement overlay；
-7. 实现 Plugin authority 与 `PluginActivationSnapshot`；
-8. 接通 Plugin contribution 到 MCP/Skill manager；
-9. 由 App Server 原子发布 `AgentEnvironmentSnapshot`；
-10. Core 在 Turn/model/tool safe point 消费窄 snapshot；
-11. 增加 crash、replay、scope conflict、permission monotonicity 和 generation consistency 测试。
+7. ✅ 将 Session/Thread 与 Config transaction metadata 迁到 profile SQLite，User desired config
+   保持 TOML authority；
+8. ✅ 用本地与跨 connection commit signal 驱动 Skill/MCP reconcile；
+9. ✅ MCP Tool registry 对未来调用原子切换，并保持 prepared call generation；
+10. 实现 Plugin authority 与 `PluginActivationSnapshot`；
+11. 接通 Plugin contribution 到 MCP/Skill manager；
+12. 发布完整跨领域 `AgentEnvironmentSnapshot`；
+13. 增加 process-kill crash、permission monotonicity 和完整 generation consistency 测试。
 
-开发期直接修改现有 JSON、RPC 和存储模型，不保留旧格式兼容层或 upcast。
+Workspace 配置使用 TOML；RPC 仍使用 typed JSON DTO。旧 DB 内嵌 Config document 只做一次性迁出，
+不继续作为 fallback 或第二 writer。

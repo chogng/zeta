@@ -99,3 +99,33 @@ fn explicit_selection_drives_paint_and_hit_geometry() {
         Some(1)
     );
 }
+
+#[test]
+fn reserved_header_shifts_items_and_paints_inside_the_menu_overlay() {
+    let button_style = ButtonStyle::new(
+        ButtonBackgrounds::new(Color::TRANSPARENT),
+        TextStyle::new(13.0, Color::rgb(0, 0, 0)),
+    );
+    let menu = ContextMenu::new(
+        Rect::from_xywh(0.0, 0.0, 400.0, 300.0),
+        Rect::from_xywh(30.0, 260.0, 80.0, 24.0),
+        vec![ContextMenuItem::new("main", ButtonState::Resting)],
+        ContextMenuStyle::new(SURFACE, button_style, Size::new(120.0, 28.0))
+            .with_header_height(36.0),
+    );
+    let header_bounds = menu.header_bounds().unwrap();
+    let mut scene = UiScene::new(Color::TRANSPARENT);
+
+    menu.paint_with_header(&mut scene, |scene, bounds| {
+        scene.draw_rect(crate::PaintRect::new(bounds, SELECTED));
+    });
+
+    assert_eq!(header_bounds.origin, menu.content_bounds().origin);
+    assert_eq!(header_bounds.size.height, 36.0);
+    assert_eq!(
+        menu.item_bounds(0).unwrap().origin.y,
+        header_bounds.bottom()
+    );
+    assert_eq!(menu.bounds().size.height, 68.0);
+    assert!(scene.rects().iter().any(|rect| rect.fill() == SELECTED));
+}

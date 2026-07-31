@@ -1,6 +1,6 @@
 use zeta_ui::{
-    Color, CornerRadii, Edges, FontFamily, InputBoxStateColors, InputBoxStyle, SearchBoxStyle,
-    TextStyle,
+    Color, CornerRadii, Edges, InputBoxStateColors, InputBoxStyle, ScrollViewStyle, ScrollbarStyle,
+    SearchBoxStyle, TextStyle,
 };
 
 #[derive(Clone, Copy)]
@@ -15,7 +15,6 @@ pub(crate) struct ShellPalette {
     pub(crate) terminal_selection: Color,
     pub(crate) surface_hovered: Color,
     pub(crate) session_tab_highlight: Color,
-    pub(crate) border_focused: Color,
 }
 
 pub(crate) const SHELL_PALETTE: ShellPalette = ShellPalette {
@@ -29,7 +28,6 @@ pub(crate) const SHELL_PALETTE: ShellPalette = ShellPalette {
     terminal_selection: Color::rgba(68, 139, 202, 72),
     surface_hovered: Color::rgb(248, 248, 249),
     session_tab_highlight: Color::rgb(235, 235, 237),
-    border_focused: Color::TRANSPARENT,
 };
 
 impl ShellPalette {
@@ -55,29 +53,6 @@ impl ShellPalette {
         }
     }
 
-    pub(crate) fn composer_style(self) -> InputBoxStyle {
-        InputBoxStyle::new(
-            InputBoxStateColors::new(self.surface, self.surface_hovered, self.surface),
-            InputBoxStateColors::new(
-                self.border_focused,
-                self.border_focused,
-                self.border_focused,
-            ),
-            TextStyle::new(15.0, self.text)
-                .with_family(FontFamily::Monospace)
-                .with_line_height(20.0),
-            TextStyle::new(15.0, self.text_muted)
-                .with_family(FontFamily::Monospace)
-                .with_line_height(20.0),
-        )
-        .with_border_width(0.0)
-        .with_corner_radii(CornerRadii::uniform(0.0))
-        .with_padding(Edges::new(12.0, 8.0, 12.0, 8.0))
-        .with_selection_color(self.terminal_selection)
-        .with_caret_color(self.accent)
-        .with_preedit_underline_color(self.accent)
-    }
-
     pub(crate) fn session_search_style(self) -> SearchBoxStyle {
         let input_box = InputBoxStyle::new(
             InputBoxStateColors::new(Color::TRANSPARENT, Color::TRANSPARENT, Color::TRANSPARENT),
@@ -92,5 +67,19 @@ impl ShellPalette {
         .with_caret_color(self.accent)
         .with_preedit_underline_color(self.accent);
         SearchBoxStyle::new(input_box, self.text_muted).with_icon_size(18.0)
+    }
+
+    pub(crate) fn terminal_scroll_view_style(self) -> ScrollViewStyle {
+        ScrollViewStyle::new(
+            ScrollbarStyle::new(Color::TRANSPARENT, Color::rgba(126, 126, 132, 128))
+                .with_hovered_colors(
+                    Color::rgba(230, 230, 232, 96),
+                    Color::rgba(104, 104, 110, 184),
+                )
+                .with_active_colors(
+                    Color::rgba(222, 222, 225, 128),
+                    Color::rgba(82, 82, 88, 220),
+                ),
+        )
     }
 }

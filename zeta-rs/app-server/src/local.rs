@@ -2,11 +2,15 @@ use crate::AppServer;
 use crate::SlashCommandCatalog;
 use crate::mcp_tools::compose_mcp_tools;
 use crate::model_catalog::ModelCatalog;
+use crate::server::WorkspaceToolPorts;
 use crate::server::skills_runtime::{BuiltInSkillSource, SkillConfigSnapshotProvider};
 use crate::tool_composition::ToolPort;
+use sha2::{Digest, Sha256};
 use std::fmt;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
+use std::thread::JoinHandle;
+use std::time::Duration;
 use zeta_async_utils::CancellationToken;
 use zeta_config::{
     ConfigStore, ResolvedConfig, ResolvedConfigSnapshot, WorkspaceConfigDocument,
@@ -19,12 +23,12 @@ use zeta_model_provider::{
     ModelInvoker, ModelProvider, ModelProviderRuntime, ModelRuntimeRequest, UnavailableModel,
 };
 use zeta_model_provider_config::ProviderConfigRegistry;
-use zeta_rollout::RolloutRepository;
+use zeta_rollout::LocalStateRepository;
 
 /// Filesystem locations needed to open one persistent local App Server.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct LocalAppServerOptions {
-    pub state_root: PathBuf,
+    pub profile_root: PathBuf,
     pub workspace: Option<LocalWorkspaceConfigOptions>,
     pub slash_commands: SlashCommandCatalog,
     pub workspace_root: Option<PathBuf>,
@@ -32,9 +36,9 @@ pub struct LocalAppServerOptions {
 }
 
 impl LocalAppServerOptions {
-    pub fn new(state_root: impl Into<PathBuf>) -> Self {
+    pub fn new(profile_root: impl Into<PathBuf>) -> Self {
         Self {
-            state_root: state_root.into(),
+            profile_root: profile_root.into(),
             workspace: None,
             slash_commands: SlashCommandCatalog::default(),
             workspace_root: None,
@@ -106,16 +110,22 @@ impl std::error::Error for OpenAppServerError {}
 
 /// Opens the authoritative local composition root used by in-process and stdio clients.
 pub fn open_local_app_server(
-    options: LocalAppServerOptions,
+    mut options: LocalAppServerOptions,
 ) -> Result<AppServer, OpenAppServerError> {
-    let sessions = RolloutRepository::open(&options.state_root)
-        .map_err(open_error)?
-        .recover_coordinator()
-        .map_err(open_error)?;
+    if options.workspace.is_none()
+        && let Some(workspace_root) = &options.workspace_root
+    {
+        options.workspace = Some(default_workspace_config(workspace_root)?);
+    }
+    let repository = LocalStateRepository::open(&options.profile_root).map_err(open_error)?;
     let config = Arc::new(
-        ConfigStore::open(options.state_root.join("config.authority.json"))
-            .map_err(|error| OpenAppServerError(error.0))?,
+        ConfigStore::open_with_paths(
+            repository.database_path(),
+            options.profile_root.join("config.toml"),
+        )
+        .map_err(|error| OpenAppServerError(error.0))?,
     );
+    let sessions = repository.recover_coordinator().map_err(open_error)?;
     let user_config = config
         .read_snapshot()
         .map_err(|error| OpenAppServerError(error.0))?;
@@ -142,12 +152,11 @@ pub fn open_local_app_server(
         .map_err(|error| OpenAppServerError(error.to_string()))?;
     let skill_config = Arc::new(LocalSkillConfigProvider {
         config: Arc::clone(&config),
-        config_path: options.state_root.join("config.authority.json"),
     });
     let built_in_skill_root = resolve_built_in_skill_root(options.built_in_skills);
     let mut server = AppServer::new(sessions, model.clone())
         .with_model_catalog(model)
-        .with_config_store(config)
+        .with_config_store(Arc::clone(&config))
         .with_slash_command_catalog(options.slash_commands)
         .with_skill_runtime(built_in_skill_root, skill_config)
         .map_err(OpenAppServerError)?;
@@ -162,12 +171,100 @@ pub fn open_local_app_server(
             .switch_local_workspace_root(workspace_root)
             .map_err(|error| OpenAppServerError(error.to_string()))?;
     }
+    server
+        .resume_recovered_tool_continuations()
+        .map_err(open_error)?;
+    let workspace_tools = server
+        .local_workspace_tool_ports()
+        .ok_or_else(|| OpenAppServerError("local Workspace tools are unavailable".into()))?;
+    server = server.with_tool_config_watcher(ToolConfigWatcher::start(config, workspace_tools));
     Ok(server)
+}
+
+fn default_workspace_config(
+    workspace_root: &std::path::Path,
+) -> Result<LocalWorkspaceConfigOptions, OpenAppServerError> {
+    let canonical = std::fs::canonicalize(workspace_root).map_err(open_error)?;
+    let digest = Sha256::digest(canonical.to_string_lossy().as_bytes());
+    let workspace_id = WorkspaceId::new(format!(
+        "local-{}",
+        digest[..16]
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect::<String>()
+    ))
+    .map_err(|error| OpenAppServerError(error.0))?;
+    Ok(LocalWorkspaceConfigOptions::new(
+        canonical.join(".zeta/config.toml"),
+        workspace_id,
+    ))
+}
+
+pub(crate) struct ToolConfigWatcher {
+    shutdown: Option<std::sync::mpsc::Sender<()>>,
+    thread: Option<JoinHandle<()>>,
+}
+
+impl ToolConfigWatcher {
+    fn start(config: Arc<ConfigStore>, workspace_tools: Arc<WorkspaceToolPorts>) -> Self {
+        let changes = config.subscribe_changes();
+        let (shutdown, shutdown_receiver) = std::sync::mpsc::channel();
+        let thread = std::thread::Builder::new()
+            .name("zeta-tool-config".into())
+            .spawn(move || {
+                loop {
+                    if shutdown_receiver.try_recv().is_ok() {
+                        break;
+                    }
+                    match changes.recv_timeout(Duration::from_millis(100)) {
+                        Ok(mut change) => {
+                            while let Ok(next) = changes.try_recv() {
+                                change = next;
+                            }
+                            let snapshot = match config.read_snapshot() {
+                                Ok(snapshot) => snapshot,
+                                Err(error) => {
+                                    workspace_tools.record_reconcile_failure(error.to_string());
+                                    continue;
+                                }
+                            };
+                            let mcp = match compose_mcp_tools(&snapshot.values, change.generation) {
+                                Ok(mcp) => mcp.map(|mcp| ToolPort::mcp(mcp.tools, mcp.policy)),
+                                Err(error) => {
+                                    workspace_tools.record_reconcile_failure(error.to_string());
+                                    continue;
+                                }
+                            };
+                            if let Err(error) = workspace_tools.replace_mcp(mcp) {
+                                workspace_tools.record_reconcile_failure(error.to_string());
+                            }
+                        }
+                        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {}
+                        Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
+                    }
+                }
+            })
+            .ok();
+        Self {
+            shutdown: Some(shutdown),
+            thread,
+        }
+    }
+}
+
+impl Drop for ToolConfigWatcher {
+    fn drop(&mut self) {
+        if let Some(shutdown) = self.shutdown.take() {
+            let _ = shutdown.send(());
+        }
+        if let Some(thread) = self.thread.take() {
+            let _ = thread.join();
+        }
+    }
 }
 
 struct LocalSkillConfigProvider {
     config: Arc<ConfigStore>,
-    config_path: PathBuf,
 }
 
 impl SkillConfigSnapshotProvider for LocalSkillConfigProvider {
@@ -178,8 +275,8 @@ impl SkillConfigSnapshotProvider for LocalSkillConfigProvider {
             .map_err(|error| error.0)
     }
 
-    fn watched_config_paths(&self) -> Vec<PathBuf> {
-        vec![self.config_path.clone()]
+    fn config_changes(&self) -> Option<std::sync::mpsc::Receiver<zeta_config::ConfigChange>> {
+        Some(self.config.subscribe_changes())
     }
 }
 

@@ -5,7 +5,7 @@ use zeta_protocol::{
     SessionEvent, SessionId, SessionThread, SessionThreadStatus, ThreadEvent, ThreadId,
     ThreadOrigin,
 };
-use zeta_rollout::RolloutRepository;
+use zeta_rollout::LocalStateRepository;
 use zeta_session_store::{
     CURRENT_SESSION_EVENT_SCHEMA_VERSION, SessionEventBatch, SessionEventId, SessionTimestamp,
     StoredSessionEvent,
@@ -28,7 +28,7 @@ fn temporary_root() -> std::path::PathBuf {
 #[test]
 fn trace_keeps_session_and_thread_sequences_independent() {
     let root = temporary_root();
-    let repository = RolloutRepository::open(&root).unwrap();
+    let repository = LocalStateRepository::open(&root).unwrap();
     let session_id = SessionId::new("session_1").expect("test ID is non-empty");
     let thread_id = ThreadId::new("thread_1").expect("test ID is non-empty");
     let session_store = repository.session_store();

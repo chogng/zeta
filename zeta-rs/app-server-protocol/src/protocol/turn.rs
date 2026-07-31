@@ -37,6 +37,23 @@ pub struct TurnStartResult {
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
+pub struct ShellTurnStartParams {
+    pub command_id: CommandId,
+    pub session_id: SessionId,
+    pub thread_id: ThreadId,
+    #[ts(type = "number")]
+    pub expected_sequence: u64,
+    pub command: String,
+    #[serde(default = "default_working_directory")]
+    pub working_directory: String,
+}
+
+fn default_working_directory() -> String {
+    ".".into()
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
 pub struct TurnInterruptParams {
     pub command_id: CommandId,
     pub session_id: SessionId,

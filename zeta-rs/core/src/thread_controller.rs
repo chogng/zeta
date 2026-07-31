@@ -51,6 +51,20 @@ pub struct StartTurnRequest {
     pub input: Vec<UserInput>,
 }
 
+/// Concrete host invocation used to execute one explicit Shell Turn.
+pub struct ShellTurnInvocation {
+    pub command: String,
+    pub shell_program: String,
+    pub working_directory: String,
+}
+
+/// Client command that starts a model-free Turn containing one durable shell Tool Call.
+pub struct StartShellTurnRequest {
+    pub command_id: CommandId,
+    pub expected_sequence: SequenceExpectation,
+    pub invocation: ShellTurnInvocation,
+}
+
 pub struct CreateThreadRequest {
     pub session_id: SessionId,
     pub thread_id: ThreadId,
@@ -314,6 +328,108 @@ impl ThreadController {
                 thread_id: thread_id.clone(),
                 turn_id: turn_id.clone(),
             });
+            let (next_snapshot, batch) = self.project_batch(
+                Some(snapshot.clone()),
+                &snapshot.thread_id,
+                events,
+                BatchCommand::AtEvent {
+                    index: 0,
+                    receipt: ThreadCommandReceipt {
+                        command_id: request.command_id,
+                        command,
+                    },
+                },
+            )?;
+            self.commit_batch(&batch)?;
+            *snapshot = next_snapshot;
+            Ok(StartTurnResult {
+                turn_id,
+                sequence: snapshot.sequence,
+                disposition: StartTurnDisposition::Created,
+            })
+        })
+    }
+
+    pub fn start_shell_turn(
+        &self,
+        thread_id: &ThreadId,
+        request: StartShellTurnRequest,
+    ) -> Result<StartTurnResult, CoreError> {
+        validate_command_id(&request.command_id)?;
+        let command_text = request.invocation.command.trim();
+        if command_text.is_empty() {
+            return Err(CoreError::InvalidInput(
+                "Shell Turn command must not be empty".into(),
+            ));
+        }
+        if request.invocation.shell_program.trim().is_empty() {
+            return Err(CoreError::InvalidInput(
+                "Shell Turn program must not be empty".into(),
+            ));
+        }
+        if request.invocation.working_directory.trim().is_empty() {
+            return Err(CoreError::InvalidInput(
+                "Shell Turn working directory must not be empty".into(),
+            ));
+        }
+        let command = ThreadCommand::StartShellTurn {
+            command: request.invocation.command.clone(),
+        };
+        self.mutate_thread(thread_id, |snapshot| {
+            if let Some(existing) = snapshot
+                .commands
+                .iter()
+                .find(|existing| existing.receipt.command_id == request.command_id)
+            {
+                if existing.receipt.command != command {
+                    return Err(CoreError::CommandConflict);
+                }
+                let ThreadCommandResult::TurnAccepted { turn_id } = &existing.result else {
+                    return Err(CoreError::Journal(
+                        "start-Shell-Turn command has an invalid result".into(),
+                    ));
+                };
+                return Ok(StartTurnResult {
+                    turn_id: turn_id.clone(),
+                    sequence: existing.response_sequence,
+                    disposition: StartTurnDisposition::Replayed,
+                });
+            }
+            validate_thread_expectation(request.expected_sequence, snapshot.sequence)?;
+            let turn_id =
+                TurnId::new(self.next_identifier("turn")).expect("generated Turn ID is non-empty");
+            let tool_call_id = ToolCallId::new(self.next_identifier("tool-call"))
+                .expect("generated Tool Call ID is non-empty");
+            let arguments_json = serde_json::to_string(&serde_json::json!({
+                "program": request.invocation.shell_program,
+                "arguments": ["-lc", request.invocation.command],
+                "working_directory": request.invocation.working_directory,
+            }))
+            .map_err(|error| CoreError::InvalidInput(error.to_string()))?;
+            let tool_call = ThreadItem::ToolCall {
+                item_id: ItemId::new(self.next_identifier("item"))
+                    .expect("generated Item ID is non-empty"),
+                turn_id: turn_id.clone(),
+                tool_call_id,
+                name: ToolName::new("shell-command").expect("built-in shell-command name is valid"),
+                arguments_json,
+            };
+            let events = vec![
+                ThreadEvent::TurnAccepted {
+                    thread_id: thread_id.clone(),
+                    turn_id: turn_id.clone(),
+                    model: None,
+                },
+                ThreadEvent::ItemCompleted {
+                    thread_id: thread_id.clone(),
+                    turn_id: turn_id.clone(),
+                    item: tool_call,
+                },
+                ThreadEvent::TurnStarted {
+                    thread_id: thread_id.clone(),
+                    turn_id: turn_id.clone(),
+                },
+            ];
             let (next_snapshot, batch) = self.project_batch(
                 Some(snapshot.clone()),
                 &snapshot.thread_id,

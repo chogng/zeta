@@ -3,13 +3,16 @@ use crate::agent::start_fingerprint;
 use crate::agent::{AgentOutcomeStatus, StartAgentRequest};
 use std::fs;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 use zeta_protocol::TurnId;
+
+static TEMPORARY_ROOT_ID: AtomicU64 = AtomicU64::new(1);
 
 #[test]
 fn receipts_replay_results_and_restore_principal_thread_binding_after_reopen() {
     let root = temporary_root();
-    let path = root.join("receipts.json");
+    let path = root.join("state.sqlite3");
     let request = StartAgentRequest {
         invocation_id: "durable-1".into(),
         prompt: "same".into(),
@@ -72,7 +75,7 @@ fn receipts_replay_results_and_restore_principal_thread_binding_after_reopen() {
 #[test]
 fn running_receipt_is_resumable_after_process_reopen() {
     let root = temporary_root();
-    let path = root.join("receipts.json");
+    let path = root.join("state.sqlite3");
     let request = StartAgentRequest {
         invocation_id: "running-1".into(),
         prompt: "resume".into(),
@@ -97,11 +100,11 @@ fn running_receipt_is_resumable_after_process_reopen() {
 
 #[cfg(unix)]
 #[test]
-fn receipt_file_is_private_to_the_host_user() {
+fn receipt_database_is_private_to_the_host_user() {
     use std::os::unix::fs::PermissionsExt;
 
     let root = temporary_root();
-    let path = root.join("receipts-v1.json");
+    let path = root.join("state.sqlite3");
     let store = ReceiptStore::open(&path).unwrap();
     let request = StartAgentRequest {
         invocation_id: "private".into(),
@@ -124,8 +127,9 @@ fn receipt_file_is_private_to_the_host_user() {
 
 fn temporary_root() -> PathBuf {
     std::env::temp_dir().join(format!(
-        "zeta-mcp-receipts-{}-{}",
+        "zeta-mcp-receipts-{}-{}-{}",
         std::process::id(),
+        TEMPORARY_ROOT_ID.fetch_add(1, Ordering::Relaxed),
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()

@@ -4,12 +4,12 @@ use zeta_async_utils::CancellationToken;
 use zeta_core::{CoreError, PolicyService, ToolAuthorization, ToolService};
 use zeta_policy::{
     ActionDigest, ActionKind, ActionProvenance, ActionReviewRequest, ActionSource, ApprovalRequest,
-    Capability, CapabilityKind, CapabilitySet, ExecutionDecision, PolicyRevision, ResolvedAction,
-    SandboxCompatibility,
+    Capability, CapabilityKind, CapabilitySet, ExecutionDecision, GrantId, PolicyRevision,
+    ResolvedAction, SandboxCompatibility,
 };
 use zeta_protocol::{ToolCall, ToolDefinition, ToolExecutionOutput, ToolName};
 
-use super::{ToolPort, combine_tool_ports};
+use super::{ReloadableToolPorts, ToolPort, combine_tool_ports};
 
 struct FakeTools {
     definition: ToolDefinition,
@@ -146,4 +146,85 @@ fn rejects_duplicate_model_tool_names() {
     ]);
 
     assert!(result.is_err());
+}
+
+#[test]
+fn reload_switches_future_calls_but_preserves_prepared_call_generation() {
+    let initial = combine_tool_ports(vec![ToolPort::local(
+        Arc::new(FakeTools::new(
+            "shared_tool",
+            ActionSource::BuiltInTool,
+            "initial",
+        )),
+        Arc::new(AskPolicy),
+    )])
+    .unwrap();
+    let reloadable = ReloadableToolPorts::new(initial);
+    let tools = reloadable.tools();
+    let prepared = ToolCall {
+        id: zeta_protocol::ToolCallId::new("prepared-call").unwrap(),
+        name: ToolName::new("shared_tool").unwrap(),
+        arguments: serde_json::json!({}),
+    };
+
+    tools
+        .prepare(&prepared)
+        .expect("prepare initial generation");
+    let replacement = combine_tool_ports(vec![ToolPort::local(
+        Arc::new(FakeTools::new(
+            "shared_tool",
+            ActionSource::BuiltInTool,
+            "replacement",
+        )),
+        Arc::new(AskPolicy),
+    )])
+    .unwrap();
+    reloadable.replace(replacement);
+
+    assert_eq!(
+        tools
+            .execute(
+                &prepared,
+                &ToolAuthorization::UnsandboxedGrant {
+                    grant_id: GrantId::new("test")
+                },
+                &zeta_async_utils::CancellationSource::new().token(),
+            )
+            .unwrap(),
+        ToolExecutionOutput::Success("initial".into())
+    );
+    let future = ToolCall {
+        id: zeta_protocol::ToolCallId::new("future-call").unwrap(),
+        name: ToolName::new("shared_tool").unwrap(),
+        arguments: serde_json::json!({}),
+    };
+    tools
+        .prepare(&future)
+        .expect("prepare replacement generation");
+    assert_eq!(
+        tools
+            .execute(
+                &future,
+                &ToolAuthorization::UnsandboxedGrant {
+                    grant_id: GrantId::new("test")
+                },
+                &zeta_async_utils::CancellationSource::new().token(),
+            )
+            .unwrap(),
+        ToolExecutionOutput::Success("replacement".into())
+    );
+}
+
+#[test]
+fn successful_replacement_clears_reconcile_diagnostic() {
+    let reloadable = ReloadableToolPorts::new(None);
+    reloadable.record_reconcile_failure("invalid MCP config");
+    assert_eq!(
+        reloadable.diagnostic().as_deref(),
+        Some("invalid MCP config")
+    );
+
+    reloadable.replace(None);
+
+    assert_eq!(reloadable.diagnostic(), None);
 }

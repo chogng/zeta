@@ -5,13 +5,18 @@ use zeta_ui::{TextInputCompositionCursor, TextInputCompositionEvent};
 use zeta_winit::{Ime, ImeCursorArea};
 
 use crate::NativeApp;
-use crate::shell_interaction::{COMPOSER, SESSION_SEARCH_INPUT};
+use crate::git_branch_context_menu::GIT_BRANCH_SEARCH_INPUT;
+use crate::shell_interaction::{AGENT_FILE_SEARCH_INPUT, COMPOSER, SESSION_SEARCH_INPUT};
+use crate::workspace_path_picker::WORKSPACE_PATH_SEARCH_INPUT;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum InputMethodTarget {
     Disabled,
     Composer,
     SessionSearch,
+    FileSearch,
+    GitBranchSearch,
+    WorkspacePathSearch,
     TerminalGrid,
 }
 
@@ -21,6 +26,9 @@ struct InputMethodContext {
     screen: ScreenBuffer,
     composer_focused: bool,
     session_search_focused: bool,
+    file_search_focused: bool,
+    git_branch_search_focused: bool,
+    workspace_path_search_focused: bool,
 }
 
 impl InputMethodTarget {
@@ -30,6 +38,15 @@ impl InputMethodTarget {
         }
         if context.session_search_focused {
             return Self::SessionSearch;
+        }
+        if context.file_search_focused {
+            return Self::FileSearch;
+        }
+        if context.git_branch_search_focused {
+            return Self::GitBranchSearch;
+        }
+        if context.workspace_path_search_focused {
+            return Self::WorkspacePathSearch;
         }
         match context.screen {
             ScreenBuffer::Primary if context.composer_focused => Self::Composer,
@@ -45,6 +62,7 @@ impl InputMethodTarget {
 
 impl NativeApp {
     pub(super) fn ime_input(&mut self, event: Ime) {
+        self.keybindings.cancel_chord();
         let target = self.input_method_target();
         if matches!(event, Ime::Enabled) {
             if target.is_enabled() {
@@ -59,7 +77,7 @@ impl NativeApp {
                     return;
                 };
                 self.caret_blink.activity(Instant::now());
-                self.terminal_composer.apply_composition(composition);
+                self.composer.apply_composition(composition);
                 self.rebuild_presentation();
                 self.request_redraw();
             }
@@ -69,6 +87,36 @@ impl NativeApp {
                 };
                 self.caret_blink.activity(Instant::now());
                 self.session_search.apply_composition(composition);
+                self.rebuild_presentation();
+                self.request_redraw();
+            }
+            InputMethodTarget::FileSearch => {
+                let Some(composition) = text_input_composition_event(event) else {
+                    return;
+                };
+                self.caret_blink.activity(Instant::now());
+                self.agent_sidebar_workspace
+                    .apply_file_search_composition(composition);
+                self.rebuild_presentation();
+                self.request_redraw();
+            }
+            InputMethodTarget::GitBranchSearch => {
+                let Some(composition) = text_input_composition_event(event) else {
+                    return;
+                };
+                self.caret_blink.activity(Instant::now());
+                self.git_branch_context_menu
+                    .apply_search_composition(composition);
+                self.rebuild_presentation();
+                self.request_redraw();
+            }
+            InputMethodTarget::WorkspacePathSearch => {
+                let Some(composition) = text_input_composition_event(event) else {
+                    return;
+                };
+                self.caret_blink.activity(Instant::now());
+                self.workspace_path_picker
+                    .apply_search_composition(composition);
                 self.rebuild_presentation();
                 self.request_redraw();
             }
@@ -107,17 +155,31 @@ impl NativeApp {
         let target = self.input_method_target();
         if matches!(
             target,
-            InputMethodTarget::Composer | InputMethodTarget::SessionSearch
+            InputMethodTarget::Composer
+                | InputMethodTarget::SessionSearch
+                | InputMethodTarget::FileSearch
+                | InputMethodTarget::GitBranchSearch
+                | InputMethodTarget::WorkspacePathSearch
         ) {
             self.caret_blink.focus(Instant::now());
         } else {
             self.caret_blink.blur();
         }
         if target != InputMethodTarget::Composer {
-            self.terminal_composer.cancel_composition();
+            self.composer.cancel_composition();
         }
         if target != InputMethodTarget::SessionSearch {
             self.session_search.cancel_composition();
+        }
+        if target != InputMethodTarget::FileSearch {
+            self.agent_sidebar_workspace
+                .cancel_file_search_composition();
+        }
+        if target != InputMethodTarget::GitBranchSearch {
+            self.git_branch_context_menu.cancel_search_composition();
+        }
+        if target != InputMethodTarget::WorkspacePathSearch {
+            self.workspace_path_picker.cancel_search_composition();
         }
         if let Some(window) = self.window.as_ref() {
             if target.is_enabled() {
@@ -134,6 +196,9 @@ impl NativeApp {
             screen: self.active_screen(),
             composer_focused: self.ui_dispatch.is_focused(COMPOSER),
             session_search_focused: self.ui_dispatch.is_focused(SESSION_SEARCH_INPUT),
+            file_search_focused: self.ui_dispatch.is_focused(AGENT_FILE_SEARCH_INPUT),
+            git_branch_search_focused: self.ui_dispatch.is_focused(GIT_BRANCH_SEARCH_INPUT),
+            workspace_path_search_focused: self.ui_dispatch.is_focused(WORKSPACE_PATH_SEARCH_INPUT),
         })
     }
 }

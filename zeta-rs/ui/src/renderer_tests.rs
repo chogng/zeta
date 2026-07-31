@@ -1,5 +1,5 @@
-use super::{UiRenderError, validate_text_block};
-use crate::{Color, Point, Size, TextBlock, TextSpan, TextStyle};
+use super::{UiRenderError, glyphon_wrap, validate_text_block};
+use crate::{Color, Point, Size, TextBlock, TextBlockWrap, TextSpan, TextStyle};
 
 #[test]
 fn rejects_non_positive_text_bounds() {
@@ -54,4 +54,13 @@ fn rejects_invalid_rich_text_span_metrics() {
             reason: "span font size and line height must be finite and positive",
         })
     ));
+}
+
+#[test]
+fn renderer_preserves_the_text_blocks_explicit_wrap_contract() {
+    assert_eq!(
+        glyphon_wrap(TextBlockWrap::WordOrGlyph),
+        glyphon::Wrap::WordOrGlyph
+    );
+    assert_eq!(glyphon_wrap(TextBlockWrap::None), glyphon::Wrap::None);
 }

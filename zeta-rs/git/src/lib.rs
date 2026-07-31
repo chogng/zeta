@@ -4,6 +4,7 @@
 //! App Server repository lifecycles, model tool authorization, or desktop presentation.
 
 mod client;
+mod content;
 mod error;
 mod fsmonitor;
 mod info;
@@ -12,9 +13,11 @@ mod patch;
 mod path;
 mod repository;
 mod status;
+mod text_diff;
 
 pub use client::GitClient;
 pub use client::GitExecutionLimits;
+pub use content::GitFileRevision;
 pub use error::GitError;
 pub use error::GitResult;
 pub use info::GitBranch;
@@ -37,6 +40,10 @@ pub use status::GitRepositoryChange;
 pub use status::GitRepositorySnapshot;
 pub use status::GitSubmoduleState;
 pub use status::GitUpstream;
+pub use text_diff::GitDiffStatistics;
+pub use text_diff::GitTextDiff;
+pub use text_diff::GitTextDiffLimits;
+pub use text_diff::GitTextDiffSnapshot;
 
 #[cfg(test)]
 #[path = "test_support.rs"]

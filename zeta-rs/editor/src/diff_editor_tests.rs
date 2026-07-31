@@ -1,4 +1,7 @@
-use super::{DiffEditor, DiffEditorLabels, DiffEditorSide, DiffEditorState, DiffEditorStyle};
+use super::{
+    DiffEditor, DiffEditorLabels, DiffEditorPresentation, DiffEditorSide, DiffEditorState,
+    DiffEditorStyle,
+};
 use zeta_diff::DiffDocument;
 use zeta_ui::{Color, Component, Point, Rect, UiScene};
 
@@ -92,6 +95,39 @@ fn side_by_side_paint_includes_headers_mapped_lines_markers_and_inline_highlight
 }
 
 #[test]
+fn unified_presentation_stacks_changed_rows_once_without_side_headers() {
+    let document = DiffDocument::from_text("same\nbefore\n", "same\nafter\n").unwrap();
+    let editor = editor(
+        &document,
+        Rect::from_xywh(0.0, 0.0, 320.0, 80.0),
+        DiffEditorState::default(),
+    )
+    .with_presentation(DiffEditorPresentation::Unified);
+    let mut scene = UiScene::new(Color::WHITE);
+
+    editor.paint(&mut scene);
+
+    let texts = scene
+        .text_blocks()
+        .iter()
+        .map(|block| block.text())
+        .collect::<Vec<_>>();
+    assert_eq!(editor.content_height(), 60.0);
+    assert_eq!(texts.iter().filter(|text| **text == "same").count(), 1);
+    assert!(texts.contains(&"before"));
+    assert!(texts.contains(&"after"));
+    assert!(texts.contains(&"−"));
+    assert!(texts.contains(&"+"));
+    assert!(!texts.contains(&"Original · src/main.rs"));
+    assert!(!texts.contains(&"Modified · src/main.rs"));
+
+    let removed = editor.location_at(Point::new(80.0, 22.0)).unwrap();
+    let added = editor.location_at(Point::new(80.0, 42.0)).unwrap();
+    assert_eq!(removed.side, DiffEditorSide::Original);
+    assert_eq!(added.side, DiffEditorSide::Modified);
+}
+
+#[test]
 fn location_maps_both_panes_to_the_same_visible_diff_row() {
     let document = document();
     let editor = editor(
@@ -159,4 +195,119 @@ fn absent_counterpart_uses_missing_line_background_without_fake_line_number() {
             .line_number,
         None
     );
+}
+
+#[test]
+fn unified_presentation_collapses_and_reveals_long_unchanged_regions() {
+    let original = (1..=20)
+        .map(|line| format!("line {line}"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let modified = (1..=20)
+        .map(|line| {
+            if line == 11 {
+                "changed 11".to_string()
+            } else {
+                format!("line {line}")
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    let document = DiffDocument::from_text(&original, &modified).unwrap();
+    let bounds = Rect::from_xywh(0.0, 0.0, 320.0, 400.0);
+    let collapsed = editor(&document, bounds, DiffEditorState::default())
+        .with_presentation(DiffEditorPresentation::Unified);
+    let mut collapsed_scene = UiScene::new(Color::WHITE);
+
+    collapsed.paint(&mut collapsed_scene);
+
+    let collapsed_text = collapsed_scene
+        .text_blocks()
+        .iter()
+        .map(|block| block.text())
+        .collect::<Vec<_>>();
+    assert_eq!(collapsed.content_height(), 200.0);
+    assert!(collapsed_text.contains(&"Show 7 unchanged lines"));
+    assert!(collapsed_text.contains(&"Show 6 unchanged lines"));
+    assert!(!collapsed_text.contains(&"line 1"));
+    assert!(collapsed_text.contains(&"line 10"));
+    assert!(collapsed_text.contains(&"changed 11"));
+    assert_eq!(collapsed.fold_controls().len(), 2);
+    assert_eq!(collapsed.fold_controls()[0].region_index(), 0);
+    assert_eq!(collapsed.fold_controls()[0].line_count(), 7);
+    assert_eq!(
+        collapsed.fold_controls()[0].state(),
+        super::DiffEditorFoldState::Collapsed
+    );
+    assert_eq!(
+        collapsed.fold_controls()[0].bounds(),
+        Rect::from_xywh(0.0, 0.0, 320.0, 20.0)
+    );
+    assert_eq!(collapsed.location_at(Point::new(100.0, 10.0)), None);
+
+    let mut state = DiffEditorState::default();
+    state.expand_unchanged_region(0);
+    let expanded =
+        editor(&document, bounds, state).with_presentation(DiffEditorPresentation::Unified);
+    let mut expanded_scene = UiScene::new(Color::WHITE);
+
+    expanded.paint(&mut expanded_scene);
+
+    let expanded_text = expanded_scene
+        .text_blocks()
+        .iter()
+        .map(|block| block.text())
+        .collect::<Vec<_>>();
+    assert_eq!(expanded.content_height(), 340.0);
+    assert!(expanded_text.contains(&"Hide 7 unchanged lines"));
+    assert!(expanded_text.contains(&"line 1"));
+    assert_eq!(
+        expanded.fold_controls()[0].state(),
+        super::DiffEditorFoldState::Expanded
+    );
+}
+
+#[test]
+fn unchanged_region_state_can_toggle_and_collapse_again() {
+    let mut state = DiffEditorState::default();
+
+    state.toggle_unchanged_region(2);
+    assert!(state.is_unchanged_region_expanded(2));
+    state.collapse_unchanged_region(2);
+    assert!(!state.is_unchanged_region_expanded(2));
+}
+
+#[test]
+fn expanded_large_unified_diff_maps_a_distant_visual_row_without_materializing_every_row() {
+    let original = (1..=2_000)
+        .map(|line| format!("line {line}"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let modified = original.replace("line 1001", "changed 1001");
+    let document = DiffDocument::from_text(&original, &modified).unwrap();
+    let mut state = DiffEditorState::default();
+    state.expand_unchanged_region(0);
+    state.expand_unchanged_region(1);
+    state.scroll_rows(1_800, 2_003, 4);
+    let editor = editor(&document, Rect::from_xywh(0.0, 0.0, 320.0, 80.0), state)
+        .with_presentation(DiffEditorPresentation::Unified);
+    let mut scene = UiScene::new(Color::WHITE);
+
+    editor.paint(&mut scene);
+
+    assert_eq!(editor.content_height(), 2_003.0 * 20.0);
+    assert_eq!(
+        editor
+            .location_at(Point::new(100.0, 2.0))
+            .unwrap()
+            .line_number,
+        Some(1_798)
+    );
+    assert!(
+        scene
+            .text_blocks()
+            .iter()
+            .any(|block| block.text() == "line 1798")
+    );
+    assert!(scene.text_blocks().len() < 12);
 }

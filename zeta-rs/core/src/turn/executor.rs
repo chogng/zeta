@@ -8,8 +8,8 @@ use std::sync::Arc;
 use zeta_async_utils::{Cancellation, CancellationReason, CancellationToken};
 use zeta_protocol::{
     ItemId, ModelResponse, ModelStreamEvent, ResponseItem, StableTurnError, StreamCursor,
-    StreamInstanceId, ThreadId, ThreadItem, ThreadUpdate, ThreadUpdateEnvelope, ToolCall, TurnId,
-    TurnStatus,
+    StreamInstanceId, ThreadCommand, ThreadId, ThreadItem, ThreadUpdate, ThreadUpdateEnvelope,
+    ToolCall, TurnId, TurnStatus,
 };
 
 /// Executes provider-independent model and tool steps for one already-started Turn.
@@ -30,6 +30,7 @@ pub struct TurnExecutor {
 /// Terminal result of one executor run.
 pub enum TurnExecutionOutcome {
     Completed(CompletedTurn),
+    ShellCompleted { sequence: u64 },
     WaitingForApproval,
 }
 
@@ -84,6 +85,32 @@ impl TurnExecutor {
             })
     }
 
+    /// Enqueues one already-started model-free Shell Turn.
+    pub fn start_shell(&self, thread_id: &ThreadId, turn_id: &TurnId) -> Result<(), CoreError> {
+        let executor = self.clone();
+        let queued_thread_id = thread_id.clone();
+        let queued_turn_id = turn_id.clone();
+        self.threads
+            .enqueue_turn_execution(thread_id, turn_id, move |execution| {
+                if execution.check_current().is_ok() {
+                    let _ = executor.execute_shell(
+                        &queued_thread_id,
+                        &queued_turn_id,
+                        execution.cancellation(),
+                    );
+                }
+            })
+    }
+
+    /// Resumes a waiting or recovered Turn through the executor matching its durable command.
+    pub fn resume(&self, thread_id: &ThreadId, turn_id: &TurnId) -> Result<(), CoreError> {
+        if self.is_shell_turn(thread_id, turn_id)? {
+            self.start_shell(thread_id, turn_id)
+        } else {
+            self.start(thread_id, turn_id)
+        }
+    }
+
     /// Enqueues every recovered running Turn that owns an unresolved durable Tool Call.
     ///
     /// Hosts should call this only after installing the same tool and policy services used for
@@ -96,12 +123,76 @@ impl TurnExecutor {
                 if turn.status == TurnStatus::Running
                     && snapshot.has_resumable_tool_continuation(&turn.turn_id)
                 {
-                    self.start(&snapshot.thread_id, &turn.turn_id)?;
+                    self.resume(&snapshot.thread_id, &turn.turn_id)?;
                     resumed += 1;
                 }
             }
         }
         Ok(resumed)
+    }
+
+    fn execute_shell(
+        &self,
+        thread_id: &ThreadId,
+        turn_id: &TurnId,
+        cancellation: &CancellationToken,
+    ) -> Result<TurnExecutionOutcome, CoreError> {
+        let sequence_before_execution = self
+            .threads
+            .read_thread(thread_id)
+            .map(|snapshot| snapshot.sequence)
+            .unwrap_or(0);
+        let result = match self.execute_shell_steps(thread_id, turn_id, cancellation) {
+            Ok(completion) => Ok(completion),
+            Err(ExecutionFailure::Cancelled(error)) | Err(ExecutionFailure::Interrupted(error)) => {
+                self.threads.interrupt_execution(thread_id, turn_id)?;
+                Err(error)
+            }
+            Err(ExecutionFailure::Failed { error, stable }) => {
+                self.threads.fail_turn(thread_id, turn_id, stable)?;
+                Err(error)
+            }
+        };
+        self.publish_committed_after(thread_id, sequence_before_execution);
+        result
+    }
+
+    fn execute_shell_steps(
+        &self,
+        thread_id: &ThreadId,
+        turn_id: &TurnId,
+        cancellation: &CancellationToken,
+    ) -> Result<TurnExecutionOutcome, ExecutionFailure> {
+        check_cancellation(cancellation)?;
+        self.require_running_turn(thread_id, turn_id)?;
+        if matches!(
+            self.tool_scheduler()
+                .run_pending(thread_id, turn_id, cancellation)
+                .map_err(ExecutionFailure::service)?,
+            ToolSchedulingProgress::WaitingForApproval
+        ) {
+            return Ok(TurnExecutionOutcome::WaitingForApproval);
+        }
+        let sequence = self
+            .threads
+            .complete_turn_without_agent_message(thread_id, turn_id)
+            .map_err(ExecutionFailure::persistence)?;
+        Ok(TurnExecutionOutcome::ShellCompleted { sequence })
+    }
+
+    fn is_shell_turn(&self, thread_id: &ThreadId, turn_id: &TurnId) -> Result<bool, CoreError> {
+        let snapshot = self.threads.read_thread(thread_id)?;
+        Ok(snapshot.commands.iter().any(|command| {
+            matches!(
+                (&command.result, &command.receipt.command),
+                (
+                    crate::ThreadCommandResult::TurnAccepted {
+                        turn_id: command_turn_id,
+                    },
+                    ThreadCommand::StartShellTurn { .. },
+                ) if command_turn_id == turn_id
+            )
+        }))
     }
 
     fn execute(
@@ -304,6 +395,7 @@ impl TurnExecutor {
             self.tools.clone(),
             self.policy.clone(),
         )
+        .with_thread_updates(self.updates.clone())
     }
 }
 

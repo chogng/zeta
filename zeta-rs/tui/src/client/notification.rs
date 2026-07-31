@@ -20,7 +20,9 @@ pub(crate) fn map_event(event: AppServerEvent) -> Option<ClientEvent> {
         }
         AppServerEvent::Notification(
             ServerNotification::SessionUpdate(_)
+            | ServerNotification::ConfigChanged(_)
             | ServerNotification::GitStatusChanged(_)
+            | ServerNotification::FsChanged(_)
             | ServerNotification::Unknown { .. },
         ) => None,
         AppServerEvent::ConnectionClosed(reason) => Some(ClientEvent::Failed(format!(

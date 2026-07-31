@@ -8,6 +8,23 @@ use zeta_protocol::{
 };
 
 impl ThreadController {
+    pub(crate) fn complete_turn_without_agent_message(
+        &self,
+        thread_id: &ThreadId,
+        turn_id: &TurnId,
+    ) -> Result<u64, CoreError> {
+        self.mutate_thread(thread_id, |snapshot| {
+            self.record_batch(
+                snapshot,
+                vec![ThreadEvent::TurnCompleted {
+                    thread_id: thread_id.clone(),
+                    turn_id: turn_id.clone(),
+                }],
+            )?;
+            Ok(snapshot.sequence)
+        })
+    }
+
     pub(crate) fn record_model_tool_call(
         &self,
         thread_id: &ThreadId,

@@ -25,8 +25,9 @@ ZETA_MCP_BEARER_TOKEN=<at-least-32-visible-ASCII-characters> \
   zeta mcp-server --listen http://127.0.0.1:8787/mcp
 ```
 
-两个入口都读取 `ZETA_STATE_ROOT` 和 `ZETA_WORKSPACE_ROOT`，默认值分别为 `.zeta` 和进程工作
-目录。HTTP 还必须提供 `ZETA_MCP_BEARER_TOKEN`；`ZETA_MCP_ALLOWED_ORIGIN` 可以额外允许一个
+两个入口都读取 `ZETA_PROFILE_ROOT` 和 `ZETA_WORKSPACE_ROOT`；前者默认使用操作系统用户 state
+目录，后者默认使用进程工作目录。HTTP 还必须提供 `ZETA_MCP_BEARER_TOKEN`；
+`ZETA_MCP_ALLOWED_ORIGIN` 可以额外允许一个
 精确浏览器来源。内置监听器只提供普通 HTTP，远程部署时应放在已认证的 TLS 反向代理之后。
 
 服务实现 MCP `2025-11-25`：
@@ -125,7 +126,8 @@ run_stdio 或 run_http
 `invocationId` 与 MCP JSON-RPC 请求 ID 以及所有 Zeta 产品身份互相独立。适配器为 Session、
 Thread、Turn、交互解决和取消派生按主体命名空间隔离的稳定 App Server 命令 ID。
 
-回执以原子方式持久化到 `<ZETA_STATE_ROOT>/mcp-server/receipts-v1.json`，并按主体隔离：
+回执以 SQLite 事务持久化到 `<ZETA_PROFILE_ROOT>/state.sqlite3` 的
+`mcp_invocation_receipts` / `mcp_thread_bindings`，并按主体隔离：
 
 - stdio 使用本地用户主体；
 - HTTP 从 Bearer 令牌派生不可逆主体标识；
@@ -135,9 +137,9 @@ Thread、Turn、交互解决和取消派生按主体命名空间隔离的稳定 
 - 进程失败留下的运行中调用在重启后重新进入相同的确定性 App Server 命令，不分配新产品身份；
 - `zeta-reply` 只接受持久绑定到同一主体的 Thread。
 
-回执文件是适配器恢复索引，不是权威 Agent 状态。Session、Thread、Turn 状态仍在 App Server
-存储中。一个状态根目录当前只能由一个 MCP Server 进程使用；跨进程文件锁和分布式回执存储
-尚未实现。
+回执表是适配器恢复索引，不是权威 Agent 状态。Session、Thread、Turn 状态仍在 App Server
+store tables 中。SQLite 支持同一 profile 的多 connection 原子提交，但 active single-flight set
+仍为进程内；一个 profile 当前只能由一个 MCP Server runtime 使用，分布式执行租约尚未实现。
 
 等待交互的结果保持可恢复，不会被封存为已完成。使用相同调用身份重试时，即使进程重启，也能
 继续精确的未完成交互。

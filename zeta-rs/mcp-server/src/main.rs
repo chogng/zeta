@@ -1,5 +1,6 @@
 use std::env;
 use std::path::PathBuf;
+use zeta_app_server_client::local_profile_root;
 use zeta_mcp_server::{HttpServerOptions, McpServerOptions, run_http, run_stdio};
 
 fn main() {
@@ -10,14 +11,12 @@ fn main() {
 }
 
 fn run() -> Result<(), Box<dyn std::error::Error>> {
-    let state_root = env::var_os("ZETA_STATE_ROOT")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from(".zeta"));
+    let profile_root = local_profile_root();
     let workspace_root = env::var_os("ZETA_WORKSPACE_ROOT")
         .map(PathBuf::from)
         .map(Ok)
         .unwrap_or_else(env::current_dir)?;
-    let options = McpServerOptions::new(state_root, workspace_root);
+    let options = McpServerOptions::new(profile_root, workspace_root);
     let arguments = env::args().skip(1).collect::<Vec<_>>();
     match arguments.as_slice() {
         [] => run_stdio(options)?,

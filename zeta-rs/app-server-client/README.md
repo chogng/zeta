@@ -60,6 +60,7 @@ Notification 不依附 request completion；consumer 不得对 session handle �
 | --- | --- |
 | `src/session.rs` | owned session、session transport、request/event threads、shutdown 与 connection lifecycle |
 | `src/in_process.rs` | embedded composition 与 legacy initialized connection |
+| `src/profile.rs` | `ZETA_PROFILE_ROOT` 与 host-wide default profile state path |
 | `src/lib.rs` | generic typed JSON-RPC methods、request ID/result pairing 与 public exports |
 | `src/notification.rs` | wire notification method 到 `ServerNotification` 的 typed decode |
 | `src/session_tests.rs` | owned lifecycle、idle wakeup、clone identity 与 shutdown contract |
@@ -69,6 +70,7 @@ Notification 不依附 request completion；consumer 不得对 session handle �
 
 ```text
 AppServerSession::start_embedded
+├─ resolve/receive profile root
 ├─ open_in_process_app_server
 ├─ AppServer::connection
 ├─ AppServer::connection_notifications

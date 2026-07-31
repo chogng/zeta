@@ -2,11 +2,11 @@ use super::fs_watcher::FileSystemWatcher;
 use super::git_runtime::{GitRuntime, GitWatcher};
 use super::{AppServer, AppServerThreadUpdates, RpcError};
 use crate::local_tools::compose_local_tools;
-use crate::tool_composition::{ToolPort, combine_tool_ports};
+use crate::tool_composition::{ReloadableToolPorts, ToolPort, combine_tool_ports};
 use crate::workspace_search::WorkspaceSearchService;
 use std::fmt;
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use zeta_app_server_protocol::protocol::error::AppServerErrorName;
 use zeta_core::TurnExecutor;
 use zeta_file_system::{LocalFileSystem, WorkspaceFileSystem};
@@ -40,7 +40,61 @@ impl WorkspaceRuntime {
 }
 
 pub(super) struct LocalWorkspaceHost {
+    tools: Arc<WorkspaceToolPorts>,
+}
+
+struct WorkspaceToolPortState {
+    local: Option<ToolPort>,
     mcp: Option<ToolPort>,
+}
+
+pub(crate) struct WorkspaceToolPorts {
+    state: Mutex<WorkspaceToolPortState>,
+    reloadable: Arc<ReloadableToolPorts>,
+}
+
+impl WorkspaceToolPorts {
+    fn new(mcp: Option<ToolPort>) -> Result<Arc<Self>, WorkspaceRuntimeError> {
+        let combined = combine_tool_ports(mcp.iter().cloned().collect())
+            .map_err(|error| WorkspaceRuntimeError::Failed(error.to_string()))?;
+        Ok(Arc::new(Self {
+            state: Mutex::new(WorkspaceToolPortState { local: None, mcp }),
+            reloadable: ReloadableToolPorts::new(combined),
+        }))
+    }
+
+    fn replace_local(&self, local: Option<ToolPort>) -> Result<(), WorkspaceRuntimeError> {
+        self.replace(|state| state.local = local)
+    }
+
+    pub(crate) fn replace_mcp(&self, mcp: Option<ToolPort>) -> Result<(), WorkspaceRuntimeError> {
+        self.replace(|state| state.mcp = mcp)
+    }
+
+    fn replace(
+        &self,
+        update: impl FnOnce(&mut WorkspaceToolPortState),
+    ) -> Result<(), WorkspaceRuntimeError> {
+        let mut state = self
+            .state
+            .lock()
+            .map_err(|_| WorkspaceRuntimeError::Failed("Workspace tool state poisoned".into()))?;
+        let mut next = WorkspaceToolPortState {
+            local: state.local.clone(),
+            mcp: state.mcp.clone(),
+        };
+        update(&mut next);
+        let ports = next.local.iter().chain(next.mcp.iter()).cloned().collect();
+        let combined = combine_tool_ports(ports)
+            .map_err(|error| WorkspaceRuntimeError::Failed(error.to_string()))?;
+        *state = next;
+        self.reloadable.replace(combined);
+        Ok(())
+    }
+
+    pub(crate) fn record_reconcile_failure(&self, error: impl Into<String>) {
+        self.reloadable.record_reconcile_failure(error);
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -72,13 +126,28 @@ impl AppServer {
                 "local Workspace host is already installed".into(),
             ));
         }
-        let executor = self.compose_turn_executor(mcp.iter().cloned().collect())?;
+        let tools = WorkspaceToolPorts::new(mcp)?;
+        let executor = TurnExecutor::new(
+            self.sessions.threads().clone(),
+            Arc::clone(&self.model),
+            tools.reloadable.tools(),
+            tools.reloadable.policy(),
+        )
+        .with_thread_updates(Arc::new(AppServerThreadUpdates {
+            updates: Arc::clone(&self.updates),
+        }));
         self.workspace_runtime
             .get_mut()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .turn_executor = executor;
-        self.local_workspace_host = Some(LocalWorkspaceHost { mcp });
+        self.local_workspace_host = Some(LocalWorkspaceHost { tools });
         Ok(self)
+    }
+
+    pub(crate) fn local_workspace_tool_ports(&self) -> Option<Arc<WorkspaceToolPorts>> {
+        self.local_workspace_host
+            .as_ref()
+            .map(|host| Arc::clone(&host.tools))
     }
 
     pub(crate) fn switch_local_workspace_root(
@@ -112,11 +181,7 @@ impl AppServer {
             .map_err(|_| {
                 WorkspaceRuntimeError::Failed("failed to initialize Git runtime".into())
             })?;
-        let mut ports = vec![ToolPort::local(local.tools, local.policy)];
-        if let Some(mcp) = &host.mcp {
-            ports.push(mcp.clone());
-        }
-        let turn_executor = self.compose_turn_executor(ports)?;
+        let local_port = ToolPort::local(local.tools, local.policy);
         let canonical_root = workspace.path().to_path_buf();
 
         let mut current = self
@@ -146,6 +211,7 @@ impl AppServer {
         };
         workspace_search.switch_workspace(workspace);
         terminals.switch_workspace_root(canonical_root.clone());
+        host.tools.replace_local(Some(local_port))?;
         let next = WorkspaceRuntime {
             root: Some(canonical_root.clone()),
             file_system: Some(file_system),
@@ -154,7 +220,7 @@ impl AppServer {
             git: Some(Arc::clone(&git)),
             workspace_search: Some(workspace_search),
             terminals: Some(terminals),
-            turn_executor,
+            turn_executor: current.turn_executor.clone(),
         };
         let previous = std::mem::replace(&mut *current, next);
         drop(current);
@@ -239,31 +305,6 @@ impl AppServer {
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .turn_executor
             .clone()
-    }
-
-    fn compose_turn_executor(
-        &self,
-        ports: Vec<ToolPort>,
-    ) -> Result<TurnExecutor, WorkspaceRuntimeError> {
-        let tools = combine_tool_ports(ports)
-            .map_err(|error| WorkspaceRuntimeError::Failed(error.to_string()))?;
-        let executor = match tools {
-            Some(tools) => TurnExecutor::new(
-                self.sessions.threads().clone(),
-                Arc::clone(&self.model),
-                tools.tools,
-                tools.policy,
-            ),
-            None => TurnExecutor::without_tools(
-                self.sessions.threads().clone(),
-                Arc::clone(&self.model),
-            ),
-        };
-        Ok(
-            executor.with_thread_updates(Arc::new(AppServerThreadUpdates {
-                updates: Arc::clone(&self.updates),
-            })),
-        )
     }
 
     fn ensure_workspace_switch_is_idle(&self) -> Result<(), WorkspaceRuntimeError> {

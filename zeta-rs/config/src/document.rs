@@ -1,12 +1,13 @@
 use crate::{
-    ConfigDiagnostic, ConfigError, ConfigProvenance, McpConfig, SkillsConfig, WorkspaceConfigIntent,
+    ConfigDiagnostic, ConfigError, ConfigProvenance, HooksConfig, McpConfig, PluginsConfig,
+    SkillsConfig, WorkspaceConfigIntent,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use zeta_model_provider_config::{
     ModelProviderConfig, ProviderConfigError, ProviderConfigRegistry,
 };
-use zeta_protocol::{ModelRef, ProviderId, Theme};
+use zeta_protocol::{ModelRef, ProviderId};
 
 /// User-selected model source for automatic approval review.
 ///
@@ -65,6 +66,10 @@ pub struct ConfigGeneration(u64);
 impl ConfigGeneration {
     pub const INITIAL: Self = Self(0);
 
+    pub fn new(value: u64) -> Self {
+        Self(value)
+    }
+
     pub fn get(self) -> u64 {
         self.0
     }
@@ -74,17 +79,9 @@ impl ConfigGeneration {
     }
 }
 
-/// User-interface preferences that are meaningful across Zeta clients.
-#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct UiConfig {
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub theme: Option<Theme>,
-}
-
 /// Agent defaults that may be resolved into future model invocations.
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct AgentConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub preferred_model: Option<ModelRef>,
@@ -97,10 +94,8 @@ pub struct AgentConfig {
 /// Provider entries are keyed by `ProviderId`; each value repeats its provider identity so a
 /// serialized document remains self-describing and mismatched entries can be rejected.
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct UserConfigDocument {
-    #[serde(default)]
-    pub ui: UiConfig,
     #[serde(default)]
     pub agent: AgentConfig,
     #[serde(default)]
@@ -109,6 +104,10 @@ pub struct UserConfigDocument {
     pub mcp: McpConfig,
     #[serde(default)]
     pub skills: SkillsConfig,
+    #[serde(default)]
+    pub plugins: PluginsConfig,
+    #[serde(default)]
+    pub hooks: HooksConfig,
 }
 
 impl UserConfigDocument {
@@ -142,6 +141,8 @@ impl UserConfigDocument {
         }
         self.mcp.validate_for_namespace("user")?;
         self.skills.validate_for_namespace("user")?;
+        self.plugins.validate()?;
+        self.hooks.validate_for_namespace("user")?;
         Ok(())
     }
 }
@@ -152,12 +153,13 @@ impl UserConfigDocument {
 /// type without exposing file or authority implementation details to runtime consumers.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct ResolvedConfig {
-    pub theme: Option<Theme>,
     pub preferred_model: Option<ModelRef>,
     pub approval_review_model: ApprovalReviewModelSelection,
     pub providers: BTreeMap<ProviderId, ModelProviderConfig>,
     pub mcp: McpConfig,
     pub skills: SkillsConfig,
+    pub plugins: PluginsConfig,
+    pub hooks: HooksConfig,
     pub workspace: Option<WorkspaceConfigIntent>,
 }
 
@@ -220,12 +222,13 @@ fn provider_config_error(error: ProviderConfigError) -> ConfigError {
 impl From<&UserConfigDocument> for ResolvedConfig {
     fn from(document: &UserConfigDocument) -> Self {
         Self {
-            theme: document.ui.theme,
             preferred_model: document.agent.preferred_model.clone(),
             approval_review_model: document.agent.approval_review_model.clone(),
             providers: document.providers.clone(),
             mcp: document.mcp.clone(),
             skills: document.skills.clone(),
+            plugins: document.plugins.clone(),
+            hooks: document.hooks.clone(),
             workspace: None,
         }
     }

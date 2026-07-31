@@ -108,7 +108,8 @@ transport 本身不创造 parent/child 语义。
 - dynamic Tool interaction、artifact reference 和命名 execution profile 尚未完成；
 - HTTP 尚无 independent GET SSE、`Last-Event-ID` redelivery、OAuth、multi-tenant workspace
   binding、built-in TLS 或 remote App Server backend；
-- receipt store 尚无多进程 file lock；一个 state root 当前只能运行一个 MCP server process。
+- receipt rows 已进入 profile SQLite，但 single-flight active set 仍为进程内；同一 profile 当前
+  只能运行一个 MCP server process。
 
 本文以下章节同时固定 Current surface 与 Proposed 演进；当前 HTTP listener 是 remote MCP
 adapter，不等于已具备公网 multi-tenant service 或 remote App Server execution plane。
@@ -219,7 +220,7 @@ bounded final content
 结果不包含完整 transcript、secret、raw model response、未过滤 Tool output 或内部 store location。
 `zeta-reply` 必须校验 caller 是否仍有权访问目标 Thread，不能仅凭猜到的 `thread_id` 继续任务。
 stdio 使用 local-user principal；HTTP principal 由 bearer token 的不可逆 hash 派生。
-caller-to-Thread binding 持久化在 state root，因此新的 connection/process 仍可恢复授权，但
+caller-to-Thread binding 持久化在 profile SQLite，因此新的 connection/process 仍可恢复授权，但
 不能跨 principal 猜测 `thread_id`。
 
 ## 7. 端到端流程
@@ -352,9 +353,11 @@ MCP client 对 progress 和 custom notification 的支持不一致。最终 `too
 | embedded server shutdown | bounded cancellation、driver join 和清晰 process exit |
 
 MCP connection、request ID 和 process PID 都不是 durable authority。当前 adapter 将
-principal-scoped receipt 原子持久化到 `<ZETA_STATE_ROOT>/mcp-server/receipts-v1.json`；它只
-负责外部 invocation correlation 与 Thread authorization，canonical Session/Thread/Turn 状态
-仍以 App Server/Core 为准。当前无多进程 file lock，同一 state root 只能有一个 server writer。
+principal-scoped receipt 原子持久化到 `<ZETA_PROFILE_ROOT>/state.sqlite3` 的
+`mcp_invocation_receipts` / `mcp_thread_bindings`；它只负责外部 invocation correlation 与
+Thread authorization，canonical Session/Thread/Turn 状态仍以 App Server/Core 为准。SQLite
+提交支持多 connection，但 active single-flight set 仍为进程内，因此同一 profile 当前只能有一个
+MCP server runtime。
 
 ## 12. 可观测性
 

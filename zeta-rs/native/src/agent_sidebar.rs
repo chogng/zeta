@@ -38,6 +38,10 @@ impl AgentSidebarState {
         };
     }
 
+    pub(crate) fn expand(&mut self) {
+        self.visibility = AgentSidebarVisibility::Expanded;
+    }
+
     pub(crate) fn is_visible_for(self, available_width: f32) -> bool {
         self.is_expanded() && available_width >= DEFAULT_WIDTH + MINIMUM_MAIN_WIDTH
     }

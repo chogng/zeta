@@ -19,6 +19,9 @@ pub enum ThreadCommand {
         model: Option<ModelRef>,
         input: Vec<UserInput>,
     },
+    StartShellTurn {
+        command: String,
+    },
     InterruptTurn {
         turn_id: TurnId,
     },

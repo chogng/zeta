@@ -108,7 +108,7 @@ function supervisorOptions(
     environment: {
       PATH: "/test/bin",
       ZETA_RG_PATH: "/test/bin/rg",
-      ZETA_STATE_ROOT: "/test/state",
+      ZETA_PROFILE_ROOT: "/test/state",
     },
     session: {
       clientName: "desktop-test",
@@ -294,7 +294,7 @@ test("supervisor requires an absolute executable and an explicit environment all
         ...supervisorOptions(children),
         environment: {
           PATH: "/test/bin",
-          ZETA_STATE_ROOT: "/test/state",
+          ZETA_PROFILE_ROOT: "/test/state",
           HOME: "/should-not-leak",
         },
       }),

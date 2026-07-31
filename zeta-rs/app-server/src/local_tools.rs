@@ -4,14 +4,14 @@ use std::path::{Component, Path};
 use std::sync::Arc;
 use std::time::Duration;
 use zeta_async_utils::CancellationToken;
-use zeta_core::{CoreError, PolicyService, ToolAuthorization, ToolService};
+use zeta_core::{CoreError, PolicyService, ToolAuthorization, ToolOutputSink, ToolService};
 use zeta_install_context::{ExecutableCandidates, InstallContext, ManagedExecutable};
 use zeta_policy::{
     ActionDigest, ActionKind, ActionProvenance, ActionReviewPhase, ActionReviewRequest,
-    ActionSource, Capability, CapabilityKind, CapabilitySet, ExecutionDecision, PolicyRevision,
-    ProcessInvocationKind, ResolvedAction, SandboxCompatibility,
+    ActionSource, ApprovalRequest, Capability, CapabilityKind, CapabilitySet, ExecutionDecision,
+    PolicyRevision, ProcessInvocationKind, ResolvedAction, SandboxCompatibility,
 };
-use zeta_protocol::{ToolCall, ToolDefinition, ToolExecutionOutput};
+use zeta_protocol::{ToolCall, ToolDefinition, ToolExecutionOutput, ToolOutputStream};
 use zeta_sandboxing::{
     FileSystemAccess, NetworkAccess, SandboxBackend, SandboxPolicy, WorkspaceRoot,
 };
@@ -22,7 +22,7 @@ use zeta_shell_command::{
 };
 use zeta_tools::{ToolPayload, to_protocol_tool_definition};
 
-const LOCAL_POLICY_REVISION: &str = "local-read-only-rg-v1";
+const LOCAL_POLICY_REVISION: &str = "local-shell-v2";
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
 const DEFAULT_OUTPUT_BYTES: usize = 256 * 1024;
 
@@ -37,7 +37,7 @@ pub(crate) fn compose_local_tools(
 ) -> Result<LocalToolComposition, LocalToolError> {
     let install_context = InstallContext::current();
     let ripgrep = resolve_ripgrep(&install_context).map_err(LocalToolError::ripgrep)?;
-    let policy = LocalReadOnlyPolicy::new(&workspace, &ripgrep);
+    let policy = LocalShellPolicy;
     let service = LocalShellToolService::new(
         workspace,
         ripgrep.clone(),
@@ -92,21 +92,8 @@ impl<B: SandboxBackend> LocalShellToolService<B> {
             },
         )
         .map_err(LocalToolError::definition)?;
-        let mut definition = to_protocol_tool_definition(shell.host_definition())
+        let definition = to_protocol_tool_definition(shell.host_definition())
             .map_err(LocalToolError::definition)?;
-        definition.description =
-            "Search workspace file contents and paths with read-only ripgrep (`rg`).".into();
-        if let Some(program) = definition
-            .parameters
-            .get_mut("properties")
-            .and_then(|properties| properties.get_mut("program"))
-        {
-            *program = json!({
-                "type": "string",
-                "enum": ["rg"],
-                "description": "The read-only ripgrep program."
-            });
-        }
         Ok(Self {
             workspace,
             ripgrep,
@@ -126,7 +113,9 @@ impl<B: SandboxBackend> LocalShellToolService<B> {
             call.arguments.clone(),
         ))
         .map_err(|error| CoreError::Policy(error.to_string()))?;
-        validate_workspace_arguments(&self.workspace, &request)?;
+        if request.program() == "rg" {
+            validate_workspace_arguments(&self.workspace, &request)?;
+        }
         let working_directory = self
             .workspace
             .resolve_existing(request.working_directory())
@@ -136,9 +125,13 @@ impl<B: SandboxBackend> LocalShellToolService<B> {
                 "shell-command working directory must be a directory".into(),
             ));
         }
-        self.ripgrep
-            .materialize(request)
-            .map_err(|error| CoreError::Policy(error.to_string()))
+        if request.program() == "rg" {
+            self.ripgrep
+                .materialize(request)
+                .map_err(|error| CoreError::Policy(error.to_string()))
+        } else {
+            Ok(request)
+        }
     }
 
     fn review_request(
@@ -155,19 +148,34 @@ impl<B: SandboxBackend> LocalShellToolService<B> {
             "working_directory": canonical_working_directory,
         }))
         .map_err(|error| CoreError::Policy(error.to_string()))?;
-        let capabilities = local_capabilities(&self.workspace, &self.ripgrep);
+        let is_ripgrep = request.program() == self.ripgrep.path().to_string_lossy();
+        let capabilities = if is_ripgrep {
+            local_capabilities(&self.workspace, &self.ripgrep)
+        } else {
+            shell_capabilities()
+        };
+        let sandbox = if is_ripgrep {
+            read_only_sandbox()
+        } else {
+            shell_sandbox()
+        };
         Ok(ActionReviewRequest::new(
             ResolvedAction::new(
                 ActionDigest::from_canonical_bytes(canonical),
-                ActionKind::LocalProcess(ProcessInvocationKind::Direct),
+                ActionKind::LocalProcess(if is_ripgrep {
+                    ProcessInvocationKind::Direct
+                } else {
+                    ProcessInvocationKind::Shell
+                }),
                 format!(
-                    "run read-only ripgrep in {}",
+                    "run {} in {}",
+                    request.program(),
                     canonical_working_directory.display()
                 ),
                 capabilities,
             ),
             ActionProvenance::new(ActionSource::BuiltInTool, "shell-command"),
-            SandboxCompatibility::Supported(read_only_sandbox()),
+            SandboxCompatibility::Supported(sandbox),
             PolicyRevision::new(LOCAL_POLICY_REVISION),
         ))
     }
@@ -215,30 +223,41 @@ impl<B: SandboxBackend> ToolService for LocalShellToolService<B> {
             }
             Err(ExecutionError::CancelledAfterStart(reason)) => {
                 Ok(ToolExecutionOutput::OutcomeUnknown(format!(
-                    "ripgrep was cancelled after process start: {reason}"
+                    "shell command was cancelled after process start: {reason}"
                 )))
             }
             Err(ExecutionError::TimedOut) => Ok(ToolExecutionOutput::OutcomeUnknown(
-                "ripgrep timed out after process start".into(),
+                "shell command timed out after process start".into(),
             )),
             Err(error) => Ok(ToolExecutionOutput::Failure(execution_error(error))),
         }
     }
-}
 
-struct LocalReadOnlyPolicy {
-    capabilities: CapabilitySet,
-}
-
-impl LocalReadOnlyPolicy {
-    fn new(workspace: &WorkspaceRoot, ripgrep: &RipgrepExecutable) -> Self {
-        Self {
-            capabilities: local_capabilities(workspace, ripgrep),
+    fn execute_streaming(
+        &self,
+        call: &ToolCall,
+        authorization: &ToolAuthorization,
+        cancellation: &CancellationToken,
+        sink: &mut dyn ToolOutputSink,
+    ) -> Result<ToolExecutionOutput, CoreError> {
+        let output = self.execute(call, authorization, cancellation)?;
+        if let ToolExecutionOutput::Success(text) = &output
+            && let Ok(value) = serde_json::from_str::<serde_json::Value>(text)
+        {
+            if let Some(stdout) = value.get("stdout").and_then(serde_json::Value::as_str) {
+                sink.emit(ToolOutputStream::Stdout, stdout.to_owned())?;
+            }
+            if let Some(stderr) = value.get("stderr").and_then(serde_json::Value::as_str) {
+                sink.emit(ToolOutputStream::Stderr, stderr.to_owned())?;
+            }
         }
+        Ok(output)
     }
 }
 
-impl PolicyService for LocalReadOnlyPolicy {
+struct LocalShellPolicy;
+
+impl PolicyService for LocalShellPolicy {
     fn decide(
         &self,
         request: &ActionReviewRequest,
@@ -250,20 +269,27 @@ impl PolicyService for LocalReadOnlyPolicy {
         if request.policy_revision().as_str() != LOCAL_POLICY_REVISION
             || request.provenance().source() != &ActionSource::BuiltInTool
             || request.provenance().source_id() != "shell-command"
-            || request.action().kind() != &ActionKind::LocalProcess(ProcessInvocationKind::Direct)
-            || !matches!(request.phase(), ActionReviewPhase::Initial)
-            || request.action().required_capabilities() != &self.capabilities
+            || !matches!(request.action().kind(), ActionKind::LocalProcess(_))
         {
             return Err(CoreError::Policy(
-                "local read-only policy rejected a non-ripgrep action".into(),
+                "local shell policy rejected an action outside its exact review contract".into(),
             ));
         }
-        match request.sandbox() {
-            SandboxCompatibility::Supported(policy) if *policy == read_only_sandbox() => {
+        match (request.phase(), request.sandbox()) {
+            (ActionReviewPhase::Initial, SandboxCompatibility::Supported(policy))
+                if *policy == read_only_sandbox() || *policy == shell_sandbox() =>
+            {
                 Ok(ExecutionDecision::RunSandboxed(*policy))
             }
+            (ActionReviewPhase::SandboxDenial(_), SandboxCompatibility::Supported(_)) => {
+                Ok(ExecutionDecision::AskUser(ApprovalRequest::new(
+                    request.action().digest().clone(),
+                    request.action().required_capabilities().clone(),
+                    "the command requires authority outside the workspace sandbox",
+                )))
+            }
             _ => Err(CoreError::Policy(
-                "read-only ripgrep requires an enforceable local sandbox".into(),
+                "local shell review phase is invalid".into(),
             )),
         }
     }
@@ -279,8 +305,25 @@ fn local_capabilities(workspace: &WorkspaceRoot, ripgrep: &RipgrepExecutable) ->
     ])
 }
 
+fn shell_capabilities() -> CapabilitySet {
+    CapabilitySet::new([
+        Capability::new(CapabilityKind::FileRead, "/"),
+        Capability::new(CapabilityKind::FileWrite, "/"),
+        Capability::new(CapabilityKind::ProcessSpawn, "*"),
+        Capability::new(CapabilityKind::Network, "*"),
+        Capability::new(CapabilityKind::CredentialUse, "*"),
+        Capability::new(CapabilityKind::ExternalMutation, "*"),
+        Capability::new(CapabilityKind::SystemConfiguration, "*"),
+        Capability::new(CapabilityKind::UserInterface, "*"),
+    ])
+}
+
 fn read_only_sandbox() -> SandboxPolicy {
     SandboxPolicy::new(FileSystemAccess::ReadOnly, NetworkAccess::Denied)
+}
+
+fn shell_sandbox() -> SandboxPolicy {
+    SandboxPolicy::new(FileSystemAccess::WorkspaceWrite, NetworkAccess::Denied)
 }
 
 fn validate_workspace_arguments(
@@ -314,17 +357,19 @@ fn validate_workspace_arguments(
 
 fn execution_error(error: ExecutionError) -> String {
     match error {
-        ExecutionError::ApprovalRequired => "ripgrep unexpectedly requires host approval".into(),
-        ExecutionError::Denied => "ripgrep was denied by the execution policy".into(),
-        ExecutionError::Spawn(reason) => format!("could not execute ripgrep: {reason}"),
+        ExecutionError::ApprovalRequired => {
+            "shell command unexpectedly requires host approval".into()
+        }
+        ExecutionError::Denied => "shell command was denied by the execution policy".into(),
+        ExecutionError::Spawn(reason) => format!("could not execute shell command: {reason}"),
         ExecutionError::CancelledBeforeStart(reason) => {
             format!("ripgrep was cancelled before process start: {reason}")
         }
         ExecutionError::CancelledAfterStart(reason) => {
             format!("ripgrep was cancelled after process start: {reason}")
         }
-        ExecutionError::TimedOut => "ripgrep timed out".into(),
-        ExecutionError::Sandbox(error) => format!("ripgrep sandbox failed: {error}"),
+        ExecutionError::TimedOut => "shell command timed out".into(),
+        ExecutionError::Sandbox(error) => format!("shell command sandbox failed: {error}"),
     }
 }
 

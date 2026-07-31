@@ -13,6 +13,7 @@ path = "src/lib.rs"
 [dependencies]
 dunce = { workspace = true }
 tokio = { workspace = true, features = ["io-util", "process", "rt", "time"] }
+zeta-diff = { workspace = true }
 
 [dev-dependencies]
 pretty_assertions = { workspace = true }

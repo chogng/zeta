@@ -3,14 +3,16 @@ use crate::policy_service::durable_sandbox_escalation_approval_request;
 use crate::thread_controller::{RecordToolExecutionEscalation, RecordToolExecutionStart};
 use crate::{
     AutoReviewedToolGrant, CoreError, PolicyService, RecordToolResultRequest,
-    RequestTurnInteraction, SandboxDenialOutput, ThreadController, ToolAuthorization,
-    ToolCallOutput, ToolExecutionOutput, ToolReplaySafety, ToolService,
+    RequestTurnInteraction, SandboxDenialOutput, ThreadController, ThreadUpdateSink,
+    ToolAuthorization, ToolCallOutput, ToolExecutionOutput, ToolOutputSink, ToolReplaySafety,
+    ToolService,
 };
 use zeta_async_utils::CancellationToken;
 use zeta_policy::{ActionReviewRequest, ExecutionDecision, SandboxDenialEvidence};
 use zeta_protocol::{
-    AgentRequest, ItemId, ThreadId, ToolCall, ToolExecutionAuthority,
-    ToolExecutionAuthority::Sandboxed, TurnId,
+    AgentRequest, ItemId, StreamCursor, StreamInstanceId, ThreadId, ThreadUpdate,
+    ThreadUpdateEnvelope, ToolCall, ToolCallId, ToolExecutionAuthority,
+    ToolExecutionAuthority::Sandboxed, ToolOutputStream, TurnId,
 };
 
 const MAX_DENIAL_REASON_CHARS: usize = 500;
@@ -65,6 +67,7 @@ pub(super) struct ToolExecutionOrchestrator<'a> {
     threads: &'a ThreadController,
     tools: &'a dyn ToolService,
     policy: &'a dyn PolicyService,
+    updates: &'a dyn ThreadUpdateSink,
 }
 
 impl<'a> ToolExecutionOrchestrator<'a> {
@@ -72,11 +75,13 @@ impl<'a> ToolExecutionOrchestrator<'a> {
         threads: &'a ThreadController,
         tools: &'a dyn ToolService,
         policy: &'a dyn PolicyService,
+        updates: &'a dyn ThreadUpdateSink,
     ) -> Self {
         Self {
             threads,
             tools,
             policy,
+            updates,
         }
     }
 
@@ -146,10 +151,7 @@ impl<'a> ToolExecutionOrchestrator<'a> {
                 authority: execution_authority(&authorization),
             },
         )?;
-        let output = match self
-            .tools
-            .execute(&call, &authorization, context.cancellation)
-        {
+        let output = match self.execute_service(context, &call, &authorization) {
             Ok(ToolExecutionOutput::Success(text)) => ToolCallOutput::Success(text),
             Ok(ToolExecutionOutput::Failure(text)) => ToolCallOutput::Failure(text),
             Ok(ToolExecutionOutput::OutcomeUnknown(reason)) => ToolCallOutput::Failure(format!(
@@ -184,9 +186,7 @@ impl<'a> ToolExecutionOrchestrator<'a> {
         reviewed: &ActionReviewRequest,
         authorization: ToolAuthorization,
     ) -> Result<ToolAttempt, CoreError> {
-        let result = self
-            .tools
-            .execute(call, &authorization, context.cancellation);
+        let result = self.execute_service(context, call, &authorization);
         match result {
             Ok(ToolExecutionOutput::Success(text)) => Ok(ToolAttempt::Commit {
                 output: ToolCallOutput::Success(text),
@@ -228,6 +228,27 @@ impl<'a> ToolExecutionOrchestrator<'a> {
             }
             Err(error) => Err(error),
         }
+    }
+
+    fn execute_service(
+        &self,
+        context: &ToolExecutionContext<'_>,
+        call: &ToolCall,
+        authorization: &ToolAuthorization,
+    ) -> Result<ToolExecutionOutput, CoreError> {
+        let snapshot = self.threads.read_thread(context.thread_id)?;
+        let mut stream = ToolUpdateStream {
+            updates: self.updates,
+            session_id: snapshot.session_id,
+            thread_id: context.thread_id.clone(),
+            turn_id: context.turn_id.clone(),
+            tool_call_id: call.id.clone(),
+            durable_sequence: snapshot.sequence,
+            stream_instance_id: self.threads.next_stream_instance_id(),
+            next_sequence: 0,
+        };
+        self.tools
+            .execute_streaming(call, authorization, context.cancellation, &mut stream)
     }
 
     fn review_denial_and_retry(
@@ -342,10 +363,7 @@ impl<'a> ToolExecutionOrchestrator<'a> {
             },
         )?;
 
-        let output = match self
-            .tools
-            .execute(call, &authorization, context.cancellation)
-        {
+        let output = match self.execute_service(context, call, &authorization) {
             Ok(ToolExecutionOutput::Success(text)) => ToolCallOutput::Success(text),
             Ok(ToolExecutionOutput::Failure(text)) => ToolCallOutput::Failure(text),
             Ok(ToolExecutionOutput::OutcomeUnknown(reason)) => ToolCallOutput::Failure(format!(
@@ -362,6 +380,42 @@ impl<'a> ToolExecutionOrchestrator<'a> {
             output,
             completion: ToolExecutionCompletion::Complete,
         })
+    }
+}
+
+struct ToolUpdateStream<'a> {
+    updates: &'a dyn ThreadUpdateSink,
+    session_id: zeta_protocol::SessionId,
+    thread_id: ThreadId,
+    turn_id: TurnId,
+    tool_call_id: ToolCallId,
+    durable_sequence: u64,
+    stream_instance_id: StreamInstanceId,
+    next_sequence: u64,
+}
+
+impl ToolOutputSink for ToolUpdateStream<'_> {
+    fn emit(&mut self, stream: ToolOutputStream, text: String) -> Result<(), CoreError> {
+        if text.is_empty() {
+            return Ok(());
+        }
+        self.next_sequence = self.next_sequence.saturating_add(1);
+        self.updates.publish(ThreadUpdateEnvelope {
+            session_id: self.session_id.clone(),
+            thread_id: self.thread_id.clone(),
+            durable_sequence: self.durable_sequence,
+            stream_cursor: Some(StreamCursor {
+                stream_instance_id: self.stream_instance_id.clone(),
+                sequence: self.next_sequence,
+            }),
+            update: ThreadUpdate::ToolOutputDelta {
+                turn_id: self.turn_id.clone(),
+                tool_call_id: self.tool_call_id.clone(),
+                stream,
+                text,
+            },
+        });
+        Ok(())
     }
 }
 

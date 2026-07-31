@@ -579,6 +579,52 @@ fn start_turn_replays_typed_command_without_creating_another_turn() {
 }
 
 #[test]
+fn shell_turn_atomically_persists_its_exact_command_and_tool_call() {
+    let threads = ThreadController::with_store(Arc::new(InMemoryThreadStore::default()));
+    let thread_id = create_thread(&threads, "shell");
+    let request = || StartShellTurnRequest {
+        command_id: CommandId::new("shell-start").unwrap(),
+        expected_sequence: SequenceExpectation::Any,
+        invocation: ShellTurnInvocation {
+            command: "cargo test -p zeta-core".into(),
+            shell_program: "/bin/sh".into(),
+            working_directory: ".".into(),
+        },
+    };
+
+    let created = threads.start_shell_turn(&thread_id, request()).unwrap();
+    let replayed = threads.start_shell_turn(&thread_id, request()).unwrap();
+    let snapshot = threads.read_thread(&thread_id).unwrap();
+
+    assert_eq!(created.turn_id, replayed.turn_id);
+    assert_eq!(replayed.disposition, StartTurnDisposition::Replayed);
+    assert_eq!(snapshot.turns.len(), 1);
+    assert!(matches!(
+        &snapshot.commands[0].receipt.command,
+        zeta_protocol::ThreadCommand::StartShellTurn { command }
+            if command == "cargo test -p zeta-core"
+    ));
+    let ThreadItem::ToolCall {
+        turn_id,
+        name,
+        arguments_json,
+        ..
+    } = &snapshot.items[0]
+    else {
+        panic!("Shell Turn must own one durable Tool Call");
+    };
+    assert_eq!(turn_id, &created.turn_id);
+    assert_eq!(name.as_str(), "shell-command");
+    let arguments: serde_json::Value = serde_json::from_str(arguments_json).unwrap();
+    assert_eq!(arguments["program"], "/bin/sh");
+    assert_eq!(
+        arguments["arguments"],
+        serde_json::json!(["-lc", "cargo test -p zeta-core"])
+    );
+    assert_eq!(arguments["working_directory"], ".");
+}
+
+#[test]
 fn typed_command_rejects_reusing_an_id_with_different_input() {
     let threads = ThreadController::with_store(Arc::new(InMemoryThreadStore::default()));
     let thread = create_thread(&threads, "test");

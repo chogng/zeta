@@ -3,20 +3,30 @@ use super::{
     build_shell_presentation, terminal_grid_size_for_viewport,
     terminal_mouse_position_for_viewport,
 };
+use crate::PRODUCT_DISPLAY_NAME;
+use crate::agent_composer::ComposerMode;
 use crate::agent_sidebar::AgentSidebarState;
-use crate::agent_sidebar_workspace::AgentSidebarWorkspace;
+use crate::agent_sidebar_workspace::{AgentSidebarView, AgentSidebarWorkspace};
+use crate::composer_editor::ComposerEditor;
+use crate::git_branch_context_menu::GitBranchContextMenuState;
+use crate::keybindings::NativeKeybindings;
+use crate::keyboard_shortcuts::KeyboardShortcutsState;
 use crate::session_context_menu::SessionContextMenuState;
 use crate::session_search::SessionSearch;
 use crate::session_sidebar::SessionSidebarState;
 use crate::shell_interaction::{
-    ADD_SESSION, AGENT_EDITOR_PANE, AGENT_EXPLORER_PANE, AGENT_SIDEBAR, COMPOSER, COMPOSER_PANEL,
-    ContextAction, MULTI_DIFF_EDITOR, SESSION_SEARCH_INPUT, SESSION_SIDEBAR_RESIZE_HANDLE,
-    TITLEBAR,
+    ADD_SESSION, AGENT_CHANGES, AGENT_EDITOR_PANE, AGENT_EXPLORER_PANE, AGENT_FILES,
+    AGENT_FILES_REFRESH, AGENT_FILES_SEARCH, AGENT_SIDEBAR, AGENT_SIDEBAR_NAVIGATION,
+    AGENT_SIDEBAR_TOOLBAR, COMPOSER, COMPOSER_MODE, COMPOSER_PANEL, ContextAction,
+    MULTI_DIFF_EDITOR, SESSION_SEARCH_INPUT, SESSION_SIDEBAR_RESIZE_HANDLE, TITLEBAR,
 };
-use crate::terminal_projection::scroll_limit;
+use crate::thread_projection::ThreadProjection;
 use crate::workspace_context::WorkspaceContext;
+use crate::workspace_path_picker::WorkspacePathPickerState;
 use zeta_terminal::{GridSize, ScreenBuffer, TerminalCore};
-use zeta_ui::{CaretVisibility, Color, Point, TextInput, TextInputCommand, TextInputLayoutEngine};
+use zeta_ui::{
+    CaretVisibility, Color, Point, ScrollbarPresentation, TextInputCommand, TextInputLayoutEngine,
+};
 use zeta_ui_dispatch::{
     AccessibilityRole, CursorFeedback, DispatchInvalidation, UiDispatch, UiIntent,
 };
@@ -68,20 +78,27 @@ fn presentation_with_sidebars_and_menu(
     agent_sidebar: AgentSidebarState,
     session_context_menu: SessionContextMenuState,
 ) -> ShellPresentation {
-    let composer = TextInput::new();
+    let composer = ComposerEditor::default();
     let session_search = SessionSearch::default();
     let workspace_context = WorkspaceContext::fixture("~/Desktop/zeta", Some("main"), Some(0));
     let mut text_layout = TextInputLayoutEngine::new();
     let mut dispatch = UiDispatch::default();
     let agent_sidebar_workspace = AgentSidebarWorkspace::default();
+    let thread_projection = ThreadProjection::default();
     let initial = build_shell_presentation(
         viewport(),
         ShellPresentationModel {
             terminal,
             terminal_scroll_offset: scroll_offset,
+            terminal_scrollbar_presentation: ScrollbarPresentation::default(),
             terminal_selection: None,
+            terminal_surface: terminal
+                .is_some_and(|terminal| terminal.active_screen() == ScreenBuffer::Alternate),
+            thread_projection: &thread_projection,
+            thread_timeline_scroll_offset: 0,
             workspace_context: &workspace_context,
             composer: &composer,
+            composer_mode: ComposerMode::Agent,
             session_search: &session_search,
             caret_visibility: CaretVisibility::Visible,
             dispatch: &dispatch,
@@ -89,6 +106,11 @@ fn presentation_with_sidebars_and_menu(
             agent_sidebar,
             agent_sidebar_workspace: &agent_sidebar_workspace,
             session_context_menu,
+            git_branch_context_menu: &GitBranchContextMenuState::default(),
+            workspace_path_picker: &WorkspacePathPickerState::default(),
+            keybindings: &NativeKeybindings::default(),
+            keyboard_shortcuts: &KeyboardShortcutsState::default(),
+            keybinding_diagnostics: &[],
             window_control_insets: WindowControlInsets::NONE,
         },
         &mut text_layout,
@@ -99,9 +121,15 @@ fn presentation_with_sidebars_and_menu(
         ShellPresentationModel {
             terminal,
             terminal_scroll_offset: scroll_offset,
+            terminal_scrollbar_presentation: ScrollbarPresentation::default(),
             terminal_selection: None,
+            terminal_surface: terminal
+                .is_some_and(|terminal| terminal.active_screen() == ScreenBuffer::Alternate),
+            thread_projection: &thread_projection,
+            thread_timeline_scroll_offset: 0,
             workspace_context: &workspace_context,
             composer: &composer,
+            composer_mode: ComposerMode::Agent,
             session_search: &session_search,
             caret_visibility: CaretVisibility::Visible,
             dispatch: &dispatch,
@@ -109,6 +137,11 @@ fn presentation_with_sidebars_and_menu(
             agent_sidebar,
             agent_sidebar_workspace: &agent_sidebar_workspace,
             session_context_menu,
+            git_branch_context_menu: &GitBranchContextMenuState::default(),
+            workspace_path_picker: &WorkspacePathPickerState::default(),
+            keybindings: &NativeKeybindings::default(),
+            keyboard_shortcuts: &KeyboardShortcutsState::default(),
+            keybinding_diagnostics: &[],
             window_control_insets: WindowControlInsets::NONE,
         },
         &mut text_layout,
@@ -132,6 +165,25 @@ fn primary_layout_keeps_output_above_a_bottom_composer() {
     assert_eq!(layout.composer_panel.origin.y, 588.0);
     assert_eq!(layout.composer.bottom(), 644.0);
     assert_eq!(layout.composer_toolbar.origin.y, 656.0);
+}
+
+#[test]
+fn multiline_composer_grows_upward_without_covering_its_toolbar() {
+    let layout = ShellLayout::for_viewport_with_composer_height(
+        viewport(),
+        SessionSidebarState::default(),
+        AgentSidebarState::default(),
+        160.0,
+    )
+    .unwrap();
+
+    assert_eq!(layout.composer.size.height, 160.0);
+    assert_eq!(layout.composer_panel.size.height, 228.0);
+    assert_eq!(
+        layout.composer_toolbar.origin.y,
+        layout.composer.bottom() + 12.0
+    );
+    assert_eq!(layout.output.bottom(), layout.composer_panel.origin.y);
 }
 
 #[test]
@@ -163,7 +215,7 @@ fn primary_presentation_uses_a_flat_light_surface() {
 }
 
 #[test]
-fn primary_presentation_has_block_output_and_a_fixed_command_editor() {
+fn primary_presentation_has_an_agent_timeline_and_fixed_composer() {
     let presentation = presentation(None, 0);
     let visible_text = presentation
         .scene
@@ -173,10 +225,11 @@ fn primary_presentation_has_block_output_and_a_fixed_command_editor() {
         .collect::<Vec<_>>();
 
     assert!(!visible_text.contains(&"zeterm"));
-    assert!(visible_text.contains(&"Starting shell…"));
-    assert!(visible_text.contains(&"Enter a command…"));
+    assert!(!visible_text.contains(&"Starting shell…"));
+    assert!(visible_text.contains(&"Ask Zeta anything…"));
+    assert!(visible_text.contains(&"Agent"));
     assert!(!visible_text.contains(&"SESSIONS"));
-    assert_eq!(presentation.scene.icons().len(), 6);
+    assert_eq!(presentation.scene.icons().len(), 7);
 }
 
 #[test]
@@ -266,22 +319,28 @@ fn expanded_sidebar_reflows_the_terminal_and_publishes_a_selected_session_tab() 
 
 #[test]
 fn session_search_filters_tabs_by_session_name() {
-    let composer = TextInput::new();
+    let composer = ComposerEditor::default();
     let mut session_search = SessionSearch::default();
     session_search.apply(TextInputCommand::Insert("missing session".to_owned()));
     let workspace_context = WorkspaceContext::fixture("~/Desktop/zeta", Some("main"), Some(0));
     let mut text_layout = TextInputLayoutEngine::new();
     let dispatch = UiDispatch::default();
     let agent_sidebar_workspace = AgentSidebarWorkspace::default();
+    let thread_projection = ThreadProjection::default();
 
     let presentation = build_shell_presentation(
         viewport(),
         ShellPresentationModel {
             terminal: None,
             terminal_scroll_offset: 0,
+            terminal_scrollbar_presentation: ScrollbarPresentation::default(),
             terminal_selection: None,
+            terminal_surface: false,
+            thread_projection: &thread_projection,
+            thread_timeline_scroll_offset: 0,
             workspace_context: &workspace_context,
             composer: &composer,
+            composer_mode: ComposerMode::Agent,
             session_search: &session_search,
             caret_visibility: CaretVisibility::Visible,
             dispatch: &dispatch,
@@ -289,6 +348,11 @@ fn session_search_filters_tabs_by_session_name() {
             agent_sidebar: AgentSidebarState::default(),
             agent_sidebar_workspace: &agent_sidebar_workspace,
             session_context_menu: SessionContextMenuState::default(),
+            git_branch_context_menu: &GitBranchContextMenuState::default(),
+            workspace_path_picker: &WorkspacePathPickerState::default(),
+            keybindings: &NativeKeybindings::default(),
+            keyboard_shortcuts: &KeyboardShortcutsState::default(),
+            keybinding_diagnostics: &[],
             window_control_insets: WindowControlInsets::NONE,
         },
         &mut text_layout,
@@ -310,7 +374,7 @@ fn session_search_filters_tabs_by_session_name() {
 }
 
 #[test]
-fn expanded_agent_sidebar_hosts_sibling_explorer_and_editor_panes() {
+fn expanded_agent_sidebar_defaults_to_the_files_pane_with_navigation_and_actions() {
     let agent_sidebar = AgentSidebarState::expanded();
     let layout =
         ShellLayout::for_viewport(viewport(), SessionSidebarState::default(), agent_sidebar)
@@ -332,15 +396,15 @@ fn expanded_agent_sidebar_hosts_sibling_explorer_and_editor_panes() {
         .iter()
         .find(|node| node.id == AGENT_EXPLORER_PANE)
         .unwrap();
-    let editor = presentation
+    let navigation = presentation
         .accessibility_nodes
         .iter()
-        .find(|node| node.id == AGENT_EDITOR_PANE)
+        .find(|node| node.id == AGENT_SIDEBAR_NAVIGATION)
         .unwrap();
-    let multi_diff = presentation
+    let toolbar = presentation
         .accessibility_nodes
         .iter()
-        .find(|node| node.id == MULTI_DIFF_EDITOR)
+        .find(|node| node.id == AGENT_SIDEBAR_TOOLBAR)
         .unwrap();
 
     assert_eq!(
@@ -354,22 +418,61 @@ fn expanded_agent_sidebar_hosts_sibling_explorer_and_editor_panes() {
     assert_eq!(sidebar.role, AccessibilityRole::Group);
     assert_eq!(sidebar.label, "Agent sidebar");
     assert_eq!(explorer.parent, Some(AGENT_SIDEBAR));
-    assert_eq!(explorer.label, "Explorer");
-    assert_eq!(editor.parent, Some(AGENT_SIDEBAR));
-    assert_eq!(editor.label, "Changed files editor");
-    assert_eq!(multi_diff.parent, Some(AGENT_EDITOR_PANE));
-    assert_eq!(multi_diff.role, AccessibilityRole::Group);
-    assert_eq!(multi_diff.label, "Multiple file differences");
-    assert_eq!(explorer.bounds.bottom(), editor.bounds.origin.y);
+    assert_eq!(explorer.label, "Files");
+    assert_eq!(navigation.role, AccessibilityRole::Toolbar);
+    assert_eq!(toolbar.label, "Agent sidebar toolbar");
+    assert_eq!(
+        toolbar.bounds,
+        zeta_ui::Rect::from_xywh(680.0, 32.0, 320.0, 36.0)
+    );
+    assert_eq!(
+        navigation.bounds,
+        zeta_ui::Rect::from_xywh(680.0, 32.0, 128.0, 36.0)
+    );
+    assert_eq!(navigation.parent, Some(AGENT_SIDEBAR_TOOLBAR));
+    assert_eq!(
+        explorer.bounds,
+        zeta_ui::Rect::from_xywh(680.0, 68.0, 320.0, 632.0)
+    );
+    for id in [
+        AGENT_CHANGES,
+        AGENT_FILES,
+        AGENT_FILES_REFRESH,
+        AGENT_FILES_SEARCH,
+    ] {
+        assert!(
+            presentation
+                .accessibility_nodes
+                .iter()
+                .any(|node| node.id == id)
+        );
+    }
+    assert!(
+        presentation
+            .accessibility_nodes
+            .iter()
+            .all(|node| !matches!(node.id, AGENT_EDITOR_PANE | MULTI_DIFF_EDITOR))
+    );
     let visible_text = presentation
         .scene
         .text_blocks()
         .iter()
         .map(|text| text.text())
         .collect::<Vec<_>>();
-    assert!(visible_text.contains(&"Explorer"));
+    assert_eq!(
+        visible_text.iter().filter(|text| **text == "Files").count(),
+        1
+    );
     assert!(visible_text.contains(&"No files loaded"));
-    assert!(visible_text.contains(&"No changed files"));
+    assert!(visible_text.contains(&"↑0 ↓0"));
+    assert_eq!(
+        presentation
+            .accessibility_nodes
+            .iter()
+            .filter(|node| node.parent == Some(crate::shell_interaction::AGENT_FILES_ACTION_BAR))
+            .count(),
+        2
+    );
     assert_eq!(
         terminal_grid_size_for_viewport(
             viewport(),
@@ -379,6 +482,88 @@ fn expanded_agent_sidebar_hosts_sibling_explorer_and_editor_panes() {
         )
         .cols(),
         79
+    );
+}
+
+#[test]
+fn changes_switch_mounts_workspace_diffs_in_the_multi_diff_editor_without_files_actions() {
+    let composer = ComposerEditor::default();
+    let session_search = SessionSearch::default();
+    let workspace_context = WorkspaceContext::fixture("~/Desktop/zeta", Some("main"), Some(2));
+    let mut agent_workspace = AgentSidebarWorkspace::default();
+    agent_workspace.sync_repository(&workspace_context);
+    agent_workspace.select_view(AgentSidebarView::Changes);
+    let mut text_layout = TextInputLayoutEngine::new();
+    let dispatch = UiDispatch::default();
+    let thread_projection = ThreadProjection::default();
+    let presentation = build_shell_presentation(
+        viewport(),
+        ShellPresentationModel {
+            terminal: None,
+            terminal_scroll_offset: 0,
+            terminal_scrollbar_presentation: ScrollbarPresentation::default(),
+            terminal_selection: None,
+            terminal_surface: false,
+            thread_projection: &thread_projection,
+            thread_timeline_scroll_offset: 0,
+            workspace_context: &workspace_context,
+            composer: &composer,
+            composer_mode: ComposerMode::Agent,
+            session_search: &session_search,
+            caret_visibility: CaretVisibility::Visible,
+            dispatch: &dispatch,
+            session_sidebar: SessionSidebarState::default(),
+            agent_sidebar: AgentSidebarState::expanded(),
+            agent_sidebar_workspace: &agent_workspace,
+            session_context_menu: SessionContextMenuState::default(),
+            git_branch_context_menu: &GitBranchContextMenuState::default(),
+            workspace_path_picker: &WorkspacePathPickerState::default(),
+            keybindings: &NativeKeybindings::default(),
+            keyboard_shortcuts: &KeyboardShortcutsState::default(),
+            keybinding_diagnostics: &[],
+            window_control_insets: WindowControlInsets::NONE,
+        },
+        &mut text_layout,
+    );
+
+    assert!(
+        presentation
+            .accessibility_nodes
+            .iter()
+            .any(|node| node.id == AGENT_EDITOR_PANE)
+    );
+    assert!(
+        presentation
+            .accessibility_nodes
+            .iter()
+            .any(|node| node.id == MULTI_DIFF_EDITOR)
+    );
+    assert!(
+        presentation
+            .accessibility_nodes
+            .iter()
+            .all(|node| !matches!(
+                node.id,
+                AGENT_EXPLORER_PANE | AGENT_FILES_REFRESH | AGENT_FILES_SEARCH
+            ))
+    );
+    let visible_text = presentation
+        .scene
+        .text_blocks()
+        .iter()
+        .map(|text| text.text())
+        .collect::<Vec<_>>();
+    assert!(visible_text.contains(&"fixture-0.txt"));
+    assert!(visible_text.contains(&"fixture-1.txt"));
+    assert!(!visible_text.contains(&"No changed files"));
+    assert!(!visible_text.contains(&"HEAD"));
+    assert!(!visible_text.contains(&"Working Tree"));
+    assert_eq!(
+        visible_text
+            .iter()
+            .filter(|text| **text == "Changes")
+            .count(),
+        1
     );
 }
 
@@ -447,6 +632,34 @@ fn primary_presentation_publishes_current_control_semantics_and_focus() {
 }
 
 #[test]
+fn context_toolbar_pointer_clicks_activate_workspace_and_branch_pickers() {
+    let presentation = presentation(None, 0);
+
+    for action in [ContextAction::WorkingDirectory, ContextAction::GitBranch] {
+        let bounds = presentation
+            .accessibility_nodes
+            .iter()
+            .find(|node| node.id == action.element_id())
+            .unwrap()
+            .bounds;
+        let point = Point::new(
+            bounds.origin.x + bounds.size.width / 2.0,
+            bounds.origin.y + bounds.size.height / 2.0,
+        );
+        let mut dispatch = UiDispatch::default();
+
+        dispatch.pointer_moved(point, &presentation.interaction_frame);
+        dispatch.press_primary(&presentation.interaction_frame);
+        let outcome = dispatch.release_primary(point, &presentation.interaction_frame);
+
+        assert_eq!(
+            outcome.intent,
+            Some(UiIntent::Activate(action.element_id()))
+        );
+    }
+}
+
+#[test]
 fn titlebar_drags_the_window_and_composer_is_a_registered_input_region() {
     let presentation = presentation(None, 0);
     let mut dispatch = UiDispatch::default();
@@ -502,7 +715,7 @@ fn context_toolbar_registers_button_geometry_above_the_composer_panel() {
         presentation
             .interaction_frame
             .target_at(Point::new(40.0, 668.0)),
-        Some(ContextAction::Location.element_id())
+        Some(COMPOSER_MODE)
     );
     assert_eq!(
         dispatch.pointer_feedback(&presentation.interaction_frame),
@@ -514,17 +727,18 @@ fn context_toolbar_registers_button_geometry_above_the_composer_panel() {
             .invalidation,
         DispatchInvalidation::Paint
     );
-    assert!(dispatch.is_pressed(ContextAction::Location.element_id()));
+    assert!(dispatch.is_pressed(COMPOSER_MODE));
 }
 
 #[test]
 fn compact_viewport_uses_bounded_fallback_scene() {
-    let composer = TextInput::new();
+    let composer = ComposerEditor::default();
     let session_search = SessionSearch::default();
     let workspace_context = WorkspaceContext::fixture("/tmp/project", None, None);
     let mut text_layout = TextInputLayoutEngine::new();
     let dispatch = UiDispatch::default();
     let agent_sidebar_workspace = AgentSidebarWorkspace::default();
+    let thread_projection = ThreadProjection::default();
     let presentation = build_shell_presentation(
         LogicalViewport {
             width: 220.0,
@@ -533,9 +747,14 @@ fn compact_viewport_uses_bounded_fallback_scene() {
         ShellPresentationModel {
             terminal: None,
             terminal_scroll_offset: 0,
+            terminal_scrollbar_presentation: ScrollbarPresentation::default(),
             terminal_selection: None,
+            terminal_surface: false,
+            thread_projection: &thread_projection,
+            thread_timeline_scroll_offset: 0,
             workspace_context: &workspace_context,
             composer: &composer,
+            composer_mode: ComposerMode::Agent,
             session_search: &session_search,
             caret_visibility: CaretVisibility::Visible,
             dispatch: &dispatch,
@@ -543,6 +762,11 @@ fn compact_viewport_uses_bounded_fallback_scene() {
             agent_sidebar: AgentSidebarState::default(),
             agent_sidebar_workspace: &agent_sidebar_workspace,
             session_context_menu: SessionContextMenuState::default(),
+            git_branch_context_menu: &GitBranchContextMenuState::default(),
+            workspace_path_picker: &WorkspacePathPickerState::default(),
+            keybindings: &NativeKeybindings::default(),
+            keyboard_shortcuts: &KeyboardShortcutsState::default(),
+            keybinding_diagnostics: &[],
             window_control_insets: WindowControlInsets::NONE,
         },
         &mut text_layout,
@@ -595,7 +819,7 @@ fn primary_pointer_coordinates_are_limited_to_the_output_region() {
 }
 
 #[test]
-fn primary_block_list_is_projected_above_the_composer() {
+fn primary_terminal_blocks_do_not_override_the_agent_timeline() {
     let mut terminal = TerminalCore::new(GridSize::new(29, 119));
     terminal.process_output(b"$ ");
     terminal.start_command("printf hi");
@@ -609,28 +833,19 @@ fn primary_block_list_is_projected_above_the_composer() {
         .map(|block| block.text())
         .collect::<Vec<_>>();
 
-    assert!(visible_text.contains(&"❯ printf hi"));
-    assert!(visible_text.contains(&"hi"));
-    assert!(visible_text.contains(&"Enter a command…"));
+    assert!(!visible_text.contains(&"❯ printf hi"));
+    assert!(!visible_text.contains(&"hi"));
+    assert!(visible_text.contains(&"Ask Zeta anything…"));
 }
 
 #[test]
-fn primary_block_transcript_can_project_an_older_viewport() {
+fn primary_terminal_scrollback_does_not_change_the_agent_timeline() {
     let mut terminal = TerminalCore::new(GridSize::new(29, 119));
     terminal.start_command("history");
     for index in 0..80 {
         terminal.process_output(format!("line-{index}\r\n").as_bytes());
     }
-    let capacity = terminal_grid_size_for_viewport(
-        viewport(),
-        ScreenBuffer::Primary,
-        SessionSidebarState::default(),
-        AgentSidebarState::default(),
-    )
-    .rows() as usize;
-    let limit = scroll_limit(&terminal, capacity);
-
-    let presentation = presentation(Some(&terminal), limit);
+    let presentation = presentation(Some(&terminal), 80);
     let visible_text = presentation
         .scene
         .text_blocks()
@@ -638,10 +853,10 @@ fn primary_block_transcript_can_project_an_older_viewport() {
         .map(|block| block.text())
         .collect::<Vec<_>>();
 
-    assert!(limit > 0);
-    assert!(visible_text.contains(&"❯ history"));
-    assert!(visible_text.contains(&"line-0"));
+    assert!(!visible_text.contains(&"❯ history"));
+    assert!(!visible_text.contains(&"line-0"));
     assert!(!visible_text.contains(&"line-79"));
+    assert!(visible_text.contains(&"Ask Zeta anything…"));
 }
 
 #[test]
@@ -674,18 +889,19 @@ fn alternate_screen_ime_position_comes_from_the_terminal_cursor() {
 }
 
 #[test]
-fn osc_title_is_projected_into_the_expanded_session_tab() {
+fn background_terminal_title_does_not_replace_the_agent_session_title() {
     let mut terminal = TerminalCore::new(GridSize::new(29, 119));
     terminal.process_output(b"\x1b]2;project shell\x07");
 
     let presentation =
         presentation_with_sidebar(Some(&terminal), 0, SessionSidebarState::expanded());
 
-    assert!(
-        presentation
-            .scene
-            .text_blocks()
-            .iter()
-            .any(|block| block.text() == "project shell")
-    );
+    let text = presentation
+        .scene
+        .text_blocks()
+        .iter()
+        .map(|block| block.text())
+        .collect::<Vec<_>>();
+    assert!(text.contains(&PRODUCT_DISPLAY_NAME));
+    assert!(!text.contains(&"project shell"));
 }

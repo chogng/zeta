@@ -1,0 +1,364 @@
+use std::str::FromStr;
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
+
+use lsp_types::request::HoverRequest;
+use lsp_types::{
+    ConfigurationItem, HoverParams, Position, TextDocumentIdentifier, TextDocumentPositionParams,
+    Uri, WorkDoneProgressParams,
+};
+use serde_json::{Value, json};
+use tokio::io::{AsyncWrite, BufReader};
+use tokio::sync::{Notify, oneshot};
+
+use super::*;
+use crate::protocol::{
+    DEFAULT_MAX_HEADER_BYTES, DEFAULT_MAX_MESSAGE_BYTES, read_frame, write_frame,
+};
+
+#[derive(Default)]
+struct RecordingHost {
+    events: Mutex<Vec<LanguageServerEvent>>,
+    event_received: Notify,
+}
+
+impl RecordingHost {
+    async fn wait_for_diagnostics(&self) {
+        loop {
+            if self
+                .events
+                .lock()
+                .expect("events mutex")
+                .iter()
+                .any(|event| matches!(event, LanguageServerEvent::Diagnostics(_)))
+            {
+                return;
+            }
+            self.event_received.notified().await;
+        }
+    }
+}
+
+impl LanguageServerHost for RecordingHost {
+    fn on_event(&self, event: LanguageServerEvent) {
+        self.events.lock().expect("events mutex").push(event);
+        self.event_received.notify_waiters();
+    }
+
+    fn workspace_configuration(&self, items: &[ConfigurationItem]) -> Vec<WorkspaceConfiguration> {
+        items
+            .iter()
+            .map(|item| {
+                WorkspaceConfiguration(json!({
+                    "section": item.section,
+                    "enabled": true,
+                }))
+            })
+            .collect()
+    }
+}
+
+#[tokio::test]
+async fn runs_initialize_document_requests_events_and_shutdown() {
+    let (client_stream, server_stream) = tokio::io::duplex(64 * 1024);
+    let (client_reader, client_writer) = tokio::io::split(client_stream);
+    let (server_reader, server_writer) = tokio::io::split(server_stream);
+    let (configuration_done_tx, configuration_done_rx) = oneshot::channel();
+    let uri = Uri::from_str("file:///workspace/src/main.rs").expect("document URI");
+    let server_uri = uri.clone();
+    let server = tokio::spawn(async move {
+        let mut reader = BufReader::new(server_reader);
+        let mut writer = server_writer;
+        let initialize = read_json(&mut reader).await;
+        assert_eq!(initialize["method"], "initialize");
+        assert_eq!(
+            initialize["params"]["capabilities"]["general"]["positionEncodings"],
+            json!(["utf-8", "utf-16"])
+        );
+        respond(
+            &mut writer,
+            initialize["id"].clone(),
+            json!({
+                "capabilities": {
+                    "positionEncoding": "utf-8",
+                    "hoverProvider": true,
+                    "textDocumentSync": {
+                        "openClose": true,
+                        "change": 2,
+                        "save": { "includeText": true }
+                    }
+                },
+                "serverInfo": {
+                    "name": "test-language-server",
+                    "version": "1"
+                }
+            }),
+        )
+        .await;
+
+        let initialized = read_json(&mut reader).await;
+        assert_eq!(initialized["method"], "initialized");
+        write_json(
+            &mut writer,
+            json!({
+                "jsonrpc": "2.0",
+                "id": "configuration-1",
+                "method": "workspace/configuration",
+                "params": {
+                    "items": [{
+                        "scopeUri": server_uri,
+                        "section": "rust-analyzer"
+                    }]
+                }
+            }),
+        )
+        .await;
+        let configuration = read_json(&mut reader).await;
+        assert_eq!(configuration["id"], "configuration-1");
+        assert_eq!(configuration["result"][0]["section"], "rust-analyzer");
+        assert_eq!(configuration["result"][0]["enabled"], true);
+        configuration_done_tx
+            .send(())
+            .expect("signal configuration");
+
+        let opened = read_json(&mut reader).await;
+        assert_eq!(opened["method"], "textDocument/didOpen");
+        assert_eq!(opened["params"]["textDocument"]["version"], 1);
+        write_json(
+            &mut writer,
+            json!({
+                "jsonrpc": "2.0",
+                "method": "textDocument/publishDiagnostics",
+                "params": {
+                    "uri": server_uri,
+                    "version": 1,
+                    "diagnostics": [{
+                        "range": {
+                            "start": { "line": 0, "character": 0 },
+                            "end": { "line": 0, "character": 2 }
+                        },
+                        "severity": 1,
+                        "message": "example error"
+                    }]
+                }
+            }),
+        )
+        .await;
+
+        let changed = read_json(&mut reader).await;
+        assert_eq!(changed["method"], "textDocument/didChange");
+        assert_eq!(changed["params"]["textDocument"]["version"], 2);
+        assert_eq!(
+            changed["params"]["contentChanges"][0]["range"]["start"]["line"],
+            0
+        );
+
+        let saved = read_json(&mut reader).await;
+        assert_eq!(saved["method"], "textDocument/didSave");
+        assert_eq!(saved["params"]["text"], "fn main() {}");
+
+        let hover = read_json(&mut reader).await;
+        assert_eq!(hover["method"], "textDocument/hover");
+        respond(&mut writer, hover["id"].clone(), Value::Null).await;
+
+        let closed = read_json(&mut reader).await;
+        assert_eq!(closed["method"], "textDocument/didClose");
+
+        let shutdown = read_json(&mut reader).await;
+        assert_eq!(shutdown["method"], "shutdown");
+        respond(&mut writer, shutdown["id"].clone(), Value::Null).await;
+        let exit = read_json(&mut reader).await;
+        assert_eq!(exit["method"], "exit");
+    });
+
+    let host = Arc::new(RecordingHost::default());
+    let client = LanguageServerClient::connect(
+        BufReader::new(client_reader),
+        client_writer,
+        LanguageServerOptions::new("zeta-lsp-test", "0").with_host(host.clone()),
+    )
+    .await
+    .expect("initialize language server");
+    assert_eq!(
+        client.initialization().position_encoding,
+        lsp_types::PositionEncodingKind::UTF8
+    );
+    assert_eq!(
+        client.initialization().document_sync,
+        DocumentSyncPolicy {
+            open_close: true,
+            change: DocumentChangeSync::Incremental,
+            save: DocumentSaveSync::IncludeText,
+        }
+    );
+
+    configuration_done_rx
+        .await
+        .expect("configuration response should complete");
+    assert_eq!(
+        client
+            .open_document(uri.clone(), "rust", "fn main() {}")
+            .await
+            .expect("open document"),
+        DocumentVersion::INITIAL
+    );
+    host.wait_for_diagnostics().await;
+    let version = client
+        .change_document(
+            &uri,
+            DocumentChange::Incremental(vec![lsp_types::TextDocumentContentChangeEvent {
+                range: Some(lsp_types::Range::new(
+                    Position::new(0, 0),
+                    Position::new(0, 2),
+                )),
+                range_length: None,
+                text: "fn".into(),
+            }]),
+        )
+        .await
+        .expect("change document");
+    assert_eq!(version.value(), 2);
+    client
+        .save_document(&uri, DocumentSave::WithText("fn main() {}"))
+        .await
+        .expect("save document");
+    let hover = client
+        .request::<HoverRequest>(HoverParams {
+            text_document_position_params: TextDocumentPositionParams {
+                text_document: TextDocumentIdentifier { uri: uri.clone() },
+                position: Position::new(0, 1),
+            },
+            work_done_progress_params: WorkDoneProgressParams::default(),
+        })
+        .await
+        .expect("hover response");
+    assert!(hover.is_none());
+    client.close_document(&uri).await.expect("close document");
+    client.shutdown().await.expect("shutdown language server");
+    server.await.expect("server task");
+}
+
+#[tokio::test]
+async fn request_timeout_sends_protocol_cancellation() {
+    let (client_stream, server_stream) = tokio::io::duplex(16 * 1024);
+    let (client_reader, client_writer) = tokio::io::split(client_stream);
+    let (server_reader, server_writer) = tokio::io::split(server_stream);
+    let server = tokio::spawn(async move {
+        let mut reader = BufReader::new(server_reader);
+        let mut writer = server_writer;
+        let initialize = read_json(&mut reader).await;
+        respond(
+            &mut writer,
+            initialize["id"].clone(),
+            json!({ "capabilities": { "hoverProvider": true } }),
+        )
+        .await;
+        assert_eq!(read_json(&mut reader).await["method"], "initialized");
+
+        let hover = read_json(&mut reader).await;
+        assert_eq!(hover["method"], "textDocument/hover");
+        let cancellation = read_json(&mut reader).await;
+        assert_eq!(cancellation["method"], "$/cancelRequest");
+        assert_eq!(cancellation["params"]["id"], hover["id"]);
+
+        let shutdown = read_json(&mut reader).await;
+        respond(&mut writer, shutdown["id"].clone(), Value::Null).await;
+        assert_eq!(read_json(&mut reader).await["method"], "exit");
+    });
+    let client = LanguageServerClient::connect(
+        BufReader::new(client_reader),
+        client_writer,
+        LanguageServerOptions::new("zeta-lsp-test", "0").with_timeouts(LanguageServerTimeouts {
+            initialize: Duration::from_secs(1),
+            request: Duration::from_millis(20),
+            shutdown: Duration::from_secs(1),
+        }),
+    )
+    .await
+    .expect("initialize language server");
+    let uri = Uri::from_str("file:///workspace/main.rs").expect("document URI");
+    let error = client
+        .request::<HoverRequest>(HoverParams {
+            text_document_position_params: TextDocumentPositionParams {
+                text_document: TextDocumentIdentifier { uri },
+                position: Position::new(0, 0),
+            },
+            work_done_progress_params: WorkDoneProgressParams::default(),
+        })
+        .await
+        .expect_err("hover should time out");
+    assert!(matches!(
+        error,
+        LanguageServerError::Timeout { operation, .. } if operation == "textDocument/hover"
+    ));
+    client.shutdown().await.expect("shutdown language server");
+    server.await.expect("server task");
+}
+
+#[tokio::test]
+async fn framing_rejects_duplicate_content_length() {
+    let bytes = b"Content-Length: 2\r\nContent-Length: 2\r\n\r\n{}";
+    let mut reader = BufReader::new(&bytes[..]);
+    let error = read_frame(
+        &mut reader,
+        DEFAULT_MAX_HEADER_BYTES,
+        DEFAULT_MAX_MESSAGE_BYTES,
+    )
+    .await
+    .expect_err("duplicate content length must fail");
+    assert!(matches!(error, LanguageServerError::InvalidMessage(_)));
+}
+
+#[tokio::test]
+async fn framing_bounds_a_header_before_its_newline() {
+    let bytes = vec![b'x'; DEFAULT_MAX_HEADER_BYTES + 1];
+    let mut reader = BufReader::new(bytes.as_slice());
+    let error = read_frame(
+        &mut reader,
+        DEFAULT_MAX_HEADER_BYTES,
+        DEFAULT_MAX_MESSAGE_BYTES,
+    )
+    .await
+    .expect_err("oversized header must fail before a newline");
+    assert!(matches!(
+        error,
+        LanguageServerError::MessageTooLarge { limit }
+            if limit == DEFAULT_MAX_HEADER_BYTES
+    ));
+}
+
+async fn read_json<R>(reader: &mut R) -> Value
+where
+    R: tokio::io::AsyncBufRead + Unpin,
+{
+    let bytes = read_frame(reader, DEFAULT_MAX_HEADER_BYTES, DEFAULT_MAX_MESSAGE_BYTES)
+        .await
+        .expect("read frame")
+        .expect("transport remains open");
+    serde_json::from_slice(&bytes).expect("valid JSON")
+}
+
+async fn respond<W>(writer: &mut W, id: Value, result: Value)
+where
+    W: AsyncWrite + Unpin,
+{
+    write_json(
+        writer,
+        json!({
+            "jsonrpc": "2.0",
+            "id": id,
+            "result": result,
+        }),
+    )
+    .await;
+}
+
+async fn write_json<W>(writer: &mut W, value: Value)
+where
+    W: AsyncWrite + Unpin,
+{
+    let bytes = serde_json::to_vec(&value).expect("serialize JSON");
+    write_frame(writer, &bytes, DEFAULT_MAX_MESSAGE_BYTES)
+        .await
+        .expect("write frame");
+}

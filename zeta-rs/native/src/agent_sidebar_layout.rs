@@ -1,76 +1,42 @@
-use zeta_ui::{
-    GridLayout, GridNode, GridPane, Rect, SplitViewLayoutPriority, SplitViewOrientation,
-    SplitViewPane,
-};
+use zeta_ui::Rect;
 
-const EXPLORER_PREFERRED_HEIGHT: f32 = 180.0;
-const EXPLORER_MINIMUM_HEIGHT: f32 = 96.0;
-const EDITOR_MINIMUM_HEIGHT: f32 = 160.0;
+pub(crate) const TOOLBAR_HEIGHT: f32 = 36.0;
 
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-enum AgentSidebarLeafId {
-    Explorer,
-    Editor,
-}
-
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-enum AgentSidebarSplitId {
-    Root,
-}
-
-/// Resolved sibling Pane geometry inside the Agent Sidebar.
+/// Resolved toolbar and active-pane geometry inside the Agent Sidebar.
+///
+/// The toolbar owns the pane-switching ActionBar. Implementations must place
+/// the selected Changes or Files pane in the single content rectangle.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct AgentSidebarLayout {
-    explorer: Rect,
-    editor: Rect,
+    toolbar: Rect,
+    content: Rect,
 }
 
 impl AgentSidebarLayout {
     pub(crate) fn for_bounds(bounds: Rect) -> Self {
-        let editor_preferred_height =
-            (bounds.size.height - EXPLORER_PREFERRED_HEIGHT).max(EDITOR_MINIMUM_HEIGHT);
-        let root = GridNode::split(
-            AgentSidebarSplitId::Root,
-            SplitViewOrientation::Vertical,
-            vec![
-                GridPane::new(
-                    GridNode::leaf(AgentSidebarLeafId::Explorer),
-                    SplitViewPane::new(
-                        EXPLORER_PREFERRED_HEIGHT,
-                        EXPLORER_MINIMUM_HEIGHT,
-                        f32::INFINITY,
-                    ),
-                ),
-                GridPane::new(
-                    GridNode::leaf(AgentSidebarLeafId::Editor),
-                    SplitViewPane::new(
-                        editor_preferred_height,
-                        EDITOR_MINIMUM_HEIGHT,
-                        f32::INFINITY,
-                    )
-                    .with_priority(SplitViewLayoutPriority::High),
-                ),
-            ],
-        );
-        let layout = GridLayout::new(bounds, &root);
+        let toolbar_height = TOOLBAR_HEIGHT.min(bounds.size.height.max(0.0));
         Self {
-            explorer: layout
-                .leaf(AgentSidebarLeafId::Explorer)
-                .expect("Agent Sidebar Grid must retain ExplorerPane")
-                .bounds(),
-            editor: layout
-                .leaf(AgentSidebarLeafId::Editor)
-                .expect("Agent Sidebar Grid must retain EditorPane")
-                .bounds(),
+            toolbar: Rect::from_xywh(
+                bounds.origin.x,
+                bounds.origin.y,
+                bounds.size.width.max(0.0),
+                toolbar_height,
+            ),
+            content: Rect::from_xywh(
+                bounds.origin.x,
+                bounds.origin.y + toolbar_height,
+                bounds.size.width.max(0.0),
+                (bounds.size.height - toolbar_height).max(0.0),
+            ),
         }
     }
 
-    pub(crate) const fn explorer(self) -> Rect {
-        self.explorer
+    pub(crate) const fn toolbar(self) -> Rect {
+        self.toolbar
     }
 
-    pub(crate) const fn editor(self) -> Rect {
-        self.editor
+    pub(crate) const fn content(self) -> Rect {
+        self.content
     }
 }
 

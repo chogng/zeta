@@ -4,6 +4,7 @@ use zeta_policy::{ActionReviewRequest, AutoReviewGrant, GrantId, ReviewEvidence}
 use zeta_protocol::{
     ActionApprovalRequest, ModelRef, ModelRequest, ModelResponse, ModelStreamEvent, RequestId,
     ThreadUpdateEnvelope, ToolCall, ToolCallId, ToolDefinition, ToolExecutionOutput,
+    ToolOutputStream,
 };
 use zeta_sandboxing::SandboxPolicy;
 
@@ -91,6 +92,14 @@ pub trait ModelService: Send + Sync {
 /// commits on a slow client connection. Durable updates can always be replayed from the store.
 pub trait ThreadUpdateSink: Send + Sync {
     fn publish(&self, update: ThreadUpdateEnvelope);
+}
+
+/// Receives transient, typed output from one running Tool Call.
+///
+/// Implementations publish best-effort output only. The durable Tool Result remains the
+/// authoritative replay and recovery boundary.
+pub trait ToolOutputSink {
+    fn emit(&mut self, stream: ToolOutputStream, text: String) -> Result<(), CoreError>;
 }
 
 /// Update sink used by hosts that do not expose live Thread subscriptions.
@@ -203,6 +212,19 @@ pub trait ToolService: Send + Sync {
         authorization: &ToolAuthorization,
         cancellation: &CancellationToken,
     ) -> Result<ToolExecutionOutput, CoreError>;
+
+    /// Executes a Tool Call while optionally publishing typed transient output.
+    ///
+    /// Services without an incremental transport retain the default terminal-only behavior.
+    fn execute_streaming(
+        &self,
+        call: &ToolCall,
+        authorization: &ToolAuthorization,
+        cancellation: &CancellationToken,
+        _: &mut dyn ToolOutputSink,
+    ) -> Result<ToolExecutionOutput, CoreError> {
+        self.execute(call, authorization, cancellation)
+    }
 }
 
 /// Tool service used by hosts that expose no tools.

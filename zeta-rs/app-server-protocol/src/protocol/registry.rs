@@ -3,12 +3,15 @@ use crate::protocol::common::{
     SchemaHash, ServerInfo, SessionId, StreamInstanceId, ThreadId, ToolCallId, ToolName, TurnId,
 };
 use crate::protocol::config::{
-    ApprovalReviewModelSelectionDto, ConfigCommandDispositionDto, ConfigCommandResult,
-    ConfigReadResult, ConfigUpdateParams, McpCredentialBindingDto, McpServerConfigDto,
-    McpServerEnablementDto, McpServerRemoveParams, McpServerSetEnablementParams,
-    McpServerUpsertParams, McpTransportDto, ModelRefDto, ProviderConfigDto,
+    ApprovalReviewModelSelectionDto, ConfigChanged, ConfigCommandDispositionDto,
+    ConfigCommandResult, ConfigReadResult, ConfigUpdateParams, HookActionDto, HookConfigDto,
+    HookEnablementDto, HookEventDto, HookMatcherDto, HookRemoveParams, HookSetEnablementParams,
+    HookUpsertParams, McpCredentialBindingDto, McpServerConfigDto, McpServerEnablementDto,
+    McpServerRemoveParams, McpServerSetEnablementParams, McpServerUpsertParams, McpTransportDto,
+    ModelRefDto, PluginRequestDto, PluginRequestEnablementDto, PluginRequestRemoveParams,
+    PluginRequestSetEnablementParams, PluginRequestUpsertParams, ProviderConfigDto,
     ProviderConfigureParams, ProviderRemoveParams, SkillSourceAddParams, SkillSourceConfigDto,
-    SkillSourceEnablementDto, SkillSourceRemoveParams, SkillSourceSetEnablementParams, ThemeDto,
+    SkillSourceEnablementDto, SkillSourceRemoveParams, SkillSourceSetEnablementParams,
 };
 use crate::protocol::document::{
     TypstCompileParams, TypstCompileResult, TypstDiagnosticDto, TypstDiagnosticSeverityDto,
@@ -59,8 +62,8 @@ use crate::protocol::thread::{
     ThreadUnsubscribeParams,
 };
 use crate::protocol::turn::{
-    InputItem, TurnInteractionResolveParams, TurnInteractionResolveResult, TurnInterruptParams,
-    TurnInterruptResult, TurnStartParams, TurnStartResult,
+    InputItem, ShellTurnStartParams, TurnInteractionResolveParams, TurnInteractionResolveResult,
+    TurnInterruptParams, TurnInterruptResult, TurnStartParams, TurnStartResult,
 };
 use crate::protocol::workspace::{WorkspaceSwitchParams, WorkspaceSwitchResult};
 use schemars::JsonSchema;
@@ -74,8 +77,9 @@ use zeta_protocol::{
     RequestUserInputResponse, SandboxDenialOutput, Session, SessionEvent, SessionStatus,
     SessionThread, SessionThreadStatus, SessionUpdate, SkillId, SkillName, SkillSourceId,
     StableTurnError, StableTurnErrorCode, StreamCursor, Thread, ThreadEvent, ThreadItem,
-    ThreadOrigin, ThreadStatus, ThreadUpdate, ToolExecutionAuthority, ToolReplaySafety, Turn,
-    TurnInteraction, TurnStatus, UserInputAnswer, UserInputOption, UserInputQuestion,
+    ThreadOrigin, ThreadStatus, ThreadUpdate, ToolExecutionAuthority, ToolOutputStream,
+    ToolReplaySafety, Turn, TurnInteraction, TurnStatus, UserInputAnswer, UserInputOption,
+    UserInputQuestion,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -341,6 +345,36 @@ client_methods! {
         response: ConfigCommandResult,
         serialization: GlobalExclusive,
     },
+    PluginRequestUpsert => "plugin/request/upsert" {
+        params: PluginRequestUpsertParams,
+        response: ConfigCommandResult,
+        serialization: GlobalExclusive,
+    },
+    PluginRequestRemove => "plugin/request/remove" {
+        params: PluginRequestRemoveParams,
+        response: ConfigCommandResult,
+        serialization: GlobalExclusive,
+    },
+    PluginRequestSetEnablement => "plugin/request/enablement/set" {
+        params: PluginRequestSetEnablementParams,
+        response: ConfigCommandResult,
+        serialization: GlobalExclusive,
+    },
+    HookUpsert => "hook/upsert" {
+        params: HookUpsertParams,
+        response: ConfigCommandResult,
+        serialization: GlobalExclusive,
+    },
+    HookRemove => "hook/remove" {
+        params: HookRemoveParams,
+        response: ConfigCommandResult,
+        serialization: GlobalExclusive,
+    },
+    HookSetEnablement => "hook/enablement/set" {
+        params: HookSetEnablementParams,
+        response: ConfigCommandResult,
+        serialization: GlobalExclusive,
+    },
     SkillList => "skills/list" {
         params: SkillListParams,
         response: SkillListResult,
@@ -353,6 +387,11 @@ client_methods! {
     },
     TurnStart => "turn/start" {
         params: TurnStartParams,
+        response: TurnStartResult,
+        serialization: ThreadExclusive,
+    },
+    ShellTurnStart => "turn/shell/start" {
+        params: ShellTurnStartParams,
         response: TurnStartResult,
         serialization: ThreadExclusive,
     },
@@ -550,6 +589,9 @@ server_notifications! {
     ThreadUpdate => "thread/update" {
         params: ThreadUpdateEnvelope,
     },
+    ConfigChanged => "config/changed" {
+        params: ConfigChanged,
+    },
     SkillsChanged => "skills/changed" {
         params: SkillsChanged,
     },
@@ -597,8 +639,15 @@ typescript_bindings! {
     McpServerConfigDto,
     SkillSourceEnablementDto,
     SkillSourceConfigDto,
-    ThemeDto,
+    PluginRequestEnablementDto,
+    PluginRequestDto,
+    HookEventDto,
+    HookEnablementDto,
+    HookMatcherDto,
+    HookActionDto,
+    HookConfigDto,
     ConfigReadResult,
+    ConfigChanged,
     ConfigCommandDispositionDto,
     ConfigCommandResult,
     ConfigUpdateParams,
@@ -610,6 +659,12 @@ typescript_bindings! {
     SkillSourceAddParams,
     SkillSourceRemoveParams,
     SkillSourceSetEnablementParams,
+    PluginRequestUpsertParams,
+    PluginRequestRemoveParams,
+    PluginRequestSetEnablementParams,
+    HookUpsertParams,
+    HookRemoveParams,
+    HookSetEnablementParams,
     SkillName,
     SkillSourceId,
     SkillId,
@@ -682,6 +737,7 @@ typescript_bindings! {
     Turn,
     Thread,
     ToolExecutionAuthority,
+    ToolOutputStream,
     ProcessExitStatus,
     ProcessExecutionOutput,
     ToolReplaySafety,
@@ -700,6 +756,7 @@ typescript_bindings! {
     ThreadReadResult,
     ThreadSubscribeResult,
     InputItem,
+    ShellTurnStartParams,
     TurnStartParams,
     TurnStartResult,
     TurnInterruptParams,

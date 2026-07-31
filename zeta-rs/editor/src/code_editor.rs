@@ -2,14 +2,17 @@
 
 use std::ops::Range;
 
-use zeta_ui::{Color, Component, PaintRect, Point, Rect, Size, TextBlock, UiScene};
+use zeta_ui::{
+    CaretVisibility, Color, Component, PaintRect, Point, Rect, Size, TextBlock, TextBlockWrap,
+    TextStyle, UiScene,
+};
 
 pub use self::document::CodeEditorDocument;
 pub use self::editing::{CodeEditorCommand, CodeEditorSelectionMode};
 use self::layout::{CodeEditorLayout, build_layout};
 pub use self::style::CodeEditorStyle;
 pub use self::syntax::{CodeEditorSyntaxHighlighter, CodeEditorSyntaxToken};
-use self::text_metrics::{display_columns, expand_tabs};
+use self::text_metrics::{display_columns, expand_tabs, visit_display_cell_runs};
 
 const HEADER_HEIGHT: f32 = 32.0;
 const ROW_HEIGHT: f32 = 20.0;
@@ -18,6 +21,53 @@ const MARKER_WIDTH: f32 = 16.0;
 const GUTTER_HORIZONTAL_PADDING: f32 = 8.0;
 const CONTENT_HORIZONTAL_PADDING: f32 = 8.0;
 const TAB_WIDTH: usize = 4;
+
+fn paint_text_block(
+    scene: &mut UiScene,
+    text: impl Into<String>,
+    origin: Point,
+    bounds: Size,
+    style: TextStyle,
+) {
+    let text = text.into();
+    if text.is_empty() || bounds.width <= 0.0 || bounds.height <= 0.0 {
+        return;
+    }
+    visit_display_cell_runs(&text, |run| {
+        paint_cell_run(
+            scene,
+            run.text,
+            origin,
+            bounds.height,
+            run.column,
+            run.columns,
+            &style,
+        );
+    });
+}
+
+fn paint_cell_run(
+    scene: &mut UiScene,
+    text: &str,
+    origin: Point,
+    height: f32,
+    column: usize,
+    columns: usize,
+    style: &TextStyle,
+) {
+    if text.is_empty() || columns == 0 {
+        return;
+    }
+    scene.draw_text(
+        TextBlock::new(
+            text,
+            Point::new(origin.x + column as f32 * CELL_WIDTH, origin.y),
+            Size::new(columns as f32 * CELL_WIDTH, height),
+            style.clone(),
+        )
+        .with_wrap(TextBlockWrap::None),
+    );
+}
 
 mod decorations;
 mod document;
@@ -54,6 +104,16 @@ pub enum CodeEditorHeader<'a> {
     #[default]
     Hidden,
     Label(&'a str),
+}
+
+/// Named geometry variants owned by the shared CodeEditor.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum CodeEditorPresentation {
+    /// Ordinary document editor with line numbers and marker gutter.
+    #[default]
+    Document,
+    /// Embedded editor without document chrome, suitable for compact composers.
+    Compact,
 }
 
 impl CodeEditorHeader<'_> {
@@ -113,6 +173,20 @@ impl CodeEditorViewport {
             .first_visible_row
             .min(row_count.saturating_sub(visible_row_capacity));
     }
+
+    /// Moves the retained window only when `row` falls outside its visible range.
+    pub fn reveal_row(&mut self, row: usize, row_count: usize, visible_row_capacity: usize) {
+        if visible_row_capacity == 0 {
+            self.first_visible_row = row.min(row_count.saturating_sub(1));
+            return;
+        }
+        if row < self.first_visible_row {
+            self.first_visible_row = row;
+        } else if row >= self.first_visible_row.saturating_add(visible_row_capacity) {
+            self.first_visible_row = row.saturating_add(1).saturating_sub(visible_row_capacity);
+        }
+        self.clamp(row_count, visible_row_capacity);
+    }
 }
 
 /// One byte-range highlight painted below code text.
@@ -168,6 +242,18 @@ impl<'a> CodeEditorRow<'a> {
         }
     }
 
+    /// Creates a non-document visual row such as a diff fold control.
+    pub const fn annotation(text: &'a str) -> Self {
+        Self {
+            line_number: None,
+            text: Some(text),
+            marker: None,
+            background: None,
+            inline_highlights: Vec::new(),
+            syntax_tokens: Vec::new(),
+        }
+    }
+
     pub const fn with_marker(mut self, text: &'a str, color: Color) -> Self {
         self.marker = Some(CodeEditorMarker { text, color });
         self
@@ -193,8 +279,8 @@ impl<'a> CodeEditorRow<'a> {
 ///
 /// Implementations retain authoritative document or projection data and return only the requested
 /// visible row. A row source must keep row ordering and line-number identity stable for the
-/// lifetime of one presentation frame. Diff projections may return placeholders for alignment;
-/// ordinary documents should return real numbered rows.
+/// lifetime of one presentation frame. Diff projections may return placeholders for alignment or
+/// non-numbered annotations for fold controls; ordinary documents should return numbered rows.
 pub trait CodeEditorRowSource {
     /// Returns the number of visual rows addressable in this frame.
     fn row_count(&self) -> usize;
@@ -235,13 +321,21 @@ pub struct CodeEditorLocation {
 /// persistence, and input routing.
 pub struct CodeEditor<'a> {
     bounds: Rect,
+    paint_viewport: Rect,
     rows: &'a dyn CodeEditorRowSource,
     viewport: CodeEditorViewport,
     header: CodeEditorHeader<'a>,
     style: CodeEditorStyle,
+    presentation: CodeEditorPresentation,
+    caret_visibility: CaretVisibility,
 }
 
 impl<'a> CodeEditor<'a> {
+    /// Returns the vertical metric shared by row paint and host-owned viewport sizing.
+    pub const fn row_height() -> f32 {
+        ROW_HEIGHT
+    }
+
     pub fn new(
         bounds: Rect,
         rows: &'a dyn CodeEditorRowSource,
@@ -251,11 +345,36 @@ impl<'a> CodeEditor<'a> {
     ) -> Self {
         Self {
             bounds,
+            paint_viewport: bounds,
             rows,
             viewport,
             header,
             style,
+            presentation: CodeEditorPresentation::Document,
+            caret_visibility: CaretVisibility::Visible,
         }
+    }
+
+    /// Selects a named geometry contract without changing the row source.
+    pub const fn with_presentation(mut self, presentation: CodeEditorPresentation) -> Self {
+        self.presentation = presentation;
+        self
+    }
+
+    /// Projects host-owned focus blink state into caret paint.
+    pub const fn with_caret_visibility(mut self, visibility: CaretVisibility) -> Self {
+        self.caret_visibility = visibility;
+        self
+    }
+
+    /// Limits row projection to the visible host viewport while preserving document geometry.
+    ///
+    /// Scroll containers use this when the editor's full content bounds are larger than the
+    /// on-screen clip. The editor still positions rows against `bounds`, but does not shape or
+    /// publish rows that cannot appear inside `viewport`.
+    pub const fn within_viewport(mut self, viewport: Rect) -> Self {
+        self.paint_viewport = viewport;
+        self
     }
 
     pub const fn bounds(&self) -> Rect {
@@ -279,6 +398,20 @@ impl<'a> CodeEditor<'a> {
             .first_visible_row
             .min(row_count.saturating_sub(capacity));
         start..start.saturating_add(capacity).min(row_count)
+    }
+
+    fn painted_row_range(&self, layout: CodeEditorLayout) -> Range<usize> {
+        let visible = self.visible_row_range();
+        let painted_body = layout.body.intersection(self.paint_viewport);
+        if visible.is_empty() || painted_body.is_empty() {
+            return visible.start..visible.start;
+        }
+        let first_offset =
+            ((painted_body.origin.y - layout.body.origin.y) / ROW_HEIGHT).floor() as usize;
+        let end_offset =
+            ((painted_body.bottom() - layout.body.origin.y) / ROW_HEIGHT).ceil() as usize;
+        visible.start.saturating_add(first_offset).min(visible.end)
+            ..visible.start.saturating_add(end_offset).min(visible.end)
     }
 
     pub fn location_at(&self, point: Point) -> Option<CodeEditorLocation> {
@@ -321,6 +454,9 @@ impl<'a> CodeEditor<'a> {
     }
 
     fn gutter_width(&self) -> f32 {
+        if self.presentation == CodeEditorPresentation::Compact {
+            return 0.0;
+        }
         let largest_line = self.rows.largest_line_number().max(1);
         let digits = largest_line.ilog10() as f32 + 1.0;
         MARKER_WIDTH + GUTTER_HORIZONTAL_PADDING * 2.0 + digits * CELL_WIDTH
@@ -337,12 +473,13 @@ impl<'a> CodeEditor<'a> {
             (layout.header.size.width - CONTENT_HORIZONTAL_PADDING * 2.0).max(0.0),
             layout.header.size.height,
         );
-        scene.draw_text(TextBlock::new(
+        paint_text_block(
+            scene,
             label,
             label_bounds.origin,
             label_bounds.size,
             self.style.header_text_style().clone(),
-        ));
+        );
     }
 
     fn paint_row(
@@ -363,52 +500,55 @@ impl<'a> CodeEditor<'a> {
             row_bounds,
             row.background.unwrap_or(self.style.surface()),
         ));
-        let gutter_bounds = Rect::from_xywh(
-            row_bounds.origin.x,
-            row_bounds.origin.y,
-            layout.gutter.size.width,
-            ROW_HEIGHT,
-        );
-        scene.draw_rect(PaintRect::new(gutter_bounds, self.style.gutter()));
-
         let Some(text) = row.text else {
             return;
         };
-        let line_number = row
-            .line_number
-            .expect("CodeEditor rows with text must have a line number");
-        let number_width =
-            (layout.gutter.size.width - MARKER_WIDTH - GUTTER_HORIZONTAL_PADDING * 2.0).max(0.0);
-        let number = format!(
-            "{:>width$}",
-            line_number,
-            width = (number_width / CELL_WIDTH).floor() as usize
-        );
-        let number_bounds = Rect::from_xywh(
-            layout.gutter.origin.x + GUTTER_HORIZONTAL_PADDING,
-            row_bounds.origin.y,
-            number_width,
-            ROW_HEIGHT,
-        );
-        scene.draw_text(TextBlock::new(
-            number,
-            number_bounds.origin,
-            number_bounds.size,
-            self.style.muted_text_style(),
-        ));
-        if let Some(marker) = row.marker {
-            let marker_bounds = Rect::from_xywh(
-                layout.gutter.right() - MARKER_WIDTH,
+        if self.presentation == CodeEditorPresentation::Document {
+            let gutter_bounds = Rect::from_xywh(
+                row_bounds.origin.x,
                 row_bounds.origin.y,
-                MARKER_WIDTH,
+                layout.gutter.size.width,
                 ROW_HEIGHT,
             );
-            scene.draw_text(TextBlock::new(
-                marker.text,
-                marker_bounds.origin,
-                marker_bounds.size,
-                self.style.text_with_color(marker.color),
-            ));
+            scene.draw_rect(PaintRect::new(gutter_bounds, self.style.gutter()));
+            let number_width =
+                (layout.gutter.size.width - MARKER_WIDTH - GUTTER_HORIZONTAL_PADDING * 2.0)
+                    .max(0.0);
+            if let Some(line_number) = row.line_number {
+                let number = format!(
+                    "{:>width$}",
+                    line_number,
+                    width = (number_width / CELL_WIDTH).floor() as usize
+                );
+                let number_bounds = Rect::from_xywh(
+                    layout.gutter.origin.x + GUTTER_HORIZONTAL_PADDING,
+                    row_bounds.origin.y,
+                    number_width,
+                    ROW_HEIGHT,
+                );
+                paint_text_block(
+                    scene,
+                    number,
+                    number_bounds.origin,
+                    number_bounds.size,
+                    self.style.muted_text_style(),
+                );
+            }
+            if let Some(marker) = row.marker {
+                let marker_bounds = Rect::from_xywh(
+                    layout.gutter.right() - MARKER_WIDTH,
+                    row_bounds.origin.y,
+                    MARKER_WIDTH,
+                    ROW_HEIGHT,
+                );
+                paint_text_block(
+                    scene,
+                    marker.text,
+                    marker_bounds.origin,
+                    marker_bounds.size,
+                    self.style.text_with_color(marker.color),
+                );
+            }
         }
 
         let content_row_bounds = Rect::from_xywh(
@@ -425,12 +565,13 @@ impl<'a> CodeEditor<'a> {
                     - self.viewport.horizontal_column as f32 * CELL_WIDTH,
                 row_bounds.origin.y,
             );
-            scene.draw_text(TextBlock::new(
+            paint_text_block(
+                scene,
                 expand_tabs(text),
                 text_origin,
                 Size::new(display_columns(text) as f32 * CELL_WIDTH, ROW_HEIGHT),
                 self.style.text_style().clone(),
-            ));
+            );
             self.paint_syntax_tokens(scene, content_row_bounds, text, &row.syntax_tokens);
             self.paint_composition_and_caret(scene, content_row_bounds, row_index, text);
         });
@@ -439,18 +580,20 @@ impl<'a> CodeEditor<'a> {
 
 impl Component for CodeEditor<'_> {
     fn paint(&self, scene: &mut UiScene) {
-        if self.bounds.is_empty() {
+        let paint_bounds = self.bounds.intersection(self.paint_viewport);
+        if paint_bounds.is_empty() {
             return;
         }
         let layout = self.layout();
-        scene.with_clip(self.bounds, |scene| {
+        scene.with_clip(paint_bounds, |scene| {
             scene.draw_rect(PaintRect::new(self.bounds, self.style.surface()));
             self.paint_header(scene, layout);
             let visible = self.visible_row_range();
-            for (visible_row, row_index) in visible.enumerate() {
+            for row_index in self.painted_row_range(layout) {
                 let Some(row) = self.rows.row(row_index) else {
                     continue;
                 };
+                let visible_row = row_index.saturating_sub(visible.start);
                 self.paint_row(scene, layout, visible_row, row_index, row);
             }
         });

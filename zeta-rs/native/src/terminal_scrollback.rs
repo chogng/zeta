@@ -1,3 +1,6 @@
+use std::time::Instant;
+
+use zeta_ui::{ScrollbarController, ScrollbarPresentation};
 use zeta_winit::MouseScrollDelta;
 
 use crate::NativeApp;
@@ -13,6 +16,7 @@ const MULTI_DIFF_PIXELS_PER_LINE: f32 = 18.0;
 pub(crate) struct TerminalScroll {
     offset: usize,
     fractional_lines: f64,
+    scrollbar: ScrollbarController,
 }
 
 impl TerminalScroll {
@@ -40,6 +44,26 @@ impl TerminalScroll {
         self.offset != previous
     }
 
+    pub(crate) fn scrollbar_activity(&mut self, now: Instant) {
+        self.scrollbar.activity(now);
+    }
+
+    pub(crate) fn scrollbar_presentation(&self) -> ScrollbarPresentation {
+        self.scrollbar.presentation()
+    }
+
+    pub(crate) fn advance_scrollbar(&mut self, now: Instant) -> bool {
+        self.scrollbar.advance(now)
+    }
+
+    pub(crate) const fn scrollbar_deadline(&self) -> Option<Instant> {
+        self.scrollbar.next_deadline()
+    }
+
+    pub(crate) fn cancel_scrollbar(&mut self) {
+        self.scrollbar.cancel();
+    }
+
     pub(crate) fn preserve_view_after_growth(&mut self, added_lines: usize, limit: usize) {
         if self.offset > 0 {
             self.offset = self.offset.saturating_add(added_lines).min(limit);
@@ -64,6 +88,9 @@ impl NativeApp {
         if self.route_multi_diff_wheel(delta) {
             return;
         }
+        if self.route_thread_timeline_wheel(delta) {
+            return;
+        }
         let position = self
             .cursor_position
             .and_then(|point| self.terminal_mouse_position(point));
@@ -86,6 +113,7 @@ impl NativeApp {
         }
         let limit = self.terminal_scroll_limit();
         if self.terminal_scroll.scroll(delta, limit) {
+            self.terminal_scroll.scrollbar_activity(Instant::now());
             self.terminal_selection.clear();
             self.rebuild_presentation();
             self.request_redraw();
@@ -123,8 +151,7 @@ impl NativeApp {
             std::time::Instant::now(),
         );
         if changed {
-            self.rebuild_presentation();
-            self.request_redraw();
+            self.rebuild_presentation_on_next_redraw();
         }
         true
     }

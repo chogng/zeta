@@ -82,7 +82,7 @@ export class AppServerSupervisor implements IDisposable {
     }
     const allowedEnvironmentKeys = new Set(
       options.allowedEnvironmentKeys ??
-        ["PATH", "ZETA_RG_PATH", "ZETA_STATE_ROOT", "ZETA_WORKSPACE_ROOT"],
+        ["PATH", "ZETA_PROFILE_ROOT", "ZETA_RG_PATH", "ZETA_WORKSPACE_ROOT"],
     );
     for (const key of Object.keys(options.environment)) {
       if (!allowedEnvironmentKeys.has(key)) {

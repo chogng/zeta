@@ -72,6 +72,7 @@ fn canonical_session_contains_thread_lineage_without_embedding_thread_history() 
         session_id: SessionId::new("session_1").expect("test ID is non-empty"),
         title: "task".into(),
         status: SessionStatus::Active,
+        model: None,
         sequence: 2,
         threads: vec![
             SessionThread {

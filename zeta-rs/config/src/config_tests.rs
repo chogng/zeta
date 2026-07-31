@@ -1,5 +1,5 @@
 use super::*;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 use zeta_model_provider_config::{ModelProviderConfig, ProviderConfigRegistry};
@@ -7,7 +7,7 @@ use zeta_protocol::{CommandId, Patch, ProviderId};
 
 fn config_path(label: &str) -> std::path::PathBuf {
     std::env::temp_dir().join(format!(
-        "zeta-config-{label}-{}-{}.authority.json",
+        "zeta-config-{label}-{}-{}.sqlite3",
         std::process::id(),
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -18,7 +18,7 @@ fn config_path(label: &str) -> std::path::PathBuf {
 
 fn workspace_config_path(label: &str) -> std::path::PathBuf {
     std::env::temp_dir().join(format!(
-        "zeta-workspace-config-{label}-{}-{}.json",
+        "zeta-workspace-config-{label}-{}-{}.toml",
         std::process::id(),
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -29,8 +29,13 @@ fn workspace_config_path(label: &str) -> std::path::PathBuf {
 
 fn remove_config_files(path: &Path) {
     let _ = std::fs::remove_file(path);
-    let _ = std::fs::remove_file(path.with_extension("lock"));
-    let _ = std::fs::remove_file(path.with_extension("tmp"));
+    let _ = std::fs::remove_file(path.with_extension("toml"));
+    let _ = std::fs::remove_file(format!("{}-shm", path.display()));
+    let _ = std::fs::remove_file(format!("{}-wal", path.display()));
+}
+
+fn persisted_config_document(path: &Path) -> String {
+    std::fs::read_to_string(path.with_extension("toml")).unwrap()
 }
 
 fn provider_id(value: &str) -> ProviderId {
@@ -61,7 +66,6 @@ fn update_preferences(
     command_id: &str,
     revision: u64,
     preferred_model: Patch<ModelRef>,
-    theme: Patch<Theme>,
 ) -> ConfigCommandRequest {
     ConfigCommandRequest {
         command_id: CommandId::new(command_id).unwrap(),
@@ -69,7 +73,6 @@ fn update_preferences(
         command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
             preferred_model,
             approval_review_model: Patch::Missing,
-            theme,
         }),
     }
 }
@@ -93,6 +96,29 @@ fn skill_source() -> SkillSourceConfig {
         id: SkillSourceId::new("user:skill-source:personal").unwrap(),
         root_reference: "user:skill-root:personal".into(),
         enablement: SkillSourceEnablement::Disabled,
+    }
+}
+
+fn plugin_request() -> PluginRequest {
+    PluginRequest {
+        plugin_id: PluginId::new("acme/code-review").unwrap(),
+        version: PluginVersion::new("1.2.3").unwrap(),
+        enablement: PluginRequestEnablement::Disabled,
+    }
+}
+
+fn hook(id: &str) -> HookConfig {
+    HookConfig {
+        id: HookId::new(id).unwrap(),
+        event: HookEvent::BeforeTool,
+        matcher: HookMatcher {
+            tool_names: BTreeSet::from(["shell_command".into()]),
+        },
+        action: HookAction::Process {
+            program: "review-hook".into(),
+            args: vec!["--check".into()],
+        },
+        enablement: HookEnablement::Disabled,
     }
 }
 
@@ -141,11 +167,17 @@ fn workspace_document(preferred_model: Option<ModelRef>) -> WorkspaceConfigDocum
         skills: WorkspaceSkillsConfig {
             sources: BTreeMap::from([(skill_source.id.clone(), skill_source)]),
         },
+        hooks: HooksConfig {
+            hooks: BTreeMap::from([(
+                HookId::new("workspace:project:hook:review").unwrap(),
+                hook("workspace:project:hook:review"),
+            )]),
+        },
     }
 }
 
 #[test]
-fn authority_uses_one_file_and_survives_reopen() {
+fn toml_authority_and_sqlite_metadata_survive_reopen() {
     let path = config_path("single-authority");
     let store = ConfigStore::open(&path).unwrap();
     let configured = configure_provider(&store, 0, "openai");
@@ -154,7 +186,6 @@ fn authority_uses_one_file_and_survives_reopen() {
             "select-model",
             configured.revision.get(),
             Patch::Value(model_ref("openai", "model")),
-            Patch::Value(Theme::Dark),
         ))
         .unwrap();
 
@@ -163,7 +194,6 @@ fn authority_uses_one_file_and_survives_reopen() {
     assert_eq!(updated.revision, ConfigRevision::new(2));
     assert_eq!(snapshot.revision, updated.revision);
     assert_eq!(snapshot.generation.get(), 2);
-    assert_eq!(snapshot.values.theme, Some(Theme::Dark));
     assert_eq!(
         snapshot.values.preferred_model,
         Some(model_ref("openai", "model"))
@@ -172,7 +202,137 @@ fn authority_uses_one_file_and_survives_reopen() {
         snapshot.values.selected_provider().unwrap().provider,
         provider_id("openai")
     );
-    assert!(!path.with_extension("authority.json").exists());
+    assert!(path.with_extension("toml").exists());
+    let columns: Vec<String> = rusqlite::Connection::open(&path)
+        .unwrap()
+        .prepare("PRAGMA table_info(config_metadata)")
+        .unwrap()
+        .query_map([], |row| row.get(1))
+        .unwrap()
+        .map(Result::unwrap)
+        .collect();
+    assert!(!columns.iter().any(|column| column == "document_json"));
+    remove_config_files(&path);
+}
+
+#[test]
+fn legacy_sqlite_document_is_migrated_once_into_toml() {
+    let path = config_path("legacy-document-migration");
+    let provider = ModelProviderConfig::new(provider_id("openai"));
+    let document = UserConfigDocument {
+        providers: BTreeMap::from([(provider_id("openai"), provider)]),
+        ..UserConfigDocument::default()
+    };
+    let connection = rusqlite::Connection::open(&path).unwrap();
+    connection
+        .execute_batch(
+            "CREATE TABLE zeta_schema_migrations (
+                 component TEXT PRIMARY KEY,
+                 version INTEGER NOT NULL
+             );
+             INSERT INTO zeta_schema_migrations (component, version) VALUES ('config', 1);
+             CREATE TABLE config_authority (
+                 authority_id INTEGER PRIMARY KEY,
+                 schema_version INTEGER NOT NULL,
+                 revision INTEGER NOT NULL,
+                 generation INTEGER NOT NULL,
+                 document_json TEXT NOT NULL
+             );
+             CREATE TABLE config_command_receipts (
+                 command_id TEXT PRIMARY KEY,
+                 expected_revision INTEGER NOT NULL,
+                 command_json TEXT NOT NULL,
+                 result_revision INTEGER NOT NULL,
+                 result_generation INTEGER NOT NULL
+             );",
+        )
+        .unwrap();
+    let mut legacy_document = serde_json::to_value(&document).unwrap();
+    legacy_document.as_object_mut().unwrap().remove("plugins");
+    legacy_document.as_object_mut().unwrap().remove("hooks");
+    connection
+        .execute(
+            "INSERT INTO config_authority VALUES (1, 5, 7, 9, ?1)",
+            [serde_json::to_string(&legacy_document).unwrap()],
+        )
+        .unwrap();
+    drop(connection);
+
+    let store = ConfigStore::open(&path).unwrap();
+    let snapshot = store.read_snapshot().unwrap();
+    assert_eq!(snapshot.revision, ConfigRevision::new(7));
+    assert_eq!(snapshot.generation, ConfigGeneration::new(9));
+    assert!(
+        snapshot
+            .values
+            .providers
+            .contains_key(&provider_id("openai"))
+    );
+    assert!(store.config_path().exists());
+    let old_table: i64 = rusqlite::Connection::open(&path)
+        .unwrap()
+        .query_row(
+            "SELECT COUNT(*) FROM sqlite_master
+             WHERE type = 'table' AND name = 'config_authority'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(old_table, 0);
+    drop(store);
+    remove_config_files(&path);
+}
+
+#[test]
+fn additive_document_schema_upgrade_keeps_revision_and_generation() {
+    let path = config_path("document-schema-upgrade");
+    let config_path = path.with_extension("toml");
+    std::fs::write(
+        &config_path,
+        toml::to_string_pretty(&UserConfigDocument::default()).unwrap(),
+    )
+    .unwrap();
+    let connection = rusqlite::Connection::open(&path).unwrap();
+    connection
+        .execute_batch(
+            "CREATE TABLE zeta_schema_migrations (
+                 component TEXT PRIMARY KEY,
+                 version INTEGER NOT NULL
+             );
+             INSERT INTO zeta_schema_migrations (component, version) VALUES ('config', 2);
+             CREATE TABLE config_metadata (
+                 authority_id INTEGER PRIMARY KEY,
+                 document_schema_version INTEGER NOT NULL,
+                 revision INTEGER NOT NULL,
+                 generation INTEGER NOT NULL,
+                 content_digest TEXT NOT NULL
+             );
+             INSERT INTO config_metadata VALUES (1, 5, 7, 9, 'legacy-digest');
+             CREATE TABLE config_command_receipts (
+                 command_id TEXT PRIMARY KEY,
+                 expected_revision INTEGER NOT NULL,
+                 command_json TEXT NOT NULL,
+                 result_revision INTEGER NOT NULL,
+                 result_generation INTEGER NOT NULL
+             );",
+        )
+        .unwrap();
+    drop(connection);
+
+    let store = ConfigStore::open(&path).unwrap();
+    let snapshot = store.read_snapshot().unwrap();
+    assert_eq!(snapshot.revision, ConfigRevision::new(7));
+    assert_eq!(snapshot.generation, ConfigGeneration::new(9));
+    let document_schema_version: u32 = rusqlite::Connection::open(&path)
+        .unwrap()
+        .query_row(
+            "SELECT document_schema_version FROM config_metadata WHERE authority_id = 1",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(document_schema_version, 6);
+    drop(store);
     remove_config_files(&path);
 }
 
@@ -186,24 +346,18 @@ fn preference_patches_preserve_missing_fields_and_clear_null_fields() {
             "initial",
             configured.revision.get(),
             Patch::Value(model_ref("openai", "model")),
-            Patch::Value(Theme::Dark),
         ))
         .unwrap();
     store
         .apply(update_preferences(
-            "clear-theme",
+            "clear-model",
             first.revision.get(),
-            Patch::Missing,
             Patch::Null,
         ))
         .unwrap();
 
     let snapshot = store.read_snapshot().unwrap();
-    assert_eq!(
-        snapshot.values.preferred_model,
-        Some(model_ref("openai", "model"))
-    );
-    assert_eq!(snapshot.values.theme, None);
+    assert_eq!(snapshot.values.preferred_model, None);
     remove_config_files(&path);
 }
 
@@ -216,7 +370,6 @@ fn selected_model_must_reference_a_configured_provider() {
             "select-missing-provider",
             0,
             Patch::Value(model_ref("openai", "model")),
-            Patch::Missing,
         ))
         .unwrap_err();
 
@@ -246,7 +399,6 @@ fn approval_review_model_is_explicit_and_keeps_its_provider_configured() {
                 approval_review_model: Patch::Value(ApprovalReviewModelSelection::Explicit {
                     model: model_ref("openai", "codex-auto-review"),
                 }),
-                theme: Patch::Missing,
             }),
         })
         .unwrap_err();
@@ -262,7 +414,6 @@ fn approval_review_model_is_explicit_and_keeps_its_provider_configured() {
                 approval_review_model: Patch::Value(ApprovalReviewModelSelection::Explicit {
                     model: model_ref("openai", "codex-auto-review"),
                 }),
-                theme: Patch::Missing,
             }),
         })
         .unwrap();
@@ -331,7 +482,10 @@ fn provider_entries_validate_their_key_and_static_settings() {
         .unwrap_err();
 
     assert!(matches!(error, ConfigCommandError::Config(_)));
-    assert!(!path.exists());
+    assert_eq!(
+        store.read_snapshot().unwrap().revision,
+        ConfigRevision::INITIAL
+    );
     remove_config_files(&path);
 }
 
@@ -343,16 +497,14 @@ fn command_replay_returns_its_original_revision_without_copying_a_snapshot() {
     let first = update_preferences(
         "first",
         configured.revision.get(),
-        Patch::Missing,
-        Patch::Value(Theme::Dark),
+        Patch::Value(model_ref("openai", "model-a")),
     );
     let first_result = store.apply(first.clone()).unwrap();
     let second = store
         .apply(update_preferences(
             "second",
             first_result.revision.get(),
-            Patch::Missing,
-            Patch::Value(Theme::Light),
+            Patch::Value(model_ref("openai", "model-b")),
         ))
         .unwrap();
 
@@ -362,13 +514,17 @@ fn command_replay_returns_its_original_revision_without_copying_a_snapshot() {
     assert_eq!(replayed.revision, first_result.revision);
     assert_eq!(second.revision, ConfigRevision::new(3));
     assert_eq!(
-        store.read_snapshot().unwrap().values.theme,
-        Some(Theme::Light)
+        store.read_snapshot().unwrap().values.preferred_model,
+        Some(model_ref("openai", "model-b"))
     );
 
-    let persisted = std::fs::read_to_string(&path).unwrap();
-    assert!(persisted.contains("resultRevision"));
-    assert!(!persisted.contains("\"result\""));
+    let receipt_count: i64 = rusqlite::Connection::open(&path)
+        .unwrap()
+        .query_row("SELECT COUNT(*) FROM config_command_receipts", [], |row| {
+            row.get(0)
+        })
+        .unwrap();
+    assert_eq!(receipt_count, 3);
     remove_config_files(&path);
 }
 
@@ -376,20 +532,19 @@ fn command_replay_returns_its_original_revision_without_copying_a_snapshot() {
 fn no_op_command_keeps_the_resolved_snapshot_generation() {
     let path = config_path("no-op-generation");
     let store = ConfigStore::open(&path).unwrap();
+    let configured = configure_provider(&store, 0, "openai");
     let first = store
         .apply(update_preferences(
-            "set-dark",
-            0,
-            Patch::Missing,
-            Patch::Value(Theme::Dark),
+            "set-model",
+            configured.revision.get(),
+            Patch::Value(model_ref("openai", "model")),
         ))
         .unwrap();
     let no_op = store
         .apply(update_preferences(
-            "set-dark-again",
+            "set-model-again",
             first.revision.get(),
-            Patch::Missing,
-            Patch::Value(Theme::Dark),
+            Patch::Value(model_ref("openai", "model")),
         ))
         .unwrap();
 
@@ -401,33 +556,159 @@ fn no_op_command_keeps_the_resolved_snapshot_generation() {
 }
 
 #[test]
+fn committed_changes_publish_after_the_sqlite_snapshot_advances() {
+    let path = config_path("change-subscription");
+    let store = ConfigStore::open(&path).unwrap();
+    let changes = store.subscribe_changes();
+    let configured = configure_provider(&store, 0, "openai");
+    let _ = changes.recv_timeout(std::time::Duration::from_secs(1));
+    let changed = store
+        .apply(update_preferences(
+            "set-model-and-notify",
+            configured.revision.get(),
+            Patch::Value(model_ref("openai", "model")),
+        ))
+        .unwrap();
+    let notification = changes
+        .recv_timeout(std::time::Duration::from_secs(1))
+        .unwrap();
+
+    assert_eq!(notification.revision, changed.revision);
+    assert_eq!(notification.generation, changed.generation);
+    assert_eq!(
+        store.read_snapshot().unwrap().values.preferred_model,
+        Some(model_ref("openai", "model"))
+    );
+    remove_config_files(&path);
+}
+
+#[test]
+fn changes_committed_by_another_connection_publish_to_local_subscribers() {
+    let path = config_path("cross-connection-subscription");
+    let observing_store = ConfigStore::open(&path).unwrap();
+    let writing_store = ConfigStore::open(&path).unwrap();
+    let changes = observing_store.subscribe_changes();
+
+    let changed = configure_provider(&writing_store, 0, "openai");
+    let notification = changes
+        .recv_timeout(std::time::Duration::from_secs(2))
+        .unwrap();
+
+    assert_eq!(notification.revision, changed.revision);
+    assert_eq!(notification.generation, changed.generation);
+    assert_eq!(
+        observing_store
+            .read_snapshot()
+            .unwrap()
+            .values
+            .providers
+            .len(),
+        1
+    );
+    drop(writing_store);
+    drop(observing_store);
+    remove_config_files(&path);
+}
+
+#[test]
+fn valid_external_toml_edits_advance_revision_and_publish() {
+    let path = config_path("external-toml-edit");
+    let store = ConfigStore::open(&path).unwrap();
+    let configured = configure_provider(&store, 0, "openai");
+    let changes = store.subscribe_changes();
+    let config_path = store.config_path().to_path_buf();
+    let mut document: UserConfigDocument =
+        toml::from_str(&std::fs::read_to_string(&config_path).unwrap()).unwrap();
+    document.agent.preferred_model = Some(model_ref("openai", "external-model"));
+    std::fs::write(&config_path, toml::to_string_pretty(&document).unwrap()).unwrap();
+
+    let change = changes
+        .recv_timeout(std::time::Duration::from_secs(2))
+        .unwrap();
+    assert_eq!(change.revision, configured.revision.next());
+    assert_eq!(
+        store.read_snapshot().unwrap().values.preferred_model,
+        Some(model_ref("openai", "external-model"))
+    );
+    drop(store);
+    remove_config_files(&path);
+}
+
+#[test]
+fn invalid_external_toml_does_not_replace_the_last_valid_metadata() {
+    let path = config_path("invalid-external-toml");
+    let store = ConfigStore::open(&path).unwrap();
+    let configured = configure_provider(&store, 0, "openai");
+    std::fs::write(store.config_path(), "unknown = true").unwrap();
+
+    assert!(store.read_snapshot().is_err());
+    let metadata_revision: i64 = rusqlite::Connection::open(&path)
+        .unwrap()
+        .query_row(
+            "SELECT revision FROM config_metadata WHERE authority_id = 1",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(metadata_revision as u64, configured.revision.get());
+    drop(store);
+    remove_config_files(&path);
+}
+
+#[test]
+fn concurrent_open_installs_one_config_schema() {
+    let path = config_path("concurrent-open");
+    let barrier = std::sync::Arc::new(std::sync::Barrier::new(3));
+    let threads = (0..2)
+        .map(|_| {
+            let path = path.clone();
+            let barrier = std::sync::Arc::clone(&barrier);
+            std::thread::spawn(move || {
+                barrier.wait();
+                let store = ConfigStore::open(path).unwrap();
+                store.read_snapshot().unwrap().revision
+            })
+        })
+        .collect::<Vec<_>>();
+    barrier.wait();
+
+    for thread in threads {
+        assert_eq!(thread.join().unwrap(), ConfigRevision::INITIAL);
+    }
+    remove_config_files(&path);
+}
+
+#[test]
 fn command_rejects_stale_revisions_and_conflicting_retries() {
     let path = config_path("revision-conflict");
     let store = ConfigStore::open(&path).unwrap();
-    let first = update_preferences("first", 0, Patch::Missing, Patch::Value(Theme::Dark));
+    let configured = configure_provider(&store, 0, "openai");
+    let first = update_preferences(
+        "first",
+        configured.revision.get(),
+        Patch::Value(model_ref("openai", "model-a")),
+    );
     store.apply(first.clone()).unwrap();
 
     assert_eq!(
         store
             .apply(update_preferences(
                 "stale",
-                0,
-                Patch::Missing,
-                Patch::Value(Theme::Light),
+                configured.revision.get(),
+                Patch::Value(model_ref("openai", "model-b")),
             ))
             .unwrap_err(),
         ConfigCommandError::RevisionConflict {
-            expected: ConfigRevision::INITIAL,
-            actual: ConfigRevision::new(1),
+            expected: ConfigRevision::new(1),
+            actual: ConfigRevision::new(2),
         }
     );
     assert_eq!(
         store
             .apply(update_preferences(
                 "first",
-                1,
-                Patch::Missing,
-                Patch::Value(Theme::Light),
+                2,
+                Patch::Value(model_ref("openai", "model-b")),
             ))
             .unwrap_err(),
         ConfigCommandError::CommandConflict
@@ -445,7 +726,6 @@ fn a_preferred_provider_cannot_be_removed_until_the_model_is_cleared() {
             "select",
             configured.revision.get(),
             Patch::Value(model_ref("openai", "model")),
-            Patch::Missing,
         ))
         .unwrap();
     assert!(matches!(
@@ -463,7 +743,6 @@ fn a_preferred_provider_cannot_be_removed_until_the_model_is_cleared() {
             "clear-model",
             selected.revision.get(),
             Patch::Null,
-            Patch::Missing,
         ))
         .unwrap();
     store
@@ -524,9 +803,112 @@ fn mcp_and_skill_declarations_are_durable_desired_config() {
         snapshot.values.skills.sources[&source.id].root_reference,
         "user:skill-root:personal"
     );
-    let persisted = std::fs::read_to_string(&path).unwrap();
+    let persisted = persisted_config_document(&path);
     assert!(persisted.contains("credentialRef"));
     assert!(!persisted.contains("secretValue"));
+    remove_config_files(&path);
+}
+
+#[test]
+fn plugin_and_hook_declarations_are_durable_desired_config() {
+    let path = config_path("plugin-and-hooks");
+    let store = ConfigStore::open(&path).unwrap();
+    let plugin = plugin_request();
+    let added_plugin = store
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("request-plugin").unwrap(),
+            expected_revision: ConfigRevision::INITIAL,
+            command: UserConfigCommand::UpsertPluginRequest {
+                request: plugin.clone(),
+            },
+        })
+        .unwrap();
+    let hook = hook("user:hook:review");
+    let added_hook = store
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("add-hook").unwrap(),
+            expected_revision: added_plugin.revision,
+            command: UserConfigCommand::UpsertHook { hook: hook.clone() },
+        })
+        .unwrap();
+    let enabled_plugin = store
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("enable-plugin-request").unwrap(),
+            expected_revision: added_hook.revision,
+            command: UserConfigCommand::SetPluginRequestEnablement {
+                plugin_id: plugin.plugin_id.clone(),
+                enablement: PluginRequestEnablement::Enabled,
+            },
+        })
+        .unwrap();
+    let enabled_hook = store
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("enable-hook").unwrap(),
+            expected_revision: enabled_plugin.revision,
+            command: UserConfigCommand::SetHookEnablement {
+                hook_id: hook.id.clone(),
+                enablement: HookEnablement::Enabled,
+            },
+        })
+        .unwrap();
+
+    let snapshot = ConfigStore::open(&path).unwrap().read_snapshot().unwrap();
+    assert_eq!(snapshot.revision, enabled_hook.revision);
+    assert_eq!(
+        snapshot.values.plugins.requests[&plugin.plugin_id].enablement,
+        PluginRequestEnablement::Enabled
+    );
+    assert_eq!(
+        snapshot.values.hooks.hooks[&hook.id].enablement,
+        HookEnablement::Enabled
+    );
+    let persisted = persisted_config_document(&path);
+    assert!(persisted.contains("[plugins.requests"));
+    assert!(persisted.contains("[hooks.hooks"));
+    drop(store);
+    remove_config_files(&path);
+}
+
+#[test]
+fn plugin_and_hook_commands_reject_missing_targets_and_unsafe_shapes() {
+    assert!(PluginVersion::new("latest").is_err());
+    assert!(HookId::new("review").is_err());
+
+    let path = config_path("plugin-hook-validation");
+    let store = ConfigStore::open(&path).unwrap();
+    let missing_plugin = store
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("enable-missing-plugin").unwrap(),
+            expected_revision: ConfigRevision::INITIAL,
+            command: UserConfigCommand::SetPluginRequestEnablement {
+                plugin_id: PluginId::new("acme/review").unwrap(),
+                enablement: PluginRequestEnablement::Enabled,
+            },
+        })
+        .unwrap_err();
+    assert!(matches!(missing_plugin, ConfigCommandError::Config(_)));
+
+    let invalid_hook = HookConfig {
+        id: HookId::new("user:hook:complete").unwrap(),
+        event: HookEvent::TurnCompleted,
+        matcher: HookMatcher {
+            tool_names: BTreeSet::from(["shell_command".into()]),
+        },
+        action: HookAction::Process {
+            program: "notify".into(),
+            args: Vec::new(),
+        },
+        enablement: HookEnablement::Enabled,
+    };
+    let error = store
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("invalid-hook").unwrap(),
+            expected_revision: ConfigRevision::INITIAL,
+            command: UserConfigCommand::UpsertHook { hook: invalid_hook },
+        })
+        .unwrap_err();
+    assert!(matches!(error, ConfigCommandError::Config(_)));
+    drop(store);
     remove_config_files(&path);
 }
 
@@ -609,41 +991,7 @@ fn workspace_document_is_namespaced_and_cannot_bind_credentials() {
     let path = workspace_config_path("declared-intent");
     std::fs::write(
         &path,
-        serde_json::json!({
-            "agent": {"preferredModel": {"provider": "openai", "model": "gpt-5.6"}},
-            "mcp": {
-                "servers": {
-                    "workspace:project:mcp:github": {
-                        "id": "workspace:project:mcp:github",
-                        "displayName": "Project GitHub",
-                        "transport": {
-                            "type": "streamableHttp",
-                            "url": "https://mcp.github.example"
-                        },
-                        "enablement": "enabled"
-                    }
-                }
-            },
-            "pluginRequests": {
-                "requests": {
-                    "acme/code-review": {
-                        "pluginId": "acme/code-review",
-                        "version": "1.2.3",
-                        "requestedScope": "workspace"
-                    }
-                }
-            },
-            "skills": {
-                "sources": {
-                    "workspace:project:skill-source:review": {
-                        "id": "workspace:project:skill-source:review",
-                        "rootReference": "workspace:skill-root:review",
-                        "enablement": "enabled"
-                    }
-                }
-            }
-        })
-        .to_string(),
+        toml::to_string_pretty(&workspace_document(Some(model_ref("openai", "gpt-5.6")))).unwrap(),
     )
     .unwrap();
 
@@ -654,6 +1002,7 @@ fn workspace_document_is_namespaced_and_cannot_bind_credentials() {
     assert_eq!(document.mcp.servers.len(), 1);
     assert_eq!(document.skills.sources.len(), 1);
     assert_eq!(document.plugin_requests.requests.len(), 1);
+    assert_eq!(document.hooks.hooks.len(), 1);
     assert_eq!(
         document
             .plugin_requests
@@ -674,18 +1023,17 @@ fn workspace_document_rejects_foreign_namespace_and_unknown_fields() {
     let scope = WorkspaceConfigScope::new(WorkspaceId::new("project").unwrap());
     std::fs::write(
         &path,
-        serde_json::json!({
-            "mcp": {
-                "servers": {
-                    "workspace:other:mcp:github": {
-                        "id": "workspace:other:mcp:github",
-                        "displayName": "Other GitHub",
-                        "transport": {"type": "stdio", "command": "github-mcp", "args": []}
-                    }
-                }
-            }
-        })
-        .to_string(),
+        r#"
+[mcp.servers."workspace:other:mcp:github"]
+id = "workspace:other:mcp:github"
+displayName = "Other GitHub"
+enablement = "disabled"
+
+[mcp.servers."workspace:other:mcp:github".transport]
+type = "stdio"
+command = "github-mcp"
+args = []
+"#,
     )
     .unwrap();
     assert!(
@@ -694,7 +1042,32 @@ fn workspace_document_rejects_foreign_namespace_and_unknown_fields() {
             .is_err()
     );
 
-    std::fs::write(&path, r#"{"unknown":true}"#).unwrap();
+    std::fs::write(&path, "unknown = true").unwrap();
+    assert!(
+        WorkspaceConfigStore::open(&path, scope.clone())
+            .read_document()
+            .is_err()
+    );
+
+    std::fs::write(
+        &path,
+        r#"
+[hooks.hooks."workspace:project:hook:review"]
+id = "workspace:project:hook:review"
+event = "beforeTool"
+enablement = "disabled"
+
+[hooks.hooks."workspace:project:hook:review".matcher]
+toolNames = []
+
+[hooks.hooks."workspace:project:hook:review".action]
+type = "process"
+program = "review-hook"
+args = []
+shell = true
+"#,
+    )
+    .unwrap();
     assert!(
         WorkspaceConfigStore::open(&path, scope)
             .read_document()
@@ -751,6 +1124,14 @@ fn workspace_resolution_overrides_only_a_user_configured_model_provider() {
     assert!(resolved.diagnostics.iter().any(|diagnostic| {
         diagnostic.code == ConfigDiagnosticCode::WorkspaceMcpPendingTrust
             && diagnostic.subject == "workspace:project:mcp:github"
+    }));
+    assert!(resolved.diagnostics.iter().any(|diagnostic| {
+        diagnostic.code == ConfigDiagnosticCode::WorkspacePluginPendingTrust
+            && diagnostic.subject == "acme/code-review"
+    }));
+    assert!(resolved.diagnostics.iter().any(|diagnostic| {
+        diagnostic.code == ConfigDiagnosticCode::WorkspaceHookPendingTrust
+            && diagnostic.subject == "workspace:project:hook:review"
     }));
     assert!(resolved.diagnostics.iter().any(|diagnostic| {
         diagnostic.code == ConfigDiagnosticCode::WorkspaceSkillPendingTrust

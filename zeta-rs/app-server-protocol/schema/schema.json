@@ -822,6 +822,102 @@
           "properties": {
             "method": {
               "type": "string",
+              "const": "plugin/request/upsert"
+            },
+            "params": {
+              "$ref": "#/$defs/PluginRequestUpsertParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "plugin/request/remove"
+            },
+            "params": {
+              "$ref": "#/$defs/PluginRequestRemoveParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "plugin/request/enablement/set"
+            },
+            "params": {
+              "$ref": "#/$defs/PluginRequestSetEnablementParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "hook/upsert"
+            },
+            "params": {
+              "$ref": "#/$defs/HookUpsertParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "hook/remove"
+            },
+            "params": {
+              "$ref": "#/$defs/HookRemoveParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "hook/enablement/set"
+            },
+            "params": {
+              "$ref": "#/$defs/HookSetEnablementParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
               "const": "skills/list"
             },
             "params": {
@@ -858,6 +954,22 @@
             },
             "params": {
               "$ref": "#/$defs/TurnStartParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "turn/shell/start"
+            },
+            "params": {
+              "$ref": "#/$defs/ShellTurnStartParams"
             }
           },
           "required": [
@@ -1002,6 +1114,22 @@
             },
             "params": {
               "$ref": "#/$defs/FsReadFileParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "fs/writeFile"
+            },
+            "params": {
+              "$ref": "#/$defs/FsWriteFileParams"
             }
           },
           "required": [
@@ -1722,6 +1850,102 @@
           "properties": {
             "method": {
               "type": "string",
+              "const": "plugin/request/upsert"
+            },
+            "result": {
+              "$ref": "#/$defs/ConfigCommandResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "plugin/request/remove"
+            },
+            "result": {
+              "$ref": "#/$defs/ConfigCommandResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "plugin/request/enablement/set"
+            },
+            "result": {
+              "$ref": "#/$defs/ConfigCommandResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "hook/upsert"
+            },
+            "result": {
+              "$ref": "#/$defs/ConfigCommandResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "hook/remove"
+            },
+            "result": {
+              "$ref": "#/$defs/ConfigCommandResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "hook/enablement/set"
+            },
+            "result": {
+              "$ref": "#/$defs/ConfigCommandResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
               "const": "skills/list"
             },
             "result": {
@@ -1755,6 +1979,22 @@
             "method": {
               "type": "string",
               "const": "turn/start"
+            },
+            "result": {
+              "$ref": "#/$defs/TurnStartResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "turn/shell/start"
             },
             "result": {
               "$ref": "#/$defs/TurnStartResult"
@@ -1902,6 +2142,22 @@
             },
             "result": {
               "$ref": "#/$defs/FsReadFileResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "fs/writeFile"
+            },
+            "result": {
+              "$ref": "#/$defs/FsWriteFileResult"
             }
           },
           "required": [
@@ -2188,6 +2444,26 @@
       "type": "string",
       "minLength": 1
     },
+    "ConfigChanged": {
+      "description": "Notification payload emitted after a durable Config authority commit.",
+      "type": "object",
+      "properties": {
+        "generation": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "revision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "revision",
+        "generation"
+      ]
+    },
     "ConfigCommandDispositionDto": {
       "type": "string",
       "enum": [
@@ -2231,10 +2507,22 @@
           "format": "uint64",
           "minimum": 0
         },
+        "hooks": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/HookConfigDto"
+          }
+        },
         "mcpServers": {
           "type": "object",
           "additionalProperties": {
             "$ref": "#/$defs/McpServerConfigDto"
+          }
+        },
+        "pluginRequests": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/PluginRequestDto"
           }
         },
         "preferredModel": {
@@ -2263,16 +2551,6 @@
           "additionalProperties": {
             "$ref": "#/$defs/SkillSourceConfigDto"
           }
-        },
-        "theme": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/ThemeDto"
-            },
-            {
-              "type": "null"
-            }
-          ]
         }
       },
       "required": [
@@ -2281,7 +2559,9 @@
         "approvalReviewModel",
         "providers",
         "mcpServers",
-        "skillSources"
+        "skillSources",
+        "pluginRequests",
+        "hooks"
       ]
     },
     "ConfigUpdateParams": {
@@ -2310,16 +2590,6 @@
           "anyOf": [
             {
               "$ref": "#/$defs/ModelRefDto"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "theme": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/ThemeDto"
             },
             {
               "type": "null"
@@ -2410,6 +2680,44 @@
     "EmptyParams": {
       "type": "object",
       "additionalProperties": false
+    },
+    "FsChanged": {
+      "description": "Coarse workspace filesystem invalidation published by `fs/changed`.",
+      "oneOf": [
+        {
+          "description": "The backend observed changes near these sorted workspace-relative paths.",
+          "type": "object",
+          "properties": {
+            "paths": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "type": {
+              "type": "string",
+              "const": "pathsChanged"
+            }
+          },
+          "required": [
+            "type",
+            "paths"
+          ]
+        },
+        {
+          "description": "The watcher may have lost events and consumers must rescan their visible scope.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "rescanRequired"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        }
+      ]
     },
     "FsFileType": {
       "description": "Stable filesystem entry kind exposed to clients.",
@@ -2528,6 +2836,34 @@
       },
       "required": [
         "content"
+      ]
+    },
+    "FsWriteFileParams": {
+      "description": "Atomically write one UTF-8 file relative to the configured workspace root.",
+      "type": "object",
+      "properties": {
+        "content": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "content"
+      ]
+    },
+    "FsWriteFileResult": {
+      "description": "Metadata returned after one successful `fs/writeFile`.",
+      "type": "object",
+      "properties": {
+        "metadata": {
+          "$ref": "#/$defs/FsGetMetadataResult"
+        }
+      },
+      "required": [
+        "metadata"
       ]
     },
     "GitChangeStatusDto": {
@@ -2782,6 +3118,167 @@
         "name",
         "ahead",
         "behind"
+      ]
+    },
+    "HookActionDto": {
+      "description": "Runtime-free Hook action. Execution still requires policy and sandbox approval.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "args": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "program": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "process"
+            }
+          },
+          "required": [
+            "type",
+            "program",
+            "args"
+          ]
+        }
+      ]
+    },
+    "HookConfigDto": {
+      "description": "Declarative Hook configuration exposed through the App Server contract.",
+      "type": "object",
+      "properties": {
+        "action": {
+          "$ref": "#/$defs/HookActionDto"
+        },
+        "enablement": {
+          "$ref": "#/$defs/HookEnablementDto"
+        },
+        "event": {
+          "$ref": "#/$defs/HookEventDto"
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "matcher": {
+          "$ref": "#/$defs/HookMatcherDto"
+        }
+      },
+      "required": [
+        "id",
+        "event",
+        "matcher",
+        "action",
+        "enablement"
+      ]
+    },
+    "HookEnablementDto": {
+      "description": "Desired enablement of one Hook declaration.",
+      "type": "string",
+      "enum": [
+        "disabled",
+        "enabled"
+      ]
+    },
+    "HookEventDto": {
+      "description": "Safe-point event that may request a Hook execution.",
+      "type": "string",
+      "enum": [
+        "beforeTool",
+        "afterTool",
+        "turnCompleted"
+      ]
+    },
+    "HookMatcherDto": {
+      "description": "Optional exact tool-name matcher for tool-related Hook events.",
+      "type": "object",
+      "properties": {
+        "toolNames": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "toolNames"
+      ]
+    },
+    "HookRemoveParams": {
+      "description": "Removes one declarative user Hook.",
+      "type": "object",
+      "properties": {
+        "commandId": {
+          "$ref": "#/$defs/CommandId"
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "hookId": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "commandId",
+        "expectedRevision",
+        "hookId"
+      ]
+    },
+    "HookSetEnablementParams": {
+      "description": "Changes desired enablement for one configured user Hook.",
+      "type": "object",
+      "properties": {
+        "commandId": {
+          "$ref": "#/$defs/CommandId"
+        },
+        "enablement": {
+          "$ref": "#/$defs/HookEnablementDto"
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "hookId": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "commandId",
+        "expectedRevision",
+        "hookId",
+        "enablement"
+      ]
+    },
+    "HookUpsertParams": {
+      "description": "Creates or replaces one declarative user Hook.",
+      "type": "object",
+      "properties": {
+        "commandId": {
+          "$ref": "#/$defs/CommandId"
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "hook": {
+          "$ref": "#/$defs/HookConfigDto"
+        }
+      },
+      "required": [
+        "commandId",
+        "expectedRevision",
+        "hook"
       ]
     },
     "InitializeParams": {
@@ -3397,6 +3894,108 @@
         "steps"
       ]
     },
+    "PluginRequestDto": {
+      "description": "Declarative request for one exact Plugin package.",
+      "type": "object",
+      "properties": {
+        "enablement": {
+          "$ref": "#/$defs/PluginRequestEnablementDto"
+        },
+        "pluginId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "pluginId",
+        "version",
+        "enablement"
+      ]
+    },
+    "PluginRequestEnablementDto": {
+      "description": "Desired participation of one exact Plugin request in future activation resolution.",
+      "type": "string",
+      "enum": [
+        "disabled",
+        "enabled"
+      ]
+    },
+    "PluginRequestRemoveParams": {
+      "description": "Removes one user Plugin request.",
+      "type": "object",
+      "properties": {
+        "commandId": {
+          "$ref": "#/$defs/CommandId"
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "pluginId": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "commandId",
+        "expectedRevision",
+        "pluginId"
+      ]
+    },
+    "PluginRequestSetEnablementParams": {
+      "description": "Changes desired enablement for one configured Plugin request.",
+      "type": "object",
+      "properties": {
+        "commandId": {
+          "$ref": "#/$defs/CommandId"
+        },
+        "enablement": {
+          "$ref": "#/$defs/PluginRequestEnablementDto"
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "pluginId": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "commandId",
+        "expectedRevision",
+        "pluginId",
+        "enablement"
+      ]
+    },
+    "PluginRequestUpsertParams": {
+      "description": "Creates or replaces one exact user Plugin request.",
+      "type": "object",
+      "properties": {
+        "commandId": {
+          "$ref": "#/$defs/CommandId"
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "request": {
+          "$ref": "#/$defs/PluginRequestDto"
+        }
+      },
+      "required": [
+        "commandId",
+        "expectedRevision",
+        "request"
+      ]
+    },
     "ProcessExecutionOutput": {
       "description": "Provider-independent process result retained across executor and Core boundaries.",
       "type": "object",
@@ -3793,6 +4392,22 @@
           "properties": {
             "method": {
               "type": "string",
+              "const": "config/changed"
+            },
+            "params": {
+              "$ref": "#/$defs/ConfigChanged"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
               "const": "skills/changed"
             },
             "params": {
@@ -3813,6 +4428,22 @@
             },
             "params": {
               "$ref": "#/$defs/GitStatusChanged"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "fs/changed"
+            },
+            "params": {
+              "$ref": "#/$defs/FsChanged"
             }
           },
           "required": [
@@ -4334,6 +4965,39 @@
         "sessionId",
         "durableSequence",
         "update"
+      ]
+    },
+    "ShellTurnStartParams": {
+      "type": "object",
+      "properties": {
+        "command": {
+          "type": "string"
+        },
+        "commandId": {
+          "$ref": "#/$defs/CommandId"
+        },
+        "expectedSequence": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "sessionId": {
+          "$ref": "#/$defs/SessionId"
+        },
+        "threadId": {
+          "$ref": "#/$defs/ThreadId"
+        },
+        "workingDirectory": {
+          "type": "string",
+          "default": "."
+        }
+      },
+      "required": [
+        "commandId",
+        "sessionId",
+        "threadId",
+        "expectedSequence",
+        "command"
       ]
     },
     "SkillCatalogReloadDto": {
@@ -4988,14 +5652,6 @@
       "required": [
         "terminalId",
         "data"
-      ]
-    },
-    "ThemeDto": {
-      "type": "string",
-      "enum": [
-        "light",
-        "dark",
-        "system"
       ]
     },
     "Thread": {
@@ -5768,6 +6424,34 @@
             "turnId",
             "plan"
           ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "stream": {
+              "$ref": "#/$defs/ToolOutputStream"
+            },
+            "text": {
+              "type": "string"
+            },
+            "toolCallId": {
+              "$ref": "#/$defs/ToolCallId"
+            },
+            "turnId": {
+              "$ref": "#/$defs/TurnId"
+            },
+            "type": {
+              "type": "string",
+              "const": "toolOutputDelta"
+            }
+          },
+          "required": [
+            "type",
+            "turnId",
+            "toolCallId",
+            "stream",
+            "text"
+          ]
         }
       ]
     },
@@ -5879,6 +6563,13 @@
     "ToolName": {
       "description": "Validated provider-independent name used to register and invoke a tool.",
       "type": "string"
+    },
+    "ToolOutputStream": {
+      "type": "string",
+      "enum": [
+        "stdout",
+        "stderr"
+      ]
     },
     "ToolReplaySafety": {
       "description": "Whether Core may automatically execute the same exact Tool Call after sandbox review.",

@@ -55,6 +55,7 @@ pub struct ContextMenuStyle {
     background: Color,
     button_style: ButtonStyle,
     item_size: Size,
+    header_height: f32,
     placement: ContextViewPlacement,
 }
 
@@ -64,8 +65,15 @@ impl ContextMenuStyle {
             background,
             button_style,
             item_size,
+            header_height: 0.0,
             placement: ContextViewPlacement::new(),
         }
+    }
+
+    /// Reserves a leading row that the product host can paint with [`ContextMenu::paint_with_header`].
+    pub const fn with_header_height(mut self, header_height: f32) -> Self {
+        self.header_height = header_height;
+        self
     }
 
     pub const fn with_placement(mut self, placement: ContextViewPlacement) -> Self {
@@ -85,6 +93,8 @@ pub struct ContextMenu {
     context_view: ContextView,
     surface_bounds: Rect,
     menu_bounds: Rect,
+    item_bounds: Rect,
+    header_bounds: Option<Rect>,
     items: Vec<ContextMenuItem>,
     style: ContextMenuStyle,
     selection: ContextMenuSelection,
@@ -99,7 +109,7 @@ impl ContextMenu {
     ) -> Self {
         let menu_size = Size::new(
             style.item_size.width.max(0.0),
-            style.item_size.height.max(0.0) * items.len() as f32,
+            style.header_height.max(0.0) + style.item_size.height.max(0.0) * items.len() as f32,
         );
         let surface_size = Size::new(
             menu_size.width + MENU_PADDING * 2.0,
@@ -114,10 +124,27 @@ impl ContextMenu {
         );
         let surface_bounds = context_view.content_bounds();
         let menu_bounds = inset_rect(surface_bounds, MENU_PADDING);
+        let header_height = style.header_height.max(0.0).min(menu_bounds.size.height);
+        let header_bounds = (header_height > 0.0).then(|| {
+            Rect::from_xywh(
+                menu_bounds.origin.x,
+                menu_bounds.origin.y,
+                menu_bounds.size.width,
+                header_height,
+            )
+        });
+        let item_bounds = Rect::from_xywh(
+            menu_bounds.origin.x,
+            menu_bounds.origin.y + header_height,
+            menu_bounds.size.width,
+            (menu_bounds.size.height - header_height).max(0.0),
+        );
         Self {
             context_view,
             surface_bounds,
             menu_bounds,
+            item_bounds,
+            header_bounds,
             items,
             style,
             selection: ContextMenuSelection::default(),
@@ -137,6 +164,11 @@ impl ContextMenu {
     /// Returns the item layout bounds inset by the menu's canonical 2px padding.
     pub const fn content_bounds(&self) -> Rect {
         self.menu_bounds
+    }
+
+    /// Returns the host-owned leading row, when one was reserved by the style.
+    pub const fn header_bounds(&self) -> Option<Rect> {
+        self.header_bounds
     }
 
     pub fn selected_index(&self) -> Option<usize> {
@@ -184,16 +216,23 @@ impl ContextMenu {
             })
             .collect();
         ActionBar::new(
-            self.menu_bounds,
+            self.item_bounds,
             ActionBarOrientation::Vertical,
             items,
             ActionBarStyle::new(self.style.button_style.clone(), self.style.item_size),
         )
     }
-}
 
-impl Component for ContextMenu {
-    fn paint(&self, scene: &mut UiScene) {
+    /// Paints the canonical menu shell and items with product-owned content in its header row.
+    pub fn paint_with_header(
+        &self,
+        scene: &mut UiScene,
+        paint_header: impl FnOnce(&mut UiScene, Rect),
+    ) {
+        self.paint_contents(scene, paint_header);
+    }
+
+    fn paint_contents(&self, scene: &mut UiScene, paint_header: impl FnOnce(&mut UiScene, Rect)) {
         let action_bar = self.action_bar();
         self.context_view
             .draw_overflow(scene, |scene, _content_bounds| {
@@ -215,8 +254,17 @@ impl Component for ContextMenu {
                         )
                         .with_corner_radii(CornerRadii::uniform(MENU_CORNER_RADIUS)),
                 );
+                if let Some(header_bounds) = self.header_bounds {
+                    paint_header(scene, header_bounds);
+                }
                 action_bar.paint(scene);
             });
+    }
+}
+
+impl Component for ContextMenu {
+    fn paint(&self, scene: &mut UiScene) {
+        self.paint_contents(scene, |_scene, _bounds| {});
     }
 }
 

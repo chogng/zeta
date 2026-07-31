@@ -1,6 +1,7 @@
 use super::{
-    ADD_SESSION, CONTEXT_DIFF, CONTEXT_GIT_BRANCH, CONTEXT_LOCATION, CONTEXT_WORKING_DIRECTORY,
-    ContextAction, SESSION_CONTEXT_MENU, SESSION_SEARCH_INPUT, SESSION_SIDEBAR_ACTION_BAR,
+    ADD_SESSION, AGENT_CHANGES, AGENT_FILES, AgentSidebarPaneAction, CONTEXT_DIFF,
+    CONTEXT_GIT_BRANCH, CONTEXT_LOCATION, CONTEXT_WORKING_DIRECTORY, ContextAction,
+    SESSION_CONTEXT_MENU, SESSION_SEARCH_INPUT, SESSION_SIDEBAR_ACTION_BAR,
     SESSION_SIDEBAR_TOOLBAR, SessionContextMenuAction,
 };
 
@@ -26,6 +27,19 @@ fn context_actions_have_stable_unique_element_identities() {
             .collect::<std::collections::HashSet<_>>()
             .len(),
         4
+    );
+}
+
+#[test]
+fn agent_sidebar_pane_actions_have_stable_labels_and_identities() {
+    let ids = AgentSidebarPaneAction::ALL.map(AgentSidebarPaneAction::element_id);
+    let labels = AgentSidebarPaneAction::ALL.map(AgentSidebarPaneAction::label);
+
+    assert_eq!(ids, [AGENT_CHANGES, AGENT_FILES]);
+    assert_eq!(labels, ["Changes", "Files"]);
+    assert_eq!(
+        AgentSidebarPaneAction::from_element_id(AGENT_FILES),
+        Some(AgentSidebarPaneAction::Files)
     );
 }
 

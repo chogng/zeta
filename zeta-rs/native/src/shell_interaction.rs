@@ -33,6 +33,55 @@ pub(crate) const AGENT_EXPLORER_PANE: ElementId = ElementId::scoped(SHELL_SCOPE,
 pub(crate) const AGENT_EDITOR_PANE: ElementId = ElementId::scoped(SHELL_SCOPE, 29);
 pub(crate) const MULTI_DIFF_EDITOR: ElementId = ElementId::scoped(SHELL_SCOPE, 30);
 pub(crate) const MULTI_DIFF_SCROLLBAR: ElementId = ElementId::scoped(SHELL_SCOPE, 31);
+pub(crate) const AGENT_SIDEBAR_NAVIGATION: ElementId = ElementId::scoped(SHELL_SCOPE, 32);
+pub(crate) const AGENT_CHANGES: ElementId = ElementId::scoped(SHELL_SCOPE, 33);
+pub(crate) const AGENT_FILES: ElementId = ElementId::scoped(SHELL_SCOPE, 34);
+pub(crate) const AGENT_SIDEBAR_TOOLBAR: ElementId = ElementId::scoped(SHELL_SCOPE, 35);
+pub(crate) const AGENT_FILES_ACTION_BAR: ElementId = ElementId::scoped(SHELL_SCOPE, 36);
+pub(crate) const AGENT_FILES_REFRESH: ElementId = ElementId::scoped(SHELL_SCOPE, 37);
+pub(crate) const AGENT_FILES_SEARCH: ElementId = ElementId::scoped(SHELL_SCOPE, 38);
+pub(crate) const AGENT_FILE_SEARCH_INPUT: ElementId = ElementId::scoped(SHELL_SCOPE, 39);
+pub(crate) const THREAD_TIMELINE: ElementId = ElementId::scoped(SHELL_SCOPE, 40);
+pub(crate) const COMPOSER_MODE: ElementId = ElementId::scoped(SHELL_SCOPE, 41);
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum AgentSidebarPaneAction {
+    Changes,
+    Files,
+}
+
+impl AgentSidebarPaneAction {
+    pub(crate) const ALL: [Self; 2] = [Self::Changes, Self::Files];
+
+    pub(crate) const fn element_id(self) -> ElementId {
+        match self {
+            Self::Changes => AGENT_CHANGES,
+            Self::Files => AGENT_FILES,
+        }
+    }
+
+    pub(crate) const fn label(self) -> &'static str {
+        match self {
+            Self::Changes => "Changes",
+            Self::Files => "Files",
+        }
+    }
+
+    pub(crate) const fn view(self) -> crate::agent_sidebar_workspace::AgentSidebarView {
+        match self {
+            Self::Changes => crate::agent_sidebar_workspace::AgentSidebarView::Changes,
+            Self::Files => crate::agent_sidebar_workspace::AgentSidebarView::Files,
+        }
+    }
+
+    pub(crate) const fn from_element_id(id: ElementId) -> Option<Self> {
+        match id {
+            AGENT_CHANGES => Some(Self::Changes),
+            AGENT_FILES => Some(Self::Files),
+            _ => None,
+        }
+    }
+}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum ContextAction {

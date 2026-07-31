@@ -27,15 +27,15 @@ use zeta_app_server_protocol::protocol::thread::{
     ThreadUnsubscribeParams,
 };
 use zeta_app_server_protocol::protocol::turn::{
-    InputItem, TurnInteractionResolveParams, TurnInteractionResolveResult, TurnInterruptParams,
-    TurnInterruptResult, TurnStartParams, TurnStartResult,
+    InputItem, ShellTurnStartParams, TurnInteractionResolveParams, TurnInteractionResolveResult,
+    TurnInterruptParams, TurnInterruptResult, TurnStartParams, TurnStartResult,
 };
 use zeta_app_server_protocol::schema_hash;
 use zeta_core::{
     ArchiveSessionThreadRequest, CreateSessionRequest, CreateSessionThreadRequest,
     ForkSessionThreadRequest, InterruptTurnRequest, ResolveTurnInteractionRequest,
-    SequenceExpectation, SessionLifecycleRequest, SetSessionModelRequest, StartTurnDisposition,
-    StartTurnRequest, TurnStatus,
+    SequenceExpectation, SessionLifecycleRequest, SetSessionModelRequest, ShellTurnInvocation,
+    StartShellTurnRequest, StartTurnDisposition, StartTurnRequest, TurnStatus,
 };
 use zeta_protocol::UserInput;
 use zeta_typst::{
@@ -470,6 +470,80 @@ impl AppServer {
         })
     }
 
+    pub(super) fn shell_turn_start(
+        &self,
+        _connection: &mut ConnectionState,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        let params: ShellTurnStartParams = decode(params)?;
+        let thread_before = self
+            .sessions
+            .threads()
+            .read_thread(&params.thread_id)
+            .map_err(core_error)?;
+        if thread_before.session_id != params.session_id {
+            return Err(RpcError::new(
+                -32010,
+                AppServerErrorName::CoreOperationFailed,
+            ));
+        }
+        let start = self
+            .sessions
+            .threads()
+            .start_shell_turn(
+                &params.thread_id,
+                StartShellTurnRequest {
+                    command_id: params.command_id,
+                    expected_sequence: SequenceExpectation::Exact(params.expected_sequence),
+                    invocation: ShellTurnInvocation {
+                        command: params.command,
+                        shell_program: "/bin/sh".into(),
+                        working_directory: params.working_directory,
+                    },
+                },
+            )
+            .map_err(core_error)?;
+        let turn_id = start.turn_id;
+        if start.disposition == StartTurnDisposition::Replayed {
+            let snapshot = self
+                .sessions
+                .threads()
+                .read_thread(&params.thread_id)
+                .map_err(core_error)?;
+            let turn = snapshot
+                .turns
+                .iter()
+                .find(|turn| turn.turn_id == turn_id)
+                .ok_or_else(|| RpcError::new(-32000, AppServerErrorName::InternalError))?;
+            return match turn.status {
+                TurnStatus::Created
+                | TurnStatus::Running
+                | TurnStatus::WaitingForApproval
+                | TurnStatus::WaitingForUserInput
+                | TurnStatus::WaitingForCapability
+                | TurnStatus::Completed => result(&TurnStartResult {
+                    turn_id,
+                    sequence: start.sequence,
+                }),
+                TurnStatus::Failed | TurnStatus::Interrupted => Err(RpcError::new(
+                    -32010,
+                    AppServerErrorName::CoreOperationFailed,
+                )),
+                TurnStatus::Cancelling => {
+                    Err(RpcError::new(-32000, AppServerErrorName::ServerOverloaded))
+                }
+            };
+        }
+        self.notify_thread_updates(&params.thread_id, params.expected_sequence)?;
+        self.turn_executor_snapshot()
+            .start_shell(&params.thread_id, &turn_id)
+            .map_err(core_error)?;
+        result(&TurnStartResult {
+            turn_id,
+            sequence: start.sequence,
+        })
+    }
+
     pub(super) fn turn_interrupt(
         &self,
         _connection: &mut ConnectionState,
@@ -573,7 +647,7 @@ impl AppServer {
             && resolved.disposition == zeta_core::ResolveTurnInteractionDisposition::Resolved
         {
             self.turn_executor_snapshot()
-                .start(&params.thread_id, &turn_id)
+                .resume(&params.thread_id, &turn_id)
                 .map_err(core_error)?;
         }
         self.notify_thread_updates(&params.thread_id, before.sequence)?;

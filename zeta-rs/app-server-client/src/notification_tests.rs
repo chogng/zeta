@@ -1,4 +1,6 @@
 use super::{ServerNotification, decode};
+use zeta_app_server_protocol::protocol::config::ConfigChanged;
+use zeta_app_server_protocol::protocol::fs::FsChanged;
 use zeta_app_server_protocol::protocol::git::{GitChangeStatusDto, GitHeadDto};
 
 #[test]
@@ -48,5 +50,47 @@ fn decodes_git_status_changed_notification() {
     assert_eq!(
         changed.status.changes[0].worktree_status,
         GitChangeStatusDto::Modified
+    );
+}
+
+#[test]
+fn decodes_file_system_changed_notification() {
+    let notification = decode(
+        r#"{
+            "jsonrpc": "2.0",
+            "method": "fs/changed",
+            "params": {
+                "type": "pathsChanged",
+                "paths": ["src/lib.rs", "README.md"]
+            }
+        }"#,
+    )
+    .expect("filesystem notification decodes");
+
+    assert_eq!(
+        notification,
+        ServerNotification::FsChanged(FsChanged::PathsChanged {
+            paths: vec!["src/lib.rs".into(), "README.md".into()],
+        })
+    );
+}
+
+#[test]
+fn decodes_config_changed_notification() {
+    let notification = decode(
+        r#"{
+            "jsonrpc": "2.0",
+            "method": "config/changed",
+            "params": {"revision": 3, "generation": 2}
+        }"#,
+    )
+    .expect("config notification decodes");
+
+    assert_eq!(
+        notification,
+        ServerNotification::ConfigChanged(ConfigChanged {
+            revision: 3,
+            generation: 2,
+        })
     );
 }

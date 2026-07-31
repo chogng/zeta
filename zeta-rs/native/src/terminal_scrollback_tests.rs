@@ -1,3 +1,5 @@
+use std::time::{Duration, Instant};
+
 use super::{TerminalScroll, multi_diff_scroll_pixels};
 use zeta_winit::{MouseScrollDelta, PhysicalPosition};
 
@@ -57,4 +59,19 @@ fn retained_view_stays_anchored_when_output_grows() {
     scroll.reset();
     scroll.preserve_view_after_growth(2, 22);
     assert_eq!(scroll.offset(), 0);
+}
+
+#[test]
+fn terminal_scrollbar_reveals_after_activity_and_can_be_cancelled() {
+    let mut scroll = TerminalScroll::default();
+    let now = Instant::now();
+
+    scroll.scrollbar_activity(now);
+    assert!(scroll.scrollbar_deadline().is_some());
+    assert!(scroll.advance_scrollbar(now + Duration::from_millis(150)));
+    assert_eq!(scroll.scrollbar_presentation().opacity(), 1.0);
+
+    scroll.cancel_scrollbar();
+    assert_eq!(scroll.scrollbar_presentation().opacity(), 0.0);
+    assert_eq!(scroll.scrollbar_deadline(), None);
 }

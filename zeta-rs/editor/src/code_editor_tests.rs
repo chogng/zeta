@@ -1,10 +1,10 @@
-use super::text_metrics::display_columns_until;
+use super::text_metrics::{display_columns_until, visit_display_cell_runs};
 use super::{
     CodeEditor, CodeEditorCommand, CodeEditorDocument, CodeEditorHeader, CodeEditorInlineHighlight,
-    CodeEditorRow, CodeEditorRowSource, CodeEditorSelectionMode, CodeEditorStyle,
-    CodeEditorSyntaxHighlighter, CodeEditorSyntaxToken, CodeEditorViewport,
+    CodeEditorPresentation, CodeEditorRow, CodeEditorRowSource, CodeEditorSelectionMode,
+    CodeEditorStyle, CodeEditorSyntaxHighlighter, CodeEditorSyntaxToken, CodeEditorViewport,
 };
-use zeta_ui::{Color, Component, Point, Rect, UiScene};
+use zeta_ui::{CaretVisibility, Color, Component, Point, Rect, TextBlockWrap, UiScene};
 use zeta_ui::{TextInputCompositionCursor, TextInputCompositionEvent};
 
 #[test]
@@ -53,6 +53,188 @@ fn code_editor_paints_only_visible_numbered_rows_and_optional_header() {
 }
 
 #[test]
+fn empty_rows_do_not_emit_zero_width_text_blocks() {
+    let document = CodeEditorDocument::from_text("one\n\nthree");
+    let editor = CodeEditor::new(
+        Rect::from_xywh(0.0, 0.0, 320.0, 60.0),
+        &document,
+        CodeEditorViewport::default(),
+        CodeEditorHeader::Hidden,
+        CodeEditorStyle::light(),
+    );
+    let mut scene = UiScene::new(Color::WHITE);
+
+    editor.paint(&mut scene);
+
+    assert!(scene.text_blocks().iter().all(|block| {
+        !block.text().is_empty() && block.bounds().width > 0.0 && block.bounds().height > 0.0
+    }));
+    assert_eq!(
+        scene
+            .text_blocks()
+            .iter()
+            .filter(|block| matches!(block.text(), "one" | "three"))
+            .count(),
+        2
+    );
+}
+
+#[test]
+fn compact_presentation_uses_the_full_width_without_line_number_chrome() {
+    let document = CodeEditorDocument::from_text("hello");
+    let editor = CodeEditor::new(
+        Rect::from_xywh(0.0, 0.0, 320.0, 40.0),
+        &document,
+        CodeEditorViewport::default(),
+        CodeEditorHeader::Hidden,
+        CodeEditorStyle::light(),
+    )
+    .with_presentation(CodeEditorPresentation::Compact)
+    .with_caret_visibility(CaretVisibility::Hidden);
+    let mut scene = UiScene::new(Color::WHITE);
+
+    editor.paint(&mut scene);
+
+    let hello = scene
+        .text_blocks()
+        .iter()
+        .find(|block| block.text() == "hello")
+        .unwrap();
+    assert_eq!(hello.origin().x, 8.0);
+    assert!(scene.text_blocks().iter().all(|block| block.text() != "1"));
+    assert!(editor.caret_bounds().is_some());
+}
+
+#[test]
+fn code_rows_keep_chinese_text_and_spaces_on_one_unwrapped_source_line() {
+    let text = "中文 空格";
+    let mut document = CodeEditorDocument::from_text(text);
+    document.apply(CodeEditorCommand::SelectAll);
+    document.apply(CodeEditorCommand::MoveRight(CodeEditorSelectionMode::Move));
+    let editor = CodeEditor::new(
+        Rect::from_xywh(0.0, 0.0, 220.0, 40.0),
+        &document,
+        CodeEditorViewport::default(),
+        CodeEditorHeader::Hidden,
+        CodeEditorStyle::light(),
+    )
+    .with_presentation(CodeEditorPresentation::Compact);
+    let caret = editor.caret_bounds().unwrap();
+    let mut scene = UiScene::new(Color::WHITE);
+
+    editor.paint(&mut scene);
+
+    let glyphs = scene
+        .text_blocks()
+        .iter()
+        .map(|block| {
+            (
+                block.text(),
+                block.origin().x,
+                block.bounds().width,
+                block.wrap(),
+            )
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        glyphs,
+        vec![
+            ("中", 8.0, 16.0, TextBlockWrap::None),
+            ("文", 24.0, 16.0, TextBlockWrap::None),
+            ("空", 48.0, 16.0, TextBlockWrap::None),
+            ("格", 64.0, 16.0, TextBlockWrap::None),
+        ]
+    );
+    assert_eq!(caret.origin.x, 80.0);
+    assert_eq!(document.text(), text);
+}
+
+#[test]
+fn every_unicode_scalar_preserves_spaces_in_the_display_cell_projection() {
+    for codepoint in 0..=char::MAX as u32 {
+        let Some(character) = char::from_u32(codepoint) else {
+            continue;
+        };
+        let text = super::expand_tabs(&format!("界 {character} 界"));
+        let expected_columns = super::display_columns(&text);
+        let mut previous_right = 0;
+        let projected_columns = visit_display_cell_runs(&text, |run| {
+            assert!(
+                run.column >= previous_right,
+                "overlapping display-cell runs for U+{codepoint:04X}"
+            );
+            assert_eq!(
+                run.columns,
+                super::display_columns(run.text),
+                "run width mismatch for U+{codepoint:04X}"
+            );
+            assert!(
+                run.column + run.columns <= expected_columns,
+                "run exceeds the caret column for U+{codepoint:04X}"
+            );
+            previous_right = run.column + run.columns;
+        });
+        assert_eq!(
+            projected_columns, expected_columns,
+            "text and caret columns diverged for U+{codepoint:04X}"
+        );
+    }
+}
+
+#[test]
+fn multi_scalar_graphemes_keep_text_spaces_and_caret_in_one_projection() {
+    let samples = [
+        "e\u{301}",
+        "क्",
+        "क्ष",
+        "กำ",
+        "한",
+        "👩‍💻",
+        "👨‍👩‍👧‍👦",
+        "👍🏽",
+        "🇨🇳",
+        "1️⃣",
+        "♥︎",
+        "♥️",
+        "\u{200d}",
+        "\u{2067}עברית\u{2069}",
+        "\u{3000}",
+    ];
+
+    for sample in samples {
+        let text = format!("界 {sample} 界");
+        let mut document = CodeEditorDocument::from_text(&text);
+        document.apply(CodeEditorCommand::SelectAll);
+        document.apply(CodeEditorCommand::MoveRight(CodeEditorSelectionMode::Move));
+        let editor = CodeEditor::new(
+            Rect::from_xywh(0.0, 0.0, 480.0, 40.0),
+            &document,
+            CodeEditorViewport::default(),
+            CodeEditorHeader::Hidden,
+            CodeEditorStyle::light(),
+        )
+        .with_presentation(CodeEditorPresentation::Compact);
+        let mut scene = UiScene::new(Color::WHITE);
+
+        editor.paint(&mut scene);
+
+        assert_eq!(document.text(), text, "document changed for {sample:?}");
+        assert_eq!(
+            editor.caret_bounds().unwrap().origin.x,
+            8.0 + super::display_columns(&text) as f32 * 8.0,
+            "caret drifted for {sample:?}"
+        );
+        assert!(
+            scene
+                .text_blocks()
+                .iter()
+                .all(|block| block.wrap() == TextBlockWrap::None),
+            "a text run wrapped for {sample:?}"
+        );
+    }
+}
+
+#[test]
 fn viewport_clamps_vertical_scroll_and_retains_horizontal_column() {
     let mut viewport = CodeEditorViewport::default();
 
@@ -65,6 +247,16 @@ fn viewport_clamps_vertical_scroll_and_retains_horizontal_column() {
     assert_eq!(viewport.first_visible_row(), 5);
     viewport.clamp(4, 3);
     assert_eq!(viewport.first_visible_row(), 1);
+}
+
+#[test]
+fn viewport_reveals_rows_above_and_below_the_retained_window() {
+    let mut viewport = CodeEditorViewport::new(3);
+
+    viewport.reveal_row(8, 12, 4);
+    assert_eq!(viewport.first_visible_row(), 5);
+    viewport.reveal_row(2, 12, 4);
+    assert_eq!(viewport.first_visible_row(), 2);
 }
 
 #[test]

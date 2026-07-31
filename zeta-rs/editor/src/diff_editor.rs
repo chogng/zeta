@@ -1,5 +1,6 @@
-//! Side-by-side diff projection composed from shared CodeEditor viewports.
+//! Side-by-side and unified diff projections composed from shared CodeEditor viewports.
 
+use std::collections::BTreeSet;
 use std::ops::Range;
 
 use zeta_diff::{DiffDocument, DiffRowKind};
@@ -7,6 +8,7 @@ use zeta_ui::{Component, PaintRect, Point, Rect, UiScene};
 
 use self::layout::{DiffEditorLayout, build_layout};
 pub use self::style::DiffEditorStyle;
+use self::unified::UnifiedDiffRows;
 use crate::code_editor::{
     CodeEditor, CodeEditorHeader, CodeEditorInlineHighlight, CodeEditorRow, CodeEditorRowSource,
     CodeEditorViewport,
@@ -16,6 +18,7 @@ const DIVIDER_WIDTH: f32 = 1.0;
 
 mod layout;
 mod style;
+mod unified;
 
 /// The source side represented by a DiffEditor pane.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -24,20 +27,31 @@ pub enum DiffEditorSide {
     Modified,
 }
 
-/// Persistent viewport state retained by the editor host while this document is inactive.
+/// Named layout variants for a read-only diff surface.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum DiffEditorPresentation {
+    /// Two synchronized CodeEditor panes for surfaces with enough horizontal space.
+    #[default]
+    SideBySide,
+    /// One CodeEditor that stacks removed and added rows for narrow embedded surfaces.
+    Unified,
+}
+
+/// Persistent viewport state retained by the editor host while this document is inactive.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct DiffEditorState {
     first_visible_row: usize,
     original_horizontal_column: usize,
     modified_horizontal_column: usize,
+    expanded_unchanged_regions: BTreeSet<usize>,
 }
 
 impl DiffEditorState {
-    pub const fn first_visible_row(self) -> usize {
+    pub const fn first_visible_row(&self) -> usize {
         self.first_visible_row
     }
 
-    pub const fn horizontal_column(self, side: DiffEditorSide) -> usize {
+    pub const fn horizontal_column(&self, side: DiffEditorSide) -> usize {
         match side {
             DiffEditorSide::Original => self.original_horizontal_column,
             DiffEditorSide::Modified => self.modified_horizontal_column,
@@ -63,7 +77,28 @@ impl DiffEditorState {
         self.first_visible_row = viewport.first_visible_row();
     }
 
-    fn viewport(self, side: DiffEditorSide) -> CodeEditorViewport {
+    /// Expands one stable unchanged-region ordinal from the current DiffDocument.
+    pub fn expand_unchanged_region(&mut self, region_index: usize) {
+        self.expanded_unchanged_regions.insert(region_index);
+    }
+
+    /// Collapses one stable unchanged-region ordinal from the current DiffDocument.
+    pub fn collapse_unchanged_region(&mut self, region_index: usize) {
+        self.expanded_unchanged_regions.remove(&region_index);
+    }
+
+    /// Toggles one stable unchanged-region ordinal from the current DiffDocument.
+    pub fn toggle_unchanged_region(&mut self, region_index: usize) {
+        if !self.expanded_unchanged_regions.remove(&region_index) {
+            self.expanded_unchanged_regions.insert(region_index);
+        }
+    }
+
+    pub fn is_unchanged_region_expanded(&self, region_index: usize) -> bool {
+        self.expanded_unchanged_regions.contains(&region_index)
+    }
+
+    fn viewport(&self, side: DiffEditorSide) -> CodeEditorViewport {
         CodeEditorViewport::new(self.first_visible_row)
             .with_horizontal_column(self.horizontal_column(side))
     }
@@ -117,48 +152,57 @@ impl CodeEditorRowSource for DiffSideRows<'_> {
 
     fn row(&self, index: usize) -> Option<CodeEditorRow<'_>> {
         let row = self.document.rows().get(index)?;
-        let line = match self.side {
-            DiffEditorSide::Original => row.old(),
-            DiffEditorSide::Modified => row.new_line(),
-        };
-        let background = self
-            .style
-            .line_background(row.kind(), self.side, line.is_some());
-        let Some(line) = line else {
-            return Some(CodeEditorRow::placeholder().with_background(background));
-        };
-        let mut code_row =
-            CodeEditorRow::new(line.number(), line.text()).with_background(background);
-        if let Some(marker) = change_marker(row.kind(), self.side) {
-            code_row = code_row.with_marker(marker, self.style.marker_color(self.side));
-        }
-        let inline_color = self.style.inline_color(self.side);
-        let highlights = row
-            .inline_changes()
-            .iter()
-            .filter_map(|change| {
-                let range = match self.side {
-                    DiffEditorSide::Original => change.old_range(),
-                    DiffEditorSide::Modified => change.new_range(),
-                };
-                (!range.is_empty()).then(|| CodeEditorInlineHighlight::new(range, inline_color))
-            })
-            .collect();
-        Some(code_row.with_inline_highlights(highlights))
+        Some(project_row(row, self.side, self.style, true))
     }
 }
 
-/// Read-only, side-by-side composition of two shared [`CodeEditor`] viewports.
+/// Whether an unchanged-region control currently reveals its source lines.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum DiffEditorFoldState {
+    Collapsed,
+    Expanded,
+}
+
+/// One visible unchanged-region control and its hit-test geometry.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct DiffEditorFoldControl {
+    region_index: usize,
+    line_count: usize,
+    bounds: Rect,
+    state: DiffEditorFoldState,
+}
+
+impl DiffEditorFoldControl {
+    pub const fn region_index(self) -> usize {
+        self.region_index
+    }
+
+    pub const fn line_count(self) -> usize {
+        self.line_count
+    }
+
+    pub const fn bounds(self) -> Rect {
+        self.bounds
+    }
+
+    pub const fn state(self) -> DiffEditorFoldState {
+        self.state
+    }
+}
+
+/// Read-only diff composition built from shared [`CodeEditor`] viewports.
 ///
 /// The host owns file identity, diff computation, active-tab selection, input routing, and the
-/// retained [`DiffEditorState`]. DiffEditor owns only row-pair projection, synchronized vertical
-/// position, side-specific decorations, and the divider between the two CodeEditor panes.
+/// retained [`DiffEditorState`]. DiffEditor owns row projection, synchronized vertical position,
+/// side-specific decorations, and the selected [`DiffEditorPresentation`].
 pub struct DiffEditor<'a> {
     bounds: Rect,
+    paint_viewport: Rect,
     document: &'a DiffDocument,
     state: DiffEditorState,
     labels: DiffEditorLabels<'a>,
     style: DiffEditorStyle,
+    presentation: DiffEditorPresentation,
 }
 
 impl<'a> DiffEditor<'a> {
@@ -171,36 +215,119 @@ impl<'a> DiffEditor<'a> {
     ) -> Self {
         Self {
             bounds,
+            paint_viewport: bounds,
             document,
             state,
             labels,
             style,
+            presentation: DiffEditorPresentation::SideBySide,
         }
+    }
+
+    /// Selects a named diff geometry without changing the document or retained state.
+    pub const fn with_presentation(mut self, presentation: DiffEditorPresentation) -> Self {
+        self.presentation = presentation;
+        self
     }
 
     pub const fn bounds(&self) -> Rect {
         self.bounds
     }
 
+    /// Limits both code panes to the visible host viewport without changing document geometry.
+    pub const fn within_viewport(mut self, viewport: Rect) -> Self {
+        self.paint_viewport = viewport;
+        self
+    }
+
     pub fn visible_row_capacity(&self) -> usize {
-        let rows = self.rows(DiffEditorSide::Original);
-        self.code_editor(DiffEditorSide::Original, &rows)
-            .visible_row_capacity()
+        match self.presentation {
+            DiffEditorPresentation::SideBySide => {
+                let rows = self.rows(DiffEditorSide::Original);
+                self.code_editor(DiffEditorSide::Original, &rows)
+                    .visible_row_capacity()
+            }
+            DiffEditorPresentation::Unified => {
+                let rows = self.unified_rows();
+                self.unified_code_editor(&rows).visible_row_capacity()
+            }
+        }
     }
 
     pub fn content_height(&self) -> f32 {
-        let rows = self.rows(DiffEditorSide::Original);
-        self.code_editor(DiffEditorSide::Original, &rows)
-            .content_height()
+        match self.presentation {
+            DiffEditorPresentation::SideBySide => {
+                let rows = self.rows(DiffEditorSide::Original);
+                self.code_editor(DiffEditorSide::Original, &rows)
+                    .content_height()
+            }
+            DiffEditorPresentation::Unified => {
+                let rows = self.unified_rows();
+                self.unified_code_editor(&rows).content_height()
+            }
+        }
     }
 
     pub fn visible_row_range(&self) -> Range<usize> {
-        let rows = self.rows(DiffEditorSide::Original);
-        self.code_editor(DiffEditorSide::Original, &rows)
-            .visible_row_range()
+        match self.presentation {
+            DiffEditorPresentation::SideBySide => {
+                let rows = self.rows(DiffEditorSide::Original);
+                self.code_editor(DiffEditorSide::Original, &rows)
+                    .visible_row_range()
+            }
+            DiffEditorPresentation::Unified => {
+                let rows = self.unified_rows();
+                self.unified_code_editor(&rows).visible_row_range()
+            }
+        }
+    }
+
+    /// Returns visible fold controls for host-owned input and accessibility routing.
+    pub fn fold_controls(&self) -> Vec<DiffEditorFoldControl> {
+        if self.presentation != DiffEditorPresentation::Unified {
+            return Vec::new();
+        }
+        let rows = self.unified_rows();
+        let editor = self.unified_code_editor(&rows);
+        let visible = editor.visible_row_range();
+        rows.fold_rows()
+            .filter_map(|(visual_row, region, expanded)| {
+                if !visible.contains(&visual_row) {
+                    return None;
+                }
+                let bounds = Rect::from_xywh(
+                    self.bounds.origin.x,
+                    self.bounds.origin.y
+                        + visual_row.saturating_sub(visible.start) as f32
+                            * CodeEditor::row_height(),
+                    self.bounds.size.width,
+                    CodeEditor::row_height(),
+                )
+                .intersection(self.paint_viewport);
+                (!bounds.is_empty()).then_some(DiffEditorFoldControl {
+                    region_index: region.index,
+                    line_count: region.source_rows.len(),
+                    bounds,
+                    state: if expanded {
+                        DiffEditorFoldState::Expanded
+                    } else {
+                        DiffEditorFoldState::Collapsed
+                    },
+                })
+            })
+            .collect()
     }
 
     pub fn location_at(&self, point: Point) -> Option<DiffEditorLocation> {
+        if self.presentation == DiffEditorPresentation::Unified {
+            let rows = self.unified_rows();
+            let location = self.unified_code_editor(&rows).location_at(point)?;
+            return Some(DiffEditorLocation {
+                side: rows.side_at(location.row_index)?,
+                row_index: location.row_index,
+                line_number: location.line_number,
+            });
+        }
         let layout = self.layout();
         let side = if layout.original.contains(point) {
             DiffEditorSide::Original
@@ -230,6 +357,10 @@ impl<'a> DiffEditor<'a> {
         }
     }
 
+    fn unified_rows(&self) -> UnifiedDiffRows<'_> {
+        UnifiedDiffRows::new(self.document, &self.state, &self.style)
+    }
+
     fn code_editor<'rows>(
         &'rows self,
         side: DiffEditorSide,
@@ -247,23 +378,85 @@ impl<'a> DiffEditor<'a> {
             CodeEditorHeader::Label(self.labels.for_side(side)),
             self.style.code_editor().clone(),
         )
+        .within_viewport(self.paint_viewport)
+    }
+
+    fn unified_code_editor<'rows>(
+        &'rows self,
+        rows: &'rows UnifiedDiffRows<'_>,
+    ) -> CodeEditor<'rows> {
+        CodeEditor::new(
+            self.bounds,
+            rows,
+            self.state.viewport(DiffEditorSide::Modified),
+            CodeEditorHeader::Hidden,
+            self.style.code_editor().clone(),
+        )
+        .within_viewport(self.paint_viewport)
     }
 }
 
 impl Component for DiffEditor<'_> {
     fn paint(&self, scene: &mut UiScene) {
-        if self.bounds.is_empty() {
+        let paint_bounds = self.bounds.intersection(self.paint_viewport);
+        if paint_bounds.is_empty() {
             return;
         }
-        let layout = self.layout();
-        let original_rows = self.rows(DiffEditorSide::Original);
-        let modified_rows = self.rows(DiffEditorSide::Modified);
-        scene.with_clip(self.bounds, |scene| {
-            scene.draw_component(&self.code_editor(DiffEditorSide::Original, &original_rows));
-            scene.draw_component(&self.code_editor(DiffEditorSide::Modified, &modified_rows));
-            scene.draw_rect(PaintRect::new(layout.divider, self.style.divider()));
-        });
+        match self.presentation {
+            DiffEditorPresentation::SideBySide => {
+                let layout = self.layout();
+                let original_rows = self.rows(DiffEditorSide::Original);
+                let modified_rows = self.rows(DiffEditorSide::Modified);
+                scene.with_clip(paint_bounds, |scene| {
+                    scene.draw_component(
+                        &self.code_editor(DiffEditorSide::Original, &original_rows),
+                    );
+                    scene.draw_component(
+                        &self.code_editor(DiffEditorSide::Modified, &modified_rows),
+                    );
+                    scene.draw_rect(PaintRect::new(layout.divider, self.style.divider()));
+                });
+            }
+            DiffEditorPresentation::Unified => {
+                let rows = self.unified_rows();
+                scene.draw_component(&self.unified_code_editor(&rows));
+            }
+        }
     }
+}
+
+pub(super) fn project_row<'a>(
+    row: &'a zeta_diff::DiffRow,
+    side: DiffEditorSide,
+    style: &DiffEditorStyle,
+    allow_placeholder: bool,
+) -> CodeEditorRow<'a> {
+    let line = match side {
+        DiffEditorSide::Original => row.old(),
+        DiffEditorSide::Modified => row.new_line(),
+    };
+    let background = style.line_background(row.kind(), side, line.is_some());
+    let Some(line) = line else {
+        debug_assert!(allow_placeholder);
+        return CodeEditorRow::placeholder().with_background(background);
+    };
+    let mut code_row = CodeEditorRow::new(line.number(), line.text()).with_background(background);
+    if let Some(marker) = change_marker(row.kind(), side) {
+        code_row = code_row.with_marker(marker, style.marker_color(side));
+    }
+    let inline_color = style.inline_color(side);
+    let highlights = row
+        .inline_changes()
+        .iter()
+        .filter_map(|change| {
+            let range = match side {
+                DiffEditorSide::Original => change.old_range(),
+                DiffEditorSide::Modified => change.new_range(),
+            };
+            (!range.is_empty()).then(|| CodeEditorInlineHighlight::new(range, inline_color))
+        })
+        .collect();
+    code_row.with_inline_highlights(highlights)
 }
 
 fn change_marker(kind: DiffRowKind, side: DiffEditorSide) -> Option<&'static str> {

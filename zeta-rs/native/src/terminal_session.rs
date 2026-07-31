@@ -8,6 +8,7 @@ use zeta_utils_pty::{ProcessHandle, SpawnedProcess, TerminalSize, spawn_pty_proc
 use zeta_winit::EventLoopProxy;
 
 use crate::PRODUCT_DISPLAY_NAME;
+use crate::native_event::NativeEvent;
 
 const SHELL_BOOTSTRAP_MARKER: &[u8] = b"\x1b]9;zeterm-ready\x07";
 
@@ -40,10 +41,7 @@ impl Drop for TerminalSession {
 }
 
 impl TerminalSession {
-    pub(crate) fn spawn(
-        size: GridSize,
-        event_proxy: EventLoopProxy<TerminalSessionEvent>,
-    ) -> Result<Self> {
+    pub(crate) fn spawn(size: GridSize, event_proxy: EventLoopProxy<NativeEvent>) -> Result<Self> {
         let runtime = tokio::runtime::Builder::new_multi_thread()
             .worker_threads(2)
             .enable_all()
@@ -109,14 +107,6 @@ impl TerminalSession {
             .context("terminal input queue is unavailable")
     }
 
-    pub(crate) fn submit_command(&mut self, command: &str) -> Result<()> {
-        let mut input = command.as_bytes().to_vec();
-        input.push(b'\r');
-        self.send_input(input)?;
-        self.core.start_command(command);
-        Ok(())
-    }
-
     pub(crate) fn resize(&mut self, size: GridSize) -> Result<()> {
         if self.size == size {
             return Ok(());
@@ -135,7 +125,7 @@ impl TerminalSession {
 fn spawn_event_forwarders(
     runtime: &Runtime,
     spawned: SpawnedProcess,
-    event_proxy: EventLoopProxy<TerminalSessionEvent>,
+    event_proxy: EventLoopProxy<NativeEvent>,
     suppress_until: Option<&'static [u8]>,
 ) -> Arc<ProcessHandle> {
     let SpawnedProcess {
@@ -156,7 +146,10 @@ fn spawn_event_forwarders(
                         let Some(output) = output else {
                             continue;
                         };
-                        if event_proxy.send_event(TerminalSessionEvent::Output(output)).is_err() {
+                        if event_proxy
+                            .send_event(TerminalSessionEvent::Output(output).into())
+                            .is_err()
+                        {
                             return;
                         }
                     }
@@ -170,7 +163,10 @@ fn spawn_event_forwarders(
                         else {
                             continue;
                         };
-                        if event_proxy.send_event(TerminalSessionEvent::Output(output)).is_err() {
+                        if event_proxy
+                            .send_event(TerminalSessionEvent::Output(output).into())
+                            .is_err()
+                        {
                             return;
                         }
                     }
@@ -179,7 +175,7 @@ fn spawn_event_forwarders(
             }
         };
         event_process.release_pty_handles_after_exit();
-        let _ = event_proxy.send_event(TerminalSessionEvent::Exited(exit_code));
+        let _ = event_proxy.send_event(TerminalSessionEvent::Exited(exit_code).into());
     });
     process
 }

@@ -125,6 +125,16 @@ impl TextSpan {
     }
 }
 
+/// Horizontal overflow behavior for one shaped [`TextBlock`].
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum TextBlockWrap {
+    /// Wrap at word or glyph boundaries when text exceeds the block width.
+    #[default]
+    WordOrGlyph,
+    /// Keep every source line unwrapped and rely on the scene clip for overflow.
+    None,
+}
+
 /// A shaped-on-demand block of text placed in logical UI coordinates.
 #[derive(Clone, Debug, PartialEq)]
 pub struct TextBlock {
@@ -133,6 +143,7 @@ pub struct TextBlock {
     origin: Point,
     bounds: Size,
     style: TextStyle,
+    wrap: TextBlockWrap,
     clip_bounds: Option<Rect>,
 }
 
@@ -144,6 +155,7 @@ impl TextBlock {
             origin,
             bounds,
             style,
+            wrap: TextBlockWrap::WordOrGlyph,
             clip_bounds: None,
         }
     }
@@ -166,8 +178,14 @@ impl TextBlock {
             origin,
             bounds,
             style,
+            wrap: TextBlockWrap::WordOrGlyph,
             clip_bounds: None,
         }
+    }
+
+    pub const fn with_wrap(mut self, wrap: TextBlockWrap) -> Self {
+        self.wrap = wrap;
+        self
     }
 
     pub fn text(&self) -> &str {
@@ -188,6 +206,10 @@ impl TextBlock {
 
     pub fn style(&self) -> &TextStyle {
         &self.style
+    }
+
+    pub const fn wrap(&self) -> TextBlockWrap {
+        self.wrap
     }
 
     pub(crate) const fn clip_bounds(&self) -> Option<Rect> {

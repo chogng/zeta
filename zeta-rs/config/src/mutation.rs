@@ -1,0 +1,142 @@
+use crate::{ConfigError, PreferencesUpdate, UserConfigCommand, UserConfigDocument};
+use zeta_protocol::Patch;
+
+pub(crate) fn apply_command(
+    document: &mut UserConfigDocument,
+    command: &UserConfigCommand,
+) -> Result<(), ConfigError> {
+    match command {
+        UserConfigCommand::UpdatePreferences(update) => apply_preferences(document, update),
+        UserConfigCommand::ConfigureProvider { provider, config } => {
+            if &config.provider != provider {
+                return Err(ConfigError(format!(
+                    "provider command key '{}' does not match configuration provider '{}'",
+                    provider, config.provider
+                )));
+            }
+            document.providers.insert(provider.clone(), config.clone());
+        }
+        UserConfigCommand::RemoveProvider { provider } => {
+            if document
+                .agent
+                .preferred_model
+                .as_ref()
+                .is_some_and(|model| model.provider == *provider)
+            {
+                return Err(ConfigError(format!(
+                    "cannot remove provider '{}' while it is the preferred model provider",
+                    provider
+                )));
+            }
+            if document
+                .agent
+                .approval_review_model
+                .explicit_model()
+                .is_some_and(|model| model.provider == *provider)
+            {
+                return Err(ConfigError(format!(
+                    "cannot remove provider '{}' while it is the approval review model provider",
+                    provider
+                )));
+            }
+            document.providers.remove(provider);
+        }
+        UserConfigCommand::UpsertMcpServer { server } => {
+            document
+                .mcp
+                .servers
+                .insert(server.id.clone(), server.clone());
+        }
+        UserConfigCommand::RemoveMcpServer { server_id } => {
+            document.mcp.servers.remove(server_id);
+        }
+        UserConfigCommand::SetMcpServerEnablement {
+            server_id,
+            enablement,
+        } => {
+            let server = document.mcp.servers.get_mut(server_id).ok_or_else(|| {
+                ConfigError(format!("MCP server '{}' is not configured", server_id))
+            })?;
+            server.enablement = *enablement;
+        }
+        UserConfigCommand::AddSkillSource { source } => {
+            document
+                .skills
+                .sources
+                .insert(source.id.clone(), source.clone());
+        }
+        UserConfigCommand::RemoveSkillSource { source_id } => {
+            document.skills.sources.remove(source_id);
+        }
+        UserConfigCommand::SetSkillSourceEnablement {
+            source_id,
+            enablement,
+        } => {
+            let source = document.skills.sources.get_mut(source_id).ok_or_else(|| {
+                ConfigError(format!("Skill source '{}' is not configured", source_id))
+            })?;
+            source.enablement = *enablement;
+        }
+        UserConfigCommand::SetSkillEnablement {
+            skill_id,
+            enablement,
+        } => {
+            document.skills.set_skill_enablement(skill_id, *enablement);
+        }
+        UserConfigCommand::UpsertPluginRequest { request } => {
+            document
+                .plugins
+                .requests
+                .insert(request.plugin_id.clone(), request.clone());
+        }
+        UserConfigCommand::RemovePluginRequest { plugin_id } => {
+            document.plugins.requests.remove(plugin_id);
+        }
+        UserConfigCommand::SetPluginRequestEnablement {
+            plugin_id,
+            enablement,
+        } => {
+            let request = document
+                .plugins
+                .requests
+                .get_mut(plugin_id)
+                .ok_or_else(|| ConfigError(format!("Plugin '{}' is not requested", plugin_id)))?;
+            request.enablement = *enablement;
+        }
+        UserConfigCommand::UpsertHook { hook } => {
+            document.hooks.hooks.insert(hook.id.clone(), hook.clone());
+        }
+        UserConfigCommand::RemoveHook { hook_id } => {
+            document.hooks.hooks.remove(hook_id);
+        }
+        UserConfigCommand::SetHookEnablement {
+            hook_id,
+            enablement,
+        } => {
+            let hook = document
+                .hooks
+                .hooks
+                .get_mut(hook_id)
+                .ok_or_else(|| ConfigError(format!("Hook '{}' is not configured", hook_id)))?;
+            hook.enablement = *enablement;
+        }
+    }
+    Ok(())
+}
+
+fn apply_preferences(document: &mut UserConfigDocument, update: &PreferencesUpdate) {
+    match &update.preferred_model {
+        Patch::Missing => {}
+        Patch::Null => document.agent.preferred_model = None,
+        Patch::Value(model) => document.agent.preferred_model = Some(model.clone()),
+    }
+    match &update.approval_review_model {
+        Patch::Missing => {}
+        Patch::Null => {
+            document.agent.approval_review_model = crate::ApprovalReviewModelSelection::Automatic;
+        }
+        Patch::Value(selection) => {
+            document.agent.approval_review_model = selection.clone();
+        }
+    }
+}

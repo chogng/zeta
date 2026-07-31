@@ -20,7 +20,7 @@ pub use winit::event::WindowEvent;
 pub use winit::event_loop::ActiveEventLoop;
 pub use winit::event_loop::ControlFlow;
 pub use winit::event_loop::EventLoopProxy;
-pub use winit::keyboard::{Key, ModifiersState, NamedKey};
+pub use winit::keyboard::{Key, ModifiersState, NamedKey, PhysicalKey};
 pub use winit::window::CursorIcon;
 pub use winit::window::Theme;
 pub use winit::window::WindowAttributes;

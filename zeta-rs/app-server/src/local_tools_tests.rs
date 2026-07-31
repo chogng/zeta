@@ -21,13 +21,13 @@ impl SandboxBackend for PassThroughBackend {
         policy: SandboxPolicy,
         _: &WorkspaceRoot,
     ) -> Result<PreparedCommand, SandboxError> {
-        assert_eq!(policy, read_only_sandbox());
+        assert!(policy == read_only_sandbox() || policy == shell_sandbox());
         Ok(PreparedCommand::unrestricted(command))
     }
 }
 
 #[test]
-fn local_registry_exposes_and_executes_only_sandboxed_ripgrep() {
+fn local_registry_exposes_shell_command_and_preserves_read_only_ripgrep() {
     let workspace = TestWorkspace::new();
     let service = LocalShellToolService::new(
         workspace.root(),
@@ -38,8 +38,8 @@ fn local_registry_exposes_and_executes_only_sandboxed_ripgrep() {
     let definition = &service.definitions()[0];
     assert_eq!(definition.name.as_str(), "shell-command");
     assert_eq!(
-        definition.parameters["properties"]["program"]["enum"],
-        json!(["rg"])
+        definition.parameters["properties"]["program"]["type"],
+        "string"
     );
 
     let call = tool_call(json!({
@@ -48,10 +48,7 @@ fn local_registry_exposes_and_executes_only_sandboxed_ripgrep() {
         "working_directory": "."
     }));
     let review = service.prepare(&call).unwrap();
-    let policy = LocalReadOnlyPolicy::new(
-        &workspace.root(),
-        &RipgrepExecutable::from_path(workspace.ripgrep()).unwrap(),
-    );
+    let policy = LocalShellPolicy;
     assert_eq!(
         policy
             .decide(&review, &CancellationSource::new().token())
@@ -72,7 +69,7 @@ fn local_registry_exposes_and_executes_only_sandboxed_ripgrep() {
 }
 
 #[test]
-fn local_registry_rejects_process_spawning_and_workspace_escape_arguments() {
+fn local_registry_accepts_shell_processes_but_rejects_ripgrep_workspace_escape_arguments() {
     let workspace = TestWorkspace::new();
     let service = LocalShellToolService::new(
         workspace.root(),
@@ -80,6 +77,19 @@ fn local_registry_rejects_process_spawning_and_workspace_escape_arguments() {
         PassThroughBackend,
     )
     .unwrap();
+
+    let shell = tool_call(json!({
+        "program": "/bin/sh",
+        "arguments": ["-lc", "printf hello"],
+        "working_directory": "."
+    }));
+    let review = service.prepare(&shell).unwrap();
+    assert_eq!(
+        LocalShellPolicy
+            .decide(&review, &CancellationSource::new().token())
+            .unwrap(),
+        ExecutionDecision::RunSandboxed(shell_sandbox())
+    );
 
     assert!(
         service

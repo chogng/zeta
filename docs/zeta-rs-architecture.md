@@ -46,13 +46,14 @@ zeta-rs/
 ├── syntax/               # bounded incremental tree-sitter analysis；不拥有文件、索引或 presentation
 ├── editor/               # Native CodeEditor/DiffEditor/MultiDiffEditor presentation；不拥有文件或产品宿主
 ├── markdown/             # bounded CommonMark/GFM parsing、layout 与 Native presentation
+├── lsp/                  # LSP stdio lifecycle、request pairing、document sync 与 server events
 ├── install-context/      # runtime install method, package layout and resource candidates
 ├── apply-patch/          # concrete validated write executor
 ├── session-store/        # Session persistence port + envelope
 ├── thread-store/         # Thread persistence port + envelope
 ├── core/                 # reducers, coordinators, execution policy and recovery
-├── storage/              # one physical event-stream engine + typed adapters
-├── rollout/              # local rollout repository + recovery composition
+├── storage/              # SQLite Session/Thread authority adapters
+├── rollout/              # local state repository + recovery composition（crate 名待清理）
 ├── rollout-trace/        # read-only export, diagnostics and evaluation artifact
 ├── app-server-protocol/  # external RPC wire contract + generators
 ├── app-server-transport/
@@ -111,6 +112,14 @@ TUI presentation。当前 API、接入义务和限制见
 block layout 和 Native presentation，并消费 `zeta-ui::ScrollState`；它依赖 `zeta-ui`，但不依赖
 `zeta-native`，也不拥有消息 identity、网络图片、链接激活、平台输入或持久化。当前 API、
 信任边界和限制见 [`markdown/README.md`](../zeta-rs/markdown/README.md)。
+
+`zeta-lsp` 当前拥有单语言服务器的 stdio/async transport、initialize gate、typed request
+pairing、deadline cancellation、文档同步版本、push diagnostics 与规范关闭；宿主路由层另外
+把一个 language ID 绑定到一个 initialized client，保存 editor revision / server incarnation /
+document version，并在显式 replacement 时重放当前全文。它不依赖 `zeta-editor` 或
+`zeta-native`，也不拥有 server discovery、安装、workspace 配置、crash detection、restart
+backoff 或 UI projection。跨层所有权与当前阶段见 [`lsp.md`](lsp.md)，当前 API 和修改路径见
+[`lsp/README.md`](../zeta-rs/lsp/README.md)。
 
 `zeta-ui::ScrollState`、`ScrollMetrics`、`ScrollView` 与 `ScrollbarController` 提供
 domain-agnostic logical-pixel offset、clamp、viewport clip、内容坐标、同源 scrollbar
@@ -173,20 +182,22 @@ typed command receipt 与 atomic batch validator。Core 依赖这些 port，不�
 实现细节分别见 [`session-store/README.md`](../zeta-rs/session-store/README.md) 与
 [`thread-store/README.md`](../zeta-rs/thread-store/README.md)。
 
-`zeta-storage` 只有一个物理 event-stream engine，统一负责：
+`zeta-storage` 当前提供 `SqliteSessionStore` 与 `SqliteThreadStore`。两者打开同一
+`state.sqlite3`，并统一负责：
 
-- typed JSONL batch；
-- format/kind discriminator；
-- checksum；
-- append + fsync；
-- 未终止 tail recovery。
+- `BEGIN IMMEDIATE` 下的 sequence compare-and-set；
+- batch/event identity 唯一性；
+- typed envelope JSON 与可查询 identity/sequence 列的原子提交；
+- foreign key、WAL、`synchronous=FULL` 和 bounded busy timeout；
+- component-scoped schema version gate。
 
-`SessionRolloutStore` 与 `ThreadRolloutStore` 是薄的领域 adapter，不是两套 rollout 引擎。
-它们分别选择 stream kind、path、ID 与 batch validator。
+SQLite 是 Session/Thread 的物理 authority，不是 JSONL 的 projection。旧 JSONL stream、
+tail-recovery 和 rollout adapter 已退出执行路径；开发期不保留双写或自动 import。
 
-`zeta-rollout` 组合上述 adapters 与 writer lease，负责从一个 state root 恢复可运行的
-SessionCoordinator；它先恢复 Thread，再恢复 Session 以便继续 create/fork saga。App Server 的本地
-composition root 只依赖该 repository，不重复这套恢复流程。
+`zeta-rollout` 中公开的 `LocalStateRepository` 组合 SQLite stores 与 writer lease，负责从一个
+profile root 恢复可运行的 SessionCoordinator；它先恢复 Thread，再恢复 Session 以便继续
+create/fork saga。crate 名仍是历史命名，不能据此重新引入 rollout 文件格式。App Server 的本地
+composition root 只依赖该 repository，不重复恢复流程。
 具体打开与恢复顺序见 [`rollout/README.md`](../zeta-rs/rollout/README.md)。
 
 `zeta-rollout-trace` 以两个 store port 为输入，生成只读、可序列化的 Session trace。它适合
@@ -196,10 +207,14 @@ crate 不提供默认文件写入；持久化或上传必须由调用方显式�
 实现与 privacy obligation 见
 [`rollout-trace/README.md`](../zeta-rs/rollout-trace/README.md)。
 
-当前开发期只读当前 schema。旧记录、implicit Session、kind/payload upcast 和 sidecar ledger
-不进入执行路径。
+当前开发期只读当前 Session/Thread SQLite schema。旧 JSONL、implicit Session、kind/payload
+upcast 和 sidecar ledger 不进入执行路径。旧 Config DB 正文只在 component v1→v2 时一次性迁出
+为 TOML，迁移后不再读取。
 
-SQLite 仅为可删除、可重建的查询 projection，不是 authority。
+Config transaction metadata 也在同一 profile 数据库中，通过独立 component migration 与表维护
+revision/generation/receipt contract；desired document 的唯一 authority 是 profile
+`config.toml`，SQLite 只保存 digest 与事务元数据。Workspace 的 `.zeta/config.toml` 是严格、
+只读的 scoped intent，不是用户级数据库的替代 writer。
 
 ## 6. Sequence 与并发
 

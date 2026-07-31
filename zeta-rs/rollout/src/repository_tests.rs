@@ -18,12 +18,13 @@ fn temporary_root() -> std::path::PathBuf {
 #[test]
 fn repository_recovers_threads_before_their_session_membership() {
     let root = temporary_root();
-    let repository = RolloutRepository::open(&root).unwrap();
+    let repository = LocalStateRepository::open(&root).unwrap();
     let runtime = repository.recover_coordinator().unwrap();
     let session = runtime
         .create_session(CreateSessionRequest {
             command_id: CommandId::new("create-session").expect("test ID is non-empty"),
             title: "Task".into(),
+            model: None,
         })
         .unwrap();
     let thread = runtime
@@ -35,7 +36,7 @@ fn repository_recovers_threads_before_their_session_membership() {
         })
         .unwrap();
 
-    let recovered = RolloutRepository::open(&root)
+    let recovered = LocalStateRepository::open(&root)
         .unwrap()
         .recover_coordinator()
         .unwrap();

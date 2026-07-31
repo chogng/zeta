@@ -1,11 +1,16 @@
 use std::time::Instant;
 
+use zeta_editor::{CodeEditorCommand, CodeEditorSelectionMode};
 use zeta_terminal::{KeyModifiers, ScreenBuffer, TerminalCore, TerminalKey};
 use zeta_ui::{TextInputCommand, TextInputSelectionMode};
 use zeta_winit::{ElementState, Key, KeyEvent, ModifiersState, NamedKey};
 
 use crate::NativeApp;
-use crate::shell_interaction::{COMPOSER, SESSION_SEARCH_INPUT};
+use crate::agent_composer::{ComposerMode, ComposerSubmission};
+use crate::keybindings::{
+    NativeKeybindingContext, NativeKeybindingFacts, NativeKeybindingResolution,
+};
+use crate::shell_interaction::{AGENT_FILE_SEARCH_INPUT, COMPOSER, SESSION_SEARCH_INPUT};
 use crate::terminal_selection::{read_clipboard_text, write_clipboard_text};
 use zeta_ui_dispatch::{FocusDirection, NavigationAxis};
 
@@ -14,69 +19,101 @@ impl NativeApp {
         if event.state != ElementState::Pressed {
             return;
         }
+        if self.keyboard_shortcuts.is_visible() {
+            if self.route_keyboard_shortcuts_keyboard(&event) {
+                return;
+            }
+            let _ = self.dispatch_primary_keyboard_input(&event);
+            return;
+        }
+        if self.route_git_branch_context_menu_keyboard(&event) {
+            return;
+        }
+        if self.route_workspace_path_picker_keyboard(&event) {
+            return;
+        }
         if self.route_session_context_menu_keyboard(&event) {
             return;
         }
-        if self.active_screen() == ScreenBuffer::Alternate
-            && !self.ui_dispatch.is_focused(SESSION_SEARCH_INPUT)
-        {
+        let direct_terminal = self.is_direct_terminal_input();
+        let context = NativeKeybindingContext::from_facts(NativeKeybindingFacts {
+            direct_terminal,
+            terminal_surface_visible: self.workspace_surface.is_terminal(),
+            session_sidebar_visible: self.session_sidebar.is_expanded(),
+            agent_sidebar_visible: self.agent_sidebar.is_expanded(),
+            file_search_visible: self.agent_sidebar_workspace.search_visible(),
+            composer_mode: match self.composer.mode() {
+                ComposerMode::Agent => "agent",
+                ComposerMode::Shell => "shell",
+            },
+        });
+        match self.keybindings.resolve(&event, self.modifiers, context) {
+            NativeKeybindingResolution::Command(command) => {
+                self.execute_native_command(command);
+                self.sync_input_focus();
+                self.rebuild_presentation();
+                self.request_redraw();
+                return;
+            }
+            NativeKeybindingResolution::Consumed => return,
+            NativeKeybindingResolution::NoMatch => {}
+        }
+        if direct_terminal {
             self.direct_terminal_keyboard_input(&event);
         } else if !self.dispatch_primary_keyboard_input(&event) {
             if self.ui_dispatch.is_focused(SESSION_SEARCH_INPUT) {
                 self.session_search_keyboard_input(&event);
+            } else if self.ui_dispatch.is_focused(AGENT_FILE_SEARCH_INPUT) {
+                self.file_search_keyboard_input(&event);
             } else {
                 self.composer_keyboard_input(&event);
             }
         }
     }
 
-    fn composer_keyboard_input(&mut self, event: &KeyEvent) {
-        if is_clipboard_shortcut(&event.logical_key, "c", self.modifiers, false) {
-            if !self.copy_composer_selection() {
-                self.copy_terminal_selection();
-            }
-            return;
-        }
-        if is_clipboard_shortcut(&event.logical_key, "v", self.modifiers, false) {
-            self.paste_into_composer();
-            return;
-        }
-        if event.logical_key == Key::Named(NamedKey::Enter) {
-            self.submit_composer_command();
-            return;
-        }
+    fn file_search_keyboard_input(&mut self, event: &KeyEvent) {
         if event.logical_key == Key::Named(NamedKey::Escape) {
-            self.terminal_composer.cancel_composition();
-            self.composer_changed();
+            if self
+                .agent_sidebar_workspace
+                .file_search_input()
+                .text()
+                .is_empty()
+            {
+                self.agent_sidebar_workspace.set_search_visible(false);
+            } else {
+                self.agent_sidebar_workspace.clear_file_search();
+            }
+            self.file_search_changed();
             return;
         }
         if let Some(command) = text_input_command(event, self.modifiers) {
-            self.terminal_composer.apply(command);
+            self.agent_sidebar_workspace.apply_file_search(command);
+            self.file_search_changed();
+        }
+    }
+
+    fn composer_keyboard_input(&mut self, event: &KeyEvent) {
+        if event.logical_key == Key::Named(NamedKey::Enter) {
+            if self.modifiers.shift_key() {
+                self.composer.apply(CodeEditorCommand::Newline);
+                self.composer_changed();
+            } else {
+                self.submit_composer();
+            }
+            return;
+        }
+        if event.logical_key == Key::Named(NamedKey::Escape) {
+            self.composer.cancel_composition();
+            self.composer_changed();
+            return;
+        }
+        if let Some(command) = code_editor_command(event, self.modifiers) {
+            self.composer.apply(command);
             self.composer_changed();
         }
     }
 
     fn session_search_keyboard_input(&mut self, event: &KeyEvent) {
-        if is_clipboard_shortcut(&event.logical_key, "c", self.modifiers, false) {
-            if let Some(text) = self.session_search.selected_text()
-                && let Err(error) = write_clipboard_text(text.to_owned())
-            {
-                eprintln!("could not copy session search text: {error}");
-            }
-            return;
-        }
-        if is_clipboard_shortcut(&event.logical_key, "v", self.modifiers, false) {
-            let text = match read_clipboard_text() {
-                Ok(text) => text,
-                Err(error) => {
-                    eprintln!("could not paste session search text: {error}");
-                    return;
-                }
-            };
-            self.session_search.apply(TextInputCommand::Insert(text));
-            self.session_search_changed();
-            return;
-        }
         if event.logical_key == Key::Named(NamedKey::Escape) {
             self.session_search.clear();
             self.session_search_changed();
@@ -102,7 +139,7 @@ impl NativeApp {
             Some(self.ui_dispatch.focus_in_order(frame, direction))
         } else if !matches!(
             self.ui_dispatch.focused(),
-            Some(COMPOSER | SESSION_SEARCH_INPUT)
+            Some(COMPOSER | SESSION_SEARCH_INPUT | AGENT_FILE_SEARCH_INPUT)
         ) {
             match &event.logical_key {
                 Key::Named(NamedKey::ArrowLeft) => Some(self.ui_dispatch.focus_within_group(
@@ -145,14 +182,6 @@ impl NativeApp {
     }
 
     fn direct_terminal_keyboard_input(&mut self, event: &KeyEvent) {
-        let copy_shortcut = is_clipboard_shortcut(&event.logical_key, "c", self.modifiers, true);
-        if copy_shortcut && self.copy_terminal_selection() {
-            return;
-        }
-        let paste_shortcut = is_clipboard_shortcut(&event.logical_key, "v", self.modifiers, true);
-        if paste_shortcut && self.paste_into_terminal() {
-            return;
-        }
         let Some(terminal) = self.terminal.as_ref() else {
             return;
         };
@@ -160,25 +189,37 @@ impl NativeApp {
         self.send_terminal_input(input, "could not send terminal input");
     }
 
-    fn submit_composer_command(&mut self) {
-        let Some(command) = self.terminal_composer.command().map(ToOwned::to_owned) else {
+    fn submit_composer(&mut self) {
+        let Some(submission) = self.composer.submission() else {
             return;
         };
-        let Some(terminal) = self.terminal.as_mut() else {
-            return;
-        };
-        if let Err(error) = terminal.submit_command(&command) {
-            eprintln!("could not submit terminal command: {error}");
-            return;
+        match submission {
+            ComposerSubmission::AgentMessage(text) => {
+                let Some(session) = self.agent_session.as_ref() else {
+                    return;
+                };
+                if let Err(error) = session.submit_agent_message(text) {
+                    eprintln!("could not submit Agent message: {error}");
+                    return;
+                }
+            }
+            ComposerSubmission::ShellCommand(command) => {
+                let Some(session) = self.agent_session.as_ref() else {
+                    return;
+                };
+                if let Err(error) = session.submit_shell_command(command) {
+                    eprintln!("could not submit Shell Turn: {error}");
+                    return;
+                }
+            }
         }
-        self.terminal_composer.clear_after_submit();
-        self.terminal_scroll.reset();
-        self.terminal_selection.clear();
+        self.composer.clear_after_submit();
+        self.thread_timeline_scroll.reset();
         self.composer_changed();
     }
 
-    fn copy_composer_selection(&mut self) -> bool {
-        let Some(text) = self.terminal_composer.input().selected_text() else {
+    pub(super) fn copy_composer_selection(&mut self) -> bool {
+        let Some(text) = self.composer.editor().selected_text() else {
             return false;
         };
         if let Err(error) = write_clipboard_text(text.to_string()) {
@@ -187,7 +228,7 @@ impl NativeApp {
         true
     }
 
-    fn paste_into_composer(&mut self) {
+    pub(super) fn paste_into_composer(&mut self) {
         let text = match read_clipboard_text() {
             Ok(text) => text,
             Err(error) => {
@@ -195,11 +236,11 @@ impl NativeApp {
                 return;
             }
         };
-        self.terminal_composer.apply(TextInputCommand::Insert(text));
+        self.composer.apply(CodeEditorCommand::Insert(text));
         self.composer_changed();
     }
 
-    fn paste_into_terminal(&mut self) -> bool {
+    pub(super) fn paste_into_terminal(&mut self) -> bool {
         let Some(terminal) = self.terminal.as_ref() else {
             return false;
         };
@@ -215,14 +256,21 @@ impl NativeApp {
         true
     }
 
-    fn composer_changed(&mut self) {
+    pub(super) fn composer_changed(&mut self) {
         self.caret_blink.activity(Instant::now());
         self.rebuild_presentation();
         self.update_ime_cursor_area();
         self.request_redraw();
     }
 
-    fn session_search_changed(&mut self) {
+    pub(super) fn session_search_changed(&mut self) {
+        self.caret_blink.activity(Instant::now());
+        self.rebuild_presentation();
+        self.update_ime_cursor_area();
+        self.request_redraw();
+    }
+
+    pub(super) fn file_search_changed(&mut self) {
         self.caret_blink.activity(Instant::now());
         self.rebuild_presentation();
         self.update_ime_cursor_area();
@@ -244,9 +292,76 @@ impl NativeApp {
         self.rebuild_presentation();
         self.request_redraw();
     }
+
+    pub(super) fn copy_keybinding_target(&mut self) {
+        if self.ui_dispatch.is_focused(SESSION_SEARCH_INPUT) {
+            if let Some(text) = self.session_search.selected_text()
+                && let Err(error) = write_clipboard_text(text.to_owned())
+            {
+                eprintln!("could not copy session search text: {error}");
+            }
+            return;
+        }
+        if self.ui_dispatch.is_focused(AGENT_FILE_SEARCH_INPUT) {
+            if let Some(text) = self.agent_sidebar_workspace.selected_file_search_text()
+                && let Err(error) = write_clipboard_text(text.to_owned())
+            {
+                eprintln!("could not copy file search text: {error}");
+            }
+            return;
+        }
+        if !self.is_direct_terminal_input() && self.copy_composer_selection() {
+            return;
+        }
+        self.copy_terminal_selection();
+    }
+
+    pub(super) fn paste_keybinding_target(&mut self) {
+        if self.ui_dispatch.is_focused(SESSION_SEARCH_INPUT) {
+            let Some(text) = clipboard_text("could not paste session search text") else {
+                return;
+            };
+            self.session_search.apply(TextInputCommand::Insert(text));
+            self.session_search_changed();
+            return;
+        }
+        if self.ui_dispatch.is_focused(AGENT_FILE_SEARCH_INPUT) {
+            let Some(text) = clipboard_text("could not paste file search text") else {
+                return;
+            };
+            self.agent_sidebar_workspace
+                .apply_file_search(TextInputCommand::Insert(text));
+            self.file_search_changed();
+            return;
+        }
+        if self.is_direct_terminal_input() {
+            self.paste_into_terminal();
+        } else {
+            self.paste_into_composer();
+        }
+    }
+
+    fn is_direct_terminal_input(&self) -> bool {
+        self.active_screen() == ScreenBuffer::Alternate
+            && !self.ui_dispatch.is_focused(SESSION_SEARCH_INPUT)
+            && !self.ui_dispatch.is_focused(AGENT_FILE_SEARCH_INPUT)
+    }
 }
 
-fn text_input_command(event: &KeyEvent, modifiers: ModifiersState) -> Option<TextInputCommand> {
+fn clipboard_text(error_context: &str) -> Option<String> {
+    match read_clipboard_text() {
+        Ok(text) => Some(text),
+        Err(error) => {
+            eprintln!("{error_context}: {error}");
+            None
+        }
+    }
+}
+
+pub(crate) fn text_input_command(
+    event: &KeyEvent,
+    modifiers: ModifiersState,
+) -> Option<TextInputCommand> {
     let selection_mode = if modifiers.shift_key() {
         TextInputSelectionMode::Extend
     } else {
@@ -267,6 +382,40 @@ fn text_input_command(event: &KeyEvent, modifiers: ModifiersState) -> Option<Tex
             .text
             .as_ref()
             .map(|text| TextInputCommand::Insert(text.to_string())),
+        _ => None,
+    }
+}
+
+fn code_editor_command(event: &KeyEvent, modifiers: ModifiersState) -> Option<CodeEditorCommand> {
+    let selection_mode = if modifiers.shift_key() {
+        CodeEditorSelectionMode::Extend
+    } else {
+        CodeEditorSelectionMode::Move
+    };
+    let shortcut = modifiers.control_key() || modifiers.super_key();
+    match &event.logical_key {
+        Key::Named(NamedKey::Backspace) => Some(CodeEditorCommand::Backspace),
+        Key::Named(NamedKey::Delete) => Some(CodeEditorCommand::DeleteForward),
+        Key::Named(NamedKey::ArrowLeft) => Some(CodeEditorCommand::MoveLeft(selection_mode)),
+        Key::Named(NamedKey::ArrowRight) => Some(CodeEditorCommand::MoveRight(selection_mode)),
+        Key::Named(NamedKey::ArrowUp) => Some(CodeEditorCommand::MoveUp(selection_mode)),
+        Key::Named(NamedKey::ArrowDown) => Some(CodeEditorCommand::MoveDown(selection_mode)),
+        Key::Named(NamedKey::Home) => Some(CodeEditorCommand::MoveToLineStart(selection_mode)),
+        Key::Named(NamedKey::End) => Some(CodeEditorCommand::MoveToLineEnd(selection_mode)),
+        Key::Character(text) if shortcut && text.eq_ignore_ascii_case("a") => {
+            Some(CodeEditorCommand::SelectAll)
+        }
+        Key::Character(text) if shortcut && text.eq_ignore_ascii_case("z") => {
+            if modifiers.shift_key() {
+                Some(CodeEditorCommand::Redo)
+            } else {
+                Some(CodeEditorCommand::Undo)
+            }
+        }
+        _ if !shortcut => event
+            .text
+            .as_ref()
+            .map(|text| CodeEditorCommand::Insert(text.to_string())),
         _ => None,
     }
 }
@@ -297,19 +446,6 @@ fn terminal_modifiers(modifiers: ModifiersState) -> KeyModifiers {
         terminal = terminal.with_control();
     }
     terminal
-}
-
-fn is_clipboard_shortcut(
-    key: &Key,
-    character: &str,
-    modifiers: ModifiersState,
-    direct_terminal_input: bool,
-) -> bool {
-    if !matches!(key, Key::Character(text) if text.eq_ignore_ascii_case(character)) {
-        return false;
-    }
-    modifiers.super_key()
-        || (modifiers.control_key() && (!direct_terminal_input || modifiers.shift_key()))
 }
 
 fn terminal_key(event: &KeyEvent) -> Option<TerminalKey<'_>> {
@@ -346,7 +482,3 @@ fn terminal_key(event: &KeyEvent) -> Option<TerminalKey<'_>> {
         _ => None,
     }
 }
-
-#[cfg(test)]
-#[path = "terminal_input_tests.rs"]
-mod tests;

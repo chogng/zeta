@@ -12,6 +12,9 @@ fn target_requires_an_active_window_and_the_appropriate_editable_surface() {
         screen: ScreenBuffer::Primary,
         composer_focused: true,
         session_search_focused: false,
+        file_search_focused: false,
+        git_branch_search_focused: false,
+        workspace_path_search_focused: false,
     };
     let toolbar = InputMethodContext {
         composer_focused: false,
@@ -24,6 +27,18 @@ fn target_requires_an_active_window_and_the_appropriate_editable_surface() {
     };
     let session_search = InputMethodContext {
         session_search_focused: true,
+        ..terminal_grid
+    };
+    let file_search = InputMethodContext {
+        file_search_focused: true,
+        ..terminal_grid
+    };
+    let git_branch_search = InputMethodContext {
+        git_branch_search_focused: true,
+        ..terminal_grid
+    };
+    let workspace_path_search = InputMethodContext {
+        workspace_path_search_focused: true,
         ..terminal_grid
     };
     let inactive_window = InputMethodContext {
@@ -46,6 +61,18 @@ fn target_requires_an_active_window_and_the_appropriate_editable_surface() {
     assert_eq!(
         InputMethodTarget::for_context(session_search),
         InputMethodTarget::SessionSearch
+    );
+    assert_eq!(
+        InputMethodTarget::for_context(file_search),
+        InputMethodTarget::FileSearch
+    );
+    assert_eq!(
+        InputMethodTarget::for_context(git_branch_search),
+        InputMethodTarget::GitBranchSearch
+    );
+    assert_eq!(
+        InputMethodTarget::for_context(workspace_path_search),
+        InputMethodTarget::WorkspacePathSearch
     );
     assert_eq!(
         InputMethodTarget::for_context(inactive_window),

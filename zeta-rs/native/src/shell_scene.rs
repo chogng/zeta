@@ -1,33 +1,47 @@
+use zeta_keybinding::{KeyboardShortcuts, paint_chord_hint};
 use zeta_terminal::{GridSize, ScreenBuffer, TerminalColor, TerminalCore, TerminalMousePosition};
 use zeta_ui::{
-    Border, CaretVisibility, Color, CornerRadii, FontFamily, FontWeight, InputBox, InputBoxState,
-    PaintRect, Rect, Sash, SashOrientation, SashState, SashStyle, TextBlock, TextInput,
-    TextInputLayoutEngine, TextStyle, UiScene,
+    Border, CaretVisibility, Color, CornerRadii, FontFamily, FontWeight, PaintRect, Rect, Sash,
+    SashOrientation, SashState, SashStyle, ScrollbarPresentation, TextBlock, TextInputLayoutEngine,
+    TextStyle, UiScene,
 };
 
 use crate::PRODUCT_DISPLAY_NAME;
+use crate::agent_composer::ComposerMode;
 use crate::agent_sidebar::AgentSidebarState;
 use crate::agent_sidebar_layout::AgentSidebarLayout;
+use crate::agent_sidebar_toolbar::AgentSidebarToolbar;
+use crate::agent_sidebar_workspace::AgentSidebarView;
 use crate::agent_sidebar_workspace::AgentSidebarWorkspace;
+use crate::composer_editor::{ComposerEditor, ComposerEditorFocus};
 use crate::editor_pane::EditorPane;
 use crate::explorer_pane::ExplorerPane;
+use crate::git_branch_context_menu::{GitBranchContextMenu, GitBranchContextMenuState};
 use crate::input_context_toolbar::InputContextToolbar;
+use crate::keybindings::NativeKeybindings;
+use crate::keyboard_shortcuts::{
+    KeyboardShortcutsState, keyboard_shortcut_rows, keyboard_shortcuts_ids,
+};
 use crate::session_context_menu::{SessionContextMenu, SessionContextMenuState};
 use crate::session_search::SessionSearch;
 use crate::session_sidebar::SessionSidebarState;
 use crate::session_sidebar_toolbar::SessionSidebarToolbar;
 use crate::session_tab_list::{SessionTab, SessionTabList};
 use crate::shell_interaction::{
-    ACTIVE_SESSION_TAB, AGENT_SIDEBAR, COMPOSER, COMPOSER_PANEL, MAIN_SURFACE,
-    SESSION_SEARCH_INPUT, SESSION_SIDEBAR, SESSION_SIDEBAR_RESIZE_HANDLE, TERMINAL_OUTPUT, WINDOW,
+    ACTIVE_SESSION_TAB, AGENT_FILE_SEARCH_INPUT, AGENT_SIDEBAR, COMPOSER, COMPOSER_PANEL,
+    MAIN_SURFACE, SESSION_SEARCH_INPUT, SESSION_SIDEBAR, SESSION_SIDEBAR_RESIZE_HANDLE,
+    TERMINAL_OUTPUT, THREAD_TIMELINE, WINDOW,
 };
 use crate::shell_style::{SHELL_PALETTE, ShellPalette};
 use crate::terminal_blocks::{TerminalBlockLineKind, project_block_lines};
-use crate::terminal_projection::block_view_range;
+use crate::terminal_output_scroll_view::TerminalOutputScrollView;
 use crate::terminal_selection::{TerminalSelectionRange, paint_terminal_selection};
 use crate::terminal_workspace_layout::TerminalWorkspaceLayout;
+use crate::thread_projection::ThreadProjection;
+use crate::thread_timeline::ThreadTimeline;
 use crate::titlebar::{TITLEBAR_HEIGHT, Titlebar};
 use crate::workspace_context::WorkspaceContext;
+use crate::workspace_path_picker::{WorkspacePathPicker, WorkspacePathPickerState};
 use zeta_ui_dispatch::{
     AccessibilityNode, AccessibilityRole, CursorFeedback, FocusBehavior, InteractionFrame,
     UiDispatch, UiNode,
@@ -40,6 +54,8 @@ const TERMINAL_PADDING: f32 = 24.0;
 const COMPOSER_PANEL_HEIGHT: f32 = 112.0;
 const COMPOSER_TOOLBAR_HEIGHT: f32 = 24.0;
 const COMPOSER_HEIGHT: f32 = 44.0;
+const COMPOSER_PANEL_CHROME_HEIGHT: f32 = COMPOSER_PANEL_HEIGHT - COMPOSER_HEIGHT;
+const MIN_OUTPUT_HEIGHT: f32 = 40.0;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct LogicalViewport {
@@ -80,6 +96,20 @@ impl ShellLayout {
         session_sidebar: SessionSidebarState,
         agent_sidebar: AgentSidebarState,
     ) -> Option<Self> {
+        Self::for_viewport_with_composer_height(
+            viewport,
+            session_sidebar,
+            agent_sidebar,
+            COMPOSER_HEIGHT,
+        )
+    }
+
+    fn for_viewport_with_composer_height(
+        viewport: LogicalViewport,
+        session_sidebar: SessionSidebarState,
+        agent_sidebar: AgentSidebarState,
+        preferred_composer_height: f32,
+    ) -> Option<Self> {
         if viewport.width < 240.0 || viewport.height < 180.0 {
             return None;
         }
@@ -97,21 +127,28 @@ impl ShellLayout {
         let terminal_workspace = TerminalWorkspaceLayout::for_bounds(remaining, agent_sidebar);
         let main = terminal_workspace.active_pane_bounds();
         let agent_sidebar = terminal_workspace.agent_sidebar_bounds();
+        let maximum_composer_height =
+            (main.size.height - COMPOSER_PANEL_CHROME_HEIGHT - MIN_OUTPUT_HEIGHT)
+                .max(COMPOSER_HEIGHT);
+        let composer_height = preferred_composer_height
+            .max(COMPOSER_HEIGHT)
+            .min(maximum_composer_height);
+        let composer_panel_height = composer_height + COMPOSER_PANEL_CHROME_HEIGHT;
         let composer_panel = Rect::from_xywh(
             main.origin.x,
-            main.bottom() - COMPOSER_PANEL_HEIGHT,
+            main.bottom() - composer_panel_height,
             main.size.width,
-            COMPOSER_PANEL_HEIGHT,
+            composer_panel_height,
         );
         let composer = Rect::from_xywh(
             main.origin.x + TERMINAL_PADDING,
             composer_panel.origin.y + 12.0,
             (main.size.width - TERMINAL_PADDING * 2.0).max(1.0),
-            COMPOSER_HEIGHT,
+            composer_height,
         );
         let composer_toolbar = Rect::from_xywh(
             main.origin.x + TERMINAL_PADDING,
-            composer_panel.origin.y + 68.0,
+            composer.bottom() + 12.0,
             (main.size.width - TERMINAL_PADDING * 2.0).max(1.0),
             COMPOSER_TOOLBAR_HEIGHT,
         );
@@ -146,15 +183,21 @@ pub(crate) struct ShellPresentation {
 struct TerminalView<'a> {
     core: Option<&'a TerminalCore>,
     scroll_offset: usize,
+    scrollbar_presentation: ScrollbarPresentation,
     selection: Option<TerminalSelectionRange>,
 }
 
 pub(crate) struct ShellPresentationModel<'a> {
     pub(crate) terminal: Option<&'a TerminalCore>,
     pub(crate) terminal_scroll_offset: usize,
+    pub(crate) terminal_scrollbar_presentation: ScrollbarPresentation,
     pub(crate) terminal_selection: Option<TerminalSelectionRange>,
+    pub(crate) terminal_surface: bool,
+    pub(crate) thread_projection: &'a ThreadProjection,
+    pub(crate) thread_timeline_scroll_offset: usize,
     pub(crate) workspace_context: &'a WorkspaceContext,
-    pub(crate) composer: &'a TextInput,
+    pub(crate) composer: &'a ComposerEditor,
+    pub(crate) composer_mode: ComposerMode,
     pub(crate) session_search: &'a SessionSearch,
     pub(crate) caret_visibility: CaretVisibility,
     pub(crate) dispatch: &'a UiDispatch,
@@ -162,13 +205,19 @@ pub(crate) struct ShellPresentationModel<'a> {
     pub(crate) agent_sidebar: AgentSidebarState,
     pub(crate) agent_sidebar_workspace: &'a AgentSidebarWorkspace,
     pub(crate) session_context_menu: SessionContextMenuState,
+    pub(crate) git_branch_context_menu: &'a GitBranchContextMenuState,
+    pub(crate) workspace_path_picker: &'a WorkspacePathPickerState,
+    pub(crate) keybindings: &'a NativeKeybindings,
+    pub(crate) keyboard_shortcuts: &'a KeyboardShortcutsState,
+    pub(crate) keybinding_diagnostics: &'a [String],
     pub(crate) window_control_insets: WindowControlInsets,
 }
 
 #[derive(Clone, Copy)]
 struct ComposerView<'a> {
     context: &'a WorkspaceContext,
-    input: &'a TextInput,
+    editor: &'a ComposerEditor,
+    mode: ComposerMode,
     caret_visibility: CaretVisibility,
     dispatch: &'a UiDispatch,
 }
@@ -178,6 +227,14 @@ struct SessionSidebarView<'a> {
     title: &'a str,
     context: &'a WorkspaceContext,
     search: &'a SessionSearch,
+    caret_visibility: CaretVisibility,
+    dispatch: &'a UiDispatch,
+}
+
+#[derive(Clone, Copy)]
+struct AgentSidebarPresentationView<'a> {
+    workspace: &'a AgentSidebarWorkspace,
+    context: &'a WorkspaceContext,
     caret_visibility: CaretVisibility,
     dispatch: &'a UiDispatch,
 }
@@ -196,9 +253,12 @@ pub(crate) fn build_shell_presentation(
         AccessibilityRole::Window,
         PRODUCT_DISPLAY_NAME,
     ));
-    let Some(layout) =
-        ShellLayout::for_viewport(viewport, model.session_sidebar, model.agent_sidebar)
-    else {
+    let Some(layout) = ShellLayout::for_viewport_with_composer_height(
+        viewport,
+        model.session_sidebar,
+        model.agent_sidebar,
+        model.composer.preferred_height(),
+    ) else {
         draw_compact_scene(&mut scene, viewport, palette);
         return ShellPresentation {
             scene,
@@ -208,10 +268,18 @@ pub(crate) fn build_shell_presentation(
         };
     };
 
-    let title = model
-        .terminal
-        .and_then(TerminalCore::title)
-        .unwrap_or(PRODUCT_DISPLAY_NAME);
+    let title = if model.terminal_surface {
+        model
+            .terminal
+            .and_then(TerminalCore::title)
+            .unwrap_or("Terminal")
+    } else {
+        model
+            .thread_projection
+            .thread()
+            .map(|thread| thread.title.as_str())
+            .unwrap_or(PRODUCT_DISPLAY_NAME)
+    };
     let titlebar = Titlebar::new(
         layout.titlebar,
         palette,
@@ -240,15 +308,23 @@ pub(crate) fn build_shell_presentation(
     } else {
         None
     };
-    if let Some(bounds) = layout.agent_sidebar {
+    let file_search_caret = if let Some(bounds) = layout.agent_sidebar {
         draw_agent_sidebar(
             &mut scene,
             &mut interaction_frame,
             bounds,
-            model.agent_sidebar_workspace,
+            AgentSidebarPresentationView {
+                workspace: model.agent_sidebar_workspace,
+                context: model.workspace_context,
+                caret_visibility: model.caret_visibility,
+                dispatch: model.dispatch,
+            },
+            text_layout,
             palette,
-        );
-    }
+        )
+    } else {
+        None
+    };
     let composer_caret = draw_main(
         &mut scene,
         &mut interaction_frame,
@@ -256,17 +332,24 @@ pub(crate) fn build_shell_presentation(
         TerminalView {
             core: model.terminal,
             scroll_offset: model.terminal_scroll_offset,
+            scrollbar_presentation: model.terminal_scrollbar_presentation,
             selection: model.terminal_selection,
         },
+        model.terminal_surface,
+        model.thread_projection,
+        model.thread_timeline_scroll_offset,
         ComposerView {
             context: model.workspace_context,
-            input: model.composer,
+            editor: model.composer,
+            mode: model.composer_mode,
             caret_visibility: model.caret_visibility,
             dispatch: model.dispatch,
         },
         text_layout,
     );
-    let ime_cursor_area = if model.dispatch.is_focused(SESSION_SEARCH_INPUT) {
+    let mut ime_cursor_area = if model.dispatch.is_focused(AGENT_FILE_SEARCH_INPUT) {
+        file_search_caret
+    } else if model.dispatch.is_focused(SESSION_SEARCH_INPUT) {
         session_search_caret
     } else {
         composer_caret
@@ -289,6 +372,63 @@ pub(crate) fn build_shell_presentation(
     ) {
         context_menu.register_interactions(&mut interaction_frame);
         scene.draw_component(&context_menu);
+    }
+    if let Some(path_picker) = WorkspacePathPicker::new(
+        Rect::from_xywh(0.0, 0.0, viewport.width, viewport.height),
+        model.workspace_path_picker,
+        model.caret_visibility,
+        palette,
+        text_layout,
+        model.dispatch,
+    ) {
+        if model
+            .dispatch
+            .is_focused(crate::workspace_path_picker::WORKSPACE_PATH_SEARCH_INPUT)
+        {
+            ime_cursor_area = path_picker.search_caret_bounds();
+        }
+        path_picker.register_interactions(&mut interaction_frame);
+        scene.draw_component(&path_picker);
+    }
+    if let Some(branch_menu) = GitBranchContextMenu::new(
+        Rect::from_xywh(0.0, 0.0, viewport.width, viewport.height),
+        model.git_branch_context_menu,
+        model.caret_visibility,
+        palette,
+        text_layout,
+        model.dispatch,
+    ) {
+        if model
+            .dispatch
+            .is_focused(crate::git_branch_context_menu::GIT_BRANCH_SEARCH_INPUT)
+        {
+            ime_cursor_area = branch_menu.search_caret_bounds();
+        }
+        branch_menu.register_interactions(&mut interaction_frame);
+        scene.draw_component(&branch_menu);
+    }
+    let viewport_bounds = Rect::from_xywh(0.0, 0.0, viewport.width, viewport.height);
+    if let Some((keybinding, entered)) = model.keybindings.pending_keybinding() {
+        paint_chord_hint(
+            &mut scene,
+            viewport_bounds,
+            keybinding,
+            entered,
+            model.keybindings.platform(),
+        );
+    }
+    let shortcut_rows = keyboard_shortcut_rows(model.keybindings);
+    if let Some(shortcuts) = KeyboardShortcuts::new(
+        viewport_bounds,
+        model.keyboard_shortcuts,
+        &shortcut_rows,
+        model.keybinding_diagnostics,
+        keyboard_shortcuts_ids(),
+        model.keybindings.platform(),
+        model.dispatch,
+    ) {
+        shortcuts.register_interactions(&mut interaction_frame);
+        scene.draw_component(&shortcuts);
     }
     let accessibility_nodes = interaction_frame.accessibility_nodes(model.dispatch);
     ShellPresentation {
@@ -342,9 +482,10 @@ fn draw_agent_sidebar(
     scene: &mut UiScene,
     interaction_frame: &mut InteractionFrame,
     bounds: Rect,
-    workspace: &AgentSidebarWorkspace,
+    view: AgentSidebarPresentationView<'_>,
+    text_layout: &mut TextInputLayoutEngine,
     palette: ShellPalette,
-) {
+) -> Option<Rect> {
     scene.draw_rect(
         PaintRect::new(bounds, palette.surface_raised).with_border(Border::new(
             zeta_ui::Edges::new(0.0, 0.0, 0.0, 1.0),
@@ -361,12 +502,33 @@ fn draw_agent_sidebar(
         .with_parent(WINDOW),
     );
     let layout = AgentSidebarLayout::for_bounds(bounds);
-    let explorer = ExplorerPane::new(layout.explorer(), palette);
-    explorer.register_interactions(interaction_frame);
-    scene.draw_component(&explorer);
-    let editor = EditorPane::new(layout.editor(), workspace.editor(), palette);
-    editor.register_interactions(interaction_frame);
-    scene.draw_component(&editor);
+    let toolbar = AgentSidebarToolbar::new(
+        layout.toolbar(),
+        view.workspace,
+        view.context,
+        view.caret_visibility,
+        palette,
+        text_layout,
+        view.dispatch,
+    );
+    toolbar.register_interactions(interaction_frame);
+    scene.draw_component(&toolbar);
+    match view.workspace.active_view() {
+        AgentSidebarView::Changes => {
+            let editor = EditorPane::new(layout.content(), view.workspace.editor(), palette);
+            editor.register_interactions(interaction_frame);
+            scene.draw_component(&editor);
+        }
+        AgentSidebarView::Files => {
+            let explorer = ExplorerPane::new(layout.content(), view.workspace, palette);
+            explorer.register_interactions(interaction_frame);
+            scene.draw_component(&explorer);
+        }
+    }
+    view.dispatch
+        .is_focused(AGENT_FILE_SEARCH_INPUT)
+        .then_some(toolbar.search_caret_bounds())
+        .flatten()
 }
 
 fn draw_session_sidebar(
@@ -470,47 +632,67 @@ fn draw_main(
     interaction_frame: &mut InteractionFrame,
     layout: ShellLayout,
     terminal_view: TerminalView<'_>,
+    terminal_surface: bool,
+    thread_projection: &ThreadProjection,
+    thread_timeline_scroll_offset: usize,
     composer_view: ComposerView<'_>,
     text_layout: &mut TextInputLayoutEngine,
 ) -> Option<Rect> {
     let palette = SHELL_PALETTE;
-    let active_screen = terminal_view
-        .core
-        .map(TerminalCore::active_screen)
-        .unwrap_or_default();
+    let active_screen = if terminal_surface {
+        ScreenBuffer::Alternate
+    } else {
+        ScreenBuffer::Primary
+    };
     scene.draw_rect(PaintRect::new(layout.main, palette.background));
     interaction_frame.register(
         UiNode::new(
             MAIN_SURFACE,
             layout.main,
             AccessibilityRole::Group,
-            "Terminal workspace",
+            if terminal_surface {
+                "Interactive terminal"
+            } else {
+                "Agent workspace"
+            },
         )
         .with_parent(WINDOW)
         .with_cursor(CursorFeedback::Text),
     );
-    interaction_frame.register(
-        UiNode::new(
-            TERMINAL_OUTPUT,
-            terminal_content_bounds(layout, active_screen),
-            AccessibilityRole::Terminal,
-            "Terminal output",
-        )
-        .with_parent(MAIN_SURFACE)
-        .with_cursor(CursorFeedback::Text),
-    );
+    if active_screen == ScreenBuffer::Alternate {
+        interaction_frame.register(
+            UiNode::new(
+                TERMINAL_OUTPUT,
+                terminal_content_bounds(layout, active_screen),
+                AccessibilityRole::Terminal,
+                "Interactive terminal",
+            )
+            .with_parent(MAIN_SURFACE)
+            .with_cursor(CursorFeedback::Text),
+        );
+    } else {
+        interaction_frame.register(
+            UiNode::new(
+                THREAD_TIMELINE,
+                layout.output,
+                AccessibilityRole::Group,
+                "Agent Thread timeline",
+            )
+            .with_parent(MAIN_SURFACE)
+            .with_cursor(CursorFeedback::Text),
+        );
+    }
     let mut ime_cursor_area = None;
     scene.with_clip(layout.main, |scene| {
-        draw_terminal(
-            scene,
-            layout,
-            terminal_view.core,
-            active_screen,
-            terminal_view.scroll_offset,
-            terminal_view.selection,
-            palette,
-        );
-        if active_screen == ScreenBuffer::Primary {
+        if active_screen == ScreenBuffer::Alternate {
+            draw_terminal(scene, layout, terminal_view, active_screen, palette);
+        } else {
+            scene.draw_component(&ThreadTimeline::new(
+                layout.output,
+                thread_projection,
+                thread_timeline_scroll_offset,
+                palette,
+            ));
             ime_cursor_area = draw_composer(
                 scene,
                 interaction_frame,
@@ -565,33 +747,26 @@ fn terminal_cursor_area(
 fn draw_terminal(
     scene: &mut UiScene,
     layout: ShellLayout,
-    terminal: Option<&TerminalCore>,
+    view: TerminalView<'_>,
     active_screen: ScreenBuffer,
-    scroll_offset: usize,
-    selection: Option<TerminalSelectionRange>,
     palette: ShellPalette,
 ) {
     let bounds = terminal_content_bounds(layout, active_screen);
-    let Some(terminal) = terminal else {
+    let Some(terminal) = view.core else {
         draw_terminal_text(scene, "Starting shell…", bounds, palette.text_muted);
         return;
     };
     if active_screen == ScreenBuffer::Alternate {
-        draw_grid(scene, terminal, bounds, scroll_offset, palette);
+        draw_grid(scene, terminal, bounds, view.scroll_offset, palette);
     } else {
-        draw_block_list(scene, terminal, bounds, scroll_offset, palette);
-    }
-    if active_screen == ScreenBuffer::Primary
-        && let Some(selection) = selection
-    {
-        paint_terminal_selection(
+        draw_block_list(
             scene,
+            terminal,
             bounds,
-            terminal.grid().size().cols() as usize,
-            selection,
-            TERMINAL_CELL_WIDTH,
-            TERMINAL_LINE_HEIGHT,
-            palette.terminal_selection,
+            view.scroll_offset,
+            view.scrollbar_presentation,
+            view.selection,
+            palette,
         );
     }
 }
@@ -629,39 +804,36 @@ fn draw_composer(
         .with_parent(COMPOSER_PANEL)
         .with_cursor(CursorFeedback::Text)
         .with_focus(FocusBehavior::TabStop)
-        .with_value(composer_view.input.text()),
+        .with_value(composer_view.editor.text()),
     );
     let toolbar = InputContextToolbar::new(
         layout.composer_toolbar,
         composer_view.context,
+        composer_view.mode,
         palette,
         text_layout,
         composer_view.dispatch,
     );
     toolbar.register_interactions(interaction_frame);
     scene.draw_component(&toolbar);
-    let input_state = if composer_view.dispatch.is_focused(COMPOSER) {
-        InputBoxState::Focused(composer_view.caret_visibility)
-    } else if composer_view.dispatch.is_hovered(COMPOSER) {
-        InputBoxState::Hovered
+    let editor_focus = if composer_view.dispatch.is_focused(COMPOSER) {
+        ComposerEditorFocus::Focused(composer_view.caret_visibility)
     } else {
-        InputBoxState::Resting
+        ComposerEditorFocus::Blurred
     };
-    let input_box = InputBox::new(
+    let placeholder = match composer_view.mode {
+        ComposerMode::Agent => "Ask Zeta anything…",
+        ComposerMode::Shell => "Enter a shell command…",
+    };
+    let editor = composer_view.editor.view(
         layout.composer,
-        "Enter a command…",
-        input_state,
-        palette.composer_style(),
-        composer_view.input,
-        text_layout,
+        placeholder,
+        editor_focus,
+        palette.text_muted,
     );
-    let caret_bounds = input_box.caret_bounds();
-    scene.draw_component(&input_box);
-    composer_view
-        .dispatch
-        .is_focused(COMPOSER)
-        .then_some(caret_bounds)
-        .flatten()
+    let caret_bounds = editor.caret_bounds();
+    scene.draw_component(&editor);
+    caret_bounds
 }
 
 fn draw_grid(
@@ -721,34 +893,52 @@ fn draw_block_list(
     terminal: &TerminalCore,
     bounds: Rect,
     scroll_offset: usize,
+    scrollbar_presentation: ScrollbarPresentation,
+    selection: Option<TerminalSelectionRange>,
     palette: ShellPalette,
 ) {
     let lines = project_block_lines(terminal);
-    let capacity = terminal_line_capacity(bounds);
-    let range = block_view_range(lines.len(), capacity, scroll_offset);
-    for (row, line) in lines[range].iter().enumerate() {
-        let color = match line.kind {
-            TerminalBlockLineKind::Preamble => palette.text_muted,
-            TerminalBlockLineKind::Command => palette.accent,
-            TerminalBlockLineKind::Output => palette.text,
-            TerminalBlockLineKind::Status => palette.text_muted,
-        };
-        draw_terminal_text(
-            scene,
-            &line.text,
-            Rect::from_xywh(
-                bounds.origin.x,
-                bounds.origin.y + row as f32 * TERMINAL_LINE_HEIGHT,
-                bounds.size.width,
+    TerminalOutputScrollView::new(
+        bounds,
+        lines.len(),
+        TERMINAL_LINE_HEIGHT,
+        scroll_offset,
+        scrollbar_presentation,
+        palette,
+    )
+    .draw(scene, |scene, viewport, range| {
+        for absolute_index in range {
+            let line = &lines[absolute_index];
+            let color = match line.kind {
+                TerminalBlockLineKind::Preamble => palette.text_muted,
+                TerminalBlockLineKind::Command => palette.accent,
+                TerminalBlockLineKind::Output => palette.text,
+                TerminalBlockLineKind::Status => palette.text_muted,
+            };
+            draw_terminal_text(
+                scene,
+                &line.text,
+                Rect::from_xywh(
+                    viewport.content_origin().x,
+                    viewport.content_origin().y + absolute_index as f32 * TERMINAL_LINE_HEIGHT,
+                    viewport.bounds().size.width,
+                    TERMINAL_LINE_HEIGHT,
+                ),
+                color,
+            );
+        }
+        if let Some(selection) = selection {
+            paint_terminal_selection(
+                scene,
+                viewport.bounds(),
+                terminal.grid().size().cols() as usize,
+                selection,
+                TERMINAL_CELL_WIDTH,
                 TERMINAL_LINE_HEIGHT,
-            ),
-            color,
-        );
-    }
-}
-
-fn terminal_line_capacity(bounds: Rect) -> usize {
-    ((bounds.size.height / TERMINAL_LINE_HEIGHT).floor() as usize).max(1)
+                palette.terminal_selection,
+            );
+        }
+    });
 }
 
 fn terminal_cell_colors(style: zeta_terminal::CellStyle, palette: ShellPalette) -> (Color, Color) {

@@ -2,21 +2,27 @@ use std::time::Instant;
 
 use zeta_diff::DiffDocument;
 use zeta_editor::{
-    DiffEditorLabels, DiffEditorState, MultiDiffEditor, MultiDiffEditorItem, MultiDiffEditorStyle,
+    DiffEditorFoldState, DiffEditorLabels, DiffEditorPresentation, DiffEditorState,
+    MultiDiffEditor, MultiDiffEditorItem, MultiDiffEditorLayout, MultiDiffEditorStyle,
 };
 use zeta_ui::{
-    Border, Component, Edges, PaintRect, Rect, ScrollAxis, ScrollCommand, ScrollDelta, ScrollState,
-    ScrollbarController, ScrollbarDrag, ScrollbarPart, ScrollbarPointerPresence,
-    ScrollbarPresentation, Size, TextBlock, TextStyle, UiScene,
+    Border, Component, Edges, PaintRect, Rect, ScrollAxis, ScrollCommand, ScrollDelta,
+    ScrollMetrics, ScrollState, ScrollbarController, ScrollbarDrag, ScrollbarPart,
+    ScrollbarPointerPresence, ScrollbarPresentation, Size, TextBlock, TextStyle, UiScene,
 };
-use zeta_ui_dispatch::{AccessibilityRole, InteractionFrame, UiNode};
+use zeta_ui_dispatch::{
+    AccessibilityRole, CursorFeedback, ElementId, FocusBehavior, InteractionFrame, NavigationAxis,
+    NavigationGroupId, NodeAction, UiNode,
+};
 
 use crate::shell_interaction::{
     AGENT_EDITOR_PANE, AGENT_SIDEBAR, MULTI_DIFF_EDITOR, MULTI_DIFF_SCROLLBAR,
 };
 use crate::shell_style::ShellPalette;
+use crate::workspace_context::WorkspaceDiff;
 
 const EMPTY_STATE_PADDING: f32 = 12.0;
+const DIFF_FOLD_SCOPE: u32 = 4;
 
 /// One changed file and the retained state of its DiffEditor section.
 pub(crate) struct EditorDiff {
@@ -32,7 +38,7 @@ impl EditorDiff {
         MultiDiffEditorItem::new(
             &self.file_name,
             &self.document,
-            self.editor_state,
+            self.editor_state.clone(),
             DiffEditorLabels::new(&self.original_label, &self.modified_label),
         )
     }
@@ -53,6 +59,7 @@ pub(crate) struct EditorPaneState {
     scroll_state: ScrollState,
     scrollbar: ScrollbarController,
     scrollbar_capture: Option<ScrollbarCapture>,
+    measured_layout: MultiDiffEditorLayout,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -80,6 +87,44 @@ impl EditorPaneState {
         self.diffs.get_mut(index)
     }
 
+    pub(crate) fn toggle_fold_for_element(&mut self, id: ElementId) -> bool {
+        let mut toggled = false;
+        for (item_index, diff) in self.diffs.iter_mut().enumerate() {
+            for region_index in 0..diff.document.rows().len() {
+                if multi_diff_fold_element_id(item_index, region_index) == Some(id) {
+                    diff.editor_state.toggle_unchanged_region(region_index);
+                    toggled = true;
+                    break;
+                }
+            }
+            if toggled {
+                break;
+            }
+        }
+        if toggled {
+            self.remeasure();
+        }
+        toggled
+    }
+
+    pub(crate) fn replace_diffs(&mut self, diffs: &[WorkspaceDiff]) {
+        self.diffs = diffs
+            .iter()
+            .map(|diff| EditorDiff {
+                file_name: diff.path().to_owned(),
+                original_label: "HEAD".to_string(),
+                modified_label: "Working Tree".to_string(),
+                document: diff.document().clone(),
+                editor_state: DiffEditorState::default(),
+            })
+            .collect();
+        self.scroll_state = ScrollState::default();
+        self.scrollbar = ScrollbarController::default();
+        self.scrollbar_capture = None;
+        self.remeasure();
+    }
+
+    #[cfg(test)]
     #[allow(
         dead_code,
         reason = "called once the authoritative changed-file projection is connected"
@@ -98,6 +143,7 @@ impl EditorPaneState {
             document,
             editor_state: DiffEditorState::default(),
         });
+        self.remeasure();
     }
 
     fn items(&self) -> Vec<MultiDiffEditorItem<'_>> {
@@ -105,16 +151,10 @@ impl EditorPaneState {
     }
 
     pub(crate) fn scroll(&mut self, delta: f32, viewport: Size, now: Instant) -> bool {
-        let metrics = {
-            let items = self.items();
-            MultiDiffEditor::new(
-                Rect::from_xywh(0.0, 0.0, viewport.width, viewport.height),
-                &items,
-                self.scroll_state,
-                MultiDiffEditorStyle::light(),
-            )
-            .scroll_metrics()
-        };
+        let metrics = ScrollMetrics::new(
+            viewport,
+            Size::new(viewport.width, self.measured_layout.content_height()),
+        );
         let changed = self.scroll_state.apply(
             ScrollCommand::ByPixels(ScrollDelta::vertical(delta)),
             metrics,
@@ -242,10 +282,24 @@ impl EditorPaneState {
             bounds,
             &items,
             self.scroll_state,
-            MultiDiffEditorStyle::light(),
+            MultiDiffEditorStyle::light_cards(),
         )
+        .with_diff_presentation(DiffEditorPresentation::Unified)
+        .with_measured_layout(&self.measured_layout)
         .with_scrollbar_presentation(self.scrollbar.presentation())
         .scroll_view()
+    }
+
+    fn remeasure(&mut self) {
+        let items = self.items();
+        self.measured_layout = MultiDiffEditor::new(
+            Rect::from_xywh(0.0, 0.0, 1.0, 0.0),
+            &items,
+            ScrollState::default(),
+            MultiDiffEditorStyle::light_cards(),
+        )
+        .with_diff_presentation(DiffEditorPresentation::Unified)
+        .measure_layout();
     }
 
     fn scrollbar_presence(&self, point: zeta_ui::Point, bounds: Rect) -> ScrollbarPointerPresence {
@@ -296,8 +350,47 @@ impl<'a> EditorPane<'a> {
             )
             .with_parent(AGENT_EDITOR_PANE),
         );
-        if let Some(scrollbar) = self.state.scroll_view(self.bounds).vertical_scrollbar() {
-            let metrics = self.state.scroll_view(self.bounds).metrics();
+        let items = self.state.items();
+        let editor = MultiDiffEditor::new(
+            self.bounds,
+            &items,
+            self.state.scroll_state,
+            MultiDiffEditorStyle::light_cards(),
+        )
+        .with_diff_presentation(DiffEditorPresentation::Unified)
+        .with_measured_layout(&self.state.measured_layout)
+        .with_scrollbar_presentation(self.state.scrollbar_presentation());
+        let navigation = NavigationGroupId::new(MULTI_DIFF_EDITOR);
+        for control in editor.fold_controls() {
+            let Some(id) = multi_diff_fold_element_id(control.item_index(), control.region_index())
+            else {
+                continue;
+            };
+            let action = match control.state() {
+                DiffEditorFoldState::Collapsed => "Show",
+                DiffEditorFoldState::Expanded => "Hide",
+            };
+            let file_name = items[control.item_index()].file_name();
+            frame.register(
+                UiNode::new(
+                    id,
+                    control.bounds(),
+                    AccessibilityRole::Button,
+                    format!(
+                        "{action} {} unchanged lines in {file_name}",
+                        control.line_count()
+                    ),
+                )
+                .with_parent(MULTI_DIFF_EDITOR)
+                .with_cursor(CursorFeedback::Pointer)
+                .with_focus(FocusBehavior::TabStop)
+                .with_action(NodeAction::Activate)
+                .with_navigation(navigation, NavigationAxis::Vertical),
+            );
+        }
+        let scroll_view = editor.scroll_view();
+        if let Some(scrollbar) = scroll_view.vertical_scrollbar() {
+            let metrics = scroll_view.metrics();
             let maximum = metrics.maximum_offset().y;
             let percentage = if maximum > 0.0 {
                 self.state.scroll_state.vertical_offset() / maximum * 100.0
@@ -316,6 +409,13 @@ impl<'a> EditorPane<'a> {
             );
         }
     }
+}
+
+fn multi_diff_fold_element_id(item_index: usize, region_index: usize) -> Option<ElementId> {
+    let item_index = u16::try_from(item_index).ok()?;
+    let region_index = u16::try_from(region_index).ok()?;
+    let local = ((u32::from(item_index) << 16) | u32::from(region_index)).checked_add(1)?;
+    Some(ElementId::scoped(DIFF_FOLD_SCOPE, local))
 }
 
 impl Component for EditorPane<'_> {
@@ -347,8 +447,10 @@ impl Component for EditorPane<'_> {
                 self.bounds,
                 &items,
                 self.state.scroll_state,
-                MultiDiffEditorStyle::light(),
+                MultiDiffEditorStyle::light_cards(),
             )
+            .with_diff_presentation(DiffEditorPresentation::Unified)
+            .with_measured_layout(&self.state.measured_layout)
             .with_scrollbar_presentation(self.state.scrollbar_presentation()),
         );
     }

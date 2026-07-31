@@ -39,7 +39,8 @@ resources/icons/*.svg
 `DROPDOWN_INDICATOR` 使用 `CHEVRON_DOWN`。因此 SVG 文件重命名或替换不要求调用方迁移
 `IconId`。新增 SVG 不会自动扩大公共 API；只有产品语义确定后才应在 `library.rs` 登记。
 Native input context toolbar 当前登记并消费 `LOCAL`、`WORKING_DIRECTORY`、`GIT_BRANCH` 与
-`DIFF`；这些是稳定语义 identity，不把底层 artwork filename 暴露给 Toolbar。
+`DIFF`；Native Files toolbar 另外消费 `REFRESH` 与 `SEARCH`，并用文本箭头呈现 upstream
+distance。这些都是稳定语义 identity，不把底层 artwork filename 暴露给 Toolbar。
 
 ## 生成与失败语义
 

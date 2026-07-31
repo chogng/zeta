@@ -11,17 +11,24 @@ use zeta_app_server_protocol::protocol::slash_commands::{
 use zeta_async_utils::CancellationToken;
 use zeta_config::ConfigStore;
 use zeta_core::{
-    CoreError, InMemorySessionStore, InMemoryThreadStore, ModelService, RequestTurnInteraction,
-    SessionCoordinator, StartTurnRequest, ThreadController,
+    CoreError, InMemorySessionStore, InMemoryThreadStore, ModelService, PolicyService,
+    RequestTurnInteraction, SessionCoordinator, StartTurnRequest, ThreadController,
+    ToolAuthorization, ToolOutputSink, ToolService,
 };
 use zeta_file_system::LocalFileSystem;
 use zeta_model_provider::EchoModel;
+use zeta_policy::{
+    ActionDigest, ActionKind, ActionProvenance, ActionReviewRequest, ActionSource, Capability,
+    CapabilityKind, CapabilitySet, ExecutionDecision, PolicyRevision, ProcessInvocationKind,
+    ResolvedAction, SandboxCompatibility,
+};
 use zeta_protocol::{
     ActionApprovalCapability, ActionApprovalCapabilityKind, ActionApprovalRequest, AgentRequest,
     CommandId, ContentPart, InputItem, ModelId, ModelRef, ModelRequest, ModelResponse, ProviderId,
-    RequestId, RequestUserInput, ResponseItem, StopReason, TurnStatus, UserInput,
+    RequestId, RequestUserInput, ResponseItem, StopReason, ToolCall, ToolDefinition,
+    ToolExecutionOutput, ToolOutputStream, TurnStatus, UserInput,
 };
-use zeta_sandboxing::WorkspaceRoot;
+use zeta_sandboxing::{FileSystemAccess, NetworkAccess, SandboxPolicy, WorkspaceRoot};
 
 fn server_with_model(model: Arc<dyn ModelService>) -> AppServer {
     let threads = Arc::new(ThreadController::with_store(Arc::new(
@@ -642,6 +649,143 @@ struct CountingModel {
     calls: AtomicUsize,
 }
 
+struct ShellTestTool;
+
+impl ToolService for ShellTestTool {
+    fn definitions(&self) -> Vec<ToolDefinition> {
+        Vec::new()
+    }
+
+    fn prepare(&self, call: &ToolCall) -> Result<ActionReviewRequest, CoreError> {
+        Ok(ActionReviewRequest::new(
+            ResolvedAction::new(
+                ActionDigest::from_canonical_bytes(call.arguments.to_string()),
+                ActionKind::LocalProcess(ProcessInvocationKind::Shell),
+                "run test shell command",
+                CapabilitySet::new([Capability::new(CapabilityKind::ProcessSpawn, "/bin/sh")]),
+            ),
+            ActionProvenance::new(ActionSource::BuiltInTool, "shell-command"),
+            SandboxCompatibility::Supported(shell_test_sandbox()),
+            PolicyRevision::new("test-shell-v1"),
+        ))
+    }
+
+    fn execute(
+        &self,
+        _: &ToolCall,
+        _: &ToolAuthorization,
+        _: &CancellationToken,
+    ) -> Result<ToolExecutionOutput, CoreError> {
+        Ok(ToolExecutionOutput::Success(
+            serde_json::json!({
+                "exit_code": 0,
+                "stdout": "shell output\n",
+                "stderr": "",
+                "stdout_truncated": false,
+                "stderr_truncated": false,
+            })
+            .to_string(),
+        ))
+    }
+
+    fn execute_streaming(
+        &self,
+        call: &ToolCall,
+        authorization: &ToolAuthorization,
+        cancellation: &CancellationToken,
+        sink: &mut dyn ToolOutputSink,
+    ) -> Result<ToolExecutionOutput, CoreError> {
+        sink.emit(ToolOutputStream::Stdout, "shell output\n".into())?;
+        self.execute(call, authorization, cancellation)
+    }
+}
+
+struct ShellTestPolicy;
+
+impl PolicyService for ShellTestPolicy {
+    fn decide(
+        &self,
+        _: &ActionReviewRequest,
+        _: &CancellationToken,
+    ) -> Result<ExecutionDecision, CoreError> {
+        Ok(ExecutionDecision::RunSandboxed(shell_test_sandbox()))
+    }
+}
+
+fn shell_test_sandbox() -> SandboxPolicy {
+    SandboxPolicy::new(FileSystemAccess::WorkspaceWrite, NetworkAccess::Denied)
+}
+
+#[test]
+fn shell_turn_runs_without_a_model_and_publishes_typed_output() {
+    let model = Arc::new(CountingModel::default());
+    let server = server_with_model(model.clone())
+        .with_tool_service(Arc::new(ShellTestTool), Arc::new(ShellTestPolicy));
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+    let session = create_session(&server, &mut connection, 2, "session");
+    let session_id = session["result"]["session"]["sessionId"].as_str().unwrap();
+    let thread = create_thread(&server, &mut connection, 3, "thread", session_id, 1);
+    let thread_id = thread["result"]["threadId"].as_str().unwrap();
+    call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":4,
+            "method":"thread/subscribe",
+            "params":{"threadId":thread_id,"afterSequence":1}
+        }),
+    );
+
+    let response = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":5,
+            "method":"turn/shell/start",
+            "params":{
+                "commandId":"shell-turn",
+                "sessionId":session_id,
+                "threadId":thread_id,
+                "expectedSequence":1,
+                "command":"printf shell output",
+                "workingDirectory":"."
+            }
+        }),
+    );
+
+    assert!(response["result"]["turnId"].is_string());
+    wait_for_latest_turn(&server, thread_id, TurnStatus::Completed);
+    assert_eq!(model.calls.load(Ordering::Relaxed), 0);
+    let snapshot = server
+        .sessions()
+        .threads()
+        .read_thread(&zeta_protocol::ThreadId::new(thread_id).unwrap())
+        .unwrap();
+    assert!(snapshot.items.iter().any(|item| {
+        matches!(
+            item,
+            zeta_protocol::ThreadItem::ToolCall { name, .. }
+                if name.as_str() == "shell-command"
+        )
+    }));
+    assert!(snapshot.items.iter().any(|item| {
+        matches!(
+            item,
+            zeta_protocol::ThreadItem::ToolResult { text, is_error: false, .. }
+                if text.contains("shell output")
+        )
+    }));
+    assert!(
+        server
+            .drain_notifications(&mut connection)
+            .iter()
+            .any(|notification| notification.contains("\"toolOutputDelta\""))
+    );
+}
+
 impl ModelService for CountingModel {
     fn invoke(
         &self,
@@ -903,7 +1047,7 @@ fn typst_source_errors_are_typed_results_not_server_failures() {
 #[test]
 fn config_updates_use_typed_command_ids() {
     let path = std::env::temp_dir().join(format!(
-        "zeta-app-server-config-{}.json",
+        "zeta-app-server-config-{}.sqlite3",
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
@@ -911,28 +1055,29 @@ fn config_updates_use_typed_command_ids() {
     ));
     let server = server().with_config_store(Arc::new(ConfigStore::open(&path).unwrap()));
     let mut connection = server.connection();
+    let mut observer = server.connection();
     initialize(&server, &mut connection);
+    initialize(&server, &mut observer);
     let updated = call(
         &server,
         &mut connection,
         serde_json::json!({
             "jsonrpc":"2.0","id":2,"method":"config/update",
             "params":{
-                "commandId":"theme","expectedRevision":0,"theme":"dark",
+                "commandId":"config-noop","expectedRevision":0,
                 "approvalReviewModel":{"type":"automatic"}
             }
         }),
     );
-    assert_eq!(updated["result"]["revision"], 1);
-    assert_eq!(updated["result"]["generation"], 1);
+    assert_eq!(updated["result"]["revision"], 0);
+    assert_eq!(updated["result"]["generation"], 0);
     assert_eq!(updated["result"]["disposition"], "updated");
     let read = call(
         &server,
         &mut connection,
         serde_json::json!({"jsonrpc":"2.0","id":3,"method":"config/read","params":{}}),
     );
-    assert_eq!(read["result"]["revision"], 1);
-    assert_eq!(read["result"]["theme"], "dark");
+    assert_eq!(read["result"]["revision"], 0);
     assert_eq!(
         read["result"]["approvalReviewModel"],
         serde_json::json!({"type":"automatic"})
@@ -943,7 +1088,7 @@ fn config_updates_use_typed_command_ids() {
         serde_json::json!({
             "jsonrpc":"2.0","id":4,"method":"mcp/server/upsert",
             "params":{
-                "commandId":"github-mcp","expectedRevision":1,
+                "commandId":"github-mcp","expectedRevision":0,
                 "server":{
                     "id":"user:mcp:github",
                     "displayName":"GitHub",
@@ -954,14 +1099,14 @@ fn config_updates_use_typed_command_ids() {
             }
         }),
     );
-    assert_eq!(mcp["result"]["revision"], 2);
+    assert_eq!(mcp["result"]["revision"], 1);
     let skill = call(
         &server,
         &mut connection,
         serde_json::json!({
             "jsonrpc":"2.0","id":5,"method":"skill/source/add",
             "params":{
-                "commandId":"personal-skills","expectedRevision":2,
+                "commandId":"personal-skills","expectedRevision":1,
                 "source":{
                     "id":"user:skill-source:personal",
                     "rootReference":"user:skill-root:personal",
@@ -970,37 +1115,95 @@ fn config_updates_use_typed_command_ids() {
             }
         }),
     );
-    assert_eq!(skill["result"]["revision"], 3);
+    assert_eq!(skill["result"]["revision"], 2);
     let enabled = call(
         &server,
         &mut connection,
         serde_json::json!({
             "jsonrpc":"2.0","id":6,"method":"mcp/server/enablement/set",
             "params":{
-                "commandId":"enable-github-mcp","expectedRevision":3,
+                "commandId":"enable-github-mcp","expectedRevision":2,
                 "serverId":"user:mcp:github","enablement":"enabled"
             }
         }),
     );
-    assert_eq!(enabled["result"]["revision"], 4);
+    assert_eq!(enabled["result"]["revision"], 3);
     let stale = call(
         &server,
         &mut connection,
         serde_json::json!({
             "jsonrpc":"2.0","id":7,"method":"skill/source/enablement/set",
             "params":{
-                "commandId":"stale-skill","expectedRevision":3,
+                "commandId":"stale-skill","expectedRevision":2,
                 "sourceId":"user:skill-source:personal","enablement":"enabled"
             }
         }),
     );
     assert_eq!(stale["error"]["message"], "ConfigRevisionConflict");
+    let plugin = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":8,"method":"plugin/request/upsert",
+            "params":{
+                "commandId":"request-review-plugin","expectedRevision":3,
+                "request":{
+                    "pluginId":"acme/code-review",
+                    "version":"1.2.3",
+                    "enablement":"disabled"
+                }
+            }
+        }),
+    );
+    assert_eq!(plugin["result"]["revision"], 4);
+    let hook = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":9,"method":"hook/upsert",
+            "params":{
+                "commandId":"add-review-hook","expectedRevision":4,
+                "hook":{
+                    "id":"user:hook:review",
+                    "event":"beforeTool",
+                    "matcher":{"toolNames":["shell_command"]},
+                    "action":{"type":"process","program":"review-hook","args":["--check"]},
+                    "enablement":"disabled"
+                }
+            }
+        }),
+    );
+    assert_eq!(hook["result"]["revision"], 5);
+    let plugin_enabled = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":10,"method":"plugin/request/enablement/set",
+            "params":{
+                "commandId":"enable-review-plugin","expectedRevision":5,
+                "pluginId":"acme/code-review","enablement":"enabled"
+            }
+        }),
+    );
+    assert_eq!(plugin_enabled["result"]["revision"], 6);
+    let hook_enabled = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":11,"method":"hook/enablement/set",
+            "params":{
+                "commandId":"enable-review-hook","expectedRevision":6,
+                "hookId":"user:hook:review","enablement":"enabled"
+            }
+        }),
+    );
+    assert_eq!(hook_enabled["result"]["revision"], 7);
     let configured = call(
         &server,
         &mut connection,
-        serde_json::json!({"jsonrpc":"2.0","id":8,"method":"config/read","params":{}}),
+        serde_json::json!({"jsonrpc":"2.0","id":12,"method":"config/read","params":{}}),
     );
-    assert_eq!(configured["result"]["revision"], 4);
+    assert_eq!(configured["result"]["revision"], 7);
     assert_eq!(
         configured["result"]["mcpServers"]["user:mcp:github"]["enablement"],
         "enabled"
@@ -1009,9 +1212,40 @@ fn config_updates_use_typed_command_ids() {
         configured["result"]["skillSources"]["user:skill-source:personal"]["rootReference"],
         "user:skill-root:personal"
     );
+    assert_eq!(
+        configured["result"]["pluginRequests"]["acme/code-review"]["enablement"],
+        "enabled"
+    );
+    assert_eq!(
+        configured["result"]["hooks"]["user:hook:review"]["action"]["program"],
+        "review-hook"
+    );
+    let deadline = Instant::now() + Duration::from_secs(2);
+    loop {
+        let observed = server
+            .drain_notifications(&mut observer)
+            .into_iter()
+            .map(|notification| serde_json::from_str::<serde_json::Value>(&notification).unwrap())
+            .any(|notification| {
+                notification["method"] == "config/changed"
+                    && notification["params"]["revision"] == 7
+                    && notification["params"]["generation"] == 7
+            });
+        if observed {
+            break;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "config watcher did not publish the committed generation"
+        );
+        thread::sleep(Duration::from_millis(10));
+    }
+    drop(observer);
+    drop(connection);
+    drop(server);
     let _ = std::fs::remove_file(&path);
-    let _ = std::fs::remove_file(path.with_extension("lock"));
-    let _ = std::fs::remove_file(path.with_extension("tmp"));
+    let _ = std::fs::remove_file(format!("{}-shm", path.display()));
+    let _ = std::fs::remove_file(format!("{}-wal", path.display()));
 }
 
 #[test]

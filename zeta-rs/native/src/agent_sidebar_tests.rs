@@ -21,3 +21,13 @@ fn narrow_viewport_temporarily_hides_the_expanded_sidebar() {
     assert!(!sidebar.is_visible_for(DEFAULT_WIDTH + MINIMUM_MAIN_WIDTH - 1.0));
     assert!(sidebar.is_visible_for(DEFAULT_WIDTH + MINIMUM_MAIN_WIDTH));
 }
+
+#[test]
+fn expand_is_idempotent_and_keeps_the_sidebar_visible() {
+    let mut sidebar = AgentSidebarState::default();
+
+    sidebar.expand();
+    sidebar.expand();
+
+    assert!(sidebar.is_expanded());
+}

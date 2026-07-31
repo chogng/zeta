@@ -11,6 +11,7 @@ use zeta_app_server_client::AppServerEvent;
 use zeta_app_server_client::AppServerSession;
 use zeta_app_server_client::InProcessClientOptions;
 use zeta_app_server_client::ServerNotification;
+use zeta_app_server_client::local_profile_root;
 use zeta_app_server_protocol::protocol::common::ClientInfo;
 use zeta_app_server_protocol::protocol::session::{SessionCreateParams, SessionThreadCreateParams};
 use zeta_app_server_protocol::protocol::thread::{ThreadReadParams, ThreadSubscribeParams};
@@ -60,8 +61,8 @@ fn run_app_server(arguments: Vec<String>) -> Result<(), String> {
     if arguments.as_slice() != ["--listen", "stdio://"] {
         return Err("usage: zeta app-server --listen stdio://".into());
     }
-    let options =
-        LocalAppServerOptions::new(state_root()).with_workspace_root(configured_workspace()?);
+    let options = LocalAppServerOptions::new(local_profile_root())
+        .with_workspace_root(configured_workspace()?);
     open_local_app_server(options)
         .map_err(|error| error.to_string())?
         .serve_stdio()
@@ -73,7 +74,8 @@ fn app_server_command(arguments: Vec<String>) -> Result<(), String> {
 }
 
 fn mcp_server_command(arguments: Vec<String>) -> Result<(), String> {
-    let options = zeta_mcp_server::McpServerOptions::new(state_root(), configured_workspace()?);
+    let options =
+        zeta_mcp_server::McpServerOptions::new(local_profile_root(), configured_workspace()?);
     match arguments.as_slice() {
         [] => zeta_mcp_server::run_stdio(options).map_err(|error| error.to_string()),
         [listen, address] if listen == "--listen" && address == "stdio://" => {
@@ -104,12 +106,6 @@ fn parse_mcp_http_address(address: &str) -> Result<(std::net::SocketAddr, String
         .parse()
         .map_err(|_| "MCP HTTP listener authority must be an IP:PORT pair".to_string())?;
     Ok((socket, format!("/{path}")))
-}
-
-fn state_root() -> PathBuf {
-    env::var_os("ZETA_STATE_ROOT")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from(".zeta"))
 }
 
 fn current_workspace() -> Result<PathBuf, String> {
@@ -237,7 +233,7 @@ fn run_prompt_in_session(
 fn in_process_session() -> Result<AppServerSession, String> {
     AppServerSession::start_embedded(
         InProcessClientOptions::new(
-            state_root(),
+            local_profile_root(),
             ClientInfo {
                 name: "zeta-cli".into(),
                 version: env!("CARGO_PKG_VERSION").into(),

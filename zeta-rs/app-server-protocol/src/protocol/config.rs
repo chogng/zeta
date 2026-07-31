@@ -101,6 +101,68 @@ pub struct SkillSourceConfigDto {
     pub enablement: SkillSourceEnablementDto,
 }
 
+/// Desired participation of one exact Plugin request in future activation resolution.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum PluginRequestEnablementDto {
+    Disabled,
+    Enabled,
+}
+
+/// Declarative request for one exact Plugin package.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct PluginRequestDto {
+    #[schemars(length(min = 1))]
+    pub plugin_id: String,
+    #[schemars(length(min = 1))]
+    pub version: String,
+    pub enablement: PluginRequestEnablementDto,
+}
+
+/// Safe-point event that may request a Hook execution.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum HookEventDto {
+    BeforeTool,
+    AfterTool,
+    TurnCompleted,
+}
+
+/// Desired enablement of one Hook declaration.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum HookEnablementDto {
+    Disabled,
+    Enabled,
+}
+
+/// Optional exact tool-name matcher for tool-related Hook events.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct HookMatcherDto {
+    pub tool_names: Vec<String>,
+}
+
+/// Runtime-free Hook action. Execution still requires policy and sandbox approval.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", tag = "type")]
+pub enum HookActionDto {
+    Process { program: String, args: Vec<String> },
+}
+
+/// Declarative Hook configuration exposed through the App Server contract.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct HookConfigDto {
+    #[schemars(length(min = 1))]
+    pub id: String,
+    pub event: HookEventDto,
+    pub matcher: HookMatcherDto,
+    pub action: HookActionDto,
+    pub enablement: HookEnablementDto,
+}
+
 /// Current user configuration snapshot returned by `config/read`.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -111,10 +173,21 @@ pub struct ConfigReadResult {
     pub generation: u64,
     pub preferred_model: Option<ModelRefDto>,
     pub approval_review_model: ApprovalReviewModelSelectionDto,
-    pub theme: Option<ThemeDto>,
     pub providers: BTreeMap<String, ProviderConfigDto>,
     pub mcp_servers: BTreeMap<String, McpServerConfigDto>,
     pub skill_sources: BTreeMap<String, SkillSourceConfigDto>,
+    pub plugin_requests: BTreeMap<String, PluginRequestDto>,
+    pub hooks: BTreeMap<String, HookConfigDto>,
+}
+
+/// Notification payload emitted after a durable Config authority commit.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct ConfigChanged {
+    #[ts(type = "number")]
+    pub revision: u64,
+    #[ts(type = "number")]
+    pub generation: u64,
 }
 
 /// Compact result of a retry-safe configuration mutation.
@@ -151,10 +224,6 @@ pub struct ConfigUpdateParams {
     #[schemars(with = "Option<ApprovalReviewModelSelectionDto>")]
     #[ts(as = "Option<ApprovalReviewModelSelectionDto>", optional = nullable)]
     pub approval_review_model: Patch<ApprovalReviewModelSelectionDto>,
-    #[serde(default, skip_serializing_if = "Patch::is_missing")]
-    #[schemars(with = "Option<ThemeDto>")]
-    #[ts(as = "Option<ThemeDto>", optional = nullable)]
-    pub theme: Patch<ThemeDto>,
 }
 
 /// Creates or replaces one provider entry in the user configuration authority.
@@ -252,11 +321,74 @@ pub struct SkillSourceSetEnablementParams {
     pub enablement: SkillSourceEnablementDto,
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+/// Creates or replaces one exact user Plugin request.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
-#[ts(rename = "Theme")]
-pub enum ThemeDto {
-    Light,
-    Dark,
-    System,
+pub struct PluginRequestUpsertParams {
+    pub command_id: CommandId,
+    #[schemars(range(min = 0))]
+    #[ts(type = "number")]
+    pub expected_revision: u64,
+    pub request: PluginRequestDto,
+}
+
+/// Removes one user Plugin request.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct PluginRequestRemoveParams {
+    pub command_id: CommandId,
+    #[schemars(range(min = 0))]
+    #[ts(type = "number")]
+    pub expected_revision: u64,
+    #[schemars(length(min = 1))]
+    pub plugin_id: String,
+}
+
+/// Changes desired enablement for one configured Plugin request.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct PluginRequestSetEnablementParams {
+    pub command_id: CommandId,
+    #[schemars(range(min = 0))]
+    #[ts(type = "number")]
+    pub expected_revision: u64,
+    #[schemars(length(min = 1))]
+    pub plugin_id: String,
+    pub enablement: PluginRequestEnablementDto,
+}
+
+/// Creates or replaces one declarative user Hook.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct HookUpsertParams {
+    pub command_id: CommandId,
+    #[schemars(range(min = 0))]
+    #[ts(type = "number")]
+    pub expected_revision: u64,
+    pub hook: HookConfigDto,
+}
+
+/// Removes one declarative user Hook.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct HookRemoveParams {
+    pub command_id: CommandId,
+    #[schemars(range(min = 0))]
+    #[ts(type = "number")]
+    pub expected_revision: u64,
+    #[schemars(length(min = 1))]
+    pub hook_id: String,
+}
+
+/// Changes desired enablement for one configured user Hook.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct HookSetEnablementParams {
+    pub command_id: CommandId,
+    #[schemars(range(min = 0))]
+    #[ts(type = "number")]
+    pub expected_revision: u64,
+    #[schemars(length(min = 1))]
+    pub hook_id: String,
+    pub enablement: HookEnablementDto,
 }

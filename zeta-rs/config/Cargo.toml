@@ -11,8 +11,12 @@ name = "zeta_config"
 path = "src/lib.rs"
 
 [dependencies]
+rusqlite = { workspace = true }
+semver = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+sha2 = { workspace = true }
+toml = { workspace = true }
 zeta-model-provider-config = { workspace = true }
 zeta-protocol = { workspace = true }
 

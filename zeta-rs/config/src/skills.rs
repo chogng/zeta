@@ -26,7 +26,7 @@ pub enum SkillEnablement {
 /// `root_reference` is an opaque host reference, not a trusted filesystem handle. A future Skill
 /// manager resolves it, checks containment and trust, then publishes a separate catalog snapshot.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SkillSourceConfig {
     pub id: SkillSourceId,
     pub root_reference: String,
@@ -50,7 +50,7 @@ impl SkillSourceConfig {
 
 /// Skill source declarations owned by the user configuration authority.
 #[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SkillsConfig {
     #[serde(default)]
     pub sources: BTreeMap<SkillSourceId, SkillSourceConfig>,

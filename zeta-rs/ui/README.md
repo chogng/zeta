@@ -4,11 +4,12 @@
 > Surface 生命周期与 presentation 的 canonical 文档在
 > [`zeta-wgpu`](../wgpu/README.md)；native 文本输入的跨 crate ownership 见
 > [`docs/native-text-input.md`](../../docs/native-text-input.md)；product icon system 见
-> [`docs/icons.md`](../../docs/icons.md)。
+> [`docs/icons.md`](../../docs/icons.md)。`Keycap` 的快捷键产品组合由
+> [`zeta-keybinding`](../keybinding/README.md) 拥有。
 
 `zeta-ui` 定义与窗口系统无关的 immutable frame scene、单轴 SplitView 几何，并提供
-presentation-only 的 Button、ActionBar、ContextMenu、Dropdown、TabList、Sash、ContextView、
-ScrollView 和输入框等组合控件；底层
+presentation-only 的 Button、ActionBar、ContextMenu、Dropdown、TabList、Keycap、Sash、
+ContextView、ScrollView 和输入框等组合控件；底层
 实现分层的 instanced rect、decoded RGBA image、symbolic/multicolor SVG icon 与 text GPU
 pipeline。SVG icon 由 `resvg`
 栅格为按 physical size 缓存的 alpha mask，`glyphon` 完成 shaping、glyph cache、texture
@@ -29,8 +30,9 @@ shaping 或 glyph rasterization。
 | 通用像素滚动状态、viewport 裁剪、内容坐标与滚动条交互 geometry | `zeta-ui::ScrollState` / `ScrollView` | ✅；包含 hover/active/fade presentation、thumb drag mapping 和 track paging；平台事件路由、pointer capture、产品内容与 virtualization 归 host |
 | 锚点浮层布局、viewport 翻转/约束、通用外壳与浮层合成 | `zeta-ui::ContextView` / `UiScene::with_overlay` | ✅；显示生命周期、关闭和输入路由归 host |
 | 柔和阴影、2px padding、4px radius、纵向 menu item geometry 与默认选择 | `zeta-ui::ContextMenu` | ✅；组合 ContextView/ActionBar，产品 identity、关闭与 command 归 host |
-| 无边框、无外层 padding 的锚定下拉项布局与默认选择 | `zeta-ui::Dropdown` | ✅；组合 ContextView/ActionBar，选中 identity、关闭与 command 归 host |
+| 无边框、无外层 padding 的锚定下拉项布局、可选 header 与默认选择 | `zeta-ui::Dropdown` | ✅；组合 ContextView/ActionBar，选中 identity、header 内容、关闭与 command 归 host |
 | Icon+text label 的内部布局 | `zeta-ui::IconLabel` | ✅ |
+| 单个按键与多段快捷键的 keycap 几何和绘制 | `zeta-ui::Keycap` / `KeycapSequence` | ✅；按键语义与平台 label 归 caller |
 | Semantic icon identity、SVG definition 与 rendering mode | `zeta-icons` | 委托 |
 | 非 component 单行编辑基座与 shaping | `TextInput` / `TextInputLayoutEngine` | ✅ |
 | Input-box chrome、状态与 scene composition | `InputBox` | ✅ |
@@ -90,11 +92,12 @@ DirectWrite 或 fontconfig 类型。
 | `components::scroll_view::{ScrollView, ScrollViewport}` | public | 约束有效 offset，裁剪调用方内容，并公开 translated content origin 与 visible content bounds |
 | `components::scroll_view::{ScrollbarLayout, ScrollbarHit, ScrollbarDrag}` | public | 以绘制所用的同一 track/thumb geometry 执行命中、轨道翻页和拖动到绝对 offset 的映射 |
 | `components::scroll_view::{ScrollbarController, ScrollbarPresentation, ScrollbarStyle}` | public | 计算 hover/active 与 fade-in/hold/fade-out deadline，选择语义颜色并绘制 overlay scrollbar；不安装 timer 或持有平台 pointer capture |
-| `components::context_menu::{ContextMenu, ContextMenuItem}` | public | 组合 ContextView 与纵向 ActionBar，绘制带柔和 BoxShadow 的无边框 menu surface，并公开同源 item bounds/hit-test |
-| `components::context_menu::{ContextMenuSelection, ContextMenuStyle}` | public | 默认选择首个 enabled item；定义 surface color、item size/style 和锚点 placement，padding 固定为 2px、radius 固定为 4px |
-| `components::dropdown::{Dropdown, DropdownItem}` | public | 组合锚定浮层与纵向 label item，公开同源 item/interactive bounds、hit-test 和当前 selected index |
-| `components::dropdown::{DropdownSelection, DropdownStyle}` | public | 默认选择首个 enabled item，并定义 borderless surface、item size/style、圆角和锚点 placement |
+| `components::context_menu::{ContextMenu, ContextMenuItem}` | public | 组合 ContextView 与纵向 ActionBar，绘制带柔和 BoxShadow 的无边框 menu surface，公开同源 item bounds/hit-test，并允许 host 在保留的 header row 中绘制搜索等产品内容 |
+| `components::context_menu::{ContextMenuSelection, ContextMenuStyle}` | public | 默认选择首个 enabled item；定义 surface color、item size/style、可选 header height 和锚点 placement，padding 固定为 2px、radius 固定为 4px |
+| `components::dropdown::{Dropdown, DropdownItem}` | public | 组合锚定浮层与纵向 label item，公开同源 item/interactive bounds、hit-test 和当前 selected index，并允许 host 在保留的 header row 中绘制搜索等产品内容 |
+| `components::dropdown::{DropdownSelection, DropdownStyle}` | public | 默认选择首个 enabled item，并定义 borderless surface、item size/style、可选 header height、圆角和锚点 placement |
 | `components::icon_label::{IconLabel, IconLabelStyle}` | public | 对齐 semantic icon 与单行 text；不选择产品 icon |
+| `components::keycap::{Keycap, KeycapSequence, KeycapStyle}` | public | 绘制 caller 提供 label 的按键块，并区分同一 Chord 内按键间距与多段 Chord 间距；不解析快捷键或选择平台 label |
 | `text_input::model::TextInput` | public | 拥有 single-line text、selection、grapheme editing 与 composition；`selected_text` 投影非空 committed selection，不实现 `Component` |
 | `text_input::caret_blink::CaretBlinkController` | public | 计算 focus/activity/deadline 驱动的 caret visibility；不创建 timer |
 | `text_input::layout::TextInputLayoutEngine` | public | 使用 cosmic-text 生成单行 text、selection、caret、preedit 几何 |
@@ -106,13 +109,13 @@ DirectWrite 或 fontconfig 类型。
 | `icon::PaintIcon` | public | 把 `zeta-icons::Icon` 绑定到 logical bounds、caller tint 与 clip |
 | `image::{ImageData, ImageId, PaintImage}` | public | 校验 immutable RGBA8 sRGB pixels，以稳定 identity 绑定 logical bounds 与 clip |
 | `scene::UiScene` | public | 保存一帧背景、分层 rect/image/icon/text、构建时的 nested clip 和显式 overlay composition |
-| `scene::{TextBlock, TextSpan, TextStyle}` | public | 使用 logical UI pixels 表达普通/同段富文本、bounds 和样式；不拥有 Markdown 语义 |
+| `scene::{TextBlock, TextBlockWrap, TextSpan, TextStyle}` | public | 使用 logical UI pixels 表达普通/同段富文本、bounds 与显式 wrap；不拥有 Markdown 语义 |
 | `text_layout::{TextLayoutEngine, TextLayoutWidth, TextLayout}` | public | 用 renderer-compatible font policy 测量普通/富文本，并从同一次 shaping 返回 wrapped/BiDi per-span/UTF-8-range geometry 与 point hit |
 | `font::catalog::FontCatalog` | public | 加载、排序并去重系统 family names |
 | `font::platform::system_family_names` | private | 选择 macOS CoreText 或 portable font database |
 | `font::system::new_font_system` | private | 建立 renderer/layout 共用的 locale-aware font database，并应用平台 raster compatibility filter |
 | `renderer::UiViewport` | public | 绑定 physical target extent 与 scale factor |
-| `renderer::UiRenderer` | public | 持有 rect pipeline、font system、Swash cache、glyph atlas 与 text pipeline |
+| `renderer::UiRenderer` | public | 持有 rect pipeline、font system、Swash cache、glyph atlas 与 text pipeline，并把每个 TextBlock 的 wrap contract 投影到 glyphon |
 | `rect_renderer::RectRenderer` | private | 上传 instanced rect 并执行 WGSL rounded-rect/border/clip draw |
 | `icon_renderer::IconRenderer` | private | 按 SVG/physical size 栅格化 alpha mask、分配 atlas 并执行 tinted quad draw |
 | `image_renderer::ImageRenderer` | private | 按稳定 `ImageId` 把 immutable RGBA8 pixels 上传到 4096² sRGB atlas，并执行 clipped/scaled quad draw |
@@ -219,6 +222,7 @@ CoreGraphics raster 或原生 typographic metrics 已经成为绘制事实。
 - symbolic SVG coverage 进入 R8 mask atlas；multicolor 固定色进入 sRGB RGBA atlas，纯黑
   coverage 继续使用 caller tint；
 - text bounds、font size 与 line height 必须大于零；
+- 不换行的 code/input row 必须选择 `TextBlockWrap::None`，不能依赖 renderer 默认断行；
 - 校验失败返回对应的 `InvalidScaleFactor`、`InvalidPaintRect`、`InvalidPaintImage`、
   `InvalidPaintIcon`、`InvalidSvgIcon`、`IconRasterTooLarge`、`ImageAtlasFull`、
   `IconAtlasFull` 或 `InvalidTextBlock`；
@@ -288,13 +292,17 @@ content 的领域交互；这些 retained lifecycle 不进入 scene component。
 中点；ContextMenu 再组合低透明度的 ambient shadow 与向下偏移的 key shadow，避免单层黑色
 光晕。内部无边框 menu surface 固定使用 2px padding 与 4px radius，再由纵向 ActionBar
 排列 label item。Host 通过
-`ContextMenuSelection::Item` 投影唯一
-选中项，并使用 ContextMenu 返回的同源 bounds 注册交互。当前
-`zeta-native::session_context_menu` 是第一处真实 consumer。
+`ContextMenuSelection::Item` 投影唯一选中项，并使用 ContextMenu 返回的同源 bounds 注册交互。
+`ContextMenuStyle::with_header_height` 只保留 product-owned header geometry；
+`ContextMenu::paint_with_header` 保证 header 与菜单项绘制在同一 overlay。搜索状态、输入语义、
+过滤和焦点仍由 host 保存，ContextMenu 不依赖 `TextInput` 或业务数据。Native 的分支菜单通过
+这条 header contract 组合产品搜索。
 `Dropdown` 是另一层 ContextView 组合：它使用无外层 padding 的浮层外壳，
 用垂直 ActionBar 排列 label item，并默认选择第一个 enabled item。Host 可以用
 `DropdownSelection::Item` 投影 hover/focus/pressed 对应的唯一选择，用 Dropdown 返回的同源
-bounds 注册交互；selected identity、open/close 和 command 不进入组件。
+bounds 注册交互。`DropdownStyle::with_header_height` 与 `Dropdown::paint_with_header` 为
+选择器保留 product-owned header，但不拥有查询或输入状态；Native 的工作区目录 picker 通过
+这条契约组合 SearchBox。selected identity、open/close 和 command 不进入组件。
 `TextInput` 拥有 local editing state 和 composition，但不拥有 focus、platform IME lifecycle、
 component chrome 或产品 reducer。`InputBox::new` 使用 `TextInputLayoutEngine` 从 base state
 生成 immutable layout，再组合 background、border、placeholder、selection、caret 和 preedit
@@ -348,7 +356,7 @@ snapshot harness。
 - `Dropdown` 当前只支持单列 label item、固定 item size 和单项 selection；icon、separator、
   submenu、typeahead、scroll/virtualization、打开/关闭与 accessibility scope 尚无；
 - `BoxShadow` 当前支持单个 rounded-rect shadow 的 color、offset 与 blur radius；尚无 spread、
-  inset 或多重 shadow。ContextMenu 也暂不支持 icon、separator、submenu、typeahead 或超高菜单滚动；
+  inset 或多重 shadow。ContextMenu 也暂不内建 icon、separator、submenu、typeahead 或超高菜单滚动；
 - `TabList` 当前只拥有固定 item size、gap 和 Tab surface paint；custom content、动态宽度、
   overflow、close action、identity、interaction 与 tabpanel 均由 composed control/host 拥有；
 - `ContextView` 不拥有 shadow、arrow/callout，也不拥有 outside click、Escape、focus

@@ -2,6 +2,7 @@
 
 mod in_process;
 mod notification;
+mod profile;
 mod session;
 
 use serde_json::Value;
@@ -40,8 +41,8 @@ use zeta_app_server_protocol::protocol::thread::{
     ThreadUnsubscribeParams,
 };
 use zeta_app_server_protocol::protocol::turn::{
-    TurnInteractionResolveParams, TurnInteractionResolveResult, TurnInterruptParams,
-    TurnInterruptResult, TurnStartParams, TurnStartResult,
+    ShellTurnStartParams, TurnInteractionResolveParams, TurnInteractionResolveResult,
+    TurnInterruptParams, TurnInterruptResult, TurnStartParams, TurnStartResult,
 };
 use zeta_app_server_protocol::rpc::{JsonRpcId, JsonRpcRequest, JsonRpcResponse};
 
@@ -51,6 +52,7 @@ pub use in_process::InProcessTransport;
 pub use in_process::open_in_process_app_server;
 pub use in_process::start_in_process_client;
 pub use notification::ServerNotification;
+pub use profile::local_profile_root;
 pub use session::{
     AppServerEvent, AppServerEvents, AppServerRequestHandle, AppServerSession,
     ConnectionCloseReason, ShutdownError, TakeEventsError,
@@ -291,6 +293,13 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
 
     pub fn start_turn(&mut self, params: TurnStartParams) -> Result<TurnStartResult, ClientError> {
         self.call(ClientMethod::TurnStart, params)
+    }
+
+    pub fn start_shell_turn(
+        &mut self,
+        params: ShellTurnStartParams,
+    ) -> Result<TurnStartResult, ClientError> {
+        self.call(ClientMethod::ShellTurnStart, params)
     }
 
     pub fn interrupt_turn(

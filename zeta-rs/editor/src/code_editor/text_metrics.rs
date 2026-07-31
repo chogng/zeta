@@ -1,8 +1,16 @@
 //! Monospace display-column mapping shared by text and decorations.
 
+use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 
 use super::TAB_WIDTH;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) struct DisplayCellRun<'a> {
+    pub text: &'a str,
+    pub column: usize,
+    pub columns: usize,
+}
 
 pub(super) fn display_columns(text: &str) -> usize {
     display_columns_until(text, text.len())
@@ -56,4 +64,74 @@ pub(super) fn expand_tabs(text: &str) -> String {
     }
     expanded.push_str(&text[segment_start..]);
     expanded
+}
+
+pub(super) fn visit_display_cell_runs<'a>(
+    text: &'a str,
+    mut visit: impl FnMut(DisplayCellRun<'a>),
+) -> usize {
+    if text.is_empty() {
+        return 0;
+    }
+    if text
+        .graphemes(true)
+        .all(|grapheme| display_columns(grapheme) <= 1)
+    {
+        let columns = display_columns(text);
+        if columns > 0 {
+            visit(DisplayCellRun {
+                text,
+                column: 0,
+                columns,
+            });
+        }
+        return columns;
+    }
+
+    let mut run_start = 0;
+    let mut run_column = 0;
+    let mut column = 0;
+    for (start, grapheme) in text.grapheme_indices(true) {
+        let grapheme_columns = display_columns(grapheme);
+        let isolate = grapheme_columns != 1 || grapheme.chars().all(char::is_whitespace);
+        if !isolate {
+            column += grapheme_columns;
+            continue;
+        }
+        visit_run(
+            &mut visit,
+            &text[run_start..start],
+            run_column,
+            column - run_column,
+        );
+        if !grapheme.chars().all(char::is_whitespace) {
+            visit_run(&mut visit, grapheme, column, grapheme_columns);
+        }
+        column += grapheme_columns;
+        run_start = start + grapheme.len();
+        run_column = column;
+    }
+    visit_run(
+        &mut visit,
+        &text[run_start..],
+        run_column,
+        column - run_column,
+    );
+    column
+}
+
+fn visit_run<'a>(
+    visit: &mut impl FnMut(DisplayCellRun<'a>),
+    text: &'a str,
+    column: usize,
+    columns: usize,
+) {
+    if text.is_empty() || columns == 0 {
+        return;
+    }
+    visit(DisplayCellRun {
+        text,
+        column,
+        columns,
+    });
 }

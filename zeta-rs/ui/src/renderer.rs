@@ -1,6 +1,6 @@
 use glyphon::{
     Attrs, Buffer, Cache, Color as GlyphColor, Metrics, Resolution, Shaping, SwashCache, TextArea,
-    TextAtlas, TextBounds, TextRenderer, Viewport,
+    TextAtlas, TextBounds, TextRenderer, Viewport, Wrap,
 };
 
 use crate::font::mapping::{glyphon_family, glyphon_style, glyphon_weight};
@@ -8,7 +8,7 @@ use crate::font::new_font_system;
 use crate::icon_renderer::IconRenderer;
 use crate::image_renderer::ImageRenderer;
 use crate::rect_renderer::RectRenderer;
-use crate::{Rect, TextBlock, TextStyle, UiScene};
+use crate::{Rect, TextBlock, TextBlockWrap, TextStyle, UiScene};
 
 /// Physical render-target extent paired with the logical-to-physical UI scale.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -134,39 +134,11 @@ impl UiRenderer {
                     continue;
                 }
                 validate_text_block(index, block)?;
-                let style = block.style();
-                let metrics = Metrics::new(
-                    style.font_size() * scale_factor,
-                    style.line_height() * scale_factor,
-                );
-                let mut buffer = Buffer::new(&mut self.font_system, metrics);
-                let bounds = block.bounds();
-                buffer.set_size(
-                    Some(bounds.width * scale_factor),
-                    Some(bounds.height * scale_factor),
-                );
-                let attrs = Attrs::new()
-                    .family(glyphon_family(style.family()))
-                    .weight(glyphon_weight(style.weight()))
-                    .style(glyphon_style(style.style()));
-                if block.spans().is_empty() {
-                    buffer.set_text(block.text(), &attrs, Shaping::Advanced, None);
-                } else {
-                    buffer.set_rich_text(
-                        block
-                            .spans()
-                            .iter()
-                            .map(|span| (span.text(), attrs_for_style(span.style(), scale_factor))),
-                        &attrs,
-                        Shaping::Advanced,
-                        None,
-                    );
-                }
-                buffer.shape_until_scroll(&mut self.font_system, false);
+                let buffer = prepare_text_buffer(&mut self.font_system, block, scale_factor);
                 text_layer.buffers.push(buffer);
                 text_layer
                     .areas
-                    .push(prepared_area(block, scale_factor, style.color()));
+                    .push(prepared_area(block, scale_factor, block.style().color()));
             }
             let text_areas =
                 text_layer
@@ -293,6 +265,44 @@ fn attrs_for_style(style: &TextStyle, scale_factor: f32) -> Attrs<'_> {
         ))
 }
 
+fn prepare_text_buffer(
+    font_system: &mut glyphon::FontSystem,
+    block: &TextBlock,
+    scale_factor: f32,
+) -> Buffer {
+    let style = block.style();
+    let metrics = Metrics::new(
+        style.font_size() * scale_factor,
+        style.line_height() * scale_factor,
+    );
+    let mut buffer = Buffer::new(font_system, metrics);
+    buffer.set_wrap(glyphon_wrap(block.wrap()));
+    let bounds = block.bounds();
+    buffer.set_size(
+        Some(bounds.width * scale_factor),
+        Some(bounds.height * scale_factor),
+    );
+    let attrs = Attrs::new()
+        .family(glyphon_family(style.family()))
+        .weight(glyphon_weight(style.weight()))
+        .style(glyphon_style(style.style()));
+    if block.spans().is_empty() {
+        buffer.set_text(block.text(), &attrs, Shaping::Advanced, None);
+    } else {
+        buffer.set_rich_text(
+            block
+                .spans()
+                .iter()
+                .map(|span| (span.text(), attrs_for_style(span.style(), scale_factor))),
+            &attrs,
+            Shaping::Advanced,
+            None,
+        );
+    }
+    buffer.shape_until_scroll(font_system, false);
+    buffer
+}
+
 fn prepared_area(block: &TextBlock, scale_factor: f32, color: crate::Color) -> PreparedArea {
     let origin = block.origin();
     let size = block.bounds();
@@ -313,6 +323,13 @@ fn prepared_area(block: &TextBlock, scale_factor: f32, color: crate::Color) -> P
             bottom: (clip_bounds.bottom() * scale_factor).ceil() as i32,
         },
         color: glyphon_color(color),
+    }
+}
+
+const fn glyphon_wrap(wrap: TextBlockWrap) -> Wrap {
+    match wrap {
+        TextBlockWrap::WordOrGlyph => Wrap::WordOrGlyph,
+        TextBlockWrap::None => Wrap::None,
     }
 }
 

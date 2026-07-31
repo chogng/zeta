@@ -16,6 +16,8 @@ pub struct DiffEditorStyle {
     pub(super) removed_inline: Color,
     pub(super) added_inline: Color,
     pub(super) missing_line: Color,
+    pub(super) fold_line: Color,
+    pub(super) fold_marker: Color,
 }
 
 impl DiffEditorStyle {
@@ -28,6 +30,8 @@ impl DiffEditorStyle {
             removed_inline: Color::rgb(255, 198, 194),
             added_inline: Color::rgb(166, 235, 183),
             missing_line: Color::rgb(248, 248, 249),
+            fold_line: Color::rgb(241, 246, 252),
+            fold_marker: Color::rgb(87, 96, 106),
         }
     }
 
@@ -51,6 +55,14 @@ impl DiffEditorStyle {
             DiffEditorSide::Original => self.removed_inline,
             DiffEditorSide::Modified => self.added_inline,
         }
+    }
+
+    pub(super) const fn fold_line(&self) -> Color {
+        self.fold_line
+    }
+
+    pub(super) const fn fold_marker(&self) -> Color {
+        self.fold_marker
     }
 
     pub(super) fn line_background(

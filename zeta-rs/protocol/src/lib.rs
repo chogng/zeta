@@ -42,7 +42,7 @@ pub use skill::{InvalidSkillName, InvalidSkillSourceId, SkillId, SkillName, Skil
 pub use stream::{StreamCursor, StreamInstanceId};
 pub use thread::{
     ItemDelta, Thread, ThreadCommand, ThreadEvent, ThreadStatus, ThreadUpdate,
-    ThreadUpdateEnvelope, ToolExecutionAuthority,
+    ThreadUpdateEnvelope, ToolExecutionAuthority, ToolOutputStream,
 };
 pub use tool_execution::{
     ProcessExecutionOutput, ProcessExitStatus, SandboxDenialOutput, ToolExecutionOutput,

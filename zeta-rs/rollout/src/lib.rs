@@ -6,8 +6,8 @@
 mod error;
 mod repository;
 
-pub use error::RolloutError;
-pub use repository::RolloutRepository;
+pub use error::LocalStateError;
+pub use repository::LocalStateRepository;
 
 #[cfg(test)]
 #[path = "repository_tests.rs"]

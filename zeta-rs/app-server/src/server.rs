@@ -25,6 +25,8 @@ use zeta_protocol::ThreadUpdateEnvelope;
 use zeta_typst::TypstCompiler;
 
 mod config_operations;
+mod config_runtime;
+mod extension_config_operations;
 mod fs_operations;
 mod fs_watcher;
 mod git_operations;
@@ -39,6 +41,7 @@ mod workspace_operations;
 mod workspace_runtime;
 
 use update_broker::{NotificationListener, NotificationQueue, UpdateBroker};
+pub(crate) use workspace_runtime::WorkspaceToolPorts;
 use workspace_runtime::{LocalWorkspaceHost, WorkspaceRuntime};
 
 pub struct AppServer {
@@ -55,6 +58,8 @@ pub struct AppServer {
     pub(super) slash_commands: SlashCommandCatalog,
     pub(super) skills: Option<Arc<SkillRuntime>>,
     _skill_watcher: Option<SkillWatcher>,
+    _config_watcher: Option<config_runtime::ConfigWatcher>,
+    _tool_config_watcher: Option<crate::local::ToolConfigWatcher>,
     updates: Arc<UpdateBroker>,
 }
 
@@ -116,6 +121,8 @@ impl AppServer {
             slash_commands: SlashCommandCatalog::default(),
             skills: None,
             _skill_watcher: None,
+            _config_watcher: None,
+            _tool_config_watcher: None,
             updates,
         }
     }
@@ -153,6 +160,10 @@ impl AppServer {
     }
 
     pub fn with_config_store(mut self, config: Arc<ConfigStore>) -> Self {
+        self._config_watcher = Some(config_runtime::ConfigWatcher::start(
+            &config,
+            Arc::clone(&self.updates),
+        ));
         self.config = Some(config);
         self
     }
@@ -268,8 +279,22 @@ impl AppServer {
         self
     }
 
+    pub(crate) fn with_tool_config_watcher(
+        mut self,
+        watcher: crate::local::ToolConfigWatcher,
+    ) -> Self {
+        self._tool_config_watcher = Some(watcher);
+        self
+    }
+
     pub fn sessions(&self) -> &Arc<SessionCoordinator> {
         &self.sessions
+    }
+
+    /// Re-enqueues durable running Tool continuations after host services are installed.
+    pub fn resume_recovered_tool_continuations(&self) -> Result<usize, CoreError> {
+        self.turn_executor_snapshot()
+            .resume_recovered_tool_continuations()
     }
 
     pub fn drain_notifications(&self, connection: &mut ConnectionState) -> Vec<String> {
@@ -414,6 +439,9 @@ impl AppServer {
                 self.thread_unsubscribe(connection, &request.params)
             }
             Some(ClientMethod::TurnStart) => self.turn_start(connection, &request.params),
+            Some(ClientMethod::ShellTurnStart) => {
+                self.shell_turn_start(connection, &request.params)
+            }
             Some(ClientMethod::TurnInterrupt) => self.turn_interrupt(connection, &request.params),
             Some(ClientMethod::TurnInteractionResolve) => {
                 self.turn_interaction_resolve(connection, &request.params)
@@ -434,6 +462,14 @@ impl AppServer {
             Some(ClientMethod::SkillSourceSetEnablement) => {
                 self.skill_source_set_enablement(&request.params)
             }
+            Some(ClientMethod::PluginRequestUpsert) => self.plugin_request_upsert(&request.params),
+            Some(ClientMethod::PluginRequestRemove) => self.plugin_request_remove(&request.params),
+            Some(ClientMethod::PluginRequestSetEnablement) => {
+                self.plugin_request_set_enablement(&request.params)
+            }
+            Some(ClientMethod::HookUpsert) => self.hook_upsert(&request.params),
+            Some(ClientMethod::HookRemove) => self.hook_remove(&request.params),
+            Some(ClientMethod::HookSetEnablement) => self.hook_set_enablement(&request.params),
             Some(ClientMethod::SkillList) => self.skill_list(&request.params),
             Some(ClientMethod::SkillSetEnablement) => self.skill_set_enablement(&request.params),
             Some(ClientMethod::ResourceMetadata) => {

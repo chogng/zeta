@@ -90,6 +90,16 @@ impl CodeEditorDocument {
         self.preferred_column = None;
     }
 
+    /// Moves or extends the committed selection to a projected editor position.
+    pub fn move_to(&mut self, position: CodeEditorPosition, mode: super::CodeEditorSelectionMode) {
+        self.cancel_composition();
+        self.cursor = self.offset_for_position(position);
+        if mode == super::CodeEditorSelectionMode::Move {
+            self.anchor = self.cursor;
+        }
+        self.preferred_column = None;
+    }
+
     pub fn apply_syntax(&mut self, highlighter: &dyn CodeEditorSyntaxHighlighter) {
         self.syntax = self
             .line_ranges

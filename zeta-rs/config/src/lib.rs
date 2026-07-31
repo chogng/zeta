@@ -5,10 +5,16 @@
 
 mod command;
 mod document;
+mod hooks;
 mod mcp;
+mod mutation;
+mod plugins;
 mod resolution;
 mod skills;
 mod store;
+mod store_file;
+mod store_monitor;
+mod store_schema;
 mod workspace;
 
 pub use command::{
@@ -17,25 +23,31 @@ pub use command::{
 };
 pub use document::{
     AgentConfig, ApprovalReviewModelSelection, ConfigGeneration, ConfigRevision, ResolvedConfig,
-    ResolvedConfigSnapshot, UiConfig, UserConfigDocument,
+    ResolvedConfigSnapshot, UserConfigDocument,
+};
+pub use hooks::{
+    HookAction, HookConfig, HookEnablement, HookEvent, HookId, HookMatcher, HooksConfig,
 };
 pub use mcp::{
     McpConfig, McpCredentialBinding, McpServerConfig, McpServerEnablement, McpServerId,
     McpTransportConfig,
+};
+pub use plugins::{
+    PluginId, PluginRequest, PluginRequestEnablement, PluginVersion, PluginsConfig,
+    WorkspacePluginRequest, WorkspacePluginRequestScope, WorkspacePluginRequests,
 };
 pub use resolution::{
     ConfigDiagnostic, ConfigDiagnosticCode, ConfigProvenance, ConfigValueSource,
     ScopedConfigSnapshot, WorkspaceConfigInput, resolve_scoped_config,
 };
 pub use skills::{SkillEnablement, SkillSourceConfig, SkillSourceEnablement, SkillsConfig};
-pub use store::{ConfigError, ConfigStore};
+pub use store::{ConfigChange, ConfigError, ConfigStore};
 pub use workspace::{
-    PluginId, PluginVersion, WorkspaceAgentConfig, WorkspaceConfigDocument, WorkspaceConfigIntent,
-    WorkspaceConfigRevision, WorkspaceConfigScope, WorkspaceConfigStore, WorkspaceId,
-    WorkspaceMcpConfig, WorkspaceMcpServerConfig, WorkspacePluginRequest,
-    WorkspacePluginRequestScope, WorkspacePluginRequests, WorkspaceSkillsConfig,
+    WorkspaceAgentConfig, WorkspaceConfigDocument, WorkspaceConfigIntent, WorkspaceConfigRevision,
+    WorkspaceConfigScope, WorkspaceConfigStore, WorkspaceId, WorkspaceMcpConfig,
+    WorkspaceMcpServerConfig, WorkspaceSkillsConfig,
 };
-pub use zeta_protocol::{ModelRef, SkillId, SkillName, SkillSourceId, Theme};
+pub use zeta_protocol::{ModelRef, SkillId, SkillName, SkillSourceId};
 
 #[cfg(test)]
 #[path = "config_tests.rs"]

@@ -1,6 +1,6 @@
 use crate::{
-    ConfigError, McpServerEnablement, McpServerId, McpTransportConfig, SkillSourceConfig,
-    SkillSourceId,
+    ConfigError, HooksConfig, McpServerEnablement, McpServerId, McpTransportConfig,
+    SkillSourceConfig, SkillSourceId, WorkspacePluginRequests,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -155,132 +155,6 @@ impl WorkspaceMcpConfig {
     }
 }
 
-/// Stable Plugin package identity requested by a Workspace.
-#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize)]
-#[serde(transparent)]
-pub struct PluginId(String);
-
-impl PluginId {
-    pub fn new(value: impl Into<String>) -> Result<Self, ConfigError> {
-        let value = value.into();
-        let Some((publisher, name)) = value.split_once('/') else {
-            return Err(ConfigError(
-                "plugin id must use '<publisher>/<name>' form".into(),
-            ));
-        };
-        if value.matches('/').count() != 1
-            || !is_plugin_segment(publisher)
-            || !is_plugin_segment(name)
-        {
-            return Err(ConfigError(
-                "plugin id segments must use lowercase ASCII letters, digits, or single hyphens"
-                    .into(),
-            ));
-        }
-        Ok(Self(value))
-    }
-
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
-impl std::fmt::Display for PluginId {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        formatter.write_str(&self.0)
-    }
-}
-
-impl<'de> Deserialize<'de> for PluginId {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        Self::new(String::deserialize(deserializer)?).map_err(serde::de::Error::custom)
-    }
-}
-
-/// Exact package version requested by a Workspace configuration document.
-#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize)]
-#[serde(transparent)]
-pub struct PluginVersion(String);
-
-impl PluginVersion {
-    pub fn new(value: impl Into<String>) -> Result<Self, ConfigError> {
-        let value = value.into();
-        if value.trim().is_empty()
-            || value.contains(char::is_whitespace)
-            || value.contains(['\0', '\n', '\r'])
-        {
-            return Err(ConfigError(
-                "plugin version must be non-empty plain text".into(),
-            ));
-        }
-        Ok(Self(value))
-    }
-
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
-impl std::fmt::Display for PluginVersion {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        formatter.write_str(&self.0)
-    }
-}
-
-impl<'de> Deserialize<'de> for PluginVersion {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        Self::new(String::deserialize(deserializer)?).map_err(serde::de::Error::custom)
-    }
-}
-
-/// Scope requested by a Workspace Plugin request.
-#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub enum WorkspacePluginRequestScope {
-    #[default]
-    Workspace,
-}
-
-/// A non-authoritative request for an exact Plugin package.
-///
-/// This does not install, enable, grant permissions to, or bind credentials for the Plugin.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct WorkspacePluginRequest {
-    pub plugin_id: PluginId,
-    pub version: PluginVersion,
-    #[serde(default)]
-    pub requested_scope: WorkspacePluginRequestScope,
-}
-
-/// Workspace Plugin requests keyed by their stable package identity.
-#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct WorkspacePluginRequests {
-    #[serde(default)]
-    pub requests: BTreeMap<PluginId, WorkspacePluginRequest>,
-}
-
-impl WorkspacePluginRequests {
-    fn validate(&self) -> Result<(), ConfigError> {
-        for (plugin_id, request) in &self.requests {
-            if &request.plugin_id != plugin_id {
-                return Err(ConfigError(format!(
-                    "Workspace Plugin request '{}' contains request for '{}'",
-                    plugin_id, request.plugin_id
-                )));
-            }
-        }
-        Ok(())
-    }
-}
-
 /// Workspace Skill sources. Each source remains an opaque reference until a Skill manager checks
 /// containment and trust.
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
@@ -322,6 +196,7 @@ pub struct WorkspaceConfigIntent {
     pub mcp: WorkspaceMcpConfig,
     pub plugin_requests: WorkspacePluginRequests,
     pub skills: WorkspaceSkillsConfig,
+    pub hooks: HooksConfig,
 }
 
 /// Typed, non-authoritative intent loaded from one Workspace configuration file.
@@ -336,6 +211,8 @@ pub struct WorkspaceConfigDocument {
     pub plugin_requests: WorkspacePluginRequests,
     #[serde(default)]
     pub skills: WorkspaceSkillsConfig,
+    #[serde(default)]
+    pub hooks: HooksConfig,
 }
 
 impl WorkspaceConfigDocument {
@@ -343,7 +220,8 @@ impl WorkspaceConfigDocument {
         let namespace = scope.namespace();
         self.mcp.validate(&namespace)?;
         self.plugin_requests.validate()?;
-        self.skills.validate(&namespace)
+        self.skills.validate(&namespace)?;
+        self.hooks.validate_for_namespace(&namespace)
     }
 }
 
@@ -369,9 +247,9 @@ impl WorkspaceConfigStore {
         if !self.path.exists() {
             return Ok(WorkspaceConfigDocument::default());
         }
+        let source = fs::read_to_string(&self.path).map_err(io_error)?;
         let document: WorkspaceConfigDocument =
-            serde_json::from_slice(&fs::read(&self.path).map_err(io_error)?)
-                .map_err(|error| ConfigError(error.to_string()))?;
+            toml::from_str(&source).map_err(|error| ConfigError(error.to_string()))?;
         document.validate(&self.scope)?;
         Ok(document)
     }
@@ -383,16 +261,6 @@ impl WorkspaceConfigStore {
     pub fn scope(&self) -> &WorkspaceConfigScope {
         &self.scope
     }
-}
-
-fn is_plugin_segment(value: &str) -> bool {
-    !value.is_empty()
-        && !value.starts_with('-')
-        && !value.ends_with('-')
-        && !value.contains("--")
-        && value
-            .bytes()
-            .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
 }
 
 fn validate_text(value: &str, label: &str) -> Result<(), ConfigError> {

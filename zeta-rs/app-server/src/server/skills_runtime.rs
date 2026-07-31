@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::Duration;
-use zeta_config::{SkillEnablement, SkillSourceEnablement, SkillsConfig};
+use zeta_config::{ConfigChange, SkillEnablement, SkillSourceEnablement, SkillsConfig};
 use zeta_file_watcher::{DebouncedWatchReceiver, FileWatcher, WatchPath};
 use zeta_skills::{
     SkillCatalog, SkillCatalogEntry, SkillDiagnosticCode, SkillSourceId, SkillSourceRoot,
@@ -17,7 +17,10 @@ const BUILT_IN_SOURCE_ID: &str = "builtin:skill-source:zeta-release";
 /// untrusted client path directly into a validated [`SkillSourceRoot`].
 pub(crate) trait SkillConfigSnapshotProvider: Send + Sync {
     fn snapshot(&self) -> Result<SkillsConfig, String>;
-    fn watched_config_paths(&self) -> Vec<PathBuf>;
+
+    fn config_changes(&self) -> Option<std::sync::mpsc::Receiver<ConfigChange>> {
+        None
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -126,17 +129,15 @@ impl SkillRuntime {
     }
 
     pub(crate) fn watched_paths(&self) -> Vec<PathBuf> {
-        let mut paths = self.config.watched_config_paths();
         let state = self
             .state
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        paths.extend(
-            state
-                .source_fingerprint
-                .iter()
-                .map(|source| source.root.clone()),
-        );
+        let mut paths = state
+            .source_fingerprint
+            .iter()
+            .map(|source| source.root.clone())
+            .collect::<Vec<_>>();
         paths.sort();
         paths.dedup();
         paths
@@ -144,14 +145,16 @@ impl SkillRuntime {
 
     pub(super) fn start_watching(self: &Arc<Self>) -> SkillWatcher {
         let (shutdown, shutdown_rx) = tokio::sync::oneshot::channel();
+        let (ready, ready_rx) = std::sync::mpsc::channel();
         let runtime = Arc::downgrade(self);
         let thread = std::thread::Builder::new()
             .name("zeta-skill-watcher".into())
-            .spawn(move || watch_skill_sources(runtime, shutdown_rx))
+            .spawn(move || watch_skill_sources(runtime, shutdown_rx, ready))
             .ok();
         if thread.is_none() {
             return SkillWatcher::default();
         }
+        let _ = ready_rx.recv_timeout(Duration::from_secs(1));
         SkillWatcher {
             shutdown: Some(shutdown),
             thread,
@@ -211,6 +214,7 @@ impl Drop for SkillWatcher {
 fn watch_skill_sources(
     runtime: std::sync::Weak<SkillRuntime>,
     mut shutdown: tokio::sync::oneshot::Receiver<()>,
+    ready: std::sync::mpsc::Sender<()>,
 ) {
     let Ok(tokio_runtime) = tokio::runtime::Builder::new_current_thread()
         .enable_time()
@@ -218,6 +222,9 @@ fn watch_skill_sources(
     else {
         return;
     };
+    let config_changes = runtime
+        .upgrade()
+        .and_then(|runtime| runtime.config.config_changes());
     tokio_runtime.block_on(async move {
         let Ok(file_watcher) = FileWatcher::new() else {
             return;
@@ -231,9 +238,29 @@ fn watch_skill_sources(
         drop(skill_runtime);
         let mut registration = subscriber.register_paths(watch_paths(&watched_paths));
         let mut receiver = DebouncedWatchReceiver::new(receiver, Duration::from_millis(75));
+        let mut config_poll = tokio::time::interval(Duration::from_millis(250));
+        let _ = ready.send(());
         loop {
             tokio::select! {
                 _ = &mut shutdown => break,
+                _ = config_poll.tick() => {
+                    let Some(changes) = &config_changes else {
+                        continue;
+                    };
+                    if changes.try_iter().count() == 0 {
+                        continue;
+                    }
+                    let Some(skill_runtime) = runtime.upgrade() else {
+                        break;
+                    };
+                    let _ = skill_runtime.list(SkillCatalogReload::Cached);
+                    let next_paths = skill_runtime.watched_paths();
+                    if next_paths != watched_paths {
+                        drop(registration);
+                        registration = subscriber.register_paths(watch_paths(&next_paths));
+                        watched_paths = next_paths;
+                    }
+                }
                 event = receiver.recv() => {
                     if event.is_none() {
                         break;

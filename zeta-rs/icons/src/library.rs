@@ -14,6 +14,7 @@ pub mod icons {
 
     pub const ADD: Icon = Icon::new(IconId::new("add"), artwork::ADD);
     pub const AGENT: Icon = Icon::new(IconId::new("agent"), artwork::AGENT);
+    pub const ARROW_DOWN: Icon = Icon::new(IconId::new("arrow-down"), artwork::ARROW_DOWN);
     pub const ARROW_UP: Icon = Icon::new(IconId::new("arrow-up"), artwork::ARROW_UP);
     pub const BROWSER_WEB: Icon = Icon::new(IconId::new("browser-web"), artwork::BROWSER_WEB);
     pub const CHAT: Icon = Icon::new(IconId::new("chat"), artwork::CHAT);
@@ -41,6 +42,7 @@ pub mod icons {
     pub const LOCAL: Icon = Icon::new(IconId::new("local"), artwork::TERMINAL);
     pub const MENU: Icon = Icon::new(IconId::new("menu"), artwork::MENU);
     pub const MODEL: Icon = Icon::new(IconId::new("model"), artwork::MODEL);
+    pub const REFRESH: Icon = Icon::new(IconId::new("refresh"), artwork::REFRESH);
     pub const SEARCH: Icon = Icon::new(IconId::new("search"), artwork::SEARCH);
     pub const SETTINGS: Icon = Icon::new(IconId::new("settings"), artwork::SETTINGS);
     pub const SPLIT_HORIZONTAL: Icon = Icon::new(IconId::new("split-horizontal"), artwork::SPLIT_HORIZONTAL);
@@ -53,6 +55,7 @@ pub mod icons {
 pub const ALL_ICONS: &[Icon] = &[
     icons::ADD,
     icons::AGENT,
+    icons::ARROW_DOWN,
     icons::ARROW_UP,
     icons::BROWSER_WEB,
     icons::CHAT,
@@ -80,6 +83,7 @@ pub const ALL_ICONS: &[Icon] = &[
     icons::LOCAL,
     icons::MENU,
     icons::MODEL,
+    icons::REFRESH,
     icons::SEARCH,
     icons::SETTINGS,
     icons::SPLIT_HORIZONTAL,

@@ -71,11 +71,12 @@ package-relative path、本地 package 安全校验、确定性 digest 和只读
 discovery。实现细节、limits 与 failure semantics 由 crate
 [`README`](../zeta-rs/plugins/README.md) 维护。
 
-尚未实现 Plugin store、authority、activation、grant、runtime injection 或 App Server API。
-`docs/tui.md` 也明确要求 plugins 先进入 canonical domain 和 App Server contract，TUI 才能增加
-feature。TUI 已有可复用的 interaction view stack 与 tabs/search/selection presentation
-primitive，但当前没有 Plugin view model、Plugin intent 或 `/plugins` command；这些 UI 基础设施
-不改变本节的 backend gate。
+User/Workspace TOML 与 App Server 已能表达 exact Plugin request 和 desired enablement，但它们
+只是 `zeta-config` intent。Plugin store、authority、activation、grant、runtime injection 与
+package lifecycle API 尚未实现。`docs/tui.md` 也明确要求 Plugin domain projection 进入 canonical
+App Server contract 后，TUI 才能增加管理 feature。TUI 已有可复用的 interaction view stack 与
+tabs/search/selection presentation primitive，但当前没有 Plugin view model 或 `/plugins` command；
+这些 UI 基础设施不改变本节的 backend gate。
 
 已有可复用边界：
 

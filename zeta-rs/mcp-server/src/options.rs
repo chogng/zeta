@@ -12,7 +12,7 @@ const DEFAULT_POLL_INTERVAL: Duration = Duration::from_millis(10);
 /// Host-owned filesystem and execution limits for one MCP server process.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct McpServerOptions {
-    state_root: PathBuf,
+    profile_root: PathBuf,
     workspace_root: PathBuf,
     default_turn_timeout: Duration,
     maximum_turn_timeout: Duration,
@@ -119,9 +119,9 @@ impl fmt::Debug for HttpServerOptions {
 }
 
 impl McpServerOptions {
-    pub fn new(state_root: impl Into<PathBuf>, workspace_root: impl Into<PathBuf>) -> Self {
+    pub fn new(profile_root: impl Into<PathBuf>, workspace_root: impl Into<PathBuf>) -> Self {
         Self {
-            state_root: state_root.into(),
+            profile_root: profile_root.into(),
             workspace_root: workspace_root.into(),
             default_turn_timeout: DEFAULT_TURN_TIMEOUT,
             maximum_turn_timeout: MAX_TURN_TIMEOUT,
@@ -144,8 +144,8 @@ impl McpServerOptions {
         self
     }
 
-    pub fn state_root(&self) -> &Path {
-        &self.state_root
+    pub fn profile_root(&self) -> &Path {
+        &self.profile_root
     }
 
     pub fn workspace_root(&self) -> &Path {

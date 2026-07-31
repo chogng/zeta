@@ -84,3 +84,31 @@ fn explicit_selection_drives_paint_and_hit_geometry() {
         Some(1)
     );
 }
+
+#[test]
+fn reserved_header_shifts_items_and_paints_inside_the_dropdown() {
+    let button_style = ButtonStyle::new(
+        ButtonBackgrounds::new(Color::TRANSPARENT),
+        TextStyle::new(13.0, Color::rgb(0, 0, 0)),
+    );
+    let dropdown = Dropdown::new(
+        Rect::from_xywh(0.0, 0.0, 400.0, 300.0),
+        Rect::from_xywh(30.0, 20.0, 1.0, 1.0),
+        vec![DropdownItem::new("Folder", ButtonState::Resting)],
+        DropdownStyle::new(SURFACE, button_style, Size::new(120.0, 28.0)).with_header_height(36.0),
+    );
+    let header_bounds = dropdown.header_bounds().unwrap();
+    let mut scene = UiScene::new(Color::TRANSPARENT);
+
+    dropdown.paint_with_header(&mut scene, |scene, bounds| {
+        scene.draw_rect(crate::PaintRect::new(bounds, SELECTED));
+    });
+
+    assert_eq!(header_bounds.origin, dropdown.content_bounds().origin);
+    assert_eq!(
+        dropdown.item_bounds(0).unwrap().origin.y,
+        header_bounds.bottom()
+    );
+    assert_eq!(dropdown.bounds().size.height, 64.0);
+    assert!(scene.rects().iter().any(|rect| rect.fill() == SELECTED));
+}

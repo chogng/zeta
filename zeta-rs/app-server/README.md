@@ -12,7 +12,7 @@
 `zeta-app-server-protocol` request，调用 `SessionCoordinator`、Thread controller、
 `TurnExecutor` 与 `ConfigStore`，再返回 typed result 或发布 canonical update。
 
-它不实现 reducer，不定义第二套 Session/Thread/Turn model，也不拥有 rollout 文件格式。
+它不实现 reducer，不定义第二套 Session/Thread/Turn model，也不拥有 SQLite schema。
 
 ## 运行时所有权
 
@@ -28,10 +28,10 @@ JSONL / in-process caller
    ├─ optional GitRuntime → zeta-file-watcher + GitService → zeta-git
    ├─ optional WorkspaceSearchService
    ├─ optional TerminalService → zeta-utils-pty
-   ├─ optional McpRuntimeOwner → zeta-mcp
+   ├─ reloadable MCP Tool generation → zeta-mcp
    ├─ SkillRuntime → zeta-skills + zeta-file-watcher
    ├─ connection-owned ResourceStore
-   └─ UpdateBroker → session/update, thread/update, skills/changed, git/statusChanged, fs/changed
+   └─ UpdateBroker → session/update, thread/update, config/changed, skills/changed, git/statusChanged, fs/changed
 ```
 
 App Server connection 不是 product Session。关闭 connection 只失去 connection-local subscription、
@@ -59,17 +59,18 @@ request-ID set、notification queue 与 resource ownership；Session/Thread dura
 | `AppServer::with_git_root` | 冻结 workspace root，开启 Git status/mutation、watcher 与 revision notification |
 | `AppServer::with_workspace_search` | 注入 workspace root 与冻结的 ripgrep executable |
 | `AppServer::with_tool_service` | 安装同一 server 内所有 Turn 使用的 Core Tool/Policy ports |
-| `open_local_app_server` | 打开 rollout/config、恢复 coordinator、组合 provider-backed model |
-| `LocalAppServerOptions` | local state root + optional config/runtime Workspace + validated slash catalog + built-in Skill root selection |
+| `open_local_app_server` | 打开 profile SQLite/config、恢复 coordinator、组合 provider-backed model |
+| `LocalAppServerOptions` | user profile root + optional config/runtime Workspace + validated slash catalog + built-in Skill root selection |
 | `BuiltInSkillRoot` | auto-detected release root、explicit test/host root 或 unavailable 的自解释选择 |
 | `SlashCommandCatalog` | 校验动态命令名称、描述与唯一性，并冻结 server-advertised snapshot |
 | `ReviewModelResolver` | 从 frozen config snapshot 选择 review-only model |
 | `ProviderReviewModel` | `ModelInvoker → zeta_auto_review::ReviewModel` adapter |
 
 `AppServer::new` 默认用 `TurnExecutor::without_tools`。`with_tool_service` 才会替换为有 Tool 和
-Policy port 的 executor。`open_local_app_server` 会从启动时 user config snapshot 连接明确
-`enabled` 的 unauthenticated MCP server，并把冻结 catalog 与本地工具组合；每次 MCP tool call
-仍必须经过 durable one-time approval。它仅在调用方通过
+Policy port 的 executor。`open_local_app_server` 会从 user config snapshot 连接明确 `enabled`
+的 unauthenticated MCP server，并把 catalog 与本地工具组合；Config commit 会在后台构建新
+generation 并只切换未来的 prepare。已 prepare 的调用继续绑定原 Tool/Policy generation，直到
+execute 完成。每次 MCP tool call 仍必须经过 durable one-time approval。它仅在调用方通过
 `LocalAppServerOptions::with_workspace_root` 提供统一 Workspace 根时同时组合 filesystem 与
 workspace search、Git SCM、connection-owned Terminal runtime、只读 `rg` registry；Zeta CLI 的 stdio 与
 in-process 路径都会使用同一个启动时解析结果：
@@ -86,6 +87,7 @@ src/
 │   └── server/
 │       ├── operations.rs          # Session/Thread/Turn/Resource methods
 │       ├── config_operations.rs   # Config/provider/MCP/Skill methods + DTO conversion
+│       ├── config_runtime.rs      # Config commit → config/changed fanout
 │       ├── skill_operations.rs    # Skill catalog/enablement DTO conversion and error mapping
 │       ├── skills_runtime.rs       # source composition、catalog cache、watcher、projection
 │       ├── fs_operations.rs       # root-relative filesystem DTO conversion/error mapping
@@ -99,7 +101,7 @@ src/
 ├── local_tools.rs                 # frozen rg registry + Core Tool/Policy adapters
 ├── mcp_runtime.rs                 # continuously driven Tokio worker + synchronous Core bridge
 ├── mcp_tools.rs                   # Config materialization + MCP Tool/Policy adapters
-├── tool_composition.rs            # frozen local/MCP definition and policy routing
+├── tool_composition.rs            # local/MCP routing + generation-safe atomic replacement
 ├── review.rs                      # review-only provider adapter
 ├── resource_store.rs              # bounded in-memory connection-owned resources
 ├── git_service.rs                 # workspace root + GitClient + synchronous RPC runtime bridge
@@ -122,7 +124,7 @@ src/
 | `UpdateBroker` | private | subscription、durable cursor、weak queue fanout | 不持有 connection/session runtime authority |
 | `UpdateBroker::publish_thread_update` | private | committed 按 durable cursor；transient 直接给 subscriber | 两类 cursor semantics 不得混合 |
 | `SkillRuntime` | crate-private | 组合 built-in/user roots、缓存 metadata projection、叠加 config enablement | 不读取正文、不执行 Skill、不拥有 config durability |
-| `SkillConfigSnapshotProvider` | crate-private trait | 给 runtime 最新 `SkillsConfig` 与待监听 config path | implementation 不把客户端 path 直接升级为 trusted root |
+| `SkillConfigSnapshotProvider` | crate-private trait | 给 runtime 最新 `SkillsConfig` 与 commit signal | implementation 不把客户端 path 直接升级为 trusted root |
 | `compose_sources` | private | enabled user absolute root + release root → validated `SkillSourceRoot` | Workspace/Plugin source 尚不在当前 composition |
 | `watch_skill_sources` | private | watcher invalidation 后完整 reconcile 并更新 watched path registration | watch event 不是文件事实，不直接推进 generation |
 | `notification<T>` | private | canonical update → JSON-RPC notification | method 来自 `ServerNotificationMethod` |
@@ -152,6 +154,7 @@ src/
 | `McpApprovalPolicy::decide` | private | 只接受已知 user MCP provenance 并返回 one-time approval | 不自动批准远端副作用 |
 | `CompositeToolService` | private | model tool name → frozen local/MCP service | duplicate name 在 composition 时失败 |
 | `CompositePolicyService` | private | trusted `ActionSource` → owning policy | 不依靠 trial-and-error policy fallback |
+| `ReloadableToolPorts` | crate-private | 原子替换未来 Tool generation，并为 prepared call 固定 service/policy | reconcile failure 保留上一份可用 runtime |
 | `ModelSnapshotResolver` | private trait | frozen config → immutable invoker | implementation 不持有 mutable config view |
 | `SlashCommandCatalog::new` | public constructor | 校验 lowercase ASCII/interior-hyphen name、非空描述与唯一性 | 不执行命令、不引用 TUI built-ins |
 | `ProviderReviewModel::request` | private | system/input/schema → tool-disabled zero-temperature request | reviewer 不获得 Tool capability |
@@ -262,15 +265,13 @@ connection 若未显式 close，最后一个 strong owner drop 后 broker 仍会
 `open_local_app_server` 的顺序：
 
 ```text
-RolloutRepository::open(state_root)
+LocalStateRepository::open(profile_root)
+├─ SqliteSessionStore(profile_root/state.sqlite3)
+├─ SqliteThreadStore(profile_root/state.sqlite3)
 └─ recover_coordinator
 
-ConfigStore::open(config.authority.json)
+ConfigStore::open_with_paths(profile_root/state.sqlite3, profile_root/config.toml)
 └─ read_snapshot preflight
-   └─ enabled user MCP declarations
-      ├─ materialize absolute stdio executable / unauthenticated HTTP endpoint
-      ├─ McpRuntimeOwner::start
-      └─ immutable catalog + CompositeToolService
 
 optional WorkspaceConfigStore
 └─ WorkspaceConfigTracker::read preflight
@@ -280,7 +281,18 @@ ConfigBackedModelService
    └─ SkillRuntime::new(...)
       ├─ release built-in root
       ├─ enabled user Skill source roots
-      └─ SkillWatcher
+      └─ SkillWatcher(source events + ConfigChange)
+
+local tools + enabled user MCP declarations
+├─ materialize absolute stdio executable / unauthenticated HTTP endpoint
+├─ combine duplicate-free model Tool names
+├─ install ReloadableToolPorts
+└─ ToolConfigWatcher(ConfigChange)
+
+Plugin request + Hook declaration
+└─ config/read + typed mutation only
+   ├─ Plugin install/activation manager 尚未实现
+   └─ Hook execution/policy runtime 尚未实现
 ```
 
 每次 `ModelService::invoke` 重新读取 user config，与 optional workspace document 合并，再由
@@ -314,9 +326,10 @@ skill/enablement/set
 └─ reconcile → publish skills/changed when projection changes
 ```
 
-Watcher 订阅当前 source roots 与 user config authority path。change、overflow 或 backend rescan
-提示都只触发完整 reconcile；entry、diagnostic 或 enablement projection 没变时 generation 不变，
-也不发 notification。Watcher 启动失败时 local App Server 仍可用，显式
+Watcher 订阅当前 source roots；Config authority 通过 commit channel（包括 TOML 外部编辑与
+SQLite cross-connection change）触发配置 reconcile。change、overflow 或 backend rescan 提示都只触发
+完整 reconcile；entry、diagnostic 或 enablement projection 没变时 generation 不变，也不发
+notification。Watcher 启动失败时 local App Server 仍可用，显式
 `skills/list { reload: "refresh" }` 是恢复路径。
 
 当前只组合 built-in 与 user source。Workspace/Plugin source、正文 activation、context assembly
@@ -401,7 +414,7 @@ protocol enum，再在本 crate 显式转换。
 
 - `server.rs` 定义新的 RPC params/result：contract ownership 从 protocol crate 漂移；
 - App Server 直接构造/store event 或执行 reducer：Core ownership漂移；
-- App Server 解析 rollout files：repository/storage ownership漂移；
+- App Server 直接解释 SQLite Session/Thread tables：repository/storage ownership 漂移；
 - ConnectionState 保存 product Session/Thread authoritative snapshot：delivery 与 domain混合；
 - Broker 用 transient event 推进 durable cursor：reconnect gap 可能丢失；
 - Model invocation 长期持有 mutable config snapshot：safe-point guarantee 被破坏；
@@ -432,7 +445,9 @@ bazel test //zeta-rs/app-server:app-server-unit-tests
 多连接更新、重连后的持久化缺口、连接拥有的资源、配置命令、交互/批准解决、
 先响应后通知、模型配置安全点、
 Workspace override、review-only request、只读 `rg` definition/materialization/policy/execution，
-MCP worker bridge、exact provenance/approval policy、local/MCP 路由与 collision rejection，以及
+MCP worker bridge、exact provenance/approval policy、local/MCP 路由与 collision rejection、
+Config commit/cross-connection notification、future Tool generation replacement 与 prepared-call
+generation retention，以及
 可信 Terminal Profile、真实 PTY create/write/read/exit、Terminal owner/error/ring limits，
 Skill built-in/user composition、enablement overlay、watcher refresh 与 `skills/changed`。
 Git 覆盖 workspace projection、runtime stream identity、revision 去重、`git/statusChanged`、
@@ -445,7 +460,8 @@ local tool 的参数白名单、discovery、取消与输出限制由
 
 当前 JSONL 服务仍使用同步循环；自有嵌入式连接已具备可唤醒通知来源，以及显式订阅、资源和
 终端清理；尚无异步多连接调度器、序列化范围强制、通知背压、持久化资源或完整网络服务
-生命周期。MCP 当前没有凭据具体化、stdio 进程沙箱、运行时热更新、列表变化重建、
-progress/elicitation delivery 或 image result 的原生 Core content path；MCP image 暂时编码进
-bounded JSON text result。演进这些能力时应保留 protocol registry唯一性、Core/store authority、
-snapshot + durable gap 和 per-invocation config safe point。
+生命周期。MCP desired config 的热更新和未来 Tool catalog replacement 已实现；当前仍没有凭据
+具体化、stdio 进程沙箱、对外 runtime health/diagnostic API、progress/elicitation delivery 或
+image result 的原生 Core content path；MCP image 暂时编码进 bounded JSON text result。演进这些
+能力时应保留 protocol registry唯一性、Core/store authority、snapshot + durable gap 和
+per-invocation config safe point。

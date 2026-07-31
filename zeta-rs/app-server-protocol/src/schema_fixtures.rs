@@ -28,6 +28,7 @@ fn registry_method_and_notification_names_are_unique() {
     assert!(methods.contains("session/create"));
     assert!(methods.contains("session/thread/fork"));
     assert!(methods.contains("turn/start"));
+    assert!(methods.contains("turn/shell/start"));
     assert!(methods.contains("turn/interaction/resolve"));
     assert!(methods.contains("document/typst/compile"));
     assert!(methods.contains("fs/getMetadata"));
@@ -51,6 +52,8 @@ fn registry_method_and_notification_names_are_unique() {
     assert!(methods.contains("terminal/resize"));
     assert!(methods.contains("terminal/read"));
     assert!(methods.contains("terminal/close"));
+    assert!(methods.contains("plugin/request/upsert"));
+    assert!(methods.contains("hook/upsert"));
     assert!(notifications.contains("session/update"));
     assert!(notifications.contains("thread/update"));
     assert!(notifications.contains("git/statusChanged"));
@@ -199,8 +202,12 @@ fn dto_driven_typescript_preserves_model_ref_and_patch_shape() {
     assert!(typescript.contains("export type McpServerConfigDto ="));
     assert!(typescript.contains("credentialRef: string"));
     assert!(typescript.contains("export type SkillSourceConfigDto ="));
+    assert!(typescript.contains("export type PluginRequestDto ="));
+    assert!(typescript.contains("export type HookConfigDto ="));
     assert!(typescript.contains(r#""mcp/server/upsert": { method: "mcp/server/upsert" }"#));
     assert!(typescript.contains(r#""skill/source/add": { method: "skill/source/add" }"#));
+    assert!(typescript.contains(r#""plugin/request/upsert": { method: "plugin/request/upsert" }"#));
+    assert!(typescript.contains(r#""hook/upsert": { method: "hook/upsert" }"#));
     assert!(typescript.contains("export type SkillName = string;"));
     assert!(typescript.contains("export type SkillSourceId = string;"));
     assert!(typescript.contains(r#""skills/list": { method: "skills/list" }"#));
@@ -224,6 +231,7 @@ fn dto_driven_typescript_preserves_model_ref_and_patch_shape() {
     assert!(typescript.contains("export const APP_SERVER_METHODS:"));
     assert!(typescript.contains(r#""session/create": { method: "session/create" }"#));
     assert!(typescript.contains(r#""turn/start": { method: "turn/start" }"#));
+    assert!(typescript.contains(r#""turn/shell/start": { method: "turn/shell/start" }"#));
     assert!(typescript.contains(
         r#"export type InputItem = { "type": "text", text: string, } | { "type": "image", url: string, };"#
     ));
@@ -359,18 +367,15 @@ fn config_patch_distinguishes_missing_null_and_value() {
         "commandId": "null",
         "expectedRevision": 3,
         "preferredModel": null,
-        "approvalReviewModel": null,
-        "theme": null
+        "approvalReviewModel": null
     }))
     .unwrap();
 
     assert_eq!(missing.preferred_model, Patch::Missing);
     assert_eq!(missing.approval_review_model, Patch::Missing);
     assert_eq!(missing.expected_revision, 0);
-    assert_eq!(missing.theme, Patch::Missing);
     assert_eq!(null.preferred_model, Patch::Null);
     assert_eq!(null.approval_review_model, Patch::Null);
-    assert_eq!(null.theme, Patch::Null);
     assert_eq!(
         serde_json::to_value(missing).unwrap(),
         serde_json::json!({"commandId": "missing", "expectedRevision": 0})
@@ -381,8 +386,7 @@ fn config_patch_distinguishes_missing_null_and_value() {
             "commandId": "null",
             "expectedRevision": 3,
             "preferredModel": null,
-            "approvalReviewModel": null,
-            "theme": null
+            "approvalReviewModel": null
         })
     );
 }

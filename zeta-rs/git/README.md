@@ -7,8 +7,9 @@
 
 `zeta-git` 是 Zeta 中“如何调用 Git、如何解释 Git 结果”的唯一实现 owner。完整 owner 不等于
 当前已经实现完整 SCM：本阶段提供仓库打开、结构化状态快照、本地 branch、remote、最近 commit、
-typed stage/unstage/discard/commit/fetch/pull/push 和 patch check/apply；持续监听、状态缓存与
-branch/worktree mutation 尚未实现。App Server 与 Desktop 已通过 Git SCM 纵向切片消费这些能力，但该 service/protocol/UI
+revision file content、HEAD-to-working-tree 文本 Diff/增删行统计、typed
+stage/unstage/discard/commit/fetch/pull/push、local branch switch 和 patch check/apply；持续监听、
+状态缓存与 tag/worktree mutation 尚未实现。App Server 与 Desktop 已通过 Git SCM 纵向切片消费这些能力，但该 service/protocol/UI
 不属于本 crate。
 
 ## 为什么不是普通 `git utils`
@@ -36,8 +37,10 @@ Git domain owner 下，而不是建立平级的 `zeta-git-utils`：
 | `src/client.rs` | Git executable identity、process profile、timeout、bounded capture、non-interactive config | `GitClient`、`GitExecutionLimits`、private `GitInvocation`、`GitCommandProfile`、`read_bounded` |
 | `src/repository.rs` | 从已有 path 打开 working tree，解析 worktree/git/common metadata path | `GitRepository`、`GitRepositoryKind`、`existing_directory` |
 | `src/status.rs` | porcelain-v2 snapshot 与 HEAD/change/submodule model | `GitRepositorySnapshot`、`GitHead`、private `parse_status` |
+| `src/content.rs` | 有界读取 HEAD 或 index 中一个 repository-relative file | `GitFileRevision`、`GitClient::read_file_at_revision` |
+| `src/text_diff.rs` | 从同一次状态快照构建 repository-wide 或 path-scoped 的有界 UTF-8 HEAD/worktree Diff 与文件级、聚合增删行统计 | `GitTextDiffSnapshot`、`GitTextDiff`、`GitDiffStatistics`、`GitClient::text_diff_snapshot[_under]` |
 | `src/info.rs` | local branches、fetch/push remote URLs、bounded recent history | `GitBranch`、`GitRemote`、`GitCommitSummary` |
-| `src/mutation.rs` | path set/commit request validation 与常用 index/worktree/remote mutation | `GitPathspecSet`、`GitCommitRequest`、`GitCommitResult` |
+| `src/mutation.rs` | path set/commit request validation 与常用 index/worktree/branch/remote mutation | `GitPathspecSet`、`GitCommitRequest`、`GitCommitResult`、`GitClient::switch_branch` |
 | `src/patch.rs` | patch request/result、stdin apply、path extraction 和 diagnostics 分类 | `GitPatchRequest`、`GitPatchResult`、private `parse_apply_diagnostics` |
 | `src/fsmonitor.rs` | effective config 与 built-in daemon capability 探测 | private `detect_fsmonitor_override` |
 | `src/path.rs` | porcelain path bytes 到 platform `PathBuf` | private `path_from_git_bytes` |
@@ -68,6 +71,20 @@ GitClient::snapshot
    └─ git status --porcelain=v2 --branch -z
       └─ parse_status
 
+GitClient::read_file_at_revision
+└─ GitClient::run_query_unchecked
+   └─ git show --no-textconv HEAD:path | :path
+      ├─ present bytes
+      └─ missing path → None
+
+GitClient::text_diff_snapshot[_under]
+├─ GitClient::snapshot
+├─ optional repository-relative path-prefix filter
+├─ GitClient::read_file_at_revision(Head)
+├─ bounded worktree file read
+└─ zeta_diff::DiffDocument::from_text
+   └─ GitDiffStatistics
+
 GitClient::local_branches / remotes / recent_commits
 └─ GitClient::run_query
    └─ strict parser for the command-specific output
@@ -76,6 +93,11 @@ GitClient::stage / unstage / discard_worktree
 ├─ GitPathspecSet
 └─ GitClient::run_mutation
    └─ git add | restore --staged | restore --worktree
+
+GitClient::switch_branch
+├─ GitBranch from GitClient::local_branches
+└─ GitClient::run_mutation
+   └─ git switch -- <local-branch>
 
 GitClient::commit / fetch / pull_fast_forward / push
 └─ GitClient::run_mutation[_with_stdin]
@@ -111,6 +133,22 @@ branch、remote URL 和 commit subject 当前要求 UTF-8。Snapshot 按 Git 输
 调用方不能把一次 snapshot 当作后续 mutation 的 compare-and-swap 前提。App Server
 `GitRuntime` 当前使用 watcher invalidation 重新查询，并仅在 workspace projection 改变时推进
 revision；该 revision 仍不是 mutation CAS token。
+
+## 文本 Diff 与统计契约
+
+`text_diff_snapshot` / `text_diff_snapshot_under` 是 Git domain 对 HEAD-to-working-tree
+文本变化的权威投影。它先捕获
+`GitRepositorySnapshot`，再按其中的 repository-relative changed path 读取 HEAD 与当前工作区
+内容，并由 `zeta-diff` 生成 `DiffDocument`。`GitDiffStatistics` 将新增行计为 addition、删除行
+计为 deletion；一行 replacement 同时计入一次 addition 和一次 deletion。Native 只能按
+workspace prefix 请求、聚合和展示这些结果，不能自行读取 Git revision 或复制统计规则。
+
+该读取序列不是 filesystem transaction：文件可能在 status 与内容读取之间变化。binary、
+非 UTF-8、symlink、非普通文件、不可读文件、任一侧超过 `GitTextDiffLimits`，或超过 diff engine
+限制或单文件内容查询失败的 path 仍保留在 repository status 中，但不会进入
+`GitTextDiffSnapshot::diffs` 和统计。
+因此 text diff 文件数明确表示“当前可展示的文本变化数”，不冒充全部 porcelain status entry
+数量。
 
 ## 变更契约
 
@@ -212,9 +250,11 @@ policy/approval。它们都不能复制本 crate 的 command/parsing 实现。
 - `client_tests.rs`：system Git runner 与 limits；
 - `repository_tests.rs`：nested start、non-repository、linked worktree；
 - `status_tests.rs`：index/worktree/untracked、rename 与 unmerged/unborn parser；
+- `content_tests.rs`：HEAD/index 内容与 missing path；
+- `text_diff_tests.rs`：modified/deleted/untracked 汇总、replacement 统计及 binary/size skip；
 - `info_tests.rs`：branch、remote fetch/push URL、history limit；
-- `mutation_tests.rs`：validation、stage/unstage/discard/commit，以及本地 bare remote 驱动的
-  fetch/fast-forward pull/push；
+- `mutation_tests.rs`：validation、stage/unstage/discard/commit、local branch switch 及失败时
+  保留当前分支和工作树，以及本地 bare remote 驱动的 fetch/fast-forward pull/push；
 - `patch_tests.rs`：quoted paths、check/apply、unapplied rejection、three-way conflict 与
   Windows `core.autocrlf=true`；
 - `fsmonitor_tests.rs`：NUL config value 与 boolean spelling。
@@ -240,12 +280,14 @@ bazel test //zeta-rs/git:git-unit-tests
 
 当前限制：
 
-- 尚无 branch/tag/worktree mutation；
+- local branch switch 已实现；尚无新建/删除/重命名 branch、tag 或 worktree mutation；
 - App Server 已有单 workspace projection、watch、revision/event 和 operation serialization，
   但尚无 multi-repository registry、可观测 queue、progress 或 caller cancellation；
 - 不支持 bare repository，`open_repository` 要求 working tree；
 - repository discovery 依赖支持 `rev-parse --path-format=absolute` 的 Git；
 - patch diagnostics parser 是 best effort，不承诺复现所有 Git 版本的自然语言；
+- text diff snapshot 不是原子快照，且当前只投影 UTF-8 普通文件，不表达 mode-only、binary 或
+  symlink 内容变化；
 - 未移植 Codex internal baseline，因为 resettable internal directory 不是用户 repository SCM；
 - remote URL 当前保留 Git 配置原值，尚无 canonical repository identity API。
 

@@ -18,7 +18,7 @@ fn catalog_resolves_semantic_ids_without_exposing_filenames() {
         icon_by_id("working-directory"),
         Some(icons::WORKING_DIRECTORY)
     );
-    assert_eq!(icon_by_id("refresh"), None);
+    assert_eq!(icon_by_id("refresh"), Some(icons::REFRESH));
     assert_eq!(icon_by_id("missing"), None);
 }
 

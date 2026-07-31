@@ -1,3 +1,4 @@
+use super::extension_config_operations::{hook_config_dto, plugin_request_dto};
 use super::{AppServer, RpcError, decode, result};
 use serde_json::Value;
 use zeta_app_server_protocol::protocol::config::{
@@ -6,14 +7,14 @@ use zeta_app_server_protocol::protocol::config::{
     McpServerEnablementDto, McpServerRemoveParams, McpServerSetEnablementParams,
     McpServerUpsertParams, McpTransportDto, ModelRefDto, ProviderConfigDto,
     ProviderConfigureParams, ProviderRemoveParams, SkillSourceAddParams, SkillSourceConfigDto,
-    SkillSourceEnablementDto, SkillSourceRemoveParams, SkillSourceSetEnablementParams, ThemeDto,
+    SkillSourceEnablementDto, SkillSourceRemoveParams, SkillSourceSetEnablementParams,
 };
 use zeta_app_server_protocol::protocol::error::AppServerErrorName;
 use zeta_config::{
     ApprovalReviewModelSelection, ConfigCommandDisposition, ConfigCommandError,
     ConfigCommandRequest, ConfigRevision, McpCredentialBinding, McpServerConfig,
     McpServerEnablement, McpServerId, McpTransportConfig, PreferencesUpdate,
-    ResolvedConfigSnapshot, SkillSourceConfig, SkillSourceEnablement, SkillSourceId, Theme,
+    ResolvedConfigSnapshot, SkillSourceConfig, SkillSourceEnablement, SkillSourceId,
     UserConfigCommand,
 };
 use zeta_model_provider::{ModelId, ModelRef, ProviderId};
@@ -46,7 +47,6 @@ impl AppServer {
                     approval_review_model: approval_review_model_update_from_dto(
                         params.approval_review_model,
                     )?,
-                    theme: params.theme.map(theme_from_dto),
                 }),
             })
             .map_err(config_operation_error)?;
@@ -226,7 +226,6 @@ fn config_read_result(snapshot: ResolvedConfigSnapshot) -> ConfigReadResult {
         generation: snapshot.generation.get(),
         preferred_model: snapshot.values.preferred_model.map(model_ref_dto),
         approval_review_model: approval_review_model_dto(snapshot.values.approval_review_model),
-        theme: snapshot.values.theme.map(theme_dto),
         providers: snapshot
             .values
             .providers
@@ -247,6 +246,20 @@ fn config_read_result(snapshot: ResolvedConfigSnapshot) -> ConfigReadResult {
             .into_iter()
             .map(|(id, config)| (id.to_string(), skill_source_config_dto(config)))
             .collect(),
+        plugin_requests: snapshot
+            .values
+            .plugins
+            .requests
+            .into_iter()
+            .map(|(id, request)| (id.to_string(), plugin_request_dto(request)))
+            .collect(),
+        hooks: snapshot
+            .values
+            .hooks
+            .hooks
+            .into_iter()
+            .map(|(id, hook)| (id.to_string(), hook_config_dto(hook)))
+            .collect(),
     }
 }
 
@@ -260,22 +273,6 @@ pub(super) fn config_command_result(
             ConfigCommandDisposition::Updated => ConfigCommandDispositionDto::Updated,
             ConfigCommandDisposition::Replayed => ConfigCommandDispositionDto::Replayed,
         },
-    }
-}
-
-fn theme_dto(theme: Theme) -> ThemeDto {
-    match theme {
-        Theme::Light => ThemeDto::Light,
-        Theme::Dark => ThemeDto::Dark,
-        Theme::System => ThemeDto::System,
-    }
-}
-
-fn theme_from_dto(theme: ThemeDto) -> Theme {
-    match theme {
-        ThemeDto::Light => Theme::Light,
-        ThemeDto::Dark => Theme::Dark,
-        ThemeDto::System => Theme::System,
     }
 }
 

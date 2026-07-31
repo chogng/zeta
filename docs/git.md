@@ -26,6 +26,7 @@ parsing 留在 Rust host。Renderer 只拥有展示状态和用户 intent。
 | 查看更改 | 自动读取并投影工作区范围内的 Git 状态 | 当前只支持单工作区 |
 | 暂存或取消暂存 | 使用明确的工作区相对路径 | 不能越过工作区边界 |
 | 丢弃更改 | 只恢复已跟踪文件，并在界面确认 | 不删除未跟踪文件 |
+| Native 切换本地分支 | 点击底栏当前分支，在菜单中选择另一个本地分支 | 冲突时 Git 拒绝切换并保留当前工作树 |
 | 拉取远端 | 只允许 fast-forward | 需要交互认证时失败 |
 | 提交和推送 | 使用系统 Git 的当前仓库配置 | 尚无凭据提示和进度 UI |
 
@@ -38,7 +39,7 @@ parsing 留在 Rust host。Renderer 只拥有展示状态和用户 intent。
 | App Server `GitRuntime` | 串行化 operation、维护 workspace projection/revision、消费 watcher hint、去重并发布状态 | Git command/parsing、Renderer state |
 | App Server `GitService` | 冻结 workspace root、映射 workspace/repository path、持有 Tokio runtime并调用 `zeta-git` | live projection、notification |
 | `zeta-app-server-protocol` | Git query/mutation、`git/statusChanged`、DTO、capability 和 stable error name | process/runtime state |
-| `zeta-git` | system Git identity、仓库发现、porcelain-v2 snapshot、typed mutation 与结构化 parsing | App Server lifecycle、workspace product boundary、Renderer state |
+| `zeta-git` | system Git identity、仓库发现、porcelain-v2 snapshot、HEAD/worktree 文本 Diff 与增删行统计、typed mutation 与结构化 parsing | App Server lifecycle、workspace product boundary、Renderer state |
 
 ## 当前状态
 
@@ -68,6 +69,19 @@ parsing 留在 Rust host。Renderer 只拥有展示状态和用户 intent。
   ready 时主动刷新，并接受新 runtime 从较小 revision 开始的 snapshot。已退役实例的迟到通知
   不能覆盖新状态。Watcher 初始化失败不会关闭 Git RPC，用户仍可手动 Refresh。
 
+Native host 还会直接通过 `text_diff_snapshot_under` 消费 `zeta-git::GitTextDiffSnapshot`，
+让 Git domain 按当前工作区前缀过滤 changed path 与可展示的 UTF-8 文本变化，并在 Composer 底栏展示
+`Changes files • +additions -deletions`。文件内容读取、
+replacement 计数和 binary/size skip 规则由 `zeta-git` 统一拥有；Native 只负责标签、侧栏状态和
+MultiDiff presentation。点击该 Changes action 会刷新 Git projection、展开右栏并选择 Changes
+Pane。
+
+Native 的底栏分支按钮直接复用通用 `ContextMenu`，通过
+`GitClient::local_branches` 获取候选项，再由 `GitClient::switch_branch` 执行本地分支切换。
+Git 对脏工作树或 linked worktree 冲突保持权威：失败时不重试、不丢弃改动，菜单保留并显示失败；
+成功后重新读取 Files、HEAD、Changes 和 MultiDiff。该 Native 路径不等同于 App Server SCM
+协议已经拥有 branch mutation。
+
 稳定失败边界为 `GitUnavailable`、`GitNotRepository` 和 `GitOperationFailed`。内部 executable、
 stderr、磁盘绝对路径和非 UTF-8 path 不进入 Renderer。
 
@@ -75,7 +89,8 @@ stderr、磁盘绝对路径和非 UTF-8 path 不进入 Renderer。
 
 - 当前是单 workspace `GitRuntime`，尚无 multi-repository registry；
 - operation 由 runtime mutex 串行化，但尚无可观测 queue、progress、caller cancellation 或 retry；
-- 尚无 branch/tag/worktree mutation，也没有 credential prompt；需要交互认证的 remote operation 会失败；
+- Native 已支持切换现有本地分支；App Server SCM 协议仍无 branch mutation，系统也尚无
+  branch 新建/删除/重命名、tag/worktree mutation 或 credential prompt；
 - pull 固定为 fast-forward only；discard 不删除 untracked 文件；
 - 当前是单 workspace root contract，不是 multi-root repository collection；
 - SCM change row 尚未接入 editor diff/open workflow。
@@ -89,7 +104,8 @@ stderr、磁盘绝对路径和非 UTF-8 path 不进入 Renderer。
 1. 增加显式 repository identity 与 multi-root registry；
 2. 为长时间 remote operation 增加 progress、queue state 和 caller cancellation；
 3. 接入 diff/open 与更细粒度的错误 UI；
-4. 按明确产品语义增加 branch 等额外 mutation。
+4. 把 Native 已验证的 local branch switch 语义扩展到 App Server SCM，并按明确产品语义增加
+   branch lifecycle 等额外 mutation。
 
 长期不变量是：Desktop 不直接执行 Git；App Server adapter 不复制 Git command/parsing；watch
 event 只触发重新确认，不能自身成为 repository truth。

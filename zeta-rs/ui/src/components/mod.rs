@@ -6,6 +6,7 @@ mod context_view;
 mod dropdown;
 mod icon_label;
 mod input_box;
+mod keycap;
 mod sash;
 mod scroll_view;
 mod search_box;
@@ -25,6 +26,7 @@ pub use context_view::{
 pub use dropdown::{Dropdown, DropdownItem, DropdownSelection, DropdownStyle};
 pub use icon_label::{IconLabel, IconLabelStyle};
 pub use input_box::{InputBox, InputBoxState, InputBoxStateColors, InputBoxStyle};
+pub use keycap::{Keycap, KeycapSequence, KeycapStyle};
 pub use sash::{Sash, SashOrientation, SashState, SashStyle};
 pub use scroll_view::{
     ScrollAxis, ScrollCommand, ScrollDelta, ScrollMetrics, ScrollState, ScrollView,

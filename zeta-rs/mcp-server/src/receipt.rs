@@ -1,13 +1,13 @@
 use crate::agent::{AgentCallError, AgentOutcome, InvocationFingerprint};
-use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, BTreeSet};
+use rusqlite::{Connection, ErrorCode, OptionalExtension, TransactionBehavior, params};
+use std::collections::BTreeSet;
 use std::fs;
-use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
+use std::time::Duration;
 use zeta_protocol::{SessionId, ThreadId};
 
-const RECEIPT_VERSION: u32 = 1;
+const RECEIPT_SQLITE_SCHEMA_VERSION: u32 = 1;
 
 pub(crate) enum BeginInvocation {
     Execute,
@@ -15,81 +15,41 @@ pub(crate) enum BeginInvocation {
 }
 
 pub(crate) struct ReceiptStore {
-    path: Option<PathBuf>,
     inner: Mutex<ReceiptState>,
 }
 
 struct ReceiptState {
-    document: ReceiptDocument,
+    connection: Connection,
     active: BTreeSet<(String, String)>,
-}
-
-#[derive(Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct ReceiptDocument {
-    version: u32,
-    principals: BTreeMap<String, PrincipalReceipts>,
-}
-
-#[derive(Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct PrincipalReceipts {
-    invocations: BTreeMap<String, InvocationReceipt>,
-    threads: BTreeMap<ThreadId, SessionId>,
-}
-
-#[derive(Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct InvocationReceipt {
-    fingerprint: String,
-    state: InvocationReceiptState,
-}
-
-#[derive(Deserialize, Serialize)]
-#[serde(tag = "type", rename_all = "camelCase")]
-enum InvocationReceiptState {
-    Running,
-    Finished { outcome: AgentOutcome },
 }
 
 impl ReceiptStore {
     pub(crate) fn open(path: impl Into<PathBuf>) -> Result<Self, AgentCallError> {
         let path = path.into();
-        let document = if path.exists() {
-            let bytes = fs::read(&path).map_err(receipt_error)?;
-            let document: ReceiptDocument =
-                serde_json::from_slice(&bytes).map_err(receipt_error)?;
-            if document.version != RECEIPT_VERSION {
-                return Err(AgentCallError::AppServer(format!(
-                    "unsupported MCP receipt version {}",
-                    document.version
-                )));
-            }
-            document
-        } else {
-            ReceiptDocument {
-                version: RECEIPT_VERSION,
-                ..ReceiptDocument::default()
-            }
-        };
-        Ok(Self {
-            path: Some(path),
-            inner: Mutex::new(ReceiptState {
-                document,
-                active: BTreeSet::new(),
-            }),
-        })
+        if let Some(parent) = path.parent()
+            && !parent.as_os_str().is_empty()
+        {
+            fs::create_dir_all(parent).map_err(receipt_error)?;
+        }
+        prepare_private_database_file(&path)?;
+        let mut connection = Connection::open(&path).map_err(receipt_error)?;
+        configure(&connection)?;
+        initialize_schema(&mut connection)?;
+        Ok(Self::from_connection(connection))
     }
 
     #[cfg(test)]
     pub(crate) fn memory() -> Self {
+        let mut connection = Connection::open_in_memory().expect("open in-memory receipt database");
+        configure(&connection).expect("configure in-memory receipt database");
+        initialize_schema(&mut connection).expect("initialize in-memory receipt schema");
+        Self::from_connection(connection)
+    }
+
+    fn from_connection(connection: Connection) -> Self {
         Self {
-            path: None,
             inner: Mutex::new(ReceiptState {
-                document: ReceiptDocument {
-                    version: RECEIPT_VERSION,
-                    ..ReceiptDocument::default()
-                },
+                connection,
                 active: BTreeSet::new(),
             }),
         }
@@ -107,42 +67,61 @@ impl ReceiptStore {
             return Err(AgentCallError::InvocationInProgress);
         }
         let fingerprint = fingerprint.encode();
-        let existing = state
-            .document
-            .principals
-            .get(principal)
-            .and_then(|receipts| receipts.invocations.get(invocation_id));
-        match existing {
-            Some(receipt) if receipt.fingerprint != fingerprint => {
+        let transaction = state
+            .connection
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .map_err(receipt_error)?;
+        let existing = transaction
+            .query_row(
+                "SELECT fingerprint, state, outcome_json
+                 FROM mcp_invocation_receipts
+                 WHERE principal = ?1 AND invocation_id = ?2",
+                params![principal, invocation_id],
+                |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, Option<String>>(2)?,
+                    ))
+                },
+            )
+            .optional()
+            .map_err(receipt_error)?;
+        let disposition = match existing {
+            Some((stored_fingerprint, _, _)) if stored_fingerprint != fingerprint => {
                 return Err(AgentCallError::InvocationConflict);
             }
-            Some(InvocationReceipt {
-                state: InvocationReceiptState::Finished { outcome },
-                ..
-            }) => return Ok(BeginInvocation::Replay(outcome.clone())),
-            Some(InvocationReceipt {
-                state: InvocationReceiptState::Running,
-                ..
-            }) => {}
-            None => {
-                state
-                    .document
-                    .principals
-                    .entry(principal.into())
-                    .or_default()
-                    .invocations
-                    .insert(
-                        invocation_id.into(),
-                        InvocationReceipt {
-                            fingerprint,
-                            state: InvocationReceiptState::Running,
-                        },
-                    );
-                persist(self.path.as_deref(), &state.document)?;
+            Some((_, state, outcome)) if state == "finished" => {
+                let outcome = outcome.ok_or_else(|| {
+                    AgentCallError::AppServer(
+                        "finished MCP invocation receipt has no outcome".into(),
+                    )
+                })?;
+                BeginInvocation::Replay(serde_json::from_str(&outcome).map_err(receipt_error)?)
             }
+            Some((_, state, _)) if state == "running" => BeginInvocation::Execute,
+            Some((_, state, _)) => {
+                return Err(AgentCallError::AppServer(format!(
+                    "unsupported MCP invocation receipt state '{state}'"
+                )));
+            }
+            None => {
+                transaction
+                    .execute(
+                        "INSERT INTO mcp_invocation_receipts
+                         (principal, invocation_id, fingerprint, state, outcome_json)
+                         VALUES (?1, ?2, ?3, 'running', NULL)",
+                        params![principal, invocation_id, fingerprint],
+                    )
+                    .map_err(receipt_error)?;
+                BeginInvocation::Execute
+            }
+        };
+        transaction.commit().map_err(receipt_error)?;
+        if matches!(disposition, BeginInvocation::Execute) {
+            state.active.insert(key);
         }
-        state.active.insert(key);
-        Ok(BeginInvocation::Execute)
+        Ok(disposition)
     }
 
     pub(crate) fn finish(
@@ -156,29 +135,42 @@ impl ReceiptStore {
         state
             .active
             .remove(&(principal.to_string(), invocation_id.to_string()));
-        let receipts = state
-            .document
-            .principals
-            .entry(principal.into())
-            .or_default();
+        let transaction = state
+            .connection
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .map_err(receipt_error)?;
         match &result {
             Ok(outcome) if outcome.is_terminal() => {
-                receipts.invocations.insert(
-                    invocation_id.into(),
-                    InvocationReceipt {
-                        fingerprint: fingerprint.encode(),
-                        state: InvocationReceiptState::Finished {
-                            outcome: outcome.clone(),
-                        },
-                    },
-                );
+                transaction
+                    .execute(
+                        "INSERT INTO mcp_invocation_receipts
+                         (principal, invocation_id, fingerprint, state, outcome_json)
+                         VALUES (?1, ?2, ?3, 'finished', ?4)
+                         ON CONFLICT(principal, invocation_id) DO UPDATE SET
+                           fingerprint = excluded.fingerprint,
+                           state = excluded.state,
+                           outcome_json = excluded.outcome_json",
+                        params![
+                            principal,
+                            invocation_id,
+                            fingerprint.encode(),
+                            serde_json::to_string(outcome).map_err(receipt_error)?,
+                        ],
+                    )
+                    .map_err(receipt_error)?;
             }
             Ok(_) => {}
             Err(_) => {
-                receipts.invocations.remove(invocation_id);
+                transaction
+                    .execute(
+                        "DELETE FROM mcp_invocation_receipts
+                         WHERE principal = ?1 AND invocation_id = ?2",
+                        params![principal, invocation_id],
+                    )
+                    .map_err(receipt_error)?;
             }
         }
-        persist(self.path.as_deref(), &state.document)?;
+        transaction.commit().map_err(receipt_error)?;
         result
     }
 
@@ -189,24 +181,37 @@ impl ReceiptStore {
         session_id: SessionId,
     ) -> Result<(), AgentCallError> {
         let mut state = self.inner.lock().map_err(|_| receipt_lock_error())?;
-        let threads = &mut state
-            .document
-            .principals
-            .entry(principal.into())
-            .or_default()
-            .threads;
-        match threads.get(&thread_id) {
-            Some(existing) if existing != &session_id => {
+        let transaction = state
+            .connection
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .map_err(receipt_error)?;
+        let existing = transaction
+            .query_row(
+                "SELECT session_id FROM mcp_thread_bindings
+                 WHERE principal = ?1 AND thread_id = ?2",
+                params![principal, thread_id.as_str()],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()
+            .map_err(receipt_error)?;
+        match existing {
+            Some(existing) if existing != session_id.as_str() => {
                 return Err(AgentCallError::AppServer(
                     "durable Thread binding conflicts with the App Server result".into(),
                 ));
             }
-            Some(_) => return Ok(()),
+            Some(_) => {}
             None => {
-                threads.insert(thread_id, session_id);
+                transaction
+                    .execute(
+                        "INSERT INTO mcp_thread_bindings
+                         (principal, thread_id, session_id) VALUES (?1, ?2, ?3)",
+                        params![principal, thread_id.as_str(), session_id.as_str()],
+                    )
+                    .map_err(receipt_error)?;
             }
         }
-        persist(self.path.as_deref(), &state.document)
+        transaction.commit().map_err(receipt_error)
     }
 
     pub(crate) fn session_for_thread(
@@ -215,48 +220,128 @@ impl ReceiptStore {
         thread_id: &ThreadId,
     ) -> Result<Option<SessionId>, AgentCallError> {
         let state = self.inner.lock().map_err(|_| receipt_lock_error())?;
-        Ok(state
-            .document
-            .principals
-            .get(principal)
-            .and_then(|receipts| receipts.threads.get(thread_id))
-            .cloned())
+        state
+            .connection
+            .query_row(
+                "SELECT session_id FROM mcp_thread_bindings
+                 WHERE principal = ?1 AND thread_id = ?2",
+                params![principal, thread_id.as_str()],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()
+            .map_err(receipt_error)?
+            .map(|session_id| SessionId::new(session_id).map_err(receipt_error))
+            .transpose()
     }
 }
 
-fn persist(path: Option<&Path>, document: &ReceiptDocument) -> Result<(), AgentCallError> {
-    let Some(path) = path else {
-        return Ok(());
-    };
-    let parent = path
-        .parent()
-        .ok_or_else(|| AgentCallError::AppServer("receipt path has no parent".into()))?;
-    fs::create_dir_all(parent).map_err(receipt_error)?;
-    let bytes = serde_json::to_vec(document).map_err(receipt_error)?;
-    let temporary = path.with_extension(format!("tmp-{}", std::process::id()));
+fn configure(connection: &Connection) -> Result<(), AgentCallError> {
+    connection
+        .busy_timeout(Duration::from_secs(5))
+        .map_err(receipt_error)?;
+    enable_wal(connection)?;
+    connection
+        .execute_batch(
+            "PRAGMA foreign_keys = ON;
+             PRAGMA synchronous = FULL;
+             CREATE TABLE IF NOT EXISTS zeta_schema_migrations (
+                 component TEXT PRIMARY KEY,
+                 version INTEGER NOT NULL
+             );",
+        )
+        .map_err(receipt_error)
+}
+
+fn enable_wal(connection: &Connection) -> Result<(), AgentCallError> {
+    for _ in 0..100 {
+        match connection.query_row("PRAGMA journal_mode = WAL", [], |row| {
+            row.get::<_, String>(0)
+        }) {
+            Ok(_) => return Ok(()),
+            Err(rusqlite::Error::SqliteFailure(error, _))
+                if matches!(
+                    error.code,
+                    ErrorCode::DatabaseBusy | ErrorCode::DatabaseLocked
+                ) =>
+            {
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            Err(error) => return Err(receipt_error(error)),
+        }
+    }
+    Err(AgentCallError::AppServer(
+        "MCP SQLite receipt database remained locked while enabling WAL".into(),
+    ))
+}
+
+fn initialize_schema(connection: &mut Connection) -> Result<(), AgentCallError> {
+    let transaction = connection
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .map_err(receipt_error)?;
+    let version = transaction
+        .query_row(
+            "SELECT version FROM zeta_schema_migrations WHERE component = 'mcp-receipts'",
+            [],
+            |row| row.get::<_, u32>(0),
+        )
+        .optional()
+        .map_err(receipt_error)?;
+    match version {
+        Some(version) if version != RECEIPT_SQLITE_SCHEMA_VERSION => {
+            return Err(AgentCallError::AppServer(format!(
+                "unsupported MCP receipt SQLite schema version {version}"
+            )));
+        }
+        Some(_) => {}
+        None => {
+            transaction
+                .execute_batch(
+                    "CREATE TABLE mcp_invocation_receipts (
+                         principal TEXT NOT NULL,
+                         invocation_id TEXT NOT NULL,
+                         fingerprint TEXT NOT NULL,
+                         state TEXT NOT NULL CHECK (state IN ('running', 'finished')),
+                         outcome_json TEXT,
+                         PRIMARY KEY (principal, invocation_id),
+                         CHECK (
+                           (state = 'running' AND outcome_json IS NULL) OR
+                           (state = 'finished' AND outcome_json IS NOT NULL)
+                         )
+                     );
+                     CREATE TABLE mcp_thread_bindings (
+                         principal TEXT NOT NULL,
+                         thread_id TEXT NOT NULL,
+                         session_id TEXT NOT NULL,
+                         PRIMARY KEY (principal, thread_id)
+                     );",
+                )
+                .map_err(receipt_error)?;
+            transaction
+                .execute(
+                    "INSERT INTO zeta_schema_migrations (component, version)
+                     VALUES ('mcp-receipts', ?1)",
+                    [RECEIPT_SQLITE_SCHEMA_VERSION],
+                )
+                .map_err(receipt_error)?;
+        }
+    }
+    transaction.commit().map_err(receipt_error)
+}
+
+fn prepare_private_database_file(path: &Path) -> Result<(), AgentCallError> {
     let mut options = fs::OpenOptions::new();
-    options.create(true).truncate(true).write(true);
+    options.create(true).append(true);
     #[cfg(unix)]
     {
         use std::os::unix::fs::OpenOptionsExt;
         options.mode(0o600);
     }
-    let mut file = options.open(&temporary).map_err(receipt_error)?;
-    file.write_all(&bytes).map_err(receipt_error)?;
-    file.sync_all().map_err(receipt_error)?;
-    fs::rename(&temporary, path).map_err(receipt_error)?;
-    sync_parent(parent)
-}
-
-#[cfg(unix)]
-fn sync_parent(parent: &Path) -> Result<(), AgentCallError> {
-    fs::File::open(parent)
-        .and_then(|directory| directory.sync_all())
-        .map_err(receipt_error)
-}
-
-#[cfg(not(unix))]
-fn sync_parent(_parent: &Path) -> Result<(), AgentCallError> {
+    options.open(path).map_err(receipt_error)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(path, fs::Permissions::from_mode(0o600)).map_err(receipt_error)?;
+    }
     Ok(())
 }
 
@@ -265,7 +350,7 @@ fn receipt_lock_error() -> AgentCallError {
 }
 
 fn receipt_error(error: impl std::fmt::Display) -> AgentCallError {
-    AgentCallError::AppServer(format!("MCP receipt store failed: {error}"))
+    AgentCallError::AppServer(format!("MCP SQLite receipt store failed: {error}"))
 }
 
 #[cfg(test)]

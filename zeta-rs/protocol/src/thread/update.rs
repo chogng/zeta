@@ -32,6 +32,19 @@ pub enum ThreadUpdate {
         turn_id: TurnId,
         plan: PlanUpdate,
     },
+    ToolOutputDelta {
+        turn_id: TurnId,
+        tool_call_id: crate::ToolCallId,
+        stream: ToolOutputStream,
+        text: String,
+    },
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum ToolOutputStream {
+    Stdout,
+    Stderr,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

@@ -33,10 +33,6 @@ impl SkillConfigSnapshotProvider for TestConfig {
     fn snapshot(&self) -> Result<SkillsConfig, String> {
         Ok(self.skills.lock().unwrap().clone())
     }
-
-    fn watched_config_paths(&self) -> Vec<PathBuf> {
-        Vec::new()
-    }
 }
 
 #[test]

@@ -5,9 +5,9 @@ use super::tool_execution::{
 };
 use crate::policy_service::approval_matches_review;
 use crate::{
-    AutoReviewedToolGrant, CoreError, OneTimeToolGrant, PolicyService, RecordToolResultRequest,
-    RequestTurnInteraction, ThreadController, ThreadSnapshot, ToolAuthorization, ToolCallOutput,
-    ToolService, durable_approval_request,
+    AutoReviewedToolGrant, CoreError, NoThreadUpdates, OneTimeToolGrant, PolicyService,
+    RecordToolResultRequest, RequestTurnInteraction, ThreadController, ThreadSnapshot,
+    ThreadUpdateSink, ToolAuthorization, ToolCallOutput, ToolService, durable_approval_request,
 };
 use std::sync::Arc;
 use zeta_async_utils::CancellationToken;
@@ -26,6 +26,7 @@ pub(super) struct ToolScheduler {
     threads: Arc<ThreadController>,
     tools: Arc<dyn ToolService>,
     policy: Arc<dyn PolicyService>,
+    updates: Arc<dyn ThreadUpdateSink>,
 }
 
 impl ToolScheduler {
@@ -38,7 +39,13 @@ impl ToolScheduler {
             threads,
             tools,
             policy,
+            updates: Arc::new(NoThreadUpdates),
         }
+    }
+
+    pub(super) fn with_thread_updates(mut self, updates: Arc<dyn ThreadUpdateSink>) -> Self {
+        self.updates = updates;
+        self
     }
 
     pub(super) fn run_pending(
@@ -114,6 +121,7 @@ impl ToolScheduler {
                                 self.threads.as_ref(),
                                 self.tools.as_ref(),
                                 self.policy.as_ref(),
+                                self.updates.as_ref(),
                             )
                             .execute_approved_escalation(
                                 &execution,
@@ -281,6 +289,7 @@ impl ToolScheduler {
             self.threads.as_ref(),
             self.tools.as_ref(),
             self.policy.as_ref(),
+            self.updates.as_ref(),
         )
         .execute(context, call, reviewed, authorization)?;
         match completion {

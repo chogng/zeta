@@ -1,9 +1,9 @@
-use zeta_ui::{PaintRect, Point, Rect, Size, TextBlock, UiScene};
+use zeta_ui::{PaintRect, Point, Rect, Size, UiScene};
 
 use super::text_metrics::{display_columns, display_columns_until, expand_tabs};
 use super::{
     CELL_WIDTH, CONTENT_HORIZONTAL_PADDING, CodeEditor, CodeEditorInlineHighlight,
-    CodeEditorSyntaxToken, ROW_HEIGHT,
+    CodeEditorSyntaxToken, ROW_HEIGHT, paint_text_block,
 };
 
 impl CodeEditor<'_> {
@@ -133,7 +133,8 @@ impl CodeEditor<'_> {
             }
             let start = display_columns_until(text, token.range.start);
             let token_text = &text[token.range.clone()];
-            scene.draw_text(TextBlock::new(
+            paint_text_block(
+                scene,
                 expand_tabs(token_text),
                 Point::new(
                     bounds.origin.x
@@ -144,7 +145,7 @@ impl CodeEditor<'_> {
                 ),
                 Size::new(display_columns(token_text) as f32 * CELL_WIDTH, ROW_HEIGHT),
                 self.style.text_with_color(token.color),
-            ));
+            );
         }
     }
 
@@ -169,12 +170,13 @@ impl CodeEditor<'_> {
         let mut caret_x = base_x;
         if let Some(composition) = self.rows.composition() {
             let width = display_columns(composition.text) as f32 * CELL_WIDTH;
-            scene.draw_text(TextBlock::new(
+            paint_text_block(
+                scene,
                 expand_tabs(composition.text),
                 Point::new(base_x, bounds.origin.y),
                 Size::new(width, ROW_HEIGHT),
                 self.style.text_style().clone(),
-            ));
+            );
             scene.draw_rect(PaintRect::new(
                 Rect::from_xywh(base_x, bounds.bottom() - 1.0, width.max(CELL_WIDTH), 1.0),
                 self.style.composition_underline(),
@@ -183,9 +185,11 @@ impl CodeEditor<'_> {
                 caret_x += display_columns_until(composition.text, cursor.end) as f32 * CELL_WIDTH;
             }
         }
-        scene.draw_rect(PaintRect::new(
-            Rect::from_xywh(caret_x, bounds.origin.y, 1.5, ROW_HEIGHT),
-            self.style.caret(),
-        ));
+        if self.caret_visibility == zeta_ui::CaretVisibility::Visible {
+            scene.draw_rect(PaintRect::new(
+                Rect::from_xywh(caret_x, bounds.origin.y, 1.5, ROW_HEIGHT),
+                self.style.caret(),
+            ));
+        }
     }
 }

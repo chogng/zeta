@@ -83,7 +83,7 @@ zeta-rs/app-server-protocol/
 | `SerializationScopeDefinition` | dispatcher serialization requirement |
 
 方法注册表当前覆盖初始化、Session 生命周期/订阅、Thread 读取/订阅、Session 模型选择、
-模型目录、配置/供应商/MCP/Skill 修改、Turn
+模型目录、配置/供应商/MCP/Skill/Plugin request/Hook declaration 修改、Turn
 start/interrupt/interaction resolve 与 Resource
 metadata/read/release、filesystem metadata/read/write，以及 workspace search start/read/cancel。
 Notification 包含 `session/update`、`thread/update`、`skills/changed`、`git/statusChanged` 与

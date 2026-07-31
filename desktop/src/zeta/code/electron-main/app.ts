@@ -511,7 +511,7 @@ export class ZetaApplication extends DisposableOwner {
       ...(process.env.ZETA_RG_PATH
         ? { ZETA_RG_PATH: process.env.ZETA_RG_PATH }
         : {}),
-      ZETA_STATE_ROOT: join(app.getPath("userData"), "state"),
+      ZETA_PROFILE_ROOT: join(app.getPath("userData"), "state"),
       ...(isSingleFolderWorkspaceIdentifier(workspace)
         ? { ZETA_WORKSPACE_ROOT: workspace.uri.fsPath }
         : {}),

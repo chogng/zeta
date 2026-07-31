@@ -27,12 +27,12 @@ pub use server::McpServerError;
 pub fn run_stdio(options: McpServerOptions) -> Result<(), McpServerError> {
     options.validate().map_err(McpServerError::configuration)?;
     let receipts = Arc::new(
-        ReceiptStore::open(options.state_root().join("mcp-server/receipts-v1.json"))
+        ReceiptStore::open(options.profile_root().join("state.sqlite3"))
             .map_err(McpServerError::receipt)?,
     );
     let client = start_in_process_client(
         InProcessClientOptions::new(
-            options.state_root(),
+            options.profile_root(),
             ClientInfo {
                 name: "zeta-mcp-server".into(),
                 version: env!("CARGO_PKG_VERSION").into(),
@@ -60,12 +60,12 @@ pub fn run_http(
         .validate()
         .map_err(McpServerError::configuration)?;
     let receipts = Arc::new(
-        ReceiptStore::open(options.state_root().join("mcp-server/receipts-v1.json"))
+        ReceiptStore::open(options.profile_root().join("state.sqlite3"))
             .map_err(McpServerError::receipt)?,
     );
     let host = open_in_process_app_server(
         InProcessClientOptions::new(
-            options.state_root(),
+            options.profile_root(),
             ClientInfo {
                 name: "zeta-mcp-server".into(),
                 version: env!("CARGO_PKG_VERSION").into(),

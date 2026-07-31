@@ -1,7 +1,8 @@
 use crate::{
-    ApprovalReviewModelSelection, ConfigGeneration, ConfigRevision, McpServerConfig,
-    McpServerEnablement, McpServerId, ModelRef, SkillEnablement, SkillId, SkillSourceConfig,
-    SkillSourceEnablement, SkillSourceId, Theme,
+    ApprovalReviewModelSelection, ConfigGeneration, ConfigRevision, HookConfig, HookEnablement,
+    HookId, McpServerConfig, McpServerEnablement, McpServerId, ModelRef, PluginId, PluginRequest,
+    PluginRequestEnablement, SkillEnablement, SkillId, SkillSourceConfig, SkillSourceEnablement,
+    SkillSourceId,
 };
 use serde::{Deserialize, Serialize};
 use zeta_model_provider_config::ModelProviderConfig;
@@ -15,8 +16,6 @@ pub struct PreferencesUpdate {
     pub preferred_model: Patch<ModelRef>,
     #[serde(default, skip_serializing_if = "Patch::is_missing")]
     pub approval_review_model: Patch<ApprovalReviewModelSelection>,
-    #[serde(default, skip_serializing_if = "Patch::is_missing")]
-    pub theme: Patch<Theme>,
 }
 
 /// Typed mutations accepted by the user configuration authority.
@@ -54,6 +53,26 @@ pub enum UserConfigCommand {
     SetSkillEnablement {
         skill_id: SkillId,
         enablement: SkillEnablement,
+    },
+    UpsertPluginRequest {
+        request: PluginRequest,
+    },
+    RemovePluginRequest {
+        plugin_id: PluginId,
+    },
+    SetPluginRequestEnablement {
+        plugin_id: PluginId,
+        enablement: PluginRequestEnablement,
+    },
+    UpsertHook {
+        hook: HookConfig,
+    },
+    RemoveHook {
+        hook_id: HookId,
+    },
+    SetHookEnablement {
+        hook_id: HookId,
+        enablement: HookEnablement,
     },
 }
 

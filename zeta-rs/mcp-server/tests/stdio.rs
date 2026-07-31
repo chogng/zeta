@@ -15,7 +15,7 @@ fn binary_serves_initialize_and_tool_catalog_over_stdio() {
             .as_nanos()
     ));
     let mut child = Command::new(env!("CARGO_BIN_EXE_zeta-mcp-server"))
-        .env("ZETA_STATE_ROOT", &state_root)
+        .env("ZETA_PROFILE_ROOT", &state_root)
         .env("ZETA_WORKSPACE_ROOT", std::env::current_dir().unwrap())
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -81,7 +81,7 @@ fn binary_serves_initialize_and_tool_catalog_over_stdio() {
     );
 
     let mut restarted = Command::new(env!("CARGO_BIN_EXE_zeta-mcp-server"))
-        .env("ZETA_STATE_ROOT", &state_root)
+        .env("ZETA_PROFILE_ROOT", &state_root)
         .env("ZETA_WORKSPACE_ROOT", std::env::current_dir().unwrap())
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())

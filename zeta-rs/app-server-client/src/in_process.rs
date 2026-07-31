@@ -16,7 +16,7 @@ use zeta_app_server_protocol::schema_hash;
 /// Startup inputs for an embedded App Server connection.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct InProcessClientOptions {
-    pub state_root: PathBuf,
+    pub profile_root: PathBuf,
     pub workspace_root: Option<PathBuf>,
     pub client_info: ClientInfo,
     pub capabilities: ClientCapabilities,
@@ -25,9 +25,9 @@ pub struct InProcessClientOptions {
 }
 
 impl InProcessClientOptions {
-    pub fn new(state_root: impl Into<PathBuf>, client_info: ClientInfo) -> Self {
+    pub fn new(profile_root: impl Into<PathBuf>, client_info: ClientInfo) -> Self {
         Self {
-            state_root: state_root.into(),
+            profile_root: profile_root.into(),
             workspace_root: None,
             client_info,
             capabilities: ClientCapabilities::default(),
@@ -135,7 +135,7 @@ pub fn start_in_process_client(
 pub fn open_in_process_app_server(
     options: InProcessClientOptions,
 ) -> Result<InProcessAppServer, ClientError> {
-    let mut server_options = LocalAppServerOptions::new(options.state_root)
+    let mut server_options = LocalAppServerOptions::new(options.profile_root)
         .with_slash_command_catalog(options.slash_commands);
     server_options.built_in_skills = options.built_in_skills;
     if let Some(workspace_root) = options.workspace_root {

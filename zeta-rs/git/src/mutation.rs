@@ -1,7 +1,7 @@
 use std::ffi::OsString;
 use std::path::{Component, PathBuf};
 
-use crate::{GitClient, GitError, GitHead, GitRepository, GitResult};
+use crate::{GitBranch, GitClient, GitError, GitHead, GitRepository, GitResult};
 
 const MAX_COMMIT_MESSAGE_BYTES: usize = 64 * 1024;
 
@@ -89,6 +89,28 @@ impl GitCommitResult {
 }
 
 impl GitClient {
+    /// Switches the working tree to one local branch returned by [`GitClient::local_branches`].
+    ///
+    /// Git remains authoritative for dirty-worktree and linked-worktree conflicts. A rejected
+    /// switch is returned as [`GitError::CommandFailed`] without retrying or discarding changes.
+    pub async fn switch_branch(
+        &self,
+        repository: &GitRepository,
+        branch: &GitBranch,
+    ) -> GitResult<()> {
+        self.run_mutation(
+            repository.worktree_root(),
+            [
+                OsString::from("switch"),
+                OsString::from("--"),
+                OsString::from(branch.name()),
+            ],
+        )
+        .await?
+        .require_success()?;
+        Ok(())
+    }
+
     /// Adds the selected repository-relative paths to the index.
     pub async fn stage(&self, repository: &GitRepository, paths: &GitPathspecSet) -> GitResult<()> {
         self.run_mutation(repository.worktree_root(), paths.arguments(&["add"]))

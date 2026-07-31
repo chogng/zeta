@@ -110,7 +110,7 @@ impl AppServerSession {
 `zeta-exec` 和 `zeta-tui` 都是本地 App Server 的宿主，而不是已经存在的外部 server 的普通
 调用方。两者需要相同的 composition：
 
-- state root 与本地 rollout/store；
+- 用户 profile root 与本地 SQLite state repository；
 - config、credentials、model provider 和 tool runtime；
 - App Server dispatcher；
 - connection-scoped subscription 与 Resource ownership；
@@ -211,7 +211,7 @@ Remote connection failure 必须结束 pending request 并发出 connection even
 
 ```rust
 pub struct AppServerStartOptions {
-    pub state_root: PathBuf,
+    pub profile_root: PathBuf,
     pub client_info: ClientInfo,
     pub required_capabilities: RequiredCapabilities,
 }
@@ -432,7 +432,7 @@ TUI 不再接收一个同步 `&mut AppServerClient<T>`，也不调用 `drain_not
 - `InProcessAppServer::connect` 为同一个 `Arc<AppServer>` 建立各自 initialize 完成的 typed
   connection，当前供 MCP HTTP session 共享一个 embedded composition；
 - `InProcessTransport::from_shared_server` 明确表达共享 host，不要求每个 transport 重建
-  rollout/config/model composition；
+  SQLite repository/config/model composition；
 - typed client methods；
 - protocol method registry；
 - external JSON-RPC request/response 编解码；

@@ -7,7 +7,8 @@ use zeta_ui::{
     TextInputLayoutEngine, TextStyle, UiScene,
 };
 
-use crate::shell_interaction::{COMPOSER_PANEL, CONTEXT_TOOLBAR, ContextAction};
+use crate::agent_composer::ComposerMode;
+use crate::shell_interaction::{COMPOSER_MODE, COMPOSER_PANEL, CONTEXT_TOOLBAR, ContextAction};
 use crate::shell_style::ShellPalette;
 use crate::workspace_context::WorkspaceContext;
 use zeta_ui_dispatch::{
@@ -25,7 +26,7 @@ const TOOLBAR_CONTENT_GAP: f32 = 4.0;
 /// Product-owned action toolbar shared by command and future chat input surfaces.
 pub(crate) struct InputContextToolbar {
     action_bar: ActionBar,
-    accessibility_labels: [String; 4],
+    accessibility_labels: Vec<String>,
     bounds: Rect,
 }
 
@@ -33,37 +34,45 @@ impl InputContextToolbar {
     pub(crate) fn new(
         bounds: Rect,
         context: &WorkspaceContext,
+        mode: ComposerMode,
         palette: ShellPalette,
         text_layout: &mut TextInputLayoutEngine,
         dispatch: &UiDispatch,
     ) -> Self {
         let labels = [
+            match mode {
+                ComposerMode::Agent => "Agent".to_owned(),
+                ComposerMode::Shell => "Shell".to_owned(),
+            },
             context.location_label().to_string(),
             context.working_directory_label().to_string(),
             context.git_branch_label().to_string(),
-            context.diff_count_label(),
+            context.diff_summary_label(),
         ];
-        let accessibility_labels = [
-            format!("Environment: {}", labels[0]),
-            format!("Working directory: {}", labels[1]),
-            format!("Git branch: {}", labels[2]),
-            format!("Diff changes: {}", labels[3]),
+        let accessibility_labels = vec![
+            format!("Composer mode: {}", labels[0]),
+            format!("Environment: {}", labels[1]),
+            format!("Working directory: {}", labels[2]),
+            format!("Git branch: {}", labels[3]),
+            format!("Workspace {}", labels[4]),
         ];
         let natural_text_style =
             TextStyle::new(TOOLBAR_FONT_SIZE, palette.accent).with_line_height(TOOLBAR_LINE_HEIGHT);
         let natural_button_style = button_style(palette, natural_text_style.clone(), 1.0);
-        let item_widths = labels.each_ref().map(|label| {
-            let text_width = text_layout.measure_text(label, &natural_text_style).width;
-            natural_button_style.preferred_icon_and_label_width(text_width)
-        });
+        let item_widths = labels
+            .iter()
+            .map(|label| {
+                let text_width = text_layout.measure_text(label, &natural_text_style).width;
+                natural_button_style.preferred_icon_and_label_width(text_width)
+            })
+            .collect::<Vec<_>>();
         let total_width =
             item_widths.iter().sum::<f32>() + TOOLBAR_ITEM_GAP * (item_widths.len() - 1) as f32;
         let scale = (bounds.size.width / total_width).clamp(0.0, 1.0);
         let scaled_text_style = TextStyle::new(TOOLBAR_FONT_SIZE * scale, palette.accent)
             .with_line_height(TOOLBAR_LINE_HEIGHT * scale);
         let button_style = button_style(palette, scaled_text_style, scale);
-        let item = |action: ContextAction, icon, label: String, index: usize| {
-            let target = action.element_id();
+        let item = |target, icon, label: String, index: usize| {
             let state = if dispatch.is_pressed(target) {
                 ButtonState::Pressed
             } else if dispatch.is_focused(target) {
@@ -78,21 +87,36 @@ impl InputContextToolbar {
                     .with_main_axis_extent(item_widths[index] * scale),
             )
         };
+        let mode_icon = match mode {
+            ComposerMode::Agent => icons::AGENT,
+            ComposerMode::Shell => icons::LOCAL,
+        };
         let items = vec![
-            item(ContextAction::ALL[0], icons::LOCAL, labels[0].clone(), 0),
+            item(COMPOSER_MODE, mode_icon, labels[0].clone(), 0),
             item(
-                ContextAction::ALL[1],
-                icons::WORKING_DIRECTORY,
+                ContextAction::ALL[0].element_id(),
+                icons::LOCAL,
                 labels[1].clone(),
                 1,
             ),
             item(
-                ContextAction::ALL[2],
-                icons::GIT_BRANCH,
+                ContextAction::ALL[1].element_id(),
+                icons::WORKING_DIRECTORY,
                 labels[2].clone(),
                 2,
             ),
-            item(ContextAction::ALL[3], icons::DIFF, labels[3].clone(), 3),
+            item(
+                ContextAction::ALL[2].element_id(),
+                icons::GIT_BRANCH,
+                labels[3].clone(),
+                3,
+            ),
+            item(
+                ContextAction::ALL[3].element_id(),
+                icons::DIFF,
+                labels[4].clone(),
+                4,
+            ),
         ];
         Self {
             action_bar: ActionBar::new(
@@ -121,14 +145,30 @@ impl InputContextToolbar {
             .with_parent(COMPOSER_PANEL),
         );
         let navigation_group = NavigationGroupId::new(CONTEXT_TOOLBAR);
+        if let Some(bounds) = self.action_bar.interactive_item_bounds(0) {
+            frame.register(
+                UiNode::new(
+                    COMPOSER_MODE,
+                    bounds,
+                    AccessibilityRole::Button,
+                    self.accessibility_labels[0].clone(),
+                )
+                .with_parent(CONTEXT_TOOLBAR)
+                .with_cursor(CursorFeedback::Pointer)
+                .with_focus(FocusBehavior::TabStop)
+                .with_action(NodeAction::Activate)
+                .with_navigation(navigation_group, NavigationAxis::Horizontal),
+            );
+        }
         for (index, action) in ContextAction::ALL.into_iter().enumerate() {
-            if let Some(bounds) = self.action_bar.interactive_item_bounds(index) {
+            let item_index = index + 1;
+            if let Some(bounds) = self.action_bar.interactive_item_bounds(item_index) {
                 frame.register(
                     UiNode::new(
                         action.element_id(),
                         bounds,
                         AccessibilityRole::Button,
-                        self.accessibility_labels[index].clone(),
+                        self.accessibility_labels[item_index].clone(),
                     )
                     .with_parent(CONTEXT_TOOLBAR)
                     .with_cursor(CursorFeedback::Pointer)
