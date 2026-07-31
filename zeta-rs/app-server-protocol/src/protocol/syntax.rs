@@ -11,6 +11,99 @@ pub enum SyntaxLanguageDto {
     Rust,
 }
 
+/// Protocol-owned syntax token categories referenced by compact token data.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum SyntaxTokenTypeDto {
+    Attribute,
+    Comment,
+    Constant,
+    Constructor,
+    Embedded,
+    Function,
+    Keyword,
+    Label,
+    Module,
+    Number,
+    Operator,
+    Property,
+    String,
+    Type,
+    Variable,
+}
+
+/// Zero-based UTF-16 position used by syntax-analysis protocol results.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct SyntaxPositionDto {
+    pub line: usize,
+    pub character: usize,
+}
+
+/// Half-open UTF-16 range used by syntax-analysis protocol results.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct SyntaxRangeDto {
+    pub start: SyntaxPositionDto,
+    pub end: SyntaxPositionDto,
+}
+
+/// Compact LSP-compatible token data and its protocol-owned legend.
+///
+/// Each group of five integers is `deltaLine, deltaStartUtf16, lengthUtf16, tokenType,
+/// modifierBits`. `tokenType` indexes `legend`; modifier bits are currently zero.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct SyntaxTokenDataDto {
+    pub legend: Vec<SyntaxTokenTypeDto>,
+    pub data: Vec<u32>,
+}
+
+/// Language-neutral kind for one syntactically declared document symbol.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum SyntaxDocumentSymbolKindDto {
+    Constant,
+    Enum,
+    Field,
+    Function,
+    Macro,
+    Method,
+    Module,
+    Static,
+    Struct,
+    Trait,
+    Type,
+    Variable,
+}
+
+/// One syntactically declared symbol derived from an exact document revision.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct SyntaxDocumentSymbolDto {
+    pub name: String,
+    pub kind: SyntaxDocumentSymbolKindDto,
+    pub range: SyntaxRangeDto,
+    pub selection_range: SyntaxRangeDto,
+}
+
+/// Severity of one syntax parser diagnostic.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum SyntaxDiagnosticSeverityDto {
+    Error,
+}
+
+/// Recoverable parser error or missing construct for an exact document revision.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct SyntaxDiagnosticDto {
+    pub range: SyntaxRangeDto,
+    pub severity: SyntaxDiagnosticSeverityDto,
+    pub message: String,
+    pub source: String,
+}
+
 /// Opens or replaces one connection-owned incremental syntax-analysis document.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -53,14 +146,15 @@ pub struct SyntaxCloseParams {
     pub document_id: String,
 }
 
-/// LSP-compatible relative semantic-token encoding derived from one exact syntax revision.
-///
-/// Each group of five integers is `deltaLine, deltaStartUtf16, lengthUtf16, tokenType,
-/// modifierBits`. The fixed token-type legend is owned by the Desktop Alpha adapter.
+/// Complete presentation-independent syntax analysis derived from one exact document revision.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
-pub struct SyntaxTokenSnapshotDto {
+pub struct SyntaxAnalysisSnapshotDto {
     pub revision: usize,
     pub result_id: String,
-    pub data: Vec<u32>,
+    pub has_errors: bool,
+    pub tokens: SyntaxTokenDataDto,
+    pub folding_ranges: Vec<SyntaxRangeDto>,
+    pub symbols: Vec<SyntaxDocumentSymbolDto>,
+    pub diagnostics: Vec<SyntaxDiagnosticDto>,
 }

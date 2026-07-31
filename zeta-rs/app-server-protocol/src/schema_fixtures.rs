@@ -233,8 +233,9 @@ fn dto_driven_typescript_preserves_model_ref_and_patch_shape() {
     assert!(!typescript.contains(
         "ResourceReadResult = { resourceId: string, offset: number, data: Array<number>"
     ));
+    assert!(typescript.contains("SyntaxAnalysisSnapshotDto = { revision: number, resultId: string, hasErrors: boolean, tokens: SyntaxTokenDataDto"));
     assert!(typescript.contains(
-        "SyntaxTokenSnapshotDto = { revision: number, resultId: string, data: Array<number>, }"
+        "SyntaxTokenDataDto = { legend: Array<SyntaxTokenTypeDto>, data: Array<number>, }"
     ));
     assert!(typescript.contains("SyntaxLanguageDto = \"json\" | \"jsonc\" | \"rust\";"));
     assert!(typescript.contains("export const APP_SERVER_METHODS:"));
@@ -305,7 +306,10 @@ fn dto_driven_schema_contains_registered_rpc_envelopes() {
     assert!(definitions.contains_key("TypstCompileResult"));
     assert!(definitions.contains_key("SyntaxOpenParams"));
     assert!(definitions.contains_key("SyntaxChangeParams"));
-    assert!(definitions.contains_key("SyntaxTokenSnapshotDto"));
+    assert!(definitions.contains_key("SyntaxAnalysisSnapshotDto"));
+    assert!(definitions.contains_key("SyntaxTokenDataDto"));
+    assert!(definitions.contains_key("SyntaxDocumentSymbolDto"));
+    assert!(definitions.contains_key("SyntaxDiagnosticDto"));
     assert!(definitions.contains_key("WorkspaceSearchStartParams"));
     assert!(definitions.contains_key("WorkspaceSearchReadResult"));
     assert!(definitions.contains_key("TerminalProfile"));

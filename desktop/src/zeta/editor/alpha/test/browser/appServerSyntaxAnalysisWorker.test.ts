@@ -4,9 +4,10 @@ import { type ZetaRendererApi } from "../../../../platform/app-server/common/ren
 import { createAppServerSyntaxAnalysisWorkerFactory } from "../../browser/appServerSyntaxAnalysisWorker.js";
 import { LANGUAGE_DIAGNOSTIC_LANE, LANGUAGE_TOKEN_LANE, type LanguageAnalysisResult, type LanguageAnalysisWorker } from "../../common/languageAnalysisService.js";
 import { type LanguageWorkerModelSynchronizer, type LanguageWorkerRequest } from "../../common/languageRequestCoordinator.js";
+import { LanguageDiagnosticSeverity, type LanguageDiagnosticResult } from "../../common/languageResults.js";
 import { TextModelChangeReason, TextPosition, TextRange, type TextModelChange, type TextSnapshot } from "../../common/text.js";
 import { type LanguageAnalysisRequest } from "../../common/languageAnalysisProviders.js";
-import { type SyntaxChangeParams, type SyntaxCloseParams, type SyntaxOpenParams, type SyntaxTokenSnapshotDto } from "../../../../../../generated/app-server/types.js";
+import { type SyntaxAnalysisSnapshotDto, type SyntaxChangeParams, type SyntaxCloseParams, type SyntaxOpenParams } from "../../../../../../generated/app-server/types.js";
 
 type SyntaxApi = ZetaRendererApi["syntax"];
 
@@ -74,21 +75,48 @@ test("Alpha App Server syntax worker uses the existing fallback when backend ana
   assert.deepEqual(fallback.calls, ["tokens:rust"]);
 });
 
+test("Alpha App Server syntax worker merges backend and fallback diagnostics", async () => {
+  const api = new RecordingSyntaxApi();
+  api.diagnostics = [{
+    range: { start: { line: 0, character: 3 }, end: { line: 0, character: 3 } },
+    severity: "error",
+    message: "Missing syntax",
+    source: "tree-sitter",
+  }];
+  const fallback = new RecordingFallbackWorker();
+  fallback.diagnostics = [{
+    range: TextRange.from(TextPosition.at(0, 0), TextPosition.at(0, 1)),
+    severity: LanguageDiagnosticSeverity.Warning,
+    message: "Fallback diagnostic",
+    source: "alpha.lexical",
+  }];
+  using worker = createAppServerSyntaxAnalysisWorkerFactory(api, "file:///workspace/main.rs", "rust", () => fallback)();
+
+  const result = await worker.run(request(1, LANGUAGE_DIAGNOSTIC_LANE, "rust", snapshot(1, "fn (")), new AbortController().signal);
+
+  assert.equal(result.lane, LANGUAGE_DIAGNOSTIC_LANE);
+  assert.deepEqual(result.value.diagnostics.map(diagnostic => [diagnostic.message, diagnostic.source]), [
+    ["Missing syntax", "tree-sitter"],
+    ["Fallback diagnostic", "alpha.lexical"],
+  ]);
+});
+
 class RecordingSyntaxApi implements SyntaxApi {
   readonly openCalls: SyntaxOpenParams[] = [];
   readonly changeCalls: SyntaxChangeParams[] = [];
   readonly closeCalls: SyntaxCloseParams[] = [];
   openError: Error | undefined;
+  diagnostics: SyntaxAnalysisSnapshotDto["diagnostics"] = [];
 
-  async open(params: SyntaxOpenParams): Promise<SyntaxTokenSnapshotDto> {
+  async open(params: SyntaxOpenParams): Promise<SyntaxAnalysisSnapshotDto> {
     this.openCalls.push(params);
     if (this.openError) throw this.openError;
-    return tokenSnapshot(params.revision);
+    return analysisSnapshot(params.revision, this.diagnostics);
   }
 
-  async change(params: SyntaxChangeParams): Promise<SyntaxTokenSnapshotDto> {
+  async change(params: SyntaxChangeParams): Promise<SyntaxAnalysisSnapshotDto> {
     this.changeCalls.push(params);
-    return tokenSnapshot(params.revision);
+    return analysisSnapshot(params.revision, this.diagnostics);
   }
 
   async close(params: SyntaxCloseParams): Promise<void> {
@@ -98,6 +126,7 @@ class RecordingSyntaxApi implements SyntaxApi {
 
 class RecordingFallbackWorker implements LanguageAnalysisWorker {
   readonly calls: string[] = [];
+  diagnostics: LanguageDiagnosticResult["diagnostics"] = [];
 
   run(request: LanguageWorkerRequest<"tokens" | "diagnostics", LanguageAnalysisRequest>): Promise<LanguageAnalysisResult> {
     this.calls.push(`${request.lane}:${request.payload.languageId}`);
@@ -106,7 +135,7 @@ class RecordingFallbackWorker implements LanguageAnalysisWorker {
       value: { tokens: [] },
     } : {
       lane: LANGUAGE_DIAGNOSTIC_LANE,
-      value: { diagnostics: [] },
+      value: { diagnostics: this.diagnostics },
     });
   }
 
@@ -145,10 +174,17 @@ function change(version: number, rangeOffset: number, rangeLength: number, text:
   });
 }
 
-function tokenSnapshot(revision: number): SyntaxTokenSnapshotDto {
+function analysisSnapshot(revision: number, diagnostics: SyntaxAnalysisSnapshotDto["diagnostics"]): SyntaxAnalysisSnapshotDto {
   return {
     revision,
     resultId: String(revision),
-    data: [0, 0, 2, 6, 0, 0, 3, 4, 5, 0, 1, 2, 1, 13, 0],
+    hasErrors: diagnostics.length > 0,
+    tokens: {
+      legend: ["attribute", "comment", "constant", "constructor", "embedded", "function", "keyword", "label", "module", "number", "operator", "property", "string", "type", "variable"],
+      data: [0, 0, 2, 6, 0, 0, 3, 4, 5, 0, 1, 2, 1, 14, 0],
+    },
+    foldingRanges: [],
+    symbols: [],
+    diagnostics,
   };
 }

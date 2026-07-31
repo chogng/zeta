@@ -205,14 +205,15 @@ later requests reference it, while model transactions send one incremental
 sync shared by both lanes.
 
 `appServerSyntaxAnalysisWorker.ts` is Alpha's browser adapter for backend Rust,
-JSON, and JSONC syntax tokens. It serializes one model's UTF-16 transactions into the App
-Server `document/syntax/open|change|close` session, validates the returned
-revision, and decodes compact token data into Alpha `LanguageToken` values.
-Only supported token lanes are intercepted. Diagnostics and other languages
-stay with the TextMate/lexical worker. Backend failure delegates to that same
-fallback chain: JSON/JSONC retain their bundled TextMate grammars, while Rust
-currently has no TextMate grammar and therefore yields an empty fallback token
-batch. Monaco has no ownership in this path.
+JSON, and JSONC syntax analysis. It serializes one model's UTF-16 transactions into the App
+Server `document/syntax/open|change|close` session, validates the returned complete analysis
+snapshot, maps the protocol-owned token legend into Alpha `LanguageToken` values, and projects
+tree-sitter parse errors into Alpha diagnostics. The diagnostic lane merges backend parse errors
+with the existing lexical result. Backend failure delegates to that same fallback chain:
+JSON/JSONC retain their bundled TextMate grammars, while Rust currently has no TextMate grammar
+and therefore yields an empty fallback token batch. Folding ranges and document symbols cross the
+wire in the shared snapshot but do not yet have an Alpha UI owner. Monaco has no ownership in this
+path.
 
 `LanguageAnalysisProviderRegistry` selects the first matching token provider
 and all matching diagnostic providers in registration order. Provider failures

@@ -186,6 +186,9 @@ dispatcher 的 executable metadata，不能被误写成已经落实的并发保�
 - Terminal raw output 使用 `TerminalOutputChunk.data_base64`；sequence 字段在 Rust 使用 `u64`，
   TypeScript artifact 显式生成为 `number`，server 只产生 safe-lifetime 的单调值。`output_gap`
   是 ring eviction 的显式信号，不能由客户端忽略。
+- `SyntaxAnalysisSnapshotDto` 是 syntax analysis 的跨进程完整 revision snapshot。范围统一使用
+  UTF-16 position；compact token index 必须解释为同一 snapshot 中协议拥有的 `legend`，不能依赖
+  Alpha、Monaco 或 Native 私有顺序。fold、symbol 与 parse diagnostic 必须和 token 绑定同一 revision。
 - `TerminalProfile` 只暴露稳定 ID、标题和 default 标记。Terminal create 只接受
   `TerminalProfileSelection`，不包含 program、args、cwd 或 environment；这些 authority 留在
   local App Server composition。

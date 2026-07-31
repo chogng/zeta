@@ -2113,7 +2113,7 @@
               "const": "document/syntax/open"
             },
             "result": {
-              "$ref": "#/$defs/SyntaxTokenSnapshotDto"
+              "$ref": "#/$defs/SyntaxAnalysisSnapshotDto"
             }
           },
           "required": [
@@ -2129,7 +2129,7 @@
               "const": "document/syntax/change"
             },
             "result": {
-              "$ref": "#/$defs/SyntaxTokenSnapshotDto"
+              "$ref": "#/$defs/SyntaxAnalysisSnapshotDto"
             }
           },
           "required": [
@@ -5501,6 +5501,53 @@
       "type": "string",
       "minLength": 1
     },
+    "SyntaxAnalysisSnapshotDto": {
+      "description": "Complete presentation-independent syntax analysis derived from one exact document revision.",
+      "type": "object",
+      "properties": {
+        "diagnostics": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SyntaxDiagnosticDto"
+          }
+        },
+        "foldingRanges": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SyntaxRangeDto"
+          }
+        },
+        "hasErrors": {
+          "type": "boolean"
+        },
+        "resultId": {
+          "type": "string"
+        },
+        "revision": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "symbols": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SyntaxDocumentSymbolDto"
+          }
+        },
+        "tokens": {
+          "$ref": "#/$defs/SyntaxTokenDataDto"
+        }
+      },
+      "required": [
+        "revision",
+        "resultId",
+        "hasErrors",
+        "tokens",
+        "foldingRanges",
+        "symbols",
+        "diagnostics"
+      ]
+    },
     "SyntaxChangeParams": {
       "description": "Applies one atomic, non-overlapping editor change event to an open document.",
       "type": "object",
@@ -5550,6 +5597,79 @@
         "documentId"
       ]
     },
+    "SyntaxDiagnosticDto": {
+      "description": "Recoverable parser error or missing construct for an exact document revision.",
+      "type": "object",
+      "properties": {
+        "message": {
+          "type": "string"
+        },
+        "range": {
+          "$ref": "#/$defs/SyntaxRangeDto"
+        },
+        "severity": {
+          "$ref": "#/$defs/SyntaxDiagnosticSeverityDto"
+        },
+        "source": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "range",
+        "severity",
+        "message",
+        "source"
+      ]
+    },
+    "SyntaxDiagnosticSeverityDto": {
+      "description": "Severity of one syntax parser diagnostic.",
+      "type": "string",
+      "enum": [
+        "error"
+      ]
+    },
+    "SyntaxDocumentSymbolDto": {
+      "description": "One syntactically declared symbol derived from an exact document revision.",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/SyntaxDocumentSymbolKindDto"
+        },
+        "name": {
+          "type": "string"
+        },
+        "range": {
+          "$ref": "#/$defs/SyntaxRangeDto"
+        },
+        "selectionRange": {
+          "$ref": "#/$defs/SyntaxRangeDto"
+        }
+      },
+      "required": [
+        "name",
+        "kind",
+        "range",
+        "selectionRange"
+      ]
+    },
+    "SyntaxDocumentSymbolKindDto": {
+      "description": "Language-neutral kind for one syntactically declared document symbol.",
+      "type": "string",
+      "enum": [
+        "constant",
+        "enum",
+        "field",
+        "function",
+        "macro",
+        "method",
+        "module",
+        "static",
+        "struct",
+        "trait",
+        "type",
+        "variable"
+      ]
+    },
     "SyntaxLanguageDto": {
       "description": "Source language selected for one backend syntax-analysis document.",
       "type": "string",
@@ -5593,6 +5713,42 @@
         "text"
       ]
     },
+    "SyntaxPositionDto": {
+      "description": "Zero-based UTF-16 position used by syntax-analysis protocol results.",
+      "type": "object",
+      "properties": {
+        "character": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "line": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "line",
+        "character"
+      ]
+    },
+    "SyntaxRangeDto": {
+      "description": "Half-open UTF-16 range used by syntax-analysis protocol results.",
+      "type": "object",
+      "properties": {
+        "end": {
+          "$ref": "#/$defs/SyntaxPositionDto"
+        },
+        "start": {
+          "$ref": "#/$defs/SyntaxPositionDto"
+        }
+      },
+      "required": [
+        "start",
+        "end"
+      ]
+    },
     "SyntaxTextEditDto": {
       "description": "One replacement expressed in UTF-16 offsets against `previous_revision`.",
       "type": "object",
@@ -5617,8 +5773,8 @@
         "text"
       ]
     },
-    "SyntaxTokenSnapshotDto": {
-      "description": "LSP-compatible relative semantic-token encoding derived from one exact syntax revision.\n\nEach group of five integers is `deltaLine, deltaStartUtf16, lengthUtf16, tokenType,\nmodifierBits`. The fixed token-type legend is owned by the Desktop Alpha adapter.",
+    "SyntaxTokenDataDto": {
+      "description": "Compact LSP-compatible token data and its protocol-owned legend.\n\nEach group of five integers is `deltaLine, deltaStartUtf16, lengthUtf16, tokenType,\nmodifierBits`. `tokenType` indexes `legend`; modifier bits are currently zero.",
       "type": "object",
       "properties": {
         "data": {
@@ -5629,19 +5785,37 @@
             "minimum": 0
           }
         },
-        "resultId": {
-          "type": "string"
-        },
-        "revision": {
-          "type": "integer",
-          "format": "uint",
-          "minimum": 0
+        "legend": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SyntaxTokenTypeDto"
+          }
         }
       },
       "required": [
-        "revision",
-        "resultId",
+        "legend",
         "data"
+      ]
+    },
+    "SyntaxTokenTypeDto": {
+      "description": "Protocol-owned syntax token categories referenced by compact token data.",
+      "type": "string",
+      "enum": [
+        "attribute",
+        "comment",
+        "constant",
+        "constructor",
+        "embedded",
+        "function",
+        "keyword",
+        "label",
+        "module",
+        "number",
+        "operator",
+        "property",
+        "string",
+        "type",
+        "variable"
       ]
     },
     "TerminalCloseParams": {

@@ -1,18 +1,19 @@
 use super::{AppServer, ConnectionState, RpcError, decode, result};
 use serde_json::Value;
-use std::cmp::Reverse;
 use std::collections::BTreeMap;
-use std::ops::Range;
 use std::sync::Mutex;
 use zeta_app_server_protocol::protocol::error::AppServerErrorName;
 use zeta_app_server_protocol::protocol::syntax::{
-    SyntaxChangeParams, SyntaxCloseParams, SyntaxLanguageDto, SyntaxOpenParams, SyntaxTextEditDto,
-    SyntaxTokenSnapshotDto,
+    SyntaxAnalysisSnapshotDto, SyntaxChangeParams, SyntaxCloseParams, SyntaxLanguageDto,
+    SyntaxOpenParams, SyntaxTextEditDto,
 };
 use zeta_syntax::{
     AnalysisLimits, DocumentRevision, SyntaxDocument, SyntaxEdit, SyntaxError, SyntaxLanguage,
-    SyntaxSnapshot, SyntaxTokenKind,
 };
+
+mod snapshot_encoding;
+
+use snapshot_encoding::syntax_analysis_snapshot;
 
 const MAX_SYNTAX_TOKENS: usize = 50_000;
 
@@ -31,7 +32,7 @@ impl SyntaxAnalysisService {
         &self,
         owner: u64,
         params: SyntaxOpenParams,
-    ) -> Result<SyntaxTokenSnapshotDto, SyntaxAnalysisError> {
+    ) -> Result<SyntaxAnalysisSnapshotDto, SyntaxAnalysisError> {
         validate_document_id(&params.document_id)?;
         validate_document_uri(&params.document_uri)?;
         let language = match params.language {
@@ -41,9 +42,6 @@ impl SyntaxAnalysisService {
         };
         let limits = AnalysisLimits {
             max_tokens: MAX_SYNTAX_TOKENS,
-            max_folding_ranges: 0,
-            max_symbols: 0,
-            max_diagnostics: 0,
             ..AnalysisLimits::default()
         };
         let document = SyntaxDocument::open_with_limits(
@@ -54,7 +52,7 @@ impl SyntaxAnalysisService {
         )
         .map_err(syntax_engine_error)?;
         let derived = document.snapshot();
-        let snapshot = syntax_token_snapshot(document.text(), &derived)?;
+        let snapshot = syntax_analysis_snapshot(document.text(), &derived)?;
         self.documents
             .lock()
             .map_err(|_| SyntaxAnalysisError::Failed)?
@@ -66,7 +64,7 @@ impl SyntaxAnalysisService {
         &self,
         owner: u64,
         params: SyntaxChangeParams,
-    ) -> Result<SyntaxTokenSnapshotDto, SyntaxAnalysisError> {
+    ) -> Result<SyntaxAnalysisSnapshotDto, SyntaxAnalysisError> {
         validate_document_id(&params.document_id)?;
         if params.edits.is_empty() || params.edits.len() > 1024 {
             return Err(SyntaxAnalysisError::InvalidInput);
@@ -87,7 +85,7 @@ impl SyntaxAnalysisService {
         let snapshot = document
             .apply_edits(document_revision(params.revision)?, &edits)
             .map_err(syntax_engine_error)?;
-        syntax_token_snapshot(document.text(), &snapshot)
+        syntax_analysis_snapshot(document.text(), &snapshot)
     }
 
     fn close(&self, owner: u64, document_id: &str) -> Result<(), SyntaxAnalysisError> {
@@ -257,172 +255,6 @@ fn syntax_edits(
             ))
         })
         .collect()
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-struct TokenSegment {
-    bytes: Range<usize>,
-    kind: SyntaxTokenKind,
-}
-
-fn syntax_token_snapshot(
-    text: &str,
-    snapshot: &SyntaxSnapshot,
-) -> Result<SyntaxTokenSnapshotDto, SyntaxAnalysisError> {
-    Ok(SyntaxTokenSnapshotDto {
-        revision: snapshot
-            .revision()
-            .value()
-            .try_into()
-            .map_err(|_| SyntaxAnalysisError::Failed)?,
-        result_id: snapshot.revision().value().to_string(),
-        data: encode_semantic_tokens(text, snapshot)?,
-    })
-}
-
-fn encode_semantic_tokens(
-    text: &str,
-    snapshot: &SyntaxSnapshot,
-) -> Result<Vec<u32>, SyntaxAnalysisError> {
-    let line_starts = line_starts(text);
-    let mut lines = BTreeMap::<usize, Vec<TokenSegment>>::new();
-    for token in snapshot.tokens() {
-        for line in token.range.start.row..=token.range.end.row {
-            let Some(&line_start) = line_starts.get(line) else {
-                return Err(SyntaxAnalysisError::Failed);
-            };
-            let line_end = line_content_end(text, &line_starts, line);
-            let start = token.range.bytes.start.max(line_start);
-            let end = token.range.bytes.end.min(line_end);
-            if start < end {
-                overlay_segment(
-                    lines.entry(line).or_default(),
-                    TokenSegment {
-                        bytes: start..end,
-                        kind: token.kind,
-                    },
-                );
-            }
-        }
-    }
-
-    let mut data = Vec::new();
-    let mut previous_line = 0usize;
-    let mut previous_start = 0usize;
-    let mut first = true;
-    for (line, mut segments) in lines {
-        segments.sort_by_key(|segment| (segment.bytes.start, Reverse(segment.bytes.end)));
-        for segment in merge_adjacent_segments(segments) {
-            let line_start = line_starts[line];
-            let start = text[line_start..segment.bytes.start].encode_utf16().count();
-            let length = text[segment.bytes.clone()].encode_utf16().count();
-            if length == 0 {
-                continue;
-            }
-            let delta_line = if first { line } else { line - previous_line };
-            let delta_start = if !first && delta_line == 0 {
-                start - previous_start
-            } else {
-                start
-            };
-            data.extend([
-                to_u32(delta_line)?,
-                to_u32(delta_start)?,
-                to_u32(length)?,
-                token_type(segment.kind),
-                0,
-            ]);
-            previous_line = line;
-            previous_start = start;
-            first = false;
-        }
-    }
-    Ok(data)
-}
-
-fn line_starts(text: &str) -> Vec<usize> {
-    let mut starts = vec![0];
-    starts.extend(
-        text.bytes()
-            .enumerate()
-            .filter_map(|(index, byte)| (byte == b'\n').then_some(index + 1)),
-    );
-    starts
-}
-
-fn line_content_end(text: &str, starts: &[usize], line: usize) -> usize {
-    let mut end = starts.get(line + 1).copied().unwrap_or(text.len());
-    if end > 0 && text.as_bytes()[end - 1] == b'\n' {
-        end -= 1;
-    }
-    if end > 0 && text.as_bytes()[end - 1] == b'\r' {
-        end -= 1;
-    }
-    end
-}
-
-fn overlay_segment(segments: &mut Vec<TokenSegment>, overlay: TokenSegment) {
-    let mut next = Vec::with_capacity(segments.len() + 1);
-    for segment in segments.drain(..) {
-        if segment.bytes.end <= overlay.bytes.start || segment.bytes.start >= overlay.bytes.end {
-            next.push(segment);
-            continue;
-        }
-        if segment.bytes.start < overlay.bytes.start {
-            next.push(TokenSegment {
-                bytes: segment.bytes.start..overlay.bytes.start,
-                kind: segment.kind,
-            });
-        }
-        if segment.bytes.end > overlay.bytes.end {
-            next.push(TokenSegment {
-                bytes: overlay.bytes.end..segment.bytes.end,
-                kind: segment.kind,
-            });
-        }
-    }
-    next.push(overlay);
-    *segments = next;
-}
-
-fn merge_adjacent_segments(mut segments: Vec<TokenSegment>) -> Vec<TokenSegment> {
-    let mut merged: Vec<TokenSegment> = Vec::with_capacity(segments.len());
-    for segment in segments.drain(..) {
-        if let Some(previous) = merged.last_mut()
-            && previous.kind == segment.kind
-            && previous.bytes.end == segment.bytes.start
-        {
-            previous.bytes.end = segment.bytes.end;
-        } else {
-            merged.push(segment);
-        }
-    }
-    merged
-}
-
-fn token_type(kind: SyntaxTokenKind) -> u32 {
-    match kind {
-        SyntaxTokenKind::Attribute => 0,
-        SyntaxTokenKind::Comment => 1,
-        SyntaxTokenKind::Constant => 2,
-        SyntaxTokenKind::Constructor => 3,
-        SyntaxTokenKind::Embedded => 4,
-        SyntaxTokenKind::Function => 5,
-        SyntaxTokenKind::Keyword => 6,
-        SyntaxTokenKind::Label => 7,
-        SyntaxTokenKind::Module => 8,
-        SyntaxTokenKind::Number => 9,
-        SyntaxTokenKind::Operator => 10,
-        SyntaxTokenKind::Property => 11,
-        SyntaxTokenKind::Punctuation => 10,
-        SyntaxTokenKind::String => 4,
-        SyntaxTokenKind::Type => 12,
-        SyntaxTokenKind::Variable => 13,
-    }
-}
-
-fn to_u32(value: usize) -> Result<u32, SyntaxAnalysisError> {
-    value.try_into().map_err(|_| SyntaxAnalysisError::Failed)
 }
 
 #[cfg(test)]

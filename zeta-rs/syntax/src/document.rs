@@ -6,8 +6,8 @@ use tree_sitter::{InputEdit, Node, Parser, Point, Query, QueryCursor, StreamingI
 use crate::language::LanguageConfiguration;
 use crate::{
     AnalysisLimits, DocumentSymbol, DocumentSymbolKind, FoldingRange, SyntaxDiagnostic,
-    SyntaxError, SyntaxLanguage, SyntaxPoint, SyntaxRange, SyntaxSnapshot, SyntaxToken,
-    SyntaxTokenKind,
+    SyntaxDiagnosticKind, SyntaxError, SyntaxLanguage, SyntaxPoint, SyntaxRange, SyntaxSnapshot,
+    SyntaxToken, SyntaxTokenKind,
 };
 
 /// Monotonic host-owned revision attached to source text and derived analysis.
@@ -468,6 +468,11 @@ fn collect_diagnostics(tree: &Tree, limit: usize) -> Vec<SyntaxDiagnostic> {
         if diagnostics.len() < limit && (node.is_error() || node.is_missing()) {
             diagnostics.push(SyntaxDiagnostic {
                 range: syntax_range(node),
+                kind: if node.is_missing() {
+                    SyntaxDiagnosticKind::Missing
+                } else {
+                    SyntaxDiagnosticKind::Error
+                },
             });
         }
     });

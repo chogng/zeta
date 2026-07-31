@@ -97,7 +97,9 @@ src/
 │       ├── git_operations.rs      # Git RPC decode 与稳定错误映射
 │       ├── git_runtime.rs         # status projection/revision、watcher、去重与通知
 │       ├── search_operations.rs   # search RPC decode、ownership 与稳定错误映射
-│       ├── syntax_operations.rs   # incremental syntax session、UTF-16 conversion 与 token encoding
+│       ├── syntax_operations.rs   # incremental syntax session、revision/owner gate 与 UTF-16 edit conversion
+│       ├── syntax_operations/
+│       │   └── snapshot_encoding.rs # full analysis snapshot、UTF-16 range 与 compact token encoding
 │       ├── terminal_operations.rs # terminal RPC decode、ownership 与稳定错误映射
 │       └── update_broker.rs       # per-connection subscription/cursor/fanout
 ├── local.rs                       # persistent local composition + model safe point
@@ -142,7 +144,8 @@ src/
 | `SearchService` | external crate | 持有 active workspace、frozen rg 和 owner-bound job map | App Server 不把 connection/DTO/UI 语义写入该 crate |
 | `SyntaxAnalysisService` | crate-private | 持有 connection/model-owned `SyntaxDocument`，处理 open/change/close 与 revision gate | 不读取文件、不选择主题、不产生 compiler/LSP semantic facts |
 | `syntax_edits` | private | 单次扫描把一批编辑器 UTF-16 offset 转成旧 revision 上的 UTF-8 byte ranges | 不接受 surrogate 中点或重叠 batch |
-| `encode_semantic_tokens` | private | 展平 tree-sitter capture precedence，并编码紧凑的行相对 UTF-16 token data | token type legend 只表达 syntax category，不拥有颜色 |
+| `syntax_analysis_snapshot` | private | 把同一 revision 的 tokens、folds、symbols 与 diagnostics 投影为 UTF-16 wire DTO | 不产生 compiler/LSP semantic facts |
+| `encode_semantic_tokens` | private | 展平 tree-sitter capture precedence，并按协议 legend 编码紧凑的行相对 UTF-16 token data | token type legend 只表达 syntax category，不拥有颜色 |
 | `TerminalService` | crate-private | 持有 `ExecuteProcess` 的 `TrustedWorkspace`、Tokio runtime、PTY session map 与 1 MiB output ring | 不从 client path 自行授予 process authority |
 | `TerminalProfileCatalog` | crate-private | 冻结可信 Shell Profile、program 与 environment allowlist | external DTO 不暴露 executable/args |
 | `TerminalService::create` | crate-private | 将 default/profile ID 解析到 catalog 并启动 workspace-rooted PTY | client 不能提交 executable/environment |
@@ -458,16 +461,17 @@ bazel test //zeta-rs/app-server:app-server-unit-tests
 把当前连接拥有的临时资源改为持久化文档存储，是另一项所有权决策。跨 crate 信任模型见
 [`docs/typst.md`](../../docs/typst.md)。
 
-## Syntax token 集成
+## Syntax analysis 集成
 
 `document/syntax/open|change|close` 维护 connection/model-owned Rust/JSON/JSONC analysis session。Open 只在
 首次同步和恢复时携带全文；Change 接收一个 Alpha model transaction 的原子 UTF-16 edit batch，后端
-一次扫描转换 offset，并委托 `zeta-syntax` 复用旧 tree。返回值是绑定精确 revision、上限为
-50,000 token 的紧凑相对编码；connection 关闭会释放其全部 analysis document。
+一次扫描转换 offset，并委托 `zeta-syntax` 复用旧 tree。返回的 `SyntaxAnalysisSnapshotDto` 绑定精确
+revision，包含协议拥有 legend 的紧凑 token data，以及 UTF-16 folding range、document symbol 和
+parse diagnostic；connection 关闭会释放其全部 analysis document。
 
 Alpha provider、主题和 stale-result presentation 属于 Desktop；grammar、query、tree 与稳定
-syntax category 属于 [`zeta-syntax`](../syntax/README.md)。当前未实现 token delta、debounce、LSP
-semantic token 或 Native projection，不能把本接口描述成 compiler 语义高亮。
+syntax category 属于 [`zeta-syntax`](../syntax/README.md)。当前 token 上限为 50,000；未实现 token
+delta、debounce、LSP semantic token 或 Native projection，不能把本接口描述成 compiler 语义高亮。
 
 测试覆盖初始化/请求 ID、Session 优先流程、命令重放/冲突、分叉谱系、Turn 重放/模型只调用一次、
 多连接更新、重连后的持久化缺口、连接拥有的资源、配置命令、交互/批准解决、

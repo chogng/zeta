@@ -1,6 +1,6 @@
 # 源码结构分析系统
 
-> 状态：Rust/JSON/JSONC 增量分析内核与 Desktop Alpha syntax-token 接入已实现；Native 与 workspace
+> 状态：Rust/JSON/JSONC 增量分析内核与 Desktop Alpha syntax-token/parse-diagnostic 接入已实现；Native 与 workspace
 > index 接入尚未完成。
 > 本文拥有跨 crate、进程和编辑器的语言分析所有权与演进阶段；当前 crate API、内部调用图和
 > 修改路径见 [`zeta-syntax` README](../zeta-rs/syntax/README.md)。
@@ -14,7 +14,7 @@ Zeta 把可跨编辑器复用的语法分析放入 Rust，同时保留 Alpha 和
 | 使用场景 | 当前结果 | 最终 owner |
 | --- | --- | --- |
 | 对 Rust/JSON/JSONC 文本进行增量 parse | ✅ `zeta-syntax` 已实现 UTF-8 edit、revision binding 与 tree reuse | `zeta-syntax` |
-| 取得 syntax token、fold、document outline 和 parse error | 部分具备：Rust/JSON/JSONC syntax token 已投影到 Alpha；其他 snapshot 尚未投影 | `zeta-syntax` + 产品宿主 |
+| 取得 syntax token、fold、document outline 和 parse error | 部分具备：完整 snapshot 已跨 App Server 传输，token 与 parse diagnostic 已投影到 Alpha；fold/outline UI 尚未接入 | `zeta-syntax` + 产品宿主 |
 | Alpha 输入、光标、DOM、layout、accessibility | ✅ 由 Alpha 拥有 | Desktop Renderer |
 | Monaco 工具能力 | 保持现有过渡实现；不拥有后端 syntax 接入 | Monaco adapter |
 | Native code surface 绘制 | 部分具备：`zeta-editor` 已有 syntax projection，adapter 尚未接线 | `zeta-editor` + Native host |
@@ -85,7 +85,7 @@ connection/model 拥有的 analysis session：
 ```text
 document/syntax/open(model ID, URI, full text, revision)
   → document/syntax/change(model ID, previous revision, next revision, bounded UTF-16 edits)
-  → compact LSP-compatible token snapshot tagged with next revision
+  → revision-tagged analysis snapshot（compact tokens + folds + symbols + diagnostics）
   → close
 ```
 
@@ -96,8 +96,9 @@ document/syntax/open(model ID, URI, full text, revision)
 - 串行 model queue、provider cancellation 检查和 stale revision 丢弃；
 - App Server 文档丢失或重启后的当前全文 reopen；
 - 4 MiB document、1024 edit 和 50,000 token 上限；
-- compact token data 到 Alpha `LanguageToken`/viewport presentation 的投影；
-- 后端不可用时委托既有 fallback chain，diagnostic lane 与其他语言 token lane 不改变。
+- 协议拥有的 token legend 与 compact token data 到 Alpha `LanguageToken`/viewport presentation 的投影；
+- tree-sitter parse diagnostic 与既有 lexical diagnostic 合并；
+- 后端不可用时委托既有 fallback chain，其他语言的 token/diagnostic lane 不改变。
 
 尚未实现 token delta、主动 debounce 和有界跨进程队列 backpressure；当前返回每个 revision 的
 完整紧凑 token 数组。wire 使用 LSP-compatible relative token 形状，但内容仍是
@@ -118,15 +119,15 @@ revision，并把语言中立 token category 映射为 `zeta-editor` presentatio
 - 有界 token、fold、document symbol 与 parse diagnostic snapshot；
 - grammar/tree 类型不泄漏到 public API；
 - 单独测试文件覆盖增量编辑、Unicode boundary、revision 和 limits。
-- App Server `document/syntax/open|change|close`、connection/model ownership、UTF-16 batch 转换与
-  Alpha Rust/JSON/JSONC token provider adapter。
+- App Server `document/syntax/open|change|close`、connection/model ownership、UTF-16 batch/result 转换与
+  Alpha Rust/JSON/JSONC token/parse-diagnostic provider adapter。
 
 ### 近期计划
 
 1. 建立 authoritative EditorHost/document service，统一 URI、language 和 revision。
 2. 为 Native 增加 snapshot-to-`CodeEditorSyntaxToken` adapter，并按 revision 投影。
 3. 为 token snapshot 增加 result-ID delta 与有界 backpressure，并以 profile 数据决定 debounce。
-4. 在 Alpha 接入 document outline/folding，再按语言逐项替换重复 syntax provider。
+4. 在 Alpha 接入 document outline/folding UI，再按语言逐项替换重复 syntax provider。
 5. 以真实 Files/Search consumer 验证 open buffer 覆盖 disk snapshot 后，再建立 workspace index。
 
 ### 潜在方向

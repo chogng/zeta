@@ -10,7 +10,7 @@ pub use error::SyntaxError;
 pub use language::SyntaxLanguage;
 pub use snapshot::{
     AnalysisLimits, DocumentSymbol, DocumentSymbolKind, FoldingRange, SyntaxDiagnostic,
-    SyntaxPoint, SyntaxRange, SyntaxSnapshot, SyntaxToken, SyntaxTokenKind,
+    SyntaxDiagnosticKind, SyntaxPoint, SyntaxRange, SyntaxSnapshot, SyntaxToken, SyntaxTokenKind,
 };
 
 #[cfg(test)]

@@ -24,9 +24,10 @@ use crate::protocol::fs::{
     FsWriteFileParams, FsWriteFileResult,
 };
 use crate::protocol::git::{
-    GitChangeStatusDto, GitCommitParams, GitCommitResult, GitHeadDto, GitOperationResult,
-    GitPathsParams, GitRepositoryChangeDto, GitStatusChanged, GitStatusResult,
-    GitSubmoduleStateDto, GitUpstreamDto,
+    GitBranchDto, GitBranchListResult, GitBranchSwitchParams, GitChangeStatusDto, GitCommitParams,
+    GitCommitResult, GitDiffStatisticsDto, GitHeadDto, GitOperationResult, GitPathsParams,
+    GitRepositoryChangeDto, GitStatusChanged, GitStatusResult, GitSubmoduleStateDto,
+    GitTextDiffDto, GitTextDiffResult, GitUpstreamDto,
 };
 use crate::protocol::initialize::{InitializeParams, InitializeResult, ServerCapabilities};
 use crate::protocol::model::{ModelCatalogEntry, ModelListResult};
@@ -53,8 +54,10 @@ use crate::protocol::skills::{
 };
 use crate::protocol::slash_commands::{SlashCommandArgumentModeDto, SlashCommandDefinition};
 use crate::protocol::syntax::{
-    SyntaxChangeParams, SyntaxCloseParams, SyntaxLanguageDto, SyntaxOpenParams, SyntaxTextEditDto,
-    SyntaxTokenSnapshotDto,
+    SyntaxAnalysisSnapshotDto, SyntaxChangeParams, SyntaxCloseParams, SyntaxDiagnosticDto,
+    SyntaxDiagnosticSeverityDto, SyntaxDocumentSymbolDto, SyntaxDocumentSymbolKindDto,
+    SyntaxLanguageDto, SyntaxOpenParams, SyntaxPositionDto, SyntaxRangeDto, SyntaxTextEditDto,
+    SyntaxTokenDataDto, SyntaxTokenTypeDto,
 };
 use crate::protocol::terminal::{
     TerminalCloseParams, TerminalCreateParams, TerminalCreateResult, TerminalOutputChunk,
@@ -416,12 +419,12 @@ client_methods! {
     },
     SyntaxOpen => "document/syntax/open" {
         params: SyntaxOpenParams,
-        response: SyntaxTokenSnapshotDto,
+        response: SyntaxAnalysisSnapshotDto,
         serialization: GlobalExclusive,
     },
     SyntaxChange => "document/syntax/change" {
         params: SyntaxChangeParams,
-        response: SyntaxTokenSnapshotDto,
+        response: SyntaxAnalysisSnapshotDto,
         serialization: GlobalExclusive,
     },
     SyntaxClose => "document/syntax/close" {
@@ -468,6 +471,21 @@ client_methods! {
         params: EmptyParams,
         response: GitStatusResult,
         serialization: GlobalSharedRead,
+    },
+    GitTextDiff => "git/textDiff" {
+        params: EmptyParams,
+        response: GitTextDiffResult,
+        serialization: GlobalSharedRead,
+    },
+    GitBranchList => "git/branch/list" {
+        params: EmptyParams,
+        response: GitBranchListResult,
+        serialization: GlobalSharedRead,
+    },
+    GitBranchSwitch => "git/branch/switch" {
+        params: GitBranchSwitchParams,
+        response: GitOperationResult,
+        serialization: GlobalExclusive,
     },
     GitStage => "git/stage" {
         params: GitPathsParams,
@@ -788,11 +806,19 @@ typescript_bindings! {
     TypstDiagnosticSeverityDto,
     TypstSourceRangeDto,
     SyntaxLanguageDto,
+    SyntaxTokenTypeDto,
+    SyntaxPositionDto,
+    SyntaxRangeDto,
+    SyntaxTokenDataDto,
+    SyntaxDocumentSymbolKindDto,
+    SyntaxDocumentSymbolDto,
+    SyntaxDiagnosticSeverityDto,
+    SyntaxDiagnosticDto,
     SyntaxOpenParams,
     SyntaxTextEditDto,
     SyntaxChangeParams,
     SyntaxCloseParams,
-    SyntaxTokenSnapshotDto,
+    SyntaxAnalysisSnapshotDto,
     ResourceMetadataParams,
     ResourceMetadataResult,
     ResourceReadParams,
@@ -816,6 +842,12 @@ typescript_bindings! {
     GitRepositoryChangeDto,
     GitStatusResult,
     GitStatusChanged,
+    GitBranchDto,
+    GitBranchListResult,
+    GitBranchSwitchParams,
+    GitTextDiffDto,
+    GitDiffStatisticsDto,
+    GitTextDiffResult,
     GitPathsParams,
     GitCommitParams,
     GitOperationResult,

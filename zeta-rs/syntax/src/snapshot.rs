@@ -103,9 +103,17 @@ pub struct DocumentSymbol {
 }
 
 /// Recoverable parser error or missing construct in a syntax tree.
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub enum SyntaxDiagnosticKind {
+    Error,
+    Missing,
+}
+
+/// Recoverable parser diagnostic derived from a syntax tree.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SyntaxDiagnostic {
     pub range: SyntaxRange,
+    pub kind: SyntaxDiagnosticKind,
 }
 
 /// Immutable derived analysis for one exact document revision.

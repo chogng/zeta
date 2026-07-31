@@ -1,6 +1,9 @@
 use super::*;
+use zeta_app_server_protocol::protocol::syntax::{
+    SyntaxDiagnosticSeverityDto, SyntaxDocumentSymbolKindDto,
+};
 
-fn open_params(owner: u64, text: &str) -> (SyntaxAnalysisService, SyntaxTokenSnapshotDto) {
+fn open_params(owner: u64, text: &str) -> (SyntaxAnalysisService, SyntaxAnalysisSnapshotDto) {
     let service = SyntaxAnalysisService::new();
     let snapshot = service
         .open(
@@ -22,7 +25,7 @@ fn syntax_session_applies_utf16_batch_and_advances_one_revision() {
     let owner = 7;
     let (service, initial) = open_params(owner, "fn 😀first() {}\nfn second() {}\n");
     assert_eq!(initial.revision, 1);
-    assert_eq!(initial.data.len() % 5, 0);
+    assert_eq!(initial.tokens.data.len() % 5, 0);
 
     let changed = service
         .change(
@@ -49,7 +52,7 @@ fn syntax_session_applies_utf16_batch_and_advances_one_revision() {
 
     assert_eq!(changed.revision, 2);
     assert_eq!(changed.result_id, "2");
-    assert_eq!(changed.data.len() % 5, 0);
+    assert_eq!(changed.tokens.data.len() % 5, 0);
 }
 
 #[test]
@@ -97,7 +100,7 @@ fn semantic_token_encoding_is_relative_and_non_overlapping() {
     let mut start = 0u32;
     let mut previous_end = 0u32;
 
-    for token in snapshot.data.chunks_exact(5) {
+    for token in snapshot.tokens.data.chunks_exact(5) {
         line += token[0];
         start = if token[0] == 0 {
             start + token[1]
@@ -108,7 +111,7 @@ fn semantic_token_encoding_is_relative_and_non_overlapping() {
             assert!(start >= previous_end);
         }
         assert!(token[2] > 0);
-        assert!(token[3] <= 13);
+        assert!((token[3] as usize) < snapshot.tokens.legend.len());
         assert_eq!(token[4], 0);
         previous_end = start + token[2];
     }
@@ -148,12 +151,40 @@ fn syntax_sessions_support_json_and_jsonc_languages() {
             )
             .expect("JSON-family syntax document should open");
         assert_eq!(snapshot.revision, 1);
-        assert!(!snapshot.data.is_empty());
+        assert!(!snapshot.tokens.data.is_empty());
         assert!(
             snapshot
+                .tokens
                 .data
                 .chunks_exact(5)
                 .any(|token| token[3] == expected_token_type)
         );
     }
+}
+
+#[test]
+fn syntax_snapshot_projects_structure_and_diagnostics_in_utf16_coordinates() {
+    let (_, valid) = open_params(23, "/* 😀 */ mod engine {\n    fn run() {}\n}\n");
+    assert!(!valid.has_errors);
+    assert!(valid.folding_ranges.iter().any(|range| {
+        range.start.line == 0
+            && range.start.character == 20
+            && range.end.line == 2
+            && range.end.character == 1
+    }));
+    assert!(valid.symbols.iter().any(|symbol| {
+        symbol.name == "run"
+            && symbol.kind == SyntaxDocumentSymbolKindDto::Function
+            && symbol.selection_range.start.line == 1
+            && symbol.selection_range.start.character == 7
+    }));
+    assert!(valid.diagnostics.is_empty());
+
+    let (_, invalid) = open_params(24, "fn main( {\n");
+    assert!(invalid.has_errors);
+    assert!(!invalid.diagnostics.is_empty());
+    assert!(invalid.diagnostics.iter().all(|diagnostic| {
+        diagnostic.severity == SyntaxDiagnosticSeverityDto::Error
+            && diagnostic.source == "tree-sitter"
+    }));
 }
