@@ -55,10 +55,7 @@ export class WorkbenchWindow
     options.root.setAttribute("data-product", options.productId);
     options.root.setAttribute("data-runtime", environment.runtime);
     options.root.setAttribute("data-os", environment.os);
-    options.root.setAttribute(
-      "data-workbench-state",
-      workbenchStateToContextValue(options.workbenchState),
-    );
+    this.setWorkbenchState(options.workbenchState);
     this.defer(() => {
       options.root.classList.remove("zeta-workbench");
       options.root.removeAttribute("data-product");
@@ -80,5 +77,12 @@ export class WorkbenchWindow
         this.ownerDocument,
       ));
     }
+  }
+
+  setWorkbenchState(state: WorkbenchState): void {
+    this.root.setAttribute(
+      "data-workbench-state",
+      workbenchStateToContextValue(state),
+    );
   }
 }

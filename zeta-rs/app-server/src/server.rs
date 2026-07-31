@@ -7,7 +7,7 @@ use serde_json::Value;
 use std::collections::BTreeSet;
 use std::io::{BufRead, Write};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 use std::time::Duration;
 use zeta_app_server_protocol::protocol::error::{AppServerError, AppServerErrorName};
 use zeta_app_server_protocol::protocol::registry::{ClientMethod, client_method};
@@ -35,26 +35,25 @@ mod skill_operations;
 pub(crate) mod skills_runtime;
 mod terminal_operations;
 mod update_broker;
+mod workspace_operations;
+mod workspace_runtime;
 
 use update_broker::{NotificationListener, NotificationQueue, UpdateBroker};
+use workspace_runtime::{LocalWorkspaceHost, WorkspaceRuntime};
 
 pub struct AppServer {
     pub(super) sessions: Arc<SessionCoordinator>,
     model: Arc<dyn ModelService>,
     model_catalog: Arc<dyn ModelCatalog>,
-    pub(super) turn_executor: TurnExecutor,
     next_connection_id: AtomicU64,
     pub(super) resources: Mutex<ResourceStore>,
     pub(super) config: Option<Arc<ConfigStore>>,
-    pub(super) file_system: Option<Arc<dyn WorkspaceFileSystem>>,
-    pub(super) git: Option<Arc<git_runtime::GitRuntime>>,
-    pub(super) workspace_search: Option<crate::workspace_search::WorkspaceSearchService>,
-    pub(super) terminals: Option<crate::terminal_service::TerminalService>,
+    pub(super) workspace_authority_gate: Mutex<()>,
+    workspace_runtime: RwLock<WorkspaceRuntime>,
+    local_workspace_host: Option<LocalWorkspaceHost>,
     pub(super) typst: TypstCompiler,
     pub(super) slash_commands: SlashCommandCatalog,
     pub(super) skills: Option<Arc<SkillRuntime>>,
-    _file_system_watcher: Option<fs_watcher::FileSystemWatcher>,
-    _git_watcher: Option<git_runtime::GitWatcher>,
     _skill_watcher: Option<SkillWatcher>,
     updates: Arc<UpdateBroker>,
 }
@@ -107,19 +106,15 @@ impl AppServer {
             sessions,
             model,
             model_catalog: unavailable_model_catalog(),
-            turn_executor,
             next_connection_id: AtomicU64::new(1),
             resources: Mutex::new(ResourceStore::default()),
             config: None,
-            file_system: None,
-            git: None,
-            workspace_search: None,
-            terminals: None,
+            workspace_authority_gate: Mutex::new(()),
+            workspace_runtime: RwLock::new(WorkspaceRuntime::empty(turn_executor)),
+            local_workspace_host: None,
             typst: TypstCompiler::new(),
             slash_commands: SlashCommandCatalog::default(),
             skills: None,
-            _file_system_watcher: None,
-            _git_watcher: None,
             _skill_watcher: None,
             updates,
         }
@@ -152,7 +147,7 @@ impl AppServer {
         if let Ok(mut resources) = self.resources.lock() {
             resources.release_owner(connection.connection_id);
         }
-        if let Some(terminals) = &self.terminals {
+        if let Some(terminals) = self.configured_terminal_service() {
             terminals.close_owner(connection.connection_id);
         }
     }
@@ -179,12 +174,19 @@ impl AppServer {
     }
 
     pub fn with_file_system(mut self, file_system: Arc<dyn WorkspaceFileSystem>) -> Self {
-        self.file_system = Some(file_system);
+        self.workspace_runtime
+            .get_mut()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .file_system = Some(file_system);
         self
     }
 
+    #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) fn with_file_system_watcher(mut self, workspace_root: std::path::PathBuf) -> Self {
-        self._file_system_watcher = Some(fs_watcher::FileSystemWatcher::start(
+        self.workspace_runtime
+            .get_mut()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            ._file_system_watcher = Some(fs_watcher::FileSystemWatcher::start(
             workspace_root,
             Arc::clone(&self.updates),
         ));
@@ -197,13 +199,18 @@ impl AppServer {
     }
 
     /// Enables workspace-scoped Git queries without exposing arbitrary host paths to clients.
+    #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) fn with_git_root(
         mut self,
         workspace_root: std::path::PathBuf,
     ) -> Result<Self, git_runtime::GitRuntimeError> {
         let runtime = git_runtime::GitRuntime::new(workspace_root, Arc::clone(&self.updates))?;
-        self._git_watcher = Some(runtime.start_watching());
-        self.git = Some(runtime);
+        let state = self
+            .workspace_runtime
+            .get_mut()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        state._git_watcher = Some(runtime.start_watching());
+        state.git = Some(runtime);
         Ok(self)
     }
 
@@ -213,20 +220,29 @@ impl AppServer {
         workspace: zeta_sandboxing::WorkspaceRoot,
         ripgrep: zeta_shell_command::RipgrepExecutable,
     ) -> Self {
-        self.workspace_search = Some(crate::workspace_search::WorkspaceSearchService::new(
-            workspace, ripgrep,
+        let runtime = self
+            .workspace_runtime
+            .get_mut()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        runtime.workspace_search = Some(Arc::new(
+            crate::workspace_search::WorkspaceSearchService::new(workspace, ripgrep),
         ));
         self
     }
 
     /// Enables connection-owned interactive terminals rooted at one trusted Workspace.
+    #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) fn with_terminal_root(
         mut self,
         workspace_root: std::path::PathBuf,
     ) -> Result<Self, crate::terminal_service::TerminalError> {
-        self.terminals = Some(crate::terminal_service::TerminalService::new(
+        let runtime = self
+            .workspace_runtime
+            .get_mut()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        runtime.terminals = Some(Arc::new(crate::terminal_service::TerminalService::new(
             workspace_root,
-        )?);
+        )?));
         Ok(self)
     }
 
@@ -236,7 +252,11 @@ impl AppServer {
         tools: Arc<dyn ToolService>,
         policy: Arc<dyn PolicyService>,
     ) -> Self {
-        self.turn_executor = TurnExecutor::new(
+        let runtime = self
+            .workspace_runtime
+            .get_mut()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        runtime.turn_executor = TurnExecutor::new(
             self.sessions.threads().clone(),
             self.model.clone(),
             tools,
@@ -360,6 +380,7 @@ impl AppServer {
         }
         match client_method(&request.method) {
             Some(ClientMethod::Initialize) => unreachable!("initialize handled before gate"),
+            Some(ClientMethod::WorkspaceSwitch) => self.workspace_switch(&request.params),
             Some(ClientMethod::SessionCreate) => self.session_create(connection, &request.params),
             Some(ClientMethod::SessionRead) => self.session_read(&request.params),
             Some(ClientMethod::SessionList) => self.session_list(),

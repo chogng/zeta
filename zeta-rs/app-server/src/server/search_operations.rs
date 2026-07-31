@@ -14,7 +14,7 @@ impl AppServer {
     ) -> Result<Value, RpcError> {
         let params: WorkspaceSearchStartParams = decode(params)?;
         let search_id = self
-            .workspace_search()?
+            .workspace_search_service()?
             .start(connection.connection_id, params)
             .map_err(search_error)?;
         result(&WorkspaceSearchStartResult { search_id })
@@ -27,7 +27,7 @@ impl AppServer {
     ) -> Result<Value, RpcError> {
         let params: WorkspaceSearchReadParams = decode(params)?;
         let search = self
-            .workspace_search()?
+            .workspace_search_service()?
             .read(connection.connection_id, params)
             .map_err(search_error)?;
         result(&search)
@@ -39,18 +39,10 @@ impl AppServer {
         params: &Value,
     ) -> Result<Value, RpcError> {
         let params: WorkspaceSearchCancelParams = decode(params)?;
-        self.workspace_search()?
+        self.workspace_search_service()?
             .cancel(connection.connection_id, &params.search_id)
             .map_err(search_error)?;
         result(&())
-    }
-
-    fn workspace_search(
-        &self,
-    ) -> Result<&crate::workspace_search::WorkspaceSearchService, RpcError> {
-        self.workspace_search
-            .as_ref()
-            .ok_or_else(|| RpcError::new(-32050, AppServerErrorName::SearchUnavailable))
     }
 }
 

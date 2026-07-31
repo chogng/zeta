@@ -1,0 +1,389 @@
+import { addDisposableListener, stopEvent } from "../../../base/browser/dom.js";
+import { DisposableOwner } from "../../../base/common/lifecycle.js";
+import { createBackspaceCommand, createDeleteForwardCommand, createTypeTextCommand } from "../common/editCommands.js";
+import { resolveEditorIndentationOptions, type EditorIndentationOptions, type ResolvedEditorIndentationOptions } from "../common/editorIndentation.js";
+import { type EditorEditCommand, type EditorSelectionController } from "../common/editorSelectionController.js";
+import { LanguageAutoClosingTracker } from "../common/languageAutoClosingTracker.js";
+import { type LanguageConfigurationSource, type ResolvedLanguageConfiguration } from "../common/languageConfiguration.js";
+import { type LanguageCompletionSessionController } from "../common/languageCompletionSession.js";
+import { type LanguageCompletionService } from "../common/languageCompletionService.js";
+import { createLanguageCompletionIncompleteRefreshContext, createLanguageCompletionInvokeContext, type LanguageCompletionContext } from "../common/languageCompletionProviders.js";
+import { assertLanguageId } from "../common/languageId.js";
+import { createLanguageEnterCommand } from "../common/languageEnter.js";
+import { LanguageLexicalContextIndex, type LanguageLexicalContextSource } from "../common/languageLexicalContext.js";
+import { createLanguagePairBackspaceCommand, createLanguagePairTypeCommand, type LanguagePairTypeCommand } from "../common/languagePairEditing.js";
+import { type TextModelChange } from "../common/text.js";
+import { type AlphaEditorViewport } from "./alphaEditorViewport.js";
+import { AlphaClipboardController, type AlphaClipboardControllerOptions } from "./clipboardController.js";
+import { AlphaCompletionWidget } from "./completionWidget.js";
+import { AlphaCompositionController } from "./compositionController.js";
+
+export interface AlphaTextInputControllerOptions {
+  readonly ariaLabel?: string;
+  readonly clipboard?: AlphaClipboardControllerOptions;
+  readonly completion?: AlphaTextInputCompletionOptions;
+  readonly indentation?: EditorIndentationOptions;
+  readonly language?: AlphaTextInputLanguageOptions;
+}
+
+export interface AlphaTextInputLanguageOptions {
+  readonly languageId: string;
+  readonly configurations: LanguageConfigurationSource;
+  readonly lexicalContext?: LanguageLexicalContextSource;
+}
+
+export interface AlphaTextInputCompletionOptions {
+  readonly session: LanguageCompletionSessionController;
+  readonly requests?: AlphaTextInputCompletionRequests;
+}
+
+export interface AlphaTextInputCompletionRequests {
+  readonly service: LanguageCompletionService;
+  readonly languageId: string;
+  readonly onRequestError?: (error: unknown) => void;
+}
+
+/**
+ * Owns Alpha's hidden textarea and non-composition beforeinput editing.
+ */
+export class AlphaTextInputController extends DisposableOwner {
+  readonly element: HTMLTextAreaElement;
+  readonly compositionController: AlphaCompositionController;
+  readonly completionWidget: AlphaCompletionWidget | undefined;
+  private readonly completionSession: LanguageCompletionSessionController | undefined;
+  private readonly completionRequests: AlphaTextInputCompletionRequests | undefined;
+  private readonly language: AlphaTextInputLanguageOptions | undefined;
+  private readonly indentation: ResolvedEditorIndentationOptions;
+  private readonly languageLexicalContext: LanguageLexicalContextSource | undefined;
+  private readonly autoClosingTracker: LanguageAutoClosingTracker | undefined;
+
+  constructor(
+    private readonly viewport: AlphaEditorViewport,
+    private readonly selectionController: EditorSelectionController,
+    options: AlphaTextInputControllerOptions = {},
+  ) {
+    super();
+    if (
+      viewport.textModel !== selectionController.textModel ||
+      (
+        options.completion &&
+        viewport.textModel !== options.completion.session.textModel
+      ) ||
+      (
+        options.completion?.requests &&
+        (
+          viewport.textModel !== options.completion.requests.service.textModel ||
+          options.completion.session.resultStore !== options.completion.requests.service.results
+        )
+      )
+    ) {
+      this.dispose();
+      throw new TypeError("Alpha text input dependencies must share one text model and completion result store");
+    }
+    if (
+      options.completion?.requests?.onRequestError !== undefined &&
+      typeof options.completion.requests.onRequestError !== "function"
+    ) {
+      this.dispose();
+      throw new TypeError("Alpha completion request error handler must be a function");
+    }
+    if (options.language) {
+      assertLanguageId(options.language.languageId);
+      if (!options.language.configurations || typeof options.language.configurations.getLanguageConfiguration !== "function") {
+        this.dispose();
+        throw new TypeError("Alpha text input language requires a configuration source");
+      }
+      if (options.completion?.requests && options.completion.requests.languageId !== options.language.languageId) {
+        this.dispose();
+        throw new TypeError("Alpha text input language and completion request identities must match");
+      }
+      if (options.language.lexicalContext && (
+        options.language.lexicalContext.textModel !== viewport.textModel ||
+        options.language.lexicalContext.languageId !== options.language.languageId ||
+        typeof options.language.lexicalContext.getStructuralLineContent !== "function" ||
+        typeof options.language.lexicalContext.getTokenTypeAt !== "function"
+      )) {
+        this.dispose();
+        throw new TypeError("Alpha text input lexical context must match its model and language");
+      }
+    }
+    this.completionSession = options.completion?.session;
+    this.completionRequests = options.completion?.requests;
+    this.language = options.language;
+    try {
+      this.indentation = resolveEditorIndentationOptions(options.indentation);
+    } catch (error) {
+      this.dispose();
+      throw error;
+    }
+    this.languageLexicalContext = options.language
+      ? options.language.lexicalContext ?? this.own(new LanguageLexicalContextIndex(viewport.textModel, options.language.languageId, options.language.configurations))
+      : undefined;
+    this.autoClosingTracker = options.language
+      ? this.own(new LanguageAutoClosingTracker(viewport.textModel, selectionController))
+      : undefined;
+    const ownerDocument = viewport.element.ownerDocument;
+    this.element = ownerDocument.createElement("textarea");
+    this.element.className = "zeta-alpha-editor-input";
+    this.element.tabIndex = -1;
+    this.element.spellcheck = false;
+    this.element.wrap = "off";
+    this.element.autocomplete = "off";
+    this.element.setAttribute("autocapitalize", "off");
+    this.element.setAttribute("aria-label", options.ariaLabel ?? "Alpha editor input");
+    this.completionWidget = this.completionSession
+      ? this.own(new AlphaCompletionWidget(
+        this.element,
+        viewport,
+        selectionController,
+        this.completionSession,
+      ))
+      : undefined;
+    this.compositionController = this.own(new AlphaCompositionController(
+      this.element,
+      viewport,
+      selectionController,
+    ));
+    this.own(new AlphaClipboardController(
+      this.element,
+      viewport,
+      selectionController,
+      options.clipboard,
+    ));
+    viewport.element.append(this.element);
+    this.defer(() => {
+      viewport.element.classList.remove("input-focused");
+      this.element.remove();
+    });
+
+    this.own(addDisposableListener(viewport.element, "focus", event => {
+      if (event.target === viewport.element) this.focus();
+    }));
+    this.own(addDisposableListener(this.element, "focus", () => {
+      viewport.element.classList.add("input-focused");
+    }));
+    this.own(addDisposableListener(this.element, "blur", () => {
+      viewport.element.classList.remove("input-focused");
+    }));
+    this.own(addDisposableListener<InputEvent>(
+      this.element,
+      "beforeinput",
+      event => this.handleBeforeInput(event),
+    ));
+    this.own(addDisposableListener<InputEvent>(
+      this.element,
+      "input",
+      event => {
+        if (!event.isComposing) this.resetInput();
+      },
+    ));
+    this.own(addDisposableListener(
+      this.element,
+      "keydown",
+      event => this.handleKeydown(event),
+    ));
+  }
+
+  focus(): void {
+    this.element.focus({ preventScroll: true });
+  }
+
+  private handleBeforeInput(event: InputEvent): void {
+    if (event.defaultPrevented || event.isComposing) return;
+    const refreshIncomplete = this.readCompletionIsIncomplete();
+    let insertedText: string | undefined;
+    let command: EditorEditCommand | undefined;
+    let pairCommand: LanguagePairTypeCommand | undefined;
+    switch (event.inputType) {
+      case "insertText":
+      case "insertReplacementText":
+        if (!event.data) return;
+        {
+          pairCommand = this.language
+            ? createLanguagePairTypeCommand(this.viewport.textModel, this.selectionController.selections, event.data, this.readLanguageConfiguration(), {
+              autoClosingTrust: this.autoClosingTracker,
+              lexicalContext: this.languageLexicalContext,
+            })
+            : undefined;
+          insertedText = pairCommand?.didInsertText === false ? undefined : event.data;
+          command = pairCommand?.command ?? createTypeTextCommand(
+            this.viewport.textModel,
+            this.selectionController.selections,
+            event.data,
+          );
+        }
+        break;
+      case "insertLineBreak":
+      case "insertParagraph":
+        command = this.language
+          ? createLanguageEnterCommand(this.viewport.textModel, this.selectionController.selections, this.readLanguageConfiguration(), {
+            indentation: this.indentation,
+            lexicalContext: this.languageLexicalContext,
+          })
+          : createTypeTextCommand(this.viewport.textModel, this.selectionController.selections, "\n");
+        break;
+      case "deleteContentBackward":
+        command = (this.language
+          ? createLanguagePairBackspaceCommand(this.viewport.textModel, this.selectionController.selections, this.readLanguageConfiguration(), this.autoClosingTracker)
+          : undefined) ?? createBackspaceCommand(
+          this.viewport.textModel,
+          this.selectionController.selections,
+        );
+        break;
+      case "deleteContentForward":
+        command = createDeleteForwardCommand(
+          this.viewport.textModel,
+          this.selectionController.selections,
+        );
+        break;
+      case "historyUndo":
+        stopEvent(event);
+        this.resetInput();
+        this.selectionController.undo();
+        this.revealPrimary();
+        return;
+      case "historyRedo":
+        stopEvent(event);
+        this.resetInput();
+        this.selectionController.redo();
+        this.revealPrimary();
+        return;
+      default:
+        return;
+    }
+    stopEvent(event);
+    this.resetInput();
+    const change = this.execute(command);
+    if (change && pairCommand?.autoClosingActions.length) {
+      this.autoClosingTracker?.record(pairCommand.autoClosingActions, change.version);
+    }
+    if (insertedText !== undefined) {
+      this.requestAfterInsert(insertedText, refreshIncomplete);
+    }
+  }
+
+  private handleKeydown(event: KeyboardEvent): void {
+    if (
+      !event.defaultPrevented &&
+      !event.isComposing &&
+      event.key === " " &&
+      event.ctrlKey &&
+      !event.shiftKey &&
+      !event.altKey &&
+      !event.metaKey
+    ) {
+      stopEvent(event);
+      this.requestCompletion(createLanguageCompletionInvokeContext());
+      return;
+    }
+    if (
+      event.defaultPrevented ||
+      event.isComposing ||
+      event.key !== "Tab" ||
+      event.shiftKey ||
+      event.ctrlKey ||
+      event.altKey ||
+      event.metaKey
+    ) {
+      return;
+    }
+    stopEvent(event);
+    this.execute(createTypeTextCommand(
+      this.viewport.textModel,
+      this.selectionController.selections,
+      "\t",
+    ));
+  }
+
+  private execute(command: EditorEditCommand): TextModelChange | undefined {
+    const change = this.selectionController.execute(command);
+    this.revealPrimary();
+    return change;
+  }
+
+  private revealPrimary(): void {
+    this.viewport.revealPosition(
+      this.selectionController.selections.primary.active,
+    );
+  }
+
+  private resetInput(): void {
+    this.element.value = "";
+  }
+
+  private requestAfterInsert(insertedText: string, refreshIncomplete: boolean): void {
+    const requests = this.completionRequests;
+    if (!requests) return;
+    if ([...insertedText].length === 1) {
+      const selections = this.selectionController.selections;
+      if (selections.selections.length !== 1 || !selections.primary.collapsed) {
+        this.completionSession?.cancel();
+        return;
+      }
+      const position = selections.primary.active;
+      const modelVersion = this.viewport.textModel.version;
+      void requests.service.requestTriggerCharacter(
+        requests.languageId,
+        position,
+        insertedText,
+      ).then(outcome => {
+        if (
+          outcome === undefined &&
+          refreshIncomplete &&
+          this.viewport.textModel.version === modelVersion &&
+          this.selectionController.selections.selections.length === 1 &&
+          this.selectionController.selections.primary.collapsed &&
+          this.selectionController.selections.primary.active.compareTo(position) === 0
+        ) {
+          this.requestCompletion(createLanguageCompletionIncompleteRefreshContext());
+        }
+      }).catch(error => this.reportCompletionRequestError(error));
+      return;
+    }
+    if (refreshIncomplete) {
+      this.requestCompletion(createLanguageCompletionIncompleteRefreshContext());
+    }
+  }
+
+  private requestCompletion(context: LanguageCompletionContext): void {
+    const requests = this.completionRequests;
+    if (!requests) return;
+    const selections = this.selectionController.selections;
+    if (selections.selections.length !== 1 || !selections.primary.collapsed) {
+      this.completionSession?.cancel();
+      return;
+    }
+    try {
+      void requests.service.request(
+        requests.languageId,
+        selections.primary.active,
+        context,
+      ).catch(error => this.reportCompletionRequestError(error));
+    } catch (error) {
+      this.reportCompletionRequestError(error);
+    }
+  }
+
+  private readCompletionIsIncomplete(): boolean {
+    try {
+      return this.completionSession?.state?.isIncomplete === true;
+    } catch (error) {
+      if (error instanceof ReferenceError) return false;
+      throw error;
+    }
+  }
+
+  private readLanguageConfiguration(): ResolvedLanguageConfiguration {
+    return this.language!.configurations.getLanguageConfiguration(this.language!.languageId);
+  }
+
+  private reportCompletionRequestError(error: unknown): void {
+    try {
+      const handler = this.completionRequests?.onRequestError;
+      if (handler) handler(error);
+      else console.error("Alpha completion request failed", error);
+    } catch (reportingError) {
+      console.error("Alpha completion request and error handler both failed", new AggregateError([error, reportingError]));
+    }
+  }
+}

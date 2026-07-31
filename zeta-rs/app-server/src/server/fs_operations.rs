@@ -14,7 +14,7 @@ impl AppServer {
     pub(super) fn fs_get_metadata(&self, params: &Value) -> Result<Value, RpcError> {
         let params: FsGetMetadataParams = decode(params)?;
         let metadata = self
-            .file_system()?
+            .file_system_service()?
             .get_metadata(&params.path)
             .map_err(file_system_error)?;
         result(&metadata_result(metadata))
@@ -23,7 +23,7 @@ impl AppServer {
     pub(super) fn fs_read_directory(&self, params: &Value) -> Result<Value, RpcError> {
         let params: FsReadDirectoryParams = decode(params)?;
         let entries = self
-            .file_system()?
+            .file_system_service()?
             .read_directory(&params.path)
             .map_err(file_system_error)?
             .into_iter()
@@ -38,7 +38,7 @@ impl AppServer {
     pub(super) fn fs_read_file(&self, params: &Value) -> Result<Value, RpcError> {
         let params: FsReadFileParams = decode(params)?;
         let bytes = self
-            .file_system()?
+            .file_system_service()?
             .read_file(&params.path, MAX_EDITOR_FILE_BYTES)
             .map_err(file_system_error)?;
         let content = String::from_utf8(bytes).map_err(|_| {
@@ -50,7 +50,7 @@ impl AppServer {
     pub(super) fn fs_write_file(&self, params: &Value) -> Result<Value, RpcError> {
         let params: FsWriteFileParams = decode(params)?;
         let metadata = self
-            .file_system()?
+            .file_system_service()?
             .write_file(
                 &params.path,
                 params.content.as_bytes(),
@@ -60,12 +60,6 @@ impl AppServer {
         result(&FsWriteFileResult {
             metadata: metadata_result(metadata),
         })
-    }
-
-    fn file_system(&self) -> Result<&dyn zeta_file_system::WorkspaceFileSystem, RpcError> {
-        self.file_system
-            .as_deref()
-            .ok_or_else(|| RpcError::new(-32040, AppServerErrorName::FileSystemUnavailable))
     }
 }
 

@@ -1,49 +1,14 @@
-import {
-  type IAnyWorkspaceIdentifier,
-  UNKNOWN_EMPTY_WINDOW_WORKSPACE,
-  serializeWorkspaceIdentifier,
-} from "../../workspace/common/workspace.js";
-import {
-  WORKSPACE_CONTEXT_READ_CHANNEL,
-  validateWorkspaceContextRead,
-} from "../../workspace/common/workspaceIpc.js";
-import type {
-  IpcRoute,
-} from "../../app-server/electron-main/trusted-ipc-router.js";
-import {
-  type IWorkspaceOpenTarget,
-  WorkspaceOpenTargetKind,
-} from "../common/workspaces.js";
-import {
-  type IWorkspacePathService,
-  nodeWorkspacePathService,
-  resolveWorkspaceOpenTarget,
-} from "../node/workspaces.js";
+import { Emitter, type Event } from "../../../base/common/event.js";
+import { DisposableOwner } from "../../../base/common/lifecycle.js";
+import type { IpcRoute } from "../../app-server/electron-main/trusted-ipc-router.js";
+import { type IAnyWorkspaceIdentifier, type ISingleFolderWorkspaceIdentifier, UNKNOWN_EMPTY_WINDOW_WORKSPACE, isSingleFolderWorkspaceIdentifier, serializeWorkspaceIdentifier } from "../../workspace/common/workspace.js";
+import { WORKSPACE_CONTEXT_READ_CHANNEL, validateWorkspaceContextRead } from "../../workspace/common/workspaceIpc.js";
+import { type IWorkspaceOpenTarget, WorkspaceOpenTargetKind } from "../common/workspaces.js";
+import { type IWorkspacePathService, nodeWorkspacePathService, resolveWorkspaceOpenTarget } from "../node/workspaces.js";
 
 export interface IResolveStartupWorkspaceOptions {
   readonly arguments: readonly string[];
   readonly cwd: string;
-}
-
-export interface IFolderRelaunchArgumentsOptions {
-  readonly appPath: string;
-  readonly folderPath: string;
-  readonly isPackaged: boolean;
-}
-
-/** Builds process arguments that reopen Zeta on one selected folder. */
-export function folderRelaunchArguments({
-  appPath,
-  folderPath,
-  isPackaged,
-}: IFolderRelaunchArgumentsOptions): readonly string[] {
-  if (!appPath.trim()) throw new TypeError("App path must not be empty");
-  if (!folderPath.trim()) throw new TypeError("Folder path must not be empty");
-  return [
-    ...(isPackaged ? [] : [appPath]),
-    "--folder",
-    folderPath,
-  ];
 }
 
 /**
@@ -71,16 +36,58 @@ export class WorkspacesMainService {
     }
     return resolveWorkspaceOpenTarget(target, cwd, this.pathService);
   }
+
+  /** Resolves and validates one folder selected by the native folder picker. */
+  async resolveFolder(path: string): Promise<ISingleFolderWorkspaceIdentifier> {
+    const workspace = await resolveWorkspaceOpenTarget(
+      { kind: WorkspaceOpenTargetKind.Folder, path },
+      process.cwd(),
+      this.pathService,
+    );
+    if (!isSingleFolderWorkspaceIdentifier(workspace)) {
+      throw new Error("Selected folder did not resolve to a folder workspace");
+    }
+    return workspace;
+  }
+}
+
+export interface IWorkspaceContextMainChangeEvent {
+  readonly previous: IAnyWorkspaceIdentifier;
+  readonly workspace: IAnyWorkspaceIdentifier;
+}
+
+/** Mutable main-process owner of the workspace currently hosted by one window. */
+export class WorkspaceContextMainService extends DisposableOwner {
+  private workspace: IAnyWorkspaceIdentifier;
+  private readonly _onDidChangeWorkspace = this.own(new Emitter<IWorkspaceContextMainChangeEvent>());
+
+  readonly onDidChangeWorkspace: Event<IWorkspaceContextMainChangeEvent> = this._onDidChangeWorkspace.event;
+
+  constructor(workspace: IAnyWorkspaceIdentifier) {
+    super();
+    this.workspace = workspace;
+  }
+
+  getWorkspace(): IAnyWorkspaceIdentifier {
+    return this.workspace;
+  }
+
+  updateWorkspace(workspace: IAnyWorkspaceIdentifier): void {
+    if (workspace.id === this.workspace.id) return;
+    const previous = this.workspace;
+    this.workspace = workspace;
+    this._onDidChangeWorkspace.fire({ previous, workspace });
+  }
 }
 
 /** Exposes one window-owned workspace identity through the trusted IPC router. */
 export function workspaceContextIpcRoutes(
-  workspace: IAnyWorkspaceIdentifier,
+  service: WorkspaceContextMainService,
 ): readonly IpcRoute<unknown, unknown>[] {
   return [{
     channel: WORKSPACE_CONTEXT_READ_CHANNEL,
     validate: validateWorkspaceContextRead,
-    invoke: () => serializeWorkspaceIdentifier(workspace),
+    invoke: () => serializeWorkspaceIdentifier(service.getWorkspace()),
   }];
 }
 

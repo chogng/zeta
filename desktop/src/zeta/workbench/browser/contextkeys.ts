@@ -20,7 +20,7 @@ import {
 } from "../common/contextkeys.js";
 import type { IWorkbenchLayoutService, WorkbenchPartId } from "../services/layout/browser/layoutService.js";
 
-/** Installs the initial window-wide Workbench context keys. */
+/** Keeps window-wide Workbench context keys synchronized with the workspace. */
 export function bindWorkbenchContextKeys(
   contextKeyService: IContextKeyService,
   workspaceContextService: IWorkspaceContextService,
@@ -36,14 +36,20 @@ export function bindWorkbenchContextKeys(
     EditorAreaVisibleContext.bindTo(contextKeyService);
   const focusedView = FocusedViewContext.bindTo(contextKeyService);
 
-  workbenchState.set(workbenchStateToContextValue(
-    workspaceContextService.getWorkbenchState(),
-  ));
-  workspaceFolderCount.set(
-    workspaceContextService.getWorkspace().folders.length,
-  );
+  const updateWorkspaceKeys = (): void => {
+    workbenchState.set(workbenchStateToContextValue(
+      workspaceContextService.getWorkbenchState(),
+    ));
+    workspaceFolderCount.set(
+      workspaceContextService.getWorkspace().folders.length,
+    );
+  };
+  updateWorkspaceKeys();
+  const workspaceSubscription =
+    workspaceContextService.onDidChangeWorkspace(updateWorkspaceKeys);
 
   return toDisposable(() => {
+    workspaceSubscription.dispose();
     focusedView.reset();
     editorAreaVisible.reset();
     panelVisible.reset();

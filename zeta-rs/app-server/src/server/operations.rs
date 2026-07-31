@@ -60,6 +60,7 @@ impl AppServer {
             return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
         }
         connection.initialized = true;
+        let (file_system, git, workspace_search, terminal) = self.workspace_features();
         result(&InitializeResult {
             server_info: ServerInfo {
                 name: "zeta-app-server".into(),
@@ -71,10 +72,10 @@ impl AppServer {
                 threads: true,
                 turns: true,
                 resources: true,
-                file_system: self.file_system.is_some(),
-                git: self.git.is_some(),
-                workspace_search: self.workspace_search.is_some(),
-                terminal: self.terminals.is_some(),
+                file_system,
+                git,
+                workspace_search,
+                terminal,
                 typst: true,
                 update_replay: true,
             },
@@ -404,6 +405,10 @@ impl AppServer {
                 .configured_default()
                 .map_err(core_error)?,
         };
+        let _workspace_authority = self
+            .workspace_authority_gate
+            .lock()
+            .map_err(|_| RpcError::new(-32000, AppServerErrorName::ServerOverloaded))?;
         let start = self
             .sessions
             .threads()
@@ -456,7 +461,7 @@ impl AppServer {
             };
         }
         self.notify_thread_updates(&params.thread_id, params.expected_sequence)?;
-        self.turn_executor
+        self.turn_executor_snapshot()
             .start(&params.thread_id, &turn_id)
             .map_err(core_error)?;
         result(&TurnStartResult {
@@ -506,6 +511,10 @@ impl AppServer {
         params: &Value,
     ) -> Result<Value, RpcError> {
         let params: TurnInteractionResolveParams = decode(params)?;
+        let _workspace_authority = self
+            .workspace_authority_gate
+            .lock()
+            .map_err(|_| RpcError::new(-32000, AppServerErrorName::ServerOverloaded))?;
         let before = self
             .sessions
             .threads()
@@ -563,7 +572,7 @@ impl AppServer {
         if resumes_tool
             && resolved.disposition == zeta_core::ResolveTurnInteractionDisposition::Resolved
         {
-            self.turn_executor
+            self.turn_executor_snapshot()
                 .start(&params.thread_id, &turn_id)
                 .map_err(core_error)?;
         }

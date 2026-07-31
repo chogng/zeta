@@ -1,0 +1,1477 @@
+# Alpha Editor：内核所有权与分阶段演进
+
+> 本文是跨 editor、document、language、browser view、Workbench 和过渡
+> adapter 的 canonical 架构文档。文本内核的具体实现与修改契约见
+> [`desktop/src/zeta/editor/alpha/README.md`](../desktop/src/zeta/editor/alpha/README.md)。
+
+## 决策摘要
+
+Alpha 是 Zeta 从底层向上自建的编辑器栈。Monaco 不再是产品模型或公共
+接口的定义者，而是在 Zeta 原生输入、布局和渲染层完成前继续提供可用
+界面的过渡 renderer。
+
+这不是一次性重写。每一阶段必须先形成可独立测试的 Zeta contract，再
+让上层依赖它，最后才能删除 Monaco 中对应的所有权。
+
+## 所有权
+
+| 层 | 当前状态 | 责任 |
+| --- | --- | --- |
+| `editor/alpha/common` | 内核、基础 viewport 与版本语言状态已具备 | 文本坐标、事务、Piece Tree、版本快照、有界历史、压实、Unicode segment、光标导航、纯 viewport 状态、语言分析 lane/result store、completion provider registry/host/wire codec、增量 Worker 文档镜像、增量词法分析、取消、过期结果拒绝与 worker 生命周期 |
+| `editor/alpha/browser` | viewport、selection、基础文本、clipboard、桌面式 IME、基础 diagnostic、semantic token 与 completion widget/trigger/Worker factory 已具备 | 虚拟行 DOM、viewport、增量行宽、gutter、selection/caret、decoration、Error/Warning diagnostic underline、版本化 semantic-token 行投影、completion list/accept/invoke/trigger/incomplete refresh/module Worker、pointer selection、autoscroll、多光标、键盘导航、普通 textarea 编辑、选区 clipboard、composition 基线与 provisional underline；移动端/平台 IME 差异、富 clipboard 和 accessibility 尚未完成 |
+| `editor/textmate` | 部分具备 | grammar revision registry、真实 TextMate/Oniguruma runtime、增量行状态缓存、Alpha provider/module adapter、版本化 catalog wire 与独立 browser Worker 已完成；产品 grammar resource/extension 接线与主题 selector 尚未完成 |
+| Document service | 尚未完成 | URI 身份、加载、保存、dirty、冲突、外部变更和行尾持久化 |
+| Selection/decorations | 基础具备 | selection、实例控制器、tracked range、decoration collection |
+| Language model | 部分具备 | 版本化请求、取消、过期拒绝、worker 重建、token/diagnostic/completion store、analysis/completion provider host、catalog/module activation/resolve/incremental multi-lane wire、增量词法分析、session/accept、semantic-token 行索引/DOM 投影及 Error/Warning projection 已完成；rich diagnostic、AST 与语言服务器级增量分析尚未完成 |
+| Browser view | 部分具备 | common viewport、虚拟行 DOM、字体行宽、gutter、selection/caret、基础 decoration、hit-test 与 active-position reveal 已完成；富交互与主题细化尚未完成 |
+| Input controller | 部分具备 | IME 内核事务、pointer selection、键盘导航、textarea 编辑、completion 键盘/鼠标接受、Ctrl+Space invoke、trigger character 与 incomplete refresh、选区与空选区整行 copy/cut/paste、基础 composition DOM event 已完成；Android/macOS 特化、富 clipboard 和 drag/drop 尚未接入 |
+| Accessibility | 尚未完成 | screen reader 文本、ARIA、辅助输入和高对比度语义 |
+| Monaco adapter | 过渡 | 在原生 view/input 完成前提供当前编辑体验 |
+| Workbench Editor Part | 已有独立实现 | tabs、pane 生命周期、可见性和产品 contribution |
+
+`src/zeta/base` 继续保持领域无关。编辑器位置、文档版本、selection 和
+decoration 等身份只能由 `editor` 领域定义，不得为了复用而下沉到
+`base`。
+
+## 环境分层与 base 联动
+
+依赖方向是 `alpha/browser → alpha/common → base/common`，同时
+`alpha/browser → base/browser`。`base` 反向引用 editor 严格禁止；
+这不表示 editor 要回避 base，恰恰相反，通用机制必须优先复用 base。
+
+| Editor 层 | 应复用的 base 能力 | 仍由 editor 定义 |
+| --- | --- | --- |
+| `alpha/common` | event、lifecycle、IME realm coordination、cancellation、通用 geometry | position/range、model version、history、selection、decoration、composition transaction、language request/lane/result identity、snapshot version gate、worker ownership、纯 view-model 语义 |
+| `alpha/browser` | DOM lifecycle、通用控件基础、platform/keybinding 状态、通用 layout primitive | viewport、行布局投影、textarea/input adapter、字体测量、editor ARIA |
+| Workbench host | platform service、context key、commands、configuration、theme | editor pane 接线、document/workspace 绑定和外部区域布局 |
+| Transition adapter | 对应第三方 renderer API | 仅适配，不得反向定义 Zeta common/browser contract |
+
+目录结构遵循运行环境，而不是功能名称倒置嵌套：
+
+```text
+editor/
+  alpha/
+    common/        DOM-free canonical contracts and implementation
+    browser/       native DOM, input, viewport, measurement, accessibility
+    test/common/   common-layer tests
+    benchmark/     non-gating kernel benchmarks
+  monaco/        transition adapter
+  prosemirror/   transition adapter
+```
+
+当前 `editor/alpha/common` 已直接复用 `base/common/event`、
+`base/common/lifecycle`、`base/common/ime` 和 `base/common/layout.ISize`。
+其中 composition 开始必须
+遵守共享 `IME.enabled` 状态，避免编辑器与 keybinding/inputbox 各自维护
+互相冲突的输入法开关。`ISize` 只表达通用几何；scroll clamp、visible line
+和 overscan 仍由 Alpha 定义，未反向污染 base。
+
+## 当前数据流
+
+当前产品仍然走以下路径：
+
+```text
+EditorInput.initialText
+        ↓
+monacoModelService
+        ↓
+Monaco ITextModel
+        ↓
+Monaco view / input / worker
+```
+
+`editor/alpha/common/TextModel` 已经实现并有独立测试，但尚未接管产品文档。直接
+把它和 Monaco model 双向绑定会产生两个 undo stack、两个版本序列和
+不明确的事务边界，因此在 Zeta command/input bridge 完成前不做这种
+表面集成。
+
+## 目标数据流
+
+```text
+Document service
+        ↓ load/save/conflict
+Alpha TextModel
+        ↓ transaction snapshots
+Selection + Decoration model
+        ↓
+Language snapshots ─────→ Language workers
+        ↓
+Viewport + Layout model
+        ↓
+Input controller ←──────→ Native DOM renderer
+        ↓ temporary projection
+Monaco adapter
+```
+
+Monaco adapter 最终只能消费 Zeta 状态并把暂时无法原生处理的交互转换成
+Zeta transaction。它不能持有权威版本、独立 dirty 状态或产品可见的
+持久化语义。
+
+## 长期不变量
+
+- 一个文档在一个 renderer realm 中只有一个权威 `TextModel`。
+- 所有文本变化都经过原子 transaction，版本、事件和 history 同步提交。
+- 文件保存、外部变更与冲突由 Document service 决定，不能由 view 决定。
+- worker 只消费带版本的不可变 snapshot；过期结果不能重新写入新版本。
+- view 可以丢弃并重建，不能因此丢失文本、selection 或 undo history。
+- IME composition 在提交前不是普通编辑事务，取消 composition 不得污染
+  history。
+- accessibility 是 view/input contract 的组成部分，不是渲染完成后的补丁。
+- Monaco 特有类型不得越过 adapter 进入 Alpha editor、document 或
+  Workbench 公共接口。
+
+## 分阶段实施
+
+### Current：文本事务与 Piece Tree 内核
+
+已实现 LF 规范化、UTF-16 坐标、原子非重叠编辑、版本、同步事件和事务级
+undo/redo。存储已经切换到 TypeScript `PieceTreeTextBuffer`：piece 引用不可变
+original/add buffer，确定性 treap 在子树维护字符数、换行数和 piece 数。随机
+差分测试将 1,000 次 replace、range read、坐标和行内容与普通 string oracle
+对比。
+
+### Current 1：基础存储硬化
+
+相邻且引用同一段连续 source 的 piece 现在会在编辑边界合并。版本化
+snapshot 捕获不可变 source segment，不需要在创建时拼接全文，并且在后续
+编辑或模型销毁后仍可读取。undo/redo 同时受事务数量和保存文本单元预算
+约束，超限时从最旧的连续可达历史开始裁剪。
+
+事务提交后会按 retained/live 比例、绝对可回收文本量或 piece 数触发同步
+compaction。当前文本被重建为新的 immutable original buffer，add buffer
+清空；版本、事件和 history 均不变化。旧 snapshot 继续引用捕获时的 source，
+因此 compaction 不会破坏 worker 读取的一致性。
+
+仓库提供非 gating 的 2 MiB benchmark runner，覆盖构建、分散编辑、坐标
+往返、snapshot range read 和 churn compaction。下一步仍需建立跨平台性能
+预算，并评估超大文档是否需要增量或空闲调度压实。只要 snapshot 仍被外部
+持有，它捕获的旧 source 就按契约继续占用内存，不能把当前 buffer 的统计值
+误认为进程总内存。
+
+### Current 2：Selection 值与模型锚点（部分完成）
+
+`TextSelection` 保存 anchor/active 方向，`TextSelectionSet` 保存稳定的多光标
+顺序和 primary selection。它们是不可变值，不是 `TextModel` 上的全局“当前
+光标”：同一文档可以同时被多个 editor instance 展示，每个实例必须拥有自己
+的 selection state。
+
+`TextModel.trackRange` 提供文档级通用锚点，并要求调用者显式选择四种边界
+stickiness 之一。每次事务完成文本变更后、发送 change event 前，所有锚点会
+按完整事务统一映射；undo/redo 走同一路径。
+
+每个 undo step 会分配稳定的 `transactionId`，同组提交、撤销与重做沿用该
+身份，而每次提交仍产生新 version。`EditorSelectionController` 以此保存一个
+editor instance 的命令前后选区；另一个实例共享同一 `TextModel` 时仍拥有
+独立 selection。命令执行期间若同步 listener 再次修改模型，控制器不会把
+已经过期的 post-selection 写进新版本，而是保留 tracked mapping 的安全结果。
+
+键盘导航已按 Current 15 直接生成 `TextSelectionSet`；文本输入与删除已按
+Current 16、clipboard 已按 Current 17 生成统一的 selection-after contract。
+IME composition 的单 selection 内核路径见 Current 5，browser 映射见
+Current 18。
+
+### Current 3：Decoration collection
+
+`TextDecorationCollection<TMetadata>` 让 diagnostics、search、diff 等 owner
+在同一个 `TextModel` 上维护彼此独立的装饰集合。集合提供 realm 内唯一且
+稳定的 ID、原子 `replaceAll`、增量 add/update/delete，以及区分集合内容变化
+和锚点范围变化的事件。范围移动继续由 `TrackedRangeStickiness` 决定。
+
+common 不解释泛型 metadata，也不定义 CSS class、颜色、z-index 或 DOM 结构。
+这些视觉规则必须由对应 renderer component 或语义 token owner 按
+`docs/ui-styling-ownership.md` 投影。browser renderer 已按 Current 10 消费
+collection；token/diagnostic 的 snapshot version 存储见 Current 22，向
+decoration 与文本行的 projection 仍未完成。
+
+### Current 4：结构安全的输入 Undo 合并
+
+命令可显式选择 `CoalesceTyping`、`CoalesceBackspace` 或 `CoalesceDelete`。
+控制器为同模式的连续命令复用 nominal `TextEditHistoryGroup`；只有每个光标
+都继续执行同方向、相邻且非空的操作时，`TextModel` 才复用同一
+`transactionId` 并合并 inverse edits。多光标前序编辑导致的后续 offset
+shift 会在合并时累计修正。
+
+Typing group 可以从替换单个或多个 selection 开始，随后继续普通插入或
+向前覆盖替换；合并后的 inverse edits 同时删除整段新输入并恢复最初被替换
+的文本。每次合并都会重新计算 history text-unit 占用，不能绕过内存预算。
+
+同一事务删除相邻区间时，模型会先合并汇聚到同一 offset 的 inverse
+insertions，保证 undo script 没有共享起点歧义。若跨事务多光标删除会使
+不同光标的 inverse insertions 汇聚，模型拒绝合并并保留新的 undo step。
+
+实现不会保存全文 snapshot，也不会把无法证明等价的 edit script 强行折叠。
+显式 selection 变化、undo/redo、外部编辑、非相邻操作和模式变化都会形成
+新的 undo step。输入层也可调用 `pushUndoStop()` 切断当前组；该操作本身
+不会产生空历史项。
+
+### Current 5：IME composition 内核事务
+
+`EditorSelectionController.beginComposition()` 为当前单 selection 建立受保护的
+history revision。每次 `update` 都完整替换上一版 provisional text，产生可观察
+的 model version，但沿用同一 `transactionId` 和最初的 inverse edit。
+`commit` 最终只保留一个 selection-aware undo step；`cancel` 恢复原文本和
+原 selection，并消费该历史项，不生成 redo。
+
+受保护 revision 在关闭前不会被 history budget 驱逐，因此即使预算为零也能
+无损取消；commit 后立即重新执行预算裁剪。最终 composition text 与原文本
+相同时不会保留空 undo step。普通 command、selection 变化、undo/redo 在
+composition 活跃期间被拒绝，直接发生的外部 model edit 会使 session 失效。
+
+DOM 无关的内核生命周期只支持单 selection。browser 已按 Current 18 接入
+基础 `compositionstart`、`compositionupdate`、`compositionend` 和候选窗
+anchor；Android diff、macOS 长按及其他平台差异仍未完成。
+
+### Current 6：固定行高 viewport 内核
+
+`EditorViewportModel` 已在 `alpha/common` 中建立 DOM 无关的 view-model
+边界。browser 层负责测量并输入 viewport size、content width 和 line height；
+common 层负责内容尺寸、横纵滚动约束、可见行范围和 overscan render range。
+输出 layout 是不可变快照并携带 `TextModel.version`，因此即使一次编辑没有
+改变行数，renderer 仍能按版本丢弃旧投影。resize 与 line-height 更新尽量
+保持原 fractional top-line anchor，模型收缩则把 scroll position 约束回新的
+内容边界。
+
+common 契约明确限定为固定行高，不包含软换行、折叠、inline widget、字体
+测量或 DOM。`alpha/browser` 已按 Current 7 消费这个 contract；浏览器职责
+没有进入 common，也没有下沉进 base。
+
+### Current 7：只读虚拟行 browser projection
+
+`AlphaEditorViewport` 已把 common viewport 接到原生 DOM。它创建并拥有
+`.zeta-alpha-editor` scroll host、content extent 和 overscanned line layer；
+滚动窗口重叠的行按 line index 复用 DOM identity，模型版本变化同步更新当前
+render range，文档收缩则把 common 与 DOM 的滚动坐标一并约束回有效范围。
+模型文本通过 `textContent` 投影，不作为 HTML 解析。
+
+该组件复用 `base/browser/dom`、`base/browser/geometry` 和
+`base/common/lifecycle`，内部 DOM 与 focus 样式由组件自己的 CSS 拥有。
+Workbench host 只能负责根节点外部尺寸，不能穿透覆盖行节点。当前仍是固定
+行高只读 renderer；软换行、输入与完整 accessibility 尚未实现。
+
+### Current 8：字体度量与增量横向宽度
+
+`AlphaDomTextMeasurer` 从 line layer computed style 解析 font、letter spacing、
+tab size 和左右 padding。普通文本段由 Canvas 按当前字体 shaping 和 fallback
+测量，tab 按实测 space glyph 推进到下一个 stop。Canvas 不可用时使用
+font-size 派生的 fallback advance；测试和未来专用字体引擎通过小型
+`AlphaTextMeasurer` contract 注入。
+
+`AlphaLineWidthIndex` 首次同步扫描所有行，之后按 `TextModelChange` 的旧行
+范围合并同一行多处编辑，只重测事务影响的新行组。宽度计数集合维护当前
+最大值，最长行缩短时无需全文重测即可收缩 content width 并夹紧横向滚动。
+字体加载完成或显式 `refreshFontMetrics()` 会重建全部宽度，因为此时每个
+缓存值都可能失效。随机差分测试覆盖 400 次多区间事务、换行变化和
+undo/redo，并与逐次全文扫描结果比较。
+
+当前首次扫描仍是同步的；超大文档需要评估分片或 idle 调度，但不能以牺牲
+最终横向宽度正确性为代价。
+
+### Current 9：Gutter 与 selection/caret projection
+
+每个虚拟行现在由 sticky line-number gutter、文本节点和 overlay 组成。gutter
+宽度按当前总行数的数字位数测量，并计入横向 content width；滚动复用行节点
+时，行号、文本和 overlay 一起按 line index 更新。组件通过稳定的 `.active`
+类投影 primary selection 的活动行，状态样式由 Alpha 自己的 CSS 拥有，
+Workbench 不通过深层 selector 覆盖。
+
+`AlphaEditorViewport` 可观察一个调用方持有的
+`EditorSelectionController`。`createAlphaSelectionGeometry` 保留
+anchor/active 方向、多 selection 顺序和 primary 身份，只为当前 overscan
+范围生成矩形。水平坐标复用当前 `AlphaTextMeasurer` 测量行前缀；被选中的
+换行符占一个实测 space cell，因此终点位于下一行 column 0 时仍有明确视觉
+范围。overlay 在主 caret 上投影 `.primary` 身份，为后续 presentation 保留
+稳定状态；CSS 不使用 ARIA attribute 作为视觉 selector。
+
+这一步本身只消费已有 selection 状态，不产生输入；pointer policy 见
+Current 12–15，普通文本输入见 Current 16，clipboard 见 Current 17，
+composition 见 Current 18。caret blink 与完整 screen-reader contract 仍未
+实现；销毁 view 只释放自己的 controller listener，不销毁共享 controller
+或 `TextModel`。
+
+### Current 10：Decoration presentation
+
+`createAlphaDecorationSource<TMetadata>` 把一个调用方持有的
+`TextDecorationCollection` 适配为 browser presentation。resolver 显式选择
+`SearchMatch`、`ErrorUnderline`、`WarningUnderline` 或不投影；因此 common
+metadata 继续 opaque，browser 也不接受任意 caller CSS class。对应 CSS 由
+Alpha component 自己拥有，并消费已有 search、error、warning 语义 token。
+
+Viewport 可同时观察多个 source，只为当前 overscan 范围创建 decoration
+rectangle。selection 与 decoration 共用 `createAlphaRangeRectangles`，统一
+end-exclusive 多行范围、换行符可见宽度、字体前缀测量和 clipping 规则。
+collection 的 content/range event 会同步重建可见 decoration；文本事务移动
+tracked range 后，DOM 继续使用同一 decoration ID。
+
+每个 source 的 resolved snapshot 会缓存到下一次 collection event，因此滚动
+不会重复调用 caller metadata resolver。当前每次 layout 仍会扫描全部 resolved
+decoration 以完成 clipping；大规模 diagnostics/search 集合接入产品前需要
+增加按行范围查询的索引。
+
+Viewport 只拥有 source event registration，销毁时不销毁 source、collection
+或共享 `TextModel`。当前 presentation 尚不包含 hover、glyph margin、
+minimap/overview ruler 或诊断版本拒绝；这些不能从已有矩形投影推断为完成。
+
+### Current 11：Pointer hit testing
+
+`AlphaEditorViewport.getTargetAtClientPoint` 接受与 PointerEvent 结构兼容的
+`clientX/clientY`，结合 root bounds、固定行高、sticky gutter 和当前横纵
+scroll，返回 `Gutter`、`Text`、`EmptyContent` 或 `AfterLines`。每个结果都
+携带合法 `TextPosition`，但查询本身不 focus、不 capture pointer，也不修改
+`EditorSelectionController`；输入策略仍由后续 controller 拥有。
+
+文本横向命中使用相邻 caret midpoint。前缀宽度复用 `AlphaTextMeasurer`，
+因此 tab stop 与当前 selection/decoration/line-width 投影一致。
+`Intl.Segmenter` 可用时只返回 grapheme boundary，不会把 emoji 或组合字符
+命中到任意 UTF-16 内部；fallback 至少保持 Unicode code-point boundary。
+空行、行前 padding、行尾外侧和最后一行下方拥有显式 target kind，不要求
+调用方从 column 猜测语义。
+
+当前 hit-test 仍基于单向、固定行高、无 soft-wrap 的文本度量。BiDi、inline
+advance decoration 和 DOM caret-range fallback 尚未完成；pointer selection
+policy 见 Current 12。
+
+### Current 12：Pointer selection controller
+
+`AlphaPointerSelectionController` 把 hit target 转成一个
+`EditorSelectionController` 的显式 selection policy。主键点击放置单 caret，
+Shift-click 保留原 primary anchor；字符拖动持续更新 active。gutter 点击和
+拖动按整行选择，存在下一行时把 LF 包含在 end-exclusive range 中，向上拖动
+保留 backward direction；gutter Shift-click 把原 anchor 扩展到目标行边界。
+
+browser 提供的双击计数按 `common/getWordSelectionRange` 的完整 segment
+选择；拖动继续按词扩展并保持正反方向。三击内容按整行选择并沿用 gutter 的
+行拖动规则。Shift-double/triple click 保留原 primary anchor，再分别扩展到
+目标词或目标行边界。默认词边界优先使用 `Intl.Segmenter`，word-like 文本、
+连续空白与标点都形成可选择 segment；fallback 至少保持 Unicode code-point
+边界，行尾命中选择前一个 segment，且所有范围保持单行、UTF-16 end-exclusive。
+
+活动拖动拥有一个 collapsed position 或完整 word 的 `TrackedRange` anchor，
+因此拖动期间发生同步模型事务时不会继续使用 stale `TextPosition`。adapter 同时拥有 window 级
+pointermove/up/cancel/blur listener 和 native pointer capture；完成、cancel、
+blur、dispose 或初始化失败都会释放这些临时资源。Viewport、pointer adapter
+和 selection controller 会比较只读 `textModel` 身份，跨文档接线直接拒绝。
+
+该 adapter 不拥有 Viewport、selection controller 或 `TextModel`，也不执行
+文本事务。拖出 viewport 的滚动策略见 Current 13，多光标策略见 Current 14。
+当前尚未实现 touch 特化和右键 selection policy，
+因此仍不是完整 mouse input stack。
+
+### Current 13：Pointer drag autoscroll
+
+`AlphaEditorViewport.getNearestTargetAtClientPoint` 与严格的
+`getTargetAtClientPoint` 分离：前者只供已开始的 drag 把越界 client point
+夹到最近 viewport 边缘，后者仍对普通查询返回 `undefined`。因此越界拖动会
+先同步扩展到当前可见边缘，不必等待 animation frame。
+
+`AlphaPointerAutoScroller` 保存最新 point，并通过
+`base/browser/AnimationFrameScheduler` 逐帧更新。横纵轴速度分别由越界距离
+计算，起速为 240 px/s、上限为 2400 px/s；frame duration 限制在 4–50ms，
+避免后台恢复或异常时间戳造成大跳。每次滚动后重新执行最近命中，所以字符、
+词、整行与 Shift 扩选继续使用 Current 12 的同一 selection policy。
+
+pointer 回到 viewport、到达对应 scroll maximum、pointerup、cancel、blur、
+dispose 或新 drag 开始都会取消后续工作并释放 scheduler。该策略不修改
+common viewport 或文本模型，也不把 wheel、touch kinetic scrolling 或
+任意 selection reveal policy 推断为已经完成。
+
+### Current 14：Pointer multi-cursor policy
+
+`AlphaPointerSelectionControllerOptions.multiCursorModifier` 显式选择
+`Alt`（默认）或 `ControlOrMeta`。只有配置的精确 chord 且未按 Shift 时才新增
+selection；因此 Alt 模式不会吞掉 Ctrl/Meta，ControlOrMeta 模式也不会吞掉
+Alt，带 Shift 的 chord 继续使用 Current 12 的普通扩选语义。
+
+修饰键单击、双击、三击和拖动分别复用已有字符、词和整行 selection policy，
+新 selection 追加为 primary。点击 gesture 起点处已有的 range 会切换移除，
+但最后一个 selection 不会被删除；拖动离开该起点则用新 range 替换它。
+命中另一个相同 range 时只切换 primary，新增 range 与旧 range 重叠时移除旧
+range，避免后续文本命令生成重叠 edit。
+
+活动 gesture 为原 selection 集合单独创建 temporary tracked ranges，而不是
+保存裸值。因此同步模型事务、autoscroll 和重复 pointermove 后仍保持原顺序、
+方向与 primary 身份。pointerup、cancel、blur、dispose 或新 gesture 会连同
+active anchor 一起释放这些临时所有权。column selection、box selection 和
+touch 多点手势仍未实现。
+
+### Current 15：Keyboard cursor navigation
+
+`common/textSegmentation` 统一拥有 grapheme boundary 与 word segment。
+pointer hit-test、double-click word selection 和键盘导航共享这一个 seam；
+`Intl.Segmenter` 不可用时退化到 Unicode code point 与显式 word/whitespace/
+other 分类，避免三份 fallback 漂移。
+
+`navigateEditorCursors` 对每个 selection 执行 `CharacterLeft/Right`、
+`WordLeft/Right`、`LineUp/Down`、`LineStart/End`、
+`DocumentStart/End` 或 `PageUp/Down`。`Move` 与 `Extend` 是显式 mode；
+后者保留 anchor。字符移动不拆 grapheme，词移动只跳 word-like segment 并可
+跨行，纵向移动保留每个 selection 的 preferred UTF-16 column，在短行后可
+恢复；目标列会夹到 grapheme boundary。完全相同的结果会合并并重新映射
+primary，multi-selection 顺序保持稳定。
+
+`AlphaKeyboardNavigationController` 只负责 browser routing。Windows/Linux
+使用 Ctrl+Arrow 词跳转和 Ctrl+Home/End 文档跳转；macOS 使用
+Option+Arrow 词跳转、Command+Left/Right 行边界和
+Command+Up/Down 文档边界。Shift 统一选择 `Extend`。未知 chord、
+AltGraph、composition keydown 和已被上层处理的事件不会被消费。
+
+Page 命令的行数来自当前固定行高 viewport。成功导航后
+`AlphaEditorViewport.revealPosition` 同步调整横纵 scroll，使 primary active
+position 可见；垂直 reveal 使用完整行，水平 reveal 使用同一
+`AlphaTextMeasurer` 的前缀与 space-cell 宽度。外部 selection 变化会清除
+preferred columns。该 controller 不处理字符输入、Backspace/Delete、Enter、
+Tab、clipboard、composition DOM event 或平台辅助功能命令。
+
+### Current 16：Textarea editing surface
+
+`common/editCommands` 从调用方的当前 `TextSelectionSet` 构造统一的
+`EditorEditCommand`。普通输入替换每个 selection；Backspace/Delete 优先删除
+已有范围，否则分别删除前一个或后一个 grapheme，行边界则删除 LF 并合并
+两行。输入先规范化为 LF，再计算 transaction 后的 UTF-16 caret offset。
+多 selection 的所有 range 都基于事务前文档，重叠或共享插入起点会在修改
+前拒绝；相邻删除使 caret 汇聚时，完全相同的结果会合并并重映射 primary。
+undo 仍恢复命令前的原多 selection，redo 恢复合并后的结果。
+
+`AlphaTextInputController` 创建并拥有一个不可见 textarea。Viewport root
+获得焦点时转移到该 textarea；focus 状态通过稳定的 `.input-focused` 类投影，
+视觉规则由 Alpha component CSS 持有。非 composition `beforeinput` 将
+`insertText`、replacement text、Enter、Backspace、Delete、history undo/redo
+映射到 common 命令，普通 Tab 由 keydown 映射为 `\t`。成功编辑后清空
+textarea 并 reveal primary active position。它与 viewport、selection
+controller 必须引用同一个 `TextModel`，销毁 adapter 只移除自己的 DOM 和
+listener。
+
+普通 `beforeinput` router 明确忽略 composition input，由组合持有的
+composition controller 按 Current 18 处理；clipboard 路径见 Current 17。
+dead key、平台 IME 特化和 screen-reader mirror 仍不属于这个普通输入
+router。
+
+### Current 17：Selection clipboard adapter
+
+`getSelectionTexts` 按 `TextSelectionSet` 拥有的稳定顺序读取范围文本。
+`createPasteTextCommand` 把同一文本应用到所有 selection，
+`createDistributedPasteTextCommand` 要求文本数量精确匹配 selection 数量，
+`createCutCommand` 只删除非空范围。三者都生成统一的 selection-after
+offset，并使用 `Isolated` history，确保 paste/cut 不会与前后的连续 typing
+合成一个 undo step。
+
+`AlphaClipboardController` 由 textarea input controller 组合持有并监听原生
+copy/cut/paste。copy 写入可移植的 `text/plain`；Alpha 自身的多 selection
+复制额外写入版本化 `application/x-zeta-alpha-editor` 元数据。粘贴时，合法且
+数量匹配的元数据逐 selection 分发；外部纯文本或无效元数据则把同一文本
+应用到每个 selection。所有输入最终仍经过 common command 和权威
+`TextModel`，成功 cut/paste 后清空 textarea 并 reveal primary。
+
+clipboard 输出的换行约定由显式 `AlphaClipboardLineEnding` 控制，默认按宿主
+Windows 选择 CRLF，其余平台选择 LF；进入 model 时仍统一规范化为 LF。浏览器
+拒绝自定义 MIME 时保留 plain text，不影响跨应用复制。空 selection 的显式
+策略和整行 round-trip 见 Current 20。
+
+当前尚未实现 HTML/syntax clipboard、文件 paste、异步 Clipboard API、
+paste provider 或 IME 活跃期间的 clipboard 协调。这些限制不能由基础
+plain-text 路径推断为完整 clipboard 支持。
+
+### Current 18：Textarea composition adapter
+
+`AlphaCompositionController` 把 textarea 的 `compositionstart/update/end`
+映射到一个 `EditorCompositionSession`。开始前要求共享 `IME.enabled` 且只有
+一个 selection；否则取消浏览器事件。每次 update 把完整 provisional string
+替换进同一个受保护 revision。textarea value 与 event data 一致时读取
+selectionStart/End 和方向，换算为规范化文本的相对 offset；无法可靠对应时
+保守地把 caret 放在 composition text 末尾。`compositionend` 更新最终文本
+并 commit，因此整个序列仍只有一个 selection-aware undo step。
+
+Escape 后的 end、blur、adapter disposal 或运行期间 `IME.disable()` 会 cancel，
+无损恢复 composition 前文本与 selection。外部 model edit 即使没有移动
+selection，也会通过直接 model observation 发现内核 session 已失效，清除
+browser presentation 并忽略迟到的 update/end。重复 start 不会打开第二个
+revision。`onDidChange` 对上层发布 composition active 状态。
+
+开始时 Viewport reveal composition 起点，并通过
+`getPositionContentCoordinates` 把隐藏 textarea 移到对应的测量 caret；
+后续 selection、line height 和 layout 变化会重算位置，为原生候选窗提供
+content-coordinate anchor。DOM 通过稳定的 `.composing` 和 `.ime-input`
+状态类投影，样式继续由 Alpha component 持有。
+
+当前实现面向提供完整 `CompositionEvent.data` 的桌面式事件流。Android
+通常需要从 textarea 前后状态推导 replacement，macOS 长按可能把前一个字符
+带入 composition；iOS 的额外空 end、dead key、IME clause segmentation、
+多 selection IME、候选窗越界回退和活跃 composition 中的 clipboard 仍需
+独立适配与真实平台验证。活跃 session 收到空 end 会提交空 provisional text，
+因此可表达删除原 selection；Escape/blur 才是明确 cancel。已经关闭 session
+后的额外 end 被忽略，iOS 若在仍活跃时发出伪空 end，平台 adapter 必须提供
+更强的识别信号。
+
+### Current 19：Composition range projection
+
+`EditorCompositionSession.currentRange` 只在 session 活跃时返回当前 provisional
+text 占据的 model range；commit、cancel 或外部失效后读取会拒绝，避免把
+stale offset 暴露给 renderer。
+
+`AlphaEditorViewport.setCompositionRange` 把该范围保存为 Viewport 自己拥有的
+临时 `TrackedRange`。因此 model event 先于 browser controller 清理到达时，
+投影仍能读取映射后的合法范围，而不会使用旧 `TextRange` 越界。替换或清除
+presentation 会释放旧 tracked handle，Viewport 销毁也只释放自己的临时
+所有权。
+
+composition rectangle 复用 `createAlphaRangeRectangles`，与 selection 和
+decoration 共享 tab prefix measurement、end-exclusive 多行语义、selected
+newline cell 和 overscan clipping。每个虚拟行拥有独立 composition layer；
+`.composing .zeta-alpha-editor-composition` 由组件 CSS 投影 underline。commit、
+cancel、blur、IME disable、外部失效和 disposal 都同步清空该 layer。当前空
+provisional range 不绘制标记，也尚未区分 IME clause 的 primary/secondary
+segment。
+
+### Current 20：Empty-selection whole-line clipboard
+
+`EditorEmptySelectionClipboardPolicy` 显式选择 `Line` 或 `Ignore`，browser
+默认 `Line`。`getEditorClipboardEntries` 按稳定 selection 顺序生成文本、
+source range 和 `Selection`/`Line` paste mode。collapsed selection 的整行
+文本总以 LF 结束；存在下一行时 source range 包含后继 LF，最后一行则包含
+前驱 LF，唯一一行只删除自身内容。`Ignore` 保持浏览器原行为，不用含糊
+boolean 表达策略。
+
+`createClipboardCutCommand` 合并相交或相邻 source ranges，所以同一行多个
+caret、整行范围与普通 selection 重叠时只生成一个无歧义 deletion script。
+每个原 selection 的目标 offset 再统一映射过合并后的删除；完全汇聚的 caret
+按已有规则去重，undo 仍恢复原始多 selection。
+
+Alpha clipboard metadata 升级为 version 2，除每个 selection 的文本外还携带
+paste mode。全部 payload 为 `Line` 且目标 selection 都 collapsed 时，
+`createLinePasteCommand` 在各目标行首插入并把 caret 保留在原内容列。同一
+目标行的多个 caret 会按稳定 selection 顺序合并 payload 为一次 insertion，
+不会产生共享起点 edit。混合 line/selection metadata 或非空目标会降级为
+普通逐 selection paste，避免 line mode 隐式绕过目标范围。
+
+plain-text 输出会连续拼接 line entries，避免每个自带 LF 的行之间出现额外
+空行；跨平台输出仍由 `AlphaClipboardLineEnding` 转换。当前还没有
+copy-with-syntax、language mode metadata、文件/URI clipboard、paste provider
+或系统 clipboard service fallback。
+
+### Current 21：Versioned language request boundary
+
+`editor/alpha/common/LanguageRequestCoordinator` 为每个请求捕获不可变
+`TextSnapshot`、单调 request ID、具名 lane 和调用方 payload。同一 lane 是
+latest-wins；不同 lane 可以共享一个惰性创建的 worker 并发运行。该 adapter
+直接复用标准 `AbortSignal`，模型事务、同 lane 新请求、调用方取消、worker
+重启和 coordinator disposal 都有显式取消原因。
+
+worker value 不直接返回给任意状态写入路径。协调器在同步调用 result applier
+之前同时检查 active request identity 与当前 `TextModel.version`；任何晚到
+结果只返回 `Cancelled` outcome。模型先销毁时同样拒绝应用，而已捕获 snapshot
+仍保持可读。协调器拥有 worker 和 model listener，但不拥有 `TextModel`。
+
+当前 active request 的 worker rejection 会使该实例失效并被释放，同时以
+`WorkerRestarted` 取消其他 lane；下一次请求再惰性创建 worker。失败请求保留
+原始 error，result applier 自身失败不会误伤健康 worker。`LanguageWorkerRequest`
+是 adapter contract 而非可直接 structured-clone 的 wire schema；具体
+browser/process worker 必须自己传输文本并保留 request/model version。
+
+定向测试已覆盖同 lane 覆盖、跨 lane 并发、模型变更、调用方取消、worker
+故障重建、两种销毁顺序、晚到结果拒绝和 application failure isolation。
+token/diagnostic result store 见 Current 22，completion result/session 见
+Current 25，completion full-snapshot wire 见 Current 27；增量同步、
+token/diagnostic transport 与自动 retry 在该阶段仍未定义。completion 增量
+同步见 Current 28。
+
+### Current 22：Versioned token and diagnostic result state
+
+`VersionedLanguageResultStore<TResult>` 是 Current 21 同步 application gate
+之后的持久状态 owner。`VersionedLanguageResult` 同时携带 realm-local
+`TextModel` identity 与 version，跨模型接线在 normalization 前直接拒绝，
+不能把两个 version 1 文档混为一体。一个 store 对应一个单调 request-ID
+domain；低于 high-water mark 的结果返回
+`SupersededRequest`，相同 ID 返回 `DuplicateRequest`。显式 `clear()` 只清内容，
+不重置 high-water，因而旧的同版本 worker 结果不能重新写回。
+
+store 发出不可变的 `Result`、`ModelChanged` 和 `Cleared` 事件。任何文本事务
+都会整体移除当前 language result，而不是用 tracked range 把旧 token 或
+diagnostic 映射到新文本。这样 `TextDecorationCollection` 继续保持领域无关，
+language owner 也不能把 stale analysis 伪装成仍然有效的装饰。
+
+`createLanguageTokenStore` 要求 token 是非空、单行、按位置排序且不重叠的
+`TextRange`，token type 是非空 ID，modifier 必须唯一。结果和所有 entry/
+modifier 数组都会复制并冻结。`createLanguageDiagnosticStore` 允许 diagnostic
+重叠与 collapsed point range，但验证 model range、severity、非空 message、
+finite/string code 和 source。任一 entry 失败时不会替换既有 result。
+
+normalizer 完成后 store 会再次检查 model version 和 request high-water，
+所以 validation 期间的同步模型编辑或重入写入不能发布捕获版本。模型先销毁
+时返回 `ModelUnavailable`；store disposal 不拥有模型。diagnostic projection
+见 Current 23；semantic-token 行索引和 browser projection 见 Current 24；
+completion result/session 见 Current 25，completion wire schema 见 Current 27；
+token/diagnostic worker wire schema 仍未完成。
+
+### Current 23：Versioned diagnostic decoration projection
+
+`LanguageDiagnosticDecorationBridge` 观察一个 typed diagnostic store，并拥有
+`TextDecorationCollection<LanguageDiagnostic>`。当前 result 会在构造时投影，
+后续 result replacement、显式 clear 和 model invalidation 都走 collection
+的原子 `replaceAll`。bridge 不拥有 store 或 `TextModel`，dispose 只释放自己
+的 listener、tracked ranges 和 collection。
+
+该 collection 在 store 之后注册 model listener。文本事务先触发 store 的
+`ModelChanged` clear，再由 bridge 清空 collection；轮到 collection 自己观察
+同一事务时已经没有旧 range，因此不会先发一次虚假的 `Range` movement 再
+清空。测试明确证明 model version 2 只出现一个空 `Content` event。
+
+browser 的 `createAlphaLanguageDiagnosticSource` 显式把 Error 映射为
+`ErrorUnderline`、Warning 映射为 `WarningUnderline`，继续消费 Alpha component
+已有的 error/warning theme token 和 CSS。Information/Hint 保留在 common
+metadata 中并返回无 presentation；在专属 hover、glyph margin、overview ruler
+和 Information/Hint theme token 注册前，不用错误颜色冒充它们。Viewport 只拥有 source
+event registration，不拥有 bridge、collection、store 或 model。
+
+当前 whole-result replacement 会重新分配 decoration ID；若后续 hover/action
+需要跨同版本 refresh 保持身份，必须增加明确的 diagnostic identity/reconcile
+契约，不能从 message 或数组位置静默猜测。大规模 diagnostics 也仍需行范围
+索引，当前 viewport clipping 会扫描 source 的全部 resolved decorations。
+
+### Current 24：Versioned semantic-token line projection
+
+`LanguageTokenLineIndex` 观察一个
+`VersionedLanguageResultStore<LanguageTokenResult>`，按实际含 token 的行
+建立稀疏索引。每条可见虚拟行可做 O(1) 查询；同 model version 的新 request
+原子替换全部 line buckets，模型事务则沿 store 的 `ModelChanged` 顺序先清空
+索引。index 不拥有 store 或 `TextModel`，也不把旧 token 通过 tracked range
+映射到新文本。
+
+browser 的 `createAlphaSemanticTokenSource` 把 common token type 显式解析为
+Alpha 的 `Comment`、`Keyword`、`String`、`Number`、`Regexp`、`Type`、
+`Function`、`Variable` 或 `Operator` presentation。未知 type 默认省略；
+语言 owner 可以提供 resolver，但返回值仍必须属于该命名 enum，worker
+字符串永远不能直接成为 CSS class。source 的全量 `lines` 查询仍可生成并整体验证
+稀疏 snapshot；Viewport 使用 Current 35 的逐行查询，不再解析屏幕外 token。
+
+`projectAlphaSemanticTokenLine` 只使用 text node 和 component-owned `span`，
+不使用 HTML 拼接。每次分段都验证非空、排序、不重叠和行内边界，并要求
+fragment 的完整 `textContent` 与模型行逐 UTF-16 code unit 相同。Viewport
+先解析完整目标虚拟窗口，再修改其中的 row；同版本 token refresh
+只重投影当前虚拟窗口，重叠行继续保留 row DOM identity。模型编辑先移除
+stale span，再由既有 model-version reconciliation 投影新文本。Viewport
+只拥有 event registration，不拥有 source、index、store 或 model。
+
+颜色由 `platform/theme/common/colors/editorColors.ts` 以
+`editor.semanticToken.*Foreground` 注册并编译为 design-token 产物；
+Alpha CSS 只消费这些语义变量。当前 modifiers 交给 resolver 解释，尚未定义
+字体粗细/斜体 contract；持久 relative-range token storage、multi-splice delta、
+嵌入语言优先级和超大 token snapshot 的调度仍未完成。
+
+### Current 25：Versioned completion result、session 与 widget
+
+`createLanguageCompletionStore` 继续复用
+`VersionedLanguageResultStore<LanguageCompletionResult>`。result 显式携带
+触发 `TextPosition`、`isIncomplete` 和 immutable items；每个 item 必须提供
+item ID、命名 kind、label、明确的 `TextRange` 与 `insertText`。替换范围必须
+停留在触发行且包含触发位置。detail/documentation/filter/sort/preselect 都在
+接受前验证并复制冻结，多个 preselect、重复 provider/item identity、跨行或不包含触发点的范围
+会 failure-atomically 拒绝整个 result。插入文本在 store 边界归一化为 LF。
+
+`LanguageCompletionSessionController` 是 per-editor 状态，不进入共享
+`TextModel`。它只在 selection 是位于 result 触发点的单一 collapsed caret
+时打开；同版本新 request 通过 provider/item identity 保留 focus，默认使用唯一 preselect
+或第一项。next/previous 循环移动，显式 cancel 和 selection change 只关闭
+本地 session，不清除 caller-owned store。store、selection controller 或
+model 都不由 session 拥有。
+
+接受 item 时，`createLanguageCompletionAcceptCommand` 只使用 item 的明确
+range/insertText，生成一个 isolated `EditorEditCommand`，并把 caret 放在
+归一化插入文本末尾。它不从 label、detail 或 DOM 推断编辑。模型事件造成的
+store invalidation 在 accept 期间由 session 协调，最终只发布一次
+`Accepted` close；undo 通过既有 selection history 同时恢复文本与触发 caret。
+
+browser 的 `AlphaCompletionWidget` 由 `AlphaTextInputController` 可选托管。
+widget 使用 viewport 的 content coordinates 锚定在触发 caret 下方，以
+`.visible`、`.focused` 状态类同步 listbox/option ARIA。上下键循环 focus，
+Enter/Tab 接受，Escape 本地取消；活跃 session 才截获这些键，其余事件继续
+走既有 navigation/input controllers。鼠标在 mousedown 同一事务中 focus
+并接受，避免重绘后的 detached option 丢失 click。label/detail/kind 全部用
+`textContent`，kind 只映射命名 enum，CSS 由 widget 自己拥有并仅消费现有
+theme tokens。
+
+当前结果协议和接受链路已具备；provider 生产和触发链见 Current 26。
+lazy resolve/documentation、snippet 语法、additional edits、commit character
+尚未完成；completion Worker wire transport 见 Current 27。
+
+### Current 26：Completion provider registry、host 与触发链
+
+`LanguageCompletionProviderRegistry` 在 common 层保存确定性的注册顺序，
+并以 provider ID、显式 language ID 或 `*` selector、Unicode code-point trigger
+characters 形成最小注册契约。注册返回的 disposable 只撤销该项；registry
+不拥有 provider。`Invoke`、`TriggerCharacter` 与 `IncompleteRefresh` 是封闭的
+discriminated context，避免用 boolean 或可歧义的 optional 参数表达触发原因。
+
+`LanguageCompletionProviderWorker` 实现既有 `LanguageWorker` 边界，是当前
+进程内 provider host。一次请求先捕获唯一 snapshot 行索引，再并发调用全部
+匹配 provider；每个 provider 的结果都在该 snapshot 上验证。普通 provider
+异常和无效结果按 provider 隔离并上报，取消则直接向 coordinator 传播。合并
+结果保持 registry/item 顺序，以 `providerId + item.id` 作为 identity，只保留
+第一个 preselect，并对 `isIncomplete` 做 OR。`LanguageCompletionService`
+拥有 coordinator、host 和 result store，但不拥有 registry 或 model。
+
+browser 输入层通过 `AlphaTextInputControllerOptions.completion.requests`
+显式接入 service 和 language ID。Ctrl+Space 发送 `Invoke`；已注册的 trigger
+character 在文本事务完成后，以新的 model version 和 caret 发送请求；当前
+结果为 incomplete 时，普通输入发送 `IncompleteRefresh`。请求只发生在单一
+collapsed selection 上，失败不会回滚已经成功的文本事务。session 必须精确
+观察该 service 的 result store，避免同模型、不同 request-ID domain 被误接。
+
+当前 incomplete refresh 会重新查询所有匹配 provider，不复用旧版本 complete
+items，因为旧 range 不能越过 model-version gate。host 隔离在
+`LanguageWorker` 后；具体浏览器 Worker transport 见 Current 27。
+
+### Current 27：Completion Worker wire 与 lexical provider
+
+`LanguageWorkerWireClient` / `LanguageWorkerWireServer` 在 common 层只依赖
+结构化 `LanguageWorkerWirePort`，不依赖 DOM `Worker`、`MessagePort` 或 browser
+event 类型。协议使用版本化的 request/cancel/result/failure envelope。每次
+request 传输 request ID、lane、完整 LF snapshot DTO 和 domain payload；
+server 会核对 snapshot version、UTF-16 length、line count 与文本，再创建
+只读 `TextSnapshot`。取消在 client 立即结束本地 promise，同时发送 cancel
+使 server 的 `AbortSignal` 中止。remote failure 只传 name/message，不传递
+可执行对象或不可靠的跨 realm prototype。
+
+`languageCompletionWireCodec` 是 completion domain 对 wire 的唯一 codec。
+renderer 发出的 `TextPosition`/context 被编码为 plain DTO；Worker 返回的
+position/range/item 也全部是 plain DTO。client 在自己的 realm 重建
+`TextPosition` / `TextRange`，然后再次按原始 captured snapshot 做完整结果
+normalization。无效 range、kind、identity 或 malformed protocol 不能进入
+result store。transport terminal failure 会使 pending request 失败；既有
+coordinator 随即销毁 client，下一次请求创建新的 Worker。
+
+browser 的 `createAlphaCompletionWorkerFactory` 创建 Vite module Worker、
+DOM Worker port adapter 与 typed wire client。Worker entry 创建自己的 provider
+registry、`LanguageCompletionProviderWorker` 和 wire server，并注册
+`alpha.word` lexical provider。该 provider 在 snapshot 内收集确定性排序的
+同前缀 word，使用完整 active word 作为 replacement range，默认最多返回
+100 项并准确标记 incomplete。
+
+`LanguageCompletionService.workerFactory` 允许调用方显式选择该 transport；
+service 仍拥有每个 factory result，而 registry/model 仍由调用方拥有。当前
+默认值继续使用进程内 provider host，因此现有调用方不会隐式创建线程。
+Alpha 产品 composition root 尚未接入该 factory；接入时 renderer registry
+与 Worker registry 的触发元数据同步由 Current 29 负责。
+
+Current 27 的第一版 wire 每次请求复制完整 snapshot，是正确但
+O(document length) 的同步基线；Current 28 已用增量文档镜像替代正常路径。
+Current 29 已补齐 Worker provider catalog/metadata 与 Worker 预热。token 与
+diagnostic codec、resolve request 仍未完成。
+
+### Current 28：增量 Worker 文档镜像
+
+`LanguageWorkerModelSynchronizer` 是独立于 `LanguageWorker.run` 的可选能力。
+`LanguageRequestCoordinator` 收到 `TextModelChange` 时先以 `ModelChanged`
+取消所有旧版本 request，再把同一个 immutable change 交给当前支持同步的
+worker。同步失败只丢弃该 worker；下一请求惰性创建新实例并从 full snapshot
+恢复。普通进程内 worker 不需要实现该接口。
+
+wire protocol v2 把 request snapshot 分为 `full` 与 `reference`。client 第一次
+请求或失去连续版本时发送 full；成功把消息交给有序 channel 后记录 mirror
+version。后续每个 model commit 发送 `sync(previousVersion, modelVersion,
+changes)`，其中 changes 只包含 pre-transaction UTF-16 range offset/length
+和 LF text。连续同步后的请求只发送 version/length/lineCount reference，
+不再传全文。若 client 观察到版本跳跃，它不猜测缺失事务，而是清空本地 mirror
+状态，使下一请求重新发送 full。
+
+Worker server 用 `LanguageWorkerDocumentMirror` 独占一个 Piece Tree，而不是
+用字符串拼接应用 delta。所有 change 会先验证版本连续、顺序、非重叠、范围
+和 LF，再按 offset 逆序写入，因此验证失败是原子的。每个 request 从 Piece
+Tree 捕获独立 immutable snapshot；同步新版本不会改变正在取消中的旧 request
+snapshot。undo、redo 和多 edit transaction 使用同一 `TextModelChange`
+contract，无需 transport 特判。
+
+同一 Worker port 是可靠有序 channel，因此 cancel、sync、reference request
+按发送顺序处理，不增加每次 sync acknowledgement。server 拒绝 sync 时会清空
+镜像并发送 terminal `syncFailure`；client poison 后，coordinator 在下一请求
+替换整个 Worker。协议仍保留 full 作为初始化、版本跳跃和 Worker 重建的恢复
+路径。一个 coordinator/worker 只镜像一个 model，当前不引入多文档 identity。
+
+### Current 29：Worker provider catalog 与首次 trigger handshake
+
+`LanguageCompletionProviderMetadata` 从可执行 `provideCompletions` 函数中拆出
+provider ID、language selectors 和 trigger characters。
+`LanguageCompletionProviderRegistry.providerCatalog` 是带单调 revision 的
+immutable snapshot；注册和撤销都会在 registry 顺序下发布新 catalog。
+catalog normalization 会复制冻结所有数组，并拒绝重复 provider ID、language
+ID 或 trigger character，因此 renderer 不会直接信任 Worker plain objects。
+
+catalog 使用独立的 `zeta.alpha.completion-provider-catalog` side-channel，
+不把 completion 特有 metadata 塞进通用 language-worker envelope。
+`LanguageCompletionCatalogWirePublisher` 观察 Worker 内真正执行 provider 的
+registry，启动时发送当前 snapshot，之后发送每个 revision。
+`LanguageCompletionCatalogWorkerClient` 同时委托 typed request client 和观察
+catalog；首次 catalog 有明确 readiness promise，后续 revision 必须严格递增。
+malformed/stale catalog 会 invalidate 底层 wire client。
+
+自定义 `LanguageCompletionService.workerFactory` 现在会被 service 预热。
+factory result 若实现 `LanguageCompletionProviderCatalogSource`，service 会切换
+到该远端 source；普通自定义 worker 和默认进程内 host 继续使用 caller-owned
+registry catalog。`requestTriggerCharacter` 捕获当前 model version，启动或
+重建 Worker，等待首次 catalog，再只对真实匹配 provider 发请求。等待期间模型
+变化会丢弃该 trigger，而不是用旧位置请求新版本。
+
+`AlphaTextInputController` 使用该异步 trigger API。若 catalog 证明字符不受
+支持，且先前 result 是 incomplete，它只在 model version、单一 collapsed
+selection 和 caret 都未变化时回退到 `IncompleteRefresh`。Worker terminal
+failure 或 disposal 会先发布 empty catalog；下一次 trigger 让 coordinator
+创建新 Worker，并重新完成 catalog handshake，旧 metadata 不会继续路由输入。
+
+当前 catalog 描述 Worker 已加载的 provider，但还不能要求 Worker 动态加载
+任意 renderer 函数。后续需要命名 provider module/feature manifest 与受控加载
+协议；函数本身始终不能通过 structured clone 传输。
+
+### Current 30：命名 Worker provider module 与首次请求 barrier
+
+`LanguageCompletionProviderModuleRegistry` 在 Worker realm 内保存调用方拥有的
+命名 module definition，只向 renderer 发布 ID 与单调 revision。
+`LanguageCompletionProviderModuleHost` 按 module ID 串行化 Active/Inactive
+操作。一次 load 返回的 provider batch 先全部校验，再通过
+`LanguageCompletionProviderRegistry.registerMany` 原子注册；重复 ID、无效
+provider 或 load failure 都不会泄漏部分 registry 状态。deactivate、module
+撤销和 host disposal 会释放整批 provider，并只发布一次 provider catalog
+revision。
+
+独立的 `zeta.alpha.completion-provider-modules` 协议只传 module ID、期望状态、
+catalog 和结果，不传函数或 renderer 对象。
+`LanguageCompletionProviderModuleWireServer` 在 Worker 内委托 module host；
+`LanguageCompletionProviderModuleWireClient` 验证 catalog revision 与 request
+response identity。stale/malformed catalog 或协议不匹配会 invalidate 共享
+typed Worker client，因此 catalog、activation 和 request 不会形成彼此独立的
+半失效状态。
+
+`LanguageCompletionCatalogWorkerClient` 将 required-module activation 合成首次
+request readiness barrier。browser factory 声明需要 `alpha.word`；Worker entry
+只注册同名 module definition，不再无条件注册 lexical provider。客户端先等
+module catalog，再请求激活；Worker 原子注册 provider 并发布 provider catalog，
+最后返回 activation result。共享 port 的有序性保证 catalog revision 先于
+barrier 释放，立即发出的首次 Invoke 也不会跑到空 registry。Worker 重建会
+重新执行同一 handshake。
+
+### Current 31：版本绑定的 completion resolve
+
+列表 item 新增显式 `hasDeferredDetails`，但 provider 的 `resolveData` 不进入
+renderer item 或通用 completion DTO。`LanguageCompletionProviderWorker` 在一次
+成功列表请求结束时保存 provider realm 内的解析记录，key 同时包含 completion
+request ID、model version、provider ID 和 item ID。新结果替换 cache；provider
+撤销或同 ID replacement 也会使旧记录失效。
+
+provider resolver 只能返回 `LanguageCompletionItemDetails`。runtime normalizer
+只接受 `detail` 与 `documentation`，拒绝 `insertText`、range、label 等字段，
+因此延迟解析不能改变已验证的 edit identity。`resolveData` 在缓存前通过
+structured clone 与 provider 后续 mutation 隔离；resolve failure 走 provider
+error policy，但不会 poison 一个协议仍健康的 Worker。
+
+独立的 `zeta.alpha.completion-resolve` side-channel 提供 resolve/result/failure/
+cancel。它复用同一 Worker port，却不扩张通用 language request envelope。
+客户端核对 response target；错配或 malformed response 会 invalidate 共享
+Worker。普通 provider failure 只拒绝对应 resolve。浏览器取消会发送 cancel，
+Worker 使用独立 `AbortController` 终止 provider work。
+
+`LanguageCompletionService` 在调用 Worker 前后都核对当前 result identity。
+`LanguageCompletionSessionController` 只为 focused item 自动解析，focus、
+result、selection、accept、cancel 或 disposal 都会 abort 旧请求。session 用
+Complete/Loading/Failed/Unavailable 命名状态投影详情；失败不会关闭候选列表，
+已解析文本也不能参与 acceptance。browser widget 只用 text node 展示选中项
+detail/documentation，并以 `.resolving` 和 `aria-busy` 投影加载状态。
+
+### Current 32：共享 token/diagnostic Worker transport
+
+通用 `LanguageWorkerWireCodec` 从单一 `lane` 演进为显式 `lanes` 集合，codec 的
+payload/result encode/decode 都接收当前 lane。request envelope 与协议版本无需
+变化；client 使用 pending request 的 lane 解码 result，server 在 decode 前拒绝
+未声明 lane。completion 继续声明单 lane，而 analysis codec 同时声明 `tokens`
+与 `diagnostics`。
+
+`LanguageAnalysisProviderRegistry` 保存 caller-owned provider。token lane 按注册
+顺序选择第一个匹配 provider，避免多个语义 token batch 产生未定义覆盖规则；
+diagnostic lane 并发执行全部匹配 provider，并按注册顺序合并，允许诊断 overlap。
+provider failure 通过 Worker realm 的 error policy 报告并与健康 batch 隔离。
+所有 range、token 排序/非重叠、modifier、severity、message、code 与 source
+都先针对 captured snapshot 归一化。
+
+`LanguageAnalysisService` 用一个 `LanguageRequestCoordinator` 和一个 Worker
+同时拥有两条 latest-wins lane，并将结果分别应用到 token/diagnostic versioned
+store。两 lane 可并发；任一 lane 的新请求只 supersede 自己，model transaction
+则先取消两者，再向共享 `LanguageWorkerModelSynchronizer` 发送一次增量 change。
+因此首个请求发送 full snapshot，同一轮的另一个 lane 使用 reference，后续
+请求在有序 sync 后继续 reference。无效 DTO 在 renderer realm 被拒绝，terminal
+Worker failure 由 coordinator 在下一请求重建。
+
+browser 的 `createAlphaAnalysisWorkerFactory` 创建独立 Vite module Worker。
+completion 与 analysis 共用抽取后的 browser/dedicated Worker port adapter，
+但 provider host、协议 client 和 failure domain 独立。Worker entry 注册
+`alpha.lexical` baseline provider，为 TypeScript/JavaScript/JSON 提供确定性的
+comment/string/number/identifier/keyword/operator token，以及未终止
+string/template/comment 和 bracket balance diagnostic。它不是 parser 或语言
+服务器；在 Current 32 边界内每条 lane 仍完整扫描 captured snapshot，只有文档
+transport 已经增量化。产品 composition root 尚未选择该 factory。
+
+### Current 33：版本化增量词法分析
+
+通用 Worker server 在成功应用一笔有序同步事务后，向实现
+`LanguageWorkerDocumentSynchronizationObserver` 的 Worker host 投递
+`previousVersion`、`modelVersion`、规范化 change 和更新后的不可变 snapshot。
+`LanguageAnalysisProviderWorker` 再把该事件投递给注册表中声明
+`synchronizeDocument` 的 provider。单个 provider 的同步失败只进入该 provider
+的错误策略，不会清空 Worker mirror，也不会阻断健康 token/diagnostic lane。
+
+`alpha.lexical` 现在由一个 token 与 diagnostic lane 共享的版本缓存计算结果。
+逐行扫描只保存相对列范围、括号/诊断事件和显式
+`normal`、`blockComment`、`template` 输入输出状态。事务更新先复用文本相同的
+前缀，再从首个变化行向后传播状态；进入相同文本后缀且输入状态与旧缓存一致时，
+剩余行整体复用。行号发生移动时，相对结果在聚合阶段重新绑定当前 snapshot，
+因此不会保留旧版本绝对坐标。
+
+同一版本的另一条 lane 直接读取已聚合缓存，不再重复扫描。缓存 observer 记录
+完整/增量更新、实际扫描行数和复用行数，测试据此锁定 1,000 行文档的单行编辑
+预算；跨行状态测试证明传播在闭合点后收敛，120 轮确定性随机编辑逐版本与全量
+新缓存 oracle 比对 token 和 diagnostic。该能力仍是确定性词法基线，不代表
+TypeScript AST、语义类型检查或语言服务器级增量图已经完成。
+
+### Current 34：可确认基准的 analysis result delta
+
+Worker wire protocol v3 为每条 lane 增加可选的 `resultBaseRequestId`。client 只
+发送最后一次通过 renderer application gate 的 request ID；server 仅在自己最后保存的同 lane result
+具有完全相同 ID 时把它交给 codec。若响应在取消竞态中丢失、请求乱序、Worker
+重建或任一侧没有基准，server 发送 full result。这个握手避免把“server 已发送”
+误当成“client 已接收”，也不需要额外 acknowledgement 消息。codec 必须显式
+选择 `stateless` 或 `confirmedBase` result protocol；completion 不持有无用基准。
+
+analysis codec 的 delta 保存绝对相同的 item 前缀，对文档总行数变化后的 item
+后缀执行统一行位移，并只传输中间 splice。DTO 绑定 base request ID、行位移、
+起始 item、删除数量和插入 item。renderer realm 在重建前校验基准、lane、
+snapshot 行数差、splice 边界以及全部 token/diagnostic contract；delta 不能减少
+传输 item 数时直接使用 full。completion codec 继续发送 full result，不承担
+analysis 特有规则。
+
+100 轮随机编辑证明两条 analysis lane 的 delta 重建与 full oracle 相同。
+1,000 行且超过 3,000 token 的文档在首行普通编辑后最多传输 4 个 token item；
+测试还主动制造 client 漏收 server result 的状态，证明下一请求回退 full。
+
+当前限制必须保持显式：v3 只有一个连续 item splice，距离很远的多个变化区域
+可能回退 full；renderer 的 `VersionedLanguageResultStore` 仍接受完整数组，
+`LanguageTokenLineIndex` 仍在发布后重建。行原生 renderer store 与 multi-splice
+协议尚未完成，不能把 Worker 传输增量描述成端到端零复制。
+
+### Current 35：application-confirmed token line state
+
+`LanguageWorkerWireClient` 不再在 decode 时立即晋升 analysis 基准。它先暂存
+结果；`LanguageRequestCoordinator` 只有在 request identity、model version、
+store normalization 和同步 application callback 全部通过后，才以
+`LanguageWorkerResultDisposition.Applied` 确认。取消、stale result 和 application
+failure 都发送 `Discarded`，因此下一请求不会引用 renderer 从未接受的基准。
+
+token delta 的 splice 元数据不进入可克隆 DTO，也不开放给 provider。codec 在
+renderer realm 完成 DTO 与 snapshot 校验后，通过 realm-local `WeakMap` 绑定；
+provider snapshot normalizer 会剥离该提示，token store normalizer 只保留已绑定
+元数据。
+
+模型事务发生时，`LanguageTokenLineIndex` 立即清空可见 bucket，同时可将上一份
+immutable state 保留为隐藏 confirmed base。匹配 delta 到达后，index 只重建
+splice 边界覆盖的稀疏 token 行；行号未变化的 prefix/suffix line object 直接
+复用。base 不匹配或 full result 到达时仍执行完整 rebuild。change event 显式
+报告 `rebuiltLineCount` 与 `reusedLineCount`。
+
+browser 不再在 source event 上解析全部 sparse lines。
+`AlphaSemanticTokenSource.getLineTokens` 只解析指定行，Viewport 先解析整个目标
+虚拟窗口，再原子更新该窗口。1,000 个 token 行的单行编辑测试证明 1 行重建、
+999 行复用；100 轮随机 wire delta 与 full token oracle 一致；1,000 行文档的一行
+viewport 只调用一次 presentation resolver。
+
+当前 store 仍保留完整 token 数组，换行编辑也仍需为绝对 range 重建 shifted
+suffix。下一步需要 relative-range persistent line storage，才能把 line delta
+从投影层继续下沉到 canonical result ownership。
+
+### Current 36：multi-splice 与相对 token 行基座
+
+language Worker protocol v4 将 analysis delta 从单个连续 splice 扩展为按 base item
+坐标排序的 splice 列表。`createLanguageAnalysisItemSplices` 先以完全相同的 snapshot
+行建立有序稳定锚点，再要求对应 token/diagnostic item 在各自累计行位移下完全相同；
+锚点之间才作为变化区传输。每个 splice 记录其后续未变化区间的累计行位移，因此两个
+相距很远的编辑不再把中间数千个 item 合并进一个巨大变化区。无法证明排序、稳定锚点
+或传输收益时仍回退单 splice 或 full result，正确性不依赖差分质量。
+
+renderer 解码器依次验证 base ID、splice 顺序、非重叠边界、最终行数位移和完整结果
+contract。通过验证后，它把 base/result item 坐标、插入数量及 splice 前后行位移作为
+realm-local `WeakMap` 元数据交给 token store；provider 无法伪造该提示。协议版本提升
+到 v4，避免旧 Worker 把新的 result payload 当成 v3 解析。
+
+`LanguageTokenLineIndex` 的持久状态不再以绝对 `TextRange` 作为行内容基座。每个稀疏
+行保存不可变的相对列 payload；multi-splice 元数据把完整 base item 空隙映射到 result
+item 空隙。行号不变时复用同一个公开 line object，行号移动时只创建新的轻量绑定并
+复用 payload，绝对 range 在 `getLineTokens` 或 `line.tokens` 首次查询时才生成。base
+缺失、元数据不连续或当前 token 与 payload 不一致时仍完整重建。
+
+验证覆盖两个相距 800 行的编辑只产生两个 splice，40 轮双区域事务与 full oracle
+一致，1,000 行中的两个变化行只重建 2 行并复用 998 行，以及插入一行后只重建新行、
+复用原有 1,000 个相对 payload。`VersionedLanguageResultStore` 目前仍发布完整绝对
+token 数组；若要进一步消除 renderer 端整数组分配，需要后续引入持久 result tree，
+不能把当前状态描述为端到端零复制。
+
+本阶段同时固定服务抽取边界：
+
+| 能力 | 所有者 | 当前状态 |
+| --- | --- | --- |
+| event、lifecycle、URI、resource collection | `base` | ✅ 复用现有领域无关基座；禁止 editor 反向依赖 |
+| 原始资源 I/O | `platform/files` | 部分具备；`IFileService` 当前只读 |
+| load、dirty、save/revert、冲突与共享文档引用 | `workbench/services/textfile/common` | 尚未完成；由首个真实 file-backed Alpha consumer 建立 contract |
+| 文本事务、selection、decoration、language result | `editor/alpha/common` | ✅ editor 领域所有权 |
+| TextMate grammar/runtime 与 token provider | 独立 `editor/textmate` adapter | 部分具备；Current 43 已完成 runtime/provider/browser WASM seam，产品 grammar resource 接线仍待完成 |
+
+因此 Current 36 不为 token delta 新造 service，也不提前创建没有保存、冲突或 grammar
+consumer 的空壳 service。Current 43 在 Analysis provider 成为真实 consumer 后才抽取
+TextMate adapter。未来若文件 I/O、dirty 状态或 TextMate runtime import 出现在
+`TextModel`、token index 或 Alpha browser component 中，应视为所有权漂移并
+立即沿上述边界抽取。
+
+### Current 37：共享 provider module 基座与 Analysis 激活屏障
+
+Completion 原先拥有的 module registry、host、catalog、activation 状态机和
+wire request/response 校验已经抽为 `editor/alpha/common` 内的通用语言域设施。
+Completion 与 Analysis 仅保留 provider 类型和协议描述符的薄封装。该抽取不会进入
+`base`：module ID、provider batch 与 Worker catalog 都是编辑器语言域语义，反向下沉
+会违反 base 的领域无关边界。
+
+两个真实调用方都需要“等待异步准备，同时响应调用方 `AbortSignal`”，因此仅将这一
+无领域语义的机制抽为 `base/common/cancellation.raceCancellation`。它不拥有也不取消
+底层任务，只结束当前调用方的等待，并统一产生可识别的 `CancellationError`。
+
+Analysis Worker entry 不再直接把 lexical provider 无条件注册进 provider registry。
+它发布 `alpha.lexical` module definition，由
+`LanguageAnalysisModuleWorkerClient` 在首个 token/diagnostic 请求前完成 catalog
+握手与激活。激活以一个 provider batch 原子提交；碰撞、加载失败或加载期间撤销都不
+泄漏部分 provider。required module 失败会使预热 Worker 失效，下一次请求由
+`LanguageAnalysisService` 创建全新 Worker 并重新握手。
+
+该组合客户端仍转发 Current 35 的 `Applied`/`Discarded` result settlement，所以
+只有 Renderer 真正接受的 Analysis 结果才成为下一次 delta 基线。测试覆盖激活先于
+首请求、批量注册回滚、确认基线转发、失败后的 Worker 重建，并继续回归 Completion
+module 协议。
+
+这条 module seam 是 `editor/textmate` adapter 的接入点。Current 37 落地时
+TextMate grammar、scope 解析和 runtime 依赖尚未实现；Current 43 已在 Alpha/`base`
+之外建立该 adapter，但产品 grammar resource 接线仍未完成。同样，
+`workbench/services/textfile/common` 仍等待首个真实 file-backed Alpha consumer
+定义 dirty、save/revert、冲突和共享模型引用契约。
+
+### Current 38：语言配置基座与 lexical cache 身份
+
+对照 VS Code 源码后，Alpha 保留了“language configuration 与 tokenization runtime
+分离”的架构结论，但没有移植其完整 service、配置覆盖层或 support class。
+Current 38 的首个真实消费者只需要 comments 与 brackets，因此当时
+`LanguageConfigurationRegistry` 先定义这两个可组合字段。贡献按 priority 和注册顺序
+逐字段合并，`null` 可以显式清空继承值，撤销贡献会恢复剩余配置并发布新的不可变
+revision。`languageId.ts` 统一 concrete language ID 与 `*` provider selector 的校验，
+这些都是 editor 领域身份，不能下沉到 `base`。
+
+Analysis Worker realm 在加载 `alpha.lexical` module 前建立并拥有该 registry，注册
+ECMAScript、JSON 与 JSONC 的内置配置，再把配置 source 注入 lexical provider。
+scanner 被编译为 `LanguageLexicalLineScanner`，comments、任意长度 bracket token、
+keyword 与 string profile 均由明确的语言配置/lexical profile 提供，不再依赖文件级
+全局常量。
+
+此前 `LanguageLexicalAnalysisCache` 只以 model version 判断命中；同一快照先按
+TypeScript、再按 JSON 请求时可能错误复用第一份结果。现在 provider 按
+`languageId + resolved configuration identity` 拥有独立 cache，每个 cache 内仍由
+token/diagnostic 两条 lane 共享扫描结果。配置 revision 改变时，即使 model version
+不变，也会创建新 scanner/cache。JSON 不再继承 JavaScript 的注释与 template literal
+规则，JSONC 则显式保留注释配置。
+
+测试覆盖 priority/order 合并、逐字段保留、显式清空、验证原子性、贡献撤销、
+registry 独立生命周期、同版本跨语言隔离、JSON/JSONC 差异、配置变更后的 cache
+替换，以及既有 1,000 行增量扫描与随机编辑 oracle。
+
+该 registry 是原生输入的 bracket/comment command 与 `editor/textmate` adapter
+可共同消费的 Alpha common 基座。Current 38 落地时尚未加入 indentation、on-enter
+或 word-pattern 字段；Current 41 在 Enter command 成为真实消费者后加入前两者。
+word-pattern 仍未实现；TextMate grammar runtime 与 scope tokenization 由 Current 43
+在独立 adapter 中补齐。
+
+### Current 39：语言配对输入事务
+
+`LanguageConfiguration` 新增 `autoClosingPairs`、`surroundingPairs` 与
+`autoCloseBefore`。未显式贡献 auto-closing 时回退到最终 brackets；未显式贡献
+surrounding 时再回退到最终 auto-closing。相同 open/close 的 quote pair 合法，
+bracket 与 block-comment pair 仍要求角色不同。字段继续遵循 Current 38 的
+priority/order、`null` 清空、revision 与撤销语义。
+
+ECMAScript、JSON 与 JSONC 的内置配置已从 lexical profile 文件迁移到
+`languageBuiltinConfigurations.ts`。这是所有权修正：comments、brackets 与编辑
+pair 是 language configuration，lexical 文件只拥有 keyword/string scanner profile。
+Analysis Worker 仍显式拥有自己的 registry；原生输入 composition root 也可以注册
+同一组配置，但两边不共享可变实例或生命周期。
+
+`createSelectionEditCommand` 把原有 edit command 内部的多 selection 偏移映射提升为
+editor-common 事务构造器。`createLanguagePairTypeCommand` 在这一边界上实现：
+
+- 非空 selection 输入 surrounding opener 时保留方向并包围原文本；
+- collapsed caret 输入 opener 时仅在行尾或 `autoCloseBefore` 允许的后继字符前插入
+  完整 pair，并把 caret 留在中间；
+- 输入已位于 caret 后的 closer 时只移动 selection，不产生 model version；
+- `createLanguagePairBackspaceCommand` 删除空 pair 两侧，同时让同一多光标事务中的
+  其他 selection 保持普通 Backspace 语义。
+
+`AlphaTextInputControllerOptions.language` 显式接收 concrete language ID 与
+caller-owned `LanguageConfigurationSource`。每次相关 `beforeinput` 都读取当前 resolved
+revision，因此配置贡献变化无需重建 View。若同时接入 completion requests，两条路径
+必须使用相同 language ID。DOM 层只做事件适配；pair 决策、事务、selection 映射与
+undo 仍由 common/controller/model 拥有。
+
+测试覆盖单字符和多字符 pair、后继字符策略、quote overtype、正反向 selection
+surround、多光标偏移、空 pair Backspace、undo、配置 revision 热更新和浏览器
+`beforeinput` 路由。Current 39 落地时尚无自动闭合来源追踪；该缺口由 Current 40
+补齐。自动缩进与 on-enter 由 Current 41 补齐基础事务；token-context `notIn` 条件
+由 Current 42 补齐 string/comment 基线。
+
+### Current 40：每编辑器实例的自动闭合来源
+
+字符相等不足以证明 closer 来自自动闭合。`createLanguagePairTypeCommand` 现在为实际
+auto-close edit 生成 post-transaction `LanguageAutoClosingAction`；调用者只有在返回的
+model version 仍是当前已提交版本时，才能把 action 交给
+`LanguageAutoClosingTracker`。同步 listener 引发重入编辑时，过期 action 会被丢弃。
+
+`LanguageAutoClosingTracker` 位于 `alpha/common`，但由每个输入 controller 实例拥有。
+它复用 `TextModel.trackRange`，分别追踪 enclosing range 与 closer range，并借用同一
+model 的 `EditorSelectionController`：
+
+| 关注点 | 所有者 | 结论 |
+| --- | --- | --- |
+| tracked-range 映射算法 | `TextModel` / Alpha text core | ✅ 复用，不建立第二套 decoration |
+| “由自动闭合产生”的身份 | `LanguageAutoClosingTracker` | editor-instance 状态，不进入共享 model |
+| DOM `beforeinput` 与 tracker 生命周期 | `AlphaTextInputController` | browser 只适配事件和记录提交回执 |
+| language pair 配置 | `LanguageConfigurationRegistry` | 继续由 caller-owned registry 提供 |
+| URI、文件保存、TextMate runtime | 各自 platform/adapter service | ❌ 不与自动闭合来源耦合 |
+| 通用 `base` | domain-neutral primitives | ❌ 不新增 editor identity 或反向依赖 |
+
+只有 tracker 对当前位置和 closer 给出正向信任时，pair command 才允许无事务
+overtype；只有 trusted pair 仍为空时，Backspace 才删除两侧。用户源码中原本存在的
+`()`、字符串或 bracket 即使字符完全匹配，也保持普通插入/删除语义。
+
+外部编辑会通过 tracked range 移动仍有效的 pair；closer/open 改写、跨行、所有
+selection 离开 enclosing range 都会永久释放对应记录。多光标记录独立失效。
+undo 令 pair 消失时来源随之失效；redo 只恢复 model/selection 历史，不伪造已经释放
+的短生命周期来源。测试覆盖以上路径、过期 version、销毁后借用依赖仍存活，以及
+browser controller 的自动记录链路。
+
+### Current 41：语言感知 Enter 与实例缩进
+
+`LanguageConfiguration` 现在拥有 `indentationRules` 与 `onEnterRules` 两个真实消费字段。
+它们继续遵守 field-wise priority/order、`null` 清空、registration disposal 和 revision
+语义。RegExp 在注册时克隆，resolved rule/action/pattern 全部冻结；Analysis Worker
+使用的 isolated built-in source 也返回自己的冻结副本，不共享 caller 可变
+`lastIndex`。
+
+`createLanguageEnterCommand` 的决策顺序是：
+
+1. 按配置顺序匹配 `previousLineText`、`beforeText`、`afterText` 的显式
+   `onEnterRules`；
+2. 匹配 caret 两侧的 language brackets，生成 Indent 或 IndentOutdent；
+3. 读取 increase/decrease/indent-next/unindented patterns；
+4. 无规则命中时保留当前行在 caret 前的 leading indentation。
+
+Indent、IndentOutdent、Outdent、appendText 与 removeText 都转换为
+`EditorSelectionEdit`。多个 selection 仍以同一 pre-change snapshot 计算，交给
+`createSelectionEditCommand` 一次提交。`BeginCoalescedTyping` 在 Enter 前切断旧 typing
+history group，但让 Enter 后紧邻输入继续加入新 group：一次 undo 删除 Enter 与随后
+输入，再一次 undo 才删除 Enter 前的输入。
+
+缩进样式没有放入 language registry。`EditorIndentationOptions` 明确选择 Tabs 或
+Spaces，并提供 tabSize；visual-column 归一化负责 mixed whitespace、shift 与 unshift。
+browser controller 只拥有 resolved 实例选项并在每次 Enter 读取当前 language
+revision。
+
+| 候选抽象 | 当前归属 | 评估 |
+| --- | --- | --- |
+| event/lifecycle | `base/common` | ✅ 继续复用 |
+| Tabs/Spaces/tabSize | Alpha editor instance | 值对象即可，尚不需要 service |
+| indentation/on-enter language rules | `LanguageConfigurationRegistry` | ✅ 已有多个 input/Worker composition root |
+| 持久化 editor setting | future Workbench settings service | 尚未完成；未来只映射为实例 options |
+| TextFile save/dirty/conflict | `workbench/services/textfile` | 尚未完成；不与 Enter command 耦合 |
+| TextMate grammar/runtime | `editor/textmate` adapter | Current 43 部分具备；不得进入 Enter 或 `base` |
+
+Current 41 初始 matcher 使用 model 原始行文本，尚未像 VS Code 的
+`IndentationContextProcessor` 一样移除 string/comment token 中的 bracket-looking
+文本。该缺口由 Current 42 的同步 lexical context 补齐；common 仍不反向 import
+Worker/browser，editor token 语义也没有进入 `base`。
+
+测试覆盖规则组合/清空/验证、全局 RegExp 隔离、ECMAScript/JSON built-ins、显式规则
+优先级、doc-comment continuation、bracket indent-outdent、increase/decrease/ignore、
+tabs/spaces visual-column 归一化、selection replacement、多光标偏移、undo group、
+动态 revision 与 browser `beforeinput`。
+
+### Current 42：同步 lexical input context
+
+Worker 的 `LanguageLexicalAnalysisCache` 会生成整份 token/diagnostic 结果，不能直接放到
+按键热路径。`LanguageLexicalContextSource` 因此定义更小的同步查询契约：
+
+- identity 必须绑定一个 `TextModel` 与 concrete language ID；
+- `getStructuralLineContent` 返回指定原始列范围的结构文本；
+- `getTokenTypeAt` 返回 caret 所处的 baseline lexical token type。
+
+默认实现 `LanguageLexicalContextIndex` 复用 `createLanguageLexicalLineScanner`，按需从最近
+已知 lexical state 扫描到目标行。model transaction 只截断 first changed line 之后的
+cache；resolved configuration identity 改变时才重建 scanner。它借用 model 与
+configuration source，不拥有两者。
+
+结构文本不是把整个 string/comment 清空。与 VS Code 的
+`IndentationLineProcessor` 边界一致，它只删除这些 token span 内由当前 language
+配置声明的 bracket token，保留引号、comment marker、普通文字与 whitespace。这样
+`/** ... */`、line-comment continuation 等显式 on-enter rule 仍能匹配，同时 `"{"`、
+`// {` 和跨行 block comment 内的括号不会触发 Indent/IndentOutdent。
+
+`LanguageAutoClosingPair` 同时新增冻结的 `notIn`。当前 closed vocabulary 是
+`string | comment`，因为 baseline scanner 只对这两类上下文提供可靠结构边界。
+`createLanguagePairTypeCommand` 在 auto-close 前查询同一个 source；已记录 closer 的
+overtype 仍先由 `LanguageAutoClosingTracker` 决定，不会被 `notIn` 破坏。
+
+| 生命周期/能力 | 当前所有者 | 结论 |
+| --- | --- | --- |
+| 行 scanner 编译与 lazy state cache | `LanguageLexicalContextIndex` | Alpha common、可共享注入 |
+| 默认 input context | `AlphaTextInputController` | controller 创建并销毁本地 index |
+| document-level 共享 | future composition root | 可直接注入 source，无需改 command |
+| full token/diagnostic analysis | Analysis Worker | 继续异步，不阻塞按键 |
+| lifecycle/event primitives | `base/common` | ✅ 复用 |
+| lexical/token semantics | `base` | ❌ 禁止下沉 |
+
+当前 baseline 尚不识别 JavaScript regular-expression literal、embedded language、
+template interpolation 中重新进入代码的区域，也没有 suffix-state convergence 优化。
+这些是明确的下一阶段，而不是当前能力。测试已覆盖 partial slice、string、closed 与
+unterminated string boundary、line/block comment、多行状态、外部编辑、configuration
+revision、销毁、跨 model/language 拒绝、Enter、auto-closing `notIn` 与 browser
+路由。
+
+### Current 43：独立 TextMate runtime adapter
+
+TextMate grammar 已经出现真实消费者：Alpha Analysis provider/module seam 可以接收比
+baseline lexical scanner 更高保真的 token provider。因此 runtime 不进入
+`editor/alpha`，而是建立单向依赖 `editor/textmate → editor/alpha/common →
+base/common`。`base` 不认识 grammar、scope、language ID 或 token provider；
+Alpha 也不 import `vscode-textmate`、`vscode-oniguruma` 或 WASM。
+
+`TextMateGrammarRegistry` 拥有 grammar contribution identity。一个 definition 由唯一
+`scopeName`、可选 root `languageId`、injection targets 和延迟 loader 组成；注册、
+撤销都会产生新的 immutable snapshot，旧 snapshot 仍能完成已经开始的请求。
+loader 只返回 raw grammar 文本或对象，不接收 URI/`IFileService`。资源定位、extension
+manifest 与信任验证仍由未来 product composition root 负责，避免 token Worker
+反向拥有 platform I/O。
+
+`TextMateTokenizationService` 针对 snapshot 建立 `vscode-textmate.Registry`，通过注入
+的 `IOnigLib` 加载 grammar/injection，并按行保存 input/output `StateStack` 与相对列
+token。文档变化后先复用相同行前缀，再从第一处变化扫描；进入相同文本后缀且新的
+input state 与旧 state `equals` 时复用剩余 suffix。grammar revision 即使 model
+version 未变化，也建立新的 runtime generation；旧 generation 只在最后一个捕获它
+的请求退出后 dispose。
+
+scope mapping 是显式可替换的 `TextMateScopeResolver`。默认 resolver 只投影稳定的
+comment/string/regexp/number/operator/keyword/function/type/parameter/variable/tag/
+property/constant/punctuation/invalid vocabulary，不假装已实现 theme selector 或
+semantic modifier。`createTextMateAnalysisProvider` 把结果转为 Alpha
+`LanguageTokenResult`，`createTextMateAnalysisModule` 再接入现有 module activation
+协议。
+
+Alpha token provider 新增 `tokenPriority`，默认值为 `0`，相同优先级保留注册顺序。
+TextMate provider 使用 `100`，因此一个 Worker 可同时激活 lexical fallback 与
+TextMate。Current 43 初始 provider 捕获当时的 root language selectors；该静态限制由
+Current 44 的 wildcard/`undefined` fallback chain 与版本化 catalog transport 移除。
+priority 只影响 token lane；diagnostic provider 继续按原合同合并。
+
+browser 边界由 `createBrowserTextMateOnigLib` 独占：它通过 Vite asset URL fetch
+`onig.wasm`，每个 Worker realm 只初始化一次，并只把 `IOnigLib` 交给 common。
+CommonJS package 在 Node ESM 和 Vite realm 的导出形态不同，适配层统一处理
+namespace/default 两种形式；该差异不泄漏给调用方。
+
+| 能力 | 所有者 | 当前状态 |
+| --- | --- | --- |
+| grammar identity、revision、injection graph | `editor/textmate/common` | ✅ |
+| TextMate runtime 与 incremental state | `TextMateTokenizationService` | ✅ |
+| Alpha provider/module integration | `editor/textmate/common` | ✅ |
+| Oniguruma WASM URL/fetch | `editor/textmate/browser` | ✅ |
+| baseline structural diagnostics | `alpha.lexical` | ✅，继续独立 |
+| grammar resource/extension manifest loading | product extension/resource layer | 尚未完成 |
+| theme selector、embedded language 与 modifier projection | TextMate/theme adapter | 尚未完成 |
+| URI、文件保存、dirty/conflict | platform/textfile | ❌，不得混入 TextMate |
+
+真实 WASM 测试覆盖跨行 string/comment state、单行编辑只重扫一行、多行状态变化扫描到
+suffix convergence、同 model version grammar revision 替换、scope validation、
+cancellation、独立生命周期，以及经过 `LanguageAnalysisService` application gate 的
+provider priority。独立 Vite entry build 证明 browser WASM adapter 可被 Worker
+打包。Current 44 已补充完整的独立 TextMate Analysis Worker，但产品 Workbench 尚未
+提供 grammar resource catalog 或选择该 factory，因此仍不能描述为“产品已启用
+TextMate 高亮”。
+
+### Current 44：版本化 grammar catalog 与动态 token fallback
+
+Grammar loader 是函数，不能跨 structured clone；而 Electron Renderer 能通过 platform
+service 读取 extension/resource，dedicated Worker 则不应拥有 IPC 或文件权限。因此
+TextMate 新增显式的完整 catalog 边界：
+
+1. `materializeTextMateGrammarCatalog` 把一个 immutable registry snapshot 的 raw
+   grammar 文本/对象解析为有界 content catalog；
+2. `TextMateGrammarCatalogModel` 在 Renderer 维护严格递增的完整 revision；
+3. `TextMateGrammarCatalogWireClient` 通过 Analysis Worker 已有 port 发送 catalog；
+4. `TextMateGrammarCatalogWireServer` 先完整验证并构造候选 registry，再原子替换
+   `TextMateGrammarCatalogStore`；
+5. `TextMateTokenizationService` 在下一请求捕获新的 registry snapshot，同 model
+   version 也不会复用旧 grammar runtime。
+
+Wire 限制 grammar 数、单 grammar UTF-16 长度和 catalog 总长度，拒绝重复 scope/root
+language、空内容、乱序 revision 与未知 response。远端拒绝、malformed response 或
+transport failure 会 poison catalog client 并 invalidate 整个 Analysis Worker；下一
+请求由 `LanguageRequestCoordinator` 建立新 Worker，并把 catalog source 当前 revision
+发送给从零开始的 store。普通 dispose 只结束 pending catalog wait，不反向拥有 source
+或 port。
+
+静态 root selector 会让动态 catalog 增加语言时必须重注册 provider。为消除这个耦合，
+Alpha token lane 从“选一个 provider”演进为明确的 priority fallback chain：
+
+- `LanguageAnalysisProviderRegistry.getTokenProviders` 按 `tokenPriority` 降序返回，
+  同 priority 保留注册顺序；
+- provider 返回 `undefined` 表示“本次不拥有”，继续下一个 provider；
+- provider failure 被隔离并报告，然后继续 fallback；
+- 第一个返回有效结果的 provider 经过原有 snapshot normalizer 和 application gate；
+- 所有 provider 都缺席时才发布 empty token result。
+
+TextMate provider 因而声明 wildcard、priority `100`；catalog 没有该 language root 时
+返回 `undefined`，priority `0` 的 `alpha.lexical` 自动接管。该 fallback 语义只属于
+token provider；diagnostic lane 仍然并发合并所有匹配 provider。
+
+`TextMateAnalysisModuleWorkerClient` 同时持有 Alpha module client 与 grammar catalog
+client。catalog updates 串行发送，每个 Analysis request 都等待调用时最新的 scheduled
+revision。`textMateAnalysisWorkerMain.ts` 是独立 composition root，拥有：
+
+| Worker 内能力 | 所有者 |
+| --- | --- |
+| Analysis request/result 与 document mirror | Alpha Worker wire |
+| provider module activation | Alpha generic module wire |
+| grammar catalog replacement | TextMate catalog wire/store |
+| TextMate provider/runtime | `textmate.grammars` / `TextMateTokenizationService` |
+| deterministic fallback/diagnostics | `alpha.lexical` |
+| WASM fetch/init | `editor/textmate/browser` |
+
+这种组合保持依赖为 `textmate/browser → textmate/common → alpha/common → base`；
+Alpha 原有 Worker 不 import TextMate，`base` 也不增加任何 editor identity。
+
+真实 structured-clone 测试证明 initial catalog 在首请求前落地、TextMate 优先、
+无 grammar language 回落 lexical、同 Worker revision 热更新改变同版本 token，
+stale revision poison client，以及 registry snapshot 到 wire catalog 的 materialization。
+独立 Vite build 同时产出 TextMate Worker chunk 与 466,610-byte Oniguruma WASM。
+
+Current 44 落地时还缺真实 grammar resource owner 和产品层消费者。Current 45 已补入
+首批内置 grammar 与 catalog service；Workbench 选择 Alpha pane、外部 extension resource
+以及 catalog 变化后的 model token request 调度仍未完成。catalog change 本身不隐式遍历
+或重算所有文档，这个调度责任不得偷偷进入通用 catalog model。
+
+### Current 45：TextMate grammar service 与首批真实资源
+
+仓库审计确认当前没有 extension host 或 grammar contribution service；现有
+`IFileService` 的合同是“工作区文件读取”，并不拥有产品内置资源。因而真实 grammar
+不能硬编码进 Worker，也不能通过给 workspace file service 增加 TextMate 特例来读取。
+Current 45 建立了独立的 editor-domain 服务边界：
+
+| 能力 | 所有者 | 结论 |
+| --- | --- | --- |
+| URI、事件、取消与生命周期原语 | `base/common` | ✅ 复用，保持领域无关 |
+| 工作区用户文件读取 | `platform/files` | ✅ 合同不变 |
+| grammar contribution、异步装载和 catalog 发布 | `TextMateGrammarService` | ✅ `editor/textmate/common` |
+| 产品内置 grammar asset import | `BrowserTextMateGrammarService` | ✅ `editor/textmate/browser` |
+| catalog 传输和 tokenization | TextMate dedicated Worker | ✅ 继续无文件权限 |
+| extension manifest 与外部 grammar resource | future extension layer | 尚未完成 |
+| TextFile dirty/save/conflict | future textfile service | 尚未完成，未与 grammar service 混合 |
+
+`TextMateGrammarService` 拥有 registration 和 `TextMateGrammarCatalogModel`。每次贡献变化
+都会捕获 immutable registry snapshot；较新 revision 会取消较旧 materialization，只有最新且
+完整的 catalog 才能发布。loader 失败通过 `onDidFailCatalog` 报告，已经可用的 catalog 保持
+不变；`whenReady()` 明确等待当前最新 revision。服务销毁先关闭调度和 listener，再释放注册，
+不会在 teardown 中启动新的 catalog 工作。
+
+首批产品资源从相邻 VS Code 源码树的 `extensions/json/syntaxes` 移入：
+`JSON.tmLanguage.json` 和 `JSONC.tmLanguage.json`。两者保留上游 revision/provenance，
+由 Vite `?raw` 仅在 browser 边界导入，再通过现有 catalog wire 传给 Worker。
+`common` 不 import raw asset，Worker 不访问文件系统，`base` 不识别 grammar、scope 或
+language identity。
+
+`BrowserTextMateAnalysisWorkerSupport` 把内置 grammar service 和
+`createTextMateAnalysisWorkerFactory` 组合为一个可销毁的产品接入单元。Current 45
+落地时 Workbench 尚无 Alpha `EditorPane`，因此当时未选择该 support，也未在 catalog
+revision 变化时为打开文档请求重分析；Current 46 已补齐这两个真实消费者。
+
+测试覆盖 contribution 装载、latest-revision-wins、失败保持 last-good catalog、撤销后重发布，
+并使用真实 Oniguruma 对移入的 VS Code JSON grammar 执行 tokenization。Renderer TSC 同时
+验证 raw asset browser 边界。
+
+### Current 46：Workbench TextFile 边界与 Alpha 产品 Pane
+
+Alpha 已从独立内核演进为真实 `IEditorPane`，但仍保持“Workbench 负责资源与宿主、
+编辑器域负责模型和交互语义”的单向依赖。Code 与 Complete 产品注册 Alpha 为
+`Optional` editor；Monaco 继续是普通文本的 `Default` editor，因此迁移不会悄然改变
+现有默认打开行为。显式 `preferredEditorId` 可以选择 Alpha。
+
+| 能力 | 当前所有者 | 状态 |
+| --- | --- | --- |
+| URI、取消、事件、生命周期原语 | `base/common` | ✅ 复用，保持领域无关 |
+| 工作区原始文件读取 | `platform/files` | ✅ |
+| file/bootstrap 内容决策 | `ITextFileService` | ✅ Workbench service |
+| URI 到 Alpha `TextModel` 的共享引用 | `AlphaTextModelService` | ✅ editor-owned |
+| Alpha DOM、selection、input 与 language session | `AlphaEditorSession` | ✅ per-pane ownership |
+| JSON/JSONC TextMate 与 Analysis Worker | `createBrowserAlphaEditorSession` | ✅ 产品 Alpha pane 已选择 |
+| Completion Worker | `createBrowserAlphaEditorSession` | ✅ 产品 Alpha pane 已选择 |
+| dirty、save/revert、encoding 与冲突 | future TextFile model layer | 尚未完成 |
+
+打开资源时，`ExplorerViewPane` 只提交 `{ resource, label }`；它不再预读文件或伪造
+`initialText`。`EditorPart` 选定 descriptor 后把 `ITextFileService` 注入 pane。
+Alpha pane 先通过 `AlphaTextModelService.acquire` 获取引用：已有资源模型保持权威，
+新资源才调用 TextFile resolve。最后一个引用释放时模型销毁。Monaco 使用相同内容
+服务但保留自己的临时模型池；ProseMirror 也通过同一服务解析内容。TextFile service
+不吸收任何编辑器的 transaction、undo 或 selection 类型。
+
+产品 Alpha session 组合 `BrowserTextMateAnalysisWorkerSupport` 与 Completion Worker。
+它等待初始 grammar catalog，再发 token/diagnostic 请求；catalog revision 变化会触发
+当前文档重新分析。直接构造的 Alpha session 仍使用本地 lexical/word provider，方便
+独立嵌入和确定性测试。详细 TextFile 实现契约见
+[`desktop/src/zeta/workbench/services/textfile/README.md`](../desktop/src/zeta/workbench/services/textfile/README.md)，
+Alpha 内部契约见
+[`desktop/src/zeta/editor/alpha/README.md`](../desktop/src/zeta/editor/alpha/README.md)。
+
+当前内置 grammar catalog 与 Analysis Worker 都跟随一个 Alpha session 生命周期。
+这是有意的阶段性所有权：静态 JSON/JSONC grammar 尚未形成跨 pane 的贡献消费者，
+提前把 TextMate 注册进共享 Workbench 会让未选择 Alpha 的产品也依赖编辑器专用域。
+未来 extension contribution host 出现后，可由选择 Alpha 的产品 composition root
+共享 `ITextMateGrammarService`；每个文档的 Analysis Worker 仍由其 model coordinator
+独立拥有，避免故障域和增量 mirror 互相污染。
+
+本阶段明确没有把 TextFile、TextMate 或 document identity 下沉到 `base`。当 host
+协议具备写入、备份与冲突信息后，dirty/save/revert 才能作为新的 TextFile model
+合同演进；当前只读 resolve 不能被描述为完整文档服务。
+
+### Proposed 3：语言边界
+
+在 Current 21–36 的请求、结果、基础 diagnostic、semantic-token 与
+completion provider/accept/wire 之上定义 rich diagnostic identity/hover/glyph、
+语言专用增量语法/语义分析。
+所有结果必须继续绑定请求时的 model version，不得绕过同步 application gate。
+
+### Proposed 4：原生 view 与输入
+
+在现有虚拟行、字体度量、gutter、selection/caret、基础 decoration、
+hit-test、pointer selection、keyboard navigation、普通 textarea 编辑、
+基础 clipboard 与桌面式 composition 之上补齐 Android/macOS/iOS IME
+差异和 clause presentation，并扩展 rich/file clipboard；富
+decoration 与 versioned language result 沿 language boundary 演进。
+每增加一种输入路径，都必须生成同一种 Zeta transaction。
+
+### Potential：移除 Monaco
+
+只有原生 renderer、输入、accessibility、language projection 和 diff
+达到产品要求后才删除 Monaco。删除是能力完成的结果，不是单独里程碑。
+
+## 评估与迁移门槛
+
+| 阶段 | 必须证明 |
+| --- | --- |
+| Storage | 大文件编辑、随机事务回放、snapshot 一致性和内存上限 |
+| Model state | 多光标、tracked range、undo selection 和 decoration 稳定性 |
+| Language | cancellation、版本拒绝、worker crash recovery |
+| View | viewport 正确性、字体变化、滚动稳定性和主题切换 |
+| Input | 主流 IME、clipboard、dead key、组合取消和浏览器差异 |
+| Accessibility | screen reader 导航、ARIA、键盘完整操作和高对比度 |
+
+Monaco 对应层只能在这些证据通过后从“委托”改为“已由 Zeta 拥有”。

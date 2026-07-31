@@ -14,6 +14,7 @@ export const enum StorageTarget {
 
 export const enum WillSaveStateReason {
   PERIODIC = "periodic",
+  WORKSPACE_CHANGE = "workspaceChange",
   SHUTDOWN = "shutdown",
 }
 

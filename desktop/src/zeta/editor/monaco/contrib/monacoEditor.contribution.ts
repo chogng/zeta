@@ -1,18 +1,11 @@
 import * as monaco from "monaco-editor";
 import { isDarkColorScheme } from "../../../platform/theme/common/theme.js";
 import { IThemeService } from "../../../platform/theme/common/themeService.js";
-import {
-  registerEditorPane,
-} from "../../../workbench/browser/parts/editor/editorRegistry.js";
+import { registerEditorPane } from "../../../workbench/browser/parts/editor/editorRegistry.js";
 import { registerWorkbenchContribution, WorkbenchPhase } from "../../../workbench/common/contributions.js";
-import {
-  MonacoEditorPane,
-} from "../browser/monacoEditorPane.js";
+import { MonacoEditorPane } from "../browser/monacoEditorPane.js";
 import { MonacoChatInputEditor } from "../browser/monacoChatInputEditor.js";
-import {
-  MONACO_EDITOR_ID,
-  matchMonacoEditor,
-} from "../common/monacoEditorInput.js";
+import { MONACO_EDITOR_ID, matchMonacoEditor } from "../common/monacoEditorInput.js";
 import { ChatInputEditors } from "../../../workbench/contrib/chat/browser/input/chatInputEditor.js";
 
 ChatInputEditors.registerStatic({
@@ -24,9 +17,10 @@ registerEditorPane({
   id: MONACO_EDITOR_ID,
   name: "Code Editor",
   canOpen: matchMonacoEditor,
-  create: (options) => new MonacoEditorPane(
-    options.configurationService,
-  ),
+  create: options => {
+    if (!options.textFileService) throw new Error("Monaco Editor requires the Workbench text file service");
+    return new MonacoEditorPane(options.textFileService, options.configurationService);
+  },
 });
 
 registerWorkbenchContribution(

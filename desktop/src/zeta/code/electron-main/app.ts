@@ -9,9 +9,7 @@ import {
 } from "electron/main";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import {
-  APP_SERVER_SCHEMA_HASH,
-} from "../../../../generated/app-server/types.js";
+import { APP_SERVER_SCHEMA_HASH } from "../../../../generated/app-server/types.js";
 import {
   DisposableOwner,
   DisposableStore,
@@ -87,16 +85,11 @@ import {
 import {
   WindowsStateHandler,
 } from "../../platform/windows/electron-main/windowsStateHandler.js";
-import {
-  type IAnyWorkspaceIdentifier,
-  isSingleFolderWorkspaceIdentifier,
-  UNKNOWN_EMPTY_WINDOW_WORKSPACE,
-} from "../../platform/workspace/common/workspace.js";
-import {
-  folderRelaunchArguments,
-  WorkspacesMainService,
-  workspaceContextIpcRoutes,
-} from "../../platform/workspaces/electron-main/workspacesMainService.js";
+import { type IAnyWorkspaceIdentifier, isSingleFolderWorkspaceIdentifier, serializeWorkspaceIdentifier, UNKNOWN_EMPTY_WINDOW_WORKSPACE } from "../../platform/workspace/common/workspace.js";
+import { WORKSPACE_CONTEXT_CHANGED_CHANNEL } from "../../platform/workspace/common/workspaceIpc.js";
+import { createAppServerWorkspaceTransitionAdapter } from "../../platform/workspaces/electron-main/appServerWorkspaceTransition.js";
+import { type IWorkspaceTransitionFailure, WorkspaceTransitionMainService, WorkspaceTransitionStatus } from "../../platform/workspaces/electron-main/workspaceTransitionMainService.js";
+import { WorkspaceContextMainService, WorkspacesMainService, workspaceContextIpcRoutes } from "../../platform/workspaces/electron-main/workspacesMainService.js";
 export interface ZetaApplicationOptions {
   readonly product: ProductConfiguration;
   readonly rendererRoot: string;
@@ -165,19 +158,10 @@ export class ZetaApplication extends DisposableOwner {
     }
 
     await this.createPersistentServices();
-    const services = this.services;
-    const workspace = await this.resolveWorkspace();
-    this._windowsStateHandler = new WindowsStateHandler({
-      stateService: services.state,
-      workspace,
-      displayService: {
-        getAllDisplays: () => screen.getAllDisplays(),
-        getDisplayMatching: (bounds) => screen.getDisplayMatching(bounds),
-      },
-      onError: (error) => {
-        console.error("Failed to save window state", error);
-      },
-    });
+    const workspaces = new WorkspacesMainService();
+    const workspace = await this.resolveWorkspace(workspaces);
+    this._windowsStateHandler = this.createWindowsStateHandler(workspace);
+    const workspaceContext = this.own(new WorkspaceContextMainService(workspace));
 
     const supervisor = this.own(this.createAppServerSupervisor(workspace));
     this.supervisor = supervisor;
@@ -185,7 +169,7 @@ export class ZetaApplication extends DisposableOwner {
     if (!appServerReady) {
       return;
     }
-    await this.openFirstWindow(workspace, supervisor);
+    await this.openFirstWindow(workspaceContext, workspaces, supervisor);
   }
 
   async disposeAfterStartupFailure(): Promise<void> {
@@ -229,9 +213,11 @@ export class ZetaApplication extends DisposableOwner {
     }
   }
 
-  private async resolveWorkspace(): Promise<IAnyWorkspaceIdentifier> {
+  private async resolveWorkspace(
+    workspaces: WorkspacesMainService,
+  ): Promise<IAnyWorkspaceIdentifier> {
     try {
-      return await new WorkspacesMainService().resolveStartupWorkspace({
+      return await workspaces.resolveStartupWorkspace({
         arguments: process.argv.slice(app.isPackaged ? 1 : 2),
         cwd: process.cwd(),
       });
@@ -253,16 +239,7 @@ export class ZetaApplication extends DisposableOwner {
     return new AppServerSupervisor({
       executable,
       args: ["app-server", "--listen", "stdio://"],
-      environment: {
-        PATH: process.env.PATH ?? "",
-        ...(process.env.ZETA_RG_PATH
-          ? { ZETA_RG_PATH: process.env.ZETA_RG_PATH }
-          : {}),
-        ZETA_STATE_ROOT: join(app.getPath("userData"), "state"),
-        ...(isSingleFolderWorkspaceIdentifier(workspace)
-          ? { ZETA_WORKSPACE_ROOT: workspace.uri.fsPath }
-          : {}),
-      },
+      environment: this.appServerEnvironment(workspace),
       session: {
         clientName: "zeta-desktop",
         clientVersion: app.getVersion(),
@@ -316,9 +293,11 @@ export class ZetaApplication extends DisposableOwner {
   }
 
   private async openFirstWindow(
-    workspace: IAnyWorkspaceIdentifier,
+    workspaceContext: WorkspaceContextMainService,
+    workspaces: WorkspacesMainService,
     supervisor: AppServerSupervisor,
   ): Promise<void> {
+    const workspace = workspaceContext.getWorkspace();
     const windowsStateHandler = this.windowsStateHandler;
     const windowState = windowsStateHandler.restoreWindowState();
     const browserWindowOptions = resolveBrowserWindowOptions({
@@ -376,7 +355,27 @@ export class ZetaApplication extends DisposableOwner {
         },
       }),
     );
+    windowDisposables.add(workspaceContext.onDidChangeWorkspace(({ workspace: nextWorkspace }) => {
+      if (window.isDestroyed()) return;
+      this.windowStateTracking?.dispose();
+      const nextWindowsStateHandler = this.createWindowsStateHandler(nextWorkspace);
+      this._windowsStateHandler = nextWindowsStateHandler;
+      this.windowStateTracking = windowDisposables.add(nextWindowsStateHandler.trackWindow(window));
+    }));
+    windowDisposables.add(workspaceContext.onDidChangeWorkspace(({ workspace: nextWorkspace }) => {
+      if (!window.isDestroyed()) {
+        window.webContents.send(WORKSPACE_CONTEXT_CHANGED_CHANNEL, serializeWorkspaceIdentifier(nextWorkspace));
+      }
+    }));
     const { configuration, keybindings } = this.services;
+    const appServerWorkspace = createAppServerWorkspaceTransitionAdapter(supervisor);
+    const workspaceTransitions = windowDisposables.add(new WorkspaceTransitionMainService({
+      workspaces,
+      context: workspaceContext,
+      runtime: appServerWorkspace,
+      classifyRuntimeError: (error) => appServerWorkspace.classifyRuntimeError(error),
+      recovery: appServerWorkspace,
+    }));
     const ipcRoutes = [
       ...appServerIpcRoutes(supervisor),
       ...browserViewIpcRoutes(browserViewMainService),
@@ -390,14 +389,19 @@ export class ZetaApplication extends DisposableOwner {
           });
           const folderPath = result.filePaths[0];
           if (result.canceled || !folderPath) return;
-          app.relaunch({
-            args: [...folderRelaunchArguments({
-              appPath: app.getAppPath(),
-              folderPath,
-              isPackaged: app.isPackaged,
-            })],
-          });
-          globalThis.setTimeout(() => app.quit(), 0);
+          await this.windowsStateHandler.saveWindowState(window);
+          const transition = await workspaceTransitions.transitionToFolder(folderPath);
+          if (transition.status === WorkspaceTransitionStatus.Blocked) {
+            await dialog.showMessageBox(window, {
+              type: "info",
+              message: "Finish the active request before opening another folder.",
+              detail: "The current Workspace was kept unchanged.",
+            });
+            return;
+          }
+          if (transition.status === WorkspaceTransitionStatus.Failed) {
+            throw workspaceTransitionError(transition.failure);
+          }
         },
         setWindowTheme: ({ backgroundColor, symbolColor }) => {
           if (process.platform === "win32" || process.platform === "linux") {
@@ -407,7 +411,7 @@ export class ZetaApplication extends DisposableOwner {
         toggleDeveloperTools: () => window.webContents.toggleDevTools(),
       }),
       ...userThemeIpcRoutes(new UserThemeFileService(join(app.getPath("userData"), "themes"))),
-      ...workspaceContextIpcRoutes(workspace),
+      ...workspaceContextIpcRoutes(workspaceContext),
     ];
     if (process.platform === "darwin") {
       const nativeContextMenu = windowDisposables.add(
@@ -499,6 +503,37 @@ export class ZetaApplication extends DisposableOwner {
     return this.closePersistentServicesPromise;
   }
 
+  private appServerEnvironment(
+    workspace: IAnyWorkspaceIdentifier,
+  ): Readonly<Record<string, string>> {
+    return {
+      PATH: process.env.PATH ?? "",
+      ...(process.env.ZETA_RG_PATH
+        ? { ZETA_RG_PATH: process.env.ZETA_RG_PATH }
+        : {}),
+      ZETA_STATE_ROOT: join(app.getPath("userData"), "state"),
+      ...(isSingleFolderWorkspaceIdentifier(workspace)
+        ? { ZETA_WORKSPACE_ROOT: workspace.uri.fsPath }
+        : {}),
+    };
+  }
+
+  private createWindowsStateHandler(
+    workspace: IAnyWorkspaceIdentifier,
+  ): WindowsStateHandler {
+    return new WindowsStateHandler({
+      stateService: this.services.state,
+      workspace,
+      displayService: {
+        getAllDisplays: () => screen.getAllDisplays(),
+        getDisplayMatching: (bounds) => screen.getDisplayMatching(bounds),
+      },
+      onError: (error) => {
+        console.error("Failed to save window state", error);
+      },
+    });
+  }
+
   private get services(): PersistentServices {
     assertDefined(this.persistentServices, "Persistent application services are not initialized");
     return this.persistentServices;
@@ -516,4 +551,12 @@ export class ZetaApplication extends DisposableOwner {
       this.tracking?.[Symbol.dispose]();
     }
   }
+}
+
+function workspaceTransitionError(
+  failure: IWorkspaceTransitionFailure | undefined,
+): Error {
+  if (!failure) return new Error("Workspace transition failed without a classified failure");
+  if (failure.error instanceof Error) return failure.error;
+  return new Error(`Workspace transition failed during ${failure.stage}`);
 }

@@ -26,10 +26,12 @@ import {
 import {
   ToggleDeveloperToolsCommandId,
 } from "../src/zeta/workbench/electron-browser/actions/developerActions.js";
+import { OpenFolderCommandId } from "../src/zeta/workbench/electron-browser/actions/workspaceActions.js";
 import "../src/zeta/workbench/electron-browser/desktop.contribution.js";
 import {
   CommandService,
 } from "../src/zeta/workbench/services/commands/common/commandService.js";
+import { IWorkspaceOpenService } from "../src/zeta/workbench/services/workspaces/browser/workspaceOpenService.js";
 
 test("native host routes validate folder opening and developer tools", async () => {
   let folderOpens = 0;
@@ -89,7 +91,7 @@ test("native host routes validate folder opening and developer tools", async () 
   assert.equal(toggles, 1);
 });
 
-test("developer tools command is available from the command palette", async () => {
+test("desktop commands are available from the command palette", async () => {
   const services = new ServiceCollection();
   let toggles = 0;
   services.set(INativeHostService, {
@@ -97,6 +99,13 @@ test("developer tools command is available from the command palette", async () =
     setWindowTheme: async () => {},
     async toggleDeveloperTools() {
       toggles += 1;
+    },
+  });
+  let folderOpens = 0;
+  services.set(IWorkspaceOpenService, {
+    canOpenFolder: true,
+    async openFolder() {
+      folderOpens += 1;
     },
   });
   using commands = new CommandService(services);
@@ -111,4 +120,11 @@ test("developer tools command is available from the command palette", async () =
   assert.equal(action?.label, "Developer: Toggle Developer Tools");
   await action?.run();
   assert.equal(toggles, 1);
+
+  const openFolder = paletteActions.find(
+    ({ id }) => id === OpenFolderCommandId,
+  );
+  assert.equal(openFolder?.label, "Open Folder...");
+  await openFolder?.run();
+  assert.equal(folderOpens, 1);
 });

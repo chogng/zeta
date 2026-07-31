@@ -1,10 +1,9 @@
 use crate::AppServer;
 use crate::SlashCommandCatalog;
-use crate::local_tools::compose_local_tools;
 use crate::mcp_tools::compose_mcp_tools;
 use crate::model_catalog::ModelCatalog;
 use crate::server::skills_runtime::{BuiltInSkillSource, SkillConfigSnapshotProvider};
-use crate::tool_composition::{ToolPort, combine_tool_ports};
+use crate::tool_composition::ToolPort;
 use std::fmt;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -15,14 +14,12 @@ use zeta_config::{
     WorkspaceId, resolve_scoped_config,
 };
 use zeta_core::{CoreError, ModelSelection, ModelService};
-use zeta_file_system::LocalFileSystem;
 use zeta_install_context::InstallContext;
 use zeta_model_provider::{
     ModelInvoker, ModelProvider, ModelProviderRuntime, ModelRuntimeRequest, UnavailableModel,
 };
 use zeta_model_provider_config::ProviderConfigRegistry;
 use zeta_rollout::RolloutRepository;
-use zeta_sandboxing::WorkspaceRoot;
 
 /// Filesystem locations needed to open one persistent local App Server.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -154,30 +151,16 @@ pub fn open_local_app_server(
         .with_slash_command_catalog(options.slash_commands)
         .with_skill_runtime(built_in_skill_root, skill_config)
         .map_err(OpenAppServerError)?;
-    let mut tool_ports = Vec::new();
-    if let Some(workspace_root) = options.workspace_root {
-        let workspace = WorkspaceRoot::open(workspace_root).map_err(open_error)?;
-        let tools = compose_local_tools(workspace.clone())
-            .map_err(|error| OpenAppServerError(error.to_string()))?;
-        server = server
-            .with_file_system(Arc::new(LocalFileSystem::new(workspace.clone())))
-            .with_file_system_watcher(workspace.path().to_path_buf())
-            .with_workspace_search(workspace.clone(), tools.ripgrep.clone())
-            .with_git_root(workspace.path().to_path_buf())
-            .map_err(|_| OpenAppServerError("failed to initialize Git runtime".into()))?
-            .with_terminal_root(workspace.path().to_path_buf())
-            .map_err(|_| OpenAppServerError("failed to initialize terminal runtime".into()))?;
-        tool_ports.push(ToolPort::local(tools.tools, tools.policy));
-    }
-    if let Some(mcp) = compose_mcp_tools(&runtime_config, user_config.generation)
+    let mcp = compose_mcp_tools(&runtime_config, user_config.generation)
         .map_err(|error| OpenAppServerError(error.to_string()))?
-    {
-        tool_ports.push(ToolPort::mcp(mcp.tools, mcp.policy));
-    }
-    if let Some(tools) =
-        combine_tool_ports(tool_ports).map_err(|error| OpenAppServerError(error.to_string()))?
-    {
-        server = server.with_tool_service(tools.tools, tools.policy);
+        .map(|mcp| ToolPort::mcp(mcp.tools, mcp.policy));
+    server = server
+        .with_local_workspace_host(mcp)
+        .map_err(|error| OpenAppServerError(error.to_string()))?;
+    if let Some(workspace_root) = options.workspace_root {
+        server
+            .switch_local_workspace_root(workspace_root)
+            .map_err(|error| OpenAppServerError(error.to_string()))?;
     }
     Ok(server)
 }

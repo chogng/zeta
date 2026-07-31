@@ -2,6 +2,12 @@
 
 The Monaco subsystem is selected by the Code product and composed into Complete.
 It does not own files, persistence, tabs, dirty state, or Markdown rendering.
+It is now a transition renderer and must not define new canonical text-model,
+transaction, history, selection, or language contracts. Those move upward from
+the repository-owned
+[`Alpha Editor`](../alpha/README.md) as each native layer becomes usable.
+The canonical staged ownership and removal criteria are documented in
+[`docs/editor-architecture.md`](../../../../../docs/editor-architecture.md).
 
 - `common/monacoEditorInput.ts` owns editor matching and extension/content-type
   to Monaco language mapping. Add or override language selection here.
@@ -13,7 +19,9 @@ It does not own files, persistence, tabs, dirty state, or Markdown rendering.
   services or worker bundling here.
 - `browser/monacoModelService.ts` owns the realm-scoped URI-to-model pool and
   reference-counted model disposal. A later `initialText` snapshot cannot
-  overwrite a model that is already in use.
+  overwrite a model that is already in use. This is current migration debt:
+  Monaco still owns the live model until the Zeta input and command layers can
+  preserve native transaction and undo semantics end to end.
 - `browser/monacoEditorPane.ts` owns Monaco DOM, layout, visibility, focus,
   and one reference to the shared model.
 - `browser/monacoChatInputEditor.ts` owns the ephemeral plaintext model,
@@ -24,5 +32,11 @@ It does not own files, persistence, tabs, dirty state, or Markdown rendering.
   that do not select this contribution retain Chat's textarea fallback.
 - `test/` verifies matching and language policy without loading browser workers.
 
-`EditorInput.initialText` is currently an in-memory bootstrap snapshot. A future
-document service must own loading, saving, conflict handling, and model reuse.
+All `monaco-editor` imports, including `?worker` entry points, currently resolve
+to the npm transition dependency. Do not import package internals or add new
+Monaco-specific product contracts.
+
+`ITextFileService` now owns file-versus-bootstrap content resolution for Monaco,
+Alpha, and ProseMirror. `EditorInput.initialText` remains only an in-memory
+bootstrap snapshot. Monaco still owns its transition model pool; dirty state,
+saving, revert, encoding, and conflict handling are not implemented.

@@ -632,6 +632,132 @@
       }
     },
     {
+      "id": "editor.semanticToken.commentForeground",
+      "kind": "color",
+      "cssVariable": "--zeta-editor-semantic-token-comment-foreground",
+      "owner": "editor.presentation",
+      "description": "Foreground for comment semantic tokens.",
+      "needsTransparency": false,
+      "values": {
+        "dark": "#6a9955",
+        "light": "#008000",
+        "high-contrast-dark": "#6a9955",
+        "high-contrast-light": "#008000"
+      }
+    },
+    {
+      "id": "editor.semanticToken.keywordForeground",
+      "kind": "color",
+      "cssVariable": "--zeta-editor-semantic-token-keyword-foreground",
+      "owner": "editor.presentation",
+      "description": "Foreground for keyword semantic tokens.",
+      "needsTransparency": false,
+      "values": {
+        "dark": "#c586c0",
+        "light": "#af00db",
+        "high-contrast-dark": "#c586c0",
+        "high-contrast-light": "#af00db"
+      }
+    },
+    {
+      "id": "editor.semanticToken.stringForeground",
+      "kind": "color",
+      "cssVariable": "--zeta-editor-semantic-token-string-foreground",
+      "owner": "editor.presentation",
+      "description": "Foreground for string semantic tokens.",
+      "needsTransparency": false,
+      "values": {
+        "dark": "#ce9178",
+        "light": "#a31515",
+        "high-contrast-dark": "#ce9178",
+        "high-contrast-light": "#a31515"
+      }
+    },
+    {
+      "id": "editor.semanticToken.numberForeground",
+      "kind": "color",
+      "cssVariable": "--zeta-editor-semantic-token-number-foreground",
+      "owner": "editor.presentation",
+      "description": "Foreground for number semantic tokens.",
+      "needsTransparency": false,
+      "values": {
+        "dark": "#b5cea8",
+        "light": "#098658",
+        "high-contrast-dark": "#b5cea8",
+        "high-contrast-light": "#098658"
+      }
+    },
+    {
+      "id": "editor.semanticToken.regexpForeground",
+      "kind": "color",
+      "cssVariable": "--zeta-editor-semantic-token-regexp-foreground",
+      "owner": "editor.presentation",
+      "description": "Foreground for regular-expression semantic tokens.",
+      "needsTransparency": false,
+      "values": {
+        "dark": "#d16969",
+        "light": "#811f3f",
+        "high-contrast-dark": "#d16969",
+        "high-contrast-light": "#811f3f"
+      }
+    },
+    {
+      "id": "editor.semanticToken.typeForeground",
+      "kind": "color",
+      "cssVariable": "--zeta-editor-semantic-token-type-foreground",
+      "owner": "editor.presentation",
+      "description": "Foreground for type semantic tokens.",
+      "needsTransparency": false,
+      "values": {
+        "dark": "#4ec9b0",
+        "light": "#267f99",
+        "high-contrast-dark": "#4ec9b0",
+        "high-contrast-light": "#267f99"
+      }
+    },
+    {
+      "id": "editor.semanticToken.functionForeground",
+      "kind": "color",
+      "cssVariable": "--zeta-editor-semantic-token-function-foreground",
+      "owner": "editor.presentation",
+      "description": "Foreground for function semantic tokens.",
+      "needsTransparency": false,
+      "values": {
+        "dark": "#dcdcaa",
+        "light": "#795e26",
+        "high-contrast-dark": "#dcdcaa",
+        "high-contrast-light": "#795e26"
+      }
+    },
+    {
+      "id": "editor.semanticToken.variableForeground",
+      "kind": "color",
+      "cssVariable": "--zeta-editor-semantic-token-variable-foreground",
+      "owner": "editor.presentation",
+      "description": "Foreground for variable semantic tokens.",
+      "needsTransparency": false,
+      "values": {
+        "dark": "#cccccc",
+        "light": "#3b3b3b",
+        "high-contrast-dark": "#cccccc",
+        "high-contrast-light": "#3b3b3b"
+      }
+    },
+    {
+      "id": "editor.semanticToken.operatorForeground",
+      "kind": "color",
+      "cssVariable": "--zeta-editor-semantic-token-operator-foreground",
+      "owner": "editor.presentation",
+      "description": "Foreground for operator semantic tokens.",
+      "needsTransparency": false,
+      "values": {
+        "dark": "#cccccc",
+        "light": "#3b3b3b",
+        "high-contrast-dark": "#cccccc",
+        "high-contrast-light": "#3b3b3b"
+      }
+    },
+    {
       "id": "sectionHeader.foreground",
       "kind": "color",
       "cssVariable": "--zeta-section-header-foreground",

@@ -1,0 +1,127 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { AlphaDecorationPresentation, createAlphaDecorationRectangles, createAlphaDecorationSource } from "../../browser/decorationPresentation.js";
+import { type AlphaTextMeasurer } from "../../browser/fontMetrics.js";
+import { TextDecorationCollection } from "../../common/decoration.js";
+import { TextPosition, TextRange } from "../../common/text.js";
+import { TextModel } from "../../common/textModel.js";
+import { TrackedRangeStickiness } from "../../common/trackedRange.js";
+
+test("Decoration source resolves opaque metadata without owning the collection", () => {
+  using model = new TextModel("abcd\nefgh\nij");
+  using collection = new TextDecorationCollection<DecorationMetadata>(model);
+  const matchId = collection.add({
+    range: TextRange.from(TextPosition.at(0, 1), TextPosition.at(1, 2)),
+    stickiness: TrackedRangeStickiness.NeverGrowsAtEdges,
+    metadata: { presentation: AlphaDecorationPresentation.SearchMatch },
+  });
+  collection.add({
+    range: TextRange.from(TextPosition.at(1, 0), TextPosition.at(1, 1)),
+    stickiness: TrackedRangeStickiness.NeverGrowsAtEdges,
+    metadata: {},
+  });
+  const errorId = collection.add({
+    range: TextRange.from(TextPosition.at(2, 0), TextPosition.at(2, 2)),
+    stickiness: TrackedRangeStickiness.NeverGrowsAtEdges,
+    metadata: { presentation: AlphaDecorationPresentation.ErrorUnderline },
+  });
+  const source = createAlphaDecorationSource(
+    collection,
+    decoration => decoration.metadata.presentation,
+  );
+
+  assert.deepEqual(source.decorations, [{
+    id: matchId,
+    range: TextRange.from(TextPosition.at(0, 1), TextPosition.at(1, 2)),
+    presentation: AlphaDecorationPresentation.SearchMatch,
+  }, {
+    id: errorId,
+    range: TextRange.from(TextPosition.at(2, 0), TextPosition.at(2, 2)),
+    presentation: AlphaDecorationPresentation.ErrorUnderline,
+  }]);
+  assert.equal(Object.isFrozen(source.decorations), true);
+
+  const rectangles = createAlphaDecorationRectangles(
+    model,
+    source.decorations,
+    { startLineIndex: 0, endLineIndexExclusive: 3 },
+    38,
+    new FixedTextMeasurer(),
+  );
+  assert.deepEqual(rectangles, [{
+    id: matchId,
+    presentation: AlphaDecorationPresentation.SearchMatch,
+    lineIndex: 0,
+    left: 48,
+    width: 40,
+  }, {
+    id: matchId,
+    presentation: AlphaDecorationPresentation.SearchMatch,
+    lineIndex: 1,
+    left: 38,
+    width: 20,
+  }, {
+    id: errorId,
+    presentation: AlphaDecorationPresentation.ErrorUnderline,
+    lineIndex: 2,
+    left: 38,
+    width: 20,
+  }]);
+
+  let changes = 0;
+  using listener = source.onDidChange(() => changes += 1);
+  collection.delete(errorId);
+  assert.equal(changes, 1);
+  assert.equal(collection.size, 2);
+});
+
+test("Decoration geometry clips lines and rejects unknown presentations", () => {
+  using model = new TextModel("abcd\nefgh");
+  using collection = new TextDecorationCollection<string>(model);
+  const id = collection.add({
+    range: TextRange.from(TextPosition.at(0, 1), TextPosition.at(1, 2)),
+    stickiness: TrackedRangeStickiness.NeverGrowsAtEdges,
+    metadata: "match",
+  });
+  const source = createAlphaDecorationSource(
+    collection,
+    () => AlphaDecorationPresentation.SearchMatch,
+  );
+
+  assert.deepEqual(createAlphaDecorationRectangles(
+    model,
+    source.decorations,
+    { startLineIndex: 1, endLineIndexExclusive: 2 },
+    38,
+    new FixedTextMeasurer(),
+  ), [{
+    id,
+    presentation: AlphaDecorationPresentation.SearchMatch,
+    lineIndex: 1,
+    left: 38,
+    width: 20,
+  }]);
+
+  const invalid = createAlphaDecorationSource(
+    collection,
+    () => "unknown" as AlphaDecorationPresentation,
+  );
+  assert.throws(() => invalid.decorations, /Unknown Alpha decoration/);
+});
+
+interface DecorationMetadata {
+  readonly presentation?: AlphaDecorationPresentation;
+}
+
+class FixedTextMeasurer implements AlphaTextMeasurer {
+  readonly horizontalPadding = 24;
+  readonly contentLeftPadding = 12;
+
+  refresh(): boolean {
+    return false;
+  }
+
+  measureLineWidth(text: string): number {
+    return [...text].length * 10;
+  }
+}

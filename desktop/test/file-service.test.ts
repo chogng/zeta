@@ -11,6 +11,7 @@ import {
 import type {
   IWorkspaceContextService,
 } from "../src/zeta/platform/workspace/common/workspace.js";
+import { WorkspaceContextService } from "../src/zeta/workbench/services/workspaces/browser/workspaceContextService.js";
 
 test("workspaceRelativePath confines resources to the folder", () => {
   const root = URI.file("C:\\project");
@@ -27,13 +28,8 @@ test("workspaceRelativePath confines resources to the folder", () => {
 
 test("BrowserFileService maps wire entries back to resource URIs", async () => {
   const root = URI.file("C:\\project");
-  const workspaceContextService: IWorkspaceContextService = {
-    getWorkspace: () => ({
-      id: "workspace",
-      folders: [{ uri: root, name: "project", index: 0 }],
-    }),
-    getWorkbenchState: () => 2,
-  };
+  using workspaceContextService: IWorkspaceContextService =
+    new WorkspaceContextService({ id: "workspace", uri: root });
   const service = new BrowserFileService({
     workspaceContextService,
     api: {

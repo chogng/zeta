@@ -19,9 +19,9 @@ import {
   lightColorTheme,
 } from "../src/zeta/platform/theme/common/colorTheme.js";
 import {
-  type IWorkspaceContextService,
   WorkbenchState,
 } from "../src/zeta/platform/workspace/common/workspace.js";
+import { WorkspaceContextService } from "../src/zeta/workbench/services/workspaces/browser/workspaceContextService.js";
 import {
   getVisibleViewContextKey,
 } from "../src/zeta/workbench/common/contextkeys.js";
@@ -52,17 +52,10 @@ import {
 
 test("workbench context keys describe the current workspace", () => {
   using contextKeys = new ContextKeyService();
-  const workspace: IWorkspaceContextService = {
-    getWorkbenchState: () => WorkbenchState.FOLDER,
-    getWorkspace: () => ({
-      id: "workspace",
-      folders: [{
-        index: 0,
-        name: "project",
-        uri: URI.file("C:\\project"),
-      }],
-    }),
-  };
+  using workspace = new WorkspaceContextService({
+    id: "workspace",
+    uri: URI.file("C:\\project"),
+  });
   using bindings = bindWorkbenchContextKeys(contextKeys, workspace);
 
   assert.equal(contextKeys.getValue("workbenchState"), "folder");
@@ -72,6 +65,10 @@ test("workbench context keys describe the current workspace", () => {
     getVisibleViewContextKey("zeta.explorer"),
     "view.zeta.explorer.visible",
   );
+
+  workspace.updateWorkspace({ id: "empty" });
+  assert.equal(contextKeys.getValue("workbenchState"), "empty");
+  assert.equal(contextKeys.getValue("workspaceFolderCount"), 0);
 });
 
 test("workbench contributions start once at their declared phases", () => {

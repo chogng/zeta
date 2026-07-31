@@ -1,4 +1,5 @@
 import { URI } from "../../../base/common/uri.js";
+import type { Event } from "../../../base/common/event.js";
 import {
   createServiceIdentifier,
 } from "../../instantiation/common/instantiation.js";
@@ -56,8 +57,15 @@ export interface IWorkspace {
   readonly name?: string;
 }
 
-/** Read-only workspace identity available to workbench contributions. */
+/** One atomic replacement of the workspace hosted by a window. */
+export interface IWorkspaceChangeEvent {
+  readonly previous: IWorkspace;
+  readonly workspace: IWorkspace;
+}
+
+/** Live workspace identity available to workbench contributions. */
 export interface IWorkspaceContextService {
+  readonly onDidChangeWorkspace: Event<IWorkspaceChangeEvent>;
   getWorkspace(): IWorkspace;
   getWorkbenchState(): WorkbenchState;
 }

@@ -10,7 +10,7 @@ import { CONFIGURATION_CHANGED_CHANNEL, CONFIGURATION_READ_CHANNEL, CONFIGURATIO
 import { KEYBINDINGS_RESOURCE_CHANGED_CHANNEL, KEYBINDINGS_RESOURCE_READ_CHANNEL, KEYBINDINGS_RESOURCE_UPDATE_CHANNEL } from "../../keybinding/common/keybindingsResource.js";
 import { NATIVE_MENUBAR_SELECT_CHANNEL, NATIVE_MENUBAR_UPDATE_CHANNEL, type INativeMenubarSelection } from "../../menubar/common/nativeMenubar.js";
 import { NATIVE_HOST_OPEN_FOLDER_CHANNEL, NATIVE_HOST_SET_WINDOW_THEME_CHANNEL, NATIVE_HOST_TOGGLE_DEVELOPER_TOOLS_CHANNEL } from "../common/nativeHost.js";
-import { WORKSPACE_CONTEXT_READ_CHANNEL } from "../../workspace/common/workspaceIpc.js";
+import { WORKSPACE_CONTEXT_CHANGED_CHANNEL, WORKSPACE_CONTEXT_READ_CHANNEL } from "../../workspace/common/workspaceIpc.js";
 import { USER_THEME_FILES_LIST_CHANNEL, USER_THEME_FILE_DELETE_CHANNEL, USER_THEME_FILE_WRITE_CHANNEL } from "../../theme/common/userThemeFiles.js";
 import type { ZetaElectronRendererApi } from "../common/rendererApi.js";
 
@@ -234,6 +234,8 @@ export function createElectronRendererApi(): ZetaElectronRendererApi {
     },
     workspace: {
       getWorkspace: () => invoke(WORKSPACE_CONTEXT_READ_CHANNEL),
+      onDidChange: (listener) =>
+        subscribe(WORKSPACE_CONTEXT_CHANGED_CHANNEL, listener),
     },
   };
 }

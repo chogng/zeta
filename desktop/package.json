@@ -41,7 +41,8 @@
     "build:renderer:academic": "cross-env ZETA_PRODUCT=academic pnpm run build:renderer",
     "build:renderer:complete": "cross-env ZETA_PRODUCT=complete pnpm run build:renderer",
     "build:rust": "cargo build --manifest-path ../zeta-rs/Cargo.toml -p zeta-cli",
-    "test:main": "node --test scripts/prepare-dev-package.test.mjs scripts/sync-product-icons.test.mjs && node -e \"require('node:fs').rmSync('dist/test', { recursive: true, force: true })\" && tsc -p tsconfig.test.json && node --import ./scripts/ignore-css-imports.mjs --test dist/test/test/*.test.js dist/test/src/zeta/base/test/common/*.test.js dist/test/src/zeta/base/test/browser/*.test.js dist/test/src/zeta/editor/monaco/test/*.test.js dist/test/src/zeta/editor/prosemirror/test/*.test.js dist/test/src/zeta/platform/theme/test/common/*.test.js dist/test/src/zeta/platform/theme/test/browser/*.test.js",
+    "benchmark:alpha": "tsc -p tsconfig.test.json && node dist/test/src/zeta/editor/alpha/benchmark/pieceTreeTextBuffer.benchmark.js",
+    "test:main": "node --test scripts/prepare-dev-package.test.mjs scripts/sync-product-icons.test.mjs && node -e \"require('node:fs').rmSync('dist/test', { recursive: true, force: true })\" && tsc -p tsconfig.test.json && node --import ./scripts/ignore-css-imports.mjs --test dist/test/test/*.test.js dist/test/src/zeta/base/test/common/*.test.js dist/test/src/zeta/base/test/browser/*.test.js dist/test/src/zeta/editor/alpha/test/common/*.test.js dist/test/src/zeta/editor/alpha/test/browser/*.test.js dist/test/src/zeta/editor/textmate/test/common/*.test.js dist/test/src/zeta/editor/monaco/test/*.test.js dist/test/src/zeta/editor/prosemirror/test/*.test.js dist/test/src/zeta/platform/theme/test/common/*.test.js dist/test/src/zeta/platform/theme/test/browser/*.test.js",
     "test:icons": "node --test scripts/sync-product-icons.test.mjs",
     "typecheck:renderer": "tsc -p tsconfig.renderer.json --noEmit",
     "dev": "tsc -p tsconfig.main.json && tsc -p tsconfig.preload.json && node scripts/verify-sandbox-preload.mjs && concurrently -k -n renderer,main,preload,electron \"vite\" \"tsc -p tsconfig.main.json --watch --preserveWatchOutput\" \"tsc -p tsconfig.preload.json --watch --preserveWatchOutput\" \"wait-on tcp:127.0.0.1:5173 && cross-env ZETA_RENDERER_URL=http://127.0.0.1:5173 nodemon --quiet --signal SIGTERM --watch dist/main --watch dist/preload --ext js,cjs --exec \\\"node scripts/run-electron.mjs\\\"\"",
@@ -86,6 +87,8 @@
     "prosemirror-schema-basic": "^1.2.4",
     "prosemirror-schema-list": "^1.5.1",
     "prosemirror-state": "^1.4.4",
-    "prosemirror-view": "^1.42.2"
+    "prosemirror-view": "^1.42.2",
+    "vscode-oniguruma": "1.7.0",
+    "vscode-textmate": "9.3.2"
   }
 }

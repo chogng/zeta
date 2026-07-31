@@ -8,9 +8,9 @@
     "src/zeta/base/**/*.ts",
     "src/zeta/code/browser/**/*.ts",
     "src/zeta/code/electron-browser/workbench/**/*.ts",
-    "src/zeta/editor/**/browser/**/*.ts",
-    "src/zeta/editor/**/common/**/*.ts",
-    "src/zeta/editor/**/contrib/**/*.ts",
+    "src/zeta/editor/*/browser/**/*.ts",
+    "src/zeta/editor/*/common/**/*.ts",
+    "src/zeta/editor/*/contrib/**/*.ts",
     "src/zeta/product/common/**/*.ts",
     "src/zeta/platform/app-server/common/**/*.ts",
     "src/zeta/platform/app-server/browser/**/*.ts",
@@ -40,6 +40,7 @@
   "exclude": [
     "src/zeta/base/test/**/*.ts",
     "src/zeta/base/parts/**/electron-main/**/*.ts",
+    "src/zeta/editor/*/test/**/*.ts",
     "src/zeta/platform/keybinding/electron-main/**/*.ts"
   ]
 }

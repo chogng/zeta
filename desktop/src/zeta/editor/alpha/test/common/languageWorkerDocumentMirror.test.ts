@@ -1,0 +1,53 @@
+import { strict as assert } from "node:assert";
+import test from "node:test";
+import { LanguageWorkerDocumentMirror } from "../../common/languageWorkerDocumentMirror.js";
+import { TextPosition, TextRange } from "../../common/text.js";
+import { TextModel } from "../../common/textModel.js";
+
+test("Worker document mirror applies model transactions through its Piece Tree", () => {
+  using model = new TextModel("abc\ndef");
+  const mirror = new LanguageWorkerDocumentMirror(model.createSnapshot());
+  const captured = mirror.createSnapshot();
+  const change = model.applyEdits([
+    {
+      range: TextRange.from(TextPosition.at(0, 1), TextPosition.at(0, 2)),
+      text: "XYZ",
+    },
+    {
+      range: TextRange.emptyAt(TextPosition.at(1, 3)),
+      text: "\nlast",
+    },
+  ])!;
+
+  mirror.synchronize(change.version - 1, change.version, change.changes);
+
+  const current = mirror.createSnapshot();
+  assert.equal(current.version, model.version);
+  assert.equal(current.getText(), model.getText());
+  assert.equal(current.length, model.getText().length);
+  assert.equal(current.lineCount, model.lineCount);
+  assert.equal(captured.version, 1);
+  assert.equal(captured.getText(), "abc\ndef");
+
+  const undo = model.undo()!;
+  mirror.synchronize(undo.version - 1, undo.version, undo.changes);
+  assert.equal(mirror.createSnapshot().getText(), "abc\ndef");
+});
+
+test("Worker document mirror rejects invalid synchronization atomically", () => {
+  using model = new TextModel("value");
+  const mirror = new LanguageWorkerDocumentMirror(model.createSnapshot());
+
+  assert.throws(() => mirror.synchronize(2, 3, [{
+    rangeOffset: 0,
+    rangeLength: 1,
+    text: "V",
+  }]), /version does not follow/);
+  assert.throws(() => mirror.synchronize(1, 2, [{
+    rangeOffset: 99,
+    rangeLength: 0,
+    text: "!",
+  }]), /inside the mirror/);
+  assert.equal(mirror.version, 1);
+  assert.equal(mirror.createSnapshot().getText(), "value");
+});

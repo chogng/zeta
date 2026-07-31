@@ -35,3 +35,26 @@ export function throwIfCancelled(
     throw new CancellationError(message, signal.reason);
   }
 }
+
+/**
+ * Observes one promise until it settles or the caller's signal is cancelled.
+ *
+ * Cancellation does not attempt to stop the underlying operation. Its owner
+ * remains responsible for that operation's lifecycle.
+ */
+export function raceCancellation<T>(
+  promise: PromiseLike<T>,
+  signal: AbortSignal,
+  message = "Operation cancelled",
+): Promise<T> {
+  if (signal.aborted) {
+    return Promise.reject(new CancellationError(message, signal.reason));
+  }
+  return new Promise<T>((resolve, reject) => {
+    const abort = (): void => reject(new CancellationError(message, signal.reason));
+    signal.addEventListener("abort", abort, { once: true });
+    Promise.resolve(promise).then(resolve, reject).finally(() => {
+      signal.removeEventListener("abort", abort);
+    });
+  });
+}

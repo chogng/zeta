@@ -1,7 +1,10 @@
+import { Emitter } from "../../../../base/common/event.js";
+import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import type { URI } from "../../../../base/common/uri.js";
 import type {
   IAnyWorkspaceIdentifier,
   IWorkspace,
+  IWorkspaceChangeEvent,
   IWorkspaceContextService,
   IWorkspaceFolder,
 } from "../../../../platform/workspace/common/workspace.js";
@@ -11,11 +14,16 @@ import {
   WorkbenchState,
 } from "../../../../platform/workspace/common/workspace.js";
 
-/** Immutable renderer projection of the workspace hosted by this window. */
-export class WorkspaceContextService implements IWorkspaceContextService {
-  private readonly workspace: IWorkspace;
+/** Live renderer projection of the workspace hosted by this window. */
+export class WorkspaceContextService extends DisposableOwner implements IWorkspaceContextService {
+  private readonly _onDidChangeWorkspace =
+    this.own(new Emitter<IWorkspaceChangeEvent>());
+  private workspace: IWorkspace;
+
+  readonly onDidChangeWorkspace = this._onDidChangeWorkspace.event;
 
   constructor(workspace: IAnyWorkspaceIdentifier) {
+    super();
     this.workspace = resolveWorkspace(workspace);
   }
 
@@ -31,6 +39,15 @@ export class WorkspaceContextService implements IWorkspaceContextService {
       return WorkbenchState.FOLDER;
     }
     return WorkbenchState.EMPTY;
+  }
+
+  /** Atomically replaces the current window workspace and publishes its projection. */
+  updateWorkspace(identifier: IAnyWorkspaceIdentifier): void {
+    const workspace = resolveWorkspace(identifier);
+    const previous = this.workspace;
+    if (previous.id === workspace.id) return;
+    this.workspace = workspace;
+    this._onDidChangeWorkspace.fire({ previous, workspace });
   }
 }
 

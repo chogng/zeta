@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { resolve } from "node:path";
 import test from "node:test";
 import { URI } from "../src/zeta/base/common/uri.js";
+import { toDisposable } from "../src/zeta/base/common/lifecycle.js";
 import {
   isSingleFolderWorkspaceIdentifier,
   isWorkspaceIdentifier,
@@ -14,12 +15,10 @@ import {
 import {
   WorkspaceOpenTargetKind,
 } from "../src/zeta/platform/workspaces/common/workspaces.js";
-import {
-  folderRelaunchArguments,
-  parseWorkspaceLaunchArguments,
-  WorkspacesMainService,
-  workspaceContextIpcRoutes,
-} from "../src/zeta/platform/workspaces/electron-main/workspacesMainService.js";
+import { WorkspaceTransitionFailureKind, WorkspaceTransitionFailureStage, WorkspaceTransitionMainService, WorkspaceTransitionPhase, WorkspaceTransitionRecovery, WorkspaceTransitionStatus } from "../src/zeta/platform/workspaces/electron-main/workspaceTransitionMainService.js";
+import { AppServerWorkspaceTransitionAdapter, type IAppServerWorkspaceTransitionHost } from "../src/zeta/platform/workspaces/electron-main/appServerWorkspaceTransition.js";
+import { JsonRpcRemoteError } from "../src/zeta/platform/app-server/electron-main/json-rpc-peer.js";
+import { parseWorkspaceLaunchArguments, WorkspaceContextMainService, WorkspacesMainService, workspaceContextIpcRoutes } from "../src/zeta/platform/workspaces/electron-main/workspacesMainService.js";
 import {
   getSingleFolderWorkspaceIdentifier,
   getWorkspaceIdentifier,
@@ -29,25 +28,6 @@ import {
 import {
   WorkspaceContextService,
 } from "../src/zeta/workbench/services/workspaces/browser/workspaceContextService.js";
-
-test("folder relaunch arguments preserve the development app entry", () => {
-  assert.deepEqual(
-    folderRelaunchArguments({
-      appPath: "C:\\zeta\\desktop",
-      folderPath: "C:\\project",
-      isPackaged: false,
-    }),
-    ["C:\\zeta\\desktop", "--folder", "C:\\project"],
-  );
-  assert.deepEqual(
-    folderRelaunchArguments({
-      appPath: "C:\\Program Files\\Zeta",
-      folderPath: "C:\\project",
-      isPackaged: true,
-    }),
-    ["--folder", "C:\\project"],
-  );
-});
 
 test("workspace launch arguments distinguish automatic and named targets", () => {
   assert.equal(parseWorkspaceLaunchArguments([]), undefined);
@@ -242,7 +222,12 @@ test("workspaces main service exposes a window-owned identity through IPC", asyn
       arguments: [],
       cwd: resolve("launch-root"),
     });
-  const [route] = workspaceContextIpcRoutes(workspace);
+  const context = new WorkspaceContextMainService(workspace);
+  const [route] = workspaceContextIpcRoutes(context);
+  const changes: string[] = [];
+  const changeSubscription = context.onDidChangeWorkspace(({ workspace: nextWorkspace }) => {
+    changes.push(nextWorkspace.id);
+  });
 
   assert.equal(route.channel, "zeta:workspace:context:read");
   assert.equal(route.validate(undefined), undefined);
@@ -251,4 +236,233 @@ test("workspaces main service exposes a window-owned identity through IPC", asyn
     await route.invoke(undefined),
     serializeWorkspaceIdentifier(UNKNOWN_EMPTY_WINDOW_WORKSPACE),
   );
+
+  const folder = await new WorkspacesMainService({
+    async resolvePath(path) {
+      return { kind: WorkspacePathKind.Directory, path };
+    },
+  }).resolveFolder(resolve("project"));
+  context.updateWorkspace(folder);
+  context.updateWorkspace(folder);
+  assert.deepEqual(
+    await route.invoke(undefined),
+    serializeWorkspaceIdentifier(folder),
+  );
+  assert.deepEqual(changes, [folder.id]);
+  changeSubscription.dispose();
+  context.dispose();
+});
+
+test("workspace transition commits only after the runtime accepts the folder", async () => {
+  const workspaces = new WorkspacesMainService({
+    async resolvePath(path) {
+      return { kind: WorkspacePathKind.Directory, path };
+    },
+  });
+  const context = new WorkspaceContextMainService(
+    UNKNOWN_EMPTY_WINDOW_WORKSPACE,
+  );
+  const runtimeSwitches: string[] = [];
+  const transitions = new WorkspaceTransitionMainService({
+    workspaces,
+    context,
+    runtime: {
+      async switchWorkspace({ workspace }) {
+        runtimeSwitches.push(workspace.uri.fsPath);
+        if (workspace.uri.fsPath.endsWith("rejected")) {
+          throw new Error("runtime rejected workspace");
+        }
+      },
+    },
+    classifyRuntimeError: () => WorkspaceTransitionFailureKind.RuntimeRejected,
+  });
+  const acceptedPath = resolve("project");
+  const accepted = await transitions.transitionToFolder(acceptedPath);
+
+  assert.equal(accepted.status, WorkspaceTransitionStatus.Applied);
+  assert.ok(accepted.workspace);
+  assert.equal(context.getWorkspace().id, accepted.workspace.id);
+  assert.deepEqual(runtimeSwitches, [acceptedPath]);
+
+  const unchanged = await transitions.transitionToFolder(acceptedPath);
+  assert.equal(unchanged.status, WorkspaceTransitionStatus.Unchanged);
+  assert.deepEqual(runtimeSwitches, [acceptedPath]);
+
+  const rejected = await transitions.transitionToFolder(resolve("rejected"));
+  assert.equal(rejected.status, WorkspaceTransitionStatus.Failed);
+  assert.equal(rejected.failure?.kind, WorkspaceTransitionFailureKind.RuntimeRejected);
+  assert.equal(context.getWorkspace().id, accepted.workspace.id);
+});
+
+test("workspace transition serializes concurrent folder requests", async () => {
+  const workspaces = new WorkspacesMainService({
+    async resolvePath(path) {
+      return { kind: WorkspacePathKind.Directory, path };
+    },
+  });
+  const context = new WorkspaceContextMainService(
+    UNKNOWN_EMPTY_WINDOW_WORKSPACE,
+  );
+  let releaseFirstSwitch!: () => void;
+  const firstSwitchGate = new Promise<void>((resolve) => {
+    releaseFirstSwitch = resolve;
+  });
+  const switchedPaths: string[] = [];
+  const transitions = new WorkspaceTransitionMainService({
+    workspaces,
+    context,
+    runtime: {
+      async switchWorkspace({ workspace }) {
+        switchedPaths.push(workspace.uri.fsPath);
+        if (switchedPaths.length === 1) await firstSwitchGate;
+      },
+    },
+    classifyRuntimeError: () => WorkspaceTransitionFailureKind.RuntimeRejected,
+  });
+  const firstPath = resolve("first");
+  const secondPath = resolve("second");
+  const first = transitions.transitionToFolder(firstPath);
+  const second = transitions.transitionToFolder(secondPath);
+  await new Promise<void>((resolveTurn) => setImmediate(resolveTurn));
+
+  assert.deepEqual(switchedPaths, [firstPath]);
+  assert.deepEqual(context.getWorkspace(), UNKNOWN_EMPTY_WINDOW_WORKSPACE);
+  releaseFirstSwitch();
+  await Promise.all([first, second]);
+
+  assert.deepEqual(switchedPaths, [firstPath, secondPath]);
+  const current = context.getWorkspace();
+  assert.ok(isSingleFolderWorkspaceIdentifier(current));
+  assert.equal(current.uri.fsPath, secondPath);
+});
+
+test("workspace transition exposes phases and safely retries recovered runtime loss", async () => {
+  const workspaces = new WorkspacesMainService({
+    async resolvePath(path) {
+      return { kind: WorkspacePathKind.Directory, path };
+    },
+  });
+  const context = new WorkspaceContextMainService(UNKNOWN_EMPTY_WINDOW_WORKSPACE);
+  const phases: WorkspaceTransitionPhase[] = [];
+  let runtimeAttempts = 0;
+  const transitions = new WorkspaceTransitionMainService({
+    workspaces,
+    context,
+    runtime: {
+      async switchWorkspace() {
+        runtimeAttempts += 1;
+        if (runtimeAttempts === 1) throw new Error("connection closed");
+      },
+    },
+    classifyRuntimeError: () => WorkspaceTransitionFailureKind.RuntimeUnavailable,
+    recovery: {
+      async recover(failure) {
+        assert.equal(failure.kind, WorkspaceTransitionFailureKind.RuntimeUnavailable);
+        return WorkspaceTransitionRecovery.Retry;
+      },
+    },
+  });
+  transitions.onDidChangeState((state) => phases.push(state.phase));
+
+  const result = await transitions.transitionToFolder(resolve("recovered"));
+
+  assert.equal(result.status, WorkspaceTransitionStatus.Recovered);
+  assert.equal(runtimeAttempts, 2);
+  assert.deepEqual(phases, [
+    WorkspaceTransitionPhase.Resolving,
+    WorkspaceTransitionPhase.SwitchingRuntime,
+    WorkspaceTransitionPhase.Recovering,
+    WorkspaceTransitionPhase.SwitchingRuntime,
+    WorkspaceTransitionPhase.Committing,
+    WorkspaceTransitionPhase.Idle,
+  ]);
+});
+
+test("workspace transition routes Busy without committing and accepts a later backend transition", async () => {
+  const workspaces = new WorkspacesMainService({
+    async resolvePath(path) {
+      return { kind: WorkspacePathKind.Directory, path };
+    },
+  });
+  const original = UNKNOWN_EMPTY_WINDOW_WORKSPACE;
+  const context = new WorkspaceContextMainService(original);
+  let runtimeBusy = true;
+  const transitions = new WorkspaceTransitionMainService({
+    workspaces,
+    context,
+    runtime: {
+      async switchWorkspace() {
+        if (runtimeBusy) throw new Error("busy");
+      },
+    },
+    classifyRuntimeError: () => WorkspaceTransitionFailureKind.RuntimeBusy,
+  });
+
+  const blocked = await transitions.transitionToFolder(resolve("blocked"));
+  assert.equal(blocked.status, WorkspaceTransitionStatus.Blocked);
+  assert.equal(context.getWorkspace(), original);
+  assert.equal(transitions.state.phase, WorkspaceTransitionPhase.Idle);
+
+  runtimeBusy = false;
+  const applied = await transitions.transitionToFolder(resolve("accepted"));
+  assert.equal(applied.status, WorkspaceTransitionStatus.Applied);
+  assert.equal(context.getWorkspace().id, applied.workspace?.id);
+  assert.deepEqual(transitions.state, { phase: WorkspaceTransitionPhase.Idle });
+});
+
+test("App Server workspace adapter routes only connection recovery into a retry", async () => {
+  let state: ReturnType<IAppServerWorkspaceTransitionHost["getState"]> = "ready";
+  const listeners = new Set<Parameters<IAppServerWorkspaceTransitionHost["onStateChange"]>[0]>();
+  const switchedRoots: string[] = [];
+  const host: IAppServerWorkspaceTransitionHost = {
+    getState: () => state,
+    async switchWorkspace(root) {
+      switchedRoots.push(root);
+    },
+    onStateChange(listener) {
+      listeners.add(listener);
+      return toDisposable(() => listeners.delete(listener));
+    },
+  };
+  const adapter = new AppServerWorkspaceTransitionAdapter(host);
+
+  assert.equal(
+    adapter.classifyRuntimeError(new JsonRpcRemoteError(-32071, "WorkspaceSwitchBusy", {})),
+    WorkspaceTransitionFailureKind.RuntimeBusy,
+  );
+  assert.equal(
+    adapter.classifyRuntimeError(new JsonRpcRemoteError(-32070, "WorkspaceSwitchUnavailable", {})),
+    WorkspaceTransitionFailureKind.RuntimeUnsupported,
+  );
+  state = "restarting";
+  assert.equal(
+    adapter.classifyRuntimeError(new Error("connection closed")),
+    WorkspaceTransitionFailureKind.RuntimeUnavailable,
+  );
+
+  const workspace = await new WorkspacesMainService({
+    async resolvePath(path) {
+      return { kind: WorkspacePathKind.Directory, path };
+    },
+  }).resolveFolder(resolve("recovered-by-supervisor"));
+  const recovery = adapter.recover({
+    transitionId: 1,
+    stage: WorkspaceTransitionFailureStage.Runtime,
+    kind: WorkspaceTransitionFailureKind.RuntimeUnavailable,
+    requestedPath: workspace.uri.fsPath,
+    previous: UNKNOWN_EMPTY_WINDOW_WORKSPACE,
+    workspace,
+    error: new Error("connection closed"),
+  });
+  await new Promise<void>((resolveTurn) => setImmediate(resolveTurn));
+  state = "ready";
+  for (const listener of listeners) listener(state);
+
+  assert.equal(await recovery, WorkspaceTransitionRecovery.Retry);
+  await adapter.switchWorkspace({
+    transitionId: 1,
+    previous: UNKNOWN_EMPTY_WINDOW_WORKSPACE,
+    workspace,
+  });
+  assert.deepEqual(switchedRoots, [workspace.uri.fsPath]);
 });

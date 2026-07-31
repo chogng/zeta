@@ -3,6 +3,7 @@ import test from "node:test";
 import { JSDOM } from "jsdom";
 import { DisposableStore } from "../src/zeta/base/common/lifecycle.js";
 import { StorageScope, StorageTarget, WillSaveStateReason } from "../src/zeta/platform/storage/common/storage.js";
+import { Memento } from "../src/zeta/workbench/common/memento.js";
 import { BrowserStorageService } from "../src/zeta/workbench/services/storage/browser/storageService.js";
 
 test("Browser storage persists scoped values and target metadata", () => {
@@ -54,6 +55,14 @@ test("Browser storage isolates workspaces while retaining profile state", () => 
   });
   first.store("size", 260, StorageScope.PROFILE, StorageTarget.MACHINE);
   first.store("visible", false, StorageScope.WORKSPACE, StorageTarget.MACHINE);
+  first.switchWorkspace("workspace-b");
+  assert.equal(first.getNumber("size", StorageScope.PROFILE), 260);
+  assert.equal(first.getBoolean("visible", StorageScope.WORKSPACE), undefined);
+  first.store("visible", true, StorageScope.WORKSPACE, StorageTarget.MACHINE);
+  first.switchWorkspace("workspace-a");
+  assert.equal(first.getBoolean("visible", StorageScope.WORKSPACE), false);
+  first.switchWorkspace("workspace-b");
+  assert.equal(first.getBoolean("visible", StorageScope.WORKSPACE), true);
   first.dispose();
 
   const second = new BrowserStorageService({
@@ -64,8 +73,51 @@ test("Browser storage isolates workspaces while retaining profile state", () => 
     flushInterval: 0,
   });
   assert.equal(second.getNumber("size", StorageScope.PROFILE), 260);
-  assert.equal(second.getBoolean("visible", StorageScope.WORKSPACE), undefined);
+  assert.equal(second.getBoolean("visible", StorageScope.WORKSPACE), true);
   second.dispose();
+  dom.window.close();
+});
+
+test("Browser storage saves and reloads Mementos across workspace changes", async () => {
+  const dom = new JSDOM("<!doctype html><body></body>", {
+    url: "https://zeta.test",
+  });
+  const seed = new BrowserStorageService({
+    ownerWindow: dom.window as unknown as Window,
+    applicationId: "code",
+    workspaceId: "workspace-b",
+    backend: dom.window.localStorage,
+    flushInterval: 0,
+  });
+  seed.store("memento/test.workspace", JSON.stringify({ value: "workspace-b" }), StorageScope.WORKSPACE, StorageTarget.MACHINE);
+  seed.dispose();
+
+  const storage = new BrowserStorageService({
+    ownerWindow: dom.window as unknown as Window,
+    applicationId: "code",
+    workspaceId: "workspace-a",
+    backend: dom.window.localStorage,
+    flushInterval: 0,
+  });
+  const memento = new Memento(storage, {
+    id: "test.workspace",
+    scope: StorageScope.WORKSPACE,
+    target: StorageTarget.MACHINE,
+    defaultValue: () => ({ value: "default" }),
+    parse: parseWorkspaceTestState,
+    serialize: (state) => ({ value: state.value }),
+  });
+  memento.update({ value: "workspace-a" });
+
+  await storage.flush(WillSaveStateReason.WORKSPACE_CHANGE);
+  storage.switchWorkspace("workspace-b");
+  assert.equal(memento.state.value, "workspace-b");
+
+  storage.switchWorkspace("workspace-a");
+  assert.equal(memento.state.value, "workspace-a");
+
+  memento.dispose();
+  storage.dispose();
   dom.window.close();
 });
 
@@ -167,3 +219,10 @@ test("Browser storage reports malformed persisted documents and falls back", () 
   storage.dispose();
   dom.window.close();
 });
+
+function parseWorkspaceTestState(value: unknown): { readonly value: string } {
+  if (typeof value !== "object" || value === null || !("value" in value) || typeof value.value !== "string") {
+    throw new TypeError("Workspace test state is invalid");
+  }
+  return { value: value.value };
+}

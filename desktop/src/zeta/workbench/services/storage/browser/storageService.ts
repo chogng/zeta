@@ -34,8 +34,10 @@ export class BrowserStorageService extends DisposableOwner implements IStorageSe
   private readonly ownerWindow: Window;
   private readonly backend: Storage | undefined;
   private readonly onError: (error: unknown) => void;
-  private readonly storageKeys: Readonly<Record<StorageScope, string>>;
-  private readonly scopesByStorageKey: ReadonlyMap<string, StorageScope>;
+  private readonly namespace: string;
+  private readonly applicationStorageKey: string;
+  private readonly profileStorageKey: string;
+  private workspaceStorageKey: string;
   private readonly entries = new Map<StorageScope, Map<string, StoredEntry>>();
 
   readonly onDidChangeValue = this._onDidChangeValue.event;
@@ -53,15 +55,10 @@ export class BrowserStorageService extends DisposableOwner implements IStorageSe
     if (!Number.isFinite(flushInterval) || flushInterval < 0) {
       throw new RangeError("Browser storage flush interval must be non-negative and finite");
     }
-    const namespace = `zeta.${encodeURIComponent(options.applicationId)}.storage`;
-    this.storageKeys = {
-      [StorageScope.APPLICATION]: `${namespace}.application`,
-      [StorageScope.PROFILE]: `${namespace}.profile.${encodeURIComponent(profileId)}`,
-      [StorageScope.WORKSPACE]: `${namespace}.workspace.${encodeURIComponent(options.workspaceId)}`,
-    };
-    this.scopesByStorageKey = new Map(
-      Object.entries(this.storageKeys).map(([scope, key]) => [key, scope as StorageScope]),
-    );
+    this.namespace = `zeta.${encodeURIComponent(options.applicationId)}.storage`;
+    this.applicationStorageKey = `${this.namespace}.application`;
+    this.profileStorageKey = `${this.namespace}.profile.${encodeURIComponent(profileId)}`;
+    this.workspaceStorageKey = workspaceStorageKey(this.namespace, options.workspaceId);
     this.backend = options.backend ?? readLocalStorage(this.ownerWindow, this.onError);
     for (const scope of storageScopes) {
       this.entries.set(scope, this.load(scope));
@@ -154,6 +151,28 @@ export class BrowserStorageService extends DisposableOwner implements IStorageSe
     this._onWillSaveState.fire({ reason });
   }
 
+  /** Switches the WORKSPACE scope while retaining application and profile state. */
+  switchWorkspace(workspaceId: string): void {
+    validateIdentifier(workspaceId, "workspace");
+    const storageKey = workspaceStorageKey(this.namespace, workspaceId);
+    if (storageKey === this.workspaceStorageKey) return;
+    const previous = this.scopeEntries(StorageScope.WORKSPACE);
+    this.workspaceStorageKey = storageKey;
+    const next = this.load(StorageScope.WORKSPACE);
+    this.entries.set(StorageScope.WORKSPACE, next);
+    for (const key of new Set([...previous.keys(), ...next.keys()])) {
+      const before = previous.get(key);
+      const after = next.get(key);
+      if (before?.value === after?.value && before?.target === after?.target) continue;
+      this._onDidChangeValue.fire({
+        key,
+        scope: StorageScope.WORKSPACE,
+        target: after?.target,
+        external: true,
+      });
+    }
+  }
+
   private load(scope: StorageScope): Map<string, StoredEntry> {
     if (!this.backend) return new Map();
     try {
@@ -182,7 +201,7 @@ export class BrowserStorageService extends DisposableOwner implements IStorageSe
   private handleStorageEvent(event: StorageEvent): void {
     if (event.storageArea && this.backend && event.storageArea !== this.backend) return;
     if (!event.key) return;
-    const scope = this.scopesByStorageKey.get(event.key);
+    const scope = this.scopeForStorageKey(event.key);
     if (!scope) return;
     let next: Map<string, StoredEntry>;
     try {
@@ -213,9 +232,21 @@ export class BrowserStorageService extends DisposableOwner implements IStorageSe
   }
 
   private storageKey(scope: StorageScope): string {
-    const key = this.storageKeys[scope];
-    if (!key) throw new TypeError(`Unsupported storage scope: ${scope}`);
-    return key;
+    switch (scope) {
+      case StorageScope.APPLICATION:
+        return this.applicationStorageKey;
+      case StorageScope.PROFILE:
+        return this.profileStorageKey;
+      case StorageScope.WORKSPACE:
+        return this.workspaceStorageKey;
+    }
+  }
+
+  private scopeForStorageKey(key: string): StorageScope | undefined {
+    if (key === this.applicationStorageKey) return StorageScope.APPLICATION;
+    if (key === this.profileStorageKey) return StorageScope.PROFILE;
+    if (key === this.workspaceStorageKey) return StorageScope.WORKSPACE;
+    return undefined;
   }
 }
 
@@ -262,6 +293,10 @@ function validateIdentifier(value: string, name: string): void {
   if (value.trim().length === 0) {
     throw new TypeError(`Browser storage ${name} ID must be non-empty`);
   }
+}
+
+function workspaceStorageKey(namespace: string, workspaceId: string): string {
+  return `${namespace}.workspace.${encodeURIComponent(workspaceId)}`;
 }
 
 function validateKey(key: string): void {

@@ -1,0 +1,281 @@
+import { strict as assert } from "node:assert";
+import test from "node:test";
+import { Emitter, type Event } from "../../../../base/common/event.js";
+import { DisposableOwner, DisposableStore } from "../../../../base/common/lifecycle.js";
+import { LanguageAnalysisProviderRegistry, type LanguageAnalysisRequest } from "../../common/languageAnalysisProviders.js";
+import { LANGUAGE_TOKEN_LANE, LanguageAnalysisProviderWorker, LanguageAnalysisService, type LanguageAnalysisLane, type LanguageAnalysisResult, type LanguageAnalysisWorker } from "../../common/languageAnalysisService.js";
+import { languageAnalysisWireCodec } from "../../common/languageAnalysisWire.js";
+import { type LanguageLexicalCacheUpdate } from "../../common/languageLexicalAnalysisCache.js";
+import { createLanguageLexicalAnalysisProvider } from "../../common/languageLexicalAnalysisProvider.js";
+import { LanguageRequestCoordinator, LanguageRequestStatus, LanguageWorkerResultDisposition, type LanguageWorkerRequest } from "../../common/languageRequestCoordinator.js";
+import { LanguageWorkerWireClient, LanguageWorkerWireServer, type LanguageWorkerWireClientPort } from "../../common/languageWorkerWire.js";
+import { TextPosition, TextRange } from "../../common/text.js";
+import { TextModel } from "../../common/textModel.js";
+
+test("Token and diagnostic lanes share one structured-clone incremental document mirror", async () => {
+  using model = new TextModel("const value = 1;");
+  using localRegistry = new LanguageAnalysisProviderRegistry();
+  using remoteRegistry = new LanguageAnalysisProviderRegistry();
+  const cacheUpdates: LanguageLexicalCacheUpdate[] = [];
+  using registration = remoteRegistry.register(createLanguageLexicalAnalysisProvider({
+    onDidUpdateCache: update => cacheUpdates.push(update),
+  }));
+  const [clientPort, serverPort] = createPortPair();
+  using server = new LanguageWorkerWireServer(
+    serverPort,
+    languageAnalysisWireCodec,
+    new LanguageAnalysisProviderWorker(remoteRegistry),
+  );
+  using service = new LanguageAnalysisService(model, localRegistry, {
+    workerFactory: () => new LanguageWorkerWireClient(clientPort, languageAnalysisWireCodec),
+  });
+
+  const outcomes = await service.requestAll("typescript");
+
+  assert.equal(outcomes.tokens.status, LanguageRequestStatus.Applied);
+  assert.equal(outcomes.diagnostics.status, LanguageRequestStatus.Applied);
+  assert.deepEqual(service.tokens.result!.value.tokens.map(token => token.tokenType), ["keyword", "variable", "operator", "number"]);
+  assert.equal(service.tokens.result!.value.tokens[0]!.range instanceof TextRange, true);
+  const initialMessages = clientPort.sentMessages as WireMessage[];
+  assert.deepEqual(initialMessages.map(message => message.kind), ["request", "request"]);
+  assert.equal(initialMessages[0]!.lane, "tokens");
+  assert.equal(initialMessages[0]!.snapshot?.kind, "full");
+  assert.equal(initialMessages[1]!.lane, "diagnostics");
+  assert.equal(initialMessages[1]!.snapshot?.kind, "reference");
+  assert.deepEqual(cacheUpdates, [{
+    modelVersion: 1,
+    kind: "full",
+    scannedLineCount: 1,
+    reusedLineCount: 0,
+  }]);
+
+  model.applyEdits([{
+    range: TextRange.emptyAt(TextPosition.at(0, model.getText().length)),
+    text: "\nreturn value;",
+  }]);
+  assert.equal((await service.requestTokens("typescript")).status, LanguageRequestStatus.Applied);
+
+  const messages = clientPort.sentMessages as WireMessage[];
+  assert.deepEqual(messages.map(message => message.kind), ["request", "request", "sync", "request"]);
+  assert.equal(messages[2]!.previousVersion, 1);
+  assert.equal(messages[3]!.snapshot?.kind, "reference");
+  assert.equal(messages[3]!.resultBaseRequestId, 1);
+  assert.deepEqual(service.tokens.result!.value.tokens.filter(token => token.range.start.lineIndex === 1).map(token => token.tokenType), ["keyword", "variable"]);
+  const incrementalResponse = (serverPort.sentMessages as WireMessage[]).find(message => message.requestId === 3);
+  assert.equal(incrementalResponse?.result?.kind, "delta");
+  assert.equal(incrementalResponse?.result?.baseRequestId, 1);
+  assert.equal(incrementalResponse?.result?.splices?.at(-1)?.lineDelta, 1);
+  assert.equal(incrementalResponse?.result?.splices?.reduce((count, splice) => count + splice.items.length, 0), 2);
+  assert.deepEqual(cacheUpdates[1], {
+    modelVersion: 2,
+    kind: "incremental",
+    scannedLineCount: 1,
+    reusedLineCount: 1,
+  });
+  assert.equal(cacheUpdates.length, 2);
+});
+
+test("Analysis wire rejects malformed lane DTOs in the client realm", async () => {
+  using model = new TextModel("value");
+  const [clientPort, serverPort] = createPortPair();
+  using serverEndpoint = serverPort;
+  using client = new LanguageWorkerWireClient(clientPort, languageAnalysisWireCodec);
+  const pending = client.run({
+    requestId: 1,
+    lane: LANGUAGE_TOKEN_LANE,
+    snapshot: model.createSnapshot(),
+    payload: { languageId: "typescript" },
+  }, new AbortController().signal);
+  await turn();
+  serverPort.send({
+    protocol: "zeta.alpha.language-worker",
+    version: 4,
+    kind: "result",
+    requestId: 1,
+    result: {
+      kind: "full",
+      items: [{
+        range: {
+          start: { lineIndex: 0, columnIndex: 0 },
+          end: { lineIndex: 0, columnIndex: 4 },
+        },
+        tokenType: "variable",
+        modifiers: [],
+      }, {
+        range: {
+          start: { lineIndex: 0, columnIndex: 3 },
+          end: { lineIndex: 0, columnIndex: 5 },
+        },
+        tokenType: "variable",
+        modifiers: [],
+      }],
+    },
+  });
+
+  await assert.rejects(pending, /sorted and non-overlapping/);
+});
+
+test("Analysis service replaces a failed wire Worker on the next request", async () => {
+  using model = new TextModel("const value = 1;");
+  using localRegistry = new LanguageAnalysisProviderRegistry();
+  using remoteRegistry = new LanguageAnalysisProviderRegistry();
+  using registration = remoteRegistry.register(createLanguageLexicalAnalysisProvider());
+  using workerResources = new DisposableStore();
+  let workerCount = 0;
+  using service = new LanguageAnalysisService(model, localRegistry, {
+    workerFactory: () => {
+      workerCount += 1;
+      const [clientPort, serverPort] = createPortPair();
+      const worker: LanguageAnalysisWorker = workerCount === 1
+        ? new FailingAnalysisWorker()
+        : new LanguageAnalysisProviderWorker(remoteRegistry);
+      workerResources.add(new LanguageWorkerWireServer(serverPort, languageAnalysisWireCodec, worker));
+      return new LanguageWorkerWireClient(clientPort, languageAnalysisWireCodec);
+    },
+  });
+
+  await assert.rejects(service.requestTokens("typescript"), /analysis worker failed/);
+  const outcome = await service.requestTokens("typescript");
+
+  assert.equal(outcome.status, LanguageRequestStatus.Applied);
+  assert.equal(workerCount, 2);
+  assert.equal(service.tokens.result!.value.tokens[0]!.tokenType, "keyword");
+});
+
+test("Analysis wire falls back to full when the client missed the server result base", async () => {
+  using model = new TextModel("const value = 1;");
+  using registry = new LanguageAnalysisProviderRegistry();
+  using registration = registry.register(createLanguageLexicalAnalysisProvider());
+  const [clientPort, serverPort] = createPortPair();
+  using server = new LanguageWorkerWireServer(serverPort, languageAnalysisWireCodec, new LanguageAnalysisProviderWorker(registry));
+  using client = new LanguageWorkerWireClient(clientPort, languageAnalysisWireCodec);
+  const signal = new AbortController().signal;
+  const request = (requestId: number): LanguageWorkerRequest<LanguageAnalysisLane, LanguageAnalysisRequest> => ({
+    requestId,
+    lane: LANGUAGE_TOKEN_LANE,
+    snapshot: model.createSnapshot(),
+    payload: { languageId: "typescript" },
+  });
+  await client.run(request(1), signal);
+  client.settleResult(1, LanguageWorkerResultDisposition.Applied);
+  const snapshot = model.createSnapshot();
+  clientPort.send({
+    protocol: "zeta.alpha.language-worker",
+    version: 4,
+    kind: "request",
+    requestId: 2,
+    lane: LANGUAGE_TOKEN_LANE,
+    resultBaseRequestId: 1,
+    snapshot: {
+      kind: "reference",
+      version: snapshot.version,
+      length: snapshot.length,
+      lineCount: snapshot.lineCount,
+    },
+    payload: { languageId: "typescript" },
+  });
+  await turn();
+  await turn();
+
+  const result = await client.run(request(3), signal);
+
+  assert.equal(result.lane, LANGUAGE_TOKEN_LANE);
+  const thirdRequest = (clientPort.sentMessages as WireMessage[]).find(message => message.requestId === 3);
+  assert.equal(thirdRequest?.resultBaseRequestId, 1);
+  const thirdResponse = (serverPort.sentMessages as WireMessage[]).find(message => message.requestId === 3);
+  assert.equal(thirdResponse?.result?.kind, "full");
+});
+
+test("Analysis wire does not confirm a result rejected by renderer application", async () => {
+  using model = new TextModel("const value = 1;");
+  using registry = new LanguageAnalysisProviderRegistry();
+  using registration = registry.register(createLanguageLexicalAnalysisProvider());
+  const [clientPort, serverPort] = createPortPair();
+  using server = new LanguageWorkerWireServer(serverPort, languageAnalysisWireCodec, new LanguageAnalysisProviderWorker(registry));
+  const client = new LanguageWorkerWireClient(clientPort, languageAnalysisWireCodec);
+  using coordinator = new LanguageRequestCoordinator<LanguageAnalysisLane, LanguageAnalysisRequest, LanguageAnalysisResult>(model, () => client);
+  const applicationFailure = new Error("renderer rejected result");
+
+  await assert.rejects(coordinator.runLatest(LANGUAGE_TOKEN_LANE, { languageId: "typescript" }, () => {
+    throw applicationFailure;
+  }), applicationFailure);
+  assert.equal((await coordinator.runLatest(LANGUAGE_TOKEN_LANE, { languageId: "typescript" }, () => undefined)).status, LanguageRequestStatus.Applied);
+
+  const requests = (clientPort.sentMessages as WireMessage[]).filter(message => message.kind === "request");
+  assert.equal(requests[0]!.resultBaseRequestId, undefined);
+  assert.equal(requests[1]!.resultBaseRequestId, undefined);
+  const secondResponse = (serverPort.sentMessages as WireMessage[]).find(message => message.requestId === 2);
+  assert.equal(secondResponse?.result?.kind, "full");
+});
+
+interface WireMessage {
+  readonly kind?: string;
+  readonly lane?: string;
+  readonly previousVersion?: number;
+  readonly requestId?: number;
+  readonly resultBaseRequestId?: number;
+  readonly snapshot?: {
+    readonly kind?: string;
+  };
+  readonly result?: {
+    readonly kind?: string;
+    readonly baseRequestId?: number;
+    readonly splices?: readonly {
+      readonly lineDelta?: number;
+      readonly items: readonly unknown[];
+    }[];
+  };
+}
+
+function createPortPair(): readonly [MemoryAnalysisPort, MemoryAnalysisPort] {
+  const first = new MemoryAnalysisPort();
+  const second = new MemoryAnalysisPort();
+  first.connect(second);
+  second.connect(first);
+  return [first, second];
+}
+
+class MemoryAnalysisPort extends DisposableOwner implements LanguageWorkerWireClientPort {
+  private readonly messageEmitter = this.own(new Emitter<unknown>());
+  private readonly failureEmitter = this.own(new Emitter<unknown>());
+  private peer: MemoryAnalysisPort | undefined;
+  private disposed = false;
+
+  readonly sentMessages: unknown[] = [];
+  readonly onMessage: Event<unknown> = this.messageEmitter.event;
+  readonly onFailure: Event<unknown> = this.failureEmitter.event;
+
+  constructor() {
+    super();
+    this.defer(() => {
+      this.disposed = true;
+      this.peer = undefined;
+    });
+  }
+
+  connect(peer: MemoryAnalysisPort): void {
+    this.peer = peer;
+  }
+
+  send(message: unknown): void {
+    if (this.disposed || !this.peer) {
+      throw new ReferenceError("Memory analysis port is unavailable");
+    }
+    const peer = this.peer;
+    const cloned = structuredClone(message);
+    this.sentMessages.push(cloned);
+    queueMicrotask(() => {
+      if (!peer.disposed) peer.messageEmitter.fire(cloned);
+    });
+  }
+}
+
+class FailingAnalysisWorker extends DisposableOwner implements LanguageAnalysisWorker {
+  async run(_request: LanguageWorkerRequest<LanguageAnalysisLane, LanguageAnalysisRequest>): Promise<LanguageAnalysisResult> {
+    throw new Error("analysis worker failed");
+  }
+}
+
+function turn(): Promise<void> {
+  return new Promise(resolve => setImmediate(resolve));
+}

@@ -1,0 +1,223 @@
+import { strict as assert } from "node:assert";
+import test from "node:test";
+import { languageAnalysisWireCodec } from "../../common/languageAnalysisWire.js";
+import { LANGUAGE_DIAGNOSTIC_LANE, LANGUAGE_TOKEN_LANE, type LanguageAnalysisLane, type LanguageAnalysisResult } from "../../common/languageAnalysisService.js";
+import { LanguageLexicalAnalysisCache } from "../../common/languageLexicalAnalysisCache.js";
+import { type LanguageWorkerWireResultState } from "../../common/languageWorkerWireProtocol.js";
+import { TextPosition, TextRange, type TextSnapshot } from "../../common/text.js";
+import { TextModel } from "../../common/textModel.js";
+
+test("Analysis wire deltas stay equal to full results across random edits", () => {
+  using model = new TextModel("const value = `start\nmiddle\nend`;\nif (value) {\n  return 1;\n}");
+  const cache = new LanguageLexicalAnalysisCache();
+  const signal = new AbortController().signal;
+  const serverStates = new Map<LanguageAnalysisLane, LanguageWorkerWireResultState<LanguageAnalysisResult>>();
+  const clientStates = new Map<LanguageAnalysisLane, LanguageWorkerWireResultState<LanguageAnalysisResult>>();
+  const insertions = ["x", " ", "\n", "/*", "*/", "`", "'", "(", ")", "const"];
+  let requestId = 1;
+  let seed = 0x34de17a;
+  let deltaCount = 0;
+
+  for (let iteration = 0; iteration < 100; iteration += 1) {
+    const snapshot = model.createSnapshot();
+    for (const lane of [LANGUAGE_TOKEN_LANE, LANGUAGE_DIAGNOSTIC_LANE] as const) {
+      const result = analysisResult(lane, cache, snapshot, signal);
+      const encoded = languageAnalysisWireCodec.encodeResult(lane, result, snapshot, serverStates.get(lane)) as { readonly kind: string };
+      const decoded = languageAnalysisWireCodec.decodeResult(lane, structuredClone(encoded), snapshot, clientStates.get(lane));
+      assert.deepEqual(serializeResult(decoded), serializeResult(result));
+      if (encoded.kind === "delta") deltaCount += 1;
+      const serverState = Object.freeze({ requestId, snapshot, result });
+      const clientState = Object.freeze({ requestId, snapshot, result: decoded });
+      serverStates.set(lane, serverState);
+      clientStates.set(lane, clientState);
+      requestId += 1;
+    }
+    const length = model.getText().length;
+    const startOffset = randomInteger(length + 1);
+    const removedLength = Math.min(randomInteger(4), length - startOffset);
+    model.applyEdits([{
+      range: TextRange.from(model.positionAt(startOffset), model.positionAt(startOffset + removedLength)),
+      text: insertions[randomInteger(insertions.length)]!,
+    }]);
+  }
+
+  assert.ok(deltaCount > 75, `Expected repeated lane results to use deltas, got ${deltaCount}`);
+
+  function randomInteger(limit: number): number {
+    seed = (Math.imul(seed, 1_664_525) + 1_013_904_223) >>> 0;
+    return seed % limit;
+  }
+});
+
+test("Analysis wire rejects missing bases and inconsistent delta metadata", () => {
+  using model = new TextModel("const value = 1;");
+  const cache = new LanguageLexicalAnalysisCache();
+  const signal = new AbortController().signal;
+  const firstSnapshot = model.createSnapshot();
+  const firstResult = analysisResult(LANGUAGE_TOKEN_LANE, cache, firstSnapshot, signal);
+  const base = Object.freeze({ requestId: 7, snapshot: firstSnapshot, result: firstResult });
+  model.applyEdits([{
+    range: TextRange.emptyAt(model.positionAt(model.getText().length)),
+    text: "\nreturn value;",
+  }]);
+  const snapshot = model.createSnapshot();
+
+  assert.throws(() => languageAnalysisWireCodec.decodeResult(LANGUAGE_TOKEN_LANE, {
+    kind: "delta",
+    baseRequestId: 7,
+    splices: [],
+  }, snapshot, undefined), /base result is unavailable/);
+  assert.throws(() => languageAnalysisWireCodec.decodeResult(LANGUAGE_TOKEN_LANE, {
+    kind: "delta",
+    baseRequestId: 7,
+    splices: [{
+      startItemIndex: 0,
+      deleteItemCount: 0,
+      lineDelta: 0,
+      items: [],
+    }],
+  }, snapshot, base), /final line shift does not match/);
+  assert.throws(() => languageAnalysisWireCodec.decodeResult(LANGUAGE_TOKEN_LANE, {
+    kind: "delta",
+    baseRequestId: 7,
+    splices: [{
+      startItemIndex: 99,
+      deleteItemCount: 0,
+      lineDelta: 1,
+      items: [],
+    }],
+  }, snapshot, base), /inside their base result/);
+});
+
+test("Analysis wire uses full fallback when a delta cannot reduce item transfer", () => {
+  using model = new TextModel("value");
+  const snapshot = model.createSnapshot();
+  const first = tokenResult("variable");
+  const second = tokenResult("keyword");
+  const base = Object.freeze({ requestId: 1, snapshot, result: first });
+
+  const encoded = languageAnalysisWireCodec.encodeResult(LANGUAGE_TOKEN_LANE, second, snapshot, base) as { readonly kind: string };
+
+  assert.equal(encoded.kind, "full");
+  assert.deepEqual(serializeResult(languageAnalysisWireCodec.decodeResult(LANGUAGE_TOKEN_LANE, encoded, snapshot, base)), serializeResult(second));
+});
+
+test("Analysis wire bounds a one-line edit independently of document token count", () => {
+  const lines = Array.from({ length: 1_000 }, (_, index) => `const value${index} = ${index};`);
+  using model = new TextModel(lines.join("\n"));
+  const cache = new LanguageLexicalAnalysisCache();
+  const signal = new AbortController().signal;
+  const firstSnapshot = model.createSnapshot();
+  const first = analysisResult(LANGUAGE_TOKEN_LANE, cache, firstSnapshot, signal);
+  const base = Object.freeze({ requestId: 1, snapshot: firstSnapshot, result: first });
+  model.applyEdits([{
+    range: TextRange.from(TextPosition.at(0, 0), TextPosition.at(0, 5)),
+    text: "let",
+  }]);
+  const snapshot = model.createSnapshot();
+  const current = analysisResult(LANGUAGE_TOKEN_LANE, cache, snapshot, signal);
+
+  const encoded = languageAnalysisWireCodec.encodeResult(LANGUAGE_TOKEN_LANE, current, snapshot, base) as { readonly kind: string; readonly splices: readonly { readonly items: readonly unknown[] }[] };
+  const decoded = languageAnalysisWireCodec.decodeResult(LANGUAGE_TOKEN_LANE, structuredClone(encoded), snapshot, base);
+
+  assert.equal(encoded.kind, "delta");
+  assert.ok(encoded.splices.reduce((count, splice) => count + splice.items.length, 0) <= 4);
+  assert.ok(first.lane === LANGUAGE_TOKEN_LANE && first.value.tokens.length > 3_000);
+  assert.deepEqual(serializeResult(decoded), serializeResult(current));
+});
+
+test("Analysis wire isolates two distant edits into multiple item splices", () => {
+  const lines = Array.from({ length: 1_000 }, (_, index) => `const uniqueValue${index} = ${index};`);
+  using model = new TextModel(lines.join("\n"));
+  const cache = new LanguageLexicalAnalysisCache();
+  const signal = new AbortController().signal;
+  const firstSnapshot = model.createSnapshot();
+  const first = analysisResult(LANGUAGE_TOKEN_LANE, cache, firstSnapshot, signal);
+  const base = Object.freeze({ requestId: 1, snapshot: firstSnapshot, result: first });
+  model.applyEdits([{
+    range: TextRange.from(TextPosition.at(100, 0), TextPosition.at(100, 5)),
+    text: "let",
+  }, {
+    range: TextRange.from(TextPosition.at(900, lines[900]!.length - 4), TextPosition.at(900, lines[900]!.length - 1)),
+    text: "901",
+  }]);
+  const snapshot = model.createSnapshot();
+  const current = analysisResult(LANGUAGE_TOKEN_LANE, cache, snapshot, signal);
+
+  const encoded = languageAnalysisWireCodec.encodeResult(LANGUAGE_TOKEN_LANE, current, snapshot, base) as { readonly kind: string; readonly splices: readonly { readonly items: readonly unknown[] }[] };
+  const decoded = languageAnalysisWireCodec.decodeResult(LANGUAGE_TOKEN_LANE, structuredClone(encoded), snapshot, base);
+
+  assert.equal(encoded.kind, "delta");
+  assert.equal(encoded.splices.length, 2);
+  assert.ok(encoded.splices.every(splice => splice.items.length <= 4));
+  assert.deepEqual(serializeResult(decoded), serializeResult(current));
+});
+
+test("Analysis wire multi-splices stay exact across repeated disjoint transactions", () => {
+  const lines = Array.from({ length: 300 }, (_, index) => `const uniqueValue${index} = ${index};`);
+  using model = new TextModel(lines.join("\n"));
+  const cache = new LanguageLexicalAnalysisCache();
+  const signal = new AbortController().signal;
+  let serverState: LanguageWorkerWireResultState<LanguageAnalysisResult> | undefined;
+  let clientState: LanguageWorkerWireResultState<LanguageAnalysisResult> | undefined;
+  let seed = 0x36a17;
+  let multiSpliceCount = 0;
+
+  for (let requestId = 1; requestId <= 40; requestId += 1) {
+    const snapshot = model.createSnapshot();
+    const result = analysisResult(LANGUAGE_TOKEN_LANE, cache, snapshot, signal);
+    const encoded = languageAnalysisWireCodec.encodeResult(LANGUAGE_TOKEN_LANE, result, snapshot, serverState) as { readonly kind: string; readonly splices?: readonly unknown[] };
+    const decoded = languageAnalysisWireCodec.decodeResult(LANGUAGE_TOKEN_LANE, structuredClone(encoded), snapshot, clientState);
+    assert.deepEqual(serializeResult(decoded), serializeResult(result));
+    if ((encoded.splices?.length ?? 0) >= 2) multiSpliceCount += 1;
+    serverState = Object.freeze({ requestId, snapshot, result });
+    clientState = Object.freeze({ requestId, snapshot, result: decoded });
+
+    const firstLine = randomInteger(140) + 1;
+    const secondLine = randomInteger(140) + 159;
+    model.applyEdits([firstLine, secondLine].map(lineIndex => ({
+      range: TextRange.from(TextPosition.at(lineIndex, 0), TextPosition.at(lineIndex, 5)),
+      text: model.getLineContent(lineIndex).startsWith("const") ? "alpha" : "const",
+    })));
+  }
+
+  assert.ok(multiSpliceCount >= 35, `Expected most disjoint transactions to retain multiple splices, got ${multiSpliceCount}`);
+
+  function randomInteger(limit: number): number {
+    seed = (Math.imul(seed, 1_664_525) + 1_013_904_223) >>> 0;
+    return seed % limit;
+  }
+});
+
+function analysisResult(lane: LanguageAnalysisLane, cache: LanguageLexicalAnalysisCache, snapshot: TextSnapshot, signal: AbortSignal): LanguageAnalysisResult {
+  return lane === LANGUAGE_TOKEN_LANE
+    ? Object.freeze({ lane, value: cache.getTokens(snapshot, signal) })
+    : Object.freeze({ lane, value: cache.getDiagnostics(snapshot, signal) });
+}
+
+function tokenResult(tokenType: string): LanguageAnalysisResult {
+  return Object.freeze({
+    lane: LANGUAGE_TOKEN_LANE,
+    value: Object.freeze({
+      tokens: Object.freeze([Object.freeze({
+        range: TextRange.from(TextPosition.at(0, 0), TextPosition.at(0, 5)),
+        tokenType,
+        modifiers: Object.freeze([]),
+      })]),
+    }),
+  });
+}
+
+function serializeResult(result: LanguageAnalysisResult): unknown {
+  const items = result.lane === LANGUAGE_TOKEN_LANE ? result.value.tokens : result.value.diagnostics;
+  return {
+    lane: result.lane,
+    items: items.map(item => ({
+      start: [item.range.start.lineIndex, item.range.start.columnIndex],
+      end: [item.range.end.lineIndex, item.range.end.columnIndex],
+      ...("tokenType" in item
+        ? { tokenType: item.tokenType, modifiers: item.modifiers }
+        : { severity: item.severity, message: item.message, code: item.code, source: item.source }),
+    })),
+  };
+}

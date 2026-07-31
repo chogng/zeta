@@ -1,10 +1,7 @@
 import * as monaco from "monaco-editor";
-import type {
-  EditorInput,
-} from "../../../workbench/browser/parts/editor/editorInput.js";
-import {
-  monacoLanguageForInput,
-} from "../common/monacoEditorInput.js";
+import type { EditorInput } from "../../../workbench/browser/parts/editor/editorInput.js";
+import { type ITextFileService } from "../../../workbench/services/textfile/common/textFileService.js";
+import { monacoLanguageForInput } from "../common/monacoEditorInput.js";
 
 interface ModelEntry {
   readonly model: monaco.editor.ITextModel;
@@ -26,12 +23,22 @@ const models = new Map<string, ModelEntry>();
  * models are authoritative so a later input snapshot cannot erase edits made
  * by another pane.
  */
-export function acquireMonacoModel(input: EditorInput): IMonacoModelReference {
+export async function acquireMonacoModel(input: EditorInput, textFiles: ITextFileService, signal: AbortSignal): Promise<IMonacoModelReference> {
   const key = input.resource.toString();
   let entry = models.get(key);
   if (!entry || entry.model.isDisposed()) {
+    const content = await textFiles.resolve({
+      resource: input.resource,
+      ...(input.initialText === undefined ? {} : { bootstrapText: input.initialText }),
+    }, signal);
+    signal.throwIfAborted();
+    entry = models.get(key);
+    if (entry && !entry.model.isDisposed()) {
+      monaco.editor.setModelLanguage(entry.model, monacoLanguageForInput(input));
+      return acquireEntry(key, entry);
+    }
     const model = monaco.editor.createModel(
-      input.initialText ?? "",
+      content.text,
       monacoLanguageForInput(input),
       monaco.Uri.parse(key),
     );
@@ -43,7 +50,10 @@ export function acquireMonacoModel(input: EditorInput): IMonacoModelReference {
       monacoLanguageForInput(input),
     );
   }
-  const acquiredEntry = entry;
+  return acquireEntry(key, entry);
+}
+
+function acquireEntry(key: string, acquiredEntry: ModelEntry): IMonacoModelReference {
   acquiredEntry.references += 1;
   let released = false;
   return {

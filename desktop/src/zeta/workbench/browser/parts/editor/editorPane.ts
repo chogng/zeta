@@ -7,6 +7,7 @@ import type {
 import type {
   IConfigurationService,
 } from "../../../../platform/configuration/common/configuration.js";
+import { type ITextFileService } from "../../../services/textfile/common/textFileService.js";
 import type { EditorInput } from "./editorInput.js";
 
 export enum EditorPaneVisibility {
@@ -36,6 +37,7 @@ export interface IEditorPane extends IDisposable {
 export interface EditorPaneCreationOptions {
   readonly ownerDocument: Document;
   readonly configurationService?: IConfigurationService;
+  readonly textFileService?: ITextFileService;
 }
 
 export enum EditorPaneMatch {

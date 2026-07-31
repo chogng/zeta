@@ -4,7 +4,7 @@ use std::io::{BufRead, BufReader, Read};
 use std::path::Path;
 use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 use std::thread;
 use std::time::{Duration, Instant};
 use zeta_app_server_protocol::protocol::search::{
@@ -27,7 +27,7 @@ const MAX_GLOB_BYTES: usize = 1024;
 /// Callers identify their connection when starting, reading, or cancelling a
 /// job. Implementations must never expose results to a different connection.
 pub(crate) struct WorkspaceSearchService {
-    workspace: WorkspaceRoot,
+    workspace: RwLock<WorkspaceRoot>,
     ripgrep: RipgrepExecutable,
     next_search_id: AtomicU64,
     jobs: Mutex<HashMap<String, SearchJob>>,
@@ -36,11 +36,18 @@ pub(crate) struct WorkspaceSearchService {
 impl WorkspaceSearchService {
     pub(crate) fn new(workspace: WorkspaceRoot, ripgrep: RipgrepExecutable) -> Self {
         Self {
-            workspace,
+            workspace: RwLock::new(workspace),
             ripgrep,
             next_search_id: AtomicU64::new(1),
             jobs: Mutex::new(HashMap::new()),
         }
+    }
+
+    pub(crate) fn switch_workspace(&self, workspace: WorkspaceRoot) {
+        *self
+            .workspace
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = workspace;
     }
 
     pub(crate) fn start(
@@ -70,7 +77,11 @@ impl WorkspaceSearchService {
                 created_at: Instant::now(),
             },
         );
-        let workspace = self.workspace.clone();
+        let workspace = self
+            .workspace
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clone();
         let ripgrep = self.ripgrep.clone();
         thread::spawn(move || run_search(workspace, ripgrep, params, cancellation, state));
         Ok(search_id)

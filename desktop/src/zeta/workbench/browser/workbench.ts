@@ -81,7 +81,7 @@ import {
   IThemeService,
   ThemeService,
 } from "../../platform/theme/common/themeService.js";
-import { type IAnyWorkspaceIdentifier, IWorkspaceContextService } from "../../platform/workspace/common/workspace.js";
+import { type IAnyWorkspaceIdentifier, IWorkspaceContextService, workbenchStateFromWorkspaceIdentifier } from "../../platform/workspace/common/workspace.js";
 import { WorkbenchConfiguration } from "../common/configuration.js";
 import {
   WorkbenchContributionsRegistry,
@@ -181,6 +181,7 @@ import { IWorkbenchWindowService, WorkbenchWindow } from "./window.js";
 import { BrowserTerminalProcessService } from "../../platform/terminal/browser/terminalProcessService.js";
 import { TerminalService } from "../services/terminal/browser/terminalService.js";
 import { ITerminalService } from "../services/terminal/common/terminal.js";
+import { ITextFileService, TextFileService } from "../services/textfile/common/textFileService.js";
 
 /** Host-specific inputs required to construct a workbench. */
 export interface IStartWorkbenchOptions {
@@ -208,7 +209,7 @@ export function startWorkbench({
   userThemeService,
   createContextMenuService,
   createTitlebarPart,
-}: IStartWorkbenchOptions): IDisposable {
+}: IStartWorkbenchOptions): Workbench {
   return new Workbench(
     product,
     api,
@@ -225,6 +226,12 @@ export function startWorkbench({
 
 /** Owns the renderer workbench, its parts, commands, and runtime layout. */
 export class Workbench extends DisposableOwner {
+  private readonly workspaceContext: WorkspaceContextService;
+  private readonly storage: BrowserStorageService;
+  private readonly editor: EditorPart;
+  private readonly workbenchWindow: WorkbenchWindow;
+  private workspaceSwitchQueue: Promise<void> = Promise.resolve();
+
   constructor(
     product: ProductConfiguration,
     api: ZetaRendererApi,
@@ -248,12 +255,16 @@ export class Workbench extends DisposableOwner {
       IWorkspaceOpenService,
       new WorkspaceOpenService(nativeHostApi),
     );
-    const workspaceContext = new WorkspaceContextService(workspace);
+    const workspaceContext = this.own(new WorkspaceContextService(workspace));
+    this.workspaceContext = workspaceContext;
     services.set(IWorkspaceContextService, workspaceContext);
-    services.set(IFileService, new BrowserFileService({
+    const fileService = new BrowserFileService({
       api: api.fs,
       workspaceContextService: workspaceContext,
-    }));
+    });
+    services.set(IFileService, fileService);
+    const textFileService = new TextFileService(fileService);
+    services.set(ITextFileService, textFileService);
     services.set(
       IWorkspaceSearchService,
       new BrowserWorkspaceSearchService(api.workspaceSearch),
@@ -282,6 +293,8 @@ export class Workbench extends DisposableOwner {
       applicationId: product.id,
       workspaceId: workspace.id,
     }));
+    this.workbenchWindow = workbenchWindow;
+    this.storage = storage;
     services.set(IStorageService, storage);
     const themeService = this.own(new ThemeService(
       resolveWorkbenchColorTheme(
@@ -399,6 +412,7 @@ export class Workbench extends DisposableOwner {
     const editor = this.own(new EditorPart(ownerDocument, {
       configurationService: configuration,
       keybindingService: keybindings,
+      textFileService,
       titleActions: {
         menuService: menus,
         contextMenuProvider: contextMenus,
@@ -440,6 +454,7 @@ export class Workbench extends DisposableOwner {
       ownerDocument,
       viewDescriptorService: viewDescriptors,
     }));
+    this.editor = editor;
     const panelCompositeDescriptor = requiredViewContainer(
       viewDescriptors,
       ViewContainerLocation.Panel,
@@ -546,6 +561,26 @@ export class Workbench extends DisposableOwner {
     this.defer(() => {
       void storage.flush(WillSaveStateReason.SHUTDOWN);
     });
+  }
+
+  /** Applies a host-authoritative workspace replacement without rebuilding the Workbench. */
+  updateWorkspace(workspace: IAnyWorkspaceIdentifier): Promise<void> {
+    const switching = this.workspaceSwitchQueue.then(() => this.doUpdateWorkspace(workspace));
+    this.workspaceSwitchQueue = switching.then(() => undefined, () => undefined);
+    return switching;
+  }
+
+  private async doUpdateWorkspace(workspace: IAnyWorkspaceIdentifier): Promise<void> {
+    if (this.workspaceContext.getWorkspace().id === workspace.id) return;
+    for (const group of this.editor.groups) {
+      for (const input of [...group.inputs]) group.closeEditor(input);
+    }
+    await this.storage.flush(WillSaveStateReason.WORKSPACE_CHANGE);
+    this.storage.switchWorkspace(workspace.id);
+    this.workbenchWindow.setWorkbenchState(
+      workbenchStateFromWorkspaceIdentifier(workspace),
+    );
+    this.workspaceContext.updateWorkspace(workspace);
   }
 }
 

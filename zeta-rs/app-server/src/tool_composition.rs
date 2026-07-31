@@ -12,6 +12,7 @@ enum ToolPortKind {
     Mcp,
 }
 
+#[derive(Clone)]
 pub(crate) struct ToolPort {
     kind: ToolPortKind,
     tools: Arc<dyn ToolService>,

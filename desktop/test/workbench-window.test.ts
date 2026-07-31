@@ -57,6 +57,8 @@ test(
     assert.equal(root.classList.contains("zeta-workbench"), true);
     assert.equal(root.dataset.product, "academic");
     assert.equal(root.dataset.workbenchState, "folder");
+    workbenchWindow.setWorkbenchState(WorkbenchState.EMPTY);
+    assert.equal(root.dataset.workbenchState, "empty");
     assert.equal(
       isRegisteredWindow(secondaryWindow),
       true,

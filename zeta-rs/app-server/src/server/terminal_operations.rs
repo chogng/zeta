@@ -76,12 +76,6 @@ impl AppServer {
             .map_err(terminal_error)?;
         result(&())
     }
-
-    fn terminal_service(&self) -> Result<&crate::terminal_service::TerminalService, RpcError> {
-        self.terminals
-            .as_ref()
-            .ok_or_else(|| RpcError::new(-32060, AppServerErrorName::TerminalUnavailable))
-    }
 }
 
 fn terminal_error(error: crate::terminal_service::TerminalError) -> RpcError {

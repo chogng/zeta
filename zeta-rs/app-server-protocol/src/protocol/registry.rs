@@ -62,6 +62,7 @@ use crate::protocol::turn::{
     InputItem, TurnInteractionResolveParams, TurnInteractionResolveResult, TurnInterruptParams,
     TurnInterruptResult, TurnStartParams, TurnStartResult,
 };
+use crate::protocol::workspace::{WorkspaceSwitchParams, WorkspaceSwitchResult};
 use schemars::JsonSchema;
 use ts_rs::{Config, TS};
 use zeta_protocol::{
@@ -208,6 +209,11 @@ client_methods! {
     Initialize => "initialize" {
         params: InitializeParams,
         response: InitializeResult,
+        serialization: GlobalExclusive,
+    },
+    WorkspaceSwitch => "workspace/switch" {
+        params: WorkspaceSwitchParams,
+        response: WorkspaceSwitchResult,
         serialization: GlobalExclusive,
     },
     SessionCreate => "session/create" {
@@ -623,6 +629,8 @@ typescript_bindings! {
     ServerCapabilities,
     InitializeParams,
     InitializeResult,
+    WorkspaceSwitchParams,
+    WorkspaceSwitchResult,
     SessionStatus,
     ThreadOrigin,
     SessionThreadStatus,

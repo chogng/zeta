@@ -38,6 +38,9 @@ pub enum AppServerErrorName {
     SkillsUnavailable,
     SkillOperationFailed,
     SkillNotFound,
+    WorkspaceSwitchUnavailable,
+    WorkspaceSwitchBusy,
+    WorkspaceSwitchFailed,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

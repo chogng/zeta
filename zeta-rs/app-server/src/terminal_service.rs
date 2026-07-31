@@ -3,7 +3,7 @@ use base64::Engine;
 use std::collections::{HashMap, VecDeque};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 use tokio::runtime::Runtime;
 use zeta_app_server_protocol::protocol::terminal::{
     TerminalCreateParams, TerminalCreateResult, TerminalOutputChunk, TerminalProfile,
@@ -17,7 +17,7 @@ const MAX_INPUT_BYTES: usize = 64 * 1024;
 
 /// Owns connection-scoped interactive PTY processes rooted at one trusted workspace.
 pub(crate) struct TerminalService {
-    workspace_root: PathBuf,
+    workspace_root: RwLock<PathBuf>,
     next_terminal_id: AtomicU64,
     sessions: Mutex<HashMap<String, TerminalSession>>,
     runtime: Runtime,
@@ -33,12 +33,19 @@ impl TerminalService {
             .build()
             .map_err(|_| TerminalError::OperationFailed)?;
         Ok(Self {
-            workspace_root,
+            workspace_root: RwLock::new(workspace_root),
             next_terminal_id: AtomicU64::new(1),
             sessions: Mutex::new(HashMap::new()),
             runtime,
             profiles: TerminalProfileCatalog::discover(),
         })
+    }
+
+    pub(crate) fn switch_workspace_root(&self, workspace_root: PathBuf) {
+        *self
+            .workspace_root
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = workspace_root;
     }
 
     pub(crate) fn profiles(&self) -> Vec<TerminalProfile> {
@@ -59,12 +66,17 @@ impl TerminalService {
         if sessions.len() >= MAX_ACTIVE_TERMINALS {
             return Err(TerminalError::Busy);
         }
+        let workspace_root = self
+            .workspace_root
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clone();
         let spawned = self
             .runtime
             .block_on(spawn_pty_process(
                 &profile.program,
                 &profile.args,
-                &self.workspace_root,
+                &workspace_root,
                 self.profiles.environment(),
                 &None,
                 TerminalSize {

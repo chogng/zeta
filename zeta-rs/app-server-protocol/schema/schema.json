@@ -283,7 +283,10 @@
         "ConfigRevisionConflict",
         "SkillsUnavailable",
         "SkillOperationFailed",
-        "SkillNotFound"
+        "SkillNotFound",
+        "WorkspaceSwitchUnavailable",
+        "WorkspaceSwitchBusy",
+        "WorkspaceSwitchFailed"
       ]
     },
     "ApprovalReviewModelSelectionDto": {
@@ -391,6 +394,22 @@
             },
             "params": {
               "$ref": "#/$defs/InitializeParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "workspace/switch"
+            },
+            "params": {
+              "$ref": "#/$defs/WorkspaceSwitchParams"
             }
           },
           "required": [
@@ -1275,6 +1294,22 @@
             },
             "result": {
               "$ref": "#/$defs/InitializeResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "workspace/switch"
+            },
+            "result": {
+              "$ref": "#/$defs/WorkspaceSwitchResult"
             }
           },
           "required": [
@@ -6472,6 +6507,30 @@
       },
       "required": [
         "searchId"
+      ]
+    },
+    "WorkspaceSwitchParams": {
+      "description": "Replaces the trusted local Workspace hosted by one App Server.",
+      "type": "object",
+      "properties": {
+        "root": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "root"
+      ]
+    },
+    "WorkspaceSwitchResult": {
+      "description": "Confirms the canonical Workspace root accepted by the App Server.",
+      "type": "object",
+      "properties": {
+        "root": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "root"
       ]
     }
   }

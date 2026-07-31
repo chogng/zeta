@@ -1,6 +1,6 @@
 use super::{AppServer, RpcError, decode, result};
 use crate::git_service::GitServiceError;
-use crate::server::git_runtime::{GitRuntime, GitRuntimeError};
+use crate::server::git_runtime::GitRuntimeError;
 use serde_json::Value;
 use std::path::PathBuf;
 use zeta_app_server_protocol::protocol::error::AppServerErrorName;
@@ -11,13 +11,13 @@ use zeta_git::GitError;
 
 impl AppServer {
     pub(super) fn git_status(&self) -> Result<Value, RpcError> {
-        result(&self.git_runtime()?.status().map_err(git_error)?)
+        result(&self.git_runtime_service()?.status().map_err(git_error)?)
     }
 
     pub(super) fn git_stage(&self, params: &Value) -> Result<Value, RpcError> {
         let params: GitPathsParams = decode(params)?;
         let status = self
-            .git_runtime()?
+            .git_runtime_service()?
             .stage(workspace_paths(params.paths)?)
             .map_err(git_error)?;
         result(&GitOperationResult { status })
@@ -26,7 +26,7 @@ impl AppServer {
     pub(super) fn git_unstage(&self, params: &Value) -> Result<Value, RpcError> {
         let params: GitPathsParams = decode(params)?;
         let status = self
-            .git_runtime()?
+            .git_runtime_service()?
             .unstage(workspace_paths(params.paths)?)
             .map_err(git_error)?;
         result(&GitOperationResult { status })
@@ -35,7 +35,7 @@ impl AppServer {
     pub(super) fn git_discard_worktree(&self, params: &Value) -> Result<Value, RpcError> {
         let params: GitPathsParams = decode(params)?;
         let status = self
-            .git_runtime()?
+            .git_runtime_service()?
             .discard_worktree(workspace_paths(params.paths)?)
             .map_err(git_error)?;
         result(&GitOperationResult { status })
@@ -50,7 +50,7 @@ impl AppServer {
             return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
         }
         let committed = self
-            .git_runtime()?
+            .git_runtime_service()?
             .commit(params.message)
             .map_err(git_error)?;
         result(&GitCommitResultDto {
@@ -60,24 +60,21 @@ impl AppServer {
     }
 
     pub(super) fn git_fetch(&self) -> Result<Value, RpcError> {
-        let status = self.git_runtime()?.fetch().map_err(git_error)?;
+        let status = self.git_runtime_service()?.fetch().map_err(git_error)?;
         result(&GitOperationResult { status })
     }
 
     pub(super) fn git_pull(&self) -> Result<Value, RpcError> {
-        let status = self.git_runtime()?.pull_fast_forward().map_err(git_error)?;
+        let status = self
+            .git_runtime_service()?
+            .pull_fast_forward()
+            .map_err(git_error)?;
         result(&GitOperationResult { status })
     }
 
     pub(super) fn git_push(&self) -> Result<Value, RpcError> {
-        let status = self.git_runtime()?.push().map_err(git_error)?;
+        let status = self.git_runtime_service()?.push().map_err(git_error)?;
         result(&GitOperationResult { status })
-    }
-
-    fn git_runtime(&self) -> Result<&GitRuntime, RpcError> {
-        self.git
-            .as_deref()
-            .ok_or_else(|| RpcError::new(-32060, AppServerErrorName::GitUnavailable))
     }
 }
 

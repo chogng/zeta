@@ -1,32 +1,15 @@
 import "./media/proseMirrorEditor.css";
-import type {
-  Node as ProseMirrorNode,
-} from "prosemirror-model";
-import {
-  EditorView,
-} from "prosemirror-view";
-import type {
-  IDimension,
-} from "../../../base/browser/geometry.js";
-import {
-  DisposableOwner,
-} from "../../../base/common/lifecycle.js";
+import type { Node as ProseMirrorNode } from "prosemirror-model";
+import { EditorView } from "prosemirror-view";
+import type { IDimension } from "../../../base/browser/geometry.js";
+import { DisposableOwner } from "../../../base/common/lifecycle.js";
 import { assertDefined } from "../../../base/common/types.js";
-import type {
-  EditorInput,
-} from "../../../workbench/browser/parts/editor/editorInput.js";
-import type {
-  IEditorPane,
-} from "../../../workbench/browser/parts/editor/editorPane.js";
-import {
-  EditorPaneVisibility,
-} from "../../../workbench/browser/parts/editor/editorPane.js";
-import {
-  PROSEMIRROR_EDITOR_ID,
-} from "../common/proseMirrorEditorInput.js";
-import {
-  createProseMirrorEditorState,
-} from "../common/proseMirrorEditorState.js";
+import { type ITextFileService } from "../../../workbench/services/textfile/common/textFileService.js";
+import type { EditorInput } from "../../../workbench/browser/parts/editor/editorInput.js";
+import type { IEditorPane } from "../../../workbench/browser/parts/editor/editorPane.js";
+import { EditorPaneVisibility } from "../../../workbench/browser/parts/editor/editorPane.js";
+import { PROSEMIRROR_EDITOR_ID } from "../common/proseMirrorEditorInput.js";
+import { createProseMirrorEditorState } from "../common/proseMirrorEditorState.js";
 
 /** Browser host for the customizable ProseMirror editor subsystem. */
 export class ProseMirrorEditorPane extends DisposableOwner
@@ -35,6 +18,13 @@ export class ProseMirrorEditorPane extends DisposableOwner
 
   private _container: HTMLDivElement | undefined;
   private _view: EditorView | undefined;
+
+  constructor(private readonly textFiles: ITextFileService) {
+    super();
+    if (!textFiles || typeof textFiles.resolve !== "function") {
+      throw new TypeError("ProseMirror editor pane requires a text file service");
+    }
+  }
 
   create(parent: HTMLElement): void {
     if (this._container) {
@@ -59,7 +49,11 @@ export class ProseMirrorEditorPane extends DisposableOwner
   ): Promise<void> {
     const container = this.container;
     throwIfAborted(signal);
-    const state = createProseMirrorEditorState(input.initialText ?? "");
+    const content = await this.textFiles.resolve({
+      resource: input.resource,
+      ...(input.initialText === undefined ? {} : { bootstrapText: input.initialText }),
+    }, signal);
+    const state = createProseMirrorEditorState(content.text);
     throwIfAborted(signal);
     this.destroyView();
     const view = new EditorView(container, {

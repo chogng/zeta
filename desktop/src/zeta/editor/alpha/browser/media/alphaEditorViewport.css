@@ -1,0 +1,219 @@
+.zeta-alpha-editor {
+  position: relative;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  min-height: 0;
+  overflow: auto;
+  color: var(--zeta-editor-foreground);
+  background: var(--zeta-editor-background);
+  font-family:
+    var(
+      --zeta-editor-font-family,
+      var(--zeta-font-family-monospace, ui-monospace, monospace)
+    );
+  white-space: pre;
+  tab-size: 4;
+  outline: none;
+  contain: strict;
+}
+
+.zeta-alpha-editor:focus-visible {
+  outline: 1px solid var(--zeta-focus-border);
+  outline-offset: -1px;
+}
+
+.zeta-alpha-editor.input-focused {
+  outline: 1px solid var(--zeta-focus-border);
+  outline-offset: -1px;
+}
+
+.zeta-alpha-editor-content {
+  position: relative;
+  min-width: 100%;
+}
+
+.zeta-alpha-editor-lines {
+  position: absolute;
+  top: 0;
+  left: 0;
+  box-sizing: border-box;
+  min-width: 100%;
+  will-change: transform;
+}
+
+.zeta-alpha-editor-line {
+  position: relative;
+  box-sizing: border-box;
+  min-width: 100%;
+  overflow: visible;
+  white-space: pre;
+}
+
+.zeta-alpha-editor-line-number {
+  position: sticky;
+  left: 0;
+  z-index: 4;
+  display: inline-block;
+  box-sizing: border-box;
+  width: var(--alpha-editor-gutter-width);
+  padding: 0 8px;
+  color: var(--zeta-description-foreground);
+  text-align: right;
+  user-select: none;
+  background: var(--zeta-editor-background);
+}
+
+.zeta-alpha-editor-line-number.active {
+  color: var(--zeta-editor-foreground);
+}
+
+.zeta-alpha-editor-line-text,
+.zeta-alpha-editor-text-metrics {
+  box-sizing: border-box;
+  padding: 0 12px;
+}
+
+.zeta-alpha-editor-line-text {
+  position: relative;
+  z-index: 3;
+  display: inline-block;
+}
+
+.zeta-alpha-editor-token.token-comment {
+  color: var(--zeta-editor-semantic-token-comment-foreground);
+}
+
+.zeta-alpha-editor-token.token-keyword {
+  color: var(--zeta-editor-semantic-token-keyword-foreground);
+}
+
+.zeta-alpha-editor-token.token-string {
+  color: var(--zeta-editor-semantic-token-string-foreground);
+}
+
+.zeta-alpha-editor-token.token-number {
+  color: var(--zeta-editor-semantic-token-number-foreground);
+}
+
+.zeta-alpha-editor-token.token-regexp {
+  color: var(--zeta-editor-semantic-token-regexp-foreground);
+}
+
+.zeta-alpha-editor-token.token-type {
+  color: var(--zeta-editor-semantic-token-type-foreground);
+}
+
+.zeta-alpha-editor-token.token-function {
+  color: var(--zeta-editor-semantic-token-function-foreground);
+}
+
+.zeta-alpha-editor-token.token-variable {
+  color: var(--zeta-editor-semantic-token-variable-foreground);
+}
+
+.zeta-alpha-editor-token.token-operator {
+  color: var(--zeta-editor-semantic-token-operator-foreground);
+}
+
+.zeta-alpha-editor-line-decorations,
+.zeta-alpha-editor-line-composition,
+.zeta-alpha-editor-line-selections {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.zeta-alpha-editor-line-decorations {
+  z-index: 1;
+}
+
+.zeta-alpha-editor-line-selections {
+  z-index: 2;
+}
+
+.zeta-alpha-editor-line-composition {
+  z-index: 4;
+}
+
+.zeta-alpha-editor-decoration {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  box-sizing: border-box;
+}
+
+.zeta-alpha-editor-decoration.search-match {
+  background: var(--zeta-search-match-background);
+}
+
+.zeta-alpha-editor-decoration.error-underline {
+  border-bottom: 2px solid var(--zeta-error-foreground);
+}
+
+.zeta-alpha-editor-decoration.warning-underline {
+  border-bottom: 2px solid var(--zeta-warning-foreground);
+}
+
+.zeta-alpha-editor-selection {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: var(--zeta-selection-background);
+}
+
+.zeta-alpha-editor-caret {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  width: 2px;
+  background: var(--zeta-editor-foreground);
+}
+
+.zeta-alpha-editor.composing .zeta-alpha-editor-composition {
+  position: absolute;
+  top: 0;
+  bottom: 1px;
+  box-sizing: border-box;
+  border-bottom: 1px solid var(--zeta-editor-foreground);
+}
+
+.zeta-alpha-editor:not(:focus-within) .zeta-alpha-editor-caret {
+  opacity: 0.65;
+}
+
+.zeta-alpha-editor-input {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 5;
+  box-sizing: border-box;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  color: transparent;
+  caret-color: transparent;
+  resize: none;
+  pointer-events: none;
+  opacity: 0;
+  background: transparent;
+  border: 0;
+  outline: none;
+}
+
+.zeta-alpha-editor-input.ime-input {
+  width: 2px;
+}
+
+.zeta-alpha-editor-text-metrics {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+  visibility: hidden;
+  pointer-events: none;
+}

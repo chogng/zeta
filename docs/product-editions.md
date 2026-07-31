@@ -60,7 +60,8 @@ Renderer 产品目录，并从该目录与入口名确定产品身份。
   `workbench-*.contribution.ts` 文件。
 - 共享 `EditorPart` 已通过 `EditorInput`、`IEditorPane` 和 `EditorPaneRegistry` 提供真实的编辑器
   宿主边界，包括资源匹配、显式 “Open With”、异步切换取消、布局、可见性、聚焦与释放。
-- Code 已从产品入口注册 Monaco pane；它拥有文本模型、语言 worker、布局、焦点和释放。
+- Code 已从产品入口注册 Monaco default pane 与 Alpha optional pane。Monaco 保持默认打开，
+  Alpha 可通过 `preferredEditorId` 显式选择。
 - Academic 已从产品入口注册 ProseMirror pane；它拥有基础论文 schema、历史、快捷键、布局和释放。
 - Main、Preload 和 App Server 当前由三个产品共享，尚未按产品裁剪原生能力或 Rust feature。
 - 未注入 Web host 的 Browser 页面使用显式 disconnected renderer API：页面和 Workbench
@@ -68,20 +69,20 @@ Renderer 产品目录，并从该目录与入口名确定产品身份。
   `WebAppServerUnavailableError` 失败。当前 Rust App Server 只监听 `stdio://`，尚无浏览器可
   直连的 HTTP/WebSocket transport。
 
-因此，Renderer 构建产物和编辑器依赖已经按产品入口分流。Complete 静态组合两套编辑器；
+因此，Renderer 构建产物和编辑器依赖已经按产品入口分流。Complete 静态组合三套编辑器；
 Academic 专有内容类型和 `.zeta-paper`、`.zeta-academic` 默认由 ProseMirror 打开，普通源码及
 Markdown 默认由 Monaco 打开。
 
 ## 编辑器装配契约
 
-`workbench-code.ts` 只能引入 `editor/monaco/contrib`；
+`workbench-code.ts` 引入 `editor/alpha/contrib` 和 `editor/monaco/contrib`；
 `workbench-academic.ts` 只能引入 `editor/prosemirror/contrib`。共享 Workbench 不得
-直接依赖任一编辑器。`workbench-complete.ts` 静态导入这两个 contribution，获得两个编辑器：
+直接依赖任一编辑器。`workbench-complete.ts` 静态导入这三个 contribution，获得三个编辑器：
 
 ```text
-Code       → Monaco descriptor
+Code       → Alpha optional descriptor + Monaco default descriptor
 Academic   → ProseMirror descriptor
-Complete   → Monaco descriptor + ProseMirror descriptor
+Complete   → Alpha optional + Monaco default + ProseMirror descriptors
                          ↓
                  EditorPaneRegistry
                          ↓
@@ -96,18 +97,19 @@ Complete   → Monaco descriptor + ProseMirror descriptor
 `AbortSignal` 并释放新 pane；实现必须观察该信号。成功切换后，宿主负责隐藏、清空并释放旧
 pane。编辑器实现不得自行替换 Editor Part 内容，也不得持有产品全局生命周期之外的 DOM。
 
-当前宿主一次只拥有一个活动 pane，不拥有 tab、历史记录、脏状态、保存或恢复语义。这些仍是
-后续编辑器/文档服务的职责，不能由 pane 私自发明。
+当前宿主一次只拥有一个活动 pane，不拥有 tab、历史记录、脏状态、保存或恢复语义。
+`ITextFileService` 只拥有 file/bootstrap 内容解析；其余文档生命周期仍是后续 TextFile
+model contract 的职责，不能由 pane 私自发明。
 
 ## 扩展点
 
 新增 Code 或 Academic 专属功能时，应分别从 `workbench-code.ts` 或
 `workbench-academic.ts` 导入。Complete 入口显式导入两类 contribution，获得这些功能。
 
-Monaco 和 ProseMirror 的模型、插件与 worker 分别归 `editor/monaco` 和
-`editor/prosemirror` 子系统所有；产品 contribution 只选择是否装配，不能持有编辑器实现。
-共享 `workbench` 同样不得直接依赖具体编辑器。当前 `EditorInput.initialText` 只是文档服务
-接入前的内存启动快照，不拥有保存语义。
+Alpha、Monaco 和 ProseMirror 的模型、插件与 worker 分别归 `editor/alpha`、
+`editor/monaco` 和 `editor/prosemirror` 子系统所有；产品 contribution 只选择是否装配，
+不能持有编辑器实现。共享 `workbench` 同样不得直接依赖具体编辑器。
+`EditorInput.initialText` 是 `ITextFileService` 优先使用的内存启动快照，不拥有保存语义。
 
 ## 构建与验证
 

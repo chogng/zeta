@@ -1,0 +1,78 @@
+.zeta-alpha-editor-completion {
+  position: absolute;
+  z-index: 6;
+  display: none;
+  box-sizing: border-box;
+  min-width: 220px;
+  max-width: min(480px, calc(100% - 16px));
+  max-height: 240px;
+  overflow: auto;
+  color: var(--zeta-editor-foreground);
+  white-space: normal;
+  background: var(--zeta-dialog-background);
+  border: 1px solid var(--zeta-widget-border);
+  border-radius: 4px;
+  box-shadow: 0 4px 12px var(--zeta-widget-shadow);
+}
+
+.zeta-alpha-editor-completion.visible {
+  display: block;
+}
+
+.zeta-alpha-editor-completion-option {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) minmax(0, auto);
+  gap: 8px;
+  align-items: center;
+  box-sizing: border-box;
+  min-height: 24px;
+  padding: 3px 8px;
+  cursor: default;
+}
+
+.zeta-alpha-editor-completion-option.focused {
+  color: var(--zeta-list-active-selection-foreground);
+  background: var(--zeta-list-active-selection-background);
+}
+
+.zeta-alpha-editor-completion-kind {
+  min-width: 64px;
+  color: var(--zeta-description-foreground);
+  font-size: 0.85em;
+}
+
+.zeta-alpha-editor-completion-option.focused
+  .zeta-alpha-editor-completion-kind {
+  color: inherit;
+}
+
+.zeta-alpha-editor-completion-label,
+.zeta-alpha-editor-completion-detail {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.zeta-alpha-editor-completion-detail {
+  color: var(--zeta-description-foreground);
+  font-size: 0.9em;
+}
+
+.zeta-alpha-editor-completion-option.resolving
+  .zeta-alpha-editor-completion-detail::after {
+  content: " …";
+}
+
+.zeta-alpha-editor-completion-documentation {
+  grid-column: 2 / -1;
+  overflow: hidden;
+  color: inherit;
+  font-size: 0.9em;
+  line-height: 1.35;
+  white-space: pre-wrap;
+}
+
+.zeta-alpha-editor-completion-option.focused
+  .zeta-alpha-editor-completion-detail {
+  color: inherit;
+}

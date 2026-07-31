@@ -73,6 +73,9 @@ class ProtocolChildProcess extends EventEmitter {
             updateReplay: true,
           },
         });
+      } else if (request.method === "workspace/switch") {
+        const params = request.params as { readonly root: string };
+        this.respond(request.id, { root: params.root });
       }
     }
   }
@@ -196,6 +199,25 @@ test("supervisor restarts a crashed process with bounded lifecycle states", asyn
   assert.equal(supervisor.state, "ready");
   await supervisor.stop();
   assert.equal(supervisor.state, "stopped");
+});
+
+test("workspace switching keeps the current App Server process and connection", async () => {
+  const children: ProtocolChildProcess[] = [];
+  const supervisor = new AppServerSupervisor(supervisorOptions(children));
+  const states: string[] = [];
+  supervisor.onStateChange((state) => states.push(state));
+  await supervisor.start();
+
+  const switched = await supervisor.request(APP_SERVER_METHODS["workspace/switch"], {
+    root: "/test/workspace",
+  });
+
+  assert.deepEqual(switched, { root: "/test/workspace" });
+  assert.equal(children.length, 1);
+  assert.equal(children[0].signalCode, null);
+  assert.equal(supervisor.state, "ready");
+  assert.deepEqual(states, ["starting", "initializing", "ready"]);
+  await supervisor.stop();
 });
 
 test("crash rejects an unknown-outcome side effect without replaying it", async () => {

@@ -33,6 +33,7 @@ export class ExplorerViewPane extends ViewPane {
   private root: ExplorerNode | undefined;
   private error: string | undefined;
   private disposed = false;
+  private workspaceGeneration = 0;
 
   constructor(
     options: IViewPaneOptions,
@@ -64,6 +65,9 @@ export class ExplorerViewPane extends ViewPane {
     this.own(fileIconThemeService.onDidFileIconThemeChange(
       () => this.render(),
     ));
+    this.own(workspaceContextService.onDidChangeWorkspace(() => {
+      void this.initialize();
+    }));
     this.defer(() => {
       this.disposed = true;
       this.nodes.clear();
@@ -73,6 +77,10 @@ export class ExplorerViewPane extends ViewPane {
   }
 
   private async initialize(): Promise<void> {
+    const generation = ++this.workspaceGeneration;
+    this.root = undefined;
+    this.error = undefined;
+    this.render();
     const folder = this.workspaceContextService.getWorkspace().folders[0];
     if (!folder) {
       this.error = "Open a folder to browse files.";
@@ -82,9 +90,10 @@ export class ExplorerViewPane extends ViewPane {
     try {
       this.setTitle(folder.name);
       const metadata = await this.fileService.stat(folder.uri);
-      if (metadata.kind !== FileKind.Directory || this.disposed) {
+      if (metadata.kind !== FileKind.Directory) {
         throw new Error("Workspace root is not a directory");
       }
+      if (this.disposed || generation !== this.workspaceGeneration) return;
       this.root = {
         resource: folder.uri,
         name: folder.name,
@@ -93,9 +102,9 @@ export class ExplorerViewPane extends ViewPane {
         loading: false,
         children: undefined,
       };
-      await this.loadChildren(this.root);
+      await this.loadChildren(this.root, generation);
     } catch (error) {
-      if (this.disposed) return;
+      if (this.disposed || generation !== this.workspaceGeneration) return;
       this.error = error instanceof Error
         ? error.message
         : "Unable to load workspace files.";
@@ -103,24 +112,29 @@ export class ExplorerViewPane extends ViewPane {
     }
   }
 
-  private async loadChildren(node: ExplorerNode): Promise<void> {
+  private async loadChildren(
+    node: ExplorerNode,
+    generation: number = this.workspaceGeneration,
+  ): Promise<void> {
     if (node.loading) return;
     node.loading = true;
     this.render();
     try {
       const entries = await this.fileService.readDirectory(node.resource);
-      if (this.disposed) return;
+      if (this.disposed || generation !== this.workspaceGeneration) return;
       node.children = entries.map(explorerNode).sort(compareExplorerNodes);
       node.expanded = true;
       this.error = undefined;
     } catch (error) {
-      if (this.disposed) return;
+      if (this.disposed || generation !== this.workspaceGeneration) return;
       this.error = error instanceof Error
         ? error.message
         : `Unable to read ${node.name}.`;
     } finally {
       node.loading = false;
-      if (!this.disposed) this.render();
+      if (!this.disposed && generation === this.workspaceGeneration) {
+        this.render();
+      }
     }
   }
 
@@ -140,7 +154,7 @@ export class ExplorerViewPane extends ViewPane {
     if (!node || node.loading) return;
     if (node.kind === FileKind.Directory) {
       if (node.children === undefined) {
-        void this.loadChildren(node);
+        void this.loadChildren(node, this.workspaceGeneration);
         return;
       }
       node.expanded = !node.expanded;
@@ -152,12 +166,9 @@ export class ExplorerViewPane extends ViewPane {
 
   private async openFile(node: ExplorerNode): Promise<void> {
     try {
-      const content = await this.fileService.readFile(node.resource);
-      if (this.disposed) return;
       await this.editorPart.openEditor({
         resource: node.resource,
         label: node.name,
-        initialText: content,
       });
       if (!this.disposed) this.editorPart.focus();
     } catch (error) {

@@ -2,27 +2,17 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { URI } from "../src/zeta/base/common/uri.js";
-import {
-  FileKind,
-  type IFileService,
-} from "../src/zeta/platform/files/common/files.js";
-import type {
-  IWorkspaceContextService,
-} from "../src/zeta/platform/workspace/common/workspace.js";
-import type {
-  IFileIconThemeService,
-} from "../src/zeta/platform/theme/browser/fileIconThemeService.js";
-import type {
-  EditorInput,
-} from "../src/zeta/workbench/browser/parts/editor/editorInput.js";
-import type {
-  IEditorPart,
-} from "../src/zeta/workbench/browser/parts/editor/editorPart.js";
+import { FileKind, type IFileService } from "../src/zeta/platform/files/common/files.js";
+import { WorkspaceContextService } from "../src/zeta/workbench/services/workspaces/browser/workspaceContextService.js";
+import type { IFileIconThemeService } from "../src/zeta/platform/theme/browser/fileIconThemeService.js";
+import type { EditorInput } from "../src/zeta/workbench/browser/parts/editor/editorInput.js";
+import type { IEditorPart } from "../src/zeta/workbench/browser/parts/editor/editorPart.js";
 
 test("ExplorerViewPane renders, expands, and opens workspace files", async () => {
   const browser = new JSDOM("<!doctype html><body></body>");
   const installedGlobals = installDomGlobals(browser);
   const root = URI.file("C:\\project");
+  const nextRoot = URI.file("C:\\next-project");
   const directoryReads: string[] = [];
   let openedInput: EditorInput | undefined;
   const fileService: IFileService = {
@@ -49,27 +39,27 @@ test("ExplorerViewPane renders, expands, and opens workspace files", async () =>
           },
         ];
       }
+      if (resource.toString() === nextRoot.toString()) {
+        return [{
+          resource: URI.file("C:\\next-project\\next.txt"),
+          name: "next.txt",
+          kind: FileKind.File,
+        }];
+      }
       return [{
         resource: URI.file("C:\\project\\src\\main.ts"),
         name: "main.ts",
         kind: FileKind.File,
       }];
     },
-    readFile: async (resource) => {
-      assert.equal(
-        resource.toString(),
-        URI.file("C:\\project\\README.md").toString(),
-      );
-      return "# Project";
+    readFile: async () => {
+      throw new Error("Explorer must delegate file content resolution to the selected editor");
     },
   };
-  const workspaceContextService: IWorkspaceContextService = {
-    getWorkspace: () => ({
-      id: "workspace",
-      folders: [{ uri: root, name: "project", index: 0 }],
-    }),
-    getWorkbenchState: () => 2,
-  };
+  using workspaceContextService = new WorkspaceContextService({
+    id: "workspace",
+    uri: root,
+  });
   const editorPart: IEditorPart = {
     element: browser.window.document.createElement("section"),
     groups: [],
@@ -211,7 +201,22 @@ test("ExplorerViewPane renders, expands, and opens workspace files", async () =>
     readme.click();
     await waitFor(() => openedInput !== undefined);
     assert.equal(openedInput?.label, "README.md");
-    assert.equal(openedInput?.initialText, "# Project");
+    assert.equal(openedInput?.initialText, undefined);
+    assert.equal(
+      openedInput?.resource.toString(),
+      URI.file("C:\\project\\README.md").toString(),
+    );
+
+    workspaceContextService.updateWorkspace({
+      id: "next-workspace",
+      uri: nextRoot,
+    });
+    await waitFor(() =>
+      pane.element.querySelector(".zeta-view-pane-title")?.textContent ===
+        "next-project" &&
+      rowLabels(pane.element).includes("next.txt")
+    );
+    assert.deepEqual(rowLabels(pane.element), ["next.txt"]);
   } finally {
     browser.window.close();
     for (const name of installedGlobals) {

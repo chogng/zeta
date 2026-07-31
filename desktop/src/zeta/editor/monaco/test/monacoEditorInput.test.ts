@@ -44,4 +44,10 @@ test("Monaco resolves common source languages from extensions", () => {
     }),
     "ini",
   );
+  assert.equal(
+    monacoLanguageForInput({
+      resource: URI.file("C:\\project\\view.tsx"),
+    }),
+    "typescript",
+  );
 });

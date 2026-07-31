@@ -1,36 +1,17 @@
 import "./media/monacoEditor.css";
 import "./monacoEnvironment.js";
 import * as monaco from "monaco-editor";
-import type {
-  IDimension,
-} from "../../../base/browser/geometry.js";
-import {
-  DisposableOwner,
-} from "../../../base/common/lifecycle.js";
+import type { IDimension } from "../../../base/browser/geometry.js";
+import { DisposableOwner } from "../../../base/common/lifecycle.js";
 import { assertDefined } from "../../../base/common/types.js";
-import type {
-  IConfigurationService,
-} from "../../../platform/configuration/common/configuration.js";
-import type {
-  EditorInput,
-} from "../../../workbench/browser/parts/editor/editorInput.js";
-import type {
-  IEditorPane,
-} from "../../../workbench/browser/parts/editor/editorPane.js";
-import {
-  EditorPaneVisibility,
-} from "../../../workbench/browser/parts/editor/editorPane.js";
-import {
-  affectsMonacoEditorFontConfiguration,
-  readMonacoEditorFontSettings,
-} from "../common/config/editorConfiguration.js";
-import {
-  MONACO_EDITOR_ID,
-} from "../common/monacoEditorInput.js";
-import {
-  acquireMonacoModel,
-  type IMonacoModelReference,
-} from "./monacoModelService.js";
+import type { IConfigurationService } from "../../../platform/configuration/common/configuration.js";
+import { type ITextFileService } from "../../../workbench/services/textfile/common/textFileService.js";
+import type { EditorInput } from "../../../workbench/browser/parts/editor/editorInput.js";
+import type { IEditorPane } from "../../../workbench/browser/parts/editor/editorPane.js";
+import { EditorPaneVisibility } from "../../../workbench/browser/parts/editor/editorPane.js";
+import { affectsMonacoEditorFontConfiguration, readMonacoEditorFontSettings } from "../common/config/editorConfiguration.js";
+import { MONACO_EDITOR_ID } from "../common/monacoEditorInput.js";
+import { acquireMonacoModel, type IMonacoModelReference } from "./monacoModelService.js";
 
 /** Browser host for the customizable Monaco editor subsystem. */
 export class MonacoEditorPane extends DisposableOwner
@@ -44,8 +25,11 @@ export class MonacoEditorPane extends DisposableOwner
   private dimension: IDimension = { width: 0, height: 0 };
   private readonly configurationService: IConfigurationService | undefined;
 
-  constructor(configurationService?: IConfigurationService) {
+  constructor(private readonly textFiles: ITextFileService, configurationService?: IConfigurationService) {
     super();
+    if (!textFiles || typeof textFiles.resolve !== "function") {
+      throw new TypeError("Monaco editor pane requires a text file service");
+    }
     this.configurationService = configurationService;
     if (this.configurationService) {
       this.own(this.configurationService.onDidChangeConfiguration(
@@ -88,7 +72,7 @@ export class MonacoEditorPane extends DisposableOwner
   ): Promise<void> {
     const editor = this.editor;
     throwIfAborted(signal);
-    const modelReference = acquireMonacoModel(input);
+    const modelReference = await acquireMonacoModel(input, this.textFiles, signal);
     const model = modelReference.model;
     if (signal.aborted) {
       modelReference.dispose();

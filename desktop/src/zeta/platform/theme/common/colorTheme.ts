@@ -2,6 +2,7 @@ import type { Color } from "../../../base/common/color.js";
 import { Colors, colorCssVariable, type ColorIdentifier, type ColorValue, type ResolvedColorContribution } from "./colorRegistry.js";
 import * as baseColors from "./colors/baseColors.js";
 import * as componentColors from "./colors/componentColors.js";
+import "./colors/editorColors.js";
 import * as workbenchColors from "./colors/workbenchColors.js";
 import { Sizes, sizeCssVariable, sizeToCss, type SizeContribution, type SizeValue } from "./sizeRegistry.js";
 import "./sizes/baseSizes.js";

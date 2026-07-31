@@ -12,7 +12,7 @@ import {
 import {
   parseWorkspaceIdentifier,
 } from "../../platform/workspace/common/workspace.js";
-import { startWorkbench } from "../browser/workbench.js";
+import { type Workbench, startWorkbench } from "../browser/workbench.js";
 import {
   createElectronTitlebarPartFactory,
 } from "./parts/titlebar/titlebarPart.js";
@@ -34,14 +34,11 @@ export async function startElectronWorkbench(
     : undefined;
   const api = createElectronRendererApi();
   const userThemes = await loadUserThemes(api.userThemes);
-  const workspace = parseWorkspaceIdentifier(
-    await api.workspace.getWorkspace(),
-  );
   const workbench = startWorkbench({
     product,
     api,
     container: document.querySelector<HTMLElement>("#app"),
-    workspace,
+    workspace: parseWorkspaceIdentifier(await api.workspace.getWorkspace()),
     configurationApi: api.configuration,
     keybindingsResourceApi: api.keybindings,
     nativeHostApi: api.nativeHost,
@@ -55,8 +52,12 @@ export async function startElectronWorkbench(
       api.nativeMenubar,
     ),
   });
+  const workspaceSubscription = api.workspace.onDidChange((workspace) => {
+    void applyWorkspaceChange(workbench, workspace);
+  });
   window.addEventListener("pagehide", () => {
     try {
+      workspaceSubscription.dispose();
       workbench.dispose();
       userThemes.dispose();
       disposableTracker?.assertNoLeaks();
@@ -64,4 +65,13 @@ export async function startElectronWorkbench(
       tracking?.[Symbol.dispose]();
     }
   }, { once: true });
+}
+
+async function applyWorkspaceChange(workbench: Workbench, workspace: unknown): Promise<void> {
+  try {
+    await workbench.updateWorkspace(parseWorkspaceIdentifier(workspace));
+  } catch (error) {
+    console.error("Failed to switch Workbench workspace", error);
+    window.location.reload();
+  }
 }
