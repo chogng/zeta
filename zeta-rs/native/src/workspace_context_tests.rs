@@ -3,6 +3,11 @@ use std::process::Command;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use super::{WorkspaceContext, display_working_directory};
+use zeta_app_server_client::{
+    AppServerClient, InProcessClientOptions, InProcessTransport, start_in_process_client,
+};
+use zeta_app_server_protocol::protocol::common::ClientInfo;
+use zeta_app_server_protocol::protocol::git::GitBranchSwitchParams;
 
 static NEXT_REPOSITORY_ID: AtomicU64 = AtomicU64::new(0);
 
@@ -53,7 +58,8 @@ fn repository_capture_builds_real_changed_file_diffs() {
     std::fs::remove_file(root.join("deleted.txt")).unwrap();
     std::fs::write(root.join("untracked.txt"), "new\nfile\n").unwrap();
 
-    let context = WorkspaceContext::capture(root.clone());
+    let mut context = WorkspaceContext::capture(root.clone());
+    context.apply_git_projection(Some(&git_client(&root).git_text_diff().unwrap()));
 
     assert_eq!(context.git_branch_label(), "main");
     assert_eq!(context.diff_summary_label(), "Changes 3 • +3 -2");
@@ -102,17 +108,43 @@ fn switching_branch_refreshes_the_repository_projection() {
     run_git(&root, &["branch", "topic"]);
     let mut context = WorkspaceContext::capture_current();
     context.switch_working_directory(root.clone()).unwrap();
-    let topic = context
-        .local_branches()
+    let mut client = git_client(&root);
+    let topic = client
+        .list_git_branches()
         .unwrap()
+        .branches
         .into_iter()
         .find(|branch| branch.name() == "topic")
         .unwrap();
 
-    context.switch_branch(&topic).unwrap();
+    client
+        .switch_git_branch(GitBranchSwitchParams {
+            name: topic.name().into(),
+        })
+        .unwrap();
+    context.apply_git_projection(Some(&client.git_text_diff().unwrap()));
 
     assert_eq!(context.git_branch_label(), "topic");
     std::fs::remove_dir_all(root).unwrap();
+}
+
+fn git_client(root: &Path) -> AppServerClient<InProcessTransport> {
+    let profile_root = std::env::temp_dir().join(format!(
+        "zeta-native-workspace-context-profile-{}-{}",
+        std::process::id(),
+        NEXT_REPOSITORY_ID.fetch_add(1, Ordering::Relaxed)
+    ));
+    start_in_process_client(
+        InProcessClientOptions::new(
+            profile_root,
+            ClientInfo {
+                name: "zeta-native-test".into(),
+                version: env!("CARGO_PKG_VERSION").into(),
+            },
+        )
+        .with_workspace_root(root),
+    )
+    .unwrap()
 }
 
 fn run_git(root: &Path, arguments: &[&str]) {

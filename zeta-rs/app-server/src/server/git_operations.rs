@@ -5,13 +5,38 @@ use serde_json::Value;
 use std::path::PathBuf;
 use zeta_app_server_protocol::protocol::error::AppServerErrorName;
 use zeta_app_server_protocol::protocol::git::{
-    GitCommitParams, GitCommitResult as GitCommitResultDto, GitOperationResult, GitPathsParams,
+    GitBranchListResult, GitBranchSwitchParams, GitCommitParams,
+    GitCommitResult as GitCommitResultDto, GitOperationResult, GitPathsParams,
 };
 use zeta_git::GitError;
 
 impl AppServer {
     pub(super) fn git_status(&self) -> Result<Value, RpcError> {
         result(&self.git_runtime_service()?.status().map_err(git_error)?)
+    }
+
+    pub(super) fn git_text_diff(&self) -> Result<Value, RpcError> {
+        result(&self.git_runtime_service()?.text_diff().map_err(git_error)?)
+    }
+
+    pub(super) fn git_branch_list(&self) -> Result<Value, RpcError> {
+        let branches = self
+            .git_runtime_service()?
+            .local_branches()
+            .map_err(git_error)?;
+        result(&GitBranchListResult { branches })
+    }
+
+    pub(super) fn git_branch_switch(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: GitBranchSwitchParams = decode(params)?;
+        if params.name.trim().is_empty() || params.name.len() > 1024 || params.name.contains('\0') {
+            return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+        }
+        let status = self
+            .git_runtime_service()?
+            .switch_branch(&params.name)
+            .map_err(git_error)?;
+        result(&GitOperationResult { status })
     }
 
     pub(super) fn git_stage(&self, params: &Value) -> Result<Value, RpcError> {
@@ -98,7 +123,9 @@ fn workspace_paths(paths: Vec<String>) -> Result<Vec<PathBuf>, RpcError> {
 
 fn git_error(error: GitRuntimeError) -> RpcError {
     match error {
-        GitRuntimeError::Boundary | GitRuntimeError::Service(GitServiceError::Boundary) => {
+        GitRuntimeError::Boundary
+        | GitRuntimeError::Service(GitServiceError::Boundary)
+        | GitRuntimeError::Service(GitServiceError::BranchNotFound) => {
             RpcError::new(-32061, AppServerErrorName::GitOperationFailed)
         }
         GitRuntimeError::Service(GitServiceError::Git(GitError::NotAWorkingTree { .. })) => {

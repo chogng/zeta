@@ -6,8 +6,8 @@
 
 ## 快速理解
 
-Desktop Renderer 不启动 Git 进程，也不解析 Git 输出。Workspace-scoped App Server 接收 typed
-Git intent，调用 `zeta-git`，再把 renderer-safe DTO 返回 TypeScript。
+Desktop Renderer、Native 和 TUI 不启动 Git 进程，也不解析 Git 输出。Workspace-scoped App
+Server 接收 typed Git intent，调用 `zeta-git`，再把 client-safe DTO 返回产品入口。
 
 ```text
 Desktop SCM View
@@ -26,7 +26,7 @@ parsing 留在 Rust host。Renderer 只拥有展示状态和用户 intent。
 | 查看更改 | 自动读取并投影工作区范围内的 Git 状态 | 当前只支持单工作区 |
 | 暂存或取消暂存 | 使用明确的工作区相对路径 | 不能越过工作区边界 |
 | 丢弃更改 | 只恢复已跟踪文件，并在界面确认 | 不删除未跟踪文件 |
-| Native 切换本地分支 | 点击底栏当前分支，在菜单中选择另一个本地分支 | 冲突时 Git 拒绝切换并保留当前工作树 |
+| 切换本地分支 | Native 点击底栏当前分支，在菜单中选择另一个本地分支；请求通过 App Server | 冲突时 Git 拒绝切换并保留当前工作树 |
 | 拉取远端 | 只允许 fast-forward | 需要交互认证时失败 |
 | 提交和推送 | 使用系统 Git 的当前仓库配置 | 尚无凭据提示和进度 UI |
 
@@ -58,6 +58,9 @@ parsing 留在 Rust host。Renderer 只拥有展示状态和用户 intent。
 - `git/stage`、`git/unstage` 和 `git/discardWorktree` 使用明确 path set；discard 只恢复 tracked
   working-tree 内容，不删除 untracked 文件，Desktop 在执行前要求确认；
 - `git/commit` 从 stdin 传入经过校验的 message，并返回新 commit object ID；
+- `git/textDiff` 返回 workspace-scoped status、受限 UTF-8 HEAD/worktree 文本与增删行统计；
+- `git/branch/list` 返回现有本地分支，`git/branch/switch` 只接受 branch name，并在 host 重新解析为
+  当前仓库真实分支后执行切换；
 - `git/fetch` 执行 all-remotes prune，`git/pull` 仅允许 fast-forward，`git/push` 使用 Git 当前
   upstream/default 配置；所有 remote operation 都是 non-interactive；
 - 每个成功 mutation 都返回新的 `GitStatusResult`，Desktop 立即重绘；首次打开 View 也会自动刷新；
@@ -69,18 +72,16 @@ parsing 留在 Rust host。Renderer 只拥有展示状态和用户 intent。
   ready 时主动刷新，并接受新 runtime 从较小 revision 开始的 snapshot。已退役实例的迟到通知
   不能覆盖新状态。Watcher 初始化失败不会关闭 Git RPC，用户仍可手动 Refresh。
 
-Native host 还会直接通过 `text_diff_snapshot_under` 消费 `zeta-git::GitTextDiffSnapshot`，
-让 Git domain 按当前工作区前缀过滤 changed path 与可展示的 UTF-8 文本变化，并在 Composer 底栏展示
-`Changes files • +additions -deletions`。文件内容读取、
-replacement 计数和 binary/size skip 规则由 `zeta-git` 统一拥有；Native 只负责标签、侧栏状态和
-MultiDiff presentation。点击该 Changes action 会刷新 Git projection、展开右栏并选择 Changes
-Pane。
+Native 通过 `zeta-app-server-client` 消费 `git/textDiff`，在 Composer 底栏展示
+`Changes files • +additions -deletions`，并从协议中的原始/修改文本重建 presentation-only
+`DiffDocument`。文件内容读取、replacement 计数和 binary/size skip 规则仍由 `zeta-git` 统一拥有；
+Native 只负责标签、侧栏状态和 MultiDiff presentation。点击 Changes action 会请求刷新 Git
+projection、展开右栏并选择 Changes Pane。
 
-Native 的底栏分支按钮直接复用通用 `ContextMenu`，通过
-`GitClient::local_branches` 获取候选项，再由 `GitClient::switch_branch` 执行本地分支切换。
-Git 对脏工作树或 linked worktree 冲突保持权威：失败时不重试、不丢弃改动，菜单保留并显示失败；
-成功后重新读取 Files、HEAD、Changes 和 MultiDiff。该 Native 路径不等同于 App Server SCM
-协议已经拥有 branch mutation。
+Native 的底栏分支按钮复用通用 `ContextMenu`，候选项来自 `git/branch/list`，切换通过
+`git/branch/switch`。Git 对脏工作树或 linked worktree 冲突保持权威：失败时不重试、不丢弃改动，
+菜单保留并显示失败；成功后使用新的 typed projection 刷新 Files、HEAD、Changes 和 MultiDiff。
+`zeta-native` 不再依赖 `zeta-git`。
 
 稳定失败边界为 `GitUnavailable`、`GitNotRepository` 和 `GitOperationFailed`。内部 executable、
 stderr、磁盘绝对路径和非 UTF-8 path 不进入 Renderer。
@@ -89,8 +90,8 @@ stderr、磁盘绝对路径和非 UTF-8 path 不进入 Renderer。
 
 - 当前是单 workspace `GitRuntime`，尚无 multi-repository registry；
 - operation 由 runtime mutex 串行化，但尚无可观测 queue、progress、caller cancellation 或 retry；
-- Native 已支持切换现有本地分支；App Server SCM 协议仍无 branch mutation，系统也尚无
-  branch 新建/删除/重命名、tag/worktree mutation 或 credential prompt；
+- App Server 与 Native 已支持切换现有本地分支；系统仍无 branch 新建/删除/重命名、
+  tag/worktree mutation 或 credential prompt；TUI 尚未投影 Git UI；
 - pull 固定为 fast-forward only；discard 不删除 untracked 文件；
 - 当前是单 workspace root contract，不是 multi-root repository collection；
 - SCM change row 尚未接入 editor diff/open workflow。
@@ -104,8 +105,7 @@ stderr、磁盘绝对路径和非 UTF-8 path 不进入 Renderer。
 1. 增加显式 repository identity 与 multi-root registry；
 2. 为长时间 remote operation 增加 progress、queue state 和 caller cancellation；
 3. 接入 diff/open 与更细粒度的错误 UI；
-4. 把 Native 已验证的 local branch switch 语义扩展到 App Server SCM，并按明确产品语义增加
-   branch lifecycle 等额外 mutation。
+4. 按明确产品语义增加 branch lifecycle 等额外 mutation，并让 TUI 消费同一协议。
 
-长期不变量是：Desktop 不直接执行 Git；App Server adapter 不复制 Git command/parsing；watch
-event 只触发重新确认，不能自身成为 repository truth。
+长期不变量是：Desktop、Native 与 TUI 不直接执行 Git；App Server adapter 不复制 Git
+command/parsing；watch event 只触发重新确认，不能自身成为 repository truth。

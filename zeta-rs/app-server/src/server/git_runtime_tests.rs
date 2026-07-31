@@ -91,6 +91,49 @@ fn runtime_incarnations_use_distinct_revision_scopes() {
     assert_eq!(second_status.revision, 1);
 }
 
+#[test]
+fn runtime_projects_text_diffs_and_switches_only_existing_local_branches() {
+    let repository = TestRepository::init();
+    repository.write("tracked.txt", "before\n");
+    repository.git(&["add", "tracked.txt"]);
+    repository.git(&["commit", "-m", "initial"]);
+    repository.git(&["branch", "topic"]);
+    repository.write("tracked.txt", "after\n");
+    let runtime = GitRuntime::new(
+        trusted_workspace(repository.root()),
+        Arc::new(UpdateBroker::default()),
+    )
+    .unwrap();
+
+    let projection = runtime.text_diff().unwrap();
+
+    assert_eq!(projection.status.changes.len(), 1);
+    assert_eq!(projection.diffs.len(), 1);
+    assert_eq!(projection.diffs[0].path, "tracked.txt");
+    assert_eq!(projection.diffs[0].original, "before\n");
+    assert_eq!(projection.diffs[0].modified, "after\n");
+    assert_eq!(projection.statistics.files, 1);
+    let branches = runtime.local_branches().unwrap();
+    assert!(
+        branches
+            .iter()
+            .any(|branch| branch.name == "main" && branch.current)
+    );
+    assert!(
+        branches
+            .iter()
+            .any(|branch| branch.name == "topic" && !branch.current)
+    );
+
+    let switched = runtime.switch_branch("topic").unwrap();
+    assert!(matches!(
+        switched.head,
+        zeta_app_server_protocol::protocol::git::GitHeadDto::Branch { ref name, .. }
+            if name == "topic"
+    ));
+    assert!(runtime.switch_branch("missing").is_err());
+}
+
 struct TestRepository {
     root: PathBuf,
 }
@@ -104,7 +147,7 @@ impl TestRepository {
         ));
         std::fs::create_dir_all(&root).unwrap();
         let repository = Self { root };
-        repository.git(&["init"]);
+        repository.git(&["init", "--initial-branch=main"]);
         repository.git(&["config", "user.name", "Zeta Test"]);
         repository.git(&["config", "user.email", "zeta@example.invalid"]);
         repository

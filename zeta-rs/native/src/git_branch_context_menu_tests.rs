@@ -1,30 +1,19 @@
-use std::path::{Path, PathBuf};
-use std::process::Command;
-use std::sync::atomic::{AtomicU64, Ordering};
-
 use super::{
     GitBranchContextMenu, GitBranchContextMenuState, GitBranchMenuAction, GitBranchMenuActivation,
 };
 use crate::shell_interaction::COMPOSER;
 use crate::shell_style::SHELL_PALETTE;
-use crate::workspace_context::WorkspaceContext;
+use zeta_app_server_protocol::protocol::git::GitBranchDto;
 use zeta_ui::{CaretVisibility, Rect, TextInputCommand, TextInputLayoutEngine};
 use zeta_ui_dispatch::{AccessibilityRole, InteractionFrame, UiDispatch};
 
-static NEXT_MENU_ID: AtomicU64 = AtomicU64::new(0);
-
 #[test]
 fn branch_menu_places_the_current_branch_first_and_marks_it() {
-    let root = repository_fixture();
-    run_git(&root, &["branch", "zulu"]);
-    run_git(&root, &["branch", "alpha"]);
-    let mut context = WorkspaceContext::capture_current();
-    context.switch_working_directory(root.clone()).unwrap();
     let mut state = GitBranchContextMenuState::default();
 
     state.open(
         Rect::from_xywh(240.0, 640.0, 90.0, 24.0),
-        context.local_branches().unwrap(),
+        branches(&["zulu", "main", "alpha"]),
         Some(COMPOSER),
     );
 
@@ -37,18 +26,13 @@ fn branch_menu_places_the_current_branch_first_and_marks_it() {
         Some(GitBranchMenuAction::Select(_))
     ));
     assert_eq!(state.dismiss(), Some(COMPOSER));
-    std::fs::remove_dir_all(root).unwrap();
 }
 
 #[test]
 fn branch_menu_reuses_context_menu_geometry_and_modal_semantics() {
-    let root = repository_fixture();
-    run_git(&root, &["branch", "topic"]);
-    let mut context = WorkspaceContext::capture_current();
-    context.switch_working_directory(root.clone()).unwrap();
     let anchor = Rect::from_xywh(240.0, 640.0, 90.0, 24.0);
     let mut state = GitBranchContextMenuState::default();
-    state.open(anchor, context.local_branches().unwrap(), None);
+    state.open(anchor, branches(&["main", "topic"]), None);
     let dispatch = UiDispatch::default();
     let mut text_layout = TextInputLayoutEngine::new();
     let menu = GitBranchContextMenu::new(
@@ -69,20 +53,14 @@ fn branch_menu_reuses_context_menu_geometry_and_modal_semantics() {
     assert_eq!(nodes[0].role, AccessibilityRole::Menu);
     assert_eq!(nodes[1].role, AccessibilityRole::TextInput);
     assert_eq!(nodes[2].role, AccessibilityRole::MenuItem);
-    std::fs::remove_dir_all(root).unwrap();
 }
 
 #[test]
 fn search_row_filters_branches_and_resets_to_the_first_page() {
-    let root = repository_fixture();
-    run_git(&root, &["branch", "feature/search"]);
-    run_git(&root, &["branch", "topic"]);
-    let mut context = WorkspaceContext::capture_current();
-    context.switch_working_directory(root.clone()).unwrap();
     let mut state = GitBranchContextMenuState::default();
     state.open(
         Rect::from_xywh(240.0, 640.0, 90.0, 24.0),
-        context.local_branches().unwrap(),
+        branches(&["main", "feature/search", "topic"]),
         None,
     );
 
@@ -91,21 +69,17 @@ fn search_row_filters_branches_and_resets_to_the_first_page() {
     assert_eq!(state.search_input().text(), "search");
     assert_eq!(state.items().len(), 1);
     assert_eq!(state.items()[0].label, "feature/search");
-    std::fs::remove_dir_all(root).unwrap();
 }
 
 #[test]
 fn branch_menu_pages_large_branch_lists_and_surfaces_switch_errors() {
-    let root = repository_fixture();
-    for index in 0..12 {
-        run_git(&root, &["branch", &format!("topic-{index:02}")]);
-    }
-    let mut context = WorkspaceContext::capture_current();
-    context.switch_working_directory(root.clone()).unwrap();
+    let mut branch_names = vec!["main".to_string()];
+    branch_names.extend((0..12).map(|index| format!("topic-{index:02}")));
+    let branch_names = branch_names.iter().map(String::as_str).collect::<Vec<_>>();
     let mut state = GitBranchContextMenuState::default();
     state.open(
         Rect::from_xywh(240.0, 640.0, 90.0, 24.0),
-        context.local_branches().unwrap(),
+        branches(&branch_names),
         None,
     );
     let more_index = state.items().len() - 1;
@@ -126,35 +100,16 @@ fn branch_menu_pages_large_branch_lists_and_surfaces_switch_errors() {
         "Switch failed · working tree unchanged"
     );
     assert!(state.items()[0].action.is_none());
-    std::fs::remove_dir_all(root).unwrap();
 }
 
-fn repository_fixture() -> PathBuf {
-    let root = std::env::temp_dir().join(format!(
-        "zeta-git-branch-menu-{}-{}",
-        std::process::id(),
-        NEXT_MENU_ID.fetch_add(1, Ordering::Relaxed)
-    ));
-    std::fs::create_dir_all(&root).unwrap();
-    run_git(&root, &["init", "--initial-branch=main"]);
-    run_git(&root, &["config", "user.name", "Zeta Test"]);
-    run_git(&root, &["config", "user.email", "zeta@example.invalid"]);
-    std::fs::write(root.join("tracked.txt"), "main\n").unwrap();
-    run_git(&root, &["add", "tracked.txt"]);
-    run_git(&root, &["commit", "-m", "initial"]);
-    root
-}
-
-fn run_git(root: &Path, arguments: &[&str]) {
-    let output = Command::new("git")
-        .arg("-C")
-        .arg(root)
-        .args(arguments)
-        .output()
-        .unwrap();
-    assert!(
-        output.status.success(),
-        "git failed: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
+fn branches(names: &[&str]) -> Vec<GitBranchDto> {
+    names
+        .iter()
+        .map(|name| GitBranchDto {
+            name: (*name).into(),
+            object_id: format!("object-{name}"),
+            current: *name == "main",
+            upstream: None,
+        })
+        .collect()
 }

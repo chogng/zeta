@@ -1,11 +1,8 @@
 use std::path::{Path, PathBuf};
 use std::{fs, io};
 
-use anyhow::{Context, Result};
+use zeta_app_server_protocol::protocol::git::{GitHeadDto, GitTextDiffResult};
 use zeta_diff::DiffDocument;
-use zeta_git::{GitBranch, GitClient, GitHead, GitTextDiffLimits};
-
-const MAX_DIFF_FILE_BYTES: usize = 2 * 1024 * 1024;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct WorkspaceDiff {
@@ -50,7 +47,7 @@ impl WorkspaceContext {
             .map(PathBuf::from);
         let working_directory_label =
             display_working_directory(&working_directory, home.as_deref());
-        let mut context = Self {
+        Self {
             working_directory,
             working_directory_label,
             git_branch: None,
@@ -59,9 +56,7 @@ impl WorkspaceContext {
             diffs: Vec::new(),
             diff_additions: 0,
             diff_deletions: 0,
-        };
-        context.refresh_repository();
-        context
+        }
     }
 
     pub(crate) const fn location_label(&self) -> &'static str {
@@ -100,22 +95,40 @@ impl WorkspaceContext {
         &self.diffs
     }
 
-    pub(crate) fn refresh_repository(&mut self) {
-        let Some(snapshot) = repository_snapshot(&self.working_directory) else {
-            self.git_branch = None;
-            self.upstream_distance = None;
-            self.change_count = 0;
-            self.diffs.clear();
-            self.diff_additions = 0;
-            self.diff_deletions = 0;
+    pub(crate) fn apply_git_projection(&mut self, projection: Option<&GitTextDiffResult>) {
+        self.clear_repository();
+        let Some(projection) = projection else {
             return;
         };
-        self.git_branch = Some(snapshot.branch);
-        self.upstream_distance = snapshot.upstream_distance;
-        self.change_count = snapshot.change_count;
-        self.diffs = snapshot.diffs;
-        self.diff_additions = snapshot.diff_additions;
-        self.diff_deletions = snapshot.diff_deletions;
+        let (branch, upstream_distance) = match &projection.status.head {
+            GitHeadDto::Branch { name, upstream, .. } => (
+                name.clone(),
+                upstream
+                    .as_ref()
+                    .map(|upstream| (upstream.ahead, upstream.behind)),
+            ),
+            GitHeadDto::Detached { object_id } => {
+                (object_id.chars().take(8).collect::<String>(), None)
+            }
+            GitHeadDto::Unborn { name } => (name.clone(), None),
+        };
+        self.git_branch = Some(branch);
+        self.upstream_distance = upstream_distance;
+        self.change_count = projection.status.changes.len();
+        self.diffs = projection
+            .diffs
+            .iter()
+            .filter_map(|diff| {
+                DiffDocument::from_text(&diff.original, &diff.modified)
+                    .ok()
+                    .map(|document| WorkspaceDiff {
+                        path: diff.path.clone(),
+                        document,
+                    })
+            })
+            .collect();
+        self.diff_additions = projection.statistics.additions;
+        self.diff_deletions = projection.statistics.deletions;
     }
 
     pub(crate) fn switch_working_directory(
@@ -133,42 +146,13 @@ impl WorkspaceContext {
         Ok(())
     }
 
-    pub(crate) fn local_branches(&self) -> Result<Vec<GitBranch>> {
-        let runtime = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .context("could not create Git branch query runtime")?;
-        runtime.block_on(async {
-            let client = GitClient::system();
-            let repository = client
-                .open_repository(&self.working_directory)
-                .await
-                .context("could not open workspace Git repository")?;
-            client
-                .local_branches(&repository)
-                .await
-                .context("could not list local Git branches")
-        })
-    }
-
-    pub(crate) fn switch_branch(&mut self, branch: &GitBranch) -> Result<()> {
-        let runtime = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .context("could not create Git branch mutation runtime")?;
-        runtime.block_on(async {
-            let client = GitClient::system();
-            let repository = client
-                .open_repository(&self.working_directory)
-                .await
-                .context("could not open workspace Git repository")?;
-            client
-                .switch_branch(&repository, branch)
-                .await
-                .with_context(|| format!("could not switch to Git branch {}", branch.name()))
-        })?;
-        self.refresh_repository();
-        Ok(())
+    fn clear_repository(&mut self) {
+        self.git_branch = None;
+        self.upstream_distance = None;
+        self.change_count = 0;
+        self.diffs.clear();
+        self.diff_additions = 0;
+        self.diff_deletions = 0;
     }
 
     #[cfg(test)]
@@ -198,76 +182,6 @@ impl WorkspaceContext {
             diffs,
         }
     }
-}
-
-struct RepositorySnapshot {
-    branch: String,
-    upstream_distance: Option<(usize, usize)>,
-    change_count: usize,
-    diffs: Vec<WorkspaceDiff>,
-    diff_additions: usize,
-    diff_deletions: usize,
-}
-
-fn repository_snapshot(working_directory: &Path) -> Option<RepositorySnapshot> {
-    let runtime = tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .ok()?;
-    runtime.block_on(async {
-        let client = GitClient::system();
-        let repository = client.open_repository(working_directory).await.ok()?;
-        let workspace_prefix = working_directory
-            .strip_prefix(repository.worktree_root())
-            .ok()?;
-        let diff_snapshot = client
-            .text_diff_snapshot_under(
-                &repository,
-                workspace_prefix,
-                GitTextDiffLimits::new(MAX_DIFF_FILE_BYTES).ok()?,
-            )
-            .await
-            .ok()?;
-        let snapshot = diff_snapshot.repository();
-        let (branch, upstream_distance) = match snapshot.head() {
-            GitHead::Branch { name, upstream, .. } => (
-                name.clone(),
-                upstream
-                    .as_ref()
-                    .map(|upstream| (upstream.ahead(), upstream.behind())),
-            ),
-            GitHead::Detached { object_id } => (object_id.chars().take(8).collect(), None),
-            GitHead::Unborn { name } => (name.clone(), None),
-        };
-        let change_count = snapshot
-            .changes()
-            .iter()
-            .filter(|change| change.path().strip_prefix(workspace_prefix).is_ok())
-            .count();
-        let mut diffs = Vec::new();
-        let mut diff_additions = 0;
-        let mut diff_deletions = 0;
-        for diff in diff_snapshot.diffs() {
-            let Some(display_path) = diff.path().strip_prefix(workspace_prefix).ok() else {
-                continue;
-            };
-            let statistics = diff.statistics();
-            diff_additions += statistics.additions();
-            diff_deletions += statistics.deletions();
-            diffs.push(WorkspaceDiff {
-                path: display_path.to_string_lossy().replace('\\', "/"),
-                document: diff.document().clone(),
-            });
-        }
-        Some(RepositorySnapshot {
-            branch,
-            upstream_distance,
-            change_count,
-            diffs,
-            diff_additions,
-            diff_deletions,
-        })
-    })
 }
 
 pub(crate) fn display_working_directory(working_directory: &Path, home: Option<&Path>) -> String {

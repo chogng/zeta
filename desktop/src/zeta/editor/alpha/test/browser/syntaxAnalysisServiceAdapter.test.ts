@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { type ZetaRendererApi } from "../../../../platform/app-server/common/renderer-api.js";
-import { createAppServerSyntaxAnalysisWorkerFactory } from "../../browser/appServerSyntaxAnalysisWorker.js";
+import { AppServerSyntaxAnalysisService, type ISyntaxAnalysisApi } from "../../../../platform/syntax/browser/appServerSyntaxAnalysisService.js";
+import { createSyntaxAnalysisServiceAdapter } from "../../browser/syntaxAnalysisServiceAdapter.js";
 import { LANGUAGE_DIAGNOSTIC_LANE, LANGUAGE_TOKEN_LANE, type LanguageAnalysisResult, type LanguageAnalysisWorker } from "../../common/languageAnalysisService.js";
 import { type LanguageWorkerModelSynchronizer, type LanguageWorkerRequest } from "../../common/languageRequestCoordinator.js";
 import { LanguageDiagnosticSeverity, type LanguageDiagnosticResult } from "../../common/languageResults.js";
@@ -9,12 +9,23 @@ import { TextModelChangeReason, TextPosition, TextRange, type TextModelChange, t
 import { type LanguageAnalysisRequest } from "../../common/languageAnalysisProviders.js";
 import { type SyntaxAnalysisSnapshotDto, type SyntaxChangeParams, type SyntaxCloseParams, type SyntaxOpenParams } from "../../../../../../generated/app-server/types.js";
 
-type SyntaxApi = ZetaRendererApi["syntax"];
+test("App Server syntax adapter forwards the canonical service lifecycle", async () => {
+  const api = new RecordingSyntaxApi();
+  const service = new AppServerSyntaxAnalysisService(api);
 
-test("Alpha App Server syntax worker decodes Rust tokens and synchronizes model transactions", async () => {
+  await service.open({ documentId: "document-1", documentUri: "file:///workspace/main.rs", language: "rust", revision: 1, text: "fn main() {}" });
+  await service.change({ documentId: "document-1", previousRevision: 1, revision: 2, edits: [{ startUtf16: 3, endUtf16: 7, text: "entry" }] });
+  await service.close({ documentId: "document-1" });
+
+  assert.equal(api.openCalls[0]?.documentUri, "file:///workspace/main.rs");
+  assert.deepEqual(api.changeCalls[0]?.edits, [{ startUtf16: 3, endUtf16: 7, text: "entry" }]);
+  assert.deepEqual(api.closeCalls, [{ documentId: "document-1" }]);
+});
+
+test("Alpha syntax service adapter decodes Rust tokens and synchronizes model transactions", async () => {
   const api = new RecordingSyntaxApi();
   const fallback = new RecordingFallbackWorker();
-  const factory = createAppServerSyntaxAnalysisWorkerFactory(api, "file:///workspace/main.rs", "rust", () => fallback);
+  const factory = createSyntaxAnalysisServiceAdapter(new AppServerSyntaxAnalysisService(api), "file:///workspace/main.rs", "rust", () => fallback);
   using worker = factory();
 
   const first = await worker.run(request(1, LANGUAGE_TOKEN_LANE, "rust", snapshot(1, "fn main() {\n  x\n}")), new AbortController().signal);
@@ -52,10 +63,10 @@ test("Alpha App Server syntax worker decodes Rust tokens and synchronizes model 
   assert.deepEqual(fallback.calls, ["diagnostics:rust", "tokens:typescript"]);
 });
 
-test("Alpha App Server syntax worker routes JSON and JSONC through the backend", async () => {
+test("Alpha syntax service adapter routes JSON and JSONC through the backend", async () => {
   for (const languageId of ["json", "jsonc"] as const) {
     const api = new RecordingSyntaxApi();
-    using worker = createAppServerSyntaxAnalysisWorkerFactory(api, `file:///workspace/settings.${languageId}`, languageId, () => new RecordingFallbackWorker())();
+    using worker = createSyntaxAnalysisServiceAdapter(new AppServerSyntaxAnalysisService(api), `file:///workspace/settings.${languageId}`, languageId, () => new RecordingFallbackWorker())();
 
     await worker.run(request(1, LANGUAGE_TOKEN_LANE, languageId, snapshot(1, "{\"enabled\":true}")), new AbortController().signal);
 
@@ -63,19 +74,19 @@ test("Alpha App Server syntax worker routes JSON and JSONC through the backend",
   }
 });
 
-test("Alpha App Server syntax worker uses the existing fallback when backend analysis fails", async context => {
+test("Alpha syntax service adapter uses the existing fallback when backend analysis fails", async context => {
   context.mock.method(console, "error", () => undefined);
   const api = new RecordingSyntaxApi();
   api.openError = new Error("backend unavailable");
   const fallback = new RecordingFallbackWorker();
-  using worker = createAppServerSyntaxAnalysisWorkerFactory(api, "file:///workspace/main.rs", "rust", () => fallback)();
+  using worker = createSyntaxAnalysisServiceAdapter(new AppServerSyntaxAnalysisService(api), "file:///workspace/main.rs", "rust", () => fallback)();
 
   const result = await worker.run(request(1, LANGUAGE_TOKEN_LANE, "rust", snapshot(1, "fn main() {}")), new AbortController().signal);
   assert.equal(result.lane, LANGUAGE_TOKEN_LANE);
   assert.deepEqual(fallback.calls, ["tokens:rust"]);
 });
 
-test("Alpha App Server syntax worker merges backend and fallback diagnostics", async () => {
+test("Alpha syntax service adapter merges backend and fallback diagnostics", async () => {
   const api = new RecordingSyntaxApi();
   api.diagnostics = [{
     range: { start: { line: 0, character: 3 }, end: { line: 0, character: 3 } },
@@ -90,7 +101,7 @@ test("Alpha App Server syntax worker merges backend and fallback diagnostics", a
     message: "Fallback diagnostic",
     source: "alpha.lexical",
   }];
-  using worker = createAppServerSyntaxAnalysisWorkerFactory(api, "file:///workspace/main.rs", "rust", () => fallback)();
+  using worker = createSyntaxAnalysisServiceAdapter(new AppServerSyntaxAnalysisService(api), "file:///workspace/main.rs", "rust", () => fallback)();
 
   const result = await worker.run(request(1, LANGUAGE_DIAGNOSTIC_LANE, "rust", snapshot(1, "fn (")), new AbortController().signal);
 
@@ -101,7 +112,7 @@ test("Alpha App Server syntax worker merges backend and fallback diagnostics", a
   ]);
 });
 
-class RecordingSyntaxApi implements SyntaxApi {
+class RecordingSyntaxApi implements ISyntaxAnalysisApi {
   readonly openCalls: SyntaxOpenParams[] = [];
   readonly changeCalls: SyntaxChangeParams[] = [];
   readonly closeCalls: SyntaxCloseParams[] = [];

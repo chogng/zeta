@@ -1210,6 +1210,54 @@
           "properties": {
             "method": {
               "type": "string",
+              "const": "git/textDiff"
+            },
+            "params": {
+              "$ref": "#/$defs/EmptyParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "git/branch/list"
+            },
+            "params": {
+              "$ref": "#/$defs/EmptyParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "git/branch/switch"
+            },
+            "params": {
+              "$ref": "#/$defs/GitBranchSwitchParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
               "const": "git/stage"
             },
             "params": {
@@ -2286,6 +2334,54 @@
           "properties": {
             "method": {
               "type": "string",
+              "const": "git/textDiff"
+            },
+            "result": {
+              "$ref": "#/$defs/GitTextDiffResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "git/branch/list"
+            },
+            "result": {
+              "$ref": "#/$defs/GitBranchListResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "git/branch/switch"
+            },
+            "result": {
+              "$ref": "#/$defs/GitOperationResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
               "const": "git/stage"
             },
             "result": {
@@ -2966,6 +3062,59 @@
         "metadata"
       ]
     },
+    "GitBranchDto": {
+      "description": "One local branch returned by the workspace Git runtime.",
+      "type": "object",
+      "properties": {
+        "current": {
+          "type": "boolean"
+        },
+        "name": {
+          "type": "string"
+        },
+        "objectId": {
+          "type": "string"
+        },
+        "upstream": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "name",
+        "objectId",
+        "current"
+      ]
+    },
+    "GitBranchListResult": {
+      "type": "object",
+      "properties": {
+        "branches": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/GitBranchDto"
+          }
+        }
+      },
+      "required": [
+        "branches"
+      ]
+    },
+    "GitBranchSwitchParams": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "maxLength": 1024,
+          "minLength": 1
+        }
+      },
+      "required": [
+        "name"
+      ]
+    },
     "GitChangeStatusDto": {
       "type": "string",
       "enum": [
@@ -3007,6 +3156,31 @@
       "required": [
         "objectId",
         "status"
+      ]
+    },
+    "GitDiffStatisticsDto": {
+      "type": "object",
+      "properties": {
+        "additions": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "deletions": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "files": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "files",
+        "additions",
+        "deletions"
       ]
     },
     "GitHeadDto": {
@@ -3195,6 +3369,61 @@
         "commitChanged",
         "trackedChanges",
         "untrackedChanges"
+      ]
+    },
+    "GitTextDiffDto": {
+      "description": "One bounded UTF-8 text change from `HEAD` to the workspace working tree.",
+      "type": "object",
+      "properties": {
+        "additions": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "deletions": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "modified": {
+          "type": "string"
+        },
+        "original": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "original",
+        "modified",
+        "additions",
+        "deletions"
+      ]
+    },
+    "GitTextDiffResult": {
+      "description": "One authoritative status snapshot plus its bounded workspace text-diff projection.",
+      "type": "object",
+      "properties": {
+        "diffs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/GitTextDiffDto"
+          }
+        },
+        "statistics": {
+          "$ref": "#/$defs/GitDiffStatisticsDto"
+        },
+        "status": {
+          "$ref": "#/$defs/GitStatusResult"
+        }
+      },
+      "required": [
+        "status",
+        "diffs",
+        "statistics"
       ]
     },
     "GitUpstreamDto": {

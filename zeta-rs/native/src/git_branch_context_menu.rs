@@ -1,4 +1,4 @@
-use zeta_git::GitBranch;
+use zeta_app_server_protocol::protocol::git::GitBranchDto as GitBranch;
 use zeta_ui::{
     ButtonBackgrounds, ButtonState, ButtonStyle, CaretVisibility, Component, ContextMenu,
     ContextMenuItem, ContextMenuSelection, ContextMenuStyle, ContextViewAnchorPosition,

@@ -6,13 +6,17 @@ use std::time::Duration;
 
 use anyhow::{Context, Result, anyhow};
 use zeta_app_server_client::{
-    AppServerEvent, AppServerEvents, AppServerRequestHandle, AppServerSession,
+    AppServerEvent, AppServerEvents, AppServerRequestHandle, AppServerSession, ClientError,
     InProcessClientOptions, ServerNotification, local_profile_root,
 };
 use zeta_app_server_protocol::protocol::common::{ClientInfo, CommandId};
+use zeta_app_server_protocol::protocol::git::{
+    GitBranchDto, GitBranchSwitchParams, GitTextDiffResult,
+};
 use zeta_app_server_protocol::protocol::session::{SessionCreateParams, SessionThreadCreateParams};
 use zeta_app_server_protocol::protocol::thread::{ThreadSubscribeParams, ThreadSubscribeResult};
 use zeta_app_server_protocol::protocol::turn::{InputItem, ShellTurnStartParams, TurnStartParams};
+use zeta_app_server_protocol::protocol::workspace::WorkspaceSwitchParams;
 use zeta_protocol::{
     Session, SessionId, SessionStatus, SessionThreadStatus, Thread, ThreadId, ThreadUpdateEnvelope,
 };
@@ -29,6 +33,7 @@ const EVENT_POLL_INTERVAL: Duration = Duration::from_millis(25);
 pub(crate) enum AgentSessionEvent {
     Snapshot(Thread),
     Update(Box<ThreadUpdateEnvelope>),
+    GitProjection(Option<GitTextDiffResult>),
     Error(String),
     Closed,
 }
@@ -37,7 +42,22 @@ enum AgentSessionCommand {
     SubmitAgentMessage(String),
     SubmitShellCommand(String),
     Refresh,
+    RefreshGit,
+    ListGitBranches(SyncSender<std::result::Result<Vec<GitBranchDto>, String>>),
+    SwitchGitBranch {
+        name: String,
+        response: SyncSender<std::result::Result<GitTextDiffResult, String>>,
+    },
+    SwitchWorkspace {
+        root: PathBuf,
+        response: SyncSender<std::result::Result<WorkspaceSwitchProjection, String>>,
+    },
     Shutdown,
+}
+
+pub(crate) struct WorkspaceSwitchProjection {
+    pub(crate) root: PathBuf,
+    pub(crate) git: Option<GitTextDiffResult>,
 }
 
 pub(crate) struct AgentSession {
@@ -77,6 +97,45 @@ impl AgentSession {
         self.commands
             .try_send(AgentSessionCommand::Refresh)
             .context("Agent refresh queue is unavailable")
+    }
+
+    pub(crate) fn refresh_git(&self) -> Result<()> {
+        self.commands
+            .try_send(AgentSessionCommand::RefreshGit)
+            .context("Git refresh queue is unavailable")
+    }
+
+    pub(crate) fn local_branches(&self) -> Result<Vec<GitBranchDto>> {
+        let (response, result) = mpsc::sync_channel(1);
+        self.commands
+            .try_send(AgentSessionCommand::ListGitBranches(response))
+            .context("Git branch query queue is unavailable")?;
+        result
+            .recv()
+            .context("Git branch query worker stopped")?
+            .map_err(anyhow::Error::msg)
+    }
+
+    pub(crate) fn switch_git_branch(&self, name: String) -> Result<GitTextDiffResult> {
+        let (response, result) = mpsc::sync_channel(1);
+        self.commands
+            .try_send(AgentSessionCommand::SwitchGitBranch { name, response })
+            .context("Git branch mutation queue is unavailable")?;
+        result
+            .recv()
+            .context("Git branch mutation worker stopped")?
+            .map_err(anyhow::Error::msg)
+    }
+
+    pub(crate) fn switch_workspace(&self, root: PathBuf) -> Result<WorkspaceSwitchProjection> {
+        let (response, result) = mpsc::sync_channel(1);
+        self.commands
+            .try_send(AgentSessionCommand::SwitchWorkspace { root, response })
+            .context("Workspace switch queue is unavailable")?;
+        result
+            .recv()
+            .context("Workspace switch worker stopped")?
+            .map_err(anyhow::Error::msg)
     }
 }
 
@@ -118,6 +177,7 @@ fn run_agent_session_inner(
     )
     .map_err(|error| anyhow!(error.to_string()))?;
     let mut client = session.client();
+    publish_git_projection(event_proxy, &mut client)?;
     let events = session
         .take_events()
         .map_err(|error| anyhow!(error.to_string()))?;
@@ -151,6 +211,26 @@ fn drive_agent_session(
                     active.subscription = subscribe_thread(client, &active.thread_id)?;
                     publish_subscription(event_proxy, &active.subscription)?;
                 }
+                Ok(AgentSessionCommand::RefreshGit) => {
+                    if let Err(error) = publish_git_projection(event_proxy, client) {
+                        send_event(event_proxy, AgentSessionEvent::Error(error.to_string()))?;
+                    }
+                }
+                Ok(AgentSessionCommand::ListGitBranches(response)) => {
+                    let result = client
+                        .list_git_branches()
+                        .map(|result| result.branches)
+                        .map_err(|error| error.to_string());
+                    let _ = response.send(result);
+                }
+                Ok(AgentSessionCommand::SwitchGitBranch { name, response }) => {
+                    let result = switch_git_branch(client, name);
+                    let _ = response.send(result.map_err(|error| error.to_string()));
+                }
+                Ok(AgentSessionCommand::SwitchWorkspace { root, response }) => {
+                    let result = switch_workspace(client, root);
+                    let _ = response.send(result.map_err(|error| error.to_string()));
+                }
                 Ok(AgentSessionCommand::Shutdown) => return Ok(()),
                 Err(TryRecvError::Empty) => break,
                 Err(TryRecvError::Disconnected) => return Ok(()),
@@ -163,6 +243,9 @@ fn drive_agent_session(
                     active.sequence = active.sequence.max(update.durable_sequence);
                     send_event(event_proxy, AgentSessionEvent::Update(update))?;
                 }
+            }
+            Ok(AppServerEvent::Notification(ServerNotification::GitStatusChanged(_))) => {
+                publish_git_projection(event_proxy, client)?;
             }
             Ok(AppServerEvent::Notification(_)) => {}
             Ok(AppServerEvent::ConnectionClosed(reason)) => {
@@ -313,6 +396,56 @@ fn submit_shell_command(
     Ok(())
 }
 
+fn switch_git_branch(
+    client: &mut AppServerRequestHandle,
+    name: String,
+) -> Result<GitTextDiffResult> {
+    client
+        .switch_git_branch(GitBranchSwitchParams { name })
+        .map_err(|error| anyhow!(error.to_string()))?;
+    read_git_projection(client)?.ok_or_else(|| anyhow!("Git repository became unavailable"))
+}
+
+fn switch_workspace(
+    client: &mut AppServerRequestHandle,
+    root: PathBuf,
+) -> Result<WorkspaceSwitchProjection> {
+    let switched = client
+        .switch_workspace(WorkspaceSwitchParams { root })
+        .map_err(|error| anyhow!(error.to_string()))?;
+    Ok(WorkspaceSwitchProjection {
+        root: switched.root,
+        git: read_git_projection(client)?,
+    })
+}
+
+fn publish_git_projection(
+    event_proxy: &EventLoopProxy<NativeEvent>,
+    client: &mut AppServerRequestHandle,
+) -> Result<()> {
+    send_event(
+        event_proxy,
+        AgentSessionEvent::GitProjection(read_git_projection(client)?),
+    )
+}
+
+fn read_git_projection(client: &mut AppServerRequestHandle) -> Result<Option<GitTextDiffResult>> {
+    match client.git_text_diff() {
+        Ok(projection) => Ok(Some(projection)),
+        Err(error) if git_is_unavailable(&error) => Ok(None),
+        Err(error) => Err(anyhow!(error.to_string())),
+    }
+}
+
+fn git_is_unavailable(error: &ClientError) -> bool {
+    matches!(
+        error,
+        ClientError::Server {
+            code: -32062 | -32060,
+            ..
+        }
+    )
+}
 fn send_event(event_proxy: &EventLoopProxy<NativeEvent>, event: AgentSessionEvent) -> Result<()> {
     event_proxy
         .send_event(event.into())
@@ -364,16 +497,24 @@ impl NativeApp {
                     eprintln!("could not refresh Agent Thread projection: {error}");
                 }
             }
+            AgentSessionEvent::GitProjection(projection) => {
+                self.workspace_context
+                    .apply_git_projection(projection.as_ref());
+                self.agent_sidebar_workspace
+                    .sync_repository(&self.workspace_context);
+                self.agent_sidebar_workspace.refresh_files();
+            }
             AgentSessionEvent::Error(error) => {
                 eprintln!("Agent session failed: {error}");
             }
             AgentSessionEvent::Closed => {}
         }
         if workspace_may_have_changed {
-            self.workspace_context.refresh_repository();
-            self.agent_sidebar_workspace
-                .sync_repository(&self.workspace_context);
-            self.agent_sidebar_workspace.refresh_files();
+            if let Some(session) = self.agent_session.as_ref()
+                && let Err(error) = session.refresh_git()
+            {
+                eprintln!("could not refresh Git projection: {error}");
+            }
         }
         let line_count = crate::thread_timeline::line_count(&self.thread_projection);
         let limit = self.thread_timeline_scroll_limit();

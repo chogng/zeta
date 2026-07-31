@@ -24,6 +24,13 @@ async fn text_diff_snapshot_owns_changed_files_and_line_statistics() {
     assert_eq!(snapshot.statistics().files(), 3);
     assert_eq!(snapshot.statistics().additions(), 4);
     assert_eq!(snapshot.statistics().deletions(), 3);
+    let modified = snapshot
+        .diffs()
+        .iter()
+        .find(|diff| diff.path() == Path::new("modified.txt"))
+        .unwrap();
+    assert_eq!(modified.original(), "same\nbefore\n");
+    assert_eq!(modified.modified(), "same\nafter\nadded\n");
 }
 
 #[tokio::test]

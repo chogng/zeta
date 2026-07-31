@@ -39,6 +39,9 @@ fn registry_method_and_notification_names_are_unique() {
     assert!(methods.contains("fs/readFile"));
     assert!(methods.contains("fs/writeFile"));
     assert!(methods.contains("git/status"));
+    assert!(methods.contains("git/textDiff"));
+    assert!(methods.contains("git/branch/list"));
+    assert!(methods.contains("git/branch/switch"));
     assert!(methods.contains("git/stage"));
     assert!(methods.contains("git/unstage"));
     assert!(methods.contains("git/discardWorktree"));

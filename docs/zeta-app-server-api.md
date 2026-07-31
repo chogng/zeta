@@ -169,6 +169,9 @@ inline argument parsing；提交仍通过 `turn/start.input`，并保留 `/name`
 | `fs/readFile` | workspace | 读取不超过 10 MiB 的 UTF-8 文件 |
 | `fs/writeFile` | workspace | 原子替换或新建不超过 10 MiB 的 UTF-8 文件 |
 | `git/status` | workspace | 读取 HEAD、upstream 和 index/worktree change snapshot |
+| `git/textDiff` | workspace | 读取 status 及有界 UTF-8 HEAD/worktree text diff projection |
+| `git/branch/list` | workspace | 列出现有本地分支及 current/upstream 信息 |
+| `git/branch/switch` | workspace | 切换到 host 重新解析确认存在的本地分支 |
 | `git/stage` | workspace | stage 一组 workspace-relative path |
 | `git/unstage` | workspace | 从 index 移除一组 path 的 staged change |
 | `git/discardWorktree` | workspace | 恢复 tracked working-tree change，不删除 untracked 文件 |
@@ -227,8 +230,18 @@ Watcher 初始化失败时显式 `git/status` 与 mutation 仍可用。客户端
 App Server 已重启，客户端必须接受新 snapshot，并在连接重新 ready 时主动执行 `git/status`
 恢复权威状态。
 
+`git/textDiff` 返回同一 workspace 范围内的 `GitStatusResult`、每个可展示文本变化的 original/
+modified UTF-8 source，以及文件级和聚合增删行统计。单侧文件上限为 2 MiB；binary、symlink、
+非 UTF-8、不可读或超限内容仍保留在 status 中，但不进入 text diff。客户端可以用 source 构建
+presentation diff，不得直接读取 Git revision 或复制 Git 统计规则。
+
+`git/branch/list` 返回当前仓库的现有本地分支。`git/branch/switch` 只接受有界非空 branch name；
+server 会重新列出当前仓库分支并按 exact name 解析后才执行 mutation，因此客户端提交的字符串
+不会直接成为未经确认的 Git argv。成功结果包含新的 status；脏工作树或 linked worktree 冲突由
+Git 拒绝，server 不重试或丢弃用户内容。
+
 Mutation contract 提供 `git/stage`、`git/unstage`、`git/discardWorktree`、`git/commit`、
-`git/fetch`、`git/pull` 和 `git/push`。Path mutation 接受 1–5000 个 workspace-relative path；
+`git/branch/switch`、`git/fetch`、`git/pull` 和 `git/push`。Path mutation 接受 1–5000 个 workspace-relative path；
 Rust service 负责最终边界校验和 repository-relative 映射。Commit message 必须非空、无 NUL，
 且不超过 64 KiB UTF-8。每个成功 mutation 都返回新的 status；commit 另外返回 object ID。
 

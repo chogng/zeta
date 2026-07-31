@@ -3,9 +3,12 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 use tokio::runtime::Runtime;
 use zeta_git::{
-    GitClient, GitCommitRequest, GitError, GitPathspecSet, GitRepository, GitRepositorySnapshot,
+    GitBranch, GitClient, GitCommitRequest, GitError, GitPathspecSet, GitRepository,
+    GitRepositorySnapshot, GitTextDiffLimits, GitTextDiffSnapshot,
 };
 use zeta_workspace::{TrustedWorkspace, WorkspaceCapability, WorkspaceRoot};
+
+const MAX_TEXT_DIFF_FILE_BYTES: usize = 2 * 1024 * 1024;
 
 pub(crate) struct GitServiceCommit {
     pub(crate) object_id: String,
@@ -83,6 +86,71 @@ impl GitService {
         paths: Vec<PathBuf>,
     ) -> Result<(GitRepository, GitRepositorySnapshot), GitServiceError> {
         self.mutate_paths(GitPathMutation::Stage, paths)
+    }
+
+    pub(crate) fn local_branches(&self) -> Result<Vec<GitBranch>, GitServiceError> {
+        self.ensure_trusted()?;
+        let runtime = self.runtime.lock().map_err(|_| GitServiceError::Runtime)?;
+        runtime.block_on(async {
+            let repository = self.open_repository().await?;
+            self.client
+                .local_branches(&repository)
+                .await
+                .map_err(GitServiceError::Git)
+        })
+    }
+
+    pub(crate) fn text_diff_snapshot(
+        &self,
+    ) -> Result<(GitRepository, GitTextDiffSnapshot), GitServiceError> {
+        self.ensure_trusted()?;
+        let limits =
+            GitTextDiffLimits::new(MAX_TEXT_DIFF_FILE_BYTES).map_err(GitServiceError::Git)?;
+        let runtime = self.runtime.lock().map_err(|_| GitServiceError::Runtime)?;
+        runtime.block_on(async {
+            let repository = self.open_repository().await?;
+            let workspace_prefix = self
+                .workspace
+                .root()
+                .relative_to_existing_ancestor(repository.worktree_root())
+                .map_err(|_| GitServiceError::Boundary)?;
+            let snapshot = self
+                .client
+                .text_diff_snapshot_under(&repository, &workspace_prefix, limits)
+                .await
+                .map_err(GitServiceError::Git)?;
+            Ok((repository, snapshot))
+        })
+    }
+
+    pub(crate) fn switch_branch(
+        &self,
+        name: &str,
+    ) -> Result<(GitRepository, GitRepositorySnapshot), GitServiceError> {
+        self.ensure_trusted()?;
+        let runtime = self.runtime.lock().map_err(|_| GitServiceError::Runtime)?;
+        runtime.block_on(async {
+            let repository = self.open_repository().await?;
+            let branches = self
+                .client
+                .local_branches(&repository)
+                .await
+                .map_err(GitServiceError::Git)?;
+            let branch = branches
+                .iter()
+                .find(|branch| branch.name() == name)
+                .ok_or(GitServiceError::BranchNotFound)?;
+            self.client
+                .switch_branch(&repository, branch)
+                .await
+                .map_err(GitServiceError::Git)?;
+            let snapshot = self
+                .client
+                .snapshot(&repository)
+                .await
+                .map_err(GitServiceError::Git)?;
+            Ok((repository, snapshot))
+        })
     }
 
     pub(crate) fn unstage(
@@ -224,6 +292,7 @@ impl GitService {
 
 #[derive(Debug)]
 pub(crate) enum GitServiceError {
+    BranchNotFound,
     Boundary,
     Git(GitError),
     Runtime,

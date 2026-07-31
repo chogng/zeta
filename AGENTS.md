@@ -64,6 +64,21 @@
 - Validate interfaces with representative usage. Prefer clear code over clever
   compression or explanatory comments.
 
+## Service boundaries and naming
+
+- Treat service alignment as a repository-wide architecture rule, not a feature-specific convention.
+- Put a frontend domain service contract in a `common/*Service.ts` file, and name its public interface
+  and service identifier `I<Capability>Service`.
+- Name each runtime implementation file after its exported implementation class, including the runtime
+  qualifier when it matters, such as `appServerSyntaxAnalysisService.ts` exporting
+  `AppServerSyntaxAnalysisService`.
+- Keep transport APIs and generated DTOs inside runtime implementation modules. Product consumers must
+  depend on the frontend service contract and frontend-owned domain types.
+- Align capability names, operation semantics, lifecycle, and error categories across the frontend
+  service, transport protocol, and backend service so adapters stay thin and mechanical.
+- Name adapter and test files after the contract or implementation they exercise. Do not preserve an
+  obsolete transport, editor, or host name after ownership has moved.
+
 ## Base module boundaries
 
 - Reverse dependencies from `src/zeta/base` into any higher-level domain are

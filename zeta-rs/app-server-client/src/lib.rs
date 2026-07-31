@@ -17,6 +17,9 @@ use zeta_app_server_protocol::protocol::config::{
     SkillSourceSetEnablementParams,
 };
 use zeta_app_server_protocol::protocol::document::{TypstCompileParams, TypstCompileResult};
+use zeta_app_server_protocol::protocol::git::{
+    GitBranchListResult, GitBranchSwitchParams, GitOperationResult, GitTextDiffResult,
+};
 use zeta_app_server_protocol::protocol::initialize::{InitializeParams, InitializeResult};
 use zeta_app_server_protocol::protocol::registry::ClientMethod;
 use zeta_app_server_protocol::protocol::resources::{
@@ -44,6 +47,7 @@ use zeta_app_server_protocol::protocol::turn::{
     ShellTurnStartParams, TurnInteractionResolveParams, TurnInteractionResolveResult,
     TurnInterruptParams, TurnInterruptResult, TurnStartParams, TurnStartResult,
 };
+use zeta_app_server_protocol::protocol::workspace::{WorkspaceSwitchParams, WorkspaceSwitchResult};
 use zeta_app_server_protocol::rpc::{JsonRpcId, JsonRpcRequest, JsonRpcResponse};
 
 pub use in_process::InProcessAppServer;
@@ -123,6 +127,28 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
                 "App Server client has not completed the initialize handshake".into(),
             )
         })
+    }
+
+    pub fn switch_workspace(
+        &mut self,
+        params: WorkspaceSwitchParams,
+    ) -> Result<WorkspaceSwitchResult, ClientError> {
+        self.call(ClientMethod::WorkspaceSwitch, params)
+    }
+
+    pub fn git_text_diff(&mut self) -> Result<GitTextDiffResult, ClientError> {
+        self.call(ClientMethod::GitTextDiff, EmptyParams {})
+    }
+
+    pub fn list_git_branches(&mut self) -> Result<GitBranchListResult, ClientError> {
+        self.call(ClientMethod::GitBranchList, EmptyParams {})
+    }
+
+    pub fn switch_git_branch(
+        &mut self,
+        params: GitBranchSwitchParams,
+    ) -> Result<GitOperationResult, ClientError> {
+        self.call(ClientMethod::GitBranchSwitch, params)
     }
 
     pub fn create_session(

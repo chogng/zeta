@@ -139,9 +139,11 @@ revision；该 revision 仍不是 mutation CAS token。
 `text_diff_snapshot` / `text_diff_snapshot_under` 是 Git domain 对 HEAD-to-working-tree
 文本变化的权威投影。它先捕获
 `GitRepositorySnapshot`，再按其中的 repository-relative changed path 读取 HEAD 与当前工作区
-内容，并由 `zeta-diff` 生成 `DiffDocument`。`GitDiffStatistics` 将新增行计为 addition、删除行
-计为 deletion；一行 replacement 同时计入一次 addition 和一次 deletion。Native 只能按
-workspace prefix 请求、聚合和展示这些结果，不能自行读取 Git revision 或复制统计规则。
+内容，并由 `zeta-diff` 生成 `DiffDocument`。`GitTextDiff` 同时保留构建该 document 的有界
+`original` / `modified` UTF-8 文本，供 App Server 投影跨进程 DTO；client 不直接依赖本 crate。
+`GitDiffStatistics` 将新增行计为 addition、删除行计为 deletion；一行 replacement 同时计入一次
+addition 和一次 deletion。调用方只能按 workspace prefix 请求、聚合和展示这些结果，不能自行读取
+Git revision 或复制统计规则。
 
 该读取序列不是 filesystem transaction：文件可能在 status 与内容读取之间变化。binary、
 非 UTF-8、symlink、非普通文件、不可读文件、任一侧超过 `GitTextDiffLimits`，或超过 diff engine
@@ -215,7 +217,7 @@ private `GitCommandProfile` 固定三类执行：
 Current：
 
 ```text
-Desktop SCM
+Desktop / Native / TUI
   ↔ App Server git/* + git/statusChanged
   → workspace-scoped GitRuntime
   → workspace-scoped GitService
@@ -226,7 +228,7 @@ Desktop SCM
 当前实时状态投影：
 
 ```text
-Desktop
+Product client
   ↕ app-server-protocol Git commands/snapshots/events
 App Server GitRuntime
   ├─ single-workspace projection + revision

@@ -33,6 +33,8 @@ import {
   IConfigurationService,
 } from "../../platform/configuration/common/configuration.js";
 import { IStorageService, WillSaveStateReason } from "../../platform/storage/common/storage.js";
+import { AppServerSyntaxAnalysisService } from "../../platform/syntax/browser/appServerSyntaxAnalysisService.js";
+import { ISyntaxAnalysisService } from "../../platform/syntax/common/syntaxAnalysisService.js";
 import {
   IContextMenuService,
 } from "../../platform/contextview/browser/contextMenu.js";
@@ -244,6 +246,8 @@ export class Workbench extends DisposableOwner {
     const services = new ServiceCollection();
     const instantiationService = new InstantiationService(services);
     services.set(IRendererApiService, api);
+    const syntaxAnalysisService = new AppServerSyntaxAnalysisService(api.syntax);
+    services.set(ISyntaxAnalysisService, syntaxAnalysisService);
     if (nativeHostApi) {
       services.set(INativeHostService, nativeHostApi);
     }
@@ -408,7 +412,7 @@ export class Workbench extends DisposableOwner {
     const editor = this.own(new EditorPart(ownerDocument, {
       configurationService: configuration,
       keybindingService: keybindings,
-      rendererApi: api,
+      syntaxAnalysisService,
       textFileService,
       titleActions: {
         menuService: menus,

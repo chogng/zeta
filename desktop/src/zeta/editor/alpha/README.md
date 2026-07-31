@@ -1,13 +1,15 @@
 # Alpha Editor
 
 > 本文拥有文本内核的实现和修改契约。跨 editor、document、language、
-> browser view、Workbench 与 Monaco adapter 的边界见
+> browser view、Workbench 与退场中的 Monaco adapter 边界见
 > [`docs/editor-architecture.md`](../../../../../docs/editor-architecture.md)。
 
 Alpha owns the editor-domain primitives and is the product's default plain-text
-editor. It remains independent of Monaco, ProseMirror, the DOM, workbench tabs,
-files, persistence, and language services. Monaco is an optional compatibility
-editor and must not define the canonical Zeta text-model contract.
+editor. Its common text model remains independent of Monaco, ProseMirror, the DOM,
+workbench tabs, files, persistence, and external language runtimes; browser composition
+consumes platform capabilities only through named service contracts. Monaco is being
+retired, receives no new product capability, and must not define the canonical Zeta
+text-model contract.
 
 ## Runtime layering and base dependencies
 
@@ -15,7 +17,7 @@ editor and must not define the canonical Zeta text-model contract.
 | --- | --- | --- |
 | `common/` | `base/common` | DOM-free editor identities, text, history, selection, decoration, composition transactions, versioned language requests/results, and pure layout/view-model math |
 | `browser/` | `base/common`, `base/browser`, `alpha/common` | DOM projection, textarea/input events, viewport observation, font measurement, clipboard, and accessibility |
-| `../monaco/`, `../prosemirror/` | their adapter dependencies plus stable Alpha contracts | Transitional renderer integration only |
+| `../monaco/`, `../prosemirror/` | their adapter dependencies plus stable Alpha contracts | Retirement/migration integration only; no new product ownership |
 | Workbench contributions | editor public contracts and platform services | Pane registration, product composition, and document/workspace wiring |
 
 The dependency direction is intentionally one-way: editor layers should reuse
@@ -38,6 +40,7 @@ class:
 | Events, lifecycle, URI identity, resource collections | `base/common` | Reuse existing primitives; editor semantics must not flow back into base |
 | Raw resource I/O | `platform/files` | `IFileService` currently owns read-only workspace access; write capabilities belong here when the host protocol supports them |
 | Text resource loading and bootstrap resolution | `workbench/services/textfile/common` | ✅ `ITextFileService`; dirty state, save/revert and conflicts remain unfinished |
+| Revisioned syntax snapshots | `platform/syntax/common` | ✅ `ISyntaxAnalysisService`; the App Server implementation owns transport while Alpha consumes only the service contract |
 | Shared URI-to-Alpha-model references | `AlphaTextModelService` | ✅ editor-owned; the TextFile service does not absorb Alpha transaction semantics |
 | Text transactions, selections, decorations and versioned language results | `editor/alpha/common` | Canonical editor-domain state; no URI, persistence or Workbench tab dependency |
 | Language identities and composable editing rules | `editor/alpha/common` | `LanguageConfigurationRegistry`; comments/brackets/pairs are editor-domain contracts, not generic base primitives |
@@ -204,16 +207,18 @@ ordered request initializes the mirror with a full snapshot; the peer lane and
 later requests reference it, while model transactions send one incremental
 sync shared by both lanes.
 
-`appServerSyntaxAnalysisWorker.ts` is Alpha's browser adapter for backend Rust,
-JSON, and JSONC syntax analysis. It serializes one model's UTF-16 transactions into the App
-Server `document/syntax/open|change|close` session, validates the returned complete analysis
+`syntaxAnalysisServiceAdapter.ts` adapts the frontend `ISyntaxAnalysisService` to Alpha's analysis
+worker contract for Rust, JSON, and JSONC. Workbench registers
+`AppServerSyntaxAnalysisService`, which delegates to the App Server transport without exposing
+`ZetaRendererApi` to Editor Part or Alpha. The worker serializes one model's UTF-16 transactions
+into the service's `open|change|close` session, validates the returned complete analysis
 snapshot, maps the protocol-owned token legend into Alpha `LanguageToken` values, and projects
 tree-sitter parse errors into Alpha diagnostics. The diagnostic lane merges backend parse errors
 with the existing lexical result. Backend failure delegates to that same fallback chain:
 JSON/JSONC retain their bundled TextMate grammars, while Rust currently has no TextMate grammar
 and therefore yields an empty fallback token batch. Folding ranges and document symbols cross the
 wire in the shared snapshot but do not yet have an Alpha UI owner. Monaco has no ownership in this
-path.
+path and receives no parallel syntax integration.
 
 `LanguageAnalysisProviderRegistry` selects the first matching token provider
 and all matching diagnostic providers in registration order. Provider failures
@@ -1083,8 +1088,8 @@ The next implementation stages are:
    styling, and richer diagnostic presentation;
 6. accessibility, decoration hover, and overview-ruler projection;
 7. BiDi, wrapping, and inline-advance layout evaluation;
-8. inventory remaining Monaco-only tools and implement them through Alpha's
-   public contracts without importing Monaco ownership into Alpha.
+8. migrate remaining Monaco-only tools through Alpha's public contracts, then
+   remove the retired Monaco editor without importing its ownership into Alpha.
 
 Tests under `test/common/` cover normalization, coordinates, atomic edits, failure
 atomicity, events, disposal, immutable snapshots, history budgets,

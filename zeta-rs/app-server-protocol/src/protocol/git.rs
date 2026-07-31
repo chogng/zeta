@@ -82,6 +82,67 @@ pub struct GitStatusChanged {
     pub status: GitStatusResult,
 }
 
+/// One local branch returned by the workspace Git runtime.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct GitBranchDto {
+    pub name: String,
+    pub object_id: String,
+    pub current: bool,
+    pub upstream: Option<String>,
+}
+
+impl GitBranchDto {
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub const fn is_current(&self) -> bool {
+        self.current
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct GitBranchListResult {
+    pub branches: Vec<GitBranchDto>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct GitBranchSwitchParams {
+    #[schemars(length(min = 1, max = 1024))]
+    pub name: String,
+}
+
+/// One bounded UTF-8 text change from `HEAD` to the workspace working tree.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct GitTextDiffDto {
+    pub path: String,
+    pub original: String,
+    pub modified: String,
+    pub additions: usize,
+    pub deletions: usize,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct GitDiffStatisticsDto {
+    pub files: usize,
+    pub additions: usize,
+    pub deletions: usize,
+}
+
+/// One authoritative status snapshot plus its bounded workspace text-diff projection.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct GitTextDiffResult {
+    pub status: GitStatusResult,
+    pub diffs: Vec<GitTextDiffDto>,
+    pub statistics: GitDiffStatisticsDto,
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct GitPathsParams {

@@ -61,12 +61,30 @@ impl NativeApp {
                 self.rebuild_and_focus_workspace_path_search();
             }
             WorkspacePathPickerActivation::SelectWorkspace(directory) => {
-                if let Err(error) = self.workspace_context.switch_working_directory(directory) {
+                let switched = match self.agent_session.as_ref() {
+                    Some(session) => session.switch_workspace(directory),
+                    None => Err(anyhow::anyhow!("Agent session is unavailable")),
+                };
+                let switched = match switched {
+                    Ok(switched) => switched,
+                    Err(error) => {
+                        eprintln!("could not switch App Server workspace: {error}");
+                        return true;
+                    }
+                };
+                if let Err(error) = self
+                    .workspace_context
+                    .switch_working_directory(switched.root)
+                {
                     eprintln!("could not switch workspace directory: {error}");
                     return true;
                 }
+                self.workspace_context
+                    .apply_git_projection(switched.git.as_ref());
                 self.agent_sidebar_workspace
                     .replace_workspace(&self.workspace_context);
+                self.composer
+                    .set_working_directory(self.workspace_context.working_directory());
                 self.dismiss_workspace_path_picker();
             }
         }

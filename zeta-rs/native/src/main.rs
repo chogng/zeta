@@ -787,9 +787,11 @@ impl ApplicationHandler<NativeEvent> for NativeApp {
         if previous_block_status == Some(BlockStatus::Running)
             && current_block_status != Some(BlockStatus::Running)
         {
-            self.workspace_context.refresh_repository();
-            self.agent_sidebar_workspace
-                .sync_repository(&self.workspace_context);
+            if let Some(session) = self.agent_session.as_ref()
+                && let Err(error) = session.refresh_git()
+            {
+                eprintln!("could not refresh Git projection: {error}");
+            }
             self.agent_sidebar_workspace.refresh_files();
         }
         if active_screen == ScreenBuffer::Alternate || self.terminal_scroll.offset() == 0 {

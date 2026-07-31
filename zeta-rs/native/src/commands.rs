@@ -174,9 +174,11 @@ impl NativeApp {
                 self.agent_sidebar.expand();
             }
             NativeCommand::RefreshFiles => {
-                self.workspace_context.refresh_repository();
-                self.agent_sidebar_workspace
-                    .sync_repository(&self.workspace_context);
+                if let Some(session) = self.agent_session.as_ref()
+                    && let Err(error) = session.refresh_git()
+                {
+                    eprintln!("could not refresh Git projection: {error}");
+                }
                 self.agent_sidebar_workspace.refresh_files();
             }
             NativeCommand::ToggleFileSearch => {
@@ -212,9 +214,11 @@ impl NativeApp {
                     // Pickers are product commands layered above the dispatch foundation.
                 }
                 ContextAction::Diff => {
-                    self.workspace_context.refresh_repository();
-                    self.agent_sidebar_workspace
-                        .sync_repository(&self.workspace_context);
+                    if let Some(session) = self.agent_session.as_ref()
+                        && let Err(error) = session.refresh_git()
+                    {
+                        eprintln!("could not refresh Git projection: {error}");
+                    }
                     self.agent_sidebar_workspace
                         .select_view(crate::agent_sidebar_workspace::AgentSidebarView::Changes);
                     self.agent_sidebar.expand();

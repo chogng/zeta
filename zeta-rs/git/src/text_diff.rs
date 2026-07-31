@@ -60,6 +60,8 @@ impl GitDiffStatistics {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct GitTextDiff {
     path: PathBuf,
+    original: String,
+    modified: String,
     document: DiffDocument,
     statistics: GitDiffStatistics,
 }
@@ -67,6 +69,14 @@ pub struct GitTextDiff {
 impl GitTextDiff {
     pub fn path(&self) -> &Path {
         &self.path
+    }
+
+    pub fn original(&self) -> &str {
+        &self.original
+    }
+
+    pub fn modified(&self) -> &str {
+        &self.modified
     }
 
     pub const fn document(&self) -> &DiffDocument {
@@ -176,6 +186,8 @@ impl GitClient {
             statistics.include(file_statistics);
             diffs.push(GitTextDiff {
                 path: change.path().to_path_buf(),
+                original: original.to_owned(),
+                modified: modified.to_owned(),
                 document,
                 statistics: file_statistics,
             });

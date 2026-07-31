@@ -5,8 +5,8 @@ use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::Duration;
 use zeta_app_server_protocol::protocol::git::{
-    GitChangeStatusDto, GitHeadDto, GitRepositoryChangeDto, GitStatusResult, GitSubmoduleStateDto,
-    GitUpstreamDto,
+    GitBranchDto, GitChangeStatusDto, GitDiffStatisticsDto, GitHeadDto, GitRepositoryChangeDto,
+    GitStatusResult, GitSubmoduleStateDto, GitTextDiffDto, GitTextDiffResult, GitUpstreamDto,
 };
 use zeta_file_watcher::{DebouncedWatchReceiver, FileWatcher, FileWatcherBackend, WatchPath};
 use zeta_git::{
@@ -74,6 +74,77 @@ impl GitRuntime {
             .map_err(|_| GitRuntimeError::Service(GitServiceError::Runtime))?;
         let (repository, snapshot) = self.service.snapshot().map_err(GitRuntimeError::Service)?;
         self.accept(repository, snapshot)
+    }
+
+    pub(super) fn local_branches(&self) -> Result<Vec<GitBranchDto>, GitRuntimeError> {
+        let _operation = self
+            .operation
+            .lock()
+            .map_err(|_| GitRuntimeError::Service(GitServiceError::Runtime))?;
+        self.service
+            .local_branches()
+            .map(|branches| {
+                branches
+                    .into_iter()
+                    .map(|branch| GitBranchDto {
+                        name: branch.name().into(),
+                        object_id: branch.object_id().into(),
+                        current: branch.is_current(),
+                        upstream: branch.upstream().map(Into::into),
+                    })
+                    .collect()
+            })
+            .map_err(GitRuntimeError::Service)
+    }
+
+    pub(super) fn text_diff(&self) -> Result<GitTextDiffResult, GitRuntimeError> {
+        let _operation = self
+            .operation
+            .lock()
+            .map_err(|_| GitRuntimeError::Service(GitServiceError::Runtime))?;
+        let (repository, snapshot) = self
+            .service
+            .text_diff_snapshot()
+            .map_err(GitRuntimeError::Service)?;
+        let workspace_prefix = self
+            .service
+            .workspace_root()
+            .strip_prefix(repository.worktree_root())
+            .map_err(|_| GitRuntimeError::Boundary)?;
+        let diffs = snapshot
+            .diffs()
+            .iter()
+            .map(|diff| {
+                let path = diff
+                    .path()
+                    .strip_prefix(workspace_prefix)
+                    .map_err(|_| GitRuntimeError::Boundary)?;
+                let statistics = diff.statistics();
+                Ok(GitTextDiffDto {
+                    path: wire_path(path)?,
+                    original: diff.original().into(),
+                    modified: diff.modified().into(),
+                    additions: statistics.additions(),
+                    deletions: statistics.deletions(),
+                })
+            })
+            .collect::<Result<Vec<_>, GitRuntimeError>>()?;
+        let statistics = snapshot.statistics();
+        let repository_snapshot = snapshot.repository().clone();
+        let status = self.accept(repository, repository_snapshot)?;
+        Ok(GitTextDiffResult {
+            status,
+            diffs,
+            statistics: GitDiffStatisticsDto {
+                files: statistics.files(),
+                additions: statistics.additions(),
+                deletions: statistics.deletions(),
+            },
+        })
+    }
+
+    pub(super) fn switch_branch(&self, name: &str) -> Result<GitStatusResult, GitRuntimeError> {
+        self.mutate_paths(|service| service.switch_branch(name))
     }
 
     pub(super) fn stage(&self, paths: Vec<PathBuf>) -> Result<GitStatusResult, GitRuntimeError> {
