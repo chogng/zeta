@@ -13,6 +13,7 @@ path = "src/lib.rs"
 [dependencies]
 thiserror = { workspace = true }
 tree-sitter = { workspace = true }
+tree-sitter-bash = { workspace = true }
 tree-sitter-json = { workspace = true }
 tree-sitter-rust = { workspace = true }
 

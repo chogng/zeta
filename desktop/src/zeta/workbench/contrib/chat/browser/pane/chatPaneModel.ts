@@ -1,4 +1,4 @@
-import type { AgentResponse, ModelCatalogEntry, ModelRef, Thread, ThreadId, ThreadItem, ThreadUpdateEnvelope, Turn, TurnInteraction } from "../../../../../../../generated/app-server/types.js";
+import type { AgentResponse, ModelCatalogEntry, ModelRef, SlashCommandDefinition, Thread, ThreadId, ThreadItem, ThreadUpdateEnvelope, Turn, TurnInteraction } from "../../../../../../../generated/app-server/types.js";
 import { Emitter, type Event } from "../../../../../base/common/event.js";
 import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
 import { createUuid } from "../../../../../base/common/uuid.js";
@@ -38,6 +38,7 @@ export class ChatPaneModel extends DisposableOwner {
   private streamInstanceId: string | undefined;
   private streamSequence = 0;
   private _models: readonly ModelCatalogEntry[] = [];
+  private _slashCommands: readonly SlashCommandDefinition[] = [];
 
   readonly onDidChange: Event<void> = this._onDidChange.event;
 
@@ -84,6 +85,10 @@ export class ChatPaneModel extends DisposableOwner {
 
   get models(): readonly ModelCatalogEntry[] {
     return this._models;
+  }
+
+  get slashCommands(): readonly SlashCommandDefinition[] {
+    return this._slashCommands;
   }
 
   get selectedModel(): ModelRef | undefined {
@@ -215,16 +220,14 @@ export class ChatPaneModel extends DisposableOwner {
 
   private async _initialize(): Promise<void> {
     this.setState("loading");
-    await Promise.all([this.subscribe(this.selection), this.loadModels()]);
+    await Promise.all([this.subscribe(this.selection), this.loadCatalogs()]);
   }
 
-  private async loadModels(): Promise<void> {
-    try {
-      this._models = (await this.api.model.list()).models;
-      this._onDidChange.fire();
-    } catch {
-      this._models = [];
-    }
+  private async loadCatalogs(): Promise<void> {
+    const [models, slashCommands] = await Promise.allSettled([this.api.model.list(), this.api.appServer.getSlashCommands()]);
+    this._models = models.status === "fulfilled" ? models.value.models : [];
+    this._slashCommands = slashCommands.status === "fulfilled" ? slashCommands.value : [];
+    this._onDidChange.fire();
   }
 
   private async subscribe(active: IActiveSessionThread): Promise<void> {
@@ -303,7 +306,7 @@ export class ChatPaneModel extends DisposableOwner {
   }
 
   private async reconnect(): Promise<void> {
-    await this.subscribe(this.selection);
+    await Promise.all([this.subscribe(this.selection), this.loadCatalogs()]);
   }
 
   private acceptStreamCursor(update: ThreadUpdateEnvelope): boolean {

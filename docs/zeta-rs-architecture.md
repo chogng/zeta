@@ -40,10 +40,12 @@ zeta-rs/
 ├── shell-command/        # concrete approved-process executor
 ├── file-system/          # concrete read-only filesystem executor
 ├── file-search/          # workspace path fuzzy search + CLI
+├── slash-commands/       # headless catalog, input grammar and interaction state
 ├── file-watcher/         # shared filesystem invalidation hints
 ├── git/                  # bounded Git repository operations and structured parsing
 ├── diff/                 # shared bounded line/inline diff mapping for Native and TUI
 ├── syntax/               # bounded incremental tree-sitter analysis；不拥有文件、索引或 presentation
+├── theme/                # shared manifest/user-theme resolver 与 device-local bounded loader
 ├── editor/               # Native CodeEditor/DiffEditor/MultiDiffEditor presentation；不拥有文件或产品宿主
 ├── markdown/             # bounded CommonMark/GFM parsing、layout 与 Native presentation
 ├── lsp/                  # LSP stdio lifecycle、request pairing、document sync 与 server events
@@ -95,11 +97,23 @@ Unicode 字素级内联范围、Git-style hunk、比较策略、取消和资源�
 也不拥有 Editor/TUI presentation。当前 API、失败和修改影响见
 [`diff/README.md`](../zeta-rs/diff/README.md)。
 
-`zeta-syntax` 当前拥有 Rust、JSON 与 JSONC 文档的有界增量 tree-sitter parse、host revision binding，以及
+`zeta-slash-commands` 当前拥有 App Server、TUI 与 Native 共享的无渲染命令 catalog 校验、
+local/server origin、输入 grammar、匹配、选择、dismiss、滚动、补全与 submission parsing；它不执行
+命令、不读取 config，也不依赖任何 renderer。Desktop 通过 generated protocol types 与共享
+conformance fixture 保持语义一致。跨产品边界见 [`slash-commands.md`](slash-commands.md)，当前 API
+和失败语义见 [`slash-commands/README.md`](../zeta-rs/slash-commands/README.md)。
+
+`zeta-syntax` 当前拥有 Rust、JSON、JSONC 与 Shell 文档的有界增量 tree-sitter parse、host revision binding，以及
 syntax token、folding range、document symbol 和 parse diagnostic snapshot。它不读取文件、
 不监听 workspace、不保存符号索引，也不依赖 Monaco、`zeta-editor` 或 `zeta-lsp`。跨宿主
 所有权与演进阶段见 [`syntax-analysis.md`](syntax-analysis.md)，当前 API 和修改路径见
 [`syntax/README.md`](../zeta-rs/syntax/README.md)。
+
+`zeta-theme` 当前嵌入 Desktop registry 生成的语言中立 manifest，严格解析同一用户主题 JSON，
+解析 alias/transform/default graph，并从 device-local `configuration.json` 与 `themes/*.json`
+选择 Graphical/Terminal snapshot。它不依赖 renderer、不拥有组件 geometry，也不进入 Agent
+config、Session/Thread store。Native 消费完整相关 palette，TUI 只消费明确子集；当前 API、
+失败语义和 conformance contract 见 [`theme/README.md`](../zeta-rs/theme/README.md)。
 
 `zeta-editor` 当前拥有 Native 使用的多行编辑、caret/selection、undo/redo、IME/syntax
 projection、代码视口绘制、复用两个 CodeEditor pane 的 side-by-side DiffEditor，以及纵向组合

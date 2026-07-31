@@ -1,9 +1,7 @@
 //! Status-specific interaction hints.
 
 use crate::app::Status;
-use crate::ui::DANGER;
-use crate::ui::MUTED;
-use crate::ui::WARNING;
+use crate::ui::{danger, muted, warning};
 use ratatui::Frame;
 use ratatui::layout::Alignment;
 use ratatui::layout::Rect;
@@ -14,26 +12,26 @@ pub(super) fn draw(frame: &mut Frame<'_>, area: Rect, status: &Status) {
     let (text, style) = match status {
         Status::Ready => (
             "policy  (shift + tab to cycle)  ·  enter send  ·  ctrl-v image  ·  esc quit",
-            Style::default().fg(MUTED),
+            Style::default().fg(muted()),
         ),
         Status::Working => (
             "working…  ·  ctrl-c interrupt",
-            Style::default().fg(WARNING),
+            Style::default().fg(warning()),
         ),
         Status::WaitingForApproval => (
             "approval required  ·  ctrl-c interrupt",
-            Style::default().fg(WARNING),
+            Style::default().fg(warning()),
         ),
         Status::WaitingForUserInput => (
             "input required  ·  ctrl-c interrupt",
-            Style::default().fg(WARNING),
+            Style::default().fg(warning()),
         ),
         Status::WaitingForCapability => (
             "capability required  ·  ctrl-c interrupt",
-            Style::default().fg(WARNING),
+            Style::default().fg(warning()),
         ),
-        Status::Cancelling => ("interrupting…", Style::default().fg(WARNING)),
-        Status::Error => ("ready to retry  ·  esc quit", Style::default().fg(DANGER)),
+        Status::Cancelling => ("interrupting…", Style::default().fg(warning())),
+        Status::Error => ("ready to retry  ·  esc quit", Style::default().fg(danger())),
     };
     frame.render_widget(
         Paragraph::new(text)

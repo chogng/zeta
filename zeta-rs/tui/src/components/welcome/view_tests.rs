@@ -1,7 +1,7 @@
 use super::draw;
-use crate::ui::ACCENT;
-use crate::ui::COMPOSER_CHROME;
-use crate::ui::HIGHLIGHT;
+use crate::ui::accent;
+use crate::ui::composer_chrome;
+use crate::ui::highlight;
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use ratatui::style::Modifier;
@@ -20,15 +20,15 @@ fn wide_banner_uses_the_two_column_welcome_presentation() {
     assert!(rendered.contains("Tips for getting started"));
     assert!(rendered.contains("Use @ to mention workspace files"));
     assert!(rendered.contains("Try asking"));
-    assert_eq!(buffer[(2, 1)].fg, HIGHLIGHT);
-    assert_eq!(buffer[(77, 11)].fg, HIGHLIGHT);
-    assert_eq!(buffer[(30, 2)].fg, HIGHLIGHT);
-    assert_eq!(buffer[(33, 5)].fg, HIGHLIGHT);
+    assert_eq!(buffer[(2, 1)].fg, highlight());
+    assert_eq!(buffer[(77, 11)].fg, highlight());
+    assert_eq!(buffer[(30, 2)].fg, highlight());
+    assert_eq!(buffer[(33, 5)].fg, highlight());
     assert_eq!(buffer[(9, 1)].symbol(), "Z");
-    assert_eq!(buffer[(9, 1)].fg, ACCENT);
+    assert_eq!(buffer[(9, 1)].fg, accent());
     assert!(!buffer[(9, 1)].modifier.contains(Modifier::BOLD));
     assert_eq!(buffer[(19, 1)].symbol(), "v");
-    assert_eq!(buffer[(19, 1)].fg, COMPOSER_CHROME);
+    assert_eq!(buffer[(19, 1)].fg, composer_chrome());
     assert_eq!(buffer[(10, 2)].symbol(), " ");
     assert_eq!(buffer[(11, 3)].symbol(), "W");
 }

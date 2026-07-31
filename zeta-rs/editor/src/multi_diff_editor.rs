@@ -127,9 +127,20 @@ pub struct MultiDiffEditorStyle {
     section_corner_radii: CornerRadii,
 }
 
+/// Resolved visual inputs used to construct a MultiDiffEditor style.
+#[derive(Clone, Debug, PartialEq)]
+pub struct MultiDiffEditorPalette {
+    pub surface: Color,
+    pub file_header: Color,
+    pub divider: Color,
+    pub file_name: TextStyle,
+    pub diff_editor: DiffEditorStyle,
+    pub scroll_view: ScrollViewStyle,
+}
+
 impl MultiDiffEditorStyle {
     pub fn light() -> Self {
-        Self {
+        Self::new(MultiDiffEditorPalette {
             surface: Color::WHITE,
             file_header: Color::rgb(246, 246, 247),
             divider: Color::rgb(222, 222, 224),
@@ -149,6 +160,17 @@ impl MultiDiffEditorStyle {
                         Color::rgba(82, 82, 88, 220),
                     ),
             ),
+        })
+    }
+
+    pub fn new(palette: MultiDiffEditorPalette) -> Self {
+        Self {
+            surface: palette.surface,
+            file_header: palette.file_header,
+            divider: palette.divider,
+            file_name: palette.file_name,
+            diff_editor: palette.diff_editor,
+            scroll_view: palette.scroll_view,
             section_gap: DEFAULT_SECTION_GAP,
             section_horizontal_inset: 0.0,
             content_vertical_padding: 0.0,
@@ -159,12 +181,17 @@ impl MultiDiffEditorStyle {
 
     /// Light presentation with inset, bordered file cards for narrow drawers.
     pub fn light_cards() -> Self {
+        Self::light().cards()
+    }
+
+    /// Applies the inset, border, and corner geometry used by narrow drawer cards.
+    pub fn cards(self) -> Self {
         Self {
             section_horizontal_inset: CARD_INSET,
             content_vertical_padding: CARD_PADDING,
             section_border_width: CARD_BORDER_WIDTH,
             section_corner_radii: CornerRadii::uniform(CARD_CORNER_RADIUS),
-            ..Self::light()
+            ..self
         }
     }
 }

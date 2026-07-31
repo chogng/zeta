@@ -1,8 +1,7 @@
 use super::SelectionTab;
 use super::SelectionViewState;
-use crate::ui::HIGHLIGHT;
-use crate::ui::MUTED;
 use crate::ui::horizontal_margin;
+use crate::ui::{highlight, muted};
 use ratatui::Frame;
 use ratatui::layout::Constraint;
 use ratatui::layout::Direction;
@@ -24,7 +23,7 @@ pub(crate) fn draw(frame: &mut Frame<'_>, area: Rect, view: &SelectionViewState)
     frame.render_widget(
         Block::default()
             .borders(Borders::TOP)
-            .border_style(Style::default().fg(HIGHLIGHT)),
+            .border_style(Style::default().fg(highlight())),
         area,
     );
     let content = horizontal_margin(
@@ -55,14 +54,16 @@ pub(crate) fn draw(frame: &mut Frame<'_>, area: Rect, view: &SelectionViewState)
     frame.render_widget(
         Paragraph::new(Line::from(Span::styled(
             view.title(),
-            Style::default().fg(HIGHLIGHT).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(highlight())
+                .add_modifier(Modifier::BOLD),
         ))),
         areas[0],
     );
     frame.render_widget(Paragraph::new(tab_lines), areas[1]);
 
     let search_text = if view.query().is_empty() {
-        Span::styled(view.search_placeholder(), Style::default().fg(MUTED))
+        Span::styled(view.search_placeholder(), Style::default().fg(muted()))
     } else {
         Span::raw(view.query())
     };
@@ -70,7 +71,7 @@ pub(crate) fn draw(frame: &mut Frame<'_>, area: Rect, view: &SelectionViewState)
         Paragraph::new(Line::from(search_text)).block(
             Block::default()
                 .borders(Borders::ALL)
-                .border_style(Style::default().fg(MUTED)),
+                .border_style(Style::default().fg(muted())),
         ),
         areas[2],
     );
@@ -81,7 +82,7 @@ pub(crate) fn draw(frame: &mut Frame<'_>, area: Rect, view: &SelectionViewState)
     let rows = if visible_items.is_empty() {
         vec![Line::from(Span::styled(
             view.empty_message(),
-            Style::default().fg(MUTED),
+            Style::default().fg(muted()),
         ))]
     } else {
         visible_items
@@ -92,7 +93,9 @@ pub(crate) fn draw(frame: &mut Frame<'_>, area: Rect, view: &SelectionViewState)
             .map(|(index, item)| {
                 let selected = view.selected_visible_index() == Some(index);
                 let label_style = if selected {
-                    Style::default().fg(HIGHLIGHT).add_modifier(Modifier::BOLD)
+                    Style::default()
+                        .fg(highlight())
+                        .add_modifier(Modifier::BOLD)
                 } else {
                     Style::default()
                 };
@@ -102,8 +105,8 @@ pub(crate) fn draw(frame: &mut Frame<'_>, area: Rect, view: &SelectionViewState)
                     Span::styled(item.label(), label_style),
                 ];
                 if let Some(description) = item.description() {
-                    spans.push(Span::styled("  ·  ", Style::default().fg(MUTED)));
-                    spans.push(Span::styled(description, Style::default().fg(MUTED)));
+                    spans.push(Span::styled("  ·  ", Style::default().fg(muted())));
+                    spans.push(Span::styled(description, Style::default().fg(muted())));
                 }
                 Line::from(spans)
             })
@@ -113,7 +116,7 @@ pub(crate) fn draw(frame: &mut Frame<'_>, area: Rect, view: &SelectionViewState)
     frame.render_widget(
         Paragraph::new(Line::from(Span::styled(
             view.footer_hint(),
-            Style::default().fg(MUTED).add_modifier(Modifier::ITALIC),
+            Style::default().fg(muted()).add_modifier(Modifier::ITALIC),
         ))),
         areas[4],
     );
@@ -147,13 +150,13 @@ fn tab_lines(tabs: &[SelectionTab], active: usize, width: u16) -> Vec<Line<'stat
                 format!(" {} ", tab.label()),
                 Style::default()
                     .fg(Color::Black)
-                    .bg(HIGHLIGHT)
+                    .bg(highlight())
                     .add_modifier(Modifier::BOLD),
             ));
         } else {
             spans.push(Span::styled(
                 format!(" {} ", tab.label()),
-                Style::default().fg(MUTED),
+                Style::default().fg(muted()),
             ));
         }
         row_width = row_width.saturating_add(tab_width);

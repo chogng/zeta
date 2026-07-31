@@ -2,6 +2,7 @@ use std::path::PathBuf;
 use std::sync::mpsc::{Receiver, TryRecvError};
 use std::time::Instant;
 
+use zeta_editor::MultiDiffEditorStyle;
 use zeta_file_search::{PathSearchHandle, PathSearchOptions, PathSearchSnapshot};
 use zeta_ui::{
     Point, Rect, ScrollAxis, ScrollCommand, ScrollDelta, ScrollMetrics, ScrollState, Size,
@@ -78,6 +79,10 @@ impl AgentSidebarWorkspace {
 
     pub(crate) const fn editor(&self) -> &EditorPaneState {
         &self.editor
+    }
+
+    pub(crate) fn set_editor_style(&mut self, style: MultiDiffEditorStyle) {
+        self.editor.set_style(style);
     }
 
     #[cfg(test)]

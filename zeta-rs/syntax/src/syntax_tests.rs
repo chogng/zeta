@@ -72,6 +72,27 @@ fn jsonc_snapshot_uses_comment_capable_json_grammar() {
 }
 
 #[test]
+fn shell_snapshot_highlights_command_operators_variables_and_comments() {
+    let source = "just native-dev && echo \"$USER\" # restart native\n";
+    let document = SyntaxDocument::open(SyntaxLanguage::Shell, DocumentRevision::new(6), source)
+        .expect("Shell grammar should load");
+
+    let snapshot = document.snapshot();
+    let highlighted = snapshot
+        .tokens()
+        .iter()
+        .map(|token| (&source[token.range.bytes.clone()], token.kind))
+        .collect::<Vec<_>>();
+
+    assert!(!snapshot.has_errors());
+    assert!(highlighted.contains(&("just", SyntaxTokenKind::Function)));
+    assert!(highlighted.contains(&("&&", SyntaxTokenKind::Operator)));
+    assert!(highlighted.contains(&("echo", SyntaxTokenKind::Function)));
+    assert!(highlighted.contains(&("# restart native", SyntaxTokenKind::Comment)));
+    assert_eq!(SyntaxLanguage::Shell.id(), "shell");
+}
+
+#[test]
 fn rust_snapshot_contains_tokens_folds_and_symbols() {
     let document =
         SyntaxDocument::open(SyntaxLanguage::Rust, DocumentRevision::new(7), RUST_SOURCE)

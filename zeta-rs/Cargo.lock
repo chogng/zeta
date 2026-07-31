@@ -5846,6 +5846,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "tree-sitter-bash"
+version = "0.25.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9e5ec769279cc91b561d3df0d8a5deb26b0ad40d183127f409494d6d8fc53062"
+dependencies = [
+ "cc",
+ "tree-sitter-language",
+]
+
+[[package]]
 name = "tree-sitter-json"
 version = "0.24.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7781,6 +7791,7 @@ dependencies = [
  "zeta-search",
  "zeta-shell-command",
  "zeta-skills",
+ "zeta-slash-commands",
  "zeta-syntax",
  "zeta-tools",
  "zeta-typst",
@@ -8137,11 +8148,13 @@ dependencies = [
  "zeta-diff",
  "zeta-editor",
  "zeta-file-search",
- "zeta-git",
  "zeta-icons",
  "zeta-keybinding",
  "zeta-protocol",
+ "zeta-slash-commands",
+ "zeta-syntax",
  "zeta-terminal",
+ "zeta-theme",
  "zeta-ui",
  "zeta-ui-dispatch",
  "zeta-utils-path",
@@ -8276,6 +8289,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "zeta-slash-commands"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "zeta-app-server-protocol",
+]
+
+[[package]]
 name = "zeta-storage"
 version = "0.1.0"
 dependencies = [
@@ -8294,6 +8316,7 @@ version = "0.1.0"
 dependencies = [
  "thiserror 2.0.19",
  "tree-sitter",
+ "tree-sitter-bash",
  "tree-sitter-json",
  "tree-sitter-rust",
 ]
@@ -8306,6 +8329,15 @@ dependencies = [
  "unicode-segmentation",
  "unicode-width 0.2.0",
  "vte",
+]
+
+[[package]]
+name = "zeta-theme"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror 2.0.19",
 ]
 
 [[package]]
@@ -8345,6 +8377,8 @@ dependencies = [
  "zeta-diff",
  "zeta-file-search",
  "zeta-protocol",
+ "zeta-slash-commands",
+ "zeta-theme",
 ]
 
 [[package]]

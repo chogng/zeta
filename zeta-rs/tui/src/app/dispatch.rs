@@ -4,9 +4,8 @@ use crate::app::App;
 use crate::app::AppEvent;
 use crate::app::help_selection_view;
 use crate::components::composer::ComposerInput;
-use crate::components::composer::SlashCommand;
 use crate::components::composer::SlashCommandInvocation;
-use crate::components::composer::SlashCommandItem;
+use crate::components::composer::TuiSlashCommandAction;
 use crate::features::config;
 use crate::features::config::PreferredModelOutcome;
 use crate::features::sessions::ActiveConversation;
@@ -42,31 +41,33 @@ impl ActiveConversation {
     where
         T: JsonRpcTransport,
     {
-        let SlashCommandItem::Builtin(command) = invocation.command else {
-            return Err(CommandExecutionError(
-                "dynamic command reached the built-in dispatcher".into(),
-            ));
-        };
+        let command = invocation
+            .command
+            .name
+            .parse::<TuiSlashCommandAction>()
+            .map_err(|_| {
+                CommandExecutionError("server command reached the TUI-local dispatcher".into())
+            })?;
         let arguments = text_arguments(&invocation.arguments)?;
 
         match command {
-            SlashCommand::Status => self.show_status(client, app),
-            SlashCommand::Skills => show_skills(client, app),
-            SlashCommand::Mcp => show_mcp(client, app),
-            SlashCommand::Resume => self.resume(client, &arguments, app),
-            SlashCommand::Clear | SlashCommand::New => {
+            TuiSlashCommandAction::Status => self.show_status(client, app),
+            TuiSlashCommandAction::Skills => show_skills(client, app),
+            TuiSlashCommandAction::Mcp => show_mcp(client, app),
+            TuiSlashCommandAction::Resume => self.resume(client, &arguments, app),
+            TuiSlashCommandAction::Clear | TuiSlashCommandAction::New => {
                 self.start_new(client, command, &arguments, app)
             }
-            SlashCommand::Config => show_config(client, app),
-            SlashCommand::Fork => self.fork(client, &arguments, app),
-            SlashCommand::Help => {
+            TuiSlashCommandAction::Config => show_config(client, app),
+            TuiSlashCommandAction::Fork => self.fork(client, &arguments, app),
+            TuiSlashCommandAction::Help => {
                 app.update(AppEvent::SelectionViewOpened(help_selection_view()));
                 Ok(())
             }
-            SlashCommand::Model => set_or_show_model(client, &arguments, app),
-            SlashCommand::Quit | SlashCommand::Exit => Err(CommandExecutionError(
-                "exit command reached the product dispatcher".into(),
-            )),
+            TuiSlashCommandAction::Model => set_or_show_model(client, &arguments, app),
+            TuiSlashCommandAction::Quit | TuiSlashCommandAction::Exit => Err(
+                CommandExecutionError("exit command reached the product dispatcher".into()),
+            ),
         }
     }
 
@@ -92,7 +93,7 @@ impl ActiveConversation {
     fn start_new<T>(
         &mut self,
         client: &mut AppServerClient<T>,
-        command: SlashCommand,
+        command: TuiSlashCommandAction,
         arguments: &str,
         app: &mut App,
     ) -> Result<(), CommandExecutionError>
@@ -100,8 +101,8 @@ impl ActiveConversation {
         T: JsonRpcTransport,
     {
         let kind = match command {
-            SlashCommand::Clear => NewConversationKind::Clear,
-            SlashCommand::New => NewConversationKind::New,
+            TuiSlashCommandAction::Clear => NewConversationKind::Clear,
+            TuiSlashCommandAction::New => NewConversationKind::New,
             _ => unreachable!("only new-chat commands call start_new"),
         };
         let change = self

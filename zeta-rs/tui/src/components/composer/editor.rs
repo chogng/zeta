@@ -25,7 +25,7 @@ struct TextElement {
 /// Owns the editable text buffer, cursor, and editor keymap boundary.
 ///
 /// Vim modes, motions, and operators belong in this component when that capability is added.
-/// Chat-level submission stays in the parent composer; slash parsing stays in `SlashInput`.
+/// Chat-level submission stays in the parent composer; slash parsing stays in the shared core.
 #[derive(Debug, Eq, PartialEq)]
 pub(super) struct TextArea {
     text: String,

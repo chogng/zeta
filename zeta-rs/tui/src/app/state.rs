@@ -57,12 +57,15 @@ impl App {
 
     #[cfg(test)]
     pub(crate) fn for_workspace(workspace_root: &Path) -> Self {
-        Self::for_workspace_with_slash_commands(workspace_root, SlashCommandRegistry::default())
+        Self::for_workspace_with_slash_commands(
+            workspace_root,
+            crate::components::composer::default_slash_command_catalog(),
+        )
     }
 
     pub(crate) fn for_workspace_with_slash_commands(
         workspace_root: &Path,
-        slash_commands: SlashCommandRegistry,
+        slash_commands: SlashCommandCatalog,
     ) -> Self {
         Self {
             interaction_pane: InteractionPane::with_slash_commands(slash_commands),
@@ -175,7 +178,7 @@ impl App {
         self.interaction_pane.cursor_display_width()
     }
 
-    pub(crate) fn slash_popup(&self) -> Option<SlashPopupView<'_>> {
+    pub(crate) fn slash_popup(&self) -> Option<SlashCommandsView<'_>> {
         self.interaction_pane.slash_popup()
     }
 
@@ -314,13 +317,17 @@ impl App {
     }
 
     fn handle_slash_command(&mut self, invocation: SlashCommandInvocation) -> Option<AppCommand> {
-        match &invocation.command {
-            SlashCommandItem::Builtin(SlashCommand::Quit | SlashCommand::Exit)
-                if invocation.arguments.is_empty() =>
-            {
-                Some(AppCommand::Quit)
-            }
-            SlashCommandItem::Dynamic(_) => {
+        let local = invocation
+            .command
+            .name
+            .parse::<TuiSlashCommandAction>()
+            .ok();
+        match (invocation.origin, local) {
+            (
+                SlashCommandOrigin::Local,
+                Some(TuiSlashCommandAction::Quit | TuiSlashCommandAction::Exit),
+            ) if invocation.arguments.is_empty() => Some(AppCommand::Quit),
+            (SlashCommandOrigin::Server, _) => {
                 let submission = invocation.into_forwarded_submission();
                 self.thread.update(ThreadPresentationEvent::UserSubmitted(
                     submission.display_text.clone(),
@@ -328,7 +335,10 @@ impl App {
                 self.status = Status::Working;
                 Some(AppCommand::SubmitTurn(submission))
             }
-            SlashCommandItem::Builtin(_) => Some(AppCommand::ExecuteProductCommand(invocation)),
+            (SlashCommandOrigin::Local, Some(_)) => {
+                Some(AppCommand::ExecuteProductCommand(invocation))
+            }
+            (SlashCommandOrigin::Local, None) => None,
         }
     }
 
@@ -351,8 +361,8 @@ impl App {
 #[path = "state_tests.rs"]
 mod tests;
 use crate::components::composer::MentionPopupView;
-use crate::components::composer::SlashCommand;
+use crate::components::composer::SlashCommandCatalog;
 use crate::components::composer::SlashCommandInvocation;
-use crate::components::composer::SlashCommandItem;
-use crate::components::composer::SlashCommandRegistry;
-use crate::components::composer::SlashPopupView;
+use crate::components::composer::SlashCommandsView;
+use crate::components::composer::TuiSlashCommandAction;
+use zeta_slash_commands::SlashCommandOrigin;

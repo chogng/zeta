@@ -3,8 +3,7 @@ use std::collections::BTreeMap;
 use serde_json::Value;
 use zeta_protocol::{PlanStepStatus, ThreadItem};
 use zeta_ui::{
-    Color, Component, FontFamily, FontWeight, PaintRect, Point, Rect, Size, TextBlock, TextStyle,
-    UiScene,
+    Component, FontFamily, FontWeight, PaintRect, Point, Rect, Size, TextBlock, TextStyle, UiScene,
 };
 
 use crate::shell_style::ShellPalette;
@@ -353,7 +352,7 @@ fn line_style(kind: TimelineLineKind, palette: ShellPalette) -> TextStyle {
         ),
         TimelineLineKind::ToolError => (
             13.0,
-            Color::rgb(180, 38, 38),
+            palette.error,
             FontFamily::Monospace,
             FontWeight::Normal,
         ),

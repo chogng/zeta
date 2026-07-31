@@ -1,5 +1,5 @@
 use super::StatusLineModel;
-use crate::ui::COMPOSER_CHROME;
+use crate::ui::composer_chrome;
 use crate::ui::horizontal_margin;
 use ratatui::Frame;
 use ratatui::layout::Alignment;
@@ -12,7 +12,7 @@ pub(crate) fn draw(frame: &mut Frame<'_>, area: Rect, status_line: &StatusLineMo
     let text = status_line.text_for_width(area.width as usize);
     frame.render_widget(
         Paragraph::new(text)
-            .style(Style::default().fg(COMPOSER_CHROME))
+            .style(Style::default().fg(composer_chrome()))
             .alignment(Alignment::Right),
         area,
     );

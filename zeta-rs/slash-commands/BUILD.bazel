@@ -1,0 +1,6 @@
+load("//:defs.bzl", "zeta_rust_crate")
+
+zeta_rust_crate(
+    name = "slash-commands",
+    crate_name = "zeta_slash_commands",
+)

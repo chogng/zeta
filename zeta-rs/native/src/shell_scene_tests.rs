@@ -8,6 +8,8 @@ use crate::agent_composer::ComposerMode;
 use crate::agent_sidebar::AgentSidebarState;
 use crate::agent_sidebar_workspace::{AgentSidebarView, AgentSidebarWorkspace};
 use crate::composer_editor::ComposerEditor;
+use crate::composer_interaction::ComposerInteractionModel;
+use crate::composer_interaction_pane::ComposerInteractionPaneState;
 use crate::git_branch_context_menu::GitBranchContextMenuState;
 use crate::keybindings::NativeKeybindings;
 use crate::keyboard_shortcuts::KeyboardShortcutsState;
@@ -17,8 +19,9 @@ use crate::session_sidebar::SessionSidebarState;
 use crate::shell_interaction::{
     ADD_SESSION, AGENT_CHANGES, AGENT_EDITOR_PANE, AGENT_EXPLORER_PANE, AGENT_FILES,
     AGENT_FILES_REFRESH, AGENT_FILES_SEARCH, AGENT_SIDEBAR, AGENT_SIDEBAR_NAVIGATION,
-    AGENT_SIDEBAR_TOOLBAR, COMPOSER, COMPOSER_MODE, COMPOSER_PANEL, ContextAction,
-    MULTI_DIFF_EDITOR, SESSION_SEARCH_INPUT, SESSION_SIDEBAR_RESIZE_HANDLE, TITLEBAR,
+    AGENT_SIDEBAR_TOOLBAR, COMPOSER, COMPOSER_INFO_BAR, COMPOSER_MODE, COMPOSER_PANEL,
+    ContextAction, MULTI_DIFF_EDITOR, SESSION_SEARCH_INPUT, SESSION_SIDEBAR_RESIZE_HANDLE,
+    TITLEBAR,
 };
 use crate::thread_projection::ThreadProjection;
 use crate::workspace_context::WorkspaceContext;
@@ -79,6 +82,8 @@ fn presentation_with_sidebars_and_menu(
     session_context_menu: SessionContextMenuState,
 ) -> ShellPresentation {
     let composer = ComposerEditor::default();
+    let composer_interaction = ComposerInteractionModel::new();
+    let composer_interaction_pane = ComposerInteractionPaneState::default();
     let session_search = SessionSearch::default();
     let workspace_context = WorkspaceContext::fixture("~/Desktop/zeta", Some("main"), Some(0));
     let mut text_layout = TextInputLayoutEngine::new();
@@ -88,6 +93,7 @@ fn presentation_with_sidebars_and_menu(
     let initial = build_shell_presentation(
         viewport(),
         ShellPresentationModel {
+            palette: crate::shell_style::SHELL_PALETTE,
             terminal,
             terminal_scroll_offset: scroll_offset,
             terminal_scrollbar_presentation: ScrollbarPresentation::default(),
@@ -98,6 +104,8 @@ fn presentation_with_sidebars_and_menu(
             thread_timeline_scroll_offset: 0,
             workspace_context: &workspace_context,
             composer: &composer,
+            composer_interaction: &composer_interaction,
+            composer_interaction_pane: &composer_interaction_pane,
             composer_mode: ComposerMode::Agent,
             session_search: &session_search,
             caret_visibility: CaretVisibility::Visible,
@@ -119,6 +127,7 @@ fn presentation_with_sidebars_and_menu(
     build_shell_presentation(
         viewport(),
         ShellPresentationModel {
+            palette: crate::shell_style::SHELL_PALETTE,
             terminal,
             terminal_scroll_offset: scroll_offset,
             terminal_scrollbar_presentation: ScrollbarPresentation::default(),
@@ -129,6 +138,8 @@ fn presentation_with_sidebars_and_menu(
             thread_timeline_scroll_offset: 0,
             workspace_context: &workspace_context,
             composer: &composer,
+            composer_interaction: &composer_interaction,
+            composer_interaction_pane: &composer_interaction_pane,
             composer_mode: ComposerMode::Agent,
             session_search: &session_search,
             caret_visibility: CaretVisibility::Visible,
@@ -161,14 +172,16 @@ fn primary_layout_keeps_output_above_a_bottom_composer() {
     assert_eq!(layout.titlebar.size.height, 32.0);
     assert_eq!(layout.main.origin.x, 0.0);
     assert_eq!(layout.main.bottom(), 700.0);
-    assert!(layout.output.bottom() < layout.composer.origin.y);
-    assert_eq!(layout.composer_panel.origin.y, 588.0);
-    assert_eq!(layout.composer.bottom(), 644.0);
-    assert_eq!(layout.composer_toolbar.origin.y, 656.0);
+    assert_eq!(layout.output.bottom(), layout.composer_panel.origin.y);
+    assert_eq!(layout.composer_panel.origin.y, 572.0);
+    assert_eq!(layout.composer_info_bar.origin.y, 580.0);
+    assert_eq!(layout.composer.origin.y, 612.0);
+    assert_eq!(layout.composer.bottom(), 656.0);
+    assert_eq!(layout.composer_toolbar.origin.y, 664.0);
 }
 
 #[test]
-fn multiline_composer_grows_upward_without_covering_its_toolbar() {
+fn multiline_composer_grows_upward_between_info_bar_and_bottom_toolbar() {
     let layout = ShellLayout::for_viewport_with_composer_height(
         viewport(),
         SessionSidebarState::default(),
@@ -178,10 +191,14 @@ fn multiline_composer_grows_upward_without_covering_its_toolbar() {
     .unwrap();
 
     assert_eq!(layout.composer.size.height, 160.0);
-    assert_eq!(layout.composer_panel.size.height, 228.0);
+    assert_eq!(layout.composer_panel.size.height, 244.0);
     assert_eq!(
-        layout.composer_toolbar.origin.y,
-        layout.composer.bottom() + 12.0
+        layout.composer.origin.y,
+        layout.composer_info_bar.bottom() + 8.0
+    );
+    assert_eq!(
+        layout.composer.bottom() + 8.0,
+        layout.composer_toolbar.origin.y
     );
     assert_eq!(layout.output.bottom(), layout.composer_panel.origin.y);
 }
@@ -201,10 +218,20 @@ fn primary_presentation_uses_a_flat_light_surface() {
         .iter()
         .find(|rect| rect.bounds() == layout.composer_panel)
         .unwrap();
+    let info_editor_separator = presentation
+        .scene
+        .rects()
+        .iter()
+        .find(|rect| rect.bounds() == layout.composer_panel_layout.info_editor_separator())
+        .unwrap();
 
     assert_eq!(presentation.scene.background(), Color::rgb(252, 252, 253));
     assert_eq!(composer_panel.fill(), Color::WHITE);
     assert_eq!(composer_panel.border().widths().top, 1.0);
+    assert_eq!(
+        info_editor_separator.fill(),
+        crate::shell_style::SHELL_PALETTE.border
+    );
     assert!(
         presentation
             .scene
@@ -331,6 +358,7 @@ fn session_search_filters_tabs_by_session_name() {
     let presentation = build_shell_presentation(
         viewport(),
         ShellPresentationModel {
+            palette: crate::shell_style::SHELL_PALETTE,
             terminal: None,
             terminal_scroll_offset: 0,
             terminal_scrollbar_presentation: ScrollbarPresentation::default(),
@@ -340,6 +368,8 @@ fn session_search_filters_tabs_by_session_name() {
             thread_timeline_scroll_offset: 0,
             workspace_context: &workspace_context,
             composer: &composer,
+            composer_interaction: &ComposerInteractionModel::new(),
+            composer_interaction_pane: &ComposerInteractionPaneState::default(),
             composer_mode: ComposerMode::Agent,
             session_search: &session_search,
             caret_visibility: CaretVisibility::Visible,
@@ -499,6 +529,7 @@ fn changes_switch_mounts_workspace_diffs_in_the_multi_diff_editor_without_files_
     let presentation = build_shell_presentation(
         viewport(),
         ShellPresentationModel {
+            palette: crate::shell_style::SHELL_PALETTE,
             terminal: None,
             terminal_scroll_offset: 0,
             terminal_scrollbar_presentation: ScrollbarPresentation::default(),
@@ -508,6 +539,8 @@ fn changes_switch_mounts_workspace_diffs_in_the_multi_diff_editor_without_files_
             thread_timeline_scroll_offset: 0,
             workspace_context: &workspace_context,
             composer: &composer,
+            composer_interaction: &ComposerInteractionModel::new(),
+            composer_interaction_pane: &ComposerInteractionPaneState::default(),
             composer_mode: ComposerMode::Agent,
             session_search: &session_search,
             caret_visibility: CaretVisibility::Visible,
@@ -611,6 +644,11 @@ fn open_session_context_menu_is_topmost_and_exposes_four_actions() {
 #[test]
 fn primary_presentation_publishes_current_control_semantics_and_focus() {
     let presentation = presentation(None, 0);
+    let info_bar = presentation
+        .accessibility_nodes
+        .iter()
+        .find(|node| node.id == COMPOSER_INFO_BAR)
+        .unwrap();
     let composer = presentation
         .accessibility_nodes
         .iter()
@@ -622,6 +660,8 @@ fn primary_presentation_publishes_current_control_semantics_and_focus() {
         .find(|node| node.id == ContextAction::Location.element_id())
         .unwrap();
 
+    assert_eq!(info_bar.role, AccessibilityRole::Group);
+    assert_eq!(info_bar.label, "/ for commands");
     assert_eq!(composer.role, AccessibilityRole::TextInput);
     assert_eq!(composer.label, "Command input");
     assert_eq!(composer.value.as_deref(), Some(""));
@@ -701,20 +741,20 @@ fn titlebar_drags_the_window_and_composer_is_a_registered_input_region() {
 }
 
 #[test]
-fn context_toolbar_registers_button_geometry_above_the_composer_panel() {
+fn context_toolbar_registers_button_geometry_below_the_composer_editor() {
     let presentation = presentation(None, 0);
     let mut dispatch = UiDispatch::default();
 
     assert_eq!(
         dispatch
-            .pointer_moved(Point::new(40.0, 668.0), &presentation.interaction_frame)
+            .pointer_moved(Point::new(40.0, 676.0), &presentation.interaction_frame)
             .invalidation,
         DispatchInvalidation::Paint
     );
     assert_eq!(
         presentation
             .interaction_frame
-            .target_at(Point::new(40.0, 668.0)),
+            .target_at(Point::new(40.0, 676.0)),
         Some(COMPOSER_MODE)
     );
     assert_eq!(
@@ -745,6 +785,7 @@ fn compact_viewport_uses_bounded_fallback_scene() {
             height: 100.0,
         },
         ShellPresentationModel {
+            palette: crate::shell_style::SHELL_PALETTE,
             terminal: None,
             terminal_scroll_offset: 0,
             terminal_scrollbar_presentation: ScrollbarPresentation::default(),
@@ -754,6 +795,8 @@ fn compact_viewport_uses_bounded_fallback_scene() {
             thread_timeline_scroll_offset: 0,
             workspace_context: &workspace_context,
             composer: &composer,
+            composer_interaction: &ComposerInteractionModel::new(),
+            composer_interaction_pane: &ComposerInteractionPaneState::default(),
             composer_mode: ComposerMode::Agent,
             session_search: &session_search,
             caret_visibility: CaretVisibility::Visible,
@@ -792,7 +835,7 @@ fn primary_reserves_rows_for_composer_while_alternate_screen_uses_full_height() 
         AgentSidebarState::default(),
     );
 
-    assert_eq!(primary, GridSize::new(28, 119));
+    assert_eq!(primary, GridSize::new(27, 119));
     assert_eq!(alternate, GridSize::new(34, 119));
 }
 

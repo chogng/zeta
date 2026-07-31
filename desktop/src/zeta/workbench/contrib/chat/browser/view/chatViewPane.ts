@@ -5,6 +5,7 @@ import type { ZetaRendererApi } from "../../../../../platform/app-server/common/
 import type { IMenuService } from "../../../../../platform/actions/common/menuService.js";
 import type { IContextKeyService } from "../../../../../platform/contextkey/common/contextkey.js";
 import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextMenu.js";
+import type { ICommandService } from "../../../../../platform/commands/common/commands.js";
 import { SidebarPart } from "../../../../browser/parts/sidebar/sidebarPart.js";
 import { ViewPane, type IViewPaneOptions } from "../../../../browser/parts/views/viewPane.js";
 import { ViewContainerLocation } from "../../../../common/views.js";
@@ -27,6 +28,7 @@ export class ChatViewPane extends ViewPane {
   private readonly api: ZetaRendererApi;
   private readonly sessionService: IWorkbenchSessionService;
   private readonly contextMenuService: IContextMenuService;
+  private readonly commandService: ICommandService;
   private readonly titleControl: ChatTitleControl;
   private readonly agentSidebar: SidebarPart;
   private readonly paneHost: HTMLDivElement;
@@ -42,11 +44,13 @@ export class ChatViewPane extends ViewPane {
     contextMenuService: IContextMenuService,
     viewDescriptorService: IViewDescriptorService,
     contextKeyService: IContextKeyService,
+    commandService: ICommandService,
   ) {
     super(options);
     this.api = api;
     this.sessionService = sessionService;
     this.contextMenuService = contextMenuService;
+    this.commandService = commandService;
     this.element.classList.add("zeta-chat-view-pane");
     this.titleElement.hidden = true;
     this.contentElement.classList.add("zeta-chat-view");
@@ -117,6 +121,7 @@ export class ChatViewPane extends ViewPane {
           selection,
           this.sessionService,
           this.contextMenuService,
+          this.commandService,
         );
         setDisposableOwner(pane, this);
         this.panes.set(session.sessionId, pane);

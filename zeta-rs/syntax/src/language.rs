@@ -5,6 +5,7 @@ use crate::SyntaxError;
 mod json;
 mod jsonc;
 mod rust;
+mod shell;
 
 /// Source language selected for syntax analysis.
 ///
@@ -16,6 +17,7 @@ pub enum SyntaxLanguage {
     Json,
     Jsonc,
     Rust,
+    Shell,
 }
 
 impl SyntaxLanguage {
@@ -24,6 +26,7 @@ impl SyntaxLanguage {
             Self::Json => "json",
             Self::Jsonc => "jsonc",
             Self::Rust => "rust",
+            Self::Shell => "shell",
         }
     }
 }
@@ -68,6 +71,7 @@ fn definition(syntax_language: SyntaxLanguage) -> LanguageDefinition {
         SyntaxLanguage::Json => json::definition(),
         SyntaxLanguage::Jsonc => jsonc::definition(),
         SyntaxLanguage::Rust => rust::definition(),
+        SyntaxLanguage::Shell => shell::definition(),
     }
 }
 

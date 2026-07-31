@@ -22,6 +22,8 @@ zeta-app-server-protocol = { workspace = true }
 zeta-file-search = { workspace = true }
 zeta-diff = { workspace = true }
 zeta-protocol = { workspace = true }
+zeta-slash-commands = { workspace = true }
+zeta-theme = { workspace = true }
 
 [target.'cfg(unix)'.dependencies]
 signal-hook = { workspace = true }

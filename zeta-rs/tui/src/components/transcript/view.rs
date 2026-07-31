@@ -2,11 +2,8 @@ use super::Message;
 use super::MessageRole;
 use super::row::estimated_wrapped_rows;
 use crate::components::welcome;
-use crate::ui::ACCENT;
-use crate::ui::DANGER;
-use crate::ui::SUCCESS;
-use crate::ui::WARNING;
 use crate::ui::horizontal_margin;
+use crate::ui::{accent, danger, success, warning};
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::Modifier;
@@ -42,10 +39,10 @@ fn message_lines(messages: &[Message]) -> Vec<Line<'_>> {
         .iter()
         .flat_map(|message| {
             let (marker, color) = match message.role {
-                MessageRole::User => ("›", ACCENT),
-                MessageRole::Agent => ("◆", SUCCESS),
-                MessageRole::Notice => ("•", WARNING),
-                MessageRole::Error => ("×", DANGER),
+                MessageRole::User => ("›", accent()),
+                MessageRole::Agent => ("◆", success()),
+                MessageRole::Notice => ("•", warning()),
+                MessageRole::Error => ("×", danger()),
             };
             [
                 Line::from(vec![

@@ -116,6 +116,10 @@
   margin-left: auto;
 }
 
+.zeta-chat-input-toolbar .zeta-chat-input-send {
+  margin-left: auto;
+}
+
 .zeta-chat-input-toolbar .zeta-chat-input-send .zeta-button,
 .zeta-chat-input-toolbar .zeta-chat-input-interrupt .zeta-button {
   border-radius: 6px;

@@ -1,12 +1,14 @@
 import { addDisposableListener } from "../../../../../base/browser/dom.js";
 import { Emitter, type Event } from "../../../../../base/common/event.js";
 import { DisposableOwner, type IDisposable, toDisposable } from "../../../../../base/common/lifecycle.js";
+import type { SlashCommandCatalog } from "../../common/slashCommands.js";
 
 /** Construction inputs shared by Chat input editor implementations. */
 export interface ChatInputEditorOptions {
   readonly container: HTMLElement;
   readonly placeholder: string;
   readonly ariaLabel: string;
+  readonly slashCommands: SlashCommandCatalog;
 }
 
 /** Text editing contract consumed by the Chat composer. */

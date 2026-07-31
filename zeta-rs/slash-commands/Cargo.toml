@@ -1,0 +1,21 @@
+[package]
+name = "zeta-slash-commands"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[lib]
+doctest = false
+name = "zeta_slash_commands"
+path = "src/lib.rs"
+
+[dependencies]
+zeta-app-server-protocol = { workspace = true }
+
+[dev-dependencies]
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+
+[lints]
+workspace = true

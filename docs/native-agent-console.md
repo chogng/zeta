@@ -21,9 +21,12 @@ AgentWorkspace
 │  ├─ ApprovalRequest
 │  └─ FileChange
 ├─ AgentComposer
+│  ├─ ComposerInteractionPane → active View stack
+│  │  └─ current: SlashCommandView | ModelPickerView
+│  ├─ ComposerInfoBar → contextual hints (`/ for commands`)
 │  ├─ ComposerEditor → CodeEditor(Compact)
-│  ├─ Agent | Shell mode
-│  └─ ComposerContextToolbar
+│  ├─ ComposerContextToolbar
+│  └─ Agent | Shell mode
 └─ optional TerminalPane
 ```
 
@@ -37,6 +40,7 @@ compatibility 的程序进入独立 TerminalPane。
 | --- | --- | --- |
 | Native 产品根 | `AgentWorkspace` + `ThreadTimeline` | ✅ |
 | Composer | `AgentComposer` 显式 Agent/Shell mode | ✅ |
+| Composer 可展开交互 Pane | 展示当前 View；Slash 状态委托 `zeta-slash-commands`，Native 拥有 `/model` 子 View 和 WGPU row projection | ✅ |
 | Agent authority | App Server Session/Thread subscription + gap resubscribe | ✅ |
 | Agent Tool Call | durable ToolCall/ToolResult → CommandCard | ✅ |
 | 用户直接 Shell | `turn/shell/start` → model-free durable Shell Turn | ✅ |
@@ -55,12 +59,17 @@ Thread transcript。
 | transient Agent/Tool delta | App Server update stream | 检测 stream cursor gap；gap 后重新订阅 |
 | Timeline scroll、selection、collapse | Native presentation | 可丢弃、可从 snapshot 重建 |
 | Composer text、mode、IME 与 caret | Native `ComposerEditor` + `zeta-editor::CodeEditorDocument` | mode 明确，不猜测输入内容 |
+| Composer 信息栏 | Native `composer_panel` | 固定在输入框上方，展示当前 mode 的提示信息 |
+| Composer 交互 Pane 宿主 | Native `composer_panel` + `ComposerInteractionPaneState` + `zeta-ui::{ScrollView,ListView}` | 只放置 active View、保留 viewport offset，并委托通用 UI 基座完成裁剪、滚动与可见范围；不解释 Slash、Model 或 Plan |
+| Composer active View model | Native `ComposerInteractionModel` | 当前实现选择 Slash Command / Model Picker View；不拥有 Pane 几何与滚动 |
+| Slash Command interaction model | `zeta-slash-commands::SlashCommandsState` | 消费初始化命令快照，拥有 query、selection、dismiss 与 completion；滚动属于各 renderer |
 | Composer Changes 文件数与增删行 | `zeta-git::GitTextDiffSnapshot` | 只过滤工作区范围并展示；点击后刷新并展开 Changes Pane |
 | Agent submission | `turn/start` | 提交 UserInput 并消费 canonical result |
 | 用户直接 Shell submission | Shell Turn contract | 经过同一 policy、approval、sandbox 与 durable commit |
 | Agent-managed Tool execution | Core Tool scheduler | 只投影 ToolCall/ToolResult |
 | Terminal grid、alternate screen 与 direct input | `zeta-terminal` + TerminalPane host | 不反推 Agent/Turn 状态 |
 | Files、Changes 与 Diff presentation | Native sidebar + typed workspace services | 不从 terminal output 推断 |
+| 主题 catalog、用户 JSON 与颜色变换 | `zeta-theme` + shared manifest | Native 只把 snapshot 映射为组件 palette，不维护第二份默认色表 |
 
 ## Composer 语义
 
@@ -86,6 +95,19 @@ Composer 使用 `CodeEditorPresentation::Compact`：保留多行文档、selecti
 由 retained viewport 跟随 caret。`Enter` 提交当前 mode，`Shift+Enter` 插入换行；Shell mode
 在首行/末行边界使用 Up/Down 浏览已提交命令，并在返回末端时恢复尚未提交的 draft。该行为属于
 `AgentComposer`，不属于通用 `CodeEditor`。
+
+Composer Panel 的固定顺序是“信息栏 → 输入框 → 底部 toolbar”；信息栏用于显示 `/ for commands`
+等上下文提示。其上方的 Composer Interaction Pane 是可展开、可收起的 View 宿主：Panel 只为它
+分配位置，`ComposerInteractionPaneState` 只保留 offset，`zeta-ui::ScrollView` / `ListView` 只根据
+viewport 与 content geometry 完成裁剪、滚动、scrollbar 和可见范围投影。三者都不解释挂载的是
+Slash、Model、Plan 还是未来的其他 View。当前 Agent mode 输入 `/` 时，Slash Command View 使其
+在信息栏上方出现；没有 active View 时 Pane 收起。整个 Panel 增高并压缩 ThreadTimeline，不覆盖
+已有消息，也不移动固定的三行。共享 `SlashCommandsState` 按当前无空格前缀过滤并保留键盘选择与
+dismiss；Native renderer 单独保留滚动。根 View 关闭时交互区收起，子 View 关闭时返回上一层。
+`/model` 将模型选择 View 压入同一个 View 栈。方向键移动选择，Enter 进入或确认，Tab 补全 Slash
+Command，Escape 在子 View 中返回上一层、在根 View 中关闭。列表最多显示八行，超出后由方向键或
+滚轮滚动；关闭时保留 Composer draft。模型目录来自 App Server，选中项以精确 `ModelRef` 写入
+当前 Session。
 
 Shell Turn 不调用模型。`StartShellTurn` 原子记录 Turn acceptance、精确 `shell-command`
 ToolCall 与 Turn start，随后复用 Tool scheduler 的 policy、workspace sandbox、one-time
@@ -131,4 +153,5 @@ Terminal 激活后 keyboard/IME/paste 可直接编码到 PTY。后台 PTY 的 al
 | Terminal layout | 独立全主区域 Surface | 可调整 TerminalPane / 多 Pane tree |
 | Agent message | ThreadTimeline 基本文本布局 | Markdown block、selection、折叠与虚拟化 |
 | Interaction UI | durable approval 已可恢复 | Timeline 内 approval card 与响应控件 |
+| Composer interaction | Slash Command 与模型选择 View 栈已接入 | 继续增加只消费 typed catalog 的命令专属 View |
 | Session UI | 使用一条 active App Server Session/Thread | 多 Session/Thread 选择、创建与恢复 |

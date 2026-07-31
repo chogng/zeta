@@ -4,6 +4,9 @@ import { JSDOM } from "jsdom";
 import { Emitter, type Event } from "../src/zeta/base/common/event.js";
 import { DisposableOwner } from "../src/zeta/base/common/lifecycle.js";
 import { ChatInputEditorRegistry, type ChatInputEditorOptions, type IChatInputEditor } from "../src/zeta/workbench/contrib/chat/browser/input/chatInputEditor.js";
+import { SlashCommandCatalog } from "../src/zeta/workbench/contrib/chat/common/slashCommands.js";
+
+const slashCommands = new SlashCommandCatalog([], []);
 
 test("Chat input editor fallback owns multiline change and submit gestures", () => {
   const dom = new JSDOM("<!doctype html><body><div id='host'></div></body>");
@@ -14,6 +17,7 @@ test("Chat input editor fallback owns multiline change and submit gestures", () 
     container,
     placeholder: "Ask Zeta",
     ariaLabel: "Chat message",
+    slashCommands,
   });
   const changes: string[] = [];
   let submissions = 0;
@@ -72,6 +76,7 @@ test("Chat input editor registry selects and releases a product provider", () =>
     container,
     placeholder: "Prompt",
     ariaLabel: "Prompt editor",
+    slashCommands,
   });
   assert.ok(editor instanceof FakeChatInputEditor);
   assert.equal(created.length, 1);

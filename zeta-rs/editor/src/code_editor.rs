@@ -10,8 +10,11 @@ use zeta_ui::{
 pub use self::document::CodeEditorDocument;
 pub use self::editing::{CodeEditorCommand, CodeEditorSelectionMode};
 use self::layout::{CodeEditorLayout, build_layout};
-pub use self::style::CodeEditorStyle;
-pub use self::syntax::{CodeEditorSyntaxHighlighter, CodeEditorSyntaxToken};
+pub use self::style::{CodeEditorPalette, CodeEditorStyle};
+pub use self::syntax::{
+    CodeEditorSyntaxHighlighter, CodeEditorSyntaxPalette, CodeEditorSyntaxToken,
+    CodeEditorTokenRole,
+};
 use self::text_metrics::{display_columns, expand_tabs, visit_display_cell_runs};
 
 const HEADER_HEIGHT: f32 = 32.0;

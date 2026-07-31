@@ -12,7 +12,7 @@ const outputs = {
 } as const;
 
 export async function runDesignTokenCompiler(check: boolean): Promise<void> {
-  const outputDirectory = resolve("generated/design-tokens");
+  const outputDirectory = resolve("../resources/design-tokens");
   const artifacts = compileDesignTokenArtifacts();
   if (!check) await mkdir(outputDirectory, { recursive: true });
   const stale: string[] = [];

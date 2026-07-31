@@ -2,7 +2,7 @@ use super::ActiveConversation;
 use crate::app::help_selection_view;
 use crate::app::{App, AppCommand, AppEvent, Status};
 use crate::components::composer::{
-    ComposerInput, SlashCommand, SlashCommandInvocation, SlashCommandItem,
+    ComposerInput, SlashCommandInvocation, TuiSlashCommandAction, built_in_catalog_command,
 };
 use crate::components::transcript::MessageRole;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
@@ -46,7 +46,7 @@ fn new_fork_and_resume_change_the_active_typed_conversation() {
 
     conversation.execute(
         &mut client,
-        invocation(SlashCommand::Fork, "investigation"),
+        invocation(TuiSlashCommandAction::Fork, "investigation"),
         &mut app,
     );
 
@@ -56,14 +56,14 @@ fn new_fork_and_resume_change_the_active_typed_conversation() {
 
     conversation.execute(
         &mut client,
-        invocation(SlashCommand::New, "fresh task"),
+        invocation(TuiSlashCommandAction::New, "fresh task"),
         &mut app,
     );
     assert_ne!(conversation.session_id(), &original_session);
 
     conversation.execute(
         &mut client,
-        invocation(SlashCommand::Resume, original_session.as_str()),
+        invocation(TuiSlashCommandAction::Resume, original_session.as_str()),
         &mut app,
     );
     assert_eq!(conversation.session_id(), &original_session);
@@ -87,15 +87,19 @@ fn status_config_mcp_skills_and_help_return_real_surfaces() {
     let mut app = App::new();
 
     for command in [
-        SlashCommand::Status,
-        SlashCommand::Config,
-        SlashCommand::Mcp,
+        TuiSlashCommandAction::Status,
+        TuiSlashCommandAction::Config,
+        TuiSlashCommandAction::Mcp,
     ] {
         conversation.execute(&mut client, invocation(command, ""), &mut app);
         assert_eq!(app.status(), &Status::Ready);
         assert_eq!(app.messages().last().unwrap().role, MessageRole::Notice);
     }
-    conversation.execute(&mut client, invocation(SlashCommand::Skills, ""), &mut app);
+    conversation.execute(
+        &mut client,
+        invocation(TuiSlashCommandAction::Skills, ""),
+        &mut app,
+    );
     assert_eq!(app.status(), &Status::Ready);
     let selection = app.selection_view().unwrap();
     assert_eq!(selection.title(), "Skills");
@@ -105,7 +109,11 @@ fn status_config_mcp_skills_and_help_return_real_surfaces() {
     );
     assert_eq!(selection.visible_items()[0].label(), "skill-creator");
 
-    conversation.execute(&mut client, invocation(SlashCommand::Help, ""), &mut app);
+    conversation.execute(
+        &mut client,
+        invocation(TuiSlashCommandAction::Help, ""),
+        &mut app,
+    );
     assert_eq!(app.status(), &Status::Ready);
     let selection = app.selection_view().unwrap();
     assert_eq!(
@@ -139,7 +147,11 @@ fn skills_view_toggles_catalog_entries_by_enablement() {
     let mut conversation = ActiveConversation::start(&mut client, "skills".into()).unwrap();
     let mut app = App::new();
 
-    conversation.execute(&mut client, invocation(SlashCommand::Skills, ""), &mut app);
+    conversation.execute(
+        &mut client,
+        invocation(TuiSlashCommandAction::Skills, ""),
+        &mut app,
+    );
 
     let all = app.selection_view().unwrap();
     assert_eq!(all.tabs()[all.active_tab_index()].label(), "All (1)");
@@ -214,7 +226,7 @@ fn model_command_updates_and_clears_preferred_model_with_config_revision() {
 
     conversation.execute(
         &mut client,
-        invocation(SlashCommand::Model, "test/model-one"),
+        invocation(TuiSlashCommandAction::Model, "test/model-one"),
         &mut app,
     );
 
@@ -226,7 +238,7 @@ fn model_command_updates_and_clears_preferred_model_with_config_revision() {
 
     conversation.execute(
         &mut client,
-        invocation(SlashCommand::Model, "clear"),
+        invocation(TuiSlashCommandAction::Model, "clear"),
         &mut app,
     );
     assert_eq!(client.read_config().unwrap().preferred_model, None);
@@ -243,7 +255,8 @@ fn product_commands_reject_image_arguments_instead_of_silently_dropping_them() {
     let mut conversation = ActiveConversation::start(&mut client, "images".into()).unwrap();
     let mut app = App::new();
     let invocation = SlashCommandInvocation {
-        command: SlashCommandItem::Builtin(SlashCommand::Model),
+        command: built_in_catalog_command(TuiSlashCommandAction::Model),
+        origin: zeta_slash_commands::SlashCommandOrigin::Local,
         display_arguments: "[Image #1]".into(),
         arguments: vec![ComposerInput::Image {
             url: "data:image/png;base64,cG5n".into(),
@@ -266,9 +279,10 @@ fn product_commands_reject_image_arguments_instead_of_silently_dropping_them() {
     let _ = fs::remove_dir_all(state_root);
 }
 
-fn invocation(command: SlashCommand, arguments: &str) -> SlashCommandInvocation {
+fn invocation(command: TuiSlashCommandAction, arguments: &str) -> SlashCommandInvocation {
     SlashCommandInvocation {
-        command: SlashCommandItem::Builtin(command),
+        command: built_in_catalog_command(command),
+        origin: zeta_slash_commands::SlashCommandOrigin::Local,
         display_arguments: arguments.into(),
         arguments: (!arguments.is_empty())
             .then(|| ComposerInput::Text(arguments.into()))

@@ -151,6 +151,10 @@ impl NativeApp {
             NativeCommand::Paste => self.paste_keybinding_target(),
             NativeCommand::ToggleComposerMode => {
                 self.composer.toggle_mode();
+                self.composer_interaction.sync_for_composer(
+                    self.composer.editor().text(),
+                    self.composer.mode() == crate::agent_composer::ComposerMode::Agent,
+                );
             }
             NativeCommand::ToggleTerminalSurface => {
                 self.workspace_surface.toggle();

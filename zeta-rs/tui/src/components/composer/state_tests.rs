@@ -1,14 +1,15 @@
 use super::ChatComposer;
 use super::ComposerInput;
 use super::ComposerOutcome;
-use crate::components::composer::SlashCommand;
-use crate::components::composer::SlashCommandItem;
-use crate::components::composer::slash_commands::DynamicSlashCommand;
-use crate::components::composer::slash_commands::SlashCommandArgumentMode;
-use crate::components::composer::slash_commands::SlashCommandRegistry;
+use crate::components::composer::TuiSlashCommandAction;
+use crate::components::composer::built_in_catalog_command;
+use crate::components::composer::built_in_slash_command_definitions;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
+use zeta_slash_commands::{
+    SlashCommandArgumentMode, SlashCommandCatalog, SlashCommandDefinition, SlashCommandOrigin,
+};
 
 fn key(code: KeyCode) -> KeyEvent {
     KeyEvent::new(code, KeyModifiers::NONE)
@@ -28,7 +29,7 @@ fn cursor_aware_completion_preserves_an_existing_argument_tail() {
     };
     assert_eq!(
         invocation.command,
-        SlashCommandItem::Builtin(SlashCommand::Model)
+        built_in_catalog_command(TuiSlashCommandAction::Model)
     );
     assert_eq!(invocation.display_arguments, "provider/model");
     assert_eq!(
@@ -107,12 +108,16 @@ fn deleting_an_atomic_command_clears_its_binding_and_allows_new_discovery() {
 
 #[test]
 fn dynamic_commands_share_popup_completion_and_submission() {
-    let dynamic = DynamicSlashCommand {
+    let dynamic = SlashCommandDefinition {
         name: "diagnose".into(),
         description: "inspect the current workspace".into(),
         argument_mode: SlashCommandArgumentMode::Optional,
     };
-    let registry = SlashCommandRegistry::with_dynamic_commands([dynamic.clone()]).unwrap();
+    let registry = SlashCommandCatalog::with_local_and_server(
+        built_in_slash_command_definitions(),
+        [dynamic.clone()],
+    )
+    .unwrap();
     let mut composer = ChatComposer::with_slash_commands(registry);
     composer.insert_text("/diag logs");
     composer.handle_key(key(KeyCode::Home));
@@ -123,7 +128,8 @@ fn dynamic_commands_share_popup_completion_and_submission() {
     let ComposerOutcome::Command(invocation) = composer.handle_key(key(KeyCode::Enter)) else {
         panic!("expected dynamic command invocation");
     };
-    assert_eq!(invocation.command, SlashCommandItem::Dynamic(dynamic));
+    assert_eq!(invocation.command, dynamic);
+    assert_eq!(invocation.origin, SlashCommandOrigin::Server);
     assert_eq!(invocation.display_arguments, "logs");
     assert_eq!(
         invocation.arguments,
@@ -133,12 +139,14 @@ fn dynamic_commands_share_popup_completion_and_submission() {
 
 #[test]
 fn forwarded_dynamic_command_restores_command_text_before_structured_arguments() {
-    let dynamic = DynamicSlashCommand {
+    let dynamic = SlashCommandDefinition {
         name: "diagnose".into(),
         description: "inspect the current workspace".into(),
         argument_mode: SlashCommandArgumentMode::Optional,
     };
-    let registry = SlashCommandRegistry::with_dynamic_commands([dynamic]).unwrap();
+    let registry =
+        SlashCommandCatalog::with_local_and_server(built_in_slash_command_definitions(), [dynamic])
+            .unwrap();
     let mut composer = ChatComposer::with_slash_commands(registry);
     composer.insert_text("/diagnose ");
     composer

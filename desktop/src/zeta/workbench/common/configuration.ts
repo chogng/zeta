@@ -1,4 +1,5 @@
 import { ConfigurationsRegistry } from "../../platform/configuration/common/configurationRegistry.js";
+import "../../platform/theme/common/themeConfiguration.js";
 import { defaultWorkbenchColorThemePreference, SystemColorThemePreference, WorkbenchThemesRegistry } from "./theme.js";
 
 /** Typed configuration keys owned by the workbench layer. */

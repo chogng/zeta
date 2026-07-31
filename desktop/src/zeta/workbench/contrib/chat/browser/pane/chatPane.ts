@@ -1,6 +1,7 @@
 import type { SessionId, ThreadId } from "../../../../../../../generated/app-server/types.js";
 import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
 import type { ZetaRendererApi } from "../../../../../platform/app-server/common/renderer-api.js";
+import type { ICommandService } from "../../../../../platform/commands/common/commands.js";
 import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextMenu.js";
 import type { IActiveSessionThread, IWorkbenchSessionService } from "../../../../services/sessions/common/sessionService.js";
 import type { ChatInputDelegate } from "../input/chatInput.js";
@@ -16,7 +17,7 @@ export class ChatPane extends DisposableOwner {
   private readonly listWidget: ChatListWidget;
   private readonly inputWidget: ChatInputWidget;
 
-  constructor(ownerDocument: Document, panelId: string, api: ZetaRendererApi, active: IActiveSessionThread, sessionService: IWorkbenchSessionService, contextMenuService: IContextMenuService) {
+  constructor(ownerDocument: Document, panelId: string, api: ZetaRendererApi, active: IActiveSessionThread, sessionService: IWorkbenchSessionService, contextMenuService: IContextMenuService, commandService: ICommandService) {
     super();
     this.sessionId = active.session.sessionId;
     this.element = ownerDocument.createElement("div");
@@ -29,6 +30,7 @@ export class ChatPane extends DisposableOwner {
     this.listWidget = this.own(new ChatListWidget(ownerDocument));
     const inputDelegate: ChatInputDelegate = {
       send: (text) => this.model.send(text),
+      executeCommand: (invocation) => commandService.executeCommand(invocation.commandId, invocation.argumentsText),
       interrupt: () => this.model.interrupt(),
       selectModel: (model) => this.model.selectModel(model),
       resolveInteraction: (response) => this.model.resolveInteraction(response),
@@ -80,6 +82,7 @@ export class ChatPane extends DisposableOwner {
       error: this.model.error,
       canInterrupt: this.model.canInterrupt,
       models: this.model.models,
+      slashCommands: this.model.slashCommands,
       selectedModel: this.model.selectedModel,
       interaction: this.model.interaction,
     });

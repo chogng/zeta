@@ -56,6 +56,7 @@ export class AlphaTextInputController extends DisposableOwner {
   private readonly indentation: ResolvedEditorIndentationOptions;
   private readonly languageLexicalContext: LanguageLexicalContextSource | undefined;
   private readonly autoClosingTracker: LanguageAutoClosingTracker | undefined;
+  private completionIsIncomplete = false;
 
   constructor(
     private readonly viewport: AlphaEditorViewport,
@@ -109,6 +110,13 @@ export class AlphaTextInputController extends DisposableOwner {
     }
     this.completionSession = options.completion?.session;
     this.completionRequests = options.completion?.requests;
+    const completionResults = this.completionRequests?.service.results;
+    if (completionResults) {
+      this.completionIsIncomplete = completionResults.result?.value.isIncomplete === true;
+      this.own(completionResults.onDidChange(change => {
+        if (change.result) this.completionIsIncomplete = change.result.value.isIncomplete;
+      }));
+    }
     this.language = options.language;
     try {
       this.indentation = resolveEditorIndentationOptions(options.indentation);
@@ -259,6 +267,8 @@ export class AlphaTextInputController extends DisposableOwner {
     }
     if (insertedText !== undefined) {
       this.requestAfterInsert(insertedText, refreshIncomplete);
+    } else if (change && refreshIncomplete) {
+      this.requestCompletion(createLanguageCompletionIncompleteRefreshContext());
     }
   }
 
@@ -365,6 +375,9 @@ export class AlphaTextInputController extends DisposableOwner {
   }
 
   private readCompletionIsIncomplete(): boolean {
+    const result = this.completionRequests?.service.results.result;
+    if (result) return result.value.isIncomplete;
+    if (this.completionIsIncomplete) return true;
     try {
       return this.completionSession?.state?.isIncomplete === true;
     } catch (error) {

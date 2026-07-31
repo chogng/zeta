@@ -2,7 +2,22 @@
 
 use zeta_ui::{Border, Color, Edges, FontFamily, FontWeight, PaintRect, Rect, TextStyle};
 
-use super::{HEADER_HEIGHT, ROW_HEIGHT};
+use super::{CodeEditorSyntaxPalette, CodeEditorTokenRole, HEADER_HEIGHT, ROW_HEIGHT};
+
+/// Resolved color inputs used to construct one CodeEditor presentation style.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CodeEditorPalette {
+    pub surface: Color,
+    pub header: Color,
+    pub gutter: Color,
+    pub divider: Color,
+    pub text: Color,
+    pub text_muted: Color,
+    pub selection: Color,
+    pub caret: Color,
+    pub composition_underline: Color,
+    pub syntax: CodeEditorSyntaxPalette,
+}
 
 /// Semantic surface and typography owned by the shared CodeEditor viewport.
 #[derive(Clone, Debug, PartialEq)]
@@ -17,26 +32,55 @@ pub struct CodeEditorStyle {
     composition_underline: Color,
     text_style: TextStyle,
     header_style: TextStyle,
+    syntax: CodeEditorSyntaxPalette,
 }
 
 impl CodeEditorStyle {
     pub fn light() -> Self {
-        Self {
+        let text = Color::rgb(38, 38, 41);
+        let syntax = CodeEditorSyntaxPalette::uniform(text)
+            .with_color(CodeEditorTokenRole::Comment, Color::rgb(126, 126, 132))
+            .with_color(CodeEditorTokenRole::Function, Color::rgb(15, 110, 96))
+            .with_color(CodeEditorTokenRole::Keyword, Color::rgb(130, 80, 223))
+            .with_color(CodeEditorTokenRole::Constant, Color::rgb(130, 80, 223))
+            .with_color(CodeEditorTokenRole::String, Color::rgb(154, 103, 0))
+            .with_color(CodeEditorTokenRole::Number, Color::rgb(154, 103, 0))
+            .with_color(CodeEditorTokenRole::Operator, Color::rgb(207, 34, 46))
+            .with_color(CodeEditorTokenRole::Punctuation, Color::rgb(207, 34, 46))
+            .with_color(CodeEditorTokenRole::Property, Color::rgb(9, 105, 218))
+            .with_color(CodeEditorTokenRole::Variable, Color::rgb(9, 105, 218));
+        Self::new(CodeEditorPalette {
             surface: Color::WHITE,
             header: Color::rgb(246, 246, 247),
             gutter: Color::rgb(247, 247, 248),
             divider: Color::rgb(222, 222, 224),
+            text,
             text_muted: Color::rgb(126, 126, 132),
             selection: Color::rgba(68, 139, 202, 72),
             caret: Color::rgb(15, 110, 96),
             composition_underline: Color::rgb(15, 110, 96),
-            text_style: TextStyle::new(13.0, Color::rgb(38, 38, 41))
+            syntax,
+        })
+    }
+
+    pub fn new(palette: CodeEditorPalette) -> Self {
+        Self {
+            surface: palette.surface,
+            header: palette.header,
+            gutter: palette.gutter,
+            divider: palette.divider,
+            text_muted: palette.text_muted,
+            selection: palette.selection,
+            caret: palette.caret,
+            composition_underline: palette.composition_underline,
+            text_style: TextStyle::new(13.0, palette.text)
                 .with_family(FontFamily::Monospace)
                 .with_line_height(ROW_HEIGHT),
-            header_style: TextStyle::new(12.0, Color::rgb(38, 38, 41))
+            header_style: TextStyle::new(12.0, palette.text)
                 .with_family(FontFamily::Monospace)
                 .with_weight(FontWeight::Bold)
                 .with_line_height(HEADER_HEIGHT),
+            syntax: palette.syntax,
         }
     }
 
@@ -78,6 +122,10 @@ impl CodeEditorStyle {
             .with_line_height(self.text_style.line_height())
             .with_weight(self.text_style.weight())
             .with_style(self.text_style.style())
+    }
+
+    pub(super) const fn syntax_color(&self, role: CodeEditorTokenRole) -> Color {
+        self.syntax.color(role)
     }
 
     pub(super) const fn header_rect(&self, bounds: Rect) -> PaintRect {

@@ -73,13 +73,14 @@ impl NativeApp {
         match target {
             InputMethodTarget::Disabled => {}
             InputMethodTarget::Composer => {
+                if self.composer_interaction.is_model_picker_visible() {
+                    return;
+                }
                 let Some(composition) = text_input_composition_event(event) else {
                     return;
                 };
-                self.caret_blink.activity(Instant::now());
                 self.composer.apply_composition(composition);
-                self.rebuild_presentation();
-                self.request_redraw();
+                self.composer_changed();
             }
             InputMethodTarget::SessionSearch => {
                 let Some(composition) = text_input_composition_event(event) else {

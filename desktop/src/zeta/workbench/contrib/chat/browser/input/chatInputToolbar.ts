@@ -19,6 +19,7 @@ export interface ChatInputToolbarDelegate {
 export interface ChatInputToolbarState {
   readonly canSubmit: boolean;
   readonly canInterrupt: boolean;
+  readonly inputKind: "message" | "command";
   readonly models: readonly ModelCatalogEntry[];
   readonly selectedModel?: ModelRef;
 }
@@ -39,7 +40,7 @@ export class ChatInputToolbar extends DisposableOwner {
   private readonly toolbar: WorkbenchToolBar;
   private readonly delegate: ChatInputToolbarDelegate;
   private mode: ChatInputMode = "agent";
-  private state: ChatInputToolbarState = { canSubmit: false, canInterrupt: false, models: [] };
+  private state: ChatInputToolbarState = { canSubmit: false, canInterrupt: false, inputKind: "message", models: [] };
 
   constructor(ownerDocument: Document, contextMenuService: IContextMenuService, delegate: ChatInputToolbarDelegate) {
     super();
@@ -57,6 +58,7 @@ export class ChatInputToolbar extends DisposableOwner {
     if (
       state.canSubmit === this.state.canSubmit &&
       state.canInterrupt === this.state.canInterrupt &&
+      state.inputKind === this.state.inputKind &&
       state.models === this.state.models &&
       sameModel(state.selectedModel, this.state.selectedModel)
     ) return;
@@ -66,26 +68,28 @@ export class ChatInputToolbar extends DisposableOwner {
 
   private _render(): void {
     const mode = modeOptions.find((option) => option.id === this.mode) ?? modeOptions[0]!;
-    const modeAction = new SelectorAction(
-      "zeta.chat.input.mode",
-      mode.label,
-      `Mode: ${mode.label}`,
-      lxiconsLibrary.agent,
-      "mode",
-      () => modeOptions.map((option) => new ChatInputAction(
-        `zeta.chat.input.mode.${option.id}`,
-        option.label,
-        `Use ${option.label} mode`,
-        undefined,
-        true,
+    const modeAction = this.state.inputKind === "command"
+      ? new ChatInputAction("zeta.chat.input.command", "Command", "Slash command", lxiconsLibrary.start, false, "mode", () => {})
+      : new SelectorAction(
+        "zeta.chat.input.mode",
+        mode.label,
+        `Mode: ${mode.label}`,
+        lxiconsLibrary.agent,
         "mode",
-        () => {
-          this.mode = option.id;
-          this._render();
-        },
-        option.id === this.mode,
-      )),
-    );
+        () => modeOptions.map((option) => new ChatInputAction(
+          `zeta.chat.input.mode.${option.id}`,
+          option.label,
+          `Use ${option.label} mode`,
+          undefined,
+          true,
+          "mode",
+          () => {
+            this.mode = option.id;
+            this._render();
+          },
+          option.id === this.mode,
+        )),
+      );
     const selectedModel = this.state.models.find((entry) => sameModel(entry.model, this.state.selectedModel));
     const modelAction = new SelectorAction(
       "zeta.chat.input.model",
@@ -127,13 +131,15 @@ export class ChatInputToolbar extends DisposableOwner {
       : new ChatInputAction(
         "zeta.chat.input.send",
         "Send",
-        "Send message",
+        this.state.inputKind === "command" ? "Run command" : "Send message",
         lxiconsLibrary.arrowUp,
         this.state.canSubmit,
         "send",
         () => this.delegate.submit(),
       );
-    this.toolbar.setActions([modeAction, modelAction, attachmentAction, trailingAction]);
+    this.toolbar.setActions(this.state.inputKind === "command"
+      ? [modeAction, trailingAction]
+      : [modeAction, modelAction, attachmentAction, trailingAction]);
   }
 
   private createViewItem(action: IAction, contextMenuService: IContextMenuService): ActionViewItem | undefined {

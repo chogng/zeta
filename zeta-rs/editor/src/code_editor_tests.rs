@@ -2,7 +2,8 @@ use super::text_metrics::{display_columns_until, visit_display_cell_runs};
 use super::{
     CodeEditor, CodeEditorCommand, CodeEditorDocument, CodeEditorHeader, CodeEditorInlineHighlight,
     CodeEditorPresentation, CodeEditorRow, CodeEditorRowSource, CodeEditorSelectionMode,
-    CodeEditorStyle, CodeEditorSyntaxHighlighter, CodeEditorSyntaxToken, CodeEditorViewport,
+    CodeEditorStyle, CodeEditorSyntaxHighlighter, CodeEditorSyntaxToken, CodeEditorTokenRole,
+    CodeEditorViewport,
 };
 use zeta_ui::{CaretVisibility, Color, Component, Point, Rect, TextBlockWrap, UiScene};
 use zeta_ui::{TextInputCompositionCursor, TextInputCompositionEvent};
@@ -404,7 +405,7 @@ struct RustKeywordHighlighter;
 impl CodeEditorSyntaxHighlighter for RustKeywordHighlighter {
     fn highlight_line(&self, _line_number: usize, text: &str) -> Vec<CodeEditorSyntaxToken> {
         text.starts_with("let")
-            .then(|| CodeEditorSyntaxToken::new(0..3, Color::rgb(130, 80, 223)))
+            .then(|| CodeEditorSyntaxToken::new(0..3, CodeEditorTokenRole::Keyword))
             .into_iter()
             .collect()
     }

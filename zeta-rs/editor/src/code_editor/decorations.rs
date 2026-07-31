@@ -144,7 +144,8 @@ impl CodeEditor<'_> {
                     bounds.origin.y,
                 ),
                 Size::new(display_columns(token_text) as f32 * CELL_WIDTH, ROW_HEIGHT),
-                self.style.text_with_color(token.color),
+                self.style
+                    .text_with_color(self.style.syntax_color(token.role)),
             );
         }
     }

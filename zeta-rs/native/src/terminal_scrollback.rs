@@ -1,6 +1,6 @@
 use std::time::Instant;
 
-use zeta_ui::{ScrollbarController, ScrollbarPresentation};
+use zeta_ui::{ScrollCommand, ScrollDelta, ScrollbarController, ScrollbarPresentation};
 use zeta_winit::MouseScrollDelta;
 
 use crate::NativeApp;
@@ -92,6 +92,9 @@ impl NativeApp {
         if self.route_file_list_wheel(delta) {
             return;
         }
+        if self.route_composer_interaction_wheel(delta) {
+            return;
+        }
         if self.route_thread_timeline_wheel(delta) {
             return;
         }
@@ -122,6 +125,49 @@ impl NativeApp {
             self.rebuild_presentation();
             self.request_redraw();
         }
+    }
+
+    fn route_composer_interaction_wheel(&mut self, delta: MouseScrollDelta) -> bool {
+        let Some(point) = self.cursor_position else {
+            return false;
+        };
+        let Some(presentation) = self.presentation.as_ref() else {
+            return false;
+        };
+        let Some(target) = presentation.interaction_frame.target_at(point) else {
+            return false;
+        };
+        if !presentation
+            .interaction_frame
+            .ancestry(target)
+            .contains(&crate::shell_interaction::COMPOSER_INTERACTION)
+        {
+            return false;
+        }
+        let Some(interaction_bounds) = presentation
+            .accessibility_nodes
+            .iter()
+            .find(|node| node.id == crate::shell_interaction::COMPOSER_INTERACTION)
+            .map(|node| node.bounds)
+        else {
+            return true;
+        };
+        let item_count = self
+            .composer_interaction
+            .view()
+            .map(|view| view.items().len())
+            .unwrap_or(0);
+        let viewport = crate::composer_panel::interaction_list_bounds(interaction_bounds);
+        let content = crate::composer_panel::interaction_content_size(viewport, item_count);
+        if self.composer_interaction_pane.apply_scroll(
+            composer_interaction_scroll_command(delta),
+            viewport.size,
+            content,
+        ) {
+            self.rebuild_presentation();
+            self.request_redraw();
+        }
+        true
     }
 
     fn route_multi_diff_wheel(&mut self, delta: MouseScrollDelta) -> bool {
@@ -205,6 +251,16 @@ impl NativeApp {
             })
             .unwrap_or(0)
     }
+}
+
+fn composer_interaction_scroll_command(delta: MouseScrollDelta) -> ScrollCommand {
+    let pixels = match delta {
+        MouseScrollDelta::LineDelta(_, vertical) => {
+            vertical * LINES_PER_WHEEL_STEP * crate::composer_panel::INTERACTION_ROW_HEIGHT
+        }
+        MouseScrollDelta::PixelDelta(position) => position.y as f32,
+    };
+    ScrollCommand::ByPixels(ScrollDelta::vertical(-pixels))
 }
 
 fn multi_diff_scroll_pixels(delta: MouseScrollDelta) -> f32 {

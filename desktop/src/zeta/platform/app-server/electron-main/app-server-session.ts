@@ -64,6 +64,10 @@ export class AppServerSession implements IDisposable {
     return this.initialization.serverInfo;
   }
 
+  get slashCommands(): readonly InitializeResult["slashCommands"][number][] {
+    return this.initialization.slashCommands;
+  }
+
   async initialize(): Promise<InitializeResult> {
     if (this._state !== "created") {
       throw new Error(`Cannot initialize App Server session from ${this._state}`);
@@ -191,7 +195,9 @@ function validateInitializeResult(value: InitializeResult): void {
     typeof value.capabilities.workspaceSearch !== "boolean" ||
     typeof value.capabilities.terminal !== "boolean" ||
     typeof value.capabilities.typst !== "boolean" ||
-    typeof value.capabilities.updateReplay !== "boolean"
+    typeof value.capabilities.updateReplay !== "boolean" ||
+    !Array.isArray(value.slashCommands) ||
+    value.slashCommands.some(command => !command || typeof command.name !== "string" || typeof command.description !== "string" || (command.argumentMode !== "none" && command.argumentMode !== "optional"))
   ) {
     throw new Error("App Server initialize result is malformed");
   }

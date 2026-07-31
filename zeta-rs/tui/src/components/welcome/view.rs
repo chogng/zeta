@@ -1,10 +1,7 @@
 //! Responsive empty-Thread welcome banner presentation.
 
-use crate::ui::ACCENT;
-use crate::ui::COMPOSER_CHROME;
-use crate::ui::HIGHLIGHT;
-use crate::ui::MUTED;
 use crate::ui::horizontal_margin;
+use crate::ui::{accent, composer_chrome, highlight, muted};
 use ratatui::Frame;
 use ratatui::layout::Alignment;
 use ratatui::layout::Constraint;
@@ -45,7 +42,7 @@ pub(crate) fn draw(frame: &mut Frame<'_>, area: Rect) {
     };
     let block = Block::default()
         .borders(Borders::ALL)
-        .border_style(Style::default().fg(HIGHLIGHT));
+        .border_style(Style::default().fg(highlight()));
     let content = block.inner(banner_area);
     frame.render_widget(block, banner_area);
     if content.is_empty() {
@@ -80,7 +77,7 @@ fn draw_expanded(frame: &mut Frame<'_>, area: Rect) {
     frame.render_widget(
         Block::default()
             .borders(Borders::RIGHT)
-            .border_style(Style::default().fg(HIGHLIGHT)),
+            .border_style(Style::default().fg(highlight())),
         columns[0],
     );
     let welcome_area = Rect {
@@ -95,20 +92,20 @@ fn draw_expanded(frame: &mut Frame<'_>, area: Rect) {
                 Style::default().add_modifier(Modifier::BOLD),
             )),
             Line::default(),
-            Line::from(Span::styled("╭─────╮", Style::default().fg(ACCENT))),
+            Line::from(Span::styled("╭─────╮", Style::default().fg(accent()))),
             Line::from(vec![
-                Span::styled("│  ", Style::default().fg(ACCENT)),
+                Span::styled("│  ", Style::default().fg(accent())),
                 Span::styled(
                     "ζ",
-                    Style::default().fg(ACCENT).add_modifier(Modifier::BOLD),
+                    Style::default().fg(accent()).add_modifier(Modifier::BOLD),
                 ),
-                Span::styled("  │", Style::default().fg(ACCENT)),
+                Span::styled("  │", Style::default().fg(accent())),
             ]),
-            Line::from(Span::styled("╰─┬─┬─╯", Style::default().fg(ACCENT))),
+            Line::from(Span::styled("╰─┬─┬─╯", Style::default().fg(accent()))),
             Line::default(),
             Line::from(Span::styled(
                 "Ready when you are",
-                Style::default().fg(MUTED),
+                Style::default().fg(muted()),
             )),
         ])
         .alignment(Alignment::Center),
@@ -130,7 +127,7 @@ fn draw_expanded(frame: &mut Frame<'_>, area: Rect) {
     );
     let prompts = Block::default()
         .borders(Borders::TOP)
-        .border_style(Style::default().fg(HIGHLIGHT));
+        .border_style(Style::default().fg(highlight()));
     let prompts_content = prompts.inner(sections[1]);
     frame.render_widget(prompts, sections[1]);
     frame.render_widget(
@@ -156,10 +153,10 @@ fn draw_title(frame: &mut Frame<'_>, area: Rect) {
     frame.render_widget(
         Paragraph::new(Line::from(vec![
             Span::raw(" "),
-            Span::styled("Zeta Code", Style::default().fg(ACCENT)),
+            Span::styled("Zeta Code", Style::default().fg(accent())),
             Span::styled(
                 format!(" v{}", env!("CARGO_PKG_VERSION")),
-                Style::default().fg(COMPOSER_CHROME),
+                Style::default().fg(composer_chrome()),
             ),
             Span::raw(" "),
         ]))
@@ -182,7 +179,7 @@ fn draw_compact(frame: &mut Frame<'_>, area: Rect) {
                     "Welcome back!",
                     Style::default().add_modifier(Modifier::BOLD),
                 ),
-                Span::styled("  ·  Ready when you are", Style::default().fg(MUTED)),
+                Span::styled("  ·  Ready when you are", Style::default().fg(muted())),
             ]),
             Line::default(),
             heading("Tips for getting started"),
@@ -199,7 +196,7 @@ fn draw_compact(frame: &mut Frame<'_>, area: Rect) {
 fn heading(text: &'static str) -> Line<'static> {
     Line::from(Span::styled(
         text,
-        Style::default().fg(ACCENT).add_modifier(Modifier::BOLD),
+        Style::default().fg(accent()).add_modifier(Modifier::BOLD),
     ))
 }
 

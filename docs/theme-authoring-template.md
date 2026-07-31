@@ -1,6 +1,6 @@
 # 用户主题 JSON 模板
 
-> 本文是可安装用户主题的 canonical 说明。可以直接复制并修改 [`color-theme.template.json`](../desktop/generated/design-tokens/color-theme.template.json)；架构与可靠性边界见 [`design-tokens.md`](design-tokens.md)，可用 token 见[生成目录](../desktop/generated/design-tokens/design-tokens.md)，格式 Schema 见 [`color-theme.schema.json`](../desktop/generated/design-tokens/color-theme.schema.json)。
+> 本文是可安装用户主题的 canonical 说明。可以直接复制并修改 [`color-theme.template.json`](../resources/design-tokens/color-theme.template.json)；架构与可靠性边界见 [`design-tokens.md`](design-tokens.md)，可用 token 见[生成目录](../resources/design-tokens/design-tokens.md)，格式 Schema 见 [`color-theme.schema.json`](../resources/design-tokens/color-theme.schema.json)。
 
 ## 快速理解
 
@@ -29,9 +29,9 @@
 
 ## 文件安装与卸载
 
-Zeta 启动时读取产品 `userData/themes` 目录中的常规 `*.json` 文件。实际绝对路径会显示在 Settings → Appearance 底部。
+Zeta 宿主读取 device root 的 `themes` 目录中的常规 `*.json` 文件。Desktop 的 device root 是 Electron `userData`；Native/TUI 使用相同平台目录（macOS 为 `~/Library/Application Support/Zeta`，Windows 为 `%APPDATA%/Zeta`，Linux 为 `$XDG_CONFIG_HOME/zeta` 或 `~/.config/zeta`）。测试和开发可用 `ZETA_DEVICE_ROOT` 显式覆盖。Desktop 中的实际绝对路径会显示在 Settings → Appearance 底部。
 
-- 外部安装：把 [`color-theme.template.json`](../desktop/generated/design-tokens/color-theme.template.json) 复制到该目录，修改 `id`、`label` 和颜色后保存，完全重启 Zeta。
+- 外部安装：把 [`color-theme.template.json`](../resources/design-tokens/color-theme.template.json) 复制到该目录，修改 `id`、`label` 和颜色后保存，完全重启 Zeta。
 - 外部更新：替换同名文件，完全重启 Zeta。
 - 卸载：删除对应文件，完全重启 Zeta。
 - 恢复：如果已选择的主题不存在或加载失败，配置验证会回退到 System，内置 Light/Dark 始终可用。
@@ -150,13 +150,27 @@ Zeta 启动时读取产品 `userData/themes` 目录中的常规 `*.json` 文件�
 
 一个成功注册的用户主题会自动出现在 Settings → Appearance，并使用实际快照生成预览。选择后以下消费者使用同一快照：
 
-- Workbench CSS custom properties；
-- Monaco 明暗模式；
-- Terminal 前景、背景、光标和选择色；
+- Workbench CSS custom properties 与 Alpha editor token 颜色；
+- Native shell、composer CodeEditor、multi-diff editor、terminal ANSI palette 与 scrollbar；
+- Desktop Terminal 前景、背景、光标、选择色和完整 ANSI palette；
 - Windows/Linux 原生标题栏按钮区域；
 - 状态栏、菜单、输入框、列表和其他语义组件。
 
-System 仍表示跟随操作系统并在内置 Light/Dark 之间切换，不会自动选择用户主题。
+TUI 有意只消费共享 token 子集，并根据终端能力降级到 TrueColor、ANSI-256、ANSI-16 或 Monochrome；因此一个合法主题不保证终端能复现 Desktop 的全部颜色细节。
+
+选择值保存在 device-local `configuration.json`，而不是 Agent config、Session store 或 TOML：
+
+```json
+{
+  "version": 1,
+  "values": {
+    "workbench.colorTheme": "zeta-aurora",
+    "tui.colorTheme": "zeta-aurora"
+  }
+}
+```
+
+`tui.colorTheme` 可省略；省略时跟随 `workbench.colorTheme`。`system` 仍表示跟随操作系统并在内置 Light/Dark 之间切换。Desktop 保存/预览会即时更新，Native 与 TUI 当前在启动时读取一次，外部修改后需要重启对应宿主。
 
 ## 开发与验证
 

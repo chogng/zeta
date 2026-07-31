@@ -19,6 +19,8 @@ import { projectAlphaCompositionOverlay, projectAlphaDecorationOverlays, project
 
 const GUTTER_HORIZONTAL_PADDING = 16;
 
+export type AlphaEditorViewportPresentation = "document" | "embedded";
+
 export interface AlphaEditorViewportOptions {
   readonly container: HTMLElement;
   readonly model: TextModel;
@@ -29,6 +31,7 @@ export interface AlphaEditorViewportOptions {
   readonly selectionController?: EditorSelectionController;
   readonly decorationSources?: readonly AlphaDecorationSource[];
   readonly semanticTokenSource?: AlphaSemanticTokenSource;
+  readonly presentation?: AlphaEditorViewportPresentation;
 }
 
 export interface AlphaEditorContentPosition {
@@ -56,6 +59,7 @@ export class AlphaEditorViewport extends DisposableOwner {
   private readonly selectionController: EditorSelectionController | undefined;
   private readonly decorationSources: readonly AlphaDecorationSource[];
   private readonly semanticTokenSource: AlphaSemanticTokenSource | undefined;
+  private readonly presentation: AlphaEditorViewportPresentation;
   private readonly decorationSnapshots =
     new Map<AlphaDecorationSource, AlphaDecorationSource["decorations"]>();
   private renderedLines = new Map<number, AlphaRenderedLine>();
@@ -83,6 +87,7 @@ export class AlphaEditorViewport extends DisposableOwner {
     this.textMetricsElement = ownerDocument.createElement("span");
     this.selectionController = options.selectionController;
     this.semanticTokenSource = options.semanticTokenSource;
+    this.presentation = options.presentation ?? "document";
     try {
       if (this.selectionController && this.selectionController.textModel !== this.model) {
         throw new TypeError(
@@ -101,6 +106,7 @@ export class AlphaEditorViewport extends DisposableOwner {
     ]);
 
     this.element.className = "zeta-alpha-editor";
+    this.element.classList.add(`zeta-alpha-editor-${this.presentation}`);
     this.element.tabIndex = 0;
     this.element.setAttribute("role", "region");
     this.element.setAttribute("aria-label", options.ariaLabel ?? "Alpha editor");
@@ -309,6 +315,7 @@ export class AlphaEditorViewport extends DisposableOwner {
   }
 
   private get gutterWidth(): number {
+    if (this.presentation === "embedded") return 0;
     const digitCount = String(this.model.lineCount).length;
     return Math.ceil(
       this.textMeasurer.measureLineWidth("9".repeat(digitCount)) +

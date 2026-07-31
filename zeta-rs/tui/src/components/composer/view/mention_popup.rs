@@ -1,8 +1,7 @@
 use super::super::MentionPopupView;
-use crate::ui::HIGHLIGHT;
-use crate::ui::MUTED;
 use crate::ui::bottom_anchored_area;
 use crate::ui::horizontal_margin;
+use crate::ui::{highlight, muted};
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::Modifier;
@@ -33,7 +32,7 @@ pub(crate) fn draw(frame: &mut Frame<'_>, area: Rect, popup: Option<MentionPopup
             } else {
                 "No matching workspace files"
             },
-            Style::default().fg(MUTED),
+            Style::default().fg(muted()),
         ))]
     } else {
         popup
@@ -44,9 +43,11 @@ pub(crate) fn draw(frame: &mut Frame<'_>, area: Rect, popup: Option<MentionPopup
             .take(layout.visible_rows)
             .map(|(index, mention_match)| {
                 let base_style = if index == popup.selected {
-                    Style::default().fg(HIGHLIGHT).add_modifier(Modifier::BOLD)
+                    Style::default()
+                        .fg(highlight())
+                        .add_modifier(Modifier::BOLD)
                 } else {
-                    Style::default().fg(MUTED)
+                    Style::default().fg(muted())
                 };
                 let mut matched_indices = mention_match.indices.iter().peekable();
                 Line::from(

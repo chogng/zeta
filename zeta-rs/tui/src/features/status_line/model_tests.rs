@@ -52,9 +52,10 @@ fn config_with_model(provider: &str, model: &str) -> ConfigReadResult {
             model: model.into(),
         }),
         approval_review_model: ApprovalReviewModelSelectionDto::Automatic,
-        theme: None,
         providers: BTreeMap::new(),
         mcp_servers: BTreeMap::new(),
         skill_sources: BTreeMap::new(),
+        plugin_requests: BTreeMap::new(),
+        hooks: BTreeMap::new(),
     }
 }

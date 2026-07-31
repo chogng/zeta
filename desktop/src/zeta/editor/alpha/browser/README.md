@@ -80,7 +80,8 @@ rerenders visible line content without rebuilding rows; model invalidation
 removes stale spans before the normal model-version projection. The viewport
 owns only its event registration, not the source, common index, result store,
 or model. Semantic foregrounds come from registered
-`editor.semanticToken.*Foreground` theme colors owned by editor presentation.
+`editor.token.*Foreground` theme colors owned by editor presentation. Legacy
+`editor.semanticToken.*Foreground` overrides are normalized only at the user-theme boundary.
 
 `AlphaCompletionWidget` projects one caller-owned
 `LanguageCompletionSessionController` below the viewport's measured trigger

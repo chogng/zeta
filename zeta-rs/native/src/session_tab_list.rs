@@ -163,7 +163,7 @@ impl Component for SessionTabList<'_> {
             // Thinking, Editing, and any later Session states can project their own SVG inside it
             // once the App Server exposes an authoritative typed activity status.
             scene.draw_rect(
-                PaintRect::new(status_bounds, Color::WHITE)
+                PaintRect::new(status_bounds, self.palette.surface)
                     .with_corner_radii(CornerRadii::uniform(STATUS_CONTAINER_SIZE * 0.5)),
             );
 

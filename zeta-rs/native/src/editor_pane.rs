@@ -53,13 +53,26 @@ impl EditorDiff {
 }
 
 /// Product-owned changed-file collection and retained MultiDiffEditor viewport.
-#[derive(Default)]
 pub(crate) struct EditorPaneState {
     diffs: Vec<EditorDiff>,
     scroll_state: ScrollState,
     scrollbar: ScrollbarController,
     scrollbar_capture: Option<ScrollbarCapture>,
     measured_layout: MultiDiffEditorLayout,
+    style: MultiDiffEditorStyle,
+}
+
+impl Default for EditorPaneState {
+    fn default() -> Self {
+        Self {
+            diffs: Vec::new(),
+            scroll_state: ScrollState::default(),
+            scrollbar: ScrollbarController::default(),
+            scrollbar_capture: None,
+            measured_layout: MultiDiffEditorLayout::default(),
+            style: MultiDiffEditorStyle::light_cards(),
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -75,6 +88,15 @@ pub(crate) struct ScrollbarPointerOutcome {
 }
 
 impl EditorPaneState {
+    pub(crate) fn set_style(&mut self, style: MultiDiffEditorStyle) {
+        self.style = style;
+        self.remeasure();
+    }
+
+    fn style(&self) -> MultiDiffEditorStyle {
+        self.style.clone()
+    }
+
     pub(crate) fn diffs(&self) -> &[EditorDiff] {
         &self.diffs
     }
@@ -278,16 +300,11 @@ impl EditorPaneState {
 
     fn scroll_view(&self, bounds: Rect) -> zeta_ui::ScrollView {
         let items = self.items();
-        MultiDiffEditor::new(
-            bounds,
-            &items,
-            self.scroll_state,
-            MultiDiffEditorStyle::light_cards(),
-        )
-        .with_diff_presentation(DiffEditorPresentation::Unified)
-        .with_measured_layout(&self.measured_layout)
-        .with_scrollbar_presentation(self.scrollbar.presentation())
-        .scroll_view()
+        MultiDiffEditor::new(bounds, &items, self.scroll_state, self.style())
+            .with_diff_presentation(DiffEditorPresentation::Unified)
+            .with_measured_layout(&self.measured_layout)
+            .with_scrollbar_presentation(self.scrollbar.presentation())
+            .scroll_view()
     }
 
     fn remeasure(&mut self) {
@@ -296,7 +313,7 @@ impl EditorPaneState {
             Rect::from_xywh(0.0, 0.0, 1.0, 0.0),
             &items,
             ScrollState::default(),
-            MultiDiffEditorStyle::light_cards(),
+            self.style(),
         )
         .with_diff_presentation(DiffEditorPresentation::Unified)
         .measure_layout();
@@ -355,7 +372,7 @@ impl<'a> EditorPane<'a> {
             self.bounds,
             &items,
             self.state.scroll_state,
-            MultiDiffEditorStyle::light_cards(),
+            self.state.style(),
         )
         .with_diff_presentation(DiffEditorPresentation::Unified)
         .with_measured_layout(&self.state.measured_layout)
@@ -447,7 +464,7 @@ impl Component for EditorPane<'_> {
                 self.bounds,
                 &items,
                 self.state.scroll_state,
-                MultiDiffEditorStyle::light_cards(),
+                self.state.style(),
             )
             .with_diff_presentation(DiffEditorPresentation::Unified)
             .with_measured_layout(&self.state.measured_layout)

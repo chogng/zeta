@@ -25,6 +25,7 @@ export function createDisconnectedRendererApi(): ZetaRendererApi {
   return {
     appServer: {
       getConnectionState: () => Promise.resolve("stopped"),
+      getSlashCommands: () => unavailable("appServer.getSlashCommands"),
       onConnectionState: inertSubscription,
     },
     session: {

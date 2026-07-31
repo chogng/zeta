@@ -50,6 +50,7 @@ pub(crate) fn run(mut session: AppServerSession, options: TuiOptions) -> Result<
 }
 
 fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<TuiExit, TuiError> {
+    crate::ui::configure();
     let mut client = session.client();
     let events = session.take_events()?;
     let TuiOptions {

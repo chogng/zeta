@@ -21,6 +21,7 @@ use zeta_app_server_protocol::protocol::git::{
     GitBranchListResult, GitBranchSwitchParams, GitOperationResult, GitTextDiffResult,
 };
 use zeta_app_server_protocol::protocol::initialize::{InitializeParams, InitializeResult};
+use zeta_app_server_protocol::protocol::model::ModelListResult;
 use zeta_app_server_protocol::protocol::registry::ClientMethod;
 use zeta_app_server_protocol::protocol::resources::{
     ResourceMetadataParams, ResourceMetadataResult, ResourceReadParams, ResourceReadResult,
@@ -31,10 +32,10 @@ use zeta_app_server_protocol::protocol::search::{
     WorkspaceSearchStartParams, WorkspaceSearchStartResult,
 };
 use zeta_app_server_protocol::protocol::session::{
-    SessionCommandParams, SessionCreateParams, SessionListResult, SessionReadParams, SessionResult,
-    SessionSubscribeParams, SessionSubscribeResult, SessionThreadArchiveParams,
-    SessionThreadCreateParams, SessionThreadForkParams, SessionThreadResult,
-    SessionUnsubscribeParams,
+    SessionCommandParams, SessionCreateParams, SessionListResult, SessionModelSetParams,
+    SessionReadParams, SessionResult, SessionSubscribeParams, SessionSubscribeResult,
+    SessionThreadArchiveParams, SessionThreadCreateParams, SessionThreadForkParams,
+    SessionThreadResult, SessionUnsubscribeParams,
 };
 use zeta_app_server_protocol::protocol::skills::{
     SkillListParams, SkillListResult, SkillSetEnablementParams,
@@ -169,6 +170,13 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
         self.call(ClientMethod::SessionList, EmptyParams {})
     }
 
+    pub fn set_session_model(
+        &mut self,
+        params: SessionModelSetParams,
+    ) -> Result<SessionResult, ClientError> {
+        self.call(ClientMethod::SessionModelSet, params)
+    }
+
     pub fn subscribe_session(
         &mut self,
         params: SessionSubscribeParams,
@@ -241,6 +249,10 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
 
     pub fn read_config(&mut self) -> Result<ConfigReadResult, ClientError> {
         self.call(ClientMethod::ConfigRead, EmptyParams {})
+    }
+
+    pub fn list_models(&mut self) -> Result<ModelListResult, ClientError> {
+        self.call(ClientMethod::ModelList, EmptyParams {})
     }
 
     pub fn update_config(

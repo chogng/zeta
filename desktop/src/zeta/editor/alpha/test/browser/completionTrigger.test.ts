@@ -131,6 +131,27 @@ test("Typing after an incomplete result retriggers all providers at the new vers
   assert.equal(fixture.session.state!.selectedItem.label, "continue");
 });
 
+test("Deleting after an incomplete result retriggers providers at the new version", async () => {
+  const requests: LanguageCompletionProviderRequest[] = [];
+  using fixture = createFixture({
+    id: "incomplete-delete",
+    languageIds: ["typescript"],
+    provideCompletions: request => {
+      requests.push(request);
+      return completionResult(request, request.snapshot.getText(), true);
+    },
+  });
+  fixture.input.element.dispatchEvent(keyboardEvent(fixture.dom.window, " ", { ctrlKey: true }));
+  await waitFor(() => fixture.session.state?.requestId === 1);
+
+  fixture.input.element.dispatchEvent(beforeInputEvent(fixture.dom.window, null, "deleteContentBackward"));
+  await waitFor(() => fixture.session.state?.requestId === 2);
+
+  assert.equal(fixture.model.getText(), "co");
+  assert.equal(requests[1]!.context.kind, LanguageCompletionTriggerKind.IncompleteRefresh);
+  assert.equal(requests[1]!.snapshot.getText(), "co");
+});
+
 test("Completion request wiring rejects a same-model session from another service", () => {
   using registry = new LanguageCompletionProviderRegistry();
   using registration = registry.register({
@@ -277,11 +298,11 @@ function keyboardEvent(targetWindow: typeof browserEnvironment.window, key: stri
   }) as unknown as KeyboardEvent;
 }
 
-function beforeInputEvent(targetWindow: typeof browserEnvironment.window, data: string): InputEvent {
+function beforeInputEvent(targetWindow: typeof browserEnvironment.window, data: string | null, inputType = "insertText"): InputEvent {
   return new targetWindow.InputEvent("beforeinput", {
     bubbles: true,
     cancelable: true,
-    inputType: "insertText",
+    inputType,
     data,
   }) as unknown as InputEvent;
 }

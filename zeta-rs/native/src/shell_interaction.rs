@@ -1,3 +1,4 @@
+use std::ops::Range;
 use zeta_ui_dispatch::ElementId;
 
 const SHELL_SCOPE: u32 = 1;
@@ -43,6 +44,24 @@ pub(crate) const AGENT_FILES_SEARCH: ElementId = ElementId::scoped(SHELL_SCOPE, 
 pub(crate) const AGENT_FILE_SEARCH_INPUT: ElementId = ElementId::scoped(SHELL_SCOPE, 39);
 pub(crate) const THREAD_TIMELINE: ElementId = ElementId::scoped(SHELL_SCOPE, 40);
 pub(crate) const COMPOSER_MODE: ElementId = ElementId::scoped(SHELL_SCOPE, 41);
+pub(crate) const COMPOSER_INTERACTION: ElementId = ElementId::scoped(SHELL_SCOPE, 42);
+pub(crate) const COMPOSER_INFO_BAR: ElementId = ElementId::scoped(SHELL_SCOPE, 43);
+const FIRST_COMPOSER_INTERACTION_ITEM: u32 = 100;
+
+pub(crate) fn composer_interaction_item_id(index: usize) -> ElementId {
+    let local = u32::try_from(index)
+        .ok()
+        .and_then(|index| FIRST_COMPOSER_INTERACTION_ITEM.checked_add(index))
+        .expect("composer interaction item index must fit its element scope");
+    ElementId::scoped(SHELL_SCOPE, local)
+}
+
+pub(crate) fn composer_interaction_item_index(
+    id: ElementId,
+    mut visible_range: Range<usize>,
+) -> Option<usize> {
+    visible_range.find(|index| composer_interaction_item_id(*index) == id)
+}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum AgentSidebarPaneAction {

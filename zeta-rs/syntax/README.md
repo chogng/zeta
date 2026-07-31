@@ -5,7 +5,7 @@
 > [`docs/syntax-analysis.md`](../../docs/syntax-analysis.md) 拥有。
 
 `zeta-syntax` 对宿主提供有界、增量、与 presentation 无关的源码结构分析。当前实现支持 Rust、
-JSON 和 JSONC，使用 tree-sitter 保存每个打开文档的增量 parse tree，并为精确的 host revision 派生 syntax
+JSON、JSONC 和 Shell，使用 tree-sitter 保存每个打开文档的增量 parse tree，并为精确的 host revision 派生 syntax
 tokens、folding ranges、document symbols 和 parse diagnostics。它不读取文件、不监听 workspace、
 不持久化索引、不启动语言服务器，也不依赖 Monaco、`zeta-editor`、Native paint types 或 App
 Server DTO。
@@ -78,7 +78,8 @@ cargo clippy --manifest-path zeta-rs/Cargo.toml -p zeta-syntax --all-targets -- 
 bazel test //zeta-rs/syntax:syntax-unit-tests
 ```
 
-`src/syntax_tests.rs` 覆盖 Rust token/fold/symbol projection、JSON/JSONC token/fold/comment、单行和
+`src/syntax_tests.rs` 覆盖 Rust token/fold/symbol projection、JSON/JSONC token/fold/comment、Shell
+command/operator/comment token、单行和
 多行增量编辑、revision binding、UTF-8 boundary、更新后的 line index、resource limits，以及失败不修改文档。
 
 新增 grammar 时必须同时增加 `SyntaxLanguage`、`LanguageConfiguration::load` 的 grammar/query
@@ -88,7 +89,7 @@ host adapter；修改 symbol category 时必须同步检查未来 workspace inde
 
 当前限制：
 
-- Current：注册 Rust grammar，以及由独立私有语言模块选择的 JSON/JSONC grammar；JSON 与 JSONC
+- Current：注册 Rust、Shell grammar，以及由独立私有语言模块选择的 JSON/JSONC grammar；JSON 与 JSONC
   共用上游 comment-capable JSON parser，syntax snapshot 不代替 language server 的严格格式校验；
 - Current：单个 edit 和同一旧 revision 上的非重叠 batch 都使用 UTF-8 byte range；宿主负责事件 coalescing；
 - Current：文本保存在 `String`，中间插入需要移动后续 bytes；超大文档的 rope/chunked input 尚未实现；

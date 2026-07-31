@@ -9,6 +9,7 @@ export const mutedForeground = color("muted.foreground", "#8f8f8f", "#767676", "
 export const accentForeground = color("accent.foreground", "#4daafc", "#005fb8", "Foreground for links and accent content.");
 export const errorForeground = color("error.foreground", "#f48771", "#a1260d", "Foreground for errors.");
 export const warningForeground = color("warning.foreground", "#cca700", "#895503", "Foreground for warnings.");
+export const successForeground = color("success.foreground", "#89d185", "#107c10", "Foreground for successful states.");
 export const focusBorder = color("focusBorder", "#007fd4", "#0078d4", "Border for focused controls.");
 export const border = color("border", "#2b2b2b", "#e5e5e5", "Default separator border.");
 export const widgetBorder = color("widget.border", "#454545", "#d4d4d4", "Border around floating widgets.");

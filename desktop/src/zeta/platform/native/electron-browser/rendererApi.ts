@@ -1,4 +1,4 @@
-import type { FsGetMetadataResult, FsReadDirectoryResult, FsReadFileResult, ModelListResult, ResourceMetadataResult, ResourceReadResult, ServerNotification, SessionListResult, SessionResult, SessionSubscribeResult, SessionThreadResult, SyntaxAnalysisSnapshotDto, ThreadReadResult, ThreadSubscribeResult, TurnInterruptResult, TurnInteractionResolveResult, TurnStartResult, TypstCompileResult, WorkspaceSearchReadResult, WorkspaceSearchStartResult } from "../../../../../generated/app-server/types.js";
+import type { FsGetMetadataResult, FsReadDirectoryResult, FsReadFileResult, ModelListResult, ResourceMetadataResult, ResourceReadResult, ServerNotification, SessionListResult, SessionResult, SessionSubscribeResult, SessionThreadResult, SlashCommandDefinition, SyntaxAnalysisSnapshotDto, ThreadReadResult, ThreadSubscribeResult, TurnInterruptResult, TurnInteractionResolveResult, TurnStartResult, TypstCompileResult, WorkspaceSearchReadResult, WorkspaceSearchStartResult } from "../../../../../generated/app-server/types.js";
 import type { TerminalCreateResult, TerminalProfileListResult, TerminalReadResult } from "../../../../../generated/app-server/types.js";
 import type { GitCommitResult, GitOperationResult, GitStatusResult } from "../../../../../generated/app-server/types.js";
 import { operatingSystemFromNodePlatform } from "../../../base/common/environment.js";
@@ -25,6 +25,8 @@ export function createElectronRendererApi(): ZetaElectronRendererApi {
     appServer: {
       getConnectionState: () =>
         invoke<AppServerConnectionState>("zeta:app-server:state"),
+      getSlashCommands: () =>
+        invoke<readonly SlashCommandDefinition[]>("zeta:app-server:slash-commands"),
       onConnectionState: (listener) =>
         subscribe(
           "zeta:app-server:stateChanged",

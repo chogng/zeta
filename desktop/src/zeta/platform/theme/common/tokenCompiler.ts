@@ -1,5 +1,5 @@
 import "./colorTheme.js";
-import { Colors, colorCssVariable } from "./colorRegistry.js";
+import { Colors, colorCssVariable, type ColorDefaults, type ColorValue } from "./colorRegistry.js";
 import { Sizes, sizeCssVariable, sizeToCss } from "./sizeRegistry.js";
 import { ColorScheme } from "./theme.js";
 import { USER_COLOR_THEME_SCHEMA_URL } from "./userColorTheme.js";
@@ -16,7 +16,7 @@ export interface DesignTokenArtifacts {
 export function compileDesignTokenArtifacts(): DesignTokenArtifacts {
   const schemes = [ColorScheme.Dark, ColorScheme.Light, ColorScheme.HighContrastDark, ColorScheme.HighContrastLight];
   const resolved = new Map(schemes.map((scheme) => [scheme, new Map(Colors.resolve(scheme).map(({ id, value }) => [id, value?.toString() ?? null]))]));
-  const colors = Colors.getColors().map(({ id, description, owner, needsTransparency = false, deprecated }) => ({
+  const colors = Colors.getColors().map(({ id, defaults, description, owner, needsTransparency = false, deprecated }) => ({
     id,
     kind: "color",
     cssVariable: colorCssVariable(id),
@@ -24,6 +24,7 @@ export function compileDesignTokenArtifacts(): DesignTokenArtifacts {
     description,
     needsTransparency,
     ...(deprecated ? { deprecated } : {}),
+    defaults: Object.fromEntries(schemes.map((scheme) => [scheme, serializeColorValue(defaultsForScheme(defaults, scheme))])),
     values: Object.fromEntries(schemes.map((scheme) => [scheme, resolved.get(scheme)!.get(id) ?? null])),
   }));
   const sizes = Sizes.getSizes().map(({ id, description, owner, value, deprecated }) => ({
@@ -36,6 +37,17 @@ export function compileDesignTokenArtifacts(): DesignTokenArtifacts {
     value: sizeToCss(value),
   }));
   const manifestValue = { version: 1, colors, sizes };
+  const colorValueReference = { $ref: "#/$defs/colorValue" };
+  const transform = (op: string, properties: Record<string, unknown>, required: string[]) => ({
+    type: "object",
+    additionalProperties: false,
+    required: ["op", "value", ...required],
+    properties: {
+      op: { const: op },
+      value: colorValueReference,
+      ...properties,
+    },
+  });
   const schemaValue = {
     $schema: "https://json-schema.org/draft/2020-12/schema",
     $id: "https://zeta.dev/schemas/design-tokens.schema.json",
@@ -66,10 +78,16 @@ export function compileDesignTokenArtifacts(): DesignTokenArtifacts {
           { $ref: "#/$defs/common" },
           {
             type: "object",
-            required: ["values", "needsTransparency"],
+            required: ["defaults", "values", "needsTransparency"],
             properties: {
               kind: { const: "color" },
               needsTransparency: { type: "boolean" },
+              defaults: {
+                type: "object",
+                additionalProperties: false,
+                required: schemes,
+                properties: Object.fromEntries(schemes.map((scheme) => [scheme, { $ref: "#/$defs/colorValue" }])),
+              },
               values: {
                 type: "object",
                 additionalProperties: false,
@@ -78,6 +96,16 @@ export function compileDesignTokenArtifacts(): DesignTokenArtifacts {
               },
             },
           },
+        ],
+      },
+      colorValue: {
+        anyOf: [
+          { type: ["string", "null"] },
+          transform("transparent", { factor: { type: "number", minimum: 0, maximum: 1 } }, ["factor"]),
+          transform("lighten", { factor: { type: "number", minimum: 0, maximum: 1 } }, ["factor"]),
+          transform("darken", { factor: { type: "number", minimum: 0, maximum: 1 } }, ["factor"]),
+          transform("mix", { other: colorValueReference, factor: { type: "number", minimum: 0, maximum: 1 } }, ["other", "factor"]),
+          transform("opaque", { background: colorValueReference }, ["background"]),
         ],
       },
       size: {
@@ -115,17 +143,6 @@ export function compileDesignTokenArtifacts(): DesignTokenArtifacts {
     ...sizes.map((token) => `| \`${token.id}\` | ${token.owner} | \`${token.value}\` | \`${token.cssVariable}\` |`),
     "",
   ];
-  const colorValueReference = { $ref: "#/$defs/colorValue" };
-  const transform = (op: string, properties: Record<string, unknown>, required: string[]) => ({
-    type: "object",
-    additionalProperties: false,
-    required: ["op", "value", ...required],
-    properties: {
-      op: { const: op },
-      value: colorValueReference,
-      ...properties,
-    },
-  });
   const userThemeSchemaValue = {
     $schema: "https://json-schema.org/draft/2020-12/schema",
     $id: USER_COLOR_THEME_SCHEMA_URL,
@@ -197,4 +214,25 @@ export function compileDesignTokenArtifacts(): DesignTokenArtifacts {
     userThemeSchema: `${JSON.stringify(userThemeSchemaValue, null, 2)}\n`,
     userThemeTemplate: `${JSON.stringify(userThemeTemplateValue, null, 2)}\n`,
   };
+}
+
+function defaultsForScheme(defaults: ColorDefaults, scheme: ColorScheme): ColorValue {
+  switch (scheme) {
+    case ColorScheme.Dark: return defaults.dark;
+    case ColorScheme.Light: return defaults.light;
+    case ColorScheme.HighContrastDark: return defaults.highContrastDark ?? defaults.dark;
+    case ColorScheme.HighContrastLight: return defaults.highContrastLight ?? defaults.light;
+  }
+}
+
+function serializeColorValue(value: ColorValue): unknown {
+  if (value === null || typeof value === "string") return value;
+  if (!("op" in value)) return value.toString();
+  switch (value.op) {
+    case "transparent":
+    case "lighten":
+    case "darken": return { op: value.op, value: serializeColorValue(value.value), factor: value.factor };
+    case "mix": return { op: value.op, value: serializeColorValue(value.value), other: serializeColorValue(value.other), factor: value.factor };
+    case "opaque": return { op: value.op, value: serializeColorValue(value.value), background: serializeColorValue(value.background) };
+  }
 }

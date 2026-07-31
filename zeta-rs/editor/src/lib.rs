@@ -10,15 +10,16 @@ mod multi_diff_editor;
 
 pub use code_editor::{
     CodeEditor, CodeEditorCommand, CodeEditorComposition, CodeEditorDocument, CodeEditorHeader,
-    CodeEditorInlineHighlight, CodeEditorLocation, CodeEditorPosition, CodeEditorPresentation,
-    CodeEditorRow, CodeEditorRowSource, CodeEditorSelection, CodeEditorSelectionMode,
-    CodeEditorStyle, CodeEditorSyntaxHighlighter, CodeEditorSyntaxToken, CodeEditorViewport,
+    CodeEditorInlineHighlight, CodeEditorLocation, CodeEditorPalette, CodeEditorPosition,
+    CodeEditorPresentation, CodeEditorRow, CodeEditorRowSource, CodeEditorSelection,
+    CodeEditorSelectionMode, CodeEditorStyle, CodeEditorSyntaxHighlighter, CodeEditorSyntaxPalette,
+    CodeEditorSyntaxToken, CodeEditorTokenRole, CodeEditorViewport,
 };
 pub use diff_editor::{
     DiffEditor, DiffEditorFoldControl, DiffEditorFoldState, DiffEditorLabels, DiffEditorLocation,
-    DiffEditorPresentation, DiffEditorSide, DiffEditorState, DiffEditorStyle,
+    DiffEditorPalette, DiffEditorPresentation, DiffEditorSide, DiffEditorState, DiffEditorStyle,
 };
 pub use multi_diff_editor::{
     MultiDiffEditor, MultiDiffEditorFoldControl, MultiDiffEditorItem, MultiDiffEditorLayout,
-    MultiDiffEditorStyle,
+    MultiDiffEditorPalette, MultiDiffEditorStyle,
 };

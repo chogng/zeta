@@ -38,6 +38,7 @@ zeta-sandboxing = { workspace = true }
 zeta-workspace = { workspace = true }
 zeta-search = { workspace = true }
 zeta-shell-command = { workspace = true }
+zeta-slash-commands = { workspace = true }
 zeta-skills = { workspace = true }
 zeta-syntax = { workspace = true }
 zeta-tools = { workspace = true }

@@ -1,6 +1,10 @@
 use std::time::{Duration, Instant};
 
-use super::{TerminalScroll, file_list_scroll_pixels, multi_diff_scroll_pixels};
+use super::{
+    TerminalScroll, composer_interaction_scroll_command, file_list_scroll_pixels,
+    multi_diff_scroll_pixels,
+};
+use zeta_ui::{ScrollCommand, ScrollDelta};
 use zeta_winit::{MouseScrollDelta, PhysicalPosition};
 
 #[test]
@@ -59,6 +63,20 @@ fn file_list_line_wheel_uses_the_component_owned_row_extent() {
             0.0, -12.0
         ))),
         12.0
+    );
+}
+
+#[test]
+fn composer_interaction_wheel_maps_platform_delta_to_ui_scroll_command() {
+    assert_eq!(
+        composer_interaction_scroll_command(MouseScrollDelta::LineDelta(0.0, -1.0)),
+        ScrollCommand::ByPixels(ScrollDelta::vertical(102.0))
+    );
+    assert_eq!(
+        composer_interaction_scroll_command(MouseScrollDelta::PixelDelta(PhysicalPosition::new(
+            0.0, -12.0
+        ))),
+        ScrollCommand::ByPixels(ScrollDelta::vertical(12.0))
     );
 }
 

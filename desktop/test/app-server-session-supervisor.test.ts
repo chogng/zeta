@@ -72,6 +72,7 @@ class ProtocolChildProcess extends EventEmitter {
             typst: true,
             updateReplay: true,
           },
+          slashCommands: [{ name: "diagnose", description: "Inspect workspace", argumentMode: "optional" }],
         });
       } else if (request.method === "workspace/switch") {
         const params = request.params as { readonly root: string };
@@ -137,6 +138,7 @@ test("session becomes ready only after protocol and schema gates pass", async ()
   assert.equal(initialized.schemaHash, APP_SERVER_SCHEMA_HASH);
   assert.equal(appServer.capabilities.resources, true);
   assert.equal(appServer.serverInfo.name, "zeta-test");
+  assert.equal(appServer.slashCommands[0]?.name, "diagnose");
   await appServer.close();
   assert.equal(appServer.state, "closed");
 });
@@ -181,6 +183,7 @@ test("supervisor restarts a crashed process with bounded lifecycle states", asyn
   supervisor.onStateChange((state) => states.push(state));
   await supervisor.start();
   assert.equal(supervisor.state, "ready");
+  assert.equal(supervisor.slashCommands[0]?.name, "diagnose");
 
   const restarted = new Promise<void>((resolve) => {
     const dispose = supervisor.onStateChange((state) => {

@@ -1,7 +1,7 @@
 # 源码结构分析系统
 
-> 状态：Rust/JSON/JSONC 增量分析内核与 Desktop Alpha syntax-token/parse-diagnostic 接入已实现；Native 与 workspace
-> index 接入尚未完成。
+> 状态：Rust/JSON/JSONC/Shell 增量分析内核已实现；Desktop Alpha 已接入 Rust/JSON/JSONC，Native
+> Composer 已接入 Shell syntax-token projection，文件 EditorHost 与 workspace index 接入尚未完成。
 > 本文拥有跨 crate、进程和编辑器的语言分析所有权与演进阶段；当前 crate API、内部调用图和
 > 修改路径见 [`zeta-syntax` README](../zeta-rs/syntax/README.md)。
 
@@ -13,11 +13,11 @@ Zeta 把可跨编辑器复用的语法分析放入 Rust，同时保留 Alpha 和
 
 | 使用场景 | 当前结果 | 最终 owner |
 | --- | --- | --- |
-| 对 Rust/JSON/JSONC 文本进行增量 parse | ✅ `zeta-syntax` 已实现 UTF-8 edit、revision binding 与 tree reuse | `zeta-syntax` |
+| 对 Rust/JSON/JSONC/Shell 文本进行增量 parse | ✅ `zeta-syntax` 已实现 UTF-8 edit、revision binding 与 tree reuse | `zeta-syntax` |
 | 取得 syntax token、fold、document outline 和 parse error | 部分具备：完整 snapshot 已跨 App Server 传输，token 与 parse diagnostic 已投影到 Alpha；fold/outline UI 尚未接入 | `zeta-syntax` + 产品宿主 |
 | Alpha 输入、光标、DOM、layout、accessibility | ✅ 由 Alpha 拥有 | Desktop Renderer |
-| Monaco 工具能力 | 保持现有过渡实现；不拥有后端 syntax 接入 | Monaco adapter |
-| Native code surface 绘制 | 部分具备：`zeta-editor` 已有 syntax projection，adapter 尚未接线 | `zeta-editor` + Native host |
+| Monaco 退场 | 不再接入新的 syntax capability；仍需保留的工具能力迁移到 Alpha contract | Alpha / Workbench |
+| Native code surface 绘制 | 部分具备：Composer Shell adapter 已接线；文件 EditorHost adapter 尚未完成 | `zeta-editor` + Native host |
 | completion、type、definition/reference、rename | 部分具备：低层 LSP runtime 已实现，产品接线尚未完成 | `zeta-lsp` + language server |
 | workspace symbol search | 尚未完成 | 后续 workspace index；不属于 parser document |
 
@@ -28,7 +28,7 @@ Zeta 把可跨编辑器复用的语法分析放入 Rust，同时保留 Alpha 和
 flowchart LR
     Document["EditorHost authoritative document"] -->|"UTF-8 edit + revision"| Syntax["zeta-syntax"]
     Syntax --> Snapshot["revision-tagged syntax snapshot"]
-    Snapshot --> Desktop["Alpha analysis adapter"]
+    Snapshot --> Desktop["ISyntaxAnalysisService → Alpha analysis worker"]
     Snapshot --> Native["Native adapter → zeta-editor"]
     Snapshot --> Index["future workspace symbol index"]
     Document --> LSP["zeta-lsp → language server"]
@@ -79,7 +79,9 @@ Renderer 的语言 worker/JS heap 工作、共享 Native 实现，以及让大�
 Alpha 的 Rust/JSON/JSONC token lane 优先使用后端，避免正常路径重复 tokenization。后端失败时委托
 既有 worker provider chain；JSON/JSONC 可回退 TextMate，Rust 当前没有 TextMate grammar。
 
-Desktop 通过版本化 App Server API 使用 Rust。当前 Alpha 接入使用长生命周期、按
+Desktop 通过前端正式的 `ISyntaxAnalysisService` 使用 Rust。Workbench 注册
+`AppServerSyntaxAnalysisService`，后者是版本化 App Server API 的薄适配；Alpha 只依赖 service，
+不接触 `ZetaRendererApi`、Electron IPC 或 JSON-RPC。当前接入使用长生命周期、按
 connection/model 拥有的 analysis session：
 
 ```text
@@ -112,20 +114,23 @@ revision，并把语言中立 token category 映射为 `zeta-editor` presentatio
 ### 当前实现
 
 - 独立 `zeta-syntax` Cargo/Bazel crate；
-- Rust grammar/highlights/tags，以及 JSON/JSONC grammar/highlights；
+- Rust grammar/highlights/tags、Shell grammar/highlights，以及 JSON/JSONC grammar/highlights；
+- Native Composer 用增量 `SyntaxDocument::Shell` snapshot 映射 `CodeEditorSyntaxToken`；
 - host-owned monotonic `DocumentRevision`；
 - UTF-8 replace/insert/delete 与 tree-sitter `InputEdit`；
 - incremental line index、old-tree reuse 和 parse cancellation rollback；
 - 有界 token、fold、document symbol 与 parse diagnostic snapshot；
 - grammar/tree 类型不泄漏到 public API；
 - 单独测试文件覆盖增量编辑、Unicode boundary、revision 和 limits。
-- App Server `document/syntax/open|change|close`、connection/model ownership、UTF-16 batch/result 转换与
-  Alpha Rust/JSON/JSONC token/parse-diagnostic provider adapter。
+- App Server `document/syntax/open|change|close`、connection/model ownership、UTF-16 batch/result 转换；
+- 前端 `ISyntaxAnalysisService`、`AppServerSyntaxAnalysisService` 与 Alpha
+  `syntaxAnalysisServiceAdapter`，共同完成 Rust/JSON/JSONC token/parse-diagnostic 投影且不让 transport
+  进入 Editor Part/Alpha contract。
 
 ### 近期计划
 
 1. 建立 authoritative EditorHost/document service，统一 URI、language 和 revision。
-2. 为 Native 增加 snapshot-to-`CodeEditorSyntaxToken` adapter，并按 revision 投影。
+2. 把 Composer 已使用的 snapshot-to-`CodeEditorSyntaxToken` adapter 扩展到 Native 文件 EditorHost。
 3. 为 token snapshot 增加 result-ID delta 与有界 backpressure，并以 profile 数据决定 debounce。
 4. 在 Alpha 接入 document outline/folding UI，再按语言逐项替换重复 syntax provider。
 5. 以真实 Files/Search consumer 验证 open buffer 覆盖 disk snapshot 后，再建立 workspace index。
@@ -139,5 +144,5 @@ revision，并把语言中立 token category 映射为 `zeta-editor` presentatio
   猜测来源。
 
 长期不变量是：EditorHost 拥有文档，`zeta-syntax` 拥有结构分析，LSP/compiler 拥有语义事实，
-Alpha/Native view 拥有 presentation；Monaco 只保留过渡工具实现。任何异步结果都必须绑定并验证
-document revision。
+Alpha/Native view 拥有 presentation；Monaco 不再获得新的产品所有权，退场所需工具能力进入 Alpha
+公开 contract。任何异步结果都必须绑定并验证 document revision。

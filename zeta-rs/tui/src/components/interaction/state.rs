@@ -2,9 +2,9 @@ use crate::components::composer::ChatComposer;
 use crate::components::composer::ComposerOutcome;
 use crate::components::composer::ComposerSubmission;
 use crate::components::composer::MentionPopupView;
+use crate::components::composer::SlashCommandCatalog;
 use crate::components::composer::SlashCommandInvocation;
-use crate::components::composer::SlashCommandRegistry;
-use crate::components::composer::SlashPopupView;
+use crate::components::composer::SlashCommandsView;
 use crate::components::selection::SelectionInputOutcome;
 use crate::components::selection::SelectionItemId;
 use crate::components::selection::SelectionViewModel;
@@ -46,7 +46,7 @@ impl InteractionPane {
         }
     }
 
-    pub(crate) fn with_slash_commands(slash_commands: SlashCommandRegistry) -> Self {
+    pub(crate) fn with_slash_commands(slash_commands: SlashCommandCatalog) -> Self {
         Self {
             composer: ChatComposer::with_slash_commands(slash_commands),
             views: Vec::new(),
@@ -94,7 +94,7 @@ impl InteractionPane {
         self.composer.cursor_display_width()
     }
 
-    pub(crate) fn slash_popup(&self) -> Option<SlashPopupView<'_>> {
+    pub(crate) fn slash_popup(&self) -> Option<SlashCommandsView<'_>> {
         if !self.views.is_empty() {
             return None;
         }

@@ -21,6 +21,7 @@ TUI 把 App Server 的权威状态转换成终端中的可交互呈现；它拥�
 | 检测到序列缺口 | 暂停推断并请求权威快照 | 用本地状态填补缺口 |
 | 请求完成、过期或取消 | 按关联身份丢弃过期结果并更新交互 | 决定工具重试或 Agent 恢复 |
 | 渲染一帧 | 纯读取当前呈现状态 | 在绘制过程中触发业务副作用 |
+| 加载主题 | 消费共享 snapshot 的明确子集并按终端能力降级 | 复制 Desktop 的全部主题能力或默认色目录 |
 | 外部 Agent 来源已经进入统一 Skill catalog | 浏览、启用或禁用已有条目 | 导入外部 Agent 配置、选择目录或扫描用户主目录 |
 
 ## 1. 结论
@@ -49,6 +50,13 @@ Zeta 已经在 TUI 外部拥有：
 - `zeta-app-server-protocol` 中唯一的 wire contract；
 - `zeta-app-server-client` 中共享的 App Server 启动、初始化、请求/事件连接与关闭层；
 - CLI 交付的启动配置与产品入口参数。
+- `zeta-theme` 中与 Desktop/Native 共享的 manifest、用户主题解析和 device preference loader。
+
+主题边界是“部分接入”而不是“尚未复制完成”：TUI 当前只需要 accent、composer chrome、错误、
+成功、警告、弱化文字和选择高亮。`ui/theme.rs` 将透明色先合成到 terminal background，再按
+TrueColor、ANSI-256、ANSI-16、Monochrome 投影；其他 Desktop/Native token 不进入 TUI API。
+`tui.colorTheme` 缺失时跟随 `workbench.colorTheme`，选择属于 device-local JSON，不属于 Agent
+config、Session store 或 TOML。新增消费必须先有真实终端语义和可测试的能力降级规则。
 
 因此 TUI 必须是可丢弃、可重新同步的 presentation shell，而不是第二个 Agent runtime 或
 App Server facade。产品权威状态的依赖链固定为：
@@ -270,7 +278,7 @@ zeta-rs/tui/
 │   │   │   ├── editor.rs
 │   │   │   ├── attachments.rs
 │   │   │   ├── pending_pastes.rs
-│   │   │   ├── slash_input.rs
+│   │   │   ├── slash_commands.rs    # TUI-local command execution metadata only
 │   │   │   ├── view.rs
 │   │   │   └── composer_tests.rs
 │   │   ├── transcript/
@@ -928,7 +936,8 @@ lib_tests.rs
   与 Skill catalog/enablement 调用，App 不再内联这些领域 payload；
 - `components/selection` 已同时拥有 generic tabs/query/filter/selection state、输入 outcome 与
   Ratatui view；`InteractionPane`、App 和产品 view builder 只消费该 component contract；
-- `ui/layout.rs` 与 `ui/theme.rs` 已拥有跨 presentation surface 复用的纯 geometry 与颜色原语；
+- `ui/layout.rs` 拥有跨 presentation surface 复用的纯 geometry；`ui/theme.rs` 只拥有共享主题
+  snapshot 到终端色彩能力的窄投影，用户文件解析与完整 token catalog 留在 `zeta-theme`；
   component 不反向依赖 frame coordinator；
 - `App` 处理 presentation coordination 与全局键，并直接委托 `InteractionPane` 的
   composer/temporary-view 输入；`ChatWidget` 与过渡目录 `toppane/` 已移除，不再存在第二份
@@ -956,7 +965,8 @@ lib_tests.rs
   `features/status_line/view.rs` 只读取模型，并按可用宽度从完整 model/workspace 降级到短值
   或省略号；
 - `ChatComposer` 协调提交、popup keys、range completion application 与 structured local
-  command dispatch，`SlashInput` 解释 cursor 下的 slash composer text，`TextArea` 拥有 UTF-8
+  command dispatch；`zeta-slash-commands` 拥有 slash grammar、catalog、matches、selection 与
+  dismiss，Ratatui popup renderer 根据自身 viewport 投影可见范围，`TextArea` 只拥有 UTF-8
   编辑状态、原子 command element 和未来 Vim keymap 边界；
 - bracketed paste 使用独立事件路径；超过 1000 个 Unicode scalar value 的内容由 `PendingPastes`
   绑定到 `TextArea` 原子占位符，并在提交前展开；
@@ -990,12 +1000,12 @@ lib_tests.rs
   resync；
 - 没有 archive UI、resume picker 或多 Thread navigation surface；interrupt、exact-ID resume
   与当前 Thread fork 已接通 typed API；
-- local slash popup 已支持共享 validated registry、cursor-aware prefix filtering、保留 argument
+- local slash popup 已接入 `zeta-slash-commands` 的 validated catalog/state、cursor-aware prefix filtering、保留 argument
   tail 的 range completion、keyboard/mouse selection、原子 command token，以及 inline
   text/image/large-paste arguments；App Server 的 `initialize.slashCommands` snapshot 会在创建
-  Session 前合并进 registry，非法名称、空描述、重复项和 built-in shadowing 都会使启动失败；
+  Session 前合并进 catalog，非法名称、空描述、重复项和 built-in shadowing 都会使启动失败；
   dynamic command 恢复完整 `/name` 与 ordered arguments 后作为普通 Turn input 提交。
-  Built-in registry 只保留真实执行流：Session/Thread lifecycle、status/config/MCP/Skill 查询、
+  Built-in command adapter 只保留真实执行流：Session/Thread lifecycle、status/config/MCP/Skill 查询、
   revision-checked model selection、interactive help 与退出；缺少 backend contract 的命令不显示。
   workspace file mention popup 也支持
   keyboard/mouse selection，两者之外的 mouse surface 尚未接通；结构化 app/plugin Mention

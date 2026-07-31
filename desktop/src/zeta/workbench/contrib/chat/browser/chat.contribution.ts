@@ -4,13 +4,21 @@ import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
 import { IMenuService } from "../../../../platform/actions/common/menuService.js";
 import { IContextKeyService } from "../../../../platform/contextkey/common/contextkey.js";
 import { IContextMenuService } from "../../../../platform/contextview/browser/contextMenu.js";
+import { ICommandService } from "../../../../platform/commands/common/commands.js";
 import { SyncDescriptor } from "../../../../platform/instantiation/common/instantiation.js";
 import { IRendererApiService } from "../../../common/services.js";
 import { ViewContainerLocation, type WorkbenchViewRegistry, ViewsRegistry } from "../../../common/views.js";
 import { IWorkbenchSessionService } from "../../../services/sessions/common/sessionService.js";
 import { IViewDescriptorService } from "../../../services/views/common/viewDescriptorService.js";
 import { CHAT_VIEW_CONTAINER_ID, CHAT_VIEW_ID } from "../common/chat.js";
+import { AlphaChatInputEditor } from "./input/alphaChatInputEditor.js";
+import { ChatInputEditors } from "./input/chatInputEditor.js";
 import { ChatViewPane } from "./view/chatViewPane.js";
+
+ChatInputEditors.registerStatic({
+  id: "alpha",
+  create: options => new AlphaChatInputEditor(options),
+});
 
 /** Registers the fixed Auxiliary Chat view. */
 export function registerChatViews(registry: WorkbenchViewRegistry = ViewsRegistry): void {
@@ -35,6 +43,7 @@ export function registerChatViews(registry: WorkbenchViewRegistry = ViewsRegistr
         IContextMenuService,
         IViewDescriptorService,
         IContextKeyService,
+        ICommandService,
       ],
     }),
   }]);

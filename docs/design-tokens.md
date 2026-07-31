@@ -1,17 +1,19 @@
 # Design Token：主题系统边界与演进
 
-> 本文是 Zeta 主题与 design token 跨模块架构的 canonical 文档。完整 token 清单由构建器生成在 [`desktop/generated/design-tokens/design-tokens.md`](../desktop/generated/design-tokens/design-tokens.md)。
+> 本文是 Zeta 主题与 design token 跨模块架构的 canonical 文档。完整 token 清单由构建器生成在 [`resources/design-tokens/design-tokens.md`](../resources/design-tokens/design-tokens.md)。
 > 新增具体主题请使用 [`theme-authoring-template.md`](theme-authoring-template.md)。
 > selector、交互状态与组件/Part CSS 的 canonical 所有权见 [`ui-styling-ownership.md`](ui-styling-ownership.md)。
 
 ## 快速理解
 
-Zeta 采用“注册表优先、编译器兜底”的两阶段模型。功能模块注册有稳定 ID、owner、描述和默认值的语义 token；主题创建时将 token 引用图与主题覆盖编译为不可变快照；浏览器层再把同一快照投影给 CSS、Terminal 等消费者。用户选择 `light`、`dark` 或 `system`，其中 `system` 只负责跟随操作系统并选择一个具体快照，不是第四套主题数据。
+Zeta 采用“单一声明目录、共享版本化 contract、各宿主独立投影”的模型。Desktop TypeScript registry 是 token 声明的 authoring authority；构建器把保留 alias/default graph 的 manifest、Schema 和模板生成到 `resources/design-tokens/`。Desktop resolver 与 Rust `zeta-theme` 都读取这份 contract，分别产生不可变快照，再投影给 CSS、Alpha CodeEditor、Native UI 或 Ratatui。`system` 只选择具体明暗方案，不是第四套主题数据。
 
 | 想改变什么 | 应该修改哪里 | 不应该怎么做 |
 | --- | --- | --- |
 | 一个组件的语义颜色 | 修改或新增该组件所有者注册的 token | 在组件 CSS 中复制十六进制颜色 |
 | 整套主题外观 | 覆盖公开 token | 重写组件 selector |
+| Native/CodeEditor 语法颜色 | 覆盖 `editor.token.*Foreground` | 让 parser 或 CodeEditor token 携带固定 RGB |
+| TUI 外观 | 覆盖 TUI 消费的共享子集；必要时设置 `tui.colorTheme` | 要求终端实现全部 Desktop 视觉能力 |
 | 跟随操作系统明暗模式 | 选择 `system` | 维护第四套 system 主题值 |
 | 增加新的视觉值类型 | 有真实跨组件消费者后增加独立注册表 | 把阴影、字体或动效伪装成颜色 |
 
@@ -22,10 +24,12 @@ Zeta 采用“注册表优先、编译器兜底”的两阶段模型。功能模
 | 通用 RGBA 运算 | `src/zeta/base/common/color.ts` | 解析、混合、透明度和字符串化；不感知主题或 workbench |
 | token 定义与依赖解析 | `platform/theme/common` | 注册颜色/尺寸、拒绝重复 ID、解析别名与变换、检测循环和无效引用 |
 | token domain | `platform/theme/common/colors`、`sizes` | 按消费语义声明 token、默认值、owner 和说明 |
-| 主题快照 | `colorTheme.ts` | 将 scheme、覆盖值和注册目录编译为只读颜色/尺寸表 |
-| 浏览器与原生投影 | `themeStyles.ts`、`windowTheme.contribution.ts` | 把当前快照映射为 `--zeta-*`、`color-scheme` 和 Electron 标题栏按钮区 |
-| 用户偏好 | `workbench/browser/theme.ts` | 持久化并解析 `light`、`dark`、`system`，监听系统变化 |
-| 离线治理 | `tokenCompiler.ts` 与 `scripts/compile-design-tokens.mjs` | 校验所有 scheme，生成 manifest、schema 和目录 |
+| 语言中立 contract | `resources/design-tokens/` | 保存版本化 manifest、用户主题 Schema/模板和跨运行时 conformance fixture |
+| Desktop 快照 | `colorTheme.ts` | 将 scheme、覆盖值和注册目录编译为只读颜色/尺寸表 |
+| Rust 快照与加载 | `zeta-rs/theme` | 嵌入同一 manifest，严格解析用户 JSON，选择 Graphical/Terminal 偏好并产生 RGBA snapshot |
+| 宿主投影 | Desktop theme binding、Native `shell_style`、TUI `ui/theme` | 把 snapshot 转成宿主组件公开的 palette/style；不注册新的产品语义 |
+| device-local 偏好 | `configuration.json` 与 `themes/*.json` | `workbench.colorTheme` 供图形宿主，`tui.colorTheme` 可选且回退到前者；不进入 Agent config/store |
+| 离线治理 | `tokenCompiler.ts` 与 `scripts/compile-design-tokens.mjs` | 校验所有 scheme，生成 manifest、Schema、模板和目录 |
 
 `src/zeta/base` 不引用主题平台或 workbench。颜色数学保持通用，注册、用户偏好和产品语义都位于更高层。
 
@@ -33,14 +37,16 @@ Zeta 采用“注册表优先、编译器兜底”的两阶段模型。功能模
 
 ```mermaid
 flowchart LR
-  A["Domain registerColor / registerSize"] --> B["ColorRegistry / SizeRegistry"]
-  B --> C["Resolve aliases, transforms, overrides"]
-  C --> D["Immutable IColorTheme snapshot"]
-  D --> E["CSS custom properties"]
-  D --> F["Terminal / JavaScript consumers"]
-  G["light / dark / system preference"] --> D
-  B --> H["Build-time compiler"]
-  H --> I["Manifest + JSON Schema + catalog"]
+  A["Domain registerColor / registerSize"] --> B["TypeScript registries"]
+  B --> C["Build-time compiler"]
+  C --> D["Versioned manifest + Schema"]
+  B --> E["Desktop resolver"]
+  D --> F["zeta-theme resolver"]
+  G["Device preference + user JSON"] --> E
+  G --> F
+  E --> H["CSS / Alpha / xterm"]
+  F --> I["Native component palettes"]
+  F --> J["TUI token subset + capability downgrade"]
 ```
 
 注册表保留声明顺序，因此生成物与 CSS 投影稳定。颜色引用可以指向另一颜色 token，也可以使用透明、明暗、混合和不透明化变换。解析采用带路径的深度优先遍历；未知引用、未知覆盖、重复 ID、循环依赖或透明度契约不满足都会失败，而不是静默回退。
@@ -52,22 +58,27 @@ flowchart LR
 - ID 采用点分语义命名，CSS 名称由系统稳定生成，例如 `button.primaryBackground` 对应 `--zeta-button-primary-background`。
 - CSS 消费颜色和标准布局尺寸；需要颜色值的 JavaScript 消费者使用 `IColorTheme.getColor()` 或 `getColorCss()`。
 - 主题是已解析快照。消费层不能修改快照，也不能自行解释别名或变换。
-- 新注册或默认值变更后运行 `pnpm tokens:generate`，提交生成的 manifest、schema 和目录。
+- parser/highlighter 只发布 `CodeEditorTokenRole`；颜色在绘制时由当前 `CodeEditorStyle` 解析，因此换主题不要求重新分析文本。
+- 新注册或默认值变更后运行 `pnpm tokens:generate`，提交 `resources/design-tokens/` 生成物。
 
 ## 当前状态/已实现
 
 - `light`、`dark` 与跟随操作系统的 `system` 偏好。
-- 启动时发现并隔离加载 `userData/themes/*.json` 用户主题；用户主题无需重新构建 App。
-- 61 个语义颜色 token，包含别名依赖；四种 `ColorScheme` 均在编译期解析，高对比度当前继承对应明暗默认值。
-- 6 个标准布局尺寸 token，通过同一主题绑定投影到 CSS。
+- Desktop、Native 和 TUI 使用同一 device root 下的 `configuration.json` 与 `themes/*.json`；每个错误文件独立隔离，内置主题始终可回退。
+- 116 个语义颜色 token 与 8 个标准布局尺寸 token；四种 `ColorScheme` 均在编译期解析，高对比度当前继承对应明暗默认值。
 - 不可变颜色对象、注册贡献、主题快照和生成产物。
-- Monaco 按当前 scheme 同步；Terminal 从主题查询 API 读取颜色。
+- Alpha/Native CodeEditor 使用 source-neutral `editor.token.*` 角色；旧 `editor.semanticToken.*` 仅作为兼容覆盖入口。
+- Native shell、composer、terminal ANSI、scrollbar 和 multi-diff editor 已由共享 snapshot 构造组件 palette；没有宿主 selector 或 parser 固定色。
+- TUI 明确只消费 accent、chrome、error/success/warning、muted 和 highlight 子集，并按 TrueColor、ANSI-256、ANSI-16、Monochrome 确定性降级。
+- Desktop Terminal 使用完整 terminal 前景、背景、光标和 ANSI 16 色 token；Monaco 仅保留迁移期兼容同步，Alpha 是默认文本编辑器。
 - Electron renderer 通过受校验的 window-theme IPC 将标题栏背景和按钮颜色投影到主进程；Terminal canvas 使用当前编辑器背景，不依赖 xterm 黑色回退。
-- 单元测试覆盖颜色运算、重复注册、依赖循环、未知引用、覆盖校验、尺寸序列化、快照和 DOM 恢复。
+- Desktop 与 Rust resolver 共同执行 `theme-conformance.json`，防止 alias、变换、量化或兼容映射发生跨语言漂移。
 
 ## 当前状态 limitation /当前限制
 
 - 高对比度使用明暗默认值回退，尚未提供独立视觉设计；类型、解析路径和 manifest 已保留独立 scheme。
+- Desktop 的保存/预览可即时更新；Native 与 TUI 当前在进程启动时加载一次，外部文件修改需要重启对应宿主。
+- `tui.colorTheme` 当前有 typed configuration contract，但尚无 Settings UI；缺失时回退到 `workbench.colorTheme`。
 - 字体族仍由平台 CSS 按操作系统选择，不属于当前尺寸注册表。
 - 颜色和尺寸是当前已实现 token kind；阴影、排版和动效应在出现真实跨组件消费者后增加独立注册表，不能伪装成颜色或尺寸。
 - 用户主题只能覆盖已封存 catalog 中的 token，不能在 JSON 中注册新的产品语义。运行期动态插件如果需要新增 token，应先引入显式 catalog revision 与快照重编译，不应直接让旧快照变为可变对象。
@@ -76,6 +87,7 @@ flowchart LR
 
 - base 层保持领域无关且不存在反向依赖。
 - token ID、CSS 投影名称和 owner 变更属于兼容性变更。
-- CSS 与 JavaScript 必须消费同一主题快照。
-- 运行期解析与构建期编译共享同一注册数据和解析器，不能维护第二份手写主题表。
+- 同一宿主内所有组件必须消费同一主题快照；不同语言 runtime 必须消费同一版本化 manifest 并通过共享 fixture 验证一致性。
+- TS registry 是声明 authority，生成 manifest 是跨语言 runtime contract；Rust 不维护第二份默认颜色表，宿主中的常量只能作为 manifest 无法加载时的安全 fallback。
+- TUI 部分接入是明确 contract，不是未完成的 Desktop 复制：新增 TUI token 消费必须有真实终端语义并定义能力降级。
 - 未知、循环或不完整数据必须快速失败；不存在“缺失时猜一个颜色”的恢复语义。

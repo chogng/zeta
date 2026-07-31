@@ -20,11 +20,12 @@ undo/redo、IME composition、语法 token、代码行与视口绘制，以及�
 | `CodeEditorPresentation` | public | 选择带 document chrome 的普通编辑器或隐藏 gutter 的 compact 嵌入式编辑器 |
 | `CodeEditorDocument` | public | 保存文本、行 range、selection、composition、syntax snapshot 与 undo/redo |
 | `CodeEditorCommand` | public | 表达插入、换行、Unicode navigation、选择、删除与 undo/redo |
-| `CodeEditorSyntaxHighlighter` | public trait | 把单行文本同步投影为 UTF-8 byte-range foreground token |
+| `CodeEditorSyntaxHighlighter` | public trait | 把单行文本同步投影为 UTF-8 byte range + `CodeEditorTokenRole`；不选择具体颜色 |
+| `CodeEditorPalette` / `CodeEditorSyntaxPalette` | public | 由宿主把 resolved theme token 映射为组件命名输入；换主题只重建 style，不重新分析文本 |
 | `CodeEditorRowSource` | public trait | 惰性提供稳定 visual row；普通文档和 diff projection 共用 |
 | `CodeEditorRow` | public | 表达真实代码行、对齐 placeholder 或无行号 annotation，以及本帧 decoration |
 | `CodeEditorViewport` | public | 保存首个可见行和横向显示列，并执行有界滚动或 reveal-row |
-| `CodeEditorStyle` | public | 拥有代码 surface、header、gutter 与文本的浅色 presentation token |
+| `CodeEditorStyle` | public | 拥有代码 surface、header、gutter、文本与 syntax role 的 resolved presentation style；`light()` 只是安全 fallback |
 | `DiffEditor` | public | 按 presentation 组合双列或单列 `CodeEditor`，同步纵向 viewport 并绘制 diff decoration |
 | `DiffEditorPresentation` | public | 显式选择 `SideBySide` 或适合窄嵌入 surface 的 `Unified` geometry |
 | `DiffEditorState` | public | 保存共享首行、两侧独立横向显示列和 Unified 未修改区间的展开状态 |
@@ -34,6 +35,7 @@ undo/redo、IME composition、语法 token、代码行与视口绘制，以及�
 | `MultiDiffEditorLayout` | public | 用 `zeta-ui::VirtualListLayout` 缓存精确 item/state/presentation snapshot 的可变 section heights、prefix index 与总内容高度，供高频滚动复用 |
 | `zeta-ui::ScrollState` | delegated | 保存 MultiDiffEditor 整体 logical-pixel offset；clamp 与 transition 由通用滚动基座执行 |
 | `MultiDiffEditorStyle` | public | 拥有文件 header、section 间距与嵌套 DiffEditor 样式 |
+| `DiffEditorPalette` / `MultiDiffEditorPalette` | public | 让产品宿主通过命名字段注入 diff marker/background、scrollbar 与文件 header 视觉 |
 | `DiffSideRows` | private | 把 `DiffDocument` 的一侧惰性转换为 `CodeEditorRow` |
 | `UnifiedDiffRows` | private | 用 hunk source-range、修改行索引和 fold segment 紧凑表达单列 diff；按可见 visual index 随机映射代码行，不按文件总行数分配 row 数组 |
 | `code_editor::layout::build_layout` | private | 从组件 bounds 计算 header/body/gutter/content |
@@ -94,7 +96,8 @@ line number 的 placeholder 或 fold annotation，但不能把它们写入 autho
 UTF-8 byte range；越界或不落在字符边界上的 range 会被忽略，不得造成绘制 panic。
 Code row 使用 `TextBlockWrap::None`，并把宽字符 grapheme 与 whitespace 按 8px display cell
 边界分别投影；ASCII run 对齐一个 cell，CJK fallback 对齐两个 cell，使 text、space、
-selection 与 caret 共用同一坐标系。
+selection 与 caret 共用同一坐标系。语法 token 保存语义 role，不保存 RGB；paint 从当前
+`CodeEditorStyle` 解析颜色，所以 theme snapshot 变化不使 syntax snapshot 失效。
 
 Unified projection 以 `DiffDocument::hunks` 的间隙作为可折叠区间，只保存少量 source segment
 和 `Modified` source-row index。展开超大未修改区间不会物化等量 `CodeEditorRow`；可见行通过
@@ -129,6 +132,8 @@ snapshot 生成 `UiScene`。
 - 把滚轮、平台按键和 IME 事件转换为 `CodeEditorCommand` / `TextInputCompositionEvent`；
 - 用 `caret_bounds` 同步平台 IME candidate area，并由 host 控制 caret blink；
 - 在接入异步 syntax 或 diff 计算时丢弃不再匹配当前 document revision 的结果。
+- 把 `zeta-theme` 或其他主题 runtime 的 snapshot 映射成公开 palette；本 crate 不读取主题文件，
+  也不依赖具体产品宿主。
 
 `zeta-native` 是当前 GPU presentation host；`zeta-tui` 不依赖本 crate，而是直接消费
 `zeta-diff` 并拥有自己的 Ratatui projection。

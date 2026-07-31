@@ -1,0 +1,23 @@
+{
+  "definitions": [
+    { "name": "diagnose", "description": "Inspect the workspace", "argumentMode": "optional" },
+    { "name": "status", "description": "Show current status", "argumentMode": "none" }
+  ],
+  "matching": [
+    { "prefix": "", "names": ["diagnose", "status"] },
+    { "prefix": "d", "names": ["diagnose"] },
+    { "prefix": "D", "names": [] }
+  ],
+  "inputs": [
+    { "text": "hello /status", "kind": "message" },
+    { "text": "/missing", "kind": "unknown" },
+    { "text": "/status", "kind": "command", "name": "status", "arguments": "" },
+    { "text": "/status now", "kind": "unknown" },
+    { "text": "/diagnose src", "kind": "command", "name": "diagnose", "arguments": "src" }
+  ],
+  "invalidDefinitions": [
+    { "name": "Invalid", "description": "Uppercase", "argumentMode": "none" },
+    { "name": "-leading", "description": "Leading hyphen", "argumentMode": "none" },
+    { "name": "blank", "description": " ", "argumentMode": "none" }
+  ]
+}

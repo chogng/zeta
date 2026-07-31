@@ -1,7 +1,7 @@
+use crate::SlashCommandCatalog;
 use crate::model_catalog::{ModelCatalog, unavailable_model_catalog};
 use crate::resource_store::{ResourceError, ResourceStore};
 use crate::server::skills_runtime::{SkillConfigSnapshotProvider, SkillRuntime, SkillWatcher};
-use crate::slash_commands::SlashCommandCatalog;
 use serde::Deserialize;
 use serde_json::Value;
 use std::collections::BTreeSet;
@@ -34,15 +34,15 @@ mod git_runtime;
 mod operations;
 mod search_operations;
 mod skill_operations;
-mod syntax_operations;
 pub(crate) mod skills_runtime;
+mod syntax_operations;
 mod terminal_operations;
 mod update_broker;
 mod workspace_operations;
 mod workspace_runtime;
 
-use update_broker::{NotificationListener, NotificationQueue, UpdateBroker};
 use syntax_operations::SyntaxAnalysisService;
+use update_broker::{NotificationListener, NotificationQueue, UpdateBroker};
 use workspace_runtime::{LocalWorkspaceHost, WorkspaceRuntime};
 pub(crate) use workspace_runtime::{
     WorkspaceRuntimeControl, WorkspaceSwitchTrustPolicy, WorkspaceToolPorts,

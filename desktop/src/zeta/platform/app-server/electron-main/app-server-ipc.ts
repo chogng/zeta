@@ -16,6 +16,11 @@ export function appServerIpcRoutes(
       invoke: () => supervisor.state,
     }),
     route({
+      channel: "zeta:app-server:slash-commands",
+      validate: emptyParams,
+      invoke: () => supervisor.slashCommands,
+    }),
+    route({
       channel: "zeta:session:create",
       validate: sessionCreateParams,
       invoke: (params) => supervisor.request(APP_SERVER_METHODS["session/create"], params),

@@ -4,11 +4,7 @@ use super::Status;
 use crate::app::AppEvent;
 use crate::components::composer::ComposerInput;
 use crate::components::composer::ComposerSubmission;
-use crate::components::composer::DynamicSlashCommand;
-use crate::components::composer::SlashCommand;
-use crate::components::composer::SlashCommandArgumentMode;
-use crate::components::composer::SlashCommandItem;
-use crate::components::composer::SlashCommandRegistry;
+use crate::components::composer::built_in_slash_command_definitions;
 use crate::components::transcript::MessageRole;
 use crate::features::thread::TurnActivity;
 use crate::features::workspace_files::FileSearchManager;
@@ -20,6 +16,9 @@ use std::path::Path;
 use std::time::Duration;
 use std::time::Instant;
 use std::time::{SystemTime, UNIX_EPOCH};
+use zeta_slash_commands::{
+    SlashCommandArgumentMode, SlashCommandCatalog, SlashCommandDefinition, SlashCommandOrigin,
+};
 
 #[test]
 fn enter_submits_trimmed_input_and_records_the_user_message() {
@@ -215,10 +214,8 @@ fn product_command_is_delegated_to_the_typed_dispatcher() {
     let Some(AppCommand::ExecuteProductCommand(invocation)) = action else {
         panic!("expected product command action");
     };
-    assert_eq!(
-        invocation.command,
-        SlashCommandItem::Builtin(SlashCommand::Status)
-    );
+    assert_eq!(invocation.command.name, "status");
+    assert_eq!(invocation.origin, SlashCommandOrigin::Local);
     assert!(invocation.arguments.is_empty());
     assert_eq!(app.status(), &Status::Ready);
     assert!(app.messages().is_empty());
@@ -234,10 +231,8 @@ fn inline_product_arguments_reach_the_typed_dispatcher() {
     let Some(AppCommand::ExecuteProductCommand(invocation)) = action else {
         panic!("expected product command action");
     };
-    assert_eq!(
-        invocation.command,
-        SlashCommandItem::Builtin(SlashCommand::Model)
-    );
+    assert_eq!(invocation.command.name, "model");
+    assert_eq!(invocation.origin, SlashCommandOrigin::Local);
     assert_eq!(invocation.display_arguments, "provider/model");
     assert_eq!(
         invocation.arguments,
@@ -250,11 +245,14 @@ fn inline_product_arguments_reach_the_typed_dispatcher() {
 #[test]
 fn runtime_command_registry_drives_popup_and_submission_consistently() {
     let workspace = temporary_workspace("dynamic-slash-command");
-    let registry = SlashCommandRegistry::with_dynamic_commands([DynamicSlashCommand {
-        name: "diagnose".into(),
-        description: "inspect the current workspace".into(),
-        argument_mode: SlashCommandArgumentMode::Optional,
-    }])
+    let registry = SlashCommandCatalog::with_local_and_server(
+        built_in_slash_command_definitions(),
+        [SlashCommandDefinition {
+            name: "diagnose".into(),
+            description: "inspect the current workspace".into(),
+            argument_mode: SlashCommandArgumentMode::Optional,
+        }],
+    )
     .unwrap();
     let mut app = App::for_workspace_with_slash_commands(&workspace, registry);
     app.insert_text("/diag logs");

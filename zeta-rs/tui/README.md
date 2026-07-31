@@ -42,7 +42,8 @@ Tool、approval policy 或 persistence。
   该页面不把 enablement 冒充为正文 activation；
 - Session/Thread 命令调用 typed create/list/read/fork API 并切换当前 Thread context；配置命令调用
   `config/read`，`/model` 使用 expected revision 更新 preferred model；
-- 启动时读取 client 保存的 `initialize.slashCommands` snapshot，与 built-ins 做防冲突合并；
+- 启动时读取 client 保存的 `initialize.slashCommands` snapshot，通过
+  [`zeta-slash-commands`](../slash-commands/README.md) 与 built-ins 做防冲突合并；
   server-advertised command 保留 `/name`、inline text/image/large-paste 参数并作为普通 Turn
   input 提交；
 - Enter 按 composer 顺序提交由 text/image items 组成的 Turn；
@@ -59,6 +60,8 @@ Tool、approval policy 或 persistence。
 - Unix `SIGINT`/`SIGTERM` 进入同一个 event loop 退出路径，确保 watcher 重启和 host termination
   仍执行 session shutdown 与 terminal RAII cleanup；
 - raw mode、alternate screen、bracketed paste、mouse capture 与 cursor cleanup；
+- 启动时通过 `zeta-theme` 读取共享用户主题；只投影 accent/chrome/error/success/warning/muted/highlight
+  子集，并按 TrueColor、ANSI-256、ANSI-16 或 Monochrome 能力确定性降级；
 - basic Unicode-aware wrapped-row estimation 和自动滚动到底部。
 
 当前没有 Session browser、Thread navigation、Markdown、stream delta render、Tool transcript、
@@ -142,7 +145,8 @@ src/
 │   └── session.rs                 # transactional terminal acquisition and RAII restore
 └── ui/
     ├── layout.rs                  # shared pure geometry
-    └── theme.rs                   # shared colors
+    ├── theme.rs                   # shared token subset and terminal capability projection
+    └── theme_tests.rs             # TrueColor/ANSI/monochrome projection contract
 ```
 
 实现 module 都是 private；crate 只导出启动 contract。
@@ -158,7 +162,8 @@ src/
 | `ThreadFeatureState` | crate-private | active canonical `Thread` snapshot、transcript projection 与本地 optimistic/diagnostic overlay | 下一份 snapshot 替换 projection；不执行 RPC、不复制 product reducer |
 | `ThreadPresentationEvent` | crate-private | snapshot/user/notice/failure/interrupted/clear 的 feature-local事实 | 只改变 active Thread presentation owner |
 | `components::transcript::{Message,MessageRole,draw}` | crate-private | 定义 transcript-facing 展示值，并渲染 role chrome、empty state、wrapping 与 bottom scroll | 不依赖 feature/`App`、不保存 Thread/sequence、不处理输入 |
-| `ui::{layout,theme}` | private modules | 跨 surface 复用的纯 geometry 与颜色原语 | 不读取 App/feature、不调用 terminal 或 RPC |
+| `ui::layout` | private module | 跨 surface 复用的纯 geometry | 不读取 App/feature、不调用 terminal 或 RPC |
+| `ui::theme` | private module | 将 `zeta-theme::ThemeSnapshot` 的明确子集投影到终端能力 | 不复制完整 Desktop token catalog、不拥有用户文件加载、不定义产品状态 |
 | `Status` | crate-private | Ready/Working/waiting/Cancelling/Error display state | 只能由 canonical snapshot/result驱动 |
 | `StatusLineModel` | crate-private | 直接把 config/workspace 接口结果变成长短展示值并执行宽度降级 | 不查询接口、不保存领域 authority、不渲染 |
 | `App::update` | crate-private | 将一个 `AppEvent` 应用到唯一 presentation state owner | 不执行 I/O、不访问 runtime resource |
@@ -177,9 +182,8 @@ src/
 | `FileSearchManager` | crate-private | event loop 持有的 workspace search runtime；非阻塞 drain snapshot 并丢弃旧 query 结果 | 不进入 `App` state、不解析输入、不保存 popup state |
 | `Mentions` / `MentionPopup` | private | `@token` query/range、异步结果应用、选择/关闭和原子路径补全 | 不扫描 workspace、不拥有 worker、不构造结构化 app/plugin Mention |
 | `PendingPastes` | private | 超过 1000 字符的 text-paste payload、唯一占位符与提交时展开 | 不识别或保存图片，不解释 slash、不渲染、不直接提交 |
-| `SlashCommandPopup` | private | 缓存 cursor-query/registry-derived matches、selection 与 dismissal state | 不解析输入、不执行命令、不渲染 Ratatui widget |
-| `SlashInput` / `SlashCompletion` | private | 解析 cursor 下的 command token、返回替换 range、识别 bare/inline submission 和 command element range | 不改变 editor/popup、不执行命令 |
-| `SlashCommandRegistry` / `SlashCommandItem` | private / crate-private | 合并 built-in 与已校验 dynamic metadata，为 discovery 和 submission 提供同一 snapshot | 不决定 product availability、不执行 App Server operation |
+| `zeta_slash_commands::SlashCommandsState` | shared public type | 拥有 cursor query、matches、selection、dismissal 与 completion | TUI 不保存第二份 Slash query/selection authority；可见范围与滚动仍由 Ratatui renderer 负责 |
+| `zeta_slash_commands::{SlashCommandInput,SlashCommandCatalog}` | shared public types | 统一输入 grammar，并合并 built-in 与 server metadata | TUI 不重新校验名称、不执行 App Server operation |
 | `SlashCommandInvocation` | crate-private | command identity、trimmed display arguments 与有序 text/image argument items | 不执行 RPC |
 | `features::sessions::ActiveConversation` | crate-private | 当前 Session/Thread identity、sequence 与 typed create/fork/resume lifecycle | 不解析 composer text、不更新 `App`、不拥有 App Server |
 | `TextArea` | private | UTF-8 buffer、byte-safe cursor、原子元素 insert/delete/movement；Vim 的扩展 owner | 不保存 paste payload，不解释 Enter submission 或 slash command |
@@ -284,17 +288,18 @@ popup 再校验 query，因此包括 A → B → A 在内的旧结果都不会�
 插入，但提交时仍属于普通 Text item。关闭 token 会 drop handle；裸 `@` 也会启动空 pattern
 搜索并随着 walker 发现文件逐步更新候选。
 
-`SlashInput::at_cursor` 只在光标位于第一行 `/name` token 内时提供 popup query；补全返回
-`SlashCompletion { range, replacement }`，因此 `/mod provider/model` 可变成
+`zeta_slash_commands::SlashCommandInput::at_cursor` 只在光标位于第一行 `/name` token 内时提供
+popup query；补全返回 `SlashCommandCompletion { range, replacement }`，因此
+`/mod provider/model` 可变成
 `/model provider/model` 而不会
 清空后缀、图片或 paste bindings。完成且后接 whitespace 的命令名会被标记为 `TextArea`
 原子元素；移除 separator 后会解除标记，从而允许重新编辑。
 
-提交路径先生成完整 `ComposerSubmission`，再由 `SlashInput::for_submission` 使用同一个
-`SlashCommandRegistry` 识别命令。支持 inline arguments 的命令会生成
+提交路径先生成完整 `ComposerSubmission`，再由共享 `SlashCommandInput::for_submission` 使用
+同一个 `SlashCommandCatalog` 识别命令。支持 inline arguments 的命令会生成
 `SlashCommandInvocation`：display arguments 已 trim，structured arguments 保持原有
 `ComposerInput::Text` / `ComposerInput::Image` 顺序。未知命令以及不支持参数却带参数的命令仍是
-普通 prompt。Registry 可以合并已校验的 dynamic metadata，并拒绝非法名称、空描述和 built-in
+普通 prompt。Catalog 可以合并已校验的 dynamic metadata，并拒绝非法名称、空描述和 built-in
 冲突；App Server 在 initialize snapshot 中提供 host-composed dynamic command source。
 
 Built-in command 进入 `ActiveConversation::execute`：Session/Thread lifecycle 使用 typed

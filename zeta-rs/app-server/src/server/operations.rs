@@ -79,7 +79,7 @@ impl AppServer {
                 typst: true,
                 update_replay: true,
             },
-            slash_commands: self.slash_commands.definitions().to_vec(),
+            slash_commands: self.slash_commands.commands().to_vec(),
         })
     }
 

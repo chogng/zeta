@@ -4,6 +4,9 @@ import { ColorScheme } from "./theme.js";
 
 export const USER_COLOR_THEME_SCHEMA_URL = "https://zeta.dev/schemas/color-theme.schema.json";
 
+const LEGACY_EDITOR_TOKEN_PREFIX = "editor.semanticToken.";
+const EDITOR_TOKEN_PREFIX = "editor.token.";
+
 export interface IUserColorThemeDocument {
   readonly version: 1;
   readonly id: string;
@@ -41,8 +44,18 @@ export function parseUserColorTheme(source: string): IColorTheme {
     id: document.id,
     label: document.label,
     colorScheme: document.colorScheme,
-    colorOverrides: document.colors,
+    colorOverrides: normalizeLegacyEditorTokenOverrides(document.colors),
   });
+}
+
+function normalizeLegacyEditorTokenOverrides(colors: Readonly<Record<string, ColorValue>>): Readonly<Record<string, ColorValue>> {
+  const normalized: Record<string, ColorValue> = { ...colors };
+  for (const [id, value] of Object.entries(colors)) {
+    if (!id.startsWith(LEGACY_EDITOR_TOKEN_PREFIX)) continue;
+    const replacement = `${EDITOR_TOKEN_PREFIX}${id.slice(LEGACY_EDITOR_TOKEN_PREFIX.length)}`;
+    if (!Object.hasOwn(normalized, replacement)) normalized[replacement] = value;
+  }
+  return normalized;
 }
 
 export function validateUserColorThemeDocument(value: unknown): IUserColorThemeDocument {

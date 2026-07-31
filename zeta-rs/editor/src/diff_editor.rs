@@ -7,7 +7,7 @@ use zeta_diff::{DiffDocument, DiffRowKind};
 use zeta_ui::{Component, PaintRect, Point, Rect, UiScene};
 
 use self::layout::{DiffEditorLayout, build_layout};
-pub use self::style::DiffEditorStyle;
+pub use self::style::{DiffEditorPalette, DiffEditorStyle};
 use self::unified::UnifiedDiffRows;
 use crate::code_editor::{
     CodeEditor, CodeEditorHeader, CodeEditorInlineHighlight, CodeEditorRow, CodeEditorRowSource,

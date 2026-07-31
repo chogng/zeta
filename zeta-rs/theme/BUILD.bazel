@@ -1,0 +1,7 @@
+load("//:defs.bzl", "zeta_rust_crate")
+
+zeta_rust_crate(
+    name = "theme",
+    crate_name = "zeta_theme",
+    data = ["//resources/design-tokens:artifacts"],
+)

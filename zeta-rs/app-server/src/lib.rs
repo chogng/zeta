@@ -9,7 +9,6 @@ mod model_catalog;
 mod resource_store;
 mod review;
 mod server;
-mod slash_commands;
 mod terminal_profiles;
 mod terminal_service;
 mod tool_composition;
@@ -21,7 +20,7 @@ pub use review::{ProviderReviewModel, ReviewModelResolutionError, ReviewModelRes
 pub use server::AppServer;
 pub use server::ConnectionNotifications;
 pub use server::ConnectionState;
-pub use slash_commands::{SlashCommandCatalog, SlashCommandCatalogError};
+pub use zeta_slash_commands::{SlashCommandCatalog, SlashCommandCatalogError};
 
 #[cfg(test)]
 #[path = "server_tests.rs"]

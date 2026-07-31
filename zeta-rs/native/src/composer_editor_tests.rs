@@ -1,4 +1,5 @@
-use super::{ComposerEditor, ComposerEditorFocus};
+use super::{ComposerEditor, ComposerEditorFocus, ComposerEditorSyntax};
+use crate::shell_style::SHELL_PALETTE;
 use zeta_editor::CodeEditorCommand;
 use zeta_ui::{CaretVisibility, Color, Component, Rect, UiScene};
 
@@ -49,4 +50,35 @@ fn empty_editor_paints_placeholder_and_only_exposes_a_focused_visible_caret() {
         Color::rgb(126, 126, 132),
     );
     assert!(focused.caret_bounds().is_some());
+}
+
+#[test]
+fn shell_highlighting_projects_syntax_tokens_into_code_editor() {
+    let mut editor = ComposerEditor::default();
+    editor.set_text("just native-dev");
+    editor.set_syntax(ComposerEditorSyntax::Shell);
+    let bounds = Rect::from_xywh(0.0, 0.0, 320.0, editor.preferred_height());
+    let mut scene = UiScene::new(Color::WHITE);
+
+    editor
+        .view(
+            bounds,
+            "",
+            ComposerEditorFocus::Blurred,
+            Color::rgb(126, 126, 132),
+        )
+        .paint(&mut scene);
+
+    let command = scene
+        .text_blocks()
+        .iter()
+        .find(|block| block.text() == "just")
+        .expect("syntax command token should be painted");
+    assert_eq!(command.style().color(), SHELL_PALETTE.accent);
+    assert!(
+        scene
+            .text_blocks()
+            .iter()
+            .any(|block| block.text() == "just native-dev")
+    );
 }

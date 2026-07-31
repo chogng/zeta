@@ -86,6 +86,16 @@ impl NativeWindow {
         self.window.scale_factor()
     }
 
+    /// Returns the platform's current light or dark window preference when available.
+    pub fn theme(&self) -> Option<crate::Theme> {
+        self.window.theme()
+    }
+
+    /// Applies an explicit window theme selected by the product presentation layer.
+    pub fn set_theme(&self, theme: Option<crate::Theme>) {
+        self.window.set_theme(theme);
+    }
+
     /// Returns logical insets occupied by native controls for the selected chrome policy.
     pub fn window_control_insets(&self) -> WindowControlInsets {
         window_control_insets(self.chrome)

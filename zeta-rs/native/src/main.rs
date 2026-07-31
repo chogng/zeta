@@ -17,6 +17,7 @@ use shell_scene::{
     LogicalViewport, ShellPresentation, ShellPresentationModel, build_shell_presentation,
     terminal_grid_size_for_viewport,
 };
+use shell_style::{SHELL_PALETTE, ShellPalette, code_editor_style};
 use terminal_pointer::TerminalPointer;
 use terminal_scrollback::TerminalScroll;
 use terminal_selection::TerminalSelection;
@@ -27,6 +28,7 @@ use workspace_context::WorkspaceContext;
 use workspace_path_picker::WorkspacePathPickerState;
 use workspace_surface::WorkspaceSurface;
 use zeta_terminal::{BlockStatus, ScreenBuffer};
+use zeta_theme::{ColorScheme, ThemeLoadOptions, ThemeLoader, ThemeSurface, default_device_root};
 use zeta_ui::{CaretBlinkAdvance, CaretBlinkController, Point, TextInputLayoutEngine};
 use zeta_ui_dispatch::{
     CursorFeedback, DispatchInvalidation, DispatchOutcome, UiDispatch, UiIntent,
@@ -47,6 +49,11 @@ mod agent_sidebar_toolbar;
 mod agent_sidebar_workspace;
 mod commands;
 mod composer_editor;
+mod composer_interaction;
+mod composer_interaction_pane;
+mod composer_panel;
+mod composer_shell;
+mod composer_syntax;
 mod editor_pane;
 mod explorer_pane;
 mod explorer_tree;
@@ -125,6 +132,8 @@ struct NativeApp {
     terminal: Option<TerminalSession>,
     workspace_context: WorkspaceContext,
     composer: AgentComposer,
+    composer_interaction: composer_interaction::ComposerInteractionModel,
+    composer_interaction_pane: composer_interaction_pane::ComposerInteractionPaneState,
     text_layout: TextInputLayoutEngine,
     caret_blink: CaretBlinkController,
     event_proxy: zeta_winit::EventLoopProxy<NativeEvent>,
@@ -139,6 +148,9 @@ struct NativeApp {
     physical_extent: PhysicalExtent,
     scale_factor: f64,
     failed: bool,
+    palette: ShellPalette,
+    theme_scheme: ColorScheme,
+    theme_follows_system: bool,
 }
 
 impl NativeApp {
@@ -155,6 +167,7 @@ impl NativeApp {
         {
             eprintln!("{error}");
         }
+        let composer = AgentComposer::for_working_directory(workspace_context.working_directory());
         Self {
             window_id: None,
             window: None,
@@ -174,8 +187,11 @@ impl NativeApp {
             thread_timeline_scroll: ThreadTimelineScroll::default(),
             workspace_surface: WorkspaceSurface::default(),
             terminal: None,
+            composer,
             workspace_context,
-            composer: AgentComposer::default(),
+            composer_interaction: composer_interaction::ComposerInteractionModel::new(),
+            composer_interaction_pane:
+                composer_interaction_pane::ComposerInteractionPaneState::default(),
             text_layout: TextInputLayoutEngine::new(),
             caret_blink: CaretBlinkController::default(),
             event_proxy,
@@ -190,7 +206,37 @@ impl NativeApp {
             physical_extent: PhysicalExtent::new(0, 0),
             scale_factor: 1.0,
             failed: false,
+            palette: SHELL_PALETTE,
+            theme_scheme: ColorScheme::Light,
+            theme_follows_system: true,
         }
+    }
+
+    fn reload_theme(&mut self, system_scheme: ColorScheme) {
+        let Ok(loader) = ThemeLoader::embedded() else {
+            return;
+        };
+        let device_root = default_device_root();
+        let loaded = loader.load(ThemeLoadOptions::new(
+            &device_root,
+            ThemeSurface::Graphical,
+            system_scheme,
+        ));
+        for diagnostic in &loaded.diagnostics {
+            eprintln!("theme: {}", diagnostic.message);
+        }
+        let Ok(palette) = ShellPalette::from_theme(&loaded.snapshot) else {
+            return;
+        };
+        let Ok(editor_style) = code_editor_style(&loaded.snapshot) else {
+            return;
+        };
+        self.palette = palette;
+        self.theme_scheme = loaded.snapshot.color_scheme();
+        self.theme_follows_system = loaded.follows_system;
+        self.composer.set_editor_style(editor_style);
+        self.agent_sidebar_workspace
+            .set_editor_style(palette.multi_diff_editor_style());
     }
 
     fn fail(&mut self, event_loop: &ActiveEventLoop, message: impl std::fmt::Display) {
@@ -260,6 +306,7 @@ impl NativeApp {
         let mut presentation = build_shell_presentation(
             viewport,
             ShellPresentationModel {
+                palette: self.palette,
                 terminal: self.terminal.as_ref().map(TerminalSession::core),
                 terminal_scroll_offset: self.terminal_scroll.offset(),
                 terminal_scrollbar_presentation: self.terminal_scroll.scrollbar_presentation(),
@@ -269,6 +316,8 @@ impl NativeApp {
                 thread_timeline_scroll_offset: self.thread_timeline_scroll.offset(),
                 workspace_context: &self.workspace_context,
                 composer: self.composer.editor(),
+                composer_interaction: &self.composer_interaction,
+                composer_interaction_pane: &self.composer_interaction_pane,
                 composer_mode: self.composer.mode(),
                 session_search: &self.session_search,
                 caret_visibility: self.caret_blink.visibility(),
@@ -293,6 +342,7 @@ impl NativeApp {
             presentation = build_shell_presentation(
                 viewport,
                 ShellPresentationModel {
+                    palette: self.palette,
                     terminal: self.terminal.as_ref().map(TerminalSession::core),
                     terminal_scroll_offset: self.terminal_scroll.offset(),
                     terminal_scrollbar_presentation: self.terminal_scroll.scrollbar_presentation(),
@@ -302,6 +352,8 @@ impl NativeApp {
                     thread_timeline_scroll_offset: self.thread_timeline_scroll.offset(),
                     workspace_context: &self.workspace_context,
                     composer: self.composer.editor(),
+                    composer_interaction: &self.composer_interaction,
+                    composer_interaction_pane: &self.composer_interaction_pane,
                     composer_mode: self.composer.mode(),
                     session_search: &self.session_search,
                     caret_visibility: self.caret_blink.visibility(),
@@ -330,6 +382,7 @@ impl NativeApp {
             presentation = build_shell_presentation(
                 viewport,
                 ShellPresentationModel {
+                    palette: self.palette,
                     terminal: self.terminal.as_ref().map(TerminalSession::core),
                     terminal_scroll_offset: self.terminal_scroll.offset(),
                     terminal_scrollbar_presentation: self.terminal_scroll.scrollbar_presentation(),
@@ -339,6 +392,8 @@ impl NativeApp {
                     thread_timeline_scroll_offset: self.thread_timeline_scroll.offset(),
                     workspace_context: &self.workspace_context,
                     composer: self.composer.editor(),
+                    composer_interaction: &self.composer_interaction,
+                    composer_interaction_pane: &self.composer_interaction_pane,
                     composer_mode: self.composer.mode(),
                     session_search: &self.session_search,
                     caret_visibility: self.caret_blink.visibility(),
@@ -430,6 +485,17 @@ impl NativeApp {
     }
 
     fn activate_shell_element(&mut self, id: zeta_ui_dispatch::ElementId) {
+        let interaction_item_count = self
+            .composer_interaction
+            .view()
+            .map(|view| view.items().len())
+            .unwrap_or(0);
+        if let Some(index) =
+            shell_interaction::composer_interaction_item_index(id, 0..interaction_item_count)
+        {
+            self.activate_composer_interaction_item(index);
+            return;
+        }
         if self.agent_sidebar_workspace.activate_file_tree_element(id) {
             return;
         }
@@ -626,7 +692,6 @@ impl ApplicationHandler<NativeEvent> for NativeApp {
 
         let attributes = WindowAttributes::default()
             .with_title(PRODUCT_DISPLAY_NAME)
-            .with_theme(Some(Theme::Light))
             .with_inner_size(LogicalSize::new(INITIAL_WIDTH, INITIAL_HEIGHT));
         let window = match NativeWindow::create(
             event_loop,
@@ -639,6 +704,17 @@ impl ApplicationHandler<NativeEvent> for NativeApp {
                 return;
             }
         };
+        let system_scheme = match window.theme() {
+            Some(Theme::Dark) => ColorScheme::Dark,
+            Some(Theme::Light) | None => ColorScheme::Light,
+        };
+        self.reload_theme(system_scheme);
+        window.set_theme(
+            (!self.theme_follows_system).then_some(match self.theme_scheme {
+                ColorScheme::Dark | ColorScheme::HighContrastDark => Theme::Dark,
+                ColorScheme::Light | ColorScheme::HighContrastLight => Theme::Light,
+            }),
+        );
         self.window_id = Some(window.id());
         self.physical_extent = window.inner_extent();
         self.scale_factor = window.scale_factor();
@@ -707,6 +783,17 @@ impl ApplicationHandler<NativeEvent> for NativeApp {
                     renderer.set_scale_factor(scale_factor);
                 }
                 self.request_redraw();
+            }
+            WindowEvent::ThemeChanged(theme) => {
+                if !self.theme_follows_system {
+                    return;
+                }
+                let system_scheme = match theme {
+                    Theme::Dark => ColorScheme::Dark,
+                    Theme::Light => ColorScheme::Light,
+                };
+                self.reload_theme(system_scheme);
+                self.rebuild_presentation_on_next_redraw();
             }
             WindowEvent::CursorMoved { position, .. } => {
                 self.pointer_moved(position.x, position.y);

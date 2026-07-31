@@ -1,6 +1,9 @@
 use super::{AgentComposer, ComposerMode, ComposerSubmission};
+use std::sync::atomic::{AtomicU64, Ordering};
 use zeta_editor::{CodeEditorCommand, CodeEditorSelectionMode};
 use zeta_ui::{TextInputCompositionCursor, TextInputCompositionEvent};
+
+static NEXT_FIXTURE_ID: AtomicU64 = AtomicU64::new(0);
 
 #[test]
 fn composer_defaults_to_agent_submission() {
@@ -22,6 +25,42 @@ fn shell_mode_produces_an_explicit_shell_submission() {
     assert!(matches!(
         composer.submission(),
         Some(ComposerSubmission::ShellCommand(command)) if command == "cargo test"
+    ));
+}
+
+#[test]
+fn just_task_automatically_switches_to_shell_submission() {
+    let root = std::env::temp_dir().join(format!(
+        "zeta-agent-composer-{}-{}",
+        std::process::id(),
+        NEXT_FIXTURE_ID.fetch_add(1, Ordering::Relaxed)
+    ));
+    std::fs::create_dir_all(&root).unwrap();
+    std::fs::write(root.join("Justfile"), "native-dev:\n    cargo run\n").unwrap();
+    let mut composer = AgentComposer::for_working_directory(&root);
+
+    composer.apply(CodeEditorCommand::Insert("just native-dev".to_owned()));
+
+    assert_eq!(composer.mode(), ComposerMode::Shell);
+    assert!(matches!(
+        composer.submission(),
+        Some(ComposerSubmission::ShellCommand(command)) if command == "just native-dev"
+    ));
+
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn explicit_agent_mode_overrides_automatic_shell_detection() {
+    let mut composer = AgentComposer::default();
+    composer.apply(CodeEditorCommand::Insert("echo explain this".to_owned()));
+    assert_eq!(composer.mode(), ComposerMode::Shell);
+
+    composer.set_mode(ComposerMode::Agent);
+
+    assert!(matches!(
+        composer.submission(),
+        Some(ComposerSubmission::AgentMessage(text)) if text == "echo explain this"
     ));
 }
 
@@ -65,4 +104,16 @@ fn shell_history_replaces_boundary_navigation_and_restores_the_draft() {
 
     composer.apply(CodeEditorCommand::MoveDown(CodeEditorSelectionMode::Move));
     assert_eq!(composer.editor().text(), "draft");
+}
+
+#[test]
+fn submitting_an_automatic_shell_command_restores_agent_mode() {
+    let mut composer = AgentComposer::default();
+    composer.apply(CodeEditorCommand::Insert("echo done".to_owned()));
+    assert_eq!(composer.mode(), ComposerMode::Shell);
+
+    composer.clear_after_submit();
+
+    assert_eq!(composer.mode(), ComposerMode::Agent);
+    assert_eq!(composer.editor().text(), "");
 }

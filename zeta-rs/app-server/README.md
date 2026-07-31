@@ -64,7 +64,7 @@ request-ID set、notification queue 与 resource ownership；Session/Thread dura
 | `open_local_app_server` | 打开 profile SQLite/config、恢复 coordinator、组合 provider-backed model |
 | `LocalAppServerOptions` | user profile root + optional config/runtime Workspace + validated slash catalog + built-in Skill root selection |
 | `BuiltInSkillRoot` | auto-detected release root、explicit test/host root 或 unavailable 的自解释选择 |
-| `SlashCommandCatalog` | 校验动态命令名称、描述与唯一性，并冻结 server-advertised snapshot |
+| `zeta_slash_commands::SlashCommandCatalog` | 委托共享 crate 校验动态命令并冻结 server-advertised snapshot；App Server 只拥有 composition |
 | `ReviewModelResolver` | 从 frozen config snapshot 选择 review-only model |
 | `ProviderReviewModel` | `ModelInvoker → zeta_auto_review::ReviewModel` adapter |
 
@@ -163,7 +163,7 @@ src/
 | `CompositePolicyService` | private | trusted `ActionSource` → owning policy | 不依靠 trial-and-error policy fallback |
 | `ReloadableToolPorts` | crate-private | 原子替换未来 Tool generation，并为 prepared call 固定 service/policy | reconcile failure 保留上一份可用 runtime |
 | `ModelSnapshotResolver` | private trait | frozen config → immutable invoker | implementation 不持有 mutable config view |
-| `SlashCommandCatalog::new` | public constructor | 校验 lowercase ASCII/interior-hyphen name、非空描述与唯一性 | 不执行命令、不引用 TUI built-ins |
+| `zeta_slash_commands::SlashCommandCatalog::new` | shared public constructor | 校验 lowercase ASCII/interior-hyphen name、非空描述与唯一性 | App Server 不复制 grammar、不执行命令、不引用 client-local commands |
 | `ProviderReviewModel::request` | private | system/input/schema → tool-disabled zero-temperature request | reviewer 不获得 Tool capability |
 | config `*_dto` / `*_from_dto` helpers | private | external DTO 与 config domain 显式转换 | invalid identity 映射 InvalidParams |
 
@@ -483,7 +483,7 @@ generation retention，以及
 可信 Terminal Profile、真实 PTY create/write/read/exit、Terminal owner/error/ring limits，
 Skill built-in/user composition、enablement overlay、watcher refresh 与 `skills/changed`。
 Git 覆盖 workspace projection、runtime stream identity、revision 去重、`git/statusChanged`、
-path mutation 与 commit。Filesystem 覆盖有界原子写入、权限保留、root containment、
+text diff、local branch list/switch、path mutation 与 commit。Filesystem 覆盖有界原子写入、权限保留、root containment、
 相对路径 `fs/changed` 与 watcher overflow rescan。
 Syntax 覆盖 connection owner、revision mismatch、Unicode UTF-16 batch 与非重叠 token encoding。
 

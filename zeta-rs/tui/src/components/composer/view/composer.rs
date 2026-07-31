@@ -1,4 +1,4 @@
-use crate::ui::COMPOSER_CHROME;
+use crate::ui::composer_chrome;
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::Modifier;
@@ -26,7 +26,7 @@ pub(crate) fn draw(
         Span::styled(
             "❯ ",
             Style::default()
-                .fg(COMPOSER_CHROME)
+                .fg(composer_chrome())
                 .add_modifier(Modifier::BOLD),
         ),
         Span::raw(input),
@@ -34,7 +34,7 @@ pub(crate) fn draw(
     .block(
         Block::default()
             .borders(Borders::TOP | Borders::BOTTOM)
-            .border_style(Style::default().fg(COMPOSER_CHROME)),
+            .border_style(Style::default().fg(composer_chrome())),
     );
     frame.render_widget(composer, area);
 

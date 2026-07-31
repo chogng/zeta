@@ -1,8 +1,7 @@
-use super::super::SlashPopupView;
-use crate::ui::HIGHLIGHT;
-use crate::ui::MUTED;
+use super::super::SlashCommandsView;
 use crate::ui::bottom_anchored_area;
 use crate::ui::horizontal_margin;
+use crate::ui::{highlight, muted};
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
@@ -20,7 +19,7 @@ struct PopupLayout {
     visible_rows: usize,
 }
 
-pub(crate) fn draw(frame: &mut Frame<'_>, area: Rect, popup: Option<SlashPopupView<'_>>) {
+pub(crate) fn draw(frame: &mut Frame<'_>, area: Rect, popup: Option<SlashCommandsView<'_>>) {
     let Some(popup) = popup else {
         return;
     };
@@ -30,7 +29,7 @@ pub(crate) fn draw(frame: &mut Frame<'_>, area: Rect, popup: Option<SlashPopupVi
     let lines = if popup.commands.is_empty() {
         vec![Line::from(Span::styled(
             "No matching commands",
-            Style::default().fg(MUTED),
+            Style::default().fg(muted()),
         ))]
     } else {
         popup
@@ -42,20 +41,16 @@ pub(crate) fn draw(frame: &mut Frame<'_>, area: Rect, popup: Option<SlashPopupVi
             .map(|(index, command)| {
                 let selected = index == popup.selected;
                 let command_style = if selected {
-                    Style::default().fg(HIGHLIGHT)
+                    Style::default().fg(highlight())
                 } else {
-                    Style::default().fg(MUTED)
+                    Style::default().fg(muted())
                 };
                 Line::from(vec![
                     Span::styled(
-                        format!(
-                            "/{:<width$}",
-                            command.command(),
-                            width = COMMAND_COLUMN_WIDTH
-                        ),
+                        format!("/{:<width$}", command.name, width = COMMAND_COLUMN_WIDTH),
                         command_style,
                     ),
-                    Span::styled(command.description(), command_style),
+                    Span::styled(&command.description, command_style),
                 ])
             })
             .collect()
@@ -66,7 +61,7 @@ pub(crate) fn draw(frame: &mut Frame<'_>, area: Rect, popup: Option<SlashPopupVi
 
 pub(crate) fn command_index_at(
     area: Rect,
-    popup: Option<SlashPopupView<'_>>,
+    popup: Option<SlashCommandsView<'_>>,
     column: u16,
     row: u16,
 ) -> Option<usize> {

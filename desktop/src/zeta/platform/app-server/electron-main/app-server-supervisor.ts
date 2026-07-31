@@ -115,6 +115,13 @@ export class AppServerSupervisor implements IDisposable {
     return this._state;
   }
 
+  get slashCommands() {
+    if (this._state !== "ready" || !this.session) {
+      throw new Error(`App Server is not ready: ${this._state}`);
+    }
+    return this.session.slashCommands;
+  }
+
   onStateChange(listener: StateListener): IDisposable {
     this.stateListeners.add(listener);
     return toDisposable(() => this.stateListeners.delete(listener));

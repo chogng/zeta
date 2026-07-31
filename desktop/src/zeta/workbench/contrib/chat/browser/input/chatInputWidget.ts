@@ -2,6 +2,7 @@ import "./chatInputWidget.css";
 import { addDisposableListener } from "../../../../../base/browser/dom.js";
 import { DisposableOwner, ResettableDisposableGroup } from "../../../../../base/common/lifecycle.js";
 import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextMenu.js";
+import { DesktopSlashCommands, parseSlashCommandInput, SlashCommandCatalog } from "../../common/slashCommands.js";
 import type { ChatInputDelegate, ChatInputState } from "./chatInput.js";
 import { ChatInputEditors, type IChatInputEditor } from "./chatInputEditor.js";
 import { ChatInputToolbar } from "./chatInputToolbar.js";
@@ -16,7 +17,9 @@ export class ChatInputWidget extends DisposableOwner {
   private readonly form: HTMLFormElement;
   private readonly input: IChatInputEditor;
   private readonly toolbar: ChatInputToolbar;
-  private state: ChatInputState = { phase: "loading", canInterrupt: false, models: [] };
+  private readonly slashCommands = new SlashCommandCatalog(DesktopSlashCommands, []);
+  private state: ChatInputState = { phase: "loading", canInterrupt: false, models: [], slashCommands: [] };
+  private serverSlashCommands: ChatInputState["slashCommands"] = [];
 
   constructor(ownerDocument: Document, delegate: ChatInputDelegate, contextMenuService: IContextMenuService) {
     super();
@@ -37,6 +40,7 @@ export class ChatInputWidget extends DisposableOwner {
       container: inputContainer,
       placeholder: "Ask Zeta",
       ariaLabel: "Chat message",
+      slashCommands: this.slashCommands,
     }));
     this.toolbar = this.own(new ChatInputToolbar(ownerDocument, contextMenuService, {
       submit: () => this.form.requestSubmit(),
@@ -49,18 +53,30 @@ export class ChatInputWidget extends DisposableOwner {
       event.preventDefault();
       const value = this.input.value;
       if (!value.trim()) return;
-      this.input.value = "";
-      this.renderToolbar();
-      void this.delegate.send(value).catch(() => {
-        if (!this.input.value) {
-          this.input.value = value;
-          this.renderToolbar();
-        }
-      });
+      const input = parseSlashCommandInput(value, this.slashCommands);
+      if (input.kind === "command" && input.binding.origin === "local") {
+        this.submit(value, this.delegate.executeCommand({ commandId: input.binding.actionId, argumentsText: input.argumentsText }));
+        return;
+      }
+      this.submit(value, this.delegate.send(value));
     }));
-    this.own(this.input.onDidChange(() => this.renderToolbar()));
+    this.own(this.input.onDidChange(() => {
+      this.status.textContent = this.statusText(this.state);
+      this.renderToolbar();
+    }));
     this.own(this.input.onDidSubmit(() => this.form.requestSubmit()));
     this.defer(() => this.element.remove());
+  }
+
+  private submit(value: string, operation: Promise<void>): void {
+    this.input.value = "";
+    this.renderToolbar();
+    void operation.catch(() => {
+      if (!this.input.value) {
+        this.input.value = value;
+        this.renderToolbar();
+      }
+    });
   }
 
   focus(): void {
@@ -72,6 +88,10 @@ export class ChatInputWidget extends DisposableOwner {
   }
 
   render(state: ChatInputState): void {
+    if (this.serverSlashCommands !== state.slashCommands) {
+      this.slashCommands.setServerCommands(state.slashCommands);
+      this.serverSlashCommands = state.slashCommands;
+    }
     this.state = state;
     this.status.textContent = this.statusText(state);
     this.renderInteraction(state);
@@ -79,9 +99,12 @@ export class ChatInputWidget extends DisposableOwner {
   }
 
   private renderToolbar(): void {
+    const input = parseSlashCommandInput(this.input.value, this.slashCommands);
+    const canSubmitIntent = input.kind === "message" ? input.text.trim().length > 0 : this.input.value.trim().length > 0;
     this.toolbar.render({
-      canSubmit: this.input.value.trim().length > 0 && this.state.phase !== "submitting" && !this.state.canInterrupt,
+      canSubmit: canSubmitIntent && this.state.phase !== "submitting" && !this.state.canInterrupt,
       canInterrupt: this.state.canInterrupt,
+      inputKind: input.kind === "message" ? "message" : "command",
       models: this.state.models,
       selectedModel: this.state.selectedModel,
     });

@@ -13,11 +13,15 @@ use crate::agent_sidebar_layout::AgentSidebarLayout;
 use crate::agent_sidebar_toolbar::AgentSidebarToolbar;
 use crate::agent_sidebar_workspace::AgentSidebarView;
 use crate::agent_sidebar_workspace::AgentSidebarWorkspace;
-use crate::composer_editor::{ComposerEditor, ComposerEditorFocus};
+use crate::composer_editor::ComposerEditor;
+use crate::composer_interaction::ComposerInteractionModel;
+use crate::composer_interaction_pane::ComposerInteractionPaneState;
+use crate::composer_panel::{
+    ComposerPanelLayout, ComposerPanelView, draw_composer_panel, interaction_preferred_height,
+};
 use crate::editor_pane::EditorPane;
 use crate::explorer_pane::ExplorerPane;
 use crate::git_branch_context_menu::{GitBranchContextMenu, GitBranchContextMenuState};
-use crate::input_context_toolbar::InputContextToolbar;
 use crate::keybindings::NativeKeybindings;
 use crate::keyboard_shortcuts::{
     KeyboardShortcutsState, keyboard_shortcut_rows, keyboard_shortcuts_ids,
@@ -28,11 +32,10 @@ use crate::session_sidebar::SessionSidebarState;
 use crate::session_sidebar_toolbar::SessionSidebarToolbar;
 use crate::session_tab_list::{SessionTab, SessionTabList};
 use crate::shell_interaction::{
-    ACTIVE_SESSION_TAB, AGENT_FILE_SEARCH_INPUT, AGENT_SIDEBAR, COMPOSER, COMPOSER_PANEL,
-    MAIN_SURFACE, SESSION_SEARCH_INPUT, SESSION_SIDEBAR, SESSION_SIDEBAR_RESIZE_HANDLE,
-    TERMINAL_OUTPUT, THREAD_TIMELINE, WINDOW,
+    ACTIVE_SESSION_TAB, AGENT_FILE_SEARCH_INPUT, AGENT_SIDEBAR, MAIN_SURFACE, SESSION_SEARCH_INPUT,
+    SESSION_SIDEBAR, SESSION_SIDEBAR_RESIZE_HANDLE, TERMINAL_OUTPUT, THREAD_TIMELINE, WINDOW,
 };
-use crate::shell_style::{SHELL_PALETTE, ShellPalette};
+use crate::shell_style::ShellPalette;
 use crate::terminal_blocks::{TerminalBlockLineKind, project_block_lines};
 use crate::terminal_output_scroll_view::TerminalOutputScrollView;
 use crate::terminal_selection::{TerminalSelectionRange, paint_terminal_selection};
@@ -43,19 +46,14 @@ use crate::titlebar::{TITLEBAR_HEIGHT, Titlebar};
 use crate::workspace_context::WorkspaceContext;
 use crate::workspace_path_picker::{WorkspacePathPicker, WorkspacePathPickerState};
 use zeta_ui_dispatch::{
-    AccessibilityNode, AccessibilityRole, CursorFeedback, FocusBehavior, InteractionFrame,
-    UiDispatch, UiNode,
+    AccessibilityNode, AccessibilityRole, CursorFeedback, InteractionFrame, UiDispatch, UiNode,
 };
 use zeta_winit::WindowControlInsets;
 
 const TERMINAL_CELL_WIDTH: f32 = 8.0;
 const TERMINAL_LINE_HEIGHT: f32 = 18.0;
 const TERMINAL_PADDING: f32 = 24.0;
-const COMPOSER_PANEL_HEIGHT: f32 = 112.0;
-const COMPOSER_TOOLBAR_HEIGHT: f32 = 24.0;
 const COMPOSER_HEIGHT: f32 = 44.0;
-const COMPOSER_PANEL_CHROME_HEIGHT: f32 = COMPOSER_PANEL_HEIGHT - COMPOSER_HEIGHT;
-const MIN_OUTPUT_HEIGHT: f32 = 40.0;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct LogicalViewport {
@@ -85,7 +83,9 @@ struct ShellLayout {
     agent_sidebar: Option<Rect>,
     main: Rect,
     output: Rect,
+    composer_panel_layout: ComposerPanelLayout,
     composer_panel: Rect,
+    composer_info_bar: Rect,
     composer_toolbar: Rect,
     composer: Rect,
 }
@@ -96,19 +96,37 @@ impl ShellLayout {
         session_sidebar: SessionSidebarState,
         agent_sidebar: AgentSidebarState,
     ) -> Option<Self> {
-        Self::for_viewport_with_composer_height(
+        Self::for_viewport_with_composer_and_interaction_height(
             viewport,
             session_sidebar,
             agent_sidebar,
             COMPOSER_HEIGHT,
+            0.0,
         )
     }
 
+    #[cfg(test)]
     fn for_viewport_with_composer_height(
         viewport: LogicalViewport,
         session_sidebar: SessionSidebarState,
         agent_sidebar: AgentSidebarState,
         preferred_composer_height: f32,
+    ) -> Option<Self> {
+        Self::for_viewport_with_composer_and_interaction_height(
+            viewport,
+            session_sidebar,
+            agent_sidebar,
+            preferred_composer_height,
+            0.0,
+        )
+    }
+
+    fn for_viewport_with_composer_and_interaction_height(
+        viewport: LogicalViewport,
+        session_sidebar: SessionSidebarState,
+        agent_sidebar: AgentSidebarState,
+        preferred_composer_height: f32,
+        preferred_interaction_height: f32,
     ) -> Option<Self> {
         if viewport.width < 240.0 || viewport.height < 180.0 {
             return None;
@@ -127,37 +145,12 @@ impl ShellLayout {
         let terminal_workspace = TerminalWorkspaceLayout::for_bounds(remaining, agent_sidebar);
         let main = terminal_workspace.active_pane_bounds();
         let agent_sidebar = terminal_workspace.agent_sidebar_bounds();
-        let maximum_composer_height =
-            (main.size.height - COMPOSER_PANEL_CHROME_HEIGHT - MIN_OUTPUT_HEIGHT)
-                .max(COMPOSER_HEIGHT);
-        let composer_height = preferred_composer_height
-            .max(COMPOSER_HEIGHT)
-            .min(maximum_composer_height);
-        let composer_panel_height = composer_height + COMPOSER_PANEL_CHROME_HEIGHT;
-        let composer_panel = Rect::from_xywh(
-            main.origin.x,
-            main.bottom() - composer_panel_height,
-            main.size.width,
-            composer_panel_height,
+        let composer_panel = ComposerPanelLayout::for_main(
+            main,
+            preferred_composer_height.max(COMPOSER_HEIGHT),
+            preferred_interaction_height,
         );
-        let composer = Rect::from_xywh(
-            main.origin.x + TERMINAL_PADDING,
-            composer_panel.origin.y + 12.0,
-            (main.size.width - TERMINAL_PADDING * 2.0).max(1.0),
-            composer_height,
-        );
-        let composer_toolbar = Rect::from_xywh(
-            main.origin.x + TERMINAL_PADDING,
-            composer.bottom() + 12.0,
-            (main.size.width - TERMINAL_PADDING * 2.0).max(1.0),
-            COMPOSER_TOOLBAR_HEIGHT,
-        );
-        let output = Rect::from_xywh(
-            main.origin.x,
-            main.origin.y,
-            main.size.width,
-            (composer_panel.origin.y - main.origin.y).max(1.0),
-        );
+        let output = composer_panel.output();
         Some(Self {
             titlebar,
             session_sidebar,
@@ -165,9 +158,11 @@ impl ShellLayout {
             agent_sidebar,
             main,
             output,
-            composer_panel,
-            composer_toolbar,
-            composer,
+            composer_panel_layout: composer_panel,
+            composer_panel: composer_panel.panel(),
+            composer_info_bar: composer_panel.info_bar(),
+            composer_toolbar: composer_panel.toolbar(),
+            composer: composer_panel.editor(),
         })
     }
 }
@@ -188,6 +183,7 @@ struct TerminalView<'a> {
 }
 
 pub(crate) struct ShellPresentationModel<'a> {
+    pub(crate) palette: ShellPalette,
     pub(crate) terminal: Option<&'a TerminalCore>,
     pub(crate) terminal_scroll_offset: usize,
     pub(crate) terminal_scrollbar_presentation: ScrollbarPresentation,
@@ -197,6 +193,8 @@ pub(crate) struct ShellPresentationModel<'a> {
     pub(crate) thread_timeline_scroll_offset: usize,
     pub(crate) workspace_context: &'a WorkspaceContext,
     pub(crate) composer: &'a ComposerEditor,
+    pub(crate) composer_interaction: &'a ComposerInteractionModel,
+    pub(crate) composer_interaction_pane: &'a ComposerInteractionPaneState,
     pub(crate) composer_mode: ComposerMode,
     pub(crate) session_search: &'a SessionSearch,
     pub(crate) caret_visibility: CaretVisibility,
@@ -211,15 +209,6 @@ pub(crate) struct ShellPresentationModel<'a> {
     pub(crate) keyboard_shortcuts: &'a KeyboardShortcutsState,
     pub(crate) keybinding_diagnostics: &'a [String],
     pub(crate) window_control_insets: WindowControlInsets,
-}
-
-#[derive(Clone, Copy)]
-struct ComposerView<'a> {
-    context: &'a WorkspaceContext,
-    editor: &'a ComposerEditor,
-    mode: ComposerMode,
-    caret_visibility: CaretVisibility,
-    dispatch: &'a UiDispatch,
 }
 
 #[derive(Clone, Copy)]
@@ -244,7 +233,7 @@ pub(crate) fn build_shell_presentation(
     model: ShellPresentationModel<'_>,
     text_layout: &mut TextInputLayoutEngine,
 ) -> ShellPresentation {
-    let palette = SHELL_PALETTE;
+    let palette = model.palette;
     let mut scene = UiScene::new(palette.background);
     let mut interaction_frame = InteractionFrame::default();
     interaction_frame.register(UiNode::new(
@@ -253,11 +242,12 @@ pub(crate) fn build_shell_presentation(
         AccessibilityRole::Window,
         PRODUCT_DISPLAY_NAME,
     ));
-    let Some(layout) = ShellLayout::for_viewport_with_composer_height(
+    let Some(layout) = ShellLayout::for_viewport_with_composer_and_interaction_height(
         viewport,
         model.session_sidebar,
         model.agent_sidebar,
         model.composer.preferred_height(),
+        interaction_preferred_height(model.composer_interaction.view()),
     ) else {
         draw_compact_scene(&mut scene, viewport, palette);
         return ShellPresentation {
@@ -338,13 +328,16 @@ pub(crate) fn build_shell_presentation(
         model.terminal_surface,
         model.thread_projection,
         model.thread_timeline_scroll_offset,
-        ComposerView {
+        ComposerPanelView {
             context: model.workspace_context,
             editor: model.composer,
+            interaction: model.composer_interaction,
+            interaction_pane: model.composer_interaction_pane,
             mode: model.composer_mode,
             caret_visibility: model.caret_visibility,
             dispatch: model.dispatch,
         },
+        palette,
         text_layout,
     );
     let mut ime_cursor_area = if model.dispatch.is_focused(AGENT_FILE_SEARCH_INPUT) {
@@ -635,10 +628,10 @@ fn draw_main(
     terminal_surface: bool,
     thread_projection: &ThreadProjection,
     thread_timeline_scroll_offset: usize,
-    composer_view: ComposerView<'_>,
+    composer_view: ComposerPanelView<'_>,
+    palette: ShellPalette,
     text_layout: &mut TextInputLayoutEngine,
 ) -> Option<Rect> {
-    let palette = SHELL_PALETTE;
     let active_screen = if terminal_surface {
         ScreenBuffer::Alternate
     } else {
@@ -693,10 +686,10 @@ fn draw_main(
                 thread_timeline_scroll_offset,
                 palette,
             ));
-            ime_cursor_area = draw_composer(
+            ime_cursor_area = draw_composer_panel(
                 scene,
                 interaction_frame,
-                layout,
+                layout.composer_panel_layout,
                 composer_view,
                 text_layout,
                 palette,
@@ -769,71 +762,6 @@ fn draw_terminal(
             palette,
         );
     }
-}
-
-fn draw_composer(
-    scene: &mut UiScene,
-    interaction_frame: &mut InteractionFrame,
-    layout: ShellLayout,
-    composer_view: ComposerView<'_>,
-    text_layout: &mut TextInputLayoutEngine,
-    palette: ShellPalette,
-) -> Option<Rect> {
-    scene.draw_rect(
-        PaintRect::new(layout.composer_panel, palette.surface).with_border(Border::new(
-            zeta_ui::Edges::new(1.0, 0.0, 0.0, 0.0),
-            palette.border,
-        )),
-    );
-    interaction_frame.register(
-        UiNode::new(
-            COMPOSER_PANEL,
-            layout.composer_panel,
-            AccessibilityRole::Group,
-            "Command composer",
-        )
-        .with_parent(MAIN_SURFACE),
-    );
-    interaction_frame.register(
-        UiNode::new(
-            COMPOSER,
-            layout.composer,
-            AccessibilityRole::TextInput,
-            "Command input",
-        )
-        .with_parent(COMPOSER_PANEL)
-        .with_cursor(CursorFeedback::Text)
-        .with_focus(FocusBehavior::TabStop)
-        .with_value(composer_view.editor.text()),
-    );
-    let toolbar = InputContextToolbar::new(
-        layout.composer_toolbar,
-        composer_view.context,
-        composer_view.mode,
-        palette,
-        text_layout,
-        composer_view.dispatch,
-    );
-    toolbar.register_interactions(interaction_frame);
-    scene.draw_component(&toolbar);
-    let editor_focus = if composer_view.dispatch.is_focused(COMPOSER) {
-        ComposerEditorFocus::Focused(composer_view.caret_visibility)
-    } else {
-        ComposerEditorFocus::Blurred
-    };
-    let placeholder = match composer_view.mode {
-        ComposerMode::Agent => "Ask Zeta anything…",
-        ComposerMode::Shell => "Enter a shell command…",
-    };
-    let editor = composer_view.editor.view(
-        layout.composer,
-        placeholder,
-        editor_focus,
-        palette.text_muted,
-    );
-    let caret_bounds = editor.caret_bounds();
-    scene.draw_component(&editor);
-    caret_bounds
 }
 
 fn draw_grid(

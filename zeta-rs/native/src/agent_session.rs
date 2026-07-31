@@ -13,12 +13,17 @@ use zeta_app_server_protocol::protocol::common::{ClientInfo, CommandId};
 use zeta_app_server_protocol::protocol::git::{
     GitBranchDto, GitBranchSwitchParams, GitTextDiffResult,
 };
-use zeta_app_server_protocol::protocol::session::{SessionCreateParams, SessionThreadCreateParams};
+use zeta_app_server_protocol::protocol::model::ModelCatalogEntry;
+use zeta_app_server_protocol::protocol::session::{
+    SessionCreateParams, SessionModelSetParams, SessionThreadCreateParams,
+};
+use zeta_app_server_protocol::protocol::slash_commands::SlashCommandDefinition;
 use zeta_app_server_protocol::protocol::thread::{ThreadSubscribeParams, ThreadSubscribeResult};
 use zeta_app_server_protocol::protocol::turn::{InputItem, ShellTurnStartParams, TurnStartParams};
 use zeta_app_server_protocol::protocol::workspace::WorkspaceSwitchParams;
 use zeta_protocol::{
-    Session, SessionId, SessionStatus, SessionThreadStatus, Thread, ThreadId, ThreadUpdateEnvelope,
+    ModelRef, Session, SessionId, SessionStatus, SessionThreadStatus, Thread, ThreadId,
+    ThreadUpdateEnvelope,
 };
 use zeta_winit::EventLoopProxy;
 
@@ -31,6 +36,10 @@ const EVENT_POLL_INTERVAL: Duration = Duration::from_millis(25);
 
 #[derive(Debug)]
 pub(crate) enum AgentSessionEvent {
+    Catalog {
+        slash_commands: Vec<SlashCommandDefinition>,
+        models: Vec<ModelCatalogEntry>,
+    },
     Snapshot(Thread),
     Update(Box<ThreadUpdateEnvelope>),
     GitProjection(Option<GitTextDiffResult>),
@@ -41,6 +50,7 @@ pub(crate) enum AgentSessionEvent {
 enum AgentSessionCommand {
     SubmitAgentMessage(String),
     SubmitShellCommand(String),
+    SelectModel(ModelRef),
     Refresh,
     RefreshGit,
     ListGitBranches(SyncSender<std::result::Result<Vec<GitBranchDto>, String>>),
@@ -91,6 +101,12 @@ impl AgentSession {
         self.commands
             .try_send(AgentSessionCommand::SubmitShellCommand(command))
             .context("Shell submission queue is unavailable")
+    }
+
+    pub(crate) fn select_model(&self, model: ModelRef) -> Result<()> {
+        self.commands
+            .try_send(AgentSessionCommand::SelectModel(model))
+            .context("Agent model selection queue is unavailable")
     }
 
     pub(crate) fn refresh(&self) -> Result<()> {
@@ -177,6 +193,22 @@ fn run_agent_session_inner(
     )
     .map_err(|error| anyhow!(error.to_string()))?;
     let mut client = session.client();
+    let slash_commands = client
+        .initialization()
+        .map_err(|error| anyhow!(error.to_string()))?
+        .slash_commands
+        .clone();
+    let models = client
+        .list_models()
+        .map_err(|error| anyhow!(error.to_string()))?
+        .models;
+    send_event(
+        event_proxy,
+        AgentSessionEvent::Catalog {
+            slash_commands,
+            models,
+        },
+    )?;
     publish_git_projection(event_proxy, &mut client)?;
     let events = session
         .take_events()
@@ -206,6 +238,9 @@ fn drive_agent_session(
                 }
                 Ok(AgentSessionCommand::SubmitShellCommand(command)) => {
                     submit_shell_command(client, active, command)?;
+                }
+                Ok(AgentSessionCommand::SelectModel(model)) => {
+                    select_model(client, active, model)?;
                 }
                 Ok(AgentSessionCommand::Refresh) => {
                     active.subscription = subscribe_thread(client, &active.thread_id)?;
@@ -261,6 +296,7 @@ fn drive_agent_session(
 
 struct ActiveThread {
     session_id: SessionId,
+    session_sequence: u64,
     thread_id: ThreadId,
     sequence: u64,
     subscription: ThreadSubscribeResult,
@@ -285,6 +321,7 @@ fn ensure_active_thread(
     let subscription = subscribe_thread(client, &thread_id)?;
     Ok(ActiveThread {
         session_id: session.session_id,
+        session_sequence: session.sequence,
         thread_id,
         sequence: subscription.thread.sequence,
         subscription,
@@ -396,6 +433,23 @@ fn submit_shell_command(
     Ok(())
 }
 
+fn select_model(
+    client: &mut AppServerRequestHandle,
+    active: &mut ActiveThread,
+    model: ModelRef,
+) -> Result<()> {
+    let result = client
+        .set_session_model(SessionModelSetParams {
+            command_id: next_command_id("model"),
+            session_id: active.session_id.clone(),
+            expected_sequence: active.session_sequence,
+            model,
+        })
+        .map_err(|error| anyhow!(error.to_string()))?;
+    active.session_sequence = result.session.sequence;
+    Ok(())
+}
+
 fn switch_git_branch(
     client: &mut AppServerRequestHandle,
     name: String,
@@ -446,6 +500,7 @@ fn git_is_unavailable(error: &ClientError) -> bool {
         }
     )
 }
+
 fn send_event(event_proxy: &EventLoopProxy<NativeEvent>, event: AgentSessionEvent) -> Result<()> {
     event_proxy
         .send_event(event.into())
@@ -485,6 +540,17 @@ impl NativeApp {
                 )
         );
         match event {
+            AgentSessionEvent::Catalog {
+                slash_commands,
+                models,
+            } => {
+                if let Err(error) = self
+                    .composer_interaction
+                    .set_catalog(slash_commands, models)
+                {
+                    eprintln!("could not install Slash Commands catalog: {error}");
+                }
+            }
             AgentSessionEvent::Snapshot(thread) => {
                 self.thread_projection.replace_snapshot(thread);
             }

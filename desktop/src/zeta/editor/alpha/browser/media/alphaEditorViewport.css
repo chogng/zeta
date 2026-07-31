@@ -29,6 +29,16 @@
   outline-offset: -1px;
 }
 
+.zeta-alpha-editor-embedded {
+  color: var(--zeta-input-foreground);
+  background: transparent;
+  font-family: inherit;
+}
+
+.zeta-alpha-editor-embedded .zeta-alpha-editor-line-number {
+  display: none;
+}
+
 .zeta-alpha-editor-content {
   position: relative;
   min-width: 100%;
@@ -82,39 +92,39 @@
 }
 
 .zeta-alpha-editor-token.token-comment {
-  color: var(--zeta-editor-semantic-token-comment-foreground);
+  color: var(--zeta-editor-token-comment-foreground);
 }
 
 .zeta-alpha-editor-token.token-keyword {
-  color: var(--zeta-editor-semantic-token-keyword-foreground);
+  color: var(--zeta-editor-token-keyword-foreground);
 }
 
 .zeta-alpha-editor-token.token-string {
-  color: var(--zeta-editor-semantic-token-string-foreground);
+  color: var(--zeta-editor-token-string-foreground);
 }
 
 .zeta-alpha-editor-token.token-number {
-  color: var(--zeta-editor-semantic-token-number-foreground);
+  color: var(--zeta-editor-token-number-foreground);
 }
 
 .zeta-alpha-editor-token.token-regexp {
-  color: var(--zeta-editor-semantic-token-regexp-foreground);
+  color: var(--zeta-editor-token-regexp-foreground);
 }
 
 .zeta-alpha-editor-token.token-type {
-  color: var(--zeta-editor-semantic-token-type-foreground);
+  color: var(--zeta-editor-token-type-foreground);
 }
 
 .zeta-alpha-editor-token.token-function {
-  color: var(--zeta-editor-semantic-token-function-foreground);
+  color: var(--zeta-editor-token-function-foreground);
 }
 
 .zeta-alpha-editor-token.token-variable {
-  color: var(--zeta-editor-semantic-token-variable-foreground);
+  color: var(--zeta-editor-token-variable-foreground);
 }
 
 .zeta-alpha-editor-token.token-operator {
-  color: var(--zeta-editor-semantic-token-operator-foreground);
+  color: var(--zeta-editor-token-operator-foreground);
 }
 
 .zeta-alpha-editor-line-decorations,

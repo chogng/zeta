@@ -1,0 +1,20 @@
+.zeta-alpha-chat-input-editor {
+  position: relative;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: 62px;
+  overflow: visible;
+}
+
+.zeta-alpha-chat-input-placeholder {
+  position: absolute;
+  top: 8px;
+  left: 12px;
+  z-index: 1;
+  overflow: hidden;
+  color: var(--zeta-input-placeholder-foreground);
+  font: inherit;
+  white-space: nowrap;
+  pointer-events: none;
+}

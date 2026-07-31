@@ -129,6 +129,9 @@ schema hash 不一致时客户端必须拒绝继续运行。
 `slashCommands` 每项的 `name` 只能使用 lowercase ASCII letters、digits 与 interior hyphens，
 description 不能为空，同一 snapshot 中 name 必须唯一。该 snapshot 负责 discoverability 与
 inline argument parsing；提交仍通过 `turn/start.input`，并保留 `/name`、text/image 顺序。
+校验、local/server 合并与 Rust client 交互状态的 canonical owner 是
+[`zeta-slash-commands`](../zeta-rs/slash-commands/README.md)；App Server 只组合并发布 server snapshot。
+三种 client surface 的合并、执行与渲染边界见 [`slash-commands.md`](slash-commands.md)。
 
 ## 5. 方法清单
 

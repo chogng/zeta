@@ -2,7 +2,8 @@ import type { Color } from "../../../base/common/color.js";
 import { Colors, colorCssVariable, type ColorIdentifier, type ColorValue, type ResolvedColorContribution } from "./colorRegistry.js";
 import * as baseColors from "./colors/baseColors.js";
 import * as componentColors from "./colors/componentColors.js";
-import "./colors/editorColors.js";
+import * as editorColors from "./colors/editorColors.js";
+import * as terminalColors from "./colors/terminalColors.js";
 import * as workbenchColors from "./colors/workbenchColors.js";
 import { Sizes, sizeCssVariable, sizeToCss, type SizeContribution, type SizeValue } from "./sizeRegistry.js";
 import "./sizes/baseSizes.js";
@@ -16,6 +17,7 @@ export const ColorId = Object.freeze({
   accentForeground: baseColors.accentForeground,
   errorForeground: baseColors.errorForeground,
   warningForeground: baseColors.warningForeground,
+  successForeground: baseColors.successForeground,
   focusBorder: baseColors.focusBorder,
   border: baseColors.border,
   widgetBorder: baseColors.widgetBorder,
@@ -71,6 +73,43 @@ export const ColorId = Object.freeze({
   statusBarForeground: workbenchColors.statusBarForeground,
   statusBarBackground: workbenchColors.statusBarBackground,
   sashHoverBackground: workbenchColors.sashHoverBackground,
+  editorTokenCommentForeground: editorColors.tokenCommentForeground,
+  editorTokenKeywordForeground: editorColors.tokenKeywordForeground,
+  editorTokenStringForeground: editorColors.tokenStringForeground,
+  editorTokenNumberForeground: editorColors.tokenNumberForeground,
+  editorTokenRegexpForeground: editorColors.tokenRegexpForeground,
+  editorTokenTypeForeground: editorColors.tokenTypeForeground,
+  editorTokenFunctionForeground: editorColors.tokenFunctionForeground,
+  editorTokenVariableForeground: editorColors.tokenVariableForeground,
+  editorTokenOperatorForeground: editorColors.tokenOperatorForeground,
+  diffEditorRemovedLineBackground: editorColors.diffRemovedLineBackground,
+  diffEditorInsertedLineBackground: editorColors.diffInsertedLineBackground,
+  diffEditorRemovedTextBackground: editorColors.diffRemovedTextBackground,
+  diffEditorInsertedTextBackground: editorColors.diffInsertedTextBackground,
+  diffEditorMissingLineBackground: editorColors.diffMissingLineBackground,
+  diffEditorUnchangedRegionBackground: editorColors.diffUnchangedRegionBackground,
+  diffEditorUnchangedRegionForeground: editorColors.diffUnchangedRegionForeground,
+  diffEditorRemovedLineMarker: editorColors.diffRemovedLineMarker,
+  diffEditorInsertedLineMarker: editorColors.diffInsertedLineMarker,
+  terminalBackground: terminalColors.terminalBackground,
+  terminalForeground: terminalColors.terminalForeground,
+  terminalCursorForeground: terminalColors.terminalCursorForeground,
+  terminalAnsiBlack: terminalColors.terminalAnsiBlack,
+  terminalAnsiRed: terminalColors.terminalAnsiRed,
+  terminalAnsiGreen: terminalColors.terminalAnsiGreen,
+  terminalAnsiYellow: terminalColors.terminalAnsiYellow,
+  terminalAnsiBlue: terminalColors.terminalAnsiBlue,
+  terminalAnsiMagenta: terminalColors.terminalAnsiMagenta,
+  terminalAnsiCyan: terminalColors.terminalAnsiCyan,
+  terminalAnsiWhite: terminalColors.terminalAnsiWhite,
+  terminalAnsiBrightBlack: terminalColors.terminalAnsiBrightBlack,
+  terminalAnsiBrightRed: terminalColors.terminalAnsiBrightRed,
+  terminalAnsiBrightGreen: terminalColors.terminalAnsiBrightGreen,
+  terminalAnsiBrightYellow: terminalColors.terminalAnsiBrightYellow,
+  terminalAnsiBrightBlue: terminalColors.terminalAnsiBrightBlue,
+  terminalAnsiBrightMagenta: terminalColors.terminalAnsiBrightMagenta,
+  terminalAnsiBrightCyan: terminalColors.terminalAnsiBrightCyan,
+  terminalAnsiBrightWhite: terminalColors.terminalAnsiBrightWhite,
 });
 
 export { colorCssVariable, sizeCssVariable };

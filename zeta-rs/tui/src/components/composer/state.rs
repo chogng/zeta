@@ -6,15 +6,13 @@ use super::editor::TextElementId;
 use super::mentions::MentionPopupView;
 use super::mentions::Mentions;
 use super::pending_pastes::PendingPastes;
-use super::slash_command_popup::SlashCommandPopup;
-use super::slash_command_popup::SlashPopupView;
-use super::slash_commands::SlashCommandItem;
-use super::slash_commands::SlashCommandRegistry;
-use super::slash_input::ParsedSlashCommand;
-use super::slash_input::SlashInput;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use zeta_file_search::PathSearchSnapshot;
+use zeta_slash_commands::{
+    SlashCommandCatalog, SlashCommandDefinition, SlashCommandInvocation as ParsedSlashCommand,
+    SlashCommandOrigin, SlashCommandsState, SlashCommandsView,
+};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum ComposerOutcome {
@@ -38,14 +36,15 @@ pub(crate) struct ComposerSubmission {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct SlashCommandInvocation {
-    pub(crate) command: SlashCommandItem,
+    pub(crate) command: SlashCommandDefinition,
+    pub(crate) origin: SlashCommandOrigin,
     pub(crate) display_arguments: String,
     pub(crate) arguments: Vec<ComposerInput>,
 }
 
 impl SlashCommandInvocation {
     pub(crate) fn into_forwarded_submission(mut self) -> ComposerSubmission {
-        let command_text = format!("/{}", self.command.command());
+        let command_text = format!("/{}", self.command.name);
         let display_text = if self.display_arguments.is_empty() {
             command_text.clone()
         } else {
@@ -70,14 +69,13 @@ impl SlashCommandInvocation {
 
 /// Owns chat-input semantics around an editing-oriented [`TextArea`].
 ///
-/// Slash parsing belongs to [`SlashInput`]; this component applies its completion plans, owns popup
+/// Slash parsing belongs to `zeta-slash-commands`; this component applies its completion plans, owns popup
 /// key routing, and turns parsed submissions into command invocations. The text area remains
 /// responsible only for editing state and keymap behavior.
 #[derive(Debug)]
 pub(crate) struct ChatComposer {
     textarea: TextArea,
-    slash_commands: SlashCommandRegistry,
-    slash_popup: SlashCommandPopup,
+    slash_commands: SlashCommandsState,
     slash_command_element: Option<TextElementId>,
     mentions: Mentions,
     pending_pastes: PendingPastes,
@@ -87,14 +85,13 @@ pub(crate) struct ChatComposer {
 impl ChatComposer {
     #[cfg(test)]
     pub(crate) fn new() -> Self {
-        Self::with_slash_commands(SlashCommandRegistry::default())
+        Self::with_slash_commands(super::default_slash_command_catalog())
     }
 
-    pub(crate) fn with_slash_commands(slash_commands: SlashCommandRegistry) -> Self {
+    pub(crate) fn with_slash_commands(slash_commands: SlashCommandCatalog) -> Self {
         Self {
             textarea: TextArea::new(),
-            slash_commands,
-            slash_popup: SlashCommandPopup::default(),
+            slash_commands: SlashCommandsState::new(slash_commands),
             slash_command_element: None,
             mentions: Mentions::default(),
             pending_pastes: PendingPastes::default(),
@@ -130,28 +127,28 @@ impl ChatComposer {
             }
         }
 
-        if self.slash_popup.view().is_some() {
+        if self.slash_commands.view().is_some() {
             match key.code {
                 KeyCode::Esc => {
-                    self.slash_popup.dismiss();
+                    self.slash_commands.dismiss();
                     return ComposerOutcome::Consumed;
                 }
                 KeyCode::Up => {
-                    self.slash_popup.select_previous();
+                    self.slash_commands.select_previous();
                     return ComposerOutcome::Consumed;
                 }
                 KeyCode::Down => {
-                    self.slash_popup.select_next();
+                    self.slash_commands.select_next();
                     return ComposerOutcome::Consumed;
                 }
                 KeyCode::Tab => {
-                    if let Some(command) = self.slash_popup.selected_command() {
+                    if let Some(command) = self.slash_commands.selected_command().cloned() {
                         self.complete_slash_command(&command);
                     }
                     return ComposerOutcome::Consumed;
                 }
                 KeyCode::Enter => {
-                    if let Some(command) = self.slash_popup.selected_command() {
+                    if let Some(command) = self.slash_commands.selected_command().cloned() {
                         self.complete_slash_command(&command);
                         return self.submit();
                     }
@@ -209,8 +206,8 @@ impl ChatComposer {
         self.textarea.cursor_display_width()
     }
 
-    pub(crate) fn slash_popup(&self) -> Option<SlashPopupView<'_>> {
-        self.slash_popup.view()
+    pub(crate) fn slash_popup(&self) -> Option<SlashCommandsView<'_>> {
+        self.slash_commands.view()
     }
 
     pub(crate) fn mention_popup(&self) -> Option<MentionPopupView<'_>> {
@@ -226,7 +223,7 @@ impl ChatComposer {
     }
 
     pub(crate) fn activate_slash_command(&mut self, index: usize) -> Option<ComposerOutcome> {
-        let command = self.slash_popup.command_at(index)?;
+        let command = self.slash_commands.command_at(index)?.clone();
         self.complete_slash_command(&command);
         Some(self.submit())
     }
@@ -243,8 +240,7 @@ impl ChatComposer {
         let Some(submission) = self.prepare_submission() else {
             return ComposerOutcome::Consumed;
         };
-        let command = SlashInput::for_submission(&submission.display_text, &self.slash_commands)
-            .submission_command();
+        let command = self.slash_commands.invocation(&submission.display_text);
         self.clear();
         match command {
             Some(command) => match into_command_invocation(submission, command) {
@@ -288,20 +284,15 @@ impl ChatComposer {
 
     fn clear(&mut self) {
         self.textarea.clear();
-        self.slash_popup.clear();
+        self.slash_commands.clear();
         self.slash_command_element = None;
         self.mentions.clear();
         self.pending_pastes.clear();
         self.attachments.clear();
     }
 
-    fn complete_slash_command(&mut self, command: &SlashCommandItem) -> bool {
-        let Some(completion) = SlashInput::at_cursor(
-            self.textarea.text(),
-            self.textarea.cursor(),
-            &self.slash_commands,
-        )
-        .completion(command) else {
+    fn complete_slash_command(&mut self, command: &SlashCommandDefinition) -> bool {
+        let Some(completion) = self.slash_commands.completion(command) else {
             return false;
         };
         self.textarea
@@ -316,23 +307,17 @@ impl ChatComposer {
         self.sync_slash_command_element();
         self.mentions.sync_textarea(&self.textarea);
         if self.slash_command_element.is_some() {
-            self.slash_popup.clear();
+            self.slash_commands.clear();
         } else {
-            self.slash_popup.sync_input(
-                self.textarea.text(),
-                self.textarea.cursor(),
-                &self.slash_commands,
-            );
+            self.slash_commands
+                .sync_input(self.textarea.text(), self.textarea.cursor());
         }
     }
 
     fn sync_slash_command_element(&mut self) {
-        let desired = SlashInput::at_cursor(
-            self.textarea.text(),
-            self.textarea.cursor(),
-            &self.slash_commands,
-        )
-        .command_element_range();
+        let desired = self
+            .slash_commands
+            .command_element_range(self.textarea.text(), self.textarea.cursor());
 
         if let Some(element_id) = self.slash_command_element {
             let current = self.textarea.element_range(element_id);
@@ -353,7 +338,7 @@ fn into_command_invocation(
     mut submission: ComposerSubmission,
     parsed: ParsedSlashCommand,
 ) -> Result<SlashCommandInvocation, ComposerSubmission> {
-    let command_prefix = format!("/{}", parsed.command.command());
+    let command_prefix = format!("/{}", parsed.command.name);
     let Some(ComposerInput::Text(first_text)) = submission.input.first_mut() else {
         return Err(submission);
     };
@@ -369,6 +354,7 @@ fn into_command_invocation(
 
     Ok(SlashCommandInvocation {
         command: parsed.command,
+        origin: parsed.origin,
         display_arguments: submission.display_text[parsed.arguments_range].to_owned(),
         arguments: submission.input,
     })

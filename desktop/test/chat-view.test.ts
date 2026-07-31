@@ -127,6 +127,7 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
     contextMenuService,
     viewDescriptors,
     contextKeys,
+    commands,
   );
   dom.window.document.body.append(pane.element);
 
@@ -270,12 +271,11 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
   assert.equal(firstChatPane.querySelector<HTMLButtonElement>("[data-action-id='zeta.chat.input.mode'] button")?.textContent, "Plan");
   assert.deepEqual([...chatPanes].map((chatPane) => chatPane.hidden), [false, true]);
   const composerInputs = [...chatPanes].map((chatPane) => {
-    const input = chatPane.querySelector<HTMLTextAreaElement>(".zeta-chat-input-widget textarea");
+    const input = chatPane.querySelector<HTMLTextAreaElement>(".zeta-alpha-editor-input");
     assert.ok(input);
     return input;
   });
-  composerInputs[0].value = "First draft";
-  composerInputs[0].dispatchEvent(new dom.window.Event("input"));
+  typeAlphaText(dom.window, composerInputs[0], "First draft");
   assert.equal(firstChatPane.querySelector<HTMLButtonElement>("[data-action-id='zeta.chat.input.send'] button")?.disabled, false);
 
   tabs?.[1]?.click();
@@ -287,12 +287,12 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
     ["false", "true"],
   );
   assert.deepEqual([...chatPanes].map((chatPane) => chatPane.hidden), [true, false]);
-  composerInputs[1].value = "Second draft";
+  typeAlphaText(dom.window, composerInputs[1], "Second draft");
   pane.element.querySelectorAll<HTMLButtonElement>("[role='tab']")[0]?.click();
   assert.equal(sessions.active?.session.sessionId, "session-1");
   assert.deepEqual([...chatPanes].map((chatPane) => chatPane.hidden), [false, true]);
-  assert.equal(composerInputs[0].value, "First draft");
-  assert.equal(composerInputs[1].value, "Second draft");
+  assert.equal(chatPanes[0]?.querySelector(".zeta-alpha-editor-line-text")?.textContent, "First draft");
+  assert.equal(chatPanes[1]?.querySelector(".zeta-alpha-editor-line-text")?.textContent, "Second draft");
 
   const closeButtons = pane.element.querySelectorAll<HTMLButtonElement>(
     `[data-action-id="${TAB_CLOSE_ACTION_ID}"] button`,
@@ -330,7 +330,7 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
   dom.window.close();
 });
 
-test("New Chat creates and activates a dedicated Session pane", async () => {
+test("The New Chat slash command creates and activates a dedicated Session pane", async () => {
   const dom = new JSDOM("<!doctype html><body></body>");
   const initialSession = session("session-1", "thread-1", "First Chat");
   const createdSession = session("session-2", undefined, "New Chat");
@@ -376,6 +376,7 @@ test("New Chat creates and activates a dedicated Session pane", async () => {
     contextMenuService,
     viewDescriptors,
     contextKeys,
+    commands,
   );
   dom.window.document.body.append(pane.element);
 
@@ -383,8 +384,13 @@ test("New Chat creates and activates a dedicated Session pane", async () => {
   await nextTask();
   assert.equal(pane.element.querySelectorAll("[role='tab']").length, 1);
 
-  await commands.executeCommand(NEW_CHAT_COMMAND_ID);
-  await nextTask();
+  const chatInput = pane.element.querySelector<HTMLTextAreaElement>(".zeta-chat:not([hidden]) .zeta-alpha-editor-input");
+  assert.ok(chatInput);
+  typeAlphaText(dom.window, chatInput, "/new");
+  assert.equal(pane.element.querySelector("[data-action-id='zeta.chat.input.command'] button")?.textContent, "Command");
+  assert.equal(pane.element.querySelector<HTMLButtonElement>("[data-action-id='zeta.chat.input.send'] button")?.disabled, false);
+  chatInput.dispatchEvent(new dom.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Enter" }));
+  await waitFor(() => pane.element.querySelectorAll("[role='tab']").length === 2);
 
   const tabs = pane.element.querySelectorAll<HTMLButtonElement>("[role='tab']");
   assert.equal(tabs.length, 2);
@@ -452,6 +458,7 @@ test("one Session retains one Chat pane while its selected Thread changes", asyn
     contextMenuService,
     viewDescriptors,
     contextKeys,
+    commands,
   );
   dom.window.document.body.append(pane.element);
 
@@ -751,6 +758,7 @@ function fakeApi(options: FakeOptions = {}): {
   const api = {
     appServer: {
       getConnectionState: async () => "ready" as const,
+      getSlashCommands: async () => [],
       onConnectionState: () => ({ dispose() {} }),
     },
     session: {
@@ -853,6 +861,23 @@ function thread(agentText?: string): Thread {
   };
 }
 
+function typeAlphaText(targetWindow: typeof browserEnvironment.window, input: HTMLTextAreaElement, text: string): void {
+  input.dispatchEvent(new targetWindow.InputEvent("beforeinput", {
+    bubbles: true,
+    cancelable: true,
+    data: text,
+    inputType: "insertText",
+  }));
+}
+
 function nextTask(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+async function waitFor(predicate: () => boolean): Promise<void> {
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    if (predicate()) return;
+    await nextTask();
+  }
+  assert.fail("Timed out waiting for Chat view state");
 }

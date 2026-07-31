@@ -7,9 +7,9 @@ use crate::components::selection::SelectionItem;
 use crate::components::selection::SelectionTab;
 use crate::components::selection::SelectionViewModel;
 use crate::features::workspace_files::FileSearchManager;
-use crate::ui::COMPOSER_CHROME;
-use crate::ui::HIGHLIGHT;
-use crate::ui::MUTED;
+use crate::ui::composer_chrome;
+use crate::ui::highlight;
+use crate::ui::muted;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
@@ -51,7 +51,7 @@ fn status_line_renders_workspace_context_above_the_composer() {
         .collect::<String>();
 
     assert!(status_row.contains("/work/zeta"));
-    assert_eq!(buffer[(77, 15)].fg, COMPOSER_CHROME);
+    assert_eq!(buffer[(77, 15)].fg, composer_chrome());
 }
 
 #[test]
@@ -60,12 +60,12 @@ fn composer_uses_light_gray_edge_to_edge_horizontal_rules_and_prompt() {
 
     for y in [16, 18] {
         assert_eq!(buffer[(0, y)].symbol(), "─");
-        assert_eq!(buffer[(0, y)].fg, COMPOSER_CHROME);
+        assert_eq!(buffer[(0, y)].fg, composer_chrome());
         assert_eq!(buffer[(79, y)].symbol(), "─");
-        assert_eq!(buffer[(79, y)].fg, COMPOSER_CHROME);
+        assert_eq!(buffer[(79, y)].fg, composer_chrome());
     }
     assert_eq!(buffer[(0, 17)].symbol(), "❯");
-    assert_eq!(buffer[(0, 17)].fg, COMPOSER_CHROME);
+    assert_eq!(buffer[(0, 17)].fg, composer_chrome());
     assert_eq!(buffer[(79, 17)].symbol(), " ");
 }
 
@@ -151,10 +151,10 @@ fn slash_popup_uses_gray_text_and_a_foreground_only_selection_highlight() {
     let selected = &buffer[(2, 9)];
     let unselected = &buffer[(2, 10)];
 
-    assert_eq!(selected.fg, HIGHLIGHT);
+    assert_eq!(selected.fg, highlight());
     assert_eq!(selected.bg, Color::Reset);
     assert!(!selected.modifier.contains(Modifier::BOLD));
-    assert_eq!(unselected.fg, MUTED);
+    assert_eq!(unselected.fg, muted());
     assert_eq!(unselected.bg, Color::Reset);
 }
 
