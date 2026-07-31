@@ -1,5 +1,6 @@
 use super::{Edit, edits};
-use crate::{DiffLimits, NeverCancel};
+use crate::{DiffCancellation, DiffError, DiffLimits, NeverCancel};
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 #[test]
 fn exhaustive_small_sequences_produce_a_shortest_ordered_edit_script() {
@@ -17,6 +18,45 @@ fn exhaustive_small_sequences_produce_a_shortest_ordered_edit_script() {
                 "old={old:?}, new={new:?}, script={script:?}"
             );
         }
+    }
+}
+
+#[test]
+fn empty_side_respects_the_edit_distance_limit() {
+    let limits = DiffLimits::default().with_max_edit_distance(0);
+
+    assert_eq!(
+        edits(&[] as &[u8], &[1], limits, &NeverCancel),
+        Err(DiffError::EditDistanceLimit { limit: 0 })
+    );
+    assert_eq!(
+        edits(&[1], &[] as &[u8], limits, &NeverCancel),
+        Err(DiffError::EditDistanceLimit { limit: 0 })
+    );
+}
+
+#[test]
+fn empty_side_observes_cancellation_while_building_the_edit_script() {
+    struct CancelAfter {
+        calls: AtomicUsize,
+        allowed_calls: usize,
+    }
+
+    impl DiffCancellation for CancelAfter {
+        fn is_cancelled(&self) -> bool {
+            self.calls.fetch_add(1, Ordering::Relaxed) >= self.allowed_calls
+        }
+    }
+
+    for (old, new) in [(Vec::new(), vec![1; 2_048]), (vec![1; 2_048], Vec::new())] {
+        let cancellation = CancelAfter {
+            calls: AtomicUsize::new(0),
+            allowed_calls: 1,
+        };
+        assert_eq!(
+            edits(&old, &new, DiffLimits::default(), &cancellation),
+            Err(DiffError::Cancelled)
+        );
     }
 }
 

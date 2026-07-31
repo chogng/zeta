@@ -17,10 +17,10 @@ pub(crate) fn edits<T: Eq>(
         return Err(DiffError::Cancelled);
     }
     if old.is_empty() {
-        return Ok((0..new.len()).map(|new| Edit::Insert { new }).collect());
+        return linear_edits(new.len(), |new| Edit::Insert { new }, limits, cancellation);
     }
     if new.is_empty() {
-        return Ok((0..old.len()).map(|old| Edit::Delete { old }).collect());
+        return linear_edits(old.len(), |old| Edit::Delete { old }, limits, cancellation);
     }
 
     let n = old.len() as isize;
@@ -108,6 +108,27 @@ pub(crate) fn edits<T: Eq>(
         final_depth.expect("bounded Myers search reaches its terminal diagonal"),
         &trace,
     ))
+}
+
+fn linear_edits(
+    length: usize,
+    edit: impl Fn(usize) -> Edit,
+    limits: DiffLimits,
+    cancellation: &dyn DiffCancellation,
+) -> Result<Vec<Edit>, DiffError> {
+    if length > limits.max_edit_distance() {
+        return Err(DiffError::EditDistanceLimit {
+            limit: limits.max_edit_distance(),
+        });
+    }
+    let mut edits = Vec::with_capacity(length);
+    for index in 0..length {
+        if index > 0 && index & 1023 == 0 && cancellation.is_cancelled() {
+            return Err(DiffError::Cancelled);
+        }
+        edits.push(edit(index));
+    }
+    Ok(edits)
 }
 
 fn reconstruct(
