@@ -70,6 +70,14 @@ impl ShellPalette {
     }
 
     pub(crate) fn terminal_scroll_view_style(self) -> ScrollViewStyle {
+        self.overlay_scroll_view_style()
+    }
+
+    pub(crate) fn file_list_scroll_view_style(self) -> ScrollViewStyle {
+        self.overlay_scroll_view_style()
+    }
+
+    fn overlay_scroll_view_style(self) -> ScrollViewStyle {
         ScrollViewStyle::new(
             ScrollbarStyle::new(Color::TRANSPARENT, Color::rgba(126, 126, 132, 128))
                 .with_hovered_colors(

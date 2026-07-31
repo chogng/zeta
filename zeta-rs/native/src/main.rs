@@ -49,6 +49,7 @@ mod commands;
 mod composer_editor;
 mod editor_pane;
 mod explorer_pane;
+mod explorer_tree;
 mod git_branch_context_menu;
 mod git_branch_context_menu_input;
 mod input_context_toolbar;
@@ -429,6 +430,9 @@ impl NativeApp {
     }
 
     fn activate_shell_element(&mut self, id: zeta_ui_dispatch::ElementId) {
+        if self.agent_sidebar_workspace.activate_file_tree_element(id) {
+            return;
+        }
         if self.agent_sidebar_workspace.toggle_multi_diff_fold(id) {
             return;
         }

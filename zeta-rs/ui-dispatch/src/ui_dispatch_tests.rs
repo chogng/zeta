@@ -3,9 +3,9 @@
 use zeta_ui::{Point, Rect};
 
 use super::{
-    AccessibilityRole, CursorFeedback, DispatchInvalidation, ElementId, FocusBehavior,
-    FocusDirection, InteractionFrame, NavigationAxis, NavigationGroupId, NodeAction, UiDispatch,
-    UiIntent, UiNode,
+    AccessibilityExpansion, AccessibilityRole, CursorFeedback, DispatchInvalidation, ElementId,
+    FocusBehavior, FocusDirection, InteractionFrame, NavigationAxis, NavigationGroupId, NodeAction,
+    UiDispatch, UiIntent, UiNode,
 };
 
 const ROOT: ElementId = ElementId::scoped(1, 1);
@@ -170,6 +170,35 @@ fn keyboard_activation_and_accessibility_use_the_focused_node_identity() {
     assert!(button.focusable);
     assert!(button.focused);
     assert_eq!(button.bounds, Rect::from_xywh(20.0, 80.0, 60.0, 24.0));
+}
+
+#[test]
+fn tree_item_accessibility_retains_level_and_expansion() {
+    let tree = ElementId::scoped(2, 1);
+    let item = ElementId::scoped(2, 2);
+    let mut frame = InteractionFrame::default();
+    frame.register(UiNode::new(
+        tree,
+        Rect::from_xywh(0.0, 0.0, 200.0, 100.0),
+        AccessibilityRole::Tree,
+        "Files",
+    ));
+    frame.register(
+        UiNode::new(
+            item,
+            Rect::from_xywh(0.0, 0.0, 200.0, 24.0),
+            AccessibilityRole::TreeItem,
+            "src",
+        )
+        .with_parent(tree)
+        .with_level(2)
+        .with_expansion(AccessibilityExpansion::Expanded),
+    );
+
+    let nodes = frame.accessibility_nodes(&UiDispatch::default());
+    let item = nodes.iter().find(|node| node.id == item).unwrap();
+    assert_eq!(item.level, Some(2));
+    assert_eq!(item.expansion, AccessibilityExpansion::Expanded);
 }
 
 #[test]

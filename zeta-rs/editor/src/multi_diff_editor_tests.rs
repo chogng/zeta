@@ -274,3 +274,48 @@ fn measured_layout_reuses_section_metrics_for_scrolling_and_paint() {
             .any(|block| block.text() == "line 8")
     );
 }
+
+#[test]
+fn measured_layout_indexes_variable_section_heights_and_spacing() {
+    let small = document("old", "new");
+    let large_original = (0..40)
+        .map(|line| format!("old line {line}"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let large_modified = (0..40)
+        .map(|line| format!("new line {line}"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let large = document(&large_original, &large_modified);
+    let items = [
+        MultiDiffEditorItem::new(
+            "small.rs",
+            &small,
+            DiffEditorState::default(),
+            DiffEditorLabels::new("base", "working"),
+        ),
+        MultiDiffEditorItem::new(
+            "large.rs",
+            &large,
+            DiffEditorState::default(),
+            DiffEditorLabels::new("base", "working"),
+        ),
+    ];
+
+    let measured = MultiDiffEditor::new(
+        Rect::from_xywh(0.0, 0.0, 320.0, 120.0),
+        &items,
+        ScrollState::default(),
+        MultiDiffEditorStyle::light_cards(),
+    )
+    .with_diff_presentation(DiffEditorPresentation::Unified)
+    .measure_layout();
+
+    let small_height = measured.sections.item_extent(0).unwrap();
+    let large_height = measured.sections.item_extent(1).unwrap();
+    assert!(large_height > small_height);
+    assert_eq!(
+        measured.content_height(),
+        8.0 + small_height + 8.0 + large_height + 8.0
+    );
+}

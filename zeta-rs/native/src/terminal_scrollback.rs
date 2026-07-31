@@ -4,7 +4,8 @@ use zeta_ui::{ScrollbarController, ScrollbarPresentation};
 use zeta_winit::MouseScrollDelta;
 
 use crate::NativeApp;
-use crate::shell_interaction::MULTI_DIFF_EDITOR;
+use crate::explorer_pane::FILE_LIST_ROW_HEIGHT;
+use crate::shell_interaction::{AGENT_EXPLORER_PANE, MULTI_DIFF_EDITOR};
 use crate::terminal_projection::scroll_limit;
 
 const LINES_PER_WHEEL_STEP: f32 = 3.0;
@@ -88,6 +89,9 @@ impl NativeApp {
         if self.route_multi_diff_wheel(delta) {
             return;
         }
+        if self.route_file_list_wheel(delta) {
+            return;
+        }
         if self.route_thread_timeline_wheel(delta) {
             return;
         }
@@ -156,6 +160,40 @@ impl NativeApp {
         true
     }
 
+    fn route_file_list_wheel(&mut self, delta: MouseScrollDelta) -> bool {
+        let Some(point) = self.cursor_position else {
+            return false;
+        };
+        let Some(presentation) = self.presentation.as_ref() else {
+            return false;
+        };
+        let Some(target) = presentation.interaction_frame.target_at(point) else {
+            return false;
+        };
+        if !presentation
+            .interaction_frame
+            .ancestry(target)
+            .contains(&AGENT_EXPLORER_PANE)
+        {
+            return false;
+        }
+        let Some(viewport) = presentation
+            .accessibility_nodes
+            .iter()
+            .find(|node| node.id == AGENT_EXPLORER_PANE)
+            .map(|node| node.bounds.size)
+        else {
+            return false;
+        };
+        let changed = self
+            .agent_sidebar_workspace
+            .scroll_file_list(file_list_scroll_pixels(delta), viewport);
+        if changed {
+            self.rebuild_presentation_on_next_redraw();
+        }
+        true
+    }
+
     pub(super) fn terminal_scroll_limit(&self) -> usize {
         self.terminal
             .as_ref()
@@ -173,6 +211,15 @@ fn multi_diff_scroll_pixels(delta: MouseScrollDelta) -> f32 {
     match delta {
         MouseScrollDelta::LineDelta(_, vertical) => {
             -vertical * LINES_PER_WHEEL_STEP * MULTI_DIFF_PIXELS_PER_LINE
+        }
+        MouseScrollDelta::PixelDelta(position) => -position.y as f32,
+    }
+}
+
+fn file_list_scroll_pixels(delta: MouseScrollDelta) -> f32 {
+    match delta {
+        MouseScrollDelta::LineDelta(_, vertical) => {
+            -vertical * LINES_PER_WHEEL_STEP * FILE_LIST_ROW_HEIGHT
         }
         MouseScrollDelta::PixelDelta(position) => -position.y as f32,
     }

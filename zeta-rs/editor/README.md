@@ -31,7 +31,7 @@ undo/redo、IME composition、语法 token、代码行与视口绘制，以及�
 | `DiffEditorFoldControl` | public | 向产品宿主发布可见未修改区间的行数、状态与命中 bounds |
 | `MultiDiffEditor` | public | 把多个文件标题和 `DiffEditor` section 组合为一个纵向裁剪 surface |
 | `MultiDiffEditorItem` | public | 为一帧借用文件名、`DiffDocument`、两侧标签和该文件的 `DiffEditorState` |
-| `MultiDiffEditorLayout` | public | 缓存一个精确 item/state/presentation snapshot 的 section heights 与总内容高度，供高频滚动复用 |
+| `MultiDiffEditorLayout` | public | 用 `zeta-ui::VirtualListLayout` 缓存精确 item/state/presentation snapshot 的可变 section heights、prefix index 与总内容高度，供高频滚动复用 |
 | `zeta-ui::ScrollState` | delegated | 保存 MultiDiffEditor 整体 logical-pixel offset；clamp 与 transition 由通用滚动基座执行 |
 | `MultiDiffEditorStyle` | public | 拥有文件 header、section 间距与嵌套 DiffEditor 样式 |
 | `DiffSideRows` | private | 把 `DiffDocument` 的一侧惰性转换为 `CodeEditorRow` |
@@ -82,7 +82,8 @@ MultiDiffEditor::paint
 ├─ ScrollView::draw
 │  ├─ viewport clip / content origin
 │  └─ hover/active/fading scrollbar chrome
-└─ visible MultiDiffEditorItem
+├─ VirtualListLayout::visible_range → prefix-height binary search
+└─ visible MultiDiffEditorItem only
    ├─ file header
    └─ DiffEditor → selected SideBySide or Unified presentation
 ```
@@ -97,7 +98,9 @@ selection 与 caret 共用同一坐标系。
 
 Unified projection 以 `DiffDocument::hunks` 的间隙作为可折叠区间，只保存少量 source segment
 和 `Modified` source-row index。展开超大未修改区间不会物化等量 `CodeEditorRow`；可见行通过
-二分映射回 source row。`MultiDiffEditor` 在一个 presentation 实例内缓存每文件 section height；
+二分映射回 source row。`MultiDiffEditor` 在一个 presentation 实例内通过
+`VirtualListLayout` 缓存每文件 section height 与 prefix index；paint 和 fold-control 查询都先
+二分定位可见 section，不再从首个文件线性累加 offset。
 高频输入宿主可继续保留 `measure_layout` 结果，使 scroll metrics、fold-control geometry 和 paint
 跨 presentation rebuild 共用同一组高度。item、document、`DiffEditorState`、style 或 presentation
 变化时必须重新测量。
@@ -140,7 +143,8 @@ cargo clippy --manifest-path zeta-rs/Cargo.toml -p zeta-editor --all-targets -- 
 测试覆盖 LF/CRLF/CR 行索引、多行 Unicode 编辑、跨行列导航、选择替换、有界撤销/重做、IME
 预编辑与提交、语法前景 token、caret/selection/composition 绘制、viewport、Tab/Unicode 列宽和
 无效 UTF-8 range，DiffEditor 的双 pane 映射、Unified 单列映射、字符级高亮和长未修改区间
-展开/收起，以及 MultiDiffEditor 的多文件 section、每文件 fold-control identity、整体纵向滚动与
+展开/收起，以及 MultiDiffEditor 的可变高度多文件 section、prefix-index viewport 定位、
+每文件 fold-control identity、整体纵向滚动与
 超大单文件的紧凑行映射与 row-level viewport culling。
 
 修改 `CodeEditorRowSource` 或 `CodeEditorRow` 必须同步检查普通文档和 `DiffSideRows`；修改显示列
@@ -152,6 +156,7 @@ cargo clippy --manifest-path zeta-rs/Cargo.toml -p zeta-editor --all-targets -- 
 当前 history 使用完整 snapshot 且不做 typing coalescing；syntax highlighter 是同步逐行 contract，
 异步 parser 的 revision binding 仍由 host 负责。clipboard command、自动缩进、多光标、find/replace、
 语言级函数/类型代码折叠、minimap、diagnostics 和 EditorHost 尚未完成。Unified DiffEditor 已拥有
-纯 diff 语义的未修改区间折叠；它不会把这套规则放进普通 CodeEditor。MultiDiffEditor section 高度随 diff row
-数量增长；完全不可见的文件会被剔除，部分可见的超大单文件只投影外层 viewport 内的行。
+纯 diff 语义的未修改区间折叠；它不会把这套规则放进普通 CodeEditor。MultiDiffEditor section
+高度随 diff row 数量增长，并用可变高度 prefix index 二分剔除完全不可见的文件；部分可见的
+超大单文件只投影外层 viewport 内的行。
 section 折叠仍由后续宿主接线完成。

@@ -5,8 +5,8 @@ mod types;
 pub use dispatch::{DispatchInvalidation, DispatchOutcome, FocusDirection, UiDispatch};
 pub use frame::{AccessibilityNode, InteractionFrame, UiNode};
 pub use types::{
-    AccessibilityRole, AccessibilitySelection, CursorFeedback, ElementId, FocusBehavior,
-    NavigationAxis, NavigationGroupId, NodeAction, UiIntent,
+    AccessibilityExpansion, AccessibilityRole, AccessibilitySelection, CursorFeedback, ElementId,
+    FocusBehavior, NavigationAxis, NavigationGroupId, NodeAction, UiIntent,
 };
 
 #[cfg(test)]

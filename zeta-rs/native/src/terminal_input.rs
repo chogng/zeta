@@ -7,6 +7,7 @@ use zeta_winit::{ElementState, Key, KeyEvent, ModifiersState, NamedKey};
 
 use crate::NativeApp;
 use crate::agent_composer::{ComposerMode, ComposerSubmission};
+use crate::explorer_tree::ExplorerTreeNavigation;
 use crate::keybindings::{
     NativeKeybindingContext, NativeKeybindingFacts, NativeKeybindingResolution,
 };
@@ -126,6 +127,9 @@ impl NativeApp {
     }
 
     fn dispatch_primary_keyboard_input(&mut self, event: &KeyEvent) -> bool {
+        if self.route_file_tree_keyboard(event) {
+            return true;
+        }
         let Some(presentation) = self.presentation.as_ref() else {
             return false;
         };
@@ -178,6 +182,43 @@ impl NativeApp {
             return false;
         };
         self.apply_dispatch_outcome(outcome);
+        true
+    }
+
+    fn route_file_tree_keyboard(&mut self, event: &KeyEvent) -> bool {
+        let Some(focused) = self.ui_dispatch.focused() else {
+            return false;
+        };
+        let navigation = match &event.logical_key {
+            Key::Named(NamedKey::ArrowRight) => self
+                .agent_sidebar_workspace
+                .navigate_file_tree_right(focused),
+            Key::Named(NamedKey::ArrowLeft) => self
+                .agent_sidebar_workspace
+                .navigate_file_tree_left(focused),
+            _ => return false,
+        };
+        let Some(navigation) = navigation else {
+            return false;
+        };
+        match navigation {
+            ExplorerTreeNavigation::Handled => {}
+            ExplorerTreeNavigation::StateChanged => {
+                self.rebuild_presentation();
+                self.request_redraw();
+            }
+            ExplorerTreeNavigation::Focus(target) => {
+                let outcome = self
+                    .presentation
+                    .as_ref()
+                    .map(|presentation| {
+                        self.ui_dispatch
+                            .focus_element(&presentation.interaction_frame, target)
+                    })
+                    .unwrap_or_default();
+                self.apply_dispatch_outcome(outcome);
+            }
+        }
         true
     }
 

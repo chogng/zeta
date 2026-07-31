@@ -66,6 +66,10 @@ pub enum AccessibilityRole {
     Button,
     TextInput,
     Terminal,
+    List,
+    ListItem,
+    Tree,
+    TreeItem,
     TabList,
     Tab,
     ScrollBar,
@@ -79,4 +83,12 @@ pub enum AccessibilitySelection {
     NotApplicable,
     Selected,
     Unselected,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum AccessibilityExpansion {
+    #[default]
+    NotApplicable,
+    Collapsed,
+    Expanded,
 }

@@ -1,8 +1,8 @@
 use zeta_ui::{Point, Rect};
 
 use super::{
-    AccessibilityRole, AccessibilitySelection, CursorFeedback, ElementId, FocusBehavior,
-    NavigationAxis, NavigationGroupId, NodeAction, UiDispatch,
+    AccessibilityExpansion, AccessibilityRole, AccessibilitySelection, CursorFeedback, ElementId,
+    FocusBehavior, NavigationAxis, NavigationGroupId, NodeAction, UiDispatch,
 };
 
 #[derive(Clone, Debug, PartialEq)]
@@ -18,6 +18,8 @@ pub struct UiNode {
     label: String,
     value: Option<String>,
     selection: AccessibilitySelection,
+    level: Option<usize>,
+    expansion: AccessibilityExpansion,
 }
 
 impl UiNode {
@@ -39,6 +41,8 @@ impl UiNode {
             label: label.into(),
             value: None,
             selection: AccessibilitySelection::NotApplicable,
+            level: None,
+            expansion: AccessibilityExpansion::NotApplicable,
         }
     }
 
@@ -74,6 +78,16 @@ impl UiNode {
 
     pub const fn with_selection(mut self, selection: AccessibilitySelection) -> Self {
         self.selection = selection;
+        self
+    }
+
+    pub const fn with_level(mut self, level: usize) -> Self {
+        self.level = Some(level);
+        self
+    }
+
+    pub const fn with_expansion(mut self, expansion: AccessibilityExpansion) -> Self {
+        self.expansion = expansion;
         self
     }
 
@@ -196,6 +210,8 @@ impl InteractionFrame {
                 label: node.label.clone(),
                 value: node.value.clone(),
                 selection: node.selection,
+                level: node.level,
+                expansion: node.expansion,
                 bounds: node.bounds,
                 focusable: self.is_in_active_scope(node.id) && node.focus == FocusBehavior::TabStop,
                 focused: self.is_in_active_scope(node.id) && dispatch.is_focused(node.id),
@@ -215,4 +231,6 @@ pub struct AccessibilityNode {
     pub focusable: bool,
     pub focused: bool,
     pub selection: AccessibilitySelection,
+    pub level: Option<usize>,
+    pub expansion: AccessibilityExpansion,
 }

@@ -41,6 +41,7 @@ product host → zeta-ui-dispatch → zeta-ui geometry
 | `UiNode` | public | 绑定一帧中的 bounds、parent、cursor、focus policy、action、navigation group 与 semantics |
 | `CursorFeedback::ResizeHorizontal` / `AccessibilityRole::Separator` | public | 投影 Sash 的横向尺寸调整 cursor 与 separator 语义；不拥有 drag state 或 Pane 尺寸 |
 | `AccessibilityRole::Menu` / `MenuItem` | public | 投影菜单父子语义；不拥有打开、关闭、焦点恢复或产品 command |
+| `AccessibilityRole::Tree` / `TreeItem`、`AccessibilityExpansion` | public | 投影虚拟 Tree 的父项、可见节点、层级和展开状态；不持有 hierarchy 或 child loading |
 | `InteractionFrame::register` | public | 按 scene/paint 顺序记录节点；同一 identity 每帧只能注册一次 |
 | `InteractionFrame::set_modal_root` | public | 把 pointer target 与 focus order 限定在一个已注册子树；下层节点在该 frame 内保持 inert |
 | `InteractionFrame::target_at` | public | 逆序选择最上层命中节点 |
@@ -83,6 +84,8 @@ product layout + component geometry
 - Sash 使用 `zeta-ui::Sash::interaction_bounds` 注册 `Separator` 与对应 resize cursor；当前
   product host 单独保存 drag snapshot，不把 Pane 尺寸放进 `UiDispatch`；
 - Toolbar、TabList 等使用稳定 `NavigationGroupId`，并明确水平或垂直轴；
+- Tree host 给可见节点注册 `TreeItem`、1-based level 与 branch expansion；虚拟化节点可统一以
+  `Tree` 为 parent，产品 host 仍须保留跨 viewport 的稳定 identity；
 - product host 负责把 `UiIntent` 映射到 command，crate 不接收 callback registry；
 - accessibility adapter 必须发布 `AccessibilityNode`，不能建立第二套 focus 或 selection。
 

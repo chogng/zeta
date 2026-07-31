@@ -27,7 +27,9 @@ shaping 或 glyph rasterization。
 | 单轴 Pane 约束分配、可见几何、Sash track 与拖动快照 | `zeta-ui::SplitViewLayout` | ✅；跨帧首选尺寸与显隐状态归 host |
 | 递归 Split 拓扑输入、Leaf/Split bounds 与 Sash 路由 | `zeta-ui::GridLayout` | ✅；树、稳定 ID、产品绑定与拓扑变更归 host |
 | Sash 命中几何与 hover/active 反馈线 | `zeta-ui::Sash` | ✅；pointer capture、identity 与 resize transition 归 host |
-| 通用像素滚动状态、viewport 裁剪、内容坐标与滚动条交互 geometry | `zeta-ui::ScrollState` / `ScrollView` | ✅；包含 hover/active/fade presentation、thumb drag mapping 和 track paging；平台事件路由、pointer capture、产品内容与 virtualization 归 host |
+| 通用像素滚动状态、viewport 裁剪、内容坐标与滚动条交互 geometry | `zeta-ui::ScrollState` / `ScrollView` | ✅；包含 hover/active/fade presentation、thumb drag mapping 和 track paging；平台事件路由、pointer capture 与产品内容归 host |
+| 固定/可变高度列表测量、可见/overscan range、item bounds、hit-test 与虚拟化绘制 | `zeta-ui::VirtualListLayout` / `ListView` | ✅；固定高度直接计算，可变高度使用 prefix index 二分定位；identity、selection、键盘语义与产品数据归 host |
+| 虚拟 Tree 行、层级缩进、disclosure/content geometry 与命中 | `zeta-ui::TreeView` | ✅；复用固定高度 ListView；hierarchy、稳定节点 identity、展开状态和 child loading 归 host |
 | 锚点浮层布局、viewport 翻转/约束、通用外壳与浮层合成 | `zeta-ui::ContextView` / `UiScene::with_overlay` | ✅；显示生命周期、关闭和输入路由归 host |
 | 柔和阴影、2px padding、4px radius、纵向 menu item geometry 与默认选择 | `zeta-ui::ContextMenu` | ✅；组合 ContextView/ActionBar，产品 identity、关闭与 command 归 host |
 | 无边框、无外层 padding 的锚定下拉项布局、可选 header 与默认选择 | `zeta-ui::Dropdown` | ✅；组合 ContextView/ActionBar，选中 identity、header 内容、关闭与 command 归 host |
@@ -92,6 +94,11 @@ DirectWrite 或 fontconfig 类型。
 | `components::scroll_view::{ScrollView, ScrollViewport}` | public | 约束有效 offset，裁剪调用方内容，并公开 translated content origin 与 visible content bounds |
 | `components::scroll_view::{ScrollbarLayout, ScrollbarHit, ScrollbarDrag}` | public | 以绘制所用的同一 track/thumb geometry 执行命中、轨道翻页和拖动到绝对 offset 的映射 |
 | `components::scroll_view::{ScrollbarController, ScrollbarPresentation, ScrollbarStyle}` | public | 计算 hover/active 与 fade-in/hold/fade-out deadline，选择语义颜色并绘制 overlay scrollbar；不安装 timer 或持有平台 pointer capture |
+| `components::list_view::{VirtualListLayout, ListView}` | public | 固定 extent 使用 O(1) geometry；可变 extent 保存 prefix index 并以 O(log n) 定位可见 range，组合 ScrollView 且只调用 projected item paint |
+| `components::list_view::ListContentPadding` | public | 显式表达列表 item sequence 前后的内容留白，不把 padding 混入首尾 item identity 或高度 |
+| `components::list_view::ListItemLayout` | public | 为一个 projected index 暴露 translated item bounds；不携带产品 identity 或内容 |
+| `components::tree_view::{TreeView, TreeViewStyle}` | public | 在 host-flattened visible node sequence 上组合 ListView，拥有 row extent、depth indentation、disclosure/content geometry 与虚拟化 |
+| `components::tree_view::{TreeItem, TreeItemExpansion, TreeItemLayout}` | public | 分别表达可见节点的 depth/Leaf/Collapsed/Expanded 结构状态，以及同源 row/disclosure/content bounds |
 | `components::context_menu::{ContextMenu, ContextMenuItem}` | public | 组合 ContextView 与纵向 ActionBar，绘制带柔和 BoxShadow 的无边框 menu surface，公开同源 item bounds/hit-test，并允许 host 在保留的 header row 中绘制搜索等产品内容 |
 | `components::context_menu::{ContextMenuSelection, ContextMenuStyle}` | public | 默认选择首个 enabled item；定义 surface color、item size/style、可选 header height 和锚点 placement，padding 固定为 2px、radius 固定为 4px |
 | `components::dropdown::{Dropdown, DropdownItem}` | public | 组合锚定浮层与纵向 label item，公开同源 item/interactive bounds、hit-test 和当前 selected index，并允许 host 在保留的 header row 中绘制搜索等产品内容 |
@@ -156,6 +163,8 @@ host
           ├─ Dropdown → ContextView + vertical ActionBar
           │   └─ selected item → Button selection presentation
           ├─ ScrollView → viewport clip + translated content geometry + interactive scrollbar chrome
+          ├─ ListView → ScrollView + fixed/variable-extent visible/overscan item projection
+          ├─ TreeView → fixed ListView + depth/disclosure/content item projection
           ├─ ActionBar → item bounds
           │   ├─ ActionBarButton → Button → icon/text primitives
           │   └─ Separator → rect primitive
@@ -260,9 +269,15 @@ Terminal Session、决定 split command 或跨帧修改树，说明 Grid ownersh
 Host 把平台 wheel、键盘或 scrollbar drag 归一化为 `ScrollCommand`，再使用同一
 `ScrollMetrics` 更新 retained state。`ScrollView::draw` 把调用方内容裁剪到 viewport，并通过
 `ScrollViewport` 返回 translated content origin 和 content-coordinate visible bounds；
-`ScrollbarLayout` 与最终 track/thumb paint 使用同一 geometry。内容高度、可见项
-virtualization、scroll anchoring、focus reveal policy 和交互 identity 仍归 composed control 或
-产品 host。Terminal 从底部计数和输出增长锚定不属于通用 `ScrollState`；Native 的
+`ScrollbarLayout` 与最终 track/thumb paint 使用同一 geometry。`ListView` 在这层基座上为固定
+或可变高度数据提供 content height、可见/overscan range、item bounds、point hit-test 和
+ensure-visible command；固定高度不分配逐项 geometry，可变高度保存 extent prefix index，
+通过二分查找定位 viewport。它只向 caller 请求 projected index，不拥有 item。高度重新测量、
+scroll anchoring、focus reveal policy 和交互 identity 仍归 composed control 或产品 host。
+`TreeView` 再把 host 已按展开状态扁平化的 visible node sequence 映射为固定高度 ListView
+items，计算 depth indentation 与 disclosure/content bounds；它不读取 children、不持有展开状态，
+也不生成产品节点 identity。
+Terminal 从底部计数和输出增长锚定不属于通用 `ScrollState`；Native 的
 `TerminalOutputScrollView` 只负责把该产品状态适配为 `ScrollView` 的顶部相对内容坐标。
 
 `ActionBar` 接收 caller-provided outer bounds，内部拥有 Button/Separator 的方向、间距和 item
@@ -321,7 +336,10 @@ bazel test //zeta-rs/ui:ui-unit-tests
 Sash track 和相邻 resize clamp，Grid 的横纵嵌套、隐藏子树、identity 校验与 owning-split
 Sash 路由，Sash 命中/反馈几何与状态绘制，ScrollState 的 axis clamp、绝对 offset、首尾和
 ensure-visible transition，ScrollView 的内容坐标、裁剪、visibility policy、比例 thumb geometry、
-track paging、thumb drag 映射、hover/active 颜色与 fade deadline，ContextView 的纵/横锚定、
+track paging、thumb drag 映射、hover/active 颜色与 fade deadline，ListView 的固定/可变高度
+visible/overscan range、prefix geometry、gap/padding、translated bounds、hit-test、ensure-visible
+与 projected-only paint，TreeView 的 depth/disclosure geometry、命中与 projected-only paint，
+ContextView 的纵/横锚定、
 翻转、对齐、viewport 约束、外壳/内容裁剪，Dropdown 的默认/显式选择、无外层 inset 与命中，
 ContextMenu 的柔和阴影、2px padding、4px radius、默认/显式选择与命中，ActionBar 排列与命中、
 TabList 横纵排列与
@@ -365,6 +383,11 @@ snapshot harness。
 - `ScrollView` 当前提供 overlay scrollbar 的同源 paint/hit/track-page/thumb-drag geometry，
   `ScrollbarController` 提供 hover/active/fade presentation；平台事件接线、pointer capture、
   滚动惯性、overscroll 和 accessibility adapter 仍由 host/dispatch 扩展；
+- `ListView` 支持固定和可变 item extent，但不测量 item 内容；caller 必须在高度改变时重建
+  layout。稳定 item identity、selection、键盘导航、滚动锚定、focus anchor 与 Tree
+  flatten/expand semantics 仍由 composed control 或后续专用组件拥有；
+- `TreeView` 只消费 host-flattened visible nodes；异步 child loading、展开状态持久化、稳定节点
+  identity、selection、重命名、拖放和文件打开仍属于产品 Tree model/host；
 - `SplitViewLayout` 当前是静态 slice 输入和单帧 geometry；`GridLayout` 递归组合这些
   Split，但仍是 caller tree 的单帧 projection，没有 add/remove/move、cached hidden size、
   active Pane、产品绑定或序列化 API；这些 retained topology/state 仍由 product host 拥有；

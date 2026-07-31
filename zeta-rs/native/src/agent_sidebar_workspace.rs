@@ -1,12 +1,19 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::mpsc::{Receiver, TryRecvError};
 use std::time::Instant;
 
 use zeta_file_search::{PathSearchHandle, PathSearchOptions, PathSearchSnapshot};
-use zeta_ui::{Point, Rect, Size, TextInput, TextInputCommand, TextInputCompositionEvent};
+use zeta_ui::{
+    Point, Rect, ScrollAxis, ScrollCommand, ScrollDelta, ScrollMetrics, ScrollState, Size,
+    TextInput, TextInputCommand, TextInputCompositionEvent, TreeItem, VirtualListLayout,
+};
 use zeta_ui_dispatch::ElementId;
 
 use crate::editor_pane::{EditorPaneState, ScrollbarPointerOutcome};
+use crate::explorer_pane::FILE_LIST_ROW_HEIGHT;
+#[cfg(test)]
+use crate::explorer_tree::ExplorerEntry;
+use crate::explorer_tree::{ExplorerTree, ExplorerTreeNavigation, ExplorerTreeRow};
 use crate::workspace_context::WorkspaceContext;
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -16,27 +23,11 @@ pub(crate) enum AgentSidebarView {
     Files,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct ExplorerEntry {
-    label: String,
-    directory: bool,
-}
-
-impl ExplorerEntry {
-    pub(crate) fn label(&self) -> &str {
-        &self.label
-    }
-
-    pub(crate) const fn is_directory(&self) -> bool {
-        self.directory
-    }
-}
-
 pub(crate) struct AgentSidebarWorkspace {
     active_view: AgentSidebarView,
     editor: EditorPaneState,
     root: Option<PathBuf>,
-    root_entries: Vec<ExplorerEntry>,
+    explorer_tree: ExplorerTree,
     file_search_input: TextInput,
     search_visible: bool,
     search_handle: Option<PathSearchHandle>,
@@ -44,6 +35,7 @@ pub(crate) struct AgentSidebarWorkspace {
     search_revision: u64,
     search_matches: Vec<PathBuf>,
     search_pending: bool,
+    file_list_scroll_state: ScrollState,
 }
 
 impl Default for AgentSidebarWorkspace {
@@ -52,7 +44,7 @@ impl Default for AgentSidebarWorkspace {
             active_view: AgentSidebarView::Files,
             editor: EditorPaneState::default(),
             root: None,
-            root_entries: Vec::new(),
+            explorer_tree: ExplorerTree::default(),
             file_search_input: TextInput::new(),
             search_visible: false,
             search_handle: None,
@@ -60,6 +52,7 @@ impl Default for AgentSidebarWorkspace {
             search_revision: 0,
             search_matches: Vec::new(),
             search_pending: false,
+            file_list_scroll_state: ScrollState::default(),
         }
     }
 }
@@ -87,8 +80,35 @@ impl AgentSidebarWorkspace {
         &self.editor
     }
 
-    pub(crate) fn root_entries(&self) -> &[ExplorerEntry] {
-        &self.root_entries
+    #[cfg(test)]
+    pub(crate) fn root_entries(&self) -> Vec<&ExplorerEntry> {
+        self.explorer_tree.root_entries()
+    }
+
+    pub(crate) fn file_tree_items(&self) -> &[TreeItem] {
+        self.explorer_tree.visible_items()
+    }
+
+    pub(crate) fn file_tree_row(&self, index: usize) -> Option<ExplorerTreeRow<'_>> {
+        self.explorer_tree.row(index)
+    }
+
+    pub(crate) fn activate_file_tree_element(&mut self, element: ElementId) -> bool {
+        self.explorer_tree.activate_element(element)
+    }
+
+    pub(crate) fn navigate_file_tree_right(
+        &mut self,
+        element: ElementId,
+    ) -> Option<ExplorerTreeNavigation> {
+        self.explorer_tree.navigate_right(element)
+    }
+
+    pub(crate) fn navigate_file_tree_left(
+        &mut self,
+        element: ElementId,
+    ) -> Option<ExplorerTreeNavigation> {
+        self.explorer_tree.navigate_left(element)
     }
 
     pub(crate) const fn search_visible(&self) -> bool {
@@ -103,8 +123,21 @@ impl AgentSidebarWorkspace {
         &self.search_matches
     }
 
+    pub(crate) const fn file_list_scroll_state(&self) -> ScrollState {
+        self.file_list_scroll_state
+    }
+
+    pub(crate) fn file_list_item_count(&self) -> usize {
+        if self.search_visible && !self.file_search_input.text().trim().is_empty() {
+            self.search_matches.len()
+        } else {
+            self.explorer_tree.visible_len()
+        }
+    }
+
     pub(crate) fn set_search_visible(&mut self, visible: bool) {
         self.search_visible = visible;
+        self.file_list_scroll_state = ScrollState::default();
         if !visible {
             self.file_search_input.take_text();
             self.update_file_search();
@@ -113,11 +146,13 @@ impl AgentSidebarWorkspace {
 
     pub(crate) fn apply_file_search(&mut self, command: TextInputCommand) {
         self.file_search_input.apply(command);
+        self.file_list_scroll_state = ScrollState::default();
         self.update_file_search();
     }
 
     pub(crate) fn apply_file_search_composition(&mut self, event: TextInputCompositionEvent) {
         self.file_search_input.apply_composition(event);
+        self.file_list_scroll_state = ScrollState::default();
         self.update_file_search();
     }
 
@@ -127,6 +162,7 @@ impl AgentSidebarWorkspace {
 
     pub(crate) fn clear_file_search(&mut self) {
         self.file_search_input.take_text();
+        self.file_list_scroll_state = ScrollState::default();
         self.update_file_search();
     }
 
@@ -135,11 +171,8 @@ impl AgentSidebarWorkspace {
     }
 
     pub(crate) fn refresh_files(&mut self) {
-        self.root_entries = self
-            .root
-            .as_deref()
-            .map(read_root_entries)
-            .unwrap_or_default();
+        self.file_list_scroll_state = ScrollState::default();
+        self.explorer_tree.replace_root(self.root.as_deref());
         let Some(root) = self.root.clone() else {
             return;
         };
@@ -213,6 +246,16 @@ impl AgentSidebarWorkspace {
         self.editor.scroll(delta, viewport, now)
     }
 
+    pub(crate) fn scroll_file_list(&mut self, delta: f32, viewport: Size) -> bool {
+        let content = VirtualListLayout::new(self.file_list_item_count(), FILE_LIST_ROW_HEIGHT)
+            .content_size(viewport.width);
+        self.file_list_scroll_state.apply(
+            ScrollCommand::ByPixels(ScrollDelta::vertical(delta)),
+            ScrollMetrics::new(viewport, content),
+            ScrollAxis::Vertical,
+        )
+    }
+
     pub(crate) fn toggle_multi_diff_fold(&mut self, id: ElementId) -> bool {
         self.editor.toggle_fold_for_element(id)
     }
@@ -266,32 +309,6 @@ impl AgentSidebarWorkspace {
             self.search_pending = true;
         }
     }
-}
-
-fn read_root_entries(root: &Path) -> Vec<ExplorerEntry> {
-    let mut entries = std::fs::read_dir(root)
-        .ok()
-        .into_iter()
-        .flatten()
-        .filter_map(Result::ok)
-        .filter_map(|entry| {
-            let file_type = entry.file_type().ok()?;
-            let label = entry.file_name().to_string_lossy().into_owned();
-            (!matches!(label.as_str(), ".git" | ".zeta" | "node_modules" | "target")).then_some(
-                ExplorerEntry {
-                    label,
-                    directory: file_type.is_dir(),
-                },
-            )
-        })
-        .collect::<Vec<_>>();
-    entries.sort_by(|left, right| {
-        right
-            .directory
-            .cmp(&left.directory)
-            .then_with(|| left.label.cmp(&right.label))
-    });
-    entries
 }
 
 #[cfg(test)]

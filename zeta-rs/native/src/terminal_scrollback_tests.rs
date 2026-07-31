@@ -1,6 +1,6 @@
 use std::time::{Duration, Instant};
 
-use super::{TerminalScroll, multi_diff_scroll_pixels};
+use super::{TerminalScroll, file_list_scroll_pixels, multi_diff_scroll_pixels};
 use zeta_winit::{MouseScrollDelta, PhysicalPosition};
 
 #[test]
@@ -42,6 +42,20 @@ fn multi_diff_wheel_maps_downward_motion_to_positive_content_offset() {
     );
     assert_eq!(
         multi_diff_scroll_pixels(MouseScrollDelta::PixelDelta(PhysicalPosition::new(
+            0.0, -12.0
+        ))),
+        12.0
+    );
+}
+
+#[test]
+fn file_list_line_wheel_uses_the_component_owned_row_extent() {
+    assert_eq!(
+        file_list_scroll_pixels(MouseScrollDelta::LineDelta(0.0, -1.0)),
+        72.0
+    );
+    assert_eq!(
+        file_list_scroll_pixels(MouseScrollDelta::PixelDelta(PhysicalPosition::new(
             0.0, -12.0
         ))),
         12.0

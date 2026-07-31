@@ -4,9 +4,9 @@ use std::cell::OnceCell;
 
 use zeta_diff::DiffDocument;
 use zeta_ui::{
-    Border, Color, Component, CornerRadii, Edges, FontFamily, FontWeight, PaintRect, Point, Rect,
-    ScrollAxis, ScrollMetrics, ScrollState, ScrollView, ScrollViewStyle, ScrollViewport,
-    ScrollbarPresentation, ScrollbarStyle, TextBlock, TextStyle, UiScene,
+    Border, Color, Component, CornerRadii, Edges, FontFamily, FontWeight, ListContentPadding,
+    PaintRect, Point, Rect, ScrollAxis, ScrollMetrics, ScrollState, ScrollView, ScrollViewStyle,
+    ScrollbarPresentation, ScrollbarStyle, TextBlock, TextStyle, UiScene, VirtualListLayout,
 };
 
 use crate::{
@@ -90,16 +90,24 @@ impl MultiDiffEditorFoldControl {
 ///
 /// Product hosts that process high-frequency scrolling may retain this value until items or their
 /// [`DiffEditorState`] change, avoiding repeated measurement for every input delta.
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct MultiDiffEditorLayout {
-    section_heights: Vec<f32>,
-    content_height: f32,
+    sections: VirtualListLayout,
     presentation: DiffEditorPresentation,
 }
 
 impl MultiDiffEditorLayout {
-    pub const fn content_height(&self) -> f32 {
-        self.content_height
+    pub fn content_height(&self) -> f32 {
+        self.sections.content_extent()
+    }
+}
+
+impl Default for MultiDiffEditorLayout {
+    fn default() -> Self {
+        Self {
+            sections: VirtualListLayout::variable([]),
+            presentation: DiffEditorPresentation::default(),
+        }
     }
 }
 
@@ -173,7 +181,7 @@ pub struct MultiDiffEditor<'a> {
     style: MultiDiffEditorStyle,
     scrollbar_presentation: ScrollbarPresentation,
     diff_presentation: DiffEditorPresentation,
-    section_heights: OnceCell<Vec<f32>>,
+    section_layout: OnceCell<VirtualListLayout>,
     measured_layout: Option<&'a MultiDiffEditorLayout>,
 }
 
@@ -191,7 +199,7 @@ impl<'a> MultiDiffEditor<'a> {
             style,
             scrollbar_presentation: ScrollbarPresentation::default(),
             diff_presentation: DiffEditorPresentation::SideBySide,
-            section_heights: OnceCell::new(),
+            section_layout: OnceCell::new(),
             measured_layout: None,
         }
     }
@@ -199,7 +207,7 @@ impl<'a> MultiDiffEditor<'a> {
     /// Selects the layout used by every visible per-file DiffEditor.
     pub fn with_diff_presentation(mut self, presentation: DiffEditorPresentation) -> Self {
         self.diff_presentation = presentation;
-        self.section_heights.take();
+        self.section_layout.take();
         self.measured_layout = None;
         self
     }
@@ -209,7 +217,7 @@ impl<'a> MultiDiffEditor<'a> {
     /// The host must invalidate the layout when item order, documents, per-file state, style, or
     /// presentation changes.
     pub fn with_measured_layout(mut self, layout: &'a MultiDiffEditorLayout) -> Self {
-        debug_assert_eq!(layout.section_heights.len(), self.items.len());
+        debug_assert_eq!(layout.sections.item_count(), self.items.len());
         debug_assert_eq!(layout.presentation, self.diff_presentation);
         self.measured_layout = Some(layout);
         self
@@ -229,14 +237,9 @@ impl<'a> MultiDiffEditor<'a> {
 
     pub fn content_height(&self) -> f32 {
         if let Some(layout) = self.measured_layout {
-            return layout.content_height;
+            return layout.content_height();
         }
-        if self.items.is_empty() {
-            return 0.0;
-        }
-        self.section_heights().iter().sum::<f32>()
-            + self.items.len().saturating_sub(1) as f32 * self.style.section_gap
-            + self.style.content_vertical_padding * 2.0
+        self.section_layout().content_extent()
     }
 
     pub fn scroll_metrics(&self) -> ScrollMetrics {
@@ -246,8 +249,7 @@ impl<'a> MultiDiffEditor<'a> {
     /// Measures reusable section geometry for the current items, state, style, and presentation.
     pub fn measure_layout(&self) -> MultiDiffEditorLayout {
         MultiDiffEditorLayout {
-            section_heights: self.section_heights().to_vec(),
-            content_height: self.content_height(),
+            sections: self.section_layout().clone(),
             presentation: self.diff_presentation,
         }
     }
@@ -259,56 +261,44 @@ impl<'a> MultiDiffEditor<'a> {
         }
         let viewport = self.scroll_view().viewport();
         let mut controls = Vec::new();
-        let mut content_offset = self.style.content_vertical_padding;
-        for (item_index, (item, section_height)) in
-            self.items.iter().zip(self.section_heights()).enumerate()
-        {
-            let section_height = *section_height;
-            let content_section =
-                Rect::from_xywh(0.0, content_offset, self.bounds.size.width, section_height);
-            if !content_section
-                .intersection(viewport.visible_content_bounds())
-                .is_empty()
-            {
-                let section = self.section_bounds(content_offset, section_height, viewport);
-                let diff_bounds = self.diff_bounds(section);
-                controls.extend(
-                    DiffEditor::new(
-                        diff_bounds,
-                        item.document,
-                        item.editor_state.clone(),
-                        item.labels,
-                        self.style.diff_editor.clone(),
-                    )
-                    .with_presentation(self.diff_presentation)
-                    .within_viewport(viewport.bounds())
-                    .fold_controls()
-                    .into_iter()
-                    .map(|control| MultiDiffEditorFoldControl {
-                        item_index,
-                        region_index: control.region_index(),
-                        line_count: control.line_count(),
-                        bounds: control.bounds(),
-                        state: control.state(),
-                    }),
-                );
-            }
-            content_offset += section_height + self.style.section_gap;
+        let section_layout = self.section_layout();
+        for item_index in section_layout.visible_range(viewport) {
+            let item = &self.items[item_index];
+            let item_bounds = section_layout
+                .item_bounds(item_index, viewport)
+                .expect("visible multi-diff section");
+            let section = self.section_bounds(item_bounds);
+            let diff_bounds = self.diff_bounds(section);
+            controls.extend(
+                DiffEditor::new(
+                    diff_bounds,
+                    item.document,
+                    item.editor_state.clone(),
+                    item.labels,
+                    self.style.diff_editor.clone(),
+                )
+                .with_presentation(self.diff_presentation)
+                .within_viewport(viewport.bounds())
+                .fold_controls()
+                .into_iter()
+                .map(|control| MultiDiffEditorFoldControl {
+                    item_index,
+                    region_index: control.region_index(),
+                    line_count: control.line_count(),
+                    bounds: control.bounds(),
+                    state: control.state(),
+                }),
+            );
         }
         controls
     }
 
-    fn section_bounds(
-        &self,
-        content_offset: f32,
-        section_height: f32,
-        viewport: ScrollViewport,
-    ) -> Rect {
+    fn section_bounds(&self, item_bounds: Rect) -> Rect {
         Rect::from_xywh(
-            viewport.content_origin().x + self.style.section_horizontal_inset,
-            viewport.content_origin().y + content_offset,
+            item_bounds.origin.x + self.style.section_horizontal_inset,
+            item_bounds.origin.y,
             (self.bounds.size.width - self.style.section_horizontal_inset * 2.0).max(0.0),
-            section_height,
+            item_bounds.size.height,
         )
     }
 
@@ -337,15 +327,16 @@ impl<'a> MultiDiffEditor<'a> {
             .content_height()
     }
 
-    fn section_heights(&self) -> &[f32] {
+    fn section_layout(&self) -> &VirtualListLayout {
         if let Some(layout) = self.measured_layout {
-            return &layout.section_heights;
+            return &layout.sections;
         }
-        self.section_heights.get_or_init(|| {
-            self.items
-                .iter()
-                .map(|item| self.section_height(item))
-                .collect()
+        self.section_layout.get_or_init(|| {
+            VirtualListLayout::variable(self.items.iter().map(|item| self.section_height(item)))
+                .with_item_gap(self.style.section_gap)
+                .with_content_padding(ListContentPadding::symmetric(
+                    self.style.content_vertical_padding,
+                ))
         })
     }
 
@@ -367,19 +358,13 @@ impl Component for MultiDiffEditor<'_> {
         }
         scene.draw_rect(PaintRect::new(self.bounds, self.style.surface));
         self.scroll_view().draw(scene, |scene, viewport| {
-            let mut content_offset = self.style.content_vertical_padding;
-            for (item, section_height) in self.items.iter().zip(self.section_heights()) {
-                let section_height = *section_height;
-                let content_section =
-                    Rect::from_xywh(0.0, content_offset, self.bounds.size.width, section_height);
-                if content_section
-                    .intersection(viewport.visible_content_bounds())
-                    .is_empty()
-                {
-                    content_offset += section_height + self.style.section_gap;
-                    continue;
-                }
-                let section = self.section_bounds(content_offset, section_height, viewport);
+            let section_layout = self.section_layout();
+            for item_index in section_layout.visible_range(viewport) {
+                let item = &self.items[item_index];
+                let item_bounds = section_layout
+                    .item_bounds(item_index, viewport)
+                    .expect("visible multi-diff section");
+                let section = self.section_bounds(item_bounds);
                 scene.draw_rect(
                     PaintRect::new(section, self.style.surface)
                         .with_border(Border::new(
@@ -418,7 +403,6 @@ impl Component for MultiDiffEditor<'_> {
                     .with_presentation(self.diff_presentation)
                     .within_viewport(viewport.bounds()),
                 );
-                content_offset += section_height + self.style.section_gap;
             }
         });
     }
