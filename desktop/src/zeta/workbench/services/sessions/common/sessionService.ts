@@ -11,6 +11,18 @@ export interface IActiveSessionThread {
   readonly threadId: ThreadId;
 }
 
+/**
+ * An unsaved Chat tab that has not yet acquired a durable Session identity.
+ *
+ * Drafts are window-local presentation state. They retain user choices until
+ * the first send materializes the corresponding Session and root Thread.
+ */
+export interface IChatDraft {
+  readonly draftId: string;
+  readonly title: string;
+  readonly model: ModelRef | undefined;
+}
+
 /** Current initialization or mutation state of the session projection. */
 export type WorkbenchSessionState =
   | "loading"
@@ -20,20 +32,29 @@ export type WorkbenchSessionState =
   | "error";
 
 /**
- * Owns the active Session and Thread selection for one workbench window.
+ * Owns durable Session selection and local Chat drafts for one workbench window.
  *
- * Feature views consume this selection instead of choosing an arbitrary
- * Thread independently. Durable transcript projection remains feature-owned.
+ * Feature views consume the durable selection instead of choosing an
+ * arbitrary Thread independently. A draft becomes durable only when a Chat
+ * pane asks to materialize it for its first send.
  */
 export interface IWorkbenchSessionService {
   readonly onDidChange: Event<void>;
   readonly sessions: readonly Session[];
   readonly active: IActiveSessionThread | undefined;
+  readonly drafts: readonly IChatDraft[];
+  readonly activeDraft: IChatDraft | undefined;
   readonly state: WorkbenchSessionState;
   readonly error: string | undefined;
 
   initialize(): Promise<void>;
   selectThread(sessionId: SessionId, threadId: ThreadId): void;
+  createDraft(title?: string): IChatDraft;
+  selectDraft(draftId: string): void;
+  discardDraft(draftId: string): void;
+  setDraftModel(draftId: string, model: ModelRef): void;
+  materializeDraft(draftId: string): Promise<IActiveSessionThread>;
+  promoteDraft(draftId: string, active: IActiveSessionThread): void;
   ensureActiveThread(): Promise<IActiveSessionThread>;
   startNewSession(title?: string): Promise<IActiveSessionThread>;
   archiveSession(sessionId: SessionId): Promise<void>;
@@ -58,6 +79,8 @@ export class WorkbenchSessionService
   private readonly _onDidChange = this.own(new Emitter<void>());
   private _sessions: readonly Session[] = [];
   private _active: IActiveSessionThread | undefined;
+  private _drafts: readonly IChatDraft[] = [];
+  private _activeDraftId: string | undefined;
   private _state: WorkbenchSessionState = "loading";
   private _error: string | undefined;
   private initializePromise: Promise<void> | undefined;
@@ -75,6 +98,16 @@ export class WorkbenchSessionService
 
   get active(): IActiveSessionThread | undefined {
     return this._active;
+  }
+
+  get drafts(): readonly IChatDraft[] {
+    return this._drafts;
+  }
+
+  get activeDraft(): IChatDraft | undefined {
+    return this._drafts.find(
+      (draft) => draft.draftId === this._activeDraftId,
+    );
   }
 
   get state(): WorkbenchSessionState {
@@ -104,13 +137,74 @@ export class WorkbenchSessionService
     if (!session || !thread || session.status !== "active") {
       throw new Error(`Active Session Thread is not available: ${threadId}`);
     }
-    if (
-      this._active?.session.sessionId === sessionId &&
-      this._active.threadId === threadId
-    ) return;
+    if (this._active?.session.sessionId === sessionId && this._active.threadId === threadId && this._activeDraftId === undefined) return;
     this._active = { session, threadId };
+    this._activeDraftId = undefined;
     this._error = undefined;
     this._onDidChange.fire();
+  }
+
+  createDraft(title = "New Chat"): IChatDraft {
+    const draft: IChatDraft = {
+      draftId: createUuid(),
+      title,
+      model: undefined,
+    };
+    this._drafts = [draft, ...this._drafts];
+    this._activeDraftId = draft.draftId;
+    this._error = undefined;
+    this._onDidChange.fire();
+    return draft;
+  }
+
+  selectDraft(draftId: string): void {
+    if (!this._drafts.some((draft) => draft.draftId === draftId)) {
+      throw new Error(`Chat Draft is not available: ${draftId}`);
+    }
+    if (this._activeDraftId === draftId) return;
+    this._activeDraftId = draftId;
+    this._error = undefined;
+    this._onDidChange.fire();
+  }
+
+  discardDraft(draftId: string): void {
+    const drafts = this._drafts.filter((draft) => draft.draftId !== draftId);
+    if (drafts.length === this._drafts.length) return;
+    this._drafts = drafts;
+    if (this._activeDraftId === draftId) this._activeDraftId = undefined;
+    this._onDidChange.fire();
+  }
+
+  setDraftModel(draftId: string, model: ModelRef): void {
+    const current = this._drafts.find((draft) => draft.draftId === draftId);
+    if (!current) throw new Error(`Chat Draft is not available: ${draftId}`);
+    if (sameModel(current.model, model)) return;
+    this._drafts = this._drafts.map((draft) =>
+      draft.draftId === draftId ? { ...draft, model } : draft,
+    );
+    this._onDidChange.fire();
+  }
+
+  /** Creates server state for a draft without changing the visible tab yet. */
+  async materializeDraft(draftId: string): Promise<IActiveSessionThread> {
+    const draft = this._drafts.find((candidate) => candidate.draftId === draftId);
+    if (!draft) throw new Error(`Chat Draft is not available: ${draftId}`);
+    return this.createSession(draft.title, draft.model);
+  }
+
+  /** Replaces a local draft with its already-created durable Session. */
+  promoteDraft(draftId: string, active: IActiveSessionThread): void {
+    const wasActive = this._activeDraftId === draftId;
+    this._drafts = this._drafts.filter((draft) => draft.draftId !== draftId);
+    if (wasActive) this._activeDraftId = undefined;
+    this._sessions = [
+      active.session,
+      ...this._sessions.filter(
+        (session) => session.sessionId !== active.session.sessionId,
+      ),
+    ];
+    if (wasActive || !this._active) this._active = active;
+    this.setState("ready");
   }
 
   async ensureActiveThread(): Promise<IActiveSessionThread> {
@@ -120,6 +214,15 @@ export class WorkbenchSessionService
 
   async startNewSession(
     title = "New Chat",
+  ): Promise<IActiveSessionThread> {
+    const active = await this.createSession(title);
+    this.activateSession(active);
+    return active;
+  }
+
+  private async createSession(
+    title: string,
+    model: ModelRef | undefined = undefined,
   ): Promise<IActiveSessionThread> {
     this.setState("creating");
     try {
@@ -133,19 +236,15 @@ export class WorkbenchSessionService
         expectedSequence: created.session.sequence,
         title: "Main",
       });
-      this._sessions = [
-        thread.session,
-        ...this._sessions.filter(
-          (session) =>
-            session.sessionId !== thread.session.sessionId,
-        ),
-      ];
-      this._active = {
-        session: thread.session,
-        threadId: thread.threadId,
-      };
-      this.setState("ready");
-      return this._active;
+      const session = model && !sameModel(thread.session.model, model)
+        ? (await this.api.session.setModel({
+          commandId: commandId("session-model"),
+          sessionId: thread.session.sessionId,
+          expectedSequence: thread.session.sequence,
+          model,
+        })).session
+        : thread.session;
+      return { session, threadId: thread.threadId };
     } catch (error) {
       this.setError(error);
       throw error;
@@ -230,6 +329,18 @@ export class WorkbenchSessionService
       : "Unable to load sessions.";
     this._onDidChange.fire();
   }
+
+  private activateSession(active: IActiveSessionThread): void {
+    this._sessions = [
+      active.session,
+      ...this._sessions.filter(
+        (session) => session.sessionId !== active.session.sessionId,
+      ),
+    ];
+    this._active = active;
+    this._activeDraftId = undefined;
+    this.setState("ready");
+  }
 }
 
 function firstActiveThread(
@@ -247,4 +358,11 @@ function firstActiveThread(
 
 function commandId(kind: string): string {
   return `desktop-${kind}-${createUuid()}`;
+}
+
+function sameModel(
+  left: ModelRef | null | undefined,
+  right: ModelRef | null | undefined,
+): boolean {
+  return left?.provider === right?.provider && left?.model === right?.model;
 }

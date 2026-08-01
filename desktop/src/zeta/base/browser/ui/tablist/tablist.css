@@ -12,6 +12,11 @@
   width: max-content;
 }
 
+.zeta-tab-list-scroll-content > .zeta-action-bar.vertical {
+  width: 100%;
+  height: max-content;
+}
+
 .zeta-tab {
   display: flex;
   min-width: 0;

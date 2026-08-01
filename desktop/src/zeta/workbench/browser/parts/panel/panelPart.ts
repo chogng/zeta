@@ -1,4 +1,6 @@
 import "./panelpart.css";
+import type { IContextMenuProvider } from "../../../../base/browser/contextmenu.js";
+import type { IDimension } from "../../../../base/browser/geometry.js";
 import { type Event } from "../../../../base/common/event.js";
 import { ViewContainerLocation } from "../../../common/views.js";
 import type { IViewDescriptorService } from "../../../services/views/common/viewDescriptorService.js";
@@ -9,6 +11,7 @@ import { CompositeBar, type CompositeBarSelectionEvent } from "../compositebar/c
 export interface PanelPartOptions {
   readonly ownerDocument: Document;
   readonly viewDescriptorService: IViewDescriptorService;
+  readonly contextMenuProvider?: IContextMenuProvider;
 }
 
 /** Bottom tool region with Panel tabs and a contextual title toolbar. */
@@ -28,6 +31,7 @@ export class PanelPart extends CompositePart {
       location: ViewContainerLocation.Panel,
       ariaLabel: "Panel views",
       presentation: "label",
+      contextMenuProvider: options.contextMenuProvider,
     }));
     this.onDidSelectComposite = this.compositeBar.onDidSelectComposite;
     const titleControl = options.ownerDocument.createElement("div");
@@ -40,6 +44,10 @@ export class PanelPart extends CompositePart {
 
   setActiveComposite(compositeId: string): void {
     this.compositeBar.setActiveComposite(compositeId);
+  }
+
+  override layout(_dimension: IDimension): void {
+    this.compositeBar.layout();
   }
 
   override showComposite(compositeId: string): void {

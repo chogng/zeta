@@ -4,8 +4,7 @@ import { MenuWorkbenchToolBar } from "../../../../../platform/actions/browser/to
 import { MenuId } from "../../../../../platform/actions/common/actions.js";
 import type { IMenuService } from "../../../../../platform/actions/common/menuService.js";
 import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextMenu.js";
-import type { SessionId } from "../../../../../../../generated/app-server/types.js";
-import { ChatTabsControl, type ChatSessionTab, type ChatTabsDelegate } from "./chatTabsControl.js";
+import { ChatTabsControl, type ChatTab, type ChatTabsDelegate } from "./chatTabsControl.js";
 
 /** Hosts Chat tabs and the independent Chat action toolbar. */
 export class ChatTitleControl extends DisposableOwner {
@@ -41,7 +40,7 @@ export class ChatTitleControl extends DisposableOwner {
     this.defer(() => this.element.remove());
   }
 
-  setSessions(entries: readonly ChatSessionTab[], activeSessionId: SessionId | undefined): ReadonlyMap<SessionId, string> {
-    return this.tabs.setSessions(entries, activeSessionId);
+  setTabs(entries: readonly ChatTab[], activeTabId: string | undefined): ReadonlyMap<string, string> {
+    return this.tabs.setTabs(entries, activeTabId);
   }
 }

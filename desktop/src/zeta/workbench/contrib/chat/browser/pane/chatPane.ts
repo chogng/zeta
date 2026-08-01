@@ -3,30 +3,27 @@ import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
 import type { ZetaRendererApi } from "../../../../../platform/app-server/common/renderer-api.js";
 import type { ICommandService } from "../../../../../platform/commands/common/commands.js";
 import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextMenu.js";
-import type { IActiveSessionThread, IWorkbenchSessionService } from "../../../../services/sessions/common/sessionService.js";
+import type { IActiveSessionThread, IChatDraft, IWorkbenchSessionService } from "../../../../services/sessions/common/sessionService.js";
 import type { ChatInputDelegate } from "../input/chatInput.js";
 import { ChatInputWidget } from "../input/chatInputWidget.js";
 import { ChatListWidget } from "../list/chatListWidget.js";
-import { ChatPaneModel } from "./chatPaneModel.js";
+import { ChatPaneModel, type ChatPaneSelection } from "./chatPaneModel.js";
 
-/** Owns the content, interaction state, and Thread projection for one Session. */
+/** Owns the content and interaction state for one local or durable Chat tab. */
 export class ChatPane extends DisposableOwner {
   readonly element: HTMLElement;
-  readonly sessionId: SessionId;
   private readonly model: ChatPaneModel;
   private readonly listWidget: ChatListWidget;
   private readonly inputWidget: ChatInputWidget;
 
-  constructor(ownerDocument: Document, panelId: string, api: ZetaRendererApi, active: IActiveSessionThread, sessionService: IWorkbenchSessionService, contextMenuService: IContextMenuService, commandService: ICommandService) {
+  constructor(ownerDocument: Document, panelId: string, api: ZetaRendererApi, selection: ChatPaneSelection, sessionService: IWorkbenchSessionService, contextMenuService: IContextMenuService, commandService: ICommandService) {
     super();
-    this.sessionId = active.session.sessionId;
     this.element = ownerDocument.createElement("div");
     this.element.id = panelId;
     this.element.className = "zeta-chat";
-    this.element.dataset.sessionId = this.sessionId;
     this.element.setAttribute("role", "tabpanel");
     this.element.hidden = true;
-    this.model = this.own(new ChatPaneModel(api, active, sessionService));
+    this.model = this.own(new ChatPaneModel(api, selection, sessionService));
     this.listWidget = this.own(new ChatListWidget(ownerDocument));
     const inputDelegate: ChatInputDelegate = {
       send: (text) => this.model.send(text),
@@ -42,7 +39,15 @@ export class ChatPane extends DisposableOwner {
     this.render();
   }
 
-  get threadId(): ThreadId {
+  get sessionId(): SessionId | undefined {
+    return this.model.sessionId;
+  }
+
+  get draftId(): string | undefined {
+    return this.model.draftId;
+  }
+
+  get threadId(): ThreadId | undefined {
     return this.model.threadId;
   }
 
@@ -50,8 +55,14 @@ export class ChatPane extends DisposableOwner {
     if (active.session.sessionId !== this.sessionId) {
       throw new Error(`ChatPane cannot select a Thread from another Session: ${active.session.sessionId}`);
     }
-    this.element.dataset.threadId = active.threadId;
     return this.model.selectThread(active);
+  }
+
+  selectDraft(draft: IChatDraft): void {
+    if (draft.draftId !== this.draftId) {
+      throw new Error(`ChatPane cannot select another Chat Draft: ${draft.draftId}`);
+    }
+    this.model.selectDraft(draft);
   }
 
   setTabId(tabId: string | undefined): void {
@@ -75,7 +86,7 @@ export class ChatPane extends DisposableOwner {
   }
 
   private render(): void {
-    this.element.dataset.threadId = this.model.threadId;
+    this.syncIdentity();
     this.listWidget.render(this.model.items);
     this.inputWidget.render({
       phase: this.model.state,
@@ -86,5 +97,17 @@ export class ChatPane extends DisposableOwner {
       selectedModel: this.model.selectedModel,
       interaction: this.model.interaction,
     });
+  }
+
+  private syncIdentity(): void {
+    const sessionId = this.model.sessionId;
+    const threadId = this.model.threadId;
+    const draftId = this.model.draftId;
+    if (sessionId) this.element.dataset.sessionId = sessionId;
+    else this.element.removeAttribute("data-session-id");
+    if (threadId) this.element.dataset.threadId = threadId;
+    else this.element.removeAttribute("data-thread-id");
+    if (draftId) this.element.dataset.draftId = draftId;
+    else this.element.removeAttribute("data-draft-id");
   }
 }

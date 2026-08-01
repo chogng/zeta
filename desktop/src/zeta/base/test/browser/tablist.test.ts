@@ -133,6 +133,27 @@ test("TabList renders IconLabel content, custom actions, and its standard close 
   dom.window.close();
 });
 
+test("TabList supports vertical ActionBar navigation and scrolling", () => {
+  const dom = new JSDOM("<!doctype html><body></body>");
+  const tabList = new TabList({
+    ownerDocument: dom.window.document,
+    ariaLabel: "Terminal instances",
+    orientation: "vertical",
+    onActivate: () => undefined,
+  });
+  tabList.setTabs([{ ...tab("first"), state: "running" }], "first");
+  dom.window.document.body.append(tabList.element);
+  const actionBar = tabList.element.querySelector<HTMLElement>("[role='tablist']");
+  assert.equal(tabList.element.dataset.scrollDirection, "vertical");
+  assert.equal(actionBar?.getAttribute("aria-orientation"), "vertical");
+  assert.equal(actionBar?.classList.contains("vertical"), true);
+  assert.equal(actionBar?.querySelector(".zeta-tab.checked") !== null, true);
+  assert.equal(actionBar?.querySelector<HTMLElement>(".zeta-tab")?.dataset.state, "running");
+
+  tabList.dispose();
+  dom.window.close();
+});
+
 test("TabList rejects ambiguous item and selection identities", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
   const tabList = new TabList({

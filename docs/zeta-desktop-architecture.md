@@ -512,7 +512,12 @@ thread 的可释放订阅、已提交 transcript 与临时 stream projection。�
 
 当前尚未实现 session/thread picker、附件和图片输入、fork/history 导航、动态工具执行器。
 由于 session 列表当前没有最近活动时间，启动时只能按服务端顺序选择首个活动 thread；
-Browser 入口没有 App Server 连接时会明确显示不可用状态。
+Browser 入口没有 App Server 连接时会明确显示不可用状态。当前本地 `dev:web` 是已实现的开发
+例外：Vite host 为每个 HMR WebSocket client 启动一个 stdio App Server，并把 transport-neutral
+JSON-RPC 帧投影成同一份 `ZetaRendererApi`。该 bridge 只监听 loopback、复用 Vite WebSocket
+token 与同源检查，client 断开后回收其子进程；它不构成生产远程 Web transport。静态 Browser
+构建仍使用 disconnected API，生产 HTTP/WebSocket listener、认证、origin policy 和部署服务
+仍是当前限制。
 
 ### 6.6 集成终端
 

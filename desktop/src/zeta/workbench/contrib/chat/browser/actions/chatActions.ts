@@ -38,10 +38,10 @@ registerAction2(class NewChatAction extends Action2 {
     });
   }
 
-  override async run(accessor: ServicesAccessor): Promise<void> {
+  override run(accessor: ServicesAccessor): void {
     const sessionService = accessor.get(IWorkbenchSessionService);
     const viewsService = accessor.get(IViewsService);
-    await sessionService.startNewSession();
+    sessionService.createDraft();
     viewsService.focusView(CHAT_VIEW_ID);
   }
 });

@@ -1,4 +1,5 @@
 .zeta-action-bar { display: flex; align-items: stretch; gap: var(--zeta-action-bar-gap); }
+.zeta-action-bar.vertical { flex-direction: column; }
 .zeta-action-bar .zeta-icon { width: 18px; height: 18px; }
 .zeta-action-bar.highlight-toggled .zeta-button.checked {
   background: var(--zeta-button-active-background);

@@ -1,9 +1,9 @@
-import type { AgentResponse, ModelCatalogEntry, ModelRef, SlashCommandDefinition, Thread, ThreadId, ThreadItem, ThreadUpdateEnvelope, Turn, TurnInteraction } from "../../../../../../../generated/app-server/types.js";
+import type { AgentResponse, ModelCatalogEntry, ModelRef, SessionId, SlashCommandDefinition, Thread, ThreadId, ThreadItem, ThreadUpdateEnvelope, Turn, TurnInteraction } from "../../../../../../../generated/app-server/types.js";
 import { Emitter, type Event } from "../../../../../base/common/event.js";
 import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
 import { createUuid } from "../../../../../base/common/uuid.js";
 import type { ZetaRendererApi } from "../../../../../platform/app-server/common/renderer-api.js";
-import type { IActiveSessionThread, IWorkbenchSessionService } from "../../../../services/sessions/common/sessionService.js";
+import type { IActiveSessionThread, IChatDraft, IWorkbenchSessionService } from "../../../../services/sessions/common/sessionService.js";
 import { chatListItem, type IChatListItem } from "../list/chatListItems.js";
 
 export type ChatPaneState =
@@ -12,8 +12,13 @@ export type ChatPaneState =
   | "submitting"
   | "error";
 
+/** The local or durable identity currently projected by a Chat pane. */
+export type ChatPaneSelection =
+  | { readonly kind: "session"; readonly active: IActiveSessionThread }
+  | { readonly kind: "draft"; readonly draft: IChatDraft };
+
 /**
- * Projection of the selected Thread inside one Session-owned Chat pane.
+ * Projection of one Chat tab, before or after it acquires a durable Thread.
  *
  * Canonical committed state is refreshed from `thread/read`. Transient item
  * updates are layered by Item ID and discarded once the committed snapshot
@@ -24,7 +29,7 @@ export class ChatPaneModel extends DisposableOwner {
   private readonly sessionService: IWorkbenchSessionService;
   private readonly _onDidChange = this.own(new Emitter<void>());
   private readonly transientItems = new Map<string, ThreadItem>();
-  private selection: IActiveSessionThread;
+  private selection: ChatPaneSelection;
   private _thread: Thread | undefined;
   private _interaction: TurnInteraction | undefined;
   private _state: ChatPaneState = "loading";
@@ -42,11 +47,11 @@ export class ChatPaneModel extends DisposableOwner {
 
   readonly onDidChange: Event<void> = this._onDidChange.event;
 
-  constructor(api: ZetaRendererApi, active: IActiveSessionThread, sessionService: IWorkbenchSessionService) {
+  constructor(api: ZetaRendererApi, selection: ChatPaneSelection, sessionService: IWorkbenchSessionService) {
     super();
     this.api = api;
     this.sessionService = sessionService;
-    this.selection = active;
+    this.selection = selection;
     const events = api.events.subscribe((notification) => {
       if (notification.method === "thread/update") {
         this.acceptUpdate(notification.params);
@@ -60,7 +65,8 @@ export class ChatPaneModel extends DisposableOwner {
     this.defer(() => {
       this.disposed = true;
       this.generation++;
-      void this.api.thread.unsubscribe({ threadId: this.selection.threadId });
+      const threadId = this.threadId;
+      if (threadId) void this.api.thread.unsubscribe({ threadId });
       this.transientItems.clear();
       this.resetStreamCursor();
     });
@@ -79,8 +85,16 @@ export class ChatPaneModel extends DisposableOwner {
     return this._thread;
   }
 
-  get threadId(): ThreadId {
-    return this.selection.threadId;
+  get sessionId(): SessionId | undefined {
+    return this.activeSession?.session.sessionId;
+  }
+
+  get draftId(): string | undefined {
+    return this.selection.kind === "draft" ? this.selection.draft.draftId : undefined;
+  }
+
+  get threadId(): ThreadId | undefined {
+    return this.activeSession?.threadId;
   }
 
   get models(): readonly ModelCatalogEntry[] {
@@ -92,7 +106,9 @@ export class ChatPaneModel extends DisposableOwner {
   }
 
   get selectedModel(): ModelRef | undefined {
-    return this.selection.session.model ?? undefined;
+    return this.selection.kind === "draft"
+      ? this.selection.draft.model
+      : this.selection.active.session.model ?? undefined;
   }
 
   get items(): readonly IChatListItem[] {
@@ -122,12 +138,13 @@ export class ChatPaneModel extends DisposableOwner {
   }
 
   async selectThread(active: IActiveSessionThread): Promise<void> {
-    if (active.session.sessionId !== this.selection.session.sessionId) {
+    const current = this.activeSession;
+    if (!current || active.session.sessionId !== current.session.sessionId) {
       throw new Error(`ChatPaneModel cannot select a Thread from another Session: ${active.session.sessionId}`);
     }
-    const previousThreadId = this.selection.threadId;
-    const previousModel = this.selection.session.model;
-    this.selection = active;
+    const previousThreadId = current.threadId;
+    const previousModel = current.session.model;
+    this.selection = { kind: "session", active };
     if (previousThreadId === active.threadId && this._thread?.threadId === active.threadId) {
       if (!sameModel(previousModel, active.session.model)) this._onDidChange.fire();
       return;
@@ -138,8 +155,20 @@ export class ChatPaneModel extends DisposableOwner {
     await this.subscribe(active);
   }
 
+  selectDraft(draft: IChatDraft): void {
+    if (this.selection.kind !== "draft" || this.selection.draft.draftId !== draft.draftId) {
+      throw new Error(`ChatPaneModel cannot select another Chat Draft: ${draft.draftId}`);
+    }
+    this.selection = { kind: "draft", draft };
+    this._onDidChange.fire();
+  }
+
   async selectModel(model: ModelRef): Promise<void> {
-    await this.sessionService.setModel(this.selection.session.sessionId, model);
+    if (this.selection.kind === "draft") {
+      this.sessionService.setDraftModel(this.selection.draft.draftId, model);
+      return;
+    }
+    await this.sessionService.setModel(this.selection.active.session.sessionId, model);
   }
 
   async send(text: string): Promise<void> {
@@ -147,7 +176,7 @@ export class ChatPaneModel extends DisposableOwner {
     if (!input) return;
     try {
       this.setState("submitting");
-      const active = this.selection;
+      const active = await this.ensureActiveSession();
       if (this._thread?.threadId !== active.threadId) {
         await this.subscribe(active);
       }
@@ -220,7 +249,14 @@ export class ChatPaneModel extends DisposableOwner {
 
   private async _initialize(): Promise<void> {
     this.setState("loading");
-    await Promise.all([this.subscribe(this.selection), this.loadCatalogs()]);
+    if (this.selection.kind === "draft") {
+      await this.loadCatalogs();
+      if (!this.disposed && this.selection.kind === "draft") {
+        this.setState("ready");
+      }
+      return;
+    }
+    await Promise.all([this.subscribe(this.selection.active), this.loadCatalogs()]);
   }
 
   private async loadCatalogs(): Promise<void> {
@@ -282,7 +318,8 @@ export class ChatPaneModel extends DisposableOwner {
   }
 
   private acceptUpdate(update: ThreadUpdateEnvelope): void {
-    const selectedThreadId = this._thread?.threadId ?? this.selection.threadId;
+    const selectedThreadId = this._thread?.threadId ?? this.threadId;
+    if (!selectedThreadId) return;
     if (update.threadId !== selectedThreadId) return;
     if (!this.acceptStreamCursor(update)) return;
     switch (update.update.type) {
@@ -306,7 +343,11 @@ export class ChatPaneModel extends DisposableOwner {
   }
 
   private async reconnect(): Promise<void> {
-    await Promise.all([this.subscribe(this.selection), this.loadCatalogs()]);
+    const active = this.activeSession;
+    await Promise.all([
+      active ? this.subscribe(active) : Promise.resolve(),
+      this.loadCatalogs(),
+    ]);
   }
 
   private acceptStreamCursor(update: ThreadUpdateEnvelope): boolean {
@@ -378,14 +419,16 @@ export class ChatPaneModel extends DisposableOwner {
   }
 
   private async refreshThread(): Promise<void> {
-    const threadId = this.selection.threadId;
+    const active = this.activeSession;
+    if (!active) return;
+    const threadId = active.threadId;
     const generation = this.generation;
     try {
       const result = await this.api.thread.read({ threadId });
       if (
         this.disposed ||
         generation !== this.generation ||
-        result.thread.threadId !== this.selection.threadId
+        result.thread.threadId !== this.threadId
       ) return;
       this._thread = result.thread;
       this.discardCommittedTransientItems();
@@ -421,6 +464,24 @@ export class ChatPaneModel extends DisposableOwner {
       "error",
       error instanceof Error ? error.message : "Chat is unavailable.",
     );
+  }
+
+  private get activeSession(): IActiveSessionThread | undefined {
+    return this.selection.kind === "session" ? this.selection.active : undefined;
+  }
+
+  private async ensureActiveSession(): Promise<IActiveSessionThread> {
+    if (this.selection.kind === "session") return this.selection.active;
+    const draft = this.selection.draft;
+    const created = await this.sessionService.materializeDraft(draft.draftId);
+    if (this.disposed) {
+      this.sessionService.promoteDraft(draft.draftId, created);
+      throw new Error("Chat Draft was closed while its Session was being created");
+    }
+    this.selection = { kind: "session", active: created };
+    this.sessionService.promoteDraft(draft.draftId, created);
+    await this.subscribe(created);
+    return created;
   }
 }
 

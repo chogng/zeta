@@ -35,8 +35,13 @@ export const lxiconsLibrary = {
   menu: register("menu", svg.menu),
   model: register("model", svg.model),
   search: register("search", svg.search),
+  screenFull: register("screen-full", svg.screenFull),
+  screenNormal: register("screen-normal", svg.screenNormal),
   settings: register("settings", svg.settings),
   splitHorizontal: register("split-horizontal", svg.splitHorizontal),
   start: register("start", svg.start),
   submenuIndicator: register("submenu-indicator", svg.chevronRight),
+  terminal: register("terminal", svg.terminal),
+  terminalCmd: register("terminal-cmd", svg.terminalCmd),
+  terminalGitBash: register("terminal-git-bash", svg.terminalGitBash),
 } as const;

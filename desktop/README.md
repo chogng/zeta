@@ -20,6 +20,18 @@ corepack pnpm install
 corepack pnpm dev:desktop
 ```
 
+只开发 Browser Workbench 且需要真实 App Server 能力时，在仓库根目录运行：
+
+```bash
+corepack pnpm dev:web
+```
+
+该命令准备同一份开发包，并启动只监听 `127.0.0.1` 的 Vite 开发服务器。Browser 通过 Vite
+已认证的 HMR WebSocket 连接本地开发桥接器；桥接器为每个浏览器连接启动独立的
+`zeta app-server --listen stdio://` 子进程。因此 Chat、Explorer、Git 和 Terminal 使用真实协议，
+浏览器连接关闭时对应子进程也会被回收。`dev:web:code`、`dev:web:academic` 与
+`dev:web:complete` 用于显式选择产品版本。
+
 这个命令会先通过 Node 开发组装器生成 `desktop/.tmp/zeta-package`；其中包含 debug Rust
 CLI、锁定版本的 ripgrep 与平台 sandbox helper。开发态和发布态 Electron 都从相同的
 `<package>/bin/zeta[.exe]` 入口启动 App Server，区别仅在编译 profile 和 package root。
@@ -76,9 +88,11 @@ Renderer 控件、Workbench Part 与 CSS 状态的 canonical 所有权规范见
 Command、MenuId、Context Key 与菜单型 Toolbar 的 canonical 组合规范见
 [`docs/menu-system.md`](../docs/menu-system.md)。
 
-独立页面未配置 host 时由
+普通 `dev:renderer` 和静态 Browser 构建未配置 host 时由
 `platform/app-server/browser/rendererApi.ts` 提供 disconnected API：UI 正常启动，状态栏显示
-App Server 不可用，产品操作明确失败。嵌入方若已实现受认证的远程 transport，必须在产品入口
+App Server 不可用，产品操作明确失败。`dev:web` 则由 `web-app-server-vite-plugin.mjs`、
+`ViteDevAppServerConnection` 与 `connectViteDevRendererApi()` 组成仅限本机开发的 host，并在
+Workbench 启动前注入同一份 `ZetaRendererApi` contract。嵌入方若已实现受认证的远程 transport，必须在产品入口
 执行前注入：
 
 ```ts
@@ -89,8 +103,9 @@ globalThis.zetaWebWorkbenchHost = {
 ```
 
 该对象是进程内 capability，不是可直接从不可信 JSON 反序列化的配置。当前 Rust App Server
-仅支持 `zeta app-server --listen stdio://`；HTTP/WebSocket listener、认证、origin policy 和
-部署服务尚未实现，因此 disconnected 页面不能描述为已连接的 Web 客户端。
+仍只支持 `zeta app-server --listen stdio://`。`dev:web` 的 WebSocket 只属于 loopback Vite
+开发宿主，不是 Rust listener，也不是可部署服务；生产级 HTTP/WebSocket listener、认证、
+origin policy 和远程部署尚未实现，因此静态 Browser 构建不能描述为已连接的 Web 客户端。
 
 ## Electron sandbox 边界
 

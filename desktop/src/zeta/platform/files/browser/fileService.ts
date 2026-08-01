@@ -1,22 +1,7 @@
-import type {
-  FsFileType,
-  FsGetMetadataParams,
-  FsGetMetadataResult,
-  FsReadDirectoryParams,
-  FsReadDirectoryResult,
-  FsReadFileParams,
-  FsReadFileResult,
-} from "../../../../../generated/app-server/types.js";
+import type { FsFileType, FsGetMetadataParams, FsGetMetadataResult, FsReadDirectoryParams, FsReadDirectoryResult, FsReadFileParams, FsReadFileResult } from "../../../../../generated/app-server/types.js";
 import { URI } from "../../../base/common/uri.js";
-import {
-  FileKind,
-  type IFileEntry,
-  type IFileService,
-  type IFileStat,
-} from "../common/files.js";
-import type {
-  IWorkspaceContextService,
-} from "../../workspace/common/workspace.js";
+import { FileKind, type IFileEntry, type IFileService, type IFileStat } from "../common/files.js";
+import type { IWorkspaceContextService } from "../../workspace/common/workspace.js";
 
 /** Narrow App Server surface consumed by the browser file-service adapter. */
 export interface IFileSystemApi {
@@ -100,7 +85,7 @@ export function workspaceRelativePath(root: URI, resource: URI): string {
   const comparedResource = ignoreCase
     ? resourcePath.toLowerCase()
     : resourcePath;
-  if (comparedResource === comparedRoot) return "";
+  if (comparedResource === comparedRoot) return ".";
   const prefix = `${comparedRoot}/`;
   if (!comparedResource.startsWith(prefix)) {
     throw new Error("Resource is outside the current workspace folder");

@@ -1,17 +1,8 @@
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
-import type {
-  IContextKey,
-  IContextKeyService,
-} from "../../../../platform/contextkey/common/contextkey.js";
-import type {
-  IInstantiationService,
-} from "../../../../platform/instantiation/common/instantiation.js";
+import type { IContextKey, IContextKeyService } from "../../../../platform/contextkey/common/contextkey.js";
+import type { IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
 import { FocusedViewContext } from "../../../common/contextkeys.js";
-import type {
-  IViewContainerDescriptor,
-  IViewContainerModel,
-  IViewDescriptor,
-} from "../../../common/views.js";
+import type { IViewContainerDescriptor, IViewContainerModel, IViewDescriptor } from "../../../common/views.js";
 import { ViewPane } from "./viewPane.js";
 
 /** Construction inputs for one browser view container. */
@@ -103,7 +94,7 @@ export class ViewPaneContainer extends DisposableOwner {
   }
 
   openView(id: string): ViewPane | undefined {
-    this.model.setVisible(id, true);
+    if (!this.model.isVisible(id)) this.model.setVisible(id, true);
     return this._panes.get(id)?.pane;
   }
 

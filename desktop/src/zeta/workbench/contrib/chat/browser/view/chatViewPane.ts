@@ -1,5 +1,5 @@
 import "../media/chat.css";
-import type { Session, SessionId, SessionThread, ThreadId } from "../../../../../../../generated/app-server/types.js";
+import type { Session, SessionThread, ThreadId } from "../../../../../../../generated/app-server/types.js";
 import { setDisposableOwner } from "../../../../../base/common/lifecycle.js";
 import type { ZetaRendererApi } from "../../../../../platform/app-server/common/renderer-api.js";
 import type { IMenuService } from "../../../../../platform/actions/common/menuService.js";
@@ -9,7 +9,7 @@ import type { ICommandService } from "../../../../../platform/commands/common/co
 import { SidebarPart } from "../../../../browser/parts/sidebar/sidebarPart.js";
 import { ViewPane, type IViewPaneOptions } from "../../../../browser/parts/views/viewPane.js";
 import { ViewContainerLocation } from "../../../../common/views.js";
-import type { IActiveSessionThread, IWorkbenchSessionService } from "../../../../services/sessions/common/sessionService.js";
+import type { IActiveSessionThread, IChatDraft, IWorkbenchSessionService } from "../../../../services/sessions/common/sessionService.js";
 import type { IViewDescriptorService } from "../../../../services/views/common/viewDescriptorService.js";
 import { AgentSidebarVisibleContext } from "../../common/chat.js";
 import { ChatPane } from "../pane/chatPane.js";
@@ -18,11 +18,18 @@ import { ChatTitleControl } from "./chatTitleControl.js";
 let chatViewInstanceId = 0;
 let chatPaneInstanceId = 0;
 
+interface ChatPaneEntry {
+  readonly tabId: string;
+  readonly label: string;
+  readonly pane: ChatPane;
+}
+
 /**
- * Session-level Chat container.
+ * Chat tab container.
  *
- * Each active Session owns one retained ChatPane. Thread selection remains
- * internal to that Pane, while the title tabs only switch Sessions.
+ * Each local draft or active Session owns one retained ChatPane. Thread
+ * selection remains internal to persisted panes, while draft tabs materialize
+ * only when their first message is sent.
  */
 export class ChatViewPane extends ViewPane {
   private readonly api: ZetaRendererApi;
@@ -33,7 +40,7 @@ export class ChatViewPane extends ViewPane {
   private readonly agentSidebar: SidebarPart;
   private readonly paneHost: HTMLDivElement;
   private readonly empty: HTMLDivElement;
-  private readonly panes = new Map<SessionId, ChatPane>();
+  private readonly panes = new Map<string, ChatPane>();
   private activePane: ChatPane | undefined;
 
   constructor(
@@ -59,8 +66,8 @@ export class ChatViewPane extends ViewPane {
       options.ownerDocument,
       viewId,
       {
-        selectSession: (sessionId) => this.selectSession(sessionId),
-        closeSession: (sessionId) => this.closeSession(sessionId),
+        selectTab: (tabId) => this.selectTab(tabId),
+        closeTab: (tabId) => this.closeTab(tabId),
       },
       menuService,
       contextMenuService,
@@ -105,46 +112,70 @@ export class ChatViewPane extends ViewPane {
   }
 
   private syncSessions(): void {
-    const entries: { readonly session: Session; readonly pane: ChatPane }[] = [];
-    const retainedSessionIds = new Set<SessionId>();
-    for (const session of this.sessionService.sessions) {
-      if (session.status !== "active") continue;
-      const selection = this.selectionForSession(session);
-      if (!selection) continue;
-      retainedSessionIds.add(session.sessionId);
-      let pane = this.panes.get(session.sessionId);
+    this.rekeyMaterializedPanes();
+    const entries: ChatPaneEntry[] = [];
+    const retainedPaneIds = new Set<string>();
+    for (const draft of this.sessionService.drafts) {
+      const paneId = draftPaneId(draft);
+      retainedPaneIds.add(paneId);
+      let pane = this.panes.get(paneId);
       if (!pane) {
         pane = new ChatPane(
           this.element.ownerDocument,
           `zeta-chat-pane-${++chatPaneInstanceId}`,
           this.api,
-          selection,
+          { kind: "draft", draft },
           this.sessionService,
           this.contextMenuService,
           this.commandService,
         );
         setDisposableOwner(pane, this);
-        this.panes.set(session.sessionId, pane);
+        this.panes.set(paneId, pane);
+      } else {
+        pane.selectDraft(draft);
+      }
+      entries.push({ tabId: pane.element.id, label: draft.title.trim() || "New Chat", pane });
+    }
+    for (const session of this.sessionService.sessions) {
+      if (session.status !== "active") continue;
+      const selection = this.selectionForSession(session);
+      if (!selection) continue;
+      const paneId = sessionPaneId(session);
+      retainedPaneIds.add(paneId);
+      let pane = this.panes.get(paneId);
+      if (!pane) {
+        pane = new ChatPane(
+          this.element.ownerDocument,
+          `zeta-chat-pane-${++chatPaneInstanceId}`,
+          this.api,
+          { kind: "session", active: selection },
+          this.sessionService,
+          this.contextMenuService,
+          this.commandService,
+        );
+        setDisposableOwner(pane, this);
+        this.panes.set(paneId, pane);
       } else {
         void pane.selectThread(selection);
       }
-      entries.push({ session, pane });
+      entries.push({ tabId: pane.element.id, label: session.title.trim() || "Chat", pane });
     }
-    for (const [sessionId, pane] of this.panes) {
-      if (retainedSessionIds.has(sessionId)) continue;
-      this.panes.delete(sessionId);
+    for (const [paneId, pane] of this.panes) {
+      if (retainedPaneIds.has(paneId)) continue;
+      this.panes.delete(paneId);
       pane.dispose();
     }
-    this.paneHost.replaceChildren(...entries.map(({ pane }) => pane.element), this.empty);
-    const activeSessionId = this.sessionService.active?.session.sessionId;
-    this.activePane = activeSessionId ? this.panes.get(activeSessionId) : undefined;
-    for (const { pane } of entries) pane.setVisible(pane === this.activePane);
+    this.paneHost.replaceChildren(...entries.map((entry) => entry.pane.element), this.empty);
+    const activePaneId = this.activePaneId();
+    this.activePane = activePaneId ? this.panes.get(activePaneId) : undefined;
+    for (const entry of entries) entry.pane.setVisible(entry.pane === this.activePane);
     this.empty.hidden = entries.length > 0;
-    const tabIds = this.titleControl.setSessions(
-      entries.map(({ session, pane }) => ({ session, panelId: pane.element.id })),
-      this.activePane?.sessionId,
+    const activeTabId = this.activePane?.element.id;
+    const tabIds = this.titleControl.setTabs(
+      entries.map((entry) => ({ id: entry.tabId, label: entry.label, panelId: entry.pane.element.id })),
+      activeTabId,
     );
-    for (const { pane } of entries) pane.setTabId(tabIds.get(pane.sessionId));
+    for (const entry of entries) entry.pane.setTabId(tabIds.get(entry.tabId));
   }
 
   private selectionForSession(session: Session): IActiveSessionThread | undefined {
@@ -155,7 +186,7 @@ export class ChatViewPane extends ViewPane {
     ) {
       return { session, threadId: active.threadId };
     }
-    const retainedThreadId = this.panes.get(session.sessionId)?.threadId;
+    const retainedThreadId = this.panes.get(sessionPaneId(session))?.threadId;
     if (retainedThreadId && isActiveThread(session, retainedThreadId)) {
       return { session, threadId: retainedThreadId };
     }
@@ -163,14 +194,58 @@ export class ChatViewPane extends ViewPane {
     return thread ? { session, threadId: thread.threadId } : undefined;
   }
 
-  private selectSession(sessionId: SessionId): void {
-    const pane = this.panes.get(sessionId);
+  private selectTab(tabId: string): void {
+    const pane = this.paneForTabId(tabId);
     if (!pane) return;
-    this.sessionService.selectThread(sessionId, pane.threadId);
+    const draftId = pane.draftId;
+    if (draftId) {
+      this.sessionService.selectDraft(draftId);
+      return;
+    }
+    const sessionId = pane.sessionId;
+    const threadId = pane.threadId;
+    if (sessionId && threadId) this.sessionService.selectThread(sessionId, threadId);
   }
 
-  private closeSession(sessionId: SessionId): void {
+  private closeTab(tabId: string): void {
+    const pane = this.paneForTabId(tabId);
+    if (!pane) return;
+    const draftId = pane.draftId;
+    if (draftId) {
+      this.sessionService.discardDraft(draftId);
+      return;
+    }
+    const sessionId = pane.sessionId;
+    if (!sessionId) return;
     void this.sessionService.archiveSession(sessionId).catch(() => {});
+  }
+
+  private activePaneId(): string | undefined {
+    const draft = this.sessionService.activeDraft;
+    if (draft) return draftPaneId(draft);
+    const active = this.sessionService.active;
+    return active ? sessionPaneId(active.session) : undefined;
+  }
+
+  private rekeyMaterializedPanes(): void {
+    for (const [paneId, pane] of [...this.panes]) {
+      const sessionId = pane.sessionId;
+      if (!sessionId) continue;
+      const materializedPaneId = sessionPaneIdFromId(sessionId);
+      if (paneId === materializedPaneId) continue;
+      const existing = this.panes.get(materializedPaneId);
+      if (existing && existing !== pane) {
+        pane.dispose();
+        this.panes.delete(paneId);
+        continue;
+      }
+      this.panes.delete(paneId);
+      this.panes.set(materializedPaneId, pane);
+    }
+  }
+
+  private paneForTabId(tabId: string): ChatPane | undefined {
+    return [...this.panes.values()].find((pane) => pane.element.id === tabId);
   }
 
   private syncAgentSidebarVisibility(contextKeyService: IContextKeyService): void {
@@ -185,4 +260,16 @@ function isActiveThread(session: Session, threadId: ThreadId): boolean {
 
 function rootThread(session: Session): SessionThread | undefined {
   return session.threads.find((thread) => thread.status === "active" && thread.origin.type === "root");
+}
+
+function draftPaneId(draft: IChatDraft): string {
+  return `draft:${draft.draftId}`;
+}
+
+function sessionPaneId(session: Session): string {
+  return sessionPaneIdFromId(session.sessionId);
+}
+
+function sessionPaneIdFromId(sessionId: string): string {
+  return `session:${sessionId}`;
 }

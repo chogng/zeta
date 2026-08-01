@@ -3,7 +3,7 @@ import { addDisposableListener } from "../../dom.js";
 import type { Icon } from "../../../common/icon.js";
 import type { IAction } from "../../../common/actions.js";
 import { DisposableOwner } from "../../../common/lifecycle.js";
-import { ActionBar } from "../actionbar/actionbar.js";
+import { ActionBar, type ActionBarOrientation } from "../actionbar/actionbar.js";
 import { ScrollableElement } from "../scrollbar/scrollableElement.js";
 import { TabAction, TabActionViewItem } from "./tabActionViewItem.js";
 
@@ -23,15 +23,17 @@ export interface TabListItem<T> {
   readonly ariaLabel?: string;
   readonly tooltip?: string;
   readonly icon?: Icon;
+  readonly state?: string;
   readonly tabId: string;
   readonly panelId?: string;
   readonly actions?: TabListActions;
 }
 
-/** Construction inputs for a manually activated horizontal TabList. */
+/** Construction inputs for a manually activated TabList. */
 export interface TabListOptions<T> {
   readonly ownerDocument: Document;
   readonly ariaLabel: string;
+  readonly orientation?: ActionBarOrientation;
   readonly onActivate: (value: T) => void;
   readonly onClose?: (value: T) => void;
 }
@@ -52,11 +54,12 @@ export class TabList<T> extends DisposableOwner {
     super();
     this.activate = options.onActivate;
     const onClose = options.onClose;
+    const orientation = options.orientation ?? "horizontal";
     this.actionBar = this.own(new ActionBar({
       ownerDocument: options.ownerDocument,
       ariaLabel: options.ariaLabel,
       ariaRole: "tablist",
-      orientation: "horizontal",
+      orientation,
       actionViewItemProvider: (action) => {
         if (!(action instanceof TabAction)) {
           throw new TypeError(`Unsupported TabList action: ${action.id}`);
@@ -64,13 +67,10 @@ export class TabList<T> extends DisposableOwner {
         return new TabActionViewItem(action, onClose);
       },
     }));
-    this.scrollable = this.own(new ScrollableElement({
-      ownerDocument: options.ownerDocument,
-      direction: "horizontal",
-      horizontal: "auto",
-      tabIndex: -1,
-      wheel: { consume: "when-scrolling" },
-    }));
+    const scrollableOptions = orientation === "vertical"
+      ? { ownerDocument: options.ownerDocument, direction: "vertical" as const, vertical: "auto" as const, tabIndex: -1, wheel: { consume: "when-scrolling" as const } }
+      : { ownerDocument: options.ownerDocument, direction: "horizontal" as const, horizontal: "auto" as const, tabIndex: -1, wheel: { consume: "when-scrolling" as const } };
+    this.scrollable = this.own(new ScrollableElement(scrollableOptions));
     this.scrollable.element.classList.add("zeta-tab-list");
     this.scrollable.contentElement.classList.add(
       "zeta-tab-list-scroll-content",

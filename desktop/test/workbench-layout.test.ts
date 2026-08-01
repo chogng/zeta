@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
+import type { IContextMenuProvider } from "../src/zeta/base/browser/contextmenu.js";
+import type { IAction } from "../src/zeta/base/common/actions.js";
 import { DisposableStore } from "../src/zeta/base/common/lifecycle.js";
 import type { IViewPaneOptions } from "../src/zeta/workbench/browser/parts/views/viewPane.js";
 import {
@@ -48,6 +50,7 @@ const { SidebarPart } = await import(
 const { PanelPart } = await import(
   "../src/zeta/workbench/browser/parts/panel/panelPart.js"
 );
+const { CompositeBar } = await import("../src/zeta/workbench/browser/parts/compositebar/compositeBar.js");
 const { AuxiliarybarPart } = await import(
   "../src/zeta/workbench/browser/parts/auxiliarybar/auxiliarybarPart.js"
 );
@@ -72,6 +75,7 @@ const {
 } = await import("../src/zeta/workbench/common/views.js");
 const {
   ToggleAuxiliaryBarCommandId,
+  ToggleMaximizedPanelCommandId,
   TogglePanelCommandId,
   ToggleSideBarCommandId,
 } = await import(
@@ -668,6 +672,86 @@ test("Panel presents its destinations as tabs and active commands as a toolbar",
   dom.window.close();
 });
 
+test("CompositeBar moves non-fitting label tabs into its overflow menu", () => {
+  const dom = new JSDOM("<!doctype html><body></body>");
+  const disposables = new DisposableStore();
+  const registry = new WorkbenchViewRegistry();
+  const panels = [
+    ["zeta.panel.problems", "Problems"],
+    ["zeta.panel.output", "Output"],
+    ["zeta.panel.terminal", "Terminal"],
+  ] as const;
+  for (const [id, title] of panels) {
+    disposables.add(registry.registerViewContainer({
+      id,
+      title,
+      location: ViewContainerLocation.Panel,
+    }));
+  }
+  const contextKeys = disposables.add(new ContextKeyService());
+  const viewDescriptors = disposables.add(new ViewDescriptorService({
+    contextKeyService: contextKeys,
+    registry,
+  }));
+  const selections: string[] = [];
+  let overflowActions: readonly IAction[] = [];
+  let hideOverflowMenu: (() => void) | undefined;
+  const contextMenuProvider: IContextMenuProvider = {
+    showContextMenu(options): void {
+      overflowActions = options.actions;
+      hideOverflowMenu = () => options.onHide?.(true);
+    },
+  };
+  const compositeBar = disposables.add(new CompositeBar({
+    ownerDocument: dom.window.document,
+    viewDescriptorService: viewDescriptors,
+    location: ViewContainerLocation.Panel,
+    ariaLabel: "Panel views",
+    presentation: "label",
+    contextMenuProvider,
+  }));
+  disposables.add(compositeBar.onDidSelectComposite(
+    ({ compositeId }) => selections.push(compositeId),
+  ));
+  dom.window.document.body.append(compositeBar.element);
+  Object.defineProperty(compositeBar.element, "clientWidth", {
+    configurable: true,
+    value: 110,
+  });
+  compositeBar.setActiveComposite("zeta.panel.terminal");
+  for (const tab of compositeBar.element.querySelectorAll<HTMLElement>(".zeta-tab")) {
+    tab.getBoundingClientRect = () => ({ width: 50 } as DOMRect);
+  }
+  compositeBar.layout();
+
+  assert.deepEqual(
+    [...compositeBar.element.querySelectorAll("[role='tab']")]
+      .map((tab) => tab.textContent),
+    ["Terminal"],
+  );
+  const overflowButton = compositeBar.element.querySelector<HTMLButtonElement>(
+    ".zeta-composite-bar-overflow",
+  );
+  assert.ok(overflowButton);
+  assert.equal(overflowButton.hidden, false);
+  overflowButton.click();
+  assert.equal(overflowButton.getAttribute("aria-expanded"), "true");
+  assert.deepEqual(
+    overflowActions.map((action) => action.label),
+    ["Problems", "Output"],
+  );
+  const problems = overflowActions[0];
+  assert.ok(problems);
+  problems.run();
+  assert.deepEqual(selections, ["zeta.panel.problems"]);
+  assert.ok(hideOverflowMenu);
+  hideOverflowMenu();
+  assert.equal(overflowButton.getAttribute("aria-expanded"), "false");
+
+  disposables.dispose();
+  dom.window.close();
+});
+
 test("Auxiliary Bar directly hosts its fixed View container", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
   const disposables = new DisposableStore();
@@ -761,11 +845,23 @@ test("titlebar layout commands toggle shell regions", async () => {
   await commands.executeCommand(TogglePanelCommandId);
   assert.equal(harness.layout.isPartVisible("panel"), true);
 
+  assert.equal(harness.layout.isPartVisible("editor"), true);
+  await commands.executeCommand(ToggleMaximizedPanelCommandId);
+  assert.equal(harness.layout.isPartVisible("panel"), true);
+  assert.equal(harness.layout.isPartVisible("editor"), false);
+  await commands.executeCommand(ToggleMaximizedPanelCommandId);
+  assert.equal(harness.layout.isPartVisible("editor"), true);
+
+  await commands.executeCommand(ToggleMaximizedPanelCommandId);
+  await commands.executeCommand(TogglePanelCommandId);
+  assert.equal(harness.layout.isPartVisible("panel"), false);
+  assert.equal(harness.layout.isPartVisible("editor"), true);
+
   harness.disposables.dispose();
   dom.window.close();
 });
 
-test("panel toggle action uses state icons in the right titlebar", () => {
+test("panel layout actions use state icons", () => {
   using disposables = new DisposableStore();
   const contextKeys = disposables.add(new ContextKeyService());
   const commands = disposables.add(
@@ -776,8 +872,17 @@ test("panel toggle action uses state icons in the right titlebar", () => {
     .getMenuActions(MenuId.TitleBar)
     .flatMap(([, actions]) => actions)
     .find((action) => action.id === TogglePanelCommandId);
+  const maximizePanelAction = () => menuService
+    .getMenuActions(MenuId.TerminalTitle)
+    .flatMap(([, actions]) => actions)
+    .find((action) => action.id === ToggleMaximizedPanelCommandId);
 
   assert.equal(panelAction()?.icon, lxiconsLibrary.layoutPanelOff);
   contextKeys.setContext("panelVisible", true);
   assert.equal(panelAction()?.icon, lxiconsLibrary.layoutPanel);
+  assert.equal(maximizePanelAction()?.icon, lxiconsLibrary.screenFull);
+  assert.equal(maximizePanelAction()?.checked, false);
+  contextKeys.setContext("editorAreaVisible", false);
+  assert.equal(maximizePanelAction()?.icon, lxiconsLibrary.screenNormal);
+  assert.equal(maximizePanelAction()?.checked, true);
 });

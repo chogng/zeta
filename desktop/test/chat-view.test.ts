@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import type { ModelRef, ServerNotification, Session, SessionCommandParams, SessionModelSetParams, Thread } from "../generated/app-server/types.js";
+import type { ModelRef, ServerNotification, Session, SessionCommandParams, SessionCreateParams, SessionModelSetParams, SessionThreadCreateParams, Thread, TurnStartParams } from "../generated/app-server/types.js";
 import type { ZetaRendererApi } from "../src/zeta/platform/app-server/common/renderer-api.js";
 import type { IAction } from "../src/zeta/base/common/actions.js";
 import { TAB_CLOSE_ACTION_ID } from "../src/zeta/base/browser/ui/tablist/tabList.js";
@@ -330,19 +330,19 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
   dom.window.close();
 });
 
-test("The New Chat slash command creates and activates a dedicated Session pane", async () => {
+test("New Chat creates a local draft pane and persists it on its first send", async () => {
   const dom = new JSDOM("<!doctype html><body></body>");
-  const initialSession = session("session-1", "thread-1", "First Chat");
-  const createdSession = session("session-2", undefined, "New Chat");
-  const attachedSession = session("session-2", "thread-2", "New Chat");
-  const api = fakeApi({
-    sessions: [initialSession],
+  const createdSession = session("session-1", undefined, "New Chat");
+  const attachedSession = session("session-1", "thread-1", "New Chat");
+  const fake = fakeApi({
+    sessions: [],
     createSession: createdSession,
     createThread: {
       session: attachedSession,
-      threadId: "thread-2",
+      threadId: "thread-1",
     },
-  }).api;
+  });
+  const api = fake.api;
   const services = new ServiceCollection();
   using sessions = new WorkbenchSessionService(api);
   using contextKeys = new ContextKeyService();
@@ -382,20 +382,116 @@ test("The New Chat slash command creates and activates a dedicated Session pane"
 
   await sessions.initialize();
   await nextTask();
-  assert.equal(pane.element.querySelectorAll("[role='tab']").length, 1);
+  assert.equal(pane.element.querySelectorAll("[role='tab']").length, 0);
 
-  const chatInput = pane.element.querySelector<HTMLTextAreaElement>(".zeta-chat:not([hidden]) .zeta-alpha-editor-input");
-  assert.ok(chatInput);
-  typeAlphaText(dom.window, chatInput, "/new");
-  assert.equal(pane.element.querySelector("[data-action-id='zeta.chat.input.command'] button")?.textContent, "Command");
-  assert.equal(pane.element.querySelector<HTMLButtonElement>("[data-action-id='zeta.chat.input.send'] button")?.disabled, false);
-  chatInput.dispatchEvent(new dom.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Enter" }));
-  await waitFor(() => pane.element.querySelectorAll("[role='tab']").length === 2);
+  await commands.executeCommand(NEW_CHAT_COMMAND_ID);
+  await nextTask();
 
   const tabs = pane.element.querySelectorAll<HTMLButtonElement>("[role='tab']");
-  assert.equal(tabs.length, 2);
+  assert.equal(tabs.length, 1);
   assert.deepEqual(
     [...tabs].map((tab) => ({
+      label: tab.textContent,
+      selected: tab.getAttribute("aria-selected"),
+    })),
+    [
+      { label: "New Chat", selected: "true" },
+    ],
+  );
+  assert.equal(fake.createSessionRequests.length, 0);
+  assert.equal(fake.createThreadRequests.length, 0);
+  assert.equal(sessions.sessions.length, 0);
+  assert.equal(sessions.drafts.length, 1);
+  assert.equal(focusedView, CHAT_VIEW_ID);
+  const draftPane = pane.element.querySelector<HTMLElement>("[role='tabpanel']");
+  assert.ok(draftPane?.dataset.draftId);
+  const input = draftPane.querySelector<HTMLTextAreaElement>(".zeta-alpha-editor-input");
+  assert.ok(input);
+  typeAlphaText(dom.window, input, "Hello from a draft");
+  input.dispatchEvent(new dom.window.KeyboardEvent("keydown", {
+    bubbles: true,
+    cancelable: true,
+    key: "Enter",
+  }));
+  await waitFor(() => fake.turnStartRequests.length === 1);
+
+  assert.equal(fake.createSessionRequests.length, 1);
+  assert.equal(fake.createThreadRequests.length, 1);
+  assert.equal(fake.turnStartRequests.length, 1);
+  assert.equal(sessions.drafts.length, 0);
+  assert.equal(sessions.active?.session.sessionId, "session-1");
+  assert.equal(sessions.active?.threadId, "thread-1");
+  assert.equal(
+    pane.element.querySelector<HTMLElement>("[role='tabpanel']")?.dataset.sessionId,
+    "session-1",
+  );
+  assert.equal(
+    pane.element.querySelector("[role='tabpanel']")?.getAttribute(
+      "aria-labelledby",
+    ),
+    tabs[0]?.id,
+  );
+
+  dom.window.close();
+});
+
+test("the New Chat slash command opens a local draft", async () => {
+  const dom = new JSDOM("<!doctype html><body></body>");
+  const initialSession = session("session-1", "thread-1", "First Chat");
+  const fake = fakeApi({ sessions: [initialSession] });
+  const services = new ServiceCollection();
+  using sessions = new WorkbenchSessionService(fake.api);
+  using contextKeys = new ContextKeyService();
+  using viewDescriptors = new ViewDescriptorService({
+    contextKeyService: contextKeys,
+    registry: new WorkbenchViewRegistry(),
+  });
+  services.set(IWorkbenchSessionService, sessions);
+  let focusedView: string | undefined;
+  services.set(IViewsService, {
+    openView: () => undefined,
+    focusView: (viewId) => {
+      focusedView = viewId;
+      return true;
+    },
+  });
+  using commands = new CommandService(services);
+  const menuService = new MenuService(commands, contextKeys);
+  const contextMenuService = {
+    showContextMenu: () => undefined,
+  } as unknown as IContextMenuService;
+  using pane = new ChatViewPane(
+    {
+      id: CHAT_VIEW_ID,
+      title: "Chat",
+      ownerDocument: dom.window.document,
+    },
+    fake.api,
+    sessions,
+    menuService,
+    contextMenuService,
+    viewDescriptors,
+    contextKeys,
+    commands,
+  );
+  dom.window.document.body.append(pane.element);
+
+  await sessions.initialize();
+  await nextTask();
+
+  const input = pane.element.querySelector<HTMLTextAreaElement>(".zeta-chat:not([hidden]) .zeta-alpha-editor-input");
+  assert.ok(input);
+  typeAlphaText(dom.window, input, "/new");
+  assert.equal(pane.element.querySelector("[data-action-id='zeta.chat.input.command'] button")?.textContent, "Command");
+  input.dispatchEvent(new dom.window.KeyboardEvent("keydown", {
+    bubbles: true,
+    cancelable: true,
+    key: "Enter",
+  }));
+  await waitFor(() => pane.element.querySelectorAll("[role='tab']").length === 2);
+
+  assert.deepEqual(
+    [...pane.element.querySelectorAll<HTMLElement>("[role='tab']")].map((tab) => ({
       label: tab.textContent,
       selected: tab.getAttribute("aria-selected"),
     })),
@@ -404,15 +500,73 @@ test("The New Chat slash command creates and activates a dedicated Session pane"
       { label: "First Chat", selected: "false" },
     ],
   );
-  assert.equal(sessions.active?.session.sessionId, "session-2");
-  assert.equal(sessions.active?.threadId, "thread-2");
+  assert.equal(fake.createSessionRequests.length, 0);
+  assert.equal(fake.createThreadRequests.length, 0);
+  assert.equal(sessions.drafts.length, 1);
   assert.equal(focusedView, CHAT_VIEW_ID);
-  assert.equal(
-    pane.element.querySelector("[role='tabpanel']")?.getAttribute(
-      "aria-labelledby",
-    ),
-    tabs[0]?.id,
+
+  dom.window.close();
+});
+
+test("failed first send keeps the local draft and its message", async () => {
+  const dom = new JSDOM("<!doctype html><body></body>");
+  const fake = fakeApi({
+    sessions: [],
+    createSessionError: new Error("Cannot create Session"),
+  });
+  const services = new ServiceCollection();
+  using sessions = new WorkbenchSessionService(fake.api);
+  using contextKeys = new ContextKeyService();
+  using viewDescriptors = new ViewDescriptorService({
+    contextKeyService: contextKeys,
+    registry: new WorkbenchViewRegistry(),
+  });
+  services.set(IWorkbenchSessionService, sessions);
+  services.set(IViewsService, {
+    openView: () => undefined,
+    focusView: () => true,
+  });
+  using commands = new CommandService(services);
+  const menuService = new MenuService(commands, contextKeys);
+  const contextMenuService = {
+    showContextMenu: () => undefined,
+  } as unknown as IContextMenuService;
+  using pane = new ChatViewPane(
+    {
+      id: CHAT_VIEW_ID,
+      title: "Chat",
+      ownerDocument: dom.window.document,
+    },
+    fake.api,
+    sessions,
+    menuService,
+    contextMenuService,
+    viewDescriptors,
+    contextKeys,
+    commands,
   );
+  dom.window.document.body.append(pane.element);
+
+  await sessions.initialize();
+  await commands.executeCommand(NEW_CHAT_COMMAND_ID);
+  await nextTask();
+
+  const input = pane.element.querySelector<HTMLTextAreaElement>(".zeta-alpha-editor-input");
+  assert.ok(input);
+  typeAlphaText(dom.window, input, "Keep this draft");
+  input.dispatchEvent(new dom.window.KeyboardEvent("keydown", {
+    bubbles: true,
+    cancelable: true,
+    key: "Enter",
+  }));
+  await waitFor(() => pane.element.querySelector(".zeta-alpha-editor-line-text")?.textContent === "Keep this draft");
+
+  assert.equal(fake.createSessionRequests.length, 1);
+  assert.equal(sessions.sessions.length, 0);
+  assert.equal(sessions.drafts.length, 1);
+  assert.equal(pane.element.querySelector(".zeta-alpha-editor-line-text")?.textContent, "Keep this draft");
+  assert.equal(pane.element.querySelector<HTMLElement>("[role='tabpanel']")?.dataset.draftId, sessions.drafts[0]?.draftId);
+  assert.match(pane.element.querySelector<HTMLElement>(".zeta-chat-status")?.textContent ?? "", /Cannot create Session/);
 
   dom.window.close();
 });
@@ -661,8 +815,11 @@ test("ChatPaneModel layers transient deltas over canonical Thread state", async 
   });
   using sessions = new WorkbenchSessionService(fake.api);
   using model = new ChatPaneModel(fake.api, {
-    session: activeSession,
-    threadId: "thread-1",
+    kind: "session",
+    active: {
+      session: activeSession,
+      threadId: "thread-1",
+    },
   }, sessions);
 
   await model.initialize();
@@ -738,6 +895,7 @@ test("ChatPaneModel layers transient deltas over canonical Thread state", async 
 interface FakeOptions {
   readonly sessions?: readonly Session[];
   readonly createSession?: Session;
+  readonly createSessionError?: Error;
   readonly createThread?: {
     readonly session: Session;
     readonly threadId: string;
@@ -748,12 +906,18 @@ interface FakeOptions {
 function fakeApi(options: FakeOptions = {}): {
   readonly api: ZetaRendererApi;
   readonly archiveRequests: readonly SessionCommandParams[];
+  readonly createSessionRequests: readonly SessionCreateParams[];
+  readonly createThreadRequests: readonly SessionThreadCreateParams[];
   readonly setModelRequests: readonly SessionModelSetParams[];
+  readonly turnStartRequests: readonly TurnStartParams[];
   readonly emit: (notification: ServerNotification) => void;
 } {
   const listeners = new Set<(notification: ServerNotification) => void>();
   const archiveRequests: SessionCommandParams[] = [];
+  const createSessionRequests: SessionCreateParams[] = [];
+  const createThreadRequests: SessionThreadCreateParams[] = [];
   const setModelRequests: SessionModelSetParams[] = [];
+  const turnStartRequests: TurnStartParams[] = [];
   const currentThread = () => options.thread?.() ?? thread();
   const api = {
     appServer: {
@@ -763,14 +927,18 @@ function fakeApi(options: FakeOptions = {}): {
     },
     session: {
       list: async () => ({ sessions: [...(options.sessions ?? [])] }),
-      create: async () => ({
-        session: options.createSession ?? session("created"),
-      }),
-      createThread: async () =>
-        options.createThread ?? {
+      create: async (params: SessionCreateParams) => {
+        createSessionRequests.push(params);
+        if (options.createSessionError) throw options.createSessionError;
+        return { session: options.createSession ?? session("created") };
+      },
+      createThread: async (params: SessionThreadCreateParams) => {
+        createThreadRequests.push(params);
+        return options.createThread ?? {
           session: session("created", "created-thread"),
           threadId: "created-thread",
-        },
+        };
+      },
       archive: async (params: SessionCommandParams) => {
         archiveRequests.push(params);
         const archived = options.sessions?.find(
@@ -802,7 +970,10 @@ function fakeApi(options: FakeOptions = {}): {
       unsubscribe: async () => undefined,
     },
     turn: {
-      start: async () => ({ turnId: "turn-started", sequence: 2 }),
+      start: async (params: TurnStartParams) => {
+        turnStartRequests.push(params);
+        return { turnId: "turn-started", sequence: 2 };
+      },
       interrupt: async () => ({ sequence: 3 }),
       resolveInteraction: async () => ({ sequence: 3 }),
     },
@@ -816,7 +987,10 @@ function fakeApi(options: FakeOptions = {}): {
   return {
     api,
     archiveRequests,
+    createSessionRequests,
+    createThreadRequests,
     setModelRequests,
+    turnStartRequests,
     emit: (notification) => {
       for (const listener of listeners) listener(notification);
     },

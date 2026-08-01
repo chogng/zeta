@@ -1,21 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { URI } from "../src/zeta/base/common/uri.js";
-import {
-  BrowserFileService,
-  workspaceRelativePath,
-} from "../src/zeta/platform/files/browser/fileService.js";
-import {
-  FileKind,
-} from "../src/zeta/platform/files/common/files.js";
-import type {
-  IWorkspaceContextService,
-} from "../src/zeta/platform/workspace/common/workspace.js";
+import { BrowserFileService, workspaceRelativePath } from "../src/zeta/platform/files/browser/fileService.js";
+import { FileKind } from "../src/zeta/platform/files/common/files.js";
+import type { IWorkspaceContextService } from "../src/zeta/platform/workspace/common/workspace.js";
 import { WorkspaceContextService } from "../src/zeta/workbench/services/workspaces/browser/workspaceContextService.js";
 
 test("workspaceRelativePath confines resources to the folder", () => {
   const root = URI.file("C:\\project");
-  assert.equal(workspaceRelativePath(root, URI.file("C:\\project")), "");
+  assert.equal(workspaceRelativePath(root, URI.file("C:\\project")), ".");
   assert.equal(
     workspaceRelativePath(root, URI.file("C:\\project\\src\\main.ts")),
     "src/main.ts",
@@ -34,7 +27,7 @@ test("BrowserFileService maps wire entries back to resource URIs", async () => {
     workspaceContextService,
     api: {
       getMetadata: async ({ path }) => {
-        assert.equal(path, "");
+        assert.equal(path, ".");
         return {
           fileType: "directory",
           sizeBytes: 0,

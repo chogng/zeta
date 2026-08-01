@@ -5,22 +5,33 @@
   flex-direction: column;
 }
 
-.zeta-terminal-profile {
-  max-width: 170px;
-  height: 22px;
-  border: 1px solid color-mix(in srgb, currentColor 20%, transparent);
-  border-radius: 3px;
-  color: inherit;
-  background: transparent;
-  font: inherit;
-}
-
 .zeta-terminal-title-toolbar {
   gap: 2px;
 }
 
-.zeta-terminal-title-toolbar .zeta-terminal-profile-action {
-  align-items: center;
+.zeta-terminal-profile-action .zeta-button {
+  width: auto;
+  min-width: 0;
+  height: 26px;
+  min-height: 26px;
+  gap: 4px;
+  padding: 3px 6px;
+}
+
+.zeta-terminal-profile-action .zeta-button-label {
+  position: static;
+  width: auto;
+  max-width: 170px;
+  height: auto;
+  overflow: hidden;
+  clip-path: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.zeta-terminal-profile-action .zeta-icon {
+  width: 16px;
+  height: 16px;
 }
 
 .zeta-terminal-status {
@@ -45,16 +56,12 @@
 }
 
 .zeta-terminal-tabs {
-  display: flex;
   min-width: 0;
   min-height: 0;
-  flex-direction: column;
-  overflow-x: hidden;
-  overflow-y: auto;
   border-left: 1px solid color-mix(in srgb, currentColor 12%, transparent);
 }
 
-.zeta-terminal-tab {
+.zeta-terminal-tabs .zeta-tab {
   position: relative;
   display: flex;
   align-items: center;
@@ -63,11 +70,11 @@
   flex: 0 0 auto;
 }
 
-.zeta-terminal-tab.active {
+.zeta-terminal-tabs .zeta-tab.checked {
   background: color-mix(in srgb, currentColor 8%, transparent);
 }
 
-.zeta-terminal-tab.active::before {
+.zeta-terminal-tabs .zeta-tab.checked::before {
   position: absolute;
   top: 0;
   bottom: 0;
@@ -77,15 +84,15 @@
   content: "";
 }
 
-.zeta-terminal-tab-select {
+.zeta-terminal-tabs .zeta-tab-label {
   display: flex;
   overflow: hidden;
   align-items: center;
   min-width: 0;
+  height: 100%;
+  flex: 1 1 auto;
   padding: 3px 4px 3px 10px;
   border: 0;
-  flex: 1 1 auto;
-  gap: 4px;
   color: inherit;
   background: transparent;
   font: inherit;
@@ -93,60 +100,28 @@
   cursor: pointer;
 }
 
-.zeta-terminal-tab-icon {
-  width: 16px;
-  flex: 0 0 auto;
-  font-family: var(--zeta-font-family-monospace, Consolas, "Courier New", monospace);
-  font-size: 11px;
-  letter-spacing: -1px;
-  text-align: center;
+.zeta-terminal-tabs .zeta-tab-label:focus-visible {
+  outline: 1px solid var(--zeta-focus-border);
+  outline-offset: -1px;
 }
 
-.zeta-terminal-tab-label {
-  overflow: hidden;
-  min-width: 0;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.zeta-terminal-tabs .zeta-tab-actions {
+  padding-right: 3px;
 }
 
-.zeta-terminal-tabs-narrow .zeta-terminal-tab-select {
+.zeta-terminal-tabs-narrow .zeta-icon-label-text {
+  display: none;
+}
+
+.zeta-terminal-tabs-narrow .zeta-tab-label {
   justify-content: center;
   padding-right: 3px;
   padding-left: 3px;
 }
 
-.zeta-terminal-tabs-narrow .zeta-terminal-tab-label {
-  display: none;
-}
-
-.zeta-terminal-tab[data-state="disconnected"] .zeta-terminal-tab-select,
-.zeta-terminal-tab[data-state="error"] .zeta-terminal-tab-select {
+.zeta-terminal-tabs .zeta-tab[data-state="disconnected"],
+.zeta-terminal-tabs .zeta-tab[data-state="error"] {
   color: var(--zeta-error-foreground);
-}
-
-.zeta-terminal-tab-close {
-  width: 20px;
-  height: 20px;
-  flex: 0 0 auto;
-  margin-right: 3px;
-  border: 0;
-  border-radius: 3px;
-  color: inherit;
-  background: transparent;
-  cursor: pointer;
-  font-size: 13px;
-  opacity: 0;
-  pointer-events: none;
-}
-
-.zeta-terminal-tab:hover .zeta-terminal-tab-close,
-.zeta-terminal-tab:focus-within .zeta-terminal-tab-close {
-  opacity: 1;
-  pointer-events: auto;
-}
-
-.zeta-terminal-tab-close:hover {
-  background: color-mix(in srgb, currentColor 12%, transparent);
 }
 
 .zeta-terminal-widgets {

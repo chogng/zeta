@@ -1,15 +1,15 @@
 import "./chatTabsControl.css";
 import { TabList } from "../../../../../base/browser/ui/tablist/tabList.js";
 import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
-import type { Session, SessionId } from "../../../../../../../generated/app-server/types.js";
 
-export interface ChatSessionTab {
-  readonly session: Session;
+export interface ChatTab {
+  readonly id: string;
+  readonly label: string;
   readonly panelId: string;
 }
 
 interface ChatTabDescriptor {
-  readonly sessionId: SessionId;
+  readonly id: string;
   readonly label: string;
   readonly panelId: string;
   readonly tabId: string;
@@ -17,14 +17,14 @@ interface ChatTabDescriptor {
 
 /** Callback through which a Chat tab requests Session selection. */
 export interface ChatTabsDelegate {
-  selectSession(sessionId: SessionId): void;
-  closeSession(sessionId: SessionId): void;
+  selectTab(tabId: string): void;
+  closeTab(tabId: string): void;
 }
 
-/** Maps active Sessions onto the shared TabList. */
+/** Maps local draft and durable Session tabs onto the shared TabList. */
 export class ChatTabsControl extends DisposableOwner {
   readonly element: HTMLDivElement;
-  private readonly tabList: TabList<SessionId>;
+  private readonly tabList: TabList<string>;
   private readonly idPrefix: string;
   private readonly tabIds = new Map<string, string>();
   private nextTabId = 0;
@@ -37,38 +37,38 @@ export class ChatTabsControl extends DisposableOwner {
     this.tabList = this.own(new TabList({
       ownerDocument,
       ariaLabel: "Open chats",
-      onActivate: (sessionId) => delegate.selectSession(sessionId),
-      onClose: (sessionId) => delegate.closeSession(sessionId),
+      onActivate: (tabId) => delegate.selectTab(tabId),
+      onClose: (tabId) => delegate.closeTab(tabId),
     }));
     this.element.append(this.tabList.element);
     this.defer(() => this.element.remove());
   }
 
-  setSessions(entries: readonly ChatSessionTab[], activeSessionId: SessionId | undefined): ReadonlyMap<SessionId, string> {
-    const tabs = entries.map(({ session, panelId }) => {
-      let tabId = this.tabIds.get(session.sessionId);
+  setTabs(entries: readonly ChatTab[], activeTabId: string | undefined): ReadonlyMap<string, string> {
+    const tabs = entries.map(({ id, label, panelId }) => {
+      let tabId = this.tabIds.get(id);
       if (!tabId) {
         tabId = `${this.idPrefix}-tab-${++this.nextTabId}`;
-        this.tabIds.set(session.sessionId, tabId);
+        this.tabIds.set(id, tabId);
       }
       return {
-        sessionId: session.sessionId,
-        label: session.title.trim() || "Chat",
+        id,
+        label,
         panelId,
         tabId,
       } satisfies ChatTabDescriptor;
     });
     this.tabList.setTabs(
       tabs.map((tab) => ({
-        id: tab.sessionId,
-        value: tab.sessionId,
+        id: tab.id,
+        value: tab.id,
         label: tab.label,
         tabId: tab.tabId,
         panelId: tab.panelId,
       })),
-      activeSessionId,
+      activeTabId,
     );
     this.element.hidden = tabs.length === 0;
-    return new Map(tabs.map((tab) => [tab.sessionId, tab.tabId]));
+    return new Map(tabs.map((tab) => [tab.id, tab.tabId]));
   }
 }

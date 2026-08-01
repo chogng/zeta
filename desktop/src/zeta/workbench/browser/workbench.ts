@@ -454,6 +454,7 @@ export class Workbench extends DisposableOwner {
     const panel = this.own(new PanelPart({
       ownerDocument,
       viewDescriptorService: viewDescriptors,
+      contextMenuProvider: contextMenus,
     }));
     this.editor = editor;
     const panelCompositeDescriptor = requiredViewContainer(

@@ -44,9 +44,10 @@ export class ActionBar extends DisposableOwner {
     this.element = element;
     this.defer(() => element.remove());
     element.className = "zeta-action-bar";
+    this.orientation = options.orientation ?? "horizontal";
+    element.classList.toggle("vertical", this.orientation === "vertical");
     element.classList.toggle("highlight-toggled", options.highlightToggledItems === true);
     element.setAttribute("role", options.ariaRole ?? "toolbar");
-    this.orientation = options.orientation ?? "horizontal";
     element.setAttribute("aria-orientation", this.orientation);
     if (options.ariaLabel) {
       element.setAttribute("aria-label", options.ariaLabel);

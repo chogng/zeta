@@ -1,12 +1,13 @@
 import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
 import { Action2, MenuId, registerAction2 } from "../../../../platform/actions/common/actions.js";
 import type { ServicesAccessor } from "../../../../platform/instantiation/common/instantiation.js";
-import { AuxiliaryBarVisibleContext, PanelVisibleContext, SideBarVisibleContext } from "../../../common/contextkeys.js";
+import { AuxiliaryBarVisibleContext, EditorAreaVisibleContext, PanelVisibleContext, SideBarVisibleContext } from "../../../common/contextkeys.js";
 import { IWorkbenchLayoutService } from "../../../services/layout/browser/layoutService.js";
 
 export const ToggleSideBarCommandId = "workbench.action.toggleSideBar";
 export const ToggleAuxiliaryBarCommandId = "workbench.action.toggleAuxiliaryBar";
 export const TogglePanelCommandId = "workbench.action.togglePanel";
+export const ToggleMaximizedPanelCommandId = "workbench.action.toggleMaximizedPanel";
 
 registerAction2(class ToggleSideBarAction extends Action2 {
   constructor() {
@@ -118,9 +119,45 @@ registerAction2(class TogglePanelAction extends Action2 {
   override run(accessor: ServicesAccessor): void {
     const layout = accessor.get(IWorkbenchLayoutService);
     if (layout.isPartVisible("panel")) {
+      if (!layout.isPartVisible("editor")) {
+        layout.showPart("editor");
+      }
       layout.hidePart("panel");
     } else {
       layout.showPart("panel");
+    }
+  }
+});
+
+registerAction2(class ToggleMaximizedPanelAction extends Action2 {
+  constructor() {
+    super({
+      id: ToggleMaximizedPanelCommandId,
+      title: "Maximize Panel",
+      tooltip: "Maximize Panel",
+      icon: lxiconsLibrary.screenFull,
+      toggled: {
+        condition: EditorAreaVisibleContext.isEqualTo(false),
+        title: "Restore Editor Area",
+        tooltip: "Restore Editor Area",
+        icon: lxiconsLibrary.screenNormal,
+      },
+      menu: {
+        id: MenuId.TerminalTitle,
+        group: "navigation",
+        order: 40,
+      },
+      f1: true,
+    });
+  }
+
+  override run(accessor: ServicesAccessor): void {
+    const layout = accessor.get(IWorkbenchLayoutService);
+    if (layout.isPartVisible("editor")) {
+      layout.showPart("panel");
+      layout.hidePart("editor");
+    } else {
+      layout.showPart("editor");
     }
   }
 });

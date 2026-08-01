@@ -1,16 +1,16 @@
-import { addDisposableListener } from "../../../../../base/browser/dom.js";
-import { ActionViewItem } from "../../../../../base/browser/ui/actionbar/actionViewItems.js";
+import { DropdownMenuActionViewItem } from "../../../../../base/browser/ui/dropdown/dropdownMenuActionViewItem.js";
 import type { IAction } from "../../../../../base/common/actions.js";
 import { lxiconsLibrary } from "../../../../../base/common/lxiconsLibrary.js";
 import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
-import { assertDefined } from "../../../../../base/common/types.js";
 import { MenuWorkbenchToolBar } from "../../../../../platform/actions/browser/toolbar.js";
 import { MenuId, MenusRegistry } from "../../../../../platform/actions/common/actions.js";
 import type { IMenuService } from "../../../../../platform/actions/common/menuService.js";
 import { CommandsRegistry } from "../../../../../platform/commands/common/commands.js";
 import { ContextKeyExpr, type IContextKey, type IContextKeyService, RawContextKey } from "../../../../../platform/contextkey/common/contextkey.js";
 import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextMenu.js";
+import { TogglePanelCommandId } from "../../../../browser/parts/titlebar/titlebarActions.js";
 import type { ITerminalInstance, ITerminalProfile } from "../../../../services/terminal/common/terminal.js";
+import { terminalProfileIcon } from "./terminalProfileIcon.js";
 
 const SELECT_PROFILE_COMMAND_ID = "zeta.terminal.selectProfile";
 const NEW_TERMINAL_COMMAND_ID = "zeta.terminal.new";
@@ -62,12 +62,14 @@ export class TerminalTitleActions extends DisposableOwner {
       options.ownerDocument,
       {
         ariaLabel: "Terminal actions",
+        highlightToggledItems: true,
         menuOptions: { shouldForwardArgs: true },
         actionViewItemProvider: (action) => action.id === SELECT_PROFILE_COMMAND_ID
           ? new TerminalProfileActionViewItem(
             action,
             () => this.profiles,
             () => this._selectedProfileId,
+            options.contextMenuService,
           )
           : undefined,
       },
@@ -114,6 +116,7 @@ export class TerminalTitleActions extends DisposableOwner {
         id: SELECT_PROFILE_COMMAND_ID,
         title: "Terminal Profile",
         tooltip: "Select Terminal Profile",
+        icon: lxiconsLibrary.terminal,
       },
       when: TerminalProfilesAvailableContext.isEqualTo(true),
       group: "navigation",
@@ -155,46 +158,62 @@ export class TerminalTitleActions extends DisposableOwner {
       group: "navigation",
       order: 30,
     }));
+    this.own(MenusRegistry.appendMenuItem(MenuId.TerminalTitle, {
+      command: {
+        id: TogglePanelCommandId,
+        title: "Close Panel",
+        tooltip: "Close Panel",
+        icon: lxiconsLibrary.close,
+      },
+      group: "navigation",
+      order: 50,
+    }));
   }
 }
 
-class TerminalProfileActionViewItem extends ActionViewItem {
-  private _select: HTMLSelectElement | undefined;
-
-  constructor(action: IAction, readonly profiles: () => readonly ITerminalProfile[], readonly selectedProfileId: () => string | undefined) { super(action); }
+class TerminalProfileActionViewItem extends DropdownMenuActionViewItem {
+  constructor(action: IAction, profiles: () => readonly ITerminalProfile[], selectedProfileId: () => string | undefined, contextMenuService: IContextMenuService) {
+    super(
+      new TerminalProfileSelectorAction(action, profiles, selectedProfileId),
+      () => profiles().map((profile) => terminalProfileMenuAction(action, profile, selectedProfileId)),
+      contextMenuService,
+    );
+  }
 
   override render(container: HTMLElement): void {
+    super.render(container);
     container.classList.add("zeta-terminal-profile-action");
-    const select = container.ownerDocument.createElement("select");
-    this._select = select;
-    select.className = "zeta-terminal-profile";
-    select.setAttribute("aria-label", "Terminal profile");
-    select.disabled = !this.action.enabled;
-    const selectedProfileId = this.selectedProfileId();
-    const options = this.profiles().map((profile) => {
-      const option = container.ownerDocument.createElement("option");
-      option.value = profile.profileId;
-      option.textContent = profile.isDefault ? `${profile.title} (Default)` : profile.title;
-      option.selected = profile.profileId === selectedProfileId;
-      return option;
-    });
-    select.append(...options);
-    this.own(addDisposableListener(select, "change", () => {
-      void this.action.run(select.value);
-    }));
-    container.append(select);
+  }
+}
+
+class TerminalProfileSelectorAction implements IAction {
+  constructor(private readonly action: IAction, private readonly profiles: () => readonly ITerminalProfile[], private readonly selectedProfileId: () => string | undefined) {}
+
+  get id(): string { return this.action.id; }
+  get label(): string { return this.selectedProfile?.title ?? this.action.label; }
+  get tooltip(): string { return this.selectedProfile ? `Terminal profile: ${this.selectedProfile.title}` : this.action.tooltip; }
+  get icon() { return terminalProfileIcon(this.selectedProfile); }
+  get enabled(): boolean { return this.action.enabled; }
+  get checked(): boolean | undefined { return this.action.checked; }
+
+  run(...args: readonly unknown[]): unknown {
+    return this.action.run(...args);
   }
 
-  override focus(): void {
-    this.select.focus();
+  private get selectedProfile(): ITerminalProfile | undefined {
+    return this.profiles().find((profile) => profile.profileId === this.selectedProfileId());
   }
+}
 
-  override setTabbable(tabbable: boolean): void {
-    this.select.tabIndex = tabbable ? 0 : -1;
-  }
-
-  private get select(): HTMLSelectElement {
-    assertDefined(this._select, "Terminal profile action is not rendered");
-    return this._select;
-  }
+function terminalProfileMenuAction(action: IAction, profile: ITerminalProfile, selectedProfileId: () => string | undefined): IAction {
+  const label = profile.isDefault ? `${profile.title} (Default)` : profile.title;
+  return {
+    id: `${action.id}.${profile.profileId}`,
+    label,
+    tooltip: `Use ${profile.title}`,
+    icon: terminalProfileIcon(profile),
+    enabled: action.enabled,
+    checked: profile.profileId === selectedProfileId(),
+    run: () => action.run(profile.profileId),
+  };
 }

@@ -1,0 +1,98 @@
+$ node scripts/sync-generated-resources.mjs
+$ vite "--" "--force"
+[2m02:03:32[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [31m[Unhandled rejection] [1mWebAppServerUnavailableError[22m: Web App Server operation 'session.create' is unavailable because no Web host API was provided
+[39m > unavailable ../platform/app-server/browser/rendererApi.ts:22:19
+    20 |  export function createDisconnectedRendererApi(): ZetaRendererApi {
+    21 |    const unavailable = <T>(operation: string): Promise<T> =>
+    22 |      Promise.reject(new WebAppServerUnavailableError(operation));
+       |                     ^
+    23 |    const inertSubscription = () => ({ dispose(): void {} });
+    24 |  
+ > Object.create ../platform/app-server/browser/rendererApi.ts:31:20
+ > WorkbenchSessionService.startNewSession ../workbench/services/sessions/common/sessionService.ts:126:45
+ > NewChatAction.run ../workbench/contrib/chat/browser/actions/chatActions.ts:44:25
+ > ../platform/actions/common/actions.ts:262:36
+ > CommandService.executeCommand ../workbench/services/commands/common/commandService.ts:45:19
+ > MenuItemAction.run ../platform/actions/common/actions.ts:202:31
+ > MenuEntryActionViewItem.runAction ../base/browser/ui/actionbar/actionViewItems.ts:66:23
+ > HTMLButtonElement.onClick ../base/browser/ui/actionbar/actionViewItems.ts:47:26
+
+[2m02:03:33[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [31m[Unhandled rejection] [1mWebAppServerUnavailableError[22m: Web App Server operation 'session.create' is unavailable because no Web host API was provided
+[39m > unavailable ../platform/app-server/browser/rendererApi.ts:22:19
+    20 |  export function createDisconnectedRendererApi(): ZetaRendererApi {
+    21 |    const unavailable = <T>(operation: string): Promise<T> =>
+    22 |      Promise.reject(new WebAppServerUnavailableError(operation));
+       |                     ^
+    23 |    const inertSubscription = () => ({ dispose(): void {} });
+    24 |  
+ > Object.create ../platform/app-server/browser/rendererApi.ts:31:20
+ > WorkbenchSessionService.startNewSession ../workbench/services/sessions/common/sessionService.ts:126:45
+ > NewChatAction.run ../workbench/contrib/chat/browser/actions/chatActions.ts:44:25
+ > ../platform/actions/common/actions.ts:262:36
+ > CommandService.executeCommand ../workbench/services/commands/common/commandService.ts:45:19
+ > MenuItemAction.run ../platform/actions/common/actions.ts:202:31
+ > MenuEntryActionViewItem.runAction ../base/browser/ui/actionbar/actionViewItems.ts:66:23
+ > HTMLButtonElement.onClick ../base/browser/ui/actionbar/actionViewItems.ts:47:26
+
+[2m02:03:33[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [31m[Unhandled rejection] [1mWebAppServerUnavailableError[22m: Web App Server operation 'session.create' is unavailable because no Web host API was provided
+[39m > unavailable ../platform/app-server/browser/rendererApi.ts:22:19
+    20 |  export function createDisconnectedRendererApi(): ZetaRendererApi {
+    21 |    const unavailable = <T>(operation: string): Promise<T> =>
+    22 |      Promise.reject(new WebAppServerUnavailableError(operation));
+       |                     ^
+    23 |    const inertSubscription = () => ({ dispose(): void {} });
+    24 |  
+ > Object.create ../platform/app-server/browser/rendererApi.ts:31:20
+ > WorkbenchSessionService.startNewSession ../workbench/services/sessions/common/sessionService.ts:126:45
+ > NewChatAction.run ../workbench/contrib/chat/browser/actions/chatActions.ts:44:25
+ > ../platform/actions/common/actions.ts:262:36
+ > CommandService.executeCommand ../workbench/services/commands/common/commandService.ts:45:19
+ > MenuItemAction.run ../platform/actions/common/actions.ts:202:31
+ > MenuEntryActionViewItem.runAction ../base/browser/ui/actionbar/actionViewItems.ts:66:23
+ > HTMLButtonElement.onClick ../base/browser/ui/actionbar/actionViewItems.ts:47:26
+
+[2m02:03:34[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [31m[Unhandled rejection] [1mWebAppServerUnavailableError[22m: Web App Server operation 'session.create' is unavailable because no Web host API was provided
+[39m > unavailable ../platform/app-server/browser/rendererApi.ts:22:19
+    20 |  export function createDisconnectedRendererApi(): ZetaRendererApi {
+    21 |    const unavailable = <T>(operation: string): Promise<T> =>
+    22 |      Promise.reject(new WebAppServerUnavailableError(operation));
+       |                     ^
+    23 |    const inertSubscription = () => ({ dispose(): void {} });
+    24 |  
+ > Object.create ../platform/app-server/browser/rendererApi.ts:31:20
+ > WorkbenchSessionService.startNewSession ../workbench/services/sessions/common/sessionService.ts:126:45
+ > NewChatAction.run ../workbench/contrib/chat/browser/actions/chatActions.ts:44:25
+ > ../platform/actions/common/actions.ts:262:36
+ > CommandService.executeCommand ../workbench/services/commands/common/commandService.ts:45:19
+ > MenuItemAction.run ../platform/actions/common/actions.ts:202:31
+ > MenuEntryActionViewItem.runAction ../base/browser/ui/actionbar/actionViewItems.ts:66:23
+ > HTMLButtonElement.onClick ../base/browser/ui/actionbar/actionViewItems.ts:47:26
+
+[2m02:04:37[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [31m[Unhandled rejection] [1mWebAppServerUnavailableError[22m: Web App Server operation 'session.create' is unavailable because no Web host API was provided
+[39m > unavailable ../platform/app-server/browser/rendererApi.ts:22:19
+    20 |  export function createDisconnectedRendererApi(): ZetaRendererApi {
+    21 |    const unavailable = <T>(operation: string): Promise<T> =>
+    22 |      Promise.reject(new WebAppServerUnavailableError(operation));
+       |                     ^
+    23 |    const inertSubscription = () => ({ dispose(): void {} });
+    24 |  
+ > Object.create ../platform/app-server/browser/rendererApi.ts:31:20
+ > WorkbenchSessionService.startNewSession ../workbench/services/sessions/common/sessionService.ts:126:45
+ > NewChatAction.run ../workbench/contrib/chat/browser/actions/chatActions.ts:44:25
+ > ../platform/actions/common/actions.ts:262:36
+ > CommandService.executeCommand ../workbench/services/commands/common/commandService.ts:45:19
+ > MenuItemAction.run ../platform/actions/common/actions.ts:202:31
+ > MenuEntryActionViewItem.runAction ../base/browser/ui/actionbar/actionViewItems.ts:66:23
+ > HTMLButtonElement.onClick ../base/browser/ui/actionbar/actionViewItems.ts:47:26
+
+[2m02:16:39[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [31m[Unhandled rejection] [1mReferenceError[22m: __ZETA_WEB_APP_SERVER__ is not defined
+[39m > startBrowserWorkbenchAsync ../workbench/browser/web.bootstrap.ts:19:56
+    17 |  
+    18 |  async function startBrowserWorkbenchAsync(product: ProductConfiguration): Promise<void> {
+    19 |    if (globalThis.zetaWebWorkbenchHost !== undefined || !__ZETA_WEB_APP_SERVER__) {
+       |                                                          ^
+    20 |      startWebWorkbench(product);
+    21 |      return;
+ > startBrowserWorkbench ../workbench/browser/web.bootstrap.ts:15:7
+ > browser/workbench/workbench-code.ts:7:0
+
