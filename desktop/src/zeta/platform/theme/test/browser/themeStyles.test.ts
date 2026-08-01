@@ -27,6 +27,9 @@ test("color theme binding applies changes and restores prior root styles", () =>
   assert.equal(target.style.getPropertyValue(background), "#1e1e1e");
   assert.equal(target.style.getPropertyValue("color-scheme"), "dark");
   assert.equal(target.style.getPropertyValue(sizeCssVariable("scrollbar.size")), "10px");
+  assert.equal(target.style.getPropertyValue(sizeCssVariable("fontSize.body1")), "13px");
+  assert.equal(target.style.getPropertyValue(sizeCssVariable("fontSize.label2")), "11px");
+  assert.equal(target.style.getPropertyValue(sizeCssVariable("fontWeight.regular")), "400");
   assert.equal(target.getAttribute("data-color-theme"), "zeta-dark");
 
   service.setColorTheme(lightColorTheme);
@@ -39,6 +42,8 @@ test("color theme binding applies changes and restores prior root styles", () =>
   assert.equal(target.style.getPropertyPriority(foreground), "important");
   assert.equal(target.style.getPropertyValue(background), "");
   assert.equal(target.style.getPropertyValue(sizeCssVariable("scrollbar.size")), "");
+  assert.equal(target.style.getPropertyValue(sizeCssVariable("fontSize.body1")), "");
+  assert.equal(target.style.getPropertyValue(sizeCssVariable("fontWeight.regular")), "");
   assert.equal(target.style.getPropertyValue("color-scheme"), "only light");
   assert.equal(target.getAttribute("data-color-theme"), "host-theme");
   assert.equal(target.getAttribute("data-color-scheme"), null);

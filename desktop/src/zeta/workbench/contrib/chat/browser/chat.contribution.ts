@@ -8,6 +8,7 @@ import { ICommandService } from "../../../../platform/commands/common/commands.j
 import { SyncDescriptor } from "../../../../platform/instantiation/common/instantiation.js";
 import { IRendererApiService } from "../../../common/services.js";
 import { ViewContainerLocation, type WorkbenchViewRegistry, ViewsRegistry } from "../../../common/views.js";
+import { IWorkbenchLayoutService } from "../../../services/layout/browser/layoutService.js";
 import { IWorkbenchSessionService } from "../../../services/sessions/common/sessionService.js";
 import { IViewDescriptorService } from "../../../services/views/common/viewDescriptorService.js";
 import { CHAT_VIEW_CONTAINER_ID, CHAT_VIEW_ID } from "../common/chat.js";
@@ -44,6 +45,7 @@ export function registerChatViews(registry: WorkbenchViewRegistry = ViewsRegistr
         IViewDescriptorService,
         IContextKeyService,
         ICommandService,
+        IWorkbenchLayoutService,
       ],
     }),
   }]);

@@ -11,6 +11,16 @@ export interface ITerminalDimensions {
 /** Lifecycle state of one Workbench terminal instance. */
 export type TerminalInstanceState = "running" | "exited" | "disconnected" | "error";
 
+/** Renderer-independent lifecycle state of one shell command. */
+export type TerminalCommandStatus = "running" | "completed" | "succeeded" | "failed" | "canceled";
+
+/** One command lifecycle transition positioned relative to terminal output. */
+export interface ITerminalCommandStatusEvent {
+  readonly commandId: string;
+  readonly status: TerminalCommandStatus;
+  readonly exitCode: number | undefined;
+}
+
 /** One available shell profile exposed to Workbench callers. */
 export interface ITerminalProfile {
   readonly profileId: string;
@@ -37,6 +47,7 @@ export interface ITerminalInstance extends IDisposable {
   readonly state: TerminalInstanceState;
   readonly exitCode: number | undefined;
   readonly onDidWriteData: Event<Uint8Array>;
+  readonly onDidChangeCommandStatus: Event<ITerminalCommandStatusEvent>;
   readonly onDidExit: Event<number | undefined>;
   readonly onDidChangeState: Event<TerminalInstanceState>;
 

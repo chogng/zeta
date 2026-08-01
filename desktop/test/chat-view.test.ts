@@ -4,6 +4,7 @@ import { JSDOM } from "jsdom";
 import type { ModelRef, ServerNotification, Session, SessionCommandParams, SessionCreateParams, SessionModelSetParams, SessionThreadCreateParams, Thread, TurnStartParams } from "../generated/app-server/types.js";
 import type { ZetaRendererApi } from "../src/zeta/platform/app-server/common/renderer-api.js";
 import type { IAction } from "../src/zeta/base/common/actions.js";
+import { Emitter } from "../src/zeta/base/common/event.js";
 import { TAB_CLOSE_ACTION_ID } from "../src/zeta/base/browser/ui/tablist/tabList.js";
 import { lxiconsLibrary } from "../src/zeta/base/common/lxiconsLibrary.js";
 import { toDisposable } from "../src/zeta/base/common/lifecycle.js";
@@ -18,6 +19,7 @@ import { ViewContainerLocation, WorkbenchViewRegistry } from "../src/zeta/workbe
 import { ChatPaneModel } from "../src/zeta/workbench/contrib/chat/browser/pane/chatPaneModel.js";
 import { CHAT_VIEW_CONTAINER_ID, CHAT_VIEW_ID, MOVE_CHAT_TO_EDITOR_COMMAND_ID, MOVE_CHAT_TO_NEW_WINDOW_COMMAND_ID, NEW_CHAT_COMMAND_ID, OPEN_CHAT_BROWSER_COMMAND_ID, OPEN_CHAT_SETTINGS_COMMAND_ID, SHOW_CHAT_HISTORY_COMMAND_ID, TOGGLE_AGENT_SIDEBAR_COMMAND_ID } from "../src/zeta/workbench/contrib/chat/common/chat.js";
 import { ISettingsService } from "../src/zeta/workbench/services/preferences/common/settings.js";
+import type { IWorkbenchLayoutService, WorkbenchPartId, WorkbenchPartVisibilityChangeEvent } from "../src/zeta/workbench/services/layout/browser/layoutService.js";
 import { IWorkbenchSessionService, WorkbenchSessionService } from "../src/zeta/workbench/services/sessions/common/sessionService.js";
 import { IViewsService, ViewsService } from "../src/zeta/workbench/services/views/browser/viewsService.js";
 import { ContextKeyService, IContextKeyService } from "../src/zeta/platform/contextkey/common/contextkey.js";
@@ -44,6 +46,9 @@ const { registerChatViews } = await import(
 );
 const { ChatViewPane } = await import(
   "../src/zeta/workbench/contrib/chat/browser/view/chatViewPane.js"
+);
+const { ChatListWidget } = await import(
+  "../src/zeta/workbench/contrib/chat/browser/list/chatListWidget.js"
 );
 await import(
   "../src/zeta/workbench/contrib/preferences/browser/preferences.contribution.js"
@@ -109,6 +114,7 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
   services.set(IContextKeyService, contextKeys);
   using commands = new CommandService(services);
   const menuService = new MenuService(commands, contextKeys);
+  const layout = testLayoutService();
   let shownContextMenuActions: readonly IAction[] = [];
   const contextMenuService = {
     showContextMenu: (options: { readonly actions?: readonly IAction[] }) => {
@@ -128,6 +134,7 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
     viewDescriptors,
     contextKeys,
     commands,
+    layout,
   );
   dom.window.document.body.append(pane.element);
 
@@ -327,6 +334,33 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
     "session-2",
   );
 
+  pane.element.querySelector<HTMLButtonElement>(`[data-action-id="${TAB_CLOSE_ACTION_ID}"] button`)?.click();
+  await waitFor(() => !layout.isPartVisible("auxiliarybar"));
+  assert.equal(pane.element.querySelectorAll("[role='tab']").length, 0);
+  assert.equal(sessions.active, undefined);
+  assert.equal(sessions.untitledSessions.length, 0);
+
+  layout.showPart("auxiliarybar");
+  await waitFor(() => pane.element.querySelectorAll("[role='tab']").length === 1);
+  assert.equal(pane.element.querySelector<HTMLElement>("[role='tab']")?.textContent, "New Chat");
+  assert.equal(sessions.untitledSessions.length, 1);
+
+  pane.element.querySelector<HTMLButtonElement>(`[data-action-id="${TAB_CLOSE_ACTION_ID}"] button`)?.click();
+  assert.equal(layout.isPartVisible("auxiliarybar"), false);
+  assert.equal(pane.element.querySelectorAll("[role='tab']").length, 0);
+  assert.equal(sessions.untitledSessions.length, 0);
+
+  dom.window.close();
+});
+
+test("Empty chat transcripts do not render a redundant placeholder", () => {
+  const dom = new JSDOM("<!doctype html><body></body>");
+  using list = new ChatListWidget(dom.window.document);
+
+  list.render([]);
+
+  assert.equal(list.element.querySelector(".zeta-chat-empty"), null);
+  assert.equal(list.element.textContent, "");
   dom.window.close();
 });
 
@@ -357,6 +391,7 @@ test("an empty Session list opens an untitled session and persists it on its fir
   });
   using commands = new CommandService(services);
   const menuService = new MenuService(commands, contextKeys);
+  const layout = testLayoutService();
   const contextMenuService = {
     showContextMenu: () => undefined,
   } as unknown as IContextMenuService;
@@ -373,6 +408,7 @@ test("an empty Session list opens an untitled session and persists it on its fir
     viewDescriptors,
     contextKeys,
     commands,
+    layout,
   );
   dom.window.document.body.append(pane.element);
 
@@ -449,6 +485,7 @@ test("the New Chat slash command opens an untitled session", async () => {
   });
   using commands = new CommandService(services);
   const menuService = new MenuService(commands, contextKeys);
+  const layout = testLayoutService();
   const contextMenuService = {
     showContextMenu: () => undefined,
   } as unknown as IContextMenuService;
@@ -465,6 +502,7 @@ test("the New Chat slash command opens an untitled session", async () => {
     viewDescriptors,
     contextKeys,
     commands,
+    layout,
   );
   dom.window.document.body.append(pane.element);
 
@@ -520,6 +558,7 @@ test("failed first send keeps the untitled session and its input draft", async (
   });
   using commands = new CommandService(services);
   const menuService = new MenuService(commands, contextKeys);
+  const layout = testLayoutService();
   const contextMenuService = {
     showContextMenu: () => undefined,
   } as unknown as IContextMenuService;
@@ -536,6 +575,7 @@ test("failed first send keeps the untitled session and its input draft", async (
     viewDescriptors,
     contextKeys,
     commands,
+    layout,
   );
   dom.window.document.body.append(pane.element);
 
@@ -588,6 +628,7 @@ test("one Session retains one Chat pane while its selected Thread changes", asyn
   });
   using commands = new CommandService(new ServiceCollection());
   const menuService = new MenuService(commands, contextKeys);
+  const layout = testLayoutService();
   const contextMenuService = {
     showContextMenu: () => undefined,
   } as unknown as IContextMenuService;
@@ -604,6 +645,7 @@ test("one Session retains one Chat pane while its selected Thread changes", asyn
     viewDescriptors,
     contextKeys,
     commands,
+    layout,
   );
   dom.window.document.body.append(pane.element);
 
@@ -774,7 +816,7 @@ test("WorkbenchSessionService archives a Session and selects the next active one
   assert.equal(service.state, "ready");
 });
 
-test("WorkbenchSessionService keeps an active untitled session when no durable Session remains", async () => {
+test("WorkbenchSessionService permits an empty selection when no durable Session remains", async () => {
   const onlySession = session("session-1", "thread-1");
   const fake = fakeApi({ sessions: [onlySession] });
   using service = new WorkbenchSessionService(fake.api);
@@ -783,28 +825,27 @@ test("WorkbenchSessionService keeps an active untitled session when no durable S
   await service.archiveSession("session-1");
 
   assert.equal(service.active, undefined);
-  assert.equal(service.untitledSessions.length, 1);
-  assert.equal(service.activeUntitledSession?.title, "New Chat");
+  assert.equal(service.untitledSessions.length, 0);
+  assert.equal(service.activeUntitledSession, undefined);
   assert.equal(fake.createSessionRequests.length, 0);
   assert.equal(fake.createThreadRequests.length, 0);
 });
 
-test("WorkbenchSessionService selects another untitled session and replaces the last discarded one", async () => {
+test("WorkbenchSessionService selects another untitled session and permits the last one to be discarded", async () => {
   const fake = fakeApi();
   using service = new WorkbenchSessionService(fake.api);
 
   await service.initialize();
-  const initialSession = service.activeUntitledSession;
-  assert.ok(initialSession);
+  assert.equal(service.untitledSessions.length, 0);
+  const initialSession = service.createUntitledSession();
   const nextSession = service.createUntitledSession();
 
   service.discardUntitledSession(nextSession.untitledSessionId);
   assert.equal(service.activeUntitledSession?.untitledSessionId, initialSession.untitledSessionId);
 
   service.discardUntitledSession(initialSession.untitledSessionId);
-  assert.equal(service.untitledSessions.length, 1);
-  assert.notEqual(service.activeUntitledSession?.untitledSessionId, initialSession.untitledSessionId);
-  assert.equal(service.activeUntitledSession?.title, "New Chat");
+  assert.equal(service.untitledSessions.length, 0);
+  assert.equal(service.activeUntitledSession, undefined);
   assert.equal(fake.createSessionRequests.length, 0);
   assert.equal(fake.createThreadRequests.length, 0);
 });
@@ -927,6 +968,25 @@ interface FakeOptions {
     readonly threadId: string;
   };
   readonly thread?: () => Thread;
+}
+
+function testLayoutService(auxiliaryBarVisible = true): IWorkbenchLayoutService {
+  const visibility = new Emitter<WorkbenchPartVisibilityChangeEvent>();
+  const visibleParts = new Set<WorkbenchPartId>(auxiliaryBarVisible ? ["auxiliarybar"] : []);
+  const updateVisibility = (partId: WorkbenchPartId, visible: boolean): void => {
+    if (visible === visibleParts.has(partId)) return;
+    if (visible) visibleParts.add(partId);
+    else visibleParts.delete(partId);
+    visibility.fire({ partId, visible });
+  };
+  return {
+    onDidChangePartVisibility: visibility.event,
+    isPartVisible: (partId) => visibleParts.has(partId),
+    showPart: (partId) => updateVisibility(partId, true),
+    showParts: (partIds) => partIds.forEach((partId) => updateVisibility(partId, true)),
+    hidePart: (partId) => updateVisibility(partId, false),
+    hideParts: (partIds) => partIds.forEach((partId) => updateVisibility(partId, false)),
+  } as IWorkbenchLayoutService;
 }
 
 function fakeApi(options: FakeOptions = {}): {

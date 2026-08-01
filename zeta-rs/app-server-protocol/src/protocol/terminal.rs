@@ -79,6 +79,8 @@ pub struct TerminalReadParams {
     pub terminal_id: String,
     #[ts(type = "number")]
     pub after_sequence: u64,
+    #[ts(type = "number")]
+    pub after_command_sequence: u64,
     #[schemars(range(min = 1, max = 128))]
     pub max_chunks: usize,
 }
@@ -92,6 +94,30 @@ pub struct TerminalOutputChunk {
     pub data_base64: String,
 }
 
+/// Renderer-independent lifecycle state for one shell command.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum TerminalCommandStatus {
+    Running,
+    Completed,
+    Succeeded,
+    Failed,
+    Canceled,
+}
+
+/// One ordered command lifecycle transition associated with PTY output.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct TerminalCommandStatusEvent {
+    #[ts(type = "number")]
+    pub sequence: u64,
+    pub command_id: String,
+    pub status: TerminalCommandStatus,
+    pub exit_code: Option<i32>,
+    #[ts(type = "number")]
+    pub after_output_sequence: u64,
+}
+
 /// Bounded output and process state for one interactive terminal.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -101,6 +127,10 @@ pub struct TerminalReadResult {
     #[ts(type = "number")]
     pub next_sequence: u64,
     pub output_gap: bool,
+    pub command_events: Vec<TerminalCommandStatusEvent>,
+    #[ts(type = "number")]
+    pub next_command_sequence: u64,
+    pub command_event_gap: bool,
     pub exited: bool,
     pub exit_code: Option<i32>,
 }

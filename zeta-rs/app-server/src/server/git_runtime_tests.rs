@@ -113,6 +113,10 @@ fn runtime_projects_text_diffs_and_switches_only_existing_local_branches() {
     assert_eq!(projection.diffs[0].original, "before\n");
     assert_eq!(projection.diffs[0].modified, "after\n");
     assert_eq!(projection.statistics.files, 1);
+    let history = runtime.recent_commits().unwrap();
+    assert_eq!(history.len(), 1);
+    assert_eq!(history[0].subject, "initial");
+    assert_eq!(history[0].object_id.len(), 40);
     let branches = runtime.local_branches().unwrap();
     assert!(
         branches

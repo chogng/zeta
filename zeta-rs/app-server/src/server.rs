@@ -482,6 +482,7 @@ impl AppServer {
             Some(ClientMethod::GitStatus) => self.git_status(),
             Some(ClientMethod::GitTextDiff) => self.git_text_diff(),
             Some(ClientMethod::GitBranchList) => self.git_branch_list(),
+            Some(ClientMethod::GitHistory) => self.git_history(),
             Some(ClientMethod::GitBranchSwitch) => self.git_branch_switch(&request.params),
             Some(ClientMethod::GitStage) => self.git_stage(&request.params),
             Some(ClientMethod::GitUnstage) => self.git_unstage(&request.params),

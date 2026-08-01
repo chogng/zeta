@@ -11,6 +11,7 @@ fn output_ring_reports_a_gap_after_eviction() {
         &TerminalReadParams {
             terminal_id: "terminal-1".into(),
             after_sequence: 0,
+            after_command_sequence: 0,
             max_chunks: 128,
         },
         &state,
@@ -31,6 +32,7 @@ fn output_ring_advances_the_cursor_when_one_oversized_chunk_is_evicted() {
         &TerminalReadParams {
             terminal_id: "terminal-1".into(),
             after_sequence: 0,
+            after_command_sequence: 0,
             max_chunks: 128,
         },
         &state,

@@ -7,6 +7,7 @@ import type { IContextKeyService } from "../../../../../platform/contextkey/comm
 import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextMenu.js";
 import type { IThemeService } from "../../../../../platform/theme/common/themeService.js";
 import { ViewPane, type IViewPaneOptions } from "../../../../browser/parts/views/viewPane.js";
+import type { IWorkbenchLayoutService } from "../../../../services/layout/browser/layoutService.js";
 import type { ITerminalDimensions, ITerminalInstance, ITerminalService } from "../../../../services/terminal/common/terminal.js";
 import { TerminalInstanceWidget } from "../instance/terminalInstanceWidget.js";
 import { TerminalTabsLayout } from "./terminalTabsLayout.js";
@@ -29,7 +30,7 @@ export class TerminalViewPane extends ViewPane {
   private creating = false;
   private disposed = false;
 
-  constructor(options: IViewPaneOptions, terminalService: ITerminalService, themeService: IThemeService, menuService: IMenuService, contextMenuService: IContextMenuService, contextKeyService: IContextKeyService) {
+  constructor(options: IViewPaneOptions, terminalService: ITerminalService, themeService: IThemeService, menuService: IMenuService, contextMenuService: IContextMenuService, contextKeyService: IContextKeyService, private readonly layoutService: IWorkbenchLayoutService) {
     super(options);
     this.defer(() => {
       this.disposed = true;
@@ -46,10 +47,7 @@ export class TerminalViewPane extends ViewPane {
       createTerminal: (profileId) => this.createTerminal(profileId),
       focusActive: () => this.focus(),
       relaunchActive: () => this.relaunchActive(),
-      killActive: () => {
-        const active = this.terminalService.activeInstance;
-        return active ? this.terminalService.closeTerminal(active) : undefined;
-      },
+      killActive: () => this.killActive(),
       clearActive: () => this.clearActive(),
     }));
 
@@ -87,6 +85,11 @@ export class TerminalViewPane extends ViewPane {
       this.render();
     }));
     this.own(terminalService.onDidChangeActiveInstance(() => this.render()));
+    this.own(layoutService.onDidChangePartVisibility(({ partId, visible }) => {
+      if (partId === "panel" && visible && this.terminalService.instances.length === 0) {
+        void this.createTerminal();
+      }
+    }));
 
     const ResizeObserverConstructor = options.ownerDocument.defaultView?.ResizeObserver;
     if (ResizeObserverConstructor) {
@@ -164,6 +167,13 @@ export class TerminalViewPane extends ViewPane {
         this.setStatus(error instanceof Error ? error.message : "Terminal relaunch failed");
       }
     }
+  }
+
+  private async killActive(): Promise<void> {
+    const instance = this.terminalService.activeInstance;
+    if (!instance) return;
+    await this.terminalService.closeTerminal(instance);
+    if (!this.disposed) this.layoutService.hidePart("panel");
   }
 
   private clearActive(): void {

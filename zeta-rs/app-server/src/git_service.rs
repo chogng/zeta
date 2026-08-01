@@ -1,14 +1,16 @@
+use std::num::NonZeroUsize;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Mutex;
 use tokio::runtime::Runtime;
 use zeta_git::{
-    GitBranch, GitClient, GitCommitRequest, GitError, GitPathspecSet, GitRepository,
-    GitRepositorySnapshot, GitTextDiffLimits, GitTextDiffSnapshot,
+    GitBranch, GitClient, GitCommitRequest, GitCommitSummary, GitError, GitPathspecSet,
+    GitRepository, GitRepositorySnapshot, GitTextDiffLimits, GitTextDiffSnapshot,
 };
 use zeta_workspace::{TrustedWorkspace, WorkspaceCapability, WorkspaceRoot};
 
 const MAX_TEXT_DIFF_FILE_BYTES: usize = 2 * 1024 * 1024;
+const RECENT_COMMIT_LIMIT: NonZeroUsize = NonZeroUsize::new(50).expect("history limit is non-zero");
 
 pub(crate) struct GitServiceCommit {
     pub(crate) object_id: String,
@@ -95,6 +97,18 @@ impl GitService {
             let repository = self.open_repository().await?;
             self.client
                 .local_branches(&repository)
+                .await
+                .map_err(GitServiceError::Git)
+        })
+    }
+
+    pub(crate) fn recent_commits(&self) -> Result<Vec<GitCommitSummary>, GitServiceError> {
+        self.ensure_trusted()?;
+        let runtime = self.runtime.lock().map_err(|_| GitServiceError::Runtime)?;
+        runtime.block_on(async {
+            let repository = self.open_repository().await?;
+            self.client
+                .recent_commits(&repository, RECENT_COMMIT_LIMIT)
                 .await
                 .map_err(GitServiceError::Git)
         })

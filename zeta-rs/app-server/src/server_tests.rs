@@ -350,7 +350,10 @@ fn terminal_rpc_drives_a_workspace_rooted_pty_to_exit() {
     let deadline = Instant::now() + Duration::from_secs(5);
     let mut request_id = 4;
     let mut after_sequence = 0;
+    let mut after_command_sequence = 0;
     let mut output = Vec::new();
+    #[cfg(windows)]
+    let mut command_statuses = Vec::new();
     let exit_code = loop {
         let read = call(
             &server,
@@ -362,18 +365,24 @@ fn terminal_rpc_drives_a_workspace_rooted_pty_to_exit() {
                 "params":{
                     "terminalId":terminal_id,
                     "afterSequence":after_sequence,
+                    "afterCommandSequence":after_command_sequence,
                     "maxChunks":128
                 }
             }),
         );
         request_id += 1;
         after_sequence = read["result"]["nextSequence"].as_u64().unwrap();
+        after_command_sequence = read["result"]["nextCommandSequence"].as_u64().unwrap();
         for chunk in read["result"]["chunks"].as_array().unwrap() {
             output.extend(
                 base64::engine::general_purpose::STANDARD
                     .decode(chunk["dataBase64"].as_str().unwrap())
                     .unwrap(),
             );
+        }
+        #[cfg(windows)]
+        for event in read["result"]["commandEvents"].as_array().unwrap() {
+            command_statuses.push(event["status"].as_str().unwrap().to_owned());
         }
         if read["result"]["exited"] == true {
             break read["result"]["exitCode"].as_i64().unwrap();
@@ -389,6 +398,15 @@ fn terminal_rpc_drives_a_workspace_rooted_pty_to_exit() {
 
     assert_eq!(exit_code, 0);
     assert!(String::from_utf8_lossy(&output).contains("zeta-terminal-ready"));
+    #[cfg(windows)]
+    {
+        assert!(command_statuses.iter().any(|status| status == "running"));
+        assert!(
+            command_statuses
+                .iter()
+                .any(|status| matches!(status.as_str(), "completed" | "succeeded"))
+        );
+    }
     drop(server);
     std::fs::remove_dir_all(root).unwrap();
 }
@@ -436,6 +454,7 @@ fn terminal_rpc_enforces_connection_ownership_and_close() {
             "params":{
                 "terminalId":terminal_id,
                 "afterSequence":0,
+                "afterCommandSequence":0,
                 "maxChunks":1
             }
         }),
@@ -463,6 +482,7 @@ fn terminal_rpc_enforces_connection_ownership_and_close() {
             "params":{
                 "terminalId":terminal_id,
                 "afterSequence":0,
+                "afterCommandSequence":0,
                 "maxChunks":1
             }
         }),

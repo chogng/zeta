@@ -25,6 +25,29 @@ fn discovered_profiles_have_one_default_and_unique_programs() {
     assert_eq!(programs.len(), profiles.len());
 }
 
+#[test]
+fn tracked_windows_shells_launch_with_shell_integration_markers() {
+    let command_prompt = TerminalProfileSpec {
+        profile_id: "command-prompt".into(),
+        title: "Command Prompt".into(),
+        program: "cmd.exe".into(),
+        args: Vec::new(),
+        is_default: true,
+    };
+    assert!(command_prompt.command_status_enabled());
+    assert!(command_prompt.launch_args().join(" ").contains("633;D"));
+
+    let powershell = TerminalProfileSpec {
+        profile_id: "powershell".into(),
+        title: "PowerShell".into(),
+        program: "pwsh.exe".into(),
+        args: Vec::new(),
+        is_default: false,
+    };
+    assert!(powershell.command_status_enabled());
+    assert!(powershell.launch_args().join(" ").contains("633;A"));
+}
+
 #[cfg(windows)]
 #[test]
 fn windows_discovers_zsh_from_path() {

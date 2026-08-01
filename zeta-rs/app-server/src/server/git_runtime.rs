@@ -5,8 +5,9 @@ use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::Duration;
 use zeta_app_server_protocol::protocol::git::{
-    GitBranchDto, GitChangeStatusDto, GitDiffStatisticsDto, GitHeadDto, GitRepositoryChangeDto,
-    GitStatusResult, GitSubmoduleStateDto, GitTextDiffDto, GitTextDiffResult, GitUpstreamDto,
+    GitBranchDto, GitChangeStatusDto, GitCommitSummaryDto, GitDiffStatisticsDto, GitHeadDto,
+    GitRepositoryChangeDto, GitStatusResult, GitSubmoduleStateDto, GitTextDiffDto,
+    GitTextDiffResult, GitUpstreamDto,
 };
 use zeta_file_watcher::{DebouncedWatchReceiver, FileWatcher, FileWatcherBackend, WatchPath};
 use zeta_git::{
@@ -91,6 +92,26 @@ impl GitRuntime {
                         object_id: branch.object_id().into(),
                         current: branch.is_current(),
                         upstream: branch.upstream().map(Into::into),
+                    })
+                    .collect()
+            })
+            .map_err(GitRuntimeError::Service)
+    }
+
+    pub(super) fn recent_commits(&self) -> Result<Vec<GitCommitSummaryDto>, GitRuntimeError> {
+        let _operation = self
+            .operation
+            .lock()
+            .map_err(|_| GitRuntimeError::Service(GitServiceError::Runtime))?;
+        self.service
+            .recent_commits()
+            .map(|commits| {
+                commits
+                    .into_iter()
+                    .map(|commit| GitCommitSummaryDto {
+                        object_id: commit.object_id().into(),
+                        timestamp_seconds: commit.timestamp_seconds(),
+                        subject: commit.subject().into(),
                     })
                     .collect()
             })

@@ -99,8 +99,8 @@ export class TerminalTitleActions extends DisposableOwner {
 
   setActiveInstance(instance: ITerminalInstance | undefined, placement: "list" | "title"): void {
     this.activeInstance = instance;
-    this.hasActiveInstanceContext.set(instance !== undefined);
     this.activeInstanceInTitleContext.set(instance !== undefined && placement === "title");
+    this.hasActiveInstanceContext.set(instance !== undefined);
     this.activeInstanceStateContext.set(instance?.state ?? "none");
     this.toolbar.refresh();
   }
@@ -197,7 +197,7 @@ export class TerminalTitleActions extends DisposableOwner {
   private createActionViewItem(action: IAction, contextMenuService: IContextMenuService): ActionViewItem | undefined {
     switch (action.id) {
       case ACTIVE_TERMINAL_COMMAND_ID:
-        if (!this.activeInstance) throw new Error("Active Terminal action requires an active instance");
+        if (!this.activeInstance) return undefined;
         return new ActiveTerminalActionViewItem(action, this.activeInstance);
       case NEW_TERMINAL_COMMAND_ID:
         return new NewTerminalActionViewItem(action);

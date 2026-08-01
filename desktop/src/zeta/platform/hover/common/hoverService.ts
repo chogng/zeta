@@ -9,7 +9,7 @@ export const MaximumHoverDelay = 2_000;
 export const HoverConfiguration = Object.freeze({
   delay: ConfigurationsRegistry.registerConfiguration<number>({
     key: "workbench.hover.delay",
-    defaultValue: 300,
+    defaultValue: 500,
     parse: (value) => parseHoverDelay(value, "workbench.hover.delay"),
   }),
   reducedDelay: ConfigurationsRegistry.registerConfiguration<number>({

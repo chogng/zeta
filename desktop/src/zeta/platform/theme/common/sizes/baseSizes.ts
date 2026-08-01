@@ -2,6 +2,18 @@ import { registerSize, size } from "../sizeRegistry.js";
 
 const owner = "platform.ui";
 const dimension = (id: string, value: number, description: string): string => registerSize(id, size(value), { description, owner });
+const scalar = (id: string, value: number, description: string): string => registerSize(id, size(value, "unitless"), { description, owner });
+
+export const fontSizeHeading1 = dimension("fontSize.heading1", 26, "Largest heading font size.");
+export const fontSizeHeading2 = dimension("fontSize.heading2", 18, "Title heading font size.");
+export const fontSizeHeading3 = dimension("fontSize.heading3", 13, "Subtitle heading font size.");
+export const fontSizeBody1 = dimension("fontSize.body1", 13, "Primary body font size.");
+export const fontSizeBody2 = dimension("fontSize.body2", 11, "Secondary body font size.");
+export const fontSizeLabel1 = dimension("fontSize.label1", 12, "Section title and tab label font size.");
+export const fontSizeLabel2 = dimension("fontSize.label2", 11, "Metadata label font size.");
+export const fontSizeLabel3 = dimension("fontSize.label3", 10, "Badge label font size.");
+export const fontWeightRegular = scalar("fontWeight.regular", 400, "Regular font weight.");
+export const fontWeightSemiBold = scalar("fontWeight.semiBold", 600, "Semibold font weight.");
 
 export const actionBarGap = dimension("actionBar.gap", 2, "Gap between action bar items.");
 export const toolbarItemGap = dimension("toolbar.itemGap", 2, "Gap before a toolbar item.");

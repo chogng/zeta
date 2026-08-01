@@ -1242,6 +1242,22 @@
           "properties": {
             "method": {
               "type": "string",
+              "const": "git/history"
+            },
+            "params": {
+              "$ref": "#/$defs/EmptyParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
               "const": "git/branch/switch"
             },
             "params": {
@@ -2366,6 +2382,22 @@
           "properties": {
             "method": {
               "type": "string",
+              "const": "git/history"
+            },
+            "result": {
+              "$ref": "#/$defs/GitHistoryResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
               "const": "git/branch/switch"
             },
             "result": {
@@ -3158,6 +3190,27 @@
         "status"
       ]
     },
+    "GitCommitSummaryDto": {
+      "description": "One commit in the bounded history projection used by repository graph views.",
+      "type": "object",
+      "properties": {
+        "objectId": {
+          "type": "string"
+        },
+        "subject": {
+          "type": "string"
+        },
+        "timestampSeconds": {
+          "type": "integer",
+          "format": "int64"
+        }
+      },
+      "required": [
+        "objectId",
+        "timestampSeconds",
+        "subject"
+      ]
+    },
     "GitDiffStatisticsDto": {
       "type": "object",
       "properties": {
@@ -3247,6 +3300,21 @@
             "name"
           ]
         }
+      ]
+    },
+    "GitHistoryResult": {
+      "description": "Bounded recent commit history for the active workspace repository.",
+      "type": "object",
+      "properties": {
+        "commits": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/GitCommitSummaryDto"
+          }
+        }
+      },
+      "required": [
+        "commits"
       ]
     },
     "GitOperationResult": {
@@ -6060,6 +6128,52 @@
         "terminalId"
       ]
     },
+    "TerminalCommandStatus": {
+      "description": "Renderer-independent lifecycle state for one shell command.",
+      "type": "string",
+      "enum": [
+        "running",
+        "completed",
+        "succeeded",
+        "failed",
+        "canceled"
+      ]
+    },
+    "TerminalCommandStatusEvent": {
+      "description": "One ordered command lifecycle transition associated with PTY output.",
+      "type": "object",
+      "properties": {
+        "afterOutputSequence": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "commandId": {
+          "type": "string"
+        },
+        "exitCode": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int32"
+        },
+        "sequence": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "status": {
+          "$ref": "#/$defs/TerminalCommandStatus"
+        }
+      },
+      "required": [
+        "sequence",
+        "commandId",
+        "status",
+        "afterOutputSequence"
+      ]
+    },
     "TerminalCreateParams": {
       "description": "Starts one connection-owned interactive terminal at the server's trusted workspace root.",
       "type": "object",
@@ -6192,6 +6306,11 @@
       "description": "Reads output after the last sequence observed by this client.",
       "type": "object",
       "properties": {
+        "afterCommandSequence": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
         "afterSequence": {
           "type": "integer",
           "format": "uint64",
@@ -6211,6 +6330,7 @@
       "required": [
         "terminalId",
         "afterSequence",
+        "afterCommandSequence",
         "maxChunks"
       ]
     },
@@ -6224,6 +6344,15 @@
             "$ref": "#/$defs/TerminalOutputChunk"
           }
         },
+        "commandEventGap": {
+          "type": "boolean"
+        },
+        "commandEvents": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TerminalCommandStatusEvent"
+          }
+        },
         "exitCode": {
           "type": [
             "integer",
@@ -6233,6 +6362,11 @@
         },
         "exited": {
           "type": "boolean"
+        },
+        "nextCommandSequence": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
         },
         "nextSequence": {
           "type": "integer",
@@ -6251,6 +6385,9 @@
         "chunks",
         "nextSequence",
         "outputGap",
+        "commandEvents",
+        "nextCommandSequence",
+        "commandEventGap",
         "exited"
       ]
     },

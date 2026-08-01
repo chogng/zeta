@@ -25,9 +25,9 @@ use crate::protocol::fs::{
 };
 use crate::protocol::git::{
     GitBranchDto, GitBranchListResult, GitBranchSwitchParams, GitChangeStatusDto, GitCommitParams,
-    GitCommitResult, GitDiffStatisticsDto, GitHeadDto, GitOperationResult, GitPathsParams,
-    GitRepositoryChangeDto, GitStatusChanged, GitStatusResult, GitSubmoduleStateDto,
-    GitTextDiffDto, GitTextDiffResult, GitUpstreamDto,
+    GitCommitResult, GitCommitSummaryDto, GitDiffStatisticsDto, GitHeadDto, GitHistoryResult,
+    GitOperationResult, GitPathsParams, GitRepositoryChangeDto, GitStatusChanged, GitStatusResult,
+    GitSubmoduleStateDto, GitTextDiffDto, GitTextDiffResult, GitUpstreamDto,
 };
 use crate::protocol::initialize::{InitializeParams, InitializeResult, ServerCapabilities};
 use crate::protocol::model::{ModelCatalogEntry, ModelListResult};
@@ -60,9 +60,10 @@ use crate::protocol::syntax::{
     SyntaxTokenDataDto, SyntaxTokenTypeDto,
 };
 use crate::protocol::terminal::{
-    TerminalCloseParams, TerminalCreateParams, TerminalCreateResult, TerminalOutputChunk,
-    TerminalProfile, TerminalProfileListResult, TerminalProfileSelection, TerminalReadParams,
-    TerminalReadResult, TerminalResizeParams, TerminalWriteParams,
+    TerminalCloseParams, TerminalCommandStatus, TerminalCommandStatusEvent, TerminalCreateParams,
+    TerminalCreateResult, TerminalOutputChunk, TerminalProfile, TerminalProfileListResult,
+    TerminalProfileSelection, TerminalReadParams, TerminalReadResult, TerminalResizeParams,
+    TerminalWriteParams,
 };
 use crate::protocol::thread::{
     ThreadReadParams, ThreadReadResult, ThreadSubscribeParams, ThreadSubscribeResult,
@@ -482,6 +483,11 @@ client_methods! {
         response: GitBranchListResult,
         serialization: GlobalSharedRead,
     },
+    GitHistory => "git/history" {
+        params: EmptyParams,
+        response: GitHistoryResult,
+        serialization: GlobalSharedRead,
+    },
     GitBranchSwitch => "git/branch/switch" {
         params: GitBranchSwitchParams,
         response: GitOperationResult,
@@ -844,6 +850,8 @@ typescript_bindings! {
     GitStatusChanged,
     GitBranchDto,
     GitBranchListResult,
+    GitCommitSummaryDto,
+    GitHistoryResult,
     GitBranchSwitchParams,
     GitTextDiffDto,
     GitDiffStatisticsDto,
@@ -870,6 +878,8 @@ typescript_bindings! {
     TerminalResizeParams,
     TerminalReadParams,
     TerminalOutputChunk,
+    TerminalCommandStatus,
+    TerminalCommandStatusEvent,
     TerminalReadResult,
     TerminalCloseParams,
     AppServerErrorName,

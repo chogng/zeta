@@ -120,7 +120,7 @@ export class Tree<T> extends DisposableOwner {
     const indentGuides = document.createElement("span");
     indentGuides.className = "zeta-tree-indent";
     indentGuides.setAttribute("aria-hidden", "true");
-    for (let guideIndex = 0; guideIndex < level; guideIndex += 1) {
+    for (let guideIndex = 1; guideIndex < level; guideIndex += 1) {
       const guide = document.createElement("span");
       guide.className = "zeta-tree-indent-guide";
       indentGuides.append(guide);

@@ -108,6 +108,23 @@ pub struct GitBranchListResult {
     pub branches: Vec<GitBranchDto>,
 }
 
+/// One commit in the bounded history projection used by repository graph views.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct GitCommitSummaryDto {
+    pub object_id: String,
+    #[ts(type = "number")]
+    pub timestamp_seconds: i64,
+    pub subject: String,
+}
+
+/// Bounded recent commit history for the active workspace repository.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct GitHistoryResult {
+    pub commits: Vec<GitCommitSummaryDto>,
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct GitBranchSwitchParams {

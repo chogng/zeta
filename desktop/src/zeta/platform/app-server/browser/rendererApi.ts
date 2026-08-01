@@ -75,6 +75,7 @@ export function createDisconnectedRendererApi(): ZetaRendererApi {
     },
     git: {
       status: () => unavailable("git.status"),
+      history: () => unavailable("git.history"),
       stage: () => unavailable("git.stage"),
       unstage: () => unavailable("git.unstage"),
       discardWorktree: () => unavailable("git.discardWorktree"),

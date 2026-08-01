@@ -1,6 +1,6 @@
 import type { FsGetMetadataResult, FsReadDirectoryResult, FsReadFileResult, ModelListResult, ResourceMetadataResult, ResourceReadResult, ServerNotification, SessionListResult, SessionResult, SessionSubscribeResult, SessionThreadResult, SlashCommandDefinition, SyntaxAnalysisSnapshotDto, ThreadReadResult, ThreadSubscribeResult, TurnInterruptResult, TurnInteractionResolveResult, TurnStartResult, TypstCompileResult, WorkspaceSearchReadResult, WorkspaceSearchStartResult } from "../../../../../generated/app-server/types.js";
 import type { TerminalCreateResult, TerminalProfileListResult, TerminalReadResult } from "../../../../../generated/app-server/types.js";
-import type { GitCommitResult, GitOperationResult, GitStatusResult } from "../../../../../generated/app-server/types.js";
+import type { GitCommitResult, GitHistoryResult, GitOperationResult, GitStatusResult } from "../../../../../generated/app-server/types.js";
 import { operatingSystemFromNodePlatform } from "../../../base/common/environment.js";
 import { ipcRenderer, sandboxProcess } from "../../../base/parts/sandbox/electron-browser/globals.js";
 import { NATIVE_CONTEXT_MENU_CLOSE_CHANNEL, NATIVE_CONTEXT_MENU_POPUP_CHANNEL, type INativeContextMenuResult } from "../../../base/parts/contextmenu/common/contextmenu.js";
@@ -150,6 +150,8 @@ export function createElectronRendererApi(): ZetaElectronRendererApi {
     git: {
       status: () =>
         invoke<GitStatusResult>("zeta:git:status"),
+      history: () =>
+        invoke<GitHistoryResult>("zeta:git:history"),
       stage: (params) =>
         invoke<GitOperationResult>("zeta:git:stage", params),
       unstage: (params) =>

@@ -19,19 +19,36 @@ test("TerminalService exposes event-driven instances over the process service", 
         dataBase64: Buffer.from("hello").toString("base64"),
       }],
       nextSequence: 1,
+      commandEvents: [{
+        sequence: 1,
+        commandId: "command-1",
+        status: "running",
+        exitCode: null,
+        afterOutputSequence: 0,
+      }, {
+        sequence: 2,
+        commandId: "command-1",
+        status: "succeeded",
+        exitCode: 0,
+        afterOutputSequence: 1,
+      }],
+      nextCommandSequence: 2,
     }),
     readResult({
       nextSequence: 1,
+      nextCommandSequence: 2,
       exited: true,
       exitCode: 0,
     }),
   ]);
   using service = new TerminalService(processService);
   const output: Uint8Array[] = [];
+  const commandStatuses: string[] = [];
   let createdInstance: ITerminalInstance | undefined;
   service.onDidCreateInstance((instance) => {
     createdInstance = instance;
     instance.onDidWriteData((data) => output.push(data));
+    instance.onDidChangeCommandStatus((event) => commandStatuses.push(event.status));
   });
 
   const instance = await service.createTerminal({
@@ -44,6 +61,7 @@ test("TerminalService exposes event-driven instances over the process service", 
   assert.equal(service.activeInstance, instance);
   assert.equal(instance.title, "cmd");
   assert.equal(new TextDecoder().decode(output[0]), "hello");
+  assert.deepEqual(commandStatuses, ["running", "succeeded"]);
   assert.equal(instance.exitCode, 0);
   assert.deepEqual(processService.createCalls, [{
     rows: 24,
@@ -51,6 +69,7 @@ test("TerminalService exposes event-driven instances over the process service", 
     profile: { type: "default" },
   }]);
   assert.deepEqual(processService.readCursors, [0, 1]);
+  assert.deepEqual(processService.commandReadCursors, [0, 2]);
 });
 
 test("TerminalService batches input, coalesces resize, and releases terminals", async () => {
@@ -93,7 +112,7 @@ test("TerminalService keeps multiple instances and safely relaunches after a cra
 
   assert.equal(service.instances.length, 2);
   assert.equal(service.activeInstance, second);
-  assert.equal(first.title, "cmd");
+  assert.equal(first.title, "cmd 1");
   assert.equal(second.title, "cmd 2");
   service.setActiveInstance(first);
   assert.equal(service.activeInstance, first);
@@ -114,11 +133,39 @@ test("TerminalService keeps multiple instances and safely relaunches after a cra
   });
 });
 
+test("TerminalService renumbers only concurrently open terminals", async () => {
+  const processService = new TestTerminalProcessService([]);
+  using service = new TerminalService(processService);
+  const first = await service.createTerminal({
+    dimensions: { rows: 24, cols: 80 },
+    profile: { type: "default" },
+  });
+  const second = await service.createTerminal({
+    dimensions: { rows: 24, cols: 80 },
+    profile: { type: "default" },
+  });
+
+  assert.equal(first.title, "cmd 1");
+  assert.equal(second.title, "cmd 2");
+  await service.closeTerminal(first);
+  assert.equal(second.title, "cmd");
+
+  const replacement = await service.createTerminal({
+    dimensions: { rows: 24, cols: 80 },
+    profile: { type: "default" },
+  });
+  assert.equal(second.title, "cmd 1");
+  assert.equal(replacement.title, "cmd 2");
+  await service.closeTerminal(replacement);
+  assert.equal(second.title, "cmd");
+});
+
 class TestTerminalProcessService implements ITerminalProcessService {
   readonly createCalls: ITerminalProcessCreateOptions[] = [];
   readonly writeCalls: Array<{ terminalId: string; data: string }> = [];
   readonly resizeCalls: Array<{ terminalId: string; rows: number; cols: number }> = [];
   readonly readCursors: number[] = [];
+  readonly commandReadCursors: number[] = [];
   readonly closeCalls: string[] = [];
   private readonly connectionListeners = new Set<(state: TerminalProcessConnectionState) => void>();
   private connectionState: TerminalProcessConnectionState = "ready";
@@ -145,9 +192,10 @@ class TestTerminalProcessService implements ITerminalProcessService {
     this.resizeCalls.push(params);
   }
 
-  async read(params: { terminalId: string; afterSequence: number; maxChunks: number }) {
+  async read(params: { terminalId: string; afterSequence: number; afterCommandSequence: number; maxChunks: number }) {
     this.readCursors.push(params.afterSequence);
-    return this.reads.shift() ?? readResult({ nextSequence: params.afterSequence });
+    this.commandReadCursors.push(params.afterCommandSequence);
+    return this.reads.shift() ?? readResult({ nextSequence: params.afterSequence, nextCommandSequence: params.afterCommandSequence });
   }
 
   async close(params: { terminalId: string }) {
@@ -175,6 +223,9 @@ function readResult(overrides: Partial<ITerminalProcessReadResult>): ITerminalPr
     chunks: [],
     nextSequence: 0,
     outputGap: false,
+    commandEvents: [],
+    nextCommandSequence: 0,
+    commandEventGap: false,
     exited: false,
     exitCode: null,
     ...overrides,

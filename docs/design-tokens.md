@@ -57,7 +57,7 @@ flowchart LR
 - 新语义必须注册新 ID；组件不能通过复制某个十六进制值表达“看起来一样”。
 - 一个 token 只有一个 owner。owner 负责默认值、描述、弃用路径和视觉回归。
 - ID 采用点分语义命名，CSS 名称由系统稳定生成，例如 `button.primaryBackground` 对应 `--zeta-button-primary-background`。
-- CSS 消费颜色和标准布局尺寸；需要颜色值的 JavaScript 消费者使用 `IColorTheme.getColor()` 或 `getColorCss()`。
+- CSS 消费颜色与标准标量尺寸，包括布局尺寸、字体大小和字重；需要颜色值的 JavaScript 消费者使用 `IColorTheme.getColor()` 或 `getColorCss()`。
 - 主题是已解析快照。消费层不能修改快照，也不能自行解释别名或变换。
 - parser/highlighter 只发布 `CodeEditorTokenRole`；颜色在绘制时由当前 `CodeEditorStyle` 解析，因此换主题不要求重新分析文本。
 - 新注册或默认值变更后运行 `pnpm tokens:generate`，提交 `resources/design-tokens/` 生成物。
@@ -67,7 +67,7 @@ flowchart LR
 - `light`、`dark` 与跟随操作系统的 `system` 偏好。
 - 语言中立的 `theme-entries.json` 为 Rust `ThemeLoader` 提供 `zeta`、`zeta-code` 与 `zeterm` 默认入口；入口只覆盖统一 token，不创建产品 token 或组件分支。
 - Desktop、Native 和 TUI 使用同一 device root 下的 `configuration.json` 与 `themes/*.json`；每个错误文件独立隔离，内置主题始终可回退。Native `zeterm` 在没有显式用户主题时选择 `zeterm` 入口。
-- 116 个语义颜色 token 与 8 个标准布局尺寸 token；四种 `ColorScheme` 均在编译期解析，高对比度当前继承对应明暗默认值。
+- 121 个语义颜色 token 与 19 个标准标量尺寸 token；四种 `ColorScheme` 均在编译期解析，高对比度当前继承对应明暗默认值。
 - 不可变颜色对象、注册贡献、主题快照和生成产物。
 - Alpha/Native CodeEditor 使用 source-neutral `editor.token.*` 角色；旧 `editor.semanticToken.*` 仅作为兼容覆盖入口。
 - Native shell、composer、terminal ANSI、scrollbar 和 multi-diff editor 已由共享 snapshot 构造组件 palette；没有宿主 selector 或 parser 固定色。
@@ -81,8 +81,8 @@ flowchart LR
 - 高对比度使用明暗默认值回退，尚未提供独立视觉设计；类型、解析路径和 manifest 已保留独立 scheme。
 - Desktop 的保存/预览可即时更新；Native 与 TUI 当前在进程启动时加载一次，外部文件修改需要重启对应宿主。
 - `tui.colorTheme` 当前有 typed configuration contract，但尚无 Settings UI；缺失时回退到 `workbench.colorTheme`。
-- 字体族仍由平台 CSS 按操作系统选择，不属于当前尺寸注册表。
-- 颜色和尺寸是当前已实现 token kind；阴影、排版和动效应在出现真实跨组件消费者后增加独立注册表，不能伪装成颜色或尺寸。
+- 字体族和行高仍由平台或组件 CSS 管理；字体大小与字重作为 `fontSize.*`、`fontWeight.*` 标量尺寸注册。
+- 颜色和标量尺寸是当前已实现 token kind；阴影和动效应在出现真实跨组件消费者后增加独立注册表，不能伪装成颜色或尺寸。
 - 用户主题只能覆盖已封存 catalog 中的 token，不能在 JSON 中注册新的产品语义。运行期动态插件如果需要新增 token，应先引入显式 catalog revision 与快照重编译，不应直接让旧快照变为可变对象。
 
 ## 长期不变量

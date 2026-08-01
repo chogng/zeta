@@ -1,3 +1,4 @@
+use crate::terminal_command_status::{ParsedTerminalOutput, TerminalCommandStatusTracker};
 use crate::terminal_profiles::TerminalProfileCatalog;
 use base64::Engine;
 use std::collections::{HashMap, VecDeque};
@@ -84,7 +85,7 @@ impl TerminalService {
             .runtime
             .block_on(spawn_pty_process(
                 &profile.program,
-                &profile.args,
+                &profile.launch_args(),
                 &workspace_root,
                 self.profiles.environment(),
                 &None,
@@ -99,7 +100,9 @@ impl TerminalService {
             "terminal-{:x}",
             self.next_terminal_id.fetch_add(1, Ordering::Relaxed)
         );
-        let state = Arc::new(Mutex::new(TerminalState::default()));
+        let state = Arc::new(Mutex::new(TerminalState::new(
+            profile.command_status_enabled(),
+        )));
         let process = spawn_output_drainers(&self.runtime, spawned, state.clone());
         sessions.insert(
             terminal_id.clone(),
@@ -125,12 +128,19 @@ impl TerminalService {
             return Err(TerminalError::InvalidInput);
         }
         let sessions = self.owned_sessions(owner_connection_id, &params.terminal_id)?;
-        let writer = sessions
+        let session = sessions
             .get(&params.terminal_id)
-            .expect("terminal ownership was just validated")
-            .process
-            .writer_sender();
+            .expect("terminal ownership was just validated");
+        let writer = session.process.writer_sender();
+        let state = session.state.clone();
         drop(sessions);
+        {
+            let mut state = state.lock().map_err(|_| TerminalError::Busy)?;
+            let after_output_sequence = state.next_sequence;
+            state
+                .command_status
+                .note_input(&params.data, after_output_sequence);
+        }
         self.runtime
             .block_on(writer.send(params.data.into_bytes()))
             .map_err(|_| TerminalError::OperationFailed)
@@ -175,6 +185,9 @@ impl TerminalService {
         if params.after_sequence > state.next_sequence {
             return Err(TerminalError::InvalidInput);
         }
+        if params.after_command_sequence > state.command_status.next_event_sequence() {
+            return Err(TerminalError::InvalidInput);
+        }
         Ok(read_state(&params, &state))
     }
 
@@ -187,6 +200,10 @@ impl TerminalService {
         let session = sessions.get(terminal_id).ok_or(TerminalError::NotFound)?;
         if session.owner_connection_id != owner_connection_id {
             return Err(TerminalError::NotOwner);
+        }
+        if let Ok(mut state) = session.state.lock() {
+            let after_output_sequence = state.next_sequence;
+            state.command_status.cancel_active(after_output_sequence);
         }
         sessions
             .remove(terminal_id)
@@ -257,14 +274,34 @@ struct TerminalSession {
     state: Arc<Mutex<TerminalState>>,
 }
 
-#[derive(Default)]
 struct TerminalState {
     chunks: VecDeque<BufferedOutput>,
     next_sequence: u64,
     output_bytes: usize,
+    command_status: TerminalCommandStatusTracker,
     exited: bool,
     output_closed: bool,
     exit_code: Option<i32>,
+}
+
+impl TerminalState {
+    fn new(command_status_enabled: bool) -> Self {
+        Self {
+            chunks: VecDeque::new(),
+            next_sequence: 0,
+            output_bytes: 0,
+            command_status: TerminalCommandStatusTracker::new(command_status_enabled),
+            exited: false,
+            output_closed: false,
+            exit_code: None,
+        }
+    }
+}
+
+impl Default for TerminalState {
+    fn default() -> Self {
+        Self::new(false)
+    }
 }
 
 struct BufferedOutput {
@@ -288,10 +325,22 @@ fn spawn_output_drainers(
     runtime.spawn(async move {
         while let Some(bytes) = stdout_rx.recv().await {
             if let Ok(mut state) = output_state.lock() {
-                push_output(&mut state, bytes);
+                for item in state.command_status.parse_output(bytes) {
+                    match item {
+                        ParsedTerminalOutput::Bytes(bytes) => push_output(&mut state, bytes),
+                        ParsedTerminalOutput::CommandFinished(exit_code) => {
+                            let after_output_sequence = state.next_sequence;
+                            state
+                                .command_status
+                                .finish_active(exit_code, after_output_sequence);
+                        }
+                    }
+                }
             }
         }
         if let Ok(mut state) = output_state.lock() {
+            let pending_output = state.command_status.flush_output();
+            push_output(&mut state, pending_output);
             state.output_closed = true;
             state.exited = state.exit_code.is_some();
         }
@@ -301,6 +350,10 @@ fn spawn_output_drainers(
         let exit_code = exit_rx.await.unwrap_or(-1);
         exit_session.release_pty_handles_after_exit();
         if let Ok(mut state) = state.lock() {
+            let after_output_sequence = state.next_sequence;
+            state
+                .command_status
+                .finish_active(Some(exit_code), after_output_sequence);
             state.exit_code = Some(exit_code);
             state.exited = state.output_closed;
         }
@@ -360,11 +413,17 @@ fn read_state(params: &TerminalReadParams, state: &TerminalState) -> TerminalRea
         },
         |chunk| chunk.sequence,
     );
+    let (command_events, next_command_sequence, command_event_gap) = state
+        .command_status
+        .read_events(params.after_command_sequence, params.max_chunks);
     TerminalReadResult {
         terminal_id: params.terminal_id.clone(),
         chunks,
         next_sequence,
         output_gap,
+        command_events,
+        next_command_sequence,
+        command_event_gap,
         exited: state.exited,
         exit_code: state.exit_code,
     }

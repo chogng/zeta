@@ -2433,6 +2433,86 @@
   ],
   "sizes": [
     {
+      "id": "fontSize.heading1",
+      "kind": "size",
+      "cssVariable": "--zeta-font-size-heading1",
+      "owner": "platform.ui",
+      "description": "Largest heading font size.",
+      "value": "26px"
+    },
+    {
+      "id": "fontSize.heading2",
+      "kind": "size",
+      "cssVariable": "--zeta-font-size-heading2",
+      "owner": "platform.ui",
+      "description": "Title heading font size.",
+      "value": "18px"
+    },
+    {
+      "id": "fontSize.heading3",
+      "kind": "size",
+      "cssVariable": "--zeta-font-size-heading3",
+      "owner": "platform.ui",
+      "description": "Subtitle heading font size.",
+      "value": "13px"
+    },
+    {
+      "id": "fontSize.body1",
+      "kind": "size",
+      "cssVariable": "--zeta-font-size-body1",
+      "owner": "platform.ui",
+      "description": "Primary body font size.",
+      "value": "13px"
+    },
+    {
+      "id": "fontSize.body2",
+      "kind": "size",
+      "cssVariable": "--zeta-font-size-body2",
+      "owner": "platform.ui",
+      "description": "Secondary body font size.",
+      "value": "11px"
+    },
+    {
+      "id": "fontSize.label1",
+      "kind": "size",
+      "cssVariable": "--zeta-font-size-label1",
+      "owner": "platform.ui",
+      "description": "Section title and tab label font size.",
+      "value": "12px"
+    },
+    {
+      "id": "fontSize.label2",
+      "kind": "size",
+      "cssVariable": "--zeta-font-size-label2",
+      "owner": "platform.ui",
+      "description": "Metadata label font size.",
+      "value": "11px"
+    },
+    {
+      "id": "fontSize.label3",
+      "kind": "size",
+      "cssVariable": "--zeta-font-size-label3",
+      "owner": "platform.ui",
+      "description": "Badge label font size.",
+      "value": "10px"
+    },
+    {
+      "id": "fontWeight.regular",
+      "kind": "size",
+      "cssVariable": "--zeta-font-weight-regular",
+      "owner": "platform.ui",
+      "description": "Regular font weight.",
+      "value": "400"
+    },
+    {
+      "id": "fontWeight.semiBold",
+      "kind": "size",
+      "cssVariable": "--zeta-font-weight-semi-bold",
+      "owner": "platform.ui",
+      "description": "Semibold font weight.",
+      "value": "600"
+    },
+    {
       "id": "actionBar.gap",
       "kind": "size",
       "cssVariable": "--zeta-action-bar-gap",

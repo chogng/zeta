@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use zeta_app_server_protocol::protocol::error::AppServerErrorName;
 use zeta_app_server_protocol::protocol::git::{
     GitBranchListResult, GitBranchSwitchParams, GitCommitParams,
-    GitCommitResult as GitCommitResultDto, GitOperationResult, GitPathsParams,
+    GitCommitResult as GitCommitResultDto, GitHistoryResult, GitOperationResult, GitPathsParams,
 };
 use zeta_git::GitError;
 
@@ -25,6 +25,14 @@ impl AppServer {
             .local_branches()
             .map_err(git_error)?;
         result(&GitBranchListResult { branches })
+    }
+
+    pub(super) fn git_history(&self) -> Result<Value, RpcError> {
+        let commits = self
+            .git_runtime_service()?
+            .recent_commits()
+            .map_err(git_error)?;
+        result(&GitHistoryResult { commits })
     }
 
     pub(super) fn git_branch_switch(&self, params: &Value) -> Result<Value, RpcError> {

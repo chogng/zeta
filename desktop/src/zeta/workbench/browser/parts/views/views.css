@@ -1,7 +1,7 @@
-.zeta-view-pane-container { display: flex; min-width: 0; min-height: 0; flex: 1 1 auto; flex-direction: column; overflow: auto; }
-.zeta-view-pane { min-width: 0; }
+.zeta-view-pane-container { display: flex; min-width: 0; min-height: 0; flex: 1 1 auto; flex-direction: column; overflow: hidden; }
+.zeta-view-pane { display: flex; min-width: 0; min-height: 0; flex: 1 1 0; flex-direction: column; overflow: hidden; }
 .zeta-pane-composite-pane-layout-fill > .zeta-view-pane { min-height: 0; flex: 1 1 auto; }
-.zeta-view-pane-title { font-size: 12px; font-weight: 600; }
+.zeta-view-pane-title { flex: 0 0 auto; font-size: 12px; font-weight: 600; }
 .zeta-view-pane-title-button {
   display: flex;
   width: 100%;
@@ -21,7 +21,7 @@
 .zeta-view-pane-title-button.expanded .zeta-view-pane-collapsed-icon { display: none; }
 .zeta-view-pane-title-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .zeta-pane-composite-pane-headers-hidden > .zeta-view-pane > .zeta-view-pane-title { display: none; }
-.zeta-view-pane-content { min-width: 0; }
+.zeta-view-pane-content { min-width: 0; min-height: 0; flex: 1 1 auto; overflow: hidden; }
 .zeta-view-pane.collapsed { flex: 0 0 auto; }
 .zeta-view-pane.collapsed > .zeta-view-pane-content { display: none; }
 .zeta-view-pane-placeholder {

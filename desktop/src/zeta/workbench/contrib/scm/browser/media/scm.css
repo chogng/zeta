@@ -5,6 +5,93 @@
   padding: 8px 0;
 }
 
+.zeta-scm-secondary-pane {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.zeta-scm-empty {
+  margin: 0;
+  padding: 8px;
+  color: color-mix(in srgb, currentColor 70%, transparent);
+  font-size: 12px;
+}
+
+.zeta-scm-graph {
+  min-height: 0;
+  padding: 4px 0 8px;
+  overflow: auto;
+}
+
+.zeta-scm-graph > .zeta-scm-command {
+  margin-left: 8px;
+}
+
+.zeta-scm-graph-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.zeta-scm-graph-commit {
+  position: relative;
+  display: flex;
+  gap: 8px;
+  min-height: 38px;
+  padding: 3px 8px 3px 12px;
+}
+
+.zeta-scm-graph-commit::before {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 16px;
+  width: 1px;
+  background: color-mix(in srgb, currentColor 30%, transparent);
+  content: "";
+}
+
+.zeta-scm-graph-commit:first-child::before {
+  top: 9px;
+}
+
+.zeta-scm-graph-commit:last-child::before {
+  bottom: calc(100% - 10px);
+}
+
+.zeta-scm-graph-node {
+  position: relative;
+  z-index: 1;
+  width: 7px;
+  height: 7px;
+  flex: 0 0 7px;
+  margin-top: 6px;
+  border: 2px solid var(--zeta-workbench-background, Canvas);
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 0 1px currentColor;
+}
+
+.zeta-scm-graph-details {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+}
+
+.zeta-scm-graph-subject {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.zeta-scm-graph-metadata {
+  color: color-mix(in srgb, currentColor 62%, transparent);
+  font-size: 11px;
+}
+
 .zeta-scm-summary {
   display: flex;
   flex-wrap: wrap;

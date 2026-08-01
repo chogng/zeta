@@ -26,6 +26,7 @@ test("Tree projects hierarchy, expansion, and indentation guides", () => {
   const parentRow = tree.element.querySelector<HTMLButtonElement>("[data-tree-id='parent']");
   assert.ok(parentRow);
   assert.equal(parentRow.getAttribute("aria-expanded"), "false");
+  assert.equal(parentRow.querySelectorAll(".zeta-tree-indent-guide").length, 0);
 
   parentRow.click();
   assert.deepEqual(activated, ["parent"]);
@@ -34,7 +35,7 @@ test("Tree projects hierarchy, expansion, and indentation guides", () => {
   assert.equal(tree.element.querySelectorAll(".zeta-tree-row").length, 3);
   assert.equal(tree.element.querySelector(".zeta-tree-group")?.getAttribute("role"), "group");
   assert.equal(tree.element.querySelector("[data-tree-id='child']")?.getAttribute("aria-level"), "2");
-  assert.equal(tree.element.querySelector("[data-tree-id='child']")?.querySelectorAll(".zeta-tree-indent-guide").length, 2);
+  assert.equal(tree.element.querySelector("[data-tree-id='child']")?.querySelectorAll(".zeta-tree-indent-guide").length, 1);
   assert.equal(tree.element.querySelector("[data-tree-id='parent']")?.getAttribute("aria-expanded"), "true");
 
   tree.dispose();

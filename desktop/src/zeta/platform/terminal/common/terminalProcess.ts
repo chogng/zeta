@@ -37,6 +37,7 @@ export interface ITerminalProcessResizeOptions {
 export interface ITerminalProcessReadOptions {
   readonly terminalId: string;
   readonly afterSequence: number;
+  readonly afterCommandSequence: number;
   readonly maxChunks: number;
 }
 
@@ -45,11 +46,24 @@ export interface ITerminalProcessOutputChunk {
   readonly dataBase64: string;
 }
 
+export type TerminalProcessCommandStatus = "running" | "completed" | "succeeded" | "failed" | "canceled";
+
+export interface ITerminalProcessCommandStatusEvent {
+  readonly sequence: number;
+  readonly commandId: string;
+  readonly status: TerminalProcessCommandStatus;
+  readonly exitCode: number | null;
+  readonly afterOutputSequence: number;
+}
+
 export interface ITerminalProcessReadResult {
   readonly terminalId: string;
   readonly chunks: readonly ITerminalProcessOutputChunk[];
   readonly nextSequence: number;
   readonly outputGap: boolean;
+  readonly commandEvents: readonly ITerminalProcessCommandStatusEvent[];
+  readonly nextCommandSequence: number;
+  readonly commandEventGap: boolean;
   readonly exited: boolean;
   readonly exitCode: number | null;
 }

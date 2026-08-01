@@ -186,6 +186,12 @@ export function appServerIpcRoutes(
         supervisor.request(APP_SERVER_METHODS["git/status"], {}),
     }),
     route({
+      channel: "zeta:git:history",
+      validate: emptyParams,
+      invoke: () =>
+        supervisor.request(APP_SERVER_METHODS["git/history"], {}),
+    }),
+    route({
       channel: "zeta:git:stage",
       validate: gitPathsParams,
       invoke: (params) =>

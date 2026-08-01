@@ -1,7 +1,7 @@
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
-import type { ITerminalProcessService, TerminalProcessConnectionState } from "../../../../platform/terminal/common/terminalProcess.js";
-import type { ITerminalCreateOptions, ITerminalDimensions, ITerminalInstance, ITerminalProfile, ITerminalService, TerminalInstanceState } from "../common/terminal.js";
+import type { ITerminalProcessCommandStatusEvent, ITerminalProcessOutputChunk, ITerminalProcessService, TerminalProcessConnectionState } from "../../../../platform/terminal/common/terminalProcess.js";
+import type { ITerminalCommandStatusEvent, ITerminalCreateOptions, ITerminalDimensions, ITerminalInstance, ITerminalProfile, ITerminalService, TerminalInstanceState } from "../common/terminal.js";
 
 const POLL_DELAY_MILLIS = 35;
 const INPUT_BATCH_DELAY_MILLIS = 8;
@@ -71,12 +71,13 @@ export class TerminalService extends DisposableOwner implements ITerminalService
     const instance = this.own(new TerminalInstance(
       `terminal-instance-${instanceNumber}`,
       created.terminalId,
-      terminalInstanceTitle(created.profile, instanceNumber),
+      terminalProfileTitle(created.profile),
       created.profile,
       this.processService,
       () => this.removeInstance(instance),
     ));
     this._instances.push(instance);
+    this.refreshInstanceTitles();
     this._onDidCreateInstance.fire(instance);
     this.setActiveInstance(instance);
     instance.start();
@@ -107,11 +108,30 @@ export class TerminalService extends DisposableOwner implements ITerminalService
   private removeInstance(instance: TerminalInstance): void {
     const index = this._instances.indexOf(instance);
     if (index < 0) return;
+    const activeChanged = this._activeInstance === instance;
     this._instances.splice(index, 1);
-    this._onDidDisposeInstance.fire(instance);
-    if (this._activeInstance === instance) {
+    if (activeChanged) {
       this._activeInstance = this._instances.at(-1);
+    }
+    this.refreshInstanceTitles();
+    this._onDidDisposeInstance.fire(instance);
+    if (activeChanged) {
       this._onDidChangeActiveInstance.fire(this._activeInstance);
+    }
+  }
+
+  private refreshInstanceTitles(): void {
+    const instancesByProfile = new Map<string, TerminalInstance[]>();
+    for (const instance of this._instances) {
+      const profileInstances = instancesByProfile.get(instance.profile.profileId) ?? [];
+      profileInstances.push(instance);
+      instancesByProfile.set(instance.profile.profileId, profileInstances);
+    }
+    for (const profileInstances of instancesByProfile.values()) {
+      const baseTitle = terminalProfileTitle(profileInstances[0].profile);
+      for (const [index, instance] of profileInstances.entries()) {
+        instance.setTitle(profileInstances.length === 1 ? baseTitle : `${baseTitle} ${index + 1}`);
+      }
     }
   }
 
@@ -129,11 +149,13 @@ class TerminalInstance extends DisposableOwner implements ITerminalInstance {
   private readonly processService: ITerminalProcessService;
   private readonly onClosed: () => void;
   private readonly _onDidWriteData = this.own(new Emitter<Uint8Array>());
+  private readonly _onDidChangeCommandStatus = this.own(new Emitter<ITerminalCommandStatusEvent>());
   private readonly _onDidExit = this.own(new Emitter<number | undefined>());
   private readonly _onDidChangeState = this.own(new Emitter<TerminalInstanceState>());
   private _state: TerminalInstanceState = "running";
   private _exitCode: number | undefined;
   private nextSequence = 0;
+  private nextCommandSequence = 0;
   private closed = false;
   private pendingInput = "";
   private inputTimer: ReturnType<typeof setTimeout> | undefined;
@@ -142,16 +164,18 @@ class TerminalInstance extends DisposableOwner implements ITerminalInstance {
   private resizeScheduled = false;
   private serverTerminalId: string;
   private _profile: ITerminalProfile;
+  private _title: string;
   private pollGeneration = 0;
 
   readonly onDidWriteData: Event<Uint8Array> = this._onDidWriteData.event;
+  readonly onDidChangeCommandStatus: Event<ITerminalCommandStatusEvent> = this._onDidChangeCommandStatus.event;
   readonly onDidExit: Event<number | undefined> = this._onDidExit.event;
   readonly onDidChangeState: Event<TerminalInstanceState> = this._onDidChangeState.event;
 
   constructor(
     readonly id: string,
     serverTerminalId: string,
-    readonly title: string,
+    title: string,
     profile: ITerminalProfile,
     processService: ITerminalProcessService,
     onClosed: () => void,
@@ -159,6 +183,7 @@ class TerminalInstance extends DisposableOwner implements ITerminalInstance {
     super();
     this.serverTerminalId = serverTerminalId;
     this._profile = profile;
+    this._title = title;
     this.processService = processService;
     this.onClosed = onClosed;
     this.defer(() => {
@@ -176,6 +201,14 @@ class TerminalInstance extends DisposableOwner implements ITerminalInstance {
 
   get profile(): ITerminalProfile {
     return this._profile;
+  }
+
+  get title(): string {
+    return this._title;
+  }
+
+  setTitle(title: string): void {
+    this._title = title;
   }
 
   start(): void {
@@ -260,6 +293,7 @@ class TerminalInstance extends DisposableOwner implements ITerminalInstance {
       this.serverTerminalId = created.terminalId;
       this._profile = created.profile;
       this.nextSequence = 0;
+      this.nextCommandSequence = 0;
       this._exitCode = undefined;
       this._onDidWriteData.fire(new TextEncoder().encode("\r\n[terminal relaunched]\r\n"));
       this.setState("running");
@@ -302,16 +336,16 @@ class TerminalInstance extends DisposableOwner implements ITerminalInstance {
         const result = await this.processService.read({
           terminalId: this.serverTerminalId,
           afterSequence: this.nextSequence,
+          afterCommandSequence: this.nextCommandSequence,
           maxChunks: MAX_READ_CHUNKS,
         });
         if (this.closed || this._state !== "running" || generation !== this.pollGeneration) return;
         if (result.outputGap) {
           this._onDidWriteData.fire(new TextEncoder().encode("\r\n[terminal output truncated]\r\n"));
         }
-        for (const chunk of result.chunks) {
-          this._onDidWriteData.fire(decodeBase64(chunk.dataBase64));
-        }
+        this.emitReadResult(result.chunks, result.commandEvents);
         this.nextSequence = result.nextSequence;
+        this.nextCommandSequence = result.nextCommandSequence;
         if (result.exited) {
           this._exitCode = result.exitCode ?? undefined;
           this.setState("exited");
@@ -332,6 +366,29 @@ class TerminalInstance extends DisposableOwner implements ITerminalInstance {
       this.inputTimer = undefined;
     }
     this.pendingInput = "";
+  }
+
+  private emitReadResult(chunks: readonly ITerminalProcessOutputChunk[], commandEvents: readonly ITerminalProcessCommandStatusEvent[]): void {
+    let outputSequence = this.nextSequence;
+    let eventIndex = 0;
+    const emitEventsThrough = (sequence: number): void => {
+      while (eventIndex < commandEvents.length && commandEvents[eventIndex]!.afterOutputSequence <= sequence) {
+        const event = commandEvents[eventIndex++]!;
+        this._onDidChangeCommandStatus.fire({
+          commandId: event.commandId,
+          status: event.status,
+          exitCode: event.exitCode ?? undefined,
+        });
+      }
+    };
+    emitEventsThrough(outputSequence);
+    for (const chunk of chunks) {
+      emitEventsThrough(chunk.sequence - 1);
+      this._onDidWriteData.fire(decodeBase64(chunk.dataBase64));
+      outputSequence = chunk.sequence;
+      emitEventsThrough(outputSequence);
+    }
+    emitEventsThrough(Number.POSITIVE_INFINITY);
   }
 
   private setState(state: TerminalInstanceState): void {
@@ -377,9 +434,9 @@ function isHighSurrogate(codeUnit: number): boolean {
   return codeUnit >= 0xd800 && codeUnit <= 0xdbff;
 }
 
-function terminalInstanceTitle(profile: ITerminalProfile, instanceNumber: number): string {
+function terminalProfileTitle(profile: ITerminalProfile): string {
   if (profile.profileId === "cmd" || profile.profileId === "command-prompt") {
-    return instanceNumber === 1 ? "cmd" : `cmd ${instanceNumber}`;
+    return "cmd";
   }
-  return `${profile.title} ${instanceNumber}`;
+  return profile.title;
 }

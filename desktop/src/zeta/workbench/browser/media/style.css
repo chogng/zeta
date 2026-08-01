@@ -184,6 +184,9 @@ button, input, select, textarea { font: inherit; }
   overflow: hidden;
   flex-direction: column;
   font-family: var(--zeta-font-family);
+  font-size: var(--zeta-font-size-body1);
+  font-weight: var(--zeta-font-weight-regular);
+  line-height: 1.4;
   color: var(--zeta-foreground);
   background: var(--zeta-workbench-background);
 }

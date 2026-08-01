@@ -499,20 +499,11 @@ export class Workbench extends DisposableOwner {
       assertDefined(composite, `Panel Composite is not available: ${viewContainer.id}`);
       return composite;
     };
-    openPanelComposite(panelCompositeDescriptor.id);
     const auxiliarybar = this.own(new AuxiliarybarPart(ownerDocument));
     const auxiliaryViewContainer = requiredViewContainer(
       viewDescriptors,
       ViewContainerLocation.AuxiliaryBar,
     );
-    const auxiliaryPaneContainer = new ViewPaneContainer({
-      viewContainer: auxiliaryViewContainer,
-      model: viewDescriptors.getViewContainerModel(auxiliaryViewContainer.id),
-      instantiationService,
-      contextKeyService: contextKeys,
-      ownerDocument,
-    });
-    auxiliarybar.setViewPaneContainer(auxiliaryPaneContainer);
     const statusbar = this.own(new StatusbarPart(
       statusbarService,
       ownerDocument,
@@ -530,6 +521,16 @@ export class Workbench extends DisposableOwner {
       storageService: storage,
     }));
     services.set(IWorkbenchLayoutService, layout);
+    // Fixed Panel and Auxiliary Bar views may depend on the host layout during construction.
+    openPanelComposite(panelCompositeDescriptor.id);
+    const auxiliaryPaneContainer = new ViewPaneContainer({
+      viewContainer: auxiliaryViewContainer,
+      model: viewDescriptors.getViewContainerModel(auxiliaryViewContainer.id),
+      instantiationService,
+      contextKeyService: contextKeys,
+      ownerDocument,
+    });
+    auxiliarybar.setViewPaneContainer(auxiliaryPaneContainer);
     services.set(IViewsService, new ViewsService({
       viewDescriptorService: viewDescriptors,
       openViewContainer: (container) => {

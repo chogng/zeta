@@ -47,20 +47,23 @@ test.after(() => {
 
 const noEvent = (() => toDisposable(() => {})) as Event<never>;
 let shownProfileActions: readonly IAction[] = [];
+let shownProfileAnchor: unknown;
 
 const contextMenuService: IContextMenuService = {
   onDidShowContextMenu: noEvent,
   onDidHideContextMenu: noEvent,
   showContextMenu(options) {
     shownProfileActions = "actions" in options ? options.actions : [];
+    shownProfileAnchor = "actions" in options ? options.anchor : undefined;
   },
   hideContextMenu() {},
 };
 
-test("Terminal profile dropdown launches the selected shell profile", async () => {
+test("Terminal profile menu launches the selected shell profile", async () => {
   const ownerDocument = browserEnvironment.window.document;
   ownerDocument.body.replaceChildren();
   shownProfileActions = [];
+  shownProfileAnchor = undefined;
   const createdProfiles: Array<string | undefined> = [];
   let focusCount = 0;
   let clearCount = 0;
@@ -166,16 +169,27 @@ test("Terminal profile dropdown launches the selected shell profile", async () =
     state: "exited",
   } as ITerminalInstance, "list");
   assert.equal(toolbar.textContent?.includes("Relaunch Terminal"), true);
+  titleActions.setActiveInstance(activeInstance, "title");
+  assert.doesNotThrow(() => titleActions.setActiveInstance(undefined, "title"));
+  assert.equal(toolbar.querySelector(".zeta-terminal-active-action"), null);
+  assert.equal(toolbar.textContent?.includes("Kill Terminal"), false);
+  titleActions.setActiveInstance(activeInstance, "list");
 
   const currentProfile = toolbar.querySelector<HTMLButtonElement>(".zeta-terminal-profile-action .zeta-button");
   assert.ok(currentProfile);
   currentProfile.click();
-  const commandPrompt = shownProfileActions.find((action) => action.label === "Command Prompt (Default)");
-  const powerShell = shownProfileActions.find((action) => action.label === "PowerShell");
+  assert.equal(currentProfile.getAttribute("aria-haspopup"), "menu");
+  assert.equal(currentProfile.getAttribute("aria-expanded"), "true");
+  assert.equal(shownProfileAnchor, currentProfile);
+  assert.equal(ownerDocument.querySelector(".zeta-quick-pick"), null);
+  const commandPrompt = shownProfileActions.find((action) => action.label.includes("Command Prompt"));
+  const powerShell = shownProfileActions.find((action) => action.label.includes("PowerShell"));
   assert.ok(commandPrompt);
   assert.ok(powerShell);
+  assert.match(commandPrompt.label, /Default/);
   assert.equal(commandPrompt.checked, true);
   assert.equal(powerShell.checked, false);
   await powerShell.run();
+  await Promise.resolve();
   assert.deepEqual(createdProfiles, [undefined, "pwsh"]);
 });

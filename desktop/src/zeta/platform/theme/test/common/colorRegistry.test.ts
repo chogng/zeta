@@ -35,9 +35,10 @@ test("ColorRegistry rejects duplicates, cycles, unknown references, and unknown 
 
 test("SizeRegistry validates registration and serializes CSS values", () => {
   const registry = new SizeRegistry();
-  registry.registerSize("control.height", size(28), metadata);
-  assert.equal(sizeToCss(registry.getSizes()[0]!.value), "28px");
-  assert.throws(() => registry.registerSize("control.height", size(30), metadata), /already registered/);
+  registry.registerSize("fontSize.body1", size(13), metadata);
+  assert.equal(sizeToCss(registry.getSizes()[0]!.value), "13px");
+  assert.equal(sizeToCss(size(400, "unitless")), "400");
+  assert.throws(() => registry.registerSize("fontSize.body1", size(14), metadata), /already registered/);
   assert.throws(() => size(Number.NaN), /must be finite/);
 });
 

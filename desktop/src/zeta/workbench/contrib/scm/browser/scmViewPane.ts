@@ -47,6 +47,7 @@ export class ScmViewPane extends ViewPane {
     commitForm.className = "zeta-scm-commit-form";
     this.commitInput = document.createElement("textarea");
     this.commitInput.className = "zeta-scm-commit-input";
+    this.commitInput.name = "commitMessage";
     this.commitInput.rows = 2;
     this.commitInput.placeholder = "Message (Ctrl+Enter to commit)";
     this.commitInput.setAttribute("aria-label", "Commit message");

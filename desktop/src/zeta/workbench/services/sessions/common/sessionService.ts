@@ -38,8 +38,9 @@ export type WorkbenchSessionState =
  * Feature views consume the durable selection instead of choosing an
  * arbitrary Thread independently. An untitled session becomes durable only
  * when a Chat pane asks to materialize it for its first send. Once initialization
- * settles, the service keeps either an active Thread or an active untitled
- * session selected.
+ * settles, the service selects an available active Thread or untitled session.
+ * It permits an empty selection after the last Chat tab closes; the Chat view
+ * owns creation of a new untitled tab when its host becomes visible again.
  */
 export interface IWorkbenchSessionService {
   readonly onDidChange: Event<void>;
@@ -170,7 +171,7 @@ export class WorkbenchSessionService
     if (sessions.length === this._untitledSessions.length) return;
     this._untitledSessions = sessions;
     if (this._activeUntitledSessionId === untitledSessionId) this._activeUntitledSessionId = sessions[0]?.untitledSessionId;
-    this.ensureActiveSelection();
+    this.restoreAvailableSelection();
     this._onDidChange.fire();
   }
 
@@ -273,7 +274,7 @@ export class WorkbenchSessionService
       if (this._active?.session.sessionId === sessionId) {
         this._active = firstActiveThread(this._sessions);
       }
-      this.ensureActiveSelection();
+      this.restoreAvailableSelection();
       this.setState("ready");
     } catch (error) {
       this.setError(error);
@@ -310,7 +311,7 @@ export class WorkbenchSessionService
       const result = await this.api.session.list();
       this._sessions = result.sessions;
       this._active = firstActiveThread(this._sessions);
-      this.ensureActiveSelection();
+      this.restoreAvailableSelection();
       this.setState("ready");
     } catch (error) {
       this.setError(error);
@@ -324,7 +325,7 @@ export class WorkbenchSessionService
   }
 
   private setError(error: unknown): void {
-    this.ensureActiveSelection();
+    this.restoreAvailableSelection();
     this._state = "error";
     this._error = error instanceof Error
       ? error.message
@@ -342,10 +343,9 @@ export class WorkbenchSessionService
     return session;
   }
 
-  private ensureActiveSelection(): void {
+  private restoreAvailableSelection(): void {
     if (this.activeUntitledSession || this._active) return;
-    const session = this._untitledSessions[0] ?? this.addUntitledSession("New Chat");
-    this._activeUntitledSessionId = session.untitledSessionId;
+    this._activeUntitledSessionId = this._untitledSessions[0]?.untitledSessionId;
   }
 
   private activateSession(active: IActiveSessionThread): void {

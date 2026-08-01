@@ -9,6 +9,7 @@ import type { ICommandService } from "../../../../../platform/commands/common/co
 import { SidebarPart } from "../../../../browser/parts/sidebar/sidebarPart.js";
 import { ViewPane, type IViewPaneOptions } from "../../../../browser/parts/views/viewPane.js";
 import { ViewContainerLocation } from "../../../../common/views.js";
+import type { IWorkbenchLayoutService } from "../../../../services/layout/browser/layoutService.js";
 import type { IActiveSessionThread, IUntitledChatSession, IWorkbenchSessionService } from "../../../../services/sessions/common/sessionService.js";
 import type { IViewDescriptorService } from "../../../../services/views/common/viewDescriptorService.js";
 import { AgentSidebarVisibleContext } from "../../common/chat.js";
@@ -42,6 +43,8 @@ export class ChatViewPane extends ViewPane {
   private readonly empty: HTMLDivElement;
   private readonly panes = new Map<string, ChatPane>();
   private activePane: ChatPane | undefined;
+  private sessionsInitialized = false;
+  private viewDisposed = false;
 
   constructor(
     options: IViewPaneOptions,
@@ -52,6 +55,7 @@ export class ChatViewPane extends ViewPane {
     viewDescriptorService: IViewDescriptorService,
     contextKeyService: IContextKeyService,
     commandService: ICommandService,
+    private readonly layoutService: IWorkbenchLayoutService,
   ) {
     super(options);
     this.api = api;
@@ -98,13 +102,21 @@ export class ChatViewPane extends ViewPane {
         this.syncAgentSidebarVisibility(contextKeyService);
       }
     }));
+    this.own(layoutService.onDidChangePartVisibility((event) => {
+      if (event.partId === "auxiliarybar" && event.visible && this.sessionsInitialized) this.ensureTabForVisibleChat();
+    }));
     this.defer(() => {
+      this.viewDisposed = true;
       for (const pane of this.panes.values()) pane.dispose();
       this.panes.clear();
     });
     this.syncAgentSidebarVisibility(contextKeyService);
     this.syncSessions();
-    void sessionService.initialize();
+    void sessionService.initialize().then(() => {
+      if (this.viewDisposed) return;
+      this.sessionsInitialized = true;
+      this.ensureTabForVisibleChat();
+    });
   }
 
   override focus(): void {
@@ -213,11 +225,21 @@ export class ChatViewPane extends ViewPane {
     const untitledSessionId = pane.untitledSessionId;
     if (untitledSessionId) {
       this.sessionService.discardUntitledSession(untitledSessionId);
+      this.hideChatWhenEmpty();
       return;
     }
     const sessionId = pane.sessionId;
     if (!sessionId) return;
-    void this.sessionService.archiveSession(sessionId).catch(() => {});
+    void this.sessionService.archiveSession(sessionId).then(() => this.hideChatWhenEmpty()).catch(() => {});
+  }
+
+  private ensureTabForVisibleChat(): void {
+    if (!this.layoutService.isPartVisible("auxiliarybar") || this.panes.size > 0) return;
+    this.sessionService.createUntitledSession();
+  }
+
+  private hideChatWhenEmpty(): void {
+    if (this.panes.size === 0) this.layoutService.hidePart("auxiliarybar");
   }
 
   private activePaneId(): string | undefined {

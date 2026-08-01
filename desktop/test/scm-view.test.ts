@@ -4,6 +4,69 @@ import { JSDOM } from "jsdom";
 import type { GitStatusResult, ServerNotification } from "../generated/app-server/types.js";
 import type { ZetaRendererApi } from "../src/zeta/platform/app-server/common/renderer-api.js";
 
+test("Git contribution registers Changes, Agent Review, and Graph as ordered panes", async () => {
+  const browser = new JSDOM("<!doctype html><body></body>");
+  const installedGlobals = installDomGlobals(browser);
+
+  try {
+    const { WorkbenchViewRegistry, WorkbenchViewContainerId } = await import("../src/zeta/workbench/common/views.js");
+    const { GIT_AGENT_REVIEW_VIEW_ID, GIT_GRAPH_VIEW_ID, GIT_VIEW_ID, registerGitViews } = await import("../src/zeta/workbench/contrib/scm/browser/scm.contribution.js");
+    const registry = new WorkbenchViewRegistry();
+
+    registerGitViews(registry);
+
+    const views = registry.getViews(WorkbenchViewContainerId.Git);
+    assert.deepEqual(views.map((view) => view.id), [GIT_VIEW_ID, GIT_AGENT_REVIEW_VIEW_ID, GIT_GRAPH_VIEW_ID]);
+    assert.deepEqual(views.map((view) => view.title), ["Changes", "Agent Review", "Graph"]);
+    assert.deepEqual(views.map((view) => view.collapsed === true), [false, true, true]);
+  } finally {
+    browser.window.close();
+    for (const name of installedGlobals) Reflect.deleteProperty(globalThis, name);
+  }
+});
+
+test("ScmGraphViewPane renders bounded repository history", async () => {
+  const browser = new JSDOM("<!doctype html><body></body>");
+  const installedGlobals = installDomGlobals(browser);
+  const api = {
+    git: {
+      history: async () => ({
+        commits: [
+          { objectId: "1234567890abcdef", timestampSeconds: 1_753_000_000, subject: "Wire SCM panes" },
+          { objectId: "abcdef1234567890", timestampSeconds: 1_752_900_000, subject: "Prepare graph data" },
+        ],
+      }),
+    },
+  } as unknown as ZetaRendererApi;
+
+  try {
+    const { ScmGraphViewPane } = await import("../src/zeta/workbench/contrib/scm/browser/scmGraphViewPane.js");
+    using pane = new ScmGraphViewPane({ id: "zeta.gitGraph.test", title: "Graph", ownerDocument: browser.window.document }, api);
+    browser.window.document.body.append(pane.element);
+    await waitFor(() => pane.element.querySelectorAll(".zeta-scm-graph-commit").length === 2);
+
+    assert.deepEqual([...pane.element.querySelectorAll(".zeta-scm-graph-subject")].map((element) => element.textContent), ["Wire SCM panes", "Prepare graph data"]);
+    assert.match(pane.element.querySelector(".zeta-scm-graph-metadata")?.textContent ?? "", /^1234567 · /);
+  } finally {
+    browser.window.close();
+    for (const name of installedGlobals) Reflect.deleteProperty(globalThis, name);
+  }
+});
+
+test("ScmAgentReviewViewPane exposes an explicit empty state", async () => {
+  const browser = new JSDOM("<!doctype html><body></body>");
+  const installedGlobals = installDomGlobals(browser);
+
+  try {
+    const { ScmAgentReviewViewPane } = await import("../src/zeta/workbench/contrib/scm/browser/scmAgentReviewViewPane.js");
+    using pane = new ScmAgentReviewViewPane({ id: "zeta.gitAgentReview.test", title: "Agent Review", ownerDocument: browser.window.document });
+    assert.equal(pane.element.querySelector(".zeta-scm-empty")?.textContent, "No agent changes to review.");
+  } finally {
+    browser.window.close();
+    for (const name of installedGlobals) Reflect.deleteProperty(globalThis, name);
+  }
+});
+
 test("ScmViewPane groups App Server Git status and refreshes it", async () => {
   const browser = new JSDOM("<!doctype html><body></body>");
   const installedGlobals = installDomGlobals(browser);

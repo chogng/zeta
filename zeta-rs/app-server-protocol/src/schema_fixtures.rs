@@ -277,6 +277,8 @@ fn dto_driven_typescript_preserves_model_ref_and_patch_shape() {
     assert!(typescript.contains("profileId: string"));
     assert!(typescript.contains("export type TerminalProfileSelection ="));
     assert!(typescript.contains("export type TerminalProfileListResult ="));
+    assert!(typescript.contains("export type TerminalCommandStatus ="));
+    assert!(typescript.contains("export type TerminalCommandStatusEvent ="));
     assert!(typescript.contains("export type TerminalReadResult ="));
     assert!(typescript.contains("export type WorkspaceSearchMatch ="));
     assert!(typescript.contains("export type TypstCompileResult ="));
@@ -319,6 +321,8 @@ fn dto_driven_schema_contains_registered_rpc_envelopes() {
     assert!(definitions.contains_key("TerminalProfileSelection"));
     assert!(definitions.contains_key("TerminalProfileListResult"));
     assert!(definitions.contains_key("TerminalCreateParams"));
+    assert!(definitions.contains_key("TerminalCommandStatus"));
+    assert!(definitions.contains_key("TerminalCommandStatusEvent"));
     assert!(definitions.contains_key("TerminalReadResult"));
     assert!(definitions.contains_key("GitStatusResult"));
     assert!(definitions.contains_key("GitPathsParams"));

@@ -78,6 +78,7 @@ function createRendererApi(connection: ViteDevAppServerConnection): ZetaRenderer
     },
     git: {
       status: () => request(connection, "git/status", {}),
+      history: () => request(connection, "git/history", {}),
       stage: (params) => request(connection, "git/stage", params),
       unstage: (params) => request(connection, "git/unstage", params),
       discardWorktree: (params) => request(connection, "git/discardWorktree", params),

@@ -33,12 +33,6 @@ export class ChatListWidget extends DisposableOwner {
     if (this.visible) this.captureFollowState();
     this.renderedItems.clear();
     this.transcript.replaceChildren(...items.map((item) => this.renderItem(item)));
-    if (items.length === 0) {
-      const empty = this.element.ownerDocument.createElement("div");
-      empty.className = "zeta-chat-empty";
-      empty.textContent = "Start a conversation.";
-      this.transcript.append(empty);
-    }
     if (this.visible) this.layout();
   }
 

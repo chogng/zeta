@@ -388,15 +388,18 @@ test("App Server IPC validators reject malformed Turn, Typst, resource, filesyst
   assert.deepEqual(terminalRead.validate({
     terminalId: "terminal-1",
     afterSequence: 0,
+    afterCommandSequence: 0,
     maxChunks: 128,
   }), {
     terminalId: "terminal-1",
     afterSequence: 0,
+    afterCommandSequence: 0,
     maxChunks: 128,
   });
   assert.throws(() => terminalRead.validate({
     terminalId: "terminal-1",
     afterSequence: 0,
+    afterCommandSequence: 0,
     maxChunks: 129,
   }), /must not exceed 128/);
   assert.deepEqual(terminalClose.validate({

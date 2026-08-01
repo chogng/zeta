@@ -58,6 +58,33 @@ impl TerminalProfileSpec {
             is_default: self.is_default,
         }
     }
+
+    pub(crate) fn launch_args(&self) -> Vec<String> {
+        match self.profile_id.as_str() {
+            "powershell" | "windows-powershell" => vec![
+                "-NoExit".into(),
+                "-Command".into(),
+                powershell_integration_script().into(),
+            ],
+            "command-prompt" => vec![
+                "/Q".into(),
+                "/K".into(),
+                r"prompt $E]633;D$E\$E]633;A$E\$P$G$S".into(),
+            ],
+            _ => self.args.clone(),
+        }
+    }
+
+    pub(crate) fn command_status_enabled(&self) -> bool {
+        matches!(
+            self.profile_id.as_str(),
+            "powershell" | "windows-powershell" | "command-prompt"
+        )
+    }
+}
+
+fn powershell_integration_script() -> &'static str {
+    r#"function global:prompt { $zetaSuccess = $?; $zetaExitCode = if ($zetaSuccess) { 0 } elseif (($global:LASTEXITCODE -is [int]) -and $global:LASTEXITCODE -ne 0) { $global:LASTEXITCODE } else { 1 }; [Console]::Write("`e]633;D;$zetaExitCode`a`e]633;A`a"); "PS $($executionContext.SessionState.Path.CurrentLocation)> " }"#
 }
 
 fn discover_profiles(environment: &HashMap<String, String>) -> Vec<TerminalProfileSpec> {

@@ -103,10 +103,11 @@ function terminalResizeParams(value: unknown): TerminalResizeParams {
 }
 
 function terminalReadParams(value: unknown): TerminalReadParams {
-  const params = record(value, ["terminalId", "afterSequence", "maxChunks"]);
+  const params = record(value, ["terminalId", "afterSequence", "afterCommandSequence", "maxChunks"]);
   return {
     terminalId: nonEmptyString(params.terminalId, "terminalId"),
     afterSequence: nonNegativeInteger(params.afterSequence, "afterSequence"),
+    afterCommandSequence: nonNegativeInteger(params.afterCommandSequence, "afterCommandSequence"),
     maxChunks: boundedPositiveInteger(params.maxChunks, "maxChunks", 128),
   };
 }

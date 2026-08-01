@@ -1,6 +1,6 @@
 import type { FsGetMetadataParams, FsGetMetadataResult, FsReadDirectoryParams, FsReadDirectoryResult, FsReadFileParams, FsReadFileResult, ModelListResult, ResourceMetadataParams, ResourceMetadataResult, ResourceReadParams, ResourceReadResult, ResourceReleaseParams, ServerNotification, SessionCommandParams, SessionCreateParams, SessionListResult, SessionModelSetParams, SessionReadParams, SessionResult, SessionSubscribeParams, SessionSubscribeResult, SessionThreadArchiveParams, SessionThreadCreateParams, SessionThreadForkParams, SessionThreadResult, SessionUnsubscribeParams, SlashCommandDefinition, SyntaxAnalysisSnapshotDto, SyntaxChangeParams, SyntaxCloseParams, SyntaxOpenParams, ThreadReadParams, ThreadReadResult, ThreadSubscribeParams, ThreadSubscribeResult, ThreadUnsubscribeParams, TurnInterruptParams, TurnInterruptResult, TurnInteractionResolveParams, TurnInteractionResolveResult, TurnStartParams, TurnStartResult, TypstCompileParams, TypstCompileResult, WorkspaceSearchCancelParams, WorkspaceSearchReadParams, WorkspaceSearchReadResult, WorkspaceSearchStartParams, WorkspaceSearchStartResult } from "../../../../../generated/app-server/types.js";
 import type { TerminalCloseParams, TerminalCreateParams, TerminalCreateResult, TerminalProfileListResult, TerminalReadParams, TerminalReadResult, TerminalResizeParams, TerminalWriteParams } from "../../../../../generated/app-server/types.js";
-import type { GitCommitParams, GitCommitResult, GitOperationResult, GitPathsParams, GitStatusResult } from "../../../../../generated/app-server/types.js";
+import type { GitCommitParams, GitCommitResult, GitHistoryResult, GitOperationResult, GitPathsParams, GitStatusResult } from "../../../../../generated/app-server/types.js";
 
 /**
  * A string-keyed cleanup handle that can cross Electron's contextBridge.
@@ -84,6 +84,7 @@ export interface ZetaRendererApi {
   };
   git: {
     status(): Promise<GitStatusResult>;
+    history(): Promise<GitHistoryResult>;
     stage(params: GitPathsParams): Promise<GitOperationResult>;
     unstage(params: GitPathsParams): Promise<GitOperationResult>;
     discardWorktree(params: GitPathsParams): Promise<GitOperationResult>;
