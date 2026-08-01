@@ -297,6 +297,23 @@ fn terminal_profiles_are_server_owned_and_reject_unknown_ids() {
     );
     assert_eq!(rejected["error"]["message"], "InvalidParams");
 
+    let environment_injection = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":4,
+            "method":"terminal/create",
+            "params":{
+                "rows":24,
+                "cols":80,
+                "profile":{"type":"default"},
+                "environment":{"OPENAI_API_KEY":"injected"}
+            }
+        }),
+    );
+    assert_eq!(environment_injection["error"]["message"], "InvalidParams");
+
     drop(server);
     std::fs::remove_dir_all(root).unwrap();
 }

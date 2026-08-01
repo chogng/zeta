@@ -1,17 +1,18 @@
+use crate::terminal_environment::TerminalEnvironment;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use zeta_app_server_protocol::protocol::terminal::{TerminalProfile, TerminalProfileSelection};
 
 /// Frozen trusted shell catalog used by one local Terminal service.
 pub(crate) struct TerminalProfileCatalog {
-    environment: HashMap<String, String>,
+    environment: TerminalEnvironment,
     profiles: Vec<TerminalProfileSpec>,
 }
 
 impl TerminalProfileCatalog {
     pub(crate) fn discover() -> Self {
-        let environment = terminal_environment();
-        let profiles = discover_profiles(&environment);
+        let environment = TerminalEnvironment::from_process();
+        let profiles = discover_profiles(environment.variables());
         Self {
             environment,
             profiles,
@@ -19,7 +20,7 @@ impl TerminalProfileCatalog {
     }
 
     pub(crate) fn environment(&self) -> &HashMap<String, String> {
-        &self.environment
+        self.environment.variables()
     }
 
     pub(crate) fn list(&self) -> Vec<TerminalProfile> {
@@ -224,45 +225,6 @@ fn normalized_program(program: &str) -> String {
     {
         program.to_owned()
     }
-}
-
-fn terminal_environment() -> HashMap<String, String> {
-    std::env::vars()
-        .filter(|(key, _)| allowed_environment_key(key))
-        .chain([
-            ("TERM".to_owned(), "xterm-256color".to_owned()),
-            ("COLORTERM".to_owned(), "truecolor".to_owned()),
-        ])
-        .collect()
-}
-
-fn allowed_environment_key(key: &str) -> bool {
-    matches!(
-        key.to_ascii_uppercase().as_str(),
-        "COMSPEC"
-            | "HOME"
-            | "HOMEDRIVE"
-            | "HOMEPATH"
-            | "LANG"
-            | "LOCALAPPDATA"
-            | "LOGNAME"
-            | "PATH"
-            | "PATHEXT"
-            | "PROGRAMDATA"
-            | "PROGRAMFILES"
-            | "PROGRAMFILES(X86)"
-            | "PSMODULEPATH"
-            | "SHELL"
-            | "SYSTEMDRIVE"
-            | "SYSTEMROOT"
-            | "TEMP"
-            | "TMP"
-            | "USER"
-            | "USERDOMAIN"
-            | "USERNAME"
-            | "USERPROFILE"
-            | "WINDIR"
-    ) || key.to_ascii_uppercase().starts_with("LC_")
 }
 
 #[cfg(windows)]

@@ -191,7 +191,8 @@ dispatcher 的 executable metadata，不能被误写成已经落实的并发保�
   是 ring eviction 的显式信号，不能由客户端忽略。
 - `TerminalProfile` 只暴露稳定 ID、标题和 default 标记。Terminal create 只接受
   `TerminalProfileSelection`，不包含 program、args、cwd 或 environment；这些 authority 留在
-  local App Server composition。
+  local App Server composition。Terminal params 与 profile selection 拒绝 unknown field，不能把
+  client-authored environment 藏在生成 DTO 之外。
 - `AppServerError` 的 `message` 是 stable `AppServerErrorName`，`data` 当前为 unit，不传任意
   internal error text。
 - DTO 默认 camelCase；required/optional/nullability 要同时符合 serde、schemars 与 ts-rs。

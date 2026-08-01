@@ -5712,6 +5712,7 @@
           "minLength": 1
         }
       },
+      "additionalProperties": false,
       "required": [
         "terminalId"
       ]
@@ -5782,6 +5783,7 @@
           "minimum": 1
         }
       },
+      "additionalProperties": false,
       "required": [
         "rows",
         "cols",
@@ -5868,6 +5870,7 @@
               "const": "default"
             }
           },
+          "additionalProperties": false,
           "required": [
             "type"
           ]
@@ -5883,6 +5886,7 @@
               "const": "profile"
             }
           },
+          "additionalProperties": false,
           "required": [
             "type",
             "profileId"
@@ -5915,6 +5919,7 @@
           "minLength": 1
         }
       },
+      "additionalProperties": false,
       "required": [
         "terminalId",
         "afterSequence",
@@ -6000,6 +6005,7 @@
           "minLength": 1
         }
       },
+      "additionalProperties": false,
       "required": [
         "terminalId",
         "rows",
@@ -6020,6 +6026,7 @@
           "minLength": 1
         }
       },
+      "additionalProperties": false,
       "required": [
         "terminalId",
         "data"

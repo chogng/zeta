@@ -107,7 +107,8 @@ src/
 ├── review.rs                      # review-only provider adapter
 ├── resource_store.rs              # bounded in-memory connection-owned resources
 ├── git_service.rs                 # workspace root + GitClient + synchronous RPC runtime bridge
-├── terminal_profiles.rs           # trusted Shell discovery、ID 与 environment allowlist
+├── terminal_environment.rs        # secret-excluding host environment、platform normalization 与 terminal identity
+├── terminal_profiles.rs           # trusted Shell discovery、ID 与 frozen environment
 └── terminal_service.rs            # PTY runtime、output ring 与 connection-owned sessions
 ```
 
@@ -140,7 +141,8 @@ src/
 | `search_operations::{search_query, search_page}` | private | `WorkspaceSearch*` DTO 与 `zeta-search` 领域类型之间的显式转换 | 不复制查询校验、rg argv、job state 或 parsing |
 | `SearchService` | external crate | 持有 active workspace、frozen rg 和 owner-bound job map | App Server 不把 connection/DTO/UI 语义写入该 crate |
 | `TerminalService` | crate-private | 持有 `ExecuteProcess` 的 `TrustedWorkspace`、Tokio runtime、PTY session map 与 1 MiB output ring | 不从 client path 自行授予 process authority |
-| `TerminalProfileCatalog` | crate-private | 冻结可信 Shell Profile、program 与 environment allowlist | external DTO 不暴露 executable/args |
+| `TerminalEnvironment` | crate-private | 二次过滤 host environment、规范化 Windows key、固定 `TERM`/`COLORTERM`/`TERM_PROGRAM` | 不继承凭据或接受 client mutation |
+| `TerminalProfileCatalog` | crate-private | 冻结可信 Shell Profile、program 与 `TerminalEnvironment` | external DTO 不暴露 executable/args/environment |
 | `TerminalService::create` | crate-private | 将 default/profile ID 解析到 catalog 并启动 workspace-rooted PTY | client 不能提交 executable/environment |
 | `spawn_output_drainers` | private | raw output/exit 并发收束；尾部输出 EOF 后才标记 exited | 不在 exit code 到达时提前丢弃尾部 bytes |
 | `read_state` | private | after-sequence cursor → bounded Base64 chunks + gap/exited state | ring eviction 必须显式返回 `output_gap` |
@@ -195,7 +197,10 @@ capacity 分别映射稳定 Terminal error。`serve_jsonl` 结束时调用 `clos
 `terminal/profile/list` 从 composition 时冻结的 `TerminalProfileCatalog` 返回安全显示信息；
 `terminal/create.profile` 只能选择 default 或已列出的稳定 ID。Windows catalog 可发现 Command
 Prompt、PowerShell、Git Bash，以及 PATH 中已安装的 Zsh；Unix catalog 可发现默认 Shell 与已
-安装的常见 Shell；路径、args 和 environment 始终留在 Rust authority。
+安装的常见 Shell；路径、args 和 environment 始终留在 Rust authority。Host 只传入明确的
+session/environment allowlist，`TerminalEnvironment` 再排除未拥有变量并固定终端 identity；
+底层 PTY spawn 先 `env_clear`，不会意外继承 App Server 的其他环境。客户端提交 unknown
+terminal params（包括 `terminal/create.environment`）会在协议 decode 时返回 `InvalidParams`。
 
 Initialize 是每 connection 一次。重复 initialize 返回 `AlreadyInitialized`；初始化前的其他 method
 返回 `NotInitialized`。Request ID 只接受正整数，且在 connection 生命周期内不能重复。

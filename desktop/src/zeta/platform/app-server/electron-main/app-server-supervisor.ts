@@ -12,6 +12,7 @@ import type {
   ServerNotification,
 } from "../../../../../generated/app-server/types.js";
 import type { AppServerConnectionState } from "../common/appServerApi.js";
+import { isAllowedAppServerEnvironmentKey } from "../common/appServerEnvironment.js";
 import {
   DisposableSlot,
   type IDisposable,
@@ -80,12 +81,10 @@ export class AppServerSupervisor implements IDisposable {
     if (!isAbsolute(options.executable)) {
       throw new Error("App Server executable path must be absolute");
     }
-    const allowedEnvironmentKeys = new Set(
-      options.allowedEnvironmentKeys ??
-        ["PATH", "ZETA_PROFILE_ROOT", "ZETA_RG_PATH", "ZETA_WORKSPACE_ROOT"],
-    );
+    const allowedEnvironmentKeys = options.allowedEnvironmentKeys ? new Set(options.allowedEnvironmentKeys) : undefined;
     for (const key of Object.keys(options.environment)) {
-      if (!allowedEnvironmentKeys.has(key)) {
+      const allowed = allowedEnvironmentKeys ? allowedEnvironmentKeys.has(key) : isAllowedAppServerEnvironmentKey(key);
+      if (!allowed) {
         throw new Error(`App Server environment variable is not allowed: ${key}`);
       }
     }

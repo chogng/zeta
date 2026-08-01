@@ -114,6 +114,7 @@ production consumer，因此下表的共享 URI 状态仍为“部分具备”�
 | Terminal ID、workspace binding、输出 ring 与 connection cleanup | Rust / App Server | ✅ connection-owned |
 | PTY/ConPTY spawn、raw bytes、resize 与进程终止 | `zeta-utils-pty` | ✅ |
 | 可信 Shell Profile discovery 与 ID 解析 | Rust / App Server | ✅ 不暴露 executable |
+| 宿主终端环境继承 | Electron Main + Rust / App Server | ✅ 双层 allowlist，凭据变量不进入 App Server 或 PTY |
 | 任意 executable/environment 选择 | 无 | ❌ 当前客户端不能提交 |
 
 文件图标的跨客户端数据契约由

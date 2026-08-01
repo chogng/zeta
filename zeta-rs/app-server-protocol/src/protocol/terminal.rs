@@ -20,7 +20,7 @@ pub struct TerminalProfileListResult {
 
 /// Selects either the server default or one previously listed trusted profile.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
-#[serde(rename_all = "camelCase", tag = "type")]
+#[serde(rename_all = "camelCase", tag = "type", deny_unknown_fields)]
 pub enum TerminalProfileSelection {
     Default,
     Profile {
@@ -32,7 +32,7 @@ pub enum TerminalProfileSelection {
 
 /// Starts one connection-owned interactive terminal at the server's trusted workspace root.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct TerminalCreateParams {
     #[schemars(range(min = 1, max = 512))]
     pub rows: u16,
@@ -51,7 +51,7 @@ pub struct TerminalCreateResult {
 
 /// Writes one bounded UTF-8 input batch to an interactive terminal.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct TerminalWriteParams {
     #[schemars(length(min = 1))]
     pub terminal_id: String,
@@ -61,7 +61,7 @@ pub struct TerminalWriteParams {
 
 /// Changes the PTY character-cell dimensions.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct TerminalResizeParams {
     #[schemars(length(min = 1))]
     pub terminal_id: String,
@@ -73,7 +73,7 @@ pub struct TerminalResizeParams {
 
 /// Reads output after the last sequence observed by this client.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct TerminalReadParams {
     #[schemars(length(min = 1))]
     pub terminal_id: String,
@@ -137,7 +137,7 @@ pub struct TerminalReadResult {
 
 /// Terminates and releases one connection-owned terminal.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct TerminalCloseParams {
     #[schemars(length(min = 1))]
     pub terminal_id: String,

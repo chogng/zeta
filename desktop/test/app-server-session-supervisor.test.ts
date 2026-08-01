@@ -281,7 +281,7 @@ test("supervisor stops restarting after its crash budget is exhausted", async ()
   await supervisor.stop();
 });
 
-test("supervisor requires an absolute executable and an explicit environment allowlist", () => {
+test("supervisor requires an absolute executable and rejects variables outside its environment allowlist", () => {
   const children: ProtocolChildProcess[] = [];
   assert.throws(
     () =>
@@ -298,11 +298,21 @@ test("supervisor requires an absolute executable and an explicit environment all
         environment: {
           PATH: "/test/bin",
           ZETA_PROFILE_ROOT: "/test/state",
-          HOME: "/should-not-leak",
+          AWS_SECRET_ACCESS_KEY: "should-not-leak",
         },
       }),
-    /HOME/,
+    /AWS_SECRET_ACCESS_KEY/,
   );
+  const allowedSupervisor = new AppServerSupervisor({
+    ...supervisorOptions(children),
+    environment: {
+      HOME: "/home/zeta",
+      LANG: "C.UTF-8",
+      PATH: "/test/bin",
+      ZETA_PROFILE_ROOT: "/test/state",
+    },
+  });
+  allowedSupervisor.dispose();
 });
 
 test("initialization failures consume exactly the bounded startup retry budget", async () => {

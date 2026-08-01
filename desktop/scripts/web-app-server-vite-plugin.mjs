@@ -282,16 +282,32 @@ function assertLoopbackServer(host) {
   }
 }
 
-function appServerEnvironment({ profileRoot, ripgrep, workspaceRoot }) {
-  const environment = {
-    PATH: process.env.PATH ?? "",
+const COMMON_HOST_ENVIRONMENT_KEYS = ["HOME", "LANG", "LOGNAME", "PATH", "SHELL", "TEMP", "TMP", "TMPDIR", "USER"];
+const POSIX_HOST_ENVIRONMENT_KEYS = ["XDG_CACHE_HOME", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_RUNTIME_DIR", "XDG_STATE_HOME"];
+const WINDOWS_HOST_ENVIRONMENT_KEYS = ["ALLUSERSPROFILE", "APPDATA", "COMMONPROGRAMFILES", "COMMONPROGRAMFILES(X86)", "COMSPEC", "HOMEDRIVE", "HOMEPATH", "LOCALAPPDATA", "NUMBER_OF_PROCESSORS", "OS", "PATHEXT", "PROCESSOR_ARCHITECTURE", "PROCESSOR_IDENTIFIER", "PROCESSOR_LEVEL", "PROCESSOR_REVISION", "PROGRAMDATA", "PROGRAMFILES", "PROGRAMFILES(X86)", "PROGRAMW6432", "PSMODULEPATH", "PUBLIC", "SYSTEMDRIVE", "SYSTEMROOT", "USERDOMAIN", "USERNAME", "USERPROFILE", "WINDIR"];
+
+export function appServerEnvironment({ profileRoot, ripgrep, workspaceRoot, sourceEnvironment = process.env, platform = process.platform }) {
+  const environment = {};
+  const hostKeys = platform === "win32" ? [...COMMON_HOST_ENVIRONMENT_KEYS, ...WINDOWS_HOST_ENVIRONMENT_KEYS] : [...COMMON_HOST_ENVIRONMENT_KEYS, ...POSIX_HOST_ENVIRONMENT_KEYS];
+  for (const key of hostKeys) {
+    const value = environmentValue(sourceEnvironment, key, platform);
+    if (typeof value === "string" && !value.includes("\0")) environment[key] = value;
+  }
+  for (const [key, value] of Object.entries(sourceEnvironment)) {
+    if (!key.toUpperCase().startsWith("LC_") || key.includes("=") || key.includes("\0") || typeof value !== "string" || value.includes("\0")) continue;
+    environment[platform === "win32" ? key.toUpperCase() : key] = value;
+  }
+  return {
+    ...environment,
     ZETA_PROFILE_ROOT: profileRoot,
     ZETA_RG_PATH: ripgrep,
     ZETA_WORKSPACE_ROOT: workspaceRoot,
   };
-  if (process.platform !== "win32") return environment;
-  const systemRoot = process.env.SystemRoot ?? process.env.SYSTEMROOT ?? "C:\\Windows";
-  return { ...environment, SystemRoot: systemRoot, WINDIR: process.env.WINDIR ?? systemRoot };
+}
+
+function environmentValue(source, key, platform) {
+  if (platform !== "win32") return source[key];
+  return Object.entries(source).find(([candidate]) => candidate.toUpperCase() === key)?.[1];
 }
 
 function isLoopbackHostname(hostname) {

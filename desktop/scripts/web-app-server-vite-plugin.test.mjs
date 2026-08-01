@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { JsonlFrameDecoder, isAllowedDevOrigin } from "./web-app-server-vite-plugin.mjs";
+import { appServerEnvironment, JsonlFrameDecoder, isAllowedDevOrigin } from "./web-app-server-vite-plugin.mjs";
 
 test("accepts only same-origin loopback WebSocket clients", () => {
   assert.equal(isAllowedDevOrigin("http://127.0.0.1:5173", "127.0.0.1:5173"), true);
@@ -29,4 +29,48 @@ test("rejects CRLF and oversized JSONL frames", () => {
   oversized.accept(Buffer.from("1234"));
   assert.match(errors[0].message, /LF, not CRLF/);
   assert.match(errors[1].message, /exceeds 3 bytes/);
+});
+
+test("passes only safe host environment into the development App Server", () => {
+  const environment = appServerEnvironment({
+    profileRoot: "/profile",
+    ripgrep: "/bin/rg",
+    workspaceRoot: "/workspace",
+    platform: "linux",
+    sourceEnvironment: {
+      HOME: "/home/zeta",
+      LANG: "en_US.UTF-8",
+      LC_ALL: "C.UTF-8",
+      PATH: "/bin",
+      OPENAI_API_KEY: "secret",
+    },
+  });
+  assert.deepEqual(environment, {
+    HOME: "/home/zeta",
+    LANG: "en_US.UTF-8",
+    PATH: "/bin",
+    LC_ALL: "C.UTF-8",
+    ZETA_PROFILE_ROOT: "/profile",
+    ZETA_RG_PATH: "/bin/rg",
+    ZETA_WORKSPACE_ROOT: "/workspace",
+  });
+});
+
+test("normalizes the Windows host environment without leaking credentials", () => {
+  const environment = appServerEnvironment({
+    profileRoot: "C:\\profile",
+    ripgrep: "C:\\bin\\rg.exe",
+    workspaceRoot: "C:\\workspace",
+    platform: "win32",
+    sourceEnvironment: {
+      Path: "C:\\Windows\\System32",
+      SystemRoot: "C:\\Windows",
+      UserProfile: "C:\\Users\\zeta",
+      AWS_SECRET_ACCESS_KEY: "secret",
+    },
+  });
+  assert.equal(environment.PATH, "C:\\Windows\\System32");
+  assert.equal(environment.SYSTEMROOT, "C:\\Windows");
+  assert.equal(environment.USERPROFILE, "C:\\Users\\zeta");
+  assert.equal(environment.AWS_SECRET_ACCESS_KEY, undefined);
 });

@@ -29,6 +29,7 @@ import {
 import {
   appServerIpcRoutes,
 } from "../../platform/app-server/electron-main/app-server-ipc.js";
+import { buildAppServerEnvironment } from "../../platform/app-server/common/appServerEnvironment.js";
 import {
   AppServerSupervisor,
 } from "../../platform/app-server/electron-main/app-server-supervisor.js";
@@ -518,8 +519,7 @@ export class ZetaApplication extends DisposableOwner {
   private appServerEnvironment(
     workspace: IAnyWorkspaceIdentifier,
   ): Readonly<Record<string, string>> {
-    return {
-      PATH: process.env.PATH ?? "",
+    return buildAppServerEnvironment(process.env, process.platform === "win32" ? "windows" : "posix", {
       ...(process.env.ZETA_RG_PATH
         ? { ZETA_RG_PATH: process.env.ZETA_RG_PATH }
         : {}),
@@ -527,7 +527,7 @@ export class ZetaApplication extends DisposableOwner {
       ...(isSingleFolderWorkspaceIdentifier(workspace)
         ? { ZETA_WORKSPACE_ROOT: workspace.uri.fsPath }
         : {}),
-    };
+    });
   }
 
   private createWindowsStateHandler(

@@ -10,6 +10,7 @@ mod resource_store;
 mod review;
 mod server;
 mod terminal_command_status;
+mod terminal_environment;
 mod terminal_profiles;
 mod terminal_service;
 mod tool_composition;
