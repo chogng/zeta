@@ -2,7 +2,13 @@ import { strict as assert } from "node:assert";
 import test from "node:test";
 import type { AppServerSupervisor } from "../src/zeta/platform/app-server/electron-main/app-server-supervisor.js";
 import { appServerIpcRoutes } from "../src/zeta/platform/app-server/electron-main/app-server-ipc.js";
-import { registerTrustedIpcRoutes, type IpcMainInvokeEventLike, type IpcMainLike, type IpcRoute } from "../src/zeta/platform/app-server/electron-main/trusted-ipc-router.js";
+import { registerTrustedIpcRoutes, type IpcMainInvokeEventLike, type IpcMainLike, type IpcRoute } from "../src/zeta/platform/ipc/electron-main/trustedIpcRouter.js";
+import { fileIpcRoutes } from "../src/zeta/platform/files/electron-main/fileIpcRoutes.js";
+import { gitIpcRoutes } from "../src/zeta/platform/git/electron-main/gitIpcRoutes.js";
+import { searchIpcRoutes } from "../src/zeta/platform/search/electron-main/searchIpcRoutes.js";
+import { sessionIpcRoutes } from "../src/zeta/platform/sessions/electron-main/sessionIpcRoutes.js";
+import { terminalIpcRoutes } from "../src/zeta/platform/terminal/electron-main/terminalIpcRoutes.js";
+import { typstIpcRoutes } from "../src/zeta/platform/typst/electron-main/typstIpcRoutes.js";
 
 class FakeIpcMain implements IpcMainLike {
   readonly handlers = new Map<
@@ -89,16 +95,23 @@ test("trusted IPC router enforces webContents, main frame, exact URL, and params
   assert.equal(ipcMain.handlers.size, 0);
 });
 
-test("App Server IPC validators reject malformed Turn, Typst, resource, filesystem, search, and Git input", () => {
-  const routes = appServerIpcRoutes({} as AppServerSupervisor);
+test("capability IPC validators reject malformed input", () => {
+  const supervisor = {} as AppServerSupervisor;
+  const routes = [
+    ...appServerIpcRoutes(supervisor),
+    ...sessionIpcRoutes(supervisor),
+    ...typstIpcRoutes(supervisor),
+    ...fileIpcRoutes(supervisor),
+    ...gitIpcRoutes(supervisor),
+    ...searchIpcRoutes(supervisor),
+    ...terminalIpcRoutes(supervisor),
+  ];
   const sessionCreate = routes.find((route) => route.channel === "zeta:session:create")!;
   const turnStart = routes.find((route) => route.channel === "zeta:turn:start")!;
   const resolveInteraction = routes.find(
     (route) => route.channel === "zeta:turn:interaction:resolve",
   )!;
   const typstCompile = routes.find((route) => route.channel === "zeta:typst:compile")!;
-  const syntaxOpen = routes.find((route) => route.channel === "zeta:syntax:open")!;
-  const syntaxChange = routes.find((route) => route.channel === "zeta:syntax:change")!;
   const resourceRead = routes.find((route) => route.channel === "zeta:resource:read")!;
   const fsGetMetadata = routes.find(
     (route) => route.channel === "zeta:fs:get-metadata",
@@ -145,33 +158,6 @@ test("App Server IPC validators reject malformed Turn, Typst, resource, filesyst
         unexpected: true,
       }),
     /exactly/,
-  );
-  for (const language of ["json", "jsonc", "rust"] as const) {
-    assert.deepEqual(
-      syntaxOpen.validate({
-        documentId: "model-1",
-        documentUri: `file:///main.${language}`,
-        language,
-        revision: 1,
-        text: "{}",
-      }),
-      {
-        documentId: "model-1",
-        documentUri: `file:///main.${language}`,
-        language,
-        revision: 1,
-        text: "{}",
-      },
-    );
-  }
-  assert.throws(
-    () => syntaxChange.validate({
-      documentId: "model-1",
-      previousRevision: 2,
-      revision: 2,
-      edits: [{ startUtf16: 0, endUtf16: 0, text: "pub " }],
-    }),
-    /increase/,
   );
   assert.throws(
     () =>

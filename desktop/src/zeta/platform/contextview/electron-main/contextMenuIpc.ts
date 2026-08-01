@@ -10,7 +10,7 @@ import {
 } from "../../../base/parts/contextmenu/common/contextmenu.js";
 import type {
   IpcRoute,
-} from "../../app-server/electron-main/trusted-ipc-router.js";
+} from "../../ipc/electron-main/trustedIpcRouter.js";
 
 /** Binds the base context menu host to trusted Electron renderer IPC. */
 export function nativeContextMenuIpcRoutes(

@@ -1,6 +1,6 @@
 import type {
   IpcRoute,
-} from "../../app-server/electron-main/trusted-ipc-router.js";
+} from "../../ipc/electron-main/trustedIpcRouter.js";
 import {
   BROWSER_VIEW_CLOSE_CHANNEL,
   BROWSER_VIEW_CREATE_CHANNEL,

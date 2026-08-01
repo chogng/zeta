@@ -1,6 +1,6 @@
 import type { ZetaRendererApi } from "../../app-server/common/renderer-api.js";
 import { type IDisposable, toDisposable } from "../../../base/common/lifecycle.js";
-import type { ITerminalProcessCloseOptions, ITerminalProcessCreateOptions, ITerminalProcessCreation, ITerminalProcessProfile, ITerminalProcessReadOptions, ITerminalProcessReadResult, ITerminalProcessResizeOptions, ITerminalProcessService, ITerminalProcessWriteOptions, TerminalProcessConnectionState } from "../common/terminalProcess.js";
+import type { ITerminalProcessCloseOptions, ITerminalProcessCreateOptions, ITerminalProcessCreation, ITerminalProcessProfile, ITerminalProcessReadOptions, ITerminalProcessReadResult, ITerminalProcessResizeOptions, ITerminalProcessService, ITerminalProcessWriteOptions, TerminalProcessConnectionState } from "../common/terminalProcessService.js";
 
 /**
  * Browser terminal-process service backed by the renderer's trusted capability.
@@ -8,7 +8,7 @@ import type { ITerminalProcessCloseOptions, ITerminalProcessCreateOptions, ITerm
  * Workbench terminal consumers depend on ITerminalService and never access
  * this transport-facing process service or renderer capability directly.
  */
-export class BrowserTerminalProcessService implements ITerminalProcessService {
+export class TerminalProcessService implements ITerminalProcessService {
   constructor(private readonly api: Pick<ZetaRendererApi, "appServer" | "terminal">) {}
 
   async listProfiles(): Promise<readonly ITerminalProcessProfile[]> {

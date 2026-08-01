@@ -256,10 +256,14 @@ Stopped/Starting/Initializing/Ready/Stopping/Crashed/Restarting 状态、initial
 重放结果未知的副作用操作。
 
 结构化 IPC router 集中注册有限 channel，并在调用 validator/handler 前同时验证目标
-webContents、main frame identity 和确切入口 URL。当前窄 IPC surface 对 params 做
-exact-shape validation；unknown field、错误 enum、空 ID 或畸形 Turn input 均不会到达
-App Server。协议生成 runtime validator 后，应替换这些同形显式 validator 的来源而不改变
-router 边界。
+webContents、main frame identity 和确切入口 URL。各能力在自己的
+`platform/<capability>/electron-main/*IpcRoutes.ts` 中拥有 channel、exact-shape validator 与
+App Server method 映射；`platform/app-server/electron-main` 只拥有连接状态、通用 Resource
+route、Supervisor、Session 与 JSON-RPC transport。通用可信 router 和 exact-shape validation
+primitive 位于 `platform/ipc/electron-main`，不反向依赖任何产品能力。`code/electron-main/app.ts`
+是这些 route factory 的 composition root。unknown field、错误 enum、空 ID 或畸形 Turn input均
+不会到达 App Server。协议生成 runtime validator 后，应替换这些同形显式 validator 的来源而
+不改变 router 边界。
 
 ### 4.1 Workspace 身份与窗口策略
 
@@ -523,7 +527,7 @@ token 与同源检查，client 断开后回收其子进程；它不构成生产�
 
 Terminal contribution 只依赖 Workbench service layer 的 `ITerminalService`。实例管理、输入
 batching、resize coalescing 和 polling 由 `TerminalService` 负责；process contract 位于
-platform layer，wire DTO 只在 `BrowserTerminalProcessService` adapter 内出现。Contribution
+platform layer，wire DTO 只在 `TerminalProcessService` adapter 内出现。Contribution
 和 xterm view 都不直接调用 `ZetaRendererApi`：
 
 ```text
@@ -531,9 +535,10 @@ TerminalViewPane / xterm
   → ITerminalService
   → TerminalService (Renderer)
   → ITerminalProcessService
-  → BrowserTerminalProcessService
+  → TerminalProcessService
   → ZetaRendererApi.terminal
   → trusted Electron IPC
+  → platform/terminal/electron-main/terminalIpcRoutes
   → terminal/* App Server methods
   → TerminalService (Rust)
   → zeta-utils-pty

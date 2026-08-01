@@ -5,10 +5,7 @@ export function record(value: unknown, keys: readonly string[]): Record<string, 
   const params = value as Record<string, unknown>;
   const actualKeys = Object.keys(params).sort();
   const expectedKeys = [...keys].sort();
-  if (
-    actualKeys.length !== expectedKeys.length ||
-    actualKeys.some((key, index) => key !== expectedKeys[index])
-  ) {
+  if (actualKeys.length !== expectedKeys.length || actualKeys.some((key, index) => key !== expectedKeys[index])) {
     throw new Error(`IPC params must contain exactly: ${expectedKeys.join(", ")}`);
   }
   return params;
@@ -26,9 +23,7 @@ export function string(value: unknown, field: string): string {
 }
 
 export function boolean(value: unknown, field: string): boolean {
-  if (typeof value !== "boolean") {
-    throw new Error(`${field} must be a boolean`);
-  }
+  if (typeof value !== "boolean") throw new Error(`${field} must be a boolean`);
   return value;
 }
 
@@ -47,9 +42,7 @@ export function positiveInteger(value: unknown, field: string): number {
 
 export function boundedPositiveInteger(value: unknown, field: string, maximum: number): number {
   const resolved = positiveInteger(value, field);
-  if (resolved > maximum) {
-    throw new Error(`${field} must not exceed ${maximum}`);
-  }
+  if (resolved > maximum) throw new Error(`${field} must not exceed ${maximum}`);
   return resolved;
 }
 

@@ -1,4 +1,4 @@
-import type { IpcRoute } from "../../app-server/electron-main/trusted-ipc-router.js";
+import type { IpcRoute } from "../../ipc/electron-main/trustedIpcRouter.js";
 import { USER_THEME_FILES_LIST_CHANNEL, USER_THEME_FILE_DELETE_CHANNEL, USER_THEME_FILE_WRITE_CHANNEL, validateUserThemeFileDeleteRequest, validateUserThemeFileWriteRequest } from "../common/userThemeFiles.js";
 import type { UserThemeFileService } from "../node/userThemeFileService.js";
 

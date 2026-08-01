@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { toDisposable } from "../src/zeta/base/common/lifecycle.js";
-import type { ITerminalProcessCreateOptions, ITerminalProcessReadResult, ITerminalProcessService, TerminalProcessConnectionState } from "../src/zeta/platform/terminal/common/terminalProcess.js";
+import type { ITerminalProcessCreateOptions, ITerminalProcessReadResult, ITerminalProcessService, TerminalProcessConnectionState } from "../src/zeta/platform/terminal/common/terminalProcessService.js";
 import { TerminalService } from "../src/zeta/workbench/services/terminal/browser/terminalService.js";
 import type { ITerminalInstance } from "../src/zeta/workbench/services/terminal/common/terminal.js";
 

@@ -1,6 +1,6 @@
 import type {
   IpcRoute,
-} from "../../app-server/electron-main/trusted-ipc-router.js";
+} from "../../ipc/electron-main/trustedIpcRouter.js";
 import {
   NATIVE_HOST_OPEN_FOLDER_CHANNEL,
   NATIVE_HOST_SET_WINDOW_THEME_CHANNEL,

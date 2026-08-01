@@ -7,7 +7,7 @@ import {
 import { DisposableOwner } from "../../../base/common/lifecycle.js";
 import type {
   IpcRoute,
-} from "../../app-server/electron-main/trusted-ipc-router.js";
+} from "../../ipc/electron-main/trustedIpcRouter.js";
 import {
   type INativeMenubarData,
   NATIVE_MENUBAR_SELECT_CHANNEL,

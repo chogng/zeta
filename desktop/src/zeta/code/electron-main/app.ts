@@ -36,7 +36,7 @@ import { appServerExecutablePath } from "../../platform/app-server/electron-main
 import {
   normalizeEntryUrl,
   registerTrustedIpcRoutes,
-} from "../../platform/app-server/electron-main/trusted-ipc-router.js";
+} from "../../platform/ipc/electron-main/trustedIpcRouter.js";
 import {
   BROWSER_VIEW_EVENT_CHANNEL,
 } from "../../platform/browser/common/browserView.js";
@@ -56,6 +56,8 @@ import {
 import {
   nativeContextMenuIpcRoutes,
 } from "../../platform/contextview/electron-main/contextMenuIpc.js";
+import { fileIpcRoutes } from "../../platform/files/electron-main/fileIpcRoutes.js";
+import { gitIpcRoutes } from "../../platform/git/electron-main/gitIpcRoutes.js";
 import {
   KEYBINDINGS_RESOURCE_CHANGED_CHANNEL,
 } from "../../platform/keybinding/common/keybindingsResource.js";
@@ -73,11 +75,15 @@ import {
 import {
   nativeHostIpcRoutes,
 } from "../../platform/native/electron-main/nativeHostIpc.js";
+import { searchIpcRoutes } from "../../platform/search/electron-main/searchIpcRoutes.js";
+import { sessionIpcRoutes } from "../../platform/sessions/electron-main/sessionIpcRoutes.js";
 import {
   StateService,
 } from "../../platform/state/node/stateService.js";
+import { terminalIpcRoutes } from "../../platform/terminal/electron-main/terminalIpcRoutes.js";
 import { userThemeIpcRoutes } from "../../platform/theme/electron-main/userThemeIpc.js";
 import { UserThemeFileService } from "../../platform/theme/node/userThemeFileService.js";
+import { typstIpcRoutes } from "../../platform/typst/electron-main/typstIpcRoutes.js";
 import {
   applyWindowState,
   resolveBrowserWindowOptions,
@@ -378,6 +384,12 @@ export class ZetaApplication extends DisposableOwner {
     }));
     const ipcRoutes = [
       ...appServerIpcRoutes(supervisor),
+      ...sessionIpcRoutes(supervisor),
+      ...typstIpcRoutes(supervisor),
+      ...fileIpcRoutes(supervisor),
+      ...gitIpcRoutes(supervisor),
+      ...searchIpcRoutes(supervisor),
+      ...terminalIpcRoutes(supervisor),
       ...browserViewIpcRoutes(browserViewMainService),
       ...configurationIpcRoutes(configuration),
       ...keybindingsResourceIpcRoutes(keybindings),

@@ -4,7 +4,7 @@ import {
 } from "../../../base/common/lifecycle.js";
 import type {
   IpcRoute,
-} from "../../app-server/electron-main/trusted-ipc-router.js";
+} from "../../ipc/electron-main/trustedIpcRouter.js";
 import {
   RevisionedJsonFile,
 } from "../../storage/node/revisionedJsonFile.js";

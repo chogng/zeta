@@ -77,6 +77,7 @@ test("ScmViewPane groups App Server Git status and refreshes it", async () => {
   const first: GitStatusResult = {
     streamInstanceId: "git-stream-1",
     revision: 1,
+    workspacePath: ".",
     head: {
       type: "branch",
       name: "main",
@@ -93,6 +94,7 @@ test("ScmViewPane groups App Server Git status and refreshes it", async () => {
   const committedClean: GitStatusResult = {
     streamInstanceId: first.streamInstanceId,
     revision: 2,
+    workspacePath: first.workspacePath,
     head: first.head,
     changes: [],
   };
@@ -199,12 +201,14 @@ test("ScmViewPane accepts a restarted Git stream and rejects its retired predece
   const previous: GitStatusResult = {
     streamInstanceId: "git-stream-before-restart",
     revision: 20,
+    workspacePath: ".",
     head: { type: "branch", name: "before", objectId: "1111111", upstream: null },
     changes: [change("before.ts", "unmodified", "modified")],
   };
   const restarted: GitStatusResult = {
     streamInstanceId: "git-stream-after-restart",
     revision: 1,
+    workspacePath: ".",
     head: { type: "branch", name: "after", objectId: "2222222", upstream: null },
     changes: [],
   };

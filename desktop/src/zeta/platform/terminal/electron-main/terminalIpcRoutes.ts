@@ -1,9 +1,9 @@
 import { APP_SERVER_METHODS, type TerminalCloseParams, type TerminalCreateParams, type TerminalReadParams, type TerminalResizeParams, type TerminalWriteParams } from "../../../../../generated/app-server/types.js";
-import type { AppServerSupervisor } from "./app-server-supervisor.js";
-import { boundedPositiveInteger, nonEmptyString, nonNegativeInteger, record, string } from "./app-server-ipc-validation.js";
-import type { IpcRoute } from "./trusted-ipc-router.js";
+import type { AppServerSupervisor } from "../../app-server/electron-main/app-server-supervisor.js";
+import { boundedPositiveInteger, nonEmptyString, nonNegativeInteger, record, string } from "../../ipc/electron-main/ipcValidation.js";
+import type { IpcRoute } from "../../ipc/electron-main/trustedIpcRouter.js";
 
-/** Exact-shape IPC routes for the App Server terminal contract. */
+/** Exact-shape IPC routes for terminal process operations. */
 export function terminalIpcRoutes(supervisor: AppServerSupervisor): readonly IpcRoute<unknown, unknown>[] {
   return [
     route({
@@ -114,7 +114,5 @@ function terminalReadParams(value: unknown): TerminalReadParams {
 
 function terminalCloseParams(value: unknown): TerminalCloseParams {
   const params = record(value, ["terminalId"]);
-  return {
-    terminalId: nonEmptyString(params.terminalId, "terminalId"),
-  };
+  return { terminalId: nonEmptyString(params.terminalId, "terminalId") };
 }

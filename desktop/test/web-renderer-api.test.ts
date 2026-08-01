@@ -40,20 +40,6 @@ test("disconnected Web renderer API rejects product operations explicitly", asyn
     },
   );
   await assert.rejects(
-    api.syntax.open({
-      documentId: "model-1",
-      documentUri: "file:///main.rs",
-      language: "rust",
-      revision: 1,
-      text: "fn main() {}",
-    }),
-    (error: unknown) => {
-      assert.ok(error instanceof WebAppServerUnavailableError);
-      assert.equal(error.operation, "syntax.open");
-      return true;
-    },
-  );
-  await assert.rejects(
     api.workspaceSearch.start({
       query: "needle",
       patternKind: "literal",

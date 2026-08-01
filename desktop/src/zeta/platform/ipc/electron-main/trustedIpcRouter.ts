@@ -1,3 +1,5 @@
+import { type IDisposable, toDisposable } from "../../../base/common/lifecycle.js";
+
 export interface IpcMainInvokeEventLike {
   readonly sender: {
     readonly mainFrame: unknown;
@@ -8,10 +10,7 @@ export interface IpcMainInvokeEventLike {
 }
 
 export interface IpcMainLike {
-  handle(
-    channel: string,
-    listener: (event: IpcMainInvokeEventLike, params: unknown) => unknown,
-  ): void;
+  handle(channel: string, listener: (event: IpcMainInvokeEventLike, params: unknown) => unknown): void;
   removeHandler(channel: string): void;
 }
 
@@ -28,14 +27,8 @@ export interface TrustedIpcTarget {
   readonly allowedEntryUrls: ReadonlySet<string>;
 }
 
-/**
- * Registers finite IPC routes with one shared sender, main-frame, URL, and params gate.
- */
-export function registerTrustedIpcRoutes(
-  ipcMain: IpcMainLike,
-  target: TrustedIpcTarget,
-  routes: readonly IpcRoute<unknown, unknown>[],
-): IDisposable {
+/** Registers finite IPC routes with one shared sender, main-frame, URL, and params gate. */
+export function registerTrustedIpcRoutes(ipcMain: IpcMainLike, target: TrustedIpcTarget, routes: readonly IpcRoute<unknown, unknown>[]): IDisposable {
   const channels = new Set<string>();
   for (const route of routes) {
     if (channels.has(route.channel)) {
@@ -61,10 +54,7 @@ export function registerTrustedIpcRoutes(
   });
 }
 
-export function requireTrustedSender(
-  event: IpcMainInvokeEventLike,
-  target: TrustedIpcTarget,
-): void {
+export function requireTrustedSender(event: IpcMainInvokeEventLike, target: TrustedIpcTarget): void {
   if (event.sender !== target.webContents) {
     throw new Error("Untrusted renderer IPC sender");
   }
@@ -79,7 +69,3 @@ export function requireTrustedSender(
 export function normalizeEntryUrl(value: string): string {
   return new URL(value).href;
 }
-import {
-  type IDisposable,
-  toDisposable,
-} from "../../../base/common/lifecycle.js";

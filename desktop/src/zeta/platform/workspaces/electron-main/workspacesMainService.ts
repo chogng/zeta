@@ -1,6 +1,6 @@
 import { Emitter, type Event } from "../../../base/common/event.js";
 import { DisposableOwner } from "../../../base/common/lifecycle.js";
-import type { IpcRoute } from "../../app-server/electron-main/trusted-ipc-router.js";
+import type { IpcRoute } from "../../ipc/electron-main/trustedIpcRouter.js";
 import { type IAnyWorkspaceIdentifier, type ISingleFolderWorkspaceIdentifier, UNKNOWN_EMPTY_WINDOW_WORKSPACE, isSingleFolderWorkspaceIdentifier, serializeWorkspaceIdentifier } from "../../workspace/common/workspace.js";
 import { WORKSPACE_CONTEXT_READ_CHANNEL, validateWorkspaceContextRead } from "../../workspace/common/workspaceIpc.js";
 import { type IWorkspaceOpenTarget, WorkspaceOpenTargetKind } from "../common/workspaces.js";
