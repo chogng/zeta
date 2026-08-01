@@ -26,8 +26,14 @@ fn titlebar_places_actions_after_native_window_controls_and_component_gap() {
 
     assert_eq!(scene.icons().len(), 2);
     assert!(scene.text_blocks().is_empty());
-    assert_eq!(scene.icons()[0].icon(), icons::LAYOUT_SIDEBAR_LEFT_EMPTY);
-    assert_eq!(scene.icons()[1].icon(), icons::LAYOUT_SIDEBAR_RIGHT_EMPTY);
+    assert_eq!(
+        scene.icons()[0].icon(),
+        icons::LAYOUT_SIDEBAR_LEFT_OFF_EMPTY
+    );
+    assert_eq!(
+        scene.icons()[1].icon(),
+        icons::LAYOUT_SIDEBAR_RIGHT_OFF_EMPTY
+    );
     assert_eq!(
         scene.icons()[0].bounds(),
         Rect::from_xywh(81.0, 7.0, 18.0, 18.0)
@@ -70,11 +76,11 @@ fn titlebar_places_actions_after_native_window_controls_and_component_gap() {
 }
 
 #[test]
-fn expanded_agent_sidebar_uses_the_right_off_icon() {
+fn expanded_sidebars_use_the_left_and_right_icons() {
     let titlebar = Titlebar::new(
         Rect::from_xywh(0.0, 0.0, 1000.0, 32.0),
         SHELL_PALETTE,
-        SessionSidebarState::default(),
+        SessionSidebarState::expanded(),
         AgentSidebarState::expanded(),
         WindowControlInsets::NONE,
         &UiDispatch::default(),
@@ -83,5 +89,6 @@ fn expanded_agent_sidebar_uses_the_right_off_icon() {
 
     titlebar.paint(&mut scene);
 
-    assert_eq!(scene.icons()[1].icon(), icons::LAYOUT_SIDEBAR_RIGHT_OFF);
+    assert_eq!(scene.icons()[0].icon(), icons::LAYOUT_SIDEBAR_LEFT);
+    assert_eq!(scene.icons()[1].icon(), icons::LAYOUT_SIDEBAR_RIGHT);
 }

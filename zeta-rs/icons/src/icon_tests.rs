@@ -37,9 +37,10 @@ fn semantic_library_distinguishes_symbolic_and_multicolor_artwork() {
 #[test]
 fn sidebar_toggle_icons_preserve_their_rendering_contracts() {
     for icon in [
-        icons::LAYOUT_SIDEBAR_LEFT_EMPTY,
-        icons::LAYOUT_SIDEBAR_LEFT_OFF,
-        icons::LAYOUT_SIDEBAR_RIGHT_EMPTY,
+        icons::LAYOUT_SIDEBAR_LEFT,
+        icons::LAYOUT_SIDEBAR_LEFT_OFF_EMPTY,
+        icons::LAYOUT_SIDEBAR_RIGHT,
+        icons::LAYOUT_SIDEBAR_RIGHT_OFF_EMPTY,
     ] {
         assert_eq!(icon.definition().rendering(), IconRendering::Symbolic);
     }

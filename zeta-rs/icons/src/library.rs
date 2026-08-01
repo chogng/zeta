@@ -33,11 +33,10 @@ pub mod icons {
     pub const LAYOUT_PANEL: Icon = Icon::new(IconId::new("layout-panel"), artwork::LAYOUT_PANEL);
     pub const LAYOUT_PANEL_OFF: Icon = Icon::new(IconId::new("layout-panel-off"), artwork::LAYOUT_PANEL_OFF);
     pub const LAYOUT_SIDEBAR_LEFT: Icon = Icon::new(IconId::new("layout-sidebar-left"), artwork::LAYOUT_SIDEBAR_LEFT);
-    pub const LAYOUT_SIDEBAR_LEFT_EMPTY: Icon = Icon::new(IconId::new("layout-sidebar-left-empty"), artwork::LAYOUT_SIDEBAR_LEFT_EMPTY);
-    pub const LAYOUT_SIDEBAR_LEFT_OFF: Icon = Icon::new(IconId::new("layout-sidebar-left-off"), artwork::LAYOUT_SIDEBAR_LEFT_OFF);
+    pub const LAYOUT_SIDEBAR_LEFT_OFF_EMPTY: Icon = Icon::new(IconId::new("layout-sidebar-left-off-empty"), artwork::LAYOUT_SIDEBAR_LEFT_OFF_EMPTY);
     pub const LAYOUT_SIDEBAR_RIGHT: Icon = Icon::new(IconId::new("layout-sidebar-right"), artwork::LAYOUT_SIDEBAR_RIGHT);
-    pub const LAYOUT_SIDEBAR_RIGHT_EMPTY: Icon = Icon::new(IconId::new("layout-sidebar-right-empty"), artwork::LAYOUT_SIDEBAR_RIGHT_EMPTY);
     pub const LAYOUT_SIDEBAR_RIGHT_OFF: Icon = Icon::new(IconId::new("layout-sidebar-right-off"), artwork::LAYOUT_SIDEBAR_RIGHT_OFF);
+    pub const LAYOUT_SIDEBAR_RIGHT_OFF_EMPTY: Icon = Icon::new(IconId::new("layout-sidebar-right-off-empty"), artwork::LAYOUT_SIDEBAR_RIGHT_OFF_EMPTY);
     pub const LINK_EXTERNAL: Icon = Icon::new(IconId::new("link-external"), artwork::LINK_EXTERNAL);
     pub const LOCAL: Icon = Icon::new(IconId::new("local"), artwork::TERMINAL);
     pub const MENU: Icon = Icon::new(IconId::new("menu"), artwork::MENU);
@@ -74,11 +73,10 @@ pub const ALL_ICONS: &[Icon] = &[
     icons::LAYOUT_PANEL,
     icons::LAYOUT_PANEL_OFF,
     icons::LAYOUT_SIDEBAR_LEFT,
-    icons::LAYOUT_SIDEBAR_LEFT_EMPTY,
-    icons::LAYOUT_SIDEBAR_LEFT_OFF,
+    icons::LAYOUT_SIDEBAR_LEFT_OFF_EMPTY,
     icons::LAYOUT_SIDEBAR_RIGHT,
-    icons::LAYOUT_SIDEBAR_RIGHT_EMPTY,
     icons::LAYOUT_SIDEBAR_RIGHT_OFF,
+    icons::LAYOUT_SIDEBAR_RIGHT_OFF_EMPTY,
     icons::LINK_EXTERNAL,
     icons::LOCAL,
     icons::MENU,

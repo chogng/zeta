@@ -83,9 +83,9 @@ impl Titlebar {
             "Expand sessions sidebar"
         };
         let session_toggle_icon = if session_sidebar.is_expanded() {
-            icons::LAYOUT_SIDEBAR_LEFT_OFF
+            icons::LAYOUT_SIDEBAR_LEFT
         } else {
-            icons::LAYOUT_SIDEBAR_LEFT_EMPTY
+            icons::LAYOUT_SIDEBAR_LEFT_OFF_EMPTY
         };
         let agent_toggle_label = if agent_sidebar.is_expanded() {
             "Collapse agent sidebar"
@@ -93,9 +93,9 @@ impl Titlebar {
             "Expand agent sidebar"
         };
         let agent_toggle_icon = if agent_sidebar.is_expanded() {
-            icons::LAYOUT_SIDEBAR_RIGHT_OFF
+            icons::LAYOUT_SIDEBAR_RIGHT
         } else {
-            icons::LAYOUT_SIDEBAR_RIGHT_EMPTY
+            icons::LAYOUT_SIDEBAR_RIGHT_OFF_EMPTY
         };
         let button_style = ButtonStyle::new(
             ButtonBackgrounds::new(palette.surface_raised)
