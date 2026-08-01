@@ -92,10 +92,7 @@ import {
   IDialogsModel,
   IWorkbenchDialogHandler,
 } from "../common/dialogs.js";
-import {
-  INativeHostService,
-  IRendererApiService,
-} from "../common/services.js";
+import { INativeHostService } from "../common/services.js";
 import { resolveWorkbenchColorTheme } from "../common/theme.js";
 import { IUserThemeService, type IUserThemeService as IUserThemeServiceContract, UnavailableUserThemeService } from "../common/userThemes.js";
 import {
@@ -130,10 +127,8 @@ import {
   IViewsService,
   ViewsService,
 } from "../services/views/browser/viewsService.js";
-import {
-  IWorkbenchSessionService,
-  WorkbenchSessionService,
-} from "../services/sessions/common/sessionService.js";
+import { WorkbenchSessionService } from "../services/sessions/browser/sessionService.js";
+import { IWorkbenchSessionService } from "../services/sessions/common/sessionService.js";
 import {
   WorkbenchConfigurationService,
 } from "../services/configuration/browser/configurationService.js";
@@ -181,6 +176,8 @@ import { ITerminalService } from "../services/terminal/common/terminal.js";
 import { ITextFileService, TextFileService } from "../services/textfile/common/textFileService.js";
 import { GitService } from "../services/git/browser/gitService.js";
 import { IGitService } from "../services/git/common/gitService.js";
+import { ChatService } from "../services/chat/browser/chatService.js";
+import { IChatService } from "../services/chat/common/chatService.js";
 
 /** Host-specific inputs required to construct a workbench. */
 export interface IStartWorkbenchOptions {
@@ -246,7 +243,6 @@ export class Workbench extends DisposableOwner {
     super();
     const services = new ServiceCollection();
     const instantiationService = new InstantiationService(services);
-    services.set(IRendererApiService, api);
     if (nativeHostApi) {
       services.set(INativeHostService, nativeHostApi);
     }
@@ -268,10 +264,12 @@ export class Workbench extends DisposableOwner {
       IWorkspaceSearchService,
       new BrowserWorkspaceSearchService(api.workspaceSearch),
     );
-    const terminalService = this.own(new TerminalService(new TerminalProcessService(api)));
+    const terminalService = this.own(new TerminalService(new TerminalProcessService(api.terminal, api.appServer)));
     services.set(ITerminalService, terminalService);
     const gitService = this.own(new GitService({ api: api.git, appServerApi: api.appServer, eventApi: api.events }));
     services.set(IGitService, gitService);
+    const chatService = this.own(new ChatService({ modelApi: api.model, threadApi: api.thread, turnApi: api.turn, appServerApi: api.appServer, eventApi: api.events }));
+    services.set(IChatService, chatService);
     const workbenchState = workspaceContext.getWorkbenchState();
     const workbenchWindow = this.own(new WorkbenchWindow({
       root: workbenchRoot,
@@ -351,7 +349,7 @@ export class Workbench extends DisposableOwner {
       contextKeyService: contextKeys,
     }));
     services.set(IViewDescriptorService, viewDescriptors);
-    const sessionService = this.own(new WorkbenchSessionService(api));
+    const sessionService = this.own(new WorkbenchSessionService(api.session));
     services.set(IWorkbenchSessionService, sessionService);
     const keyboardLayout = this.own(new BrowserKeyboardLayoutService({
       navigator: ownerDocument.defaultView?.navigator ?? navigator,

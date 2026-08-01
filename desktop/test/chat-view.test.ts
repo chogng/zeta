@@ -20,7 +20,9 @@ import { ChatPaneModel } from "../src/zeta/workbench/contrib/chat/browser/pane/c
 import { CHAT_VIEW_CONTAINER_ID, CHAT_VIEW_ID, MOVE_CHAT_TO_EDITOR_COMMAND_ID, MOVE_CHAT_TO_NEW_WINDOW_COMMAND_ID, NEW_CHAT_COMMAND_ID, OPEN_CHAT_BROWSER_COMMAND_ID, OPEN_CHAT_SETTINGS_COMMAND_ID, SHOW_CHAT_HISTORY_COMMAND_ID, TOGGLE_AGENT_SIDEBAR_COMMAND_ID } from "../src/zeta/workbench/contrib/chat/common/chat.js";
 import { ISettingsService } from "../src/zeta/workbench/services/preferences/common/settings.js";
 import type { IWorkbenchLayoutService, WorkbenchPartId, WorkbenchPartVisibilityChangeEvent } from "../src/zeta/workbench/services/layout/browser/layoutService.js";
-import { IWorkbenchSessionService, WorkbenchSessionService } from "../src/zeta/workbench/services/sessions/common/sessionService.js";
+import { ChatService } from "../src/zeta/workbench/services/chat/browser/chatService.js";
+import { WorkbenchSessionService } from "../src/zeta/workbench/services/sessions/browser/sessionService.js";
+import { IWorkbenchSessionService } from "../src/zeta/workbench/services/sessions/common/sessionService.js";
 import { IViewsService, ViewsService } from "../src/zeta/workbench/services/views/browser/viewsService.js";
 import { ContextKeyService, IContextKeyService } from "../src/zeta/platform/contextkey/common/contextkey.js";
 import { ViewDescriptorService } from "../src/zeta/workbench/services/views/common/viewDescriptorService.js";
@@ -127,7 +129,7 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
       title: "Chat",
       ownerDocument: dom.window.document,
     },
-    api,
+    createChatService(api),
     sessions,
     menuService,
     contextMenuService,
@@ -401,7 +403,7 @@ test("an empty Session list opens an untitled session and persists it on its fir
       title: "Chat",
       ownerDocument: dom.window.document,
     },
-    api,
+    createChatService(api),
     sessions,
     menuService,
     contextMenuService,
@@ -495,7 +497,7 @@ test("the New Chat slash command opens an untitled session", async () => {
       title: "Chat",
       ownerDocument: dom.window.document,
     },
-    fake.api,
+    createChatService(fake.api),
     sessions,
     menuService,
     contextMenuService,
@@ -568,7 +570,7 @@ test("failed first send keeps the untitled session and its input draft", async (
       title: "Chat",
       ownerDocument: dom.window.document,
     },
-    fake.api,
+    createChatService(fake.api),
     sessions,
     menuService,
     contextMenuService,
@@ -638,7 +640,7 @@ test("one Session retains one Chat pane while its selected Thread changes", asyn
       title: "Chat",
       ownerDocument: dom.window.document,
     },
-    api,
+    createChatService(api),
     sessions,
     menuService,
     contextMenuService,
@@ -881,7 +883,7 @@ test("ChatPaneModel layers transient deltas over canonical Thread state", async 
     thread: () => currentThread,
   });
   using sessions = new WorkbenchSessionService(fake.api);
-  using model = new ChatPaneModel(fake.api, {
+  using model = new ChatPaneModel(createChatService(fake.api), {
     kind: "session",
     active: {
       session: activeSession,
@@ -968,6 +970,10 @@ interface FakeOptions {
     readonly threadId: string;
   };
   readonly thread?: () => Thread;
+}
+
+function createChatService(api: IRendererHost): ChatService {
+  return new ChatService({ modelApi: api.model, threadApi: api.thread, turnApi: api.turn, appServerApi: api.appServer, eventApi: api.events });
 }
 
 function testLayoutService(auxiliaryBarVisible = true): IWorkbenchLayoutService {

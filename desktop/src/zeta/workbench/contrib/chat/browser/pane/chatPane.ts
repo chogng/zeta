@@ -1,9 +1,8 @@
-import type { SessionId, ThreadId } from "../../../../../../../generated/app-server/types.js";
 import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
-import type { IRendererHost } from "../../../../../platform/renderer/common/rendererHost.js";
 import type { ICommandService } from "../../../../../platform/commands/common/commands.js";
 import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextMenu.js";
-import type { IActiveSessionThread, IUntitledChatSession, IWorkbenchSessionService } from "../../../../services/sessions/common/sessionService.js";
+import type { IChatService } from "../../../../services/chat/common/chatService.js";
+import type { IActiveSessionThread, IUntitledChatSession, IWorkbenchSessionService, SessionId, ThreadId } from "../../../../services/sessions/common/sessionService.js";
 import type { ChatInputDelegate } from "../input/chatInput.js";
 import { ChatInputWidget } from "../input/chatInputWidget.js";
 import { ChatListWidget } from "../list/chatListWidget.js";
@@ -16,14 +15,14 @@ export class ChatPane extends DisposableOwner {
   private readonly listWidget: ChatListWidget;
   private readonly inputWidget: ChatInputWidget;
 
-  constructor(ownerDocument: Document, panelId: string, api: IRendererHost, selection: ChatPaneSelection, sessionService: IWorkbenchSessionService, contextMenuService: IContextMenuService, commandService: ICommandService) {
+  constructor(ownerDocument: Document, panelId: string, chatService: IChatService, selection: ChatPaneSelection, sessionService: IWorkbenchSessionService, contextMenuService: IContextMenuService, commandService: ICommandService) {
     super();
     this.element = ownerDocument.createElement("div");
     this.element.id = panelId;
     this.element.className = "zeta-chat";
     this.element.setAttribute("role", "tabpanel");
     this.element.hidden = true;
-    this.model = this.own(new ChatPaneModel(api, selection, sessionService));
+    this.model = this.own(new ChatPaneModel(chatService, selection, sessionService));
     this.listWidget = this.own(new ChatListWidget(ownerDocument));
     const inputDelegate: ChatInputDelegate = {
       send: (text) => this.model.send(text),

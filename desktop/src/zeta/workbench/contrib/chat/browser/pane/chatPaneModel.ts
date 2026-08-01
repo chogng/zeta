@@ -1,9 +1,7 @@
-import type { AgentResponse, ModelCatalogEntry, ModelRef, SessionId, SlashCommandDefinition, Thread, ThreadId, ThreadItem, ThreadUpdateEnvelope, Turn, TurnInteraction } from "../../../../../../../generated/app-server/types.js";
 import { Emitter, type Event } from "../../../../../base/common/event.js";
 import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
-import { createUuid } from "../../../../../base/common/uuid.js";
-import type { IRendererHost } from "../../../../../platform/renderer/common/rendererHost.js";
-import type { IActiveSessionThread, IUntitledChatSession, IWorkbenchSessionService } from "../../../../services/sessions/common/sessionService.js";
+import type { AgentResponse, IChatService, ModelCatalogEntry, SlashCommandDefinition, Thread, ThreadItem, ThreadUpdateEnvelope, Turn, TurnInteraction } from "../../../../services/chat/common/chatService.js";
+import type { IActiveSessionThread, IUntitledChatSession, IWorkbenchSessionService, ModelRef, SessionId, ThreadId } from "../../../../services/sessions/common/sessionService.js";
 import { chatListItem, type IChatListItem } from "../list/chatListItems.js";
 
 export type ChatPaneState =
@@ -25,7 +23,7 @@ export type ChatPaneSelection =
  * contains the same item.
  */
 export class ChatPaneModel extends DisposableOwner {
-  private readonly api: IRendererHost;
+  private readonly chatService: IChatService;
   private readonly sessionService: IWorkbenchSessionService;
   private readonly _onDidChange = this.own(new Emitter<void>());
   private readonly transientItems = new Map<string, ThreadItem>();
@@ -47,26 +45,18 @@ export class ChatPaneModel extends DisposableOwner {
 
   readonly onDidChange: Event<void> = this._onDidChange.event;
 
-  constructor(api: IRendererHost, selection: ChatPaneSelection, sessionService: IWorkbenchSessionService) {
+  constructor(chatService: IChatService, selection: ChatPaneSelection, sessionService: IWorkbenchSessionService) {
     super();
-    this.api = api;
+    this.chatService = chatService;
     this.sessionService = sessionService;
     this.selection = selection;
-    const events = api.events.subscribe((notification) => {
-      if (notification.method === "thread/update") {
-        this.acceptUpdate(notification.params);
-      }
-    });
-    this.defer(() => events.dispose());
-    const connection = api.appServer.onConnectionState((state) => {
-      if (state === "ready") void this.reconnect();
-    });
-    this.defer(() => connection.dispose());
+    this.own(chatService.onDidUpdateThread((update) => this.acceptUpdate(update)));
+    this.own(chatService.onDidBecomeReady(() => void this.reconnect()));
     this.defer(() => {
       this.disposed = true;
       this.generation++;
       const threadId = this.threadId;
-      if (threadId) void this.api.thread.unsubscribe({ threadId });
+      if (threadId) void this.chatService.unsubscribeThread(threadId);
       this.transientItems.clear();
       this.resetStreamCursor();
     });
@@ -150,7 +140,7 @@ export class ChatPaneModel extends DisposableOwner {
       return;
     }
     if (previousThreadId !== active.threadId) {
-      void this.api.thread.unsubscribe({ threadId: previousThreadId });
+      void this.chatService.unsubscribeThread(previousThreadId);
     }
     await this.subscribe(active);
   }
@@ -184,12 +174,11 @@ export class ChatPaneModel extends DisposableOwner {
       if (!thread || thread.threadId !== active.threadId) {
         throw new Error("Chat Thread is not available");
       }
-      await this.api.turn.start({
-        commandId: commandId("turn"),
+      await this.chatService.startTurn({
         sessionId: active.session.sessionId,
         threadId: active.threadId,
         expectedSequence: thread.sequence,
-        input: [{ type: "text", text: input }],
+        text: input,
       });
       await this.refreshThread();
       this.setState("ready");
@@ -205,8 +194,7 @@ export class ChatPaneModel extends DisposableOwner {
     if (!thread || !turn) return;
     try {
       this.setState("submitting");
-      await this.api.turn.interrupt({
-        commandId: commandId("interrupt"),
+      await this.chatService.interruptTurn({
         sessionId: thread.sessionId,
         threadId: thread.threadId,
         turnId: turn.turnId,
@@ -229,8 +217,7 @@ export class ChatPaneModel extends DisposableOwner {
     }
     try {
       this.setState("submitting");
-      await this.api.turn.resolveInteraction({
-        commandId: commandId("interaction"),
+      await this.chatService.resolveInteraction({
         sessionId: thread.sessionId,
         threadId: thread.threadId,
         turnId: turn.turnId,
@@ -260,8 +247,8 @@ export class ChatPaneModel extends DisposableOwner {
   }
 
   private async loadCatalogs(): Promise<void> {
-    const [models, slashCommands] = await Promise.allSettled([this.api.model.list(), this.api.appServer.getSlashCommands()]);
-    this._models = models.status === "fulfilled" ? models.value.models : [];
+    const [models, slashCommands] = await Promise.allSettled([this.chatService.listModels(), this.chatService.listSlashCommands()]);
+    this._models = models.status === "fulfilled" ? models.value : [];
     this._slashCommands = slashCommands.status === "fulfilled" ? slashCommands.value : [];
     this._onDidChange.fire();
   }
@@ -295,13 +282,10 @@ export class ChatPaneModel extends DisposableOwner {
     this.resetStreamCursor();
     this.setState("loading");
     if (oldThreadId && oldThreadId !== active.threadId) {
-      void this.api.thread.unsubscribe({ threadId: oldThreadId });
+      void this.chatService.unsubscribeThread(oldThreadId);
     }
     try {
-      const result = await this.api.thread.subscribe({
-        threadId: active.threadId,
-        afterSequence: 0,
-      });
+      const result = await this.chatService.subscribeThread(active.threadId, 0);
       if (this.disposed || generation !== this.generation) return;
       this._thread = result.thread;
       this.discardCommittedTransientItems();
@@ -424,13 +408,13 @@ export class ChatPaneModel extends DisposableOwner {
     const threadId = active.threadId;
     const generation = this.generation;
     try {
-      const result = await this.api.thread.read({ threadId });
+      const thread = await this.chatService.readThread(threadId);
       if (
         this.disposed ||
         generation !== this.generation ||
-        result.thread.threadId !== this.threadId
+        thread.threadId !== this.threadId
       ) return;
-      this._thread = result.thread;
+      this._thread = thread;
       this.discardCommittedTransientItems();
       this._error = undefined;
       this._state = "ready";
@@ -495,10 +479,6 @@ function activeTurn(thread: Thread | undefined): Turn | undefined {
       turn.status === "waitingForCapability" ||
       turn.status === "cancelling",
   );
-}
-
-function commandId(kind: string): string {
-  return `desktop-${kind}-${createUuid()}`;
 }
 
 function sameModel(left: ModelRef | null | undefined, right: ModelRef | null | undefined): boolean {

@@ -1,7 +1,5 @@
 import "../media/chat.css";
-import type { Session, SessionThread, ThreadId } from "../../../../../../../generated/app-server/types.js";
 import { setDisposableOwner } from "../../../../../base/common/lifecycle.js";
-import type { IRendererHost } from "../../../../../platform/renderer/common/rendererHost.js";
 import type { IMenuService } from "../../../../../platform/actions/common/menuService.js";
 import type { IContextKeyService } from "../../../../../platform/contextkey/common/contextkey.js";
 import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextMenu.js";
@@ -10,7 +8,8 @@ import { SidebarPart } from "../../../../browser/parts/sidebar/sidebarPart.js";
 import { ViewPane, type IViewPaneOptions } from "../../../../browser/parts/views/viewPane.js";
 import { ViewContainerLocation } from "../../../../common/views.js";
 import type { IWorkbenchLayoutService } from "../../../../services/layout/browser/layoutService.js";
-import type { IActiveSessionThread, IUntitledChatSession, IWorkbenchSessionService } from "../../../../services/sessions/common/sessionService.js";
+import type { IChatService } from "../../../../services/chat/common/chatService.js";
+import type { IActiveSessionThread, IUntitledChatSession, IWorkbenchSessionService, Session, SessionThread, ThreadId } from "../../../../services/sessions/common/sessionService.js";
 import type { IViewDescriptorService } from "../../../../services/views/common/viewDescriptorService.js";
 import { AgentSidebarVisibleContext } from "../../common/chat.js";
 import { ChatPane } from "../pane/chatPane.js";
@@ -33,7 +32,7 @@ interface ChatPaneEntry {
  * materialize only when their first message is sent.
  */
 export class ChatViewPane extends ViewPane {
-  private readonly api: IRendererHost;
+  private readonly chatService: IChatService;
   private readonly sessionService: IWorkbenchSessionService;
   private readonly contextMenuService: IContextMenuService;
   private readonly commandService: ICommandService;
@@ -48,7 +47,7 @@ export class ChatViewPane extends ViewPane {
 
   constructor(
     options: IViewPaneOptions,
-    api: IRendererHost,
+    chatService: IChatService,
     sessionService: IWorkbenchSessionService,
     menuService: IMenuService,
     contextMenuService: IContextMenuService,
@@ -58,7 +57,7 @@ export class ChatViewPane extends ViewPane {
     private readonly layoutService: IWorkbenchLayoutService,
   ) {
     super(options);
-    this.api = api;
+    this.chatService = chatService;
     this.sessionService = sessionService;
     this.contextMenuService = contextMenuService;
     this.commandService = commandService;
@@ -135,7 +134,7 @@ export class ChatViewPane extends ViewPane {
         pane = new ChatPane(
           this.element.ownerDocument,
           `zeta-chat-pane-${++chatPaneInstanceId}`,
-          this.api,
+          this.chatService,
           { kind: "untitled", session: untitledSession },
           this.sessionService,
           this.contextMenuService,
@@ -159,7 +158,7 @@ export class ChatViewPane extends ViewPane {
         pane = new ChatPane(
           this.element.ownerDocument,
           `zeta-chat-pane-${++chatPaneInstanceId}`,
-          this.api,
+          this.chatService,
           { kind: "session", active: selection },
           this.sessionService,
           this.contextMenuService,

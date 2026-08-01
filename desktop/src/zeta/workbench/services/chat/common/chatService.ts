@@ -1,0 +1,113 @@
+import type { Event } from "../../../../base/common/event.js";
+import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
+import type { ModelRef, SessionId, ThreadId } from "../../sessions/common/sessionService.js";
+
+export interface ModelCatalogEntry {
+  readonly model: ModelRef;
+  readonly displayName: string;
+}
+
+export interface SlashCommandDefinition {
+  readonly name: string;
+  readonly description: string;
+  readonly argumentMode: "none" | "optional";
+}
+
+export type ThreadItem =
+  | { readonly type: "userMessage"; readonly itemId: string; readonly turnId: string; readonly text: string }
+  | { readonly type: "userImage"; readonly itemId: string; readonly turnId: string; readonly url: string }
+  | { readonly type: "agentMessage"; readonly itemId: string; readonly turnId: string; readonly text: string }
+  | { readonly type: "reasoning"; readonly itemId: string; readonly turnId: string; readonly text: string }
+  | { readonly type: "plan"; readonly itemId: string; readonly turnId: string; readonly text: string }
+  | { readonly type: "toolCall"; readonly itemId: string; readonly turnId: string; readonly toolCallId: string; readonly name: string; readonly argumentsJson: string }
+  | { readonly type: "toolResult"; readonly itemId: string; readonly turnId: string; readonly toolCallId: string; readonly text: string; readonly isError: boolean };
+
+export type TurnStatus = "created" | "running" | "waitingForApproval" | "waitingForUserInput" | "waitingForCapability" | "cancelling" | "completed" | "failed" | "interrupted";
+
+export interface Turn {
+  readonly turnId: string;
+  readonly status: TurnStatus;
+  readonly model?: ModelRef | null;
+  readonly items: readonly ThreadItem[];
+}
+
+export interface Thread {
+  readonly sessionId: SessionId;
+  readonly threadId: ThreadId;
+  readonly title: string;
+  readonly status: "active" | "archived";
+  readonly sequence: number;
+  readonly turns: readonly Turn[];
+}
+
+export interface UserInputOption { readonly label: string; readonly description: string }
+export interface UserInputQuestion { readonly id: string; readonly header: string; readonly question: string; readonly options?: readonly UserInputOption[]; readonly allowFreeForm: boolean }
+export interface RequestUserInput { readonly questions: readonly UserInputQuestion[] }
+export interface ActionApprovalRequest { readonly reason: string }
+export interface DynamicToolCall { readonly callId: string; readonly name: string; readonly arguments: unknown }
+
+export type AgentRequest =
+  | { readonly type: "approval"; readonly request: ActionApprovalRequest }
+  | { readonly type: "userInput"; readonly request: RequestUserInput }
+  | { readonly type: "dynamicTool"; readonly call: DynamicToolCall };
+
+export type AgentResponse =
+  | { readonly type: "approval"; readonly response: { readonly decision: "approveOnce" | "decline" } }
+  | { readonly type: "userInput"; readonly response: { readonly answers: Readonly<Record<string, { readonly value: string }>> } }
+  | { readonly type: "dynamicTool"; readonly response: { readonly callId: string; readonly content: readonly ({ readonly type: "text"; readonly text: string } | { readonly type: "image"; readonly dataUrl: string })[]; readonly success: boolean } };
+
+export interface TurnInteraction {
+  readonly requestId: string;
+  readonly itemId?: string | null;
+  readonly request: AgentRequest;
+  readonly deadline?: { readonly expiresAtUnixMs: number } | null;
+}
+
+export type ThreadCommittedEvent =
+  | { readonly type: "interactionRequested"; readonly interaction: TurnInteraction }
+  | { readonly type: "interactionResolved" }
+  | { readonly type: "interactionCancelled" }
+  | { readonly type: "turnCompleted" }
+  | { readonly type: "turnFailed" }
+  | { readonly type: "turnInterrupted" }
+  | { readonly type: "threadCreated" | "turnAccepted" | "turnStarted" | "itemCompleted" | "toolExecutionStarted" | "toolExecutionEscalated" | "turnCancelling" };
+
+export type ThreadUpdate =
+  | { readonly type: "committed"; readonly event: ThreadCommittedEvent }
+  | { readonly type: "itemStarted"; readonly item: ThreadItem }
+  | { readonly type: "itemDelta"; readonly itemId: string; readonly delta: { readonly type: "agentMessage" | "reasoning" | "plan"; readonly text: string } }
+  | { readonly type: "planUpdated" }
+  | { readonly type: "toolOutputDelta" };
+
+export interface ThreadUpdateEnvelope {
+  readonly sessionId: SessionId;
+  readonly threadId: ThreadId;
+  readonly durableSequence: number;
+  readonly streamCursor?: { readonly streamInstanceId: string; readonly sequence: number } | null;
+  readonly update: ThreadUpdate;
+}
+
+export interface ThreadSubscription {
+  readonly thread: Thread;
+  readonly updates: readonly ThreadUpdateEnvelope[];
+}
+
+export interface StartTurnOptions { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly expectedSequence: number; readonly text: string }
+export interface InterruptTurnOptions { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly turnId: string; readonly expectedSequence: number }
+export interface ResolveInteractionOptions extends InterruptTurnOptions { readonly requestId: string; readonly response: AgentResponse }
+
+/** Frontend Chat operations, catalogs, and Thread update lifecycle. */
+export interface IChatService {
+  readonly onDidUpdateThread: Event<ThreadUpdateEnvelope>;
+  readonly onDidBecomeReady: Event<void>;
+  listModels(): Promise<readonly ModelCatalogEntry[]>;
+  listSlashCommands(): Promise<readonly SlashCommandDefinition[]>;
+  readThread(threadId: ThreadId): Promise<Thread>;
+  subscribeThread(threadId: ThreadId, afterSequence: number): Promise<ThreadSubscription>;
+  unsubscribeThread(threadId: ThreadId): Promise<void>;
+  startTurn(options: StartTurnOptions): Promise<void>;
+  interruptTurn(options: InterruptTurnOptions): Promise<void>;
+  resolveInteraction(options: ResolveInteractionOptions): Promise<void>;
+}
+
+export const IChatService = createServiceIdentifier<IChatService>("chatService");

@@ -1,0 +1,229 @@
+import type { ModelRef as ModelRefDto, Session as SessionDto } from "../../../../../../generated/app-server/types.js";
+import { Emitter } from "../../../../base/common/event.js";
+import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { createUuid } from "../../../../base/common/uuid.js";
+import type { ISessionApi } from "../../../../platform/sessions/common/sessionApi.js";
+import type { IActiveSessionThread, IUntitledChatSession, IWorkbenchSessionService, ModelRef, Session, SessionId, ThreadId, WorkbenchSessionState } from "../common/sessionService.js";
+
+/** App Server-backed active Session selector for one workbench window. */
+export class WorkbenchSessionService extends DisposableOwner implements IWorkbenchSessionService {
+  private readonly api: ISessionApi;
+  private readonly _onDidChange = this.own(new Emitter<void>());
+  private _sessions: readonly Session[] = [];
+  private _active: IActiveSessionThread | undefined;
+  private _untitledSessions: readonly IUntitledChatSession[] = [];
+  private _activeUntitledSessionId: string | undefined;
+  private _state: WorkbenchSessionState = "loading";
+  private _error: string | undefined;
+  private initializePromise: Promise<void> | undefined;
+
+  readonly onDidChange = this._onDidChange.event;
+
+  constructor(api: ISessionApi | { readonly session: ISessionApi }) {
+    super();
+    this.api = "session" in api ? api.session : api;
+  }
+
+  get sessions(): readonly Session[] { return this._sessions; }
+  get active(): IActiveSessionThread | undefined { return this._active; }
+  get untitledSessions(): readonly IUntitledChatSession[] { return this._untitledSessions; }
+  get activeUntitledSession(): IUntitledChatSession | undefined { return this._untitledSessions.find((session) => session.untitledSessionId === this._activeUntitledSessionId); }
+  get state(): WorkbenchSessionState { return this._state; }
+  get error(): string | undefined { return this._error; }
+
+  initialize(): Promise<void> {
+    if (!this.initializePromise || this._state === "error") this.initializePromise = this.loadSessions();
+    return this.initializePromise;
+  }
+
+  selectThread(sessionId: SessionId, threadId: ThreadId): void {
+    const session = this._sessions.find((candidate) => candidate.sessionId === sessionId);
+    const thread = session?.threads.find((candidate) => candidate.threadId === threadId && candidate.status === "active");
+    if (!session || !thread || session.status !== "active") throw new Error(`Active Session Thread is not available: ${threadId}`);
+    if (this._active?.session.sessionId === sessionId && this._active.threadId === threadId && this._activeUntitledSessionId === undefined) return;
+    this._active = { session, threadId };
+    this._activeUntitledSessionId = undefined;
+    this._error = undefined;
+    this._onDidChange.fire();
+  }
+
+  createUntitledSession(title = "New Chat"): IUntitledChatSession {
+    const session = this.addUntitledSession(title);
+    this._activeUntitledSessionId = session.untitledSessionId;
+    this._error = undefined;
+    this._onDidChange.fire();
+    return session;
+  }
+
+  selectUntitledSession(untitledSessionId: string): void {
+    if (!this._untitledSessions.some((session) => session.untitledSessionId === untitledSessionId)) throw new Error(`Untitled Chat Session is not available: ${untitledSessionId}`);
+    if (this._activeUntitledSessionId === untitledSessionId) return;
+    this._activeUntitledSessionId = untitledSessionId;
+    this._error = undefined;
+    this._onDidChange.fire();
+  }
+
+  discardUntitledSession(untitledSessionId: string): void {
+    const sessions = this._untitledSessions.filter((session) => session.untitledSessionId !== untitledSessionId);
+    if (sessions.length === this._untitledSessions.length) return;
+    this._untitledSessions = sessions;
+    if (this._activeUntitledSessionId === untitledSessionId) this._activeUntitledSessionId = sessions[0]?.untitledSessionId;
+    this.restoreAvailableSelection();
+    this._onDidChange.fire();
+  }
+
+  setUntitledSessionModel(untitledSessionId: string, model: ModelRef): void {
+    const current = this._untitledSessions.find((session) => session.untitledSessionId === untitledSessionId);
+    if (!current) throw new Error(`Untitled Chat Session is not available: ${untitledSessionId}`);
+    if (sameModel(current.model, model)) return;
+    this._untitledSessions = this._untitledSessions.map((session) => session.untitledSessionId === untitledSessionId ? { ...session, model } : session);
+    this._onDidChange.fire();
+  }
+
+  async materializeUntitledSession(untitledSessionId: string): Promise<IActiveSessionThread> {
+    const session = this._untitledSessions.find((candidate) => candidate.untitledSessionId === untitledSessionId);
+    if (!session) throw new Error(`Untitled Chat Session is not available: ${untitledSessionId}`);
+    return this.createSession(session.title, session.model);
+  }
+
+  promoteUntitledSession(untitledSessionId: string, active: IActiveSessionThread): void {
+    const wasActive = this._activeUntitledSessionId === untitledSessionId;
+    this._untitledSessions = this._untitledSessions.filter((session) => session.untitledSessionId !== untitledSessionId);
+    if (wasActive) this._activeUntitledSessionId = undefined;
+    this._sessions = [active.session, ...this._sessions.filter((session) => session.sessionId !== active.session.sessionId)];
+    if (wasActive || !this._active) this._active = active;
+    this.setState("ready");
+  }
+
+  async ensureActiveThread(): Promise<IActiveSessionThread> {
+    await this.initialize();
+    return this._active ?? this.startNewSession();
+  }
+
+  async startNewSession(title = "New Chat"): Promise<IActiveSessionThread> {
+    const active = await this.createSession(title);
+    this.activateSession(active);
+    return active;
+  }
+
+  async archiveSession(sessionId: SessionId): Promise<void> {
+    await this.initialize();
+    const session = this._sessions.find((candidate) => candidate.sessionId === sessionId && candidate.status === "active");
+    if (!session) throw new Error(`Active Session is not available: ${sessionId}`);
+    this.setState("archiving");
+    try {
+      const result = await this.api.archive({ commandId: commandId("archive-session"), sessionId, expectedSequence: session.sequence });
+      this._sessions = this._sessions.map((candidate) => candidate.sessionId === sessionId ? toSession(result.session) : candidate);
+      if (this._active?.session.sessionId === sessionId) this._active = firstActiveThread(this._sessions);
+      this.restoreAvailableSelection();
+      this.setState("ready");
+    } catch (error) {
+      this.setError(error);
+      throw error;
+    }
+  }
+
+  async setModel(sessionId: SessionId, model: ModelRef): Promise<void> {
+    await this.initialize();
+    const session = this._sessions.find((candidate) => candidate.sessionId === sessionId && candidate.status === "active");
+    if (!session) throw new Error(`Active Session is not available: ${sessionId}`);
+    try {
+      const result = await this.api.setModel({ commandId: commandId("session-model"), sessionId, expectedSequence: session.sequence, model });
+      const updated = toSession(result.session);
+      this._sessions = this._sessions.map((candidate) => candidate.sessionId === sessionId ? updated : candidate);
+      if (this._active?.session.sessionId === sessionId) this._active = { session: updated, threadId: this._active.threadId };
+      this._error = undefined;
+      this._onDidChange.fire();
+    } catch (error) {
+      this.setError(error);
+      throw error;
+    }
+  }
+
+  private async createSession(title: string, model: ModelRef | undefined = undefined): Promise<IActiveSessionThread> {
+    this.setState("creating");
+    try {
+      const created = await this.api.create({ commandId: commandId("session"), title });
+      const thread = await this.api.createThread({ commandId: commandId("thread"), sessionId: created.session.sessionId, expectedSequence: created.session.sequence, title: "Main" });
+      const result = model && !sameModel(thread.session.model, model)
+        ? await this.api.setModel({ commandId: commandId("session-model"), sessionId: thread.session.sessionId, expectedSequence: thread.session.sequence, model })
+        : thread;
+      return { session: toSession(result.session), threadId: thread.threadId };
+    } catch (error) {
+      this.setError(error);
+      throw error;
+    }
+  }
+
+  private async loadSessions(): Promise<void> {
+    this.setState("loading");
+    try {
+      const result = await this.api.list();
+      this._sessions = result.sessions.map(toSession);
+      this._active = firstActiveThread(this._sessions);
+      this.restoreAvailableSelection();
+      this.setState("ready");
+    } catch (error) {
+      this.setError(error);
+    }
+  }
+
+  private setState(state: WorkbenchSessionState): void {
+    this._state = state;
+    this._error = undefined;
+    this._onDidChange.fire();
+  }
+
+  private setError(error: unknown): void {
+    this.restoreAvailableSelection();
+    this._state = "error";
+    this._error = error instanceof Error ? error.message : "Unable to load sessions.";
+    this._onDidChange.fire();
+  }
+
+  private addUntitledSession(title: string): IUntitledChatSession {
+    const session = { untitledSessionId: createUuid(), title, model: undefined };
+    this._untitledSessions = [session, ...this._untitledSessions];
+    return session;
+  }
+
+  private restoreAvailableSelection(): void {
+    if (this.activeUntitledSession || this._active) return;
+    this._activeUntitledSessionId = this._untitledSessions[0]?.untitledSessionId;
+  }
+
+  private activateSession(active: IActiveSessionThread): void {
+    this._sessions = [active.session, ...this._sessions.filter((session) => session.sessionId !== active.session.sessionId)];
+    this._active = active;
+    this._activeUntitledSessionId = undefined;
+    this.setState("ready");
+  }
+}
+
+function toSession(session: SessionDto): Session {
+  return {
+    sessionId: session.sessionId,
+    title: session.title,
+    status: session.status,
+    model: session.model ? toModelRef(session.model) : session.model,
+    sequence: session.sequence,
+    threads: session.threads.map((thread) => ({ ...thread, origin: { ...thread.origin } })),
+  };
+}
+
+function toModelRef(model: ModelRefDto): ModelRef { return { provider: model.provider, model: model.model }; }
+
+function firstActiveThread(sessions: readonly Session[]): IActiveSessionThread | undefined {
+  for (const session of sessions) {
+    if (session.status !== "active") continue;
+    const thread = session.threads.find((candidate) => candidate.status === "active");
+    if (thread) return { session, threadId: thread.threadId };
+  }
+  return undefined;
+}
+
+function commandId(kind: string): string { return `desktop-${kind}-${createUuid()}`; }
+
+function sameModel(left: ModelRef | ModelRefDto | null | undefined, right: ModelRef | ModelRefDto | null | undefined): boolean {
+  return left?.provider === right?.provider && left?.model === right?.model;
+}

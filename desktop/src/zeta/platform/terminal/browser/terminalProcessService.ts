@@ -1,5 +1,6 @@
-import type { IRendererHost } from "../../renderer/common/rendererHost.js";
 import { type IDisposable, toDisposable } from "../../../base/common/lifecycle.js";
+import type { IAppServerApi } from "../../app-server/common/appServerApi.js";
+import type { ITerminalProcessApi } from "../common/terminalProcessApi.js";
 import type { ITerminalProcessCloseOptions, ITerminalProcessCreateOptions, ITerminalProcessCreation, ITerminalProcessProfile, ITerminalProcessReadOptions, ITerminalProcessReadResult, ITerminalProcessResizeOptions, ITerminalProcessService, ITerminalProcessWriteOptions, TerminalProcessConnectionState } from "../common/terminalProcessService.js";
 
 /**
@@ -9,39 +10,39 @@ import type { ITerminalProcessCloseOptions, ITerminalProcessCreateOptions, ITerm
  * this transport-facing process service or renderer capability directly.
  */
 export class TerminalProcessService implements ITerminalProcessService {
-  constructor(private readonly api: Pick<IRendererHost, "appServer" | "terminal">) {}
+  constructor(private readonly api: ITerminalProcessApi, private readonly appServerApi: IAppServerApi) {}
 
   async listProfiles(): Promise<readonly ITerminalProcessProfile[]> {
-    const result = await this.api.terminal.listProfiles();
+    const result = await this.api.listProfiles();
     return result.profiles;
   }
 
   create(options: ITerminalProcessCreateOptions): Promise<ITerminalProcessCreation> {
-    return this.api.terminal.create(options);
+    return this.api.create(options);
   }
 
   write(options: ITerminalProcessWriteOptions): Promise<void> {
-    return this.api.terminal.write(options);
+    return this.api.write(options);
   }
 
   resize(options: ITerminalProcessResizeOptions): Promise<void> {
-    return this.api.terminal.resize(options);
+    return this.api.resize(options);
   }
 
   read(options: ITerminalProcessReadOptions): Promise<ITerminalProcessReadResult> {
-    return this.api.terminal.read(options);
+    return this.api.read(options);
   }
 
   close(options: ITerminalProcessCloseOptions): Promise<void> {
-    return this.api.terminal.close(options);
+    return this.api.close(options);
   }
 
   getConnectionState(): Promise<TerminalProcessConnectionState> {
-    return this.api.appServer.getConnectionState();
+    return this.appServerApi.getConnectionState();
   }
 
   onConnectionState(listener: (state: TerminalProcessConnectionState) => void): IDisposable {
-    const subscription = this.api.appServer.onConnectionState(listener);
+    const subscription = this.appServerApi.onConnectionState(listener);
     return toDisposable(() => subscription.dispose());
   }
 }

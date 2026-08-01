@@ -1,4 +1,4 @@
-import type { ThreadItem } from "../../../../../../../generated/app-server/types.js";
+import type { ThreadItem } from "../../../../services/chat/common/chatService.js";
 
 /** Render-ready projection of one committed or transient Thread item. */
 export interface IChatListItem {
@@ -9,7 +9,7 @@ export interface IChatListItem {
   readonly isError?: boolean;
 }
 
-/** Maps a protocol Thread item without interpreting untrusted content. */
+/** Maps a Chat Thread item without interpreting untrusted content. */
 export function chatListItem(item: ThreadItem, transient = false): IChatListItem {
   switch (item.type) {
     case "userMessage":

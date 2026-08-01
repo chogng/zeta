@@ -1,7 +1,8 @@
 import { ButtonActionViewItem, type ActionViewItem } from "../../../../../base/browser/ui/actionbar/actionViewItems.js";
 import { DropdownMenuActionViewItem } from "../../../../../base/browser/ui/dropdown/dropdownMenuActionViewItem.js";
 import type { IAction } from "../../../../../base/common/actions.js";
-import type { ModelCatalogEntry, ModelRef } from "../../../../../../../generated/app-server/types.js";
+import type { ModelCatalogEntry } from "../../../../services/chat/common/chatService.js";
+import type { ModelRef } from "../../../../services/sessions/common/sessionService.js";
 import type { Icon } from "../../../../../base/common/icon.js";
 import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
 import { lxiconsLibrary } from "../../../../../base/common/lxiconsLibrary.js";

@@ -1,4 +1,5 @@
-import type { AgentResponse, ModelCatalogEntry, ModelRef, SlashCommandDefinition, TurnInteraction } from "../../../../../../../generated/app-server/types.js";
+import type { AgentResponse, ModelCatalogEntry, SlashCommandDefinition, TurnInteraction } from "../../../../services/chat/common/chatService.js";
+import type { ModelRef } from "../../../../services/sessions/common/sessionService.js";
 
 export type ChatInputPhase = "loading" | "ready" | "submitting" | "error";
 

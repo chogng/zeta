@@ -1,0 +1,96 @@
+import type { AgentResponse as AgentResponseDto, Thread as ThreadDto, ThreadUpdateEnvelope as ThreadUpdateEnvelopeDto } from "../../../../../../generated/app-server/types.js";
+import { Emitter } from "../../../../base/common/event.js";
+import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { createUuid } from "../../../../base/common/uuid.js";
+import type { IAppServerApi, IServerEventApi } from "../../../../platform/app-server/common/appServerApi.js";
+import type { IModelApi, IThreadApi, ITurnApi } from "../../../../platform/sessions/common/sessionApi.js";
+import type { IChatService, InterruptTurnOptions, ModelCatalogEntry, ResolveInteractionOptions, SlashCommandDefinition, StartTurnOptions, Thread, ThreadSubscription, ThreadUpdateEnvelope } from "../common/chatService.js";
+
+export interface ChatServiceOptions {
+  readonly modelApi: IModelApi;
+  readonly threadApi: IThreadApi;
+  readonly turnApi: ITurnApi;
+  readonly appServerApi: IAppServerApi;
+  readonly eventApi: IServerEventApi;
+}
+
+/** App Server-backed implementation of the frontend Chat service. */
+export class ChatService extends DisposableOwner implements IChatService {
+  private readonly _onDidUpdateThread = this.own(new Emitter<ThreadUpdateEnvelope>());
+  private readonly _onDidBecomeReady = this.own(new Emitter<void>());
+
+  readonly onDidUpdateThread = this._onDidUpdateThread.event;
+  readonly onDidBecomeReady = this._onDidBecomeReady.event;
+
+  constructor(private readonly options: ChatServiceOptions) {
+    super();
+    const events = options.eventApi.subscribe((event) => {
+      if (event.method === "thread/update") this._onDidUpdateThread.fire(toThreadUpdate(event.params));
+    });
+    this.defer(() => events.dispose());
+    const connection = options.appServerApi.onConnectionState((state) => {
+      if (state === "ready") this._onDidBecomeReady.fire();
+    });
+    this.defer(() => connection.dispose());
+  }
+
+  async listModels(): Promise<readonly ModelCatalogEntry[]> {
+    const result = await this.options.modelApi.list();
+    return result.models.map((entry) => ({ model: { ...entry.model }, displayName: entry.displayName }));
+  }
+
+  async listSlashCommands(): Promise<readonly SlashCommandDefinition[]> {
+    const commands = await this.options.appServerApi.getSlashCommands();
+    return commands.map((command) => ({ ...command }));
+  }
+
+  async readThread(threadId: string): Promise<Thread> {
+    return toThread((await this.options.threadApi.read({ threadId })).thread);
+  }
+
+  async subscribeThread(threadId: string, afterSequence: number): Promise<ThreadSubscription> {
+    const result = await this.options.threadApi.subscribe({ threadId, afterSequence });
+    return { thread: toThread(result.thread), updates: result.updates.map(toThreadUpdate) };
+  }
+
+  unsubscribeThread(threadId: string): Promise<void> {
+    return this.options.threadApi.unsubscribe({ threadId });
+  }
+
+  async startTurn(options: StartTurnOptions): Promise<void> {
+    await this.options.turnApi.start({ commandId: commandId("turn"), sessionId: options.sessionId, threadId: options.threadId, expectedSequence: options.expectedSequence, input: [{ type: "text", text: options.text }] });
+  }
+
+  async interruptTurn(options: InterruptTurnOptions): Promise<void> {
+    await this.options.turnApi.interrupt({ commandId: commandId("interrupt"), ...options });
+  }
+
+  async resolveInteraction(options: ResolveInteractionOptions): Promise<void> {
+    await this.options.turnApi.resolveInteraction({ commandId: commandId("interaction"), ...options, response: toAgentResponse(options.response) });
+  }
+}
+
+function toThread(thread: ThreadDto): Thread {
+  return {
+    sessionId: thread.sessionId,
+    threadId: thread.threadId,
+    title: thread.title,
+    status: thread.status,
+    sequence: thread.sequence,
+    turns: thread.turns.map((turn) => ({ turnId: turn.turnId, status: turn.status, model: turn.model ? { ...turn.model } : turn.model, items: turn.items.map((item) => ({ ...item })) })),
+  };
+}
+
+function toThreadUpdate(update: ThreadUpdateEnvelopeDto): ThreadUpdateEnvelope {
+  return update as unknown as ThreadUpdateEnvelope;
+}
+
+function toAgentResponse(response: ResolveInteractionOptions["response"]): AgentResponseDto {
+  switch (response.type) {
+    case "approval": return { type: "approval", response: { ...response.response } };
+    case "userInput": return { type: "userInput", response: { answers: { ...response.response.answers } } };
+    case "dynamicTool": return { type: "dynamicTool", response: { ...response.response, content: response.response.content.map((output) => ({ ...output })) } };
+  }
+}
+
+function commandId(kind: string): string { return `desktop-${kind}-${createUuid()}`; }

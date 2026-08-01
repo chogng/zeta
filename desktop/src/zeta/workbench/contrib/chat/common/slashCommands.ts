@@ -1,4 +1,4 @@
-import type { SlashCommandDefinition } from "../../../../../../generated/app-server/types.js";
+import type { SlashCommandDefinition } from "../../../services/chat/common/chatService.js";
 import { NEW_CHAT_COMMAND_ID, SHOW_CHAT_HISTORY_COMMAND_ID } from "./chat.js";
 
 const SLASH_COMMAND_NAME = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;

@@ -6,8 +6,8 @@ import { IContextKeyService } from "../../../../platform/contextkey/common/conte
 import { IContextMenuService } from "../../../../platform/contextview/browser/contextMenu.js";
 import { ICommandService } from "../../../../platform/commands/common/commands.js";
 import { SyncDescriptor } from "../../../../platform/instantiation/common/instantiation.js";
-import { IRendererApiService } from "../../../common/services.js";
 import { ViewContainerLocation, type WorkbenchViewRegistry, ViewsRegistry } from "../../../common/views.js";
+import { IChatService } from "../../../services/chat/common/chatService.js";
 import { IWorkbenchLayoutService } from "../../../services/layout/browser/layoutService.js";
 import { IWorkbenchSessionService } from "../../../services/sessions/common/sessionService.js";
 import { IViewDescriptorService } from "../../../services/views/common/viewDescriptorService.js";
@@ -38,7 +38,7 @@ export function registerChatViews(registry: WorkbenchViewRegistry = ViewsRegistr
     canToggleVisibility: false,
     ctorDescriptor: new SyncDescriptor(ChatViewPane, {
       serviceDependencies: [
-        IRendererApiService,
+        IChatService,
         IWorkbenchSessionService,
         IMenuService,
         IContextMenuService,
