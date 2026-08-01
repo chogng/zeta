@@ -58,6 +58,37 @@ cargo run --manifest-path zeta-rs/Cargo.toml -p zeta-cli -- ask "explain this re
 cargo run --manifest-path zeta-rs/Cargo.toml -p zeta-cli -- exec "summarize the current changes"
 ```
 
+### Electron and Web development
+
+The desktop workspace uses the pnpm version pinned by `package.json` through
+[Corepack](https://nodejs.org/api/corepack.html). From the repository root,
+install its JavaScript dependencies once:
+
+```bash
+corepack pnpm install
+```
+
+Start the Electron desktop application:
+
+```bash
+corepack pnpm dev:desktop
+```
+
+This starts Vite, watches the Electron main and preload processes, prepares the
+local development package, and opens Electron. Keep the terminal open while
+developing; use `Ctrl+C` to stop it.
+
+Start the Browser Workbench with its local development App Server bridge:
+
+```bash
+corepack pnpm dev:web
+```
+
+Open [http://127.0.0.1:5173/browser/workbench/workbench-code.html](http://127.0.0.1:5173/browser/workbench/workbench-code.html)
+after Vite reports that it is ready. Both commands start the default `code`
+product edition; the corresponding `:academic` and `:complete` variants are
+also available (for example, `corepack pnpm dev:web:academic`).
+
 ## Package
 
 Build a canonical package directory containing Zeta, its built-in Skills, and
