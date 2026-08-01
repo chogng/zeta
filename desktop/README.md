@@ -92,7 +92,7 @@ Command、MenuId、Context Key 与菜单型 Toolbar 的 canonical 组合规范�
 `platform/app-server/browser/rendererApi.ts` 提供 disconnected API：UI 正常启动，状态栏显示
 App Server 不可用，产品操作明确失败。`dev:web` 则由 `web-app-server-vite-plugin.mjs`、
 `ViteDevAppServerConnection` 与 `connectViteDevRendererApi()` 组成仅限本机开发的 host，并在
-Workbench 启动前注入同一份 `ZetaRendererApi` contract。嵌入方若已实现受认证的远程 transport，必须在产品入口
+Workbench 启动前注入同一份 `IRendererHost` contract。嵌入方若已实现受认证的远程 transport，必须在产品入口
 执行前注入：
 
 ```ts
@@ -114,7 +114,8 @@ origin policy 和远程部署尚未实现，因此静态 Browser 构建不能描
 `ISandboxGlobals` 暴露受 `zeta:` 前缀约束的 IPC 与只读进程元数据。
 
 普通 Renderer 中的 `createElectronRendererApi()` 是该底层桥接的唯一产品适配器；Workbench
-只消费它生成的 `ZetaElectronRendererApi`。Electron Main 的 `registerTrustedIpcRoutes()`
+只在 composition root 消费它生成的 `ZetaElectronRendererApi`，再注册按领域划分的 Workbench Service；
+contrib 不直接持有聚合 Renderer Host。Electron Main 的 `registerTrustedIpcRoutes()`
 继续负责 sender、main frame、入口 URL 和参数验证。若修改 preload、频道或 API 组装，必须同时
 运行 `corepack pnpm --dir desktop build` 与 `corepack pnpm --dir desktop test:main`。跨进程
 所有权与安全取舍以 [`docs/zeta-desktop-architecture.md`](../docs/zeta-desktop-architecture.md)

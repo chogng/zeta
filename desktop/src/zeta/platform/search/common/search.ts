@@ -1,5 +1,19 @@
-import type { WorkspaceSearchCaseSensitivity, WorkspaceSearchMatch, WorkspaceSearchPatternKind } from "../../../../../generated/app-server/types.js";
 import { createServiceIdentifier } from "../../instantiation/common/instantiation.js";
+
+export type WorkspaceSearchPatternKind = "literal" | "regex";
+export type WorkspaceSearchCaseSensitivity = "smart" | "sensitive" | "insensitive";
+
+export interface WorkspaceSearchMatchRange {
+  start: number;
+  end: number;
+}
+
+export interface WorkspaceSearchMatch {
+  readonly path: string;
+  readonly lineNumber: number;
+  readonly preview: string;
+  readonly ranges: readonly WorkspaceSearchMatchRange[];
+}
 
 /** A content query applied to the current workspace. */
 export interface IWorkspaceSearchQuery {

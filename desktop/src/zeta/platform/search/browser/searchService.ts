@@ -1,16 +1,9 @@
-import type { WorkspaceSearchCancelParams, WorkspaceSearchReadParams, WorkspaceSearchReadResult, WorkspaceSearchStartParams, WorkspaceSearchStartResult } from "../../../../../generated/app-server/types.js";
+import type { IWorkspaceSearchApi } from "../common/searchApi.js";
 import type { IWorkspaceSearchOptions, IWorkspaceSearchQuery, IWorkspaceSearchComplete, IWorkspaceSearchService } from "../common/search.js";
 
 const DEFAULT_MAX_RESULTS = 2_000;
 const RESULT_BATCH_SIZE = 100;
 const IDLE_POLL_MILLIS = 20;
-
-/** Narrow App Server capability consumed by the browser search adapter. */
-export interface IWorkspaceSearchApi {
-  start(params: WorkspaceSearchStartParams): Promise<WorkspaceSearchStartResult>;
-  read(params: WorkspaceSearchReadParams): Promise<WorkspaceSearchReadResult>;
-  cancel(params: WorkspaceSearchCancelParams): Promise<void>;
-}
 
 /** Pulls bounded backend batches and exposes one cancellable renderer search. */
 export class BrowserWorkspaceSearchService implements IWorkspaceSearchService {
@@ -44,7 +37,7 @@ export class BrowserWorkspaceSearchService implements IWorkspaceSearchService {
         });
         if (snapshot.matches.length > 0) {
           cursor = snapshot.nextMatch;
-          options.onProgress?.(snapshot.matches);
+          options.onProgress?.(snapshot.matches.map((match) => ({ ...match, ranges: match.ranges.map((range) => ({ ...range })) })));
         }
         if (snapshot.completed) {
           return {

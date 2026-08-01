@@ -324,11 +324,11 @@ Electron sandbox 边界分为两层。`ISandboxGlobals` 是 preload 唯一暴露
 构建后的 preload 由 `verify-sandbox-preload.mjs` 检查这一约束。
 
 `createElectronRendererApi()` 是该桥接的唯一产品适配器。它在普通 Renderer bundle 中引用频道
-常量，并组装领域化、强类型、可枚举的 `ZetaElectronRendererApi`。领域方法由其父接口
-`ZetaRendererApi` 定义，Electron 专属能力保持以下精确形状：
+常量，并组装领域化、强类型、可枚举的 `ZetaElectronRendererApi`。跨宿主领域能力由其父接口
+`IRendererHost` 定义，Electron 专属能力保持以下精确形状：
 
 ```ts
-interface ZetaElectronRendererApi extends ZetaRendererApi {
+interface ZetaElectronRendererApi extends IRendererHost {
   readonly environment: IRuntimeEnvironment;
   readonly browserView: IBrowserViewApi;
   readonly configuration: IConfigurationApi;
@@ -339,8 +339,11 @@ interface ZetaElectronRendererApi extends ZetaRendererApi {
 }
 ```
 
-Workbench 和其他产品代码禁止直接导入 sandbox globals，也禁止提供绕过
-`ZetaElectronRendererApi` 的通用 App Server 调用：
+Workbench composition root 是聚合 `IRendererHost` 的唯一产品消费者：它把每个 transport
+capability 注入对应的领域 Service。Contribution 只能依赖 `IChatService`、`IGitService`、
+`IWorkspaceSearchService`、`ITerminalService` 等前端契约和前端自有领域类型，不能取得整个
+Renderer Host，也不能导入生成 DTO。所有产品代码禁止直接导入 sandbox globals，并禁止提供
+绕过领域 capability 的通用 App Server 调用：
 
 ```ts
 execute(method: string, params?: unknown): Promise<unknown>
@@ -504,12 +507,15 @@ Open Chat / New Chat
 
 IWorkbenchSessionService
   → 当前 session / root thread
+  → IChatService
+  → ChatService
   → thread.subscribe + thread/stream 事件
-  → ChatViewModel
+  → ChatPaneModel
   → ChatViewPane
 ```
 
-`IWorkbenchSessionService` 负责恢复和切换当前 session/thread；`ChatViewModel` 负责单个活动
+`IWorkbenchSessionService` 负责恢复和切换当前 session/thread；`IChatService` 隔离 model、
+thread、turn 和 App Server lifecycle transport，并把生成 DTO 映射为前端领域类型；`ChatPaneModel` 负责单个活动
 thread 的可释放订阅、已提交 transcript 与临时 stream projection。重新连接或 stream 序号
 不连续时，以 `thread.read` 返回的权威状态重建展示。`ChatViewPane` 当前支持文本发送、中断、
 审批、用户输入请求和经过统一 sanitizer 的 Markdown 展示。
@@ -518,7 +524,7 @@ thread 的可释放订阅、已提交 transcript 与临时 stream projection。�
 由于 session 列表当前没有最近活动时间，启动时只能按服务端顺序选择首个活动 thread；
 Browser 入口没有 App Server 连接时会明确显示不可用状态。当前本地 `dev:web` 是已实现的开发
 例外：Vite host 为每个 HMR WebSocket client 启动一个 stdio App Server，并把 transport-neutral
-JSON-RPC 帧投影成同一份 `ZetaRendererApi`。该 bridge 只监听 loopback、复用 Vite WebSocket
+JSON-RPC 帧投影成同一份 `IRendererHost`。该 bridge 只监听 loopback、复用 Vite WebSocket
 token 与同源检查，client 断开后回收其子进程；它不构成生产远程 Web transport。静态 Browser
 构建仍使用 disconnected API，生产 HTTP/WebSocket listener、认证、origin policy 和部署服务
 仍是当前限制。
@@ -528,7 +534,7 @@ token 与同源检查，client 断开后回收其子进程；它不构成生产�
 Terminal contribution 只依赖 Workbench service layer 的 `ITerminalService`。实例管理、输入
 batching、resize coalescing 和 polling 由 `TerminalService` 负责；process contract 位于
 platform layer，wire DTO 只在 `TerminalProcessService` adapter 内出现。Contribution
-和 xterm view 都不直接调用 `ZetaRendererApi`：
+和 xterm view 都不直接调用 `IRendererHost`：
 
 ```text
 TerminalViewPane / xterm
@@ -536,13 +542,18 @@ TerminalViewPane / xterm
   → TerminalService (Renderer)
   → ITerminalProcessService
   → TerminalProcessService
-  → ZetaRendererApi.terminal
+  → ITerminalProcessApi + IAppServerApi
   → trusted Electron IPC
   → platform/terminal/electron-main/terminalIpcRoutes
   → terminal/* App Server methods
   → TerminalService (Rust)
   → zeta-utils-pty
 ```
+
+SCM 同样通过 `IGitService → GitService → IGitApi` 访问仓库，并由 Service 把 status notification
+和 reconnect lifecycle 投影成前端事件；Search 通过
+`IWorkspaceSearchService → BrowserWorkspaceSearchService → IWorkspaceSearchApi` 消费有界批次。
+两者的 contrib 都不接触 App Server notification union 或生成 DTO。
 
 Terminal title actions 通过 `MenuId.TerminalTitle`、Context Key 与
 `MenuWorkbenchToolBar` 接入 MenuService；profile selector 仍由 Terminal 自定义 action view

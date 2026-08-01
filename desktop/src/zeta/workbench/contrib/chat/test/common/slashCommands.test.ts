@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
-import type { SlashCommandDefinition } from "../../../../../../../generated/app-server/types.js";
+import type { SlashCommandDefinition } from "../../../../services/chat/common/chatService.js";
 import { parseSlashCommandInput, SlashCommandCatalog } from "../../common/slashCommands.js";
 
 const local = [{

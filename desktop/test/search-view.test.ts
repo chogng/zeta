@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import type { WorkspaceSearchMatch } from "../generated/app-server/types.js";
-import { BrowserWorkspaceSearchService, type IWorkspaceSearchApi } from "../src/zeta/platform/search/browser/searchService.js";
-import type { IWorkspaceSearchQuery, IWorkspaceSearchService } from "../src/zeta/platform/search/common/search.js";
+import { BrowserWorkspaceSearchService } from "../src/zeta/platform/search/browser/searchService.js";
+import type { IWorkspaceSearchQuery, IWorkspaceSearchService, WorkspaceSearchMatch } from "../src/zeta/platform/search/common/search.js";
+import type { IWorkspaceSearchApi } from "../src/zeta/platform/search/common/searchApi.js";
 
 const matches: readonly WorkspaceSearchMatch[] = [
   {
@@ -34,7 +34,7 @@ test("BrowserWorkspaceSearchService pulls bounded batches and releases the job",
       if (params.afterMatch === 0) {
         return {
           searchId: params.searchId,
-          matches: [matches[0]],
+          matches: [{ ...matches[0], ranges: matches[0].ranges.map((range) => ({ ...range })) }],
           nextMatch: 1,
           completed: false,
           limitHit: false,
@@ -43,7 +43,7 @@ test("BrowserWorkspaceSearchService pulls bounded batches and releases the job",
       }
       return {
         searchId: params.searchId,
-        matches: [matches[1]],
+        matches: [{ ...matches[1], ranges: matches[1].ranges.map((range) => ({ ...range })) }],
         nextMatch: 2,
         completed: true,
         limitHit: true,
