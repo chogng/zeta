@@ -1,6 +1,12 @@
-import { APP_SERVER_METHODS, type AppServerMethod, type MethodParams, type MethodResult } from "../../../../../generated/app-server/types.js";
-import type { IRendererHost } from "../../renderer/common/rendererHost.js";
+import { createViteDevAppServerApi, createViteDevResourceApi, createViteDevServerEventApi } from "./appServerApi.js";
 import { ViteDevAppServerConnection, type ViteDevAppServerConnectionOptions, type ViteDevAppServerMetadata, type ViteDevHotContext } from "./viteDevConnection.js";
+import { createViteDevFileApi } from "../../files/browser/fileApi.js";
+import { createViteDevGitApi } from "../../git/browser/gitApi.js";
+import type { IRendererHost } from "../../renderer/common/rendererHost.js";
+import { createViteDevWorkspaceSearchApi } from "../../search/browser/searchApi.js";
+import { createViteDevModelApi, createViteDevSessionApi, createViteDevThreadApi, createViteDevTurnApi } from "../../sessions/browser/sessionApi.js";
+import { createViteDevTerminalProcessApi } from "../../terminal/browser/terminalProcessApi.js";
+import { createViteDevTypstApi } from "../../typst/browser/typstApi.js";
 
 export interface ConnectedWebRendererApi {
   readonly api: IRendererHost;
@@ -8,13 +14,13 @@ export interface ConnectedWebRendererApi {
   dispose(): void;
 }
 
-/** Connects a browser Renderer API to the loopback Vite development bridge. */
+/** Connects a browser Renderer host to the loopback Vite development bridge. */
 export async function connectViteDevRendererApi(hot: ViteDevHotContext, options: ViteDevAppServerConnectionOptions = {}): Promise<ConnectedWebRendererApi> {
   const connection = new ViteDevAppServerConnection(hot, options);
   try {
     const metadata = await connection.connect();
     return {
-      api: createRendererApi(connection),
+      api: createRendererHost(connection),
       metadata,
       dispose: () => connection.dispose(),
     };
@@ -24,84 +30,19 @@ export async function connectViteDevRendererApi(hot: ViteDevHotContext, options:
   }
 }
 
-function createRendererApi(connection: ViteDevAppServerConnection): IRendererHost {
-  const voidResult = <T>(promise: Promise<T>): Promise<void> => promise.then(() => undefined);
-  const api: IRendererHost = {
-    appServer: {
-      getConnectionState: () => Promise.resolve(connection.state),
-      getSlashCommands: () => Promise.resolve(connection.slashCommands),
-      onConnectionState: (listener) => connection.onStateChange(listener),
-    },
-    session: {
-      create: (params) => request(connection, "session/create", params),
-      read: (params) => request(connection, "session/read", params),
-      list: () => request(connection, "session/list", {}),
-      subscribe: (params) => request(connection, "session/subscribe", params),
-      unsubscribe: (params) => voidResult(request(connection, "session/unsubscribe", params)),
-      createThread: (params) => request(connection, "session/thread/create", params),
-      forkThread: (params) => request(connection, "session/thread/fork", params),
-      archiveThread: (params) => request(connection, "session/thread/archive", params),
-      complete: (params) => request(connection, "session/complete", params),
-      archive: (params) => request(connection, "session/archive", params),
-      setModel: (params) => request(connection, "session/model/set", params),
-    },
-    model: {
-      list: () => request(connection, "model/list", {}),
-    },
-    thread: {
-      read: (params) => request(connection, "thread/read", params),
-      subscribe: (params) => request(connection, "thread/subscribe", params),
-      unsubscribe: (params) => voidResult(request(connection, "thread/unsubscribe", params)),
-    },
-    turn: {
-      start: (params) => request(connection, "turn/start", params),
-      interrupt: (params) => request(connection, "turn/interrupt", params),
-      resolveInteraction: (params) => request(connection, "turn/interaction/resolve", params),
-    },
-    typst: {
-      compile: (params) => request(connection, "document/typst/compile", params),
-    },
-    resource: {
-      metadata: (params) => request(connection, "resource/metadata", params),
-      read: (params) => request(connection, "resource/read", params),
-      release: (params) => voidResult(request(connection, "resource/release", params)),
-    },
-    fs: {
-      getMetadata: (params) => request(connection, "fs/getMetadata", params),
-      readDirectory: (params) => request(connection, "fs/readDirectory", params),
-      readFile: (params) => request(connection, "fs/readFile", params),
-    },
-    git: {
-      status: () => request(connection, "git/status", {}),
-      history: () => request(connection, "git/history", {}),
-      stage: (params) => request(connection, "git/stage", params),
-      unstage: (params) => request(connection, "git/unstage", params),
-      discardWorktree: (params) => request(connection, "git/discardWorktree", params),
-      commit: (params) => request(connection, "git/commit", params),
-      fetch: () => request(connection, "git/fetch", {}),
-      pull: () => request(connection, "git/pull", {}),
-      push: () => request(connection, "git/push", {}),
-    },
-    workspaceSearch: {
-      start: (params) => request(connection, "workspace/search/start", params),
-      read: (params) => request(connection, "workspace/search/read", params),
-      cancel: (params) => voidResult(request(connection, "workspace/search/cancel", params)),
-    },
-    terminal: {
-      listProfiles: () => request(connection, "terminal/profile/list", {}),
-      create: (params) => request(connection, "terminal/create", params),
-      write: (params) => voidResult(request(connection, "terminal/write", params)),
-      resize: (params) => voidResult(request(connection, "terminal/resize", params)),
-      read: (params) => request(connection, "terminal/read", params),
-      close: (params) => voidResult(request(connection, "terminal/close", params)),
-    },
-    events: {
-      subscribe: (listener) => connection.onNotification(listener),
-    },
+function createRendererHost(connection: ViteDevAppServerConnection): IRendererHost {
+  return {
+    appServer: createViteDevAppServerApi(connection),
+    session: createViteDevSessionApi(connection),
+    model: createViteDevModelApi(connection),
+    thread: createViteDevThreadApi(connection),
+    turn: createViteDevTurnApi(connection),
+    typst: createViteDevTypstApi(connection),
+    resource: createViteDevResourceApi(connection),
+    fs: createViteDevFileApi(connection),
+    git: createViteDevGitApi(connection),
+    workspaceSearch: createViteDevWorkspaceSearchApi(connection),
+    terminal: createViteDevTerminalProcessApi(connection),
+    events: createViteDevServerEventApi(connection),
   };
-  return api;
-}
-
-function request<M extends AppServerMethod>(connection: ViteDevAppServerConnection, method: M, params: MethodParams<M>): Promise<MethodResult<M>> {
-  return connection.request(APP_SERVER_METHODS[method], params);
 }
