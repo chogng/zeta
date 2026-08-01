@@ -14,11 +14,32 @@ const PADDING_COLOR: Color = Color::rgba(238, 147, 54, 92);
 #[derive(Clone, Debug, PartialEq)]
 pub(super) struct InspectionSelection {
     pub(super) path: Vec<InspectionNode>,
+    selected_index: usize,
 }
 
 impl InspectionSelection {
+    fn new(path: Vec<InspectionNode>) -> Self {
+        let selected_index = path.len().saturating_sub(1);
+        Self {
+            path,
+            selected_index,
+        }
+    }
+
     fn target(&self) -> Option<&InspectionNode> {
-        self.path.last()
+        self.path.get(self.selected_index)
+    }
+
+    const fn selected_index(&self) -> usize {
+        self.selected_index
+    }
+
+    fn select_index(&mut self, index: usize) -> bool {
+        if index >= self.path.len() {
+            return false;
+        }
+        self.selected_index = index;
+        true
     }
 }
 
@@ -55,6 +76,18 @@ impl LayoutInspector {
     pub(crate) fn pointer_is_over_panel(&self, pointer: Option<Point>) -> bool {
         self.enabled
             && pointer.is_some_and(|point| point.x >= self.content_width.unwrap_or(f32::INFINITY))
+    }
+
+    pub(crate) fn uses_panel_action_cursor(&self, pointer: Option<Point>) -> bool {
+        if !self.enabled {
+            return false;
+        }
+        let Some(point) = pointer else {
+            return false;
+        };
+        let content_width = self.content_width.unwrap_or(f32::INFINITY);
+        panel::picker_bounds(content_width).contains(point)
+            || self.panel_row_at(point, content_width).is_some()
     }
 
     pub(crate) fn window_resized(&mut self, window_viewport: LogicalViewport) {
@@ -105,6 +138,28 @@ impl LayoutInspector {
         self.picking = false;
     }
 
+    fn select_panel_row(&mut self, point: Point) -> bool {
+        let content_width = self.content_width.unwrap_or(f32::INFINITY);
+        let Some(index) = self.panel_row_at(point, content_width) else {
+            return false;
+        };
+        let Some(mut selection) = self.locked.as_ref().or(self.hovered.as_ref()).cloned() else {
+            return false;
+        };
+        if !selection.select_index(index) {
+            return false;
+        }
+        self.locked = Some(selection);
+        self.hovered = None;
+        self.picking = false;
+        true
+    }
+
+    fn panel_row_at(&self, point: Point, content_width: f32) -> Option<usize> {
+        let selection = self.locked.as_ref().or(self.hovered.as_ref())?;
+        panel::row_index_at(content_width, point, selection.path.len())
+    }
+
     pub(crate) fn decorate(
         &mut self,
         scene: &mut UiScene,
@@ -122,6 +177,13 @@ impl LayoutInspector {
             self.hovered = selection_at(scene, point);
         }
         let selection = self.locked.as_ref().or(self.hovered.as_ref());
+        let hovered_row = pointer.and_then(|point| {
+            panel::row_index_at(
+                content_width,
+                point,
+                selection.map_or(0, |selection| selection.path.len()),
+            )
+        });
         scene.with_overlay(|scene| {
             if let Some(selection) = selection {
                 paint_selection(scene, selection);
@@ -136,6 +198,7 @@ impl LayoutInspector {
                     picker_hovered: pointer
                         .is_some_and(|point| panel::picker_bounds(content_width).contains(point)),
                     has_selection: selection.is_some(),
+                    hovered_row,
                 },
             );
         });
@@ -213,6 +276,16 @@ impl NativeApp {
             self.update_cursor();
             return true;
         }
+        if state == ElementState::Released
+            && button == MouseButton::Left
+            && self
+                .cursor_position
+                .is_some_and(|point| self.layout_inspector.select_panel_row(point))
+        {
+            self.rebuild_presentation_on_next_redraw();
+            self.update_cursor();
+            return true;
+        }
         if self
             .layout_inspector
             .pointer_is_over_panel(self.cursor_position)
@@ -249,14 +322,14 @@ impl NativeApp {
 
 fn selection_at(scene: &UiScene, point: Point) -> Option<InspectionSelection> {
     let target = scene.inspection().target_at(point)?;
-    Some(InspectionSelection {
-        path: scene
+    Some(InspectionSelection::new(
+        scene
             .inspection()
             .ancestry(target.id())
             .into_iter()
             .cloned()
             .collect(),
-    })
+    ))
 }
 
 fn is_toggle_shortcut(event: &KeyEvent, modifiers: ModifiersState) -> bool {
@@ -279,8 +352,13 @@ fn paint_selection(scene: &mut UiScene, selection: &InspectionSelection) {
         return;
     };
     paint_padding(scene, target);
-    for node in &selection.path {
-        let selected = node.id() == target.id();
+    for (index, node) in selection
+        .path
+        .iter()
+        .take(selection.selected_index() + 1)
+        .enumerate()
+    {
+        let selected = index == selection.selected_index();
         scene.draw_rect(
             PaintRect::new(node.bounds(), Color::TRANSPARENT)
                 .with_border(Border::uniform(

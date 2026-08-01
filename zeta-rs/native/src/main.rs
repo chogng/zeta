@@ -475,6 +475,11 @@ impl NativeApp {
             CursorIcon::Crosshair
         } else if self
             .layout_inspector
+            .uses_panel_action_cursor(self.cursor_position)
+        {
+            CursorIcon::Pointer
+        } else if self
+            .layout_inspector
             .pointer_is_over_panel(self.cursor_position)
         {
             CursorIcon::Default

@@ -147,6 +147,36 @@ fn selecting_a_component_stops_picking_and_retains_the_selection() {
 }
 
 #[test]
+fn panel_rows_retarget_the_selection_without_discarding_descendants() {
+    let mut scene = UiScene::new(Color::TRANSPARENT);
+    scene.with_inspection_node(
+        InspectionNode::new("ComposerPanel", Rect::from_xywh(0.0, 0.0, 300.0, 100.0)),
+        |scene| {
+            scene.with_inspection_node(
+                InspectionNode::new("ComposerEditor", Rect::from_xywh(10.0, 10.0, 280.0, 60.0)),
+                |_| {},
+            );
+        },
+    );
+    let mut inspector = LayoutInspector::default();
+    inspector.open(400.0);
+    inspector.select(super::selection_at(&scene, Point::new(20.0, 20.0)));
+
+    assert!(inspector.uses_panel_action_cursor(Some(Point::new(420.0, 70.0))));
+    assert!(inspector.select_panel_row(Point::new(420.0, 70.0)));
+
+    let selection = inspector.locked.as_ref().expect("selection remains locked");
+    assert_eq!(selection.path.len(), 2);
+    assert_eq!(
+        selection.target().map(InspectionNode::name),
+        Some("ComposerPanel")
+    );
+    let mut overlay = UiScene::new(Color::TRANSPARENT);
+    super::paint_selection(&mut overlay, selection);
+    assert_eq!(overlay.rects().len(), 1);
+}
+
+#[test]
 fn picker_action_lives_inside_the_inspector_panel() {
     let bounds = super::panel::picker_bounds(1_000.0);
 

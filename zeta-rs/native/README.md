@@ -320,8 +320,9 @@ Native 先保存当前产品 content width，再通过 `NativeWindow::request_in
 `UiScene::inspection` 反向选择最深节点；左键释放后锁定当前链并自动退出选取，保留检查结果。Escape
 先停止选取，再次按下才关闭面板并请求恢复原窗口宽度。Inspector 用橙色显示 padding、蓝色显示当前
 bounds、紫色显示 ancestor bounds，并在右侧面板按真实 parent chain 显示每层的组件名、size、
-padding、radius、scene layer 与源码位置。它不复用 `InteractionFrame` 推断样式，因为交互树不覆盖
-纯视觉组件；也不修改组件 style 或产品 reducer。
+padding、radius、scene layer 与源码位置。层级行可以直接重定向当前目标；面板保留完整 path，左侧只
+强调所选节点及其祖先，因此可在 parent 与原 descendant 之间反复切换。它不复用 `InteractionFrame`
+推断样式，因为交互树不覆盖纯视觉组件；也不修改组件 style 或产品 reducer。
 常规组件通过 `Component::inspection` 声明 `ComponentInspection`，由
 `UiScene::draw_component` 自动建立 parent chain；`SessionSidebar` 这类非组件布局函数以及
 `ContextView::draw` 这类自定义 content-closure surface 才显式使用 `with_inspection_node`。

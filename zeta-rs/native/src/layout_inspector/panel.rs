@@ -11,6 +11,7 @@ use crate::shell_scene::LogicalViewport;
 const PANEL_BACKGROUND: Color = Color::rgb(248, 248, 250);
 const PANEL_BORDER: Color = Color::rgb(218, 218, 224);
 const ROW_BACKGROUND: Color = Color::rgba(35, 131, 226, 24);
+const ROW_HOVER_BACKGROUND: Color = Color::rgba(35, 35, 42, 10);
 const FOREGROUND: Color = Color::rgb(35, 35, 42);
 const MUTED: Color = Color::rgb(105, 105, 116);
 const ACCENT: Color = Color::rgb(35, 131, 226);
@@ -27,6 +28,7 @@ pub(super) struct PanelState {
     pub(super) picking: bool,
     pub(super) picker_hovered: bool,
     pub(super) has_selection: bool,
+    pub(super) hovered_row: Option<usize>,
 }
 
 pub(super) fn picker_bounds(content_width: f32) -> Rect {
@@ -36,6 +38,14 @@ pub(super) fn picker_bounds(content_width: f32) -> Rect {
         PICKER_SIZE,
         PICKER_SIZE,
     )
+}
+
+pub(super) fn row_index_at(content_width: f32, point: Point, row_count: usize) -> Option<usize> {
+    if point.x < content_width || point.y < HEADER_HEIGHT {
+        return None;
+    }
+    let index = ((point.y - HEADER_HEIGHT) / ROW_HEIGHT).floor() as usize;
+    (index < row_count).then_some(index)
 }
 
 pub(super) fn paint(
@@ -129,13 +139,15 @@ pub(super) fn paint(
                 break;
             }
             let row_bounds = Rect::from_xywh(content_width, y, panel_width, ROW_HEIGHT);
-            let selected = depth + 1 == selection.path.len();
+            let selected = depth == selection.selected_index();
             if selected {
                 scene.draw_rect(PaintRect::new(row_bounds, ROW_BACKGROUND));
                 scene.draw_rect(PaintRect::new(
                     Rect::from_xywh(content_width, y, 3.0, ROW_HEIGHT),
                     ACCENT,
                 ));
+            } else if state.hovered_row == Some(depth) {
+                scene.draw_rect(PaintRect::new(row_bounds, ROW_HOVER_BACKGROUND));
             }
             paint_row(scene, node, content_width, panel_width, y, depth, selected);
             scene.draw_rect(PaintRect::new(
