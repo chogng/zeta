@@ -11,7 +11,7 @@ import type {
   MethodResult,
   ServerNotification,
 } from "../../../../../generated/app-server/types.js";
-import type { AppServerConnectionState } from "../common/renderer-api.js";
+import type { AppServerConnectionState } from "../common/appServerApi.js";
 import {
   DisposableSlot,
   type IDisposable,

@@ -1,0 +1,23 @@
+import type { IAppServerApi, IResourceApi, IServerEventApi } from "../../app-server/common/appServerApi.js";
+import type { IFileApi } from "../../files/common/fileApi.js";
+import type { IGitApi } from "../../git/common/gitApi.js";
+import type { IWorkspaceSearchApi } from "../../search/common/searchApi.js";
+import type { IModelApi, ISessionApi, IThreadApi, ITurnApi } from "../../sessions/common/sessionApi.js";
+import type { ITerminalProcessApi } from "../../terminal/common/terminalProcessApi.js";
+import type { ITypstApi } from "../../typst/common/typstApi.js";
+
+/** Transport-neutral capability set supplied by a renderer host at startup. */
+export interface IRendererHost {
+  readonly appServer: IAppServerApi;
+  readonly session: ISessionApi;
+  readonly model: IModelApi;
+  readonly thread: IThreadApi;
+  readonly turn: ITurnApi;
+  readonly typst: ITypstApi;
+  readonly resource: IResourceApi;
+  readonly fs: IFileApi;
+  readonly git: IGitApi;
+  readonly workspaceSearch: IWorkspaceSearchApi;
+  readonly terminal: ITerminalProcessApi;
+  readonly events: IServerEventApi;
+}

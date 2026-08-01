@@ -1,7 +1,5 @@
 import type { IDisposable } from "../../base/common/lifecycle.js";
-import type {
-  ZetaRendererApi,
-} from "../../platform/app-server/common/renderer-api.js";
+import type { IRendererHost } from "../../platform/renderer/common/rendererHost.js";
 import type {
   IAnyWorkspaceIdentifier,
 } from "../../platform/workspace/common/workspace.js";
@@ -13,14 +11,14 @@ import type {
  * obeys the same renderer contract as the Electron preload bridge.
  */
 export interface IWebWorkbenchHost {
-  readonly api: ZetaRendererApi;
+  readonly api: IRendererHost;
   readonly workspace?: IAnyWorkspaceIdentifier;
   readonly container?: HTMLElement | null;
 }
 
 /** Inputs used to create one browser-hosted Workbench instance. */
 export interface IWebWorkbenchConstructionOptions {
-  readonly api: ZetaRendererApi;
+  readonly api: IRendererHost;
   readonly workspace?: IAnyWorkspaceIdentifier;
   readonly container: HTMLElement | null;
 }

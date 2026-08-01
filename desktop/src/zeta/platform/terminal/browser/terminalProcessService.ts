@@ -1,4 +1,4 @@
-import type { ZetaRendererApi } from "../../app-server/common/renderer-api.js";
+import type { IRendererHost } from "../../renderer/common/rendererHost.js";
 import { type IDisposable, toDisposable } from "../../../base/common/lifecycle.js";
 import type { ITerminalProcessCloseOptions, ITerminalProcessCreateOptions, ITerminalProcessCreation, ITerminalProcessProfile, ITerminalProcessReadOptions, ITerminalProcessReadResult, ITerminalProcessResizeOptions, ITerminalProcessService, ITerminalProcessWriteOptions, TerminalProcessConnectionState } from "../common/terminalProcessService.js";
 
@@ -9,7 +9,7 @@ import type { ITerminalProcessCloseOptions, ITerminalProcessCreateOptions, ITerm
  * this transport-facing process service or renderer capability directly.
  */
 export class TerminalProcessService implements ITerminalProcessService {
-  constructor(private readonly api: Pick<ZetaRendererApi, "appServer" | "terminal">) {}
+  constructor(private readonly api: Pick<IRendererHost, "appServer" | "terminal">) {}
 
   async listProfiles(): Promise<readonly ITerminalProcessProfile[]> {
     const result = await this.api.terminal.listProfiles();

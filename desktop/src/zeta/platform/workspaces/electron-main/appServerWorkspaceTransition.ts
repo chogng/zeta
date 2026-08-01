@@ -1,6 +1,6 @@
 import { APP_SERVER_METHODS } from "../../../../../generated/app-server/types.js";
 import type { IDisposable } from "../../../base/common/lifecycle.js";
-import type { AppServerConnectionState } from "../../app-server/common/renderer-api.js";
+import type { AppServerConnectionState } from "../../app-server/common/appServerApi.js";
 import type { AppServerSupervisor } from "../../app-server/electron-main/app-server-supervisor.js";
 import { JsonRpcRemoteError } from "../../app-server/electron-main/json-rpc-peer.js";
 import { type IWorkspaceRuntimeSwitcher, type IWorkspaceTransitionContext, type IWorkspaceTransitionFailure, type IWorkspaceTransitionRecoveryRouter, WorkspaceTransitionFailureKind, WorkspaceTransitionRecovery } from "./workspaceTransitionMainService.js";

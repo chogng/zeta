@@ -2,7 +2,7 @@ import type { AgentResponse, ModelCatalogEntry, ModelRef, SessionId, SlashComman
 import { Emitter, type Event } from "../../../../../base/common/event.js";
 import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
 import { createUuid } from "../../../../../base/common/uuid.js";
-import type { ZetaRendererApi } from "../../../../../platform/app-server/common/renderer-api.js";
+import type { IRendererHost } from "../../../../../platform/renderer/common/rendererHost.js";
 import type { IActiveSessionThread, IUntitledChatSession, IWorkbenchSessionService } from "../../../../services/sessions/common/sessionService.js";
 import { chatListItem, type IChatListItem } from "../list/chatListItems.js";
 
@@ -25,7 +25,7 @@ export type ChatPaneSelection =
  * contains the same item.
  */
 export class ChatPaneModel extends DisposableOwner {
-  private readonly api: ZetaRendererApi;
+  private readonly api: IRendererHost;
   private readonly sessionService: IWorkbenchSessionService;
   private readonly _onDidChange = this.own(new Emitter<void>());
   private readonly transientItems = new Map<string, ThreadItem>();
@@ -47,7 +47,7 @@ export class ChatPaneModel extends DisposableOwner {
 
   readonly onDidChange: Event<void> = this._onDidChange.event;
 
-  constructor(api: ZetaRendererApi, selection: ChatPaneSelection, sessionService: IWorkbenchSessionService) {
+  constructor(api: IRendererHost, selection: ChatPaneSelection, sessionService: IWorkbenchSessionService) {
     super();
     this.api = api;
     this.sessionService = sessionService;

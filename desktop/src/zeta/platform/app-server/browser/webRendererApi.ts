@@ -1,9 +1,9 @@
 import { APP_SERVER_METHODS, type AppServerMethod, type MethodParams, type MethodResult } from "../../../../../generated/app-server/types.js";
-import type { ZetaRendererApi } from "../common/renderer-api.js";
+import type { IRendererHost } from "../../renderer/common/rendererHost.js";
 import { ViteDevAppServerConnection, type ViteDevAppServerConnectionOptions, type ViteDevAppServerMetadata, type ViteDevHotContext } from "./viteDevConnection.js";
 
 export interface ConnectedWebRendererApi {
-  readonly api: ZetaRendererApi;
+  readonly api: IRendererHost;
   readonly metadata: ViteDevAppServerMetadata;
   dispose(): void;
 }
@@ -24,9 +24,9 @@ export async function connectViteDevRendererApi(hot: ViteDevHotContext, options:
   }
 }
 
-function createRendererApi(connection: ViteDevAppServerConnection): ZetaRendererApi {
+function createRendererApi(connection: ViteDevAppServerConnection): IRendererHost {
   const voidResult = <T>(promise: Promise<T>): Promise<void> => promise.then(() => undefined);
-  const api: ZetaRendererApi = {
+  const api: IRendererHost = {
     appServer: {
       getConnectionState: () => Promise.resolve(connection.state),
       getSlashCommands: () => Promise.resolve(connection.slashCommands),

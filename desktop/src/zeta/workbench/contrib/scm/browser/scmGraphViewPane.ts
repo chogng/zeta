@@ -1,16 +1,16 @@
 import { addDisposableListener } from "../../../../base/browser/dom.js";
 import type { GitCommitSummaryDto } from "../../../../../../generated/app-server/types.js";
-import type { ZetaRendererApi } from "../../../../platform/app-server/common/renderer-api.js";
+import type { IRendererHost } from "../../../../platform/renderer/common/rendererHost.js";
 import type { IViewPaneOptions } from "../../../browser/parts/views/viewPane.js";
 import { ViewPane } from "../../../browser/parts/views/viewPane.js";
 
 /** Bounded recent repository history rendered as a compact commit graph. */
 export class ScmGraphViewPane extends ViewPane {
-  private readonly api: ZetaRendererApi;
+  private readonly api: IRendererHost;
   private readonly graphElement: HTMLDivElement;
   private disposed = false;
 
-  constructor(options: IViewPaneOptions, api: ZetaRendererApi) {
+  constructor(options: IViewPaneOptions, api: IRendererHost) {
     super(options);
     this.api = api;
     this.contentElement.classList.add("zeta-scm-secondary-pane");

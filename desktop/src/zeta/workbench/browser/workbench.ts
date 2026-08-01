@@ -8,10 +8,8 @@ import { assertDefined } from "../../base/common/types.js";
 import type {
   ProductConfiguration,
 } from "../../product/common/product.js";
-import type {
-  AppServerConnectionState,
-  ZetaRendererApi,
-} from "../../platform/app-server/common/renderer-api.js";
+import type { AppServerConnectionState } from "../../platform/app-server/common/appServerApi.js";
+import type { IRendererHost } from "../../platform/renderer/common/rendererHost.js";
 import type {
   INativeHostApi,
 } from "../../platform/native/common/nativeHost.js";
@@ -185,7 +183,7 @@ import { ITextFileService, TextFileService } from "../services/textfile/common/t
 /** Host-specific inputs required to construct a workbench. */
 export interface IStartWorkbenchOptions {
   readonly product: ProductConfiguration;
-  readonly api: ZetaRendererApi;
+  readonly api: IRendererHost;
   readonly container: HTMLElement | null;
   readonly workspace: IAnyWorkspaceIdentifier;
   readonly configurationApi?: IConfigurationApi;
@@ -233,7 +231,7 @@ export class Workbench extends DisposableOwner {
 
   constructor(
     product: ProductConfiguration,
-    api: ZetaRendererApi,
+    api: IRendererHost,
     workbenchRoot: HTMLElement,
     workspace: IAnyWorkspaceIdentifier,
     configurationApi: IConfigurationApi | undefined,

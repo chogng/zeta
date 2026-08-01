@@ -2,7 +2,7 @@ import type { ModelRef, Session, SessionId, ThreadId } from "../../../../../../g
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { createUuid } from "../../../../base/common/uuid.js";
-import type { ZetaRendererApi } from "../../../../platform/app-server/common/renderer-api.js";
+import type { IRendererHost } from "../../../../platform/renderer/common/rendererHost.js";
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
 
 /** Selected Session and Thread shared by session navigation and features. */
@@ -79,7 +79,7 @@ export const IWorkbenchSessionService =
 export class WorkbenchSessionService
   extends DisposableOwner
   implements IWorkbenchSessionService {
-  private readonly api: ZetaRendererApi;
+  private readonly api: IRendererHost;
   private readonly _onDidChange = this.own(new Emitter<void>());
   private _sessions: readonly Session[] = [];
   private _active: IActiveSessionThread | undefined;
@@ -91,7 +91,7 @@ export class WorkbenchSessionService
 
   readonly onDidChange = this._onDidChange.event;
 
-  constructor(api: ZetaRendererApi) {
+  constructor(api: IRendererHost) {
     super();
     this.api = api;
   }

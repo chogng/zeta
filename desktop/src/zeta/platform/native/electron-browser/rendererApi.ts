@@ -1,20 +1,23 @@
-import type { FsGetMetadataResult, FsReadDirectoryResult, FsReadFileResult, ModelListResult, ResourceMetadataResult, ResourceReadResult, ServerNotification, SessionListResult, SessionResult, SessionSubscribeResult, SessionThreadResult, SlashCommandDefinition, ThreadReadResult, ThreadSubscribeResult, TurnInterruptResult, TurnInteractionResolveResult, TurnStartResult, TypstCompileResult, WorkspaceSearchReadResult, WorkspaceSearchStartResult } from "../../../../../generated/app-server/types.js";
-import type { TerminalCreateResult, TerminalProfileListResult, TerminalReadResult } from "../../../../../generated/app-server/types.js";
-import type { GitCommitResult, GitHistoryResult, GitOperationResult, GitStatusResult } from "../../../../../generated/app-server/types.js";
 import { operatingSystemFromNodePlatform } from "../../../base/common/environment.js";
-import { ipcRenderer, sandboxProcess } from "../../../base/parts/sandbox/electron-browser/globals.js";
-import { NATIVE_CONTEXT_MENU_CLOSE_CHANNEL, NATIVE_CONTEXT_MENU_POPUP_CHANNEL, type INativeContextMenuResult } from "../../../base/parts/contextmenu/common/contextmenu.js";
-import { type AppServerConnectionState } from "../../app-server/common/renderer-api.js";
-import { BROWSER_VIEW_CLOSE_CHANNEL, BROWSER_VIEW_CREATE_CHANNEL, BROWSER_VIEW_EVENT_CHANNEL, BROWSER_VIEW_GO_BACK_CHANNEL, BROWSER_VIEW_GO_FORWARD_CHANNEL, BROWSER_VIEW_LAYOUT_CHANNEL, BROWSER_VIEW_NAVIGATE_CHANNEL, BROWSER_VIEW_RELOAD_CHANNEL, BROWSER_VIEW_STATE_CHANNEL, BROWSER_VIEW_STOP_CHANNEL, BROWSER_VIEW_VISIBILITY_CHANNEL, type BrowserViewEvent, type IBrowserViewState } from "../../browser/common/browserView.js";
-import { CONFIGURATION_CHANGED_CHANNEL, CONFIGURATION_READ_CHANNEL, CONFIGURATION_UPDATE_CHANNEL } from "../../configuration/common/configuration.js";
-import { KEYBINDINGS_RESOURCE_CHANGED_CHANNEL, KEYBINDINGS_RESOURCE_READ_CHANNEL, KEYBINDINGS_RESOURCE_UPDATE_CHANNEL } from "../../keybinding/common/keybindingsResource.js";
-import { NATIVE_MENUBAR_SELECT_CHANNEL, NATIVE_MENUBAR_UPDATE_CHANNEL, type INativeMenubarSelection } from "../../menubar/common/nativeMenubar.js";
-import { NATIVE_HOST_OPEN_FOLDER_CHANNEL, NATIVE_HOST_SET_WINDOW_THEME_CHANNEL, NATIVE_HOST_TOGGLE_DEVELOPER_TOOLS_CHANNEL } from "../common/nativeHost.js";
-import { WORKSPACE_CONTEXT_CHANGED_CHANNEL, WORKSPACE_CONTEXT_READ_CHANNEL } from "../../workspace/common/workspaceIpc.js";
-import { USER_THEME_FILES_LIST_CHANNEL, USER_THEME_FILE_DELETE_CHANNEL, USER_THEME_FILE_WRITE_CHANNEL } from "../../theme/common/userThemeFiles.js";
+import { sandboxProcess } from "../../../base/parts/sandbox/electron-browser/globals.js";
+import { createAppServerApi, createResourceApi, createServerEventApi } from "../../app-server/electron-browser/appServerApi.js";
+import { createBrowserViewApi } from "../../browser/electron-browser/browserViewApi.js";
+import { createConfigurationApi } from "../../configuration/electron-browser/configurationApi.js";
+import { createNativeContextMenuApi } from "../../contextview/electron-browser/contextMenuApi.js";
+import { createFileApi } from "../../files/electron-browser/fileApi.js";
+import { createGitApi } from "../../git/electron-browser/gitApi.js";
+import { createKeybindingsResourceApi } from "../../keybinding/electron-browser/keybindingsResourceApi.js";
+import { createNativeMenubarApi } from "../../menubar/electron-browser/nativeMenubarApi.js";
+import { createWorkspaceSearchApi } from "../../search/electron-browser/searchApi.js";
+import { createModelApi, createSessionApi, createThreadApi, createTurnApi } from "../../sessions/electron-browser/sessionApi.js";
+import { createTerminalProcessApi } from "../../terminal/electron-browser/terminalProcessApi.js";
+import { createUserThemeFilesApi } from "../../theme/electron-browser/userThemeFilesApi.js";
+import { createTypstApi } from "../../typst/electron-browser/typstApi.js";
+import { createWorkspaceContextApi } from "../../workspace/electron-browser/workspaceContextApi.js";
 import type { ZetaElectronRendererApi } from "../common/rendererApi.js";
+import { createNativeHostApi } from "./nativeHostApi.js";
 
-/** Builds Zeta's typed renderer API on top of the minimal sandbox globals. */
+/** Composes Electron renderer capabilities from domain-owned IPC adapters. */
 export function createElectronRendererApi(): ZetaElectronRendererApi {
   return {
     environment: {
@@ -22,238 +25,25 @@ export function createElectronRendererApi(): ZetaElectronRendererApi {
       os: operatingSystemFromNodePlatform(sandboxProcess.platform),
       arch: sandboxProcess.arch,
     },
-    appServer: {
-      getConnectionState: () =>
-        invoke<AppServerConnectionState>("zeta:app-server:state"),
-      getSlashCommands: () =>
-        invoke<readonly SlashCommandDefinition[]>("zeta:app-server:slash-commands"),
-      onConnectionState: (listener) =>
-        subscribe(
-          "zeta:app-server:stateChanged",
-          listener,
-        ),
-    },
-    browserView: {
-      create: (request) =>
-        invoke<IBrowserViewState>(BROWSER_VIEW_CREATE_CHANNEL, request),
-      getState: (request) =>
-        invoke<IBrowserViewState>(BROWSER_VIEW_STATE_CHANNEL, request),
-      layout: (request) =>
-        invoke<void>(BROWSER_VIEW_LAYOUT_CHANNEL, request),
-      setVisibility: (request) =>
-        invoke<void>(BROWSER_VIEW_VISIBILITY_CHANNEL, request),
-      navigate: (request) =>
-        invoke<void>(BROWSER_VIEW_NAVIGATE_CHANNEL, request),
-      goBack: (request) =>
-        invoke<void>(BROWSER_VIEW_GO_BACK_CHANNEL, request),
-      goForward: (request) =>
-        invoke<void>(BROWSER_VIEW_GO_FORWARD_CHANNEL, request),
-      reload: (request) =>
-        invoke<void>(BROWSER_VIEW_RELOAD_CHANNEL, request),
-      stop: (request) =>
-        invoke<void>(BROWSER_VIEW_STOP_CHANNEL, request),
-      close: (request) =>
-        invoke<void>(BROWSER_VIEW_CLOSE_CHANNEL, request),
-      onDidEvent: (listener) =>
-        subscribe<BrowserViewEvent>(BROWSER_VIEW_EVENT_CHANNEL, listener),
-    },
-    session: {
-      create: (params) =>
-        invoke<SessionResult>("zeta:session:create", params),
-      read: (params) =>
-        invoke<SessionResult>("zeta:session:read", params),
-      list: () =>
-        invoke<SessionListResult>("zeta:session:list"),
-      subscribe: (params) =>
-        invoke<SessionSubscribeResult>(
-          "zeta:session:subscribe",
-          params,
-        ),
-      unsubscribe: (params) =>
-        invoke<void>("zeta:session:unsubscribe", params),
-      createThread: (params) =>
-        invoke<SessionThreadResult>(
-          "zeta:session:thread:create",
-          params,
-        ),
-      forkThread: (params) =>
-        invoke<SessionThreadResult>(
-          "zeta:session:thread:fork",
-          params,
-        ),
-      archiveThread: (params) =>
-        invoke<SessionResult>(
-          "zeta:session:thread:archive",
-          params,
-        ),
-      complete: (params) =>
-        invoke<SessionResult>("zeta:session:complete", params),
-      archive: (params) =>
-        invoke<SessionResult>("zeta:session:archive", params),
-      setModel: (params) =>
-        invoke<SessionResult>("zeta:session:model:set", params),
-    },
-    model: {
-      list: () =>
-        invoke<ModelListResult>("zeta:model:list"),
-    },
-    thread: {
-      read: (params) =>
-        invoke<ThreadReadResult>("zeta:thread:read", params),
-      subscribe: (params) =>
-        invoke<ThreadSubscribeResult>(
-          "zeta:thread:subscribe",
-          params,
-        ),
-      unsubscribe: (params) =>
-        invoke<void>("zeta:thread:unsubscribe", params),
-    },
-    turn: {
-      start: (params) =>
-        invoke<TurnStartResult>("zeta:turn:start", params),
-      interrupt: (params) =>
-        invoke<TurnInterruptResult>("zeta:turn:interrupt", params),
-      resolveInteraction: (params) =>
-        invoke<TurnInteractionResolveResult>(
-          "zeta:turn:interaction:resolve",
-          params,
-        ),
-    },
-    typst: {
-      compile: (params) =>
-        invoke<TypstCompileResult>("zeta:typst:compile", params),
-    },
-    resource: {
-      metadata: (params) =>
-        invoke<ResourceMetadataResult>("zeta:resource:metadata", params),
-      read: (params) =>
-        invoke<ResourceReadResult>("zeta:resource:read", params),
-      release: (params) =>
-        invoke<void>("zeta:resource:release", params),
-    },
-    fs: {
-      getMetadata: (params) =>
-        invoke<FsGetMetadataResult>("zeta:fs:get-metadata", params),
-      readDirectory: (params) =>
-        invoke<FsReadDirectoryResult>("zeta:fs:read-directory", params),
-      readFile: (params) =>
-        invoke<FsReadFileResult>("zeta:fs:read-file", params),
-    },
-    git: {
-      status: () =>
-        invoke<GitStatusResult>("zeta:git:status"),
-      history: () =>
-        invoke<GitHistoryResult>("zeta:git:history"),
-      stage: (params) =>
-        invoke<GitOperationResult>("zeta:git:stage", params),
-      unstage: (params) =>
-        invoke<GitOperationResult>("zeta:git:unstage", params),
-      discardWorktree: (params) =>
-        invoke<GitOperationResult>("zeta:git:discard-worktree", params),
-      commit: (params) =>
-        invoke<GitCommitResult>("zeta:git:commit", params),
-      fetch: () =>
-        invoke<GitOperationResult>("zeta:git:fetch"),
-      pull: () =>
-        invoke<GitOperationResult>("zeta:git:pull"),
-      push: () =>
-        invoke<GitOperationResult>("zeta:git:push"),
-    },
-    workspaceSearch: {
-      start: (params) =>
-        invoke<WorkspaceSearchStartResult>(
-          "zeta:workspace-search:start",
-          params,
-        ),
-      read: (params) =>
-        invoke<WorkspaceSearchReadResult>(
-          "zeta:workspace-search:read",
-          params,
-        ),
-      cancel: (params) =>
-        invoke<void>("zeta:workspace-search:cancel", params),
-    },
-    terminal: {
-      listProfiles: () =>
-        invoke<TerminalProfileListResult>("zeta:terminal:profile-list"),
-      create: (params) =>
-        invoke<TerminalCreateResult>("zeta:terminal:create", params),
-      write: (params) =>
-        invoke<void>("zeta:terminal:write", params),
-      resize: (params) =>
-        invoke<void>("zeta:terminal:resize", params),
-      read: (params) =>
-        invoke<TerminalReadResult>("zeta:terminal:read", params),
-      close: (params) =>
-        invoke<void>("zeta:terminal:close", params),
-    },
-    events: {
-      subscribe: (listener) =>
-        subscribe<ServerNotification>("zeta:event", listener),
-    },
-    configuration: {
-      read: () => invoke(CONFIGURATION_READ_CHANNEL),
-      update: (request) =>
-        invoke(CONFIGURATION_UPDATE_CHANNEL, request),
-      onDidChange: (listener) =>
-        subscribe(CONFIGURATION_CHANGED_CHANNEL, listener),
-    },
-    keybindings: {
-      read: () => invoke(KEYBINDINGS_RESOURCE_READ_CHANNEL),
-      update: (request) =>
-        invoke(KEYBINDINGS_RESOURCE_UPDATE_CHANNEL, request),
-      onDidChange: (listener) =>
-        subscribe(KEYBINDINGS_RESOURCE_CHANGED_CHANNEL, listener),
-    },
-    nativeContextMenu: {
-      popup: (request) =>
-        invoke<INativeContextMenuResult>(
-          NATIVE_CONTEXT_MENU_POPUP_CHANNEL,
-          request,
-        ),
-      close: () =>
-        invoke<void>(NATIVE_CONTEXT_MENU_CLOSE_CHANNEL),
-    },
-    nativeHost: {
-      openFolder: () =>
-        invoke<void>(NATIVE_HOST_OPEN_FOLDER_CHANNEL),
-      setWindowTheme: (theme) =>
-        invoke<void>(NATIVE_HOST_SET_WINDOW_THEME_CHANNEL, theme),
-      toggleDeveloperTools: () =>
-        invoke<void>(NATIVE_HOST_TOGGLE_DEVELOPER_TOOLS_CHANNEL),
-    },
-    nativeMenubar: {
-      update: (data) =>
-        invoke<void>(NATIVE_MENUBAR_UPDATE_CHANNEL, data),
-      onDidSelect: (listener) =>
-        subscribe<INativeMenubarSelection>(
-          NATIVE_MENUBAR_SELECT_CHANNEL,
-          listener,
-        ),
-    },
-    userThemes: {
-      delete: (request) => invoke(USER_THEME_FILE_DELETE_CHANNEL, request),
-      list: () => invoke(USER_THEME_FILES_LIST_CHANNEL),
-      write: (request) => invoke(USER_THEME_FILE_WRITE_CHANNEL, request),
-    },
-    workspace: {
-      getWorkspace: () => invoke(WORKSPACE_CONTEXT_READ_CHANNEL),
-      onDidChange: (listener) =>
-        subscribe(WORKSPACE_CONTEXT_CHANGED_CHANNEL, listener),
-    },
+    appServer: createAppServerApi(),
+    browserView: createBrowserViewApi(),
+    session: createSessionApi(),
+    model: createModelApi(),
+    thread: createThreadApi(),
+    turn: createTurnApi(),
+    typst: createTypstApi(),
+    resource: createResourceApi(),
+    fs: createFileApi(),
+    git: createGitApi(),
+    workspaceSearch: createWorkspaceSearchApi(),
+    terminal: createTerminalProcessApi(),
+    events: createServerEventApi(),
+    configuration: createConfigurationApi(),
+    keybindings: createKeybindingsResourceApi(),
+    nativeContextMenu: createNativeContextMenuApi(),
+    nativeHost: createNativeHostApi(),
+    nativeMenubar: createNativeMenubarApi(),
+    userThemes: createUserThemeFilesApi(),
+    workspace: createWorkspaceContextApi(),
   };
-}
-
-function invoke<TResult>(
-  channel: string,
-  params?: unknown,
-): Promise<TResult> {
-  return ipcRenderer.invoke(channel, params) as Promise<TResult>;
-}
-
-function subscribe<T>(
-  channel: string,
-  listener: (value: T) => void,
-) {
-  return ipcRenderer.on(channel, (value) => listener(value as T));
 }

@@ -1,5 +1,6 @@
 import { APP_SERVER_METHODS, APP_SERVER_NOTIFICATIONS, APP_SERVER_SCHEMA_HASH, type AppServerMethod, type AppServerMethodDefinition, type InitializeResult, type MethodParams, type MethodResult, type ServerNotification } from "../../../../../generated/app-server/types.js";
-import type { AppServerConnectionState, DisposableHandle } from "../common/renderer-api.js";
+import type { AppServerConnectionState } from "../common/appServerApi.js";
+import type { DisposableHandle } from "../../ipc/common/ipc.js";
 
 export const WEB_APP_SERVER_PROTOCOL_VERSION = 1;
 export const WEB_APP_SERVER_CONNECT_EVENT = "zeta:app-server:connect";

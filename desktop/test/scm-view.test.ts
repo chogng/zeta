@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import type { GitStatusResult, ServerNotification } from "../generated/app-server/types.js";
-import type { ZetaRendererApi } from "../src/zeta/platform/app-server/common/renderer-api.js";
+import type { IRendererHost } from "../src/zeta/platform/renderer/common/rendererHost.js";
 
 test("Git contribution registers Changes, Agent Review, and Graph as ordered panes", async () => {
   const browser = new JSDOM("<!doctype html><body></body>");
@@ -37,7 +37,7 @@ test("ScmGraphViewPane renders bounded repository history", async () => {
         ],
       }),
     },
-  } as unknown as ZetaRendererApi;
+  } as unknown as IRendererHost;
 
   try {
     const { ScmGraphViewPane } = await import("../src/zeta/workbench/contrib/scm/browser/scmGraphViewPane.js");
@@ -137,7 +137,7 @@ test("ScmViewPane groups App Server Git status and refreshes it", async () => {
     appServer: {
       onConnectionState: () => ({ dispose(): void {} }),
     },
-  } as unknown as ZetaRendererApi;
+  } as unknown as IRendererHost;
 
   try {
     const { ScmViewPane } = await import("../src/zeta/workbench/contrib/scm/browser/scmViewPane.js");
@@ -233,7 +233,7 @@ test("ScmViewPane accepts a restarted Git stream and rejects its retired predece
         return { dispose(): void {} };
       },
     },
-  } as unknown as ZetaRendererApi;
+  } as unknown as IRendererHost;
 
   try {
     const { ScmViewPane } = await import("../src/zeta/workbench/contrib/scm/browser/scmViewPane.js");

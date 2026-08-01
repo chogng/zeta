@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import type { ModelRef, ServerNotification, Session, SessionCommandParams, SessionCreateParams, SessionModelSetParams, SessionThreadCreateParams, Thread, TurnStartParams } from "../generated/app-server/types.js";
-import type { ZetaRendererApi } from "../src/zeta/platform/app-server/common/renderer-api.js";
+import type { IRendererHost } from "../src/zeta/platform/renderer/common/rendererHost.js";
 import type { IAction } from "../src/zeta/base/common/actions.js";
 import { Emitter } from "../src/zeta/base/common/event.js";
 import { TAB_CLOSE_ACTION_ID } from "../src/zeta/base/browser/ui/tablist/tabList.js";
@@ -990,7 +990,7 @@ function testLayoutService(auxiliaryBarVisible = true): IWorkbenchLayoutService 
 }
 
 function fakeApi(options: FakeOptions = {}): {
-  readonly api: ZetaRendererApi;
+  readonly api: IRendererHost;
   readonly archiveRequests: readonly SessionCommandParams[];
   readonly createSessionRequests: readonly SessionCreateParams[];
   readonly createThreadRequests: readonly SessionThreadCreateParams[];
@@ -1069,7 +1069,7 @@ function fakeApi(options: FakeOptions = {}): {
         return { dispose: () => { listeners.delete(next); } };
       },
     },
-  } as unknown as ZetaRendererApi;
+  } as unknown as IRendererHost;
   return {
     api,
     archiveRequests,

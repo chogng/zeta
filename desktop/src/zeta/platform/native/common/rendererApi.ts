@@ -4,9 +4,7 @@ import type {
 import type {
   IBrowserViewApi,
 } from "../../browser/common/browserView.js";
-import type {
-  ZetaRendererApi,
-} from "../../app-server/common/renderer-api.js";
+import type { IRendererHost } from "../../renderer/common/rendererHost.js";
 import type {
   IConfigurationApi,
 } from "../../configuration/common/configuration.js";
@@ -28,7 +26,7 @@ import type {
 } from "./nativeHost.js";
 
 /** Capabilities exposed only by the Electron preload bridge. */
-export interface ZetaElectronRendererApi extends ZetaRendererApi {
+export interface ZetaElectronRendererApi extends IRendererHost {
   readonly environment: IRuntimeEnvironment;
   readonly browserView: IBrowserViewApi;
   readonly configuration: IConfigurationApi;

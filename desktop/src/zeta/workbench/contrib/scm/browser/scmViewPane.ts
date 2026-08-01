@@ -1,6 +1,6 @@
 import { addDisposableListener } from "../../../../base/browser/dom.js";
 import type { GitChangeStatusDto, GitHeadDto, GitRepositoryChangeDto, GitStatusResult, ServerNotification } from "../../../../../../generated/app-server/types.js";
-import type { ZetaRendererApi } from "../../../../platform/app-server/common/renderer-api.js";
+import type { IRendererHost } from "../../../../platform/renderer/common/rendererHost.js";
 import { ViewPane, type IViewPaneOptions } from "../../../browser/parts/views/viewPane.js";
 
 type GitChangeSide = "index" | "worktree";
@@ -8,7 +8,7 @@ type GitPathAction = "stage" | "unstage" | "discard";
 
 /** Git status and user mutations routed through the workspace App Server. */
 export class ScmViewPane extends ViewPane {
-  private readonly api: ZetaRendererApi;
+  private readonly api: IRendererHost;
   private readonly branchElement: HTMLDivElement;
   private readonly refreshButton: HTMLButtonElement;
   private readonly fetchButton: HTMLButtonElement;
@@ -24,7 +24,7 @@ export class ScmViewPane extends ViewPane {
   private busy = false;
   private disposed = false;
 
-  constructor(options: IViewPaneOptions, api: ZetaRendererApi) {
+  constructor(options: IViewPaneOptions, api: IRendererHost) {
     super(options);
     this.api = api;
     this.contentElement.classList.add("zeta-scm");

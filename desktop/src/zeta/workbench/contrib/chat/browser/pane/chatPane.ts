@@ -1,6 +1,6 @@
 import type { SessionId, ThreadId } from "../../../../../../../generated/app-server/types.js";
 import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
-import type { ZetaRendererApi } from "../../../../../platform/app-server/common/renderer-api.js";
+import type { IRendererHost } from "../../../../../platform/renderer/common/rendererHost.js";
 import type { ICommandService } from "../../../../../platform/commands/common/commands.js";
 import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextMenu.js";
 import type { IActiveSessionThread, IUntitledChatSession, IWorkbenchSessionService } from "../../../../services/sessions/common/sessionService.js";
@@ -16,7 +16,7 @@ export class ChatPane extends DisposableOwner {
   private readonly listWidget: ChatListWidget;
   private readonly inputWidget: ChatInputWidget;
 
-  constructor(ownerDocument: Document, panelId: string, api: ZetaRendererApi, selection: ChatPaneSelection, sessionService: IWorkbenchSessionService, contextMenuService: IContextMenuService, commandService: ICommandService) {
+  constructor(ownerDocument: Document, panelId: string, api: IRendererHost, selection: ChatPaneSelection, sessionService: IWorkbenchSessionService, contextMenuService: IContextMenuService, commandService: ICommandService) {
     super();
     this.element = ownerDocument.createElement("div");
     this.element.id = panelId;

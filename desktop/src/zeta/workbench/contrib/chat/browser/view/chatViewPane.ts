@@ -1,7 +1,7 @@
 import "../media/chat.css";
 import type { Session, SessionThread, ThreadId } from "../../../../../../../generated/app-server/types.js";
 import { setDisposableOwner } from "../../../../../base/common/lifecycle.js";
-import type { ZetaRendererApi } from "../../../../../platform/app-server/common/renderer-api.js";
+import type { IRendererHost } from "../../../../../platform/renderer/common/rendererHost.js";
 import type { IMenuService } from "../../../../../platform/actions/common/menuService.js";
 import type { IContextKeyService } from "../../../../../platform/contextkey/common/contextkey.js";
 import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextMenu.js";
@@ -33,7 +33,7 @@ interface ChatPaneEntry {
  * materialize only when their first message is sent.
  */
 export class ChatViewPane extends ViewPane {
-  private readonly api: ZetaRendererApi;
+  private readonly api: IRendererHost;
   private readonly sessionService: IWorkbenchSessionService;
   private readonly contextMenuService: IContextMenuService;
   private readonly commandService: ICommandService;
@@ -48,7 +48,7 @@ export class ChatViewPane extends ViewPane {
 
   constructor(
     options: IViewPaneOptions,
-    api: ZetaRendererApi,
+    api: IRendererHost,
     sessionService: IWorkbenchSessionService,
     menuService: IMenuService,
     contextMenuService: IContextMenuService,

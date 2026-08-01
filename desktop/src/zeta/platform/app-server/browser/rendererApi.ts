@@ -1,4 +1,4 @@
-import type { ZetaRendererApi } from "../common/renderer-api.js";
+import type { IRendererHost } from "../../renderer/common/rendererHost.js";
 
 /**
  * Error returned when a standalone Web Workbench has no App Server host.
@@ -17,7 +17,7 @@ export class WebAppServerUnavailableError extends Error {
  * Creates the explicit disconnected renderer capability used by standalone
  * Web pages until an embedder supplies a remote App Server implementation.
  */
-export function createDisconnectedRendererApi(): ZetaRendererApi {
+export function createDisconnectedRendererApi(): IRendererHost {
   const unavailable = <T>(operation: string): Promise<T> =>
     Promise.reject(new WebAppServerUnavailableError(operation));
   const inertSubscription = () => ({ dispose(): void {} });
