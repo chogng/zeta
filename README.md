@@ -84,10 +84,15 @@ Start the Browser Workbench with its local development App Server bridge:
 corepack pnpm dev:web
 ```
 
-Open [http://127.0.0.1:5173/browser/workbench/workbench-code.html](http://127.0.0.1:5173/browser/workbench/workbench-code.html)
+Open [http://127.0.0.1:5174/browser/workbench/workbench-code.html](http://127.0.0.1:5174/browser/workbench/workbench-code.html)
 after Vite reports that it is ready. Both commands start the default `code`
 product edition; the corresponding `:academic` and `:complete` variants are
 also available (for example, `corepack pnpm dev:web:academic`).
+
+Electron development uses `127.0.0.1:5173`; Web development uses
+`127.0.0.1:5174`, so both modes can run at the same time. If either port is
+already in use, stop the previous instance of that development mode before
+starting it again.
 
 ## Package
 

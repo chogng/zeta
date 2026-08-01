@@ -7,6 +7,7 @@ import { getProductConfiguration, resolveProductId } from "./src/zeta/product/co
 export default defineConfig(() => {
   const product = getProductConfiguration(resolveProductId(process.env.ZETA_PRODUCT));
   const webAppServerEnabled = process.env.ZETA_WEB_APP_SERVER === "1";
+  const developmentPort = webAppServerEnabled ? 5174 : 5173;
   const sourceRoot = resolve(import.meta.dirname, "src/zeta/code");
   const browserEntry = `browser/workbench/${product.rendererEntry}`;
   const electronEntry = `electron-browser/workbench/${product.rendererEntry}`;
@@ -20,7 +21,7 @@ export default defineConfig(() => {
     plugins: [productIconsPlugin(), ...(webAppServerEnabled ? [webAppServerVitePlugin()] : [])],
     server: {
       host: "127.0.0.1",
-      port: 5173,
+      port: developmentPort,
       strictPort: true,
     },
     build: {

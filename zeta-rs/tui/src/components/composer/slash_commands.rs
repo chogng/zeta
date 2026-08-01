@@ -2,7 +2,10 @@
 
 use strum::IntoEnumIterator;
 use strum_macros::{AsRefStr, EnumIter, EnumString, IntoStaticStr};
-use zeta_slash_commands::{SlashCommandArgumentMode, SlashCommandCatalog, SlashCommandDefinition};
+use zeta_slash_commands::{SlashCommandArgumentMode, SlashCommandDefinition};
+
+#[cfg(test)]
+use zeta_slash_commands::SlashCommandCatalog;
 
 /// TUI execution binding for a locally contributed Slash Command definition.
 #[derive(AsRefStr, Clone, Copy, Debug, EnumIter, EnumString, Eq, IntoStaticStr, PartialEq)]
@@ -73,6 +76,7 @@ pub(crate) fn built_in_slash_command_definitions() -> Vec<SlashCommandDefinition
         .collect()
 }
 
+#[cfg(test)]
 pub(crate) fn default_slash_command_catalog() -> SlashCommandCatalog {
     SlashCommandCatalog::with_local_and_server(
         built_in_slash_command_definitions(),
