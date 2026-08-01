@@ -61,6 +61,7 @@ pub struct ThemeLoadOptions<'a> {
     pub device_root: &'a Path,
     pub surface: ThemeSurface,
     pub system_scheme: ColorScheme,
+    pub default_entry: &'a str,
 }
 
 impl<'a> ThemeLoadOptions<'a> {
@@ -73,7 +74,14 @@ impl<'a> ThemeLoadOptions<'a> {
             device_root,
             surface,
             system_scheme,
+            default_entry: "zeta",
         }
+    }
+
+    /// Selects the built-in entry used when the device preference follows the system.
+    pub const fn with_default_entry(mut self, default_entry: &'a str) -> Self {
+        self.default_entry = default_entry;
+        self
     }
 }
 
@@ -106,43 +114,34 @@ impl ThemeLoader {
     pub fn load(&self, options: ThemeLoadOptions<'_>) -> LoadedTheme {
         let mut diagnostics = Vec::new();
         let preference = read_preference(&options, &mut diagnostics);
-        let fallback = || {
-            self.catalog
-                .built_in(options.system_scheme)
-                .expect("embedded theme catalog must resolve built-in schemes")
-        };
         if preference == "system" {
             return LoadedTheme {
-                snapshot: fallback(),
+                snapshot: self.default_snapshot(&options, &mut diagnostics),
                 diagnostics,
                 follows_system: true,
             };
         }
-        let built_in_scheme = match preference.as_str() {
-            "zeta-dark" => Some(ColorScheme::Dark),
-            "zeta-light" => Some(ColorScheme::Light),
-            _ => None,
-        };
-        if let Some(color_scheme) = built_in_scheme {
+        if let Some(snapshot) = self
+            .catalog
+            .resolve_built_in_id(&preference)
+            .expect("embedded theme entries must resolve named light and dark variants")
+        {
             return LoadedTheme {
-                snapshot: self
-                    .catalog
-                    .built_in(color_scheme)
-                    .expect("embedded theme catalog must resolve built-in schemes"),
+                snapshot,
                 diagnostics,
                 follows_system: false,
             };
         }
-        let documents = read_theme_documents(options.device_root, &mut diagnostics);
+        let documents = read_theme_documents(options.device_root, &self.catalog, &mut diagnostics);
         let Some(document) = documents.get(&preference) else {
             diagnostics.push(ThemeDiagnostic {
                 file: None,
                 message: format!(
-                    "selected theme '{preference}' is unavailable; using system theme"
+                    "selected theme '{preference}' is unavailable; using default theme entry"
                 ),
             });
             return LoadedTheme {
-                snapshot: fallback(),
+                snapshot: self.default_snapshot(&options, &mut diagnostics),
                 diagnostics,
                 follows_system: true,
             };
@@ -159,10 +158,35 @@ impl ThemeLoader {
                     message: format!("selected theme '{preference}' is invalid: {error}"),
                 });
                 LoadedTheme {
-                    snapshot: fallback(),
+                    snapshot: self.default_snapshot(&options, &mut diagnostics),
                     diagnostics,
                     follows_system: true,
                 }
+            }
+        }
+    }
+
+    fn default_snapshot(
+        &self,
+        options: &ThemeLoadOptions<'_>,
+        diagnostics: &mut Vec<ThemeDiagnostic>,
+    ) -> ThemeSnapshot {
+        match self
+            .catalog
+            .built_in_entry(options.default_entry, options.system_scheme)
+        {
+            Ok(snapshot) => snapshot,
+            Err(error) => {
+                diagnostics.push(ThemeDiagnostic {
+                    file: None,
+                    message: format!(
+                        "default theme entry '{}' is unavailable: {error}; using zeta",
+                        options.default_entry
+                    ),
+                });
+                self.catalog
+                    .built_in(options.system_scheme)
+                    .expect("embedded theme catalog must resolve the zeta entry")
             }
         }
     }
@@ -216,6 +240,7 @@ fn read_preference(
 
 fn read_theme_documents(
     device_root: &Path,
+    catalog: &ThemeCatalog,
     diagnostics: &mut Vec<ThemeDiagnostic>,
 ) -> BTreeMap<String, ThemeDocument> {
     let directory = device_root.join("themes");
@@ -267,9 +292,7 @@ fn read_theme_documents(
                 continue;
             }
         };
-        if matches!(document.id(), "system" | "zeta-dark" | "zeta-light")
-            || documents.contains_key(document.id())
-        {
+        if catalog.is_reserved_theme_id(document.id()) || documents.contains_key(document.id()) {
             diagnostics.push(ThemeDiagnostic {
                 file: Some(path),
                 message: format!("duplicate or reserved user theme id '{}'", document.id()),

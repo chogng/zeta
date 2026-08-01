@@ -10,22 +10,25 @@ Schema 和模板由 Desktop registry 编译到 [`resources/design-tokens`](../..
 | `ThemeCatalog` | 读取版本化共享 manifest，解析默认值、alias、覆盖和颜色变换 |
 | `ThemeDocument` | 严格解析最多 1 MiB、512 个覆盖项的用户主题 JSON |
 | `ThemeSnapshot` | 保存完整 resolved RGBA token table；不包含 DOM、WGPU 或 Ratatui 类型 |
-| `ThemeLoader` | 有界读取 device configuration 与 `themes/*.json`，隔离单文件错误并选择主题 |
+| `ThemeLoader` | 有界读取主题入口、device configuration 与 `themes/*.json`，隔离单文件错误并选择主题 |
+| `ThemeLoadOptions::with_default_entry` | 由产品启动组合选择 `zeta`、`zeta-code` 或 `zeterm` 默认入口；组件和 token 不感知产品 |
 | `ThemeSurface` | 选择 graphical 或 terminal device preference；不把 UI preference 放进 `zeta-config` |
 
 Desktop 使用自己的 TypeScript resolver 和 CSS projection；Rust 与 TypeScript 通过同一 manifest、
 Schema 和 parity fixture 保持一致。Native/TUI adapter 只能把 snapshot 投影为自己的 component
 style，不能在本 crate 注册宿主状态或布局规则。TUI 可以只读取 token 子集并执行终端色彩能力降级。
 
-## 执行路径与内部 owner
+## 执行路径与内部所有者
 
 ```text
 ThemeLoader::embedded
 └─ ThemeCatalog::embedded
-   └─ include_str!(resources/design-tokens/design-tokens.json)
+   ├─ include_str!(resources/design-tokens/design-tokens.json)
+   └─ include_str!(resources/design-tokens/theme-entries.json)
 
 ThemeLoader::load(options)
 ├─ read_preference(configuration.json)
+├─ system preference → ThemeCatalog::built_in_entry(default_entry)
 ├─ read_theme_documents(themes/*.json)
 │  └─ ThemeDocument::parse → validate schema/version/id/label/value bounds
 ├─ ThemeCatalog::resolve_document
@@ -39,10 +42,16 @@ contract 的唯一内部 owner；宿主不能再解析 token 引用。`read_pref
 `workbench.colorTheme` 与 `tui.colorTheme`；`read_theme_documents` 只枚举非递归 regular JSON，按路径
 排序并限制为 128 个。`read_bounded_text` 在分配完整文档前将配置和主题文件限制为 1 MiB。
 
+`theme-entries.json` 只为同一 token catalog 提供数据化默认覆盖。`zeta`、`zeta-code` 与 `zeterm`
+不创建产品 token 或 resolver 分支；宿主只在 `ThemeLoadOptions` 选择入口。配置为 `system` 时，入口
+跟随系统明暗方案；配置为 `<entry>-light`、`<entry>-dark` 或用户主题 ID 时固定到对应主题。
+
 ## 失败语义与接入义务
 
 - embedded manifest 版本、重复 token 或解析失败会使 `ThemeLoader::embedded` 返回错误；这是构建
   contract 破坏，宿主应使用自己的最小安全 fallback，而不是猜 token。
+- 未知宿主默认入口产生诊断并回退 `zeta`；未知 device preference 回退宿主所选的默认入口，而
+  不是绕过入口回到全局颜色。
 - 一个用户主题文件失败只产生带路径的 `ThemeDiagnostic`，不会阻断其他主题；选中的主题不可用时
   回退调用方提供的 system scheme。
 - `ThemeSnapshot::required_color` 只用于宿主声明为必需的 token；缺失返回 `ThemeError`，adapter
@@ -55,8 +64,9 @@ contract 的唯一内部 owner；宿主不能再解析 token 引用。`read_pref
 ## 修改影响、测试与当前限制
 
 修改 `document.rs` 必须同步用户主题 Schema 与 Desktop validator；修改 `catalog.rs` 的颜色数学或
-legacy 映射必须同时更新共享 `theme-conformance.json` 并让 TS/Rust 两端通过。修改 device path、
-文件上限或 preference 优先级必须同步 Desktop loader、本文与 `docs/design-tokens.md`。
+legacy 映射必须同时更新共享 `theme-conformance.json` 并让 TS/Rust 两端通过。修改入口默认值需更新
+`resources/design-tokens/theme-entries.json`；修改 device path、文件上限或 preference 优先级必须同步
+Desktop loader、本文与 `docs/design-tokens.md`。
 
 当前 snapshot 只包含颜色；尺寸仍由 Desktop 消费。Native/TUI 目前不监听外部主题文件，应用新
 JSON 需要重启对应进程；Native 会在系统明暗事件到达时重新选择 system snapshot。高对比度已保留

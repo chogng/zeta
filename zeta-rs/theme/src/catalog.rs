@@ -4,11 +4,16 @@ use serde::Deserialize;
 use thiserror::Error;
 
 use crate::color::{FloatColor, Rgba};
-use crate::document::{ColorScheme, ColorTransform, ColorValue, ThemeDocument};
+use crate::document::{
+    ColorScheme, ColorTransform, ColorValue, ThemeDocument, valid_theme_id, valid_theme_label,
+};
 
 const EMBEDDED_MANIFEST: &str = include_str!("../../../resources/design-tokens/design-tokens.json");
+const EMBEDDED_THEME_ENTRIES: &str =
+    include_str!("../../../resources/design-tokens/theme-entries.json");
 const LEGACY_EDITOR_TOKEN_PREFIX: &str = "editor.semanticToken.";
 const EDITOR_TOKEN_PREFIX: &str = "editor.token.";
+const DEFAULT_THEME_ENTRY: &str = "zeta";
 
 /// Immutable, fully resolved theme selected for one presentation surface.
 #[derive(Clone, Debug)]
@@ -49,6 +54,7 @@ impl ThemeSnapshot {
 /// Versioned catalog compiled from the shared design-token manifest.
 pub struct ThemeCatalog {
     colors: BTreeMap<String, ColorContribution>,
+    entries: BTreeMap<String, ThemeEntryContribution>,
 }
 
 impl ThemeCatalog {
@@ -64,16 +70,112 @@ impl ThemeCatalog {
                 return Err(ThemeError::DuplicateToken(id));
             }
         }
-        Ok(Self { colors })
+        let entry_manifest: ThemeEntryManifest = serde_json::from_str(EMBEDDED_THEME_ENTRIES)?;
+        if entry_manifest.version != 1 {
+            return Err(ThemeError::UnsupportedThemeEntryVersion(
+                entry_manifest.version,
+            ));
+        }
+        let mut entries = BTreeMap::new();
+        for entry in entry_manifest.entries {
+            if !valid_theme_id(&entry.id) {
+                return Err(ThemeError::InvalidThemeId(entry.id));
+            }
+            if !valid_theme_label(&entry.label) {
+                return Err(ThemeError::InvalidThemeLabel);
+            }
+            if entry.colors.len() > 512 {
+                return Err(ThemeError::TooManyOverrides);
+            }
+            if let Some(token) = entry
+                .colors
+                .keys()
+                .find(|token| !colors.contains_key(*token))
+            {
+                return Err(ThemeError::UnknownOverride(token.clone()));
+            }
+            let id = entry.id.clone();
+            if entries.insert(id.clone(), entry).is_some() {
+                return Err(ThemeError::DuplicateThemeEntry(id));
+            }
+        }
+        if !entries.contains_key(DEFAULT_THEME_ENTRY) {
+            return Err(ThemeError::MissingThemeEntry(
+                DEFAULT_THEME_ENTRY.to_owned(),
+            ));
+        }
+        let catalog = Self { colors, entries };
+        for entry_id in catalog.entries.keys() {
+            for scheme in [
+                ColorScheme::Dark,
+                ColorScheme::Light,
+                ColorScheme::HighContrastDark,
+                ColorScheme::HighContrastLight,
+            ] {
+                catalog.built_in_entry(entry_id, scheme)?;
+            }
+        }
+        Ok(catalog)
     }
 
     pub fn built_in(&self, color_scheme: ColorScheme) -> Result<ThemeSnapshot, ThemeError> {
+        self.built_in_entry(DEFAULT_THEME_ENTRY, color_scheme)
+    }
+
+    /// Resolves one data-defined product entry against the shared semantic token catalog.
+    pub fn built_in_entry(
+        &self,
+        entry_id: &str,
+        color_scheme: ColorScheme,
+    ) -> Result<ThemeSnapshot, ThemeError> {
+        let entry = self
+            .entries
+            .get(entry_id)
+            .ok_or_else(|| ThemeError::MissingThemeEntry(entry_id.to_owned()))?;
+        let overrides = entry
+            .colors
+            .iter()
+            .filter_map(|(token, values)| {
+                values
+                    .get(&color_scheme)
+                    .cloned()
+                    .map(|value| (token.clone(), value))
+            })
+            .collect();
         self.resolve(
-            color_scheme.built_in_id(),
-            color_scheme.built_in_label(),
+            &entry.theme_id(color_scheme),
+            &entry.theme_label(color_scheme),
             color_scheme,
-            &BTreeMap::new(),
+            &overrides,
         )
+    }
+
+    pub(crate) fn has_entry(&self, entry_id: &str) -> bool {
+        self.entries.contains_key(entry_id)
+    }
+
+    pub(crate) fn resolve_built_in_id(
+        &self,
+        theme_id: &str,
+    ) -> Result<Option<ThemeSnapshot>, ThemeError> {
+        for entry in self.entries.values() {
+            for scheme in [ColorScheme::Dark, ColorScheme::Light] {
+                if entry.theme_id(scheme) == theme_id {
+                    return self.built_in_entry(&entry.id, scheme).map(Some);
+                }
+            }
+        }
+        Ok(None)
+    }
+
+    pub(crate) fn is_reserved_theme_id(&self, theme_id: &str) -> bool {
+        self.has_entry(theme_id)
+            || self.entries.values().any(|entry| {
+                [ColorScheme::Dark, ColorScheme::Light]
+                    .into_iter()
+                    .any(|scheme| entry.theme_id(scheme) == theme_id)
+            })
+            || theme_id == "system"
     }
 
     pub fn resolve_document(&self, document: &ThemeDocument) -> Result<ThemeSnapshot, ThemeError> {
@@ -249,6 +351,29 @@ struct Manifest {
 }
 
 #[derive(Deserialize)]
+struct ThemeEntryManifest {
+    version: u8,
+    entries: Vec<ThemeEntryContribution>,
+}
+
+#[derive(Deserialize)]
+struct ThemeEntryContribution {
+    id: String,
+    label: String,
+    colors: BTreeMap<String, BTreeMap<ColorScheme, ColorValue>>,
+}
+
+impl ThemeEntryContribution {
+    fn theme_id(&self, color_scheme: ColorScheme) -> String {
+        format!("{}-{}", self.id, color_scheme.variant_name())
+    }
+
+    fn theme_label(&self, color_scheme: ColorScheme) -> String {
+        format!("{} {}", self.label, color_scheme.variant_label())
+    }
+}
+
+#[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct ColorContribution {
     id: String,
@@ -266,6 +391,8 @@ pub enum ThemeError {
     UnsupportedVersion(u8),
     #[error("design-token catalog version {0} is unsupported")]
     UnsupportedCatalogVersion(u8),
+    #[error("theme-entry catalog version {0} is unsupported")]
+    UnsupportedThemeEntryVersion(u8),
     #[error("theme $schema is invalid")]
     InvalidSchema,
     #[error("theme id '{0}' must be lowercase kebab-case")]
@@ -290,6 +417,10 @@ pub enum ThemeError {
     MissingResolvedColor(String),
     #[error("duplicate color token '{0}' in the shared catalog")]
     DuplicateToken(String),
+    #[error("duplicate built-in theme entry '{0}'")]
+    DuplicateThemeEntry(String),
+    #[error("built-in theme entry '{0}' is unavailable")]
+    MissingThemeEntry(String),
     #[error("color token cycle: {0}")]
     ColorCycle(String),
     #[error("color transform factor must be finite and between 0 and 1")]

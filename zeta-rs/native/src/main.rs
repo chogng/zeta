@@ -93,6 +93,7 @@ mod workspace_path_picker_input;
 mod workspace_surface;
 
 pub(crate) const PRODUCT_DISPLAY_NAME: &str = "zeterm";
+const DEFAULT_THEME_ENTRY: &str = "zeterm";
 const INITIAL_WIDTH: f64 = 1_000.0;
 const INITIAL_HEIGHT: f64 = 700.0;
 
@@ -217,11 +218,10 @@ impl NativeApp {
             return;
         };
         let device_root = default_device_root();
-        let loaded = loader.load(ThemeLoadOptions::new(
-            &device_root,
-            ThemeSurface::Graphical,
-            system_scheme,
-        ));
+        let loaded = loader.load(
+            ThemeLoadOptions::new(&device_root, ThemeSurface::Graphical, system_scheme)
+                .with_default_entry(DEFAULT_THEME_ENTRY),
+        );
         for diagnostic in &loaded.diagnostics {
             eprintln!("theme: {}", diagnostic.message);
         }

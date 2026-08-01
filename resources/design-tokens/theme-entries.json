@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "entries": [
+    {
+      "id": "zeta",
+      "label": "Zeta",
+      "colors": {}
+    },
+    {
+      "id": "zeta-code",
+      "label": "Zeta Code",
+      "colors": {}
+    },
+    {
+      "id": "zeterm",
+      "label": "zeterm",
+      "colors": {
+        "list.activeSelectionForeground": {
+          "dark": "foreground",
+          "light": "foreground",
+          "high-contrast-dark": "foreground",
+          "high-contrast-light": "foreground"
+        },
+        "list.activeSelectionBackground": {
+          "dark": "#37373d",
+          "light": "#ebebed",
+          "high-contrast-dark": "#37373d",
+          "high-contrast-light": "#ebebed"
+        }
+      }
+    }
+  ]
+}

@@ -11,7 +11,7 @@
 `zeta-native` 是与 Electron Desktop 和 TUI 同级的原生产品入口，在发布边界导出为 `zeterm`。
 当前窗口纵切由产品拥有 `ApplicationHandler`，组合 `zeta-winit`、`zeta-wgpu` 与 `zeta-ui`，
 并在单个原生窗口中绘制 Agent ThreadTimeline 与固定底部 Agent/Shell Composer。
-启动时 `zeta-theme` 从共享 design-token manifest 与 device-local 用户主题生成不可变 snapshot；
+启动时 `zeta-theme` 从共享 design-token manifest、`zeterm` 默认主题入口与 device-local 用户主题生成不可变 snapshot；
 `shell_style` 将其适配为 Shell、CodeEditor、MultiDiffEditor、scrollbar 与 terminal ANSI palette。
 `ShellLayout` 仍只拥有区域背景、边界和外部几何，组件内部视觉继续由组件 style contract 拥有。
 
@@ -47,7 +47,7 @@
 | 无边框下拉 surface、可选 header、item geometry 与默认选择 | `zeta-ui::Dropdown` | 委托；不拥有产品查询、选择 identity、关闭或 command |
 | 柔和阴影、2px menu padding、4px radius、item geometry 与默认选择 | `zeta-ui::ContextMenu` | 委托；不拥有 Session identity、关闭或 command |
 | Session Tab 右键菜单、关闭策略与 action 映射 | `session_context_menu::SessionContextMenu` / `SessionContextMenuState` | ✅；四个 action 已进入产品边界，真实多会话 transition 尚无 |
-| 共享主题加载与平台中立 snapshot | [`zeta-theme`](../theme/README.md) | 委托；与 Desktop/TUI 消费同一 manifest 和用户主题 JSON |
+| 共享主题加载与平台中立 snapshot | [`zeta-theme`](../theme/README.md) | 委托；选择数据化 `zeterm` 默认入口，并与 Desktop/TUI 消费同一 manifest 和用户主题 JSON |
 | Native Shell/CodeEditor/Diff/Terminal 主题投影 | `shell_style::ShellPalette` 与命名 component palette | ✅；启动时加载一次，失败回退内置浅色 palette |
 | 稳定控件身份与 shell action 映射 | `shell_interaction` | ✅ |
 | 稳定 product command identity 与唯一执行入口 | `commands::NativeCommand` / `NativeApp::execute_native_command` | ✅；pointer、menu 与 shortcut 汇合到同一 executor |

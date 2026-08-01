@@ -11,7 +11,7 @@ Zeta 采用“单一声明目录、共享版本化 contract、各宿主独立投
 | 想改变什么 | 应该修改哪里 | 不应该怎么做 |
 | --- | --- | --- |
 | 一个组件的语义颜色 | 修改或新增该组件所有者注册的 token | 在组件 CSS 中复制十六进制颜色 |
-| 整套主题外观 | 覆盖公开 token | 重写组件 selector |
+| 整套主题外观 | 切换主题入口或覆盖公开 token | 重写组件 selector |
 | Native/CodeEditor 语法颜色 | 覆盖 `editor.token.*Foreground` | 让 parser 或 CodeEditor token 携带固定 RGB |
 | TUI 外观 | 覆盖 TUI 消费的共享子集；必要时设置 `tui.colorTheme` | 要求终端实现全部 Desktop 视觉能力 |
 | 跟随操作系统明暗模式 | 选择 `system` | 维护第四套 system 主题值 |
@@ -24,7 +24,7 @@ Zeta 采用“单一声明目录、共享版本化 contract、各宿主独立投
 | 通用 RGBA 运算 | `src/zeta/base/common/color.ts` | 解析、混合、透明度和字符串化；不感知主题或 workbench |
 | token 定义与依赖解析 | `platform/theme/common` | 注册颜色/尺寸、拒绝重复 ID、解析别名与变换、检测循环和无效引用 |
 | token domain | `platform/theme/common/colors`、`sizes` | 按消费语义声明 token、默认值、owner 和说明 |
-| 语言中立 contract | `resources/design-tokens/` | 保存版本化 manifest、用户主题 Schema/模板和跨运行时 conformance fixture |
+| 语言中立 contract | `resources/design-tokens/` | 保存版本化 manifest、主题入口、用户主题 Schema/模板和跨运行时 conformance fixture |
 | Desktop 快照 | `colorTheme.ts` | 将 scheme、覆盖值和注册目录编译为只读颜色/尺寸表 |
 | Rust 快照与加载 | `zeta-rs/theme` | 嵌入同一 manifest，严格解析用户 JSON，选择 Graphical/Terminal 偏好并产生 RGBA snapshot |
 | 宿主投影 | Desktop theme binding、Native `shell_style`、TUI `ui/theme` | 把 snapshot 转成宿主组件公开的 palette/style；不注册新的产品语义 |
@@ -44,6 +44,7 @@ flowchart LR
   D --> F["zeta-theme resolver"]
   G["Device preference + user JSON"] --> E
   G --> F
+  K["Built-in theme entry"] --> F
   E --> H["CSS / Alpha / xterm"]
   F --> I["Native component palettes"]
   F --> J["TUI token subset + capability downgrade"]
@@ -64,7 +65,8 @@ flowchart LR
 ## 当前状态/已实现
 
 - `light`、`dark` 与跟随操作系统的 `system` 偏好。
-- Desktop、Native 和 TUI 使用同一 device root 下的 `configuration.json` 与 `themes/*.json`；每个错误文件独立隔离，内置主题始终可回退。
+- 语言中立的 `theme-entries.json` 为 Rust `ThemeLoader` 提供 `zeta`、`zeta-code` 与 `zeterm` 默认入口；入口只覆盖统一 token，不创建产品 token 或组件分支。
+- Desktop、Native 和 TUI 使用同一 device root 下的 `configuration.json` 与 `themes/*.json`；每个错误文件独立隔离，内置主题始终可回退。Native `zeterm` 在没有显式用户主题时选择 `zeterm` 入口。
 - 116 个语义颜色 token 与 8 个标准布局尺寸 token；四种 `ColorScheme` 均在编译期解析，高对比度当前继承对应明暗默认值。
 - 不可变颜色对象、注册贡献、主题快照和生成产物。
 - Alpha/Native CodeEditor 使用 source-neutral `editor.token.*` 角色；旧 `editor.semanticToken.*` 仅作为兼容覆盖入口。

@@ -28,6 +28,20 @@ impl ColorScheme {
             Self::Light | Self::HighContrastLight => "Zeta Light",
         }
     }
+
+    pub(crate) const fn variant_name(self) -> &'static str {
+        match self {
+            Self::Dark | Self::HighContrastDark => "dark",
+            Self::Light | Self::HighContrastLight => "light",
+        }
+    }
+
+    pub(crate) const fn variant_label(self) -> &'static str {
+        match self {
+            Self::Dark | Self::HighContrastDark => "Dark",
+            Self::Light | Self::HighContrastLight => "Light",
+        }
+    }
 }
 
 /// Strict, versioned user color-theme document shared by every presentation surface.
@@ -80,10 +94,7 @@ impl ThemeDocument {
         if !valid_theme_id(&self.id) {
             return Err(crate::catalog::ThemeError::InvalidThemeId(self.id.clone()));
         }
-        if self.label.trim() != self.label
-            || self.label.is_empty()
-            || self.label.chars().count() > 80
-        {
+        if !valid_theme_label(&self.label) {
             return Err(crate::catalog::ThemeError::InvalidThemeLabel);
         }
         if self.colors.len() > 512 {
@@ -96,7 +107,7 @@ impl ThemeDocument {
     }
 }
 
-fn valid_theme_id(value: &str) -> bool {
+pub(crate) fn valid_theme_id(value: &str) -> bool {
     !value.is_empty()
         && value.split('-').all(|part| {
             !part.is_empty()
@@ -104,6 +115,10 @@ fn valid_theme_id(value: &str) -> bool {
                     .bytes()
                     .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit())
         })
+}
+
+pub(crate) fn valid_theme_label(value: &str) -> bool {
+    value.trim() == value && !value.is_empty() && value.chars().count() <= 80
 }
 
 #[derive(Clone, Debug, Deserialize)]
