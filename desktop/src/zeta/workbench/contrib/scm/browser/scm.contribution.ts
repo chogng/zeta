@@ -1,7 +1,7 @@
 import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
 import { SyncDescriptor } from "../../../../platform/instantiation/common/instantiation.js";
 import { ViewContainerLocation, type WorkbenchViewRegistry, WorkbenchViewContainerId, ViewsRegistry } from "../../../common/views.js";
-import { IRendererApiService } from "../../../common/services.js";
+import { IGitService } from "../../../services/git/common/gitService.js";
 import { ScmAgentReviewViewPane } from "./scmAgentReviewViewPane.js";
 import { ScmGraphViewPane } from "./scmGraphViewPane.js";
 import { ScmViewPane } from "./scmViewPane.js";
@@ -29,7 +29,7 @@ export function registerGitViews(
       order: 1,
       canToggleVisibility: false,
       ctorDescriptor: new SyncDescriptor(ScmViewPane, {
-        serviceDependencies: [IRendererApiService],
+        serviceDependencies: [IGitService],
       }),
     },
     {
@@ -47,7 +47,7 @@ export function registerGitViews(
       collapsed: true,
       canToggleVisibility: false,
       ctorDescriptor: new SyncDescriptor(ScmGraphViewPane, {
-        serviceDependencies: [IRendererApiService],
+        serviceDependencies: [IGitService],
       }),
     },
   ]);

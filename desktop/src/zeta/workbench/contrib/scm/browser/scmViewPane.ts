@@ -1,6 +1,5 @@
 import { addDisposableListener } from "../../../../base/browser/dom.js";
-import type { GitChangeStatusDto, GitHeadDto, GitRepositoryChangeDto, GitStatusResult, ServerNotification } from "../../../../../../generated/app-server/types.js";
-import type { IRendererHost } from "../../../../platform/renderer/common/rendererHost.js";
+import type { GitChangeStatus, GitHead, GitRepositoryChange, GitStatus, IGitService } from "../../../services/git/common/gitService.js";
 import { ViewPane, type IViewPaneOptions } from "../../../browser/parts/views/viewPane.js";
 
 type GitChangeSide = "index" | "worktree";
@@ -8,7 +7,7 @@ type GitPathAction = "stage" | "unstage" | "discard";
 
 /** Git status and user mutations routed through the workspace App Server. */
 export class ScmViewPane extends ViewPane {
-  private readonly api: IRendererHost;
+  private readonly gitService: IGitService;
   private readonly branchElement: HTMLDivElement;
   private readonly refreshButton: HTMLButtonElement;
   private readonly fetchButton: HTMLButtonElement;
@@ -18,15 +17,15 @@ export class ScmViewPane extends ViewPane {
   private readonly commitButton: HTMLButtonElement;
   private readonly statusElement: HTMLDivElement;
   private readonly changesElement: HTMLDivElement;
-  private status: GitStatusResult | undefined;
+  private status: GitStatus | undefined;
   private readonly retiredStreamInstanceIds = new Set<string>();
   private revision = 0;
   private busy = false;
   private disposed = false;
 
-  constructor(options: IViewPaneOptions, api: IRendererHost) {
+  constructor(options: IViewPaneOptions, gitService: IGitService) {
     super(options);
-    this.api = api;
+    this.gitService = gitService;
     this.contentElement.classList.add("zeta-scm");
     const document = options.ownerDocument;
     const summary = document.createElement("div");
@@ -64,9 +63,9 @@ export class ScmViewPane extends ViewPane {
     this.changesElement.className = "zeta-scm-changes";
     this.contentElement.append(summary, commitForm, this.statusElement, this.changesElement);
     this.own(addDisposableListener(this.refreshButton, "click", () => void this.refresh()));
-    this.own(addDisposableListener(this.fetchButton, "click", () => void this.runRemote("Fetching", () => this.api.git.fetch())));
-    this.own(addDisposableListener(this.pullButton, "click", () => void this.runRemote("Pulling", () => this.api.git.pull())));
-    this.own(addDisposableListener(this.pushButton, "click", () => void this.runRemote("Pushing", () => this.api.git.push())));
+    this.own(addDisposableListener(this.fetchButton, "click", () => void this.runRemote("Fetching", () => this.gitService.fetch())));
+    this.own(addDisposableListener(this.pullButton, "click", () => void this.runRemote("Pulling", () => this.gitService.pull())));
+    this.own(addDisposableListener(this.pushButton, "click", () => void this.runRemote("Pushing", () => this.gitService.push())));
     this.own(addDisposableListener(commitForm, "submit", (event) => {
       event.preventDefault();
       void this.commit();
@@ -79,12 +78,8 @@ export class ScmViewPane extends ViewPane {
       }
     }));
     this.own(addDisposableListener(this.changesElement, "click", (event) => this.onChangeAction(event)));
-    const events = this.api.events.subscribe((event) => this.onServerNotification(event));
-    this.defer(() => events.dispose());
-    const connection = this.api.appServer.onConnectionState((state) => {
-      if (state === "ready") void this.refresh();
-    });
-    this.defer(() => connection.dispose());
+    this.own(this.gitService.onDidChangeStatus((status) => this.onStatusChanged(status)));
+    this.own(this.gitService.onDidBecomeReady(() => void this.refresh()));
     this.defer(() => {
       this.disposed = true;
       this.revision += 1;
@@ -98,7 +93,7 @@ export class ScmViewPane extends ViewPane {
     this.setBusy(true);
     this.statusElement.textContent = "Reading Git status…";
     try {
-      const status = await this.api.git.status();
+      const status = await this.gitService.status();
       if (this.disposed || revision !== this.revision) return;
       this.renderStatus(status);
     } catch (error) {
@@ -119,7 +114,7 @@ export class ScmViewPane extends ViewPane {
     this.setBusy(true);
     this.statusElement.textContent = "Committing staged changes…";
     try {
-      const result = await this.api.git.commit({ message });
+      const result = await this.gitService.commit(message);
       if (this.disposed || revision !== this.revision) return;
       this.commitInput.value = "";
       this.renderStatus(result.status, `Created commit ${result.objectId.slice(0, 7)}.`);
@@ -130,14 +125,14 @@ export class ScmViewPane extends ViewPane {
     }
   }
 
-  private async runRemote(label: string, operation: () => Promise<{ status: GitStatusResult }>): Promise<void> {
+  private async runRemote(label: string, operation: () => Promise<GitStatus>): Promise<void> {
     const revision = ++this.revision;
     this.setBusy(true);
     this.statusElement.textContent = `${label}…`;
     try {
       const result = await operation();
       if (this.disposed || revision !== this.revision) return;
-      this.renderStatus(result.status, `${label.replace(/ing$/, "")} complete.`);
+      this.renderStatus(result, `${label.replace(/ing$/, "")} complete.`);
     } catch (error) {
       this.renderError(error, revision);
     } finally {
@@ -173,12 +168,12 @@ export class ScmViewPane extends ViewPane {
     this.statusElement.textContent = `${pathActionLabel(action)} ${paths.length === 1 ? paths[0] : `${paths.length} paths`}…`;
     try {
       const result = action === "stage"
-        ? await this.api.git.stage({ paths: [...paths] })
+        ? await this.gitService.stage(paths)
         : action === "unstage"
-        ? await this.api.git.unstage({ paths: [...paths] })
-        : await this.api.git.discardWorktree({ paths: [...paths] });
+        ? await this.gitService.unstage(paths)
+        : await this.gitService.discardWorktree(paths);
       if (this.disposed || revision !== this.revision) return;
-      this.renderStatus(result.status);
+      this.renderStatus(result);
     } catch (error) {
       this.renderError(error, revision);
     } finally {
@@ -186,17 +181,17 @@ export class ScmViewPane extends ViewPane {
     }
   }
 
-  private onServerNotification(event: ServerNotification): void {
-    if (event.method !== "git/statusChanged" || this.disposed) return;
+  private onStatusChanged(status: GitStatus): void {
+    if (this.disposed) return;
     if (
       this.status &&
-      event.params.status.streamInstanceId === this.status.streamInstanceId &&
-      event.params.status.revision <= this.status.revision
+      status.streamInstanceId === this.status.streamInstanceId &&
+      status.revision <= this.status.revision
     ) return;
-    this.renderStatus(event.params.status);
+    this.renderStatus(status);
   }
 
-  private renderStatus(status: GitStatusResult, announcement?: string): void {
+  private renderStatus(status: GitStatus, announcement?: string): void {
     if (this.status) {
       if (status.streamInstanceId === this.status.streamInstanceId) {
         if (status.revision < this.status.revision) return;
@@ -222,7 +217,7 @@ export class ScmViewPane extends ViewPane {
     this.updateCommandState();
   }
 
-  private appendSection(title: string, changes: readonly GitRepositoryChangeDto[], side: GitChangeSide, action: "stageAll" | "unstageAll"): void {
+  private appendSection(title: string, changes: readonly GitRepositoryChange[], side: GitChangeSide, action: "stageAll" | "unstageAll"): void {
     if (changes.length === 0) return;
     const document = this.element.ownerDocument;
     const section = document.createElement("section");
@@ -278,7 +273,7 @@ function commandButton(document: Document, text: string, ariaLabel: string): HTM
   return button;
 }
 
-function renderChange(document: Document, change: GitRepositoryChangeDto, side: GitChangeSide): HTMLLIElement {
+function renderChange(document: Document, change: GitRepositoryChange, side: GitChangeSide): HTMLLIElement {
   const item = document.createElement("li");
   item.className = "zeta-scm-change";
   const path = document.createElement("span");
@@ -312,7 +307,7 @@ function changeAction(document: Document, action: GitPathAction, paths: readonly
   return button;
 }
 
-function changePaths(change: GitRepositoryChangeDto): string[] {
+function changePaths(change: GitRepositoryChange): string[] {
   return change.originalPath ? [change.originalPath, change.path] : [change.path];
 }
 
@@ -325,7 +320,7 @@ function parseActionPaths(value: string): string[] {
   }
 }
 
-function headLabel(head: GitHeadDto): string {
+function headLabel(head: GitHead): string {
   switch (head.type) {
     case "branch": return `${head.name}${upstreamDistance(head.upstream)}`;
     case "detached": return `Detached at ${head.objectId.slice(0, 7)}`;
@@ -333,7 +328,7 @@ function headLabel(head: GitHeadDto): string {
   }
 }
 
-function headTitle(head: GitHeadDto): string {
+function headTitle(head: GitHead): string {
   switch (head.type) {
     case "branch": return head.upstream ? `${head.name} tracks ${head.upstream.name}` : head.name;
     case "detached": return `Detached HEAD ${head.objectId}`;
@@ -341,7 +336,7 @@ function headTitle(head: GitHeadDto): string {
   }
 }
 
-function upstreamDistance(upstream: Extract<GitHeadDto, { type: "branch" }>["upstream"]): string {
+function upstreamDistance(upstream: Extract<GitHead, { type: "branch" }>["upstream"]): string {
   if (!upstream) return "";
   const parts = [];
   if (upstream.ahead > 0) parts.push(`↑${upstream.ahead}`);
@@ -349,7 +344,7 @@ function upstreamDistance(upstream: Extract<GitHeadDto, { type: "branch" }>["ups
   return parts.length > 0 ? ` ${parts.join(" ")}` : "";
 }
 
-function statusCode(status: GitChangeStatusDto): string {
+function statusCode(status: GitChangeStatus): string {
   switch (status) {
     case "modified": return "M";
     case "added": return "A";
@@ -364,7 +359,7 @@ function statusCode(status: GitChangeStatusDto): string {
   }
 }
 
-function statusLabel(status: GitChangeStatusDto): string {
+function statusLabel(status: GitChangeStatus): string {
   return status.replace(/([A-Z])/g, " $1").toLowerCase();
 }
 

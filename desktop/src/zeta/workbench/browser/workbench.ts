@@ -179,6 +179,8 @@ import { TerminalProcessService } from "../../platform/terminal/browser/terminal
 import { TerminalService } from "../services/terminal/browser/terminalService.js";
 import { ITerminalService } from "../services/terminal/common/terminal.js";
 import { ITextFileService, TextFileService } from "../services/textfile/common/textFileService.js";
+import { GitService } from "../services/git/browser/gitService.js";
+import { IGitService } from "../services/git/common/gitService.js";
 
 /** Host-specific inputs required to construct a workbench. */
 export interface IStartWorkbenchOptions {
@@ -268,6 +270,8 @@ export class Workbench extends DisposableOwner {
     );
     const terminalService = this.own(new TerminalService(new TerminalProcessService(api)));
     services.set(ITerminalService, terminalService);
+    const gitService = this.own(new GitService({ api: api.git, appServerApi: api.appServer, eventApi: api.events }));
+    services.set(IGitService, gitService);
     const workbenchState = workspaceContext.getWorkbenchState();
     const workbenchWindow = this.own(new WorkbenchWindow({
       root: workbenchRoot,

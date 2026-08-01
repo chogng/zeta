@@ -1,8 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import type { GitStatusResult, ServerNotification } from "../generated/app-server/types.js";
-import type { IRendererHost } from "../src/zeta/platform/renderer/common/rendererHost.js";
+import type { GitStatus, IGitService } from "../src/zeta/workbench/services/git/common/gitService.js";
 
 test("Git contribution registers Changes, Agent Review, and Graph as ordered panes", async () => {
   const browser = new JSDOM("<!doctype html><body></body>");
@@ -28,20 +27,16 @@ test("Git contribution registers Changes, Agent Review, and Graph as ordered pan
 test("ScmGraphViewPane renders bounded repository history", async () => {
   const browser = new JSDOM("<!doctype html><body></body>");
   const installedGlobals = installDomGlobals(browser);
-  const api = {
-    git: {
-      history: async () => ({
-        commits: [
+  const gitService = {
+      history: async () => [
           { objectId: "1234567890abcdef", timestampSeconds: 1_753_000_000, subject: "Wire SCM panes" },
           { objectId: "abcdef1234567890", timestampSeconds: 1_752_900_000, subject: "Prepare graph data" },
         ],
-      }),
-    },
-  } as unknown as IRendererHost;
+  } as unknown as IGitService;
 
   try {
     const { ScmGraphViewPane } = await import("../src/zeta/workbench/contrib/scm/browser/scmGraphViewPane.js");
-    using pane = new ScmGraphViewPane({ id: "zeta.gitGraph.test", title: "Graph", ownerDocument: browser.window.document }, api);
+    using pane = new ScmGraphViewPane({ id: "zeta.gitGraph.test", title: "Graph", ownerDocument: browser.window.document }, gitService);
     browser.window.document.body.append(pane.element);
     await waitFor(() => pane.element.querySelectorAll(".zeta-scm-graph-commit").length === 2);
 
@@ -73,8 +68,8 @@ test("ScmViewPane groups App Server Git status and refreshes it", async () => {
   let requestCount = 0;
   let stagedPaths: readonly string[] | undefined;
   let committedMessage: string | undefined;
-  let notificationListener: ((event: ServerNotification) => void) | undefined;
-  const first: GitStatusResult = {
+  let statusListener: ((status: GitStatus) => void) | undefined;
+  const first: GitStatus = {
     streamInstanceId: "git-stream-1",
     revision: 1,
     workspacePath: ".",
@@ -91,53 +86,48 @@ test("ScmViewPane groups App Server Git status and refreshes it", async () => {
       { ...change("conflict.ts", "unmerged", "unmerged"), conflicted: true },
     ],
   };
-  const committedClean: GitStatusResult = {
+  const committedClean: GitStatus = {
     streamInstanceId: first.streamInstanceId,
     revision: 2,
     workspacePath: first.workspacePath,
     head: first.head,
     changes: [],
   };
-  const external: GitStatusResult = {
+  const external: GitStatus = {
     ...first,
     revision: 3,
   };
-  const clean: GitStatusResult = {
+  const clean: GitStatus = {
     ...committedClean,
     revision: 4,
   };
-  const api = {
-    git: {
+  const gitService = {
       status: async () => {
         requestCount += 1;
         return requestCount === 1 ? first : clean;
       },
-      stage: async (params: { paths: string[] }) => {
-        stagedPaths = params.paths;
-        return { status: first };
+      stage: async (paths: readonly string[]) => {
+        stagedPaths = paths;
+        return first;
       },
-      unstage: async () => ({ status: first }),
-      discardWorktree: async () => ({ status: first }),
-      commit: async (params: { message: string }) => {
-        committedMessage = params.message;
+      unstage: async () => first,
+      discardWorktree: async () => first,
+      commit: async (message: string) => {
+        committedMessage = message;
         return { objectId: "abcdef123456", status: committedClean };
       },
-      fetch: async () => ({ status: first }),
-      pull: async () => ({ status: first }),
-      push: async () => ({ status: first }),
-    },
-    events: {
-      subscribe: (listener: (event: ServerNotification) => void) => {
-        notificationListener = listener;
-        return { dispose: () => {
-          notificationListener = undefined;
-        } };
+      fetch: async () => first,
+      pull: async () => first,
+      push: async () => first,
+      onDidChangeStatus: (listener: (status: GitStatus) => void) => {
+        statusListener = listener;
+        const dispose = () => {
+          statusListener = undefined;
+        };
+        return { dispose, [Symbol.dispose]: dispose };
       },
-    },
-    appServer: {
-      onConnectionState: () => ({ dispose(): void {} }),
-    },
-  } as unknown as IRendererHost;
+      onDidBecomeReady: () => ({ dispose(): void {}, [Symbol.dispose](): void {} }),
+  } as unknown as IGitService;
 
   try {
     const { ScmViewPane } = await import("../src/zeta/workbench/contrib/scm/browser/scmViewPane.js");
@@ -145,7 +135,7 @@ test("ScmViewPane groups App Server Git status and refreshes it", async () => {
       id: "zeta.git",
       title: "Changes",
       ownerDocument: browser.window.document,
-    }, api);
+    }, gitService);
     browser.window.document.body.append(pane.element);
     await waitFor(() => pane.element.querySelector(".zeta-scm-status")?.textContent === "4 changed files");
 
@@ -176,8 +166,8 @@ test("ScmViewPane groups App Server Git status and refreshes it", async () => {
     assert.equal(committedMessage, "ship scm");
     await waitFor(() => pane.element.querySelector(".zeta-scm-status")?.textContent?.startsWith("Created commit abcdef1.") === true);
 
-    assert.ok(notificationListener);
-    notificationListener({ method: "git/statusChanged", params: { status: external } });
+    assert.ok(statusListener);
+    statusListener(external);
     await waitFor(() => pane.element.querySelector(".zeta-scm-status")?.textContent === "4 changed files");
 
     const refresh = pane.element.querySelector<HTMLButtonElement>(".zeta-scm-refresh");
@@ -196,44 +186,38 @@ test("ScmViewPane accepts a restarted Git stream and rejects its retired predece
   const browser = new JSDOM("<!doctype html><body></body>");
   const installedGlobals = installDomGlobals(browser);
   let statusRequest = 0;
-  let notificationListener: ((event: ServerNotification) => void) | undefined;
-  let connectionListener: ((state: "ready") => void) | undefined;
-  const previous: GitStatusResult = {
+  let statusListener: ((status: GitStatus) => void) | undefined;
+  let readyListener: (() => void) | undefined;
+  const previous: GitStatus = {
     streamInstanceId: "git-stream-before-restart",
     revision: 20,
     workspacePath: ".",
-    head: { type: "branch", name: "before", objectId: "1111111", upstream: null },
+    head: { type: "branch", name: "before", objectId: "1111111", upstream: undefined },
     changes: [change("before.ts", "unmodified", "modified")],
   };
-  const restarted: GitStatusResult = {
+  const restarted: GitStatus = {
     streamInstanceId: "git-stream-after-restart",
     revision: 1,
     workspacePath: ".",
-    head: { type: "branch", name: "after", objectId: "2222222", upstream: null },
+    head: { type: "branch", name: "after", objectId: "2222222", upstream: undefined },
     changes: [],
   };
-  const latePrevious: GitStatusResult = {
+  const latePrevious: GitStatus = {
     ...previous,
     revision: 21,
-    head: { type: "branch", name: "late-before", objectId: "3333333", upstream: null },
+    head: { type: "branch", name: "late-before", objectId: "3333333", upstream: undefined },
   };
-  const api = {
-    git: {
+  const gitService = {
       status: async () => statusRequest++ === 0 ? previous : restarted,
-    },
-    events: {
-      subscribe: (listener: (event: ServerNotification) => void) => {
-        notificationListener = listener;
-        return { dispose(): void {} };
+      onDidChangeStatus: (listener: (status: GitStatus) => void) => {
+        statusListener = listener;
+        return { dispose(): void {}, [Symbol.dispose](): void {} };
       },
-    },
-    appServer: {
-      onConnectionState: (listener: (state: "ready") => void) => {
-        connectionListener = listener;
-        return { dispose(): void {} };
+      onDidBecomeReady: (listener: () => void) => {
+        readyListener = listener;
+        return { dispose(): void {}, [Symbol.dispose](): void {} };
       },
-    },
-  } as unknown as IRendererHost;
+  } as unknown as IGitService;
 
   try {
     const { ScmViewPane } = await import("../src/zeta/workbench/contrib/scm/browser/scmViewPane.js");
@@ -241,17 +225,17 @@ test("ScmViewPane accepts a restarted Git stream and rejects its retired predece
       id: "zeta.git.restart",
       title: "Changes",
       ownerDocument: browser.window.document,
-    }, api);
+    }, gitService);
     browser.window.document.body.append(pane.element);
     await waitFor(() => pane.element.querySelector(".zeta-scm-branch")?.textContent === "before");
 
-    assert.ok(connectionListener);
-    connectionListener("ready");
+    assert.ok(readyListener);
+    readyListener();
     await waitFor(() => pane.element.querySelector(".zeta-scm-branch")?.textContent === "after");
     assert.equal(statusRequest, 2);
 
-    assert.ok(notificationListener);
-    notificationListener({ method: "git/statusChanged", params: { status: latePrevious } });
+    assert.ok(statusListener);
+    statusListener(latePrevious);
     await new Promise((resolve) => setTimeout(resolve, 0));
     assert.equal(pane.element.querySelector(".zeta-scm-branch")?.textContent, "after");
   } finally {
@@ -260,10 +244,10 @@ test("ScmViewPane accepts a restarted Git stream and rejects its retired predece
   }
 });
 
-function change(path: string, indexStatus: GitStatusResult["changes"][number]["indexStatus"], worktreeStatus: GitStatusResult["changes"][number]["worktreeStatus"]): GitStatusResult["changes"][number] {
+function change(path: string, indexStatus: GitStatus["changes"][number]["indexStatus"], worktreeStatus: GitStatus["changes"][number]["worktreeStatus"]): GitStatus["changes"][number] {
   return {
     path,
-    originalPath: null,
+    originalPath: undefined,
     indexStatus,
     worktreeStatus,
     conflicted: false,

@@ -1,18 +1,17 @@
 import { addDisposableListener } from "../../../../base/browser/dom.js";
-import type { GitCommitSummaryDto } from "../../../../../../generated/app-server/types.js";
-import type { IRendererHost } from "../../../../platform/renderer/common/rendererHost.js";
+import type { GitCommitSummary, IGitService } from "../../../services/git/common/gitService.js";
 import type { IViewPaneOptions } from "../../../browser/parts/views/viewPane.js";
 import { ViewPane } from "../../../browser/parts/views/viewPane.js";
 
 /** Bounded recent repository history rendered as a compact commit graph. */
 export class ScmGraphViewPane extends ViewPane {
-  private readonly api: IRendererHost;
+  private readonly gitService: IGitService;
   private readonly graphElement: HTMLDivElement;
   private disposed = false;
 
-  constructor(options: IViewPaneOptions, api: IRendererHost) {
+  constructor(options: IViewPaneOptions, gitService: IGitService) {
     super(options);
-    this.api = api;
+    this.gitService = gitService;
     this.contentElement.classList.add("zeta-scm-secondary-pane");
     this.graphElement = options.ownerDocument.createElement("div");
     this.graphElement.className = "zeta-scm-graph";
@@ -28,7 +27,7 @@ export class ScmGraphViewPane extends ViewPane {
   private async refresh(): Promise<void> {
     this.graphElement.textContent = "Loading commit graph…";
     try {
-      const { commits } = await this.api.git.history();
+      const commits = await this.gitService.history();
       if (this.disposed) return;
       this.renderCommits(commits);
     } catch (error) {
@@ -47,7 +46,7 @@ export class ScmGraphViewPane extends ViewPane {
     }
   }
 
-  private renderCommits(commits: readonly GitCommitSummaryDto[]): void {
+  private renderCommits(commits: readonly GitCommitSummary[]): void {
     if (commits.length === 0) {
       const empty = this.graphElement.ownerDocument.createElement("p");
       empty.className = "zeta-scm-empty";
@@ -61,7 +60,7 @@ export class ScmGraphViewPane extends ViewPane {
     this.graphElement.replaceChildren(list);
   }
 
-  private renderCommit(commit: GitCommitSummaryDto): HTMLLIElement {
+  private renderCommit(commit: GitCommitSummary): HTMLLIElement {
     const document = this.graphElement.ownerDocument;
     const item = document.createElement("li");
     item.className = "zeta-scm-graph-commit";
