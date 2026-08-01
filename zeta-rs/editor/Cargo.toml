@@ -14,6 +14,7 @@ path = "src/lib.rs"
 unicode-segmentation = { workspace = true }
 unicode-width = { workspace = true }
 zeta-diff = { workspace = true }
+zeta-syntax = { workspace = true }
 zeta-ui = { workspace = true }
 
 [lints]

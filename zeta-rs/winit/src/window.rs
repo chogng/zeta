@@ -81,6 +81,11 @@ impl NativeWindow {
         PhysicalExtent::new(size.width, size.height)
     }
 
+    /// Requests a new logical inner size while leaving product layout policy with the host.
+    pub fn request_inner_logical_size(&self, size: LogicalSize<f64>) {
+        let _ = self.window.request_inner_size(size);
+    }
+
     /// Returns the current logical-to-physical scale factor.
     pub fn scale_factor(&self) -> f64 {
         self.window.scale_factor()

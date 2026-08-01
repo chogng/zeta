@@ -1,9 +1,9 @@
 use std::ops::Range;
 
-use glyphon::{Attrs, Buffer, Metrics, Shaping, Wrap};
+use cosmic_text::{Attrs, Buffer, Metrics, Shaping, Wrap};
 use unicode_segmentation::UnicodeSegmentation;
 
-use crate::font::mapping::{glyphon_family, glyphon_style, glyphon_weight};
+use crate::font::mapping::{shaping_family, shaping_style, shaping_weight};
 use crate::font::new_font_system;
 use crate::{Point, Rect, Size, TextSpan, TextStyle};
 
@@ -133,7 +133,7 @@ impl TextCluster {
 /// Hosts should retain one engine for repeated layout. The engine returns logical-pixel geometry
 /// and does not own scene state, GPU resources, component identity, or input routing.
 pub struct TextLayoutEngine {
-    font_system: glyphon::FontSystem,
+    font_system: cosmic_text::FontSystem,
 }
 
 impl TextLayoutEngine {
@@ -336,9 +336,9 @@ impl Default for TextLayoutEngine {
 
 fn attrs_for_style(style: &TextStyle) -> Attrs<'_> {
     Attrs::new()
-        .family(glyphon_family(style.family()))
-        .weight(glyphon_weight(style.weight()))
-        .style(glyphon_style(style.style()))
+        .family(shaping_family(style.family()))
+        .weight(shaping_weight(style.weight()))
+        .style(shaping_style(style.style()))
         .metrics(Metrics::new(style.font_size(), style.line_height()))
 }
 

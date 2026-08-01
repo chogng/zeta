@@ -19,13 +19,15 @@ pub use action_bar::{
     ActionBarStyle,
 };
 pub use button::{Button, ButtonBackgrounds, ButtonSelection, ButtonState, ButtonStyle};
-pub use component::Component;
+pub use component::{Component, ComponentInspection};
 pub use context_menu::{ContextMenu, ContextMenuItem, ContextMenuSelection, ContextMenuStyle};
 pub use context_view::{
     ContextView, ContextViewAnchorAlignment, ContextViewAnchorAxis, ContextViewAnchorPosition,
     ContextViewLayout, ContextViewPlacement, ContextViewStyle,
 };
-pub use dropdown::{Dropdown, DropdownItem, DropdownSelection, DropdownStyle};
+pub use dropdown::{
+    Dropdown, DropdownItem, DropdownScrollConfiguration, DropdownSelection, DropdownStyle,
+};
 pub use icon_label::{IconLabel, IconLabelStyle};
 pub use input_box::{InputBox, InputBoxState, InputBoxStateColors, InputBoxStyle};
 pub use keycap::{Keycap, KeycapSequence, KeycapStyle};

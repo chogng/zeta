@@ -22,7 +22,6 @@ import type {
 import type {
   IKeybindingService,
 } from "../src/zeta/platform/keybinding/common/keybinding.js";
-import { type ISyntaxAnalysisService } from "../src/zeta/platform/syntax/common/syntaxAnalysisService.js";
 import type {
   EditorInput,
 } from "../src/zeta/workbench/browser/parts/editor/editorInput.js";
@@ -117,7 +116,7 @@ test("editor registry resolves defaults and explicit Open With choices", () => {
   assert.throws(() => registry.resolve(markdown), /No editor can open/);
 });
 
-test("EditorPart passes Workbench syntax-analysis and text-file services to pane factories", async () => {
+test("EditorPart passes the Workbench text-file service to pane factories", async () => {
   const dom = new JSDOM("<!doctype html><body></body>");
   const registry = new EditorPaneRegistry();
   const textFileService = {
@@ -125,28 +124,23 @@ test("EditorPart passes Workbench syntax-analysis and text-file services to pane
       throw new Error("not used");
     },
   };
-  const syntaxAnalysisService = {} as ISyntaxAnalysisService;
-  let observedSyntaxAnalysisService: unknown;
   let observedTextFileService: unknown;
   registry.register({
     id: "zeta.editor.text-service-test",
     name: "Text Service Test",
     canOpen: () => EditorPaneMatch.Default,
     create: options => {
-      observedSyntaxAnalysisService = options.syntaxAnalysisService;
       observedTextFileService = options.textFileService;
       return new TestEditorPane("zeta.editor.text-service-test");
     },
   });
   const editor = new EditorPart(dom.window.document, {
     registry,
-    syntaxAnalysisService,
     textFileService,
   });
 
   await editor.openEditor(input("C:\\project\\main.ts"));
 
-  assert.equal(observedSyntaxAnalysisService, syntaxAnalysisService);
   assert.equal(observedTextFileService, textFileService);
   editor.dispose();
   dom.window.close();

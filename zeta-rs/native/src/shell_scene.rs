@@ -1,9 +1,9 @@
 use zeta_keybinding::{KeyboardShortcuts, paint_chord_hint};
 use zeta_terminal::{GridSize, ScreenBuffer, TerminalColor, TerminalCore, TerminalMousePosition};
 use zeta_ui::{
-    Border, CaretVisibility, Color, CornerRadii, FontFamily, FontWeight, PaintRect, Rect, Sash,
-    SashOrientation, SashState, SashStyle, ScrollbarPresentation, TextBlock, TextInputLayoutEngine,
-    TextStyle, UiScene,
+    Border, CaretVisibility, Color, CornerRadii, FontFamily, FontWeight, InspectionNode, PaintRect,
+    Rect, Sash, SashOrientation, SashState, SashStyle, ScrollMetrics, ScrollbarPresentation,
+    TextBlock, TextInputLayoutEngine, TextStyle, UiScene,
 };
 
 use crate::PRODUCT_DISPLAY_NAME;
@@ -172,6 +172,7 @@ pub(crate) struct ShellPresentation {
     pub(crate) interaction_frame: InteractionFrame,
     pub(crate) accessibility_nodes: Vec<AccessibilityNode>,
     pub(crate) ime_cursor_area: Option<Rect>,
+    pub(crate) workspace_path_picker_scroll_metrics: Option<ScrollMetrics>,
 }
 
 #[derive(Clone, Copy)]
@@ -255,6 +256,7 @@ pub(crate) fn build_shell_presentation(
             accessibility_nodes: interaction_frame.accessibility_nodes(model.dispatch),
             interaction_frame,
             ime_cursor_area: None,
+            workspace_path_picker_scroll_metrics: None,
         };
     };
 
@@ -347,6 +349,7 @@ pub(crate) fn build_shell_presentation(
     } else {
         composer_caret
     };
+    let mut workspace_path_picker_scroll_metrics = None;
     if let Some(bounds) = layout.session_sidebar_sash_track {
         draw_session_sidebar_sash(
             &mut scene,
@@ -374,6 +377,7 @@ pub(crate) fn build_shell_presentation(
         text_layout,
         model.dispatch,
     ) {
+        workspace_path_picker_scroll_metrics = path_picker.scroll_metrics();
         if model
             .dispatch
             .is_focused(crate::workspace_path_picker::WORKSPACE_PATH_SEARCH_INPUT)
@@ -429,6 +433,7 @@ pub(crate) fn build_shell_presentation(
         interaction_frame,
         accessibility_nodes,
         ime_cursor_area,
+        workspace_path_picker_scroll_metrics,
     }
 }
 
@@ -532,57 +537,59 @@ fn draw_session_sidebar(
     text_layout: &mut TextInputLayoutEngine,
     palette: ShellPalette,
 ) -> Option<Rect> {
-    scene.draw_rect(
-        PaintRect::new(bounds, palette.surface_raised).with_border(Border::new(
-            zeta_ui::Edges::new(0.0, 1.0, 0.0, 0.0),
-            palette.border,
-        )),
-    );
-    interaction_frame.register(
-        UiNode::new(
-            SESSION_SIDEBAR,
-            bounds,
-            AccessibilityRole::Group,
-            "Sessions sidebar",
-        )
-        .with_parent(WINDOW),
-    );
-    let toolbar = SessionSidebarToolbar::new(
-        bounds,
-        view.search.input(),
-        view.caret_visibility,
-        palette,
-        text_layout,
-        view.dispatch,
-    );
-    toolbar.register_interactions(interaction_frame);
-    scene.draw_component(&toolbar);
-    let tabs = view
-        .search
-        .matches_session_name(view.title)
-        .then(|| {
-            SessionTab::new(
-                ACTIVE_SESSION_TAB,
-                view.title,
-                view.context.working_directory_label(),
-                "Active",
+    scene.with_inspection_node(InspectionNode::new("SessionSidebar", bounds), |scene| {
+        scene.draw_rect(
+            PaintRect::new(bounds, palette.surface_raised).with_border(Border::new(
+                zeta_ui::Edges::new(0.0, 1.0, 0.0, 0.0),
+                palette.border,
+            )),
+        );
+        interaction_frame.register(
+            UiNode::new(
+                SESSION_SIDEBAR,
+                bounds,
+                AccessibilityRole::Group,
+                "Sessions sidebar",
             )
-        })
-        .into_iter()
-        .collect::<Vec<_>>();
-    let tab_list = SessionTabList::new(
-        SessionSidebarToolbar::content_bounds(bounds),
-        &tabs,
-        ACTIVE_SESSION_TAB,
-        palette,
-        view.dispatch,
-    );
-    tab_list.register_interactions(interaction_frame);
-    scene.draw_component(&tab_list);
-    view.dispatch
-        .is_focused(SESSION_SEARCH_INPUT)
-        .then_some(toolbar.search_caret_bounds())
-        .flatten()
+            .with_parent(WINDOW),
+        );
+        let toolbar = SessionSidebarToolbar::new(
+            bounds,
+            view.search.input(),
+            view.caret_visibility,
+            palette,
+            text_layout,
+            view.dispatch,
+        );
+        toolbar.register_interactions(interaction_frame);
+        scene.draw_component(&toolbar);
+        let tabs = view
+            .search
+            .matches_session_name(view.title)
+            .then(|| {
+                SessionTab::new(
+                    ACTIVE_SESSION_TAB,
+                    view.title,
+                    view.context.working_directory_label(),
+                    "Active",
+                )
+            })
+            .into_iter()
+            .collect::<Vec<_>>();
+        let tab_list = SessionTabList::new(
+            SessionSidebarToolbar::content_bounds(bounds),
+            &tabs,
+            ACTIVE_SESSION_TAB,
+            palette,
+            view.dispatch,
+        );
+        tab_list.register_interactions(interaction_frame);
+        scene.draw_component(&tab_list);
+        view.dispatch
+            .is_focused(SESSION_SEARCH_INPUT)
+            .then_some(toolbar.search_caret_bounds())
+            .flatten()
+    })
 }
 
 fn draw_session_sidebar_sash(

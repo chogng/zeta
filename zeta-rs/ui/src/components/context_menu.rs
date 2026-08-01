@@ -1,6 +1,6 @@
 use crate::{
-    BoxShadow, Color, Component, ContextView, ContextViewPlacement, ContextViewStyle, CornerRadii,
-    PaintRect, Point, Rect, Size, UiScene,
+    BoxShadow, Color, Component, ComponentInspection, ContextView, ContextViewPlacement,
+    ContextViewStyle, CornerRadii, Edges, InspectionNode, PaintRect, Point, Rect, Size, UiScene,
 };
 
 use super::{
@@ -229,7 +229,12 @@ impl ContextMenu {
         scene: &mut UiScene,
         paint_header: impl FnOnce(&mut UiScene, Rect),
     ) {
-        self.paint_contents(scene, paint_header);
+        scene.with_inspection_node(
+            InspectionNode::new("ContextMenu", self.surface_bounds)
+                .with_padding(Edges::uniform(MENU_PADDING))
+                .with_corner_radii(CornerRadii::uniform(MENU_CORNER_RADIUS)),
+            |scene| self.paint_contents(scene, paint_header),
+        );
     }
 
     fn paint_contents(&self, scene: &mut UiScene, paint_header: impl FnOnce(&mut UiScene, Rect)) {
@@ -257,12 +262,18 @@ impl ContextMenu {
                 if let Some(header_bounds) = self.header_bounds {
                     paint_header(scene, header_bounds);
                 }
-                action_bar.paint(scene);
+                scene.draw_component(&action_bar);
             });
     }
 }
 
 impl Component for ContextMenu {
+    fn inspection(&self) -> ComponentInspection {
+        ComponentInspection::new("ContextMenu", self.surface_bounds)
+            .with_padding(Edges::uniform(MENU_PADDING))
+            .with_corner_radii(CornerRadii::uniform(MENU_CORNER_RADIUS))
+    }
+
     fn paint(&self, scene: &mut UiScene) {
         self.paint_contents(scene, |_scene, _bounds| {});
     }

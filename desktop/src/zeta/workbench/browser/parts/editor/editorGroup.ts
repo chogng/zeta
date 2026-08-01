@@ -1,7 +1,6 @@
 import { addDisposableListener } from "../../../../base/browser/dom.js";
 import { Dimension, type IDimension } from "../../../../base/browser/geometry.js";
 import { DisposableOwner, setDisposableOwner } from "../../../../base/common/lifecycle.js";
-import { type ISyntaxAnalysisService } from "../../../../platform/syntax/common/syntaxAnalysisService.js";
 import type { IKeybindingService } from "../../../../platform/keybinding/common/keybinding.js";
 import type { IConfigurationService } from "../../../../platform/configuration/common/configuration.js";
 import { type ITextFileService } from "../../../services/textfile/common/textFileService.js";
@@ -36,7 +35,6 @@ export interface EditorGroupOptions {
   readonly registry: EditorPaneRegistry;
   readonly configurationService?: IConfigurationService;
   readonly keybindingService?: IKeybindingService;
-  readonly syntaxAnalysisService?: ISyntaxAnalysisService;
   readonly textFileService?: ITextFileService;
   readonly titleActions?: EditorTitleActions;
   readonly onDidActivate?: () => void;
@@ -58,7 +56,6 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
   private readonly contentElement: HTMLDivElement;
   private readonly registry: EditorPaneRegistry;
   private readonly configurationService: IConfigurationService | undefined;
-  private readonly syntaxAnalysisService: ISyntaxAnalysisService | undefined;
   private readonly textFileService: ITextFileService | undefined;
   private readonly titleControl: EditorTitleControl;
   private readonly watermarkElement: HTMLElement;
@@ -73,7 +70,6 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
     super();
     this.registry = options.registry;
     this.configurationService = options.configurationService;
-    this.syntaxAnalysisService = options.syntaxAnalysisService;
     this.textFileService = options.textFileService;
     this.element = options.ownerDocument.createElement("section");
     this.element.className = "zeta-editor-group";
@@ -147,7 +143,6 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
     const pane = descriptor.create({
       ownerDocument: this.element.ownerDocument,
       configurationService: this.configurationService,
-      syntaxAnalysisService: this.syntaxAnalysisService,
       textFileService: this.textFileService,
     });
     if (pane.id !== descriptor.id) {

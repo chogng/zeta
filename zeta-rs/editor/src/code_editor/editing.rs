@@ -226,8 +226,8 @@ impl CodeEditorDocument {
 
     fn after_edit(&mut self) {
         self.preferred_column = None;
-        self.syntax.clear();
         self.reindex_lines();
+        self.refresh_syntax();
     }
 
     fn move_cursor(&mut self, cursor: usize, mode: CodeEditorSelectionMode) {

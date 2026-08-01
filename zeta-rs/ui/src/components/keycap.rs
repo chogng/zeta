@@ -1,6 +1,6 @@
 use crate::{
-    Color, Component, CornerRadii, FontFamily, PaintRect, Point, Rect, Size, TextBlock, TextStyle,
-    UiScene,
+    Color, Component, ComponentInspection, CornerRadii, Edges, FontFamily, PaintRect, Point, Rect,
+    Size, TextBlock, TextStyle, UiScene,
 };
 
 /// Geometry and colors shared by standalone keycaps and keybinding sequences.
@@ -103,6 +103,17 @@ impl Keycap {
 }
 
 impl Component for Keycap {
+    fn inspection(&self) -> ComponentInspection {
+        ComponentInspection::new("Keycap", self.bounds)
+            .with_padding(Edges::new(
+                0.0,
+                self.style.horizontal_padding,
+                0.0,
+                self.style.horizontal_padding,
+            ))
+            .with_corner_radii(self.style.corner_radii)
+    }
+
     fn paint(&self, scene: &mut UiScene) {
         scene.draw_rect(
             PaintRect::new(self.bounds, self.style.background)
@@ -174,9 +185,13 @@ impl KeycapSequence {
 }
 
 impl Component for KeycapSequence {
+    fn inspection(&self) -> ComponentInspection {
+        ComponentInspection::new("KeycapSequence", self.bounds)
+    }
+
     fn paint(&self, scene: &mut UiScene) {
         for keycap in &self.keycaps {
-            keycap.paint(scene);
+            scene.draw_component(keycap);
         }
     }
 }

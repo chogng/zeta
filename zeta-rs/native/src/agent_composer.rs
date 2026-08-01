@@ -1,9 +1,11 @@
 use std::path::{Path, PathBuf};
 
-use zeta_editor::{CodeEditorCommand, CodeEditorSelectionMode, CodeEditorStyle};
+use zeta_editor::{
+    CodeEditorCommand, CodeEditorLanguage, CodeEditorSelectionMode, CodeEditorStyle,
+};
 use zeta_ui::{Point, Rect, TextInputCompositionEvent};
 
-use crate::composer_editor::{ComposerEditor, ComposerEditorSyntax};
+use crate::composer_editor::ComposerEditor;
 use crate::composer_shell::ComposerShellDetector;
 
 /// Explicit submission mode for the shared Agent Console composer.
@@ -69,7 +71,7 @@ impl AgentComposer {
         self.mode_selection = ComposerModeSelection::Explicit;
         self.editor.cancel_composition();
         self.leave_shell_history();
-        self.refresh_editor_syntax();
+        self.refresh_editor_language();
     }
 
     pub(crate) fn toggle_mode(&mut self) {
@@ -147,7 +149,7 @@ impl AgentComposer {
         if self.mode_selection == ComposerModeSelection::Automatic {
             self.mode = ComposerMode::Agent;
         }
-        self.refresh_editor_syntax();
+        self.refresh_editor_language();
         self.leave_shell_history();
     }
 
@@ -174,7 +176,7 @@ impl AgentComposer {
         };
         self.shell_history_index = Some(index);
         self.editor.set_text(self.shell_history[index].clone());
-        self.refresh_editor_syntax();
+        self.refresh_editor_language();
         true
     }
 
@@ -186,12 +188,12 @@ impl AgentComposer {
             let next = index + 1;
             self.shell_history_index = Some(next);
             self.editor.set_text(self.shell_history[next].clone());
-            self.refresh_editor_syntax();
+            self.refresh_editor_language();
         } else {
             let draft = self.shell_history_draft.take().unwrap_or_default();
             self.shell_history_index = None;
             self.editor.set_text(draft);
-            self.refresh_editor_syntax();
+            self.refresh_editor_language();
         }
         true
     }
@@ -204,13 +206,13 @@ impl AgentComposer {
                 ComposerMode::Agent
             };
         }
-        self.refresh_editor_syntax();
+        self.refresh_editor_language();
     }
 
-    fn refresh_editor_syntax(&mut self) {
-        self.editor.set_syntax(match self.mode {
-            ComposerMode::Agent => ComposerEditorSyntax::PlainText,
-            ComposerMode::Shell => ComposerEditorSyntax::Shell,
+    fn refresh_editor_language(&mut self) {
+        self.editor.set_language(match self.mode {
+            ComposerMode::Agent => CodeEditorLanguage::PlainText,
+            ComposerMode::Shell => CodeEditorLanguage::Shell,
         });
     }
 

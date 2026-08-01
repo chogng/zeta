@@ -7,7 +7,6 @@ import type {
 import type {
   IConfigurationService,
 } from "../../../../platform/configuration/common/configuration.js";
-import { type ISyntaxAnalysisService } from "../../../../platform/syntax/common/syntaxAnalysisService.js";
 import { type ITextFileService } from "../../../services/textfile/common/textFileService.js";
 import type { EditorInput } from "./editorInput.js";
 
@@ -38,7 +37,6 @@ export interface IEditorPane extends IDisposable {
 export interface EditorPaneCreationOptions {
   readonly ownerDocument: Document;
   readonly configurationService?: IConfigurationService;
-  readonly syntaxAnalysisService?: ISyntaxAnalysisService;
   readonly textFileService?: ITextFileService;
 }
 

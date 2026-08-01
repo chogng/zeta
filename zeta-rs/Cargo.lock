@@ -7792,7 +7792,6 @@ dependencies = [
  "zeta-shell-command",
  "zeta-skills",
  "zeta-slash-commands",
- "zeta-syntax",
  "zeta-tools",
  "zeta-typst",
  "zeta-utils-pty",
@@ -7935,6 +7934,7 @@ dependencies = [
  "unicode-segmentation",
  "unicode-width 0.2.0",
  "zeta-diff",
+ "zeta-syntax",
  "zeta-ui",
 ]
 
@@ -8151,8 +8151,8 @@ dependencies = [
  "zeta-icons",
  "zeta-keybinding",
  "zeta-protocol",
+ "zeta-renderer",
  "zeta-slash-commands",
- "zeta-syntax",
  "zeta-terminal",
  "zeta-theme",
  "zeta-ui",
@@ -8198,6 +8198,14 @@ dependencies = [
  "serde",
  "serde_json",
  "ts-rs",
+]
+
+[[package]]
+name = "zeta-renderer"
+version = "0.1.0"
+dependencies = [
+ "thiserror 2.0.19",
+ "zeta-ui",
 ]
 
 [[package]]
@@ -8394,14 +8402,11 @@ dependencies = [
 name = "zeta-ui"
 version = "0.1.0"
 dependencies = [
- "bytemuck",
  "coretext-rs",
- "glyphon",
- "resvg",
+ "cosmic-text",
  "sys-locale",
  "thiserror 2.0.19",
  "unicode-segmentation",
- "wgpu",
  "zeta-icons",
 ]
 
@@ -8457,9 +8462,14 @@ dependencies = [
 name = "zeta-wgpu"
 version = "0.1.0"
 dependencies = [
+ "bytemuck",
+ "glyphon",
  "pollster",
+ "resvg",
  "thiserror 2.0.19",
  "wgpu",
+ "zeta-icons",
+ "zeta-renderer",
  "zeta-ui",
  "zeta-winit",
 ]

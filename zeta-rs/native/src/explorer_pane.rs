@@ -1,7 +1,7 @@
 use zeta_icons::icons;
 use zeta_ui::{
-    Component, ListView, PaintIcon, PaintRect, Rect, TextBlock, TextStyle, TreeItemExpansion,
-    TreeItemLayout, TreeView, TreeViewStyle, UiScene,
+    Component, ComponentInspection, ListView, PaintIcon, PaintRect, Rect, TextBlock, TextStyle,
+    TreeItemExpansion, TreeItemLayout, TreeView, TreeViewStyle, UiScene,
 };
 use zeta_ui_dispatch::{
     AccessibilityExpansion, AccessibilityRole, CursorFeedback, FocusBehavior, InteractionFrame,
@@ -149,6 +149,10 @@ impl<'a> ExplorerPane<'a> {
 }
 
 impl Component for ExplorerPane<'_> {
+    fn inspection(&self) -> ComponentInspection {
+        ComponentInspection::new("ExplorerPane", self.bounds)
+    }
+
     fn paint(&self, scene: &mut UiScene) {
         scene.draw_rect(PaintRect::new(self.bounds, self.palette.surface));
         if self.workspace.file_list_item_count() == 0 {

@@ -1,18 +1,21 @@
 use std::time::Instant;
 
-use zeta_ui::Point;
+use zeta_ui::{Point, ScrollCommand, ScrollDelta};
 use zeta_ui_dispatch::{
     DispatchInvalidation, DispatchOutcome, ElementId, FocusDirection, InteractionFrame,
     NavigationAxis, UiDispatch,
 };
-use zeta_winit::{ElementState, Key, KeyEvent, MouseButton, NamedKey};
+use zeta_winit::{ElementState, Key, KeyEvent, MouseButton, MouseScrollDelta, NamedKey};
 
 use crate::NativeApp;
 use crate::shell_interaction::CONTEXT_WORKING_DIRECTORY;
 use crate::terminal_selection::{read_clipboard_text, write_clipboard_text};
 use crate::workspace_path_picker::{
-    WORKSPACE_PATH_SEARCH_INPUT, WorkspacePathPickerActivation, WorkspacePathPickerState,
+    PICKER_ITEM_HEIGHT, WORKSPACE_PATH_SEARCH_INPUT, WorkspacePathPickerActivation,
+    WorkspacePathPickerState,
 };
+
+const PICKER_ROWS_PER_WHEEL_STEP: f32 = 3.0;
 
 impl NativeApp {
     pub(super) fn toggle_workspace_path_picker(&mut self) {
@@ -34,6 +37,7 @@ impl NativeApp {
         if let Err(error) = self.workspace_path_picker.open(
             anchor,
             self.workspace_context.working_directory(),
+            self.workspace_context.git_repository_root(),
             restore_focus,
         ) {
             eprintln!("could not open workspace path picker: {error}");
@@ -146,6 +150,27 @@ impl NativeApp {
         true
     }
 
+    pub(super) fn route_workspace_path_picker_wheel(&mut self, delta: MouseScrollDelta) -> bool {
+        if !self.workspace_path_picker.is_open() {
+            return false;
+        }
+        let Some(metrics) = self
+            .presentation
+            .as_ref()
+            .and_then(|presentation| presentation.workspace_path_picker_scroll_metrics)
+        else {
+            return true;
+        };
+        if self
+            .workspace_path_picker
+            .apply_scroll(workspace_path_picker_scroll_command(delta), metrics)
+        {
+            self.rebuild_presentation();
+            self.request_redraw();
+        }
+        true
+    }
+
     pub(super) fn route_workspace_path_picker_keyboard(&mut self, event: &KeyEvent) -> bool {
         if !self.workspace_path_picker.is_open() {
             return false;
@@ -165,7 +190,7 @@ impl NativeApp {
                         FocusDirection::Next,
                         NavigationAxis::Vertical,
                     );
-                    self.apply_dispatch_outcome(outcome);
+                    self.apply_workspace_path_picker_navigation(outcome);
                 }
                 Key::Named(NamedKey::ArrowUp) => {
                     let outcome = self.ui_dispatch.focus_within_group(
@@ -173,7 +198,7 @@ impl NativeApp {
                         FocusDirection::Previous,
                         NavigationAxis::Vertical,
                     );
-                    self.apply_dispatch_outcome(outcome);
+                    self.apply_workspace_path_picker_navigation(outcome);
                 }
                 Key::Named(NamedKey::Tab) => {
                     let direction = if self.modifiers.shift_key() {
@@ -186,7 +211,7 @@ impl NativeApp {
                         direction,
                         NavigationAxis::Vertical,
                     );
-                    self.apply_dispatch_outcome(outcome);
+                    self.apply_workspace_path_picker_navigation(outcome);
                 }
                 Key::Named(NamedKey::Enter) => {
                     if let Some(id) = self.workspace_path_picker.first_action_id() {
@@ -254,7 +279,7 @@ impl NativeApp {
             Key::Character(text) if text == " " => self.ui_dispatch.activate_focused(frame),
             _ => Default::default(),
         };
-        self.apply_dispatch_outcome(outcome);
+        self.apply_workspace_path_picker_navigation(outcome);
         true
     }
 
@@ -306,10 +331,45 @@ impl NativeApp {
         self.sync_input_focus();
         self.request_redraw();
     }
+
+    fn apply_workspace_path_picker_navigation(&mut self, outcome: DispatchOutcome) {
+        self.apply_dispatch_outcome(outcome);
+        let Some(index) = self
+            .ui_dispatch
+            .focused()
+            .and_then(|id| self.workspace_path_picker.item_index(id))
+        else {
+            return;
+        };
+        let Some(metrics) = self
+            .presentation
+            .as_ref()
+            .and_then(|presentation| presentation.workspace_path_picker_scroll_metrics)
+        else {
+            return;
+        };
+        if self
+            .workspace_path_picker
+            .ensure_item_visible(index, metrics)
+        {
+            self.rebuild_presentation();
+            self.request_redraw();
+        }
+    }
 }
 
 fn is_shortcut(modifiers: zeta_winit::ModifiersState) -> bool {
     modifiers.control_key() || modifiers.super_key()
+}
+
+fn workspace_path_picker_scroll_command(delta: MouseScrollDelta) -> ScrollCommand {
+    let pixels = match delta {
+        MouseScrollDelta::LineDelta(_, vertical) => {
+            vertical * PICKER_ROWS_PER_WHEEL_STEP * PICKER_ITEM_HEIGHT
+        }
+        MouseScrollDelta::PixelDelta(position) => position.y as f32,
+    };
+    ScrollCommand::ByPixels(ScrollDelta::vertical(-pixels))
 }
 
 fn update_workspace_path_picker_pointer(

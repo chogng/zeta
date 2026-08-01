@@ -1,8 +1,7 @@
-use super::{linear_color, prepare_instances, validate_paint_rect};
-use crate::{
-    Border, BoxShadow, Color, CornerRadii, Edges, PaintRect, Point, Rect, UiRenderError, UiScene,
-    UiViewport,
-};
+use super::{instance_range, linear_color, prepare_instances, validate_paint_rect};
+use zeta_ui::{Border, BoxShadow, Color, CornerRadii, Edges, PaintRect, Point, Rect, UiScene};
+
+use super::{UiRenderError, UiViewport};
 
 #[test]
 fn prepares_logical_rect_in_physical_pixels() {
@@ -68,7 +67,7 @@ fn prepares_soft_shadow_before_its_source_rect() {
 }
 
 #[test]
-fn groups_rect_instances_into_scene_layer_ranges() {
+fn maps_scene_primitives_to_backend_instance_ranges() {
     let mut scene = UiScene::new(Color::TRANSPARENT);
     scene.draw_rect(PaintRect::new(
         Rect::from_xywh(0.0, 0.0, 20.0, 20.0),
@@ -84,7 +83,16 @@ fn groups_rect_instances_into_scene_layer_ranges() {
     let prepared = prepare_instances(&scene, UiViewport::new(100, 100, 1.0)).unwrap();
 
     assert_eq!(prepared.instances.len(), 2);
-    assert_eq!(prepared.layer_ranges, [0..1, 1..2]);
+    assert_eq!(prepared.primitive_ranges, [0..1, 1..2]);
+}
+
+#[test]
+fn batch_range_includes_multi_instance_primitives_and_skips_empty_ones() {
+    let primitive_ranges = [0..2, 2..2, 2..3];
+
+    assert_eq!(instance_range(&primitive_ranges, 0..3), Some(0..3));
+    assert_eq!(instance_range(&primitive_ranges, 1..2), Some(2..2));
+    assert_eq!(instance_range(&primitive_ranges, 2..2), None);
 }
 
 #[test]

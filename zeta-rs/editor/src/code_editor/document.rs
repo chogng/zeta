@@ -1,12 +1,13 @@
 //! Owned text snapshot used by the ordinary CodeEditor projection.
 
-use std::ops::Range;
+use std::{fmt, ops::Range};
 
 use zeta_ui::TextInputCompositionCursor;
 
+use super::analysis::CodeEditorAnalysis;
 use super::{
-    CodeEditorComposition, CodeEditorPosition, CodeEditorRow, CodeEditorRowSource,
-    CodeEditorSelection, CodeEditorSyntaxHighlighter, CodeEditorSyntaxToken,
+    CodeEditorComposition, CodeEditorLanguage, CodeEditorPosition, CodeEditorRow,
+    CodeEditorRowSource, CodeEditorSelection, CodeEditorSyntaxToken,
 };
 
 pub(super) const HISTORY_LIMIT: usize = 100;
@@ -25,7 +26,6 @@ pub(super) struct DocumentSnapshot {
 }
 
 /// Owned text snapshot projected as numbered CodeEditor rows.
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct CodeEditorDocument {
     pub(super) text: String,
     pub(super) line_ranges: Vec<Range<usize>>,
@@ -35,11 +35,70 @@ pub struct CodeEditorDocument {
     pub(super) composition: Option<Composition>,
     pub(super) undo: Vec<DocumentSnapshot>,
     pub(super) redo: Vec<DocumentSnapshot>,
-    pub(super) syntax: Vec<Vec<CodeEditorSyntaxToken>>,
+    pub(super) syntax_tokens: Vec<Vec<CodeEditorSyntaxToken>>,
+    pub(super) analysis: CodeEditorAnalysis,
+}
+
+impl Clone for CodeEditorDocument {
+    fn clone(&self) -> Self {
+        let mut clone = Self::from_text_with_language(&self.text, self.language());
+        clone.anchor = self.anchor;
+        clone.cursor = self.cursor;
+        clone.preferred_column = self.preferred_column;
+        clone.composition = self.composition.clone();
+        clone.undo = self.undo.clone();
+        clone.redo = self.redo.clone();
+        clone
+    }
+}
+
+impl fmt::Debug for CodeEditorDocument {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("CodeEditorDocument")
+            .field("text", &self.text)
+            .field("line_ranges", &self.line_ranges)
+            .field("anchor", &self.anchor)
+            .field("cursor", &self.cursor)
+            .field("preferred_column", &self.preferred_column)
+            .field("composition", &self.composition)
+            .field("undo", &self.undo)
+            .field("redo", &self.redo)
+            .field("syntax_tokens", &self.syntax_tokens)
+            .field("language", &self.language())
+            .finish()
+    }
+}
+
+impl PartialEq for CodeEditorDocument {
+    fn eq(&self, other: &Self) -> bool {
+        self.text == other.text
+            && self.line_ranges == other.line_ranges
+            && self.anchor == other.anchor
+            && self.cursor == other.cursor
+            && self.preferred_column == other.preferred_column
+            && self.composition == other.composition
+            && self.undo == other.undo
+            && self.redo == other.redo
+            && self.syntax_tokens == other.syntax_tokens
+            && self.language() == other.language()
+    }
+}
+
+impl Eq for CodeEditorDocument {}
+
+impl Default for CodeEditorDocument {
+    fn default() -> Self {
+        Self::from_text("")
+    }
 }
 
 impl CodeEditorDocument {
     pub fn from_text(text: impl Into<String>) -> Self {
+        Self::from_text_with_language(text, CodeEditorLanguage::PlainText)
+    }
+
+    pub fn from_text_with_language(text: impl Into<String>, language: CodeEditorLanguage) -> Self {
         let mut document = Self {
             text: text.into(),
             line_ranges: Vec::new(),
@@ -49,9 +108,12 @@ impl CodeEditorDocument {
             composition: None,
             undo: Vec::new(),
             redo: Vec::new(),
-            syntax: Vec::new(),
+            syntax_tokens: Vec::new(),
+            analysis: CodeEditorAnalysis::default(),
         };
+        document.analysis.set_language(language);
         document.reindex_lines();
+        document.refresh_syntax();
         document
     }
 
@@ -63,8 +125,8 @@ impl CodeEditorDocument {
         self.composition = None;
         self.undo.clear();
         self.redo.clear();
-        self.syntax.clear();
         self.reindex_lines();
+        self.refresh_syntax();
     }
 
     pub fn text(&self) -> &str {
@@ -100,20 +162,13 @@ impl CodeEditorDocument {
         self.preferred_column = None;
     }
 
-    pub fn apply_syntax(&mut self, highlighter: &dyn CodeEditorSyntaxHighlighter) {
-        self.syntax = self
-            .line_ranges
-            .iter()
-            .enumerate()
-            .map(|(index, range)| {
-                let text = &self.text[range.clone()];
-                highlighter
-                    .highlight_line(index + 1, text)
-                    .into_iter()
-                    .filter(|token| valid_token(text, token))
-                    .collect()
-            })
-            .collect();
+    pub const fn language(&self) -> CodeEditorLanguage {
+        self.analysis.language()
+    }
+
+    pub fn set_language(&mut self, language: CodeEditorLanguage) {
+        self.analysis.set_language(language);
+        self.refresh_syntax();
     }
 
     pub(super) fn reindex_lines(&mut self) {
@@ -167,8 +222,8 @@ impl CodeEditorDocument {
         self.cursor = snapshot.cursor;
         self.preferred_column = None;
         self.composition = None;
-        self.syntax.clear();
         self.reindex_lines();
+        self.refresh_syntax();
     }
 
     pub(super) fn current_line_range(&self) -> Range<usize> {
@@ -222,7 +277,7 @@ impl CodeEditorRowSource for CodeEditorDocument {
 
     fn row(&self, index: usize) -> Option<CodeEditorRow<'_>> {
         let range = self.line_ranges.get(index)?.clone();
-        let syntax = self.syntax.get(index).cloned().unwrap_or_default();
+        let syntax = self.syntax_tokens.get(index).cloned().unwrap_or_default();
         Some(CodeEditorRow::new(index + 1, &self.text[range]).with_syntax_tokens(syntax))
     }
 
@@ -248,9 +303,15 @@ impl CodeEditorRowSource for CodeEditorDocument {
     }
 }
 
-fn valid_token(text: &str, token: &CodeEditorSyntaxToken) -> bool {
-    token.range.start < token.range.end
-        && token.range.end <= text.len()
-        && text.is_char_boundary(token.range.start)
-        && text.is_char_boundary(token.range.end)
+impl CodeEditorDocument {
+    pub(super) fn refresh_syntax(&mut self) {
+        self.syntax_tokens = self.analysis.synchronize(&self.text, &self.line_ranges);
+    }
+
+    pub(crate) fn syntax_tokens_for_row(&self, row_index: usize) -> &[CodeEditorSyntaxToken] {
+        self.syntax_tokens
+            .get(row_index)
+            .map(Vec::as_slice)
+            .unwrap_or_default()
+    }
 }

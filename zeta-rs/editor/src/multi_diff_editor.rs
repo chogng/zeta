@@ -2,16 +2,16 @@
 
 use std::cell::OnceCell;
 
-use zeta_diff::DiffDocument;
 use zeta_ui::{
-    Border, Color, Component, CornerRadii, Edges, FontFamily, FontWeight, ListContentPadding,
-    PaintRect, Point, Rect, ScrollAxis, ScrollMetrics, ScrollState, ScrollView, ScrollViewStyle,
-    ScrollbarPresentation, ScrollbarStyle, TextBlock, TextStyle, UiScene, VirtualListLayout,
+    Border, Color, Component, ComponentInspection, CornerRadii, Edges, FontFamily, FontWeight,
+    ListContentPadding, PaintRect, Point, Rect, ScrollAxis, ScrollMetrics, ScrollState, ScrollView,
+    ScrollViewStyle, ScrollbarPresentation, ScrollbarStyle, TextBlock, TextStyle, UiScene,
+    VirtualListLayout,
 };
 
 use crate::{
-    DiffEditor, DiffEditorFoldState, DiffEditorLabels, DiffEditorPresentation, DiffEditorState,
-    DiffEditorStyle,
+    DiffEditor, DiffEditorDocument, DiffEditorFoldState, DiffEditorLabels, DiffEditorPresentation,
+    DiffEditorState, DiffEditorStyle,
 };
 
 const DEFAULT_SECTION_GAP: f32 = 8.0;
@@ -29,7 +29,7 @@ const CARD_CORNER_RADIUS: f32 = 6.0;
 #[derive(Clone)]
 pub struct MultiDiffEditorItem<'a> {
     file_name: &'a str,
-    document: &'a DiffDocument,
+    document: &'a DiffEditorDocument,
     editor_state: DiffEditorState,
     labels: DiffEditorLabels<'a>,
 }
@@ -37,7 +37,7 @@ pub struct MultiDiffEditorItem<'a> {
 impl<'a> MultiDiffEditorItem<'a> {
     pub const fn new(
         file_name: &'a str,
-        document: &'a DiffDocument,
+        document: &'a DiffEditorDocument,
         editor_state: DiffEditorState,
         labels: DiffEditorLabels<'a>,
     ) -> Self {
@@ -379,6 +379,10 @@ impl<'a> MultiDiffEditor<'a> {
 }
 
 impl Component for MultiDiffEditor<'_> {
+    fn inspection(&self) -> ComponentInspection {
+        ComponentInspection::new("MultiDiffEditor", self.bounds)
+    }
+
     fn paint(&self, scene: &mut UiScene) {
         if self.bounds.is_empty() {
             return;

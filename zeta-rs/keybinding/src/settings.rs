@@ -1,6 +1,6 @@
 use zeta_ui::{
-    Border, BoxShadow, Color, Component, CornerRadii, KeycapSequence, KeycapStyle, PaintRect,
-    Point, Rect, Size, TextBlock, TextStyle, UiScene,
+    Border, BoxShadow, Color, Component, ComponentInspection, CornerRadii, KeycapSequence,
+    KeycapStyle, PaintRect, Point, Rect, Size, TextBlock, TextStyle, UiScene,
 };
 use zeta_ui_dispatch::{
     AccessibilityRole, CursorFeedback, ElementId, FocusBehavior, InteractionFrame, NavigationAxis,
@@ -291,6 +291,11 @@ impl<'a, Command: Copy + Eq> KeyboardShortcuts<'a, Command> {
 }
 
 impl<Command: Copy + Eq> Component for KeyboardShortcuts<'_, Command> {
+    fn inspection(&self) -> ComponentInspection {
+        ComponentInspection::new("KeyboardShortcuts", self.panel)
+            .with_corner_radii(CornerRadii::uniform(8.0))
+    }
+
     fn paint(&self, scene: &mut UiScene) {
         scene.with_overlay(|scene| {
             scene.draw_rect(PaintRect::new(self.viewport, Color::rgba(20, 20, 24, 72)));

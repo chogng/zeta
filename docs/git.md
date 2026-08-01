@@ -53,8 +53,9 @@ parsing 留在 Rust host。Renderer 只拥有展示状态和用户 intent。
   workspace-relative；mutation 则把合法 workspace path 映射回 repository-relative path；
 - 每次请求重新打开仓库并读取 authoritative snapshot，不把旧 snapshot 当作 mutation 前提；
 - response 保留 HEAD branch/detached/unborn、upstream ahead/behind、index/worktree 状态、
-  rename original path、conflict 和 submodule flags，并带 Git runtime `streamInstanceId` 与在
-  该实例内单调递增的 workspace status revision；
+  rename original path、conflict 和 submodule flags，并带 repository-relative `workspacePath`、
+  Git runtime `streamInstanceId` 与在该实例内单调递增的 workspace status revision；协议不暴露
+  repository 的 host 绝对路径；
 - `git/stage`、`git/unstage` 和 `git/discardWorktree` 使用明确 path set；discard 只恢复 tracked
   working-tree 内容，不删除 untracked 文件，Desktop 在执行前要求确认；
 - `git/commit` 从 stdin 传入经过校验的 message，并返回新 commit object ID；
@@ -76,7 +77,8 @@ Native 通过 `zeta-app-server-client` 消费 `git/textDiff`，在 Composer 底�
 `Changes files • +additions -deletions`，并从协议中的原始/修改文本重建 presentation-only
 `DiffDocument`。文件内容读取、replacement 计数和 binary/size skip 规则仍由 `zeta-git` 统一拥有；
 Native 只负责标签、侧栏状态和 MultiDiff presentation。点击 Changes action 会请求刷新 Git
-projection、展开右栏并选择 Changes Pane。
+projection、展开右栏并选择 Changes Pane。cwd picker 使用 `workspacePath` 从当前可信工作区还原
+repository root 快捷项；选择该项会把工作区切换到 repository root，使 Changes 投影覆盖整个仓库。
 
 Native 的底栏分支按钮复用通用 `ContextMenu`，候选项来自 `git/branch/list`，切换通过
 `git/branch/switch`。Git 对脏工作树或 linked worktree 冲突保持权威：失败时不重试、不丢弃改动，

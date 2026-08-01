@@ -1,13 +1,12 @@
 use zeta_editor::{
-    CodeEditor, CodeEditorCommand, CodeEditorDocument, CodeEditorHeader, CodeEditorPresentation,
-    CodeEditorRowSource, CodeEditorSelectionMode, CodeEditorStyle, CodeEditorViewport,
+    CodeEditor, CodeEditorCommand, CodeEditorDocument, CodeEditorHeader, CodeEditorLanguage,
+    CodeEditorPresentation, CodeEditorRowSource, CodeEditorSelectionMode, CodeEditorStyle,
+    CodeEditorViewport,
 };
 use zeta_ui::{
-    CaretVisibility, Color, Component, FontFamily, Point, Rect, TextBlock,
+    CaretVisibility, Color, Component, ComponentInspection, FontFamily, Point, Rect, TextBlock,
     TextInputCompositionEvent, TextStyle, UiScene,
 };
-
-use crate::composer_syntax::{ComposerPlainTextSyntax, ComposerShellSyntax};
 
 const MAX_VISIBLE_ROWS: usize = 8;
 const MIN_EDITOR_HEIGHT: f32 = 44.0;
@@ -21,19 +20,10 @@ pub(crate) enum ComposerEditorFocus {
     Focused(CaretVisibility),
 }
 
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub(crate) enum ComposerEditorSyntax {
-    #[default]
-    PlainText,
-    Shell,
-}
-
 /// Product-owned multiline document and retained viewport for the Agent composer.
 pub(crate) struct ComposerEditor {
     document: CodeEditorDocument,
     viewport: CodeEditorViewport,
-    syntax: ComposerEditorSyntax,
-    shell_syntax: ComposerShellSyntax,
     style: CodeEditorStyle,
 }
 
@@ -42,8 +32,6 @@ impl Default for ComposerEditor {
         Self {
             document: CodeEditorDocument::from_text(""),
             viewport: CodeEditorViewport::default(),
-            syntax: ComposerEditorSyntax::PlainText,
-            shell_syntax: ComposerShellSyntax::new(),
             style: CodeEditorStyle::light(),
         }
     }
@@ -71,28 +59,12 @@ impl ComposerEditor {
     }
 
     pub(crate) fn apply(&mut self, command: CodeEditorCommand) {
-        let changes_text = matches!(
-            &command,
-            CodeEditorCommand::Insert(_)
-                | CodeEditorCommand::Newline
-                | CodeEditorCommand::Backspace
-                | CodeEditorCommand::DeleteForward
-                | CodeEditorCommand::Undo
-                | CodeEditorCommand::Redo
-        );
         self.document.apply(command);
-        if changes_text {
-            self.refresh_syntax();
-        }
         self.reveal_caret();
     }
 
     pub(crate) fn apply_composition(&mut self, event: TextInputCompositionEvent) {
-        let commits_text = matches!(&event, TextInputCompositionEvent::Commit(_));
         self.document.apply_composition(event);
-        if commits_text {
-            self.refresh_syntax();
-        }
         self.reveal_caret();
     }
 
@@ -103,7 +75,6 @@ impl ComposerEditor {
     pub(crate) fn clear(&mut self) {
         self.document.replace_text("");
         self.viewport = CodeEditorViewport::default();
-        self.refresh_syntax();
     }
 
     pub(crate) fn set_text(&mut self, text: impl Into<String>) {
@@ -111,16 +82,11 @@ impl ComposerEditor {
         self.document.apply(CodeEditorCommand::SelectAll);
         self.document
             .apply(CodeEditorCommand::MoveRight(CodeEditorSelectionMode::Move));
-        self.refresh_syntax();
         self.reveal_caret();
     }
 
-    pub(crate) fn set_syntax(&mut self, syntax: ComposerEditorSyntax) {
-        if self.syntax == syntax {
-            return;
-        }
-        self.syntax = syntax;
-        self.refresh_syntax();
+    pub(crate) fn set_language(&mut self, language: CodeEditorLanguage) {
+        self.document.set_language(language);
     }
 
     pub(crate) fn set_style(&mut self, style: CodeEditorStyle) {
@@ -182,19 +148,6 @@ impl ComposerEditor {
             .reveal_row(caret.row_index, self.document.row_count(), MAX_VISIBLE_ROWS);
     }
 
-    fn refresh_syntax(&mut self) {
-        match self.syntax {
-            ComposerEditorSyntax::PlainText => self.document.apply_syntax(&ComposerPlainTextSyntax),
-            ComposerEditorSyntax::Shell => {
-                if let Some(projection) = self.shell_syntax.synchronize(self.document.text()) {
-                    self.document.apply_syntax(&projection);
-                } else {
-                    self.document.apply_syntax(&ComposerPlainTextSyntax);
-                }
-            }
-        }
-    }
-
     fn code_editor(&self, bounds: Rect, caret_visibility: CaretVisibility) -> CodeEditor<'_> {
         CodeEditor::new(
             bounds,
@@ -229,6 +182,10 @@ impl ComposerEditorView<'_> {
 }
 
 impl Component for ComposerEditorView<'_> {
+    fn inspection(&self) -> ComponentInspection {
+        ComponentInspection::new("ComposerEditor", self.bounds)
+    }
+
     fn paint(&self, scene: &mut UiScene) {
         let caret_visibility = match self.focus {
             ComposerEditorFocus::Blurred => CaretVisibility::Hidden,

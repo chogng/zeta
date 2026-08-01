@@ -22,6 +22,8 @@ pub mod icons {
     pub const CHEVRON_DOWN: Icon = Icon::new(IconId::new("chevron-down"), artwork::CHEVRON_DOWN);
     pub const CHEVRON_RIGHT: Icon = Icon::new(IconId::new("chevron-right"), artwork::CHEVRON_RIGHT);
     pub const CLOSE: Icon = Icon::new(IconId::new("close"), artwork::CLOSE);
+    pub const CURSOR: Icon = Icon::new(IconId::new("cursor"), artwork::CURSOR);
+    pub const CURSOR_FILLED: Icon = Icon::new(IconId::new("cursor-filled"), artwork::CURSOR_FILLED);
     pub const DIFF: Icon = Icon::new(IconId::new("diff"), artwork::GIT);
     pub const DROPDOWN_INDICATOR: Icon = Icon::new(IconId::new("dropdown-indicator"), artwork::CHEVRON_DOWN);
     pub const ELLIPSIS: Icon = Icon::new(IconId::new("ellipsis"), artwork::ELLIPSIS);
@@ -62,6 +64,8 @@ pub const ALL_ICONS: &[Icon] = &[
     icons::CHEVRON_DOWN,
     icons::CHEVRON_RIGHT,
     icons::CLOSE,
+    icons::CURSOR,
+    icons::CURSOR_FILLED,
     icons::DIFF,
     icons::DROPDOWN_INDICATOR,
     icons::ELLIPSIS,

@@ -1399,6 +1399,10 @@ Alpha 已从独立内核演进为真实 `IEditorPane`，但仍保持“Workbench
 普通文本的 `Default` editor；Monaco 保留为 `Optional` compatibility editor，并可通过显式
 `preferredEditorId` 选择。
 
+`IEditorPart.openEditor` 是产品调用面，`EditorPaneRegistry` 是实现选择边界，`IEditorPane` 是
+被选实现的生命周期 contract。产品调用方不选择 parser、analysis service 或 transport；descriptor
+可以把 Alpha、Monaco 或后续实现绑定到同一资源输入，App Server 不知道最终选择了哪个 editor。
+
 | 能力 | 当前所有者 | 状态 |
 | --- | --- | --- |
 | URI、取消、事件、生命周期原语 | `base/common` | ✅ 复用，保持领域无关 |

@@ -1,4 +1,4 @@
-use glyphon::{Attrs, Buffer, Family, Metrics, Shaping, SwashCache};
+use cosmic_text::{Attrs, Buffer, Family, Metrics, Shaping, SwashCache};
 
 use super::new_font_system;
 

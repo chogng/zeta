@@ -1,6 +1,6 @@
 use crate::FontCatalogError;
 
-pub(crate) fn configure_font_database(database: &mut glyphon::fontdb::Database) {
+pub(crate) fn configure_font_database(database: &mut cosmic_text::fontdb::Database) {
     let unsupported_faces = database
         .faces()
         .filter(|face| face.post_script_name == "GB18030Bitmap")

@@ -1,4 +1,13 @@
-use crate::{Color, Component, PaintIcon, PaintRect, Point, Rect, Size};
+use crate::{
+    Color, Component, InspectionFrame, InspectionNode, InspectionNodeId, PaintIcon, PaintRect,
+    Point, Rect, Size,
+};
+
+#[path = "scene/batching.rs"]
+mod batching;
+
+pub use batching::SceneBatch;
+use batching::{ScenePrimitive, batches};
 
 /// The font-family selection requested by a text block.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
@@ -212,7 +221,8 @@ impl TextBlock {
         self.wrap
     }
 
-    pub(crate) const fn clip_bounds(&self) -> Option<Rect> {
+    /// Returns the resolved scene clip consumed by renderer backends.
+    pub const fn clip_bounds(&self) -> Option<Rect> {
         self.clip_bounds
     }
 
@@ -236,9 +246,12 @@ pub struct UiScene {
     image_layers: Vec<usize>,
     text_blocks: Vec<TextBlock>,
     text_layers: Vec<usize>,
+    layer_primitives: Vec<Vec<ScenePrimitive>>,
     active_clip: Option<Rect>,
     active_layer: usize,
     layer_count: usize,
+    inspection: InspectionFrame,
+    active_inspection_parent: Option<InspectionNodeId>,
 }
 
 impl UiScene {
@@ -253,9 +266,12 @@ impl UiScene {
             image_layers: Vec::new(),
             text_blocks: Vec::new(),
             text_layers: Vec::new(),
+            layer_primitives: vec![Vec::new()],
             active_clip: None,
             active_layer: 0,
             layer_count: 1,
+            inspection: InspectionFrame::default(),
+            active_inspection_parent: None,
         }
     }
 
@@ -263,36 +279,75 @@ impl UiScene {
         if let Some(clip_bounds) = self.active_clip {
             rect.apply_clip(clip_bounds);
         }
+        let index = self.rects.len();
         self.rects.push(rect);
         self.rect_layers.push(self.active_layer);
+        self.layer_primitives[self.active_layer].push(ScenePrimitive::Rect(index));
     }
 
     pub fn draw_icon(&mut self, mut icon: PaintIcon) {
         if let Some(clip_bounds) = self.active_clip {
             icon.apply_clip(clip_bounds);
         }
+        let index = self.icons.len();
         self.icons.push(icon);
         self.icon_layers.push(self.active_layer);
+        self.layer_primitives[self.active_layer].push(ScenePrimitive::Icon(index));
     }
 
     pub fn draw_image(&mut self, mut image: crate::PaintImage) {
         if let Some(clip_bounds) = self.active_clip {
             image.apply_clip(clip_bounds);
         }
+        let index = self.images.len();
         self.images.push(image);
         self.image_layers.push(self.active_layer);
+        self.layer_primitives[self.active_layer].push(ScenePrimitive::Image(index));
     }
 
     pub fn draw_text(&mut self, mut block: TextBlock) {
         if let Some(clip_bounds) = self.active_clip {
             block.apply_clip(clip_bounds);
         }
+        let index = self.text_blocks.len();
         self.text_blocks.push(block);
         self.text_layers.push(self.active_layer);
+        self.layer_primitives[self.active_layer].push(ScenePrimitive::Text(index));
     }
 
+    /// Draws one component and automatically registers any inspection metadata it declares.
+    #[track_caller]
     pub fn draw_component<C: Component + ?Sized>(&mut self, component: &C) {
-        component.paint(self);
+        let Some(node) = component.inspection().into_node() else {
+            component.paint(self);
+            return;
+        };
+        self.with_inspection_node(node, |scene| component.paint(scene));
+    }
+
+    /// Records one component's resolved geometry while its scene primitives are emitted.
+    ///
+    /// Nested calls form the per-frame inspection hierarchy. The caller location identifies the
+    /// composition site that registered the node rather than a product data source.
+    #[track_caller]
+    pub fn with_inspection_node<R>(
+        &mut self,
+        node: InspectionNode,
+        draw: impl FnOnce(&mut Self) -> R,
+    ) -> R {
+        let location = std::panic::Location::caller();
+        let id = self.inspection.register(
+            node,
+            self.active_inspection_parent,
+            self.active_layer,
+            location.file(),
+            location.line(),
+        );
+        let previous_parent = self.active_inspection_parent;
+        self.active_inspection_parent = Some(id);
+        let result = draw(self);
+        self.active_inspection_parent = previous_parent;
+        result
     }
 
     pub fn with_clip<R>(&mut self, clip_bounds: Rect, draw: impl FnOnce(&mut Self) -> R) -> R {
@@ -317,6 +372,7 @@ impl UiScene {
         self.active_layer = self.layer_count;
         self.active_clip = None;
         self.layer_count += 1;
+        self.layer_primitives.push(Vec::new());
         let result = draw(self);
         self.active_layer = previous_layer;
         self.active_clip = previous_clip;
@@ -343,23 +399,41 @@ impl UiScene {
         &self.text_blocks
     }
 
-    pub(crate) const fn layer_count(&self) -> usize {
+    pub const fn inspection(&self) -> &InspectionFrame {
+        &self.inspection
+    }
+
+    /// Returns the number of ordered composition layers in this frame.
+    pub const fn layer_count(&self) -> usize {
         self.layer_count
     }
 
-    pub(crate) fn rect_layers(&self) -> &[usize] {
+    /// Iterates consecutive primitive batches in exact back-to-front paint order.
+    ///
+    /// The iterator visits lower composition layers first and preserves insertion order inside
+    /// each layer. It does not allocate and lets a renderer switch pipelines only at real batch
+    /// boundaries instead of repeatedly scanning every primitive for every layer.
+    pub fn batches(&self) -> impl Iterator<Item = SceneBatch> + '_ {
+        batches(&self.layer_primitives)
+    }
+
+    /// Returns the composition layer parallel to each rectangle primitive.
+    pub fn rect_layers(&self) -> &[usize] {
         &self.rect_layers
     }
 
-    pub(crate) fn icon_layers(&self) -> &[usize] {
+    /// Returns the composition layer parallel to each icon primitive.
+    pub fn icon_layers(&self) -> &[usize] {
         &self.icon_layers
     }
 
-    pub(crate) fn image_layers(&self) -> &[usize] {
+    /// Returns the composition layer parallel to each image primitive.
+    pub fn image_layers(&self) -> &[usize] {
         &self.image_layers
     }
 
-    pub(crate) fn text_layers(&self) -> &[usize] {
+    /// Returns the composition layer parallel to each text primitive.
+    pub fn text_layers(&self) -> &[usize] {
         &self.text_layers
     }
 }

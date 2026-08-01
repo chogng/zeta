@@ -1,4 +1,7 @@
-use crate::{Color, Component, CornerRadii, PaintRect, Point, Rect, Size, UiScene};
+use crate::{
+    Color, Component, ComponentInspection, CornerRadii, InspectionNode, PaintRect, Point, Rect,
+    Size, UiScene,
+};
 
 mod geometry;
 mod interaction;
@@ -286,9 +289,11 @@ impl ScrollView {
         scene: &mut UiScene,
         draw_content: impl FnOnce(&mut UiScene, ScrollViewport) -> R,
     ) -> R {
-        let result = scene.with_clip(self.bounds, |scene| draw_content(scene, self.viewport()));
-        self.paint(scene);
-        result
+        scene.with_inspection_node(InspectionNode::new("ScrollView", self.bounds), |scene| {
+            let result = scene.with_clip(self.bounds, |scene| draw_content(scene, self.viewport()));
+            self.paint(scene);
+            result
+        })
     }
 
     fn effective_offset(&self) -> Point {
@@ -398,6 +403,10 @@ impl ScrollView {
 }
 
 impl Component for ScrollView {
+    fn inspection(&self) -> ComponentInspection {
+        ComponentInspection::new("ScrollView", self.bounds)
+    }
+
     fn paint(&self, scene: &mut UiScene) {
         let opacity = self.scrollbar_presentation.opacity();
         if opacity <= 0.0 {

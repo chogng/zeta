@@ -1,7 +1,9 @@
 use zeta_icons::{Icon, IconDefinition, IconId, IconRendering, icons};
 
 use super::{ATLAS_PADDING, ATLAS_SIZE, ShelfAllocator, rasterize_icon, validate_paint_icon};
-use crate::{Color, PaintIcon, Rect, UiRenderError};
+use zeta_ui::{Color, PaintIcon, Rect};
+
+use super::UiRenderError;
 
 const TEST_ICON: Icon = Icon::new(
     IconId::new("circle"),

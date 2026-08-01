@@ -1,8 +1,8 @@
 use zeta_icons::icons;
 
 use crate::{
-    Color, Component, InputBox, InputBoxState, InputBoxStyle, PaintIcon, Rect, TextInput,
-    TextInputLayoutEngine, UiScene,
+    Color, Component, ComponentInspection, InputBox, InputBoxState, InputBoxStyle, PaintIcon, Rect,
+    TextInput, TextInputLayoutEngine, UiScene,
 };
 
 /// Presentation contract for a search box composed from an [`InputBox`].
@@ -96,8 +96,12 @@ impl SearchBox {
 }
 
 impl Component for SearchBox {
+    fn inspection(&self) -> ComponentInspection {
+        ComponentInspection::new("SearchBox", self.bounds)
+    }
+
     fn paint(&self, scene: &mut UiScene) {
-        self.input_box.paint(scene);
+        scene.draw_component(&self.input_box);
         scene.draw_icon(PaintIcon::new(
             icons::SEARCH,
             self.icon_bounds,

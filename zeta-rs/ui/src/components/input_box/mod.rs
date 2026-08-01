@@ -1,6 +1,6 @@
 use crate::{
-    Border, CaretVisibility, Color, Component, CornerRadii, Edges, PaintRect, Rect, TextBlock,
-    TextStyle, UiScene,
+    Border, CaretVisibility, Color, Component, ComponentInspection, CornerRadii, Edges, PaintRect,
+    Rect, TextBlock, TextStyle, UiScene,
 };
 use crate::{TextInput, TextInputLayout, TextInputLayoutEngine, TextInputLayoutStyle};
 
@@ -176,6 +176,12 @@ impl InputBox {
 }
 
 impl Component for InputBox {
+    fn inspection(&self) -> ComponentInspection {
+        ComponentInspection::new("InputBox", self.bounds)
+            .with_padding(self.style.padding)
+            .with_corner_radii(self.style.corner_radii)
+    }
+
     fn paint(&self, scene: &mut UiScene) {
         scene.draw_rect(
             PaintRect::new(self.bounds, self.style.backgrounds.for_state(self.state))

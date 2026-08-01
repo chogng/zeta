@@ -1,9 +1,7 @@
 use super::{SessionSidebarToolbar, TOOLBAR_CONTENT_GAP, TOOLBAR_HEIGHT};
 use crate::shell_interaction::{ADD_SESSION, SESSION_SEARCH_INPUT, SESSION_SIDEBAR_ACTION_BAR};
 use crate::shell_style::SHELL_PALETTE;
-use zeta_ui::{
-    CaretVisibility, Color, Component, Point, Rect, TextInput, TextInputLayoutEngine, UiScene,
-};
+use zeta_ui::{CaretVisibility, Color, Point, Rect, TextInput, TextInputLayoutEngine, UiScene};
 use zeta_ui_dispatch::{AccessibilityRole, InteractionFrame, UiDispatch};
 
 #[test]
@@ -22,7 +20,7 @@ fn toolbar_fills_the_sidebar_row_with_search_and_add_action() {
     let mut scene = UiScene::new(Color::TRANSPARENT);
     let mut frame = InteractionFrame::default();
 
-    toolbar.paint(&mut scene);
+    scene.draw_component(&toolbar);
     toolbar.register_interactions(&mut frame);
 
     assert_eq!(toolbar.bounds.size.width, 220.0);
@@ -35,6 +33,19 @@ fn toolbar_fills_the_sidebar_row_with_search_and_add_action() {
         TOOLBAR_CONTENT_GAP
     );
     assert_eq!(scene.text_blocks()[0].text(), "Search sessions...");
+    let target = scene
+        .inspection()
+        .target_at(Point::new(20.0, 50.0))
+        .expect("search input should be inspectable");
+    assert_eq!(
+        scene
+            .inspection()
+            .ancestry(target.id())
+            .iter()
+            .map(|node| node.name())
+            .collect::<Vec<_>>(),
+        vec!["SessionSidebarToolbar", "SearchBox", "InputBox"]
+    );
     assert_eq!(scene.icons().len(), 2);
     assert!(
         scene

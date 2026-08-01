@@ -9,6 +9,7 @@ use explorer_tree::ExplorerTreeAction;
 use git_branch_context_menu::GitBranchContextMenuState;
 use keybindings_resource::{KeybindingsResource, KeybindingsResourcePoll};
 use keyboard_shortcuts::KeyboardShortcutsState;
+use layout_inspector::LayoutInspector;
 use native_event::NativeEvent;
 use session_context_menu::SessionContextMenuState;
 use session_search::SessionSearch;
@@ -28,13 +29,13 @@ use thread_timeline_scroll::ThreadTimelineScroll;
 use workspace_context::WorkspaceContext;
 use workspace_path_picker::WorkspacePathPickerState;
 use workspace_surface::WorkspaceSurface;
+use zeta_renderer::{RenderOutcome, RenderTargetSize, Renderer};
 use zeta_terminal::{BlockStatus, ScreenBuffer};
 use zeta_theme::{ColorScheme, ThemeLoadOptions, ThemeLoader, ThemeSurface, default_device_root};
 use zeta_ui::{CaretBlinkAdvance, CaretBlinkController, Point, TextInputLayoutEngine};
 use zeta_ui_dispatch::{
     CursorFeedback, DispatchInvalidation, DispatchOutcome, UiDispatch, UiIntent,
 };
-use zeta_wgpu::{RenderOutcome, WgpuRenderer};
 use zeta_winit::{
     ActiveEventLoop, ApplicationHandler, ControlFlow, CursorIcon, ElementState, LogicalSize,
     ModifiersState, MouseButton, NativeWindow, PhysicalExtent, Theme, WindowAttributes,
@@ -49,12 +50,14 @@ mod agent_sidebar_navigation;
 mod agent_sidebar_toolbar;
 mod agent_sidebar_workspace;
 mod commands;
+#[cfg(test)]
+#[path = "component_composition_tests.rs"]
+mod component_composition_tests;
 mod composer_editor;
 mod composer_interaction;
 mod composer_interaction_pane;
 mod composer_panel;
 mod composer_shell;
-mod composer_syntax;
 mod editor_pane;
 mod explorer_pane;
 mod explorer_tree;
@@ -66,7 +69,9 @@ mod keybinding_input;
 mod keybindings;
 mod keybindings_resource;
 mod keyboard_shortcuts;
+mod layout_inspector;
 mod native_event;
+mod renderer_backend;
 mod session_context_menu;
 mod session_search;
 mod session_sidebar;
@@ -116,7 +121,7 @@ fn main() -> ExitCode {
 struct NativeApp {
     window_id: Option<WindowId>,
     window: Option<NativeWindow>,
-    renderer: Option<WgpuRenderer>,
+    renderer: Option<Box<dyn Renderer>>,
     presentation: Option<ShellPresentation>,
     presentation_rebuild_pending: bool,
     agent_sidebar: AgentSidebarState,
@@ -146,6 +151,7 @@ struct NativeApp {
     keybindings: keybindings::NativeKeybindings,
     keybindings_resource: KeybindingsResource,
     keyboard_shortcuts: KeyboardShortcutsState,
+    layout_inspector: LayoutInspector,
     modifiers: ModifiersState,
     physical_extent: PhysicalExtent,
     scale_factor: f64,
@@ -204,6 +210,7 @@ impl NativeApp {
             keybindings,
             keybindings_resource,
             keyboard_shortcuts: KeyboardShortcutsState::default(),
+            layout_inspector: LayoutInspector::default(),
             modifiers: ModifiersState::default(),
             physical_extent: PhysicalExtent::new(0, 0),
             scale_factor: 1.0,
@@ -264,12 +271,17 @@ impl NativeApp {
         }
     }
 
-    fn logical_viewport(&self) -> LogicalViewport {
+    fn window_viewport(&self) -> LogicalViewport {
         LogicalViewport::from_physical(
             self.physical_extent.width,
             self.physical_extent.height,
             self.scale_factor,
         )
+    }
+
+    fn logical_viewport(&self) -> LogicalViewport {
+        self.layout_inspector
+            .content_viewport(self.window_viewport())
     }
 
     fn active_screen(&self) -> ScreenBuffer {
@@ -283,6 +295,7 @@ impl NativeApp {
     }
 
     fn rebuild_presentation(&mut self) {
+        let window_viewport = self.window_viewport();
         let viewport = self.logical_viewport();
         let active_screen = self.active_screen();
         let terminal_size = terminal_grid_size_for_viewport(
@@ -413,6 +426,11 @@ impl NativeApp {
                 &mut self.text_layout,
             );
         }
+        self.layout_inspector.decorate(
+            &mut presentation.scene,
+            window_viewport,
+            self.cursor_position,
+        );
         self.presentation = Some(presentation);
         self.presentation_rebuild_pending = false;
         self.update_ime_cursor_area();
@@ -450,7 +468,17 @@ impl NativeApp {
                     .pointer_feedback(&presentation.interaction_frame)
             })
             .unwrap_or_default();
-        let cursor = if self.session_sidebar.is_resizing() {
+        let cursor = if self
+            .layout_inspector
+            .uses_inspection_cursor(self.cursor_position)
+        {
+            CursorIcon::Crosshair
+        } else if self
+            .layout_inspector
+            .pointer_is_over_panel(self.cursor_position)
+        {
+            CursorIcon::Default
+        } else if self.session_sidebar.is_resizing() {
             CursorIcon::ColResize
         } else {
             match feedback {
@@ -523,6 +551,9 @@ impl NativeApp {
     fn pointer_moved(&mut self, physical_x: f64, physical_y: f64) {
         let point = self.logical_pointer_position(physical_x, physical_y);
         self.cursor_position = Some(point);
+        if self.route_layout_inspector_pointer_move() {
+            return;
+        }
         if self.route_git_branch_context_menu_pointer_move(point) {
             return;
         }
@@ -557,6 +588,9 @@ impl NativeApp {
 
     fn pointer_left(&mut self) {
         self.cursor_position = None;
+        if self.route_layout_inspector_pointer_left() {
+            return;
+        }
         if self
             .agent_sidebar_workspace
             .leave_multi_diff_scrollbar(Instant::now())
@@ -615,6 +649,9 @@ impl NativeApp {
     }
 
     fn mouse_button_changed(&mut self, state: ElementState, button: MouseButton) {
+        if self.route_layout_inspector_button(state, button) {
+            return;
+        }
         if self.route_git_branch_context_menu_button(state, button) {
             return;
         }
@@ -748,7 +785,7 @@ impl ApplicationHandler<NativeEvent> for NativeApp {
         self.window = Some(window.clone());
         self.rebuild_presentation();
         self.sync_input_focus();
-        let renderer = match WgpuRenderer::initialize(window) {
+        let renderer = match renderer_backend::create(window) {
             Ok(renderer) => renderer,
             Err(error) => {
                 self.fail(event_loop, error);
@@ -773,9 +810,13 @@ impl ApplicationHandler<NativeEvent> for NativeApp {
             WindowEvent::Resized(size) => {
                 self.terminal_selection.clear();
                 self.physical_extent = PhysicalExtent::new(size.width, size.height);
+                self.layout_inspector.window_resized(self.window_viewport());
                 self.rebuild_presentation();
                 if let Some(renderer) = self.renderer.as_mut() {
-                    renderer.resize(self.physical_extent);
+                    renderer.resize(RenderTargetSize::new(
+                        self.physical_extent.width,
+                        self.physical_extent.height,
+                    ));
                 }
                 self.request_redraw();
             }
@@ -807,7 +848,11 @@ impl ApplicationHandler<NativeEvent> for NativeApp {
                 self.modifiers = modifiers.state();
             }
             WindowEvent::KeyboardInput { event, .. } => self.keyboard_input(event),
-            WindowEvent::Ime(event) => self.ime_input(event),
+            WindowEvent::Ime(event) => {
+                if !self.layout_inspector.is_picking() {
+                    self.ime_input(event);
+                }
+            }
             WindowEvent::Focused(false) => {
                 self.modifiers = ModifiersState::default();
                 self.keybindings.cancel_chord();
@@ -833,7 +878,15 @@ impl ApplicationHandler<NativeEvent> for NativeApp {
             WindowEvent::MouseInput { state, button, .. } => {
                 self.mouse_button_changed(state, button);
             }
-            WindowEvent::MouseWheel { delta, .. } => self.mouse_wheel(delta),
+            WindowEvent::MouseWheel { delta, .. } => {
+                if !self.layout_inspector.is_picking()
+                    && !self
+                        .layout_inspector
+                        .pointer_is_over_panel(self.cursor_position)
+                {
+                    self.mouse_wheel(delta);
+                }
+            }
             WindowEvent::Occluded(false) => {
                 // macOS can reject initial surface acquisition while the new window activates.
                 // The visible transition is the next reliable opportunity to present that frame.

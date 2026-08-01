@@ -1,8 +1,8 @@
 use zeta_icons::icons;
 use zeta_ui::{
     ActionBar, ActionBarButton, ActionBarItem, ActionBarOrientation, ActionBarStyle, Border,
-    ButtonBackgrounds, ButtonState, ButtonStyle, Component, CornerRadii, Edges, PaintRect, Rect,
-    Size, TextStyle, UiScene,
+    ButtonBackgrounds, ButtonState, ButtonStyle, Component, ComponentInspection, CornerRadii,
+    Edges, PaintRect, Rect, Size, TextStyle, UiScene,
 };
 
 use crate::agent_sidebar::AgentSidebarState;
@@ -178,6 +178,10 @@ impl Titlebar {
 }
 
 impl Component for Titlebar {
+    fn inspection(&self) -> ComponentInspection {
+        ComponentInspection::new("Titlebar", self.bounds)
+    }
+
     fn paint(&self, scene: &mut UiScene) {
         scene.draw_rect(
             PaintRect::new(self.bounds, self.palette.surface_raised).with_border(Border::new(
@@ -185,8 +189,8 @@ impl Component for Titlebar {
                 self.palette.border,
             )),
         );
-        self.left_action_bar.paint(scene);
-        self.right_action_bar.paint(scene);
+        scene.draw_component(&self.left_action_bar);
+        scene.draw_component(&self.right_action_bar);
     }
 }
 

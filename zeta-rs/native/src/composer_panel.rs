@@ -1,6 +1,7 @@
 use zeta_ui::{
-    Border, CaretVisibility, CornerRadii, Edges, FontFamily, FontWeight, ListView, PaintRect,
-    Point, Rect, ScrollState, Size, TextBlock, TextInputLayoutEngine, TextStyle, UiScene,
+    Border, CaretVisibility, Color, CornerRadii, Edges, FontFamily, FontWeight, InspectionNode,
+    KeycapSequence, KeycapStyle, ListView, PaintRect, Point, Rect, ScrollState, Size, TextBlock,
+    TextInputLayoutEngine, TextStyle, UiScene,
 };
 use zeta_ui_dispatch::{
     AccessibilityRole, AccessibilitySelection, CursorFeedback, FocusBehavior, InteractionFrame,
@@ -24,6 +25,9 @@ const PANEL_TOP_INSET: f32 = 8.0;
 const PANEL_BOTTOM_INSET: f32 = 12.0;
 const PANEL_SECTION_GAP: f32 = 8.0;
 const INFO_BAR_HEIGHT: f32 = 24.0;
+const INFO_KEYCAP_SIZE: f32 = 16.0;
+const INFO_KEYCAP_LABEL_GAP: f32 = 6.0;
+const INFO_KEYCAP_BACKGROUND: Color = Color::rgb(96, 97, 102);
 const INFO_EDITOR_SEPARATOR_HEIGHT: f32 = 1.0;
 const TOOLBAR_HEIGHT: f32 = 24.0;
 const MIN_OUTPUT_HEIGHT: f32 = 40.0;
@@ -176,75 +180,81 @@ pub(crate) fn draw_composer_panel(
     text_layout: &mut TextInputLayoutEngine,
     palette: ShellPalette,
 ) -> Option<Rect> {
-    scene.draw_rect(
-        PaintRect::new(layout.panel, palette.surface)
-            .with_border(Border::new(Edges::new(1.0, 0.0, 0.0, 0.0), palette.border)),
-    );
-    interaction_frame.register(
-        UiNode::new(
-            COMPOSER_PANEL,
-            layout.panel,
-            AccessibilityRole::Group,
-            "Command composer",
-        )
-        .with_parent(MAIN_SURFACE),
-    );
-    if let (Some(bounds), Some(interaction)) = (layout.interaction, view.interaction.view()) {
-        draw_interaction(
-            scene,
-            interaction_frame,
-            bounds,
-            interaction,
-            view.interaction_pane.scroll_state(),
-            view.dispatch,
-            palette,
-        );
-    }
-    draw_info_bar(
-        scene,
-        interaction_frame,
-        layout.info_bar,
-        view.mode,
-        palette,
-    );
-    scene.draw_rect(PaintRect::new(layout.info_editor_separator, palette.border));
-    interaction_frame.register(
-        UiNode::new(
-            COMPOSER,
-            layout.editor,
-            AccessibilityRole::TextInput,
-            "Command input",
-        )
-        .with_parent(COMPOSER_PANEL)
-        .with_cursor(CursorFeedback::Text)
-        .with_focus(FocusBehavior::TabStop)
-        .with_value(view.editor.text()),
-    );
-    let editor_focus = if view.dispatch.is_focused(COMPOSER) {
-        ComposerEditorFocus::Focused(view.caret_visibility)
-    } else {
-        ComposerEditorFocus::Blurred
-    };
-    let placeholder = match view.mode {
-        ComposerMode::Agent => "Ask Zeta anything…",
-        ComposerMode::Shell => "Enter a shell command…",
-    };
-    let editor = view
-        .editor
-        .view(layout.editor, placeholder, editor_focus, palette.text_muted);
-    let caret_bounds = editor.caret_bounds();
-    scene.draw_component(&editor);
-    let toolbar = InputContextToolbar::new(
-        layout.toolbar,
-        view.context,
-        view.mode,
-        palette,
-        text_layout,
-        view.dispatch,
-    );
-    toolbar.register_interactions(interaction_frame);
-    scene.draw_component(&toolbar);
-    caret_bounds
+    scene.with_inspection_node(
+        InspectionNode::new("ComposerPanel", layout.panel),
+        |scene| {
+            scene.draw_rect(
+                PaintRect::new(layout.panel, palette.surface)
+                    .with_border(Border::new(Edges::new(1.0, 0.0, 0.0, 0.0), palette.border)),
+            );
+            interaction_frame.register(
+                UiNode::new(
+                    COMPOSER_PANEL,
+                    layout.panel,
+                    AccessibilityRole::Group,
+                    "Command composer",
+                )
+                .with_parent(MAIN_SURFACE),
+            );
+            if let (Some(bounds), Some(interaction)) = (layout.interaction, view.interaction.view())
+            {
+                draw_interaction(
+                    scene,
+                    interaction_frame,
+                    bounds,
+                    interaction,
+                    view.interaction_pane.scroll_state(),
+                    view.dispatch,
+                    palette,
+                );
+            }
+            draw_info_bar(
+                scene,
+                interaction_frame,
+                layout.info_bar,
+                view.mode,
+                palette,
+            );
+            scene.draw_rect(PaintRect::new(layout.info_editor_separator, palette.border));
+            interaction_frame.register(
+                UiNode::new(
+                    COMPOSER,
+                    layout.editor,
+                    AccessibilityRole::TextInput,
+                    "Command input",
+                )
+                .with_parent(COMPOSER_PANEL)
+                .with_cursor(CursorFeedback::Text)
+                .with_focus(FocusBehavior::TabStop)
+                .with_value(view.editor.text()),
+            );
+            let editor_focus = if view.dispatch.is_focused(COMPOSER) {
+                ComposerEditorFocus::Focused(view.caret_visibility)
+            } else {
+                ComposerEditorFocus::Blurred
+            };
+            let placeholder = match view.mode {
+                ComposerMode::Agent => "Ask Zeta anything…",
+                ComposerMode::Shell => "Enter a shell command…",
+            };
+            let editor =
+                view.editor
+                    .view(layout.editor, placeholder, editor_focus, palette.text_muted);
+            let caret_bounds = editor.caret_bounds();
+            scene.draw_component(&editor);
+            let toolbar = InputContextToolbar::new(
+                layout.toolbar,
+                view.context,
+                view.mode,
+                palette,
+                text_layout,
+                view.dispatch,
+            );
+            toolbar.register_interactions(interaction_frame);
+            scene.draw_component(&toolbar);
+            caret_bounds
+        },
+    )
 }
 
 fn draw_info_bar(
@@ -254,22 +264,56 @@ fn draw_info_bar(
     mode: ComposerMode,
     palette: ShellPalette,
 ) {
-    let hint = match mode {
-        ComposerMode::Agent => "/ for commands",
-        ComposerMode::Shell => "↑↓ for command history",
+    let (accessibility_label, keycaps, label) = match mode {
+        ComposerMode::Agent => ("/ for commands", vec![vec!["/".to_owned()]], "for commands"),
+        ComposerMode::Shell => (
+            "Up and Down for command history",
+            vec![vec!["↑".to_owned(), "↓".to_owned()]],
+            "for command history",
+        ),
     };
     frame.register(
-        UiNode::new(COMPOSER_INFO_BAR, bounds, AccessibilityRole::Group, hint)
-            .with_parent(COMPOSER_PANEL),
+        UiNode::new(
+            COMPOSER_INFO_BAR,
+            bounds,
+            AccessibilityRole::Group,
+            accessibility_label,
+        )
+        .with_parent(COMPOSER_PANEL),
     );
-    scene.draw_text(TextBlock::new(
-        hint,
-        Point::new(bounds.origin.x, bounds.origin.y + 2.0),
-        bounds.size,
-        TextStyle::new(12.0, palette.text_muted)
-            .with_family(FontFamily::Monospace)
-            .with_line_height(20.0),
-    ));
+    scene.with_inspection_node(InspectionNode::new("ComposerInfoBar", bounds), |scene| {
+        let keycaps = KeycapSequence::new(
+            Point::new(
+                bounds.origin.x,
+                bounds.origin.y + (bounds.size.height - INFO_KEYCAP_SIZE).max(0.0) * 0.5,
+            ),
+            keycaps,
+            info_keycap_style(),
+        );
+        let label_x = keycaps.bounds().right() + INFO_KEYCAP_LABEL_GAP;
+        scene.draw_component(&keycaps);
+        scene.draw_text(TextBlock::new(
+            label,
+            Point::new(label_x, bounds.origin.y + 2.0),
+            Size::new((bounds.right() - label_x).max(1.0), 20.0),
+            TextStyle::new(12.0, palette.text_muted)
+                .with_family(FontFamily::Monospace)
+                .with_line_height(20.0),
+        ));
+    });
+}
+
+fn info_keycap_style() -> KeycapStyle {
+    KeycapStyle::new(INFO_KEYCAP_BACKGROUND, Color::WHITE)
+        .with_text_style(
+            TextStyle::new(10.0, Color::WHITE)
+                .with_family(FontFamily::Monospace)
+                .with_line_height(12.0),
+        )
+        .with_corner_radii(CornerRadii::uniform(3.0))
+        .with_height(INFO_KEYCAP_SIZE)
+        .with_minimum_width(INFO_KEYCAP_SIZE)
+        .with_horizontal_padding(3.0)
 }
 
 fn draw_interaction(

@@ -1,4 +1,4 @@
-use glyphon::{FontSystem, fontdb};
+use cosmic_text::{FontSystem, fontdb};
 
 use super::platform;
 

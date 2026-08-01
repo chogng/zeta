@@ -1,13 +1,13 @@
 use std::time::Instant;
 
-use zeta_diff::DiffDocument;
 use zeta_editor::{
-    DiffEditorFoldState, DiffEditorLabels, DiffEditorPresentation, DiffEditorState,
-    MultiDiffEditor, MultiDiffEditorItem, MultiDiffEditorLayout, MultiDiffEditorStyle,
+    DiffEditorDocument, DiffEditorFoldState, DiffEditorLabels, DiffEditorPresentation,
+    DiffEditorState, MultiDiffEditor, MultiDiffEditorItem, MultiDiffEditorLayout,
+    MultiDiffEditorStyle,
 };
 use zeta_ui::{
-    Border, Component, Edges, PaintRect, Rect, ScrollAxis, ScrollCommand, ScrollDelta,
-    ScrollMetrics, ScrollState, ScrollbarController, ScrollbarDrag, ScrollbarPart,
+    Border, Component, ComponentInspection, Edges, PaintRect, Rect, ScrollAxis, ScrollCommand,
+    ScrollDelta, ScrollMetrics, ScrollState, ScrollbarController, ScrollbarDrag, ScrollbarPart,
     ScrollbarPointerPresence, ScrollbarPresentation, Size, TextBlock, TextStyle, UiScene,
 };
 use zeta_ui_dispatch::{
@@ -29,7 +29,7 @@ pub(crate) struct EditorDiff {
     file_name: String,
     original_label: String,
     modified_label: String,
-    document: DiffDocument,
+    document: DiffEditorDocument,
     editor_state: DiffEditorState,
 }
 
@@ -112,7 +112,7 @@ impl EditorPaneState {
     pub(crate) fn toggle_fold_for_element(&mut self, id: ElementId) -> bool {
         let mut toggled = false;
         for (item_index, diff) in self.diffs.iter_mut().enumerate() {
-            for region_index in 0..diff.document.rows().len() {
+            for region_index in 0..diff.document.diff().rows().len() {
                 if multi_diff_fold_element_id(item_index, region_index) == Some(id) {
                     diff.editor_state.toggle_unchanged_region(region_index);
                     toggled = true;
@@ -156,13 +156,13 @@ impl EditorPaneState {
         file_name: impl Into<String>,
         original_label: impl Into<String>,
         modified_label: impl Into<String>,
-        document: DiffDocument,
+        document: zeta_diff::DiffDocument,
     ) {
         self.diffs.push(EditorDiff {
             file_name: file_name.into(),
             original_label: original_label.into(),
             modified_label: modified_label.into(),
-            document,
+            document: DiffEditorDocument::new(document, zeta_editor::CodeEditorLanguage::PlainText),
             editor_state: DiffEditorState::default(),
         });
         self.remeasure();
@@ -436,6 +436,10 @@ fn multi_diff_fold_element_id(item_index: usize, region_index: usize) -> Option<
 }
 
 impl Component for EditorPane<'_> {
+    fn inspection(&self) -> ComponentInspection {
+        ComponentInspection::new("EditorPane", self.bounds)
+    }
+
     fn paint(&self, scene: &mut UiScene) {
         scene.draw_rect(
             PaintRect::new(self.bounds, self.palette.surface).with_border(Border::new(

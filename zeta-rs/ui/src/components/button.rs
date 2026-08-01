@@ -1,8 +1,8 @@
 use zeta_icons::Icon;
 
 use crate::{
-    Border, Color, Component, CornerRadii, Edges, PaintIcon, PaintRect, Point, Rect, TextBlock,
-    TextStyle, UiScene,
+    Border, Color, Component, ComponentInspection, CornerRadii, Edges, PaintIcon, PaintRect, Point,
+    Rect, TextBlock, TextStyle, UiScene,
 };
 
 use super::icon_label::{IconLabel, IconLabelStyle};
@@ -282,6 +282,12 @@ impl Button {
 }
 
 impl Component for Button {
+    fn inspection(&self) -> ComponentInspection {
+        ComponentInspection::new("Button", self.bounds)
+            .with_padding(self.style.padding)
+            .with_corner_radii(self.style.corner_radii)
+    }
+
     fn paint(&self, scene: &mut UiScene) {
         scene.draw_rect(
             PaintRect::new(
@@ -331,7 +337,7 @@ impl Component for Button {
                         .with_icon_size(self.style.icon_size)
                         .with_content_gap(self.style.content_gap),
                 );
-                label.paint(scene);
+                scene.draw_component(&label);
                 return;
             }
             ButtonContent::Label(_) => {}

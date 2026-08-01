@@ -1,19 +1,30 @@
 use super::{
-    DiffEditor, DiffEditorLabels, DiffEditorPresentation, DiffEditorSide, DiffEditorState,
-    DiffEditorStyle,
+    DiffEditor, DiffEditorDocument, DiffEditorLabels, DiffEditorPresentation, DiffEditorSide,
+    DiffEditorState, DiffEditorStyle,
 };
+use crate::CodeEditorLanguage;
 use zeta_diff::DiffDocument;
 use zeta_ui::{Color, Component, Point, Rect, UiScene};
 
-fn document() -> DiffDocument {
-    DiffDocument::from_text(
+fn document() -> DiffEditorDocument {
+    editor_document(
         "same\nlet value = 1;\nremoved\n",
         "same\nlet value = 20;\nadded\nextra\n",
     )
-    .unwrap()
 }
 
-fn editor<'a>(document: &'a DiffDocument, bounds: Rect, state: DiffEditorState) -> DiffEditor<'a> {
+fn editor_document(original: &str, modified: &str) -> DiffEditorDocument {
+    DiffEditorDocument::new(
+        DiffDocument::from_text(original, modified).unwrap(),
+        CodeEditorLanguage::PlainText,
+    )
+}
+
+fn editor<'a>(
+    document: &'a DiffEditorDocument,
+    bounds: Rect,
+    state: DiffEditorState,
+) -> DiffEditor<'a> {
     DiffEditor::new(
         bounds,
         document,
@@ -95,8 +106,35 @@ fn side_by_side_paint_includes_headers_mapped_lines_markers_and_inline_highlight
 }
 
 #[test]
+fn diff_document_projects_editor_owned_syntax_into_both_code_panes() {
+    let document = DiffEditorDocument::new(
+        DiffDocument::from_text("fn before() {}\n", "fn after() {}\n").unwrap(),
+        CodeEditorLanguage::Rust,
+    );
+    let editor = editor(
+        &document,
+        Rect::from_xywh(0.0, 0.0, 640.0, 80.0),
+        DiffEditorState::default(),
+    );
+    let mut scene = UiScene::new(Color::WHITE);
+
+    editor.paint(&mut scene);
+
+    assert_eq!(
+        scene
+            .text_blocks()
+            .iter()
+            .filter(|block| {
+                block.text() == "fn" && block.style().color() == Color::rgb(130, 80, 223)
+            })
+            .count(),
+        2
+    );
+}
+
+#[test]
 fn unified_presentation_stacks_changed_rows_once_without_side_headers() {
-    let document = DiffDocument::from_text("same\nbefore\n", "same\nafter\n").unwrap();
+    let document = editor_document("same\nbefore\n", "same\nafter\n");
     let editor = editor(
         &document,
         Rect::from_xywh(0.0, 0.0, 320.0, 80.0),
@@ -157,17 +195,17 @@ fn location_maps_both_panes_to_the_same_visible_diff_row() {
 fn visible_range_never_paints_more_rows_than_the_body_capacity() {
     let document = document();
     let mut state = DiffEditorState::default();
-    state.scroll_rows(isize::MAX, document.rows().len(), 2);
+    state.scroll_rows(isize::MAX, document.diff().rows().len(), 2);
     let editor = editor(&document, Rect::from_xywh(0.0, 0.0, 400.0, 72.0), state);
 
     assert_eq!(editor.visible_row_capacity(), 2);
     assert_eq!(editor.visible_row_range().len(), 2);
-    assert_eq!(editor.visible_row_range().end, document.rows().len());
+    assert_eq!(editor.visible_row_range().end, document.diff().rows().len());
 }
 
 #[test]
 fn absent_counterpart_uses_missing_line_background_without_fake_line_number() {
-    let document = DiffDocument::from_text("", "new line\n").unwrap();
+    let document = editor_document("", "new line\n");
     let editor = editor(
         &document,
         Rect::from_xywh(0.0, 0.0, 400.0, 80.0),
@@ -213,7 +251,7 @@ fn unified_presentation_collapses_and_reveals_long_unchanged_regions() {
         })
         .collect::<Vec<_>>()
         .join("\n");
-    let document = DiffDocument::from_text(&original, &modified).unwrap();
+    let document = editor_document(&original, &modified);
     let bounds = Rect::from_xywh(0.0, 0.0, 320.0, 400.0);
     let collapsed = editor(&document, bounds, DiffEditorState::default())
         .with_presentation(DiffEditorPresentation::Unified);
@@ -284,7 +322,7 @@ fn expanded_large_unified_diff_maps_a_distant_visual_row_without_materializing_e
         .collect::<Vec<_>>()
         .join("\n");
     let modified = original.replace("line 1001", "changed 1001");
-    let document = DiffDocument::from_text(&original, &modified).unwrap();
+    let document = editor_document(&original, &modified);
     let mut state = DiffEditorState::default();
     state.expand_unchanged_region(0);
     state.expand_unchanged_region(1);

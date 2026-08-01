@@ -4,7 +4,9 @@ use std::ops::Range;
 
 use bytemuck::{Pod, Zeroable};
 
-use crate::{ImageId, PaintImage, Rect, UiRenderError, UiScene, UiViewport};
+use zeta_ui::{ImageId, PaintImage, Rect, UiScene};
+
+use super::{UiRenderError, UiViewport};
 
 const ATLAS_SIZE: u32 = 4_096;
 const ATLAS_PADDING: u32 = 1;
@@ -88,7 +90,7 @@ pub(crate) struct ImageRenderer {
     atlas: wgpu::Texture,
     instance_buffer: wgpu::Buffer,
     instance_capacity: usize,
-    layer_ranges: Vec<Range<u32>>,
+    primitive_ranges: Vec<Range<u32>>,
     allocator: ShelfAllocator,
     regions: HashMap<ImageId, AtlasRegion>,
 }
@@ -196,7 +198,7 @@ impl ImageRenderer {
             atlas,
             instance_buffer: create_instance_buffer(device, 1),
             instance_capacity: 1,
-            layer_ranges: Vec::new(),
+            primitive_ranges: Vec::new(),
             allocator: ShelfAllocator::new(),
             regions: HashMap::new(),
         }
@@ -218,31 +220,27 @@ impl ImageRenderer {
         );
         let viewport = [target.width() as f32, target.height() as f32, 0.0, 0.0];
         let mut instances = Vec::with_capacity(scene.images().len());
-        self.layer_ranges.clear();
-        for layer in 0..scene.layer_count() {
+        self.primitive_ranges.clear();
+        for (index, image) in scene.images().iter().enumerate() {
             let start = instances.len() as u32;
-            for (index, image) in scene.images().iter().enumerate() {
-                if scene.image_layers()[index] != layer {
-                    continue;
-                }
-                validate_image(index, image)?;
-                let bounds = image.bounds();
-                let clip = image
-                    .clip_bounds()
-                    .map(|clip| clip.intersection(logical_viewport))
-                    .unwrap_or(logical_viewport);
-                if bounds.is_empty() || bounds.intersection(clip).is_empty() {
-                    continue;
-                }
-                let region = self.region_for(queue, image)?;
-                instances.push(ImageInstance {
-                    bounds: scaled_rect(bounds, scale),
-                    uv_bounds: region.uv_bounds(),
-                    clip_bounds: scaled_rect(clip, scale),
-                    viewport,
-                });
+            validate_image(index, image)?;
+            let bounds = image.bounds();
+            let clip = image
+                .clip_bounds()
+                .map(|clip| clip.intersection(logical_viewport))
+                .unwrap_or(logical_viewport);
+            if bounds.is_empty() || bounds.intersection(clip).is_empty() {
+                self.primitive_ranges.push(start..start);
+                continue;
             }
-            self.layer_ranges.push(start..instances.len() as u32);
+            let region = self.region_for(queue, image)?;
+            instances.push(ImageInstance {
+                bounds: scaled_rect(bounds, scale),
+                uv_bounds: region.uv_bounds(),
+                clip_bounds: scaled_rect(clip, scale),
+                viewport,
+            });
+            self.primitive_ranges.push(start..instances.len() as u32);
         }
         if instances.len() > self.instance_capacity {
             self.instance_capacity = instances.len().next_power_of_two();
@@ -296,12 +294,13 @@ impl ImageRenderer {
         Ok(region)
     }
 
-    pub(crate) fn render_layer<'pass>(
+    pub(crate) fn render_range<'pass>(
         &'pass self,
         pass: &mut wgpu::RenderPass<'pass>,
-        layer: usize,
+        primitive_range: Range<usize>,
     ) {
-        let Some(range) = self.layer_ranges.get(layer) else {
+        let Some(range) = super::rect::instance_range(&self.primitive_ranges, primitive_range)
+        else {
             return;
         };
         if range.is_empty() {
@@ -353,5 +352,5 @@ fn scaled_rect(rect: Rect, scale: f32) -> [f32; 4] {
 }
 
 #[cfg(test)]
-#[path = "image_renderer_tests.rs"]
+#[path = "image_tests.rs"]
 mod tests;

@@ -61,11 +61,6 @@ function createRendererApi(connection: ViteDevAppServerConnection): ZetaRenderer
     typst: {
       compile: (params) => request(connection, "document/typst/compile", params),
     },
-    syntax: {
-      open: (params) => request(connection, "document/syntax/open", params),
-      change: (params) => request(connection, "document/syntax/change", params),
-      close: (params) => voidResult(request(connection, "document/syntax/close", params)),
-    },
     resource: {
       metadata: (params) => request(connection, "resource/metadata", params),
       read: (params) => request(connection, "resource/read", params),

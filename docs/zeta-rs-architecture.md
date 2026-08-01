@@ -71,8 +71,10 @@ zeta-rs/
 ├── zeta-api/
 ├── http-client/           # shared proxy/TLS/unary HTTP substrate；stream/WebSocket 尚未实现
 ├── zeta-client/           # API operation retry 与 SSE framing layer
+├── ui/                    # 后端无关 component、layout、paint primitive 与 immutable scene
+├── renderer/              # UiScene 到图形后端的稳定执行契约；不依赖具体 GPU API
 ├── winit/                 # App Server 下方的底层 event-loop/native-window crate
-├── wgpu/                  # App Server 下方的底层 GPU/surface crate；不拥有 product identity
+├── wgpu/                  # Renderer 的当前 wgpu 实现；拥有 GPU pipeline/surface，不拥有 product identity
 ├── exec/                  # target headless Agent runner
 ├── tool-executor/         # target local process execution boundary
 ├── tui/
@@ -103,9 +105,10 @@ local/server origin、输入 grammar、匹配、选择、dismiss、滚动、补�
 conformance fixture 保持语义一致。跨产品边界见 [`slash-commands.md`](slash-commands.md)，当前 API
 和失败语义见 [`slash-commands/README.md`](../zeta-rs/slash-commands/README.md)。
 
-`zeta-syntax` 当前拥有 Rust、JSON、JSONC 与 Shell 文档的有界增量 tree-sitter parse、host revision binding，以及
+`zeta-syntax` 当前拥有 Rust、JSON、JSONC 与 Shell 文档的有界增量 tree-sitter parse、revision binding，以及
 syntax token、folding range、document symbol 和 parse diagnostic snapshot。它不读取文件、
-不监听 workspace、不保存符号索引，也不依赖 Monaco、`zeta-editor` 或 `zeta-lsp`。跨宿主
+不监听 workspace、不保存符号索引，也不依赖 Monaco、`zeta-editor` 或 `zeta-lsp`。它是
+Rust `zeta-editor` 内部组合的底层分析 crate，不是 App Server 产品 API。跨编辑器
 所有权与演进阶段见 [`syntax-analysis.md`](syntax-analysis.md)，当前 API 和修改路径见
 [`syntax/README.md`](../zeta-rs/syntax/README.md)。
 
@@ -115,10 +118,10 @@ syntax token、folding range、document symbol 和 parse diagnostic snapshot。�
 config、Session/Thread store。Native 消费完整相关 palette，TUI 只消费明确子集；当前 API、
 失败语义和 conformance contract 见 [`theme/README.md`](../zeta-rs/theme/README.md)。
 
-`zeta-editor` 当前拥有 Native 使用的多行编辑、caret/selection、undo/redo、IME/syntax
-projection、代码视口绘制、复用两个 CodeEditor pane 的 side-by-side DiffEditor，以及纵向组合
+`zeta-editor` 当前拥有 Native 使用的多行编辑、caret/selection、undo/redo、IME、language-aware
+syntax lifecycle/projection、代码视口绘制、retained `DiffEditorDocument`、复用两个 CodeEditor pane 的 side-by-side DiffEditor，以及纵向组合
 多个文件 section 的 MultiDiffEditor；它依赖
-`zeta-ui` 和 `zeta-diff`，但不依赖 `zeta-native`，也不拥有文件 Tab、平台事件、EditorHost 或
+`zeta-ui`、`zeta-diff` 和 `zeta-syntax`，但不依赖 `zeta-native`，也不拥有文件 Tab、平台事件、EditorHost 或
 TUI presentation。当前 API、接入义务和限制见
 [`editor/README.md`](../zeta-rs/editor/README.md)。
 
@@ -140,6 +143,12 @@ domain-agnostic logical-pixel offset、clamp、viewport clip、内容坐标、�
 paint/hit/track-page/thumb-drag geometry，以及 hover/active/fade deadline。MultiDiffEditor
 复用这套基座；平台 wheel normalization、pointer capture，以及 Terminal scrollback 的距底部
 行偏移、输出增长锚定和 alternate-screen 分流仍由 `zeta-native` 拥有，不能迁入通用 ScrollView。
+
+组件到 GPU 的依赖方向固定为 `Component → UiScene → Renderer → concrete backend`；`UiScene`
+通过 `SceneBatch` 保留跨 primitive 的真实绘制顺序。`zeta-ui` 不依赖 wgpu，Native 只保存
+`dyn Renderer`，当前具体类型只在 composition-root adapter 中选择。Native 的 interaction 与
+accessibility frame 不进入 renderer。完整所有权、后端替换路径和架构约束见
+[`rendering-architecture.md`](rendering-architecture.md)。
 
 Direct-provider credential ownership 由 [`model-provider.md`](model-provider.md) 维护；通用 secret
 persistence 由 [`secrets.md`](secrets.md) 维护；interactive login control plane 由

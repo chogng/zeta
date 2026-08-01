@@ -1,7 +1,7 @@
 use zeta_ui::{
-    ButtonBackgrounds, ButtonState, ButtonStyle, Component, ContextMenu, ContextMenuItem,
-    ContextMenuSelection, ContextMenuStyle, ContextViewPlacement, CornerRadii, Edges, Point, Rect,
-    Size, TextStyle, UiScene,
+    ButtonBackgrounds, ButtonState, ButtonStyle, Component, ComponentInspection, ContextMenu,
+    ContextMenuItem, ContextMenuSelection, ContextMenuStyle, ContextViewPlacement, CornerRadii,
+    Edges, Point, Rect, Size, TextStyle, UiScene,
 };
 use zeta_ui_dispatch::{
     AccessibilityRole, AccessibilitySelection, CursorFeedback, DispatchInvalidation,
@@ -199,8 +199,12 @@ impl SessionContextMenu {
 }
 
 impl Component for SessionContextMenu {
+    fn inspection(&self) -> ComponentInspection {
+        ComponentInspection::new("SessionContextMenu", self.context_menu.bounds())
+    }
+
     fn paint(&self, scene: &mut UiScene) {
-        self.context_menu.paint(scene);
+        scene.draw_component(&self.context_menu);
     }
 }
 

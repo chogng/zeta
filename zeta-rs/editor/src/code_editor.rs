@@ -3,18 +3,16 @@
 use std::ops::Range;
 
 use zeta_ui::{
-    CaretVisibility, Color, Component, PaintRect, Point, Rect, Size, TextBlock, TextBlockWrap,
-    TextStyle, UiScene,
+    CaretVisibility, Color, Component, ComponentInspection, PaintRect, Point, Rect, Size,
+    TextBlock, TextBlockWrap, TextStyle, UiScene,
 };
 
+pub use self::analysis::CodeEditorLanguage;
 pub use self::document::CodeEditorDocument;
 pub use self::editing::{CodeEditorCommand, CodeEditorSelectionMode};
 use self::layout::{CodeEditorLayout, build_layout};
 pub use self::style::{CodeEditorPalette, CodeEditorStyle};
-pub use self::syntax::{
-    CodeEditorSyntaxHighlighter, CodeEditorSyntaxPalette, CodeEditorSyntaxToken,
-    CodeEditorTokenRole,
-};
+pub use self::syntax::{CodeEditorSyntaxPalette, CodeEditorSyntaxToken, CodeEditorTokenRole};
 use self::text_metrics::{display_columns, expand_tabs, visit_display_cell_runs};
 
 const HEADER_HEIGHT: f32 = 32.0;
@@ -72,6 +70,7 @@ fn paint_cell_run(
     );
 }
 
+mod analysis;
 mod decorations;
 mod document;
 mod editing;
@@ -582,6 +581,10 @@ impl<'a> CodeEditor<'a> {
 }
 
 impl Component for CodeEditor<'_> {
+    fn inspection(&self) -> ComponentInspection {
+        ComponentInspection::new("CodeEditor", self.bounds)
+    }
+
     fn paint(&self, scene: &mut UiScene) {
         let paint_bounds = self.bounds.intersection(self.paint_viewport);
         if paint_bounds.is_empty() {

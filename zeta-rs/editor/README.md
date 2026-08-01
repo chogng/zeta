@@ -18,25 +18,26 @@ undo/redo、IME composition、语法 token、代码行与视口绘制，以及�
 | --- | --- | --- |
 | `CodeEditor` | public | 绘制可见代码行、caret/selection、preedit、syntax token、gutter 与 decoration；`within_viewport` 限制嵌入式宿主实际投影的行 |
 | `CodeEditorPresentation` | public | 选择带 document chrome 的普通编辑器或隐藏 gutter 的 compact 嵌入式编辑器 |
-| `CodeEditorDocument` | public | 保存文本、行 range、selection、composition、syntax snapshot 与 undo/redo |
+| `CodeEditorDocument` | public | 保存文本、语言、行 range、selection、composition、editor-local syntax snapshot 与 undo/redo；所有文本 mutation 自动同步分析 |
 | `CodeEditorCommand` | public | 表达插入、换行、Unicode navigation、选择、删除与 undo/redo |
-| `CodeEditorSyntaxHighlighter` | public trait | 把单行文本同步投影为 UTF-8 byte range + `CodeEditorTokenRole`；不选择具体颜色 |
+| `CodeEditorLanguage` | public | 让宿主选择 PlainText、Shell、JSON、JSONC 或 Rust；parser、tree、revision 与 token projection 保持私有 |
 | `CodeEditorPalette` / `CodeEditorSyntaxPalette` | public | 由宿主把 resolved theme token 映射为组件命名输入；换主题只重建 style，不重新分析文本 |
 | `CodeEditorRowSource` | public trait | 惰性提供稳定 visual row；普通文档和 diff projection 共用 |
 | `CodeEditorRow` | public | 表达真实代码行、对齐 placeholder 或无行号 annotation，以及本帧 decoration |
 | `CodeEditorViewport` | public | 保存首个可见行和横向显示列，并执行有界滚动或 reveal-row |
 | `CodeEditorStyle` | public | 拥有代码 surface、header、gutter、文本与 syntax role 的 resolved presentation style；`light()` 只是安全 fallback |
 | `DiffEditor` | public | 按 presentation 组合双列或单列 `CodeEditor`，同步纵向 viewport 并绘制 diff decoration |
+| `DiffEditorDocument` | public | 接收已计算 `DiffDocument` 与 language，内部持有 original/modified 两个 language-aware `CodeEditorDocument`；不向宿主暴露 parser/revision/token |
 | `DiffEditorPresentation` | public | 显式选择 `SideBySide` 或适合窄嵌入 surface 的 `Unified` geometry |
 | `DiffEditorState` | public | 保存共享首行、两侧独立横向显示列和 Unified 未修改区间的展开状态 |
 | `DiffEditorFoldControl` | public | 向产品宿主发布可见未修改区间的行数、状态与命中 bounds |
 | `MultiDiffEditor` | public | 把多个文件标题和 `DiffEditor` section 组合为一个纵向裁剪 surface |
-| `MultiDiffEditorItem` | public | 为一帧借用文件名、`DiffDocument`、两侧标签和该文件的 `DiffEditorState` |
+| `MultiDiffEditorItem` | public | 为一帧借用文件名、`DiffEditorDocument`、两侧标签和该文件的 `DiffEditorState` |
 | `MultiDiffEditorLayout` | public | 用 `zeta-ui::VirtualListLayout` 缓存精确 item/state/presentation snapshot 的可变 section heights、prefix index 与总内容高度，供高频滚动复用 |
 | `zeta-ui::ScrollState` | delegated | 保存 MultiDiffEditor 整体 logical-pixel offset；clamp 与 transition 由通用滚动基座执行 |
 | `MultiDiffEditorStyle` | public | 拥有文件 header、section 间距与嵌套 DiffEditor 样式 |
 | `DiffEditorPalette` / `MultiDiffEditorPalette` | public | 让产品宿主通过命名字段注入 diff marker/background、scrollbar 与文件 header 视觉 |
-| `DiffSideRows` | private | 把 `DiffDocument` 的一侧惰性转换为 `CodeEditorRow` |
+| `DiffSideRows` | private | 把 `DiffEditorDocument` 的一侧惰性转换为带 editor-owned syntax token 的 `CodeEditorRow` |
 | `UnifiedDiffRows` | private | 用 hunk source-range、修改行索引和 fold segment 紧凑表达单列 diff；按可见 visual index 随机映射代码行，不按文件总行数分配 row 数组 |
 | `code_editor::layout::build_layout` | private | 从组件 bounds 计算 header/body/gutter/content |
 | `code_editor::text_metrics::display_columns_until` | private | 把 UTF-8 byte offset 映射到 Tab/Unicode 等宽显示列 |
@@ -50,6 +51,7 @@ CodeEditorDocument ─┐
 DiffSideRows ───────┘
                            ↓
 CodeEditor::paint
+├─ ComponentInspection(CodeEditor bounds)
 ├─ code_editor::layout::build_layout
 ├─ CodeEditor::visible_row_range
 ├─ CodeEditor::painted_row_range → host viewport row culling
@@ -62,7 +64,8 @@ CodeEditorDocument::apply
 ├─ grapheme / CRLF boundary navigation
 ├─ selection replacement
 ├─ checkpoint → bounded undo / redo
-└─ reindex_lines → clear stale syntax
+└─ reindex_lines → CodeEditorAnalysis::synchronize
+   └─ SyntaxDocument incremental edit → line-relative syntax token
 
 CodeEditorDocument::apply_composition
 ├─ Preedit → separate composition state
@@ -71,8 +74,8 @@ CodeEditorDocument::apply_composition
 
 DiffEditor::paint
 ├─ SideBySide
-│  ├─ DiffSideRows(original) → CodeEditor
-│  ├─ DiffSideRows(modified) → CodeEditor
+│  ├─ DiffEditorDocument.original syntax → DiffSideRows → CodeEditor
+│  ├─ DiffEditorDocument.modified syntax → DiffSideRows → CodeEditor
 │  └─ divider
 └─ Unified
    └─ UnifiedDiffRows → one CodeEditor
@@ -118,20 +121,25 @@ grapheme boundary 修改 committed text；CRLF 在删除时作为一个换行边
 `set_selection` 支持指针选择。`CodeEditorPresentation::Compact` 只改变共享组件拥有的
 header/gutter geometry，不改变 document、editing 或 row-source contract。
 
-`DiffDocument` 的输入
-验证、资源限制和取消在进入本 crate 前由 `zeta-diff` 完成。组件只根据调用方提供的不可变
-snapshot 生成 `UiScene`。
+三个公开 editor Component 都通过 `ComponentInspection` 上报各自 resolved bounds；宿主必须使用
+`UiScene::draw_component`，使 MultiDiffEditor → ScrollView → DiffEditor → CodeEditor 的可见组合链
+进入同一帧的 layout inspection hierarchy。该 metadata 不改变 document、viewport 或输入 ownership。
+
+`DiffDocument` 的输入验证、资源限制和取消在进入本 crate 前由 `zeta-diff` 完成。宿主随后用
+语言构造 retained `DiffEditorDocument`；组件只根据该不可变 editor snapshot 生成 `UiScene`。
 
 产品宿主必须：
 
-- 为每个文件保存独立的 document identity 与 editor viewport；
+- 为每个文件保存独立的 document identity 与 editor viewport，并在创建 document 时选择
+  `CodeEditorLanguage`；
 - 为 `MultiDiffEditorItem` 提供已排序的 changed-file snapshot，并保留整体
   `zeta-ui::ScrollState`；
 - 保存每文件 `DiffEditorState`，并用 `fold_controls` 发布的 identity 与 bounds 路由未修改区间
   的展开/收起输入；
 - 把滚轮、平台按键和 IME 事件转换为 `CodeEditorCommand` / `TextInputCompositionEvent`；
 - 用 `caret_bounds` 同步平台 IME candidate area，并由 host 控制 caret blink；
-- 在接入异步 syntax 或 diff 计算时丢弃不再匹配当前 document revision 的结果。
+- 在接入异步 diff 或 LSP 结果时丢弃不再匹配当前 document revision 的结果；CodeEditor 的
+  tree-sitter revision 不暴露给宿主。
 - 把 `zeta-theme` 或其他主题 runtime 的 snapshot 映射成公开 palette；本 crate 不读取主题文件，
   也不依赖具体产品宿主。
 
@@ -158,10 +166,11 @@ cargo clippy --manifest-path zeta-rs/Cargo.toml -p zeta-editor --all-targets -- 
 字符范围，表示共享 CodeEditor ownership 已经漂移。若 `MultiDiffEditor` 绕过 `DiffEditor`
 直接生成左右代码行，表示多文件组合层的 ownership 已经漂移。
 
-当前 history 使用完整 snapshot 且不做 typing coalescing；syntax highlighter 是同步逐行 contract，
-异步 parser 的 revision binding 仍由 host 负责。clipboard command、自动缩进、多光标、find/replace、
+当前 history 使用完整 snapshot 且不做 typing coalescing；Native CodeEditor 的 tree-sitter 分析
+与文本 mutation 同步执行，大文件尚未迁移到 editor-owned worker。clipboard command、自动缩进、多光标、find/replace、
 语言级函数/类型代码折叠、minimap、diagnostics 和 EditorHost 尚未完成。Unified DiffEditor 已拥有
 纯 diff 语义的未修改区间折叠；它不会把这套规则放进普通 CodeEditor。MultiDiffEditor section
 高度随 diff row 数量增长，并用可变高度 prefix index 二分剔除完全不可见的文件；部分可见的
 超大单文件只投影外层 viewport 内的行。
-section 折叠仍由后续宿主接线完成。
+section 折叠仍由后续宿主接线完成。DiffEditor 已维护 original/modified 两侧的 language 与 syntax
+snapshot；当前同步 parse 仍需以后基于大文件 profile 决定是否迁入 editor-owned worker。

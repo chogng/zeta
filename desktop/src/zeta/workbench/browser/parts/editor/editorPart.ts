@@ -6,7 +6,6 @@ import type { IMenuService } from "../../../../platform/actions/common/menuServi
 import type { IConfigurationService } from "../../../../platform/configuration/common/configuration.js";
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
 import type { IKeybindingService } from "../../../../platform/keybinding/common/keybinding.js";
-import { type ISyntaxAnalysisService } from "../../../../platform/syntax/common/syntaxAnalysisService.js";
 import { type ITextFileService } from "../../../services/textfile/common/textFileService.js";
 import { WorkbenchPart } from "../../part.js";
 import { EditorGroup, type EditorGroupOptions, type IEditorGroup } from "./editorGroup.js";
@@ -43,7 +42,6 @@ export const IEditorPart =
 export interface IEditorPartOptions {
   readonly configurationService?: IConfigurationService;
   readonly keybindingService?: IKeybindingService;
-  readonly syntaxAnalysisService?: ISyntaxAnalysisService;
   readonly textFileService?: ITextFileService;
   readonly registry?: EditorPaneRegistry;
   readonly titleActions?: {
@@ -74,7 +72,6 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
       registry: options.registry ?? EditorPanes,
       configurationService: options.configurationService,
       keybindingService: options.keybindingService,
-      syntaxAnalysisService: options.syntaxAnalysisService,
       textFileService: options.textFileService,
       titleActions: options.titleActions,
     };

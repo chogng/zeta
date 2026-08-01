@@ -1,6 +1,9 @@
-use super::{Dropdown, DropdownItem, DropdownSelection, DropdownStyle};
+use super::{
+    Dropdown, DropdownItem, DropdownScrollConfiguration, DropdownSelection, DropdownStyle,
+};
 use crate::{
-    ButtonBackgrounds, ButtonState, ButtonStyle, Color, Component, CornerRadii, Point, Rect, Size,
+    ButtonBackgrounds, ButtonState, ButtonStyle, Color, Component, CornerRadii, Point, Rect,
+    ScrollAxis, ScrollCommand, ScrollMetrics, ScrollState, ScrollViewStyle, ScrollbarStyle, Size,
     TextStyle, UiScene,
 };
 
@@ -111,4 +114,46 @@ fn reserved_header_shifts_items_and_paints_inside_the_dropdown() {
     );
     assert_eq!(dropdown.bounds().size.height, 64.0);
     assert!(scene.rects().iter().any(|rect| rect.fill() == SELECTED));
+}
+
+#[test]
+fn scrollable_dropdown_caps_height_and_translates_item_geometry() {
+    let items = (0..5)
+        .map(|index| DropdownItem::new(format!("Folder {index}"), ButtonState::Resting))
+        .collect::<Vec<_>>();
+    let metrics = ScrollMetrics::new(Size::new(120.0, 56.0), Size::new(120.0, 140.0));
+    let mut scroll_state = ScrollState::default();
+    assert!(scroll_state.apply(
+        ScrollCommand::ToEnd(ScrollAxis::Vertical),
+        metrics,
+        ScrollAxis::Vertical,
+    ));
+    let dropdown = Dropdown::new_scrollable(
+        Rect::from_xywh(0.0, 0.0, 400.0, 300.0),
+        Rect::from_xywh(30.0, 20.0, 1.0, 1.0),
+        items,
+        DropdownStyle::new(
+            SURFACE,
+            ButtonStyle::new(
+                ButtonBackgrounds::new(Color::TRANSPARENT),
+                TextStyle::new(13.0, Color::rgb(0, 0, 0)),
+            ),
+            Size::new(120.0, 28.0),
+        )
+        .with_header_height(36.0),
+        DropdownScrollConfiguration::new(
+            scroll_state,
+            2,
+            ScrollViewStyle::new(ScrollbarStyle::new(Color::TRANSPARENT, SELECTED)),
+        ),
+    );
+
+    assert_eq!(dropdown.bounds().size.height, 92.0);
+    assert_eq!(dropdown.scroll_metrics(), Some(metrics));
+    assert!(dropdown.item_bounds(0).unwrap().is_empty());
+    assert_eq!(
+        dropdown.item_bounds(3).unwrap().origin.y,
+        dropdown.header_bounds().unwrap().bottom()
+    );
+    assert!(!dropdown.item_bounds(4).unwrap().is_empty());
 }

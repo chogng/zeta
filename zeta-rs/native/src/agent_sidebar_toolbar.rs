@@ -2,8 +2,8 @@ use zeta_icons::icons;
 use zeta_ui::{
     ActionBar, ActionBarButton, ActionBarItem, ActionBarOrientation, ActionBarStyle, Border,
     ButtonBackgrounds, ButtonSelection, ButtonState, ButtonStyle, CaretVisibility, Component,
-    CornerRadii, Edges, PaintRect, Rect, SearchBox, Size, TextInputLayoutEngine, TextStyle,
-    UiScene,
+    ComponentInspection, CornerRadii, Edges, PaintRect, Rect, SearchBox, Size,
+    TextInputLayoutEngine, TextStyle, UiScene,
 };
 use zeta_ui_dispatch::{
     AccessibilityRole, CursorFeedback, FocusBehavior, InteractionFrame, NavigationAxis,
@@ -220,6 +220,10 @@ impl AgentSidebarToolbar {
 }
 
 impl Component for AgentSidebarToolbar {
+    fn inspection(&self) -> ComponentInspection {
+        ComponentInspection::new("AgentSidebarToolbar", self.bounds)
+    }
+
     fn paint(&self, scene: &mut UiScene) {
         scene.draw_rect(
             PaintRect::new(self.bounds, self.palette.surface_raised).with_border(Border::new(
@@ -227,12 +231,12 @@ impl Component for AgentSidebarToolbar {
                 self.palette.border,
             )),
         );
-        self.navigation.paint(scene);
+        scene.draw_component(&self.navigation);
         if let Some(search_box) = self.search_box.as_ref() {
-            search_box.paint(scene);
+            scene.draw_component(search_box);
         }
         if let Some(action_bar) = self.action_bar.as_ref() {
-            action_bar.paint(scene);
+            scene.draw_component(action_bar);
         }
     }
 }

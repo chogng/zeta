@@ -28,6 +28,7 @@ fn runtime_revisions_and_notifies_only_for_changed_workspace_projection() {
 
     let initial = runtime.status().unwrap();
     assert_eq!(initial.revision, 1);
+    assert_eq!(initial.workspace_path, "workspace");
     assert!(initial.changes.is_empty());
     assert_eq!(queue.drain().len(), 1);
     let watched_paths = runtime.watched_paths();
@@ -83,6 +84,7 @@ fn runtime_incarnations_use_distinct_revision_scopes() {
     let first_status = first.status().unwrap();
     let second_status = second.status().unwrap();
 
+    assert!(first_status.workspace_path.is_empty());
     assert_ne!(
         first_status.stream_instance_id,
         second_status.stream_instance_id

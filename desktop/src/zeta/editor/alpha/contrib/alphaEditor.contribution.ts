@@ -9,10 +9,8 @@ registerEditorPane({
   canOpen: matchAlphaEditor,
   create: options => {
     if (!options.textFileService) throw new Error("Alpha Editor requires the Workbench text file service");
-    const syntaxAnalysisService = options.syntaxAnalysisService;
-    if (!syntaxAnalysisService) throw new Error("Alpha Editor requires the Workbench syntax analysis service");
     return new AlphaEditorPane(options.textFileService, {
-      createSession: sessionOptions => createBrowserAlphaEditorSession(sessionOptions, syntaxAnalysisService),
+      createSession: createBrowserAlphaEditorSession,
     });
   },
 });

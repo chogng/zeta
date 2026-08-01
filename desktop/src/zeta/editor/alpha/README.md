@@ -40,7 +40,7 @@ class:
 | Events, lifecycle, URI identity, resource collections | `base/common` | Reuse existing primitives; editor semantics must not flow back into base |
 | Raw resource I/O | `platform/files` | `IFileService` currently owns read-only workspace access; write capabilities belong here when the host protocol supports them |
 | Text resource loading and bootstrap resolution | `workbench/services/textfile/common` | ✅ `ITextFileService`; dirty state, save/revert and conflicts remain unfinished |
-| Revisioned syntax snapshots | `platform/syntax/common` | ✅ `ISyntaxAnalysisService`; the App Server implementation owns transport while Alpha consumes only the service contract |
+| Syntax token production | Alpha analysis providers | ✅ JSON/JSONC use the editor-local TextMate worker; Rust provider is unfinished and no App Server syntax transport exists |
 | Shared URI-to-Alpha-model references | `AlphaTextModelService` | ✅ editor-owned; the TextFile service does not absorb Alpha transaction semantics |
 | Text transactions, selections, decorations and versioned language results | `editor/alpha/common` | Canonical editor-domain state; no URI, persistence or Workbench tab dependency |
 | Language identities and composable editing rules | `editor/alpha/common` | `LanguageConfigurationRegistry`; comments/brackets/pairs are editor-domain contracts, not generic base primitives |
@@ -207,18 +207,12 @@ ordered request initializes the mirror with a full snapshot; the peer lane and
 later requests reference it, while model transactions send one incremental
 sync shared by both lanes.
 
-`syntaxAnalysisServiceAdapter.ts` adapts the frontend `ISyntaxAnalysisService` to Alpha's analysis
-worker contract for Rust, JSON, and JSONC. Workbench registers
-`AppServerSyntaxAnalysisService`, which delegates to the App Server transport without exposing
-`ZetaRendererApi` to Editor Part or Alpha. The worker serializes one model's UTF-16 transactions
-into the service's `open|change|close` session, validates the returned complete analysis
-snapshot, maps the protocol-owned token legend into Alpha `LanguageToken` values, and projects
-tree-sitter parse errors into Alpha diagnostics. The diagnostic lane merges backend parse errors
-with the existing lexical result. Backend failure delegates to that same fallback chain:
-JSON/JSONC retain their bundled TextMate grammars, while Rust currently has no TextMate grammar
-and therefore yields an empty fallback token batch. Folding ranges and document symbols cross the
-wire in the shared snapshot but do not yet have an Alpha UI owner. Monaco has no ownership in this
-path and receives no parallel syntax integration.
+Browser sessions create their analysis worker directly from the editor-local provider factory.
+JSON/JSONC use the bundled TextMate grammars; Workbench, Renderer API and App Server do not expose
+a syntax service. Rust currently has no Alpha provider and therefore yields no syntax token batch.
+Adding Rust tree-sitter must extend Alpha's provider/worker boundary while keeping parser transport
+private to the editor implementation. Monaco has no ownership in this path and receives no parallel
+syntax integration.
 
 `LanguageAnalysisProviderRegistry` selects the first matching token provider
 and all matching diagnostic providers in registration order. Provider failures

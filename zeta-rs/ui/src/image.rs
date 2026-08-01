@@ -105,7 +105,8 @@ impl PaintImage {
         self.bounds
     }
 
-    pub(crate) const fn clip_bounds(&self) -> Option<Rect> {
+    /// Returns the resolved scene clip consumed by renderer backends.
+    pub const fn clip_bounds(&self) -> Option<Rect> {
         self.clip_bounds
     }
 

@@ -1,6 +1,6 @@
 use zeta_icons::Icon;
 
-use crate::{Color, Component, PaintRect, Point, Rect, Size, UiScene};
+use crate::{Color, Component, ComponentInspection, PaintRect, Point, Rect, Size, UiScene};
 
 use super::{Button, ButtonSelection, ButtonState, ButtonStyle};
 
@@ -103,7 +103,7 @@ impl ActionBarButton {
             }
         }
         .with_selection(self.selection);
-        button.paint(scene);
+        scene.draw_component(&button);
     }
 }
 
@@ -303,6 +303,10 @@ impl ActionBar {
 }
 
 impl Component for ActionBar {
+    fn inspection(&self) -> ComponentInspection {
+        ComponentInspection::new("ActionBar", self.bounds)
+    }
+
     fn paint(&self, scene: &mut UiScene) {
         scene.with_clip(self.bounds, |scene| {
             for (index, item) in self.items.iter().enumerate() {

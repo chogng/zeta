@@ -1,10 +1,10 @@
-use std::io;
 use std::path::{Path, PathBuf};
 
 use zeta_ui::{
-    ButtonBackgrounds, ButtonState, ButtonStyle, CaretVisibility, Component,
+    ButtonBackgrounds, ButtonState, ButtonStyle, CaretVisibility, Component, ComponentInspection,
     ContextViewAnchorPosition, ContextViewPlacement, CornerRadii, Dropdown, DropdownItem,
-    DropdownSelection, DropdownStyle, Edges, InputBoxState, Rect, SearchBox, Size, TextInput,
+    DropdownScrollConfiguration, DropdownSelection, DropdownStyle, Edges, InputBoxState, Rect,
+    ScrollAxis, ScrollCommand, ScrollMetrics, ScrollState, SearchBox, Size, TextInput,
     TextInputCommand, TextInputCompositionEvent, TextInputLayoutEngine, TextStyle, UiScene,
 };
 use zeta_ui_dispatch::{
@@ -16,13 +16,20 @@ use crate::shell_interaction::WINDOW;
 use crate::shell_style::ShellPalette;
 use crate::workspace_context::display_working_directory;
 
+#[path = "workspace_path_picker_path.rs"]
+mod path_support;
+use path_support::{
+    canonical_directory, directory_name, home_directory, read_child_directories,
+    resolve_directory_query,
+};
+
 const PATH_PICKER_SCOPE: u32 = 2;
 const WORKSPACE_PATH_PICKER: ElementId = ElementId::scoped(PATH_PICKER_SCOPE, 1);
 pub(crate) const WORKSPACE_PATH_SEARCH_INPUT: ElementId = ElementId::scoped(PATH_PICKER_SCOPE, 2);
 const FIRST_WORKSPACE_PATH_ITEM: u32 = 3;
-const DIRECTORY_PAGE_SIZE: usize = 8;
+const PICKER_VISIBLE_ITEM_COUNT: usize = 8;
 const PICKER_CONTENT_WIDTH: f32 = 320.0;
-const PICKER_ITEM_HEIGHT: f32 = 30.0;
+pub(crate) const PICKER_ITEM_HEIGHT: f32 = 30.0;
 const PICKER_SEARCH_ROW_HEIGHT: f32 = 36.0;
 const PICKER_SEARCH_INSET: f32 = 4.0;
 const PICKER_VIEWPORT_MARGIN: f32 = 6.0;
@@ -30,10 +37,8 @@ const PICKER_ANCHOR_GAP: f32 = 4.0;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 enum WorkspacePathPickerAction {
-    SelectCurrent,
+    Select(PathBuf),
     Browse(PathBuf),
-    PreviousPage,
-    NextPage,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -46,8 +51,8 @@ struct WorkspacePathPickerItem {
 struct OpenWorkspacePathPicker {
     anchor: Rect,
     directory: PathBuf,
+    repository_root: Option<PathBuf>,
     directories: Vec<PathBuf>,
-    page: usize,
     restore_focus: Option<ElementId>,
 }
 
@@ -56,6 +61,7 @@ struct OpenWorkspacePathPicker {
 pub(crate) struct WorkspacePathPickerState {
     open: Option<OpenWorkspacePathPicker>,
     search_input: TextInput,
+    scroll: ScrollState,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -69,18 +75,23 @@ impl WorkspacePathPickerState {
         &mut self,
         anchor: Rect,
         directory: &Path,
+        repository_root: Option<&Path>,
         restore_focus: Option<ElementId>,
-    ) -> io::Result<()> {
+    ) -> std::io::Result<()> {
         let directory = canonical_directory(directory)?;
+        let repository_root = repository_root
+            .and_then(|root| canonical_directory(root).ok())
+            .filter(|root| directory.starts_with(root));
         let directories = read_child_directories(&directory)?;
         self.search_input.take_text();
         self.open = Some(OpenWorkspacePathPicker {
             anchor,
             directory,
+            repository_root,
             directories,
-            page: 0,
             restore_focus,
         });
+        self.scroll = ScrollState::default();
         Ok(())
     }
 
@@ -114,6 +125,26 @@ impl WorkspacePathPickerState {
         self.search_input.selected_text()
     }
 
+    pub(crate) const fn scroll_state(&self) -> ScrollState {
+        self.scroll
+    }
+
+    pub(crate) fn apply_scroll(&mut self, command: ScrollCommand, metrics: ScrollMetrics) -> bool {
+        self.scroll.apply(command, metrics, ScrollAxis::Vertical)
+    }
+
+    pub(crate) fn ensure_item_visible(&mut self, index: usize, metrics: ScrollMetrics) -> bool {
+        self.apply_scroll(
+            ScrollCommand::EnsureVisible(Rect::from_xywh(
+                0.0,
+                index as f32 * PICKER_ITEM_HEIGHT,
+                metrics.content().width,
+                PICKER_ITEM_HEIGHT,
+            )),
+            metrics,
+        )
+    }
+
     pub(crate) fn first_action_id(&self) -> Option<ElementId> {
         self.items()
             .iter()
@@ -141,7 +172,7 @@ impl WorkspacePathPickerState {
     pub(crate) fn activate(
         &mut self,
         index: usize,
-    ) -> io::Result<Option<WorkspacePathPickerActivation>> {
+    ) -> std::io::Result<Option<WorkspacePathPickerActivation>> {
         let Some(item) = self.items().get(index).cloned() else {
             return Ok(None);
         };
@@ -149,39 +180,17 @@ impl WorkspacePathPickerState {
             return Ok(None);
         };
         match action {
-            WorkspacePathPickerAction::SelectCurrent => Ok(self.open.as_ref().map(|open| {
-                WorkspacePathPickerActivation::SelectWorkspace(open.directory.clone())
-            })),
+            WorkspacePathPickerAction::Select(directory) => Ok(Some(
+                WorkspacePathPickerActivation::SelectWorkspace(directory),
+            )),
             WorkspacePathPickerAction::Browse(directory) => {
                 self.browse(&directory)?;
-                Ok(Some(WorkspacePathPickerActivation::BrowseChanged))
-            }
-            WorkspacePathPickerAction::PreviousPage => {
-                if let Some(open) = self.open.as_mut() {
-                    open.page = open.page.saturating_sub(1);
-                }
-                Ok(Some(WorkspacePathPickerActivation::BrowseChanged))
-            }
-            WorkspacePathPickerAction::NextPage => {
-                if let Some(open) = self.open.as_mut() {
-                    let query = self.search_input.text().trim().to_lowercase();
-                    let directory_count = open
-                        .directories
-                        .iter()
-                        .filter(|directory| {
-                            query.is_empty()
-                                || directory_name(directory).to_lowercase().contains(&query)
-                        })
-                        .count();
-                    let maximum_page = directory_count.saturating_sub(1) / DIRECTORY_PAGE_SIZE;
-                    open.page = (open.page + 1).min(maximum_page);
-                }
                 Ok(Some(WorkspacePathPickerActivation::BrowseChanged))
             }
         }
     }
 
-    fn browse(&mut self, directory: &Path) -> io::Result<()> {
+    fn browse(&mut self, directory: &Path) -> std::io::Result<()> {
         let directory = canonical_directory(directory)?;
         let directories = read_child_directories(&directory)?;
         let Some(open) = self.open.as_mut() else {
@@ -189,8 +198,8 @@ impl WorkspacePathPickerState {
         };
         open.directory = directory;
         open.directories = directories;
-        open.page = 0;
         self.search_input.take_text();
+        self.scroll = ScrollState::default();
         Ok(())
     }
 
@@ -198,7 +207,17 @@ impl WorkspacePathPickerState {
         let Some(open) = self.open.as_ref() else {
             return Vec::new();
         };
-        let query = self.search_input.text().trim().to_lowercase();
+        let raw_query = self.search_input.text().trim();
+        if let Some(directory) = resolve_directory_query(&open.directory, raw_query) {
+            return vec![WorkspacePathPickerItem {
+                label: format!(
+                    "Use path · {}",
+                    display_working_directory(&directory, home_directory().as_deref())
+                ),
+                action: Some(WorkspacePathPickerAction::Select(directory)),
+            }];
+        }
+        let query = raw_query.to_lowercase();
         let directories = open
             .directories
             .iter()
@@ -213,7 +232,10 @@ impl WorkspacePathPickerState {
                     action: None,
                 }];
             }
-            return paged_directory_items(open.page, &directories);
+            return directories
+                .into_iter()
+                .map(directory_item)
+                .collect::<Vec<_>>();
         }
         let home = home_directory();
         let mut items = vec![WorkspacePathPickerItem {
@@ -221,22 +243,33 @@ impl WorkspacePathPickerState {
                 "Use this folder · {}",
                 display_working_directory(&open.directory, home.as_deref())
             ),
-            action: Some(WorkspacePathPickerAction::SelectCurrent),
+            action: Some(WorkspacePathPickerAction::Select(open.directory.clone())),
         }];
+        if let Some(repository_root) = open
+            .repository_root
+            .as_ref()
+            .filter(|root| *root != &open.directory)
+        {
+            items.push(WorkspacePathPickerItem {
+                label: format!(
+                    "Git repository root · {}",
+                    display_working_directory(repository_root, home.as_deref())
+                ),
+                action: Some(WorkspacePathPickerAction::Select(repository_root.clone())),
+            });
+        }
         if let Some(parent) = open.directory.parent() {
             items.push(WorkspacePathPickerItem {
                 label: format!("↑ Parent · {}", directory_name(parent)),
                 action: Some(WorkspacePathPickerAction::Browse(parent.to_path_buf())),
             });
         }
-        items.extend(paged_directory_items(open.page, &directories));
+        items.extend(directories.into_iter().map(directory_item));
         items
     }
 
     fn search_changed(&mut self) {
-        if let Some(open) = self.open.as_mut() {
-            open.page = 0;
-        }
+        self.scroll = ScrollState::default();
     }
 }
 
@@ -299,7 +332,7 @@ impl WorkspacePathPicker {
             })
             .map(DropdownSelection::Item)
             .unwrap_or(DropdownSelection::None);
-        let dropdown = Dropdown::new(
+        let dropdown = Dropdown::new_scrollable(
             viewport,
             open.anchor,
             dropdown_items,
@@ -315,6 +348,11 @@ impl WorkspacePathPicker {
                     .with_position(ContextViewAnchorPosition::Before)
                     .with_gap(PICKER_ANCHOR_GAP)
                     .with_viewport_margin(PICKER_VIEWPORT_MARGIN),
+            ),
+            DropdownScrollConfiguration::new(
+                state.scroll_state(),
+                PICKER_VISIBLE_ITEM_COUNT,
+                palette.picker_scroll_view_style(),
             ),
         )
         .with_selection(selection);
@@ -376,11 +414,7 @@ impl WorkspacePathPicker {
             .with_value(&self.search_value),
         );
         for (index, item) in self.items.iter().enumerate() {
-            let Some(bounds) = self
-                .dropdown
-                .interactive_item_bounds(index)
-                .filter(|bounds| !bounds.is_empty())
-            else {
+            let Some(bounds) = self.dropdown.interactive_item_bounds(index) else {
                 continue;
             };
             frame.register(
@@ -412,40 +446,22 @@ impl WorkspacePathPicker {
     pub(crate) const fn search_caret_bounds(&self) -> Option<Rect> {
         self.search_box.caret_bounds()
     }
+
+    pub(crate) fn scroll_metrics(&self) -> Option<ScrollMetrics> {
+        self.dropdown.scroll_metrics()
+    }
 }
 
 impl Component for WorkspacePathPicker {
-    fn paint(&self, scene: &mut UiScene) {
-        self.dropdown
-            .paint_with_header(scene, |scene, _bounds| self.search_box.paint(scene));
+    fn inspection(&self) -> ComponentInspection {
+        ComponentInspection::new("WorkspacePathPicker", self.dropdown.bounds())
     }
-}
 
-fn paged_directory_items(page: usize, directories: &[&PathBuf]) -> Vec<WorkspacePathPickerItem> {
-    let mut items = Vec::new();
-    if page > 0 {
-        items.push(WorkspacePathPickerItem {
-            label: "← Previous folders".to_string(),
-            action: Some(WorkspacePathPickerAction::PreviousPage),
+    fn paint(&self, scene: &mut UiScene) {
+        self.dropdown.paint_with_header(scene, |scene, _bounds| {
+            scene.draw_component(&self.search_box)
         });
     }
-    let start = page.saturating_mul(DIRECTORY_PAGE_SIZE);
-    let end = (start + DIRECTORY_PAGE_SIZE).min(directories.len());
-    items.extend(
-        directories[start..end]
-            .iter()
-            .map(|directory| WorkspacePathPickerItem {
-                label: format!("› {}/", directory_name(directory)),
-                action: Some(WorkspacePathPickerAction::Browse((*directory).clone())),
-            }),
-    );
-    if end < directories.len() {
-        items.push(WorkspacePathPickerItem {
-            label: "More folders →".to_string(),
-            action: Some(WorkspacePathPickerAction::NextPage),
-        });
-    }
-    items
 }
 
 fn workspace_path_item_id(index: usize) -> ElementId {
@@ -455,51 +471,11 @@ fn workspace_path_item_id(index: usize) -> ElementId {
     )
 }
 
-fn canonical_directory(path: &Path) -> io::Result<PathBuf> {
-    let directory = path.canonicalize()?;
-    if directory.is_dir() {
-        Ok(directory)
-    } else {
-        Err(io::Error::new(
-            io::ErrorKind::InvalidInput,
-            format!("{} is not a directory", directory.display()),
-        ))
+fn directory_item(directory: &PathBuf) -> WorkspacePathPickerItem {
+    WorkspacePathPickerItem {
+        label: format!("› {}/", directory_name(directory)),
+        action: Some(WorkspacePathPickerAction::Browse(directory.clone())),
     }
-}
-
-fn read_child_directories(directory: &Path) -> io::Result<Vec<PathBuf>> {
-    let mut directories = std::fs::read_dir(directory)?
-        .filter_map(Result::ok)
-        .filter_map(|entry| {
-            entry
-                .file_type()
-                .ok()
-                .filter(|file_type| file_type.is_dir())
-                .map(|_| entry.path())
-        })
-        .collect::<Vec<_>>();
-    directories.sort_by(|left, right| {
-        directory_name(left)
-            .to_lowercase()
-            .cmp(&directory_name(right).to_lowercase())
-            .then_with(|| left.cmp(right))
-    });
-    Ok(directories)
-}
-
-fn directory_name(directory: &Path) -> String {
-    directory
-        .file_name()
-        .and_then(|name| name.to_str())
-        .filter(|name| !name.is_empty())
-        .map(ToOwned::to_owned)
-        .unwrap_or_else(|| directory.display().to_string())
-}
-
-fn home_directory() -> Option<PathBuf> {
-    std::env::var_os("HOME")
-        .or_else(|| std::env::var_os("USERPROFILE"))
-        .map(PathBuf::from)
 }
 
 #[cfg(test)]

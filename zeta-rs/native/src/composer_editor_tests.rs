@@ -1,6 +1,6 @@
-use super::{ComposerEditor, ComposerEditorFocus, ComposerEditorSyntax};
+use super::{ComposerEditor, ComposerEditorFocus};
 use crate::shell_style::SHELL_PALETTE;
-use zeta_editor::CodeEditorCommand;
+use zeta_editor::{CodeEditorCommand, CodeEditorLanguage};
 use zeta_ui::{CaretVisibility, Color, Component, Rect, UiScene};
 
 #[test]
@@ -56,7 +56,7 @@ fn empty_editor_paints_placeholder_and_only_exposes_a_focused_visible_caret() {
 fn shell_highlighting_projects_syntax_tokens_into_code_editor() {
     let mut editor = ComposerEditor::default();
     editor.set_text("just native-dev");
-    editor.set_syntax(ComposerEditorSyntax::Shell);
+    editor.set_language(CodeEditorLanguage::Shell);
     let bounds = Rect::from_xywh(0.0, 0.0, 320.0, editor.preferred_height());
     let mut scene = UiScene::new(Color::WHITE);
 

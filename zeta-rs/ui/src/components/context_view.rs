@@ -1,4 +1,6 @@
-use crate::{Color, Component, CornerRadii, Edges, PaintRect, Point, Rect, Size, UiScene};
+use crate::{
+    Color, Component, CornerRadii, Edges, InspectionNode, PaintRect, Point, Rect, Size, UiScene,
+};
 
 /// Axis on which a [`ContextView`] is placed beside its anchor.
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
@@ -208,9 +210,11 @@ impl ContextView {
         draw_content: impl FnOnce(&mut UiScene, Rect) -> R,
     ) -> R {
         scene.with_overlay(|scene| {
-            self.paint_shell(scene);
-            scene.with_clip(self.content_bounds(), |scene| {
-                draw_content(scene, self.content_bounds())
+            scene.with_inspection_node(self.inspection_node(), |scene| {
+                self.paint_shell(scene);
+                scene.with_clip(self.content_bounds(), |scene| {
+                    draw_content(scene, self.content_bounds())
+                })
             })
         })
     }
@@ -226,9 +230,17 @@ impl ContextView {
         draw_content: impl FnOnce(&mut UiScene, Rect) -> R,
     ) -> R {
         scene.with_overlay(|scene| {
-            self.paint_shell(scene);
-            draw_content(scene, self.content_bounds())
+            scene.with_inspection_node(self.inspection_node(), |scene| {
+                self.paint_shell(scene);
+                draw_content(scene, self.content_bounds())
+            })
         })
+    }
+
+    fn inspection_node(&self) -> InspectionNode {
+        InspectionNode::new("ContextView", self.bounds())
+            .with_padding(self.style.padding)
+            .with_corner_radii(self.style.corner_radii)
     }
 
     fn paint_shell(&self, scene: &mut UiScene) {
@@ -241,7 +253,9 @@ impl ContextView {
 
 impl Component for ContextView {
     fn paint(&self, scene: &mut UiScene) {
-        scene.with_overlay(|scene| self.paint_shell(scene));
+        scene.with_overlay(|scene| {
+            scene.with_inspection_node(self.inspection_node(), |scene| self.paint_shell(scene));
+        });
     }
 }
 

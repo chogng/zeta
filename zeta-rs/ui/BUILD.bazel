@@ -3,9 +3,4 @@ load("//:defs.bzl", "zeta_rust_crate")
 zeta_rust_crate(
     name = "ui",
     crate_name = "zeta_ui",
-    data = [
-        "src/image.wgsl",
-        "src/icon.wgsl",
-        "src/rect.wgsl",
-    ],
 )

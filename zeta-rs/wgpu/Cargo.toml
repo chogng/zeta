@@ -11,9 +11,14 @@ name = "zeta_wgpu"
 path = "src/lib.rs"
 
 [dependencies]
+bytemuck = { workspace = true }
+glyphon = { workspace = true }
 pollster = { workspace = true }
+resvg = { workspace = true }
 thiserror = { workspace = true }
 wgpu = { workspace = true }
+zeta-icons = { workspace = true }
+zeta-renderer = { workspace = true }
 zeta-ui = { workspace = true }
 zeta-winit = { workspace = true }
 

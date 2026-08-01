@@ -7,7 +7,10 @@ use super::{
 };
 use crate::shell_interaction::COMPOSER;
 use crate::shell_style::SHELL_PALETTE;
-use zeta_ui::{CaretVisibility, Point, Rect, TextInputCommand, TextInputLayoutEngine};
+use zeta_ui::{
+    CaretVisibility, Point, Rect, ScrollAxis, ScrollCommand, TextInputCommand,
+    TextInputLayoutEngine,
+};
 use zeta_ui_dispatch::{AccessibilityRole, InteractionFrame, UiDispatch};
 
 static NEXT_PICKER_ID: AtomicU64 = AtomicU64::new(0);
@@ -24,6 +27,7 @@ fn picker_lists_current_parent_and_sorted_child_directories() {
         .open(
             Rect::from_xywh(40.0, 640.0, 180.0, 24.0),
             &root,
+            None,
             Some(COMPOSER),
         )
         .unwrap();
@@ -32,7 +36,7 @@ fn picker_lists_current_parent_and_sorted_child_directories() {
     assert!(items[0].label.starts_with("Use this folder · "));
     assert!(matches!(
         &items[0].action,
-        Some(WorkspacePathPickerAction::SelectCurrent)
+        Some(WorkspacePathPickerAction::Select(_))
     ));
     assert!(items[1].label.starts_with("↑ Parent · "));
     assert_eq!(items[2].label, "› Alpha/");
@@ -42,26 +46,60 @@ fn picker_lists_current_parent_and_sorted_child_directories() {
 }
 
 #[test]
-fn picker_browses_directories_and_pages_all_children() {
+fn picker_scrolls_all_children_without_paging() {
     let root = picker_fixture();
     for index in 0..10 {
         std::fs::create_dir_all(root.join(format!("folder-{index:02}"))).unwrap();
     }
     let mut state = WorkspacePathPickerState::default();
     state
-        .open(Rect::from_xywh(40.0, 640.0, 180.0, 24.0), &root, None)
+        .open(Rect::from_xywh(40.0, 640.0, 180.0, 24.0), &root, None, None)
         .unwrap();
-    let more_index = state.items().len() - 1;
+    let items = state.items();
 
-    assert_eq!(
-        state.activate(more_index).unwrap(),
-        Some(WorkspacePathPickerActivation::BrowseChanged)
-    );
+    assert_eq!(items.len(), 12);
     assert!(
-        state
-            .items()
+        items
             .iter()
-            .any(|item| item.label == "← Previous folders")
+            .all(|item| !item.label.contains("folders →") && !item.label.contains("← Previous"))
+    );
+    let dispatch = UiDispatch::default();
+    let mut text_layout = TextInputLayoutEngine::new();
+    let picker = WorkspacePathPicker::new(
+        Rect::from_xywh(0.0, 0.0, 1_000.0, 700.0),
+        &state,
+        CaretVisibility::Visible,
+        SHELL_PALETTE,
+        &mut text_layout,
+        &dispatch,
+    )
+    .unwrap();
+    let metrics = picker.scroll_metrics().unwrap();
+    assert!(metrics.maximum_offset().y > 0.0);
+    assert!(
+        picker
+            .dropdown
+            .item_bounds(items.len() - 1)
+            .unwrap()
+            .is_empty()
+    );
+
+    assert!(state.apply_scroll(ScrollCommand::ToEnd(ScrollAxis::Vertical), metrics));
+    let picker = WorkspacePathPicker::new(
+        Rect::from_xywh(0.0, 0.0, 1_000.0, 700.0),
+        &state,
+        CaretVisibility::Visible,
+        SHELL_PALETTE,
+        &mut text_layout,
+        &dispatch,
+    )
+    .unwrap();
+    assert!(
+        !picker
+            .dropdown
+            .item_bounds(items.len() - 1)
+            .unwrap()
+            .is_empty()
     );
     let child_index = state
         .items()
@@ -91,7 +129,7 @@ fn picker_is_anchored_above_the_toolbar_and_registers_modal_menu_semantics() {
     std::fs::create_dir_all(root.join("child")).unwrap();
     let anchor = Rect::from_xywh(40.0, 640.0, 180.0, 24.0);
     let mut state = WorkspacePathPickerState::default();
-    state.open(anchor, &root, None).unwrap();
+    state.open(anchor, &root, None, None).unwrap();
     let dispatch = UiDispatch::default();
     let mut text_layout = TextInputLayoutEngine::new();
     let picker = WorkspacePathPicker::new(
@@ -124,7 +162,7 @@ fn search_row_filters_child_directories_and_resets_after_browsing() {
     std::fs::create_dir_all(root.join("beta")).unwrap();
     let mut state = WorkspacePathPickerState::default();
     state
-        .open(Rect::from_xywh(40.0, 640.0, 180.0, 24.0), &root, None)
+        .open(Rect::from_xywh(40.0, 640.0, 180.0, 24.0), &root, None, None)
         .unwrap();
 
     state.apply_search(TextInputCommand::Insert("bet".to_string()));
@@ -144,6 +182,44 @@ fn search_row_filters_child_directories_and_resets_after_browsing() {
             .is_some_and(|item| item.label.starts_with("Use this folder · "))
     );
     std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn picker_offers_repository_root_and_accepts_an_explicit_path_query() {
+    let repository = picker_fixture();
+    let workspace = repository.join("workspace");
+    let sibling = repository.join("sibling");
+    std::fs::create_dir_all(&workspace).unwrap();
+    std::fs::create_dir_all(&sibling).unwrap();
+    let mut state = WorkspacePathPickerState::default();
+    state
+        .open(
+            Rect::from_xywh(40.0, 640.0, 180.0, 24.0),
+            &workspace,
+            Some(&repository),
+            None,
+        )
+        .unwrap();
+
+    let items = state.items();
+    assert!(items[1].label.starts_with("Git repository root · "));
+    assert_eq!(
+        state.activate(1).unwrap(),
+        Some(WorkspacePathPickerActivation::SelectWorkspace(
+            repository.canonicalize().unwrap()
+        ))
+    );
+
+    state.apply_search(TextInputCommand::Insert("../sibling".to_string()));
+
+    assert!(state.items()[0].label.starts_with("Use path · "));
+    assert_eq!(
+        state.activate(0).unwrap(),
+        Some(WorkspacePathPickerActivation::SelectWorkspace(
+            sibling.canonicalize().unwrap()
+        ))
+    );
+    std::fs::remove_dir_all(repository).unwrap();
 }
 
 fn picker_fixture() -> PathBuf {

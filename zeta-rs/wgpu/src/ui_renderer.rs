@@ -2,13 +2,18 @@ use glyphon::{
     Attrs, Buffer, Cache, Color as GlyphColor, Metrics, Resolution, Shaping, SwashCache, TextArea,
     TextAtlas, TextBounds, TextRenderer, Viewport, Wrap,
 };
+use std::ops::Range;
+use zeta_ui::renderer_support::{create_font_system, font_family, font_style, font_weight};
 
-use crate::font::mapping::{glyphon_family, glyphon_style, glyphon_weight};
-use crate::font::new_font_system;
-use crate::icon_renderer::IconRenderer;
-use crate::image_renderer::ImageRenderer;
-use crate::rect_renderer::RectRenderer;
-use crate::{Rect, TextBlock, TextBlockWrap, TextStyle, UiScene};
+use zeta_ui::{Color, Rect, SceneBatch, TextBlock, TextBlockWrap, TextStyle, UiScene};
+
+use self::icon::IconRenderer;
+use self::image::ImageRenderer;
+use self::rect::RectRenderer;
+
+mod icon;
+mod image;
+mod rect;
 
 /// Physical render-target extent paired with the logical-to-physical UI scale.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -53,6 +58,13 @@ struct TextLayer {
     areas: Vec<PreparedArea>,
 }
 
+enum PreparedBatch {
+    Rects(Range<usize>),
+    Icons(Range<usize>),
+    Images(Range<usize>),
+    Text(usize),
+}
+
 impl TextLayer {
     fn new(atlas: &mut TextAtlas, device: &wgpu::Device) -> Self {
         Self {
@@ -72,8 +84,8 @@ pub struct UiRenderer {
     swash_cache: SwashCache,
     viewport: Viewport,
     atlas: TextAtlas,
-    text_layers: Vec<TextLayer>,
-    prepared_layer_count: usize,
+    text_batches: Vec<TextLayer>,
+    prepared_batches: Vec<PreparedBatch>,
 }
 
 impl UiRenderer {
@@ -85,17 +97,17 @@ impl UiRenderer {
         let cache = Cache::new(device);
         let viewport = Viewport::new(device, &cache);
         let mut atlas = TextAtlas::new(device, queue, &cache, surface_format);
-        let text_layers = vec![TextLayer::new(&mut atlas, device)];
+        let text_batches = vec![TextLayer::new(&mut atlas, device)];
         Self {
             rect_renderer: RectRenderer::new(device, surface_format),
             icon_renderer: IconRenderer::new(device, surface_format),
             image_renderer: ImageRenderer::new(device, surface_format),
-            font_system: new_font_system(),
+            font_system: create_font_system(),
             swash_cache: SwashCache::new(),
             viewport,
             atlas,
-            text_layers,
-            prepared_layer_count: 0,
+            text_batches,
+            prepared_batches: Vec::new(),
         }
     }
 
@@ -120,49 +132,66 @@ impl UiRenderer {
         self.rect_renderer.prepare(device, queue, scene, target)?;
         self.icon_renderer.prepare(device, queue, scene, target)?;
         self.image_renderer.prepare(device, queue, scene, target)?;
-        while self.text_layers.len() < scene.layer_count() {
-            self.text_layers
-                .push(TextLayer::new(&mut self.atlas, device));
-        }
-        self.prepared_layer_count = scene.layer_count();
-        for layer in 0..scene.layer_count() {
-            let text_layer = &mut self.text_layers[layer];
-            text_layer.buffers.clear();
-            text_layer.areas.clear();
-            for (index, block) in scene.text_blocks().iter().enumerate() {
-                if scene.text_layers()[index] != layer {
-                    continue;
+        self.prepared_batches.clear();
+        let mut text_batch_index = 0;
+        for batch in scene.batches() {
+            match batch {
+                SceneBatch::Rects { range, .. } => {
+                    self.prepared_batches.push(PreparedBatch::Rects(range));
                 }
-                validate_text_block(index, block)?;
-                let buffer = prepare_text_buffer(&mut self.font_system, block, scale_factor);
-                text_layer.buffers.push(buffer);
-                text_layer
-                    .areas
-                    .push(prepared_area(block, scale_factor, block.style().color()));
+                SceneBatch::Icons { range, .. } => {
+                    self.prepared_batches.push(PreparedBatch::Icons(range));
+                }
+                SceneBatch::Images { range, .. } => {
+                    self.prepared_batches.push(PreparedBatch::Images(range));
+                }
+                SceneBatch::Text { range, .. } => {
+                    if text_batch_index == self.text_batches.len() {
+                        self.text_batches
+                            .push(TextLayer::new(&mut self.atlas, device));
+                    }
+                    let text_batch = &mut self.text_batches[text_batch_index];
+                    text_batch.buffers.clear();
+                    text_batch.areas.clear();
+                    for index in range {
+                        let block = &scene.text_blocks()[index];
+                        validate_text_block(index, block)?;
+                        text_batch.buffers.push(prepare_text_buffer(
+                            &mut self.font_system,
+                            block,
+                            scale_factor,
+                        ));
+                        text_batch.areas.push(prepared_area(
+                            block,
+                            scale_factor,
+                            block.style().color(),
+                        ));
+                    }
+                    let text_areas = text_batch.buffers.iter().zip(text_batch.areas.iter()).map(
+                        |(buffer, area)| TextArea {
+                            buffer,
+                            left: area.left,
+                            top: area.top,
+                            scale: 1.0,
+                            bounds: area.bounds,
+                            default_color: area.color,
+                            custom_glyphs: &[],
+                        },
+                    );
+                    text_batch.renderer.prepare(
+                        device,
+                        queue,
+                        &mut self.font_system,
+                        &mut self.atlas,
+                        &self.viewport,
+                        text_areas,
+                        &mut self.swash_cache,
+                    )?;
+                    self.prepared_batches
+                        .push(PreparedBatch::Text(text_batch_index));
+                    text_batch_index += 1;
+                }
             }
-            let text_areas =
-                text_layer
-                    .buffers
-                    .iter()
-                    .zip(text_layer.areas.iter())
-                    .map(|(buffer, area)| TextArea {
-                        buffer,
-                        left: area.left,
-                        top: area.top,
-                        scale: 1.0,
-                        bounds: area.bounds,
-                        default_color: area.color,
-                        custom_glyphs: &[],
-                    });
-            text_layer.renderer.prepare(
-                device,
-                queue,
-                &mut self.font_system,
-                &mut self.atlas,
-                &self.viewport,
-                text_areas,
-                &mut self.swash_cache,
-            )?;
         }
         Ok(())
     }
@@ -171,13 +200,23 @@ impl UiRenderer {
         &'pass self,
         render_pass: &mut wgpu::RenderPass<'pass>,
     ) -> Result<(), UiRenderError> {
-        for layer in 0..self.prepared_layer_count {
-            self.rect_renderer.render_layer(render_pass, layer);
-            self.image_renderer.render_layer(render_pass, layer);
-            self.icon_renderer.render_layer(render_pass, layer);
-            self.text_layers[layer]
-                .renderer
-                .render(&self.atlas, &self.viewport, render_pass)?;
+        for batch in &self.prepared_batches {
+            match batch {
+                PreparedBatch::Rects(range) => {
+                    self.rect_renderer.render_range(render_pass, range.clone());
+                }
+                PreparedBatch::Icons(range) => {
+                    self.icon_renderer.render_range(render_pass, range.clone());
+                }
+                PreparedBatch::Images(range) => {
+                    self.image_renderer.render_range(render_pass, range.clone());
+                }
+                PreparedBatch::Text(index) => self.text_batches[*index].renderer.render(
+                    &self.atlas,
+                    &self.viewport,
+                    render_pass,
+                )?,
+            }
         }
         Ok(())
     }
@@ -255,9 +294,9 @@ fn validate_text_block(index: usize, block: &TextBlock) -> Result<(), UiRenderEr
 
 fn attrs_for_style(style: &TextStyle, scale_factor: f32) -> Attrs<'_> {
     Attrs::new()
-        .family(glyphon_family(style.family()))
-        .weight(glyphon_weight(style.weight()))
-        .style(glyphon_style(style.style()))
+        .family(font_family(style.family()))
+        .weight(font_weight(style.weight()))
+        .style(font_style(style.style()))
         .color(glyphon_color(style.color()))
         .metrics(Metrics::new(
             style.font_size() * scale_factor,
@@ -283,9 +322,9 @@ fn prepare_text_buffer(
         Some(bounds.height * scale_factor),
     );
     let attrs = Attrs::new()
-        .family(glyphon_family(style.family()))
-        .weight(glyphon_weight(style.weight()))
-        .style(glyphon_style(style.style()));
+        .family(font_family(style.family()))
+        .weight(font_weight(style.weight()))
+        .style(font_style(style.style()));
     if block.spans().is_empty() {
         buffer.set_text(block.text(), &attrs, Shaping::Advanced, None);
     } else {
@@ -303,7 +342,7 @@ fn prepare_text_buffer(
     buffer
 }
 
-fn prepared_area(block: &TextBlock, scale_factor: f32, color: crate::Color) -> PreparedArea {
+fn prepared_area(block: &TextBlock, scale_factor: f32, color: Color) -> PreparedArea {
     let origin = block.origin();
     let size = block.bounds();
     let left = origin.x * scale_factor;
@@ -333,7 +372,7 @@ const fn glyphon_wrap(wrap: TextBlockWrap) -> Wrap {
     }
 }
 
-fn glyphon_color(color: crate::Color) -> GlyphColor {
+fn glyphon_color(color: Color) -> GlyphColor {
     let [red, green, blue, alpha] = color.components();
     GlyphColor::rgba(red, green, blue, alpha)
 }
@@ -369,5 +408,5 @@ pub enum UiRenderError {
 }
 
 #[cfg(test)]
-#[path = "renderer_tests.rs"]
+#[path = "ui_renderer_tests.rs"]
 mod tests;

@@ -1,6 +1,6 @@
-use glyphon::{Attrs, Buffer, Cursor, FontSystem, Metrics, Shaping, Wrap};
+use cosmic_text::{Attrs, Buffer, Cursor, FontSystem, Metrics, Shaping, Wrap};
 
-use crate::font::mapping::{glyphon_family, glyphon_style, glyphon_weight};
+use crate::font::mapping::{shaping_family, shaping_style, shaping_weight};
 use crate::font::new_font_system;
 use crate::{Point, Rect, Size, TextStyle};
 
@@ -94,9 +94,9 @@ impl TextInputLayoutEngine {
         buffer.set_wrap(Wrap::None);
         buffer.set_size(None, Some(style.line_height()));
         let attrs = Attrs::new()
-            .family(glyphon_family(style.family()))
-            .weight(glyphon_weight(style.weight()))
-            .style(glyphon_style(style.style()));
+            .family(shaping_family(style.family()))
+            .weight(shaping_weight(style.weight()))
+            .style(shaping_style(style.style()));
         buffer.set_text(text, &attrs, Shaping::Advanced, None);
         buffer.shape_until_scroll(&mut self.font_system, false);
         let width = buffer
@@ -140,9 +140,9 @@ impl TextInputLayoutEngine {
         buffer.set_wrap(Wrap::None);
         buffer.set_size(None, Some(text_style.line_height()));
         let attrs = Attrs::new()
-            .family(glyphon_family(text_style.family()))
-            .weight(glyphon_weight(text_style.weight()))
-            .style(glyphon_style(text_style.style()));
+            .family(shaping_family(text_style.family()))
+            .weight(shaping_weight(text_style.weight()))
+            .style(shaping_style(text_style.style()));
         buffer.set_text(&projection.text, &attrs, Shaping::Advanced, None);
         buffer.shape_until_scroll(&mut self.font_system, false);
 

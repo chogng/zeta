@@ -35,13 +35,11 @@ mod operations;
 mod search_operations;
 mod skill_operations;
 pub(crate) mod skills_runtime;
-mod syntax_operations;
 mod terminal_operations;
 mod update_broker;
 mod workspace_operations;
 mod workspace_runtime;
 
-use syntax_operations::SyntaxAnalysisService;
 use update_broker::{NotificationListener, NotificationQueue, UpdateBroker};
 use workspace_runtime::{LocalWorkspaceHost, WorkspaceRuntime};
 pub(crate) use workspace_runtime::{
@@ -60,7 +58,6 @@ pub struct AppServer {
     local_workspace_host: Option<LocalWorkspaceHost>,
     pub(super) typst: TypstCompiler,
     pub(super) slash_commands: SlashCommandCatalog,
-    syntax: SyntaxAnalysisService,
     pub(super) skills: Option<Arc<SkillRuntime>>,
     _skill_watcher: Option<SkillWatcher>,
     _config_watcher: Option<config_runtime::ConfigWatcher>,
@@ -124,7 +121,6 @@ impl AppServer {
             local_workspace_host: None,
             typst: TypstCompiler::new(),
             slash_commands: SlashCommandCatalog::default(),
-            syntax: SyntaxAnalysisService::new(),
             skills: None,
             _skill_watcher: None,
             _config_watcher: None,
@@ -163,7 +159,6 @@ impl AppServer {
         if let Some(terminals) = self.configured_terminal_service() {
             terminals.close_owner(connection.connection_id);
         }
-        self.syntax.release_owner(connection.connection_id);
     }
 
     pub fn with_config_store(mut self, config: Arc<ConfigStore>) -> Self {
@@ -440,9 +435,6 @@ impl AppServer {
                 self.turn_interaction_resolve(connection, &request.params)
             }
             Some(ClientMethod::TypstCompile) => self.typst_compile(connection, &request.params),
-            Some(ClientMethod::SyntaxOpen) => self.syntax_open(connection, &request.params),
-            Some(ClientMethod::SyntaxChange) => self.syntax_change(connection, &request.params),
-            Some(ClientMethod::SyntaxClose) => self.syntax_close(connection, &request.params),
             Some(ClientMethod::ConfigRead) => self.config_read(),
             Some(ClientMethod::ModelList) => self.model_list(),
             Some(ClientMethod::ConfigUpdate) => self.config_update(&request.params),

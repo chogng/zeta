@@ -3,7 +3,8 @@ use std::collections::BTreeMap;
 use serde_json::Value;
 use zeta_protocol::{PlanStepStatus, ThreadItem};
 use zeta_ui::{
-    Component, FontFamily, FontWeight, PaintRect, Point, Rect, Size, TextBlock, TextStyle, UiScene,
+    Component, ComponentInspection, Edges, FontFamily, FontWeight, PaintRect, Point, Rect, Size,
+    TextBlock, TextStyle, UiScene,
 };
 
 use crate::shell_style::ShellPalette;
@@ -59,6 +60,15 @@ impl ThreadTimeline {
 }
 
 impl Component for ThreadTimeline {
+    fn inspection(&self) -> ComponentInspection {
+        ComponentInspection::new("ThreadTimeline", self.bounds).with_padding(Edges::new(
+            TIMELINE_VERTICAL_PADDING,
+            TIMELINE_HORIZONTAL_PADDING,
+            TIMELINE_VERTICAL_PADDING,
+            TIMELINE_HORIZONTAL_PADDING,
+        ))
+    }
+
     fn paint(&self, scene: &mut UiScene) {
         scene.with_clip(self.bounds, |scene| {
             let content_bounds = Rect::from_xywh(

@@ -1,7 +1,7 @@
 use zeta_ui::{
-    Color, Component, CornerRadii, FontWeight, PaintRect, Rect, Size, Tab, TabBackgrounds, TabList,
-    TabListOrientation, TabListStyle, TabSelection, TabState, TabStyle, TextBlock, TextStyle,
-    UiScene,
+    Color, Component, ComponentInspection, CornerRadii, FontWeight, PaintRect, Rect, Size, Tab,
+    TabBackgrounds, TabList, TabListOrientation, TabListStyle, TabSelection, TabState, TabStyle,
+    TextBlock, TextStyle, UiScene,
 };
 use zeta_ui_dispatch::{
     AccessibilityRole, AccessibilitySelection, CursorFeedback, ElementId, FocusBehavior,
@@ -148,9 +148,13 @@ impl<'a> SessionTabList<'a> {
 }
 
 impl Component for SessionTabList<'_> {
+    fn inspection(&self) -> ComponentInspection {
+        ComponentInspection::new("SessionTabList", self.bounds)
+    }
+
     fn paint(&self, scene: &mut UiScene) {
         let tab_list = self.tab_list();
-        tab_list.paint(scene);
+        scene.draw_component(&tab_list);
         for (index, tab) in self.tabs.iter().enumerate() {
             let tab_bounds = tab_list.tab_bounds(index).expect("painted tab");
             let status_bounds = Rect::from_xywh(

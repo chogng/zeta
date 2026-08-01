@@ -1,9 +1,10 @@
 use zeta_app_server_protocol::protocol::git::GitBranchDto as GitBranch;
 use zeta_ui::{
-    ButtonBackgrounds, ButtonState, ButtonStyle, CaretVisibility, Component, ContextMenu,
-    ContextMenuItem, ContextMenuSelection, ContextMenuStyle, ContextViewAnchorPosition,
-    ContextViewPlacement, CornerRadii, Edges, InputBoxState, Rect, SearchBox, Size, TextInput,
-    TextInputCommand, TextInputCompositionEvent, TextInputLayoutEngine, TextStyle, UiScene,
+    ButtonBackgrounds, ButtonState, ButtonStyle, CaretVisibility, Component, ComponentInspection,
+    ContextMenu, ContextMenuItem, ContextMenuSelection, ContextMenuStyle,
+    ContextViewAnchorPosition, ContextViewPlacement, CornerRadii, Edges, InputBoxState, Rect,
+    SearchBox, Size, TextInput, TextInputCommand, TextInputCompositionEvent, TextInputLayoutEngine,
+    TextStyle, UiScene,
 };
 use zeta_ui_dispatch::{
     AccessibilityRole, AccessibilitySelection, CursorFeedback, ElementId, FocusBehavior,
@@ -417,9 +418,15 @@ impl GitBranchContextMenu {
 }
 
 impl Component for GitBranchContextMenu {
+    fn inspection(&self) -> ComponentInspection {
+        ComponentInspection::new("GitBranchContextMenu", self.context_menu.bounds())
+    }
+
     fn paint(&self, scene: &mut UiScene) {
         self.context_menu
-            .paint_with_header(scene, |scene, _bounds| self.search_box.paint(scene));
+            .paint_with_header(scene, |scene, _bounds| {
+                scene.draw_component(&self.search_box)
+            });
     }
 }
 

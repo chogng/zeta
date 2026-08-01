@@ -1,6 +1,8 @@
-use zeta_ui::{Color, UiRenderer, UiScene, UiViewport};
+use zeta_renderer::{RenderOutcome, RenderTargetSize, Renderer, RendererError};
+use zeta_ui::{Color, UiScene};
 use zeta_winit::{NativeWindow, PhysicalExtent};
 
+use crate::ui_renderer::{UiRenderer, UiViewport};
 use crate::viewport::{SurfaceExtent, Viewport};
 
 const CLEAR_COLOR: wgpu::Color = wgpu::Color {
@@ -23,14 +25,7 @@ pub enum WgpuRendererError {
     #[error("wgpu rejected a surface frame")]
     SurfaceValidation,
     #[error(transparent)]
-    Ui(#[from] zeta_ui::UiRenderError),
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum RenderOutcome {
-    Presented,
-    Skipped,
-    Retry,
+    Ui(#[from] crate::ui_renderer::UiRenderError),
 }
 
 /// Owns one window's `wgpu` presentation resources.
@@ -46,6 +41,24 @@ pub struct WgpuRenderer {
     config: wgpu::SurfaceConfiguration,
     viewport: Viewport,
     ui_renderer: UiRenderer,
+}
+
+impl Renderer for WgpuRenderer {
+    fn resize(&mut self, size: RenderTargetSize) {
+        self.resize(PhysicalExtent::new(size.width(), size.height()));
+    }
+
+    fn set_scale_factor(&mut self, scale_factor: f64) {
+        self.set_scale_factor(scale_factor);
+    }
+
+    fn render(&mut self) -> Result<RenderOutcome, RendererError> {
+        self.render().map_err(RendererError::backend)
+    }
+
+    fn render_scene(&mut self, scene: &UiScene) -> Result<RenderOutcome, RendererError> {
+        self.render_scene(scene).map_err(RendererError::backend)
+    }
 }
 
 impl WgpuRenderer {

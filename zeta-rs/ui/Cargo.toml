@@ -11,13 +11,10 @@ name = "zeta_ui"
 path = "src/lib.rs"
 
 [dependencies]
-bytemuck = { workspace = true }
-glyphon = { workspace = true }
-resvg = { workspace = true }
+cosmic-text = { workspace = true }
 sys-locale = { workspace = true }
 thiserror = { workspace = true }
 unicode-segmentation = { workspace = true }
-wgpu = { workspace = true }
 zeta-icons = { workspace = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]

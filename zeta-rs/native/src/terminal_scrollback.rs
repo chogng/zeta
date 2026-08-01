@@ -83,6 +83,9 @@ impl TerminalScroll {
 
 impl NativeApp {
     pub(super) fn mouse_wheel(&mut self, delta: MouseScrollDelta) {
+        if self.route_workspace_path_picker_wheel(delta) {
+            return;
+        }
         if self.session_context_menu.is_open() {
             return;
         }

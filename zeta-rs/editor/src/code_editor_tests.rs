@@ -1,9 +1,8 @@
 use super::text_metrics::{display_columns_until, visit_display_cell_runs};
 use super::{
     CodeEditor, CodeEditorCommand, CodeEditorDocument, CodeEditorHeader, CodeEditorInlineHighlight,
-    CodeEditorPresentation, CodeEditorRow, CodeEditorRowSource, CodeEditorSelectionMode,
-    CodeEditorStyle, CodeEditorSyntaxHighlighter, CodeEditorSyntaxToken, CodeEditorTokenRole,
-    CodeEditorViewport,
+    CodeEditorLanguage, CodeEditorPresentation, CodeEditorRow, CodeEditorRowSource,
+    CodeEditorSelectionMode, CodeEditorStyle, CodeEditorViewport,
 };
 use zeta_ui::{CaretVisibility, Color, Component, Point, Rect, TextBlockWrap, UiScene};
 use zeta_ui::{TextInputCompositionCursor, TextInputCompositionEvent};
@@ -400,21 +399,10 @@ fn ime_preedit_is_uncommitted_until_commit_and_commit_is_undoable() {
     assert_eq!(document.text(), "let value = ");
 }
 
-struct RustKeywordHighlighter;
-
-impl CodeEditorSyntaxHighlighter for RustKeywordHighlighter {
-    fn highlight_line(&self, _line_number: usize, text: &str) -> Vec<CodeEditorSyntaxToken> {
-        text.starts_with("let")
-            .then(|| CodeEditorSyntaxToken::new(0..3, CodeEditorTokenRole::Keyword))
-            .into_iter()
-            .collect()
-    }
-}
-
 #[test]
 fn syntax_tokens_selection_caret_and_preedit_are_projected_into_the_scene() {
-    let mut document = CodeEditorDocument::from_text("let value = 1;");
-    document.apply_syntax(&RustKeywordHighlighter);
+    let mut document =
+        CodeEditorDocument::from_text_with_language("let value = 1;", CodeEditorLanguage::Rust);
     document.apply(CodeEditorCommand::MoveRight(
         CodeEditorSelectionMode::Extend,
     ));

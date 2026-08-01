@@ -1,13 +1,19 @@
 use super::{MultiDiffEditor, MultiDiffEditorItem, MultiDiffEditorStyle};
-use crate::{DiffEditorLabels, DiffEditorPresentation, DiffEditorState};
+use crate::{
+    CodeEditorLanguage, DiffEditorDocument, DiffEditorLabels, DiffEditorPresentation,
+    DiffEditorState,
+};
 use zeta_diff::DiffDocument;
 use zeta_ui::{
     Color, Component, CornerRadii, Rect, ScrollAxis, ScrollCommand, ScrollDelta, ScrollState,
     UiScene,
 };
 
-fn document(original: &str, modified: &str) -> DiffDocument {
-    DiffDocument::from_text(original, modified).unwrap()
+fn document(original: &str, modified: &str) -> DiffEditorDocument {
+    DiffEditorDocument::new(
+        DiffDocument::from_text(original, modified).unwrap(),
+        CodeEditorLanguage::PlainText,
+    )
 }
 
 #[test]

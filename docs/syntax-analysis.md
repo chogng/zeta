@@ -1,148 +1,94 @@
-# 源码结构分析系统
+# 编辑器语法能力
 
-> 状态：Rust/JSON/JSONC/Shell 增量分析内核已实现；Desktop Alpha 已接入 Rust/JSON/JSONC，Native
-> Composer 已接入 Shell syntax-token projection，文件 EditorHost 与 workspace index 接入尚未完成。
-> 本文拥有跨 crate、进程和编辑器的语言分析所有权与演进阶段；当前 crate API、内部调用图和
-> 修改路径见 [`zeta-syntax` README](../zeta-rs/syntax/README.md)。
+> 状态：Rust `CodeEditor` 已内部接入 Rust、JSON、JSONC 与 Shell 的增量 tree-sitter
+> 分析；Rust `DiffEditor` 已通过 retained `DiffEditorDocument` 内部维护两侧语法状态；Desktop
+> Alpha 的 JSON/JSONC 继续使用编辑器内 TextMate provider。本文拥有跨编辑器的语法能力边界；底层解析契约见
+> [`zeta-syntax` README](../zeta-rs/syntax/README.md)，Native 编辑器 API 见
+> [`zeta-editor` README](../zeta-rs/editor/README.md)。
 
 ## 快速理解
 
-Zeta 把可跨编辑器复用的语法分析放入 Rust，同时保留 Alpha 和 Native editor 各自的输入、
-布局与绘制职责。tree-sitter 提供快速结构事实，LSP/compiler 提供类型与跨文件语义；两者不能
-互相冒充。
+语法高亮、折叠、outline 和 parse diagnostic 都是编辑器能力。产品层对外组合
+`CodeEditor` 或 `DiffEditor`，只提供文档、语言、主题和平台输入；它不获得独立 syntax service，
+也不通过 App Server 同步编辑器内部 revision。
 
-| 使用场景 | 当前结果 | 最终 owner |
+| 能力 | 当前 owner | 状态 |
 | --- | --- | --- |
-| 对 Rust/JSON/JSONC/Shell 文本进行增量 parse | ✅ `zeta-syntax` 已实现 UTF-8 edit、revision binding 与 tree reuse | `zeta-syntax` |
-| 取得 syntax token、fold、document outline 和 parse error | 部分具备：完整 snapshot 已跨 App Server 传输，token 与 parse diagnostic 已投影到 Alpha；fold/outline UI 尚未接入 | `zeta-syntax` + 产品宿主 |
-| Alpha 输入、光标、DOM、layout、accessibility | ✅ 由 Alpha 拥有 | Desktop Renderer |
-| Monaco 退场 | 不再接入新的 syntax capability；仍需保留的工具能力迁移到 Alpha contract | Alpha / Workbench |
-| Native code surface 绘制 | 部分具备：Composer Shell adapter 已接线；文件 EditorHost adapter 尚未完成 | `zeta-editor` + Native host |
-| completion、type、definition/reference、rename | 部分具备：低层 LSP runtime 已实现，产品接线尚未完成 | `zeta-lsp` + language server |
-| workspace symbol search | 尚未完成 | 后续 workspace index；不属于 parser document |
+| Rust/JSON/JSONC/Shell grammar、query 与增量 tree | `zeta-syntax`，由 Rust `CodeEditor` 私有组合 | ✅ |
+| 文本、selection、undo/redo、语言切换和 syntax token 生命周期 | `zeta-editor::CodeEditorDocument` | ✅ |
+| Native Composer 的 Shell 高亮 | `CodeEditorDocument::from_text_with_language` / `set_language` | ✅ |
+| Native 文件 CodeEditor 接线 | Native EditorHost | 尚未完成 |
+| Native `DiffEditor` 两侧 syntax token 投影 | `zeta-editor::DiffEditorDocument` / `DiffEditor` | ✅；宿主只提交 diff 与 language |
+| Alpha JSON/JSONC token | Alpha analysis provider + TextMate worker | ✅ |
+| Alpha Rust token | 后续 Alpha 编辑器内 provider | 尚未完成 |
+| App Server syntax RPC | 无 | ❌；不属于远程产品服务 |
+| completion、type、definition/reference、rename | `zeta-lsp` + language server，经编辑器 language feature 接入 | 部分具备 |
+| workspace symbol index | 后续 workspace index | 尚未完成；不属于单个 editor document |
 
-继续阅读：[一次编辑](#1-一次编辑)、[所有权](#2-所有权边界)、
-[性能边界](#3-性能与进程边界)、[当前状态](#4-当前实现与演进)。
-
-```mermaid
-flowchart LR
-    Document["EditorHost authoritative document"] -->|"UTF-8 edit + revision"| Syntax["zeta-syntax"]
-    Syntax --> Snapshot["revision-tagged syntax snapshot"]
-    Snapshot --> Desktop["ISyntaxAnalysisService → Alpha analysis worker"]
-    Snapshot --> Native["Native adapter → zeta-editor"]
-    Snapshot --> Index["future workspace symbol index"]
-    Document --> LSP["zeta-lsp → language server"]
-    LSP --> Desktop
-    LSP --> Native
-```
-
-## 1. 一次编辑
-
-1. EditorHost 保存 authoritative text、document identity 和单调 revision。
-2. Host adapter 把一次变更转换为当前 revision 上的 UTF-8 byte replacement；Desktop adapter
-   必须先从 UTF-16 position 显式转换。
-3. `SyntaxDocument` 校验 revision、range、UTF-8 boundary 和文档大小，在旧 tree clone 上应用
-   `InputEdit`，再以旧 tree 为 hint 增量 parse 新文本。
-4. 解析成功后原子提交 text、line index、tree 和新 revision，并派生同 revision 的 token、
-   fold、document symbol 和 parse diagnostic snapshot。
-5. 产品宿主只在 snapshot revision 仍等于当前 EditorHost revision 时投影结果；迟到结果直接丢弃。
-6. LSP 同步独立消费 authoritative document。语法 snapshot 不能替代 LSP document version，
-   LSP 结果也不能绕过宿主 freshness gate。
-
-Parser 接受包含语法错误的中间文本；error/missing node 是正常 snapshot 数据。只有无效 edit、
-超限、grammar/query 初始化失败或 parser cancellation 才使操作失败。
-
-## 2. 所有权边界
-
-| 能力 | `zeta-syntax` | 产品宿主 / EditorHost | Alpha / Native view | `zeta-lsp` |
-| --- | --- | --- | --- | --- |
-| tree-sitter grammar、query 与增量 tree | ✅ | ❌ | ❌ | ❌ |
-| authoritative text、URI、language、revision | 消费 snapshot | ✅ | 协调 | 消费 snapshot |
-| syntax token category、fold、document symbol | ✅ | freshness/调度 | 展示 | ❌ |
-| workspace 扫描、watch、open-buffer-over-disk policy | ❌ | 后续 index composition | ❌ | ❌ |
-| type、completion、definition/reference、rename | ❌ | 协调 | 展示/交互 | transport/runtime |
-| theme color、DOM/native geometry、fold state | ❌ | 协调 | ✅ | ❌ |
-| 文件读写、dirty state、保存冲突 | ❌ | ✅ | 视图投影 | ❌ |
-
-tree-sitter 的输出是语言 grammar 定义的 concrete syntax tree，不是统一语义 AST。公共 contract
-不暴露 `tree_sitter::Tree`、`Node` 或 grammar node-kind 字符串，只暴露产品可稳定消费的范围、
-category 和声明。语言特有 query 保持 crate private。
-
-单文档 symbol 是 parse snapshot 的派生事实；workspace symbol index 则需要文件扫描、watcher、
-unsaved buffer 优先级、更新原子性、缓存和可能的持久化。两者生命周期不同。首阶段不创建
-`zeta-symbol-index`；真实 workspace consumer 和独立 typed port 稳定后再提取。
-
-## 3. 性能与进程边界
-
-把 parser 放进 Rust 不会自动优化 Alpha 的 DOM、glyph measurement 或 layout。收益来自减少
-Renderer 的语言 worker/JS heap 工作、共享 Native 实现，以及让大文件结构分析离开 UI thread。
-Alpha 的 Rust/JSON/JSONC token lane 优先使用后端，避免正常路径重复 tokenization。后端失败时委托
-既有 worker provider chain；JSON/JSONC 可回退 TextMate，Rust 当前没有 TextMate grammar。
-
-Desktop 通过前端正式的 `ISyntaxAnalysisService` 使用 Rust。Workbench 注册
-`AppServerSyntaxAnalysisService`，后者是版本化 App Server API 的薄适配；Alpha 只依赖 service，
-不接触 `ZetaRendererApi`、Electron IPC 或 JSON-RPC。当前接入使用长生命周期、按
-connection/model 拥有的 analysis session：
+## 一次 CodeEditor 编辑
 
 ```text
-document/syntax/open(model ID, URI, full text, revision)
-  → document/syntax/change(model ID, previous revision, next revision, bounded UTF-16 edits)
-  → revision-tagged analysis snapshot（compact tokens + folds + symbols + diagnostics）
-  → close
+Native host
+  └─ CodeEditorDocument::apply / apply_composition / replace_text
+       ├─ 修改 authoritative editor text 与 history
+       ├─ CodeEditorAnalysis::synchronize
+       │  └─ zeta-syntax::SyntaxDocument::apply_edit
+       └─ snapshot token → line-relative CodeEditorSyntaxToken
+            └─ CodeEditor::paint → current theme palette
 ```
 
-不能把每次按键实现为“发送全文、返回完整 AST”的独立 RPC。当前 Desktop adapter 已定义：
+1. 宿主创建 `CodeEditorDocument` 时选择 `CodeEditorLanguage`，或在 mode 改变时调用
+   `set_language`。
+2. `CodeEditorDocument` 执行 Unicode-safe 编辑、IME commit、undo/redo 或全文替换。
+3. 私有 `CodeEditorAnalysis` 计算单个 UTF-8 replacement，推进内部 revision，并让
+   `SyntaxDocument` 复用旧 tree；解析失败时丢弃旧 analyzer，并从当前 authoritative text 重建。
+4. 同 revision snapshot 被投影为逐行、行内 UTF-8 byte range 的 `CodeEditorSyntaxToken`。
+5. 绘制只读取 document 已确认的 token，并从当前 `CodeEditorStyle` 解析颜色；主题变化不触发重解析。
 
-- Alpha UTF-16 absolute offset 到 Rust UTF-8 byte range 的后端转换；
-- 一个 Alpha model transaction 到一个原子、非重叠 edit batch；
-- 串行 model queue、provider cancellation 检查和 stale revision 丢弃；
-- App Server 文档丢失或重启后的当前全文 reopen；
-- 4 MiB document、1024 edit 和 50,000 token 上限；
-- 协议拥有的 token legend 与 compact token data 到 Alpha `LanguageToken`/viewport presentation 的投影；
-- tree-sitter parse diagnostic 与既有 lexical diagnostic 合并；
-- 后端不可用时委托既有 fallback chain，其他语言的 token/diagnostic lane 不改变。
+调用方看不到 parser、tree、revision、edit batch 或 syntax transport。这些细节随编辑器文档一起
+创建、编辑和释放，避免 model ID、连接所有权、重连恢复和 stale-result gate 泄漏到 Workbench。
 
-尚未实现 token delta、主动 debounce 和有界跨进程队列 backpressure；当前返回每个 revision 的
-完整紧凑 token 数组。wire 使用 LSP-compatible relative token 形状，但内容仍是
-tree-sitter syntax category，不能描述成 compiler/LSP semantic facts。
+## 所有权边界
 
-Native host 与 Rust 运行在同一进程，可直接依赖 `zeta-syntax`，但仍由 EditorHost 持有文档与
-revision，并把语言中立 token category 映射为 `zeta-editor` presentation color。
+| 能力 | `zeta-syntax` | `CodeEditor` / Alpha | 产品宿主 | App Server | `zeta-lsp` |
+| --- | --- | --- | --- | --- | --- |
+| grammar、query、tree-sitter tree | ✅ | 组合/消费 | ❌ | ❌ | ❌ |
+| editor text、selection、language 与本地 revision | ❌ | ✅ | 选择初始资源与语言 | ❌ | 消费同步 |
+| syntax token 与 parse facts | 计算 | ✅ 生命周期与展示 | ❌ | ❌ | ❌ |
+| theme color、DOM/native geometry、fold UI state | ❌ | ✅ | 注入主题/布局 | ❌ | ❌ |
+| 文件读写、dirty/save/conflict | ❌ | ❌ | ✅ | 可提供独立文件 capability | ❌ |
+| type、completion、definition/reference、rename | ❌ | 交互入口 | 协调 | 可承载独立 LSP runtime | ✅ |
+| workspace 扫描、watch 与 symbol index | ❌ | ❌ | 后续组合 | 可承载独立 workspace capability | 消费/提供事实 |
 
-## 4. 当前实现与演进
+`zeta-syntax` 仍保持独立 crate，因为 grammar、query、资源上限和增量 tree 算法需要可测试的领域
+边界；但它不是产品对外服务。`zeta-editor` 是当前唯一产品 consumer，Native 不直接依赖它。
+tree-sitter 的输出是 concrete syntax facts，不是统一 AST，也不是 compiler/LSP semantic facts。
 
-### 当前实现
+## Desktop Alpha
 
-- 独立 `zeta-syntax` Cargo/Bazel crate；
-- Rust grammar/highlights/tags、Shell grammar/highlights，以及 JSON/JSONC grammar/highlights；
-- Native Composer 用增量 `SyntaxDocument::Shell` snapshot 映射 `CodeEditorSyntaxToken`；
-- host-owned monotonic `DocumentRevision`；
-- UTF-8 replace/insert/delete 与 tree-sitter `InputEdit`；
-- incremental line index、old-tree reuse 和 parse cancellation rollback；
-- 有界 token、fold、document symbol 与 parse diagnostic snapshot；
-- grammar/tree 类型不泄漏到 public API；
-- 单独测试文件覆盖增量编辑、Unicode boundary、revision 和 limits。
-- App Server `document/syntax/open|change|close`、connection/model ownership、UTF-16 batch/result 转换；
-- 前端 `ISyntaxAnalysisService`、`AppServerSyntaxAnalysisService` 与 Alpha
-  `syntaxAnalysisServiceAdapter`，共同完成 Rust/JSON/JSONC token/parse-diagnostic 投影且不让 transport
-  进入 Editor Part/Alpha contract。
+Alpha 同样只对外暴露编辑器与 versioned language-provider contract。当前 JSON/JSONC grammar 在
+Alpha TextMate worker 中运行，浏览器 session 直接从 editor-local provider factory 创建分析
+worker；Workbench 不注册 syntax service，Renderer API 和 App Server protocol 也没有 syntax
+capability。
 
-### 近期计划
+这次边界收敛删除了先前的 Rust App Server provider，因此 Alpha Rust 高亮当前尚未完成。后续若
+需要 Rust tree-sitter，应实现 Alpha 拥有的 worker/provider，并保持 parser transport 私有；不能
+恢复 `document/syntax/open|change|close` 作为产品 API。
 
-1. 建立 authoritative EditorHost/document service，统一 URI、language 和 revision。
-2. 把 Composer 已使用的 snapshot-to-`CodeEditorSyntaxToken` adapter 扩展到 Native 文件 EditorHost。
-3. 为 token snapshot 增加 result-ID delta 与有界 backpressure，并以 profile 数据决定 debounce。
-4. 在 Alpha 接入 document outline/folding UI，再按语言逐项替换重复 syntax provider。
-5. 以真实 Files/Search consumer 验证 open buffer 覆盖 disk snapshot 后，再建立 workspace index。
+## DiffEditor 与后续演进
 
-### 潜在方向
+`DiffEditorDocument` 接收已经计算完成的 `DiffDocument` 和一个 `CodeEditorLanguage`，内部重建
+original/modified 精确文本，并各自持有 `CodeEditorDocument`。双栏和 unified projection 根据
+source line number 读取同一份 editor-owned token；Changes Pane 不知道 parser、revision 或 token。
+语言切换只调用 `DiffEditorDocument::set_language`，不会产生 App Server 请求。
 
-- 按实际产品语言逐个注册 grammar 和 fixture，不开放任意 native grammar loading；
-- 超大文档 profiling 证明 `String` mutation 成为瓶颈后，改为 rope/chunked tree-sitter input；
-- workspace index 需要第二个进程或远程 authority 时，再决定 App Server durability 与缓存格式；
-- semantic token 与 tree-sitter token 同时存在时，由宿主定义明确 precedence，不让 presentation
-  猜测来源。
+近期工作按以下顺序推进：
 
-长期不变量是：EditorHost 拥有文档，`zeta-syntax` 拥有结构分析，LSP/compiler 拥有语义事实，
-Alpha/Native view 拥有 presentation；Monaco 不再获得新的产品所有权，退场所需工具能力进入 Alpha
-公开 contract。任何异步结果都必须绑定并验证 document revision。
+1. Native 文件打开产品流程出现真实宿主后，直接持有 language-aware `CodeEditorDocument`；这是一项
+   文件 UI 功能，不再设计 syntax adapter。
+2. Alpha 按真实产品需要增加 editor-local Rust provider。
+3. folding、outline 和 parse diagnostics 只有出现具体 UI consumer 后才扩展编辑器公开 contract。
+4. workspace index 只在真实 Files/Search consumer 建立后作为独立能力设计。
+
+长期不变量是：产品层暴露编辑器，不暴露 parser RPC；编辑器拥有文档内语言能力，
+`zeta-syntax` 拥有底层 syntax 算法，LSP/compiler 拥有跨文件语义事实。

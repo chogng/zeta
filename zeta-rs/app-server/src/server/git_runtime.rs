@@ -429,6 +429,7 @@ fn project_status(
     Ok(GitStatusResult {
         stream_instance_id,
         revision: 0,
+        workspace_path: wire_path(workspace_prefix)?,
         head: head(snapshot.head()),
         changes: snapshot
             .changes()

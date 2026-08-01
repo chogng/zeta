@@ -300,6 +300,26 @@ fn expanded_sidebar_reflows_the_terminal_and_publishes_a_selected_session_tab() 
     assert_eq!(layout.main.origin.x, 200.0);
     assert_eq!(layout.composer.origin.x, 224.0);
     assert!(visible_text.contains(&"Search sessions..."));
+    let inspected_search = presentation
+        .scene
+        .inspection()
+        .target_at(Point::new(20.0, 50.0))
+        .expect("session search should expose its inspection hierarchy");
+    assert_eq!(
+        presentation
+            .scene
+            .inspection()
+            .ancestry(inspected_search.id())
+            .iter()
+            .map(|node| node.name())
+            .collect::<Vec<_>>(),
+        vec![
+            "SessionSidebar",
+            "SessionSidebarToolbar",
+            "SearchBox",
+            "InputBox"
+        ]
+    );
     assert_eq!(search.role, AccessibilityRole::TextInput);
     assert_eq!(add_session.role, AccessibilityRole::Button);
     assert_eq!(add_session.label, "Add new session");
@@ -662,6 +682,24 @@ fn primary_presentation_publishes_current_control_semantics_and_focus() {
 
     assert_eq!(info_bar.role, AccessibilityRole::Group);
     assert_eq!(info_bar.label, "/ for commands");
+    let inspected_info_bar = presentation
+        .scene
+        .inspection()
+        .target_at(Point::new(
+            info_bar.bounds.origin.x + 100.0,
+            info_bar.bounds.origin.y + info_bar.bounds.size.height / 2.0,
+        ))
+        .expect("composer info bar should expose its inspection hierarchy");
+    assert_eq!(
+        presentation
+            .scene
+            .inspection()
+            .ancestry(inspected_info_bar.id())
+            .iter()
+            .map(|node| node.name())
+            .collect::<Vec<_>>(),
+        vec!["ComposerPanel", "ComposerInfoBar"]
+    );
     assert_eq!(composer.role, AccessibilityRole::TextInput);
     assert_eq!(composer.label, "Command input");
     assert_eq!(composer.value.as_deref(), Some(""));

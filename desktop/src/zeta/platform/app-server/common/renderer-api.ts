@@ -1,4 +1,4 @@
-import type { FsGetMetadataParams, FsGetMetadataResult, FsReadDirectoryParams, FsReadDirectoryResult, FsReadFileParams, FsReadFileResult, ModelListResult, ResourceMetadataParams, ResourceMetadataResult, ResourceReadParams, ResourceReadResult, ResourceReleaseParams, ServerNotification, SessionCommandParams, SessionCreateParams, SessionListResult, SessionModelSetParams, SessionReadParams, SessionResult, SessionSubscribeParams, SessionSubscribeResult, SessionThreadArchiveParams, SessionThreadCreateParams, SessionThreadForkParams, SessionThreadResult, SessionUnsubscribeParams, SlashCommandDefinition, SyntaxAnalysisSnapshotDto, SyntaxChangeParams, SyntaxCloseParams, SyntaxOpenParams, ThreadReadParams, ThreadReadResult, ThreadSubscribeParams, ThreadSubscribeResult, ThreadUnsubscribeParams, TurnInterruptParams, TurnInterruptResult, TurnInteractionResolveParams, TurnInteractionResolveResult, TurnStartParams, TurnStartResult, TypstCompileParams, TypstCompileResult, WorkspaceSearchCancelParams, WorkspaceSearchReadParams, WorkspaceSearchReadResult, WorkspaceSearchStartParams, WorkspaceSearchStartResult } from "../../../../../generated/app-server/types.js";
+import type { FsGetMetadataParams, FsGetMetadataResult, FsReadDirectoryParams, FsReadDirectoryResult, FsReadFileParams, FsReadFileResult, ModelListResult, ResourceMetadataParams, ResourceMetadataResult, ResourceReadParams, ResourceReadResult, ResourceReleaseParams, ServerNotification, SessionCommandParams, SessionCreateParams, SessionListResult, SessionModelSetParams, SessionReadParams, SessionResult, SessionSubscribeParams, SessionSubscribeResult, SessionThreadArchiveParams, SessionThreadCreateParams, SessionThreadForkParams, SessionThreadResult, SessionUnsubscribeParams, SlashCommandDefinition, ThreadReadParams, ThreadReadResult, ThreadSubscribeParams, ThreadSubscribeResult, ThreadUnsubscribeParams, TurnInterruptParams, TurnInterruptResult, TurnInteractionResolveParams, TurnInteractionResolveResult, TurnStartParams, TurnStartResult, TypstCompileParams, TypstCompileResult, WorkspaceSearchCancelParams, WorkspaceSearchReadParams, WorkspaceSearchReadResult, WorkspaceSearchStartParams, WorkspaceSearchStartResult } from "../../../../../generated/app-server/types.js";
 import type { TerminalCloseParams, TerminalCreateParams, TerminalCreateResult, TerminalProfileListResult, TerminalReadParams, TerminalReadResult, TerminalResizeParams, TerminalWriteParams } from "../../../../../generated/app-server/types.js";
 import type { GitCommitParams, GitCommitResult, GitHistoryResult, GitOperationResult, GitPathsParams, GitStatusResult } from "../../../../../generated/app-server/types.js";
 
@@ -66,11 +66,6 @@ export interface ZetaRendererApi {
   };
   typst: {
     compile(params: TypstCompileParams): Promise<TypstCompileResult>;
-  };
-  syntax: {
-    open(params: SyntaxOpenParams): Promise<SyntaxAnalysisSnapshotDto>;
-    change(params: SyntaxChangeParams): Promise<SyntaxAnalysisSnapshotDto>;
-    close(params: SyntaxCloseParams): Promise<void>;
   };
   resource: {
     metadata(params: ResourceMetadataParams): Promise<ResourceMetadataResult>;

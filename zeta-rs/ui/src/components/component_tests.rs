@@ -1,11 +1,15 @@
 use super::Component;
-use crate::{Color, PaintRect, Rect, UiScene};
+use crate::{Color, ComponentInspection, PaintRect, Rect, UiScene};
 
 struct TestComponent {
     bounds: Rect,
 }
 
 impl Component for TestComponent {
+    fn inspection(&self) -> ComponentInspection {
+        ComponentInspection::new("TestComponent", self.bounds)
+    }
+
     fn paint(&self, scene: &mut UiScene) {
         scene.draw_rect(PaintRect::new(self.bounds, Color::WHITE));
     }
@@ -23,6 +27,7 @@ fn scene_draws_component_inside_active_clip() {
     });
 
     assert_eq!(scene.rects().len(), 1);
+    assert_eq!(scene.inspection().nodes()[0].name(), "TestComponent");
     assert_eq!(
         scene.rects()[0].clip_bounds(),
         Some(Rect::from_xywh(10.0, 12.0, 20.0, 16.0))

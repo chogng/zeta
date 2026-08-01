@@ -2,12 +2,16 @@ use std::path::Path;
 use std::process::Command;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use super::{WorkspaceContext, display_working_directory};
+use super::{
+    WorkspaceContext, display_working_directory, editor_language_for_path,
+    repository_root_from_workspace_path,
+};
 use zeta_app_server_client::{
     AppServerClient, InProcessClientOptions, InProcessTransport, start_in_process_client,
 };
 use zeta_app_server_protocol::protocol::common::ClientInfo;
 use zeta_app_server_protocol::protocol::git::GitBranchSwitchParams;
+use zeta_editor::CodeEditorLanguage;
 
 static NEXT_REPOSITORY_ID: AtomicU64 = AtomicU64::new(0);
 
@@ -40,6 +44,40 @@ fn fixture_exposes_all_four_toolbar_values_without_inventing_git_state() {
 }
 
 #[test]
+fn file_extension_selects_only_the_editor_language_contract() {
+    assert_eq!(
+        editor_language_for_path(Path::new("src/main.rs")),
+        CodeEditorLanguage::Rust
+    );
+    assert_eq!(
+        editor_language_for_path(Path::new("config/settings.jsonc")),
+        CodeEditorLanguage::Jsonc
+    );
+    assert_eq!(
+        editor_language_for_path(Path::new("README.md")),
+        CodeEditorLanguage::PlainText
+    );
+}
+
+#[test]
+fn repository_relative_workspace_path_recovers_only_an_ancestor_root() {
+    let working_directory = Path::new("repository/crates/native");
+
+    assert_eq!(
+        repository_root_from_workspace_path(working_directory, "crates/native"),
+        Some("repository".into())
+    );
+    assert_eq!(
+        repository_root_from_workspace_path(working_directory, "../native"),
+        None
+    );
+    assert_eq!(
+        repository_root_from_workspace_path(working_directory, "other/native"),
+        None
+    );
+}
+
+#[test]
 fn repository_capture_builds_real_changed_file_diffs() {
     let root = std::env::temp_dir().join(format!(
         "zeta-native-workspace-context-{}-{}",
@@ -62,13 +100,17 @@ fn repository_capture_builds_real_changed_file_diffs() {
     context.apply_git_projection(Some(&git_client(&root).git_text_diff().unwrap()));
 
     assert_eq!(context.git_branch_label(), "main");
+    assert_eq!(
+        context.git_repository_root(),
+        Some(root.canonicalize().unwrap().as_path())
+    );
     assert_eq!(context.diff_summary_label(), "Changes 3 • +3 -2");
     let tracked = context
         .diffs()
         .iter()
         .find(|diff| diff.path() == "tracked.txt")
         .unwrap();
-    assert!(!tracked.document().hunks().is_empty());
+    assert!(!tracked.document().diff().hunks().is_empty());
     let _ = std::fs::remove_dir_all(root);
 }
 

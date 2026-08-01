@@ -1,4 +1,4 @@
-import type { FsGetMetadataResult, FsReadDirectoryResult, FsReadFileResult, ModelListResult, ResourceMetadataResult, ResourceReadResult, ServerNotification, SessionListResult, SessionResult, SessionSubscribeResult, SessionThreadResult, SlashCommandDefinition, SyntaxAnalysisSnapshotDto, ThreadReadResult, ThreadSubscribeResult, TurnInterruptResult, TurnInteractionResolveResult, TurnStartResult, TypstCompileResult, WorkspaceSearchReadResult, WorkspaceSearchStartResult } from "../../../../../generated/app-server/types.js";
+import type { FsGetMetadataResult, FsReadDirectoryResult, FsReadFileResult, ModelListResult, ResourceMetadataResult, ResourceReadResult, ServerNotification, SessionListResult, SessionResult, SessionSubscribeResult, SessionThreadResult, SlashCommandDefinition, ThreadReadResult, ThreadSubscribeResult, TurnInterruptResult, TurnInteractionResolveResult, TurnStartResult, TypstCompileResult, WorkspaceSearchReadResult, WorkspaceSearchStartResult } from "../../../../../generated/app-server/types.js";
 import type { TerminalCreateResult, TerminalProfileListResult, TerminalReadResult } from "../../../../../generated/app-server/types.js";
 import type { GitCommitResult, GitHistoryResult, GitOperationResult, GitStatusResult } from "../../../../../generated/app-server/types.js";
 import { operatingSystemFromNodePlatform } from "../../../base/common/environment.js";
@@ -122,14 +122,6 @@ export function createElectronRendererApi(): ZetaElectronRendererApi {
     typst: {
       compile: (params) =>
         invoke<TypstCompileResult>("zeta:typst:compile", params),
-    },
-    syntax: {
-      open: (params) =>
-        invoke<SyntaxAnalysisSnapshotDto>("zeta:syntax:open", params),
-      change: (params) =>
-        invoke<SyntaxAnalysisSnapshotDto>("zeta:syntax:change", params),
-      close: (params) =>
-        invoke<void>("zeta:syntax:close", params),
     },
     resource: {
       metadata: (params) =>

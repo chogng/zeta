@@ -67,12 +67,3 @@ impl CodeEditorSyntaxToken {
         Self { range, role }
     }
 }
-
-/// Synchronous syntax-token projection used to build a document presentation snapshot.
-///
-/// Implementations must return ranges relative to the provided line and should avoid I/O. Hosts
-/// with asynchronous parsers should compute tokens off-thread and apply them only when the
-/// document revision still matches.
-pub trait CodeEditorSyntaxHighlighter {
-    fn highlight_line(&self, line_number: usize, text: &str) -> Vec<CodeEditorSyntaxToken>;
-}

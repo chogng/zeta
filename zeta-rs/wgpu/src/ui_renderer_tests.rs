@@ -1,5 +1,5 @@
 use super::{UiRenderError, glyphon_wrap, validate_text_block};
-use crate::{Color, Point, Size, TextBlock, TextBlockWrap, TextSpan, TextStyle};
+use zeta_ui::{Color, Point, Size, TextBlock, TextBlockWrap, TextSpan, TextStyle};
 
 #[test]
 fn rejects_non_positive_text_bounds() {

@@ -148,6 +148,10 @@ impl ShellPalette {
         self.overlay_scroll_view_style()
     }
 
+    pub(crate) fn picker_scroll_view_style(self) -> ScrollViewStyle {
+        self.overlay_scroll_view_style()
+    }
+
     fn overlay_scroll_view_style(self) -> ScrollViewStyle {
         ScrollViewStyle::new(
             ScrollbarStyle::new(Color::TRANSPARENT, self.scrollbar)

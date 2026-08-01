@@ -53,12 +53,6 @@ use crate::protocol::skills::{
     SkillSourceKindDto, SkillsChanged,
 };
 use crate::protocol::slash_commands::{SlashCommandArgumentModeDto, SlashCommandDefinition};
-use crate::protocol::syntax::{
-    SyntaxAnalysisSnapshotDto, SyntaxChangeParams, SyntaxCloseParams, SyntaxDiagnosticDto,
-    SyntaxDiagnosticSeverityDto, SyntaxDocumentSymbolDto, SyntaxDocumentSymbolKindDto,
-    SyntaxLanguageDto, SyntaxOpenParams, SyntaxPositionDto, SyntaxRangeDto, SyntaxTextEditDto,
-    SyntaxTokenDataDto, SyntaxTokenTypeDto,
-};
 use crate::protocol::terminal::{
     TerminalCloseParams, TerminalCommandStatus, TerminalCommandStatusEvent, TerminalCreateParams,
     TerminalCreateResult, TerminalOutputChunk, TerminalProfile, TerminalProfileListResult,
@@ -416,21 +410,6 @@ client_methods! {
     TypstCompile => "document/typst/compile" {
         params: TypstCompileParams,
         response: TypstCompileResult,
-        serialization: GlobalExclusive,
-    },
-    SyntaxOpen => "document/syntax/open" {
-        params: SyntaxOpenParams,
-        response: SyntaxAnalysisSnapshotDto,
-        serialization: GlobalExclusive,
-    },
-    SyntaxChange => "document/syntax/change" {
-        params: SyntaxChangeParams,
-        response: SyntaxAnalysisSnapshotDto,
-        serialization: GlobalExclusive,
-    },
-    SyntaxClose => "document/syntax/close" {
-        params: SyntaxCloseParams,
-        response: (),
         serialization: GlobalExclusive,
     },
     ResourceMetadata => "resource/metadata" {
@@ -811,20 +790,6 @@ typescript_bindings! {
     TypstDiagnosticDto,
     TypstDiagnosticSeverityDto,
     TypstSourceRangeDto,
-    SyntaxLanguageDto,
-    SyntaxTokenTypeDto,
-    SyntaxPositionDto,
-    SyntaxRangeDto,
-    SyntaxTokenDataDto,
-    SyntaxDocumentSymbolKindDto,
-    SyntaxDocumentSymbolDto,
-    SyntaxDiagnosticSeverityDto,
-    SyntaxDiagnosticDto,
-    SyntaxOpenParams,
-    SyntaxTextEditDto,
-    SyntaxChangeParams,
-    SyntaxCloseParams,
-    SyntaxAnalysisSnapshotDto,
     ResourceMetadataParams,
     ResourceMetadataResult,
     ResourceReadParams,

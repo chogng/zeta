@@ -1,4 +1,6 @@
-use crate::{Border, Color, Component, CornerRadii, PaintRect, Rect, Size, UiScene};
+use crate::{
+    Border, Color, Component, ComponentInspection, CornerRadii, PaintRect, Rect, Size, UiScene,
+};
 
 /// Axis along which a [`TabList`] arranges its tabs.
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
@@ -238,15 +240,39 @@ impl TabList {
 }
 
 impl Component for TabList {
+    fn inspection(&self) -> ComponentInspection {
+        ComponentInspection::new("TabList", self.bounds)
+    }
+
     fn paint(&self, scene: &mut UiScene) {
         scene.with_clip(self.bounds, |scene| {
             for (index, tab) in self.tabs.iter().copied().enumerate() {
                 let Some(bounds) = self.tab_bounds(index) else {
                     continue;
                 };
-                tab.paint(bounds, self.style.tab_style, scene);
+                scene.draw_component(&TabSurface {
+                    tab,
+                    bounds,
+                    style: self.style.tab_style,
+                });
             }
         });
+    }
+}
+
+struct TabSurface {
+    tab: Tab,
+    bounds: Rect,
+    style: TabStyle,
+}
+
+impl Component for TabSurface {
+    fn inspection(&self) -> ComponentInspection {
+        ComponentInspection::new("Tab", self.bounds).with_corner_radii(self.style.corner_radii)
+    }
+
+    fn paint(&self, scene: &mut UiScene) {
+        self.tab.paint(self.bounds, self.style, scene);
     }
 }
 

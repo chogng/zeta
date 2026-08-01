@@ -48,6 +48,7 @@ fn git_status_change_is_explicitly_ignored_until_the_tui_owns_git_state() {
         status: GitStatusResult {
             stream_instance_id: StreamInstanceId::new("git-stream").unwrap(),
             revision: 1,
+            workspace_path: String::new(),
             head: GitHeadDto::Unborn {
                 name: "main".into(),
             },

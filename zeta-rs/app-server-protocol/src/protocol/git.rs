@@ -72,6 +72,7 @@ pub struct GitStatusResult {
     pub stream_instance_id: StreamInstanceId,
     #[ts(type = "number")]
     pub revision: u64,
+    pub workspace_path: String,
     pub head: GitHeadDto,
     pub changes: Vec<GitRepositoryChangeDto>,
 }

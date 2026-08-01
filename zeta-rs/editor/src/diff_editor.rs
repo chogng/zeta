@@ -3,9 +3,10 @@
 use std::collections::BTreeSet;
 use std::ops::Range;
 
-use zeta_diff::{DiffDocument, DiffRowKind};
-use zeta_ui::{Component, PaintRect, Point, Rect, UiScene};
+use zeta_diff::DiffRowKind;
+use zeta_ui::{Component, ComponentInspection, PaintRect, Point, Rect, UiScene};
 
+pub use self::document::DiffEditorDocument;
 use self::layout::{DiffEditorLayout, build_layout};
 pub use self::style::{DiffEditorPalette, DiffEditorStyle};
 use self::unified::UnifiedDiffRows;
@@ -16,6 +17,7 @@ use crate::code_editor::{
 
 const DIVIDER_WIDTH: f32 = 1.0;
 
+mod document;
 mod layout;
 mod style;
 mod unified;
@@ -133,26 +135,32 @@ pub struct DiffEditorLocation {
 }
 
 struct DiffSideRows<'a> {
-    document: &'a DiffDocument,
+    document: &'a DiffEditorDocument,
     side: DiffEditorSide,
     style: &'a DiffEditorStyle,
 }
 
 impl CodeEditorRowSource for DiffSideRows<'_> {
     fn row_count(&self) -> usize {
-        self.document.rows().len()
+        self.document.diff().rows().len()
     }
 
     fn largest_line_number(&self) -> usize {
         match self.side {
-            DiffEditorSide::Original => self.document.old_line_count(),
-            DiffEditorSide::Modified => self.document.new_line_count(),
+            DiffEditorSide::Original => self.document.diff().old_line_count(),
+            DiffEditorSide::Modified => self.document.diff().new_line_count(),
         }
     }
 
     fn row(&self, index: usize) -> Option<CodeEditorRow<'_>> {
-        let row = self.document.rows().get(index)?;
-        Some(project_row(row, self.side, self.style, true))
+        let row = self.document.diff().rows().get(index)?;
+        let syntax_tokens = match self.side {
+            DiffEditorSide::Original => row.old(),
+            DiffEditorSide::Modified => row.new_line(),
+        }
+        .map(|line| self.document.syntax_tokens(self.side, line.number()))
+        .unwrap_or_default();
+        Some(project_row(row, self.side, self.style, true, syntax_tokens))
     }
 }
 
@@ -198,7 +206,7 @@ impl DiffEditorFoldControl {
 pub struct DiffEditor<'a> {
     bounds: Rect,
     paint_viewport: Rect,
-    document: &'a DiffDocument,
+    document: &'a DiffEditorDocument,
     state: DiffEditorState,
     labels: DiffEditorLabels<'a>,
     style: DiffEditorStyle,
@@ -208,7 +216,7 @@ pub struct DiffEditor<'a> {
 impl<'a> DiffEditor<'a> {
     pub fn new(
         bounds: Rect,
-        document: &'a DiffDocument,
+        document: &'a DiffEditorDocument,
         state: DiffEditorState,
         labels: DiffEditorLabels<'a>,
         style: DiffEditorStyle,
@@ -397,6 +405,10 @@ impl<'a> DiffEditor<'a> {
 }
 
 impl Component for DiffEditor<'_> {
+    fn inspection(&self) -> ComponentInspection {
+        ComponentInspection::new("DiffEditor", self.bounds)
+    }
+
     fn paint(&self, scene: &mut UiScene) {
         let paint_bounds = self.bounds.intersection(self.paint_viewport);
         if paint_bounds.is_empty() {
@@ -430,6 +442,7 @@ pub(super) fn project_row<'a>(
     side: DiffEditorSide,
     style: &DiffEditorStyle,
     allow_placeholder: bool,
+    syntax_tokens: &[crate::CodeEditorSyntaxToken],
 ) -> CodeEditorRow<'a> {
     let line = match side {
         DiffEditorSide::Original => row.old(),
@@ -440,7 +453,9 @@ pub(super) fn project_row<'a>(
         debug_assert!(allow_placeholder);
         return CodeEditorRow::placeholder().with_background(background);
     };
-    let mut code_row = CodeEditorRow::new(line.number(), line.text()).with_background(background);
+    let mut code_row = CodeEditorRow::new(line.number(), line.text())
+        .with_background(background)
+        .with_syntax_tokens(syntax_tokens.to_vec());
     if let Some(marker) = change_marker(row.kind(), side) {
         code_row = code_row.with_marker(marker, style.marker_color(side));
     }

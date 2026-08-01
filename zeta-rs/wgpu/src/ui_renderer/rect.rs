@@ -2,7 +2,9 @@ use std::{mem, ops::Range};
 
 use bytemuck::{Pod, Zeroable};
 
-use crate::{BoxShadow, Color, PaintRect, Rect, UiRenderError, UiScene, UiViewport};
+use zeta_ui::{BoxShadow, Color, PaintRect, Rect, UiScene};
+
+use super::{UiRenderError, UiViewport};
 
 const INSTANCE_ATTRIBUTES: [wgpu::VertexAttribute; 8] = wgpu::vertex_attr_array![
     0 => Float32x4,
@@ -32,7 +34,7 @@ pub(crate) struct RectRenderer {
     pipeline: wgpu::RenderPipeline,
     instance_buffer: wgpu::Buffer,
     instance_capacity: usize,
-    layer_ranges: Vec<Range<u32>>,
+    primitive_ranges: Vec<Range<u32>>,
 }
 
 impl RectRenderer {
@@ -76,7 +78,7 @@ impl RectRenderer {
             pipeline,
             instance_buffer,
             instance_capacity,
-            layer_ranges: Vec::new(),
+            primitive_ranges: Vec::new(),
         }
     }
 
@@ -89,7 +91,7 @@ impl RectRenderer {
     ) -> Result<(), UiRenderError> {
         let prepared = prepare_instances(scene, target)?;
         let instances = prepared.instances;
-        self.layer_ranges = prepared.layer_ranges;
+        self.primitive_ranges = prepared.primitive_ranges;
         if instances.is_empty() {
             return Ok(());
         }
@@ -101,12 +103,12 @@ impl RectRenderer {
         Ok(())
     }
 
-    pub(crate) fn render_layer<'pass>(
+    pub(crate) fn render_range<'pass>(
         &'pass self,
         pass: &mut wgpu::RenderPass<'pass>,
-        layer: usize,
+        primitive_range: Range<usize>,
     ) {
-        let Some(range) = self.layer_ranges.get(layer) else {
+        let Some(range) = instance_range(&self.primitive_ranges, primitive_range) else {
             return;
         };
         if range.is_empty() {
@@ -140,60 +142,31 @@ fn prepare_instances(
         target.height() as f32 / scale_factor,
     );
     let mut instances = Vec::with_capacity(scene.rects().len() * 2);
-    let mut layer_ranges = Vec::with_capacity(scene.layer_count());
-    for layer in 0..scene.layer_count() {
+    let mut primitive_ranges = Vec::with_capacity(scene.rects().len());
+    for (index, rect) in scene.rects().iter().copied().enumerate() {
         let start = instances.len() as u32;
-        for (index, rect) in scene.rects().iter().copied().enumerate() {
-            if scene.rect_layers()[index] != layer {
-                continue;
-            }
-            validate_paint_rect(index, rect)?;
-            let clip_bounds = rect
-                .clip_bounds()
-                .map(|clip| clip.intersection(logical_viewport))
-                .unwrap_or(logical_viewport);
-            if rect.bounds().is_empty() || clip_bounds.is_empty() {
-                continue;
-            }
-            let bounds = rect.bounds();
-            let border = rect.border();
-            let widths = border.widths();
-            let radii = rect.corner_radii();
-            if let Some(shadow) = rect.shadow() {
-                let blur_radius = shadow.blur_radius();
-                let shadow_extent = blur_radius;
-                let shadow_bounds = shadow_draw_bounds(bounds, shadow, shadow_extent);
-                instances.push(RectInstance {
-                    bounds: scaled_rect(shadow_bounds, scale_factor),
-                    fill: linear_color(shadow.color()),
-                    border_color: linear_color(Color::TRANSPARENT),
-                    border_widths: [0.0; 4],
-                    corner_radii: [
-                        radii.top_left * scale_factor,
-                        radii.top_right * scale_factor,
-                        radii.bottom_right * scale_factor,
-                        radii.bottom_left * scale_factor,
-                    ],
-                    clip_bounds: scaled_rect(clip_bounds, scale_factor),
-                    viewport,
-                    effect: [
-                        blur_radius * scale_factor,
-                        shadow_extent * scale_factor,
-                        1.0,
-                        0.0,
-                    ],
-                });
-            }
+        validate_paint_rect(index, rect)?;
+        let clip_bounds = rect
+            .clip_bounds()
+            .map(|clip| clip.intersection(logical_viewport))
+            .unwrap_or(logical_viewport);
+        if rect.bounds().is_empty() || clip_bounds.is_empty() {
+            primitive_ranges.push(start..start);
+            continue;
+        }
+        let bounds = rect.bounds();
+        let border = rect.border();
+        let widths = border.widths();
+        let radii = rect.corner_radii();
+        if let Some(shadow) = rect.shadow() {
+            let blur_radius = shadow.blur_radius();
+            let shadow_extent = blur_radius;
+            let shadow_bounds = shadow_draw_bounds(bounds, shadow, shadow_extent);
             instances.push(RectInstance {
-                bounds: scaled_rect(bounds, scale_factor),
-                fill: linear_color(rect.fill()),
-                border_color: linear_color(border.color()),
-                border_widths: [
-                    widths.top * scale_factor,
-                    widths.right * scale_factor,
-                    widths.bottom * scale_factor,
-                    widths.left * scale_factor,
-                ],
+                bounds: scaled_rect(shadow_bounds, scale_factor),
+                fill: linear_color(shadow.color()),
+                border_color: linear_color(Color::TRANSPARENT),
+                border_widths: [0.0; 4],
                 corner_radii: [
                     radii.top_left * scale_factor,
                     radii.top_right * scale_factor,
@@ -202,20 +175,59 @@ fn prepare_instances(
                 ],
                 clip_bounds: scaled_rect(clip_bounds, scale_factor),
                 viewport,
-                effect: [0.0; 4],
+                effect: [
+                    blur_radius * scale_factor,
+                    shadow_extent * scale_factor,
+                    1.0,
+                    0.0,
+                ],
             });
         }
-        layer_ranges.push(start..instances.len() as u32);
+        instances.push(RectInstance {
+            bounds: scaled_rect(bounds, scale_factor),
+            fill: linear_color(rect.fill()),
+            border_color: linear_color(border.color()),
+            border_widths: [
+                widths.top * scale_factor,
+                widths.right * scale_factor,
+                widths.bottom * scale_factor,
+                widths.left * scale_factor,
+            ],
+            corner_radii: [
+                radii.top_left * scale_factor,
+                radii.top_right * scale_factor,
+                radii.bottom_right * scale_factor,
+                radii.bottom_left * scale_factor,
+            ],
+            clip_bounds: scaled_rect(clip_bounds, scale_factor),
+            viewport,
+            effect: [0.0; 4],
+        });
+        primitive_ranges.push(start..instances.len() as u32);
     }
     Ok(PreparedRectInstances {
         instances,
-        layer_ranges,
+        primitive_ranges,
     })
 }
 
 struct PreparedRectInstances {
     instances: Vec<RectInstance>,
-    layer_ranges: Vec<Range<u32>>,
+    primitive_ranges: Vec<Range<u32>>,
+}
+
+pub(super) fn instance_range(
+    primitive_ranges: &[Range<u32>],
+    primitive_range: Range<usize>,
+) -> Option<Range<u32>> {
+    if primitive_range.is_empty() {
+        return None;
+    }
+    let start = primitive_ranges.get(primitive_range.start)?.start;
+    let end = primitive_ranges
+        .get(primitive_range.end.checked_sub(1)?)?
+        .end;
+    Some(start..end)
 }
 
 fn validate_paint_rect(index: usize, rect: PaintRect) -> Result<(), UiRenderError> {
@@ -344,5 +356,5 @@ fn linear_channel(channel: u8) -> f32 {
 }
 
 #[cfg(test)]
-#[path = "rect_renderer_tests.rs"]
+#[path = "rect_tests.rs"]
 mod tests;

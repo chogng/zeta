@@ -3,11 +3,12 @@ use std::{fs, io};
 
 use zeta_app_server_protocol::protocol::git::{GitHeadDto, GitTextDiffResult};
 use zeta_diff::DiffDocument;
+use zeta_editor::{CodeEditorLanguage, DiffEditorDocument};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct WorkspaceDiff {
     path: String,
-    document: DiffDocument,
+    document: DiffEditorDocument,
 }
 
 impl WorkspaceDiff {
@@ -15,7 +16,7 @@ impl WorkspaceDiff {
         &self.path
     }
 
-    pub(crate) const fn document(&self) -> &DiffDocument {
+    pub(crate) const fn document(&self) -> &DiffEditorDocument {
         &self.document
     }
 }
@@ -25,6 +26,7 @@ pub(crate) struct WorkspaceContext {
     working_directory: PathBuf,
     working_directory_label: String,
     git_branch: Option<String>,
+    git_repository_root: Option<PathBuf>,
     upstream_distance: Option<(usize, usize)>,
     change_count: usize,
     diffs: Vec<WorkspaceDiff>,
@@ -51,6 +53,7 @@ impl WorkspaceContext {
             working_directory,
             working_directory_label,
             git_branch: None,
+            git_repository_root: None,
             upstream_distance: None,
             change_count: 0,
             diffs: Vec::new(),
@@ -73,6 +76,10 @@ impl WorkspaceContext {
 
     pub(crate) fn git_branch_label(&self) -> &str {
         self.git_branch.as_deref().unwrap_or("No Git")
+    }
+
+    pub(crate) fn git_repository_root(&self) -> Option<&Path> {
+        self.git_repository_root.as_deref()
     }
 
     pub(crate) fn diff_summary_label(&self) -> String {
@@ -113,6 +120,10 @@ impl WorkspaceContext {
             GitHeadDto::Unborn { name } => (name.clone(), None),
         };
         self.git_branch = Some(branch);
+        self.git_repository_root = repository_root_from_workspace_path(
+            &self.working_directory,
+            &projection.status.workspace_path,
+        );
         self.upstream_distance = upstream_distance;
         self.change_count = projection.status.changes.len();
         self.diffs = projection
@@ -123,7 +134,10 @@ impl WorkspaceContext {
                     .ok()
                     .map(|document| WorkspaceDiff {
                         path: diff.path.clone(),
-                        document,
+                        document: DiffEditorDocument::new(
+                            document,
+                            editor_language_for_path(Path::new(&diff.path)),
+                        ),
                     })
             })
             .collect();
@@ -148,6 +162,7 @@ impl WorkspaceContext {
 
     fn clear_repository(&mut self) {
         self.git_branch = None;
+        self.git_repository_root = None;
         self.upstream_distance = None;
         self.change_count = 0;
         self.diffs.clear();
@@ -167,7 +182,7 @@ impl WorkspaceContext {
                     .ok()
                     .map(|document| WorkspaceDiff {
                         path: format!("fixture-{index}.txt"),
-                        document,
+                        document: DiffEditorDocument::new(document, CodeEditorLanguage::PlainText),
                     })
             })
             .collect();
@@ -175,12 +190,46 @@ impl WorkspaceContext {
             working_directory: PathBuf::from("/fixture"),
             working_directory_label: working_directory_label.into(),
             git_branch: git_branch.map(ToOwned::to_owned),
+            git_repository_root: git_branch.map(|_| PathBuf::from("/fixture")),
             upstream_distance: git_branch.map(|_| (0, 0)),
             change_count: diffs.len(),
             diff_additions: diffs.len(),
             diff_deletions: 0,
             diffs,
         }
+    }
+}
+
+fn repository_root_from_workspace_path(
+    working_directory: &Path,
+    workspace_path: &str,
+) -> Option<PathBuf> {
+    let workspace_path = Path::new(workspace_path);
+    if workspace_path.as_os_str().is_empty() {
+        return Some(working_directory.to_path_buf());
+    }
+    let components = workspace_path.components().collect::<Vec<_>>();
+    if components
+        .iter()
+        .any(|component| !matches!(component, std::path::Component::Normal(_)))
+    {
+        return None;
+    }
+    let repository_root = working_directory.ancestors().nth(components.len())?;
+    let actual_suffix = working_directory.strip_prefix(repository_root).ok()?;
+    actual_suffix
+        .components()
+        .eq(components)
+        .then(|| repository_root.to_path_buf())
+}
+
+fn editor_language_for_path(path: &Path) -> CodeEditorLanguage {
+    match path.extension().and_then(|extension| extension.to_str()) {
+        Some("rs") => CodeEditorLanguage::Rust,
+        Some("json") => CodeEditorLanguage::Json,
+        Some("jsonc") => CodeEditorLanguage::Jsonc,
+        Some("sh" | "bash" | "zsh") => CodeEditorLanguage::Shell,
+        _ => CodeEditorLanguage::PlainText,
     }
 }
 

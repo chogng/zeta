@@ -20,6 +20,7 @@ App Server connection、UI tree 或渲染状态。
 | `NativeWindow::create` | public | 从 `ActiveEventLoop`、attributes 和显式 `WindowChrome` 创建窗口 | 产品标题、尺寸或窗口模式 |
 | `NativeWindow` | public | 安全持有 window 与 display handle | GPU surface、widget 或 workspace |
 | `PhysicalExtent` | public | 跨底层 crate 传递 physical pixel dimensions | logical layout |
+| `NativeWindow::request_inner_logical_size` | public | 把 host 决定的 logical inner size 请求转发给平台窗口 | 产品布局、面板宽度或 resize policy |
 | `WindowChrome` | public | 让产品选择 native chrome 与 full-size titlebar 的共享方式 | titlebar paint/layout |
 | `WindowControlInsets` / `NativeWindow::window_control_insets` | public | 把当前 chrome policy 投影为覆盖产品内容的左右逻辑占位 | ActionBar 间距或产品布局 |
 | `NativeWindow::start_window_drag` | public | 转发产品 titlebar 命中的平台窗口拖动 | hit testing |
@@ -63,8 +64,9 @@ product-owned ApplicationHandler
 - `Theme` 只作为 `winit` 窗口外观策略透传；产品可以显式选择 light/dark native chrome，
   `zeta-winit` 不据此决定产品 scene palette；
 - event-loop 与 window creation error 原样返回，产品决定诊断、恢复或退出；
-- `NativeWindow` 只提供 handle、identity、extent、scale factor、redraw/present hooks 与原生窗口
-  交互 forwarding；
+- `NativeWindow` 只提供 handle、identity、extent、scale factor、size request、redraw/present hooks
+  与原生窗口交互 forwarding；`request_inner_logical_size` 不保证平台接受请求，host 仍须以随后收到的
+  `WindowEvent::Resized` 作为实际 surface extent；
 - IME 默认保持关闭；product host 必须根据 editable focus 显式启停，并只在 active composition
   contract 内更新 logical candidate area；
 - 出现 App Server method、workspace state、widget、paint scene 或 GPU resource 意味着 ownership

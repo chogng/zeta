@@ -91,7 +91,9 @@ Notification 包含 `session/update`、`thread/update`、`skills/changed`、`git
 contract，不伪装成主动 notification stream。
 Git 注册 `git/status`、`git/textDiff`、`git/branch/list` query，以及
 branch/switch、stage/unstage/discardWorktree/commit/fetch/pull/push global-exclusive mutation；
-status 带 revision，投影变化通过 `git/statusChanged` 发送完整 snapshot。
+status 带 revision 和 repository-relative `workspacePath`，投影变化通过 `git/statusChanged` 发送
+完整 snapshot；该相对关系允许本地 host 提供 repository-root 导航，但不会把 host 绝对路径放进
+共享协议。
 Filesystem 注册 `fs/writeFile` global-exclusive mutation；`fs/changed` 只携带 workspace-relative
 invalidation hint 或 rescan request，不成为 durable 文件事件。
 
@@ -187,9 +189,6 @@ dispatcher 的 executable metadata，不能被误写成已经落实的并发保�
 - Terminal raw output 使用 `TerminalOutputChunk.data_base64`；sequence 字段在 Rust 使用 `u64`，
   TypeScript artifact 显式生成为 `number`，server 只产生 safe-lifetime 的单调值。`output_gap`
   是 ring eviction 的显式信号，不能由客户端忽略。
-- `SyntaxAnalysisSnapshotDto` 是 syntax analysis 的跨进程完整 revision snapshot。范围统一使用
-  UTF-16 position；compact token index 必须解释为同一 snapshot 中协议拥有的 `legend`，不能依赖
-  Alpha、Monaco 或 Native 私有顺序。fold、symbol 与 parse diagnostic 必须和 token 绑定同一 revision。
 - `TerminalProfile` 只暴露稳定 ID、标题和 default 标记。Terminal create 只接受
   `TerminalProfileSelection`，不包含 program、args、cwd 或 environment；这些 authority 留在
   local App Server composition。

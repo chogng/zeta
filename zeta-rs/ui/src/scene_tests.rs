@@ -1,6 +1,6 @@
 use zeta_icons::{Icon, IconDefinition, IconId};
 
-use super::{FontFamily, FontWeight, TextBlock, TextSpan, TextStyle, UiScene};
+use super::{FontFamily, FontWeight, SceneBatch, TextBlock, TextSpan, TextStyle, UiScene};
 use crate::{Color, ImageData, ImageId, PaintIcon, PaintImage, PaintRect, Point, Rect, Size};
 
 const TEST_ICON: Icon = Icon::new(
@@ -183,4 +183,82 @@ fn overlay_escapes_and_then_restores_the_callers_clip() {
 
     assert_eq!(scene.rects()[0].clip_bounds(), None);
     assert_eq!(scene.rects()[1].clip_bounds(), Some(host_clip));
+}
+
+#[test]
+fn batches_preserve_cross_kind_paint_order_and_coalesce_adjacent_primitives() {
+    let mut scene = UiScene::new(Color::TRANSPARENT);
+    scene.draw_rect(PaintRect::new(
+        Rect::from_xywh(0.0, 0.0, 20.0, 20.0),
+        Color::WHITE,
+    ));
+    scene.draw_rect(PaintRect::new(
+        Rect::from_xywh(2.0, 2.0, 16.0, 16.0),
+        Color::rgb(0, 0, 0),
+    ));
+    scene.draw_text(TextBlock::new(
+        "under",
+        Point::new(0.0, 0.0),
+        Size::new(40.0, 20.0),
+        TextStyle::new(12.0, Color::WHITE),
+    ));
+    scene.draw_rect(PaintRect::new(
+        Rect::from_xywh(4.0, 4.0, 12.0, 12.0),
+        Color::WHITE,
+    ));
+
+    assert_eq!(
+        scene.batches().collect::<Vec<_>>(),
+        [
+            SceneBatch::Rects {
+                layer: 0,
+                range: 0..2,
+            },
+            SceneBatch::Text {
+                layer: 0,
+                range: 0..1,
+            },
+            SceneBatch::Rects {
+                layer: 0,
+                range: 2..3,
+            },
+        ]
+    );
+}
+
+#[test]
+fn batches_order_overlays_above_base_primitives_drawn_later() {
+    let mut scene = UiScene::new(Color::TRANSPARENT);
+    scene.draw_rect(PaintRect::new(
+        Rect::from_xywh(0.0, 0.0, 20.0, 20.0),
+        Color::WHITE,
+    ));
+    scene.with_overlay(|scene| {
+        scene.draw_rect(PaintRect::new(
+            Rect::from_xywh(0.0, 0.0, 10.0, 10.0),
+            Color::rgb(0, 0, 0),
+        ));
+    });
+    scene.draw_rect(PaintRect::new(
+        Rect::from_xywh(2.0, 2.0, 16.0, 16.0),
+        Color::WHITE,
+    ));
+
+    assert_eq!(
+        scene.batches().collect::<Vec<_>>(),
+        [
+            SceneBatch::Rects {
+                layer: 0,
+                range: 0..1,
+            },
+            SceneBatch::Rects {
+                layer: 0,
+                range: 2..3,
+            },
+            SceneBatch::Rects {
+                layer: 1,
+                range: 1..2,
+            },
+        ]
+    );
 }

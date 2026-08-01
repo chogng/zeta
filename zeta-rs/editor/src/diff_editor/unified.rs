@@ -2,7 +2,7 @@ use std::ops::Range;
 
 use zeta_diff::{DiffDocument, DiffRowKind};
 
-use super::{DiffEditorSide, DiffEditorState, DiffEditorStyle, project_row};
+use super::{DiffEditorDocument, DiffEditorSide, DiffEditorState, DiffEditorStyle, project_row};
 use crate::{CodeEditorRow, CodeEditorRowSource};
 
 const MIN_FOLDED_LINES: usize = 2;
@@ -41,7 +41,7 @@ impl UnifiedSegment {
 /// Source ranges remain symbolic. Random visual-row lookup uses the sorted list of modified source
 /// rows, so scrolling a large file does not recreate one allocation per unchanged line.
 pub(super) struct UnifiedDiffRows<'a> {
-    document: &'a DiffDocument,
+    document: &'a DiffEditorDocument,
     style: &'a DiffEditorStyle,
     modified_source_rows: Vec<usize>,
     segments: Vec<UnifiedSegment>,
@@ -50,19 +50,20 @@ pub(super) struct UnifiedDiffRows<'a> {
 
 impl<'a> UnifiedDiffRows<'a> {
     pub(super) fn new(
-        document: &'a DiffDocument,
+        document: &'a DiffEditorDocument,
         state: &DiffEditorState,
         style: &'a DiffEditorStyle,
     ) -> Self {
         let modified_source_rows = document
+            .diff()
             .hunks()
             .iter()
             .flat_map(|hunk| hunk.row_start()..hunk.row_end())
-            .filter(|row| document.rows()[*row].kind() == DiffRowKind::Modified)
+            .filter(|row| document.diff().rows()[*row].kind() == DiffRowKind::Modified)
             .collect::<Vec<_>>();
         let mut segments = Vec::new();
         let mut source_row = 0;
-        for region in fold_regions(document) {
+        for region in fold_regions(document.diff()) {
             append_source_segment(
                 source_row..region.source_rows.start,
                 &modified_source_rows,
@@ -89,7 +90,7 @@ impl<'a> UnifiedDiffRows<'a> {
             source_row = region.source_rows.end;
         }
         append_source_segment(
-            source_row..document.rows().len(),
+            source_row..document.diff().rows().len(),
             &modified_source_rows,
             &mut segments,
         );
@@ -137,7 +138,7 @@ impl<'a> UnifiedDiffRows<'a> {
             )?;
             let before =
                 visual_row_count(source_rows.start..source_row, &self.modified_source_rows);
-            let side = match self.document.rows()[source_row].kind() {
+            let side = match self.document.diff().rows()[source_row].kind() {
                 DiffRowKind::Context | DiffRowKind::Added => DiffEditorSide::Modified,
                 DiffRowKind::Removed => DiffEditorSide::Original,
                 DiffRowKind::Modified if index == before => DiffEditorSide::Original,
@@ -156,17 +157,24 @@ impl CodeEditorRowSource for UnifiedDiffRows<'_> {
 
     fn largest_line_number(&self) -> usize {
         self.document
+            .diff()
             .old_line_count()
-            .max(self.document.new_line_count())
+            .max(self.document.diff().new_line_count())
     }
 
     fn row(&self, index: usize) -> Option<CodeEditorRow<'_>> {
         if let Some((source_row, side)) = self.source_at(index) {
+            let row = self.document.diff().rows().get(source_row)?;
+            let line = match side {
+                DiffEditorSide::Original => row.old(),
+                DiffEditorSide::Modified => row.new_line(),
+            }?;
             return Some(project_row(
-                self.document.rows().get(source_row)?,
+                row,
                 side,
                 self.style,
                 false,
+                self.document.syntax_tokens(side, line.number()),
             ));
         }
         let mut remaining = index;

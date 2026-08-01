@@ -23,6 +23,9 @@ impl NativeApp {
         if event.state != ElementState::Pressed {
             return;
         }
+        if self.route_layout_inspector_keyboard(&event) {
+            return;
+        }
         if self.keyboard_shortcuts.is_visible() {
             if self.route_keyboard_shortcuts_keyboard(&event) {
                 return;
