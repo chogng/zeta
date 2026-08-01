@@ -1,4 +1,5 @@
 import "./style.js";
+import { setHoverDelegate } from "../../base/browser/ui/hover/hoverDelegate.js";
 import {
   type IDisposable,
   DisposableOwner,
@@ -44,6 +45,8 @@ import {
 import {
   BrowserContextViewService,
 } from "../../platform/contextview/browser/contextViewService.js";
+import { HoverService } from "../../platform/hover/browser/hoverService.js";
+import { IHoverService } from "../../platform/hover/common/hoverService.js";
 import {
   InstantiationService,
   ServiceCollection,
@@ -395,6 +398,13 @@ export class Workbench extends DisposableOwner {
       contextViewService: contextViews,
     }));
     services.set(IContextMenuService, contextMenus);
+    const hoverService = this.own(new HoverService(
+      configuration,
+      contextViews,
+      contextMenus,
+    ));
+    services.set(IHoverService, hoverService);
+    this.own(setHoverDelegate(hoverService));
     const contributions = this.own(
       WorkbenchContributionsRegistry.createHost(services),
     );

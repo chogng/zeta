@@ -3,6 +3,9 @@ import test from "node:test";
 import { JSDOM } from "jsdom";
 import { TAB_CLOSE_ACTION_ID, TabList, type TabListItem } from "../../browser/ui/tablist/tabList.js";
 import type { IAction } from "../../common/actions.js";
+import { register } from "../../common/icon.js";
+
+const customCloseIcon = register("tablist-test-close", () => '<svg viewBox="0 0 16 16" data-test-icon="custom-close"><path d="M2 2h12v12H2z"/></svg>');
 
 test("TabList owns manual selection semantics and roving focus", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
@@ -78,6 +81,7 @@ test("TabList renders IconLabel content, custom actions, and its standard close 
     ariaLabel: "Editors",
     onActivate: () => undefined,
     onClose: (value: string) => closed.push(value),
+    closeActionIcon: customCloseIcon,
   });
   const pin: IAction = {
     id: "pin",
@@ -123,7 +127,7 @@ test("TabList renders IconLabel content, custom actions, and its standard close 
   );
   assert.equal(closeButton.title, "Close first");
   assert.equal(closeButton.closest(".zeta-action-view-item")?.getAttribute("data-action-id"), TAB_CLOSE_ACTION_ID);
-  assert.ok(closeButton.querySelector("svg.zeta-icon"));
+  assert.equal(closeButton.querySelector("svg.zeta-icon")?.getAttribute("data-test-icon"), "custom-close");
 
   selected.dispatchEvent(keyboardEvent(dom.window, "Delete"));
   closeButton.click();

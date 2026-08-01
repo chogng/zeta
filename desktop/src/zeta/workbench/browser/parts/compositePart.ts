@@ -24,7 +24,6 @@ export abstract class CompositePart extends WorkbenchPart {
     }
     this.composites.set(composite.id, this.own(composite));
     composite.setVisible(false);
-    this.contentElement.append(composite.element);
   }
 
   getComposite(compositeId: string): PaneComposite | undefined {
@@ -37,8 +36,12 @@ export abstract class CompositePart extends WorkbenchPart {
       throw new Error(`Composite is not available in Part: ${compositeId}`);
     }
     if (this.activeComposite === composite) return;
-    this.activeComposite?.setVisible(false);
+    if (this.activeComposite) {
+      this.activeComposite.setVisible(false);
+      this.activeComposite.element.remove();
+    }
     this.activeComposite = composite;
+    this.contentElement.append(composite.element);
     composite.setVisible(true);
   }
 

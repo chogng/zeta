@@ -1,5 +1,7 @@
 import { TabList } from "../../../../../base/browser/ui/tablist/tabList.js";
 import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
+import { lxiconsLibrary } from "../../../../../base/common/lxiconsLibrary.js";
+import type { IAction } from "../../../../../base/common/actions.js";
 import type { IMenuService } from "../../../../../platform/actions/common/menuService.js";
 import type { IContextKeyService } from "../../../../../platform/contextkey/common/contextkey.js";
 import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextMenu.js";
@@ -42,11 +44,13 @@ export class TerminalViewPane extends ViewPane {
       contextMenuService,
       contextKeyService,
       createTerminal: () => this.createTerminal(),
+      focusActive: () => this.focus(),
       relaunchActive: () => this.relaunchActive(),
       killActive: () => {
         const active = this.terminalService.activeInstance;
         return active ? this.terminalService.closeTerminal(active) : undefined;
       },
+      clearActive: () => this.clearActive(),
     }));
 
     this.contentElement.classList.add("zeta-terminal-content");
@@ -58,6 +62,7 @@ export class TerminalViewPane extends ViewPane {
       ownerDocument: options.ownerDocument,
       ariaLabel: "Terminal instances",
       orientation: "vertical",
+      closeActionIcon: lxiconsLibrary.trash,
       onActivate: (instance) => {
         this.terminalService.setActiveInstance(instance);
         this.focus();
@@ -108,6 +113,11 @@ export class TerminalViewPane extends ViewPane {
     return this.titleActions.element;
   }
 
+  override setTitleSecondaryActions(actions: readonly IAction[]): boolean {
+    this.titleActions.setSupplementalSecondaryActions(actions);
+    return true;
+  }
+
   private async initialize(): Promise<void> {
     try {
       const profiles = await this.terminalService.getProfiles();
@@ -156,6 +166,11 @@ export class TerminalViewPane extends ViewPane {
     }
   }
 
+  private clearActive(): void {
+    this.activeItem()?.widget.clear();
+    this.focus();
+  }
+
   private addInstance(instance: ITerminalInstance): void {
     if (this.items.has(instance)) return;
     const item = this.own(new TerminalViewItem(
@@ -177,7 +192,9 @@ export class TerminalViewPane extends ViewPane {
   private render(): void {
     if (this.disposed) return;
     const active = this.terminalService.activeInstance;
-    this.titleActions.setActiveInstance(active);
+    const instanceSwitcherPlacement = this.terminalService.instances.length > 1 ? "list" : "title";
+    this.titleActions.setActiveInstance(active, instanceSwitcherPlacement);
+    this.tabsLayout.setInstanceListPresentation(instanceSwitcherPlacement === "list" ? "visible" : "hidden");
     for (const [instance, item] of this.items) {
       item.widget.setVisible(instance === active);
     }

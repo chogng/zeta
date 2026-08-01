@@ -140,12 +140,6 @@
   font-weight: 500;
 }
 
-.zeta-composite-bar-label .zeta-tab-label > .zeta-icon-label {
-  /* System font metrics place glyph ink slightly below the flex center. */
-  position: relative;
-  top: -1px;
-}
-
 .zeta-composite-bar-label .zeta-icon-label-text {
   display: block;
   white-space: nowrap;

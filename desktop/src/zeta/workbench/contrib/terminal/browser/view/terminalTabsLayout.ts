@@ -27,18 +27,27 @@ export class TerminalTabsLayout extends DisposableOwner {
     this.element.classList.add("zeta-terminal-tabs-layout");
     this.splitView.addView(splitViewItem(widgetsElement, MIN_TERMINAL_WIDTH, Number.POSITIVE_INFINITY, "high"), { type: "distribute" });
     this.splitView.addView(splitViewItem(tabsElement, TerminalTabsListSizes.narrow, TerminalTabsListSizes.maximum, "low"), TerminalTabsListSizes.default);
-    this.element.querySelector<HTMLElement>(":scope > .zeta-sash")?.setAttribute("aria-label", "Resize terminal instance list");
-    this.own(this.splitView.onDidChangeViewSizes(() => this.updateTabsWidth()));
-    this.updateTabsPresentation(TerminalTabsListSizes.default);
+    this.own(this.splitView.onDidChangeViewSizes(() => this.updatePresentation()));
+    this.updatePresentation();
   }
 
   layout(width: number, height: number): void {
     this.splitView.layout(width, height);
+    this.updatePresentation();
+  }
+
+  setInstanceListPresentation(presentation: "hidden" | "visible"): void {
+    this.splitView.setViewVisible(TABS_VIEW_INDEX, presentation === "visible");
+    this.updatePresentation();
+  }
+
+  private updatePresentation(): void {
+    this.element.querySelector<HTMLElement>(":scope > .zeta-sash")?.setAttribute("aria-label", "Resize terminal instance list");
     this.updateTabsWidth();
   }
 
   private updateTabsWidth(): void {
-    if (this.snapping) return;
+    if (this.snapping || !this.splitView.isViewVisible(TABS_VIEW_INDEX)) return;
     const width = this.splitView.getViewSize(TABS_VIEW_INDEX);
     const snappedWidth = width < TerminalTabsListSizes.midpoint
       ? TerminalTabsListSizes.narrow

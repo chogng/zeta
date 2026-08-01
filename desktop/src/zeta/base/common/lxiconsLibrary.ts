@@ -44,4 +44,5 @@ export const lxiconsLibrary = {
   terminal: register("terminal", svg.terminal),
   terminalCmd: register("terminal-cmd", svg.terminalCmd),
   terminalGitBash: register("terminal-git-bash", svg.terminalGitBash),
+  trash: register("trash", svg.trash),
 } as const;

@@ -57,11 +57,13 @@ const contextMenuService: IContextMenuService = {
   hideContextMenu() {},
 };
 
-test("Terminal title actions resolve through MenuService and preserve the profile control", async () => {
+test("Terminal title actions separate active identity from new-terminal profile selection", async () => {
   const ownerDocument = browserEnvironment.window.document;
   ownerDocument.body.replaceChildren();
   shownProfileActions = [];
   const selectedProfiles: Array<string | undefined> = [];
+  let focusCount = 0;
+  let clearCount = 0;
   using contextKeyService = new ContextKeyService();
   const commandService = new CommandService(new ServiceCollection());
   const menuService = new MenuService(commandService, contextKeyService);
@@ -73,13 +75,21 @@ test("Terminal title actions resolve through MenuService and preserve the profil
     createTerminal: () => {
       selectedProfiles.push(titleActions.selectedProfileId);
     },
+    focusActive: () => focusCount++,
     relaunchActive() {},
     killActive() {},
+    clearActive: () => clearCount++,
   });
-  titleActions.setProfiles([
-      { profileId: "cmd", title: "Command Prompt", isDefault: true },
-      { profileId: "pwsh", title: "PowerShell", isDefault: false },
-  ]);
+  const commandPromptProfile = { profileId: "cmd", title: "Command Prompt", isDefault: true };
+  const powerShellProfile = { profileId: "pwsh", title: "PowerShell", isDefault: false };
+  titleActions.setProfiles([commandPromptProfile, powerShellProfile]);
+  titleActions.setSupplementalSecondaryActions([{
+    id: "zeta.compositeBar.open.panel.output",
+    label: "Output",
+    tooltip: "Output",
+    enabled: true,
+    run() {},
+  }]);
   ownerDocument.body.append(titleActions.element);
 
   const toolbar = titleActions.element;
@@ -87,7 +97,8 @@ test("Terminal title actions resolve through MenuService and preserve the profil
   assert.equal(toolbar.classList.contains("highlight-toggled"), true);
   const profile = toolbar.querySelector<HTMLButtonElement>(".zeta-terminal-profile-action .zeta-button");
   assert.ok(profile);
-  assert.equal(profile.querySelector(".zeta-button-label")?.textContent, "Command Prompt");
+  assert.equal(profile.querySelector(".zeta-button-label")?.textContent, "New Terminal Profile");
+  assert.equal(profile.getAttribute("aria-label"), "New terminal profile: Command Prompt");
   assert.ok(profile.querySelector("svg.zeta-icon"));
   const newTerminal = [...toolbar.querySelectorAll("button")].find((button) => button.textContent === "New Terminal");
   assert.ok(newTerminal);
@@ -111,10 +122,49 @@ test("Terminal title actions resolve through MenuService and preserve the profil
   titleActions.setCreating(true);
   assert.equal([...toolbar.querySelectorAll("button")].find((button) => button.textContent === "New Terminal")?.disabled, true);
   titleActions.setCreating(false);
-  titleActions.setActiveInstance({ state: "running" } as ITerminalInstance);
+  const activeInstance = {
+    id: "terminal-1",
+    title: "Backend shell",
+    profile: commandPromptProfile,
+    state: "running",
+  } as ITerminalInstance;
+  titleActions.setActiveInstance(activeInstance, "title");
+  const activeTerminal = toolbar.querySelector<HTMLButtonElement>(".zeta-terminal-active-action .zeta-action-label");
+  assert.ok(activeTerminal);
+  assert.equal(activeTerminal.querySelector(".zeta-action-label-text")?.textContent, "Backend shell");
+  assert.ok(activeTerminal.querySelector(".zeta-action-label-icon > svg.zeta-icon"));
+  assert.equal(activeTerminal.classList.contains("zeta-button"), false);
+  assert.equal(activeTerminal.querySelector(".zeta-button-label"), null);
+  assert.equal(activeTerminal.querySelector(".zeta-icon-label"), null);
+  assert.equal(activeTerminal.getAttribute("aria-label"), "Active terminal: Backend shell (Command Prompt)");
+  activeTerminal.click();
+  await Promise.resolve();
+  assert.equal(focusCount, 1);
   assert.equal(toolbar.textContent?.includes("Kill Terminal"), true);
   assert.equal(toolbar.textContent?.includes("Relaunch Terminal"), false);
-  titleActions.setActiveInstance({ state: "exited" } as ITerminalInstance);
+  const killTerminal = [...toolbar.querySelectorAll("[data-action-id]")].find((item) => item.getAttribute("data-action-id") === "zeta.terminal.kill");
+  const moreActions = toolbar.querySelector<HTMLElement>("[data-action-id='zeta.toolbar.moreActions']");
+  const currentMaximizePanel = toolbar.querySelector<HTMLElement>("[data-action-id='workbench.action.toggleMaximizedPanel']");
+  assert.ok(killTerminal);
+  assert.ok(moreActions);
+  assert.ok(currentMaximizePanel);
+  assert.equal(killTerminal.compareDocumentPosition(moreActions) & browserEnvironment.window.Node.DOCUMENT_POSITION_FOLLOWING, browserEnvironment.window.Node.DOCUMENT_POSITION_FOLLOWING);
+  assert.equal(moreActions.compareDocumentPosition(currentMaximizePanel) & browserEnvironment.window.Node.DOCUMENT_POSITION_FOLLOWING, browserEnvironment.window.Node.DOCUMENT_POSITION_FOLLOWING);
+  moreActions.querySelector("button")?.click();
+  const clearTerminal = shownProfileActions.find((action) => action.id === "zeta.terminal.clear");
+  assert.ok(clearTerminal);
+  assert.ok(shownProfileActions.some((action) => action.id === "zeta.compositeBar.open.panel.output"));
+  await clearTerminal.run();
+  assert.equal(clearCount, 1);
+  titleActions.setActiveInstance(activeInstance, "list");
+  assert.equal(toolbar.querySelector(".zeta-terminal-active-action"), null);
+  assert.equal(toolbar.textContent?.includes("Kill Terminal"), true);
+  titleActions.setActiveInstance({
+    id: "terminal-1",
+    title: "Backend shell",
+    profile: commandPromptProfile,
+    state: "exited",
+  } as ITerminalInstance, "list");
   assert.equal(toolbar.textContent?.includes("Relaunch Terminal"), true);
 
   const currentProfile = toolbar.querySelector<HTMLButtonElement>(".zeta-terminal-profile-action .zeta-button");
@@ -123,7 +173,7 @@ test("Terminal title actions resolve through MenuService and preserve the profil
   const powerShell = shownProfileActions.find((action) => action.label === "PowerShell");
   assert.ok(powerShell);
   await powerShell.run();
-  assert.equal(toolbar.querySelector(".zeta-terminal-profile-action .zeta-button-label")?.textContent, "PowerShell");
+  assert.equal(toolbar.querySelector(".zeta-terminal-profile-action .zeta-button")?.getAttribute("aria-label"), "New terminal profile: PowerShell");
   const nextNewTerminal = [...toolbar.querySelectorAll("button")].find((button) => button.textContent === "New Terminal");
   assert.ok(nextNewTerminal);
   nextNewTerminal.click();

@@ -17,6 +17,7 @@ use zeta_app_server_protocol::protocol::config::{
     SkillSourceSetEnablementParams,
 };
 use zeta_app_server_protocol::protocol::document::{TypstCompileParams, TypstCompileResult};
+use zeta_app_server_protocol::protocol::fs::{FsReadDirectoryParams, FsReadDirectoryResult};
 use zeta_app_server_protocol::protocol::git::{
     GitBranchListResult, GitBranchSwitchParams, GitOperationResult, GitTextDiffResult,
 };
@@ -135,6 +136,13 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
         params: WorkspaceSwitchParams,
     ) -> Result<WorkspaceSwitchResult, ClientError> {
         self.call(ClientMethod::WorkspaceSwitch, params)
+    }
+
+    pub fn read_directory(
+        &mut self,
+        params: FsReadDirectoryParams,
+    ) -> Result<FsReadDirectoryResult, ClientError> {
+        self.call(ClientMethod::FsReadDirectory, params)
     }
 
     pub fn git_text_diff(&mut self) -> Result<GitTextDiffResult, ClientError> {

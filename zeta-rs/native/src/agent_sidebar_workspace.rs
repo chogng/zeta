@@ -2,6 +2,7 @@ use std::path::PathBuf;
 use std::sync::mpsc::{Receiver, TryRecvError};
 use std::time::Instant;
 
+use zeta_app_server_protocol::protocol::fs::FsReadDirectoryEntry;
 use zeta_editor::MultiDiffEditorStyle;
 use zeta_file_search::{PathSearchHandle, PathSearchOptions, PathSearchSnapshot};
 use zeta_ui::{
@@ -14,7 +15,7 @@ use crate::editor_pane::{EditorPaneState, ScrollbarPointerOutcome};
 use crate::explorer_pane::FILE_LIST_ROW_HEIGHT;
 #[cfg(test)]
 use crate::explorer_tree::ExplorerEntry;
-use crate::explorer_tree::{ExplorerTree, ExplorerTreeNavigation, ExplorerTreeRow};
+use crate::explorer_tree::{ExplorerTree, ExplorerTreeAction, ExplorerTreeRow};
 use crate::workspace_context::WorkspaceContext;
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -65,7 +66,6 @@ impl AgentSidebarWorkspace {
             ..Self::default()
         };
         workspace.sync_repository(context);
-        workspace.refresh_files();
         workspace
     }
 
@@ -98,22 +98,33 @@ impl AgentSidebarWorkspace {
         self.explorer_tree.row(index)
     }
 
-    pub(crate) fn activate_file_tree_element(&mut self, element: ElementId) -> bool {
+    pub(crate) fn activate_file_tree_element(
+        &mut self,
+        element: ElementId,
+    ) -> Option<ExplorerTreeAction> {
         self.explorer_tree.activate_element(element)
     }
 
     pub(crate) fn navigate_file_tree_right(
         &mut self,
         element: ElementId,
-    ) -> Option<ExplorerTreeNavigation> {
+    ) -> Option<ExplorerTreeAction> {
         self.explorer_tree.navigate_right(element)
     }
 
     pub(crate) fn navigate_file_tree_left(
         &mut self,
         element: ElementId,
-    ) -> Option<ExplorerTreeNavigation> {
+    ) -> Option<ExplorerTreeAction> {
         self.explorer_tree.navigate_left(element)
+    }
+
+    pub(crate) fn complete_file_tree_directory_load(
+        &mut self,
+        element: ElementId,
+        entries: Vec<FsReadDirectoryEntry>,
+    ) -> bool {
+        self.explorer_tree.complete_directory_load(element, entries)
     }
 
     pub(crate) const fn search_visible(&self) -> bool {
@@ -175,9 +186,9 @@ impl AgentSidebarWorkspace {
         self.file_search_input.selected_text()
     }
 
-    pub(crate) fn refresh_files(&mut self) {
+    pub(crate) fn refresh_files(&mut self, entries: Vec<FsReadDirectoryEntry>) {
         self.file_list_scroll_state = ScrollState::default();
-        self.explorer_tree.replace_root(self.root.as_deref());
+        self.explorer_tree.replace_root(entries);
         let Some(root) = self.root.clone() else {
             return;
         };
@@ -202,7 +213,8 @@ impl AgentSidebarWorkspace {
     pub(crate) fn replace_workspace(&mut self, context: &WorkspaceContext) {
         self.root = Some(context.working_directory().to_path_buf());
         self.sync_repository(context);
-        self.refresh_files();
+        self.explorer_tree.clear();
+        self.file_list_scroll_state = ScrollState::default();
     }
 
     pub(crate) fn poll_file_search(&mut self) -> bool {

@@ -1,13 +1,14 @@
-import { addDisposableListener } from "../../../../base/browser/dom.js";
 import { IconLabel } from "../../../../base/browser/ui/iconlabel/iconlabel.js";
 import { appendIcon } from "../../../../base/browser/ui/icon/icon.js";
 import { ScrollableElement } from "../../../../base/browser/ui/scrollbar/scrollableElement.js";
+import { Tree, type TreeTwistieState } from "../../../../base/browser/ui/tree/tree.js";
 import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
 import { ResettableDisposableGroup } from "../../../../base/common/lifecycle.js";
 import { URI } from "../../../../base/common/uri.js";
 import { FileKind, type IFileEntry, type IFileService } from "../../../../platform/files/common/files.js";
 import type { IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
 import type { IFileIconThemeService } from "../../../../platform/theme/browser/fileIconThemeService.js";
+import type { IHoverService } from "../../../../platform/hover/common/hoverService.js";
 import type { IEditorPart } from "../../../browser/parts/editor/editorPart.js";
 import { ViewPane, type IViewPaneOptions } from "../../../browser/parts/views/viewPane.js";
 
@@ -26,10 +27,11 @@ export class ExplorerViewPane extends ViewPane {
   private readonly workspaceContextService: IWorkspaceContextService;
   private readonly editorPart: IEditorPart;
   private readonly fileIconThemeService: IFileIconThemeService;
+  private readonly hoverService: IHoverService;
   private readonly scrollable: ScrollableElement;
+  private readonly tree: Tree<ExplorerNode>;
   private readonly renderedLabels =
     this.own(new ResettableDisposableGroup());
-  private readonly nodes = new Map<string, ExplorerNode>();
   private root: ExplorerNode | undefined;
   private error: string | undefined;
   private disposed = false;
@@ -41,12 +43,14 @@ export class ExplorerViewPane extends ViewPane {
     workspaceContextService: IWorkspaceContextService,
     editorPart: IEditorPart,
     fileIconThemeService: IFileIconThemeService,
+    hoverService: IHoverService,
   ) {
     super(options);
     this.fileService = fileService;
     this.workspaceContextService = workspaceContextService;
     this.editorPart = editorPart;
     this.fileIconThemeService = fileIconThemeService;
+    this.hoverService = hoverService;
     this.element.classList.add("zeta-explorer-view-pane");
     this.titleElement.classList.add("zeta-explorer-title");
     this.contentElement.classList.add("zeta-explorer");
@@ -57,11 +61,21 @@ export class ExplorerViewPane extends ViewPane {
       vertical: "auto",
     }));
     this.contentElement.append(this.scrollable.element);
-    this.own(addDisposableListener(
-      this.contentElement,
-      "click",
-      (event) => this.onClick(event),
-    ));
+    this.tree = this.own(new Tree<ExplorerNode>({
+      ownerDocument: options.ownerDocument,
+      ariaLabel: "Workspace files",
+      indentGuides: "always",
+      getId: (node) => node.resource.toString(),
+      getChildren: (node) => node.children,
+      isCollapsible: (node) => node.kind === FileKind.Directory,
+      isExpanded: (node) => node.expanded,
+      renderElement: (node) => this.renderTreeElement(node),
+      renderTwistie: (node, state, container) =>
+        this.renderTreeTwistie(node, state, container),
+    }));
+    this.own(this.tree.onDidActivate(({ element }) => {
+      this.activateNode(element);
+    }));
     this.own(fileIconThemeService.onDidFileIconThemeChange(
       () => this.render(),
     ));
@@ -70,7 +84,6 @@ export class ExplorerViewPane extends ViewPane {
     }));
     this.defer(() => {
       this.disposed = true;
-      this.nodes.clear();
     });
     this.render();
     void this.initialize();
@@ -138,20 +151,8 @@ export class ExplorerViewPane extends ViewPane {
     }
   }
 
-  private onClick(event: Event): void {
-    const target = event.target;
-    const HTMLElementConstructor =
-      this.element.ownerDocument.defaultView?.HTMLElement;
-    if (
-      !HTMLElementConstructor ||
-      !(target instanceof HTMLElementConstructor)
-    ) return;
-    const button = target.closest<HTMLButtonElement>(
-      "button[data-explorer-resource]",
-    );
-    if (!button || !this.contentElement.contains(button)) return;
-    const node = this.nodes.get(button.dataset.explorerResource ?? "");
-    if (!node || node.loading) return;
+  private activateNode(node: ExplorerNode): void {
+    if (node.loading) return;
     if (node.kind === FileKind.Directory) {
       if (node.children === undefined) {
         void this.loadChildren(node, this.workspaceGeneration);
@@ -183,7 +184,7 @@ export class ExplorerViewPane extends ViewPane {
   private render(): void {
     const document = this.element.ownerDocument;
     this.renderedLabels.clear();
-    this.nodes.clear();
+    this.tree.items = this.root?.children ?? [];
     const surface = document.createElement("div");
     surface.className = "zeta-explorer-scroll-content";
     if (!this.root) {
@@ -194,13 +195,7 @@ export class ExplorerViewPane extends ViewPane {
       this.scrollable.replaceChildren(surface);
       return;
     }
-    const tree = document.createElement("ul");
-    tree.className = "zeta-explorer-tree";
-    tree.setAttribute("role", "tree");
-    for (const child of this.root.children ?? []) {
-      tree.append(this.renderNode(child, document));
-    }
-    surface.append(tree);
+    surface.append(this.tree.element);
     if (this.error) {
       const error = document.createElement("div");
       error.className = "zeta-explorer-status zeta-explorer-error";
@@ -210,29 +205,10 @@ export class ExplorerViewPane extends ViewPane {
     this.scrollable.replaceChildren(surface);
   }
 
-  private renderNode(node: ExplorerNode, document: Document): HTMLLIElement {
-    const item = document.createElement("li");
-    item.setAttribute("role", "treeitem");
-    if (node.kind === FileKind.Directory) {
-      item.setAttribute("aria-expanded", String(node.expanded));
-    }
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = `zeta-explorer-row zeta-explorer-${node.kind}`;
-    const key = node.resource.toString();
-    button.dataset.explorerResource = key;
-    this.nodes.set(key, node);
-    const twistie = document.createElement("span");
-    twistie.className = "zeta-explorer-twistie";
-    twistie.setAttribute("aria-hidden", "true");
-    if (node.kind === FileKind.Directory) {
-      appendIcon(
-        node.expanded
-          ? lxiconsLibrary.dropdownIndicator
-          : lxiconsLibrary.submenuIndicator,
-        twistie,
-      );
-    }
+  private renderTreeElement(node: ExplorerNode): HTMLElement {
+    const document = this.element.ownerDocument;
+    const content = document.createElement("span");
+    content.className = `zeta-explorer-row-content zeta-explorer-${node.kind}`;
     const label = this.renderedLabels.add(new IconLabel({
       label: node.name,
       renderIcon: node.kind === FileKind.Directory
@@ -245,19 +221,27 @@ export class ExplorerViewPane extends ViewPane {
         },
       ownerDocument: document,
       reserveIconSpace: node.kind !== FileKind.Directory,
-      title: node.name,
     }));
-    button.append(twistie, label.element);
-    item.append(button);
-    if (node.expanded && node.children) {
-      const group = document.createElement("ul");
-      group.setAttribute("role", "group");
-      for (const child of node.children) {
-        group.append(this.renderNode(child, document));
-      }
-      item.append(group);
-    }
-    return item;
+    this.renderedLabels.add(this.hoverService.setupHover({
+      target: label.element,
+      content: () => label.labelElement.scrollWidth >
+          label.labelElement.clientWidth
+        ? node.name
+        : undefined,
+      groupId: "explorer.items",
+    }));
+    content.append(label.element);
+    return content;
+  }
+
+  private renderTreeTwistie(node: ExplorerNode, state: TreeTwistieState, container: HTMLSpanElement): void {
+    if (!state.collapsible) return;
+    appendIcon(
+      state.expanded
+        ? lxiconsLibrary.dropdownIndicator
+        : lxiconsLibrary.submenuIndicator,
+      container,
+    );
   }
 }
 

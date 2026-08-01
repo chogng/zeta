@@ -1,5 +1,5 @@
 import { registerColor } from "../colorRegistry.js";
-import { foreground, mutedForeground, widgetBorder } from "./baseColors.js";
+import { foreground, mutedForeground, widgetBorder, widgetShadow } from "./baseColors.js";
 
 const owner = "platform.theme.components";
 const color = (id: string, dark: string, light: string, description: string): string => registerColor(id, { dark, light }, { description, owner });
@@ -11,9 +11,14 @@ export const inputBorder = color("input.border", "#3c3c3c", "#cecece", "Input bo
 export const inputPlaceholderForeground = alias("input.placeholderForeground", mutedForeground, "Input placeholder foreground.");
 export const selectionForeground = color("selection.foreground", "#ffffff", "#000000", "Selected text foreground.");
 export const selectionBackground = color("selection.background", "#264f78", "#add6ff", "Selected text background.");
+export const hoverForeground = alias("hover.foreground", foreground, "Foreground for managed Hovers.");
+export const hoverBackground = color("hover.background", "#252526", "#f8f8f8", "Background for managed Hovers.");
+export const hoverBorder = alias("hover.border", widgetBorder, "Border around managed Hovers.");
+export const hoverShadow = alias("hover.shadow", widgetShadow, "Shadow around managed Hovers.");
 export const listHoverBackground = color("list.hoverBackground", "#2a2d2e", "#e8e8e8", "Hovered list row background.");
 export const listActiveSelectionForeground = color("list.activeSelectionForeground", "#ffffff", "#ffffff", "Active list selection foreground.");
 export const listActiveSelectionBackground = color("list.activeSelectionBackground", "#04395e", "#0060c0", "Active list selection background.");
+export const treeIndentGuidesStroke = color("tree.indentGuidesStroke", "#585858", "#a9a9a9", "Tree indentation guide stroke.");
 export const menuSelectionForeground = alias("menu.selectionForeground", listActiveSelectionForeground, "Selected menu item foreground.");
 export const menuSelectionBackground = alias("menu.selectionBackground", listActiveSelectionBackground, "Selected menu item background.");
 export const buttonForeground = alias("button.foreground", foreground, "Default button foreground.");

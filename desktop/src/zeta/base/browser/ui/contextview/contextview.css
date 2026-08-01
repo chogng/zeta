@@ -11,3 +11,42 @@
   box-shadow: 0 2px 8px var(--zeta-widget-shadow);
   overflow: auto;
 }
+
+.zeta-context-view-hover {
+  color: var(--zeta-hover-foreground);
+  background: var(--zeta-hover-background);
+  border-color: var(--zeta-hover-border);
+  border-radius: 6px;
+  box-shadow: 0 4px 16px var(--zeta-hover-shadow);
+  overflow: visible;
+}
+
+.zeta-context-view-hover::before {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  box-sizing: border-box;
+  background: var(--zeta-hover-background);
+  content: "";
+  transform: rotate(45deg);
+}
+
+.zeta-context-view-hover.zeta-context-view-above::before {
+  bottom: -5px;
+  border-right: 1px solid var(--zeta-hover-border);
+  border-bottom: 1px solid var(--zeta-hover-border);
+}
+
+.zeta-context-view-hover.zeta-context-view-below::before {
+  top: -5px;
+  border-top: 1px solid var(--zeta-hover-border);
+  border-left: 1px solid var(--zeta-hover-border);
+}
+
+.zeta-context-view-hover.zeta-context-view-align-left::before {
+  left: 14px;
+}
+
+.zeta-context-view-hover.zeta-context-view-align-right::before {
+  right: 14px;
+}

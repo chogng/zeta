@@ -1,37 +1,22 @@
 import { Emitter } from "../../../common/event.js";
-import {
-  DisposableOwner,
-  DisposableSlot,
-  ResettableDisposableGroup,
-  type IDisposable,
-  toDisposable,
-} from "../../../common/lifecycle.js";
-import {
-  addDisposableListener,
-  isNode,
-} from "../../dom.js";
+import { DisposableOwner, DisposableSlot, ResettableDisposableGroup, type IDisposable, toDisposable } from "../../../common/lifecycle.js";
+import { addDisposableListener, isNode } from "../../dom.js";
 import { getWindow } from "../../window.js";
-import {
-  getAriaAttribute,
-  setAriaAttribute,
-} from "../aria/aria.js";
-import {
-  AnchorAlignment,
-  AnchorPosition,
-  ContextView,
-  type ContextViewHideReason,
-  type IContextViewProvider,
-} from "../contextview/contextview.js";
+import { getAriaAttribute, setAriaAttribute } from "../aria/aria.js";
+import { AnchorAlignment, AnchorPosition, ContextView, type ContextViewHideReason, type IContextViewProvider } from "../contextview/contextview.js";
 
-export type HoverContent =
-  | string
-  | HTMLElement
-  | (() => string | HTMLElement);
+export type HoverContentValue = string | HTMLElement | undefined;
+export type HoverContent = HoverContentValue | (() => HoverContentValue);
+export type HoverDelay = number | (() => number);
+export type HoverPersistence = "transient" | "sticky";
 
 export interface HoverOptions {
   readonly target: HTMLElement;
   readonly content: HoverContent;
-  readonly delayMs?: number;
+  readonly delayMs?: HoverDelay;
+  readonly persistence?: HoverPersistence;
+  readonly enabled?: () => boolean;
+  readonly pointerHoverEnabled?: () => boolean;
   readonly anchorAlignment?: AnchorAlignment;
   readonly anchorPosition?: AnchorPosition;
   readonly gap?: number;
@@ -51,7 +36,10 @@ export class Hover extends DisposableOwner {
   private readonly _onDidHide = this.own(new Emitter<void>());
   readonly onDidShow = this._onDidShow.event;
   readonly onDidHide = this._onDidHide.event;
-  private readonly delayMs: number;
+  private readonly delayMs: HoverDelay;
+  private readonly persistence: HoverPersistence;
+  private readonly enabled: (() => boolean) | undefined;
+  private readonly pointerHoverEnabled: (() => boolean) | undefined;
   private readonly anchorAlignment: AnchorAlignment;
   private readonly anchorPosition: AnchorPosition;
   private readonly gap: number;
@@ -61,13 +49,17 @@ export class Hover extends DisposableOwner {
   private previousDescription: string | undefined;
   private descriptionApplied = false;
   private _visible = false;
+  private pointerDown = false;
 
   constructor(options: HoverOptions) {
     super();
     const target = options.target;
     this.element = target;
     this.content = options.content;
-    this.delayMs = Math.max(0, options.delayMs ?? 300);
+    this.delayMs = options.delayMs ?? 300;
+    this.persistence = options.persistence ?? "transient";
+    this.enabled = options.enabled;
+    this.pointerHoverEnabled = options.pointerHoverEnabled;
     this.anchorAlignment = options.anchorAlignment ??
       AnchorAlignment.Left;
     this.anchorPosition = options.anchorPosition ??
@@ -93,11 +85,24 @@ export class Hover extends DisposableOwner {
       this.hideTimer.clear();
       this.scheduleShow();
     }));
+    this.own(addDisposableListener(target, "pointerdown", () => {
+      this.pointerDown = true;
+      this.hide();
+    }, true));
+    this.own(addDisposableListener(target, "pointerup", () => {
+      this.pointerDown = false;
+    }, true));
+    this.own(addDisposableListener(target, "pointercancel", () => {
+      this.pointerDown = false;
+    }, true));
     this.own(addDisposableListener(target, "pointerleave", (event) => {
+      this.pointerDown = false;
       if (this.isInsideHover(event.relatedTarget)) return;
       this.scheduleHide();
     }));
-    this.own(addDisposableListener(target, "focusin", () => this.show()));
+    this.own(addDisposableListener(target, "focusin", () => {
+      if (!this.pointerDown) this.show();
+    }));
     this.own(addDisposableListener(target, "focusout", (event) => {
       if (this.isInsideHover(event.relatedTarget)) return;
       this.scheduleHide();
@@ -111,14 +116,14 @@ export class Hover extends DisposableOwner {
   show(): void {
     this.showTimer.clear();
     this.hideTimer.clear();
-    if (this.visible) return;
+    if (this.visible || this.enabled?.() === false) return;
     const ownerDocument = this.element.ownerDocument;
     const tooltip = ownerDocument.createElement("div");
     hoverId += 1;
     tooltip.id = `zeta-hover-${hoverId}`;
     tooltip.className = "zeta-hover";
     tooltip.setAttribute("role", "tooltip");
-    this.renderContent(tooltip);
+    if (!this.renderContent(tooltip)) return;
     this.tooltipListeners.clear();
     this.tooltipListeners.add(addDisposableListener(
       tooltip,
@@ -138,6 +143,30 @@ export class Hover extends DisposableOwner {
         this.scheduleHide();
       },
     ));
+    this.tooltipListeners.add(addDisposableListener(
+      tooltip,
+      "focusin",
+      () => this.hideTimer.clear(),
+    ));
+    this.tooltipListeners.add(addDisposableListener(
+      tooltip,
+      "focusout",
+      (event) => {
+        if (
+          isNode(event.relatedTarget) &&
+          this.element.contains(event.relatedTarget)
+        ) {
+          return;
+        }
+        this.scheduleHide();
+      },
+    ));
+    const dismissOutsideTooltip = (event: Event) => {
+      if (isNode(event.target) && tooltip.contains(event.target)) return;
+      this.hide();
+    };
+    this.tooltipListeners.add(addDisposableListener(ownerDocument, "pointerdown", dismissOutsideTooltip, true));
+    this.tooltipListeners.add(addDisposableListener(ownerDocument, "click", dismissOutsideTooltip, true));
     this.tooltip = tooltip;
     this.applyDescription(tooltip.id);
     const shown = this.contextView.show({
@@ -146,6 +175,7 @@ export class Hover extends DisposableOwner {
       anchorAlignment: this.anchorAlignment,
       anchorPosition: this.anchorPosition,
       gap: this.gap,
+      presentation: "hover",
       onHide: (reason) => this.didHide(reason),
     });
     if (!shown) return;
@@ -163,25 +193,39 @@ export class Hover extends DisposableOwner {
   update(content: HoverContent): void {
     this.content = content;
     if (!this._visible || !this.tooltip) return;
-    this.renderContent(this.tooltip);
+    if (!this.renderContent(this.tooltip)) {
+      this.hide();
+      return;
+    }
     this.contextView.layout();
   }
 
   private scheduleShow(): void {
     if (this.visible || this.showTimer.value) return;
+    const delayMs = Math.max(
+      0,
+      typeof this.delayMs === "function"
+        ? this.delayMs()
+        : this.delayMs,
+    );
     this.showTimer.replace(windowTimeout(
       getWindow(this.element),
       () => {
         this.showTimer.clear();
+        if (this.pointerHoverEnabled?.() === false) return;
         this.show();
       },
-      this.delayMs,
+      delayMs,
     ));
   }
 
   private scheduleHide(): void {
     this.showTimer.clear();
-    if (!this.visible || this.hideTimer.value) return;
+    if (
+      this.persistence === "sticky" ||
+      !this.visible ||
+      this.hideTimer.value
+    ) return;
     this.hideTimer.replace(windowTimeout(
       getWindow(this.element),
       () => {
@@ -192,16 +236,18 @@ export class Hover extends DisposableOwner {
     ));
   }
 
-  private renderContent(container: HTMLElement): void {
+  private renderContent(container: HTMLElement): boolean {
     const content = typeof this.content === "function"
       ? this.content()
       : this.content;
     container.replaceChildren();
+    if (content === undefined || content === "") return false;
     if (typeof content === "string") {
       container.textContent = content;
     } else {
       container.append(content);
     }
+    return true;
   }
 
   private isInsideHover(candidate: EventTarget | null): boolean {

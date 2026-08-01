@@ -40,6 +40,9 @@ export class PanelPart extends CompositePart {
     this.actionsElement.className = "zeta-panel-title-actions";
     titleControl.append(this.compositeBar.element, this.actionsElement);
     this.contentElement.before(titleControl);
+    this.own(this.compositeBar.onDidChangeOverflowActions(() => {
+      this.updateTitleActions();
+    }));
   }
 
   setActiveComposite(compositeId: string): void {
@@ -51,9 +54,22 @@ export class PanelPart extends CompositePart {
   }
 
   override showComposite(compositeId: string): void {
+    this.getComposite(this.activeCompositeId ?? "")
+      ?.setTitleSecondaryActions([]);
     super.showComposite(compositeId);
     this.actionsElement.replaceChildren(
       ...optionalElement(this.getComposite(compositeId)?.titleActionsElement),
+    );
+    this.updateTitleActions();
+  }
+
+  private updateTitleActions(): void {
+    const composite = this.getComposite(this.activeCompositeId ?? "");
+    const usesExternalOverflow = composite?.setTitleSecondaryActions(
+      this.compositeBar.getOverflowActions(),
+    ) === true;
+    this.compositeBar.setOverflowPresentation(
+      usesExternalOverflow ? "external" : "inline",
     );
   }
 }

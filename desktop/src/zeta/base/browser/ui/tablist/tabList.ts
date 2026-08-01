@@ -36,6 +36,7 @@ export interface TabListOptions<T> {
   readonly orientation?: ActionBarOrientation;
   readonly onActivate: (value: T) => void;
   readonly onClose?: (value: T) => void;
+  readonly closeActionIcon?: Icon;
 }
 
 /**
@@ -54,6 +55,7 @@ export class TabList<T> extends DisposableOwner {
     super();
     this.activate = options.onActivate;
     const onClose = options.onClose;
+    const closeActionIcon = options.closeActionIcon;
     const orientation = options.orientation ?? "horizontal";
     this.actionBar = this.own(new ActionBar({
       ownerDocument: options.ownerDocument,
@@ -64,7 +66,7 @@ export class TabList<T> extends DisposableOwner {
         if (!(action instanceof TabAction)) {
           throw new TypeError(`Unsupported TabList action: ${action.id}`);
         }
-        return new TabActionViewItem(action, onClose);
+        return new TabActionViewItem(action, onClose, closeActionIcon);
       },
     }));
     const scrollableOptions = orientation === "vertical"

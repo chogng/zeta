@@ -3,7 +3,72 @@ import test from "node:test";
 import { JSDOM } from "jsdom";
 import type { IAction } from "../../common/actions.js";
 import { Separator } from "../../common/actions.js";
+import { lxiconsLibrary } from "../../common/lxiconsLibrary.js";
 import { ActionBar } from "../../browser/ui/actionbar/actionbar.js";
+import { LabelActionViewItem } from "../../browser/ui/actionbar/actionViewItems.js";
+import { setHoverDelegate, type HoverDelegateSetupOptions, type IManagedHover } from "../../browser/ui/hover/hoverDelegate.js";
+
+test("ActionViewItem routes its tooltip through the shared action Hover group", () => {
+  const dom = new JSDOM("<!doctype html><body></body>");
+  const setups: HoverDelegateSetupOptions[] = [];
+  using delegateRegistration = setHoverDelegate({
+    setupHover(options) {
+      setups.push(options);
+      options.target.removeAttribute("title");
+      return managedHover();
+    },
+  });
+  using actionBar = new ActionBar({
+    ownerDocument: dom.window.document,
+    actions: [action("open")],
+  });
+  dom.window.document.body.append(actionBar.element);
+
+  const button = actionBar.element.querySelector("button");
+  assert.ok(button);
+  assert.equal(setups.length, 1);
+  assert.equal(setups[0]?.target, button);
+  assert.equal(setups[0]?.content, "open");
+  assert.equal(setups[0]?.groupId, "actions");
+  assert.equal(button.hasAttribute("title"), false);
+
+  dom.window.close();
+});
+
+test("LabelActionViewItem owns compact icon-and-text action markup", () => {
+  const dom = new JSDOM("<!doctype html><body></body>");
+  let runCount = 0;
+  const activeAction: IAction = {
+    id: "active-terminal",
+    label: "Focus Active Terminal",
+    tooltip: "Focus Active Terminal",
+    enabled: true,
+    run: () => runCount++,
+  };
+  using actionBar = new ActionBar({
+    ownerDocument: dom.window.document,
+    actions: [activeAction],
+    actionViewItemProvider: (action) => new LabelActionViewItem(action, {
+      label: "cmd",
+      icon: lxiconsLibrary.terminalCmd,
+      ariaLabel: "Active terminal: cmd",
+      tooltip: "Active terminal: cmd",
+    }),
+  });
+  dom.window.document.body.append(actionBar.element);
+
+  const label = actionBar.element.querySelector<HTMLButtonElement>(".zeta-action-label");
+  assert.ok(label);
+  assert.equal(label.classList.contains("zeta-button"), false);
+  assert.equal(label.querySelector(".zeta-action-label-text")?.textContent, "cmd");
+  assert.ok(label.querySelector(".zeta-action-label-icon > svg.zeta-icon"));
+  assert.equal(label.getAttribute("aria-label"), "Active terminal: cmd");
+  assert.equal(label.tabIndex, 0);
+  label.click();
+  assert.equal(runCount, 1);
+
+  dom.window.close();
+});
 
 test("ActionBar owns horizontal keyboard navigation", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
@@ -101,4 +166,15 @@ function keyboardEvent(
     cancelable: true,
     key,
   });
+}
+
+function managedHover(): IManagedHover {
+  return {
+    visible: false,
+    show() {},
+    hide() {},
+    update() {},
+    dispose() {},
+    [Symbol.dispose]() {},
+  };
 }

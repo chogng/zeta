@@ -5,6 +5,7 @@ import { URI } from "../src/zeta/base/common/uri.js";
 import { FileKind, type IFileService } from "../src/zeta/platform/files/common/files.js";
 import { WorkspaceContextService } from "../src/zeta/workbench/services/workspaces/browser/workspaceContextService.js";
 import type { IFileIconThemeService } from "../src/zeta/platform/theme/browser/fileIconThemeService.js";
+import type { IHoverService, IManagedHover } from "../src/zeta/platform/hover/common/hoverService.js";
 import type { EditorInput } from "../src/zeta/workbench/browser/parts/editor/editorInput.js";
 import type { IEditorPart } from "../src/zeta/workbench/browser/parts/editor/editorPart.js";
 
@@ -89,6 +90,11 @@ test("ExplorerViewPane renders, expands, and opens workspace files", async () =>
       container.textContent = resource.path.endsWith(".ts") ? "T" : "F";
     },
   };
+  const hoverService: IHoverService = {
+    setupHover: () => testManagedHover(),
+    showHover: () => testManagedHover(),
+    hideHover() {},
+  };
 
   try {
     const { ExplorerViewPane } = await import(
@@ -137,6 +143,7 @@ test("ExplorerViewPane renders, expands, and opens workspace files", async () =>
       workspaceContextService,
       editorPart,
       fileIconThemeService,
+      hoverService,
     );
     browser.window.document.body.append(pane.element);
     assert.equal(
@@ -145,7 +152,7 @@ test("ExplorerViewPane renders, expands, and opens workspace files", async () =>
     );
 
     await waitFor(() => pane.element.querySelectorAll(
-      "[data-explorer-resource]",
+      ".zeta-tree-row",
     ).length === 2);
     assert.equal(
       pane.element.querySelector(".zeta-view-pane-title")?.textContent,
@@ -164,17 +171,18 @@ test("ExplorerViewPane renders, expands, and opens workspace files", async () =>
     );
     assert.equal(
       pane.element.querySelectorAll(
-        ".zeta-explorer-twistie .zeta-icon",
+        ".zeta-tree-twistie .zeta-icon",
       ).length,
       1,
     );
+    assert.ok(pane.element.querySelector(".zeta-tree-indent-guides-always"));
     assert.equal(
       pane.element.querySelectorAll(".zeta-seti-file-icon").length,
       1,
     );
 
     const sourceFolder = [...pane.element.querySelectorAll<HTMLButtonElement>(
-      "[data-explorer-resource]",
+      ".zeta-tree-row",
     )].find((row) => rowLabel(row) === "src");
     assert.ok(sourceFolder);
     sourceFolder.click();
@@ -195,7 +203,7 @@ test("ExplorerViewPane renders, expands, and opens workspace files", async () =>
     ]);
 
     const readme = [...pane.element.querySelectorAll<HTMLButtonElement>(
-      "[data-explorer-resource]",
+      ".zeta-tree-row",
     )].find((row) => rowLabel(row) === "README.md");
     assert.ok(readme);
     readme.click();
@@ -225,9 +233,20 @@ test("ExplorerViewPane renders, expands, and opens workspace files", async () =>
   }
 });
 
+function testManagedHover(): IManagedHover {
+  return {
+    visible: false,
+    show() {},
+    hide() {},
+    update() {},
+    dispose() {},
+    [Symbol.dispose]() {},
+  };
+}
+
 function rowLabels(container: Element): readonly string[] {
   return [...container.querySelectorAll<HTMLElement>(
-    "[data-explorer-resource]",
+    ".zeta-tree-row",
   )].map(rowLabel);
 }
 

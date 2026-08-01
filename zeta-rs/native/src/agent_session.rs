@@ -10,6 +10,7 @@ use zeta_app_server_client::{
     InProcessClientOptions, ServerNotification, local_profile_root,
 };
 use zeta_app_server_protocol::protocol::common::{ClientInfo, CommandId};
+use zeta_app_server_protocol::protocol::fs::{FsReadDirectoryEntry, FsReadDirectoryParams};
 use zeta_app_server_protocol::protocol::git::{
     GitBranchDto, GitBranchSwitchParams, GitTextDiffResult,
 };
@@ -43,6 +44,7 @@ pub(crate) enum AgentSessionEvent {
     Snapshot(Thread),
     Update(Box<ThreadUpdateEnvelope>),
     GitProjection(Option<GitTextDiffResult>),
+    FilesChanged,
     Error(String),
     Closed,
 }
@@ -53,6 +55,10 @@ enum AgentSessionCommand {
     SelectModel(ModelRef),
     Refresh,
     RefreshGit,
+    ReadDirectory {
+        path: PathBuf,
+        response: SyncSender<std::result::Result<Vec<FsReadDirectoryEntry>, String>>,
+    },
     ListGitBranches(SyncSender<std::result::Result<Vec<GitBranchDto>, String>>),
     SwitchGitBranch {
         name: String,
@@ -119,6 +125,17 @@ impl AgentSession {
         self.commands
             .try_send(AgentSessionCommand::RefreshGit)
             .context("Git refresh queue is unavailable")
+    }
+
+    pub(crate) fn read_directory(&self, path: PathBuf) -> Result<Vec<FsReadDirectoryEntry>> {
+        let (response, result) = mpsc::sync_channel(1);
+        self.commands
+            .try_send(AgentSessionCommand::ReadDirectory { path, response })
+            .context("Workspace directory query queue is unavailable")?;
+        result
+            .recv()
+            .context("Workspace directory query worker stopped")?
+            .map_err(anyhow::Error::msg)
     }
 
     pub(crate) fn local_branches(&self) -> Result<Vec<GitBranchDto>> {
@@ -251,6 +268,13 @@ fn drive_agent_session(
                         send_event(event_proxy, AgentSessionEvent::Error(error.to_string()))?;
                     }
                 }
+                Ok(AgentSessionCommand::ReadDirectory { path, response }) => {
+                    let result = client
+                        .read_directory(FsReadDirectoryParams { path })
+                        .map(|result| result.entries)
+                        .map_err(|error| error.to_string());
+                    let _ = response.send(result);
+                }
                 Ok(AgentSessionCommand::ListGitBranches(response)) => {
                     let result = client
                         .list_git_branches()
@@ -281,6 +305,9 @@ fn drive_agent_session(
             }
             Ok(AppServerEvent::Notification(ServerNotification::GitStatusChanged(_))) => {
                 publish_git_projection(event_proxy, client)?;
+            }
+            Ok(AppServerEvent::Notification(ServerNotification::FsChanged(_))) => {
+                send_event(event_proxy, AgentSessionEvent::FilesChanged)?;
             }
             Ok(AppServerEvent::Notification(_)) => {}
             Ok(AppServerEvent::ConnectionClosed(reason)) => {
@@ -568,8 +595,9 @@ impl NativeApp {
                     .apply_git_projection(projection.as_ref());
                 self.agent_sidebar_workspace
                     .sync_repository(&self.workspace_context);
-                self.agent_sidebar_workspace.refresh_files();
+                self.refresh_files_from_app_server();
             }
+            AgentSessionEvent::FilesChanged => self.refresh_files_from_app_server(),
             AgentSessionEvent::Error(error) => {
                 eprintln!("Agent session failed: {error}");
             }
@@ -589,6 +617,35 @@ impl NativeApp {
         self.thread_timeline_scroll.clamp(limit);
         self.rebuild_presentation();
         self.request_redraw();
+    }
+}
+
+impl NativeApp {
+    pub(crate) fn refresh_files_from_app_server(&mut self) {
+        let Some(session) = self.agent_session.as_ref() else {
+            return;
+        };
+        match session.read_directory(PathBuf::from(".")) {
+            Ok(entries) => self.agent_sidebar_workspace.refresh_files(entries),
+            Err(error) => eprintln!("could not read App Server workspace directory: {error}"),
+        }
+    }
+
+    pub(crate) fn load_file_tree_directory(
+        &mut self,
+        element: zeta_ui_dispatch::ElementId,
+        path: PathBuf,
+    ) {
+        let Some(session) = self.agent_session.as_ref() else {
+            return;
+        };
+        match session.read_directory(path) {
+            Ok(entries) => {
+                self.agent_sidebar_workspace
+                    .complete_file_tree_directory_load(element, entries);
+            }
+            Err(error) => eprintln!("could not read App Server workspace directory: {error}"),
+        }
     }
 }
 

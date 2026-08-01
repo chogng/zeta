@@ -94,6 +94,28 @@ test("ToolBar omits More Actions when secondary actions are empty", () => {
   dom.window.close();
 });
 
+test("ToolBar can place More Actions before a named primary action", () => {
+  const dom = new JSDOM("<!doctype html><body></body>");
+  const toolbar = new ToolBar({
+    contextMenuProvider: new TestContextMenuProvider(),
+    ownerDocument: dom.window.document,
+    moreActionsPlacement: { beforeActionId: "maximize" },
+  });
+  toolbar.setActions(
+    [action("kill"), action("maximize"), action("close")],
+    [action("clear")],
+  );
+
+  assert.deepEqual(
+    [...toolbar.element.querySelectorAll<HTMLElement>("[data-action-id]")]
+      .map((item) => item.dataset.actionId),
+    ["kill", "zeta.toolbar.moreActions", "maximize", "close"],
+  );
+
+  toolbar.dispose();
+  dom.window.close();
+});
+
 class TestContextMenuProvider implements IContextMenuProvider {
   lastOptions: IActionContextMenuOptions | undefined;
 

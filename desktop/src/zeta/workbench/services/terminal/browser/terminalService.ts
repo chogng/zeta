@@ -71,7 +71,7 @@ export class TerminalService extends DisposableOwner implements ITerminalService
     const instance = this.own(new TerminalInstance(
       `terminal-instance-${instanceNumber}`,
       created.terminalId,
-      `${created.profile.title} ${instanceNumber}`,
+      terminalInstanceTitle(created.profile, instanceNumber),
       created.profile,
       this.processService,
       () => this.removeInstance(instance),
@@ -375,4 +375,11 @@ function takeUtf8Prefix(value: string, maximumBytes: number): string {
 
 function isHighSurrogate(codeUnit: number): boolean {
   return codeUnit >= 0xd800 && codeUnit <= 0xdbff;
+}
+
+function terminalInstanceTitle(profile: ITerminalProfile, instanceNumber: number): string {
+  if (profile.profileId === "cmd" || profile.profileId === "command-prompt") {
+    return instanceNumber === 1 ? "cmd" : `cmd ${instanceNumber}`;
+  }
+  return `${profile.title} ${instanceNumber}`;
 }

@@ -1,6 +1,7 @@
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
+use zeta_app_server_protocol::protocol::fs::{FsFileType, FsReadDirectoryEntry};
 use zeta_ui::{TreeItem, TreeItemExpansion};
 use zeta_ui_dispatch::ElementId;
 
@@ -55,11 +56,12 @@ impl<'a> ExplorerTreeRow<'a> {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum ExplorerTreeNavigation {
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) enum ExplorerTreeAction {
     Handled,
     StateChanged,
     Focus(ElementId),
+    LoadChildren { element: ElementId, path: PathBuf },
 }
 
 #[derive(Default)]
@@ -72,17 +74,17 @@ pub(crate) struct ExplorerTree {
 }
 
 impl ExplorerTree {
-    pub(crate) fn replace_root(&mut self, root: Option<&Path>) {
+    pub(crate) fn clear(&mut self) {
         self.nodes.clear();
         self.roots.clear();
         self.elements.clear();
         self.visible_nodes.clear();
         self.visible_items.clear();
-        let Some(root) = root else {
-            return;
-        };
-        let entries = read_entries(root);
-        self.roots = self.allocate_entries(entries, None);
+    }
+
+    pub(crate) fn replace_root(&mut self, entries: Vec<FsReadDirectoryEntry>) {
+        self.clear();
+        self.roots = self.allocate_entries(directory_entries(PathBuf::new(), entries), None);
         self.rebuild_visible();
     }
 
@@ -111,67 +113,84 @@ impl ExplorerTree {
         })
     }
 
-    pub(crate) fn activate_element(&mut self, element: ElementId) -> bool {
-        let Some(node_id) = self.elements.get(&element).copied() else {
-            return false;
-        };
+    pub(crate) fn activate_element(&mut self, element: ElementId) -> Option<ExplorerTreeAction> {
+        let node_id = self.elements.get(&element).copied()?;
         if !self.nodes[node_id.0].directory {
-            return true;
+            return Some(ExplorerTreeAction::Handled);
         }
         if self.nodes[node_id.0].expanded {
             self.nodes[node_id.0].expanded = false;
-        } else {
-            self.load_children(node_id);
+        } else if self.nodes[node_id.0].children_loaded {
             self.nodes[node_id.0].expanded = true;
+        } else {
+            return Some(ExplorerTreeAction::LoadChildren {
+                element,
+                path: self.nodes[node_id.0].path.clone(),
+            });
         }
         self.rebuild_visible();
-        true
+        Some(ExplorerTreeAction::StateChanged)
     }
 
-    pub(crate) fn navigate_right(&mut self, element: ElementId) -> Option<ExplorerTreeNavigation> {
+    pub(crate) fn navigate_right(&mut self, element: ElementId) -> Option<ExplorerTreeAction> {
         let node_id = self.elements.get(&element).copied()?;
         if !self.nodes[node_id.0].directory {
-            return Some(ExplorerTreeNavigation::Handled);
+            return Some(ExplorerTreeAction::Handled);
         }
         if !self.nodes[node_id.0].expanded {
-            self.load_children(node_id);
-            self.nodes[node_id.0].expanded = true;
-            self.rebuild_visible();
-            return Some(ExplorerTreeNavigation::StateChanged);
+            if self.nodes[node_id.0].children_loaded {
+                self.nodes[node_id.0].expanded = true;
+                self.rebuild_visible();
+                return Some(ExplorerTreeAction::StateChanged);
+            }
+            return Some(ExplorerTreeAction::LoadChildren {
+                element,
+                path: self.nodes[node_id.0].path.clone(),
+            });
         }
         Some(
             self.nodes[node_id.0]
                 .children
                 .first()
-                .map(|child| ExplorerTreeNavigation::Focus(file_tree_element_id(*child)))
-                .unwrap_or(ExplorerTreeNavigation::Handled),
+                .map(|child| ExplorerTreeAction::Focus(file_tree_element_id(*child)))
+                .unwrap_or(ExplorerTreeAction::Handled),
         )
     }
 
-    pub(crate) fn navigate_left(&mut self, element: ElementId) -> Option<ExplorerTreeNavigation> {
+    pub(crate) fn navigate_left(&mut self, element: ElementId) -> Option<ExplorerTreeAction> {
         let node_id = self.elements.get(&element).copied()?;
         if self.nodes[node_id.0].directory && self.nodes[node_id.0].expanded {
             self.nodes[node_id.0].expanded = false;
             self.rebuild_visible();
-            return Some(ExplorerTreeNavigation::StateChanged);
+            return Some(ExplorerTreeAction::StateChanged);
         }
         Some(
             self.nodes[node_id.0]
                 .parent
-                .map(|parent| ExplorerTreeNavigation::Focus(file_tree_element_id(parent)))
-                .unwrap_or(ExplorerTreeNavigation::Handled),
+                .map(|parent| ExplorerTreeAction::Focus(file_tree_element_id(parent)))
+                .unwrap_or(ExplorerTreeAction::Handled),
         )
     }
 
-    fn load_children(&mut self, node_id: ExplorerNodeId) {
-        if self.nodes[node_id.0].children_loaded {
-            return;
+    pub(crate) fn complete_directory_load(
+        &mut self,
+        element: ElementId,
+        entries: Vec<FsReadDirectoryEntry>,
+    ) -> bool {
+        let Some(node_id) = self.elements.get(&element).copied() else {
+            return false;
+        };
+        if !self.nodes[node_id.0].directory || self.nodes[node_id.0].children_loaded {
+            return false;
         }
         let path = self.nodes[node_id.0].path.clone();
-        let children = self.allocate_entries(read_entries(&path), Some(node_id));
+        let children = self.allocate_entries(directory_entries(path, entries), Some(node_id));
         let node = &mut self.nodes[node_id.0];
         node.children = children;
         node.children_loaded = true;
+        node.expanded = true;
+        self.rebuild_visible();
+        true
     }
 
     fn allocate_entries(
@@ -258,20 +277,16 @@ struct ExplorerEntrySpec {
     directory: bool,
 }
 
-fn read_entries(directory: &Path) -> Vec<ExplorerEntrySpec> {
-    let mut entries = std::fs::read_dir(directory)
-        .ok()
+fn directory_entries(
+    parent: PathBuf,
+    entries: Vec<FsReadDirectoryEntry>,
+) -> Vec<ExplorerEntrySpec> {
+    let mut entries = entries
         .into_iter()
-        .flatten()
-        .filter_map(Result::ok)
-        .filter_map(|entry| {
-            let file_type = entry.file_type().ok()?;
-            let label = entry.file_name().to_string_lossy().into_owned();
-            (!ignored_name(&label)).then_some(ExplorerEntrySpec {
-                path: entry.path(),
-                label,
-                directory: file_type.is_dir(),
-            })
+        .map(|entry| ExplorerEntrySpec {
+            path: parent.join(&entry.name),
+            label: entry.name,
+            directory: entry.file_type == FsFileType::Directory,
         })
         .collect::<Vec<_>>();
     entries.sort_by(|left, right| {
@@ -281,10 +296,6 @@ fn read_entries(directory: &Path) -> Vec<ExplorerEntrySpec> {
             .then_with(|| left.label.cmp(&right.label))
     });
     entries
-}
-
-fn ignored_name(label: &str) -> bool {
-    matches!(label, ".git" | ".zeta" | "node_modules" | "target")
 }
 
 fn file_tree_element_id(id: ExplorerNodeId) -> ElementId {

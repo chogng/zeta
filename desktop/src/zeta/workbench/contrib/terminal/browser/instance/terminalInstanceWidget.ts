@@ -67,6 +67,10 @@ export class TerminalInstanceWidget extends DisposableOwner {
     if (this.visible) this.terminal.focus();
   }
 
+  clear(): void {
+    this.terminal.clear();
+  }
+
   fit(): void {
     if (!this.visible) return;
     try {

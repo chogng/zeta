@@ -7,6 +7,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use zeta_app_server::AppServer;
 use zeta_app_server::SlashCommandCatalog;
 use zeta_app_server_protocol::protocol::common::{ClientCapabilities, ClientInfo};
+use zeta_app_server_protocol::protocol::fs::{FsFileType, FsReadDirectoryParams};
 use zeta_app_server_protocol::protocol::initialize::InitializeParams;
 use zeta_app_server_protocol::protocol::session::{SessionCreateParams, SessionThreadCreateParams};
 use zeta_app_server_protocol::protocol::skills::{
@@ -90,6 +91,24 @@ fn client_rejects_response_for_another_request() {
     let result: Result<serde_json::Value, _> =
         client.call(ClientMethod::Initialize, serde_json::json!({}));
     assert!(matches!(result, Err(ClientError::Protocol(_))));
+}
+
+#[test]
+fn client_reads_workspace_directories_through_the_typed_contract() {
+    let mut client = AppServerClient::new(MockTransport(VecDeque::from([
+        r#"{"jsonrpc":"2.0","id":1,"result":{"entries":[{"name":"src","fileType":"directory"}]}}"#
+            .into(),
+    ])));
+
+    let result = client
+        .read_directory(FsReadDirectoryParams {
+            path: "nested".into(),
+        })
+        .unwrap();
+
+    assert_eq!(result.entries.len(), 1);
+    assert_eq!(result.entries[0].name, "src");
+    assert_eq!(result.entries[0].file_type, FsFileType::Directory);
 }
 
 #[test]

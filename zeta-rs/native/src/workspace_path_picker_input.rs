@@ -83,6 +83,7 @@ impl NativeApp {
                     .apply_git_projection(switched.git.as_ref());
                 self.agent_sidebar_workspace
                     .replace_workspace(&self.workspace_context);
+                self.refresh_files_from_app_server();
                 self.composer
                     .set_working_directory(self.workspace_context.working_directory());
                 self.dismiss_workspace_path_picker();

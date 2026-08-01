@@ -42,14 +42,14 @@ export class DropdownMenuActionViewItem extends ActionViewItem {
     if (this.button) {
       throw new Error(`Action view item is already rendered: ${this.action.id}`);
     }
-    const button = this.own(new Button({
+    const button = this.createButton({
       label: this.action.label,
       ownerDocument: container.ownerDocument,
       icon: this.action.icon,
       title: this.action.tooltip,
       enabled: this.action.enabled,
       onClick: () => this.show(),
-    }));
+    });
     this.button = button;
     container.classList.add("zeta-dropdown-menu-action-view-item");
     button.element.setAttribute("aria-haspopup", "menu");

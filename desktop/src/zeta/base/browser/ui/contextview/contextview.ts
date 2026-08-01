@@ -28,6 +28,9 @@ export enum ContextViewHideReason {
   AnchorRemoved,
 }
 
+/** Named shell treatments owned by ContextView consumers. */
+export type ContextViewPresentation = "default" | "hover";
+
 export interface ContextViewOptions {
   readonly anchor: ContextViewAnchor;
   readonly content: HTMLElement;
@@ -35,6 +38,7 @@ export interface ContextViewOptions {
   readonly anchorPosition?: AnchorPosition;
   readonly anchorAxisAlignment?: AnchorAxisAlignment;
   readonly gap?: number;
+  readonly presentation?: ContextViewPresentation;
   readonly focusRestore?: ContextViewFocusRestore;
   readonly layer?: number;
   readonly isTargetWithin?: (target: Node) => boolean;
@@ -104,7 +108,8 @@ export class ContextView
 
     this.options = options;
     this.element.replaceChildren(options.content);
-    this.element.className = "zeta-context-view";
+    this.element.className =
+      `zeta-context-view zeta-context-view-${options.presentation ?? "default"}`;
     this.element.style.zIndex = String(1000 + (options.layer ?? 0));
     this.element.style.visibility = "hidden";
     this.element.hidden = false;

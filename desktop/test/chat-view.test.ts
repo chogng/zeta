@@ -330,7 +330,7 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
   dom.window.close();
 });
 
-test("New Chat creates a local draft pane and persists it on its first send", async () => {
+test("an empty Session list opens a local draft pane and persists it on its first send", async () => {
   const dom = new JSDOM("<!doctype html><body></body>");
   const createdSession = session("session-1", undefined, "New Chat");
   const attachedSession = session("session-1", "thread-1", "New Chat");
@@ -351,13 +351,9 @@ test("New Chat creates a local draft pane and persists it on its first send", as
     registry: new WorkbenchViewRegistry(),
   });
   services.set(IWorkbenchSessionService, sessions);
-  let focusedView: string | undefined;
   services.set(IViewsService, {
     openView: () => undefined,
-    focusView: (viewId) => {
-      focusedView = viewId;
-      return true;
-    },
+    focusView: () => true,
   });
   using commands = new CommandService(services);
   const menuService = new MenuService(commands, contextKeys);
@@ -382,10 +378,6 @@ test("New Chat creates a local draft pane and persists it on its first send", as
 
   await sessions.initialize();
   await nextTask();
-  assert.equal(pane.element.querySelectorAll("[role='tab']").length, 0);
-
-  await commands.executeCommand(NEW_CHAT_COMMAND_ID);
-  await nextTask();
 
   const tabs = pane.element.querySelectorAll<HTMLButtonElement>("[role='tab']");
   assert.equal(tabs.length, 1);
@@ -398,11 +390,11 @@ test("New Chat creates a local draft pane and persists it on its first send", as
       { label: "New Chat", selected: "true" },
     ],
   );
+  assert.equal(pane.element.querySelector<HTMLElement>(".zeta-chat-view-empty")?.hidden, true);
   assert.equal(fake.createSessionRequests.length, 0);
   assert.equal(fake.createThreadRequests.length, 0);
   assert.equal(sessions.sessions.length, 0);
   assert.equal(sessions.drafts.length, 1);
-  assert.equal(focusedView, CHAT_VIEW_ID);
   const draftPane = pane.element.querySelector<HTMLElement>("[role='tabpanel']");
   assert.ok(draftPane?.dataset.draftId);
   const input = draftPane.querySelector<HTMLTextAreaElement>(".zeta-alpha-editor-input");
@@ -548,7 +540,6 @@ test("failed first send keeps the local draft and its message", async () => {
   dom.window.document.body.append(pane.element);
 
   await sessions.initialize();
-  await commands.executeCommand(NEW_CHAT_COMMAND_ID);
   await nextTask();
 
   const input = pane.element.querySelector<HTMLTextAreaElement>(".zeta-alpha-editor-input");
@@ -781,6 +772,41 @@ test("WorkbenchSessionService archives a Session and selects the next active one
   assert.equal(service.active?.session.sessionId, "session-2");
   assert.equal(service.active?.threadId, "thread-2");
   assert.equal(service.state, "ready");
+});
+
+test("WorkbenchSessionService keeps an active local draft when no Session remains", async () => {
+  const onlySession = session("session-1", "thread-1");
+  const fake = fakeApi({ sessions: [onlySession] });
+  using service = new WorkbenchSessionService(fake.api);
+
+  await service.initialize();
+  await service.archiveSession("session-1");
+
+  assert.equal(service.active, undefined);
+  assert.equal(service.drafts.length, 1);
+  assert.equal(service.activeDraft?.title, "New Chat");
+  assert.equal(fake.createSessionRequests.length, 0);
+  assert.equal(fake.createThreadRequests.length, 0);
+});
+
+test("WorkbenchSessionService selects another draft and replaces the last discarded draft", async () => {
+  const fake = fakeApi();
+  using service = new WorkbenchSessionService(fake.api);
+
+  await service.initialize();
+  const initialDraft = service.activeDraft;
+  assert.ok(initialDraft);
+  const nextDraft = service.createDraft();
+
+  service.discardDraft(nextDraft.draftId);
+  assert.equal(service.activeDraft?.draftId, initialDraft.draftId);
+
+  service.discardDraft(initialDraft.draftId);
+  assert.equal(service.drafts.length, 1);
+  assert.notEqual(service.activeDraft?.draftId, initialDraft.draftId);
+  assert.equal(service.activeDraft?.title, "New Chat");
+  assert.equal(fake.createSessionRequests.length, 0);
+  assert.equal(fake.createThreadRequests.length, 0);
 });
 
 test("WorkbenchSessionService changes the model only for the selected Session", async () => {

@@ -183,7 +183,7 @@ impl NativeApp {
                 {
                     eprintln!("could not refresh Git projection: {error}");
                 }
-                self.agent_sidebar_workspace.refresh_files();
+                self.refresh_files_from_app_server();
             }
             NativeCommand::ToggleFileSearch => {
                 let visible = !self.agent_sidebar_workspace.search_visible();

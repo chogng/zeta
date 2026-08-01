@@ -8,7 +8,7 @@ use zeta_winit::{ElementState, Key, KeyEvent, ModifiersState, NamedKey};
 use crate::NativeApp;
 use crate::agent_composer::{ComposerMode, ComposerSubmission};
 use crate::composer_interaction::{ComposerInteractionActivation, SelectionDirection};
-use crate::explorer_tree::ExplorerTreeNavigation;
+use crate::explorer_tree::ExplorerTreeAction;
 use crate::keybindings::{
     NativeKeybindingContext, NativeKeybindingFacts, NativeKeybindingResolution,
 };
@@ -254,12 +254,12 @@ impl NativeApp {
             return false;
         };
         match navigation {
-            ExplorerTreeNavigation::Handled => {}
-            ExplorerTreeNavigation::StateChanged => {
+            ExplorerTreeAction::Handled => {}
+            ExplorerTreeAction::StateChanged => {
                 self.rebuild_presentation();
                 self.request_redraw();
             }
-            ExplorerTreeNavigation::Focus(target) => {
+            ExplorerTreeAction::Focus(target) => {
                 let outcome = self
                     .presentation
                     .as_ref()
@@ -269,6 +269,11 @@ impl NativeApp {
                     })
                     .unwrap_or_default();
                 self.apply_dispatch_outcome(outcome);
+            }
+            ExplorerTreeAction::LoadChildren { element, path } => {
+                self.load_file_tree_directory(element, path);
+                self.rebuild_presentation();
+                self.request_redraw();
             }
         }
         true

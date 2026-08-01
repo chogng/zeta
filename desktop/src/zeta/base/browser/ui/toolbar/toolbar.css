@@ -10,11 +10,20 @@
   color: inherit;
 }
 
-.zeta-toolbar .zeta-action-view-item.icon .zeta-button {
-  width: var(--zeta-toolbar-action-size);
-  min-width: var(--zeta-toolbar-action-size);
+.zeta-toolbar .zeta-action-view-item > .zeta-button {
   height: var(--zeta-toolbar-action-size);
   min-height: var(--zeta-toolbar-action-size);
+  padding-block: 3px;
+}
+
+.zeta-toolbar .zeta-action-view-item > .zeta-action-label {
+  height: var(--zeta-toolbar-action-size);
+  min-height: var(--zeta-toolbar-action-size);
+}
+
+.zeta-toolbar .zeta-action-view-item.icon > .zeta-button {
+  width: var(--zeta-toolbar-action-size);
+  min-width: var(--zeta-toolbar-action-size);
   padding: 4px;
 }
 

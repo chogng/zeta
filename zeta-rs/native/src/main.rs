@@ -5,6 +5,7 @@ use agent_composer::AgentComposer;
 use agent_session::AgentSession;
 use agent_sidebar::AgentSidebarState;
 use agent_sidebar_workspace::AgentSidebarWorkspace;
+use explorer_tree::ExplorerTreeAction;
 use git_branch_context_menu::GitBranchContextMenuState;
 use keybindings_resource::{KeybindingsResource, KeybindingsResourcePoll};
 use keyboard_shortcuts::KeyboardShortcutsState;
@@ -496,7 +497,10 @@ impl NativeApp {
             self.activate_composer_interaction_item(index);
             return;
         }
-        if self.agent_sidebar_workspace.activate_file_tree_element(id) {
+        if let Some(action) = self.agent_sidebar_workspace.activate_file_tree_element(id) {
+            if let ExplorerTreeAction::LoadChildren { element, path } = action {
+                self.load_file_tree_directory(element, path);
+            }
             return;
         }
         if self.agent_sidebar_workspace.toggle_multi_diff_fold(id) {
@@ -879,7 +883,7 @@ impl ApplicationHandler<NativeEvent> for NativeApp {
             {
                 eprintln!("could not refresh Git projection: {error}");
             }
-            self.agent_sidebar_workspace.refresh_files();
+            self.refresh_files_from_app_server();
         }
         if active_screen == ScreenBuffer::Alternate || self.terminal_scroll.offset() == 0 {
             self.terminal_selection.clear();

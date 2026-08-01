@@ -1,5 +1,6 @@
 import { compositePanelId, compositeTabId } from "../compositebar/compositeBar.js";
 import { ViewPaneContainer, type ViewPaneContainerOptions } from "./viewPaneContainer.js";
+import type { IAction } from "../../../../base/common/actions.js";
 
 export interface PaneCompositeOptions extends ViewPaneContainerOptions {
   readonly paneHeaders?: PaneHeaderVisibility;
@@ -32,5 +33,9 @@ export class PaneComposite extends ViewPaneContainer {
 
   get titleActionsElement(): HTMLElement | undefined {
     return this.panes.find((pane) => pane.titleActionsElement)?.titleActionsElement;
+  }
+
+  setTitleSecondaryActions(actions: readonly IAction[]): boolean {
+    return this.panes.some((pane) => pane.setTitleSecondaryActions(actions));
   }
 }

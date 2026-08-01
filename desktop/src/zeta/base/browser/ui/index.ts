@@ -7,6 +7,8 @@ export {
 export {
   ActionViewItem,
   ButtonActionViewItem,
+  LabelActionViewItem,
+  type LabelActionViewItemOptions,
   SeparatorActionViewItem,
 } from "./actionbar/actionViewItems.js";
 export { Button, type ButtonOptions } from "./button/button.js";
@@ -19,6 +21,7 @@ export {
   ContextViewFocusRestore,
   ContextViewHideReason,
   type ContextViewOptions,
+  type ContextViewPresentation,
   type IContextViewProvider,
 } from "./contextview/contextview.js";
 export {
@@ -58,8 +61,12 @@ export {
 export {
   Hover,
   type HoverContent,
+  type HoverContentValue,
+  type HoverDelay,
   type HoverOptions,
+  type HoverPersistence,
 } from "./hover/hover.js";
+export { getHoverDelegate, setHoverDelegate, type HoverDelegateSetupOptions, type IHoverDelegate, type IManagedHover } from "./hover/hoverDelegate.js";
 export {
   IconLabel,
   type IconLabelOptions,
@@ -123,6 +130,6 @@ export {
   type TabListItem,
   type TabListOptions,
 } from "./tablist/tabList.js";
-export { ToolBar, type ToolBarOptions } from "./toolbar/toolbar.js";
+export { ToolBar, type MoreActionsPlacement, type ToolBarOptions } from "./toolbar/toolbar.js";
 export { Toggle } from "./toggle/toggle.js";
-export { Tree, type TreeItem } from "./tree/tree.js";
+export { Tree, type TreeActivateEvent, type TreeIndentGuides, type TreeOptions, type TreeTwistieState } from "./tree/tree.js";

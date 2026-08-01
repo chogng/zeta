@@ -36,7 +36,8 @@ export type WorkbenchSessionState =
  *
  * Feature views consume the durable selection instead of choosing an
  * arbitrary Thread independently. A draft becomes durable only when a Chat
- * pane asks to materialize it for its first send.
+ * pane asks to materialize it for its first send. Once initialization settles,
+ * the service keeps either an active Thread or an active local draft selected.
  */
 export interface IWorkbenchSessionService {
   readonly onDidChange: Event<void>;
@@ -145,12 +146,7 @@ export class WorkbenchSessionService
   }
 
   createDraft(title = "New Chat"): IChatDraft {
-    const draft: IChatDraft = {
-      draftId: createUuid(),
-      title,
-      model: undefined,
-    };
-    this._drafts = [draft, ...this._drafts];
+    const draft = this.addDraft(title);
     this._activeDraftId = draft.draftId;
     this._error = undefined;
     this._onDidChange.fire();
@@ -171,7 +167,8 @@ export class WorkbenchSessionService
     const drafts = this._drafts.filter((draft) => draft.draftId !== draftId);
     if (drafts.length === this._drafts.length) return;
     this._drafts = drafts;
-    if (this._activeDraftId === draftId) this._activeDraftId = undefined;
+    if (this._activeDraftId === draftId) this._activeDraftId = drafts[0]?.draftId;
+    this.ensureActiveSelection();
     this._onDidChange.fire();
   }
 
@@ -274,6 +271,7 @@ export class WorkbenchSessionService
       if (this._active?.session.sessionId === sessionId) {
         this._active = firstActiveThread(this._sessions);
       }
+      this.ensureActiveSelection();
       this.setState("ready");
     } catch (error) {
       this.setError(error);
@@ -310,6 +308,7 @@ export class WorkbenchSessionService
       const result = await this.api.session.list();
       this._sessions = result.sessions;
       this._active = firstActiveThread(this._sessions);
+      this.ensureActiveSelection();
       this.setState("ready");
     } catch (error) {
       this.setError(error);
@@ -323,11 +322,28 @@ export class WorkbenchSessionService
   }
 
   private setError(error: unknown): void {
+    this.ensureActiveSelection();
     this._state = "error";
     this._error = error instanceof Error
       ? error.message
       : "Unable to load sessions.";
     this._onDidChange.fire();
+  }
+
+  private addDraft(title: string): IChatDraft {
+    const draft: IChatDraft = {
+      draftId: createUuid(),
+      title,
+      model: undefined,
+    };
+    this._drafts = [draft, ...this._drafts];
+    return draft;
+  }
+
+  private ensureActiveSelection(): void {
+    if (this.activeDraft || this._active) return;
+    const draft = this._drafts[0] ?? this.addDraft("New Chat");
+    this._activeDraftId = draft.draftId;
   }
 
   private activateSession(active: IActiveSessionThread): void {

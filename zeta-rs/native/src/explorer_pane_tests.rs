@@ -4,6 +4,7 @@ use super::ExplorerPane;
 use crate::shell_interaction::{AGENT_EXPLORER_PANE, AGENT_SIDEBAR};
 use crate::shell_style::SHELL_PALETTE;
 use crate::{agent_sidebar_workspace::AgentSidebarWorkspace, workspace_context::WorkspaceContext};
+use zeta_app_server_protocol::protocol::fs::{FsFileType, FsReadDirectoryEntry};
 use zeta_ui::{Color, Component, Rect, UiScene};
 use zeta_ui_dispatch::{AccessibilityRole, InteractionFrame, UiDispatch};
 
@@ -26,7 +27,12 @@ fn large_file_tree_only_paints_and_registers_visible_rows() {
     }
     let mut context = WorkspaceContext::capture_current();
     context.switch_working_directory(fixture.clone()).unwrap();
-    let workspace = AgentSidebarWorkspace::new(&context);
+    let mut workspace = AgentSidebarWorkspace::new(&context);
+    workspace.refresh_files(
+        (0..50)
+            .map(|index| file(&format!("file-{index:03}.txt")))
+            .collect(),
+    );
     let pane = ExplorerPane::new(
         Rect::from_xywh(0.0, 0.0, 320.0, 100.0),
         &workspace,
@@ -85,9 +91,11 @@ fn expanded_directory_paints_an_indented_child_as_a_tree_item() {
     let mut context = WorkspaceContext::capture_current();
     context.switch_working_directory(fixture.clone()).unwrap();
     let mut workspace = AgentSidebarWorkspace::new(&context);
+    workspace.refresh_files(vec![directory("src")]);
     let directory_id = workspace.root_entries()[0].element_id();
 
-    assert!(workspace.activate_file_tree_element(directory_id));
+    assert!(workspace.activate_file_tree_element(directory_id).is_some());
+    assert!(workspace.complete_file_tree_directory_load(directory_id, vec![file("lib.rs")]));
 
     let pane = ExplorerPane::new(
         Rect::from_xywh(0.0, 0.0, 320.0, 100.0),
@@ -111,4 +119,18 @@ fn expanded_directory_paints_an_indented_child_as_a_tree_item() {
     );
 
     std::fs::remove_dir_all(fixture).unwrap();
+}
+
+fn directory(name: &str) -> FsReadDirectoryEntry {
+    FsReadDirectoryEntry {
+        name: name.into(),
+        file_type: FsFileType::Directory,
+    }
+}
+
+fn file(name: &str) -> FsReadDirectoryEntry {
+    FsReadDirectoryEntry {
+        name: name.into(),
+        file_type: FsFileType::File,
+    }
 }

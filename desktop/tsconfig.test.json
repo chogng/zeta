@@ -21,6 +21,7 @@
     "src/zeta/platform/contextkey/common/**/*.ts",
     "src/zeta/platform/contextview/browser/**/*.ts",
     "src/zeta/platform/contextview/electron-browser/**/*.ts",
+    "src/zeta/platform/hover/**/*.ts",
     "src/zeta/platform/dialogs/common/**/*.ts",
     "src/zeta/platform/instantiation/common/**/*.ts",
     "src/zeta/platform/keybinding/**/*.ts",

@@ -27,6 +27,7 @@ import {
 import {
   IFileIconThemeService,
 } from "../../../../platform/theme/browser/fileIconThemeService.js";
+import { IHoverService } from "../../../../platform/hover/common/hoverService.js";
 import { ExplorerViewPane } from "./explorerViewPane.js";
 import { EmptyView } from "./views/emptyView.js";
 import "./media/explorer.css";
@@ -50,6 +51,7 @@ export function registerFilesViews(
           IWorkspaceContextService,
           IEditorPart,
           IFileIconThemeService,
+          IHoverService,
         ],
       }),
     },

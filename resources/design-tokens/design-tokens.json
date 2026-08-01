@@ -342,6 +342,86 @@
       }
     },
     {
+      "id": "hover.foreground",
+      "kind": "color",
+      "cssVariable": "--zeta-hover-foreground",
+      "owner": "platform.theme.components",
+      "description": "Foreground for managed Hovers.",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "foreground",
+        "light": "foreground",
+        "high-contrast-dark": "foreground",
+        "high-contrast-light": "foreground"
+      },
+      "values": {
+        "dark": "#cccccc",
+        "light": "#3b3b3b",
+        "high-contrast-dark": "#cccccc",
+        "high-contrast-light": "#3b3b3b"
+      }
+    },
+    {
+      "id": "hover.background",
+      "kind": "color",
+      "cssVariable": "--zeta-hover-background",
+      "owner": "platform.theme.components",
+      "description": "Background for managed Hovers.",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#252526",
+        "light": "#f8f8f8",
+        "high-contrast-dark": "#252526",
+        "high-contrast-light": "#f8f8f8"
+      },
+      "values": {
+        "dark": "#252526",
+        "light": "#f8f8f8",
+        "high-contrast-dark": "#252526",
+        "high-contrast-light": "#f8f8f8"
+      }
+    },
+    {
+      "id": "hover.border",
+      "kind": "color",
+      "cssVariable": "--zeta-hover-border",
+      "owner": "platform.theme.components",
+      "description": "Border around managed Hovers.",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "widget.border",
+        "light": "widget.border",
+        "high-contrast-dark": "widget.border",
+        "high-contrast-light": "widget.border"
+      },
+      "values": {
+        "dark": "#454545",
+        "light": "#d4d4d4",
+        "high-contrast-dark": "#454545",
+        "high-contrast-light": "#d4d4d4"
+      }
+    },
+    {
+      "id": "hover.shadow",
+      "kind": "color",
+      "cssVariable": "--zeta-hover-shadow",
+      "owner": "platform.theme.components",
+      "description": "Shadow around managed Hovers.",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "widget.shadow",
+        "light": "widget.shadow",
+        "high-contrast-dark": "widget.shadow",
+        "high-contrast-light": "widget.shadow"
+      },
+      "values": {
+        "dark": "#00000066",
+        "light": "#00000029",
+        "high-contrast-dark": "#00000066",
+        "high-contrast-light": "#00000029"
+      }
+    },
+    {
       "id": "list.hoverBackground",
       "kind": "color",
       "cssVariable": "--zeta-list-hover-background",
@@ -399,6 +479,26 @@
         "light": "#0060c0",
         "high-contrast-dark": "#04395e",
         "high-contrast-light": "#0060c0"
+      }
+    },
+    {
+      "id": "tree.indentGuidesStroke",
+      "kind": "color",
+      "cssVariable": "--zeta-tree-indent-guides-stroke",
+      "owner": "platform.theme.components",
+      "description": "Tree indentation guide stroke.",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#585858",
+        "light": "#a9a9a9",
+        "high-contrast-dark": "#585858",
+        "high-contrast-light": "#a9a9a9"
+      },
+      "values": {
+        "dark": "#585858",
+        "light": "#a9a9a9",
+        "high-contrast-dark": "#585858",
+        "high-contrast-light": "#a9a9a9"
       }
     },
     {
@@ -2363,6 +2463,14 @@
       "owner": "platform.ui",
       "description": "Default scrollbar thickness.",
       "value": "10px"
+    },
+    {
+      "id": "tree.indent",
+      "kind": "size",
+      "cssVariable": "--zeta-tree-indent",
+      "owner": "platform.ui",
+      "description": "Default tree nesting indentation.",
+      "value": "14px"
     },
     {
       "id": "sash.dragAreaSize",

@@ -14,6 +14,12 @@ export interface ToolBarOptions {
   readonly actionViewItemProvider?: ActionViewItemProvider;
   readonly presentation?: ToolBarPresentation;
   readonly highlightToggledItems?: boolean;
+  readonly moreActionsPlacement?: MoreActionsPlacement;
+}
+
+/** Places the synthetic More Actions item relative to a primary action. */
+export interface MoreActionsPlacement {
+  readonly beforeActionId: string;
 }
 
 /** Component-owned visual adaptation selected by a toolbar host. */
@@ -29,10 +35,12 @@ export class ToolBar extends DisposableOwner {
   readonly element: HTMLDivElement;
   private readonly actionBar: ActionBar;
   private readonly moreActions = new MoreActionsAction();
+  private readonly moreActionsPlacement: MoreActionsPlacement | undefined;
   private secondaryActions: readonly IAction[] = [];
 
   constructor(options: ToolBarOptions) {
     super();
+    this.moreActionsPlacement = options.moreActionsPlacement;
     this.actionBar = this.own(new ActionBar({
       ownerDocument: options.ownerDocument,
       ariaLabel: options.ariaLabel,
@@ -59,13 +67,22 @@ export class ToolBar extends DisposableOwner {
   ): void {
     const primary = cleanSeparators(primaryActions);
     this.secondaryActions = cleanSeparators(secondaryActions);
-    this.actionBar.setActions(
-      this.secondaryActions.length > 0
-        ? [...primary, this.moreActions]
-        : primary,
-    );
+    this.actionBar.setActions(this.withMoreActions(primary));
   }
 
+  private withMoreActions(primary: readonly IAction[]): readonly IAction[] {
+    if (this.secondaryActions.length === 0) return primary;
+    const beforeActionId = this.moreActionsPlacement?.beforeActionId;
+    const index = beforeActionId === undefined
+      ? -1
+      : primary.findIndex((action) => action.id === beforeActionId);
+    if (index < 0) return [...primary, this.moreActions];
+    return [
+      ...primary.slice(0, index),
+      this.moreActions,
+      ...primary.slice(index),
+    ];
+  }
 }
 
 class MoreActionsAction implements IAction {

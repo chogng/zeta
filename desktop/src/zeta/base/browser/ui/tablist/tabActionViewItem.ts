@@ -1,5 +1,6 @@
 import { addDisposableListener } from "../../dom.js";
 import type { IAction } from "../../../common/actions.js";
+import type { Icon } from "../../../common/icon.js";
 import { lxiconsLibrary } from "../../../common/lxiconsLibrary.js";
 import { assertDefined } from "../../../common/types.js";
 import { ActionBar } from "../actionbar/actionbar.js";
@@ -37,12 +38,14 @@ export class TabAction<T> implements IAction {
 export class TabActionViewItem<T> extends ActionViewItem {
   private readonly tabAction: TabAction<T>;
   private readonly onClose: ((value: T) => void) | undefined;
+  private readonly closeActionIcon: Icon | undefined;
   private tabElement: HTMLButtonElement | undefined;
 
-  constructor(action: TabAction<T>, onClose: ((value: T) => void) | undefined) {
+  constructor(action: TabAction<T>, onClose: ((value: T) => void) | undefined, closeActionIcon: Icon | undefined) {
     super(action);
     this.tabAction = action;
     this.onClose = onClose;
+    this.closeActionIcon = closeActionIcon;
   }
 
   override render(container: HTMLElement): void {
@@ -64,12 +67,11 @@ export class TabActionViewItem<T> extends ActionViewItem {
     tab.setAttribute("aria-selected", String(this.tabAction.checked));
     tab.setAttribute("aria-label", item.ariaLabel ?? item.label);
     if (item.panelId) tab.setAttribute("aria-controls", item.panelId);
-    tab.title = this.tabAction.tooltip;
+    this.setupHover(tab, this.tabAction.tooltip);
     const label = this.own(new IconLabel({
       label: item.label,
       icon: item.icon,
       ownerDocument: container.ownerDocument,
-      title: this.tabAction.tooltip,
     }));
     tab.append(label.element);
     container.append(tab);
@@ -90,7 +92,7 @@ export class TabActionViewItem<T> extends ActionViewItem {
     }
     const actions = [
       ...(item.actions?.items ?? []),
-      ...(this.onClose ? [closeTabAction(item, this.onClose)] : []),
+      ...(this.onClose ? [closeTabAction(item, this.onClose, this.closeActionIcon)] : []),
     ];
     if (actions.length > 0) {
       const actionBar = this.own(new ActionBar({
@@ -124,13 +126,13 @@ export class TabActionViewItem<T> extends ActionViewItem {
   }
 }
 
-function closeTabAction<T>(item: TabListItem<T>, close: (value: T) => void): IAction {
+function closeTabAction<T>(item: TabListItem<T>, close: (value: T) => void, icon: Icon | undefined): IAction {
   const label = `Close ${item.label}`;
   return {
     id: TAB_CLOSE_ACTION_ID,
     label,
     tooltip: label,
-    icon: lxiconsLibrary.close,
+    icon: icon ?? lxiconsLibrary.close,
     enabled: true,
     run: () => close(item.value),
   };

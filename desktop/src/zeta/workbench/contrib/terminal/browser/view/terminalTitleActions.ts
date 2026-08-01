@@ -1,3 +1,4 @@
+import { ActionViewItem, ButtonActionViewItem, LabelActionViewItem } from "../../../../../base/browser/ui/actionbar/actionViewItems.js";
 import { DropdownMenuActionViewItem } from "../../../../../base/browser/ui/dropdown/dropdownMenuActionViewItem.js";
 import type { IAction } from "../../../../../base/common/actions.js";
 import { lxiconsLibrary } from "../../../../../base/common/lxiconsLibrary.js";
@@ -8,17 +9,20 @@ import type { IMenuService } from "../../../../../platform/actions/common/menuSe
 import { CommandsRegistry } from "../../../../../platform/commands/common/commands.js";
 import { ContextKeyExpr, type IContextKey, type IContextKeyService, RawContextKey } from "../../../../../platform/contextkey/common/contextkey.js";
 import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextMenu.js";
-import { TogglePanelCommandId } from "../../../../browser/parts/titlebar/titlebarActions.js";
+import { ToggleMaximizedPanelCommandId, TogglePanelCommandId } from "../../../../browser/parts/titlebar/titlebarActions.js";
 import type { ITerminalInstance, ITerminalProfile } from "../../../../services/terminal/common/terminal.js";
 import { terminalProfileIcon } from "./terminalProfileIcon.js";
 
+const ACTIVE_TERMINAL_COMMAND_ID = "zeta.terminal.focusActive";
 const SELECT_PROFILE_COMMAND_ID = "zeta.terminal.selectProfile";
 const NEW_TERMINAL_COMMAND_ID = "zeta.terminal.new";
 const RELAUNCH_TERMINAL_COMMAND_ID = "zeta.terminal.relaunch";
 const KILL_TERMINAL_COMMAND_ID = "zeta.terminal.kill";
+const CLEAR_TERMINAL_COMMAND_ID = "zeta.terminal.clear";
 const TerminalProfilesAvailableContext = new RawContextKey<boolean>("terminalProfilesAvailable", false);
 const TerminalCreatingContext = new RawContextKey<boolean>("terminalCreating", false);
 const TerminalHasActiveInstanceContext = new RawContextKey<boolean>("terminalHasActiveInstance", false);
+const TerminalActiveInstanceInTitleContext = new RawContextKey<boolean>("terminalActiveInstanceInTitle", false);
 const TerminalActiveInstanceStateContext = new RawContextKey<ITerminalInstance["state"] | "none">("terminalActiveInstanceState", "none");
 
 export interface TerminalTitleActionsOptions {
@@ -27,8 +31,10 @@ export interface TerminalTitleActionsOptions {
   readonly contextMenuService: IContextMenuService;
   readonly contextKeyService: IContextKeyService;
   readonly createTerminal: () => unknown;
+  readonly focusActive: () => unknown;
   readonly relaunchActive: () => unknown;
   readonly killActive: () => unknown;
+  readonly clearActive: () => unknown;
 }
 
 /** Owns the Terminal title Command, Menu, Context Key, and Toolbar projection. */
@@ -38,8 +44,10 @@ export class TerminalTitleActions extends DisposableOwner {
   private readonly profilesAvailableContext: IContextKey<boolean>;
   private readonly creatingContext: IContextKey<boolean>;
   private readonly hasActiveInstanceContext: IContextKey<boolean>;
+  private readonly activeInstanceInTitleContext: IContextKey<boolean>;
   private readonly activeInstanceStateContext: IContextKey<ITerminalInstance["state"] | "none">;
   private profiles: readonly ITerminalProfile[] = [];
+  private activeInstance: ITerminalInstance | undefined;
   private _selectedProfileId: string | undefined;
 
   constructor(options: TerminalTitleActionsOptions) {
@@ -47,9 +55,11 @@ export class TerminalTitleActions extends DisposableOwner {
     this.profilesAvailableContext = TerminalProfilesAvailableContext.bindTo(options.contextKeyService);
     this.creatingContext = TerminalCreatingContext.bindTo(options.contextKeyService);
     this.hasActiveInstanceContext = TerminalHasActiveInstanceContext.bindTo(options.contextKeyService);
+    this.activeInstanceInTitleContext = TerminalActiveInstanceInTitleContext.bindTo(options.contextKeyService);
     this.activeInstanceStateContext = TerminalActiveInstanceStateContext.bindTo(options.contextKeyService);
     this.defer(() => {
       this.activeInstanceStateContext.reset();
+      this.activeInstanceInTitleContext.reset();
       this.hasActiveInstanceContext.reset();
       this.creatingContext.reset();
       this.profilesAvailableContext.reset();
@@ -63,15 +73,11 @@ export class TerminalTitleActions extends DisposableOwner {
       {
         ariaLabel: "Terminal actions",
         highlightToggledItems: true,
+        moreActionsPlacement: {
+          beforeActionId: ToggleMaximizedPanelCommandId,
+        },
         menuOptions: { shouldForwardArgs: true },
-        actionViewItemProvider: (action) => action.id === SELECT_PROFILE_COMMAND_ID
-          ? new TerminalProfileActionViewItem(
-            action,
-            () => this.profiles,
-            () => this._selectedProfileId,
-            options.contextMenuService,
-          )
-          : undefined,
+        actionViewItemProvider: (action) => this.createActionViewItem(action, options.contextMenuService),
       },
     ));
     this.element = this.toolbar.element;
@@ -95,12 +101,20 @@ export class TerminalTitleActions extends DisposableOwner {
     this.creatingContext.set(creating);
   }
 
-  setActiveInstance(instance: ITerminalInstance | undefined): void {
+  setSupplementalSecondaryActions(actions: readonly IAction[]): void {
+    this.toolbar.setSupplementalSecondaryActions(actions);
+  }
+
+  setActiveInstance(instance: ITerminalInstance | undefined, placement: "list" | "title"): void {
+    this.activeInstance = instance;
     this.hasActiveInstanceContext.set(instance !== undefined);
+    this.activeInstanceInTitleContext.set(instance !== undefined && placement === "title");
     this.activeInstanceStateContext.set(instance?.state ?? "none");
+    this.toolbar.refresh();
   }
 
   private registerCommandsAndMenu(options: TerminalTitleActionsOptions): void {
+    this.own(CommandsRegistry.register(ACTIVE_TERMINAL_COMMAND_ID, () => options.focusActive()));
     this.own(CommandsRegistry.register(SELECT_PROFILE_COMMAND_ID, (_accessor, profileId) => {
       if (typeof profileId !== "string" || !this.profiles.some((profile) => profile.profileId === profileId)) {
         throw new TypeError(`Unknown terminal profile: ${String(profileId)}`);
@@ -111,16 +125,26 @@ export class TerminalTitleActions extends DisposableOwner {
     this.own(CommandsRegistry.register(NEW_TERMINAL_COMMAND_ID, () => options.createTerminal()));
     this.own(CommandsRegistry.register(RELAUNCH_TERMINAL_COMMAND_ID, () => options.relaunchActive()));
     this.own(CommandsRegistry.register(KILL_TERMINAL_COMMAND_ID, () => options.killActive()));
+    this.own(CommandsRegistry.register(CLEAR_TERMINAL_COMMAND_ID, () => options.clearActive()));
+    this.own(MenusRegistry.appendMenuItem(MenuId.TerminalTitle, {
+      command: {
+        id: ACTIVE_TERMINAL_COMMAND_ID,
+        title: "Focus Active Terminal",
+        tooltip: "Focus Active Terminal",
+      },
+      when: TerminalActiveInstanceInTitleContext.isEqualTo(true),
+      group: "navigation",
+      order: 0,
+    }));
     this.own(MenusRegistry.appendMenuItem(MenuId.TerminalTitle, {
       command: {
         id: SELECT_PROFILE_COMMAND_ID,
         title: "Terminal Profile",
         tooltip: "Select Terminal Profile",
-        icon: lxiconsLibrary.terminal,
       },
       when: TerminalProfilesAvailableContext.isEqualTo(true),
       group: "navigation",
-      order: 0,
+      order: 11,
     }));
     this.own(MenusRegistry.appendMenuItem(MenuId.TerminalTitle, {
       command: {
@@ -152,11 +176,20 @@ export class TerminalTitleActions extends DisposableOwner {
         id: KILL_TERMINAL_COMMAND_ID,
         title: "Kill Terminal",
         tooltip: "Kill Terminal",
-        icon: lxiconsLibrary.close,
+        icon: lxiconsLibrary.trash,
       },
       when: TerminalHasActiveInstanceContext.isEqualTo(true),
       group: "navigation",
       order: 30,
+    }));
+    this.own(MenusRegistry.appendMenuItem(MenuId.TerminalTitle, {
+      command: {
+        id: CLEAR_TERMINAL_COMMAND_ID,
+        title: "Clear Terminal",
+        tooltip: "Clear Terminal",
+      },
+      group: "1_terminal",
+      order: 10,
     }));
     this.own(MenusRegistry.appendMenuItem(MenuId.TerminalTitle, {
       command: {
@@ -168,6 +201,47 @@ export class TerminalTitleActions extends DisposableOwner {
       group: "navigation",
       order: 50,
     }));
+  }
+
+  private createActionViewItem(action: IAction, contextMenuService: IContextMenuService): ActionViewItem | undefined {
+    switch (action.id) {
+      case ACTIVE_TERMINAL_COMMAND_ID:
+        if (!this.activeInstance) throw new Error("Active Terminal action requires an active instance");
+        return new ActiveTerminalActionViewItem(action, this.activeInstance);
+      case NEW_TERMINAL_COMMAND_ID:
+        return new NewTerminalActionViewItem(action);
+      case SELECT_PROFILE_COMMAND_ID:
+        return new TerminalProfileActionViewItem(action, () => this.profiles, () => this._selectedProfileId, contextMenuService);
+      default:
+        return undefined;
+    }
+  }
+}
+
+class ActiveTerminalActionViewItem extends LabelActionViewItem {
+  constructor(action: IAction, private readonly instance: ITerminalInstance) {
+    const tooltip = instance.title === instance.profile.title
+      ? `Active terminal: ${instance.title}`
+      : `Active terminal: ${instance.title} (${instance.profile.title})`;
+    super(action, {
+      label: instance.title,
+      icon: terminalProfileIcon(instance.profile),
+      ariaLabel: tooltip,
+      tooltip,
+    });
+  }
+
+  override render(container: HTMLElement): void {
+    super.render(container);
+    container.classList.add("zeta-terminal-active-action");
+    container.dataset.state = this.instance.state;
+  }
+}
+
+class NewTerminalActionViewItem extends ButtonActionViewItem {
+  override render(container: HTMLElement): void {
+    super.render(container);
+    container.classList.add("zeta-terminal-new-action");
   }
 }
 
@@ -183,6 +257,7 @@ class TerminalProfileActionViewItem extends DropdownMenuActionViewItem {
   override render(container: HTMLElement): void {
     super.render(container);
     container.classList.add("zeta-terminal-profile-action");
+    container.querySelector("button")?.setAttribute("aria-label", this.action.tooltip);
   }
 }
 
@@ -190,9 +265,8 @@ class TerminalProfileSelectorAction implements IAction {
   constructor(private readonly action: IAction, private readonly profiles: () => readonly ITerminalProfile[], private readonly selectedProfileId: () => string | undefined) {}
 
   get id(): string { return this.action.id; }
-  get label(): string { return this.selectedProfile?.title ?? this.action.label; }
-  get tooltip(): string { return this.selectedProfile ? `Terminal profile: ${this.selectedProfile.title}` : this.action.tooltip; }
-  get icon() { return terminalProfileIcon(this.selectedProfile); }
+  get label(): string { return "New Terminal Profile"; }
+  get tooltip(): string { return this.selectedProfile ? `New terminal profile: ${this.selectedProfile.title}` : this.action.tooltip; }
   get enabled(): boolean { return this.action.enabled; }
   get checked(): boolean | undefined { return this.action.checked; }
 

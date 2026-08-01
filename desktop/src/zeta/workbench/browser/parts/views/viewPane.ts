@@ -6,6 +6,7 @@ import type { Event } from "../../../../base/common/event.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
 import type { IView } from "../../../common/views.js";
+import type { IAction } from "../../../../base/common/actions.js";
 
 /** Runtime inputs supplied by a browser view container to every pane. */
 export interface IViewPaneOptions {
@@ -87,6 +88,11 @@ export abstract class ViewPane extends DisposableOwner implements IView {
   /** Contextual commands rendered by a host title toolbar, when available. */
   get titleActionsElement(): HTMLElement | undefined {
     return undefined;
+  }
+
+  /** Lets a hosting Part merge its overflow commands into this title toolbar. */
+  setTitleSecondaryActions(_actions: readonly IAction[]): boolean {
+    return false;
   }
 
   focus(): void {

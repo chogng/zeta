@@ -42,6 +42,7 @@ test("TerminalService exposes event-driven instances over the process service", 
 
   assert.equal(instance, createdInstance);
   assert.equal(service.activeInstance, instance);
+  assert.equal(instance.title, "cmd");
   assert.equal(new TextDecoder().decode(output[0]), "hello");
   assert.equal(instance.exitCode, 0);
   assert.deepEqual(processService.createCalls, [{
@@ -92,6 +93,8 @@ test("TerminalService keeps multiple instances and safely relaunches after a cra
 
   assert.equal(service.instances.length, 2);
   assert.equal(service.activeInstance, second);
+  assert.equal(first.title, "cmd");
+  assert.equal(second.title, "cmd 2");
   service.setActiveInstance(first);
   assert.equal(service.activeInstance, first);
 

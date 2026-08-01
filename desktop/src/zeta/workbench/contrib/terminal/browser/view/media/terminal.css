@@ -9,29 +9,34 @@
   gap: 2px;
 }
 
+.zeta-terminal-active-action .zeta-action-label-text {
+  max-width: 170px;
+}
+
+.zeta-terminal-new-action {
+  margin-right: -2px;
+}
+
+.zeta-terminal-new-action .zeta-button {
+  border-radius: 4px 0 0 4px;
+}
+
 .zeta-terminal-profile-action .zeta-button {
-  width: auto;
-  min-width: 0;
-  height: 26px;
-  min-height: 26px;
-  gap: 4px;
-  padding: 3px 6px;
+  width: 18px;
+  min-width: 18px;
+  height: var(--zeta-toolbar-action-size);
+  min-height: var(--zeta-toolbar-action-size);
+  padding: 4px 2px;
+  border-radius: 0 4px 4px 0;
 }
 
 .zeta-terminal-profile-action .zeta-button-label {
-  position: static;
-  width: auto;
-  max-width: 170px;
-  height: auto;
-  overflow: hidden;
-  clip-path: none;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  display: none;
 }
 
-.zeta-terminal-profile-action .zeta-icon {
-  width: 16px;
-  height: 16px;
+.zeta-terminal-profile-action .zeta-dropdown-menu-indicator .zeta-icon {
+  width: 14px;
+  height: 14px;
 }
 
 .zeta-terminal-status {

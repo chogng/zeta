@@ -1,5 +1,5 @@
 import type { ActionBarOrientation, ActionViewItemProvider } from "../../../base/browser/ui/actionbar/actionbar.js";
-import { ToolBar, type ToolBarPresentation } from "../../../base/browser/ui/toolbar/toolbar.js";
+import { ToolBar, type MoreActionsPlacement, type ToolBarPresentation } from "../../../base/browser/ui/toolbar/toolbar.js";
 import { Separator, type IAction } from "../../../base/common/actions.js";
 import type { IContextMenuProvider } from "../../../base/browser/contextmenu.js";
 import { createMenuEntryActionViewItem } from "./menuEntryActionViewItem.js";
@@ -12,6 +12,7 @@ export interface WorkbenchToolBarOptions {
   readonly actionViewItemProvider?: ActionViewItemProvider;
   readonly presentation?: ToolBarPresentation;
   readonly highlightToggledItems?: boolean;
+  readonly moreActionsPlacement?: MoreActionsPlacement;
 }
 
 /**
@@ -33,6 +34,7 @@ export class WorkbenchToolBar extends ToolBar {
       orientation: options.orientation,
       presentation: options.presentation,
       highlightToggledItems: options.highlightToggledItems,
+      moreActionsPlacement: options.moreActionsPlacement,
       actionViewItemProvider: (action) =>
         options.actionViewItemProvider?.(action) ??
         createMenuEntryActionViewItem(action, contextMenuProvider),
@@ -48,6 +50,7 @@ export interface MenuWorkbenchToolBarOptions extends WorkbenchToolBarOptions {
 export class MenuWorkbenchToolBar extends WorkbenchToolBar {
   private readonly menuOptions: IMenuActionOptions | undefined;
   private readonly menu: IMenu & Disposable;
+  private supplementalSecondaryActions: readonly IAction[] = [];
 
   constructor(
     menuService: IMenuService,
@@ -68,6 +71,12 @@ export class MenuWorkbenchToolBar extends WorkbenchToolBar {
     this.update();
   }
 
+  /** Adds host-owned overflow actions after this menu's secondary groups. */
+  setSupplementalSecondaryActions(actions: readonly IAction[]): void {
+    this.supplementalSecondaryActions = actions;
+    this.update();
+  }
+
   override setActions(_primaryActions: readonly IAction[], _secondaryActions: readonly IAction[] = []): never {
     throw new Error("MenuWorkbenchToolBar actions are owned by its MenuId");
   }
@@ -77,10 +86,14 @@ export class MenuWorkbenchToolBar extends WorkbenchToolBar {
     const primary = groups
       .filter(([group]) => group === "navigation")
       .flatMap(([, actions]) => actions);
-    const secondary = Separator.join(
+    const menuSecondary = Separator.join(
       ...groups
         .filter(([group]) => group !== "navigation")
         .map(([, actions]) => [...actions]),
+    );
+    const secondary = Separator.join(
+      menuSecondary,
+      [...this.supplementalSecondaryActions],
     );
     super.setActions(primary, secondary);
   }

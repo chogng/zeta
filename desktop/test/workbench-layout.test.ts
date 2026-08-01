@@ -747,6 +747,13 @@ test("CompositeBar moves non-fitting label tabs into its overflow menu", () => {
   assert.ok(hideOverflowMenu);
   hideOverflowMenu();
   assert.equal(overflowButton.getAttribute("aria-expanded"), "false");
+  compositeBar.setOverflowPresentation("external");
+  assert.equal(overflowButton.hidden, true);
+  assert.equal(overflowButton.classList.contains("hidden"), true);
+  assert.deepEqual(
+    compositeBar.getOverflowActions().map((action) => action.label),
+    ["Problems", "Output"],
+  );
 
   disposables.dispose();
   dom.window.close();

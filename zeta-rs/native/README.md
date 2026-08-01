@@ -121,7 +121,7 @@ authority。下表把仍保留的历史 shell vocabulary 映射到当前产品�
 | `session_context_menu` | 右键当前 Session Tab 后，用 `ContextMenu` 呈现 Pin、Close、Rename、Fork；拥有 outside click、Escape、键盘导航和焦点恢复 | Session action surface | 通用基座提供柔和阴影、2px padding 与 4px radius，打开默认选择 Pin；命令映射已建立，真实 Session mutation 等待多会话 runtime |
 | `zeta-editor::CodeEditor` | 多行 Unicode 编辑、selection、history、IME/syntax projection、Document/Compact presentation 与可见行绘制 | CodeEditor | 委托；Composer 已接入平台事件、focus、caret blink、IME 和 pointer caret，文件 EditorHost 输入尚未接入 |
 | `agent_sidebar_layout` / `agent_sidebar_navigation` / `agent_sidebar_toolbar` | 顶部 toolbar 左侧 ActionBar 切换 Changes/Files，右侧仅在 Files 显示 Refresh、ahead/behind 和 Search | Agent Sidebar navigation | ✅；ActionBar 与 active content pane 使用同一 retained workspace state |
-| `explorer_tree` / `explorer_pane` / `AgentSidebarWorkspace` | arena 保存稳定 mounted-node ID、parent/children、懒加载和展开状态；`zeta-ui::TreeView` 虚拟化层级行，Search 结果继续使用 ListView | Files Pane | ✅；pointer/Enter/Space 展开收起，Up/Down 遍历，Left 折叠/转父项，Right 展开/转首个 child；文件打开尚未接入 |
+| `explorer_tree` / `explorer_pane` / `AgentSidebarWorkspace` | arena 保存稳定 mounted-node ID、parent/children、懒加载和展开状态；目录枚举统一通过 App Server `fs/readDirectory`；`zeta-ui::TreeView` 虚拟化层级行，Search 结果继续使用 ListView | Files Pane | ✅；pointer/Enter/Space 展开收起，Up/Down 遍历，Left 折叠/转父项，Right 展开/转首个 child；文件打开尚未接入 |
 | `editor_pane` | 保存 Git changed-file collection、整体滚动位置、scrollbar pointer capture/animation、每文件 `DiffEditorState` 和 `MultiDiffEditorLayout`，把全部文件绑定为 MultiDiffEditor items，并把 fold controls 注册为可访问 Button | Changes Pane | ✅；启动、Refresh、fold state 改变和 shell command completion 会重建 diff/layout snapshot；wheel 直接复用 metrics |
 | `zeta-editor::DiffEditor` / `MultiDiffEditor` | DiffEditor 提供 SideBySide/Unified presentation 与未修改区间折叠投影；MultiDiffEditor 再纵向组合多个文件 section、发布每文件 fold identity 并裁剪不可见项 | 多文件差异文档 | Changes 固定宽度栏显式选择 Unified；文件读取、diff 计算、持久状态与产品输入路由不属于 editor crate |
 | terminal grid / PTY / scrollback | grid、PTY 与会话内有界回滚已接通，跨重启持久化尚无 | 活动 Terminal Session runtime | 部分具备 |
@@ -230,11 +230,13 @@ Changes 选择、文件搜索与 changed-file collection；Refresh、Composer Ch
 command completion 通过 App Server `git/textDiff` 重建上游领先/落后距离、
 HEAD/working-tree `DiffDocument` 与增删行统计。
 Files pane 的层级模式由 `explorer_tree::ExplorerTree` 保存 arena、parent/children、稳定 mounted
-node ID 和展开状态；目录首次展开时才读取直接子项，收起/再次展开复用已加载 children。
+node ID 和展开状态；根目录和首次展开的子目录都由 `AgentSession` 通过 App Server
+`fs/readDirectory` 读取 workspace-relative 直接子项，Tree model 不直接访问文件系统；收起/再次展开
+复用已加载 children。App Server `fs/changed` 通知会重新读取根目录，当前仍不恢复刷新前的展开状态。
 `zeta-ui::TreeView` 在 24px 固定行高 ListView 上投影 depth、disclosure 和 content geometry，
 只为 visible range 注册 `Tree`/`TreeItem` accessibility node，paint 使用两行 overscan。
 Search 结果仍是扁平 List/ListItem。滚轮更新 workspace-owned `ScrollState`，查询、Refresh 或
-workspace 替换会回到顶部。文件打开、重命名、拖放与外部文件变化下的展开状态恢复尚未接入。
+workspace 替换会回到顶部。文件打开、重命名、拖放与刷新后的展开状态恢复尚未接入。
 `EditorPaneState` 保存整体 `zeta-ui::ScrollState` 和每文件 `DiffEditorState`；
 `MultiDiffEditor` 在一个纵向文档中连续绘制所有可见文件 section，每段再复用
 `DiffEditorPresentation::Unified` 将删除/新增行投影为单列内容。section 高度由

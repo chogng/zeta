@@ -12,6 +12,7 @@
   font: inherit;
   cursor: pointer;
 }
+.zeta-button.hidden { display: none; }
 .zeta-button:hover {
   background: var(--zeta-button-hover-background);
 }

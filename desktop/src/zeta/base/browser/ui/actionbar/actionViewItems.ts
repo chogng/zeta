@@ -1,10 +1,14 @@
-import {
-  Separator,
-  type IAction,
-} from "../../../common/actions.js";
+import { Separator, type IAction } from "../../../common/actions.js";
+import type { Icon } from "../../../common/icon.js";
 import { DisposableOwner } from "../../../common/lifecycle.js";
 import { assertDefined } from "../../../common/types.js";
-import { Button } from "../button/button.js";
+import { addDisposableListener } from "../../dom.js";
+import { setAriaAttribute } from "../aria/aria.js";
+import { Button, type ButtonOptions } from "../button/button.js";
+import { getHoverDelegate, type IManagedHover } from "../hover/hoverDelegate.js";
+import { appendIcon } from "../icon/icon.js";
+
+const ActionHoverGroupId = "actions";
 
 /**
  * Browser representation of one action inside an ActionBar.
@@ -23,6 +27,23 @@ export abstract class ActionViewItem extends DisposableOwner {
   abstract setTabbable(tabbable: boolean): void;
 
   focus(): void {}
+
+  /** Creates a Button using the shared delay group for adjacent actions. */
+  protected createButton(options: ButtonOptions): Button {
+    return this.own(new Button({
+      ...options,
+      hoverGroupId: options.hoverGroupId ?? ActionHoverGroupId,
+    }));
+  }
+
+  /** Installs an action tooltip for view items that render a custom target. */
+  protected setupHover(target: HTMLElement, content: string): IManagedHover {
+    return this.own(getHoverDelegate().setupHover({
+      target,
+      content,
+      groupId: ActionHoverGroupId,
+    }));
+  }
 }
 
 /** Default button representation for a runnable action. */
@@ -37,7 +58,7 @@ export class ButtonActionViewItem extends ActionViewItem {
     if (this._button) {
       throw new Error(`Action view item is already rendered: ${this.action.id}`);
     }
-    this._button = this.own(new Button({
+    this._button = this.createButton({
       label: this.action.label,
       ownerDocument: container.ownerDocument,
       icon: this.action.icon,
@@ -45,7 +66,7 @@ export class ButtonActionViewItem extends ActionViewItem {
       enabled: this.action.enabled,
       checked: this.action.checked,
       onClick: () => this.runAction(),
-    }));
+    });
     container.append(this._button.element);
   }
 
@@ -64,6 +85,63 @@ export class ButtonActionViewItem extends ActionViewItem {
 
   protected runAction(): unknown {
     return this.action.run();
+  }
+}
+
+export interface LabelActionViewItemOptions {
+  readonly label?: string;
+  readonly icon?: Icon;
+  readonly ariaLabel?: string;
+  readonly tooltip?: string;
+}
+
+/** Compact icon-and-text representation owned by an ActionBar. */
+export class LabelActionViewItem extends ActionViewItem {
+  private button: HTMLButtonElement | undefined;
+
+  constructor(action: IAction, private readonly options: LabelActionViewItemOptions = {}) {
+    super(action);
+  }
+
+  override render(container: HTMLElement): void {
+    if (this.button) {
+      throw new Error(`Action view item is already rendered: ${this.action.id}`);
+    }
+    const button = container.ownerDocument.createElement("button");
+    const label = container.ownerDocument.createElement("span");
+    button.className = "zeta-action-label";
+    button.type = "button";
+    button.disabled = !this.action.enabled;
+    if (this.action.checked !== undefined) {
+      button.classList.toggle("checked", this.action.checked);
+      setAriaAttribute(button, "pressed", this.action.checked);
+    }
+    if (this.options.ariaLabel) {
+      setAriaAttribute(button, "label", this.options.ariaLabel);
+    }
+    const icon = this.options.icon ?? this.action.icon;
+    if (icon) {
+      const iconContainer = container.ownerDocument.createElement("span");
+      iconContainer.className = "zeta-action-label-icon";
+      appendIcon(icon, iconContainer);
+      button.append(iconContainer);
+    }
+    label.className = "zeta-action-label-text";
+    label.textContent = this.options.label ?? this.action.label;
+    button.append(label);
+    this.own(addDisposableListener(button, "click", () => this.action.run()));
+    this.setupHover(button, this.options.tooltip ?? this.action.tooltip);
+    this.defer(() => button.remove());
+    this.button = button;
+    container.append(button);
+  }
+
+  override focus(): void {
+    this.button?.focus();
+  }
+
+  override setTabbable(tabbable: boolean): void {
+    if (this.button) this.button.tabIndex = tabbable ? 0 : -1;
   }
 }
 

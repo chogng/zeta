@@ -198,3 +198,111 @@ test("menu toolbar keeps navigation inline and moves other groups into More Acti
   dom.window.close();
   Reflect.deleteProperty(globalThis, "window");
 });
+
+test("More Actions opens an anchored Menu with actionable list items", async () => {
+  const dom = new JSDOM("<!doctype html><body><main></main></body>");
+  Object.defineProperty(dom.window.HTMLElement.prototype, "scrollTo", {
+    configurable: true,
+    value: () => {},
+  });
+  for (const [name, value] of Object.entries({
+    window: dom.window,
+    Node: dom.window.Node,
+    Element: dom.window.Element,
+    HTMLElement: dom.window.HTMLElement,
+  })) {
+    Object.defineProperty(globalThis, name, {
+      configurable: true,
+      value,
+    });
+  }
+  const [
+    { Separator },
+    { toDisposable },
+    { ToolBar },
+    { ContextKeyService },
+    { MenuService },
+    { ServiceCollection },
+    { CommandService },
+    { BrowserContextViewService },
+    { BrowserContextMenuService },
+  ] = await Promise.all([
+    import("../src/zeta/base/common/actions.js"),
+    import("../src/zeta/base/common/lifecycle.js"),
+    import("../src/zeta/base/browser/ui/toolbar/toolbar.js"),
+    import("../src/zeta/platform/contextkey/common/contextkey.js"),
+    import("../src/zeta/platform/actions/common/menuService.js"),
+    import("../src/zeta/platform/instantiation/common/instantiation.js"),
+    import("../src/zeta/workbench/services/commands/common/commandService.js"),
+    import("../src/zeta/platform/contextview/browser/contextViewService.js"),
+    import("../src/zeta/platform/contextview/browser/contextMenuService.js"),
+  ]);
+  const host = dom.window.document.querySelector<HTMLElement>("main");
+  assert.ok(host);
+  using contexts = new ContextKeyService();
+  const commands = new CommandService(new ServiceCollection());
+  const menus = new MenuService(commands, contexts);
+  using contextViews = new BrowserContextViewService(host);
+  const noEvent = () => toDisposable(() => {});
+  using contextMenus = new BrowserContextMenuService(
+    menus,
+    {
+      inChordMode: false,
+      onDidUpdateKeybindings: noEvent,
+      resolveKeybinding() { throw new Error("Not used"); },
+      resolveUserBinding() { return undefined; },
+      lookupKeybindings() { return []; },
+      lookupKeybinding() { return undefined; },
+    },
+    contextViews,
+  );
+  let cleared = 0;
+  using toolbar = new ToolBar({
+    contextMenuProvider: contextMenus,
+    ownerDocument: dom.window.document,
+    moreActionsPlacement: { beforeActionId: "maximize" },
+  });
+  toolbar.setActions(
+    [testAction("kill"), testAction("maximize"), testAction("close")],
+    [
+      testAction("clear", () => cleared++),
+      new Separator(),
+      { ...testAction("output"), checked: true },
+    ],
+  );
+  host.append(toolbar.element);
+
+  const more = toolbar.element.querySelector<HTMLButtonElement>("[data-action-id='zeta.toolbar.moreActions'] button");
+  assert.ok(more);
+  more.click();
+
+  const popup = host.querySelector<HTMLElement>(".zeta-context-view .zeta-menu");
+  assert.ok(popup);
+  assert.equal(popup.getAttribute("role"), "menu");
+  assert.deepEqual(
+    [...popup.querySelectorAll<HTMLElement>("[role='menuitem'], [role='menuitemcheckbox']")]
+      .map((item) => item.textContent),
+    ["clear", "output"],
+  );
+  assert.equal(popup.querySelectorAll(".zeta-action-view-item-separator").length, 1);
+  assert.equal(popup.querySelector("[role='menuitemcheckbox']")?.getAttribute("aria-checked"), "true");
+  popup.querySelector<HTMLButtonElement>("[data-action-id='clear'] button")?.click();
+  await Promise.resolve();
+  assert.equal(cleared, 1);
+  assert.equal(more.getAttribute("aria-expanded"), "false");
+
+  dom.window.close();
+  for (const name of ["window", "Node", "Element", "HTMLElement"]) {
+    Reflect.deleteProperty(globalThis, name);
+  }
+});
+
+function testAction(id: string, run: () => unknown = () => undefined) {
+  return {
+    id,
+    label: id,
+    tooltip: id,
+    enabled: true,
+    run,
+  };
+}

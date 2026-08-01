@@ -82,6 +82,7 @@ impl NativeApp {
                     .apply_git_projection(Some(&projection));
                 self.agent_sidebar_workspace
                     .replace_workspace(&self.workspace_context);
+                self.refresh_files_from_app_server();
                 self.dismiss_git_branch_context_menu();
             }
         }
