@@ -3,7 +3,7 @@ import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
 import type { ZetaRendererApi } from "../../../../../platform/app-server/common/renderer-api.js";
 import type { ICommandService } from "../../../../../platform/commands/common/commands.js";
 import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextMenu.js";
-import type { IActiveSessionThread, IChatDraft, IWorkbenchSessionService } from "../../../../services/sessions/common/sessionService.js";
+import type { IActiveSessionThread, IUntitledChatSession, IWorkbenchSessionService } from "../../../../services/sessions/common/sessionService.js";
 import type { ChatInputDelegate } from "../input/chatInput.js";
 import { ChatInputWidget } from "../input/chatInputWidget.js";
 import { ChatListWidget } from "../list/chatListWidget.js";
@@ -43,8 +43,8 @@ export class ChatPane extends DisposableOwner {
     return this.model.sessionId;
   }
 
-  get draftId(): string | undefined {
-    return this.model.draftId;
+  get untitledSessionId(): string | undefined {
+    return this.model.untitledSessionId;
   }
 
   get threadId(): ThreadId | undefined {
@@ -58,11 +58,11 @@ export class ChatPane extends DisposableOwner {
     return this.model.selectThread(active);
   }
 
-  selectDraft(draft: IChatDraft): void {
-    if (draft.draftId !== this.draftId) {
-      throw new Error(`ChatPane cannot select another Chat Draft: ${draft.draftId}`);
+  selectUntitledSession(session: IUntitledChatSession): void {
+    if (session.untitledSessionId !== this.untitledSessionId) {
+      throw new Error(`ChatPane cannot select another Untitled Chat Session: ${session.untitledSessionId}`);
     }
-    this.model.selectDraft(draft);
+    this.model.selectUntitledSession(session);
   }
 
   setTabId(tabId: string | undefined): void {
@@ -102,12 +102,12 @@ export class ChatPane extends DisposableOwner {
   private syncIdentity(): void {
     const sessionId = this.model.sessionId;
     const threadId = this.model.threadId;
-    const draftId = this.model.draftId;
+    const untitledSessionId = this.model.untitledSessionId;
     if (sessionId) this.element.dataset.sessionId = sessionId;
     else this.element.removeAttribute("data-session-id");
     if (threadId) this.element.dataset.threadId = threadId;
     else this.element.removeAttribute("data-thread-id");
-    if (draftId) this.element.dataset.draftId = draftId;
-    else this.element.removeAttribute("data-draft-id");
+    if (untitledSessionId) this.element.dataset.untitledSessionId = untitledSessionId;
+    else this.element.removeAttribute("data-untitled-session-id");
   }
 }

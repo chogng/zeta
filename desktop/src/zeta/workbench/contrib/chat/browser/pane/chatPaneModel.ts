@@ -3,7 +3,7 @@ import { Emitter, type Event } from "../../../../../base/common/event.js";
 import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
 import { createUuid } from "../../../../../base/common/uuid.js";
 import type { ZetaRendererApi } from "../../../../../platform/app-server/common/renderer-api.js";
-import type { IActiveSessionThread, IChatDraft, IWorkbenchSessionService } from "../../../../services/sessions/common/sessionService.js";
+import type { IActiveSessionThread, IUntitledChatSession, IWorkbenchSessionService } from "../../../../services/sessions/common/sessionService.js";
 import { chatListItem, type IChatListItem } from "../list/chatListItems.js";
 
 export type ChatPaneState =
@@ -15,7 +15,7 @@ export type ChatPaneState =
 /** The local or durable identity currently projected by a Chat pane. */
 export type ChatPaneSelection =
   | { readonly kind: "session"; readonly active: IActiveSessionThread }
-  | { readonly kind: "draft"; readonly draft: IChatDraft };
+  | { readonly kind: "untitled"; readonly session: IUntitledChatSession };
 
 /**
  * Projection of one Chat tab, before or after it acquires a durable Thread.
@@ -89,8 +89,8 @@ export class ChatPaneModel extends DisposableOwner {
     return this.activeSession?.session.sessionId;
   }
 
-  get draftId(): string | undefined {
-    return this.selection.kind === "draft" ? this.selection.draft.draftId : undefined;
+  get untitledSessionId(): string | undefined {
+    return this.selection.kind === "untitled" ? this.selection.session.untitledSessionId : undefined;
   }
 
   get threadId(): ThreadId | undefined {
@@ -106,8 +106,8 @@ export class ChatPaneModel extends DisposableOwner {
   }
 
   get selectedModel(): ModelRef | undefined {
-    return this.selection.kind === "draft"
-      ? this.selection.draft.model
+    return this.selection.kind === "untitled"
+      ? this.selection.session.model
       : this.selection.active.session.model ?? undefined;
   }
 
@@ -155,17 +155,17 @@ export class ChatPaneModel extends DisposableOwner {
     await this.subscribe(active);
   }
 
-  selectDraft(draft: IChatDraft): void {
-    if (this.selection.kind !== "draft" || this.selection.draft.draftId !== draft.draftId) {
-      throw new Error(`ChatPaneModel cannot select another Chat Draft: ${draft.draftId}`);
+  selectUntitledSession(session: IUntitledChatSession): void {
+    if (this.selection.kind !== "untitled" || this.selection.session.untitledSessionId !== session.untitledSessionId) {
+      throw new Error(`ChatPaneModel cannot select another Untitled Chat Session: ${session.untitledSessionId}`);
     }
-    this.selection = { kind: "draft", draft };
+    this.selection = { kind: "untitled", session };
     this._onDidChange.fire();
   }
 
   async selectModel(model: ModelRef): Promise<void> {
-    if (this.selection.kind === "draft") {
-      this.sessionService.setDraftModel(this.selection.draft.draftId, model);
+    if (this.selection.kind === "untitled") {
+      this.sessionService.setUntitledSessionModel(this.selection.session.untitledSessionId, model);
       return;
     }
     await this.sessionService.setModel(this.selection.active.session.sessionId, model);
@@ -249,9 +249,9 @@ export class ChatPaneModel extends DisposableOwner {
 
   private async _initialize(): Promise<void> {
     this.setState("loading");
-    if (this.selection.kind === "draft") {
+    if (this.selection.kind === "untitled") {
       await this.loadCatalogs();
-      if (!this.disposed && this.selection.kind === "draft") {
+      if (!this.disposed && this.selection.kind === "untitled") {
         this.setState("ready");
       }
       return;
@@ -472,14 +472,14 @@ export class ChatPaneModel extends DisposableOwner {
 
   private async ensureActiveSession(): Promise<IActiveSessionThread> {
     if (this.selection.kind === "session") return this.selection.active;
-    const draft = this.selection.draft;
-    const created = await this.sessionService.materializeDraft(draft.draftId);
+    const untitledSession = this.selection.session;
+    const created = await this.sessionService.materializeUntitledSession(untitledSession.untitledSessionId);
     if (this.disposed) {
-      this.sessionService.promoteDraft(draft.draftId, created);
-      throw new Error("Chat Draft was closed while its Session was being created");
+      this.sessionService.promoteUntitledSession(untitledSession.untitledSessionId, created);
+      throw new Error("Untitled Chat Session was closed while its durable Session was being created");
     }
     this.selection = { kind: "session", active: created };
-    this.sessionService.promoteDraft(draft.draftId, created);
+    this.sessionService.promoteUntitledSession(untitledSession.untitledSessionId, created);
     await this.subscribe(created);
     return created;
   }

@@ -115,6 +115,9 @@ fn platform_profiles(environment: &HashMap<String, String>) -> Vec<TerminalProfi
             profiles.push(profile("git-bash", "Git Bash", git_bash));
         }
     }
+    if let Some(program) = resolve_on_path(environment, "zsh.exe") {
+        profiles.push(profile("zsh", "Zsh", program));
+    }
     profiles
 }
 

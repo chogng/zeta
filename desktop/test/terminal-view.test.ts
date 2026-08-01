@@ -57,11 +57,11 @@ const contextMenuService: IContextMenuService = {
   hideContextMenu() {},
 };
 
-test("Terminal title actions separate active identity from new-terminal profile selection", async () => {
+test("Terminal profile dropdown launches the selected shell profile", async () => {
   const ownerDocument = browserEnvironment.window.document;
   ownerDocument.body.replaceChildren();
   shownProfileActions = [];
-  const selectedProfiles: Array<string | undefined> = [];
+  const createdProfiles: Array<string | undefined> = [];
   let focusCount = 0;
   let clearCount = 0;
   using contextKeyService = new ContextKeyService();
@@ -72,8 +72,8 @@ test("Terminal title actions separate active identity from new-terminal profile 
     menuService,
     contextMenuService,
     contextKeyService,
-    createTerminal: () => {
-      selectedProfiles.push(titleActions.selectedProfileId);
+    createTerminal: (profileId) => {
+      createdProfiles.push(profileId);
     },
     focusActive: () => focusCount++,
     relaunchActive() {},
@@ -97,8 +97,8 @@ test("Terminal title actions separate active identity from new-terminal profile 
   assert.equal(toolbar.classList.contains("highlight-toggled"), true);
   const profile = toolbar.querySelector<HTMLButtonElement>(".zeta-terminal-profile-action .zeta-button");
   assert.ok(profile);
-  assert.equal(profile.querySelector(".zeta-button-label")?.textContent, "New Terminal Profile");
-  assert.equal(profile.getAttribute("aria-label"), "New terminal profile: Command Prompt");
+  assert.equal(profile.querySelector(".zeta-button-label")?.textContent, "Select Terminal Profile");
+  assert.equal(profile.getAttribute("aria-label"), "Select Terminal Profile");
   assert.ok(profile.querySelector("svg.zeta-icon"));
   const newTerminal = [...toolbar.querySelectorAll("button")].find((button) => button.textContent === "New Terminal");
   assert.ok(newTerminal);
@@ -118,7 +118,7 @@ test("Terminal title actions separate active identity from new-terminal profile 
   assert.ok(currentNewTerminal);
   currentNewTerminal.click();
   await Promise.resolve();
-  assert.deepEqual(selectedProfiles, ["cmd"]);
+  assert.deepEqual(createdProfiles, [undefined]);
   titleActions.setCreating(true);
   assert.equal([...toolbar.querySelectorAll("button")].find((button) => button.textContent === "New Terminal")?.disabled, true);
   titleActions.setCreating(false);
@@ -170,13 +170,12 @@ test("Terminal title actions separate active identity from new-terminal profile 
   const currentProfile = toolbar.querySelector<HTMLButtonElement>(".zeta-terminal-profile-action .zeta-button");
   assert.ok(currentProfile);
   currentProfile.click();
+  const commandPrompt = shownProfileActions.find((action) => action.label === "Command Prompt (Default)");
   const powerShell = shownProfileActions.find((action) => action.label === "PowerShell");
+  assert.ok(commandPrompt);
   assert.ok(powerShell);
+  assert.equal(commandPrompt.checked, true);
+  assert.equal(powerShell.checked, false);
   await powerShell.run();
-  assert.equal(toolbar.querySelector(".zeta-terminal-profile-action .zeta-button")?.getAttribute("aria-label"), "New terminal profile: PowerShell");
-  const nextNewTerminal = [...toolbar.querySelectorAll("button")].find((button) => button.textContent === "New Terminal");
-  assert.ok(nextNewTerminal);
-  nextNewTerminal.click();
-  await Promise.resolve();
-  assert.deepEqual(selectedProfiles, ["cmd", "pwsh"]);
+  assert.deepEqual(createdProfiles, [undefined, "pwsh"]);
 });

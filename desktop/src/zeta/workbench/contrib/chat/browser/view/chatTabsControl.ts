@@ -21,7 +21,7 @@ export interface ChatTabsDelegate {
   closeTab(tabId: string): void;
 }
 
-/** Maps local draft and durable Session tabs onto the shared TabList. */
+/** Maps untitled and durable Chat sessions onto the shared TabList. */
 export class ChatTabsControl extends DisposableOwner {
   readonly element: HTMLDivElement;
   private readonly tabList: TabList<string>;

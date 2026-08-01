@@ -24,3 +24,18 @@ fn discovered_profiles_have_one_default_and_unique_programs() {
         .collect::<HashSet<_>>();
     assert_eq!(programs.len(), profiles.len());
 }
+
+#[cfg(windows)]
+#[test]
+fn windows_discovers_zsh_from_path() {
+    let directory = tempfile::tempdir().unwrap();
+    std::fs::write(directory.path().join("zsh.exe"), []).unwrap();
+    let mut environment = HashMap::new();
+    environment.insert(
+        "PATH".to_owned(),
+        directory.path().to_string_lossy().into_owned(),
+    );
+
+    let profiles = platform_profiles(&environment);
+    assert!(profiles.iter().any(|profile| profile.profile_id == "zsh"));
+}

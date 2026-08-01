@@ -9,7 +9,7 @@ import type { ICommandService } from "../../../../../platform/commands/common/co
 import { SidebarPart } from "../../../../browser/parts/sidebar/sidebarPart.js";
 import { ViewPane, type IViewPaneOptions } from "../../../../browser/parts/views/viewPane.js";
 import { ViewContainerLocation } from "../../../../common/views.js";
-import type { IActiveSessionThread, IChatDraft, IWorkbenchSessionService } from "../../../../services/sessions/common/sessionService.js";
+import type { IActiveSessionThread, IUntitledChatSession, IWorkbenchSessionService } from "../../../../services/sessions/common/sessionService.js";
 import type { IViewDescriptorService } from "../../../../services/views/common/viewDescriptorService.js";
 import { AgentSidebarVisibleContext } from "../../common/chat.js";
 import { ChatPane } from "../pane/chatPane.js";
@@ -27,9 +27,9 @@ interface ChatPaneEntry {
 /**
  * Chat tab container.
  *
- * Each local draft or active Session owns one retained ChatPane. Thread
- * selection remains internal to persisted panes, while draft tabs materialize
- * only when their first message is sent.
+ * Each untitled or active durable Session owns one retained ChatPane. Thread
+ * selection remains internal to durable panes, while untitled sessions
+ * materialize only when their first message is sent.
  */
 export class ChatViewPane extends ViewPane {
   private readonly api: ZetaRendererApi;
@@ -115,8 +115,8 @@ export class ChatViewPane extends ViewPane {
     this.rekeyMaterializedPanes();
     const entries: ChatPaneEntry[] = [];
     const retainedPaneIds = new Set<string>();
-    for (const draft of this.sessionService.drafts) {
-      const paneId = draftPaneId(draft);
+    for (const untitledSession of this.sessionService.untitledSessions) {
+      const paneId = untitledSessionPaneId(untitledSession);
       retainedPaneIds.add(paneId);
       let pane = this.panes.get(paneId);
       if (!pane) {
@@ -124,7 +124,7 @@ export class ChatViewPane extends ViewPane {
           this.element.ownerDocument,
           `zeta-chat-pane-${++chatPaneInstanceId}`,
           this.api,
-          { kind: "draft", draft },
+          { kind: "untitled", session: untitledSession },
           this.sessionService,
           this.contextMenuService,
           this.commandService,
@@ -132,9 +132,9 @@ export class ChatViewPane extends ViewPane {
         setDisposableOwner(pane, this);
         this.panes.set(paneId, pane);
       } else {
-        pane.selectDraft(draft);
+        pane.selectUntitledSession(untitledSession);
       }
-      entries.push({ tabId: pane.element.id, label: draft.title.trim() || "New Chat", pane });
+      entries.push({ tabId: pane.element.id, label: untitledSession.title.trim() || "New Chat", pane });
     }
     for (const session of this.sessionService.sessions) {
       if (session.status !== "active") continue;
@@ -197,9 +197,9 @@ export class ChatViewPane extends ViewPane {
   private selectTab(tabId: string): void {
     const pane = this.paneForTabId(tabId);
     if (!pane) return;
-    const draftId = pane.draftId;
-    if (draftId) {
-      this.sessionService.selectDraft(draftId);
+    const untitledSessionId = pane.untitledSessionId;
+    if (untitledSessionId) {
+      this.sessionService.selectUntitledSession(untitledSessionId);
       return;
     }
     const sessionId = pane.sessionId;
@@ -210,9 +210,9 @@ export class ChatViewPane extends ViewPane {
   private closeTab(tabId: string): void {
     const pane = this.paneForTabId(tabId);
     if (!pane) return;
-    const draftId = pane.draftId;
-    if (draftId) {
-      this.sessionService.discardDraft(draftId);
+    const untitledSessionId = pane.untitledSessionId;
+    if (untitledSessionId) {
+      this.sessionService.discardUntitledSession(untitledSessionId);
       return;
     }
     const sessionId = pane.sessionId;
@@ -221,8 +221,8 @@ export class ChatViewPane extends ViewPane {
   }
 
   private activePaneId(): string | undefined {
-    const draft = this.sessionService.activeDraft;
-    if (draft) return draftPaneId(draft);
+    const untitledSession = this.sessionService.activeUntitledSession;
+    if (untitledSession) return untitledSessionPaneId(untitledSession);
     const active = this.sessionService.active;
     return active ? sessionPaneId(active.session) : undefined;
   }
@@ -262,8 +262,8 @@ function rootThread(session: Session): SessionThread | undefined {
   return session.threads.find((thread) => thread.status === "active" && thread.origin.type === "root");
 }
 
-function draftPaneId(draft: IChatDraft): string {
-  return `draft:${draft.draftId}`;
+function untitledSessionPaneId(session: IUntitledChatSession): string {
+  return `untitled:${session.untitledSessionId}`;
 }
 
 function sessionPaneId(session: Session): string {

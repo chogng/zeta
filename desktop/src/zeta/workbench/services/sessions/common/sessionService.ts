@@ -12,13 +12,14 @@ export interface IActiveSessionThread {
 }
 
 /**
- * An unsaved Chat tab that has not yet acquired a durable Session identity.
+ * An untitled Chat session that has not yet acquired a durable Session identity.
  *
- * Drafts are window-local presentation state. They retain user choices until
- * the first send materializes the corresponding Session and root Thread.
+ * Untitled sessions are window-local presentation state. They retain user
+ * choices until the first send materializes the corresponding durable Session
+ * and root Thread.
  */
-export interface IChatDraft {
-  readonly draftId: string;
+export interface IUntitledChatSession {
+  readonly untitledSessionId: string;
   readonly title: string;
   readonly model: ModelRef | undefined;
 }
@@ -32,30 +33,31 @@ export type WorkbenchSessionState =
   | "error";
 
 /**
- * Owns durable Session selection and local Chat drafts for one workbench window.
+ * Owns durable Session selection and untitled Chat sessions for one workbench window.
  *
  * Feature views consume the durable selection instead of choosing an
- * arbitrary Thread independently. A draft becomes durable only when a Chat
- * pane asks to materialize it for its first send. Once initialization settles,
- * the service keeps either an active Thread or an active local draft selected.
+ * arbitrary Thread independently. An untitled session becomes durable only
+ * when a Chat pane asks to materialize it for its first send. Once initialization
+ * settles, the service keeps either an active Thread or an active untitled
+ * session selected.
  */
 export interface IWorkbenchSessionService {
   readonly onDidChange: Event<void>;
   readonly sessions: readonly Session[];
   readonly active: IActiveSessionThread | undefined;
-  readonly drafts: readonly IChatDraft[];
-  readonly activeDraft: IChatDraft | undefined;
+  readonly untitledSessions: readonly IUntitledChatSession[];
+  readonly activeUntitledSession: IUntitledChatSession | undefined;
   readonly state: WorkbenchSessionState;
   readonly error: string | undefined;
 
   initialize(): Promise<void>;
   selectThread(sessionId: SessionId, threadId: ThreadId): void;
-  createDraft(title?: string): IChatDraft;
-  selectDraft(draftId: string): void;
-  discardDraft(draftId: string): void;
-  setDraftModel(draftId: string, model: ModelRef): void;
-  materializeDraft(draftId: string): Promise<IActiveSessionThread>;
-  promoteDraft(draftId: string, active: IActiveSessionThread): void;
+  createUntitledSession(title?: string): IUntitledChatSession;
+  selectUntitledSession(untitledSessionId: string): void;
+  discardUntitledSession(untitledSessionId: string): void;
+  setUntitledSessionModel(untitledSessionId: string, model: ModelRef): void;
+  materializeUntitledSession(untitledSessionId: string): Promise<IActiveSessionThread>;
+  promoteUntitledSession(untitledSessionId: string, active: IActiveSessionThread): void;
   ensureActiveThread(): Promise<IActiveSessionThread>;
   startNewSession(title?: string): Promise<IActiveSessionThread>;
   archiveSession(sessionId: SessionId): Promise<void>;
@@ -80,8 +82,8 @@ export class WorkbenchSessionService
   private readonly _onDidChange = this.own(new Emitter<void>());
   private _sessions: readonly Session[] = [];
   private _active: IActiveSessionThread | undefined;
-  private _drafts: readonly IChatDraft[] = [];
-  private _activeDraftId: string | undefined;
+  private _untitledSessions: readonly IUntitledChatSession[] = [];
+  private _activeUntitledSessionId: string | undefined;
   private _state: WorkbenchSessionState = "loading";
   private _error: string | undefined;
   private initializePromise: Promise<void> | undefined;
@@ -101,13 +103,13 @@ export class WorkbenchSessionService
     return this._active;
   }
 
-  get drafts(): readonly IChatDraft[] {
-    return this._drafts;
+  get untitledSessions(): readonly IUntitledChatSession[] {
+    return this._untitledSessions;
   }
 
-  get activeDraft(): IChatDraft | undefined {
-    return this._drafts.find(
-      (draft) => draft.draftId === this._activeDraftId,
+  get activeUntitledSession(): IUntitledChatSession | undefined {
+    return this._untitledSessions.find(
+      (session) => session.untitledSessionId === this._activeUntitledSessionId,
     );
   }
 
@@ -138,62 +140,62 @@ export class WorkbenchSessionService
     if (!session || !thread || session.status !== "active") {
       throw new Error(`Active Session Thread is not available: ${threadId}`);
     }
-    if (this._active?.session.sessionId === sessionId && this._active.threadId === threadId && this._activeDraftId === undefined) return;
+    if (this._active?.session.sessionId === sessionId && this._active.threadId === threadId && this._activeUntitledSessionId === undefined) return;
     this._active = { session, threadId };
-    this._activeDraftId = undefined;
+    this._activeUntitledSessionId = undefined;
     this._error = undefined;
     this._onDidChange.fire();
   }
 
-  createDraft(title = "New Chat"): IChatDraft {
-    const draft = this.addDraft(title);
-    this._activeDraftId = draft.draftId;
+  createUntitledSession(title = "New Chat"): IUntitledChatSession {
+    const session = this.addUntitledSession(title);
+    this._activeUntitledSessionId = session.untitledSessionId;
     this._error = undefined;
     this._onDidChange.fire();
-    return draft;
+    return session;
   }
 
-  selectDraft(draftId: string): void {
-    if (!this._drafts.some((draft) => draft.draftId === draftId)) {
-      throw new Error(`Chat Draft is not available: ${draftId}`);
+  selectUntitledSession(untitledSessionId: string): void {
+    if (!this._untitledSessions.some((session) => session.untitledSessionId === untitledSessionId)) {
+      throw new Error(`Untitled Chat Session is not available: ${untitledSessionId}`);
     }
-    if (this._activeDraftId === draftId) return;
-    this._activeDraftId = draftId;
+    if (this._activeUntitledSessionId === untitledSessionId) return;
+    this._activeUntitledSessionId = untitledSessionId;
     this._error = undefined;
     this._onDidChange.fire();
   }
 
-  discardDraft(draftId: string): void {
-    const drafts = this._drafts.filter((draft) => draft.draftId !== draftId);
-    if (drafts.length === this._drafts.length) return;
-    this._drafts = drafts;
-    if (this._activeDraftId === draftId) this._activeDraftId = drafts[0]?.draftId;
+  discardUntitledSession(untitledSessionId: string): void {
+    const sessions = this._untitledSessions.filter((session) => session.untitledSessionId !== untitledSessionId);
+    if (sessions.length === this._untitledSessions.length) return;
+    this._untitledSessions = sessions;
+    if (this._activeUntitledSessionId === untitledSessionId) this._activeUntitledSessionId = sessions[0]?.untitledSessionId;
     this.ensureActiveSelection();
     this._onDidChange.fire();
   }
 
-  setDraftModel(draftId: string, model: ModelRef): void {
-    const current = this._drafts.find((draft) => draft.draftId === draftId);
-    if (!current) throw new Error(`Chat Draft is not available: ${draftId}`);
+  setUntitledSessionModel(untitledSessionId: string, model: ModelRef): void {
+    const current = this._untitledSessions.find((session) => session.untitledSessionId === untitledSessionId);
+    if (!current) throw new Error(`Untitled Chat Session is not available: ${untitledSessionId}`);
     if (sameModel(current.model, model)) return;
-    this._drafts = this._drafts.map((draft) =>
-      draft.draftId === draftId ? { ...draft, model } : draft,
+    this._untitledSessions = this._untitledSessions.map((session) =>
+      session.untitledSessionId === untitledSessionId ? { ...session, model } : session,
     );
     this._onDidChange.fire();
   }
 
-  /** Creates server state for a draft without changing the visible tab yet. */
-  async materializeDraft(draftId: string): Promise<IActiveSessionThread> {
-    const draft = this._drafts.find((candidate) => candidate.draftId === draftId);
-    if (!draft) throw new Error(`Chat Draft is not available: ${draftId}`);
-    return this.createSession(draft.title, draft.model);
+  /** Creates server state for an untitled session without changing the visible tab yet. */
+  async materializeUntitledSession(untitledSessionId: string): Promise<IActiveSessionThread> {
+    const session = this._untitledSessions.find((candidate) => candidate.untitledSessionId === untitledSessionId);
+    if (!session) throw new Error(`Untitled Chat Session is not available: ${untitledSessionId}`);
+    return this.createSession(session.title, session.model);
   }
 
-  /** Replaces a local draft with its already-created durable Session. */
-  promoteDraft(draftId: string, active: IActiveSessionThread): void {
-    const wasActive = this._activeDraftId === draftId;
-    this._drafts = this._drafts.filter((draft) => draft.draftId !== draftId);
-    if (wasActive) this._activeDraftId = undefined;
+  /** Replaces an untitled session with its already-created durable Session. */
+  promoteUntitledSession(untitledSessionId: string, active: IActiveSessionThread): void {
+    const wasActive = this._activeUntitledSessionId === untitledSessionId;
+    this._untitledSessions = this._untitledSessions.filter((session) => session.untitledSessionId !== untitledSessionId);
+    if (wasActive) this._activeUntitledSessionId = undefined;
     this._sessions = [
       active.session,
       ...this._sessions.filter(
@@ -330,20 +332,20 @@ export class WorkbenchSessionService
     this._onDidChange.fire();
   }
 
-  private addDraft(title: string): IChatDraft {
-    const draft: IChatDraft = {
-      draftId: createUuid(),
+  private addUntitledSession(title: string): IUntitledChatSession {
+    const session: IUntitledChatSession = {
+      untitledSessionId: createUuid(),
       title,
       model: undefined,
     };
-    this._drafts = [draft, ...this._drafts];
-    return draft;
+    this._untitledSessions = [session, ...this._untitledSessions];
+    return session;
   }
 
   private ensureActiveSelection(): void {
-    if (this.activeDraft || this._active) return;
-    const draft = this._drafts[0] ?? this.addDraft("New Chat");
-    this._activeDraftId = draft.draftId;
+    if (this.activeUntitledSession || this._active) return;
+    const session = this._untitledSessions[0] ?? this.addUntitledSession("New Chat");
+    this._activeUntitledSessionId = session.untitledSessionId;
   }
 
   private activateSession(active: IActiveSessionThread): void {
@@ -354,7 +356,7 @@ export class WorkbenchSessionService
       ),
     ];
     this._active = active;
-    this._activeDraftId = undefined;
+    this._activeUntitledSessionId = undefined;
     this.setState("ready");
   }
 }

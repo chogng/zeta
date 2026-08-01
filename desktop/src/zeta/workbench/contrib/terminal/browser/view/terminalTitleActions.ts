@@ -14,7 +14,7 @@ import type { ITerminalInstance, ITerminalProfile } from "../../../../services/t
 import { terminalProfileIcon } from "./terminalProfileIcon.js";
 
 const ACTIVE_TERMINAL_COMMAND_ID = "zeta.terminal.focusActive";
-const SELECT_PROFILE_COMMAND_ID = "zeta.terminal.selectProfile";
+const NEW_TERMINAL_WITH_PROFILE_COMMAND_ID = "zeta.terminal.newWithProfile";
 const NEW_TERMINAL_COMMAND_ID = "zeta.terminal.new";
 const RELAUNCH_TERMINAL_COMMAND_ID = "zeta.terminal.relaunch";
 const KILL_TERMINAL_COMMAND_ID = "zeta.terminal.kill";
@@ -30,7 +30,7 @@ export interface TerminalTitleActionsOptions {
   readonly menuService: IMenuService;
   readonly contextMenuService: IContextMenuService;
   readonly contextKeyService: IContextKeyService;
-  readonly createTerminal: () => unknown;
+  readonly createTerminal: (profileId?: string) => unknown;
   readonly focusActive: () => unknown;
   readonly relaunchActive: () => unknown;
   readonly killActive: () => unknown;
@@ -48,7 +48,6 @@ export class TerminalTitleActions extends DisposableOwner {
   private readonly activeInstanceStateContext: IContextKey<ITerminalInstance["state"] | "none">;
   private profiles: readonly ITerminalProfile[] = [];
   private activeInstance: ITerminalInstance | undefined;
-  private _selectedProfileId: string | undefined;
 
   constructor(options: TerminalTitleActionsOptions) {
     super();
@@ -84,15 +83,8 @@ export class TerminalTitleActions extends DisposableOwner {
     this.element.classList.add("zeta-terminal-title-toolbar");
   }
 
-  get selectedProfileId(): string | undefined {
-    return this._selectedProfileId;
-  }
-
   setProfiles(profiles: readonly ITerminalProfile[]): void {
     this.profiles = profiles;
-    if (!profiles.some((profile) => profile.profileId === this._selectedProfileId)) {
-      this._selectedProfileId = profiles.find((profile) => profile.isDefault)?.profileId ?? profiles[0]?.profileId;
-    }
     this.profilesAvailableContext.set(profiles.length > 0);
     this.toolbar.refresh();
   }
@@ -115,12 +107,11 @@ export class TerminalTitleActions extends DisposableOwner {
 
   private registerCommandsAndMenu(options: TerminalTitleActionsOptions): void {
     this.own(CommandsRegistry.register(ACTIVE_TERMINAL_COMMAND_ID, () => options.focusActive()));
-    this.own(CommandsRegistry.register(SELECT_PROFILE_COMMAND_ID, (_accessor, profileId) => {
+    this.own(CommandsRegistry.register(NEW_TERMINAL_WITH_PROFILE_COMMAND_ID, (_accessor, profileId) => {
       if (typeof profileId !== "string" || !this.profiles.some((profile) => profile.profileId === profileId)) {
         throw new TypeError(`Unknown terminal profile: ${String(profileId)}`);
       }
-      this._selectedProfileId = profileId;
-      this.toolbar.refresh();
+      return options.createTerminal(profileId);
     }));
     this.own(CommandsRegistry.register(NEW_TERMINAL_COMMAND_ID, () => options.createTerminal()));
     this.own(CommandsRegistry.register(RELAUNCH_TERMINAL_COMMAND_ID, () => options.relaunchActive()));
@@ -138,8 +129,8 @@ export class TerminalTitleActions extends DisposableOwner {
     }));
     this.own(MenusRegistry.appendMenuItem(MenuId.TerminalTitle, {
       command: {
-        id: SELECT_PROFILE_COMMAND_ID,
-        title: "Terminal Profile",
+        id: NEW_TERMINAL_WITH_PROFILE_COMMAND_ID,
+        title: "New Terminal With Profile",
         tooltip: "Select Terminal Profile",
       },
       when: TerminalProfilesAvailableContext.isEqualTo(true),
@@ -210,8 +201,8 @@ export class TerminalTitleActions extends DisposableOwner {
         return new ActiveTerminalActionViewItem(action, this.activeInstance);
       case NEW_TERMINAL_COMMAND_ID:
         return new NewTerminalActionViewItem(action);
-      case SELECT_PROFILE_COMMAND_ID:
-        return new TerminalProfileActionViewItem(action, () => this.profiles, () => this._selectedProfileId, contextMenuService);
+      case NEW_TERMINAL_WITH_PROFILE_COMMAND_ID:
+        return new TerminalProfileActionViewItem(action, () => this.profiles, () => this.activeInstance?.profile.profileId, contextMenuService);
       default:
         return undefined;
     }
@@ -246,10 +237,10 @@ class NewTerminalActionViewItem extends ButtonActionViewItem {
 }
 
 class TerminalProfileActionViewItem extends DropdownMenuActionViewItem {
-  constructor(action: IAction, profiles: () => readonly ITerminalProfile[], selectedProfileId: () => string | undefined, contextMenuService: IContextMenuService) {
+  constructor(action: IAction, profiles: () => readonly ITerminalProfile[], activeProfileId: () => string | undefined, contextMenuService: IContextMenuService) {
     super(
-      new TerminalProfileSelectorAction(action, profiles, selectedProfileId),
-      () => profiles().map((profile) => terminalProfileMenuAction(action, profile, selectedProfileId)),
+      new TerminalProfileSelectorAction(action),
+      () => profiles().map((profile) => terminalProfileMenuAction(action, profile, activeProfileId)),
       contextMenuService,
     );
   }
@@ -262,24 +253,20 @@ class TerminalProfileActionViewItem extends DropdownMenuActionViewItem {
 }
 
 class TerminalProfileSelectorAction implements IAction {
-  constructor(private readonly action: IAction, private readonly profiles: () => readonly ITerminalProfile[], private readonly selectedProfileId: () => string | undefined) {}
+  constructor(private readonly action: IAction) {}
 
   get id(): string { return this.action.id; }
-  get label(): string { return "New Terminal Profile"; }
-  get tooltip(): string { return this.selectedProfile ? `New terminal profile: ${this.selectedProfile.title}` : this.action.tooltip; }
+  get label(): string { return "Select Terminal Profile"; }
+  get tooltip(): string { return this.action.tooltip; }
   get enabled(): boolean { return this.action.enabled; }
   get checked(): boolean | undefined { return this.action.checked; }
 
   run(...args: readonly unknown[]): unknown {
     return this.action.run(...args);
   }
-
-  private get selectedProfile(): ITerminalProfile | undefined {
-    return this.profiles().find((profile) => profile.profileId === this.selectedProfileId());
-  }
 }
 
-function terminalProfileMenuAction(action: IAction, profile: ITerminalProfile, selectedProfileId: () => string | undefined): IAction {
+function terminalProfileMenuAction(action: IAction, profile: ITerminalProfile, activeProfileId: () => string | undefined): IAction {
   const label = profile.isDefault ? `${profile.title} (Default)` : profile.title;
   return {
     id: `${action.id}.${profile.profileId}`,
@@ -287,7 +274,7 @@ function terminalProfileMenuAction(action: IAction, profile: ITerminalProfile, s
     tooltip: `Use ${profile.title}`,
     icon: terminalProfileIcon(profile),
     enabled: action.enabled,
-    checked: profile.profileId === selectedProfileId(),
+    checked: profile.profileId === activeProfileId(),
     run: () => action.run(profile.profileId),
   };
 }

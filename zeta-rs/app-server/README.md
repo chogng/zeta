@@ -201,8 +201,8 @@ capacity 分别映射稳定 Terminal error。`serve_jsonl` 结束时调用 `clos
 
 `terminal/profile/list` 从 composition 时冻结的 `TerminalProfileCatalog` 返回安全显示信息；
 `terminal/create.profile` 只能选择 default 或已列出的稳定 ID。Windows catalog 可发现 Command
-Prompt、PowerShell 与 Git Bash，Unix catalog 可发现默认 Shell 与已安装的常见 Shell；路径、
-args 和 environment 始终留在 Rust authority。
+Prompt、PowerShell、Git Bash，以及 PATH 中已安装的 Zsh；Unix catalog 可发现默认 Shell 与已
+安装的常见 Shell；路径、args 和 environment 始终留在 Rust authority。
 
 Initialize 是每 connection 一次。重复 initialize 返回 `AlreadyInitialized`；初始化前的其他 method
 返回 `NotInitialized`。Request ID 只接受正整数，且在 connection 生命周期内不能重复。

@@ -12,22 +12,22 @@ test("SessionsPart remains owned by the Sessions product layer", () => {
     onDidChange: onDidChange.event,
     sessions: [],
     active: undefined,
-    drafts: [],
-    activeDraft: undefined,
+    untitledSessions: [],
+    activeUntitledSession: undefined,
     state: "ready",
     error: undefined,
     async initialize() {},
     selectThread() {},
-    createDraft() {
-      return { draftId: "draft", title: "New Chat", model: undefined };
+    createUntitledSession() {
+      return { untitledSessionId: "untitled", title: "New Chat", model: undefined };
     },
-    selectDraft() {},
-    discardDraft() {},
-    setDraftModel() {},
-    async materializeDraft() {
+    selectUntitledSession() {},
+    discardUntitledSession() {},
+    setUntitledSessionModel() {},
+    async materializeUntitledSession() {
       throw new Error("Session creation is unavailable");
     },
-    promoteDraft() {},
+    promoteUntitledSession() {},
     async ensureActiveThread() {
       throw new Error("No active thread");
     },

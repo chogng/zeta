@@ -330,7 +330,7 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
   dom.window.close();
 });
 
-test("an empty Session list opens a local draft pane and persists it on its first send", async () => {
+test("an empty Session list opens an untitled session and persists it on its first send", async () => {
   const dom = new JSDOM("<!doctype html><body></body>");
   const createdSession = session("session-1", undefined, "New Chat");
   const attachedSession = session("session-1", "thread-1", "New Chat");
@@ -394,12 +394,12 @@ test("an empty Session list opens a local draft pane and persists it on its firs
   assert.equal(fake.createSessionRequests.length, 0);
   assert.equal(fake.createThreadRequests.length, 0);
   assert.equal(sessions.sessions.length, 0);
-  assert.equal(sessions.drafts.length, 1);
-  const draftPane = pane.element.querySelector<HTMLElement>("[role='tabpanel']");
-  assert.ok(draftPane?.dataset.draftId);
-  const input = draftPane.querySelector<HTMLTextAreaElement>(".zeta-alpha-editor-input");
+  assert.equal(sessions.untitledSessions.length, 1);
+  const untitledPane = pane.element.querySelector<HTMLElement>("[role='tabpanel']");
+  assert.ok(untitledPane?.dataset.untitledSessionId);
+  const input = untitledPane.querySelector<HTMLTextAreaElement>(".zeta-alpha-editor-input");
   assert.ok(input);
-  typeAlphaText(dom.window, input, "Hello from a draft");
+  typeAlphaText(dom.window, input, "Hello from an untitled session");
   input.dispatchEvent(new dom.window.KeyboardEvent("keydown", {
     bubbles: true,
     cancelable: true,
@@ -410,7 +410,7 @@ test("an empty Session list opens a local draft pane and persists it on its firs
   assert.equal(fake.createSessionRequests.length, 1);
   assert.equal(fake.createThreadRequests.length, 1);
   assert.equal(fake.turnStartRequests.length, 1);
-  assert.equal(sessions.drafts.length, 0);
+  assert.equal(sessions.untitledSessions.length, 0);
   assert.equal(sessions.active?.session.sessionId, "session-1");
   assert.equal(sessions.active?.threadId, "thread-1");
   assert.equal(
@@ -427,7 +427,7 @@ test("an empty Session list opens a local draft pane and persists it on its firs
   dom.window.close();
 });
 
-test("the New Chat slash command opens a local draft", async () => {
+test("the New Chat slash command opens an untitled session", async () => {
   const dom = new JSDOM("<!doctype html><body></body>");
   const initialSession = session("session-1", "thread-1", "First Chat");
   const fake = fakeApi({ sessions: [initialSession] });
@@ -494,13 +494,13 @@ test("the New Chat slash command opens a local draft", async () => {
   );
   assert.equal(fake.createSessionRequests.length, 0);
   assert.equal(fake.createThreadRequests.length, 0);
-  assert.equal(sessions.drafts.length, 1);
+  assert.equal(sessions.untitledSessions.length, 1);
   assert.equal(focusedView, CHAT_VIEW_ID);
 
   dom.window.close();
 });
 
-test("failed first send keeps the local draft and its message", async () => {
+test("failed first send keeps the untitled session and its input draft", async () => {
   const dom = new JSDOM("<!doctype html><body></body>");
   const fake = fakeApi({
     sessions: [],
@@ -554,9 +554,9 @@ test("failed first send keeps the local draft and its message", async () => {
 
   assert.equal(fake.createSessionRequests.length, 1);
   assert.equal(sessions.sessions.length, 0);
-  assert.equal(sessions.drafts.length, 1);
+  assert.equal(sessions.untitledSessions.length, 1);
   assert.equal(pane.element.querySelector(".zeta-alpha-editor-line-text")?.textContent, "Keep this draft");
-  assert.equal(pane.element.querySelector<HTMLElement>("[role='tabpanel']")?.dataset.draftId, sessions.drafts[0]?.draftId);
+  assert.equal(pane.element.querySelector<HTMLElement>("[role='tabpanel']")?.dataset.untitledSessionId, sessions.untitledSessions[0]?.untitledSessionId);
   assert.match(pane.element.querySelector<HTMLElement>(".zeta-chat-status")?.textContent ?? "", /Cannot create Session/);
 
   dom.window.close();
@@ -774,7 +774,7 @@ test("WorkbenchSessionService archives a Session and selects the next active one
   assert.equal(service.state, "ready");
 });
 
-test("WorkbenchSessionService keeps an active local draft when no Session remains", async () => {
+test("WorkbenchSessionService keeps an active untitled session when no durable Session remains", async () => {
   const onlySession = session("session-1", "thread-1");
   const fake = fakeApi({ sessions: [onlySession] });
   using service = new WorkbenchSessionService(fake.api);
@@ -783,28 +783,28 @@ test("WorkbenchSessionService keeps an active local draft when no Session remain
   await service.archiveSession("session-1");
 
   assert.equal(service.active, undefined);
-  assert.equal(service.drafts.length, 1);
-  assert.equal(service.activeDraft?.title, "New Chat");
+  assert.equal(service.untitledSessions.length, 1);
+  assert.equal(service.activeUntitledSession?.title, "New Chat");
   assert.equal(fake.createSessionRequests.length, 0);
   assert.equal(fake.createThreadRequests.length, 0);
 });
 
-test("WorkbenchSessionService selects another draft and replaces the last discarded draft", async () => {
+test("WorkbenchSessionService selects another untitled session and replaces the last discarded one", async () => {
   const fake = fakeApi();
   using service = new WorkbenchSessionService(fake.api);
 
   await service.initialize();
-  const initialDraft = service.activeDraft;
-  assert.ok(initialDraft);
-  const nextDraft = service.createDraft();
+  const initialSession = service.activeUntitledSession;
+  assert.ok(initialSession);
+  const nextSession = service.createUntitledSession();
 
-  service.discardDraft(nextDraft.draftId);
-  assert.equal(service.activeDraft?.draftId, initialDraft.draftId);
+  service.discardUntitledSession(nextSession.untitledSessionId);
+  assert.equal(service.activeUntitledSession?.untitledSessionId, initialSession.untitledSessionId);
 
-  service.discardDraft(initialDraft.draftId);
-  assert.equal(service.drafts.length, 1);
-  assert.notEqual(service.activeDraft?.draftId, initialDraft.draftId);
-  assert.equal(service.activeDraft?.title, "New Chat");
+  service.discardUntitledSession(initialSession.untitledSessionId);
+  assert.equal(service.untitledSessions.length, 1);
+  assert.notEqual(service.activeUntitledSession?.untitledSessionId, initialSession.untitledSessionId);
+  assert.equal(service.activeUntitledSession?.title, "New Chat");
   assert.equal(fake.createSessionRequests.length, 0);
   assert.equal(fake.createThreadRequests.length, 0);
 });

@@ -7,7 +7,7 @@ import type { IContextKeyService } from "../../../../../platform/contextkey/comm
 import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextMenu.js";
 import type { IThemeService } from "../../../../../platform/theme/common/themeService.js";
 import { ViewPane, type IViewPaneOptions } from "../../../../browser/parts/views/viewPane.js";
-import type { ITerminalDimensions, ITerminalInstance, ITerminalProfileSelection, ITerminalService } from "../../../../services/terminal/common/terminal.js";
+import type { ITerminalDimensions, ITerminalInstance, ITerminalService } from "../../../../services/terminal/common/terminal.js";
 import { TerminalInstanceWidget } from "../instance/terminalInstanceWidget.js";
 import { TerminalTabsLayout } from "./terminalTabsLayout.js";
 import { terminalProfileIcon } from "./terminalProfileIcon.js";
@@ -43,7 +43,7 @@ export class TerminalViewPane extends ViewPane {
       menuService,
       contextMenuService,
       contextKeyService,
-      createTerminal: () => this.createTerminal(),
+      createTerminal: (profileId) => this.createTerminal(profileId),
       focusActive: () => this.focus(),
       relaunchActive: () => this.relaunchActive(),
       killActive: () => {
@@ -130,7 +130,7 @@ export class TerminalViewPane extends ViewPane {
     if (!this.terminalService.activeInstance) await this.createTerminal();
   }
 
-  private async createTerminal(): Promise<void> {
+  private async createTerminal(profileId?: string): Promise<void> {
     if (this.creating || this.disposed) return;
     this.creating = true;
     this.titleActions.setCreating(true);
@@ -138,7 +138,7 @@ export class TerminalViewPane extends ViewPane {
     try {
       await this.terminalService.createTerminal({
         dimensions: this.activeItem()?.widget.dimensions() ?? DEFAULT_DIMENSIONS,
-        profile: this.selectedProfile(),
+        profile: profileId ? { type: "profile", profileId } : { type: "default" },
       });
       if (!this.disposed) this.focus();
     } catch (error) {
@@ -212,11 +212,6 @@ export class TerminalViewPane extends ViewPane {
       state: instance.state,
       tabId: `${instance.id}-tab`,
     })), active?.id);
-  }
-
-  private selectedProfile(): ITerminalProfileSelection {
-    const profileId = this.titleActions.selectedProfileId;
-    return profileId ? { type: "profile", profileId } : { type: "default" };
   }
 
   private activeItem(): TerminalViewItem | undefined {
