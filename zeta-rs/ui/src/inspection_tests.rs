@@ -62,11 +62,12 @@ fn hit_test_prefers_an_overlay_even_when_base_content_registers_later() {
 }
 
 #[test]
-fn exposes_width_height_padding_and_resolved_radius() {
+fn exposes_width_height_padding_gap_and_resolved_radius() {
     let mut frame = InspectionFrame::default();
     let id = frame.register(
         InspectionNode::new("Button", Rect::from_xywh(2.0, 3.0, 20.0, 10.0))
             .with_padding(Edges::new(1.0, 2.0, 3.0, 4.0))
+            .with_gap_geometry(6.0, vec![Rect::from_xywh(8.0, 3.0, 6.0, 10.0)])
             .with_corner_radii(CornerRadii::uniform(8.0)),
         None,
         2,
@@ -78,6 +79,8 @@ fn exposes_width_height_padding_and_resolved_radius() {
     assert_eq!(node.width(), 20.0);
     assert_eq!(node.height(), 10.0);
     assert_eq!(node.padding(), Some(Edges::new(1.0, 2.0, 3.0, 4.0)));
+    assert_eq!(node.gap(), Some(6.0));
+    assert_eq!(node.gap_regions(), &[Rect::from_xywh(8.0, 3.0, 6.0, 10.0)]);
     assert_eq!(node.corner_radii(), Some(CornerRadii::uniform(5.0)));
     assert_eq!(node.layer(), 2);
     assert_eq!(node.source_file(), "button.rs");

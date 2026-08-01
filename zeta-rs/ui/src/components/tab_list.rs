@@ -237,11 +237,51 @@ impl TabList {
             ),
         })
     }
+
+    fn gap_regions(&self) -> Vec<Rect> {
+        let gap = self.style.gap.max(0.0);
+        if gap <= 0.0 || self.tabs.len() < 2 {
+            return Vec::new();
+        }
+        let extent = match self.orientation {
+            TabListOrientation::Horizontal => self.style.tab_size.width.max(0.0),
+            TabListOrientation::Vertical => self.style.tab_size.height.max(0.0),
+        };
+        (0..self.tabs.len() - 1)
+            .filter_map(|index| {
+                let offset = index as f32 * (extent + gap) + extent;
+                let bounds = match self.orientation {
+                    TabListOrientation::Horizontal => Rect::from_xywh(
+                        self.bounds.origin.x + offset,
+                        self.bounds.origin.y,
+                        gap.min((self.bounds.size.width - offset).max(0.0)),
+                        self.style
+                            .tab_size
+                            .height
+                            .max(0.0)
+                            .min(self.bounds.size.height.max(0.0)),
+                    ),
+                    TabListOrientation::Vertical => Rect::from_xywh(
+                        self.bounds.origin.x,
+                        self.bounds.origin.y + offset,
+                        self.style
+                            .tab_size
+                            .width
+                            .max(0.0)
+                            .min(self.bounds.size.width.max(0.0)),
+                        gap.min((self.bounds.size.height - offset).max(0.0)),
+                    ),
+                };
+                (!bounds.is_empty()).then_some(bounds)
+            })
+            .collect()
+    }
 }
 
 impl Component for TabList {
     fn inspection(&self) -> ComponentInspection {
         ComponentInspection::new("TabList", self.bounds)
+            .with_gap_geometry(self.style.gap.max(0.0), self.gap_regions())
     }
 
     fn paint(&self, scene: &mut UiScene) {

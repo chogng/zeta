@@ -283,6 +283,24 @@ impl ActionBar {
         }
     }
 
+    fn gap_regions(&self) -> Vec<Rect> {
+        let gap = self.style.gap.max(0.0);
+        if gap <= 0.0 || self.items.len() < 2 {
+            return Vec::new();
+        }
+        let mut offset = 0.0;
+        self.items
+            .iter()
+            .take(self.items.len() - 1)
+            .filter_map(|item| {
+                offset += self.item_extent(item);
+                let bounds = self.bounds_at_offset(offset, gap);
+                offset += gap;
+                (!bounds.is_empty()).then_some(bounds)
+            })
+            .collect()
+    }
+
     fn separator_bounds(&self, slot: Rect) -> Rect {
         let thickness = self.style.separator_style.thickness.max(0.0);
         match self.orientation {
@@ -305,6 +323,7 @@ impl ActionBar {
 impl Component for ActionBar {
     fn inspection(&self) -> ComponentInspection {
         ComponentInspection::new("ActionBar", self.bounds)
+            .with_gap_geometry(self.style.gap.max(0.0), self.gap_regions())
     }
 
     fn paint(&self, scene: &mut UiScene) {

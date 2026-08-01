@@ -17,15 +17,31 @@ impl ComponentInspection {
     }
 
     /// Adds the component-owned padding used by paint and content layout.
-    pub const fn with_padding(self, padding: Edges) -> Self {
+    pub fn with_padding(self, padding: Edges) -> Self {
         match self.0 {
             Some(node) => Self(Some(node.with_padding(padding))),
             None => self,
         }
     }
 
+    /// Adds the component-owned gap used to separate sibling layout items.
+    pub fn with_gap(self, gap: f32) -> Self {
+        match self.0 {
+            Some(node) => Self(Some(node.with_gap(gap))),
+            None => self,
+        }
+    }
+
+    /// Adds the component-owned gap and its exact resolved regions used by layout.
+    pub fn with_gap_geometry(self, gap: f32, regions: Vec<Rect>) -> Self {
+        match self.0 {
+            Some(node) => Self(Some(node.with_gap_geometry(gap, regions))),
+            None => self,
+        }
+    }
+
     /// Adds the component-owned corner radii used by paint.
-    pub const fn with_corner_radii(self, corner_radii: CornerRadii) -> Self {
+    pub fn with_corner_radii(self, corner_radii: CornerRadii) -> Self {
         match self.0 {
             Some(node) => Self(Some(node.with_corner_radii(corner_radii))),
             None => self,

@@ -9,8 +9,9 @@ pub struct InspectionNodeId(usize);
 
 /// Resolved component geometry exposed to native UI inspection tools.
 ///
-/// Components should report the same bounds and visual metrics they use for paint. Padding and
-/// corner radii are optional because not every component owns a box-shaped surface.
+/// Components should report the same bounds and visual metrics they use for paint. Padding, gap,
+/// and corner radii are optional because not every component owns the corresponding layout or
+/// box-shaped surface.
 #[derive(Clone, Debug, PartialEq)]
 pub struct InspectionNode {
     id: InspectionNodeId,
@@ -18,6 +19,8 @@ pub struct InspectionNode {
     name: &'static str,
     bounds: Rect,
     padding: Option<Edges>,
+    gap: Option<f32>,
+    gap_regions: Vec<Rect>,
     corner_radii: Option<CornerRadii>,
     layer: usize,
     source_file: &'static str,
@@ -32,6 +35,8 @@ impl InspectionNode {
             name,
             bounds,
             padding: None,
+            gap: None,
+            gap_regions: Vec::new(),
             corner_radii: None,
             layer: 0,
             source_file: "",
@@ -41,6 +46,19 @@ impl InspectionNode {
 
     pub const fn with_padding(mut self, padding: Edges) -> Self {
         self.padding = Some(padding);
+        self
+    }
+
+    /// Records the resolved spacing between this container's sibling items.
+    pub const fn with_gap(mut self, gap: f32) -> Self {
+        self.gap = Some(gap);
+        self
+    }
+
+    /// Records the resolved gap value and the exact regions separating sibling items.
+    pub fn with_gap_geometry(mut self, gap: f32, regions: Vec<Rect>) -> Self {
+        self.gap = Some(gap);
+        self.gap_regions = regions;
         self
     }
 
@@ -75,6 +93,14 @@ impl InspectionNode {
 
     pub const fn padding(&self) -> Option<Edges> {
         self.padding
+    }
+
+    pub const fn gap(&self) -> Option<f32> {
+        self.gap
+    }
+
+    pub fn gap_regions(&self) -> &[Rect] {
+        &self.gap_regions
     }
 
     pub fn corner_radii(&self) -> Option<CornerRadii> {

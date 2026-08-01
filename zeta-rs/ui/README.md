@@ -20,7 +20,7 @@ rasterization。
 | 能力 | 当前 owner | 状态 |
 | --- | --- | --- |
 | Presentation-only component contract 与 scene composition | `zeta-ui::Component` / `UiScene` | ✅ |
-| 每帧组件尺寸、padding、radius、层级与源码位置检查快照 | `InspectionFrame` / `InspectionNode` / `UiScene::with_inspection_node` | ✅；只记录组件主动上报的 presentation geometry，不建立 retained widget tree |
+| 每帧组件尺寸、padding、gap、radius、层级与源码位置检查快照 | `InspectionFrame` / `InspectionNode` / `UiScene::with_inspection_node` | ✅；只记录组件主动上报的 presentation geometry，不建立 retained widget tree |
 | Text、symbolic-icon 与 icon-only button 的状态、样式和内部布局 | `zeta-ui::Button` | ✅ |
 | Button/Separator action 排列、绘制和可查询命中几何 | `zeta-ui::ActionBar` | ✅ |
 | Tab surface 状态与横/纵 TabList 排列 | `zeta-ui::Tab` / `TabList` | ✅；product content 与 tabpanel 不在本 crate |
@@ -72,7 +72,7 @@ DirectWrite 或 fontconfig 类型。
 | Symbol | 可见性 | 精确职责 |
 | --- | --- | --- |
 | `components::component::Component` | public | 把 caller-provided presentation state 转成 scene primitives，并通过 `inspection` 声明可选 box metadata；不拥有 input 或 lifecycle |
-| `components::component::ComponentInspection` | public | 用组件实际 paint geometry 声明 name、bounds、padding 与 radius；`NONE` 明确表示没有独立 box ownership |
+| `components::component::ComponentInspection` | public | 用组件实际 paint geometry 声明 name、bounds、padding、gap 与 radius；`NONE` 明确表示没有独立 box ownership |
 | `components::button::{Button, ButtonState, ButtonSelection}` | public | 根据 host 投影的交互、disabled 与 selected 状态绘制 text、icon+text 或 icon-only button |
 | `components::action_bar::ActionBar` | public | 在 caller bounds 内排列和绘制 action representation，并公开同源 visual/interactive bounds 与 hit-test |
 | `components::action_bar::{ActionBarItem, ActionBarButton}` | public | 分别表达 Button/Separator representation 与单个 Button 的 presentation data；Button 可命名覆盖 main-axis extent |
@@ -119,7 +119,7 @@ DirectWrite 或 fontconfig 类型。
 | `image::{ImageData, ImageId, PaintImage}` | public | 校验 immutable RGBA8 sRGB pixels，以稳定 identity 绑定 logical bounds 与 clip |
 | `scene::UiScene` | public | 保存一帧背景、分层 rect/image/icon/text、构建时的 nested clip、显式 overlay composition 与每层 primitive 插入顺序 |
 | `scene::SceneBatch` / `UiScene::batches` | public | 按 back-to-front layer 与真实插入顺序暴露连续同类 primitive range；backend 不得重新排序 |
-| `inspection::{InspectionFrame, InspectionNode, InspectionNodeId}` | public | 保存与 scene 同寿命的组件检查层级，公开 width/height、可选 padding、clamp 后 radius、layer 与注册源码位置；identity 不得跨 frame 保存 |
+| `inspection::{InspectionFrame, InspectionNode, InspectionNodeId}` | public | 保存与 scene 同寿命的组件检查层级，公开 width/height、可选 padding/gap、gap 的实际区域、clamp 后 radius、layer 与注册源码位置；identity 不得跨 frame 保存 |
 | `scene::UiScene::draw_component` | public | 读取 `Component::inspection`，自动注册节点与 nested parent 后同步 paint；调用者不得绕过它直接调用 `Component::paint` |
 | `scene::UiScene::with_inspection_node` | public | 为非 `Component` 布局函数及拥有自定义 content closure 的特殊组合 surface 注册节点；不改变 paint、layout、input 或 accessibility 语义 |
 | `scene::{TextBlock, TextBlockWrap, TextSpan, TextStyle}` | public | 使用 logical UI pixels 表达普通/同段富文本、bounds 与显式 wrap；不拥有 Markdown 语义 |
@@ -307,7 +307,7 @@ cargo test --manifest-path zeta-rs/Cargo.toml -p zeta-ui
 bazel test //zeta-rs/ui:ui-unit-tests
 ```
 
-单元测试覆盖检查节点的 layer-aware 反向命中、层级、width/height、padding、clamp 后 radius 与源码位置，
+单元测试覆盖检查节点的 layer-aware 反向命中、层级、width/height、padding、gap、clamp 后 radius 与源码位置，
 组件裁剪与浮层合成、SplitView 的横纵 Pane geometry、priority 分配、visibility、
 Sash track 和相邻 resize clamp，Grid 的横纵嵌套、隐藏子树、identity 校验与 owning-split
 Sash 路由，Sash 命中/反馈几何与状态绘制，ScrollState 的 axis clamp、绝对 offset、首尾和
@@ -334,7 +334,7 @@ atlas 与 input validation 测试已迁移到具体 backend crate。
 - 修改 rect/clip contract：同步检查 `paint.rs`、`scene.rs`、所有 backend 与 tests；
 - 修改 DPI 转换、shader、atlas 或 glyph raster：只修改具体 backend，不向组件暴露实现类型；
 - 新增或修改拥有 box geometry 的组件：实现 `Component::inspection`，用 `ComponentInspection`
-  上报绘制实际使用的 bounds、padding 与 radius，并在 sibling test 中验证检查快照；组合调用统一
+  上报绘制实际使用的 bounds、padding、gap 与 radius，并在 sibling test 中验证检查快照；组合调用统一
   使用 `UiScene::draw_component`。只有非组件布局函数或拥有自定义 content closure 的特殊 surface
   才直接调用 `UiScene::with_inspection_node`；纯 primitive helper 不应伪造组件节点。
 

@@ -2,14 +2,18 @@ use zeta_ui::{Border, Color, CornerRadii, InspectionNode, PaintRect, Point, Rect
 use zeta_winit::{ElementState, Key, KeyEvent, LogicalSize, ModifiersState, MouseButton, NamedKey};
 
 use crate::NativeApp;
+use crate::root_layout::RootLayout;
 use crate::shell_scene::LogicalViewport;
 
+mod inspector_content;
+mod inspector_toolbar;
 mod panel;
 
 pub(crate) const PANEL_WIDTH: f32 = 360.0;
 const OUTLINE_COLOR: Color = Color::rgb(35, 131, 226);
 const ANCESTOR_OUTLINE_COLOR: Color = Color::rgba(116, 92, 217, 150);
 const PADDING_COLOR: Color = Color::rgba(238, 147, 54, 92);
+const GAP_COLOR: Color = Color::rgba(45, 184, 164, 112);
 
 #[derive(Clone, Debug, PartialEq)]
 pub(super) struct InspectionSelection {
@@ -48,6 +52,8 @@ pub(crate) struct LayoutInspector {
     enabled: bool,
     picking: bool,
     content_width: Option<f32>,
+    product_bounds: Option<Rect>,
+    panel_bounds: Option<Rect>,
     hovered: Option<InspectionSelection>,
     locked: Option<InspectionSelection>,
 }
@@ -69,13 +75,14 @@ impl LayoutInspector {
     }
 
     pub(crate) fn uses_inspection_cursor(&self, pointer: Option<Point>) -> bool {
-        self.is_picking()
-            && pointer.is_some_and(|point| point.x < self.content_width.unwrap_or(f32::INFINITY))
+        self.is_picking() && self.pointer_is_over_product(pointer)
     }
 
     pub(crate) fn pointer_is_over_panel(&self, pointer: Option<Point>) -> bool {
         self.enabled
-            && pointer.is_some_and(|point| point.x >= self.content_width.unwrap_or(f32::INFINITY))
+            && self
+                .panel_bounds
+                .is_some_and(|bounds| pointer.is_some_and(|point| bounds.contains(point)))
     }
 
     pub(crate) fn uses_panel_action_cursor(&self, pointer: Option<Point>) -> bool {
@@ -85,9 +92,7 @@ impl LayoutInspector {
         let Some(point) = pointer else {
             return false;
         };
-        let content_width = self.content_width.unwrap_or(f32::INFINITY);
-        panel::picker_bounds(content_width).contains(point)
-            || self.panel_row_at(point, content_width).is_some()
+        self.toolbar_action_at(point).is_some() || self.panel_row_at(point).is_some()
     }
 
     pub(crate) fn window_resized(&mut self, window_viewport: LogicalViewport) {
@@ -103,6 +108,8 @@ impl LayoutInspector {
         self.enabled = true;
         self.picking = false;
         self.content_width = Some(content_width);
+        self.product_bounds = None;
+        self.panel_bounds = None;
         self.hovered = None;
         self.locked = None;
     }
@@ -110,6 +117,8 @@ impl LayoutInspector {
     fn close(&mut self) -> Option<f32> {
         self.enabled = false;
         self.picking = false;
+        self.product_bounds = None;
+        self.panel_bounds = None;
         self.hovered = None;
         self.locked = None;
         self.content_width
@@ -139,8 +148,7 @@ impl LayoutInspector {
     }
 
     fn select_panel_row(&mut self, point: Point) -> bool {
-        let content_width = self.content_width.unwrap_or(f32::INFINITY);
-        let Some(index) = self.panel_row_at(point, content_width) else {
+        let Some(index) = self.panel_row_at(point) else {
             return false;
         };
         let Some(mut selection) = self.locked.as_ref().or(self.hovered.as_ref()).cloned() else {
@@ -155,52 +163,54 @@ impl LayoutInspector {
         true
     }
 
-    fn panel_row_at(&self, point: Point, content_width: f32) -> Option<usize> {
+    fn panel_row_at(&self, point: Point) -> Option<usize> {
+        let panel_bounds = self.panel_bounds?;
         let selection = self.locked.as_ref().or(self.hovered.as_ref())?;
-        panel::row_index_at(content_width, point, selection.path.len())
+        panel::row_index_at(panel_bounds, point, selection.path.len())
     }
 
-    pub(crate) fn decorate(
+    fn toolbar_action_at(&self, point: Point) -> Option<inspector_toolbar::InspectorToolbarAction> {
+        panel::toolbar_action_at(self.panel_bounds?, point)
+    }
+
+    fn pointer_is_over_product(&self, pointer: Option<Point>) -> bool {
+        self.product_bounds
+            .is_some_and(|bounds| pointer.is_some_and(|point| bounds.contains(point)))
+    }
+
+    pub(crate) fn compose(
         &mut self,
         scene: &mut UiScene,
-        window_viewport: LogicalViewport,
+        root_layout: RootLayout,
         pointer: Option<Point>,
     ) {
+        self.product_bounds = Some(root_layout.product_bounds());
+        self.panel_bounds = root_layout.inspector_bounds();
         if !self.enabled {
             return;
         }
-        let content_width = self.content_width.unwrap_or(window_viewport.width);
         if self.picking
             && self.locked.is_none()
-            && let Some(point) = pointer.filter(|point| point.x < content_width)
+            && let Some(point) =
+                pointer.filter(|point| root_layout.product_bounds().contains(*point))
         {
             self.hovered = selection_at(scene, point);
         }
         let selection = self.locked.as_ref().or(self.hovered.as_ref());
-        let hovered_row = pointer.and_then(|point| {
-            panel::row_index_at(
-                content_width,
-                point,
-                selection.map_or(0, |selection| selection.path.len()),
-            )
-        });
+        if let Some(panel_bounds) = root_layout.inspector_bounds() {
+            scene.draw_component(&panel::InspectorPanel::new(
+                panel_bounds,
+                selection,
+                panel::PanelState {
+                    picking: self.picking,
+                    pointer,
+                },
+            ));
+        }
         scene.with_overlay(|scene| {
             if let Some(selection) = selection {
                 paint_selection(scene, selection);
             }
-            panel::paint(
-                scene,
-                window_viewport,
-                content_width,
-                selection,
-                panel::PanelState {
-                    picking: self.picking,
-                    picker_hovered: pointer
-                        .is_some_and(|point| panel::picker_bounds(content_width).contains(point)),
-                    has_selection: selection.is_some(),
-                    hovered_row,
-                },
-            );
         });
     }
 }
@@ -264,17 +274,28 @@ impl NativeApp {
         if !self.layout_inspector.is_enabled() {
             return false;
         }
-        let content_width = self.logical_viewport().width;
-        if state == ElementState::Pressed
-            && button == MouseButton::Left
-            && self
+        if state == ElementState::Pressed && button == MouseButton::Left {
+            let toolbar_action = self
                 .cursor_position
-                .is_some_and(|point| panel::picker_bounds(content_width).contains(point))
-        {
-            self.layout_inspector.toggle_picking();
-            self.rebuild_presentation_on_next_redraw();
-            self.update_cursor();
-            return true;
+                .and_then(|point| self.layout_inspector.toolbar_action_at(point));
+            match toolbar_action {
+                Some(inspector_toolbar::InspectorToolbarAction::Pick) => {
+                    self.layout_inspector.toggle_picking();
+                    self.rebuild_presentation_on_next_redraw();
+                    self.update_cursor();
+                    return true;
+                }
+                Some(inspector_toolbar::InspectorToolbarAction::Close) => {
+                    if let Some(content_width) = self.layout_inspector.close() {
+                        self.request_layout_inspector_window_width(content_width);
+                    }
+                    self.rebuild_presentation();
+                    self.update_cursor();
+                    self.request_redraw();
+                    return true;
+                }
+                None => {}
+            }
         }
         if state == ElementState::Released
             && button == MouseButton::Left
@@ -299,7 +320,7 @@ impl NativeApp {
             let target = self.presentation.as_ref().and_then(|presentation| {
                 let point = self
                     .cursor_position
-                    .filter(|point| point.x < content_width)?;
+                    .filter(|point| self.layout_inspector.pointer_is_over_product(Some(*point)))?;
                 selection_at(&presentation.scene, point)
             });
             self.layout_inspector.select(target);
@@ -352,6 +373,7 @@ fn paint_selection(scene: &mut UiScene, selection: &InspectionSelection) {
         return;
     };
     paint_padding(scene, target);
+    paint_gap(scene, target);
     for (index, node) in selection
         .path
         .iter()
@@ -371,6 +393,15 @@ fn paint_selection(scene: &mut UiScene, selection: &InspectionSelection) {
                 ))
                 .with_corner_radii(node.corner_radii().unwrap_or(CornerRadii::uniform(0.0))),
         );
+    }
+}
+
+fn paint_gap(scene: &mut UiScene, node: &InspectionNode) {
+    for gap_bounds in node.gap_regions() {
+        let gap_bounds = node.bounds().intersection(*gap_bounds);
+        if !gap_bounds.is_empty() {
+            scene.draw_rect(PaintRect::new(gap_bounds, GAP_COLOR));
+        }
     }
 }
 

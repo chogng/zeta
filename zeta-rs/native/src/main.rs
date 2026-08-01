@@ -11,6 +11,7 @@ use keybindings_resource::{KeybindingsResource, KeybindingsResourcePoll};
 use keyboard_shortcuts::KeyboardShortcutsState;
 use layout_inspector::LayoutInspector;
 use native_event::NativeEvent;
+use root_layout::{InspectorPane, RootLayout};
 use session_context_menu::SessionContextMenuState;
 use session_search::SessionSearch;
 use session_sidebar::SessionSidebarState;
@@ -72,6 +73,7 @@ mod keyboard_shortcuts;
 mod layout_inspector;
 mod native_event;
 mod renderer_backend;
+mod root_layout;
 mod session_context_menu;
 mod session_search;
 mod session_sidebar;
@@ -297,6 +299,15 @@ impl NativeApp {
     fn rebuild_presentation(&mut self) {
         let window_viewport = self.window_viewport();
         let viewport = self.logical_viewport();
+        let root_layout = RootLayout::for_viewports(
+            window_viewport,
+            viewport,
+            if self.layout_inspector.is_enabled() {
+                InspectorPane::visible(layout_inspector::PANEL_WIDTH)
+            } else {
+                InspectorPane::Hidden
+            },
+        );
         let active_screen = self.active_screen();
         let terminal_size = terminal_grid_size_for_viewport(
             viewport,
@@ -426,11 +437,8 @@ impl NativeApp {
                 &mut self.text_layout,
             );
         }
-        self.layout_inspector.decorate(
-            &mut presentation.scene,
-            window_viewport,
-            self.cursor_position,
-        );
+        self.layout_inspector
+            .compose(&mut presentation.scene, root_layout, self.cursor_position);
         self.presentation = Some(presentation);
         self.presentation_rebuild_pending = false;
         self.update_ime_cursor_area();

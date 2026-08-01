@@ -124,6 +124,38 @@ fn vertical_action_bar_maps_item_extent_to_the_vertical_axis() {
 }
 
 #[test]
+fn action_bar_inspection_reports_the_resolved_item_gap() {
+    let action_bar = ActionBar::new(
+        Rect::from_xywh(0.0, 0.0, 100.0, 20.0),
+        ActionBarOrientation::Horizontal,
+        vec![
+            ActionBarItem::Button(ActionBarButton::label("One", ButtonState::Resting)),
+            ActionBarItem::Separator,
+            ActionBarItem::Button(ActionBarButton::label("Two", ButtonState::Resting)),
+        ],
+        test_style(),
+    );
+    let mut scene = UiScene::new(Color::TRANSPARENT);
+
+    scene.draw_component(&action_bar);
+
+    let node = scene
+        .inspection()
+        .nodes()
+        .iter()
+        .find(|node| node.name() == "ActionBar")
+        .expect("ActionBar inspection node");
+    assert_eq!(node.gap(), Some(4.0));
+    assert_eq!(
+        node.gap_regions(),
+        &[
+            Rect::from_xywh(24.0, 0.0, 4.0, 20.0),
+            Rect::from_xywh(36.0, 0.0, 4.0, 20.0),
+        ]
+    );
+}
+
+#[test]
 fn action_buttons_can_override_their_main_axis_extent() {
     let action_bar = ActionBar::new(
         Rect::from_xywh(10.0, 5.0, 140.0, 20.0),

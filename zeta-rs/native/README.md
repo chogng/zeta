@@ -29,7 +29,7 @@
 | GPU surface、pipeline、atlas、shader、present 与 retry | `zeta-wgpu` | 委托；仅 `renderer_backend` 知道具体 backend 类型 |
 | Rect、image、icon、text scene 与字体测量 | `zeta-ui` | 委托；不接触 GPU API |
 | Shell layout、interaction frame 与 scene composition | `shell_scene` / `composer_panel` | ✅；Composer Panel 展开时向上压缩 ThreadTimeline |
-| 原生布局检查模式、pointer 拦截与 overlay | `layout_inspector::LayoutInspector` / `NativeApp` | ✅；消费 `zeta-ui::InspectionFrame`，不拥有或修改组件 layout |
+| 原生布局检查模式、pointer 拦截与 highlight overlay | `layout_inspector::LayoutInspector` / `NativeApp` | ✅；Inspector Panel 是根 Grid leaf，只有产品节点高亮进入 overlay |
 | Sessions/Main 单轴约束与 Sash presentation geometry | `zeta-ui::SplitViewLayout` / `Sash` | 委托 |
 | Terminal Workspace 与 Agent Sidebar 递归 Pane geometry | `zeta-ui::GridLayout` | 委托；当前输入树包含活动终端与可选右栏 Leaf |
 | Terminal Pane Tree、Session binding 与 active Pane | 后续 native Terminal Workspace model | 尚未完成 |
@@ -116,11 +116,12 @@ authority。下表把仍保留的历史 shell vocabulary 映射到当前产品�
 | 当前源码 | 当前能力 | 目标产品语义 | 状态 |
 | --- | --- | --- | --- |
 | `titlebar::Titlebar` | 窗口拖拽区和左右 sidebar toggle `ActionBar`；不绘制标题文案 | Top Bar | ✅ |
+| `root_layout::RootLayout` | 用 `GridLayout` 解析固定 Product leaf 与可选 Inspector leaf | Native window 根布局 | ✅；窗口扩展后 Inspector 获得独立 360px sibling leaf，Product bounds 不变 |
 | `ShellLayout` | 组合 titlebar、可选 Sessions sidebar，并把剩余区域交给 `TerminalWorkspaceLayout` | Top Bar 与 Workspace 外部布局 | ✅；Sessions 使用外层单轴 split |
 | `terminal_workspace_layout::TerminalWorkspaceLayout` | 用 `GridLayout` 投影活动终端与可选 Agent Sidebar Leaf bounds | Workspace Pane geometry adapter | ✅；尚无多 Terminal Pane Tree 或多 Session binding |
 | `commands` / `keybindings` / `keybindings_resource` / `keyboard_shortcuts` | 把 pointer/menu 的 `ElementId` 与标准化键盘事件映射到同一 `NativeCommand` executor；向 `zeta-keybinding` 提供命令行、稳定 identity 和保存 adapter | Product command 与快捷键输入层 | ✅；支持完整 `when` 表达式、冲突/错误诊断、最多四段 Chord 与 keycap UI |
 | `shell_scene` / `thread_timeline` | Agent Surface 绘制 canonical Thread items；Terminal Surface 绘制活动 grid | Agent Workspace / Terminal compatibility | ✅ |
-| `layout_inspector` | `Cmd/Ctrl+Shift+I` 开关检查面板，面板 cursor action 显式开关选取，点击锁定最深检查节点，Escape 先停止选取再关闭 | Native UI layout inspection | ✅；原生窗口向右扩展独立层级面板，显示 ancestor、size、padding、radius、layer 与源码位置；未主动上报的组件不可检查 |
+| `layout_inspector` | `Cmd/Ctrl+Shift+I` 开关检查面板，面板 cursor action 显式开关选取，点击锁定最深检查节点，Escape 先停止选取再关闭 | Native UI layout inspection | ✅；原生窗口向右扩展独立层级面板，显示 ancestor、size、padding、gap、radius、layer 与源码位置；未主动上报的组件不可检查 |
 | `composer_editor` / `agent_composer` / `composer_interaction` / `composer_interaction_pane` / `composer_panel` / `terminal_input` | Compact `CodeEditor` 共享 Agent/Shell 多行文档；宿主切换 `CodeEditorLanguage`，Shell parser/revision/token 由 editor 内部拥有；active View model 接管方向键、Enter、Tab、Escape，Pane state 与 zeta-ui list 基座接管滚动；Terminal Surface direct input | Agent Composer、Slash/模型选择与 explicit Shell Turn | ✅ |
 | `input_context_toolbar` / `workspace_path_picker` / `git_branch_context_menu` | `ActionBar` 排列 mode、Local、cwd、branch 与 `Changes files • +additions -deletions`；cwd 组合 `Dropdown`，branch 组合 `ContextMenu`，两者均使用各自通用 header slot | Composer context toolbar | ✅；两个浮层第一行均默认聚焦 Search Box；目录或分支切换后替换 Files 根、文件搜索索引和 Git/Changes projection；Changes action 刷新 Git projection、展开右栏并选择 Changes Pane |
 | `session_tab_list` | 组合 `zeta-ui::TabList` 投影当前真实 PTY Session；自身拥有白色状态容器、会话名和工作区两行截断信息，以及纵向 TabList/selected Tab 语义 | 多会话导航 | 通用 TabList 已支持 6px 间隔的多项布局；runtime 仍只有单 Session |
@@ -315,12 +316,18 @@ accessibility ownership。
 `layout_inspector::LayoutInspector` 是独立的检查工具 presentation state。`Cmd/Ctrl+Shift+I` 开启后，
 Native 先保存当前产品 content width，再通过 `NativeWindow::request_inner_logical_size` 向右扩展
 `360px`；Shell、Terminal grid 与产品 hit testing 继续使用保存的 content viewport，因此检查面板不会
-挤压或重排被观察布局。面板打开时默认不进入选取状态，产品 content 继续接收正常 pointer、keyboard
-和 cursor feedback；header 的 cursor action 显式开关选取。选取期间 Native 才截获产品输入，按当前
+挤压或重排被观察布局。`root_layout::RootLayout` 把保存的 Product viewport 和新增宽度交给
+`GridLayout`，解析为两个真实 sibling leaf；`InspectorPanel` 在 Inspector leaf 的 layer 0 内组合
+`InspectorToolbar` 与 `InspectorContent`，不再作为 scene overlay。Toolbar 与产品 Titlebar 同高，左侧
+cursor action 显式开关选取，右侧 close action 关闭面板并恢复原窗口宽度；Content 只拥有层级行、
+指标与节点切换。面板打开时默认不进入选取状态，产品 content 继续接收正常 pointer、keyboard 和
+cursor feedback。选取期间 Native 才截获产品输入，按当前
 `UiScene::inspection` 反向选择最深节点；左键释放后锁定当前链并自动退出选取，保留检查结果。Escape
-先停止选取，再次按下才关闭面板并请求恢复原窗口宽度。Inspector 用橙色显示 padding、蓝色显示当前
+先停止选取，再次按下才关闭面板并请求恢复原窗口宽度。Inspector 用橙色显示 padding、青绿色显示组件
+上报的实际 gap 区域、蓝色显示当前
 bounds、紫色显示 ancestor bounds，并在右侧面板按真实 parent chain 显示每层的组件名、size、
-padding、radius、scene layer 与源码位置。层级行可以直接重定向当前目标；面板保留完整 path，左侧只
+padding、gap、radius、scene layer 与源码位置。只有这些产品节点的 outline/padding highlight 使用 overlay。
+层级行可以直接重定向当前目标；面板保留完整 path，左侧只
 强调所选节点及其祖先，因此可在 parent 与原 descendant 之间反复切换。它不复用 `InteractionFrame`
 推断样式，因为交互树不覆盖纯视觉组件；也不修改组件 style 或产品 reducer。
 常规组件通过 `Component::inspection` 声明 `ComponentInspection`，由

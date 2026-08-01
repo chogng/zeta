@@ -2,7 +2,7 @@ use super::{
     Tab, TabBackgrounds, TabList, TabListOrientation, TabListStyle, TabSelection, TabState,
     TabStyle,
 };
-use crate::{Color, Component, CornerRadii, Rect, Size, UiScene};
+use crate::{Color, CornerRadii, Rect, Size, UiScene};
 
 #[test]
 fn vertical_tab_list_owns_tab_size_gap_and_surface_presentation() {
@@ -29,7 +29,7 @@ fn vertical_tab_list_owns_tab_size_gap_and_surface_presentation() {
     );
     let mut scene = UiScene::new(Color::WHITE);
 
-    list.paint(&mut scene);
+    scene.draw_component(&list);
 
     let first = list.tab_bounds(0).unwrap();
     let second = list.tab_bounds(1).unwrap();
@@ -38,6 +38,17 @@ fn vertical_tab_list_owns_tab_size_gap_and_surface_presentation() {
     assert_eq!(scene.rects()[0].fill(), highlight);
     assert_eq!(scene.rects()[1].fill(), highlight);
     assert_eq!(scene.rects()[0].corner_radii(), CornerRadii::uniform(4.0));
+    let node = scene
+        .inspection()
+        .nodes()
+        .iter()
+        .find(|node| node.name() == "TabList")
+        .expect("TabList inspection node");
+    assert_eq!(node.gap(), Some(6.0));
+    assert_eq!(
+        node.gap_regions(),
+        &[Rect::from_xywh(10.0, 72.0, 180.0, 6.0)]
+    );
 }
 
 #[test]
