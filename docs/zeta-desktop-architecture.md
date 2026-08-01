@@ -533,16 +533,16 @@ token 与同源检查，client 断开后回收其子进程；它不构成生产�
 
 Terminal contribution 只依赖 Workbench service layer 的 `ITerminalService`。实例管理、输入
 batching、resize coalescing 和 polling 由 `TerminalService` 负责；process contract 位于
-platform layer，wire DTO 只在 `TerminalProcessService` adapter 内出现。Contribution
-和 xterm view 都不直接调用 `IRendererHost`：
+platform layer 的 `ITerminalProcessService`。`IRendererHost` 直接提供该领域契约；Electron、
+Vite development 和 disconnected runtime 分别实现它，wire DTO 只出现在对应 runtime
+implementation 内。Contribution 和 xterm view 都不直接调用 `IRendererHost`：
 
 ```text
 TerminalViewPane / xterm
   → ITerminalService
   → TerminalService (Renderer)
   → ITerminalProcessService
-  → TerminalProcessService
-  → ITerminalProcessApi + IAppServerApi
+  → ElectronTerminalProcessService + IAppServerApi
   → trusted Electron IPC
   → platform/terminal/electron-main/terminalIpcRoutes
   → terminal/* App Server methods

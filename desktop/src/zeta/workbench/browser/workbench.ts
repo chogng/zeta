@@ -170,7 +170,6 @@ import {
 } from "./parts/views/viewPaneContainer.js";
 import { PaneComposite } from "./parts/views/paneComposite.js";
 import { IWorkbenchWindowService, WorkbenchWindow } from "./window.js";
-import { TerminalProcessService } from "../../platform/terminal/browser/terminalProcessService.js";
 import { TerminalService } from "../services/terminal/browser/terminalService.js";
 import { ITerminalService } from "../services/terminal/common/terminal.js";
 import { ITextFileService, TextFileService } from "../services/textfile/common/textFileService.js";
@@ -264,7 +263,7 @@ export class Workbench extends DisposableOwner {
       IWorkspaceSearchService,
       new BrowserWorkspaceSearchService(api.workspaceSearch),
     );
-    const terminalService = this.own(new TerminalService(new TerminalProcessService(api.terminal, api.appServer)));
+    const terminalService = this.own(new TerminalService(api.terminal));
     services.set(ITerminalService, terminalService);
     const gitService = this.own(new GitService({ api: api.git, appServerApi: api.appServer, eventApi: api.events }));
     services.set(IGitService, gitService);

@@ -5,15 +5,16 @@ import type { IRendererHost } from "../../renderer/common/rendererHost.js";
 import { unavailableOperation, WebAppServerUnavailableError } from "../../renderer/browser/disconnectedHost.js";
 import { createDisconnectedWorkspaceSearchApi } from "../../search/browser/searchApi.js";
 import { createDisconnectedModelApi, createDisconnectedSessionApi, createDisconnectedThreadApi, createDisconnectedTurnApi } from "../../sessions/browser/sessionApi.js";
-import { createDisconnectedTerminalProcessApi } from "../../terminal/browser/terminalProcessApi.js";
+import { DisconnectedTerminalProcessService } from "../../terminal/browser/disconnectedTerminalProcessService.js";
 import { createDisconnectedTypstApi } from "../../typst/browser/typstApi.js";
 
 export { WebAppServerUnavailableError };
 
 /** Composes the explicit disconnected capability set for standalone Web pages. */
 export function createDisconnectedRendererApi(): IRendererHost {
+  const appServer = createDisconnectedAppServerApi(unavailableOperation);
   return {
-    appServer: createDisconnectedAppServerApi(unavailableOperation),
+    appServer,
     session: createDisconnectedSessionApi(unavailableOperation),
     model: createDisconnectedModelApi(unavailableOperation),
     thread: createDisconnectedThreadApi(unavailableOperation),
@@ -23,7 +24,7 @@ export function createDisconnectedRendererApi(): IRendererHost {
     fs: createDisconnectedFileApi(unavailableOperation),
     git: createDisconnectedGitApi(unavailableOperation),
     workspaceSearch: createDisconnectedWorkspaceSearchApi(unavailableOperation),
-    terminal: createDisconnectedTerminalProcessApi(unavailableOperation),
+    terminal: new DisconnectedTerminalProcessService(unavailableOperation, appServer),
     events: createDisconnectedServerEventApi(),
   };
 }

@@ -5,7 +5,7 @@ import { createViteDevGitApi } from "../../git/browser/gitApi.js";
 import type { IRendererHost } from "../../renderer/common/rendererHost.js";
 import { createViteDevWorkspaceSearchApi } from "../../search/browser/searchApi.js";
 import { createViteDevModelApi, createViteDevSessionApi, createViteDevThreadApi, createViteDevTurnApi } from "../../sessions/browser/sessionApi.js";
-import { createViteDevTerminalProcessApi } from "../../terminal/browser/terminalProcessApi.js";
+import { ViteDevTerminalProcessService } from "../../terminal/browser/viteDevTerminalProcessService.js";
 import { createViteDevTypstApi } from "../../typst/browser/typstApi.js";
 
 export interface ConnectedWebRendererApi {
@@ -31,8 +31,9 @@ export async function connectViteDevRendererApi(hot: ViteDevHotContext, options:
 }
 
 function createRendererHost(connection: ViteDevAppServerConnection): IRendererHost {
+  const appServer = createViteDevAppServerApi(connection);
   return {
-    appServer: createViteDevAppServerApi(connection),
+    appServer,
     session: createViteDevSessionApi(connection),
     model: createViteDevModelApi(connection),
     thread: createViteDevThreadApi(connection),
@@ -42,7 +43,7 @@ function createRendererHost(connection: ViteDevAppServerConnection): IRendererHo
     fs: createViteDevFileApi(connection),
     git: createViteDevGitApi(connection),
     workspaceSearch: createViteDevWorkspaceSearchApi(connection),
-    terminal: createViteDevTerminalProcessApi(connection),
+    terminal: new ViteDevTerminalProcessService(connection, appServer),
     events: createViteDevServerEventApi(connection),
   };
 }
