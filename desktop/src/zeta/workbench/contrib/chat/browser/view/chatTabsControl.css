@@ -1,4 +1,7 @@
 .zeta-chat-tabs-control {
+  --zeta-tab-list-action-hover-background: var(--zeta-chat-tab-background);
+  --zeta-tab-list-checked-action-hover-background: var(--zeta-tab-list-active-background);
+
   display: flex;
   min-width: 0;
   flex: 1 1 auto;
@@ -29,6 +32,9 @@
 }
 
 .zeta-chat-tabs-control .zeta-tab-label {
+  --zeta-icon-label-text-overflow: clip;
+
+  position: relative;
   overflow: hidden;
   min-width: 0;
   height: 100%;
@@ -38,12 +44,23 @@
   outline: none;
   color: inherit;
   background: transparent;
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.zeta-chat-tabs-control .zeta-tab-actions {
-  padding-right: 1px;
+.zeta-chat-tabs-control .zeta-tab.checked .zeta-tab-label::after,
+.zeta-chat-tabs-control .zeta-tab:hover .zeta-tab-label::after {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 24px;
+  content: "";
+  pointer-events: none;
+  background: linear-gradient(to right, transparent, var(--zeta-chat-tab-background));
+}
+
+.zeta-chat-tabs-control .zeta-tab.checked .zeta-tab-label::after {
+  background: linear-gradient(to right, transparent, var(--zeta-tab-list-active-background));
 }
 
 .zeta-chat-tabs-control .zeta-tab-label:focus-visible {

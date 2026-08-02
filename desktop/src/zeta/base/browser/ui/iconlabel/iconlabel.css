@@ -29,6 +29,6 @@
 .zeta-icon-label-text {
   min-width: 0;
   overflow: hidden;
-  text-overflow: ellipsis;
+  text-overflow: var(--zeta-icon-label-text-overflow, ellipsis);
   white-space: nowrap;
 }

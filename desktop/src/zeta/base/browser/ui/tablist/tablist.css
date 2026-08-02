@@ -86,5 +86,9 @@
 }
 
 .zeta-tab-actions .zeta-action-view-item.icon .zeta-button:hover {
-  background: var(--zeta-toolbar-hover-background);
+  background: var(--zeta-tab-list-action-hover-background, var(--zeta-toolbar-hover-background));
+}
+
+.zeta-tab.checked .zeta-tab-actions .zeta-action-view-item.icon .zeta-button:hover {
+  background: var(--zeta-tab-list-checked-action-hover-background, var(--zeta-tab-list-action-hover-background, var(--zeta-toolbar-hover-background)));
 }
