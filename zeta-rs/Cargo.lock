@@ -8041,6 +8041,40 @@ dependencies = [
 ]
 
 [[package]]
+name = "zeta-language-server-catalog"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.19",
+ "zeta-install-context",
+ "zeta-lsp",
+]
+
+[[package]]
+name = "zeta-language-server-distribution"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+ "thiserror 2.0.19",
+]
+
+[[package]]
+name = "zeta-language-service"
+version = "0.1.0"
+dependencies = [
+ "tempfile",
+ "thiserror 2.0.19",
+ "tokio",
+ "url",
+ "zeta-language-server-catalog",
+ "zeta-lsp",
+]
+
+[[package]]
 name = "zeta-linux-sandbox"
 version = "0.1.0"
 dependencies = [
@@ -8149,11 +8183,15 @@ dependencies = [
  "zeta-editor",
  "zeta-file-search",
  "zeta-icons",
+ "zeta-install-context",
  "zeta-keybinding",
+ "zeta-language-server-catalog",
+ "zeta-language-service",
  "zeta-protocol",
  "zeta-renderer",
  "zeta-slash-commands",
  "zeta-terminal",
+ "zeta-text-file",
  "zeta-theme",
  "zeta-ui",
  "zeta-ui-dispatch",
@@ -8339,6 +8377,10 @@ dependencies = [
  "unicode-width 0.2.0",
  "vte",
 ]
+
+[[package]]
+name = "zeta-text-file"
+version = "0.1.0"
 
 [[package]]
 name = "zeta-theme"

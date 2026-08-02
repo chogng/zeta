@@ -165,6 +165,25 @@ fn explicit_override_is_authoritative_and_excludes_fallback_candidates() {
     );
 }
 
+#[test]
+fn host_path_candidates_validate_names_and_use_the_frozen_search_path() {
+    let first = TestDirectory::new();
+    let second = TestDirectory::new();
+    let search_path = env::join_paths([first.path(), second.path()]).expect("search path");
+    let context = InstallContext::detect(None, None, None, None, None, Some(search_path));
+    let name = HostExecutableName::new("rust-analyzer").expect("name");
+    let candidates = context.host_path_candidates(&name);
+
+    assert!(candidates.iter().any(|path| path.starts_with(first.path())));
+    assert!(
+        candidates
+            .iter()
+            .any(|path| path.starts_with(second.path()))
+    );
+    assert!(HostExecutableName::new("../rust-analyzer").is_err());
+    assert!(HostExecutableName::new("").is_err());
+}
+
 fn expected_ripgrep_candidates<'a>(
     directories: impl IntoIterator<Item = &'a PathBuf>,
 ) -> Vec<PathBuf> {

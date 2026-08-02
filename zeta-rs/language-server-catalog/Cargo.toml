@@ -1,0 +1,23 @@
+[package]
+name = "zeta-language-server-catalog"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[lib]
+doctest = false
+name = "zeta_language_server_catalog"
+path = "src/lib.rs"
+
+[dependencies]
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+zeta-install-context = { workspace = true }
+zeta-lsp = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[lints]
+workspace = true

@@ -34,6 +34,9 @@ members = [
     "http-client",
     "install-context",
     "keybinding",
+    "language-server-catalog",
+    "language-server-distribution",
+    "language-service",
     "linux-sandbox",
     "lsp",
     "model-provider",
@@ -56,6 +59,7 @@ members = [
     "storage",
     "syntax",
     "terminal",
+    "text-file",
     "theme",
     "thread-store",
     "tools",
@@ -183,6 +187,9 @@ zeta-git = { path = "git" }
 zeta-http-client = { path = "http-client" }
 zeta-install-context = { path = "install-context" }
 zeta-keybinding = { path = "keybinding" }
+zeta-language-server-catalog = { path = "language-server-catalog" }
+zeta-language-server-distribution = { path = "language-server-distribution" }
+zeta-language-service = { path = "language-service" }
 zeta-linux-sandbox = { path = "linux-sandbox" }
 zeta-lsp = { path = "lsp" }
 zeta-model-provider = { path = "model-provider" }
@@ -206,6 +213,7 @@ zeta-skills = { path = "skills" }
 zeta-storage = { path = "storage" }
 zeta-syntax = { path = "syntax" }
 zeta-terminal = { path = "terminal" }
+zeta-text-file = { path = "text-file" }
 zeta-theme = { path = "theme" }
 zeta-thread-store = { path = "thread-store" }
 zeta-tools = { path = "tools" }

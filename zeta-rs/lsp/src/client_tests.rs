@@ -37,6 +37,24 @@ impl RecordingHost {
             self.event_received.notified().await;
         }
     }
+
+    async fn wait_for_transport_closed(&self) -> String {
+        loop {
+            if let Some(message) =
+                self.events
+                    .lock()
+                    .expect("events mutex")
+                    .iter()
+                    .find_map(|event| match event {
+                        LanguageServerEvent::TransportClosed { message } => Some(message.clone()),
+                        _ => None,
+                    })
+            {
+                return message;
+            }
+            self.event_received.notified().await;
+        }
+    }
 }
 
 impl LanguageServerHost for RecordingHost {
@@ -236,6 +254,58 @@ async fn runs_initialize_document_requests_events_and_shutdown() {
     client.close_document(&uri).await.expect("close document");
     client.shutdown().await.expect("shutdown language server");
     server.await.expect("server task");
+    assert!(
+        !host
+            .events
+            .lock()
+            .expect("events mutex")
+            .iter()
+            .any(|event| matches!(event, LanguageServerEvent::TransportClosed { .. }))
+    );
+}
+
+#[tokio::test]
+async fn unexpected_transport_close_is_reported_once_after_initialization() {
+    let (client_stream, server_stream) = tokio::io::duplex(16 * 1024);
+    let (client_reader, client_writer) = tokio::io::split(client_stream);
+    let (server_reader, server_writer) = tokio::io::split(server_stream);
+    let server = tokio::spawn(async move {
+        let mut reader = BufReader::new(server_reader);
+        let mut writer = server_writer;
+        let initialize = read_json(&mut reader).await;
+        respond(
+            &mut writer,
+            initialize["id"].clone(),
+            json!({ "capabilities": {} }),
+        )
+        .await;
+        assert_eq!(read_json(&mut reader).await["method"], "initialized");
+    });
+    let host = Arc::new(RecordingHost::default());
+    let client = LanguageServerClient::connect(
+        BufReader::new(client_reader),
+        client_writer,
+        LanguageServerOptions::new("zeta-lsp-test", "0").with_host(host.clone()),
+    )
+    .await
+    .expect("initialize language server");
+
+    let message = tokio::time::timeout(Duration::from_secs(1), host.wait_for_transport_closed())
+        .await
+        .expect("transport close event");
+
+    assert!(!message.is_empty());
+    client.abort_disconnected().await;
+    server.await.expect("server task");
+    assert_eq!(
+        host.events
+            .lock()
+            .expect("events mutex")
+            .iter()
+            .filter(|event| matches!(event, LanguageServerEvent::TransportClosed { .. }))
+            .count(),
+        1
+    );
 }
 
 #[tokio::test]

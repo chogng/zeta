@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use lsp_types::{
     ConfigurationParams, LogMessageParams, PublishDiagnosticsParams, ShowMessageParams,
@@ -43,13 +44,20 @@ pub(crate) fn spawn_driver<R, W>(
     reader: R,
     writer: W,
     host: Arc<dyn LanguageServerHost>,
+    intentional_stop: Arc<AtomicBool>,
 ) -> DriverHandle
 where
     R: AsyncBufRead + Send + Unpin + 'static,
     W: AsyncWrite + Send + Unpin + 'static,
 {
     let (command_tx, command_rx) = mpsc::channel(128);
-    let task = tokio::spawn(run_driver(reader, writer, host, command_rx));
+    let task = tokio::spawn(run_driver(
+        reader,
+        writer,
+        host,
+        intentional_stop,
+        command_rx,
+    ));
     DriverHandle {
         commands: command_tx,
         task,
@@ -60,6 +68,7 @@ async fn run_driver<R, W>(
     mut reader: R,
     mut writer: W,
     host: Arc<dyn LanguageServerHost>,
+    intentional_stop: Arc<AtomicBool>,
     mut commands: mpsc::Receiver<DriverCommand>,
 ) where
     R: AsyncBufRead + Send + Unpin + 'static,
@@ -95,36 +104,42 @@ async fn run_driver<R, W>(
         }
     });
     let mut pending = HashMap::new();
-    loop {
+    let close_message = loop {
         tokio::select! {
             command = commands.recv() => {
                 let Some(command) = command else {
-                    break;
+                    break Some("language server client command channel closed".into());
                 };
                 match handle_command(command, &mut writer, &mut pending).await {
                     Ok(DriverControl::Continue) => {}
-                    Ok(DriverControl::Stop) => break,
-                    Err(()) => break,
+                    Ok(DriverControl::Stop) => break None,
+                    Err(()) => break Some("language server transport stopped while writing a client message".into()),
                 }
             }
             message = incoming_rx.recv() => {
                 match message {
                     Some(Ok(message)) => {
                         if handle_incoming(message, &mut writer, &host, &mut pending).await.is_err() {
-                            break;
+                            break Some("language server transport stopped while handling a server message".into());
                         }
                     }
                     Some(Err(error)) => {
+                        let message = error.to_string();
                         fail_pending(&mut pending, error);
-                        break;
+                        break Some(message);
                     }
-                    None => break,
+                    None => break Some("language server input channel closed".into()),
                 }
             }
         }
-    }
+    };
     reader_task.abort();
     fail_pending(&mut pending, LanguageServerError::ConnectionClosed);
+    if let Some(message) = close_message
+        && !intentional_stop.load(Ordering::Acquire)
+    {
+        host.on_event(LanguageServerEvent::TransportClosed { message });
+    }
 }
 
 enum DriverControl {

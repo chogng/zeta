@@ -13,6 +13,10 @@ pub enum LanguageServerEvent {
     ShowMessage(ShowMessageParams),
     Telemetry(serde_json::Value),
     ServerStderr(String),
+    /// The initialized protocol transport ended without a requested client shutdown.
+    TransportClosed {
+        message: String,
+    },
     UnhandledNotification {
         method: String,
         params: serde_json::Value,

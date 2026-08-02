@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU8, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::time::Duration;
 
 use lsp_types::notification::{
@@ -116,8 +116,13 @@ impl LanguageServerClient {
         R: AsyncBufRead + Send + Unpin + 'static,
         W: AsyncWrite + Send + Unpin + 'static,
     {
-        let DriverHandle { commands, task } =
-            spawn_driver(reader, writer, Arc::clone(&options.host));
+        let intentional_stop = Arc::new(AtomicBool::new(false));
+        let DriverHandle { commands, task } = spawn_driver(
+            reader,
+            writer,
+            Arc::clone(&options.host),
+            Arc::clone(&intentional_stop),
+        );
         let raw = RawClient::new(commands);
         #[allow(deprecated)]
         let initialize_params = InitializeParams {
@@ -138,8 +143,10 @@ impl LanguageServerClient {
         {
             Ok(result) => result,
             Err(error) => {
+                intentional_stop.store(true, Ordering::Release);
                 let _ = raw.commands.send(DriverCommand::Stop).await;
                 let _ = task.await;
+                terminate_process(process.as_ref()).await;
                 return Err(error);
             }
         };
@@ -151,8 +158,10 @@ impl LanguageServerClient {
         if position_encoding != PositionEncodingKind::UTF8
             && position_encoding != PositionEncodingKind::UTF16
         {
+            intentional_stop.store(true, Ordering::Release);
             let _ = raw.commands.send(DriverCommand::Stop).await;
             let _ = task.await;
+            terminate_process(process.as_ref()).await;
             return Err(LanguageServerError::InvalidMessage(format!(
                 "unsupported position encoding `{position_encoding:?}`"
             )));
@@ -165,7 +174,13 @@ impl LanguageServerClient {
             capabilities: initialized.capabilities,
             position_encoding,
         };
-        raw.notify::<Initialized>(InitializedParams {}).await?;
+        if let Err(error) = raw.notify::<Initialized>(InitializedParams {}).await {
+            intentional_stop.store(true, Ordering::Release);
+            let _ = raw.commands.send(DriverCommand::Stop).await;
+            let _ = task.await;
+            terminate_process(process.as_ref()).await;
+            return Err(error);
+        }
         Ok(Self {
             inner: Arc::new(ClientInner {
                 raw,
@@ -174,6 +189,7 @@ impl LanguageServerClient {
                 process,
                 driver_task: Mutex::new(Some(task)),
                 state: AtomicU8::new(STATE_READY),
+                intentional_stop,
                 timeouts: options.timeouts,
             }),
         })
@@ -344,6 +360,7 @@ impl LanguageServerClient {
                     LanguageServerError::ShuttingDown
                 }
             })?;
+        self.inner.intentional_stop.store(true, Ordering::Release);
         let shutdown_result = self
             .inner
             .raw
@@ -357,6 +374,22 @@ impl LanguageServerClient {
         reap_process(self.inner.process.as_ref(), self.inner.timeouts.shutdown).await;
         self.inner.state.store(STATE_CLOSED, Ordering::Release);
         shutdown_result
+    }
+
+    /// Stop protocol work and terminate a spawned process after its transport was lost.
+    ///
+    /// Supervisors use this only after receiving [`LanguageServerEvent::TransportClosed`]. It
+    /// deliberately skips the LSP shutdown handshake because that transport is no longer usable.
+    pub async fn abort_disconnected(&self) {
+        self.inner.intentional_stop.store(true, Ordering::Release);
+        if self.inner.state.swap(STATE_CLOSED, Ordering::AcqRel) == STATE_CLOSED {
+            return;
+        }
+        let _ = self.inner.raw.commands.send(DriverCommand::Stop).await;
+        if let Some(task) = self.inner.driver_task.lock().await.take() {
+            let _ = task.await;
+        }
+        terminate_process(self.inner.process.as_ref()).await;
     }
 
     fn require_ready(&self) -> Result<(), LanguageServerError> {
@@ -376,6 +409,7 @@ struct ClientInner {
     process: Option<Arc<Mutex<Option<Child>>>>,
     driver_task: Mutex<Option<tokio::task::JoinHandle<()>>>,
     state: AtomicU8,
+    intentional_stop: Arc<AtomicBool>,
     timeouts: LanguageServerTimeouts,
 }
 
@@ -407,4 +441,21 @@ async fn reap_process(process: Option<&Arc<Mutex<Option<Child>>>>, timeout: Dura
         let _ = child.wait().await;
     }
     process.take();
+}
+
+async fn terminate_process(process: Option<&Arc<Mutex<Option<Child>>>>) {
+    let Some(process) = process else {
+        return;
+    };
+    let mut process = process.lock().await;
+    let Some(mut child) = process.take() else {
+        return;
+    };
+    match child.try_wait() {
+        Ok(Some(_)) => {}
+        Ok(None) | Err(_) => {
+            let _ = child.kill().await;
+            let _ = child.wait().await;
+        }
+    }
 }

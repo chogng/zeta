@@ -58,6 +58,7 @@ layout marker，不解析或信任其中的字段。
 | `InstallContext::current` | 捕获当前安装与环境 snapshot | 持续观察环境变化 |
 | `PackageLayout` | 描述 metadata 与 package/bin/path/resources 路径 | 创建、解析或修改 package |
 | `executable_candidates` | 生成有来源和优先级的候选 | executable 验证或 capability probe |
+| `host_path_candidates` | 为 consumer-owned basename 查询冻结的 host PATH | 决定领域 identity、trust 或执行 |
 | `bundled_resource` | 返回现有普通 resource file | digest 验证或 materialization |
 | `bundled_resource_directory` | 返回现有 resource directory | tree validation、Skill discovery |
 

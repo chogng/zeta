@@ -5,6 +5,7 @@
 
 use std::env;
 use std::ffi::OsString;
+use std::fmt;
 use std::path::Component;
 use std::path::{Path, PathBuf};
 
@@ -93,6 +94,41 @@ pub enum ExecutableCandidates {
     ExplicitOverride(ExecutableOverride),
     SearchPaths(Vec<PathBuf>),
 }
+
+/// Validated executable basename used to query the frozen host `PATH` snapshot.
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct HostExecutableName(String);
+
+impl HostExecutableName {
+    pub fn new(name: impl Into<String>) -> Result<Self, InvalidHostExecutableName> {
+        let name = name.into();
+        if name.is_empty()
+            || name == "."
+            || name == ".."
+            || name.contains('/')
+            || name.contains('\\')
+        {
+            return Err(InvalidHostExecutableName(name));
+        }
+        Ok(Self(name))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+/// Failure to construct a host executable name from a path or empty value.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct InvalidHostExecutableName(String);
+
+impl fmt::Display for InvalidHostExecutableName {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(formatter, "invalid host executable name `{}`", self.0)
+    }
+}
+
+impl std::error::Error for InvalidHostExecutableName {}
 
 /// Immutable snapshot of the running Zeta installation and executable search environment.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -196,6 +232,21 @@ impl InstallContext {
         ExecutableCandidates::SearchPaths(paths)
     }
 
+    /// Produces candidates for a consumer-owned executable identity from the frozen host `PATH`.
+    ///
+    /// This method does not inspect, canonicalize, trust, probe, or execute the candidates. Those
+    /// obligations remain with the domain that owns the requested executable.
+    pub fn host_path_candidates(&self, executable: &HostExecutableName) -> Vec<PathBuf> {
+        let mut candidates = Vec::new();
+        let Some(search_path) = &self.search_path else {
+            return candidates;
+        };
+        for directory in env::split_paths(search_path) {
+            push_host_executable_candidates(&mut candidates, &directory, executable);
+        }
+        candidates
+    }
+
     fn detect(
         current_executable: Option<&Path>,
         ripgrep_override: Option<OsString>,
@@ -275,6 +326,21 @@ fn executable_names(executable: ManagedExecutable) -> &'static [&'static str] {
         ManagedExecutable::Bubblewrap => &["bwrap"],
         ManagedExecutable::WindowsCommandRunner => &["zeta-command-runner.exe"],
         ManagedExecutable::WindowsSandboxSetup => &["zeta-windows-sandbox-setup.exe"],
+    }
+}
+
+fn push_host_executable_candidates(
+    candidates: &mut Vec<PathBuf>,
+    directory: &Path,
+    executable: &HostExecutableName,
+) {
+    #[cfg(windows)]
+    if Path::new(executable.as_str()).extension().is_none() {
+        candidates.push(directory.join(format!("{}.exe", executable.as_str())));
+    }
+    let candidate = directory.join(executable.as_str());
+    if !candidates.contains(&candidate) {
+        candidates.push(candidate);
     }
 }
 

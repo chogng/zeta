@@ -294,6 +294,29 @@ impl LanguageServerDocumentRouter {
         })
     }
 
+    /// Remove a server whose protocol transport has already closed.
+    ///
+    /// The route and all of its document bindings are discarded before the disconnected process
+    /// is terminated. A supervisor may then register a fresh client and replay authoritative
+    /// editor snapshots without reusing stale router text.
+    pub async fn remove_disconnected_server(
+        &mut self,
+        name: &LanguageServerName,
+    ) -> Result<usize, LanguageServerRouterError> {
+        let server = self.servers.remove(name).ok_or_else(|| {
+            LanguageServerRouterError::ServerNotRegistered {
+                server: name.clone(),
+            }
+        })?;
+        self.language_routes.retain(|_, server| server != name);
+        let before = self.documents.len();
+        self.documents
+            .retain(|_, document| &document.server_name != name);
+        let removed_documents = before - self.documents.len();
+        server.client.abort_disconnected().await;
+        Ok(removed_documents)
+    }
+
     pub async fn shutdown(self) -> Vec<LanguageServerShutdownFailure> {
         let mut failures = Vec::new();
         for (server, routed) in self.servers {

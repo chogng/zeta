@@ -132,6 +132,58 @@ async fn router_binds_revisions_and_replays_documents_on_replacement() {
     replacement_task.await.expect("replacement server task");
 }
 
+#[tokio::test]
+async fn disconnected_server_removal_discards_stale_bindings_before_fresh_replay() {
+    let sync = json!({ "openClose": true, "change": 1 });
+    let (original, mut original_events, original_task) = fake_language_server(sync.clone()).await;
+    let server_name = LanguageServerName::new("rust-analyzer").expect("server name");
+    let mut router = LanguageServerDocumentRouter::default();
+    router
+        .register(
+            LanguageServerRoute::new(server_name.clone(), ["rust"]).expect("route"),
+            original,
+        )
+        .expect("register original");
+    let uri = Uri::from_str("file:///workspace/src/main.rs").expect("document URI");
+    router
+        .open_document(snapshot(&uri, 1, "old text"))
+        .await
+        .expect("open original document");
+    let _ = next_method(&mut original_events, "textDocument/didOpen").await;
+
+    assert_eq!(
+        router
+            .remove_disconnected_server(&server_name)
+            .await
+            .expect("remove disconnected route"),
+        1
+    );
+    original_task.await.expect("original server task");
+    assert!(matches!(
+        router.document_version(&uri),
+        Err(LanguageServerRouterError::DocumentNotOpen { .. })
+    ));
+
+    let (replacement, mut replacement_events, replacement_task) = fake_language_server(sync).await;
+    router
+        .register(
+            LanguageServerRoute::new(server_name, ["rust"]).expect("replacement route"),
+            replacement,
+        )
+        .expect("register replacement");
+    router
+        .open_document(snapshot(&uri, 2, "authoritative latest text"))
+        .await
+        .expect("replay authoritative document");
+    let replay = next_method(&mut replacement_events, "textDocument/didOpen").await;
+    assert_eq!(
+        replay["params"]["textDocument"]["text"],
+        "authoritative latest text"
+    );
+    assert!(router.shutdown().await.is_empty());
+    replacement_task.await.expect("replacement server task");
+}
+
 fn snapshot(uri: &Uri, revision: u64, text: &str) -> LanguageDocumentSnapshot {
     LanguageDocumentSnapshot::new(
         uri.clone(),
@@ -168,7 +220,17 @@ async fn fake_language_server(
         )
         .await;
         loop {
-            let message = read_json(&mut reader).await;
+            let frame = match read_frame(
+                &mut reader,
+                DEFAULT_MAX_HEADER_BYTES,
+                DEFAULT_MAX_MESSAGE_BYTES,
+            )
+            .await
+            {
+                Ok(Some(frame)) => frame,
+                Ok(None) | Err(_) => break,
+            };
+            let message: Value = serde_json::from_slice(&frame).expect("valid JSON");
             let method = message["method"].as_str().unwrap_or_default();
             event_tx.send(message.clone()).expect("record server event");
             if method == "shutdown" {
