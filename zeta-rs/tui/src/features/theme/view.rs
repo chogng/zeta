@@ -134,8 +134,8 @@ fn diff_preview(palette: ThemePreviewPalette) -> Vec<Line<'static>> {
                 .bg(palette.background),
         ),
         Line::from(vec![
-            Span::styled("2-  ", Style::default().fg(palette.removed_marker)),
-            Span::styled("    format!", Style::default().fg(palette.function)),
+            Span::styled("2  -  ", Style::default().fg(palette.removed_marker)),
+            Span::styled("  format!", Style::default().fg(palette.function)),
             Span::styled("(", Style::default().fg(palette.foreground)),
             Span::styled("\"Hello, {}!\"", Style::default().fg(palette.string)),
             Span::styled(", ", Style::default().fg(palette.foreground)),
@@ -148,8 +148,8 @@ fn diff_preview(palette: ThemePreviewPalette) -> Vec<Line<'static>> {
                 .bg(palette.removed_background),
         ),
         Line::from(vec![
-            Span::styled("2+  ", Style::default().fg(palette.inserted_marker)),
-            Span::styled("    format!", Style::default().fg(palette.function)),
+            Span::styled("2  +  ", Style::default().fg(palette.inserted_marker)),
+            Span::styled("  format!", Style::default().fg(palette.function)),
             Span::styled("(", Style::default().fg(palette.foreground)),
             Span::styled("\"Hello, {zeta}!\"", Style::default().fg(palette.string)),
             Span::styled(")", Style::default().fg(palette.foreground)),

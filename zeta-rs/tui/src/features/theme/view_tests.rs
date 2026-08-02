@@ -106,8 +106,8 @@ fn theme_pane_is_numbered_fixed_and_not_searchable() {
         })
         .collect::<Vec<_>>();
     assert!(preview_text[0].starts_with("1   fn greet(zeta:"));
-    assert!(preview_text[1].starts_with("2-"));
-    assert!(preview_text[2].starts_with("2+"));
+    assert!(preview_text[1].starts_with("2  -"));
+    assert!(preview_text[2].starts_with("2  +"));
     assert!(preview_text[3].starts_with("3"));
     let caption = preview
         .caption()
