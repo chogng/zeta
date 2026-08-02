@@ -86,13 +86,6 @@ test("Terminal profile menu launches the selected shell profile", async () => {
   const commandPromptProfile = { profileId: "cmd", title: "Command Prompt", isDefault: true };
   const powerShellProfile = { profileId: "pwsh", title: "PowerShell", isDefault: false };
   titleActions.setProfiles([commandPromptProfile, powerShellProfile]);
-  titleActions.setSupplementalSecondaryActions([{
-    id: "zeta.compositeBar.open.panel.output",
-    label: "Output",
-    tooltip: "Output",
-    enabled: true,
-    run() {},
-  }]);
   ownerDocument.body.append(titleActions.element);
 
   const toolbar = titleActions.element;
@@ -156,7 +149,7 @@ test("Terminal profile menu launches the selected shell profile", async () => {
   moreActions.querySelector("button")?.click();
   const clearTerminal = shownProfileActions.find((action) => action.id === "zeta.terminal.clear");
   assert.ok(clearTerminal);
-  assert.ok(shownProfileActions.some((action) => action.id === "zeta.compositeBar.open.panel.output"));
+  assert.equal(shownProfileActions.some((action) => action.id.startsWith("zeta.compositeBar.open.")), false);
   await clearTerminal.run();
   assert.equal(clearCount, 1);
   titleActions.setActiveInstance(activeInstance, "list");

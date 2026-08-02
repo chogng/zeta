@@ -1,34 +1,13 @@
-import {
-  type IAction,
-  Separator,
-  SubmenuAction,
-} from "../../../common/actions.js";
-import { addDisposableListener } from "../../dom.js";
-import {
-  FocusNavigationBoundary,
-  FocusNavigationDirection,
-  focusFirst,
-  focusLast,
-  moveFocus,
-} from "../../focus.js";
+import { type IAction, Separator, SubmenuAction } from "../../../common/actions.js";
+import { addDisposableListener, isNode } from "../../dom.js";
+import { FocusNavigationBoundary, FocusNavigationDirection, focusFirst, focusLast, moveFocus } from "../../focus.js";
 import type { ResolvedKeybinding } from "../../../common/keybindings.js";
 import { DisposableOwner } from "../../../common/lifecycle.js";
 import { lxiconsLibrary } from "../../../common/lxiconsLibrary.js";
-import {
-  ActionViewItem,
-  ButtonActionViewItem,
-  SeparatorActionViewItem,
-} from "../actionbar/actionViewItems.js";
-import {
-  AnchorAxisAlignment,
-  AnchorPosition,
-  ContextView,
-  ContextViewFocusRestore,
-} from "../contextview/contextview.js";
+import { ActionViewItem, ButtonActionViewItem, SeparatorActionViewItem } from "../actionbar/actionViewItems.js";
+import { AnchorAxisAlignment, AnchorPosition, ContextView, ContextViewFocusRestore } from "../contextview/contextview.js";
 import { appendIcon } from "../icon/icon.js";
-import {
-  KeybindingLabel,
-} from "../keybindinglabel/keybindinglabel.js";
+import { KeybindingLabel } from "../keybindinglabel/keybindinglabel.js";
 
 interface MenuActionViewItemOptions {
   readonly onDidSelect?: () => void;
@@ -38,6 +17,22 @@ interface MenuActionViewItemOptions {
   readonly getKeybinding?: (
     action: IAction,
   ) => ResolvedKeybinding | undefined;
+}
+
+function prependMenuLeadingSlot(
+  button: HTMLButtonElement,
+  checked: boolean | undefined,
+): void {
+  const slot = button.ownerDocument.createElement("span");
+  slot.className = "zeta-menu-leading-slot";
+  slot.setAttribute("aria-hidden", "true");
+  const icon = button.querySelector<SVGElement>(":scope > .zeta-icon");
+  if (icon) slot.append(icon);
+  else if (checked !== undefined) {
+    slot.classList.add("zeta-menu-leading-check");
+    appendIcon(lxiconsLibrary.check, slot);
+  }
+  button.prepend(slot);
 }
 
 /** Button view item for an action presented inside a menu. */
@@ -56,6 +51,7 @@ class MenuActionViewItem extends ButtonActionViewItem {
 
   override render(container: HTMLElement): void {
     super.render(container);
+    prependMenuLeadingSlot(this.button.element, this.action.checked);
     if (this.action.checked === undefined) {
       this.button.element.setAttribute("role", "menuitem");
     } else {
@@ -111,6 +107,7 @@ class SubmenuMenuActionViewItem extends ButtonActionViewItem {
 
   override render(container: HTMLElement): void {
     super.render(container);
+    prependMenuLeadingSlot(this.button.element, undefined);
     const ownerDocument = container.ownerDocument;
     if (
       this.contextViewContainer &&
@@ -161,6 +158,7 @@ class SubmenuMenuActionViewItem extends ButtonActionViewItem {
       anchorAxisAlignment: AnchorAxisAlignment.Horizontal,
       anchorPosition: AnchorPosition.Below,
       gap: 2,
+      presentation: "menu",
       layer: this.submenuLayer,
       focusRestore: ContextViewFocusRestore.Previous,
       isTargetWithin: (target) => this.menu?.contains(target) ?? false,
@@ -216,10 +214,18 @@ export interface MenuOptions {
   readonly layer?: number;
 }
 
+interface MenuEntry {
+  readonly action: IAction;
+  readonly container: HTMLElement;
+  readonly item: ActionViewItem;
+}
+
 /** Keyboard-focusable action menu with shared nested-submenu behavior. */
 export class Menu extends DisposableOwner {
   readonly element: HTMLDivElement;
   private readonly submenus: SubmenuMenuActionViewItem[] = [];
+  private readonly entries: MenuEntry[] = [];
+  private focusedEntry: MenuEntry | undefined;
 
   constructor(options: MenuOptions) {
     super();
@@ -249,7 +255,24 @@ export class Menu extends DisposableOwner {
       container.setAttribute("role", "presentation");
       element.append(container);
       item.render(container);
+      this.entries.push({ action, container, item });
     }
+    this.own(addDisposableListener(element, "focusin", (event) => {
+      const entry = this.findEntry(event.target);
+      if (entry?.action.enabled) this.setFocusedEntry(entry);
+    }));
+    this.own(addDisposableListener(element, "focusout", (event) => {
+      if (isNode(event.relatedTarget) && this.contains(event.relatedTarget)) return;
+      this.setFocusedEntry(undefined);
+    }));
+    this.own(addDisposableListener(element, "mouseover", (event) => {
+      const entry = this.findEntry(event.target);
+      this.setFocusedEntry(entry?.action.enabled ? entry : undefined, true);
+    }));
+    this.own(addDisposableListener(element, "mouseout", (event) => {
+      if (isNode(event.relatedTarget) && this.contains(event.relatedTarget)) return;
+      this.setFocusedEntry(undefined);
+    }));
     this.own(addDisposableListener(element, "keydown", (event) => {
       if (event.isComposing) return;
       let handled = true;
@@ -304,5 +327,32 @@ export class Menu extends DisposableOwner {
   contains(target: Node): boolean {
     return this.element.contains(target) ||
       this.submenus.some((submenu) => submenu.contains(target));
+  }
+
+  private findEntry(target: EventTarget | null): MenuEntry | undefined {
+    if (!isNode(target)) return undefined;
+    const targetElement = target.nodeType === 1
+      ? target as Element
+      : target.parentElement;
+    const container = targetElement?.closest<HTMLElement>(
+      ".zeta-action-view-item",
+    );
+    if (container?.parentElement !== this.element) return undefined;
+    return this.entries.find((entry) => entry.container === container);
+  }
+
+  private setFocusedEntry(entry: MenuEntry | undefined, focus = false): void {
+    if (entry !== this.focusedEntry) {
+      this.focusedEntry?.container.classList.remove("focused");
+      this.focusedEntry = entry;
+      entry?.container.classList.add("focused");
+    }
+    if (
+      focus &&
+      entry &&
+      !entry.container.contains(this.element.ownerDocument.activeElement)
+    ) {
+      entry.item.focus();
+    }
   }
 }

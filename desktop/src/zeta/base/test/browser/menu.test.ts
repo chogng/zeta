@@ -8,6 +8,10 @@ test("Menu renders submenu actions with the shared SVG indicator", async () => {
     configurable: true,
     value: dom.window,
   });
+  Object.defineProperty(globalThis, "Node", {
+    configurable: true,
+    value: dom.window.Node,
+  });
   const [{ SubmenuAction }, { Menu }] = await Promise.all([
     import("../../common/actions.js"),
     import("../../browser/ui/menu/menu.js"),
@@ -32,4 +36,83 @@ test("Menu renders submenu actions with the shared SVG indicator", async () => {
   menu.dispose();
   dom.window.close();
   Reflect.deleteProperty(globalThis, "window");
+  Reflect.deleteProperty(globalThis, "Node");
+});
+
+test("Menu projects one focused item for keyboard and pointer navigation", async () => {
+  const dom = new JSDOM("<!doctype html><body></body>");
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    value: dom.window,
+  });
+  Object.defineProperty(globalThis, "Node", {
+    configurable: true,
+    value: dom.window.Node,
+  });
+  const { Menu } = await import("../../browser/ui/menu/menu.js");
+  const menu = new Menu({
+    actions: ["first", "second", "third"].map((id) => ({
+      id,
+      label: id,
+      tooltip: id,
+      enabled: true,
+      run(): void {},
+    })),
+    ownerDocument: dom.window.document,
+  });
+  dom.window.document.body.append(menu.element);
+  const items = [...menu.element.querySelectorAll<HTMLElement>(
+    ":scope > .zeta-action-view-item",
+  )];
+  const buttons = items.map((item) =>
+    item.querySelector<HTMLButtonElement>(":scope > .zeta-button")!
+  );
+  for (const button of buttons) {
+    button.getClientRects = () => [{}] as unknown as DOMRectList;
+  }
+  Object.defineProperty(dom.window.Element.prototype, "scrollTo", {
+    configurable: true,
+    value(): void {},
+  });
+
+  menu.focusFirst();
+  assert.equal(dom.window.document.activeElement, buttons[0]);
+  assert.deepEqual(items.map((item) => item.classList.contains("focused")), [
+    true,
+    false,
+    false,
+  ]);
+
+  buttons[1]!.dispatchEvent(new dom.window.MouseEvent("mouseover", {
+    bubbles: true,
+    relatedTarget: buttons[0],
+  }));
+  assert.equal(dom.window.document.activeElement, buttons[1]);
+  assert.deepEqual(items.map((item) => item.classList.contains("focused")), [
+    false,
+    true,
+    false,
+  ]);
+
+  buttons[1]!.dispatchEvent(new dom.window.KeyboardEvent("keydown", {
+    bubbles: true,
+    key: "ArrowDown",
+  }));
+  assert.equal(dom.window.document.activeElement, buttons[2]);
+  assert.deepEqual(items.map((item) => item.classList.contains("focused")), [
+    false,
+    false,
+    true,
+  ]);
+
+  menu.element.dispatchEvent(new dom.window.MouseEvent("mouseout", {
+    bubbles: true,
+    relatedTarget: dom.window.document.body,
+  }));
+  assert.equal(items.some((item) => item.classList.contains("focused")), false);
+
+  menu.dispose();
+  dom.window.close();
+  Reflect.deleteProperty(globalThis, "window");
+  Reflect.deleteProperty(globalThis, "Node");
 });

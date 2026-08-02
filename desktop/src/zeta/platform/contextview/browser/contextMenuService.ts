@@ -80,6 +80,7 @@ export class BrowserContextMenuService extends DisposableOwner
       anchor: toContextViewAnchor(options.anchor),
       content: menu.element,
       anchorPosition: AnchorPosition.Below,
+      presentation: "menu",
       focusRestore: ContextViewFocusRestore.Previous,
       layer: 10,
       isTargetWithin: (target) => menu.contains(target),
@@ -91,8 +92,8 @@ export class BrowserContextMenuService extends DisposableOwner
     }
 
     this.shown = true;
-    menu.focusFirst();
     this._onDidShowContextMenu.fire();
+    menu.focusFirst();
   }
 
   hideContextMenu(): void {

@@ -4,6 +4,9 @@
   z-index: 1000;
   max-width: calc(100vw - 8px);
   max-height: calc(100vh - 8px);
+}
+
+.zeta-context-view-default {
   color: var(--zeta-foreground);
   background: var(--zeta-editor-background);
   border: 1px solid var(--zeta-border);

@@ -1,6 +1,5 @@
 import { compositePanelId, compositeTabId } from "../compositebar/compositeBar.js";
 import { ViewPaneContainer, type ViewPaneContainerOptions } from "./viewPaneContainer.js";
-import type { IAction } from "../../../../base/common/actions.js";
 import type { PartTitleProjection } from "./viewPane.js";
 
 export interface PaneCompositeOptions extends ViewPaneContainerOptions {
@@ -40,9 +39,5 @@ export class PaneComposite extends ViewPaneContainer {
       throw new Error("A PaneComposite may receive a title projection from only one visible View");
     }
     return projections[0];
-  }
-
-  setTitleSecondaryActions(actions: readonly IAction[]): boolean {
-    return this.panes.some((pane) => pane.setTitleSecondaryActions(actions));
   }
 }

@@ -1,6 +1,7 @@
 import "./compositebar.css";
 import type { IContextMenuProvider } from "../../../../base/browser/contextmenu.js";
-import { Button } from "../../../../base/browser/ui/button/button.js";
+import type { ActionViewItem } from "../../../../base/browser/ui/actionbar/actionViewItems.js";
+import { DropdownMenuActionViewItem } from "../../../../base/browser/ui/dropdown/dropdownMenuActionViewItem.js";
 import { TabList } from "../../../../base/browser/ui/tablist/tabList.js";
 import type { IAction } from "../../../../base/common/actions.js";
 import { Emitter, type Event } from "../../../../base/common/event.js";
@@ -29,10 +30,9 @@ export interface CompositeBarOptions {
 
 /** Visual density selected by the Part hosting a CompositeBar. */
 export type CompositeBarPresentation = "icon" | "label";
-export type CompositeBarOverflowPresentation = "inline" | "external";
 
 const OVERFLOW_BUTTON_WIDTH = 24;
-const LABEL_TAB_LIST_INSET_WIDTH = 16;
+const OVERFLOW_ACTION_ID = "zeta.compositeBar.overflow";
 
 /**
  * Maps registered workbench Composites onto the shared TabList.
@@ -47,65 +47,62 @@ export class CompositeBar extends DisposableOwner {
   private readonly tabList: TabList<string>;
   private readonly contextMenuProvider: IContextMenuProvider | undefined;
   private readonly containerFilter: (container: IViewContainerDescriptor) => boolean;
-  private readonly overflowButton: Button | undefined;
+  private overflowViewItem: CompositeBarOverflowViewItem | undefined;
   private readonly _onDidSelectComposite =
     this.own(new Emitter<CompositeBarSelectionEvent>());
-  private readonly _onDidChangeOverflowActions = this.own(new Emitter<void>());
   private containers: readonly IViewContainerDescriptor[] = [];
   private readonly tabWidths = new Map<string, number>();
-  private readonly tabListInsetWidth = LABEL_TAB_LIST_INSET_WIDTH;
+  private tabListInsetWidth = 0;
+  private tabListItemGap = 0;
   private renderedContainerIds: readonly string[] = [];
   private overflowingContainerIds = new Set<string>();
-  private overflowPresentation: CompositeBarOverflowPresentation = "inline";
   private _activeCompositeId: string | undefined;
 
   readonly onDidSelectComposite: Event<CompositeBarSelectionEvent> =
     this._onDidSelectComposite.event;
-  readonly onDidChangeOverflowActions: Event<void> =
-    this._onDidChangeOverflowActions.event;
 
   constructor(options: CompositeBarOptions) {
     super();
+    const presentation = options.presentation ?? "icon";
     this.viewDescriptorService = options.viewDescriptorService;
     this.location = options.location;
     this.contextMenuProvider = options.contextMenuProvider;
     this.containerFilter = options.containerFilter ?? (() => true);
     this.element = options.ownerDocument.createElement("section");
-    this.element.className = `zeta-composite-bar zeta-composite-bar-${options.presentation ?? "icon"}`;
+    this.element.className = `zeta-composite-bar zeta-composite-bar-${presentation}`;
     this.element.setAttribute("aria-label", options.ariaLabel);
     this.element.dataset.viewContainerLocation = options.location;
     this.defer(() => this.element.remove());
+    const overflowAction = presentation === "label" && this.contextMenuProvider
+      ? new CompositeBarOverflowAction()
+      : undefined;
     this.tabList = this.own(new TabList({
       ownerDocument: options.ownerDocument,
       ariaLabel: options.ariaLabel,
+      presentation: presentation === "icon" ? "inset" : "flush",
+      trailingActions: overflowAction ? [overflowAction] : undefined,
+      trailingActionViewItemProvider: overflowAction
+        ? (action): ActionViewItem => {
+          const item = new CompositeBarOverflowViewItem(
+            action,
+            () => this.createOverflowActions(),
+            this.contextMenuProvider!,
+          );
+          this.overflowViewItem = item;
+          return item;
+        }
+        : undefined,
       onActivate: (compositeId) => {
         if (this._activeCompositeId === compositeId) return;
         this._onDidSelectComposite.fire({ compositeId });
       },
     }));
-    if (options.presentation === "label" && this.contextMenuProvider) {
-      const overflowButton = this.own(new Button({
-        ownerDocument: options.ownerDocument,
-        label: "Additional views",
-        title: "Additional views",
-        icon: lxiconsLibrary.ellipsis,
-        onClick: () => this.showOverflowMenu(),
-      }));
-      overflowButton.element.classList.add("zeta-composite-bar-overflow");
-      overflowButton.element.setAttribute("aria-haspopup", "menu");
-      overflowButton.element.setAttribute("aria-expanded", "false");
-      overflowButton.hidden = true;
-      this.overflowButton = overflowButton;
-      this.element.append(this.tabList.element, overflowButton.element);
-    } else {
-      this.overflowButton = undefined;
-      this.element.append(this.tabList.element);
-    }
+    this.element.append(this.tabList.element);
     this.own(this.viewDescriptorService.onDidChangeViewContainers(() => {
       this.render();
     }));
     const ResizeObserverConstructor = options.ownerDocument.defaultView?.ResizeObserver;
-    if (this.overflowButton && ResizeObserverConstructor) {
+    if (overflowAction && ResizeObserverConstructor) {
       const observer = new ResizeObserverConstructor(() => this.layout());
       observer.observe(this.element);
       this.defer(() => observer.disconnect());
@@ -129,30 +126,14 @@ export class CompositeBar extends DisposableOwner {
     this.render();
   }
 
-  setOverflowPresentation(presentation: CompositeBarOverflowPresentation): void {
-    if (this.overflowPresentation === presentation) return;
-    this.overflowPresentation = presentation;
-    if (this.overflowButton) {
-      this.overflowButton.hidden = presentation === "external" || this.overflowingContainerIds.size === 0;
-    }
-    this.layout();
-  }
-
-  getOverflowActions(): readonly IAction[] {
-    return this.createOverflowActions();
-  }
-
   /** Reconciles visible label tabs with the width assigned by the hosting Part. */
   layout(): void {
-    const overflowButton = this.overflowButton;
-    if (!overflowButton || !this.measureTabWidths()) return;
+    const overflowViewItem = this.overflowViewItem;
+    if (!overflowViewItem || !this.measureTabWidths()) return;
     const availableWidth = this.element.clientWidth;
     if (availableWidth <= 0) return;
 
-    const visibleContainers = this.visibleContainersForWidth(
-      availableWidth,
-      this.overflowPresentation === "inline" ? OVERFLOW_BUTTON_WIDTH : 0,
-    );
+    const visibleContainers = this.visibleContainersForWidth(availableWidth, OVERFLOW_BUTTON_WIDTH + this.tabListItemGap);
     const visibleContainerIds = visibleContainers.map((container) => container.id);
     if (!sameIds(this.renderedContainerIds, visibleContainerIds)) {
       this.renderTabs(visibleContainers);
@@ -161,7 +142,9 @@ export class CompositeBar extends DisposableOwner {
     this.setOverflowingContainerIds(new Set(this.containers
       .filter((container) => !visibleContainerIds.includes(container.id))
       .map((container) => container.id)));
-    overflowButton.hidden = this.overflowPresentation === "external" || this.overflowingContainerIds.size === 0;
+    if (this.overflowViewItem) {
+      this.overflowViewItem.hidden = this.overflowingContainerIds.size === 0;
+    }
   }
 
   private render(): void {
@@ -175,7 +158,7 @@ export class CompositeBar extends DisposableOwner {
     }
     this.tabWidths.clear();
     this.setOverflowingContainerIds(new Set());
-    if (this.overflowButton) this.overflowButton.hidden = true;
+    if (this.overflowViewItem) this.overflowViewItem.hidden = true;
     this.renderTabs(this.containers);
     this.layout();
   }
@@ -196,6 +179,9 @@ export class CompositeBar extends DisposableOwner {
         ? this._activeCompositeId
         : undefined,
     );
+    if (this.overflowViewItem) {
+      this.overflowViewItem.hidden = this.overflowingContainerIds.size === 0;
+    }
   }
 
   private measureTabWidths(): boolean {
@@ -203,11 +189,27 @@ export class CompositeBar extends DisposableOwner {
       ".zeta-tab-list-scroll-content > .zeta-action-bar",
     );
     if (!actionBar) return false;
-    for (const tab of actionBar.querySelectorAll<HTMLElement>(":scope > .zeta-tab")) {
+    const tabs = [...actionBar.querySelectorAll<HTMLElement>(":scope > .zeta-tab")];
+    const tabBounds: DOMRect[] = [];
+    let totalTabWidth = 0;
+    for (const tab of tabs) {
       const id = tab.dataset.actionId;
-      const width = tab.getBoundingClientRect().width;
+      const bounds = tab.getBoundingClientRect();
+      const width = bounds.width;
       if (!id || width <= 0) return false;
       this.tabWidths.set(id, width);
+      tabBounds.push(bounds);
+      totalTabWidth += width;
+    }
+    const firstTabBounds = tabBounds[0];
+    const lastTabBounds = tabBounds.at(-1);
+    if (firstTabBounds && lastTabBounds) {
+      const actionBarBounds = actionBar.getBoundingClientRect();
+      this.tabListInsetWidth = Math.max(0, firstTabBounds.left - actionBarBounds.left) * 2;
+      if (tabBounds.length > 1) {
+        const itemSpan = lastTabBounds.right - firstTabBounds.left;
+        this.tabListItemGap = Math.max(0, (itemSpan - totalTabWidth) / (tabBounds.length - 1));
+      }
     }
     if (!this.containers.every((container) => this.tabWidths.has(container.id))) {
       return false;
@@ -216,52 +218,32 @@ export class CompositeBar extends DisposableOwner {
   }
 
   private visibleContainersForWidth(availableWidth: number, overflowWidth: number): readonly IViewContainerDescriptor[] {
-    const totalWidth = this.tabListInsetWidth + this.containers.reduce(
-      (total, container) => total + this.tabWidths.get(container.id)!,
-      0,
-    );
+    const totalWidth = this.containersWidth(this.containers);
     if (totalWidth <= availableWidth) return this.containers;
 
     const widthLimit = Math.max(0, availableWidth - overflowWidth);
     const visible: IViewContainerDescriptor[] = [];
-    let width = this.tabListInsetWidth;
     for (const container of this.containers) {
-      const tabWidth = this.tabWidths.get(container.id)!;
-      if (width + tabWidth > widthLimit) break;
+      if (this.containersWidth([...visible, container]) > widthLimit) break;
       visible.push(container);
-      width += tabWidth;
     }
 
     const activeCompositeId = this._activeCompositeId;
     if (activeCompositeId && !visible.some((container) => container.id === activeCompositeId)) {
       const activeContainer = this.containers.find((container) => container.id === activeCompositeId);
       if (activeContainer) {
-        const activeWidth = this.tabWidths.get(activeContainer.id)!;
-        while (visible.length > 0 && width + activeWidth > widthLimit) {
-          const removed = visible.pop()!;
-          width -= this.tabWidths.get(removed.id)!;
-        }
-        if (width + activeWidth <= widthLimit) visible.push(activeContainer);
+        while (visible.length > 0 && this.containersWidth([...visible, activeContainer]) > widthLimit) visible.pop();
+        if (this.containersWidth([...visible, activeContainer]) <= widthLimit) visible.push(activeContainer);
       }
     }
     return visible;
   }
 
-  private showOverflowMenu(): void {
-    const overflowButton = this.overflowButton;
-    const contextMenuProvider = this.contextMenuProvider;
-    if (!overflowButton || !contextMenuProvider || this.overflowingContainerIds.size === 0) return;
-    overflowButton.element.setAttribute("aria-expanded", "true");
-    try {
-      contextMenuProvider.showContextMenu({
-        anchor: overflowButton.element,
-        actions: this.createOverflowActions(),
-        onHide: () => overflowButton.element.setAttribute("aria-expanded", "false"),
-      });
-    } catch (error) {
-      overflowButton.element.setAttribute("aria-expanded", "false");
-      throw error;
-    }
+  private containersWidth(containers: readonly IViewContainerDescriptor[]): number {
+    return this.tabListInsetWidth + containers.reduce(
+      (total, container, index) => total + this.tabWidths.get(container.id)! + (index > 0 ? this.tabListItemGap : 0),
+      0,
+    );
   }
 
   private createOverflowActions(): readonly IAction[] {
@@ -283,7 +265,32 @@ export class CompositeBar extends DisposableOwner {
   private setOverflowingContainerIds(ids: Set<string>): void {
     if (sameIds([...this.overflowingContainerIds], [...ids])) return;
     this.overflowingContainerIds = ids;
-    this._onDidChangeOverflowActions.fire();
+  }
+}
+
+class CompositeBarOverflowAction implements IAction {
+  readonly id = OVERFLOW_ACTION_ID;
+  readonly label = "Additional views";
+  readonly tooltip = "Additional views";
+  readonly icon = lxiconsLibrary.ellipsis;
+  readonly enabled = true;
+
+  run(): void {}
+}
+
+class CompositeBarOverflowViewItem extends DropdownMenuActionViewItem {
+  private container: HTMLElement | undefined;
+
+  override render(container: HTMLElement): void {
+    super.render(container);
+    this.container = container;
+    container.classList.add("zeta-composite-bar-overflow");
+  }
+
+  set hidden(hidden: boolean) {
+    if (!this.container) return;
+    this.container.hidden = hidden;
+    this.container.classList.toggle("hidden", hidden);
   }
 }
 

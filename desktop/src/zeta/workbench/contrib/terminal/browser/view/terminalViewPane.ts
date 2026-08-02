@@ -1,7 +1,6 @@
 import { TabList } from "../../../../../base/browser/ui/tablist/tabList.js";
 import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
 import { lxiconsLibrary } from "../../../../../base/common/lxiconsLibrary.js";
-import type { IAction } from "../../../../../base/common/actions.js";
 import type { IMenuService } from "../../../../../platform/actions/common/menuService.js";
 import type { IContextKeyService } from "../../../../../platform/contextkey/common/contextkey.js";
 import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextMenu.js";
@@ -114,11 +113,6 @@ export class TerminalViewPane extends ViewPane {
 
   override get partTitleProjection(): PartTitleProjection {
     return { actions: this.titleActions.element };
-  }
-
-  override setTitleSecondaryActions(actions: readonly IAction[]): boolean {
-    this.titleActions.setSupplementalSecondaryActions(actions);
-    return true;
   }
 
   private async initialize(): Promise<void> {

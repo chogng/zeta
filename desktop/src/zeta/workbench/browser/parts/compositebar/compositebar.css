@@ -11,23 +11,31 @@
   flex: 1 1 auto;
 }
 
-.zeta-composite-bar-overflow.zeta-button {
+.zeta-composite-bar-overflow {
+  flex: 0 0 24px;
+}
+
+.zeta-composite-bar-overflow.hidden {
+  display: none;
+}
+
+.zeta-composite-bar-overflow > .zeta-button {
   width: 24px;
   min-width: 24px;
   height: 24px;
   min-height: 24px;
-  flex: 0 0 24px;
   padding: 4px;
   border: 0;
   color: var(--zeta-composite-bar-inactive-foreground);
 }
 
-.zeta-composite-bar-overflow .zeta-icon {
+.zeta-composite-bar-overflow > .zeta-button > .zeta-icon {
   width: 16px;
   height: 16px;
 }
 
-.zeta-composite-bar-overflow .zeta-button-label {
+.zeta-composite-bar-overflow .zeta-button-label,
+.zeta-composite-bar-overflow .zeta-dropdown-menu-indicator {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -46,7 +54,6 @@
   align-items: center;
   flex-direction: row;
   gap: 2px;
-  padding: 0 6px;
 }
 
 .zeta-composite-bar
@@ -58,7 +65,6 @@
   border: 0;
   border-radius: 4px;
   color: var(--zeta-composite-bar-inactive-foreground);
-  background: transparent;
 }
 
 .zeta-composite-bar-icon
@@ -73,8 +79,7 @@
 .zeta-composite-bar-label
   .zeta-tab-list-scroll-content
   > .zeta-action-bar {
-  gap: 0;
-  padding: 0 8px;
+  padding: 0 var(--zeta-tab-list-content-inset);
   font-size: var(--zeta-font-size-body1);
   line-height: 20px;
 }
@@ -85,7 +90,6 @@
   > .zeta-tab {
   width: auto;
   min-width: 0;
-  padding: 2px 4px;
 }
 
 .zeta-composite-bar
@@ -106,7 +110,6 @@
   > .zeta-action-bar
   > .zeta-tab.checked {
   color: var(--zeta-composite-bar-foreground);
-  background: var(--zeta-button-active-background);
 }
 
 .zeta-composite-bar .zeta-tab-label {
@@ -115,7 +118,6 @@
   height: 100%;
   align-items: center;
   justify-content: center;
-  padding: 0;
   border: 0;
   outline: none;
   color: inherit;
@@ -132,9 +134,12 @@
   display: none;
 }
 
+.zeta-composite-bar-icon .zeta-tab-label {
+  padding: 0;
+}
+
 .zeta-composite-bar-label .zeta-tab-label {
   width: auto;
-  padding: 0 2px;
 }
 
 .zeta-composite-bar-label .zeta-icon-label-text {

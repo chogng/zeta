@@ -93,10 +93,6 @@ export class TerminalTitleActions extends DisposableOwner {
     this.creatingContext.set(creating);
   }
 
-  setSupplementalSecondaryActions(actions: readonly IAction[]): void {
-    this.toolbar.setSupplementalSecondaryActions(actions);
-  }
-
   setActiveInstance(instance: ITerminalInstance | undefined, placement: "list" | "title"): void {
     this.activeInstance = instance;
     this.activeInstanceInTitleContext.set(instance !== undefined && placement === "title");

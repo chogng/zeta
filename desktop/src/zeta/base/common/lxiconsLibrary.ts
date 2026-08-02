@@ -15,6 +15,7 @@ export const lxiconsLibrary = {
   browserWeb: register("browser-web", svg.browserWeb),
   chat: register("chat", svg.chat),
   chatFilled: register("chat-filled", svg.chatFilled),
+  check: register("check", svg.check),
   chevronDown: register("chevron-down", svg.chevronDown),
   chevronRight: register("chevron-right", svg.chevronRight),
   close: register("close", svg.close),

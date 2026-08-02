@@ -3,7 +3,7 @@
 .zeta-action-bar .zeta-icon { width: 18px; height: 18px; }
 .zeta-action-bar.highlight-toggled .zeta-button.checked,
 .zeta-action-bar.highlight-toggled .zeta-action-label.checked {
-  background: var(--zeta-button-active-background);
+  background: var(--zeta-action-bar-toggled-background);
 }
 .zeta-action-view-item { display: flex; align-items: stretch; }
 .zeta-action-label {

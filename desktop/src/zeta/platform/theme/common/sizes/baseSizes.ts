@@ -16,6 +16,9 @@ export const fontWeightRegular = scalar("fontWeight.regular", 400, "Regular font
 export const fontWeightSemiBold = scalar("fontWeight.semiBold", 600, "Strong font weight paired with any font-size role for tabs, headings, and emphasized text.");
 
 export const tabHeight = dimension("tab.height", 24, "Standard height for TabList tabs.");
+export const tabListContentInset = dimension("tabList.contentInset", 4, "Horizontal inset between an inset TabList and its first or last tab.");
+export const tabListItemContentInset = dimension("tabList.itemContentInset", 6, "Horizontal inset between a TabList item's edge and its label content.");
+export const paneTitleHeight = dimension("pane.titleHeight", 32, "Standard height for a Workbench pane title.");
 export const actionBarGap = dimension("actionBar.gap", 2, "Gap between action bar items.");
 export const toolbarItemGap = dimension("toolbar.itemGap", 2, "Gap before a toolbar item.");
 export const toolbarActionSize = dimension("toolbar.actionSize", 24, "Default square toolbar action size.");

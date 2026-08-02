@@ -759,8 +759,9 @@ test("CompositeBar moves non-fitting label tabs into its overflow menu", () => {
     value: 110,
   });
   compositeBar.setActiveComposite("zeta.panel.terminal");
-  for (const tab of compositeBar.element.querySelectorAll<HTMLElement>(".zeta-tab")) {
-    tab.getBoundingClientRect = () => ({ width: 50 } as DOMRect);
+  const tabs = [...compositeBar.element.querySelectorAll<HTMLElement>(".zeta-tab")];
+  for (const [index, tab] of tabs.entries()) {
+    tab.getBoundingClientRect = () => ({ left: index * 50, right: (index + 1) * 50, width: 50 } as DOMRect);
   }
   compositeBar.layout();
 
@@ -769,11 +770,17 @@ test("CompositeBar moves non-fitting label tabs into its overflow menu", () => {
       .map((tab) => tab.textContent),
     ["Terminal"],
   );
-  const overflowButton = compositeBar.element.querySelector<HTMLButtonElement>(
+  const overflowItem = compositeBar.element.querySelector<HTMLElement>(
     ".zeta-composite-bar-overflow",
   );
+  assert.ok(overflowItem);
+  const overflowButton = overflowItem.querySelector<HTMLButtonElement>("button");
   assert.ok(overflowButton);
-  assert.equal(overflowButton.hidden, false);
+  assert.equal(overflowItem.hidden, false);
+  assert.equal(
+    compositeBar.element.querySelector(".zeta-tab")?.nextElementSibling,
+    overflowItem,
+  );
   overflowButton.click();
   assert.equal(overflowButton.getAttribute("aria-expanded"), "true");
   assert.deepEqual(
@@ -787,13 +794,7 @@ test("CompositeBar moves non-fitting label tabs into its overflow menu", () => {
   assert.ok(hideOverflowMenu);
   hideOverflowMenu();
   assert.equal(overflowButton.getAttribute("aria-expanded"), "false");
-  compositeBar.setOverflowPresentation("external");
-  assert.equal(overflowButton.hidden, true);
-  assert.equal(overflowButton.classList.contains("hidden"), true);
-  assert.deepEqual(
-    compositeBar.getOverflowActions().map((action) => action.label),
-    ["Problems", "Output"],
-  );
+  assert.equal(overflowItem.hidden, false);
 
   disposables.dispose();
   dom.window.close();

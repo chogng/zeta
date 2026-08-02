@@ -3,7 +3,7 @@ import { addDisposableListener } from "../../dom.js";
 import type { Icon } from "../../../common/icon.js";
 import type { IAction } from "../../../common/actions.js";
 import { DisposableOwner } from "../../../common/lifecycle.js";
-import { ActionBar, type ActionBarOrientation } from "../actionbar/actionbar.js";
+import { ActionBar, type ActionBarOrientation, type ActionViewItemProvider } from "../actionbar/actionbar.js";
 import { ScrollableElement } from "../scrollbar/scrollableElement.js";
 import { TabAction, TabActionViewItem } from "./tabActionViewItem.js";
 
@@ -29,14 +29,21 @@ export interface TabListItem<T> {
   readonly actions?: TabListActions;
 }
 
+/** Visual edge treatment for the ActionBar rendered inside a TabList. */
+export type TabListPresentation = "flush" | "inset";
+
 /** Construction inputs for a manually activated TabList. */
 export interface TabListOptions<T> {
   readonly ownerDocument: Document;
   readonly ariaLabel: string;
+  readonly presentation?: TabListPresentation;
   readonly orientation?: ActionBarOrientation;
   readonly onActivate: (value: T) => void;
   readonly onClose?: (value: T) => void;
   readonly closeActionIcon?: Icon;
+  /** Non-tab actions retained after the selectable tabs. */
+  readonly trailingActions?: readonly IAction[];
+  readonly trailingActionViewItemProvider?: ActionViewItemProvider;
 }
 
 /**
@@ -50,12 +57,16 @@ export class TabList<T> extends DisposableOwner {
   private readonly actionBar: ActionBar;
   private readonly scrollable: ScrollableElement;
   private readonly activate: (value: T) => void;
+  private readonly trailingActions: readonly IAction[];
 
   constructor(options: TabListOptions<T>) {
     super();
     this.activate = options.onActivate;
     const onClose = options.onClose;
     const closeActionIcon = options.closeActionIcon;
+    this.trailingActions = options.trailingActions ?? [];
+    const trailingActionIds = new Set(this.trailingActions.map((action) => action.id));
+    const presentation = options.presentation ?? "flush";
     const orientation = options.orientation ?? "horizontal";
     this.actionBar = this.own(new ActionBar({
       ownerDocument: options.ownerDocument,
@@ -64,7 +75,10 @@ export class TabList<T> extends DisposableOwner {
       orientation,
       actionViewItemProvider: (action) => {
         if (!(action instanceof TabAction)) {
-          throw new TypeError(`Unsupported TabList action: ${action.id}`);
+          if (!trailingActionIds.has(action.id)) {
+            throw new TypeError(`Unsupported TabList action: ${action.id}`);
+          }
+          return options.trailingActionViewItemProvider?.(action);
         }
         return new TabActionViewItem(action, onClose, closeActionIcon);
       },
@@ -74,6 +88,7 @@ export class TabList<T> extends DisposableOwner {
       : { ownerDocument: options.ownerDocument, direction: "horizontal" as const, horizontal: "auto" as const, tabIndex: -1, wheel: { consume: "when-scrolling" as const } };
     this.scrollable = this.own(new ScrollableElement(scrollableOptions));
     this.scrollable.element.classList.add("zeta-tab-list");
+    this.scrollable.element.classList.add(`zeta-tab-list-${presentation}`);
     this.scrollable.contentElement.classList.add(
       "zeta-tab-list-scroll-content",
     );
@@ -100,11 +115,19 @@ export class TabList<T> extends DisposableOwner {
     if (selectedId !== undefined && !ids.has(selectedId)) {
       throw new RangeError(`Selected TabList item is not available: ${selectedId}`);
     }
-    this.actionBar.setActions(tabs.map((tab) => new TabAction(
-      tab,
-      tab.id === selectedId,
-      this.activate,
-    )));
+    for (const action of this.trailingActions) {
+      if (ids.has(action.id)) {
+        throw new TypeError(`TabList trailing action conflicts with tab ID: ${action.id}`);
+      }
+    }
+    this.actionBar.setActions([
+      ...tabs.map((tab) => new TabAction(
+        tab,
+        tab.id === selectedId,
+        this.activate,
+      )),
+      ...this.trailingActions,
+    ]);
     if (selectedId !== undefined) this.actionBar.setTabStop(selectedId);
     this.scrollable.layout();
   }

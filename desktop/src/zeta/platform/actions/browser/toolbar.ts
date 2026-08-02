@@ -50,7 +50,6 @@ export interface MenuWorkbenchToolBarOptions extends WorkbenchToolBarOptions {
 export class MenuWorkbenchToolBar extends WorkbenchToolBar {
   private readonly menuOptions: IMenuActionOptions | undefined;
   private readonly menu: IMenu & Disposable;
-  private supplementalSecondaryActions: readonly IAction[] = [];
 
   constructor(
     menuService: IMenuService,
@@ -71,12 +70,6 @@ export class MenuWorkbenchToolBar extends WorkbenchToolBar {
     this.update();
   }
 
-  /** Adds host-owned overflow actions after this menu's secondary groups. */
-  setSupplementalSecondaryActions(actions: readonly IAction[]): void {
-    this.supplementalSecondaryActions = actions;
-    this.update();
-  }
-
   override setActions(_primaryActions: readonly IAction[], _secondaryActions: readonly IAction[] = []): never {
     throw new Error("MenuWorkbenchToolBar actions are owned by its MenuId");
   }
@@ -91,17 +84,13 @@ export class MenuWorkbenchToolBar extends WorkbenchToolBar {
         .filter(([group]) => group !== "navigation")
         .map(([, actions]) => [...actions]),
     );
-    const secondary = Separator.join(
-      menuSecondary,
-      [...this.supplementalSecondaryActions],
-    );
-    const empty = primary.length === 0 && secondary.length === 0;
+    const empty = primary.length === 0 && menuSecondary.length === 0;
     this.element.hidden = empty;
     this.element.classList.toggle("empty", empty);
     if (event?.isStructuralChange === false) {
-      super.updateActions(primary, secondary);
+      super.updateActions(primary, menuSecondary);
       return;
     }
-    super.setActions(primary, secondary);
+    super.setActions(primary, menuSecondary);
   }
 }

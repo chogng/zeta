@@ -229,26 +229,6 @@
       "description": "Background for inactive Chat session tabs.",
       "needsTransparency": false,
       "defaults": {
-        "dark": "#F8F8F8",
-        "light": "#F8F8F8",
-        "high-contrast-dark": "#F8F8F8",
-        "high-contrast-light": "#F8F8F8"
-      },
-      "values": {
-        "dark": "#f8f8f8",
-        "light": "#f8f8f8",
-        "high-contrast-dark": "#f8f8f8",
-        "high-contrast-light": "#f8f8f8"
-      }
-    },
-    {
-      "id": "chat.tabActiveBackground",
-      "kind": "color",
-      "cssVariable": "--zeta-chat-tab-active-background",
-      "owner": "chat.presentation",
-      "description": "Background for the active Chat session tab.",
-      "needsTransparency": false,
-      "defaults": {
         "dark": "#EEEEEE",
         "light": "#EEEEEE",
         "high-contrast-dark": "#EEEEEE",
@@ -549,16 +529,16 @@
       "description": "Selected menu item foreground.",
       "needsTransparency": false,
       "defaults": {
-        "dark": "list.activeSelectionForeground",
-        "light": "list.activeSelectionForeground",
-        "high-contrast-dark": "list.activeSelectionForeground",
-        "high-contrast-light": "list.activeSelectionForeground"
+        "dark": "foreground",
+        "light": "foreground",
+        "high-contrast-dark": "foreground",
+        "high-contrast-light": "foreground"
       },
       "values": {
-        "dark": "#ffffff",
-        "light": "#ffffff",
-        "high-contrast-dark": "#ffffff",
-        "high-contrast-light": "#ffffff"
+        "dark": "#cccccc",
+        "light": "#3b3b3b",
+        "high-contrast-dark": "#cccccc",
+        "high-contrast-light": "#3b3b3b"
       }
     },
     {
@@ -569,16 +549,16 @@
       "description": "Selected menu item background.",
       "needsTransparency": false,
       "defaults": {
-        "dark": "list.activeSelectionBackground",
-        "light": "list.activeSelectionBackground",
-        "high-contrast-dark": "list.activeSelectionBackground",
-        "high-contrast-light": "list.activeSelectionBackground"
+        "dark": "list.hoverBackground",
+        "light": "list.hoverBackground",
+        "high-contrast-dark": "list.hoverBackground",
+        "high-contrast-light": "list.hoverBackground"
       },
       "values": {
-        "dark": "#04395e",
-        "light": "#0060c0",
-        "high-contrast-dark": "#04395e",
-        "high-contrast-light": "#0060c0"
+        "dark": "#2a2d2e",
+        "light": "#e8e8e8",
+        "high-contrast-dark": "#2a2d2e",
+        "high-contrast-light": "#e8e8e8"
       }
     },
     {
@@ -659,6 +639,46 @@
         "light": "#dcdcdc",
         "high-contrast-dark": "#37373d",
         "high-contrast-light": "#dcdcdc"
+      }
+    },
+    {
+      "id": "actionBar.toggledBackground",
+      "kind": "color",
+      "cssVariable": "--zeta-action-bar-toggled-background",
+      "owner": "platform.theme.components",
+      "description": "Background for a checked ActionBar item.",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#37373d",
+        "light": "#E4E6F2",
+        "high-contrast-dark": "#37373d",
+        "high-contrast-light": "#E4E6F2"
+      },
+      "values": {
+        "dark": "#37373d",
+        "light": "#e4e6f2",
+        "high-contrast-dark": "#37373d",
+        "high-contrast-light": "#e4e6f2"
+      }
+    },
+    {
+      "id": "tabList.activeBackground",
+      "kind": "color",
+      "cssVariable": "--zeta-tab-list-active-background",
+      "owner": "platform.theme.components",
+      "description": "Background for a selected TabList tab.",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#37373d",
+        "light": "#E4E6F2",
+        "high-contrast-dark": "#37373d",
+        "high-contrast-light": "#E4E6F2"
+      },
+      "values": {
+        "dark": "#37373d",
+        "light": "#e4e6f2",
+        "high-contrast-dark": "#37373d",
+        "high-contrast-light": "#e4e6f2"
       }
     },
     {
@@ -2559,6 +2579,30 @@
       "owner": "platform.ui",
       "description": "Standard height for TabList tabs.",
       "value": "24px"
+    },
+    {
+      "id": "tabList.contentInset",
+      "kind": "size",
+      "cssVariable": "--zeta-tab-list-content-inset",
+      "owner": "platform.ui",
+      "description": "Horizontal inset between an inset TabList and its first or last tab.",
+      "value": "4px"
+    },
+    {
+      "id": "tabList.itemContentInset",
+      "kind": "size",
+      "cssVariable": "--zeta-tab-list-item-content-inset",
+      "owner": "platform.ui",
+      "description": "Horizontal inset between a TabList item's edge and its label content.",
+      "value": "6px"
+    },
+    {
+      "id": "pane.titleHeight",
+      "kind": "size",
+      "cssVariable": "--zeta-pane-title-height",
+      "owner": "platform.ui",
+      "description": "Standard height for a Workbench pane title.",
+      "value": "32px"
     },
     {
       "id": "actionBar.gap",

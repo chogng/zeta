@@ -27,6 +27,7 @@ test("TabList owns manual selection semantics and roving focus", () => {
     "[role='tablist']",
   );
   assert.equal(tabList.element.dataset.scrollDirection, "horizontal");
+  assert.equal(tabList.element.classList.contains("zeta-tab-list-flush"), true);
   assert.equal(
     tabList.element.querySelector(
       ".zeta-scrollbar-track-vertical",
@@ -69,6 +70,19 @@ test("TabList owns manual selection semantics and roving focus", () => {
     [false, true],
   );
 
+  tabList.dispose();
+  dom.window.close();
+});
+
+test("TabList exposes its ActionBar edge treatment as a presentation", () => {
+  const dom = new JSDOM("<!doctype html><body></body>");
+  const tabList = new TabList({
+    ownerDocument: dom.window.document,
+    ariaLabel: "Inset tabs",
+    presentation: "inset",
+    onActivate: () => undefined,
+  });
+  assert.equal(tabList.element.classList.contains("zeta-tab-list-inset"), true);
   tabList.dispose();
   dom.window.close();
 });

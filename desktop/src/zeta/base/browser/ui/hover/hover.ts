@@ -169,6 +169,9 @@ export class Hover extends DisposableOwner {
     this.tooltipListeners.add(addDisposableListener(ownerDocument, "click", dismissOutsideTooltip, true));
     this.tooltip = tooltip;
     this.applyDescription(tooltip.id);
+    // Layout can synchronously rebuild and dispose the target while measuring
+    // its anchor. Treat the view as active first so disposal can close it.
+    this._visible = true;
     const shown = this.contextView.show({
       anchor: this.element,
       content: tooltip,
@@ -178,8 +181,10 @@ export class Hover extends DisposableOwner {
       presentation: "hover",
       onHide: (reason) => this.didHide(reason),
     });
-    if (!shown) return;
-    this._visible = true;
+    if (!shown) {
+      if (this._visible) this.didHide();
+      return;
+    }
     this._onDidShow.fire();
   }
 
@@ -282,11 +287,11 @@ export class Hover extends DisposableOwner {
     this.descriptionApplied = false;
   }
 
-  private didHide(_reason: ContextViewHideReason): void {
+  private didHide(_reason?: ContextViewHideReason): void {
     const wasVisible = this._visible;
     this._visible = false;
     this.tooltip = undefined;
-    this.tooltipListeners.clear();
+    if (!this.tooltipListeners.disposed) this.tooltipListeners.clear();
     this.restoreDescription();
     if (wasVisible) this._onDidHide.fire();
   }

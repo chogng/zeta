@@ -3,7 +3,6 @@
   min-width: 0;
   flex: 1 1 auto;
   align-items: center;
-  margin-left: 6px;
   overflow: hidden;
 }
 
@@ -27,7 +26,6 @@
 
 .zeta-chat-tabs-control .zeta-tab.checked {
   color: var(--zeta-foreground);
-  background: var(--zeta-chat-tab-active-background);
 }
 
 .zeta-chat-tabs-control .zeta-tab-label {
@@ -35,7 +33,7 @@
   min-width: 0;
   height: 100%;
   flex: 1 1 auto;
-  padding: 0 10px;
+  padding-right: 4px;
   border: 0;
   outline: none;
   color: inherit;

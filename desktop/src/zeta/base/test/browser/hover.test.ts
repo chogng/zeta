@@ -77,6 +77,34 @@ test("Hover skips empty content and sticky persistence requires explicit dismiss
   contextView.dispose();
 });
 
+test("Hover closes an in-flight ContextView when target layout disposes it", () => {
+  const container = requiredElement<HTMLElement>("main");
+  const target = environment.window.document.createElement("button");
+  container.append(target);
+  const contextView = new ContextView(container);
+  contextView.element.getBoundingClientRect = () => rectangle(0, 0, 120, 40);
+  const hover = new Hover({
+    target,
+    content: "Transient title",
+    contextViewProvider: contextView,
+  });
+  target.getBoundingClientRect = () => {
+    hover.dispose();
+    target.remove();
+    return rectangle(20, 60, 80, 24);
+  };
+
+  assert.doesNotThrow(() => hover.show());
+  assert.equal(contextView.visible, false);
+  assert.doesNotThrow(() => contextView.show({
+    anchor: rectangle(40, 80, 0, 0),
+    content: environment.window.document.createElement("div"),
+  }));
+  assert.equal(contextView.visible, true);
+
+  contextView.dispose();
+});
+
 function requiredElement<T extends Element>(selector: string): T {
   const element = environment.window.document.querySelector<T>(selector);
   assert.ok(element);

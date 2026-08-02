@@ -47,29 +47,38 @@
 | `ToolBar` | primary/secondary action 编排、icon action 尺寸、More Actions、可选 toggled 高亮 | Button 的状态投影仍归 `Button` |
 | `WorkbenchToolBar` | 把 platform action representation 适配到 base `ToolBar`；actions 仍由调用方提供 | 视觉仍归 base `ToolBar`/`Button` |
 | `MenuWorkbenchToolBar` | 从 `MenuId` 解析并刷新 `WorkbenchToolBar` actions | Menu 来源不改变 toolbar ARIA 与视觉 owner |
-| `TabList` | `tablist/tab` ARIA、`aria-selected`、激活回调、`.checked` 状态投影 | 不定义 Workbench tab 皮肤 |
-| `CompositeBar` | View Container 切换，以及 `icon`/`label` 两种 presentation | `compositebar.css` |
+| `TabList` | `tablist/tab` ARIA、`aria-selected`、激活回调、`.checked` 状态投影，以及标准 tab 的选中背景 | `tablist.css` |
+| `CompositeBar` | View Container 切换，以及 `icon`/`label` 两种 presentation | presentation 专属的几何与前景色；不重定义标准 tab 选中背景 |
 | `PaneComposite` | `tabpanel`、pane 生命周期、pane header presentation | `views.css` |
-| `PaneCompositePart` | 35px title control、CompositeBar/自有标题与 title actions 的左右槽位 | `paneCompositePart.css` 只拥有外层布局 |
+| `PaneCompositePart` | 32px title control、CompositeBar/自有标题与 title actions 的左右槽位 | `paneCompositePart.css` 只拥有外层布局 |
 | `TitlebarPart` | 左区、应用菜单、标题和右区的窗口级布局 | 通用 toolbar/button 状态不归 Titlebar |
 
-`PaneCompositePart` 的标题高度为 `35px`；`titleContentElement` 占据左侧弹性空间，`titleActionsSlotElement` 固定在右侧并提供 `4px` 的双侧 inset。当前 View 的 `partTitleProjection.actions` 与 Part 级 menu toolbar 使用独立子槽并列；Part CSS 只拥有这些直接槽位的外框与排列，不得穿透修改其中的 toolbar/button 内部状态。
+`PaneCompositePart` 的标题高度为 `32px`；`titleContentElement` 占据左侧弹性空间，`titleActionsSlotElement` 固定在右侧并提供 `4px` 的双侧 inset。当前 View 的 `partTitleProjection.actions` 与 Part 级 menu toolbar 使用独立子槽并列；Part CSS 只拥有这些直接槽位的外框与排列，不得穿透修改其中的 toolbar/button 内部状态。
 
-`CompositeBar` 的 icon presentation item 状态盒为 `24px × 24px`，hover 与 `.checked` 使用同一外框。`CompositeBar` 拥有该 item 几何和两种状态的视觉；`TabList` 与 `ActionBar` 只提供结构、交互和稳定状态 class，不决定 Workbench Composite 的状态盒尺寸。
+`CompositeBar` 的 icon presentation item 状态盒为 `24px × 24px`，hover 与 `.checked` 使用同一外框。`CompositeBar` 拥有该 item 几何及 presentation 专属前景色；`TabList` 提供标准 tab 的稳定状态 class、选中背景，以及由 `tabList.itemContentInset` 定义的标准内容左右 inset；非选中 tab 保持透明；`ActionBar` 只在显式启用 toggled 高亮时提供 action 的背景。
 
 ## 状态归属矩阵
 
 | 状态 | 判定 owner | 样式 owner | Host 可以做什么 |
 | --- | --- | --- | --- |
 | `hover` / `focus-visible` / `disabled` | 原生交互 primitive | primitive CSS | 选择 primitive；不得重写内部状态 |
-| tab `selected` / `active` | `TabList` 投影状态，组合控件解释语义 | 具体 tabs control 或 `CompositeBar` CSS | 选择 presentation variant |
+| menu 当前项 | `Menu` 统一投射鼠标与键盘焦点为 `.focused` | `menu.css` | 提供 actions；不得用调用方 selector 重建菜单焦点态 |
+| tab `selected` / `active` | `TabList` 投影状态 | `TabList` 默认皮肤；有独立语义的组合控件通过自己的 token 覆盖 | 选择 presentation variant，不能复用 ActionBar token |
 | toggle `checked` / `pressed` | command/action model | 控件并行投影 `.checked` 与 ARIA；具体 composed control CSS 决定皮肤 | 提供 checked 值或显式启用 toggled 高亮；不得在 Part 中猜状态 |
 | Part visible/hidden | Workbench layout | Part/layout CSS | contribution 只能请求命令 |
 | theme light/dark/high contrast | Theme service | token snapshot | 组件消费 token，不硬编码主题分支 |
 
 `ActionBar` 是行为与排列基座，不因为它包裹了 item 就自动拥有业务 selected 皮肤。需要通用 toggled 背景时，由调用方显式启用 `highlightToggledItems`，ActionBar 再通过 `.highlight-toggled .checked` selector 应用自己的公开高亮 presentation。
 
+### ActionBar 与 TabList 的选中态边界
+
+`ActionBar` 的 `actionBar.toggledBackground` 只表达“一个 action 在显式 toggled 上下文中被选中”。`TabList` 的 `tabList.activeBackground` 只表达“一个 tab 被选中”；非选中 tab 不设置背景。两者即使当前主题值相同，也必须保持独立 token 和独立 CSS selector；这保证日后主题或交互语义变化时不会产生隐式耦合。
+
+标准 tab 由 `tablist.css` 消费 `tabList.activeBackground` token，并保持非选中项透明。`CompositeBar` 只能追加 `icon`/`label` presentation 的几何、间距和前景色，不能覆盖标准 tab 的选中背景。Chat 这类会话 tab 可以通过 `chat.tabBackground` 定义非选中背景，但必须继承 `TabList` 的选中背景；不得借用 ActionBar token 或通过 Part 深层 selector 改写 TabList。
+
 和 VS Code 一致，ARIA attribute 用于无障碍语义，稳定 class 用于视觉 selector。不要使用 `[aria-pressed="true"]` 或 `[aria-selected="true"]` 作为皮肤 selector。
+
+Menu 的 pointer hover 与键盘导航必须汇入同一个 `focusedEntry`，并在直接 action item 上投射 `.focused`。`menu.css` 只能通过该 class 设置当前项背景；不得同时用 `:hover` 与 `:focus-visible` 驱动两套高亮。`:focus-visible` 只适合表达额外的键盘焦点轮廓。
 
 原生 DOM attribute 同样不作为组件视觉状态 API。组件需要覆盖 author CSS 时，应并行保留原生语义并投影稳定 class，例如 `MenuWorkbenchToolBar` 同时设置 `hidden` 和 `.empty`，CSS 只选择 `.empty`。
 
@@ -101,6 +110,8 @@
 添加视觉 class 不等于需要新的 representation。只有 DOM 结构、交互行为、ARIA 语义或生命周期确实不同，才新增 `ActionViewItem` 等专用表示。仅有颜色、显隐、间距或状态皮肤差异时，由语义 owner 在现有直接托管 shell 上投影 class。只有多个真实消费者需要同一项通用能力时，才扩展 `ActionBar`、`Button` 等基座接口；不要为了单个样式差异增加转发层、模糊选项或具体实现继承。
 
 ## Selector 规则
+
+Workbench 的固定横向几何使用物理方向 CSS。仅需左右 inset 时，写作 `padding: 0 <value>`；不要使用 `padding-inline`、`margin-inline` 或其他 `*-inline` logical property。token 仍表达数值，例如 `padding: 0 var(--zeta-tab-list-item-content-inset)`。
 
 允许组件修改自己的内部结构：
 
@@ -147,7 +158,7 @@
 export type CompositeBarPresentation = "icon" | "label";
 ```
 
-Sidebar 使用默认 `icon` presentation；Panel 显式选择 `label` presentation。两种 item 几何及 hover/active 视觉均由 `CompositeBar` 拥有。
+Sidebar 使用默认 `icon` presentation；Panel 显式选择 `label` presentation。两种 item 的几何及 presentation 专属前景色由 `CompositeBar` 拥有；标准 tab 的选中背景仍归 `TabList`，非选中项透明。
 
 ## Panel 规范
 
@@ -155,13 +166,16 @@ Panel 顶部的 Problems、Output、Terminal、Ports 是同一 View Container lo
 
 | 区域 | 语义/实现 | 样式 owner |
 | --- | --- | --- |
-| Problems / Output / Terminal / Ports | `TabList` + `CompositeBar` | tab 状态和 label presentation 归 `compositebar.css` |
+| Problems / Output / Terminal / Ports | `TabList` + `CompositeBar` | 标准 tab 的选中背景归 `tablist.css`；label presentation 归 `compositebar.css` |
 | 当前 View 命令 | `WorkbenchToolBar` 或 `MenuWorkbenchToolBar` | action 编排归 toolbar；button 状态归 button |
+| 未显示的 Panel 目的地 | `CompositeBar` 自有 overflow button 与菜单 | `CompositeBar` |
 | title control 左右布局 | `PanelPart` | `panelpart.css` |
 | terminal 实例列表 | Terminal View 内第二级 `TabList` | Terminal contribution/view |
 | pane header 是否显示 | `PaneComposite` presentation | `views.css` |
 
-Panel 不拥有 tab 的 active 下划线，也不拥有 active/hover 背景。选中态应填满 `CompositeBar` item 的命中区域，具体视觉由 `CompositeBar` 的 token 与 CSS 决定。
+Panel 不拥有 tab 的 active 下划线，也不拥有 active/hover 背景。选中态应填满 `CompositeBar` item 的命中区域；标准背景由 `TabList` 的 token 与 CSS 决定。
+
+当 Panel 目的地超出 `CompositeBar` 可用宽度时，`CompositeBar` 必须在自己的 action row 中、最后一个可见 tab 之后创建独立的 More button，并将未显示的目的地放入该 button 的菜单。不得把这些目的地注入当前 View 的 `WorkbenchToolBar` 或 `MenuWorkbenchToolBar`；View title toolbar 的 More 只承载该 View 自有 Menu 的 secondary actions。
 
 ## Titlebar 规范
 
@@ -182,11 +196,11 @@ Design token 回答“值是什么”，组件 CSS 回答“何时使用这个�
 
 ```text
 Theme registry
-  → --zeta-button-active-background
-  → compositebar.css 的 .zeta-tab.checked
+  → --zeta-tab-list-active-background
+  → tablist.css 的 .zeta-tab.checked
 ```
 
-Theme 不判断某个 tab 是否 active，Part 也不选择 active token。`CompositeBar` 在自己的状态 selector 中消费相应 token。
+Theme 不判断某个 tab 是否 active，Part 也不选择 active token。`TabList` 在自己的状态 selector 中消费相应 token；`CompositeBar` 只消费其 presentation 所需的 token。
 
 ## 字体层级
 

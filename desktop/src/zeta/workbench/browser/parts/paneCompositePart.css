@@ -1,8 +1,8 @@
 .zeta-pane-composite-title {
   display: flex;
   min-width: 0;
-  height: 35px;
-  flex: 0 0 35px;
+  height: var(--zeta-pane-title-height);
+  flex: 0 0 var(--zeta-pane-title-height);
   align-items: center;
 }
 
@@ -33,7 +33,7 @@
   flex: 0 0 auto;
   align-items: center;
   margin-left: auto;
-  padding: 0 6px;
+  padding: 0 4px;
 }
 
 .zeta-pane-composite-title-menu-actions.zeta-toolbar {

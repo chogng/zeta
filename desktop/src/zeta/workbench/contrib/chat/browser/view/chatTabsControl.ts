@@ -40,6 +40,7 @@ export class ChatTabsControl extends DisposableOwner {
     this.tabList = this.own(new TabList({
       ownerDocument,
       ariaLabel: "Open chats",
+      presentation: "inset",
       onActivate: (tabId) => delegate.selectTab(tabId),
       onClose: (tabId) => delegate.closeTab(tabId),
     }));

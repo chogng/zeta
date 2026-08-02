@@ -12,6 +12,10 @@
   width: max-content;
 }
 
+.zeta-tab-list-inset .zeta-tab-list-scroll-content > .zeta-action-bar {
+  padding: 0 var(--zeta-tab-list-content-inset);
+}
+
 .zeta-tab-list-scroll-content > .zeta-action-bar.vertical {
   width: 100%;
   height: max-content;
@@ -24,11 +28,15 @@
   align-items: center;
 }
 
+.zeta-tab-list .zeta-tab.checked {
+  background: var(--zeta-tab-list-active-background);
+}
+
 .zeta-tab-label {
   display: flex;
   box-sizing: border-box;
   min-width: 0;
-  padding: 0;
+  padding: 0 var(--zeta-tab-list-item-content-inset);
   border: 0;
   color: inherit;
   background: transparent;

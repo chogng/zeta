@@ -324,6 +324,10 @@ test("More Actions opens an anchored Menu with actionable list items", async () 
     configurable: true,
     value: () => {},
   });
+  Object.defineProperty(dom.window.HTMLElement.prototype, "getClientRects", {
+    configurable: true,
+    value: () => [{ width: 24, height: 24 }],
+  });
   for (const [name, value] of Object.entries({
     window: dom.window,
     Node: dom.window.Node,
@@ -375,6 +379,11 @@ test("More Actions opens an anchored Menu with actionable list items", async () 
     },
     contextViews,
   );
+  const openingOrder: string[] = [];
+  contextMenus.onDidShowContextMenu(() => openingOrder.push("show"));
+  host.addEventListener("focusin", (event) => {
+    if ((event.target as HTMLElement).closest(".zeta-menu")) openingOrder.push("focus");
+  });
   let cleared = 0;
   using toolbar = new ToolBar({
     contextMenuProvider: contextMenus,
@@ -397,6 +406,8 @@ test("More Actions opens an anchored Menu with actionable list items", async () 
 
   const popup = host.querySelector<HTMLElement>(".zeta-context-view .zeta-menu");
   assert.ok(popup);
+  assert.equal(popup.parentElement?.classList.contains("zeta-context-view-menu"), true);
+  assert.deepEqual(openingOrder, ["show", "focus"]);
   assert.equal(popup.getAttribute("role"), "menu");
   assert.deepEqual(
     [...popup.querySelectorAll<HTMLElement>("[role='menuitem'], [role='menuitemcheckbox']")]
@@ -404,7 +415,13 @@ test("More Actions opens an anchored Menu with actionable list items", async () 
     ["clear", "output"],
   );
   assert.equal(popup.querySelectorAll(".zeta-action-view-item-separator").length, 1);
-  assert.equal(popup.querySelector("[role='menuitemcheckbox']")?.getAttribute("aria-checked"), "true");
+  const popupItems = popup.querySelectorAll<HTMLElement>("[role='menuitem'], [role='menuitemcheckbox']");
+  assert.equal(popupItems.length, 2);
+  assert.equal([...popupItems].every((item) => item.querySelector(":scope > .zeta-menu-leading-slot") !== null), true);
+  const checkedPopupItem = popup.querySelector<HTMLElement>("[role='menuitemcheckbox']");
+  assert.equal(checkedPopupItem?.getAttribute("aria-checked"), "true");
+  assert.equal(checkedPopupItem?.querySelector(":scope > .zeta-menu-leading-check") !== null, true);
+  assert.equal(checkedPopupItem?.querySelector(":scope > .zeta-menu-leading-check > .zeta-icon") !== null, true);
   popup.querySelector<HTMLButtonElement>("[data-action-id='clear'] button")?.click();
   await Promise.resolve();
   assert.equal(cleared, 1);
