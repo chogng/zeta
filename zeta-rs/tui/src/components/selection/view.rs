@@ -125,7 +125,7 @@ pub(crate) fn draw(frame: &mut Frame<'_>, area: Rect, view: &SelectionViewState)
                 } else {
                     Style::default()
                 };
-                let marker = if selected { "› " } else { "  " };
+                let marker = if selected { "❯ " } else { "  " };
                 let mut spans = vec![
                     Span::styled(marker, label_style),
                     Span::styled(item.label(), label_style),

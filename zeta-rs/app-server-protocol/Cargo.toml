@@ -15,7 +15,7 @@ schemars = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
-ts-rs = { workspace = true }
+ts-rs = { workspace = true, features = ["no-serde-warnings"] }
 zeta-protocol = { workspace = true }
 
 [lints]
