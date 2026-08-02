@@ -2,7 +2,7 @@ import { Dimension, getClientArea, type IDimension, type IRectangle } from "../.
 import { SerializableGrid, type ISerializableView, type SerializedGridDescriptor } from "../../base/browser/ui/grid/grid.js";
 import { type Event, Emitter } from "../../base/common/event.js";
 import { DisposableOwner } from "../../base/common/lifecycle.js";
-import { type IStorageService, type IStorageValueChangeEvent, StorageScope, StorageTarget } from "../../platform/storage/common/storage.js";
+import { type IStorageService, StorageScope, StorageTarget } from "../../platform/storage/common/storage.js";
 import { type IWorkbenchLayoutService, type WorkbenchPartId, type WorkbenchPartVisibilityChangeEvent, workbenchPartIds } from "../services/layout/browser/layoutService.js";
 import { type WorkbenchPart } from "./part.js";
 
@@ -118,13 +118,10 @@ export class WorkbenchLayout
     ));
     this.element.append(this.grid.element);
     if (options.storageService) {
+      // Layout is window-local after construction. External storage writes do not carry a
+      // revision or the sender's constraints, so applying one can undo an active sash resize.
       this.own(options.storageService.onWillSaveState(() => {
-        this.stateModel.save(this.state);
-      }));
-      this.own(options.storageService.onDidChangeValue((event) => {
-        if (event.external && this.stateModel.affects(event)) {
-          this.applyState(this.stateModel.state);
-        }
+        this.saveState();
       }));
     }
 
@@ -180,6 +177,10 @@ export class WorkbenchLayout
   restoreState(value: unknown): void {
     const state = parseWorkbenchLayoutState(value);
     this.applyState(state);
+    this.saveState();
+  }
+
+  private saveState(): void {
     this.stateModel.save(this.state);
   }
 
@@ -620,8 +621,6 @@ const WorkbenchLayoutStorageKeys = {
   },
 } as const satisfies Record<string, WorkbenchLayoutStorageKey>;
 
-const workbenchLayoutStorageKeys = Object.values(WorkbenchLayoutStorageKeys);
-
 /** Private bridge between Layout semantics and the generic scoped storage service. */
 class WorkbenchLayoutStateModel {
   constructor(
@@ -694,11 +693,6 @@ class WorkbenchLayoutStateModel {
     storeLayoutValue(storage, WorkbenchLayoutStorageKeys.PANEL_VISIBLE, state.panel.visible);
   }
 
-  affects(event: IStorageValueChangeEvent): boolean {
-    return workbenchLayoutStorageKeys.some((candidate) =>
-      candidate.key === event.key && candidate.scope === event.scope
-    );
-  }
 }
 
 function storeLayoutValue(storage: IStorageService, key: WorkbenchLayoutStorageKey, value: number | boolean): void {

@@ -49,7 +49,10 @@ export class EditorTitleControl extends DisposableOwner {
     const actions = ownerDocument.createElement("div");
     actions.className = "zeta-editor-title-actions";
     actions.append(this.toolbar.element);
-    this.element.append(this.tabs.element, actions);
+    const tabsAndActions = ownerDocument.createElement("div");
+    tabsAndActions.className = "zeta-editor-tabs-and-actions";
+    tabsAndActions.append(this.tabs.element, actions);
+    this.element.append(tabsAndActions);
     this.defer(() => this.element.remove());
   }
 
