@@ -442,7 +442,7 @@ fn at_file_popup_completes_an_atomic_workspace_path_before_submission() {
 }
 
 #[test]
-fn escape_dismisses_an_at_file_popup_before_requesting_exit() {
+fn escape_dismisses_an_at_file_popup_and_is_inert_at_the_root() {
     let workspace = temporary_workspace("mention-dismiss");
     fs::write(workspace.join("notes.md"), "notes").unwrap();
     let mut app = App::for_workspace(&workspace);
@@ -454,9 +454,20 @@ fn escape_dismisses_an_at_file_popup_before_requesting_exit() {
     assert_eq!(app.mention_popup(), None);
     assert_eq!(
         app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)),
-        Some(AppCommand::Quit)
+        None
     );
     let _ = fs::remove_dir_all(workspace);
+}
+
+#[test]
+fn escape_does_not_exit_the_idle_root_view() {
+    let mut app = App::new();
+
+    assert_eq!(
+        app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)),
+        None
+    );
+    assert_eq!(app.status(), &Status::Ready);
 }
 
 #[test]

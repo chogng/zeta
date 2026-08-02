@@ -11,7 +11,7 @@ use ratatui::widgets::Paragraph;
 pub(super) fn draw(frame: &mut Frame<'_>, area: Rect, status: &Status) {
     let (text, style) = match status {
         Status::Ready => (
-            "policy  (shift + tab to cycle)  ·  enter send  ·  ctrl-v image  ·  esc quit",
+            "policy  (shift + tab to cycle)  ·  enter send  ·  ctrl-v image  ·  ctrl-c quit",
             Style::default().fg(muted()),
         ),
         Status::Working => (
@@ -31,7 +31,10 @@ pub(super) fn draw(frame: &mut Frame<'_>, area: Rect, status: &Status) {
             Style::default().fg(warning()),
         ),
         Status::Cancelling => ("interrupting…", Style::default().fg(warning())),
-        Status::Error => ("ready to retry  ·  esc quit", Style::default().fg(danger())),
+        Status::Error => (
+            "ready to retry  ·  ctrl-c quit",
+            Style::default().fg(danger()),
+        ),
     };
     frame.render_widget(
         Paragraph::new(text)

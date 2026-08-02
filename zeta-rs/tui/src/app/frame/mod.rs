@@ -2,6 +2,8 @@ mod footer;
 
 use crate::app::App;
 use crate::components::composer;
+use crate::components::key_hint_bar;
+use crate::components::pane;
 use crate::components::selection;
 use crate::components::transcript;
 use crate::features::status_line;
@@ -27,8 +29,10 @@ pub(crate) fn draw(frame: &mut Frame<'_>, app: &App) {
         .unwrap_or_else(highlight);
 
     transcript::draw(frame, areas.history, app.messages(), presentation_highlight);
-    if let Some(view) = app.selection_view() {
-        selection::draw(frame, areas.interaction, view);
+    if let Some(view) = app.selection_pane() {
+        let pane_areas = pane::areas(areas.interaction);
+        selection::draw(frame, pane_areas.body, view.body());
+        key_hint_bar::draw(frame, pane_areas.key_hint_bar, view.key_hints());
     } else {
         composer::draw_slash_popup(frame, areas.history, app.slash_popup());
         composer::draw_mention_popup(frame, areas.history, app.mention_popup());
@@ -70,9 +74,9 @@ pub(crate) fn slash_command_index_at(
 }
 
 fn interaction_layout(app: &App, terminal_area: Rect) -> InteractionLayout {
-    app.selection_view()
+    app.selection_pane()
         .map(|view| InteractionLayout::Expanded {
-            desired_height: view.desired_height(terminal_area.width),
+            desired_height: pane::desired_height(view.body().desired_height(terminal_area.width)),
         })
         .unwrap_or(InteractionLayout::Composer)
 }

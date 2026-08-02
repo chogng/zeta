@@ -1,3 +1,5 @@
+use crate::components::pane::PaneViewModel;
+use crate::components::search_box::SearchBoxModel;
 use crate::components::selection::SelectionActivationMode;
 use crate::components::selection::SelectionItem;
 use crate::components::selection::SelectionItemId;
@@ -18,7 +20,7 @@ pub(crate) enum SkillSelectionAction {
 }
 
 pub(crate) struct SkillSelectionView {
-    pub(crate) model: SelectionViewModel,
+    pub(crate) model: PaneViewModel<SelectionViewModel>,
     pub(crate) actions: BTreeMap<SelectionItemId, SkillSelectionAction>,
 }
 
@@ -77,19 +79,21 @@ pub(crate) fn skills_selection_view(catalog: &SkillListResult) -> SkillSelection
     let error_count = errors.len();
 
     SkillSelectionView {
-        model: SelectionViewModel::new(
-            "Skills",
-            vec![
-                SelectionTab::new(format!("All ({})", all.len()), all),
-                SelectionTab::new(format!("Enabled ({enabled_count})"), enabled),
-                SelectionTab::new(format!("Disabled ({disabled_count})"), disabled),
-                SelectionTab::new(format!("Errors ({error_count})"), errors),
-            ],
-        )
-        .with_activation_mode(SelectionActivationMode::Enter)
-        .with_search_placeholder("Search available skills")
-        .with_empty_message("No matching skills")
-        .with_footer_hint("Space search  ·  ←/→ tabs  ·  ↑/↓ select  ·  Enter toggle  ·  Esc back"),
+        model: PaneViewModel::new(
+            SelectionViewModel::new(
+                "Skills",
+                vec![
+                    SelectionTab::new(format!("All ({})", all.len()), all),
+                    SelectionTab::new(format!("Enabled ({enabled_count})"), enabled),
+                    SelectionTab::new(format!("Disabled ({disabled_count})"), disabled),
+                    SelectionTab::new(format!("Errors ({error_count})"), errors),
+                ],
+            )
+            .with_activation_mode(SelectionActivationMode::Enter)
+            .with_search(SearchBoxModel::new("Search available skills"))
+            .with_empty_message("No matching skills"),
+            "Space search  ·  ←/→ tabs  ·  ↑/↓ select  ·  Enter toggle  ·  Esc back",
+        ),
         actions,
     }
 }

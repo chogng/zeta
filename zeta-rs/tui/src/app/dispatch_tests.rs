@@ -21,7 +21,8 @@ use zeta_protocol::CommandId;
 
 #[test]
 fn help_lists_only_builtins_with_execution_paths() {
-    let help = crate::components::selection::SelectionViewState::new(help_selection_view());
+    let help =
+        crate::components::selection::SelectionViewState::new(help_selection_view().into_body());
     let help = help
         .visible_items()
         .into_iter()

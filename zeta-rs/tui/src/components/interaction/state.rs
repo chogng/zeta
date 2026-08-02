@@ -5,6 +5,8 @@ use crate::components::composer::MentionPopupView;
 use crate::components::composer::SlashCommandCatalog;
 use crate::components::composer::SlashCommandInvocation;
 use crate::components::composer::SlashCommandsView;
+use crate::components::pane::PaneView;
+use crate::components::pane::PaneViewModel;
 use crate::components::selection::SelectionInputOutcome;
 use crate::components::selection::SelectionItemId;
 use crate::components::selection::SelectionViewModel;
@@ -34,7 +36,7 @@ pub(crate) struct InteractionPane {
 
 #[derive(Debug)]
 enum InteractionView {
-    Selection(SelectionViewState),
+    Selection(PaneView<SelectionViewState>),
 }
 
 impl InteractionPane {
@@ -55,7 +57,7 @@ impl InteractionPane {
 
     pub(crate) fn handle_key(&mut self, key: KeyEvent) -> InteractionPaneOutcome {
         if let Some(InteractionView::Selection(view)) = self.views.last_mut() {
-            return match view.handle_key(key) {
+            return match view.body_mut().handle_key(key) {
                 SelectionInputOutcome::Activate(item_id) => {
                     InteractionPaneOutcome::ActivateSelectionItem(item_id)
                 }
@@ -76,7 +78,7 @@ impl InteractionPane {
 
     pub(crate) fn handle_paste(&mut self, pasted: String) -> Result<(), String> {
         if let Some(InteractionView::Selection(view)) = self.views.last_mut() {
-            view.handle_paste(pasted);
+            view.body_mut().handle_paste(pasted);
             return Ok(());
         }
         self.composer.handle_paste(pasted)
@@ -138,15 +140,22 @@ impl InteractionPane {
         self.composer.activate_mention(index)
     }
 
-    pub(crate) fn show_selection_view(&mut self, model: SelectionViewModel) {
-        self.views
-            .push(InteractionView::Selection(SelectionViewState::new(model)));
+    pub(crate) fn show_selection_view(&mut self, model: PaneViewModel<SelectionViewModel>) {
+        let (body, key_hints) = model.into_parts();
+        self.views.push(InteractionView::Selection(PaneView::new(
+            SelectionViewState::new(body),
+            key_hints,
+        )));
     }
 
-    pub(crate) fn replace_selection_view(&mut self, model: SelectionViewModel) {
+    pub(crate) fn replace_selection_view(&mut self, model: PaneViewModel<SelectionViewModel>) {
+        let (body, key_hints) = model.into_parts();
         match self.views.last_mut() {
-            Some(InteractionView::Selection(view)) => view.replace_model(model),
-            None => self.show_selection_view(model),
+            Some(InteractionView::Selection(view)) => {
+                view.body_mut().replace_model(body);
+                view.replace_key_hints(key_hints);
+            }
+            None => self.show_selection_view(PaneViewModel::new(body, key_hints)),
         }
     }
 
@@ -157,6 +166,13 @@ impl InteractionPane {
     }
 
     pub(crate) fn selection_view(&self) -> Option<&SelectionViewState> {
+        match self.views.last() {
+            Some(InteractionView::Selection(view)) => Some(view.body()),
+            None => None,
+        }
+    }
+
+    pub(crate) fn selection_pane(&self) -> Option<&PaneView<SelectionViewState>> {
         match self.views.last() {
             Some(InteractionView::Selection(view)) => Some(view),
             None => None,

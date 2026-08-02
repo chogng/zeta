@@ -79,7 +79,8 @@ fn catalog() -> ThemePickerCatalog {
 #[test]
 fn theme_pane_is_numbered_fixed_and_not_searchable() {
     let view = theme_selection_view(&catalog());
-    let mut state = SelectionViewState::new(view.model);
+    let (model, key_hints) = view.model.into_parts();
+    let mut state = SelectionViewState::new(model);
 
     assert_eq!(state.title(), "Theme");
     assert!(!state.show_tabs());
@@ -117,11 +118,15 @@ fn theme_pane_is_numbered_fixed_and_not_searchable() {
         .map(|span| span.content.as_ref())
         .collect::<String>();
     assert_eq!(caption, "Syntax palette: Palette 1");
-    let height = state.desired_height(80);
+    let height = crate::components::pane::desired_height(state.desired_height(80));
     let backend = TestBackend::new(80, height);
     let mut terminal = Terminal::new(backend).unwrap();
     terminal
-        .draw(|frame| crate::components::selection::draw(frame, frame.area(), &state))
+        .draw(|frame| {
+            let areas = crate::components::pane::areas(frame.area());
+            crate::components::selection::draw(frame, areas.body, &state);
+            crate::components::key_hint_bar::draw(frame, areas.key_hint_bar, &key_hints);
+        })
         .unwrap();
     let buffer = terminal.backend().buffer();
     let rows = (0..height)
@@ -153,12 +158,12 @@ fn theme_pane_is_numbered_fixed_and_not_searchable() {
         .iter()
         .position(|row| row.contains("Syntax palette"))
         .unwrap();
-    let footer_row = rows
+    let key_hint_row = rows
         .iter()
         .position(|row| row.contains("Enter apply"))
         .unwrap();
     assert_eq!(preview_row - custom_row, 3);
-    assert_eq!(footer_row - palette_row, 2);
+    assert_eq!(key_hint_row - palette_row, 3);
     assert_eq!(buffer[(2, preview_row as u16)].fg, Color::DarkGray);
 
     assert_eq!(
@@ -179,7 +184,7 @@ fn custom_row_opens_the_custom_theme_model() {
     );
 
     let custom = custom_theme_selection_view(&catalog);
-    let state = SelectionViewState::new(custom.model);
+    let state = SelectionViewState::new(custom.model.into_body());
     assert_eq!(state.title(), "Custom color themes");
     assert_eq!(state.visible_items()[0].label(), "1. Aurora");
     assert_eq!(

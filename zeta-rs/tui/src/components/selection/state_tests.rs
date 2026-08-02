@@ -2,11 +2,11 @@ use super::SelectionActivationMode;
 use super::SelectionInputOutcome;
 use super::SelectionItem;
 use super::SelectionItemId;
-use super::SelectionSearchMode;
 use super::SelectionTab;
 use super::SelectionViewModel;
 use super::SelectionViewState;
 use super::tab_row_count;
+use crate::components::search_box::SearchBoxModel;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
@@ -32,7 +32,7 @@ fn state() -> SelectionViewState {
                 ),
             ],
         )
-        .with_search_placeholder("Search help"),
+        .with_search(SearchBoxModel::new("Search help")),
     )
 }
 
@@ -67,8 +67,9 @@ fn tab_switching_preserves_the_search_query() {
     state.handle_key(key(KeyCode::Right));
 
     assert_eq!(state.query(), "esc");
-    assert_eq!(state.visible_items().len(), 1);
+    assert_eq!(state.visible_items().len(), 2);
     assert_eq!(state.visible_items()[0].label(), "Esc");
+    assert_eq!(state.visible_items()[1].label(), "↑ / ↓");
 }
 
 #[test]
@@ -89,6 +90,53 @@ fn filtering_and_navigation_keep_selection_in_visible_range() {
     }
     state.handle_key(key(KeyCode::Up));
     assert_eq!(state.selected_visible_index(), Some(1));
+}
+
+#[test]
+fn candidate_ranking_uses_match_quality_and_preserves_equal_model_order() {
+    let mut state = SelectionViewState::new(
+        SelectionViewModel::new(
+            "Help",
+            vec![SelectionTab::new(
+                "Commands",
+                vec![
+                    SelectionItem::new("show status"),
+                    SelectionItem::new("s-t-a-t-u-s"),
+                    SelectionItem::new("status"),
+                    SelectionItem::new("status line"),
+                    SelectionItem::new("appstatus"),
+                    SelectionItem::new("second description").with_description("status"),
+                    SelectionItem::new("first description").with_description("status"),
+                ],
+            )],
+        )
+        .with_search(SearchBoxModel::new("Search commands"))
+        .with_initial_selected(4),
+    );
+
+    state.handle_key(key(KeyCode::Char(' ')));
+    for character in "status".chars() {
+        state.handle_key(key(KeyCode::Char(character)));
+    }
+
+    assert_eq!(
+        state
+            .visible_items()
+            .into_iter()
+            .map(SelectionItem::label)
+            .collect::<Vec<_>>(),
+        vec![
+            "status",
+            "status line",
+            "show status",
+            "appstatus",
+            "s-t-a-t-u-s",
+            "second description",
+            "first description",
+        ]
+    );
+    assert_eq!(state.selected_visible_index(), Some(0));
+    assert_eq!(state.selected_item().unwrap().label(), "status");
 }
 
 #[test]
@@ -122,8 +170,7 @@ fn enter_and_space_activate_actionable_items() {
                 vec![SelectionItem::new("review").with_id(item_id.clone())],
             )],
         )
-        .with_activation_mode(SelectionActivationMode::EnterOrSpace)
-        .with_search_mode(SelectionSearchMode::Disabled),
+        .with_activation_mode(SelectionActivationMode::EnterOrSpace),
     );
 
     assert_eq!(
@@ -140,6 +187,8 @@ fn enter_and_space_activate_actionable_items() {
 fn space_enters_search_before_becoming_search_text() {
     let mut read_only = state();
 
+    assert!(read_only.search().is_some());
+    assert!(!read_only.search_active());
     assert_eq!(
         read_only.handle_key(key(KeyCode::Char(' '))),
         SelectionInputOutcome::Consumed
@@ -152,13 +201,16 @@ fn space_enters_search_before_becoming_search_text() {
 
 #[test]
 fn enter_only_actions_keep_space_available_for_search() {
-    let mut state = SelectionViewState::new(SelectionViewModel::new(
-        "Themes",
-        vec![SelectionTab::new(
-            "All",
-            vec![SelectionItem::new("Zeta Code Dark").with_id(SelectionItemId::new("theme"))],
-        )],
-    ));
+    let mut state = SelectionViewState::new(
+        SelectionViewModel::new(
+            "Themes",
+            vec![SelectionTab::new(
+                "All",
+                vec![SelectionItem::new("Zeta Code Dark").with_id(SelectionItemId::new("theme"))],
+            )],
+        )
+        .with_search(SearchBoxModel::new("Search themes")),
+    );
 
     state.handle_key(key(KeyCode::Char(' ')));
     for character in "zeta code".chars() {
@@ -170,21 +222,19 @@ fn enter_only_actions_keep_space_available_for_search() {
 }
 
 #[test]
-fn disabled_search_ignores_text_and_space() {
-    let mut state = SelectionViewState::new(
-        SelectionViewModel::new(
+fn selection_without_search_ignores_text_and_space() {
+    let mut state = SelectionViewState::new(SelectionViewModel::new(
+        "Themes",
+        vec![SelectionTab::new(
             "Themes",
-            vec![SelectionTab::new(
-                "Themes",
-                vec![SelectionItem::new("Dark mode")],
-            )],
-        )
-        .with_search_mode(SelectionSearchMode::Disabled),
-    );
+            vec![SelectionItem::new("Dark mode")],
+        )],
+    ));
 
     state.handle_key(key(KeyCode::Char(' ')));
     state.handle_key(key(KeyCode::Char('d')));
 
+    assert!(state.search().is_none());
     assert!(!state.search_active());
     assert_eq!(state.query(), "");
 }

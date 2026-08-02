@@ -1,10 +1,10 @@
 use std::collections::BTreeMap;
 
+use crate::components::pane::PaneViewModel;
 use crate::components::selection::SelectionActivationMode;
 use crate::components::selection::SelectionItem;
 use crate::components::selection::SelectionItemId;
 use crate::components::selection::SelectionPreview;
-use crate::components::selection::SelectionSearchMode;
 use crate::components::selection::SelectionTab;
 use crate::components::selection::SelectionViewModel;
 use crate::features::theme::ThemePickerCatalog;
@@ -30,7 +30,7 @@ enum ThemePickerLevel {
 }
 
 pub(crate) struct ThemeSelectionView {
-    pub(crate) model: SelectionViewModel,
+    pub(crate) model: PaneViewModel<SelectionViewModel>,
     pub(crate) actions: BTreeMap<SelectionItemId, ThemeSelectionAction>,
 }
 
@@ -68,15 +68,16 @@ fn selection_view(
             .collect()
     };
     ThemeSelectionView {
-        model: SelectionViewModel::new(title, vec![SelectionTab::new("Themes", items)])
-            .with_activation_mode(SelectionActivationMode::Enter)
-            .with_search_mode(SelectionSearchMode::Disabled)
-            .without_tab_bar()
-            .with_title_top_margin(1)
-            .with_title_bottom_margin(1)
-            .with_initial_selected(selected)
-            .with_empty_message("No color themes available")
-            .with_footer_hint("↑/↓ select  ·  Enter apply  ·  Esc back"),
+        model: PaneViewModel::new(
+            SelectionViewModel::new(title, vec![SelectionTab::new("Themes", items)])
+                .with_activation_mode(SelectionActivationMode::Enter)
+                .without_tab_bar()
+                .with_title_top_margin(1)
+                .with_title_bottom_margin(1)
+                .with_initial_selected(selected)
+                .with_empty_message("No color themes available"),
+            "↑/↓ select  ·  Enter apply  ·  Esc back",
+        ),
         actions,
     }
 }
@@ -111,7 +112,7 @@ fn theme_item(
                     Style::default().fg(choice.palette.muted),
                 )))
                 .with_separator_color(choice.palette.muted)
-                .with_margins(2, 1),
+                .with_margins(2, 0),
         )
 }
 

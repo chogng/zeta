@@ -1,9 +1,11 @@
 use crate::components::composer::built_in_slash_commands;
+use crate::components::pane::PaneViewModel;
+use crate::components::search_box::SearchBoxModel;
 use crate::components::selection::SelectionItem;
 use crate::components::selection::SelectionTab;
 use crate::components::selection::SelectionViewModel;
 
-pub(crate) fn help_selection_view() -> SelectionViewModel {
+pub(crate) fn help_selection_view() -> PaneViewModel<SelectionViewModel> {
     let commands = built_in_slash_commands()
         .into_iter()
         .map(|(name, command)| {
@@ -13,7 +15,7 @@ pub(crate) fn help_selection_view() -> SelectionViewModel {
     let keys = [
         ("Enter", "submit the current prompt"),
         ("Ctrl-V", "attach an image from the system clipboard"),
-        ("Esc", "close the active view or exit while idle"),
+        ("Esc", "close the active view"),
         ("Ctrl-C", "interrupt an active turn or exit while idle"),
         ("← / →", "switch tabs in an interactive view"),
         ("↑ / ↓", "move through visible choices"),
@@ -21,12 +23,15 @@ pub(crate) fn help_selection_view() -> SelectionViewModel {
     .into_iter()
     .map(|(key, description)| SelectionItem::new(key).with_description(description))
     .collect();
-    SelectionViewModel::new(
-        "Help",
-        vec![
-            SelectionTab::new("Commands", commands),
-            SelectionTab::new("Keys", keys),
-        ],
+    PaneViewModel::new(
+        SelectionViewModel::new(
+            "Help",
+            vec![
+                SelectionTab::new("Commands", commands),
+                SelectionTab::new("Keys", keys),
+            ],
+        )
+        .with_search(SearchBoxModel::new("Search commands and shortcuts")),
+        "Space search  ·  ←/→ tabs  ·  ↑/↓ select  ·  Esc back",
     )
-    .with_search_placeholder("Search commands and shortcuts")
 }

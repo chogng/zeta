@@ -1,11 +1,14 @@
 use super::InteractionPane;
 use super::InteractionPaneOutcome;
 use crate::components::composer::ComposerInput;
+use crate::components::pane::PaneViewModel;
+use crate::components::search_box::SearchBoxModel;
 use crate::components::selection::SelectionItem;
 use crate::components::selection::SelectionTab;
 use crate::components::selection::SelectionViewModel;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
+use crossterm::event::KeyEventKind;
 use crossterm::event::KeyModifiers;
 
 #[test]
@@ -27,12 +30,16 @@ fn pane_routes_submission_from_its_composer() {
 fn selection_view_preserves_composer_draft_and_owns_input_until_dismissed() {
     let mut pane = InteractionPane::new();
     pane.insert_text("draft");
-    pane.show_selection_view(SelectionViewModel::new(
-        "Help",
-        vec![SelectionTab::new(
-            "Commands",
-            vec![SelectionItem::new("/status")],
-        )],
+    pane.show_selection_view(PaneViewModel::new(
+        SelectionViewModel::new(
+            "Help",
+            vec![SelectionTab::new(
+                "Commands",
+                vec![SelectionItem::new("/status")],
+            )],
+        )
+        .with_search(SearchBoxModel::new("Search commands")),
+        "Space search  ·  Esc back",
     ));
 
     assert_eq!(
@@ -55,6 +62,42 @@ fn selection_view_preserves_composer_draft_and_owns_input_until_dismissed() {
 }
 
 #[test]
+fn repeated_escape_does_not_close_a_view_after_exiting_search() {
+    let mut pane = InteractionPane::new();
+    pane.show_selection_view(PaneViewModel::new(
+        SelectionViewModel::new(
+            "Help",
+            vec![SelectionTab::new(
+                "Commands",
+                vec![SelectionItem::new("/status")],
+            )],
+        )
+        .with_search(SearchBoxModel::new("Search commands")),
+        "Space search  ·  Esc back",
+    ));
+    pane.handle_key(KeyEvent::new(KeyCode::Char(' '), KeyModifiers::NONE));
+
+    assert_eq!(
+        pane.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)),
+        InteractionPaneOutcome::Consumed
+    );
+    assert_eq!(
+        pane.handle_key(KeyEvent::new_with_kind(
+            KeyCode::Esc,
+            KeyModifiers::NONE,
+            KeyEventKind::Repeat,
+        )),
+        InteractionPaneOutcome::Consumed
+    );
+    assert!(pane.selection_view().is_some());
+
+    assert_eq!(
+        pane.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)),
+        InteractionPaneOutcome::ViewDismissed
+    );
+}
+
+#[test]
 fn escape_pops_one_interaction_view_at_a_time() {
     let mut pane = InteractionPane::new();
     pane.show_selection_view(selection_view("Parent"));
@@ -67,9 +110,12 @@ fn escape_pops_one_interaction_view_at_a_time() {
     assert!(pane.selection_view().is_none());
 }
 
-fn selection_view(title: &str) -> SelectionViewModel {
-    SelectionViewModel::new(
-        title,
-        vec![SelectionTab::new("Items", vec![SelectionItem::new("Item")])],
+fn selection_view(title: &str) -> PaneViewModel<SelectionViewModel> {
+    PaneViewModel::new(
+        SelectionViewModel::new(
+            title,
+            vec![SelectionTab::new("Items", vec![SelectionItem::new("Item")])],
+        ),
+        "Esc back",
     )
 }

@@ -3,6 +3,9 @@ use super::mention_index_at;
 use super::slash_command_index_at;
 use crate::app::App;
 use crate::app::AppEvent;
+use crate::components::pane;
+use crate::components::pane::PaneViewModel;
+use crate::components::search_box::SearchBoxModel;
 use crate::components::selection::SelectionItem;
 use crate::components::selection::SelectionTab;
 use crate::components::selection::SelectionViewModel;
@@ -35,11 +38,9 @@ fn empty_frame_uses_lightweight_chrome_and_a_welcome_banner() {
     assert!(rendered.contains("Welcome back!"));
     assert!(rendered.contains("Tips for getting started"));
     assert!(rendered.contains("Try asking"));
-    assert!(
-        rendered.contains(
-            "policy  (shift + tab to cycle)  ·  enter send  ·  ctrl-v image  ·  esc quit"
-        )
-    );
+    assert!(rendered.contains(
+        "policy  (shift + tab to cycle)  ·  enter send  ·  ctrl-v image  ·  ctrl-c quit"
+    ));
 }
 
 #[test]
@@ -84,9 +85,16 @@ fn selection_view_replaces_the_composer_but_keeps_the_transcript_surface() {
     assert!(rendered.contains("Commands"));
     assert!(rendered.contains("Keys"));
     assert!(rendered.contains("Space search"));
-    assert!(!rendered.contains("Search commands and shortcuts"));
+    assert!(rendered.contains("Search commands and shortcuts"));
     assert!(rendered.contains("←/→ tabs"));
     assert!(!rendered.contains("enter send"));
+    let rows = rendered.lines().collect::<Vec<_>>();
+    let last_item_row = rows.iter().position(|row| row.contains("/model")).unwrap();
+    let footer_row = rows
+        .iter()
+        .position(|row| row.contains("Space search"))
+        .unwrap();
+    assert_eq!(footer_row - last_item_row, 3);
 }
 
 #[test]
@@ -102,7 +110,7 @@ fn selection_view_supports_keyboard_tab_switching_and_search() {
 
     let rendered = render(&app, 80, 24);
     assert!(rendered.contains("Esc"));
-    assert!(!rendered.contains("move selection"));
+    assert!(rendered.find("Esc") < rendered.find("move selection"));
 
     app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
     assert!(app.selection_view().is_some());
@@ -113,19 +121,22 @@ fn selection_view_supports_keyboard_tab_switching_and_search() {
 #[test]
 fn selection_candidate_color_repaints_the_pane_and_welcome_frames() {
     let mut app = App::new();
-    app.update(AppEvent::SelectionViewOpened(SelectionViewModel::new(
-        "Theme",
-        vec![SelectionTab::new(
-            "Themes",
-            vec![
-                SelectionItem::new("First").with_selection_foreground(Color::Red),
-                SelectionItem::new("Second").with_selection_foreground(Color::Green),
-            ],
-        )],
+    app.update(AppEvent::SelectionViewOpened(PaneViewModel::new(
+        SelectionViewModel::new(
+            "Theme",
+            vec![SelectionTab::new(
+                "Themes",
+                vec![
+                    SelectionItem::new("First").with_selection_foreground(Color::Red),
+                    SelectionItem::new("Second").with_selection_foreground(Color::Green),
+                ],
+            )],
+        ),
+        "Esc back",
     )));
 
     let first = render_buffer(&app, 80, 24);
-    let interaction_y = 24 - app.selection_view().unwrap().desired_height(80);
+    let interaction_y = 24 - pane::desired_height(app.selection_view().unwrap().desired_height(80));
     assert_eq!(first[(2, 1)].fg, Color::Red);
     assert_eq!(first[(0, interaction_y)].fg, Color::Red);
 
@@ -150,7 +161,7 @@ fn error_detail_is_rendered_once_and_the_footer_only_offers_recovery() {
             .count(),
         1
     );
-    assert!(rendered.contains("ready to retry  ·  esc quit"));
+    assert!(rendered.contains("ready to retry  ·  ctrl-c quit"));
     assert!(!rendered.contains("StableTurnError"));
 }
 
@@ -332,27 +343,30 @@ fn render(app: &App, width: u16, height: u16) -> String {
         .join("\n")
 }
 
-fn help_view() -> SelectionViewModel {
-    SelectionViewModel::new(
-        "Help",
-        vec![
-            SelectionTab::new(
-                "Commands",
-                vec![
-                    SelectionItem::new("/status").with_description("show status"),
-                    SelectionItem::new("/model").with_description("show model"),
-                ],
-            ),
-            SelectionTab::new(
-                "Keys",
-                vec![
-                    SelectionItem::new("↑ / ↓").with_description("move selection"),
-                    SelectionItem::new("Esc").with_description("return to composer"),
-                ],
-            ),
-        ],
+fn help_view() -> PaneViewModel<SelectionViewModel> {
+    PaneViewModel::new(
+        SelectionViewModel::new(
+            "Help",
+            vec![
+                SelectionTab::new(
+                    "Commands",
+                    vec![
+                        SelectionItem::new("/status").with_description("show status"),
+                        SelectionItem::new("/model").with_description("show model"),
+                    ],
+                ),
+                SelectionTab::new(
+                    "Keys",
+                    vec![
+                        SelectionItem::new("↑ / ↓").with_description("move selection"),
+                        SelectionItem::new("Esc").with_description("return to composer"),
+                    ],
+                ),
+            ],
+        )
+        .with_search(SearchBoxModel::new("Search commands and shortcuts")),
+        "Space search  ·  ←/→ tabs  ·  ↑/↓ select  ·  Esc back",
     )
-    .with_search_placeholder("Search commands and shortcuts")
 }
 
 fn wait_for_mention_results(app: &mut App, workspace: &Path) {

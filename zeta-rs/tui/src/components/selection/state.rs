@@ -5,6 +5,11 @@ use ratatui::style::Color;
 use unicode_width::UnicodeWidthStr;
 
 use super::SelectionPreview;
+use super::matcher::selection_match_score;
+use crate::components::search_box::SEARCH_BOX_HEIGHT;
+use crate::components::search_box::SearchBoxInputOutcome;
+use crate::components::search_box::SearchBoxModel;
+use crate::components::search_box::SearchBoxState;
 
 const TAB_GAP: usize = 2;
 const MAX_VISIBLE_ROWS: usize = 12;
@@ -13,12 +18,6 @@ const MAX_VISIBLE_ROWS: usize = 12;
 pub(crate) enum SelectionActivationMode {
     Enter,
     EnterOrSpace,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum SelectionSearchMode {
-    Disabled,
-    SpaceActivated,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -80,15 +79,6 @@ impl SelectionItem {
     pub(crate) fn preview(&self) -> Option<&SelectionPreview> {
         self.preview.as_ref()
     }
-
-    fn matches(&self, normalized_query: &str) -> bool {
-        normalized_query.is_empty()
-            || self.label.to_lowercase().contains(normalized_query)
-            || self
-                .description
-                .as_ref()
-                .is_some_and(|description| description.to_lowercase().contains(normalized_query))
-    }
 }
 
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -123,11 +113,9 @@ impl SelectionTab {
 pub(crate) struct SelectionViewModel {
     title: String,
     tabs: Vec<SelectionTab>,
-    search_placeholder: String,
+    search: Option<SearchBoxModel>,
     empty_message: String,
-    footer_hint: String,
     activation_mode: SelectionActivationMode,
-    search_mode: SelectionSearchMode,
     show_tabs: bool,
     initial_selected: usize,
     title_top_margin: usize,
@@ -143,11 +131,9 @@ impl SelectionViewModel {
         Self {
             title: title.into(),
             tabs,
-            search_placeholder: "Search…".into(),
+            search: None,
             empty_message: "No matching items".into(),
-            footer_hint: "Space search  ·  ←/→ tabs  ·  ↑/↓ select  ·  Esc back".into(),
             activation_mode: SelectionActivationMode::Enter,
-            search_mode: SelectionSearchMode::SpaceActivated,
             show_tabs: true,
             initial_selected: 0,
             title_top_margin: 0,
@@ -157,11 +143,6 @@ impl SelectionViewModel {
 
     pub(crate) fn with_activation_mode(mut self, mode: SelectionActivationMode) -> Self {
         self.activation_mode = mode;
-        self
-    }
-
-    pub(crate) fn with_search_mode(mut self, mode: SelectionSearchMode) -> Self {
-        self.search_mode = mode;
         self
     }
 
@@ -185,18 +166,13 @@ impl SelectionViewModel {
         self
     }
 
-    pub(crate) fn with_search_placeholder(mut self, placeholder: impl Into<String>) -> Self {
-        self.search_placeholder = placeholder.into();
+    pub(crate) fn with_search(mut self, search: SearchBoxModel) -> Self {
+        self.search = Some(search);
         self
     }
 
     pub(crate) fn with_empty_message(mut self, message: impl Into<String>) -> Self {
         self.empty_message = message.into();
-        self
-    }
-
-    pub(crate) fn with_footer_hint(mut self, hint: impl Into<String>) -> Self {
-        self.footer_hint = hint.into();
         self
     }
 }
@@ -213,18 +189,17 @@ pub(crate) struct SelectionViewState {
     model: SelectionViewModel,
     active_tab: usize,
     selected_visible: Option<usize>,
-    query: String,
-    search_active: bool,
+    search: Option<SearchBoxState>,
 }
 
 impl SelectionViewState {
     pub(crate) fn new(model: SelectionViewModel) -> Self {
+        let search = model.search.clone().map(SearchBoxState::new);
         let mut state = Self {
             model,
             active_tab: 0,
             selected_visible: None,
-            query: String::new(),
-            search_active: false,
+            search,
         };
         state.selected_visible = (state.visible_len() > 0).then_some(
             state
@@ -236,6 +211,14 @@ impl SelectionViewState {
     }
 
     pub(crate) fn replace_model(&mut self, model: SelectionViewModel) {
+        self.search = match (self.search.take(), model.search.clone()) {
+            (Some(mut state), Some(search_model)) => {
+                state.replace_model(search_model);
+                Some(state)
+            }
+            (None, Some(search_model)) => Some(SearchBoxState::new(search_model)),
+            (_, None) => None,
+        };
         self.model = model;
         self.active_tab = self.active_tab.min(self.model.tabs.len().saturating_sub(1));
         self.reconcile_selection();
@@ -262,11 +245,10 @@ impl SelectionViewState {
     }
 
     pub(crate) fn query(&self) -> &str {
-        &self.query
-    }
-
-    pub(crate) fn search_placeholder(&self) -> &str {
-        &self.model.search_placeholder
+        self.search
+            .as_ref()
+            .map(SearchBoxState::query)
+            .unwrap_or_default()
     }
 
     pub(crate) fn show_tabs(&self) -> bool {
@@ -274,15 +256,17 @@ impl SelectionViewState {
     }
 
     pub(crate) fn search_active(&self) -> bool {
-        self.search_active
+        self.search
+            .as_ref()
+            .is_some_and(SearchBoxState::input_active)
+    }
+
+    pub(crate) fn search(&self) -> Option<&SearchBoxState> {
+        self.search.as_ref()
     }
 
     pub(crate) fn empty_message(&self) -> &str {
         &self.model.empty_message
-    }
-
-    pub(crate) fn footer_hint(&self) -> &str {
-        &self.model.footer_hint
     }
 
     pub(crate) fn visible_items(&self) -> Vec<&SelectionItem> {
@@ -312,7 +296,7 @@ impl SelectionViewState {
         } else {
             0
         };
-        let search_rows = if self.search_active() { 3 } else { 0 };
+        let search_rows = self.search.as_ref().map(|_| SEARCH_BOX_HEIGHT).unwrap_or(0);
         let list_rows = self.visible_len().clamp(1, MAX_VISIBLE_ROWS);
         let preview_rows = self
             .selected_item()
@@ -325,7 +309,6 @@ impl SelectionViewState {
             .saturating_add(search_rows)
             .saturating_add(list_rows.min(u16::MAX as usize) as u16)
             .saturating_add(preview_rows.min(u16::MAX as usize) as u16)
-            .saturating_add(1)
     }
 
     pub(crate) fn handle_key(&mut self, key: KeyEvent) -> SelectionInputOutcome {
@@ -338,12 +321,18 @@ impl SelectionViewState {
             return SelectionInputOutcome::Consumed;
         }
 
-        match key.code {
-            KeyCode::Esc if self.search_active => {
-                self.query.clear();
-                self.search_active = false;
-                self.reconcile_selection();
+        if let Some(search) = self.search.as_mut() {
+            match search.handle_key(key) {
+                SearchBoxInputOutcome::Consumed => return SelectionInputOutcome::Consumed,
+                SearchBoxInputOutcome::QueryChanged => {
+                    self.select_first_visible();
+                    return SelectionInputOutcome::Consumed;
+                }
+                SearchBoxInputOutcome::Ignored => {}
             }
+        }
+
+        match key.code {
             KeyCode::Esc => return SelectionInputOutcome::Dismiss,
             KeyCode::Left | KeyCode::BackTab => self.switch_tab(TabDirection::Previous),
             KeyCode::Right | KeyCode::Tab => self.switch_tab(TabDirection::Next),
@@ -356,30 +345,12 @@ impl SelectionViewState {
                     return SelectionInputOutcome::Activate(id);
                 }
             }
-            KeyCode::Backspace if self.search_active => {
-                self.query.pop();
-                self.reconcile_selection();
-            }
-            KeyCode::Char(' ')
-                if self.model.search_mode == SelectionSearchMode::SpaceActivated
-                    && !self.search_active =>
-            {
-                self.search_active = true;
-            }
             KeyCode::Char(' ') => {
                 if self.model.activation_mode == SelectionActivationMode::EnterOrSpace
                     && let Some(id) = self.selected_item_id()
                 {
                     return SelectionInputOutcome::Activate(id);
                 }
-                if self.search_active {
-                    self.query.push(' ');
-                    self.reconcile_selection();
-                }
-            }
-            KeyCode::Char(character) if self.search_active && !character.is_ascii_control() => {
-                self.query.push(character);
-                self.reconcile_selection();
             }
             _ => {}
         }
@@ -388,12 +359,11 @@ impl SelectionViewState {
     }
 
     pub(crate) fn handle_paste(&mut self, pasted: String) {
-        if !self.search_active {
-            return;
+        if let Some(search) = self.search.as_mut()
+            && search.handle_paste(pasted) == SearchBoxInputOutcome::QueryChanged
+        {
+            self.select_first_visible();
         }
-        let normalized = pasted.split_whitespace().collect::<Vec<_>>().join(" ");
-        self.query.push_str(&normalized);
-        self.reconcile_selection();
     }
 
     fn active_tab(&self) -> &SelectionTab {
@@ -414,13 +384,22 @@ impl SelectionViewState {
     }
 
     fn visible_indices(&self) -> Vec<usize> {
-        let normalized_query = self.query.to_lowercase();
-        self.active_tab()
+        let normalized_query = self.query().to_lowercase();
+        if normalized_query.is_empty() {
+            return (0..self.active_tab().items.len()).collect();
+        }
+        let mut matches = self
+            .active_tab()
             .items
             .iter()
             .enumerate()
-            .filter_map(|(index, item)| item.matches(&normalized_query).then_some(index))
-            .collect()
+            .filter_map(|(index, item)| {
+                selection_match_score(item.label(), item.description(), &normalized_query)
+                    .map(|score| (index, score))
+            })
+            .collect::<Vec<_>>();
+        matches.sort_by_key(|(_, score)| *score);
+        matches.into_iter().map(|(index, _)| index).collect()
     }
 
     fn visible_len(&self) -> usize {

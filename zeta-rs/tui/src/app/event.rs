@@ -1,3 +1,4 @@
+use crate::components::pane::PaneViewModel;
 use crate::components::selection::SelectionViewModel;
 use crate::features::skills::SkillSelectionView;
 use crate::features::theme::ThemeSelectionView;
@@ -16,7 +17,7 @@ pub(crate) enum AppEvent {
     FileSearchSnapshotReceived(PathSearchSnapshot),
     InterruptFailed(String),
     ProductNotice(String),
-    SelectionViewOpened(SelectionViewModel),
+    SelectionViewOpened(PaneViewModel<SelectionViewModel>),
     SkillsViewOpened(SkillSelectionView),
     SkillsViewReplaced(SkillSelectionView),
     ThemeViewClosed,

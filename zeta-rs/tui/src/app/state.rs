@@ -2,6 +2,8 @@ use super::command::AppCommand;
 use super::event::AppEvent;
 use crate::components::interaction::InteractionPane;
 use crate::components::interaction::InteractionPaneOutcome;
+use crate::components::pane::PaneView;
+use crate::components::pane::PaneViewModel;
 use crate::components::selection::SelectionItemId;
 use crate::components::selection::SelectionViewModel;
 use crate::components::selection::SelectionViewState;
@@ -200,7 +202,7 @@ impl App {
         self.interaction_pane.mention_popup()
     }
 
-    fn show_selection_view(&mut self, model: SelectionViewModel) {
+    fn show_selection_view(&mut self, model: PaneViewModel<SelectionViewModel>) {
         self.interaction_pane.show_selection_view(model);
         self.selection_actions.push(SelectionActions::ReadOnly);
     }
@@ -246,6 +248,10 @@ impl App {
 
     pub(crate) fn selection_view(&self) -> Option<&SelectionViewState> {
         self.interaction_pane.selection_view()
+    }
+
+    pub(crate) fn selection_pane(&self) -> Option<&PaneView<SelectionViewState>> {
+        self.interaction_pane.selection_pane()
     }
 
     pub(crate) fn activate_mention(&mut self, index: usize) -> bool {
@@ -350,9 +356,6 @@ impl App {
                 KeyCode::Char('d') if self.input().is_empty() => self.quit_or_interrupt(),
                 _ => None,
             };
-        }
-        if key.code == KeyCode::Esc {
-            return self.quit_or_interrupt();
         }
         None
     }

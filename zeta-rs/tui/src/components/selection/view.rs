@@ -1,5 +1,7 @@
 use super::SelectionTab;
 use super::SelectionViewState;
+use crate::components::search_box;
+use crate::components::search_box::SEARCH_BOX_HEIGHT;
 use crate::ui::horizontal_margin;
 use crate::ui::{highlight, muted};
 use ratatui::Frame;
@@ -50,7 +52,7 @@ pub(crate) fn draw(frame: &mut Frame<'_>, area: Rect, view: &SelectionViewState)
         Vec::new()
     };
     let tab_height = tab_lines.len().min(u16::MAX as usize) as u16;
-    let search_height = if view.search_active() { 3 } else { 0 };
+    let search_height = view.search().map(|_| SEARCH_BOX_HEIGHT).unwrap_or(0);
     let preview_height = view
         .selected_item()
         .and_then(|item| item.preview())
@@ -69,7 +71,6 @@ pub(crate) fn draw(frame: &mut Frame<'_>, area: Rect, view: &SelectionViewState)
             Constraint::Length(search_height),
             Constraint::Min(1),
             Constraint::Length(preview_height),
-            Constraint::Length(1),
         ])
         .split(content);
 
@@ -86,20 +87,8 @@ pub(crate) fn draw(frame: &mut Frame<'_>, area: Rect, view: &SelectionViewState)
         frame.render_widget(Paragraph::new(tab_lines), areas[3]);
     }
 
-    if view.search_active() {
-        let search_text = if view.query().is_empty() {
-            Span::styled(view.search_placeholder(), Style::default().fg(muted()))
-        } else {
-            Span::raw(view.query())
-        };
-        frame.render_widget(
-            Paragraph::new(Line::from(search_text)).block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .border_style(Style::default().fg(muted())),
-            ),
-            areas[4],
-        );
+    if let Some(search) = view.search() {
+        search_box::draw(frame, areas[4], search, presentation_highlight);
     }
 
     let visible_items = view.visible_items();
@@ -189,13 +178,6 @@ pub(crate) fn draw(frame: &mut Frame<'_>, area: Rect, view: &SelectionViewState)
             frame.render_widget(Paragraph::new(caption.clone()), preview_areas[4]);
         }
     }
-    frame.render_widget(
-        Paragraph::new(Line::from(Span::styled(
-            view.footer_hint(),
-            Style::default().fg(muted()).add_modifier(Modifier::ITALIC),
-        ))),
-        areas[7],
-    );
 }
 
 fn dashed_rule(width: u16, title: Option<&str>, color: Color) -> Line<'static> {
