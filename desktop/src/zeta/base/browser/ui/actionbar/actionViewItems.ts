@@ -10,6 +10,12 @@ import { appendIcon } from "../icon/icon.js";
 
 const ActionHoverGroupId = "actions";
 
+/** Presentation options shared by every ActionBar item representation. */
+export interface ActionViewItemOptions {
+  /** Allows the host ActionBar to expose this item as a native drag source. */
+  readonly draggable?: boolean;
+}
+
 /**
  * Browser representation of one action inside an ActionBar.
  *
@@ -17,8 +23,15 @@ const ActionHoverGroupId = "actions";
  * resources they create for that representation.
  */
 export abstract class ActionViewItem extends DisposableOwner {
-  protected constructor(readonly action: IAction) {
+  protected constructor(
+    readonly action: IAction,
+    private readonly actionViewItemOptions: ActionViewItemOptions = {},
+  ) {
     super();
+  }
+
+  get draggable(): boolean {
+    return this.actionViewItemOptions.draggable === true;
   }
 
   abstract render(container: HTMLElement): void;
@@ -50,8 +63,8 @@ export abstract class ActionViewItem extends DisposableOwner {
 export class ButtonActionViewItem extends ActionViewItem {
   private _button: Button | undefined;
 
-  constructor(action: IAction) {
-    super(action);
+  constructor(action: IAction, options: ActionViewItemOptions = {}) {
+    super(action, options);
   }
 
   override render(container: HTMLElement): void {
@@ -88,7 +101,7 @@ export class ButtonActionViewItem extends ActionViewItem {
   }
 }
 
-export interface LabelActionViewItemOptions {
+export interface LabelActionViewItemOptions extends ActionViewItemOptions {
   readonly label?: string;
   readonly icon?: Icon;
   readonly ariaLabel?: string;
@@ -100,7 +113,7 @@ export class LabelActionViewItem extends ActionViewItem {
   private button: HTMLButtonElement | undefined;
 
   constructor(action: IAction, private readonly options: LabelActionViewItemOptions = {}) {
-    super(action);
+    super(action, options);
   }
 
   override render(container: HTMLElement): void {

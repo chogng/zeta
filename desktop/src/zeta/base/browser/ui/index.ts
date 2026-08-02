@@ -8,10 +8,11 @@ export {
   ActionViewItem,
   ButtonActionViewItem,
   LabelActionViewItem,
+  type ActionViewItemOptions,
   type LabelActionViewItemOptions,
   SeparatorActionViewItem,
 } from "./actionbar/actionViewItems.js";
-export { Button, type ButtonOptions } from "./button/button.js";
+export { Button, type ButtonContentAlignment, type ButtonOptions } from "./button/button.js";
 export {
   AnchorAlignment,
   AnchorAxisAlignment,

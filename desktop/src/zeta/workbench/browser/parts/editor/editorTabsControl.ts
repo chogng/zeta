@@ -1,5 +1,4 @@
-import "./editorTabsControl.css";
-import { TabList } from "../../../../base/browser/ui/tablist/tabList.js";
+import type { TabListDropPosition } from "../../../../base/browser/ui/tablist/tabList.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import type { EditorInput } from "./editorInput.js";
 
@@ -10,65 +9,32 @@ export interface EditorTabDescriptor {
   readonly tabId: string;
 }
 
-/** Callbacks through which tabs request group-level mutations. */
+/** Callbacks through which an Editor tab presentation requests group-level mutations. */
 export interface EditorTabsDelegate {
   activate(input: EditorInput): void;
+  preview(input: EditorInput): void;
   close(input: EditorInput): void;
+  startDrag(input: EditorInput): void;
+  isDragging(): boolean;
+  drop(target: EditorInput | undefined, position: TabListDropPosition): void;
+  dropExternal(event: DragEvent, target: EditorInput | undefined, position: TabListDropPosition): void;
+  endDrag(): void;
 }
 
-/** Maps Editor inputs and lifecycle callbacks onto the shared TabList. */
-export class EditorTabsControl extends DisposableOwner {
+/** Common lifecycle contract implemented by each Editor tab presentation mode. */
+export abstract class EditorTabsControl extends DisposableOwner {
   readonly element: HTMLDivElement;
-  private readonly delegate: EditorTabsDelegate;
-  private readonly tabList: TabList<EditorInput>;
 
-  constructor(ownerDocument: Document, delegate: EditorTabsDelegate) {
+  protected constructor(ownerDocument: Document) {
     super();
-    this.delegate = delegate;
     this.element = ownerDocument.createElement("div");
     this.element.className = "zeta-editor-tabs-control";
-    this.tabList = this.own(new TabList({
-      ownerDocument,
-      ariaLabel: "Open editors",
-      onActivate: (input) => delegate.activate(input),
-      onClose: (input) => delegate.close(input),
-    }));
-    this.element.append(this.tabList.element);
     this.defer(() => this.element.remove());
   }
 
-  setEditors(
-    editors: readonly EditorTabDescriptor[],
-    activeInput: EditorInput | undefined,
-  ): void {
-    const activeKey = activeInput
-      ? editorInputKey(activeInput)
-      : undefined;
-    this.tabList.setTabs(
-      editors.map((editor) => {
-        const label = editorInputLabel(editor.input);
-        return {
-          id: editorInputKey(editor.input),
-          value: editor.input,
-          label,
-          tooltip: editor.input.resource.toString(),
-          tabId: editor.tabId,
-          panelId: editor.panelId,
-        };
-      }),
-      activeKey,
-    );
-    this.element.hidden = editors.length === 0;
-  }
+  abstract setEditors(editors: readonly EditorTabDescriptor[], activeInput: EditorInput | undefined): void;
 }
 
 export function editorInputKey(input: EditorInput): string {
   return input.resource.toString();
-}
-
-export function editorInputLabel(input: EditorInput): string {
-  if (input.label?.trim()) return input.label;
-  const path = decodeURIComponent(input.resource.path).replace(/\/+$/, "");
-  const separator = path.lastIndexOf("/");
-  return path.slice(separator + 1) || input.resource.toString();
 }

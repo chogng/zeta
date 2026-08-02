@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
+import type { IContextMenuService } from "../src/zeta/platform/contextview/browser/contextMenu.js";
 import type { GitStatus, IGitService } from "../src/zeta/workbench/services/git/common/gitService.js";
 
 test("Git contribution registers Changes, Agent Review, and Graph as ordered panes", async () => {
@@ -27,18 +28,48 @@ test("Git contribution registers Changes, Agent Review, and Graph as ordered pan
 test("ScmGraphViewPane renders bounded repository history", async () => {
   const browser = new JSDOM("<!doctype html><body></body>");
   const installedGlobals = installDomGlobals(browser);
+  let historyRequests = 0;
+  const [
+    { ContextKeyService },
+    { MenuService },
+    { ServiceCollection },
+    { CommandService },
+  ] = await Promise.all([
+    import("../src/zeta/platform/contextkey/common/contextkey.js"),
+    import("../src/zeta/platform/actions/common/menuService.js"),
+    import("../src/zeta/platform/instantiation/common/instantiation.js"),
+    import("../src/zeta/workbench/services/commands/common/commandService.js"),
+  ]);
+  using contextKeyService = new ContextKeyService();
+  const menuService = new MenuService(new CommandService(new ServiceCollection()), contextKeyService);
   const gitService = {
-      history: async () => [
+      history: async () => {
+        historyRequests += 1;
+        return [
           { objectId: "1234567890abcdef", timestampSeconds: 1_753_000_000, subject: "Wire SCM panes" },
           { objectId: "abcdef1234567890", timestampSeconds: 1_752_900_000, subject: "Prepare graph data" },
-        ],
+        ];
+      },
   } as unknown as IGitService;
 
   try {
     const { ScmGraphViewPane } = await import("../src/zeta/workbench/contrib/scm/browser/scmGraphViewPane.js");
-    using pane = new ScmGraphViewPane({ id: "zeta.gitGraph.test", title: "Graph", ownerDocument: browser.window.document }, gitService);
+    using pane = new ScmGraphViewPane({ id: "zeta.gitGraph.test", title: "Graph", ownerDocument: browser.window.document }, gitService, menuService, {} as IContextMenuService, contextKeyService);
     browser.window.document.body.append(pane.element);
     await waitFor(() => pane.element.querySelectorAll(".zeta-scm-graph-commit").length === 2);
+
+    const remoteActionItems = [...pane.element.querySelectorAll<HTMLElement>(".zeta-pane-view-header-actions .zeta-action-view-item")];
+    assert.deepEqual(remoteActionItems.map((item) => item.dataset.actionId), ["zeta.git.fetch", "zeta.git.pull", "zeta.git.push", "zeta.git.graph.refresh"]);
+    assert.equal(remoteActionItems.filter((item) => item.querySelector(".zeta-icon")).length, 4);
+    pane.setCollapsed(true);
+    assert.equal(pane.element.querySelector<HTMLElement>(".zeta-pane-view-header-actions")?.hidden, true);
+    pane.setCollapsed(false);
+    assert.equal(pane.element.querySelector<HTMLElement>(".zeta-pane-view-header-actions")?.hidden, false);
+
+    const refresh = pane.element.querySelector<HTMLButtonElement>('[data-action-id="zeta.git.graph.refresh"] > button');
+    assert.ok(refresh);
+    refresh.click();
+    await waitFor(() => historyRequests === 2);
 
     assert.deepEqual([...pane.element.querySelectorAll(".zeta-scm-graph-subject")].map((element) => element.textContent), ["Wire SCM panes", "Prepare graph data"]);
     assert.match(pane.element.querySelector(".zeta-scm-graph-metadata")?.textContent ?? "", /^1234567 · /);
@@ -62,7 +93,7 @@ test("ScmAgentReviewViewPane exposes an explicit empty state", async () => {
   }
 });
 
-test("ScmViewPane groups App Server Git status and refreshes it", async () => {
+test("ScmViewPane groups App Server Git status", async () => {
   const browser = new JSDOM("<!doctype html><body></body>");
   const installedGlobals = installDomGlobals(browser);
   let requestCount = 0;
@@ -159,6 +190,10 @@ test("ScmViewPane groups App Server Git status and refreshes it", async () => {
     const commit = pane.element.querySelector<HTMLButtonElement>(".zeta-scm-commit");
     assert.ok(message);
     assert.ok(commit);
+    assert.ok(commit.classList.contains("zeta-button"));
+    assert.ok(commit.classList.contains("label-centered"));
+    assert.equal(commit.textContent, "Commit");
+    assert.ok(commit.querySelector(".zeta-icon"));
     await waitFor(() => !commit.disabled);
     message.value = "ship scm";
     commit.click();
@@ -170,12 +205,7 @@ test("ScmViewPane groups App Server Git status and refreshes it", async () => {
     statusListener(external);
     await waitFor(() => pane.element.querySelector(".zeta-scm-status")?.textContent === "4 changed files");
 
-    const refresh = pane.element.querySelector<HTMLButtonElement>(".zeta-scm-refresh");
-    assert.ok(refresh);
-    refresh.click();
-    await waitFor(() => pane.element.querySelector(".zeta-scm-status")?.textContent === "No changes.");
-    assert.equal(requestCount, 2);
-    assert.equal(pane.element.querySelectorAll(".zeta-scm-section").length, 0);
+    assert.equal(requestCount, 1);
   } finally {
     browser.window.close();
     for (const name of installedGlobals) Reflect.deleteProperty(globalThis, name);

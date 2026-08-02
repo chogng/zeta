@@ -1,3 +1,5 @@
+import { DragAndDropObserver } from "../../../../base/browser/dnd.js";
+import { DndCssClasses } from "../../../../base/browser/ui/dnd/dnd.js";
 import { addDisposableListener } from "../../../../base/browser/dom.js";
 import { Dimension, type IDimension } from "../../../../base/browser/geometry.js";
 import { DisposableOwner, setDisposableOwner } from "../../../../base/common/lifecycle.js";
@@ -6,7 +8,9 @@ import type { IConfigurationService } from "../../../../platform/configuration/c
 import { type ITextFileService } from "../../../services/textfile/common/textFileService.js";
 import type { EditorInput, EditorOpenOptions } from "./editorInput.js";
 import { type IEditorPane, EditorPaneVisibility } from "./editorPane.js";
+import { extractExternalEditorInputs } from "./editorDropData.js";
 import { EditorPaneRegistry } from "./editorRegistry.js";
+import type { IEditorTabDragAndDrop, EditorTabDropPosition } from "./editorTabDragAndDrop.js";
 import { EditorGroupWatermark } from "./editorGroupWatermark.js";
 import { editorInputKey, type EditorTabDescriptor } from "./editorTabsControl.js";
 import { EditorTitleControl, type EditorTitleActions } from "./editorTitleControl.js";
@@ -38,6 +42,7 @@ export interface EditorGroupOptions {
   readonly textFileService?: ITextFileService;
   readonly titleActions?: EditorTitleActions;
   readonly onDidActivate?: () => void;
+  readonly dragAndDrop?: IEditorTabDragAndDrop;
 }
 
 interface EditorGroupEntry extends EditorTabDescriptor {
@@ -74,6 +79,22 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
     this.element = options.ownerDocument.createElement("section");
     this.element.className = "zeta-editor-group";
     this.element.setAttribute("aria-label", "Editor group");
+    this.own(new DragAndDropObserver(this.element, {
+      onDragOver: (event) => {
+        if (!options.dragAndDrop?.isDragging() || this.dragIsOverTitle(event)) return;
+        if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+        this.element.classList.add(DndCssClasses.DropTarget);
+      },
+      onDragLeave: () => this.element.classList.remove(DndCssClasses.DropTarget),
+      onDrop: (event) => {
+        if (!options.dragAndDrop?.isDragging() || this.dragIsOverTitle(event)) return;
+        event.stopPropagation();
+        this.element.classList.remove(DndCssClasses.DropTarget);
+        options.dragAndDrop.drop(this, undefined, "after");
+        options.dragAndDrop.end();
+      },
+      onDragEnd: () => this.element.classList.remove(DndCssClasses.DropTarget),
+    }));
     if (options.onDidActivate) {
       this.own(addDisposableListener(this.element, "focusin", () => {
         options.onDidActivate?.();
@@ -85,7 +106,17 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
         activate: (input) => {
           this.activateEntry(this.requireEntry(input), true);
         },
+        preview: (input) => this.activateEntry(this.requireEntry(input), false),
         close: (input) => this.closeEditor(input),
+        startDrag: (input) => options.dragAndDrop?.start(this, input),
+        isDragging: () => options.dragAndDrop?.isDragging() ?? false,
+        drop: (target, position) => options.dragAndDrop?.drop(this, target, position),
+        dropExternal: (event, target, position) => {
+          void this.openExternalEditors(event.dataTransfer, target, position).catch((error: unknown) => {
+            console.error("Failed to open dropped editor resources", error);
+          });
+        },
+        endDrag: () => options.dragAndDrop?.end(),
       },
       options.titleActions,
     ));
@@ -136,6 +167,7 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
     const existing = this.entry(input);
     if (existing?.paneInstance.pane.id === descriptor.id) {
       existing.input = input;
+      this.moveEntry(existing, options.index);
       this.activateEntry(existing, false);
       return existing.paneInstance.pane;
     }
@@ -195,7 +227,7 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
       if (this.activeEntry === existing) this.activeEntry = undefined;
       this.entries[index] = entry;
     } else {
-      this.entries.push(entry);
+      this.insertEntry(entry, options.index);
     }
     this.ordinaryContent = undefined;
     this.activateEntry(entry, false);
@@ -227,6 +259,52 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
     }
     this.renderContent();
     this.renderChrome();
+  }
+
+  getEditorInsertionIndex(target: EditorInput | undefined, position: EditorTabDropPosition): number {
+    if (!target) return this.entries.length;
+    const index = this.entries.findIndex(
+      (candidate) => editorInputKey(candidate.input) === editorInputKey(target),
+    );
+    if (index < 0) return this.entries.length;
+    return position === "before" ? index : index + 1;
+  }
+
+  moveEditor(input: EditorInput, targetIndex: number): void {
+    const sourceIndex = this.entries.findIndex(
+      (candidate) => editorInputKey(candidate.input) === editorInputKey(input),
+    );
+    if (sourceIndex < 0) return;
+    const [entry] = this.entries.splice(sourceIndex, 1);
+    if (!entry) return;
+    const adjustedIndex = Math.min(
+      Math.max(0, targetIndex > sourceIndex ? targetIndex - 1 : targetIndex),
+      this.entries.length,
+    );
+    this.entries.splice(adjustedIndex, 0, entry);
+    this.renderContent();
+    this.renderChrome();
+  }
+
+  private async openExternalEditors(dataTransfer: DataTransfer | null, target: EditorInput | undefined, position: EditorTabDropPosition): Promise<void> {
+    if (!dataTransfer) return;
+    const inputs = await extractExternalEditorInputs(dataTransfer);
+    let index = this.getEditorInsertionIndex(target, position);
+    for (const input of inputs) {
+      await this.openEditor(input, { index });
+      index += 1;
+    }
+  }
+
+  async moveEditorTo(input: EditorInput, target: EditorGroup, targetIndex: number): Promise<void> {
+    if (target === this) {
+      this.moveEditor(input, targetIndex);
+      return;
+    }
+    this.requireEntry(input);
+    await target.openEditor(input, { index: targetIndex });
+    this.closeEditor(input);
+    target.activateEditor(input);
   }
 
   setContent(content: Element): void {
@@ -285,6 +363,27 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
 
   private renderChrome(): void {
     this.titleControl.setEditors(this.entries, this.activeInput);
+  }
+
+  private dragIsOverTitle(event: DragEvent): boolean {
+    const target = event.target as Node | null;
+    return target ? this.titleControl.element.contains(target) : false;
+  }
+
+  private insertEntry(entry: EditorGroupEntry, index: number | undefined): void {
+    const targetIndex = index === undefined
+      ? this.entries.length
+      : Math.min(Math.max(0, index), this.entries.length);
+    this.entries.splice(targetIndex, 0, entry);
+  }
+
+  private moveEntry(entry: EditorGroupEntry, index: number | undefined): void {
+    if (index === undefined) return;
+    const currentIndex = this.entries.indexOf(entry);
+    if (currentIndex < 0) return;
+    this.entries.splice(currentIndex, 1);
+    const targetIndex = Math.min(Math.max(0, index), this.entries.length);
+    this.entries.splice(targetIndex, 0, entry);
   }
 
   private entry(input: EditorInput): EditorGroupEntry | undefined {

@@ -1,5 +1,5 @@
 import "./chatTabsControl.css";
-import { TabList } from "../../../../../base/browser/ui/tablist/tabList.js";
+import { TabList, type TabListDropPosition } from "../../../../../base/browser/ui/tablist/tabList.js";
 import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
 
 export interface ChatTab {
@@ -21,6 +21,7 @@ interface ChatTabDescriptor {
 export interface ChatTabsDelegate {
   selectTab(tabId: string): void;
   closeTab(tabId: string): void;
+  moveTab(sourceTabId: string, targetTabId: string | undefined, position: TabListDropPosition): void;
 }
 
 /** Maps untitled and durable Chat sessions onto the shared TabList. */
@@ -29,6 +30,7 @@ export class ChatTabsControl extends DisposableOwner {
   private readonly tabList: TabList<string>;
   private readonly idPrefix: string;
   private readonly tabIds = new Map<string, string>();
+  private draggedTabId: string | undefined;
   private nextTabId = 0;
 
   constructor(ownerDocument: Document, idPrefix: string, delegate: ChatTabsDelegate, presentation: ChatTabsPresentation) {
@@ -41,6 +43,20 @@ export class ChatTabsControl extends DisposableOwner {
       ownerDocument,
       ariaLabel: "Open chats",
       presentation: "inset",
+      draggable: true,
+      dragAndDrop: {
+        canDrop: () => this.draggedTabId !== undefined,
+        onDragStart: (tabId) => {
+          this.draggedTabId = tabId;
+        },
+        onDrop: (targetTabId, position) => {
+          const sourceTabId = this.draggedTabId;
+          if (sourceTabId) delegate.moveTab(sourceTabId, targetTabId, position);
+        },
+        onDragEnd: () => {
+          this.draggedTabId = undefined;
+        },
+      },
       onActivate: (tabId) => delegate.selectTab(tabId),
       onClose: (tabId) => delegate.closeTab(tabId),
     }));

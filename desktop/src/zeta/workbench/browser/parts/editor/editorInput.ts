@@ -21,4 +21,6 @@ export interface EditorInput {
 /** Optional caller preference used by "Open With" and saved associations. */
 export interface EditorOpenOptions {
   readonly preferredEditorId?: string;
+  /** Inserts or moves the editor to this zero-based tab index. */
+  readonly index?: number;
 }

@@ -41,8 +41,8 @@ export class TabActionViewItem<T> extends ActionViewItem {
   private readonly closeActionIcon: Icon | undefined;
   private tabElement: HTMLButtonElement | undefined;
 
-  constructor(action: TabAction<T>, onClose: ((value: T) => void) | undefined, closeActionIcon: Icon | undefined) {
-    super(action);
+  constructor(action: TabAction<T>, onClose: ((value: T) => void) | undefined, closeActionIcon: Icon | undefined, draggable: boolean) {
+    super(action, { draggable });
     this.tabAction = action;
     this.onClose = onClose;
     this.closeActionIcon = closeActionIcon;

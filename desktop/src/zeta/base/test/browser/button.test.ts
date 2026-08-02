@@ -24,10 +24,19 @@ test("Button only installs a Hover for an explicit title", () => {
   });
 
   assert.deepEqual(contents, ["Save changes"]);
+  assert.ok(titledButton.element.querySelector(".zeta-button-content.zeta-icon-label"));
+  assert.ok(titledButton.element.querySelector(".zeta-button-label.zeta-icon-label-text"));
   assert.equal(unlabeledHoverButton.element.hasAttribute("title"), false);
   titledButton.hidden = true;
   assert.equal(titledButton.element.hidden, true);
   assert.equal(titledButton.element.classList.contains("hidden"), true);
+
+  using labelCenteredButton = new Button({
+    label: "Commit",
+    contentAlignment: "labelCentered",
+    ownerDocument: dom.window.document,
+  });
+  assert.equal(labelCenteredButton.element.classList.contains("label-centered"), true);
 
   dom.window.close();
 });

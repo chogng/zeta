@@ -9,6 +9,7 @@ import type { IKeybindingService } from "../../../../platform/keybinding/common/
 import { type ITextFileService } from "../../../services/textfile/common/textFileService.js";
 import { WorkbenchPart } from "../../part.js";
 import { EditorGroup, type EditorGroupOptions, type IEditorGroup } from "./editorGroup.js";
+import { EditorTabDragAndDropController, type EditorTabDropEvent } from "./editorTabDragAndDrop.js";
 import type { EditorInput, EditorOpenOptions } from "./editorInput.js";
 import type { IEditorPane } from "./editorPane.js";
 import { EditorPaneRegistry, EditorPanes } from "./editorRegistry.js";
@@ -53,9 +54,10 @@ export interface IEditorPartOptions {
 /** Owns EditorGroup layout and delegates editor behavior to the active group. */
 export class EditorPart extends WorkbenchPart implements IEditorPart {
   private readonly splitView: SplitView;
-  private readonly groupOptions: Omit<EditorGroupOptions, "ownerDocument" | "onDidActivate">;
+  private readonly groupOptions: Omit<EditorGroupOptions, "ownerDocument" | "onDidActivate" | "dragAndDrop">;
   private readonly _groups: EditorGroupHost[] = [];
   private _activeGroup: EditorGroup;
+  private readonly tabDragAndDrop: EditorTabDragAndDropController;
   private dimension = Dimension.Zero;
 
   override get minimumWidth(): number { return 120; }
@@ -75,6 +77,9 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
       textFileService: options.textFileService,
       titleActions: options.titleActions,
     };
+    this.tabDragAndDrop = new EditorTabDragAndDropController((event) => {
+      this.dropEditor(event);
+    });
     this.splitView = this.own(new SplitView(
       "horizontal",
       ownerDocument,
@@ -187,11 +192,35 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
       onDidActivate: () => {
         this._activeGroup = group;
       },
+      dragAndDrop: {
+        start: (source, input) => this.tabDragAndDrop.start(source, input),
+        isDragging: () => this.tabDragAndDrop.isDragging(),
+        drop: (target, targetInput, position) => this.tabDragAndDrop.drop(target, targetInput, position),
+        end: () => this.tabDragAndDrop.end(),
+      },
     }));
     return {
       group,
       view: new EditorGroupSplitView(group),
     };
+  }
+
+  private dropEditor(event: EditorTabDropEvent): void {
+    const targetIndex = event.target.getEditorInsertionIndex(event.targetInput, event.position);
+    if (event.source === event.target) {
+      event.target.moveEditor(event.input, targetIndex);
+      this._activeGroup = event.target;
+      event.target.focus();
+      return;
+    }
+    void event.source.moveEditorTo(event.input, event.target, targetIndex)
+      .then(() => {
+        this._activeGroup = event.target;
+        event.target.focus();
+      })
+      .catch((error) => {
+        console.error("Failed to move Editor tab", error);
+      });
   }
 }
 

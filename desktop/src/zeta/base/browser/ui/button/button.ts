@@ -3,12 +3,16 @@ import type { Icon } from "../../../common/icon.js";
 import { DisposableOwner, DisposableSlot } from "../../../common/lifecycle.js";
 import { setAriaAttribute } from "../aria/aria.js";
 import { getHoverDelegate, type IManagedHover } from "../hover/hoverDelegate.js";
-import { appendIcon } from "../icon/icon.js";
+import { IconLabel } from "../iconlabel/iconlabel.js";
+
+/** Controls whether a button centers its complete content group or its text label. */
+export type ButtonContentAlignment = "groupCentered" | "labelCentered";
 
 export interface ButtonOptions {
   label: string;
   ownerDocument?: Document;
   icon?: Icon;
+  contentAlignment?: ButtonContentAlignment;
   title?: string;
   hoverGroupId?: string;
   enabled?: boolean;
@@ -30,12 +34,16 @@ export class Button extends DisposableOwner {
     this.element = element;
     this.defer(() => element.remove());
     element.className = "zeta-button";
+    element.classList.toggle("label-centered", options.contentAlignment === "labelCentered");
     element.type = "button";
-    if (options.icon) appendIcon(options.icon, element);
-    const label = ownerDocument.createElement("span");
-    label.className = "zeta-button-label";
-    label.textContent = options.label;
-    element.append(label);
+    const content = this.own(new IconLabel({
+      label: options.label,
+      icon: options.icon,
+      ownerDocument,
+    }));
+    content.element.classList.add("zeta-button-content");
+    content.labelElement.classList.add("zeta-button-label");
+    element.append(content.element);
     this.setTitle(options.title);
     element.disabled = options.enabled === false;
     if (options.checked !== undefined) {

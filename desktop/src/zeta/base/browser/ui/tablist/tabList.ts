@@ -3,7 +3,7 @@ import { addDisposableListener } from "../../dom.js";
 import type { Icon } from "../../../common/icon.js";
 import type { IAction } from "../../../common/actions.js";
 import { DisposableOwner } from "../../../common/lifecycle.js";
-import { ActionBar, type ActionBarOrientation, type ActionViewItemProvider } from "../actionbar/actionbar.js";
+import { ActionBar, type ActionBarDragAndDrop, type ActionBarDropPosition, type ActionBarOrientation, type ActionViewItemProvider } from "../actionbar/actionbar.js";
 import { ScrollableElement } from "../scrollbar/scrollableElement.js";
 import { TabAction, TabActionViewItem } from "./tabActionViewItem.js";
 
@@ -31,6 +31,18 @@ export interface TabListItem<T> {
 
 /** Visual edge treatment for the ActionBar rendered inside a TabList. */
 export type TabListPresentation = "flush" | "inset";
+export type TabListDropPosition = ActionBarDropPosition;
+
+/** Drag callbacks for a tab list; the caller owns payload and mutation semantics. */
+export interface TabListDragAndDrop<T> {
+  readonly canDrop: (event: DragEvent, target: T | undefined, position: TabListDropPosition) => boolean;
+  readonly onDragStart: (value: T, event: DragEvent) => void;
+  readonly onDragEnter?: (target: T | undefined, position: TabListDropPosition, event: DragEvent) => void;
+  readonly onDragOver?: (target: T | undefined, position: TabListDropPosition, event: DragEvent, duration: number) => void;
+  readonly onDragLeave?: () => void;
+  readonly onDrop: (target: T | undefined, position: TabListDropPosition, event: DragEvent) => void;
+  readonly onDragEnd: () => void;
+}
 
 /** Construction inputs for a manually activated TabList. */
 export interface TabListOptions<T> {
@@ -41,6 +53,9 @@ export interface TabListOptions<T> {
   readonly onActivate: (value: T) => void;
   readonly onClose?: (value: T) => void;
   readonly closeActionIcon?: Icon;
+  /** Makes tab items native drag sources without defining any drop behavior. */
+  readonly draggable?: boolean;
+  readonly dragAndDrop?: TabListDragAndDrop<T>;
   /** Non-tab actions retained after the selectable tabs. */
   readonly trailingActions?: readonly IAction[];
   readonly trailingActionViewItemProvider?: ActionViewItemProvider;
@@ -68,11 +83,32 @@ export class TabList<T> extends DisposableOwner {
     const trailingActionIds = new Set(this.trailingActions.map((action) => action.id));
     const presentation = options.presentation ?? "flush";
     const orientation = options.orientation ?? "horizontal";
+    const dragAndDrop = options.dragAndDrop;
+    const actionBarDragAndDrop: ActionBarDragAndDrop | undefined = dragAndDrop
+      ? {
+        canDrop: (event, action, position) => dragAndDrop.canDrop(event, action instanceof TabAction ? action.tab.value : undefined, position),
+        onDragStart: (action, event) => {
+          if (action instanceof TabAction) dragAndDrop.onDragStart(action.tab.value, event);
+        },
+        onDragEnter: (action, position, event) => {
+          dragAndDrop.onDragEnter?.(action instanceof TabAction ? action.tab.value : undefined, position, event);
+        },
+        onDragOver: (action, position, event, duration) => {
+          dragAndDrop.onDragOver?.(action instanceof TabAction ? action.tab.value : undefined, position, event, duration);
+        },
+        onDragLeave: () => dragAndDrop.onDragLeave?.(),
+        onDrop: (action, position, event) => {
+          dragAndDrop.onDrop(action instanceof TabAction ? action.tab.value : undefined, position, event);
+        },
+        onDragEnd: () => dragAndDrop.onDragEnd(),
+      }
+      : undefined;
     this.actionBar = this.own(new ActionBar({
       ownerDocument: options.ownerDocument,
       ariaLabel: options.ariaLabel,
       ariaRole: "tablist",
       orientation,
+      dragAndDrop: actionBarDragAndDrop,
       actionViewItemProvider: (action) => {
         if (!(action instanceof TabAction)) {
           if (!trailingActionIds.has(action.id)) {
@@ -80,7 +116,7 @@ export class TabList<T> extends DisposableOwner {
           }
           return options.trailingActionViewItemProvider?.(action);
         }
-        return new TabActionViewItem(action, onClose, closeActionIcon);
+        return new TabActionViewItem(action, onClose, closeActionIcon, options.draggable === true);
       },
     }));
     const scrollableOptions = orientation === "vertical"

@@ -1,10 +1,10 @@
-.zeta-editor-tabs-control {
+.zeta-multi-editor-tabs-control {
   min-width: 0;
   flex: 1 1 auto;
   overflow: hidden;
 }
 
-.zeta-editor-tabs-control .zeta-tab {
+.zeta-multi-editor-tabs-control .zeta-tab {
   display: flex;
   min-width: 80px;
   max-width: 220px;
@@ -15,17 +15,17 @@
   background: var(--zeta-workbench-background);
 }
 
-.zeta-editor-tabs-control .zeta-tab:hover {
+.zeta-multi-editor-tabs-control .zeta-tab:hover {
   color: var(--zeta-foreground);
   background: var(--zeta-button-hover-background);
 }
 
-.zeta-editor-tabs-control .zeta-tab.checked {
+.zeta-multi-editor-tabs-control .zeta-tab.checked {
   color: var(--zeta-foreground);
   background: var(--zeta-editor-background);
 }
 
-.zeta-editor-tabs-control .zeta-tab-label {
+.zeta-multi-editor-tabs-control .zeta-tab-label {
   display: flex;
   min-width: 0;
   height: 100%;
@@ -36,18 +36,18 @@
   outline: none;
 }
 
-.zeta-editor-tabs-control .zeta-tab-label:focus-visible {
+.zeta-multi-editor-tabs-control .zeta-tab-label:focus-visible {
   outline: 1px solid var(--zeta-focus-border);
   outline-offset: -1px;
 }
 
-.zeta-editor-tabs-control .zeta-icon-label-text {
+.zeta-multi-editor-tabs-control .zeta-icon-label-text {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.zeta-editor-tabs-control .zeta-tab-actions {
+.zeta-multi-editor-tabs-control .zeta-tab-actions {
   flex: 0 0 auto;
   padding-right: 4px;
 }

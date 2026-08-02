@@ -35,6 +35,7 @@ export class ChatViewPane extends ViewPane {
   private readonly paneHost: HTMLDivElement;
   private readonly empty: HTMLDivElement;
   private readonly panes = new Map<string, ChatPane>();
+  private readonly tabOrder: string[] = [];
   private activePane: ChatPane | undefined;
   private viewDisposed = false;
 
@@ -62,6 +63,7 @@ export class ChatViewPane extends ViewPane {
       {
         selectTab: (tabId) => this.selectTab(tabId),
         closeTab: (tabId) => this.closeTab(tabId),
+        moveTab: (sourceTabId, targetTabId, position) => this.moveTab(sourceTabId, targetTabId, position),
       },
       menuService,
       contextMenuService,
@@ -154,17 +156,18 @@ export class ChatViewPane extends ViewPane {
       this.panes.delete(paneId);
       pane.dispose();
     }
-    this.paneHost.replaceChildren(...entries.map((entry) => entry.pane.element), this.empty);
+    const orderedEntries = this.orderEntries(entries);
+    this.paneHost.replaceChildren(...orderedEntries.map((entry) => entry.pane.element), this.empty);
     const activePaneId = this.activePaneId();
     this.activePane = activePaneId ? this.panes.get(activePaneId) : undefined;
-    for (const entry of entries) entry.pane.setVisible(entry.pane === this.activePane);
-    this.empty.hidden = entries.length > 0;
+    for (const entry of orderedEntries) entry.pane.setVisible(entry.pane === this.activePane);
+    this.empty.hidden = orderedEntries.length > 0;
     const activeTabId = this.activePane?.element.id;
     const tabIds = this.titleControl.setTabs(
-      entries.map((entry) => ({ id: entry.tabId, label: entry.label, panelId: entry.pane.element.id })),
+      orderedEntries.map((entry) => ({ id: entry.tabId, label: entry.label, panelId: entry.pane.element.id })),
       activeTabId,
     );
-    for (const entry of entries) entry.pane.setTabId(tabIds.get(entry.tabId));
+    for (const entry of orderedEntries) entry.pane.setTabId(tabIds.get(entry.tabId));
   }
 
   private selectionForSession(session: Session): IActiveSessionThread | undefined {
@@ -208,6 +211,31 @@ export class ChatViewPane extends ViewPane {
     const sessionId = pane.sessionId;
     if (!sessionId) return;
     void this.sessionService.archiveSession(sessionId).then(() => this.hideChatWhenEmpty()).catch(() => {});
+  }
+
+  private moveTab(sourceTabId: string, targetTabId: string | undefined, position: "before" | "after"): void {
+    if (sourceTabId === targetTabId) return;
+    const sourceIndex = this.tabOrder.indexOf(sourceTabId);
+    if (sourceIndex < 0) return;
+    this.tabOrder.splice(sourceIndex, 1);
+    const targetIndex = targetTabId === undefined
+      ? this.tabOrder.length
+      : this.tabOrder.indexOf(targetTabId);
+    const insertionIndex = targetIndex < 0
+      ? this.tabOrder.length
+      : position === "before" ? targetIndex : targetIndex + 1;
+    this.tabOrder.splice(insertionIndex, 0, sourceTabId);
+    this.syncSessions();
+  }
+
+  private orderEntries(entries: readonly ChatPaneEntry[]): readonly ChatPaneEntry[] {
+    const entriesByTabId = new Map(entries.map((entry) => [entry.tabId, entry]));
+    const orderedTabIds = this.tabOrder.filter((tabId) => entriesByTabId.has(tabId));
+    for (const entry of entries) {
+      if (!orderedTabIds.includes(entry.tabId)) orderedTabIds.push(entry.tabId);
+    }
+    this.tabOrder.splice(0, this.tabOrder.length, ...orderedTabIds);
+    return orderedTabIds.map((tabId) => entriesByTabId.get(tabId)!);
   }
 
   private ensureTabForVisibleChat(): void {

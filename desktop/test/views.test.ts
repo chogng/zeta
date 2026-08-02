@@ -116,6 +116,24 @@ test("view descriptor service resolves default containers by location", () => {
   );
 });
 
+test("view descriptor service keeps a window-local container order", () => {
+  using contextKeys = new ContextKeyService();
+  const registry = new WorkbenchViewRegistry();
+  using first = registry.registerViewContainer({ id: "test.first", title: "First", location: ViewContainerLocation.Panel, order: 10 });
+  using second = registry.registerViewContainer({ id: "test.second", title: "Second", location: ViewContainerLocation.Panel, order: 20 });
+  using third = registry.registerViewContainer({ id: "test.third", title: "Third", location: ViewContainerLocation.Panel, order: 30 });
+  using descriptors = new ViewDescriptorService({ contextKeyService: contextKeys, registry });
+  const changes: ViewContainerLocation[] = [];
+  using listener = descriptors.onDidChangeViewContainerOrder((location) => changes.push(location));
+
+  descriptors.moveViewContainer(ViewContainerLocation.Panel, "test.third", "test.first", "before");
+  assert.deepEqual(descriptors.getViewContainers(ViewContainerLocation.Panel).map((container) => container.id), ["test.third", "test.first", "test.second"]);
+  assert.deepEqual(changes, [ViewContainerLocation.Panel]);
+
+  descriptors.moveViewContainer(ViewContainerLocation.Panel, "test.third", undefined, "after");
+  assert.deepEqual(descriptors.getViewContainers(ViewContainerLocation.Panel).map((container) => container.id), ["test.first", "test.second", "test.third"]);
+});
+
 type TestViewDescriptorOptions = Omit<
   IViewDescriptor,
   "id" | "title" | "ctorDescriptor"

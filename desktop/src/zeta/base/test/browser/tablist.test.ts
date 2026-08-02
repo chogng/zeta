@@ -76,13 +76,70 @@ test("TabList owns manual selection semantics and roving focus", () => {
 
 test("TabList exposes its ActionBar edge treatment as a presentation", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
-  const tabList = new TabList({
+  const tabList = new TabList<string>({
     ownerDocument: dom.window.document,
     ariaLabel: "Inset tabs",
     presentation: "inset",
     onActivate: () => undefined,
   });
   assert.equal(tabList.element.classList.contains("zeta-tab-list-inset"), true);
+  tabList.dispose();
+  dom.window.close();
+});
+
+test("TabList can opt its items into native drag-source presentation", () => {
+  const dom = new JSDOM("<!doctype html><body></body>");
+  const tabList = new TabList({
+    ownerDocument: dom.window.document,
+    ariaLabel: "Draggable tabs",
+    draggable: true,
+    onActivate: () => undefined,
+  });
+  tabList.setTabs([tab("first")], "first");
+  const item = tabList.element.querySelector<HTMLElement>(".zeta-tab");
+  assert.ok(item);
+  assert.equal(item.draggable, true);
+  assert.equal(item.classList.contains("zeta-dnd-draggable"), true);
+
+  tabList.dispose();
+  dom.window.close();
+});
+
+test("TabList forwards ActionBar drag positions using tab values", () => {
+  const dom = new JSDOM("<!doctype html><body></body>");
+  const drops: Array<{ target: string | undefined; position: string }> = [];
+  let dragging = false;
+  const tabList = new TabList<string>({
+    ownerDocument: dom.window.document,
+    ariaLabel: "Reorderable tabs",
+    draggable: true,
+    dragAndDrop: {
+      canDrop: () => dragging,
+      onDragStart: () => {
+        dragging = true;
+      },
+      onDrop: (target, position) => drops.push({ target, position }),
+      onDragEnd: () => {
+        dragging = false;
+      },
+    },
+    onActivate: () => undefined,
+  });
+  tabList.setTabs([tab("first"), tab("second")], "first");
+  dom.window.document.body.append(tabList.element);
+  const [first, second] = tabList.element.querySelectorAll<HTMLElement>(".zeta-tab");
+  assert.ok(first);
+  assert.ok(second);
+  Object.defineProperty(second, "getBoundingClientRect", {
+    value: () => ({ left: 100, width: 100 }),
+  });
+
+  first.dispatchEvent(dragEvent(dom.window, "dragstart"));
+  second.dispatchEvent(dragEvent(dom.window, "dragover", 175));
+  second.dispatchEvent(dragEvent(dom.window, "drop", 175));
+
+  assert.deepEqual(drops, [{ target: "second", position: "after" }]);
+  assert.equal(dragging, false);
   tabList.dispose();
   dom.window.close();
 });
@@ -211,4 +268,10 @@ function keyboardEvent(
     cancelable: true,
     key,
   });
+}
+
+function dragEvent(targetWindow: { readonly Event: typeof Event }, type: string, clientX = 0): DragEvent {
+  const event = new targetWindow.Event(type, { bubbles: true, cancelable: true }) as DragEvent;
+  Object.defineProperty(event, "clientX", { value: clientX });
+  return event;
 }

@@ -1,4 +1,6 @@
 import { addDisposableListener } from "../../../../base/browser/dom.js";
+import { Button } from "../../../../base/browser/ui/button/button.js";
+import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
 import type { GitChangeStatus, GitHead, GitRepositoryChange, GitStatus, IGitService } from "../../../services/git/common/gitService.js";
 import { ViewPane, type IViewPaneOptions } from "../../../browser/parts/views/viewPane.js";
 
@@ -9,10 +11,6 @@ type GitPathAction = "stage" | "unstage" | "discard";
 export class ScmViewPane extends ViewPane {
   private readonly gitService: IGitService;
   private readonly branchElement: HTMLDivElement;
-  private readonly refreshButton: HTMLButtonElement;
-  private readonly fetchButton: HTMLButtonElement;
-  private readonly pullButton: HTMLButtonElement;
-  private readonly pushButton: HTMLButtonElement;
   private readonly commitInput: HTMLTextAreaElement;
   private readonly commitButton: HTMLButtonElement;
   private readonly statusElement: HTMLDivElement;
@@ -33,15 +31,7 @@ export class ScmViewPane extends ViewPane {
     this.branchElement = document.createElement("div");
     this.branchElement.className = "zeta-scm-branch";
     this.branchElement.textContent = "Loading repository…";
-    const remoteActions = document.createElement("div");
-    remoteActions.className = "zeta-scm-remote-actions";
-    this.fetchButton = commandButton(document, "Fetch", "Fetch Git remotes");
-    this.pullButton = commandButton(document, "Pull", "Pull current branch (fast-forward only)");
-    this.pushButton = commandButton(document, "Push", "Push current branch");
-    this.refreshButton = commandButton(document, "Refresh", "Refresh Git changes");
-    this.refreshButton.classList.add("zeta-scm-refresh");
-    remoteActions.append(this.fetchButton, this.pullButton, this.pushButton, this.refreshButton);
-    summary.append(this.branchElement, remoteActions);
+    summary.append(this.branchElement);
     const commitForm = document.createElement("form");
     commitForm.className = "zeta-scm-commit-form";
     this.commitInput = document.createElement("textarea");
@@ -50,7 +40,14 @@ export class ScmViewPane extends ViewPane {
     this.commitInput.rows = 2;
     this.commitInput.placeholder = "Message (Ctrl+Enter to commit)";
     this.commitInput.setAttribute("aria-label", "Commit message");
-    this.commitButton = commandButton(document, "Commit", "Commit staged changes");
+    const commitButton = this.own(new Button({
+      label: "Commit",
+      icon: lxiconsLibrary.check,
+      contentAlignment: "labelCentered",
+      ownerDocument: document,
+      title: "Commit staged changes",
+    }));
+    this.commitButton = commitButton.element;
     this.commitButton.classList.add("zeta-scm-commit");
     this.commitButton.type = "submit";
     commitForm.append(this.commitInput, this.commitButton);
@@ -62,10 +59,6 @@ export class ScmViewPane extends ViewPane {
     this.changesElement = document.createElement("div");
     this.changesElement.className = "zeta-scm-changes";
     this.contentElement.append(summary, commitForm, this.statusElement, this.changesElement);
-    this.own(addDisposableListener(this.refreshButton, "click", () => void this.refresh()));
-    this.own(addDisposableListener(this.fetchButton, "click", () => void this.runRemote("Fetching", () => this.gitService.fetch())));
-    this.own(addDisposableListener(this.pullButton, "click", () => void this.runRemote("Pulling", () => this.gitService.pull())));
-    this.own(addDisposableListener(this.pushButton, "click", () => void this.runRemote("Pushing", () => this.gitService.push())));
     this.own(addDisposableListener(commitForm, "submit", (event) => {
       event.preventDefault();
       void this.commit();
@@ -118,21 +111,6 @@ export class ScmViewPane extends ViewPane {
       if (this.disposed || revision !== this.revision) return;
       this.commitInput.value = "";
       this.renderStatus(result.status, `Created commit ${result.objectId.slice(0, 7)}.`);
-    } catch (error) {
-      this.renderError(error, revision);
-    } finally {
-      if (!this.disposed && revision === this.revision) this.setBusy(false);
-    }
-  }
-
-  private async runRemote(label: string, operation: () => Promise<GitStatus>): Promise<void> {
-    const revision = ++this.revision;
-    this.setBusy(true);
-    this.statusElement.textContent = `${label}…`;
-    try {
-      const result = await operation();
-      if (this.disposed || revision !== this.revision) return;
-      this.renderStatus(result, `${label.replace(/ing$/, "")} complete.`);
     } catch (error) {
       this.renderError(error, revision);
     } finally {
@@ -255,9 +233,6 @@ export class ScmViewPane extends ViewPane {
     const hasStagedChanges = (this.status?.changes ?? []).some((change) => !change.conflicted && change.indexStatus !== "unmodified");
     this.commitButton.disabled = this.busy || !hasStagedChanges;
     this.commitInput.disabled = this.busy;
-    for (const button of [this.refreshButton, this.fetchButton, this.pullButton, this.pushButton]) {
-      button.disabled = this.busy;
-    }
     for (const button of this.changesElement.querySelectorAll<HTMLButtonElement>(".zeta-scm-command")) {
       button.disabled = this.busy;
     }

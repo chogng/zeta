@@ -503,7 +503,8 @@ test("Sidebar hosts its Composite Bar before content", () => {
   const actionbar = compositeBar.element.querySelector(
     ".zeta-tab-list-scroll-content > .zeta-action-bar",
   );
-  assert.equal(actionbar?.className, "zeta-action-bar");
+  assert.equal(actionbar?.classList.contains("zeta-action-bar"), true);
+  assert.equal(actionbar?.classList.contains("horizontal"), true);
   assert.equal(actionbar?.getAttribute("role"), "tablist");
   assert.equal(actionbar?.getAttribute("aria-orientation"), "horizontal");
   assert.deepEqual(
@@ -940,6 +941,44 @@ test("PaneComposite rejects ambiguous title projections from multiple Views", ()
   dom.window.close();
 });
 
+test("CompositeBar reorders view container tabs through drag and drop", () => {
+  const dom = new JSDOM("<!doctype html><body></body>");
+  const disposables = new DisposableStore();
+  const registry = new WorkbenchViewRegistry();
+  for (const [id, title, order] of [
+    ["zeta.panel.problems", "Problems", 10],
+    ["zeta.panel.output", "Output", 20],
+    ["zeta.panel.terminal", "Terminal", 30],
+  ] as const) {
+    disposables.add(registry.registerViewContainer({ id, title, order, location: ViewContainerLocation.Panel }));
+  }
+  const contextKeys = disposables.add(new ContextKeyService());
+  const viewDescriptors = disposables.add(new ViewDescriptorService({ contextKeyService: contextKeys, registry }));
+  const compositeBar = disposables.add(new CompositeBar({
+    ownerDocument: dom.window.document,
+    viewDescriptorService: viewDescriptors,
+    location: ViewContainerLocation.Panel,
+    ariaLabel: "Panel views",
+    presentation: "label",
+  }));
+  dom.window.document.body.append(compositeBar.element);
+  const [problems, output] = compositeBar.element.querySelectorAll<HTMLElement>(".zeta-tab");
+  assert.ok(problems);
+  assert.ok(output);
+  output.getBoundingClientRect = () => ({ left: 100, width: 100 } as DOMRect);
+
+  problems.dispatchEvent(compositeBarDragEvent(dom.window, "dragstart"));
+  output.dispatchEvent(compositeBarDragEvent(dom.window, "dragover", 175));
+  output.dispatchEvent(compositeBarDragEvent(dom.window, "drop", 175));
+
+  assert.deepEqual(
+    [...compositeBar.element.querySelectorAll<HTMLElement>("[role='tab']")].map((tab) => tab.textContent),
+    ["Output", "Problems", "Terminal"],
+  );
+  disposables.dispose();
+  dom.window.close();
+});
+
 test("titlebar layout commands toggle shell regions", async () => {
   const dom = new JSDOM("<!doctype html><body></body>");
   const harness = createLayoutHarness(dom.window.document);
@@ -1006,3 +1045,9 @@ test("panel layout actions use state icons", () => {
   assert.equal(maximizePanelAction()?.icon, lxiconsLibrary.screenNormal);
   assert.equal(maximizePanelAction()?.checked, true);
 });
+
+function compositeBarDragEvent(targetWindow: { readonly Event: typeof Event }, type: string, clientX = 0): DragEvent {
+  const event = new targetWindow.Event(type, { bubbles: true, cancelable: true }) as DragEvent;
+  Object.defineProperty(event, "clientX", { value: clientX });
+  return event;
+}

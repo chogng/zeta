@@ -15,6 +15,7 @@ export class TerminalService extends DisposableOwner implements ITerminalService
   private readonly _instances: TerminalInstance[] = [];
   private readonly _onDidCreateInstance = this.own(new Emitter<ITerminalInstance>());
   private readonly _onDidDisposeInstance = this.own(new Emitter<ITerminalInstance>());
+  private readonly _onDidChangeInstances = this.own(new Emitter<void>());
   private readonly _onDidChangeActiveInstance = this.own(new Emitter<ITerminalInstance | undefined>());
   private _activeInstance: TerminalInstance | undefined;
   private nextInstanceId = 1;
@@ -23,6 +24,7 @@ export class TerminalService extends DisposableOwner implements ITerminalService
 
   readonly onDidCreateInstance: Event<ITerminalInstance> = this._onDidCreateInstance.event;
   readonly onDidDisposeInstance: Event<ITerminalInstance> = this._onDidDisposeInstance.event;
+  readonly onDidChangeInstances: Event<void> = this._onDidChangeInstances.event;
   readonly onDidChangeActiveInstance: Event<ITerminalInstance | undefined> = this._onDidChangeActiveInstance.event;
 
   constructor(processService: ITerminalProcessService) {
@@ -98,6 +100,18 @@ export class TerminalService extends DisposableOwner implements ITerminalService
     if (this._activeInstance === instance) return;
     this._activeInstance = instance as TerminalInstance | undefined;
     this._onDidChangeActiveInstance.fire(instance);
+  }
+
+  moveTerminal(instance: ITerminalInstance, targetIndex: number): void {
+    const currentIndex = this._instances.indexOf(instance as TerminalInstance);
+    if (currentIndex < 0) {
+      throw new Error("Terminal must belong to this TerminalService");
+    }
+    this._instances.splice(currentIndex, 1);
+    const insertionIndex = Math.min(Math.max(0, targetIndex), this._instances.length);
+    this._instances.splice(insertionIndex, 0, instance as TerminalInstance);
+    this.refreshInstanceTitles();
+    this._onDidChangeInstances.fire();
   }
 
   async closeTerminal(instance: ITerminalInstance): Promise<void> {

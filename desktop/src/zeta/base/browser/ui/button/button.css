@@ -12,10 +12,19 @@
   font: inherit;
   cursor: pointer;
 }
-.zeta-button.hidden { display: none; }
-.zeta-button:hover {
-  background: var(--zeta-button-hover-background);
+.zeta-button > .zeta-button-content { gap: 6px; }
+.zeta-button.label-centered > .zeta-button-content {
+  display: grid;
+  width: 100%;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  column-gap: 6px;
 }
+.zeta-button.label-centered > .zeta-button-content > .zeta-icon-label-icon {
+  grid-column: 1;
+  justify-self: end;
+}
+.zeta-button.label-centered > .zeta-button-content > .zeta-button-label { grid-column: 2; }
+.zeta-button.hidden { display: none; }
 .zeta-button:focus-visible {
   outline: 1px solid var(--zeta-focus-border);
   outline-offset: -1px;

@@ -1,13 +1,27 @@
 import { addDisposableListener } from "../../dom.js";
+import { DataTransfers, DragAndDropObserver } from "../../dnd.js";
 import type { IAction } from "../../../common/actions.js";
 import { DisposableOwner, DisposableStore } from "../../../common/lifecycle.js";
 import { type ActionViewItem, createActionViewItem } from "./actionViewItems.js";
+import { DndCssClasses } from "../dnd/dnd.js";
 
 export type ActionBarOrientation = "horizontal" | "vertical";
+export type ActionBarDropPosition = "before" | "after";
 
 export type ActionViewItemProvider = (
   action: IAction,
 ) => ActionViewItem | undefined;
+
+/** Optional drag lifecycle for action collections that define their own drop semantics. */
+export interface ActionBarDragAndDrop {
+  readonly canDrop: (event: DragEvent, target: IAction | undefined, position: ActionBarDropPosition) => boolean;
+  readonly onDragStart: (action: IAction, event: DragEvent) => void;
+  readonly onDragEnter?: (target: IAction | undefined, position: ActionBarDropPosition, event: DragEvent) => void;
+  readonly onDragOver?: (target: IAction | undefined, position: ActionBarDropPosition, event: DragEvent, duration: number) => void;
+  readonly onDragLeave?: () => void;
+  readonly onDrop: (target: IAction | undefined, position: ActionBarDropPosition, event: DragEvent) => void;
+  readonly onDragEnd: () => void;
+}
 
 export interface ActionBarOptions {
   readonly ownerDocument?: Document;
@@ -16,6 +30,8 @@ export interface ActionBarOptions {
   readonly ariaRole?: "toolbar" | "tablist";
   readonly orientation?: ActionBarOrientation;
   readonly actionViewItemProvider?: ActionViewItemProvider;
+  /** Enables drag lifecycle callbacks without changing ordinary toolbar behavior. */
+  readonly dragAndDrop?: ActionBarDragAndDrop;
   readonly highlightToggledItems?: boolean;
 }
 
@@ -37,7 +53,12 @@ export class ActionBar extends DisposableOwner {
   private readonly entries: ActionBarEntry[] = [];
   private readonly actionViewItemProvider: ActionViewItemProvider | undefined;
   private readonly orientation: ActionBarOrientation;
+  private readonly dragAndDrop: ActionBarDragAndDrop | undefined;
   private tabStop: ActionViewItem | undefined;
+  private dragging = false;
+  private draggingEntry: ActionBarEntry | undefined;
+  private dropTarget: HTMLElement | undefined;
+  private dropPosition: ActionBarDropPosition | undefined;
 
   constructor(options: ActionBarOptions = {}) {
     super();
@@ -47,7 +68,7 @@ export class ActionBar extends DisposableOwner {
     this.defer(() => element.remove());
     element.className = "zeta-action-bar";
     this.orientation = options.orientation ?? "horizontal";
-    element.classList.toggle("vertical", this.orientation === "vertical");
+    element.classList.add(this.orientation);
     element.classList.toggle("highlight-toggled", options.highlightToggledItems === true);
     element.setAttribute("role", options.ariaRole ?? "toolbar");
     element.setAttribute("aria-orientation", this.orientation);
@@ -55,6 +76,8 @@ export class ActionBar extends DisposableOwner {
       element.setAttribute("aria-label", options.ariaLabel);
     }
     this.actionViewItemProvider = options.actionViewItemProvider;
+    this.dragAndDrop = options.dragAndDrop;
+    element.classList.toggle("zeta-action-bar-dnd", this.dragAndDrop !== undefined);
     this.own(addDisposableListener(element, "keydown", (event) => {
       this.handleNavigation(event);
     }));
@@ -65,6 +88,19 @@ export class ActionBar extends DisposableOwner {
       );
       if (entry?.action.enabled) this._setTabStop(entry.item);
     }));
+    if (this.dragAndDrop) {
+      this.own(new DragAndDropObserver(element, {
+        onDragStart: (event) => this.onDragStart(event),
+        onDragOver: (event, duration) => {
+          if (!this.entryFromEvent(event)) this.onDragOver(event, duration);
+        },
+        onDragLeave: () => this.onDragLeave(),
+        onDrop: (event) => {
+          if (!this.entryFromEvent(event)) this.onDrop(event);
+        },
+        onDragEnd: () => this.endDrag(),
+      }));
+    }
     this.defer(() => this.clearActions());
     this.setActions(options.actions ?? []);
   }
@@ -165,12 +201,174 @@ export class ActionBar extends DisposableOwner {
 
   private createEntry(action: IAction, container: HTMLElement): ActionBarEntry {
     const store = new DisposableStore();
+    container.draggable = false;
+    container.classList.remove(DndCssClasses.Draggable);
     const item = store.add(
       this.actionViewItemProvider?.(action) ??
         createActionViewItem(action),
     );
     item.render(container);
-    return { action, container, item, store };
+    const entry = { action, container, item, store };
+    if (item.draggable) {
+      container.draggable = true;
+      container.classList.add(DndCssClasses.Draggable);
+      store.add(addDisposableListener(container, "dragstart", (event: DragEvent) => {
+        event.dataTransfer?.setData(DataTransfers.Text, action.label);
+      }));
+    }
+    if (this.dragAndDrop) {
+      store.add(new DragAndDropObserver(container, {
+        onDragEnter: (event) => this.onEntryDragEnter(entry, event),
+        onDragOver: (event, duration) => this.onEntryDragOver(entry, event, duration),
+        onDragLeave: () => this.clearDropTarget(),
+        onDrop: (event) => this.onEntryDrop(entry, event),
+      }));
+    }
+    return entry;
+  }
+
+  private onDragStart(event: DragEvent): void {
+    const entry = this.entryFromEvent(event);
+    if (!entry?.item.draggable) return;
+    this.dragging = true;
+    this.draggingEntry = entry;
+    entry.container.classList.add(DndCssClasses.Dragging);
+    if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
+    this.dragAndDrop?.onDragStart(entry.action, event);
+  }
+
+  private onDragOver(event: DragEvent, duration = 0): void {
+    const { entry, position } = this.dropTargetFromEvent(event);
+    if (!this.dragAndDrop?.canDrop(event, entry?.action, position)) {
+      this.clearDropTarget();
+      return;
+    }
+    if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+    if (this.isNoopDrop(entry, position)) {
+      this.clearDropTarget();
+      return;
+    }
+    this.updateDropTarget(entry?.container, position);
+    this.dragAndDrop.onDragOver?.(entry?.action, position, event, duration);
+  }
+
+  private onDrop(event: DragEvent): void {
+    const { entry, position } = this.dropTargetFromEvent(event);
+    if (!this.dragAndDrop?.canDrop(event, entry?.action, position)) return;
+    if (this.isNoopDrop(entry, position)) {
+      this.endDrag();
+      return;
+    }
+    this.clearDropTarget();
+    this.dragAndDrop.onDrop(entry?.action, position, event);
+    this.endDrag();
+  }
+
+  private onEntryDragEnter(entry: ActionBarEntry, event: DragEvent): void {
+    const position = this.dropPositionForEntry(entry, event);
+    if (!this.dragAndDrop?.canDrop(event, entry.action, position)) return;
+    if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+    this.dragAndDrop.onDragEnter?.(entry.action, position, event);
+  }
+
+  private onEntryDragOver(entry: ActionBarEntry, event: DragEvent, duration: number): void {
+    const position = this.dropPositionForEntry(entry, event);
+    if (!this.dragAndDrop?.canDrop(event, entry.action, position)) {
+      this.clearDropTarget();
+      return;
+    }
+    if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+    if (this.isNoopDrop(entry, position)) {
+      this.clearDropTarget();
+      return;
+    }
+    this.updateDropTarget(entry.container, position);
+    this.dragAndDrop.onDragOver?.(entry.action, position, event, duration);
+  }
+
+  private onEntryDrop(entry: ActionBarEntry, event: DragEvent): void {
+    const position = this.dropPositionForEntry(entry, event);
+    if (!this.dragAndDrop?.canDrop(event, entry.action, position)) return;
+    if (this.isNoopDrop(entry, position)) {
+      this.endDrag();
+      return;
+    }
+    this.clearDropTarget();
+    this.dragAndDrop.onDrop(entry.action, position, event);
+    this.endDrag();
+  }
+
+  private endDrag(): void {
+    const wasDragging = this.dragging;
+    this.dragging = false;
+    this.draggingEntry = undefined;
+    const dragged = this.element.querySelector<HTMLElement>(`.${DndCssClasses.Dragging}`);
+    dragged?.classList.remove(DndCssClasses.Dragging);
+    this.clearDropTarget();
+    if (wasDragging) this.dragAndDrop?.onDragEnd();
+  }
+
+  private entryFromEvent(event: DragEvent): ActionBarEntry | undefined {
+    const target = event.target as Element | null;
+    let container = target?.closest<HTMLElement>(".zeta-action-view-item");
+    while (container && this.element.contains(container)) {
+      const entry = this.entries.find((candidate) => candidate.container === container);
+      if (entry) return entry;
+      container = container.parentElement?.closest<HTMLElement>(".zeta-action-view-item") ?? null;
+    }
+    return undefined;
+  }
+
+  private dropTargetFromEvent(event: DragEvent): { entry: ActionBarEntry | undefined; position: ActionBarDropPosition } {
+    const coordinate = this.orientation === "horizontal" ? event.clientX : event.clientY;
+    let lastLaidOutEntry: ActionBarEntry | undefined;
+    for (const entry of this.entries) {
+      const rect = entry.container.getBoundingClientRect();
+      const start = this.orientation === "horizontal" ? rect.left : rect.top;
+      const extent = this.orientation === "horizontal" ? rect.width : rect.height;
+      if (extent <= 0) continue;
+      lastLaidOutEntry = entry;
+      if (coordinate < start + extent / 2) return { entry, position: "before" };
+    }
+    if (lastLaidOutEntry) return { entry: lastLaidOutEntry, position: "after" };
+    const entry = this.entryFromEvent(event);
+    return { entry, position: entry ? "before" : "after" };
+  }
+
+  private isNoopDrop(entry: ActionBarEntry | undefined, position: ActionBarDropPosition): boolean {
+    const sourceIndex = this.draggingEntry ? this.entries.indexOf(this.draggingEntry) : -1;
+    if (sourceIndex < 0) return false;
+    const targetIndex = entry ? this.entries.indexOf(entry) : this.entries.length;
+    const insertionIndex = targetIndex + (entry && position === "after" ? 1 : 0);
+    return insertionIndex === sourceIndex || insertionIndex === sourceIndex + 1;
+  }
+
+  private dropPositionForEntry(entry: ActionBarEntry, event: DragEvent): ActionBarDropPosition {
+    const rect = entry.container.getBoundingClientRect();
+    const offset = this.orientation === "horizontal" ? event.clientX - rect.left : event.clientY - rect.top;
+    const extent = this.orientation === "horizontal" ? rect.width : rect.height;
+    return offset <= extent / 2 ? "before" : "after";
+  }
+
+  private updateDropTarget(target: HTMLElement | undefined, position: ActionBarDropPosition): void {
+    if (this.dropTarget === target && this.dropPosition === position) return;
+    this.clearDropTarget();
+    if (!target) return;
+    this.dropTarget = target;
+    this.dropPosition = position;
+    target.classList.add(position === "before" ? DndCssClasses.DropBefore : DndCssClasses.DropAfter);
+  }
+
+  private clearDropTarget(): void {
+    if (!this.dropTarget || !this.dropPosition) return;
+    this.dropTarget.classList.remove(this.dropPosition === "before" ? DndCssClasses.DropBefore : DndCssClasses.DropAfter);
+    this.dropTarget = undefined;
+    this.dropPosition = undefined;
+  }
+
+  private onDragLeave(): void {
+    this.clearDropTarget();
+    this.dragAndDrop?.onDragLeave?.();
   }
 
   private hasMatchingStructure(actions: readonly IAction[]): boolean {

@@ -110,9 +110,7 @@
 }
 
 .zeta-scm-remote-actions {
-  display: flex;
   gap: 4px;
-  margin-left: auto;
 }
 
 .zeta-scm-command {
@@ -140,15 +138,9 @@
   opacity: 0.55;
 }
 
-.zeta-scm-remote-actions > .zeta-scm-command {
-  margin-left: 0;
-  padding-inline: 5px;
-  font-size: 11px;
-}
-
 .zeta-scm-commit-form {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
   gap: 6px;
   padding: 0 8px 8px;
 }
@@ -169,8 +161,10 @@
   outline: 1px solid var(--zeta-focus-border);
 }
 
-.zeta-scm-commit-form > .zeta-scm-command {
-  margin-left: 0;
+.zeta-scm-commit.zeta-button {
+  width: 100%;
+  color: var(--zeta-button-primary-foreground);
+  background: var(--zeta-button-primary-background);
 }
 
 .zeta-scm-status {

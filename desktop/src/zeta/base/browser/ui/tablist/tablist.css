@@ -22,10 +22,56 @@
 }
 
 .zeta-tab {
+  position: relative;
   display: flex;
   min-width: 0;
   height: var(--zeta-tab-height);
   align-items: center;
+}
+
+/* Keep the visual gap inside a tab's native drop hit area. */
+.zeta-tab-list-scroll-content
+  > .zeta-action-bar.zeta-action-bar-dnd.horizontal
+  > .zeta-tab:not(:last-child)::after {
+  position: absolute;
+  top: 0;
+  left: 100%;
+  width: var(--zeta-action-bar-gap);
+  height: 100%;
+  content: "";
+  pointer-events: auto;
+}
+
+.zeta-tab-list-scroll-content
+  > .zeta-action-bar.zeta-action-bar-dnd.vertical
+  > .zeta-tab:not(:last-child)::after {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  width: 100%;
+  height: var(--zeta-action-bar-gap);
+  content: "";
+  pointer-events: auto;
+}
+
+.zeta-tab.zeta-dnd-drop-before::before,
+.zeta-tab.zeta-dnd-drop-after::before {
+  position: absolute;
+  top: 0;
+  z-index: 1;
+  width: 2px;
+  height: 100%;
+  content: "";
+  pointer-events: none;
+  background: #000;
+}
+
+.zeta-tab.zeta-dnd-drop-before::before {
+  left: -2px;
+}
+
+.zeta-tab.zeta-dnd-drop-after::before {
+  right: -2px;
 }
 
 .zeta-tab-list .zeta-tab.checked {

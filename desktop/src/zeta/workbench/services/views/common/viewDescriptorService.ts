@@ -38,6 +38,7 @@ export interface IViewContainersChangeEvent {
  */
 export interface IViewDescriptorService {
   readonly onDidChangeViewContainers: Event<IViewContainersChangeEvent>;
+  readonly onDidChangeViewContainerOrder: Event<ViewContainerLocation>;
 
   getViewContainers(
     location: ViewContainerLocation,
@@ -51,6 +52,7 @@ export interface IViewDescriptorService {
   getViewContainerModel(
     containerId: string,
   ): IViewContainerModel;
+  moveViewContainer(location: ViewContainerLocation, containerId: string, targetContainerId: string | undefined, position: "before" | "after"): void;
 }
 
 export const IViewDescriptorService =
@@ -72,11 +74,16 @@ export class ViewDescriptorService
   private readonly contextKeyService: IContextKeyService;
   private readonly registry: WorkbenchViewRegistry;
   private readonly models = new Map<string, ViewContainerModel>();
+  private readonly containerOrders = new Map<ViewContainerLocation, string[]>();
   private readonly _onDidChangeViewContainers =
     this.own(new Emitter<IViewContainersChangeEvent>());
+  private readonly _onDidChangeViewContainerOrder =
+    this.own(new Emitter<ViewContainerLocation>());
 
   readonly onDidChangeViewContainers =
     this._onDidChangeViewContainers.event;
+  readonly onDidChangeViewContainerOrder =
+    this._onDidChangeViewContainerOrder.event;
 
   constructor(options: ViewDescriptorServiceOptions) {
     super();
@@ -105,7 +112,14 @@ export class ViewDescriptorService
   getViewContainers(
     location: ViewContainerLocation,
   ): readonly IViewContainerDescriptor[] {
-    return this.registry.getViewContainers(location);
+    const registered = this.registry.getViewContainers(location);
+    const registeredById = new Map(registered.map((container) => [container.id, container]));
+    const order = (this.containerOrders.get(location) ?? []).filter((id) => registeredById.has(id));
+    for (const container of registered) {
+      if (!order.includes(container.id)) order.push(container.id);
+    }
+    this.containerOrders.set(location, order);
+    return order.map((id) => registeredById.get(id)!);
   }
 
   getDefaultViewContainer(
@@ -126,6 +140,22 @@ export class ViewDescriptorService
     return model;
   }
 
+  moveViewContainer(location: ViewContainerLocation, containerId: string, targetContainerId: string | undefined, position: "before" | "after"): void {
+    if (containerId === targetContainerId) return;
+    const current = this.getViewContainers(location).map((container) => container.id);
+    const sourceIndex = current.indexOf(containerId);
+    if (sourceIndex < 0) throw new RangeError(`View container is not available at ${location}: ${containerId}`);
+    current.splice(sourceIndex, 1);
+    let targetIndex = targetContainerId === undefined ? current.length : current.indexOf(targetContainerId);
+    if (targetIndex < 0) throw new RangeError(`Target view container is not available at ${location}: ${targetContainerId}`);
+    if (targetContainerId !== undefined && position === "after") targetIndex += 1;
+    current.splice(targetIndex, 0, containerId);
+    const previous = this.containerOrders.get(location);
+    if (previous && sameContainerOrder(previous, current)) return;
+    this.containerOrders.set(location, current);
+    this._onDidChangeViewContainerOrder.fire(location);
+  }
+
   private addContainer(container: IViewContainerDescriptor): void {
     if (this.models.has(container.id)) return;
     this.models.set(
@@ -144,6 +174,10 @@ export class ViewDescriptorService
     this.models.delete(container.id);
     model.dispose();
   }
+}
+
+function sameContainerOrder(first: readonly string[], second: readonly string[]): boolean {
+  return first.length === second.length && first.every((id, index) => id === second[index]);
 }
 
 class ViewContainerModel

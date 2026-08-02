@@ -1,5 +1,5 @@
 (function () {
-  const { contextBridge, ipcRenderer } =
+  const { contextBridge, ipcRenderer, webUtils } =
     require("electron") as typeof import("electron");
   type ISandboxGlobals =
     import("../common/sandboxTypes.js").ISandboxGlobals;
@@ -31,6 +31,9 @@
     process: {
       platform: process.platform,
       arch: process.arch,
+    },
+    webUtils: {
+      getPathForFile: (file) => webUtils.getPathForFile(file),
     },
   };
 

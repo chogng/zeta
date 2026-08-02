@@ -6,6 +6,7 @@ import { MenuId } from "../../../../platform/actions/common/actions.js";
 import type { IMenuService } from "../../../../platform/actions/common/menuService.js";
 import type { EditorInput } from "./editorInput.js";
 import { EditorTabsControl, type EditorTabDescriptor, type EditorTabsDelegate } from "./editorTabsControl.js";
+import { MultiEditorTabsControl } from "./multiEditorTabsControl.js";
 
 /** Platform services used to populate the Editor title toolbar. */
 export interface EditorTitleActions {
@@ -29,7 +30,7 @@ export class EditorTitleControl extends DisposableOwner {
     super();
     this.element = ownerDocument.createElement("div");
     this.element.className = "zeta-editor-title-control";
-    this.tabs = this.own(new EditorTabsControl(ownerDocument, delegate));
+    this.tabs = this.own(new MultiEditorTabsControl(ownerDocument, delegate));
     this.toolbar = this.own(titleActions
       ? new MenuWorkbenchToolBar(
         titleActions.menuService,
@@ -46,13 +47,15 @@ export class EditorTitleControl extends DisposableOwner {
           highlightToggledItems: true,
         },
       ));
+    const tabsAndActions = ownerDocument.createElement("div");
+    tabsAndActions.className = "zeta-editor-tabs-and-actions";
+    this.element.append(tabsAndActions);
+    tabsAndActions.append(this.tabs.element);
+
     const actions = ownerDocument.createElement("div");
     actions.className = "zeta-editor-title-actions";
     actions.append(this.toolbar.element);
-    const tabsAndActions = ownerDocument.createElement("div");
-    tabsAndActions.className = "zeta-editor-tabs-and-actions";
-    tabsAndActions.append(this.tabs.element, actions);
-    this.element.append(tabsAndActions);
+    tabsAndActions.append(actions);
     this.defer(() => this.element.remove());
   }
 

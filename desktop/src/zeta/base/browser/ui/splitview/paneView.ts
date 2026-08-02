@@ -11,24 +11,31 @@ export interface PaneViewOptions {
   readonly title: string;
   readonly ownerDocument: Document;
   readonly collapsed?: boolean;
+  readonly headerActionsVisibility?: PaneViewHeaderActionsVisibility;
 }
+
+/** Determines whether a pane exposes its title actions while collapsed. */
+export type PaneViewHeaderActionsVisibility = "always" | "whenExpanded";
 
 /**
  * Domain-agnostic titled pane that owns its header geometry, collapse state,
  * accessibility semantics, and title interaction.
  *
- * Consumers append domain content to {@link contentElement} and may add a
- * stable root class for their own outer presentation. They must not recreate
- * or style the header interaction internals.
+ * Consumers append domain content to {@link contentElement}, may add a
+ * stable root class for their outer presentation, and may project actions
+ * through {@link headerActionsElement}. They must not recreate or style the
+ * header interaction internals.
  */
 export class PaneView extends DisposableOwner {
   readonly element: HTMLElement;
   readonly id: string;
   protected readonly headerElement: HTMLDivElement;
+  protected readonly headerActionsElement: HTMLDivElement;
   protected readonly contentElement: HTMLDivElement;
   private readonly headerButton: HTMLButtonElement;
   private readonly titleElement: HTMLHeadingElement;
   private readonly focusTracker;
+  private readonly headerActionsVisibility: PaneViewHeaderActionsVisibility;
   private collapsed: boolean;
 
   readonly onDidFocus: Event<void>;
@@ -44,6 +51,7 @@ export class PaneView extends DisposableOwner {
     element.dataset.paneViewId = id;
     element.tabIndex = -1;
     this.id = id;
+    this.headerActionsVisibility = options.headerActionsVisibility ?? "always";
 
     this.headerElement = ownerDocument.createElement("div");
     this.headerElement.className = "zeta-pane-view-header";
@@ -61,7 +69,9 @@ export class PaneView extends DisposableOwner {
     this.titleElement.className = "zeta-pane-view-header-title";
     this.titleElement.textContent = title;
     this.headerButton.append(twistyContainer, this.titleElement);
-    this.headerElement.append(this.headerButton);
+    this.headerActionsElement = ownerDocument.createElement("div");
+    this.headerActionsElement.className = "zeta-pane-view-header-actions";
+    this.headerElement.append(this.headerButton, this.headerActionsElement);
 
     this.contentElement = ownerDocument.createElement("div");
     this.contentElement.className = "zeta-pane-view-content";
@@ -103,5 +113,6 @@ export class PaneView extends DisposableOwner {
     this.headerButton.setAttribute("aria-expanded", String(expanded));
     this.contentElement.classList.toggle("collapsed", this.collapsed);
     this.contentElement.hidden = this.collapsed;
+    this.headerActionsElement.hidden = this.collapsed && this.headerActionsVisibility === "whenExpanded";
   }
 }

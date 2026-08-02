@@ -2,7 +2,7 @@ import "./compositebar.css";
 import type { IContextMenuProvider } from "../../../../base/browser/contextmenu.js";
 import type { ActionViewItem } from "../../../../base/browser/ui/actionbar/actionViewItems.js";
 import { DropdownMenuActionViewItem } from "../../../../base/browser/ui/dropdown/dropdownMenuActionViewItem.js";
-import { TabList } from "../../../../base/browser/ui/tablist/tabList.js";
+import { TabList, type TabListDropPosition } from "../../../../base/browser/ui/tablist/tabList.js";
 import type { IAction } from "../../../../base/common/actions.js";
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
@@ -56,6 +56,7 @@ export class CompositeBar extends DisposableOwner {
   private tabListItemGap = 0;
   private renderedContainerIds: readonly string[] = [];
   private overflowingContainerIds = new Set<string>();
+  private draggedCompositeId: string | undefined;
   private _activeCompositeId: string | undefined;
 
   readonly onDidSelectComposite: Event<CompositeBarSelectionEvent> =
@@ -96,10 +97,22 @@ export class CompositeBar extends DisposableOwner {
         if (this._activeCompositeId === compositeId) return;
         this._onDidSelectComposite.fire({ compositeId });
       },
+      draggable: true,
+      dragAndDrop: {
+        canDrop: () => this.draggedCompositeId !== undefined,
+        onDragStart: (compositeId, event) => this.onDragStart(compositeId, event),
+        onDrop: (targetCompositeId, position) => this.onDrop(targetCompositeId, position),
+        onDragEnd: () => {
+          this.draggedCompositeId = undefined;
+        },
+      },
     }));
     this.element.append(this.tabList.element);
     this.own(this.viewDescriptorService.onDidChangeViewContainers(() => {
       this.render();
+    }));
+    this.own(this.viewDescriptorService.onDidChangeViewContainerOrder((location) => {
+      if (location === this.location) this.render();
     }));
     const ResizeObserverConstructor = options.ownerDocument.defaultView?.ResizeObserver;
     if (overflowAction && ResizeObserverConstructor) {
@@ -161,6 +174,19 @@ export class CompositeBar extends DisposableOwner {
     if (this.overflowViewItem) this.overflowViewItem.hidden = true;
     this.renderTabs(this.containers);
     this.layout();
+  }
+
+  private onDragStart(compositeId: string, event: DragEvent): void {
+    this.draggedCompositeId = compositeId;
+    event.dataTransfer?.setData("text/plain", compositeId);
+    if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
+  }
+
+  private onDrop(targetCompositeId: string | undefined, position: TabListDropPosition): void {
+    const sourceCompositeId = this.draggedCompositeId;
+    this.draggedCompositeId = undefined;
+    if (sourceCompositeId === undefined) return;
+    this.viewDescriptorService.moveViewContainer(this.location, sourceCompositeId, targetCompositeId, position);
   }
 
   private renderTabs(containers: readonly IViewContainerDescriptor[]): void {

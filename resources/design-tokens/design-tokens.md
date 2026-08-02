@@ -163,3 +163,4 @@ Colors: 127 · Sizes: 23
 | `sash.hoverFeedbackSize` | platform.ui | `1px` | `--zeta-sash-hover-feedback-size` |
 | `modalEditor.width` | platform.ui | `960px` | `--zeta-modal-editor-width` |
 | `modalEditor.height` | platform.ui | `720px` | `--zeta-modal-editor-height` |
+

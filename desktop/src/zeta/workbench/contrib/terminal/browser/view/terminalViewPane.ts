@@ -1,4 +1,4 @@
-import { TabList } from "../../../../../base/browser/ui/tablist/tabList.js";
+import { TabList, type TabListDropPosition } from "../../../../../base/browser/ui/tablist/tabList.js";
 import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
 import { lxiconsLibrary } from "../../../../../base/common/lxiconsLibrary.js";
 import type { IMenuService } from "../../../../../platform/actions/common/menuService.js";
@@ -26,6 +26,7 @@ export class TerminalViewPane extends ViewPane {
   private readonly tabsLayout: TerminalTabsLayout;
   private readonly widgetsElement: HTMLDivElement;
   private readonly items = new Map<ITerminalInstance, TerminalViewItem>();
+  private draggedTerminal: ITerminalInstance | undefined;
   private creating = false;
   private disposed = false;
 
@@ -59,6 +60,20 @@ export class TerminalViewPane extends ViewPane {
       ownerDocument: options.ownerDocument,
       ariaLabel: "Terminal instances",
       orientation: "vertical",
+      draggable: true,
+      dragAndDrop: {
+        canDrop: () => this.draggedTerminal !== undefined,
+        onDragStart: (instance) => {
+          this.draggedTerminal = instance;
+        },
+        onDrop: (target, position) => {
+          const source = this.draggedTerminal;
+          if (source) this.moveTerminalTab(source, target, position);
+        },
+        onDragEnd: () => {
+          this.draggedTerminal = undefined;
+        },
+      },
       closeActionIcon: lxiconsLibrary.trash,
       onActivate: (instance) => {
         this.terminalService.setActiveInstance(instance);
@@ -84,6 +99,7 @@ export class TerminalViewPane extends ViewPane {
       this.render();
     }));
     this.own(terminalService.onDidChangeActiveInstance(() => this.render()));
+    this.own(terminalService.onDidChangeInstances(() => this.render()));
     this.own(layoutService.onDidChangePartVisibility(({ partId, visible }) => {
       if (partId === "panel" && visible && this.terminalService.instances.length === 0) {
         void this.createTerminal();
@@ -216,6 +232,20 @@ export class TerminalViewPane extends ViewPane {
       state: instance.state,
       tabId: `${instance.id}-tab`,
     })), active?.id);
+  }
+
+  private moveTerminalTab(source: ITerminalInstance, target: ITerminalInstance | undefined, position: TabListDropPosition): void {
+    if (source === target) return;
+    const instances = this.terminalService.instances;
+    const sourceIndex = instances.indexOf(source);
+    if (sourceIndex < 0) return;
+    const targetIndex = target === undefined
+      ? instances.length
+      : instances.indexOf(target);
+    const insertionIndex = targetIndex < 0
+      ? instances.length - 1
+      : position === "before" ? targetIndex : targetIndex + 1;
+    this.terminalService.moveTerminal(source, insertionIndex > sourceIndex ? insertionIndex - 1 : insertionIndex);
   }
 
   private activeItem(): TerminalViewItem | undefined {

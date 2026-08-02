@@ -62,12 +62,14 @@ export interface ITerminalService extends IDisposable {
   readonly activeInstance: ITerminalInstance | undefined;
   readonly onDidCreateInstance: Event<ITerminalInstance>;
   readonly onDidDisposeInstance: Event<ITerminalInstance>;
+  readonly onDidChangeInstances: Event<void>;
   readonly onDidChangeActiveInstance: Event<ITerminalInstance | undefined>;
 
   getProfiles(): Promise<readonly ITerminalProfile[]>;
   createTerminal(options: ITerminalCreateOptions): Promise<ITerminalInstance>;
   relaunchTerminal(instance: ITerminalInstance, dimensions: ITerminalDimensions): Promise<void>;
   setActiveInstance(instance: ITerminalInstance | undefined): void;
+  moveTerminal(instance: ITerminalInstance, targetIndex: number): void;
   closeTerminal(instance: ITerminalInstance): Promise<void>;
 }
 

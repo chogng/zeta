@@ -29,7 +29,7 @@
   color: var(--zeta-composite-bar-inactive-foreground);
 }
 
-.zeta-composite-bar-overflow > .zeta-button > .zeta-icon {
+.zeta-composite-bar-overflow > .zeta-button .zeta-icon {
   width: 16px;
   height: 16px;
 }

@@ -1,0 +1,16 @@
+.zeta-dnd-draggable {
+  cursor: grab;
+}
+
+.zeta-dnd-draggable:active {
+  cursor: grabbing;
+}
+
+.zeta-dnd-dragging {
+  opacity: .5;
+}
+
+.zeta-dnd-drop-target {
+  outline: 2px solid var(--zeta-focus-border);
+  outline-offset: -2px;
+}

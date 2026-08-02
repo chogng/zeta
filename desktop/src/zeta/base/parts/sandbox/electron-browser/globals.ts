@@ -16,3 +16,6 @@ export const ipcRenderer = globals.ipcRenderer;
 
 /** Read-only process metadata installed by the sandbox preload. */
 export const sandboxProcess = globals.process;
+
+/** Browser-object helpers installed by the sandbox preload. */
+export const sandboxWebUtils = globals.webUtils;

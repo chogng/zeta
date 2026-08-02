@@ -1,16 +1,21 @@
 import { addDisposableListener } from "../../../../base/browser/dom.js";
+import type { IMenuService } from "../../../../platform/actions/common/menuService.js";
+import type { IContextKeyService } from "../../../../platform/contextkey/common/contextkey.js";
+import type { IContextMenuService } from "../../../../platform/contextview/browser/contextMenu.js";
 import type { GitCommitSummary, IGitService } from "../../../services/git/common/gitService.js";
 import type { IViewPaneOptions } from "../../../browser/parts/views/viewPane.js";
 import { ViewPane } from "../../../browser/parts/views/viewPane.js";
+import { ScmGraphTitleActions } from "./scmGraphTitleActions.js";
 
 /** Bounded recent repository history rendered as a compact commit graph. */
 export class ScmGraphViewPane extends ViewPane {
   private readonly gitService: IGitService;
+  private readonly titleActions: ScmGraphTitleActions;
   private readonly graphElement: HTMLDivElement;
   private disposed = false;
 
-  constructor(options: IViewPaneOptions, gitService: IGitService) {
-    super(options);
+  constructor(options: IViewPaneOptions, gitService: IGitService, menuService: IMenuService, contextMenuService: IContextMenuService, contextKeyService: IContextKeyService) {
+    super({ ...options, headerActionsVisibility: "whenExpanded" });
     this.gitService = gitService;
     this.contentElement.classList.add("zeta-scm-secondary-pane");
     this.graphElement = options.ownerDocument.createElement("div");
@@ -18,6 +23,15 @@ export class ScmGraphViewPane extends ViewPane {
     this.graphElement.setAttribute("role", "status");
     this.graphElement.setAttribute("aria-live", "polite");
     this.contentElement.append(this.graphElement);
+    this.titleActions = this.own(new ScmGraphTitleActions({
+      ownerDocument: options.ownerDocument,
+      gitService,
+      menuService,
+      contextMenuService,
+      contextKeyService,
+      refreshGraph: () => this.refresh(),
+    }));
+    this.headerActionsElement.append(this.titleActions.element);
     this.defer(() => {
       this.disposed = true;
     });
