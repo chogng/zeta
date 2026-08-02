@@ -94,21 +94,38 @@ This starts Vite, watches the Electron main and preload processes, prepares the
 local development package, and opens Electron. Keep the terminal open while
 developing; use `Ctrl+C` to stop it.
 
-Start the Browser Workbench with its local development App Server bridge:
+Start the standalone Browser Workbench without building or starting the Rust
+App Server:
 
 ```bash
 corepack pnpm dev:web
 ```
 
-Open [http://127.0.0.1:5174/browser/workbench/workbench-code.html](http://127.0.0.1:5174/browser/workbench/workbench-code.html)
-after Vite reports that it is ready. Both commands start the default `zeta` Electron Desktop build.
-The internal `code` build edition and the corresponding `:academic` and `:complete` variants are
-documented in [`docs/product-editions.md`](docs/product-editions.md); they are not the `zeta code`
-TUI product.
+Open [http://127.0.0.1:5173/browser/workbench/workbench-code.html](http://127.0.0.1:5173/browser/workbench/workbench-code.html)
+after Vite reports that it is ready. The UI starts with an explicit disconnected
+backend; operations that require files, search, terminal, Git, or Chat fail as
+unavailable instead of manufacturing browser-owned product state.
 
-Electron development uses `127.0.0.1:5173`; Web development uses
-`127.0.0.1:5174`, so both modes can run at the same time. If either port is
-already in use, stop the previous instance of that development mode before
+Use the full Web development mode when those Rust-backed capabilities are
+needed:
+
+```bash
+corepack pnpm dev:web:full
+```
+
+The full mode prepares the local development package, starts one
+`zeta app-server --listen stdio://` process per browser connection, and serves
+the Workbench at
+[http://127.0.0.1:5174/browser/workbench/workbench-code.html](http://127.0.0.1:5174/browser/workbench/workbench-code.html).
+All commands select the default `zeta` Electron Desktop build. The internal
+`code` build edition and the corresponding `:academic` and `:complete` variants
+are documented in [`docs/product-editions.md`](docs/product-editions.md); they
+are not the `zeta code` TUI product.
+
+Electron development and standalone Web development both use `127.0.0.1:5173`
+and therefore cannot run simultaneously. Full Web development uses
+`127.0.0.1:5174`, so it can run alongside Electron development. If either port
+is already in use, stop the previous instance of that development mode before
 starting it again.
 
 ## Package
