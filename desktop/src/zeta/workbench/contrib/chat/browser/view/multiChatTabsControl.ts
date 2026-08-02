@@ -1,4 +1,4 @@
-import "./media/multiChatTabsControl.css";
+import "../media/multiChatTabsControl.css";
 import { TabList } from "../../../../../base/browser/ui/tablist/tabList.js";
 import { ChatTabsControl, type ChatTab, type ChatTabsDelegate, type ChatTabsPresentation } from "./chatTabsControl.js";
 
