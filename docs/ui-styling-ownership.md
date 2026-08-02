@@ -53,7 +53,7 @@
 | `PaneCompositePart` | 35px title control、CompositeBar/自有标题与 title actions 的左右槽位 | `paneCompositePart.css` 只拥有外层布局 |
 | `TitlebarPart` | 左区、应用菜单、标题和右区的窗口级布局 | 通用 toolbar/button 状态不归 Titlebar |
 
-`PaneCompositePart` 的标题高度为 `35px`；`titleContentElement` 占据左侧弹性空间，`titleActionsSlotElement` 固定在右侧并提供 `4px` 的双侧 inset。该槽位可托管 Part 级 menu toolbar 或当前 View 的 `partTitleActionsElement`；Part CSS 只拥有这两个直接槽位的外框与排列，不得穿透修改其中的 toolbar/button 内部状态。
+`PaneCompositePart` 的标题高度为 `35px`；`titleContentElement` 占据左侧弹性空间，`titleActionsSlotElement` 固定在右侧并提供 `4px` 的双侧 inset。当前 View 的 `partTitleProjection.actions` 与 Part 级 menu toolbar 使用独立子槽并列；Part CSS 只拥有这些直接槽位的外框与排列，不得穿透修改其中的 toolbar/button 内部状态。
 
 `CompositeBar` 的 icon presentation item 状态盒为 `24px × 24px`，hover 与 `.checked` 使用同一外框。`CompositeBar` 拥有该 item 几何和两种状态的视觉；`TabList` 与 `ActionBar` 只提供结构、交互和稳定状态 class，不决定 Workbench Composite 的状态盒尺寸。
 

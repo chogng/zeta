@@ -3,7 +3,7 @@ import { setDisposableOwner } from "../../../../../base/common/lifecycle.js";
 import type { IMenuService } from "../../../../../platform/actions/common/menuService.js";
 import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextMenu.js";
 import type { ICommandService } from "../../../../../platform/commands/common/commands.js";
-import { ViewPane, type IViewPaneOptions } from "../../../../browser/parts/views/viewPane.js";
+import { ViewPane, type IViewPaneOptions, type PartTitleProjection } from "../../../../browser/parts/views/viewPane.js";
 import type { IWorkbenchLayoutService } from "../../../../services/layout/browser/layoutService.js";
 import type { IChatService } from "../../../../services/chat/common/chatService.js";
 import type { IActiveSessionThread, IUntitledChatSession, IWorkbenchSessionService, Session, SessionThread, ThreadId } from "../../../../services/sessions/common/sessionService.js";
@@ -97,12 +97,8 @@ export class ChatViewPane extends ViewPane {
     this.activePane?.focus();
   }
 
-  override get partTitleElement(): HTMLElement {
-    return this.titleControl.partTitleElement;
-  }
-
-  override get partTitleActionsElement(): HTMLElement {
-    return this.titleControl.partTitleActionsElement;
+  override get partTitleProjection(): PartTitleProjection {
+    return this.titleControl.partTitleProjection;
   }
 
   private syncSessions(): void {

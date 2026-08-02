@@ -37,9 +37,7 @@ export class PanelPart extends PaneCompositePart {
     this.getComposite(this.activeCompositeId ?? "")
       ?.setTitleSecondaryActions([]);
     super.showComposite(compositeId);
-    this.titleActionsSlotElement.replaceChildren(
-      ...optionalElement(this.getComposite(compositeId)?.partTitleActionsElement),
-    );
+    this.setTitleProjection(this.getComposite(compositeId)?.partTitleProjection);
     this.updateTitleActions();
   }
 
@@ -52,8 +50,4 @@ export class PanelPart extends PaneCompositePart {
       usesExternalOverflow ? "external" : "inline",
     );
   }
-}
-
-function optionalElement(element: HTMLElement | undefined): HTMLElement[] {
-  return element ? [element] : [];
 }

@@ -5,17 +5,16 @@ import { MenuId } from "../../../../../platform/actions/common/actions.js";
 import type { IMenuService } from "../../../../../platform/actions/common/menuService.js";
 import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextMenu.js";
 import { ChatTabsControl, type ChatTab, type ChatTabsDelegate } from "./chatTabsControl.js";
+import type { PartTitleProjection } from "../../../../browser/parts/views/viewPane.js";
 
 /** Owns Chat's title content and action projections. */
 export class ChatTitleControl extends DisposableOwner {
-  static readonly HEIGHT = 35;
-
   private readonly tabs: ChatTabsControl;
   private readonly actionsElement: HTMLDivElement;
 
   constructor(ownerDocument: Document, idPrefix: string, delegate: ChatTabsDelegate, menuService: IMenuService, contextMenuService: IContextMenuService) {
     super();
-    this.tabs = this.own(new ChatTabsControl(ownerDocument, idPrefix, delegate));
+    this.tabs = this.own(new ChatTabsControl(ownerDocument, idPrefix, delegate, "pane-title"));
     const toolbar = this.own(new MenuWorkbenchToolBar(
       menuService,
       contextMenuService,
@@ -38,12 +37,8 @@ export class ChatTitleControl extends DisposableOwner {
     this.defer(() => this.actionsElement.remove());
   }
 
-  get partTitleElement(): HTMLElement {
-    return this.tabs.element;
-  }
-
-  get partTitleActionsElement(): HTMLElement {
-    return this.actionsElement;
+  get partTitleProjection(): PartTitleProjection {
+    return { content: this.tabs.element, actions: this.actionsElement };
   }
 
   setTabs(entries: readonly ChatTab[], activeTabId: string | undefined): ReadonlyMap<string, string> {

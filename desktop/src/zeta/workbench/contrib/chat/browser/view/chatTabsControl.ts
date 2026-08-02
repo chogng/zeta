@@ -8,6 +8,8 @@ export interface ChatTab {
   readonly panelId: string;
 }
 
+export type ChatTabsPresentation = "pane-title";
+
 interface ChatTabDescriptor {
   readonly id: string;
   readonly label: string;
@@ -29,11 +31,12 @@ export class ChatTabsControl extends DisposableOwner {
   private readonly tabIds = new Map<string, string>();
   private nextTabId = 0;
 
-  constructor(ownerDocument: Document, idPrefix: string, delegate: ChatTabsDelegate) {
+  constructor(ownerDocument: Document, idPrefix: string, delegate: ChatTabsDelegate, presentation: ChatTabsPresentation) {
     super();
     this.idPrefix = idPrefix;
     this.element = ownerDocument.createElement("div");
     this.element.className = "zeta-chat-tabs-control";
+    this.element.classList.add(`zeta-chat-tabs-${presentation}`);
     this.tabList = this.own(new TabList({
       ownerDocument,
       ariaLabel: "Open chats",

@@ -1,6 +1,7 @@
 import { compositePanelId, compositeTabId } from "../compositebar/compositeBar.js";
 import { ViewPaneContainer, type ViewPaneContainerOptions } from "./viewPaneContainer.js";
 import type { IAction } from "../../../../base/common/actions.js";
+import type { PartTitleProjection } from "./viewPane.js";
 
 export interface PaneCompositeOptions extends ViewPaneContainerOptions {
   readonly paneHeaders?: PaneHeaderVisibility;
@@ -31,12 +32,14 @@ export class PaneComposite extends ViewPaneContainer {
     this.element.setAttribute("aria-labelledby", compositeTabId(options.viewContainer.location, options.viewContainer.id));
   }
 
-  get partTitleActionsElement(): HTMLElement | undefined {
-    return this.panes.find((pane) => pane.partTitleActionsElement)?.partTitleActionsElement;
-  }
-
-  get partTitleElement(): HTMLElement | undefined {
-    return this.panes.find((pane) => pane.partTitleElement)?.partTitleElement;
+  get partTitleProjection(): PartTitleProjection | undefined {
+    const projections = this.panes.map((pane) => pane.partTitleProjection).filter(
+      (projection): projection is PartTitleProjection => projection !== undefined,
+    );
+    if (projections.length > 1) {
+      throw new Error("A PaneComposite may receive a title projection from only one visible View");
+    }
+    return projections[0];
   }
 
   setTitleSecondaryActions(actions: readonly IAction[]): boolean {

@@ -70,6 +70,18 @@ test.after(() => {
   }
 });
 
+function chatTitleContent(pane: { readonly partTitleProjection: { readonly content?: HTMLElement } | undefined }): HTMLElement {
+  const content = pane.partTitleProjection?.content;
+  assert.ok(content);
+  return content;
+}
+
+function chatTitleActions(pane: { readonly partTitleProjection: { readonly actions?: HTMLElement } | undefined }): HTMLElement {
+  const actions = pane.partTitleProjection?.actions;
+  assert.ok(actions);
+  return actions;
+}
+
 test("Chat contribution owns the fixed Auxiliary Bar view", () => {
   const registry = new WorkbenchViewRegistry();
 
@@ -161,7 +173,7 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
   );
   const title = dom.window.document.createElement("div");
   title.className = "zeta-pane-composite-title";
-  title.append(pane.partTitleElement, pane.partTitleActionsElement);
+  title.append(chatTitleContent(pane), chatTitleActions(pane));
   dom.window.document.body.append(title, pane.element);
 
   await sessions.initialize();
@@ -180,8 +192,8 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
   assert.equal(toolbar?.getAttribute("role"), "toolbar");
   assert.equal(toolbar?.classList.contains("zeta-toolbar"), true);
   assert.equal(
-    pane.partTitleElement.nextElementSibling,
-    pane.partTitleActionsElement,
+    chatTitleContent(pane).nextElementSibling,
+    chatTitleActions(pane),
   );
   assert.deepEqual(
     [...toolbar?.querySelectorAll<HTMLElement>("[data-action-id]") ?? []]
@@ -270,7 +282,7 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
   assert.equal(panel?.id, tabs?.[0]?.getAttribute("aria-controls"));
   assert.equal(panel?.getAttribute("aria-labelledby"), tabs?.[0]?.id);
   assert.equal(
-    pane.partTitleElement.querySelector(
+    chatTitleContent(pane).querySelector(
       ".zeta-chat-tabs-control .zeta-scrollable-element",
     )?.getAttribute("data-scroll-direction"),
     "horizontal",
@@ -321,19 +333,19 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
   assert.equal(sessions.active?.session.sessionId, "session-2");
   assert.equal(sessions.active?.threadId, "thread-2");
   assert.deepEqual(
-    [...pane.partTitleElement.querySelectorAll<HTMLElement>("[role='tab']")]
+    [...chatTitleContent(pane).querySelectorAll<HTMLElement>("[role='tab']")]
       .map((tab) => tab.getAttribute("aria-selected")),
     ["false", "true"],
   );
   assert.deepEqual([...chatPanes].map((chatPane) => chatPane.hidden), [true, false]);
   typeAlphaText(dom.window, composerInputs[1], "Second draft");
-  pane.partTitleElement.querySelectorAll<HTMLButtonElement>("[role='tab']")[0]?.click();
+  chatTitleContent(pane).querySelectorAll<HTMLButtonElement>("[role='tab']")[0]?.click();
   assert.equal(sessions.active?.session.sessionId, "session-1");
   assert.deepEqual([...chatPanes].map((chatPane) => chatPane.hidden), [false, true]);
   assert.equal(chatPanes[0]?.querySelector(".zeta-alpha-editor-line-text")?.textContent, "First draft");
   assert.equal(chatPanes[1]?.querySelector(".zeta-alpha-editor-line-text")?.textContent, "Second draft");
 
-  const closeButtons = pane.partTitleElement.querySelectorAll<HTMLButtonElement>(
+  const closeButtons = chatTitleContent(pane).querySelectorAll<HTMLButtonElement>(
     `[data-action-id="${TAB_CLOSE_ACTION_ID}"] button`,
   );
   assert.equal(closeButtons.length, 2);
@@ -353,7 +365,7 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
   );
   assert.equal(sessions.active?.session.sessionId, "session-2");
   assert.deepEqual(
-    [...pane.partTitleElement.querySelectorAll<HTMLElement>("[role='tab']")]
+    [...chatTitleContent(pane).querySelectorAll<HTMLElement>("[role='tab']")]
       .map((tab) => ({
         label: tab.textContent,
         selected: tab.getAttribute("aria-selected"),
@@ -366,20 +378,20 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
     "session-2",
   );
 
-  pane.partTitleElement.querySelector<HTMLButtonElement>(`[data-action-id="${TAB_CLOSE_ACTION_ID}"] button`)?.click();
+  chatTitleContent(pane).querySelector<HTMLButtonElement>(`[data-action-id="${TAB_CLOSE_ACTION_ID}"] button`)?.click();
   await waitFor(() => !layout.isPartVisible("auxiliarybar"));
-  assert.equal(pane.partTitleElement.querySelectorAll("[role='tab']").length, 0);
+  assert.equal(chatTitleContent(pane).querySelectorAll("[role='tab']").length, 0);
   assert.equal(sessions.active, undefined);
   assert.equal(sessions.untitledSessions.length, 0);
 
   layout.showPart("auxiliarybar");
-  await waitFor(() => pane.partTitleElement.querySelectorAll("[role='tab']").length === 1);
-  assert.equal(pane.partTitleElement.querySelector<HTMLElement>("[role='tab']")?.textContent, "New Chat");
+  await waitFor(() => chatTitleContent(pane).querySelectorAll("[role='tab']").length === 1);
+  assert.equal(chatTitleContent(pane).querySelector<HTMLElement>("[role='tab']")?.textContent, "New Chat");
   assert.equal(sessions.untitledSessions.length, 1);
 
-  pane.partTitleElement.querySelector<HTMLButtonElement>(`[data-action-id="${TAB_CLOSE_ACTION_ID}"] button`)?.click();
+  chatTitleContent(pane).querySelector<HTMLButtonElement>(`[data-action-id="${TAB_CLOSE_ACTION_ID}"] button`)?.click();
   assert.equal(layout.isPartVisible("auxiliarybar"), false);
-  assert.equal(pane.partTitleElement.querySelectorAll("[role='tab']").length, 0);
+  assert.equal(chatTitleContent(pane).querySelectorAll("[role='tab']").length, 0);
   assert.equal(sessions.untitledSessions.length, 0);
 
   dom.window.close();
@@ -445,7 +457,7 @@ test("an empty Session list opens an untitled session and persists it on its fir
   await sessions.initialize();
   await nextTask();
 
-  const tabs = pane.partTitleElement.querySelectorAll<HTMLButtonElement>("[role='tab']");
+  const tabs = chatTitleContent(pane).querySelectorAll<HTMLButtonElement>("[role='tab']");
   assert.equal(tabs.length, 1);
   assert.deepEqual(
     [...tabs].map((tab) => ({
@@ -546,10 +558,10 @@ test("the New Chat slash command opens an untitled session", async () => {
     cancelable: true,
     key: "Enter",
   }));
-  await waitFor(() => pane.partTitleElement.querySelectorAll("[role='tab']").length === 2);
+  await waitFor(() => chatTitleContent(pane).querySelectorAll("[role='tab']").length === 2);
 
   assert.deepEqual(
-    [...pane.partTitleElement.querySelectorAll<HTMLElement>("[role='tab']")].map((tab) => ({
+    [...chatTitleContent(pane).querySelectorAll<HTMLElement>("[role='tab']")].map((tab) => ({
       label: tab.textContent,
       selected: tab.getAttribute("aria-selected"),
     })),
@@ -676,7 +688,7 @@ test("one Session retains one Chat pane while its selected Thread changes", asyn
   await sessions.initialize();
   await nextTask();
 
-  assert.equal(pane.partTitleElement.querySelectorAll("[role='tab']").length, 1);
+  assert.equal(chatTitleContent(pane).querySelectorAll("[role='tab']").length, 1);
   const chatPane = pane.element.querySelector<HTMLElement>(".zeta-chat-pane-host > .zeta-chat");
   assert.ok(chatPane);
   assert.equal(chatPane.dataset.sessionId, "session-1");
@@ -689,7 +701,7 @@ test("one Session retains one Chat pane while its selected Thread changes", asyn
     pane.element.querySelector(".zeta-chat-pane-host > .zeta-chat"),
     chatPane,
   );
-  assert.equal(pane.partTitleElement.querySelectorAll("[role='tab']").length, 1);
+  assert.equal(chatTitleContent(pane).querySelectorAll("[role='tab']").length, 1);
   assert.equal(chatPane.dataset.threadId, "thread-2");
   dom.window.close();
 });

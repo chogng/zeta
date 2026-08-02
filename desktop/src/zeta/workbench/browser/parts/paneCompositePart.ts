@@ -9,6 +9,7 @@ import { ViewContainerLocation, type IViewContainerDescriptor } from "../../comm
 import type { IViewDescriptorService } from "../../services/views/common/viewDescriptorService.js";
 import { CompositePart } from "./compositePart.js";
 import { CompositeBar, type CompositeBarPresentation, type CompositeBarSelectionEvent } from "./compositebar/compositeBar.js";
+import type { PartTitleProjection } from "./views/viewPane.js";
 
 /** Menu-backed actions rendered at the right edge of a Pane Composite title. */
 export interface PaneCompositeTitleActions {
@@ -45,6 +46,8 @@ export class PaneCompositePart extends CompositePart {
   readonly onDidSelectComposite: Event<CompositeBarSelectionEvent>;
   private readonly titleContentElement: HTMLDivElement;
   protected readonly titleActionsSlotElement: HTMLDivElement;
+  private readonly viewTitleActionsElement: HTMLDivElement;
+  private readonly partTitleActionsElement: HTMLDivElement;
   private compositeBarVisible = true;
   private hasCustomTitleContent = false;
 
@@ -67,6 +70,11 @@ export class PaneCompositePart extends CompositePart {
     this.titleContentElement.append(this.compositeBar.element);
     this.titleActionsSlotElement = options.ownerDocument.createElement("div");
     this.titleActionsSlotElement.className = "zeta-pane-composite-title-actions";
+    this.viewTitleActionsElement = options.ownerDocument.createElement("div");
+    this.viewTitleActionsElement.className = "zeta-pane-composite-title-view-actions";
+    this.partTitleActionsElement = options.ownerDocument.createElement("div");
+    this.partTitleActionsElement.className = "zeta-pane-composite-title-part-actions";
+    this.titleActionsSlotElement.append(this.viewTitleActionsElement, this.partTitleActionsElement);
     this.titleElement.append(this.titleContentElement, this.titleActionsSlotElement);
 
     if (options.titleActions) {
@@ -78,7 +86,7 @@ export class PaneCompositePart extends CompositePart {
         { highlightToggledItems: true },
       ));
       actions.element.classList.add("zeta-pane-composite-title-menu-actions");
-      this.titleActionsSlotElement.append(actions.element);
+      this.partTitleActionsElement.append(actions.element);
     }
 
     this.setCompositeBarVisible(options.compositeBarVisible ?? true);
@@ -94,18 +102,13 @@ export class PaneCompositePart extends CompositePart {
     this.updateTitleVisibility();
   }
 
-  /** Projects view-owned title content into the left title slot. */
-  protected setTitleContent(element: HTMLElement | undefined): void {
-    this.hasCustomTitleContent = element !== undefined;
+  /** Projects one View's title content and actions into the Part's fixed slots. */
+  protected setTitleProjection(projection: PartTitleProjection | undefined): void {
+    this.hasCustomTitleContent = projection?.content !== undefined;
     this.titleContentElement.replaceChildren(
-      ...(element ? [element] : [this.compositeBar.element]),
+      ...(projection?.content ? [projection.content] : [this.compositeBar.element]),
     );
-    this.updateTitleVisibility();
-  }
-
-  /** Projects view-owned actions into the right title slot. */
-  protected setTitleActions(element: HTMLElement | undefined): void {
-    this.titleActionsSlotElement.replaceChildren(...(element ? [element] : []));
+    this.viewTitleActionsElement.replaceChildren(...(projection?.actions ? [projection.actions] : []));
     this.updateTitleVisibility();
   }
 
@@ -114,6 +117,6 @@ export class PaneCompositePart extends CompositePart {
   }
 
   private updateTitleVisibility(): void {
-    this.titleElement.hidden = !this.compositeBarVisible && !this.hasCustomTitleContent && this.titleActionsSlotElement.childElementCount === 0;
+    this.titleElement.hidden = !this.compositeBarVisible && !this.hasCustomTitleContent && this.viewTitleActionsElement.childElementCount === 0 && this.partTitleActionsElement.childElementCount === 0;
   }
 }

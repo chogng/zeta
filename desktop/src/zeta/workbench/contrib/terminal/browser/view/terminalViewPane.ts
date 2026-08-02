@@ -6,7 +6,7 @@ import type { IMenuService } from "../../../../../platform/actions/common/menuSe
 import type { IContextKeyService } from "../../../../../platform/contextkey/common/contextkey.js";
 import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextMenu.js";
 import type { IThemeService } from "../../../../../platform/theme/common/themeService.js";
-import { ViewPane, type IViewPaneOptions } from "../../../../browser/parts/views/viewPane.js";
+import { ViewPane, type IViewPaneOptions, type PartTitleProjection } from "../../../../browser/parts/views/viewPane.js";
 import type { IWorkbenchLayoutService } from "../../../../services/layout/browser/layoutService.js";
 import type { ITerminalDimensions, ITerminalInstance, ITerminalService } from "../../../../services/terminal/common/terminal.js";
 import { TerminalInstanceWidget } from "../instance/terminalInstanceWidget.js";
@@ -112,8 +112,8 @@ export class TerminalViewPane extends ViewPane {
     this.activeItem()?.widget.focus();
   }
 
-  override get partTitleActionsElement(): HTMLElement {
-    return this.titleActions.element;
+  override get partTitleProjection(): PartTitleProjection {
+    return { actions: this.titleActions.element };
   }
 
   override setTitleSecondaryActions(actions: readonly IAction[]): boolean {

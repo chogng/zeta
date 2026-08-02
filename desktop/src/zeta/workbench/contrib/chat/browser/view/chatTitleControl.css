@@ -1,4 +1,4 @@
-.zeta-pane-composite-title-content > .zeta-chat-tabs-control {
+.zeta-chat-tabs-control.zeta-chat-tabs-pane-title {
   min-width: 0;
   height: 100%;
   flex: 1 1 auto;

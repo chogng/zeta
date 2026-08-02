@@ -16,6 +16,12 @@ export interface IViewPaneOptions {
   readonly collapsed?: boolean;
 }
 
+/** Optional title content and actions projected together into a hosting Part. */
+export interface PartTitleProjection {
+  readonly content?: HTMLElement;
+  readonly actions?: HTMLElement;
+}
+
 /** A titled, independently managed view hosted inside a workbench view container. */
 export abstract class ViewPane extends DisposableOwner implements IView {
   readonly element: HTMLElement;
@@ -85,13 +91,8 @@ export abstract class ViewPane extends DisposableOwner implements IView {
     this.renderCollapsedState();
   }
 
-  /** Contextual commands rendered by a host title toolbar, when available. */
-  get partTitleActionsElement(): HTMLElement | undefined {
-    return undefined;
-  }
-
-  /** Optional title control projected into the hosting Pane Composite Part. */
-  get partTitleElement(): HTMLElement | undefined {
+  /** Optional title content and actions projected into the hosting Pane Composite Part. */
+  get partTitleProjection(): PartTitleProjection | undefined {
     return undefined;
   }
 

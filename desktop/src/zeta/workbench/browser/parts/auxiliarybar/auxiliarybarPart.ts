@@ -36,7 +36,6 @@ export class AuxiliarybarPart extends PaneCompositePart {
   override showComposite(compositeId: string): void {
     super.showComposite(compositeId);
     const composite = this.getComposite(compositeId);
-    this.setTitleContent(composite?.partTitleElement);
-    this.setTitleActions(composite?.partTitleActionsElement);
+    this.setTitleProjection(composite?.partTitleProjection);
   }
 }

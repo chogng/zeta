@@ -4,7 +4,7 @@ import { JSDOM } from "jsdom";
 import type { IContextMenuProvider } from "../src/zeta/base/browser/contextmenu.js";
 import type { IAction } from "../src/zeta/base/common/actions.js";
 import { DisposableStore } from "../src/zeta/base/common/lifecycle.js";
-import type { IViewPaneOptions } from "../src/zeta/workbench/browser/parts/views/viewPane.js";
+import type { IViewPaneOptions, PartTitleProjection } from "../src/zeta/workbench/browser/parts/views/viewPane.js";
 import {
   ContextKeyService,
 } from "../src/zeta/platform/contextkey/common/contextkey.js";
@@ -867,10 +867,77 @@ class TestPanelView extends ViewPane {
     this.actions.append(button);
   }
 
-  override get partTitleActionsElement(): HTMLElement {
-    return this.actions;
+  override get partTitleProjection(): PartTitleProjection {
+    return { actions: this.actions };
   }
 }
+
+class ContentProjectionView extends ViewPane {
+  private readonly titleContent: HTMLDivElement;
+
+  constructor(options: IViewPaneOptions) {
+    super(options);
+    this.titleContent = options.ownerDocument.createElement("div");
+    this.titleContent.dataset.projectionOwner = "content";
+  }
+
+  override get partTitleProjection(): PartTitleProjection {
+    return { content: this.titleContent };
+  }
+}
+
+class ActionsProjectionView extends ViewPane {
+  private readonly titleActions: HTMLDivElement;
+
+  constructor(options: IViewPaneOptions) {
+    super(options);
+    this.titleActions = options.ownerDocument.createElement("div");
+    this.titleActions.dataset.projectionOwner = "actions";
+  }
+
+  override get partTitleProjection(): PartTitleProjection {
+    return { actions: this.titleActions };
+  }
+}
+
+test("PaneComposite rejects ambiguous title projections from multiple Views", () => {
+  const dom = new JSDOM("<!doctype html><body></body>");
+  const disposables = new DisposableStore();
+  const registry = new WorkbenchViewRegistry();
+  disposables.add(registry.registerViewContainer({
+    id: "zeta.test.projection",
+    title: "Projection test",
+    location: ViewContainerLocation.Panel,
+    isDefault: true,
+  }));
+  disposables.add(registry.registerViews("zeta.test.projection", [
+    { id: "zeta.test.content", title: "Content", ctorDescriptor: new SyncDescriptor(ContentProjectionView) },
+    { id: "zeta.test.actions", title: "Actions", ctorDescriptor: new SyncDescriptor(ActionsProjectionView) },
+  ]));
+  const contextKeys = disposables.add(new ContextKeyService());
+  const viewDescriptors = disposables.add(new ViewDescriptorService({
+    contextKeyService: contextKeys,
+    registry,
+  }));
+  const descriptor = viewDescriptors.getDefaultViewContainer(ViewContainerLocation.Panel);
+  assert.ok(descriptor);
+  const composite = new PaneComposite({
+    viewContainer: descriptor,
+    model: viewDescriptors.getViewContainerModel(descriptor.id),
+    instantiationService: new InstantiationService(),
+    contextKeyService: contextKeys,
+    ownerDocument: dom.window.document,
+  });
+
+  assert.throws(
+    () => composite.partTitleProjection,
+    /only one visible View/,
+  );
+
+  composite.dispose();
+  disposables.dispose();
+  dom.window.close();
+});
 
 test("titlebar layout commands toggle shell regions", async () => {
   const dom = new JSDOM("<!doctype html><body></body>");

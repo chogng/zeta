@@ -12,7 +12,7 @@
 | Part 在 Workbench 中的位置、尺寸和显隐 | `WorkbenchLayout` | 布局状态与 Part 可见性 API |
 | 标题左侧的 View Container 选择 | `PaneCompositePart` 托管的 `CompositeBar` | `compositeBarPresentation`、`compositeBarVisible`、`compositeBarContainerFilter` |
 | 标题右侧的菜单动作 | `PaneCompositePart` 标题动作槽位 | `titleActions` + `MenuId` |
-| 当前 View 的内容与标题投影 | retained `PaneComposite` / View | `contentElement`、`partTitleElement`、`partTitleActionsElement` |
+| 当前 View 的内容与标题投影 | retained `PaneComposite` / View | `contentElement`、原子 `partTitleProjection` |
 | action 的业务显隐和 checked 状态 | Command、Menu、Context Key | 条件菜单项与稳定 `.checked` 状态投影 |
 | hover、focus、选中态和内部 item 几何 | 创建对应 DOM 的控件 | 控件 CSS 或公开 presentation variant |
 
@@ -34,9 +34,10 @@
 PaneCompositePart
 ├─ titleElement (.zeta-pane-composite-title)
 │  ├─ titleContentElement
-│  │  └─ CompositeBar 或 View 自有 partTitleElement
+│  │  └─ CompositeBar 或 partTitleProjection.content
 │  └─ titleActionsSlotElement
-│     └─ Part 级 MenuWorkbenchToolBar 或 View 自有 partTitleActionsElement
+│     ├─ viewTitleActionsElement ← partTitleProjection.actions
+│     └─ partTitleActionsElement ← Part 级 MenuWorkbenchToolBar
 └─ contentElement
    └─ retained PaneComposite
       └─ ViewPane
@@ -60,13 +61,12 @@ PaneCompositePart
 | 名称 | 准确语义 |
 | --- | --- |
 | `titleActions` | 配置 Part 标题右侧的 menu-backed toolbar |
-| `titleActionsSlotElement` | `PaneCompositePart` 创建的标题右侧动作槽位 |
+| `titleActionsSlotElement` | `PaneCompositePart` 创建的标题右侧动作宿主槽位 |
 | `compositeBarPresentation` | 选择 `CompositeBar` 的公开展示变体 |
 | `compositeBarVisible` | 控制整个 `CompositeBar` 是否参与标题布局 |
 | `compositeBarContainerFilter` | Part 对其子 `CompositeBar.containerFilter` 的显式配置 |
 | `containerFilter` | `CompositeBar` 内部选择哪些 container 生成 item |
-| `partTitleElement` | 当前 View/Composite 提供的自有标题内容 |
-| `partTitleActionsElement` | 当前 View/Composite 提供的自有标题右侧动作 |
+| `partTitleProjection` | 当前 View/Composite 原子提供的 `{ content, actions }` 标题投影 |
 
 以下命名和调用方式禁止新增：
 
@@ -95,7 +95,9 @@ PaneCompositePart
 
 ## 5. 标题槽位
 
-`titleContentElement` 与 `titleActionsSlotElement` 是 `PaneCompositePart` 创建的同级槽位：前者投影 `CompositeBar` 或当前 View 的 `partTitleElement`，后者投影 Part 级 `titleActions` 或当前 View 的 `partTitleActionsElement`。当前 View 的上下文动作必须进入其所属的固定标题槽位，不得在 View、CompositeBar 或窗口标题栏之间迁移 DOM。
+`titleContentElement` 与 `titleActionsSlotElement` 是 `PaneCompositePart` 创建的同级槽位。当前 View 通过一次 `partTitleProjection` 同时提供左侧 `content` 和右侧 `actions`，两者必定来自同一个 View；前者替换 `CompositeBar` 的视觉，后者进入 `viewTitleActionsElement`。Part 级 `titleActions` 独立进入 `partTitleActionsElement`，与 View actions 并列且不互相覆盖。当前 View 的上下文动作必须进入其所属的固定标题槽位，不得在 View、CompositeBar 或窗口标题栏之间迁移 DOM。
+
+一个 `PaneComposite` 至多允许一个可见 View 提供 `partTitleProjection`；若多个 View 同时提供，运行时立即拒绝该歧义配置，而不会拼接或按顺序挑选不同 View 的标题片段。
 
 标题、toolbar 和 `CompositeBar` 的视觉尺寸、状态 class 与 CSS selector 规则以 [`ui-styling-ownership.md`](ui-styling-ownership.md) 为准。
 
@@ -105,7 +107,7 @@ PaneCompositePart
 | --- | --- | --- | --- |
 | Primary Sidebar | 可见的 icon `CompositeBar` | 按需提供 | retained `PaneComposite` |
 | Panel | 可见的 label `CompositeBar` | 当前 Composite 的上下文 actions | retained `PaneComposite` |
-| Auxiliary Bar | 隐藏冗余 `CompositeBar`，投影 Chat 的 `partTitleElement` | 投影 Chat 的 `partTitleActionsElement` | retained `PaneComposite` |
+| Auxiliary Bar | 隐藏冗余 `CompositeBar`，投影 Chat `partTitleProjection.content` | 投影 Chat `partTitleProjection.actions` | retained `PaneComposite` |
 | Agent Sidebar | 保留统一标题/CompositeBar host，但过滤唯一冗余 container item | `MenuId.AgentSidebarTitle` | retained `PaneComposite` |
 
 Agent Sidebar 的空 `CompositeBar` root 仍是统一标题结构的一部分，但不创建 `Agent` action item；“Hide Agent Sidebar” 属于标题右侧 `titleActions`。因此它和 Auxiliary Bar 的 title toolbar 使用相同的 Part 标题槽位。
