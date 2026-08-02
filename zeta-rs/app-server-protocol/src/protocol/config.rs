@@ -163,6 +163,25 @@ pub struct HookConfigDto {
     pub enablement: HookEnablementDto,
 }
 
+/// Durable user intent for one language server.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum LanguageServerModeDto {
+    Disabled,
+    Automatic,
+    Enabled,
+}
+
+/// Runtime-free language-server preference exposed through the App Server contract.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageServerConfigDto {
+    pub mode: LanguageServerModeDto,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub executable: Option<String>,
+}
+
 /// Current user configuration snapshot returned by `config/read`.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -178,6 +197,7 @@ pub struct ConfigReadResult {
     pub skill_sources: BTreeMap<String, SkillSourceConfigDto>,
     pub plugin_requests: BTreeMap<String, PluginRequestDto>,
     pub hooks: BTreeMap<String, HookConfigDto>,
+    pub language_servers: BTreeMap<String, LanguageServerConfigDto>,
 }
 
 /// Notification payload emitted after a durable Config authority commit.
@@ -224,6 +244,31 @@ pub struct ConfigUpdateParams {
     #[schemars(with = "Option<ApprovalReviewModelSelectionDto>")]
     #[ts(as = "Option<ApprovalReviewModelSelectionDto>", optional = nullable)]
     pub approval_review_model: Patch<ApprovalReviewModelSelectionDto>,
+}
+
+/// Creates or replaces one user-owned language-server preference.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageServerConfigureParams {
+    pub command_id: CommandId,
+    #[schemars(range(min = 0))]
+    #[ts(type = "number")]
+    pub expected_revision: u64,
+    #[schemars(length(min = 1))]
+    pub server_id: String,
+    pub config: LanguageServerConfigDto,
+}
+
+/// Removes an explicit language-server preference and restores the product default.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageServerRemoveParams {
+    pub command_id: CommandId,
+    #[schemars(range(min = 0))]
+    #[ts(type = "number")]
+    pub expected_revision: u64,
+    #[schemars(length(min = 1))]
+    pub server_id: String,
 }
 
 /// Creates or replaces one provider entry in the user configuration authority.

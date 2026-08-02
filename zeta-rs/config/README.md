@@ -17,11 +17,12 @@ execution、Skill 正文、Session/Thread 或 Core execution。
 | `ResolvedConfigSnapshot` | User authority 的 immutable runtime input |
 | `WorkspaceConfigStore` | strict-read `.zeta/config.toml`，不写 Workspace 文件 |
 | `WorkspaceTrustConfig` | 按 opaque `WorkspaceTrustId` 持久化 User 的 Restricted/Trusted 决策；缺失时 fail closed |
+| `LanguageServersConfig` / `LanguageServerConfig` | 持久化 stable server ID 对应的 Disabled/Automatic/Enabled 与可选绝对 executable override |
 | `resolve_scoped_config` | User + Workspace 的受限 merge、provenance 与 diagnostic |
 | `ConfigChange` | metadata commit 后的 revision/generation signal，包括 TOML 外部编辑与其他 connection 的提交 |
 
 `UserConfigDocument` 当前包含 Agent defaults、Provider map、standalone MCP declaration、Skill
-source/enablement、exact Plugin request、declarative Hook 和 Workspace trust decision。Trust key
+source/enablement、exact Plugin request、declarative Hook、language-server preference 和 Workspace trust decision。Trust key
 由 host 对 canonical root 生成，document 不保存本地路径；User decision 不能冒充 organization
 policy 或 host configuration。Plugin request 不安装或授权 package；Hook declaration 不执行
 process。Theme/UI preference 不在本 crate；Desktop device configuration 是独立 authority。
@@ -97,4 +98,4 @@ cargo test -p zeta-config
 
 测试覆盖 TOML durability/reopen、旧 DB document 迁出、external edit、revision/replay/conflict、
 no-op generation、cross-connection signal、Provider/model invariant、MCP/Skill/Plugin/Hook desired
-config、Workspace strict TOML parsing、namespace 和 scoped resolution。
+config、language-server ID/mode/absolute-path validation、Workspace strict TOML parsing、namespace 和 scoped resolution。

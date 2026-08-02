@@ -7,7 +7,9 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use zeta_app_server::AppServer;
 use zeta_app_server::SlashCommandCatalog;
 use zeta_app_server_protocol::protocol::common::{ClientCapabilities, ClientInfo};
-use zeta_app_server_protocol::protocol::fs::{FsFileType, FsReadDirectoryParams};
+use zeta_app_server_protocol::protocol::fs::{
+    FsFileType, FsGetMetadataParams, FsReadDirectoryParams, FsReadFileParams, FsWriteFileParams,
+};
 use zeta_app_server_protocol::protocol::initialize::InitializeParams;
 use zeta_app_server_protocol::protocol::session::{SessionCreateParams, SessionThreadCreateParams};
 use zeta_app_server_protocol::protocol::skills::{
@@ -109,6 +111,36 @@ fn client_reads_workspace_directories_through_the_typed_contract() {
     assert_eq!(result.entries.len(), 1);
     assert_eq!(result.entries[0].name, "src");
     assert_eq!(result.entries[0].file_type, FsFileType::Directory);
+}
+
+#[test]
+fn client_reads_writes_and_versions_workspace_files_through_typed_contracts() {
+    let mut client = AppServerClient::new(MockTransport(VecDeque::from([
+        r#"{"jsonrpc":"2.0","id":1,"result":{"content":"fn main() {}\n"}}"#.into(),
+        r#"{"jsonrpc":"2.0","id":2,"result":{"fileType":"file","sizeBytes":13,"readonly":false,"modifiedAtMillis":41}}"#.into(),
+        r#"{"jsonrpc":"2.0","id":3,"result":{"metadata":{"fileType":"file","sizeBytes":14,"readonly":false,"modifiedAtMillis":42}}}"#.into(),
+    ])));
+
+    let read = client
+        .read_file(FsReadFileParams {
+            path: "src/main.rs".into(),
+        })
+        .unwrap();
+    let metadata = client
+        .get_file_metadata(FsGetMetadataParams {
+            path: "src/main.rs".into(),
+        })
+        .unwrap();
+    let written = client
+        .write_file(FsWriteFileParams {
+            path: "src/main.rs".into(),
+            content: "fn main() { }\n".into(),
+        })
+        .unwrap();
+
+    assert_eq!(read.content, "fn main() {}\n");
+    assert_eq!(metadata.modified_at_millis, Some(41));
+    assert_eq!(written.metadata.modified_at_millis, Some(42));
 }
 
 #[test]

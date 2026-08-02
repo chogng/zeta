@@ -311,6 +311,10 @@ Plugin request + Hook declaration
 └─ config/read + typed mutation only
    ├─ Plugin install/activation manager 尚未实现
    └─ Hook execution/policy runtime 尚未实现
+
+Language-server preference
+└─ config/read + languageServer/configure|remove
+   └─ App Server 持久化 mode/path；Native catalog/runtime 负责解析与执行
 ```
 
 每次 `ModelService::invoke` 重新读取 user config，与 optional workspace document 合并，再由

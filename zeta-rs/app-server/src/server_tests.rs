@@ -1254,12 +1254,29 @@ fn config_updates_use_typed_command_ids() {
         }),
     );
     assert_eq!(hook_enabled["result"]["revision"], 7);
+    let executable = std::env::temp_dir()
+        .join("rust-analyzer")
+        .to_string_lossy()
+        .into_owned();
+    let language_server = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":12,"method":"languageServer/configure",
+            "params":{
+                "commandId":"configure-rust-analyzer","expectedRevision":7,
+                "serverId":"rust-analyzer",
+                "config":{"mode":"enabled","executable":executable}
+            }
+        }),
+    );
+    assert_eq!(language_server["result"]["revision"], 8);
     let configured = call(
         &server,
         &mut connection,
-        serde_json::json!({"jsonrpc":"2.0","id":12,"method":"config/read","params":{}}),
+        serde_json::json!({"jsonrpc":"2.0","id":13,"method":"config/read","params":{}}),
     );
-    assert_eq!(configured["result"]["revision"], 7);
+    assert_eq!(configured["result"]["revision"], 8);
     assert_eq!(
         configured["result"]["mcpServers"]["user:mcp:github"]["enablement"],
         "enabled"
@@ -1276,6 +1293,10 @@ fn config_updates_use_typed_command_ids() {
         configured["result"]["hooks"]["user:hook:review"]["action"]["program"],
         "review-hook"
     );
+    assert_eq!(
+        configured["result"]["languageServers"]["rust-analyzer"]["mode"],
+        "enabled"
+    );
     let deadline = Instant::now() + Duration::from_secs(2);
     loop {
         let observed = server
@@ -1284,8 +1305,8 @@ fn config_updates_use_typed_command_ids() {
             .map(|notification| serde_json::from_str::<serde_json::Value>(&notification).unwrap())
             .any(|notification| {
                 notification["method"] == "config/changed"
-                    && notification["params"]["revision"] == 7
-                    && notification["params"]["generation"] == 7
+                    && notification["params"]["revision"] == 8
+                    && notification["params"]["generation"] == 8
             });
         if observed {
             break;

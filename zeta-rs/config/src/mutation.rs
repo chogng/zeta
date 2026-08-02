@@ -120,6 +120,16 @@ pub(crate) fn apply_command(
                 .ok_or_else(|| ConfigError(format!("Hook '{}' is not configured", hook_id)))?;
             hook.enablement = *enablement;
         }
+        UserConfigCommand::ConfigureLanguageServer { server_id, config } => {
+            config.validate()?;
+            document
+                .language_servers
+                .servers
+                .insert(server_id.clone(), config.clone());
+        }
+        UserConfigCommand::RemoveLanguageServerConfiguration { server_id } => {
+            document.language_servers.servers.remove(server_id);
+        }
         UserConfigCommand::SetWorkspaceTrust { workspace, setting } => {
             document
                 .workspace_trust

@@ -1,6 +1,6 @@
 use crate::{
-    ConfigDiagnostic, ConfigError, ConfigProvenance, HooksConfig, McpConfig, PluginsConfig,
-    SkillsConfig, WorkspaceConfigIntent, WorkspaceTrustConfig,
+    ConfigDiagnostic, ConfigError, ConfigProvenance, HooksConfig, LanguageServersConfig, McpConfig,
+    PluginsConfig, SkillsConfig, WorkspaceConfigIntent, WorkspaceTrustConfig,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -109,6 +109,8 @@ pub struct UserConfigDocument {
     #[serde(default)]
     pub hooks: HooksConfig,
     #[serde(default)]
+    pub language_servers: LanguageServersConfig,
+    #[serde(default)]
     pub workspace_trust: WorkspaceTrustConfig,
 }
 
@@ -145,6 +147,7 @@ impl UserConfigDocument {
         self.skills.validate_for_namespace("user")?;
         self.plugins.validate()?;
         self.hooks.validate_for_namespace("user")?;
+        self.language_servers.validate()?;
         Ok(())
     }
 }
@@ -162,6 +165,7 @@ pub struct ResolvedConfig {
     pub skills: SkillsConfig,
     pub plugins: PluginsConfig,
     pub hooks: HooksConfig,
+    pub language_servers: LanguageServersConfig,
     pub workspace_trust: WorkspaceTrustConfig,
     pub workspace: Option<WorkspaceConfigIntent>,
 }
@@ -232,6 +236,7 @@ impl From<&UserConfigDocument> for ResolvedConfig {
             skills: document.skills.clone(),
             plugins: document.plugins.clone(),
             hooks: document.hooks.clone(),
+            language_servers: document.language_servers.clone(),
             workspace_trust: document.workspace_trust.clone(),
             workspace: None,
         }

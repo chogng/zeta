@@ -12,6 +12,7 @@ fn decodes_git_status_changed_notification() {
             "params": {
                 "status": {
                     "streamInstanceId": "git_stream_1",
+                    "workspacePath": "/workspace",
                     "revision": 7,
                     "head": {
                         "type": "branch",

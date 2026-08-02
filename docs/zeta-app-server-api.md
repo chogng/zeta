@@ -157,6 +157,7 @@ inline argument parsing；提交仍通过 `turn/start.input`，并保留 `/name`
 | `turn/interaction/resolve` | Thread | 用 exact request identity 解决一个 outstanding interaction |
 | `config/read` | config | 读取配置 |
 | `config/update` | config | typed command 更新配置 |
+| `languageServer/configure` / `languageServer/remove` | config | revision-safe 修改或恢复 language-server mode/path preference |
 | `provider/configure` / `provider/remove` | config | 修改 Provider declaration |
 | `mcp/server/upsert` / `mcp/server/remove` / `mcp/server/enablement/set` | config | 修改 standalone MCP desired config |
 | `skill/source/add` / `skill/source/remove` / `skill/source/enablement/set` | config | 修改 User Skill source |
@@ -444,7 +445,7 @@ exact replay 不推进 revision/generation，也不发布 change。外部 TOML �
 SQLite connection 提交也会被观察并投影。
 
 `config/read` 当前返回 Agent preference、Provider、standalone MCP、Skill source、exact Plugin
-request 与 declarative Hook。Plugin request 的 `enabled` 只表示期望参与未来 activation；
+request、declarative Hook 与 language-server mode/path preference。Plugin request 的 `enabled` 只表示期望参与未来 activation；
 Hook 的 `enabled` 也不表示 process 已获准或已经执行。两者的 runtime/lifecycle projection 必须由
 后续独立领域 API 返回，不能从 Config desired state 推断。
 

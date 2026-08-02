@@ -1,8 +1,8 @@
 use crate::{
     ApprovalReviewModelSelection, ConfigGeneration, ConfigRevision, HookConfig, HookEnablement,
-    HookId, McpServerConfig, McpServerEnablement, McpServerId, ModelRef, PluginId, PluginRequest,
-    PluginRequestEnablement, SkillEnablement, SkillId, SkillSourceConfig, SkillSourceEnablement,
-    SkillSourceId, WorkspaceTrustSetting,
+    HookId, LanguageServerConfig, LanguageServerId, McpServerConfig, McpServerEnablement,
+    McpServerId, ModelRef, PluginId, PluginRequest, PluginRequestEnablement, SkillEnablement,
+    SkillId, SkillSourceConfig, SkillSourceEnablement, SkillSourceId, WorkspaceTrustSetting,
 };
 use serde::{Deserialize, Serialize};
 use zeta_model_provider_config::ModelProviderConfig;
@@ -74,6 +74,13 @@ pub enum UserConfigCommand {
     SetHookEnablement {
         hook_id: HookId,
         enablement: HookEnablement,
+    },
+    ConfigureLanguageServer {
+        server_id: LanguageServerId,
+        config: LanguageServerConfig,
+    },
+    RemoveLanguageServerConfiguration {
+        server_id: LanguageServerId,
     },
     SetWorkspaceTrust {
         workspace: WorkspaceTrustId,

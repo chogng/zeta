@@ -256,10 +256,10 @@ fn legacy_sqlite_document_is_migrated_once_into_toml() {
     legacy_document
         .as_object_mut()
         .unwrap()
-        .remove("workspaceTrust");
+        .remove("languageServers");
     connection
         .execute(
-            "INSERT INTO config_authority VALUES (1, 6, 7, 9, ?1)",
+            "INSERT INTO config_authority VALUES (1, 7, 7, 9, ?1)",
             [serde_json::to_string(&legacy_document).unwrap()],
         )
         .unwrap();
@@ -314,7 +314,7 @@ fn additive_document_schema_upgrade_keeps_revision_and_generation() {
                  generation INTEGER NOT NULL,
                  content_digest TEXT NOT NULL
              );
-             INSERT INTO config_metadata VALUES (1, 6, 7, 9, 'legacy-digest');
+             INSERT INTO config_metadata VALUES (1, 7, 7, 9, 'legacy-digest');
              CREATE TABLE config_command_receipts (
                  command_id TEXT PRIMARY KEY,
                  expected_revision INTEGER NOT NULL,
@@ -338,7 +338,7 @@ fn additive_document_schema_upgrade_keeps_revision_and_generation() {
             |row| row.get(0),
         )
         .unwrap();
-    assert_eq!(document_schema_version, 7);
+    assert_eq!(document_schema_version, 8);
     drop(store);
     remove_config_files(&path);
 }
@@ -1232,5 +1232,52 @@ fn workspace_resolution_keeps_user_model_when_the_workspace_provider_is_unconfig
         diagnostic.code == ConfigDiagnosticCode::WorkspacePreferredModelProviderUnconfigured
             && diagnostic.subject == "anthropic"
     }));
+    remove_config_files(&path);
+}
+
+#[test]
+fn language_server_preferences_are_typed_persisted_and_revision_safe() {
+    let path = config_path("language-server-preference");
+    let executable = std::env::temp_dir().join("rust-analyzer");
+    let store = ConfigStore::open(&path).unwrap();
+    let server_id = LanguageServerId::new("rust-analyzer").unwrap();
+
+    let result = store
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("configure-rust-analyzer").unwrap(),
+            expected_revision: ConfigRevision::INITIAL,
+            command: UserConfigCommand::ConfigureLanguageServer {
+                server_id: server_id.clone(),
+                config: LanguageServerConfig {
+                    mode: LanguageServerModeConfig::Enabled,
+                    executable: Some(executable.clone()),
+                },
+            },
+        })
+        .unwrap();
+
+    assert_eq!(result.revision, ConfigRevision::new(1));
+    let snapshot = store.read_snapshot().unwrap();
+    assert_eq!(
+        snapshot.values.language_servers.servers.get(&server_id),
+        Some(&LanguageServerConfig {
+            mode: LanguageServerModeConfig::Enabled,
+            executable: Some(executable),
+        })
+    );
+    assert!(persisted_config_document(&path).contains("rust-analyzer"));
+
+    let invalid = store.apply(ConfigCommandRequest {
+        command_id: CommandId::new("configure-relative-rust-analyzer").unwrap(),
+        expected_revision: ConfigRevision::new(1),
+        command: UserConfigCommand::ConfigureLanguageServer {
+            server_id,
+            config: LanguageServerConfig {
+                mode: LanguageServerModeConfig::Automatic,
+                executable: Some("relative/rust-analyzer".into()),
+            },
+        },
+    });
+    assert!(matches!(invalid, Err(ConfigCommandError::Config(_))));
     remove_config_files(&path);
 }

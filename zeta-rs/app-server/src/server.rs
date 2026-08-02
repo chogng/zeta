@@ -438,6 +438,12 @@ impl AppServer {
             Some(ClientMethod::ConfigRead) => self.config_read(),
             Some(ClientMethod::ModelList) => self.model_list(),
             Some(ClientMethod::ConfigUpdate) => self.config_update(&request.params),
+            Some(ClientMethod::LanguageServerConfigure) => {
+                self.language_server_configure(&request.params)
+            }
+            Some(ClientMethod::LanguageServerRemove) => {
+                self.language_server_remove(&request.params)
+            }
             Some(ClientMethod::ProviderConfigure) => self.provider_configure(&request.params),
             Some(ClientMethod::ProviderRemove) => self.provider_remove(&request.params),
             Some(ClientMethod::McpServerUpsert) => self.mcp_server_upsert(&request.params),

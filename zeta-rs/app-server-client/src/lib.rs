@@ -11,13 +11,16 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, OnceLock};
 use zeta_app_server_protocol::protocol::common::EmptyParams;
 use zeta_app_server_protocol::protocol::config::{
-    ConfigCommandResult, ConfigReadResult, ConfigUpdateParams, McpServerRemoveParams,
-    McpServerSetEnablementParams, McpServerUpsertParams, ProviderConfigureParams,
-    ProviderRemoveParams, SkillSourceAddParams, SkillSourceRemoveParams,
-    SkillSourceSetEnablementParams,
+    ConfigCommandResult, ConfigReadResult, ConfigUpdateParams, LanguageServerConfigureParams,
+    LanguageServerRemoveParams, McpServerRemoveParams, McpServerSetEnablementParams,
+    McpServerUpsertParams, ProviderConfigureParams, ProviderRemoveParams, SkillSourceAddParams,
+    SkillSourceRemoveParams, SkillSourceSetEnablementParams,
 };
 use zeta_app_server_protocol::protocol::document::{TypstCompileParams, TypstCompileResult};
-use zeta_app_server_protocol::protocol::fs::{FsReadDirectoryParams, FsReadDirectoryResult};
+use zeta_app_server_protocol::protocol::fs::{
+    FsGetMetadataParams, FsGetMetadataResult, FsReadDirectoryParams, FsReadDirectoryResult,
+    FsReadFileParams, FsReadFileResult, FsWriteFileParams, FsWriteFileResult,
+};
 use zeta_app_server_protocol::protocol::git::{
     GitBranchListResult, GitBranchSwitchParams, GitOperationResult, GitTextDiffResult,
 };
@@ -145,6 +148,24 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
         self.call(ClientMethod::FsReadDirectory, params)
     }
 
+    pub fn get_file_metadata(
+        &mut self,
+        params: FsGetMetadataParams,
+    ) -> Result<FsGetMetadataResult, ClientError> {
+        self.call(ClientMethod::FsGetMetadata, params)
+    }
+
+    pub fn read_file(&mut self, params: FsReadFileParams) -> Result<FsReadFileResult, ClientError> {
+        self.call(ClientMethod::FsReadFile, params)
+    }
+
+    pub fn write_file(
+        &mut self,
+        params: FsWriteFileParams,
+    ) -> Result<FsWriteFileResult, ClientError> {
+        self.call(ClientMethod::FsWriteFile, params)
+    }
+
     pub fn git_text_diff(&mut self) -> Result<GitTextDiffResult, ClientError> {
         self.call(ClientMethod::GitTextDiff, EmptyParams {})
     }
@@ -268,6 +289,20 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
         params: ConfigUpdateParams,
     ) -> Result<ConfigCommandResult, ClientError> {
         self.call(ClientMethod::ConfigUpdate, params)
+    }
+
+    pub fn configure_language_server(
+        &mut self,
+        params: LanguageServerConfigureParams,
+    ) -> Result<ConfigCommandResult, ClientError> {
+        self.call(ClientMethod::LanguageServerConfigure, params)
+    }
+
+    pub fn remove_language_server_configuration(
+        &mut self,
+        params: LanguageServerRemoveParams,
+    ) -> Result<ConfigCommandResult, ClientError> {
+        self.call(ClientMethod::LanguageServerRemove, params)
     }
 
     pub fn configure_provider(

@@ -3,7 +3,8 @@ use super::{AppServer, RpcError, decode, result};
 use serde_json::Value;
 use zeta_app_server_protocol::protocol::config::{
     ApprovalReviewModelSelectionDto, ConfigCommandDispositionDto, ConfigCommandResult,
-    ConfigReadResult, ConfigUpdateParams, McpCredentialBindingDto, McpServerConfigDto,
+    ConfigReadResult, ConfigUpdateParams, LanguageServerConfigDto, LanguageServerConfigureParams,
+    LanguageServerModeDto, LanguageServerRemoveParams, McpCredentialBindingDto, McpServerConfigDto,
     McpServerEnablementDto, McpServerRemoveParams, McpServerSetEnablementParams,
     McpServerUpsertParams, McpTransportDto, ModelRefDto, ProviderConfigDto,
     ProviderConfigureParams, ProviderRemoveParams, SkillSourceAddParams, SkillSourceConfigDto,
@@ -12,10 +13,10 @@ use zeta_app_server_protocol::protocol::config::{
 use zeta_app_server_protocol::protocol::error::AppServerErrorName;
 use zeta_config::{
     ApprovalReviewModelSelection, ConfigCommandDisposition, ConfigCommandError,
-    ConfigCommandRequest, ConfigRevision, McpCredentialBinding, McpServerConfig,
-    McpServerEnablement, McpServerId, McpTransportConfig, PreferencesUpdate,
-    ResolvedConfigSnapshot, SkillSourceConfig, SkillSourceEnablement, SkillSourceId,
-    UserConfigCommand,
+    ConfigCommandRequest, ConfigRevision, LanguageServerConfig, LanguageServerId,
+    LanguageServerModeConfig, McpCredentialBinding, McpServerConfig, McpServerEnablement,
+    McpServerId, McpTransportConfig, PreferencesUpdate, ResolvedConfigSnapshot, SkillSourceConfig,
+    SkillSourceEnablement, SkillSourceId, UserConfigCommand,
 };
 use zeta_model_provider::{ModelId, ModelRef, ProviderId};
 use zeta_model_provider_config::ModelProviderConfig;
@@ -68,6 +69,43 @@ impl AppServer {
                     provider: provider.provider.clone(),
                     config: provider,
                 },
+            })
+            .map_err(config_operation_error)?;
+        result(&config_command_result(outcome))
+    }
+
+    pub(super) fn language_server_configure(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: LanguageServerConfigureParams = decode(params)?;
+        let server_id = LanguageServerId::new(params.server_id)
+            .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
+        let config = language_server_config_from_dto(params.config);
+        let store = self
+            .config
+            .clone()
+            .ok_or_else(|| RpcError::new(-32030, AppServerErrorName::ConfigUnavailable))?;
+        let outcome = store
+            .apply(ConfigCommandRequest {
+                command_id: params.command_id,
+                expected_revision: ConfigRevision::new(params.expected_revision),
+                command: UserConfigCommand::ConfigureLanguageServer { server_id, config },
+            })
+            .map_err(config_operation_error)?;
+        result(&config_command_result(outcome))
+    }
+
+    pub(super) fn language_server_remove(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: LanguageServerRemoveParams = decode(params)?;
+        let server_id = LanguageServerId::new(params.server_id)
+            .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
+        let store = self
+            .config
+            .clone()
+            .ok_or_else(|| RpcError::new(-32030, AppServerErrorName::ConfigUnavailable))?;
+        let outcome = store
+            .apply(ConfigCommandRequest {
+                command_id: params.command_id,
+                expected_revision: ConfigRevision::new(params.expected_revision),
+                command: UserConfigCommand::RemoveLanguageServerConfiguration { server_id },
             })
             .map_err(config_operation_error)?;
         result(&config_command_result(outcome))
@@ -260,6 +298,37 @@ fn config_read_result(snapshot: ResolvedConfigSnapshot) -> ConfigReadResult {
             .into_iter()
             .map(|(id, hook)| (id.to_string(), hook_config_dto(hook)))
             .collect(),
+        language_servers: snapshot
+            .values
+            .language_servers
+            .servers
+            .into_iter()
+            .map(|(id, config)| (id.to_string(), language_server_config_dto(config)))
+            .collect(),
+    }
+}
+
+fn language_server_config_dto(config: LanguageServerConfig) -> LanguageServerConfigDto {
+    LanguageServerConfigDto {
+        mode: match config.mode {
+            LanguageServerModeConfig::Disabled => LanguageServerModeDto::Disabled,
+            LanguageServerModeConfig::Automatic => LanguageServerModeDto::Automatic,
+            LanguageServerModeConfig::Enabled => LanguageServerModeDto::Enabled,
+        },
+        executable: config
+            .executable
+            .map(|path| path.to_string_lossy().into_owned()),
+    }
+}
+
+fn language_server_config_from_dto(config: LanguageServerConfigDto) -> LanguageServerConfig {
+    LanguageServerConfig {
+        mode: match config.mode {
+            LanguageServerModeDto::Disabled => LanguageServerModeConfig::Disabled,
+            LanguageServerModeDto::Automatic => LanguageServerModeConfig::Automatic,
+            LanguageServerModeDto::Enabled => LanguageServerModeConfig::Enabled,
+        },
+        executable: config.executable.map(Into::into),
     }
 }
 

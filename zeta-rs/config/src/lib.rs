@@ -6,6 +6,7 @@
 mod command;
 mod document;
 mod hooks;
+mod language_servers;
 mod mcp;
 mod mutation;
 mod plugins;
@@ -28,6 +29,9 @@ pub use document::{
 };
 pub use hooks::{
     HookAction, HookConfig, HookEnablement, HookEvent, HookId, HookMatcher, HooksConfig,
+};
+pub use language_servers::{
+    LanguageServerConfig, LanguageServerId, LanguageServerModeConfig, LanguageServersConfig,
 };
 pub use mcp::{
     McpConfig, McpCredentialBinding, McpServerConfig, McpServerEnablement, McpServerId,

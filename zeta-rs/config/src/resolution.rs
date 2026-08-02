@@ -1,7 +1,8 @@
 use crate::{
-    ConfigError, ConfigGeneration, ConfigRevision, HookId, McpServerId, PluginId, ResolvedConfig,
-    ResolvedConfigSnapshot, SkillSourceId, UserConfigDocument, WorkspaceConfigDocument,
-    WorkspaceConfigIntent, WorkspaceConfigRevision, WorkspaceConfigScope, WorkspaceId,
+    ConfigError, ConfigGeneration, ConfigRevision, HookId, LanguageServerId, McpServerId, PluginId,
+    ResolvedConfig, ResolvedConfigSnapshot, SkillSourceId, UserConfigDocument,
+    WorkspaceConfigDocument, WorkspaceConfigIntent, WorkspaceConfigRevision, WorkspaceConfigScope,
+    WorkspaceId,
 };
 use std::collections::BTreeMap;
 use zeta_protocol::{ModelRef, ProviderId};
@@ -24,6 +25,7 @@ pub struct ConfigProvenance {
     pub skill_sources: BTreeMap<SkillSourceId, ConfigValueSource>,
     pub plugin_requests: BTreeMap<PluginId, ConfigValueSource>,
     pub hooks: BTreeMap<HookId, ConfigValueSource>,
+    pub language_servers: BTreeMap<LanguageServerId, ConfigValueSource>,
 }
 
 impl ConfigProvenance {
@@ -65,6 +67,13 @@ impl ConfigProvenance {
             hooks: document
                 .hooks
                 .hooks
+                .keys()
+                .cloned()
+                .map(|id| (id, ConfigValueSource::User))
+                .collect(),
+            language_servers: document
+                .language_servers
+                .servers
                 .keys()
                 .cloned()
                 .map(|id| (id, ConfigValueSource::User))

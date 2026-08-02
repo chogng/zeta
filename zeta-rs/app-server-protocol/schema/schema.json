@@ -695,6 +695,38 @@
           "properties": {
             "method": {
               "type": "string",
+              "const": "languageServer/configure"
+            },
+            "params": {
+              "$ref": "#/$defs/LanguageServerConfigureParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "languageServer/remove"
+            },
+            "params": {
+              "$ref": "#/$defs/LanguageServerRemoveParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
               "const": "provider/configure"
             },
             "params": {
@@ -1787,6 +1819,38 @@
           "properties": {
             "method": {
               "type": "string",
+              "const": "languageServer/configure"
+            },
+            "result": {
+              "$ref": "#/$defs/ConfigCommandResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "languageServer/remove"
+            },
+            "result": {
+              "$ref": "#/$defs/ConfigCommandResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
               "const": "provider/configure"
             },
             "result": {
@@ -2642,6 +2706,12 @@
             "$ref": "#/$defs/HookConfigDto"
           }
         },
+        "languageServers": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/LanguageServerConfigDto"
+          }
+        },
         "mcpServers": {
           "type": "object",
           "additionalProperties": {
@@ -2690,7 +2760,8 @@
         "mcpServers",
         "skillSources",
         "pluginRequests",
-        "hooks"
+        "hooks",
+        "languageServers"
       ]
     },
     "ConfigUpdateParams": {
@@ -3864,6 +3935,83 @@
       "type": "string",
       "enum": [
         "2.0"
+      ]
+    },
+    "LanguageServerConfigDto": {
+      "description": "Runtime-free language-server preference exposed through the App Server contract.",
+      "type": "object",
+      "properties": {
+        "executable": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "mode": {
+          "$ref": "#/$defs/LanguageServerModeDto"
+        }
+      },
+      "required": [
+        "mode"
+      ]
+    },
+    "LanguageServerConfigureParams": {
+      "description": "Creates or replaces one user-owned language-server preference.",
+      "type": "object",
+      "properties": {
+        "commandId": {
+          "$ref": "#/$defs/CommandId"
+        },
+        "config": {
+          "$ref": "#/$defs/LanguageServerConfigDto"
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "serverId": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "commandId",
+        "expectedRevision",
+        "serverId",
+        "config"
+      ]
+    },
+    "LanguageServerModeDto": {
+      "description": "Durable user intent for one language server.",
+      "type": "string",
+      "enum": [
+        "disabled",
+        "automatic",
+        "enabled"
+      ]
+    },
+    "LanguageServerRemoveParams": {
+      "description": "Removes an explicit language-server preference and restores the product default.",
+      "type": "object",
+      "properties": {
+        "commandId": {
+          "$ref": "#/$defs/CommandId"
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "serverId": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "commandId",
+        "expectedRevision",
+        "serverId"
       ]
     },
     "McpCredentialBindingDto": {
