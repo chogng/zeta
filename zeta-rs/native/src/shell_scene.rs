@@ -2,8 +2,8 @@ use zeta_keybinding::{KeyboardShortcuts, paint_chord_hint};
 use zeta_terminal::{GridSize, ScreenBuffer, TerminalColor, TerminalCore, TerminalMousePosition};
 use zeta_ui::{
     Border, CaretVisibility, Color, CornerRadii, Element, FontFamily, FontWeight, PaintRect, Rect,
-    Sash, SashOrientation, SashState, SashStyle, ScrollMetrics, ScrollbarPresentation, TextBlock,
-    TextInputLayoutEngine, TextStyle, UiScene,
+    Sash, SashOrientation, SashState, SashStyle, SceneCheckpoint, ScrollMetrics,
+    ScrollbarPresentation, TextBlock, TextInputLayoutEngine, TextStyle, UiScene,
 };
 
 use crate::PRODUCT_DISPLAY_NAME;
@@ -46,7 +46,8 @@ use crate::titlebar::{TITLEBAR_HEIGHT, Titlebar};
 use crate::workspace_context::WorkspaceContext;
 use crate::workspace_path_picker::{WorkspacePathPicker, WorkspacePathPickerState};
 use zeta_ui_dispatch::{
-    AccessibilityNode, AccessibilityRole, CursorFeedback, InteractionFrame, UiDispatch, UiNode,
+    AccessibilityNode, AccessibilityRole, CursorFeedback, InteractionFrame,
+    InteractionFrameCheckpoint, UiDispatch, UiNode,
 };
 use zeta_winit::WindowControlInsets;
 
@@ -173,6 +174,21 @@ pub(crate) struct ShellPresentation {
     pub(crate) accessibility_nodes: Vec<AccessibilityNode>,
     pub(crate) ime_cursor_area: Option<Rect>,
     pub(crate) workspace_path_picker_scroll_metrics: Option<ScrollMetrics>,
+    pub(crate) workspace_path_picker_item_viewport: Option<Rect>,
+    base_checkpoint: Option<ShellBaseCheckpoint>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+struct ShellBaseCheckpoint {
+    scene: SceneCheckpoint,
+    interaction: InteractionFrameCheckpoint,
+    ime_cursor_area: Option<Rect>,
+}
+
+struct ShellOverlayPresentation {
+    ime_cursor_area: Option<Rect>,
+    workspace_path_picker_scroll_metrics: Option<ScrollMetrics>,
+    workspace_path_picker_item_viewport: Option<Rect>,
 }
 
 #[derive(Clone, Copy)]
@@ -183,6 +199,7 @@ struct TerminalView<'a> {
     selection: Option<TerminalSelectionRange>,
 }
 
+#[derive(Clone, Copy)]
 pub(crate) struct ShellPresentationModel<'a> {
     pub(crate) palette: ShellPalette,
     pub(crate) terminal: Option<&'a TerminalCore>,
@@ -257,6 +274,8 @@ pub(crate) fn build_shell_presentation(
             interaction_frame,
             ime_cursor_area: None,
             workspace_path_picker_scroll_metrics: None,
+            workspace_path_picker_item_viewport: None,
+            base_checkpoint: None,
         };
     };
 
@@ -342,14 +361,13 @@ pub(crate) fn build_shell_presentation(
         palette,
         text_layout,
     );
-    let mut ime_cursor_area = if model.dispatch.is_focused(AGENT_FILE_SEARCH_INPUT) {
+    let ime_cursor_area = if model.dispatch.is_focused(AGENT_FILE_SEARCH_INPUT) {
         file_search_caret
     } else if model.dispatch.is_focused(SESSION_SEARCH_INPUT) {
         session_search_caret
     } else {
         composer_caret
     };
-    let mut workspace_path_picker_scroll_metrics = None;
     if let Some(bounds) = layout.session_sidebar_sash_track {
         draw_session_sidebar_sash(
             &mut scene,
@@ -360,13 +378,79 @@ pub(crate) fn build_shell_presentation(
             palette,
         );
     }
+    let base_checkpoint = ShellBaseCheckpoint {
+        scene: scene.checkpoint(),
+        interaction: interaction_frame.checkpoint(),
+        ime_cursor_area,
+    };
+    let overlay = draw_shell_overlays(
+        &mut scene,
+        &mut interaction_frame,
+        viewport,
+        &model,
+        text_layout,
+        ime_cursor_area,
+    );
+    let accessibility_nodes = interaction_frame.accessibility_nodes(model.dispatch);
+    ShellPresentation {
+        scene,
+        interaction_frame,
+        accessibility_nodes,
+        ime_cursor_area: overlay.ime_cursor_area,
+        workspace_path_picker_scroll_metrics: overlay.workspace_path_picker_scroll_metrics,
+        workspace_path_picker_item_viewport: overlay.workspace_path_picker_item_viewport,
+        base_checkpoint: Some(base_checkpoint),
+    }
+}
+
+/// Replaces only volatile shell overlays while retaining base layout, paint, and interaction data.
+pub(crate) fn rebuild_shell_overlays(
+    presentation: &mut ShellPresentation,
+    viewport: LogicalViewport,
+    model: ShellPresentationModel<'_>,
+    text_layout: &mut TextInputLayoutEngine,
+) -> bool {
+    let Some(base) = presentation.base_checkpoint.clone() else {
+        return false;
+    };
+    presentation.scene.restore(&base.scene);
+    presentation.interaction_frame.restore(base.interaction);
+    let overlay = draw_shell_overlays(
+        &mut presentation.scene,
+        &mut presentation.interaction_frame,
+        viewport,
+        &model,
+        text_layout,
+        base.ime_cursor_area,
+    );
+    presentation.accessibility_nodes = presentation
+        .interaction_frame
+        .accessibility_nodes(model.dispatch);
+    presentation.ime_cursor_area = overlay.ime_cursor_area;
+    presentation.workspace_path_picker_scroll_metrics =
+        overlay.workspace_path_picker_scroll_metrics;
+    presentation.workspace_path_picker_item_viewport = overlay.workspace_path_picker_item_viewport;
+    true
+}
+
+fn draw_shell_overlays(
+    scene: &mut UiScene,
+    interaction_frame: &mut InteractionFrame,
+    viewport: LogicalViewport,
+    model: &ShellPresentationModel<'_>,
+    text_layout: &mut TextInputLayoutEngine,
+    mut ime_cursor_area: Option<Rect>,
+) -> ShellOverlayPresentation {
+    let palette = model.palette;
+    let mut workspace_path_picker_scroll_metrics = None;
+    let mut workspace_path_picker_item_viewport = None;
     if let Some(context_menu) = SessionContextMenu::new(
         Rect::from_xywh(0.0, 0.0, viewport.width, viewport.height),
         model.session_context_menu,
         palette,
         model.dispatch,
     ) {
-        context_menu.register_interactions(&mut interaction_frame);
+        context_menu.register_interactions(interaction_frame);
         scene.draw_component(&context_menu);
     }
     if let Some(path_picker) = WorkspacePathPicker::new(
@@ -378,13 +462,14 @@ pub(crate) fn build_shell_presentation(
         model.dispatch,
     ) {
         workspace_path_picker_scroll_metrics = path_picker.scroll_metrics();
+        workspace_path_picker_item_viewport = Some(path_picker.item_viewport_bounds());
         if model
             .dispatch
             .is_focused(crate::workspace_path_picker::WORKSPACE_PATH_SEARCH_INPUT)
         {
             ime_cursor_area = path_picker.search_caret_bounds();
         }
-        path_picker.register_interactions(&mut interaction_frame);
+        path_picker.register_interactions(interaction_frame);
         scene.draw_component(&path_picker);
     }
     if let Some(branch_menu) = GitBranchContextMenu::new(
@@ -401,13 +486,13 @@ pub(crate) fn build_shell_presentation(
         {
             ime_cursor_area = branch_menu.search_caret_bounds();
         }
-        branch_menu.register_interactions(&mut interaction_frame);
+        branch_menu.register_interactions(interaction_frame);
         scene.draw_component(&branch_menu);
     }
     let viewport_bounds = Rect::from_xywh(0.0, 0.0, viewport.width, viewport.height);
     if let Some((keybinding, entered)) = model.keybindings.pending_keybinding() {
         paint_chord_hint(
-            &mut scene,
+            scene,
             viewport_bounds,
             keybinding,
             entered,
@@ -424,16 +509,13 @@ pub(crate) fn build_shell_presentation(
         model.keybindings.platform(),
         model.dispatch,
     ) {
-        shortcuts.register_interactions(&mut interaction_frame);
+        shortcuts.register_interactions(interaction_frame);
         scene.draw_component(&shortcuts);
     }
-    let accessibility_nodes = interaction_frame.accessibility_nodes(model.dispatch);
-    ShellPresentation {
-        scene,
-        interaction_frame,
-        accessibility_nodes,
+    ShellOverlayPresentation {
         ime_cursor_area,
         workspace_path_picker_scroll_metrics,
+        workspace_path_picker_item_viewport,
     }
 }
 

@@ -152,6 +152,14 @@ pub struct InspectionFrame {
 }
 
 impl InspectionFrame {
+    pub(crate) fn len(&self) -> usize {
+        self.nodes.len()
+    }
+
+    pub(crate) fn truncate(&mut self, len: usize) {
+        self.nodes.truncate(len);
+    }
+
     pub fn nodes(&self) -> &[InspectionNode] {
         &self.nodes
     }

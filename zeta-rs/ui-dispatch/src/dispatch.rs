@@ -67,6 +67,27 @@ impl UiDispatch {
             .target_at(point)
             .map(|target| frame.ancestry(target))
             .unwrap_or_default();
+        self.set_hovered_path(hovered_path)
+    }
+
+    /// Projects a host-resolved pointer target after geometry changes without another pointer
+    /// event.
+    ///
+    /// Scroll hosts use this when they can map the retained pointer position to a stable element
+    /// before rebuilding the next interaction frame. The target must exist in the active scope of
+    /// `frame`; invalid targets leave the current hover path unchanged.
+    pub fn hover_element(
+        &mut self,
+        target: ElementId,
+        frame: &InteractionFrame,
+    ) -> DispatchOutcome {
+        if !frame.is_in_active_scope(target) || frame.node(target).is_none() {
+            return DispatchOutcome::default();
+        }
+        self.set_hovered_path(frame.ancestry(target))
+    }
+
+    fn set_hovered_path(&mut self, hovered_path: Vec<ElementId>) -> DispatchOutcome {
         if self.hovered_path == hovered_path {
             return DispatchOutcome::default();
         }

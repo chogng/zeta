@@ -1,6 +1,6 @@
 use super::{
     LogicalViewport, ShellLayout, ShellPresentation, ShellPresentationModel,
-    build_shell_presentation, terminal_grid_size_for_viewport,
+    build_shell_presentation, rebuild_shell_overlays, terminal_grid_size_for_viewport,
     terminal_mouse_position_for_viewport,
 };
 use crate::PRODUCT_DISPLAY_NAME;
@@ -17,11 +17,11 @@ use crate::session_context_menu::SessionContextMenuState;
 use crate::session_search::SessionSearch;
 use crate::session_sidebar::SessionSidebarState;
 use crate::shell_interaction::{
-    ADD_SESSION, AGENT_CHANGES, AGENT_EDITOR_PANE, AGENT_EXPLORER_PANE, AGENT_FILES,
-    AGENT_FILES_REFRESH, AGENT_FILES_SEARCH, AGENT_SIDEBAR, AGENT_SIDEBAR_NAVIGATION,
+    ACTIVE_SESSION_TAB, ADD_SESSION, AGENT_CHANGES, AGENT_EDITOR_PANE, AGENT_EXPLORER_PANE,
+    AGENT_FILES, AGENT_FILES_REFRESH, AGENT_FILES_SEARCH, AGENT_SIDEBAR, AGENT_SIDEBAR_NAVIGATION,
     AGENT_SIDEBAR_TOOLBAR, COMPOSER, COMPOSER_INFO_BAR, COMPOSER_MODE, COMPOSER_PANEL,
-    ContextAction, MULTI_DIFF_EDITOR, SESSION_SEARCH_INPUT, SESSION_SIDEBAR_RESIZE_HANDLE,
-    TITLEBAR,
+    ContextAction, MULTI_DIFF_EDITOR, SESSION_CONTEXT_MENU, SESSION_SEARCH_INPUT,
+    SESSION_SIDEBAR_RESIZE_HANDLE, TITLEBAR,
 };
 use crate::thread_projection::ThreadProjection;
 use crate::workspace_context::WorkspaceContext;
@@ -735,6 +735,84 @@ fn context_toolbar_pointer_clicks_activate_workspace_and_branch_pickers() {
             Some(UiIntent::Activate(action.element_id()))
         );
     }
+}
+
+#[test]
+fn overlay_rebuild_restores_the_retained_base_scene_and_interactions() {
+    let composer = ComposerEditor::default();
+    let composer_interaction = ComposerInteractionModel::new();
+    let composer_interaction_pane = ComposerInteractionPaneState::default();
+    let session_search = SessionSearch::default();
+    let workspace_context = WorkspaceContext::fixture("~/Desktop/zeta", Some("main"), Some(0));
+    let agent_sidebar_workspace = AgentSidebarWorkspace::default();
+    let thread_projection = ThreadProjection::default();
+    let git_branch_context_menu = GitBranchContextMenuState::default();
+    let workspace_path_picker = WorkspacePathPickerState::default();
+    let keybindings = NativeKeybindings::default();
+    let keyboard_shortcuts = KeyboardShortcutsState::default();
+    let dispatch = UiDispatch::default();
+    let mut text_layout = TextInputLayoutEngine::new();
+    let closed_model = ShellPresentationModel {
+        palette: crate::shell_style::SHELL_PALETTE,
+        terminal: None,
+        terminal_scroll_offset: 0,
+        terminal_scrollbar_presentation: ScrollbarPresentation::default(),
+        terminal_selection: None,
+        terminal_surface: false,
+        thread_projection: &thread_projection,
+        thread_timeline_scroll_offset: 0,
+        workspace_context: &workspace_context,
+        composer: &composer,
+        composer_interaction: &composer_interaction,
+        composer_interaction_pane: &composer_interaction_pane,
+        composer_mode: ComposerMode::Agent,
+        session_search: &session_search,
+        caret_visibility: CaretVisibility::Visible,
+        dispatch: &dispatch,
+        session_sidebar: SessionSidebarState::default(),
+        agent_sidebar: AgentSidebarState::default(),
+        agent_sidebar_workspace: &agent_sidebar_workspace,
+        session_context_menu: SessionContextMenuState::default(),
+        git_branch_context_menu: &git_branch_context_menu,
+        workspace_path_picker: &workspace_path_picker,
+        keybindings: &keybindings,
+        keyboard_shortcuts: &keyboard_shortcuts,
+        keybinding_diagnostics: &[],
+        window_control_insets: WindowControlInsets::NONE,
+    };
+    let mut presentation = build_shell_presentation(viewport(), closed_model, &mut text_layout);
+    let base_scene = presentation.scene.clone();
+    let base_interactions = presentation.interaction_frame.clone();
+    let base_accessibility = presentation.accessibility_nodes.clone();
+    let mut menu = SessionContextMenuState::default();
+    menu.open(ACTIVE_SESSION_TAB, Point::new(200.0, 100.0), None);
+
+    assert!(rebuild_shell_overlays(
+        &mut presentation,
+        viewport(),
+        ShellPresentationModel {
+            session_context_menu: menu,
+            ..closed_model
+        },
+        &mut text_layout,
+    ));
+    assert!(
+        presentation
+            .interaction_frame
+            .node(SESSION_CONTEXT_MENU)
+            .is_some()
+    );
+    assert_ne!(presentation.scene, base_scene);
+
+    assert!(rebuild_shell_overlays(
+        &mut presentation,
+        viewport(),
+        closed_model,
+        &mut text_layout,
+    ));
+    assert_eq!(presentation.scene, base_scene);
+    assert_eq!(presentation.interaction_frame, base_interactions);
+    assert_eq!(presentation.accessibility_nodes, base_accessibility);
 }
 
 #[test]

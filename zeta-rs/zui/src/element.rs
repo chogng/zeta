@@ -1,6 +1,9 @@
 use std::panic::Location;
 
-use crate::{CornerRadii, Edges, InspectionNode, Rect};
+use crate::CornerRadii;
+use crate::Edges;
+use crate::InspectionNode;
+use crate::Rect;
 
 /// Axis along which an [`Element`] arranges its direct children.
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]

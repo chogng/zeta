@@ -1,7 +1,9 @@
 use zeta_icons::{Icon, IconDefinition, IconId};
 
 use super::{FontFamily, FontWeight, SceneBatch, TextBlock, TextSpan, TextStyle, UiScene};
-use crate::{Color, ImageData, ImageId, PaintIcon, PaintImage, PaintRect, Point, Rect, Size};
+use crate::{
+    Color, Element, ImageData, ImageId, PaintIcon, PaintImage, PaintRect, Point, Rect, Size,
+};
 
 const TEST_ICON: Icon = Icon::new(
     IconId::new("test"),
@@ -159,6 +161,35 @@ fn scene_discards_primitives_fully_outside_the_active_clip() {
     assert!(scene.images().is_empty());
     assert!(scene.text_blocks().is_empty());
     assert_eq!(scene.batches().count(), 0);
+}
+
+#[test]
+fn scene_checkpoint_restores_primitives_layers_and_inspection_prefix() {
+    let mut scene = UiScene::new(Color::TRANSPARENT);
+    scene.with_element(
+        Element::leaf("Base").in_bounds(Rect::from_xywh(0.0, 0.0, 40.0, 40.0)),
+        |scene, element| {
+            scene.draw_rect(PaintRect::new(element.bounds(), Color::WHITE));
+        },
+    );
+    let checkpoint = scene.checkpoint();
+
+    scene.with_overlay(|scene| {
+        scene.with_element(
+            Element::leaf("Overlay").in_bounds(Rect::from_xywh(10.0, 10.0, 20.0, 20.0)),
+            |scene, element| {
+                scene.draw_rect(PaintRect::new(element.bounds(), Color::WHITE));
+            },
+        );
+    });
+    assert_eq!(scene.layer_count(), 2);
+    assert_eq!(scene.inspection().nodes().len(), 2);
+
+    scene.restore(&checkpoint);
+
+    assert_eq!(scene.layer_count(), 1);
+    assert_eq!(scene.inspection().nodes().len(), 1);
+    assert_eq!(scene.inspection().nodes()[0].name(), "Base");
 }
 
 #[test]

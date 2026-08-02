@@ -3,7 +3,7 @@ mod frame;
 mod types;
 
 pub use dispatch::{DispatchInvalidation, DispatchOutcome, FocusDirection, UiDispatch};
-pub use frame::{AccessibilityNode, InteractionFrame, UiNode};
+pub use frame::{AccessibilityNode, InteractionFrame, InteractionFrameCheckpoint, UiNode};
 pub use types::{
     AccessibilityExpansion, AccessibilityRole, AccessibilitySelection, CursorFeedback, ElementId,
     FocusBehavior, NavigationAxis, NavigationGroupId, NodeAction, UiIntent,

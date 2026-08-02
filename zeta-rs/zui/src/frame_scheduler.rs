@@ -6,6 +6,8 @@
 pub enum FrameInvalidation {
     /// Render the current scene without rebuilding presentation.
     Render,
+    /// Rebuild a host-defined presentation fragment while retaining the stable presentation.
+    Fragment,
     /// Rebuild presentation and then render the resulting scene.
     Rebuild,
 }

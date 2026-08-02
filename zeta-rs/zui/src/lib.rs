@@ -37,8 +37,8 @@ pub use layout::{
 };
 pub use paint::{Border, BoxShadow, Color, PaintRect};
 pub use scene::{
-    FontFamily, FontStyle, FontWeight, SceneBatch, TextBlock, TextBlockWrap, TextSpan, TextStyle,
-    UiScene,
+    FontFamily, FontStyle, FontWeight, SceneBatch, SceneCheckpoint, TextBlock, TextBlockWrap,
+    TextSpan, TextStyle, UiScene,
 };
 pub use text_input::{
     CaretBlinkAdvance, CaretBlinkController, CaretVisibility, TextInput, TextInputCommand,

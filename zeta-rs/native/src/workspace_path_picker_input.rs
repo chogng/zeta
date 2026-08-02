@@ -12,7 +12,7 @@ use crate::shell_interaction::CONTEXT_WORKING_DIRECTORY;
 use crate::terminal_selection::{read_clipboard_text, write_clipboard_text};
 use crate::workspace_path_picker::{
     PICKER_ITEM_HEIGHT, WORKSPACE_PATH_SEARCH_INPUT, WorkspacePathPickerActivation,
-    WorkspacePathPickerState,
+    WorkspacePathPickerState, workspace_path_item_id,
 };
 
 const PICKER_ROWS_PER_WHEEL_STEP: f32 = 3.0;
@@ -165,9 +165,32 @@ impl NativeApp {
             .workspace_path_picker
             .apply_scroll(workspace_path_picker_scroll_command(delta), metrics)
         {
-            self.rebuild_presentation_on_next_redraw();
+            self.project_workspace_path_picker_hover_after_scroll();
+            self.rebuild_overlay_on_next_redraw();
         }
         true
+    }
+
+    fn project_workspace_path_picker_hover_after_scroll(&mut self) {
+        let Some(point) = self.cursor_position else {
+            return;
+        };
+        let Some(presentation) = self.presentation.as_ref() else {
+            return;
+        };
+        let Some(viewport) = presentation.workspace_path_picker_item_viewport else {
+            return;
+        };
+        if !viewport.contains(point) {
+            return;
+        }
+        let content_y = point.y - viewport.origin.y
+            + self.workspace_path_picker.scroll_state().vertical_offset();
+        let index = (content_y / PICKER_ITEM_HEIGHT).floor() as usize;
+        self.ui_dispatch.hover_element(
+            workspace_path_item_id(index),
+            &presentation.interaction_frame,
+        );
     }
 
     pub(super) fn route_workspace_path_picker_keyboard(&mut self, event: &KeyEvent) -> bool {

@@ -263,6 +263,8 @@ viewport 相交的文件；展开/收起改变高度时由 `EditorPaneState::rem
 指针位于 MultiDiffEditor 时，wheel 会更新其有界整体纵向 offset，不落入 Terminal scrollback。
 高频 PixelDelta 和 scrollbar drag 只累计 retained offset，并把 presentation 重建合并到下一次
 `RedrawRequested`；同一事件循环批次不会为每个 delta 同步重建整个 Shell scene。
+通用的 `Render < Fragment < Rebuild` 失效等级、Scene checkpoint 和 fragment 原地替换契约由
+`zui` 拥有；Native 只把产品状态变化映射到失效等级，并定义 Shell 的 base/overlay retained boundary。
 `shell_scene` 只注册产品 `ElementId`、cursor 和 separator semantics。`NativeApp` 每次重建
 presentation 时从 `NativeWindow::window_control_insets` 读取 host chrome 占位，并通过
 `ShellPresentationModel` 交给 `titlebar::Titlebar`；Titlebar 在占位外再增加自己的 `8px`

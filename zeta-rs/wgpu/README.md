@@ -54,6 +54,7 @@ implementation，意味着 crate ownership 已经漂移。
 | `zeta_renderer::RenderOutcome` | re-export | 告知 host presented/skipped/retry | 自行调度 event loop |
 | `WgpuRendererError` | public | surface/device/UI render failure | 产品级恢复策略 |
 | `ui_renderer::UiRenderer` | private | 协调 rect/image/icon/text prepare，并严格按 `UiScene::batches` 执行 | scene/layout/paint-order 语义 |
+| `ui_renderer::CachedTextBuffer` | private | 按 Scene 文本槽位复用 shape-affecting 内容未变化的 glyphon Buffer；位置、clip 与普通文本颜色变化只更新 TextArea | 跨组件 identity、无限历史缓存 |
 | `ui_renderer::{rect,image,icon}` | private | instance conversion、validation、atlas、shader 与 primitive-to-instance range mapping | component state |
 | `ui_renderer::UiRenderError` | public | 区分 invalid scene、atlas、glyph prepare/render failure | surface recovery |
 | `viewport::Viewport` | private | physical extent 与 scale-factor 状态 | window/GPU handle |
@@ -72,6 +73,7 @@ product-owned ApplicationHandler
       → WgpuRenderer::render_frame
           → Surface::get_current_texture
           → UiRenderer::prepare (scene primitive → backend resource/range)
+              → refresh_text_buffer_cache (reuse unchanged shaping buffers)
           → clear background
           → UiRenderer::render (ordered SceneBatch execution)
           → Queue::submit

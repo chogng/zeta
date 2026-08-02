@@ -9,6 +9,21 @@ mod batching;
 pub use batching::SceneBatch;
 use batching::{ScenePrimitive, batches};
 
+/// Retained boundary used to discard scene work appended after a stable presentation prefix.
+#[derive(Clone, Debug, PartialEq)]
+pub struct SceneCheckpoint {
+    rect_count: usize,
+    icon_count: usize,
+    image_count: usize,
+    text_count: usize,
+    layer_primitive_counts: Vec<usize>,
+    layer_count: usize,
+    inspection_count: usize,
+    active_clip: Option<Rect>,
+    active_layer: usize,
+    active_inspection_parent: Option<InspectionNodeId>,
+}
+
 /// The font-family selection requested by a text block.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum FontFamily {
@@ -273,6 +288,66 @@ impl UiScene {
             inspection: InspectionFrame::default(),
             active_inspection_parent: None,
         }
+    }
+
+    /// Records a stable scene prefix that can later be restored with [`UiScene::restore`].
+    ///
+    /// Product hosts use checkpoints as retained presentation boundaries: append a volatile
+    /// fragment, present it, then restore the prefix before rebuilding only that fragment. A
+    /// checkpoint belongs to the scene that produced it and must not be applied to another scene.
+    pub fn checkpoint(&self) -> SceneCheckpoint {
+        SceneCheckpoint {
+            rect_count: self.rects.len(),
+            icon_count: self.icons.len(),
+            image_count: self.images.len(),
+            text_count: self.text_blocks.len(),
+            layer_primitive_counts: self.layer_primitives.iter().map(Vec::len).collect(),
+            layer_count: self.layer_count,
+            inspection_count: self.inspection.len(),
+            active_clip: self.active_clip,
+            active_layer: self.active_layer,
+            active_inspection_parent: self.active_inspection_parent,
+        }
+    }
+
+    /// Discards all primitives, layers, and inspection nodes appended after `checkpoint`.
+    pub fn restore(&mut self, checkpoint: &SceneCheckpoint) {
+        assert!(
+            checkpoint.rect_count <= self.rects.len()
+                && checkpoint.icon_count <= self.icons.len()
+                && checkpoint.image_count <= self.images.len()
+                && checkpoint.text_count <= self.text_blocks.len()
+                && checkpoint.layer_count <= self.layer_count
+                && checkpoint.layer_primitive_counts.len() <= self.layer_primitives.len()
+                && checkpoint.inspection_count <= self.inspection.len(),
+            "Scene checkpoint must describe a prefix of its originating scene"
+        );
+        self.rects.truncate(checkpoint.rect_count);
+        self.rect_layers.truncate(checkpoint.rect_count);
+        self.icons.truncate(checkpoint.icon_count);
+        self.icon_layers.truncate(checkpoint.icon_count);
+        self.images.truncate(checkpoint.image_count);
+        self.image_layers.truncate(checkpoint.image_count);
+        self.text_blocks.truncate(checkpoint.text_count);
+        self.text_layers.truncate(checkpoint.text_count);
+        self.layer_primitives
+            .truncate(checkpoint.layer_primitive_counts.len());
+        for (primitives, &count) in self
+            .layer_primitives
+            .iter_mut()
+            .zip(&checkpoint.layer_primitive_counts)
+        {
+            assert!(
+                count <= primitives.len(),
+                "Scene checkpoint layer must describe a primitive prefix"
+            );
+            primitives.truncate(count);
+        }
+        self.layer_count = checkpoint.layer_count;
+        self.inspection.truncate(checkpoint.inspection_count);
+        self.active_clip = checkpoint.active_clip;
+        self.active_layer = checkpoint.active_layer;
+        self.active_inspection_parent = checkpoint.active_inspection_parent;
     }
 
     pub fn draw_rect(&mut self, mut rect: PaintRect) {

@@ -108,6 +108,44 @@ fn hit_testing_prefers_the_last_painted_child_and_projects_ancestry_hover() {
 }
 
 #[test]
+fn host_resolved_hover_projects_a_stable_element_without_pointer_movement() {
+    let frame = frame();
+    let mut dispatch = UiDispatch::default();
+    dispatch.pointer_moved(Point::new(25.0, 85.0), &frame);
+
+    assert_eq!(
+        dispatch.hover_element(SECOND, &frame).invalidation,
+        DispatchInvalidation::Paint
+    );
+    assert!(dispatch.is_hovered(ROOT));
+    assert!(dispatch.is_hovered(TOOLBAR));
+    assert!(dispatch.is_hovered(SECOND));
+    assert!(!dispatch.is_hovered(FIRST));
+}
+
+#[test]
+fn interaction_checkpoint_restores_nodes_and_modal_scope() {
+    let mut frame = frame();
+    let checkpoint = frame.checkpoint();
+    frame.register(
+        UiNode::new(
+            MENU,
+            Rect::from_xywh(100.0, 40.0, 120.0, 80.0),
+            AccessibilityRole::Menu,
+            "Actions",
+        )
+        .with_parent(ROOT),
+    );
+    frame.set_modal_root(MENU);
+    assert_eq!(frame.target_at(Point::new(25.0, 85.0)), None);
+
+    frame.restore(checkpoint);
+
+    assert!(frame.node(MENU).is_none());
+    assert_eq!(frame.target_at(Point::new(25.0, 85.0)), Some(FIRST));
+}
+
+#[test]
 fn pointer_capture_only_activates_when_release_returns_to_the_pressed_button() {
     let frame = frame();
     let mut dispatch = UiDispatch::default();

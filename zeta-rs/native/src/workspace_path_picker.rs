@@ -447,6 +447,10 @@ impl WorkspacePathPicker {
         self.search_box.caret_bounds()
     }
 
+    pub(crate) const fn item_viewport_bounds(&self) -> Rect {
+        self.dropdown.item_viewport_bounds()
+    }
+
     pub(crate) fn scroll_metrics(&self) -> Option<ScrollMetrics> {
         self.dropdown.scroll_metrics()
     }
@@ -464,7 +468,7 @@ impl Component for WorkspacePathPicker {
     }
 }
 
-fn workspace_path_item_id(index: usize) -> ElementId {
+pub(crate) fn workspace_path_item_id(index: usize) -> ElementId {
     ElementId::scoped(
         PATH_PICKER_SCOPE,
         FIRST_WORKSPACE_PATH_ITEM.saturating_add(index as u32),

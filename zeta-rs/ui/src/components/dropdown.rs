@@ -214,6 +214,11 @@ impl Dropdown {
         self.context_view.content_bounds()
     }
 
+    /// Returns the clipped viewport occupied by item rows, excluding the optional header.
+    pub const fn item_viewport_bounds(&self) -> Rect {
+        self.item_bounds
+    }
+
     /// Returns the host-owned leading row, when one was reserved by the style.
     pub const fn header_bounds(&self) -> Option<Rect> {
         self.header_bounds

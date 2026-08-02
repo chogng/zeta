@@ -126,7 +126,32 @@ pub struct InteractionFrame {
     modal_root: Option<ElementId>,
 }
 
+/// Retained interaction boundary paired with a stable scene prefix.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct InteractionFrameCheckpoint {
+    node_count: usize,
+    modal_root: Option<ElementId>,
+}
+
 impl InteractionFrame {
+    /// Records the current node prefix and modal scope for later restoration.
+    pub const fn checkpoint(&self) -> InteractionFrameCheckpoint {
+        InteractionFrameCheckpoint {
+            node_count: self.nodes.len(),
+            modal_root: self.modal_root,
+        }
+    }
+
+    /// Discards nodes and modal state appended after `checkpoint`.
+    pub fn restore(&mut self, checkpoint: InteractionFrameCheckpoint) {
+        assert!(
+            checkpoint.node_count <= self.nodes.len(),
+            "Interaction checkpoint must describe a prefix of its originating frame"
+        );
+        self.nodes.truncate(checkpoint.node_count);
+        self.modal_root = checkpoint.modal_root;
+    }
+
     pub fn register(&mut self, node: UiNode) {
         debug_assert!(
             self.node(node.id()).is_none(),

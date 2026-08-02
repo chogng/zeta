@@ -18,7 +18,7 @@ use session_sidebar::SessionSidebarState;
 use shell_interaction::COMPOSER;
 use shell_scene::{
     LogicalViewport, ShellPresentation, ShellPresentationModel, build_shell_presentation,
-    terminal_grid_size_for_viewport,
+    rebuild_shell_overlays, terminal_grid_size_for_viewport,
 };
 use shell_style::{SHELL_PALETTE, ShellPalette, code_editor_style};
 use terminal_pointer::TerminalPointer;
@@ -257,11 +257,10 @@ impl NativeApp {
     }
 
     fn redraw(&mut self, event_loop: &ActiveEventLoop) {
-        if matches!(
-            self.frame_scheduler.take(),
-            Some(FrameInvalidation::Rebuild)
-        ) {
-            self.rebuild_presentation();
+        match self.frame_scheduler.take() {
+            Some(FrameInvalidation::Fragment) => self.rebuild_overlay_presentation(),
+            Some(FrameInvalidation::Rebuild) => self.rebuild_presentation(),
+            Some(FrameInvalidation::Render) | None => {}
         }
         let Some(presentation) = self.presentation.as_ref() else {
             return;
@@ -332,74 +331,18 @@ impl NativeApp {
             .as_ref()
             .map(NativeWindow::window_control_insets)
             .unwrap_or(WindowControlInsets::NONE);
-        let mut presentation = build_shell_presentation(
-            viewport,
-            ShellPresentationModel {
-                palette: self.palette,
-                terminal: self.terminal.as_ref().map(TerminalSession::core),
-                terminal_scroll_offset: self.terminal_scroll.offset(),
-                terminal_scrollbar_presentation: self.terminal_scroll.scrollbar_presentation(),
-                terminal_selection: self.terminal_selection.range(),
-                terminal_surface: self.workspace_surface.is_terminal(),
-                thread_projection: &self.thread_projection,
-                thread_timeline_scroll_offset: self.thread_timeline_scroll.offset(),
-                workspace_context: &self.workspace_context,
-                composer: self.composer.editor(),
-                composer_interaction: &self.composer_interaction,
-                composer_interaction_pane: &self.composer_interaction_pane,
-                composer_mode: self.composer.mode(),
-                session_search: &self.session_search,
-                caret_visibility: self.caret_blink.visibility(),
-                dispatch: &self.ui_dispatch,
-                session_sidebar: self.session_sidebar,
-                agent_sidebar: self.agent_sidebar,
-                agent_sidebar_workspace: &self.agent_sidebar_workspace,
-                session_context_menu: self.session_context_menu,
-                git_branch_context_menu: &self.git_branch_context_menu,
-                workspace_path_picker: &self.workspace_path_picker,
-                keybindings: &self.keybindings,
-                keyboard_shortcuts: &self.keyboard_shortcuts,
-                keybinding_diagnostics: self.keybindings_resource.diagnostics(),
-                window_control_insets,
-            },
-            &mut self.text_layout,
-        );
+        let mut presentation =
+            with_shell_presentation_model(self, window_control_insets, |model, text_layout| {
+                build_shell_presentation(viewport, model, text_layout)
+            });
         let focus_outcome = self
             .ui_dispatch
             .reconcile_focus(&presentation.interaction_frame, COMPOSER);
         if focus_outcome.invalidation == DispatchInvalidation::Paint {
-            presentation = build_shell_presentation(
-                viewport,
-                ShellPresentationModel {
-                    palette: self.palette,
-                    terminal: self.terminal.as_ref().map(TerminalSession::core),
-                    terminal_scroll_offset: self.terminal_scroll.offset(),
-                    terminal_scrollbar_presentation: self.terminal_scroll.scrollbar_presentation(),
-                    terminal_selection: self.terminal_selection.range(),
-                    terminal_surface: self.workspace_surface.is_terminal(),
-                    thread_projection: &self.thread_projection,
-                    thread_timeline_scroll_offset: self.thread_timeline_scroll.offset(),
-                    workspace_context: &self.workspace_context,
-                    composer: self.composer.editor(),
-                    composer_interaction: &self.composer_interaction,
-                    composer_interaction_pane: &self.composer_interaction_pane,
-                    composer_mode: self.composer.mode(),
-                    session_search: &self.session_search,
-                    caret_visibility: self.caret_blink.visibility(),
-                    dispatch: &self.ui_dispatch,
-                    session_sidebar: self.session_sidebar,
-                    agent_sidebar: self.agent_sidebar,
-                    agent_sidebar_workspace: &self.agent_sidebar_workspace,
-                    session_context_menu: self.session_context_menu,
-                    git_branch_context_menu: &self.git_branch_context_menu,
-                    workspace_path_picker: &self.workspace_path_picker,
-                    keybindings: &self.keybindings,
-                    keyboard_shortcuts: &self.keyboard_shortcuts,
-                    keybinding_diagnostics: self.keybindings_resource.diagnostics(),
-                    window_control_insets,
-                },
-                &mut self.text_layout,
-            );
+            presentation =
+                with_shell_presentation_model(self, window_control_insets, |model, text_layout| {
+                    build_shell_presentation(viewport, model, text_layout)
+                });
         }
         if let Some(point) = self.cursor_position
             && self
@@ -408,38 +351,47 @@ impl NativeApp {
                 .invalidation
                 == DispatchInvalidation::Paint
         {
-            presentation = build_shell_presentation(
-                viewport,
-                ShellPresentationModel {
-                    palette: self.palette,
-                    terminal: self.terminal.as_ref().map(TerminalSession::core),
-                    terminal_scroll_offset: self.terminal_scroll.offset(),
-                    terminal_scrollbar_presentation: self.terminal_scroll.scrollbar_presentation(),
-                    terminal_selection: self.terminal_selection.range(),
-                    terminal_surface: self.workspace_surface.is_terminal(),
-                    thread_projection: &self.thread_projection,
-                    thread_timeline_scroll_offset: self.thread_timeline_scroll.offset(),
-                    workspace_context: &self.workspace_context,
-                    composer: self.composer.editor(),
-                    composer_interaction: &self.composer_interaction,
-                    composer_interaction_pane: &self.composer_interaction_pane,
-                    composer_mode: self.composer.mode(),
-                    session_search: &self.session_search,
-                    caret_visibility: self.caret_blink.visibility(),
-                    dispatch: &self.ui_dispatch,
-                    session_sidebar: self.session_sidebar,
-                    agent_sidebar: self.agent_sidebar,
-                    agent_sidebar_workspace: &self.agent_sidebar_workspace,
-                    session_context_menu: self.session_context_menu,
-                    git_branch_context_menu: &self.git_branch_context_menu,
-                    workspace_path_picker: &self.workspace_path_picker,
-                    keybindings: &self.keybindings,
-                    keyboard_shortcuts: &self.keyboard_shortcuts,
-                    keybinding_diagnostics: self.keybindings_resource.diagnostics(),
-                    window_control_insets,
-                },
-                &mut self.text_layout,
-            );
+            presentation =
+                with_shell_presentation_model(self, window_control_insets, |model, text_layout| {
+                    build_shell_presentation(viewport, model, text_layout)
+                });
+        }
+        self.layout_inspector
+            .compose(&mut presentation.scene, root_layout, self.cursor_position);
+        self.presentation = Some(presentation);
+        self.frame_scheduler.clear();
+        self.update_ime_cursor_area();
+    }
+
+    fn rebuild_overlay_presentation(&mut self) {
+        let window_viewport = self.window_viewport();
+        let viewport = self.logical_viewport();
+        let root_layout = RootLayout::for_viewports(
+            window_viewport,
+            viewport,
+            if self.layout_inspector.is_enabled() {
+                InspectorPane::visible(layout_inspector::PANEL_WIDTH)
+            } else {
+                InspectorPane::Hidden
+            },
+        );
+        let window_control_insets = self
+            .window
+            .as_ref()
+            .map(NativeWindow::window_control_insets)
+            .unwrap_or(WindowControlInsets::NONE);
+        let Some(mut presentation) = self.presentation.take() else {
+            self.rebuild_presentation();
+            return;
+        };
+        let rebuilt =
+            with_shell_presentation_model(self, window_control_insets, |model, text_layout| {
+                rebuild_shell_overlays(&mut presentation, viewport, model, text_layout)
+            });
+        if !rebuilt {
+            self.presentation = Some(presentation);
+            self.rebuild_presentation();
+            return;
         }
         self.layout_inspector
             .compose(&mut presentation.scene, root_layout, self.cursor_position);
@@ -450,6 +402,13 @@ impl NativeApp {
 
     fn rebuild_presentation_on_next_redraw(&mut self) {
         if self.frame_scheduler.request(FrameInvalidation::Rebuild) == FrameSchedule::RequestFrame {
+            self.request_redraw();
+        }
+    }
+
+    fn rebuild_overlay_on_next_redraw(&mut self) {
+        if self.frame_scheduler.request(FrameInvalidation::Fragment) == FrameSchedule::RequestFrame
+        {
             self.request_redraw();
         }
     }
@@ -740,6 +699,71 @@ impl NativeApp {
         }
         outcome.handled
     }
+}
+
+fn with_shell_presentation_model<R>(
+    app: &mut NativeApp,
+    window_control_insets: WindowControlInsets,
+    operation: impl FnOnce(ShellPresentationModel<'_>, &mut TextInputLayoutEngine) -> R,
+) -> R {
+    let NativeApp {
+        palette,
+        terminal,
+        terminal_scroll,
+        terminal_selection,
+        workspace_surface,
+        thread_projection,
+        thread_timeline_scroll,
+        workspace_context,
+        composer,
+        composer_interaction,
+        composer_interaction_pane,
+        session_search,
+        caret_blink,
+        ui_dispatch,
+        session_sidebar,
+        agent_sidebar,
+        agent_sidebar_workspace,
+        session_context_menu,
+        git_branch_context_menu,
+        workspace_path_picker,
+        keybindings,
+        keyboard_shortcuts,
+        keybindings_resource,
+        text_layout,
+        ..
+    } = app;
+    operation(
+        ShellPresentationModel {
+            palette: *palette,
+            terminal: terminal.as_ref().map(TerminalSession::core),
+            terminal_scroll_offset: terminal_scroll.offset(),
+            terminal_scrollbar_presentation: terminal_scroll.scrollbar_presentation(),
+            terminal_selection: terminal_selection.range(),
+            terminal_surface: workspace_surface.is_terminal(),
+            thread_projection,
+            thread_timeline_scroll_offset: thread_timeline_scroll.offset(),
+            workspace_context,
+            composer: composer.editor(),
+            composer_interaction,
+            composer_interaction_pane,
+            composer_mode: composer.mode(),
+            session_search,
+            caret_visibility: caret_blink.visibility(),
+            dispatch: ui_dispatch,
+            session_sidebar: *session_sidebar,
+            agent_sidebar: *agent_sidebar,
+            agent_sidebar_workspace,
+            session_context_menu: *session_context_menu,
+            git_branch_context_menu,
+            workspace_path_picker,
+            keybindings,
+            keyboard_shortcuts,
+            keybinding_diagnostics: keybindings_resource.diagnostics(),
+            window_control_insets,
+        },
+        text_layout,
+    )
 }
 
 impl ApplicationHandler<NativeEvent> for NativeApp {

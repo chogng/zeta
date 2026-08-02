@@ -1,4 +1,4 @@
-use super::{UiRenderError, glyphon_wrap, validate_text_block};
+use super::{UiRenderError, glyphon_wrap, same_text_buffer_layout, validate_text_block};
 use zui::{Color, Point, Size, TextBlock, TextBlockWrap, TextSpan, TextStyle};
 
 #[test]
@@ -63,4 +63,47 @@ fn renderer_preserves_the_text_blocks_explicit_wrap_contract() {
         glyphon::Wrap::WordOrGlyph
     );
     assert_eq!(glyphon_wrap(TextBlockWrap::None), glyphon::Wrap::None);
+}
+
+#[test]
+fn text_buffer_layout_ignores_position_clip_and_default_color() {
+    let first = TextBlock::new(
+        "cached",
+        Point::new(10.0, 20.0),
+        Size::new(100.0, 24.0),
+        TextStyle::new(14.0, Color::WHITE),
+    );
+    let moved = TextBlock::new(
+        "cached",
+        Point::new(90.0, 120.0),
+        Size::new(100.0, 24.0),
+        TextStyle::new(14.0, Color::rgb(20, 30, 40)),
+    );
+
+    assert!(same_text_buffer_layout(&first, &moved));
+}
+
+#[test]
+fn text_buffer_layout_invalidates_shape_affecting_changes() {
+    let original = TextBlock::new(
+        "cached",
+        Point::new(10.0, 20.0),
+        Size::new(100.0, 24.0),
+        TextStyle::new(14.0, Color::WHITE),
+    );
+    let resized = TextBlock::new(
+        "cached",
+        Point::new(10.0, 20.0),
+        Size::new(80.0, 24.0),
+        TextStyle::new(14.0, Color::WHITE),
+    );
+    let edited = TextBlock::new(
+        "changed",
+        Point::new(10.0, 20.0),
+        Size::new(100.0, 24.0),
+        TextStyle::new(14.0, Color::WHITE),
+    );
+
+    assert!(!same_text_buffer_layout(&original, &resized));
+    assert!(!same_text_buffer_layout(&original, &edited));
 }

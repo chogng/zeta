@@ -3,6 +3,7 @@ use glyphon::{
     TextAtlas, TextBounds, TextRenderer, Viewport, Wrap,
 };
 use std::ops::Range;
+use std::sync::Arc;
 use zui::renderer_support::{create_font_system, font_family, font_style, font_weight};
 
 use zui::{Color, Rect, SceneBatch, TextBlock, TextBlockWrap, TextStyle, UiScene};
@@ -54,8 +55,21 @@ struct PreparedArea {
 
 struct TextLayer {
     renderer: TextRenderer,
-    buffers: Vec<Buffer>,
+    buffers: Vec<Arc<Buffer>>,
     areas: Vec<PreparedArea>,
+}
+
+struct CachedTextBuffer {
+    block: TextBlock,
+    scale_factor_bits: u32,
+    buffer: Arc<Buffer>,
+}
+
+impl CachedTextBuffer {
+    fn matches(&self, block: &TextBlock, scale_factor: f32) -> bool {
+        self.scale_factor_bits == scale_factor.to_bits()
+            && same_text_buffer_layout(&self.block, block)
+    }
 }
 
 enum PreparedBatch {
@@ -85,6 +99,7 @@ pub struct UiRenderer {
     viewport: Viewport,
     atlas: TextAtlas,
     text_batches: Vec<TextLayer>,
+    text_buffer_cache: Vec<CachedTextBuffer>,
     prepared_batches: Vec<PreparedBatch>,
 }
 
@@ -107,6 +122,7 @@ impl UiRenderer {
             viewport,
             atlas,
             text_batches,
+            text_buffer_cache: Vec::new(),
             prepared_batches: Vec::new(),
         }
     }
@@ -132,6 +148,7 @@ impl UiRenderer {
         self.rect_renderer.prepare(device, queue, scene, target)?;
         self.icon_renderer.prepare(device, queue, scene, target)?;
         self.image_renderer.prepare(device, queue, scene, target)?;
+        self.refresh_text_buffer_cache(scene, scale_factor)?;
         self.prepared_batches.clear();
         let mut text_batch_index = 0;
         for batch in scene.batches() {
@@ -155,12 +172,9 @@ impl UiRenderer {
                     text_batch.areas.clear();
                     for index in range {
                         let block = &scene.text_blocks()[index];
-                        validate_text_block(index, block)?;
-                        text_batch.buffers.push(prepare_text_buffer(
-                            &mut self.font_system,
-                            block,
-                            scale_factor,
-                        ));
+                        text_batch
+                            .buffers
+                            .push(self.text_buffer_cache[index].buffer.clone());
                         text_batch.areas.push(prepared_area(
                             block,
                             scale_factor,
@@ -193,6 +207,43 @@ impl UiRenderer {
                 }
             }
         }
+        for unused_batch in self.text_batches.iter_mut().skip(text_batch_index) {
+            unused_batch.buffers.clear();
+            unused_batch.areas.clear();
+        }
+        Ok(())
+    }
+
+    fn refresh_text_buffer_cache(
+        &mut self,
+        scene: &UiScene,
+        scale_factor: f32,
+    ) -> Result<(), UiRenderError> {
+        for (index, block) in scene.text_blocks().iter().enumerate() {
+            validate_text_block(index, block)?;
+            if self
+                .text_buffer_cache
+                .get(index)
+                .is_some_and(|cached| cached.matches(block, scale_factor))
+            {
+                continue;
+            }
+            let cached = CachedTextBuffer {
+                block: block.clone(),
+                scale_factor_bits: scale_factor.to_bits(),
+                buffer: Arc::new(prepare_text_buffer(
+                    &mut self.font_system,
+                    block,
+                    scale_factor,
+                )),
+            };
+            if let Some(slot) = self.text_buffer_cache.get_mut(index) {
+                *slot = cached;
+            } else {
+                self.text_buffer_cache.push(cached);
+            }
+        }
+        self.text_buffer_cache.truncate(scene.text_blocks().len());
         Ok(())
     }
 
@@ -224,6 +275,22 @@ impl UiRenderer {
     pub fn trim(&mut self) {
         self.atlas.trim();
     }
+}
+
+fn same_text_buffer_layout(left: &TextBlock, right: &TextBlock) -> bool {
+    left.text() == right.text()
+        && left.spans() == right.spans()
+        && left.bounds() == right.bounds()
+        && left.wrap() == right.wrap()
+        && same_shaping_style(left.style(), right.style())
+}
+
+fn same_shaping_style(left: &TextStyle, right: &TextStyle) -> bool {
+    left.family() == right.family()
+        && left.font_size().to_bits() == right.font_size().to_bits()
+        && left.line_height().to_bits() == right.line_height().to_bits()
+        && left.weight() == right.weight()
+        && left.style() == right.style()
 }
 
 fn validate_text_block(index: usize, block: &TextBlock) -> Result<(), UiRenderError> {

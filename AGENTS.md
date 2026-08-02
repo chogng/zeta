@@ -8,6 +8,11 @@
   `尚未完成`, `协调`, or `委托` when those are more accurate.
 - Lead with the conclusion; use surrounding prose only to explain important boundaries or caveats.
 
+## Learnings
+
+- 在把新能力接入 `native` 前，先按依赖方向判断其是否属于通用框架机制。帧调度、失效等级、retained presentation、Scene fragment 生命周期和局部重建策略应优先由 `zui` 提供后端无关契约；`native` 只保留产品状态映射、平台事件适配和具体 Part/Overlay 组合，不得因接入方便复制或拥有框架运行时。
+- Rust import declarations should import one path per line instead of grouping names in braces. Keep each dependency independently editable so adding or removing an import produces a minimal diff and `apply_patch` can target it reliably.
+
 # Only for Rust Crates
 
 - Newly added traits should include doc comments that explain their role and how implementations are expected to use them.

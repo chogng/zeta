@@ -44,12 +44,14 @@ product host → zeta-ui-dispatch → zui geometry
 | `AccessibilityRole::Menu` / `MenuItem` | public | 投影菜单父子语义；不拥有打开、关闭、焦点恢复或产品 command |
 | `AccessibilityRole::Tree` / `TreeItem`、`AccessibilityExpansion` | public | 投影虚拟 Tree 的父项、可见节点、层级和展开状态；不持有 hierarchy 或 child loading |
 | `InteractionFrame::register` | public | 按 scene/paint 顺序记录节点；同一 identity 每帧只能注册一次 |
+| `InteractionFrame::checkpoint` / `restore` | public | 保留稳定节点前缀并原地替换后续 volatile interaction fragment 与 modal scope |
 | `InteractionFrame::set_modal_root` | public | 把 pointer target 与 focus order 限定在一个已注册子树；下层节点在该 frame 内保持 inert |
 | `InteractionFrame::target_at` | public | 逆序选择最上层命中节点 |
 | `InteractionFrame::ancestry` | public | 从命中节点投影到父节点 hover path；modal frame 在 modal root 截断 |
 | `InteractionFrame::focus_order` | public | 按注册顺序返回 active scope 内的 `TabStop` |
 | `InteractionFrame::accessibility_nodes` | public | 把 frame semantics 与当前 focus 合并为 immutable snapshot |
 | `UiDispatch::pointer_moved` | public | 更新 hover path，只在视觉状态改变时请求 paint |
+| `UiDispatch::hover_element` | public | 让能从 retained pointer 与新几何直接解析稳定 identity 的滚动 host 在下一帧构建前投影 hover path |
 | `UiDispatch::press_primary` / `release_primary` | public | 建立 pointer capture，并只在 release 回到原节点时产生 activation |
 | `UiDispatch::reconcile_focus` | public | frame rebuild 后保留仍有效的 focus，否则选择 preferred/首个 tab stop |
 | `UiDispatch::focus_in_order` | public | 实现 Tab/Shift+Tab 环形遍历 |

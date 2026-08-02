@@ -21,10 +21,21 @@ fn scheduler_retains_the_strongest_invalidation() {
     let mut scheduler = FrameScheduler::default();
 
     scheduler.request(FrameInvalidation::Render);
+    scheduler.request(FrameInvalidation::Fragment);
     scheduler.request(FrameInvalidation::Rebuild);
     scheduler.request(FrameInvalidation::Render);
 
     assert_eq!(scheduler.pending(), Some(FrameInvalidation::Rebuild));
+}
+
+#[test]
+fn fragment_work_subsumes_render_without_forcing_a_full_rebuild() {
+    let mut scheduler = FrameScheduler::default();
+
+    scheduler.request(FrameInvalidation::Render);
+    scheduler.request(FrameInvalidation::Fragment);
+
+    assert_eq!(scheduler.take(), Some(FrameInvalidation::Fragment));
 }
 
 #[test]
