@@ -1,9 +1,19 @@
 .zeta-editor-title-control {
+  position: relative;
   display: flex;
   min-width: 0;
   height: var(--zeta-pane-title-height);
   flex: 0 0 var(--zeta-pane-title-height);
-  border-bottom: 1px solid var(--zeta-border);
+}
+
+.zeta-editor-title-control::after {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 1px;
+  background: var(--zeta-border);
+  content: "";
 }
 
 .zeta-editor-title-actions {

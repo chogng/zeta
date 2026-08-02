@@ -129,6 +129,8 @@
           "editor.semanticToken.functionForeground",
           "editor.semanticToken.variableForeground",
           "editor.semanticToken.operatorForeground",
+          "files.emptyExplorerOpenFolderBackground",
+          "files.emptyExplorerOpenFolderHoverBackground",
           "sectionHeader.foreground",
           "workbench.background",
           "editor.background",

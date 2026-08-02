@@ -27,7 +27,7 @@ export class PaneView extends DisposableOwner {
   protected readonly headerElement: HTMLDivElement;
   protected readonly contentElement: HTMLDivElement;
   private readonly headerButton: HTMLButtonElement;
-  private readonly titleLabel: HTMLSpanElement;
+  private readonly titleElement: HTMLHeadingElement;
   private readonly focusTracker;
   private collapsed: boolean;
 
@@ -50,17 +50,17 @@ export class PaneView extends DisposableOwner {
     this.headerButton = ownerDocument.createElement("button");
     this.headerButton.className = "zeta-pane-view-header-button";
     this.headerButton.type = "button";
-    const indicator = ownerDocument.createElement("span");
-    indicator.className = "zeta-pane-view-header-chevron";
-    indicator.setAttribute("aria-hidden", "true");
-    const collapsedIcon = appendIcon(lxiconsLibrary.chevronRight, indicator);
+    const twistyContainer = ownerDocument.createElement("span");
+    twistyContainer.className = "zeta-pane-view-header-twisty-container";
+    twistyContainer.setAttribute("aria-hidden", "true");
+    const collapsedIcon = appendIcon(lxiconsLibrary.chevronRight, twistyContainer);
     collapsedIcon.classList.add("zeta-pane-view-collapsed-icon");
-    const expandedIcon = appendIcon(lxiconsLibrary.chevronDown, indicator);
+    const expandedIcon = appendIcon(lxiconsLibrary.chevronDown, twistyContainer);
     expandedIcon.classList.add("zeta-pane-view-expanded-icon");
-    this.titleLabel = ownerDocument.createElement("span");
-    this.titleLabel.className = "zeta-pane-view-header-label";
-    this.titleLabel.textContent = title;
-    this.headerButton.append(indicator, this.titleLabel);
+    this.titleElement = ownerDocument.createElement("h3");
+    this.titleElement.className = "zeta-pane-view-header-title";
+    this.titleElement.textContent = title;
+    this.headerButton.append(twistyContainer, this.titleElement);
     this.headerElement.append(this.headerButton);
 
     this.contentElement = ownerDocument.createElement("div");
@@ -79,7 +79,7 @@ export class PaneView extends DisposableOwner {
   }
 
   setTitle(title: string): void {
-    this.titleLabel.textContent = title;
+    this.titleElement.textContent = title;
   }
 
   isCollapsed(): boolean {

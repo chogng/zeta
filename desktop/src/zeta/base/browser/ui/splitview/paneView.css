@@ -11,15 +11,15 @@
   color: inherit;
   cursor: pointer;
   font: inherit;
-  padding: 0 6px;
+  padding: 0 2px;
   text-align: left;
 }
 .zeta-pane-view-header-button:hover { background: color-mix(in srgb, currentColor 8%, transparent); }
 .zeta-pane-view-header-button:focus-visible { outline: 1px solid var(--zeta-focus-border); outline-offset: -1px; }
-.zeta-pane-view-header-chevron { display: inline-flex; width: 16px; height: 16px; flex: 0 0 16px; align-items: center; justify-content: center; }
+.zeta-pane-view-header-twisty-container { display: inline-flex; width: 16px; height: 16px; flex: 0 0 16px; align-items: center; justify-content: center; margin: 0 2px; }
 .zeta-pane-view-header-button:not(.expanded) .zeta-pane-view-expanded-icon,
 .zeta-pane-view-header-button.expanded .zeta-pane-view-collapsed-icon { display: none; }
-.zeta-pane-view-header-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.zeta-pane-view-header-title { min-width: 0; margin: 0; overflow: hidden; font: inherit; text-overflow: ellipsis; white-space: nowrap; }
 .zeta-pane-view-content { min-width: 0; min-height: 0; flex: 1 1 auto; overflow: hidden; }
 .zeta-pane-view.collapsed { flex: 0 0 auto; }
 .zeta-pane-view.collapsed > .zeta-pane-view-content { display: none; }

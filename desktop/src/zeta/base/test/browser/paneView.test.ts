@@ -54,7 +54,7 @@ test("PaneView owns titled collapse semantics and its stable visual state", () =
 
   pane.setTitle("Renamed");
   assert.equal(
-    pane.element.querySelector(".zeta-pane-view-header-label")?.textContent,
+    pane.element.querySelector(".zeta-pane-view-header-title")?.textContent,
     "Renamed",
   );
 

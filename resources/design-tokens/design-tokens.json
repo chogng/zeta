@@ -1791,6 +1791,46 @@
       }
     },
     {
+      "id": "files.emptyExplorerOpenFolderBackground",
+      "kind": "color",
+      "cssVariable": "--zeta-files-empty-explorer-open-folder-background",
+      "owner": "files.presentation",
+      "description": "Background for the Empty Explorer Open Folder action.",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#328eb9",
+        "light": "#328eb9",
+        "high-contrast-dark": "#328eb9",
+        "high-contrast-light": "#328eb9"
+      },
+      "values": {
+        "dark": "#328eb9",
+        "light": "#328eb9",
+        "high-contrast-dark": "#328eb9",
+        "high-contrast-light": "#328eb9"
+      }
+    },
+    {
+      "id": "files.emptyExplorerOpenFolderHoverBackground",
+      "kind": "color",
+      "cssVariable": "--zeta-files-empty-explorer-open-folder-hover-background",
+      "owner": "files.presentation",
+      "description": "Hovered background for the Empty Explorer Open Folder action.",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "files.emptyExplorerOpenFolderBackground",
+        "light": "files.emptyExplorerOpenFolderBackground",
+        "high-contrast-dark": "files.emptyExplorerOpenFolderBackground",
+        "high-contrast-light": "files.emptyExplorerOpenFolderBackground"
+      },
+      "values": {
+        "dark": "#328eb9",
+        "light": "#328eb9",
+        "high-contrast-dark": "#328eb9",
+        "high-contrast-light": "#328eb9"
+      }
+    },
+    {
       "id": "sectionHeader.foreground",
       "kind": "color",
       "cssVariable": "--zeta-section-header-foreground",
