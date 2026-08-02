@@ -47,8 +47,12 @@ zeta-rs/
 ├── syntax/               # bounded incremental tree-sitter analysis；不拥有文件、索引或 presentation
 ├── theme/                # shared manifest/user-theme resolver 与 device-local bounded loader
 ├── editor/               # Native CodeEditor/DiffEditor/MultiDiffEditor presentation；不拥有文件或产品宿主
+├── text-file/            # UTF-8 文件保存基线、磁盘版本与外部变化冲突；不拥有 editor 或 I/O
 ├── markdown/             # bounded CommonMark/GFM parsing、layout 与 Native presentation
 ├── lsp/                  # LSP stdio lifecycle、request pairing、document sync 与 server events
+├── language-server-catalog/ # 内置 server、可信 executable resolution 与 availability；不启动进程
+├── language-server-distribution/ # verified package staging 与 side-by-side install storage
+├── language-service/     # 产品级 LSP 启停、文档路由、请求 facade 与 stale-result gate
 ├── install-context/      # runtime install method, package layout and resource candidates
 ├── apply-patch/          # concrete validated write executor
 ├── session-store/        # Session persistence port + envelope
@@ -120,11 +124,20 @@ config、Session/Thread store。Native 消费完整相关 palette，TUI 只消�
 失败语义和 conformance contract 见 [`theme/README.md`](../zeta-rs/theme/README.md)。
 
 `zeta-editor` 当前拥有 Native 使用的多行编辑、caret/selection、undo/redo、IME、language-aware
-syntax lifecycle/projection、代码视口绘制、retained `DiffEditorDocument`、复用两个 CodeEditor pane 的 side-by-side DiffEditor，以及纵向组合
+syntax lifecycle/projection、普通文档结构折叠、viewport soft wrap 与 source/visual row 映射、代码视口绘制、retained `DiffEditorDocument`、复用两个 CodeEditor pane 的 side-by-side DiffEditor，以及纵向组合
 多个文件 section 的 MultiDiffEditor；它依赖
 `zeta-ui`、`zeta-diff` 和 `zeta-syntax`，但不依赖 `zeta-native`，也不拥有文件 Tab、平台事件、EditorHost 或
 TUI presentation。当前 API、接入义务和限制见
 [`editor/README.md`](../zeta-rs/editor/README.md)。
+
+`zeta-text-file` 当前拥有与编辑器实现无关的 UTF-8 文件生命周期：保存文本基线、磁盘版本、
+只读状态、dirty/reload/conflict 分类、乐观保存 payload 与待处理外部 snapshot。它不读取或写入
+文件、不拥有 mutable editor text、Tab、关闭确认或 presentation。Native 把 active
+`CodeEditorDocument` 的当前文本交给该领域模型，并通过 App Server 的独立文件能力执行 I/O；
+Native 拥有关闭确认和 reload/conflict 操作条，而显式覆盖请求仍使用待处理外部 snapshot 的版本
+执行乐观 preflight，磁盘再次变化时不会无条件写入；
+当前 API、失败语义和接入义务见
+[`text-file/README.md`](../zeta-rs/text-file/README.md)。
 
 `zeta-markdown` 当前拥有有资源上限的 CommonMark/GFM parsing、只读文档 snapshot、富文本与
 block layout 和 Native presentation，并消费 `zeta-ui::ScrollState`；它依赖 `zeta-ui`，但不依赖
@@ -135,9 +148,37 @@ block layout 和 Native presentation，并消费 `zeta-ui::ScrollState`；它依
 pairing、deadline cancellation、文档同步版本、push diagnostics 与规范关闭；宿主路由层另外
 把一个 language ID 绑定到一个 initialized client，保存 editor revision / server incarnation /
 document version，并在显式 replacement 时重放当前全文。它不依赖 `zeta-editor` 或
-`zeta-native`，也不拥有 server discovery、安装、workspace 配置、crash detection、restart
-backoff 或 UI projection。跨层所有权与当前阶段见 [`lsp.md`](lsp.md)，当前 API 和修改路径见
+`zeta-native`，也不拥有 server discovery、安装、workspace 配置、restart policy 或 UI projection。
+它会上报规范关闭之外的 transport-close 事实；`zeta-language-service` 用 generation/server epoch
+隔离旧实例，拥有断连 route retirement、有限指数退避、crash-loop gate 和 authoritative snapshot
+重放。跨层所有权与当前阶段见 [`lsp.md`](lsp.md)，当前 API 和修改路径见
 [`lsp/README.md`](../zeta-rs/lsp/README.md)。
+
+`zeta-language-service` 把 fresh diagnostics 转换为 product-neutral UTF-8 document ranges；Native
+adapter 只负责转换到 `CodeEditorDiagnostic` 并按精确 editor revision 选择缓存，CodeEditor 自己
+完成跨行、soft-wrap 波浪线与命中，Native 在命中后绘制 hover detail。任何 LSP 类型进入 editor
+crate，或 Native 重新计算波浪线 geometry，都表示该边界发生漂移。
+
+`zeta-language-server-catalog` 当前拥有内置 Rust、JSON/JSONC、Shell server identity、
+Automatic/Enabled/Disabled preference、execution policy gate、冻结 PATH candidate 校验、canonical
+executable 和 availability；App Server Config authority 分别持久化 mode/path，Native Settings UI 为三个
+server 保留独立 draft，并只提交 revision-safe typed command，
+再把权威 snapshot 映射进 catalog，并将 definition 交给 language-service。它不启动进程、不决定 workspace trust，也不
+读取编辑器文档。crate contract 见
+[`language-server-catalog/README.md`](../zeta-rs/language-server-catalog/README.md)。
+
+`zeta-language-server-distribution` 拥有 application-managed package 的 traversal validation、
+provider-supplied SHA-256 verification、private staging、原子 publish、version receipt 与 side-by-side
+update storage。它不查询网络、不选择 release channel、不操作全局包管理器，也不激活版本；可信 release
+provider 与 Config/Native 激活 UI 是独立产品责任。
+
+`zeta-language-service` 当前位于产品宿主与 `zeta-lsp` 之间，拥有显式 enablement、resolved
+definition 消费、非阻塞文档/request API、editor revision / LSP version freshness、位置编码转换、
+server generation 和 supervisor thread 生命周期。Native 已把文件 open/change/save/close、workspace
+replacement、hover/completion/definition 和事件循环接到该层；PATH 中存在有效内置 server 时启用
+对应 route；config generation 变化时 Native 重建服务并重放全部打开文档。它不读取文件、不依赖
+`zeta-editor`、不发现 executable，也不绘制 UI。crate contract 见
+[`language-service/README.md`](../zeta-rs/language-service/README.md)。
 
 `zeta-ui::ScrollState`、`ScrollMetrics`、`ScrollView` 与 `ScrollbarController` 提供
 domain-agnostic logical-pixel offset、clamp、viewport clip、内容坐标、同源 scrollbar
