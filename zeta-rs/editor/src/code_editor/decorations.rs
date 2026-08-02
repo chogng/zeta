@@ -9,17 +9,19 @@ use super::{
 impl CodeEditor<'_> {
     pub fn caret_bounds(&self) -> Option<Rect> {
         let caret = self.rows.caret()?;
+        let visual_row = self.caret_visual_row()?;
         let visible = self.visible_row_range();
-        if !visible.contains(&caret.row_index) {
+        if !visible.contains(&visual_row) {
             return None;
         }
-        let row = self.rows.row(caret.row_index)?;
+        let line = self.visual_projection.line(visual_row)?;
+        let row = self.rows.row(line.row_index)?;
         let text = row.text?;
         let layout = self.layout();
         let column = display_columns_until(text, caret.byte_offset.min(text.len()));
         let mut x = layout.content.origin.x
             + CONTENT_HORIZONTAL_PADDING
-            + (column as isize - self.viewport.horizontal_column as isize) as f32 * CELL_WIDTH;
+            + (column as isize - self.horizontal_origin_column(line) as isize) as f32 * CELL_WIDTH;
         if let Some(composition) = self.rows.composition()
             && let zeta_ui::TextInputCompositionCursor::Visible(cursor) = composition.cursor
         {
@@ -27,7 +29,7 @@ impl CodeEditor<'_> {
         }
         Some(Rect::from_xywh(
             x,
-            layout.body.origin.y + (caret.row_index - visible.start) as f32 * ROW_HEIGHT,
+            layout.body.origin.y + (visual_row - visible.start) as f32 * ROW_HEIGHT,
             1.5,
             ROW_HEIGHT,
         ))
@@ -39,6 +41,7 @@ impl CodeEditor<'_> {
         bounds: Rect,
         row_index: usize,
         text: &str,
+        origin_column: usize,
     ) {
         let Some(selection) = self.rows.selection() else {
             return;
@@ -71,8 +74,7 @@ impl CodeEditor<'_> {
             Rect::from_xywh(
                 bounds.origin.x
                     + CONTENT_HORIZONTAL_PADDING
-                    + (start_column as isize - self.viewport.horizontal_column as isize) as f32
-                        * CELL_WIDTH,
+                    + (start_column as isize - origin_column as isize) as f32 * CELL_WIDTH,
                 bounds.origin.y,
                 width,
                 ROW_HEIGHT,
@@ -87,6 +89,7 @@ impl CodeEditor<'_> {
         bounds: Rect,
         text: &str,
         highlights: &[CodeEditorInlineHighlight],
+        origin_column: usize,
     ) {
         for highlight in highlights {
             if highlight.range.is_empty()
@@ -105,8 +108,7 @@ impl CodeEditor<'_> {
                 Rect::from_xywh(
                     bounds.origin.x
                         + CONTENT_HORIZONTAL_PADDING
-                        + (start as isize - self.viewport.horizontal_column as isize) as f32
-                            * CELL_WIDTH,
+                        + (start as isize - origin_column as isize) as f32 * CELL_WIDTH,
                     bounds.origin.y,
                     (end - start) as f32 * CELL_WIDTH,
                     ROW_HEIGHT,
@@ -122,6 +124,7 @@ impl CodeEditor<'_> {
         bounds: Rect,
         text: &str,
         tokens: &[CodeEditorSyntaxToken],
+        origin_column: usize,
     ) {
         for token in tokens {
             if token.range.is_empty()
@@ -139,8 +142,7 @@ impl CodeEditor<'_> {
                 Point::new(
                     bounds.origin.x
                         + CONTENT_HORIZONTAL_PADDING
-                        + (start as isize - self.viewport.horizontal_column as isize) as f32
-                            * CELL_WIDTH,
+                        + (start as isize - origin_column as isize) as f32 * CELL_WIDTH,
                     bounds.origin.y,
                 ),
                 Size::new(display_columns(token_text) as f32 * CELL_WIDTH, ROW_HEIGHT),
@@ -155,19 +157,19 @@ impl CodeEditor<'_> {
         scene: &mut UiScene,
         bounds: Rect,
         row_index: usize,
+        visual_row: usize,
         text: &str,
+        origin_column: usize,
     ) {
-        let Some(caret) = self
-            .rows
-            .caret()
-            .filter(|caret| caret.row_index == row_index)
-        else {
+        let Some(caret) = self.rows.caret().filter(|caret| {
+            caret.row_index == row_index && self.caret_visual_row() == Some(visual_row)
+        }) else {
             return;
         };
         let column = display_columns_until(text, caret.byte_offset.min(text.len()));
         let base_x = bounds.origin.x
             + CONTENT_HORIZONTAL_PADDING
-            + (column as isize - self.viewport.horizontal_column as isize) as f32 * CELL_WIDTH;
+            + (column as isize - origin_column as isize) as f32 * CELL_WIDTH;
         let mut caret_x = base_x;
         if let Some(composition) = self.rows.composition() {
             let width = display_columns(composition.text) as f32 * CELL_WIDTH;

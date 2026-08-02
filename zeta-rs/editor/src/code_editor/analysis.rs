@@ -4,7 +4,21 @@ use zeta_syntax::{
     DocumentRevision, SyntaxDocument, SyntaxEdit, SyntaxLanguage, SyntaxSnapshot, SyntaxTokenKind,
 };
 
-use super::{CodeEditorSyntaxToken, CodeEditorTokenRole};
+use super::{CodeEditorFoldingRange, CodeEditorSyntaxToken, CodeEditorTokenRole};
+
+pub(super) struct CodeEditorAnalysisSnapshot {
+    pub(super) syntax_tokens: Vec<Vec<CodeEditorSyntaxToken>>,
+    pub(super) folding_ranges: Vec<CodeEditorFoldingRange>,
+}
+
+impl CodeEditorAnalysisSnapshot {
+    fn plain_text(line_count: usize) -> Self {
+        Self {
+            syntax_tokens: vec![Vec::new(); line_count],
+            folding_ranges: Vec::new(),
+        }
+    }
+}
 
 /// Language mode selected by a host for one [`super::CodeEditorDocument`].
 ///
@@ -45,11 +59,11 @@ impl CodeEditorAnalysis {
         &mut self,
         text: &str,
         line_ranges: &[Range<usize>],
-    ) -> Vec<Vec<CodeEditorSyntaxToken>> {
+    ) -> CodeEditorAnalysisSnapshot {
         let Some(language) = syntax_language(self.language) else {
             self.document = None;
             self.revision = 0;
-            return vec![Vec::new(); line_ranges.len()];
+            return CodeEditorAnalysisSnapshot::plain_text(line_ranges.len());
         };
         let next_revision = self.revision.saturating_add(1).max(1);
         let snapshot = match self.document.as_mut() {
@@ -68,7 +82,7 @@ impl CodeEditorAnalysis {
             }
             _ => return self.reopen(language, text, line_ranges, next_revision),
         };
-        project_tokens(line_ranges, &snapshot)
+        project_snapshot(line_ranges, &snapshot)
     }
 
     fn reopen(
@@ -77,16 +91,16 @@ impl CodeEditorAnalysis {
         text: &str,
         line_ranges: &[Range<usize>],
         revision: u64,
-    ) -> Vec<Vec<CodeEditorSyntaxToken>> {
+    ) -> CodeEditorAnalysisSnapshot {
         let Ok(document) = SyntaxDocument::open(language, DocumentRevision::new(revision), text)
         else {
             self.document = None;
-            return vec![Vec::new(); line_ranges.len()];
+            return CodeEditorAnalysisSnapshot::plain_text(line_ranges.len());
         };
-        let tokens = project_tokens(line_ranges, &document.snapshot());
+        let snapshot = project_snapshot(line_ranges, &document.snapshot());
         self.document = Some(document);
         self.revision = revision;
-        tokens
+        snapshot
     }
 }
 
@@ -123,10 +137,10 @@ fn replacement_between(current: &str, next: &str) -> SyntaxEdit {
     )
 }
 
-fn project_tokens(
+fn project_snapshot(
     line_ranges: &[Range<usize>],
     snapshot: &SyntaxSnapshot,
-) -> Vec<Vec<CodeEditorSyntaxToken>> {
+) -> CodeEditorAnalysisSnapshot {
     let mut lines = vec![Vec::new(); line_ranges.len()];
     for token in snapshot.tokens() {
         let mut line_index =
@@ -146,7 +160,15 @@ fn project_tokens(
             line_index += 1;
         }
     }
-    lines
+    let folding_ranges = snapshot
+        .folding_ranges()
+        .iter()
+        .filter_map(|range| CodeEditorFoldingRange::new(range.range.start.row, range.range.end.row))
+        .collect();
+    CodeEditorAnalysisSnapshot {
+        syntax_tokens: lines,
+        folding_ranges,
+    }
 }
 
 fn token_role(kind: SyntaxTokenKind) -> CodeEditorTokenRole {

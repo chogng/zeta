@@ -2,7 +2,10 @@
 
 use zeta_ui::{Border, Color, Edges, FontFamily, FontWeight, PaintRect, Rect, TextStyle};
 
-use super::{CodeEditorSyntaxPalette, CodeEditorTokenRole, HEADER_HEIGHT, ROW_HEIGHT};
+use super::{
+    CodeEditorDiagnosticPalette, CodeEditorDiagnosticSeverity, CodeEditorSyntaxPalette,
+    CodeEditorTokenRole, HEADER_HEIGHT, ROW_HEIGHT,
+};
 
 /// Resolved color inputs used to construct one CodeEditor presentation style.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -16,6 +19,7 @@ pub struct CodeEditorPalette {
     pub selection: Color,
     pub caret: Color,
     pub composition_underline: Color,
+    pub diagnostics: CodeEditorDiagnosticPalette,
     pub syntax: CodeEditorSyntaxPalette,
 }
 
@@ -30,6 +34,7 @@ pub struct CodeEditorStyle {
     selection: Color,
     caret: Color,
     composition_underline: Color,
+    diagnostics: CodeEditorDiagnosticPalette,
     text_style: TextStyle,
     header_style: TextStyle,
     syntax: CodeEditorSyntaxPalette,
@@ -59,6 +64,12 @@ impl CodeEditorStyle {
             selection: Color::rgba(68, 139, 202, 72),
             caret: Color::rgb(15, 110, 96),
             composition_underline: Color::rgb(15, 110, 96),
+            diagnostics: CodeEditorDiagnosticPalette {
+                error: Color::rgb(180, 38, 38),
+                warning: Color::rgb(154, 103, 0),
+                information: Color::rgb(9, 105, 218),
+                hint: Color::rgb(126, 126, 132),
+            },
             syntax,
         })
     }
@@ -73,6 +84,7 @@ impl CodeEditorStyle {
             selection: palette.selection,
             caret: palette.caret,
             composition_underline: palette.composition_underline,
+            diagnostics: palette.diagnostics,
             text_style: TextStyle::new(13.0, palette.text)
                 .with_family(FontFamily::Monospace)
                 .with_line_height(ROW_HEIGHT),
@@ -102,6 +114,10 @@ impl CodeEditorStyle {
 
     pub(super) const fn composition_underline(&self) -> Color {
         self.composition_underline
+    }
+
+    pub(super) const fn diagnostic_color(&self, severity: CodeEditorDiagnosticSeverity) -> Color {
+        self.diagnostics.color(severity)
     }
 
     pub(super) const fn text_style(&self) -> &TextStyle {

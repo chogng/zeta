@@ -3,7 +3,10 @@ use std::ops::Range;
 use unicode_segmentation::UnicodeSegmentation;
 use zeta_ui::{TextInputCompositionCursor, TextInputCompositionEvent, TextInputSelectionMode};
 
-use super::CodeEditorDocument;
+use super::wrapping::CodeEditorVisualProjection;
+use super::{
+    CodeEditorDocument, CodeEditorLineWrapping, CodeEditorNavigation, CodeEditorRowSource,
+};
 
 /// Whether navigation collapses or extends the current CodeEditor selection.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -26,6 +29,8 @@ impl From<CodeEditorSelectionMode> for TextInputSelectionMode {
 pub enum CodeEditorCommand {
     Insert(String),
     Newline,
+    Indent,
+    Outdent,
     MoveLeft(CodeEditorSelectionMode),
     MoveRight(CodeEditorSelectionMode),
     MoveUp(CodeEditorSelectionMode),
@@ -39,15 +44,46 @@ pub enum CodeEditorCommand {
     Redo,
 }
 
+/// Exact UTF-8 document edit supplied by a trusted editor feature adapter.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CodeEditorTextEdit {
+    pub range: Range<usize>,
+    pub new_text: String,
+}
+
 impl CodeEditorDocument {
     pub fn apply(&mut self, command: CodeEditorCommand) {
+        self.apply_in_view(command, CodeEditorNavigation::LogicalLines);
+    }
+
+    /// Applies one exact edit while preserving the document's undo, analysis, and revision rules.
+    pub fn apply_text_edit(&mut self, edit: CodeEditorTextEdit) -> bool {
+        if edit.range.start > edit.range.end
+            || edit.range.end > self.text.len()
+            || !self.text.is_char_boundary(edit.range.start)
+            || !self.text.is_char_boundary(edit.range.end)
+        {
+            return false;
+        }
+        self.cancel_composition();
+        self.checkpoint();
+        self.text.replace_range(edit.range.clone(), &edit.new_text);
+        self.collapse(edit.range.start + edit.new_text.len());
+        self.after_edit();
+        true
+    }
+
+    /// Applies a command using the visual-line geometry resolved by a CodeEditor presentation.
+    pub fn apply_in_view(&mut self, command: CodeEditorCommand, navigation: CodeEditorNavigation) {
         match command {
             CodeEditorCommand::Insert(text) => self.insert(&editable_text(&text)),
-            CodeEditorCommand::Newline => self.insert("\n"),
+            CodeEditorCommand::Newline => self.insert_newline_with_indentation(),
+            CodeEditorCommand::Indent => self.indent(),
+            CodeEditorCommand::Outdent => self.outdent(),
             CodeEditorCommand::MoveLeft(mode) => self.move_left(mode),
             CodeEditorCommand::MoveRight(mode) => self.move_right(mode),
-            CodeEditorCommand::MoveUp(mode) => self.move_vertical(-1, mode),
-            CodeEditorCommand::MoveDown(mode) => self.move_vertical(1, mode),
+            CodeEditorCommand::MoveUp(mode) => self.move_vertical_in_view(-1, mode, navigation),
+            CodeEditorCommand::MoveDown(mode) => self.move_vertical_in_view(1, mode, navigation),
             CodeEditorCommand::MoveToLineStart(mode) => {
                 self.move_cursor(self.current_line_range().start, mode)
             }
@@ -133,14 +169,18 @@ impl CodeEditorDocument {
 
     fn move_vertical(&mut self, direction: isize, mode: CodeEditorSelectionMode) {
         self.cancel_composition();
-        let row = self.row_index_for_offset(self.cursor);
+        let source_row = self.row_index_for_offset(self.cursor);
+        self.reveal_source_row(source_row);
+        let Some(row) = self.visual_row_for_source(source_row) else {
+            return;
+        };
         let target = if direction.is_negative() {
             row.checked_sub(direction.unsigned_abs())
         } else {
             row.checked_add(direction as usize)
-                .filter(|index| *index < self.line_ranges.len())
+                .filter(|index| *index < self.folding.row_count())
         };
-        let Some(target) = target else {
+        let Some(target) = target.and_then(|row| self.source_row_for_visual(row)) else {
             return;
         };
         let current = self.current_line_range();
@@ -154,6 +194,70 @@ impl CodeEditorDocument {
         let relative = super::text_metrics::byte_offset_for_column(
             &self.text[target_range.clone()],
             requested_column,
+        );
+        self.preferred_column = Some(requested_column);
+        self.move_cursor_preserving_column(target_range.start + relative, mode);
+    }
+
+    fn move_vertical_in_view(
+        &mut self,
+        direction: isize,
+        mode: CodeEditorSelectionMode,
+        navigation: CodeEditorNavigation,
+    ) {
+        match navigation {
+            CodeEditorNavigation::LogicalLines => self.move_vertical(direction, mode),
+            CodeEditorNavigation::SoftWrapped { columns } => {
+                self.move_vertical_wrapped(direction, mode, columns.max(1));
+            }
+        }
+    }
+
+    fn move_vertical_wrapped(
+        &mut self,
+        direction: isize,
+        mode: CodeEditorSelectionMode,
+        columns: usize,
+    ) {
+        self.cancel_composition();
+        let source_row = self.row_index_for_offset(self.cursor);
+        self.reveal_source_row(source_row);
+        let projection =
+            CodeEditorVisualProjection::new(self, CodeEditorLineWrapping::Soft, columns);
+        let position = self.position_for_offset(self.cursor);
+        let Some(current_index) = projection.visual_line_for_position(self, position) else {
+            return;
+        };
+        let Some(current_line) = projection.line(current_index) else {
+            return;
+        };
+        let target_index = if direction.is_negative() {
+            current_index.checked_sub(direction.unsigned_abs())
+        } else {
+            current_index
+                .checked_add(direction as usize)
+                .filter(|index| *index < projection.len())
+        };
+        let Some(target_line) = target_index.and_then(|index| projection.line(index)) else {
+            return;
+        };
+        let current_range = self.line_ranges[source_row].clone();
+        let current_column = super::text_metrics::display_columns_until(
+            &self.text[current_range.clone()],
+            self.cursor.saturating_sub(current_range.start),
+        );
+        let requested_column = self
+            .preferred_column
+            .unwrap_or_else(|| current_column.saturating_sub(current_line.start_column));
+        let target_source_row = self.source_row(target_line.row_index).unwrap_or(source_row);
+        let target_range = self.line_ranges[target_source_row].clone();
+        let target_column = target_line
+            .start_column
+            .saturating_add(requested_column)
+            .min(target_line.end_column);
+        let relative = super::text_metrics::byte_offset_for_column(
+            &self.text[target_range.clone()],
+            target_column,
         );
         self.preferred_column = Some(requested_column);
         self.move_cursor_preserving_column(target_range.start + relative, mode);
@@ -200,7 +304,7 @@ impl CodeEditorDocument {
         true
     }
 
-    fn checkpoint(&mut self) {
+    pub(super) fn checkpoint(&mut self) {
         if self.undo.len() == super::document::HISTORY_LIMIT {
             self.undo.remove(0);
         }
@@ -224,10 +328,11 @@ impl CodeEditorDocument {
         self.restore(snapshot);
     }
 
-    fn after_edit(&mut self) {
+    pub(super) fn after_edit(&mut self) {
         self.preferred_column = None;
         self.reindex_lines();
         self.refresh_syntax();
+        self.advance_revision();
     }
 
     fn move_cursor(&mut self, cursor: usize, mode: CodeEditorSelectionMode) {
@@ -237,12 +342,13 @@ impl CodeEditorDocument {
 
     fn move_cursor_preserving_column(&mut self, cursor: usize, mode: CodeEditorSelectionMode) {
         self.cursor = clamp_boundary(&self.text, cursor);
+        self.reveal_source_row(self.row_index_for_offset(self.cursor));
         if mode == CodeEditorSelectionMode::Move {
             self.anchor = self.cursor;
         }
     }
 
-    fn collapse(&mut self, cursor: usize) {
+    pub(super) fn collapse(&mut self, cursor: usize) {
         self.anchor = cursor;
         self.cursor = cursor;
         self.preferred_column = None;
@@ -289,7 +395,7 @@ fn clamp_boundary(text: &str, requested: usize) -> usize {
     index
 }
 
-fn editable_text(text: &str) -> String {
+pub(super) fn editable_text(text: &str) -> String {
     text.replace("\r\n", "\n")
         .chars()
         .filter(|character| matches!(character, '\n' | '\t') || !character.is_control())

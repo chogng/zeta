@@ -5,12 +5,30 @@ use std::{fmt, ops::Range};
 use zeta_ui::TextInputCompositionCursor;
 
 use super::analysis::CodeEditorAnalysis;
+use super::folding::CodeEditorFoldingProjection;
 use super::{
-    CodeEditorComposition, CodeEditorLanguage, CodeEditorPosition, CodeEditorRow,
+    CodeEditorComposition, CodeEditorFoldControl, CodeEditorFoldState, CodeEditorFoldingRange,
+    CodeEditorIndentation, CodeEditorLanguage, CodeEditorPosition, CodeEditorRow,
     CodeEditorRowSource, CodeEditorSelection, CodeEditorSyntaxToken,
 };
 
 pub(super) const HISTORY_LIMIT: usize = 100;
+
+/// Monotonic revision of committed CodeEditor text.
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub struct CodeEditorRevision(u64);
+
+impl CodeEditorRevision {
+    pub const INITIAL: Self = Self(1);
+
+    pub const fn value(self) -> u64 {
+        self.0
+    }
+
+    fn next(self) -> Self {
+        Self(self.0.saturating_add(1))
+    }
+}
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(super) struct Composition {
@@ -36,7 +54,10 @@ pub struct CodeEditorDocument {
     pub(super) undo: Vec<DocumentSnapshot>,
     pub(super) redo: Vec<DocumentSnapshot>,
     pub(super) syntax_tokens: Vec<Vec<CodeEditorSyntaxToken>>,
+    pub(super) folding: CodeEditorFoldingProjection,
     pub(super) analysis: CodeEditorAnalysis,
+    pub(super) indentation: CodeEditorIndentation,
+    pub(super) revision: CodeEditorRevision,
 }
 
 impl Clone for CodeEditorDocument {
@@ -48,6 +69,9 @@ impl Clone for CodeEditorDocument {
         clone.composition = self.composition.clone();
         clone.undo = self.undo.clone();
         clone.redo = self.redo.clone();
+        clone.folding = self.folding.clone();
+        clone.indentation = self.indentation.clone();
+        clone.revision = self.revision;
         clone
     }
 }
@@ -65,7 +89,10 @@ impl fmt::Debug for CodeEditorDocument {
             .field("undo", &self.undo)
             .field("redo", &self.redo)
             .field("syntax_tokens", &self.syntax_tokens)
+            .field("folding", &self.folding)
             .field("language", &self.language())
+            .field("indentation", &self.indentation)
+            .field("revision", &self.revision)
             .finish()
     }
 }
@@ -81,7 +108,10 @@ impl PartialEq for CodeEditorDocument {
             && self.undo == other.undo
             && self.redo == other.redo
             && self.syntax_tokens == other.syntax_tokens
+            && self.folding == other.folding
             && self.language() == other.language()
+            && self.indentation == other.indentation
+            && self.revision == other.revision
     }
 }
 
@@ -109,7 +139,10 @@ impl CodeEditorDocument {
             undo: Vec::new(),
             redo: Vec::new(),
             syntax_tokens: Vec::new(),
+            folding: CodeEditorFoldingProjection::default(),
             analysis: CodeEditorAnalysis::default(),
+            indentation: CodeEditorIndentation::default(),
+            revision: CodeEditorRevision::INITIAL,
         };
         document.analysis.set_language(language);
         document.reindex_lines();
@@ -125,8 +158,10 @@ impl CodeEditorDocument {
         self.composition = None;
         self.undo.clear();
         self.redo.clear();
+        self.folding.clear_state(0);
         self.reindex_lines();
         self.refresh_syntax();
+        self.advance_revision();
     }
 
     pub fn text(&self) -> &str {
@@ -139,6 +174,10 @@ impl CodeEditorDocument {
 
     pub fn cursor(&self) -> usize {
         self.cursor
+    }
+
+    pub const fn revision(&self) -> CodeEditorRevision {
+        self.revision
     }
 
     pub fn selected_text(&self) -> Option<&str> {
@@ -169,6 +208,66 @@ impl CodeEditorDocument {
     pub fn set_language(&mut self, language: CodeEditorLanguage) {
         self.analysis.set_language(language);
         self.refresh_syntax();
+    }
+
+    /// Returns the editor-owned syntax folding candidates for the current text snapshot.
+    pub fn folding_ranges(&self) -> &[CodeEditorFoldingRange] {
+        self.folding.ranges()
+    }
+
+    /// Returns the current state for a fold starting at `source_row`.
+    pub fn fold_state(&self, source_row: usize) -> Option<CodeEditorFoldState> {
+        self.folding.state_at(source_row)
+    }
+
+    /// Toggles the fold starting at `source_row` and returns its resulting state.
+    pub fn toggle_fold(&mut self, source_row: usize) -> Option<CodeEditorFoldState> {
+        let state = self.fold_state(source_row)?;
+        let next = match state {
+            CodeEditorFoldState::Expanded => CodeEditorFoldState::Collapsed,
+            CodeEditorFoldState::Collapsed => CodeEditorFoldState::Expanded,
+        };
+        self.set_fold_state(source_row, next);
+        Some(next)
+    }
+
+    /// Toggles a control returned by [`super::CodeEditor::fold_control_at`].
+    ///
+    /// A stale control is ignored when its range no longer matches the current syntax snapshot.
+    pub fn toggle_fold_control(
+        &mut self,
+        control: CodeEditorFoldControl,
+    ) -> Option<CodeEditorFoldState> {
+        let range = control.range();
+        if self.folding.range_starting_at(range.start_row()) != Some(range) {
+            return None;
+        }
+        self.toggle_fold(range.start_row())
+    }
+
+    /// Applies an explicit fold state so host call sites do not encode state as a boolean.
+    pub fn set_fold_state(&mut self, source_row: usize, state: CodeEditorFoldState) {
+        match state {
+            CodeEditorFoldState::Expanded => {
+                self.folding.expand(source_row, self.line_ranges.len());
+            }
+            CodeEditorFoldState::Collapsed => {
+                let Some(range) = self.folding.range_starting_at(source_row) else {
+                    return;
+                };
+                let folded_offset = self
+                    .line_ranges
+                    .get(source_row)
+                    .map_or(self.text.len(), |line| line.end);
+                if range.hides(self.row_index_for_offset(self.anchor)) {
+                    self.anchor = folded_offset;
+                }
+                if range.hides(self.row_index_for_offset(self.cursor)) {
+                    self.cursor = folded_offset;
+                }
+                self.folding.collapse(source_row, self.line_ranges.len());
+            }
+        }
     }
 
     pub(super) fn reindex_lines(&mut self) {
@@ -224,6 +323,7 @@ impl CodeEditorDocument {
         self.composition = None;
         self.reindex_lines();
         self.refresh_syntax();
+        self.advance_revision();
     }
 
     pub(super) fn current_line_range(&self) -> Range<usize> {
@@ -240,7 +340,7 @@ impl CodeEditorDocument {
             .unwrap_or_else(|| self.line_ranges.len().saturating_sub(1))
     }
 
-    fn position_for_offset(&self, offset: usize) -> CodeEditorPosition {
+    pub(super) fn position_for_offset(&self, offset: usize) -> CodeEditorPosition {
         let row_index = self.row_index_for_offset(offset);
         let start = self
             .line_ranges
@@ -264,11 +364,40 @@ impl CodeEditorDocument {
         }
         offset
     }
+
+    pub(super) fn source_row_for_visual(&self, visual_row: usize) -> Option<usize> {
+        self.folding.source_row(visual_row)
+    }
+
+    pub(super) fn visual_row_for_source(&self, source_row: usize) -> Option<usize> {
+        self.folding.visual_row(source_row)
+    }
+
+    pub(super) fn reveal_source_row(&mut self, source_row: usize) {
+        let hidden_by = self
+            .folding
+            .ranges()
+            .iter()
+            .copied()
+            .filter(|range| {
+                range.hides(source_row)
+                    && self.fold_state(range.start_row()) == Some(CodeEditorFoldState::Collapsed)
+            })
+            .map(CodeEditorFoldingRange::start_row)
+            .collect::<Vec<_>>();
+        for start_row in hidden_by {
+            self.folding.expand(start_row, self.line_ranges.len());
+        }
+    }
+
+    pub(super) fn advance_revision(&mut self) {
+        self.revision = self.revision.next();
+    }
 }
 
 impl CodeEditorRowSource for CodeEditorDocument {
     fn row_count(&self) -> usize {
-        self.line_ranges.len()
+        self.folding.row_count()
     }
 
     fn largest_line_number(&self) -> usize {
@@ -276,9 +405,36 @@ impl CodeEditorRowSource for CodeEditorDocument {
     }
 
     fn row(&self, index: usize) -> Option<CodeEditorRow<'_>> {
-        let range = self.line_ranges.get(index)?.clone();
-        let syntax = self.syntax_tokens.get(index).cloned().unwrap_or_default();
-        Some(CodeEditorRow::new(index + 1, &self.text[range]).with_syntax_tokens(syntax))
+        let source_row = self.folding.source_row(index)?;
+        let range = self.line_ranges.get(source_row)?.clone();
+        let syntax = self
+            .syntax_tokens
+            .get(source_row)
+            .cloned()
+            .unwrap_or_default();
+        Some(CodeEditorRow::new(source_row + 1, &self.text[range]).with_syntax_tokens(syntax))
+    }
+
+    fn source_byte_range(&self, source_row: usize) -> Option<Range<usize>> {
+        self.line_ranges.get(source_row).cloned()
+    }
+
+    fn source_row(&self, visual_row: usize) -> Option<usize> {
+        self.folding.source_row(visual_row)
+    }
+
+    fn visual_row(&self, source_row: usize) -> Option<usize> {
+        self.folding.visual_row(source_row)
+    }
+
+    fn folding_range(
+        &self,
+        source_row: usize,
+    ) -> Option<(CodeEditorFoldingRange, CodeEditorFoldState)> {
+        Some((
+            self.folding.range_starting_at(source_row)?,
+            self.folding.state_at(source_row)?,
+        ))
     }
 
     fn caret(&self) -> Option<CodeEditorPosition> {
@@ -305,7 +461,10 @@ impl CodeEditorRowSource for CodeEditorDocument {
 
 impl CodeEditorDocument {
     pub(super) fn refresh_syntax(&mut self) {
-        self.syntax_tokens = self.analysis.synchronize(&self.text, &self.line_ranges);
+        let snapshot = self.analysis.synchronize(&self.text, &self.line_ranges);
+        self.syntax_tokens = snapshot.syntax_tokens;
+        self.folding
+            .synchronize(snapshot.folding_ranges, self.line_ranges.len());
     }
 
     pub(crate) fn syntax_tokens_for_row(&self, row_index: usize) -> &[CodeEditorSyntaxToken] {

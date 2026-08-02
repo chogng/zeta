@@ -1,11 +1,30 @@
 use super::text_metrics::{display_columns_until, visit_display_cell_runs};
 use super::{
-    CodeEditor, CodeEditorCommand, CodeEditorDocument, CodeEditorHeader, CodeEditorInlineHighlight,
-    CodeEditorLanguage, CodeEditorPresentation, CodeEditorRow, CodeEditorRowSource,
-    CodeEditorSelectionMode, CodeEditorStyle, CodeEditorViewport,
+    CodeEditor, CodeEditorCommand, CodeEditorDocument, CodeEditorFoldState, CodeEditorHeader,
+    CodeEditorInlineHighlight, CodeEditorLanguage, CodeEditorLineWrapping, CodeEditorNavigation,
+    CodeEditorPresentation, CodeEditorRow, CodeEditorRowSource, CodeEditorSelectionMode,
+    CodeEditorStyle, CodeEditorTextEdit, CodeEditorViewport,
 };
 use zeta_ui::{CaretVisibility, Color, Component, Point, Rect, TextBlockWrap, UiScene};
 use zeta_ui::{TextInputCompositionCursor, TextInputCompositionEvent};
+
+#[test]
+fn exact_feature_edit_uses_normal_revision_history_and_unicode_validation() {
+    let mut document = CodeEditorDocument::from_text("let 🦀 = value;");
+    let revision = document.revision();
+    assert!(document.apply_text_edit(CodeEditorTextEdit {
+        range: 11..16,
+        new_text: "answer".into(),
+    }));
+    assert_eq!(document.text(), "let 🦀 = answer;");
+    assert!(document.revision() > revision);
+    assert!(!document.apply_text_edit(CodeEditorTextEdit {
+        range: 5..6,
+        new_text: "x".into(),
+    }));
+    document.apply(CodeEditorCommand::Undo);
+    assert_eq!(document.text(), "let 🦀 = value;");
+}
 
 #[test]
 fn document_indexes_lf_crlf_cr_and_replacement_without_rendering_terminators() {
@@ -22,6 +41,20 @@ fn document_indexes_lf_crlf_cr_and_replacement_without_rendering_terminators() {
     assert_eq!(document.row_count(), 2);
     assert_eq!(document.row(0).unwrap().text, Some("replacement"));
     assert_eq!(document.row(1).unwrap().text, Some(""));
+}
+
+#[test]
+fn committed_text_revision_advances_only_for_text_mutations() {
+    let mut document = CodeEditorDocument::from_text("one");
+    let initial = document.revision();
+
+    document.apply(CodeEditorCommand::MoveRight(CodeEditorSelectionMode::Move));
+    assert_eq!(document.revision(), initial);
+    document.apply(CodeEditorCommand::Insert("!".into()));
+    let edited = document.revision();
+    assert!(edited > initial);
+    document.apply(CodeEditorCommand::Undo);
+    assert!(document.revision() > edited);
 }
 
 #[test]
@@ -247,6 +280,8 @@ fn viewport_clamps_vertical_scroll_and_retains_horizontal_column() {
     assert_eq!(viewport.first_visible_row(), 5);
     viewport.clamp(4, 3);
     assert_eq!(viewport.first_visible_row(), 1);
+    viewport.scroll_rows(-1, 2, 2);
+    assert_eq!(viewport.first_visible_row(), 0);
 }
 
 #[test]
@@ -257,6 +292,68 @@ fn viewport_reveals_rows_above_and_below_the_retained_window() {
     assert_eq!(viewport.first_visible_row(), 5);
     viewport.reveal_row(2, 12, 4);
     assert_eq!(viewport.first_visible_row(), 2);
+}
+
+#[test]
+fn soft_wrap_projects_visual_rows_caret_and_pointer_without_changing_text() {
+    let mut document = CodeEditorDocument::from_text("abcdefghij");
+    document.apply(CodeEditorCommand::SelectAll);
+    document.apply(CodeEditorCommand::MoveRight(CodeEditorSelectionMode::Move));
+    let editor = CodeEditor::new(
+        Rect::from_xywh(0.0, 0.0, 56.0, 40.0),
+        &document,
+        CodeEditorViewport::default(),
+        CodeEditorHeader::Hidden,
+        CodeEditorStyle::light(),
+    )
+    .with_presentation(CodeEditorPresentation::Compact)
+    .with_line_wrapping(CodeEditorLineWrapping::Soft);
+
+    assert_eq!(editor.visual_row_count(), 2);
+    assert_eq!(editor.visible_row_range(), 0..2);
+    assert_eq!(editor.content_height(), 40.0);
+    assert_eq!(editor.caret_visual_row(), Some(1));
+    assert_eq!(
+        editor.caret_bounds().unwrap().origin,
+        Point::new(48.0, 20.0)
+    );
+    assert_eq!(
+        editor.text_position_at(Point::new(25.0, 25.0)),
+        Some(super::CodeEditorPosition {
+            row_index: 0,
+            byte_offset: 7,
+        })
+    );
+    assert_eq!(
+        editor
+            .location_at(Point::new(25.0, 25.0))
+            .unwrap()
+            .line_number,
+        None
+    );
+    assert_eq!(document.text(), "abcdefghij");
+}
+
+#[test]
+fn wrapped_vertical_navigation_moves_between_visual_segments_and_source_rows() {
+    let mut document = CodeEditorDocument::from_text("abcdefghij\nxy");
+    let navigation = CodeEditorNavigation::SoftWrapped { columns: 5 };
+
+    document.apply_in_view(
+        CodeEditorCommand::MoveDown(CodeEditorSelectionMode::Move),
+        navigation,
+    );
+    assert_eq!(document.cursor(), 5);
+    document.apply_in_view(
+        CodeEditorCommand::MoveDown(CodeEditorSelectionMode::Move),
+        navigation,
+    );
+    assert_eq!(document.cursor(), 11);
+    document.apply_in_view(
+        CodeEditorCommand::MoveUp(CodeEditorSelectionMode::Move),
+        navigation,
+    );
+    assert_eq!(document.cursor(), 5);
 }
 
 #[test]
@@ -438,4 +535,88 @@ fn syntax_tokens_selection_caret_and_preedit_are_projected_into_the_scene() {
             .any(|rect| rect.fill() == Color::rgb(15, 110, 96))
     );
     assert!(scene.text_blocks().iter().any(|block| block.text() == "x"));
+}
+
+#[test]
+fn document_folding_owns_visible_rows_controls_and_source_hit_testing() {
+    let source = "fn main() {\n    if ready {\n        run();\n    }\n    finish();\n}\nafter();\n";
+    let mut document =
+        CodeEditorDocument::from_text_with_language(source, CodeEditorLanguage::Rust);
+    assert!(
+        document
+            .folding_ranges()
+            .iter()
+            .any(|range| { range.start_row() == 0 && range.end_row() == 5 })
+    );
+    document.set_fold_state(0, CodeEditorFoldState::Collapsed);
+    let editor = CodeEditor::new(
+        Rect::from_xywh(0.0, 0.0, 320.0, 80.0),
+        &document,
+        CodeEditorViewport::default(),
+        CodeEditorHeader::Hidden,
+        CodeEditorStyle::light(),
+    );
+
+    assert_eq!(document.row_count(), 3);
+    assert_eq!(document.row(0).unwrap().line_number, Some(1));
+    assert_eq!(document.row(1).unwrap().line_number, Some(7));
+    assert_eq!(document.row(2).unwrap().line_number, Some(8));
+    assert_eq!(editor.fold_controls().len(), 1);
+    let control = editor.fold_controls()[0];
+    assert_eq!(control.state(), CodeEditorFoldState::Collapsed);
+    assert_eq!(control.range().start_row(), 0);
+    assert_eq!(
+        editor.fold_control_at(control.bounds().origin),
+        Some(control)
+    );
+
+    let position = editor
+        .text_position_at(Point::new(100.0, CodeEditor::row_height() + 4.0))
+        .unwrap();
+    assert_eq!(position.row_index, 6);
+    assert_eq!(
+        document.toggle_fold_control(control),
+        Some(CodeEditorFoldState::Expanded)
+    );
+}
+
+#[test]
+fn vertical_navigation_skips_collapsed_rows_and_horizontal_navigation_reveals_them() {
+    let source = "{\n  \"one\": 1,\n  \"two\": 2\n}\nafter\n";
+    let mut document =
+        CodeEditorDocument::from_text_with_language(source, CodeEditorLanguage::Json);
+    document.set_fold_state(0, CodeEditorFoldState::Collapsed);
+
+    document.apply(CodeEditorCommand::MoveDown(CodeEditorSelectionMode::Move));
+    assert_eq!(document.cursor(), source.find("after").unwrap());
+    document.apply(CodeEditorCommand::MoveUp(CodeEditorSelectionMode::Move));
+    assert_eq!(document.cursor(), 0);
+    document.apply(CodeEditorCommand::MoveRight(CodeEditorSelectionMode::Move));
+    document.apply(CodeEditorCommand::MoveRight(CodeEditorSelectionMode::Move));
+
+    assert_eq!(document.fold_state(0), Some(CodeEditorFoldState::Expanded));
+    assert_eq!(document.cursor(), 2);
+}
+
+#[test]
+fn collapsing_a_range_moves_hidden_selection_endpoints_to_the_header() {
+    let source = "{\n  \"one\": 1\n}\n";
+    let mut document =
+        CodeEditorDocument::from_text_with_language(source, CodeEditorLanguage::Json);
+    document.set_selection(
+        super::CodeEditorPosition {
+            row_index: 1,
+            byte_offset: 2,
+        },
+        super::CodeEditorPosition {
+            row_index: 2,
+            byte_offset: 0,
+        },
+    );
+
+    document.set_fold_state(0, CodeEditorFoldState::Collapsed);
+
+    assert_eq!(document.anchor(), 1);
+    assert_eq!(document.cursor(), 1);
+    assert_eq!(document.selected_text(), None);
 }

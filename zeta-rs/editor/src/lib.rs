@@ -9,11 +9,15 @@ mod diff_editor;
 mod multi_diff_editor;
 
 pub use code_editor::{
-    CodeEditor, CodeEditorCommand, CodeEditorComposition, CodeEditorDocument, CodeEditorHeader,
-    CodeEditorInlineHighlight, CodeEditorLanguage, CodeEditorLocation, CodeEditorPalette,
-    CodeEditorPosition, CodeEditorPresentation, CodeEditorRow, CodeEditorRowSource,
-    CodeEditorSelection, CodeEditorSelectionMode, CodeEditorStyle, CodeEditorSyntaxPalette,
-    CodeEditorSyntaxToken, CodeEditorTokenRole, CodeEditorViewport,
+    CodeEditor, CodeEditorCaseSensitivity, CodeEditorCommand, CodeEditorComposition,
+    CodeEditorDiagnostic, CodeEditorDiagnosticPalette, CodeEditorDiagnosticSeverity,
+    CodeEditorDocument, CodeEditorFoldControl, CodeEditorFoldState, CodeEditorFoldingRange,
+    CodeEditorHeader, CodeEditorIndentation, CodeEditorInlineHighlight, CodeEditorLanguage,
+    CodeEditorLineWrapping, CodeEditorLocation, CodeEditorNavigation, CodeEditorPalette,
+    CodeEditorPosition, CodeEditorPresentation, CodeEditorRevision, CodeEditorRow,
+    CodeEditorRowSource, CodeEditorSearchMatch, CodeEditorSearchQuery, CodeEditorSelection,
+    CodeEditorSelectionMode, CodeEditorStyle, CodeEditorSyntaxPalette, CodeEditorSyntaxToken,
+    CodeEditorTextEdit, CodeEditorTokenRole, CodeEditorViewport,
 };
 pub use diff_editor::{
     DiffEditor, DiffEditorDocument, DiffEditorFoldControl, DiffEditorFoldState, DiffEditorLabels,

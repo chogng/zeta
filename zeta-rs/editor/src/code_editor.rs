@@ -8,12 +8,19 @@ use zeta_ui::{
 };
 
 pub use self::analysis::CodeEditorLanguage;
-pub use self::document::CodeEditorDocument;
-pub use self::editing::{CodeEditorCommand, CodeEditorSelectionMode};
+pub use self::diagnostics::{
+    CodeEditorDiagnostic, CodeEditorDiagnosticPalette, CodeEditorDiagnosticSeverity,
+};
+pub use self::document::{CodeEditorDocument, CodeEditorRevision};
+pub use self::editing::{CodeEditorCommand, CodeEditorSelectionMode, CodeEditorTextEdit};
+pub use self::folding::{CodeEditorFoldControl, CodeEditorFoldState, CodeEditorFoldingRange};
+pub use self::indentation::CodeEditorIndentation;
 use self::layout::{CodeEditorLayout, build_layout};
+pub use self::search::{CodeEditorCaseSensitivity, CodeEditorSearchMatch, CodeEditorSearchQuery};
 pub use self::style::{CodeEditorPalette, CodeEditorStyle};
 pub use self::syntax::{CodeEditorSyntaxPalette, CodeEditorSyntaxToken, CodeEditorTokenRole};
 use self::text_metrics::{display_columns, expand_tabs, visit_display_cell_runs};
+use self::wrapping::{CodeEditorVisualLine, CodeEditorVisualProjection};
 
 const HEADER_HEIGHT: f32 = 32.0;
 const ROW_HEIGHT: f32 = 20.0;
@@ -72,14 +79,19 @@ fn paint_cell_run(
 
 mod analysis;
 mod decorations;
+mod diagnostics;
 mod document;
 mod editing;
+mod folding;
+mod indentation;
 mod layout;
+mod search;
 mod style;
 mod syntax;
 mod text_metrics;
+mod wrapping;
 
-/// One caret or selection endpoint in a projected visual row.
+/// One caret or selection endpoint in a source row.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct CodeEditorPosition {
     pub row_index: usize,
@@ -116,6 +128,24 @@ pub enum CodeEditorPresentation {
     Document,
     /// Embedded editor without document chrome, suitable for compact composers.
     Compact,
+}
+
+/// Whether long source rows remain horizontally scrollable or wrap to the viewport width.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum CodeEditorLineWrapping {
+    #[default]
+    None,
+    Soft,
+}
+
+/// Resolved visual-line contract used by document keyboard navigation.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum CodeEditorNavigation {
+    #[default]
+    LogicalLines,
+    SoftWrapped {
+        columns: usize,
+    },
 }
 
 impl CodeEditorHeader<'_> {
@@ -157,6 +187,7 @@ impl CodeEditorViewport {
 
     pub fn scroll_rows(&mut self, delta: isize, row_count: usize, visible_row_capacity: usize) {
         let maximum = row_count.saturating_sub(visible_row_capacity);
+        self.first_visible_row = self.first_visible_row.min(maximum);
         self.first_visible_row = if delta.is_negative() {
             self.first_visible_row.saturating_sub(delta.unsigned_abs())
         } else {
@@ -293,6 +324,33 @@ pub trait CodeEditorRowSource {
     /// Projects one visual row, or `None` when the index is outside the source.
     fn row(&self, index: usize) -> Option<CodeEditorRow<'_>>;
 
+    /// Returns the authoritative document byte range represented by one source row.
+    ///
+    /// Ordinary document sources implement this so editor-owned features such as diagnostics can
+    /// project document ranges without knowing the host's storage model. Synthetic and diff rows
+    /// may keep the default when no single document byte range exists.
+    fn source_byte_range(&self, _source_row: usize) -> Option<Range<usize>> {
+        None
+    }
+
+    /// Maps a visual-row index back to its authoritative source row.
+    fn source_row(&self, visual_row: usize) -> Option<usize> {
+        (visual_row < self.row_count()).then_some(visual_row)
+    }
+
+    /// Maps an authoritative source row into the current visual projection.
+    fn visual_row(&self, source_row: usize) -> Option<usize> {
+        (source_row < self.row_count()).then_some(source_row)
+    }
+
+    /// Returns the folding range and state owned by one source row, when present.
+    fn folding_range(
+        &self,
+        _source_row: usize,
+    ) -> Option<(CodeEditorFoldingRange, CodeEditorFoldState)> {
+        None
+    }
+
     /// Returns the committed caret position for editable sources.
     fn caret(&self) -> Option<CodeEditorPosition> {
         None
@@ -329,7 +387,10 @@ pub struct CodeEditor<'a> {
     header: CodeEditorHeader<'a>,
     style: CodeEditorStyle,
     presentation: CodeEditorPresentation,
+    line_wrapping: CodeEditorLineWrapping,
+    visual_projection: CodeEditorVisualProjection,
     caret_visibility: CaretVisibility,
+    diagnostics: &'a [CodeEditorDiagnostic],
 }
 
 impl<'a> CodeEditor<'a> {
@@ -345,6 +406,8 @@ impl<'a> CodeEditor<'a> {
         header: CodeEditorHeader<'a>,
         style: CodeEditorStyle,
     ) -> Self {
+        let visual_projection =
+            CodeEditorVisualProjection::new(rows, CodeEditorLineWrapping::None, usize::MAX);
         Self {
             bounds,
             paint_viewport: bounds,
@@ -353,13 +416,17 @@ impl<'a> CodeEditor<'a> {
             header,
             style,
             presentation: CodeEditorPresentation::Document,
+            line_wrapping: CodeEditorLineWrapping::None,
+            visual_projection,
             caret_visibility: CaretVisibility::Visible,
+            diagnostics: &[],
         }
     }
 
     /// Selects a named geometry contract without changing the row source.
-    pub const fn with_presentation(mut self, presentation: CodeEditorPresentation) -> Self {
+    pub fn with_presentation(mut self, presentation: CodeEditorPresentation) -> Self {
         self.presentation = presentation;
+        self.rebuild_visual_projection();
         self
     }
 
@@ -389,12 +456,12 @@ impl<'a> CodeEditor<'a> {
     }
 
     pub fn content_height(&self) -> f32 {
-        self.header.height() + self.rows.row_count() as f32 * ROW_HEIGHT
+        self.header.height() + self.visual_projection.len() as f32 * ROW_HEIGHT
     }
 
     pub fn visible_row_range(&self) -> Range<usize> {
         let capacity = self.visible_row_capacity();
-        let row_count = self.rows.row_count();
+        let row_count = self.visual_projection.len();
         let start = self
             .viewport
             .first_visible_row
@@ -422,33 +489,72 @@ impl<'a> CodeEditor<'a> {
             return None;
         }
         let visible = self.visible_row_range();
-        let row_index = visible.start
+        let visual_row = visible.start
             + ((point.y - layout.body.origin.y) / ROW_HEIGHT)
                 .floor()
                 .max(0.0) as usize;
-        let row = self.rows.row(row_index)?;
+        let line = self.visual_projection.line(visual_row)?;
+        let row = self.rows.row(line.row_index)?;
         Some(CodeEditorLocation {
-            row_index,
-            line_number: row.line_number,
+            row_index: visual_row,
+            line_number: line.first_for_row.then_some(row.line_number).flatten(),
         })
     }
 
     pub fn text_position_at(&self, point: Point) -> Option<CodeEditorPosition> {
         let layout = self.layout();
         let location = self.location_at(point)?;
-        let row = self.rows.row(location.row_index)?;
+        let line = self.visual_projection.line(location.row_index)?;
+        let row = self.rows.row(line.row_index)?;
         let text = row.text?;
-        let visual_column = if point.x <= layout.content.origin.x + CONTENT_HORIZONTAL_PADDING {
+        let local_column = if point.x <= layout.content.origin.x + CONTENT_HORIZONTAL_PADDING {
             0
         } else {
             ((point.x - layout.content.origin.x - CONTENT_HORIZONTAL_PADDING) / CELL_WIDTH).floor()
                 as usize
-                + self.viewport.horizontal_column
         };
+        let visual_column = self
+            .horizontal_origin_column(line)
+            .saturating_add(local_column)
+            .min(line.end_column);
         Some(CodeEditorPosition {
-            row_index: location.row_index,
+            row_index: self.rows.source_row(line.row_index)?,
             byte_offset: self::text_metrics::byte_offset_for_column(text, visual_column),
         })
+    }
+
+    /// Returns the visible document-fold controls whose geometry intersects this frame.
+    pub fn fold_controls(&self) -> Vec<CodeEditorFoldControl> {
+        if self.presentation != CodeEditorPresentation::Document {
+            return Vec::new();
+        }
+        let layout = self.layout();
+        let visible = self.visible_row_range();
+        self.painted_row_range(layout)
+            .filter_map(|visual_row| {
+                let line = self.visual_projection.line(visual_row)?;
+                if !line.first_for_row {
+                    return None;
+                }
+                let source_row = self.rows.source_row(line.row_index)?;
+                let (range, state) = self.rows.folding_range(source_row)?;
+                let bounds = Rect::from_xywh(
+                    layout.gutter.right() - MARKER_WIDTH,
+                    layout.body.origin.y
+                        + visual_row.saturating_sub(visible.start) as f32 * ROW_HEIGHT,
+                    MARKER_WIDTH,
+                    ROW_HEIGHT,
+                );
+                Some(CodeEditorFoldControl::new(range, bounds, state))
+            })
+            .collect()
+    }
+
+    /// Hit-tests a document folding control without exposing gutter geometry to the host.
+    pub fn fold_control_at(&self, point: Point) -> Option<CodeEditorFoldControl> {
+        self.fold_controls()
+            .into_iter()
+            .find(|control| control.bounds().contains(point))
     }
 
     fn layout(&self) -> CodeEditorLayout {
@@ -489,7 +595,8 @@ impl<'a> CodeEditor<'a> {
         scene: &mut UiScene,
         layout: CodeEditorLayout,
         visible_row: usize,
-        row_index: usize,
+        visual_row: usize,
+        line: CodeEditorVisualLine,
         row: CodeEditorRow<'_>,
     ) {
         let row_bounds = Rect::from_xywh(
@@ -505,6 +612,10 @@ impl<'a> CodeEditor<'a> {
         let Some(text) = row.text else {
             return;
         };
+        let source_row = self
+            .rows
+            .source_row(line.row_index)
+            .unwrap_or(line.row_index);
         if self.presentation == CodeEditorPresentation::Document {
             let gutter_bounds = Rect::from_xywh(
                 row_bounds.origin.x,
@@ -516,7 +627,9 @@ impl<'a> CodeEditor<'a> {
             let number_width =
                 (layout.gutter.size.width - MARKER_WIDTH - GUTTER_HORIZONTAL_PADDING * 2.0)
                     .max(0.0);
-            if let Some(line_number) = row.line_number {
+            if line.first_for_row
+                && let Some(line_number) = row.line_number
+            {
                 let number = format!(
                     "{:>width$}",
                     line_number,
@@ -536,7 +649,34 @@ impl<'a> CodeEditor<'a> {
                     self.style.muted_text_style(),
                 );
             }
-            if let Some(marker) = row.marker {
+            let fold = line
+                .first_for_row
+                .then_some(source_row)
+                .and_then(|source_row| {
+                    self.rows
+                        .folding_range(source_row)
+                        .map(|(_, state)| match state {
+                            CodeEditorFoldState::Collapsed => "▸",
+                            CodeEditorFoldState::Expanded => "▾",
+                        })
+                });
+            if let Some(fold) = fold {
+                let marker_bounds = Rect::from_xywh(
+                    layout.gutter.right() - MARKER_WIDTH,
+                    row_bounds.origin.y,
+                    MARKER_WIDTH,
+                    ROW_HEIGHT,
+                );
+                paint_text_block(
+                    scene,
+                    fold,
+                    marker_bounds.origin,
+                    marker_bounds.size,
+                    self.style.muted_text_style(),
+                );
+            } else if line.first_for_row
+                && let Some(marker) = row.marker
+            {
                 let marker_bounds = Rect::from_xywh(
                     layout.gutter.right() - MARKER_WIDTH,
                     row_bounds.origin.y,
@@ -560,11 +700,18 @@ impl<'a> CodeEditor<'a> {
             ROW_HEIGHT,
         );
         scene.with_clip(content_row_bounds, |scene| {
-            self.paint_selection(scene, content_row_bounds, row_index, text);
-            self.paint_inline_highlights(scene, content_row_bounds, text, &row.inline_highlights);
+            let origin_column = self.horizontal_origin_column(line);
+            self.paint_selection(scene, content_row_bounds, source_row, text, origin_column);
+            self.paint_inline_highlights(
+                scene,
+                content_row_bounds,
+                text,
+                &row.inline_highlights,
+                origin_column,
+            );
             let text_origin = Point::new(
                 layout.content.origin.x + CONTENT_HORIZONTAL_PADDING
-                    - self.viewport.horizontal_column as f32 * CELL_WIDTH,
+                    - origin_column as f32 * CELL_WIDTH,
                 row_bounds.origin.y,
             );
             paint_text_block(
@@ -574,8 +721,29 @@ impl<'a> CodeEditor<'a> {
                 Size::new(display_columns(text) as f32 * CELL_WIDTH, ROW_HEIGHT),
                 self.style.text_style().clone(),
             );
-            self.paint_syntax_tokens(scene, content_row_bounds, text, &row.syntax_tokens);
-            self.paint_composition_and_caret(scene, content_row_bounds, row_index, text);
+            self.paint_syntax_tokens(
+                scene,
+                content_row_bounds,
+                text,
+                &row.syntax_tokens,
+                origin_column,
+            );
+            self.paint_diagnostics(
+                scene,
+                content_row_bounds,
+                source_row,
+                text,
+                line.start_byte..line.end_byte,
+                origin_column,
+            );
+            self.paint_composition_and_caret(
+                scene,
+                content_row_bounds,
+                source_row,
+                visual_row,
+                text,
+                origin_column,
+            );
         });
     }
 }
@@ -595,12 +763,15 @@ impl Component for CodeEditor<'_> {
             scene.draw_rect(PaintRect::new(self.bounds, self.style.surface()));
             self.paint_header(scene, layout);
             let visible = self.visible_row_range();
-            for row_index in self.painted_row_range(layout) {
-                let Some(row) = self.rows.row(row_index) else {
+            for visual_row in self.painted_row_range(layout) {
+                let Some(line) = self.visual_projection.line(visual_row) else {
                     continue;
                 };
-                let visible_row = row_index.saturating_sub(visible.start);
-                self.paint_row(scene, layout, visible_row, row_index, row);
+                let Some(row) = self.rows.row(line.row_index) else {
+                    continue;
+                };
+                let visible_row = visual_row.saturating_sub(visible.start);
+                self.paint_row(scene, layout, visible_row, visual_row, line, row);
             }
         });
     }
