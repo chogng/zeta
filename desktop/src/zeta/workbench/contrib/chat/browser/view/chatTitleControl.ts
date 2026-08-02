@@ -1,5 +1,6 @@
 import "./chatTitleControl.css";
 import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
+import { AnchorPosition } from "../../../../../base/common/layout.js";
 import { MenuWorkbenchToolBar } from "../../../../../platform/actions/browser/toolbar.js";
 import { MenuId } from "../../../../../platform/actions/common/actions.js";
 import type { IMenuService } from "../../../../../platform/actions/common/menuService.js";
@@ -21,6 +22,7 @@ export class ChatTitleControl extends DisposableOwner {
       contextMenuService,
       MenuId.ChatTitle,
       ownerDocument,
+      { hoverAnchorPosition: AnchorPosition.Below },
     ));
     toolbar.element.setAttribute("aria-label", "Chat actions");
     const layoutToolbar = this.own(new MenuWorkbenchToolBar(
@@ -28,7 +30,7 @@ export class ChatTitleControl extends DisposableOwner {
       contextMenuService,
       MenuId.ChatTitleLayout,
       ownerDocument,
-      { highlightToggledItems: true },
+      { highlightToggledItems: true, hoverAnchorPosition: AnchorPosition.Below },
     ));
     layoutToolbar.element.setAttribute("aria-label", "Chat layout");
     layoutToolbar.element.classList.add("zeta-chat-title-layout-actions");

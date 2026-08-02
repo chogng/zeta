@@ -1,18 +1,8 @@
-import {
-  ActionViewItem,
-  ButtonActionViewItem,
-} from "../../../base/browser/ui/actionbar/actionViewItems.js";
-import type {
-  IContextMenuProvider,
-} from "../../../base/browser/contextmenu.js";
-import {
-  DropdownMenuActionViewItem,
-} from "../../../base/browser/ui/dropdown/dropdownMenuActionViewItem.js";
+import { ActionViewItem, ButtonActionViewItem, type ActionViewItemOptions } from "../../../base/browser/ui/actionbar/actionViewItems.js";
+import type { IContextMenuProvider } from "../../../base/browser/contextmenu.js";
+import { DropdownMenuActionViewItem } from "../../../base/browser/ui/dropdown/dropdownMenuActionViewItem.js";
 import type { IAction } from "../../../base/common/actions.js";
-import {
-  MenuItemAction,
-  SubmenuItemAction,
-} from "../common/actions.js";
+import { MenuItemAction, SubmenuItemAction } from "../common/actions.js";
 
 /**
  * ActionBar representation of one command resolved from a menu contribution.
@@ -22,8 +12,8 @@ import {
  * ActionBar hosts.
  */
 export class MenuEntryActionViewItem extends ButtonActionViewItem {
-  constructor(action: MenuItemAction) {
-    super(action);
+  constructor(action: MenuItemAction, options: ActionViewItemOptions = {}) {
+    super(action, options);
   }
 
   override render(container: HTMLElement): void {
@@ -43,8 +33,9 @@ export class SubmenuEntryActionViewItem
   constructor(
     action: SubmenuItemAction,
     contextMenuProvider: IContextMenuProvider,
+    options: ActionViewItemOptions = {},
   ) {
-    super(action, () => action.actions, contextMenuProvider);
+    super(action, () => action.actions, contextMenuProvider, options);
   }
 
   override render(container: HTMLElement): void {
@@ -62,12 +53,13 @@ export class SubmenuEntryActionViewItem
 export function createMenuEntryActionViewItem(
   action: IAction,
   contextMenuProvider: IContextMenuProvider,
+  options: ActionViewItemOptions = {},
 ): ActionViewItem | undefined {
   if (action instanceof MenuItemAction) {
-    return new MenuEntryActionViewItem(action);
+    return new MenuEntryActionViewItem(action, options);
   }
   if (action instanceof SubmenuItemAction) {
-    return new SubmenuEntryActionViewItem(action, contextMenuProvider);
+    return new SubmenuEntryActionViewItem(action, contextMenuProvider, options);
   }
   return undefined;
 }

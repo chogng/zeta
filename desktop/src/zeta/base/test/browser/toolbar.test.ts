@@ -2,9 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import type { IActionContextMenuOptions, IContextMenuProvider } from "../../browser/contextmenu.js";
+import { setHoverDelegate, type HoverDelegateSetupOptions, type IManagedHover } from "../../browser/ui/hover/hoverDelegate.js";
 import { ToolBar } from "../../browser/ui/toolbar/toolbar.js";
 import type { IAction } from "../../common/actions.js";
 import { Separator } from "../../common/actions.js";
+import { AnchorPosition } from "../../common/layout.js";
 
 test("ToolBar renders primary actions and trails More Actions", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
@@ -75,6 +77,27 @@ test("ToolBar highlights checked actions only when requested", () => {
   dom.window.close();
 });
 
+test("ToolBar applies its hover anchor position to primary and More Actions items", () => {
+  const dom = new JSDOM("<!doctype html><body></body>");
+  const setups: HoverDelegateSetupOptions[] = [];
+  using delegateRegistration = setHoverDelegate({
+    setupHover(options) {
+      setups.push(options);
+      return managedHover();
+    },
+  });
+  using toolbar = new ToolBar({
+    contextMenuProvider: new TestContextMenuProvider(),
+    ownerDocument: dom.window.document,
+    hoverAnchorPosition: AnchorPosition.Below,
+  });
+  toolbar.setActions([action("primary")], [action("secondary")]);
+
+  assert.deepEqual(setups.map(({ anchorPosition }) => anchorPosition), [AnchorPosition.Below, AnchorPosition.Below]);
+
+  dom.window.close();
+});
+
 test("ToolBar omits More Actions when secondary actions are empty", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
   const toolbar = new ToolBar({
@@ -131,5 +154,16 @@ function action(id: string): IAction {
     tooltip: id,
     enabled: true,
     run() {},
+  };
+}
+
+function managedHover(): IManagedHover {
+  return {
+    visible: false,
+    show() {},
+    hide() {},
+    update() {},
+    dispose() {},
+    [Symbol.dispose]() {},
   };
 }

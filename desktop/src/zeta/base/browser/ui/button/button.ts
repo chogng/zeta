@@ -2,6 +2,7 @@ import { addDisposableListener } from "../../dom.js";
 import type { Icon } from "../../../common/icon.js";
 import { DisposableOwner, DisposableSlot } from "../../../common/lifecycle.js";
 import { setAriaAttribute } from "../aria/aria.js";
+import type { AnchorPosition } from "../contextview/contextview.js";
 import { getHoverDelegate, type IManagedHover } from "../hover/hoverDelegate.js";
 import { IconLabel } from "../iconlabel/iconlabel.js";
 
@@ -15,6 +16,7 @@ export interface ButtonOptions {
   contentAlignment?: ButtonContentAlignment;
   title?: string;
   hoverGroupId?: string;
+  hoverAnchorPosition?: AnchorPosition;
   enabled?: boolean;
   checked?: boolean;
   onClick?: () => void;
@@ -25,11 +27,13 @@ export class Button extends DisposableOwner {
   readonly element: HTMLButtonElement;
   private readonly hover = this.own(new DisposableSlot<IManagedHover>());
   private readonly hoverGroupId: string | undefined;
+  private readonly hoverAnchorPosition: AnchorPosition | undefined;
 
   constructor(options: ButtonOptions) {
     super();
     const ownerDocument = options.ownerDocument ?? document;
     this.hoverGroupId = options.hoverGroupId;
+    this.hoverAnchorPosition = options.hoverAnchorPosition;
     const element = ownerDocument.createElement("button");
     this.element = element;
     this.defer(() => element.remove());
@@ -79,6 +83,7 @@ export class Button extends DisposableOwner {
       target: this.element,
       content: title,
       groupId: this.hoverGroupId,
+      anchorPosition: this.hoverAnchorPosition,
     }));
   }
 }

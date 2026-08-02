@@ -4,6 +4,8 @@ import { Separator } from "../../../common/actions.js";
 import { DisposableOwner } from "../../../common/lifecycle.js";
 import { lxiconsLibrary } from "../../../common/lxiconsLibrary.js";
 import { ActionBar, type ActionBarOrientation, type ActionViewItemProvider } from "../actionbar/actionbar.js";
+import type { ActionViewItemOptions } from "../actionbar/actionViewItems.js";
+import type { AnchorPosition } from "../contextview/contextview.js";
 import { DropdownMenuActionViewItem } from "../dropdown/dropdownMenuActionViewItem.js";
 
 export interface ToolBarOptions {
@@ -15,6 +17,7 @@ export interface ToolBarOptions {
   readonly presentation?: ToolBarPresentation;
   readonly highlightToggledItems?: boolean;
   readonly moreActionsPlacement?: MoreActionsPlacement;
+  readonly hoverAnchorPosition?: AnchorPosition;
 }
 
 /** Places the synthetic More Actions item relative to a primary action. */
@@ -41,20 +44,23 @@ export class ToolBar extends DisposableOwner {
   constructor(options: ToolBarOptions) {
     super();
     this.moreActionsPlacement = options.moreActionsPlacement;
+    const actionViewItemOptions: ActionViewItemOptions = { hoverAnchorPosition: options.hoverAnchorPosition };
     this.actionBar = this.own(new ActionBar({
       ownerDocument: options.ownerDocument,
       ariaLabel: options.ariaLabel,
       orientation: options.orientation,
       highlightToggledItems: options.highlightToggledItems,
-      actionViewItemProvider: (action) => {
+      actionViewItemOptions,
+      actionViewItemProvider: (action, actionOptions) => {
         if (action === this.moreActions) {
           return new MoreActionsViewItem(
             action,
             () => this.secondaryActions,
             options.contextMenuProvider,
+            actionOptions,
           );
         }
-        return options.actionViewItemProvider?.(action);
+        return options.actionViewItemProvider?.(action, actionOptions);
       },
     }));
     this.element = this.actionBar.element;

@@ -2,7 +2,7 @@ import { addDisposableListener } from "../../dom.js";
 import { DataTransfers, DragAndDropObserver } from "../../dnd.js";
 import type { IAction } from "../../../common/actions.js";
 import { DisposableOwner, DisposableStore } from "../../../common/lifecycle.js";
-import { type ActionViewItem, createActionViewItem } from "./actionViewItems.js";
+import { type ActionViewItem, type ActionViewItemOptions, createActionViewItem } from "./actionViewItems.js";
 import { DndCssClasses } from "../dnd/dnd.js";
 
 export type ActionBarOrientation = "horizontal" | "vertical";
@@ -10,6 +10,7 @@ export type ActionBarDropPosition = "before" | "after";
 
 export type ActionViewItemProvider = (
   action: IAction,
+  options: ActionViewItemOptions,
 ) => ActionViewItem | undefined;
 
 /** Optional drag lifecycle for action collections that define their own drop semantics. */
@@ -30,6 +31,7 @@ export interface ActionBarOptions {
   readonly ariaRole?: "toolbar" | "tablist";
   readonly orientation?: ActionBarOrientation;
   readonly actionViewItemProvider?: ActionViewItemProvider;
+  readonly actionViewItemOptions?: ActionViewItemOptions;
   /** Enables drag lifecycle callbacks without changing ordinary toolbar behavior. */
   readonly dragAndDrop?: ActionBarDragAndDrop;
   readonly highlightToggledItems?: boolean;
@@ -52,6 +54,7 @@ export class ActionBar extends DisposableOwner {
   readonly element: HTMLDivElement;
   private readonly entries: ActionBarEntry[] = [];
   private readonly actionViewItemProvider: ActionViewItemProvider | undefined;
+  private readonly actionViewItemOptions: ActionViewItemOptions;
   private readonly orientation: ActionBarOrientation;
   private readonly dragAndDrop: ActionBarDragAndDrop | undefined;
   private tabStop: ActionViewItem | undefined;
@@ -76,6 +79,7 @@ export class ActionBar extends DisposableOwner {
       element.setAttribute("aria-label", options.ariaLabel);
     }
     this.actionViewItemProvider = options.actionViewItemProvider;
+    this.actionViewItemOptions = options.actionViewItemOptions ?? {};
     this.dragAndDrop = options.dragAndDrop;
     element.classList.toggle("zeta-action-bar-dnd", this.dragAndDrop !== undefined);
     this.own(addDisposableListener(element, "keydown", (event) => {
@@ -204,8 +208,8 @@ export class ActionBar extends DisposableOwner {
     container.draggable = false;
     container.classList.remove(DndCssClasses.Draggable);
     const item = store.add(
-      this.actionViewItemProvider?.(action) ??
-        createActionViewItem(action),
+      this.actionViewItemProvider?.(action, this.actionViewItemOptions) ??
+        createActionViewItem(action, this.actionViewItemOptions),
     );
     item.render(container);
     const entry = { action, container, item, store };

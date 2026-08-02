@@ -6,7 +6,7 @@ import { addDisposableListener, stopEvent } from "../../dom.js";
 import type { IAction } from "../../../common/actions.js";
 import { Emitter } from "../../../common/event.js";
 import { lxiconsLibrary } from "../../../common/lxiconsLibrary.js";
-import { ActionViewItem } from "../actionbar/actionViewItems.js";
+import { ActionViewItem, type ActionViewItemOptions } from "../actionbar/actionViewItems.js";
 import { Button } from "../button/button.js";
 import { appendIcon } from "../icon/icon.js";
 
@@ -32,8 +32,9 @@ export class DropdownMenuActionViewItem extends ActionViewItem {
     action: IAction,
     actions: DropdownMenuActions,
     contextMenuProvider: IContextMenuProvider,
+    options: ActionViewItemOptions = {},
   ) {
-    super(action);
+    super(action, options);
     this.actions = actions;
     this.contextMenuProvider = contextMenuProvider;
   }

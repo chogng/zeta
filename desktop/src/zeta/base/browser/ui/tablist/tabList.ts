@@ -109,12 +109,12 @@ export class TabList<T> extends DisposableOwner {
       ariaRole: "tablist",
       orientation,
       dragAndDrop: actionBarDragAndDrop,
-      actionViewItemProvider: (action) => {
+      actionViewItemProvider: (action, actionViewItemOptions) => {
         if (!(action instanceof TabAction)) {
           if (!trailingActionIds.has(action.id)) {
             throw new TypeError(`Unsupported TabList action: ${action.id}`);
           }
-          return options.trailingActionViewItemProvider?.(action);
+          return options.trailingActionViewItemProvider?.(action, actionViewItemOptions);
         }
         return new TabActionViewItem(action, onClose, closeActionIcon, options.draggable === true);
       },

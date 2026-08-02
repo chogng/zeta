@@ -7,6 +7,7 @@ import { lxiconsLibrary } from "../../common/lxiconsLibrary.js";
 import { ActionBar } from "../../browser/ui/actionbar/actionbar.js";
 import { LabelActionViewItem } from "../../browser/ui/actionbar/actionViewItems.js";
 import { setHoverDelegate, type HoverDelegateSetupOptions, type IManagedHover } from "../../browser/ui/hover/hoverDelegate.js";
+import { AnchorPosition } from "../../common/layout.js";
 
 test("ActionViewItem routes its tooltip through the shared action Hover group", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
@@ -21,6 +22,7 @@ test("ActionViewItem routes its tooltip through the shared action Hover group", 
   using actionBar = new ActionBar({
     ownerDocument: dom.window.document,
     actions: [action("open")],
+    actionViewItemOptions: { hoverAnchorPosition: AnchorPosition.Below },
   });
   dom.window.document.body.append(actionBar.element);
 
@@ -30,6 +32,7 @@ test("ActionViewItem routes its tooltip through the shared action Hover group", 
   assert.equal(setups[0]?.target, button);
   assert.equal(setups[0]?.content, "open");
   assert.equal(setups[0]?.groupId, "actions");
+  assert.equal(setups[0]?.anchorPosition, AnchorPosition.Below);
   assert.equal(button.hasAttribute("title"), false);
 
   dom.window.close();

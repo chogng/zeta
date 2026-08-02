@@ -8,6 +8,7 @@
     "build:desktop:code": "corepack pnpm --dir desktop build:code",
     "build:desktop:academic": "corepack pnpm --dir desktop build:academic",
     "build:desktop:complete": "corepack pnpm --dir desktop build:complete",
+    "test:desktop:e2e": "corepack pnpm --dir desktop test:e2e",
     "dev:desktop": "corepack pnpm --dir desktop dev",
     "dev:desktop:code": "corepack pnpm --dir desktop dev:code",
     "dev:desktop:academic": "corepack pnpm --dir desktop dev:academic",

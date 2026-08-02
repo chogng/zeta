@@ -1,4 +1,5 @@
 import type { ActionBarOrientation, ActionViewItemProvider } from "../../../base/browser/ui/actionbar/actionbar.js";
+import type { AnchorPosition } from "../../../base/browser/ui/contextview/contextview.js";
 import { ToolBar, type MoreActionsPlacement, type ToolBarPresentation } from "../../../base/browser/ui/toolbar/toolbar.js";
 import { Separator, type IAction } from "../../../base/common/actions.js";
 import type { IContextMenuProvider } from "../../../base/browser/contextmenu.js";
@@ -13,6 +14,7 @@ export interface WorkbenchToolBarOptions {
   readonly presentation?: ToolBarPresentation;
   readonly highlightToggledItems?: boolean;
   readonly moreActionsPlacement?: MoreActionsPlacement;
+  readonly hoverAnchorPosition?: AnchorPosition;
 }
 
 /**
@@ -35,9 +37,10 @@ export class WorkbenchToolBar extends ToolBar {
       presentation: options.presentation,
       highlightToggledItems: options.highlightToggledItems,
       moreActionsPlacement: options.moreActionsPlacement,
-      actionViewItemProvider: (action) =>
-        options.actionViewItemProvider?.(action) ??
-        createMenuEntryActionViewItem(action, contextMenuProvider),
+      hoverAnchorPosition: options.hoverAnchorPosition,
+      actionViewItemProvider: (action, actionViewItemOptions) =>
+        options.actionViewItemProvider?.(action, actionViewItemOptions) ??
+        createMenuEntryActionViewItem(action, contextMenuProvider, actionViewItemOptions),
     });
   }
 }

@@ -5,6 +5,7 @@ import { assertDefined } from "../../../common/types.js";
 import { addDisposableListener } from "../../dom.js";
 import { setAriaAttribute } from "../aria/aria.js";
 import { Button, type ButtonOptions } from "../button/button.js";
+import type { AnchorPosition } from "../contextview/contextview.js";
 import { getHoverDelegate, type IManagedHover } from "../hover/hoverDelegate.js";
 import { appendIcon } from "../icon/icon.js";
 
@@ -14,6 +15,8 @@ const ActionHoverGroupId = "actions";
 export interface ActionViewItemOptions {
   /** Allows the host ActionBar to expose this item as a native drag source. */
   readonly draggable?: boolean;
+  /** Places the item's managed tooltip relative to its trigger. */
+  readonly hoverAnchorPosition?: AnchorPosition;
 }
 
 /**
@@ -46,6 +49,7 @@ export abstract class ActionViewItem extends DisposableOwner {
     return this.own(new Button({
       ...options,
       hoverGroupId: options.hoverGroupId ?? ActionHoverGroupId,
+      hoverAnchorPosition: options.hoverAnchorPosition ?? this.actionViewItemOptions.hoverAnchorPosition,
     }));
   }
 
@@ -55,6 +59,7 @@ export abstract class ActionViewItem extends DisposableOwner {
       target,
       content,
       groupId: ActionHoverGroupId,
+      anchorPosition: this.actionViewItemOptions.hoverAnchorPosition,
     }));
   }
 }
@@ -179,8 +184,8 @@ export class SeparatorActionViewItem extends ActionViewItem {
 }
 
 /** Creates the base representation used when a platform has no override. */
-export function createActionViewItem(action: IAction): ActionViewItem {
+export function createActionViewItem(action: IAction, options: ActionViewItemOptions = {}): ActionViewItem {
   return action instanceof Separator
     ? new SeparatorActionViewItem(action)
-    : new ButtonActionViewItem(action);
+    : new ButtonActionViewItem(action, options);
 }

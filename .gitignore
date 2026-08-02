@@ -10,6 +10,7 @@ zeta-rs/target/
 .playwright-*/
 .temp
 .tmp/
+output/
 
 # Desktop build products
 desktop/node_modules/
