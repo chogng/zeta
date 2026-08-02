@@ -254,9 +254,7 @@ impl<'a> FileEditorPane<'a> {
 
     pub(crate) fn navigation(&self) -> CodeEditorNavigation {
         self.editor()
-            .map_or(CodeEditorNavigation::LogicalLines, |editor| {
-                editor.navigation()
-            })
+            .map_or_else(CodeEditorNavigation::default, |editor| editor.navigation())
     }
 
     pub(crate) fn register_interactions(&self, frame: &mut InteractionFrame) {

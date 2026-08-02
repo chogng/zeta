@@ -649,17 +649,62 @@ pub(crate) fn code_editor_command(
         CodeEditorSelectionMode::Move
     };
     let shortcut = modifiers.control_key() || modifiers.super_key();
+    let word_modifier = modifiers.control_key() || modifiers.alt_key();
     match &event.logical_key {
+        Key::Named(NamedKey::Backspace) if word_modifier => {
+            Some(CodeEditorCommand::DeleteWordBackward)
+        }
         Key::Named(NamedKey::Backspace) => Some(CodeEditorCommand::Backspace),
+        Key::Named(NamedKey::Delete) if word_modifier => Some(CodeEditorCommand::DeleteWordForward),
         Key::Named(NamedKey::Delete) => Some(CodeEditorCommand::DeleteForward),
+        Key::Named(NamedKey::Enter) if shortcut && modifiers.shift_key() => {
+            Some(CodeEditorCommand::InsertLineAbove)
+        }
+        Key::Named(NamedKey::Enter) if shortcut => Some(CodeEditorCommand::InsertLineBelow),
+        Key::Named(NamedKey::ArrowLeft) if word_modifier => {
+            Some(CodeEditorCommand::MoveWordLeft(selection_mode))
+        }
         Key::Named(NamedKey::ArrowLeft) => Some(CodeEditorCommand::MoveLeft(selection_mode)),
+        Key::Named(NamedKey::ArrowRight) if word_modifier => {
+            Some(CodeEditorCommand::MoveWordRight(selection_mode))
+        }
         Key::Named(NamedKey::ArrowRight) => Some(CodeEditorCommand::MoveRight(selection_mode)),
+        Key::Named(NamedKey::ArrowUp) if modifiers.alt_key() && modifiers.shift_key() => {
+            Some(CodeEditorCommand::DuplicateLinesAbove)
+        }
+        Key::Named(NamedKey::ArrowDown) if modifiers.alt_key() && modifiers.shift_key() => {
+            Some(CodeEditorCommand::DuplicateLinesBelow)
+        }
+        Key::Named(NamedKey::ArrowUp) if modifiers.alt_key() => {
+            Some(CodeEditorCommand::MoveLinesUp)
+        }
+        Key::Named(NamedKey::ArrowDown) if modifiers.alt_key() => {
+            Some(CodeEditorCommand::MoveLinesDown)
+        }
         Key::Named(NamedKey::ArrowUp) => Some(CodeEditorCommand::MoveUp(selection_mode)),
         Key::Named(NamedKey::ArrowDown) => Some(CodeEditorCommand::MoveDown(selection_mode)),
+        Key::Named(NamedKey::PageUp) => Some(CodeEditorCommand::MovePageUp(selection_mode)),
+        Key::Named(NamedKey::PageDown) => Some(CodeEditorCommand::MovePageDown(selection_mode)),
         Key::Named(NamedKey::Home) => Some(CodeEditorCommand::MoveToLineStart(selection_mode)),
         Key::Named(NamedKey::End) => Some(CodeEditorCommand::MoveToLineEnd(selection_mode)),
         Key::Named(NamedKey::Tab) if modifiers.shift_key() => Some(CodeEditorCommand::Outdent),
         Key::Named(NamedKey::Tab) => Some(CodeEditorCommand::Indent),
+        Key::Character(text)
+            if shortcut && modifiers.shift_key() && text.eq_ignore_ascii_case("k") =>
+        {
+            Some(CodeEditorCommand::DeleteLines)
+        }
+        Key::Character(text)
+            if shortcut && modifiers.shift_key() && text.eq_ignore_ascii_case("d") =>
+        {
+            Some(CodeEditorCommand::DeleteEmptyLines)
+        }
+        Key::Character(text) if shortcut && text.eq_ignore_ascii_case("j") => {
+            Some(CodeEditorCommand::JoinLines)
+        }
+        Key::Character(text) if shortcut && text == "/" => {
+            Some(CodeEditorCommand::ToggleLineComment)
+        }
         Key::Character(text) if shortcut && text.eq_ignore_ascii_case("a") => {
             Some(CodeEditorCommand::SelectAll)
         }

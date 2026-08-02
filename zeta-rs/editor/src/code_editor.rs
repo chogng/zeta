@@ -78,13 +78,19 @@ fn paint_cell_run(
 }
 
 mod analysis;
+mod auto_pairs;
 mod decorations;
 mod diagnostics;
 mod document;
 mod editing;
 mod folding;
+mod folding_sources;
 mod indentation;
+mod language_configuration;
+mod language_editing;
 mod layout;
+mod line_endings;
+mod line_operations;
 mod search;
 mod style;
 mod syntax;
@@ -139,13 +145,31 @@ pub enum CodeEditorLineWrapping {
 }
 
 /// Resolved visual-line contract used by document keyboard navigation.
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum CodeEditorNavigation {
-    #[default]
-    LogicalLines,
-    SoftWrapped {
-        columns: usize,
-    },
+    /// Navigate source rows and move a full visible page for page commands.
+    LogicalLines { page_rows: usize },
+    /// Navigate wrapped visual rows and move a full visible page for page commands.
+    SoftWrapped { columns: usize, page_rows: usize },
+}
+
+impl CodeEditorNavigation {
+    const DEFAULT_PAGE_ROWS: usize = 10;
+
+    /// Returns the resolved visible-row capacity used for page navigation.
+    pub const fn page_rows(self) -> usize {
+        match self {
+            Self::LogicalLines { page_rows } | Self::SoftWrapped { page_rows, .. } => page_rows,
+        }
+    }
+}
+
+impl Default for CodeEditorNavigation {
+    fn default() -> Self {
+        Self::LogicalLines {
+            page_rows: Self::DEFAULT_PAGE_ROWS,
+        }
+    }
 }
 
 impl CodeEditorHeader<'_> {

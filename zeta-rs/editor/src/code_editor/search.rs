@@ -140,6 +140,7 @@ impl CodeEditorDocument {
         }
         let replacement = editable_text(replacement);
         self.checkpoint();
+        self.auto_pairs.clear();
         self.text.replace_range(selection.clone(), &replacement);
         self.collapse(selection.start + replacement.len());
         self.after_edit();
@@ -156,6 +157,7 @@ impl CodeEditorDocument {
         let anchor = transformed_offset(self.anchor, &ranges, replacement.len());
         let cursor = transformed_offset(self.cursor, &ranges, replacement.len());
         self.checkpoint();
+        self.auto_pairs.clear();
         for range in ranges.iter().rev() {
             self.text.replace_range(range.clone(), &replacement);
         }

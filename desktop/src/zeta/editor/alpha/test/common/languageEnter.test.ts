@@ -28,6 +28,22 @@ test("Language Enter creates an indented line between configured brackets", () =
   assert.deepEqual(selections.selections.primary, TextSelection.collapsedAt(TextPosition.at(1, 2)));
 });
 
+test("Rust Enter continues line comments and applies Rust bracket indentation", () => {
+  using commentModel = new TextModel("  // explain");
+  using commentSelections = new EditorSelectionController(commentModel, TextSelectionSet.single(caret(12)));
+  using configurations = new LanguageConfigurationRegistry();
+  using builtins = registerAlphaBuiltinLanguageConfigurations(configurations);
+  const indentation = { kind: EditorIndentationKind.Spaces, tabSize: 2 } as const;
+
+  commentSelections.execute(createLanguageEnterCommand(commentModel, commentSelections.selections, configurations.getLanguageConfiguration("rust"), { indentation }));
+  assert.equal(commentModel.getText(), "  // explain\n  // ");
+
+  using blockModel = new TextModel("fn main() {}");
+  using blockSelections = new EditorSelectionController(blockModel, TextSelectionSet.single(caret(11)));
+  blockSelections.execute(createLanguageEnterCommand(blockModel, blockSelections.selections, configurations.getLanguageConfiguration("rust"), { indentation }));
+  assert.equal(blockModel.getText(), "fn main() {\n  \n}");
+});
+
 test("Explicit on-enter rules precede bracket fallback and continue documentation comments", () => {
   using model = new TextModel("/** */");
   using selections = new EditorSelectionController(model, TextSelectionSet.single(caret(3)));

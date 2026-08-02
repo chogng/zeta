@@ -1,12 +1,26 @@
-use zeta_editor::{
-    CodeEditor, CodeEditorCommand, CodeEditorDocument, CodeEditorHeader, CodeEditorLanguage,
-    CodeEditorPresentation, CodeEditorRowSource, CodeEditorSelectionMode, CodeEditorStyle,
-    CodeEditorViewport,
-};
-use zeta_ui::{
-    CaretVisibility, Color, Component, ComponentElement, Element, FontFamily, Point, Rect,
-    TextBlock, TextInputCompositionEvent, TextStyle, UiScene,
-};
+use zeta_editor::CodeEditor;
+use zeta_editor::CodeEditorCommand;
+use zeta_editor::CodeEditorDocument;
+use zeta_editor::CodeEditorHeader;
+use zeta_editor::CodeEditorLanguage;
+use zeta_editor::CodeEditorNavigation;
+use zeta_editor::CodeEditorPresentation;
+use zeta_editor::CodeEditorRowSource;
+use zeta_editor::CodeEditorSelectionMode;
+use zeta_editor::CodeEditorStyle;
+use zeta_editor::CodeEditorViewport;
+use zeta_ui::CaretVisibility;
+use zeta_ui::Color;
+use zeta_ui::Component;
+use zeta_ui::ComponentElement;
+use zeta_ui::Element;
+use zeta_ui::FontFamily;
+use zeta_ui::Point;
+use zeta_ui::Rect;
+use zeta_ui::TextBlock;
+use zeta_ui::TextInputCompositionEvent;
+use zeta_ui::TextStyle;
+use zeta_ui::UiScene;
 
 const MAX_VISIBLE_ROWS: usize = 8;
 const MIN_EDITOR_HEIGHT: f32 = 44.0;
@@ -59,7 +73,12 @@ impl ComposerEditor {
     }
 
     pub(crate) fn apply(&mut self, command: CodeEditorCommand) {
-        self.document.apply(command);
+        self.document.apply_in_view(
+            command,
+            CodeEditorNavigation::LogicalLines {
+                page_rows: MAX_VISIBLE_ROWS,
+            },
+        );
         self.reveal_caret();
     }
 

@@ -19,13 +19,13 @@ undo/redo、IME composition、语法 token、结构折叠、viewport soft wrap�
 | --- | --- | --- |
 | `CodeEditor` | public | 绘制可见代码行、caret/selection、preedit、syntax token、gutter 与 fold control；拥有 fold-control geometry 和 hit test，`within_viewport` 限制嵌入式宿主实际投影的行 |
 | `CodeEditorPresentation` | public | 选择带 document chrome 的普通编辑器或隐藏 gutter 的 compact 嵌入式编辑器 |
-| `CodeEditorLineWrapping` / `CodeEditorNavigation` | public | 选择不换行或 viewport soft wrap，并把 presentation 解析出的显示列宽交给 document 上下键导航 |
+| `CodeEditorLineWrapping` / `CodeEditorNavigation` | public | 选择不换行或 viewport soft wrap，并把 presentation 解析出的显示列宽和可见行容量交给 document 的上下键与翻页导航 |
 | `CodeEditorDocument` | public | 保存文本、语言、行 range、selection、composition、editor-local syntax snapshot、fold state/visible-row projection 与 undo/redo；所有文本 mutation 自动同步分析 |
 | `CodeEditorRevision` | public | 为宿主提供与文本 mutation 绑定的单调 revision；navigation 不推进，insert/replace/undo/redo 推进；不暴露私有 tree-sitter revision |
 | `CodeEditorFoldingRange` / `CodeEditorFoldState` | public | 表达零基 source-row 结构范围及每个 document 实例独立的展开状态；start row 保留可见 |
 | `CodeEditorFoldControl` | public | 发布当前帧可见 gutter control 的 editor-owned range、state 与命中 bounds |
-| `CodeEditorCommand` | public | 表达插入、自动缩进换行、indent/outdent、Unicode navigation、选择、删除与 undo/redo |
-| `CodeEditorIndentation` | public | 以显式 tabs/spaces policy 驱动换行、Tab 与 Shift+Tab，不把缩进策略放进 Native |
+| `CodeEditorCommand` | public | 表达插入、自动缩进换行、indent/outdent、语言声明的行注释、行复制/移动/删除空行/合并/插入/行尾空白清理/排序/反转/去重、Unicode navigation、选择、删除与 undo/redo |
+| `CodeEditorIndentation` | public | 以显式 tabs/spaces 与 tab width policy 驱动换行、Tab 与 Shift+Tab、leading-whitespace close delimiter auto-outdent；Enter 保留 document line ending，不把缩进策略放进 Native |
 | `CodeEditorSearchQuery` / `CodeEditorSearchMatch` | public | 表达大小写策略、byte range 与 editor position；前后循环查找、单次/全部替换由 document 执行 |
 | `CodeEditorDiagnostic` / `CodeEditorDiagnosticSeverity` | public | 表达 UTF-8 document byte range、severity、message/source/code；不暴露 LSP 类型 |
 | `CodeEditorDiagnosticPalette` | public | 由宿主把 error/warning/information/hint theme token 映射为编辑器语义颜色 |
@@ -147,6 +147,10 @@ grapheme boundary 修改 committed text；CRLF 在删除时作为一个换行边
 向平台宿主提供候选框锚点，`text_position_at` 与 `CodeEditorDocument::move_to` /
 `set_selection` 支持指针选择。`CodeEditorPresentation::Compact` 只改变共享组件拥有的
 header/gutter geometry，不改变 document、editing 或 row-source contract。
+直接键入语言允许的单个开括号或引号会创建匹配的 close delimiter；已有选区时会包裹并保留选区。
+只有仍被 document 追踪为自动创建的 close delimiter 才允许 overtype 或双侧 Backspace，手写源码中的
+相同字符保持普通插入/删除语义；IME Commit 和多字符输入保持原样，避免把 composition 或 paste 误判为键入。
+Rust/JSONC 使用 `//`、Shell 使用 `#` 的行注释命令由语言声明决定；JSON 明确不接受该命令。
 启用 soft wrap 的宿主应把 `CodeEditor::navigation()` 交给
 `CodeEditorDocument::apply_in_view`，并使用 `visual_row_count` / `caret_visual_row` 驱动 viewport；
 宿主不得重新计算换行边界。
@@ -206,7 +210,9 @@ caret/selection/navigation、viewport、Tab/Unicode 列宽和
 
 当前 history 使用完整 snapshot 且不做 typing coalescing；Native CodeEditor 的 tree-sitter 分析
 与文本 mutation 同步执行，大文件尚未迁移到 editor-owned worker。多光标、
-手动/缩进/region folding 与 minimap 尚未完成。`CodeEditorTextEdit` 允许产品 adapter 通过精确 UTF-8
+缩进和语言注释的 `#region` / `#endregion` 会生成编辑器自有的 folding candidates；多行 selection
+可通过 `ToggleManualFoldSelection` 生成临时 manual fold，任何文本 mutation 都会将它移除。
+minimap 尚未完成。`CodeEditorTextEdit` 允许产品 adapter 通过精确 UTF-8
 range 使用同一 undo/revision/analysis mutation path。Diagnostics 已支持 revision 外部绑定、severity
 波浪线、跨行/soft-wrap 投影和 hover hit-test；文件、tabs、持久化与产品级
 EditorHost 明确不属于本 crate；Native `FileEditorHost` 已负责对应组合。普通 CodeEditor 的 syntax

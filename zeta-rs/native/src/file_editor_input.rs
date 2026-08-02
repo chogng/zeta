@@ -223,7 +223,9 @@ impl NativeApp {
             self.file_editor_changed();
             return true;
         }
-        let command = if event.logical_key == Key::Named(NamedKey::Enter) {
+        let command = if event.logical_key == Key::Named(NamedKey::Enter)
+            && !(self.modifiers.control_key() || self.modifiers.super_key())
+        {
             Some(CodeEditorCommand::Newline)
         } else {
             code_editor_command(event, self.modifiers)

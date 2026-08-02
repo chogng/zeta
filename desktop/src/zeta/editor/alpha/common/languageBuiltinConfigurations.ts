@@ -9,6 +9,7 @@ export const ALPHA_BUILTIN_LANGUAGE_IDS = Object.freeze([
   "javascriptreact",
   "json",
   "jsonc",
+  "rust",
 ]);
 
 const ECMASCRIPT_LANGUAGE_IDS = new Set(["typescript", "typescriptreact", "javascript", "javascriptreact"]);
@@ -28,8 +29,13 @@ const JSON_PAIRS = Object.freeze([
   ...JSON_BRACKETS,
   autoPair("\"", "\"", ["string"]),
 ]);
+const RUST_PAIRS = Object.freeze([
+  ...BRACKETS,
+  autoPair("\"", "\"", ["string"]),
+]);
 const ECMASCRIPT_SURROUNDING_PAIRS = Object.freeze(ECMASCRIPT_PAIRS.map(value => pair(value.open, value.close)));
 const JSON_SURROUNDING_PAIRS = Object.freeze(JSON_PAIRS.map(value => pair(value.open, value.close)));
+const RUST_SURROUNDING_PAIRS = Object.freeze(RUST_PAIRS.map(value => pair(value.open, value.close)));
 const ECMASCRIPT_INDENTATION_RULES: LanguageIndentationRules = Object.freeze({
   decreaseIndentPattern: /^\s*[\}\]\)].*$/,
   increaseIndentPattern: /^.*(\{[^}]*|\([^)]*|\[[^\]]*)$/,
@@ -39,6 +45,10 @@ const ECMASCRIPT_INDENTATION_RULES: LanguageIndentationRules = Object.freeze({
 const JSON_INDENTATION_RULES: LanguageIndentationRules = Object.freeze({
   increaseIndentPattern: /({+(?=((\\.|[^"\\])*"(\\.|[^"\\])*")*[^"}]*)$)|(\[+(?=((\\.|[^"\\])*"(\\.|[^"\\])*")*[^"\]]*)$)/,
   decreaseIndentPattern: /^\s*[}\]],?\s*$/,
+});
+const RUST_INDENTATION_RULES: LanguageIndentationRules = Object.freeze({
+  decreaseIndentPattern: /^\s*[\}\]\)].*$/,
+  increaseIndentPattern: /^.*(\{[^}]*|\([^)]*|\[[^\]]*)$/,
 });
 const ECMASCRIPT_ON_ENTER_RULES: readonly LanguageOnEnterRule[] = Object.freeze([
   onEnter(/^\s*\/\*\*(?!\/)([^\*]|\*(?!\/))*$/, LanguageIndentAction.IndentOutdent, { afterText: /^\s*\*\/$/, appendText: " * " }),
@@ -50,6 +60,12 @@ const ECMASCRIPT_ON_ENTER_RULES: readonly LanguageOnEnterRule[] = Object.freeze(
 ]);
 const JSONC_ON_ENTER_RULES: readonly LanguageOnEnterRule[] = Object.freeze([
   onEnter(/^\s*\/\/\s*\S|\s\/\/\s+\S/, LanguageIndentAction.None, { afterText: /^(?!\s*$)/, appendText: "// " }),
+]);
+const RUST_ON_ENTER_RULES: readonly LanguageOnEnterRule[] = Object.freeze([
+  onEnter(/^\s*\/\/\/.*$/, LanguageIndentAction.None, { appendText: "/// " }),
+  onEnter(/^\s*\/\/!.*$/, LanguageIndentAction.None, { appendText: "//! " }),
+  onEnter(/^\s*\/\/.*$/, LanguageIndentAction.None, { appendText: "// " }),
+  ...ECMASCRIPT_ON_ENTER_RULES,
 ]);
 
 interface BuiltinOnEnterOptions {
@@ -87,6 +103,17 @@ const JSONC_CONFIGURATION: LanguageConfiguration = Object.freeze({
   indentationRules: JSON_INDENTATION_RULES,
   onEnterRules: JSONC_ON_ENTER_RULES,
 });
+const RUST_CONFIGURATION: LanguageConfiguration = Object.freeze({
+  comments: Object.freeze({
+    lineComment: "//",
+    blockComment: pair("/*", "*/"),
+  }),
+  brackets: BRACKETS,
+  autoClosingPairs: RUST_PAIRS,
+  surroundingPairs: RUST_SURROUNDING_PAIRS,
+  indentationRules: RUST_INDENTATION_RULES,
+  onEnterRules: RUST_ON_ENTER_RULES,
+});
 
 /** Registers Alpha's built-in editing rules into one caller-owned realm. */
 export function registerAlphaBuiltinLanguageConfigurations(registry: LanguageConfigurationRegistry): IDisposable {
@@ -97,6 +124,7 @@ export function registerAlphaBuiltinLanguageConfigurations(registry: LanguageCon
   for (const languageId of ECMASCRIPT_LANGUAGE_IDS) registrations.add(registry.register(languageId, ECMASCRIPT_CONFIGURATION));
   registrations.add(registry.register("json", JSON_CONFIGURATION));
   registrations.add(registry.register("jsonc", JSONC_CONFIGURATION));
+  registrations.add(registry.register("rust", RUST_CONFIGURATION));
   return registrations;
 }
 
@@ -106,6 +134,7 @@ export function createAlphaBuiltinLanguageConfigurationSource(): LanguageConfigu
   for (const languageId of ECMASCRIPT_LANGUAGE_IDS) configurations.set(languageId, resolved(languageId, ECMASCRIPT_CONFIGURATION));
   configurations.set("json", resolved("json", JSON_CONFIGURATION));
   configurations.set("jsonc", resolved("jsonc", JSONC_CONFIGURATION));
+  configurations.set("rust", resolved("rust", RUST_CONFIGURATION));
   return Object.freeze({
     getLanguageConfiguration(languageId: string): ResolvedLanguageConfiguration {
       assertLanguageId(languageId);

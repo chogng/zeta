@@ -40,7 +40,7 @@ class:
 | Events, lifecycle, URI identity, resource collections | `base/common` | Reuse existing primitives; editor semantics must not flow back into base |
 | Raw resource I/O | `platform/files` | `IFileService` currently owns read-only workspace access; write capabilities belong here when the host protocol supports them |
 | Text resource loading and bootstrap resolution | `workbench/services/textfile/common` | ✅ `ITextFileService`; dirty state, save/revert and conflicts remain unfinished |
-| Syntax token production | Alpha analysis providers | ✅ JSON/JSONC use the editor-local TextMate worker; Rust provider is unfinished and no App Server syntax transport exists |
+| Syntax token production | Alpha analysis providers | ✅ JSON/JSONC use the editor-local TextMate worker; Rust uses the editor-local lexical Worker; no App Server syntax transport exists |
 | Shared URI-to-Alpha-model references | `AlphaTextModelService` | ✅ editor-owned; the TextFile service does not absorb Alpha transaction semantics |
 | Text transactions, selections, decorations and versioned language results | `editor/alpha/common` | Canonical editor-domain state; no URI, persistence or Workbench tab dependency |
 | Language identities and composable editing rules | `editor/alpha/common` | `LanguageConfigurationRegistry`; comments/brackets/pairs are editor-domain contracts, not generic base primitives |
@@ -208,11 +208,12 @@ later requests reference it, while model transactions send one incremental
 sync shared by both lanes.
 
 Browser sessions create their analysis worker directly from the editor-local provider factory.
-JSON/JSONC use the bundled TextMate grammars; Workbench, Renderer API and App Server do not expose
-a syntax service. Rust currently has no Alpha provider and therefore yields no syntax token batch.
-Adding Rust tree-sitter must extend Alpha's provider/worker boundary while keeping parser transport
-private to the editor implementation. Monaco has no ownership in this path and receives no parallel
-syntax integration.
+JSON/JSONC use the bundled TextMate grammars; Rust uses Alpha's deterministic lexical Worker for
+comments, strings, keywords, operators, brackets, and structural diagnostics. Workbench, Renderer
+API and App Server do not expose a syntax service. Rust raw strings, character-literal distinction,
+macro-aware tokens, and parser-grade syntax require a future provider behind the same Alpha
+provider/Worker boundary; parser transport remains private to the editor implementation. Monaco has
+no ownership in this path and receives no parallel syntax integration.
 
 `LanguageAnalysisProviderRegistry` selects the first matching token provider
 and all matching diagnostic providers in registration order. Provider failures

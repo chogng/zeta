@@ -4,6 +4,7 @@ import { LanguageLexicalLineScanner } from "./languageLexicalLineScanner.js";
 
 const ECMASCRIPT_LANGUAGE_IDS = new Set(["typescript", "typescriptreact", "javascript", "javascriptreact"]);
 const JSON_LANGUAGE_IDS = new Set(["json", "jsonc"]);
+const RUST_LANGUAGE_IDS = new Set(["rust"]);
 const ECMASCRIPT_KEYWORDS = Object.freeze([
   "as", "async", "await", "break", "case", "catch", "class", "const", "continue",
   "debugger", "declare", "default", "delete", "do", "else", "enum", "export",
@@ -15,6 +16,13 @@ const ECMASCRIPT_KEYWORDS = Object.freeze([
   "while", "with", "yield",
 ]);
 const JSON_KEYWORDS = Object.freeze(["false", "null", "true"]);
+const RUST_KEYWORDS = Object.freeze([
+  "Self", "abstract", "as", "async", "await", "become", "box", "break", "const", "continue",
+  "crate", "do", "dyn", "else", "enum", "extern", "false", "final", "fn", "for", "if", "impl",
+  "in", "let", "loop", "macro", "match", "mod", "move", "mut", "override", "priv", "pub", "ref",
+  "return", "self", "static", "struct", "super", "trait", "true", "try", "type", "typeof", "union",
+  "unsafe", "unsized", "use", "virtual", "where", "while", "yield",
+]);
 
 export function createLanguageLexicalLineScanner(languageId: string, configuration: ResolvedLanguageConfiguration): LanguageLexicalLineScanner {
   assertLanguageId(languageId);
@@ -35,6 +43,14 @@ export function createLanguageLexicalLineScanner(languageId: string, configurati
       comments: configuration.comments,
       brackets: configuration.brackets,
       keywords: JSON_KEYWORDS,
+      stringQuotes: ["\""],
+    });
+  }
+  if (RUST_LANGUAGE_IDS.has(languageId)) {
+    return new LanguageLexicalLineScanner({
+      comments: configuration.comments,
+      brackets: configuration.brackets,
+      keywords: RUST_KEYWORDS,
       stringQuotes: ["\""],
     });
   }

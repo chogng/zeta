@@ -11,7 +11,7 @@
 ## Learnings
 
 - 在把新能力接入 `native` 前，先按依赖方向判断其是否属于通用框架机制。帧调度、失效等级、retained presentation、Scene fragment 生命周期和局部重建策略应优先由 `zui` 提供后端无关契约；`native` 只保留产品状态映射、平台事件适配和具体 Part/Overlay 组合，不得因接入方便复制或拥有框架运行时。
-- Rust import declarations should import one path per line instead of grouping names in braces. Keep each dependency independently editable so adding or removing an import produces a minimal diff and `apply_patch` can target it reliably.
+- Prefer one Rust import per line over brace-grouped imports. For example, prefer `use foo::Bar;` and `use foo::Baz;` over `use foo::{Bar, Baz};`. This keeps each dependency independently editable, produces minimal diffs, and makes `apply_patch` targets reliable.
 
 # Only for Rust Crates
 

@@ -23,6 +23,24 @@ fn compact_editor_grows_until_eight_visible_rows() {
 }
 
 #[test]
+fn page_navigation_uses_the_composer_visible_row_cap() {
+    let mut editor = ComposerEditor::default();
+    editor.set_text(
+        (0..10)
+            .map(|row| row.to_string())
+            .collect::<Vec<_>>()
+            .join("\n"),
+    );
+
+    editor.apply(CodeEditorCommand::MovePageUp(
+        zeta_editor::CodeEditorSelectionMode::Move,
+    ));
+    editor.apply(CodeEditorCommand::Insert("x".to_owned()));
+
+    assert!(editor.text().starts_with("0\n1x\n2"));
+}
+
+#[test]
 fn empty_editor_paints_placeholder_and_only_exposes_a_focused_visible_caret() {
     let editor = ComposerEditor::default();
     let bounds = Rect::from_xywh(0.0, 0.0, 320.0, editor.preferred_height());

@@ -337,7 +337,10 @@ fn soft_wrap_projects_visual_rows_caret_and_pointer_without_changing_text() {
 #[test]
 fn wrapped_vertical_navigation_moves_between_visual_segments_and_source_rows() {
     let mut document = CodeEditorDocument::from_text("abcdefghij\nxy");
-    let navigation = CodeEditorNavigation::SoftWrapped { columns: 5 };
+    let navigation = CodeEditorNavigation::SoftWrapped {
+        columns: 5,
+        page_rows: 2,
+    };
 
     document.apply_in_view(
         CodeEditorCommand::MoveDown(CodeEditorSelectionMode::Move),
@@ -578,6 +581,55 @@ fn document_folding_owns_visible_rows_controls_and_source_hit_testing() {
         document.toggle_fold_control(control),
         Some(CodeEditorFoldState::Expanded)
     );
+}
+
+#[test]
+fn manual_folds_can_be_created_from_a_selection_and_clear_after_an_edit() {
+    let mut document = CodeEditorDocument::from_text("header\nbody\nafter");
+    document.set_selection(
+        super::CodeEditorPosition {
+            row_index: 0,
+            byte_offset: 0,
+        },
+        super::CodeEditorPosition {
+            row_index: 2,
+            byte_offset: 0,
+        },
+    );
+
+    document.apply(CodeEditorCommand::ToggleManualFoldSelection);
+
+    assert_eq!(document.fold_state(0), Some(CodeEditorFoldState::Expanded));
+    document.set_fold_state(0, CodeEditorFoldState::Collapsed);
+    assert_eq!(document.row_count(), 2);
+    assert_eq!(document.row(1).unwrap().line_number, Some(3));
+    document.set_selection(
+        super::CodeEditorPosition {
+            row_index: 0,
+            byte_offset: 0,
+        },
+        super::CodeEditorPosition {
+            row_index: 0,
+            byte_offset: 0,
+        },
+    );
+
+    document.apply(CodeEditorCommand::Insert("!".into()));
+
+    assert_eq!(document.fold_state(0), None);
+    assert_eq!(document.row_count(), 3);
+}
+
+#[test]
+fn explicit_manual_folding_range_rejects_duplicates_and_invalid_rows() {
+    let mut document = CodeEditorDocument::from_text("header\nbody\nafter");
+    let range = super::CodeEditorFoldingRange::new(0, 1).unwrap();
+
+    assert!(document.add_manual_folding_range(range));
+    assert!(!document.add_manual_folding_range(range));
+    assert!(!document.add_manual_folding_range(super::CodeEditorFoldingRange::new(1, 3).unwrap()));
+    assert!(document.remove_manual_folding_range(range));
+    assert!(!document.remove_manual_folding_range(range));
 }
 
 #[test]

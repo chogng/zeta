@@ -105,10 +105,12 @@ impl CodeEditor<'_> {
     }
 
     pub fn navigation(&self) -> CodeEditorNavigation {
+        let page_rows = self.visible_row_capacity().max(1);
         match self.line_wrapping {
-            CodeEditorLineWrapping::None => CodeEditorNavigation::LogicalLines,
+            CodeEditorLineWrapping::None => CodeEditorNavigation::LogicalLines { page_rows },
             CodeEditorLineWrapping::Soft => CodeEditorNavigation::SoftWrapped {
                 columns: self.wrap_column_capacity(),
+                page_rows,
             },
         }
     }

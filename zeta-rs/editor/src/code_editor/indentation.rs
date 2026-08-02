@@ -3,10 +3,13 @@
 use std::ops::Range;
 
 use super::CodeEditorDocument;
+use super::CodeEditorTokenRole;
+use super::language_configuration::line_comment_marker;
+use super::line_endings::preferred_line_ending;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 enum IndentationKind {
-    Tabs,
+    Tabs(usize),
     Spaces(usize),
 }
 
@@ -19,8 +22,16 @@ pub struct CodeEditorIndentation {
 impl CodeEditorIndentation {
     /// Uses one tab character for each indentation level.
     pub const fn tabs() -> Self {
+        Self::tabs_with_width(4)
+    }
+
+    /// Uses one tab character for each indentation level and treats `width` spaces as one level
+    /// when removing mixed indentation.
+    ///
+    /// A zero width is normalized to one so outdent commands always make progress.
+    pub const fn tabs_with_width(width: usize) -> Self {
         Self {
-            kind: IndentationKind::Tabs,
+            kind: IndentationKind::Tabs(if width == 0 { 1 } else { width }),
         }
     }
 
@@ -35,7 +46,7 @@ impl CodeEditorIndentation {
 
     fn unit(&self) -> String {
         match self.kind {
-            IndentationKind::Tabs => "\t".to_owned(),
+            IndentationKind::Tabs(_) => "\t".to_owned(),
             IndentationKind::Spaces(width) => " ".repeat(width),
         }
     }
@@ -45,7 +56,7 @@ impl CodeEditorIndentation {
             return 1;
         }
         let maximum = match self.kind {
-            IndentationKind::Tabs => 1,
+            IndentationKind::Tabs(width) => width,
             IndentationKind::Spaces(width) => width,
         };
         text.bytes()
@@ -88,7 +99,11 @@ impl CodeEditorDocument {
             .last()
             .map_or(0, |(offset, character)| offset + character.len_utf8());
         let base = &before[..leading];
-        let opener = before.trim_end().chars().next_back();
+        let in_comment = self.has_syntax_role_at(row, insertion, CodeEditorTokenRole::Comment);
+        let in_string = self.has_syntax_role_at(row, insertion, CodeEditorTokenRole::String);
+        let opener = (!in_comment && !in_string)
+            .then(|| before.trim_end().chars().next_back())
+            .flatten();
         let matching_close = match opener {
             Some('{') => Some('}'),
             Some('[') => Some(']'),
@@ -97,16 +112,26 @@ impl CodeEditorDocument {
         };
         let closes_pair = matching_close.is_some_and(|close| after.trim_start().starts_with(close));
         let unit = self.indentation.unit();
-        let mut inserted = format!("\n{base}");
-        if opener.is_some_and(|character| matches!(character, '{' | '[' | '(')) {
+        let line_ending = preferred_line_ending(&self.text);
+        let continued_comment = in_comment
+            .then(|| line_comment_marker(self.language()))
+            .flatten()
+            .filter(|marker| before[leading..].starts_with(marker));
+        let mut inserted = format!("{line_ending}{base}");
+        if let Some(marker) = continued_comment {
+            inserted.push_str(marker);
+            inserted.push(' ');
+        } else if opener.is_some_and(|character| matches!(character, '{' | '[' | '(')) {
             inserted.push_str(&unit);
         }
         let cursor = selection.start + inserted.len();
         if closes_pair {
-            inserted.push('\n');
+            inserted.push_str(line_ending);
             inserted.push_str(base);
         }
         self.checkpoint();
+        self.auto_pairs
+            .apply_text_edit(selection.clone(), inserted.len());
         self.text.replace_range(selection, &inserted);
         self.collapse(cursor);
         self.after_edit();
@@ -118,12 +143,15 @@ impl CodeEditorDocument {
         let unit = self.indentation.unit();
         if selection.is_empty() {
             self.checkpoint();
+            self.auto_pairs
+                .apply_text_edit(self.cursor..self.cursor, unit.len());
             self.text.insert_str(self.cursor, &unit);
             self.collapse(self.cursor + unit.len());
             self.after_edit();
             return;
         }
         let starts = self.selected_line_starts(selection.clone());
+        self.auto_pairs.clear();
         self.checkpoint();
         for start in starts.iter().rev().copied() {
             self.text.insert_str(start, &unit);
@@ -151,6 +179,7 @@ impl CodeEditorDocument {
         if removals.is_empty() {
             return;
         }
+        self.auto_pairs.clear();
         self.checkpoint();
         for range in removals.iter().rev() {
             self.text.replace_range(range.clone(), "");
@@ -160,10 +189,25 @@ impl CodeEditorDocument {
         self.after_edit();
     }
 
+    pub(super) fn removable_current_line_indentation_before_cursor(&self) -> Option<Range<usize>> {
+        let line = self.current_line_range();
+        if !self.text[line.start..self.cursor]
+            .chars()
+            .all(is_indentation)
+        {
+            return None;
+        }
+        let length = self
+            .indentation
+            .removable_prefix_len(&self.text[line.clone()]);
+        (length > 0).then_some(line.start..line.start + length)
+    }
+
     fn selected_line_starts(&self, selection: Range<usize>) -> Vec<usize> {
         let start_row = self.row_index_for_offset(selection.start);
         let mut end_row = self.row_index_for_offset(selection.end);
         if selection.end > selection.start
+            && selection.end < self.text.len()
             && self
                 .line_ranges
                 .get(end_row)
@@ -176,6 +220,22 @@ impl CodeEditorDocument {
             .map(|line| line.start)
             .collect()
     }
+
+    fn has_syntax_role_at(&self, row: usize, offset: usize, role: CodeEditorTokenRole) -> bool {
+        let Some(line) = self.line_ranges.get(row) else {
+            return false;
+        };
+        let relative = offset.saturating_sub(line.start);
+        self.syntax_tokens.get(row).is_some_and(|tokens| {
+            tokens.iter().any(|token| {
+                token.role == role && token.range.start <= relative && relative <= token.range.end
+            })
+        })
+    }
+}
+
+fn is_indentation(character: char) -> bool {
+    matches!(character, ' ' | '\t')
 }
 
 fn offset_after_insertions(offset: usize, starts: &[usize], inserted_len: usize) -> usize {

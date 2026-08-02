@@ -44,10 +44,28 @@ test("Built-in lexical configuration registrations release without owning the re
   assert.equal(configurations.getLanguageConfiguration("typescript").comments.lineComment, "//");
   assert.equal(configurations.getLanguageConfiguration("json").comments.lineComment, undefined);
   assert.equal(configurations.getLanguageConfiguration("jsonc").comments.lineComment, "//");
+  assert.equal(configurations.getLanguageConfiguration("rust").comments.lineComment, "//");
+  assert.deepEqual(
+    configurations.getLanguageConfiguration("rust").autoClosingPairs.map(pair => pair.open),
+    ["(", "[", "{", "\""],
+  );
 
   registrations.dispose();
   assert.deepEqual(configurations.getLanguageConfiguration("typescript").comments, {});
   assert.deepEqual(configurations.getLanguageConfiguration("typescript").brackets, []);
+});
+
+test("Rust lexical analysis recognizes Rust comments, keywords, strings, and structural diagnostics", async () => {
+  using model = new TextModel("/// docs\nfn main() { let value = \"ok\"; }");
+  const provider = createLanguageLexicalAnalysisProvider();
+  const snapshot = model.createSnapshot();
+
+  assert.deepEqual(
+    await tokenTypes(provider, request(1, "rust", snapshot)),
+    ["comment", "keyword", "variable", "keyword", "variable", "operator", "string"],
+  );
+  const diagnostics = await provider.provideDiagnostics!(request(2, "rust", snapshot), new AbortController().signal);
+  assert.deepEqual(diagnostics?.diagnostics, []);
 });
 
 function request(requestId: number, languageId: string, snapshot: ReturnType<TextModel["createSnapshot"]>): LanguageAnalysisProviderRequest {
