@@ -52,7 +52,6 @@ pub(crate) fn run(mut session: AppServerSession, options: TuiOptions) -> Result<
 }
 
 fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<TuiExit, TuiError> {
-    crate::ui::configure();
     let mut client = session.client();
     let events = session.take_events()?;
     let TuiOptions {
@@ -69,6 +68,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
     )?;
     conversation.set_thread_sequence(initial_thread.sequence);
     let mut terminal = terminal::TerminalSession::open()?;
+    crate::ui::configure(terminal.background_color());
     let mut file_search = FileSearchManager::new(workspace_root.clone());
     let mut app = App::for_workspace_with_slash_commands(&workspace_root, slash_commands);
     app.update(AppEvent::ThreadSnapshotReceived(initial_thread));
@@ -204,15 +204,33 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                         Err(error) => app.update(AppEvent::FailureReported(error)),
                     },
                     AppCommand::SetCustomTheme { preference } => {
+                        let command = format!("/theme {preference}");
+                        app.update(AppEvent::CommandStarted(command.clone()));
                         match ui::select_theme(&preference) {
-                            Ok(()) => app.update(AppEvent::ThemeViewClosed),
+                            Ok(label) => {
+                                app.update(AppEvent::CommandCompleted {
+                                    command,
+                                    result: format!("Theme set to {label}"),
+                                });
+                                app.update(AppEvent::ThemeViewClosed);
+                            }
                             Err(error) => app.update(AppEvent::FailureReported(error)),
                         }
                     }
-                    AppCommand::SetTheme { preference } => match ui::select_theme(&preference) {
-                        Ok(()) => app.update(AppEvent::ThemeViewClosed),
-                        Err(error) => app.update(AppEvent::FailureReported(error)),
-                    },
+                    AppCommand::SetTheme { preference } => {
+                        let command = format!("/theme {preference}");
+                        app.update(AppEvent::CommandStarted(command.clone()));
+                        match ui::select_theme(&preference) {
+                            Ok(label) => {
+                                app.update(AppEvent::CommandCompleted {
+                                    command,
+                                    result: format!("Theme set to {label}"),
+                                });
+                                app.update(AppEvent::ThemeViewClosed);
+                            }
+                            Err(error) => app.update(AppEvent::FailureReported(error)),
+                        }
+                    }
                     AppCommand::SetSkillEnablement {
                         skill_id,
                         enablement,

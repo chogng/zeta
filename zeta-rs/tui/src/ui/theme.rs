@@ -7,6 +7,11 @@ use crate::features::theme::ThemePickerChoice;
 use crate::features::theme::ThemePickerTarget;
 use crate::features::theme::ThemePreviewPalette;
 use ratatui::style::Color;
+use zeta_terminal_detection::BackgroundAppearance;
+use zeta_terminal_detection::ColorLevel;
+use zeta_terminal_detection::TerminalRgb;
+use zeta_terminal_detection::detect_host_terminal;
+use zeta_terminal_detection::resolve_background;
 use zeta_theme::ColorScheme;
 use zeta_theme::Rgba;
 use zeta_theme::ThemeChoiceKind;
@@ -20,6 +25,8 @@ use zeta_theme::tokens;
 
 static ACTIVE_THEME: LazyLock<RwLock<TuiTheme>> =
     LazyLock::new(|| RwLock::new(TuiTheme::fallback()));
+static SYSTEM_SCHEME: LazyLock<RwLock<ColorScheme>> =
+    LazyLock::new(|| RwLock::new(ColorScheme::Dark));
 const DEFAULT_THEME_ENTRY: &str = "zeta-code";
 const ZETA_CODE_THEMES: [(&str, &str); 7] = [
     ("Auto", "system"),
@@ -36,41 +43,6 @@ const ZETA_CODE_THEMES: [(&str, &str); 7] = [
     ("Dark mode (ANSI colors only)", "zeta-code-ansi-dark"),
     ("Light mode (ANSI colors only)", "zeta-code-ansi-light"),
 ];
-
-/// Terminal color fidelity available to the TUI presentation adapter.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum TerminalColorCapability {
-    TrueColor,
-    Ansi256,
-    Ansi16,
-    Monochrome,
-}
-
-impl TerminalColorCapability {
-    fn detect() -> Self {
-        if std::env::var_os("NO_COLOR").is_some()
-            || std::env::var("CLICOLOR").is_ok_and(|value| value == "0")
-        {
-            return Self::Monochrome;
-        }
-        let color_term = std::env::var("COLORTERM")
-            .unwrap_or_default()
-            .to_ascii_lowercase();
-        if matches!(color_term.as_str(), "truecolor" | "24bit") {
-            return Self::TrueColor;
-        }
-        let term = std::env::var("TERM")
-            .unwrap_or_default()
-            .to_ascii_lowercase();
-        if term == "dumb" {
-            Self::Monochrome
-        } else if term.contains("256color") {
-            Self::Ansi256
-        } else {
-            Self::Ansi16
-        }
-    }
-}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct TuiTheme {
@@ -96,12 +68,9 @@ pub(crate) struct TuiTheme {
 }
 
 impl TuiTheme {
-    fn from_snapshot(
-        snapshot: &ThemeSnapshot,
-        capability: TerminalColorCapability,
-    ) -> Result<Self, ThemeError> {
+    fn from_snapshot(snapshot: &ThemeSnapshot, capability: ColorLevel) -> Result<Self, ThemeError> {
         let capability = if snapshot.id().starts_with("zeta-code-ansi-") {
-            TerminalColorCapability::Ansi16
+            ColorLevel::Ansi16
         } else {
             capability
         };
@@ -178,19 +147,21 @@ impl TuiTheme {
     }
 }
 
-pub(crate) fn configure() {
+pub(crate) fn configure(terminal_background: Option<TerminalRgb>) {
+    let system_scheme = detect_system_scheme(terminal_background);
+    set_system_scheme(system_scheme);
     let Ok(loader) = ThemeLoader::embedded() else {
         return;
     };
     let device_root = default_device_root();
     let loaded = loader.load(
-        ThemeLoadOptions::new(&device_root, ThemeSurface::Terminal, detect_system_scheme())
+        ThemeLoadOptions::new(&device_root, ThemeSurface::Terminal, system_scheme)
             .with_default_entry(DEFAULT_THEME_ENTRY),
     );
     for diagnostic in &loaded.diagnostics {
         eprintln!("theme: {}", diagnostic.message);
     }
-    let Ok(theme) = TuiTheme::from_snapshot(&loaded.snapshot, TerminalColorCapability::detect())
+    let Ok(theme) = TuiTheme::from_snapshot(&loaded.snapshot, detect_host_terminal().color_level)
     else {
         return;
     };
@@ -200,14 +171,14 @@ pub(crate) fn configure() {
 pub(crate) fn theme_catalog() -> Result<ThemePickerCatalog, String> {
     theme_catalog_at(
         &default_device_root(),
-        TerminalColorCapability::detect(),
-        detect_system_scheme(),
+        detect_host_terminal().color_level,
+        system_scheme(),
     )
 }
 
 fn theme_catalog_at(
     device_root: &Path,
-    capability: TerminalColorCapability,
+    capability: ColorLevel,
     system_scheme: ColorScheme,
 ) -> Result<ThemePickerCatalog, String> {
     let loader = ThemeLoader::embedded().map_err(|error| error.to_string())?;
@@ -269,7 +240,7 @@ fn preview_choice(
     label: &str,
     preference: &str,
     selected: bool,
-    capability: TerminalColorCapability,
+    capability: ColorLevel,
 ) -> Result<ThemePickerChoice, String> {
     let loaded = loader
         .preview(options, preference)
@@ -303,21 +274,21 @@ fn syntax_palette_label(preference: &str, snapshot: &ThemeSnapshot) -> String {
     }
 }
 
-pub(crate) fn select_theme(preference: &str) -> Result<(), String> {
+pub(crate) fn select_theme(preference: &str) -> Result<String, String> {
     select_theme_at(
         &default_device_root(),
         preference,
-        TerminalColorCapability::detect(),
-        detect_system_scheme(),
+        detect_host_terminal().color_level,
+        system_scheme(),
     )
 }
 
 fn select_theme_at(
     device_root: &Path,
     preference: &str,
-    capability: TerminalColorCapability,
+    capability: ColorLevel,
     system_scheme: ColorScheme,
-) -> Result<(), String> {
+) -> Result<String, String> {
     let loader = ThemeLoader::embedded().map_err(|error| error.to_string())?;
     let options = ThemeLoadOptions::new(device_root, ThemeSurface::Terminal, system_scheme)
         .with_default_entry(DEFAULT_THEME_ENTRY);
@@ -340,8 +311,9 @@ fn select_theme_at(
         .map_err(|error| error.to_string())?;
     let theme =
         TuiTheme::from_snapshot(&loaded.snapshot, capability).map_err(|error| error.to_string())?;
+    let label = loaded.snapshot.label().to_owned();
     set_active(theme);
-    Ok(())
+    Ok(label)
 }
 
 fn set_active(theme: TuiTheme) {
@@ -392,34 +364,32 @@ fn active() -> TuiTheme {
         .expect("TUI theme lock should not be poisoned")
 }
 
-fn detect_system_scheme() -> ColorScheme {
-    std::env::var("COLORFGBG")
-        .ok()
-        .as_deref()
-        .and_then(scheme_from_colorfgbg)
-        .unwrap_or(ColorScheme::Dark)
+fn detect_system_scheme(terminal_background: Option<TerminalRgb>) -> ColorScheme {
+    match resolve_background(terminal_background).appearance {
+        BackgroundAppearance::Dark => ColorScheme::Dark,
+        BackgroundAppearance::Light => ColorScheme::Light,
+    }
 }
 
-fn scheme_from_colorfgbg(value: &str) -> Option<ColorScheme> {
-    let background = value.rsplit(';').next()?.trim().parse::<u8>().ok()? % 16;
-    Some(if matches!(background, 7 | 10..=15) {
-        ColorScheme::Light
-    } else {
-        ColorScheme::Dark
-    })
+fn set_system_scheme(scheme: ColorScheme) {
+    *SYSTEM_SCHEME
+        .write()
+        .expect("TUI system color scheme lock should not be poisoned") = scheme;
 }
 
-fn terminal_color(
-    foreground: Rgba,
-    background: Rgba,
-    capability: TerminalColorCapability,
-) -> Color {
+fn system_scheme() -> ColorScheme {
+    *SYSTEM_SCHEME
+        .read()
+        .expect("TUI system color scheme lock should not be poisoned")
+}
+
+fn terminal_color(foreground: Rgba, background: Rgba, capability: ColorLevel) -> Color {
     let rgb = composite(foreground, background);
     match capability {
-        TerminalColorCapability::TrueColor => Color::Rgb(rgb[0], rgb[1], rgb[2]),
-        TerminalColorCapability::Ansi256 => Color::Indexed(nearest_ansi256(rgb)),
-        TerminalColorCapability::Ansi16 => nearest_ansi16(rgb),
-        TerminalColorCapability::Monochrome => Color::Reset,
+        ColorLevel::TrueColor => Color::Rgb(rgb[0], rgb[1], rgb[2]),
+        ColorLevel::Ansi256 => Color::Indexed(nearest_ansi256(rgb)),
+        ColorLevel::Ansi16 => nearest_ansi16(rgb),
+        ColorLevel::Monochrome => Color::Reset,
     }
 }
 

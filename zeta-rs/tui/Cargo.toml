@@ -23,9 +23,11 @@ zeta-file-search = { workspace = true }
 zeta-diff = { workspace = true }
 zeta-protocol = { workspace = true }
 zeta-slash-commands = { workspace = true }
+zeta-terminal-detection = { workspace = true }
 zeta-theme = { workspace = true }
 
 [target.'cfg(unix)'.dependencies]
+rustix = { workspace = true, features = ["fs", "stdio"] }
 signal-hook = { workspace = true }
 
 [target.'cfg(not(target_os = "android"))'.dependencies]

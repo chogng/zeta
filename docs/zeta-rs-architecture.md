@@ -45,6 +45,7 @@ zeta-rs/
 ├── git/                  # bounded Git repository operations and structured parsing
 ├── diff/                 # shared bounded line/inline diff mapping for Native and TUI
 ├── syntax/               # bounded incremental tree-sitter analysis；不拥有文件、索引或 presentation
+├── terminal-detection/   # host terminal identity/color capability 与 background fallback interpretation
 ├── theme/                # shared manifest/user-theme resolver 与 device-local bounded loader
 ├── editor/               # Native CodeEditor/DiffEditor/MultiDiffEditor presentation；不拥有文件或产品宿主
 ├── text-file/            # UTF-8 文件保存基线、磁盘版本与外部变化冲突；不拥有 editor 或 I/O

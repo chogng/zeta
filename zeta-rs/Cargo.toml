@@ -126,6 +126,7 @@ signal-hook = "0.3"
 sys-locale = "0.3"
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
 rustls-native-certs = "0.7"
+rustix = "1.1.4"
 rmcp = { version = "=3.0.0-beta.3", default-features = false }
 resvg = { version = "0.47", default-features = false }
 rusqlite = { version = "0.40.1", features = ["bundled"] }
@@ -213,6 +214,7 @@ zeta-skills = { path = "skills" }
 zeta-storage = { path = "storage" }
 zeta-syntax = { path = "syntax" }
 zeta-terminal = { path = "terminal" }
+zeta-terminal-detection = { path = "terminal-detection" }
 zeta-text-file = { path = "text-file" }
 zeta-theme = { path = "theme" }
 zeta-thread-store = { path = "thread-store" }

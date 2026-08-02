@@ -155,6 +155,22 @@ fn error_detail_is_rendered_once_and_the_footer_only_offers_recovery() {
 }
 
 #[test]
+fn command_completion_renders_an_adjacent_result_line() {
+    let mut app = App::new();
+    app.update(AppEvent::CommandCompleted {
+        command: "/theme zeta-code-light".into(),
+        result: "Theme set to Zeta Code Light".into(),
+    });
+
+    let rendered = render(&app, 80, 20);
+    let rows = rendered.lines().collect::<Vec<_>>();
+
+    assert!(rows[0].contains("●  /theme zeta-code-light"));
+    assert!(rows[1].contains("└─ Theme set to Zeta Code Light"));
+    assert!(rows[2].trim().is_empty());
+}
+
+#[test]
 fn bare_slash_renders_all_registered_commands() {
     let mut app = App::new();
     app.insert_text("/");

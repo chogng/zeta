@@ -12,19 +12,32 @@ use ratatui::backend::CrosstermBackend;
 use ratatui::layout::Rect;
 use std::io;
 use std::io::Stdout;
+use zeta_terminal_detection::TerminalRgb;
+use zeta_terminal_detection::detect_host_terminal;
 
 pub(crate) struct TerminalSession {
+    background_color: Option<TerminalRgb>,
     terminal: Terminal<CrosstermBackend<Stdout>>,
     modes: TerminalModeGuard<CrosstermModeOperations>,
 }
 
 impl TerminalSession {
     pub(crate) fn open() -> io::Result<Self> {
+        let host_terminal = detect_host_terminal();
         let modes = TerminalModeGuard::acquire(CrosstermModeOperations)?;
+        let background_color = super::terminal_probe::query_background(&host_terminal);
         let terminal = Terminal::new(CrosstermBackend::new(io::stdout()))?;
-        let mut session = Self { terminal, modes };
+        let mut session = Self {
+            background_color,
+            terminal,
+            modes,
+        };
         session.terminal.clear()?;
         Ok(session)
+    }
+
+    pub(crate) const fn background_color(&self) -> Option<TerminalRgb> {
+        self.background_color
     }
 
     pub(crate) fn draw<F>(&mut self, render: F) -> io::Result<()>

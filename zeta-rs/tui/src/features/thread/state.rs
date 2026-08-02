@@ -1,4 +1,5 @@
 use super::ThreadPresentationEvent;
+use crate::components::transcript::CommandStatus;
 use crate::components::transcript::Message;
 use crate::components::transcript::MessageRole;
 use zeta_protocol::Thread;
@@ -28,6 +29,26 @@ impl ThreadFeatureState {
             ThreadPresentationEvent::UserSubmitted(text) => {
                 self.push_message(MessageRole::User, text);
             }
+            ThreadPresentationEvent::CommandStarted(command) => {
+                self.messages
+                    .push(Message::command(command, CommandStatus::Running, None));
+            }
+            ThreadPresentationEvent::CommandCompleted { command, result } => {
+                if let Some(message) = self.messages.iter_mut().rev().find(|message| {
+                    message.role == MessageRole::Command
+                        && message.text == command
+                        && message.command_status == Some(CommandStatus::Running)
+                }) {
+                    message.command_status = Some(CommandStatus::Succeeded);
+                    message.detail = Some(result);
+                } else {
+                    self.messages.push(Message::command(
+                        command,
+                        CommandStatus::Succeeded,
+                        Some(result),
+                    ));
+                }
+            }
             ThreadPresentationEvent::NoticeReceived(text) => {
                 self.push_message(MessageRole::Notice, text);
             }
@@ -45,7 +66,7 @@ impl ThreadFeatureState {
     }
 
     fn push_message(&mut self, role: MessageRole, text: String) {
-        self.messages.push(Message { role, text });
+        self.messages.push(Message::plain(role, text));
     }
 
     #[cfg(test)]
@@ -60,18 +81,15 @@ fn project_messages(thread: &Thread) -> Vec<Message> {
         .iter()
         .flat_map(|turn| &turn.items)
         .filter_map(|item| match item {
-            ThreadItem::UserMessage { text, .. } => Some(Message {
-                role: MessageRole::User,
-                text: text.clone(),
-            }),
-            ThreadItem::UserImage { .. } => Some(Message {
-                role: MessageRole::User,
-                text: "[Image]".into(),
-            }),
-            ThreadItem::AgentMessage { text, .. } => Some(Message {
-                role: MessageRole::Agent,
-                text: text.clone(),
-            }),
+            ThreadItem::UserMessage { text, .. } => {
+                Some(Message::plain(MessageRole::User, text.clone()))
+            }
+            ThreadItem::UserImage { .. } => {
+                Some(Message::plain(MessageRole::User, "[Image]".into()))
+            }
+            ThreadItem::AgentMessage { text, .. } => {
+                Some(Message::plain(MessageRole::Agent, text.clone()))
+            }
             ThreadItem::Reasoning { .. }
             | ThreadItem::Plan { .. }
             | ThreadItem::ToolCall { .. }

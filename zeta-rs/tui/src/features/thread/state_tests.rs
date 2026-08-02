@@ -1,4 +1,5 @@
 use super::ThreadFeatureState;
+use crate::components::transcript::CommandStatus;
 use crate::components::transcript::MessageRole;
 use crate::features::thread::ThreadPresentationEvent;
 use zeta_protocol::ItemId;
@@ -53,6 +54,33 @@ fn local_presentation_events_share_the_thread_owner() {
             (MessageRole::Notice, "turn interrupted"),
         ]
     );
+}
+
+#[test]
+fn command_completion_groups_the_command_with_its_result() {
+    let mut state = ThreadFeatureState::default();
+
+    state.update(ThreadPresentationEvent::CommandStarted(
+        "/theme zeta-code-light".into(),
+    ));
+    let running = state.messages().first().unwrap();
+    assert_eq!(running.command_status, Some(CommandStatus::Running));
+    assert_eq!(running.detail, None);
+
+    state.update(ThreadPresentationEvent::CommandCompleted {
+        command: "/theme zeta-code-light".into(),
+        result: "Theme set to Zeta Code Light".into(),
+    });
+
+    let message = state.messages().first().unwrap();
+    assert_eq!(state.messages().len(), 1);
+    assert_eq!(message.role, MessageRole::Command);
+    assert_eq!(message.text, "/theme zeta-code-light");
+    assert_eq!(
+        message.detail.as_deref(),
+        Some("Theme set to Zeta Code Light")
+    );
+    assert_eq!(message.command_status, Some(CommandStatus::Succeeded));
 }
 
 #[test]

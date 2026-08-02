@@ -65,9 +65,9 @@ Tool、approval policy 或 persistence。
   Theme Pane preview 投影有限的 syntax/diff token，并按 TrueColor、ANSI-256、ANSI-16 或
   Monochrome 能力确定性降级；`features/theme` 拥有 `/theme` 的固定八项 Zeta Code Pane、`Theme` 标题及其上下各一行间距、编号、
   active 标记、候选 frame highlight、仅带上下较高对比度长节虚线的 diff preview、palette 来源说明和选择动作，Pane
-  不启用搜索，Enter 原子保存、立即重绘并关闭整个 Theme flow 返回主界面，失败时保留 Pane，且不追加 transcript notice，`/theme <id>` 保留直接切换；
-  Auto 根据终端 `COLORFGBG` 背景报告选择
-  Light/Dark，缺失或无效时回退 Dark；
+  不启用搜索，Enter 原子保存、立即重绘并关闭整个 Theme flow 返回主界面，失败时保留 Pane；成功时以状态圆点、`/theme <id>` 和以 `└─` 归属且与命令文字对齐的 `Theme set to …` transcript 记录执行结果，`/theme <id>` 保留直接切换；
+  Auto 在 terminal raw mode 建立后查询一次 OSC 11 实际背景 RGB，据此选择 Light/Dark；查询超时
+  后依次回退 `COLORFGBG` 和 Dark。结果在会话内缓存，后续打开 Theme Pane 不重复查询；
 - basic Unicode-aware wrapped-row estimation 和自动滚动到底部。
 
 当前没有 Session browser、Thread navigation、Markdown、stream delta render、Tool transcript、
@@ -148,10 +148,11 @@ src/
 ├── host/
 │   └── clipboard.rs               # native file/RGBA clipboard adapter
 ├── terminal/
-│   └── session.rs                 # transactional terminal acquisition and RAII restore
+│   ├── session.rs                 # transactional terminal acquisition and RAII restore
+│   └── terminal_probe.rs          # bounded OSC query before the crossterm event reader starts
 └── ui/
     ├── layout.rs                  # shared pure geometry
-    ├── theme.rs                   # shared token subset and terminal capability projection
+    ├── theme.rs                   # shared token subset and detected color-level projection
     └── theme_tests.rs             # TrueColor/ANSI/monochrome projection contract
 ```
 

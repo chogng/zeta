@@ -9,6 +9,8 @@ use zeta_protocol::Thread;
 /// A fact delivered to the single writer of TUI presentation state.
 pub(crate) enum AppEvent {
     ClipboardImageRead(Result<Vec<u8>, String>),
+    CommandStarted(String),
+    CommandCompleted { command: String, result: String },
     ConfigSnapshotReceived(ConfigReadResult),
     FailureReported(String),
     FileSearchSnapshotReceived(PathSearchSnapshot),

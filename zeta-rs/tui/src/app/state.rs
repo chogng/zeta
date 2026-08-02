@@ -277,6 +277,15 @@ impl App {
             AppEvent::ClipboardImageRead(Ok(bytes)) => self.attach_image_bytes(bytes),
             AppEvent::ClipboardImageRead(Err(error)) => self.record_clipboard_error(error),
             AppEvent::ConfigSnapshotReceived(config) => self.status_line.apply_config(&config),
+            AppEvent::CommandStarted(command) => {
+                self.thread
+                    .update(ThreadPresentationEvent::CommandStarted(command));
+            }
+            AppEvent::CommandCompleted { command, result } => {
+                self.thread
+                    .update(ThreadPresentationEvent::CommandCompleted { command, result });
+                self.status = Status::Ready;
+            }
             AppEvent::FailureReported(error) => {
                 self.thread
                     .update(ThreadPresentationEvent::FailureReported(error));

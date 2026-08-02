@@ -62,13 +62,15 @@ background，再按 TrueColor、ANSI-256、ANSI-16、Monochrome 投影；其他 
 config、Session store 或 TOML。无参数 `/theme` 打开由 `features/theme` 拥有、不可搜索的固定
 Zeta Code Theme Pane 以 `Theme` 为标题，顶部分隔线与标题、标题与第一个候选项之间各保留一行；固定选项为 Auto、Dark/Light、对应 colorblind-friendly 与 ANSI-only 模式，以及 Custom
 color theme。候选行编号展示，cursor 选择色和 syntax/diff preview 随候选主题变化；Enter 原子保存、
-即时切换并关闭整个 Theme flow 返回主界面，且不写入 transcript notice；保存失败时则保留当前 Pane 以显示错误。移动 cursor 时，Theme Pane 分隔线、上方 welcome banner
+即时切换并关闭整个 Theme flow 返回主界面；保存成功后 transcript 以独立的状态圆点显示实际执行的 `/theme <id>`，下一行通过 `└─` 结构连接符归属结果说明，两行正文保持同列对齐；保存失败时则保留当前 Pane 以显示错误。移动 cursor 时，Theme Pane 分隔线、上方 welcome banner
 框线使用候选 highlight；独立 `Diff preview` 区域不画左右边框，只用候选 muted token 绘制上下
 较高对比度的长节虚线。主题列表与 preview 间保留两行，palette 来源说明与操作提示间保留一行。preview 下方标明
 GitHub、GitHub Colorblind、ANSI 16 colors 或 User-defined 配色来源。`/theme <id>` 保留直接切换。通用 Selection Pane 的搜索是独立、
 可配置的底座；启用搜索的 feature 必须先按 Space 进入 search mode，footer 明示 `Space search`。
-Auto 使用终端的 `COLORFGBG` 背景报告选择 Light/Dark，无法识别时安全回退 Dark；显式模式不受该
-环境提示影响。
+所有本地 command 都可使用同一个“命令 + 结果” transcript 形式：命令本身不带箭头符号，独立的状态圆点为 Running 显示 `◉`，为 Succeeded 显示 `●`；结果行使用与状态位结构相连的 `└─` 表达归属，正文与命令文字同列对齐并使用弱化色，之后才空行。当前没有折叠交互；待有多行 command output 时再基于这个分组添加展开/收起。
+Auto 在终端 raw mode 建立后、输入事件线程启动前发出一次 OSC 11 背景色查询，并按实际 RGB
+亮度选择 Light/Dark；120 ms 内没有有效响应时读取 `COLORFGBG`，仍无法识别才安全回退 Dark。
+检测结果在当前 TUI 会话内缓存，主题面板与再次选择 Auto 不会重复查询；显式模式不受该判断影响。
 
 因此 TUI 必须是可丢弃、可重新同步的 presentation shell，而不是第二个 Agent runtime 或
 App Server facade。产品权威状态的依赖链固定为：
@@ -545,13 +547,18 @@ typed ID 和 action 属于 `features/sessions/`。`ui/` 只提供这两个上层
 
 ## 10. `terminal/`：真实终端基础设施
 
+宿主终端身份、multiplexer、色彩等级与背景回退解释的 crate contract 见
+[`zeta-terminal-detection`](../zeta-rs/terminal-detection/README.md)；本节只定义 TUI 对真实终端
+I/O 和 crossterm 生命周期的所有权。
+
 `terminal/` 负责：
 
 - raw mode、alternate screen 和 bracketed paste；
 - Crossterm event 读取；
 - Ratatui backend 和 frame scheduling；
 - terminal resize、reflow、cursor 和 scrollback；
-- terminal capability 探测和控制序列；
+- 在独占 input window 中执行 terminal response probe 和控制序列；host terminal 身份、色彩等级及
+  background fallback 解释由 `zeta-terminal-detection` 提供；
 - panic、错误和正常退出时恢复终端。
 
 `TerminalSession` 必须使用 RAII 恢复 raw mode、alternate screen、paste mode 和 cursor。

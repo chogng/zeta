@@ -156,7 +156,13 @@ fn set_or_show_theme(arguments: &str, app: &mut App) -> Result<(), CommandExecut
         let catalog = ui::theme_catalog().map_err(CommandExecutionError)?;
         app.update(AppEvent::ThemeViewOpened(theme_selection_view(&catalog)));
     } else {
-        ui::select_theme(arguments).map_err(CommandExecutionError)?;
+        let command = format!("/theme {arguments}");
+        app.update(AppEvent::CommandStarted(command.clone()));
+        let label = ui::select_theme(arguments).map_err(CommandExecutionError)?;
+        app.update(AppEvent::CommandCompleted {
+            command,
+            result: format!("Theme set to {label}"),
+        });
     }
     Ok(())
 }

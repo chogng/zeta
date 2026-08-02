@@ -170,7 +170,7 @@ TUI 有意只消费共享 token 子集，并根据终端能力降级到 TrueColo
 }
 ```
 
-`tui.colorTheme` 可省略；省略时跟随 `workbench.colorTheme`。`system` 仍表示跟随操作系统并在内置 Light/Dark 之间切换。Desktop 保存/预览会即时更新；TUI 可用 `/theme` 打开不带搜索的 Zeta Code Theme Pane，通过 Enter 原子保存、即时切换并返回主界面，也可用 `/theme <id>` 直接选择。Custom color theme 行进入有效用户主题列表；外部修改主题文件后，Native 与 TUI 仍需重启才能重新读取文件内容。
+`tui.colorTheme` 可省略；省略时跟随 `workbench.colorTheme`。`system` 仍表示跟随操作系统并在内置 Light/Dark 之间切换。Desktop 保存/预览会即时更新；TUI 可用 `/theme` 打开不带搜索的 Zeta Code Theme Pane，通过 Enter 原子保存、即时切换并返回主界面，并在 transcript 中以状态圆点、`/theme <id>` 与下一行通过 `└─` 归属且对齐的 `Theme set to …` 记录结果；也可用 `/theme <id>` 直接选择。Custom color theme 行进入有效用户主题列表；外部修改主题文件后，Native 与 TUI 仍需重启才能重新读取文件内容。
 
 ## 开发与验证
 

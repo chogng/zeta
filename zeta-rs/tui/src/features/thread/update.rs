@@ -4,6 +4,8 @@ use zeta_protocol::Thread;
 pub(crate) enum ThreadPresentationEvent {
     SnapshotReceived(Thread),
     UserSubmitted(String),
+    CommandStarted(String),
+    CommandCompleted { command: String, result: String },
     NoticeReceived(String),
     FailureReported(String),
     Interrupted,
