@@ -1,5 +1,8 @@
 .zeta-workbench-sidebar {
-  border-right: 1px solid var(--zeta-border);
+  margin-right: 2px;
+  margin-left: 4px;
+  border: 1px solid var(--zeta-border);
+  border-radius: 8px;
 }
 .zeta-sidebar-part {
   background: var(--zeta-side-bar-background);

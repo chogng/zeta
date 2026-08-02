@@ -1,9 +1,9 @@
 .zeta-workbench-titlebar {
+  color: var(--zeta-title-bar-foreground);
   flex-direction: row;
   align-items: center;
   justify-content: space-between;
   padding: 0 12px;
-  border-bottom: 1px solid var(--zeta-border);
   background: var(--zeta-title-bar-background);
 }
 
