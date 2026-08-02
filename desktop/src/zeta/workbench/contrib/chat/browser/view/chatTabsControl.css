@@ -1,26 +1,35 @@
 .zeta-chat-tabs-control {
+  display: flex;
   min-width: 0;
   flex: 1 1 auto;
+  align-items: center;
+  margin-left: 4px;
   overflow: hidden;
+}
+
+.zeta-chat-tabs-control .zeta-tab-list {
+  height: 26px;
 }
 
 .zeta-chat-tabs-control .zeta-tab {
   display: flex;
   min-width: 64px;
   max-width: 180px;
-  height: 100%;
+  height: 26px;
   align-items: center;
+  border-radius: 4px;
   color: var(--zeta-description-foreground);
+  background: #F8F8F8;
 }
 
 .zeta-chat-tabs-control .zeta-tab:hover {
   color: var(--zeta-foreground);
-  background: var(--zeta-button-hover-background);
+  background: #F8F8F8;
 }
 
 .zeta-chat-tabs-control .zeta-tab.checked {
   color: var(--zeta-foreground);
-  background: var(--zeta-editor-background);
+  background: #EEEEEE;
 }
 
 .zeta-chat-tabs-control .zeta-tab-label {
@@ -39,7 +48,7 @@
 }
 
 .zeta-chat-tabs-control .zeta-tab-actions {
-  padding-right: 4px;
+  padding-right: 1px;
 }
 
 .zeta-chat-tabs-control .zeta-tab-label:focus-visible {
