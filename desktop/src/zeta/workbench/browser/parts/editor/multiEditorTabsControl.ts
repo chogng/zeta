@@ -1,4 +1,4 @@
-import "./multiEditorTabsControl.css";
+import "./media/multiEditorTabsControl.css";
 import { DataTransfers } from "../../../../base/browser/dnd.js";
 import { TabList } from "../../../../base/browser/ui/tablist/tabList.js";
 import { containsExternalEditorDrop } from "./editorDropData.js";
