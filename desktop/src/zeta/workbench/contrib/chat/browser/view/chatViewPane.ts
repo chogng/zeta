@@ -36,7 +36,6 @@ export class ChatViewPane extends ViewPane {
   private readonly empty: HTMLDivElement;
   private readonly panes = new Map<string, ChatPane>();
   private activePane: ChatPane | undefined;
-  private sessionsInitialized = false;
   private viewDisposed = false;
 
   constructor(
@@ -78,7 +77,7 @@ export class ChatViewPane extends ViewPane {
     this.contentElement.append(body);
     this.own(sessionService.onDidChange(() => this.syncSessions()));
     this.own(layoutService.onDidChangePartVisibility((event) => {
-      if (event.partId === "auxiliarybar" && event.visible && this.sessionsInitialized) this.ensureTabForVisibleChat();
+      if (event.partId === "auxiliarybar" && event.visible) this.ensureTabForVisibleChat();
     }));
     this.defer(() => {
       this.viewDisposed = true;
@@ -86,9 +85,9 @@ export class ChatViewPane extends ViewPane {
       this.panes.clear();
     });
     this.syncSessions();
+    this.ensureTabForVisibleChat();
     void sessionService.initialize().then(() => {
       if (this.viewDisposed) return;
-      this.sessionsInitialized = true;
       this.ensureTabForVisibleChat();
     });
   }

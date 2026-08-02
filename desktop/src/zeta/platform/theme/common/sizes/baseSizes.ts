@@ -12,9 +12,10 @@ export const fontSizeBody2 = dimension("fontSize.body2", 11, "Secondary body fon
 export const fontSizeLabel1 = dimension("fontSize.label1", 12, "Section title and tab label font size.");
 export const fontSizeLabel2 = dimension("fontSize.label2", 11, "Metadata label font size.");
 export const fontSizeLabel3 = dimension("fontSize.label3", 10, "Badge label font size.");
-export const fontWeightRegular = scalar("fontWeight.regular", 400, "Regular font weight.");
-export const fontWeightSemiBold = scalar("fontWeight.semiBold", 600, "Semibold font weight.");
+export const fontWeightRegular = scalar("fontWeight.regular", 400, "Regular font weight for un-emphasized text.");
+export const fontWeightSemiBold = scalar("fontWeight.semiBold", 600, "Strong font weight paired with any font-size role for tabs, headings, and emphasized text.");
 
+export const tabHeight = dimension("tab.height", 24, "Standard height for TabList tabs.");
 export const actionBarGap = dimension("actionBar.gap", 2, "Gap between action bar items.");
 export const toolbarItemGap = dimension("toolbar.itemGap", 2, "Gap before a toolbar item.");
 export const toolbarActionSize = dimension("toolbar.actionSize", 24, "Default square toolbar action size.");

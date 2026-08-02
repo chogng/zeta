@@ -51,6 +51,8 @@
           "border",
           "widget.border",
           "widget.shadow",
+          "chat.tabBackground",
+          "chat.tabActiveBackground",
           "input.foreground",
           "input.background",
           "input.border",

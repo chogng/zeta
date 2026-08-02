@@ -67,8 +67,6 @@
   > .zeta-tab {
   width: 24px;
   min-width: 24px;
-  height: 24px;
-  min-height: 24px;
   padding: 0;
 }
 
@@ -77,7 +75,7 @@
   > .zeta-action-bar {
   gap: 0;
   padding: 0 8px;
-  font-size: var(--zeta-font-size-label2);
+  font-size: var(--zeta-font-size-body1);
   line-height: 20px;
 }
 
@@ -87,7 +85,6 @@
   > .zeta-tab {
   width: auto;
   min-width: 0;
-  height: 24px;
   padding: 2px 4px;
 }
 
@@ -124,7 +121,6 @@
   color: inherit;
   background: transparent;
   cursor: default;
-  font: inherit;
   text-decoration: none;
   opacity: 0.6;
 }
@@ -139,7 +135,6 @@
 .zeta-composite-bar-label .zeta-tab-label {
   width: auto;
   padding: 0 2px;
-  font-weight: var(--zeta-font-weight-regular);
 }
 
 .zeta-composite-bar-label .zeta-icon-label-text {

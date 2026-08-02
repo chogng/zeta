@@ -188,6 +188,20 @@ Theme registry
 
 Theme 不判断某个 tab 是否 active，Part 也不选择 active token。`CompositeBar` 在自己的状态 selector 中消费相应 token。
 
+## 字体层级
+
+字体角色由字号与强调程度两个正交 token 组合，不增加 `body1Strong`、`label1Bold` 之类的复合 token。`fontSize.*` 回答文本处于哪个阅读层级；`fontWeight.*` 回答它是否需要强调。这样同一强调语义能在不同字号间保持一致，也避免把 600 或 400 重新写成局部魔法数。
+
+| 文本语义 | 字号 token | 字重 token |
+| --- | --- | --- |
+| 常规正文 | `fontSize.body1` | `fontWeight.regular` |
+| 常规标签 / 次级标题 | `fontSize.label1` | `fontWeight.regular` |
+| 元数据 | `fontSize.label2` | `fontWeight.regular` |
+| 强调正文 / Pane tab | `fontSize.body1` | `fontWeight.semiBold` |
+| 强调标题 | 对应 `fontSize.heading*` 或 `fontSize.label1` | `fontWeight.semiBold` |
+
+`TabList` 基座拥有 tab label 的统一强调字重 `fontWeight.semiBold` 与标准高度 `tab.height`（24px）；`CompositeBar`、Chat tabs、Terminal tabs 等组合控件通过 presentation 决定字号、行高和内部间距，并只能调整直接托管的 TabList root 以完成对齐。Part 不得用深层 selector 改写这些字体规则。系统仅提供 regular（400）与 strong（600）两级；不引入 700 的第三层级。
+
 新增视觉规则时：
 
 1. 先确认已有语义 token 是否准确。

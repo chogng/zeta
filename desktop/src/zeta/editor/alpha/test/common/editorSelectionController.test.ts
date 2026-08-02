@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { DisposableTracker, installDisposableTracker } from "../../../../base/common/disposableTracker.js";
 import { EditorSelectionChangeReason, EditorSelectionController } from "../../common/editorSelectionController.js";
 import { TextSelection, TextSelectionSet } from "../../common/selection.js";
 import { TextPosition, TextRange } from "../../common/text.js";
@@ -93,6 +94,19 @@ test("EditorSelectionController maps external model edits", () => {
       modelVersion: 2,
     }],
   });
+});
+
+test("EditorSelectionController releases tracked ranges without taking their model ownership", () => {
+  const tracker = new DisposableTracker();
+  {
+    using installation = installDisposableTracker(tracker);
+    using model = new TextModel("abc");
+    using controller = new EditorSelectionController(model, single(0, 0));
+
+    controller.setSelections(single(2, 2));
+  }
+
+  tracker.assertNoLeaks();
 });
 
 test("Shared editors retain independent selection ownership", () => {

@@ -222,6 +222,46 @@
       }
     },
     {
+      "id": "chat.tabBackground",
+      "kind": "color",
+      "cssVariable": "--zeta-chat-tab-background",
+      "owner": "chat.presentation",
+      "description": "Background for inactive Chat session tabs.",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#F8F8F8",
+        "light": "#F8F8F8",
+        "high-contrast-dark": "#F8F8F8",
+        "high-contrast-light": "#F8F8F8"
+      },
+      "values": {
+        "dark": "#f8f8f8",
+        "light": "#f8f8f8",
+        "high-contrast-dark": "#f8f8f8",
+        "high-contrast-light": "#f8f8f8"
+      }
+    },
+    {
+      "id": "chat.tabActiveBackground",
+      "kind": "color",
+      "cssVariable": "--zeta-chat-tab-active-background",
+      "owner": "chat.presentation",
+      "description": "Background for the active Chat session tab.",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#EEEEEE",
+        "light": "#EEEEEE",
+        "high-contrast-dark": "#EEEEEE",
+        "high-contrast-light": "#EEEEEE"
+      },
+      "values": {
+        "dark": "#eeeeee",
+        "light": "#eeeeee",
+        "high-contrast-dark": "#eeeeee",
+        "high-contrast-light": "#eeeeee"
+      }
+    },
+    {
       "id": "input.foreground",
       "kind": "color",
       "cssVariable": "--zeta-input-foreground",
@@ -2501,7 +2541,7 @@
       "kind": "size",
       "cssVariable": "--zeta-font-weight-regular",
       "owner": "platform.ui",
-      "description": "Regular font weight.",
+      "description": "Regular font weight for un-emphasized text.",
       "value": "400"
     },
     {
@@ -2509,8 +2549,16 @@
       "kind": "size",
       "cssVariable": "--zeta-font-weight-semi-bold",
       "owner": "platform.ui",
-      "description": "Semibold font weight.",
+      "description": "Strong font weight paired with any font-size role for tabs, headings, and emphasized text.",
       "value": "600"
+    },
+    {
+      "id": "tab.height",
+      "kind": "size",
+      "cssVariable": "--zeta-tab-height",
+      "owner": "platform.ui",
+      "description": "Standard height for TabList tabs.",
+      "value": "24px"
     },
     {
       "id": "actionBar.gap",

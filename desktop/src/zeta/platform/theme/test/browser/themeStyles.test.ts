@@ -15,6 +15,8 @@ test("color theme binding applies changes and restores prior root styles", () =>
   const target = new FakeThemeTarget();
   const foreground = colorCssVariable(ColorId.foreground);
   const background = colorCssVariable(ColorId.workbenchBackground);
+  const chatTabBackground = colorCssVariable(ColorId.chatTabBackground);
+  const chatTabActiveBackground = colorCssVariable(ColorId.chatTabActiveBackground);
   target.style.setProperty(foreground, "hotpink", "important");
   target.style.setProperty("color-scheme", "only light");
   target.setAttribute("data-color-theme", "host-theme");
@@ -25,6 +27,8 @@ test("color theme binding applies changes and restores prior root styles", () =>
   );
   assert.equal(target.style.getPropertyValue(foreground), "#cccccc");
   assert.equal(target.style.getPropertyValue(background), "#1e1e1e");
+  assert.equal(target.style.getPropertyValue(chatTabBackground), "#f8f8f8");
+  assert.equal(target.style.getPropertyValue(chatTabActiveBackground), "#eeeeee");
   assert.equal(target.style.getPropertyValue("color-scheme"), "dark");
   assert.equal(target.style.getPropertyValue(sizeCssVariable("scrollbar.size")), "10px");
   assert.equal(target.style.getPropertyValue(sizeCssVariable("fontSize.body1")), "13px");
@@ -34,6 +38,8 @@ test("color theme binding applies changes and restores prior root styles", () =>
 
   service.setColorTheme(lightColorTheme);
   assert.equal(target.style.getPropertyValue(background), "#ffffff");
+  assert.equal(target.style.getPropertyValue(chatTabBackground), "#f8f8f8");
+  assert.equal(target.style.getPropertyValue(chatTabActiveBackground), "#eeeeee");
   assert.equal(target.style.getPropertyValue("color-scheme"), "light");
   assert.equal(target.getAttribute("data-color-theme"), "zeta-light");
 
@@ -41,6 +47,8 @@ test("color theme binding applies changes and restores prior root styles", () =>
   assert.equal(target.style.getPropertyValue(foreground), "hotpink");
   assert.equal(target.style.getPropertyPriority(foreground), "important");
   assert.equal(target.style.getPropertyValue(background), "");
+  assert.equal(target.style.getPropertyValue(chatTabBackground), "");
+  assert.equal(target.style.getPropertyValue(chatTabActiveBackground), "");
   assert.equal(target.style.getPropertyValue(sizeCssVariable("scrollbar.size")), "");
   assert.equal(target.style.getPropertyValue(sizeCssVariable("fontSize.body1")), "");
   assert.equal(target.style.getPropertyValue(sizeCssVariable("fontWeight.regular")), "");

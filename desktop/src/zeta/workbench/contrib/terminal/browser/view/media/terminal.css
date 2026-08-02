@@ -71,7 +71,6 @@
   display: flex;
   align-items: center;
   width: 100%;
-  min-height: 22px;
   flex: 0 0 auto;
 }
 
@@ -100,7 +99,6 @@
   border: 0;
   color: inherit;
   background: transparent;
-  font: inherit;
   text-align: left;
   cursor: pointer;
 }

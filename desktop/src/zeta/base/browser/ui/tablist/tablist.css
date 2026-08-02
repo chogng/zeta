@@ -20,6 +20,7 @@
 .zeta-tab {
   display: flex;
   min-width: 0;
+  height: var(--zeta-tab-height);
   align-items: center;
 }
 
@@ -33,6 +34,7 @@
   background: transparent;
   cursor: default;
   font: inherit;
+  font-weight: var(--zeta-font-weight-semi-bold);
 }
 
 .zeta-tab-label > .zeta-icon-label {

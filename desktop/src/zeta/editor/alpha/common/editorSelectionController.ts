@@ -355,11 +355,12 @@ export class EditorSelectionController extends DisposableOwner {
     const previous = this.currentSelections;
     this.trackedSelectionResources.clear();
     this.trackedSelections = selections.selections.map(selection => ({
-      range: this.trackedSelectionResources.add(
+      range: this.trackedSelectionResources.adopt(
         this.model.trackRange(
           selection.range,
           TrackedRangeStickiness.NeverGrowsAtEdges,
         ),
+        range => range.dispose(),
       ),
       direction: selection.direction,
     }));
