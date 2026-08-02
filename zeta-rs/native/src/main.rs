@@ -6,16 +6,19 @@ use agent_session::AgentSession;
 use agent_sidebar::AgentSidebarState;
 use agent_sidebar_workspace::AgentSidebarWorkspace;
 use explorer_tree::ExplorerTreeAction;
+use file_editor_host::FileEditorHost;
+use file_editor_input::FileEditorInputState;
 use git_branch_context_menu::GitBranchContextMenuState;
 use keybindings_resource::{KeybindingsResource, KeybindingsResourcePoll};
 use keyboard_shortcuts::KeyboardShortcutsState;
+use language_server_settings::LanguageServerSettingsState;
 use layout_inspector::LayoutInspector;
 use native_event::NativeEvent;
 use root_layout::{InspectorPane, RootLayout};
 use session_context_menu::SessionContextMenuState;
 use session_search::SessionSearch;
 use session_sidebar::SessionSidebarState;
-use shell_interaction::COMPOSER;
+use shell_interaction::{COMPOSER, FILE_EDITOR_DOCUMENT};
 use shell_scene::{
     LogicalViewport, ShellPresentation, ShellPresentationModel, build_shell_presentation,
     rebuild_shell_overlays, terminal_grid_size_for_viewport,
@@ -30,12 +33,13 @@ use thread_timeline_scroll::ThreadTimelineScroll;
 use workspace_context::WorkspaceContext;
 use workspace_path_picker::WorkspacePathPickerState;
 use workspace_surface::WorkspaceSurface;
+use zeta_editor::CodeEditorStyle;
 use zeta_renderer::{RenderOutcome, RenderTargetSize, Renderer};
 use zeta_terminal::{BlockStatus, ScreenBuffer};
 use zeta_theme::{ColorScheme, ThemeLoadOptions, ThemeLoader, ThemeSurface, default_device_root};
 use zeta_ui::{CaretBlinkAdvance, CaretBlinkController, Point, TextInputLayoutEngine};
 use zeta_ui_dispatch::{
-    CursorFeedback, DispatchInvalidation, DispatchOutcome, UiDispatch, UiIntent,
+    CursorFeedback, DispatchInvalidation, DispatchOutcome, ElementId, UiDispatch, UiIntent,
 };
 use zeta_winit::{
     ActiveEventLoop, ApplicationHandler, ControlFlow, CursorIcon, ElementState, LogicalSize,
@@ -63,6 +67,13 @@ mod composer_shell;
 mod editor_pane;
 mod explorer_pane;
 mod explorer_tree;
+mod file_editor_auto_scroll;
+mod file_editor_diagnostics;
+mod file_editor_host;
+mod file_editor_input;
+mod file_editor_language_features;
+mod file_editor_pane;
+mod file_editor_search;
 mod git_branch_context_menu;
 mod git_branch_context_menu_input;
 mod input_context_toolbar;
@@ -71,6 +82,9 @@ mod keybinding_input;
 mod keybindings;
 mod keybindings_resource;
 mod keyboard_shortcuts;
+mod language_server_settings;
+mod language_server_settings_input;
+mod language_service_host;
 mod layout_inspector;
 mod native_event;
 mod renderer_backend;
@@ -129,6 +143,10 @@ struct NativeApp {
     frame_scheduler: FrameScheduler,
     agent_sidebar: AgentSidebarState,
     agent_sidebar_workspace: AgentSidebarWorkspace,
+    file_editor_host: FileEditorHost,
+    file_editor_input: FileEditorInputState,
+    file_editor_search: file_editor_search::FileEditorSearchState,
+    language_service: language_service_host::NativeLanguageService,
     session_sidebar: SessionSidebarState,
     session_search: SessionSearch,
     session_context_menu: SessionContextMenuState,
@@ -146,6 +164,7 @@ struct NativeApp {
     composer_interaction_pane: composer_interaction_pane::ComposerInteractionPaneState,
     text_layout: TextInputLayoutEngine,
     caret_blink: CaretBlinkController,
+    code_editor_style: CodeEditorStyle,
     event_proxy: zeta_winit::EventLoopProxy<NativeEvent>,
     cursor_position: Option<Point>,
     terminal_pointer: TerminalPointer,
@@ -154,8 +173,10 @@ struct NativeApp {
     keybindings: keybindings::NativeKeybindings,
     keybindings_resource: KeybindingsResource,
     keyboard_shortcuts: KeyboardShortcutsState,
+    language_server_settings: LanguageServerSettingsState,
     layout_inspector: LayoutInspector,
     modifiers: ModifiersState,
+    pending_focus: Option<ElementId>,
     physical_extent: PhysicalExtent,
     scale_factor: f64,
     failed: bool,
@@ -179,6 +200,10 @@ impl NativeApp {
             eprintln!("{error}");
         }
         let composer = AgentComposer::for_working_directory(workspace_context.working_directory());
+        let language_service = language_service_host::NativeLanguageService::start(
+            workspace_context.working_directory(),
+            event_proxy.clone(),
+        );
         Self {
             window_id: None,
             window: None,
@@ -187,6 +212,10 @@ impl NativeApp {
             frame_scheduler: FrameScheduler::default(),
             agent_sidebar: AgentSidebarState::default(),
             agent_sidebar_workspace,
+            file_editor_input: FileEditorInputState::default(),
+            file_editor_search: file_editor_search::FileEditorSearchState::default(),
+            language_service,
+            file_editor_host: FileEditorHost::default(),
             session_sidebar: SessionSidebarState::default(),
             session_search: SessionSearch::default(),
             session_context_menu: SessionContextMenuState::default(),
@@ -205,6 +234,7 @@ impl NativeApp {
                 composer_interaction_pane::ComposerInteractionPaneState::default(),
             text_layout: TextInputLayoutEngine::new(),
             caret_blink: CaretBlinkController::default(),
+            code_editor_style: CodeEditorStyle::light(),
             event_proxy,
             cursor_position: None,
             terminal_pointer: TerminalPointer::default(),
@@ -213,8 +243,10 @@ impl NativeApp {
             keybindings,
             keybindings_resource,
             keyboard_shortcuts: KeyboardShortcutsState::default(),
+            language_server_settings: LanguageServerSettingsState::default(),
             layout_inspector: LayoutInspector::default(),
             modifiers: ModifiersState::default(),
+            pending_focus: None,
             physical_extent: PhysicalExtent::new(0, 0),
             scale_factor: 1.0,
             failed: false,
@@ -245,7 +277,8 @@ impl NativeApp {
         self.palette = palette;
         self.theme_scheme = loaded.snapshot.color_scheme();
         self.theme_follows_system = loaded.follows_system;
-        self.composer.set_editor_style(editor_style);
+        self.composer.set_editor_style(editor_style.clone());
+        self.code_editor_style = editor_style;
         self.agent_sidebar_workspace
             .set_editor_style(palette.multi_diff_editor_style());
     }
@@ -291,12 +324,10 @@ impl NativeApp {
 
     fn active_screen(&self) -> ScreenBuffer {
         if self.workspace_surface.is_terminal() {
-            return ScreenBuffer::Alternate;
+            ScreenBuffer::Alternate
+        } else {
+            ScreenBuffer::Primary
         }
-        self.terminal
-            .as_ref()
-            .map(|terminal| terminal.core().active_screen())
-            .unwrap_or_default()
     }
 
     fn rebuild_presentation(&mut self) {
@@ -335,9 +366,21 @@ impl NativeApp {
             with_shell_presentation_model(self, window_control_insets, |model, text_layout| {
                 build_shell_presentation(viewport, model, text_layout)
             });
-        let focus_outcome = self
-            .ui_dispatch
-            .reconcile_focus(&presentation.interaction_frame, COMPOSER);
+        let requested_focus = self.pending_focus.take();
+        let preferred_focus = requested_focus.unwrap_or_else(|| {
+            if self.workspace_surface.is_editor() {
+                FILE_EDITOR_DOCUMENT
+            } else {
+                COMPOSER
+            }
+        });
+        let focus_outcome = if requested_focus.is_some() {
+            self.ui_dispatch
+                .focus_element(&presentation.interaction_frame, preferred_focus)
+        } else {
+            self.ui_dispatch
+                .reconcile_focus(&presentation.interaction_frame, preferred_focus)
+        };
         if focus_outcome.invalidation == DispatchInvalidation::Paint {
             presentation =
                 with_shell_presentation_model(self, window_control_insets, |model, text_layout| {
@@ -360,6 +403,9 @@ impl NativeApp {
             .compose(&mut presentation.scene, root_layout, self.cursor_position);
         self.presentation = Some(presentation);
         self.frame_scheduler.clear();
+        if requested_focus.is_some() {
+            self.sync_input_focus();
+        }
         self.update_ime_cursor_area();
     }
 
@@ -491,6 +537,12 @@ impl NativeApp {
     }
 
     fn activate_shell_element(&mut self, id: zeta_ui_dispatch::ElementId) {
+        if self.activate_language_server_settings_element(id) {
+            return;
+        }
+        if self.activate_file_editor_element(id) {
+            return;
+        }
         let interaction_item_count = self
             .composer_interaction
             .view()
@@ -503,8 +555,14 @@ impl NativeApp {
             return;
         }
         if let Some(action) = self.agent_sidebar_workspace.activate_file_tree_element(id) {
-            if let ExplorerTreeAction::LoadChildren { element, path } = action {
-                self.load_file_tree_directory(element, path);
+            match action {
+                ExplorerTreeAction::OpenFile { path } => self.open_workspace_file(path),
+                ExplorerTreeAction::LoadChildren { element, path } => {
+                    self.load_file_tree_directory(element, path);
+                }
+                ExplorerTreeAction::Handled
+                | ExplorerTreeAction::StateChanged
+                | ExplorerTreeAction::Focus(_) => {}
             }
             return;
         }
@@ -543,6 +601,9 @@ impl NativeApp {
         if self.route_session_sidebar_resize_move(point) {
             return;
         }
+        if self.route_file_editor_pointer_move() {
+            return;
+        }
         if self.route_multi_diff_scrollbar_move(point) {
             return;
         }
@@ -565,6 +626,7 @@ impl NativeApp {
 
     fn pointer_left(&mut self) {
         self.cursor_position = None;
+        self.file_editor_input.cancel_pointer();
         if self.route_layout_inspector_pointer_left() {
             return;
         }
@@ -655,6 +717,7 @@ impl NativeApp {
         }
         if button == MouseButton::Left {
             self.primary_button_changed(state);
+            self.route_file_editor_pointer_button(state);
         }
     }
 
@@ -724,15 +787,27 @@ fn with_shell_presentation_model<R>(
         session_sidebar,
         agent_sidebar,
         agent_sidebar_workspace,
+        file_editor_host,
+        file_editor_input,
+        file_editor_search,
+        language_service,
+        code_editor_style,
         session_context_menu,
         git_branch_context_menu,
         workspace_path_picker,
         keybindings,
         keyboard_shortcuts,
+        language_server_settings,
+        cursor_position,
         keybindings_resource,
         text_layout,
         ..
     } = app;
+    let file_editor_diagnostics = language_service.active_editor_diagnostics(file_editor_host);
+    let language_hover = language_service.active_hover(file_editor_host);
+    let language_completions = language_service.active_completions(file_editor_host);
+    let language_server_runtime_state =
+        language_service.server_state(language_server_settings.selected_server().server_id());
     operation(
         ShellPresentationModel {
             palette: *palette,
@@ -740,7 +815,15 @@ fn with_shell_presentation_model<R>(
             terminal_scroll_offset: terminal_scroll.offset(),
             terminal_scrollbar_presentation: terminal_scroll.scrollbar_presentation(),
             terminal_selection: terminal_selection.range(),
-            terminal_surface: workspace_surface.is_terminal(),
+            workspace_surface: workspace_surface.active(),
+            file_editor_host,
+            file_editor_prompt: file_editor_input.prompt(),
+            file_editor_search,
+            file_editor_diagnostics,
+            language_hover,
+            language_completions,
+            completion_selection: file_editor_input.completion_selection(),
+            code_editor_style,
             thread_projection,
             thread_timeline_scroll_offset: thread_timeline_scroll.offset(),
             workspace_context,
@@ -759,8 +842,11 @@ fn with_shell_presentation_model<R>(
             workspace_path_picker,
             keybindings,
             keyboard_shortcuts,
+            language_server_settings,
+            language_server_runtime_state,
             keybinding_diagnostics: keybindings_resource.diagnostics(),
             window_control_insets,
+            pointer_position: *cursor_position,
         },
         text_layout,
     )
@@ -900,6 +986,7 @@ impl ApplicationHandler<NativeEvent> for NativeApp {
                 self.keybindings.cancel_chord();
                 self.keyboard_shortcuts.window_blurred();
                 self.terminal_pointer.cancel();
+                self.file_editor_input.cancel_pointer();
                 self.cancel_session_sidebar_resize();
                 self.agent_sidebar_workspace.cancel_multi_diff_scrollbar();
                 self.terminal_scroll.cancel_scrollbar();
@@ -944,6 +1031,21 @@ impl ApplicationHandler<NativeEvent> for NativeApp {
         let event = match event {
             NativeEvent::Agent(event) => {
                 self.handle_agent_session_event(event);
+                return;
+            }
+            NativeEvent::LanguageService(event) => {
+                self.language_service
+                    .handle_event(event, &self.file_editor_host);
+                if let Some(target) = self
+                    .language_service
+                    .take_definitions()
+                    .and_then(|definitions| definitions.targets.into_iter().next())
+                {
+                    self.open_language_definition(target);
+                    return;
+                }
+                self.rebuild_presentation();
+                self.request_redraw();
                 return;
             }
             NativeEvent::Terminal(event) => event,
@@ -1011,7 +1113,13 @@ impl ApplicationHandler<NativeEvent> for NativeApp {
             .advance_multi_diff_scrollbar(now);
         let terminal_scrollbar_changed = self.terminal_scroll.advance_scrollbar(now);
         let file_search_changed = self.agent_sidebar_workspace.poll_file_search();
-        if caret_changed || scrollbar_changed || terminal_scrollbar_changed || file_search_changed {
+        let file_editor_auto_scrolled = self.advance_file_editor_auto_scroll(now);
+        if caret_changed
+            || scrollbar_changed
+            || terminal_scrollbar_changed
+            || file_search_changed
+            || file_editor_auto_scrolled
+        {
             self.rebuild_presentation();
             self.request_redraw();
         }
@@ -1022,6 +1130,7 @@ impl ApplicationHandler<NativeEvent> for NativeApp {
             self.keybindings.chord_deadline(),
             self.keyboard_shortcuts_deadline(),
             Some(self.keybindings_resource.next_deadline()),
+            self.file_editor_input.auto_scroll_deadline(),
         ]
         .into_iter()
         .flatten()

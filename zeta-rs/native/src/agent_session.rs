@@ -10,7 +10,14 @@ use zeta_app_server_client::{
     InProcessClientOptions, ServerNotification, local_profile_root,
 };
 use zeta_app_server_protocol::protocol::common::{ClientInfo, CommandId};
-use zeta_app_server_protocol::protocol::fs::{FsReadDirectoryEntry, FsReadDirectoryParams};
+use zeta_app_server_protocol::protocol::config::{
+    ConfigCommandResult, ConfigReadResult, LanguageServerConfigDto, LanguageServerConfigureParams,
+    LanguageServerRemoveParams,
+};
+use zeta_app_server_protocol::protocol::fs::{
+    FsChanged, FsGetMetadataParams, FsGetMetadataResult, FsReadDirectoryEntry,
+    FsReadDirectoryParams, FsReadFileParams, FsWriteFileParams,
+};
 use zeta_app_server_protocol::protocol::git::{
     GitBranchDto, GitBranchSwitchParams, GitTextDiffResult,
 };
@@ -26,6 +33,9 @@ use zeta_protocol::{
     ModelRef, Session, SessionId, SessionStatus, SessionThreadStatus, Thread, ThreadId,
     ThreadUpdateEnvelope,
 };
+use zeta_text_file::{
+    TextFileAccess, TextFileDiskVersion, TextFileModifiedAt, TextFileSaveRequest, TextFileSnapshot,
+};
 use zeta_winit::EventLoopProxy;
 
 use crate::NativeApp;
@@ -34,6 +44,7 @@ use crate::thread_projection::ThreadProjectionUpdate;
 
 const COMMAND_QUEUE_CAPACITY: usize = 32;
 const EVENT_POLL_INTERVAL: Duration = Duration::from_millis(25);
+const FILE_SNAPSHOT_READ_ATTEMPTS: usize = 3;
 
 #[derive(Debug)]
 pub(crate) enum AgentSessionEvent {
@@ -41,10 +52,11 @@ pub(crate) enum AgentSessionEvent {
         slash_commands: Vec<SlashCommandDefinition>,
         models: Vec<ModelCatalogEntry>,
     },
+    Configuration(ConfigReadResult),
     Snapshot(Thread),
     Update(Box<ThreadUpdateEnvelope>),
     GitProjection(Option<GitTextDiffResult>),
-    FilesChanged,
+    FilesChanged(FsChanged),
     Error(String),
     Closed,
 }
@@ -59,6 +71,14 @@ enum AgentSessionCommand {
         path: PathBuf,
         response: SyncSender<std::result::Result<Vec<FsReadDirectoryEntry>, String>>,
     },
+    ReadFile {
+        path: PathBuf,
+        response: SyncSender<std::result::Result<TextFileSnapshot, String>>,
+    },
+    WriteFile {
+        request: TextFileSaveRequest,
+        response: SyncSender<std::result::Result<TextFileDiskVersion, String>>,
+    },
     ListGitBranches(SyncSender<std::result::Result<Vec<GitBranchDto>, String>>),
     SwitchGitBranch {
         name: String,
@@ -67,6 +87,17 @@ enum AgentSessionCommand {
     SwitchWorkspace {
         root: PathBuf,
         response: SyncSender<std::result::Result<WorkspaceSwitchProjection, String>>,
+    },
+    ConfigureLanguageServer {
+        expected_revision: u64,
+        server_id: String,
+        config: LanguageServerConfigDto,
+        response: SyncSender<std::result::Result<ConfigCommandResult, String>>,
+    },
+    RemoveLanguageServerConfiguration {
+        expected_revision: u64,
+        server_id: String,
+        response: SyncSender<std::result::Result<ConfigCommandResult, String>>,
     },
     Shutdown,
 }
@@ -138,6 +169,28 @@ impl AgentSession {
             .map_err(anyhow::Error::msg)
     }
 
+    pub(crate) fn read_file(&self, path: PathBuf) -> Result<TextFileSnapshot> {
+        let (response, result) = mpsc::sync_channel(1);
+        self.commands
+            .try_send(AgentSessionCommand::ReadFile { path, response })
+            .context("Workspace file query queue is unavailable")?;
+        result
+            .recv()
+            .context("Workspace file query worker stopped")?
+            .map_err(anyhow::Error::msg)
+    }
+
+    pub(crate) fn write_file(&self, request: TextFileSaveRequest) -> Result<TextFileDiskVersion> {
+        let (response, result) = mpsc::sync_channel(1);
+        self.commands
+            .try_send(AgentSessionCommand::WriteFile { request, response })
+            .context("Workspace file mutation queue is unavailable")?;
+        result
+            .recv()
+            .context("Workspace file mutation worker stopped")?
+            .map_err(anyhow::Error::msg)
+    }
+
     pub(crate) fn local_branches(&self) -> Result<Vec<GitBranchDto>> {
         let (response, result) = mpsc::sync_channel(1);
         self.commands
@@ -168,6 +221,46 @@ impl AgentSession {
         result
             .recv()
             .context("Workspace switch worker stopped")?
+            .map_err(anyhow::Error::msg)
+    }
+
+    pub(crate) fn configure_language_server(
+        &self,
+        expected_revision: u64,
+        server_id: String,
+        config: LanguageServerConfigDto,
+    ) -> Result<ConfigCommandResult> {
+        let (response, result) = mpsc::sync_channel(1);
+        self.commands
+            .try_send(AgentSessionCommand::ConfigureLanguageServer {
+                expected_revision,
+                server_id,
+                config,
+                response,
+            })
+            .context("Language server configuration queue is unavailable")?;
+        result
+            .recv()
+            .context("Language server configuration worker stopped")?
+            .map_err(anyhow::Error::msg)
+    }
+
+    pub(crate) fn remove_language_server_configuration(
+        &self,
+        expected_revision: u64,
+        server_id: String,
+    ) -> Result<ConfigCommandResult> {
+        let (response, result) = mpsc::sync_channel(1);
+        self.commands
+            .try_send(AgentSessionCommand::RemoveLanguageServerConfiguration {
+                expected_revision,
+                server_id,
+                response,
+            })
+            .context("Language server configuration queue is unavailable")?;
+        result
+            .recv()
+            .context("Language server configuration worker stopped")?
             .map_err(anyhow::Error::msg)
     }
 }
@@ -226,6 +319,7 @@ fn run_agent_session_inner(
             models,
         },
     )?;
+    publish_configuration(event_proxy, &mut client)?;
     publish_git_projection(event_proxy, &mut client)?;
     let events = session
         .take_events()
@@ -275,6 +369,14 @@ fn drive_agent_session(
                         .map_err(|error| error.to_string());
                     let _ = response.send(result);
                 }
+                Ok(AgentSessionCommand::ReadFile { path, response }) => {
+                    let result = read_file(client, path).map_err(|error| error.to_string());
+                    let _ = response.send(result);
+                }
+                Ok(AgentSessionCommand::WriteFile { request, response }) => {
+                    let result = write_file(client, request).map_err(|error| error.to_string());
+                    let _ = response.send(result);
+                }
                 Ok(AgentSessionCommand::ListGitBranches(response)) => {
                     let result = client
                         .list_git_branches()
@@ -289,6 +391,36 @@ fn drive_agent_session(
                 Ok(AgentSessionCommand::SwitchWorkspace { root, response }) => {
                     let result = switch_workspace(client, root);
                     let _ = response.send(result.map_err(|error| error.to_string()));
+                }
+                Ok(AgentSessionCommand::ConfigureLanguageServer {
+                    expected_revision,
+                    server_id,
+                    config,
+                    response,
+                }) => {
+                    let result = client
+                        .configure_language_server(LanguageServerConfigureParams {
+                            command_id: next_command_id("language-server-configure"),
+                            expected_revision,
+                            server_id,
+                            config,
+                        })
+                        .map_err(|error| error.to_string());
+                    let _ = response.send(result);
+                }
+                Ok(AgentSessionCommand::RemoveLanguageServerConfiguration {
+                    expected_revision,
+                    server_id,
+                    response,
+                }) => {
+                    let result = client
+                        .remove_language_server_configuration(LanguageServerRemoveParams {
+                            command_id: next_command_id("language-server-remove"),
+                            expected_revision,
+                            server_id,
+                        })
+                        .map_err(|error| error.to_string());
+                    let _ = response.send(result);
                 }
                 Ok(AgentSessionCommand::Shutdown) => return Ok(()),
                 Err(TryRecvError::Empty) => break,
@@ -306,8 +438,11 @@ fn drive_agent_session(
             Ok(AppServerEvent::Notification(ServerNotification::GitStatusChanged(_))) => {
                 publish_git_projection(event_proxy, client)?;
             }
-            Ok(AppServerEvent::Notification(ServerNotification::FsChanged(_))) => {
-                send_event(event_proxy, AgentSessionEvent::FilesChanged)?;
+            Ok(AppServerEvent::Notification(ServerNotification::FsChanged(changed))) => {
+                send_event(event_proxy, AgentSessionEvent::FilesChanged(changed))?;
+            }
+            Ok(AppServerEvent::Notification(ServerNotification::ConfigChanged(_))) => {
+                publish_configuration(event_proxy, client)?;
             }
             Ok(AppServerEvent::Notification(_)) => {}
             Ok(AppServerEvent::ConnectionClosed(reason)) => {
@@ -319,6 +454,71 @@ fn drive_agent_session(
             }
         }
     }
+}
+
+fn read_file(client: &mut AppServerRequestHandle, path: PathBuf) -> Result<TextFileSnapshot> {
+    for _ in 0..FILE_SNAPSHOT_READ_ATTEMPTS {
+        let before = client
+            .get_file_metadata(FsGetMetadataParams { path: path.clone() })
+            .map(disk_version)
+            .map_err(client_error)?;
+        let content = client
+            .read_file(FsReadFileParams { path: path.clone() })
+            .map_err(client_error)?
+            .content;
+        let after = client
+            .get_file_metadata(FsGetMetadataParams { path: path.clone() })
+            .map(disk_version)
+            .map_err(client_error)?;
+        if before == after {
+            return Ok(TextFileSnapshot::new(path, content, after));
+        }
+    }
+    Err(anyhow!(
+        "{} kept changing while it was being read",
+        path.display()
+    ))
+}
+
+fn write_file(
+    client: &mut AppServerRequestHandle,
+    request: TextFileSaveRequest,
+) -> Result<TextFileDiskVersion> {
+    let (path, content, expected_version) = request.into_parts();
+    let current = client
+        .get_file_metadata(FsGetMetadataParams { path: path.clone() })
+        .map_err(client_error)?;
+    let current = disk_version(current);
+    if current != expected_version {
+        return Err(anyhow!(
+            "{} changed on disk since it was opened",
+            path.display()
+        ));
+    }
+    if current.is_read_only() {
+        return Err(anyhow!("{} is read-only", path.display()));
+    }
+    client
+        .write_file(FsWriteFileParams { path, content })
+        .map(|result| disk_version(result.metadata))
+        .map_err(client_error)
+}
+
+fn disk_version(metadata: FsGetMetadataResult) -> TextFileDiskVersion {
+    let access = if metadata.readonly {
+        TextFileAccess::ReadOnly
+    } else {
+        TextFileAccess::Writable
+    };
+    TextFileDiskVersion::new(
+        metadata.size_bytes,
+        TextFileModifiedAt::from(metadata.modified_at_millis),
+        access,
+    )
+}
+
+fn client_error(error: ClientError) -> anyhow::Error {
+    anyhow!(error.to_string())
 }
 
 struct ActiveThread {
@@ -510,6 +710,14 @@ fn publish_git_projection(
     )
 }
 
+fn publish_configuration(
+    event_proxy: &EventLoopProxy<NativeEvent>,
+    client: &mut AppServerRequestHandle,
+) -> Result<()> {
+    let configuration = client.read_config().map_err(client_error)?;
+    send_event(event_proxy, AgentSessionEvent::Configuration(configuration))
+}
+
 fn read_git_projection(client: &mut AppServerRequestHandle) -> Result<Option<GitTextDiffResult>> {
     match client.git_text_diff() {
         Ok(projection) => Ok(Some(projection)),
@@ -578,6 +786,11 @@ impl NativeApp {
                     eprintln!("could not install Slash Commands catalog: {error}");
                 }
             }
+            AgentSessionEvent::Configuration(configuration) => {
+                self.language_server_settings.synchronize(&configuration);
+                self.language_service
+                    .apply_configuration(&configuration, &self.file_editor_host);
+            }
             AgentSessionEvent::Snapshot(thread) => {
                 self.thread_projection.replace_snapshot(thread);
             }
@@ -597,7 +810,10 @@ impl NativeApp {
                     .sync_repository(&self.workspace_context);
                 self.refresh_files_from_app_server();
             }
-            AgentSessionEvent::FilesChanged => self.refresh_files_from_app_server(),
+            AgentSessionEvent::FilesChanged(changed) => {
+                self.refresh_files_from_app_server();
+                self.refresh_open_files_from_app_server(&changed);
+            }
             AgentSessionEvent::Error(error) => {
                 eprintln!("Agent session failed: {error}");
             }
@@ -647,6 +863,168 @@ impl NativeApp {
             Err(error) => eprintln!("could not read App Server workspace directory: {error}"),
         }
     }
+
+    pub(crate) fn open_workspace_file(&mut self, path: PathBuf) {
+        let Some(session) = self.agent_session.as_ref() else {
+            return;
+        };
+        match session.read_file(path) {
+            Ok(snapshot) => {
+                self.file_editor_host.open(snapshot);
+                self.language_service
+                    .synchronize_active(&self.file_editor_host);
+                self.file_editor_input.reset_for_document_change();
+                self.workspace_surface.show_editor();
+                self.pending_focus = Some(crate::shell_interaction::FILE_EDITOR_DOCUMENT);
+                self.rebuild_presentation();
+                self.request_redraw();
+            }
+            Err(error) => eprintln!("could not open App Server workspace file: {error}"),
+        }
+    }
+
+    pub(crate) fn open_language_definition(
+        &mut self,
+        target: zeta_language_service::LanguageDefinitionTarget,
+    ) {
+        let Some(session) = self.agent_session.as_ref() else {
+            return;
+        };
+        match session.read_file(target.path) {
+            Ok(snapshot) => {
+                self.file_editor_host.open(snapshot);
+                if let Some(position) = definition_editor_position(
+                    self.file_editor_host
+                        .active()
+                        .map(|tab| tab.document().text())
+                        .unwrap_or_default(),
+                    target.row,
+                    target.character,
+                    target.encoding,
+                ) {
+                    self.file_editor_host
+                        .move_active_caret(position, zeta_editor::CodeEditorSelectionMode::Move);
+                }
+                self.language_service
+                    .synchronize_active(&self.file_editor_host);
+                self.file_editor_input.reset_for_document_change();
+                self.workspace_surface.show_editor();
+                self.pending_focus = Some(crate::shell_interaction::FILE_EDITOR_DOCUMENT);
+                self.rebuild_presentation();
+                self.request_redraw();
+            }
+            Err(error) => eprintln!("could not open language definition: {error}"),
+        }
+    }
+
+    pub(crate) fn save_active_workspace_file(&mut self) {
+        let Some(request) = self.file_editor_host.save_request() else {
+            return;
+        };
+        let _ = self.write_active_workspace_file(request);
+    }
+
+    pub(crate) fn try_save_active_workspace_file(&mut self) -> bool {
+        let Some(request) = self.file_editor_host.save_request() else {
+            return false;
+        };
+        self.write_active_workspace_file(request)
+    }
+
+    pub(crate) fn overwrite_active_workspace_file(&mut self) -> bool {
+        let Some(request) = self.file_editor_host.overwrite_request() else {
+            return false;
+        };
+        self.write_active_workspace_file(request)
+    }
+
+    fn write_active_workspace_file(&mut self, request: TextFileSaveRequest) -> bool {
+        let path = request.path().to_owned();
+        let Some(session) = self.agent_session.as_ref() else {
+            return false;
+        };
+        let saved = match session.write_file(request) {
+            Ok(version) => self.file_editor_host.mark_active_saved(version),
+            Err(error) => {
+                eprintln!("could not save App Server workspace file: {error}");
+                if let Ok(snapshot) = session.read_file(path.clone()) {
+                    self.file_editor_host.observe_external(snapshot);
+                }
+                false
+            }
+        };
+        if saved {
+            self.language_service.save(&path);
+        }
+        self.rebuild_presentation();
+        self.request_redraw();
+        saved
+    }
+
+    fn refresh_open_files_from_app_server(&mut self, changed: &FsChanged) {
+        let paths = match changed {
+            FsChanged::PathsChanged { paths } => self
+                .file_editor_host
+                .tabs()
+                .iter()
+                .filter(|tab| paths.iter().any(|path| path == tab.path()))
+                .map(|tab| tab.path().to_path_buf())
+                .collect::<Vec<_>>(),
+            FsChanged::RescanRequired => self
+                .file_editor_host
+                .tabs()
+                .iter()
+                .map(|tab| tab.path().to_path_buf())
+                .collect(),
+        };
+        let Some(session) = self.agent_session.as_ref() else {
+            return;
+        };
+        for path in paths {
+            match session.read_file(path) {
+                Ok(snapshot) => {
+                    self.file_editor_host.observe_external(snapshot);
+                }
+                Err(error) => eprintln!("could not refresh open workspace file: {error}"),
+            }
+        }
+    }
+}
+
+fn definition_editor_position(
+    text: &str,
+    row: u32,
+    character: u32,
+    encoding: zeta_language_service::LanguagePositionEncoding,
+) -> Option<zeta_editor::CodeEditorPosition> {
+    let row_index = usize::try_from(row).ok()?;
+    let line = text.split('\n').nth(row_index)?;
+    let line = line.strip_suffix('\r').unwrap_or(line);
+    let requested = usize::try_from(character).ok()?;
+    let byte_offset = match encoding {
+        zeta_language_service::LanguagePositionEncoding::Utf8 => {
+            (requested <= line.len() && line.is_char_boundary(requested)).then_some(requested)?
+        }
+        zeta_language_service::LanguagePositionEncoding::Utf16 => {
+            let mut units = 0;
+            let mut resolved = None;
+            for (offset, scalar) in line.char_indices() {
+                if units == requested {
+                    resolved = Some(offset);
+                    break;
+                }
+                units += scalar.len_utf16();
+                if units > requested {
+                    return None;
+                }
+            }
+            resolved.or_else(|| (units == requested).then_some(line.len()))?
+        }
+    };
+    Some(zeta_editor::CodeEditorPosition {
+        row_index,
+        byte_offset,
+    })
 }
 
 #[cfg(test)]

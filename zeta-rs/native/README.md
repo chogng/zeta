@@ -6,7 +6,8 @@
 > 细节见 [`docs/native-terminal-ui.md`](../../docs/native-terminal-ui.md)；本 README 只拥有 native
 > host 当前源码路径和接入义务。Terminal grid 与 BlockList 的实现契约见
 > [`zeta-terminal` README](../terminal/README.md)；CodeEditor/DiffEditor presentation 契约见
-> [`zeta-editor` README](../editor/README.md)。
+> [`zeta-editor` README](../editor/README.md)；文件保存基线与冲突状态契约见
+> [`zeta-text-file` README](../text-file/README.md)。
 > UI 到 GPU 的 canonical 边界见
 > [`docs/rendering-architecture.md`](../../docs/rendering-architecture.md)。
 
@@ -39,12 +40,15 @@
 | Agent Sidebar 显隐与固定宽度策略 | `agent_sidebar::AgentSidebarState` | ✅；不拥有内部 Pane 内容 |
 | Agent Sidebar 导航、toolbar 与互斥 Pane geometry | `agent_sidebar_layout::AgentSidebarLayout` / `agent_sidebar_navigation` / `agent_sidebar_toolbar` | ✅；顶部横向 Changes/Files ActionBar、36px 全宽 toolbar 与单一 active content pane |
 | Files 层级树与模糊搜索 | `explorer_tree::ExplorerTree` / `explorer_pane` / `zeta-ui::TreeView` / `ListView` / `zeta-file-search` | ✅；目录懒加载、稳定 mounted-node ID、展开/收起和 24px 虚拟行已接入；Search 保持扁平 List 投影 |
+| UTF-8 文件保存 baseline、磁盘版本与外部变化冲突 | `zeta-text-file::TextFileLifecycle` | 委托；Native 只提供当前 editor text 与 I/O adapter |
+| 语言服务 composition、持久化设置、文档/请求 freshness 与 presentation | `language_service_host::NativeLanguageService` / `language_server_settings_model::LanguageServerSettingsState` / `file_editor_language_features` / `zeta-language-service` | ✅；Rust/JSON/Shell 独立设置与 runtime state，diagnostics，latest-only pointer hover，Ctrl/Cmd+Space completion popup/安全 edit 接受和 F12 definition navigation 已接入；文件读取仍通过 App Server authority |
+| 文件 Tab、active document、关闭决策与 presentation | `file_editor_host::FileEditorHost` / `file_editor_pane::FileEditorPane` / `file_editor_input::FileEditorInputState` | ✅；Explorer activation 已通过 typed `fs/readFile`/metadata 打开 language-aware document，Cmd/Ctrl+S 使用版本 preflight 和 `fs/writeFile`，中心 Editor Surface 已接通 tabs、关闭确认、外部重载/显式乐观覆盖、find/replace、自动缩进、soft wrap、focus、keyboard、IME、pointer、clipboard 与 visual-row viewport |
 | Changed-file collection、整体滚动与每文件 diff 视口 | `agent_sidebar_workspace::AgentSidebarWorkspace` / `editor_pane::EditorPaneState` / `zeta-ui::ScrollState` | ✅；App Server `git/textDiff` 提供真实 MultiDiff source 与增删行统计，wheel、scrollbar hover/active/fade、thumb drag 与 track paging 已接入 |
-| Titlebar 背景、窗口拖拽区与左右侧栏开关 | `titlebar::Titlebar` | ✅；不绘制可见窗口标题 |
+| Titlebar 背景、窗口拖拽区、语言服务器设置入口与左右侧栏开关 | `titlebar::Titlebar` | ✅；不绘制可见窗口标题 |
 | Top Bar 左右 sidebar toggle `ActionBar` | `titlebar::Titlebar` | ✅ |
 | 原生窗口控件占位 | `zeta-winit::WindowControlInsets` | 委托；Titlebar 只增加自身内容间距 |
 | 通用 Tab surface 与横/纵排列 | `zeta-ui::Tab` / `TabList` | 委托；不拥有 Session content 或 tabpanel |
-| 多行编辑、caret/selection、undo/redo、IME 与 syntax projection | `zeta-editor::CodeEditorDocument` / `CodeEditor` | 委托；Composer 只选择 Shell language，editor 内部管理 parser/revision/token；文件 EditorHost 输入接线尚未完成 |
+| 多行编辑、caret/selection、find/replace、自动缩进、undo/redo、IME 与 syntax projection | `zeta-editor::CodeEditorDocument` / `CodeEditor` | 委托；Composer 与中心文件 Editor 都只转交平台输入，editor 内部管理文本、搜索替换、缩进、parser/revision/token、fold 与 hit-test |
 | 文本差异计算、行映射与字符级范围 | `zeta-diff::DiffDocument` | 委托；Native 不复制 diff 算法 |
 | 单列/并排及多文件只读差异展示 | `zeta-editor::DiffEditorDocument` / `DiffEditor` / `MultiDiffEditor` | 委托；Native 只按文件扩展名选择 language，editor 内部维护两侧 parser/revision/token；Changes pane 使用窄栏 Unified presentation |
 | 可折叠 Session Sidebar、名称搜索与当前真实 Session Tab | `session_sidebar_toolbar::SessionSidebarToolbar` / `session_search::SessionSearch` / `session_tab_list::SessionTabList` | ✅；Add action 已进入命令边界，多会话 runtime 尚无 |
@@ -71,7 +75,7 @@
 | App Server Session/Thread projection 与 stream-gap recovery | `agent_session` / `thread_projection` | ✅ |
 | durable direct Shell Turn | App Server `turn/shell/start` / Core `StartShellTurn` | ✅ |
 | 独立交互式 Terminal Surface | `workspace_surface` / `terminal_session` / `terminal_input` | ✅；`Cmd/Ctrl+J` 切换 |
-| Composer/Session Search/File Search/Workspace Path Search/Git Branch Search IME target、事件转换、启停、composition lifecycle 与候选框同步 | `input_method` | ✅ |
+| Composer/File Editor/Session Search/File Search/Workspace Path Search/Git Branch Search IME target、事件转换、启停、composition lifecycle 与候选框同步 | `input_method` | ✅ |
 | Bottom Widget 底部的 Local/cwd/branch/Changes context toolbar | `input_context_toolbar::InputContextToolbar` / `workspace_path_picker` / `git_branch_context_menu` / `workspace_context::WorkspaceContext` | ✅；cwd 复用带 Search Box header 的 `Dropdown`，branch 复用带同类 header 的 `ContextMenu`，分别切换工作区投影和本地分支；Changes 显示 changed path 数与文本 `+addition -deletion`，点击后刷新并展开 Changes Pane |
 | shell bootstrap、host-owned command submit 与 zsh completion marker | `terminal_session::TerminalSession` | 部分具备 |
 | terminal query reply → PTY write | `TerminalCore::take_reply_bytes` / `TerminalSession::handle_event` | ✅ |
@@ -97,6 +101,7 @@ zeta-native → zeta-winit
             → zeta-app-server-client
             → zeta-protocol
             → zeta-terminal
+            → zeta-text-file
             → zeta-diff
             → zeta-editor → zeta-ui → zui
                           → zeta-diff
@@ -129,9 +134,9 @@ authority。下表把仍保留的历史 shell vocabulary 映射到当前产品�
 | `session_tab_list` | 组合 `zeta-ui::TabList` 投影当前真实 PTY Session；自身拥有白色状态容器、会话名和工作区两行截断信息，以及纵向 TabList/selected Tab 语义 | 多会话导航 | 通用 TabList 已支持 6px 间隔的多项布局；runtime 仍只有单 Session |
 | `session_sidebar_toolbar` / `session_search` | 整行组合 `SearchBox` 与右侧 `ActionBar`；按 session name 执行大小写不敏感过滤，并把 Add 暴露为稳定 action | Session 搜索与新建入口 | 搜索已接通；真实新建 tab 等待多会话 runtime |
 | `session_context_menu` | 右键当前 Session Tab 后，用 `ContextMenu` 呈现 Pin、Close、Rename、Fork；拥有 outside click、Escape、键盘导航和焦点恢复 | Session action surface | 通用基座提供柔和阴影、2px padding 与 4px radius，打开默认选择 Pin；命令映射已建立，真实 Session mutation 等待多会话 runtime |
-| `zeta-editor::CodeEditor` | 多行 Unicode 编辑、selection、history、IME/syntax projection、Document/Compact presentation 与可见行绘制 | CodeEditor | 委托；Composer 已接入平台事件、focus、caret blink、IME 和 pointer caret，文件 EditorHost 输入尚未接入 |
+| `zeta-editor::CodeEditor` | 多行 Unicode 编辑、selection、history、IME/syntax projection、Document/Compact presentation、soft wrap 与可见行绘制 | CodeEditor | 委托；Composer 与文件 Editor 都已接入平台事件、focus、caret blink、IME、pointer caret/drag、clipboard 和垂直 viewport；文件 Editor 启用 soft wrap 与拖选越界自动滚动 |
 | `agent_sidebar_layout` / `agent_sidebar_navigation` / `agent_sidebar_toolbar` | 顶部 toolbar 左侧 ActionBar 切换 Changes/Files，右侧仅在 Files 显示 Refresh、ahead/behind 和 Search | Agent Sidebar navigation | ✅；ActionBar 与 active content pane 使用同一 retained workspace state |
-| `explorer_tree` / `explorer_pane` / `AgentSidebarWorkspace` | arena 保存稳定 mounted-node ID、parent/children、懒加载和展开状态；目录枚举统一通过 App Server `fs/readDirectory`；`zeta-ui::TreeView` 虚拟化层级行，Search 结果继续使用 ListView | Files Pane | ✅；pointer/Enter/Space 展开收起，Up/Down 遍历，Left 折叠/转父项，Right 展开/转首个 child；文件打开尚未接入 |
+| `explorer_tree` / `explorer_pane` / `AgentSidebarWorkspace` | arena 保存稳定 mounted-node ID、parent/children、懒加载和展开状态；目录枚举统一通过 App Server `fs/readDirectory`；`zeta-ui::TreeView` 虚拟化层级行，Search 结果继续使用 ListView | Files Pane | ✅；pointer/Enter/Space 展开目录或把文件交给 `FileEditorHost`，Up/Down 遍历，Left 折叠/转父项，Right 展开/转首个 child |
 | `editor_pane` | 保存 Git changed-file collection、language-aware `DiffEditorDocument`、整体滚动位置、scrollbar pointer capture/animation、每文件 `DiffEditorState` 和 `MultiDiffEditorLayout`，把全部文件绑定为 MultiDiffEditor items，并把 fold controls 注册为可访问 Button | Changes Pane | ✅；启动、Refresh、fold state 改变和 shell command completion 会重建 diff/layout snapshot；wheel 直接复用 metrics，宿主不接触 syntax token 或 revision |
 | `zeta-editor::DiffEditor` / `MultiDiffEditor` | DiffEditor 提供 SideBySide/Unified presentation 与未修改区间折叠投影；MultiDiffEditor 再纵向组合多个文件 section、发布每文件 fold identity 并裁剪不可见项 | 多文件差异文档 | Changes 固定宽度栏显式选择 Unified；文件读取、diff 计算、持久状态与产品输入路由不属于 editor crate |
 | terminal grid / PTY / scrollback | grid、PTY 与会话内有界回滚已接通，跨重启持久化尚无 | 活动 Terminal Session runtime | 部分具备 |
@@ -141,7 +146,7 @@ CodeEditor/DiffEditor/MultiDiffEditor 的实现 ownership、`DiffSideRows` 投�
 测试和当前限制由 [`zeta-editor` README](../editor/README.md) 维护。Native 负责 changed-file
 collection、文件 identity、整体滚动位置和每文件 `DiffEditorState`；MultiDiffEditor 只借用这些
 快照完成多文件组合。Native 不能复制代码行或 diff decoration 绘制。当前 Git binding 跳过
-binary、非 UTF-8 与单侧超过 2 MiB 的文件；index-only 对比、file open 和编辑输入仍是后续接线。
+binary、非 UTF-8 与单侧超过 2 MiB 的文件；index-only 对比仍是后续接线。
 
 当前已用 `zui::SplitViewLayout` 与 `zeta-ui::Sash` 支持 Sessions/Main 的单轴 resize，并用
 `zui::GridLayout` 作为 Terminal Workspace 的递归几何入口。当前 Grid 输入只有一个活动
@@ -256,7 +261,8 @@ node ID 和展开状态；根目录和首次展开的子目录都由 `AgentSessi
 `zeta-ui::TreeView` 在 24px 固定行高 ListView 上投影 depth、disclosure 和 content geometry，
 只为 visible range 注册 `Tree`/`TreeItem` accessibility node，paint 使用两行 overscan。
 Search 结果仍是扁平 List/ListItem。滚轮更新 workspace-owned `ScrollState`，查询、Refresh 或
-workspace 替换会回到顶部。文件打开、重命名、拖放与刷新后的展开状态恢复尚未接入。
+workspace 替换会回到顶部。文件打开已接入中心 Editor Surface；重命名、拖放与刷新后的展开状态
+恢复尚未接入。
 `EditorPaneState` 保存整体 `zeta-ui::ScrollState` 和每文件 `DiffEditorState`；
 `MultiDiffEditor` 在一个纵向文档中连续绘制所有可见文件 section，每段再复用
 `DiffEditorPresentation::Unified` 将删除/新增行投影为单列内容。section 高度由
@@ -306,12 +312,13 @@ ThreadTimeline、Terminal Surface、`ComposerPanel`、compact `CodeEditor`、`Ac
 上下文 `Button` 都走这条路径。
 ComposerPanel 使用默认指针，输入与终端文本使用文本指针，Button 使用 pointer 指针；绘制、
 输入上下文 toolbar 的命中与语义 bounds 共享 `ActionBar::interactive_item_bounds`，Session
-菜单则共享 `ContextMenu::interactive_item_bounds`。primary screen 默认聚焦 composer；
+菜单则共享 `ContextMenu::interactive_item_bounds`。Agent Surface 默认聚焦 composer，Editor Surface
+打开文件时聚焦 active document；
 Tab/Shift+Tab 遍历全部 tab stop，toolbar 内左右键移动相邻 Button，Enter/Space 激活焦点
 action，Escape 从 action 返回 composer。pointer press 同时更新 focus，release 按 capture identity
-决定是否激活。`input_method::InputMethodTarget` 合并窗口活动状态、screen 与 focus；焦点离开
-composer 或窗口失焦时关闭 primary IME、取消 composition 并停止 caret blink，alternate
-screen 仍保留直接输入所需的 IME。过小 viewport 使用有边界的 compact fallback。
+决定是否激活。`input_method::InputMethodTarget` 合并窗口活动状态、Workspace Surface 与 focus；
+焦点离开当前文本输入或窗口失焦时取消对应 composition 并停止 caret blink，Terminal Surface
+仍保留直接输入所需的 IME。过小 viewport 使用有边界的 compact fallback。
 
 `ShellPresentation::accessibility_nodes` 已保存当前 frame 的语义快照，但 `zeta-winit` 尚未提供
 AccessKit 或各平台原生 accessibility adapter，因此当前不能声称 VoiceOver、Narrator 或
@@ -367,8 +374,16 @@ Tab 和 Escape；否则 Enter 分别提交 `turn/start` 或
 `turn/shell/start`，Shift+Enter 插入换行。Composer 从紧凑基线自动增长到八行，之后由
 viewport 跟随 caret。Terminal Surface 的输入经过
 `TerminalCore::encode_key/encode_paste` 直接写入 PTY。`input_method` 单独把 IME 路由到当前
-`InputMethodTarget`：Agent Surface candidate area 跟随 composer caret，Terminal Surface
-跟随 grid cursor。
+`InputMethodTarget`：Agent Surface candidate area 跟随 composer caret，Editor Surface 跟随 active
+CodeEditor caret，Terminal Surface 跟随 grid cursor。`file_editor_input` 只把标准化 keyboard、IME、
+pointer、clipboard 与 wheel 操作转交给 active `CodeEditorDocument`/`CodeEditorViewport`。
+`FileEditorPane` 启用 editor-owned soft wrap，并把 `CodeEditor::navigation()`、visual row count 与
+caret visual row 原样交回 host；`file_editor_auto_scroll` 只在 pointer 拖选进入上下 8px 边缘区或
+越过边界时以 35ms deadline 推进一个 visual row，pointer 回到内部、释放、失焦或到达文档边界后立即停止。
+关闭按钮先由 `FileEditorHost::request_close_active` 判断 dirty 状态；未修改 Tab 直接关闭，dirty
+Tab 由 `FileEditorInputState` 打开 modal 决策条并提供 Save、Don't Save 与 Cancel。磁盘外部变化由
+`TextFileLifecycle::status` 投影为 reload/conflict 提示条：Reload from Disk 显式替换 editor text，
+Overwrite 使用待处理 snapshot 的磁盘版本再次执行 optimistic preflight，若文件再次变化仍拒绝写入。
 `workspace_context::WorkspaceContext` 在 Session 启动时捕获真实 cwd，并消费
 `zeta-app-server-client` 返回的 workspace-scoped `GitTextDiffResult`；
 `InputContextToolbar` 消费 Composer mode 与四项 context value，使用 `ActionBar` 统一排列并把每项语义交给
@@ -423,7 +438,7 @@ macOS 使用 `Cmd+C/V`，其他平台保留未加 Shift 的 `Ctrl+C/V` 终端语
 integration；其他支持 shell 目前不能可靠报告每条命令的完成状态、cwd 或 exit status。
 
 当前仍没有 App Server、多 Session lifecycle/switching 或 Session action mutation、多行/历史/建议式 Block Editor、
-双击词/三击行选择、selection auto-scroll、跨进程重启的回滚/Block 持久化、完整
+双击词/三击行选择、terminal selection auto-scroll、跨进程重启的回滚/Block 持久化、完整
 DEC/query/mouse family 或平台
 accessibility adapter。内部语义树与统一 focus 已具备。alternate screen 已具备基础 direct
 key/IME commit/clipboard 和请求式 mouse input，但

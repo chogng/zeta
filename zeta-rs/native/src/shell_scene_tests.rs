@@ -10,9 +10,11 @@ use crate::agent_sidebar_workspace::{AgentSidebarView, AgentSidebarWorkspace};
 use crate::composer_editor::ComposerEditor;
 use crate::composer_interaction::ComposerInteractionModel;
 use crate::composer_interaction_pane::ComposerInteractionPaneState;
+use crate::file_editor_host::FileEditorHost;
 use crate::git_branch_context_menu::GitBranchContextMenuState;
 use crate::keybindings::NativeKeybindings;
 use crate::keyboard_shortcuts::KeyboardShortcutsState;
+use crate::language_server_settings::LanguageServerSettingsState;
 use crate::session_context_menu::SessionContextMenuState;
 use crate::session_search::SessionSearch;
 use crate::session_sidebar::SessionSidebarState;
@@ -20,13 +22,17 @@ use crate::shell_interaction::{
     ACTIVE_SESSION_TAB, ADD_SESSION, AGENT_CHANGES, AGENT_EDITOR_PANE, AGENT_EXPLORER_PANE,
     AGENT_FILES, AGENT_FILES_REFRESH, AGENT_FILES_SEARCH, AGENT_SIDEBAR, AGENT_SIDEBAR_NAVIGATION,
     AGENT_SIDEBAR_TOOLBAR, COMPOSER, COMPOSER_INFO_BAR, COMPOSER_MODE, COMPOSER_PANEL,
-    ContextAction, MULTI_DIFF_EDITOR, SESSION_CONTEXT_MENU, SESSION_SEARCH_INPUT,
-    SESSION_SIDEBAR_RESIZE_HANDLE, TITLEBAR,
+    ContextAction, FILE_EDITOR_DOCUMENT, FILE_EDITOR_PANE, FILE_EDITOR_TAB_LIST, MULTI_DIFF_EDITOR,
+    SESSION_CONTEXT_MENU, SESSION_SEARCH_INPUT, SESSION_SIDEBAR_RESIZE_HANDLE, THREAD_TIMELINE,
+    TITLEBAR,
 };
 use crate::thread_projection::ThreadProjection;
 use crate::workspace_context::WorkspaceContext;
 use crate::workspace_path_picker::WorkspacePathPickerState;
+use crate::workspace_surface::WorkspaceSurfaceKind;
+use zeta_editor::CodeEditorStyle;
 use zeta_terminal::{GridSize, ScreenBuffer, TerminalCore};
+use zeta_text_file::{TextFileAccess, TextFileDiskVersion, TextFileModifiedAt, TextFileSnapshot};
 use zeta_ui::{
     CaretVisibility, Color, Point, ScrollbarPresentation, TextInputCommand, TextInputLayoutEngine,
 };
@@ -89,6 +95,8 @@ fn presentation_with_sidebars_and_menu(
     let mut text_layout = TextInputLayoutEngine::new();
     let mut dispatch = UiDispatch::default();
     let agent_sidebar_workspace = AgentSidebarWorkspace::default();
+    let file_editor_host = FileEditorHost::default();
+    let code_editor_style = CodeEditorStyle::light();
     let thread_projection = ThreadProjection::default();
     let initial = build_shell_presentation(
         viewport(),
@@ -98,8 +106,21 @@ fn presentation_with_sidebars_and_menu(
             terminal_scroll_offset: scroll_offset,
             terminal_scrollbar_presentation: ScrollbarPresentation::default(),
             terminal_selection: None,
-            terminal_surface: terminal
-                .is_some_and(|terminal| terminal.active_screen() == ScreenBuffer::Alternate),
+            workspace_surface: if terminal
+                .is_some_and(|terminal| terminal.active_screen() == ScreenBuffer::Alternate)
+            {
+                WorkspaceSurfaceKind::Terminal
+            } else {
+                WorkspaceSurfaceKind::Agent
+            },
+            file_editor_host: &file_editor_host,
+            file_editor_prompt: crate::file_editor_pane::FileEditorPrompt::None,
+            file_editor_search: &crate::file_editor_search::FileEditorSearchState::default(),
+            file_editor_diagnostics: &[],
+            language_hover: None,
+            language_completions: None,
+            completion_selection: 0,
+            code_editor_style: &code_editor_style,
             thread_projection: &thread_projection,
             thread_timeline_scroll_offset: 0,
             workspace_context: &workspace_context,
@@ -118,8 +139,11 @@ fn presentation_with_sidebars_and_menu(
             workspace_path_picker: &WorkspacePathPickerState::default(),
             keybindings: &NativeKeybindings::default(),
             keyboard_shortcuts: &KeyboardShortcutsState::default(),
+            language_server_settings: &LanguageServerSettingsState::default(),
+            language_server_runtime_state: None,
             keybinding_diagnostics: &[],
             window_control_insets: WindowControlInsets::NONE,
+            pointer_position: None,
         },
         &mut text_layout,
     );
@@ -132,8 +156,21 @@ fn presentation_with_sidebars_and_menu(
             terminal_scroll_offset: scroll_offset,
             terminal_scrollbar_presentation: ScrollbarPresentation::default(),
             terminal_selection: None,
-            terminal_surface: terminal
-                .is_some_and(|terminal| terminal.active_screen() == ScreenBuffer::Alternate),
+            workspace_surface: if terminal
+                .is_some_and(|terminal| terminal.active_screen() == ScreenBuffer::Alternate)
+            {
+                WorkspaceSurfaceKind::Terminal
+            } else {
+                WorkspaceSurfaceKind::Agent
+            },
+            file_editor_host: &file_editor_host,
+            file_editor_prompt: crate::file_editor_pane::FileEditorPrompt::None,
+            file_editor_search: &crate::file_editor_search::FileEditorSearchState::default(),
+            file_editor_diagnostics: &[],
+            language_hover: None,
+            language_completions: None,
+            completion_selection: 0,
+            code_editor_style: &code_editor_style,
             thread_projection: &thread_projection,
             thread_timeline_scroll_offset: 0,
             workspace_context: &workspace_context,
@@ -152,8 +189,11 @@ fn presentation_with_sidebars_and_menu(
             workspace_path_picker: &WorkspacePathPickerState::default(),
             keybindings: &NativeKeybindings::default(),
             keyboard_shortcuts: &KeyboardShortcutsState::default(),
+            language_server_settings: &LanguageServerSettingsState::default(),
+            language_server_runtime_state: None,
             keybinding_diagnostics: &[],
             window_control_insets: WindowControlInsets::NONE,
+            pointer_position: None,
         },
         &mut text_layout,
     )
@@ -178,6 +218,96 @@ fn primary_layout_keeps_output_above_a_bottom_composer() {
     assert_eq!(layout.composer.origin.y, 612.0);
     assert_eq!(layout.composer.bottom(), 656.0);
     assert_eq!(layout.composer_toolbar.origin.y, 664.0);
+}
+
+#[test]
+fn editor_surface_mounts_the_active_file_without_agent_composer_or_timeline() {
+    let composer = ComposerEditor::default();
+    let composer_interaction = ComposerInteractionModel::new();
+    let composer_interaction_pane = ComposerInteractionPaneState::default();
+    let session_search = SessionSearch::default();
+    let workspace_context = WorkspaceContext::fixture("~/Desktop/zeta", Some("main"), Some(0));
+    let agent_sidebar_workspace = AgentSidebarWorkspace::default();
+    let thread_projection = ThreadProjection::default();
+    let mut file_editor_host = FileEditorHost::default();
+    file_editor_host.open(TextFileSnapshot::new(
+        "src/main.rs".into(),
+        "fn main() {}\n".into(),
+        TextFileDiskVersion::new(
+            13,
+            TextFileModifiedAt::KnownMillis(1),
+            TextFileAccess::Writable,
+        ),
+    ));
+    let code_editor_style = CodeEditorStyle::light();
+    let dispatch = UiDispatch::default();
+    let mut text_layout = TextInputLayoutEngine::new();
+
+    let presentation = build_shell_presentation(
+        viewport(),
+        ShellPresentationModel {
+            palette: crate::shell_style::SHELL_PALETTE,
+            terminal: None,
+            terminal_scroll_offset: 0,
+            terminal_scrollbar_presentation: ScrollbarPresentation::default(),
+            terminal_selection: None,
+            workspace_surface: WorkspaceSurfaceKind::Editor,
+            file_editor_host: &file_editor_host,
+            file_editor_prompt: crate::file_editor_pane::FileEditorPrompt::None,
+            file_editor_search: &crate::file_editor_search::FileEditorSearchState::default(),
+            file_editor_diagnostics: &[],
+            language_hover: None,
+            language_completions: None,
+            completion_selection: 0,
+            code_editor_style: &code_editor_style,
+            thread_projection: &thread_projection,
+            thread_timeline_scroll_offset: 0,
+            workspace_context: &workspace_context,
+            composer: &composer,
+            composer_interaction: &composer_interaction,
+            composer_interaction_pane: &composer_interaction_pane,
+            composer_mode: ComposerMode::Agent,
+            session_search: &session_search,
+            caret_visibility: CaretVisibility::Visible,
+            dispatch: &dispatch,
+            session_sidebar: SessionSidebarState::default(),
+            agent_sidebar: AgentSidebarState::default(),
+            agent_sidebar_workspace: &agent_sidebar_workspace,
+            session_context_menu: SessionContextMenuState::default(),
+            git_branch_context_menu: &GitBranchContextMenuState::default(),
+            workspace_path_picker: &WorkspacePathPickerState::default(),
+            keybindings: &NativeKeybindings::default(),
+            keyboard_shortcuts: &KeyboardShortcutsState::default(),
+            language_server_settings: &LanguageServerSettingsState::default(),
+            language_server_runtime_state: None,
+            keybinding_diagnostics: &[],
+            window_control_insets: WindowControlInsets::NONE,
+            pointer_position: None,
+        },
+        &mut text_layout,
+    );
+
+    for id in [FILE_EDITOR_PANE, FILE_EDITOR_TAB_LIST, FILE_EDITOR_DOCUMENT] {
+        assert!(
+            presentation
+                .accessibility_nodes
+                .iter()
+                .any(|node| node.id == id)
+        );
+    }
+    assert!(
+        presentation
+            .accessibility_nodes
+            .iter()
+            .all(|node| node.id != COMPOSER && node.id != THREAD_TIMELINE)
+    );
+    assert!(
+        presentation
+            .scene
+            .text_blocks()
+            .iter()
+            .any(|block| block.text() == "fn main() {}")
+    );
 }
 
 #[test]
@@ -256,7 +386,7 @@ fn primary_presentation_has_an_agent_timeline_and_fixed_composer() {
     assert!(visible_text.contains(&"Ask Zeta anything…"));
     assert!(visible_text.contains(&"Agent"));
     assert!(!visible_text.contains(&"SESSIONS"));
-    assert_eq!(presentation.scene.icons().len(), 7);
+    assert_eq!(presentation.scene.icons().len(), 8);
 }
 
 #[test]
@@ -373,6 +503,8 @@ fn session_search_filters_tabs_by_session_name() {
     let mut text_layout = TextInputLayoutEngine::new();
     let dispatch = UiDispatch::default();
     let agent_sidebar_workspace = AgentSidebarWorkspace::default();
+    let file_editor_host = FileEditorHost::default();
+    let code_editor_style = CodeEditorStyle::light();
     let thread_projection = ThreadProjection::default();
 
     let presentation = build_shell_presentation(
@@ -383,7 +515,15 @@ fn session_search_filters_tabs_by_session_name() {
             terminal_scroll_offset: 0,
             terminal_scrollbar_presentation: ScrollbarPresentation::default(),
             terminal_selection: None,
-            terminal_surface: false,
+            workspace_surface: WorkspaceSurfaceKind::Agent,
+            file_editor_host: &file_editor_host,
+            file_editor_prompt: crate::file_editor_pane::FileEditorPrompt::None,
+            file_editor_search: &crate::file_editor_search::FileEditorSearchState::default(),
+            file_editor_diagnostics: &[],
+            language_hover: None,
+            language_completions: None,
+            completion_selection: 0,
+            code_editor_style: &code_editor_style,
             thread_projection: &thread_projection,
             thread_timeline_scroll_offset: 0,
             workspace_context: &workspace_context,
@@ -402,8 +542,11 @@ fn session_search_filters_tabs_by_session_name() {
             workspace_path_picker: &WorkspacePathPickerState::default(),
             keybindings: &NativeKeybindings::default(),
             keyboard_shortcuts: &KeyboardShortcutsState::default(),
+            language_server_settings: &LanguageServerSettingsState::default(),
+            language_server_runtime_state: None,
             keybinding_diagnostics: &[],
             window_control_insets: WindowControlInsets::NONE,
+            pointer_position: None,
         },
         &mut text_layout,
     );
@@ -546,6 +689,8 @@ fn changes_switch_mounts_workspace_diffs_in_the_multi_diff_editor_without_files_
     let mut text_layout = TextInputLayoutEngine::new();
     let dispatch = UiDispatch::default();
     let thread_projection = ThreadProjection::default();
+    let file_editor_host = FileEditorHost::default();
+    let code_editor_style = CodeEditorStyle::light();
     let presentation = build_shell_presentation(
         viewport(),
         ShellPresentationModel {
@@ -554,7 +699,15 @@ fn changes_switch_mounts_workspace_diffs_in_the_multi_diff_editor_without_files_
             terminal_scroll_offset: 0,
             terminal_scrollbar_presentation: ScrollbarPresentation::default(),
             terminal_selection: None,
-            terminal_surface: false,
+            workspace_surface: WorkspaceSurfaceKind::Agent,
+            file_editor_host: &file_editor_host,
+            file_editor_prompt: crate::file_editor_pane::FileEditorPrompt::None,
+            file_editor_search: &crate::file_editor_search::FileEditorSearchState::default(),
+            file_editor_diagnostics: &[],
+            language_hover: None,
+            language_completions: None,
+            completion_selection: 0,
+            code_editor_style: &code_editor_style,
             thread_projection: &thread_projection,
             thread_timeline_scroll_offset: 0,
             workspace_context: &workspace_context,
@@ -573,8 +726,11 @@ fn changes_switch_mounts_workspace_diffs_in_the_multi_diff_editor_without_files_
             workspace_path_picker: &WorkspacePathPickerState::default(),
             keybindings: &NativeKeybindings::default(),
             keyboard_shortcuts: &KeyboardShortcutsState::default(),
+            language_server_settings: &LanguageServerSettingsState::default(),
+            language_server_runtime_state: None,
             keybinding_diagnostics: &[],
             window_control_insets: WindowControlInsets::NONE,
+            pointer_position: None,
         },
         &mut text_layout,
     );
@@ -750,6 +906,9 @@ fn overlay_rebuild_restores_the_retained_base_scene_and_interactions() {
     let workspace_path_picker = WorkspacePathPickerState::default();
     let keybindings = NativeKeybindings::default();
     let keyboard_shortcuts = KeyboardShortcutsState::default();
+    let language_server_settings = LanguageServerSettingsState::default();
+    let file_editor_host = FileEditorHost::default();
+    let code_editor_style = CodeEditorStyle::light();
     let dispatch = UiDispatch::default();
     let mut text_layout = TextInputLayoutEngine::new();
     let closed_model = ShellPresentationModel {
@@ -758,7 +917,15 @@ fn overlay_rebuild_restores_the_retained_base_scene_and_interactions() {
         terminal_scroll_offset: 0,
         terminal_scrollbar_presentation: ScrollbarPresentation::default(),
         terminal_selection: None,
-        terminal_surface: false,
+        workspace_surface: WorkspaceSurfaceKind::Agent,
+        file_editor_host: &file_editor_host,
+        file_editor_prompt: crate::file_editor_pane::FileEditorPrompt::None,
+        file_editor_search: &crate::file_editor_search::FileEditorSearchState::default(),
+        file_editor_diagnostics: &[],
+        language_hover: None,
+        language_completions: None,
+        completion_selection: 0,
+        code_editor_style: &code_editor_style,
         thread_projection: &thread_projection,
         thread_timeline_scroll_offset: 0,
         workspace_context: &workspace_context,
@@ -777,8 +944,11 @@ fn overlay_rebuild_restores_the_retained_base_scene_and_interactions() {
         workspace_path_picker: &workspace_path_picker,
         keybindings: &keybindings,
         keyboard_shortcuts: &keyboard_shortcuts,
+        language_server_settings: &language_server_settings,
+        language_server_runtime_state: None,
         keybinding_diagnostics: &[],
         window_control_insets: WindowControlInsets::NONE,
+        pointer_position: None,
     };
     let mut presentation = build_shell_presentation(viewport(), closed_model, &mut text_layout);
     let base_scene = presentation.scene.clone();
@@ -895,6 +1065,8 @@ fn compact_viewport_uses_bounded_fallback_scene() {
     let dispatch = UiDispatch::default();
     let agent_sidebar_workspace = AgentSidebarWorkspace::default();
     let thread_projection = ThreadProjection::default();
+    let file_editor_host = FileEditorHost::default();
+    let code_editor_style = CodeEditorStyle::light();
     let presentation = build_shell_presentation(
         LogicalViewport {
             width: 220.0,
@@ -906,7 +1078,15 @@ fn compact_viewport_uses_bounded_fallback_scene() {
             terminal_scroll_offset: 0,
             terminal_scrollbar_presentation: ScrollbarPresentation::default(),
             terminal_selection: None,
-            terminal_surface: false,
+            workspace_surface: WorkspaceSurfaceKind::Agent,
+            file_editor_host: &file_editor_host,
+            file_editor_prompt: crate::file_editor_pane::FileEditorPrompt::None,
+            file_editor_search: &crate::file_editor_search::FileEditorSearchState::default(),
+            file_editor_diagnostics: &[],
+            language_hover: None,
+            language_completions: None,
+            completion_selection: 0,
+            code_editor_style: &code_editor_style,
             thread_projection: &thread_projection,
             thread_timeline_scroll_offset: 0,
             workspace_context: &workspace_context,
@@ -925,8 +1105,11 @@ fn compact_viewport_uses_bounded_fallback_scene() {
             workspace_path_picker: &WorkspacePathPickerState::default(),
             keybindings: &NativeKeybindings::default(),
             keyboard_shortcuts: &KeyboardShortcutsState::default(),
+            language_server_settings: &LanguageServerSettingsState::default(),
+            language_server_runtime_state: None,
             keybinding_diagnostics: &[],
             window_control_insets: WindowControlInsets::NONE,
+            pointer_position: None,
         },
         &mut text_layout,
     );

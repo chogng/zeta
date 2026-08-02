@@ -61,6 +61,7 @@ pub(crate) enum ExplorerTreeAction {
     Handled,
     StateChanged,
     Focus(ElementId),
+    OpenFile { path: PathBuf },
     LoadChildren { element: ElementId, path: PathBuf },
 }
 
@@ -116,7 +117,9 @@ impl ExplorerTree {
     pub(crate) fn activate_element(&mut self, element: ElementId) -> Option<ExplorerTreeAction> {
         let node_id = self.elements.get(&element).copied()?;
         if !self.nodes[node_id.0].directory {
-            return Some(ExplorerTreeAction::Handled);
+            return Some(ExplorerTreeAction::OpenFile {
+                path: self.nodes[node_id.0].path.clone(),
+            });
         }
         if self.nodes[node_id.0].expanded {
             self.nodes[node_id.0].expanded = false;

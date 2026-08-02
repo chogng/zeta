@@ -156,6 +156,9 @@ impl NativeApp {
         &self,
         point: zeta_ui::Point,
     ) -> Option<TerminalMousePosition> {
+        if !self.workspace_surface.is_terminal() {
+            return None;
+        }
         terminal_mouse_position_for_viewport(
             self.logical_viewport(),
             self.active_screen(),

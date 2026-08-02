@@ -57,5 +57,6 @@ fn config_with_model(provider: &str, model: &str) -> ConfigReadResult {
         skill_sources: BTreeMap::new(),
         plugin_requests: BTreeMap::new(),
         hooks: BTreeMap::new(),
+        language_servers: BTreeMap::new(),
     }
 }

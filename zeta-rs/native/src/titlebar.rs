@@ -7,7 +7,9 @@ use zeta_ui::{
 
 use crate::agent_sidebar::AgentSidebarState;
 use crate::session_sidebar::SessionSidebarState;
-use crate::shell_interaction::{AGENT_SIDEBAR_TOGGLE, SESSION_SIDEBAR_TOGGLE, TITLEBAR, WINDOW};
+use crate::shell_interaction::{
+    AGENT_SIDEBAR_TOGGLE, LANGUAGE_SERVER_SETTINGS_TOGGLE, SESSION_SIDEBAR_TOGGLE, TITLEBAR, WINDOW,
+};
 use crate::shell_style::ShellPalette;
 use zeta_ui_dispatch::{
     AccessibilityRole, CursorFeedback, FocusBehavior, InteractionFrame, NodeAction, UiDispatch,
@@ -27,6 +29,7 @@ pub(crate) struct Titlebar {
     left_action_bar: ActionBar,
     right_action_bar: ActionBar,
     session_toggle_label: &'static str,
+    language_server_settings_label: &'static str,
     agent_toggle_label: &'static str,
 }
 
@@ -59,6 +62,15 @@ impl Titlebar {
             TOGGLE_SIZE,
             TOGGLE_SIZE,
         );
+        let settings_toggle_state = if dispatch.is_pressed(LANGUAGE_SERVER_SETTINGS_TOGGLE) {
+            ButtonState::Pressed
+        } else if dispatch.is_focused(LANGUAGE_SERVER_SETTINGS_TOGGLE) {
+            ButtonState::Focused
+        } else if dispatch.is_hovered(LANGUAGE_SERVER_SETTINGS_TOGGLE) {
+            ButtonState::Hovered
+        } else {
+            ButtonState::Resting
+        };
         let session_toggle_state = if dispatch.is_pressed(SESSION_SIDEBAR_TOGGLE) {
             ButtonState::Pressed
         } else if dispatch.is_focused(SESSION_SIDEBAR_TOGGLE) {
@@ -97,6 +109,7 @@ impl Titlebar {
         } else {
             icons::LAYOUT_SIDEBAR_RIGHT_OFF_EMPTY
         };
+        let language_server_settings_label = "Language server settings";
         let button_style = ButtonStyle::new(
             ButtonBackgrounds::new(palette.surface_raised)
                 .with_hovered(palette.surface_hovered)
@@ -121,16 +134,30 @@ impl Titlebar {
                 ActionBarStyle::new(button_style.clone(), Size::new(TOGGLE_SIZE, TOGGLE_SIZE)),
             ),
             right_action_bar: ActionBar::new(
-                agent_toggle_bounds,
+                Rect::from_xywh(
+                    agent_toggle_bounds.origin.x - TOGGLE_SIZE - TITLEBAR_ACTION_GAP,
+                    agent_toggle_bounds.origin.y,
+                    TOGGLE_SIZE * 2.0 + TITLEBAR_ACTION_GAP,
+                    TOGGLE_SIZE,
+                ),
                 ActionBarOrientation::Horizontal,
-                vec![ActionBarItem::Button(ActionBarButton::icon(
-                    agent_toggle_icon,
-                    agent_toggle_label,
-                    agent_toggle_state,
-                ))],
-                ActionBarStyle::new(button_style, Size::new(TOGGLE_SIZE, TOGGLE_SIZE)),
+                vec![
+                    ActionBarItem::Button(ActionBarButton::icon(
+                        icons::SETTINGS,
+                        language_server_settings_label,
+                        settings_toggle_state,
+                    )),
+                    ActionBarItem::Button(ActionBarButton::icon(
+                        agent_toggle_icon,
+                        agent_toggle_label,
+                        agent_toggle_state,
+                    )),
+                ],
+                ActionBarStyle::new(button_style, Size::new(TOGGLE_SIZE, TOGGLE_SIZE))
+                    .with_gap(TITLEBAR_ACTION_GAP),
             ),
             session_toggle_label,
+            language_server_settings_label,
             agent_toggle_label,
         }
     }
@@ -161,6 +188,20 @@ impl Titlebar {
             );
         }
         if let Some(bounds) = self.right_action_bar.interactive_item_bounds(0) {
+            frame.register(
+                UiNode::new(
+                    LANGUAGE_SERVER_SETTINGS_TOGGLE,
+                    bounds,
+                    AccessibilityRole::Button,
+                    self.language_server_settings_label,
+                )
+                .with_parent(TITLEBAR)
+                .with_cursor(CursorFeedback::Pointer)
+                .with_focus(FocusBehavior::TabStop)
+                .with_action(NodeAction::Activate),
+            );
+        }
+        if let Some(bounds) = self.right_action_bar.interactive_item_bounds(1) {
             frame.register(
                 UiNode::new(
                     AGENT_SIDEBAR_TOGGLE,

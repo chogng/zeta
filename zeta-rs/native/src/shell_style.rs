@@ -1,6 +1,7 @@
 use zeta_editor::{
-    CodeEditorPalette, CodeEditorStyle, CodeEditorSyntaxPalette, CodeEditorTokenRole,
-    DiffEditorPalette, DiffEditorStyle, MultiDiffEditorPalette, MultiDiffEditorStyle,
+    CodeEditorDiagnosticPalette, CodeEditorPalette, CodeEditorStyle, CodeEditorSyntaxPalette,
+    CodeEditorTokenRole, DiffEditorPalette, DiffEditorStyle, MultiDiffEditorPalette,
+    MultiDiffEditorStyle,
 };
 use zeta_theme::{ThemeError, ThemeSnapshot, tokens};
 use zeta_ui::{
@@ -18,6 +19,7 @@ pub(crate) struct ShellPalette {
     pub(crate) text_muted: Color,
     pub(crate) accent: Color,
     pub(crate) error: Color,
+    pub(crate) warning: Color,
     pub(crate) terminal_selection: Color,
     pub(crate) surface_hovered: Color,
     pub(crate) session_tab_highlight: Color,
@@ -45,6 +47,7 @@ pub(crate) const SHELL_PALETTE: ShellPalette = ShellPalette {
     text_muted: Color::rgb(126, 126, 132),
     accent: Color::rgb(15, 110, 96),
     error: Color::rgb(180, 38, 38),
+    warning: Color::rgb(154, 103, 0),
     terminal_selection: Color::rgba(68, 139, 202, 72),
     surface_hovered: Color::rgb(248, 248, 249),
     session_tab_highlight: Color::rgb(235, 235, 237),
@@ -95,6 +98,7 @@ impl ShellPalette {
             text_muted: theme_color(theme, tokens::MUTED_FOREGROUND)?,
             accent: theme_color(theme, tokens::ACCENT_FOREGROUND)?,
             error: theme_color(theme, tokens::ERROR_FOREGROUND)?,
+            warning: theme_color(theme, tokens::WARNING_FOREGROUND)?,
             terminal_selection: theme_color(theme, tokens::SELECTION_BACKGROUND)?,
             surface_hovered: theme_color(theme, tokens::LIST_HOVER_BACKGROUND)?,
             session_tab_highlight: theme_color(theme, tokens::LIST_ACTIVE_SELECTION_BACKGROUND)?,
@@ -171,6 +175,12 @@ impl ShellPalette {
             selection: self.terminal_selection,
             caret: self.accent,
             composition_underline: self.accent,
+            diagnostics: CodeEditorDiagnosticPalette {
+                error: self.error,
+                warning: self.warning,
+                information: self.accent,
+                hint: self.text_muted,
+            },
             syntax: CodeEditorSyntaxPalette::uniform(self.text),
         });
         let diff_editor = DiffEditorStyle::new(DiffEditorPalette {
@@ -281,6 +291,12 @@ pub(crate) fn code_editor_style(theme: &ThemeSnapshot) -> Result<CodeEditorStyle
         selection: theme_color(theme, tokens::SELECTION_BACKGROUND)?,
         caret: theme_color(theme, tokens::ACCENT_FOREGROUND)?,
         composition_underline: theme_color(theme, tokens::ACCENT_FOREGROUND)?,
+        diagnostics: CodeEditorDiagnosticPalette {
+            error: theme_color(theme, tokens::ERROR_FOREGROUND)?,
+            warning: theme_color(theme, tokens::WARNING_FOREGROUND)?,
+            information: theme_color(theme, tokens::ACCENT_FOREGROUND)?,
+            hint: theme_color(theme, tokens::MUTED_FOREGROUND)?,
+        },
         syntax,
     }))
 }

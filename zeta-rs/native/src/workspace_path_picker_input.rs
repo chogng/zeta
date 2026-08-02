@@ -8,6 +8,7 @@ use zeta_ui_dispatch::{
 use zeta_winit::{ElementState, Key, KeyEvent, MouseButton, MouseScrollDelta, NamedKey};
 
 use crate::NativeApp;
+use crate::file_editor_host::FileEditorCloseRequest;
 use crate::shell_interaction::CONTEXT_WORKING_DIRECTORY;
 use crate::terminal_selection::{read_clipboard_text, write_clipboard_text};
 use crate::workspace_path_picker::{
@@ -65,6 +66,14 @@ impl NativeApp {
                 self.rebuild_and_focus_workspace_path_search();
             }
             WorkspacePathPickerActivation::SelectWorkspace(directory) => {
+                if self.file_editor_host.request_workspace_replace()
+                    == FileEditorCloseRequest::NeedsConfirmation
+                {
+                    eprintln!(
+                        "could not switch workspace while the active file has unsaved changes"
+                    );
+                    return true;
+                }
                 let switched = match self.agent_session.as_ref() {
                     Some(session) => session.switch_workspace(directory),
                     None => Err(anyhow::anyhow!("Agent session is unavailable")),
@@ -87,6 +96,12 @@ impl NativeApp {
                     .apply_git_projection(switched.git.as_ref());
                 self.agent_sidebar_workspace
                     .replace_workspace(&self.workspace_context);
+                self.language_service
+                    .replace_workspace(self.workspace_context.working_directory());
+                self.file_editor_host.replace_workspace();
+                self.file_editor_input.reset_for_document_change();
+                self.workspace_surface.show_agent();
+                self.pending_focus = Some(crate::shell_interaction::COMPOSER);
                 self.refresh_files_from_app_server();
                 self.composer
                     .set_working_directory(self.workspace_context.working_directory());

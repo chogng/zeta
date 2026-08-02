@@ -10,9 +10,11 @@ use crate::shell_interaction::{
 pub(crate) enum NativeCommand {
     Copy,
     Paste,
+    Save,
     ToggleComposerMode,
     ToggleTerminalSurface,
     OpenKeyboardShortcuts,
+    OpenLanguageServerSettings,
     ToggleSessionSidebar,
     ToggleAgentSidebar,
     ActivateSessionTab,
@@ -29,9 +31,11 @@ impl NativeCommand {
         match self {
             Self::Copy => "editor.action.clipboardCopyAction",
             Self::Paste => "editor.action.clipboardPasteAction",
+            Self::Save => "workbench.action.files.save",
             Self::ToggleComposerMode => "workbench.action.toggleComposerMode",
             Self::ToggleTerminalSurface => "workbench.action.toggleTerminal",
             Self::OpenKeyboardShortcuts => "workbench.action.openKeyboardShortcuts",
+            Self::OpenLanguageServerSettings => "workbench.action.openLanguageServerSettings",
             Self::ToggleSessionSidebar => "workbench.action.toggleSideBar",
             Self::ToggleAgentSidebar => "workbench.action.toggleAuxiliaryBar",
             Self::ActivateSessionTab => "workbench.action.activateSession",
@@ -71,12 +75,14 @@ impl NativeCommand {
             .find(|command| command.id() == id)
     }
 
-    pub(crate) const BINDABLE: [Self; 11] = [
+    pub(crate) const BINDABLE: [Self; 13] = [
         Self::Copy,
         Self::Paste,
+        Self::Save,
         Self::ToggleComposerMode,
         Self::ToggleTerminalSurface,
         Self::OpenKeyboardShortcuts,
+        Self::OpenLanguageServerSettings,
         Self::ToggleSessionSidebar,
         Self::ToggleAgentSidebar,
         Self::SelectAgentPane(AgentSidebarPaneAction::Changes),
@@ -89,9 +95,11 @@ impl NativeCommand {
         match self {
             Self::Copy => "Copy",
             Self::Paste => "Paste",
+            Self::Save => "Save",
             Self::ToggleComposerMode => "Toggle composer mode",
             Self::ToggleTerminalSurface => "Toggle terminal",
             Self::OpenKeyboardShortcuts => "Keyboard shortcuts",
+            Self::OpenLanguageServerSettings => "Language server settings",
             Self::ToggleSessionSidebar => "Toggle session sidebar",
             Self::ToggleAgentSidebar => "Toggle agent sidebar",
             Self::ActivateSessionTab => "Activate session",
@@ -122,6 +130,9 @@ pub(crate) fn command_for_element(id: ElementId) -> Option<NativeCommand> {
     if id == shell_interaction::AGENT_SIDEBAR_TOGGLE {
         return Some(NativeCommand::ToggleAgentSidebar);
     }
+    if id == shell_interaction::LANGUAGE_SERVER_SETTINGS_TOGGLE {
+        return Some(NativeCommand::OpenLanguageServerSettings);
+    }
     if id == shell_interaction::ACTIVE_SESSION_TAB {
         return Some(NativeCommand::ActivateSessionTab);
     }
@@ -149,6 +160,7 @@ impl NativeApp {
         match command {
             NativeCommand::Copy => self.copy_keybinding_target(),
             NativeCommand::Paste => self.paste_keybinding_target(),
+            NativeCommand::Save => self.save_active_workspace_file(),
             NativeCommand::ToggleComposerMode => {
                 self.composer.toggle_mode();
                 self.composer_interaction.sync_for_composer(
@@ -157,13 +169,31 @@ impl NativeApp {
                 );
             }
             NativeCommand::ToggleTerminalSurface => {
-                self.workspace_surface.toggle();
+                self.workspace_surface.toggle_terminal();
+                self.pending_focus = if self.workspace_surface.is_editor() {
+                    Some(shell_interaction::FILE_EDITOR_DOCUMENT)
+                } else if self.workspace_surface.is_terminal() {
+                    None
+                } else {
+                    Some(shell_interaction::COMPOSER)
+                };
                 self.terminal_selection.clear();
                 self.terminal_scroll.reset();
                 self.keybindings.cancel_chord();
             }
             NativeCommand::OpenKeyboardShortcuts => {
+                self.language_server_settings.close();
                 self.keyboard_shortcuts.toggle();
+                self.keybindings.cancel_chord();
+            }
+            NativeCommand::OpenLanguageServerSettings => {
+                self.language_server_settings.open();
+                self.keyboard_shortcuts.close();
+                let _ = self.git_branch_context_menu.dismiss();
+                let _ = self.workspace_path_picker.dismiss();
+                self.dismiss_session_context_menu();
+                self.pending_focus =
+                    Some(crate::language_server_settings::LANGUAGE_SERVER_EXECUTABLE_INPUT);
                 self.keybindings.cancel_chord();
             }
             NativeCommand::ToggleSessionSidebar => self.session_sidebar.toggle(),

@@ -18,7 +18,11 @@ zeta-app-server-client = { workspace = true }
 zeta-app-server-protocol = { workspace = true }
 zeta-icons = { workspace = true }
 zeta-keybinding = { workspace = true }
+zeta-language-server-catalog = { workspace = true }
+zeta-language-service = { workspace = true }
+zeta-install-context = { workspace = true }
 zeta-terminal = { workspace = true }
+zeta-text-file = { workspace = true }
 zeta-theme = { workspace = true }
 zeta-protocol = { workspace = true }
 zeta-renderer = { workspace = true }

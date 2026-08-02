@@ -1,7 +1,7 @@
 # Native Text 输入：分层、IME 与当前实现
 
 > 状态：Current。
-> 本文拥有 native 单行文本输入的跨 crate ownership、用户语义和演进边界。具体源码接口与
+> 本文拥有 Native 单行控件与多行代码编辑器输入的跨 crate ownership、用户语义和演进边界。具体源码接口与
 > 修改路径分别由 [`zeta-native`](../zeta-rs/native/README.md)、
 > [`zui`](../zeta-rs/zui/README.md)、[`zeta-ui`](../zeta-rs/ui/README.md) 和
 > [`zeta-winit`](../zeta-rs/winit/README.md) 说明。
@@ -14,9 +14,8 @@ Native 文本输入采用单向依赖，不建立同时理解窗口事件、编�
 winit keyboard / IME event
   → zeta-winit platform forwarding
   → zeta-native focus and event routing
-  → zui TextInput foundation
-  → TextInputLayoutEngine
-  → zeta-ui InputBox component
+  ├─ single-line → zui TextInput → TextInputLayoutEngine → zeta-ui InputBox
+  └─ multiline   → zeta-editor CodeEditorDocument / CodeEditorViewport → CodeEditor
   → zui UiScene
 ```
 
@@ -26,28 +25,29 @@ shaping geometry 和真实平台接入可以分别测试。
 
 | 用户行为 | 当前支持 | 由谁负责 |
 | --- | --- | --- |
-| 键盘输入和光标移动 | ✅ | 文本输入基座 |
-| 中文、日文等输入法预编辑与提交 | ✅ | 平台事件转发 + 文本输入状态 |
-| 选择、退格和字素级移动 | ✅ | 文本输入基座 |
-| 鼠标放置光标和拖选 | ❌ | 尚未实现 |
-| 剪贴板、撤销和重做 | ❌ | 尚未实现 |
-| 多行编辑和自动换行 | ❌ | 不属于当前单行输入 |
+| 键盘输入和光标移动 | ✅ | `TextInput` 或 `CodeEditorDocument` |
+| 中文、日文等输入法预编辑与提交 | ✅ | Native 路由 + 当前输入模型 |
+| 选择、退格和字素级移动 | ✅ | `TextInput` 或 `CodeEditorDocument` |
+| 文件编辑器鼠标放置光标、拖选与越界自动滚动 | ✅ | Native pointer/timer adapter + `CodeEditor` hit-test |
+| 文件编辑器剪贴板、撤销和重做 | ✅ | Native clipboard adapter + `CodeEditorDocument` |
+| 文件编辑器查找/替换与自动缩进 | ✅ | Native find widget + `CodeEditorDocument` search/indent contracts |
+| 多行编辑与 viewport soft wrap | ✅ | `zeta-editor::CodeEditorDocument` / editor-owned visual projection |
 
 ## 2. 所有权
 
 | 能力 | 当前 owner | 状态 |
 | --- | --- | --- |
 | 原生 keyboard/IME event 与候选框 API | `zeta-winit` / `winit` | 委托 |
-| Composer 与 Session Search focus、event routing、IME activation | `zeta-native::NativeApp` | ✅ |
+| Composer、文件 Editor 与搜索框 focus、event routing、IME activation | `zeta-native::NativeApp` | ✅ |
 | Committed text、selection、grapheme movement | `zui::TextInput` | ✅ |
 | Preedit/commit/cancel composition state | `zui::TextInput` | ✅ |
 | 单行 shaping、selection/caret/preedit geometry | `zui::TextInputLayoutEngine` | ✅ |
 | Caret blink phase state machine | `zui::CaretBlinkController` | ✅ |
 | Input-box chrome、状态与 scene composition | `zeta-ui::InputBox` | ✅ |
 | Blink deadline scheduling 与 redraw | `zeta-native::NativeApp` | ✅ |
-| Mouse caret placement、drag selection | 尚无 owner | 尚未完成 |
-| Clipboard、undo/redo、accessibility | 尚无 owner | 尚未完成 |
-| 多行 editor、soft wrap、vertical navigation | 尚无 owner | 尚未完成 |
+| 文件 Editor mouse caret、drag selection、clipboard 与 viewport | `file_editor_input` + `zeta-editor` | ✅ |
+| 文件 Editor undo/redo 与 vertical navigation | `zeta-editor::CodeEditorDocument` | ✅ |
+| 平台 accessibility adapter | 尚无完整 owner | 尚未完成 |
 
 `TextInput` 是非 component 基座：拥有编辑状态、composition 和 shaping contract，但不实现
 `Component`，也不拥有边框、背景、placeholder 或 hover/focus 视觉。`InputBox` 才是
@@ -62,7 +62,7 @@ shaping geometry 和真实平台接入可以分别测试。
 - composition 在视觉上临时替换 active selection，但不修改 committed text；只有 `Commit` 才原子
   替换 selection，cancel 保留原始文本和选择；
 - IME 没有提供 preedit cursor 时隐藏 caret；提供 range 时使用 range end 定位 caret；
-- composer 或 session search 获得焦点时启用 IME；输入目标切换时清除原目标未提交的 preedit；
+- composer、文件 Editor 或搜索框获得焦点时启用 IME；输入目标切换时清除原目标未提交的 preedit；
 - 获得焦点或发生 editing/composition activity 时 caret 立即可见，之后按 deadline 切换相位；
 - active selection 隐藏普通 caret；IME preedit cursor 仍遵守平台提供的 visible/hidden range；
 - 候选框锚点来自 shaped caret 的 logical window coordinates，不使用字符数估算；
@@ -71,7 +71,7 @@ shaping geometry 和真实平台接入可以分别测试。
 ## 4. 当前端到端路径
 
 ```text
-pointer release on composer / session search
+pointer release on composer / file editor / search input
   → ShellInteraction focuses the selected text input
   → NativeWindow::enable_ime
   → rebuild ShellPresentation
@@ -79,15 +79,15 @@ pointer release on composer / session search
   → NativeWindow::set_ime_cursor_area(shaped caret)
 
 WindowEvent::KeyboardInput
-  → NativeApp routes to composer or session search and maps to TextInputCommand
-  → TextInput updates committed text / selection
+  → NativeApp routes by Workspace Surface and focused element
+  ├─ single-line → TextInputCommand → TextInput
+  └─ file editor → CodeEditorCommand → active CodeEditorDocument
   → rebuild and redraw
 
 WindowEvent::Ime(Preedit)
   → NativeApp maps platform event to TextInputCompositionEvent
-  → TextInput updates temporary composition
-  → TextInputLayoutEngine projects committed + preedit text
-  → InputBox paints preedit underline and caret
+  → active TextInput or CodeEditorDocument updates temporary composition
+  → owning component paints preedit underline and caret
 
 WindowEvent::Ime(Commit)
   → TextInput atomically inserts committed text
@@ -113,15 +113,14 @@ ApplicationHandler::about_to_wait
 
 ## 6. 当前限制与演进前提
 
-当前 vertical slice 是 single-line composer，支持键盘插入、grapheme-safe 左右移动与删除、
-Shift selection、Home/End、Select All、IME composition 和 caret blink。它尚未实现 mouse
-caret placement、drag selection、clipboard、undo/redo、password/read-only variant、提交命令
-和 accessibility。
+单行控件支持键盘插入、grapheme-safe 左右移动与删除、Shift selection、Home/End、Select All、
+IME composition 和 caret blink；其 mouse selection、clipboard、undo/redo 与 password variant
+仍未完成。文件 Editor 另外支持多行 navigation、pointer caret/drag、clipboard、undo/redo、结构
+折叠、find/replace、自动缩进、soft wrap、垂直 viewport 和拖选越界自动滚动，但尚无平台 accessibility adapter。
 
-增加 mouse selection 前，应让 hit testing 消费同一份 shaped layout，不能另建字符宽度估算。
-增加多行编辑器前，应先定义 soft wrap、vertical cursor affinity、scroll ownership 和 IME
-candidate area 的多行语义。基础模型已由独立 `zui` crate 拥有；具体输入框 chrome 继续留在
-`zeta-ui`，不能把二者重新合并。
+两类输入必须继续消费各自 owner 的同源 hit-test/layout，不能在 Native 另建字符宽度估算。
+`TextInput` 基座留在 `zui`，输入框 chrome 留在 `zeta-ui`；多行文档、命令和可见行投影留在
+`zeta-editor`。
 
 ## 7. 长期不变量
 

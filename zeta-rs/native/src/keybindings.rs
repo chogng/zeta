@@ -276,6 +276,7 @@ fn default_keybinding(command: NativeCommand) -> Option<&'static KeySequence> {
     static TOGGLE_TERMINAL: std::sync::OnceLock<KeySequence> = std::sync::OnceLock::new();
     static COPY: std::sync::OnceLock<KeySequence> = std::sync::OnceLock::new();
     static PASTE: std::sync::OnceLock<KeySequence> = std::sync::OnceLock::new();
+    static SAVE: std::sync::OnceLock<KeySequence> = std::sync::OnceLock::new();
     match command {
         NativeCommand::ToggleTerminalSurface => Some(TOGGLE_TERMINAL.get_or_init(|| {
             KeySequence::single(
@@ -293,7 +294,13 @@ fn default_keybinding(command: NativeCommand) -> Option<&'static KeySequence> {
                 Chord::logical("v", ShortcutModifiers::primary()).expect("builtin key"),
             )
         })),
+        NativeCommand::Save => Some(SAVE.get_or_init(|| {
+            KeySequence::single(
+                Chord::logical("s", ShortcutModifiers::primary()).expect("builtin key"),
+            )
+        })),
         NativeCommand::ToggleComposerMode
+        | NativeCommand::OpenLanguageServerSettings
         | NativeCommand::ToggleSessionSidebar
         | NativeCommand::ToggleAgentSidebar
         | NativeCommand::ActivateSessionTab
@@ -330,6 +337,13 @@ fn builtin_bindings(platform: HostPlatform) -> BindingSet<NativeBindingCondition
         NativeBindingCondition::Always,
     );
     register_text_input_clipboard(&mut bindings);
+    register(
+        &mut bindings,
+        "s",
+        ShortcutModifiers::primary(),
+        NativeCommand::Save,
+        NativeBindingCondition::Always,
+    );
     register_direct_terminal_clipboard(&mut bindings, platform);
     bindings
 }

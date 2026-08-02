@@ -1,7 +1,8 @@
 use super::{
     InputMethodContext, InputMethodTarget, encode_terminal_ime_event, text_input_composition_event,
 };
-use zeta_terminal::{GridSize, ScreenBuffer, TerminalCore};
+use crate::workspace_surface::WorkspaceSurfaceKind;
+use zeta_terminal::{GridSize, TerminalCore};
 use zeta_ui::{TextInputCompositionCursor, TextInputCompositionEvent};
 use zeta_winit::Ime;
 
@@ -9,19 +10,41 @@ use zeta_winit::Ime;
 fn target_requires_an_active_window_and_the_appropriate_editable_surface() {
     let composer = InputMethodContext {
         window_active: true,
-        screen: ScreenBuffer::Primary,
+        workspace_surface: WorkspaceSurfaceKind::Agent,
         composer_focused: true,
+        file_editor_focused: false,
+        file_editor_find_focused: false,
+        file_editor_replace_focused: false,
         session_search_focused: false,
         file_search_focused: false,
         git_branch_search_focused: false,
         workspace_path_search_focused: false,
+        language_server_executable_focused: false,
     };
     let toolbar = InputMethodContext {
         composer_focused: false,
         ..composer
     };
     let terminal_grid = InputMethodContext {
-        screen: ScreenBuffer::Alternate,
+        workspace_surface: WorkspaceSurfaceKind::Terminal,
+        composer_focused: false,
+        ..composer
+    };
+    let file_editor = InputMethodContext {
+        workspace_surface: WorkspaceSurfaceKind::Editor,
+        file_editor_focused: true,
+        composer_focused: false,
+        ..composer
+    };
+    let file_editor_find = InputMethodContext {
+        workspace_surface: WorkspaceSurfaceKind::Editor,
+        file_editor_find_focused: true,
+        composer_focused: false,
+        ..composer
+    };
+    let file_editor_replace = InputMethodContext {
+        workspace_surface: WorkspaceSurfaceKind::Editor,
+        file_editor_replace_focused: true,
         composer_focused: false,
         ..composer
     };
@@ -39,6 +62,10 @@ fn target_requires_an_active_window_and_the_appropriate_editable_surface() {
     };
     let workspace_path_search = InputMethodContext {
         workspace_path_search_focused: true,
+        ..terminal_grid
+    };
+    let language_server_executable = InputMethodContext {
+        language_server_executable_focused: true,
         ..terminal_grid
     };
     let inactive_window = InputMethodContext {
@@ -59,6 +86,18 @@ fn target_requires_an_active_window_and_the_appropriate_editable_surface() {
         InputMethodTarget::TerminalGrid
     );
     assert_eq!(
+        InputMethodTarget::for_context(file_editor),
+        InputMethodTarget::FileEditor
+    );
+    assert_eq!(
+        InputMethodTarget::for_context(file_editor_find),
+        InputMethodTarget::FileEditorFind
+    );
+    assert_eq!(
+        InputMethodTarget::for_context(file_editor_replace),
+        InputMethodTarget::FileEditorReplace
+    );
+    assert_eq!(
         InputMethodTarget::for_context(session_search),
         InputMethodTarget::SessionSearch
     );
@@ -73,6 +112,10 @@ fn target_requires_an_active_window_and_the_appropriate_editable_surface() {
     assert_eq!(
         InputMethodTarget::for_context(workspace_path_search),
         InputMethodTarget::WorkspacePathSearch
+    );
+    assert_eq!(
+        InputMethodTarget::for_context(language_server_executable),
+        InputMethodTarget::LanguageServerExecutable
     );
     assert_eq!(
         InputMethodTarget::for_context(inactive_window),

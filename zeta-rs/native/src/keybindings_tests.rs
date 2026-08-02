@@ -36,6 +36,19 @@ fn text_inputs_use_portable_copy_and_paste() {
 }
 
 #[test]
+fn workspace_save_is_available_independently_from_the_focused_surface() {
+    let mut bindings = NativeKeybindings::for_platform(HostPlatform::Linux);
+
+    assert_eq!(
+        bindings.resolve_stroke(
+            &stroke("s", Modifiers::none().with_control()),
+            NativeKeybindingContext::direct_terminal(),
+        ),
+        NativeKeybindingResolution::Command(NativeCommand::Save)
+    );
+}
+
+#[test]
 fn direct_terminal_preserves_unshifted_control_keys() {
     let mut bindings = NativeKeybindings::for_platform(HostPlatform::Linux);
 

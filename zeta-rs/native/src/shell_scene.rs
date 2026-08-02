@@ -21,19 +21,24 @@ use crate::composer_panel::{
 };
 use crate::editor_pane::EditorPane;
 use crate::explorer_pane::ExplorerPane;
+use crate::file_editor_host::FileEditorHost;
+use crate::file_editor_pane::{FileEditorPane, FileEditorPrompt};
+use crate::file_editor_search::FileEditorSearchState;
 use crate::git_branch_context_menu::{GitBranchContextMenu, GitBranchContextMenuState};
 use crate::keybindings::NativeKeybindings;
 use crate::keyboard_shortcuts::{
     KeyboardShortcutsState, keyboard_shortcut_rows, keyboard_shortcuts_ids,
 };
+use crate::language_server_settings::{LanguageServerSettings, LanguageServerSettingsState};
 use crate::session_context_menu::{SessionContextMenu, SessionContextMenuState};
 use crate::session_search::SessionSearch;
 use crate::session_sidebar::SessionSidebarState;
 use crate::session_sidebar_toolbar::SessionSidebarToolbar;
 use crate::session_tab_list::{SessionTab, SessionTabList};
 use crate::shell_interaction::{
-    ACTIVE_SESSION_TAB, AGENT_FILE_SEARCH_INPUT, AGENT_SIDEBAR, MAIN_SURFACE, SESSION_SEARCH_INPUT,
-    SESSION_SIDEBAR, SESSION_SIDEBAR_RESIZE_HANDLE, TERMINAL_OUTPUT, THREAD_TIMELINE, WINDOW,
+    ACTIVE_SESSION_TAB, AGENT_FILE_SEARCH_INPUT, AGENT_SIDEBAR, FILE_EDITOR_DOCUMENT, MAIN_SURFACE,
+    SESSION_SEARCH_INPUT, SESSION_SIDEBAR, SESSION_SIDEBAR_RESIZE_HANDLE, TERMINAL_OUTPUT,
+    THREAD_TIMELINE, WINDOW,
 };
 use crate::shell_style::ShellPalette;
 use crate::terminal_blocks::{TerminalBlockLineKind, project_block_lines};
@@ -45,6 +50,8 @@ use crate::thread_timeline::ThreadTimeline;
 use crate::titlebar::{TITLEBAR_HEIGHT, Titlebar};
 use crate::workspace_context::WorkspaceContext;
 use crate::workspace_path_picker::{WorkspacePathPicker, WorkspacePathPickerState};
+use crate::workspace_surface::WorkspaceSurfaceKind;
+use zeta_editor::CodeEditorStyle;
 use zeta_ui_dispatch::{
     AccessibilityNode, AccessibilityRole, CursorFeedback, InteractionFrame,
     InteractionFrameCheckpoint, UiDispatch, UiNode,
@@ -206,7 +213,15 @@ pub(crate) struct ShellPresentationModel<'a> {
     pub(crate) terminal_scroll_offset: usize,
     pub(crate) terminal_scrollbar_presentation: ScrollbarPresentation,
     pub(crate) terminal_selection: Option<TerminalSelectionRange>,
-    pub(crate) terminal_surface: bool,
+    pub(crate) workspace_surface: WorkspaceSurfaceKind,
+    pub(crate) file_editor_host: &'a FileEditorHost,
+    pub(crate) file_editor_prompt: FileEditorPrompt,
+    pub(crate) file_editor_search: &'a FileEditorSearchState,
+    pub(crate) file_editor_diagnostics: &'a [zeta_editor::CodeEditorDiagnostic],
+    pub(crate) language_hover: Option<&'a zeta_language_service::LanguageHover>,
+    pub(crate) language_completions: Option<&'a zeta_language_service::LanguageCompletions>,
+    pub(crate) completion_selection: usize,
+    pub(crate) code_editor_style: &'a CodeEditorStyle,
     pub(crate) thread_projection: &'a ThreadProjection,
     pub(crate) thread_timeline_scroll_offset: usize,
     pub(crate) workspace_context: &'a WorkspaceContext,
@@ -225,8 +240,12 @@ pub(crate) struct ShellPresentationModel<'a> {
     pub(crate) workspace_path_picker: &'a WorkspacePathPickerState,
     pub(crate) keybindings: &'a NativeKeybindings,
     pub(crate) keyboard_shortcuts: &'a KeyboardShortcutsState,
+    pub(crate) language_server_settings: &'a LanguageServerSettingsState,
+    pub(crate) language_server_runtime_state:
+        Option<&'a zeta_language_service::LanguageServerState>,
     pub(crate) keybinding_diagnostics: &'a [String],
     pub(crate) window_control_insets: WindowControlInsets,
+    pub(crate) pointer_position: Option<zeta_ui::Point>,
 }
 
 #[derive(Clone, Copy)]
@@ -244,6 +263,31 @@ struct AgentSidebarPresentationView<'a> {
     context: &'a WorkspaceContext,
     caret_visibility: CaretVisibility,
     dispatch: &'a UiDispatch,
+}
+
+#[derive(Clone, Copy)]
+struct FileEditorPresentationView<'a> {
+    host: &'a FileEditorHost,
+    prompt: FileEditorPrompt,
+    search: &'a FileEditorSearchState,
+    diagnostics: &'a [zeta_editor::CodeEditorDiagnostic],
+    language_hover: Option<&'a zeta_language_service::LanguageHover>,
+    language_completions: Option<&'a zeta_language_service::LanguageCompletions>,
+    completion_selection: usize,
+    style: &'a CodeEditorStyle,
+    caret_visibility: CaretVisibility,
+    dispatch: &'a UiDispatch,
+    pointer_position: Option<zeta_ui::Point>,
+}
+
+#[derive(Clone, Copy)]
+struct MainPresentationView<'a> {
+    terminal: TerminalView<'a>,
+    workspace_surface: WorkspaceSurfaceKind,
+    thread_projection: &'a ThreadProjection,
+    thread_timeline_scroll_offset: usize,
+    composer: ComposerPanelView<'a>,
+    file_editor: FileEditorPresentationView<'a>,
 }
 
 pub(crate) fn build_shell_presentation(
@@ -279,7 +323,7 @@ pub(crate) fn build_shell_presentation(
         };
     };
 
-    let title = if model.terminal_surface {
+    let title = if model.workspace_surface == WorkspaceSurfaceKind::Terminal {
         model
             .terminal
             .and_then(TerminalCore::title)
@@ -340,23 +384,38 @@ pub(crate) fn build_shell_presentation(
         &mut scene,
         &mut interaction_frame,
         layout,
-        TerminalView {
-            core: model.terminal,
-            scroll_offset: model.terminal_scroll_offset,
-            scrollbar_presentation: model.terminal_scrollbar_presentation,
-            selection: model.terminal_selection,
-        },
-        model.terminal_surface,
-        model.thread_projection,
-        model.thread_timeline_scroll_offset,
-        ComposerPanelView {
-            context: model.workspace_context,
-            editor: model.composer,
-            interaction: model.composer_interaction,
-            interaction_pane: model.composer_interaction_pane,
-            mode: model.composer_mode,
-            caret_visibility: model.caret_visibility,
-            dispatch: model.dispatch,
+        MainPresentationView {
+            terminal: TerminalView {
+                core: model.terminal,
+                scroll_offset: model.terminal_scroll_offset,
+                scrollbar_presentation: model.terminal_scrollbar_presentation,
+                selection: model.terminal_selection,
+            },
+            workspace_surface: model.workspace_surface,
+            thread_projection: model.thread_projection,
+            thread_timeline_scroll_offset: model.thread_timeline_scroll_offset,
+            composer: ComposerPanelView {
+                context: model.workspace_context,
+                editor: model.composer,
+                interaction: model.composer_interaction,
+                interaction_pane: model.composer_interaction_pane,
+                mode: model.composer_mode,
+                caret_visibility: model.caret_visibility,
+                dispatch: model.dispatch,
+            },
+            file_editor: FileEditorPresentationView {
+                host: model.file_editor_host,
+                prompt: model.file_editor_prompt,
+                search: model.file_editor_search,
+                diagnostics: model.file_editor_diagnostics,
+                language_hover: model.language_hover,
+                language_completions: model.language_completions,
+                completion_selection: model.completion_selection,
+                style: model.code_editor_style,
+                caret_visibility: model.caret_visibility,
+                dispatch: model.dispatch,
+                pointer_position: model.pointer_position,
+            },
         },
         palette,
         text_layout,
@@ -511,6 +570,28 @@ fn draw_shell_overlays(
     ) {
         shortcuts.register_interactions(interaction_frame);
         scene.draw_component(&shortcuts);
+    }
+    if let Some(settings) = LanguageServerSettings::new(
+        viewport_bounds,
+        model.language_server_settings,
+        model.caret_visibility,
+        palette,
+        text_layout,
+        model.dispatch,
+    ) {
+        let settings = if let Some(runtime_state) = model.language_server_runtime_state {
+            settings.with_runtime_state(runtime_state)
+        } else {
+            settings
+        };
+        if model
+            .dispatch
+            .is_focused(crate::language_server_settings::LANGUAGE_SERVER_EXECUTABLE_INPUT)
+        {
+            ime_cursor_area = settings.executable_caret_bounds();
+        }
+        settings.register_interactions(interaction_frame);
+        scene.draw_component(&settings);
     }
     ShellOverlayPresentation {
         ime_cursor_area,
@@ -713,18 +794,13 @@ fn draw_main(
     scene: &mut UiScene,
     interaction_frame: &mut InteractionFrame,
     layout: ShellLayout,
-    terminal_view: TerminalView<'_>,
-    terminal_surface: bool,
-    thread_projection: &ThreadProjection,
-    thread_timeline_scroll_offset: usize,
-    composer_view: ComposerPanelView<'_>,
+    view: MainPresentationView<'_>,
     palette: ShellPalette,
     text_layout: &mut TextInputLayoutEngine,
 ) -> Option<Rect> {
-    let active_screen = if terminal_surface {
-        ScreenBuffer::Alternate
-    } else {
-        ScreenBuffer::Primary
+    let active_screen = match view.workspace_surface {
+        WorkspaceSurfaceKind::Terminal => ScreenBuffer::Alternate,
+        WorkspaceSurfaceKind::Agent | WorkspaceSurfaceKind::Editor => ScreenBuffer::Primary,
     };
     scene.draw_rect(PaintRect::new(layout.main, palette.background));
     interaction_frame.register(
@@ -732,65 +808,107 @@ fn draw_main(
             MAIN_SURFACE,
             layout.main,
             AccessibilityRole::Group,
-            if terminal_surface {
-                "Interactive terminal"
-            } else {
-                "Agent workspace"
+            match view.workspace_surface {
+                WorkspaceSurfaceKind::Agent => "Agent workspace",
+                WorkspaceSurfaceKind::Editor => "File editor workspace",
+                WorkspaceSurfaceKind::Terminal => "Interactive terminal",
             },
         )
         .with_parent(WINDOW)
         .with_cursor(CursorFeedback::Text),
     );
-    if active_screen == ScreenBuffer::Alternate {
-        interaction_frame.register(
-            UiNode::new(
-                TERMINAL_OUTPUT,
-                terminal_content_bounds(layout, active_screen),
-                AccessibilityRole::Terminal,
-                "Interactive terminal",
-            )
-            .with_parent(MAIN_SURFACE)
-            .with_cursor(CursorFeedback::Text),
-        );
-    } else {
-        interaction_frame.register(
-            UiNode::new(
-                THREAD_TIMELINE,
-                layout.output,
-                AccessibilityRole::Group,
-                "Agent Thread timeline",
-            )
-            .with_parent(MAIN_SURFACE)
-            .with_cursor(CursorFeedback::Text),
-        );
+    match view.workspace_surface {
+        WorkspaceSurfaceKind::Terminal => {
+            interaction_frame.register(
+                UiNode::new(
+                    TERMINAL_OUTPUT,
+                    terminal_content_bounds(layout, active_screen),
+                    AccessibilityRole::Terminal,
+                    "Interactive terminal",
+                )
+                .with_parent(MAIN_SURFACE)
+                .with_cursor(CursorFeedback::Text),
+            );
+        }
+        WorkspaceSurfaceKind::Agent => {
+            interaction_frame.register(
+                UiNode::new(
+                    THREAD_TIMELINE,
+                    layout.output,
+                    AccessibilityRole::Group,
+                    "Agent Thread timeline",
+                )
+                .with_parent(MAIN_SURFACE)
+                .with_cursor(CursorFeedback::Text),
+            );
+        }
+        WorkspaceSurfaceKind::Editor => {}
     }
     let mut ime_cursor_area = None;
-    scene.with_clip(layout.main, |scene| {
-        if active_screen == ScreenBuffer::Alternate {
-            draw_terminal(scene, layout, terminal_view, active_screen, palette);
-        } else {
+    scene.with_clip(layout.main, |scene| match view.workspace_surface {
+        WorkspaceSurfaceKind::Terminal => {
+            draw_terminal(scene, layout, view.terminal, active_screen, palette);
+        }
+        WorkspaceSurfaceKind::Agent => {
             scene.draw_component(&ThreadTimeline::new(
                 layout.output,
-                thread_projection,
-                thread_timeline_scroll_offset,
+                view.thread_projection,
+                view.thread_timeline_scroll_offset,
                 palette,
             ));
             ime_cursor_area = draw_composer_panel(
                 scene,
                 interaction_frame,
                 layout.composer_panel_layout,
-                composer_view,
+                view.composer,
                 text_layout,
                 palette,
             );
         }
+        WorkspaceSurfaceKind::Editor => {
+            let caret_visibility = if view.file_editor.dispatch.is_focused(FILE_EDITOR_DOCUMENT) {
+                view.file_editor.caret_visibility
+            } else {
+                CaretVisibility::Hidden
+            };
+            let pane = FileEditorPane::new(
+                layout.main,
+                view.file_editor.host,
+                view.file_editor.style.clone(),
+                palette,
+                caret_visibility,
+            )
+            .with_prompt(view.file_editor.prompt)
+            .with_diagnostics(view.file_editor.diagnostics)
+            .with_language_features(
+                view.file_editor.language_hover,
+                view.file_editor.language_completions,
+            )
+            .with_completion_selection(view.file_editor.completion_selection)
+            .with_pointer_position(view.file_editor.pointer_position)
+            .with_search(
+                view.file_editor.search,
+                text_layout,
+                view.file_editor.dispatch,
+                view.file_editor.caret_visibility,
+            );
+            pane.register_interactions(interaction_frame);
+            ime_cursor_area = if view.file_editor.dispatch.is_focused(FILE_EDITOR_DOCUMENT) {
+                pane.caret_bounds()
+            } else {
+                view.file_editor
+                    .dispatch
+                    .focused()
+                    .and_then(|focused| pane.search_caret_bounds(focused))
+            };
+            scene.draw_component(&pane);
+        }
     });
-    if active_screen == ScreenBuffer::Alternate {
-        terminal_view.core.and_then(|terminal| {
-            terminal_cursor_area(layout, terminal, terminal_view.scroll_offset)
-        })
-    } else {
-        ime_cursor_area
+    match view.workspace_surface {
+        WorkspaceSurfaceKind::Terminal => view.terminal.core.and_then(|terminal| {
+            terminal_cursor_area(layout, terminal, view.terminal.scroll_offset)
+        }),
+        WorkspaceSurfaceKind::Agent | WorkspaceSurfaceKind::Editor => ime_cursor_area,
     }
 }
 

@@ -1,21 +1,58 @@
-/// Top-level product surface shown in the main workspace.
+/// Product surface currently projected into the central workspace.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub(crate) enum WorkspaceSurface {
+pub(crate) enum WorkspaceSurfaceKind {
     #[default]
     Agent,
+    Editor,
     Terminal,
 }
 
+/// Central workspace selection with a reversible terminal overlay transition.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct WorkspaceSurface {
+    active: WorkspaceSurfaceKind,
+    terminal_return: WorkspaceSurfaceKind,
+}
+
+impl Default for WorkspaceSurface {
+    fn default() -> Self {
+        Self {
+            active: WorkspaceSurfaceKind::Agent,
+            terminal_return: WorkspaceSurfaceKind::Agent,
+        }
+    }
+}
+
 impl WorkspaceSurface {
-    pub(crate) fn toggle(&mut self) {
-        *self = match self {
-            Self::Agent => Self::Terminal,
-            Self::Terminal => Self::Agent,
-        };
+    pub(crate) const fn active(self) -> WorkspaceSurfaceKind {
+        self.active
+    }
+
+    pub(crate) const fn is_editor(self) -> bool {
+        matches!(self.active, WorkspaceSurfaceKind::Editor)
     }
 
     pub(crate) const fn is_terminal(self) -> bool {
-        matches!(self, Self::Terminal)
+        matches!(self.active, WorkspaceSurfaceKind::Terminal)
+    }
+
+    pub(crate) fn show_agent(&mut self) {
+        self.active = WorkspaceSurfaceKind::Agent;
+        self.terminal_return = WorkspaceSurfaceKind::Agent;
+    }
+
+    pub(crate) fn show_editor(&mut self) {
+        self.active = WorkspaceSurfaceKind::Editor;
+        self.terminal_return = WorkspaceSurfaceKind::Editor;
+    }
+
+    pub(crate) fn toggle_terminal(&mut self) {
+        if self.is_terminal() {
+            self.active = self.terminal_return;
+        } else {
+            self.terminal_return = self.active;
+            self.active = WorkspaceSurfaceKind::Terminal;
+        }
     }
 }
 

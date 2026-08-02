@@ -89,6 +89,9 @@ impl NativeApp {
         if self.session_context_menu.is_open() {
             return;
         }
+        if self.route_file_editor_wheel(delta) {
+            return;
+        }
         if self.route_multi_diff_wheel(delta) {
             return;
         }

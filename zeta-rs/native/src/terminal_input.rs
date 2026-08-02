@@ -1,7 +1,7 @@
 use std::time::Instant;
 
 use zeta_editor::{CodeEditorCommand, CodeEditorSelectionMode};
-use zeta_terminal::{KeyModifiers, ScreenBuffer, TerminalCore, TerminalKey};
+use zeta_terminal::{KeyModifiers, TerminalCore, TerminalKey};
 use zeta_ui::{TextInputCommand, TextInputSelectionMode};
 use zeta_winit::{ElementState, Key, KeyEvent, ModifiersState, NamedKey};
 
@@ -12,8 +12,10 @@ use crate::explorer_tree::ExplorerTreeAction;
 use crate::keybindings::{
     NativeKeybindingContext, NativeKeybindingFacts, NativeKeybindingResolution,
 };
+use crate::language_server_settings::LANGUAGE_SERVER_EXECUTABLE_INPUT;
 use crate::shell_interaction::{
-    AGENT_FILE_SEARCH_INPUT, COMPOSER, COMPOSER_INTERACTION, SESSION_SEARCH_INPUT,
+    AGENT_FILE_SEARCH_INPUT, COMPOSER, COMPOSER_INTERACTION, FILE_EDITOR_FIND_INPUT,
+    FILE_EDITOR_REPLACE_INPUT, SESSION_SEARCH_INPUT,
 };
 use crate::terminal_selection::{read_clipboard_text, write_clipboard_text};
 use zeta_ui_dispatch::{FocusDirection, NavigationAxis};
@@ -31,6 +33,9 @@ impl NativeApp {
                 return;
             }
             let _ = self.dispatch_primary_keyboard_input(&event);
+            return;
+        }
+        if self.route_language_server_settings_keyboard(&event) {
             return;
         }
         if self.route_git_branch_context_menu_keyboard(&event) {
@@ -67,7 +72,9 @@ impl NativeApp {
         }
         if direct_terminal {
             self.direct_terminal_keyboard_input(&event);
-        } else if !self.dispatch_primary_keyboard_input(&event) {
+        } else if !self.file_editor_keyboard_input(&event)
+            && !self.dispatch_primary_keyboard_input(&event)
+        {
             if self.ui_dispatch.is_focused(SESSION_SEARCH_INPUT) {
                 self.session_search_keyboard_input(&event);
             } else if self.ui_dispatch.is_focused(AGENT_FILE_SEARCH_INPUT) {
@@ -179,7 +186,7 @@ impl NativeApp {
         }
     }
 
-    fn dispatch_primary_keyboard_input(&mut self, event: &KeyEvent) -> bool {
+    pub(super) fn dispatch_primary_keyboard_input(&mut self, event: &KeyEvent) -> bool {
         if self.route_file_tree_keyboard(event) {
             return true;
         }
@@ -273,6 +280,7 @@ impl NativeApp {
                     .unwrap_or_default();
                 self.apply_dispatch_outcome(outcome);
             }
+            ExplorerTreeAction::OpenFile { path } => self.open_workspace_file(path),
             ExplorerTreeAction::LoadChildren { element, path } => {
                 self.load_file_tree_directory(element, path);
                 self.rebuild_presentation();
@@ -467,6 +475,17 @@ impl NativeApp {
     }
 
     pub(super) fn copy_keybinding_target(&mut self) {
+        if self
+            .ui_dispatch
+            .is_focused(LANGUAGE_SERVER_EXECUTABLE_INPUT)
+        {
+            if let Some(text) = self.language_server_settings.selected_executable_text()
+                && let Err(error) = write_clipboard_text(text.to_owned())
+            {
+                eprintln!("could not copy language server executable path: {error}");
+            }
+            return;
+        }
         if self.ui_dispatch.is_focused(SESSION_SEARCH_INPUT) {
             if let Some(text) = self.session_search.selected_text()
                 && let Err(error) = write_clipboard_text(text.to_owned())
@@ -483,6 +502,25 @@ impl NativeApp {
             }
             return;
         }
+        if self.ui_dispatch.is_focused(FILE_EDITOR_FIND_INPUT) {
+            if let Some(text) = self.file_editor_search.selected_query_text()
+                && let Err(error) = write_clipboard_text(text.to_owned())
+            {
+                eprintln!("could not copy file editor find text: {error}");
+            }
+            return;
+        }
+        if self.ui_dispatch.is_focused(FILE_EDITOR_REPLACE_INPUT) {
+            if let Some(text) = self.file_editor_search.selected_replacement_text()
+                && let Err(error) = write_clipboard_text(text.to_owned())
+            {
+                eprintln!("could not copy file editor replacement text: {error}");
+            }
+            return;
+        }
+        if self.copy_file_editor_selection() {
+            return;
+        }
         if !self.is_direct_terminal_input() && self.copy_composer_selection() {
             return;
         }
@@ -490,6 +528,20 @@ impl NativeApp {
     }
 
     pub(super) fn paste_keybinding_target(&mut self) {
+        if self
+            .ui_dispatch
+            .is_focused(LANGUAGE_SERVER_EXECUTABLE_INPUT)
+        {
+            let Some(text) = clipboard_text("could not paste language server executable path")
+            else {
+                return;
+            };
+            self.language_server_settings
+                .apply_executable(TextInputCommand::Insert(text));
+            self.rebuild_presentation();
+            self.request_redraw();
+            return;
+        }
         if self.ui_dispatch.is_focused(SESSION_SEARCH_INPUT) {
             let Some(text) = clipboard_text("could not paste session search text") else {
                 return;
@@ -507,6 +559,31 @@ impl NativeApp {
             self.file_search_changed();
             return;
         }
+        if self.ui_dispatch.is_focused(FILE_EDITOR_FIND_INPUT) {
+            let Some(text) = clipboard_text("could not paste file editor find text") else {
+                return;
+            };
+            self.file_editor_search
+                .apply_query(TextInputCommand::Insert(text));
+            let query = self.file_editor_search.query();
+            if !query.text().is_empty() {
+                self.file_editor_host.find_nearest(&query);
+            }
+            self.file_editor_changed();
+            return;
+        }
+        if self.ui_dispatch.is_focused(FILE_EDITOR_REPLACE_INPUT) {
+            let Some(text) = clipboard_text("could not paste file editor replacement text") else {
+                return;
+            };
+            self.file_editor_search
+                .apply_replacement(TextInputCommand::Insert(text));
+            self.file_editor_changed();
+            return;
+        }
+        if self.paste_into_file_editor() {
+            return;
+        }
         if self.is_direct_terminal_input() {
             self.paste_into_terminal();
         } else {
@@ -515,7 +592,10 @@ impl NativeApp {
     }
 
     fn is_direct_terminal_input(&self) -> bool {
-        self.active_screen() == ScreenBuffer::Alternate
+        self.workspace_surface.is_terminal()
+            && !self
+                .ui_dispatch
+                .is_focused(LANGUAGE_SERVER_EXECUTABLE_INPUT)
             && !self.ui_dispatch.is_focused(SESSION_SEARCH_INPUT)
             && !self.ui_dispatch.is_focused(AGENT_FILE_SEARCH_INPUT)
     }
@@ -559,7 +639,10 @@ pub(crate) fn text_input_command(
     }
 }
 
-fn code_editor_command(event: &KeyEvent, modifiers: ModifiersState) -> Option<CodeEditorCommand> {
+pub(crate) fn code_editor_command(
+    event: &KeyEvent,
+    modifiers: ModifiersState,
+) -> Option<CodeEditorCommand> {
     let selection_mode = if modifiers.shift_key() {
         CodeEditorSelectionMode::Extend
     } else {
@@ -575,6 +658,8 @@ fn code_editor_command(event: &KeyEvent, modifiers: ModifiersState) -> Option<Co
         Key::Named(NamedKey::ArrowDown) => Some(CodeEditorCommand::MoveDown(selection_mode)),
         Key::Named(NamedKey::Home) => Some(CodeEditorCommand::MoveToLineStart(selection_mode)),
         Key::Named(NamedKey::End) => Some(CodeEditorCommand::MoveToLineEnd(selection_mode)),
+        Key::Named(NamedKey::Tab) if modifiers.shift_key() => Some(CodeEditorCommand::Outdent),
+        Key::Named(NamedKey::Tab) => Some(CodeEditorCommand::Indent),
         Key::Character(text) if shortcut && text.eq_ignore_ascii_case("a") => {
             Some(CodeEditorCommand::SelectAll)
         }

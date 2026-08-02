@@ -16,8 +16,9 @@
 | --- | --- | --- |
 | Rust/JSON/JSONC/Shell grammar、query 与增量 tree | `zeta-syntax`，由 Rust `CodeEditor` 私有组合 | ✅ |
 | 文本、selection、undo/redo、语言切换和 syntax token 生命周期 | `zeta-editor::CodeEditorDocument` | ✅ |
+| Native 普通代码结构折叠、visible-row mapping 与 gutter control | `zeta-editor::CodeEditorDocument` / `CodeEditor` | ✅；宿主只转交点击 |
 | Native Composer 的 Shell 高亮 | `CodeEditorDocument::from_text_with_language` / `set_language` | ✅ |
-| Native 文件 CodeEditor 接线 | Native EditorHost | 尚未完成 |
+| Native 文件 document lifecycle | `zeta-text-file` + `FileEditorHost` / `FileEditorPane` | ✅；独立 crate 拥有 baseline/version/dirty/conflict，Native 已接通 Tab、Explorer load、save、关闭确认、外部重载/显式乐观覆盖、中心 Editor Surface 以及 keyboard/IME/pointer/clipboard/viewport 输入 |
 | Native `DiffEditor` 两侧 syntax token 投影 | `zeta-editor::DiffEditorDocument` / `DiffEditor` | ✅；宿主只提交 diff 与 language |
 | Alpha JSON/JSONC token | Alpha analysis provider + TextMate worker | ✅ |
 | Alpha Rust token | 后续 Alpha 编辑器内 provider | 尚未完成 |
@@ -33,8 +34,10 @@ Native host
        ├─ 修改 authoritative editor text 与 history
        ├─ CodeEditorAnalysis::synchronize
        │  └─ zeta-syntax::SyntaxDocument::apply_edit
-       └─ snapshot token → line-relative CodeEditorSyntaxToken
-            └─ CodeEditor::paint → current theme palette
+       └─ 同 revision snapshot
+          ├─ token → line-relative CodeEditorSyntaxToken
+          └─ folding range → editor-owned visible-row projection
+             └─ CodeEditor::paint / fold_control_at
 ```
 
 1. 宿主创建 `CodeEditorDocument` 时选择 `CodeEditorLanguage`，或在 mode 改变时调用
@@ -42,8 +45,11 @@ Native host
 2. `CodeEditorDocument` 执行 Unicode-safe 编辑、IME commit、undo/redo 或全文替换。
 3. 私有 `CodeEditorAnalysis` 计算单个 UTF-8 replacement，推进内部 revision，并让
    `SyntaxDocument` 复用旧 tree；解析失败时丢弃旧 analyzer，并从当前 authoritative text 重建。
-4. 同 revision snapshot 被投影为逐行、行内 UTF-8 byte range 的 `CodeEditorSyntaxToken`。
-5. 绘制只读取 document 已确认的 token，并从当前 `CodeEditorStyle` 解析颜色；主题变化不触发重解析。
+4. 同 revision snapshot 被投影为逐行 token 与 source-row folding range；每个
+   `CodeEditorDocument` 独立保存 collapsed state，并把 source row 映射为 visual row。
+5. 绘制只读取 document 已确认的 token/fold projection，并从当前 `CodeEditorStyle` 解析颜色；
+   主题变化不触发重解析。宿主把 `fold_control_at` 的结果原样交给 `toggle_fold_control`，不计算
+   fold 或 hidden row。
 
 调用方看不到 parser、tree、revision、edit batch 或 syntax transport。这些细节随编辑器文档一起
 创建、编辑和释放，避免 model ID、连接所有权、重连恢复和 stale-result gate 泄漏到 Workbench。
@@ -56,7 +62,7 @@ Native host
 | editor text、selection、language 与本地 revision | ❌ | ✅ | 选择初始资源与语言 | ❌ | 消费同步 |
 | syntax token 与 parse facts | 计算 | ✅ 生命周期与展示 | ❌ | ❌ | ❌ |
 | theme color、DOM/native geometry、fold UI state | ❌ | ✅ | 注入主题/布局 | ❌ | ❌ |
-| 文件读写、dirty/save/conflict | ❌ | ❌ | ✅ | 可提供独立文件 capability | ❌ |
+| 文件 dirty/save/conflict | ❌ | ❌ | 组合 `zeta-text-file` | 可提供独立文件 I/O capability | ❌ |
 | type、completion、definition/reference、rename | ❌ | 交互入口 | 协调 | 可承载独立 LSP runtime | ✅ |
 | workspace 扫描、watch 与 symbol index | ❌ | ❌ | 后续组合 | 可承载独立 workspace capability | 消费/提供事实 |
 
@@ -84,11 +90,9 @@ source line number 读取同一份 editor-owned token；Changes Pane 不知道 p
 
 近期工作按以下顺序推进：
 
-1. Native 文件打开产品流程出现真实宿主后，直接持有 language-aware `CodeEditorDocument`；这是一项
-   文件 UI 功能，不再设计 syntax adapter。
-2. Alpha 按真实产品需要增加 editor-local Rust provider。
-3. folding、outline 和 parse diagnostics 只有出现具体 UI consumer 后才扩展编辑器公开 contract。
-4. workspace index 只在真实 Files/Search consumer 建立后作为独立能力设计。
+1. Alpha 按真实产品需要增加 editor-local Rust provider。
+2. outline 和 parse diagnostics 只有出现具体 UI consumer 后才扩展编辑器公开 contract。
+3. workspace index 只在真实 Files/Search consumer 建立后作为独立能力设计。
 
 长期不变量是：产品层暴露编辑器，不暴露 parser RPC；编辑器拥有文档内语言能力，
 `zeta-syntax` 拥有底层 syntax 算法，LSP/compiler 拥有跨文件语义事实。

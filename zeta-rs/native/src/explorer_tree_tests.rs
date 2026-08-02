@@ -65,6 +65,13 @@ fn app_server_entries_are_projected_without_client_side_filtering() {
     assert_eq!(tree.visible_len(), 2);
     assert_eq!(tree.row(0).unwrap().entry().label(), "target");
     assert_eq!(tree.row(1).unwrap().entry().label(), "alpha.txt");
+    let file_id = tree.row(1).unwrap().entry().element_id();
+    assert_eq!(
+        tree.activate_element(file_id),
+        Some(ExplorerTreeAction::OpenFile {
+            path: "alpha.txt".into(),
+        })
+    );
 }
 
 fn directory(name: &str) -> FsReadDirectoryEntry {
