@@ -4,6 +4,7 @@ import * as baseColors from "./colors/baseColors.js";
 import * as chatColors from "./colors/chatColors.js";
 import * as componentColors from "./colors/componentColors.js";
 import * as editorColors from "./colors/editorColors.js";
+import * as filesColors from "./colors/filesColors.js";
 import * as terminalColors from "./colors/terminalColors.js";
 import * as workbenchColors from "./colors/workbenchColors.js";
 import { Sizes, sizeCssVariable, sizeToCss, type SizeContribution, type SizeValue } from "./sizeRegistry.js";
@@ -66,6 +67,8 @@ export const ColorId = Object.freeze({
   textCodeBlockBackground: componentColors.textCodeBlockBackground,
   searchMatchBackground: componentColors.searchMatchBackground,
   chatTabBackground: chatColors.chatTabBackground,
+  emptyExplorerOpenFolderBackground: filesColors.emptyExplorerOpenFolderBackground,
+  emptyExplorerOpenFolderHoverBackground: filesColors.emptyExplorerOpenFolderHoverBackground,
   sectionHeaderForeground: workbenchColors.sectionHeaderForeground,
   workbenchBackground: workbenchColors.workbenchBackground,
   editorBackground: workbenchColors.editorBackground,

@@ -72,13 +72,14 @@
   line-height: 18px;
 }
 
-.zeta-empty-explorer-open-folder {
+.zeta-empty-explorer-open-folder.zeta-button {
+  width: 100%;
   color: var(--zeta-button-primary-foreground);
-  background: var(--zeta-button-primary-background);
+  background: var(--zeta-files-empty-explorer-open-folder-background);
 }
 
-.zeta-empty-explorer-open-folder:not(:disabled):hover {
-  background: var(--zeta-button-primary-hover-background);
+.zeta-empty-explorer-open-folder.zeta-button:not(:disabled):hover {
+  background: var(--zeta-files-empty-explorer-open-folder-hover-background);
 }
 
 .zeta-empty-explorer-status {
