@@ -3,7 +3,7 @@
 use std::ops::Range;
 
 use zeta_ui::{
-    CaretVisibility, Color, Component, ComponentInspection, PaintRect, Point, Rect, Size,
+    CaretVisibility, Color, Component, ComponentElement, Element, PaintRect, Point, Rect, Size,
     TextBlock, TextBlockWrap, TextStyle, UiScene,
 };
 
@@ -581,8 +581,8 @@ impl<'a> CodeEditor<'a> {
 }
 
 impl Component for CodeEditor<'_> {
-    fn inspection(&self) -> ComponentInspection {
-        ComponentInspection::new("CodeEditor", self.bounds)
+    fn element(&self) -> ComponentElement {
+        Element::leaf("CodeEditor").in_bounds(self.bounds)
     }
 
     fn paint(&self, scene: &mut UiScene) {

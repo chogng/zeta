@@ -1,6 +1,7 @@
 use zeta_ui::{
-    Color, Component, ComponentInspection, CornerRadii, Edges, FontFamily, FontWeight, PaintRect,
-    Point, Rect, Size, TextBlock, TextBlockWrap, TextStyle, UiScene,
+    Color, Component, ComponentElement, CornerRadii, Edges, Element, ElementDirection,
+    ElementLength, FontFamily, FontWeight, PaintRect, Point, Rect, Size, TextBlock, TextBlockWrap,
+    TextStyle, UiScene,
 };
 
 use super::InspectionSelection;
@@ -11,7 +12,7 @@ const FOREGROUND: Color = Color::rgb(35, 35, 42);
 const MUTED: Color = Color::rgb(105, 105, 116);
 const ACCENT: Color = Color::rgb(35, 131, 226);
 const CONTENT_PADDING: f32 = 16.0;
-const ROW_HEIGHT: f32 = 74.0;
+const ROW_HEIGHT: f32 = 90.0;
 const INDENT: f32 = 12.0;
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -49,8 +50,8 @@ impl<'a> InspectorContent<'a> {
 }
 
 impl Component for InspectorContent<'_> {
-    fn inspection(&self) -> ComponentInspection {
-        ComponentInspection::new("InspectorContent", self.bounds)
+    fn element(&self) -> ComponentElement {
+        Element::leaf("InspectorContent").in_bounds(self.bounds)
     }
 
     fn paint(&self, scene: &mut UiScene) {
@@ -136,7 +137,7 @@ fn paint_row(
     paint_text(
         scene,
         &metrics(node),
-        Point::new(x + 18.0, y + 29.0),
+        Point::new(x + 18.0, y + 27.0),
         (available_width - 18.0).max(0.0),
         TextStyle::new(11.0, FOREGROUND)
             .with_family(FontFamily::Monospace)
@@ -144,8 +145,17 @@ fn paint_row(
     );
     paint_text(
         scene,
+        &authored_layout(node),
+        Point::new(x + 18.0, y + 46.0),
+        (available_width - 18.0).max(0.0),
+        TextStyle::new(10.0, MUTED)
+            .with_family(FontFamily::Monospace)
+            .with_line_height(14.0),
+    );
+    paint_text(
+        scene,
         &source(node),
-        Point::new(x + 18.0, y + 49.0),
+        Point::new(x + 18.0, y + 65.0),
         (available_width - 18.0).max(0.0),
         TextStyle::new(10.0, MUTED)
             .with_family(FontFamily::Monospace)
@@ -189,6 +199,28 @@ fn metrics(node: &zeta_ui::InspectionNode) -> String {
     value
 }
 
+fn authored_layout(node: &zeta_ui::InspectionNode) -> String {
+    let Some(style) = node.authored_style() else {
+        return String::new();
+    };
+    let direction = match style.direction() {
+        ElementDirection::Horizontal => "row",
+        ElementDirection::Vertical => "column",
+    };
+    format!(
+        "{direction}   width {}   height {}",
+        length(style.width()),
+        length(style.height())
+    )
+}
+
+fn length(value: ElementLength) -> String {
+    match value {
+        ElementLength::Fill => "fill".to_owned(),
+        ElementLength::Pixels(value) => format!("{value:.0}"),
+    }
+}
+
 fn source(node: &zeta_ui::InspectionNode) -> String {
     let file = node
         .source_file()
@@ -207,3 +239,7 @@ fn paint_text(scene: &mut UiScene, text: &str, origin: Point, width: f32, style:
             .with_wrap(TextBlockWrap::None),
     );
 }
+
+#[cfg(test)]
+#[path = "inspector_content_tests.rs"]
+mod tests;

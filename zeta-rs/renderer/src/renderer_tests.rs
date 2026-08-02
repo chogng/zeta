@@ -1,4 +1,4 @@
-use zeta_ui::{Color, UiScene};
+use zui::{Color, UiScene};
 
 use super::{RenderOutcome, RenderTargetSize, Renderer, RendererError};
 

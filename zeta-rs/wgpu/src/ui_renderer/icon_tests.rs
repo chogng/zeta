@@ -1,7 +1,7 @@
 use zeta_icons::{Icon, IconDefinition, IconId, IconRendering, icons};
 
 use super::{ATLAS_PADDING, ATLAS_SIZE, ShelfAllocator, rasterize_icon, validate_paint_icon};
-use zeta_ui::{Color, PaintIcon, Rect};
+use zui::{Color, PaintIcon, Rect};
 
 use super::UiRenderError;
 

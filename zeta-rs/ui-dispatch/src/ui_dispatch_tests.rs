@@ -1,6 +1,6 @@
 //! Cross-surface interaction, focus, activation, and semantics regression tests.
 
-use zeta_ui::{Point, Rect};
+use zui::{Point, Rect};
 
 use super::{
     AccessibilityExpansion, AccessibilityRole, CursorFeedback, DispatchInvalidation, ElementId,

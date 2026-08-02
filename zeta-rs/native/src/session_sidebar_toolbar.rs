@@ -1,9 +1,9 @@
 use zeta_icons::icons;
 use zeta_ui::{
     ActionBar, ActionBarButton, ActionBarItem, ActionBarOrientation, ActionBarStyle,
-    ButtonBackgrounds, ButtonState, ButtonStyle, CaretVisibility, Component, ComponentInspection,
-    CornerRadii, Edges, Rect, SearchBox, Size, TextInput, TextInputLayoutEngine, TextStyle,
-    UiScene,
+    ButtonBackgrounds, ButtonState, ButtonStyle, CaretVisibility, Component, ComponentElement,
+    CornerRadii, Edges, Element, Rect, SearchBox, Size, TextInput, TextInputLayoutEngine,
+    TextStyle, UiScene,
 };
 use zeta_ui_dispatch::{
     AccessibilityRole, CursorFeedback, FocusBehavior, InteractionFrame, NavigationAxis,
@@ -187,13 +187,10 @@ impl SessionSidebarToolbar {
 }
 
 impl Component for SessionSidebarToolbar {
-    fn inspection(&self) -> ComponentInspection {
-        ComponentInspection::new("SessionSidebarToolbar", self.bounds).with_padding(Edges::new(
-            0.0,
-            SIDEBAR_PADDING,
-            0.0,
-            SIDEBAR_PADDING,
-        ))
+    fn element(&self) -> ComponentElement {
+        Element::leaf("SessionSidebarToolbar")
+            .padding(Edges::new(0.0, SIDEBAR_PADDING, 0.0, SIDEBAR_PADDING))
+            .in_bounds(self.bounds)
     }
 
     fn paint(&self, scene: &mut UiScene) {

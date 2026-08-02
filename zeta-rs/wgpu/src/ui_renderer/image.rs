@@ -4,7 +4,7 @@ use std::ops::Range;
 
 use bytemuck::{Pod, Zeroable};
 
-use zeta_ui::{ImageId, PaintImage, Rect, UiScene};
+use zui::{ImageId, PaintImage, Rect, UiScene};
 
 use super::{UiRenderError, UiViewport};
 

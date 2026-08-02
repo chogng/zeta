@@ -1,10 +1,10 @@
 use std::path::{Path, PathBuf};
 
 use zeta_ui::{
-    ButtonBackgrounds, ButtonState, ButtonStyle, CaretVisibility, Component, ComponentInspection,
+    ButtonBackgrounds, ButtonState, ButtonStyle, CaretVisibility, Component, ComponentElement,
     ContextViewAnchorPosition, ContextViewPlacement, CornerRadii, Dropdown, DropdownItem,
-    DropdownScrollConfiguration, DropdownSelection, DropdownStyle, Edges, InputBoxState, Rect,
-    ScrollAxis, ScrollCommand, ScrollMetrics, ScrollState, SearchBox, Size, TextInput,
+    DropdownScrollConfiguration, DropdownSelection, DropdownStyle, Edges, Element, InputBoxState,
+    Rect, ScrollAxis, ScrollCommand, ScrollMetrics, ScrollState, SearchBox, Size, TextInput,
     TextInputCommand, TextInputCompositionEvent, TextInputLayoutEngine, TextStyle, UiScene,
 };
 use zeta_ui_dispatch::{
@@ -453,8 +453,8 @@ impl WorkspacePathPicker {
 }
 
 impl Component for WorkspacePathPicker {
-    fn inspection(&self) -> ComponentInspection {
-        ComponentInspection::new("WorkspacePathPicker", self.dropdown.bounds())
+    fn element(&self) -> ComponentElement {
+        Element::leaf("WorkspacePathPicker").in_bounds(self.dropdown.bounds())
     }
 
     fn paint(&self, scene: &mut UiScene) {

@@ -6,9 +6,10 @@ use zeta_editor::{
     MultiDiffEditorStyle,
 };
 use zeta_ui::{
-    Border, Component, ComponentInspection, Edges, PaintRect, Rect, ScrollAxis, ScrollCommand,
-    ScrollDelta, ScrollMetrics, ScrollState, ScrollbarController, ScrollbarDrag, ScrollbarPart,
-    ScrollbarPointerPresence, ScrollbarPresentation, Size, TextBlock, TextStyle, UiScene,
+    Border, Component, ComponentElement, Edges, Element, PaintRect, Rect, ScrollAxis,
+    ScrollCommand, ScrollDelta, ScrollMetrics, ScrollState, ScrollbarController, ScrollbarDrag,
+    ScrollbarPart, ScrollbarPointerPresence, ScrollbarPresentation, Size, TextBlock, TextStyle,
+    UiScene,
 };
 use zeta_ui_dispatch::{
     AccessibilityRole, CursorFeedback, ElementId, FocusBehavior, InteractionFrame, NavigationAxis,
@@ -436,8 +437,8 @@ fn multi_diff_fold_element_id(item_index: usize, region_index: usize) -> Option<
 }
 
 impl Component for EditorPane<'_> {
-    fn inspection(&self) -> ComponentInspection {
-        ComponentInspection::new("EditorPane", self.bounds)
+    fn element(&self) -> ComponentElement {
+        Element::leaf("EditorPane").in_bounds(self.bounds)
     }
 
     fn paint(&self, scene: &mut UiScene) {

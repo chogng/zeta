@@ -15,7 +15,7 @@ resources/icons/*.svg
   ├─ Desktop generator → private SVG factories → semantic registry → browser SVG renderer
   └─ Rust generator → private artwork → explicit semantic library
                                      → zeta-icons
-                       → zeta-ui PaintIcon / IconLabel / Button
+                       → zui PaintIcon → zeta-ui IconLabel / Button
                        → native product host
 ```
 
@@ -34,13 +34,13 @@ resources/icons/*.svg
 | Desktop generated SVG factories | `desktop/generated/product-icons.ts` | ✅ |
 | Desktop semantic registration与resolution | `base/common/icon.ts` / `lxiconsLibrary.ts` | ✅ |
 | Rust semantic identity、definition 与 rendering mode | `zeta-icons` | ✅ |
-| Rust logical placement、tint、clip、symbolic mask 与 fixed-color atlas | `zeta-ui` | ✅ |
+| Rust logical placement、tint 与 clip scene contract | `zui::PaintIcon` | ✅ |
 | Rust icon+text component geometry | `zeta-ui::IconLabel` | ✅ |
 | Product command 与 icon selection | 各 product host | ✅ |
 | Seti file-extension/theme resolution | `zeta-file-icons` | ✅，独立系统 |
-| Native multicolor atlas/render path | `zeta-ui::IconRenderer` | ✅ |
+| Native symbolic mask、fixed-color atlas 与 render path | `zeta-wgpu` | ✅ |
 
-`zeta-icons` 不依赖 `zeta-ui`。`IconLabel`、`Button` 和 `InputBox` 可以依赖 icon identity，但
+`zeta-icons` 不依赖 `zui` 或 `zeta-ui`。`PaintIcon`、`IconLabel`、`Button` 和 `InputBox` 可以依赖 icon identity，但
 资源 crate 不得包含 component、font、layout、theme color、GPU 或 input routing。
 
 ## 3. 身份与图稿
@@ -62,7 +62,7 @@ Rust generator 扫描全部 canonical SVG，生成 164 个 crate-private `IconDe
 `ALL_ICONS` 和 `icon_by_id` lookup。`history → refresh.svg`、`dropdown-indicator →
 chevron-down.svg` 等映射证明 semantic identity 不依赖 filename。`Button` 的 icon+text paint
 path 复用 `IconLabel`。
-`zeta-ui` 使用共享区域分配的 R8 symbolic-mask atlas 与 sRGB RGBA fixed-color atlas。Symbolic
+`zeta-wgpu` 使用共享区域分配的 R8 symbolic-mask atlas 与 sRGB RGBA fixed-color atlas。Symbolic
 artwork 只写 mask；multicolor artwork 经 `resvg` 栅格化后，把纯黑 coverage 写入 mask、其余
 颜色写入 fixed-color atlas，shader 再把 caller tint 与固定色合成为一个 icon draw。
 

@@ -98,8 +98,8 @@ Session Navigation 当前使用可折叠、可通过右边界 Sash 调整宽度�
 | 能力 | 最终 owner | 职责边界 |
 | --- | --- | --- |
 | Window、Top Bar 与 Terminal Workspace 外部布局 | `zeta-native` product host | 决定窗口区域和活动会话，不进入 `zeta-ui` |
-| 单轴 Pane 尺寸约束、Sash track 与 feedback geometry | `zeta-ui::SplitViewLayout` / `Sash` | 不持有产品显隐、preferred width、pointer capture 或持久化 |
-| 递归 Pane geometry 与 owning-split Sash 路由 | `zeta-ui::GridLayout` | 递归组合 SplitView；不持有 Terminal Session、Agent content、Pane Tree mutation 或 active Pane |
+| 单轴 Pane 尺寸约束、Sash track 与 feedback geometry | `zui::SplitViewLayout` / `zeta-ui::Sash` | 不持有产品显隐、preferred width、pointer capture 或持久化 |
+| 递归 Pane geometry 与 owning-split Sash 路由 | `zui::GridLayout` | 递归组合 SplitView；不持有 Terminal Session、Agent content、Pane Tree mutation 或 active Pane |
 | Terminal Pane Tree、Session-to-Pane binding 与 Pane 状态 | 后续 native Terminal Workspace model | 已确认是终端分屏必需边界；当前尚未完成 |
 | Session Navigation 显隐、preferred width 与 resize gesture | `zeta-native::session_sidebar` | 使用通用 Split/Sash geometry；不拥有 Session lifecycle |
 | Agent Sidebar 显隐与尺寸策略 | `zeta-native::agent_sidebar` | 只向外层 Grid 提供固定宽度 sizing；不拥有内部 Pane、文件或 diff model |
@@ -132,7 +132,7 @@ Session Navigation 当前使用可折叠、可通过右边界 Sash 调整宽度�
 | 平台 accessibility publication | 后续 `zeta-winit` adapter | 当前尚未接 AccessKit/平台 API，内部语义树不等于屏幕阅读器已可用 |
 | alternate-screen direct input | `zeta-native::terminal_input` + `input_method` + `TerminalCore` | 仅在 TUI 接管期间编码 key/IME/paste 并写入 PTY |
 | shell command completion boundary | `zeta-native::terminal_session` bootstrap + `zeta-terminal::TerminalCore` | 当前 zsh 使用 OSC 133 `D`；其他 shell 只有基础 prompt/echo suppression |
-| Rect、icon、text scene 与 GPU draw | `zeta-ui` / `zeta-wgpu` | 不拥有 Session、PTY、窗口布局或产品 reducer |
+| Rect、icon、text scene 与 GPU draw | `zui` / `zeta-wgpu` | 不拥有 Session、PTY、窗口布局或产品 reducer |
 
 `zeta-native` 可以保存活动 Tab、hover、focus、scroll position 等可丢弃 presentation state，但
 Session、Thread、Turn、PTY process 和 durable output 必须来自对应 runtime。
@@ -146,7 +146,7 @@ Session、Thread、Turn、PTY process 和 durable output 必须来自对应 runt
 | `session_tab_list::SessionTabList` | 组合 `zeta-ui::TabList` 的无边框 4px 圆角 surface；自身绘制与两行信息块等高的白色状态容器及会话名/工作区截断文字，并注册 Session Tab 语义 | 通用 TabList 已支持 6px 间隔的多项布局；多 Session projection/switching 尚未接入 |
 | `session_context_menu::SessionContextMenu` | 右键当前真实 Session Tab 后，用通用 `ContextMenu` 基座绘制 Pin、Close、Rename、Fork；基座提供 renderer 柔和阴影、2px padding 与 4px radius，默认选择 Pin；菜单子树打开时成为 modal interaction scope，hover 同步 roving focus 并在移出后保留最后一项，同时支持菜单外点击、Escape、上下键、Tab、Enter/Space 与焦点恢复 | 下层控件在菜单打开期间不接收 pointer、focus 或 activation；四项已映射为稳定 product action，单 Session runtime 尚不执行真实 pin/close/rename/fork transition |
 | `ShellLayout` | 组合扁平 titlebar、可选 Sessions sidebar，并把剩余区域交给 `TerminalWorkspaceLayout` | primary screen 窗口外层布局 |
-| `TerminalWorkspaceLayout` / `zeta-ui::GridLayout` | 把活动 Terminal 与可选 Agent Sidebar 投影为递归 Grid Leaf；alternate screen 使用完整活动 Terminal Leaf | Agent Sidebar 已接入；多 Terminal Pane runtime 尚未完成 |
+| `TerminalWorkspaceLayout` / `zui::GridLayout` | 把活动 Terminal 与可选 Agent Sidebar 投影为递归 Grid Leaf；alternate screen 使用完整活动 Terminal Leaf | Agent Sidebar 已接入；多 Terminal Pane runtime 尚未完成 |
 | `SessionSidebarState` / `Sash` | 保存 preferred width 和 drag-start snapshot；从同一 track 生成 8px 命中区与 2px hover/active feedback | 侧栏宽度限制为 160–480px，并始终为 main Pane 保留至少 240px |
 | `AgentSidebarState` | 保存右栏显隐并向外层 Grid 提供固定 320px sizing | 内部内容由 `AgentSidebarWorkspace` 独立拥有 |
 | `AgentSidebarLayout` / `AgentSidebarNavigation` / `AgentSidebarToolbar` | 64px Changes/Files ActionBar、36px toolbar 与单一 active Pane | Files-only toolbar 显示 Refresh、`↑ahead ↓behind` 与 Search；Changes 不注册这些 action |

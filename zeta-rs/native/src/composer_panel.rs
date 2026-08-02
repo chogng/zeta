@@ -1,5 +1,5 @@
 use zeta_ui::{
-    Border, CaretVisibility, Color, CornerRadii, Edges, FontFamily, FontWeight, InspectionNode,
+    Border, CaretVisibility, Color, CornerRadii, Edges, Element, FontFamily, FontWeight,
     KeycapSequence, KeycapStyle, ListView, PaintRect, Point, Rect, ScrollState, Size, TextBlock,
     TextInputLayoutEngine, TextStyle, UiScene,
 };
@@ -180,9 +180,9 @@ pub(crate) fn draw_composer_panel(
     text_layout: &mut TextInputLayoutEngine,
     palette: ShellPalette,
 ) -> Option<Rect> {
-    scene.with_inspection_node(
-        InspectionNode::new("ComposerPanel", layout.panel),
-        |scene| {
+    scene.with_element(
+        Element::leaf("ComposerPanel").in_bounds(layout.panel),
+        |scene, _| {
             scene.draw_rect(
                 PaintRect::new(layout.panel, palette.surface)
                     .with_border(Border::new(Edges::new(1.0, 0.0, 0.0, 0.0), palette.border)),
@@ -281,26 +281,29 @@ fn draw_info_bar(
         )
         .with_parent(COMPOSER_PANEL),
     );
-    scene.with_inspection_node(InspectionNode::new("ComposerInfoBar", bounds), |scene| {
-        let keycaps = KeycapSequence::new(
-            Point::new(
-                bounds.origin.x,
-                bounds.origin.y + (bounds.size.height - INFO_KEYCAP_SIZE).max(0.0) * 0.5,
-            ),
-            keycaps,
-            info_keycap_style(),
-        );
-        let label_x = keycaps.bounds().right() + INFO_KEYCAP_LABEL_GAP;
-        scene.draw_component(&keycaps);
-        scene.draw_text(TextBlock::new(
-            label,
-            Point::new(label_x, bounds.origin.y + 2.0),
-            Size::new((bounds.right() - label_x).max(1.0), 20.0),
-            TextStyle::new(12.0, palette.text_muted)
-                .with_family(FontFamily::Monospace)
-                .with_line_height(20.0),
-        ));
-    });
+    scene.with_element(
+        Element::leaf("ComposerInfoBar").in_bounds(bounds),
+        |scene, _| {
+            let keycaps = KeycapSequence::new(
+                Point::new(
+                    bounds.origin.x,
+                    bounds.origin.y + (bounds.size.height - INFO_KEYCAP_SIZE).max(0.0) * 0.5,
+                ),
+                keycaps,
+                info_keycap_style(),
+            );
+            let label_x = keycaps.bounds().right() + INFO_KEYCAP_LABEL_GAP;
+            scene.draw_component(&keycaps);
+            scene.draw_text(TextBlock::new(
+                label,
+                Point::new(label_x, bounds.origin.y + 2.0),
+                Size::new((bounds.right() - label_x).max(1.0), 20.0),
+                TextStyle::new(12.0, palette.text_muted)
+                    .with_family(FontFamily::Monospace)
+                    .with_line_height(20.0),
+            ));
+        },
+    );
 }
 
 fn info_keycap_style() -> KeycapStyle {

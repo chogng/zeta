@@ -19,15 +19,16 @@ accessibility semantics，但不保存 Session、文件树、Tab、Chat、Editor
 | activation/window-drag intent | `UiIntent` / `NodeAction` | ✅ |
 | Default/Text/Pointer/ResizeHorizontal cursor projection | `CursorFeedback` | ✅ |
 | role、label、value、bounds、focus 与 selection snapshot | `AccessibilityNode` | ✅ |
-| 布局、绘制和组件内部 geometry | `zeta-ui` / product component | ❌ |
+| 基础 geometry、Element 与 scene | `zui` | ❌ |
+| 组件内部 geometry | `zeta-ui` / product component | ❌ |
 | Session、filesystem、document、chat 或 command state | 对应 product owner | ❌ |
 | VoiceOver、Narrator、Orca 等平台发布 | 后续 window adapter | 尚未完成 |
 
 依赖方向只有：
 
 ```text
-product host → zeta-ui-dispatch → zeta-ui geometry
-             → zeta-ui components/scene
+product host → zeta-ui-dispatch → zui geometry
+             → zeta-ui components → zui scene
 ```
 
 本 crate 不能依赖 `zeta-native`、terminal、workspace、session 或 editor domain。出现这些依赖

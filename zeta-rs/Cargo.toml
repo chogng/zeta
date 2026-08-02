@@ -17,6 +17,7 @@ members = [
     "editor",
     "icons",
     "markdown",
+    "zui",
     "ui",
     "ui-dispatch",
     "wgpu",
@@ -167,6 +168,7 @@ zeta-diff = { path = "diff" }
 zeta-editor = { path = "editor" }
 zeta-icons = { path = "icons" }
 zeta-markdown = { path = "markdown" }
+zui = { path = "zui" }
 zeta-ui = { path = "ui" }
 zeta-ui-dispatch = { path = "ui-dispatch" }
 zeta-secrets = { path = "secrets" }
@@ -216,6 +218,22 @@ zeta-typst = { path = "utils/typst" }
 zeta-windows-sandbox = { path = "windows-sandbox-rs" }
 zeta-workspace = { path = "workspace" }
 zeta-search = { path = "search" }
+
+[profile.dev]
+# Keep line tables and backtraces without generating full variable debug information.
+debug = "limited"
+
+[profile.dev-small]
+inherits = "dev"
+opt-level = 0
+debug = "none"
+strip = "symbols"
+
+[profile.ci-test]
+# Reduce binary size and disk pressure in CI test builds.
+inherits = "test"
+opt-level = 0
+debug = "limited"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

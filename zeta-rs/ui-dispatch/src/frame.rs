@@ -1,4 +1,4 @@
-use zeta_ui::{Point, Rect};
+use zui::{Point, Rect};
 
 use super::{
     AccessibilityExpansion, AccessibilityRole, AccessibilitySelection, CursorFeedback, ElementId,

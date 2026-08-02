@@ -3,10 +3,10 @@
 use std::cell::OnceCell;
 
 use zeta_ui::{
-    Border, Color, Component, ComponentInspection, CornerRadii, Edges, FontFamily, FontWeight,
-    ListContentPadding, PaintRect, Point, Rect, ScrollAxis, ScrollMetrics, ScrollState, ScrollView,
-    ScrollViewStyle, ScrollbarPresentation, ScrollbarStyle, TextBlock, TextStyle, UiScene,
-    VirtualListLayout,
+    Border, Color, Component, ComponentElement, CornerRadii, Edges, Element, FontFamily,
+    FontWeight, ListContentPadding, PaintRect, Point, Rect, ScrollAxis, ScrollMetrics, ScrollState,
+    ScrollView, ScrollViewStyle, ScrollbarPresentation, ScrollbarStyle, TextBlock, TextStyle,
+    UiScene, VirtualListLayout,
 };
 
 use crate::{
@@ -379,8 +379,8 @@ impl<'a> MultiDiffEditor<'a> {
 }
 
 impl Component for MultiDiffEditor<'_> {
-    fn inspection(&self) -> ComponentInspection {
-        ComponentInspection::new("MultiDiffEditor", self.bounds)
+    fn element(&self) -> ComponentElement {
+        Element::leaf("MultiDiffEditor").in_bounds(self.bounds)
     }
 
     fn paint(&self, scene: &mut UiScene) {

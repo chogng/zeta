@@ -71,7 +71,8 @@ zeta-rs/
 ├── zeta-api/
 ├── http-client/           # shared proxy/TLS/unary HTTP substrate；stream/WebSocket 尚未实现
 ├── zeta-client/           # API operation retry 与 SSE framing layer
-├── ui/                    # 后端无关 component、layout、paint primitive 与 immutable scene
+├── zui/                   # 后端无关 Element/layout、paint primitive、inspection 与 immutable scene
+├── ui/                    # 基于 zui 的可复用 presentation component；暂时兼容 re-export zui API
 ├── renderer/              # UiScene 到图形后端的稳定执行契约；不依赖具体 GPU API
 ├── winit/                 # App Server 下方的底层 event-loop/native-window crate
 ├── wgpu/                  # Renderer 的当前 wgpu 实现；拥有 GPU pipeline/surface，不拥有 product identity
@@ -144,8 +145,9 @@ paint/hit/track-page/thumb-drag geometry，以及 hover/active/fade deadline。M
 复用这套基座；平台 wheel normalization、pointer capture，以及 Terminal scrollback 的距底部
 行偏移、输出增长锚定和 alternate-screen 分流仍由 `zeta-native` 拥有，不能迁入通用 ScrollView。
 
-组件到 GPU 的依赖方向固定为 `Component → UiScene → Renderer → concrete backend`；`UiScene`
-通过 `SceneBatch` 保留跨 primitive 的真实绘制顺序。`zeta-ui` 不依赖 wgpu，Native 只保存
+组件到 GPU 的依赖方向固定为 `zeta-ui Component → zui::UiScene → Renderer → concrete backend`；
+`UiScene` 通过 `SceneBatch` 保留跨 primitive 的真实绘制顺序。`zui` 不依赖组件 crate、窗口系统或
+wgpu，`zeta-ui` 只向下依赖 `zui`；Native 只保存
 `dyn Renderer`，当前具体类型只在 composition-root adapter 中选择。Native 的 interaction 与
 accessibility frame 不进入 renderer。完整所有权、后端替换路径和架构约束见
 [`rendering-architecture.md`](rendering-architecture.md)。

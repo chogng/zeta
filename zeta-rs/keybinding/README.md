@@ -57,7 +57,7 @@ product host → zeta-keybinding → zeta-ui
 | `KeyboardShortcutsState::record` / `advance` | 接收 adapter 已标准化的 `Chord`，到期后返回 `ShortcutCommit<Command>` |
 | `KeyboardShortcutRow<Command>` | 绑定宿主 command、label、稳定 `ElementId` 和当前快捷键 |
 | `KeyboardShortcutsIds` | 由宿主分配 parent/root/close identity，避免组件制造全局冲突 |
-| `KeyboardShortcuts` | 注册 modal interaction tree、通过 `ComponentInspection` 上报 panel bounds 并绘制设置浮层，只消费 caller-owned rows 和 diagnostics |
+| `KeyboardShortcuts` | 注册 modal interaction tree、声明 overlay zui Element 并绘制设置浮层，只消费 caller-owned rows 和 diagnostics |
 | `paint_chord_hint` | 把 resolver 的 pending sequence 与 entered count 绘制为底部提示 |
 | `ShortcutRecording` / `ShortcutStatus` | private；分别承载录制 deadline 和保存提示，不越过 commit 边界 |
 

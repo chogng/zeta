@@ -3,10 +3,10 @@
 > 本 README 负责 wgpu backend 的当前实现与失败语义。跨 backend 契约见
 > [`zeta-renderer`](../renderer/README.md)，系统替换规则见
 > [`docs/rendering-architecture.md`](../../docs/rendering-architecture.md)，scene 语义见
-> [`zeta-ui`](../ui/README.md)。
+> [`zui`](../zui/README.md)。
 
 `zeta-wgpu` 拥有一个 native window 的 `wgpu` presentation 资源，并把可选的 immutable
-`zeta-ui::UiScene` 组合进同一 render pass。它不知道 App Server、Session、Thread、Agent、
+`zui::UiScene` 组合进同一 render pass。它不知道 App Server、Session、Thread、Agent、
 Workbench 或其他产品状态。
 
 ## 1. 所有权
@@ -16,11 +16,12 @@ Workbench 或其他产品状态。
 | Instance、adapter、device、queue、surface、configuration | ✅ | |
 | Frame acquire、clear、submit、present | ✅ | |
 | Resize、零尺寸与 surface lost recovery | ✅ | |
-| UI scene/paint/font/text semantics | ❌ | `zeta-ui` |
+| UI scene/paint/font/text semantics | ❌ | `zui` |
 | Rect/image/icon/text GPU pipelines、atlas 与 glyph resources | ✅ | |
 | Backend-neutral frame contract | ❌ | `zeta-renderer::Renderer` |
 | Event loop、窗口策略 | ❌ | `zeta-winit` / product host |
-| Widget、layout、input、IME、accessibility | ❌ | `zeta-ui` / product host / platform adapter |
+| Element/layout 与 text-input 基座 | ❌ | `zui` |
+| Widget、input routing、IME adapter、accessibility | ❌ | `zeta-ui` / product host / platform adapter |
 | App Server、workspace、durable state | ❌ | 上层产品 |
 
 依赖方向：
@@ -28,11 +29,11 @@ Workbench 或其他产品状态。
 ```text
 native product host
   ├─→ zeta-winit → winit
-  ├─→ zeta-ui
-  ├─→ zeta-renderer → zeta-ui
+  ├─→ zeta-ui → zui
+  ├─→ zeta-renderer → zui
   └─→ zeta-wgpu → zeta-renderer
                   → zeta-winit
-                  → zeta-ui
+                  → zui
                   → wgpu
 ```
 
@@ -109,8 +110,8 @@ binary 在各平台执行。
 ## 5. 修改路径与当前限制
 
 - surface API/恢复策略：同步检查 `gpu.rs`、`viewport_tests.rs` 和本 README；
-- scene/text contract：修改 `zeta-ui`，不要在 backend 中复制产品语义；
-- 新 paint primitive：先在 `zeta-ui` 建立 scene contract，再在 `ui_renderer` 增加 backend 实现；
+- scene/text contract：修改 `zui`，不要在 backend 中复制组件或产品语义；
+- 新 paint primitive：先在 `zui` 建立 scene contract，再在 `ui_renderer` 增加 backend 实现；
 - 通用 frame outcome 或 host 接口：修改 `zeta-renderer`，不要把 wgpu 类型加入 trait；
 - window/event-loop policy：属于 `zeta-winit` 和 product host；
 - App Server/product 功能：禁止在本 crate 接入。
@@ -122,4 +123,4 @@ binary 在各平台执行。
 - 没有 headless GPU test、golden image 或产品 host vertical；
 - multicolor icon 栅格当前把纯黑像素视为 symbolic coverage；需要固定黑色与 caller tint 并存时，
   必须扩展 icon resource contract；
-- `render_scene` 当前绘制 `zeta-ui` 的背景、rect、RGBA image、icon 和 text primitive。
+- `render_scene` 当前绘制 `zui` 的背景、rect、RGBA image、icon 和 text primitive。

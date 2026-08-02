@@ -1,6 +1,6 @@
 use zeta_ui::{
-    Border, BoxShadow, Color, Component, ComponentInspection, CornerRadii, KeycapSequence,
-    KeycapStyle, PaintRect, Point, Rect, Size, TextBlock, TextStyle, UiScene,
+    Border, BoxShadow, Color, Component, ComponentElement, ComputedElement, CornerRadii, Element,
+    KeycapSequence, KeycapStyle, PaintRect, Point, Rect, Size, TextBlock, TextStyle, UiScene,
 };
 use zeta_ui_dispatch::{
     AccessibilityRole, CursorFeedback, ElementId, FocusBehavior, InteractionFrame, NavigationAxis,
@@ -291,51 +291,59 @@ impl<'a, Command: Copy + Eq> KeyboardShortcuts<'a, Command> {
 }
 
 impl<Command: Copy + Eq> Component for KeyboardShortcuts<'_, Command> {
-    fn inspection(&self) -> ComponentInspection {
-        ComponentInspection::new("KeyboardShortcuts", self.panel)
-            .with_corner_radii(CornerRadii::uniform(8.0))
+    fn element(&self) -> ComponentElement {
+        Element::leaf("KeyboardShortcuts")
+            .corner_radii(CornerRadii::uniform(8.0))
+            .in_overlay(self.panel)
+    }
+
+    fn paint_element(&self, scene: &mut UiScene, _element: &ComputedElement) {
+        self.paint_contents(scene);
     }
 
     fn paint(&self, scene: &mut UiScene) {
-        scene.with_overlay(|scene| {
-            scene.draw_rect(PaintRect::new(self.viewport, Color::rgba(20, 20, 24, 72)));
+        scene.with_element(self.element(), |scene, _element| self.paint_contents(scene));
+    }
+}
+
+impl<Command: Copy + Eq> KeyboardShortcuts<'_, Command> {
+    fn paint_contents(&self, scene: &mut UiScene) {
+        scene.draw_rect(PaintRect::new(self.viewport, Color::rgba(20, 20, 24, 72)));
+        scene.draw_rect(
+            PaintRect::new(self.panel, self.style.surface)
+                .with_shadow(
+                    BoxShadow::new(Color::rgba(0, 0, 0, 64))
+                        .with_offset(Point::new(0.0, 8.0))
+                        .with_blur_radius(24.0),
+                )
+                .with_border(Border::uniform(1.0, self.style.border))
+                .with_corner_radii(CornerRadii::uniform(8.0)),
+        );
+        draw_label(
+            scene,
+            "Keyboard shortcuts",
+            Point::new(self.panel.origin.x + 20.0, self.panel.origin.y + 18.0),
+            Size::new(self.panel.size.width - 80.0, 24.0),
+            TextStyle::new(17.0, self.style.text).with_line_height(22.0),
+        );
+        let close = self.close_bounds();
+        if self.dispatch.is_hovered(self.ids.close) || self.dispatch.is_focused(self.ids.close) {
             scene.draw_rect(
-                PaintRect::new(self.panel, self.style.surface)
-                    .with_shadow(
-                        BoxShadow::new(Color::rgba(0, 0, 0, 64))
-                            .with_offset(Point::new(0.0, 8.0))
-                            .with_blur_radius(24.0),
-                    )
-                    .with_border(Border::uniform(1.0, self.style.border))
-                    .with_corner_radii(CornerRadii::uniform(8.0)),
+                PaintRect::new(close, self.style.close_hovered)
+                    .with_corner_radii(CornerRadii::uniform(4.0)),
             );
-            draw_label(
-                scene,
-                "Keyboard shortcuts",
-                Point::new(self.panel.origin.x + 20.0, self.panel.origin.y + 18.0),
-                Size::new(self.panel.size.width - 80.0, 24.0),
-                TextStyle::new(17.0, self.style.text).with_line_height(22.0),
-            );
-            let close = self.close_bounds();
-            if self.dispatch.is_hovered(self.ids.close) || self.dispatch.is_focused(self.ids.close)
-            {
-                scene.draw_rect(
-                    PaintRect::new(close, self.style.close_hovered)
-                        .with_corner_radii(CornerRadii::uniform(4.0)),
-                );
-            }
-            draw_label(
-                scene,
-                "×",
-                close.origin,
-                close.size,
-                TextStyle::new(18.0, self.style.text_muted).with_line_height(24.0),
-            );
-            for (index, row) in self.rows.iter().enumerate() {
-                self.paint_row(scene, index, row);
-            }
-            self.paint_footer(scene);
-        });
+        }
+        draw_label(
+            scene,
+            "×",
+            close.origin,
+            close.size,
+            TextStyle::new(18.0, self.style.text_muted).with_line_height(24.0),
+        );
+        for (index, row) in self.rows.iter().enumerate() {
+            self.paint_row(scene, index, row);
+        }
+        self.paint_footer(scene);
     }
 }
 

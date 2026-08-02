@@ -2,7 +2,8 @@ use zeta_icons::icons;
 use zeta_ui::{
     ActionBar, ActionBarButton, ActionBarItem, ActionBarOrientation, ActionBarStyle,
     ButtonBackgrounds, ButtonSelection, ButtonState, ButtonStyle, Color, Component,
-    ComponentInspection, CornerRadii, Edges, PaintRect, Point, Rect, Size, TextStyle, UiScene,
+    ComponentElement, CornerRadii, Edges, Element, PaintRect, Point, Rect, Size, TextStyle,
+    UiScene,
 };
 
 use crate::titlebar::TITLEBAR_HEIGHT;
@@ -81,8 +82,8 @@ impl InspectorToolbar {
 }
 
 impl Component for InspectorToolbar {
-    fn inspection(&self) -> ComponentInspection {
-        ComponentInspection::new("InspectorToolbar", self.bounds)
+    fn element(&self) -> ComponentElement {
+        Element::leaf("InspectorToolbar").in_bounds(self.bounds)
     }
 
     fn paint(&self, scene: &mut UiScene) {

@@ -19,8 +19,8 @@ thiserror = { workspace = true }
 wgpu = { workspace = true }
 zeta-icons = { workspace = true }
 zeta-renderer = { workspace = true }
-zeta-ui = { workspace = true }
 zeta-winit = { workspace = true }
+zui = { workspace = true }
 
 [lints]
 workspace = true

@@ -1,6 +1,5 @@
 mod action_bar;
 mod button;
-mod component;
 mod context_menu;
 mod context_view;
 mod dropdown;
@@ -19,7 +18,6 @@ pub use action_bar::{
     ActionBarStyle,
 };
 pub use button::{Button, ButtonBackgrounds, ButtonSelection, ButtonState, ButtonStyle};
-pub use component::{Component, ComponentInspection};
 pub use context_menu::{ContextMenu, ContextMenuItem, ContextMenuSelection, ContextMenuStyle};
 pub use context_view::{
     ContextView, ContextViewAnchorAlignment, ContextViewAnchorAxis, ContextViewAnchorPosition,

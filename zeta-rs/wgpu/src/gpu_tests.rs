@@ -1,5 +1,5 @@
 use super::{srgb_channel, wgpu_color};
-use zeta_ui::Color;
+use zui::Color;
 
 #[test]
 fn converts_srgb_background_to_linear_wgpu_color() {

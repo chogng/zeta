@@ -1,4 +1,4 @@
-use crate::{Color, Component, ComponentInspection, PaintRect, Rect, UiScene};
+use crate::{Color, Component, ComponentElement, Element, PaintRect, Rect, UiScene};
 
 /// Physical direction of a Sash separator and its resize cursor.
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
@@ -122,8 +122,8 @@ impl Sash {
 }
 
 impl Component for Sash {
-    fn inspection(&self) -> ComponentInspection {
-        ComponentInspection::new("Sash", self.interaction_bounds())
+    fn element(&self) -> ComponentElement {
+        Element::leaf("Sash").in_bounds(self.interaction_bounds())
     }
 
     fn paint(&self, scene: &mut UiScene) {

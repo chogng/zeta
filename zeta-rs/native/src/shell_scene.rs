@@ -1,9 +1,9 @@
 use zeta_keybinding::{KeyboardShortcuts, paint_chord_hint};
 use zeta_terminal::{GridSize, ScreenBuffer, TerminalColor, TerminalCore, TerminalMousePosition};
 use zeta_ui::{
-    Border, CaretVisibility, Color, CornerRadii, FontFamily, FontWeight, InspectionNode, PaintRect,
-    Rect, Sash, SashOrientation, SashState, SashStyle, ScrollMetrics, ScrollbarPresentation,
-    TextBlock, TextInputLayoutEngine, TextStyle, UiScene,
+    Border, CaretVisibility, Color, CornerRadii, Element, FontFamily, FontWeight, PaintRect, Rect,
+    Sash, SashOrientation, SashState, SashStyle, ScrollMetrics, ScrollbarPresentation, TextBlock,
+    TextInputLayoutEngine, TextStyle, UiScene,
 };
 
 use crate::PRODUCT_DISPLAY_NAME;
@@ -537,59 +537,59 @@ fn draw_session_sidebar(
     text_layout: &mut TextInputLayoutEngine,
     palette: ShellPalette,
 ) -> Option<Rect> {
-    scene.with_inspection_node(InspectionNode::new("SessionSidebar", bounds), |scene| {
-        scene.draw_rect(
-            PaintRect::new(bounds, palette.surface_raised).with_border(Border::new(
-                zeta_ui::Edges::new(0.0, 1.0, 0.0, 0.0),
-                palette.border,
-            )),
-        );
-        interaction_frame.register(
-            UiNode::new(
-                SESSION_SIDEBAR,
-                bounds,
-                AccessibilityRole::Group,
-                "Sessions sidebar",
-            )
-            .with_parent(WINDOW),
-        );
-        let toolbar = SessionSidebarToolbar::new(
-            bounds,
-            view.search.input(),
-            view.caret_visibility,
-            palette,
-            text_layout,
-            view.dispatch,
-        );
-        toolbar.register_interactions(interaction_frame);
-        scene.draw_component(&toolbar);
-        let tabs = view
-            .search
-            .matches_session_name(view.title)
-            .then(|| {
-                SessionTab::new(
-                    ACTIVE_SESSION_TAB,
-                    view.title,
-                    view.context.working_directory_label(),
-                    "Active",
+    scene.with_element(
+        Element::leaf("SessionSidebar").in_bounds(bounds),
+        |scene, _| {
+            scene.draw_rect(PaintRect::new(bounds, palette.surface_raised).with_border(
+                Border::new(zeta_ui::Edges::new(0.0, 1.0, 0.0, 0.0), palette.border),
+            ));
+            interaction_frame.register(
+                UiNode::new(
+                    SESSION_SIDEBAR,
+                    bounds,
+                    AccessibilityRole::Group,
+                    "Sessions sidebar",
                 )
-            })
-            .into_iter()
-            .collect::<Vec<_>>();
-        let tab_list = SessionTabList::new(
-            SessionSidebarToolbar::content_bounds(bounds),
-            &tabs,
-            ACTIVE_SESSION_TAB,
-            palette,
-            view.dispatch,
-        );
-        tab_list.register_interactions(interaction_frame);
-        scene.draw_component(&tab_list);
-        view.dispatch
-            .is_focused(SESSION_SEARCH_INPUT)
-            .then_some(toolbar.search_caret_bounds())
-            .flatten()
-    })
+                .with_parent(WINDOW),
+            );
+            let toolbar = SessionSidebarToolbar::new(
+                bounds,
+                view.search.input(),
+                view.caret_visibility,
+                palette,
+                text_layout,
+                view.dispatch,
+            );
+            toolbar.register_interactions(interaction_frame);
+            scene.draw_component(&toolbar);
+            let tabs = view
+                .search
+                .matches_session_name(view.title)
+                .then(|| {
+                    SessionTab::new(
+                        ACTIVE_SESSION_TAB,
+                        view.title,
+                        view.context.working_directory_label(),
+                        "Active",
+                    )
+                })
+                .into_iter()
+                .collect::<Vec<_>>();
+            let tab_list = SessionTabList::new(
+                SessionSidebarToolbar::content_bounds(bounds),
+                &tabs,
+                ACTIVE_SESSION_TAB,
+                palette,
+                view.dispatch,
+            );
+            tab_list.register_interactions(interaction_frame);
+            scene.draw_component(&tab_list);
+            view.dispatch
+                .is_focused(SESSION_SEARCH_INPUT)
+                .then_some(toolbar.search_caret_bounds())
+                .flatten()
+        },
+    )
 }
 
 fn draw_session_sidebar_sash(

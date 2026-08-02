@@ -1,5 +1,6 @@
 use crate::{
-    Border, Color, Component, ComponentInspection, CornerRadii, PaintRect, Rect, Size, UiScene,
+    Border, Color, Component, ComponentElement, ComputedElement, CornerRadii, Element,
+    ElementLength, PaintRect, Rect, Size, UiScene,
 };
 
 /// Axis along which a [`TabList`] arranges its tabs.
@@ -208,86 +209,31 @@ impl TabList {
     /// Returns the clipped visual bounds for a tab, or `None` when the index is absent.
     pub fn tab_bounds(&self, index: usize) -> Option<Rect> {
         self.tabs.get(index)?;
-        let gap = self.style.gap.max(0.0);
-        let extent = match self.orientation {
-            TabListOrientation::Horizontal => self.style.tab_size.width.max(0.0),
-            TabListOrientation::Vertical => self.style.tab_size.height.max(0.0),
-        };
-        let offset = index as f32 * (extent + gap);
-        Some(match self.orientation {
-            TabListOrientation::Horizontal => Rect::from_xywh(
-                self.bounds.origin.x + offset,
-                self.bounds.origin.y,
-                extent.min((self.bounds.size.width - offset).max(0.0)),
-                self.style
-                    .tab_size
-                    .height
-                    .max(0.0)
-                    .min(self.bounds.size.height.max(0.0)),
-            ),
-            TabListOrientation::Vertical => Rect::from_xywh(
-                self.bounds.origin.x,
-                self.bounds.origin.y + offset,
-                self.style
-                    .tab_size
-                    .width
-                    .max(0.0)
-                    .min(self.bounds.size.width.max(0.0)),
-                extent.min((self.bounds.size.height - offset).max(0.0)),
-            ),
-        })
+        self.element_tree()
+            .compute()
+            .child(index)
+            .map(ComputedElement::bounds)
     }
 
-    fn gap_regions(&self) -> Vec<Rect> {
-        let gap = self.style.gap.max(0.0);
-        if gap <= 0.0 || self.tabs.len() < 2 {
-            return Vec::new();
+    fn element_tree(&self) -> ComponentElement {
+        let children = self.tabs.iter().map(|_| {
+            Element::row("Tab")
+                .width(ElementLength::px(self.style.tab_size.width))
+                .height(ElementLength::px(self.style.tab_size.height))
+        });
+        match self.orientation {
+            TabListOrientation::Horizontal => Element::row("TabList"),
+            TabListOrientation::Vertical => Element::column("TabList"),
         }
-        let extent = match self.orientation {
-            TabListOrientation::Horizontal => self.style.tab_size.width.max(0.0),
-            TabListOrientation::Vertical => self.style.tab_size.height.max(0.0),
-        };
-        (0..self.tabs.len() - 1)
-            .filter_map(|index| {
-                let offset = index as f32 * (extent + gap) + extent;
-                let bounds = match self.orientation {
-                    TabListOrientation::Horizontal => Rect::from_xywh(
-                        self.bounds.origin.x + offset,
-                        self.bounds.origin.y,
-                        gap.min((self.bounds.size.width - offset).max(0.0)),
-                        self.style
-                            .tab_size
-                            .height
-                            .max(0.0)
-                            .min(self.bounds.size.height.max(0.0)),
-                    ),
-                    TabListOrientation::Vertical => Rect::from_xywh(
-                        self.bounds.origin.x,
-                        self.bounds.origin.y + offset,
-                        self.style
-                            .tab_size
-                            .width
-                            .max(0.0)
-                            .min(self.bounds.size.width.max(0.0)),
-                        gap.min((self.bounds.size.height - offset).max(0.0)),
-                    ),
-                };
-                (!bounds.is_empty()).then_some(bounds)
-            })
-            .collect()
-    }
-}
-
-impl Component for TabList {
-    fn inspection(&self) -> ComponentInspection {
-        ComponentInspection::new("TabList", self.bounds)
-            .with_gap_geometry(self.style.gap.max(0.0), self.gap_regions())
+        .gap(self.style.gap)
+        .children(children)
+        .in_bounds(self.bounds)
     }
 
-    fn paint(&self, scene: &mut UiScene) {
+    fn paint_layout(&self, scene: &mut UiScene, layout: &ComputedElement) {
         scene.with_clip(self.bounds, |scene| {
             for (index, tab) in self.tabs.iter().copied().enumerate() {
-                let Some(bounds) = self.tab_bounds(index) else {
+                let Some(bounds) = layout.child(index).map(ComputedElement::bounds) else {
                     continue;
                 };
                 scene.draw_component(&TabSurface {
@@ -300,6 +246,20 @@ impl Component for TabList {
     }
 }
 
+impl Component for TabList {
+    fn element(&self) -> ComponentElement {
+        self.element_tree()
+    }
+
+    fn paint_element(&self, scene: &mut UiScene, element: &ComputedElement) {
+        self.paint_layout(scene, element);
+    }
+
+    fn paint(&self, scene: &mut UiScene) {
+        self.paint_layout(scene, &self.element_tree().compute());
+    }
+}
+
 struct TabSurface {
     tab: Tab,
     bounds: Rect,
@@ -307,8 +267,10 @@ struct TabSurface {
 }
 
 impl Component for TabSurface {
-    fn inspection(&self) -> ComponentInspection {
-        ComponentInspection::new("Tab", self.bounds).with_corner_radii(self.style.corner_radii)
+    fn element(&self) -> ComponentElement {
+        Element::leaf("Tab")
+            .corner_radii(self.style.corner_radii)
+            .in_bounds(self.bounds)
     }
 
     fn paint(&self, scene: &mut UiScene) {

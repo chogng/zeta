@@ -1,6 +1,6 @@
 use zeta_ui::{
-    Border, Component, ComponentInspection, CornerRadii, PaintImage, PaintRect, Point, Rect, Size,
-    TextBlock, TextStyle, UiScene,
+    Border, Component, ComponentElement, CornerRadii, Element, PaintImage, PaintRect, Point, Rect,
+    Size, TextBlock, TextStyle, UiScene,
 };
 
 use crate::component::{
@@ -412,8 +412,8 @@ fn fit_image_bounds(image: &zeta_ui::ImageData, available: Rect) -> Rect {
 }
 
 impl Component for Markdown {
-    fn inspection(&self) -> ComponentInspection {
-        ComponentInspection::new("Markdown", self.bounds)
+    fn element(&self) -> ComponentElement {
+        Element::leaf("Markdown").in_bounds(self.bounds)
     }
 
     fn paint(&self, scene: &mut UiScene) {

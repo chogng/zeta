@@ -12,7 +12,7 @@ path = "src/lib.rs"
 
 [dependencies]
 thiserror = { workspace = true }
-zeta-ui = { workspace = true }
+zui = { workspace = true }
 
 [lints]
 workspace = true

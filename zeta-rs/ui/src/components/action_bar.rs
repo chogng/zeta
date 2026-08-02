@@ -1,6 +1,9 @@
 use zeta_icons::Icon;
 
-use crate::{Color, Component, ComponentInspection, PaintRect, Point, Rect, Size, UiScene};
+use crate::{
+    Color, Component, ComponentElement, ComputedElement, Element, ElementLength, PaintRect, Point,
+    Rect, Size, UiScene,
+};
 
 use super::{Button, ButtonSelection, ButtonState, ButtonStyle};
 
@@ -231,17 +234,13 @@ impl ActionBar {
     }
 
     fn slot_bounds(&self, target_index: usize) -> Rect {
-        let mut offset = 0.0;
-        for (index, item) in self.items.iter().enumerate() {
-            if index == target_index {
-                return self.bounds_at_offset(offset, self.item_extent(item));
-            }
-            offset += self.item_extent(item);
-            if index + 1 < self.items.len() {
-                offset += self.style.gap.max(0.0);
-            }
-        }
-        Rect::from_xywh(self.bounds.origin.x, self.bounds.origin.y, 0.0, 0.0)
+        self.element_tree()
+            .compute()
+            .child(target_index)
+            .map(ComputedElement::bounds)
+            .unwrap_or_else(|| {
+                Rect::from_xywh(self.bounds.origin.x, self.bounds.origin.y, 0.0, 0.0)
+            })
     }
 
     fn item_extent(&self, item: &ActionBarItem) -> f32 {
@@ -258,47 +257,25 @@ impl ActionBar {
         }
     }
 
-    fn bounds_at_offset(&self, offset: f32, extent: f32) -> Rect {
+    fn element_tree(&self) -> ComponentElement {
+        let children = self.items.iter().map(|item| {
+            let extent = ElementLength::px(self.item_extent(item));
+            match self.orientation {
+                ActionBarOrientation::Horizontal => Element::row("ActionBarItem")
+                    .width(extent)
+                    .height(ElementLength::px(self.style.item_size.height)),
+                ActionBarOrientation::Vertical => Element::row("ActionBarItem")
+                    .width(ElementLength::px(self.style.item_size.width))
+                    .height(extent),
+            }
+        });
         match self.orientation {
-            ActionBarOrientation::Horizontal => Rect::from_xywh(
-                self.bounds.origin.x + offset,
-                self.bounds.origin.y,
-                extent.min((self.bounds.size.width - offset).max(0.0)),
-                self.style
-                    .item_size
-                    .height
-                    .max(0.0)
-                    .min(self.bounds.size.height.max(0.0)),
-            ),
-            ActionBarOrientation::Vertical => Rect::from_xywh(
-                self.bounds.origin.x,
-                self.bounds.origin.y + offset,
-                self.style
-                    .item_size
-                    .width
-                    .max(0.0)
-                    .min(self.bounds.size.width.max(0.0)),
-                extent.min((self.bounds.size.height - offset).max(0.0)),
-            ),
+            ActionBarOrientation::Horizontal => Element::row("ActionBar"),
+            ActionBarOrientation::Vertical => Element::column("ActionBar"),
         }
-    }
-
-    fn gap_regions(&self) -> Vec<Rect> {
-        let gap = self.style.gap.max(0.0);
-        if gap <= 0.0 || self.items.len() < 2 {
-            return Vec::new();
-        }
-        let mut offset = 0.0;
-        self.items
-            .iter()
-            .take(self.items.len() - 1)
-            .filter_map(|item| {
-                offset += self.item_extent(item);
-                let bounds = self.bounds_at_offset(offset, gap);
-                offset += gap;
-                (!bounds.is_empty()).then_some(bounds)
-            })
-            .collect()
+        .gap(self.style.gap)
+        .children(children)
+        .in_bounds(self.bounds)
     }
 
     fn separator_bounds(&self, slot: Rect) -> Rect {
@@ -318,18 +295,13 @@ impl ActionBar {
             ),
         }
     }
-}
 
-impl Component for ActionBar {
-    fn inspection(&self) -> ComponentInspection {
-        ComponentInspection::new("ActionBar", self.bounds)
-            .with_gap_geometry(self.style.gap.max(0.0), self.gap_regions())
-    }
-
-    fn paint(&self, scene: &mut UiScene) {
+    fn paint_layout(&self, scene: &mut UiScene, layout: &ComputedElement) {
         scene.with_clip(self.bounds, |scene| {
             for (index, item) in self.items.iter().enumerate() {
-                let slot = self.slot_bounds(index);
+                let Some(slot) = layout.child(index).map(ComputedElement::bounds) else {
+                    continue;
+                };
                 match item {
                     ActionBarItem::Button(button) => {
                         button.paint(slot, &self.style.button_style, scene);
@@ -343,6 +315,20 @@ impl Component for ActionBar {
                 }
             }
         });
+    }
+}
+
+impl Component for ActionBar {
+    fn element(&self) -> ComponentElement {
+        self.element_tree()
+    }
+
+    fn paint_element(&self, scene: &mut UiScene, element: &ComputedElement) {
+        self.paint_layout(scene, element);
+    }
+
+    fn paint(&self, scene: &mut UiScene) {
+        self.paint_layout(scene, &self.element_tree().compute());
     }
 }
 

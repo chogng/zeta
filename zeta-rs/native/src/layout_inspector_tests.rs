@@ -2,19 +2,22 @@ use super::LayoutInspector;
 use crate::root_layout::{InspectorPane, RootLayout};
 use crate::shell_scene::LogicalViewport;
 use zeta_icons::icons;
-use zeta_ui::{Color, CornerRadii, Edges, InspectionNode, Point, Rect, UiScene};
+use zeta_ui::{Color, CornerRadii, Edges, Element, InspectionNode, Point, Rect, UiScene};
 
 #[test]
 fn decoration_paints_the_full_ancestry_in_the_added_panel() {
     let mut scene = UiScene::new(Color::TRANSPARENT);
-    scene.with_inspection_node(
-        InspectionNode::new("Toolbar", Rect::from_xywh(0.0, 0.0, 300.0, 48.0)).with_gap(6.0),
-        |scene| {
-            scene.with_inspection_node(
-                InspectionNode::new("InputBox", Rect::from_xywh(10.0, 8.0, 120.0, 32.0))
-                    .with_padding(Edges::uniform(8.0))
-                    .with_corner_radii(CornerRadii::uniform(4.0)),
-                |_| {},
+    scene.with_element(
+        Element::row("Toolbar")
+            .gap(6.0)
+            .in_bounds(Rect::from_xywh(0.0, 0.0, 300.0, 48.0)),
+        |scene, _| {
+            scene.with_element(
+                Element::leaf("InputBox")
+                    .padding(Edges::uniform(8.0))
+                    .corner_radii(CornerRadii::uniform(4.0))
+                    .in_bounds(Rect::from_xywh(10.0, 8.0, 120.0, 32.0)),
+                |_, _| {},
             );
         },
     );
@@ -155,9 +158,9 @@ fn inspection_cursor_is_limited_to_the_application_content() {
 #[test]
 fn selecting_a_component_stops_picking_and_retains_the_selection() {
     let mut scene = UiScene::new(Color::TRANSPARENT);
-    scene.with_inspection_node(
-        InspectionNode::new("Toolbar", Rect::from_xywh(0.0, 0.0, 300.0, 48.0)),
-        |_| {},
+    scene.with_element(
+        Element::leaf("Toolbar").in_bounds(Rect::from_xywh(0.0, 0.0, 300.0, 48.0)),
+        |_, _| {},
     );
     let mut inspector = LayoutInspector::default();
     inspector.open(400.0);
@@ -179,12 +182,12 @@ fn selecting_a_component_stops_picking_and_retains_the_selection() {
 #[test]
 fn panel_rows_retarget_the_selection_without_discarding_descendants() {
     let mut scene = UiScene::new(Color::TRANSPARENT);
-    scene.with_inspection_node(
-        InspectionNode::new("ComposerPanel", Rect::from_xywh(0.0, 0.0, 300.0, 100.0)),
-        |scene| {
-            scene.with_inspection_node(
-                InspectionNode::new("ComposerEditor", Rect::from_xywh(10.0, 10.0, 280.0, 60.0)),
-                |_| {},
+    scene.with_element(
+        Element::leaf("ComposerPanel").in_bounds(Rect::from_xywh(0.0, 0.0, 300.0, 100.0)),
+        |scene, _| {
+            scene.with_element(
+                Element::leaf("ComposerEditor").in_bounds(Rect::from_xywh(10.0, 10.0, 280.0, 60.0)),
+                |_, _| {},
             );
         },
     );

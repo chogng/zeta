@@ -11,14 +11,8 @@ name = "zeta_ui"
 path = "src/lib.rs"
 
 [dependencies]
-cosmic-text = { workspace = true }
-sys-locale = { workspace = true }
-thiserror = { workspace = true }
-unicode-segmentation = { workspace = true }
 zeta-icons = { workspace = true }
-
-[target.'cfg(target_os = "macos")'.dependencies]
-coretext-rs = "0.7.2"
+zui = { workspace = true }
 
 [lints]
 workspace = true

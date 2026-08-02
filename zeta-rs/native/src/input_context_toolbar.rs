@@ -3,8 +3,8 @@ use zeta_icons::icons;
 use zeta_ui::Point;
 use zeta_ui::{
     ActionBar, ActionBarButton, ActionBarItem, ActionBarOrientation, ActionBarStyle, Border,
-    ButtonBackgrounds, ButtonState, ButtonStyle, Component, ComponentInspection, CornerRadii,
-    Edges, Rect, Size, TextInputLayoutEngine, TextStyle, UiScene,
+    ButtonBackgrounds, ButtonState, ButtonStyle, Component, ComponentElement, CornerRadii, Edges,
+    Element, Rect, Size, TextInputLayoutEngine, TextStyle, UiScene,
 };
 
 use crate::agent_composer::ComposerMode;
@@ -212,8 +212,8 @@ fn button_style(palette: ShellPalette, text_style: TextStyle, scale: f32) -> But
 }
 
 impl Component for InputContextToolbar {
-    fn inspection(&self) -> ComponentInspection {
-        ComponentInspection::new("InputContextToolbar", self.bounds)
+    fn element(&self) -> ComponentElement {
+        Element::leaf("InputContextToolbar").in_bounds(self.bounds)
     }
 
     fn paint(&self, scene: &mut UiScene) {

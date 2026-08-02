@@ -1,5 +1,5 @@
 use super::{instance_range, linear_color, prepare_instances, validate_paint_rect};
-use zeta_ui::{Border, BoxShadow, Color, CornerRadii, Edges, PaintRect, Point, Rect, UiScene};
+use zui::{Border, BoxShadow, Color, CornerRadii, Edges, PaintRect, Point, Rect, UiScene};
 
 use super::{UiRenderError, UiViewport};
 

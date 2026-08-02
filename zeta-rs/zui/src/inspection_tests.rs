@@ -1,5 +1,5 @@
 use super::{InspectionFrame, InspectionNode};
-use crate::{CornerRadii, Edges, Point, Rect};
+use crate::{CornerRadii, Edges, Element, ElementDirection, ElementLength, Point, Rect};
 
 #[test]
 fn reverse_hit_test_prefers_the_deepest_recent_node() {
@@ -85,4 +85,21 @@ fn exposes_width_height_padding_gap_and_resolved_radius() {
     assert_eq!(node.layer(), 2);
     assert_eq!(node.source_file(), "button.rs");
     assert_eq!(node.source_line(), 42);
+}
+
+#[test]
+fn exposes_the_authored_style_from_a_declarative_element() {
+    let computed = Element::column("Panel")
+        .width(ElementLength::px(240.0))
+        .padding(Edges::uniform(80.0))
+        .in_bounds(Rect::from_xywh(0.0, 0.0, 40.0, 30.0))
+        .compute();
+    let node = computed.inspection_node();
+    let style = node.authored_style().expect("element-authored style");
+
+    assert_eq!(style.direction(), ElementDirection::Vertical);
+    assert_eq!(style.width(), ElementLength::px(240.0));
+    assert_eq!(style.height(), ElementLength::Fill);
+    assert_eq!(style.padding(), Some(Edges::uniform(80.0)));
+    assert_eq!(node.padding(), Some(Edges::new(30.0, 0.0, 0.0, 40.0)));
 }

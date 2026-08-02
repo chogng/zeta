@@ -1,7 +1,7 @@
 use zeta_icons::Icon;
 
 use crate::{
-    Component, ComponentInspection, PaintIcon, Point, Rect, TextBlock, TextStyle, UiScene,
+    Component, ComponentElement, Element, PaintIcon, Point, Rect, TextBlock, TextStyle, UiScene,
 };
 
 /// Presentation metrics for an icon followed by a single text label.
@@ -57,8 +57,8 @@ impl IconLabel {
 }
 
 impl Component for IconLabel {
-    fn inspection(&self) -> ComponentInspection {
-        ComponentInspection::new("IconLabel", self.bounds)
+    fn element(&self) -> ComponentElement {
+        Element::leaf("IconLabel").in_bounds(self.bounds)
     }
 
     fn paint(&self, scene: &mut UiScene) {

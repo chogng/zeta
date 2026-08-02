@@ -1,6 +1,6 @@
 use crate::{
-    Color, Component, ComponentInspection, ContextView, ContextViewPlacement, ContextViewStyle,
-    CornerRadii, InspectionNode, Point, Rect, ScrollAxis, ScrollMetrics, ScrollState, ScrollView,
+    Color, Component, ComponentElement, ContextView, ContextViewPlacement, ContextViewStyle,
+    CornerRadii, Element, Point, Rect, ScrollAxis, ScrollMetrics, ScrollState, ScrollView,
     ScrollViewStyle, Size, UiScene,
 };
 
@@ -295,11 +295,15 @@ impl Dropdown {
         scene: &mut UiScene,
         paint_header: impl FnOnce(&mut UiScene, Rect),
     ) {
-        scene.with_inspection_node(
-            InspectionNode::new("Dropdown", self.context_view.bounds())
-                .with_corner_radii(self.style.corner_radii),
-            |scene| self.paint_contents(scene, paint_header),
-        );
+        scene.with_element(self.element_tree(), |scene, _element| {
+            self.paint_contents(scene, paint_header)
+        });
+    }
+
+    fn element_tree(&self) -> ComponentElement {
+        Element::leaf("Dropdown")
+            .corner_radii(self.style.corner_radii)
+            .in_bounds(self.context_view.bounds())
     }
 
     fn paint_contents(&self, scene: &mut UiScene, paint_header: impl FnOnce(&mut UiScene, Rect)) {
@@ -320,9 +324,8 @@ impl Dropdown {
 }
 
 impl Component for Dropdown {
-    fn inspection(&self) -> ComponentInspection {
-        ComponentInspection::new("Dropdown", self.context_view.bounds())
-            .with_corner_radii(self.style.corner_radii)
+    fn element(&self) -> ComponentElement {
+        self.element_tree()
     }
 
     fn paint(&self, scene: &mut UiScene) {

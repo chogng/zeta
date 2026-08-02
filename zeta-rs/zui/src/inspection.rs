@@ -1,4 +1,4 @@
-use crate::{CornerRadii, Edges, Point, Rect};
+use crate::{CornerRadii, Edges, ElementStyle, Point, Rect};
 
 /// Stable identity for one inspection node within a single immutable UI frame.
 ///
@@ -9,15 +9,15 @@ pub struct InspectionNodeId(usize);
 
 /// Resolved component geometry exposed to native UI inspection tools.
 ///
-/// Components should report the same bounds and visual metrics they use for paint. Padding, gap,
-/// and corner radii are optional because not every component owns the corresponding layout or
-/// box-shaped surface.
+/// Declarative elements populate both their authored style and the resolved geometry used for
+/// paint. Low-level scene integrations may omit authored style when no element produced the node.
 #[derive(Clone, Debug, PartialEq)]
 pub struct InspectionNode {
     id: InspectionNodeId,
     parent: Option<InspectionNodeId>,
     name: &'static str,
     bounds: Rect,
+    authored_style: Option<ElementStyle>,
     padding: Option<Edges>,
     gap: Option<f32>,
     gap_regions: Vec<Rect>,
@@ -34,6 +34,7 @@ impl InspectionNode {
             parent: None,
             name,
             bounds,
+            authored_style: None,
             padding: None,
             gap: None,
             gap_regions: Vec::new(),
@@ -46,6 +47,11 @@ impl InspectionNode {
 
     pub const fn with_padding(mut self, padding: Edges) -> Self {
         self.padding = Some(padding);
+        self
+    }
+
+    pub(crate) const fn with_authored_style(mut self, style: ElementStyle) -> Self {
+        self.authored_style = Some(style);
         self
     }
 
@@ -67,6 +73,16 @@ impl InspectionNode {
         self
     }
 
+    pub(crate) const fn with_source_location(
+        mut self,
+        source_file: &'static str,
+        source_line: u32,
+    ) -> Self {
+        self.source_file = source_file;
+        self.source_line = source_line;
+        self
+    }
+
     pub const fn id(&self) -> InspectionNodeId {
         self.id
     }
@@ -81,6 +97,11 @@ impl InspectionNode {
 
     pub const fn bounds(&self) -> Rect {
         self.bounds
+    }
+
+    /// Returns the declarative style that produced this resolved node.
+    pub const fn authored_style(&self) -> Option<ElementStyle> {
+        self.authored_style
     }
 
     pub const fn width(&self) -> f32 {
@@ -174,8 +195,10 @@ impl InspectionFrame {
         node.id = id;
         node.parent = parent;
         node.layer = layer;
-        node.source_file = source_file;
-        node.source_line = source_line;
+        if node.source_file.is_empty() {
+            node.source_file = source_file;
+            node.source_line = source_line;
+        }
         self.nodes.push(node);
         id
     }

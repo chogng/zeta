@@ -4,7 +4,7 @@ use std::collections::BTreeSet;
 use std::ops::Range;
 
 use zeta_diff::DiffRowKind;
-use zeta_ui::{Component, ComponentInspection, PaintRect, Point, Rect, UiScene};
+use zeta_ui::{Component, ComponentElement, Element, PaintRect, Point, Rect, UiScene};
 
 pub use self::document::DiffEditorDocument;
 use self::layout::{DiffEditorLayout, build_layout};
@@ -405,8 +405,8 @@ impl<'a> DiffEditor<'a> {
 }
 
 impl Component for DiffEditor<'_> {
-    fn inspection(&self) -> ComponentInspection {
-        ComponentInspection::new("DiffEditor", self.bounds)
+    fn element(&self) -> ComponentElement {
+        Element::leaf("DiffEditor").in_bounds(self.bounds)
     }
 
     fn paint(&self, scene: &mut UiScene) {

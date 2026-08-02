@@ -1,6 +1,5 @@
 use crate::{
-    Color, Component, ComponentInspection, CornerRadii, InspectionNode, PaintRect, Point, Rect,
-    Size, UiScene,
+    Color, Component, ComponentElement, CornerRadii, Element, PaintRect, Point, Rect, Size, UiScene,
 };
 
 mod geometry;
@@ -289,11 +288,15 @@ impl ScrollView {
         scene: &mut UiScene,
         draw_content: impl FnOnce(&mut UiScene, ScrollViewport) -> R,
     ) -> R {
-        scene.with_inspection_node(InspectionNode::new("ScrollView", self.bounds), |scene| {
+        scene.with_element(self.element_tree(), |scene, _element| {
             let result = scene.with_clip(self.bounds, |scene| draw_content(scene, self.viewport()));
             self.paint(scene);
             result
         })
+    }
+
+    fn element_tree(&self) -> ComponentElement {
+        Element::leaf("ScrollView").in_bounds(self.bounds)
     }
 
     fn effective_offset(&self) -> Point {
@@ -403,8 +406,8 @@ impl ScrollView {
 }
 
 impl Component for ScrollView {
-    fn inspection(&self) -> ComponentInspection {
-        ComponentInspection::new("ScrollView", self.bounds)
+    fn element(&self) -> ComponentElement {
+        self.element_tree()
     }
 
     fn paint(&self, scene: &mut UiScene) {

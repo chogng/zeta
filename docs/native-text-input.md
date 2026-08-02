@@ -3,7 +3,8 @@
 > 状态：Current。
 > 本文拥有 native 单行文本输入的跨 crate ownership、用户语义和演进边界。具体源码接口与
 > 修改路径分别由 [`zeta-native`](../zeta-rs/native/README.md)、
-> [`zeta-ui`](../zeta-rs/ui/README.md) 和 [`zeta-winit`](../zeta-rs/winit/README.md) 说明。
+> [`zui`](../zeta-rs/zui/README.md)、[`zeta-ui`](../zeta-rs/ui/README.md) 和
+> [`zeta-winit`](../zeta-rs/winit/README.md) 说明。
 
 ## 快速理解
 
@@ -13,13 +14,13 @@ Native 文本输入采用单向依赖，不建立同时理解窗口事件、编�
 winit keyboard / IME event
   → zeta-winit platform forwarding
   → zeta-native focus and event routing
-  → zeta-ui TextInput foundation
+  → zui TextInput foundation
   → TextInputLayoutEngine
-  → InputBox component
-  → UiScene
+  → zeta-ui InputBox component
+  → zui UiScene
 ```
 
-`zeta-ui` 不依赖 `zeta-winit`；`TextInput` 不保存 `winit::Ime`、`KeyEvent` 或 GPU 类型；平台
+`zui` 不依赖 `zeta-ui` 或 `zeta-winit`；`TextInput` 不保存 `winit::Ime`、`KeyEvent` 或 GPU 类型；平台
 adapter 不理解 committed text、selection 或 composition。这个边界让 Unicode 编辑语义、
 shaping geometry 和真实平台接入可以分别测试。
 
@@ -38,10 +39,10 @@ shaping geometry 和真实平台接入可以分别测试。
 | --- | --- | --- |
 | 原生 keyboard/IME event 与候选框 API | `zeta-winit` / `winit` | 委托 |
 | Composer 与 Session Search focus、event routing、IME activation | `zeta-native::NativeApp` | ✅ |
-| Committed text、selection、grapheme movement | `zeta-ui::TextInput` | ✅ |
-| Preedit/commit/cancel composition state | `zeta-ui::TextInput` | ✅ |
-| 单行 shaping、selection/caret/preedit geometry | `zeta-ui::TextInputLayoutEngine` | ✅ |
-| Caret blink phase state machine | `zeta-ui::CaretBlinkController` | ✅ |
+| Committed text、selection、grapheme movement | `zui::TextInput` | ✅ |
+| Preedit/commit/cancel composition state | `zui::TextInput` | ✅ |
+| 单行 shaping、selection/caret/preedit geometry | `zui::TextInputLayoutEngine` | ✅ |
+| Caret blink phase state machine | `zui::CaretBlinkController` | ✅ |
 | Input-box chrome、状态与 scene composition | `zeta-ui::InputBox` | ✅ |
 | Blink deadline scheduling 与 redraw | `zeta-native::NativeApp` | ✅ |
 | Mouse caret placement、drag selection | 尚无 owner | 尚未完成 |
@@ -119,8 +120,8 @@ caret placement、drag selection、clipboard、undo/redo、password/read-only va
 
 增加 mouse selection 前，应让 hit testing 消费同一份 shaped layout，不能另建字符宽度估算。
 增加多行编辑器前，应先定义 soft wrap、vertical cursor affinity、scroll ownership 和 IME
-candidate area 的多行语义。如果未来独立 crate 也需要相同基座，再评估从 `zeta-ui` 抽取；
-当前不复制模型。
+candidate area 的多行语义。基础模型已由独立 `zui` crate 拥有；具体输入框 chrome 继续留在
+`zeta-ui`，不能把二者重新合并。
 
 ## 7. 长期不变量
 
@@ -129,4 +130,4 @@ candidate area 的多行语义。如果未来独立 crate 也需要相同基座�
 - render component 不执行产品命令；
 - composition 与 committed text 保持可区分；
 - cursor/selection geometry 与实际 shaping 使用同一文本语义；
-- 产品领域状态不得下沉到 `zeta-ui` 或 `zeta-winit`。
+- 产品领域状态不得下沉到 `zui`、`zeta-ui` 或 `zeta-winit`。

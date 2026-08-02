@@ -51,7 +51,7 @@ CodeEditorDocument ─┐
 DiffSideRows ───────┘
                            ↓
 CodeEditor::paint
-├─ ComponentInspection(CodeEditor bounds)
+├─ zui Element(CodeEditor bounds) → automatic inspection
 ├─ code_editor::layout::build_layout
 ├─ CodeEditor::visible_row_range
 ├─ CodeEditor::painted_row_range → host viewport row culling
@@ -121,7 +121,8 @@ grapheme boundary 修改 committed text；CRLF 在删除时作为一个换行边
 `set_selection` 支持指针选择。`CodeEditorPresentation::Compact` 只改变共享组件拥有的
 header/gutter geometry，不改变 document、editing 或 row-source contract。
 
-三个公开 editor Component 都通过 `ComponentInspection` 上报各自 resolved bounds；宿主必须使用
+三个公开 editor Component 都通过 `Component::element` 声明各自 zui leaf，resolved bounds 与源码
+位置由 `UiScene::draw_component` 自动写入 inspection frame；宿主必须使用
 `UiScene::draw_component`，使 MultiDiffEditor → ScrollView → DiffEditor → CodeEditor 的可见组合链
 进入同一帧的 layout inspection hierarchy。该 metadata 不改变 document、viewport 或输入 ownership。
 

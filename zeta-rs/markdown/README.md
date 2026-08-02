@@ -67,7 +67,7 @@ MarkdownLayoutEngine::layout
    └─ TextBlock/TextSpan: wrapped rich text and highlighted code
 
 Markdown::paint
-├─ ComponentInspection(Markdown viewport bounds)
+├─ zui Element(Markdown viewport bounds) → automatic inspection
 └─ UiScene::with_clip(viewport bounds)
 ```
 

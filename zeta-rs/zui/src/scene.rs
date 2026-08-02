@@ -315,22 +315,43 @@ impl UiScene {
         self.layer_primitives[self.active_layer].push(ScenePrimitive::Text(index));
     }
 
-    /// Draws one component and automatically registers any inspection metadata it declares.
+    /// Resolves and draws one component while automatically registering its element metadata.
     #[track_caller]
     pub fn draw_component<C: Component + ?Sized>(&mut self, component: &C) {
-        let Some(node) = component.inspection().into_node() else {
-            component.paint(self);
-            return;
-        };
-        self.with_inspection_node(node, |scene| component.paint(scene));
+        self.with_element(component.element(), |scene, computed| {
+            component.paint_element(scene, computed)
+        });
     }
 
-    /// Records one component's resolved geometry while its scene primitives are emitted.
+    /// Resolves a declarative element once and shares it with inspection and custom composition.
     ///
-    /// Nested calls form the per-frame inspection hierarchy. The caller location identifies the
-    /// composition site that registered the node rather than a product data source.
+    /// Components with content closures should use this entry point instead of manually creating
+    /// an [`InspectionNode`]. The closure receives the same immutable computed geometry registered
+    /// in the current inspection hierarchy.
     #[track_caller]
-    pub fn with_inspection_node<R>(
+    pub fn with_element<R>(
+        &mut self,
+        element: crate::ComponentElement,
+        draw: impl FnOnce(&mut Self, &crate::ComputedElement) -> R,
+    ) -> R {
+        if element.is_overlay() {
+            return self.with_overlay(|scene| scene.with_current_layer_element(element, draw));
+        }
+        self.with_current_layer_element(element, draw)
+    }
+
+    fn with_current_layer_element<R>(
+        &mut self,
+        element: crate::ComponentElement,
+        draw: impl FnOnce(&mut Self, &crate::ComputedElement) -> R,
+    ) -> R {
+        let computed = element.compute();
+        let node = computed.inspection_node();
+        self.with_inspection_node(node, |scene| draw(scene, &computed))
+    }
+
+    #[track_caller]
+    fn with_inspection_node<R>(
         &mut self,
         node: InspectionNode,
         draw: impl FnOnce(&mut Self) -> R,

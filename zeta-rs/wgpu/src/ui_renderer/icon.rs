@@ -7,7 +7,7 @@ use resvg::tiny_skia::{Pixmap, Transform};
 use resvg::usvg;
 use zeta_icons::{Icon, IconRendering};
 
-use zeta_ui::{PaintIcon, Rect, UiScene};
+use zui::{PaintIcon, Rect, UiScene};
 
 use super::rect::linear_color;
 use super::{UiRenderError, UiViewport};

@@ -1,5 +1,5 @@
 use zeta_ui::{
-    Border, Color, Component, ComponentInspection, Edges, PaintRect, Point, Rect, UiScene,
+    Border, Color, Component, ComponentElement, Edges, Element, PaintRect, Point, Rect, UiScene,
 };
 
 use super::InspectionSelection;
@@ -52,8 +52,8 @@ pub(super) fn row_index_at(panel_bounds: Rect, point: Point, row_count: usize) -
 }
 
 impl Component for InspectorPanel<'_> {
-    fn inspection(&self) -> ComponentInspection {
-        ComponentInspection::new("InspectorPanel", self.bounds)
+    fn element(&self) -> ComponentElement {
+        Element::leaf("InspectorPanel").in_bounds(self.bounds)
     }
 
     fn paint(&self, scene: &mut UiScene) {

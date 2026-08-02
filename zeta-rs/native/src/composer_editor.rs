@@ -4,8 +4,8 @@ use zeta_editor::{
     CodeEditorViewport,
 };
 use zeta_ui::{
-    CaretVisibility, Color, Component, ComponentInspection, FontFamily, Point, Rect, TextBlock,
-    TextInputCompositionEvent, TextStyle, UiScene,
+    CaretVisibility, Color, Component, ComponentElement, Element, FontFamily, Point, Rect,
+    TextBlock, TextInputCompositionEvent, TextStyle, UiScene,
 };
 
 const MAX_VISIBLE_ROWS: usize = 8;
@@ -182,8 +182,8 @@ impl ComposerEditorView<'_> {
 }
 
 impl Component for ComposerEditorView<'_> {
-    fn inspection(&self) -> ComponentInspection {
-        ComponentInspection::new("ComposerEditor", self.bounds)
+    fn element(&self) -> ComponentElement {
+        Element::leaf("ComposerEditor").in_bounds(self.bounds)
     }
 
     fn paint(&self, scene: &mut UiScene) {

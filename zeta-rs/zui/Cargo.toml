@@ -1,0 +1,24 @@
+[package]
+name = "zui"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[lib]
+doctest = false
+name = "zui"
+path = "src/lib.rs"
+
+[dependencies]
+cosmic-text = { workspace = true }
+sys-locale = { workspace = true }
+thiserror = { workspace = true }
+unicode-segmentation = { workspace = true }
+zeta-icons = { workspace = true }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+coretext-rs = "0.7.2"
+
+[lints]
+workspace = true

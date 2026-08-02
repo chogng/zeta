@@ -1,6 +1,6 @@
 use zeta_renderer::{RenderOutcome, RenderTargetSize, Renderer, RendererError};
-use zeta_ui::{Color, UiScene};
 use zeta_winit::{NativeWindow, PhysicalExtent};
+use zui::{Color, UiScene};
 
 use crate::ui_renderer::{UiRenderer, UiViewport};
 use crate::viewport::{SurfaceExtent, Viewport};

@@ -3,9 +3,9 @@ use glyphon::{
     TextAtlas, TextBounds, TextRenderer, Viewport, Wrap,
 };
 use std::ops::Range;
-use zeta_ui::renderer_support::{create_font_system, font_family, font_style, font_weight};
+use zui::renderer_support::{create_font_system, font_family, font_style, font_weight};
 
-use zeta_ui::{Color, Rect, SceneBatch, TextBlock, TextBlockWrap, TextStyle, UiScene};
+use zui::{Color, Rect, SceneBatch, TextBlock, TextBlockWrap, TextStyle, UiScene};
 
 use self::icon::IconRenderer;
 use self::image::ImageRenderer;

@@ -1,5 +1,6 @@
 use crate::{
-    Color, Component, CornerRadii, Edges, InspectionNode, PaintRect, Point, Rect, Size, UiScene,
+    Color, Component, ComponentElement, ComputedElement, CornerRadii, Edges, Element, PaintRect,
+    Point, Rect, Size, UiScene,
 };
 
 /// Axis on which a [`ContextView`] is placed beside its anchor.
@@ -209,12 +210,10 @@ impl ContextView {
         scene: &mut UiScene,
         draw_content: impl FnOnce(&mut UiScene, Rect) -> R,
     ) -> R {
-        scene.with_overlay(|scene| {
-            scene.with_inspection_node(self.inspection_node(), |scene| {
-                self.paint_shell(scene);
-                scene.with_clip(self.content_bounds(), |scene| {
-                    draw_content(scene, self.content_bounds())
-                })
+        scene.with_element(self.overlay_element(), |scene, _element| {
+            self.paint_shell(scene);
+            scene.with_clip(self.content_bounds(), |scene| {
+                draw_content(scene, self.content_bounds())
             })
         })
     }
@@ -229,18 +228,20 @@ impl ContextView {
         scene: &mut UiScene,
         draw_content: impl FnOnce(&mut UiScene, Rect) -> R,
     ) -> R {
-        scene.with_overlay(|scene| {
-            scene.with_inspection_node(self.inspection_node(), |scene| {
-                self.paint_shell(scene);
-                draw_content(scene, self.content_bounds())
-            })
+        scene.with_element(self.overlay_element(), |scene, _element| {
+            self.paint_shell(scene);
+            draw_content(scene, self.content_bounds())
         })
     }
 
-    fn inspection_node(&self) -> InspectionNode {
-        InspectionNode::new("ContextView", self.bounds())
-            .with_padding(self.style.padding)
-            .with_corner_radii(self.style.corner_radii)
+    fn element_definition(&self) -> Element {
+        Element::leaf("ContextView")
+            .padding(self.style.padding)
+            .corner_radii(self.style.corner_radii)
+    }
+
+    fn overlay_element(&self) -> ComponentElement {
+        self.element_definition().in_overlay(self.bounds())
     }
 
     fn paint_shell(&self, scene: &mut UiScene) {
@@ -252,9 +253,17 @@ impl ContextView {
 }
 
 impl Component for ContextView {
+    fn element(&self) -> ComponentElement {
+        self.overlay_element()
+    }
+
+    fn paint_element(&self, scene: &mut UiScene, _element: &ComputedElement) {
+        self.paint_shell(scene);
+    }
+
     fn paint(&self, scene: &mut UiScene) {
-        scene.with_overlay(|scene| {
-            scene.with_inspection_node(self.inspection_node(), |scene| self.paint_shell(scene));
+        scene.with_element(self.overlay_element(), |scene, _element| {
+            self.paint_shell(scene)
         });
     }
 }

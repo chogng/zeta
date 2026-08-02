@@ -3,7 +3,7 @@
 use std::error::Error;
 
 use thiserror::Error;
-use zeta_ui::UiScene;
+use zui::UiScene;
 
 /// Physical dimensions of the renderer's current presentation target.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

@@ -2,7 +2,7 @@
 
 > 本 README 负责后端无关渲染契约的当前实现。跨 crate 的渲染所有权、替换路径与长期不变量见
 > [`docs/rendering-architecture.md`](../../docs/rendering-architecture.md)。`wgpu` 后端细节见
-> [`zeta-wgpu`](../wgpu/README.md)。
+> [`zeta-wgpu`](../wgpu/README.md)，scene contract 见 [`zui`](../zui/README.md)。
 
 `zeta-renderer` 是 `UiScene` 与具体图形 API 之间的稳定边界。产品 host 保存 `dyn Renderer`；
 组件、布局和场景构造不接触 device、queue、command encoder、render pass 或 surface。
@@ -13,7 +13,7 @@
 | --- | --- | --- |
 | 后端无关的帧执行接口 | ✅ `Renderer` | |
 | Physical target size、present outcome、统一错误边界 | ✅ | |
-| Scene primitive、paint order 与 backend-neutral batch contract | ❌ | `zeta-ui` |
+| Scene primitive、paint order 与 backend-neutral batch contract | ❌ | `zui` |
 | Surface、GPU resource、shader、atlas 与提交 | ❌ | `zeta-wgpu` 或其他 backend crate |
 | Window/event loop 与 redraw policy | ❌ | `zeta-winit` / product host |
 | 后端选择和初始化 | ❌ | product composition root |
@@ -59,6 +59,6 @@ scene producer 只依赖 trait。真实 GPU 与 surface 验证属于具体 backe
 
 - 新增所有 backend 都需要的帧语义时，修改 `Renderer`、所有实现、本 README 与系统文档；
 - backend 私有的 instance packing、shader、pipeline merge 或 atlas 不得扩张本接口；跨 primitive
-  的语义绘制顺序由 `zeta-ui::SceneBatch` 统一表达；
-- 新 scene primitive 先进入 `zeta-ui`，每个 backend 再选择支持、降级或返回明确错误；
+  的语义绘制顺序由 `zui::SceneBatch` 统一表达；
+- 新 scene primitive 先进入 `zui`，每个 backend 再选择支持、降级或返回明确错误；
 - 当前没有 backend capability negotiation、热切换或 device-lost 后自动迁移。

@@ -2,7 +2,7 @@ use std::{mem, ops::Range};
 
 use bytemuck::{Pod, Zeroable};
 
-use zeta_ui::{BoxShadow, Color, PaintRect, Rect, UiScene};
+use zui::{BoxShadow, Color, PaintRect, Rect, UiScene};
 
 use super::{UiRenderError, UiViewport};
 

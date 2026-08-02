@@ -1,7 +1,7 @@
 use zeta_ui::{
     ActionBar, ActionBarButton, ActionBarItem, ActionBarOrientation, ActionBarStyle,
-    ButtonBackgrounds, ButtonSelection, ButtonState, ButtonStyle, Component, ComponentInspection,
-    Edges, Rect, Size, TextStyle, UiScene,
+    ButtonBackgrounds, ButtonSelection, ButtonState, ButtonStyle, Component, ComponentElement,
+    Edges, Element, Rect, Size, TextStyle, UiScene,
 };
 use zeta_ui_dispatch::{
     AccessibilityRole, AccessibilitySelection, CursorFeedback, FocusBehavior, InteractionFrame,
@@ -125,8 +125,8 @@ impl AgentSidebarNavigation {
 }
 
 impl Component for AgentSidebarNavigation {
-    fn inspection(&self) -> ComponentInspection {
-        ComponentInspection::new("AgentSidebarNavigation", self.bounds)
+    fn element(&self) -> ComponentElement {
+        Element::leaf("AgentSidebarNavigation").in_bounds(self.bounds)
     }
 
     fn paint(&self, scene: &mut UiScene) {
