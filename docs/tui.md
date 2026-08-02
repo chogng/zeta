@@ -7,10 +7,11 @@
 > 产品接口基线：[`zeta-app-server-api.md`](zeta-app-server-api.md)  
 > App Server 启动与连接基线：[`app-server-client.md`](app-server-client.md)  
 > Workspace 边界基线：[`zeta-rs-architecture.md`](zeta-rs-architecture.md)
+> 产品线归属基线：[`product-lines.md`](product-lines.md)
 
 ## 快速理解
 
-TUI 把 App Server 的权威状态转换成终端中的可交互呈现；它拥有单写者的界面状态和事件循环，
+`zeta code` 的 TUI 把 App Server 的权威状态转换成终端中的可交互呈现；它拥有单写者的界面状态和事件循环，
 不拥有产品事实或后台执行。
 
 | 发生的事情 | TUI 负责 | 不负责 |

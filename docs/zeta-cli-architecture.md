@@ -7,11 +7,13 @@
 > 本地启动与连接基线：[`app-server-client.md`](app-server-client.md)
 > 无交互执行基线：[`exec.md`](exec.md)
 > MCP Agent server：[`mcp-server.md`](mcp-server.md)
+> 三条公开产品线与宿主边界：[`product-lines.md`](product-lines.md)
 
 ## 快速理解
 
-CLI 是 Zeta 的终端产品入口：它负责命令、输入输出和退出码，但所有 Agent 工作都通过统一的
-Session-first App Server 契约执行。
+`zeta code` 是 Zeta 的 TUI 产品线；`zeta-cli` 是它的命令入口和宿主启动器，`zeta-tui` 负责
+交互呈现。CLI 负责命令、输入输出和退出码，但所有 Agent 工作都通过统一的 Session-first
+App Server 契约执行。
 
 | 用户命令 | CLI 负责 | 后端负责 |
 | --- | --- | --- |

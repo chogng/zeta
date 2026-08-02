@@ -10,7 +10,9 @@
 > UI 到 GPU 的 canonical 边界见
 > [`docs/rendering-architecture.md`](../../docs/rendering-architecture.md)。
 
-`zeta-native` 是与 Electron Desktop 和 TUI 同级的原生产品入口，在发布边界导出为 `zeterm`。
+`zeta-native` 是与 `zeta` Electron Desktop 和 `zeta code` TUI 同级的纯 Rust Desktop 产品入口，
+在发布边界导出为 `zeterm`。三条产品线的宿主边界见
+[`docs/product-lines.md`](../../docs/product-lines.md)。
 当前窗口纵切由产品拥有 `ApplicationHandler`，组合 `zeta-winit`、`zeta-renderer`、当前
 `zeta-wgpu` backend、`zui` framework 与 `zeta-ui` components，
 并在单个原生窗口中绘制 Agent ThreadTimeline 与固定底部 Agent/Shell Composer。
@@ -225,6 +227,9 @@ main
 运行：
 
 ```bash
+just zeterm
+
+# Without just:
 cargo run --manifest-path zeta-rs/Cargo.toml -p zeta-native
 ```
 

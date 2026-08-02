@@ -65,7 +65,9 @@ flowchart LR
 ## 当前状态/已实现
 
 - `light`、`dark` 与跟随操作系统的 `system` 偏好。
-- 语言中立的 `theme-entries.json` 为 Rust `ThemeLoader` 提供 `zeta`、`zeta-code` 与 `zeterm` 默认入口；入口只覆盖统一 token，不创建产品 token 或组件分支。
+- 语言中立的 `theme-entries.json` 为 Rust `ThemeLoader` 提供 `zeta`（Electron Desktop）、
+  `zeta-code`（TUI）与 `zeterm`（纯 Rust Desktop）默认入口；入口只覆盖统一 token，不创建产品
+  token 或组件分支。
 - Desktop、Native 和 TUI 使用同一 device root 下的 `configuration.json` 与 `themes/*.json`；每个错误文件独立隔离，内置主题始终可回退。Native `zeterm` 在没有显式用户主题时选择 `zeterm` 入口。
 - 121 个语义颜色 token 与 19 个标准标量尺寸 token；四种 `ColorScheme` 均在编译期解析，高对比度当前继承对应明暗默认值。
 - 不可变颜色对象、注册贡献、主题快照和生成产物。

@@ -1,4 +1,4 @@
-# Zeta Desktop 架构与协作边界
+# `zeta` Electron Desktop 架构与协作边界
 
 > 负责人：Desktop 开发者
 > Rust 对接负责人：zeta-rs 开发者
@@ -9,10 +9,11 @@
 > Chat 内 Session Inspector 的信息架构与 Plan 演进：[`chat-session-inspector.md`](chat-session-inspector.md)
 > 外部 Agent Skill 来源与加载边界：[`skills.md`](skills.md)
 > TUI 明确不提供外部 Agent 导入入口：[`tui.md`](tui.md)
+> 三条公开产品线与宿主边界：[`product-lines.md`](product-lines.md)
 
 ## 快速理解
 
-Desktop 是 Zeta 的 Electron 产品界面和平台宿主：它负责窗口、交互和系统能力，只投影后端状态，
+`zeta` 是 Zeta 的 Electron 产品界面和平台宿主：它负责窗口、交互和系统能力，只投影后端状态，
 不复制 Agent、权限或持久化规则。
 
 | 用户或开发者需求 | Desktop 负责 | 必须交给后端 |
@@ -26,7 +27,7 @@ Desktop 是 Zeta 的 Electron 产品界面和平台宿主：它负责窗口、�
 
 ## 1. 目标
 
-Desktop 是 Zeta 的 Electron 富客户端，负责窗口、浏览器、系统能力和 UI，不拥有
+`zeta` 是 Zeta 的 Electron 富客户端，负责窗口、浏览器、系统能力和 UI，不拥有
 Session、Thread、Turn、ThreadItem、审批策略或持久化状态机。
 
 Desktop 只能通过版本化 App Server API 使用 zeta-rs：

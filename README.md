@@ -1,6 +1,13 @@
 # Zeta
 
-Zeta is a Rust-first agent system with CLI, TUI, and app-server product entries.
+Zeta is a Rust-first agent system with three product lines:
+
+- **`zeta code`** — the TUI product, launched by the Rust CLI and rendered by `zeta-tui`;
+- **`zeta`** — the Electron Desktop product, with Renderer/Preload/Main on top of Rust App Server;
+- **`zeterm`** — the pure-Rust Desktop terminal product.
+
+Their host boundaries and terminal ownership are defined in
+[`docs/product-lines.md`](docs/product-lines.md).
 
 The Rust workspace lives in [`zeta-rs`](zeta-rs); Electron is a separate client under
 [`desktop`](desktop).
@@ -13,8 +20,8 @@ rule and terminal-first product structure are documented in
 
 Team responsibilities and integration contracts are documented separately:
 
-- [Desktop architecture](docs/zeta-desktop-architecture.md)
-- [CLI architecture](docs/zeta-cli-architecture.md)
+- [Desktop architecture (`zeta`)](docs/zeta-desktop-architecture.md)
+- [CLI/TUI architecture (`zeta code`)](docs/zeta-cli-architecture.md)
 - [zeta-rs architecture and public surfaces](docs/zeta-rs-architecture.md)
 - [Secret storage architecture](docs/secrets.md)
 - [Provider runtime and authentication architecture](docs/model-provider.md)
@@ -34,8 +41,8 @@ licenses and notices, including the Desktop notices in
 
 ## Run
 
-With [`just`](https://just.systems/) installed, launch the interactive terminal from the current
-source tree:
+With [`just`](https://just.systems/) installed, launch the `zeta code` TUI from the current source
+tree:
 
 ```bash
 just zeta
@@ -58,7 +65,14 @@ cargo run --manifest-path zeta-rs/Cargo.toml -p zeta-cli -- ask "explain this re
 cargo run --manifest-path zeta-rs/Cargo.toml -p zeta-cli -- exec "summarize the current changes"
 ```
 
-### Electron and Web development
+Launch the other product lines through `just`:
+
+```bash
+just zeta-desktop  # Electron Desktop
+just zeterm        # pure-Rust Desktop
+```
+
+### Electron and Web development (`zeta`)
 
 The desktop workspace uses the pnpm version pinned by `package.json` through
 [Corepack](https://nodejs.org/api/corepack.html). From the repository root,
@@ -74,6 +88,8 @@ Start the Electron desktop application:
 corepack pnpm dev:desktop
 ```
 
+The equivalent `just` command is `just zeta-desktop`.
+
 This starts Vite, watches the Electron main and preload processes, prepares the
 local development package, and opens Electron. Keep the terminal open while
 developing; use `Ctrl+C` to stop it.
@@ -85,9 +101,10 @@ corepack pnpm dev:web
 ```
 
 Open [http://127.0.0.1:5174/browser/workbench/workbench-code.html](http://127.0.0.1:5174/browser/workbench/workbench-code.html)
-after Vite reports that it is ready. Both commands start the default `code`
-product edition; the corresponding `:academic` and `:complete` variants are
-also available (for example, `corepack pnpm dev:web:academic`).
+after Vite reports that it is ready. Both commands start the default `zeta` Electron Desktop build.
+The internal `code` build edition and the corresponding `:academic` and `:complete` variants are
+documented in [`docs/product-editions.md`](docs/product-editions.md); they are not the `zeta code`
+TUI product.
 
 Electron development uses `127.0.0.1:5173`; Web development uses
 `127.0.0.1:5174`, so both modes can run at the same time. If either port is

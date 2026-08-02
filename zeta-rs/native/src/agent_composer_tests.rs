@@ -36,15 +36,15 @@ fn just_task_automatically_switches_to_shell_submission() {
         NEXT_FIXTURE_ID.fetch_add(1, Ordering::Relaxed)
     ));
     std::fs::create_dir_all(&root).unwrap();
-    std::fs::write(root.join("Justfile"), "native-dev:\n    cargo run\n").unwrap();
+    std::fs::write(root.join("Justfile"), "zeterm-dev:\n    cargo run\n").unwrap();
     let mut composer = AgentComposer::for_working_directory(&root);
 
-    composer.apply(CodeEditorCommand::Insert("just native-dev".to_owned()));
+    composer.apply(CodeEditorCommand::Insert("just zeterm-dev".to_owned()));
 
     assert_eq!(composer.mode(), ComposerMode::Shell);
     assert!(matches!(
         composer.submission(),
-        Some(ComposerSubmission::ShellCommand(command)) if command == "just native-dev"
+        Some(ComposerSubmission::ShellCommand(command)) if command == "just zeterm-dev"
     ));
 
     std::fs::remove_dir_all(root).unwrap();

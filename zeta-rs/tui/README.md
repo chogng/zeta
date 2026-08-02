@@ -5,9 +5,10 @@
 > [`docs/tui.md`](../../docs/tui.md)；App Server client contract 见
 > [`docs/app-server-client.md`](../../docs/app-server-client.md)。本文不把 Proposed 架构写成
 > 当前能力。
+> 三条产品线与宿主边界见 [`docs/product-lines.md`](../../docs/product-lines.md)。
 
-`zeta-tui` 当前是 `AppServerSession` 上的 presentation shell：它从 owned session 取得
-cloneable typed request handle 与独立 `AppServerEvents`，创建一个 Session/Thread，接受文本、
+`zeta-tui` 是 `zeta code` 产品线的 TUI 实现。它当前是 `AppServerSession` 上的 presentation
+shell：从 owned session 取得 cloneable typed request handle 与独立 `AppServerEvents`，创建一个 Session/Thread，接受文本、
 本地图片路径与系统剪贴板图片输入，订阅 active Thread、启动或中断 Turn，并用 canonical
 Thread snapshot 驱动 Ratatui 呈现。
 
@@ -83,7 +84,7 @@ completion event，不能用恢复 notification polling 规避。
 从 repository root 启动当前 embedded TUI：
 
 ```bash
-just tui
+just zeta
 ```
 
 等价的 Cargo 命令是：

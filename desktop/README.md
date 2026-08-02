@@ -1,8 +1,10 @@
-# Zeta Desktop
+# `zeta` Electron Desktop
 
-Zeta Desktop 是 Zeta 的 Electron 客户端。
+`zeta` 是 Zeta 的 Electron Desktop 产品线。它由 Renderer、Preload 和 Electron Main 组成，
+通过 App Server 使用 Rust 后端；三条公开产品线的关系见
+[`docs/product-lines.md`](../docs/product-lines.md)。
 
-Code、Academic 与 Complete 三种构建的静态入口、输出目录和 contribution 所有权以
+`code`、`academic` 与 `complete` 三种内部构建变体的静态入口、输出目录和 contribution 所有权以
 [`docs/product-editions.md`](../docs/product-editions.md) 为准；本 README 只记录 Desktop
 实现、运行与验证入口。
 

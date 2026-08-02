@@ -21,9 +21,9 @@ export interface ProductConfiguration {
   readonly rendererEntry: RendererEntryName;
 }
 
-export const CodeProduct: ProductConfiguration = {
+export const ZetaDesktopProduct: ProductConfiguration = {
   id: "code",
-  name: "Zeta Code",
+  name: "Zeta",
   rendererEntry: "workbench-code",
 };
 
@@ -40,12 +40,12 @@ export const CompleteProduct: ProductConfiguration = {
 };
 
 const products: Readonly<Record<ProductId, ProductConfiguration>> = {
-  code: CodeProduct,
+  code: ZetaDesktopProduct,
   academic: AcademicProduct,
   complete: CompleteProduct,
 };
 
-/** Resolves the selected product, defaulting local and legacy builds to Code. */
+/** Resolves the selected Electron Desktop build, defaulting local and legacy builds to Zeta. */
 export function resolveProductId(value: string | undefined): ProductId {
   if (value === undefined || value.length === 0) return "code";
   if (isProductId(value)) return value;

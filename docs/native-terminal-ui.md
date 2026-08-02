@@ -6,6 +6,8 @@
 > 下文仍出现的 terminal-first 产品描述属于历史实现记录，不再代表当前主界面。
 
 > 本文是 `zeterm` terminal compatibility 和分阶段演进的 canonical 文档。
+> 三条公开产品线与宿主边界见 [`product-lines.md`](product-lines.md)；本文只负责 `zeterm`
+> 的纯 Rust Desktop 终端实现。
 > 当前源码所有权、调用路径和测试入口见
 > [`zeta-native` README](../zeta-rs/native/README.md)；terminal grid 与 BlockList 的实现契约见
 > [`zeta-terminal` README](../zeta-rs/terminal/README.md)；文本输入、IME 与 caret 的跨 crate

@@ -55,7 +55,7 @@ fn empty_editor_paints_placeholder_and_only_exposes_a_focused_visible_caret() {
 #[test]
 fn shell_highlighting_projects_syntax_tokens_into_code_editor() {
     let mut editor = ComposerEditor::default();
-    editor.set_text("just native-dev");
+    editor.set_text("just zeterm-dev");
     editor.set_language(CodeEditorLanguage::Shell);
     let bounds = Rect::from_xywh(0.0, 0.0, 320.0, editor.preferred_height());
     let mut scene = UiScene::new(Color::WHITE);
@@ -79,6 +79,6 @@ fn shell_highlighting_projects_syntax_tokens_into_code_editor() {
         scene
             .text_blocks()
             .iter()
-            .any(|block| block.text() == "just native-dev")
+            .any(|block| block.text() == "just zeterm-dev")
     );
 }

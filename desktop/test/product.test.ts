@@ -18,7 +18,7 @@ import {
   resolvePackagedProductId,
 } from "../src/zeta/product/node/product.js";
 
-test("product selection defaults to Code and accepts every build edition", () => {
+test("product selection defaults to the Zeta Desktop build and accepts every edition", () => {
   assert.equal(resolveProductId(undefined), "code");
   assert.equal(resolveProductId(""), "code");
   for (const productId of productIds) {
@@ -31,6 +31,7 @@ test("product selection defaults to Code and accepts every build edition", () =>
     getProductConfiguration("code").rendererEntry,
     "workbench-code",
   );
+  assert.equal(getProductConfiguration("code").name, "Zeta");
   assert.equal(
     getProductConfiguration("academic").rendererEntry,
     "workbench-academic",

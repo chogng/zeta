@@ -1,20 +1,22 @@
-# Zeta 产品版本与构建边界
+# `zeta` Electron Desktop 产品版本与构建边界
 
-> 本文是 Code、Academic 与 Complete 三个 Desktop 产品版本的规范来源。
+> 本文是 `zeta` Electron Desktop 内部 `code`、`academic` 与 `complete` 三个构建变体的规范来源。
+> 它不是公开产品线命名的来源；三条产品线见 [`product-lines.md`](product-lines.md)。
 > Desktop 进程与安全边界由
 > [`zeta-desktop-architecture.md`](zeta-desktop-architecture.md) 负责。
 
 ## 快速理解
 
-Zeta 的 Desktop 源码保存在同一仓库，但从三个静态产品入口构建：
+`zeta` 的 Electron Desktop 源码保存在同一仓库，但从三个静态构建入口生成不同变体：
 
-| 产品 | `ZETA_PRODUCT` | 入口名 | Renderer 输出 |
-| --- | --- | --- | --- |
-| Zeta Code | `code` | `workbench-code` | `desktop/dist/renderer/code` |
-| Zeta Academic | `academic` | `workbench-academic` | `desktop/dist/renderer/academic` |
-| Zeta Complete | `complete` | `workbench-complete` | `desktop/dist/renderer/complete` |
+| Electron 构建变体 | `ZETA_PRODUCT` | 入口名 | Renderer 输出 | 公开产品线 |
+| --- | --- | --- | --- | --- |
+| Default Zeta Desktop | `code` | `workbench-code` | `desktop/dist/renderer/code` | `zeta` |
+| Zeta Academic edition | `academic` | `workbench-academic` | `desktop/dist/renderer/academic` | `zeta` |
+| Zeta Complete edition | `complete` | `workbench-complete` | `desktop/dist/renderer/complete` | `zeta` |
 
-`code` 是未指定 `ZETA_PRODUCT` 时的兼容默认值。三个入口集中在同一个 `src/zeta/code` 源码根；
+`code` 是当前未指定 `ZETA_PRODUCT` 时的内部默认构建 ID；它不是 `zeta code` TUI 的产品 ID。
+三个入口集中在同一个 `src/zeta/code` 源码根；
 每次 Vite 构建只把所选产品对应的 Browser/Electron HTML 入口交给 Rollup。
 
 ## 所有权与装配
@@ -27,7 +29,7 @@ Zeta 的 Desktop 源码保存在同一仓库，但从三个静态产品入口构
 contribution：
 
 ```text
-Code entry ───────→ Code contributions ───────┐
+Default Zeta entry → Code contributions ──────┐
 Academic entry ──→ Academic contributions ────┼→ host main → common main
 Complete entry ──→ Code + Academic ───────────┘
 ```
@@ -55,15 +57,15 @@ Renderer 产品目录，并从该目录与入口名确定产品身份。
 - 三个 Browser 产品模块加载后会通过 `web.factory.ts` 自动启动 Workbench。Web embedder 可在
   导入产品入口前设置 `globalThis.zetaWebWorkbenchHost`，提供真实 `ZetaRendererApi`、
   workspace 和可选容器。
-- 三个产品使用独立 HTML 标题、`ProductConfiguration` 和 Renderer 输出目录。
+- 三个 Electron 构建变体使用独立 HTML 标题、`ProductConfiguration` 和 Renderer 输出目录。
 - 各 `workbench-*.ts` 直接导入自身需要的编辑器 contribution，不额外拆分产品级
   `workbench-*.contribution.ts` 文件。
 - 共享 `EditorPart` 已通过 `EditorInput`、`IEditorPane` 和 `EditorPaneRegistry` 提供真实的编辑器
   宿主边界，包括资源匹配、显式 “Open With”、异步切换取消、布局、可见性、聚焦与释放。
-- Code 已从产品入口注册 Monaco default pane 与 Alpha optional pane。Monaco 保持默认打开，
+- Default Zeta entry 已从产品入口注册 Monaco default pane 与 Alpha optional pane。Monaco 保持默认打开，
   Alpha 可通过 `preferredEditorId` 显式选择。
 - Academic 已从产品入口注册 ProseMirror pane；它拥有基础论文 schema、历史、快捷键、布局和释放。
-- Main、Preload 和 App Server 当前由三个产品共享，尚未按产品裁剪原生能力或 Rust feature。
+- Main、Preload 和 App Server 当前由三个 Electron 构建变体共享，尚未按变体裁剪原生能力或 Rust feature。
 - 未注入 Web host 的 Browser 页面使用显式 disconnected renderer API：页面和 Workbench
   可以运行，连接状态为 `stopped`，所有 App Server 产品操作以
   `WebAppServerUnavailableError` 失败。当前 Rust App Server 只监听 `stdio://`，尚无浏览器可
@@ -103,7 +105,7 @@ model contract 的职责，不能由 pane 私自发明。
 
 ## 扩展点
 
-新增 Code 或 Academic 专属功能时，应分别从 `workbench-code.ts` 或
+新增 Default Zeta 或 Academic 专属功能时，应分别从 `workbench-code.ts` 或
 `workbench-academic.ts` 导入。Complete 入口显式导入两类 contribution，获得这些功能。
 
 Alpha、Monaco 和 ProseMirror 的模型、插件与 worker 分别归 `editor/alpha`、
@@ -124,5 +126,5 @@ corepack pnpm build:desktop:complete
 发布打包必须只收录目标产品的 Renderer 目录。把整个 `dist/renderer` 复制进安装包会破坏产品
 隔离；packaged Main 检测到零个或多个完整产品入口时会拒绝启动。
 
-CI 应分别构建三个产品，并验证每个 HTML 入口、产品标题和 Main 选择路径。共享 TypeScript
+CI 应分别构建三个 Electron 构建变体，并验证每个 HTML 入口、产品标题和 Main 选择路径。共享 TypeScript
 类型检查不能替代三次入口构建，因为未被选中的静态入口可能存在独立的解析或打包错误。

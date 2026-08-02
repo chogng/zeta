@@ -12,10 +12,10 @@ fn just_task_is_detected_from_the_workspace_manifest() {
         NEXT_FIXTURE_ID.fetch_add(1, Ordering::Relaxed)
     ));
     std::fs::create_dir_all(&root).unwrap();
-    std::fs::write(root.join("justfile"), "native-dev:\n    cargo run\n").unwrap();
+    std::fs::write(root.join("justfile"), "zeterm-dev:\n    cargo run\n").unwrap();
     let detector = ComposerShellDetector::new(&root);
 
-    assert!(detector.detects_command("just native-dev"));
+    assert!(detector.detects_command("just zeterm-dev"));
     assert!(!detector.detects_command("/model gpt-5"));
     assert!(!detector.detects_command("please fix native dev"));
 

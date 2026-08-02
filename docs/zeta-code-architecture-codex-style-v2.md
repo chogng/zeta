@@ -1,8 +1,10 @@
-# Zeta Code 长期架构
+# Zeta 共享长期架构
 
 > 日期：2026-07-25
 > 状态：开发期目标架构
 > 原则：按长期领域边界直接演进，不保留开发期旧 API 或旧持久化格式的兼容层。
+> 产品线映射：`zeta code` 是 TUI，`zeta` 是 Electron Desktop，`zeterm` 是纯 Rust Desktop；
+> 三者共享本文描述的协议、Core 与 App Server 边界。
 
 ## 快速理解
 
