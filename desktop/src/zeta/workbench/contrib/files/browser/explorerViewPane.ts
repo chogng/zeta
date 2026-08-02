@@ -52,7 +52,7 @@ export class ExplorerViewPane extends ViewPane {
     this.fileIconThemeService = fileIconThemeService;
     this.hoverService = hoverService;
     this.element.classList.add("zeta-explorer-view-pane");
-    this.titleElement.classList.add("zeta-explorer-title");
+    this.headerElement.classList.add("zeta-explorer-title");
     this.contentElement.classList.add("zeta-explorer");
     this.scrollable = this.own(new ScrollableElement({
       ownerDocument: options.ownerDocument,

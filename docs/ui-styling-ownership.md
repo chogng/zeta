@@ -29,7 +29,7 @@
 
 | 层级 | 当前代表 | 必须负责 | 禁止负责 |
 | --- | --- | --- | --- |
-| Primitive | `Button`、`ActionBar`、`ToolBar`、`TabList` | 通用 DOM、键盘行为、ARIA、基础布局和 primitive 自身状态 | Workbench 区域语义、Panel/Sidebar 特例 |
+| Primitive | `Button`、`ActionBar`、`ToolBar`、`TabList`、`PaneView` | 通用 DOM、键盘行为、ARIA、基础布局和 primitive 自身状态 | Workbench 区域语义、Panel/Sidebar 特例 |
 | Composed control | `CompositeBar`、Editor/Chat tabs control、`MenubarControl` | 领域内 item 几何、presentation variant、hover/active/selected 视觉 | Part 的位置、区域背景和网格尺寸 |
 | Part | `TitlebarPart`、`PanelPart`、`SidebarPart` | Part 根节点、标题区/内容区布局、边框、背景、直接子组件占位 | 深入修改组件内部 `.zeta-action-bar`、`.zeta-tab`、`.zeta-button` 状态 |
 | Contribution/View | `TerminalViewPane`、Explorer、Search、Chat | 自有内容、命令、View 内部交互和私有子控件 | Workbench Part 的全局布局或其他 View 的皮肤 |

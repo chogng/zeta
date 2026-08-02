@@ -37,7 +37,7 @@ export class TerminalViewPane extends ViewPane {
     this.terminalService = terminalService;
     this.themeService = themeService;
     this.element.classList.add("zeta-terminal-view");
-    this.titleElement.remove();
+    this.headerElement.remove();
     this.titleActions = this.own(new TerminalTitleActions({
       ownerDocument: options.ownerDocument,
       menuService,

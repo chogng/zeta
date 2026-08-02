@@ -53,7 +53,7 @@ export class ChatViewPane extends ViewPane {
     this.contextMenuService = contextMenuService;
     this.commandService = commandService;
     this.element.classList.add("zeta-chat-view-pane");
-    this.titleElement.hidden = true;
+    this.headerElement.hidden = true;
     this.contentElement.classList.add("zeta-chat-view");
     const viewId = `zeta-chat-view-${++chatViewInstanceId}`;
     this.titleControl = this.own(new ChatTitleControl(
