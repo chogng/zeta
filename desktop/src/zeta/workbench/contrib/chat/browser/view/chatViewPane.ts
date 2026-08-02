@@ -1,17 +1,12 @@
 import "../media/chat.css";
 import { setDisposableOwner } from "../../../../../base/common/lifecycle.js";
 import type { IMenuService } from "../../../../../platform/actions/common/menuService.js";
-import type { IContextKeyService } from "../../../../../platform/contextkey/common/contextkey.js";
 import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextMenu.js";
 import type { ICommandService } from "../../../../../platform/commands/common/commands.js";
-import { SidebarPart } from "../../../../browser/parts/sidebar/sidebarPart.js";
 import { ViewPane, type IViewPaneOptions } from "../../../../browser/parts/views/viewPane.js";
-import { ViewContainerLocation } from "../../../../common/views.js";
 import type { IWorkbenchLayoutService } from "../../../../services/layout/browser/layoutService.js";
 import type { IChatService } from "../../../../services/chat/common/chatService.js";
 import type { IActiveSessionThread, IUntitledChatSession, IWorkbenchSessionService, Session, SessionThread, ThreadId } from "../../../../services/sessions/common/sessionService.js";
-import type { IViewDescriptorService } from "../../../../services/views/common/viewDescriptorService.js";
-import { AgentSidebarVisibleContext } from "../../common/chat.js";
 import { ChatPane } from "../pane/chatPane.js";
 import { ChatTitleControl } from "./chatTitleControl.js";
 
@@ -37,7 +32,6 @@ export class ChatViewPane extends ViewPane {
   private readonly contextMenuService: IContextMenuService;
   private readonly commandService: ICommandService;
   private readonly titleControl: ChatTitleControl;
-  private readonly agentSidebar: SidebarPart;
   private readonly paneHost: HTMLDivElement;
   private readonly empty: HTMLDivElement;
   private readonly panes = new Map<string, ChatPane>();
@@ -51,8 +45,6 @@ export class ChatViewPane extends ViewPane {
     sessionService: IWorkbenchSessionService,
     menuService: IMenuService,
     contextMenuService: IContextMenuService,
-    viewDescriptorService: IViewDescriptorService,
-    contextKeyService: IContextKeyService,
     commandService: ICommandService,
     private readonly layoutService: IWorkbenchLayoutService,
   ) {
@@ -75,17 +67,6 @@ export class ChatViewPane extends ViewPane {
       menuService,
       contextMenuService,
     ));
-    this.agentSidebar = this.own(new SidebarPart({
-      ownerDocument: options.ownerDocument,
-      viewDescriptorService,
-      id: "agentSidebar",
-      location: ViewContainerLocation.AgentSidebar,
-      ariaLabel: "Agent sidebar",
-      viewsAriaLabel: "Agent sidebar views",
-    }));
-    this.agentSidebar.element.classList.add("zeta-chat-agent-sidebar");
-    const agentSidebarVisible = AgentSidebarVisibleContext.bindTo(contextKeyService);
-    this.defer(() => agentSidebarVisible.reset());
     this.paneHost = options.ownerDocument.createElement("div");
     this.paneHost.className = "zeta-chat-pane-host";
     this.empty = options.ownerDocument.createElement("div");
@@ -93,14 +74,9 @@ export class ChatViewPane extends ViewPane {
     this.empty.textContent = "Start a new chat to begin.";
     const body = options.ownerDocument.createElement("div");
     body.className = "zeta-chat-body";
-    body.append(this.paneHost, this.agentSidebar.element);
-    this.contentElement.append(this.titleControl.element, body);
+    body.append(this.paneHost);
+    this.contentElement.append(body);
     this.own(sessionService.onDidChange(() => this.syncSessions()));
-    this.own(contextKeyService.onDidChangeContext((event) => {
-      if (event.keys.has(AgentSidebarVisibleContext.key)) {
-        this.syncAgentSidebarVisibility(contextKeyService);
-      }
-    }));
     this.own(layoutService.onDidChangePartVisibility((event) => {
       if (event.partId === "auxiliarybar" && event.visible && this.sessionsInitialized) this.ensureTabForVisibleChat();
     }));
@@ -109,7 +85,6 @@ export class ChatViewPane extends ViewPane {
       for (const pane of this.panes.values()) pane.dispose();
       this.panes.clear();
     });
-    this.syncAgentSidebarVisibility(contextKeyService);
     this.syncSessions();
     void sessionService.initialize().then(() => {
       if (this.viewDisposed) return;
@@ -120,6 +95,14 @@ export class ChatViewPane extends ViewPane {
 
   override focus(): void {
     this.activePane?.focus();
+  }
+
+  override get partTitleElement(): HTMLElement {
+    return this.titleControl.partTitleElement;
+  }
+
+  override get partTitleActionsElement(): HTMLElement {
+    return this.titleControl.partTitleActionsElement;
   }
 
   private syncSessions(): void {
@@ -269,10 +252,6 @@ export class ChatViewPane extends ViewPane {
     return [...this.panes.values()].find((pane) => pane.element.id === tabId);
   }
 
-  private syncAgentSidebarVisibility(contextKeyService: IContextKeyService): void {
-    const visible = contextKeyService.getValue<boolean>(AgentSidebarVisibleContext.key) ?? AgentSidebarVisibleContext.defaultValue;
-    this.agentSidebar.setVisible(visible);
-  }
 }
 
 function isActiveThread(session: Session, threadId: ThreadId): boolean {

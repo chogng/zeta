@@ -17,9 +17,9 @@ import { CommandService } from "../src/zeta/workbench/services/commands/common/c
 import type { ViewPaneContainer } from "../src/zeta/workbench/browser/parts/views/viewPaneContainer.js";
 import { ViewContainerLocation, WorkbenchViewRegistry } from "../src/zeta/workbench/common/views.js";
 import { ChatPaneModel } from "../src/zeta/workbench/contrib/chat/browser/pane/chatPaneModel.js";
-import { CHAT_VIEW_CONTAINER_ID, CHAT_VIEW_ID, MOVE_CHAT_TO_EDITOR_COMMAND_ID, MOVE_CHAT_TO_NEW_WINDOW_COMMAND_ID, NEW_CHAT_COMMAND_ID, OPEN_CHAT_BROWSER_COMMAND_ID, OPEN_CHAT_SETTINGS_COMMAND_ID, SHOW_CHAT_HISTORY_COMMAND_ID, TOGGLE_AGENT_SIDEBAR_COMMAND_ID } from "../src/zeta/workbench/contrib/chat/common/chat.js";
+import { CHAT_AGENT_SIDEBAR_VIEW_CONTAINER_ID, CHAT_AGENT_SIDEBAR_VIEW_ID, CHAT_VIEW_CONTAINER_ID, CHAT_VIEW_ID, MOVE_CHAT_TO_EDITOR_COMMAND_ID, MOVE_CHAT_TO_NEW_WINDOW_COMMAND_ID, NEW_CHAT_COMMAND_ID, OPEN_CHAT_BROWSER_COMMAND_ID, OPEN_CHAT_SETTINGS_COMMAND_ID, SHOW_CHAT_HISTORY_COMMAND_ID, TOGGLE_AGENT_SIDEBAR_COMMAND_ID } from "../src/zeta/workbench/contrib/chat/common/chat.js";
 import { ISettingsService } from "../src/zeta/workbench/services/preferences/common/settings.js";
-import type { IWorkbenchLayoutService, WorkbenchPartId, WorkbenchPartVisibilityChangeEvent } from "../src/zeta/workbench/services/layout/browser/layoutService.js";
+import { IWorkbenchLayoutService, type WorkbenchPartId, type WorkbenchPartVisibilityChangeEvent } from "../src/zeta/workbench/services/layout/browser/layoutService.js";
 import { ChatService } from "../src/zeta/workbench/services/chat/browser/chatService.js";
 import { WorkbenchSessionService } from "../src/zeta/workbench/services/sessions/browser/sessionService.js";
 import { IWorkbenchSessionService } from "../src/zeta/workbench/services/sessions/common/sessionService.js";
@@ -83,6 +83,14 @@ test("Chat contribution owns the fixed Auxiliary Bar view", () => {
     registry.getViews(CHAT_VIEW_CONTAINER_ID).map((view) => view.id),
     [CHAT_VIEW_ID],
   );
+  assert.equal(
+    registry.getDefaultViewContainer(ViewContainerLocation.AgentSidebar)?.id,
+    CHAT_AGENT_SIDEBAR_VIEW_CONTAINER_ID,
+  );
+  assert.deepEqual(
+    registry.getViews(CHAT_AGENT_SIDEBAR_VIEW_CONTAINER_ID).map((view) => view.id),
+    [CHAT_AGENT_SIDEBAR_VIEW_ID],
+  );
 });
 
 test("Chat title separates Session tabs from its action toolbar", async () => {
@@ -117,6 +125,21 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
   using commands = new CommandService(services);
   const menuService = new MenuService(commands, contextKeys);
   const layout = testLayoutService();
+  let openedAgentSidebarViewId: string | undefined;
+  services.set(IWorkbenchLayoutService, layout);
+  services.set(IViewsService, {
+    openView: (viewId) => {
+      openedAgentSidebarViewId = viewId;
+      layout.showPart("agentSidebar");
+      return {
+        id: viewId,
+        focus() {},
+        isVisible: () => true,
+        setVisible() {},
+      };
+    },
+    focusView: () => true,
+  });
   let shownContextMenuActions: readonly IAction[] = [];
   const contextMenuService = {
     showContextMenu: (options: { readonly actions?: readonly IAction[] }) => {
@@ -133,32 +156,32 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
     sessions,
     menuService,
     contextMenuService,
-    viewDescriptors,
-    contextKeys,
     commands,
     layout,
   );
-  dom.window.document.body.append(pane.element);
+  const title = dom.window.document.createElement("div");
+  title.className = "zeta-pane-composite-title";
+  title.append(pane.partTitleElement, pane.partTitleActionsElement);
+  dom.window.document.body.append(title, pane.element);
 
   await sessions.initialize();
   await nextTask();
 
-  const title = pane.element.querySelector(".zeta-chat-title-control");
-  const tablist = title?.querySelector(
+  const tablist = title.querySelector(
     ".zeta-chat-tabs-control .zeta-action-bar",
   );
-  const toolbars = title?.querySelectorAll(
+  const toolbar = title.querySelector(
     ".zeta-chat-title-actions > .zeta-action-bar",
   );
-  const toolbar = toolbars?.[0];
-  const layoutToolbar = toolbars?.[1];
+  const layoutToolbar = title.querySelector<HTMLElement>(
+    ".zeta-chat-title-layout-actions",
+  );
   assert.equal(tablist?.getAttribute("role"), "tablist");
   assert.equal(toolbar?.getAttribute("role"), "toolbar");
   assert.equal(toolbar?.classList.contains("zeta-toolbar"), true);
-  assert.equal(toolbars?.length, 2);
   assert.equal(
-    tablist?.closest(".zeta-chat-tabs-control")?.nextElementSibling,
-    toolbar?.parentElement,
+    pane.partTitleElement.nextElementSibling,
+    pane.partTitleActionsElement,
   );
   assert.deepEqual(
     [...toolbar?.querySelectorAll<HTMLElement>("[data-action-id]") ?? []]
@@ -183,14 +206,21 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
   assert.ok(layoutToolbar?.querySelector(
     `[data-action-id="${TOGGLE_AGENT_SIDEBAR_COMMAND_ID}"]`,
   ));
-  const agentSidebar = pane.element.querySelector<HTMLElement>(
-    "[data-part='agentSidebar']",
+  await commands.executeCommand(TOGGLE_AGENT_SIDEBAR_COMMAND_ID);
+  assert.equal(openedAgentSidebarViewId, CHAT_AGENT_SIDEBAR_VIEW_ID);
+  assert.equal(layout.isPartVisible("agentSidebar"), true);
+  assert.equal(contextKeys.getValue("agentSidebarVisible"), true);
+  assert.equal(layoutToolbar?.hidden, true);
+  assert.deepEqual(
+    menuService.getMenuActions(MenuId.AgentSidebarTitle)
+      .flatMap(([, actions]) => actions)
+      .map((action) => action.id),
+    [TOGGLE_AGENT_SIDEBAR_COMMAND_ID],
   );
-  assert.equal(agentSidebar?.hidden, true);
   await commands.executeCommand(TOGGLE_AGENT_SIDEBAR_COMMAND_ID);
-  assert.equal(agentSidebar?.hidden, false);
-  await commands.executeCommand(TOGGLE_AGENT_SIDEBAR_COMMAND_ID);
-  assert.equal(agentSidebar?.hidden, true);
+  assert.equal(layout.isPartVisible("agentSidebar"), false);
+  assert.equal(contextKeys.getValue("agentSidebarVisible"), false);
+  assert.equal(layoutToolbar?.hidden, false);
   const chatActions = menuService.getMenuActions(MenuId.ChatTitle)
     .filter(([group]) => group !== "navigation")
     .flatMap(([, actions]) => actions);
@@ -240,7 +270,7 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
   assert.equal(panel?.id, tabs?.[0]?.getAttribute("aria-controls"));
   assert.equal(panel?.getAttribute("aria-labelledby"), tabs?.[0]?.id);
   assert.equal(
-    pane.element.querySelector(
+    pane.partTitleElement.querySelector(
       ".zeta-chat-tabs-control .zeta-scrollable-element",
     )?.getAttribute("data-scroll-direction"),
     "horizontal",
@@ -291,19 +321,19 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
   assert.equal(sessions.active?.session.sessionId, "session-2");
   assert.equal(sessions.active?.threadId, "thread-2");
   assert.deepEqual(
-    [...pane.element.querySelectorAll<HTMLElement>("[role='tab']")]
+    [...pane.partTitleElement.querySelectorAll<HTMLElement>("[role='tab']")]
       .map((tab) => tab.getAttribute("aria-selected")),
     ["false", "true"],
   );
   assert.deepEqual([...chatPanes].map((chatPane) => chatPane.hidden), [true, false]);
   typeAlphaText(dom.window, composerInputs[1], "Second draft");
-  pane.element.querySelectorAll<HTMLButtonElement>("[role='tab']")[0]?.click();
+  pane.partTitleElement.querySelectorAll<HTMLButtonElement>("[role='tab']")[0]?.click();
   assert.equal(sessions.active?.session.sessionId, "session-1");
   assert.deepEqual([...chatPanes].map((chatPane) => chatPane.hidden), [false, true]);
   assert.equal(chatPanes[0]?.querySelector(".zeta-alpha-editor-line-text")?.textContent, "First draft");
   assert.equal(chatPanes[1]?.querySelector(".zeta-alpha-editor-line-text")?.textContent, "Second draft");
 
-  const closeButtons = pane.element.querySelectorAll<HTMLButtonElement>(
+  const closeButtons = pane.partTitleElement.querySelectorAll<HTMLButtonElement>(
     `[data-action-id="${TAB_CLOSE_ACTION_ID}"] button`,
   );
   assert.equal(closeButtons.length, 2);
@@ -323,7 +353,7 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
   );
   assert.equal(sessions.active?.session.sessionId, "session-2");
   assert.deepEqual(
-    [...pane.element.querySelectorAll<HTMLElement>("[role='tab']")]
+    [...pane.partTitleElement.querySelectorAll<HTMLElement>("[role='tab']")]
       .map((tab) => ({
         label: tab.textContent,
         selected: tab.getAttribute("aria-selected"),
@@ -336,20 +366,20 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
     "session-2",
   );
 
-  pane.element.querySelector<HTMLButtonElement>(`[data-action-id="${TAB_CLOSE_ACTION_ID}"] button`)?.click();
+  pane.partTitleElement.querySelector<HTMLButtonElement>(`[data-action-id="${TAB_CLOSE_ACTION_ID}"] button`)?.click();
   await waitFor(() => !layout.isPartVisible("auxiliarybar"));
-  assert.equal(pane.element.querySelectorAll("[role='tab']").length, 0);
+  assert.equal(pane.partTitleElement.querySelectorAll("[role='tab']").length, 0);
   assert.equal(sessions.active, undefined);
   assert.equal(sessions.untitledSessions.length, 0);
 
   layout.showPart("auxiliarybar");
-  await waitFor(() => pane.element.querySelectorAll("[role='tab']").length === 1);
-  assert.equal(pane.element.querySelector<HTMLElement>("[role='tab']")?.textContent, "New Chat");
+  await waitFor(() => pane.partTitleElement.querySelectorAll("[role='tab']").length === 1);
+  assert.equal(pane.partTitleElement.querySelector<HTMLElement>("[role='tab']")?.textContent, "New Chat");
   assert.equal(sessions.untitledSessions.length, 1);
 
-  pane.element.querySelector<HTMLButtonElement>(`[data-action-id="${TAB_CLOSE_ACTION_ID}"] button`)?.click();
+  pane.partTitleElement.querySelector<HTMLButtonElement>(`[data-action-id="${TAB_CLOSE_ACTION_ID}"] button`)?.click();
   assert.equal(layout.isPartVisible("auxiliarybar"), false);
-  assert.equal(pane.element.querySelectorAll("[role='tab']").length, 0);
+  assert.equal(pane.partTitleElement.querySelectorAll("[role='tab']").length, 0);
   assert.equal(sessions.untitledSessions.length, 0);
 
   dom.window.close();
@@ -407,8 +437,6 @@ test("an empty Session list opens an untitled session and persists it on its fir
     sessions,
     menuService,
     contextMenuService,
-    viewDescriptors,
-    contextKeys,
     commands,
     layout,
   );
@@ -417,7 +445,7 @@ test("an empty Session list opens an untitled session and persists it on its fir
   await sessions.initialize();
   await nextTask();
 
-  const tabs = pane.element.querySelectorAll<HTMLButtonElement>("[role='tab']");
+  const tabs = pane.partTitleElement.querySelectorAll<HTMLButtonElement>("[role='tab']");
   assert.equal(tabs.length, 1);
   assert.deepEqual(
     [...tabs].map((tab) => ({
@@ -501,8 +529,6 @@ test("the New Chat slash command opens an untitled session", async () => {
     sessions,
     menuService,
     contextMenuService,
-    viewDescriptors,
-    contextKeys,
     commands,
     layout,
   );
@@ -520,10 +546,10 @@ test("the New Chat slash command opens an untitled session", async () => {
     cancelable: true,
     key: "Enter",
   }));
-  await waitFor(() => pane.element.querySelectorAll("[role='tab']").length === 2);
+  await waitFor(() => pane.partTitleElement.querySelectorAll("[role='tab']").length === 2);
 
   assert.deepEqual(
-    [...pane.element.querySelectorAll<HTMLElement>("[role='tab']")].map((tab) => ({
+    [...pane.partTitleElement.querySelectorAll<HTMLElement>("[role='tab']")].map((tab) => ({
       label: tab.textContent,
       selected: tab.getAttribute("aria-selected"),
     })),
@@ -574,8 +600,6 @@ test("failed first send keeps the untitled session and its input draft", async (
     sessions,
     menuService,
     contextMenuService,
-    viewDescriptors,
-    contextKeys,
     commands,
     layout,
   );
@@ -644,8 +668,6 @@ test("one Session retains one Chat pane while its selected Thread changes", asyn
     sessions,
     menuService,
     contextMenuService,
-    viewDescriptors,
-    contextKeys,
     commands,
     layout,
   );
@@ -654,7 +676,7 @@ test("one Session retains one Chat pane while its selected Thread changes", asyn
   await sessions.initialize();
   await nextTask();
 
-  assert.equal(pane.element.querySelectorAll("[role='tab']").length, 1);
+  assert.equal(pane.partTitleElement.querySelectorAll("[role='tab']").length, 1);
   const chatPane = pane.element.querySelector<HTMLElement>(".zeta-chat-pane-host > .zeta-chat");
   assert.ok(chatPane);
   assert.equal(chatPane.dataset.sessionId, "session-1");
@@ -667,7 +689,7 @@ test("one Session retains one Chat pane while its selected Thread changes", asyn
     pane.element.querySelector(".zeta-chat-pane-host > .zeta-chat"),
     chatPane,
   );
-  assert.equal(pane.element.querySelectorAll("[role='tab']").length, 1);
+  assert.equal(pane.partTitleElement.querySelectorAll("[role='tab']").length, 1);
   assert.equal(chatPane.dataset.threadId, "thread-2");
   dom.window.close();
 });

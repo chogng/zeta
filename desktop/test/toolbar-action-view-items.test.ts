@@ -199,6 +199,125 @@ test("menu toolbar keeps navigation inline and moves other groups into More Acti
   Reflect.deleteProperty(globalThis, "window");
 });
 
+test("menu toolbar projects empty state as a stable visual class", async () => {
+  const dom = new JSDOM("<!doctype html><body></body>");
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    value: dom.window,
+  });
+  const [
+    { MenuId, MenusRegistry },
+    { MenuService },
+    { CommandsRegistry },
+    { ContextKeyExpr, ContextKeyService },
+    { ServiceCollection },
+    { CommandService },
+    { DisposableStore },
+    { MenuWorkbenchToolBar },
+  ] = await Promise.all([
+    import("../src/zeta/platform/actions/common/actions.js"),
+    import("../src/zeta/platform/actions/common/menuService.js"),
+    import("../src/zeta/platform/commands/common/commands.js"),
+    import("../src/zeta/platform/contextkey/common/contextkey.js"),
+    import("../src/zeta/platform/instantiation/common/instantiation.js"),
+    import("../src/zeta/workbench/services/commands/common/commandService.js"),
+    import("../src/zeta/base/common/lifecycle.js"),
+    import("../src/zeta/platform/actions/browser/toolbar.js"),
+  ]);
+  using registrations = new DisposableStore();
+  const menuId = new MenuId("test.toolbar.empty-state");
+  const actionId = "test.toolbar.visible-action";
+  registrations.add(CommandsRegistry.register(actionId, () => undefined));
+  registrations.add(MenusRegistry.appendMenuItem(menuId, {
+    command: { id: actionId, title: "Visible action" },
+    group: "navigation",
+    when: ContextKeyExpr.has("test.toolbar.visible"),
+  }));
+  const contexts = registrations.add(new ContextKeyService());
+  const toolbar = new MenuWorkbenchToolBar(
+    new MenuService(new CommandService(new ServiceCollection()), contexts),
+    { showContextMenu() {} },
+    menuId,
+    dom.window.document,
+  );
+  dom.window.document.body.append(toolbar.element);
+
+  assert.equal(toolbar.element.hidden, true);
+  assert.equal(toolbar.element.classList.contains("empty"), true);
+  contexts.setContext("test.toolbar.visible", true);
+  assert.equal(toolbar.element.hidden, false);
+  assert.equal(toolbar.element.classList.contains("empty"), false);
+  contexts.setContext("test.toolbar.visible", false);
+  assert.equal(toolbar.element.hidden, true);
+  assert.equal(toolbar.element.classList.contains("empty"), true);
+
+  toolbar.dispose();
+  dom.window.close();
+  Reflect.deleteProperty(globalThis, "window");
+});
+
+test("menu toolbar retains action slots for enablement and toggle changes", async () => {
+  const dom = new JSDOM("<!doctype html><body></body>");
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    value: dom.window,
+  });
+  const [
+    { MenuId, MenusRegistry },
+    { MenuService },
+    { CommandsRegistry },
+    { ContextKeyExpr, ContextKeyService },
+    { ServiceCollection },
+    { CommandService },
+    { DisposableStore },
+    { MenuWorkbenchToolBar },
+  ] = await Promise.all([
+    import("../src/zeta/platform/actions/common/actions.js"),
+    import("../src/zeta/platform/actions/common/menuService.js"),
+    import("../src/zeta/platform/commands/common/commands.js"),
+    import("../src/zeta/platform/contextkey/common/contextkey.js"),
+    import("../src/zeta/platform/instantiation/common/instantiation.js"),
+    import("../src/zeta/workbench/services/commands/common/commandService.js"),
+    import("../src/zeta/base/common/lifecycle.js"),
+    import("../src/zeta/platform/actions/browser/toolbar.js"),
+  ]);
+  using registrations = new DisposableStore();
+  const menuId = new MenuId("test.toolbar.retained-actions");
+  const actionId = "test.toolbar.retained-action";
+  registrations.add(CommandsRegistry.register(actionId, () => undefined));
+  registrations.add(MenusRegistry.appendMenuItem(menuId, {
+    command: {
+      id: actionId,
+      title: "Retained action",
+      precondition: ContextKeyExpr.has("test.toolbar.ready"),
+      toggled: ContextKeyExpr.has("test.toolbar.active"),
+    },
+    group: "navigation",
+  }));
+  const contexts = registrations.add(new ContextKeyService());
+  const toolbar = new MenuWorkbenchToolBar(
+    new MenuService(new CommandService(new ServiceCollection()), contexts),
+    { showContextMenu() {} },
+    menuId,
+    dom.window.document,
+  );
+  dom.window.document.body.append(toolbar.element);
+  const slot = toolbar.element.querySelector<HTMLElement>(`[data-action-id='${actionId}']`);
+  assert.ok(slot);
+
+  contexts.setContext("test.toolbar.ready", true);
+  assert.equal(toolbar.element.querySelector(`[data-action-id='${actionId}']`), slot);
+  assert.equal(slot.querySelector("button")?.disabled, false);
+
+  contexts.setContext("test.toolbar.active", true);
+  assert.equal(toolbar.element.querySelector(`[data-action-id='${actionId}']`), slot);
+  assert.equal(slot.querySelector("button")?.classList.contains("checked"), true);
+
+  toolbar.dispose();
+  dom.window.close();
+  Reflect.deleteProperty(globalThis, "window");
+});
+
 test("More Actions opens an anchored Menu with actionable list items", async () => {
   const dom = new JSDOM("<!doctype html><body><main></main></body>");
   Object.defineProperty(dom.window.HTMLElement.prototype, "scrollTo", {

@@ -1,16 +1,9 @@
-.zeta-workbench-sidebar {
-  margin-right: 2px;
-  margin-left: 4px;
+.zeta-workbench-sidebar,
+.zeta-workbench-agentSidebar {
   border: 1px solid var(--zeta-border);
   border-radius: 8px;
 }
 .zeta-sidebar-part {
   background: var(--zeta-side-bar-background);
-}
-.zeta-sidebar-part > .zeta-composite-bar {
-  flex: 0 0 35px;
-  height: 35px;
-  min-height: 35px;
-  width: 100%;
 }
 .zeta-sidebar-part > .zeta-composite-content { overflow: auto; }

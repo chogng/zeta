@@ -7,6 +7,7 @@ export const workbenchPartIds = [
   "statusbar",
   "sidebar",
   "auxiliarybar",
+  "agentSidebar",
   "editor",
   "panel",
 ] as const;

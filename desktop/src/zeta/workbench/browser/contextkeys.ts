@@ -9,6 +9,7 @@ import type {
   IWorkspaceContextService,
 } from "../../platform/workspace/common/workspace.js";
 import {
+  AgentSidebarVisibleContext,
   AuxiliaryBarVisibleContext,
   EditorAreaVisibleContext,
   FocusedViewContext,
@@ -84,6 +85,7 @@ export function bindWorkbenchPartVisibilityContextKeys(
 const visibilityContextPartIds = [
   "sidebar",
   "auxiliarybar",
+  "agentSidebar",
   "panel",
   "editor",
 ] as const satisfies readonly WorkbenchPartId[];
@@ -99,6 +101,9 @@ function applyWorkbenchPartVisibilityContext(
       break;
     case "auxiliarybar":
       contextKeyService.setContext(AuxiliaryBarVisibleContext.key, visible);
+      break;
+    case "agentSidebar":
+      contextKeyService.setContext(AgentSidebarVisibleContext.key, visible);
       break;
     case "panel":
       contextKeyService.setContext(PanelVisibleContext.key, visible);

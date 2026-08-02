@@ -6,17 +6,15 @@ import type { IMenuService } from "../../../../../platform/actions/common/menuSe
 import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextMenu.js";
 import { ChatTabsControl, type ChatTab, type ChatTabsDelegate } from "./chatTabsControl.js";
 
-/** Hosts Chat tabs and the independent Chat action toolbar. */
+/** Owns Chat's title content and action projections. */
 export class ChatTitleControl extends DisposableOwner {
   static readonly HEIGHT = 35;
 
-  readonly element: HTMLDivElement;
   private readonly tabs: ChatTabsControl;
+  private readonly actionsElement: HTMLDivElement;
 
   constructor(ownerDocument: Document, idPrefix: string, delegate: ChatTabsDelegate, menuService: IMenuService, contextMenuService: IContextMenuService) {
     super();
-    this.element = ownerDocument.createElement("div");
-    this.element.className = "zeta-chat-title-control";
     this.tabs = this.own(new ChatTabsControl(ownerDocument, idPrefix, delegate));
     const toolbar = this.own(new MenuWorkbenchToolBar(
       menuService,
@@ -33,11 +31,19 @@ export class ChatTitleControl extends DisposableOwner {
       { highlightToggledItems: true },
     ));
     layoutToolbar.element.setAttribute("aria-label", "Chat layout");
-    const actions = ownerDocument.createElement("div");
-    actions.className = "zeta-chat-title-actions";
-    actions.append(toolbar.element, layoutToolbar.element);
-    this.element.append(this.tabs.element, actions);
-    this.defer(() => this.element.remove());
+    layoutToolbar.element.classList.add("zeta-chat-title-layout-actions");
+    this.actionsElement = ownerDocument.createElement("div");
+    this.actionsElement.className = "zeta-chat-title-actions";
+    this.actionsElement.append(toolbar.element, layoutToolbar.element);
+    this.defer(() => this.actionsElement.remove());
+  }
+
+  get partTitleElement(): HTMLElement {
+    return this.tabs.element;
+  }
+
+  get partTitleActionsElement(): HTMLElement {
+    return this.actionsElement;
   }
 
   setTabs(entries: readonly ChatTab[], activeTabId: string | undefined): ReadonlyMap<string, string> {

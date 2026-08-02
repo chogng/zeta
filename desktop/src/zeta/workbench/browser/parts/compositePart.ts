@@ -4,8 +4,8 @@ import { PaneComposite } from "./views/paneComposite.js";
 /**
  * Workbench Part that retains and activates one PaneComposite at a time.
  *
- * Subclasses place their location-specific CompositeBar independently. The
- * shared content area hosts the active Composite.
+ * The shared content area hosts the active Composite. Pane-like subclasses
+ * add their standard title and CompositeBar through PaneCompositePart.
  */
 export abstract class CompositePart extends WorkbenchPart {
   private readonly composites = new Map<string, PaneComposite>();
@@ -13,7 +13,6 @@ export abstract class CompositePart extends WorkbenchPart {
 
   protected constructor(id: string, ownerDocument: Document) {
     super(id, ownerDocument);
-    this.titleElement.remove();
     this.contentElement.classList.add("zeta-composite-content");
     this.defer(() => this.composites.clear());
   }

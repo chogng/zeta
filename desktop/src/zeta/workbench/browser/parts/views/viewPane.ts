@@ -86,7 +86,12 @@ export abstract class ViewPane extends DisposableOwner implements IView {
   }
 
   /** Contextual commands rendered by a host title toolbar, when available. */
-  get titleActionsElement(): HTMLElement | undefined {
+  get partTitleActionsElement(): HTMLElement | undefined {
+    return undefined;
+  }
+
+  /** Optional title control projected into the hosting Pane Composite Part. */
+  get partTitleElement(): HTMLElement | undefined {
     return undefined;
   }
 

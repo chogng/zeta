@@ -24,6 +24,7 @@ const groups = [
     label: "界面与体验",
     files: [
       "ui-styling-ownership",
+      "workbench-pane-composite-design",
       "design-tokens",
       "menu-system",
       "icons",

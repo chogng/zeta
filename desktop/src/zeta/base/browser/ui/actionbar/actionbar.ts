@@ -1,6 +1,6 @@
 import { addDisposableListener } from "../../dom.js";
 import type { IAction } from "../../../common/actions.js";
-import { DisposableOwner, ResettableDisposableGroup } from "../../../common/lifecycle.js";
+import { DisposableOwner, DisposableStore } from "../../../common/lifecycle.js";
 import { type ActionViewItem, createActionViewItem } from "./actionViewItems.js";
 
 export type ActionBarOrientation = "horizontal" | "vertical";
@@ -19,6 +19,13 @@ export interface ActionBarOptions {
   readonly highlightToggledItems?: boolean;
 }
 
+interface ActionBarEntry {
+  action: IAction;
+  readonly container: HTMLElement;
+  item: ActionViewItem;
+  store: DisposableStore;
+}
+
 /**
  * Owns action arrangement and composite-widget keyboard navigation.
  *
@@ -27,12 +34,7 @@ export interface ActionBarOptions {
  */
 export class ActionBar extends DisposableOwner {
   readonly element: HTMLDivElement;
-  private readonly items = this.own(new ResettableDisposableGroup());
-  private readonly entries: Array<{
-    readonly action: IAction;
-    readonly container: HTMLElement;
-    readonly item: ActionViewItem;
-  }> = [];
+  private readonly entries: ActionBarEntry[] = [];
   private readonly actionViewItemProvider: ActionViewItemProvider | undefined;
   private readonly orientation: ActionBarOrientation;
   private tabStop: ActionViewItem | undefined;
@@ -63,6 +65,7 @@ export class ActionBar extends DisposableOwner {
       );
       if (entry?.action.enabled) this._setTabStop(entry.item);
     }));
+    this.defer(() => this.clearActions());
     this.setActions(options.actions ?? []);
   }
 
@@ -72,27 +75,33 @@ export class ActionBar extends DisposableOwner {
     container.classList.toggle("icon", action.icon !== undefined);
     container.dataset.actionId = action.id;
     container.setAttribute("role", "presentation");
-    const item = this.items.add(
-      this.actionViewItemProvider?.(action) ??
-        createActionViewItem(action),
-    );
+    const entry = this.createEntry(action, container);
     this.element.append(container);
-    item.render(container);
-    this.entries.push({ action, container, item });
+    this.entries.push(entry);
     if (action.enabled && !this.tabStop) {
-      this._setTabStop(item);
+      this._setTabStop(entry.item);
     } else {
-      item.setTabbable(false);
+      entry.item.setTabbable(false);
     }
-    return item;
+    return entry.item;
   }
 
   setActions(actions: readonly IAction[]): void {
-    this.items.clear();
-    this.entries.length = 0;
+    this.clearActions();
     this.tabStop = undefined;
     this.element.replaceChildren();
     for (const action of actions) this.add(action);
+  }
+
+  /** Updates retained action slots when menu structure and ordering are stable. */
+  updateActions(actions: readonly IAction[]): void {
+    if (!this.hasMatchingStructure(actions)) {
+      this.setActions(actions);
+      return;
+    }
+    for (let index = 0; index < actions.length; index += 1) {
+      this.replaceEntry(this.entries[index]!, actions[index]!);
+    }
   }
 
   /** Selects the action that participates in page-level Tab navigation. */
@@ -147,6 +156,40 @@ export class ActionBar extends DisposableOwner {
     this.tabStop?.setTabbable(false);
     this.tabStop = item;
     item.setTabbable(true);
+  }
+
+  private clearActions(): void {
+    for (const entry of this.entries) entry.store.dispose();
+    this.entries.length = 0;
+  }
+
+  private createEntry(action: IAction, container: HTMLElement): ActionBarEntry {
+    const store = new DisposableStore();
+    const item = store.add(
+      this.actionViewItemProvider?.(action) ??
+        createActionViewItem(action),
+    );
+    item.render(container);
+    return { action, container, item, store };
+  }
+
+  private hasMatchingStructure(actions: readonly IAction[]): boolean {
+    return actions.length === this.entries.length && actions.every(
+      (action, index) => action.id === this.entries[index]?.action.id,
+    );
+  }
+
+  private replaceEntry(entry: ActionBarEntry, action: IAction): void {
+    const wasTabStop = entry.item === this.tabStop;
+    entry.store.dispose();
+    entry.container.replaceChildren();
+    entry.container.classList.toggle("icon", action.icon !== undefined);
+    entry.action = action;
+    const replacement = this.createEntry(action, entry.container);
+    entry.item = replacement.item;
+    entry.store = replacement.store;
+    if (wasTabStop) this.tabStop = entry.item;
+    entry.item.setTabbable(wasTabStop);
   }
 
   private navigationDirection(

@@ -1,11 +1,8 @@
 import "./panelpart.css";
 import type { IContextMenuProvider } from "../../../../base/browser/contextmenu.js";
-import type { IDimension } from "../../../../base/browser/geometry.js";
-import { type Event } from "../../../../base/common/event.js";
 import { ViewContainerLocation } from "../../../common/views.js";
 import type { IViewDescriptorService } from "../../../services/views/common/viewDescriptorService.js";
-import { CompositePart } from "../compositePart.js";
-import { CompositeBar, type CompositeBarSelectionEvent } from "../compositebar/compositeBar.js";
+import { PaneCompositePart } from "../paneCompositePart.js";
 
 /** Construction inputs for the bottom Panel Composite host. */
 export interface PanelPartOptions {
@@ -15,50 +12,33 @@ export interface PanelPartOptions {
 }
 
 /** Bottom tool region with Panel tabs and a contextual title toolbar. */
-export class PanelPart extends CompositePart {
-  readonly compositeBar: CompositeBar;
-  readonly onDidSelectComposite: Event<CompositeBarSelectionEvent>;
-  private readonly actionsElement: HTMLDivElement;
-
+export class PanelPart extends PaneCompositePart {
   override get minimumHeight(): number { return 80; }
 
   constructor(options: PanelPartOptions) {
-    super("panel", options.ownerDocument);
-    this.element.setAttribute("aria-label", "Panel");
-    this.compositeBar = this.own(new CompositeBar({
+    super({
       ownerDocument: options.ownerDocument,
       viewDescriptorService: options.viewDescriptorService,
+      id: "panel",
       location: ViewContainerLocation.Panel,
-      ariaLabel: "Panel views",
-      presentation: "label",
-      contextMenuProvider: options.contextMenuProvider,
-    }));
-    this.onDidSelectComposite = this.compositeBar.onDidSelectComposite;
-    const titleControl = options.ownerDocument.createElement("div");
-    titleControl.className = "zeta-panel-title-control";
-    this.actionsElement = options.ownerDocument.createElement("div");
-    this.actionsElement.className = "zeta-panel-title-actions";
-    titleControl.append(this.compositeBar.element, this.actionsElement);
-    this.contentElement.before(titleControl);
+      ariaLabel: "Panel",
+      viewsAriaLabel: "Panel views",
+      compositeBarPresentation: "label",
+      compositeBarContextMenuProvider: options.contextMenuProvider,
+    });
+    this.titleElement.classList.add("zeta-panel-title-control");
+    this.titleActionsSlotElement.classList.add("zeta-panel-title-actions");
     this.own(this.compositeBar.onDidChangeOverflowActions(() => {
       this.updateTitleActions();
     }));
-  }
-
-  setActiveComposite(compositeId: string): void {
-    this.compositeBar.setActiveComposite(compositeId);
-  }
-
-  override layout(_dimension: IDimension): void {
-    this.compositeBar.layout();
   }
 
   override showComposite(compositeId: string): void {
     this.getComposite(this.activeCompositeId ?? "")
       ?.setTitleSecondaryActions([]);
     super.showComposite(compositeId);
-    this.actionsElement.replaceChildren(
-      ...optionalElement(this.getComposite(compositeId)?.titleActionsElement),
+    this.titleActionsSlotElement.replaceChildren(
+      ...optionalElement(this.getComposite(compositeId)?.partTitleActionsElement),
     );
     this.updateTitleActions();
   }

@@ -118,9 +118,13 @@ test("menu actions react to visibility, enablement, and toggle context", () => {
   const contexts = registrations.add(new ContextKeyService());
   const menus = new MenuService(commands, contexts);
   const menu = registrations.add(menus.createMenu(menuId));
-  let changes = 0;
-  registrations.add(menu.onDidChange(() => {
-    changes += 1;
+  const changes: Array<{
+    readonly isStructuralChange: boolean;
+    readonly isEnablementChange: boolean;
+    readonly isToggleChange: boolean;
+  }> = [];
+  registrations.add(menu.onDidChange((event) => {
+    changes.push(event);
   }));
 
   assert.deepEqual(menu.getActions(), []);
@@ -135,7 +139,55 @@ test("menu actions react to visibility, enablement, and toggle context", () => {
   action = menu.getActions()[0][1][0];
   assert.equal(action.enabled, true);
   assert.equal(action.checked, true);
-  assert.equal(changes, 3);
+  assert.deepEqual(changes, [
+    {
+      isStructuralChange: true,
+      isEnablementChange: false,
+      isToggleChange: false,
+    },
+    {
+      isStructuralChange: false,
+      isEnablementChange: true,
+      isToggleChange: false,
+    },
+    {
+      isStructuralChange: false,
+      isEnablementChange: false,
+      isToggleChange: true,
+    },
+  ]);
+
+  contexts.setContext("test.unrelated", true);
+  assert.equal(changes.length, 3);
+});
+
+test("menu change events include context keys used by nested submenus", () => {
+  using registrations = new DisposableStore();
+  const rootMenu = new MenuId("test.actions.nested-root");
+  const childMenu = new MenuId("test.actions.nested-child");
+
+  registrations.add(MenusRegistry.appendMenuItem(rootMenu, {
+    title: "Nested",
+    submenu: childMenu,
+  }));
+  registrations.add(MenusRegistry.appendMenuItem(childMenu, {
+    command: {
+      id: "test.actions.nested-command",
+      title: "Nested command",
+    },
+    when: ContextKeyExpr.has("test.nested-visible"),
+  }));
+
+  const commands = new CommandService(new ServiceCollection());
+  const contexts = registrations.add(new ContextKeyService());
+  const menu = registrations.add(new MenuService(commands, contexts).createMenu(rootMenu));
+  let changes = 0;
+  registrations.add(menu.onDidChange(() => {
+    changes += 1;
+  }));
+
+  contexts.setContext("test.nested-visible", true);
+  assert.equal(changes, 1);
 });
 
 test("menu service sorts groups and resolves submenus", () => {

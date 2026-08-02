@@ -57,9 +57,6 @@ const { AuxiliarybarPart } = await import(
 const { PaneComposite } = await import(
   "../src/zeta/workbench/browser/parts/views/paneComposite.js"
 );
-const { ViewPaneContainer } = await import(
-  "../src/zeta/workbench/browser/parts/views/viewPaneContainer.js"
-);
 const { ViewPane } = await import(
   "../src/zeta/workbench/browser/parts/views/viewPane.js"
 );
@@ -107,7 +104,7 @@ class TestPart extends WorkbenchPart {
   }
 
   override get minimumWidth(): number {
-    return this.id === "sidebar" || this.id === "auxiliarybar"
+    return this.id === "sidebar" || this.id === "auxiliarybar" || this.id === "agentSidebar"
       ? 180
       : this.id === "editor"
       ? 120
@@ -115,14 +112,14 @@ class TestPart extends WorkbenchPart {
   }
 
   override get maximumWidth(): number {
-    return this.id === "sidebar" || this.id === "auxiliarybar"
+    return this.id === "sidebar" || this.id === "auxiliarybar" || this.id === "agentSidebar"
       ? 600
       : Number.POSITIVE_INFINITY;
   }
 
   override get minimumHeight(): number {
     if (this.id === "titlebar") return 35;
-    if (this.id === "statusbar") return 23;
+    if (this.id === "statusbar") return 35;
     if (this.id === "editor") return 84;
     if (this.id === "panel") return 80;
     return 0;
@@ -130,7 +127,7 @@ class TestPart extends WorkbenchPart {
 
   override get maximumHeight(): number {
     if (this.id === "titlebar") return 35;
-    if (this.id === "statusbar") return 23;
+    if (this.id === "statusbar") return 35;
     return Number.POSITIVE_INFINITY;
   }
 }
@@ -188,7 +185,35 @@ test("Workbench layout hides and restores Parts with context keys", () => {
   assert.ok(harness.container.querySelector("[data-part='sidebar']"));
   assert.equal(contextKeys.getValue("sideBarVisible"), true);
   assert.equal(contextKeys.getValue("auxiliaryBarVisible"), true);
+  assert.equal(contextKeys.getValue("agentSidebarVisible"), false);
   assert.equal(contextKeys.getValue("panelVisible"), true);
+  const editorElement = harness.container.querySelector<HTMLElement>(
+    "[data-part='editor']",
+  );
+  const panelElement = harness.container.querySelector<HTMLElement>(
+    "[data-part='panel']",
+  );
+  const editorFrame = editorElement?.parentElement as HTMLElement | undefined;
+  const panelFrame = panelElement?.parentElement as HTMLElement | undefined;
+  const sidebarFrame = harness.container.querySelector<HTMLElement>(
+    "[data-part='sidebar']",
+  )?.parentElement as HTMLElement | undefined;
+  const auxiliarybarFrame = harness.container.querySelector<HTMLElement>(
+    "[data-part='auxiliarybar']",
+  )?.parentElement as HTMLElement | undefined;
+  assert.equal(editorFrame?.className, "zeta-workbench-part-frame");
+  assert.equal(editorFrame?.style.paddingLeft, "3px");
+  assert.equal(editorFrame?.style.paddingRight, "3px");
+  assert.equal(editorFrame?.style.paddingBottom, "3px");
+  assert.equal(panelFrame?.style.paddingTop, "3px");
+  assert.equal(sidebarFrame?.style.paddingLeft, "6px");
+  assert.equal(sidebarFrame?.style.paddingRight, "3px");
+  assert.equal(auxiliarybarFrame?.style.paddingLeft, "3px");
+  assert.equal(auxiliarybarFrame?.style.paddingRight, "8px");
+  for (const sash of harness.container.querySelectorAll<HTMLElement>(".zeta-sash")) {
+    assert.equal(sash.classList.contains("zeta-sash-inset"), true);
+    assert.equal(sash.style.getPropertyValue("--zeta-sash-inset-gap"), "6px");
+  }
   harness.layout.hideParts(["sidebar", "auxiliarybar", "panel"]);
   assert.ok(overlay.isConnected);
   assert.equal(
@@ -212,6 +237,14 @@ test("Workbench layout hides and restores Parts with context keys", () => {
   assert.equal(contextKeys.getValue("auxiliaryBarVisible"), false);
   assert.equal(contextKeys.getValue("panelVisible"), false);
   assert.equal(contextKeys.getValue("editorAreaVisible"), true);
+  assert.equal(editorFrame?.style.paddingLeft, "6px");
+  assert.equal(editorFrame?.style.paddingRight, "8px");
+  assert.equal(panelFrame?.style.paddingLeft, "6px");
+  assert.equal(panelFrame?.style.paddingRight, "8px");
+  harness.layout.showPart("agentSidebar");
+  assert.equal(contextKeys.getValue("agentSidebarVisible"), true);
+  harness.layout.hidePart("agentSidebar");
+  assert.equal(contextKeys.getValue("agentSidebarVisible"), false);
   harness.layout.showPart("sidebar");
   assert.equal(
     harness.container.querySelector<HTMLElement>(
@@ -220,6 +253,8 @@ test("Workbench layout hides and restores Parts with context keys", () => {
     false,
   );
   assert.equal(contextKeys.getValue("sideBarVisible"), true);
+  assert.equal(editorFrame?.style.paddingLeft, "3px");
+  assert.equal(editorFrame?.style.paddingRight, "8px");
 
   harness.disposables.dispose();
   dom.window.close();
@@ -235,15 +270,21 @@ test("Workbench layout state is versioned and excludes topology", () => {
   );
   harness.layout.hidePart("auxiliarybar");
   harness.layout.resizePart(
+    "agentSidebar",
+    harness.layout.getPartSize("agentSidebar").with(300),
+  );
+  harness.layout.showPart("agentSidebar");
+  harness.layout.resizePart(
     "panel",
     new Dimension(harness.layout.getPartSize("panel").width, 180),
   );
   const state = harness.layout.state;
 
   assert.deepEqual(state, {
-    version: 2,
+    version: 3,
     sidebar: { width: 250, visible: true },
-    auxiliarybar: { width: 260, visible: false },
+    auxiliarybar: { width: 380, visible: false },
+    agentSidebar: { width: 300, visible: true },
     panel: { height: 180, visible: true },
   });
   assert.equal("children" in state, false);
@@ -261,22 +302,22 @@ test("Workbench layout derives flexible editor size from the container", () => {
 
   assert.deepEqual(
     harness.layout.getPartSize("sidebar"),
-    new Dimension(220, 742),
+    new Dimension(220, 730),
   );
   assert.deepEqual(
     harness.layout.getPartSize("auxiliarybar"),
-    new Dimension(260, 742),
+    new Dimension(380, 730),
   );
   assert.deepEqual(
     harness.layout.getPartSize("editor"),
-    new Dimension(720, 542),
+    new Dimension(600, 530),
   );
   assert.equal(harness.layout.getPartSize("panel").height, 200);
 
   harness.layout.layout(new Dimension(1_300, 800));
   assert.equal(harness.layout.getPartSize("sidebar").width, 220);
-  assert.equal(harness.layout.getPartSize("auxiliarybar").width, 260);
-  assert.equal(harness.layout.getPartSize("editor").width, 820);
+  assert.equal(harness.layout.getPartSize("auxiliarybar").width, 380);
+  assert.equal(harness.layout.getPartSize("editor").width, 700);
 
   harness.disposables.dispose();
   dom.window.close();
@@ -388,7 +429,7 @@ test("Workbench layout retains resized Part dimensions across visibility", () =>
   assert.equal(harness.layout.getPartSize("sidebar").width, 250);
   const restoredSidebarPane = harness.container.querySelector<HTMLElement>(
     "[data-part='sidebar']",
-  )?.parentElement;
+  )?.parentElement?.parentElement;
   assert.equal(restoredSidebarPane?.style.width, "250px");
 
   harness.disposables.dispose();
@@ -444,11 +485,12 @@ test("Sidebar hosts its Composite Bar before content", () => {
     )].map((item) => item.dataset.actionId),
     ["zeta.explorer", "zeta.search", "zeta.git"],
   );
-  assert.equal(
-    compositeBar.element.parentElement,
-    sidebar.element,
+  const title = sidebar.element.querySelector(
+    ":scope > .zeta-workbench-part-title.zeta-pane-composite-title",
   );
-  assert.equal(sidebar.element.firstElementChild, compositeBar.element);
+  assert.ok(title);
+  assert.equal(compositeBar.element.parentElement?.parentElement, title);
+  assert.equal(sidebar.element.firstElementChild, title);
   assert.equal(
     compositeBar.element.className,
     "zeta-composite-bar zeta-composite-bar-icon",
@@ -457,11 +499,7 @@ test("Sidebar hosts its Composite Bar before content", () => {
     ":scope > .zeta-composite-content",
   );
   assert.ok(content);
-  assert.equal(compositeBar.element.nextElementSibling, content);
-  assert.equal(
-    sidebar.element.querySelector(":scope > .zeta-workbench-part-title"),
-    null,
-  );
+  assert.equal(title.nextElementSibling, content);
   const actionbar = compositeBar.element.querySelector(
     ".zeta-tab-list-scroll-content > .zeta-action-bar",
   );
@@ -583,15 +621,17 @@ test("Sidebar can host Agent Sidebar composites", () => {
     location: ViewContainerLocation.AgentSidebar,
     ariaLabel: "Agent sidebar",
     viewsAriaLabel: "Agent sidebar views",
+    compositeBarContainerFilter: () => false,
   }));
 
   assert.equal(agentSidebar.element.dataset.part, "agentSidebar");
   assert.equal(agentSidebar.element.getAttribute("aria-label"), "Agent sidebar");
+  assert.equal(agentSidebar.compositeBar.element.hidden, false);
   assert.equal(
     agentSidebar.compositeBar.element.querySelector(
       "[data-action-id='zeta.chat']",
-    ) !== null,
-    true,
+    ),
+    null,
   );
 
   disposables.dispose();
@@ -759,7 +799,7 @@ test("CompositeBar moves non-fitting label tabs into its overflow menu", () => {
   dom.window.close();
 });
 
-test("Auxiliary Bar directly hosts its fixed View container", () => {
+test("Auxiliary Bar retains its fixed View as a standard Pane Composite", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
   const disposables = new DisposableStore();
   const registry = new WorkbenchViewRegistry();
@@ -781,29 +821,34 @@ test("Auxiliary Bar directly hosts its fixed View container", () => {
   const instantiationService = new InstantiationService(
     new ServiceCollection(),
   );
-  const container = new ViewPaneContainer({
+  const composite = new PaneComposite({
     viewContainer: descriptor,
     model: viewDescriptors.getViewContainerModel(descriptor.id),
     instantiationService,
     contextKeyService: contextKeys,
     ownerDocument: dom.window.document,
+    paneHeaders: "hidden",
+    paneLayout: "fill",
   });
   const auxiliarybar = disposables.add(
-    new AuxiliarybarPart(dom.window.document),
+    new AuxiliarybarPart({
+      ownerDocument: dom.window.document,
+      viewDescriptorService: viewDescriptors,
+    }),
   );
-  auxiliarybar.setViewPaneContainer(container);
+  auxiliarybar.addComposite(composite);
+  auxiliarybar.showComposite(descriptor.id);
+  auxiliarybar.setActiveComposite(descriptor.id);
   const content = auxiliarybar.element.querySelector(
     ":scope > .zeta-auxiliarybar-content",
   );
 
   assert.ok(content);
-  assert.equal(auxiliarybar.element.firstElementChild, content);
-  assert.equal(content.firstElementChild, container.element);
-  assert.equal(auxiliarybar.element.querySelector(".zeta-composite-bar"), null);
-  assert.equal(
-    auxiliarybar.element.querySelector(":scope > .zeta-workbench-part-title"),
-    null,
-  );
+  assert.equal(content.firstElementChild, composite.element);
+  assert.equal(auxiliarybar.activeCompositeId, descriptor.id);
+  const compositeBar = auxiliarybar.element.querySelector<HTMLElement>(".zeta-composite-bar");
+  assert.ok(compositeBar);
+  assert.equal(compositeBar.hidden, true);
 
   disposables.dispose();
   dom.window.close();
@@ -822,7 +867,7 @@ class TestPanelView extends ViewPane {
     this.actions.append(button);
   }
 
-  override get titleActionsElement(): HTMLElement {
+  override get partTitleActionsElement(): HTMLElement {
     return this.actions;
   }
 }

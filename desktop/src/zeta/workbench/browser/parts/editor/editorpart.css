@@ -1,6 +1,9 @@
 .zeta-workbench-editor {
   min-width: 0;
   min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--zeta-border);
+  border-radius: 8px;
   background: var(--zeta-editor-background);
 }
 

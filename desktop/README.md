@@ -22,6 +22,14 @@ corepack pnpm install
 corepack pnpm dev:desktop
 ```
 
+只开发桌面界面、但需要检查 Electron 特有的窗口、标题栏、菜单和原生交互时，运行：
+
+```bash
+corepack pnpm dev:desktop:ui
+```
+
+该命令只同步前端生成资源，并启动 Vite、Electron 主进程、预加载脚本和 Electron 窗口；不会构建 Rust 开发包，也不会启动 App Server。窗口中的 App Server 状态会保持为已停止，依赖后端的聊天、文件、Git、终端和搜索操作会明确不可用；选择文件夹仅更新界面的工作区上下文，方便检查前端布局和状态。`dev:desktop:ui:code`、`dev:desktop:ui:academic` 和 `dev:desktop:ui:complete` 可用于选择产品变体。
+
 只开发 Browser Workbench 界面时，在仓库根目录运行：
 
 ```bash
@@ -98,6 +106,8 @@ Monaco/ProseMirror contribution。
 
 Renderer 控件、Workbench Part 与 CSS 状态的 canonical 所有权规范见
 [`docs/ui-styling-ownership.md`](../docs/ui-styling-ownership.md)。
+Pane-like Part 的标题槽位、CompositeBar、命名与生命周期规范见
+[`docs/workbench-pane-composite-design.md`](../docs/workbench-pane-composite-design.md)。
 Command、MenuId、Context Key 与菜单型 Toolbar 的 canonical 组合规范见
 [`docs/menu-system.md`](../docs/menu-system.md)。
 

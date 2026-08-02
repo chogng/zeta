@@ -2,6 +2,10 @@
   align-items: center;
 }
 
+.zeta-toolbar.empty {
+  display: none;
+}
+
 .zeta-toolbar + .zeta-toolbar {
   margin-left: var(--zeta-toolbar-item-gap);
 }

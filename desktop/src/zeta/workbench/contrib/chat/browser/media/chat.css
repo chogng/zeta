@@ -32,12 +32,6 @@
   display: none;
 }
 
-.zeta-chat-body > .zeta-chat-agent-sidebar {
-  width: 220px;
-  flex: 0 0 220px;
-  border-left: 1px solid var(--zeta-border);
-}
-
 .zeta-chat {
   display: flex;
   overflow: hidden;
@@ -76,6 +70,43 @@
 .zeta-chat-empty {
   padding: 20px 4px;
   text-align: center;
+}
+.zeta-chat-agent-sidebar-view {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px;
+}
+
+.zeta-chat-agent-sidebar-empty {
+  color: var(--zeta-description-foreground);
+  margin: 8px 4px;
+  text-align: center;
+}
+.zeta-chat-agent-session {
+  align-items: flex-start;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  color: inherit;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 8px;
+  text-align: left;
+}
+.zeta-chat-agent-session:hover, .zeta-chat-agent-session.checked {
+  background: var(--zeta-list-hover-background);
+}
+.zeta-chat-agent-session:focus-visible {
+  outline: 1px solid var(--zeta-focus-border);
+  outline-offset: -1px;
+}
+.zeta-chat-agent-session-title { font: inherit; }
+.zeta-chat-agent-session-detail {
+  color: var(--zeta-description-foreground);
+  font-size: 11px;
 }
 .zeta-chat-item {
   margin: 0 0 14px;

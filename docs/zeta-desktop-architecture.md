@@ -5,6 +5,7 @@
 > 当前开发基线：[`zeta-app-server-api.md`](zeta-app-server-api.md)
 > 产品装配与构建版本：[`product-editions.md`](product-editions.md)
 > Renderer 控件、Workbench Part 与 CSS 状态所有权：[`ui-styling-ownership.md`](ui-styling-ownership.md)
+> Pane-like Part 的标题槽位、CompositeBar、命名与生命周期：[`workbench-pane-composite-design.md`](workbench-pane-composite-design.md)
 > Renderer Command、MenuId 与 UI Action 组合系统：[`menu-system.md`](menu-system.md)
 > Chat 内 Session Inspector 的信息架构与 Plan 演进：[`chat-session-inspector.md`](chat-session-inspector.md)
 > 外部 Agent Skill 来源与加载边界：[`skills.md`](skills.md)
@@ -493,10 +494,15 @@ Renderer Part 的视觉所有权仍以
 
 ### 6.5 Workbench View 与 Chat
 
-Workbench 使用 `ViewContainerLocation` 区分 Sidebar、Auxiliary Bar 和 Panel。
-Sidebar 与 Auxiliary Bar 均由 `CompositePart` 持有通用 `CompositeBar`，容器贡献只负责声明
-位置、顺序和默认项，不直接操作 Workbench 布局。`IViewsService` 根据 view ID 解析所属
-container，再委托对应 Part 显示并激活该 composite。
+Workbench 使用 `ViewContainerLocation` 区分 Sidebar、Auxiliary Bar、Agent Sidebar 和 Panel。
+这些 pane-like Part 均由 `PaneCompositePart` 持有统一的标题槽位、`CompositeBar`、可选标题
+toolbar 与 retained `PaneComposite` 生命周期；Editor 保留其专用 editor-group 架构。容器贡献只
+负责声明位置、顺序和默认项，不直接操作 Workbench 布局。`IViewsService` 根据 view ID 解析所属
+container，再委托对应 Part 显示并激活该 composite。Primary Sidebar 和 Panel 显示标准
+`CompositeBar`；Auxiliary Bar 隐藏固定 Chat container 的冗余 bar 并投影 Chat 自有标题；Agent
+Sidebar 保留统一标题和 CompositeBar host，但过滤唯一冗余 container item，并在标题右侧
+`titleActions` 槽位投影收起动作。四者仍使用相同的 Composite 生命周期。该层级、命名和槽位契约以
+[`workbench-pane-composite-design.md`](workbench-pane-composite-design.md) 为准。
 
 Chat 是独立 contrib，而不是 Auxiliary Bar 的内建内容：
 

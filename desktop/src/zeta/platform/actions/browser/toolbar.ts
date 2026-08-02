@@ -4,7 +4,7 @@ import { Separator, type IAction } from "../../../base/common/actions.js";
 import type { IContextMenuProvider } from "../../../base/browser/contextmenu.js";
 import { createMenuEntryActionViewItem } from "./menuEntryActionViewItem.js";
 import { MenuId, type IMenuActionOptions } from "../common/actions.js";
-import type { IMenu, IMenuService } from "../common/menuService.js";
+import type { IMenu, IMenuChangeEvent, IMenuService } from "../common/menuService.js";
 
 export interface WorkbenchToolBarOptions {
   readonly ariaLabel?: string;
@@ -63,7 +63,7 @@ export class MenuWorkbenchToolBar extends WorkbenchToolBar {
     this.menuOptions = options.menuOptions;
     const menu = this.own(menuService.createMenu(menuId));
     this.menu = menu;
-    this.own(menu.onDidChange(() => this.update()));
+    this.own(menu.onDidChange((event) => this.update(event)));
     this.update();
   }
 
@@ -81,7 +81,7 @@ export class MenuWorkbenchToolBar extends WorkbenchToolBar {
     throw new Error("MenuWorkbenchToolBar actions are owned by its MenuId");
   }
 
-  private update(): void {
+  private update(event?: IMenuChangeEvent): void {
     const groups = this.menu.getActions(this.menuOptions);
     const primary = groups
       .filter(([group]) => group === "navigation")
@@ -95,6 +95,13 @@ export class MenuWorkbenchToolBar extends WorkbenchToolBar {
       menuSecondary,
       [...this.supplementalSecondaryActions],
     );
+    const empty = primary.length === 0 && secondary.length === 0;
+    this.element.hidden = empty;
+    this.element.classList.toggle("empty", empty);
+    if (event?.isStructuralChange === false) {
+      super.updateActions(primary, secondary);
+      return;
+    }
     super.setActions(primary, secondary);
   }
 }

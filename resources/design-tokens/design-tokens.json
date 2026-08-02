@@ -1778,15 +1778,15 @@
       "description": "Editor background.",
       "needsTransparency": false,
       "defaults": {
-        "dark": "workbench.background",
-        "light": "workbench.background",
-        "high-contrast-dark": "workbench.background",
-        "high-contrast-light": "workbench.background"
+        "dark": "#FFFFFF",
+        "light": "#FFFFFF",
+        "high-contrast-dark": "#FFFFFF",
+        "high-contrast-light": "#FFFFFF"
       },
       "values": {
-        "dark": "#1e1e1e",
+        "dark": "#ffffff",
         "light": "#ffffff",
-        "high-contrast-dark": "#1e1e1e",
+        "high-contrast-dark": "#ffffff",
         "high-contrast-light": "#ffffff"
       }
     },
@@ -1798,15 +1798,15 @@
       "description": "Editor foreground.",
       "needsTransparency": false,
       "defaults": {
-        "dark": "#d4d4d4",
+        "dark": "#333333",
         "light": "#333333",
-        "high-contrast-dark": "#d4d4d4",
+        "high-contrast-dark": "#333333",
         "high-contrast-light": "#333333"
       },
       "values": {
-        "dark": "#d4d4d4",
+        "dark": "#333333",
         "light": "#333333",
-        "high-contrast-dark": "#d4d4d4",
+        "high-contrast-dark": "#333333",
         "high-contrast-light": "#333333"
       }
     },
@@ -1818,16 +1818,16 @@
       "description": "Title bar background.",
       "needsTransparency": false,
       "defaults": {
-        "dark": "#181818",
-        "light": "#f3f3f3",
-        "high-contrast-dark": "#181818",
-        "high-contrast-light": "#f3f3f3"
+        "dark": "#FFFFFF",
+        "light": "#FFFFFF",
+        "high-contrast-dark": "#FFFFFF",
+        "high-contrast-light": "#FFFFFF"
       },
       "values": {
-        "dark": "#181818",
-        "light": "#f3f3f3",
-        "high-contrast-dark": "#181818",
-        "high-contrast-light": "#f3f3f3"
+        "dark": "#ffffff",
+        "light": "#ffffff",
+        "high-contrast-dark": "#ffffff",
+        "high-contrast-light": "#ffffff"
       }
     },
     {
@@ -1838,15 +1838,15 @@
       "description": "Title bar foreground.",
       "needsTransparency": false,
       "defaults": {
-        "dark": "#f0f0f0",
+        "dark": "#1f1f1f",
         "light": "#1f1f1f",
-        "high-contrast-dark": "#f0f0f0",
+        "high-contrast-dark": "#1f1f1f",
         "high-contrast-light": "#1f1f1f"
       },
       "values": {
-        "dark": "#f0f0f0",
+        "dark": "#1f1f1f",
         "light": "#1f1f1f",
-        "high-contrast-dark": "#f0f0f0",
+        "high-contrast-dark": "#1f1f1f",
         "high-contrast-light": "#1f1f1f"
       }
     },
@@ -1858,15 +1858,15 @@
       "description": "Title bar action foreground.",
       "needsTransparency": false,
       "defaults": {
-        "dark": "#d6d6d6",
+        "dark": "#424242",
         "light": "#424242",
-        "high-contrast-dark": "#d6d6d6",
+        "high-contrast-dark": "#424242",
         "high-contrast-light": "#424242"
       },
       "values": {
-        "dark": "#d6d6d6",
+        "dark": "#424242",
         "light": "#424242",
-        "high-contrast-dark": "#d6d6d6",
+        "high-contrast-dark": "#424242",
         "high-contrast-light": "#424242"
       }
     },
@@ -1878,15 +1878,15 @@
       "description": "Hovered title bar item background.",
       "needsTransparency": false,
       "defaults": {
-        "dark": "#2a2d2e",
+        "dark": "#e5e5e5",
         "light": "#e5e5e5",
-        "high-contrast-dark": "#2a2d2e",
+        "high-contrast-dark": "#e5e5e5",
         "high-contrast-light": "#e5e5e5"
       },
       "values": {
-        "dark": "#2a2d2e",
+        "dark": "#e5e5e5",
         "light": "#e5e5e5",
-        "high-contrast-dark": "#2a2d2e",
+        "high-contrast-dark": "#e5e5e5",
         "high-contrast-light": "#e5e5e5"
       }
     },
@@ -1898,15 +1898,15 @@
       "description": "Primary side bar background.",
       "needsTransparency": false,
       "defaults": {
-        "dark": "#181818",
-        "light": "#f8f8f8",
-        "high-contrast-dark": "#181818",
-        "high-contrast-light": "#f8f8f8"
+        "dark": "#F8F8F8",
+        "light": "#F8F8F8",
+        "high-contrast-dark": "#F8F8F8",
+        "high-contrast-light": "#F8F8F8"
       },
       "values": {
-        "dark": "#181818",
+        "dark": "#f8f8f8",
         "light": "#f8f8f8",
-        "high-contrast-dark": "#181818",
+        "high-contrast-dark": "#f8f8f8",
         "high-contrast-light": "#f8f8f8"
       }
     },
@@ -1924,9 +1924,9 @@
         "high-contrast-light": "sideBar.background"
       },
       "values": {
-        "dark": "#181818",
+        "dark": "#f8f8f8",
         "light": "#f8f8f8",
-        "high-contrast-dark": "#181818",
+        "high-contrast-dark": "#f8f8f8",
         "high-contrast-light": "#f8f8f8"
       }
     },
@@ -1944,9 +1944,9 @@
         "high-contrast-light": "sideBar.background"
       },
       "values": {
-        "dark": "#181818",
+        "dark": "#f8f8f8",
         "light": "#f8f8f8",
-        "high-contrast-dark": "#181818",
+        "high-contrast-dark": "#f8f8f8",
         "high-contrast-light": "#f8f8f8"
       }
     },
@@ -1998,16 +1998,16 @@
       "description": "Status bar foreground.",
       "needsTransparency": false,
       "defaults": {
-        "dark": "#ffffff",
-        "light": "#ffffff",
-        "high-contrast-dark": "#ffffff",
-        "high-contrast-light": "#ffffff"
+        "dark": "#1f1f1f",
+        "light": "#1f1f1f",
+        "high-contrast-dark": "#1f1f1f",
+        "high-contrast-light": "#1f1f1f"
       },
       "values": {
-        "dark": "#ffffff",
-        "light": "#ffffff",
-        "high-contrast-dark": "#ffffff",
-        "high-contrast-light": "#ffffff"
+        "dark": "#1f1f1f",
+        "light": "#1f1f1f",
+        "high-contrast-dark": "#1f1f1f",
+        "high-contrast-light": "#1f1f1f"
       }
     },
     {
@@ -2018,16 +2018,16 @@
       "description": "Status bar background.",
       "needsTransparency": false,
       "defaults": {
-        "dark": "#007acc",
-        "light": "#007acc",
-        "high-contrast-dark": "#007acc",
-        "high-contrast-light": "#007acc"
+        "dark": "#FFFFFF",
+        "light": "#FFFFFF",
+        "high-contrast-dark": "#FFFFFF",
+        "high-contrast-light": "#FFFFFF"
       },
       "values": {
-        "dark": "#007acc",
-        "light": "#007acc",
-        "high-contrast-dark": "#007acc",
-        "high-contrast-light": "#007acc"
+        "dark": "#ffffff",
+        "light": "#ffffff",
+        "high-contrast-dark": "#ffffff",
+        "high-contrast-light": "#ffffff"
       }
     },
     {
@@ -2038,10 +2038,10 @@
       "description": "Hovered sash background.",
       "needsTransparency": false,
       "defaults": {
-        "dark": "statusBar.background",
-        "light": "statusBar.background",
-        "high-contrast-dark": "statusBar.background",
-        "high-contrast-light": "statusBar.background"
+        "dark": "#007acc",
+        "light": "#007acc",
+        "high-contrast-dark": "#007acc",
+        "high-contrast-light": "#007acc"
       },
       "values": {
         "dark": "#007acc",
@@ -2064,9 +2064,9 @@
         "high-contrast-light": "editor.background"
       },
       "values": {
-        "dark": "#1e1e1e",
+        "dark": "#ffffff",
         "light": "#ffffff",
-        "high-contrast-dark": "#1e1e1e",
+        "high-contrast-dark": "#ffffff",
         "high-contrast-light": "#ffffff"
       }
     },
@@ -2084,9 +2084,9 @@
         "high-contrast-light": "editor.foreground"
       },
       "values": {
-        "dark": "#d4d4d4",
+        "dark": "#333333",
         "light": "#333333",
-        "high-contrast-dark": "#d4d4d4",
+        "high-contrast-dark": "#333333",
         "high-contrast-light": "#333333"
       }
     },
@@ -2264,9 +2264,9 @@
         "high-contrast-light": "terminal.foreground"
       },
       "values": {
-        "dark": "#d4d4d4",
+        "dark": "#333333",
         "light": "#333333",
-        "high-contrast-dark": "#d4d4d4",
+        "high-contrast-dark": "#333333",
         "high-contrast-light": "#333333"
       }
     },

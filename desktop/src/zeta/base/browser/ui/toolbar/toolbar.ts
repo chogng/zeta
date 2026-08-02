@@ -70,6 +70,16 @@ export class ToolBar extends DisposableOwner {
     this.actionBar.setActions(this.withMoreActions(primary));
   }
 
+  /** Refreshes retained action slots when their ordering and presence are unchanged. */
+  protected updateActions(
+    primaryActions: readonly IAction[],
+    secondaryActions: readonly IAction[] = [],
+  ): void {
+    const primary = cleanSeparators(primaryActions);
+    this.secondaryActions = cleanSeparators(secondaryActions);
+    this.actionBar.updateActions(this.withMoreActions(primary));
+  }
+
   private withMoreActions(primary: readonly IAction[]): readonly IAction[] {
     if (this.secondaryActions.length === 0) return primary;
     const beforeActionId = this.moreActionsPlacement?.beforeActionId;

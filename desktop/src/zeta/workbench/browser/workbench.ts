@@ -17,6 +17,7 @@ import {
   IMenuService,
   MenuService,
 } from "../../platform/actions/common/menuService.js";
+import { MenuId } from "../../platform/actions/common/actions.js";
 import {
   ICommandService,
 } from "../../platform/commands/common/commands.js";
@@ -165,9 +166,6 @@ import { StatusbarPart } from "./parts/statusbar/statusbarPart.js";
 import type {
   TitlebarPartFactory,
 } from "./parts/titlebar/titlebarPart.js";
-import {
-  ViewPaneContainer,
-} from "./parts/views/viewPaneContainer.js";
 import { PaneComposite } from "./parts/views/paneComposite.js";
 import { IWorkbenchWindowService, WorkbenchWindow } from "./window.js";
 import { TerminalService } from "../services/terminal/browser/terminalService.js";
@@ -414,6 +412,20 @@ export class Workbench extends DisposableOwner {
       ownerDocument,
       viewDescriptorService: viewDescriptors,
     }));
+    const agentSidebar = this.own(new SidebarPart({
+      ownerDocument,
+      viewDescriptorService: viewDescriptors,
+      id: "agentSidebar",
+      location: ViewContainerLocation.AgentSidebar,
+      ariaLabel: "Agent sidebar",
+      viewsAriaLabel: "Agent sidebar views",
+      compositeBarContainerFilter: () => false,
+      titleActions: {
+        menuService: menus,
+        contextMenuProvider: contextMenus,
+        menuId: MenuId.AgentSidebarTitle,
+      },
+    }));
     const editor = this.own(new EditorPart(ownerDocument, {
       configurationService: configuration,
       keybindingService: keybindings,
@@ -455,6 +467,32 @@ export class Workbench extends DisposableOwner {
       return composite;
     };
     openSidebarComposite(sidebarCompositeDescriptor.id);
+    const openAgentSidebarComposite = (
+      compositeId: string,
+    ): PaneComposite => {
+      const viewContainer = viewDescriptors
+        .getViewContainers(ViewContainerLocation.AgentSidebar)
+        .find((candidate) => candidate.id === compositeId);
+      if (!viewContainer) {
+        throw new Error(
+          `Agent Sidebar Composite is not registered: ${compositeId}`,
+        );
+      }
+      if (!agentSidebar.getComposite(viewContainer.id)) {
+        agentSidebar.addComposite(new PaneComposite({
+          viewContainer,
+          model: viewDescriptors.getViewContainerModel(viewContainer.id),
+          instantiationService,
+          contextKeyService: contextKeys,
+          ownerDocument,
+        }));
+      }
+      agentSidebar.showComposite(viewContainer.id);
+      agentSidebar.setActiveComposite(viewContainer.id);
+      const composite = agentSidebar.getComposite(viewContainer.id);
+      assertDefined(composite, `Agent Sidebar Composite is not available: ${viewContainer.id}`);
+      return composite;
+    };
     const panel = this.own(new PanelPart({
       ownerDocument,
       viewDescriptorService: viewDescriptors,
@@ -493,7 +531,10 @@ export class Workbench extends DisposableOwner {
       assertDefined(composite, `Panel Composite is not available: ${viewContainer.id}`);
       return composite;
     };
-    const auxiliarybar = this.own(new AuxiliarybarPart(ownerDocument));
+    const auxiliarybar = this.own(new AuxiliarybarPart({
+      ownerDocument,
+      viewDescriptorService: viewDescriptors,
+    }));
     const auxiliaryViewContainer = requiredViewContainer(
       viewDescriptors,
       ViewContainerLocation.AuxiliaryBar,
@@ -508,6 +549,7 @@ export class Workbench extends DisposableOwner {
       ["statusbar", statusbar],
       ["sidebar", sidebar],
       ["auxiliarybar", auxiliarybar],
+      ["agentSidebar", agentSidebar],
       ["editor", editor],
       ["panel", panel],
     ]);
@@ -517,14 +559,18 @@ export class Workbench extends DisposableOwner {
     services.set(IWorkbenchLayoutService, layout);
     // Fixed Panel and Auxiliary Bar views may depend on the host layout during construction.
     openPanelComposite(panelCompositeDescriptor.id);
-    const auxiliaryPaneContainer = new ViewPaneContainer({
+    const auxiliaryPaneComposite = new PaneComposite({
       viewContainer: auxiliaryViewContainer,
       model: viewDescriptors.getViewContainerModel(auxiliaryViewContainer.id),
       instantiationService,
       contextKeyService: contextKeys,
       ownerDocument,
+      paneHeaders: "hidden",
+      paneLayout: "fill",
     });
-    auxiliarybar.setViewPaneContainer(auxiliaryPaneContainer);
+    auxiliarybar.addComposite(auxiliaryPaneComposite);
+    auxiliarybar.showComposite(auxiliaryViewContainer.id);
+    auxiliarybar.setActiveComposite(auxiliaryViewContainer.id);
     services.set(IViewsService, new ViewsService({
       viewDescriptorService: viewDescriptors,
       openViewContainer: (container) => {
@@ -535,8 +581,11 @@ export class Workbench extends DisposableOwner {
           case ViewContainerLocation.AuxiliaryBar:
             layout.showPart("auxiliarybar");
             return container.id === auxiliaryViewContainer.id
-              ? auxiliaryPaneContainer
+              ? auxiliaryPaneComposite
               : undefined;
+          case ViewContainerLocation.AgentSidebar:
+            layout.showPart("agentSidebar");
+            return openAgentSidebarComposite(container.id);
           case ViewContainerLocation.Panel:
             layout.showPart("panel");
             return openPanelComposite(container.id);
@@ -548,6 +597,12 @@ export class Workbench extends DisposableOwner {
       ({ compositeId }) => {
         if (sidebar.activeCompositeId === compositeId) return;
         openSidebarComposite(compositeId);
+      },
+    ));
+    this.own(agentSidebar.onDidSelectComposite(
+      ({ compositeId }) => {
+        if (agentSidebar.activeCompositeId === compositeId) return;
+        openAgentSidebarComposite(compositeId);
       },
     ));
     this.own(panel.onDidSelectComposite(

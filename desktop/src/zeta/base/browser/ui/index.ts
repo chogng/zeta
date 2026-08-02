@@ -93,7 +93,7 @@ export {
 export { PixelSpinner } from "./pixelspinner/pixelspinner.js";
 export { ProgressBar } from "./progressbar/progressbar.js";
 export { Resizable } from "./resizable/resizable.js";
-export { Sash, type SashOrientation, type SashSettings, SashSettingsBinding } from "./sash/sash.js";
+export { Sash, type InsetSashPresentation, type SashOrientation, type SashPresentation, type SashSettings, SashSettingsBinding } from "./sash/sash.js";
 export {
   ScrollableElement,
   Scrollbar,
@@ -120,6 +120,7 @@ export {
   SplitView,
   type ISplitViewView,
   type SplitViewLayoutPriority,
+  type SplitViewOptions,
   type SplitViewOrientation,
   type SplitViewSizing,
 } from "./splitview/splitview.js";

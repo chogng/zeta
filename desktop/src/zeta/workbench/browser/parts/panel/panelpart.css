@@ -1,7 +1,10 @@
 .zeta-workbench-panel {
-  border-top: 1px solid var(--zeta-border);
+  overflow: hidden;
+  border: 1px solid var(--zeta-border);
+  border-radius: 8px;
   background: var(--zeta-panel-background);
 }
+
 .zeta-panel-title-control {
   display: flex;
   min-width: 0;

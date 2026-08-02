@@ -8,10 +8,14 @@ import {
   resolvePackagedProductId,
 } from "../../product/node/product.js";
 import {
+  type AppServerStartupMode,
   ZetaApplication,
 } from "./app.js";
 
 const rendererRoot = join(app.getAppPath(), "dist", "renderer");
+const appServerStartupMode: AppServerStartupMode = process.env.ZETA_DESKTOP_UI_ONLY === "1"
+  ? "disabled"
+  : "required";
 const product = getProductConfiguration(
   app.isPackaged
     ? resolvePackagedProductId(rendererRoot)
@@ -23,6 +27,7 @@ app.setName(product.name);
 const application = ZetaApplication.create({
   product,
   rendererRoot,
+  appServerStartupMode,
 });
 
 async function startup(): Promise<void> {

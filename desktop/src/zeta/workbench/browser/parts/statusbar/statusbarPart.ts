@@ -1,5 +1,6 @@
 import "./statusbarpart.css";
 import { WorkbenchPart } from "../../part.js";
+import { WorkbenchWindowBarHeight } from "../workbenchPartDimensions.js";
 import {
   type IStatusbarEntryItem,
   type IStatusbarService,
@@ -12,8 +13,8 @@ export class StatusbarPart extends WorkbenchPart {
   private readonly leftItems: HTMLDivElement;
   private readonly rightItems: HTMLDivElement;
 
-  override get minimumHeight(): number { return 23; }
-  override get maximumHeight(): number { return 23; }
+  override get minimumHeight(): number { return WorkbenchWindowBarHeight; }
+  override get maximumHeight(): number { return WorkbenchWindowBarHeight; }
 
   constructor(
     statusbarService: IStatusbarService,

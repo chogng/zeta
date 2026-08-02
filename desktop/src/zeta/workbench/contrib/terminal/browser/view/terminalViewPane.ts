@@ -112,7 +112,7 @@ export class TerminalViewPane extends ViewPane {
     this.activeItem()?.widget.focus();
   }
 
-  override get titleActionsElement(): HTMLElement {
+  override get partTitleActionsElement(): HTMLElement {
     return this.titleActions.element;
   }
 

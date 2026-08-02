@@ -1,10 +1,16 @@
 import { type IDimension } from "../../geometry.js";
 import { Emitter, type Event } from "../../../common/event.js";
 import { DisposableOwner, ResettableDisposableGroup } from "../../../common/lifecycle.js";
+import { type SashPresentation } from "../sash/sash.js";
 import { type ISplitViewView, SplitView, type SplitViewLayoutPriority, type SplitViewOrientation } from "../splitview/splitview.js";
 import { assertChildIndex, assertDimension, assertInsertionIndex, descriptorNode, descriptorSizing, deserializeGridViewDescriptor, isSerializableView, normalizeDescriptor, normalizeRootDescriptor, orthogonal, replaceDescriptorNode, splitLocation, type GridLocation, type GridViewDescriptor, type GridViewSizing, type ISerializableView, type IView, type IViewDeserializer, type SerializedGridViewDescriptor, validateDescriptor, validateSerializedGridViewDescriptor, validateViewConstraints } from "./gridviewDescriptor.js";
 
 export { type GridLocation, type GridViewDescriptor, type GridViewSizing, type ISerializableView, type IView, type IViewDeserializer, type SerializedGridViewDescriptor } from "./gridviewDescriptor.js";
+
+export interface GridViewOptions {
+  /** Optional presentation applied to every Grid-owned Sash. */
+  readonly sashPresentation?: SashPresentation;
+}
 
 interface ParentLink {
   readonly branch: BranchNode;
@@ -13,6 +19,7 @@ interface ParentLink {
 
 interface GridNodeHost {
   readonly ownerDocument: Document;
+  readonly sashPresentation: SashPresentation;
   ownSplitView(splitView: SplitView): SplitView;
   ownEvent(disposable: Disposable): void;
   createNode(descriptor: GridViewDescriptor<IView>): GridNode;
@@ -83,7 +90,11 @@ class BranchNode extends GridNode {
   ) {
     super(initialSize);
     this.priority = priority;
-    this.splitView = host.ownSplitView(new SplitView(orientation, host.ownerDocument));
+    this.splitView = host.ownSplitView(new SplitView(
+      orientation,
+      host.ownerDocument,
+      { sashPresentation: host.sashPresentation },
+    ));
     this.element = this.splitView.element;
     this.children = descriptors.map((descriptor) => host.createNode(descriptor));
     for (const [index, child] of this.children.entries()) {
@@ -192,6 +203,7 @@ class AxisView implements ISplitViewView {
  */
 export class GridView extends DisposableOwner {
   readonly element: HTMLDivElement;
+  private readonly sashPresentation: SashPresentation;
   private readonly treeResources = this.own(new ResettableDisposableGroup());
   private readonly leaves = new Map<IView, LeafNode>();
   private readonly _onDidChange = this.own(new Emitter<void>());
@@ -207,21 +219,25 @@ export class GridView extends DisposableOwner {
     descriptor: SerializedGridViewDescriptor,
     deserializer: IViewDeserializer<TView>,
     ownerDocument: Document = document,
+    options: GridViewOptions = {},
   ): GridView {
     validateSerializedGridViewDescriptor(descriptor);
     return new GridView(
       deserializeGridViewDescriptor(descriptor, deserializer),
       ownerDocument,
+      options,
     );
   }
 
   constructor(
     descriptor: GridViewDescriptor<IView>,
     ownerDocument: Document = document,
+    options: GridViewOptions = {},
   ) {
     super();
     this.element = ownerDocument.createElement("div");
     this.element.className = "zeta-grid zeta-grid-view";
+    this.sashPresentation = options.sashPresentation;
     this.defer(() => this.element.remove());
     this.rebuild(normalizeRootDescriptor(descriptor));
   }
@@ -423,6 +439,7 @@ export class GridView extends DisposableOwner {
     this.leaves.clear();
     const host: GridNodeHost = {
       ownerDocument: this.element.ownerDocument,
+      sashPresentation: this.sashPresentation,
       ownSplitView: (splitView) => this.treeResources.add(splitView),
       ownEvent: (disposable) => {
         this.treeResources.add(disposable);

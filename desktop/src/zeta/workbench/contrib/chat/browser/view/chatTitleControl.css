@@ -1,9 +1,7 @@
-.zeta-chat-title-control {
-  display: flex;
+.zeta-pane-composite-title-content > .zeta-chat-tabs-control {
   min-width: 0;
-  height: 35px;
-  flex: 0 0 35px;
-  border-bottom: 1px solid var(--zeta-border);
+  height: 100%;
+  flex: 1 1 auto;
 }
 
 .zeta-chat-title-actions {
@@ -11,6 +9,9 @@
   height: 100%;
   flex: 0 0 auto;
   align-items: center;
-  margin-left: auto;
-  padding: 0 4px;
+}
+
+.zeta-chat-title-layout-actions.zeta-toolbar {
+  height: 100%;
+  flex: 0 0 auto;
 }

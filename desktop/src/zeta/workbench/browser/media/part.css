@@ -8,6 +8,13 @@
   background: var(--zeta-workbench-background);
 }
 
+.zeta-workbench-part-frame {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  box-sizing: border-box;
+}
+
 .zeta-workbench-part[hidden] { display: none; }
 
 .zeta-workbench-part-title:empty { display: none; }

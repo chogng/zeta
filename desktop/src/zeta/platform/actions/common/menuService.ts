@@ -4,10 +4,12 @@ import {
 } from "../../../base/common/actions.js";
 import { Emitter, type Event } from "../../../base/common/event.js";
 import { DisposableOwner } from "../../../base/common/lifecycle.js";
+import { isCommandActionToggleInfo } from "../../action/common/action.js";
 import type {
   ICommandService,
 } from "../../commands/common/commands.js";
 import type {
+  ContextKeyExpression,
   IContextKeyService,
 } from "../../contextkey/common/contextkey.js";
 import {
@@ -29,8 +31,15 @@ export type MenuActionGroup = readonly [
   actions: readonly IAction[],
 ];
 
+/** Describes which projection of a menu changed. */
+export interface IMenuChangeEvent {
+  readonly isStructuralChange: boolean;
+  readonly isEnablementChange: boolean;
+  readonly isToggleChange: boolean;
+}
+
 export interface IMenu {
-  readonly onDidChange: Event<void>;
+  readonly onDidChange: Event<IMenuChangeEvent>;
 
   getActions(options?: IMenuActionOptions): readonly MenuActionGroup[];
 }
@@ -79,11 +88,12 @@ export class MenuService implements IMenuService {
 }
 
 class Menu extends DisposableOwner implements IMenu {
-  private readonly _onDidChange = this.own(new Emitter<void>());
+  private readonly _onDidChange = this.own(new Emitter<IMenuChangeEvent>());
   readonly onDidChange = this._onDidChange.event;
   private readonly id: MenuId;
   private readonly commandService: ICommandService;
   private readonly contextKeyService: IContextKeyService;
+  private readonly snapshot: MenuInfoSnapshot;
 
   constructor(
     id: MenuId,
@@ -94,13 +104,36 @@ class Menu extends DisposableOwner implements IMenu {
     this.id = id;
     this.commandService = commandService;
     this.contextKeyService = contextKeyService;
+    this.snapshot = new MenuInfoSnapshot(this.id);
     this.own(MenusRegistry.onDidChangeMenu(
-      (_event: IMenuRegistryChangeEvent) => {
-        this._onDidChange.fire();
+      (event: IMenuRegistryChangeEvent) => {
+        if (!this.snapshot.menuIds.has(event.menuId)) return;
+        this.snapshot.refresh();
+        this._onDidChange.fire({
+          isStructuralChange: true,
+          isEnablementChange: true,
+          isToggleChange: true,
+        });
       },
     ));
-    this.own(this.contextKeyService.onDidChangeContext(() => {
-      this._onDidChange.fire();
+    this.own(this.contextKeyService.onDidChangeContext((event) => {
+      const isStructuralChange = event.affectsSome(
+        this.snapshot.structureContextKeys,
+      );
+      const isEnablementChange = event.affectsSome(
+        this.snapshot.enablementContextKeys,
+      );
+      const isToggleChange = event.affectsSome(
+        this.snapshot.toggleContextKeys,
+      );
+      if (!isStructuralChange && !isEnablementChange && !isToggleChange) {
+        return;
+      }
+      this._onDidChange.fire({
+        isStructuralChange,
+        isEnablementChange,
+        isToggleChange,
+      });
     }));
   }
 
@@ -113,6 +146,53 @@ class Menu extends DisposableOwner implements IMenu {
       new Set(),
     );
   }
+}
+
+class MenuInfoSnapshot {
+  readonly menuIds = new Set<MenuId>();
+  readonly structureContextKeys = new Set<string>();
+  readonly enablementContextKeys = new Set<string>();
+  readonly toggleContextKeys = new Set<string>();
+
+  constructor(private readonly id: MenuId) {
+    this.refresh();
+  }
+
+  refresh(): void {
+    this.menuIds.clear();
+    this.structureContextKeys.clear();
+    this.enablementContextKeys.clear();
+    this.toggleContextKeys.clear();
+    this.collectMenu(this.id);
+  }
+
+  private collectMenu(menuId: MenuId): void {
+    if (this.menuIds.has(menuId)) return;
+    this.menuIds.add(menuId);
+    for (const item of MenusRegistry.getMenuItems(menuId)) {
+      addExpressionKeys(item.when, this.structureContextKeys);
+      if (!isMenuItem(item)) {
+        this.collectMenu(item.submenu);
+        continue;
+      }
+      addExpressionKeys(
+        item.command.precondition,
+        this.enablementContextKeys,
+      );
+      const toggled = item.command.toggled;
+      addExpressionKeys(
+        toggled && isCommandActionToggleInfo(toggled)
+          ? toggled.condition
+          : toggled,
+        this.toggleContextKeys,
+      );
+    }
+  }
+}
+
+function addExpressionKeys(expression: ContextKeyExpression | undefined, keys: Set<string>): void {
+  if (!expression) return;
+  for (const key of expression.keys()) keys.add(key);
 }
 
 function resolveMenu(

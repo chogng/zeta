@@ -1,12 +1,7 @@
 import "./sidebarpart.css";
-import { type Event } from "../../../../base/common/event.js";
-import { ViewContainerLocation } from "../../../common/views.js";
+import { ViewContainerLocation, type IViewContainerDescriptor } from "../../../common/views.js";
 import type { IViewDescriptorService } from "../../../services/views/common/viewDescriptorService.js";
-import { CompositePart } from "../compositePart.js";
-import {
-  CompositeBar,
-  type CompositeBarSelectionEvent,
-} from "../compositebar/compositeBar.js";
+import { PaneCompositePart, type PaneCompositeTitleActions } from "../paneCompositePart.js";
 
 /** Construction inputs for a Sidebar Composite host. */
 export interface SidebarPartOptions {
@@ -16,32 +11,29 @@ export interface SidebarPartOptions {
   readonly location?: ViewContainerLocation;
   readonly ariaLabel?: string;
   readonly viewsAriaLabel?: string;
+  /** Selects which registered containers receive items in the hosted CompositeBar. */
+  readonly compositeBarContainerFilter?: (container: IViewContainerDescriptor) => boolean;
+  readonly compositeBarVisible?: boolean;
+  readonly titleActions?: PaneCompositeTitleActions;
 }
 
-/** Reusable CompositePart presented at the side of a host region. */
-export class SidebarPart extends CompositePart {
-  readonly compositeBar: CompositeBar;
-
-  readonly onDidSelectComposite: Event<CompositeBarSelectionEvent>;
-
+/** Reusable Pane Composite Part presented at the side of the Workbench. */
+export class SidebarPart extends PaneCompositePart {
   override get minimumWidth(): number { return 180; }
   override get maximumWidth(): number { return 600; }
 
   constructor(options: SidebarPartOptions) {
-    super(options.id ?? "sidebar", options.ownerDocument);
-    this.element.classList.add("zeta-sidebar-part");
-    this.element.setAttribute("aria-label", options.ariaLabel ?? "Primary sidebar");
-    this.compositeBar = this.own(new CompositeBar({
+    super({
       ownerDocument: options.ownerDocument,
       viewDescriptorService: options.viewDescriptorService,
+      id: options.id ?? "sidebar",
       location: options.location ?? ViewContainerLocation.Sidebar,
-      ariaLabel: options.viewsAriaLabel ?? "Primary side bar views",
-    }));
-    this.onDidSelectComposite = this.compositeBar.onDidSelectComposite;
-    this.contentElement.before(this.compositeBar.element);
-  }
-
-  setActiveComposite(compositeId: string): void {
-    this.compositeBar.setActiveComposite(compositeId);
+      ariaLabel: options.ariaLabel ?? "Primary sidebar",
+      viewsAriaLabel: options.viewsAriaLabel ?? "Primary side bar views",
+      compositeBarContainerFilter: options.compositeBarContainerFilter,
+      compositeBarVisible: options.compositeBarVisible,
+      titleActions: options.titleActions,
+    });
+    this.element.classList.add("zeta-sidebar-part");
   }
 }

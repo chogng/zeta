@@ -5,6 +5,21 @@ import { type IDisposable, DisposableSlot, DisposableOwner, ResettableDisposable
 
 export type SashOrientation = "vertical" | "horizontal";
 
+/**
+ * An opt-in placement treatment for a Sash hosted between inset surfaces.
+ *
+ * The Sash continues to use its configured drag target and hover feedback,
+ * while its own cross-axis footprint expands to the full visual gap. Its
+ * long-axis endpoints are clipped by half the gap, preventing perpendicular
+ * Sashes from competing for pointer events at grid intersections.
+ */
+export interface InsetSashPresentation {
+  readonly type: "inset";
+  readonly gap: number;
+}
+
+export type SashPresentation = InsetSashPresentation | undefined;
+
 /** Visual and interaction settings applied to every Sash below one element. */
 export interface SashSettings {
   readonly dragAreaSize: number;
@@ -68,12 +83,18 @@ export class Sash extends DisposableOwner {
   constructor(
     readonly orientation: SashOrientation,
     ownerDocument: Document = document,
+    presentation: SashPresentation = undefined,
   ) {
     super();
     const element = ownerDocument.createElement("div");
     this.element = element;
     this.defer(() => element.remove());
     element.className = `zeta-sash zeta-sash-${orientation}`;
+    if (presentation?.type === "inset") {
+      assertPositiveFinite(presentation.gap, "inset gap");
+      element.classList.add("zeta-sash-inset");
+      element.style.setProperty("--zeta-sash-inset-gap", `${presentation.gap}px`);
+    }
     element.setAttribute("role", "separator");
     element.setAttribute("aria-orientation", orientation);
     element.tabIndex = 0;

@@ -31,8 +31,12 @@ export class PaneComposite extends ViewPaneContainer {
     this.element.setAttribute("aria-labelledby", compositeTabId(options.viewContainer.location, options.viewContainer.id));
   }
 
-  get titleActionsElement(): HTMLElement | undefined {
-    return this.panes.find((pane) => pane.titleActionsElement)?.titleActionsElement;
+  get partTitleActionsElement(): HTMLElement | undefined {
+    return this.panes.find((pane) => pane.partTitleActionsElement)?.partTitleActionsElement;
+  }
+
+  get partTitleElement(): HTMLElement | undefined {
+    return this.panes.find((pane) => pane.partTitleElement)?.partTitleElement;
   }
 
   setTitleSecondaryActions(actions: readonly IAction[]): boolean {

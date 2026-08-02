@@ -21,6 +21,8 @@ export interface CompositeBarOptions {
   readonly location: ViewContainerLocation;
   readonly ariaLabel: string;
   readonly presentation?: CompositeBarPresentation;
+  /** Selects the View Containers represented as Composite Bar action items. */
+  readonly containerFilter?: (container: IViewContainerDescriptor) => boolean;
   /** Host-owned menu surface used to reveal label tabs that do not fit. */
   readonly contextMenuProvider?: IContextMenuProvider;
 }
@@ -44,6 +46,7 @@ export class CompositeBar extends DisposableOwner {
   private readonly location: ViewContainerLocation;
   private readonly tabList: TabList<string>;
   private readonly contextMenuProvider: IContextMenuProvider | undefined;
+  private readonly containerFilter: (container: IViewContainerDescriptor) => boolean;
   private readonly overflowButton: Button | undefined;
   private readonly _onDidSelectComposite =
     this.own(new Emitter<CompositeBarSelectionEvent>());
@@ -66,6 +69,7 @@ export class CompositeBar extends DisposableOwner {
     this.viewDescriptorService = options.viewDescriptorService;
     this.location = options.location;
     this.contextMenuProvider = options.contextMenuProvider;
+    this.containerFilter = options.containerFilter ?? (() => true);
     this.element = options.ownerDocument.createElement("section");
     this.element.className = `zeta-composite-bar zeta-composite-bar-${options.presentation ?? "icon"}`;
     this.element.setAttribute("aria-label", options.ariaLabel);
@@ -161,12 +165,11 @@ export class CompositeBar extends DisposableOwner {
   }
 
   private render(): void {
-    this.containers = this.viewDescriptorService.getViewContainers(
-      this.location,
-    );
+    const availableContainers = this.viewDescriptorService.getViewContainers(this.location);
+    this.containers = availableContainers.filter(this.containerFilter);
     if (
       this._activeCompositeId !== undefined &&
-      !this.containers.some((container) => container.id === this._activeCompositeId)
+      !availableContainers.some((container) => container.id === this._activeCompositeId)
     ) {
       this._activeCompositeId = undefined;
     }

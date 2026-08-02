@@ -4,6 +4,7 @@ import { MenuId } from "../../../../platform/actions/common/actions.js";
 import type { IMenuService } from "../../../../platform/actions/common/menuService.js";
 import type { IContextMenuService } from "../../../../platform/contextview/browser/contextMenu.js";
 import { WorkbenchPart } from "../../part.js";
+import { WorkbenchWindowBarHeight } from "../workbenchPartDimensions.js";
 import { BrowserMenubarControl, type IMenubarControl } from "./menubarControl.js";
 
 /** Inputs shared by web and Electron titlebar factories. */
@@ -24,8 +25,8 @@ export class BrowserTitlebarPart extends WorkbenchPart {
   private readonly leftActions: MenuWorkbenchToolBar;
   private readonly actions: MenuWorkbenchToolBar;
 
-  override get minimumHeight(): number { return 35; }
-  override get maximumHeight(): number { return 35; }
+  override get minimumHeight(): number { return WorkbenchWindowBarHeight; }
+  override get maximumHeight(): number { return WorkbenchWindowBarHeight; }
 
   constructor(
     options: ITitlebarPartFactoryOptions,

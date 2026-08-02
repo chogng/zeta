@@ -30,6 +30,10 @@ export const SideBarVisibleContext =
 export const AuxiliaryBarVisibleContext =
   new RawContextKey<boolean>("auxiliaryBarVisible", true);
 
+/** Whether the Workbench Agent Sidebar is currently visible. */
+export const AgentSidebarVisibleContext =
+  new RawContextKey<boolean>("agentSidebarVisible", false);
+
 /** Whether the bottom panel is currently visible. */
 export const PanelVisibleContext =
   new RawContextKey<boolean>("panelVisible", true);

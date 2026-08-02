@@ -3,7 +3,10 @@ import { Action2, MenuId, registerAction2 } from "../../../../../platform/action
 import { ContextKeyExpr, IContextKeyService } from "../../../../../platform/contextkey/common/contextkey.js";
 import type { ServicesAccessor } from "../../../../../platform/instantiation/common/instantiation.js";
 import { ISettingsService } from "../../../../services/preferences/common/settings.js";
-import { AgentSidebarVisibleContext, MOVE_CHAT_TO_EDITOR_COMMAND_ID, MOVE_CHAT_TO_NEW_WINDOW_COMMAND_ID, OPEN_CHAT_BROWSER_COMMAND_ID, OPEN_CHAT_SETTINGS_COMMAND_ID, TOGGLE_AGENT_SIDEBAR_COMMAND_ID } from "../../common/chat.js";
+import { IWorkbenchLayoutService } from "../../../../services/layout/browser/layoutService.js";
+import { IViewsService } from "../../../../services/views/browser/viewsService.js";
+import { AgentSidebarVisibleContext } from "../../../../common/contextkeys.js";
+import { CHAT_AGENT_SIDEBAR_VIEW_ID, MOVE_CHAT_TO_EDITOR_COMMAND_ID, MOVE_CHAT_TO_NEW_WINDOW_COMMAND_ID, OPEN_CHAT_BROWSER_COMMAND_ID, OPEN_CHAT_SETTINGS_COMMAND_ID, TOGGLE_AGENT_SIDEBAR_COMMAND_ID } from "../../common/chat.js";
 
 const ChatBrowserAvailable = ContextKeyExpr.equals("chatBrowserAvailable", true);
 const ChatEditorAreaAvailable = ContextKeyExpr.equals("chatEditorAreaAvailable", true);
@@ -22,19 +25,36 @@ registerAction2(class ToggleAgentSidebarAction extends Action2 {
         tooltip: "Hide Agent Sidebar",
         icon: lxiconsLibrary.layoutSidebarRight,
       },
-      menu: {
-        id: MenuId.ChatTitleLayout,
-        group: "navigation",
-        order: 1,
-      },
+      menu: [
+        {
+          id: MenuId.ChatTitleLayout,
+          when: ContextKeyExpr.not(AgentSidebarVisibleContext.key),
+          group: "navigation",
+          order: 1,
+        },
+        {
+          id: MenuId.AgentSidebarTitle,
+          when: AgentSidebarVisibleContext.isEqualTo(true),
+          group: "navigation",
+          order: 1,
+        },
+      ],
       f1: true,
     });
   }
 
   override run(accessor: ServicesAccessor): void {
     const contextKeys = accessor.get(IContextKeyService);
-    const visible = contextKeys.getValue<boolean>(AgentSidebarVisibleContext.key) ?? AgentSidebarVisibleContext.defaultValue;
-    contextKeys.setContext(AgentSidebarVisibleContext.key, !visible);
+    const layout = accessor.get(IWorkbenchLayoutService);
+    if (layout.isPartVisible("agentSidebar")) {
+      layout.hidePart("agentSidebar");
+      contextKeys.setContext(AgentSidebarVisibleContext.key, false);
+      return;
+    }
+    const agentSidebar = accessor.get(IViewsService).openView(
+      CHAT_AGENT_SIDEBAR_VIEW_ID,
+    );
+    contextKeys.setContext(AgentSidebarVisibleContext.key, agentSidebar !== undefined);
   }
 });
 

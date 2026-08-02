@@ -95,11 +95,15 @@ import {
 import { type IAnyWorkspaceIdentifier, isSingleFolderWorkspaceIdentifier, serializeWorkspaceIdentifier, UNKNOWN_EMPTY_WINDOW_WORKSPACE } from "../../platform/workspace/common/workspace.js";
 import { WORKSPACE_CONTEXT_CHANGED_CHANNEL } from "../../platform/workspace/common/workspaceIpc.js";
 import { createAppServerWorkspaceTransitionAdapter } from "../../platform/workspaces/electron-main/appServerWorkspaceTransition.js";
-import { type IWorkspaceTransitionFailure, WorkspaceTransitionMainService, WorkspaceTransitionStatus } from "../../platform/workspaces/electron-main/workspaceTransitionMainService.js";
+import { type IWorkspaceTransitionFailure, type WorkspaceTransitionMainServiceOptions, WorkspaceTransitionFailureKind, WorkspaceTransitionMainService, WorkspaceTransitionStatus } from "../../platform/workspaces/electron-main/workspaceTransitionMainService.js";
 import { WorkspaceContextMainService, WorkspacesMainService, workspaceContextIpcRoutes } from "../../platform/workspaces/electron-main/workspacesMainService.js";
+export type AppServerStartupMode = "required" | "disabled";
+
 export interface ZetaApplicationOptions {
   readonly product: ProductConfiguration;
   readonly rendererRoot: string;
+  /** Selects whether this Electron process starts the App Server before opening its window. */
+  readonly appServerStartupMode: AppServerStartupMode;
 }
 
 interface PersistentServices {
@@ -114,6 +118,7 @@ interface PersistentServices {
 export class ZetaApplication extends DisposableOwner {
   private readonly product: ProductConfiguration;
   private readonly rendererRoot: string;
+  private readonly appServerStartupMode: AppServerStartupMode;
   private readonly disposableTracker: DisposableTracker | undefined;
   private readonly tracking: Disposable | undefined;
 
@@ -135,6 +140,7 @@ export class ZetaApplication extends DisposableOwner {
     super();
     this.product = options.product;
     this.rendererRoot = options.rendererRoot;
+    this.appServerStartupMode = options.appServerStartupMode;
     this.disposableTracker = disposableTracker;
     this.tracking = tracking;
 
@@ -172,9 +178,11 @@ export class ZetaApplication extends DisposableOwner {
 
     const supervisor = this.own(this.createAppServerSupervisor(workspace));
     this.supervisor = supervisor;
-    const appServerReady = await this.startAppServerWithRecovery(supervisor);
-    if (!appServerReady) {
-      return;
+    if (this.appServerStartupMode === "required") {
+      const appServerReady = await this.startAppServerWithRecovery(supervisor);
+      if (!appServerReady) {
+        return;
+      }
     }
     await this.openFirstWindow(workspaceContext, workspaces, supervisor);
   }
@@ -375,13 +383,10 @@ export class ZetaApplication extends DisposableOwner {
       }
     }));
     const { configuration, keybindings } = this.services;
-    const appServerWorkspace = createAppServerWorkspaceTransitionAdapter(supervisor);
     const workspaceTransitions = windowDisposables.add(new WorkspaceTransitionMainService({
       workspaces,
       context: workspaceContext,
-      runtime: appServerWorkspace,
-      classifyRuntimeError: (error) => appServerWorkspace.classifyRuntimeError(error),
-      recovery: appServerWorkspace,
+      ...this.createWorkspaceTransitionRuntime(supervisor),
     }));
     const ipcRoutes = [
       ...appServerIpcRoutes(supervisor),
@@ -469,6 +474,27 @@ export class ZetaApplication extends DisposableOwner {
     } else {
       await window.loadFile(rendererFile);
     }
+  }
+
+  private createWorkspaceTransitionRuntime(
+    supervisor: AppServerSupervisor,
+  ): Pick<WorkspaceTransitionMainServiceOptions, "runtime" | "classifyRuntimeError" | "recovery"> {
+    if (this.appServerStartupMode === "disabled") {
+      return {
+        runtime: {
+          async switchWorkspace() {
+            // UI-only development changes the window context without touching a backend runtime.
+          },
+        },
+        classifyRuntimeError: () => WorkspaceTransitionFailureKind.RuntimeUnavailable,
+      };
+    }
+    const appServerWorkspace = createAppServerWorkspaceTransitionAdapter(supervisor);
+    return {
+      runtime: appServerWorkspace,
+      classifyRuntimeError: (error) => appServerWorkspace.classifyRuntimeError(error),
+      recovery: appServerWorkspace,
+    };
   }
 
   private readonly onBeforeQuit = (event: ElectronEvent): void => {

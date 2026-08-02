@@ -4,10 +4,15 @@ import {
   DisposableOwner,
   ResettableDisposableGroup,
 } from "../../../common/lifecycle.js";
-import { Sash } from "../sash/sash.js";
+import { Sash, type SashPresentation } from "../sash/sash.js";
 
 export type SplitViewOrientation = "horizontal" | "vertical";
 export type SplitViewLayoutPriority = "low" | "normal" | "high";
+
+export interface SplitViewOptions {
+  /** Optional Sash presentation shared by separators created for this view. */
+  readonly sashPresentation?: SashPresentation;
+}
 
 /**
  * A view hosted by SplitView.
@@ -62,6 +67,7 @@ export class SplitView extends DisposableOwner {
   constructor(
     readonly orientation: SplitViewOrientation,
     ownerDocument: Document = document,
+    private readonly options: SplitViewOptions = {},
   ) {
     super();
     const element = ownerDocument.createElement("div");
@@ -340,6 +346,7 @@ export class SplitView extends DisposableOwner {
     const sash = this.sashes.add(new Sash(
       this.orientation === "horizontal" ? "vertical" : "horizontal",
       this.element.ownerDocument,
+      this.options.sashPresentation,
     ));
     sash.element.dataset.previousViewIndex = String(previousIndex);
     let snapshot: DragSnapshot | undefined;

@@ -66,6 +66,7 @@ export class MenuId {
   static readonly EditorTitle = new MenuId("EditorTitle");
   static readonly ChatTitle = new MenuId("ChatTitle");
   static readonly ChatTitleLayout = new MenuId("ChatTitleLayout");
+  static readonly AgentSidebarTitle = new MenuId("AgentSidebarTitle");
   static readonly TerminalTitle = new MenuId("TerminalTitle");
   static readonly MenubarMainMenu = new MenuId("MenubarMainMenu");
   static readonly MenubarFileMenu = new MenuId("MenubarFileMenu");

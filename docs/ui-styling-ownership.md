@@ -2,6 +2,7 @@
 
 > 本文是 Zeta Desktop Renderer 中组件、组合控件与 Workbench Part 样式边界的 canonical 文档。
 > 主题值与 token 注册仍以 [`design-tokens.md`](design-tokens.md) 为准；Desktop 的跨进程和产品所有权仍以 [`zeta-desktop-architecture.md`](zeta-desktop-architecture.md) 为准。
+> Pane-like Part 的标题层级、槽位、命名和 Composite 生命周期以 [`workbench-pane-composite-design.md`](workbench-pane-composite-design.md) 为准。
 > Command、MenuId、Context Key 与菜单型 Toolbar 的组合语义以 [`menu-system.md`](menu-system.md) 为准；本文只拥有它们最终投影到控件后的视觉边界。
 
 ## 快速理解
@@ -49,8 +50,12 @@
 | `TabList` | `tablist/tab` ARIA、`aria-selected`、激活回调、`.checked` 状态投影 | 不定义 Workbench tab 皮肤 |
 | `CompositeBar` | View Container 切换，以及 `icon`/`label` 两种 presentation | `compositebar.css` |
 | `PaneComposite` | `tabpanel`、pane 生命周期、pane header presentation | `views.css` |
-| `PanelPart` | 35px title control、CompositeBar 与 toolbar 的左右布局 | `panelpart.css` 只拥有外层布局 |
+| `PaneCompositePart` | 35px title control、CompositeBar/自有标题与 title actions 的左右槽位 | `paneCompositePart.css` 只拥有外层布局 |
 | `TitlebarPart` | 左区、应用菜单、标题和右区的窗口级布局 | 通用 toolbar/button 状态不归 Titlebar |
+
+`PaneCompositePart` 的标题高度为 `35px`；`titleContentElement` 占据左侧弹性空间，`titleActionsSlotElement` 固定在右侧并提供 `4px` 的双侧 inset。该槽位可托管 Part 级 menu toolbar 或当前 View 的 `partTitleActionsElement`；Part CSS 只拥有这两个直接槽位的外框与排列，不得穿透修改其中的 toolbar/button 内部状态。
+
+`CompositeBar` 的 icon presentation item 状态盒为 `24px × 24px`，hover 与 `.checked` 使用同一外框。`CompositeBar` 拥有该 item 几何和两种状态的视觉；`TabList` 与 `ActionBar` 只提供结构、交互和稳定状态 class，不决定 Workbench Composite 的状态盒尺寸。
 
 ## 状态归属矩阵
 
@@ -65,6 +70,8 @@
 `ActionBar` 是行为与排列基座，不因为它包裹了 item 就自动拥有业务 selected 皮肤。需要通用 toggled 背景时，由调用方显式启用 `highlightToggledItems`，ActionBar 再通过 `.highlight-toggled .checked` selector 应用自己的公开高亮 presentation。
 
 和 VS Code 一致，ARIA attribute 用于无障碍语义，稳定 class 用于视觉 selector。不要使用 `[aria-pressed="true"]` 或 `[aria-selected="true"]` 作为皮肤 selector。
+
+原生 DOM attribute 同样不作为组件视觉状态 API。组件需要覆盖 author CSS 时，应并行保留原生语义并投影稳定 class，例如 `MenuWorkbenchToolBar` 同时设置 `hidden` 和 `.empty`，CSS 只选择 `.empty`。
 
 需要让选中状态覆盖 hover 时，先写一般 `:hover` 规则，再写同等或更高 specificity 的 `.checked` 规则；不要使用 `:not(.checked):hover` 表达状态优先级。
 
@@ -206,6 +213,7 @@ Theme 不判断某个 tab 是否 active，Part 也不选择 active token。`Comp
 | Button 并行投影 `.checked` 与 `aria-pressed`，CSS 不依赖 ARIA selector | ✅ |
 | ActionBar/ToolBar 通过 `highlightToggledItems` 选择通用 checked 背景 | ✅ |
 | `WorkbenchToolBar` 与 `MenuWorkbenchToolBar` 不改变 base toolbar 样式所有权 | ✅ |
+| `MenuWorkbenchToolBar` 以 `.empty` 投影空状态，CSS 不选择 `hidden` attribute | ✅ |
 
 历史 CSS 中可能仍有不符合本规范的穿透 selector。它们是待迁移实现，不构成新的先例；修改相关区域时应就地迁移到 owner 或公开 variant。
 

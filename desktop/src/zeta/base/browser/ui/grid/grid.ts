@@ -1,7 +1,7 @@
 import { type IDimension } from "../../geometry.js";
 import { type Event } from "../../../common/event.js";
 import { DisposableOwner } from "../../../common/lifecycle.js";
-import { GridView, type GridLocation, type GridViewDescriptor, type GridViewSizing, type ISerializableView as ISerializableGridView, type IView as IGridView, type IViewDeserializer, type SerializedGridViewDescriptor } from "./gridview.js";
+import { GridView, type GridLocation, type GridViewDescriptor, type GridViewOptions, type GridViewSizing, type ISerializableView as ISerializableGridView, type IView as IGridView, type IViewDeserializer, type SerializedGridViewDescriptor } from "./gridview.js";
 
 /** A view hosted by the identity-addressed {@link Grid}. */
 export type IView = IGridView;
@@ -11,6 +11,8 @@ export type ISerializableView = ISerializableGridView;
 export type GridDescriptor<TView extends IView> = GridViewDescriptor<TView>;
 
 export type SerializedGridDescriptor = SerializedGridViewDescriptor;
+
+export type GridOptions = GridViewOptions;
 
 export type Direction = "up" | "right" | "down" | "left";
 
@@ -58,12 +60,13 @@ export class Grid<TView extends IView = IView> extends DisposableOwner {
   constructor(
     descriptorOrGridView: GridDescriptor<TView> | GridView,
     ownerDocument: Document = document,
+    options: GridOptions = {},
   ) {
     super();
     this.gridview = this.own(
       descriptorOrGridView instanceof GridView
         ? descriptorOrGridView
-        : new GridView(descriptorOrGridView, ownerDocument),
+        : new GridView(descriptorOrGridView, ownerDocument, options),
     );
     for (const view of this.gridview.getViews()) {
       this.views.add(view as TView);
@@ -162,9 +165,10 @@ export class SerializableGrid<TView extends ISerializableView> extends Grid<TVie
     descriptor: SerializedGridDescriptor,
     deserializer: IViewDeserializer<TView>,
     ownerDocument: Document = document,
+    options: GridOptions = {},
   ): SerializableGrid<TView> {
     return new SerializableGrid(
-      GridView.deserialize(descriptor, deserializer, ownerDocument),
+      GridView.deserialize(descriptor, deserializer, ownerDocument, options),
     );
   }
 
