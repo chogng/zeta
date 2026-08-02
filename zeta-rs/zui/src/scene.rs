@@ -277,6 +277,11 @@ impl UiScene {
 
     pub fn draw_rect(&mut self, mut rect: PaintRect) {
         if let Some(clip_bounds) = self.active_clip {
+            if clip_bounds.is_empty()
+                || (rect.shadow().is_none() && rect.bounds().intersection(clip_bounds).is_empty())
+            {
+                return;
+            }
             rect.apply_clip(clip_bounds);
         }
         let index = self.rects.len();
@@ -287,6 +292,9 @@ impl UiScene {
 
     pub fn draw_icon(&mut self, mut icon: PaintIcon) {
         if let Some(clip_bounds) = self.active_clip {
+            if icon.bounds().intersection(clip_bounds).is_empty() {
+                return;
+            }
             icon.apply_clip(clip_bounds);
         }
         let index = self.icons.len();
@@ -297,6 +305,9 @@ impl UiScene {
 
     pub fn draw_image(&mut self, mut image: crate::PaintImage) {
         if let Some(clip_bounds) = self.active_clip {
+            if image.bounds().intersection(clip_bounds).is_empty() {
+                return;
+            }
             image.apply_clip(clip_bounds);
         }
         let index = self.images.len();
@@ -307,6 +318,10 @@ impl UiScene {
 
     pub fn draw_text(&mut self, mut block: TextBlock) {
         if let Some(clip_bounds) = self.active_clip {
+            let bounds = Rect::new(block.origin(), block.bounds());
+            if bounds.intersection(clip_bounds).is_empty() {
+                return;
+            }
             block.apply_clip(clip_bounds);
         }
         let index = self.text_blocks.len();

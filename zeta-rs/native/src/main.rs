@@ -42,6 +42,7 @@ use zeta_winit::{
     ModifiersState, MouseButton, NativeWindow, PhysicalExtent, Theme, WindowAttributes,
     WindowChrome, WindowControlInsets, WindowEvent, WindowId, run_application_with_user_events,
 };
+use zui::{FrameInvalidation, FrameSchedule, FrameScheduler};
 
 mod agent_composer;
 mod agent_session;
@@ -125,7 +126,7 @@ struct NativeApp {
     window: Option<NativeWindow>,
     renderer: Option<Box<dyn Renderer>>,
     presentation: Option<ShellPresentation>,
-    presentation_rebuild_pending: bool,
+    frame_scheduler: FrameScheduler,
     agent_sidebar: AgentSidebarState,
     agent_sidebar_workspace: AgentSidebarWorkspace,
     session_sidebar: SessionSidebarState,
@@ -183,7 +184,7 @@ impl NativeApp {
             window: None,
             renderer: None,
             presentation: None,
-            presentation_rebuild_pending: false,
+            frame_scheduler: FrameScheduler::default(),
             agent_sidebar: AgentSidebarState::default(),
             agent_sidebar_workspace,
             session_sidebar: SessionSidebarState::default(),
@@ -256,7 +257,10 @@ impl NativeApp {
     }
 
     fn redraw(&mut self, event_loop: &ActiveEventLoop) {
-        if self.presentation_rebuild_pending {
+        if matches!(
+            self.frame_scheduler.take(),
+            Some(FrameInvalidation::Rebuild)
+        ) {
             self.rebuild_presentation();
         }
         let Some(presentation) = self.presentation.as_ref() else {
@@ -440,13 +444,14 @@ impl NativeApp {
         self.layout_inspector
             .compose(&mut presentation.scene, root_layout, self.cursor_position);
         self.presentation = Some(presentation);
-        self.presentation_rebuild_pending = false;
+        self.frame_scheduler.clear();
         self.update_ime_cursor_area();
     }
 
     fn rebuild_presentation_on_next_redraw(&mut self) {
-        self.presentation_rebuild_pending = true;
-        self.request_redraw();
+        if self.frame_scheduler.request(FrameInvalidation::Rebuild) == FrameSchedule::RequestFrame {
+            self.request_redraw();
+        }
     }
 
     fn logical_pointer_position(&self, physical_x: f64, physical_y: f64) -> Point {

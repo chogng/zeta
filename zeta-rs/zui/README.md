@@ -35,6 +35,7 @@
 | `UiScene::draw_component` | public | compute 一次、自动注册检查节点，再调用 `paint_element` |
 | `UiScene::with_element` | public | 让 content closure 与 overlay 进入相同 compute/inspection 管线 |
 | `UiScene::with_current_layer_element` / `with_inspection_node` | private | 绑定 scene layer、inspection parent 与声明源码位置 |
+| `FrameScheduler::request` / `take` | public | 合并平台帧之间的失效请求，并由 host 在一次 redraw 中消费最高级别的工作 |
 | `InspectionFrame::register` | crate-private | 建立单帧 identity、parent、layer 和命中顺序 |
 | `scene::batching::batches` | private | 保留跨 primitive 的真实插入顺序并合并连续同类 range |
 | `font::new_font_system` / `font::mapping` | private | 固定 layout 与 renderer 共享的 locale/fallback/font mapping policy |
@@ -57,6 +58,10 @@ Component::element
 `Element` tree 每帧解析，不持有跨帧 identity。`InspectionNodeId` 只能在当前 `UiScene` 生命周期内使用；
 选中状态如果要跨帧保存，必须由 host 建立自己的稳定 identity。Padding 色块使用 clamp 后的 resolved
 值，Inspector 同时可读取原始 `ElementStyle`。Gap 由 layout 生成实际矩形，不允许 Inspector 猜测。
+
+`FrameScheduler` 只合并帧请求，不调用窗口 API，也不决定产品状态如何变化。Host 在收到
+`FrameSchedule::RequestFrame` 时唤醒平台，在 redraw 开始时通过 `take` 消费工作；同步完成了等价重建时
+必须调用 `clear`，避免下一帧重复执行。
 
 Overlay Element 会创建高于当前 layer 的 scene layer，并在闭包返回后恢复调用者的 layer 与 clip。
 panic recovery 不是当前 contract；组件 paint panic 会中断本帧构建。
@@ -81,6 +86,7 @@ Split/Grid 和 primitive contract。修改以下边界时还需同步验证：
 
 ## 6. 当前限制与扩展点
 
-当前没有 retained mount lifecycle、跨帧 layout cache、style cascade、运行时样式编辑、path primitive
-或远程 Inspector protocol。后续只有在真实消费者要求 retained identity/invalidation 时，才应扩展
-Element lifecycle；GPU backend 变化不应改变 `zui` public contract。
+当前只有帧级失效合并，没有 retained mount lifecycle、子树级 dirty propagation、跨帧 layout cache、
+style cascade、运行时样式编辑、path primitive 或远程 Inspector protocol。后续只有在真实消费者要求
+retained identity/invalidation 时，才应扩展 Element lifecycle；GPU backend 变化不应改变 `zui`
+public contract。

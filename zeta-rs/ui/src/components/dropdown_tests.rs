@@ -157,3 +157,41 @@ fn scrollable_dropdown_caps_height_and_translates_item_geometry() {
     );
     assert!(!dropdown.item_bounds(4).unwrap().is_empty());
 }
+
+#[test]
+fn scrollable_dropdown_only_builds_projected_item_content() {
+    let items = (0..100)
+        .map(|index| DropdownItem::new(format!("Folder {index}"), ButtonState::Resting))
+        .collect::<Vec<_>>();
+    let dropdown = Dropdown::new_scrollable(
+        Rect::from_xywh(0.0, 0.0, 400.0, 300.0),
+        Rect::from_xywh(30.0, 20.0, 1.0, 1.0),
+        items,
+        DropdownStyle::new(
+            SURFACE,
+            ButtonStyle::new(
+                ButtonBackgrounds::new(Color::TRANSPARENT),
+                TextStyle::new(13.0, Color::rgb(0, 0, 0)),
+            ),
+            Size::new(120.0, 28.0),
+        ),
+        DropdownScrollConfiguration::new(
+            ScrollState::default(),
+            2,
+            ScrollViewStyle::new(ScrollbarStyle::new(Color::TRANSPARENT, SELECTED)),
+        ),
+    );
+    let mut scene = UiScene::new(Color::TRANSPARENT);
+
+    dropdown.paint(&mut scene);
+
+    assert_eq!(
+        scene
+            .text_blocks()
+            .iter()
+            .map(|block| block.text())
+            .collect::<Vec<_>>(),
+        ["Folder 0", "Folder 1"]
+    );
+    assert!(dropdown.interactive_item_bounds(99).unwrap().is_empty());
+}

@@ -63,12 +63,12 @@ fn draw_only_invokes_projected_items_and_clips_them_to_the_viewport() {
     });
 
     assert_eq!(indices, vec![0, 1, 2, 3]);
-    assert_eq!(scene.rects().len(), 6);
+    assert_eq!(scene.rects().len(), 5);
     assert!(
         scene
             .rects()
             .iter()
-            .take(4)
+            .take(3)
             .all(|rect| rect.clip_bounds() == Some(bounds))
     );
 }

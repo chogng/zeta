@@ -29,7 +29,7 @@ GPU pipeline、atlas、shader 和 surface 全部委托给 renderer backend。
 | 虚拟 Tree 行、层级缩进、disclosure/content geometry 与命中 | `zeta-ui::TreeView` | ✅；复用固定高度 ListView；hierarchy、稳定节点 identity、展开状态和 child loading 归 host |
 | 锚点浮层布局、viewport 翻转/约束、通用外壳与浮层合成 | `zeta-ui::ContextView` / `zui::UiScene::with_overlay` | ✅；显示生命周期、关闭和输入路由归 host |
 | 柔和阴影、2px padding、4px radius、纵向 menu item geometry 与默认选择 | `zeta-ui::ContextMenu` | ✅；组合 ContextView/ActionBar，产品 identity、关闭与 command 归 host |
-| 无边框、无外层 padding 的锚定下拉项布局、可选 header 与默认选择 | `zeta-ui::Dropdown` | ✅；组合 ContextView/ActionBar，选中 identity、header 内容、关闭与 command 归 host |
+| 无边框、无外层 padding 的锚定下拉项布局、可选 header 与默认选择 | `zeta-ui::Dropdown` | ✅；可滚动项复用 ListView 可见范围投影，选中 identity、header 内容、关闭与 command 归 host |
 | Icon+text label 的内部布局 | `zeta-ui::IconLabel` | ✅ |
 | 单个按键与多段快捷键的 keycap 几何和绘制 | `zeta-ui::Keycap` / `KeycapSequence` | ✅；按键语义与平台 label 归 caller |
 | Semantic icon identity、SVG definition 与 rendering mode | `zeta-icons` | 委托 |
@@ -89,7 +89,7 @@ zeta-ui -X→ App Server / workspace / product state
 | `components::tree_view::{TreeItem, TreeItemExpansion, TreeItemLayout}` | public | 分别表达可见节点的 depth/Leaf/Collapsed/Expanded 结构状态，以及同源 row/disclosure/content bounds |
 | `components::context_menu::{ContextMenu, ContextMenuItem}` | public | 组合 ContextView 与纵向 ActionBar，绘制带柔和 BoxShadow 的无边框 menu surface，公开同源 item bounds/hit-test，并允许 host 在保留的 header row 中绘制搜索等产品内容 |
 | `components::context_menu::{ContextMenuSelection, ContextMenuStyle}` | public | 默认选择首个 enabled item；定义 surface color、item size/style、可选 header height 和锚点 placement，padding 固定为 2px、radius 固定为 4px |
-| `components::dropdown::{Dropdown, DropdownItem}` | public | 组合锚定浮层与纵向 label item，公开同源 item/interactive bounds、hit-test 和当前 selected index，并允许 host 在保留的 header row 中绘制搜索等产品内容 |
+| `components::dropdown::{Dropdown, DropdownItem}` | public | 组合锚定浮层与纵向 label item；可滚动模式只为 visible/overscan range 构建 ActionBar，同时以 O(1) 固定高度几何公开全部 item/interactive bounds，供 host 保留键盘与 accessibility identity |
 | `components::dropdown::{DropdownSelection, DropdownStyle}` | public | 默认选择首个 enabled item，并定义 borderless surface、item size/style、可选 header height、圆角和锚点 placement |
 | `components::dropdown::DropdownScrollConfiguration` | public | 让 host 以 retained `ScrollState`、最大可见项数与 `ScrollViewStyle` 为 Dropdown 的 item region 启用独立滚动；header 保持固定 |
 | `components::icon_label::{IconLabel, IconLabelStyle}` | public | 对齐 semantic icon 与单行 text；不选择产品 icon |
@@ -126,8 +126,8 @@ host
           │   └─ caller content inside content-bounds clip
           ├─ ContextMenu → ContextView + shadow/menu surface + vertical ActionBar
           │   └─ soft BoxShadow + 2px padding + 4px radius + selected MenuItem presentation
-          ├─ Dropdown → ContextView + vertical ActionBar
-          │   └─ selected item → Button selection presentation
+          ├─ Dropdown → ContextView + ListView projected range + vertical ActionBar
+          │   └─ visible/overscan selected item → Button selection presentation
           ├─ ScrollView → viewport clip + translated content geometry + interactive scrollbar chrome
           ├─ ListView → ScrollView + fixed/variable-extent visible/overscan item projection
           ├─ TreeView → fixed ListView + depth/disclosure/content item projection

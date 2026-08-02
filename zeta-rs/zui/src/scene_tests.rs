@@ -92,7 +92,7 @@ fn scene_applies_nested_clip_to_all_primitives() {
             ));
             scene.draw_icon(PaintIcon::new(
                 TEST_ICON,
-                Rect::from_xywh(0.0, 0.0, 20.0, 20.0),
+                Rect::from_xywh(40.0, 0.0, 20.0, 20.0),
                 Color::WHITE,
             ));
             scene.draw_text(TextBlock::new(
@@ -125,6 +125,40 @@ fn scene_restores_outer_clip_after_nested_draw() {
         scene.rects()[0].clip_bounds(),
         Some(Rect::from_xywh(10.0, 10.0, 100.0, 80.0))
     );
+}
+
+#[test]
+fn scene_discards_primitives_fully_outside_the_active_clip() {
+    let image = ImageData::from_rgba8(ImageId::new(8), 1, 1, vec![255, 0, 0, 255]).unwrap();
+    let mut scene = UiScene::new(Color::TRANSPARENT);
+
+    scene.with_clip(Rect::from_xywh(0.0, 0.0, 20.0, 20.0), |scene| {
+        scene.draw_rect(PaintRect::new(
+            Rect::from_xywh(30.0, 30.0, 10.0, 10.0),
+            Color::WHITE,
+        ));
+        scene.draw_icon(PaintIcon::new(
+            TEST_ICON,
+            Rect::from_xywh(30.0, 30.0, 10.0, 10.0),
+            Color::WHITE,
+        ));
+        scene.draw_image(PaintImage::new(
+            image,
+            Rect::from_xywh(30.0, 30.0, 10.0, 10.0),
+        ));
+        scene.draw_text(TextBlock::new(
+            "outside",
+            Point::new(30.0, 30.0),
+            Size::new(10.0, 10.0),
+            TextStyle::new(12.0, Color::WHITE),
+        ));
+    });
+
+    assert!(scene.rects().is_empty());
+    assert!(scene.icons().is_empty());
+    assert!(scene.images().is_empty());
+    assert!(scene.text_blocks().is_empty());
+    assert_eq!(scene.batches().count(), 0);
 }
 
 #[test]

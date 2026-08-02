@@ -32,6 +32,7 @@ zeta-utils-path = { workspace = true }
 zeta-utils-pty = { workspace = true }
 zeta-wgpu = { workspace = true }
 zeta-winit = { workspace = true }
+zui = { workspace = true }
 
 [target.'cfg(not(target_os = "android"))'.dependencies]
 arboard = { workspace = true }

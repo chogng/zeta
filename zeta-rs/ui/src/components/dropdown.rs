@@ -1,7 +1,9 @@
+use std::ops::Range;
+
 use crate::{
     Color, Component, ComponentElement, ContextView, ContextViewPlacement, ContextViewStyle,
-    CornerRadii, Element, Point, Rect, ScrollAxis, ScrollMetrics, ScrollState, ScrollView,
-    ScrollViewStyle, Size, UiScene,
+    CornerRadii, Element, ListView, Point, Rect, ScrollMetrics, ScrollState, ScrollViewStyle, Size,
+    UiScene,
 };
 
 use super::{
@@ -115,7 +117,7 @@ pub struct Dropdown {
     item_bounds: Rect,
     header_bounds: Option<Rect>,
     items: Vec<DropdownItem>,
-    scroll_view: Option<ScrollView>,
+    list_view: Option<ListView>,
     style: DropdownStyle,
     selection: DropdownSelection,
 }
@@ -178,24 +180,22 @@ impl Dropdown {
             content_bounds.size.width,
             (content_bounds.size.height - header_height).max(0.0),
         );
-        let scroll_view = scroll.map(|scroll| {
-            ScrollView::new(
+        let list_view = scroll.map(|scroll| {
+            ListView::new(
                 item_bounds,
-                Size::new(
-                    item_bounds.size.width,
-                    style.item_size.height.max(0.0) * items.len() as f32,
-                ),
+                items.len(),
+                style.item_size.height.max(f32::EPSILON),
                 scroll.state,
-                ScrollAxis::Vertical,
                 scroll.style,
             )
+            .with_overscan_items(1)
         });
         Self {
             context_view,
             item_bounds,
             header_bounds,
             items,
-            scroll_view,
+            list_view,
             style,
             selection: DropdownSelection::default(),
         }
@@ -232,35 +232,76 @@ impl Dropdown {
     }
 
     pub fn item_bounds(&self, index: usize) -> Option<Rect> {
-        self.action_bar()
-            .item_bounds(index)
-            .map(|bounds| bounds.intersection(self.item_bounds))
+        Some(
+            self.unclipped_item_bounds(index)?
+                .intersection(self.item_bounds),
+        )
     }
 
     pub fn interactive_item_bounds(&self, index: usize) -> Option<Rect> {
-        self.action_bar()
-            .interactive_item_bounds(index)
-            .map(|bounds| bounds.intersection(self.item_bounds))
+        let item = self.items.get(index)?;
+        if !item.is_enabled() {
+            return None;
+        }
+        self.item_bounds(index)
     }
 
     pub fn hit_test(&self, point: Point) -> Option<usize> {
-        self.item_bounds
-            .contains(point)
-            .then(|| self.action_bar().hit_test(point))
-            .flatten()
+        if !self.item_bounds.contains(point) {
+            return None;
+        }
+        let index = if let Some(list_view) = &self.list_view {
+            list_view.item_at(point)?
+        } else {
+            let item_height = self.style.item_size.height;
+            if item_height <= 0.0 {
+                return None;
+            }
+            ((point.y - self.item_bounds.origin.y) / item_height).floor() as usize
+        };
+        self.items
+            .get(index)
+            .is_some_and(DropdownItem::is_enabled)
+            .then_some(index)
     }
 
     pub fn scroll_metrics(&self) -> Option<ScrollMetrics> {
-        self.scroll_view.map(|scroll_view| scroll_view.metrics())
+        self.list_view
+            .as_ref()
+            .map(|list_view| list_view.scroll_view().metrics())
     }
 
-    fn action_bar(&self) -> ActionBar {
+    fn unclipped_item_bounds(&self, index: usize) -> Option<Rect> {
+        self.items.get(index)?;
+        if let Some(list_view) = &self.list_view {
+            return list_view.item_bounds(index);
+        }
+        Some(Rect::from_xywh(
+            self.item_bounds.origin.x,
+            self.item_bounds.origin.y + self.style.item_size.height * index as f32,
+            self.item_bounds.size.width,
+            self.style.item_size.height.max(0.0),
+        ))
+    }
+
+    fn projected_range(&self) -> Range<usize> {
+        let Some(list_view) = &self.list_view else {
+            return 0..self.items.len();
+        };
+        let scroll_view = list_view.scroll_view();
+        list_view.layout().projected_range(scroll_view.viewport())
+    }
+
+    fn action_bar(&self, range: Range<usize>) -> ActionBar {
         let selected_index = self.selected_index();
         let items = self
             .items
+            .get(range.clone())
+            .unwrap_or_default()
             .iter()
             .enumerate()
-            .map(|(index, item)| {
+            .map(|(local_index, item)| {
+                let index = range.start + local_index;
                 ActionBarItem::Button(
                     ActionBarButton::label(item.label.clone(), item.state).with_selection(
                         if selected_index == Some(index) {
@@ -272,15 +313,15 @@ impl Dropdown {
                 )
             })
             .collect();
-        let bounds = self.scroll_view.map_or(self.item_bounds, |scroll_view| {
-            let viewport = scroll_view.viewport();
-            Rect::from_xywh(
-                viewport.content_origin().x,
-                viewport.content_origin().y,
-                self.item_bounds.size.width,
-                scroll_view.metrics().content().height,
-            )
-        });
+        let origin = self
+            .unclipped_item_bounds(range.start)
+            .map_or(self.item_bounds.origin, |bounds| bounds.origin);
+        let bounds = Rect::from_xywh(
+            origin.x,
+            origin.y,
+            self.item_bounds.size.width,
+            self.style.item_size.height.max(0.0) * range.len() as f32,
+        );
         ActionBar::new(
             bounds,
             ActionBarOrientation::Vertical,
@@ -307,13 +348,13 @@ impl Dropdown {
     }
 
     fn paint_contents(&self, scene: &mut UiScene, paint_header: impl FnOnce(&mut UiScene, Rect)) {
-        let action_bar = self.action_bar();
+        let action_bar = self.action_bar(self.projected_range());
         self.context_view.draw(scene, |scene, _content_bounds| {
             if let Some(header_bounds) = self.header_bounds {
                 paint_header(scene, header_bounds);
             }
-            if let Some(scroll_view) = self.scroll_view {
-                scroll_view.draw(scene, |scene, _viewport| {
+            if let Some(list_view) = &self.list_view {
+                list_view.scroll_view().draw(scene, |scene, _viewport| {
                     scene.draw_component(&action_bar);
                 });
             } else {

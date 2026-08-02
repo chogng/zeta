@@ -8161,6 +8161,7 @@ dependencies = [
  "zeta-utils-pty",
  "zeta-wgpu",
  "zeta-winit",
+ "zui",
 ]
 
 [[package]]

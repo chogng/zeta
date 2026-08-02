@@ -7,6 +7,7 @@
 mod component;
 mod element;
 mod font;
+mod frame_scheduler;
 mod geometry;
 mod icon;
 mod image;
@@ -24,6 +25,7 @@ pub use element::{
     ComponentElement, ComputedElement, Element, ElementDirection, ElementLength, ElementStyle,
 };
 pub use font::{FontCatalog, FontCatalogError};
+pub use frame_scheduler::{FrameInvalidation, FrameSchedule, FrameScheduler};
 pub use geometry::{CornerRadii, Edges, Point, Rect, Size};
 pub use icon::PaintIcon;
 pub use image::{ImageData, ImageDataError, ImageId, PaintImage};

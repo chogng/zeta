@@ -165,8 +165,7 @@ impl NativeApp {
             .workspace_path_picker
             .apply_scroll(workspace_path_picker_scroll_command(delta), metrics)
         {
-            self.rebuild_presentation();
-            self.request_redraw();
+            self.rebuild_presentation_on_next_redraw();
         }
         true
     }
