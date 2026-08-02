@@ -8,6 +8,8 @@ use crate::components::selection::SelectionViewState;
 use crate::components::transcript::Message;
 use crate::features::skills::{SkillSelectionAction, SkillSelectionView};
 use crate::features::status_line::StatusLineModel;
+use crate::features::theme::ThemeSelectionAction;
+use crate::features::theme::ThemeSelectionView;
 use crate::features::thread::ThreadFeatureState;
 use crate::features::thread::ThreadPresentationEvent;
 use crate::features::thread::TurnActivity;
@@ -41,6 +43,7 @@ pub(crate) struct App {
 enum SelectionActions {
     ReadOnly,
     Skills(BTreeMap<SelectionItemId, SkillSelectionAction>),
+    Theme(BTreeMap<SelectionItemId, ThemeSelectionAction>),
 }
 
 impl App {
@@ -114,17 +117,28 @@ impl App {
     }
 
     fn activate_selection_item(&self, item_id: &SelectionItemId) -> Option<AppCommand> {
-        let SelectionActions::Skills(actions) = self.selection_actions.last()? else {
-            return None;
-        };
-        match actions.get(item_id)? {
-            SkillSelectionAction::SetEnablement {
-                skill_id,
-                enablement,
-            } => Some(AppCommand::SetSkillEnablement {
-                skill_id: skill_id.clone(),
-                enablement: *enablement,
-            }),
+        match self.selection_actions.last()? {
+            SelectionActions::ReadOnly => None,
+            SelectionActions::Skills(actions) => match actions.get(item_id)? {
+                SkillSelectionAction::SetEnablement {
+                    skill_id,
+                    enablement,
+                } => Some(AppCommand::SetSkillEnablement {
+                    skill_id: skill_id.clone(),
+                    enablement: *enablement,
+                }),
+            },
+            SelectionActions::Theme(actions) => match actions.get(item_id)? {
+                ThemeSelectionAction::Select { preference } => Some(AppCommand::SetTheme {
+                    preference: preference.clone(),
+                }),
+                ThemeSelectionAction::SelectCustom { preference } => {
+                    Some(AppCommand::SetCustomTheme {
+                        preference: preference.clone(),
+                    })
+                }
+                ThemeSelectionAction::OpenCustomThemes => Some(AppCommand::OpenCustomThemePane),
+            },
         }
     }
 
@@ -207,6 +221,22 @@ impl App {
         }
     }
 
+    fn show_theme_view(&mut self, view: ThemeSelectionView) {
+        self.interaction_pane.show_selection_view(view.model);
+        self.selection_actions
+            .push(SelectionActions::Theme(view.actions));
+    }
+
+    fn close_theme_views(&mut self) {
+        while matches!(
+            self.selection_actions.last(),
+            Some(SelectionActions::Theme(_))
+        ) {
+            self.interaction_pane.pop_selection_view();
+            self.selection_actions.pop();
+        }
+    }
+
     pub(crate) fn skills_view_is_active(&self) -> bool {
         matches!(
             self.selection_actions.last(),
@@ -270,6 +300,8 @@ impl App {
             AppEvent::SelectionViewOpened(model) => self.show_selection_view(model),
             AppEvent::SkillsViewOpened(view) => self.show_skills_view(view),
             AppEvent::SkillsViewReplaced(view) => self.replace_skills_view(view),
+            AppEvent::ThemeViewClosed => self.close_theme_views(),
+            AppEvent::ThemeViewOpened(view) => self.show_theme_view(view),
             AppEvent::ThreadSnapshotReceived(thread) => self
                 .thread
                 .update(ThreadPresentationEvent::SnapshotReceived(thread)),

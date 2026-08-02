@@ -6,11 +6,18 @@ use crate::components::composer::ComposerInput;
 use crate::components::composer::ComposerSubmission;
 use crate::components::composer::built_in_slash_command_definitions;
 use crate::components::transcript::MessageRole;
+use crate::features::theme::ThemePickerCatalog;
+use crate::features::theme::ThemePickerChoice;
+use crate::features::theme::ThemePickerTarget;
+use crate::features::theme::ThemePreviewPalette;
+use crate::features::theme::custom_theme_selection_view;
+use crate::features::theme::theme_selection_view;
 use crate::features::thread::TurnActivity;
 use crate::features::workspace_files::FileSearchManager;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
+use ratatui::style::Color;
 use std::fs;
 use std::path::Path;
 use std::time::Duration;
@@ -45,6 +52,96 @@ fn blank_input_does_not_start_a_turn() {
     assert_eq!(action, None);
     assert!(app.messages().is_empty());
     assert_eq!(app.status(), &Status::Ready);
+}
+
+#[test]
+fn selected_theme_closes_the_theme_pane_after_success() {
+    let mut app = App::new();
+    app.update(AppEvent::ThemeViewOpened(theme_selection_view(
+        &theme_catalog(),
+    )));
+
+    assert_eq!(app.selection_view().unwrap().title(), "Theme");
+    let command = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    assert_eq!(
+        command,
+        Some(AppCommand::SetTheme {
+            preference: "zeta-code-dark".into(),
+        })
+    );
+    app.update(AppEvent::ThemeViewClosed);
+    assert!(app.selection_view().is_none());
+}
+
+#[test]
+fn selected_custom_theme_closes_the_entire_theme_flow_after_success() {
+    let catalog = theme_catalog();
+    let mut app = App::new();
+    app.update(AppEvent::ThemeViewOpened(theme_selection_view(&catalog)));
+    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    assert_eq!(
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        Some(AppCommand::OpenCustomThemePane)
+    );
+    app.update(AppEvent::ThemeViewOpened(custom_theme_selection_view(
+        &catalog,
+    )));
+    assert_eq!(
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        Some(AppCommand::SetCustomTheme {
+            preference: "aurora".into(),
+        })
+    );
+
+    app.update(AppEvent::ThemeViewClosed);
+    assert!(app.selection_view().is_none());
+}
+
+fn theme_catalog() -> ThemePickerCatalog {
+    ThemePickerCatalog {
+        choices: vec![
+            ThemePickerChoice {
+                label: "Dark mode".into(),
+                palette_label: "GitHub Dark".into(),
+                target: ThemePickerTarget::Preference("zeta-code-dark".into()),
+                palette: theme_palette(),
+                selected: true,
+            },
+            ThemePickerChoice {
+                label: "Custom color theme".into(),
+                palette_label: "User-defined".into(),
+                target: ThemePickerTarget::CustomThemes,
+                palette: theme_palette(),
+                selected: false,
+            },
+        ],
+        custom_choices: vec![ThemePickerChoice {
+            label: "Aurora".into(),
+            palette_label: "User-defined · Aurora".into(),
+            target: ThemePickerTarget::Preference("aurora".into()),
+            palette: theme_palette(),
+            selected: false,
+        }],
+    }
+}
+
+fn theme_palette() -> ThemePreviewPalette {
+    ThemePreviewPalette {
+        background: Color::Black,
+        border: Color::Gray,
+        foreground: Color::White,
+        muted: Color::DarkGray,
+        highlight: Color::Magenta,
+        keyword: Color::Red,
+        string: Color::Blue,
+        function: Color::Magenta,
+        r#type: Color::Cyan,
+        variable: Color::Yellow,
+        inserted_background: Color::Green,
+        removed_background: Color::Red,
+        inserted_marker: Color::LightGreen,
+        removed_marker: Color::LightRed,
+    }
 }
 
 #[test]

@@ -9,7 +9,434 @@
     {
       "id": "zeta-code",
       "label": "Zeta Code",
-      "colors": {}
+      "colors": {
+        "accent.foreground": {
+          "dark": "#58a6ff",
+          "light": "#0969da",
+          "high-contrast-dark": "#58a6ff",
+          "high-contrast-light": "#0969da"
+        },
+        "description.foreground": {
+          "dark": "#8b949e",
+          "light": "#57606a",
+          "high-contrast-dark": "#8b949e",
+          "high-contrast-light": "#57606a"
+        },
+        "diffEditor.insertedLineBackground": {
+          "dark": "#132d1d",
+          "light": "#dafbe1",
+          "high-contrast-dark": "#132d1d",
+          "high-contrast-light": "#dafbe1"
+        },
+        "diffEditor.insertedLineMarker": {
+          "dark": "#3fb950",
+          "light": "#1a7f37",
+          "high-contrast-dark": "#3fb950",
+          "high-contrast-light": "#1a7f37"
+        },
+        "diffEditor.removedLineBackground": {
+          "dark": "#351b1b",
+          "light": "#ffebe9",
+          "high-contrast-dark": "#351b1b",
+          "high-contrast-light": "#ffebe9"
+        },
+        "diffEditor.removedLineMarker": {
+          "dark": "#f85149",
+          "light": "#cf222e",
+          "high-contrast-dark": "#f85149",
+          "high-contrast-light": "#cf222e"
+        },
+        "editor.background": {
+          "dark": "#0d1117",
+          "light": "#ffffff",
+          "high-contrast-dark": "#0d1117",
+          "high-contrast-light": "#ffffff"
+        },
+        "editor.foreground": {
+          "dark": "#e6edf3",
+          "light": "#1f2328",
+          "high-contrast-dark": "#e6edf3",
+          "high-contrast-light": "#1f2328"
+        },
+        "editor.token.commentForeground": {
+          "dark": "#8b949e",
+          "light": "#57606a",
+          "high-contrast-dark": "#8b949e",
+          "high-contrast-light": "#57606a"
+        },
+        "editor.token.functionForeground": {
+          "dark": "#d2a8ff",
+          "light": "#8250df",
+          "high-contrast-dark": "#d2a8ff",
+          "high-contrast-light": "#8250df"
+        },
+        "editor.token.keywordForeground": {
+          "dark": "#ff7b72",
+          "light": "#cf222e",
+          "high-contrast-dark": "#ff7b72",
+          "high-contrast-light": "#cf222e"
+        },
+        "editor.token.numberForeground": {
+          "dark": "#79c0ff",
+          "light": "#0550ae",
+          "high-contrast-dark": "#79c0ff",
+          "high-contrast-light": "#0550ae"
+        },
+        "editor.token.regexpForeground": {
+          "dark": "#a5d6ff",
+          "light": "#0a3069",
+          "high-contrast-dark": "#a5d6ff",
+          "high-contrast-light": "#0a3069"
+        },
+        "editor.token.stringForeground": {
+          "dark": "#a5d6ff",
+          "light": "#0a3069",
+          "high-contrast-dark": "#a5d6ff",
+          "high-contrast-light": "#0a3069"
+        },
+        "editor.token.typeForeground": {
+          "dark": "#d2a8ff",
+          "light": "#8250df",
+          "high-contrast-dark": "#d2a8ff",
+          "high-contrast-light": "#8250df"
+        },
+        "editor.token.variableForeground": {
+          "dark": "#ffa657",
+          "light": "#953800",
+          "high-contrast-dark": "#ffa657",
+          "high-contrast-light": "#953800"
+        },
+        "error.foreground": {
+          "dark": "#f85149",
+          "light": "#cf222e",
+          "high-contrast-dark": "#f85149",
+          "high-contrast-light": "#cf222e"
+        },
+        "muted.foreground": {
+          "dark": "#8b949e",
+          "light": "#57606a",
+          "high-contrast-dark": "#8b949e",
+          "high-contrast-light": "#57606a"
+        },
+        "success.foreground": {
+          "dark": "#3fb950",
+          "light": "#1a7f37",
+          "high-contrast-dark": "#3fb950",
+          "high-contrast-light": "#1a7f37"
+        },
+        "terminal.background": {
+          "dark": "#0d1117",
+          "light": "#ffffff",
+          "high-contrast-dark": "#0d1117",
+          "high-contrast-light": "#ffffff"
+        },
+        "terminal.foreground": {
+          "dark": "#e6edf3",
+          "light": "#1f2328",
+          "high-contrast-dark": "#e6edf3",
+          "high-contrast-light": "#1f2328"
+        },
+        "tui.highlightForeground": {
+          "dark": "#9a91eb",
+          "light": "#6658c7",
+          "high-contrast-dark": "#9a91eb",
+          "high-contrast-light": "#6658c7"
+        },
+        "warning.foreground": {
+          "dark": "#ffa657",
+          "light": "#953800",
+          "high-contrast-dark": "#ffa657",
+          "high-contrast-light": "#953800"
+        }
+      }
+    },
+    {
+      "id": "zeta-code-colorblind",
+      "label": "Zeta Code Colorblind",
+      "colors": {
+        "accent.foreground": {
+          "dark": "#58a6ff",
+          "light": "#0969da",
+          "high-contrast-dark": "#58a6ff",
+          "high-contrast-light": "#0969da"
+        },
+        "description.foreground": {
+          "dark": "#8b949e",
+          "light": "#57606a",
+          "high-contrast-dark": "#8b949e",
+          "high-contrast-light": "#57606a"
+        },
+        "diffEditor.insertedLineBackground": {
+          "dark": "#12294b",
+          "light": "#ddf4ff",
+          "high-contrast-dark": "#12294b",
+          "high-contrast-light": "#ddf4ff"
+        },
+        "diffEditor.insertedLineMarker": {
+          "dark": "#58a6ff",
+          "light": "#0969da",
+          "high-contrast-dark": "#58a6ff",
+          "high-contrast-light": "#0969da"
+        },
+        "diffEditor.removedLineBackground": {
+          "dark": "#402810",
+          "light": "#fff1e5",
+          "high-contrast-dark": "#402810",
+          "high-contrast-light": "#fff1e5"
+        },
+        "diffEditor.removedLineMarker": {
+          "dark": "#d47616",
+          "light": "#b35900",
+          "high-contrast-dark": "#d47616",
+          "high-contrast-light": "#b35900"
+        },
+        "editor.background": {
+          "dark": "#0d1117",
+          "light": "#ffffff",
+          "high-contrast-dark": "#0d1117",
+          "high-contrast-light": "#ffffff"
+        },
+        "editor.foreground": {
+          "dark": "#e6edf3",
+          "light": "#1f2328",
+          "high-contrast-dark": "#e6edf3",
+          "high-contrast-light": "#1f2328"
+        },
+        "editor.token.commentForeground": {
+          "dark": "#8b949e",
+          "light": "#57606a",
+          "high-contrast-dark": "#8b949e",
+          "high-contrast-light": "#57606a"
+        },
+        "editor.token.functionForeground": {
+          "dark": "#d2a8ff",
+          "light": "#8250df",
+          "high-contrast-dark": "#d2a8ff",
+          "high-contrast-light": "#8250df"
+        },
+        "editor.token.keywordForeground": {
+          "dark": "#ec8e2c",
+          "light": "#b35900",
+          "high-contrast-dark": "#ec8e2c",
+          "high-contrast-light": "#b35900"
+        },
+        "editor.token.numberForeground": {
+          "dark": "#79c0ff",
+          "light": "#0550ae",
+          "high-contrast-dark": "#79c0ff",
+          "high-contrast-light": "#0550ae"
+        },
+        "editor.token.regexpForeground": {
+          "dark": "#a5d6ff",
+          "light": "#0a3069",
+          "high-contrast-dark": "#a5d6ff",
+          "high-contrast-light": "#0a3069"
+        },
+        "editor.token.stringForeground": {
+          "dark": "#a5d6ff",
+          "light": "#0a3069",
+          "high-contrast-dark": "#a5d6ff",
+          "high-contrast-light": "#0a3069"
+        },
+        "editor.token.typeForeground": {
+          "dark": "#d2a8ff",
+          "light": "#8250df",
+          "high-contrast-dark": "#d2a8ff",
+          "high-contrast-light": "#8250df"
+        },
+        "editor.token.variableForeground": {
+          "dark": "#fdac54",
+          "light": "#8a4600",
+          "high-contrast-dark": "#fdac54",
+          "high-contrast-light": "#8a4600"
+        },
+        "error.foreground": {
+          "dark": "#d47616",
+          "light": "#b35900",
+          "high-contrast-dark": "#d47616",
+          "high-contrast-light": "#b35900"
+        },
+        "muted.foreground": {
+          "dark": "#8b949e",
+          "light": "#57606a",
+          "high-contrast-dark": "#8b949e",
+          "high-contrast-light": "#57606a"
+        },
+        "success.foreground": {
+          "dark": "#58a6ff",
+          "light": "#0969da",
+          "high-contrast-dark": "#58a6ff",
+          "high-contrast-light": "#0969da"
+        },
+        "terminal.background": {
+          "dark": "#0d1117",
+          "light": "#ffffff",
+          "high-contrast-dark": "#0d1117",
+          "high-contrast-light": "#ffffff"
+        },
+        "terminal.foreground": {
+          "dark": "#e6edf3",
+          "light": "#1f2328",
+          "high-contrast-dark": "#e6edf3",
+          "high-contrast-light": "#1f2328"
+        },
+        "tui.highlightForeground": {
+          "dark": "#58a6ff",
+          "light": "#0969da",
+          "high-contrast-dark": "#58a6ff",
+          "high-contrast-light": "#0969da"
+        },
+        "warning.foreground": {
+          "dark": "#fdac54",
+          "light": "#8a4600",
+          "high-contrast-dark": "#fdac54",
+          "high-contrast-light": "#8a4600"
+        }
+      }
+    },
+    {
+      "id": "zeta-code-ansi",
+      "label": "Zeta Code ANSI",
+      "colors": {
+        "accent.foreground": {
+          "dark": "#58a6ff",
+          "light": "#0969da",
+          "high-contrast-dark": "#58a6ff",
+          "high-contrast-light": "#0969da"
+        },
+        "description.foreground": {
+          "dark": "#8b949e",
+          "light": "#57606a",
+          "high-contrast-dark": "#8b949e",
+          "high-contrast-light": "#57606a"
+        },
+        "diffEditor.insertedLineBackground": {
+          "dark": "#132d1d",
+          "light": "#dafbe1",
+          "high-contrast-dark": "#132d1d",
+          "high-contrast-light": "#dafbe1"
+        },
+        "diffEditor.insertedLineMarker": {
+          "dark": "#3fb950",
+          "light": "#1a7f37",
+          "high-contrast-dark": "#3fb950",
+          "high-contrast-light": "#1a7f37"
+        },
+        "diffEditor.removedLineBackground": {
+          "dark": "#351b1b",
+          "light": "#ffebe9",
+          "high-contrast-dark": "#351b1b",
+          "high-contrast-light": "#ffebe9"
+        },
+        "diffEditor.removedLineMarker": {
+          "dark": "#f85149",
+          "light": "#cf222e",
+          "high-contrast-dark": "#f85149",
+          "high-contrast-light": "#cf222e"
+        },
+        "editor.background": {
+          "dark": "#0d1117",
+          "light": "#ffffff",
+          "high-contrast-dark": "#0d1117",
+          "high-contrast-light": "#ffffff"
+        },
+        "editor.foreground": {
+          "dark": "#e6edf3",
+          "light": "#1f2328",
+          "high-contrast-dark": "#e6edf3",
+          "high-contrast-light": "#1f2328"
+        },
+        "editor.token.commentForeground": {
+          "dark": "#8b949e",
+          "light": "#57606a",
+          "high-contrast-dark": "#8b949e",
+          "high-contrast-light": "#57606a"
+        },
+        "editor.token.functionForeground": {
+          "dark": "#d2a8ff",
+          "light": "#8250df",
+          "high-contrast-dark": "#d2a8ff",
+          "high-contrast-light": "#8250df"
+        },
+        "editor.token.keywordForeground": {
+          "dark": "#ff7b72",
+          "light": "#cf222e",
+          "high-contrast-dark": "#ff7b72",
+          "high-contrast-light": "#cf222e"
+        },
+        "editor.token.numberForeground": {
+          "dark": "#79c0ff",
+          "light": "#0550ae",
+          "high-contrast-dark": "#79c0ff",
+          "high-contrast-light": "#0550ae"
+        },
+        "editor.token.regexpForeground": {
+          "dark": "#a5d6ff",
+          "light": "#0a3069",
+          "high-contrast-dark": "#a5d6ff",
+          "high-contrast-light": "#0a3069"
+        },
+        "editor.token.stringForeground": {
+          "dark": "#a5d6ff",
+          "light": "#0a3069",
+          "high-contrast-dark": "#a5d6ff",
+          "high-contrast-light": "#0a3069"
+        },
+        "editor.token.typeForeground": {
+          "dark": "#d2a8ff",
+          "light": "#8250df",
+          "high-contrast-dark": "#d2a8ff",
+          "high-contrast-light": "#8250df"
+        },
+        "editor.token.variableForeground": {
+          "dark": "#ffa657",
+          "light": "#953800",
+          "high-contrast-dark": "#ffa657",
+          "high-contrast-light": "#953800"
+        },
+        "error.foreground": {
+          "dark": "#f85149",
+          "light": "#cf222e",
+          "high-contrast-dark": "#f85149",
+          "high-contrast-light": "#cf222e"
+        },
+        "muted.foreground": {
+          "dark": "#8b949e",
+          "light": "#57606a",
+          "high-contrast-dark": "#8b949e",
+          "high-contrast-light": "#57606a"
+        },
+        "success.foreground": {
+          "dark": "#3fb950",
+          "light": "#1a7f37",
+          "high-contrast-dark": "#3fb950",
+          "high-contrast-light": "#1a7f37"
+        },
+        "terminal.background": {
+          "dark": "#0d1117",
+          "light": "#ffffff",
+          "high-contrast-dark": "#0d1117",
+          "high-contrast-light": "#ffffff"
+        },
+        "terminal.foreground": {
+          "dark": "#e6edf3",
+          "light": "#1f2328",
+          "high-contrast-dark": "#e6edf3",
+          "high-contrast-light": "#1f2328"
+        },
+        "tui.highlightForeground": {
+          "dark": "#9a91eb",
+          "light": "#6658c7",
+          "high-contrast-dark": "#9a91eb",
+          "high-contrast-light": "#6658c7"
+        },
+        "warning.foreground": {
+          "dark": "#ffa657",
+          "light": "#953800",
+          "high-contrast-dark": "#ffa657",
+          "high-contrast-light": "#953800"
+        }
+      }
     },
     {
       "id": "zeterm",

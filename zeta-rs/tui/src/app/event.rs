@@ -1,5 +1,6 @@
 use crate::components::selection::SelectionViewModel;
 use crate::features::skills::SkillSelectionView;
+use crate::features::theme::ThemeSelectionView;
 use crate::features::thread::TurnActivity;
 use zeta_app_server_protocol::protocol::config::ConfigReadResult;
 use zeta_file_search::PathSearchSnapshot;
@@ -16,6 +17,8 @@ pub(crate) enum AppEvent {
     SelectionViewOpened(SelectionViewModel),
     SkillsViewOpened(SkillSelectionView),
     SkillsViewReplaced(SkillSelectionView),
+    ThemeViewClosed,
+    ThemeViewOpened(ThemeSelectionView),
     ThreadSnapshotReceived(Thread),
     TranscriptCleared,
     TurnActivityChanged(TurnActivity),

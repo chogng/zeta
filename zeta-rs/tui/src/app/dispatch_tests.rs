@@ -31,6 +31,7 @@ fn help_lists_only_builtins_with_execution_paths() {
     assert!(help.contains(&"/status"));
     assert!(help.contains(&"/resume"));
     assert!(help.contains(&"/model"));
+    assert!(help.contains(&"/theme"));
     assert!(!help.contains(&"/login"));
     assert!(!help.contains(&"/plugins"));
     assert!(!help.contains(&"/review"));
@@ -179,14 +180,14 @@ fn skills_view_toggles_catalog_entries_by_enablement() {
 
     app.handle_key(KeyEvent::new(KeyCode::Left, KeyModifiers::NONE));
     let action = app
-        .handle_key(KeyEvent::new(KeyCode::Char(' '), KeyModifiers::NONE))
+        .handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
         .unwrap();
     let AppCommand::SetSkillEnablement {
         skill_id,
         enablement,
     } = action
     else {
-        panic!("Space should request a skill enablement change");
+        panic!("Enter should request a skill enablement change");
     };
     assert_eq!(skill_id.name.as_str(), "skill-creator");
     assert_eq!(enablement, SkillEnablementDto::Disabled);

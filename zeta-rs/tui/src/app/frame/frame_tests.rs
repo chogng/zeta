@@ -83,7 +83,8 @@ fn selection_view_replaces_the_composer_but_keeps_the_transcript_surface() {
     assert!(rendered.contains("Help"));
     assert!(rendered.contains("Commands"));
     assert!(rendered.contains("Keys"));
-    assert!(rendered.contains("Search commands and shortcuts"));
+    assert!(rendered.contains("Space search"));
+    assert!(!rendered.contains("Search commands and shortcuts"));
     assert!(rendered.contains("←/→ tabs"));
     assert!(!rendered.contains("enter send"));
 }
@@ -94,6 +95,7 @@ fn selection_view_supports_keyboard_tab_switching_and_search() {
     app.update(AppEvent::SelectionViewOpened(help_view()));
 
     app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Char(' '), KeyModifiers::NONE));
     app.handle_key(KeyEvent::new(KeyCode::Char('e'), KeyModifiers::NONE));
     app.handle_key(KeyEvent::new(KeyCode::Char('s'), KeyModifiers::NONE));
     app.handle_key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::NONE));
@@ -103,7 +105,34 @@ fn selection_view_supports_keyboard_tab_switching_and_search() {
     assert!(!rendered.contains("move selection"));
 
     app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+    assert!(app.selection_view().is_some());
+    app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
     assert!(app.selection_view().is_none());
+}
+
+#[test]
+fn selection_candidate_color_repaints_the_pane_and_welcome_frames() {
+    let mut app = App::new();
+    app.update(AppEvent::SelectionViewOpened(SelectionViewModel::new(
+        "Theme",
+        vec![SelectionTab::new(
+            "Themes",
+            vec![
+                SelectionItem::new("First").with_selection_foreground(Color::Red),
+                SelectionItem::new("Second").with_selection_foreground(Color::Green),
+            ],
+        )],
+    )));
+
+    let first = render_buffer(&app, 80, 24);
+    let interaction_y = 24 - app.selection_view().unwrap().desired_height(80);
+    assert_eq!(first[(2, 1)].fg, Color::Red);
+    assert_eq!(first[(0, interaction_y)].fg, Color::Red);
+
+    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    let second = render_buffer(&app, 80, 24);
+    assert_eq!(second[(2, 1)].fg, Color::Green);
+    assert_eq!(second[(0, interaction_y)].fg, Color::Green);
 }
 
 #[test]
@@ -143,19 +172,23 @@ fn bare_slash_renders_all_registered_commands() {
 }
 
 #[test]
-fn slash_popup_uses_gray_text_and_a_foreground_only_selection_highlight() {
+fn slash_popup_inherits_the_theme_surface_and_bolds_the_selected_command() {
     let mut app = App::new();
     app.insert_text("/");
 
     let buffer = render_buffer(&app, 80, 20);
     let selected = &buffer[(2, 9)];
     let unselected = &buffer[(2, 10)];
+    let surface_background = buffer[(0, 0)].bg;
 
     assert_eq!(selected.fg, highlight());
-    assert_eq!(selected.bg, Color::Reset);
-    assert!(!selected.modifier.contains(Modifier::BOLD));
+    assert_eq!(selected.bg, surface_background);
+    assert_eq!(selected.symbol(), "/");
+    assert!(selected.modifier.contains(Modifier::BOLD));
     assert_eq!(unselected.fg, muted());
-    assert_eq!(unselected.bg, Color::Reset);
+    assert_eq!(unselected.bg, surface_background);
+    assert_eq!(unselected.symbol(), "/");
+    assert!(!unselected.modifier.contains(Modifier::BOLD));
 }
 
 #[test]

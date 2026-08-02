@@ -36,12 +36,18 @@ fn selection_view_preserves_composer_draft_and_owns_input_until_dismissed() {
     ));
 
     assert_eq!(
+        pane.handle_key(KeyEvent::new(KeyCode::Char(' '), KeyModifiers::NONE)),
+        InteractionPaneOutcome::Consumed
+    );
+    assert_eq!(
         pane.handle_key(KeyEvent::new(KeyCode::Char('s'), KeyModifiers::NONE)),
         InteractionPaneOutcome::Consumed
     );
     assert_eq!(pane.selection_view().unwrap().query(), "s");
     assert_eq!(pane.text(), "draft");
 
+    pane.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+    assert!(pane.selection_view().is_some());
     pane.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
 
     assert!(pane.selection_view().is_none());

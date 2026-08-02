@@ -53,11 +53,22 @@ Zeta 已经在 TUI 外部拥有：
 - CLI 交付的启动配置与产品入口参数。
 - `zeta-theme` 中与 Desktop/Native 共享的 manifest、用户主题解析和 device preference loader。
 
-主题边界是“部分接入”而不是“尚未复制完成”：TUI 当前只需要 accent、composer chrome、错误、
-成功、警告、弱化文字和选择高亮。`ui/theme.rs` 将透明色先合成到 terminal background，再按
-TrueColor、ANSI-256、ANSI-16、Monochrome 投影；其他 Desktop/Native token 不进入 TUI API。
+主题边界是“部分接入”而不是“尚未复制完成”：TUI chrome 读取 accent、composer chrome、错误、
+成功、警告、弱化文字和选择高亮；Theme Pane preview 额外读取有限的 syntax/diff token。选择高亮由
+`tui.highlightForeground` 独立表达，不借用编辑器关键字色。`ui/theme.rs` 将透明色先合成到 terminal
+background，再按 TrueColor、ANSI-256、ANSI-16、Monochrome 投影；其他 Desktop/Native token
+不进入 TUI API。
 `tui.colorTheme` 缺失时跟随 `workbench.colorTheme`，选择属于 device-local JSON，不属于 Agent
-config、Session store 或 TOML。新增消费必须先有真实终端语义和可测试的能力降级规则。
+config、Session store 或 TOML。无参数 `/theme` 打开由 `features/theme` 拥有、不可搜索的固定
+Zeta Code Theme Pane 以 `Theme` 为标题，顶部分隔线与标题、标题与第一个候选项之间各保留一行；固定选项为 Auto、Dark/Light、对应 colorblind-friendly 与 ANSI-only 模式，以及 Custom
+color theme。候选行编号展示，cursor 选择色和 syntax/diff preview 随候选主题变化；Enter 原子保存、
+即时切换并关闭整个 Theme flow 返回主界面，且不写入 transcript notice；保存失败时则保留当前 Pane 以显示错误。移动 cursor 时，Theme Pane 分隔线、上方 welcome banner
+框线使用候选 highlight；独立 `Diff preview` 区域不画左右边框，只用候选 muted token 绘制上下
+较高对比度的长节虚线。主题列表与 preview 间保留两行，palette 来源说明与操作提示间保留一行。preview 下方标明
+GitHub、GitHub Colorblind、ANSI 16 colors 或 User-defined 配色来源。`/theme <id>` 保留直接切换。通用 Selection Pane 的搜索是独立、
+可配置的底座；启用搜索的 feature 必须先按 Space 进入 search mode，footer 明示 `Space search`。
+Auto 使用终端的 `COLORFGBG` 背景报告选择 Light/Dark，无法识别时安全回退 Dark；显式模式不受该
+环境提示影响。
 
 因此 TUI 必须是可丢弃、可重新同步的 presentation shell，而不是第二个 Agent runtime 或
 App Server facade。产品权威状态的依赖链固定为：
@@ -1003,7 +1014,7 @@ lib_tests.rs
   与当前 Thread fork 已接通 typed API；
 - local slash popup 已接入 `zeta-slash-commands` 的 validated catalog/state、cursor-aware prefix filtering、保留 argument
   tail 的 range completion、keyboard/mouse selection、原子 command token，以及 inline
-  text/image/large-paste arguments；App Server 的 `initialize.slashCommands` snapshot 会在创建
+  text/image/large-paste arguments；popup 不铺设独立背景，透明继承当前 TUI 主题 surface，选中项使用候选 highlight 色粗体且不添加行首标记；App Server 的 `initialize.slashCommands` snapshot 会在创建
   Session 前合并进 catalog，非法名称、空描述、重复项和 built-in shadowing 都会使启动失败；
   dynamic command 恢复完整 `/name` 与 ordered arguments 后作为普通 Turn input 提交。
   Built-in command adapter 只保留真实执行流：Session/Thread lifecycle、status/config/MCP/Skill 查询、

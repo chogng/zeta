@@ -67,13 +67,19 @@ flowchart LR
 - `light`、`dark` 与跟随操作系统的 `system` 偏好。
 - 语言中立的 `theme-entries.json` 为 Rust `ThemeLoader` 提供 `zeta`（Electron Desktop）、
   `zeta-code`（TUI）与 `zeterm`（纯 Rust Desktop）默认入口；入口只覆盖统一 token，不创建产品
-  token 或组件分支。
+  token 或组件分支。Zeta Code 另有 `zeta-code-colorblind` 与 `zeta-code-ansi` 入口；前者把 diff
+  成功/失败从红绿对改成蓝橙对，后者由 TUI 强制投影为 ANSI 16 色。标准与 colorblind syntax/diff
+  角色取值跟随 [GitHub VS Code theme](https://github.com/primer/github-vscode-theme) 和
+  [Primer functional color](https://www.primer.style/product/primitives/color/) 的经典语义，但值已固化在
+  Zeta 自己的 token entry 中，不形成运行时主题依赖。`zeta-code` 保留蓝紫 highlight；TUI 的
+  `system` 默认必须通过 `with_default_entry("zeta-code")` 选择它。
 - Desktop、Native 和 TUI 使用同一 device root 下的 `configuration.json` 与 `themes/*.json`；每个错误文件独立隔离，内置主题始终可回退。Native `zeterm` 在没有显式用户主题时选择 `zeterm` 入口。
-- 121 个语义颜色 token 与 19 个标准标量尺寸 token；四种 `ColorScheme` 均在编译期解析，高对比度当前继承对应明暗默认值。
+- 127 个语义颜色 token 与 23 个标准标量尺寸 token；四种 `ColorScheme` 均在编译期解析，高对比度当前继承对应明暗默认值。
 - 不可变颜色对象、注册贡献、主题快照和生成产物。
 - Alpha/Native CodeEditor 使用 source-neutral `editor.token.*` 角色；旧 `editor.semanticToken.*` 仅作为兼容覆盖入口。
 - Native shell、composer、terminal ANSI、scrollbar 和 multi-diff editor 已由共享 snapshot 构造组件 palette；没有宿主 selector 或 parser 固定色。
-- TUI 明确只消费 accent、chrome、error/success/warning、muted 和 highlight 子集，并按 TrueColor、ANSI-256、ANSI-16、Monochrome 确定性降级。
+- TUI chrome 只消费 accent、chrome、error/success/warning、muted 和 highlight；Theme Pane preview
+  额外消费有限的 syntax/diff 子集，并按 TrueColor、ANSI-256、ANSI-16、Monochrome 确定性降级。
 - Desktop Terminal 使用完整 terminal 前景、背景、光标和 ANSI 16 色 token；Monaco 仅保留迁移期兼容同步，Alpha 是默认文本编辑器。
 - Electron renderer 通过受校验的 window-theme IPC 将标题栏背景和按钮颜色投影到主进程；Terminal canvas 使用当前编辑器背景，不依赖 xterm 黑色回退。
 - Desktop 与 Rust resolver 共同执行 `theme-conformance.json`，防止 alias、变换、量化或兼容映射发生跨语言漂移。
@@ -82,7 +88,10 @@ flowchart LR
 
 - 高对比度使用明暗默认值回退，尚未提供独立视觉设计；类型、解析路径和 manifest 已保留独立 scheme。
 - Desktop 的保存/预览可即时更新；Native 与 TUI 当前在进程启动时加载一次，外部文件修改需要重启对应宿主。
-- `tui.colorTheme` 当前有 typed configuration contract，但尚无 Settings UI；缺失时回退到 `workbench.colorTheme`。
+- `tui.colorTheme` 当前有 typed configuration contract，但尚无 Settings UI；TUI 可用 `/theme` 打开
+  不带搜索的八项 Zeta Code Theme Pane，用 Enter 原子保存、即时切换并返回主界面，也可用 `/theme <id>` 快速
+  切换；Theme Pane 的 syntax/diff preview 读取同一 resolved snapshot，切换不追加 transcript notice；
+  缺失时回退到 `workbench.colorTheme`。
 - 字体族和行高仍由平台或组件 CSS 管理；字体大小与字重作为 `fontSize.*`、`fontWeight.*` 标量尺寸注册。
 - 颜色和标量尺寸是当前已实现 token kind；阴影和动效应在出现真实跨组件消费者后增加独立注册表，不能伪装成颜色或尺寸。
 - 用户主题只能覆盖已封存 catalog 中的 token，不能在 JSON 中注册新的产品语义。运行期动态插件如果需要新增 token，应先引入显式 catalog revision 与快照重编译，不应直接让旧快照变为可变对象。

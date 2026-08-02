@@ -1,3 +1,4 @@
+use crate::components::selection::SelectionActivationMode;
 use crate::components::selection::SelectionItem;
 use crate::components::selection::SelectionItemId;
 use crate::components::selection::SelectionTab;
@@ -85,11 +86,10 @@ pub(crate) fn skills_selection_view(catalog: &SkillListResult) -> SkillSelection
                 SelectionTab::new(format!("Errors ({error_count})"), errors),
             ],
         )
+        .with_activation_mode(SelectionActivationMode::Enter)
         .with_search_placeholder("Search available skills")
         .with_empty_message("No matching skills")
-        .with_footer_hint(
-            "Type to search  ·  ←/→ tabs  ·  ↑/↓ select  ·  Space toggle  ·  Esc back",
-        ),
+        .with_footer_hint("Space search  ·  ←/→ tabs  ·  ↑/↓ select  ·  Enter toggle  ·  Esc back"),
         actions,
     }
 }

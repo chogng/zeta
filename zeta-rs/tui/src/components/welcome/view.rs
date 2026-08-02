@@ -1,13 +1,14 @@
 //! Responsive empty-Thread welcome banner presentation.
 
 use crate::ui::horizontal_margin;
-use crate::ui::{accent, composer_chrome, highlight, muted};
+use crate::ui::{accent, composer_chrome, muted};
 use ratatui::Frame;
 use ratatui::layout::Alignment;
 use ratatui::layout::Constraint;
 use ratatui::layout::Direction;
 use ratatui::layout::Layout;
 use ratatui::layout::Rect;
+use ratatui::style::Color;
 use ratatui::style::Modifier;
 use ratatui::style::Style;
 use ratatui::text::Line;
@@ -21,7 +22,7 @@ const EXPANDED_MIN_WIDTH: u16 = 70;
 const EXPANDED_HEIGHT: u16 = 11;
 const COMPACT_HEIGHT: u16 = 11;
 
-pub(crate) fn draw(frame: &mut Frame<'_>, area: Rect) {
+pub(crate) fn draw(frame: &mut Frame<'_>, area: Rect, presentation_highlight: Color) {
     let available = horizontal_margin(area, 2);
     if available.is_empty() {
         return;
@@ -42,7 +43,7 @@ pub(crate) fn draw(frame: &mut Frame<'_>, area: Rect) {
     };
     let block = Block::default()
         .borders(Borders::ALL)
-        .border_style(Style::default().fg(highlight()));
+        .border_style(Style::default().fg(presentation_highlight));
     let content = block.inner(banner_area);
     frame.render_widget(block, banner_area);
     if content.is_empty() {
@@ -66,18 +67,18 @@ pub(crate) fn draw(frame: &mut Frame<'_>, area: Rect) {
     draw_title(frame, title_area);
 
     if expanded {
-        draw_expanded(frame, content);
+        draw_expanded(frame, content, presentation_highlight);
     } else {
         draw_compact(frame, content);
     }
 }
 
-fn draw_expanded(frame: &mut Frame<'_>, area: Rect) {
+fn draw_expanded(frame: &mut Frame<'_>, area: Rect, presentation_highlight: Color) {
     let columns = expanded_columns(area);
     frame.render_widget(
         Block::default()
             .borders(Borders::RIGHT)
-            .border_style(Style::default().fg(highlight())),
+            .border_style(Style::default().fg(presentation_highlight)),
         columns[0],
     );
     let welcome_area = Rect {
@@ -127,7 +128,7 @@ fn draw_expanded(frame: &mut Frame<'_>, area: Rect) {
     );
     let prompts = Block::default()
         .borders(Borders::TOP)
-        .border_style(Style::default().fg(highlight()));
+        .border_style(Style::default().fg(presentation_highlight));
     let prompts_content = prompts.inner(sections[1]);
     frame.render_widget(prompts, sections[1]);
     frame.render_widget(

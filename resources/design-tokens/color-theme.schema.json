@@ -165,7 +165,8 @@
           "terminal.ansiBrightBlue",
           "terminal.ansiBrightMagenta",
           "terminal.ansiBrightCyan",
-          "terminal.ansiBrightWhite"
+          "terminal.ansiBrightWhite",
+          "tui.highlightForeground"
         ]
       },
       "additionalProperties": {

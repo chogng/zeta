@@ -14,6 +14,8 @@ use crate::features::sessions::ConversationTranscript;
 use crate::features::sessions::NewConversationKind;
 use crate::features::sessions::ResumeOutcome;
 use crate::features::skills::load_selection;
+use crate::features::theme::theme_selection_view;
+use crate::ui;
 use std::fmt;
 use zeta_app_server_client::{AppServerClient, ClientError, JsonRpcTransport};
 use zeta_app_server_protocol::protocol::skills::SkillCatalogReloadDto;
@@ -65,6 +67,7 @@ impl ActiveConversation {
                 Ok(())
             }
             TuiSlashCommandAction::Model => set_or_show_model(client, &arguments, app),
+            TuiSlashCommandAction::Theme => set_or_show_theme(&arguments, app),
             TuiSlashCommandAction::Quit | TuiSlashCommandAction::Exit => Err(
                 CommandExecutionError("exit command reached the product dispatcher".into()),
             ),
@@ -146,6 +149,16 @@ impl ActiveConversation {
         }
         Ok(())
     }
+}
+
+fn set_or_show_theme(arguments: &str, app: &mut App) -> Result<(), CommandExecutionError> {
+    if arguments.is_empty() {
+        let catalog = ui::theme_catalog().map_err(CommandExecutionError)?;
+        app.update(AppEvent::ThemeViewOpened(theme_selection_view(&catalog)));
+    } else {
+        ui::select_theme(arguments).map_err(CommandExecutionError)?;
+    }
+    Ok(())
 }
 
 fn apply_conversation_change(app: &mut App, change: ConversationChange) {

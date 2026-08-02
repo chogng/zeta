@@ -168,6 +168,20 @@ impl ThemeCatalog {
         Ok(None)
     }
 
+    pub(crate) fn built_in_themes(&self) -> Vec<ThemeSnapshot> {
+        self.entries
+            .keys()
+            .flat_map(|entry_id| {
+                [ColorScheme::Dark, ColorScheme::Light]
+                    .into_iter()
+                    .map(|scheme| {
+                        self.built_in_entry(entry_id, scheme)
+                            .expect("embedded theme entries are validated at catalog construction")
+                    })
+            })
+            .collect()
+    }
+
     pub(crate) fn is_reserved_theme_id(&self, theme_id: &str) -> bool {
         self.has_entry(theme_id)
             || self.entries.values().any(|entry| {

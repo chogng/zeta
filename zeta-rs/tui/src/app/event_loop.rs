@@ -11,6 +11,7 @@ use crate::TuiOptions;
 use crate::client;
 use crate::components::composer::ComposerSubmission;
 use crate::features::skills;
+use crate::features::theme as theme_feature;
 use crate::features::thread::ActiveTurnUpdate;
 use crate::features::thread::ThreadRequestScope;
 use crate::features::thread::ThreadSubscription;
@@ -22,6 +23,7 @@ use crate::features::thread::submit_prompt as request_submit_prompt;
 use crate::features::workspace_files::FileSearchManager;
 use crate::host;
 use crate::terminal;
+use crate::ui;
 use crossterm::event::Event;
 use crossterm::event::KeyEventKind;
 use crossterm::event::MouseButton;
@@ -195,6 +197,22 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                     AppCommand::ReadClipboardImage => app.update(AppEvent::ClipboardImageRead(
                         host::clipboard::read_image().map(|image| image.png),
                     )),
+                    AppCommand::OpenCustomThemePane => match ui::theme_catalog() {
+                        Ok(catalog) => app.update(AppEvent::ThemeViewOpened(
+                            theme_feature::custom_theme_selection_view(&catalog),
+                        )),
+                        Err(error) => app.update(AppEvent::FailureReported(error)),
+                    },
+                    AppCommand::SetCustomTheme { preference } => {
+                        match ui::select_theme(&preference) {
+                            Ok(()) => app.update(AppEvent::ThemeViewClosed),
+                            Err(error) => app.update(AppEvent::FailureReported(error)),
+                        }
+                    }
+                    AppCommand::SetTheme { preference } => match ui::select_theme(&preference) {
+                        Ok(()) => app.update(AppEvent::ThemeViewClosed),
+                        Err(error) => app.update(AppEvent::FailureReported(error)),
+                    },
                     AppCommand::SetSkillEnablement {
                         skill_id,
                         enablement,

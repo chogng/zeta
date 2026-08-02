@@ -4,10 +4,10 @@ use crate::ui::horizontal_margin;
 use crate::ui::{highlight, muted};
 use ratatui::Frame;
 use ratatui::layout::Rect;
+use ratatui::style::Modifier;
 use ratatui::style::Style;
 use ratatui::text::Line;
 use ratatui::text::Span;
-use ratatui::widgets::Clear;
 use ratatui::widgets::Paragraph;
 
 const COMMAND_COLUMN_WIDTH: usize = 26;
@@ -41,7 +41,9 @@ pub(crate) fn draw(frame: &mut Frame<'_>, area: Rect, popup: Option<SlashCommand
             .map(|(index, command)| {
                 let selected = index == popup.selected;
                 let command_style = if selected {
-                    Style::default().fg(highlight())
+                    Style::default()
+                        .fg(highlight())
+                        .add_modifier(Modifier::BOLD)
                 } else {
                     Style::default().fg(muted())
                 };
@@ -55,7 +57,6 @@ pub(crate) fn draw(frame: &mut Frame<'_>, area: Rect, popup: Option<SlashCommand
             })
             .collect()
     };
-    frame.render_widget(Clear, layout.area);
     frame.render_widget(Paragraph::new(lines), layout.area);
 }
 

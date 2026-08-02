@@ -6,14 +6,27 @@ use crate::components::selection;
 use crate::components::transcript;
 use crate::features::status_line;
 use crate::ui::InteractionLayout;
+use crate::ui::background;
+use crate::ui::foreground;
 use crate::ui::frame_areas;
+use crate::ui::highlight;
 use ratatui::Frame;
 use ratatui::layout::Rect;
+use ratatui::style::Style;
+use ratatui::widgets::Block;
 
 pub(crate) fn draw(frame: &mut Frame<'_>, app: &App) {
+    frame.render_widget(
+        Block::default().style(Style::default().fg(foreground()).bg(background())),
+        frame.area(),
+    );
     let areas = frame_areas(frame.area(), interaction_layout(app, frame.area()));
+    let presentation_highlight = app
+        .selection_view()
+        .and_then(|view| view.presentation_highlight())
+        .unwrap_or_else(highlight);
 
-    transcript::draw(frame, areas.history, app.messages());
+    transcript::draw(frame, areas.history, app.messages(), presentation_highlight);
     if let Some(view) = app.selection_view() {
         selection::draw(frame, areas.interaction, view);
     } else {

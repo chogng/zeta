@@ -1,11 +1,16 @@
 use std::collections::BTreeMap;
 use std::fs;
 use std::io::Read;
-use std::path::{Path, PathBuf};
+use std::path::Path;
+use std::path::PathBuf;
 
-use serde::Deserialize;
-
-use crate::{ColorScheme, ThemeCatalog, ThemeDocument, ThemeSnapshot};
+use crate::ColorScheme;
+use crate::ThemeCatalog;
+use crate::ThemeDocument;
+use crate::ThemeSnapshot;
+use crate::preference::ThemeSelectionError;
+use crate::preference::read_preference;
+use crate::preference::write_preference;
 
 const MAX_THEME_FILES: usize = 128;
 const MAX_DEVICE_DOCUMENT_BYTES: u64 = 1_048_576;
@@ -57,6 +62,7 @@ pub enum ThemeSurface {
 }
 
 /// Named inputs for loading one surface's selected theme.
+#[derive(Clone, Copy)]
 pub struct ThemeLoadOptions<'a> {
     pub device_root: &'a Path,
     pub surface: ThemeSurface,
@@ -93,10 +99,35 @@ pub struct ThemeDiagnostic {
 }
 
 /// Selected snapshot plus non-fatal discovery and parsing diagnostics.
+#[derive(Debug)]
 pub struct LoadedTheme {
     pub snapshot: ThemeSnapshot,
     pub diagnostics: Vec<ThemeDiagnostic>,
     pub follows_system: bool,
+}
+
+/// Origin of one theme exposed to a presentation-surface picker.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ThemeChoiceKind {
+    System,
+    BuiltIn,
+    User,
+}
+
+/// One valid theme preference available to a presentation surface.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ThemeChoice {
+    pub id: String,
+    pub label: String,
+    pub color_scheme: ColorScheme,
+    pub kind: ThemeChoiceKind,
+}
+
+/// Available theme preferences and the effective device-local selection.
+pub struct ThemeChoices {
+    pub selected: String,
+    pub themes: Vec<ThemeChoice>,
+    pub diagnostics: Vec<ThemeDiagnostic>,
 }
 
 /// Bounded loader for shared device preferences and user theme JSON files.
@@ -114,48 +145,16 @@ impl ThemeLoader {
     pub fn load(&self, options: ThemeLoadOptions<'_>) -> LoadedTheme {
         let mut diagnostics = Vec::new();
         let preference = read_preference(&options, &mut diagnostics);
-        if preference == "system" {
-            return LoadedTheme {
-                snapshot: self.default_snapshot(&options, &mut diagnostics),
-                diagnostics,
-                follows_system: true,
-            };
-        }
-        if let Some(snapshot) = self
-            .catalog
-            .resolve_built_in_id(&preference)
-            .expect("embedded theme entries must resolve named light and dark variants")
-        {
-            return LoadedTheme {
+        match self.resolve_preference(&options, &preference, &mut diagnostics) {
+            Ok((snapshot, follows_system)) => LoadedTheme {
                 snapshot,
                 diagnostics,
-                follows_system: false,
-            };
-        }
-        let documents = read_theme_documents(options.device_root, &self.catalog, &mut diagnostics);
-        let Some(document) = documents.get(&preference) else {
-            diagnostics.push(ThemeDiagnostic {
-                file: None,
-                message: format!(
-                    "selected theme '{preference}' is unavailable; using default theme entry"
-                ),
-            });
-            return LoadedTheme {
-                snapshot: self.default_snapshot(&options, &mut diagnostics),
-                diagnostics,
-                follows_system: true,
-            };
-        };
-        match self.catalog.resolve_document(document) {
-            Ok(snapshot) => LoadedTheme {
-                snapshot,
-                diagnostics,
-                follows_system: false,
+                follows_system,
             },
             Err(error) => {
                 diagnostics.push(ThemeDiagnostic {
                     file: None,
-                    message: format!("selected theme '{preference}' is invalid: {error}"),
+                    message: format!("{error}; using default theme entry"),
                 });
                 LoadedTheme {
                     snapshot: self.default_snapshot(&options, &mut diagnostics),
@@ -164,6 +163,111 @@ impl ThemeLoader {
                 }
             }
         }
+    }
+
+    /// Lists valid built-in and user theme preferences for one presentation surface.
+    pub fn choices(&self, options: ThemeLoadOptions<'_>) -> ThemeChoices {
+        let mut diagnostics = Vec::new();
+        let selected = read_preference(&options, &mut diagnostics);
+        let system = self.default_snapshot(&options, &mut diagnostics);
+        let mut themes = vec![ThemeChoice {
+            id: "system".into(),
+            label: format!("System ({})", system.label()),
+            color_scheme: system.color_scheme(),
+            kind: ThemeChoiceKind::System,
+        }];
+        themes.extend(
+            self.catalog
+                .built_in_themes()
+                .into_iter()
+                .map(|snapshot| ThemeChoice {
+                    id: snapshot.id().to_owned(),
+                    label: snapshot.label().to_owned(),
+                    color_scheme: snapshot.color_scheme(),
+                    kind: ThemeChoiceKind::BuiltIn,
+                }),
+        );
+        let documents = read_theme_documents(options.device_root, &self.catalog, &mut diagnostics);
+        for document in documents.values() {
+            match self.catalog.resolve_document(document) {
+                Ok(snapshot) => themes.push(ThemeChoice {
+                    id: snapshot.id().to_owned(),
+                    label: snapshot.label().to_owned(),
+                    color_scheme: snapshot.color_scheme(),
+                    kind: ThemeChoiceKind::User,
+                }),
+                Err(error) => diagnostics.push(ThemeDiagnostic {
+                    file: None,
+                    message: format!("user theme '{}' is invalid: {error}", document.id()),
+                }),
+            }
+        }
+        ThemeChoices {
+            selected,
+            themes,
+            diagnostics,
+        }
+    }
+
+    /// Validates, persists, and resolves one surface-specific theme preference.
+    pub fn select(
+        &self,
+        options: ThemeLoadOptions<'_>,
+        preference: &str,
+    ) -> Result<LoadedTheme, ThemeSelectionError> {
+        let loaded = self.preview(options, preference)?;
+        write_preference(options.device_root, options.surface, preference)?;
+        Ok(loaded)
+    }
+
+    /// Resolves one theme preference without changing the device configuration.
+    pub fn preview(
+        &self,
+        options: ThemeLoadOptions<'_>,
+        preference: &str,
+    ) -> Result<LoadedTheme, ThemeSelectionError> {
+        if preference != "system" && !crate::document::valid_theme_id(preference) {
+            return Err(ThemeSelectionError::InvalidPreference(
+                preference.to_owned(),
+            ));
+        }
+        let mut diagnostics = Vec::new();
+        let (snapshot, follows_system) =
+            self.resolve_preference(&options, preference, &mut diagnostics)?;
+        Ok(LoadedTheme {
+            snapshot,
+            diagnostics,
+            follows_system,
+        })
+    }
+
+    fn resolve_preference(
+        &self,
+        options: &ThemeLoadOptions<'_>,
+        preference: &str,
+        diagnostics: &mut Vec<ThemeDiagnostic>,
+    ) -> Result<(ThemeSnapshot, bool), ThemeSelectionError> {
+        if preference == "system" {
+            return Ok((self.default_snapshot(options, diagnostics), true));
+        }
+        if let Some(snapshot) = self
+            .catalog
+            .resolve_built_in_id(preference)
+            .expect("embedded theme entries must resolve named light and dark variants")
+        {
+            return Ok((snapshot, false));
+        }
+        let documents = read_theme_documents(options.device_root, &self.catalog, diagnostics);
+        let document = documents
+            .get(preference)
+            .ok_or_else(|| ThemeSelectionError::Unavailable(preference.to_owned()))?;
+        self.catalog
+            .resolve_document(document)
+            .map(|snapshot| (snapshot, false))
+            .map_err(|source| ThemeSelectionError::InvalidTheme {
+                preference: preference.to_owned(),
+                source,
+            })
     }
 
     fn default_snapshot(
@@ -190,52 +294,6 @@ impl ThemeLoader {
             }
         }
     }
-}
-
-fn read_preference(
-    options: &ThemeLoadOptions<'_>,
-    diagnostics: &mut Vec<ThemeDiagnostic>,
-) -> String {
-    let path = options.device_root.join("configuration.json");
-    let source = match read_bounded_text(&path) {
-        Ok(source) => source,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return "system".to_owned(),
-        Err(error) => {
-            diagnostics.push(ThemeDiagnostic {
-                file: Some(path),
-                message: format!("could not read device configuration: {error}"),
-            });
-            return "system".to_owned();
-        }
-    };
-    let document: DeviceConfiguration = match serde_json::from_str(&source) {
-        Ok(document) => document,
-        Err(error) => {
-            diagnostics.push(ThemeDiagnostic {
-                file: Some(path),
-                message: format!("device configuration is invalid: {error}"),
-            });
-            return "system".to_owned();
-        }
-    };
-    if document.version != 1 {
-        diagnostics.push(ThemeDiagnostic {
-            file: Some(path),
-            message: format!(
-                "device configuration version {} is unsupported",
-                document.version
-            ),
-        });
-        return "system".to_owned();
-    }
-    match options.surface {
-        ThemeSurface::Graphical => document.values.workbench_color_theme,
-        ThemeSurface::Terminal => document
-            .values
-            .tui_color_theme
-            .or(document.values.workbench_color_theme),
-    }
-    .unwrap_or_else(|| "system".to_owned())
 }
 
 fn read_theme_documents(
@@ -304,7 +362,7 @@ fn read_theme_documents(
     documents
 }
 
-fn read_bounded_text(path: &Path) -> std::io::Result<String> {
+pub(crate) fn read_bounded_text(path: &Path) -> std::io::Result<String> {
     let mut bytes = Vec::new();
     fs::File::open(path)?
         .take(MAX_DEVICE_DOCUMENT_BYTES + 1)
@@ -317,19 +375,4 @@ fn read_bounded_text(path: &Path) -> std::io::Result<String> {
     }
     String::from_utf8(bytes)
         .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidData, error))
-}
-
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct DeviceConfiguration {
-    version: u8,
-    values: DeviceValues,
-}
-
-#[derive(Deserialize)]
-struct DeviceValues {
-    #[serde(rename = "workbench.colorTheme")]
-    workbench_color_theme: Option<String>,
-    #[serde(rename = "tui.colorTheme")]
-    tui_color_theme: Option<String>,
 }

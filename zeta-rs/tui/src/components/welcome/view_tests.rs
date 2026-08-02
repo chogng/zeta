@@ -51,6 +51,8 @@ fn narrow_banner_uses_the_compact_single_column_copy() {
 fn render(width: u16, height: u16) -> ratatui::buffer::Buffer {
     let backend = TestBackend::new(width, height);
     let mut terminal = Terminal::new(backend).unwrap();
-    terminal.draw(|frame| draw(frame, frame.area())).unwrap();
+    terminal
+        .draw(|frame| draw(frame, frame.area(), highlight()))
+        .unwrap();
     terminal.backend().buffer().clone()
 }

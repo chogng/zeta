@@ -20,6 +20,7 @@ pub(crate) enum TuiSlashCommandAction {
     Fork,
     Help,
     Model,
+    Theme,
     New,
     Quit,
     Exit,
@@ -41,6 +42,7 @@ impl TuiSlashCommandAction {
             Self::Fork => "fork the current chat",
             Self::Help => "show executable slash commands",
             Self::Model => "show or set the preferred provider/model",
+            Self::Theme => "show or set the terminal color theme",
             Self::New => "start a new chat",
             Self::Quit | Self::Exit => "exit Zeta",
         }
@@ -48,7 +50,7 @@ impl TuiSlashCommandAction {
 
     pub(crate) fn argument_mode(self) -> SlashCommandArgumentMode {
         match self {
-            Self::Resume | Self::Clear | Self::Fork | Self::Model | Self::New => {
+            Self::Resume | Self::Clear | Self::Fork | Self::Model | Self::Theme | Self::New => {
                 SlashCommandArgumentMode::Optional
             }
             _ => SlashCommandArgumentMode::None,

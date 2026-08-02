@@ -6,6 +6,7 @@ use crate::ui::horizontal_margin;
 use crate::ui::{accent, danger, success, warning};
 use ratatui::Frame;
 use ratatui::layout::Rect;
+use ratatui::style::Color;
 use ratatui::style::Modifier;
 use ratatui::style::Style;
 use ratatui::text::Line;
@@ -13,10 +14,15 @@ use ratatui::text::Span;
 use ratatui::widgets::Paragraph;
 use ratatui::widgets::Wrap;
 
-pub(crate) fn draw(frame: &mut Frame<'_>, area: Rect, messages: &[Message]) {
+pub(crate) fn draw(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    messages: &[Message],
+    presentation_highlight: Color,
+) {
     let content_area = horizontal_margin(area, 2);
     if messages.is_empty() {
-        welcome::draw(frame, area);
+        welcome::draw(frame, area, presentation_highlight);
         return;
     }
 

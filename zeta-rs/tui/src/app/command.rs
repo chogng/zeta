@@ -10,6 +10,13 @@ pub(crate) enum AppCommand {
     Quit,
     Interrupt,
     ReadClipboardImage,
+    OpenCustomThemePane,
+    SetCustomTheme {
+        preference: String,
+    },
+    SetTheme {
+        preference: String,
+    },
     SetSkillEnablement {
         skill_id: SkillId,
         enablement: SkillEnablementDto,

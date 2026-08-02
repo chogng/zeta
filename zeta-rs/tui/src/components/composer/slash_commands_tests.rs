@@ -15,12 +15,13 @@ fn builtins_follow_enum_presentation_order() {
             ("fork", TuiSlashCommandAction::Fork),
             ("help", TuiSlashCommandAction::Help),
             ("model", TuiSlashCommandAction::Model),
+            ("theme", TuiSlashCommandAction::Theme),
             ("new", TuiSlashCommandAction::New),
             ("quit", TuiSlashCommandAction::Quit),
             ("exit", TuiSlashCommandAction::Exit),
         ]
     );
-    assert_eq!(built_in_slash_command_definitions().len(), 12);
+    assert_eq!(built_in_slash_command_definitions().len(), 13);
 }
 
 #[test]
@@ -31,6 +32,10 @@ fn builtins_declare_argument_support() {
     );
     assert_eq!(
         TuiSlashCommandAction::Fork.argument_mode(),
+        SlashCommandArgumentMode::Optional
+    );
+    assert_eq!(
+        TuiSlashCommandAction::Theme.argument_mode(),
         SlashCommandArgumentMode::Optional
     );
     assert_eq!(

@@ -4,7 +4,7 @@
 > [`zeta-slash-commands` README](../zeta-rs/slash-commands/README.md) 拥有；App Server wire snapshot
 > 由 [`zeta-app-server-api.md`](zeta-app-server-api.md) 拥有。
 
-## 结论
+## 快速理解
 
 Slash Commands 是一个无渲染产品能力，不是 TUI feature，也不是用户 config。App Server 在
 `initialize.slashCommands` 发布 server commands；每个 client 再与自身真正可执行的 local commands
@@ -36,8 +36,11 @@ dispatcher identity 都是与 model 分离的 client binding，不能包装成�
 
 App Server 不执行 server-advertised Slash Command；它只声明 discoverability 与参数能力。Local command
 必须存在真实 client execution path，否则不能进入 catalog。Desktop 的 `/new`、`/history` 属于
-Workbench command mapping；Native 的 `/model` 属于 Session model selector；TUI built-ins 属于 TUI
-coordination。任意 local/server 同名都拒绝整份合并结果，不按客户端优先级静默覆盖。
+Workbench command mapping；Native 的 `/model` 属于 Session model selector；TUI 的 `/theme` 属于
+device-local presentation preference：无参数时打开由 `features/theme` 拥有的固定 Zeta Code
+Theme Pane，带 ID 时静默直接切换；Theme Pane 不启用搜索，通用 Selection Pane 则以显式
+`Space search` 进入搜索模式。其他 built-ins 属于 TUI coordination。任意 local/server 同名都拒绝整份合并结果，不按
+客户端优先级静默覆盖。
 
 ## Config 边界
 

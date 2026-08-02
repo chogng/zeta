@@ -150,6 +150,12 @@ impl InteractionPane {
         }
     }
 
+    pub(crate) fn pop_selection_view(&mut self) {
+        if matches!(self.views.last(), Some(InteractionView::Selection(_))) {
+            self.views.pop();
+        }
+    }
+
     pub(crate) fn selection_view(&self) -> Option<&SelectionViewState> {
         match self.views.last() {
             Some(InteractionView::Selection(view)) => Some(view),

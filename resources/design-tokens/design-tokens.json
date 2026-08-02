@@ -2529,6 +2529,26 @@
         "high-contrast-dark": "#8c959f",
         "high-contrast-light": "#8c959f"
       }
+    },
+    {
+      "id": "tui.highlightForeground",
+      "kind": "color",
+      "cssVariable": "--zeta-tui-highlight-foreground",
+      "owner": "tui.presentation",
+      "description": "Foreground for selected items, borders, and other TUI highlights.",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "accent.foreground",
+        "light": "accent.foreground",
+        "high-contrast-dark": "accent.foreground",
+        "high-contrast-light": "accent.foreground"
+      },
+      "values": {
+        "dark": "#4daafc",
+        "light": "#005fb8",
+        "high-contrast-dark": "#4daafc",
+        "high-contrast-light": "#005fb8"
+      }
     }
   ],
   "sizes": [

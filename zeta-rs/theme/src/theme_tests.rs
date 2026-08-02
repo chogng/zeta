@@ -2,10 +2,15 @@ use std::fs;
 
 use serde::Deserialize;
 
+use crate::ColorScheme;
+use crate::Rgba;
+use crate::ThemeCatalog;
+use crate::ThemeChoiceKind;
+use crate::ThemeDocument;
+use crate::ThemeLoadOptions;
+use crate::ThemeLoader;
+use crate::ThemeSurface;
 use crate::tokens;
-use crate::{
-    ColorScheme, Rgba, ThemeCatalog, ThemeDocument, ThemeLoadOptions, ThemeLoader, ThemeSurface,
-};
 
 #[test]
 fn embedded_catalog_preserves_aliases_when_a_dependency_is_overridden() {
@@ -154,6 +159,128 @@ fn terminal_surface_consumes_its_optional_preference_and_isolates_broken_files()
         Rgba::rgb(171, 205, 239)
     );
     assert_eq!(loaded.diagnostics.len(), 1);
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn terminal_theme_selection_is_immediate_and_preserves_other_device_values() {
+    let root = std::env::temp_dir().join(format!("zeta-theme-selection-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&root);
+    fs::create_dir_all(&root).unwrap();
+    fs::write(
+        root.join("configuration.json"),
+        r#"{"version":1,"values":{"workbench.colorTheme":"zeta-light","window.zoomLevel":2}}"#,
+    )
+    .unwrap();
+    let loader = ThemeLoader::embedded().unwrap();
+
+    let selected = loader
+        .select(
+            ThemeLoadOptions::new(&root, ThemeSurface::Terminal, ColorScheme::Dark),
+            "zeta-dark",
+        )
+        .unwrap();
+
+    assert_eq!(selected.snapshot.id(), "zeta-dark");
+    let persisted: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(root.join("configuration.json")).unwrap())
+            .unwrap();
+    assert_eq!(persisted["values"]["tui.colorTheme"], "zeta-dark");
+    assert_eq!(persisted["values"]["workbench.colorTheme"], "zeta-light");
+    assert_eq!(persisted["values"]["window.zoomLevel"], 2);
+    assert_eq!(
+        loader
+            .load(ThemeLoadOptions::new(
+                &root,
+                ThemeSurface::Terminal,
+                ColorScheme::Dark,
+            ))
+            .snapshot
+            .id(),
+        "zeta-dark"
+    );
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn theme_preview_resolves_without_persisting_the_candidate() {
+    let root = std::env::temp_dir().join(format!("zeta-theme-preview-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&root);
+    fs::create_dir_all(&root).unwrap();
+    let loader = ThemeLoader::embedded().unwrap();
+    let options = ThemeLoadOptions::new(&root, ThemeSurface::Terminal, ColorScheme::Dark)
+        .with_default_entry("zeta-code");
+
+    let preview = loader.preview(options, "zeta-code-light").unwrap();
+
+    assert_eq!(preview.snapshot.id(), "zeta-code-light");
+    assert!(!root.join("configuration.json").exists());
+    assert_eq!(loader.load(options).snapshot.id(), "zeta-code-dark");
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn theme_choices_include_system_builtins_and_valid_user_themes() {
+    let root = std::env::temp_dir().join(format!("zeta-theme-choices-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&root);
+    fs::create_dir_all(root.join("themes")).unwrap();
+    fs::write(
+        root.join("themes/aurora.json"),
+        r##"{"version":1,"id":"aurora","label":"Aurora","colorScheme":"dark","colors":{"tui.highlightForeground":"#abcdef"}}"##,
+    )
+    .unwrap();
+
+    let choices = ThemeLoader::embedded()
+        .unwrap()
+        .choices(ThemeLoadOptions::new(
+            &root,
+            ThemeSurface::Terminal,
+            ColorScheme::Dark,
+        ));
+
+    assert_eq!(choices.selected, "system");
+    assert!(
+        choices
+            .themes
+            .iter()
+            .any(|theme| { theme.id == "system" && theme.kind == ThemeChoiceKind::System })
+    );
+    assert!(
+        choices
+            .themes
+            .iter()
+            .any(|theme| { theme.id == "zeta-dark" && theme.kind == ThemeChoiceKind::BuiltIn })
+    );
+    assert!(
+        choices
+            .themes
+            .iter()
+            .any(|theme| { theme.id == "aurora" && theme.kind == ThemeChoiceKind::User })
+    );
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn unavailable_theme_selection_does_not_rewrite_device_configuration() {
+    let root = std::env::temp_dir().join(format!("zeta-theme-unavailable-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&root);
+    fs::create_dir_all(&root).unwrap();
+    let configuration = r#"{"version":1,"values":{"workbench.colorTheme":"zeta-light"}}"#;
+    fs::write(root.join("configuration.json"), configuration).unwrap();
+
+    let error = ThemeLoader::embedded()
+        .unwrap()
+        .select(
+            ThemeLoadOptions::new(&root, ThemeSurface::Terminal, ColorScheme::Dark),
+            "missing-theme",
+        )
+        .unwrap_err();
+
+    assert_eq!(error.to_string(), "theme 'missing-theme' is unavailable");
+    assert_eq!(
+        fs::read_to_string(root.join("configuration.json")).unwrap(),
+        configuration
+    );
     fs::remove_dir_all(root).unwrap();
 }
 

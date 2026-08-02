@@ -1,6 +1,8 @@
+use super::SelectionActivationMode;
 use super::SelectionInputOutcome;
 use super::SelectionItem;
 use super::SelectionItemId;
+use super::SelectionSearchMode;
 use super::SelectionTab;
 use super::SelectionViewModel;
 use super::SelectionViewState;
@@ -58,6 +60,7 @@ fn arrow_keys_switch_tabs_and_wrap() {
 fn tab_switching_preserves_the_search_query() {
     let mut state = state();
 
+    state.handle_key(key(KeyCode::Char(' ')));
     for character in "esc".chars() {
         state.handle_key(key(KeyCode::Char(character)));
     }
@@ -74,6 +77,7 @@ fn filtering_and_navigation_keep_selection_in_visible_range() {
 
     state.handle_key(key(KeyCode::Down));
     assert_eq!(state.selected_visible_index(), Some(1));
+    state.handle_key(key(KeyCode::Char(' ')));
     for character in "status".chars() {
         state.handle_key(key(KeyCode::Char(character)));
     }
@@ -108,27 +112,112 @@ fn control_c_also_dismisses_the_active_view() {
 }
 
 #[test]
-fn space_activates_an_actionable_item_and_remains_search_text_for_read_only_items() {
+fn enter_and_space_activate_actionable_items() {
     let item_id = SelectionItemId::new("toggle-skill");
-    let mut actionable = SelectionViewState::new(SelectionViewModel::new(
-        "Skills",
-        vec![SelectionTab::new(
-            "All",
-            vec![SelectionItem::new("review").with_id(item_id.clone())],
-        )],
-    ));
+    let mut actionable = SelectionViewState::new(
+        SelectionViewModel::new(
+            "Skills",
+            vec![SelectionTab::new(
+                "All",
+                vec![SelectionItem::new("review").with_id(item_id.clone())],
+            )],
+        )
+        .with_activation_mode(SelectionActivationMode::EnterOrSpace)
+        .with_search_mode(SelectionSearchMode::Disabled),
+    );
 
+    assert_eq!(
+        actionable.handle_key(key(KeyCode::Enter)),
+        SelectionInputOutcome::Activate(item_id.clone())
+    );
     assert_eq!(
         actionable.handle_key(key(KeyCode::Char(' '))),
         SelectionInputOutcome::Activate(item_id)
     );
+}
 
+#[test]
+fn space_enters_search_before_becoming_search_text() {
     let mut read_only = state();
+
     assert_eq!(
         read_only.handle_key(key(KeyCode::Char(' '))),
         SelectionInputOutcome::Consumed
     );
+    assert!(read_only.search_active());
+    assert_eq!(read_only.query(), "");
+    read_only.handle_key(key(KeyCode::Char(' ')));
     assert_eq!(read_only.query(), " ");
+}
+
+#[test]
+fn enter_only_actions_keep_space_available_for_search() {
+    let mut state = SelectionViewState::new(SelectionViewModel::new(
+        "Themes",
+        vec![SelectionTab::new(
+            "All",
+            vec![SelectionItem::new("Zeta Code Dark").with_id(SelectionItemId::new("theme"))],
+        )],
+    ));
+
+    state.handle_key(key(KeyCode::Char(' ')));
+    for character in "zeta code".chars() {
+        state.handle_key(key(KeyCode::Char(character)));
+    }
+
+    assert_eq!(state.query(), "zeta code");
+    assert_eq!(state.visible_items()[0].label(), "Zeta Code Dark");
+}
+
+#[test]
+fn disabled_search_ignores_text_and_space() {
+    let mut state = SelectionViewState::new(
+        SelectionViewModel::new(
+            "Themes",
+            vec![SelectionTab::new(
+                "Themes",
+                vec![SelectionItem::new("Dark mode")],
+            )],
+        )
+        .with_search_mode(SelectionSearchMode::Disabled),
+    );
+
+    state.handle_key(key(KeyCode::Char(' ')));
+    state.handle_key(key(KeyCode::Char('d')));
+
+    assert!(!state.search_active());
+    assert_eq!(state.query(), "");
+}
+
+#[test]
+fn escape_closes_search_before_dismissing_the_view() {
+    let mut state = state();
+    state.handle_key(key(KeyCode::Char(' ')));
+    state.handle_key(key(KeyCode::Char('s')));
+
+    assert_eq!(
+        state.handle_key(key(KeyCode::Esc)),
+        SelectionInputOutcome::Consumed
+    );
+    assert!(!state.search_active());
+    assert_eq!(state.query(), "");
+    assert_eq!(
+        state.handle_key(key(KeyCode::Esc)),
+        SelectionInputOutcome::Dismiss
+    );
+}
+
+#[test]
+fn paste_only_filters_after_space_enters_search_mode() {
+    let mut state = state();
+
+    state.handle_paste("status".into());
+    assert_eq!(state.query(), "");
+    state.handle_key(key(KeyCode::Char(' ')));
+    state.handle_paste("status".into());
+
+    assert_eq!(state.query(), "status");
+    assert_eq!(state.visible_items()[0].label(), "/status");
 }
 
 #[test]

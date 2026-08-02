@@ -1,16 +1,33 @@
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
+use ratatui::style::Color;
 use unicode_width::UnicodeWidthStr;
+
+use super::SelectionPreview;
 
 const TAB_GAP: usize = 2;
 const MAX_VISIBLE_ROWS: usize = 12;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum SelectionActivationMode {
+    Enter,
+    EnterOrSpace,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum SelectionSearchMode {
+    Disabled,
+    SpaceActivated,
+}
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct SelectionItem {
     id: Option<SelectionItemId>,
     label: String,
     description: Option<String>,
+    selection_foreground: Option<Color>,
+    preview: Option<SelectionPreview>,
 }
 
 impl SelectionItem {
@@ -19,6 +36,8 @@ impl SelectionItem {
             id: None,
             label: label.into(),
             description: None,
+            selection_foreground: None,
+            preview: None,
         }
     }
 
@@ -32,6 +51,16 @@ impl SelectionItem {
         self
     }
 
+    pub(crate) fn with_selection_foreground(mut self, color: Color) -> Self {
+        self.selection_foreground = Some(color);
+        self
+    }
+
+    pub(crate) fn with_preview(mut self, preview: SelectionPreview) -> Self {
+        self.preview = Some(preview);
+        self
+    }
+
     pub(crate) fn label(&self) -> &str {
         &self.label
     }
@@ -42,6 +71,14 @@ impl SelectionItem {
 
     pub(crate) fn id(&self) -> Option<&SelectionItemId> {
         self.id.as_ref()
+    }
+
+    pub(crate) fn selection_foreground(&self) -> Option<Color> {
+        self.selection_foreground
+    }
+
+    pub(crate) fn preview(&self) -> Option<&SelectionPreview> {
+        self.preview.as_ref()
     }
 
     fn matches(&self, normalized_query: &str) -> bool {
@@ -89,6 +126,12 @@ pub(crate) struct SelectionViewModel {
     search_placeholder: String,
     empty_message: String,
     footer_hint: String,
+    activation_mode: SelectionActivationMode,
+    search_mode: SelectionSearchMode,
+    show_tabs: bool,
+    initial_selected: usize,
+    title_top_margin: usize,
+    title_bottom_margin: usize,
 }
 
 impl SelectionViewModel {
@@ -102,8 +145,44 @@ impl SelectionViewModel {
             tabs,
             search_placeholder: "Search…".into(),
             empty_message: "No matching items".into(),
-            footer_hint: "Type to search  ·  ←/→ tabs  ·  ↑/↓ select  ·  Esc back".into(),
+            footer_hint: "Space search  ·  ←/→ tabs  ·  ↑/↓ select  ·  Esc back".into(),
+            activation_mode: SelectionActivationMode::Enter,
+            search_mode: SelectionSearchMode::SpaceActivated,
+            show_tabs: true,
+            initial_selected: 0,
+            title_top_margin: 0,
+            title_bottom_margin: 0,
         }
+    }
+
+    pub(crate) fn with_activation_mode(mut self, mode: SelectionActivationMode) -> Self {
+        self.activation_mode = mode;
+        self
+    }
+
+    pub(crate) fn with_search_mode(mut self, mode: SelectionSearchMode) -> Self {
+        self.search_mode = mode;
+        self
+    }
+
+    pub(crate) fn without_tab_bar(mut self) -> Self {
+        self.show_tabs = false;
+        self
+    }
+
+    pub(crate) fn with_initial_selected(mut self, index: usize) -> Self {
+        self.initial_selected = index;
+        self
+    }
+
+    pub(crate) fn with_title_top_margin(mut self, rows: usize) -> Self {
+        self.title_top_margin = rows;
+        self
+    }
+
+    pub(crate) fn with_title_bottom_margin(mut self, rows: usize) -> Self {
+        self.title_bottom_margin = rows;
+        self
     }
 
     pub(crate) fn with_search_placeholder(mut self, placeholder: impl Into<String>) -> Self {
@@ -135,6 +214,7 @@ pub(crate) struct SelectionViewState {
     active_tab: usize,
     selected_visible: Option<usize>,
     query: String,
+    search_active: bool,
 }
 
 impl SelectionViewState {
@@ -144,8 +224,14 @@ impl SelectionViewState {
             active_tab: 0,
             selected_visible: None,
             query: String::new(),
+            search_active: false,
         };
-        state.select_first_visible();
+        state.selected_visible = (state.visible_len() > 0).then_some(
+            state
+                .model
+                .initial_selected
+                .min(state.visible_len().saturating_sub(1)),
+        );
         state
     }
 
@@ -157,6 +243,14 @@ impl SelectionViewState {
 
     pub(crate) fn title(&self) -> &str {
         &self.model.title
+    }
+
+    pub(crate) fn title_top_margin(&self) -> usize {
+        self.model.title_top_margin
+    }
+
+    pub(crate) fn title_bottom_margin(&self) -> usize {
+        self.model.title_bottom_margin
     }
 
     pub(crate) fn tabs(&self) -> &[SelectionTab] {
@@ -173,6 +267,14 @@ impl SelectionViewState {
 
     pub(crate) fn search_placeholder(&self) -> &str {
         &self.model.search_placeholder
+    }
+
+    pub(crate) fn show_tabs(&self) -> bool {
+        self.model.show_tabs
+    }
+
+    pub(crate) fn search_active(&self) -> bool {
+        self.search_active
     }
 
     pub(crate) fn empty_message(&self) -> &str {
@@ -205,11 +307,24 @@ impl SelectionViewState {
     }
 
     pub(crate) fn desired_height(&self, width: u16) -> u16 {
-        let tab_rows = tab_row_count(self.tabs(), width.saturating_sub(4));
+        let tab_rows = if self.show_tabs() {
+            tab_row_count(self.tabs(), width.saturating_sub(4))
+        } else {
+            0
+        };
+        let search_rows = if self.search_active() { 3 } else { 0 };
         let list_rows = self.visible_len().clamp(1, MAX_VISIBLE_ROWS);
-        2u16.saturating_add(tab_rows)
-            .saturating_add(3)
+        let preview_rows = self
+            .selected_item()
+            .and_then(SelectionItem::preview)
+            .map(SelectionPreview::desired_height)
+            .unwrap_or_default();
+        2u16.saturating_add(self.title_top_margin().min(u16::MAX as usize) as u16)
+            .saturating_add(self.title_bottom_margin().min(u16::MAX as usize) as u16)
+            .saturating_add(tab_rows)
+            .saturating_add(search_rows)
             .saturating_add(list_rows.min(u16::MAX as usize) as u16)
+            .saturating_add(preview_rows.min(u16::MAX as usize) as u16)
             .saturating_add(1)
     }
 
@@ -224,6 +339,11 @@ impl SelectionViewState {
         }
 
         match key.code {
+            KeyCode::Esc if self.search_active => {
+                self.query.clear();
+                self.search_active = false;
+                self.reconcile_selection();
+            }
             KeyCode::Esc => return SelectionInputOutcome::Dismiss,
             KeyCode::Left | KeyCode::BackTab => self.switch_tab(TabDirection::Previous),
             KeyCode::Right | KeyCode::Tab => self.switch_tab(TabDirection::Next),
@@ -231,18 +351,33 @@ impl SelectionViewState {
             KeyCode::Down => self.move_selection(SelectionDirection::Next),
             KeyCode::Home => self.select_first_visible(),
             KeyCode::End => self.select_last_visible(),
-            KeyCode::Backspace => {
-                self.query.pop();
-                self.reconcile_selection();
-            }
-            KeyCode::Char(' ') => {
+            KeyCode::Enter => {
                 if let Some(id) = self.selected_item_id() {
                     return SelectionInputOutcome::Activate(id);
                 }
-                self.query.push(' ');
+            }
+            KeyCode::Backspace if self.search_active => {
+                self.query.pop();
                 self.reconcile_selection();
             }
-            KeyCode::Char(character) if !character.is_ascii_control() => {
+            KeyCode::Char(' ')
+                if self.model.search_mode == SelectionSearchMode::SpaceActivated
+                    && !self.search_active =>
+            {
+                self.search_active = true;
+            }
+            KeyCode::Char(' ') => {
+                if self.model.activation_mode == SelectionActivationMode::EnterOrSpace
+                    && let Some(id) = self.selected_item_id()
+                {
+                    return SelectionInputOutcome::Activate(id);
+                }
+                if self.search_active {
+                    self.query.push(' ');
+                    self.reconcile_selection();
+                }
+            }
+            KeyCode::Char(character) if self.search_active && !character.is_ascii_control() => {
                 self.query.push(character);
                 self.reconcile_selection();
             }
@@ -253,6 +388,9 @@ impl SelectionViewState {
     }
 
     pub(crate) fn handle_paste(&mut self, pasted: String) {
+        if !self.search_active {
+            return;
+        }
         let normalized = pasted.split_whitespace().collect::<Vec<_>>().join(" ");
         self.query.push_str(&normalized);
         self.reconcile_selection();
@@ -263,8 +401,16 @@ impl SelectionViewState {
     }
 
     fn selected_item_id(&self) -> Option<SelectionItemId> {
+        self.selected_item()?.id().cloned()
+    }
+
+    pub(crate) fn selected_item(&self) -> Option<&SelectionItem> {
         let selected = self.selected_visible?;
-        self.visible_items().get(selected)?.id().cloned()
+        self.visible_items().get(selected).copied()
+    }
+
+    pub(crate) fn presentation_highlight(&self) -> Option<Color> {
+        self.selected_item()?.selection_foreground()
     }
 
     fn visible_indices(&self) -> Vec<usize> {

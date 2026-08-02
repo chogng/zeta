@@ -30,10 +30,10 @@ Tool、approval policy 或 persistence。
   原子文本插入；
 - `/` 打开 command popup，支持 cursor-aware prefix filtering、循环选择、保留已有参数尾部的
   Tab completion、Esc dismiss 与左键单击可见命令；
-- `/resume`、`/clear`、`/fork`、`/model` 与 `/new` 可解析 inline arguments，并在执行前展开
+- `/resume`、`/clear`、`/fork`、`/model`、`/theme` 与 `/new` 可解析 inline arguments，并在执行前展开
   large-paste placeholder；product command 明确拒绝 image arguments；
 - command popup 只注册已有真实执行流的 built-ins：`/status`、`/skills`、`/mcp`、`/resume`、
-  `/clear`、`/config`、`/fork`、`/help`、`/model`、`/new`、`/quit` 与 `/exit`；
+  `/clear`、`/config`、`/fork`、`/help`、`/model`、`/theme`、`/new`、`/quit` 与 `/exit`；
 - `/help` 使用保留 composer 的 interaction view stack 打开 Commands/Keys 双 Tab selection
   surface；支持直接输入搜索、左右键或 Tab/BackTab 循环切页、上下键循环选择，以及 Esc/Ctrl-C
   返回 composer；
@@ -46,7 +46,7 @@ Tool、approval policy 或 persistence。
 - 启动时读取 client 保存的 `initialize.slashCommands` snapshot，通过
   [`zeta-slash-commands`](../slash-commands/README.md) 与 built-ins 做防冲突合并；
   server-advertised command 保留 `/name`、inline text/image/large-paste 参数并作为普通 Turn
-  input 提交；
+  input 提交；slash popup 不清空或铺设独立背景，透明继承当前 TUI 主题 surface，选中项使用候选 highlight 色粗体且不添加行首标记；
 - Enter 按 composer 顺序提交由 text/image items 组成的 Turn；
 - 启动及 `/new`、`/fork`、`/resume` 后维护 active Thread subscription；typed update 按
   Session/Thread scope 和 durable sequence 过滤，并通过 `thread/read` 触发权威 snapshot
@@ -61,8 +61,13 @@ Tool、approval policy 或 persistence。
 - Unix `SIGINT`/`SIGTERM` 进入同一个 event loop 退出路径，确保 watcher 重启和 host termination
   仍执行 session shutdown 与 terminal RAII cleanup；
 - raw mode、alternate screen、bracketed paste、mouse capture 与 cursor cleanup；
-- 启动时通过 `zeta-theme` 读取共享用户主题；只投影 accent/chrome/error/success/warning/muted/highlight
-  子集，并按 TrueColor、ANSI-256、ANSI-16 或 Monochrome 能力确定性降级；
+- 启动时通过 `zeta-theme` 读取共享用户主题；chrome 投影 accent/error/success/warning/muted/highlight，
+  Theme Pane preview 投影有限的 syntax/diff token，并按 TrueColor、ANSI-256、ANSI-16 或
+  Monochrome 能力确定性降级；`features/theme` 拥有 `/theme` 的固定八项 Zeta Code Pane、`Theme` 标题及其上下各一行间距、编号、
+  active 标记、候选 frame highlight、仅带上下较高对比度长节虚线的 diff preview、palette 来源说明和选择动作，Pane
+  不启用搜索，Enter 原子保存、立即重绘并关闭整个 Theme flow 返回主界面，失败时保留 Pane，且不追加 transcript notice，`/theme <id>` 保留直接切换；
+  Auto 根据终端 `COLORFGBG` 背景报告选择
+  Light/Dark，缺失或无效时回退 Dark；
 - basic Unicode-aware wrapped-row estimation 和自动滚动到底部。
 
 当前没有 Session browser、Thread navigation、Markdown、stream delta render、Tool transcript、
@@ -175,8 +180,8 @@ src/
 | `client::map_event` / `ClientEvent` | crate-private | 把共享 connection event 映射为 skills changed、Thread update 与 connection failure | 不保存 transport、不应用 projection |
 | `ThreadSubscription` | crate-private | 维护 active Thread scope 与最后确认的 snapshot sequence；新 update 只请求 snapshot resync | 不应用 `ThreadEvent` reducer、不保存 transient projection |
 | `InteractionPane` | crate-private | 保留 composer、拥有 temporary view stack，并把 key/paste 路由到 active view 或 composer | 不保存 Plugin/Session 等产品 feature 状态 |
-| `components::selection::SelectionViewState` | crate-private | tabs、搜索 query、过滤索引、选择与循环导航 | 不执行 action、不依赖产品 ID 或 App Server |
-| `components::selection::draw` | crate-private | generic title/tabs/search/items/footer Ratatui surface | 只读 selection state、不解释产品 action |
+| `components::selection::SelectionViewState` | crate-private | 可配置 tabs/search/titled preview、Space search mode、过滤索引、候选 presentation highlight、选择与循环导航 | 不执行 action、不依赖产品 ID 或 App Server |
+| `components::selection::draw` | crate-private | generic title/tabs/search/items、可配置间距的水平分隔 preview、caption/footer Ratatui surface | 只读 selection state、不解释产品 action |
 | `ChatComposer` | private | blank/trim/submit、paste routing、slash completion application、参数结构化与 local dispatch | 不自行实现 slash grammar，不拥有 cursor、Vim state 或 RPC |
 | `Attachments` | private | 图片 bytes/path、data URL 与原子占位符绑定、删除后重新编号 | 不直接读取系统 clipboard、不发 RPC、不渲染 |
 | `host::clipboard::read_image` | crate-private | 从本机 clipboard 文件列表/RGBA image 读取并统一编码 PNG | 不改变 composer、不发 RPC、不持久化临时文件 |
@@ -230,7 +235,7 @@ run(session, options)
    └─ terminal event
       ├─ key → App::handle_key
       │  ├─ local input → InteractionPane
-      │  │  ├─ active selection view → local view state
+      │  │  ├─ active selection view → local view state；可搜索模型先用 Space 进入 search mode
       │  │  └─ no active view → ChatComposer → TextArea
       │  ├─ ReadClipboardImage → clipboard::read_image → AppEvent → App::update
       │  ├─ Quit → return
@@ -240,7 +245,7 @@ run(session, options)
       │  ├─ mention hit → App::activate_mention → atomic path completion
       │  └─ slash hit → App::activate_slash_command → existing command dispatch
       └─ Paste → App::handle_paste → InteractionPane
-         ├─ active selection view → search query
+         ├─ active searchable selection view in search mode → search query
          └─ no active view → ChatComposer
          ├─ image path → Attachments + TextArea atomic placeholder
          └─ text → PendingPastes + TextArea
@@ -407,7 +412,7 @@ popup 从 composer 上沿向上展开；temporary interaction view active 时替
 底边保持不动并按 view 的 desired height 只向上扩张，transcript 至少保留四行。
 temporary view active 时 status line 不占行。普通 composer 模式下，status line 只消费
 `StatusLineModel`，不在 draw 中调用 config、Git 或 Thread 接口。
-Selection surface 当前包含顶部分隔线、标题、可换行 Tabs、搜索框、可滚动窗口和 view-local
+Selection surface 当前包含顶部分隔线、可配置上下间距的标题、可换行 Tabs、搜索框、可滚动窗口和 view-local
 footer；关闭后恢复一直保留的 composer state。
 
 Transcript marker 使用 role-specific color，正文是 plain text。`estimated_wrapped_rows` 使用

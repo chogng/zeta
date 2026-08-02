@@ -51,6 +51,7 @@ pub const EDITOR_TOKEN_VARIABLE: &str = "editor.token.variableForeground";
 pub const TERMINAL_BACKGROUND: &str = "terminal.background";
 pub const TERMINAL_FOREGROUND: &str = "terminal.foreground";
 pub const TERMINAL_CURSOR_FOREGROUND: &str = "terminal.cursorForeground";
+pub const TUI_HIGHLIGHT_FOREGROUND: &str = "tui.highlightForeground";
 pub const TERMINAL_ANSI: [&str; 16] = [
     "terminal.ansiBlack",
     "terminal.ansiRed",
