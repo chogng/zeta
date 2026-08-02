@@ -5,6 +5,7 @@ import { MenuId } from "../../../../../platform/actions/common/actions.js";
 import type { IMenuService } from "../../../../../platform/actions/common/menuService.js";
 import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextMenu.js";
 import { ChatTabsControl, type ChatTab, type ChatTabsDelegate } from "./chatTabsControl.js";
+import { MultiChatTabsControl } from "./multiChatTabsControl.js";
 import type { PartTitleProjection } from "../../../../browser/parts/views/viewPane.js";
 
 /** Owns Chat's title content and action projections. */
@@ -14,7 +15,7 @@ export class ChatTitleControl extends DisposableOwner {
 
   constructor(ownerDocument: Document, idPrefix: string, delegate: ChatTabsDelegate, menuService: IMenuService, contextMenuService: IContextMenuService) {
     super();
-    this.tabs = this.own(new ChatTabsControl(ownerDocument, idPrefix, delegate, "pane-title"));
+    this.tabs = this.own(new MultiChatTabsControl(ownerDocument, idPrefix, delegate, "pane-title"));
     const toolbar = this.own(new MenuWorkbenchToolBar(
       menuService,
       contextMenuService,

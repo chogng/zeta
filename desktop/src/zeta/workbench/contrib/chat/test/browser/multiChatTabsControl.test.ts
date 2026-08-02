@@ -1,12 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { ChatTabsControl, type ChatTabsDelegate } from "../../browser/view/chatTabsControl.js";
+import type { ChatTabsDelegate } from "../../browser/view/chatTabsControl.js";
+import { MultiChatTabsControl } from "../../browser/view/multiChatTabsControl.js";
 
-test("ChatTabsControl moves the dragged tab through its delegate", () => {
+test("MultiChatTabsControl moves the dragged tab through its delegate", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
   const moves: Array<{ source: string; target: string | undefined; position: string }> = [];
-  const control = new ChatTabsControl(dom.window.document, "chat", {
+  const control = new MultiChatTabsControl(dom.window.document, "chat", {
     selectTab: () => undefined,
     closeTab: () => undefined,
     moveTab: (source, target, position) => moves.push({ source, target, position }),

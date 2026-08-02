@@ -1,4 +1,4 @@
-.zeta-chat-tabs-control {
+.zeta-multi-chat-tabs-control {
   --zeta-tab-list-action-hover-background: var(--zeta-chat-tab-background);
   --zeta-tab-list-checked-action-hover-background: var(--zeta-tab-list-active-background);
 
@@ -9,11 +9,11 @@
   overflow: hidden;
 }
 
-.zeta-chat-tabs-control .zeta-tab-list {
+.zeta-multi-chat-tabs-control .zeta-tab-list {
   height: var(--zeta-tab-height);
 }
 
-.zeta-chat-tabs-control .zeta-tab {
+.zeta-multi-chat-tabs-control .zeta-tab {
   display: flex;
   min-width: 64px;
   max-width: 180px;
@@ -23,15 +23,15 @@
   background: var(--zeta-chat-tab-background);
 }
 
-.zeta-chat-tabs-control .zeta-tab:hover {
+.zeta-multi-chat-tabs-control .zeta-tab:hover {
   color: var(--zeta-foreground);
 }
 
-.zeta-chat-tabs-control .zeta-tab.checked {
+.zeta-multi-chat-tabs-control .zeta-tab.checked {
   color: var(--zeta-foreground);
 }
 
-.zeta-chat-tabs-control .zeta-tab-label {
+.zeta-multi-chat-tabs-control .zeta-tab-label {
   --zeta-icon-label-text-overflow: clip;
 
   position: relative;
@@ -47,8 +47,8 @@
   white-space: nowrap;
 }
 
-.zeta-chat-tabs-control .zeta-tab.checked .zeta-tab-label::after,
-.zeta-chat-tabs-control .zeta-tab:hover .zeta-tab-label::after {
+.zeta-multi-chat-tabs-control .zeta-tab.checked .zeta-tab-label::after,
+.zeta-multi-chat-tabs-control .zeta-tab:hover .zeta-tab-label::after {
   position: absolute;
   top: 0;
   right: 0;
@@ -59,11 +59,11 @@
   background: linear-gradient(to right, transparent, var(--zeta-chat-tab-background));
 }
 
-.zeta-chat-tabs-control .zeta-tab.checked .zeta-tab-label::after {
+.zeta-multi-chat-tabs-control .zeta-tab.checked .zeta-tab-label::after {
   background: linear-gradient(to right, transparent, var(--zeta-tab-list-active-background));
 }
 
-.zeta-chat-tabs-control .zeta-tab-label:focus-visible {
+.zeta-multi-chat-tabs-control .zeta-tab-label:focus-visible {
   outline: 1px solid var(--zeta-focus-border);
   outline-offset: -1px;
 }
