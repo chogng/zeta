@@ -1,4 +1,4 @@
-import "./editorpart.css";
+import "./media/editorpart.css";
 import type { IContextMenuProvider } from "../../../../base/browser/contextmenu.js";
 import { Dimension, type IDimension } from "../../../../base/browser/geometry.js";
 import { SplitView, type ISplitViewView } from "../../../../base/browser/ui/splitview/splitview.js";

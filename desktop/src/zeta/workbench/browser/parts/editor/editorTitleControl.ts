@@ -1,4 +1,4 @@
-import "./editorTitleControl.css";
+import "./media/editorTitleControl.css";
 import type { IContextMenuProvider } from "../../../../base/browser/contextmenu.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { MenuWorkbenchToolBar, WorkbenchToolBar } from "../../../../platform/actions/browser/toolbar.js";
