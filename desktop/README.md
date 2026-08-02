@@ -28,7 +28,8 @@ corepack pnpm dev:desktop
 corepack pnpm dev:web
 ```
 
-该命令只同步生成资源并启动监听 `127.0.0.1:5173` 的 Vite 开发服务器，不编译或启动 Rust。
+该命令只同步生成资源并启动监听 `127.0.0.1:5173` 的 Vite 开发服务器；打开
+`http://127.0.0.1:5173/` 即会进入当前产品版本的 Browser Workbench。该模式不编译或启动 Rust。
 Browser Workbench 使用 disconnected API，因此 UI 可以独立开发；Chat、Explorer、Git、
 Terminal 等依赖后端的操作会明确报告不可用。
 
@@ -38,7 +39,7 @@ Terminal 等依赖后端的操作会明确报告不可用。
 corepack pnpm dev:web:full
 ```
 
-完整模式监听 `127.0.0.1:5174`。Browser 通过 Vite 已认证的 HMR WebSocket 连接本地开发
+完整模式监听 `127.0.0.1:5174`，根地址同样会进入当前产品版本。Browser 通过 Vite 已认证的 HMR WebSocket 连接本地开发
 桥接器；桥接器为每个浏览器连接启动独立的 `zeta app-server --listen stdio://` 子进程，
 浏览器连接关闭时对应子进程也会被回收。`dev:web:code`、`dev:web:academic`、
 `dev:web:complete` 与对应的 `dev:web:full:*` 命令用于显式选择产品版本。

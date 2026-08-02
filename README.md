@@ -101,8 +101,9 @@ App Server:
 corepack pnpm dev:web
 ```
 
-Open [http://127.0.0.1:5173/browser/workbench/workbench-code.html](http://127.0.0.1:5173/browser/workbench/workbench-code.html)
-after Vite reports that it is ready. The UI starts with an explicit disconnected
+Open [http://127.0.0.1:5173/](http://127.0.0.1:5173/) after Vite reports that it
+is ready. Vite redirects the root to the selected product's Browser Workbench.
+The UI starts with an explicit disconnected
 backend; operations that require files, search, terminal, Git, or Chat fail as
 unavailable instead of manufacturing browser-owned product state.
 
@@ -115,8 +116,7 @@ corepack pnpm dev:web:full
 
 The full mode prepares the local development package, starts one
 `zeta app-server --listen stdio://` process per browser connection, and serves
-the Workbench at
-[http://127.0.0.1:5174/browser/workbench/workbench-code.html](http://127.0.0.1:5174/browser/workbench/workbench-code.html).
+the Workbench at [http://127.0.0.1:5174/](http://127.0.0.1:5174/).
 All commands select the default `zeta` Electron Desktop build. The internal
 `code` build edition and the corresponding `:academic` and `:complete` variants
 are documented in [`docs/product-editions.md`](docs/product-editions.md); they
