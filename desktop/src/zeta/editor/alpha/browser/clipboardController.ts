@@ -7,7 +7,7 @@ import { type EditorEditCommand, type EditorSelectionController } from "../commo
 import { type TextSelectionSet } from "../common/selection.js";
 import { type TextModel } from "../common/textModel.js";
 import { type AlphaEditorViewport } from "./alphaEditorViewport.js";
-import { type AlphaSemanticTokenSource } from "./semanticTokenPresentation.js";
+import { type AlphaSemanticTokenSource } from "../language/browser/semanticTokenPresentation.js";
 import { createAlphaSyntaxClipboardHtml } from "./syntaxClipboardHtml.js";
 import { ALPHA_TEXT_FILE_TRANSFER_MAX_BYTES, selectAlphaTextFileTransfer } from "./textFileTransfer.js";
 import { captureAlphaClipboardTextTransfer, normalizeAlphaClipboardPasteProviders, provideAlphaClipboardPaste, type AlphaClipboardPasteProvider } from "./clipboardPasteProvider.js";

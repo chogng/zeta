@@ -4,7 +4,7 @@ import { JSDOM } from "jsdom";
 import { type AlphaTextMeasurer } from "../../browser/fontMetrics.js";
 import { TextDecorationCollection } from "../../common/decoration.js";
 import { EditorSelectionController } from "../../common/editorSelectionController.js";
-import { LanguageDiagnosticSeverity, type LanguageDiagnostic } from "../../common/languageResults.js";
+import { LanguageDiagnosticSeverity, type LanguageDiagnostic } from "../../language/common/languageResults.js";
 import { TextSelection, TextSelectionSet } from "../../common/selection.js";
 import { TextPosition, TextRange } from "../../common/text.js";
 import { TextModel } from "../../common/textModel.js";
@@ -13,7 +13,7 @@ import { TrackedRangeStickiness } from "../../common/trackedRange.js";
 const environment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({ window: environment.window, document: environment.window.document, Node: environment.window.Node, Element: environment.window.Element, HTMLElement: environment.window.HTMLElement, Event: environment.window.Event, KeyboardEvent: environment.window.KeyboardEvent })) Object.defineProperty(globalThis, name, { configurable: true, value });
 const { AlphaEditorViewport } = await import("../../browser/alphaEditorViewport.js");
-const { AlphaDiagnosticNavigationController } = await import("../../browser/diagnosticNavigationController.js");
+const { AlphaDiagnosticNavigationController } = await import("../../language/browser/diagnosticNavigationController.js");
 
 test("F8 navigates current diagnostics in both directions", () => {
   const dom = new JSDOM("<!doctype html><body><main></main></body>");

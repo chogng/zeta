@@ -4,7 +4,7 @@ import { JSDOM } from "jsdom";
 import { OperatingSystem } from "../../../../base/common/platform.js";
 import { type AlphaTextMeasurer } from "../../browser/fontMetrics.js";
 import { EditorSelectionController } from "../../common/editorSelectionController.js";
-import { EditorFoldingModel } from "../../common/folding.js";
+import { EditorFoldingModel } from "../../language/common/folding.js";
 import { TextSelection, TextSelectionSet } from "../../common/selection.js";
 import { TextPosition } from "../../common/text.js";
 import { TextModel } from "../../common/textModel.js";
@@ -24,7 +24,7 @@ for (const [name, value] of Object.entries({
 }
 
 const { AlphaEditorViewport } = await import("../../browser/alphaEditorViewport.js");
-const { AlphaFoldingCommand, AlphaFoldingController, resolveAlphaFoldingCommand } = await import("../../browser/foldingController.js");
+const { AlphaFoldingCommand, AlphaFoldingController, resolveAlphaFoldingCommand } = await import("../../language/browser/foldingController.js");
 
 test.after(() => browserEnvironment.window.close());
 

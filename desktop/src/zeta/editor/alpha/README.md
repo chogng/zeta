@@ -17,8 +17,9 @@ text-model contract.
 
 | Directory | May depend on | Owns |
 | --- | --- | --- |
-| `common/` | `base/common` | DOM-free editor identities, text, history, selection, decoration, composition transactions, versioned language requests/results, and pure layout/view-model math |
-| `browser/` | `base/common`, `base/browser`, `alpha/common` | DOM projection, textarea/input events, viewport observation, font measurement, clipboard, and accessibility |
+| `common/` | `base/common` | DOM-free editor identities, text, history, selection, decoration, composition transactions, and pure layout/view-model math |
+| `browser/` | `base/common`, `base/browser`, `alpha/common`, `alpha/language` | DOM projection, textarea/input events, viewport observation, font measurement, clipboard, accessibility, and optional language-presentation composition |
+| `language/` | `base/common`, stable Alpha contracts | Alpha-specific language configuration, provider contracts, analysis/completion result lifecycles, language widgets, diagnostics, bracket behavior, and folding contributions; shared provider composition is in `workbench/services/language` |
 | `../monaco/`, `../prosemirror/` | their adapter dependencies plus stable Alpha contracts | Retirement/migration integration only; no new product ownership |
 | Workbench contributions | editor public contracts and platform services | Pane registration, product composition, and document/workspace wiring |
 
@@ -32,6 +33,15 @@ Text positions, model versions, selections, decorations, viewport semantics,
 and editor instance identity remain editor-owned even when implemented on base
 primitives.
 
+Language capability is deliberately outside Alpha's core ownership. The
+`ILanguageFeaturesService` contract in
+`workbench/services/language/common/languageFeaturesService.ts`
+owns shared language registrations and creates caller-owned per-document analysis
+and completion services. `AlphaEditorSession` may use the default implementation
+or receive a host-provided service; it does not own a language runtime, grammar,
+or provider registry. This is the replacement seam for an extension host, LSP, or
+Rust-backed provider.
+
 ### Service extraction boundary
 
 Service extraction follows a real cross-module owner, not the size of an Alpha
@@ -42,12 +52,12 @@ class:
 | Events, lifecycle, URI identity, resource collections | `base/common` | Reuse existing primitives; editor semantics must not flow back into base |
 | Raw resource I/O | `platform/files` | `IFileService` owns workspace reads and App-Server-backed atomic UTF-8 writes |
 | Text resource loading and save transport | `workbench/services/textfile/common` | ✅ `ITextFileService.resolve/save`; it deliberately does not own a live editor model |
-| Syntax token production | Alpha analysis providers | ✅ JSON/JSONC use the editor-local TextMate worker; Rust uses the editor-local lexical Worker; no App Server syntax transport exists |
+| Syntax token production | `workbench/services/textMate` and Alpha analysis providers | ✅ JSON/JSONC use the Workbench TextMate service; Rust uses the Alpha lexical Worker; no App Server syntax transport exists |
 | Shared URI-to-Alpha-model references, saved baseline and dirty state | `AlphaTextModelService` | ✅ editor-owned; Alpha owns LF-normalized baseline comparison, serialized snapshot saves and explicit reverts |
 | Text transactions, history, selections, decorations and versioned language results | `editor/alpha/common` | ✅ Alpha's synchronous TypeScript authority; no Rust/WASM shadow document |
 | Rust file/language/workspace capability | frontend domain services over App Server | Asynchronous, revision-bound results only; never the keystroke hot path |
 | Language identities and composable editing rules | `editor/alpha/common` | `LanguageConfigurationRegistry`; comments/brackets/pairs are editor-domain contracts, not generic base primitives |
-| TextMate grammar loading and token production | `editor/textmate` adapter over Alpha analysis providers | 部分具备; JSON/JSONC resources, caller-owned session grammar contributions, and serializable scope-theme selector rules are wired; extension-resource discovery remains unfinished |
+| TextMate grammar loading and token production | `workbench/services/textMate` adapter over Alpha analysis providers | 部分具备; JSON/JSONC resources, caller-owned session grammar contributions, and serializable scope-theme selector rules are wired; extension-resource discovery remains unfinished |
 
 The current `textfile` contract was extracted only after Alpha, Monaco,
 ProseMirror, and Explorer established a real shared loading boundary. It now
@@ -130,7 +140,7 @@ architectural drift signal and require extraction at that point.
 | Versioned language-isolated lexical line cache | ✅ | `LanguageLexicalAnalysisCache` / `LanguageLexicalLineScanner` |
 | Shared language provider-module lifecycle | ✅ | `LanguageProviderModuleRegistry` / `LanguageProviderModuleHost` / generic module wire |
 | Analysis provider-module activation barrier | ✅ | `LanguageAnalysisModuleWorkerClient` / `alpha.lexical` |
-| TextMate grammar provider and Worker seam | 部分具备 | `editor/textmate`; JSON/JSONC resources, explicit session grammar contributions, catalog transport and Alpha pane Worker selection are active |
+| TextMate grammar provider and Worker seam | 部分具备 | `workbench/services/textMate`; JSON/JSONC resources, explicit session grammar contributions, catalog transport and Alpha pane Worker selection are active |
 | Versioned completion result, session, and widget | ✅ | `languageCompletions.ts` / `LanguageCompletionSessionController` / `AlphaCompletionWidget` |
 | Completion snippet tabstops, variables, choices, and navigation-refreshed regex transforms | ✅ | `languageCompletionSnippet.ts` / `languageCompletionSnippetTransform.ts` |
 | Completion provider registry, host, and input triggers | ✅ | `LanguageCompletionProviderRegistry` / `LanguageCompletionService` / `AlphaTextInputController` |

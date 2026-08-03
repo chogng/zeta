@@ -4,6 +4,8 @@ import { throwIfCancelled } from "../../../base/common/cancellation.js";
 import { DisposableOwner, DisposableSlot, type IDisposable } from "../../../base/common/lifecycle.js";
 import { assertDefined } from "../../../base/common/types.js";
 import { type ITextFileService } from "../../../workbench/services/textfile/common/textFileService.js";
+import { type ITextMateService } from "../../../workbench/services/textMate/common/textMateService.js";
+import { type ILanguageFeaturesService } from "../../../workbench/services/language/common/languageFeaturesService.js";
 import { type EditorInput } from "../../../workbench/browser/parts/editor/editorInput.js";
 import { type IEditorPane } from "../../../workbench/browser/parts/editor/editorPane.js";
 import { EditorPaneVisibility } from "../../../workbench/browser/parts/editor/editorPane.js";
@@ -23,9 +25,16 @@ export interface AlphaEditorPaneSession extends IDisposable {
   revert?(): Promise<void>;
 }
 
+export interface AlphaEditorPaneSessionOptions extends AlphaEditorSessionOptions {
+  readonly textMateService?: ITextMateService;
+  readonly languageFeaturesService?: ILanguageFeaturesService;
+}
+
 export interface AlphaEditorPaneOptions {
   readonly modelService?: AlphaTextModelService;
-  readonly createSession?: (options: AlphaEditorSessionOptions) => AlphaEditorPaneSession;
+  readonly createSession?: (options: AlphaEditorPaneSessionOptions) => AlphaEditorPaneSession;
+  readonly textMateService?: ITextMateService;
+  readonly languageFeaturesService?: ILanguageFeaturesService;
   readonly lineWrapping?: AlphaEditorLineWrapping;
   /** Browser paragraph direction forwarded to every created Alpha session. */
   readonly textDirection?: AlphaEditorTextDirection;
@@ -36,7 +45,7 @@ export class AlphaEditorPane extends DisposableOwner implements IEditorPane {
   readonly id = ALPHA_EDITOR_ID;
   private readonly sessions = this.own(new DisposableSlot<AlphaEditorPaneSession>());
   private readonly modelService: AlphaTextModelService;
-  private readonly createSession: (options: AlphaEditorSessionOptions) => AlphaEditorPaneSession;
+  private readonly createSession: (options: AlphaEditorPaneSessionOptions) => AlphaEditorPaneSession;
   private container: HTMLDivElement | undefined;
   private dimension: IDimension = { width: 0, height: 0 };
 
@@ -74,6 +83,8 @@ export class AlphaEditorPane extends DisposableOwner implements IEditorPane {
         input,
         languageId: alphaLanguageForInput(input),
         modelReference,
+        textMateService: this.options.textMateService,
+        languageFeaturesService: this.options.languageFeaturesService,
         lineWrapping: this.options.lineWrapping,
         textDirection: this.options.textDirection,
         onSave: () => modelReference.save(this.textFiles, new AbortController().signal),

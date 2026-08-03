@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { applyLanguageCompletionSnippetTransform, createLanguageCompletionSnippetTransform } from "../../common/languageCompletionSnippetTransform.js";
+import { applyLanguageCompletionSnippetTransform, createLanguageCompletionSnippetTransform } from "../../language/common/languageCompletionSnippetTransform.js";
 
 test("Completion snippet transforms expand captures, case modifiers, conditionals, and global matches", () => {
   const caseTransform = createLanguageCompletionSnippetTransform("(?<first>alpha)_(beta)", "${1:/upcase}-${2:/pascalcase}", "i");

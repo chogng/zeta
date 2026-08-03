@@ -3,8 +3,8 @@ import test from "node:test";
 import { JSDOM } from "jsdom";
 import { type AlphaTextMeasurer } from "../../browser/fontMetrics.js";
 import { EditorSelectionController } from "../../common/editorSelectionController.js";
-import { LanguageConfigurationRegistry } from "../../common/languageConfiguration.js";
-import { LanguageBracketMatcher } from "../../common/languageBracketMatcher.js";
+import { LanguageConfigurationRegistry } from "../../language/common/languageConfiguration.js";
+import { LanguageBracketMatcher } from "../../language/common/languageBracketMatcher.js";
 import { TextSelection, TextSelectionSet } from "../../common/selection.js";
 import { TextPosition } from "../../common/text.js";
 import { TextModel } from "../../common/textModel.js";
@@ -23,7 +23,7 @@ for (const [name, value] of Object.entries({
 }
 
 const { AlphaEditorViewport } = await import("../../browser/alphaEditorViewport.js");
-const { AlphaBracketEditingController } = await import("../../browser/bracketEditingController.js");
+const { AlphaBracketEditingController } = await import("../../language/browser/bracketEditingController.js");
 
 test("Remove-brackets shortcut mutates through an isolated Alpha transaction", () => {
   const dom = new JSDOM("<!doctype html><body><main></main></body>");

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { type AlphaTextMeasurer } from "../../browser/fontMetrics.js";
-import { LanguageConfigurationRegistry } from "../../common/languageConfiguration.js";
+import { LanguageConfigurationRegistry } from "../../language/common/languageConfiguration.js";
 import { EditorSelectionController } from "../../common/editorSelectionController.js";
 import { TextSelection, TextSelectionSet } from "../../common/selection.js";
 import { TextPosition } from "../../common/text.js";

@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { AlphaSemanticTokenModifier, AlphaSemanticTokenPresentation, createAlphaSemanticTokenSource, projectAlphaSemanticTokenLine, resolveAlphaSemanticTokenModifiers, resolveAlphaSemanticTokenPresentation, type AlphaResolvedSemanticToken } from "../../browser/semanticTokenPresentation.js";
-import { LanguageResultAcceptance } from "../../common/languageResultStore.js";
-import { LanguageTokenLineIndex } from "../../common/languageTokenLineIndex.js";
-import { createLanguageTokenStore, type LanguageToken } from "../../common/languageResults.js";
+import { AlphaSemanticTokenModifier, AlphaSemanticTokenPresentation, createAlphaSemanticTokenSource, projectAlphaSemanticTokenLine, resolveAlphaSemanticTokenModifiers, resolveAlphaSemanticTokenPresentation, type AlphaResolvedSemanticToken } from "../../language/browser/semanticTokenPresentation.js";
+import { LanguageResultAcceptance } from "../../language/common/languageResultStore.js";
+import { LanguageTokenLineIndex } from "../../language/common/languageTokenLineIndex.js";
+import { createLanguageTokenStore, type LanguageToken } from "../../language/common/languageResults.js";
 import { TextPosition, TextRange } from "../../common/text.js";
 import { TextModel } from "../../common/textModel.js";
 

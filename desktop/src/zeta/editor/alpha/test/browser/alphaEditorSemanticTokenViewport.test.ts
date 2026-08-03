@@ -2,10 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { type AlphaTextMeasurer } from "../../browser/fontMetrics.js";
-import { AlphaSemanticTokenPresentation, createAlphaSemanticTokenSource } from "../../browser/semanticTokenPresentation.js";
-import { LanguageResultAcceptance } from "../../common/languageResultStore.js";
-import { LanguageTokenLineIndex } from "../../common/languageTokenLineIndex.js";
-import { createLanguageTokenStore, type LanguageToken } from "../../common/languageResults.js";
+import { AlphaSemanticTokenPresentation, createAlphaSemanticTokenSource } from "../../language/browser/semanticTokenPresentation.js";
+import { LanguageResultAcceptance } from "../../language/common/languageResultStore.js";
+import { LanguageTokenLineIndex } from "../../language/common/languageTokenLineIndex.js";
+import { createLanguageTokenStore, type LanguageToken } from "../../language/common/languageResults.js";
 import { TextPosition, TextRange } from "../../common/text.js";
 import { TextModel } from "../../common/textModel.js";
 

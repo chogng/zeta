@@ -1,11 +1,11 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
 import { DisposableStore } from "../../../../base/common/lifecycle.js";
-import { LanguageAnalysisProviderRegistry, type LanguageAnalysisProvider } from "../../common/languageAnalysisProviders.js";
-import { LANGUAGE_ANALYSIS_SYNCHRONIZATION, LANGUAGE_DIAGNOSTIC_LANE, LANGUAGE_TOKEN_LANE, LanguageAnalysisProviderWorker, LanguageAnalysisService } from "../../common/languageAnalysisService.js";
-import { createLanguageLexicalAnalysisProvider } from "../../common/languageLexicalAnalysisProvider.js";
-import { LanguageRequestCancellationReason, LanguageRequestStatus } from "../../common/languageRequestCoordinator.js";
-import { LanguageDiagnosticSeverity, type LanguageDiagnosticResult, type LanguageTokenResult } from "../../common/languageResults.js";
+import { LanguageAnalysisProviderRegistry, type LanguageAnalysisProvider } from "../../language/common/languageAnalysisProviders.js";
+import { LANGUAGE_ANALYSIS_SYNCHRONIZATION, LANGUAGE_DIAGNOSTIC_LANE, LANGUAGE_TOKEN_LANE, LanguageAnalysisProviderWorker, LanguageAnalysisService } from "../../language/common/languageAnalysisService.js";
+import { createLanguageLexicalAnalysisProvider } from "../../language/common/languageLexicalAnalysisProvider.js";
+import { LanguageRequestCancellationReason, LanguageRequestStatus } from "../../language/common/languageRequestCoordinator.js";
+import { LanguageDiagnosticSeverity, type LanguageDiagnosticResult, type LanguageTokenResult } from "../../language/common/languageResults.js";
 import { TextPosition, TextRange } from "../../common/text.js";
 import { TextModel } from "../../common/textModel.js";
 

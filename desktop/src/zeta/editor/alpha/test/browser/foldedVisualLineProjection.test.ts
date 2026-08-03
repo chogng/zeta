@@ -3,7 +3,7 @@ import test from "node:test";
 import { AlphaFoldedVisualLineProjection } from "../../browser/foldedVisualLineProjection.js";
 import { AlphaEditorLineWrapping, AlphaVisualLineProjection } from "../../browser/visualLineProjection.js";
 import { type AlphaTextMeasurer } from "../../browser/fontMetrics.js";
-import { EditorFoldingModel } from "../../common/folding.js";
+import { EditorFoldingModel } from "../../language/common/folding.js";
 import { TextModel } from "../../common/textModel.js";
 import { TextPosition } from "../../common/text.js";
 

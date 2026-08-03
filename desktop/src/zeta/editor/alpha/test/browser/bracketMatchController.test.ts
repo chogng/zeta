@@ -3,8 +3,8 @@ import test from "node:test";
 import { JSDOM } from "jsdom";
 import { AlphaDecorationPresentation, createAlphaDecorationSource } from "../../browser/decorationPresentation.js";
 import { type AlphaTextMeasurer } from "../../browser/fontMetrics.js";
-import { LanguageBracketMatcher } from "../../common/languageBracketMatcher.js";
-import { LanguageConfigurationRegistry } from "../../common/languageConfiguration.js";
+import { LanguageBracketMatcher } from "../../language/common/languageBracketMatcher.js";
+import { LanguageConfigurationRegistry } from "../../language/common/languageConfiguration.js";
 import { TextDecorationCollection } from "../../common/decoration.js";
 import { EditorSelectionController } from "../../common/editorSelectionController.js";
 import { TextSelection, TextSelectionSet } from "../../common/selection.js";
@@ -24,7 +24,7 @@ for (const [name, value] of Object.entries({
 }
 
 const { AlphaEditorViewport } = await import("../../browser/alphaEditorViewport.js");
-const { AlphaBracketMatchController } = await import("../../browser/bracketMatchController.js");
+const { AlphaBracketMatchController } = await import("../../language/browser/bracketMatchController.js");
 
 test("Bracket match controller projects current pairs and clears them for a range selection", () => {
   const dom = new JSDOM("<!doctype html><body><main></main></body>");

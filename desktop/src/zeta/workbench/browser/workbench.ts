@@ -172,6 +172,9 @@ import { IWorkbenchWindowService, WorkbenchWindow } from "./window.js";
 import { TerminalService } from "../services/terminal/browser/terminalService.js";
 import { ITerminalService } from "../services/terminal/common/terminal.js";
 import { ITextFileService, TextFileService } from "../services/textfile/common/textFileService.js";
+import { ITextMateService } from "../services/textMate/common/textMateService.js";
+import { BrowserTextMateService } from "../services/textMate/browser/browserTextMateService.js";
+import { ILanguageFeaturesService, LanguageFeaturesService } from "../services/language/common/languageFeaturesService.js";
 import { GitService } from "../services/git/browser/gitService.js";
 import { IGitService } from "../services/git/common/gitService.js";
 import { ChatService } from "../services/chat/browser/chatService.js";
@@ -268,6 +271,10 @@ export class Workbench extends DisposableOwner {
     services.set(IFileService, fileService);
     const textFileService = new TextFileService(fileService);
     services.set(ITextFileService, textFileService);
+    const textMateService = this.own(new BrowserTextMateService());
+    services.set(ITextMateService, textMateService);
+    const languageFeaturesService = this.own(new LanguageFeaturesService());
+    services.set(ILanguageFeaturesService, languageFeaturesService);
     services.set(
       IWorkspaceSearchService,
       new BrowserWorkspaceSearchService(api.workspaceSearch),
@@ -441,6 +448,8 @@ export class Workbench extends DisposableOwner {
       configurationService: configuration,
       keybindingService: keybindings,
       textFileService,
+      textMateService,
+      languageFeaturesService,
       titleActions: {
         menuService: menus,
         contextMenuProvider: contextMenus,

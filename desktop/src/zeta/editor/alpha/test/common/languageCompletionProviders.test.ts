@@ -1,6 +1,6 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
-import { LanguageCompletionProviderRegistry, LanguageCompletionTriggerKind, createLanguageCompletionIncompleteRefreshContext, createLanguageCompletionInvokeContext, createLanguageCompletionTriggerCharacterContext, normalizeLanguageCompletionProviderCatalog, type LanguageCompletionContext, type LanguageCompletionProvider, type LanguageCompletionProviderCatalog } from "../../common/languageCompletionProviders.js";
+import { LanguageCompletionProviderRegistry, LanguageCompletionTriggerKind, createLanguageCompletionIncompleteRefreshContext, createLanguageCompletionInvokeContext, createLanguageCompletionTriggerCharacterContext, normalizeLanguageCompletionProviderCatalog, type LanguageCompletionContext, type LanguageCompletionProvider, type LanguageCompletionProviderCatalog } from "../../language/common/languageCompletionProviders.js";
 
 test("Completion provider registry preserves registration order and selectors", () => {
   using registry = new LanguageCompletionProviderRegistry();

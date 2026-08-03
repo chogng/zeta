@@ -1,11 +1,11 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
 import { EditorSelectionController } from "../../common/editorSelectionController.js";
-import { LanguageAutoClosingTracker } from "../../common/languageAutoClosingTracker.js";
-import { registerAlphaBuiltinLanguageConfigurations } from "../../common/languageBuiltinConfigurations.js";
-import { LanguageConfigurationRegistry } from "../../common/languageConfiguration.js";
-import { LanguageLexicalContextIndex } from "../../common/languageLexicalContext.js";
-import { createLanguagePairBackspaceCommand, createLanguagePairTypeCommand } from "../../common/languagePairEditing.js";
+import { LanguageAutoClosingTracker } from "../../language/common/languageAutoClosingTracker.js";
+import { registerAlphaBuiltinLanguageConfigurations } from "../../language/common/languageBuiltinConfigurations.js";
+import { LanguageConfigurationRegistry } from "../../language/common/languageConfiguration.js";
+import { LanguageLexicalContextIndex } from "../../language/common/languageLexicalContext.js";
+import { createLanguagePairBackspaceCommand, createLanguagePairTypeCommand } from "../../language/common/languagePairEditing.js";
 import { TextSelection, TextSelectionSet } from "../../common/selection.js";
 import { TextPosition } from "../../common/text.js";
 import { TextModel } from "../../common/textModel.js";

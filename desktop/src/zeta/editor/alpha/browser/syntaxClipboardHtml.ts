@@ -1,6 +1,6 @@
 import { EditorClipboardPasteMode, type EditorClipboardEntry } from "../common/clipboard.js";
 import { type TextPosition } from "../common/text.js";
-import { AlphaSemanticTokenPresentation, type AlphaSemanticTokenSource } from "./semanticTokenPresentation.js";
+import { AlphaSemanticTokenPresentation, type AlphaSemanticTokenSource } from "../language/browser/semanticTokenPresentation.js";
 
 /**
  * Creates portable preformatted HTML for an Alpha clipboard operation.

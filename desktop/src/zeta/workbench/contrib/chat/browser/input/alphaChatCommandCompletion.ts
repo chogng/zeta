@@ -1,5 +1,5 @@
-import { LanguageCompletionItemKind } from "../../../../../editor/alpha/common/languageCompletions.js";
-import { type LanguageCompletionProvider, type LanguageCompletionProviderRequest, type LanguageCompletionProviderResult } from "../../../../../editor/alpha/common/languageCompletionProviders.js";
+import { LanguageCompletionItemKind } from "../../../../../editor/alpha/language/common/languageCompletions.js";
+import { type LanguageCompletionProvider, type LanguageCompletionProviderRequest, type LanguageCompletionProviderResult } from "../../../../../editor/alpha/language/common/languageCompletionProviders.js";
 import { TextPosition, TextRange } from "../../../../../editor/alpha/common/text.js";
 import { type SlashCommandCatalog } from "../../common/slashCommands.js";
 

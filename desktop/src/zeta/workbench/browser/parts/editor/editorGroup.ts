@@ -6,6 +6,8 @@ import { DisposableOwner, setDisposableOwner } from "../../../../base/common/lif
 import type { IKeybindingService } from "../../../../platform/keybinding/common/keybinding.js";
 import type { IConfigurationService } from "../../../../platform/configuration/common/configuration.js";
 import { type ITextFileService } from "../../../services/textfile/common/textFileService.js";
+import { type ITextMateService } from "../../../services/textMate/common/textMateService.js";
+import { type ILanguageFeaturesService } from "../../../services/language/common/languageFeaturesService.js";
 import type { EditorInput, EditorOpenOptions } from "./editorInput.js";
 import { type IEditorPane, EditorPaneVisibility } from "./editorPane.js";
 import { extractExternalEditorInputs } from "./editorDropData.js";
@@ -40,6 +42,8 @@ export interface EditorGroupOptions {
   readonly configurationService?: IConfigurationService;
   readonly keybindingService?: IKeybindingService;
   readonly textFileService?: ITextFileService;
+  readonly textMateService?: ITextMateService;
+  readonly languageFeaturesService?: ILanguageFeaturesService;
   readonly titleActions?: EditorTitleActions;
   readonly onDidActivate?: () => void;
   readonly dragAndDrop?: IEditorTabDragAndDrop;
@@ -62,6 +66,8 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
   private readonly registry: EditorPaneRegistry;
   private readonly configurationService: IConfigurationService | undefined;
   private readonly textFileService: ITextFileService | undefined;
+  private readonly textMateService: ITextMateService | undefined;
+  private readonly languageFeaturesService: ILanguageFeaturesService | undefined;
   private readonly titleControl: EditorTitleControl;
   private readonly watermarkElement: HTMLElement;
   private readonly entries: EditorGroupEntry[] = [];
@@ -76,6 +82,8 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
     this.registry = options.registry;
     this.configurationService = options.configurationService;
     this.textFileService = options.textFileService;
+    this.textMateService = options.textMateService;
+    this.languageFeaturesService = options.languageFeaturesService;
     this.element = options.ownerDocument.createElement("section");
     this.element.className = "zeta-editor-group";
     this.element.setAttribute("aria-label", "Editor group");
@@ -176,6 +184,8 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
       ownerDocument: this.element.ownerDocument,
       configurationService: this.configurationService,
       textFileService: this.textFileService,
+      textMateService: this.textMateService,
+      languageFeaturesService: this.languageFeaturesService,
     });
     if (pane.id !== descriptor.id) {
       pane.dispose();

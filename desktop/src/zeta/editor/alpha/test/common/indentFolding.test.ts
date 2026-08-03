@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { EditorFoldingRangeSource } from "../../common/folding.js";
+import { EditorFoldingRangeSource } from "../../language/common/folding.js";
 import { computeEditorIndentFoldingRanges } from "../../common/indentFolding.js";
 import { TextModel } from "../../common/textModel.js";
 

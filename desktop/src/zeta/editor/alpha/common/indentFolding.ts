@@ -1,4 +1,4 @@
-import { EditorFoldingRangeSource, type EditorFoldingRange } from "./folding.js";
+import { EditorFoldingRangeSource, type EditorFoldingRange } from "../language/common/folding.js";
 import { type TextModel } from "./textModel.js";
 
 export interface EditorIndentFoldingOptions {

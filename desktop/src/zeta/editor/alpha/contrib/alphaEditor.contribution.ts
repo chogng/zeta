@@ -13,6 +13,8 @@ registerEditorPane({
     if (!options.textFileService) throw new Error("Alpha Editor requires the Workbench text file service");
     return new AlphaEditorPane(options.textFileService, {
       createSession: createBrowserAlphaEditorSession,
+      textMateService: options.textMateService,
+      languageFeaturesService: options.languageFeaturesService,
     });
   },
 });

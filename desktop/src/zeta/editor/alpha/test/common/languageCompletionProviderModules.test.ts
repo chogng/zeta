@@ -1,7 +1,7 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
-import { LanguageCompletionProviderRegistry, createLanguageCompletionInvokeContext, type LanguageCompletionProvider } from "../../common/languageCompletionProviders.js";
-import { LanguageCompletionProviderModuleHost, LanguageCompletionProviderModuleRegistry, LanguageCompletionProviderModuleState, normalizeLanguageCompletionProviderModuleCatalog } from "../../common/languageCompletionProviderModules.js";
+import { LanguageCompletionProviderRegistry, createLanguageCompletionInvokeContext, type LanguageCompletionProvider } from "../../language/common/languageCompletionProviders.js";
+import { LanguageCompletionProviderModuleHost, LanguageCompletionProviderModuleRegistry, LanguageCompletionProviderModuleState, normalizeLanguageCompletionProviderModuleCatalog } from "../../language/common/languageCompletionProviderModules.js";
 
 test("Provider module activation registers and removes one atomic provider batch", async () => {
   using providers = new LanguageCompletionProviderRegistry();

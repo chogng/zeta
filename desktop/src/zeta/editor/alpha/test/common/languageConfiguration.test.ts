@@ -1,7 +1,7 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
-import { createAlphaBuiltinLanguageConfigurationSource } from "../../common/languageBuiltinConfigurations.js";
-import { LanguageConfigurationRegistry, LanguageIndentAction } from "../../common/languageConfiguration.js";
+import { createAlphaBuiltinLanguageConfigurationSource } from "../../language/common/languageBuiltinConfigurations.js";
+import { LanguageConfigurationRegistry, LanguageIndentAction } from "../../language/common/languageConfiguration.js";
 
 test("Language configurations compose by field, priority, and registration order", () => {
   using registry = new LanguageConfigurationRegistry();

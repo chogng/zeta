@@ -1,9 +1,9 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
-import { registerAlphaBuiltinLanguageConfigurations } from "../../common/languageBuiltinConfigurations.js";
-import { LanguageConfigurationRegistry } from "../../common/languageConfiguration.js";
-import { type LanguageAnalysisProviderRequest } from "../../common/languageAnalysisProviders.js";
-import { createLanguageLexicalAnalysisProvider } from "../../common/languageLexicalAnalysisProvider.js";
+import { registerAlphaBuiltinLanguageConfigurations } from "../../language/common/languageBuiltinConfigurations.js";
+import { LanguageConfigurationRegistry } from "../../language/common/languageConfiguration.js";
+import { type LanguageAnalysisProviderRequest } from "../../language/common/languageAnalysisProviders.js";
+import { createLanguageLexicalAnalysisProvider } from "../../language/common/languageLexicalAnalysisProvider.js";
 import { TextModel } from "../../common/textModel.js";
 
 test("Lexical caches remain isolated by language identity at one model version", async () => {

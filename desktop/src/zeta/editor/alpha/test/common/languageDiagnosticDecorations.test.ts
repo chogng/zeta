@@ -1,9 +1,9 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
 import { TextDecorationChangeReason } from "../../common/decoration.js";
-import { LanguageDiagnosticDecorationBridge } from "../../common/languageDiagnosticDecorations.js";
-import { LanguageResultAcceptance } from "../../common/languageResultStore.js";
-import { LanguageDiagnosticSeverity, createLanguageDiagnosticStore, type LanguageDiagnostic } from "../../common/languageResults.js";
+import { LanguageDiagnosticDecorationBridge } from "../../language/common/languageDiagnosticDecorations.js";
+import { LanguageResultAcceptance } from "../../language/common/languageResultStore.js";
+import { LanguageDiagnosticSeverity, createLanguageDiagnosticStore, type LanguageDiagnostic } from "../../language/common/languageResults.js";
 import { TextPosition, TextRange } from "../../common/text.js";
 import { TextModel } from "../../common/textModel.js";
 

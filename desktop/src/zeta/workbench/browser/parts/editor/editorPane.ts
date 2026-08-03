@@ -8,6 +8,8 @@ import type {
   IConfigurationService,
 } from "../../../../platform/configuration/common/configuration.js";
 import { type ITextFileService } from "../../../services/textfile/common/textFileService.js";
+import { type ITextMateService } from "../../../services/textMate/common/textMateService.js";
+import { type ILanguageFeaturesService } from "../../../services/language/common/languageFeaturesService.js";
 import type { EditorInput } from "./editorInput.js";
 
 export enum EditorPaneVisibility {
@@ -38,6 +40,8 @@ export interface EditorPaneCreationOptions {
   readonly ownerDocument: Document;
   readonly configurationService?: IConfigurationService;
   readonly textFileService?: ITextFileService;
+  readonly textMateService?: ITextMateService;
+  readonly languageFeaturesService?: ILanguageFeaturesService;
 }
 
 export enum EditorPaneMatch {

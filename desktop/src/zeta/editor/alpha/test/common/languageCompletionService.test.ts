@@ -1,11 +1,11 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
 import { EditorSelectionController } from "../../common/editorSelectionController.js";
-import { LanguageCompletionSessionController } from "../../common/languageCompletionSession.js";
-import { LanguageCompletionService } from "../../common/languageCompletionService.js";
-import { LanguageCompletionProviderRegistry, LanguageCompletionTriggerKind, createLanguageCompletionIncompleteRefreshContext, createLanguageCompletionInvokeContext, createLanguageCompletionTriggerCharacterContext, type LanguageCompletionContext, type LanguageCompletionProvider, type LanguageCompletionProviderItem, type LanguageCompletionProviderRequest, type LanguageCompletionProviderResult } from "../../common/languageCompletionProviders.js";
-import { LanguageRequestCancellationReason, LanguageRequestStatus } from "../../common/languageRequestCoordinator.js";
-import { LanguageCompletionItemKind } from "../../common/languageCompletions.js";
+import { LanguageCompletionSessionController } from "../../language/common/languageCompletionSession.js";
+import { LanguageCompletionService } from "../../language/common/languageCompletionService.js";
+import { LanguageCompletionProviderRegistry, LanguageCompletionTriggerKind, createLanguageCompletionIncompleteRefreshContext, createLanguageCompletionInvokeContext, createLanguageCompletionTriggerCharacterContext, type LanguageCompletionContext, type LanguageCompletionProvider, type LanguageCompletionProviderItem, type LanguageCompletionProviderRequest, type LanguageCompletionProviderResult } from "../../language/common/languageCompletionProviders.js";
+import { LanguageRequestCancellationReason, LanguageRequestStatus } from "../../language/common/languageRequestCoordinator.js";
+import { LanguageCompletionItemKind } from "../../language/common/languageCompletions.js";
 import { TextSelection, TextSelectionSet } from "../../common/selection.js";
 import { TextPosition, TextRange } from "../../common/text.js";
 import { TextModel } from "../../common/textModel.js";

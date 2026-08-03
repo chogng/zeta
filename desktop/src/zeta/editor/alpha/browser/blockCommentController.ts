@@ -2,7 +2,7 @@ import { addDisposableListener, stopEvent } from "../../../base/browser/dom.js";
 import { DisposableOwner } from "../../../base/common/lifecycle.js";
 import { createToggleBlockCommentCommand } from "../common/blockCommentCommands.js";
 import { type EditorSelectionController } from "../common/editorSelectionController.js";
-import { type LanguageConfigurationSource } from "../common/languageConfiguration.js";
+import { type LanguageConfigurationSource } from "../language/common/languageConfiguration.js";
 import { type AlphaEditorViewport } from "./alphaEditorViewport.js";
 
 export interface AlphaBlockCommentControllerOptions {
