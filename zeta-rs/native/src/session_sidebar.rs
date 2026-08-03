@@ -4,8 +4,8 @@ use zeta_ui::{
     Point, Rect, SplitViewLayout, SplitViewLayoutPriority, SplitViewOrientation, SplitViewPane,
     SplitViewResizeSnapshot,
 };
-use zeta_ui_dispatch::DispatchInvalidation;
 use zeta_winit::ElementState;
+use zui::DispatchInvalidation;
 
 const DEFAULT_WIDTH: f32 = 200.0;
 const MINIMUM_WIDTH: f32 = 160.0;

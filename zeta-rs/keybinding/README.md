@@ -21,7 +21,7 @@
 | 设置浮层、命令行、深灰 keycap 与 Chord 提示 | `settings` | ✅ |
 | 录制、取消、一秒 quiet period 与 commit | `recording` | ✅ |
 | keycap 基础几何与 scene primitive | `zeta-ui` | 委托 |
-| modal scope、稳定 identity 与 accessibility node | `zeta-ui-dispatch` | 委托 |
+| modal scope、稳定 identity 与 accessibility node | `zui` | 委托 |
 | winit/browser/terminal 事件转换 | 产品或平台 adapter | ❌ |
 | context key 的定义和状态 | 产品 host | ❌ |
 | command 注册、可用性与执行 | 产品 command owner | ❌ |
@@ -31,8 +31,8 @@
 依赖方向固定为：
 
 ```text
-product host → zeta-keybinding → zeta-ui
-                                  zeta-ui-dispatch
+product host → zeta-keybinding → zeta-ui → zui
+                              → zui
 ```
 
 本 crate 不得依赖 `zeta-winit`、terminal、workspace、session、editor 或产品配置 domain。

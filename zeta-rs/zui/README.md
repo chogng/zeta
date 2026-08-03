@@ -5,8 +5,9 @@
 > [`zeta-ui`](../ui/README.md) 维护。
 
 `zui` 是后端无关的原生 UI 框架。它把声明式 `Element` 解析为一次 `ComputedElement`，用同一份
-计算几何驱动组件绘制与检查快照，并把最终 `UiScene` 交给 renderer。它不提供 Button、ActionBar
-等组件，也不接触窗口、输入路由、产品状态或具体 GPU API。
+计算几何驱动组件绘制与检查快照，并把最终 `UiScene` 交给 renderer。它还提供后端无关的交互帧、
+稳定控件身份和 pointer/focus 分发语义。它不提供 Button、ActionBar 等组件，也不调用窗口 API、
+映射产品命令或保存产品状态。
 
 ## 1. 边界与依赖方向
 
@@ -19,11 +20,30 @@
 | Split/Grid、text shaping 与单行 text input 基座 | `zui` | ✅ |
 | Button、ActionBar、TabList、ContextView 等组件 | `zeta-ui` | 委托 |
 | GPU execution 与 surface lifecycle | `zeta-renderer` / backend crate | 委托 |
-| pointer、focus、command 与 accessibility | `zeta-ui-dispatch` / product host | 委托 |
+| 命中、pointer capture、focus、键盘导航、cursor 与 accessibility snapshot | `zui` | ✅ |
+| 平台事件转换、cursor/accessibility 发布与产品命令映射 | product host / platform adapter | 委托 |
 
-允许的依赖方向是 `zeta-ui → zui`、`zeta-ui-dispatch → zui`、`zeta-renderer → zui` 和
+允许的依赖方向是 `zeta-ui → zui`、`zeta-renderer → zui` 和
 `backend → zeta-renderer + zui`。`zui` 不得依赖这些上层 crate。出现 `wgpu::*`、产品 identity、
 组件样式或 host reducer，意味着 ownership 已经漂移。
+
+### 内部分层
+
+`lib.rs` 只是显式公共 facade，不承载实现。内部依赖固定为：
+
+| 层 | 物理目录 | 可以依赖 | 明确不拥有 |
+| --- | --- | --- | --- |
+| 基础值 | `foundation/` | 无 | layout、scene、interaction、平台类型 |
+| 几何算法 | `layout/` | `foundation` | Element、paint、产品 Pane 状态 |
+| 文本内核 | `text/` | `foundation`、自身子模块 | scene、组件 chrome、IME 平台 lifecycle |
+| 呈现组合 | `presentation/` | `foundation`、`text` | 跨帧 focus/capture、窗口事件、产品 reducer |
+| 框架运行时 | `runtime/` | `foundation` | scene、component、text、产品 command |
+| Renderer bridge | `renderer_support.rs` | `text` | scene mutation、GPU backend、平台 surface |
+
+`presentation` 与 `runtime` 是并列层：product host 负责把一帧 `UiScene`、`InteractionFrame` 和
+`FrameScheduler` 组合起来，任何一侧都不得反向获得另一侧。内部实现必须通过 canonical layer path
+引用依赖，不能经由 crate root re-export 绕过层次。生产模块上限为 500 行；新增职责应进入所属层的
+新私有模块。
 
 ## 2. 文件与接口地图
 
@@ -34,10 +54,15 @@
 | `ComponentElement::compute` | public | 在 host bounds 内解析 immutable `ComputedElement` |
 | `compute_element` / `resolved_padding` / `child_bounds` | private | 分配 fixed/fill 主轴空间、裁剪 box 并生成准确 gap regions |
 | `UiScene::draw_component` | public | compute 一次、自动注册检查节点，再调用 `paint_element` |
+| `presentation::inspection::node_for_element` | crate-private | 单向把 `ComputedElement` 投影为 inspection metadata；Element 层不反向依赖 inspection |
+| `presentation::component` 中的 `impl UiScene::draw_component` | public binding | 把 Component 接入 scene；scene 核心不依赖 Component trait |
 | `UiScene::with_element` | public | 让 content closure 与 overlay 进入相同 compute/inspection 管线 |
 | `UiScene::with_current_layer_element` / `with_inspection_node` | private | 绑定 scene layer、inspection parent 与声明源码位置 |
 | `UiScene::checkpoint` / `restore` | public | 保留 scene primitive/layer/inspection 稳定前缀，并复用分配原地替换后续 fragment |
 | `FrameScheduler::request` / `take` | public | 合并平台帧之间的失效请求，并由 host 在一次 redraw 中消费最高级别的工作 |
+| `InteractionFrame::register` / `checkpoint` / `restore` | public | 记录一帧的绘制顺序、交互节点与 modal scope，并与 retained scene prefix 对齐 |
+| `UiDispatch` | public | 跨 frame 保存 hover、press/capture、focus 与窗口激活状态，只产生无效请求和 `UiIntent` |
+| `UiNode` / `ElementId` / `AccessibilityNode` | public | 分别表达当前帧控件语义、跨帧稳定 identity 与不可变 accessibility snapshot；不分配产品 identity 或发布平台 API |
 | `InspectionFrame::register` | crate-private | 建立单帧 identity、parent、layer 和命中顺序 |
 | `scene::batching::batches` | private | 保留跨 primitive 的真实插入顺序并合并连续同类 range |
 | `font::new_font_system` / `font::mapping` | private | 固定 layout 与 renderer 共享的 locale/fallback/font mapping policy |
@@ -46,10 +71,11 @@
 ## 3. 执行路径与不变量
 
 ```text
-Component::element
+UiScene::draw_component
+  → Component::element
   → ComponentElement::compute
   → compute_element
-  → ComputedElement::inspection_node
+  → presentation::inspection::node_for_element
   → InspectionFrame::register
   → Component::paint_element(same ComputedElement)
   → UiScene primitives
@@ -60,6 +86,8 @@ Component::element
 `Element` tree 每帧解析，不持有跨帧 identity。`InspectionNodeId` 只能在当前 `UiScene` 生命周期内使用；
 选中状态如果要跨帧保存，必须由 host 建立自己的稳定 identity。Padding 色块使用 clamp 后的 resolved
 值，Inspector 同时可读取原始 `ElementStyle`。Gap 由 layout 生成实际矩形，不允许 Inspector 猜测。
+`element` 不引用 `inspection`，`scene` 不引用 `Component`；这两个单向绑定分别由
+`presentation::inspection` 和 `presentation::component` 承担，禁止重新引入双向模块依赖。
 
 `FrameScheduler` 只合并 `Render < Fragment < Rebuild` 帧请求，不调用窗口 API，也不决定产品状态如何变化。
 `Fragment` 表示由 host 划定的任意 presentation fragment，不表示 Overlay、Picker 或其他产品拓扑。Host 在收到
@@ -73,27 +101,39 @@ inspection prefix，`restore` 后 host 可以只重建 volatile fragment，并�
 Overlay Element 会创建高于当前 layer 的 scene layer，并在闭包返回后恢复调用者的 layer 与 clip。
 panic recovery 不是当前 contract；组件 paint panic 会中断本帧构建。
 
+交互沿同一份 layout bounds 运行：host 在 scene 构建时注册 `UiNode`，平台事件进入 `UiDispatch`，
+其返回的 `UiIntent` 再由 host 映射为产品状态转换。`zui` 不接受 callback registry，也不执行
+window drag、菜单、Session 或 editor command。
+
 ## 4. 集成义务
 
 - 组件调用者使用 `UiScene::draw_component`，不能直接调用 `Component::paint`。
 - 拥有 content closure 的 surface 使用 `UiScene::with_element`。
 - Renderer 只消费 `UiScene`，不得获得 Component、interaction 或 accessibility frame。
-- `zeta-ui` 可以兼容 re-export zui API，但 renderer 和 dispatch 必须直接依赖 `zui`，避免基础协议由
-  组件 crate 反向拥有。
+- 使用同一份绘制 bounds 注册 `UiNode`，不能另行估算命中区域；动态对象在仍表示同一对象时保持
+  `ElementId`。
+- product host 将 `UiIntent` 映射为 command，并由 platform adapter 发布 cursor 与 accessibility
+  snapshot；`zui` 不建立第二套业务 reducer 或平台 adapter。
+- `zeta-ui` 可以兼容 re-export `zui` API，但 renderer 必须直接依赖 `zui`，避免基础协议由组件 crate
+  反向拥有。
 
 ## 5. 测试与修改影响
 
 运行 `cargo test -p zui` 验证 Element layout、inspection、scene batching、font/text layout、text input、
-Split/Grid 和 primitive contract。修改以下边界时还需同步验证：
+Split/Grid、interaction 与 primitive contract。修改以下边界时还需同步验证：
+
+- `architecture_tests` 验证物理分层、canonical dependency path、500 行模块上限、显式 root export，
+  以及平台、GPU、组件和产品依赖禁令；
 
 - scene primitive 或 batch ordering：`zeta-renderer` 与全部 backend；
 - font/text contract：`zeta-wgpu`、`zeta-ui`、`zeta-editor`、`zeta-markdown`；
 - Element/Component contract：`zeta-ui`、`zeta-keybinding`、`zeta-editor` 与 native 架构审计；
-- geometry/layout contract：`zeta-ui-dispatch` 和 native root/split/grid tests。
+- geometry/layout/interaction contract：native root/split/grid tests。
 
 ## 6. 当前限制与扩展点
 
-当前具备帧级失效合并和 host 划定的 Scene prefix checkpoint，但没有 retained mount lifecycle、自动子树级
-dirty propagation、跨帧 layout cache、style cascade、运行时样式编辑、path primitive 或远程
-Inspector protocol。后续只有在真实消费者要求 retained identity/invalidation 时，才应扩展 Element
+当前具备帧级失效合并、host 划定的 Scene/interaction prefix checkpoint 和通用 pointer/focus
+语义，但没有 retained mount lifecycle、自动子树级 dirty propagation、跨帧 layout cache、style cascade、
+运行时样式编辑、path primitive、disabled/live-region/text-selection accessibility semantics 或平台
+accessibility adapter。后续只有在真实消费者要求 retained identity/invalidation 时，才应扩展 Element
 lifecycle；GPU backend 变化不应改变 `zui` public contract。

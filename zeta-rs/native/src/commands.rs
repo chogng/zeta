@@ -1,4 +1,4 @@
-use zeta_ui_dispatch::ElementId;
+use zui::ElementId;
 
 use crate::NativeApp;
 use crate::shell_interaction::{

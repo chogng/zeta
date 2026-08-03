@@ -38,14 +38,12 @@ use zeta_renderer::{RenderOutcome, RenderTargetSize, Renderer};
 use zeta_terminal::{BlockStatus, ScreenBuffer};
 use zeta_theme::{ColorScheme, ThemeLoadOptions, ThemeLoader, ThemeSurface, default_device_root};
 use zeta_ui::{CaretBlinkAdvance, CaretBlinkController, Point, TextInputLayoutEngine};
-use zeta_ui_dispatch::{
-    CursorFeedback, DispatchInvalidation, DispatchOutcome, ElementId, UiDispatch, UiIntent,
-};
 use zeta_winit::{
     ActiveEventLoop, ApplicationHandler, ControlFlow, CursorIcon, ElementState, LogicalSize,
     ModifiersState, MouseButton, NativeWindow, PhysicalExtent, Theme, WindowAttributes,
     WindowChrome, WindowControlInsets, WindowEvent, WindowId, run_application_with_user_events,
 };
+use zui::{CursorFeedback, DispatchInvalidation, DispatchOutcome, ElementId, UiDispatch, UiIntent};
 use zui::{FrameInvalidation, FrameSchedule, FrameScheduler};
 
 mod agent_composer;
@@ -536,7 +534,7 @@ impl NativeApp {
         }
     }
 
-    fn activate_shell_element(&mut self, id: zeta_ui_dispatch::ElementId) {
+    fn activate_shell_element(&mut self, id: zui::ElementId) {
         if self.activate_language_server_settings_element(id) {
             return;
         }

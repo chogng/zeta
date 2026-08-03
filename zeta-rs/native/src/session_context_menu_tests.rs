@@ -4,7 +4,7 @@ use crate::shell_interaction::{
 };
 use crate::shell_style::SHELL_PALETTE;
 use zeta_ui::{Color, Component, Edges, Point, Rect, UiScene};
-use zeta_ui_dispatch::{
+use zui::{
     AccessibilityRole, AccessibilitySelection, CursorFeedback, FocusBehavior, InteractionFrame,
     UiDispatch, UiNode,
 };

@@ -130,7 +130,7 @@ Session Navigation 当前使用可折叠、可通过右边界 Sash 调整宽度�
 | 跨重启历史持久化与完整 terminal compatibility | 后续 terminal runtime | 尚未完成 |
 | BlockList / TerminalOutput presentation | Native terminal session view | 呈现 runtime output；不能成为第二份权威输出存储 |
 | Primary Block Input Editor 与 IME candidate area | `zeta-native::terminal_composer` + `input_method` | 编辑 host-owned `TextInput`；Enter 才提交真实 command boundary |
-| 命中、指针状态、focus、键盘导航与 accessibility semantics | `zeta-ui-dispatch` | 只分发稳定控件身份和 activation intent，不保存 Session、文件、对话或文档状态 |
+| 命中、指针状态、focus、键盘导航与 accessibility semantics | `zui` | 只分发稳定控件身份和 activation intent，不保存 Session、文件、对话或文档状态 |
 | 平台 accessibility publication | 后续 `zeta-winit` adapter | 当前尚未接 AccessKit/平台 API，内部语义树不等于屏幕阅读器已可用 |
 | alternate-screen direct input | `zeta-native::terminal_input` + `input_method` + `TerminalCore` | 仅在 TUI 接管期间编码 key/IME/paste 并写入 PTY |
 | shell command completion boundary | `zeta-native::terminal_session` bootstrap + `zeta-terminal::TerminalCore` | 当前 zsh 使用 OSC 133 `D`；其他 shell 只有基础 prompt/echo suppression |
@@ -171,7 +171,7 @@ Session、Thread、Turn、PTY process 和 durable output 必须来自对应 runt
 | `TerminalComposer` / `terminal_input` | primary screen 编辑 `TextInput` 并在 Enter 时提交 | 当前为单行 |
 | `input_method` | 根据 window、screen 与 focus 选择 Disabled/Composer/TerminalGrid，转换 IME 事件并同步 candidate area | preedit 状态由共享 `TextInput` 模型维护 |
 | 输入上下文工具栏 | Bottom Widget 最底部用 `ActionBar` 排列四个带图标标签的 `Button`：Local、当前工作区目录、Git branch 与 diff count | 目录按钮复用带 header slot 的 `Dropdown`，分支按钮复用带同类 header 的 `ContextMenu`；两者第一行均默认聚焦 Search Box，并分别实时过滤当前层级子目录与本地分支。成功后替换 Files 根、搜索索引和 Git/Changes 投影；环境选择器尚未绑定 |
-| 统一 UI 分发 | `zeta-ui-dispatch` 的 `ElementId`、父子 `UiNode`、反向 hit-test、focus order、同组导航、`UiIntent` 与每帧 accessibility snapshot | 当前 Titlebar、Session TabList、Session Menu/MenuItem、Sash separator、terminal output、composer、toolbar 和 Button 已接入；平台 accessibility adapter 尚无 |
+| 统一 UI 分发 | `zui` 的 `ElementId`、父子 `UiNode`、反向 hit-test、focus order、同组导航、`UiIntent` 与每帧 accessibility snapshot | 当前 Titlebar、Session TabList、Session Menu/MenuItem、Sash separator、terminal output、composer、toolbar 和 Button 已接入；平台 accessibility adapter 尚无 |
 | primary/alternate Native presentation | primary 绘制 BlockList + 固定底部 composer；alternate 绘制全幅 active grid/cursor | Warp 式主屏与 TUI compatibility 已分流 |
 | `ActionBar` / `Button` | presentation-only action 与 icon button | 保持通用 primitive，不接收 terminal domain state |
 | `TabList` / `Tab` | presentation-only Tab 排列与 surface | 当前用于 Session navigation；changed-file diff 不再使用 Tab |
@@ -302,7 +302,7 @@ geometry API，RTL 换边和未来 Windows controls overlay 仍是 adapter 扩�
   `cd`；当前目录标签表示用户选择的 Files/Git 工作区，不能据此推断 PTY 内部 cwd；
 - 接入真实多会话 projection 后，把新增 Session 作为同一垂直 TabList 的动态 Tab，并实现
   activation/switching；
-- file tree、tabs、chat 和 editor 接入时复用 `zeta-ui-dispatch`：各组件只注册稳定 identity、
+- file tree、tabs、chat 和 editor 接入时复用 `zui`：各组件只注册稳定 identity、
   父子关系、语义和 intent，业务模型仍由各自 owner 保存；
 - 接入 AccessKit 或平台原生 accessibility adapter，直接发布现有语义树与 focus identity；
 - 让 root layout 继续只决定 Top Bar、可选 Session Navigation 和 Terminal Workspace 的外部

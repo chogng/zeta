@@ -1,5 +1,5 @@
 use zeta_ui::{Color, Point, Rect, UiScene};
-use zeta_ui_dispatch::{ElementId, InteractionFrame, UiDispatch};
+use zui::{ElementId, InteractionFrame, UiDispatch};
 
 use super::{KeyboardShortcutRow, KeyboardShortcuts, KeyboardShortcutsIds, paint_chord_hint};
 use crate::{HostPlatform, KeyboardShortcutsState, parse_key_sequence};

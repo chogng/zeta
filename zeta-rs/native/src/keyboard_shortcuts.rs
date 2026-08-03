@@ -4,8 +4,8 @@ use zeta_keybinding::{
     KeyboardShortcutRow, KeyboardShortcutsIds,
     KeyboardShortcutsState as GenericKeyboardShortcutsState,
 };
-use zeta_ui_dispatch::ElementId;
 use zeta_winit::{ElementState, Key, KeyEvent, NamedKey};
+use zui::ElementId;
 
 use crate::NativeApp;
 use crate::commands::NativeCommand;

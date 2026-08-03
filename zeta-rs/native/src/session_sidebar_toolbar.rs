@@ -5,7 +5,7 @@ use zeta_ui::{
     CornerRadii, Edges, Element, Rect, SearchBox, Size, TextInput, TextInputLayoutEngine,
     TextStyle, UiScene,
 };
-use zeta_ui_dispatch::{
+use zui::{
     AccessibilityRole, CursorFeedback, FocusBehavior, InteractionFrame, NavigationAxis,
     NavigationGroupId, NodeAction, UiDispatch, UiNode,
 };

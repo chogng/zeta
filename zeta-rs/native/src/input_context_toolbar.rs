@@ -11,7 +11,7 @@ use crate::agent_composer::ComposerMode;
 use crate::shell_interaction::{COMPOSER_MODE, COMPOSER_PANEL, CONTEXT_TOOLBAR, ContextAction};
 use crate::shell_style::ShellPalette;
 use crate::workspace_context::WorkspaceContext;
-use zeta_ui_dispatch::{
+use zui::{
     AccessibilityRole, CursorFeedback, FocusBehavior, InteractionFrame, NavigationAxis,
     NavigationGroupId, NodeAction, UiDispatch, UiNode,
 };

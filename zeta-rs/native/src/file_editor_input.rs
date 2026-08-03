@@ -505,7 +505,7 @@ impl NativeApp {
         true
     }
 
-    pub(super) fn activate_file_editor_element(&mut self, id: zeta_ui_dispatch::ElementId) -> bool {
+    pub(super) fn activate_file_editor_element(&mut self, id: zui::ElementId) -> bool {
         if let Some(index) = file_editor_close_index(id, 0..self.file_editor_host.tabs().len()) {
             self.file_editor_host.select(index);
             match self.file_editor_host.request_close_active() {

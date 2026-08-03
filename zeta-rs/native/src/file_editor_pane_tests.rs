@@ -13,7 +13,7 @@ use crate::shell_interaction::{
     file_editor_close_id, file_editor_tab_id,
 };
 use crate::shell_style::SHELL_PALETTE;
-use zeta_ui_dispatch::{AccessibilityRole, InteractionFrame, UiDispatch, UiNode};
+use zui::{AccessibilityRole, InteractionFrame, UiDispatch, UiNode};
 
 fn open(host: &mut FileEditorHost, path: &str, content: &str) {
     host.open(TextFileSnapshot::new(

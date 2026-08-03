@@ -11,7 +11,7 @@ use zeta_ui::{
     CaretVisibility, Point, Rect, ScrollAxis, ScrollCommand, TextInputCommand,
     TextInputLayoutEngine,
 };
-use zeta_ui_dispatch::{AccessibilityRole, InteractionFrame, UiDispatch};
+use zui::{AccessibilityRole, InteractionFrame, UiDispatch};
 
 static NEXT_PICKER_ID: AtomicU64 = AtomicU64::new(0);
 

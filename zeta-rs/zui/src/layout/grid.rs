@@ -1,7 +1,11 @@
 use std::collections::HashSet;
 use std::hash::Hash;
 
-use crate::{Rect, SplitViewLayout, SplitViewOrientation, SplitViewPane, SplitViewResizeSnapshot};
+use super::SplitViewLayout;
+use super::SplitViewOrientation;
+use super::SplitViewPane;
+use super::SplitViewResizeSnapshot;
+use crate::foundation::Rect;
 
 /// Caller-owned recursive input node for one immutable [`GridLayout`].
 ///

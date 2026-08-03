@@ -10,7 +10,7 @@ doctest = false
 
 [dependencies]
 zeta-ui = { workspace = true }
-zeta-ui-dispatch = { workspace = true }
+zui = { workspace = true }
 
 [lints]
 workspace = true

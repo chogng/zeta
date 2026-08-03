@@ -46,6 +46,9 @@ fn zui_contract_does_not_depend_on_a_gpu_backend_or_component_crate() {
 
     let mut violations = Vec::new();
     visit_rust_sources(&zui_root.join("src"), &mut |path, source| {
+        if is_test_source(path) {
+            return;
+        }
         for forbidden in ["wgpu::", "glyphon::", "zeta_ui::"] {
             if source.contains(forbidden) {
                 violations.push(format!("{} contains `{forbidden}`", path.display()));
@@ -60,11 +63,11 @@ fn zui_contract_does_not_depend_on_a_gpu_backend_or_component_crate() {
 }
 
 #[test]
-fn component_renderer_and_dispatch_crates_depend_on_zui_in_the_forward_direction() {
+fn component_and_renderer_crates_depend_on_zui_in_the_forward_direction() {
     let workspace = Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .expect("native crate should be inside the Rust workspace");
-    for crate_name in ["ui", "renderer", "ui-dispatch", "wgpu"] {
+    for crate_name in ["ui", "renderer", "wgpu"] {
         let manifest = fs::read_to_string(workspace.join(crate_name).join("Cargo.toml"))
             .unwrap_or_else(|error| panic!("could not read {crate_name} manifest: {error}"));
         assert!(
@@ -74,7 +77,7 @@ fn component_renderer_and_dispatch_crates_depend_on_zui_in_the_forward_direction
             "{crate_name} must depend directly on zui"
         );
     }
-    for crate_name in ["renderer", "ui-dispatch", "wgpu"] {
+    for crate_name in ["renderer", "wgpu"] {
         let manifest = fs::read_to_string(workspace.join(crate_name).join("Cargo.toml"))
             .unwrap_or_else(|error| panic!("could not read {crate_name} manifest: {error}"));
         assert!(
@@ -127,17 +130,15 @@ fn gpu_backend_does_not_own_interaction_or_accessibility_frames() {
     let manifest = fs::read_to_string(backend_root.join("Cargo.toml"))
         .expect("zeta-wgpu manifest should be readable");
     assert!(
-        !manifest
-            .lines()
-            .any(|line| ["zeta-ui-dispatch", "accesskit"]
-                .iter()
-                .any(|dependency| line.trim_start().starts_with(dependency))),
+        !manifest.lines().any(|line| ["accesskit"]
+            .iter()
+            .any(|dependency| line.trim_start().starts_with(dependency))),
         "zeta-wgpu must consume only paint scenes; interaction and accessibility stay in the host presentation"
     );
 
     let mut violations = Vec::new();
     visit_rust_sources(&backend_root.join("src"), &mut |path, source| {
-        for forbidden in ["zeta_ui_dispatch", "InteractionFrame", "AccessibilityNode"] {
+        for forbidden in ["InteractionFrame", "AccessibilityNode"] {
             if source.contains(forbidden) {
                 violations.push(format!("{} contains `{forbidden}`", path.display()));
             }
@@ -224,7 +225,7 @@ fn production_composition_does_not_register_inspection_nodes_directly() {
     let workspace_root = Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .expect("native crate should be inside the Rust workspace");
-    let registration_owner = workspace_root.join("zui/src/scene.rs");
+    let registration_owner = workspace_root.join("zui/src/presentation/scene.rs");
     let mut violations = Vec::new();
     for crate_root in workspace_crate_roots(workspace_root) {
         visit_rust_sources(&crate_root.join("src"), &mut |path, source| {
