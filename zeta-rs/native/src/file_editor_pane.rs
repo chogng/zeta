@@ -18,7 +18,7 @@ use crate::shell_interaction::{
     MAIN_SURFACE, file_editor_close_id, file_editor_fold_id, file_editor_tab_id,
 };
 use crate::shell_style::ShellPalette;
-use zeta_ui_dispatch::{
+use zui::{
     AccessibilityExpansion, AccessibilityRole, AccessibilitySelection, CursorFeedback,
     FocusBehavior, InteractionFrame, NavigationAxis, NavigationGroupId, NodeAction, UiNode,
 };
@@ -169,7 +169,7 @@ impl<'a> FileEditorPane<'a> {
         mut self,
         search: &FileEditorSearchState,
         text_layout: &mut TextInputLayoutEngine,
-        dispatch: &zeta_ui_dispatch::UiDispatch,
+        dispatch: &zui::UiDispatch,
         caret_visibility: CaretVisibility,
     ) -> Self {
         self.search_mode = search.mode();
@@ -214,7 +214,7 @@ impl<'a> FileEditorPane<'a> {
         )
     }
 
-    pub(crate) fn search_caret_bounds(&self, focused: zeta_ui_dispatch::ElementId) -> Option<Rect> {
+    pub(crate) fn search_caret_bounds(&self, focused: zui::ElementId) -> Option<Rect> {
         match focused {
             FILE_EDITOR_FIND_INPUT => self.search_query.as_ref()?.caret_bounds(),
             FILE_EDITOR_REPLACE_INPUT => self.search_replacement.as_ref()?.caret_bounds(),
@@ -788,8 +788,8 @@ impl Component for FileEditorPane<'_> {
 }
 
 fn input_state(
-    dispatch: &zeta_ui_dispatch::UiDispatch,
-    element: zeta_ui_dispatch::ElementId,
+    dispatch: &zui::UiDispatch,
+    element: zui::ElementId,
     caret_visibility: CaretVisibility,
 ) -> InputBoxState {
     if dispatch.is_focused(element) {

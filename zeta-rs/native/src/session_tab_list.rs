@@ -3,7 +3,7 @@ use zeta_ui::{
     Tab, TabBackgrounds, TabList, TabListOrientation, TabListStyle, TabSelection, TabState,
     TabStyle, TextBlock, TextStyle, UiScene,
 };
-use zeta_ui_dispatch::{
+use zui::{
     AccessibilityRole, AccessibilitySelection, CursorFeedback, ElementId, FocusBehavior,
     InteractionFrame, NavigationAxis, NavigationGroupId, NodeAction, UiDispatch, UiNode,
 };

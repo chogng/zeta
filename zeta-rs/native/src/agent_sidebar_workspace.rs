@@ -9,7 +9,7 @@ use zeta_ui::{
     Point, Rect, ScrollAxis, ScrollCommand, ScrollDelta, ScrollMetrics, ScrollState, Size,
     TextInput, TextInputCommand, TextInputCompositionEvent, TreeItem, VirtualListLayout,
 };
-use zeta_ui_dispatch::ElementId;
+use zui::ElementId;
 
 use crate::editor_pane::{EditorPaneState, ScrollbarPointerOutcome};
 use crate::explorer_pane::FILE_LIST_ROW_HEIGHT;

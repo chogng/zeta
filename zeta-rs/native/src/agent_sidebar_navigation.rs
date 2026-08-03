@@ -3,7 +3,7 @@ use zeta_ui::{
     ButtonBackgrounds, ButtonSelection, ButtonState, ButtonStyle, Component, ComponentElement,
     Edges, Element, Rect, Size, TextStyle, UiScene,
 };
-use zeta_ui_dispatch::{
+use zui::{
     AccessibilityRole, AccessibilitySelection, CursorFeedback, FocusBehavior, InteractionFrame,
     NavigationAxis, NavigationGroupId, NodeAction, UiDispatch, UiNode,
 };

@@ -1,4 +1,4 @@
-use crate::Rect;
+use crate::foundation::Rect;
 
 const LAYOUT_EPSILON: f32 = 0.001;
 

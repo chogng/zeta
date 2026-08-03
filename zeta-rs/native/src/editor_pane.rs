@@ -11,7 +11,7 @@ use zeta_ui::{
     ScrollbarPart, ScrollbarPointerPresence, ScrollbarPresentation, Size, TextBlock, TextStyle,
     UiScene,
 };
-use zeta_ui_dispatch::{
+use zui::{
     AccessibilityRole, CursorFeedback, ElementId, FocusBehavior, InteractionFrame, NavigationAxis,
     NavigationGroupId, NodeAction, UiNode,
 };

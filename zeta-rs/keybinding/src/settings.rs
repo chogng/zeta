@@ -2,7 +2,7 @@ use zeta_ui::{
     Border, BoxShadow, Color, Component, ComponentElement, ComputedElement, CornerRadii, Element,
     KeycapSequence, KeycapStyle, PaintRect, Point, Rect, Size, TextBlock, TextStyle, UiScene,
 };
-use zeta_ui_dispatch::{
+use zui::{
     AccessibilityRole, CursorFeedback, ElementId, FocusBehavior, InteractionFrame, NavigationAxis,
     NavigationGroupId, NodeAction, UiDispatch, UiNode,
 };

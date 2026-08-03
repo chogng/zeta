@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use zeta_app_server_protocol::protocol::fs::{FsFileType, FsReadDirectoryEntry};
 use zeta_ui::{TreeItem, TreeItemExpansion};
-use zeta_ui_dispatch::ElementId;
+use zui::ElementId;
 
 const FILE_TREE_SCOPE: u32 = 5;
 

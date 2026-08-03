@@ -847,11 +847,7 @@ impl NativeApp {
         }
     }
 
-    pub(crate) fn load_file_tree_directory(
-        &mut self,
-        element: zeta_ui_dispatch::ElementId,
-        path: PathBuf,
-    ) {
+    pub(crate) fn load_file_tree_directory(&mut self, element: zui::ElementId, path: PathBuf) {
         let Some(session) = self.agent_session.as_ref() else {
             return;
         };

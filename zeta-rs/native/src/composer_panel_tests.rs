@@ -3,7 +3,7 @@ use crate::agent_composer::ComposerMode;
 use crate::shell_interaction::COMPOSER_INFO_BAR;
 use crate::shell_style::SHELL_PALETTE;
 use zeta_ui::{Color, Rect, UiScene};
-use zeta_ui_dispatch::{InteractionFrame, UiDispatch};
+use zui::{InteractionFrame, UiDispatch};
 
 #[test]
 fn interaction_expands_panel_upward_and_preserves_fixed_composer_rows() {

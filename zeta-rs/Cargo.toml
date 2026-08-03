@@ -20,7 +20,6 @@ members = [
     "markdown",
     "zui",
     "ui",
-    "ui-dispatch",
     "wgpu",
     "winit",
     "secrets",
@@ -177,7 +176,6 @@ zeta-icons = { path = "icons" }
 zeta-markdown = { path = "markdown" }
 zui = { path = "zui" }
 zeta-ui = { path = "ui" }
-zeta-ui-dispatch = { path = "ui-dispatch" }
 zeta-secrets = { path = "secrets" }
 zeta-exec = { path = "exec" }
 zeta-file-icons = { path = "file-icons" }

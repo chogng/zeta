@@ -7,7 +7,7 @@ use zeta_keybinding::{
     serialize_key_sequence,
 };
 use zeta_ui::{Color, Point, Rect, UiScene};
-use zeta_ui_dispatch::{InteractionFrame, UiDispatch};
+use zui::{InteractionFrame, UiDispatch};
 
 #[test]
 fn recording_collects_chords_and_commits_after_the_quiet_period() {

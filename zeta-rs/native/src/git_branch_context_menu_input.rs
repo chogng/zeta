@@ -1,11 +1,11 @@
 use std::time::Instant;
 
 use zeta_ui::Point;
-use zeta_ui_dispatch::{
+use zeta_winit::{ElementState, Key, KeyEvent, MouseButton, NamedKey};
+use zui::{
     DispatchInvalidation, DispatchOutcome, ElementId, FocusDirection, InteractionFrame,
     NavigationAxis, UiDispatch,
 };
-use zeta_winit::{ElementState, Key, KeyEvent, MouseButton, NamedKey};
 
 use crate::NativeApp;
 use crate::git_branch_context_menu::{

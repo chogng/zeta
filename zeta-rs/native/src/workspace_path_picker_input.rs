@@ -1,11 +1,11 @@
 use std::time::Instant;
 
 use zeta_ui::{Point, ScrollCommand, ScrollDelta};
-use zeta_ui_dispatch::{
+use zeta_winit::{ElementState, Key, KeyEvent, MouseButton, MouseScrollDelta, NamedKey};
+use zui::{
     DispatchInvalidation, DispatchOutcome, ElementId, FocusDirection, InteractionFrame,
     NavigationAxis, UiDispatch,
 };
-use zeta_winit::{ElementState, Key, KeyEvent, MouseButton, MouseScrollDelta, NamedKey};
 
 use crate::NativeApp;
 use crate::file_editor_host::FileEditorCloseRequest;

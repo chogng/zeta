@@ -18,7 +18,7 @@ use crate::shell_interaction::{
     FILE_EDITOR_REPLACE_INPUT, SESSION_SEARCH_INPUT,
 };
 use crate::terminal_selection::{read_clipboard_text, write_clipboard_text};
-use zeta_ui_dispatch::{FocusDirection, NavigationAxis};
+use zui::{FocusDirection, NavigationAxis};
 
 impl NativeApp {
     pub(super) fn keyboard_input(&mut self, event: KeyEvent) {

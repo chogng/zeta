@@ -7,7 +7,7 @@ use zeta_ui::{
     Rect, ScrollAxis, ScrollCommand, ScrollMetrics, ScrollState, SearchBox, Size, TextInput,
     TextInputCommand, TextInputCompositionEvent, TextInputLayoutEngine, TextStyle, UiScene,
 };
-use zeta_ui_dispatch::{
+use zui::{
     AccessibilityRole, AccessibilitySelection, CursorFeedback, ElementId, FocusBehavior,
     InteractionFrame, NavigationAxis, NavigationGroupId, NodeAction, UiDispatch, UiNode,
 };

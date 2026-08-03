@@ -2,7 +2,7 @@ use super::{SessionSidebarToolbar, TOOLBAR_CONTENT_GAP, TOOLBAR_HEIGHT};
 use crate::shell_interaction::{ADD_SESSION, SESSION_SEARCH_INPUT, SESSION_SIDEBAR_ACTION_BAR};
 use crate::shell_style::SHELL_PALETTE;
 use zeta_ui::{CaretVisibility, Color, Point, Rect, TextInput, TextInputLayoutEngine, UiScene};
-use zeta_ui_dispatch::{AccessibilityRole, InteractionFrame, UiDispatch};
+use zui::{AccessibilityRole, InteractionFrame, UiDispatch};
 
 #[test]
 fn toolbar_fills_the_sidebar_row_with_search_and_add_action() {
