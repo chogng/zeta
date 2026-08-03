@@ -13,6 +13,7 @@ mod thread_reducer;
 mod turn;
 
 pub(crate) use context::ContextAssembler;
+pub use context::HarnessInstructions;
 pub use error::CoreError;
 pub use policy_service::{PolicyService, durable_approval_request};
 pub use services::AutoReviewedToolGrant;
@@ -25,6 +26,7 @@ pub use services::NoTools;
 pub use services::OneTimeToolGrant;
 pub use services::ThreadUpdateSink;
 pub use services::ToolAuthorization;
+pub use services::ToolExecutionFacts;
 pub use services::ToolOutputSink;
 pub use services::ToolService;
 pub use services::WriterLease;

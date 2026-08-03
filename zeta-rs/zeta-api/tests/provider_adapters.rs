@@ -218,7 +218,12 @@ fn non_success_status_is_preserved_for_api_error_decoding() {
         )
         .unwrap_err();
 
-    assert_eq!(error, zeta_api::ApiError::HttpStatus(429));
+    assert_eq!(
+        error,
+        zeta_api::ApiError::RateLimited {
+            retry_after_ms: None
+        }
+    );
 }
 
 struct StatusClient(u16);

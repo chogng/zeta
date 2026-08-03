@@ -45,3 +45,14 @@ impl From<ApiError> for ModelProviderError {
         }
     }
 }
+
+impl ModelProviderError {
+    pub fn is_transient(&self) -> bool {
+        matches!(
+            self,
+            Self::Api(ApiError::Transport(_))
+                | Self::Api(ApiError::RateLimited { .. })
+                | Self::Api(ApiError::Overloaded)
+        )
+    }
+}

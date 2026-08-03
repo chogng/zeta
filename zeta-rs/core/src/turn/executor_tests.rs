@@ -185,6 +185,55 @@ fn model_failure_durably_fails_the_turn() {
 }
 
 #[test]
+fn retries_transient_model_failures_before_completing() {
+    let (threads, thread_id, turn_id) = started_turn();
+    let model = Arc::new(ScriptedModel::new([
+        Err(CoreError::ModelTransient("temporary 429".into())),
+        Err(CoreError::ModelTransient("temporary 503".into())),
+        Ok(text_response("recovered")),
+    ]));
+    let executor = TurnExecutor::without_tools(threads.clone(), model.clone());
+
+    let outcome = executor
+        .execute(&thread_id, &turn_id, &CancellationSource::new().token())
+        .unwrap();
+
+    assert!(matches!(outcome, TurnExecutionOutcome::Completed(_)));
+    assert_eq!(model.requests().len(), 3);
+}
+
+#[test]
+fn retries_one_empty_response_and_completes_refusal_as_agent_message() {
+    let (threads, thread_id, turn_id) = started_turn();
+    let model = Arc::new(ScriptedModel::new([
+        Ok(ModelResponse {
+            output: Vec::new(),
+            usage: None,
+            stop_reason: StopReason::Completed,
+        }),
+        Ok(ModelResponse {
+            output: vec![ResponseItem::Refusal("cannot comply".into())],
+            usage: None,
+            stop_reason: StopReason::Completed,
+        }),
+    ]));
+    let executor = TurnExecutor::without_tools(threads.clone(), model.clone());
+
+    let outcome = executor
+        .execute(&thread_id, &turn_id, &CancellationSource::new().token())
+        .unwrap();
+
+    assert!(matches!(
+        outcome,
+        TurnExecutionOutcome::Completed(crate::CompletedTurn {
+            item: ThreadItem::AgentMessage { ref text, .. },
+            ..
+        }) if text == "cannot comply"
+    ));
+    assert_eq!(model.requests().len(), 2);
+}
+
+#[test]
 fn streaming_delta_and_final_item_share_one_identity() {
     let (threads, thread_id, turn_id) = started_turn();
     let updates = Arc::new(RecordingUpdates::default());

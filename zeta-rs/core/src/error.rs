@@ -11,6 +11,7 @@ pub enum CoreError {
     InvalidInput(String),
     Journal(String),
     Model(String),
+    ModelTransient(String),
     NotFound(String),
     Policy(String),
     PolicyCircuitBreaker(String),
@@ -31,6 +32,7 @@ impl fmt::Display for CoreError {
             Self::InvalidInput(message) => write!(formatter, "invalid input: {message}"),
             Self::Journal(message) => write!(formatter, "journal error: {message}"),
             Self::Model(message) => write!(formatter, "model error: {message}"),
+            Self::ModelTransient(message) => write!(formatter, "transient model error: {message}"),
             Self::NotFound(value) => write!(formatter, "not found: {value}"),
             Self::Policy(message) => write!(formatter, "policy error: {message}"),
             Self::PolicyCircuitBreaker(message) => {

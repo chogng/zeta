@@ -1,4 +1,4 @@
-use crate::{CoreError, ThreadSnapshot};
+use crate::{CoreError, HarnessInstructions, ThreadSnapshot};
 use std::collections::BTreeMap;
 use zeta_protocol::{
     ContentPart, ImageDetail, InputItem, Message, MessageRole, ModelRequest, ThreadItem, ToolCall,
@@ -12,10 +12,18 @@ impl ContextAssembler {
     pub(crate) fn assemble(
         snapshot: &ThreadSnapshot,
         tools: Vec<ToolDefinition>,
+        instructions: &HarnessInstructions,
     ) -> Result<ModelRequest, CoreError> {
         let mut input = Vec::new();
         let mut tool_names = BTreeMap::new();
         let mut active_user_turn = None;
+
+        if let Some(workspace_message) = instructions.workspace_message() {
+            input.push(InputItem::Message(Message::text(
+                MessageRole::User,
+                workspace_message,
+            )));
+        }
 
         for item in &snapshot.items {
             match item {
@@ -105,11 +113,11 @@ impl ContextAssembler {
             ToolChoice::Auto
         };
         Ok(ModelRequest {
-            instructions: None,
+            instructions: instructions.model_instructions(),
             input,
             tools,
             tool_choice,
-            parallel_tool_calls: false,
+            parallel_tool_calls: true,
             reasoning: None,
             max_output_tokens: None,
             temperature: None,

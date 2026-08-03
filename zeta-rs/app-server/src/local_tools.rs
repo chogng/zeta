@@ -21,7 +21,11 @@ use zeta_shell_command::{
 use zeta_tools::{ToolPayload, to_protocol_tool_definition};
 use zeta_workspace::{TrustedWorkspace, WorkspaceCapability, WorkspaceRoot};
 
-const LOCAL_POLICY_REVISION: &str = "local-shell-v2";
+mod suite;
+
+pub(crate) use suite::LocalToolSuite;
+
+const LOCAL_POLICY_REVISION: &str = "local-tools-v3";
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
 const DEFAULT_OUTPUT_BYTES: usize = 256 * 1024;
 
@@ -42,11 +46,12 @@ pub(crate) fn compose_local_tools(
     let install_context = InstallContext::current();
     let ripgrep = resolve_ripgrep(&install_context).map_err(LocalToolError::ripgrep)?;
     let policy = LocalShellPolicy;
-    let service = LocalShellToolService::new(
+    let shell = LocalShellToolService::new(
         workspace,
         ripgrep.clone(),
         native_sandbox(&install_context)?,
     )?;
+    let service = LocalToolSuite::new(shell, ripgrep.clone());
     Ok(LocalToolComposition {
         tools: Arc::new(service),
         policy: Arc::new(policy),
@@ -277,8 +282,14 @@ impl PolicyService for LocalShellPolicy {
             .map_err(|signal| CoreError::Cancelled(signal.reason().to_string()))?;
         if request.policy_revision().as_str() != LOCAL_POLICY_REVISION
             || request.provenance().source() != &ActionSource::BuiltInTool
-            || request.provenance().source_id() != "shell-command"
-            || !matches!(request.action().kind(), ActionKind::LocalProcess(_))
+            || !matches!(
+                request.provenance().source_id(),
+                "shell-command" | "read_file" | "write_file" | "edit" | "grep" | "glob"
+            )
+            || !matches!(
+                request.action().kind(),
+                ActionKind::LocalProcess(_) | ActionKind::FileSystemMutation
+            )
         {
             return Err(CoreError::Policy(
                 "local shell policy rejected an action outside its exact review contract".into(),
@@ -289,6 +300,13 @@ impl PolicyService for LocalShellPolicy {
                 if *policy == read_only_sandbox() || *policy == shell_sandbox() =>
             {
                 Ok(ExecutionDecision::RunSandboxed(*policy))
+            }
+            (ActionReviewPhase::Initial, SandboxCompatibility::NotApplicable { .. }) => {
+                Ok(ExecutionDecision::AskUser(ApprovalRequest::new(
+                    request.action().digest().clone(),
+                    request.action().required_capabilities().clone(),
+                    "the file mutation requires user approval",
+                )))
             }
             (ActionReviewPhase::SandboxDenial(_), SandboxCompatibility::Supported(_)) => {
                 Ok(ExecutionDecision::AskUser(ApprovalRequest::new(

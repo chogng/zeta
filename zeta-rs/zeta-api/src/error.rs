@@ -6,6 +6,8 @@ pub enum ApiError {
     InvalidRequest(String),
     Cancelled(String),
     Transport(String),
+    RateLimited { retry_after_ms: Option<u64> },
+    Overloaded,
     HttpStatus(u16),
     InvalidResponse(String),
 }
@@ -16,6 +18,14 @@ impl fmt::Display for ApiError {
             Self::InvalidRequest(message) => write!(formatter, "invalid model request: {message}"),
             Self::Cancelled(message) => write!(formatter, "model request cancelled: {message}"),
             Self::Transport(message) => write!(formatter, "model transport failed: {message}"),
+            Self::RateLimited { retry_after_ms } => match retry_after_ms {
+                Some(milliseconds) => write!(
+                    formatter,
+                    "model API rate limited; retry after {milliseconds} ms"
+                ),
+                None => formatter.write_str("model API rate limited"),
+            },
+            Self::Overloaded => formatter.write_str("model API is overloaded"),
             Self::HttpStatus(status) => write!(formatter, "model API returned HTTP {status}"),
             Self::InvalidResponse(message) => {
                 write!(formatter, "invalid model response: {message}")

@@ -31,6 +31,7 @@ zeta-model-provider = { workspace = true }
 zeta-model-provider-config = { workspace = true }
 zeta-mcp = { workspace = true }
 zeta-policy = { workspace = true }
+zeta-prompts = { workspace = true }
 zeta-protocol = { workspace = true }
 zeta-rollout = { workspace = true }
 zeta-rmcp-client = { workspace = true }

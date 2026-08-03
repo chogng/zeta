@@ -26,7 +26,16 @@ pub(crate) fn post_json(
     )?;
     let response = client.execute_with_cancellation(&request, cancellation)?;
     if !response.is_success() {
-        return Err(ApiError::HttpStatus(response.status()));
+        return Err(match response.status() {
+            429 => ApiError::RateLimited {
+                retry_after_ms: response
+                    .retry_after()
+                    .and_then(|delay| u64::try_from(delay.as_millis()).ok())
+                    .map(|delay| delay.min(60_000)),
+            },
+            500..=599 => ApiError::Overloaded,
+            status => ApiError::HttpStatus(status),
+        });
     }
     serde_json::from_slice(response.body())
         .map_err(|_| ApiError::InvalidResponse("server returned invalid JSON".into()))

@@ -4,8 +4,8 @@ use crate::thread_controller::{RecordToolExecutionEscalation, RecordToolExecutio
 use crate::{
     AutoReviewedToolGrant, CoreError, PolicyService, RecordToolResultRequest,
     RequestTurnInteraction, SandboxDenialOutput, ThreadController, ThreadUpdateSink,
-    ToolAuthorization, ToolCallOutput, ToolExecutionOutput, ToolOutputSink, ToolReplaySafety,
-    ToolService,
+    ToolAuthorization, ToolCallOutput, ToolExecutionFacts, ToolExecutionOutput, ToolOutputSink,
+    ToolReplaySafety, ToolService,
 };
 use zeta_async_utils::CancellationToken;
 use zeta_policy::{ActionReviewRequest, ExecutionDecision, SandboxDenialEvidence};
@@ -237,6 +237,7 @@ impl<'a> ToolExecutionOrchestrator<'a> {
         authorization: &ToolAuthorization,
     ) -> Result<ToolExecutionOutput, CoreError> {
         let snapshot = self.threads.read_thread(context.thread_id)?;
+        let facts = ToolExecutionFacts::from_items(&snapshot.items);
         let mut stream = ToolUpdateStream {
             updates: self.updates,
             session_id: snapshot.session_id,
@@ -247,8 +248,13 @@ impl<'a> ToolExecutionOrchestrator<'a> {
             stream_instance_id: self.threads.next_stream_instance_id(),
             next_sequence: 0,
         };
-        self.tools
-            .execute_streaming(call, authorization, context.cancellation, &mut stream)
+        self.tools.execute_streaming_with_facts(
+            call,
+            authorization,
+            context.cancellation,
+            &facts,
+            &mut stream,
+        )
     }
 
     fn review_denial_and_retry(

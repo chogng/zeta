@@ -8,7 +8,8 @@ use crate::server::skills_runtime::{BuiltInSkillSource, SkillConfigSnapshotProvi
 use crate::tool_composition::ToolPort;
 use sha2::{Digest, Sha256};
 use std::fmt;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::process::Command;
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::Duration;
@@ -18,13 +19,129 @@ use zeta_config::{
     WorkspaceConfigInput, WorkspaceConfigRevision, WorkspaceConfigScope, WorkspaceConfigStore,
     WorkspaceId, resolve_scoped_config,
 };
-use zeta_core::{CoreError, ModelSelection, ModelService};
+use zeta_core::{CoreError, HarnessInstructions, ModelSelection, ModelService};
 use zeta_install_context::InstallContext;
 use zeta_model_provider::{
     ModelInvoker, ModelProvider, ModelProviderRuntime, ModelRuntimeRequest, UnavailableModel,
 };
 use zeta_model_provider_config::ProviderConfigRegistry;
+use zeta_prompts::SYSTEM_PROMPT;
 use zeta_rollout::LocalStateRepository;
+
+const MAX_WORKSPACE_INSTRUCTIONS_BYTES: usize = 32 * 1024;
+const MAX_GIT_STATUS_LINES: usize = 40;
+
+pub(crate) fn harness_instructions(workspace_root: &Path) -> HarnessInstructions {
+    HarnessInstructions::new(
+        SYSTEM_PROMPT.body(),
+        render_environment(workspace_root),
+        read_workspace_instructions(workspace_root),
+    )
+}
+
+fn render_environment(workspace_root: &Path) -> String {
+    let is_git_repo = command_output(
+        workspace_root,
+        "git",
+        &["rev-parse", "--is-inside-work-tree"],
+    )
+    .is_some_and(|output| output.trim() == "true");
+    let branch = if is_git_repo {
+        command_output(workspace_root, "git", &["branch", "--show-current"])
+            .filter(|value| !value.trim().is_empty())
+    } else {
+        None
+    };
+    let main_branch = if is_git_repo {
+        command_output(
+            workspace_root,
+            "git",
+            &["symbolic-ref", "--short", "refs/remotes/origin/HEAD"],
+        )
+        .map(|value| value.trim_start_matches("origin/").trim().to_owned())
+        .filter(|value| !value.is_empty())
+        .or_else(|| branch.clone())
+    } else {
+        None
+    };
+    let status = if is_git_repo {
+        command_output(workspace_root, "git", &["status", "--porcelain"])
+            .map(|value| truncate_lines(&value, MAX_GIT_STATUS_LINES))
+    } else {
+        None
+    };
+    let commits = if is_git_repo {
+        command_output(workspace_root, "git", &["log", "--oneline", "-5"])
+    } else {
+        None
+    };
+    format!(
+        "<environment>\nworking_directory: {}\nis_git_repo: {}\nplatform: {}\nos_version: {}\nshell: {}\ntoday: {}\ngit_branch: {}\ngit_main_branch: {}\ngit_status: {}\ngit_recent_commits: {}\n</environment>\nThis snapshot was taken at session start and does not update. Run commands\n(e.g. `git status`) when you need current state.",
+        workspace_root.display(),
+        is_git_repo,
+        platform_name(),
+        command_output(workspace_root, "uname", &["-sr"]).unwrap_or_else(|| "unknown".into()),
+        std::env::var("SHELL").unwrap_or_else(|_| "unknown".into()),
+        command_output(workspace_root, "date", &["+%Y-%m-%d"]).unwrap_or_else(|| "unknown".into()),
+        branch.unwrap_or_else(|| "(none)".into()),
+        main_branch.unwrap_or_else(|| "(none)".into()),
+        status.unwrap_or_else(|| "(none)".into()),
+        commits.unwrap_or_else(|| "(none)".into()),
+    )
+}
+
+fn read_workspace_instructions(workspace_root: &Path) -> Option<String> {
+    let path = workspace_root.join("AGENTS.md");
+    let mut bytes = std::fs::read(path).ok()?;
+    let truncated = bytes.len() > MAX_WORKSPACE_INSTRUCTIONS_BYTES;
+    bytes.truncate(MAX_WORKSPACE_INSTRUCTIONS_BYTES);
+    let mut text = String::from_utf8_lossy(&bytes).into_owned();
+    if truncated {
+        text.push_str("\n[... AGENTS.md truncated at 32768 bytes ...]");
+    }
+    Some(text)
+}
+
+fn truncate_lines(text: &str, maximum_lines: usize) -> String {
+    let mut lines = text.lines().take(maximum_lines).collect::<Vec<_>>();
+    if text.lines().count() > maximum_lines {
+        lines.push("[... git status truncated ...]");
+    }
+    if lines.is_empty() {
+        "(clean)".into()
+    } else {
+        lines.join("\n")
+    }
+}
+
+fn command_output(workspace_root: &Path, program: &str, arguments: &[&str]) -> Option<String> {
+    let output = if program == "git" {
+        Command::new(program)
+            .args(["-C", &workspace_root.to_string_lossy()])
+            .args(arguments)
+            .output()
+    } else {
+        Command::new(program)
+            .args(arguments)
+            .current_dir(workspace_root)
+            .output()
+    }
+    .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    Some(String::from_utf8_lossy(&output.stdout).trim().to_owned())
+}
+
+fn platform_name() -> &'static str {
+    if cfg!(target_os = "macos") {
+        "darwin"
+    } else if cfg!(target_os = "windows") {
+        "windows"
+    } else {
+        "linux"
+    }
+}
 
 /// Filesystem locations needed to open one persistent local App Server.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -541,6 +658,7 @@ impl ModelService for ProviderModelService {
                 zeta_model_provider::ModelProviderError::Cancelled(message) => {
                     CoreError::Cancelled(message)
                 }
+                error if error.is_transient() => CoreError::ModelTransient(error.to_string()),
                 error => CoreError::Model(error.to_string()),
             })?;
         cancellation

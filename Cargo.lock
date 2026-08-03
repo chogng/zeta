@@ -7789,6 +7789,7 @@ dependencies = [
  "zeta-model-provider",
  "zeta-model-provider-config",
  "zeta-policy",
+ "zeta-prompts",
  "zeta-protocol",
  "zeta-rmcp-client",
  "zeta-rollout",

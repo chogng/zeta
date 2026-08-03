@@ -1,6 +1,7 @@
 use super::fs_watcher::FileSystemWatcher;
 use super::git_runtime::{GitRuntime, GitWatcher};
 use super::{AppServer, AppServerThreadUpdates, RpcError};
+use crate::local::harness_instructions;
 use crate::local_tools::compose_local_tools;
 use crate::tool_composition::{ReloadableToolPorts, ToolPort, combine_tool_ports};
 use std::fmt;
@@ -401,7 +402,10 @@ impl AppServer {
             git: None,
             workspace_search: None,
             terminals: None,
-            turn_executor: current.turn_executor.clone(),
+            turn_executor: current
+                .turn_executor
+                .clone()
+                .with_instructions(Arc::new(harness_instructions(&canonical_root))),
         };
         let previous = std::mem::replace(&mut *current, next);
         drop(current);
@@ -483,7 +487,10 @@ impl AppServer {
             git: Some(Arc::clone(&git)),
             workspace_search: Some(Arc::clone(&workspace_search)),
             terminals: Some(Arc::clone(&terminals)),
-            turn_executor: current.turn_executor.clone(),
+            turn_executor: current
+                .turn_executor
+                .clone()
+                .with_instructions(Arc::new(harness_instructions(&canonical_root))),
         };
         let previous = std::mem::replace(&mut *current, next);
         drop(current);

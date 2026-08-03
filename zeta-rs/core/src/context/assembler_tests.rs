@@ -32,7 +32,8 @@ fn assembles_messages_and_paired_tool_results_from_durable_items() {
         ],
     );
 
-    let request = ContextAssembler::assemble(&snapshot, Vec::new()).unwrap();
+    let request =
+        ContextAssembler::assemble(&snapshot, Vec::new(), &HarnessInstructions::default()).unwrap();
 
     assert_eq!(request.input.len(), 3);
     let InputItem::Message(message) = &request.input[1] else {
@@ -72,7 +73,8 @@ fn groups_ordered_text_and_images_from_one_user_turn() {
         ],
     );
 
-    let request = ContextAssembler::assemble(&snapshot, Vec::new()).unwrap();
+    let request =
+        ContextAssembler::assemble(&snapshot, Vec::new(), &HarnessInstructions::default()).unwrap();
 
     assert_eq!(request.input.len(), 1);
     let InputItem::Message(message) = &request.input[0] else {
@@ -107,9 +109,63 @@ fn rejects_invalid_durable_tool_arguments() {
     );
 
     assert!(matches!(
-        ContextAssembler::assemble(&snapshot, Vec::new()),
+        ContextAssembler::assemble(&snapshot, Vec::new(), &HarnessInstructions::default()),
         Err(CoreError::Context(_))
     ));
+}
+
+#[test]
+fn injects_instructions_and_workspace_message_before_durable_history() {
+    let turn_id = id::<TurnId>("turn");
+    let snapshot = snapshot(
+        turn_id.clone(),
+        vec![ThreadItem::UserMessage {
+            item_id: id("user"),
+            turn_id,
+            text: "hello".into(),
+        }],
+    );
+    let instructions = HarnessInstructions::new(
+        "system body",
+        "<environment>\ntoday: 2026-08-03\n</environment>",
+        Some("follow the workspace rules".into()),
+    );
+
+    let request = ContextAssembler::assemble(&snapshot, Vec::new(), &instructions).unwrap();
+
+    assert_eq!(
+        request.instructions.as_deref(),
+        Some("system body\n\n<environment>\ntoday: 2026-08-03\n</environment>")
+    );
+    assert!(request.parallel_tool_calls);
+    let InputItem::Message(message) = &request.input[0] else {
+        panic!("workspace instructions must be the first input message");
+    };
+    assert!(matches!(message.role, MessageRole::User));
+    assert!(
+        matches!(&message.content[0], ContentPart::Text(text) if text.contains("Workspace instructions from AGENTS.md"))
+    );
+}
+
+#[test]
+fn repeated_assembly_is_byte_stable() {
+    let turn_id = id::<TurnId>("turn");
+    let snapshot = snapshot(
+        turn_id.clone(),
+        vec![ThreadItem::UserMessage {
+            item_id: id("user"),
+            turn_id,
+            text: "stable".into(),
+        }],
+    );
+    let instructions = HarnessInstructions::new("system", "environment", None);
+    let first = ContextAssembler::assemble(&snapshot, Vec::new(), &instructions).unwrap();
+    let second = ContextAssembler::assemble(&snapshot, Vec::new(), &instructions).unwrap();
+
+    assert_eq!(
+        format!("{first:?}").as_bytes(),
+        format!("{second:?}").as_bytes()
+    );
 }
 
 fn snapshot(turn_id: TurnId, items: Vec<ThreadItem>) -> ThreadSnapshot {

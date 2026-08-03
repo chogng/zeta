@@ -1,4 +1,6 @@
 use crate::CoreError;
+use std::collections::BTreeSet;
+use std::path::PathBuf;
 use zeta_async_utils::CancellationToken;
 use zeta_policy::{ActionReviewRequest, AutoReviewGrant, GrantId, ReviewEvidence};
 use zeta_protocol::{
@@ -213,6 +215,20 @@ pub trait ToolService: Send + Sync {
         cancellation: &CancellationToken,
     ) -> Result<ToolExecutionOutput, CoreError>;
 
+    /// Executes a Tool Call with durable facts derived from the current Thread transcript.
+    ///
+    /// File-mutating implementations use these facts to enforce read-before-write without
+    /// coupling the tool layer to Thread storage. Existing tools may retain the default bridge.
+    fn execute_with_facts(
+        &self,
+        call: &ToolCall,
+        authorization: &ToolAuthorization,
+        cancellation: &CancellationToken,
+        _: &ToolExecutionFacts,
+    ) -> Result<ToolExecutionOutput, CoreError> {
+        self.execute(call, authorization, cancellation)
+    }
+
     /// Executes a Tool Call while optionally publishing typed transient output.
     ///
     /// Services without an incremental transport retain the default terminal-only behavior.
@@ -224,6 +240,66 @@ pub trait ToolService: Send + Sync {
         _: &mut dyn ToolOutputSink,
     ) -> Result<ToolExecutionOutput, CoreError> {
         self.execute(call, authorization, cancellation)
+    }
+
+    /// Streaming counterpart to [`ToolService::execute_with_facts`].
+    fn execute_streaming_with_facts(
+        &self,
+        call: &ToolCall,
+        authorization: &ToolAuthorization,
+        cancellation: &CancellationToken,
+        facts: &ToolExecutionFacts,
+        sink: &mut dyn ToolOutputSink,
+    ) -> Result<ToolExecutionOutput, CoreError> {
+        let _ = facts;
+        self.execute_streaming(call, authorization, cancellation, sink)
+    }
+}
+
+/// Read-before-write evidence reconstructed from successful durable `read_file` results.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct ToolExecutionFacts {
+    read_paths: BTreeSet<PathBuf>,
+}
+
+impl ToolExecutionFacts {
+    pub(crate) fn from_items(items: &[zeta_protocol::ThreadItem]) -> Self {
+        let mut calls = std::collections::BTreeMap::new();
+        let mut facts = Self::default();
+        for item in items {
+            match item {
+                zeta_protocol::ThreadItem::ToolCall {
+                    tool_call_id,
+                    name,
+                    arguments_json,
+                    ..
+                } => {
+                    if name.as_str() == "read_file"
+                        && let Ok(arguments) =
+                            serde_json::from_str::<serde_json::Value>(arguments_json)
+                        && let Some(path) =
+                            arguments.get("path").and_then(serde_json::Value::as_str)
+                    {
+                        calls.insert(tool_call_id.clone(), PathBuf::from(path));
+                    }
+                }
+                zeta_protocol::ThreadItem::ToolResult {
+                    tool_call_id,
+                    is_error: false,
+                    ..
+                } => {
+                    if let Some(path) = calls.get(tool_call_id) {
+                        facts.read_paths.insert(path.clone());
+                    }
+                }
+                _ => {}
+            }
+        }
+        facts
+    }
+
+    pub fn read_paths(&self) -> impl Iterator<Item = &PathBuf> {
+        self.read_paths.iter()
     }
 }
 

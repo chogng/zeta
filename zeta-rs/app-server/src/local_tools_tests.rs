@@ -122,6 +122,73 @@ fn local_registry_accepts_shell_processes_but_rejects_ripgrep_workspace_escape_a
     );
 }
 
+#[test]
+fn local_suite_reads_and_edits_with_spec_errors() {
+    let workspace = TestWorkspace::new();
+    let ripgrep = RipgrepExecutable::from_path(workspace.ripgrep()).unwrap();
+    let shell =
+        LocalShellToolService::new(workspace.trusted(), ripgrep.clone(), PassThroughBackend)
+            .unwrap();
+    let suite = LocalToolSuite::new(shell, ripgrep);
+    let path = workspace.path().join("src/main.rs");
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    fs::write(&path, "fn main() {\n    println!(\"old\");\n}\n").unwrap();
+    let cancellation = CancellationSource::new().token();
+    let authorization = ToolAuthorization::Sandboxed(read_only_sandbox());
+
+    let unread_edit = suite
+        .execute(
+            &ToolCall {
+                id: ToolCallId::new("edit-unread").unwrap(),
+                name: ToolName::new("edit").unwrap(),
+                arguments: json!({
+                    "path": path.clone(),
+                    "old_string": "old",
+                    "new_string": "new",
+                    "replace_all": false
+                }),
+            },
+            &authorization,
+            &cancellation,
+        )
+        .unwrap();
+    assert!(
+        matches!(unread_edit, ToolExecutionOutput::Failure(message) if message.contains("has not been read"))
+    );
+
+    let read = suite
+        .execute(
+            &ToolCall {
+                id: ToolCallId::new("read").unwrap(),
+                name: ToolName::new("read_file").unwrap(),
+                arguments: json!({"path": path.clone(), "offset": null, "limit": null}),
+            },
+            &authorization,
+            &cancellation,
+        )
+        .unwrap();
+    assert!(matches!(read, ToolExecutionOutput::Success(text) if text.contains("println")));
+
+    let edit = suite
+        .execute(
+            &ToolCall {
+                id: ToolCallId::new("edit").unwrap(),
+                name: ToolName::new("edit").unwrap(),
+                arguments: json!({
+                    "path": path.clone(),
+                    "old_string": "old",
+                    "new_string": "new",
+                    "replace_all": false
+                }),
+            },
+            &authorization,
+            &cancellation,
+        )
+        .unwrap();
+    assert!(matches!(edit, ToolExecutionOutput::Success(text) if text.contains("new")));
+    assert!(fs::read_to_string(path).unwrap().contains("new"));
+}
+
 fn tool_call(arguments: serde_json::Value) -> ToolCall {
     ToolCall {
         id: ToolCallId::new("call-1").unwrap(),

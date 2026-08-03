@@ -1,10 +1,12 @@
 use super::tool_scheduler::{ToolScheduler, ToolSchedulingProgress};
 use crate::policy_service::UnavailablePolicyService;
 use crate::{
-    CompletedTurn, ContextAssembler, CoreError, ModelSelection, ModelService, ModelStreamSink,
-    NoThreadUpdates, NoTools, PolicyService, ThreadController, ThreadUpdateSink, ToolService,
+    CompletedTurn, ContextAssembler, CoreError, HarnessInstructions, ModelSelection, ModelService,
+    ModelStreamSink, NoThreadUpdates, NoTools, PolicyService, ThreadController, ThreadUpdateSink,
+    ToolService,
 };
 use std::sync::Arc;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use zeta_async_utils::{Cancellation, CancellationReason, CancellationToken};
 use zeta_protocol::{
     ItemId, ModelResponse, ModelStreamEvent, ResponseItem, StableTurnError, StreamCursor,
@@ -25,6 +27,7 @@ pub struct TurnExecutor {
     tools: Arc<dyn ToolService>,
     policy: Arc<dyn PolicyService>,
     updates: Arc<dyn ThreadUpdateSink>,
+    instructions: Arc<HarnessInstructions>,
 }
 
 /// Terminal result of one executor run.
@@ -47,6 +50,7 @@ impl TurnExecutor {
             tools,
             policy,
             updates: Arc::new(NoThreadUpdates),
+            instructions: Arc::new(HarnessInstructions::default()),
         }
     }
 
@@ -62,6 +66,12 @@ impl TurnExecutor {
     /// Adds the outer transport sink for durable and transient Thread updates.
     pub fn with_thread_updates(mut self, updates: Arc<dyn ThreadUpdateSink>) -> Self {
         self.updates = updates;
+        self
+    }
+
+    /// Uses immutable prompt additions captured by the host for this Workspace runtime.
+    pub fn with_instructions(mut self, instructions: Arc<HarnessInstructions>) -> Self {
+        self.instructions = instructions;
         self
     }
 
@@ -249,7 +259,7 @@ impl TurnExecutor {
                 .threads
                 .read_thread(thread_id)
                 .map_err(ExecutionFailure::model)?;
-            let request = ContextAssembler::assemble(&snapshot, tools.clone())
+            let request = ContextAssembler::assemble(&snapshot, tools.clone(), &self.instructions)
                 .map_err(ExecutionFailure::model)?;
             let turn = snapshot
                 .turns
@@ -260,25 +270,53 @@ impl TurnExecutor {
                 Some(model) => ModelSelection::Session(model),
                 None => ModelSelection::ConfiguredDefault,
             };
-            let mut stream = InvocationStream::new(
-                self.threads.clone(),
-                self.updates.clone(),
-                snapshot.session_id.clone(),
-                thread_id.clone(),
-                turn_id.clone(),
-                snapshot.sequence,
-                cancellation.clone(),
-            );
-            let response = self
-                .model
-                .stream(model, &request, cancellation, &mut stream)
-                .map_err(ExecutionFailure::service)?;
-            check_cancellation(cancellation)?;
+            let mut transient_attempt = 0;
+            let mut empty_attempt = false;
+            let (response, mut stream) = loop {
+                let mut stream = InvocationStream::new(
+                    self.threads.clone(),
+                    self.updates.clone(),
+                    snapshot.session_id.clone(),
+                    thread_id.clone(),
+                    turn_id.clone(),
+                    snapshot.sequence,
+                    cancellation.clone(),
+                );
+                match self
+                    .model
+                    .stream(model, &request, cancellation, &mut stream)
+                {
+                    Ok(response) => {
+                        check_cancellation(cancellation)?;
+                        let tool_calls = response.tool_calls().count();
+                        let text = final_text(&response, &stream);
+                        if tool_calls == 0
+                            && text.trim().is_empty()
+                            && response_refusal_message(&response).is_none()
+                        {
+                            if !empty_attempt {
+                                empty_attempt = true;
+                                continue;
+                            }
+                            return Err(ExecutionFailure::model(CoreError::Execution(
+                                "model returned no final text or Tool Call".into(),
+                            )));
+                        }
+                        break (response, stream);
+                    }
+                    Err(CoreError::ModelTransient(error)) if transient_attempt < 3 => {
+                        wait_for_model_retry(cancellation, transient_attempt, &error)?;
+                        transient_attempt += 1;
+                    }
+                    Err(error) => return Err(ExecutionFailure::service(error)),
+                }
+            };
 
             let tool_calls = response.tool_calls().cloned().collect::<Vec<_>>();
             self.record_reasoning(thread_id, turn_id, &response, &mut stream)?;
             let text = final_text(&response, &stream);
             if tool_calls.is_empty() {
+                let text = response_refusal_message(&response).unwrap_or(text);
                 if text.trim().is_empty() {
                     return Err(ExecutionFailure::model(CoreError::Execution(
                         response_failure_message(&response),
@@ -594,6 +632,43 @@ fn response_failure_message(response: &zeta_protocol::ModelResponse) -> String {
             _ => None,
         })
         .unwrap_or_else(|| "model returned no final text or Tool Call".into())
+}
+
+fn response_refusal_message(response: &zeta_protocol::ModelResponse) -> Option<String> {
+    response.output.iter().find_map(|item| match item {
+        ResponseItem::Refusal(message) => Some(message.clone()),
+        _ => None,
+    })
+}
+
+fn wait_for_model_retry(
+    cancellation: &CancellationToken,
+    attempt: u32,
+    error: &str,
+) -> Result<(), ExecutionFailure> {
+    let retry_after = error
+        .strip_prefix("model API rate limited; retry after ")
+        .and_then(|value| value.strip_suffix(" ms"))
+        .and_then(|value| value.parse::<u64>().ok())
+        .map(|value| value.min(60_000));
+    let delay_ms = retry_after
+        .unwrap_or_else(|| {
+            let base = 1_000_u64.saturating_mul(2_u64.saturating_pow(attempt));
+            let jitter = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map(|duration| duration.subsec_nanos() as u64 % 51)
+                .unwrap_or(25);
+            base.saturating_mul(75 + jitter) / 100
+        })
+        .min(30_000);
+    let mut remaining = delay_ms;
+    while remaining > 0 {
+        check_cancellation(cancellation)?;
+        let step = remaining.min(100);
+        std::thread::sleep(Duration::from_millis(step));
+        remaining -= step;
+    }
+    Ok(())
 }
 
 #[cfg(test)]

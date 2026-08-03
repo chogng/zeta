@@ -6,6 +6,6 @@ const SYSTEM_PROMPT_TEXT: &str = include_str!("../templates/system/base.md");
 pub const SYSTEM_PROMPT: PromptArtifact = PromptArtifact::new(
     PromptCategory::System,
     "system/base",
-    "system-v2",
+    "system-v3",
     SYSTEM_PROMPT_TEXT,
 );
