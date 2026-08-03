@@ -5,6 +5,10 @@ export default defineConfig({
   outputDir: "./output/playwright/test-results",
   fullyParallel: false,
   workers: 1,
+  projects: [
+    { name: "ui" },
+    { name: "desktop" },
+  ],
   timeout: 45_000,
   expect: {
     timeout: 10_000,

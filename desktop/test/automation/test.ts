@@ -2,20 +2,24 @@ import { test as base, type ElectronApplication } from "@playwright/test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { launchElectron } from "./electron.js";
+import { type AppServerTestMode, launchElectron } from "./electron.js";
 import type { PlaywrightDriver } from "./playwrightDriver.js";
 import type { Workbench } from "./workbench.js";
 
 interface ElectronFixtures {
+  readonly appServerMode: AppServerTestMode;
   readonly application: ElectronApplication;
   readonly driver: PlaywrightDriver;
   readonly workbench: Workbench;
 }
 
 export const test = base.extend<ElectronFixtures>({
-  driver: async ({}, use) => {
+  appServerMode: async ({}, use, testInfo) => {
+    await use(appServerModeForProject(testInfo.project.name));
+  },
+  driver: async ({ appServerMode }, use) => {
     const userDataDirectory = await mkdtemp(join(tmpdir(), "zeta-playwright-"));
-    const { application, driver } = await launchElectron({ userDataDirectory });
+    const { application, driver } = await launchElectron({ appServerMode, userDataDirectory });
     try {
       await use(driver);
     } finally {
@@ -54,3 +58,14 @@ export const test = base.extend<ElectronFixtures>({
 });
 
 export { expect } from "@playwright/test";
+
+function appServerModeForProject(projectName: string): AppServerTestMode {
+  switch (projectName) {
+    case "ui":
+      return "disabled";
+    case "desktop":
+      return "required";
+    default:
+      throw new Error(`Unsupported Playwright project: ${projectName}`);
+  }
+}

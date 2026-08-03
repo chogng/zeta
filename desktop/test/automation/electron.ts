@@ -6,7 +6,10 @@ import { PlaywrightDriver } from "./playwrightDriver.js";
 const desktopDirectory = resolve(import.meta.dirname, "../..");
 const require = createRequire(import.meta.url);
 
+export type AppServerTestMode = "disabled" | "required";
+
 export interface ElectronLaunchOptions {
+  readonly appServerMode: AppServerTestMode;
   readonly userDataDirectory: string;
   readonly product?: "academic" | "code" | "complete";
 }
@@ -21,7 +24,11 @@ export async function launchElectron(options: ElectronLaunchOptions): Promise<El
   const environment = Object.fromEntries(
     Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined),
   );
-  environment.ZETA_DESKTOP_UI_ONLY = "1";
+  if (options.appServerMode === "disabled") {
+    environment.ZETA_DESKTOP_UI_ONLY = "1";
+  } else {
+    delete environment.ZETA_DESKTOP_UI_ONLY;
+  }
   environment.ZETA_PRODUCT = options.product ?? "code";
   delete environment.ELECTRON_RUN_AS_NODE;
 
