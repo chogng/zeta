@@ -47,6 +47,7 @@ members = [
     "native",
     "policy",
     "plugins",
+    "prompts",
     "protocol",
     "renderer",
     "rollout",
@@ -201,6 +202,7 @@ zeta-mcp = { path = "mcp" }
 zeta-mcp-server = { path = "mcp-server" }
 zeta-policy = { path = "policy" }
 zeta-plugins = { path = "plugins" }
+zeta-prompts = { path = "prompts" }
 zeta-protocol = { path = "protocol" }
 zeta-renderer = { path = "renderer" }
 zeta-rollout = { path = "rollout" }

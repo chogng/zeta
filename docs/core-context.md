@@ -3,6 +3,7 @@
 > Core 总体边界：[`core.md`](core.md)
 > Canonical Thread/Turn/Item contract：[`protocol.md`](protocol.md)
 > 多 Agent context inheritance：[`core-multi-agent.md`](core-multi-agent.md)
+> 内置模型提示词资产：[`zeta-prompts`](../zeta-rs/prompts/README.md)
 
 ## 快速理解
 
@@ -208,6 +209,16 @@ determinism。`ContextManager` 只协调生命周期与缓存。
 
 当前基础 `ContextAssembler` 直接接受 `ThreadSnapshot` 是过渡 API。长期应改为接受
 `ContextPlan`，Thread snapshot 的读取和选择由 ContextManager/Planner 完成。
+
+### 5.4 内置提示词资产
+
+[`zeta-prompts`](../zeta-rs/prompts/README.md) 只拥有四类 Zeta 内置、模型可见的提示词资产：system、
+compaction、goals 和通用 review。它提供稳定的 asset ID、revision 与 compile-time body，但不决定
+何时注入，也不读取 Thread、Config、Skill、MCP 或 provider runtime。
+
+需要某类提示词的功能模块负责触发条件和生命周期；当资产进入 Agent 的 canonical context 后，仍由
+Core context pipeline 负责 instruction layer、precedence、budget、provenance 和最终 request 组装。
+`zeta-auto-review` 的 prompt/schema/revision 专用契约继续由该 crate 自己拥有。
 
 当前 assembler 会把同一 Turn 中相邻的 `UserMessage` / `UserImage` 按 durable 顺序合并成一个
 provider-neutral user `Message`，分别映射为 `ContentPart::Text` 与
@@ -420,7 +431,7 @@ core/src/
    ├─ manager.rs
    ├─ selection.rs
    ├─ window.rs
-   ├─ compaction.rs
+   ├─ compact.rs
    └─ *_tests.rs
 ```
 
@@ -455,7 +466,7 @@ TurnExecutor
 2. 将现有 assembler 改为 `ContextPlan → ModelRequest`；
 3. 增加 per-Thread `ContextManager`，但先不做 cache；
 4. 在 `LoadedThreadState` 中持有 ContextManager；
-5. 增加 instruction/environment/policy snapshot；
+5. 增加 instruction/environment/policy snapshot，并由调用方决定何时贡献内置 prompt asset；
 6. 增加 checkpoint schema 与 compaction flow；
 7. 最后增加 cache/reference baseline，并以 sequence/revision 严格失效。
 

@@ -1,0 +1,15 @@
+[package]
+name = "zeta-prompts"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+readme = "README.md"
+
+[lib]
+doctest = false
+name = "zeta_prompts"
+path = "src/lib.rs"
+
+[lints]
+workspace = true
