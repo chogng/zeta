@@ -41,3 +41,7 @@
 - Prefer compact single-line formatting for short imports, function calls, parameter lists, conditions, and expressions.
 - Split code across lines only when it exceeds the project's line-length convention, materially improves readability, or is required by the configured formatter.
 - Do not preemptively use multiline formatting merely because more items might be added later.
+
+## Learnings
+
+- 严禁创建或保留仅用于聚合、转发导出的 `index.ts`（barrel file）。所有调用方必须直接从符号的实际定义模块导入，使依赖来源、代码 owner 和运行时边界保持明确；发现现有 barrel 时应删除并改写调用方，不得继续扩展。

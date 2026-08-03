@@ -1,7 +1,5 @@
-import {
-  Button,
-  Dialog,
-} from "../../../base/browser/ui/index.js";
+import { Button } from "../../../base/browser/ui/button/button.js";
+import { Dialog } from "../../../base/browser/ui/dialog/dialog.js";
 import {
   getActiveElement,
   restoreFocus,

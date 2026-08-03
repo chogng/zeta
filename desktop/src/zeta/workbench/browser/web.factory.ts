@@ -1,5 +1,5 @@
 import { addDisposableListener } from "../../base/browser/dom.js";
-import { installBaseUiStyles } from "../../base/browser/ui/index.js";
+import { installBaseUiStyles } from "../../base/browser/ui/styles.js";
 import {
   DisposableStore,
   type IDisposable,

@@ -1,9 +1,7 @@
 import {
   DisposableOwner,
 } from "../../../../base/common/lifecycle.js";
-import {
-  MarkdownPreview,
-} from "../../../../platform/markdown/browser/index.js";
+import { MarkdownPreview } from "../../../../platform/markdown/browser/markdownPreview.js";
 
 export interface MarkdownDocumentViewOptions {
   readonly ownerDocument: Document;

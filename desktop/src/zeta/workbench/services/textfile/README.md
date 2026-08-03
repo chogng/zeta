@@ -43,9 +43,9 @@ TextFile model contract here and matching host write/durability support.
 
 ## Tests and modification impact
 
-`desktop/test/text-file-service.test.ts` covers bootstrap precedence, file
+`test/common/text-file-service.test.ts` covers bootstrap precedence, file
 delegation, cancellation, validation, and failure propagation.
-`desktop/test/explorer-view.test.ts` verifies that Explorer does not read file
+`../../../contrib/files/test/browser/explorer-view.test.ts` verifies that Explorer does not read file
 content. Alpha model and pane tests cover shared model references, edit
 preservation, cancellation, and session disposal.
 

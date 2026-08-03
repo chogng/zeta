@@ -9,10 +9,9 @@
     "src/zeta/base/browser/dom.ts",
     "src/zeta/base/common/**/*.ts",
     "src/zeta/base/parts/contextmenu/common/**/*.ts",
-    "src/zeta/base/test/**/*.ts",
+    "src/zeta/**/test/**/*.ts",
     "src/zeta/editor/alpha/benchmark/**/*.ts",
     "src/zeta/editor/*/common/**/*.ts",
-    "src/zeta/editor/*/test/**/*.ts",
     "src/zeta/platform/action/common/**/*.ts",
     "src/zeta/platform/actions/common/**/*.ts",
     "src/zeta/platform/commands/common/**/*.ts",
@@ -32,7 +31,6 @@
     "src/zeta/platform/markdown/browser/**/*.ts",
     "src/zeta/platform/theme/browser/**/*.ts",
     "src/zeta/platform/theme/common/**/*.ts",
-    "src/zeta/platform/theme/test/**/*.ts",
     "src/zeta/platform/storage/node/**/*.ts",
     "src/zeta/platform/workspace/**/*.ts",
     "src/zeta/platform/workspaces/**/*.ts",
@@ -49,7 +47,6 @@
     "src/zeta/workbench/services/views/**/*.ts",
     "src/zeta/workbench/services/workspaces/**/*.ts",
     "src/zeta/workbench/common/**/*.ts",
-    "src/zeta/workbench/test/browser/**/*.ts",
     "src/zeta/workbench/contrib/chat/**/*.ts",
     "src/zeta/platform/app-server/electron-main/app-server-client.ts",
     "src/zeta/platform/app-server/electron-main/app-server-package.ts",
@@ -68,6 +65,6 @@
     "src/zeta/platform/app-server/browser/**/*.ts",
     "src/zeta/platform/browser/common/**/*.ts",
     "src/zeta/platform/browser/electron-main/browserViewIpc.ts",
-    "test/**/*.ts"
+    "test/architecture/**/*.ts"
   ]
 }
