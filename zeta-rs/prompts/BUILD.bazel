@@ -1,0 +1,7 @@
+load("//:defs.bzl", "zeta_rust_crate")
+
+zeta_rust_crate(
+    name = "prompts",
+    crate_name = "zeta_prompts",
+    data = glob(["templates/**"]),
+)

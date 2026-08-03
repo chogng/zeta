@@ -8251,6 +8251,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "zeta-prompts"
+version = "0.1.0"
+
+[[package]]
 name = "zeta-protocol"
 version = "0.1.0"
 dependencies = [
