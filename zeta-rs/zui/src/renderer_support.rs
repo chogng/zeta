@@ -6,9 +6,11 @@
 
 use cosmic_text::{Family, FontSystem, Style, Weight};
 
-use crate::font::mapping;
-use crate::font::new_font_system;
-use crate::{FontFamily, FontStyle, FontWeight};
+use crate::text::FontFamily;
+use crate::text::FontStyle;
+use crate::text::FontWeight;
+use crate::text::mapping;
+use crate::text::new_font_system;
 
 /// Creates a font system with the same locale, fallback, and platform filtering as UI layout.
 pub fn create_font_system() -> FontSystem {

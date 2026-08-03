@@ -8,7 +8,7 @@ use zeta_language_server_catalog::{JSON_LANGUAGE_SERVER_ID, RUST_ANALYZER_SERVER
 use zeta_language_service::LanguageServerState;
 use zeta_ui::TextInputCommand;
 use zeta_ui::{CaretVisibility, Rect, TextInputLayoutEngine};
-use zeta_ui_dispatch::{AccessibilityRole, InteractionFrame, UiDispatch};
+use zui::{AccessibilityRole, InteractionFrame, UiDispatch};
 
 use super::{
     LANGUAGE_SERVER_EXECUTABLE_INPUT, LANGUAGE_SERVER_SETTINGS_SAVE, LanguageServerSettings,

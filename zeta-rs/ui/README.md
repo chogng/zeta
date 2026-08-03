@@ -40,7 +40,7 @@ GPU pipeline、atlas、shader 和 surface 全部委托给 renderer backend。
 | shaping 与 renderer-compatible text measurement | `zui` → `cosmic-text` | 委托 |
 | 后端无关 frame execution contract | `zeta-renderer::Renderer` | ❌ |
 | GPU pipeline、atlas、shader、surface 与 present | `zeta-wgpu::WgpuRenderer` | ❌ |
-| Focus、input routing 与 accessibility semantics | `zeta-ui-dispatch` + product host | ❌；Button 只消费 host 投影的 focused presentation |
+| Focus、input routing 与 accessibility semantics | `zui` + product host | ❌；Button 只消费 host 投影的 focused presentation |
 
 依赖方向：
 
@@ -321,7 +321,7 @@ validation 测试属于具体 backend crate。
   overflow、close action、identity、interaction 与 tabpanel 均由 composed control/host 拥有；
 - `ContextView` 不拥有 shadow、arrow/callout，也不拥有 outside click、Escape、focus
   restoration 或 accessibility scope；overflow shadow 由托管内容的 `PaintRect` 拥有，
-  lifecycle/interaction 由 host 与 `zeta-ui-dispatch` 组合；
+  lifecycle/interaction 由 host 与 `zui` 组合；
 - `ScrollView` 当前提供 overlay scrollbar 的同源 paint/hit/track-page/thumb-drag geometry，
   `ScrollbarController` 提供 hover/active/fade presentation；平台事件接线、pointer capture、
   滚动惯性、overscroll 和 accessibility adapter 仍由 host/dispatch 扩展；
@@ -331,7 +331,7 @@ validation 测试属于具体 backend crate。
 - `TreeView` 只消费 host-flattened visible nodes；异步 child loading、展开状态持久化、稳定节点
   identity、selection、重命名、拖放和文件打开仍属于产品 Tree model/host；
 - `Sash` 当前只拥有 presentation geometry，没有 pointer capture、keyboard resize 或
-  accessibility adapter；这些交互由 host 与 `zeta-ui-dispatch` 组合；
+  accessibility adapter；这些交互由 host 与 `zui` 组合；
 - `InputBox` 消费显式 blink phase，但没有 mouse caret hit testing、drag selection 或
   disabled/read-only presentation；
 - native 当前使用 `CaretBlinkController::default` 的 530ms half-period，尚未读取系统 caret

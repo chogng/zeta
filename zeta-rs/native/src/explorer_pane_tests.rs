@@ -6,7 +6,7 @@ use crate::shell_style::SHELL_PALETTE;
 use crate::{agent_sidebar_workspace::AgentSidebarWorkspace, workspace_context::WorkspaceContext};
 use zeta_app_server_protocol::protocol::fs::{FsFileType, FsReadDirectoryEntry};
 use zeta_ui::{Color, Component, Rect, UiScene};
-use zeta_ui_dispatch::{AccessibilityRole, InteractionFrame, UiDispatch};
+use zui::{AccessibilityRole, InteractionFrame, UiDispatch};
 
 static NEXT_WORKSPACE_ID: AtomicU64 = AtomicU64::new(0);
 

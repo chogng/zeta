@@ -3,12 +3,12 @@ use zeta_ui::{
     ContextMenuItem, ContextMenuSelection, ContextMenuStyle, ContextViewPlacement, CornerRadii,
     Edges, Element, Point, Rect, Size, TextStyle, UiScene,
 };
-use zeta_ui_dispatch::{
+use zeta_winit::{ElementState, Key, KeyEvent, MouseButton, NamedKey};
+use zui::{
     AccessibilityRole, AccessibilitySelection, CursorFeedback, DispatchInvalidation,
     DispatchOutcome, ElementId, FocusBehavior, FocusDirection, InteractionFrame, NavigationAxis,
     NavigationGroupId, NodeAction, UiDispatch, UiNode,
 };
-use zeta_winit::{ElementState, Key, KeyEvent, MouseButton, NamedKey};
 
 use crate::NativeApp;
 use crate::shell_interaction::{

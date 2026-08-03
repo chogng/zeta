@@ -3,7 +3,7 @@ use zeta_ui::{
     Component, ComponentElement, Element, ListView, PaintIcon, PaintRect, Rect, TextBlock,
     TextStyle, TreeItemExpansion, TreeItemLayout, TreeView, TreeViewStyle, UiScene,
 };
-use zeta_ui_dispatch::{
+use zui::{
     AccessibilityExpansion, AccessibilityRole, CursorFeedback, FocusBehavior, InteractionFrame,
     NavigationAxis, NavigationGroupId, NodeAction, UiNode,
 };
@@ -239,8 +239,8 @@ fn draw_search_row(scene: &mut UiScene, bounds: Rect, label: &str, palette: Shel
     ));
 }
 
-fn search_result_element_id(index: usize) -> zeta_ui_dispatch::ElementId {
-    zeta_ui_dispatch::ElementId::scoped(
+fn search_result_element_id(index: usize) -> zui::ElementId {
+    zui::ElementId::scoped(
         SEARCH_RESULT_SCOPE,
         u32::try_from(index).unwrap_or(u32::MAX).saturating_add(1),
     )

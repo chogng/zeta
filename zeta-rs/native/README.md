@@ -65,7 +65,7 @@
 | 用户快捷键资源、验证与热更新 | `keybindings_resource::KeybindingsResource` | ✅；读取 `<ZETA_PROFILE_ROOT>/keybindings.json`，坏更新保留上一份有效规则 |
 | 快捷键模型、设置、录制与 Chord 提示 | [`zeta-keybinding`](../keybinding/README.md) | 委托；Native 提供命令行、事件 adapter 与保存接线 |
 | 平台无关快捷键模型、规则顺序与冲突解析 | [`zeta-keybinding`](../keybinding/README.md) | 委托 |
-| 命中、hover/press/capture、focus、键盘导航、cursor 与 accessibility semantics | `zeta-ui-dispatch` | 委托 |
+| 命中、hover/press/capture、focus、键盘导航、cursor 与 accessibility semantics | `zui` | 委托 |
 | accessibility semantics → 平台屏幕阅读器 | 尚无 native adapter | 尚未完成 |
 | Transparent native chrome 与窗口拖动 adapter | `zeta-winit` | 委托 |
 | ANSI parser、terminal grid 与 BlockList | `zeta-terminal::TerminalCore` | 委托 |
@@ -96,7 +96,6 @@ zeta-native → zeta-winit
                         → zeta-winit
                         → zui
             → zeta-ui → zui
-            → zeta-ui-dispatch → zui
             → zeta-keybinding
             → zeta-app-server-client
             → zeta-protocol
@@ -188,7 +187,7 @@ main
           → Agent Enter → App Server turn/start
           → Shell Enter → App Server turn/shell/start
           → composer caret bounds → native IME candidate area
-      → pointer → zeta_ui_dispatch::UiDispatch
+      → pointer → zui::UiDispatch
           → InteractionFrame reverse-order hit-test
           → hover / press / capture / focus → presentation rebuild
           → UiIntent → window drag 或 product action
@@ -301,8 +300,7 @@ radius 和纵向 ActionBar item geometry。打开时默认选择第一个 enable
 `SessionContextMenuAction` 已将 Pin、
 Close、Rename、Fork 映射为产品 command identity；当前 runtime 只有一个 PTY Session，因此
 这些 command 尚不执行 pinning、关闭、重命名或 fork，不得由 presentation state 伪造结果。
-`zeta-ui-dispatch` 是跨 native 组件的通用
-分发 crate：
+`zui` 是跨 native 组件的通用交互运行时：
 `InteractionFrame` 按 scene 构建顺序注册有父子关系的 `UiNode`，反向命中最上层节点，并投影
 accessibility role、label、bounds 与 focused state；`UiDispatch` 跨 frame 保存
 hover path、press/capture 和 focused identity，最后只返回 `UiIntent`。
@@ -448,12 +446,12 @@ retained widget tree，也不支持运行时编辑样式、跨 frame 选择 iden
 Sessions 搜索区域当前真实链路
 是 `SessionSidebar → SessionSidebarToolbar → SearchBox → InputBox`；不存在单独的 Header 组件。
 
-`zeta-ui-dispatch` 的 crate-level 实现契约见
-[`ui-dispatch/README.md`](../ui-dispatch/README.md)。后续 file tree、tabs、chat 和 editor
+`zui` 的 crate-level 实现契约见
+[`zui/README.md`](../zui/README.md)。后续 file tree、tabs、chat 和 editor
 首次接入时，应由各自 presentation owner 分配稳定
 `ElementId`、注册父子节点、role/label/bounds、focus policy 与 activation intent。动态行或 tab
 必须在仍表示同一对象时保持 identity；domain selection、document model、chat turn 或 filesystem
-state 不进入 `zeta-ui-dispatch`。
+state 不进入 `zui`。
 
 macOS 可能在新窗口激活完成前把首次 surface acquisition 报为 occluded；该 frame 会被跳过。
 `NativeApp` 在后续 `WindowEvent::Occluded(false)` 上重新请求 redraw，保证首个可见 frame 不会

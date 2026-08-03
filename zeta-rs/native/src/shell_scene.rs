@@ -52,7 +52,7 @@ use crate::workspace_context::WorkspaceContext;
 use crate::workspace_path_picker::{WorkspacePathPicker, WorkspacePathPickerState};
 use crate::workspace_surface::WorkspaceSurfaceKind;
 use zeta_editor::CodeEditorStyle;
-use zeta_ui_dispatch::{
+use zui::{
     AccessibilityNode, AccessibilityRole, CursorFeedback, InteractionFrame,
     InteractionFrameCheckpoint, UiDispatch, UiNode,
 };

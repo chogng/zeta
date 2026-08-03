@@ -36,10 +36,8 @@ use zeta_text_file::{TextFileAccess, TextFileDiskVersion, TextFileModifiedAt, Te
 use zeta_ui::{
     CaretVisibility, Color, Point, ScrollbarPresentation, TextInputCommand, TextInputLayoutEngine,
 };
-use zeta_ui_dispatch::{
-    AccessibilityRole, CursorFeedback, DispatchInvalidation, UiDispatch, UiIntent,
-};
 use zeta_winit::WindowControlInsets;
+use zui::{AccessibilityRole, CursorFeedback, DispatchInvalidation, UiDispatch, UiIntent};
 
 fn viewport() -> LogicalViewport {
     LogicalViewport {
@@ -454,10 +452,7 @@ fn expanded_sidebar_reflows_the_terminal_and_publishes_a_selected_session_tab() 
     assert_eq!(add_session.role, AccessibilityRole::Button);
     assert_eq!(add_session.label, "Add new session");
     assert_eq!(session_tab.role, AccessibilityRole::Tab);
-    assert_eq!(
-        session_tab.selection,
-        zeta_ui_dispatch::AccessibilitySelection::Selected
-    );
+    assert_eq!(session_tab.selection, zui::AccessibilitySelection::Selected);
     assert_eq!(resize_handle.role, AccessibilityRole::Separator);
     assert_eq!(resize_handle.label, "Resize sessions sidebar");
     assert_eq!(resize_handle.value.as_deref(), Some("200 pixels"));

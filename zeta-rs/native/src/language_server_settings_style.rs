@@ -3,7 +3,7 @@ use zeta_ui::{
     Border, ButtonBackgrounds, ButtonStyle, Color, CornerRadii, Edges, InputBoxStateColors,
     InputBoxStyle, Rect, TextStyle,
 };
-use zeta_ui_dispatch::ElementId;
+use zui::ElementId;
 
 use crate::language_server_settings::{
     LANGUAGE_SERVER_BASH, LANGUAGE_SERVER_JSON, LANGUAGE_SERVER_MODE_AUTOMATIC,

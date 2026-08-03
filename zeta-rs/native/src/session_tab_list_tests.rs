@@ -2,9 +2,7 @@ use super::{SessionTab, SessionTabList};
 use crate::shell_interaction::{ACTIVE_SESSION_TAB, SESSION_TAB_LIST};
 use crate::shell_style::SHELL_PALETTE;
 use zeta_ui::{Color, Component, CornerRadii, FontWeight, Point, Rect, UiScene};
-use zeta_ui_dispatch::{
-    AccessibilityRole, AccessibilitySelection, ElementId, InteractionFrame, UiDispatch,
-};
+use zui::{AccessibilityRole, AccessibilitySelection, ElementId, InteractionFrame, UiDispatch};
 
 const SECOND_SESSION_TAB: ElementId = ElementId::scoped(1, 16);
 

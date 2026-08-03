@@ -1,5 +1,5 @@
 use std::ops::Range;
-use zeta_ui_dispatch::ElementId;
+use zui::ElementId;
 
 const SHELL_SCOPE: u32 = 1;
 const FILE_EDITOR_ACTION_SCOPE: u32 = 7;
