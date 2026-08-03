@@ -123,6 +123,23 @@ export class WorkbenchSessionService extends DisposableOwner implements IWorkben
     }
   }
 
+  async stopSession(sessionId: SessionId): Promise<void> {
+    await this.initialize();
+    const session = this._sessions.find((candidate) => candidate.sessionId === sessionId && candidate.status === "active");
+    if (!session) throw new Error(`Active Session is not available: ${sessionId}`);
+    this.setState("stopping");
+    try {
+      const result = await this.api.stop({ commandId: commandId("stop-session"), sessionId, expectedSequence: session.sequence });
+      this._sessions = this._sessions.map((candidate) => candidate.sessionId === sessionId ? toSession(result.session) : candidate);
+      if (this._active?.session.sessionId === sessionId) this._active = firstActiveThread(this._sessions);
+      this.restoreAvailableSelection();
+      this.setState("ready");
+    } catch (error) {
+      this.setError(error);
+      throw error;
+    }
+  }
+
   async setModel(sessionId: SessionId, model: ModelRef): Promise<void> {
     await this.initialize();
     const session = this._sessions.find((candidate) => candidate.sessionId === sessionId && candidate.status === "active");

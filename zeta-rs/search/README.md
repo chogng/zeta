@@ -92,8 +92,8 @@ trusted host root + frozen rg
 ## 验证与修改影响
 
 ```bash
-cargo test --manifest-path zeta-rs/Cargo.toml -p zeta-search
-cargo test --manifest-path zeta-rs/Cargo.toml -p zeta-app-server workspace_search --lib
+cargo test --manifest-path Cargo.toml -p zeta-search
+cargo test --manifest-path Cargo.toml -p zeta-app-server workspace_search --lib
 bazel test //zeta-rs/search:search-unit-tests
 ```
 

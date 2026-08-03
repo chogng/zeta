@@ -38,8 +38,8 @@ markers、mount order、protected metadata 或 denial classification 时，必�
 `zeta-bwrap` builder tests、package contract 和系统文档。
 
 ```bash
-cargo test --manifest-path zeta-rs/Cargo.toml -p zeta-linux-sandbox
-cargo clippy --manifest-path zeta-rs/Cargo.toml \
+cargo test --manifest-path Cargo.toml -p zeta-linux-sandbox
+cargo clippy --manifest-path Cargo.toml \
   -p zeta-linux-sandbox --all-targets --no-deps -- -D warnings
 bazel test //zeta-rs/linux-sandbox:linux-sandbox-unit-tests
 ```

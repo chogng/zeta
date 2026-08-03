@@ -54,8 +54,8 @@ presentation 真正支持多 caret。
 ## 修改影响与验证
 
 ```bash
-cargo test --manifest-path zeta-rs/Cargo.toml -p zeta-editor-core
-cargo clippy --manifest-path zeta-rs/Cargo.toml -p zeta-editor-core --all-targets -- -D warnings
+cargo test --manifest-path Cargo.toml -p zeta-editor-core
+cargo clippy --manifest-path Cargo.toml -p zeta-editor-core --all-targets -- -D warnings
 ```
 
 修改 UTF-16 mapping、transaction validation 或 history 时必须同步检查 `document_tests.rs`。如果该 crate

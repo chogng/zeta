@@ -42,6 +42,9 @@ const groups = [
     label: "Agent 与运行时",
     files: [
       "core",
+      "agent-harness-design",
+      "agent-tools-spec",
+      "agent-harness-implementation-plan",
       "core-context",
       "core-multi-agent",
       "exec",
@@ -196,11 +199,15 @@ const systemDocs = docFiles.map((path) => {
   return parseDocument(path, slug, groupBySlug.get(slug) ?? "其他系统文档");
 });
 
-const crateDocs = walkReadmes(join(repositoryRoot, "zeta-rs"))
+const crateRoots = [
+  { directory: join(repositoryRoot, "zeta-rs"), prefix: "" },
+  { directory: join(repositoryRoot, "zeterm", "crates"), prefix: "zeterm/" },
+];
+const crateDocs = crateRoots.flatMap(({ directory, prefix }) => walkReadmes(directory)
   .map((path) => {
-    const cratePath = relative(join(repositoryRoot, "zeta-rs"), dirname(path)).replaceAll("\\", "/");
-    return parseDocument(path, `crates/${cratePath}`, "Crate 实现参考");
-  })
+    const cratePath = relative(directory, dirname(path)).replaceAll("\\", "/");
+    return parseDocument(path, `crates/${prefix}${cratePath}`, "Crate 实现参考");
+  }))
   .sort((left, right) => left.title.localeCompare(right.title));
 
 const allDocs = [...systemDocs, ...crateDocs];

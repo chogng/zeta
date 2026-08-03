@@ -144,7 +144,7 @@ def main(arguments: Optional[Sequence[str]] = None) -> int:
         cargo=args.cargo,
         cargo_profile=args.cargo_profile,
     )
-    version = read_workspace_version(REPOSITORY_ROOT / "zeta-rs" / "Cargo.toml")
+    version = read_workspace_version(REPOSITORY_ROOT / "Cargo.toml")
     output = args.package_dir.expanduser().resolve()
     build_package_directory(
         output,

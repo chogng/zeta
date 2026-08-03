@@ -93,7 +93,9 @@ impl FileWatcher {
                 move |result| {
                     let _ = raw_tx.send(result);
                 },
-                Config::default().with_poll_interval(interval),
+                Config::default()
+                    .with_compare_contents(true)
+                    .with_poll_interval(interval),
             )?),
         };
         let file_watcher = Self {

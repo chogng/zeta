@@ -4,12 +4,16 @@ use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::Duration;
 use zeta_config::{ConfigChange, SkillEnablement, SkillSourceEnablement, SkillsConfig};
-use zeta_file_watcher::{DebouncedWatchReceiver, FileWatcher, WatchPath};
+use zeta_file_watcher::DebouncedWatchReceiver;
+use zeta_file_watcher::FileWatcher;
+use zeta_file_watcher::FileWatcherBackend;
+use zeta_file_watcher::WatchPath;
 use zeta_skills::{
     SkillCatalog, SkillCatalogEntry, SkillDiagnosticCode, SkillSourceId, SkillSourceRoot,
 };
 
 const BUILT_IN_SOURCE_ID: &str = "builtin:skill-source:zeta-release";
+const ALIASED_PATH_POLL_INTERVAL: Duration = Duration::from_millis(100);
 
 /// Supplies the latest resolved user Skill configuration to the App Server-owned runtime.
 ///
@@ -226,16 +230,17 @@ fn watch_skill_sources(
         .upgrade()
         .and_then(|runtime| runtime.config.config_changes());
     tokio_runtime.block_on(async move {
-        let Ok(file_watcher) = FileWatcher::new() else {
-            return;
-        };
-        let file_watcher = Arc::new(file_watcher);
-        let (subscriber, receiver) = file_watcher.add_subscriber();
         let Some(skill_runtime) = runtime.upgrade() else {
             return;
         };
         let mut watched_paths = skill_runtime.watched_paths();
+        let backend = watcher_backend(&watched_paths);
         drop(skill_runtime);
+        let Ok(file_watcher) = FileWatcher::new_with_backend(backend) else {
+            return;
+        };
+        let file_watcher = Arc::new(file_watcher);
+        let (subscriber, receiver) = file_watcher.add_subscriber();
         let Ok(mut registration) = subscriber.register_paths(watch_paths(&watched_paths)) else {
             return;
         };
@@ -298,6 +303,20 @@ fn watch_paths(paths: &[PathBuf]) -> Vec<WatchPath> {
             recursive: path.is_dir(),
         })
         .collect()
+}
+
+fn watcher_backend(paths: &[PathBuf]) -> FileWatcherBackend {
+    if paths.iter().any(|path| {
+        path.canonicalize()
+            .map(|canonical| canonical != *path)
+            .unwrap_or(false)
+    }) {
+        FileWatcherBackend::Polling {
+            interval: ALIASED_PATH_POLL_INTERVAL,
+        }
+    } else {
+        FileWatcherBackend::Recommended
+    }
 }
 
 fn compose_sources(

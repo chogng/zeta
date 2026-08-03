@@ -15,6 +15,7 @@ export function createDisconnectedSessionApi(unavailable: UnavailableOperation):
     archiveThread: () => unavailable("session.archiveThread"),
     complete: () => unavailable("session.complete"),
     archive: () => unavailable("session.archive"),
+    stop: () => unavailable("session.stop"),
     setModel: () => unavailable("session.setModel"),
   };
 }
@@ -51,6 +52,7 @@ export function createViteDevSessionApi(connection: ViteDevAppServerConnection):
     archiveThread: (params) => viteDevRequest(connection, "session/thread/archive", params),
     complete: (params) => viteDevRequest(connection, "session/complete", params),
     archive: (params) => viteDevRequest(connection, "session/archive", params),
+    stop: (params) => viteDevRequest(connection, "session/stop", params),
     setModel: (params) => viteDevRequest(connection, "session/model/set", params),
   };
 }

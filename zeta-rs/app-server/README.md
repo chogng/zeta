@@ -81,6 +81,12 @@ in-process 路径都会使用同一个启动时解析结果：
 [`zeta-install-context`](../install-context/README.md)，App Server 只负责把候选交给
 `RipgrepExecutable` 验证并组合成 Tool service。
 
+Tab 关闭的停止语义属于本层适配，而不是 `zeta-protocol` 的新 command：前端通过
+`session/stop` 请求到达 `AppServer::session_stop`，后者调用 Core 的
+`SessionCoordinator::stop`，再从 durable gap 发布 Session 和 child Thread updates。单纯
+`AppServer::close_connection` 只释放 connection-owned delivery/resource state，不停止产品
+Session。
+
 ## 文件与职责
 
 ```text
@@ -117,6 +123,8 @@ src/
 | Symbol | 可见性 | 当前职责 | 方向约束 |
 | --- | --- | --- | --- |
 | `AppServer::dispatch` | private | initialization gate 后对 `ClientMethod` exhaustive dispatch | method string lookup只来自 protocol registry |
+| `AppServer::session_stop` | `pub(super)` | 解码适配层 `session/stop`，保存 child Thread cursors，调用 Core 停止编排并发布 durable gaps | 不在 App Server reducer 或 `zeta-protocol` 中定义 Stop command |
+| `AppServer::turn_start` / `AppServer::shell_turn_start` | `pub(super)` | 解析 Session 模型后通过 `SessionCoordinator` 的 Session-aware start gate 接受 Turn | 不直接绕过 Session lifecycle 调用低层 Thread start |
 | `decode<T>` | crate-private | params JSON → typed DTO，统一 InvalidParams | operation 不手读 arbitrary fields |
 | `result<T>` | crate-private | typed result → JSON，统一 serialization failure | external result shape 由 protocol DTO 决定 |
 | `core_error` | crate-private | Core error → stable App Server error | 不回传 internal error string |
@@ -232,10 +240,11 @@ Turns；source Thread 及其后续历史不被改写。调用方随后订阅新 
 `turn/start`：
 
 1. 校验 Thread 属于 supplied Session；
-2. 读取 Session 当前模型，并把它作为 `TurnAccepted` 的 durable snapshot；
-3. `start_turn` 使用 typed command ID + exact expected sequence；
-4. replay 时读取既有 Turn，terminal failure/interruption 不伪装成 success；
-5. 新 start 发布 durable update 后调用 `TurnExecutor::start`。
+2. 校验 Session 仍为 active；
+3. 读取 Session 当前模型，并把它作为 `TurnAccepted` 的 durable snapshot；
+4. `start_turn` 使用 typed command ID + exact expected sequence；
+5. replay 时读取既有 Turn，terminal failure/interruption 不伪装成 success；
+6. 新 start 发布 durable update 后调用 `TurnExecutor::start`。
 
 `model/list` 由 `ModelCatalog` 投影当前已配置 provider 的可选模型；`session/model/set`
 先通过同一 catalog 校验，再提交 Session command。全局 `preferredModel` 只作为新 Session

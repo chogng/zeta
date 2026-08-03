@@ -38,6 +38,7 @@ use zeta_core::{
     SetSessionModelRequest, ShellTurnInvocation, StartShellTurnRequest, StartTurnDisposition,
     StartTurnRequest, TurnStatus,
 };
+use zeta_protocol::SessionStatus;
 use zeta_protocol::UserInput;
 use zeta_typst::{
     TypstCompileError, TypstCompileOutcome, TypstDiagnostic, TypstDiagnosticSeverity,
@@ -340,6 +341,47 @@ impl AppServer {
         self.session_lifecycle(params, false)
     }
 
+    pub(super) fn session_stop(
+        &self,
+        _connection: &mut ConnectionState,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        let params: SessionCommandParams = decode(params)?;
+        let session_before = self
+            .sessions
+            .read_session(&params.session_id)
+            .map_err(core_error)?;
+        let thread_sequences = session_before
+            .threads
+            .iter()
+            .map(|thread| {
+                self.sessions
+                    .threads()
+                    .read_thread(&thread.membership.thread_id)
+                    .map(|snapshot| (thread.membership.thread_id.clone(), snapshot.sequence))
+                    .map_err(core_error)
+            })
+            .collect::<Result<Vec<_>, RpcError>>()?;
+        self.sessions
+            .stop(SessionLifecycleRequest {
+                command_id: params.command_id,
+                session_id: params.session_id.clone(),
+                expected_sequence: SequenceExpectation::Exact(params.expected_sequence),
+            })
+            .map_err(core_error)?;
+        self.notify_session_updates(&params.session_id, params.expected_sequence)?;
+        for (thread_id, sequence) in thread_sequences {
+            self.notify_thread_updates(&thread_id, sequence)?;
+        }
+        result(&SessionResult {
+            session: self
+                .sessions
+                .read_session(&params.session_id)
+                .map_err(core_error)?
+                .public_session(),
+        })
+    }
+
     fn session_lifecycle(&self, params: &Value, complete: bool) -> Result<Value, RpcError> {
         let params: SessionCommandParams = decode(params)?;
         let request = SessionLifecycleRequest {
@@ -431,6 +473,12 @@ impl AppServer {
             .sessions
             .read_session(&params.session_id)
             .map_err(core_error)?;
+        if session.status != SessionStatus::Active {
+            return Err(RpcError::new(
+                -32010,
+                AppServerErrorName::CoreOperationFailed,
+            ));
+        }
         let model = match session.model {
             Some(model) => Some(model),
             None => self
@@ -444,8 +492,8 @@ impl AppServer {
             .map_err(|_| RpcError::new(-32000, AppServerErrorName::ServerOverloaded))?;
         let start = self
             .sessions
-            .threads()
             .start_turn(
+                &params.session_id,
                 &params.thread_id,
                 StartTurnRequest {
                     command_id: params.command_id,
@@ -520,10 +568,22 @@ impl AppServer {
                 AppServerErrorName::CoreOperationFailed,
             ));
         }
+        if self
+            .sessions
+            .read_session(&params.session_id)
+            .map_err(core_error)?
+            .status
+            != SessionStatus::Active
+        {
+            return Err(RpcError::new(
+                -32010,
+                AppServerErrorName::CoreOperationFailed,
+            ));
+        }
         let start = self
             .sessions
-            .threads()
             .start_shell_turn(
+                &params.session_id,
                 &params.thread_id,
                 StartShellTurnRequest {
                     command_id: params.command_id,

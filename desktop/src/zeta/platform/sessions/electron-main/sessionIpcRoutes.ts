@@ -57,6 +57,11 @@ export function sessionIpcRoutes(supervisor: AppServerSupervisor): readonly IpcR
       invoke: (params) => supervisor.request(APP_SERVER_METHODS["session/archive"], params),
     }),
     route({
+      channel: "zeta:session:stop",
+      validate: sessionCommandParams,
+      invoke: (params) => supervisor.request(APP_SERVER_METHODS["session/stop"], params),
+    }),
+    route({
       channel: "zeta:session:model:set",
       validate: sessionModelSetParams,
       invoke: (params) => supervisor.request(APP_SERVER_METHODS["session/model/set"], params),

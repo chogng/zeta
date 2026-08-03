@@ -1,7 +1,7 @@
 # `zeta-file-search`
 
 > 本 README 是 workspace 文件路径 fuzzy search 的实现契约。TUI `@file` 交互由
-> [`zeta-rs/tui/README.md`](../tui/README.md) 维护。模型侧的文件内容搜索通过
+> [`zeta-code/tui/README.md`](../../zeta-code/tui/README.md) 维护。模型侧的文件内容搜索通过
 > [`zeta-rs/search/README.md`](../search/README.md) 完成；可执行文件的
 > discovery 与冻结边界见 [`zeta-rs/shell-command/README.md`](../shell-command/README.md)。
 
@@ -55,8 +55,8 @@ revision 和 query，避免输入从 A 变成 B 再回到 A 时接受第一次 A
 独立 binary 是 `PathSearchHandle` 的开发者/脚本入口，不是 TUI 启动的子进程：
 
 ```bash
-cargo run --manifest-path zeta-rs/Cargo.toml -p zeta-file-search -- src -C .
-cargo run --manifest-path zeta-rs/Cargo.toml -p zeta-file-search -- \
+cargo run --manifest-path Cargo.toml -p zeta-file-search -- src -C .
+cargo run --manifest-path Cargo.toml -p zeta-file-search -- \
   --json --compute-indices --limit 20 mention -C zeta-rs
 ```
 
@@ -98,9 +98,9 @@ limit 截断时，warning 写入 stderr；JSON match 仍写入 stdout，方便�
 ## 验证
 
 ```bash
-cargo test --manifest-path zeta-rs/Cargo.toml -p zeta-file-search
-cargo clippy --manifest-path zeta-rs/Cargo.toml -p zeta-file-search --all-targets --no-deps -- -D warnings
-cargo run --manifest-path zeta-rs/Cargo.toml -p zeta-file-search -- --help
+cargo test --manifest-path Cargo.toml -p zeta-file-search
+cargo clippy --manifest-path Cargo.toml -p zeta-file-search --all-targets --no-deps -- -D warnings
+cargo run --manifest-path Cargo.toml -p zeta-file-search -- --help
 bazel test //zeta-rs/file-search:file-search-unit-tests
 bazel build //zeta-rs/file-search:zeta-file-search
 ```

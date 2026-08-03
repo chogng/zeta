@@ -239,8 +239,8 @@ parser 必须位于新的 private module，设置 byte/entry/depth 上限，拒�
 ## 9. 验证
 
 ```bash
-cargo test --manifest-path zeta-rs/Cargo.toml -p zeta-agent-import
-cargo clippy --manifest-path zeta-rs/Cargo.toml \
+cargo test --manifest-path Cargo.toml -p zeta-agent-import
+cargo clippy --manifest-path Cargo.toml \
   -p zeta-agent-import --all-targets --no-deps -- -D warnings
 bazel test //zeta-rs/agent-import:agent-import-unit-tests
 ```

@@ -267,8 +267,8 @@ policy/approval。它们都不能复制本 crate 的 command/parsing 实现。
 正常 workspace 状态下运行：
 
 ```bash
-cargo test --manifest-path zeta-rs/Cargo.toml -p zeta-git
-cargo clippy --manifest-path zeta-rs/Cargo.toml -p zeta-git \
+cargo test --manifest-path Cargo.toml -p zeta-git
+cargo clippy --manifest-path Cargo.toml -p zeta-git \
   --all-targets --no-deps -- -D warnings
 bazel test //zeta-rs/git:git-unit-tests
 ```

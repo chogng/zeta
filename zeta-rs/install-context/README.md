@@ -83,8 +83,8 @@ host composition
 ## 验证
 
 ```bash
-cargo test --manifest-path zeta-rs/Cargo.toml -p zeta-install-context
-cargo clippy --manifest-path zeta-rs/Cargo.toml \
+cargo test --manifest-path Cargo.toml -p zeta-install-context
+cargo clippy --manifest-path Cargo.toml \
   -p zeta-install-context --all-targets --no-deps -- -D warnings
 bazel test //zeta-rs/install-context:install-context-unit-tests
 ```

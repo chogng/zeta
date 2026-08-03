@@ -33,11 +33,40 @@ Session、Thread、Turn 和更新流，不建立第二套领域模型。
 | 客户端需求 | 使用方式 | 关键保证 |
 | --- | --- | --- |
 | 创建一次工作 | 创建 Session，再创建 Thread 并启动 Turn | 产品身份与持久化语义来自统一协议 |
+| 关闭一个 Session Tab | 前端通过 App Server 适配层调用 `session/stop` | 持久化停止 Session，并中断其所有活动子 Turn；仅断开连接不会停止 Session |
 | 持续显示执行进度 | 订阅 Thread 更新并按序列消费 | 发现缺口时重新读取快照，不猜测丢失状态 |
 | 修改配置或资源 | 调用类型化方法并携带命令身份 | 重复命令可重放结果，冲突载荷会被拒绝 |
 | 响应批准或用户输入 | 回复等待中的类型化请求 | 回复绑定精确请求和当前 Thread |
 | 连接本地 App Server | 先初始化并校验能力和模式哈希 | 初始化前不能调用产品方法 |
 | 协议发生不兼容变化 | 同步修改 Rust 类型、生成物和调用方 | 开发期不保留隐藏的旧 DTO 入口 |
+
+### 唯一外部门禁
+
+这条规则适用于所有 `Session`、`Thread`、`Turn`、`ThreadItem` 产品能力：App Server 同时是
+客户端请求进入 Core 的唯一入口，也是 Core 更新离开系统的唯一出口。
+
+| 参与者 | 允许路径 | 禁止路径 |
+| --- | --- | --- |
+| Desktop、CLI、TUI 和其他客户端 | 版本化 App Server 协议 → 分发器 | 直接链接 Core、Store、Provider 或读取私有运行时接口 |
+| 进程内宿主 | 类型化客户端 → 同一个 App Server 分发器 | 为性能增加隐藏的进程内业务方法 |
+| App Server | 校验、路由、订阅、DTO 编解码和事件投影 → Core | 复制领域归约器（reducer）、直接写 Store 或消费 Provider 内部流 |
+| Core | 持有 Session/Thread/Turn/Item 权威状态并调用内部端口 | 依赖 App Server wire、客户端状态或 UI 生命周期 |
+
+```mermaid
+flowchart LR
+    client["Desktop / CLI / TUI / other client"] --> request["versioned App Server request"]
+    request --> dispatcher["App Server dispatcher"]
+    dispatcher --> core["Core Session/Thread/Turn runtime"]
+    core --> provider["Provider / tools / stores"]
+    core --> dispatcher
+    dispatcher --> events["App Server result + update stream"]
+    events --> client
+```
+
+进程内 App Server、stdio/JSONL 和未来的远程 App Server 只是不同传输方式。它们必须保持相同的
+请求、结果、错误和通知语义。`zeterm` 当前的直接 Rust 终端/PTY 组合只覆盖
+终端宿主；一旦该宿主承载 Agent 的 Session/Thread/Turn/Item 能力，也必须接入同一 App Server
+门禁，不能新增 Core 旁路。
 
 ## 1. 产品模型
 
@@ -147,12 +176,13 @@ inline argument parsing；提交仍通过 `turn/start.input`，并保留 `/name`
 | `session/thread/archive` | Session | archive membership |
 | `session/complete` | Session | 完成任务 |
 | `session/archive` | Session | archive 任务 |
+| `session/stop` | Session + child Threads | 适配层停止 Session：archive Session 并中断所有非终态 child Turn |
 | `session/model/set` | Session | 持久化当前 Session 的模型选择 |
 | `model/list` | global model catalog | 列出当前已配置 provider 可选择的模型 |
 | `thread/read` | Thread | 读取 canonical snapshot |
 | `thread/subscribe` | connection | snapshot + `afterSequence` 之后的 durable gap |
 | `thread/unsubscribe` | connection | 删除订阅 |
-| `turn/start` | Thread | 接受并执行 Turn |
+| `turn/start` | Session gate + Thread | Session active 时接受并执行 Turn |
 | `turn/interrupt` | Thread | 中断非终态 Turn |
 | `turn/interaction/resolve` | Thread | 用 exact request identity 解决一个 outstanding interaction |
 | `config/read` | config | 读取配置 |
@@ -342,8 +372,14 @@ Thread 共享后续 sequence。
 
 ### 生命周期
 
-`session/thread/archive`、`session/complete` 和 `session/archive` 都要求 `commandId`、
-`sessionId` 与 `expectedSequence`。Archived Session 不允许再修改。
+`session/thread/archive`、`session/complete`、`session/archive` 和 `session/stop` 都要求
+`commandId`、`sessionId` 与 `expectedSequence`。Archived Session 不允许再修改。
+
+`session/stop` 是 App Server 的适配层入口，不是 `zeta-protocol` 的 canonical
+`SessionCommand`。前端关闭一个 Tab 时调用这个入口；App Server 将它交给 Core 的内部停止编排，
+先 durable archive Session，再中断该 Session 下所有活动 child Turn。Core 的 Session 状态会阻止
+并发的 `turn/start` 继续接受新 Turn，子 Thread 的中断仍通过各自 Thread update 发布。连接断开只
+释放订阅、请求和资源 ownership，不隐式触发 `session/stop`。
 
 ### 会话模型
 
@@ -579,7 +615,7 @@ logout 转发 upstream logout，并将失败映射为稳定的 redacted diagnost
 修改契约后执行：
 
 ```bash
-cargo run --manifest-path zeta-rs/Cargo.toml \
+cargo run --manifest-path Cargo.toml \
   -p zeta-app-server-protocol --bin write_schema_fixtures
 node desktop/scripts/sync-app-server-protocol.mjs
 ```

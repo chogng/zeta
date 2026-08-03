@@ -180,6 +180,11 @@ Command 表达产品意图，不代表已经发生，也不能直接写入 proje
 `CommandId` 用于 retry-safe typed identity。`expectedSequence` 用于 optimistic
 concurrency。JSON-RPC request ID 不得替代 CommandId。
 
+前端关闭 Tab 不会扩展这组 canonical command。它是 App Server 适配层的产品动作：外部
+`session/stop` 由适配层映射到 Core 的内部停止编排，持久化既有的 Session archive fact，并协调
+中断其 child Thread 中的活动 Turn。这样 UI 的 Tab/session 语义不会泄漏进 `zeta-protocol`；连接
+断开也不会被解释成产品 Session 停止。
+
 所有 durable side effect 的 receipt 必须保存：
 
 ```text
@@ -546,6 +551,7 @@ zeta-rs/protocol/
 | Session/Thread 独立 sequence | 已完成 | model、store 和 fork lineage 已覆盖 |
 | durable Event 与 live Update 分离 | 基础完成 | store 类型只能接受 durable event |
 | typed Session/Thread command | 基础完成 | Core receipt 已使用；无消费者的 shared envelope 已删除 |
+| Tab 关闭到 Session 停止 | 已完成 | Chat 前端 → App Server `session/stop` → Core 内部停止编排；连接断开不触发停止 |
 | ThreadItem durable transcript | 基础完成 | text/image message、reasoning、plan、tool item 可重建 |
 | transient Item streaming | 类型已定义 | 当前没有完整异步 model stream producer |
 | Agent request/response | 基础完成 | durable request/resolve/cancel、deadline value、request correlation 和 typed resolve 已实现；owner delivery/timer 未实现 |
@@ -657,16 +663,16 @@ zeta-rs/protocol/
 每次修改 `zeta-protocol` 至少执行：
 
 ```bash
-cargo fmt --manifest-path zeta-rs/Cargo.toml --all -- --check
-cargo clippy --manifest-path zeta-rs/Cargo.toml -p zeta-protocol --all-targets -- -D warnings
-cargo test --manifest-path zeta-rs/Cargo.toml -p zeta-protocol
-cargo test --manifest-path zeta-rs/Cargo.toml -p zeta-app-server-protocol
+cargo fmt --manifest-path Cargo.toml --all -- --check
+cargo clippy --manifest-path Cargo.toml -p zeta-protocol --all-targets -- -D warnings
+cargo test --manifest-path Cargo.toml -p zeta-protocol
+cargo test --manifest-path Cargo.toml -p zeta-app-server-protocol
 ```
 
 如果改动进入 App Server external contract，还必须：
 
 ```bash
-cargo run --manifest-path zeta-rs/Cargo.toml \
+cargo run --manifest-path Cargo.toml \
   -p zeta-app-server-protocol --bin write_schema_fixtures
 node desktop/scripts/sync-app-server-protocol.mjs
 corepack pnpm --dir desktop run typecheck:renderer

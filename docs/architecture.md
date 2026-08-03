@@ -20,13 +20,18 @@ crate 名称开始倒推。本文是面向开发者的总入口：先建立产�
 阅读顺序应当始终是“用户问题 → 系统行为 → 责任边界 → 执行流程 → 实现符号”。如果必须先理解
 大量 crate、类型和函数名才能知道系统在做什么，说明文档的信息顺序需要调整。
 
+对于 `Session`、`Thread`、`Turn`、`ThreadItem` 产品能力，App Server 是唯一的外部入口和出口。
+Desktop、CLI、TUI 以及其他客户端只能通过版本化 App Server 契约读写产品状态和订阅更新；Core、
+Store、Provider 与私有运行时接口不对客户端开放。进程内嵌只改变传输成本，不改变这条门禁规则。
+
 ## 2. 一次请求如何穿过 Zeta
 
 下面是用于理解和审计的产品级流程，不是某个进程内部的函数调用图：
 
 ```mermaid
 flowchart TD
-    user["用户通过 Desktop、CLI 或 TUI 提出请求"] --> session["会话系统<br/>识别 Session、Thread 与 Turn"]
+    user["用户通过 Desktop、CLI、TUI 或其他客户端提出请求"] --> gate["App Server<br/>唯一外部门禁"]
+    gate --> session["会话系统<br/>识别 Session、Thread 与 Turn"]
     session --> context["上下文系统<br/>选择、组织和压缩模型输入"]
     context --> model["模型系统<br/>解析供应商、模型与调用配置"]
     model --> agent["Agent 运行时<br/>消费模型输出并推进 Turn"]
@@ -68,7 +73,7 @@ flowchart TD
 | --- | --- | --- | --- | --- |
 | 会话系统 | 一次工作如何被识别、恢复和持续保存？ | Session、Thread、Turn、事件顺序与持久化事务 | Session、Thread、Store 与 rollout 是否存在重复权威 | [`core.md`](core.md)、[`protocol.md`](protocol.md) |
 | 上下文系统 | 当前模型究竟能看到什么？ | 上下文选择、预算、压缩、恢复和每个 Thread 的上下文状态 | 持久事实、模型输入和 UI 展示状态是否混为一体 | [`core-context.md`](core-context.md) |
-| Agent 运行时 | 模型输出如何推进一次 Turn？ | Agent 生命周期、模型回合、工具回合、取消与多 Agent 协调 | 调度、上下文、工具和持久化是否有唯一协调者 | [`core-multi-agent.md`](core-multi-agent.md)、[`zeta-agent-runtime-architecture.md`](zeta-agent-runtime-architecture.md) |
+| Agent 运行时 | 模型输出如何推进一次 Turn？ | Agent 生命周期、模型回合、工具回合、取消与多 Agent 协调 | 调度、上下文、工具和持久化是否有唯一协调者 | [`agent-harness-design.md`](agent-harness-design.md)、[`core-multi-agent.md`](core-multi-agent.md)、[`zeta-agent-runtime-architecture.md`](zeta-agent-runtime-architecture.md) |
 
 ### 3.2 能力、决策与执行
 
@@ -86,7 +91,7 @@ flowchart TD
 | 系统 | 回答的核心问题 | 应当拥有 | 重点审计边界 | 权威文档 |
 | --- | --- | --- | --- | --- |
 | 扩展系统 | 外部能力如何被发现、激活和撤销？ | Plugin 安装与激活、Skill 加载、MCP 会话和能力贡献 | 扩展发现、信任、授权、绑定和运行时消费是否分层 | [`plugins.md`](plugins.md)、[`skills.md`](skills.md)、[`mcp.md`](mcp.md) |
-| App Server 与协议 | 产品入口如何调用同一套权威能力？ | 对外方法、DTO、事件、订阅、版本和客户端契约 | 协议层是否偷偷拥有产品决定或持久化规则 | [`zeta-app-server-api.md`](zeta-app-server-api.md)、[`app-server-client.md`](app-server-client.md)、[`protocol.md`](protocol.md) |
+| App Server 与协议 | 产品入口如何调用同一套权威能力？ | 唯一外部进入/输出边界、对外方法、DTO、事件、订阅、版本和客户端契约 | 客户端是否绕过门禁，或协议层是否偷偷拥有产品决定或持久化规则 | [`zeta-app-server-api.md`](zeta-app-server-api.md)、[`app-server-client.md`](app-server-client.md)、[`protocol.md`](protocol.md) |
 | 产品界面 | 用户如何观察和控制这些系统？ | Desktop、CLI、TUI 的交互、呈现和平台适配 | 界面是否复制 Core 状态或在本地发明业务规则 | [`zeta-desktop-architecture.md`](zeta-desktop-architecture.md)、[`zeta-cli-architecture.md`](zeta-cli-architecture.md)、[`tui.md`](tui.md) |
 
 系统名称不是按照 crate 数量划分的。一个系统可以由多个 crate 实现，一个 crate 也可能只是某个
@@ -154,7 +159,10 @@ flowchart TD
 
 ## 6. 当前实现基础
 
-当前已经具备用于继续审计和演进的基础，但“存在实现”不等于“边界已经验证清楚”：
+当前已经具备用于继续审计和演进的基础，但“存在实现”不等于“边界已经验证清楚”。Agent 执行
+面的逐组件状态总账（已实现 / 部分 / 仅设计 / 推迟）与分阶段实施计划由
+[`zeta-agent-runtime-architecture.md`](zeta-agent-runtime-architecture.md#2-组件状态总账)
+权威维护：
 
 - **对话与持久化**：Session/Thread 归约器、Store、逻辑序列、写入租约、恢复事务和 rollout；
 - **协议与接口**：Rust 权威类型、JSON Schema、TypeScript、模式哈希、App Server 分发与订阅；

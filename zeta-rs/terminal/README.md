@@ -34,12 +34,12 @@ output 组织为有界 BlockList。它不启动进程、不拥有窗口、GPU、
 依赖方向：
 
 ```text
-zeta-native
+zeterm/zeterm
 ├─ zeta-terminal → vte
 └─ zeta-utils-pty
 ```
 
-`zeta-terminal` 不得反向依赖 `zeta-native`、`zeta-ui`、`zeta-wgpu` 或 PTY backend。Renderer
+`zeta-terminal` 不得反向依赖 `zeterm/zeterm`、`zeta-ui`、`zeta-wgpu` 或 PTY backend。Renderer
 从 public projection 读取 state；不能把 UI `Color`、`Rect` 或 process handles 放进 model。
 
 ## 公共契约
@@ -137,7 +137,7 @@ host resize
 ## 测试与限制
 
 ```bash
-cargo test --manifest-path zeta-rs/Cargo.toml -p zeta-terminal
+cargo test --manifest-path Cargo.toml -p zeta-terminal
 bazel test //zeta-rs/terminal:terminal-unit-tests
 ```
 

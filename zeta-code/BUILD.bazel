@@ -1,0 +1,11 @@
+package(default_visibility = ["//visibility:public"])
+
+alias(
+    name = "zeta",
+    actual = "//zeta-code/cli:zeta",
+)
+
+alias(
+    name = "tui",
+    actual = "//zeta-code/tui:tui",
+)

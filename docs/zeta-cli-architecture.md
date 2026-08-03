@@ -48,18 +48,16 @@ zeta mcp-server --listen http://127.0.0.1:8787/mcp
 
 ## 2. 物理位置与所有权
 
-CLI 保留在同一个 Rust workspace：
+CLI 保留在同一个根 Rust workspace，但物理上属于 `zeta-code` 产品：
 
 ```text
-zeta-rs/
-├── app-server/
-├── app-server-client/
-├── app-server-protocol/
-├── exec/                # target: headless Agent runner
-├── tool-executor/       # target: current process executor migration
-├── tui/
-└── cli/
+zeta-code/
+├── cli/                 # zeta binary and product command host
+└── tui/                 # Ratatui presentation shell
 ```
+
+其中 App Server、client、protocol、exec 等共享 crate 仍位于 `zeta-rs/`；`zeta-code/` 只拥有
+TUI 产品入口和它的命令宿主。
 
 CLI 开发者负责：
 
@@ -95,6 +93,10 @@ CLI 可以依赖产品层 `zeta-exec` 运行无交互 Agent，但不依赖目标
 
 `zeta app-server` 子命令可以作为明确的宿主入口依赖 `zeta-app-server`，但不能绕过
 dispatcher 直接调用 Core 用例。
+
+跨客户端的唯一外部门禁和进程内嵌规则以
+[`zeta-app-server-api.md#唯一外部门禁`](zeta-app-server-api.md#唯一外部门禁) 为准；本文件只描述
+CLI、TUI 和 exec 如何接入同一 App Server 契约。
 
 `zeta mcp-server` 是 `zeta-mcp-server` binary 的 CLI 入口。该 crate 依赖
 `zeta-app-server-client`，将外部 MCP tool call 映射到同一 Session/Thread/Turn dispatcher；

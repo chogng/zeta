@@ -55,7 +55,7 @@ class PackageTests(unittest.TestCase):
             build_package_directory(
                 output,
                 REPOSITORY_ROOT,
-                read_workspace_version(REPOSITORY_ROOT / "zeta-rs" / "Cargo.toml"),
+                read_workspace_version(REPOSITORY_ROOT / "Cargo.toml"),
                 spec,
                 zeta_binary,
                 ripgrep,

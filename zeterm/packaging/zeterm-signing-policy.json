@@ -1,0 +1,27 @@
+{
+  "formatVersion": 1,
+  "artifact": "bin/zeterm",
+  "signatureRecord": "zeterm-signature.json",
+  "releaseRequired": true,
+  "platforms": {
+    "darwin": {
+      "tool": "codesign",
+      "signatureMode": "embedded",
+      "identityEnvironment": "ZETERM_MACOS_SIGNING_IDENTITY",
+      "verification": ["codesign", "--verify", "--strict"]
+    },
+    "linux": {
+      "tool": "cosign",
+      "signatureMode": "detached",
+      "signatureFile": "zeterm-signature.sig",
+      "identityEnvironment": "ZETERM_COSIGN_IDENTITY",
+      "verification": ["cosign", "verify-blob"]
+    },
+    "windows": {
+      "tool": "signtool",
+      "signatureMode": "embedded",
+      "identityEnvironment": "ZETERM_WINDOWS_CERTIFICATE",
+      "verification": ["signtool", "verify", "/pa"]
+    }
+  }
+}

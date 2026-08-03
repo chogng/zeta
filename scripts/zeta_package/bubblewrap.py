@@ -218,15 +218,15 @@ def build_bubblewrap(
     cargo: str,
     cargo_profile: str,
 ) -> Path:
-    rust_workspace = repository_root / "zeta-rs"
-    target_directory = rust_workspace / "target"
+    rust_workspace = repository_root
+    target_directory = repository_root / "target"
     environment = dict(os.environ)
     environment["ZETA_BWRAP_SOURCE_DIR"] = str(source_directory)
     command = [
         cargo,
         "build",
         "--manifest-path",
-        str(rust_workspace / "Cargo.toml"),
+        str(repository_root / "Cargo.toml"),
         "--package",
         "zeta-bwrap",
         "--bin",

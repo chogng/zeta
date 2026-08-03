@@ -1,6 +1,7 @@
 use crate::{
     CoreError, CreateThreadRequest, LeaseGuard, SessionCommandResult, SessionSnapshot,
-    ThreadController, WriterLease, reduce_session_event,
+    StartShellTurnRequest, StartTurnRequest, StartTurnResult, ThreadController, WriterLease,
+    reduce_session_event,
 };
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -8,8 +9,8 @@ use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 use zeta_protocol::TurnId;
 use zeta_protocol::{
-    CommandId, ModelRef, SessionCommand, SessionEvent, SessionId, SessionThread,
-    SessionThreadStatus, SessionUpdate, SessionUpdateEnvelope, ThreadId, ThreadOrigin,
+    CommandId, ModelRef, SessionCommand, SessionEvent, SessionId, SessionStatus, SessionThread,
+    SessionThreadStatus, SessionUpdate, SessionUpdateEnvelope, ThreadId, ThreadOrigin, TurnStatus,
 };
 use zeta_session_store::{
     AppendSessionBatchResult, CURRENT_SESSION_EVENT_SCHEMA_VERSION, SessionCommandReceipt,
@@ -137,6 +138,42 @@ impl SessionCoordinator {
 
     pub fn threads(&self) -> &Arc<ThreadController> {
         &self.threads
+    }
+
+    /// Starts a model Turn only while the owning Session and membership are active.
+    ///
+    /// The Session lock is held across validation and the child mutation so an App Server
+    /// `session/stop` cannot commit after this check and still accept a new Turn.
+    pub fn start_turn(
+        &self,
+        session_id: &SessionId,
+        thread_id: &ThreadId,
+        request: StartTurnRequest,
+    ) -> Result<StartTurnResult, CoreError> {
+        let sessions = self
+            .sessions
+            .lock()
+            .map_err(|_| CoreError::Journal("Session state lock poisoned".into()))?;
+        self.validate_active_thread(&sessions, session_id, thread_id)?;
+        self.threads.start_turn(thread_id, request)
+    }
+
+    /// Starts a shell Turn only while the owning Session and membership are active.
+    ///
+    /// This is the Session-aware counterpart to the lower-level Thread controller operation;
+    /// adapters should use it for product Turns so a concurrently stopped Session is respected.
+    pub fn start_shell_turn(
+        &self,
+        session_id: &SessionId,
+        thread_id: &ThreadId,
+        request: StartShellTurnRequest,
+    ) -> Result<StartTurnResult, CoreError> {
+        let sessions = self
+            .sessions
+            .lock()
+            .map_err(|_| CoreError::Journal("Session state lock poisoned".into()))?;
+        self.validate_active_thread(&sessions, session_id, thread_id)?;
+        self.threads.start_shell_turn(thread_id, request)
     }
 
     pub fn create_session(
@@ -350,6 +387,74 @@ impl SessionCoordinator {
         request: SessionLifecycleRequest,
     ) -> Result<SessionMutationResult, CoreError> {
         self.apply_lifecycle_command(request, SessionCommand::Archive)
+    }
+
+    /// Stops a Session by durably archiving it and interrupting every active child Turn.
+    ///
+    /// The Session mutation is committed before cancellation is requested so the Session status
+    /// prevents new Turns from starting while the child Thread transitions are being applied.
+    /// The same command ID deterministically derives each child interrupt command, making a
+    /// retry after a partial failure safe and allowing recovery to finish the cancellation pass.
+    ///
+    /// This is an internal Core execution action. The App Server owns the external
+    /// `session/stop` mapping (for example, a frontend Tab close); no canonical stop command is
+    /// added to `zeta-protocol`.
+    pub fn stop(
+        &self,
+        request: SessionLifecycleRequest,
+    ) -> Result<SessionMutationResult, CoreError> {
+        validate_command_id(&request.command_id)?;
+        let _lease = self.acquire_writer_lease(&request.session_id)?;
+        let mut sessions = self
+            .sessions
+            .lock()
+            .map_err(|_| CoreError::Journal("Session state lock poisoned".into()))?;
+        let snapshot = sessions
+            .get(&request.session_id)
+            .cloned()
+            .ok_or_else(|| CoreError::NotFound(request.session_id.to_string()))?;
+        let receipt = SessionCommandReceipt {
+            command_id: request.command_id.clone(),
+            command: SessionCommand::Archive,
+        };
+        let thread_ids = snapshot
+            .threads
+            .iter()
+            .map(|thread| thread.membership.thread_id.clone())
+            .collect::<Vec<_>>();
+        if let Some(existing) = snapshot
+            .commands
+            .iter()
+            .find(|existing| existing.receipt.command_id == request.command_id)
+        {
+            if existing.receipt != receipt
+                || existing.result != SessionCommandResult::SessionArchived
+            {
+                return Err(CoreError::CommandConflict);
+            }
+            self.interrupt_session_threads(&thread_ids, &request.command_id)?;
+            return Ok(SessionMutationResult {
+                sequence: existing.response_sequence,
+                disposition: CommandDisposition::Replayed,
+            });
+        }
+        validate_expectation(request.expected_sequence, snapshot.sequence)?;
+        let (next, batch) = self.project_batch(
+            Some(snapshot),
+            &request.session_id,
+            vec![SessionEvent::SessionArchived {
+                session_id: request.session_id.clone(),
+            }],
+            SessionBatchCommand::FirstEvent(receipt),
+        )?;
+        self.store.append_batch(&batch)?;
+        let sequence = next.sequence;
+        sessions.insert(request.session_id.clone(), next);
+        self.interrupt_session_threads(&thread_ids, &request.command_id)?;
+        Ok(SessionMutationResult {
+            sequence,
+            disposition: CommandDisposition::Committed,
+        })
     }
 
     pub fn read_session(&self, session_id: &SessionId) -> Result<SessionSnapshot, CoreError> {
@@ -635,6 +740,84 @@ impl SessionCoordinator {
             .ok_or_else(|| CoreError::Journal("cannot recover an empty Session rollout".into()))
     }
 
+    fn validate_active_thread(
+        &self,
+        sessions: &BTreeMap<SessionId, SessionSnapshot>,
+        session_id: &SessionId,
+        thread_id: &ThreadId,
+    ) -> Result<(), CoreError> {
+        let session = sessions
+            .get(session_id)
+            .ok_or_else(|| CoreError::NotFound(session_id.to_string()))?;
+        if session.status != SessionStatus::Active {
+            return Err(CoreError::InvalidInput("Session is not active".into()));
+        }
+        let membership = session
+            .threads
+            .iter()
+            .find(|thread| thread.membership.thread_id == *thread_id)
+            .ok_or_else(|| CoreError::NotFound(thread_id.to_string()))?;
+        if membership.membership.status != SessionThreadStatus::Active {
+            return Err(CoreError::InvalidInput(
+                "Thread is not active in its Session".into(),
+            ));
+        }
+        let thread = self.threads.read_thread(thread_id)?;
+        if thread.session_id != *session_id {
+            return Err(CoreError::InvalidInput(
+                "Thread does not belong to Session".into(),
+            ));
+        }
+        Ok(())
+    }
+
+    fn interrupt_session_threads(
+        &self,
+        thread_ids: &[ThreadId],
+        session_command_id: &CommandId,
+    ) -> Result<(), CoreError> {
+        for thread_id in thread_ids {
+            loop {
+                let snapshot = self.threads.read_thread(thread_id)?;
+                let turn_ids = snapshot
+                    .turns
+                    .iter()
+                    .filter(|turn| is_interruptible_turn(turn.status))
+                    .map(|turn| turn.turn_id.clone())
+                    .collect::<Vec<_>>();
+                if turn_ids.is_empty() {
+                    break;
+                }
+                for turn_id in turn_ids {
+                    let command_id = CommandId::new(format!(
+                        "session-stop-{}-{}-{}",
+                        session_command_id, thread_id, turn_id
+                    ))
+                    .map_err(|error| CoreError::InvalidInput(error.to_string()))?;
+                    if let Err(error) = self.threads.interrupt_turn(
+                        thread_id,
+                        crate::InterruptTurnRequest {
+                            command_id,
+                            expected_sequence: SequenceExpectation::Any,
+                            turn_id: turn_id.clone(),
+                        },
+                    ) {
+                        let current = self.threads.read_thread(thread_id)?;
+                        if current
+                            .turns
+                            .iter()
+                            .find(|turn| turn.turn_id == turn_id)
+                            .is_some_and(|turn| is_interruptible_turn(turn.status))
+                        {
+                            return Err(error);
+                        }
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
     fn project_batch(
         &self,
         snapshot: Option<SessionSnapshot>,
@@ -713,6 +896,18 @@ fn validate_command(command_id: &CommandId, title: &str) -> Result<(), CoreError
     } else {
         Ok(())
     }
+}
+
+fn is_interruptible_turn(status: TurnStatus) -> bool {
+    matches!(
+        status,
+        TurnStatus::Created
+            | TurnStatus::Running
+            | TurnStatus::WaitingForApproval
+            | TurnStatus::WaitingForUserInput
+            | TurnStatus::WaitingForCapability
+            | TurnStatus::Cancelling
+    )
 }
 
 fn validate_command_id(command_id: &CommandId) -> Result<(), CoreError> {

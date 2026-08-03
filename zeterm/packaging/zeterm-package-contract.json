@@ -1,0 +1,13 @@
+{
+  "formatVersion": 1,
+  "product": "zeterm",
+  "binary": "bin/zeterm",
+  "build": {
+    "manifest": "zeterm/Cargo.toml",
+    "package": "zeterm",
+    "binary": "zeterm"
+  },
+  "signingPolicy": "zeterm/packaging/zeterm-signing-policy.json",
+  "signatureRecord": "zeterm-signature.json",
+  "releaseInvariant": "The signed binary digest must be verified before publication."
+}

@@ -1,0 +1,17 @@
+package(default_visibility = ["//visibility:public"])
+
+exports_files([
+    "build_zeterm_package.py",
+    "check_zeterm_boundary.py",
+    "check_zeterm_boundary.sh",
+    "check_zeterm_release_contract.py",
+    "check_zeterm_release_contract.sh",
+    "test_zeterm_package.py",
+    "test_zeterm_package.sh",
+    "release_zeterm_package.sh",
+    "sign_zeterm_package.py",
+    "test_zeterm_signing.py",
+    "test_zeterm_signing.sh",
+    "verify_zeterm_package.py",
+    "zeterm_signing.py",
+])

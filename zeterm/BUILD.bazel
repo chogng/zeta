@@ -1,0 +1,128 @@
+load("//zeterm:defs.bzl", "zeterm_rust_binary")
+load("@rules_shell//shell:sh_test.bzl", "sh_test")
+
+package(default_visibility = ["//visibility:public"])
+
+zeterm_rust_binary(
+    name = "zeterm",
+    crate_name = "zeterm",
+    crate_root = "src/main.rs",
+    package_name = "zeterm",
+)
+
+exports_files([
+    "Cargo.toml",
+])
+
+filegroup(
+    name = "zeterm_sources",
+    srcs = glob([
+        "src/**/*.rs",
+        "Cargo.toml",
+    ]) + [
+        "//:Cargo.lock",
+        "//:Cargo.toml",
+        "//zeterm/crates/agent-sidebar:agent-sidebar_sources",
+        "//zeterm/crates/editor:editor_sources",
+        "//zeterm/crates/icons:icons_sources",
+        "//zeterm/crates/keybinding:keybinding_sources",
+        "//zeterm/crates/markdown:markdown_sources",
+        "//zeterm/crates/renderer:renderer_sources",
+        "//zeterm/crates/settings:settings_sources",
+        "//zeterm/crates/ui:ui_sources",
+        "//zeterm/crates/wgpu:wgpu_sources",
+        "//zeterm/crates/winit:winit_sources",
+        "//zeterm/crates/zui:zui_sources",
+    ],
+)
+
+filegroup(
+    name = "zeterm_package_contract",
+    srcs = [
+        "packaging/zeterm-package-contract.json",
+        "packaging/zeterm-signing-policy.json",
+    ],
+)
+
+filegroup(
+    name = "zeterm_package_tool",
+    srcs = ["//scripts:build_zeterm_package.py"],
+)
+
+filegroup(
+    name = "zeterm_release_inputs",
+    srcs = [
+        ":zeterm_package_contract",
+        ":zeterm_package_tool",
+        ":zeterm_sources",
+    ],
+)
+
+sh_test(
+    name = "zeterm_boundary_test",
+    srcs = ["//scripts:check_zeterm_boundary.sh"],
+    args = [
+        "$(location //scripts:check_zeterm_boundary.py)",
+        "$(location //:Cargo.toml)",
+        "$(location Cargo.toml)",
+        "$(location //:Cargo.lock)",
+    ],
+    data = [
+        "//:Cargo.lock",
+        "//:Cargo.toml",
+        "Cargo.toml",
+        "//scripts:check_zeterm_boundary.py",
+    ],
+    size = "small",
+)
+
+sh_test(
+    name = "zeterm_package_test",
+    srcs = ["//scripts:test_zeterm_package.sh"],
+    args = ["$(location //scripts:test_zeterm_package.py)"],
+    data = [
+        "//zeterm:zeterm_package_contract",
+        "//scripts:build_zeterm_package.py",
+        "//scripts:test_zeterm_package.py",
+    ],
+    size = "small",
+)
+
+sh_test(
+    name = "zeterm_release_contract_test",
+    srcs = ["//scripts:check_zeterm_release_contract.sh"],
+    args = [
+        "$(location //scripts:check_zeterm_release_contract.py)",
+        "$(location packaging/zeterm-package-contract.json)",
+        "$(location packaging/zeterm-signing-policy.json)",
+    ],
+    data = [
+        "packaging/zeterm-package-contract.json",
+        "packaging/zeterm-signing-policy.json",
+        "//scripts:check_zeterm_release_contract.py",
+    ],
+    size = "small",
+)
+
+sh_test(
+    name = "zeterm_signing_test",
+    srcs = ["//scripts:test_zeterm_signing.sh"],
+    args = ["$(location //scripts:test_zeterm_signing.py)"],
+    data = [
+        "//zeterm:zeterm_package_contract",
+        "//scripts:build_zeterm_package.py",
+        "//scripts:test_zeterm_signing.py",
+        "//scripts:zeterm_signing.py",
+    ],
+    size = "small",
+)
+
+test_suite(
+    name = "zeterm_ci",
+    tests = [
+        ":zeterm_boundary_test",
+        ":zeterm_package_test",
+        ":zeterm_release_contract_test",
+        ":zeterm_signing_test",
+    ],
+)

@@ -2,9 +2,9 @@
 
 > 状态：当前实现。
 > 本文拥有组件到图形后端之间的跨 crate 边界与替换规则。具体接口和实现细节分别见
-> [`zui`](../zeta-rs/zui/README.md)、[`zeta-ui`](../zeta-rs/ui/README.md)、
-> [`zeta-renderer`](../zeta-rs/renderer/README.md) 与
-> [`zeta-wgpu`](../zeta-rs/wgpu/README.md)。
+> [`zui`](../zeterm/crates/zui/README.md)、[`zeta-ui`](../zeterm/crates/ui/README.md)、
+> [`zeta-renderer`](../zeterm/crates/renderer/README.md) 与
+> [`zeta-wgpu`](../zeterm/crates/wgpu/README.md)。
 
 ## 快速理解
 
@@ -44,9 +44,11 @@ flowchart LR
 surface 都先声明 zui Element；computed layout 自动生成尺寸、resolved padding、gap、radius、实际
 gap regions、authored style 与声明位置。采集位于 backend 之前，所以切换 GPU API 不会改变结果。
 
-Native presentation 同时保存 `UiScene`、`InteractionFrame` 与 accessibility projection，但只把
-`UiScene` 交给 `Renderer`。命中、焦点、cursor、command dispatch 和 accessibility 不属于 GPU
-协议，也不会因更换 backend 而重新实现。
+`ShellPresentation` 由 `zui::UiFrame<InteractionFrame>` 作为单一 frame owner，再保存
+accessibility projection；只有从该 frame 投影出的 `UiScene` 交给 `Renderer`。命中、焦点、cursor、
+command dispatch 和 accessibility 不属于 GPU 协议，也不会因更换 backend 而重新实现。旧 Native split
+host boundary 已删除；剩余 retained cleanup 和发布边界见
+[`native-deprecation-plan.md`](native-deprecation-plan.md)。
 
 ## 当前执行流程
 
@@ -55,7 +57,8 @@ Native presentation 同时保存 `UiScene`、`InteractionFrame` 与 accessibilit
    composition surface 使用 `UiScene::with_element` 进入同一管线。
 2. `UiScene` 按 composition layer 与 primitive 插入顺序产生连续的 `SceneBatch`；不同 primitive
    类型之间的覆盖顺序不会被 backend 重排。
-3. Native host 保存 scene、inspection、interaction 与 accessibility frame，不获得任何 GPU 对象。
+3. `ShellPresentation` 保存单一 frame owner 派生的 scene、inspection、interaction 与 accessibility
+   snapshot，不获得任何 GPU 对象。
 4. Host 只把 scene 传给 `Box<dyn Renderer>::render_scene`。
 5. 当前 `renderer_backend::create` 选择 `WgpuRenderer`；只有该 adapter 知道具体类型。
 6. `zeta-wgpu` 把 batch 对应的 logical primitive range 转为 physical instances/glyph buffers，按

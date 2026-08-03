@@ -262,6 +262,13 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
         self.call(ClientMethod::SessionArchive, params)
     }
 
+    pub fn stop_session(
+        &mut self,
+        params: SessionCommandParams,
+    ) -> Result<SessionResult, ClientError> {
+        self.call(ClientMethod::SessionStop, params)
+    }
+
     pub fn read_thread(
         &mut self,
         params: ThreadReadParams,

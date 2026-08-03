@@ -419,6 +419,7 @@ impl AppServer {
                 self.session_complete(connection, &request.params)
             }
             Some(ClientMethod::SessionArchive) => self.session_archive(connection, &request.params),
+            Some(ClientMethod::SessionStop) => self.session_stop(connection, &request.params),
             Some(ClientMethod::SessionModelSet) => {
                 self.session_model_set(connection, &request.params)
             }

@@ -34,6 +34,9 @@ test("SessionsPart remains owned by the Sessions product layer", () => {
     async startNewSession() {
       throw new Error("Session creation is unavailable");
     },
+    async stopSession() {
+      throw new Error("Session stopping is unavailable");
+    },
     async setModel() {
       throw new Error("Model selection is unavailable");
     },

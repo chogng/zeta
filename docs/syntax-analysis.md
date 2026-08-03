@@ -4,7 +4,7 @@
 > 分析；Rust `DiffEditor` 已通过 retained `DiffEditorDocument` 内部维护两侧语法状态；Desktop
 > Alpha 的 JSON/JSONC 继续使用编辑器内 TextMate provider。本文拥有跨编辑器的语法能力边界；底层解析契约见
 > [`zeta-syntax` README](../zeta-rs/syntax/README.md)，Native 编辑器 API 见
-> [`zeta-editor` README](../zeta-rs/editor/README.md)。
+> [`zeta-editor` README](../zeterm/crates/editor/README.md)。
 
 ## 快速理解
 

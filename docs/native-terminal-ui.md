@@ -9,10 +9,10 @@
 > 三条公开产品线与宿主边界见 [`product-lines.md`](product-lines.md)；本文只负责 `zeterm`
 > 的纯 Rust Desktop 终端实现。
 > 当前源码所有权、调用路径和测试入口见
-> [`zeta-native` README](../zeta-rs/native/README.md)；terminal grid 与 BlockList 的实现契约见
+> [`zeterm` README](../zeterm/README.md)；terminal grid 与 BlockList 的实现契约见
 > [`zeta-terminal` README](../zeta-rs/terminal/README.md)；文本输入、IME 与 caret 的跨 crate
 > 所有权见 [`native-text-input.md`](native-text-input.md)；原生窗口 chrome 与控件占位的实现
-> 契约见 [`zeta-winit` README](../zeta-rs/winit/README.md)。
+> 契约见 [`zeta-winit` README](../zeterm/crates/winit/README.md)。
 
 ## 快速理解
 
@@ -47,8 +47,8 @@ Session action 不以静态装饰出现。
 
 | 边界 | 规范名称 | 示例 |
 | --- | --- | --- |
-| 仓库、Cargo package、crate、build target 和内部标识 | `zeta` / `zeta-*` | `zeta-native`、`zeta-ui`、`zeta-terminal-*` |
-| 发布的终端应用及其用户可见表面 | `zeterm` | executable、app bundle、窗口标题、Top Bar 和输入提示 |
+| 共享仓库、crate 和内部标识 | `zeta` / `zeta-*` | `zeta-ui`、`zeta-terminal-*` |
+| `zeterm` Cargo package、发布的终端应用及其用户可见表面 | `zeterm` | package、executable、app bundle、窗口标题、Top Bar 和输入提示 |
 
 因此不把内部 crate、CSS、协议或测试标识重命名为 `zeterm-*`。公开发布前仍需单独核查 `zeterm`
 的商标、域名、应用商店和软件包名称可用性；核查结果只影响发布层名称。
@@ -99,14 +99,14 @@ Session Navigation 当前使用可折叠、可通过右边界 Sash 调整宽度�
 
 | 能力 | 最终 owner | 职责边界 |
 | --- | --- | --- |
-| Window、Top Bar 与 Terminal Workspace 外部布局 | `zeta-native` product host | 决定窗口区域和活动会话，不进入 `zeta-ui` |
+| Window、Top Bar 与 Terminal Workspace 外部布局 | `zeterm/zeterm` product host | 决定窗口区域和活动会话，不进入 `zeta-ui` |
 | 单轴 Pane 尺寸约束、Sash track 与 feedback geometry | `zui::SplitViewLayout` / `zeta-ui::Sash` | 不持有产品显隐、preferred width、pointer capture 或持久化 |
 | 递归 Pane geometry 与 owning-split Sash 路由 | `zui::GridLayout` | 递归组合 SplitView；不持有 Terminal Session、Agent content、Pane Tree mutation 或 active Pane |
 | Terminal Pane Tree、Session-to-Pane binding 与 Pane 状态 | 后续 native Terminal Workspace model | 已确认是终端分屏必需边界；当前尚未完成 |
-| Session Navigation 显隐、preferred width 与 resize gesture | `zeta-native::session_sidebar` | 使用通用 Split/Sash geometry；不拥有 Session lifecycle |
-| Agent Sidebar 显隐、preferred width 与 resize gesture | `zeta-native::agent_sidebar` | 使用通用 Split/Sash geometry，宽度限制为 240–560px，并为 main Pane 保留至少 240px；不拥有内部 Pane、文件或 diff model |
-| Agent Sidebar 内部 Pane composition | [`zeta-agent-sidebar`](../zeta-rs/agent-sidebar/README.md) 的 `AgentSidebar` / `AgentSidebarNavigation` | 只组合跨功能切换；Files/SCM 功能布局分别由各自子模块拥有，Native 仅提供 shell slot |
-| Files 树、模糊搜索与领先/落后显示 | [`zeta-agent-sidebar`](../zeta-rs/agent-sidebar/README.md) / `zeta-file-search` / `zeta-git` | `zeta-agent-sidebar::files::FilesState` 保存可丢弃 UI 状态；Native 适配目录 DTO 并执行动作，Git 命令解析和模糊匹配器仍由各自 crate 拥有 |
+| Session Navigation 显隐、preferred width 与 resize gesture | `zeterm/src/session_sidebar` | 使用通用 Split/Sash geometry；不拥有 Session lifecycle |
+| Agent Sidebar 显隐、preferred width 与 resize gesture | `zeterm/src/agent_sidebar` | 使用通用 Split/Sash geometry，宽度限制为 240–560px，并为 main Pane 保留至少 240px；不拥有内部 Pane、文件或 diff model |
+| Agent Sidebar 内部 Pane composition | [`zeta-agent-sidebar`](../zeterm/crates/agent-sidebar/README.md) 的 `AgentSidebar` / `AgentSidebarNavigation` | 只组合跨功能切换；Files/SCM 功能布局分别由各自子模块拥有，zeterm 仅提供 shell slot |
+| Files 树、模糊搜索与领先/落后显示 | [`zeta-agent-sidebar`](../zeterm/crates/agent-sidebar/README.md) / `zeta-file-search` / `zeta-git` | `zeta-agent-sidebar::files::FilesState` 保存可丢弃 UI 状态；zeterm 适配目录 DTO 并执行动作，Git 命令解析和模糊匹配器仍由各自 crate 拥有 |
 | 多文件差异内容与视口 binding | `zeta-agent-sidebar::EditorPane` / `zeta-editor::MultiDiffEditor` | Agent Sidebar 保存 changed-file collection 与每文件 `DiffEditorState`；Native 只提供 SCM 投影 |
 | 通用 UI 滚动 geometry、交互映射与状态 transition | `zeta-ui::ScrollView` / `ScrollState` / `ScrollbarController` | MultiDiff 复用完整 logical-pixel 状态和交互映射；BlockOutputViewport 通过 Native adapter 复用 clip、内容坐标和 scrollbar paint；Terminal 仍保留底部相对行锚定与输出增长策略 |
 | Top Bar 内部 action 排列 | `zeta-ui::ActionBar` | 后续有真实 action 时使用；只拥有 representation geometry 和 paint |
@@ -115,28 +115,28 @@ Session Navigation 当前使用可折叠、可通过右边界 Sash 调整宽度�
 | 锚点浮层定位、viewport 约束与 layer 合成 | `zeta-ui::ContextView` | 不拥有显示生命周期、输入路由或产品 action |
 | 无边框下拉 surface、可选 header、纵向 item geometry 与默认选择 | `zeta-ui::Dropdown` | 组合 ContextView/ActionBar；不拥有产品查询、选择 identity、关闭或 command |
 | 柔和阴影、2px menu padding、4px radius、纵向 item geometry 与默认选择 | `zeta-ui::ContextMenu` | 组合 ContextView/ActionBar；不拥有 Session identity、关闭或 command |
-| Session Tab 右键菜单生命周期与 command identity | `zeta-native::session_context_menu` | 保存目标、锚点与恢复焦点；菜单关闭后不保留第二份 Session 状态 |
-| Product command identity 与执行 | `zeta-native::commands` | pointer、menu 和 shortcut 只提供入口，业务行为汇合到同一 `NativeCommand` executor |
-| 平台无关按键、规则顺序与冲突解析 | [`zeta-keybinding`](../zeta-rs/keybinding/README.md) | 不读取 winit event、focus、terminal state 或用户配置，不执行产品 command |
-| winit 按键转换、Native context 与 Chord 生命周期 | `zeta-native::keybindings` | 内建 Copy/Paste；1.5 秒超时，失焦或 IME 取消；保持 alternate terminal Control 序列透传 |
-| Native 用户快捷键资源 | `zeta-native::keybindings_resource` | 读取 `<ZETA_PROFILE_ROOT>/keybindings.json`；完整校验成功才替换，坏更新保留上一份规则 |
-| 快捷键模型、设置、录制和提示 | [`zeta-keybinding`](../zeta-rs/keybinding/README.md) | 同一 feature crate 拥有规则解析、浮层 lifecycle、录制 deadline、诊断呈现和组件样式；Native 提供产品 command、事件 adapter 与保存接线 |
+| Session Tab 右键菜单生命周期与 command identity | `zeterm/src/session_context_menu` | 保存目标、锚点与恢复焦点；菜单关闭后不保留第二份 Session 状态 |
+| Product command identity 与执行 | `zeterm/src/commands` | pointer、menu 和 shortcut 只提供入口，业务行为汇合到同一 `NativeCommand` executor |
+| 平台无关按键、规则顺序与冲突解析 | [`zeta-keybinding`](../zeterm/crates/keybinding/README.md) | 不读取 winit event、focus、terminal state 或用户配置，不执行产品 command |
+| winit 按键转换、Native context 与 Chord 生命周期 | `zeterm/src/keybindings` | 内建 Copy/Paste；1.5 秒超时，失焦或 IME 取消；保持 alternate terminal Control 序列透传 |
+| Native 用户快捷键资源 | `zeterm/src/keybindings_resource` | 读取 `<ZETA_PROFILE_ROOT>/keybindings.json`；完整校验成功才替换，坏更新保留上一份规则 |
+| 快捷键模型、设置、录制和提示 | [`zeta-keybinding`](../zeterm/crates/keybinding/README.md) | 同一 feature crate 拥有规则解析、浮层 lifecycle、录制 deadline、诊断呈现和组件样式；zeterm 提供产品 command、事件 adapter 与保存接线 |
 | Terminal Session product state | App Server/terminal session runtime | 拥有进程、cwd、环境、输出与退出状态 |
 | Terminal grid、screen/mode state、基础 escape sequence 与 BlockList | `zeta-terminal::TerminalCore` | 不由 `UiScene` 或 `InputBox` 推断 |
-| PTY process、write、resize 与 exit | `zeta-native::terminal_session` + `zeta-utils-pty` | process mechanism 与 terminal model 分离 |
+| PTY process、write、resize 与 exit | `zeterm/src/terminal_session` + `zeta-utils-pty` | process mechanism 与 terminal model 分离 |
 | cell scrollback retention | `zeta-terminal::TerminalGrid` | 会话内最多保留 10,000 行；不负责跨重启持久化 |
-| scroll position | `zeta-native::terminal_scrollback` | 可丢弃的 presentation state，不写回 terminal model |
-| terminal output selection | `zeta-native::terminal_selection` | 可丢弃的 viewport state；文本来自 terminal/Block projection |
+| scroll position | `zeterm/src/terminal_scrollback` | 可丢弃的 presentation state，不写回 terminal model |
+| terminal output selection | `zeterm/src/terminal_selection` | 可丢弃的 viewport state；文本来自 terminal/Block projection |
 | 跨重启历史持久化与完整 terminal compatibility | 后续 terminal runtime | 尚未完成 |
 | BlockList / TerminalOutput presentation | Native terminal session view | 呈现 runtime output；不能成为第二份权威输出存储 |
-| Primary Block Input Editor 与 IME candidate area | `zeta-native::terminal_composer` + `input_method` | 编辑 host-owned `TextInput`；Enter 才提交真实 command boundary |
+| Primary Block Input Editor 与 IME candidate area | `zeterm/src/terminal_composer` + `input_method` | 编辑 host-owned `TextInput`；Enter 才提交真实 command boundary |
 | 命中、指针状态、focus、键盘导航与 accessibility semantics | `zui` | 只分发稳定控件身份和 activation intent，不保存 Session、文件、对话或文档状态 |
 | 平台 accessibility publication | 后续 `zeta-winit` adapter | 当前尚未接 AccessKit/平台 API，内部语义树不等于屏幕阅读器已可用 |
-| alternate-screen direct input | `zeta-native::terminal_input` + `input_method` + `TerminalCore` | 仅在 TUI 接管期间编码 key/IME/paste 并写入 PTY |
-| shell command completion boundary | `zeta-native::terminal_session` bootstrap + `zeta-terminal::TerminalCore` | 当前 zsh 使用 OSC 133 `D`；其他 shell 只有基础 prompt/echo suppression |
+| alternate-screen direct input | `zeterm/src/terminal_input` + `input_method` + `TerminalCore` | 仅在 TUI 接管期间编码 key/IME/paste 并写入 PTY |
+| shell command completion boundary | `zeterm/src/terminal_session` bootstrap + `zeta-terminal::TerminalCore` | 当前 zsh 使用 OSC 133 `D`；其他 shell 只有基础 prompt/echo suppression |
 | Rect、icon、text scene 与 GPU draw | `zui` / `zeta-wgpu` | 不拥有 Session、PTY、窗口布局或产品 reducer |
 
-`zeta-native` 可以保存活动 Tab、hover、focus、scroll position 等可丢弃 presentation state，但
+`zeterm/zeterm` 可以保存活动 Tab、hover、focus、scroll position 等可丢弃 presentation state，但
 Session、Thread、Turn、PTY process 和 durable output 必须来自对应 runtime。
 
 ## 4. 当前实现
@@ -286,7 +286,7 @@ terminal grid → PTY resize 链路，不能绕过这条 Terminal Workspace 最�
 macOS 当前使用集中且受测试的 70 logical pixel policy；由于 `winit` 尚无安全的 system button
 geometry API，RTL 换边和未来 Windows controls overlay 仍是 adapter 扩展点，不能描述为当前
 能力，也不能在 `titlebar::Titlebar` 再引入平台常量。实现契约见
-[`zeta-winit/README.md`](../zeta-rs/winit/README.md)。
+[`zeta-winit/README.md`](../zeterm/crates/winit/README.md)。
 
 当前 Session Tab 的白色状态圆形只投影 native runtime 可确认的通用 `Active` 语义，尚未绘制
 状态 SVG。Planning、Thinking、Editing 等 Agent 阶段尚无权威 Session projection，不能由 UI

@@ -330,6 +330,7 @@ struct Supervisor {
     uri_paths: HashMap<Uri, PathBuf>,
     servers: BTreeMap<LanguageServerName, ManagedServer>,
     launches: HashMap<LanguageServerName, tokio::task::JoinHandle<()>>,
+    retry_tasks: HashMap<LanguageServerName, tokio::task::JoinHandle<()>>,
     generation: u64,
 }
 
@@ -364,6 +365,7 @@ impl Supervisor {
             uri_paths: HashMap::new(),
             servers,
             launches: HashMap::new(),
+            retry_tasks: HashMap::new(),
             generation: 0,
         }
     }

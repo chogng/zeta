@@ -43,6 +43,10 @@ Renderer
 
 Desktop 禁止执行 `zeta ask ...` 后解析终端输出，也禁止直接链接 `zeta-core`。
 
+跨客户端的唯一外部门禁、进程内嵌规则和 Core 旁路禁止项以
+[`zeta-app-server-api.md#唯一外部门禁`](zeta-app-server-api.md#唯一外部门禁) 为准；本文件只补充
+Electron 的 Renderer、Preload、Main 和可信 IPC 适配细节。
+
 ## 2. Desktop 所有权
 
 Desktop 负责：

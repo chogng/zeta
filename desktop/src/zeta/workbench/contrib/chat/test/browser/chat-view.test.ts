@@ -357,7 +357,7 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
   await nextTask();
 
   assert.deepEqual(
-    fake.archiveRequests.map(({ sessionId, expectedSequence }) => ({
+    fake.stopRequests.map(({ sessionId, expectedSequence }) => ({
       sessionId,
       expectedSequence,
     })),
@@ -1032,6 +1032,7 @@ function testLayoutService(auxiliaryBarVisible = true): IWorkbenchLayoutService 
 function fakeApi(options: FakeOptions = {}): {
   readonly api: IRendererHost;
   readonly archiveRequests: readonly SessionCommandParams[];
+  readonly stopRequests: readonly SessionCommandParams[];
   readonly createSessionRequests: readonly SessionCreateParams[];
   readonly createThreadRequests: readonly SessionThreadCreateParams[];
   readonly setModelRequests: readonly SessionModelSetParams[];
@@ -1040,6 +1041,7 @@ function fakeApi(options: FakeOptions = {}): {
 } {
   const listeners = new Set<(notification: ServerNotification) => void>();
   const archiveRequests: SessionCommandParams[] = [];
+  const stopRequests: SessionCommandParams[] = [];
   const createSessionRequests: SessionCreateParams[] = [];
   const createThreadRequests: SessionThreadCreateParams[] = [];
   const setModelRequests: SessionModelSetParams[] = [];
@@ -1078,6 +1080,19 @@ function fakeApi(options: FakeOptions = {}): {
           },
         };
       },
+      stop: async (params: SessionCommandParams) => {
+        stopRequests.push(params);
+        const stopped = options.sessions?.find(
+          ({ sessionId }) => sessionId === params.sessionId,
+        ) ?? session(params.sessionId);
+        return {
+          session: {
+            ...stopped,
+            status: "archived" as const,
+            sequence: stopped.sequence + 1,
+          },
+        };
+      },
       setModel: async (params: SessionModelSetParams) => {
         setModelRequests.push(params);
         const current = options.sessions?.find(({ sessionId }) => sessionId === params.sessionId) ?? session(params.sessionId);
@@ -1113,6 +1128,7 @@ function fakeApi(options: FakeOptions = {}): {
   return {
     api,
     archiveRequests,
+    stopRequests,
     createSessionRequests,
     createThreadRequests,
     setModelRequests,

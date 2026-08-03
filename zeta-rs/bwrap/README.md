@@ -36,8 +36,8 @@ scripts/zeta_package/bubblewrap.py
 executable selection 或 process execution加入本 crate 表示 ownership 漂移。
 
 ```bash
-cargo test --manifest-path zeta-rs/Cargo.toml -p zeta-bwrap
-cargo clippy --manifest-path zeta-rs/Cargo.toml \
+cargo test --manifest-path Cargo.toml -p zeta-bwrap
+cargo clippy --manifest-path Cargo.toml \
   -p zeta-bwrap --all-targets --no-deps -- -D warnings
 bazel test //zeta-rs/bwrap:bwrap-unit-tests
 ```

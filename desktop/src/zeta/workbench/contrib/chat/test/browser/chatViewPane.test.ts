@@ -83,6 +83,7 @@ class PendingSessionService implements IWorkbenchSessionService {
   promoteUntitledSession(_untitledSessionId: string, _active: IActiveSessionThread): void {}
   ensureActiveThread(): Promise<IActiveSessionThread> { return Promise.reject(new Error("Backend is unavailable")); }
   startNewSession(_title?: string): Promise<IActiveSessionThread> { return Promise.reject(new Error("Backend is unavailable")); }
+  stopSession(_sessionId: SessionId): Promise<void> { return Promise.reject(new Error("Backend is unavailable")); }
   archiveSession(_sessionId: SessionId): Promise<void> { return Promise.reject(new Error("Backend is unavailable")); }
   setModel(_sessionId: SessionId, _model: ModelRef): Promise<void> { return Promise.reject(new Error("Backend is unavailable")); }
 }

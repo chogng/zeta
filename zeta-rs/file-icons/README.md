@@ -80,8 +80,8 @@ corepack pnpm sync:file-icons
 直接验证 Rust crate：
 
 ```text
-cargo test --manifest-path zeta-rs/Cargo.toml -p zeta-file-icons
-cargo fmt --manifest-path zeta-rs/Cargo.toml -p zeta-file-icons -- --check
+cargo test --manifest-path Cargo.toml -p zeta-file-icons
+cargo fmt --manifest-path Cargo.toml -p zeta-file-icons -- --check
 ```
 
 ## 失败语义与当前限制

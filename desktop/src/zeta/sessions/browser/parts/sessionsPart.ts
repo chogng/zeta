@@ -48,6 +48,9 @@ export class SessionsPart extends WorkbenchPart {
       case "archiving":
         this.label.textContent = "Closing session\u2026";
         break;
+      case "stopping":
+        this.label.textContent = "Stopping session\u2026";
+        break;
       case "error":
         this.label.textContent = "Session unavailable";
         this.label.title =

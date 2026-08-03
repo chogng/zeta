@@ -51,6 +51,72 @@ fn create_thread_commits_membership_and_child_stream() {
 }
 
 #[test]
+fn stop_archives_session_and_interrupts_active_child_turns() {
+    let coordinator = coordinator();
+    let session = create_session(&coordinator);
+    let thread = coordinator
+        .create_thread(CreateSessionThreadRequest {
+            command_id: CommandId::new("create-thread").unwrap(),
+            session_id: session.session_id.clone(),
+            expected_sequence: SequenceExpectation::Exact(session.sequence),
+            title: "root".into(),
+        })
+        .unwrap();
+    let turn = coordinator
+        .threads
+        .start_turn(
+            &thread.thread_id,
+            StartTurnRequest {
+                command_id: CommandId::new("start-turn").unwrap(),
+                expected_sequence: SequenceExpectation::Any,
+                model: None,
+                input: vec![zeta_protocol::UserInput::Text {
+                    text: "hello".into(),
+                }],
+            },
+        )
+        .unwrap();
+
+    let stopped = coordinator
+        .stop(SessionLifecycleRequest {
+            command_id: CommandId::new("stop-session").unwrap(),
+            session_id: session.session_id.clone(),
+            expected_sequence: SequenceExpectation::Exact(thread.sequence),
+        })
+        .unwrap();
+
+    assert_eq!(stopped.disposition, CommandDisposition::Committed);
+    assert_eq!(
+        coordinator
+            .read_session(&session.session_id)
+            .unwrap()
+            .status,
+        zeta_protocol::SessionStatus::Archived
+    );
+    assert_eq!(
+        coordinator
+            .threads
+            .read_thread(&thread.thread_id)
+            .unwrap()
+            .turns
+            .iter()
+            .find(|candidate| candidate.turn_id == turn.turn_id)
+            .unwrap()
+            .status,
+        TurnStatus::Interrupted
+    );
+
+    let replayed = coordinator
+        .stop(SessionLifecycleRequest {
+            command_id: CommandId::new("stop-session").unwrap(),
+            session_id: session.session_id,
+            expected_sequence: SequenceExpectation::Exact(thread.sequence),
+        })
+        .unwrap();
+    assert_eq!(replayed.disposition, CommandDisposition::Replayed);
+}
+
+#[test]
 fn commands_replay_by_typed_identity_and_reject_payload_conflicts() {
     let coordinator = coordinator();
     let created = create_session(&coordinator);

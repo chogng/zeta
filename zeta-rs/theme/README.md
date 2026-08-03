@@ -81,6 +81,6 @@ JSON 需要重启对应进程；Native 会在系统明暗事件到达时重新�
 独立 scheme，但默认值当前继承相应明暗方案。
 
 ```text
-cargo test --manifest-path zeta-rs/Cargo.toml -p zeta-theme
+cargo test --manifest-path Cargo.toml -p zeta-theme
 bazel test //zeta-rs/theme:theme-unit-tests
 ```

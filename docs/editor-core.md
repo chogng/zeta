@@ -2,8 +2,8 @@
 
 > 状态：Current。`zeta-editor-core` 是 Zeterm Native editor 的纯 Rust document core；Alpha 是 Zeta
 > Renderer 内独立的 TypeScript editor，不通过 WASM 或 App Server RPC 复用该同步 core。Rust 实现契约见
-> [`zeta-editor-core`](../zeta-rs/editor-core/README.md)，Native presentation 见
-> [`zeta-editor`](../zeta-rs/editor/README.md)，Alpha 实现见
+> [`zeta-editor-core`](../zeta-rs/editor-core/README.md)，app presentation 见
+> [`zeta-editor`](../zeterm/crates/editor/README.md)，Alpha 实现见
 > [`desktop/src/zeta/editor/alpha/README.md`](../desktop/src/zeta/editor/alpha/README.md)。
 
 ## 当前所有权

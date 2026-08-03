@@ -119,8 +119,8 @@ child，最后返回原 shutdown error。Client 被直接 drop 时 child 使用 
 ## 测试、修改影响与当前限制
 
 ```bash
-cargo test --manifest-path zeta-rs/Cargo.toml -p zeta-lsp
-cargo clippy --manifest-path zeta-rs/Cargo.toml -p zeta-lsp --all-targets -- -D warnings
+cargo test --manifest-path Cargo.toml -p zeta-lsp
+cargo clippy --manifest-path Cargo.toml -p zeta-lsp --all-targets -- -D warnings
 bazel test //zeta-rs/lsp:lsp-unit-tests
 ```
 

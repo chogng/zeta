@@ -35,7 +35,7 @@ Skills 目录是当前消费者：它拒绝多链接清单，并验证路径仍�
 ## 验证
 
 ```bash
-cargo test --manifest-path zeta-rs/Cargo.toml -p zeta-file-identity
-cargo clippy --manifest-path zeta-rs/Cargo.toml \
+cargo test --manifest-path Cargo.toml -p zeta-file-identity
+cargo clippy --manifest-path Cargo.toml \
   -p zeta-file-identity --all-targets --no-deps -- -D warnings
 ```

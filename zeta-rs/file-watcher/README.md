@@ -123,8 +123,8 @@ Backend 只转发 create、modify 和 remove；access/open 事件被过滤。所
 ## 验证与修改影响
 
 ```bash
-cargo test --manifest-path zeta-rs/Cargo.toml -p zeta-file-watcher
-cargo clippy --manifest-path zeta-rs/Cargo.toml -p zeta-file-watcher \
+cargo test --manifest-path Cargo.toml -p zeta-file-watcher
+cargo clippy --manifest-path Cargo.toml -p zeta-file-watcher \
   --all-targets --no-deps -- -D warnings
 bazel test //zeta-rs/file-watcher:file-watcher-unit-tests
 ```

@@ -11,13 +11,34 @@
 ## Learnings
 
 - 在把新能力接入 `native` 前，先按依赖方向判断其是否属于通用框架机制。帧调度、失效等级、retained presentation、Scene fragment 生命周期和局部重建策略应优先由 `zui` 提供后端无关契约；`native` 只保留产品状态映射、平台事件适配和具体 Part/Overlay 组合，不得因接入方便复制或拥有框架运行时。
-- Prefer one Rust import per line over brace-grouped imports. For example, prefer `use foo::Bar;` and `use foo::Baz;` over `use foo::{Bar, Baz};`. This keeps each dependency independently editable, produces minimal diffs, and makes `apply_patch` targets reliable.
+
+## Product ownership
+
+- `zeta-rs/` is the shared Rust backend boundary. Shared protocol, App Server, domain, storage,
+  execution, terminal semantics, and other backend-neutral crates belong there; product hosts do not.
+- `zeterm/` owns the native `zeterm` product, including `zui`, `zeta-ui`, renderer, `wgpu`, and
+  `winit` under `zeterm/crates`.
+- `zeta-code/` owns the `zeta code` product host: `zeta-cli` and `zeta-tui`. Do not add TUI
+  presentation, raw-mode lifecycle, Ratatui interaction, or CLI product composition to `zeta-rs/`.
+- All three boundaries may remain members of the single root Cargo workspace; workspace membership
+  does not change implementation ownership.
+
+## Native 迁移边界
+
+- `zeta-rs/native` 已进入弃用迁移期。后续默认不得向其中新增产品能力、通用 UI 机制、组件实现、布局算法、交互树、动画、deadline、retained lifecycle 或新的状态 owner；不要把 Native 当作新功能的落点。
+- 新能力必须先落到正确的长期 owner：后端无关的 frame、layout、paint、inspection、interaction、animation、失效和 retained lifecycle 放入 `zui`；可复用 UI 组件放入 `zeta-ui`；文件、SCM、编辑器、终端等领域能力放入对应领域 crate。
+- Native 只允许保留三类改动：删除或迁移旧实现的兼容改动；把平台事件、产品状态和 command 映射到下层 canonical API 的薄适配；维持现有产品宿主运行所必需的最小组合接线。任何例外都必须在改动说明中写明 owner、迁移终点和删除条件。
+- 不得在 Native 新建 framework helper、第二套 registry/timer、重复的 layout 或 inspection 计算、手写 interaction registration，或为了绕过下层 API 在 Native 增加新的公共抽象。优先扩展下层 owner，再回到 Native 做最小 adapter 接线。
+- 修改既有 Native 文件时，优先把代码迁出、标记 `deprecated`、缩小职责或删除；不得因为已有实现就在 Native 继续扩展同一职责。Native 的 split scene/interaction host boundary 属于迁移债务，清零后应删除。
+- 如果任务看起来需要“往 Native 里写”，先停下来重新判断是否应移动到 `zui`、`zeta-ui` 或领域 crate；无法证明只是薄适配或迁移清理时，不得直接实现。
 
 # Only for Rust Crates
 
 - Newly added traits should include doc comments that explain their role and how implementations are expected to use them.
 - Avoid bool or ambiguous `Option` parameters that force callers to write hard-to-read code such as `foo(false)` or `bar(None)`. Prefer enums, named methods, newtypes, or other idiomatic Rust API shapes when they keep the callsite self-documenting.
 - Prefer private modules and explicitly exported public crate API.
+- Prefer file-based Rust module roots over `mod.rs`: use `foo.rs` for the `foo` module and `foo/bar.rs` for its child modules. The parent module should compose private children and explicitly re-export the public API; implementation details belong in named child modules. Do not introduce new `foo/mod.rs` files. Keep an existing `mod.rs` only when compatibility, generated code, or an external layout constraint requires it, and migrate it to `foo.rs` when the module is substantially modified.
+- Prefer one Rust import per line over brace-grouped imports. For example, prefer `use foo::Bar;` and `use foo::Baz;` over `use foo::{Bar, Baz};`.
 - Avoid large modules:
   - Prefer adding new modules instead of growing existing ones.
   - Target Rust modules under 500 LoC, excluding tests.

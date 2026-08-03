@@ -4,7 +4,8 @@
 > 状态：开发期目标架构
 > 原则：按长期领域边界直接演进，不保留开发期旧 API 或旧持久化格式的兼容层。
 > 产品线映射：`zeta code` 是 TUI，`zeta` 是 Electron Desktop，`zeterm` 是纯 Rust Desktop；
-> 三者共享本文描述的协议、Core 与 App Server 边界。
+> 三者共享 Session-first Agent 产品契约。`zeterm` 的终端/PTY 宿主可以直接组合终端运行时，但
+> 不得为 Agent 的 Session/Thread/Turn/Item 能力绕过 App Server。
 
 ## 快速理解
 
@@ -17,6 +18,7 @@
 | 谁拥有状态迁移？ | Core 中的纯 reducer 与协调器 | [Session 协调器](#5-session-协调器)、[Thread 控制器](#6-thread-控制器) |
 | 谁拥有持久化格式？ | 一个共享事件流引擎，Session/Thread 只保留类型化适配器 | [唯一物理事件流](#4-唯一物理-event-stream-引擎) |
 | 客户端能否拥有另一套状态？ | 不能；Desktop、CLI、TUI 只消费统一 App Server API | [App Server](#8-app-server) |
+| 外部请求从哪里进入？ | App Server 是 Session/Thread/Turn/Item 的唯一外部进入/输出门禁 | [App Server](#8-app-server) 与 [App Server API](zeta-app-server-api.md) |
 | 开发期旧接口如何处理？ | 直接迁移权威契约和调用方，不建立隐藏兼容层 | 本文固定原则 |
 
 ## 1. 结论
@@ -27,7 +29,7 @@ Canonical 产品模型、契约分类与 sequence/ID 语义统一由
 
 ```mermaid
 flowchart LR
-    Client["Desktop / CLI / TUI"] --> API["App Server Protocol"]
+    Client["Desktop / CLI / TUI / Agent host"] --> API["App Server Protocol"]
     API --> Server["App Server"]
     Server --> SR["Session Coordinator"]
     SR --> TR["Thread Controller"]
@@ -44,8 +46,10 @@ flowchart LR
 - Session 与 Thread reducer 都是纯函数；
 - Session 与 Thread 各自拥有逻辑 sequence；
 - storage 的物理 framing、checksum、atomic append 和断尾恢复只有一套实现；
-- App Server 只做 transport、路由、subscription 和 DTO 编解码；
-- Desktop、CLI 与 TUI 消费同一个 Session-first 产品 API。
+- App Server 是产品能力的唯一外部门禁，只做传输、路由、订阅和 DTO 编解码，
+  不复制 Core reducer 或 Store authority；
+- Desktop、CLI、TUI 与任何 Agent host 消费同一个 Session-first 产品 API；进程内嵌也必须经过
+  同一个 dispatcher。
 
 ## 2. Crate 边界
 
@@ -204,7 +208,9 @@ method 与 serialized params 不得成为 Core 的幂等身份。
 
 ## 8. App Server
 
-App Server 的唯一产品 API 见 [Zeta App Server API](zeta-app-server-api.md)。
+App Server 是 `Session → Thread → Turn → ThreadItem` 产品能力的唯一外部进入/输出门禁。
+完整的参与者、允许路径和禁止旁路见 [Zeta App Server API](zeta-app-server-api.md#唯一外部门禁)；
+本节只保留跨组件 ownership 和长期不变量。
 
 它暴露：
 
@@ -216,7 +222,7 @@ App Server 的唯一产品 API 见 [Zeta App Server API](zeta-app-server-api.md)
 - `session/update` / `thread/update`。
 
 App Server connection state 只保存 request ID、subscription cursor、resource ownership 与
-transport state；它不是产品 Session。
+transport state；它不是产品 Session，也不能成为 Core 领域状态的第二份 authority。
 
 订阅使用 snapshot + durable gap：
 
@@ -230,15 +236,19 @@ subscribe(afterSequence)
 durable sequence 用于恢复与并发控制；`StreamCursor` 只用于同一 stream incarnation 中可能丢失的瞬态
 delta。客户端不得把二者压成一个 sequence。
 
-## 9. Desktop、CLI 与 TUI
+## 9. Desktop、CLI、TUI 与 Native host
 
-三个入口都先创建或读取 Session，再在 Session 内创建/选择 Thread。任何入口都不得：
+所有需要 Agent 产品能力的入口都先创建或读取 Session，再在 Session 内创建/选择 Thread。任何
+入口都不得：
 
 - 直接创建无 Session 的 Thread；
 - 从 notification 文本推断权威状态；
 - 用 JSON-RPC request ID 代替 CommandId；
 - 在客户端维护第二份领域状态机；
 - 依赖旧 `thread/start`、`thread/resume` 或 `thread/list`。
+
+`zeterm` 当前直接组合终端/PTY 运行时的路径只服务终端宿主，不是 Agent 产品接口；如果未来
+Native host 暴露 Session/Thread/Turn/Item，则必须使用同一 App Server protocol 和 dispatcher。
 
 Desktop preload 只暴露自包含的 `ISandboxGlobals`，其中没有 Node API、Electron event 或不受约束
 的频道；`createElectronRendererApi()` 是它的唯一产品适配器，为 Workbench 提供强类型 capability。

@@ -1,4 +1,4 @@
-# zeta-rs 产品内核与统一对外层
+# zeta-rs 共享后端与统一对外层
 
 > 当前基线：[Zeta 长期架构](zeta-code-architecture-codex-style-v2.md) 与
 > [App Server API](zeta-app-server-api.md)。
@@ -6,20 +6,20 @@
 
 ## 快速理解
 
-`zeta-rs` 是完整的 Rust 产品内核，Core 只是其中的执行控制面；协议、存储、配置、模型、工具和
-产品接口各有独立边界，不能都塞回 Core。
+`zeta-rs` 是多个产品共享的 Rust 后端；Core 只是其中的执行控制面。协议、存储、配置、模型、工具和
+产品接口各有独立边界，不能都塞回 Core，产品宿主也不应反向放回这里。
 
 | 想知道什么 | 直接答案 | 从哪里继续 |
 | --- | --- | --- |
 | 哪些状态由 Rust 权威拥有？ | Session、Thread、Turn、工具生命周期、配置与持久化事实 | [核心](#4-核心) |
-| Desktop 和 CLI 如何调用？ | 统一经过 App Server API，不链接 Core 或解析终端输出 | [对外接口](#8-app-server) |
+| Desktop、`zeta-code` 和其他 Agent 客户端如何调用？ | 统一经过 App Server API，不链接 Core、Store 或 Provider | [对外接口](#8-app-server) |
 | protocol、Core 和 storage 有什么区别？ | 分别拥有共享语义、状态协调和物理持久化机制 | [Protocol 边界](#3-protocol-边界) |
 | 为什么有这么多 crate？ | 按可独立验证的责任拆分，不按功能名称堆成通用 service | [Workspace 边界](#2-workspace-边界) |
 | 具体函数和修改路径在哪里？ | 进入对应 crate README，系统文档不复制私有实现 | [文档规范](documentation-guidelines.md) |
 
 ## 1. Workspace 职责
 
-`zeta-rs/` 是完整 Rust 产品实现，`zeta-rs/core/` 是领域运行时。它负责：
+`zeta-rs/` 是共享 Rust 后端，`zeta-rs/core/` 是领域运行时。它负责：
 
 - Session、Thread、Turn、ThreadItem 的 reducer、命令与恢复；
 - Agent/model/tool 执行编排；
@@ -28,7 +28,7 @@
 - App Server、client、transport；
 - Rust、TypeScript 与 JSON Schema contract tests。
 
-Desktop UI、Electron IPC、终端渲染和第三方网页 UI 不属于 Rust Core。
+Desktop UI、Electron IPC、`zeta-code` 的 TUI 宿主和第三方网页 UI 不属于共享后端。
 
 ## 2. Workspace 边界
 
@@ -47,10 +47,9 @@ zeta-rs/
 ├── syntax/               # bounded incremental tree-sitter analysis；不拥有文件、索引或 presentation
 ├── terminal-detection/   # host terminal identity/color capability 与 background fallback interpretation
 ├── theme/                # shared manifest/user-theme resolver 与 device-local bounded loader
-├── editor/               # Native CodeEditor/DiffEditor/MultiDiffEditor presentation；不拥有文件或产品宿主
 ├── editor-core/          # 纯 Rust text transaction / selection / history；不拥有 presentation 或 transport
 ├── text-file/            # UTF-8 文件保存基线、磁盘版本与外部变化冲突；不拥有 editor 或 I/O
-├── markdown/             # bounded CommonMark/GFM parsing、layout 与 Native presentation
+├── markdown/             # shared bounded CommonMark/GFM parsing；presentation 位于 zeterm/crates
 ├── lsp/                  # LSP stdio lifecycle、request pairing、document sync 与 server events
 ├── language-server-catalog/ # 内置 server、可信 executable resolution 与 availability；不启动进程
 ├── language-server-distribution/ # verified package staging 与 side-by-side install storage
@@ -77,16 +76,13 @@ zeta-rs/
 ├── zeta-api/
 ├── http-client/           # shared proxy/TLS/unary HTTP substrate；stream/WebSocket 尚未实现
 ├── zeta-client/           # API operation retry 与 SSE framing layer
-├── zui/                   # 后端无关 Element/layout、paint primitive、inspection 与 immutable scene
-├── ui/                    # 基于 zui 的可复用 presentation component；暂时兼容 re-export zui API
-├── renderer/              # UiScene 到图形后端的稳定执行契约；不依赖具体 GPU API
-├── winit/                 # App Server 下方的底层 event-loop/native-window crate
-├── wgpu/                  # Renderer 的当前 wgpu 实现；拥有 GPU pipeline/surface，不拥有 product identity
 ├── exec/                  # target headless Agent runner
 ├── tool-executor/         # target local process execution boundary
-├── tui/
-└── cli/
 ```
+
+产品宿主不属于共享后端：`zeterm` 的 `zui`、`zeta-ui`、renderer、`wgpu` 和 `winit` 位于
+`zeterm/crates`；`zeta-code` 的 `zeta-cli` 与 `zeta-tui` 位于 `zeta-code/`。它们仍加入同一个
+根 Cargo workspace，但 ownership 由物理目录和依赖方向表达。
 
 当前 `exec/` 仍实现 process `ToolExecutor`。它迁移为 `tool-executor/` 后，`exec/` 名称用于
 [`exec.md`](exec.md) 定义的 headless Agent runner；迁移完成前不能把目标目录注释理解为现状。
@@ -122,19 +118,19 @@ Rust `zeta-editor` 内部组合的底层分析 crate，不是 App Server 产品 
 `zeta-theme` 当前嵌入 Desktop registry 生成的语言中立 manifest，严格解析同一用户主题 JSON，
 解析 alias/transform/default graph，并从 device-local `configuration.json` 与 `themes/*.json`
 选择 Graphical/Terminal snapshot。它不依赖 renderer、不拥有组件 geometry，也不进入 Agent
-config、Session/Thread store。Native 消费完整相关 palette，TUI 只消费明确子集；当前 API、
+config、Session/Thread store。`zeterm/zeterm` 消费完整相关 palette，TUI 只消费明确子集；当前 API、
 失败语义和 conformance contract 见 [`theme/README.md`](../zeta-rs/theme/README.md)。
 
-`zeta-editor` 当前拥有 Native 使用的多行编辑、caret/selection、undo/redo、IME、language-aware
+`zeta-editor` 当前拥有 `zeterm/zeterm` 使用的多行编辑、caret/selection、undo/redo、IME、language-aware
 syntax lifecycle/projection、普通文档结构折叠、viewport soft wrap 与 source/visual row 映射、代码视口绘制、retained `DiffEditorDocument`、复用两个 CodeEditor pane 的 side-by-side DiffEditor，以及纵向组合
 多个文件 section 的 MultiDiffEditor；它依赖
-`zeta-ui`、`zeta-diff` 和 `zeta-syntax`，但不依赖 `zeta-native`，也不拥有文件 Tab、平台事件、EditorHost 或
+`zeta-ui`、`zeta-diff` 和 `zeta-syntax`，但不依赖 `zeterm/zeterm`，也不拥有文件 Tab、平台事件、EditorHost 或
 TUI presentation。当前 API、接入义务和限制见
-[`editor/README.md`](../zeta-rs/editor/README.md)。
+[`editor/README.md`](../zeterm/crates/editor/README.md)。
 
 `zeta-editor-core` 当前拥有不依赖 renderer 或 transport 的纯 Rust document transaction vertical
-slice：UTF-16 selection、revision-bound atomic multi-edit、bounded undo/redo 和 snapshot。Native
-`CodeEditorDocument` 是当前真实消费者，以 persistent core 持有 committed text/history/revision，Native text
+slice：UTF-16 selection、revision-bound atomic multi-edit、bounded undo/redo 和 snapshot。`zeterm/zeterm`
+的 `CodeEditorDocument` 是当前真实消费者，以 persistent core 持有 committed text/history/revision，zeterm text
 projection 仅供行索引、syntax、folding 与绘制使用。Zeta Alpha 是独立的 TypeScript Browser editor，拥有自己的
 PieceTree、transaction、history、selection 和 tracked ranges；它只异步消费 Rust file/language/workspace service，
 不通过 WASM 或 App Server shadow document 调用 `zeta-editor-core`。跨运行时边界见
@@ -142,7 +138,7 @@ PieceTree、transaction、history、selection 和 tracked ranges；它只异步�
 
 `zeta-text-file` 当前拥有与编辑器实现无关的 UTF-8 文件生命周期：保存文本基线、磁盘版本、
 只读状态、dirty/reload/conflict 分类、乐观保存 payload 与待处理外部 snapshot。它不读取或写入
-文件、不拥有 mutable editor text、Tab、关闭确认或 presentation。Native 把 active
+文件、不拥有 mutable editor text、Tab、关闭确认或 presentation。`zeterm/zeterm` 把 active
 `CodeEditorDocument` 的当前文本交给该领域模型，并通过 App Server 的独立文件能力执行 I/O；
 Native 拥有关闭确认和 reload/conflict 操作条，而显式覆盖请求仍使用待处理外部 snapshot 的版本
 执行乐观 preflight，磁盘再次变化时不会无条件写入；
@@ -150,24 +146,24 @@ Native 拥有关闭确认和 reload/conflict 操作条，而显式覆盖请求�
 [`text-file/README.md`](../zeta-rs/text-file/README.md)。
 
 `zeta-markdown` 当前拥有有资源上限的 CommonMark/GFM parsing、只读文档 snapshot、富文本与
-block layout 和 Native presentation，并消费 `zeta-ui::ScrollState`；它依赖 `zeta-ui`，但不依赖
-`zeta-native`，也不拥有消息 identity、网络图片、链接激活、平台输入或持久化。当前 API、
-信任边界和限制见 [`markdown/README.md`](../zeta-rs/markdown/README.md)。
+block layout 和 zeterm presentation，并消费 `zeta-ui::ScrollState`；它依赖 `zeta-ui`，但不依赖
+`zeterm/zeterm`，也不拥有消息 identity、网络图片、链接激活、平台输入或持久化。当前 API、
+信任边界和限制见 [`markdown/README.md`](../zeterm/crates/markdown/README.md)。
 
 `zeta-lsp` 当前拥有单语言服务器的 stdio/async transport、initialize gate、typed request
 pairing、deadline cancellation、文档同步版本、push diagnostics 与规范关闭；宿主路由层另外
 把一个 language ID 绑定到一个 initialized client，保存 editor revision / server incarnation /
-document version，并在显式 replacement 时重放当前全文。它不依赖 `zeta-editor` 或
-`zeta-native`，也不拥有 server discovery、安装、workspace 配置、restart policy 或 UI projection。
+document version，并在显式 replacement 时重放当前全文。它不依赖 `zeta-editor` 或 zeterm host，也不拥有
+server discovery、安装、workspace 配置、restart policy 或 UI projection。
 它会上报规范关闭之外的 transport-close 事实；`zeta-language-service` 用 generation/server epoch
 隔离旧实例，拥有断连 route retirement、有限指数退避、crash-loop gate 和 authoritative snapshot
 重放。跨层所有权与当前阶段见 [`lsp.md`](lsp.md)，当前 API 和修改路径见
 [`lsp/README.md`](../zeta-rs/lsp/README.md)。
 
-`zeta-language-service` 把 fresh diagnostics 转换为 product-neutral UTF-8 document ranges；Native
+`zeta-language-service` 把 fresh diagnostics 转换为 product-neutral UTF-8 document ranges；zeterm
 adapter 只负责转换到 `CodeEditorDiagnostic` 并按精确 editor revision 选择缓存，CodeEditor 自己
 完成跨行、soft-wrap 波浪线与命中，Native 在命中后绘制 hover detail。任何 LSP 类型进入 editor
-crate，或 Native 重新计算波浪线 geometry，都表示该边界发生漂移。
+crate，或 zeterm 重新计算波浪线 geometry，都表示该边界发生漂移。
 
 `zeta-language-server-catalog` 当前拥有内置 Rust、JSON/JSONC、Shell server identity、
 Automatic/Enabled/Disabled preference、execution policy gate、冻结 PATH candidate 校验、canonical
@@ -184,9 +180,9 @@ provider 与 Config/Native 激活 UI 是独立产品责任。
 
 `zeta-language-service` 当前位于产品宿主与 `zeta-lsp` 之间，拥有显式 enablement、resolved
 definition 消费、非阻塞文档/request API、editor revision / LSP version freshness、位置编码转换、
-server generation 和 supervisor thread 生命周期。Native 已把文件 open/change/save/close、workspace
+server generation 和 supervisor thread 生命周期。`zeterm/zeterm` 已把文件 open/change/save/close、workspace
 replacement、hover/completion/definition 和事件循环接到该层；PATH 中存在有效内置 server 时启用
-对应 route；config generation 变化时 Native 重建服务并重放全部打开文档。它不读取文件、不依赖
+对应 route；config generation 变化时 zeterm 重建服务并重放全部打开文档。它不读取文件、不依赖
 `zeta-editor`、不发现 executable，也不绘制 UI。crate contract 见
 [`language-service/README.md`](../zeta-rs/language-service/README.md)。
 
@@ -194,11 +190,11 @@ replacement、hover/completion/definition 和事件循环接到该层；PATH 中
 domain-agnostic logical-pixel offset、clamp、viewport clip、内容坐标、同源 scrollbar
 paint/hit/track-page/thumb-drag geometry，以及 hover/active/fade deadline。MultiDiffEditor
 复用这套基座；平台 wheel normalization、pointer capture，以及 Terminal scrollback 的距底部
-行偏移、输出增长锚定和 alternate-screen 分流仍由 `zeta-native` 拥有，不能迁入通用 ScrollView。
+行偏移、输出增长锚定和 alternate-screen 分流仍由 `zeterm/zeterm` 拥有，不能迁入通用 ScrollView。
 
 组件到 GPU 的依赖方向固定为 `zeta-ui Component → zui::UiScene → Renderer → concrete backend`；
 `UiScene` 通过 `SceneBatch` 保留跨 primitive 的真实绘制顺序。`zui` 不依赖组件 crate、窗口系统或
-wgpu，`zeta-ui` 只向下依赖 `zui`；Native 只保存
+wgpu，`zeta-ui` 只向下依赖 `zui`；`zeterm/zeterm` 只保存
 `dyn Renderer`，当前具体类型只在 composition-root adapter 中选择。Native 的 interaction 与
 accessibility frame 不进入 renderer。完整所有权、后端替换路径和架构约束见
 [`rendering-architecture.md`](rendering-architecture.md)。
@@ -356,7 +352,11 @@ Rust `app-server-client` 是本地 App Server 的共享宿主层：负责启动�
 channel wiring 和显式 shutdown，详细边界见
 [`app-server-client.md`](app-server-client.md)。进程内 typed channel 是性能优化，不是语义
 捷径；Rust 本地路径与 Desktop JSONL 路径都必须经过 typed request/response、initialize、
-dispatcher 和 notification contract。长期可增加相同 contract 的 remote App Server backend。
+dispatcher 和 notification contract。对于 `Session`、`Thread`、`Turn`、`ThreadItem` 产品能力，
+App Server 是唯一外部进入/输出边界；长期可增加相同契约的远程 App Server 后端。
+
+`zeterm` 当前的 Rust 进程内直接组合只覆盖终端/PTY 宿主。它不能把该宿主路径扩展成 Agent
+产品的 Core 旁路；Native Agent 能力必须复用同一个 App Server 契约和分发器。
 
 `zeta-mcp-server` 当前通过该 client 将 stdio/Streamable HTTP MCP `zeta` / `zeta-reply` tool
 call 映射到 canonical Session/Thread/Turn，并提供 bounded progress、approval/user-input form

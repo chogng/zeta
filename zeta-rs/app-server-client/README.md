@@ -140,9 +140,9 @@ Connection driver 在 request response completion 发送之前持有 delivery ba
 ## 验证
 
 ```bash
-cargo test --manifest-path zeta-rs/Cargo.toml -p zeta-app-server-client
-cargo test --manifest-path zeta-rs/Cargo.toml -p zeta-tui
-cargo test --manifest-path zeta-rs/Cargo.toml -p zeta-cli
+cargo test --manifest-path Cargo.toml -p zeta-app-server-client
+cargo test --manifest-path Cargo.toml -p zeta-tui
+cargo test --manifest-path Cargo.toml -p zeta-cli
 ```
 
 Session tests覆盖空闲连接 notification、Turn completion event、显式 shutdown、最终

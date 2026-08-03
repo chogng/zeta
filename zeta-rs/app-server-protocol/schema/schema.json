@@ -599,6 +599,22 @@
           "properties": {
             "method": {
               "type": "string",
+              "const": "session/stop"
+            },
+            "params": {
+              "$ref": "#/$defs/SessionCommandParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
               "const": "session/model/set"
             },
             "params": {
@@ -1724,6 +1740,22 @@
             "method": {
               "type": "string",
               "const": "session/archive"
+            },
+            "result": {
+              "$ref": "#/$defs/SessionResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "session/stop"
             },
             "result": {
               "$ref": "#/$defs/SessionResult"

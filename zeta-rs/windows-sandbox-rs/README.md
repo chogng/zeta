@@ -69,7 +69,7 @@ marker 时，必须同步本 crate tests、`zeta-install-context`、package buil
 composition 和系统文档。
 
 ```bash
-cargo test --manifest-path zeta-rs/Cargo.toml -p zeta-windows-sandbox
-cargo check --manifest-path zeta-rs/Cargo.toml \
+cargo test --manifest-path Cargo.toml -p zeta-windows-sandbox
+cargo check --manifest-path Cargo.toml \
   --target x86_64-pc-windows-msvc -p zeta-windows-sandbox --all-targets
 ```

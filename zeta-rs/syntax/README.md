@@ -73,8 +73,8 @@ collection 达到对应 `AnalysisLimits` 后停止收集，不会把仍可使用
 ## 测试、修改影响与当前限制
 
 ```bash
-cargo test --manifest-path zeta-rs/Cargo.toml -p zeta-syntax
-cargo clippy --manifest-path zeta-rs/Cargo.toml -p zeta-syntax --all-targets -- -D warnings
+cargo test --manifest-path Cargo.toml -p zeta-syntax
+cargo clippy --manifest-path Cargo.toml -p zeta-syntax --all-targets -- -D warnings
 bazel test //zeta-rs/syntax:syntax-unit-tests
 ```
 

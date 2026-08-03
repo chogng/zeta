@@ -21,8 +21,8 @@
 
 当前内置项包括 `rust-analyzer → rust`、`vscode-json-language-server --stdio → json/jsonc` 和
 `bash-language-server start → shellscript`。Native 从 App Server Config snapshot 映射各自的持久化 preference；
-未配置时使用 `Automatic`。允许执行且冻结 PATH 中存在可执行文件时生成 definition；否则保持无
-server。显式 override 是 authoritative，失效时不会回退 PATH。
+未配置时使用 `Disabled`，需要显式选择 `Automatic` 或 `Enabled` 才会生成 definition。允许执行且冻结
+PATH 中存在可执行文件时生成 definition；否则保持无 server。显式 override 是 authoritative，失效时不会回退 PATH。
 
 ## 执行路径、失败和扩展
 
@@ -58,8 +58,8 @@ Native composition
 ## 测试与当前限制
 
 ```bash
-cargo test --manifest-path zeta-rs/Cargo.toml -p zeta-language-server-catalog
-cargo clippy --manifest-path zeta-rs/Cargo.toml -p zeta-language-server-catalog --all-targets -- -D warnings
+cargo test --manifest-path Cargo.toml -p zeta-language-server-catalog
+cargo clippy --manifest-path Cargo.toml -p zeta-language-server-catalog --all-targets -- -D warnings
 ```
 
 测试覆盖三项 built-in 的 Automatic PATH resolution/route/launch arguments、execution policy gate 和

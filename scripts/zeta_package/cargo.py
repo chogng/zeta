@@ -21,13 +21,13 @@ def resolve_zeta_binary(
             explicit_binary, "Zeta executable", "--zeta-bin", spec.is_windows
         )
 
-    rust_workspace = repository_root / "zeta-rs"
-    target_directory = rust_workspace / "target"
+    rust_workspace = repository_root
+    target_directory = repository_root / "target"
     command = [
         cargo,
         "build",
         "--manifest-path",
-        str(rust_workspace / "Cargo.toml"),
+        str(repository_root / "Cargo.toml"),
         "--package",
         "zeta-cli",
         "--bin",

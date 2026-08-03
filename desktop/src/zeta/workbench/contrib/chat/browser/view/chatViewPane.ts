@@ -210,7 +210,7 @@ export class ChatViewPane extends ViewPane {
     }
     const sessionId = pane.sessionId;
     if (!sessionId) return;
-    void this.sessionService.archiveSession(sessionId).then(() => this.hideChatWhenEmpty()).catch(() => {});
+    void this.sessionService.stopSession(sessionId).then(() => this.hideChatWhenEmpty()).catch(() => {});
   }
 
   private moveTab(sourceTabId: string, targetTabId: string | undefined, position: "before" | "after"): void {

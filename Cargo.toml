@@ -1,0 +1,256 @@
+[workspace]
+members = [
+    "zeta-rs/add-dir",
+    "zeta-rs/agent-import",
+    "zeta-rs/app-server",
+    "zeta-rs/app-server-client",
+    "zeta-rs/app-server-protocol",
+    "zeta-rs/app-server-transport",
+    "zeta-rs/apply-patch",
+    "zeta-rs/async-utils",
+    "zeta-rs/auto-review",
+    "zeta-rs/bwrap",
+    "zeta-code/cli",
+    "zeta-rs/config",
+    "zeta-rs/core",
+    "zeta-rs/diff",
+    "zeta-rs/editor-core",
+    "zeta-rs/secrets",
+    "zeta-rs/exec",
+    "zeta-rs/file-icons",
+    "zeta-rs/file-identity",
+    "zeta-rs/file-search",
+    "zeta-rs/file-system",
+    "zeta-rs/file-system-tool",
+    "zeta-rs/file-watcher",
+    "zeta-rs/git",
+    "zeta-rs/http-client",
+    "zeta-rs/install-context",
+    "zeta-rs/language-server-catalog",
+    "zeta-rs/language-server-distribution",
+    "zeta-rs/language-service",
+    "zeta-rs/linux-sandbox",
+    "zeta-rs/lsp",
+    "zeta-rs/model-provider",
+    "zeta-rs/model-provider-config",
+    "zeta-rs/mcp",
+    "zeta-rs/mcp-server",
+    "zeta-rs/policy",
+    "zeta-rs/plugins",
+    "zeta-rs/prompts",
+    "zeta-rs/protocol",
+    "zeta-rs/rollout",
+    "zeta-rs/rollout-trace",
+    "zeta-rs/rmcp-client",
+    "zeta-rs/sandboxing",
+    "zeta-rs/session-store",
+    "zeta-rs/shell-command",
+    "zeta-rs/slash-commands",
+    "zeta-rs/skills",
+    "zeta-rs/storage",
+    "zeta-rs/syntax",
+    "zeta-rs/terminal",
+    "zeta-rs/text-file",
+    "zeta-rs/theme",
+    "zeta-rs/thread-store",
+    "zeta-rs/tools",
+    "zeta-code/tui",
+    "zeta-rs/utils/path-uri",
+    "zeta-rs/utils/path-utils",
+    "zeta-rs/utils/pdf",
+    "zeta-rs/utils/pty",
+    "zeta-rs/utils/typst",
+    "zeta-rs/windows-sandbox-rs",
+    "zeta-rs/workspace",
+    "zeta-rs/search",
+    "zeta-rs/zeta-api",
+    "zeta-rs/zeta-client",
+    "zeterm",
+    "zeterm/crates/agent-sidebar",
+    "zeterm/crates/editor",
+    "zeterm/crates/icons",
+    "zeterm/crates/keybinding",
+    "zeterm/crates/markdown",
+    "zeterm/crates/renderer",
+    "zeterm/crates/settings",
+    "zeterm/crates/ui",
+    "zeterm/crates/wgpu",
+    "zeterm/crates/winit",
+    "zeterm/crates/zui",
+]
+default-members = ["zeterm"]
+resolver = "3"
+
+[workspace.package]
+edition = "2024"
+license-file = "LICENSE"
+publish = false
+version = "0.1.0"
+
+[workspace.dependencies]
+anyhow = "1"
+arboard = { version = "3", features = ["wayland-data-control"] }
+base64 = "0.22"
+bytemuck = { version = "1", features = ["derive"] }
+cc = "1"
+clap = "4"
+cosmic-text = "0.19.0"
+dunce = "1"
+getrandom = "0.2"
+glyphon = "0.12.0"
+image = { version = "0.25.10", default-features = false }
+ignore = "0.4"
+lazy_static = "1"
+libc = "0.2"
+log = "0.4"
+lsp-types = "0.97"
+# Recursive workspace watches must use FSEvents on macOS; kqueue holds one file
+# descriptor per watched entry and exhausts the process limit on large workspaces.
+notify = { version = "8.2.0", default-features = false, features = ["macos_fsevent"] }
+nucleo = { git = "https://github.com/helix-editor/nucleo.git", rev = "4253de9faabb4e5c6d81d946a5e35a90f87347ee" }
+pdfium-render = { version = "0.9.3", default-features = false, features = ["pdfium_7763", "thread_safe"] }
+pollster = "1.0.1"
+portable-pty = "0.9.0"
+pkg-config = "0.3"
+pretty_assertions = "1"
+crossterm = "0.28.1"
+pulldown-cmark = { version = "0.13.4", default-features = false }
+ratex-layout = "0.1.14"
+ratex-parser = "0.1.14"
+ratex-svg = { version = "0.1.14", features = ["embed-fonts"] }
+ratex-types = "0.1.14"
+ratatui = "0.29.0"
+resvg = { version = "0.47", default-features = false }
+schemars = "1.2.1"
+semver = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_yaml = "0.9"
+signal-hook = "0.3"
+syntect = { version = "5.3.0", default-features = false, features = ["default-fancy"] }
+sys-locale = "0.3"
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+rustls-native-certs = "0.7"
+rustix = "1.1.4"
+rmcp = { version = "=3.0.0-beta.3", default-features = false }
+rusqlite = { version = "0.40.1", features = ["bundled"] }
+sha2 = "0.10"
+strum = "0.27"
+strum_macros = "0.27"
+ts-rs = { version = "12.0.1", features = ["serde-compat"] }
+typst = "=0.15.1"
+typst-assets = { version = "=0.15.1", features = ["fonts"] }
+typst-pdf = "=0.15.1"
+tokio = "1"
+thiserror = "2"
+tempfile = "3"
+toml = "0.9"
+tree-sitter = "0.26.11"
+tree-sitter-bash = "0.25.1"
+tree-sitter-json = "0.24.8"
+tree-sitter-rust = "0.24.2"
+unicode-segmentation = "1"
+unicode-width = "0.2"
+url = "2"
+urlencoding = "2"
+ureq = { version = "2.12", features = ["json", "native-certs"] }
+vte = "0.15.0"
+wgpu = "30.0.0"
+winit = "0.30.13"
+windows-sys = "0.59"
+zeroize = "1"
+zeta-add-dir = { path = "zeta-rs/add-dir" }
+zeta-agent-import = { path = "zeta-rs/agent-import" }
+zeta-agent-sidebar = { path = "zeterm/crates/agent-sidebar" }
+zeta-app-server = { path = "zeta-rs/app-server" }
+zeta-app-server-client = { path = "zeta-rs/app-server-client" }
+zeta-app-server-protocol = { path = "zeta-rs/app-server-protocol" }
+zeta-app-server-transport = { path = "zeta-rs/app-server-transport" }
+zeta-apply-patch = { path = "zeta-rs/apply-patch" }
+zeta-async-utils = { path = "zeta-rs/async-utils" }
+zeta-auto-review = { path = "zeta-rs/auto-review" }
+zeta-bwrap = { path = "zeta-rs/bwrap" }
+zeta-api = { path = "zeta-rs/zeta-api" }
+zeta-client = { path = "zeta-rs/zeta-client" }
+zeta-config = { path = "zeta-rs/config" }
+zeta-core = { path = "zeta-rs/core" }
+zeta-diff = { path = "zeta-rs/diff" }
+zeta-editor = { path = "zeterm/crates/editor" }
+zeta-editor-core = { path = "zeta-rs/editor-core" }
+zeta-exec = { path = "zeta-rs/exec" }
+zeta-icons = { path = "zeterm/crates/icons" }
+zeta-file-icons = { path = "zeta-rs/file-icons" }
+zeta-file-identity = { path = "zeta-rs/file-identity" }
+zeta-file-search = { path = "zeta-rs/file-search" }
+zeta-file-system = { path = "zeta-rs/file-system" }
+zeta-file-system-tool = { path = "zeta-rs/file-system-tool" }
+zeta-file-watcher = { path = "zeta-rs/file-watcher" }
+zeta-git = { path = "zeta-rs/git" }
+zeta-http-client = { path = "zeta-rs/http-client" }
+zeta-install-context = { path = "zeta-rs/install-context" }
+zeta-keybinding = { path = "zeterm/crates/keybinding" }
+zeta-language-server-catalog = { path = "zeta-rs/language-server-catalog" }
+zeta-language-server-distribution = { path = "zeta-rs/language-server-distribution" }
+zeta-language-service = { path = "zeta-rs/language-service" }
+zeta-linux-sandbox = { path = "zeta-rs/linux-sandbox" }
+zeta-lsp = { path = "zeta-rs/lsp" }
+zeta-markdown = { path = "zeterm/crates/markdown" }
+zeta-mcp = { path = "zeta-rs/mcp" }
+zeta-mcp-server = { path = "zeta-rs/mcp-server" }
+zeta-model-provider = { path = "zeta-rs/model-provider" }
+zeta-model-provider-config = { path = "zeta-rs/model-provider-config" }
+zeta-policy = { path = "zeta-rs/policy" }
+zeta-plugins = { path = "zeta-rs/plugins" }
+zeta-prompts = { path = "zeta-rs/prompts" }
+zeta-protocol = { path = "zeta-rs/protocol" }
+zeta-renderer = { path = "zeterm/crates/renderer" }
+zeta-rollout = { path = "zeta-rs/rollout" }
+zeta-rollout-trace = { path = "zeta-rs/rollout-trace" }
+zeta-rmcp-client = { path = "zeta-rs/rmcp-client" }
+zeta-sandboxing = { path = "zeta-rs/sandboxing" }
+zeta-search = { path = "zeta-rs/search" }
+zeta-secrets = { path = "zeta-rs/secrets" }
+zeta-session-store = { path = "zeta-rs/session-store" }
+zeta-settings = { path = "zeterm/crates/settings" }
+zeta-shell-command = { path = "zeta-rs/shell-command" }
+zeta-slash-commands = { path = "zeta-rs/slash-commands" }
+zeta-skills = { path = "zeta-rs/skills" }
+zeta-storage = { path = "zeta-rs/storage" }
+zeta-syntax = { path = "zeta-rs/syntax" }
+zeta-terminal = { path = "zeta-rs/terminal" }
+zeta-terminal-detection = { path = "zeta-rs/terminal-detection" }
+zeta-text-file = { path = "zeta-rs/text-file" }
+zeta-theme = { path = "zeta-rs/theme" }
+zeta-thread-store = { path = "zeta-rs/thread-store" }
+zeta-tools = { path = "zeta-rs/tools" }
+zeta-tui = { path = "zeta-code/tui" }
+zeta-ui = { path = "zeterm/crates/ui" }
+zeta-utils-path = { path = "zeta-rs/utils/path-utils" }
+zeta-utils-path-uri = { path = "zeta-rs/utils/path-uri" }
+zeta-pdf = { path = "zeta-rs/utils/pdf" }
+zeta-typst = { path = "zeta-rs/utils/typst" }
+zeta-utils-pty = { path = "zeta-rs/utils/pty" }
+zeta-wgpu = { path = "zeterm/crates/wgpu" }
+zeta-windows-sandbox = { path = "zeta-rs/windows-sandbox-rs" }
+zeta-winit = { path = "zeterm/crates/winit" }
+zeta-workspace = { path = "zeta-rs/workspace" }
+zui = { path = "zeterm/crates/zui" }
+
+[profile.dev]
+# Keep line tables and backtraces without generating full variable debug information.
+debug = "limited"
+
+[profile.dev-small]
+inherits = "dev"
+opt-level = 0
+debug = "none"
+strip = "symbols"
+
+[profile.ci-test]
+# Reduce binary size and disk pressure in CI test builds.
+inherits = "test"
+opt-level = 0
+debug = "limited"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"

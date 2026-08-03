@@ -8,13 +8,15 @@
 
 ## 快速理解
 
-Zeta 不是一个 UI 宿主的三种包装，而是三条产品线共享 Rust 后端契约、各自拥有 UI 宿主：
+Zeta 不是一个 UI 宿主的三种包装，而是三条产品线共享 Rust 后端契约、各自拥有 UI 宿主。凡是
+`Session`、`Thread`、`Turn`、`ThreadItem` Agent 产品能力，都必须经过 App Server；`zeterm`
+当前直接组合的路径只属于终端/PTY 宿主，不是 Agent API 的例外。
 
 | 产品线 | 产品形态 | 当前 UI/宿主 | 前后端接线 | 终端实现边界 |
 | --- | --- | --- | --- | --- |
-| `zeta code` | TUI 产品 | `zeta-rs/cli` + `zeta-rs/tui` | `zeta-app-server-client` 连接 App Server | TUI 管理自己的 `crossterm`/`ratatui` 宿主终端；不直接拥有子 PTY |
+| `zeta code` | TUI 产品 | `zeta-code/cli` + `zeta-code/tui` | `zeta-app-server-client` 连接 App Server | TUI 管理自己的 `crossterm`/`ratatui` 宿主终端；不直接拥有子 PTY |
 | `zeta` | Electron Desktop | Renderer + Preload + Electron Main | Electron Main 启动并桥接 Rust App Server | 当前 Renderer 用 xterm；Rust/App Server 管理 `zeta-utils-pty` |
-| `zeterm` | 纯 Rust Desktop | `zeta-rs/native` 原生窗口与 UI | Rust 进程内直接组合 | `zeta-terminal` 负责终端语义，`zeta-utils-pty` 负责 PTY/进程 |
+| `zeterm` | 纯 Rust Desktop | `zeterm/` 原生窗口与 UI | Rust 进程内直接组合 | `zeta-terminal` 负责终端语义，`zeta-utils-pty` 负责 PTY/进程 |
 
 产品线与 Electron 的内部构建变体不是同一个维度。当前 Desktop 仍保留 `code`、`academic`、
 `complete` 这些源码和构建标识；它们是 `zeta` Electron Desktop 的构建变体，不代表
@@ -32,6 +34,7 @@ flowchart LR
     Server --> Pty["zeta-utils-pty"]
     Term["zeterm\nRust Desktop"] --> Core["zeta-terminal"]
     Term --> Pty
+    Term -. "Agent capability only" .-> Server
 ```
 
 `Electron Main` 只属于 `zeta` 产品线。它负责 Electron 生命周期、App Server 子进程监督、
@@ -50,7 +53,7 @@ flowchart LR
 | 产品后端层 | Rust App Server | 连接级 Terminal session、授权、生命周期和 protocol DTO | Renderer DOM 或 TUI 绘制 |
 | Electron 桥接层 | `zeta` 的 Electron Main | 进程监督、trusted IPC、Renderer adapter | 复制 Rust 终端状态机 |
 | TUI 宿主层 | `zeta code` 的 `zeta-tui` | raw mode、alternate screen、输入事件和 Ratatui frame | 第二套 Agent runtime 或 PTY authority |
-| Native 宿主层 | `zeterm` 的 `zeta-native` | 原生窗口、GPU/UI、终端输入输出组合 | Electron Main、Renderer bridge |
+| Native 宿主层 | `zeterm` 的 `zeterm/` | 原生窗口、GPU/UI、终端输入输出组合 | Electron Main、Renderer bridge |
 
 因此，`zeta-terminal` 不能被 `zeta-utils-pty` 替代。两者在 `zeterm` 中已经是上下层组合；
 在 `zeta` 中是否由 App Server 进一步组合 `zeta-terminal`，取决于是否把终端语义状态从
@@ -61,9 +64,9 @@ Renderer 的 xterm 投影迁移为 Rust authoritative state，这属于独立的
 
 | 公开产品线 | 当前代码入口 | 当前状态 |
 | --- | --- | --- |
-| `zeta code` | `zeta-rs/cli` 的 `zeta` binary → `zeta-tui` | TUI 产品路径已存在；TUI 通过 App Server Client 工作 |
+| `zeta code` | `zeta-code/cli` 的 `zeta` binary → `zeta-tui` | TUI 产品路径已存在；TUI 通过 App Server Client 工作 |
 | `zeta` | `desktop` Electron client | Electron Desktop 已存在；默认 Renderer 仍使用 `code` 这一内部构建 ID |
-| `zeterm` | `zeta-rs/native` 的 `zeterm` binary | 纯 Rust Desktop 已存在，并直接组合 `zeta-terminal` 与 `zeta-utils-pty` |
+| `zeterm` | `zeterm/` 的 `zeterm` binary | 终端宿主已存在，并直接组合 `zeta-terminal` 与 `zeta-utils-pty`；Agent 能力尚未作为 Native 旁路提供 |
 
 ## Canonical `just` 命令
 
@@ -78,5 +81,5 @@ Renderer 的 xterm 投影迁移为 Rust authoritative state，这属于独立的
 产品线命令是唯一的公开 `just` 命令面；不要重新添加以 `tui` 或 `native` 为名的实现层别名。
 
 修改产品归属、前后端接线或终端 owner 时，先以本文的产品线定义为准，再分别更新对应
-宿主文档和实现 README；不要用 `code`、`zeta-tui` 或 `zeta-native` 这些内部标识反推公开
+宿主文档和实现 README；不要用 `code`、`zeta-tui` 或旧的 Native 迁移标识反推公开
 产品线名称。

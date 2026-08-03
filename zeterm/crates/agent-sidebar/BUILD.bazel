@@ -1,0 +1,7 @@
+load("//zeterm:defs.bzl", "zeterm_rust_library")
+
+zeterm_rust_library(
+    name = "agent-sidebar",
+    crate_name = "zeta_agent_sidebar",
+    package_name = "zeterm/crates/agent-sidebar",
+)

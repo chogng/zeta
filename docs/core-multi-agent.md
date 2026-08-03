@@ -1,5 +1,14 @@
 # 多 Agent 协作系统
 
+> 状态：仅设计（例外：`Fork` 的 lineage anchor 与空 child Thread 创建已实现，见 §4）。
+> `MultiAgentCoordinator`、`DelegationId`、`AgentMessageId`、`AgentContextSeed` 在代码中
+> 尚无引用。落地分两段：先契约冻结
+> （[阶段 D](zeta-agent-runtime-architecture.md#阶段-d多-agent-契约冻结)，只进 protocol、
+> 无运行时），再运行时
+> （[阶段 E](zeta-agent-runtime-architecture.md#阶段-emultiagentcoordinator)，gate 在上下文
+> 系统之后）；理由见
+> [`zeta-agent-runtime-architecture.md` R4](zeta-agent-runtime-architecture.md#44-r4多-agent-契约冻结先行)。
+>
 > Core 总体边界：[`core.md`](core.md)
 > Context 与 ContextManager：[`core-context.md`](core-context.md)
 > Canonical Session/Thread/Turn contract：[`protocol.md`](protocol.md)
@@ -549,16 +558,28 @@ projection，不公开 coordinator 内部状态机。
 
 ## 16. 落地顺序
 
+落地分两段执行；跨层阶段定义与完成条件由
+[`zeta-agent-runtime-architecture.md` §7](zeta-agent-runtime-architecture.md#7-分阶段实施计划)
+权威维护。
+
+**阶段 D｜契约冻结（只进 protocol，无 Core 运行时）：**
+
 1. 冻结 `DelegationId`、Agent spawn 与 message/result 语义；
 2. 区分 `ThreadOrigin::Fork` 与 Agent spawn；
 3. 定义 ContextSeed 及 `Fresh/Selected/ForkedPrefix`；
-4. 增加 parent delegation durable facts；
-5. 用可恢复 saga 创建 child Thread；
-6. 增加 child execution、result 和 durable join；
-7. 增加 outbox/inbox delivery 与 steering；
-8. 增加 cancellation tree 与 Agent tree budget；
-9. 增加 UI projection 和跨 crate contract；
-10. 完成 crash、duplicate、late result 与 isolation 测试。
+4. delegation requested/started/terminal facts、`DelegationResult` Item 进入 canonical
+   protocol，同步 Rust types / JSON Schema / generated TS / fixtures。
+
+**阶段 E｜运行时（gate：阶段 B 上下文系统完成 + 阶段 D 契约测试通过 + spawn saga fault
+injection 框架就绪）：**
+
+5. 增加 parent delegation durable facts 的 Core 接线；
+6. 用可恢复 saga 创建 child Thread；
+7. 增加 child execution、result 和 durable join；
+8. 增加 outbox/inbox delivery 与 steering；
+9. 增加 cancellation tree 与 Agent tree budget；
+10. 增加 UI projection 和跨 crate contract；
+11. 完成 crash、duplicate、late result 与 isolation 测试。
 
 第一阶段不需要：
 

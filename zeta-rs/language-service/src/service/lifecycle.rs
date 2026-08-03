@@ -5,6 +5,9 @@ use super::*;
 impl Supervisor {
     pub(super) async fn enable(&mut self) {
         self.generation = self.generation.saturating_add(1).max(1);
+        for (_, retry) in self.retry_tasks.drain() {
+            retry.abort();
+        }
         for server in self.servers.values_mut() {
             server.phase = ManagedServerPhase::Stopped;
             server.restart.reset();
@@ -16,6 +19,9 @@ impl Supervisor {
     }
 
     fn start_server(&mut self, name: &LanguageServerName) {
+        if let Some(retry) = self.retry_tasks.remove(name) {
+            retry.abort();
+        }
         let Some(server) = self.servers.get_mut(name) else {
             return;
         };
@@ -61,6 +67,7 @@ impl Supervisor {
     }
 
     pub(super) fn retry_server(&mut self, name: &LanguageServerName, server_epoch: u64) {
+        self.retry_tasks.remove(name);
         let can_retry = self.servers.get(name).is_some_and(|server| {
             server.epoch == server_epoch && server.phase == ManagedServerPhase::BackingOff
         });
@@ -84,9 +91,7 @@ impl Supervisor {
             });
         if !current {
             if let Ok(client) = result {
-                tokio::spawn(async move {
-                    let _ = client.shutdown().await;
-                });
+                let _ = client.shutdown().await;
             }
             return;
         }
@@ -97,7 +102,9 @@ impl Supervisor {
                 return;
             }
         };
+        let client_for_shutdown = client.clone();
         if let Err(error) = self.router.register(route, client) {
+            let _ = client_for_shutdown.shutdown().await;
             if let Some(server) = self.servers.get_mut(&name) {
                 server.phase = ManagedServerPhase::Terminal;
             }
@@ -185,7 +192,7 @@ impl Supervisor {
                 let commands = self.commands.clone();
                 let server = name.clone();
                 let generation = self.generation;
-                tokio::spawn(async move {
+                let retry = tokio::spawn(async move {
                     tokio::time::sleep(retry_after).await;
                     let _ = commands.send(SupervisorCommand::RetryServer {
                         server,
@@ -193,6 +200,9 @@ impl Supervisor {
                         server_epoch,
                     });
                 });
+                if let Some(previous) = self.retry_tasks.insert(name.clone(), retry) {
+                    previous.abort();
+                }
             }
         }
     }
@@ -253,6 +263,9 @@ impl Supervisor {
         self.generation = self.generation.saturating_add(1).max(1);
         for (_, launch) in self.launches.drain() {
             launch.abort();
+        }
+        for (_, retry) in self.retry_tasks.drain() {
+            retry.abort();
         }
         for document in self.documents.values_mut() {
             document.routed = false;

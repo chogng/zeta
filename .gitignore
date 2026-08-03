@@ -1,5 +1,5 @@
 # Rust build products
-zeta-rs/target/
+target/
 
 # Bazel creates these workspace-root symlinks for its output tree.
 /bazel-*

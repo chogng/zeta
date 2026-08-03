@@ -1,0 +1,6 @@
+load("//:defs.bzl", "zeta_rust_crate")
+
+zeta_rust_crate(
+    name = "language-server-distribution",
+    crate_name = "zeta_language_server_distribution",
+)

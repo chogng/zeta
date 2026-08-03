@@ -80,6 +80,10 @@ Agent 生命周期能够成为 authority 的前提。
 
 当前实现是演进地基，不应被描述成完整的异步、多 Agent 执行系统。
 
+跨层组件状态总账与状态标记词表（已实现 / 部分 / 仅设计 / 推迟）由
+[`zeta-agent-runtime-architecture.md`](zeta-agent-runtime-architecture.md#2-组件状态总账)
+维护；本文各组件章节挂对应标记，不重复总表。
+
 ## 3. 所有权边界
 
 ### 3.1 核心拥有
@@ -200,7 +204,7 @@ membership / defaults        one logical writer
               ModelService   ToolService
 ```
 
-### 5.1 SessionCoordinator
+### 5.1 SessionCoordinator（已实现）
 
 负责：
 
@@ -217,7 +221,7 @@ membership / defaults        one logical writer
 - token/reasoning streaming；
 - 等待 model、Tool 或 child Agent 完成。
 
-### 5.2 ThreadController
+### 5.2 ThreadController（已实现）
 
 每个已加载 Thread 对应一个逻辑状态提交者。实现可以是 mailbox task 或 keyed executor，但必须
 满足：
@@ -233,7 +237,7 @@ membership / defaults        one logical writer
 
 “一个 Thread 一个常驻 task”只是实现选择，不是公共契约。
 
-### 5.3 LoadedThreadState
+### 5.3 LoadedThreadState（已实现）
 
 这是 Core-private 的进程内状态：
 
@@ -260,7 +264,7 @@ incarnation 与 cancellation 绑定。worker 空闲 30 秒后只回收匹配 inc
 projection；下一次访问从 `ThreadStore` 重建。运行中的 execution 会阻止显式 recovery，
 因此 completion 不可能跨越 incarnation；测试中的强制 stale context 也会被拒绝。
 
-### 5.4 TurnExecutor
+### 5.4 TurnExecutor（已实现：顺序循环）
 
 负责一个已经 accepted 的 Turn：
 
@@ -286,7 +290,7 @@ projection、写 store 或提前发布 committed update。
 Turn 就继续执行。安全边界应由可取消的 token/cost/deadline policy 和 durable usage accounting
 表达，不能使用 approval 或 recovery 后会重置的进程内计数器。
 
-### 5.5 ContextManager 与 ContextAssembler
+### 5.5 ContextManager 与 ContextAssembler（ContextAssembler 已实现（过渡）；其余仅设计）
 
 两者必须分开：
 
@@ -301,7 +305,7 @@ ContextManager 可以缓存按 `ThreadSequence`、policy revision 和 model capa
 索引的派生视图，但不能维护第二份 canonical transcript。完整契约见
 [`core-context.md`](core-context.md)。
 
-### 5.6 MultiAgentCoordinator
+### 5.6 MultiAgentCoordinator（仅设计）
 
 这是只在多 Agent 模式下参与的跨 Thread 协调组件，负责：
 
@@ -359,18 +363,24 @@ zeta-core → Desktop / CLI / TUI
 
 最小端口集合：
 
-| Port | Core 为什么消费 | 实现位置 |
-| --- | --- | --- |
-| `SessionStore` | Session load/append | storage adapter |
-| `ThreadStore` | Thread load/append | storage adapter |
-| `WriterLease<Id>` | aggregate 单写者 | storage/host |
-| `ModelService` | provider-neutral model invocation | model-provider adapter |
-| `ToolService` | 已物化 Tool call 的执行 | built-in/MCP host |
-| `PolicyService` | action approval/sandbox 决策 | host policy layer |
-| `CapabilityBroker` | Turn-scoped capability 解析 | App Server/host |
-| `CompactionService` | 生成候选 summary | model/host adapter |
-| `Clock` | deadline 与可测试时间 | host |
-| `IdGenerator` | 稳定 operation identity | host |
+| Port | 状态 | Core 为什么消费 | 实现位置 |
+| --- | --- | --- | --- |
+| `SessionStore` | 已实现 | Session load/append | storage adapter |
+| `ThreadStore` | 已实现 | Thread load/append | storage adapter |
+| `WriterLease<Id>` | 已实现 | aggregate 单写者 | storage/host |
+| `ModelService` | 已实现（同步；流式默认桥接见 `ModelStreamSink`） | provider-neutral model invocation | model-provider adapter |
+| `ToolService` | 已实现（含 `prepare` / `review_evidence` / `execute_streaming`） | 已物化 Tool call 的执行 | built-in/MCP host |
+| `PolicyService` | 已实现 | action approval/sandbox 决策 | host policy layer |
+| `ThreadUpdateSink` | 已实现 | committed/transient update 发布 | App Server subscription hub |
+| `ToolOutputSink` | 已实现 | Tool Call transient output | App Server/host |
+| `CapabilityBroker` | 仅设计 | Turn-scoped capability 解析 | App Server/host |
+| `CompactionService` | 仅设计（阶段 B） | 生成候选 summary | model/host adapter |
+| `Clock` | 仅设计 | deadline 与可测试时间 | host |
+| `IdGenerator` | 仅设计 | 稳定 operation identity | host |
+
+当前端口均为同步调用 + `CancellationToken` 协作取消；执行内核不承诺 async 化，理由与重新
+评审条件见
+[`zeta-agent-runtime-architecture.md` R2](zeta-agent-runtime-architecture.md#42-r2同步执行内核流式经-sink)。
 
 Port 必须是 consumer-owned interface。新 trait 必须说明角色、实现不变量、取消和错误约束。
 公共 request 不使用语义含糊的 `bool` 或 `Option` 参数。
@@ -456,7 +466,10 @@ outcome 处理，exact call 不自动重放。
 
 ## 8. 模型调用与流式处理
 
-一个 Turn 固定：
+一个 Turn 固定（快照层当前为**仅设计**；policy 冻结已修订为 durable fact，见
+[`zeta-agent-runtime-architecture.md` R1](zeta-agent-runtime-architecture.md#41-r1policy-冻结-durable-化)——
+`TurnAccepted` 持久化 policy revision，进程内 `TurnPolicySnapshot` 只是冻结 fact 的派生
+视图。模型选择已通过 `TurnAccepted` 携带 model 实现冻结）：
 
 ```rust
 pub struct TurnPolicySnapshot {
@@ -680,6 +693,14 @@ result 不能无声丢失。
 
 ## 13. 目标目录与公开 API
 
+以下是**目标目录**，不是当前布局。当前实现为扁平模块
+（`session_coordinator.rs`、`thread_controller.rs` 及其子目录、`thread_reducer.rs`、
+`turn/`、`context/assembler.rs` 等）；`thread_controller.rs`（1189 LoC）、
+`session_coordinator.rs`（998 LoC）与 `thread_reducer.rs`（947 LoC）已越过下方 800 LoC
+约束，是
+[`zeta-agent-runtime-architecture.md` 阶段 A](zeta-agent-runtime-architecture.md#阶段-a地基修整)
+的拆分对象；在拆分完成前，这三个文件不再接受新功能。
+
 ```text
 zeta-rs/core/src/
 ├─ lib.rs
@@ -781,7 +802,11 @@ Fault-injection tests：
 
 ### 14.2 落地顺序
 
-1. 将现有 Session/Thread 大文件按 aggregate 拆入目标目录；
+跨层阶段划分（阶段 A–E）与完成条件由
+[`zeta-agent-runtime-architecture.md` §7](zeta-agent-runtime-architecture.md#7-分阶段实施计划)
+权威维护；下面是 Core 内部视角的对应顺序：
+
+1. 将现有 Session/Thread 大文件按 aggregate 拆入目标目录（阶段 A）；
 2. 已引入 `LoadedThreadState`、显式 incarnation、idle eviction、FIFO mutation gate 和有界
    execution mailbox；
 3. 落地 `TurnPolicySnapshot` / `ModelInvocationSnapshot`；

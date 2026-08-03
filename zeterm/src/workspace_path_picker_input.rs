@@ -1,0 +1,436 @@
+use std::time::Instant;
+
+use zeta_ui::{Point, ScrollCommand, ScrollDelta};
+use zeta_winit::{ElementState, Key, KeyEvent, MouseButton, MouseScrollDelta, NamedKey};
+use zui::{
+    DispatchInvalidation, DispatchOutcome, ElementId, FocusDirection, InteractionFrame,
+    NavigationAxis, UiDispatch,
+};
+
+use crate::NativeApp;
+use crate::file_editor_host::FileEditorCloseRequest;
+use crate::shell_interaction::CONTEXT_WORKING_DIRECTORY;
+use crate::terminal_selection::{read_clipboard_text, write_clipboard_text};
+use crate::workspace_path_picker::{
+    PICKER_ITEM_HEIGHT, WORKSPACE_PATH_SEARCH_INPUT, WorkspacePathPickerActivation,
+    WorkspacePathPickerState, workspace_path_item_id,
+};
+
+const PICKER_ROWS_PER_WHEEL_STEP: f32 = 3.0;
+
+impl NativeApp {
+    pub(super) fn toggle_workspace_path_picker(&mut self) {
+        if self.workspace_path_picker.is_open() {
+            self.dismiss_workspace_path_picker();
+            return;
+        }
+        let anchor = self.presentation.as_ref().and_then(|presentation| {
+            presentation
+                .accessibility_nodes
+                .iter()
+                .find(|node| node.id == CONTEXT_WORKING_DIRECTORY)
+                .map(|node| node.bounds)
+        });
+        let Some(anchor) = anchor else {
+            return;
+        };
+        let restore_focus = self.ui_dispatch.focused();
+        if let Err(error) = self.workspace_path_picker.open(
+            anchor,
+            self.workspace_context.working_directory(),
+            self.workspace_context.git_repository_root(),
+            restore_focus,
+        ) {
+            eprintln!("could not open workspace path picker: {error}");
+            return;
+        }
+        self.session_context_menu.dismiss();
+        self.git_branch_context_menu.dismiss();
+        self.rebuild_and_focus_workspace_path_search();
+    }
+
+    pub(super) fn activate_workspace_path_picker_element(&mut self, id: ElementId) -> bool {
+        let Some(index) = self.workspace_path_picker.item_index(id) else {
+            return false;
+        };
+        let activation = match self.workspace_path_picker.activate(index) {
+            Ok(Some(activation)) => activation,
+            Ok(None) => return true,
+            Err(error) => {
+                eprintln!("could not browse workspace directory: {error}");
+                return true;
+            }
+        };
+        match activation {
+            WorkspacePathPickerActivation::BrowseChanged => {
+                self.rebuild_and_focus_workspace_path_search();
+            }
+            WorkspacePathPickerActivation::SelectWorkspace(directory) => {
+                if self.file_editor_host.request_workspace_replace()
+                    == FileEditorCloseRequest::NeedsConfirmation
+                {
+                    eprintln!(
+                        "could not switch workspace while the active file has unsaved changes"
+                    );
+                    return true;
+                }
+                let switched = match self.agent_session.as_ref() {
+                    Some(session) => session.switch_workspace(directory),
+                    None => Err(anyhow::anyhow!("Agent session is unavailable")),
+                };
+                let switched = match switched {
+                    Ok(switched) => switched,
+                    Err(error) => {
+                        eprintln!("could not switch App Server workspace: {error}");
+                        return true;
+                    }
+                };
+                if let Err(error) = self
+                    .workspace_context
+                    .switch_working_directory(switched.root)
+                {
+                    eprintln!("could not switch workspace directory: {error}");
+                    return true;
+                }
+                self.workspace_context
+                    .apply_git_projection(switched.git.as_ref());
+                self.replace_agent_sidebar_workspace();
+                self.language_service
+                    .replace_workspace(self.workspace_context.working_directory());
+                self.file_editor_host.replace_workspace();
+                self.file_editor_input.reset_for_document_change();
+                self.workspace_surface.show_agent();
+                self.pending_focus = Some(crate::shell_interaction::COMPOSER);
+                self.refresh_files_from_app_server();
+                self.composer
+                    .set_working_directory(self.workspace_context.working_directory());
+                self.dismiss_workspace_path_picker();
+            }
+        }
+        true
+    }
+
+    pub(super) fn route_workspace_path_picker_pointer_move(&mut self, point: Point) -> bool {
+        if !self.workspace_path_picker.is_open() {
+            return false;
+        }
+        let outcome =
+            self.presentation
+                .as_ref()
+                .map_or_else(DispatchOutcome::default, |presentation| {
+                    update_workspace_path_picker_pointer(
+                        &mut self.ui_dispatch,
+                        &self.workspace_path_picker,
+                        point,
+                        presentation.interaction_frame(),
+                    )
+                });
+        self.update_cursor();
+        self.apply_dispatch_outcome(outcome);
+        true
+    }
+
+    pub(super) fn route_workspace_path_picker_button(
+        &mut self,
+        state: ElementState,
+        button: MouseButton,
+    ) -> bool {
+        if !self.workspace_path_picker.is_open() {
+            return false;
+        }
+        if button != MouseButton::Left {
+            if state == ElementState::Pressed {
+                self.dismiss_workspace_path_picker();
+            }
+            return true;
+        }
+        let target = self
+            .cursor_position
+            .zip(self.presentation.as_ref())
+            .and_then(|(point, presentation)| presentation.interaction_frame().target_at(point));
+        match state {
+            ElementState::Pressed
+                if target.is_some_and(|id| self.workspace_path_picker.is_picker_element(id)) =>
+            {
+                self.primary_button_changed(state);
+            }
+            ElementState::Pressed => {
+                self.dismiss_workspace_path_picker();
+            }
+            ElementState::Released => {
+                self.primary_button_changed(state);
+            }
+        }
+        true
+    }
+
+    pub(super) fn route_workspace_path_picker_wheel(&mut self, delta: MouseScrollDelta) -> bool {
+        if !self.workspace_path_picker.is_open() {
+            return false;
+        }
+        let Some(metrics) = self
+            .presentation
+            .as_ref()
+            .and_then(|presentation| presentation.workspace_path_picker_scroll_metrics)
+        else {
+            return true;
+        };
+        if self
+            .workspace_path_picker
+            .apply_scroll(workspace_path_picker_scroll_command(delta), metrics)
+        {
+            self.project_workspace_path_picker_hover_after_scroll();
+            self.rebuild_overlay_on_next_redraw();
+        }
+        true
+    }
+
+    fn project_workspace_path_picker_hover_after_scroll(&mut self) {
+        let Some(point) = self.cursor_position else {
+            return;
+        };
+        let Some(presentation) = self.presentation.as_ref() else {
+            return;
+        };
+        let Some(viewport) = presentation.workspace_path_picker_item_viewport else {
+            return;
+        };
+        if !viewport.contains(point) {
+            return;
+        }
+        let content_y = point.y - viewport.origin.y
+            + self.workspace_path_picker.scroll_state().vertical_offset();
+        let index = (content_y / PICKER_ITEM_HEIGHT).floor() as usize;
+        self.ui_dispatch.hover_element(
+            workspace_path_item_id(index),
+            presentation.interaction_frame(),
+        );
+    }
+
+    pub(super) fn route_workspace_path_picker_keyboard(&mut self, event: &KeyEvent) -> bool {
+        if !self.workspace_path_picker.is_open() {
+            return false;
+        }
+        let Some(presentation) = self.presentation.as_ref() else {
+            return true;
+        };
+        let frame = presentation.interaction_frame();
+        if self.ui_dispatch.is_focused(WORKSPACE_PATH_SEARCH_INPUT) {
+            match &event.logical_key {
+                Key::Named(NamedKey::Escape) => {
+                    self.dismiss_workspace_path_picker();
+                }
+                Key::Named(NamedKey::ArrowDown) => {
+                    let outcome = self.ui_dispatch.focus_within_group(
+                        frame,
+                        FocusDirection::Next,
+                        NavigationAxis::Vertical,
+                    );
+                    self.apply_workspace_path_picker_navigation(outcome);
+                }
+                Key::Named(NamedKey::ArrowUp) => {
+                    let outcome = self.ui_dispatch.focus_within_group(
+                        frame,
+                        FocusDirection::Previous,
+                        NavigationAxis::Vertical,
+                    );
+                    self.apply_workspace_path_picker_navigation(outcome);
+                }
+                Key::Named(NamedKey::Tab) => {
+                    let direction = if self.modifiers.shift_key() {
+                        FocusDirection::Previous
+                    } else {
+                        FocusDirection::Next
+                    };
+                    let outcome = self.ui_dispatch.focus_within_group(
+                        frame,
+                        direction,
+                        NavigationAxis::Vertical,
+                    );
+                    self.apply_workspace_path_picker_navigation(outcome);
+                }
+                Key::Named(NamedKey::Enter) => {
+                    if let Some(id) = self.workspace_path_picker.first_action_id() {
+                        self.activate_workspace_path_picker_element(id);
+                    }
+                }
+                Key::Character(text)
+                    if is_shortcut(self.modifiers) && text.eq_ignore_ascii_case("c") =>
+                {
+                    if let Some(text) = self.workspace_path_picker.selected_search_text()
+                        && let Err(error) = write_clipboard_text(text.to_string())
+                    {
+                        eprintln!("could not copy workspace folder search text: {error}");
+                    }
+                }
+                Key::Character(text)
+                    if is_shortcut(self.modifiers) && text.eq_ignore_ascii_case("v") =>
+                {
+                    match read_clipboard_text() {
+                        Ok(text) => self
+                            .workspace_path_picker
+                            .apply_search(zeta_ui::TextInputCommand::Insert(text)),
+                        Err(error) => {
+                            eprintln!("could not paste workspace folder search text: {error}")
+                        }
+                    }
+                    self.workspace_path_search_changed();
+                }
+                _ => {
+                    if let Some(command) =
+                        crate::terminal_input::text_input_command(event, self.modifiers)
+                    {
+                        self.workspace_path_picker.apply_search(command);
+                        self.workspace_path_search_changed();
+                    }
+                }
+            }
+            return true;
+        }
+        let outcome = match &event.logical_key {
+            Key::Named(NamedKey::Escape) => {
+                self.dismiss_workspace_path_picker();
+                return true;
+            }
+            Key::Named(NamedKey::ArrowUp) => self.ui_dispatch.focus_within_group(
+                frame,
+                FocusDirection::Previous,
+                NavigationAxis::Vertical,
+            ),
+            Key::Named(NamedKey::ArrowDown) => self.ui_dispatch.focus_within_group(
+                frame,
+                FocusDirection::Next,
+                NavigationAxis::Vertical,
+            ),
+            Key::Named(NamedKey::Tab) => {
+                let direction = if self.modifiers.shift_key() {
+                    FocusDirection::Previous
+                } else {
+                    FocusDirection::Next
+                };
+                self.ui_dispatch
+                    .focus_within_group(frame, direction, NavigationAxis::Vertical)
+            }
+            Key::Named(NamedKey::Enter) => self.ui_dispatch.activate_focused(frame),
+            Key::Character(text) if text == " " => self.ui_dispatch.activate_focused(frame),
+            _ => Default::default(),
+        };
+        self.apply_workspace_path_picker_navigation(outcome);
+        true
+    }
+
+    pub(super) fn dismiss_workspace_path_picker(&mut self) -> bool {
+        if !self.workspace_path_picker.is_open() {
+            return false;
+        }
+        let restore_focus = self.workspace_path_picker.dismiss();
+        self.rebuild_presentation();
+        if let Some(restore_focus) = restore_focus {
+            let focus_outcome = self
+                .presentation
+                .as_ref()
+                .map(|presentation| {
+                    self.ui_dispatch
+                        .focus_element(presentation.interaction_frame(), restore_focus)
+                })
+                .unwrap_or_default();
+            if focus_outcome.invalidation == DispatchInvalidation::Paint {
+                self.rebuild_presentation();
+            }
+        }
+        self.update_cursor();
+        self.request_redraw();
+        true
+    }
+
+    fn rebuild_and_focus_workspace_path_search(&mut self) {
+        self.rebuild_presentation();
+        let focus_outcome = self
+            .presentation
+            .as_ref()
+            .map(|presentation| {
+                self.ui_dispatch.focus_element(
+                    presentation.interaction_frame(),
+                    WORKSPACE_PATH_SEARCH_INPUT,
+                )
+            })
+            .unwrap_or_default();
+        if focus_outcome.invalidation == DispatchInvalidation::Paint {
+            self.rebuild_presentation();
+        }
+        self.sync_input_focus();
+        self.update_cursor();
+        self.request_redraw();
+    }
+
+    fn workspace_path_search_changed(&mut self) {
+        self.caret_blink.activity(Instant::now());
+        self.rebuild_presentation();
+        self.sync_input_focus();
+        self.request_redraw();
+    }
+
+    fn apply_workspace_path_picker_navigation(&mut self, outcome: DispatchOutcome) {
+        self.apply_dispatch_outcome(outcome);
+        let Some(index) = self
+            .ui_dispatch
+            .focused()
+            .and_then(|id| self.workspace_path_picker.item_index(id))
+        else {
+            return;
+        };
+        let Some(metrics) = self
+            .presentation
+            .as_ref()
+            .and_then(|presentation| presentation.workspace_path_picker_scroll_metrics)
+        else {
+            return;
+        };
+        if self
+            .workspace_path_picker
+            .ensure_item_visible(index, metrics)
+        {
+            self.rebuild_presentation();
+            self.request_redraw();
+        }
+    }
+}
+
+fn is_shortcut(modifiers: zeta_winit::ModifiersState) -> bool {
+    modifiers.control_key() || modifiers.super_key()
+}
+
+fn workspace_path_picker_scroll_command(delta: MouseScrollDelta) -> ScrollCommand {
+    let pixels = match delta {
+        MouseScrollDelta::LineDelta(_, vertical) => {
+            vertical * PICKER_ROWS_PER_WHEEL_STEP * PICKER_ITEM_HEIGHT
+        }
+        MouseScrollDelta::PixelDelta(position) => position.y as f32,
+    };
+    ScrollCommand::ByPixels(ScrollDelta::vertical(-pixels))
+}
+
+fn update_workspace_path_picker_pointer(
+    dispatch: &mut UiDispatch,
+    state: &WorkspacePathPickerState,
+    point: Point,
+    frame: &InteractionFrame,
+) -> DispatchOutcome {
+    let pointer_outcome = dispatch.pointer_moved(point, frame);
+    let focus_outcome = frame
+        .target_at(point)
+        .filter(|target| state.item_index(*target).is_some())
+        .map(|target| dispatch.focus_element(frame, target))
+        .unwrap_or_default();
+    DispatchOutcome {
+        invalidation: if pointer_outcome.invalidation == DispatchInvalidation::Paint
+            || focus_outcome.invalidation == DispatchInvalidation::Paint
+        {
+            DispatchInvalidation::Paint
+        } else {
+            DispatchInvalidation::None
+        },
+        intent: None,
+        fragment: None,
+    }
+}

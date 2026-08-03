@@ -279,6 +279,11 @@ client_methods! {
         response: SessionResult,
         serialization: SessionExclusive,
     },
+    SessionStop => "session/stop" {
+        params: SessionCommandParams,
+        response: SessionResult,
+        serialization: SessionExclusive,
+    },
     SessionModelSet => "session/model/set" {
         params: SessionModelSetParams,
         response: SessionResult,

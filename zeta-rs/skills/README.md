@@ -95,8 +95,8 @@ grant，或 catalog 反向依赖 Core/App Server，表示 crate ownership 已经
 ## 验证
 
 ```bash
-cargo test --manifest-path zeta-rs/Cargo.toml -p zeta-skills
-cargo clippy --manifest-path zeta-rs/Cargo.toml \
+cargo test --manifest-path Cargo.toml -p zeta-skills
+cargo clippy --manifest-path Cargo.toml \
   -p zeta-skills --all-targets --no-deps -- -D warnings
 bazel test //zeta-rs/skills:skills-unit-tests
 ```

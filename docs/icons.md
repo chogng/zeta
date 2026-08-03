@@ -3,7 +3,7 @@
 > 状态：Current。
 > 本文拥有跨 Desktop、Rust native 与 renderer 的 product-icon ownership。Canonical SVG
 > 文件操作见 [`resources/README.md`](../resources/README.md)，Rust API 与生成路径见
-> [`zeta-icons`](../zeta-rs/icons/README.md)。
+> [`zeta-icons`](../zeterm/crates/icons/README.md)。
 
 ## 快速理解
 
@@ -74,7 +74,7 @@ Native shell 从 `zeta-icons::icons` 选择语义 icon，再交给 component；t
 ```bash
 node scripts/sync-rust-icons.mjs
 node scripts/sync-rust-icons.mjs --check
-cargo test --manifest-path zeta-rs/Cargo.toml -p zeta-icons -p zeta-ui
+cargo test --manifest-path Cargo.toml -p zeta-icons -p zeta-ui
 ```
 
 Desktop 继续运行自己的 generate/check/optimize workflow。新增 SVG 必须同时更新两个 checked-in

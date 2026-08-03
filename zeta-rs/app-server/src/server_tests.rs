@@ -572,6 +572,51 @@ fn session_first_flow_exposes_canonical_session_and_thread_models() {
 }
 
 #[test]
+fn session_stop_archives_the_session_and_blocks_new_turns() {
+    let server = server();
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+    let session = create_session(&server, &mut connection, 2, "create-session");
+    let session_id = session["result"]["session"]["sessionId"].as_str().unwrap();
+    let thread = create_thread(&server, &mut connection, 3, "create-thread", session_id, 1);
+    let thread_id = thread["result"]["threadId"].as_str().unwrap();
+
+    let stopped = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":4,
+            "method":"session/stop",
+            "params":{
+                "commandId":"stop-session",
+                "sessionId":session_id,
+                "expectedSequence":3
+            }
+        }),
+    );
+    assert_eq!(stopped["result"]["session"]["status"], "archived");
+
+    let rejected = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":5,
+            "method":"turn/start",
+            "params":{
+                "commandId":"turn-after-stop",
+                "sessionId":session_id,
+                "threadId":thread_id,
+                "expectedSequence":1,
+                "input":[{"type":"text","text":"after stop"}]
+            }
+        }),
+    );
+    assert_eq!(rejected["error"]["message"], "CoreOperationFailed");
+}
+
+#[test]
 fn model_selection_is_catalog_backed_and_session_scoped() {
     let default = model_ref("gpt-default");
     let alternate = model_ref("gpt-alternate");

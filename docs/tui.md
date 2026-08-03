@@ -1,9 +1,9 @@
 # TUI 架构与演进方案
 
-> 物理位置：`zeta-rs/tui/`  
-> 宿主：`zeta-rs/cli/`  
+> 物理位置：`zeta-code/tui/`
+> 宿主：`zeta-code/cli/`
 > 文档所有权：本文是 TUI 跨 crate ownership、长期不变量与演进顺序的 canonical 文档。
-> 当前实现接口与事件循环：[`zeta-rs/tui/README.md`](../zeta-rs/tui/README.md)
+> 当前实现接口与事件循环：[`zeta-code/tui/README.md`](../zeta-code/tui/README.md)
 > 产品接口基线：[`zeta-app-server-api.md`](zeta-app-server-api.md)  
 > App Server 启动与连接基线：[`app-server-client.md`](app-server-client.md)  
 > Workspace 边界基线：[`zeta-rs-architecture.md`](zeta-rs-architecture.md)
@@ -39,7 +39,7 @@ Zeta 的产品 authority、typed contract 和 crate dependency direction 仍由�
 
 | 内容 | 状态 | Canonical owner |
 | --- | --- | --- |
-| 当前 wakeable event loop、typed Thread subscription、snapshot resync 与已有交互 | Current | [`zeta-rs/tui/README.md`](../zeta-rs/tui/README.md) |
+| 当前 wakeable event loop、typed Thread subscription、snapshot resync 与已有交互 | Current | [`zeta-code/tui/README.md`](../zeta-code/tui/README.md) |
 | 本文的 ownership 与长期不变量 | Accepted architecture baseline | 本文 |
 | independent request driver、wakeable event pump | Current | [`app-server-client.md`](app-server-client.md) 与 crate README |
 | 非阻塞 request completion dispatch、transient data plane 与剩余 feature | Proposed | 本文的演进阶段 |
@@ -217,7 +217,7 @@ component 被至少两个真实消费者使用、API 变化频率下降且抽取
 目标结构如下：
 
 ```text
-zeta-rs/tui/
+zeta-code/tui/
 ├── src/
 │   ├── app/
 │   │   ├── mod.rs
@@ -870,7 +870,7 @@ intent 和 result event，不维护一份跨领域 operation enum。view 产生 
 
 ## 16. 当前实现与目标差距
 
-当前 `zeta-rs/tui/src/` 已完成第一阶段物理 ownership 重排，并迁到 owned session/event
+当前 `zeta-code/tui/src/` 已完成第一阶段物理 ownership 重排，并迁到 owned session/event
 contract：
 
 ```text

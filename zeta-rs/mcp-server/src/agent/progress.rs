@@ -54,7 +54,9 @@ fn committed(event: &ThreadEvent, turn_id: &TurnId) -> Option<TurnUpdate> {
         ThreadEvent::TurnFailed { turn_id, .. } => (turn_id, "Turn failed"),
         ThreadEvent::TurnCancelling { turn_id, .. } => (turn_id, "Turn cancelling"),
         ThreadEvent::TurnInterrupted { turn_id, .. } => (turn_id, "Turn interrupted"),
-        ThreadEvent::ThreadCreated { .. } | ThreadEvent::InteractionRequested { .. } => {
+        ThreadEvent::ThreadCreated { .. }
+        | ThreadEvent::HistoryImported { .. }
+        | ThreadEvent::InteractionRequested { .. } => {
             return None;
         }
     };

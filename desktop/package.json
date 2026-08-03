@@ -43,7 +43,7 @@
     "build:renderer:code": "cross-env ZETA_PRODUCT=code pnpm run build:renderer",
     "build:renderer:academic": "cross-env ZETA_PRODUCT=academic pnpm run build:renderer",
     "build:renderer:complete": "cross-env ZETA_PRODUCT=complete pnpm run build:renderer",
-    "build:rust": "cargo build --manifest-path ../zeta-rs/Cargo.toml -p zeta-cli",
+    "build:rust": "cargo build --manifest-path ../Cargo.toml -p zeta-cli",
     "benchmark:alpha": "tsc -p tsconfig.test.json && node dist/test/src/zeta/editor/alpha/benchmark/pieceTreeTextBuffer.benchmark.js",
     "benchmark:alpha:check": "ALPHA_ENFORCE_PERFORMANCE_BUDGETS=1 pnpm benchmark:alpha",
     "test:main": "pnpm run test:scripts && pnpm run test:unit",

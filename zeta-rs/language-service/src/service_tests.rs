@@ -3,6 +3,7 @@ use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, Instant};
 
 use zeta_lsp::LanguageServerCommand;
+use zeta_lsp::LanguageServerName;
 use zeta_lsp::lsp_types::{Position, PositionEncodingKind};
 
 use super::*;
@@ -68,6 +69,34 @@ fn disabled_service_retains_nonblocking_document_contract_without_starting_serve
         .set_enablement(LanguageServiceEnablement::Disabled)
         .expect("keep disabled");
     service.shutdown().expect("shutdown");
+}
+
+#[tokio::test]
+async fn disabling_supervisor_aborts_pending_retry_tasks() {
+    let workspace = tempfile::tempdir().expect("workspace");
+    let (commands, _receiver) = tokio::sync::mpsc::unbounded_channel();
+    let mut supervisor = Supervisor::new(
+        LanguageServiceConfiguration::disabled(workspace.path()),
+        Arc::new(NoopLanguageServiceEventSink),
+        commands,
+    );
+    let (finished, receiver) = tokio::sync::oneshot::channel();
+    let retry = tokio::spawn(async move {
+        tokio::time::sleep(Duration::from_secs(60)).await;
+        let _ = finished.send(());
+    });
+    supervisor.retry_tasks.insert(
+        LanguageServerName::new("rust-analyzer").expect("server name"),
+        retry,
+    );
+
+    supervisor.disable().await;
+
+    assert!(supervisor.retry_tasks.is_empty());
+    assert!(matches!(
+        tokio::time::timeout(Duration::from_secs(1), receiver).await,
+        Ok(Err(_))
+    ));
 }
 
 #[test]

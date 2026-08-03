@@ -110,8 +110,8 @@ store、重新验证并从 immutable object root 绑定 contribution。
 ## 验证
 
 ```bash
-cargo test --manifest-path zeta-rs/Cargo.toml -p zeta-plugins
-cargo clippy --manifest-path zeta-rs/Cargo.toml \
+cargo test --manifest-path Cargo.toml -p zeta-plugins
+cargo clippy --manifest-path Cargo.toml \
   -p zeta-plugins --all-targets --no-deps -- -D warnings
 bazel test //zeta-rs/plugins:plugins-unit-tests
 ```

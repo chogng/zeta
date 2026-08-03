@@ -1,0 +1,7 @@
+load("//zeterm:defs.bzl", "zeterm_rust_library")
+
+zeterm_rust_library(
+    name = "winit",
+    crate_name = "zeta_winit",
+    package_name = "zeterm/crates/winit",
+)

@@ -137,7 +137,12 @@ impl FileSystemTool {
     }
 
     fn list(&self, path: PathBuf) -> ToolExecutionOutcome {
-        let mut entries = match self.file_system.read_directory(&path) {
+        let directory_path = if path.as_os_str().is_empty() {
+            PathBuf::from(".")
+        } else {
+            path.clone()
+        };
+        let mut entries = match self.file_system.read_directory(&directory_path) {
             Ok(entries) => entries,
             Err(error) => return returned_error(format!("could not list directory: {error}")),
         };

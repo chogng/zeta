@@ -104,7 +104,7 @@ watcher 和 consumer preparation，再原子发布新的 effective scope；失�
 ## 验证与修改影响
 
 ```bash
-cargo test --manifest-path zeta-rs/Cargo.toml -p zeta-add-dir
+cargo test --manifest-path Cargo.toml -p zeta-add-dir
 bazel test //zeta-rs/add-dir:add-dir-unit-tests
 ```
 

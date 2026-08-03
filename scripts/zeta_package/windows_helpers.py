@@ -81,7 +81,7 @@ def build_windows_sandbox_helpers(
     cargo: str,
     cargo_profile: str,
 ) -> tuple[Path, Path]:
-    rust_workspace = repository_root / "zeta-rs"
+    rust_workspace = repository_root
     target_directory = rust_workspace / "target"
     subprocess.run(
         [

@@ -2,7 +2,22 @@ module(name = "zeta")
 
 bazel_dep(name = "platforms", version = "1.1.0")
 bazel_dep(name = "rules_rs", version = "0.0.96")
+bazel_dep(name = "rules_shell", version = "0.6.1")
+bazel_dep(name = "apple_support", version = "2.1.0")
 bazel_dep(name = "llvm", version = "0.8.11")
+
+archive_override(
+    module_name = "rules_rs",
+    integrity = "sha256-BHgSBa5kiwxnvxEI4ouPeARFvvQMchVk7FJcq2PEddY=",
+    patches = [
+        "//third_party/rules_rs:module_dot_bazel_version.patch",
+    ],
+    patch_strip = 1,
+    strip_prefix = "rules_rs-0.0.96",
+    urls = [
+        "https://github.com/hermeticbuild/rules_rs/releases/download/v0.0.96/rules_rs-v0.0.96.tar.gz",
+    ],
+)
 
 register_toolchains("@llvm//toolchain:all")
 
@@ -18,6 +33,45 @@ osx.from_archive(
         "https://swcdn.apple.com/content/downloads/09/08/047-91568-A_Y1CFZWQCD4/4xekpyz43i26dbp4enxfro8eb1q7wiujh5/CLTools_macOSNMOS_SDK.pkg",
     ],
 )
+osx.frameworks(names = [
+    "ApplicationServices",
+    "AppKit",
+    "ColorSync",
+    "CoreFoundation",
+    "CoreGraphics",
+    "CoreImage",
+    "CoreMedia",
+    "CoreMIDI",
+    "CoreServices",
+    "CoreText",
+    "CoreVideo",
+    "DiskArbitration",
+    "AudioToolbox",
+    "AVFoundation",
+    "AVFAudio",
+    "AVRouting",
+    "Carbon",
+    "CFNetwork",
+    "FontServices",
+    "AudioUnit",
+    "CoreAudio",
+    "CoreAudioTypes",
+    "Foundation",
+    "ImageIO",
+    "IOSurface",
+    "IOKit",
+    "Kernel",
+    "Metal",
+    "MetalKit",
+    "OpenGL",
+    "OSLog",
+    "QuartzCore",
+    "ScreenCaptureKit",
+    "Security",
+    "SystemConfiguration",
+    "UniformTypeIdentifiers",
+    "VideoToolbox",
+])
 use_repo(osx, "macos_sdk")
 
 rules_rust = use_extension("@rules_rs//rs:rules_rust.bzl", "rules_rust")
@@ -34,8 +88,8 @@ register_toolchains("@default_rust_toolchains//:all")
 
 crate = use_extension("@rules_rs//rs:extensions.bzl", "crate")
 crate.from_cargo(
-    cargo_lock = "//zeta-rs:Cargo.lock",
-    cargo_toml = "//zeta-rs:Cargo.toml",
+    cargo_lock = "//:Cargo.lock",
+    cargo_toml = "//:Cargo.toml",
     platform_triples = [
         "aarch64-apple-darwin",
         "aarch64-unknown-linux-gnu",
@@ -47,4 +101,5 @@ crate.from_cargo(
         "x86_64-pc-windows-msvc",
     ],
 )
+
 use_repo(crate, "crates")

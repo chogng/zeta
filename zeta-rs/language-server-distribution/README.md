@@ -47,8 +47,8 @@ Digest mismatch 在创建 staging 前失败。写入后的任何失败由 guard 
 安装新 version directory 完成，旧版本保留，因此 rollback 只是 Config executable path 变更。
 
 ```bash
-cargo test --manifest-path zeta-rs/Cargo.toml -p zeta-language-server-distribution
-cargo clippy --manifest-path zeta-rs/Cargo.toml -p zeta-language-server-distribution --all-targets -- -D warnings
+cargo test --manifest-path Cargo.toml -p zeta-language-server-distribution
+cargo clippy --manifest-path Cargo.toml -p zeta-language-server-distribution --all-targets -- -D warnings
 ```
 
 测试覆盖 traversal rejection、digest mismatch 不发布、version side-by-side、旧版本保留、同 package

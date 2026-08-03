@@ -2,9 +2,9 @@
 
 > 状态：Current。
 > 本文拥有 Native 单行控件与多行代码编辑器输入的跨 crate ownership、用户语义和演进边界。具体源码接口与
-> 修改路径分别由 [`zeta-native`](../zeta-rs/native/README.md)、
-> [`zui`](../zeta-rs/zui/README.md)、[`zeta-ui`](../zeta-rs/ui/README.md) 和
-> [`zeta-winit`](../zeta-rs/winit/README.md) 说明。
+> 修改路径分别由 [`zeterm`](../zeterm/README.md)、
+> [`zui`](../zeterm/crates/zui/README.md)、[`zeta-ui`](../zeterm/crates/ui/README.md) 和
+> [`zeta-winit`](../zeterm/crates/winit/README.md) 说明。
 
 ## 快速理解
 
@@ -13,7 +13,7 @@ Native 文本输入采用单向依赖，不建立同时理解窗口事件、编�
 ```text
 winit keyboard / IME event
   → zeta-winit platform forwarding
-  → zeta-native focus and event routing
+  → zeterm/zeterm focus and event routing
   ├─ single-line → zui TextInput → TextInputLayoutEngine → zeta-ui InputBox
   └─ multiline   → zeta-editor CodeEditorDocument / CodeEditorViewport → CodeEditor
   → zui UiScene
@@ -38,13 +38,13 @@ shaping geometry 和真实平台接入可以分别测试。
 | 能力 | 当前 owner | 状态 |
 | --- | --- | --- |
 | 原生 keyboard/IME event 与候选框 API | `zeta-winit` / `winit` | 委托 |
-| Composer、文件 Editor 与搜索框 focus、event routing、IME activation | `zeta-native::NativeApp` | ✅ |
+| Composer、文件 Editor 与搜索框 focus、event routing、IME activation | `zeterm/src/main.rs::NativeApp` | ✅ |
 | Committed text、selection、grapheme movement | `zui::TextInput` | ✅ |
 | Preedit/commit/cancel composition state | `zui::TextInput` | ✅ |
 | 单行 shaping、selection/caret/preedit geometry | `zui::TextInputLayoutEngine` | ✅ |
 | Caret blink phase state machine | `zui::CaretBlinkController` | ✅ |
 | Input-box chrome、状态与 scene composition | `zeta-ui::InputBox` | ✅ |
-| Blink deadline scheduling 与 redraw | `zeta-native::NativeApp` | ✅ |
+| Blink deadline scheduling 与 redraw | `zeterm/src/main.rs::NativeApp` | ✅ |
 | 文件 Editor mouse caret、drag selection、clipboard 与 viewport | `file_editor_input` + `zeta-editor` | ✅ |
 | 文件 Editor undo/redo 与 vertical navigation | `zeta-editor::CodeEditorDocument` | ✅ |
 | 平台 accessibility adapter | 尚无完整 owner | 尚未完成 |

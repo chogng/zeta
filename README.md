@@ -12,9 +12,8 @@ Their host boundaries and terminal ownership are defined in
 The Rust workspace lives in [`zeta-rs`](zeta-rs); Electron is a separate client under
 [`desktop`](desktop).
 
-The native terminal product is distributed as **`zeterm`**. Everything inside the repository
-retains the Zeta namespace, including implementation identifiers such as `zeta-native` and
-`zeta-terminal-*`; the name changes only at the user-facing distribution boundary. The naming
+The native terminal product is distributed as **`zeterm`**. The product host lives under
+[`zeterm`](zeterm), while shared Rust implementation remains under [`zeta-rs`](zeta-rs). The naming
 rule and terminal-first product structure are documented in
 [`docs/native-terminal-ui.md`](docs/native-terminal-ui.md).
 
@@ -51,7 +50,7 @@ just zeta
 The equivalent Cargo command is:
 
 ```bash
-cargo run --manifest-path zeta-rs/Cargo.toml -p zeta-cli
+cargo run --manifest-path Cargo.toml -p zeta-cli
 ```
 
 Run a one-shot prompt:
@@ -61,8 +60,8 @@ just zeta ask "explain this repository"
 just zeta exec "summarize the current changes"
 
 # Without just:
-cargo run --manifest-path zeta-rs/Cargo.toml -p zeta-cli -- ask "explain this repository"
-cargo run --manifest-path zeta-rs/Cargo.toml -p zeta-cli -- exec "summarize the current changes"
+cargo run --manifest-path Cargo.toml -p zeta-cli -- ask "explain this repository"
+cargo run --manifest-path Cargo.toml -p zeta-cli -- exec "summarize the current changes"
 ```
 
 Launch the other product lines through `just`:

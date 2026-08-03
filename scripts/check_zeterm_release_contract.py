@@ -1,0 +1,64 @@
+"""Validate the checked-in zeterm package and signing contracts."""
+
+from __future__ import annotations
+
+import json
+import sys
+from pathlib import Path
+
+
+EXPECTED_PLATFORMS = {
+    "darwin": ("codesign", "embedded", "ZETERM_MACOS_SIGNING_IDENTITY"),
+    "linux": ("cosign", "detached", "ZETERM_COSIGN_IDENTITY"),
+    "windows": ("signtool", "embedded", "ZETERM_WINDOWS_CERTIFICATE"),
+}
+
+
+def fail(message: str) -> None:
+    raise SystemExit(f"zeterm release contract check failed: {message}")
+
+
+def load(path: Path):
+    try:
+        return json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError) as error:
+        fail(f"could not read {path}: {error}")
+
+
+def main() -> int:
+    if len(sys.argv) != 3:
+        fail("usage: check_zeterm_release_contract.py package-contract.json signing-policy.json")
+    contract = load(Path(sys.argv[1]))
+    policy = load(Path(sys.argv[2]))
+    if contract.get("product") != "zeterm":
+        fail("package contract product must be zeterm")
+    if contract.get("binary") != "bin/zeterm":
+        fail("package contract must name bin/zeterm")
+    if contract.get("signatureRecord") != policy.get("signatureRecord"):
+        fail("package and signing contracts disagree on signature record")
+    if contract.get("releaseInvariant") != "The signed binary digest must be verified before publication.":
+        fail("release invariant does not require verified signed digest")
+    if policy.get("releaseRequired") is not True:
+        fail("signing policy must require release signing")
+
+    platforms = policy.get("platforms")
+    if not isinstance(platforms, dict) or set(platforms) != set(EXPECTED_PLATFORMS):
+        fail("signing policy must cover exactly darwin, linux, and windows")
+    for platform, (tool, mode, environment) in EXPECTED_PLATFORMS.items():
+        config = platforms.get(platform)
+        if not isinstance(config, dict):
+            fail(f"missing {platform} signing config")
+        if (config.get("tool"), config.get("signatureMode"), config.get("identityEnvironment")) != (tool, mode, environment):
+            fail(f"invalid {platform} signing config")
+        verification = config.get("verification")
+        if not isinstance(verification, list) or not verification or verification[0] != tool:
+            fail(f"{platform} verification must invoke {tool}")
+        if mode == "detached" and not config.get("signatureFile"):
+            fail(f"{platform} detached signing requires signatureFile")
+
+    print("zeterm release contract OK")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

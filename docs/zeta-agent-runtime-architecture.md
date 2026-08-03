@@ -1,165 +1,130 @@
-# Zeta Agent 执行架构与演进方案
+# Zeta Agent 执行架构总体设计
 
+> 状态：Accepted（2026-08-03 整体重审修订，替代此前 Proposed 版本）
+> 审查基线：`0df46ca9ff870489b58ebe6a3cbd0b1b8192928a` 加当前工作区改动
+> 最后重审：2026-08-03
+> 适用范围：Session、Thread 执行控制、Agent loop、工具执行、上下文、流式、Provider
+> 切换和多 Agent 演进
+>
 > Cancellation tree 的当前实现与 race semantics 见
 > [`zeta-async-utils` README](../zeta-rs/async-utils/README.md)。
->
-> 状态：Proposed  
-> 审查基线：`817e604af3a179d5ff70d14f4ed403a0f26cd47c` 加当前工作区改动  
-> 最后审查：2026-07-25  
-> 适用范围：Session、Thread 执行控制、Agent loop、工具执行、上下文恢复、Provider
-> 切换和多 Agent 演进
 
-本文收敛此前分散的 Session、ThreadActor、Canonical History、Provider Handoff、Tool
-Execution 和 Memory 设计稿。Session-first 领域与存储基础已落地；本文只描述尚未完成的
-异步 Agent 执行演进，不覆盖当前
-[`zeta-app-server-api.md`](zeta-app-server-api.md) 契约，也不重复
-[`zeta-protocol` 架构](protocol.md)。Core 的 ownership 与 crate 内部分层以
-[`core.md`](core.md) 为准；Context/ContextManager 以
-[`core-context.md`](core-context.md) 为准，多 Agent 以
-[`core-multi-agent.md`](core-multi-agent.md) 为准。本文只保留跨 Core、App Server、provider
-和 tool 的演进视角。
+本文是 Agent 执行架构的总入口和跨层演进的权威文档。Core 的 ownership 与 crate 内部分层以
+[`core.md`](core.md) 为准；Context 以 [`core-context.md`](core-context.md) 为准；多 Agent 以
+[`core-multi-agent.md`](core-multi-agent.md) 为准；canonical 产品契约以
+[`protocol.md`](protocol.md) 为准；**harness 产品策略**（提示词组织、工具面选择与注册时机、
+上下文裁剪/压缩策略、prompt cache）以
+[`agent-harness-design.md`](agent-harness-design.md) 为准。本文拥有三件事：**跨层分层与依赖
+规则、重审后的关键决策、分阶段实施计划**。
+
+组件状态使用四个显式标记，本文和四篇领域文档共用同一词表：
+
+- `已实现`：有代码与测试证据；
+- `部分`：纵向切片存在，声明的完整语义未达成；
+- `仅设计`：文档中有设计，代码中零引用；
+- `推迟`：明确不做，直到写明的前置条件出现。
 
 ## 快速理解
 
-本文只描述尚未完成的异步 Agent 执行演进；当前产品对象、Core 边界和上下文语义分别由其权威
-文档负责，不能把计划架构误读成现有能力。
-
 | 审计问题 | 当前结论 | 深入阅读 |
 | --- | --- | --- |
-| Session 和 Thread 谁是执行边界？ | Session 聚合任务；每个 Thread 独立排序、执行、恢复和持久化 | [术语与所有权](#4-术语与所有权) |
-| 模型和工具 I/O 会不会锁住状态？ | 不应占用状态提交临界区；结果返回后先持久化再发布 | [目标架构](#5-目标架构) |
-| Provider 什么时候可以切换？ | 只影响下一个模型调用安全点产生的不可变快照 | [上下文与供应商切换](#9-history上下文与供应商切换) |
-| 工具失败能否自动重试？ | 只有明确未跨副作用或具有精确幂等语义时可以 | [工具执行](#10-工具执行) |
-| 哪些内容已经实现？ | Session-first 基础、Thread 单写者、顺序工具闭环等已有纵向切片，其余按阶段明确标注 | [当前事实与缺口](#2-当前事实与缺口) |
+| 哪些已经落地，哪些还是纸面设计？ | 单 Agent 顺序执行闭环已实现；上下文管理、两级快照、真实流式、多 Agent 均为仅设计/部分 | [组件状态总账](#2-组件状态总账) |
+| Session 和 Thread 谁是执行边界？ | Session 聚合任务；每个 Thread 独立排序、执行、恢复和持久化 | [分层与执行链](#3-分层与执行链) |
+| 执行内核会异步化（tokio）吗？ | 不承诺；保留同步端口 + per-Thread OS 线程，流式经 sink 达成 | [R2](#42-r2同步执行内核流式经-sink) |
+| Turn 中途策略会漂移吗？ | 模型选择已冻结；policy 冻结当前缺失，修订为 durable fact | [R1](#41-r1policy-冻结-durable-化) |
+| 上下文溢出怎么办？ | 当前每次调用回放全部历史，无显式 outcome；阶段 B 落地预算与压缩 | [R3](#43-r3上下文系统裁剪落地) |
+| 多 Agent 什么时候做？ | 先冻结 protocol 契约（阶段 D），运行时 gate 在上下文系统之后（阶段 E） | [R4](#44-r4多-agent-契约冻结先行) |
 
-## 1. 结论
+## 1. 重审结论
 
-Canonical 产品层级由 [`protocol.md`](protocol.md) 定义。SessionStore、Session reducer 与
-SessionCoordinator 已作为产品根 aggregate 落地。
+### 1.1 经验证保留的决策
 
-采纳以下方向：
+以下决策经代码与测试证据验证，不再重开：
 
-- 保持 Rust 拥有 Session、Thread、Turn、ThreadItem 和工具状态的权威事实；
-- Session 持有任务生命周期、Thread membership/lineage 和共享默认设置；每个 Thread
-  继续作为独立顺序、持久化、恢复和并发边界；
-- Core 只消费 [`zeta-protocol` 定义的共享语义](protocol.md)，actor、策略、channel、
-  IO 与 reducer 执行属于 Core；
-- 将 provider-independent Agent loop 与 Thread durable commit 分层，第一阶段作为 Core 私有
-  模块实现，只有出现第二个真实消费者后才提取 crate；
-- 以每 Session 逻辑单写者串行 membership/settings 变更，但不让 SessionCoordinator 转发 token
-  delta 或串行子 Thread 的模型/工具执行；
-- 以每 Thread 逻辑单写者保证顺序，不要求每个持久化 Thread 常驻一个 actor task；
-- 模型和工具在单写者之外执行，结果返回后先持久化，再更新投影和通知；
-- 每次模型调用从 durable Thread history 构造 provider-neutral context；
-- Provider 切换只影响下一个安全点创建的模型调用快照；
-- App Server 的下一个协议版本采用“Turn durable accepted 后返回，执行异步继续”的语义。
+- protocol → core → store 分层；App Server 是产品能力唯一外部门禁；Core 不依赖 provider
+  wire 类型、storage 实现或 transport；
+- Session（membership / lineage / defaults）与 Thread（history / 上下文 / 执行 / 恢复边界）
+  的聚合拆分；同 Session 下 Thread 可并行；
+- 每 Thread 逻辑单写者 + typed event log + 纯 reducer + command receipt 幂等回放；
+- 副作用前 durable（`ToolExecutionStarted`）、unknown outcome 不自动重放、escalation marker
+  防止恢复后静默重试；
+- explicit incarnation 拒绝迟到/重复/旧实例 completion；空闲回收后从 durable store 重建；
+- 模型和工具 I/O 不占用状态提交临界区；通知不早于 durable append；
+- 拒绝的抽象继续拒绝：与 rollout 并列的 `CanonicalHistory` store、常驻
+  `ProviderLaneRegistry`、把 summary 固化为 `ProviderHandoff` 协议、未定义授权/删除/隔离/
+  评测契约的跨 Thread 长期记忆。
 
-不采纳以下抽象：
+### 1.2 修订的决策
 
-- 与 rollout 并列的 `CanonicalHistory` store；
-- 常驻且持久化 provider websocket/cache 的 `ProviderLaneRegistry`；
-- 把普通 summary 固化为 Provider 切换必需的 `ProviderHandoff` 协议；
-- 未定义授权、删除、隔离和评测机制的跨 Thread 长期记忆。
+本次重审修订四项设计决策，编号 R1–R4；文档形态修订为 R5。详细设计见
+[第 4 节](#4-修订决策详细设计)。
 
-## 2. 当前事实与缺口
+| # | 原设计 | 修订立场 | 核心理由 |
+| --- | --- | --- | --- |
+| R1 | `TurnPolicySnapshot` 为进程内不可变结构 | policy 冻结改为 **durable fact**：Turn 接受时持久化 policy revision，恢复时据此重建 | 进程内快照不能跨 crash-resume 存活；恢复后的 Turn 会从当前配置重建 policy，违反"不得静默放宽"的验收标准。模型选择已经这样做（`TurnAccepted` 携带 model），policy 应对齐 |
+| R2 | 端口演进为 async streaming（隐含运行时异步化） | **不承诺 tokio 迁移**：保留同步端口 + per-Thread OS 线程邮箱；真实流式经 wire-level SSE decoder → `ModelStreamSink`；App Server 补独立 outbound writer 线程 | 桌面级并发上限是几十个 Thread；同步代码对 durability 不变量更易验证；cancellation 已闭环；sink 契约已为流式预留。异步化收益不成比例 |
+| R3 | ContextManager 完整形态（cache / baseline / estimate）一步到位 | **裁剪落地**：纯函数 planner + `ContextPlan` 先行；ContextManager 只做薄协调（无 cache）；compaction checkpoint 的 durable schema 提前进 protocol | 纯函数可独立验证 precedence / budget / 配对 / 确定性；cache 失效是最难验对的部分，推迟到有真实性能证据 |
+| R4 | 多 Agent 按十步顺序整体落地 | **契约冻结与运行时分离**：先只冻结身份语义进 protocol（阶段 D）；coordinator 运行时 gate 在上下文系统完成之后（阶段 E） | context isolation 与 seed 依赖 `ContextPlan`；先冻结契约避免后续 protocol 破坏性变更 |
+| R5 | 文档以现在时描述未实现组件，差异只在"当前状态"小节标注 | 每个组件在其权威文档中挂**显式状态标记**（已实现/部分/仅设计/推迟），本文维护跨层状态总账 | `ContextManager`、`MultiAgentCoordinator`、两级快照在代码中零引用，但组件章节读起来像现状；这是当前最大的架构文档风险 |
 
-当前工作区已经提供了后续演进需要的大部分地基，但这些改动仍应按工作区状态验证，不能用
-“PR 已完成”代替实际 Git 历史和测试结果。
+### 1.3 明确推迟的决策
 
-| 能力 | 当前事实 | 结论 |
-|---|---|---|
-| Canonical protocol | 当前完成度由 [`protocol.md`](protocol.md) 维护 | Core 只消费，不在本文重复设计 |
-| Session | canonical model、SessionStore、pure reducer、SessionCoordinator 与 create/fork saga 已实现 | 保持为产品根 aggregate |
-| 权威历史 | per-Thread typed event log、atomic batch、pure reducer、durable Items | 继续使用，不新建 Canonical History |
-| 状态投影 | `ThreadSnapshot` 可由 rollout 重建 | 作为读取模型，不是第二份权威状态 |
-| 模型调用 | `ModelService::stream` 产生 canonical text/reasoning delta，并接受 cancellation token | provider adapter 仍需实现 wire-level SSE decoder |
-| Turn 执行 | `turn/start` durable accepted 后投递 Core `TurnExecutor` mailbox | App Server stdio 仍缺独立 outbound writer，实时通知由下一次 transport poll 取走 |
-| 并发 | 每个 loaded Thread 有独立 projection lock、FIFO mutation gate、有界 execution mailbox、explicit incarnation 与 idle eviction | App Server transport 仍缺独立 outbound worker |
-| 工具执行 | 已有顺序模型—工具循环、durable one-time approval、sandbox denial 二次审查与 exact retry 边界 | 并行计划、通用 deadline/reconciliation 与声明式 retry policy 尚未完成 |
-| 取消 | `zeta-async-utils` 已有 cancellation tree | 可以复用到 provider、tool 和 child process |
-| Provider 配置 | 每次模型调用读取最新配置快照 | 已具备安全切换基础，不需要先做持久 Provider Lane |
-| App Server | Rust server 仍是同步 read-dispatch-write | 需要 processor、outbound writer 和 keyed queue |
-| Desktop | transport、peer、session、supervisor 已拆分 | 后续补 projection/resync，不把权威状态移入 Renderer |
+| 决策 | 重新评审的触发条件 |
+| --- | --- |
+| 执行内核 tokio / async 化 | 出现需要数百以上并发 Thread 的真实宿主，或仅支持 async 的必需 transport |
+| 提取独立 `zeta-agent` crate | 至少两个真实执行宿主，且 Agent loop 不依赖 Thread projection、store、receipt 或 App Server |
+| `ProviderHandoff` 协议 | [第 6 节](#6-history上下文与供应商切换)的 continuity 评测持续失败 |
+| 跨 Thread 长期记忆 | 单独 RFC 接受 consent、scope、删除、保留期与评测契约 |
+| ContextManager cache / reference baseline | 阶段 B 完成后有真实性能证据表明重复组装是瓶颈 |
+| 与 Thread 一一对应的 `AgentId` aggregate | 出现一个 Agent 身份跨多个 Thread 延续的真实需求 |
 
-直接相关的当前实现：
+## 2. 组件状态总账
 
-- [`core/src/thread_controller.rs`](../zeta-rs/core/src/thread_controller.rs)
-- [`core/src/thread_reducer.rs`](../zeta-rs/core/src/thread_reducer.rs)
-- [`thread-store/src/store.rs`](../zeta-rs/thread-store/src/store.rs)
-- [`async-utils/src/lib.rs`](../zeta-rs/async-utils/src/lib.rs)
-- [`app-server/src/server.rs`](../zeta-rs/app-server/src/server.rs)
+跨层组件的当前状态。各领域文档不再重复此表，只在组件章节挂对应标记。
 
-## 3. 可行性评估
+### 2.1 执行面（已验证部分）
 
-| 设计项 | 判断 | 风险 | 处理方式 |
-|---|---|---|---|
-| Agent loop 与产品 Harness 分层 | 采纳 | 中 | 先在 Core 内分模块，用 fake provider 做单 Turn vertical slice；满足提取条件后再拆 crate |
-| 每 Thread 逻辑单写者 | 采纳 | 中高 | keyed mailbox/executor；长 I/O 不占有状态锁 |
-| 异步 `turn/start` | 采纳，开发期直接修改当前契约 | 高 | 以 contract test 固定 acceptance、通知和取消顺序 |
-| durable context + compaction | 采纳 | 中 | 原始 event log 保留；summary 只作带 provenance 的派生 checkpoint |
-| Provider 切换 | 采纳简化版 | 中 | 下一个 model invocation 重新构造 context 和 invocation snapshot |
-| Provider Lane/Handoff schema | 暂缓 | 中高 | 先用统一 ContextManager/ContextPlan；只有评测证明不足时再引入 |
-| Tool loop | 采纳 | 高 | 副作用前持久化、明确 approval、unknown outcome 和 per-tool retry |
-| Session aggregate | 采纳，分阶段 | 高 | Session 与 Thread 独立 sequence；跨 stream 创建使用可恢复 saga 或明确的原子事务 |
-| 长期 Memory | 单独 RFC | 高 | 必须先定义 consent、scope、删除、保留期、隐私和质量评测 |
+| 组件 | 状态 | 代码证据 |
+| --- | --- | --- |
+| SessionCoordinator + create/fork/rewind saga | 已实现 | `core/src/session_coordinator.rs` |
+| ThreadController 单写者 / receipt / replay / conflict | 已实现 | `core/src/thread_controller.rs` |
+| per-Thread loaded projection + FIFO mutation gate + incarnation + idle eviction | 已实现 | `core/src/thread_controller/loaded_thread.rs` |
+| 有界执行邮箱（OS 线程 lane，容量 8，30s 空闲回收） | 已实现 | `core/src/thread_controller/mailbox.rs` |
+| TurnExecutor 顺序 model → tool → model 循环 | 已实现 | `core/src/turn/executor.rs` |
+| ToolScheduler：durable one-time approval、sandbox escalation、rejection circuit breaker | 已实现 | `core/src/turn/tool_scheduler.rs` |
+| Tool unknown-outcome 基线（start marker / escalation marker，不自动重放） | 已实现 | `core/src/turn/tool_scheduler.rs`、`thread_reducer.rs` |
+| 模型选择冻结（`TurnAccepted` 携带 model） | 已实现 | `core/src/thread_controller.rs` |
+| `ContextAssembler`（`ThreadSnapshot` → `ModelRequest`，过渡 API） | 已实现（过渡） | `core/src/context/assembler.rs` |
+| `ModelService` / `ModelStreamSink` 契约 | 已实现（同步桥接：默认 stream 只回放 final response） | `core/src/services.rs` |
+| 取消链路 turn/interrupt → mailbox cancel → token → model/tool | 已实现 | [`core.md`](core.md) §7.3 |
+| App Server 可唤醒 outbound 通知源（`ConnectionNotifications`） | 部分 | `app-server/src/server.rs`；stdio 主循环仍在每个请求处理后才 drain |
 
-因此，Session 是目标模型的一部分，但不能与 Thread actor、History、Lane、Handoff 和 Memory
-一次性上线。先固定 canonical contract 和 per-Thread durability，再实现 SessionStore、
-SessionCoordinator 与 fork saga。
+### 2.2 设计面（本计划的工作对象）
 
-## 4. 术语与所有权
+| 组件 | 状态 | 归属阶段 | 权威文档 |
+| --- | --- | --- | --- |
+| policy 冻结（durable policy revision binding） | 仅设计（R1 修订版） | A | 本文 §4.1 |
+| `ModelInvocationSnapshot` | 仅设计 | B | [`core.md`](core.md) §8 |
+| `ContextInput` / `ContextPlan` / 纯 planner / budget | 仅设计 | B | [`core-context.md`](core-context.md) |
+| `ContextManager`（薄协调，无 cache） | 仅设计（R3 裁剪版） | B | [`core-context.md`](core-context.md) |
+| compaction checkpoint schema + 压缩流程 | 仅设计 | B | [`core-context.md`](core-context.md) §8 |
+| `CompactionService` / `Clock` / `IdGenerator` / `CapabilityBroker` 端口 | 仅设计 | B / 按需 | [`core.md`](core.md) §6 |
+| provider wire-level SSE streaming | 仅设计 | C | 本文 §4.2 |
+| App Server 独立 outbound writer 线程 | 仅设计 | C | 本文 §4.2 |
+| Desktop projection gap/resync | 仅设计 | C | [`zeta-desktop-architecture.md`](zeta-desktop-architecture.md) |
+| `DelegationId` / `AgentMessageId` / `ThreadOrigin::AgentSpawn` / seed schema | 仅设计 | D | [`core-multi-agent.md`](core-multi-agent.md) |
+| `MultiAgentCoordinator`、spawn saga、delivery、join、tree budget | 仅设计 | E | [`core-multi-agent.md`](core-multi-agent.md) |
+| 并行工具计划、通用 deadline、声明式 retry、reconciliation | 仅设计 | E 之后按需 | [`core.md`](core.md) §11 |
+| 跨 Thread 长期记忆 | 推迟 | 单独 RFC | 本文 §1.3 |
 
-### 4.1 产品领域
-
-产品实体、command/event/update、ID、sequence 和 cursor 的语义以
-[`protocol.md`](protocol.md) 为准。本执行方案只追加三个约束：
-
-- Session 与 Thread 分别保持逻辑单写者；
-- 模型和工具 I/O 不占用 aggregate 状态提交临界区；
-- snapshot、SQLite 和 Renderer state 都是可重建投影，不是第二份 authority。
-
-### 4.2 Session 的三种语义
-
-代码和文档必须显式区分：
-
-- `Session`：产品级根 aggregate，拥有 Thread membership/lineage；
-- `AppServerConnection`：一条 RPC connection 的初始化、pending request、subscription 和
-  resource owner；现有 Desktop `AppServerSession` 属于此类，后续命名不得反向定义产品层；
-- `BrowserSession` / `TerminalSession`：具体 capability 的生命周期。
-
-Session 不嵌入所有 Thread transcript，也不保存共享可变 `SessionHistory`。它只持有
-Thread reference、父子关系、任务生命周期和共享默认设置。Thread 创建同时涉及 Session 与
-Thread 两个 stream，存储层必须提供 multi-stream 原子事务，或使用
-`ThreadCreationRequested → ThreadCreated → ThreadAttached` 的可恢复 saga；不能只增加一个
-`session_id` 字段而不定义 crash consistency。
-
-### 4.3 ThreadActor 的准确含义
-
-Actor 是实现策略，不是新的 durable aggregate。目标组件统一称为 `ThreadController`：
-
-```text
-一个已加载 Thread
-    → 一个逻辑命令序列
-    → 一个状态提交者
-    → 零到多个外部异步任务
-```
-
-实现可以使用 mailbox task，也可以使用 keyed executor 加短临界区。必须满足：
-
-- 同一 Thread 的结构性提交 FIFO；
-- 不同 Thread 可并发；
-- provider/tool I/O 不持有 Thread 状态锁；
-- interrupt、approval response 和 completion 都回到同一命令序列；
-- 空闲 controller 可回收，恢复时由 rollout 重建。
-
-## 5. 目标架构
+## 3. 分层与执行链
 
 ```text
 CLI / Desktop / future daemon
              │
              ▼
 Versioned App Server
-  connection gate / dispatcher / subscriptions / resync
+  connection gate / dispatcher / subscriptions / outbound queue
              │
              ▼
 SessionCoordinator (zeta-core)
@@ -167,434 +132,244 @@ SessionCoordinator (zeta-core)
              │ ThreadHandle registry
              ▼
 ThreadController (zeta-core, one logical writer per loaded Thread)
-  policy snapshot / durable commit / recovery / product decisions
+  durable commit / recovery / incarnation / execution mailbox
              │
              ▼
 TurnExecutor (zeta-core private module)
   context → model → tool calls → tool results → next model request
        │                              │
        ▼                              ▼
-   ModelPort                     AgentTool
+  ModelService                   ToolService + PolicyService
        │                              │
 model-provider              shell-command / file-system / apply-patch / MCP adapters
 
 SessionCoordinator ── append ──► SessionStore
 ThreadController  ─── append ──► ThreadStore ──► rollout
       │ committed events and transient deltas
-      └─────────────────────────► subscription hub
+      └─────────────────────────► ThreadUpdateSink ──► subscription hub
 ```
 
-依赖方向：
+依赖规则（禁止项详见 [`core.md`](core.md) §6）：
 
-```text
-zeta-protocol
-   ▲        ▲
-   │        └──────── zeta-thread-store ◄──────── zeta-storage
-   │
-zeta-core ──────────► SessionStore + ThreadStore
-   ▲
-   │ Core-owned ports
-App Server adapters ─────► model-provider / shell-command / file-system / apply-patch / MCP
-   │
-   └─────────────────────► config / credentials / rollout
-```
-
-禁止的依赖：
-
-- `zeta-core` 不依赖 JSON-RPC DTO 或 provider HTTP wire 类型；
-- `zeta-core` 不依赖 concrete model provider、Tool adapter、storage 或 rollout；
-- composition adapter 可以同时依赖 Core port 与具体 service，不能把该依赖反向放进 Core；
+- `zeta-core` 不依赖 JSON-RPC DTO、provider HTTP wire 类型、concrete adapter、storage 或
+  rollout；
+- composition root（App Server）构造 adapter 并注入 Core 端口，依赖不反向；
 - `app-server-protocol` 只复用经过审核的 canonical public view；Core-private aggregate、
-  command receipt 和 pending request state 永不进入 wire；
+  loaded state、mailbox、incarnation 永不进入 wire；
 - Tool adapter 不直接修改 Thread projection。
 
-### 5.1 供应商配置与运行时边界
+Session 的三种语义必须区分（详见 [`protocol.md`](protocol.md)）：产品 `Session` 根 aggregate、
+`AppServerConnection`（一条 RPC 连接的资源 owner）、`BrowserSession` / `TerminalSession`
+（capability 生命周期）。三者不得混用命名或状态。
 
-Provider 配置拆成单向依赖的两层：
+提交顺序、安全点与取消语义由 [`core.md`](core.md) §7 权威定义，本文不重复。工具执行生命
+周期、approval 与 escalation 由 [`core.md`](core.md) §11 权威定义。
 
-```text
-zeta-protocol
-      ▲
-      │
-zeta-model-provider-config
-  declarations / schema / validation / defaults / normalization / registry merge
-      ▲
-      │
-zeta-model-provider ─────► zeta-api / zeta-client / zeta-http-client
-  provider execution / resolved endpoint / provider-specific adapter / execution errors
-```
+## 4. 修订决策详细设计
 
-边界判定规则：
+### 4.1 R1：policy 冻结 durable 化
 
-- 能被持久化、合并或生成 schema 的 provider 信息属于 `model-provider-config`；
-- 依赖当前进程、网络、client、transport 或 secret 的行为属于 `model-provider`；
-- endpoint 默认值和归一化规则是声明，归一化后的 endpoint 是一次 invocation snapshot；
-- adapter ID 是声明，具体 `zeta-api` endpoint/profile binding 和固定请求头是运行时实现；
-- 静态配置错误在实例化前返回 `ProviderConfigError`，连接和协议错误返回
-  `ModelProviderError`；
-- 当前阶段不声明认证字段；后续只允许配置层保存 credential reference/policy，secret
-  读取、刷新和请求头生成必须留在运行时层。
+**问题。** 原设计的 `TurnPolicySnapshot` 是进程内不可变结构，"整个 Turn 生命周期有效"。但
+Turn 可以跨进程重启恢复（waiting approval、resumable tool continuation），进程内快照在恢复
+后不存在；当前实现在每次 pending call 审查时从 live `PolicyService` 读取最新策略。结果是：
+配置在 Turn 中途放宽后，恢复的 Turn 会在更宽的策略下继续——这违反"安全策略不能在 Turn
+中途静默放宽"的固定决策。已有的缓解只覆盖局部：one-time approval 与 escalation 绑定了
+`action_digest + policy_revision`，但未绑定 Turn 级策略环境。
 
-## 6. 目标目录结构
+**修订设计。**
 
-Core 内部目标目录不在本文维护，以
-[`core.md`](core.md#13-目标目录与公开-api) 为唯一来源。跨 crate 的长期分层为：
+- `TurnAccepted` 事件增加 `policy_revision` 字段（protocol 变更，进入
+  [`protocol.md`](protocol.md) 阶段 P2/P3 的同一批 schema 同步）；
+- `ThreadSnapshot` 的 Turn 投影暴露冻结 revision；`ToolScheduler` 构造
+  `ActionReviewRequest` 时同时携带冻结 revision 与当前 revision；
+- `PolicyService` 端口新增 host obligation（doc comment 契约）：当当前 revision 不等于冻结
+  revision 时，实现只允许返回**不宽于**冻结 revision 的决定；无法判定时必须返回 `AskUser`
+  或 `Block`，不得静默采用更宽策略；
+- 恢复路径（`resume_recovered_tool_continuations` 与 approval resume）从 durable 冻结
+  revision 重建策略环境，而不是从当前配置；
+- 显式收紧仍然即时生效（当前 revision 更严时按当前执行），与原设计的"单调收紧"一致。
 
-```text
-zeta/
-├─ docs/
-│  ├─ core.md
-│  ├─ core-context.md
-│  ├─ core-multi-agent.md
-│  ├─ zeta-agent-runtime-architecture.md
-├─ zeta-rs/
-│  ├─ protocol/              canonical values and contracts
-│  ├─ core/                  execution control plane
-│  ├─ session-store/
-│  ├─ thread-store/
-│  ├─ storage/
-│  ├─ model-provider/
-│  ├─ shell-command/
-│  ├─ file-system/
-│  ├─ file-search/         TUI path index + fuzzy-match CLI
-│  ├─ file-watcher/        shared multi-subscriber invalidation hints
-│  ├─ apply-patch/
-│  ├─ app-server-protocol/
-│  ├─ app-server-transport/
-│  └─ app-server/            composition root and transport coordination
-└─ desktop/                  client projection and interaction UI
-```
+进程内的 `TurnPolicySnapshot` 结构仍可作为实现细节存在，但它是冻结 fact 的派生视图，不是
+authority。
 
-本执行文档不再复制各 crate 内部文件树；具体目录由各 crate 架构文档维护。
+### 4.2 R2：同步执行内核，流式经 sink
 
-## 7. TurnExecutor、SessionCoordinator 与 ThreadController 边界
+**立场。** 执行内核保持同步：per-Thread OS 线程邮箱（`ThreadExecutionMailboxes`）、同步
+`ModelService` / `ToolService` / `PolicyService` 端口、`CancellationToken` 协作取消。不进行
+tokio / async 迁移；重新评审触发条件见 [§1.3](#13-明确推迟的决策)。
 
-### 7.1 TurnExecutor
+**真实流式不需要异步运行时。** `ModelService::stream` 契约已经存在；当前默认桥接在
+`invoke` 返回后一次性回放 final response。阶段 C 的工作是：
 
-Core 私有 `turn` 模块负责一个 Turn 内与模型、工具相关的 provider-independent 循环：
+- provider adapter 实现 wire-level SSE decoder，在同步读循环中逐 chunk 解码并调用
+  `sink.emit(...)`；每个 chunk 边界观察 cancellation；socket 层仍由 `zeta-http-client` 的
+  bounded transport timeout 收束；
+- `InvocationStream`（Core 侧 sink 实现）已具备 stream incarnation + cursor 发布路径，无需
+  改动契约；
+- transient delta 经有界 channel 发布，饱和时允许合并或丢弃；durable completion 不依赖
+  transient stream。
 
-- 构造和消费 provider-neutral message context；
-- 调用 `ModelPort`；
-- 解析模型 lifecycle 和 Tool Call；
-- 执行 sequential/parallel tool policy；
-- 在安全点消费 steer/follow-up；
-- 传播 cancellation；
-- 产生 typed lifecycle event。
-
-它不决定哪些事件已经 durable，也不直接发送 JSON-RPC notification。
-
-端口应是异步、可取消且可作为 trait object 使用。公开 trait 必须写清实现约束，避免
-`foo(false)`、`bar(None)` 一类含义不明的调用形态。
-
-### 7.2 SessionCoordinator
-
-`zeta-core` 的 `SessionCoordinator` 只负责 Session 结构语义。当前实现类型仍名为
-`SessionCoordinator`：
-
-- 创建、attach、fork、archive Thread；
-- 维护 root/parent/child lineage；
-- durable commit Session settings 和生命周期；
-- 解析 Session defaults，但不修改已开始 Turn 的 policy snapshot；
-- 持有可回收的 Thread handle registry。
-
-它不代理 Thread token delta，不持有 Thread transcript，也不等待模型或工具 I/O。不同 Thread
-仍可并行执行。
-
-### 7.3 ThreadController
-
-`zeta-core` 的 `ThreadController` 负责产品语义：
-
-- durable accept Turn；
-- 创建整个 Turn 固定的 `TurnPolicySnapshot`；
-- 在每次模型调用前创建 `ModelInvocationSnapshot`；
-- 把 Agent lifecycle 映射为 durable Thread events；
-- 管理 approval、user input 和 capability 等待；
-- 决定 Tool failure 是继续循环还是终止 Turn；
-- 在 commit 后发布领域事件；
-- 恢复未完成 Turn；
-- 在空闲安全点执行 compaction、fork preparation 和 provider change。
-
-### 7.4 不可变快照
-
-一个产品 Turn 可能包含多次模型调用，因此至少需要两个快照：
+**App Server outbound topology。** 当前 `serve_jsonl` 是同步 read → dispatch → write →
+drain 循环：通知在下一个请求处理完成后才被取走。可唤醒的 `ConnectionNotifications`
+（wait / drain / close）已经存在，缺的是独立消费者。目标 topology：
 
 ```text
-TurnPolicySnapshot
-    approval / sandbox / cwd / capability owner
-    生命周期：整个 Turn
-
-ModelInvocationSnapshot
-    model / system prompt / messages / tools / reasoning settings
-    生命周期：一次 provider request
+per-connection reader thread        per-connection writer thread
+  read_message                        wait on ConnectionNotifications
+  → dispatch                          → drain
+  → enqueue response                  → write_message*
+      （response 与 notification 进入同一有界 outbound 队列，
+        由唯一 writer 线程串行写出，保序且互不阻塞）
 ```
 
-Session/Thread 配置更新只影响下一个安全点创建的快照。安全策略不能在 Turn 中途静默
-放宽；需要变更时使用显式 interrupt/restart 或仅允许单调收紧。
+需要区分的四种终止语义保持原设计：`$/cancelRequest`（取消一个 RPC handler 等待）、
+`turn/interrupt`（durable Turn 推向 Interrupted）、connection close（清理 connection-owned
+资源并唤醒 writer 退出）、server shutdown（带 deadline 的全局 graceful stop）。
 
-## 8. Session、Thread 状态与并发
+Desktop Renderer 不持有 raw peer；由单一 projection service 消费 notification，检测 durable
+sequence / stream cursor gap，并通过 `session/subscribe` / `thread/subscribe` 的
+snapshot + gap 重建。
 
-Sequence 与 transient cursor 的领域定义见
-[`protocol.md`](protocol.md#5-sequencecursor-与-id)。Core 必须据此为 Session 与各 Thread
-建立独立调度/提交 scope；禁止让一个 Session 下的 Thread 共享执行队列，否则多 Agent 会
-退化成全局串行。
-
-建议 phase：
-
-```text
-Idle
-├─ start turn ───────────────► Turn
-├─ compact ─────────────────► Compacting
-├─ prepare fork ────────────► PreparingFork
-└─ unload ──────────────────► Closing
+### 4.3 R3：上下文系统裁剪落地
 
-Turn
-├─ wait approval/input/capability
-├─ cancel ──────────────────► Cancelling ─► Idle
-├─ complete ──────────────────────────────► Idle
-└─ fail ──────────────────────────────────► Idle
-```
+领域权威是 [`core-context.md`](core-context.md)；本节只固定裁剪范围与顺序。
 
-关键点：
+**阶段 B 落地：**
 
-- phase 只表示进程内协调状态；durable Turn status 仍由 typed event 定义；
-- `turn/start` 的 acceptance batch 提交后即可响应；
-- 模型和工具 task 通过 Core-owned cancellation token 和 task ID 回传结果；
-- 迟到、重复或来自旧 Thread incarnation 的 completion 必须拒绝；
-- mailbox/backlog 有界，满时返回稳定 retryable error；
-- keyed queue 只串行短的验证和提交阶段，不等待完整模型调用。
+1. `ContextInput` / `ContextPlan` 不可变类型 + 纯 `ContextPlanner`（precedence、budget、
+   Tool Call/Result 原子配对、checkpoint selection、五类显式 overflow outcome）；
+2. `ContextAssembler` 从 `ThreadSnapshot → ModelRequest` 过渡 API 改为
+   `ContextPlan → ModelRequest` 纯组装；
+3. 薄 `ContextManager`：per-loaded-Thread、由 `LoadedThreadState` 持有、只做 revision 校验
+   与 prepare 协调，**无 cache / baseline / token estimate**；
+4. compaction checkpoint durable schema 进入 protocol 与 store envelope（与 R1 的 protocol
+   变更同批规划，避免两次 schema bump）；
+5. compaction 流程：`NeedsCompaction` → `CompactionService` 端口 → 验证 provenance/digest →
+   durable commit checkpoint → 失效重建。Summary model I/O 不持有 Thread writer。
 
-## 9. History、上下文与供应商切换
+**明确不做（推迟）：** `cached_plan`、`reference_baseline`、`TokenEstimate` 缓存。触发条件
+见 §1.3。
 
-Context 的 authority、ContextManager、ContextPlan、budget、compaction 和多 Agent isolation
-统一由 [`core-context.md`](core-context.md) 定义。本文只规定 provider 切换的跨层流程。
+`ModelInvocationSnapshot` 在此阶段随 `ContextPlan` 一起成形：resolved model +
+`ContextPlan` + tools + 输出/推理设置 + revision 集合，进程内不可变即可（它的输入均为
+durable fact 或冻结 revision，恢复时可确定性重建，无需自身持久化——这与 R1 的 policy
+冻结不同）。
 
-Provider change 是“未来调用配置变更”，不是新的事实存储层：
+### 4.4 R4：多 Agent 契约冻结先行
 
-```text
-请求切换 Provider
-    → 排入 ThreadController
-    → 到达 model safe point
-    → 从 durable history 重新构造 context
-    → 解析目标 provider/model
-    → 创建新的 ModelInvocationSnapshot
-```
+领域权威是 [`core-multi-agent.md`](core-multi-agent.md)；本节只固定门槛。
 
-运行中的 provider request 默认继续使用旧快照，或由用户显式 interrupt。Provider-specific
-response ID、cache key 或连接可以由 adapter 暂存；即使持久化为诊断元数据，也不能成为
-恢复正确性的前提。
+**阶段 D（契约冻结，无运行时）：** `DelegationId`、`AgentMessageId`、
+`ThreadOrigin::AgentSpawn`、`AgentContextSeed` schema、delegation requested/started/terminal
+facts、`DelegationResult` Item 进入 canonical protocol，同步 Rust types / JSON Schema /
+generated TS / fixtures。目的：后续运行时开发不再产生破坏性 protocol 变更。
 
-只有以下评测持续失败时，才引入正式 `ProviderHandoff`：
+**阶段 E 的 gate 条件：**
 
-- 约束保留；
-- 已完成工作识别；
-- 决策一致性；
-- Tool Result 引用准确性；
-- 切换后的继续执行成功率。
+- 阶段 B 完成（seed 的 `Fresh / Selected / ForkedPrefix` 语义依赖 `ContextPlan` 与
+  checkpoint）；
+- 阶段 D 契约测试通过；
+- spawn saga 的 fault injection 框架就绪（复用 Session create/fork saga 的既有测试基建）。
 
-即使引入，Handoff 也只是带 provenance 的派生 context artifact，不是权威历史。
+## 5. 工具执行与恢复（保留设计，状态标注）
 
-## 10. 工具执行
+工具生命周期、取消、unknown outcome 语义由 [`core.md`](core.md) §11 权威定义，均为已实现。
+以下仍为仅设计，归属阶段 E 之后按需评审：
 
-### 10.1 生命周期
+- 并行 Tool 计划（policy、Tool definition、resource conflict 三重检查后启用；完成顺序不
+  决定 transcript 顺序）；
+- 声明式 retry policy（`Never` / `SafeRead` / `IdempotentWrite(operation key)` /
+  `ReconcileBeforeRetry`；参数错误、permission denial、unknown outcome 默认不自动 retry）；
+- 通用 deadline 与 tool-specific reconciliation。
 
-```text
-Model emits Tool Call
-    → validate schema and availability
-    → evaluate approval/sandbox policy
-    → durable commit Tool Call / approval state
-    → execute outside Thread state owner
-    → durable commit Tool Result or terminal execution state
-    → publish committed event
-    → build next ModelInvocationSnapshot
-```
+## 6. History、上下文与供应商切换
 
-Tool adapter 不得直接修改 Thread state。
+Context authority 见 [`core-context.md`](core-context.md)。Provider 切换保持原设计：它是
+"未来调用配置变更"，不是新的事实存储层——排入 ThreadController，在 model safe point 从
+durable history 重新构造 context 并创建新的 invocation snapshot；运行中的请求默认沿用旧
+快照或由用户显式 interrupt。Provider-specific response ID / cache key 可作为 adapter 优化
+暂存，不能成为恢复正确性的前提。
 
-### 10.2 取消与 unknown 结果
+只有以下 continuity 评测持续失败时，才重新评审 `ProviderHandoff`：约束保留、已完成工作
+识别、决策一致性、Tool Result 引用准确性、切换后继续执行成功率。
 
-取消是 best effort：
+供应商配置两层边界（`model-provider-config` 声明层 / `model-provider` 运行时层）保持原
+设计，权威见 [`model-provider-config.md`](model-provider-config.md) 与
+[`model-provider.md`](model-provider.md)。
 
-- 本地 child process 应尝试终止整个受控进程树；
-- `turn/interrupt` 取消 Core execution operation；同一个 token 传播到正在运行的
-  `ModelService`、provider `ModelInvoker`、`OperationClient` 和 `ToolService`；
-- 同步 HTTP adapter 在取消后立即停止本地等待、禁止 retry，并丢弃迟到 response；底层 socket
-  attempt 仍由 `zeta-http-client` 的 bounded transport timeout 收束；
-- MCP 与本地 process tool 继续把 token 传播到 protocol cancellation 或进程树终止；
-- 远端副作用可能在本地取消前已经完成；
-- crash 时不能假设 Running Tool 仍在，也不能自动重放。
+## 7. 分阶段实施计划
 
-恢复后，未完成且可能有副作用的调用进入明确的 `UnknownOutcome` 或等价终态，并要求用户或
-tool-specific reconciliation。不能把它伪装成 `Cancelled` 或 `Failed`。
+替代此前的阶段 0–8。原阶段 0–5 中标注"完成 / 基础完成"的内容已并入
+[§2.1 状态总账](#21-执行面已验证部分)，不再作为计划项。
 
-### 10.3 重试
+### 阶段 A｜地基修整
 
-Retry 不是统一的执行层开关。每个工具显式声明策略：
+范围：
 
-```text
-Never
-SafeRead { attempts, backoff }
-IdempotentWrite { operation_key, attempts, backoff }
-ReconcileBeforeRetry { reconciliation }
-```
+- 按 [`core.md`](core.md) §13 目标目录拆分三个越线文件（`thread_controller.rs` 1189 LoC、
+  `session_coordinator.rs` 998 LoC、`thread_reducer.rs` 947 LoC）；纯迁移，不改语义，测试
+  随实现同步迁移；
+- R1：`TurnAccepted` 增加 `policy_revision`，reducer / projection / scheduler / recovery 接
+  线，protocol schema + TS + fixtures 同步。
 
-参数错误、permission denial、syntax error 和 unknown outcome 默认不自动 retry。Tool failure
-可以作为 Tool Result 返回模型继续处理；只有执行控制、持久化或不可恢复策略错误才必然使
-Turn 失败。
+完成条件：
 
-## 11. 记忆与多 Agent
+- 拆分后 implementation module 低于 500 LoC，全部现有测试通过；
+- 新测试：策略放宽后恢复的 Turn 不以更宽策略执行；冻结 revision 在 replay / recovery 中
+  保持；
+- schema 哈希与 fixtures 更新完整（`pnpm verify:protocol`）。
 
-### 11.1 当前只保留三层
+### 阶段 B｜上下文系统
 
-```text
-Working context
-    单次模型调用的派生输入，不是永久存储
+范围：[§4.3](#43-r3上下文系统裁剪落地) 的五项 + `ModelInvocationSnapshot`。
 
-Thread history
-    当前任务的 durable events/items，是执行正确性的依据
+完成条件：
 
-Cross-thread memory
-    尚未设计，不进入当前实现
-```
+- 相同 `ContextInput` 产生字节级等价 `ContextPlan`；
+- 五类 overflow 显式 outcome，当前输入 / 权限约束 / 未完成 Tool continuation 永不被静默
+  删除；
+- Tool Call/Result 与 delegation group 原子保留；
+- compaction checkpoint 前后 crash 注入：原始 event log 完整、corrupt checkpoint 回退原始
+  history；
+- ContextManager 丢弃后从 durable facts 重建等价 plan。
 
-长期记忆实施前必须单独接受以下契约：
+### 阶段 C｜真实流式
 
-- 用户明确授权和可见性；
-- user/workspace/project scope；
-- provenance 和置信度；
-- 冲突、过期和撤回；
-- 查询、导出和彻底删除；
-- 敏感信息过滤、加密和保留期；
-- 注入相关性与错误记忆评测。
+范围：[§4.2](#42-r2同步执行内核流式经-sink) 的 provider SSE decoder、App Server
+reader/writer 拆分、Desktop gap/resync。
 
-### 11.2 多 Agent
+完成条件：
 
-多 Agent 的 identity、delegation、spawn saga、context seed、message/result delivery、
-cancellation、resource budget 与恢复统一由
-[`core-multi-agent.md`](core-multi-agent.md) 定义。本文只要求 App Server 能订阅多个独立 Thread，
-并把 child lifecycle、interaction 和 result 投影给客户端；App Server 不合并父子 history。
+- 增量 delta 从 provider wire 到客户端全链路可见，不再等待 final response；
+- 断连后 snapshot + gap 重建一致；
+- 流中取消 race：迟到 delta 丢弃、durable completion 不受 transient channel 饱和阻塞；
+- response 与 notification 保序，slow client 不阻塞 durable commit。
 
-## 12. App Server 与 Desktop 影响
+阶段 B 与 C 无强依赖，可由不同人并行；合入顺序建议 B 先行，避免流式测试对上下文管线改动
+重跑两轮。
 
-当前 `turn/start` 已采用“durable accepted 后返回、Core execution mailbox 异步继续”的语义。
-provider wire streaming 与 App Server 独立 outbound writer 仍会直接演进当前开发契约，并在同一
-变更中迁移 Rust、Desktop、CLI、TUI、schema 与 fixtures。
+### 阶段 D｜多 Agent 契约冻结
 
-目标 App Server task topology：
+范围：[§4.4](#44-r4多-agent-契约冻结先行) 的 protocol 变更，无运行时。
 
-```text
-bounded transport reader
-    → connection gate
-    → request processor
-    → keyed Session/Thread scheduling
-    → bounded outbound router
-    → per-connection writer
-```
+完成条件：Rust / schema / TS / fixtures 四处一致；contract test 覆盖新类型的
+serialize / deserialize / 拒绝非法值；不引入任何 Core 运行时依赖。
 
-需要区分：
+### 阶段 E｜MultiAgentCoordinator
 
-- `$/cancelRequest`：取消一个 RPC handler 的等待；
-- `turn/interrupt`：把 durable Turn 推向 Interrupted；
-- connection close：清理 connection-owned request/resource/subscription；
-- server shutdown：有 deadline 的全局 graceful stop。
+范围：spawn saga、outbox/inbox delivery、durable join、Agent tree budget、cancellation
+tree、恢复。gate 条件见 §4.4。
 
-Desktop Renderer 仍不持有 raw peer。后续由单一 projection service 消费 notification，
-检测 durable sequence/stream cursor gap，并通过 `session/subscribe` 或
-`thread/subscribe` 的 snapshot + gap 重建。
+完成条件：[`core-multi-agent.md`](core-multi-agent.md) §17 验证矩阵全量通过，其中 spawn
+的每个 durable boundary crash、duplicate delegation 拒绝、parent/child/sibling 隔离为必过
+项。
 
-## 13. 分阶段实施
+### 贯穿项
 
-### 阶段 0：固定当前地基（完成）
+- 每个新增 durable boundary 在其落地阶段内补 fault injection，不集中后补；
+- 文档随阶段收口更新状态标记（R5），不允许"实现先行、文档滞后超过一个阶段"。
 
-- 对当前工作区执行 Rust、协议生成和 Desktop Main tests；
-- 迁移到 Session-first current contract；
-- 用 typed command receipt 替代 operation identity/sidecar ledger；
-- 统一 Session/Thread 的物理 event-stream engine；
-- 新功能不继续增长超过约 800 LoC 的 `server.rs` 和 `thread_controller.rs`。
-
-完成条件：当前工作区的实现状态有测试证据，文档不再用虚构 PR 编号表示完成度。
-
-### 阶段 1：固定 canonical Session/Thread 契约（完成）
-
-Session-first 基础迁移已经完成；准确范围和仍未完成的 protocol 契约见
-[`protocol.md` 的当前完成度](protocol.md#9-当前完成度)。本阶段不再维护另一份类型清单。
-
-完成条件：Core、storage 和协议测试不再依赖混合 durable/transient/request 的巨型 `Event`。
-
-### 阶段 2：核心 TurnExecutor 最小纵向切片（基础完成）
-
-- 已在 `zeta-core` 内新建私有 `turn` 模块，没有提前创建 facade crate；
-- 已定义 canonical `ModelService`、`ToolService` 与 cancellation contract；
-- 已用 deterministic fake service 覆盖文本完成、顺序 Tool loop、运行中模型/Tool 取消与模型失败；
-- 已通过 App Server composition adapter 接入 model-provider，Core 与 provider 均不反向依赖；
-- 待在 Phase 3 将同步端口和调用路径演进为 async streaming。
-
-基础完成条件已满足：Agent loop 不依赖 storage/App Server，提交顺序和取消有单元测试。完整
-完成仍依赖异步 streaming 与 execution incarnation。
-
-### 阶段 3：ThreadController 执行隔离（完成）与异步协议（基础完成）
-
-- 已引入 per-Thread bounded execution mailbox；
-- `turn/start` acceptance commit 后返回；
-- 已实现 keyed model/tool scheduling、有界 backlog 和多 Thread 并发；
-- interrupt 会取消 exact active execution，并把同一 token 传播到当前 model provider operation
-  或 Tool execution；模型迟到 response 不提交，已开始 Tool 保留 durable execution-start marker
-  且不伪造 Tool Result，恢复时按 unknown outcome 处理；
-- 已将 durable projection 从全局状态锁拆为 per-Thread loaded state，并以 FIFO mutation gate
-  串行同 Thread 的结构性提交；
-- 每次 load 使用 explicit incarnation；旧 incarnation 的 queued execution 在运行前拒绝；
-- mailbox worker 空闲后退出并回收对应 projection，下一次访问只从 durable store 重建；
-- 待拆分 App Server reader、processor 与 outbound writer。
-
-Thread execution isolation 的完成条件已满足：同 Thread mutation/execution FIFO，不同 Thread 的
-durable commit 和长模型调用可并发，backlog 有界，idle state 可回收，旧 incarnation 工作不会
-启动。异步 App Server protocol 的完整完成仍依赖独立 outbound transport worker。
-
-### 阶段 4：SessionCoordinator、fork 与一致性（基础完成）
-
-- 已增加 SessionStore、Session reducer 与只串行结构操作的 SessionCoordinator；
-- Thread 创建/fork 已使用可恢复 saga；
-- 每个 Thread 已保持独立 lease 与 sequence；
-- per-Thread async controller 与 provider context 隔离仍由 Phase 3 完成。
-
-完成条件：故障注入不能产生不可回收的 orphan Thread 或永久 pending membership。
-
-### 阶段 5：工具 loop、批准与能力（顺序批准闭环完成）
-
-- 已实现 durable Tool Call 后顺序执行并提交 Tool Result；
-- 初始高风险调用与安全 sandbox denial 均可进入 durable one-time approval，批准后只恢复 exact
-  Tool Call；
-- sandbox denial 只有标记为 `SafeToRetry` 才能进入二次审查；批准的非 sandbox 重试在执行前提交
-  escalation marker，恢复时不会静默重放；
-- Tool Result 与 started-without-result 的 unknown-outcome 基线已实现；通用 retry policy、
-  reconciliation、并行计划和 deadline 尚未完成；
-- cancellation 贯穿 tool、exec、sandbox 和 MCP adapter。
-
-完成条件：在每个 durable boundary 注入故障后，不会静默重复副作用或留下永久 Running。
-
-### 阶段 6：上下文、压缩与供应商切换（上下文基础完成）
-
-- 已实现统一 ContextAssembler，重建 durable message 与 Tool Call/Result；
-- 引入 per-Thread ContextManager 与不可变 ContextPlan；
-- 加入 instruction precedence、budget 与带 provenance 的 compaction checkpoint；
-- Provider change 在 safe point 生效；
-- 建立跨 provider continuity evaluation。
-
-完成条件：切换 Provider 后能保持约束、决策和 Tool Result 引用；失败时可追溯到原始 Item。
-
-### 阶段 7：投影与多 Agent
-
-- Renderer projection/resync；
-- `multi_agent/`、MultiAgentCoordinator、durable delegation 与 spawn saga；
-- immutable ContextSeed 与 child Thread context isolation；
-- 跨 Thread message/result 的 durable delivery 与 join；
-- Agent tree cancellation 和 resource budget；
-- 根据真实负载决定 controller idle eviction。
-
-### 阶段 8：记忆 RFC
-
-只有隐私、生命周期和质量评测契约被接受后才开始实现跨 Thread memory。
-
-## 14. 验证门
+## 8. 验证门
 
 Rust：
 
@@ -613,38 +388,41 @@ pnpm --dir desktop run typecheck:renderer
 pnpm --dir desktop run test:main
 ```
 
-新增异步执行控制还必须覆盖：
+跨阶段必须持续覆盖（已实现部分回归 + 新增项）：
 
-- 同 Thread FIFO 与不同 Thread 并发；
-- Session 结构提交 FIFO，且不阻塞子 Thread 模型/工具执行；
-- Session/Thread 双 stream 创建或 fork 的 crash reconciliation；
+- 同 Thread FIFO 与不同 Thread 并发；Session 结构提交不阻塞子 Thread 执行；
 - acceptance response 与 notification 顺序；
-- provider/tool cancellation race；
-- completion 迟到、重复和旧 incarnation；
+- provider/tool cancellation race；completion 迟到、重复和旧 incarnation；
 - mailbox、stream 和 outbound queue saturation；
 - partial durable batch、crash recovery 和 idempotency replay；
 - Tool unknown outcome 不自动重放；
-- Provider 切换前后 context 一致性；
-- Renderer gap/resync。
+- 冻结 policy revision 下的恢复语义（阶段 A 起）；
+- Context determinism、overflow、checkpoint crash（阶段 B 起）；
+- Renderer gap/resync（阶段 C 起）。
 
-## 15. 验收标准
+## 9. 验收标准
 
 - rollout 是唯一权威历史，任何投影都能重建；
 - Session 是 Thread membership/lineage 的权威边界，Thread 是独立执行与恢复边界；
 - 长模型或工具调用期间仍可 interrupt 并服务其他 Thread；
 - 同 Thread 只有一个逻辑状态提交者；
 - 所有用户可见 final Item 在通知前 durable；
-- provider/tool/execution 失败都有明确 terminal path；
-- 断连、取消、超时和 shutdown 不留下永久 pending；
-- Provider 切换不依赖旧 provider cache；
-- Tool 副作用在 unknown outcome 下不被静默重放；
-- 新模块遵守私有模块、显式导出、文件大小和 sibling tests 约束；
+- Turn 级策略环境冻结为 durable fact，恢复不产生静默放宽；
+- 上下文溢出产生显式 outcome，当前输入与安全约束永不被静默删除；
+- provider/tool/execution 失败都有明确 terminal path；断连、取消、超时和 shutdown 不留下
+  永久 pending；
+- Provider 切换不依赖旧 provider cache；Tool 副作用在 unknown outcome 下不被静默重放；
 - connection/capability Session 不得与产品 Session 混用；
+- 每个组件的文档状态标记与代码证据一致；
 - 长期 Memory 不在没有独立 consent、scope、删除和评测契约时进入核心模型。
 
-## 16. 参考
+## 10. 参考
 
 - [Zeta 架构索引](architecture.md)
+- [会话与执行系统（Core）](core.md)
+- [上下文系统](core-context.md)
+- [多 Agent 协作系统](core-multi-agent.md)
+- [产品协议](protocol.md)
 - [zeta-rs 产品内核与统一对外层](zeta-rs-architecture.md)
 - [Zeta App Server API](zeta-app-server-api.md)
 - [OpenAI Codex App Server snapshot](https://github.com/openai/codex/blob/322d5b96cfa5c8fd52bd83ecfdb79cd9b330205f/codex-rs/app-server/README.md)

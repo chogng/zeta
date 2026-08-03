@@ -102,8 +102,8 @@ ownership 漂移。
 ## 测试、修改影响与当前限制
 
 ```bash
-cargo test --manifest-path zeta-rs/Cargo.toml -p zeta-language-service
-cargo clippy --manifest-path zeta-rs/Cargo.toml -p zeta-language-service --all-targets -- -D warnings
+cargo test --manifest-path Cargo.toml -p zeta-language-service
+cargo clippy --manifest-path Cargo.toml -p zeta-language-service --all-targets -- -D warnings
 ```
 
 测试覆盖禁用模式的文档生命周期、启动失败隔离、catalog 歧义校验、精确重启预算、backoff 期间

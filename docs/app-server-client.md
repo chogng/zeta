@@ -519,7 +519,7 @@ Result、Notification 与 error 的 source of truth 仍是 `zeta-app-server-prot
 验证入口：
 
 ```bash
-cargo test --manifest-path zeta-rs/Cargo.toml -p zeta-app-server-client
+cargo test --manifest-path Cargo.toml -p zeta-app-server-client
 ```
 
 修改 wire contract 时，还必须按

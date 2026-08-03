@@ -287,6 +287,33 @@ async fn polling_backend_delivers_live_mutations_for_aliased_path_fallback() {
 }
 
 #[tokio::test]
+async fn polling_backend_delivers_existing_file_modifications() {
+    let workspace = TestWorkspace::new();
+    let root = workspace.create_dir("watched");
+    let changed = root.join("changed.txt");
+    fs::write(&changed, "before").unwrap();
+    let watcher = Arc::new(
+        FileWatcher::new_with_backend(FileWatcherBackend::Polling {
+            interval: Duration::from_millis(20),
+        })
+        .unwrap(),
+    );
+    let (subscriber, mut receiver) = watcher.add_subscriber();
+    let _registration = subscriber.register_paths(vec![watch(&root, true)]).unwrap();
+    tokio::time::sleep(Duration::from_millis(40)).await;
+    fs::write(&changed, "after").unwrap();
+
+    assert_eq!(
+        timeout(Duration::from_secs(2), receiver.recv())
+            .await
+            .unwrap(),
+        Some(FileWatcherEvent::PathsChanged {
+            paths: vec![changed],
+        })
+    );
+}
+
+#[tokio::test]
 async fn backend_filters_access_events_and_routes_mutations() {
     let watcher = Arc::new(FileWatcher::noop());
     let (subscriber, mut rx) = watcher.add_subscriber();

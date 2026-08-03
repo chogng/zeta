@@ -1,5 +1,12 @@
 # 上下文系统
 
+> 状态：仅设计（例外：`ContextAssembler` 已实现为过渡 API，直接消费 `ThreadSnapshot`）。
+> `ContextManager`、`ContextPlan`、planner、budget、checkpoint 与 compaction 在代码中尚无
+> 引用。落地归属
+> [`zeta-agent-runtime-architecture.md` 阶段 B](zeta-agent-runtime-architecture.md#阶段-b上下文系统)，
+> 裁剪范围（首版无 cache / baseline / token estimate）由其
+> [R3](zeta-agent-runtime-architecture.md#43-r3上下文系统裁剪落地) 决定。
+>
 > Core 总体边界：[`core.md`](core.md)
 > Canonical Thread/Turn/Item contract：[`protocol.md`](protocol.md)
 > 多 Agent context inheritance：[`core-multi-agent.md`](core-multi-agent.md)
@@ -460,15 +467,17 @@ TurnExecutor
 - 已拒绝损坏的 Tool arguments 和悬空 Tool Result；
 - 尚无 ContextManager、instructions、预算、checkpoint 和 compaction。
 
-迁移顺序：
+迁移顺序（1–6 为阶段 B 范围；7 按 R3 **推迟**，触发条件是阶段 B 完成后有真实性能证据表明
+重复组装是瓶颈）：
 
 1. 增加 `ContextInput`、`ContextPlan` 和纯 validation/budget；
 2. 将现有 assembler 改为 `ContextPlan → ModelRequest`；
 3. 增加 per-Thread `ContextManager`，但先不做 cache；
 4. 在 `LoadedThreadState` 中持有 ContextManager；
 5. 增加 instruction/environment/policy snapshot，并由调用方决定何时贡献内置 prompt asset；
-6. 增加 checkpoint schema 与 compaction flow；
-7. 最后增加 cache/reference baseline，并以 sequence/revision 严格失效。
+6. 增加 checkpoint schema 与 compaction flow（checkpoint durable schema 与 R1 的 protocol
+   变更同批规划，避免两次 schema bump）；
+7. （推迟）增加 cache/reference baseline，并以 sequence/revision 严格失效。
 
 不要先复制一份 mutable history 再逐步“变成”ContextManager。
 

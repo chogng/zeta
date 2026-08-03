@@ -42,7 +42,7 @@ export interface IUntitledChatSession {
   readonly model: ModelRef | undefined;
 }
 
-export type WorkbenchSessionState = "loading" | "ready" | "creating" | "archiving" | "error";
+export type WorkbenchSessionState = "loading" | "ready" | "creating" | "stopping" | "archiving" | "error";
 
 /** Owns durable Session selection and window-local untitled Chat sessions. */
 export interface IWorkbenchSessionService {
@@ -63,6 +63,7 @@ export interface IWorkbenchSessionService {
   promoteUntitledSession(untitledSessionId: string, active: IActiveSessionThread): void;
   ensureActiveThread(): Promise<IActiveSessionThread>;
   startNewSession(title?: string): Promise<IActiveSessionThread>;
+  stopSession(sessionId: SessionId): Promise<void>;
   archiveSession(sessionId: SessionId): Promise<void>;
   setModel(sessionId: SessionId, model: ModelRef): Promise<void>;
 }

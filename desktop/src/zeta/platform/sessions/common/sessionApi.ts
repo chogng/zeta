@@ -11,6 +11,7 @@ export interface ISessionApi {
   archiveThread(params: SessionThreadArchiveParams): Promise<SessionResult>;
   complete(params: SessionCommandParams): Promise<SessionResult>;
   archive(params: SessionCommandParams): Promise<SessionResult>;
+  stop(params: SessionCommandParams): Promise<SessionResult>;
   setModel(params: SessionModelSetParams): Promise<SessionResult>;
 }
 
