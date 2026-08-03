@@ -209,6 +209,15 @@ pub fn reduce_thread_event(
                 "Thread cannot be created more than once".into(),
             ));
         }
+        ThreadEvent::HistoryImported {
+            source_thread_id,
+            before_turn_id,
+            turns,
+            ..
+        } => {
+            require_no_command(envelope)?;
+            import_history(&mut snapshot, source_thread_id, before_turn_id, turns)?;
+        }
         ThreadEvent::TurnAccepted { turn_id, model, .. } => {
             create_turn(&mut snapshot, turn_id, model.clone())?;
             let receipt = envelope.command.clone().ok_or_else(|| {
@@ -669,6 +678,107 @@ pub fn reduce_thread_event(
     }
     snapshot.sequence = envelope.sequence;
     Ok(snapshot)
+}
+
+fn import_history(
+    snapshot: &mut ThreadSnapshot,
+    source_thread_id: &ThreadId,
+    before_turn_id: &TurnId,
+    turns: &[Turn],
+) -> Result<(), CoreError> {
+    if source_thread_id == &snapshot.thread_id {
+        return Err(CoreError::Journal(
+            "imported Thread history must come from another Thread".into(),
+        ));
+    }
+    if snapshot.sequence != 1 || !snapshot.turns.is_empty() || !snapshot.items.is_empty() {
+        return Err(CoreError::Journal(
+            "Thread history can only be imported immediately after creation".into(),
+        ));
+    }
+
+    let mut turn_ids = BTreeSet::new();
+    let mut item_ids = BTreeSet::new();
+    let mut tool_calls = BTreeSet::new();
+    let mut tool_results = BTreeSet::new();
+    for turn in turns {
+        if &turn.turn_id == before_turn_id {
+            return Err(CoreError::Journal(
+                "rewind checkpoint must be excluded from imported history".into(),
+            ));
+        }
+        if !matches!(
+            turn.status,
+            TurnStatus::Completed | TurnStatus::Failed | TurnStatus::Interrupted
+        ) || turn.pending_interaction.is_some()
+        {
+            return Err(CoreError::Journal(
+                "only terminal Turns can be imported into rewound history".into(),
+            ));
+        }
+        if !turn_ids.insert(turn.turn_id.clone()) {
+            return Err(CoreError::Journal(format!(
+                "imported Turn already exists: {}",
+                turn.turn_id
+            )));
+        }
+        for item in &turn.items {
+            if item.turn_id() != &turn.turn_id {
+                return Err(CoreError::Journal(
+                    "imported Item Turn identity does not match its Turn".into(),
+                ));
+            }
+            if !item_ids.insert(item.item_id().clone()) {
+                return Err(CoreError::Journal(format!(
+                    "imported Item already exists: {}",
+                    item.item_id()
+                )));
+            }
+            match item {
+                ThreadItem::ToolCall { tool_call_id, .. } => {
+                    if !tool_calls.insert((turn.turn_id.clone(), tool_call_id.clone())) {
+                        return Err(CoreError::Journal(format!(
+                            "imported Tool Call already exists: {tool_call_id}"
+                        )));
+                    }
+                }
+                ThreadItem::ToolResult { tool_call_id, .. } => {
+                    let identity = (turn.turn_id.clone(), tool_call_id.clone());
+                    if !tool_calls.contains(&identity) {
+                        return Err(CoreError::Journal(format!(
+                            "imported Tool Result references an unknown Tool Call: {tool_call_id}"
+                        )));
+                    }
+                    if !tool_results.insert(identity) {
+                        return Err(CoreError::Journal(format!(
+                            "imported Tool Result already exists: {tool_call_id}"
+                        )));
+                    }
+                }
+                ThreadItem::UserMessage { .. }
+                | ThreadItem::UserImage { .. }
+                | ThreadItem::AgentMessage { .. }
+                | ThreadItem::Reasoning { .. }
+                | ThreadItem::Plan { .. } => {}
+            }
+        }
+    }
+
+    snapshot.turns = turns
+        .iter()
+        .map(|turn| TurnSnapshot {
+            turn_id: turn.turn_id.clone(),
+            status: turn.status,
+            model: turn.model.clone(),
+            failure: turn.error.clone(),
+            pending_interaction: None,
+        })
+        .collect();
+    snapshot.items = turns
+        .iter()
+        .flat_map(|turn| turn.items.iter().cloned())
+        .collect();
+    Ok(())
 }
 
 pub(crate) fn validate_agent_request(request: &AgentRequest) -> Result<(), String> {

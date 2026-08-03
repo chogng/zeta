@@ -535,6 +535,22 @@
           "properties": {
             "method": {
               "type": "string",
+              "const": "session/thread/rewind"
+            },
+            "params": {
+              "$ref": "#/$defs/SessionThreadRewindParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
               "const": "session/thread/archive"
             },
             "params": {
@@ -1644,6 +1660,22 @@
             "method": {
               "type": "string",
               "const": "session/thread/fork"
+            },
+            "result": {
+              "$ref": "#/$defs/SessionThreadResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "session/thread/rewind"
             },
             "result": {
               "$ref": "#/$defs/SessionThreadResult"
@@ -5356,6 +5388,39 @@
         "threadId"
       ]
     },
+    "SessionThreadRewindParams": {
+      "type": "object",
+      "properties": {
+        "beforeTurnId": {
+          "$ref": "#/$defs/TurnId"
+        },
+        "commandId": {
+          "$ref": "#/$defs/CommandId"
+        },
+        "expectedSequence": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "parentThreadId": {
+          "$ref": "#/$defs/ThreadId"
+        },
+        "sessionId": {
+          "$ref": "#/$defs/SessionId"
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "commandId",
+        "sessionId",
+        "expectedSequence",
+        "parentThreadId",
+        "beforeTurnId",
+        "title"
+      ]
+    },
     "SessionThreadStatus": {
       "description": "Session-owned lifecycle for one Thread membership.",
       "type": "string",
@@ -6247,6 +6312,37 @@
         {
           "type": "object",
           "properties": {
+            "beforeTurnId": {
+              "$ref": "#/$defs/TurnId"
+            },
+            "sourceThreadId": {
+              "$ref": "#/$defs/ThreadId"
+            },
+            "threadId": {
+              "$ref": "#/$defs/ThreadId"
+            },
+            "turns": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/Turn"
+              }
+            },
+            "type": {
+              "type": "string",
+              "const": "historyImported"
+            }
+          },
+          "required": [
+            "type",
+            "threadId",
+            "sourceThreadId",
+            "beforeTurnId",
+            "turns"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
             "model": {
               "anyOf": [
                 {
@@ -6789,6 +6885,32 @@
             "type",
             "parentThreadId",
             "parentSequence"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "beforeTurnId": {
+              "$ref": "#/$defs/TurnId"
+            },
+            "parentSequence": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            },
+            "parentThreadId": {
+              "$ref": "#/$defs/ThreadId"
+            },
+            "type": {
+              "type": "string",
+              "const": "rewind"
+            }
+          },
+          "required": [
+            "type",
+            "parentThreadId",
+            "parentSequence",
+            "beforeTurnId"
           ]
         }
       ]

@@ -1,4 +1,6 @@
-use crate::{ModelRef, ThreadId};
+use crate::ModelRef;
+use crate::ThreadId;
+use crate::TurnId;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
@@ -24,6 +26,11 @@ pub enum SessionCommand {
     },
     ForkThread {
         parent_thread_id: ThreadId,
+        title: String,
+    },
+    RewindThread {
+        parent_thread_id: ThreadId,
+        before_turn_id: TurnId,
         title: String,
     },
     ArchiveThread {

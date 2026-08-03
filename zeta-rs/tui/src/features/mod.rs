@@ -1,6 +1,10 @@
 pub(crate) mod config;
+pub(crate) mod mcp;
+pub(crate) mod models;
+pub(crate) mod rewind;
 pub(crate) mod sessions;
 pub(crate) mod skills;
+pub(crate) mod status;
 pub(crate) mod status_line;
 pub(crate) mod theme;
 pub(crate) mod thread;

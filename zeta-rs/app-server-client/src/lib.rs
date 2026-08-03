@@ -39,7 +39,7 @@ use zeta_app_server_protocol::protocol::session::{
     SessionCommandParams, SessionCreateParams, SessionListResult, SessionModelSetParams,
     SessionReadParams, SessionResult, SessionSubscribeParams, SessionSubscribeResult,
     SessionThreadArchiveParams, SessionThreadCreateParams, SessionThreadForkParams,
-    SessionThreadResult, SessionUnsubscribeParams,
+    SessionThreadResult, SessionThreadRewindParams, SessionUnsubscribeParams,
 };
 use zeta_app_server_protocol::protocol::skills::{
     SkillListParams, SkillListResult, SkillSetEnablementParams,
@@ -232,6 +232,13 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
         params: SessionThreadForkParams,
     ) -> Result<SessionThreadResult, ClientError> {
         self.call(ClientMethod::SessionThreadFork, params)
+    }
+
+    pub fn rewind_session_thread(
+        &mut self,
+        params: SessionThreadRewindParams,
+    ) -> Result<SessionThreadResult, ClientError> {
+        self.call(ClientMethod::SessionThreadRewind, params)
     }
 
     pub fn archive_session_thread(

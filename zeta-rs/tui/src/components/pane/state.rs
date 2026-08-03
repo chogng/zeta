@@ -16,6 +16,7 @@ impl<T> PaneViewModel<T> {
         (self.body, self.key_hints)
     }
 
+    #[cfg(test)]
     pub(crate) fn into_body(self) -> T {
         self.body
     }

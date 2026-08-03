@@ -1,5 +1,9 @@
 use crate::components::pane::PaneViewModel;
 use crate::components::selection::SelectionViewModel;
+use crate::features::mcp::McpSelectionView;
+use crate::features::models::ModelSelectionView;
+use crate::features::rewind::RewindSelectionView;
+use crate::features::sessions::SessionSelectionView;
 use crate::features::skills::SkillSelectionView;
 use crate::features::theme::ThemeSelectionView;
 use crate::features::thread::TurnActivity;
@@ -17,6 +21,12 @@ pub(crate) enum AppEvent {
     FileSearchSnapshotReceived(PathSearchSnapshot),
     InterruptFailed(String),
     ProductNotice(String),
+    McpViewOpened(McpSelectionView),
+    McpViewReplaced(McpSelectionView),
+    ModelViewOpened(ModelSelectionView),
+    RewindViewOpened(RewindSelectionView),
+    SessionViewOpened(SessionSelectionView),
+    SelectionViewClosed,
     SelectionViewOpened(PaneViewModel<SelectionViewModel>),
     SkillsViewOpened(SkillSelectionView),
     SkillsViewReplaced(SkillSelectionView),

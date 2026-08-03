@@ -10,6 +10,7 @@ fn builtins_follow_enum_presentation_order() {
             ("skills", TuiSlashCommandAction::Skills),
             ("mcp", TuiSlashCommandAction::Mcp),
             ("resume", TuiSlashCommandAction::Resume),
+            ("rewind", TuiSlashCommandAction::Rewind),
             ("clear", TuiSlashCommandAction::Clear),
             ("config", TuiSlashCommandAction::Config),
             ("fork", TuiSlashCommandAction::Fork),
@@ -21,7 +22,7 @@ fn builtins_follow_enum_presentation_order() {
             ("exit", TuiSlashCommandAction::Exit),
         ]
     );
-    assert_eq!(built_in_slash_command_definitions().len(), 13);
+    assert_eq!(built_in_slash_command_definitions().len(), 14);
 }
 
 #[test]
@@ -32,6 +33,10 @@ fn builtins_declare_argument_support() {
     );
     assert_eq!(
         TuiSlashCommandAction::Fork.argument_mode(),
+        SlashCommandArgumentMode::Optional
+    );
+    assert_eq!(
+        TuiSlashCommandAction::Rewind.argument_mode(),
         SlashCommandArgumentMode::Optional
     );
     assert_eq!(

@@ -27,6 +27,7 @@ fn registry_method_and_notification_names_are_unique() {
     assert!(methods.contains("initialize"));
     assert!(methods.contains("session/create"));
     assert!(methods.contains("session/thread/fork"));
+    assert!(methods.contains("session/thread/rewind"));
     assert!(methods.contains("turn/start"));
     assert!(methods.contains("turn/shell/start"));
     assert!(methods.contains("turn/interaction/resolve"));

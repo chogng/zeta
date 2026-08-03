@@ -700,6 +700,83 @@ fn fork_freezes_parent_thread_sequence_in_session_lineage() {
     );
 }
 
+#[test]
+fn rewind_endpoint_imports_only_history_before_the_selected_turn() {
+    let server = server();
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+    let session = create_session(&server, &mut connection, 2, "session");
+    let session_id = session["result"]["session"]["sessionId"].as_str().unwrap();
+    let root = create_thread(&server, &mut connection, 3, "root", session_id, 1);
+    let root_id = root["result"]["threadId"].as_str().unwrap();
+
+    let first = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":4,"method":"turn/start",
+            "params":{
+                "commandId":"turn-first","sessionId":session_id,"threadId":root_id,
+                "expectedSequence":1,"input":[{"type":"text","text":"first"}]
+            }
+        }),
+    );
+    wait_for_latest_turn(&server, root_id, TurnStatus::Completed);
+    let after_first = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":5,"method":"thread/read","params":{"threadId":root_id}
+        }),
+    );
+    let second = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":6,"method":"turn/start",
+            "params":{
+                "commandId":"turn-second","sessionId":session_id,"threadId":root_id,
+                "expectedSequence":after_first["result"]["thread"]["sequence"],
+                "input":[{"type":"text","text":"second"}]
+            }
+        }),
+    );
+    wait_for_latest_turn(&server, root_id, TurnStatus::Completed);
+    let rewound = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":7,"method":"session/thread/rewind",
+            "params":{
+                "commandId":"rewind","sessionId":session_id,"expectedSequence":3,
+                "parentThreadId":root_id,"beforeTurnId":second["result"]["turnId"],
+                "title":"rewound"
+            }
+        }),
+    );
+    let child_id = rewound["result"]["threadId"].as_str().unwrap();
+    let child = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":8,"method":"thread/read","params":{"threadId":child_id}
+        }),
+    );
+
+    assert_eq!(
+        child["result"]["thread"]["turns"].as_array().unwrap().len(),
+        1
+    );
+    assert_eq!(
+        child["result"]["thread"]["turns"][0]["turnId"],
+        first["result"]["turnId"]
+    );
+    assert_eq!(
+        rewound["result"]["session"]["threads"][1]["origin"]["type"],
+        "rewind"
+    );
+}
+
 #[derive(Default)]
 struct CountingModel {
     calls: AtomicUsize,

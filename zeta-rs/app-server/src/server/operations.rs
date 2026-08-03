@@ -20,7 +20,7 @@ use zeta_app_server_protocol::protocol::session::{
     SessionCommandParams, SessionCreateParams, SessionListResult, SessionModelSetParams,
     SessionReadParams, SessionResult, SessionSubscribeParams, SessionSubscribeResult,
     SessionThreadArchiveParams, SessionThreadCreateParams, SessionThreadForkParams,
-    SessionThreadResult, SessionUnsubscribeParams,
+    SessionThreadResult, SessionThreadRewindParams, SessionUnsubscribeParams,
 };
 use zeta_app_server_protocol::protocol::thread::{
     ThreadReadParams, ThreadReadResult, ThreadSubscribeParams, ThreadSubscribeResult,
@@ -34,8 +34,9 @@ use zeta_app_server_protocol::schema_hash;
 use zeta_core::{
     ArchiveSessionThreadRequest, CreateSessionRequest, CreateSessionThreadRequest,
     ForkSessionThreadRequest, InterruptTurnRequest, ResolveTurnInteractionRequest,
-    SequenceExpectation, SessionLifecycleRequest, SetSessionModelRequest, ShellTurnInvocation,
-    StartShellTurnRequest, StartTurnDisposition, StartTurnRequest, TurnStatus,
+    RewindSessionThreadRequest, SequenceExpectation, SessionLifecycleRequest,
+    SetSessionModelRequest, ShellTurnInvocation, StartShellTurnRequest, StartTurnDisposition,
+    StartTurnRequest, TurnStatus,
 };
 use zeta_protocol::UserInput;
 use zeta_typst::{
@@ -264,6 +265,38 @@ impl AppServer {
                 .map_err(core_error)?
                 .public_session(),
             thread_id: forked.thread_id,
+        })
+    }
+
+    pub(super) fn session_thread_rewind(
+        &self,
+        connection: &mut ConnectionState,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        let params: SessionThreadRewindParams = decode(params)?;
+        let previous_sequence = params.expected_sequence;
+        let rewound = self
+            .sessions
+            .rewind_thread(RewindSessionThreadRequest {
+                command_id: params.command_id,
+                session_id: params.session_id.clone(),
+                expected_sequence: SequenceExpectation::Exact(params.expected_sequence),
+                parent_thread_id: params.parent_thread_id,
+                before_turn_id: params.before_turn_id,
+                title: params.title,
+            })
+            .map_err(core_error)?;
+        self.updates
+            .subscribe_thread(connection.connection_id, rewound.thread_id.clone(), 0);
+        self.notify_session_updates(&params.session_id, previous_sequence)?;
+        self.notify_thread_updates(&rewound.thread_id, 0)?;
+        result(&SessionThreadResult {
+            session: self
+                .sessions
+                .read_session(&params.session_id)
+                .map_err(core_error)?
+                .public_session(),
+            thread_id: rewound.thread_id,
         })
     }
 

@@ -1,4 +1,5 @@
 use crate::ThreadId;
+use crate::TurnId;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
@@ -16,5 +17,11 @@ pub enum ThreadOrigin {
         parent_thread_id: ThreadId,
         #[ts(type = "number")]
         parent_sequence: u64,
+    },
+    Rewind {
+        parent_thread_id: ThreadId,
+        #[ts(type = "number")]
+        parent_sequence: u64,
+        before_turn_id: TurnId,
     },
 }

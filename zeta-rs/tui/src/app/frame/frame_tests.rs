@@ -38,9 +38,11 @@ fn empty_frame_uses_lightweight_chrome_and_a_welcome_banner() {
     assert!(rendered.contains("Welcome back!"));
     assert!(rendered.contains("Tips for getting started"));
     assert!(rendered.contains("Try asking"));
-    assert!(rendered.contains(
-        "policy  (shift + tab to cycle)  ·  enter send  ·  ctrl-v image  ·  ctrl-c quit"
-    ));
+    assert!(
+        rendered.contains(
+            "shift-tab policy · enter send · ctrl-v image · esc esc rewind · ctrl-c quit"
+        )
+    );
 }
 
 #[test]
@@ -161,7 +163,7 @@ fn error_detail_is_rendered_once_and_the_footer_only_offers_recovery() {
             .count(),
         1
     );
-    assert!(rendered.contains("ready to retry  ·  ctrl-c quit"));
+    assert!(rendered.contains("ready to retry  ·  esc esc rewind  ·  ctrl-c quit"));
     assert!(!rendered.contains("StableTurnError"));
 }
 
@@ -182,7 +184,7 @@ fn command_completion_renders_an_adjacent_result_line() {
 }
 
 #[test]
-fn bare_slash_renders_all_registered_commands() {
+fn bare_slash_renders_the_first_command_window() {
     let mut app = App::new();
     app.insert_text("/");
 
@@ -192,8 +194,8 @@ fn bare_slash_renders_all_registered_commands() {
     assert!(rendered.contains("/skills"));
     assert!(rendered.contains("/mcp"));
     assert!(rendered.contains("/resume"));
+    assert!(rendered.contains("/rewind"));
     assert!(rendered.contains("/clear"));
-    assert!(rendered.contains("/config"));
     assert!(!rendered.contains("/login"));
     assert!(!rendered.contains("/plugins"));
 }

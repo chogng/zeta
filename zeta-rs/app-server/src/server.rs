@@ -409,6 +409,9 @@ impl AppServer {
             Some(ClientMethod::SessionThreadFork) => {
                 self.session_thread_fork(connection, &request.params)
             }
+            Some(ClientMethod::SessionThreadRewind) => {
+                self.session_thread_rewind(connection, &request.params)
+            }
             Some(ClientMethod::SessionThreadArchive) => {
                 self.session_thread_archive(connection, &request.params)
             }

@@ -6,6 +6,7 @@ use crate::components::composer::ComposerInput;
 use crate::components::composer::ComposerSubmission;
 use crate::components::composer::built_in_slash_command_definitions;
 use crate::components::transcript::MessageRole;
+use crate::features::rewind::rewind_selection_view;
 use crate::features::theme::ThemePickerCatalog;
 use crate::features::theme::ThemePickerChoice;
 use crate::features::theme::ThemePickerTarget;
@@ -23,6 +24,15 @@ use std::path::Path;
 use std::time::Duration;
 use std::time::Instant;
 use std::time::{SystemTime, UNIX_EPOCH};
+use zeta_protocol::ItemId;
+use zeta_protocol::SessionId;
+use zeta_protocol::Thread;
+use zeta_protocol::ThreadId;
+use zeta_protocol::ThreadItem;
+use zeta_protocol::ThreadStatus;
+use zeta_protocol::Turn;
+use zeta_protocol::TurnId;
+use zeta_protocol::TurnStatus;
 use zeta_slash_commands::{
     SlashCommandArgumentMode, SlashCommandCatalog, SlashCommandDefinition, SlashCommandOrigin,
 };
@@ -95,6 +105,40 @@ fn selected_custom_theme_closes_the_entire_theme_flow_after_success() {
 
     app.update(AppEvent::ThemeViewClosed);
     assert!(app.selection_view().is_none());
+}
+
+#[test]
+fn selected_rewind_checkpoint_emits_a_typed_rewind_action() {
+    let turn_id = TurnId::new("turn-1").unwrap();
+    let thread = Thread {
+        session_id: SessionId::new("session").unwrap(),
+        thread_id: ThreadId::new("thread").unwrap(),
+        title: "thread".into(),
+        status: ThreadStatus::Active,
+        sequence: 5,
+        turns: vec![Turn {
+            turn_id: turn_id.clone(),
+            status: TurnStatus::Completed,
+            model: None,
+            items: vec![ThreadItem::UserMessage {
+                item_id: ItemId::new("item-1").unwrap(),
+                turn_id: turn_id.clone(),
+                text: "restore here".into(),
+            }],
+            pending_interaction: None,
+            error: None,
+        }],
+    };
+    let mut app = App::new();
+    app.update(AppEvent::RewindViewOpened(rewind_selection_view(&thread)));
+
+    assert_eq!(
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        Some(AppCommand::RewindToCheckpoint {
+            before_turn_id: turn_id,
+            checkpoint_label: "restore here".into(),
+        })
+    );
 }
 
 fn theme_catalog() -> ThemePickerCatalog {
@@ -468,6 +512,45 @@ fn escape_does_not_exit_the_idle_root_view() {
         None
     );
     assert_eq!(app.status(), &Status::Ready);
+}
+
+#[test]
+fn two_root_escape_presses_within_the_gesture_window_open_rewind() {
+    let mut app = App::new();
+    let started = Instant::now();
+
+    assert_eq!(
+        app.handle_key_at(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE), started,),
+        None
+    );
+    assert_eq!(
+        app.handle_key_at(
+            KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE),
+            started + Duration::from_millis(200),
+        ),
+        Some(AppCommand::OpenRewindPane)
+    );
+}
+
+#[test]
+fn root_escape_gesture_expires_and_is_reset_by_other_input() {
+    let mut app = App::new();
+    let started = Instant::now();
+    let escape = KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE);
+
+    assert_eq!(app.handle_key_at(escape, started), None);
+    assert_eq!(
+        app.handle_key_at(escape, started + Duration::from_millis(600)),
+        None
+    );
+    app.handle_key_at(
+        KeyEvent::new(KeyCode::Char('x'), KeyModifiers::NONE),
+        started + Duration::from_millis(650),
+    );
+    assert_eq!(
+        app.handle_key_at(escape, started + Duration::from_millis(700)),
+        None
+    );
 }
 
 #[test]

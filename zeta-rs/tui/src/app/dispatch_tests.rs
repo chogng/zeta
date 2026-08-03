@@ -31,6 +31,7 @@ fn help_lists_only_builtins_with_execution_paths() {
 
     assert!(help.contains(&"/status"));
     assert!(help.contains(&"/resume"));
+    assert!(help.contains(&"/rewind"));
     assert!(help.contains(&"/model"));
     assert!(help.contains(&"/theme"));
     assert!(!help.contains(&"/login"));
@@ -88,15 +89,31 @@ fn status_config_mcp_skills_and_help_return_real_surfaces() {
     let mut conversation = ActiveConversation::start(&mut client, "commands".into()).unwrap();
     let mut app = App::new();
 
-    for command in [
-        TuiSlashCommandAction::Status,
-        TuiSlashCommandAction::Config,
-        TuiSlashCommandAction::Mcp,
-    ] {
-        conversation.execute(&mut client, invocation(command, ""), &mut app);
-        assert_eq!(app.status(), &Status::Ready);
-        assert_eq!(app.messages().last().unwrap().role, MessageRole::Notice);
-    }
+    conversation.execute(
+        &mut client,
+        invocation(TuiSlashCommandAction::Status, ""),
+        &mut app,
+    );
+    assert_eq!(app.selection_view().unwrap().title(), "Status");
+    app.update(AppEvent::SelectionViewClosed);
+
+    conversation.execute(
+        &mut client,
+        invocation(TuiSlashCommandAction::Config, ""),
+        &mut app,
+    );
+    assert_eq!(app.selection_view().unwrap().title(), "Config");
+    assert!(app.selection_view().unwrap().search().is_some());
+    app.update(AppEvent::SelectionViewClosed);
+
+    conversation.execute(
+        &mut client,
+        invocation(TuiSlashCommandAction::Mcp, ""),
+        &mut app,
+    );
+    assert_eq!(app.selection_view().unwrap().title(), "MCP servers");
+    assert!(app.selection_view().unwrap().search().is_some());
+    app.update(AppEvent::SelectionViewClosed);
     conversation.execute(
         &mut client,
         invocation(TuiSlashCommandAction::Skills, ""),
@@ -121,22 +138,6 @@ fn status_config_mcp_skills_and_help_return_real_surfaces() {
     assert_eq!(
         selection.tabs()[selection.active_tab_index()].label(),
         "Commands"
-    );
-
-    assert!(
-        app.messages()
-            .iter()
-            .any(|message| message.text.contains("Session:"))
-    );
-    assert!(
-        app.messages()
-            .iter()
-            .any(|message| message.text.contains("Config revision:"))
-    );
-    assert!(
-        app.messages()
-            .iter()
-            .any(|message| message.text == "No MCP servers configured.")
     );
 
     drop(client);
@@ -246,6 +247,64 @@ fn model_command_updates_and_clears_preferred_model_with_config_revision() {
     assert_eq!(client.read_config().unwrap().preferred_model, None);
     assert_eq!(app.status_line().text_for_width(80), ".");
     assert_eq!(app.status(), &Status::Ready);
+
+    drop(client);
+    let _ = fs::remove_dir_all(state_root);
+}
+
+#[test]
+fn resume_and_model_without_arguments_open_actionable_panes() {
+    let (mut client, state_root) = client();
+    let mut conversation = ActiveConversation::start(&mut client, "current".into()).unwrap();
+    let current_session = conversation.session_id().to_string();
+    let mut app = App::new();
+
+    conversation.execute(
+        &mut client,
+        invocation(TuiSlashCommandAction::Resume, ""),
+        &mut app,
+    );
+    assert_eq!(app.selection_view().unwrap().title(), "Resume session");
+    assert_eq!(
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        Some(AppCommand::ResumeSession {
+            session_id: current_session,
+        })
+    );
+    app.update(AppEvent::SelectionViewClosed);
+
+    conversation.execute(
+        &mut client,
+        invocation(TuiSlashCommandAction::Model, ""),
+        &mut app,
+    );
+    assert_eq!(app.selection_view().unwrap().title(), "Model");
+    assert_eq!(
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        Some(AppCommand::SetPreferredModel {
+            preference: "clear".into(),
+        })
+    );
+
+    drop(client);
+    let _ = fs::remove_dir_all(state_root);
+}
+
+#[test]
+fn rewind_without_arguments_opens_the_checkpoint_pane() {
+    let (mut client, state_root) = client();
+    let mut conversation = ActiveConversation::start(&mut client, "rewind".into()).unwrap();
+    let mut app = App::new();
+
+    conversation.execute(
+        &mut client,
+        invocation(TuiSlashCommandAction::Rewind, ""),
+        &mut app,
+    );
+
+    assert_eq!(app.selection_view().unwrap().title(), "Rewind");
+    assert!(app.selection_view().unwrap().search().is_some());
+    assert!(app.selection_view().unwrap().visible_items().is_empty());
 
     drop(client);
     let _ = fs::remove_dir_all(state_root);

@@ -6,6 +6,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
+use zeta_protocol::TurnId;
 use zeta_protocol::{
     CommandId, ModelRef, SessionCommand, SessionEvent, SessionId, SessionThread,
     SessionThreadStatus, SessionUpdate, SessionUpdateEnvelope, ThreadId, ThreadOrigin,
@@ -59,6 +60,15 @@ pub struct ForkSessionThreadRequest {
     pub session_id: SessionId,
     pub expected_sequence: SequenceExpectation,
     pub parent_thread_id: ThreadId,
+    pub title: String,
+}
+
+pub struct RewindSessionThreadRequest {
+    pub command_id: CommandId,
+    pub session_id: SessionId,
+    pub expected_sequence: SequenceExpectation,
+    pub parent_thread_id: ThreadId,
+    pub before_turn_id: TurnId,
     pub title: String,
 }
 
@@ -266,6 +276,42 @@ impl SessionCoordinator {
         )
     }
 
+    pub fn rewind_thread(
+        &self,
+        request: RewindSessionThreadRequest,
+    ) -> Result<SessionThreadResult, CoreError> {
+        validate_command(&request.command_id, &request.title)?;
+        let parent = self.threads.read_thread(&request.parent_thread_id)?;
+        if parent.session_id != request.session_id {
+            return Err(CoreError::InvalidInput(
+                "rewind parent belongs to another Session".into(),
+            ));
+        }
+        if !parent
+            .turns
+            .iter()
+            .any(|turn| turn.turn_id == request.before_turn_id)
+        {
+            return Err(CoreError::NotFound(request.before_turn_id.to_string()));
+        }
+        self.plan_and_finish_thread(
+            request.command_id,
+            request.session_id,
+            request.expected_sequence,
+            SessionCommand::RewindThread {
+                parent_thread_id: request.parent_thread_id.clone(),
+                before_turn_id: request.before_turn_id.clone(),
+                title: request.title.clone(),
+            },
+            ThreadOrigin::Rewind {
+                parent_thread_id: request.parent_thread_id,
+                parent_sequence: parent.sequence,
+                before_turn_id: request.before_turn_id,
+            },
+            request.title,
+        )
+    }
+
     pub fn archive_thread(
         &self,
         request: ArchiveSessionThreadRequest,
@@ -467,11 +513,30 @@ impl SessionCoordinator {
                 "only a creating Thread saga can be finished".into(),
             ));
         }
-        self.threads.create_thread(CreateThreadRequest {
-            session_id: snapshot.session_id.clone(),
-            thread_id: thread_id.clone(),
-            title: planned.title.clone(),
-        })?;
+        let title = planned.title.clone();
+        let origin = planned.membership.origin.clone();
+        match origin {
+            ThreadOrigin::Rewind {
+                parent_thread_id,
+                before_turn_id,
+                ..
+            } => self
+                .threads
+                .create_rewound_thread(crate::CreateRewoundThreadRequest {
+                    session_id: snapshot.session_id.clone(),
+                    thread_id: thread_id.clone(),
+                    title,
+                    source_thread_id: parent_thread_id,
+                    before_turn_id,
+                })?,
+            ThreadOrigin::Root | ThreadOrigin::Fork { .. } => {
+                self.threads.create_thread(CreateThreadRequest {
+                    session_id: snapshot.session_id.clone(),
+                    thread_id: thread_id.clone(),
+                    title,
+                })?
+            }
+        };
         let (attached, batch) = self.project_batch(
             Some(snapshot.clone()),
             &snapshot.session_id,

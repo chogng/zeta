@@ -1,4 +1,7 @@
-use crate::protocol::common::{CommandId, SessionId, ThreadId};
+use crate::protocol::common::CommandId;
+use crate::protocol::common::SessionId;
+use crate::protocol::common::ThreadId;
+use crate::protocol::common::TurnId;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
@@ -69,6 +72,18 @@ pub struct SessionThreadForkParams {
     #[ts(type = "number")]
     pub expected_sequence: u64,
     pub parent_thread_id: ThreadId,
+    pub title: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionThreadRewindParams {
+    pub command_id: CommandId,
+    pub session_id: SessionId,
+    #[ts(type = "number")]
+    pub expected_sequence: u64,
+    pub parent_thread_id: ThreadId,
+    pub before_turn_id: TurnId,
     pub title: String,
 }
 

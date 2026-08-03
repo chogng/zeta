@@ -8,6 +8,14 @@ use crate::components::selection::SelectionItemId;
 use crate::components::selection::SelectionViewModel;
 use crate::components::selection::SelectionViewState;
 use crate::components::transcript::Message;
+use crate::features::mcp::McpSelectionAction;
+use crate::features::mcp::McpSelectionView;
+use crate::features::models::ModelSelectionAction;
+use crate::features::models::ModelSelectionView;
+use crate::features::rewind::RewindSelectionAction;
+use crate::features::rewind::RewindSelectionView;
+use crate::features::sessions::SessionSelectionAction;
+use crate::features::sessions::SessionSelectionView;
 use crate::features::skills::{SkillSelectionAction, SkillSelectionView};
 use crate::features::status_line::StatusLineModel;
 use crate::features::theme::ThemeSelectionAction;
@@ -17,9 +25,14 @@ use crate::features::thread::ThreadPresentationEvent;
 use crate::features::thread::TurnActivity;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
+use crossterm::event::KeyEventKind;
 use crossterm::event::KeyModifiers;
 use std::collections::BTreeMap;
 use std::path::Path;
+use std::time::Duration;
+use std::time::Instant;
+
+const DOUBLE_ESCAPE_WINDOW: Duration = Duration::from_millis(500);
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum Status {
@@ -37,6 +50,7 @@ pub(crate) struct App {
     interaction_pane: InteractionPane,
     thread: ThreadFeatureState,
     selection_actions: Vec<SelectionActions>,
+    last_root_escape: Option<Instant>,
     status: Status,
     status_line: StatusLineModel,
 }
@@ -44,6 +58,10 @@ pub(crate) struct App {
 #[derive(Debug)]
 enum SelectionActions {
     ReadOnly,
+    Mcp(BTreeMap<SelectionItemId, McpSelectionAction>),
+    Model(BTreeMap<SelectionItemId, ModelSelectionAction>),
+    Rewind(BTreeMap<SelectionItemId, RewindSelectionAction>),
+    Sessions(BTreeMap<SelectionItemId, SessionSelectionAction>),
     Skills(BTreeMap<SelectionItemId, SkillSelectionAction>),
     Theme(BTreeMap<SelectionItemId, ThemeSelectionAction>),
 }
@@ -55,6 +73,7 @@ impl App {
             interaction_pane: InteractionPane::new(),
             thread: ThreadFeatureState::default(),
             selection_actions: Vec::new(),
+            last_root_escape: None,
             status: Status::Ready,
             status_line: StatusLineModel::for_workspace(Path::new(".")),
         }
@@ -76,19 +95,33 @@ impl App {
             interaction_pane: InteractionPane::with_slash_commands(slash_commands),
             thread: ThreadFeatureState::default(),
             selection_actions: Vec::new(),
+            last_root_escape: None,
             status: Status::Ready,
             status_line: StatusLineModel::for_workspace(workspace_root),
         }
     }
 
     pub(crate) fn handle_key(&mut self, key: KeyEvent) -> Option<AppCommand> {
+        self.handle_key_at(key, Instant::now())
+    }
+
+    fn handle_key_at(&mut self, key: KeyEvent, now: Instant) -> Option<AppCommand> {
+        let temporary_interaction_active = self.selection_view().is_some()
+            || self.slash_popup().is_some()
+            || self.mention_popup().is_some();
+        if key.kind == KeyEventKind::Press
+            && (key.code != KeyCode::Esc || temporary_interaction_active)
+        {
+            self.last_root_escape = None;
+        }
         if !self.accepts_input() {
-            return self.handle_global_key(key);
+            self.last_root_escape = None;
+            return self.handle_global_key(key, now);
         }
 
         let outcome = self.interaction_pane.handle_key(key);
         if matches!(outcome, InteractionPaneOutcome::Unhandled) {
-            return self.handle_global_key(key);
+            return self.handle_global_key(key, now);
         }
         self.handle_interaction_pane_outcome(outcome)
     }
@@ -121,6 +154,36 @@ impl App {
     fn activate_selection_item(&self, item_id: &SelectionItemId) -> Option<AppCommand> {
         match self.selection_actions.last()? {
             SelectionActions::ReadOnly => None,
+            SelectionActions::Mcp(actions) => match actions.get(item_id)? {
+                McpSelectionAction::SetEnablement {
+                    server_id,
+                    enablement,
+                } => Some(AppCommand::SetMcpEnablement {
+                    server_id: server_id.clone(),
+                    enablement: *enablement,
+                }),
+            },
+            SelectionActions::Model(actions) => match actions.get(item_id)? {
+                ModelSelectionAction::Select { preference } => {
+                    Some(AppCommand::SetPreferredModel {
+                        preference: preference.clone(),
+                    })
+                }
+            },
+            SelectionActions::Rewind(actions) => match actions.get(item_id)? {
+                RewindSelectionAction::Rewind {
+                    before_turn_id,
+                    checkpoint_label,
+                } => Some(AppCommand::RewindToCheckpoint {
+                    before_turn_id: before_turn_id.clone(),
+                    checkpoint_label: checkpoint_label.clone(),
+                }),
+            },
+            SelectionActions::Sessions(actions) => match actions.get(item_id)? {
+                SessionSelectionAction::Resume { session_id } => Some(AppCommand::ResumeSession {
+                    session_id: session_id.clone(),
+                }),
+            },
             SelectionActions::Skills(actions) => match actions.get(item_id)? {
                 SkillSelectionAction::SetEnablement {
                     skill_id,
@@ -211,6 +274,45 @@ impl App {
         self.interaction_pane.show_selection_view(view.model);
         self.selection_actions
             .push(SelectionActions::Skills(view.actions));
+    }
+
+    fn show_mcp_view(&mut self, view: McpSelectionView) {
+        self.interaction_pane.show_selection_view(view.model);
+        self.selection_actions
+            .push(SelectionActions::Mcp(view.actions));
+    }
+
+    fn replace_mcp_view(&mut self, view: McpSelectionView) {
+        self.interaction_pane.replace_selection_view(view.model);
+        match self.selection_actions.last_mut() {
+            Some(actions) => *actions = SelectionActions::Mcp(view.actions),
+            None => self
+                .selection_actions
+                .push(SelectionActions::Mcp(view.actions)),
+        }
+    }
+
+    fn show_model_view(&mut self, view: ModelSelectionView) {
+        self.interaction_pane.show_selection_view(view.model);
+        self.selection_actions
+            .push(SelectionActions::Model(view.actions));
+    }
+
+    fn show_rewind_view(&mut self, view: RewindSelectionView) {
+        self.interaction_pane.show_selection_view(view.model);
+        self.selection_actions
+            .push(SelectionActions::Rewind(view.actions));
+    }
+
+    fn show_session_view(&mut self, view: SessionSelectionView) {
+        self.interaction_pane.show_selection_view(view.model);
+        self.selection_actions
+            .push(SelectionActions::Sessions(view.actions));
+    }
+
+    fn close_selection_view(&mut self) {
+        self.interaction_pane.pop_selection_view();
+        self.selection_actions.pop();
     }
 
     fn replace_skills_view(&mut self, view: SkillSelectionView) {
@@ -312,6 +414,12 @@ impl App {
                     .update(ThreadPresentationEvent::NoticeReceived(notice));
                 self.status = Status::Ready;
             }
+            AppEvent::McpViewOpened(view) => self.show_mcp_view(view),
+            AppEvent::McpViewReplaced(view) => self.replace_mcp_view(view),
+            AppEvent::ModelViewOpened(view) => self.show_model_view(view),
+            AppEvent::RewindViewOpened(view) => self.show_rewind_view(view),
+            AppEvent::SessionViewOpened(view) => self.show_session_view(view),
+            AppEvent::SelectionViewClosed => self.close_selection_view(),
             AppEvent::SelectionViewOpened(model) => self.show_selection_view(model),
             AppEvent::SkillsViewOpened(view) => self.show_skills_view(view),
             AppEvent::SkillsViewReplaced(view) => self.replace_skills_view(view),
@@ -343,7 +451,22 @@ impl App {
         }
     }
 
-    fn handle_global_key(&mut self, key: KeyEvent) -> Option<AppCommand> {
+    fn handle_global_key(&mut self, key: KeyEvent, now: Instant) -> Option<AppCommand> {
+        if key.code == KeyCode::Esc
+            && key.modifiers.is_empty()
+            && key.kind == KeyEventKind::Press
+            && self.accepts_input()
+        {
+            if self
+                .last_root_escape
+                .take()
+                .is_some_and(|previous| now.duration_since(previous) <= DOUBLE_ESCAPE_WINDOW)
+            {
+                return Some(AppCommand::OpenRewindPane);
+            }
+            self.last_root_escape = Some(now);
+            return None;
+        }
         if self.accepts_input()
             && key.modifiers.contains(KeyModifiers::CONTROL)
             && matches!(key.code, KeyCode::Char(character) if character.eq_ignore_ascii_case(&'v'))

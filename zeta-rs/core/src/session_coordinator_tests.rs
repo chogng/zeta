@@ -1,5 +1,6 @@
 use super::*;
 use crate::InMemoryThreadStore;
+use crate::StartTurnRequest;
 
 fn coordinator() -> SessionCoordinator {
     SessionCoordinator::with_store(
@@ -138,5 +139,90 @@ fn fork_captures_the_parent_sequence_in_session_lineage() {
             parent_thread_id,
             parent_sequence: sequence,
         } if parent_thread_id == &root.thread_id && *sequence == parent_sequence
+    ));
+}
+
+#[test]
+fn rewind_creates_a_child_with_only_turns_before_the_checkpoint() {
+    let coordinator = coordinator();
+    let session = create_session(&coordinator);
+    let root = coordinator
+        .create_thread(CreateSessionThreadRequest {
+            command_id: CommandId::new("root").unwrap(),
+            session_id: session.session_id.clone(),
+            expected_sequence: SequenceExpectation::Exact(1),
+            title: "root".into(),
+        })
+        .unwrap();
+    let mut turn_ids = Vec::new();
+    let mut sequence = 1;
+    for (index, prompt) in ["first", "second", "third"].into_iter().enumerate() {
+        let started = coordinator
+            .threads
+            .start_turn(
+                &root.thread_id,
+                StartTurnRequest {
+                    command_id: CommandId::new(format!("turn-{index}")).unwrap(),
+                    expected_sequence: SequenceExpectation::Exact(sequence),
+                    model: None,
+                    input: vec![zeta_protocol::UserInput::Text {
+                        text: prompt.into(),
+                    }],
+                },
+            )
+            .unwrap();
+        turn_ids.push(started.turn_id.clone());
+        sequence = coordinator
+            .threads
+            .complete_turn(&root.thread_id, &started.turn_id, format!("answer {index}"))
+            .unwrap()
+            .sequence;
+    }
+
+    let rewound = coordinator
+        .rewind_thread(RewindSessionThreadRequest {
+            command_id: CommandId::new("rewind").unwrap(),
+            session_id: session.session_id.clone(),
+            expected_sequence: SequenceExpectation::Exact(3),
+            parent_thread_id: root.thread_id.clone(),
+            before_turn_id: turn_ids[1].clone(),
+            title: "rewound".into(),
+        })
+        .unwrap();
+    let replayed = coordinator
+        .rewind_thread(RewindSessionThreadRequest {
+            command_id: CommandId::new("rewind").unwrap(),
+            session_id: session.session_id.clone(),
+            expected_sequence: SequenceExpectation::Exact(3),
+            parent_thread_id: root.thread_id.clone(),
+            before_turn_id: turn_ids[1].clone(),
+            title: "rewound".into(),
+        })
+        .unwrap();
+    let child = coordinator
+        .threads
+        .read_thread(&rewound.thread_id)
+        .unwrap()
+        .public_thread();
+
+    assert_eq!(replayed.thread_id, rewound.thread_id);
+    assert_eq!(replayed.disposition, CommandDisposition::Replayed);
+    assert_eq!(child.turns.len(), 1);
+    assert_eq!(child.turns[0].turn_id, turn_ids[0]);
+    assert!(child.turns[0].items.iter().any(|item| {
+        matches!(item, zeta_protocol::ThreadItem::UserMessage { text, .. } if text == "first")
+    }));
+    assert!(matches!(
+        &coordinator
+            .read_session(&session.session_id)
+            .unwrap()
+            .threads[1]
+            .membership
+            .origin,
+        ThreadOrigin::Rewind {
+            parent_thread_id,
+            before_turn_id,
+            ..
+        } if parent_thread_id == &root.thread_id && before_turn_id == &turn_ids[1]
     ));
 }

@@ -47,7 +47,7 @@ use crate::protocol::session::{
     SessionCommandParams, SessionCreateParams, SessionListResult, SessionModelSetParams,
     SessionReadParams, SessionResult, SessionSubscribeParams, SessionSubscribeResult,
     SessionThreadArchiveParams, SessionThreadCreateParams, SessionThreadForkParams,
-    SessionThreadResult, SessionUnsubscribeParams,
+    SessionThreadResult, SessionThreadRewindParams, SessionUnsubscribeParams,
 };
 use crate::protocol::skills::{
     SkillCatalogReloadDto, SkillCompatibilityDto, SkillDiagnosticCodeDto, SkillDiagnosticDto,
@@ -256,6 +256,11 @@ client_methods! {
     },
     SessionThreadFork => "session/thread/fork" {
         params: SessionThreadForkParams,
+        response: SessionThreadResult,
+        serialization: SessionExclusive,
+    },
+    SessionThreadRewind => "session/thread/rewind" {
+        params: SessionThreadRewindParams,
         response: SessionThreadResult,
         serialization: SessionExclusive,
     },
@@ -740,6 +745,7 @@ typescript_bindings! {
     SessionModelSetParams,
     SessionThreadCreateParams,
     SessionThreadForkParams,
+    SessionThreadRewindParams,
     SessionThreadArchiveParams,
     SessionResult,
     SessionListResult,

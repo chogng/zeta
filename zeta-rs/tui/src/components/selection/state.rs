@@ -117,6 +117,7 @@ pub(crate) struct SelectionViewModel {
     empty_message: String,
     activation_mode: SelectionActivationMode,
     show_tabs: bool,
+    selection_enabled: bool,
     initial_selected: usize,
     title_top_margin: usize,
     title_bottom_margin: usize,
@@ -135,6 +136,7 @@ impl SelectionViewModel {
             empty_message: "No matching items".into(),
             activation_mode: SelectionActivationMode::Enter,
             show_tabs: true,
+            selection_enabled: true,
             initial_selected: 0,
             title_top_margin: 0,
             title_bottom_margin: 0,
@@ -148,6 +150,11 @@ impl SelectionViewModel {
 
     pub(crate) fn without_tab_bar(mut self) -> Self {
         self.show_tabs = false;
+        self
+    }
+
+    pub(crate) fn without_selection(mut self) -> Self {
+        self.selection_enabled = false;
         self
     }
 
@@ -201,12 +208,13 @@ impl SelectionViewState {
             selected_visible: None,
             search,
         };
-        state.selected_visible = (state.visible_len() > 0).then_some(
-            state
-                .model
-                .initial_selected
-                .min(state.visible_len().saturating_sub(1)),
-        );
+        state.selected_visible = (state.model.selection_enabled && state.visible_len() > 0)
+            .then_some(
+                state
+                    .model
+                    .initial_selected
+                    .min(state.visible_len().saturating_sub(1)),
+            );
         state
     }
 
@@ -255,6 +263,7 @@ impl SelectionViewState {
         self.model.show_tabs
     }
 
+    #[cfg(test)]
     pub(crate) fn search_active(&self) -> bool {
         self.search
             .as_ref()
@@ -416,6 +425,9 @@ impl SelectionViewState {
     }
 
     fn move_selection(&mut self, direction: SelectionDirection) {
+        if !self.model.selection_enabled {
+            return;
+        }
         let visible_len = self.visible_len();
         if visible_len == 0 {
             self.selected_visible = None;
@@ -429,14 +441,23 @@ impl SelectionViewState {
     }
 
     fn select_first_visible(&mut self) {
-        self.selected_visible = (self.visible_len() > 0).then_some(0);
+        self.selected_visible =
+            (self.model.selection_enabled && self.visible_len() > 0).then_some(0);
     }
 
     fn select_last_visible(&mut self) {
-        self.selected_visible = self.visible_len().checked_sub(1);
+        self.selected_visible = self
+            .model
+            .selection_enabled
+            .then(|| self.visible_len().checked_sub(1))
+            .flatten();
     }
 
     fn reconcile_selection(&mut self) {
+        if !self.model.selection_enabled {
+            self.selected_visible = None;
+            return;
+        }
         let visible_len = self.visible_len();
         self.selected_visible = match (self.selected_visible, visible_len) {
             (_, 0) => None,

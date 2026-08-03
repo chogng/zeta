@@ -5,68 +5,26 @@ use zeta_app_server_client::ClientError;
 use zeta_app_server_client::JsonRpcTransport;
 use zeta_app_server_protocol::protocol::config::ConfigReadResult;
 use zeta_app_server_protocol::protocol::config::ConfigUpdateParams;
-use zeta_app_server_protocol::protocol::config::McpServerEnablementDto;
 use zeta_app_server_protocol::protocol::config::ModelRefDto;
 use zeta_protocol::Patch;
 
-pub(crate) enum PreferredModelOutcome {
-    Shown(String),
-    Updated {
-        config: ConfigReadResult,
-        notice: String,
-    },
+pub(crate) struct PreferredModelUpdate {
+    pub(crate) config: ConfigReadResult,
+    pub(crate) notice: String,
 }
 
-pub(crate) fn config_summary<T>(client: &mut AppServerClient<T>) -> Result<String, ClientError>
-where
-    T: JsonRpcTransport,
-{
-    let config = client.read_config()?;
-    Ok(format!(
-        "Config revision: {}\nModel: {}\nProviders: {}\nMCP servers: {}\nSkill sources: {}",
-        config.revision,
-        preferred_model(&config),
-        config.providers.len(),
-        config.mcp_servers.len(),
-        config.skill_sources.len()
-    ))
-}
-
-pub(crate) fn mcp_summary<T>(client: &mut AppServerClient<T>) -> Result<String, ClientError>
-where
-    T: JsonRpcTransport,
-{
-    let config = client.read_config()?;
-    if config.mcp_servers.is_empty() {
-        return Ok("No MCP servers configured.".into());
-    }
-    Ok(config
-        .mcp_servers
-        .values()
-        .map(|server| {
-            let state = match server.enablement {
-                McpServerEnablementDto::Disabled => "disabled",
-                McpServerEnablementDto::Enabled => "enabled",
-            };
-            format!("{}  {}  {state}", server.id, server.display_name)
-        })
-        .collect::<Vec<_>>()
-        .join("\n"))
-}
-
-pub(crate) fn set_or_show_preferred_model<T>(
+pub(crate) fn set_preferred_model<T>(
     client: &mut AppServerClient<T>,
     arguments: &str,
-) -> Result<PreferredModelOutcome, ConfigCommandError>
+) -> Result<PreferredModelUpdate, ConfigCommandError>
 where
     T: JsonRpcTransport,
 {
     let config = client.read_config()?;
     if arguments.is_empty() {
-        return Ok(PreferredModelOutcome::Shown(format!(
-            "Preferred model: {}",
-            preferred_model(&config)
-        )));
+        return Err(ConfigCommandError(
+            "model selection requires a model or 'clear'".into(),
+        ));
     }
 
     let preferred_model_patch = if arguments == "clear" {
@@ -105,7 +63,7 @@ where
     })?;
     let config = client.read_config()?;
     let notice = format!("Preferred model: {}", preferred_model(&config));
-    Ok(PreferredModelOutcome::Updated { config, notice })
+    Ok(PreferredModelUpdate { config, notice })
 }
 
 pub(crate) fn preferred_model(config: &ConfigReadResult) -> String {

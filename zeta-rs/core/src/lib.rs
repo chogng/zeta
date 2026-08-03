@@ -31,8 +31,8 @@ pub use services::WriterLease;
 pub use session_coordinator::{
     ArchiveSessionThreadRequest, CommandDisposition, CreateSessionRequest, CreateSessionResult,
     CreateSessionThreadRequest, ForkSessionThreadRequest, InMemorySessionStore,
-    SequenceExpectation, SessionCoordinator, SessionLifecycleRequest, SessionMutationResult,
-    SessionThreadResult, SetSessionModelRequest,
+    RewindSessionThreadRequest, SequenceExpectation, SessionCoordinator, SessionLifecycleRequest,
+    SessionMutationResult, SessionThreadResult, SetSessionModelRequest,
 };
 pub use session_reducer::{
     SessionCommandResult, SessionCommandSnapshot, SessionSnapshot, SessionThreadSnapshot,
@@ -43,6 +43,7 @@ pub use state::ToolCallStatus;
 pub use thread_controller::CancelTurnInteractionRequest;
 pub use thread_controller::CancelledTurnInteraction;
 pub use thread_controller::CompletedTurn;
+pub use thread_controller::CreateRewoundThreadRequest;
 pub use thread_controller::CreateThreadRequest;
 pub use thread_controller::InMemoryThreadStore;
 pub use thread_controller::InterruptTurnDisposition;

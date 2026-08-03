@@ -10,6 +10,10 @@ use crate::TuiExit;
 use crate::TuiOptions;
 use crate::client;
 use crate::components::composer::ComposerSubmission;
+use crate::features::config;
+use crate::features::mcp;
+use crate::features::rewind;
+use crate::features::sessions::ResumeOutcome;
 use crate::features::skills;
 use crate::features::theme as theme_feature;
 use crate::features::thread::ActiveTurnUpdate;
@@ -203,6 +207,96 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                         )),
                         Err(error) => app.update(AppEvent::FailureReported(error)),
                     },
+                    AppCommand::OpenRewindPane => {
+                        match rewind::load_selection(&mut client, conversation.thread_id()) {
+                            Ok(view) => app.update(AppEvent::RewindViewOpened(view)),
+                            Err(error) => app.update(AppEvent::FailureReported(error.to_string())),
+                        }
+                    }
+                    AppCommand::RewindToCheckpoint {
+                        before_turn_id,
+                        checkpoint_label,
+                    } => {
+                        let command = format!("/rewind {before_turn_id}");
+                        app.update(AppEvent::CommandStarted(command.clone()));
+                        match conversation.rewind_active_thread(
+                            &mut client,
+                            before_turn_id,
+                            &checkpoint_label,
+                        ) {
+                            Ok(change) => {
+                                app.update(AppEvent::SelectionViewClosed);
+                                app.update(AppEvent::ThreadSnapshotReceived(change.snapshot));
+                                active_turn = None;
+                                match thread_subscription.switch(
+                                    &mut client,
+                                    conversation.session_id(),
+                                    conversation.thread_id(),
+                                ) {
+                                    Ok(ThreadSwitch::Complete { snapshot }) => {
+                                        conversation.set_thread_sequence(snapshot.sequence);
+                                        app.update(AppEvent::ThreadSnapshotReceived(snapshot));
+                                    }
+                                    Ok(ThreadSwitch::StaleSubscription { snapshot, error }) => {
+                                        conversation.set_thread_sequence(snapshot.sequence);
+                                        app.update(AppEvent::ThreadSnapshotReceived(snapshot));
+                                        app.update(AppEvent::FailureReported(format!(
+                                            "rewound Thread, but could not unsubscribe the previous \
+                                             Thread: {error}"
+                                        )));
+                                    }
+                                    Err(error) => {
+                                        app.update(AppEvent::FailureReported(error.to_string()));
+                                    }
+                                }
+                                app.update(AppEvent::CommandCompleted {
+                                    command,
+                                    result: change.notice,
+                                });
+                            }
+                            Err(error) => app.update(AppEvent::FailureReported(error.to_string())),
+                        }
+                    }
+                    AppCommand::ResumeSession { session_id } => {
+                        let command = format!("/resume {session_id}");
+                        app.update(AppEvent::CommandStarted(command.clone()));
+                        match conversation.resume_session(&mut client, &session_id) {
+                            Ok(ResumeOutcome::Changed(change)) => {
+                                app.update(AppEvent::SelectionViewClosed);
+                                app.update(AppEvent::ThreadSnapshotReceived(change.snapshot));
+                                app.update(AppEvent::CommandCompleted {
+                                    command,
+                                    result: change.notice,
+                                });
+                            }
+                            Ok(ResumeOutcome::Listed(_)) => app.update(AppEvent::FailureReported(
+                                "resume selection did not identify a session".into(),
+                            )),
+                            Err(error) => app.update(AppEvent::FailureReported(error.to_string())),
+                        }
+                    }
+                    AppCommand::SetMcpEnablement {
+                        server_id,
+                        enablement,
+                    } => match mcp::set_enablement(&mut client, server_id, enablement) {
+                        Ok(view) => app.update(AppEvent::McpViewReplaced(view)),
+                        Err(error) => app.update(AppEvent::FailureReported(error.to_string())),
+                    },
+                    AppCommand::SetPreferredModel { preference } => {
+                        let command = format!("/model {preference}");
+                        app.update(AppEvent::CommandStarted(command.clone()));
+                        match config::set_preferred_model(&mut client, &preference) {
+                            Ok(update) => {
+                                app.update(AppEvent::ConfigSnapshotReceived(update.config));
+                                app.update(AppEvent::CommandCompleted {
+                                    command,
+                                    result: update.notice,
+                                });
+                                app.update(AppEvent::SelectionViewClosed);
+                            }
+                            Err(error) => app.update(AppEvent::FailureReported(error.to_string())),
+                        }
+                    }
                     AppCommand::SetCustomTheme { preference } => {
                         let command = format!("/theme {preference}");
                         app.update(AppEvent::CommandStarted(command.clone()));

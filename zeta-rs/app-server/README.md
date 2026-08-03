@@ -220,6 +220,11 @@ session/thread/create
 └─ return current Session + ThreadId
 ```
 
+`session/thread/rewind` 是非破坏性回退：`SessionCoordinator::rewind_thread` 记录包含 source Thread、
+source sequence 与 excluded Turn 的 Rewind lineage，再让 `ThreadController::create_rewound_thread`
+向新 Thread 写入单个 `HistoryImported` durable event。该事件只携带 checkpoint 之前的 terminal
+Turns；source Thread 及其后续历史不被改写。调用方随后订阅新 Thread，旧 Thread 仍可审计和恢复。
+
 `session/subscribe(afterSequence)` 与 `thread/subscribe(afterSequence)` 先读取 snapshot + durable gap，
 再把 broker cursor 放到当前 aggregate sequence。订阅是 connection-local delivery state；真实 gap
 来自 coordinator/store。

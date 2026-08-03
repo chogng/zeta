@@ -1,7 +1,16 @@
-use crate::{
-    AgentResponse, InteractionCancelReason, ModelRef, RequestId, SandboxDenialOutput, SessionId,
-    StableTurnError, ThreadId, ThreadItem, ToolCallId, TurnId, TurnInteraction,
-};
+use crate::AgentResponse;
+use crate::InteractionCancelReason;
+use crate::ModelRef;
+use crate::RequestId;
+use crate::SandboxDenialOutput;
+use crate::SessionId;
+use crate::StableTurnError;
+use crate::ThreadId;
+use crate::ThreadItem;
+use crate::ToolCallId;
+use crate::Turn;
+use crate::TurnId;
+use crate::TurnInteraction;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
@@ -35,6 +44,12 @@ pub enum ThreadEvent {
         session_id: SessionId,
         thread_id: ThreadId,
         title: String,
+    },
+    HistoryImported {
+        thread_id: ThreadId,
+        source_thread_id: ThreadId,
+        before_turn_id: TurnId,
+        turns: Vec<Turn>,
     },
     TurnAccepted {
         thread_id: ThreadId,
@@ -109,6 +124,7 @@ impl ThreadEvent {
     pub fn kind(&self) -> &'static str {
         match self {
             Self::ThreadCreated { .. } => "thread.created",
+            Self::HistoryImported { .. } => "thread.history_imported",
             Self::TurnAccepted { .. } => "turn.accepted",
             Self::TurnStarted { .. } => "turn.started",
             Self::ItemCompleted { .. } => "item.completed",
@@ -127,6 +143,7 @@ impl ThreadEvent {
     pub fn thread_id(&self) -> &ThreadId {
         match self {
             Self::ThreadCreated { thread_id, .. }
+            | Self::HistoryImported { thread_id, .. }
             | Self::TurnAccepted { thread_id, .. }
             | Self::TurnStarted { thread_id, .. }
             | Self::ItemCompleted { thread_id, .. }

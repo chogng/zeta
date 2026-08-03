@@ -7,12 +7,14 @@ use zeta_app_server_protocol::protocol::session::SessionCreateParams;
 use zeta_app_server_protocol::protocol::session::SessionReadParams;
 use zeta_app_server_protocol::protocol::session::SessionThreadCreateParams;
 use zeta_app_server_protocol::protocol::session::SessionThreadForkParams;
+use zeta_app_server_protocol::protocol::session::SessionThreadRewindParams;
 use zeta_app_server_protocol::protocol::thread::ThreadReadParams;
 use zeta_protocol::Session;
 use zeta_protocol::SessionId;
 use zeta_protocol::SessionThreadStatus;
 use zeta_protocol::Thread;
 use zeta_protocol::ThreadId;
+use zeta_protocol::TurnId;
 
 /// Mutable product Session/Thread selection used by one TUI conversation.
 pub(crate) struct ActiveConversation {
@@ -130,6 +132,39 @@ impl ActiveConversation {
         Ok(ConversationChange {
             snapshot,
             notice: format!("Forked to thread {}.", self.thread_id),
+            transcript: ConversationTranscript::Replace,
+        })
+    }
+
+    pub(crate) fn rewind_active_thread<T>(
+        &mut self,
+        client: &mut AppServerClient<T>,
+        before_turn_id: TurnId,
+        checkpoint_label: &str,
+    ) -> Result<ConversationChange, SessionsError>
+    where
+        T: JsonRpcTransport,
+    {
+        let title = format!("Rewind of {}", self.session.title);
+        let result = client.rewind_session_thread(SessionThreadRewindParams {
+            command_id: new_command_id("rewind"),
+            session_id: self.session.session_id.clone(),
+            expected_sequence: self.session.sequence,
+            parent_thread_id: self.thread_id.clone(),
+            before_turn_id,
+            title,
+        })?;
+        let snapshot = client
+            .read_thread(ThreadReadParams {
+                thread_id: result.thread_id.clone(),
+            })?
+            .thread;
+        self.session = result.session;
+        self.thread_id = result.thread_id;
+        self.thread_sequence = snapshot.sequence;
+        Ok(ConversationChange {
+            snapshot,
+            notice: format!("Rewound before: {checkpoint_label}"),
             transcript: ConversationTranscript::Replace,
         })
     }

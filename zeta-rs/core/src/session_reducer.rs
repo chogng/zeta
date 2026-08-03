@@ -203,6 +203,32 @@ pub fn reduce_session_event(
                         ));
                     }
                 }
+                (
+                    SessionCommand::RewindThread {
+                        parent_thread_id,
+                        before_turn_id,
+                        title: command_title,
+                    },
+                    ThreadOrigin::Rewind {
+                        parent_thread_id: origin_parent,
+                        before_turn_id: origin_turn,
+                        ..
+                    },
+                ) if command_title == title
+                    && parent_thread_id == origin_parent
+                    && before_turn_id == origin_turn =>
+                {
+                    let parent = snapshot
+                        .threads
+                        .iter()
+                        .find(|candidate| candidate.membership.thread_id == *parent_thread_id)
+                        .ok_or_else(|| CoreError::NotFound(parent_thread_id.to_string()))?;
+                    if parent.membership.status != SessionThreadStatus::Active {
+                        return Err(CoreError::Journal(
+                            "a rewind parent must be an active Thread".into(),
+                        ));
+                    }
+                }
                 _ => {
                     return Err(CoreError::Journal(
                         "Thread creation command does not match its plan".into(),

@@ -7,18 +7,23 @@ use crate::components::composer::ComposerInput;
 use crate::components::composer::SlashCommandInvocation;
 use crate::components::composer::TuiSlashCommandAction;
 use crate::features::config;
-use crate::features::config::PreferredModelOutcome;
+use crate::features::mcp;
+use crate::features::models;
+use crate::features::rewind;
+use crate::features::sessions;
 use crate::features::sessions::ActiveConversation;
 use crate::features::sessions::ConversationChange;
 use crate::features::sessions::ConversationTranscript;
 use crate::features::sessions::NewConversationKind;
 use crate::features::sessions::ResumeOutcome;
 use crate::features::skills::load_selection;
+use crate::features::status::status_view;
 use crate::features::theme::theme_selection_view;
 use crate::ui;
 use std::fmt;
 use zeta_app_server_client::{AppServerClient, ClientError, JsonRpcTransport};
 use zeta_app_server_protocol::protocol::skills::SkillCatalogReloadDto;
+use zeta_protocol::TurnId;
 
 impl ActiveConversation {
     pub(crate) fn execute<T>(
@@ -57,6 +62,7 @@ impl ActiveConversation {
             TuiSlashCommandAction::Skills => show_skills(client, app),
             TuiSlashCommandAction::Mcp => show_mcp(client, app),
             TuiSlashCommandAction::Resume => self.resume(client, &arguments, app),
+            TuiSlashCommandAction::Rewind => self.rewind(client, &arguments, app),
             TuiSlashCommandAction::Clear | TuiSlashCommandAction::New => {
                 self.start_new(client, command, &arguments, app)
             }
@@ -83,12 +89,11 @@ impl ActiveConversation {
         T: JsonRpcTransport,
     {
         let config = client.read_config()?;
-        app.update(AppEvent::ProductNotice(format!(
-            "Session: {}\nThread: {}\nThread sequence: {}\nModel: {}",
-            self.session_id(),
-            self.thread_id(),
+        app.update(AppEvent::SelectionViewOpened(status_view(
+            self.session_id().as_str(),
+            self.thread_id().as_str(),
             self.thread_sequence(),
-            config::preferred_model(&config)
+            &config::preferred_model(&config),
         )));
         Ok(())
     }
@@ -140,6 +145,13 @@ impl ActiveConversation {
     where
         T: JsonRpcTransport,
     {
+        if arguments.is_empty() {
+            app.update(AppEvent::SessionViewOpened(sessions::load_selection(
+                client,
+                self.session_id().as_str(),
+            )?));
+            return Ok(());
+        }
         match self
             .resume_session(client, arguments)
             .map_err(|error| CommandExecutionError(error.to_string()))?
@@ -147,6 +159,32 @@ impl ActiveConversation {
             ResumeOutcome::Listed(notice) => app.update(AppEvent::ProductNotice(notice)),
             ResumeOutcome::Changed(change) => apply_conversation_change(app, change),
         }
+        Ok(())
+    }
+
+    fn rewind<T>(
+        &mut self,
+        client: &mut AppServerClient<T>,
+        arguments: &str,
+        app: &mut App,
+    ) -> Result<(), CommandExecutionError>
+    where
+        T: JsonRpcTransport,
+    {
+        if arguments.is_empty() {
+            app.update(AppEvent::RewindViewOpened(rewind::load_selection(
+                client,
+                self.thread_id(),
+            )?));
+            return Ok(());
+        }
+        let before_turn_id = TurnId::new(arguments).map_err(|error| {
+            CommandExecutionError(format!("invalid rewind checkpoint '{arguments}': {error}"))
+        })?;
+        let change = self
+            .rewind_active_thread(client, before_turn_id, arguments)
+            .map_err(|error| CommandExecutionError(error.to_string()))?;
+        apply_conversation_change(app, change);
         Ok(())
     }
 }
@@ -182,7 +220,8 @@ fn show_config<T>(
 where
     T: JsonRpcTransport,
 {
-    app.update(AppEvent::ProductNotice(config::config_summary(client)?));
+    let config = client.read_config()?;
+    app.update(AppEvent::SelectionViewOpened(config::config_view(&config)));
     Ok(())
 }
 
@@ -190,7 +229,7 @@ fn show_mcp<T>(client: &mut AppServerClient<T>, app: &mut App) -> Result<(), Com
 where
     T: JsonRpcTransport,
 {
-    app.update(AppEvent::ProductNotice(config::mcp_summary(client)?));
+    app.update(AppEvent::McpViewOpened(mcp::load_selection(client)?));
     Ok(())
 }
 
@@ -216,15 +255,14 @@ fn set_or_show_model<T>(
 where
     T: JsonRpcTransport,
 {
-    match config::set_or_show_preferred_model(client, arguments)
-        .map_err(|error| CommandExecutionError(error.to_string()))?
-    {
-        PreferredModelOutcome::Shown(notice) => app.update(AppEvent::ProductNotice(notice)),
-        PreferredModelOutcome::Updated { config, notice } => {
-            app.update(AppEvent::ConfigSnapshotReceived(config));
-            app.update(AppEvent::ProductNotice(notice));
-        }
+    if arguments.is_empty() {
+        app.update(AppEvent::ModelViewOpened(models::load_selection(client)?));
+        return Ok(());
     }
+    let update = config::set_preferred_model(client, arguments)
+        .map_err(|error| CommandExecutionError(error.to_string()))?;
+    app.update(AppEvent::ConfigSnapshotReceived(update.config));
+    app.update(AppEvent::ProductNotice(update.notice));
     Ok(())
 }
 

@@ -71,6 +71,14 @@ pub struct CreateThreadRequest {
     pub title: String,
 }
 
+pub struct CreateRewoundThreadRequest {
+    pub session_id: SessionId,
+    pub thread_id: ThreadId,
+    pub title: String,
+    pub source_thread_id: ThreadId,
+    pub before_turn_id: TurnId,
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum StartTurnDisposition {
     Created,
@@ -270,6 +278,54 @@ impl ThreadController {
         self.commit_batch(&batch)?;
         *loaded = Some(self.loaded_threads.install(snapshot.clone()));
         Ok(snapshot)
+    }
+
+    /// Creates a child Thread containing the source's terminal Turns before one checkpoint.
+    ///
+    /// The source remains immutable. Repeating the request after the import event committed is
+    /// safe and returns the already-created child projection.
+    pub fn create_rewound_thread(
+        &self,
+        request: CreateRewoundThreadRequest,
+    ) -> Result<ThreadSnapshot, CoreError> {
+        let source = self.read_thread(&request.source_thread_id)?;
+        if source.session_id != request.session_id {
+            return Err(CoreError::InvalidInput(
+                "rewind source belongs to another Session".into(),
+            ));
+        }
+        let checkpoint = source
+            .turns
+            .iter()
+            .position(|turn| turn.turn_id == request.before_turn_id)
+            .ok_or_else(|| CoreError::NotFound(request.before_turn_id.to_string()))?;
+        let imported_turns = source.public_thread().turns[..checkpoint].to_vec();
+        let created = self.create_thread(CreateThreadRequest {
+            session_id: request.session_id,
+            thread_id: request.thread_id.clone(),
+            title: request.title,
+        })?;
+        if created.sequence > 1 {
+            return Ok(created);
+        }
+
+        let child_thread_id = request.thread_id;
+        let event_thread_id = child_thread_id.clone();
+        self.mutate_thread(&child_thread_id, |snapshot| {
+            if snapshot.sequence > 1 {
+                return Ok(snapshot.clone());
+            }
+            self.record_batch(
+                snapshot,
+                vec![ThreadEvent::HistoryImported {
+                    thread_id: event_thread_id,
+                    source_thread_id: request.source_thread_id,
+                    before_turn_id: request.before_turn_id,
+                    turns: imported_turns,
+                }],
+            )?;
+            Ok(snapshot.clone())
+        })
     }
 
     pub fn start_turn(

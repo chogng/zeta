@@ -78,7 +78,7 @@ derive `Eq`、serde、`JsonSchema` 与 `TS`。是否生成 TypeScript/schema art
 ```text
 SessionCommand
 ├─ Create / SetModel / Complete / Archive
-└─ CreateThread / ForkThread / ArchiveThread
+└─ CreateThread / ForkThread / RewindThread / ArchiveThread
 
 ThreadCommand
 ├─ StartTurn / InterruptTurn
@@ -91,6 +91,10 @@ Command ID、expected sequence、receipt 和 idempotent replay 是 Core/store ex
 ### Event
 
 `SessionEvent`/`ThreadEvent` 只表达已经 durable 的领域事实：
+
+`ThreadEvent::HistoryImported` 是 Rewind 子 Thread 的一次性 provenance-bearing 初始化事实；它
+只能紧跟 `ThreadCreated`，只包含 source checkpoint 之前的 terminal Turns，不会截断或改写 source
+Thread。
 
 ```text
 Command

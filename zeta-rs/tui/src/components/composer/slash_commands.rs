@@ -15,6 +15,7 @@ pub(crate) enum TuiSlashCommandAction {
     Skills,
     Mcp,
     Resume,
+    Rewind,
     Clear,
     Config,
     Fork,
@@ -37,6 +38,7 @@ impl TuiSlashCommandAction {
             Self::Skills => "browse configured skill sources",
             Self::Mcp => "list configured MCP tools",
             Self::Resume => "list or resume a saved session",
+            Self::Rewind => "return to an earlier message checkpoint",
             Self::Clear => "clear the terminal and start a new chat",
             Self::Config => "show the current configuration",
             Self::Fork => "fork the current chat",
@@ -50,9 +52,13 @@ impl TuiSlashCommandAction {
 
     pub(crate) fn argument_mode(self) -> SlashCommandArgumentMode {
         match self {
-            Self::Resume | Self::Clear | Self::Fork | Self::Model | Self::Theme | Self::New => {
-                SlashCommandArgumentMode::Optional
-            }
+            Self::Resume
+            | Self::Rewind
+            | Self::Clear
+            | Self::Fork
+            | Self::Model
+            | Self::Theme
+            | Self::New => SlashCommandArgumentMode::Optional,
             _ => SlashCommandArgumentMode::None,
         }
     }

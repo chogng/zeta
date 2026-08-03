@@ -30,17 +30,20 @@ Tool、approval policy 或 persistence。
   原子文本插入；
 - `/` 打开 command popup，支持 cursor-aware prefix filtering、循环选择、保留已有参数尾部的
   Tab completion、Esc dismiss 与左键单击可见命令；
-- `/resume`、`/clear`、`/fork`、`/model`、`/theme` 与 `/new` 可解析 inline arguments，并在执行前展开
+- `/resume`、`/rewind`、`/clear`、`/fork`、`/model`、`/theme` 与 `/new` 可解析 inline arguments，并在执行前展开
   large-paste placeholder；product command 明确拒绝 image arguments；
-- command popup 只注册已有真实执行流的 built-ins：`/status`、`/skills`、`/mcp`、`/resume`、
+- command popup 只注册已有真实执行流的 built-ins：`/status`、`/skills`、`/mcp`、`/resume`、`/rewind`、
   `/clear`、`/config`、`/fork`、`/help`、`/model`、`/theme`、`/new`、`/quit` 与 `/exit`；
 - `/help` 使用保留 composer 的 interaction view stack 打开 Commands/Keys 双 Tab selection
-  surface；支持直接输入搜索、左右键或 Tab/BackTab 循环切页、上下键循环选择，以及 Esc/Ctrl-C
+  surface；Space 进入搜索模式，左右键或 Tab/BackTab 循环切页、上下键循环选择，以及 Esc/Ctrl-C
   返回 composer；
 - `/skills` 通过 typed `skills/list` 打开同一 interaction surface，提供
-  All/Enabled/Disabled/Errors tabs、数量、搜索和 source-qualified metadata；`Space` 通过
+  All/Enabled/Disabled/Errors tabs、数量、搜索和 source-qualified metadata；`Enter` 通过
   revision-checked `skill/enablement/set` 切换所选 Skill，`skills/changed` 会刷新仍在前台的页面；
   该页面不把 enablement 冒充为正文 activation；
+- `/rewind` 或主界面 500 ms 内连续按两次 Esc 打开可搜索的历史消息 checkpoint Pane；Enter
+  调用 typed `session/thread/rewind`，创建具有 Rewind lineage 的子 Thread，只导入所选消息之前的
+  terminal Turns。原 Thread 保持不变，TUI 切换订阅并以 `/rewind <turn-id>` 记录结果；
 - Session/Thread 命令调用 typed create/list/read/fork API 并切换当前 Thread context；配置命令调用
   `config/read`，`/model` 使用 expected revision 更新 preferred model；
 - 启动时读取 client 保存的 `initialize.slashCommands` snapshot，通过
@@ -48,7 +51,7 @@ Tool、approval policy 或 persistence。
   server-advertised command 保留 `/name`、inline text/image/large-paste 参数并作为普通 Turn
   input 提交；slash popup 不清空或铺设独立背景，透明继承当前 TUI 主题 surface，选中项使用候选 highlight 色粗体且不添加行首标记；
 - Enter 按 composer 顺序提交由 text/image items 组成的 Turn；
-- 启动及 `/new`、`/fork`、`/resume` 后维护 active Thread subscription；typed update 按
+- 启动及 `/new`、`/fork`、`/resume`、`/rewind` 后维护 active Thread subscription；typed update 按
   Session/Thread scope 和 durable sequence 过滤，并通过 `thread/read` 触发权威 snapshot
   resync，不在 TUI 内复制 Thread reducer；
 - `AppServerEvents` 与 terminal input 由独立 event source 主动唤醒单写者 loop；active Turn
@@ -57,7 +60,8 @@ Tool、approval policy 或 persistence。
   waiting/cancelling state；
 - 顶部显示低干扰的运行状态；composer 上方右对齐显示 preferred model 与 workspace，并按宽度
   依次使用短值或省略号；composer 只使用上下两条浅灰分隔线，footer 只包含下一步操作；
-- Ctrl-C、Ctrl-D（空输入）或 Esc：idle 时退出，active 时请求 interrupt；
+- Ctrl-C 或 Ctrl-D（空输入）在 idle 时退出，active 时请求 interrupt；单次 Esc 在根界面保持
+  inert，连续两次 Esc 打开 Rewind Pane；
 - Unix `SIGINT`/`SIGTERM` 进入同一个 event loop 退出路径，确保 watcher 重启和 host termination
   仍执行 session shutdown 与 terminal RAII cleanup；
 - raw mode、alternate screen、bracketed paste、mouse capture 与 cursor cleanup；
@@ -192,7 +196,7 @@ src/
 | `zeta_slash_commands::SlashCommandsState` | shared public type | 拥有 cursor query、matches、selection、dismissal 与 completion | TUI 不保存第二份 Slash query/selection authority；可见范围与滚动仍由 Ratatui renderer 负责 |
 | `zeta_slash_commands::{SlashCommandInput,SlashCommandCatalog}` | shared public types | 统一输入 grammar，并合并 built-in 与 server metadata | TUI 不重新校验名称、不执行 App Server operation |
 | `SlashCommandInvocation` | crate-private | command identity、trimmed display arguments 与有序 text/image argument items | 不执行 RPC |
-| `features::sessions::ActiveConversation` | crate-private | 当前 Session/Thread identity、sequence 与 typed create/fork/resume lifecycle | 不解析 composer text、不更新 `App`、不拥有 App Server |
+| `features::sessions::ActiveConversation` | crate-private | 当前 Session/Thread identity、sequence 与 typed create/fork/resume/rewind lifecycle | 不解析 composer text、不更新 `App`、不拥有 App Server |
 | `TextArea` | private | UTF-8 buffer、byte-safe cursor、原子元素 insert/delete/movement；Vim 的扩展 owner | 不保存 paste payload，不解释 Enter submission 或 slash command |
 | `features::thread::submit_prompt` | private | 从显式 `ThreadRequestScope` build typed `TurnStartParams` 并返回 typed result | 不引用或更新 `App`、不手写 method string/JSON |
 | `app::event_loop::refresh_turn` | private | `thread/read`、校验 scope、更新 local sequence 并协调 active Turn mapping | 不 drain notification；snapshot 是 authoritative UI source |
@@ -313,7 +317,7 @@ Built-in command 进入 `ActiveConversation::execute`：Session/Thread lifecycle
 Session/Thread API，查询命令读取 authoritative config，`/model` 通过 expected revision mutation
 更新 preferred model。`/help` 和 `/skills` 复用 generic interaction selection surface；关闭
 它们会恢复一直保留的 composer。`/skills` 映射 App Server 的 immutable catalog snapshot；
-`Space` 产生 source-qualified `SkillId` enablement intent，成功写入 config 后重新读取页面。
+`Enter` 产生 source-qualified `SkillId` enablement intent，成功写入 config 后重新读取页面。
 catalog/file watcher 变化通过 `skills/changed` 触发同一刷新路径。TUI 不读取 Skill filesystem，
 也没有正文 activation/context injection action。没有对应 typed contract 的产品命令不进入
 registry，不显示占位提示，也不转成普通 prompt 冒充成功。
