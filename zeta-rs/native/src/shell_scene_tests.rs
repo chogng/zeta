@@ -21,10 +21,10 @@ use crate::session_sidebar::SessionSidebarState;
 use crate::shell_interaction::{
     ACTIVE_SESSION_TAB, ADD_SESSION, AGENT_CHANGES, AGENT_EDITOR_PANE, AGENT_EXPLORER_PANE,
     AGENT_FILES, AGENT_FILES_REFRESH, AGENT_FILES_SEARCH, AGENT_SIDEBAR, AGENT_SIDEBAR_NAVIGATION,
-    AGENT_SIDEBAR_TOOLBAR, COMPOSER, COMPOSER_INFO_BAR, COMPOSER_MODE, COMPOSER_PANEL,
-    ContextAction, FILE_EDITOR_DOCUMENT, FILE_EDITOR_PANE, FILE_EDITOR_TAB_LIST, MULTI_DIFF_EDITOR,
-    SESSION_CONTEXT_MENU, SESSION_SEARCH_INPUT, SESSION_SIDEBAR_RESIZE_HANDLE, THREAD_TIMELINE,
-    TITLEBAR,
+    AGENT_SIDEBAR_RESIZE_HANDLE, AGENT_SIDEBAR_TOOLBAR, COMPOSER, COMPOSER_INFO_BAR, COMPOSER_MODE,
+    COMPOSER_PANEL, ContextAction, FILE_EDITOR_DOCUMENT, FILE_EDITOR_PANE, FILE_EDITOR_TAB_LIST,
+    MULTI_DIFF_EDITOR, SESSION_CONTEXT_MENU, SESSION_SEARCH_INPUT, SESSION_SIDEBAR_RESIZE_HANDLE,
+    THREAD_TIMELINE, TITLEBAR,
 };
 use crate::thread_projection::ThreadProjection;
 use crate::workspace_context::WorkspaceContext;
@@ -34,7 +34,8 @@ use zeta_editor::CodeEditorStyle;
 use zeta_terminal::{GridSize, ScreenBuffer, TerminalCore};
 use zeta_text_file::{TextFileAccess, TextFileDiskVersion, TextFileModifiedAt, TextFileSnapshot};
 use zeta_ui::{
-    CaretVisibility, Color, Point, ScrollbarPresentation, TextInputCommand, TextInputLayoutEngine,
+    CaretVisibility, Color, Edges, Point, Rect, ScrollbarPresentation, TextInputCommand,
+    TextInputLayoutEngine, UiScene,
 };
 use zeta_winit::WindowControlInsets;
 use zui::{AccessibilityRole, CursorFeedback, DispatchInvalidation, UiDispatch, UiIntent};
@@ -44,6 +45,23 @@ fn viewport() -> LogicalViewport {
         width: 1000.0,
         height: 700.0,
     }
+}
+
+#[test]
+fn agent_sidebar_outer_border_is_owned_by_native_shell() {
+    let bounds = Rect::from_xywh(680.0, 40.0, 320.0, 660.0);
+    let mut scene = UiScene::new(crate::shell_style::SHELL_PALETTE.background);
+
+    super::draw_agent_sidebar_border(&mut scene, bounds, crate::shell_style::SHELL_PALETTE);
+
+    let frame = scene.rects().first().copied().expect("sidebar frame");
+    assert_eq!(frame.bounds(), bounds);
+    assert_eq!(frame.fill(), Color::TRANSPARENT);
+    assert_eq!(frame.border().widths(), Edges::new(0.0, 0.0, 0.0, 1.0));
+    assert_eq!(
+        frame.border().color(),
+        crate::shell_style::SHELL_PALETTE.border
+    );
 }
 
 fn presentation(terminal: Option<&TerminalCore>, scroll_offset: usize) -> ShellPresentation {
@@ -594,6 +612,11 @@ fn expanded_agent_sidebar_defaults_to_the_files_pane_with_navigation_and_actions
         .iter()
         .find(|node| node.id == AGENT_SIDEBAR_TOOLBAR)
         .unwrap();
+    let resize_handle = presentation
+        .accessibility_nodes
+        .iter()
+        .find(|node| node.id == AGENT_SIDEBAR_RESIZE_HANDLE)
+        .unwrap();
 
     assert_eq!(
         layout.agent_sidebar,
@@ -609,6 +632,19 @@ fn expanded_agent_sidebar_defaults_to_the_files_pane_with_navigation_and_actions
     assert_eq!(explorer.label, "Files");
     assert_eq!(navigation.role, AccessibilityRole::Toolbar);
     assert_eq!(toolbar.label, "Agent sidebar toolbar");
+    assert_eq!(resize_handle.role, AccessibilityRole::Separator);
+    assert_eq!(resize_handle.label, "Resize agent sidebar");
+    assert_eq!(resize_handle.value.as_deref(), Some("680 pixels"));
+    assert_eq!(
+        resize_handle.bounds,
+        zeta_ui::Rect::from_xywh(676.0, 32.0, 8.0, 668.0)
+    );
+    let mut resize_dispatch = UiDispatch::default();
+    resize_dispatch.pointer_moved(Point::new(680.0, 100.0), &presentation.interaction_frame);
+    assert_eq!(
+        resize_dispatch.pointer_feedback(&presentation.interaction_frame),
+        CursorFeedback::ResizeHorizontal
+    );
     assert_eq!(
         toolbar.bounds,
         zeta_ui::Rect::from_xywh(680.0, 32.0, 320.0, 36.0)

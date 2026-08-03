@@ -104,10 +104,10 @@ Session Navigation 当前使用可折叠、可通过右边界 Sash 调整宽度�
 | 递归 Pane geometry 与 owning-split Sash 路由 | `zui::GridLayout` | 递归组合 SplitView；不持有 Terminal Session、Agent content、Pane Tree mutation 或 active Pane |
 | Terminal Pane Tree、Session-to-Pane binding 与 Pane 状态 | 后续 native Terminal Workspace model | 已确认是终端分屏必需边界；当前尚未完成 |
 | Session Navigation 显隐、preferred width 与 resize gesture | `zeta-native::session_sidebar` | 使用通用 Split/Sash geometry；不拥有 Session lifecycle |
-| Agent Sidebar 显隐与尺寸策略 | `zeta-native::agent_sidebar` | 只向外层 Grid 提供固定宽度 sizing；不拥有内部 Pane、文件或 diff model |
-| Agent Sidebar 内部 Pane composition | `zeta-native::agent_sidebar_layout` / `AgentSidebarWorkspace` | 组合左侧 pane ActionBar、顶部 toolbar 与单一 active content pane |
-| Files 树、模糊搜索与领先/落后显示 | `zeta-native::explorer_pane` / `zeta-file-search` / `zeta-git` | Native 保存可丢弃 UI 状态；Git 命令解析和模糊匹配器仍由各自 crate 拥有 |
-| 多文件差异内容与视口 binding | `zeta-native::editor_pane` / `zeta-editor::MultiDiffEditor` | Native 保存 changed-file collection 与每文件 `DiffEditorState`；MultiDiffEditor 在一个滚动文档中连续组合所有可见 DiffEditor |
+| Agent Sidebar 显隐、preferred width 与 resize gesture | `zeta-native::agent_sidebar` | 使用通用 Split/Sash geometry，宽度限制为 240–560px，并为 main Pane 保留至少 240px；不拥有内部 Pane、文件或 diff model |
+| Agent Sidebar 内部 Pane composition | [`zeta-agent-sidebar`](../zeta-rs/agent-sidebar/README.md) 的 `AgentSidebar` / `AgentSidebarNavigation` | 只组合跨功能切换；Files/SCM 功能布局分别由各自子模块拥有，Native 仅提供 shell slot |
+| Files 树、模糊搜索与领先/落后显示 | [`zeta-agent-sidebar`](../zeta-rs/agent-sidebar/README.md) / `zeta-file-search` / `zeta-git` | `zeta-agent-sidebar::files::FilesState` 保存可丢弃 UI 状态；Native 适配目录 DTO 并执行动作，Git 命令解析和模糊匹配器仍由各自 crate 拥有 |
+| 多文件差异内容与视口 binding | `zeta-agent-sidebar::EditorPane` / `zeta-editor::MultiDiffEditor` | Agent Sidebar 保存 changed-file collection 与每文件 `DiffEditorState`；Native 只提供 SCM 投影 |
 | 通用 UI 滚动 geometry、交互映射与状态 transition | `zeta-ui::ScrollView` / `ScrollState` / `ScrollbarController` | MultiDiff 复用完整 logical-pixel 状态和交互映射；BlockOutputViewport 通过 Native adapter 复用 clip、内容坐标和 scrollbar paint；Terminal 仍保留底部相对行锚定与输出增长策略 |
 | Top Bar 内部 action 排列 | `zeta-ui::ActionBar` | 后续有真实 action 时使用；只拥有 representation geometry 和 paint |
 | 通用 Tab surface 与横/纵排列 | `zeta-ui::Tab` / `TabList` | 只拥有 presentation state、item size/gap、surface paint 和同源 bounds；不拥有 product content 或 tabpanel |
@@ -150,10 +150,10 @@ Session、Thread、Turn、PTY process 和 durable output 必须来自对应 runt
 | `ShellLayout` | 组合扁平 titlebar、可选 Sessions sidebar，并把剩余区域交给 `TerminalWorkspaceLayout` | primary screen 窗口外层布局 |
 | `TerminalWorkspaceLayout` / `zui::GridLayout` | 把活动 Terminal 与可选 Agent Sidebar 投影为递归 Grid Leaf；alternate screen 使用完整活动 Terminal Leaf | Agent Sidebar 已接入；多 Terminal Pane runtime 尚未完成 |
 | `SessionSidebarState` / `Sash` | 保存 preferred width 和 drag-start snapshot；从同一 track 生成 8px 命中区与 2px hover/active feedback | 侧栏宽度限制为 160–480px，并始终为 main Pane 保留至少 240px |
-| `AgentSidebarState` | 保存右栏显隐并向外层 Grid 提供固定 320px sizing | 内部内容由 `AgentSidebarWorkspace` 独立拥有 |
-| `AgentSidebarLayout` / `AgentSidebarNavigation` / `AgentSidebarToolbar` | 64px Changes/Files ActionBar、36px toolbar 与单一 active Pane | Files-only toolbar 显示 Refresh、`↑ahead ↓behind` 与 Search；Changes 不注册这些 action |
-| `ExplorerPane` / `zeta-file-search` | 根目录文件树与工作区路径模糊匹配结果 | Search 输入已接键盘、剪贴板和 IME；目录展开、滚动和文件打开尚未完成 |
-| `EditorPaneState` / `zeta-editor::MultiDiffEditor` | `zeta-git` changed-file snapshot 生成 HEAD/working-tree DiffDocument；MultiDiffEditor 持有整体纵向视口 | 启动、Refresh 与 command completion 更新；binary、非 UTF-8 或单侧超过 2 MiB 的文件跳过 |
+| `AgentSidebarState` / `Sash` | 保存右栏显隐、preferred width 与 drag-start snapshot；从同一 track 生成 8px 命中区和 2px hover/active feedback | 宽度限制为 240–560px，并始终为 main Pane 保留至少 240px；内部内容由 `zeta-agent-sidebar::AgentSidebar` 拥有 |
+| `zeta-agent-sidebar::AgentSidebarNavigation` | 跨功能 Changes/Files ActionBar 与导航语义 | 不拥有 Files/SCM 功能布局 |
+| `zeta-agent-sidebar::files::FilesLayout` / `FilesToolbar` / `FilesPane` / `zeta-file-search` | Files 自己拥有 36px 功能 toolbar、根目录文件树与工作区路径模糊匹配结果 | Search 输入已接键盘、剪贴板和 IME；目录展开、滚动和文件打开动作已由 Native adapter 接线 |
+| `zeta-agent-sidebar::scm::ScmLayout` / `EditorPaneState` / `zeta-editor::MultiDiffEditor` | SCM 自己拥有 Changes toolbar slot 与整体纵向视口；Native 将 `zeta-git` snapshot 映射为 `ScmDiff` | 启动、Refresh 与 command completion 更新；binary、非 UTF-8 或单侧超过 2 MiB 的文件跳过 |
 | `commands::NativeCommand` / `keybindings::NativeKeybindings` / `keybindings_resource::KeybindingsResource` / `keyboard_shortcuts` | pointer/menu 与标准化键盘事件汇合到同一 command executor；resolver 支持 `when`、Builtin/User precedence、blocker 和最多四段 Chord；资源轮询外部编辑，设置录制采用原子写入 | ✅；内建 Copy/Paste、1.5 秒 Chord timeout、失焦/IME 取消、冲突诊断、Chord 提示与设置 UI 已实现 |
 | `TerminalCore` / `TerminalGrid` | 增量解析 ANSI，维护 cell、cursor、wrap、erase 与基础 SGR | 当前最小 terminal emulator core |
 | Unicode terminal text | CJK 按双 cell 保存；组合符、ZWJ Emoji 与 flag 序列保留在 leading cell；renderer 使用系统 outline fallback | macOS 已规避不可栅格化的 `GB18030 Bitmap`；复杂 BiDi 行级布局尚未完成 |
@@ -278,8 +278,9 @@ Terminal Workspace 保留至少 240px。`SessionSidebarState` 保存 preferred w
 composer 共享调整后的 workspace。当前不增加 `PanelHeight`、任意区域拖拽或通用 Workbench
 Part 系统。
 
-Agent Sidebar 固定宽度为 320 logical pixels；剩余区域不足 240px 时，即使显隐状态为展开也会
-临时隐藏。当前不提供右侧 Sash，后续内容接入不能绕过这条 Terminal Workspace 最小宽度约束。
+Agent Sidebar 默认宽度为 320 logical pixels，可在 240–560px 范围内调整；剩余区域不足
+480px 时，即使显隐状态为展开也会临时隐藏。右侧 Sash 拖动触发同一条 Shell bounds →
+terminal grid → PTY resize 链路，不能绕过这条 Terminal Workspace 最小宽度约束。
 
 窗口控件占位由 `zeta-winit` 的 chrome adapter 统一拥有，不属于通用 `ActionBar` 样式。
 macOS 当前使用集中且受测试的 70 logical pixel policy；由于 `winit` 尚无安全的 system button

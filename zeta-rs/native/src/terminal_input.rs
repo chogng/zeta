@@ -8,7 +8,6 @@ use zeta_winit::{ElementState, Key, KeyEvent, ModifiersState, NamedKey};
 use crate::NativeApp;
 use crate::agent_composer::{ComposerMode, ComposerSubmission};
 use crate::composer_interaction::{ComposerInteractionActivation, SelectionDirection};
-use crate::explorer_tree::ExplorerTreeAction;
 use crate::keybindings::{
     NativeKeybindingContext, NativeKeybindingFacts, NativeKeybindingResolution,
 };
@@ -18,6 +17,7 @@ use crate::shell_interaction::{
     FILE_EDITOR_REPLACE_INPUT, SESSION_SEARCH_INPUT,
 };
 use crate::terminal_selection::{read_clipboard_text, write_clipboard_text};
+use zeta_agent_sidebar::AgentSidebarAction;
 use zui::{FocusDirection, NavigationAxis};
 
 impl NativeApp {
@@ -264,12 +264,12 @@ impl NativeApp {
             return false;
         };
         match navigation {
-            ExplorerTreeAction::Handled => {}
-            ExplorerTreeAction::StateChanged => {
+            AgentSidebarAction::Handled => {}
+            AgentSidebarAction::StateChanged => {
                 self.rebuild_presentation();
                 self.request_redraw();
             }
-            ExplorerTreeAction::Focus(target) => {
+            AgentSidebarAction::Focus(target) => {
                 let outcome = self
                     .presentation
                     .as_ref()
@@ -280,8 +280,8 @@ impl NativeApp {
                     .unwrap_or_default();
                 self.apply_dispatch_outcome(outcome);
             }
-            ExplorerTreeAction::OpenFile { path } => self.open_workspace_file(path),
-            ExplorerTreeAction::LoadChildren { element, path } => {
+            AgentSidebarAction::OpenFile { path } => self.open_workspace_file(path),
+            AgentSidebarAction::LoadChildren { element, path } => {
                 self.load_file_tree_directory(element, path);
                 self.rebuild_presentation();
                 self.request_redraw();

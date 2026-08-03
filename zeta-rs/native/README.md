@@ -37,13 +37,13 @@
 | Terminal Workspace 与 Agent Sidebar 递归 Pane geometry | `zui::GridLayout` | 委托；当前输入树包含活动终端与可选右栏 Leaf |
 | Terminal Pane Tree、Session binding 与 active Pane | 后续 native Terminal Workspace model | 尚未完成 |
 | Sessions preferred width、显隐与当前 drag snapshot | `session_sidebar::SessionSidebarState` | ✅ |
-| Agent Sidebar 显隐与固定宽度策略 | `agent_sidebar::AgentSidebarState` | ✅；不拥有内部 Pane 内容 |
-| Agent Sidebar 导航、toolbar 与互斥 Pane geometry | `agent_sidebar_layout::AgentSidebarLayout` / `agent_sidebar_navigation` / `agent_sidebar_toolbar` | ✅；顶部横向 Changes/Files ActionBar、36px 全宽 toolbar 与单一 active content pane |
-| Files 层级树与模糊搜索 | `explorer_tree::ExplorerTree` / `explorer_pane` / `zeta-ui::TreeView` / `ListView` / `zeta-file-search` | ✅；目录懒加载、稳定 mounted-node ID、展开/收起和 24px 虚拟行已接入；Search 保持扁平 List 投影 |
+| Agent Sidebar 显隐、preferred width 与 resize gesture | `agent_sidebar::AgentSidebarState` / `zeta-ui::Sash` | ✅；宽度限制为 240–560px，不拥有内部 Pane 内容 |
+| Agent Sidebar 导航与各功能 Pane 的布局 | [`zeta-agent-sidebar`](../agent-sidebar/README.md) 的 `AgentSidebarNavigation` / `files::FilesLayout` / `scm::ScmLayout` | 委托；Native 只提供主题投影、workspace 快照与 shell slot |
+| Files 层级树与模糊搜索 | [`zeta-agent-sidebar`](../agent-sidebar/README.md) 的 `files::FilesState` / `files::FilesPane` / `zeta-ui::TreeView` / `ListView` / `zeta-file-search` | ✅；目录懒加载、稳定 mounted-node ID、展开/收起和 24px 虚拟行已接入；Native 只适配 App Server 目录 DTO 并执行打开/加载动作 |
 | UTF-8 文件保存 baseline、磁盘版本与外部变化冲突 | `zeta-text-file::TextFileLifecycle` | 委托；Native 只提供当前 editor text 与 I/O adapter |
 | 语言服务 composition、持久化设置、文档/请求 freshness 与 presentation | `language_service_host::NativeLanguageService` / `language_server_settings_model::LanguageServerSettingsState` / `file_editor_language_features` / `zeta-language-service` | ✅；Rust/JSON/Shell 独立设置与 runtime state，diagnostics，latest-only pointer hover，Ctrl/Cmd+Space completion popup/安全 edit 接受和 F12 definition navigation 已接入；文件读取仍通过 App Server authority |
 | 文件 Tab、active document、关闭决策与 presentation | `file_editor_host::FileEditorHost` / `file_editor_pane::FileEditorPane` / `file_editor_input::FileEditorInputState` | ✅；Explorer activation 已通过 typed `fs/readFile`/metadata 打开 language-aware document，Cmd/Ctrl+S 使用版本 preflight 和 `fs/writeFile`，中心 Editor Surface 已接通 tabs、关闭确认、外部重载/显式乐观覆盖、find/replace、自动缩进、soft wrap、focus、keyboard、IME、pointer、clipboard 与 visual-row viewport |
-| Changed-file collection、整体滚动与每文件 diff 视口 | `agent_sidebar_workspace::AgentSidebarWorkspace` / `editor_pane::EditorPaneState` / `zeta-ui::ScrollState` | ✅；App Server `git/textDiff` 提供真实 MultiDiff source 与增删行统计，wheel、scrollbar hover/active/fade、thumb drag 与 track paging 已接入 |
+| Changed-file collection、整体滚动与每文件 diff 视口 | [`zeta-agent-sidebar`](../agent-sidebar/README.md) 的 `ScmState` / `EditorPaneState` / `zeta-ui::ScrollState` | 委托；Native 只把 Git 投影映射为 `ScmDiff` 并执行刷新动作 |
 | Titlebar 背景、窗口拖拽区、语言服务器设置入口与左右侧栏开关 | `titlebar::Titlebar` | ✅；不绘制可见窗口标题 |
 | Top Bar 左右 sidebar toggle `ActionBar` | `titlebar::Titlebar` | ✅ |
 | 原生窗口控件占位 | `zeta-winit::WindowControlInsets` | 委托；Titlebar 只增加自身内容间距 |
@@ -52,7 +52,7 @@
 | 文本差异计算、行映射与字符级范围 | `zeta-diff::DiffDocument` | 委托；Native 不复制 diff 算法 |
 | 单列/并排及多文件只读差异展示 | `zeta-editor::DiffEditorDocument` / `DiffEditor` / `MultiDiffEditor` | 委托；Native 只按文件扩展名选择 language，editor 内部维护两侧 parser/revision/token；Changes pane 使用窄栏 Unified presentation |
 | 可折叠 Session Sidebar、名称搜索与当前真实 Session Tab | `session_sidebar_toolbar::SessionSidebarToolbar` / `session_search::SessionSearch` / `session_tab_list::SessionTabList` | ✅；Add action 已进入命令边界，多会话 runtime 尚无 |
-| 可折叠 Agent Sidebar 产品组合 | `shell_scene` / `AgentSidebarNavigation` / `AgentSidebarToolbar` / `ExplorerPane` / `EditorPane` | ✅；Files 与 Changes 互斥，Files-only actions 不进入 Changes |
+| 可折叠 Agent Sidebar 产品组合 | `zeta-agent-sidebar` 的 `AgentSidebarNavigation` / `files::FilesToolbar` / `FilesPane` / `scm::EditorPane` | 委托；Native 只负责外层显隐、主题映射和 action 执行 |
 | 锚点浮层定位与独立 layer 合成 | `zeta-ui::ContextView` | 委托；不拥有显示生命周期或输入路由 |
 | 无边框下拉 surface、可选 header、item geometry 与默认选择 | `zeta-ui::Dropdown` | 委托；不拥有产品查询、选择 identity、关闭或 command |
 | 柔和阴影、2px menu padding、4px radius、item geometry 与默认选择 | `zeta-ui::ContextMenu` | 委托；不拥有 Session identity、关闭或 command |
@@ -134,9 +134,9 @@ authority。下表把仍保留的历史 shell vocabulary 映射到当前产品�
 | `session_sidebar_toolbar` / `session_search` | 整行组合 `SearchBox` 与右侧 `ActionBar`；按 session name 执行大小写不敏感过滤，并把 Add 暴露为稳定 action | Session 搜索与新建入口 | 搜索已接通；真实新建 tab 等待多会话 runtime |
 | `session_context_menu` | 右键当前 Session Tab 后，用 `ContextMenu` 呈现 Pin、Close、Rename、Fork；拥有 outside click、Escape、键盘导航和焦点恢复 | Session action surface | 通用基座提供柔和阴影、2px padding 与 4px radius，打开默认选择 Pin；命令映射已建立，真实 Session mutation 等待多会话 runtime |
 | `zeta-editor::CodeEditor` | 多行 Unicode 编辑、selection、history、IME/syntax projection、Document/Compact presentation、soft wrap 与可见行绘制 | CodeEditor | 委托；Composer 与文件 Editor 都已接入平台事件、focus、caret blink、IME、pointer caret/drag、clipboard 和垂直 viewport；文件 Editor 启用 soft wrap 与拖选越界自动滚动 |
-| `agent_sidebar_layout` / `agent_sidebar_navigation` / `agent_sidebar_toolbar` | 顶部 toolbar 左侧 ActionBar 切换 Changes/Files，右侧仅在 Files 显示 Refresh、ahead/behind 和 Search | Agent Sidebar navigation | ✅；ActionBar 与 active content pane 使用同一 retained workspace state |
-| `explorer_tree` / `explorer_pane` / `AgentSidebarWorkspace` | arena 保存稳定 mounted-node ID、parent/children、懒加载和展开状态；目录枚举统一通过 App Server `fs/readDirectory`；`zeta-ui::TreeView` 虚拟化层级行，Search 结果继续使用 ListView | Files Pane | ✅；pointer/Enter/Space 展开目录或把文件交给 `FileEditorHost`，Up/Down 遍历，Left 折叠/转父项，Right 展开/转首个 child |
-| `editor_pane` | 保存 Git changed-file collection、language-aware `DiffEditorDocument`、整体滚动位置、scrollbar pointer capture/animation、每文件 `DiffEditorState` 和 `MultiDiffEditorLayout`，把全部文件绑定为 MultiDiffEditor items，并把 fold controls 注册为可访问 Button | Changes Pane | ✅；启动、Refresh、fold state 改变和 shell command completion 会重建 diff/layout snapshot；wheel 直接复用 metrics，宿主不接触 syntax token 或 revision |
+| `zeta-agent-sidebar::AgentSidebarNavigation` | 只负责 Changes/Files 的跨功能切换和导航语义 | Agent Sidebar navigation | ✅；不拥有 Files/SCM 功能布局 |
+| `zeta-agent-sidebar::files::FilesLayout` / `FilesToolbar` / `FilesState` / `FilesPane` | Files 自己拥有 36px 功能 toolbar、Refresh、ahead/behind、Search、文件树与搜索结果；Native 只通过 App Server 适配 `DirectoryEntry` | Files Pane | ✅；pointer/Enter/Space 产生 crate action，由宿主加载目录或打开文件 |
+| `zeta-agent-sidebar::scm::ScmLayout` / `ScmState` / `EditorPaneState` / `EditorPane` | SCM 自己拥有 Changes toolbar slot、changed-file snapshot、language-aware `DiffEditorDocument`、整体滚动位置、scrollbar pointer capture/animation、每文件 `DiffEditorState` 和 `MultiDiffEditorLayout` | Changes Pane | ✅；Native 只提供 `ScmDiff` 和主题投影 |
 | `zeta-editor::DiffEditor` / `MultiDiffEditor` | DiffEditor 提供 SideBySide/Unified presentation 与未修改区间折叠投影；MultiDiffEditor 再纵向组合多个文件 section、发布每文件 fold identity 并裁剪不可见项 | 多文件差异文档 | Changes 固定宽度栏显式选择 Unified；文件读取、diff 计算、持久状态与产品输入路由不属于 editor crate |
 | terminal grid / PTY / scrollback | grid、PTY 与会话内有界回滚已接通，跨重启持久化尚无 | 活动 Terminal Session runtime | 部分具备 |
 | multi-session projection / switching | 当前只有一个真实 Session Tab | 多会话入口 | 尚未完成 |
@@ -210,10 +210,9 @@ main
       → Agent Sidebar toggle
           → AgentSidebarState visibility
           → shell bounds + terminal grid/PTY resize
-          → AgentSidebarLayout
-              → top toolbar → Changes / Files ActionBar + active-pane actions
-              → Files → 根目录树 / 模糊路径匹配结果
-              → Changes → MultiDiffEditor → visible file sections → DiffEditor
+          → AgentSidebarNavigation → Changes / Files selection
+              → FilesLayout → FilesToolbar + 根目录树 / 模糊路径匹配结果
+              → ScmLayout → MultiDiffEditor → visible file sections → DiffEditor
       → TerminalWorkspaceLayout
           → GridLayout → active terminal + optional Agent Sidebar leaf bounds
           → terminal rows/columns → TerminalSession resize
@@ -245,16 +244,20 @@ Terminal Leaf 再分成上方 output viewport 与固定底部 composer；alterna
 `SessionSidebarState` 保存 visibility、preferred width 与当前 `SplitViewResizeSnapshot`，
 viewport 临时约束只改变 effective width，不覆盖 preferred width。`Sash` 从
 `SplitViewSashLayout::track_bounds` 同源计算 drag target 与 hover/active feedback；
-`AgentSidebarState` 只保存显隐并向外层 Grid 提供固定 320px sizing；
-`TerminalWorkspaceLayout` 解析右栏 Leaf bounds，`AgentSidebarLayout` 再把它解析为 36px
-全宽 toolbar 和单一 active content pane；toolbar 内的横向 ActionBar 切换 Changes / Files。
-`AgentSidebarWorkspace` 保存 Files /
-Changes 选择、文件搜索与 changed-file collection；Refresh、Composer Changes action 和 shell
-command completion 通过 App Server `git/textDiff` 重建上游领先/落后距离、
-HEAD/working-tree `DiffDocument` 与增删行统计；Native 按 path 选择 `CodeEditorLanguage` 后立即包装为
-`DiffEditorDocument`，此后 parser/revision/token 都留在 editor crate。
-Files pane 的层级模式由 `explorer_tree::ExplorerTree` 保存 arena、parent/children、稳定 mounted
-node ID 和展开状态；根目录和首次展开的子目录都由 `AgentSession` 通过 App Server
+`AgentSidebarState` 保存显隐、preferred width 与当前 `SplitViewResizeSnapshot`，并向外层 Grid
+提供右侧 Sash 所需的 pane sizing；宽度限制为 240–560px，始终为 main Pane 保留至少 240px；
+`TerminalWorkspaceLayout` 解析右栏 Leaf bounds；`files::FilesLayout` 和 `scm::ScmLayout`
+分别把各自的功能 bounds 解析为 36px toolbar slot 与 active content pane；跨功能的
+Changes / Files 切换只由 `AgentSidebarNavigation` 负责。
+`zeta-agent-sidebar::AgentSidebar` 保存 Files / Changes 选择；`files::FilesState` 保存文件搜索、
+树与滚动，`scm::ScmState` 保存 changed-file snapshot 和 `EditorPaneState`。Native 的
+`AgentSidebarWorkspace` 只负责将 App Server/`WorkspaceContext` 快照适配为 crate 类型，并执行
+Refresh、文件打开和子目录加载动作。Refresh、Composer Changes action 和 shell command completion
+通过 App Server `git/textDiff` 重建上游领先/落后距离、HEAD/working-tree `DiffDocument` 与增删行统计；
+Native 按 path 选择 `CodeEditorLanguage` 后立即包装为 `DiffEditorDocument`，此后 parser/revision/token
+都留在 editor crate。
+Files pane 的层级模式由 `files::FilesTree` 保存 arena、parent/children、稳定 mounted node ID
+和展开状态；根目录和首次展开的子目录都由 `AgentSession` 通过 App Server
 `fs/readDirectory` 读取 workspace-relative 直接子项，Tree model 不直接访问文件系统；收起/再次展开
 复用已加载 children。App Server `fs/changed` 通知会重新读取根目录，当前仍不恢复刷新前的展开状态。
 `zeta-ui::TreeView` 在 24px 固定行高 ListView 上投影 depth、disclosure 和 content geometry，

@@ -26,11 +26,22 @@ fn expanded_agent_sidebar_is_the_rightmost_grid_leaf() {
         layout.agent_sidebar_bounds(),
         Some(Rect::from_xywh(680.0, 32.0, 320.0, 668.0))
     );
+    assert_eq!(
+        layout.agent_sidebar_sash_track(),
+        Some(Rect::from_xywh(680.0, 32.0, 0.0, 668.0))
+    );
+    let snapshot = layout
+        .agent_sidebar_resize_snapshot()
+        .expect("expanded sidebar should expose a resize snapshot");
+    let resize = snapshot.resize(0.0);
+    assert_eq!(resize.previous_index(), 0);
+    assert_eq!(resize.next_index(), 1);
+    assert_eq!(resize.next_size(), 320.0);
 }
 
 #[test]
 fn constrained_grid_omits_the_agent_sidebar_leaf() {
-    let bounds = Rect::from_xywh(0.0, 32.0, 559.0, 668.0);
+    let bounds = Rect::from_xywh(0.0, 32.0, 479.0, 668.0);
 
     let layout = TerminalWorkspaceLayout::for_bounds(bounds, AgentSidebarState::expanded());
 
