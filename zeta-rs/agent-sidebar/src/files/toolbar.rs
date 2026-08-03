@@ -1,84 +1,52 @@
 use zeta_icons::icons;
 use zeta_ui::{
-    ActionBar, ActionBarButton, ActionBarItem, ActionBarOrientation, ActionBarStyle, Border,
-    ButtonBackgrounds, ButtonSelection, ButtonState, ButtonStyle, CaretVisibility, Component,
-    ComponentElement, CornerRadii, Edges, Element, PaintRect, Rect, SearchBox, Size,
-    TextInputLayoutEngine, TextStyle, UiScene,
+    ActionBar, ActionBarButton, ActionBarItem, ActionBarOrientation, ActionBarStyle,
+    ButtonSelection, ButtonState, CaretVisibility, Component, ComponentElement, Element, Rect,
+    SearchBox, Size, TextInputLayoutEngine, UiScene,
 };
 use zui::{
     AccessibilityRole, CursorFeedback, FocusBehavior, InteractionFrame, NavigationAxis,
     NavigationGroupId, NodeAction, UiDispatch, UiNode,
 };
 
-use crate::agent_sidebar_navigation::AgentSidebarNavigation;
-use crate::agent_sidebar_workspace::{AgentSidebarView, AgentSidebarWorkspace};
+use super::FilesState;
+use crate::AgentSidebarStyle;
 use crate::shell_interaction::{
     AGENT_FILE_SEARCH_INPUT, AGENT_FILES_ACTION_BAR, AGENT_FILES_REFRESH, AGENT_FILES_SEARCH,
-    AGENT_SIDEBAR, AGENT_SIDEBAR_TOOLBAR,
+    AGENT_SIDEBAR_TOOLBAR,
 };
-use crate::shell_style::ShellPalette;
-use crate::workspace_context::WorkspaceContext;
 
 const PADDING: f32 = 8.0;
 const ACTION_SIZE: f32 = 28.0;
 const STATUS_WIDTH: f32 = 62.0;
 const ACTION_BAR_WIDTH: f32 = ACTION_SIZE * 2.0 + STATUS_WIDTH;
 
-/// Top toolbar containing the pane switcher and active-pane actions.
-pub(crate) struct AgentSidebarToolbar {
+/// Files-owned functional toolbar for refresh, search, and search input.
+pub struct FilesToolbar {
     bounds: Rect,
-    palette: ShellPalette,
-    navigation: AgentSidebarNavigation,
     search_box: Option<SearchBox>,
     search_value: String,
-    action_bar: Option<ActionBar>,
+    action_bar: ActionBar,
 }
 
-impl AgentSidebarToolbar {
-    pub(crate) fn new(
+impl FilesToolbar {
+    pub fn new(
         bounds: Rect,
-        workspace: &AgentSidebarWorkspace,
-        context: &WorkspaceContext,
+        navigation_bounds: Rect,
+        files: &FilesState,
+        upstream_distance: Option<(usize, usize)>,
         caret_visibility: CaretVisibility,
-        palette: ShellPalette,
+        palette: AgentSidebarStyle,
         text_layout: &mut TextInputLayoutEngine,
         dispatch: &UiDispatch,
     ) -> Self {
-        let navigation = AgentSidebarNavigation::new(
-            AgentSidebarNavigation::bounds_in(bounds),
-            workspace.active_view(),
-            palette,
-            dispatch,
-        );
-        if workspace.active_view() == AgentSidebarView::Changes {
-            return Self {
-                bounds,
-                palette,
-                navigation,
-                search_box: None,
-                search_value: String::new(),
-                action_bar: None,
-            };
-        }
         let action_bounds = Rect::from_xywh(
             (bounds.right() - ACTION_BAR_WIDTH - PADDING).max(bounds.origin.x),
             bounds.origin.y + (bounds.size.height - ACTION_SIZE) * 0.5,
             ACTION_BAR_WIDTH.min(bounds.size.width),
             ACTION_SIZE,
         );
-        let button_backgrounds = ButtonBackgrounds::new(zeta_ui::Color::TRANSPARENT)
-            .with_hovered(palette.surface_hovered)
-            .with_focused(palette.surface_hovered)
-            .with_pressed(palette.session_tab_highlight);
-        let selected_backgrounds = ButtonBackgrounds::new(palette.session_tab_highlight)
-            .with_hovered(palette.session_tab_highlight)
-            .with_focused(palette.session_tab_highlight)
-            .with_pressed(palette.session_tab_highlight);
-        let button_style = ButtonStyle::new(button_backgrounds, TextStyle::new(11.0, palette.text))
-            .with_selected_backgrounds(selected_backgrounds)
-            .with_corner_radii(CornerRadii::uniform(4.0))
-            .with_padding(Edges::uniform(4.0))
-            .with_icon_size(16.0);
+        let button_style = palette.toolbar_button_style();
         let state = |id| {
             if dispatch.is_pressed(id) {
                 ButtonState::Pressed
@@ -90,8 +58,7 @@ impl AgentSidebarToolbar {
                 ButtonState::Resting
             }
         };
-        let distance = context
-            .upstream_distance()
+        let distance = upstream_distance
             .map(|(ahead, behind)| format!("↑{ahead} ↓{behind}"))
             .unwrap_or_else(|| "↑— ↓—".to_string());
         let action_bar = ActionBar::new(
@@ -108,7 +75,7 @@ impl AgentSidebarToolbar {
                 ),
                 ActionBarItem::Button(
                     ActionBarButton::icon(icons::SEARCH, "Search files", state(AGENT_FILES_SEARCH))
-                        .with_selection(if workspace.search_visible() {
+                        .with_selection(if files.search_visible() {
                             ButtonSelection::Selected
                         } else {
                             ButtonSelection::Unselected
@@ -117,8 +84,7 @@ impl AgentSidebarToolbar {
             ],
             ActionBarStyle::new(button_style, Size::new(ACTION_SIZE, ACTION_SIZE)),
         );
-        let search_box = workspace.search_visible().then(|| {
-            let navigation_bounds = AgentSidebarNavigation::bounds_in(bounds);
+        let search_box = files.search_visible().then(|| {
             let search_bounds = Rect::from_xywh(
                 navigation_bounds.right() + PADDING,
                 bounds.origin.y + 6.0,
@@ -136,32 +102,20 @@ impl AgentSidebarToolbar {
                 search_bounds,
                 "Search files...",
                 search_state,
-                palette.session_search_style(),
-                workspace.file_search_input(),
+                palette.search_style(),
+                files.search_input(),
                 text_layout,
             )
         });
         Self {
             bounds,
-            palette,
-            navigation,
             search_box,
-            search_value: workspace.file_search_input().text().to_owned(),
-            action_bar: Some(action_bar),
+            search_value: files.search_input().text().to_owned(),
+            action_bar,
         }
     }
 
-    pub(crate) fn register_interactions(&self, frame: &mut InteractionFrame) {
-        frame.register(
-            UiNode::new(
-                AGENT_SIDEBAR_TOOLBAR,
-                self.bounds,
-                AccessibilityRole::Toolbar,
-                "Agent sidebar toolbar",
-            )
-            .with_parent(AGENT_SIDEBAR),
-        );
-        self.navigation.register_interactions(frame);
+    pub fn register_interactions(&self, frame: &mut InteractionFrame) {
         if let Some(search_box) = self.search_box.as_ref() {
             frame.register(
                 UiNode::new(
@@ -176,13 +130,10 @@ impl AgentSidebarToolbar {
                 .with_value(&self.search_value),
             );
         }
-        let Some(action_bar) = self.action_bar.as_ref() else {
-            return;
-        };
         frame.register(
             UiNode::new(
                 AGENT_FILES_ACTION_BAR,
-                action_bar.bounds(),
+                self.action_bar.bounds(),
                 AccessibilityRole::Toolbar,
                 "Files actions",
             )
@@ -196,9 +147,9 @@ impl AgentSidebarToolbar {
         .into_iter()
         .enumerate()
         {
-            let item_index = index;
-            let bounds = action_bar
-                .interactive_item_bounds(item_index)
+            let bounds = self
+                .action_bar
+                .interactive_item_bounds(index)
                 .expect("Files toolbar actions are enabled");
             frame.register(
                 UiNode::new(id, bounds, AccessibilityRole::Button, label)
@@ -211,7 +162,7 @@ impl AgentSidebarToolbar {
         }
     }
 
-    pub(crate) const fn search_caret_bounds(&self) -> Option<Rect> {
+    pub const fn search_caret_bounds(&self) -> Option<Rect> {
         match self.search_box.as_ref() {
             Some(search_box) => search_box.caret_bounds(),
             None => None,
@@ -219,24 +170,15 @@ impl AgentSidebarToolbar {
     }
 }
 
-impl Component for AgentSidebarToolbar {
+impl Component for FilesToolbar {
     fn element(&self) -> ComponentElement {
-        Element::leaf("AgentSidebarToolbar").in_bounds(self.bounds)
+        Element::leaf("FilesToolbar").in_bounds(self.bounds)
     }
 
     fn paint(&self, scene: &mut UiScene) {
-        scene.draw_rect(
-            PaintRect::new(self.bounds, self.palette.surface_raised).with_border(Border::new(
-                Edges::new(0.0, 0.0, 1.0, 0.0),
-                self.palette.border,
-            )),
-        );
-        scene.draw_component(&self.navigation);
         if let Some(search_box) = self.search_box.as_ref() {
             scene.draw_component(search_box);
         }
-        if let Some(action_bar) = self.action_bar.as_ref() {
-            scene.draw_component(action_bar);
-        }
+        scene.draw_component(&self.action_bar);
     }
 }

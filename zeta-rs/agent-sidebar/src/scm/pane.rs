@@ -16,17 +16,17 @@ use zui::{
     NavigationGroupId, NodeAction, UiNode,
 };
 
+use super::ScmPaneStyle;
 use crate::shell_interaction::{
     AGENT_EDITOR_PANE, AGENT_SIDEBAR, MULTI_DIFF_EDITOR, MULTI_DIFF_SCROLLBAR,
 };
-use crate::shell_style::ShellPalette;
 use crate::workspace_context::WorkspaceDiff;
 
 const EMPTY_STATE_PADDING: f32 = 12.0;
 const DIFF_FOLD_SCOPE: u32 = 4;
 
 /// One changed file and the retained state of its DiffEditor section.
-pub(crate) struct EditorDiff {
+pub struct EditorDiff {
     file_name: String,
     original_label: String,
     modified_label: String,
@@ -54,7 +54,7 @@ impl EditorDiff {
 }
 
 /// Product-owned changed-file collection and retained MultiDiffEditor viewport.
-pub(crate) struct EditorPaneState {
+pub struct EditorPaneState {
     diffs: Vec<EditorDiff>,
     scroll_state: ScrollState,
     scrollbar: ScrollbarController,
@@ -83,13 +83,13 @@ enum ScrollbarCapture {
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub(crate) struct ScrollbarPointerOutcome {
-    pub(crate) handled: bool,
-    pub(crate) presentation_changed: bool,
+pub struct ScrollbarPointerOutcome {
+    pub handled: bool,
+    pub presentation_changed: bool,
 }
 
 impl EditorPaneState {
-    pub(crate) fn set_style(&mut self, style: MultiDiffEditorStyle) {
+    pub fn set_style(&mut self, style: MultiDiffEditorStyle) {
         self.style = style;
         self.remeasure();
     }
@@ -110,7 +110,7 @@ impl EditorPaneState {
         self.diffs.get_mut(index)
     }
 
-    pub(crate) fn toggle_fold_for_element(&mut self, id: ElementId) -> bool {
+    pub fn toggle_fold_for_element(&mut self, id: ElementId) -> bool {
         let mut toggled = false;
         for (item_index, diff) in self.diffs.iter_mut().enumerate() {
             for region_index in 0..diff.document.diff().rows().len() {
@@ -130,7 +130,7 @@ impl EditorPaneState {
         toggled
     }
 
-    pub(crate) fn replace_diffs(&mut self, diffs: &[WorkspaceDiff]) {
+    pub fn replace_diffs(&mut self, diffs: &[WorkspaceDiff]) {
         self.diffs = diffs
             .iter()
             .map(|diff| EditorDiff {
@@ -173,7 +173,7 @@ impl EditorPaneState {
         self.diffs.iter().map(EditorDiff::item).collect()
     }
 
-    pub(crate) fn scroll(&mut self, delta: f32, viewport: Size, now: Instant) -> bool {
+    pub fn scroll(&mut self, delta: f32, viewport: Size, now: Instant) -> bool {
         let metrics = ScrollMetrics::new(
             viewport,
             Size::new(viewport.width, self.measured_layout.content_height()),
@@ -187,7 +187,7 @@ impl EditorPaneState {
         changed
     }
 
-    pub(crate) fn scrollbar_pointer_moved(
+    pub fn scrollbar_pointer_moved(
         &mut self,
         point: zeta_ui::Point,
         bounds: Rect,
@@ -221,7 +221,7 @@ impl EditorPaneState {
         }
     }
 
-    pub(crate) fn press_scrollbar(
+    pub fn press_scrollbar(
         &mut self,
         point: zeta_ui::Point,
         bounds: Rect,
@@ -254,7 +254,7 @@ impl EditorPaneState {
         }
     }
 
-    pub(crate) fn release_scrollbar(
+    pub fn release_scrollbar(
         &mut self,
         point: zeta_ui::Point,
         bounds: Rect,
@@ -272,7 +272,7 @@ impl EditorPaneState {
         }
     }
 
-    pub(crate) fn scrollbar_pointer_left(&mut self, now: Instant) -> bool {
+    pub fn scrollbar_pointer_left(&mut self, now: Instant) -> bool {
         if self.scrollbar_capture.is_some() {
             return false;
         }
@@ -282,16 +282,16 @@ impl EditorPaneState {
         self.scrollbar.presentation() != previous
     }
 
-    pub(crate) fn cancel_scrollbar_interaction(&mut self) {
+    pub fn cancel_scrollbar_interaction(&mut self) {
         self.scrollbar_capture = None;
         self.scrollbar.cancel();
     }
 
-    pub(crate) fn advance_scrollbar(&mut self, now: Instant) -> bool {
+    pub fn advance_scrollbar(&mut self, now: Instant) -> bool {
         self.scrollbar.advance(now)
     }
 
-    pub(crate) const fn scrollbar_deadline(&self) -> Option<Instant> {
+    pub const fn scrollbar_deadline(&self) -> Option<Instant> {
         self.scrollbar.next_deadline()
     }
 
@@ -330,26 +330,22 @@ impl EditorPaneState {
 }
 
 /// Editor Pane hosting one MultiDiffEditor for all changed files.
-pub(crate) struct EditorPane<'a> {
+pub struct EditorPane<'a> {
     bounds: Rect,
     state: &'a EditorPaneState,
-    palette: ShellPalette,
+    style: ScmPaneStyle,
 }
 
 impl<'a> EditorPane<'a> {
-    pub(crate) const fn new(
-        bounds: Rect,
-        state: &'a EditorPaneState,
-        palette: ShellPalette,
-    ) -> Self {
+    pub const fn new(bounds: Rect, state: &'a EditorPaneState, style: ScmPaneStyle) -> Self {
         Self {
             bounds,
             state,
-            palette,
+            style,
         }
     }
 
-    pub(crate) fn register_interactions(&self, frame: &mut InteractionFrame) {
+    pub fn register_interactions(&self, frame: &mut InteractionFrame) {
         frame.register(
             UiNode::new(
                 AGENT_EDITOR_PANE,
@@ -443,9 +439,9 @@ impl Component for EditorPane<'_> {
 
     fn paint(&self, scene: &mut UiScene) {
         scene.draw_rect(
-            PaintRect::new(self.bounds, self.palette.surface).with_border(Border::new(
+            PaintRect::new(self.bounds, self.style.surface).with_border(Border::new(
                 Edges::new(1.0, 0.0, 0.0, 0.0),
-                self.palette.border,
+                self.style.border,
             )),
         );
         if self.state.diffs().is_empty() {
@@ -459,7 +455,7 @@ impl Component for EditorPane<'_> {
                     (self.bounds.size.width - EMPTY_STATE_PADDING * 2.0).max(1.0),
                     18.0,
                 ),
-                TextStyle::new(12.0, self.palette.text_muted).with_line_height(18.0),
+                TextStyle::new(12.0, self.style.text_muted).with_line_height(18.0),
             ));
             return;
         }
@@ -479,5 +475,5 @@ impl Component for EditorPane<'_> {
 }
 
 #[cfg(test)]
-#[path = "editor_pane_tests.rs"]
+#[path = "pane_tests.rs"]
 mod tests;

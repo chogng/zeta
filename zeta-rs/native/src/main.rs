@@ -5,7 +5,6 @@ use agent_composer::AgentComposer;
 use agent_session::AgentSession;
 use agent_sidebar::AgentSidebarState;
 use agent_sidebar_workspace::AgentSidebarWorkspace;
-use explorer_tree::ExplorerTreeAction;
 use file_editor_host::FileEditorHost;
 use file_editor_input::FileEditorInputState;
 use git_branch_context_menu::GitBranchContextMenuState;
@@ -33,6 +32,7 @@ use thread_timeline_scroll::ThreadTimelineScroll;
 use workspace_context::WorkspaceContext;
 use workspace_path_picker::WorkspacePathPickerState;
 use workspace_surface::WorkspaceSurface;
+use zeta_agent_sidebar::AgentSidebarAction;
 use zeta_editor::CodeEditorStyle;
 use zeta_renderer::{RenderOutcome, RenderTargetSize, Renderer};
 use zeta_terminal::{BlockStatus, ScreenBuffer};
@@ -49,9 +49,6 @@ use zui::{FrameInvalidation, FrameSchedule, FrameScheduler};
 mod agent_composer;
 mod agent_session;
 mod agent_sidebar;
-mod agent_sidebar_layout;
-mod agent_sidebar_navigation;
-mod agent_sidebar_toolbar;
 mod agent_sidebar_workspace;
 mod commands;
 #[cfg(test)]
@@ -62,9 +59,6 @@ mod composer_interaction;
 mod composer_interaction_pane;
 mod composer_panel;
 mod composer_shell;
-mod editor_pane;
-mod explorer_pane;
-mod explorer_tree;
 mod file_editor_auto_scroll;
 mod file_editor_diagnostics;
 mod file_editor_host;
@@ -499,7 +493,7 @@ impl NativeApp {
             .pointer_is_over_panel(self.cursor_position)
         {
             CursorIcon::Default
-        } else if self.session_sidebar.is_resizing() {
+        } else if self.session_sidebar.is_resizing() || self.agent_sidebar.is_resizing() {
             CursorIcon::ColResize
         } else {
             match feedback {
@@ -554,13 +548,13 @@ impl NativeApp {
         }
         if let Some(action) = self.agent_sidebar_workspace.activate_file_tree_element(id) {
             match action {
-                ExplorerTreeAction::OpenFile { path } => self.open_workspace_file(path),
-                ExplorerTreeAction::LoadChildren { element, path } => {
+                AgentSidebarAction::OpenFile { path } => self.open_workspace_file(path),
+                AgentSidebarAction::LoadChildren { element, path } => {
                     self.load_file_tree_directory(element, path);
                 }
-                ExplorerTreeAction::Handled
-                | ExplorerTreeAction::StateChanged
-                | ExplorerTreeAction::Focus(_) => {}
+                AgentSidebarAction::Handled
+                | AgentSidebarAction::StateChanged
+                | AgentSidebarAction::Focus(_) => {}
             }
             return;
         }
@@ -597,6 +591,9 @@ impl NativeApp {
             return;
         }
         if self.route_session_sidebar_resize_move(point) {
+            return;
+        }
+        if self.route_agent_sidebar_resize_move(point) {
             return;
         }
         if self.route_file_editor_pointer_move() {
@@ -699,6 +696,9 @@ impl NativeApp {
             return;
         }
         if button == MouseButton::Left && self.route_session_sidebar_resize_button(state) {
+            return;
+        }
+        if button == MouseButton::Left && self.route_agent_sidebar_resize_button(state) {
             return;
         }
         if button == MouseButton::Left && self.route_multi_diff_scrollbar_button(state) {
@@ -986,6 +986,7 @@ impl ApplicationHandler<NativeEvent> for NativeApp {
                 self.terminal_pointer.cancel();
                 self.file_editor_input.cancel_pointer();
                 self.cancel_session_sidebar_resize();
+                self.cancel_agent_sidebar_resize();
                 self.agent_sidebar_workspace.cancel_multi_diff_scrollbar();
                 self.terminal_scroll.cancel_scrollbar();
                 self.session_context_menu.dismiss();

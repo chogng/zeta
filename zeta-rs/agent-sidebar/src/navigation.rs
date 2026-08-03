@@ -1,30 +1,29 @@
 use zeta_ui::{
     ActionBar, ActionBarButton, ActionBarItem, ActionBarOrientation, ActionBarStyle,
-    ButtonBackgrounds, ButtonSelection, ButtonState, ButtonStyle, Component, ComponentElement,
-    Edges, Element, Rect, Size, TextStyle, UiScene,
+    ButtonSelection, ButtonState, Component, ComponentElement, Element, Rect, Size, UiScene,
 };
 use zui::{
     AccessibilityRole, AccessibilitySelection, CursorFeedback, FocusBehavior, InteractionFrame,
     NavigationAxis, NavigationGroupId, NodeAction, UiDispatch, UiNode,
 };
 
-use crate::agent_sidebar_workspace::AgentSidebarView;
+use crate::AgentSidebarStyle;
+use crate::AgentSidebarView;
 use crate::shell_interaction::{
     AGENT_SIDEBAR_NAVIGATION, AGENT_SIDEBAR_TOOLBAR, AgentSidebarPaneAction,
 };
-use crate::shell_style::ShellPalette;
 
 const ITEM_WIDTH: f32 = 64.0;
 
 /// Horizontal pane switcher hosted by the Agent Sidebar toolbar.
-pub(crate) struct AgentSidebarNavigation {
+pub struct AgentSidebarNavigation {
     bounds: Rect,
     action_bar: ActionBar,
     selected: AgentSidebarView,
 }
 
 impl AgentSidebarNavigation {
-    pub(crate) fn bounds_in(toolbar: Rect) -> Rect {
+    pub fn bounds_in(toolbar: Rect) -> Rect {
         Rect::from_xywh(
             toolbar.origin.x,
             toolbar.origin.y,
@@ -33,23 +32,13 @@ impl AgentSidebarNavigation {
         )
     }
 
-    pub(crate) fn new(
+    pub fn new(
         bounds: Rect,
         selected: AgentSidebarView,
-        palette: ShellPalette,
+        palette: &AgentSidebarStyle,
         dispatch: &UiDispatch,
     ) -> Self {
-        let backgrounds = ButtonBackgrounds::new(palette.surface_raised)
-            .with_hovered(palette.surface_hovered)
-            .with_focused(palette.surface_hovered)
-            .with_pressed(palette.session_tab_highlight);
-        let selected_backgrounds = ButtonBackgrounds::new(palette.session_tab_highlight)
-            .with_hovered(palette.session_tab_highlight)
-            .with_focused(palette.session_tab_highlight)
-            .with_pressed(palette.session_tab_highlight);
-        let button_style = ButtonStyle::new(backgrounds, TextStyle::new(11.0, palette.text))
-            .with_selected_backgrounds(selected_backgrounds)
-            .with_padding(Edges::new(0.0, 6.0, 0.0, 6.0));
+        let button_style = palette.navigation_button_style();
         let items = AgentSidebarPaneAction::ALL
             .into_iter()
             .map(|action| {
@@ -86,7 +75,7 @@ impl AgentSidebarNavigation {
         }
     }
 
-    pub(crate) fn register_interactions(&self, frame: &mut InteractionFrame) {
+    pub fn register_interactions(&self, frame: &mut InteractionFrame) {
         frame.register(
             UiNode::new(
                 AGENT_SIDEBAR_NAVIGATION,

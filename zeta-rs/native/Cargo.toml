@@ -16,6 +16,7 @@ tokio = { workspace = true, features = ["rt-multi-thread", "sync"] }
 unicode-width = { workspace = true }
 zeta-app-server-client = { workspace = true }
 zeta-app-server-protocol = { workspace = true }
+zeta-agent-sidebar = { workspace = true }
 zeta-icons = { workspace = true }
 zeta-keybinding = { workspace = true }
 zeta-language-server-catalog = { workspace = true }

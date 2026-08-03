@@ -3,14 +3,13 @@ use zeta_terminal::{GridSize, ScreenBuffer, TerminalColor, TerminalCore, Termina
 use zeta_ui::{
     Border, CaretVisibility, Color, CornerRadii, Element, FontFamily, FontWeight, PaintRect, Rect,
     Sash, SashOrientation, SashState, SashStyle, SceneCheckpoint, ScrollMetrics,
-    ScrollbarPresentation, TextBlock, TextInputLayoutEngine, TextStyle, UiScene,
+    ScrollbarPresentation, SplitViewResizeSnapshot, TextBlock, TextInputLayoutEngine, TextStyle,
+    UiScene,
 };
 
 use crate::PRODUCT_DISPLAY_NAME;
 use crate::agent_composer::ComposerMode;
 use crate::agent_sidebar::AgentSidebarState;
-use crate::agent_sidebar_layout::AgentSidebarLayout;
-use crate::agent_sidebar_toolbar::AgentSidebarToolbar;
 use crate::agent_sidebar_workspace::AgentSidebarView;
 use crate::agent_sidebar_workspace::AgentSidebarWorkspace;
 use crate::composer_editor::ComposerEditor;
@@ -19,8 +18,6 @@ use crate::composer_interaction_pane::ComposerInteractionPaneState;
 use crate::composer_panel::{
     ComposerPanelLayout, ComposerPanelView, draw_composer_panel, interaction_preferred_height,
 };
-use crate::editor_pane::EditorPane;
-use crate::explorer_pane::ExplorerPane;
 use crate::file_editor_host::FileEditorHost;
 use crate::file_editor_pane::{FileEditorPane, FileEditorPrompt};
 use crate::file_editor_search::FileEditorSearchState;
@@ -36,9 +33,9 @@ use crate::session_sidebar::SessionSidebarState;
 use crate::session_sidebar_toolbar::SessionSidebarToolbar;
 use crate::session_tab_list::{SessionTab, SessionTabList};
 use crate::shell_interaction::{
-    ACTIVE_SESSION_TAB, AGENT_FILE_SEARCH_INPUT, AGENT_SIDEBAR, FILE_EDITOR_DOCUMENT, MAIN_SURFACE,
-    SESSION_SEARCH_INPUT, SESSION_SIDEBAR, SESSION_SIDEBAR_RESIZE_HANDLE, TERMINAL_OUTPUT,
-    THREAD_TIMELINE, WINDOW,
+    ACTIVE_SESSION_TAB, AGENT_FILE_SEARCH_INPUT, AGENT_SIDEBAR, AGENT_SIDEBAR_RESIZE_HANDLE,
+    AGENT_SIDEBAR_TOOLBAR, FILE_EDITOR_DOCUMENT, MAIN_SURFACE, SESSION_SEARCH_INPUT,
+    SESSION_SIDEBAR, SESSION_SIDEBAR_RESIZE_HANDLE, TERMINAL_OUTPUT, THREAD_TIMELINE, WINDOW,
 };
 use crate::shell_style::ShellPalette;
 use crate::terminal_blocks::{TerminalBlockLineKind, project_block_lines};
@@ -51,12 +48,18 @@ use crate::titlebar::{TITLEBAR_HEIGHT, Titlebar};
 use crate::workspace_context::WorkspaceContext;
 use crate::workspace_path_picker::{WorkspacePathPicker, WorkspacePathPickerState};
 use crate::workspace_surface::WorkspaceSurfaceKind;
+use zeta_agent_sidebar::AgentSidebarNavigation;
+use zeta_agent_sidebar::EditorPane;
+use zeta_agent_sidebar::FilesLayout;
+use zeta_agent_sidebar::FilesPane;
+use zeta_agent_sidebar::FilesToolbar;
+use zeta_agent_sidebar::ScmLayout;
 use zeta_editor::CodeEditorStyle;
+use zeta_winit::WindowControlInsets;
 use zui::{
     AccessibilityNode, AccessibilityRole, CursorFeedback, InteractionFrame,
     InteractionFrameCheckpoint, UiDispatch, UiNode,
 };
-use zeta_winit::WindowControlInsets;
 
 const TERMINAL_CELL_WIDTH: f32 = 8.0;
 const TERMINAL_LINE_HEIGHT: f32 = 18.0;
@@ -89,6 +92,8 @@ struct ShellLayout {
     session_sidebar: Option<Rect>,
     session_sidebar_sash_track: Option<Rect>,
     agent_sidebar: Option<Rect>,
+    agent_sidebar_sash_track: Option<Rect>,
+    agent_sidebar_resize_snapshot: Option<SplitViewResizeSnapshot>,
     main: Rect,
     output: Rect,
     composer_panel_layout: ComposerPanelLayout,
@@ -153,6 +158,8 @@ impl ShellLayout {
         let terminal_workspace = TerminalWorkspaceLayout::for_bounds(remaining, agent_sidebar);
         let main = terminal_workspace.active_pane_bounds();
         let agent_sidebar = terminal_workspace.agent_sidebar_bounds();
+        let agent_sidebar_sash_track = terminal_workspace.agent_sidebar_sash_track();
+        let agent_sidebar_resize_snapshot = terminal_workspace.agent_sidebar_resize_snapshot();
         let composer_panel = ComposerPanelLayout::for_main(
             main,
             preferred_composer_height.max(COMPOSER_HEIGHT),
@@ -164,6 +171,8 @@ impl ShellLayout {
             session_sidebar,
             session_sidebar_sash_track,
             agent_sidebar,
+            agent_sidebar_sash_track,
+            agent_sidebar_resize_snapshot,
             main,
             output,
             composer_panel_layout: composer_panel,
@@ -173,6 +182,15 @@ impl ShellLayout {
             composer: composer_panel.editor(),
         })
     }
+}
+
+pub(crate) fn agent_sidebar_resize_snapshot_for_viewport(
+    viewport: LogicalViewport,
+    session_sidebar: SessionSidebarState,
+    agent_sidebar: AgentSidebarState,
+) -> Option<SplitViewResizeSnapshot> {
+    ShellLayout::for_viewport(viewport, session_sidebar, agent_sidebar)
+        .and_then(|layout| layout.agent_sidebar_resize_snapshot)
 }
 
 pub(crate) struct ShellPresentation {
@@ -420,6 +438,19 @@ pub(crate) fn build_shell_presentation(
         palette,
         text_layout,
     );
+    if let Some(bounds) = layout.agent_sidebar {
+        draw_agent_sidebar_border(&mut scene, bounds, palette);
+    }
+    if let Some(bounds) = layout.agent_sidebar_sash_track {
+        draw_agent_sidebar_sash(
+            &mut scene,
+            &mut interaction_frame,
+            bounds,
+            model.agent_sidebar,
+            model.dispatch,
+            palette,
+        );
+    }
     let ime_cursor_area = if model.dispatch.is_focused(AGENT_FILE_SEARCH_INPUT) {
         file_search_caret
     } else if model.dispatch.is_focused(SESSION_SEARCH_INPUT) {
@@ -647,12 +678,7 @@ fn draw_agent_sidebar(
     text_layout: &mut TextInputLayoutEngine,
     palette: ShellPalette,
 ) -> Option<Rect> {
-    scene.draw_rect(
-        PaintRect::new(bounds, palette.surface_raised).with_border(Border::new(
-            zeta_ui::Edges::new(0.0, 0.0, 0.0, 1.0),
-            palette.border,
-        )),
-    );
+    draw_agent_sidebar_surface(scene, bounds, palette);
     interaction_frame.register(
         UiNode::new(
             AGENT_SIDEBAR,
@@ -662,34 +688,104 @@ fn draw_agent_sidebar(
         )
         .with_parent(WINDOW),
     );
-    let layout = AgentSidebarLayout::for_bounds(bounds);
-    let toolbar = AgentSidebarToolbar::new(
-        layout.toolbar(),
-        view.workspace,
-        view.context,
-        view.caret_visibility,
-        palette,
-        text_layout,
+    let active_view = view.workspace.active_view();
+    let toolbar_bounds = match active_view {
+        AgentSidebarView::Changes => ScmLayout::for_bounds(bounds).toolbar(),
+        AgentSidebarView::Files => FilesLayout::for_bounds(bounds).toolbar(),
+    };
+    let content_bounds = match active_view {
+        AgentSidebarView::Changes => ScmLayout::for_bounds(bounds).content(),
+        AgentSidebarView::Files => FilesLayout::for_bounds(bounds).content(),
+    };
+    scene.draw_rect(
+        PaintRect::new(toolbar_bounds, palette.surface_raised).with_border(Border::new(
+            zeta_ui::Edges::new(0.0, 0.0, 1.0, 0.0),
+            palette.border,
+        )),
+    );
+    interaction_frame.register(
+        UiNode::new(
+            AGENT_SIDEBAR_TOOLBAR,
+            toolbar_bounds,
+            AccessibilityRole::Toolbar,
+            "Agent sidebar toolbar",
+        )
+        .with_parent(AGENT_SIDEBAR),
+    );
+    let sidebar_style = palette.agent_sidebar_style();
+    let navigation = AgentSidebarNavigation::new(
+        AgentSidebarNavigation::bounds_in(toolbar_bounds),
+        active_view,
+        &sidebar_style,
         view.dispatch,
     );
-    toolbar.register_interactions(interaction_frame);
-    scene.draw_component(&toolbar);
-    match view.workspace.active_view() {
+    navigation.register_interactions(interaction_frame);
+    scene.draw_component(&navigation);
+    let search_caret = match active_view {
+        AgentSidebarView::Changes => None,
+        AgentSidebarView::Files => {
+            let files_toolbar = FilesToolbar::new(
+                toolbar_bounds,
+                AgentSidebarNavigation::bounds_in(toolbar_bounds),
+                view.workspace.files(),
+                view.context.upstream_distance(),
+                view.caret_visibility,
+                sidebar_style,
+                text_layout,
+                view.dispatch,
+            );
+            files_toolbar.register_interactions(interaction_frame);
+            let search_caret = files_toolbar.search_caret_bounds();
+            scene.draw_component(&files_toolbar);
+            search_caret
+        }
+    };
+    match active_view {
         AgentSidebarView::Changes => {
-            let editor = EditorPane::new(layout.content(), view.workspace.editor(), palette);
+            let editor = EditorPane::new(
+                content_bounds,
+                view.workspace.editor(),
+                palette.scm_pane_style(),
+            );
             editor.register_interactions(interaction_frame);
             scene.draw_component(&editor);
         }
         AgentSidebarView::Files => {
-            let explorer = ExplorerPane::new(layout.content(), view.workspace, palette);
+            let files_style = palette.files_pane_style();
+            let explorer = FilesPane::new(
+                content_bounds,
+                view.workspace.files(),
+                AGENT_SIDEBAR,
+                &files_style,
+                view.dispatch,
+            );
             explorer.register_interactions(interaction_frame);
             scene.draw_component(&explorer);
         }
     }
     view.dispatch
         .is_focused(AGENT_FILE_SEARCH_INPUT)
-        .then_some(toolbar.search_caret_bounds())
+        .then_some(search_caret)
         .flatten()
+}
+
+/// Paints the Native-owned surface of the Agent Sidebar before feature content.
+fn draw_agent_sidebar_surface(scene: &mut UiScene, bounds: Rect, palette: ShellPalette) {
+    scene.draw_rect(PaintRect::new(bounds, palette.surface_raised));
+}
+
+/// Paints the Native-owned outer border of the Agent Sidebar after feature content.
+///
+/// This boundary separates the right sidebar shell slot from the main
+/// workspace. Files and SCM components own only their internal geometry and
+/// must not redraw this edge.
+fn draw_agent_sidebar_border(scene: &mut UiScene, bounds: Rect, palette: ShellPalette) {
+    scene.draw_rect(
+        PaintRect::new(bounds, Color::TRANSPARENT).with_border(Border::new(
+            zeta_ui::Edges::new(0.0, 0.0, 0.0, 1.0),
+            palette.border,
+        )),
+    );
 }
 
 fn draw_session_sidebar(
@@ -782,6 +878,41 @@ fn draw_session_sidebar_sash(
             sash.interaction_bounds(),
             AccessibilityRole::Separator,
             "Resize sessions sidebar",
+        )
+        .with_parent(WINDOW)
+        .with_cursor(CursorFeedback::ResizeHorizontal)
+        .with_value(format!("{} pixels", bounds.origin.x.round())),
+    );
+    scene.draw_component(&sash);
+}
+
+fn draw_agent_sidebar_sash(
+    scene: &mut UiScene,
+    interaction_frame: &mut InteractionFrame,
+    bounds: Rect,
+    agent_sidebar: AgentSidebarState,
+    dispatch: &UiDispatch,
+    palette: ShellPalette,
+) {
+    let state = if agent_sidebar.is_resizing() {
+        SashState::Active
+    } else if dispatch.is_hovered(AGENT_SIDEBAR_RESIZE_HANDLE) {
+        SashState::Hovered
+    } else {
+        SashState::Resting
+    };
+    let sash = Sash::new(
+        bounds,
+        SashOrientation::Vertical,
+        state,
+        SashStyle::new(palette.accent),
+    );
+    interaction_frame.register(
+        UiNode::new(
+            AGENT_SIDEBAR_RESIZE_HANDLE,
+            sash.interaction_bounds(),
+            AccessibilityRole::Separator,
+            "Resize agent sidebar",
         )
         .with_parent(WINDOW)
         .with_cursor(CursorFeedback::ResizeHorizontal)

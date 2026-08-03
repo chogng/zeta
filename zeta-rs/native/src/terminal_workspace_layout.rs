@@ -1,6 +1,6 @@
 use zeta_ui::{
     GridLayout, GridNode, GridPane, Rect, SplitViewLayoutPriority, SplitViewOrientation,
-    SplitViewPane,
+    SplitViewPane, SplitViewResizeSnapshot,
 };
 
 use crate::agent_sidebar::AgentSidebarState;
@@ -26,6 +26,8 @@ enum WorkspaceSplitId {
 pub(crate) struct TerminalWorkspaceLayout {
     active_pane_bounds: Rect,
     agent_sidebar_bounds: Option<Rect>,
+    agent_sidebar_sash_track: Option<Rect>,
+    agent_sidebar_resize_snapshot: Option<SplitViewResizeSnapshot>,
 }
 
 impl TerminalWorkspaceLayout {
@@ -56,6 +58,7 @@ impl TerminalWorkspaceLayout {
             ],
         );
         let layout = GridLayout::new(bounds, &root);
+        let agent_sidebar_sash = layout.sashes().first().copied();
         let active_pane_bounds = layout
             .leaf(WorkspaceLeafId::ActiveTerminal)
             .expect("Terminal Workspace Grid must retain its active leaf")
@@ -66,6 +69,8 @@ impl TerminalWorkspaceLayout {
         Self {
             active_pane_bounds,
             agent_sidebar_bounds,
+            agent_sidebar_sash_track: agent_sidebar_sash.map(|sash| sash.track_bounds()),
+            agent_sidebar_resize_snapshot: agent_sidebar_sash.map(|sash| sash.resize_snapshot()),
         }
     }
 
@@ -75,6 +80,14 @@ impl TerminalWorkspaceLayout {
 
     pub(crate) const fn agent_sidebar_bounds(self) -> Option<Rect> {
         self.agent_sidebar_bounds
+    }
+
+    pub(crate) const fn agent_sidebar_sash_track(self) -> Option<Rect> {
+        self.agent_sidebar_sash_track
+    }
+
+    pub(crate) const fn agent_sidebar_resize_snapshot(self) -> Option<SplitViewResizeSnapshot> {
+        self.agent_sidebar_resize_snapshot
     }
 }
 
