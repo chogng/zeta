@@ -13,10 +13,13 @@ const unsafeSvgPattern = /<(?:script|foreignObject)\b|\son[a-z]+\s*=|(?:href|xli
 export async function syncProductIcons(options = {}) {
   const sourceDirectory = options.sourceDirectory ?? iconDirectory;
   const outputFile = options.outputFile ?? output;
+  const writeSources = options.writeSources ?? true;
   const compilation = await compileProductIcons(sourceDirectory);
-  await Promise.all(compilation.sourceUpdates.map((update) => writeFile(update.path, update.content, "utf8")));
+  if (writeSources) {
+    await Promise.all(compilation.sourceUpdates.map((update) => writeFile(update.path, update.content, "utf8")));
+  }
   const outputChanged = await writeFileIfChanged(outputFile, compilation.generated);
-  return { count: compilation.count, outputChanged, sourceChanged: compilation.sourceUpdates.length > 0 };
+  return { count: compilation.count, outputChanged, sourceChanged: writeSources && compilation.sourceUpdates.length > 0 };
 }
 
 export async function checkProductIcons(options = {}) {

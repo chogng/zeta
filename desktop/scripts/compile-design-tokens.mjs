@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import path from "node:path";
 
 const tsc = path.resolve("node_modules/typescript/bin/tsc");
@@ -13,4 +13,11 @@ if (compilation.status !== 0) {
 
 const moduleUrl = pathToFileURL(path.resolve("dist/token-compiler/scripts/design-token-compiler.js"));
 const { runDesignTokenCompiler } = await import(`${moduleUrl.href}?v=${Date.now()}`);
-await runDesignTokenCompiler(process.argv.includes("--check"));
+
+export async function compileDesignTokens(check = false) {
+  await runDesignTokenCompiler(check);
+}
+
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  await compileDesignTokens(process.argv.includes("--check"));
+}

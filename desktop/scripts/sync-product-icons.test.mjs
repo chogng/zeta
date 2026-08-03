@@ -64,6 +64,23 @@ test("product icon generation exposes prefix-free names including reserved words
   }
 });
 
+test("product icon generation can update generated output without rewriting source SVGs", async () => {
+  const root = await mkdtemp(join(tmpdir(), "zeta-product-icons-"));
+  const sourceDirectory = join(root, "icons");
+  const outputFile = join(root, "generated", "product-icons.ts");
+  try {
+    await mkdir(sourceDirectory);
+    await writeFile(join(sourceDirectory, "add.svg"), addSvg);
+    const report = await syncProductIcons({ outputFile, sourceDirectory, writeSources: false });
+    assert.equal(report.outputChanged, true);
+    assert.equal(report.sourceChanged, false);
+    assert.equal(await readFile(join(sourceDirectory, "add.svg"), "utf8"), addSvg);
+    assert.match(await readFile(outputFile, "utf8"), /viewBox=\\"0 0 16 16\\"/);
+  } finally {
+    await rm(root, { force: true, recursive: true });
+  }
+});
+
 test("product icon synchronization canonicalizes sources and supports a read-only check", async () => {
   const root = await mkdtemp(join(tmpdir(), "zeta-product-icons-"));
   const sourceDirectory = join(root, "icons");
@@ -128,11 +145,12 @@ test("Vite product icon integration regenerates and reloads after an SVG replace
       },
     });
 
-    await writeFile(sourceFile, '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path d="M1 1l14 14"/></svg>\n');
+    const changedSource = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path d="M1 1l14 14"/></svg>\n';
+    await writeFile(sourceFile, changedSource);
     watcher.emit("all", "change", sourceFile);
     assert.deepEqual(await reload.promise, { type: "full-reload" });
     assert.match(await readFile(outputFile, "utf8"), /d=\\"m1 1 14 14\\"/);
-    assert.equal(await readFile(sourceFile, "utf8"), '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path d="m1 1 14 14"/></svg>\n');
+    assert.equal(await readFile(sourceFile, "utf8"), changedSource);
 
     watcher.emit("all", "change", sourceFile);
     await delay(25);

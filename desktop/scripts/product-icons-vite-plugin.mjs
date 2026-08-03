@@ -26,7 +26,7 @@ export function productIconsPlugin(options = {}) {
         timer = setTimeout(() => {
           pending = pending
             .catch(() => undefined)
-            .then(() => syncProductIcons({ sourceDirectory, outputFile }))
+            .then(() => syncProductIcons({ sourceDirectory, outputFile, writeSources: false }))
             .then((report) => {
               if (report.outputChanged) {
                 server.ws.send({ type: "full-reload" });
