@@ -33,8 +33,10 @@ fn replacing_workspace_rebuilds_the_files_root() {
     workspace.replace_workspace(&second_context);
     workspace.refresh_files(vec![file("second.txt")]);
 
-    assert_eq!(workspace.root_entries().len(), 1);
-    assert_eq!(workspace.root_entries()[0].label(), "second.txt");
+    assert_eq!(
+        workspace.file_tree_row(0).unwrap().entry().label(),
+        "second.txt"
+    );
     drop(workspace);
     std::fs::remove_dir_all(fixture).unwrap();
 }

@@ -1,3 +1,6 @@
+use zeta_agent_sidebar::AgentSidebarStyle;
+use zeta_agent_sidebar::FilesPaneStyle;
+use zeta_agent_sidebar::ScmPaneStyle;
 use zeta_editor::{
     CodeEditorDiagnosticPalette, CodeEditorPalette, CodeEditorStyle, CodeEditorSyntaxPalette,
     CodeEditorTokenRole, DiffEditorPalette, DiffEditorStyle, MultiDiffEditorPalette,
@@ -84,6 +87,36 @@ pub(crate) const SHELL_PALETTE: ShellPalette = ShellPalette {
 };
 
 impl ShellPalette {
+    pub(crate) fn scm_pane_style(self) -> ScmPaneStyle {
+        ScmPaneStyle {
+            surface: self.surface,
+            border: self.border,
+            text_muted: self.text_muted,
+        }
+    }
+
+    pub(crate) fn agent_sidebar_style(self) -> AgentSidebarStyle {
+        AgentSidebarStyle::new(
+            self.surface,
+            self.surface_raised,
+            self.border,
+            self.text,
+            self.text_muted,
+            self.surface_hovered,
+            self.session_tab_highlight,
+            self.session_search_style(),
+        )
+    }
+    pub(crate) fn files_pane_style(self) -> FilesPaneStyle {
+        FilesPaneStyle {
+            surface: self.surface,
+            selected_background: Color::rgb(232, 232, 232),
+            hovered_background: Color::rgb(242, 242, 242),
+            text: self.text,
+            text_muted: self.text_muted,
+            scroll_view: self.file_list_scroll_view_style(),
+        }
+    }
     pub(crate) fn from_theme(theme: &ThemeSnapshot) -> Result<Self, ThemeError> {
         let mut terminal_colors = [Color::TRANSPARENT; 16];
         for (index, token) in tokens::TERMINAL_ANSI.iter().enumerate() {

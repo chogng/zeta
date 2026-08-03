@@ -7748,6 +7748,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "zeta-agent-sidebar"
+version = "0.1.0"
+dependencies = [
+ "zeta-diff",
+ "zeta-editor",
+ "zeta-file-search",
+ "zeta-icons",
+ "zeta-ui",
+ "zui",
+]
+
+[[package]]
 name = "zeta-api"
 version = "0.1.0"
 dependencies = [
@@ -8186,6 +8198,7 @@ dependencies = [
  "serde_json",
  "tokio",
  "unicode-width 0.2.0",
+ "zeta-agent-sidebar",
  "zeta-app-server-client",
  "zeta-app-server-protocol",
  "zeta-diff",
@@ -8236,6 +8249,10 @@ dependencies = [
  "zeta-async-utils",
  "zeta-sandboxing",
 ]
+
+[[package]]
+name = "zeta-prompts"
+version = "0.1.0"
 
 [[package]]
 name = "zeta-protocol"
