@@ -5,7 +5,7 @@
   min-width: 0;
   height: 100%;
   min-height: 0;
-  overflow: auto;
+  overflow: hidden;
   color: var(--zeta-editor-foreground);
   background: var(--zeta-editor-background);
   font-family:
@@ -17,6 +17,14 @@
   tab-size: 4;
   outline: none;
   contain: strict;
+}
+
+.zeta-alpha-editor.horizontally-scrollable {
+  overflow-x: auto;
+}
+
+.zeta-alpha-editor.vertically-scrollable {
+  overflow-y: auto;
 }
 
 .zeta-alpha-editor:focus-visible {

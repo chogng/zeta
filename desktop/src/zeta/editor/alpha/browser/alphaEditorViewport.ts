@@ -319,13 +319,7 @@ export class AlphaEditorViewport extends DisposableOwner {
 
     const ResizeObserverConstructor = ownerDocument.defaultView?.ResizeObserver;
     if (ResizeObserverConstructor) {
-      const observer = new ResizeObserverConstructor(([entry]) => {
-        if (!entry) return;
-        this.layout({
-          width: entry.contentRect.width,
-          height: entry.contentRect.height,
-        });
-      });
+      const observer = new ResizeObserverConstructor(() => this.layout());
       observer.observe(this.element);
       this.defer(() => observer.disconnect());
     }
@@ -615,6 +609,8 @@ export class AlphaEditorViewport extends DisposableOwner {
   }
 
   private project(layout: EditorViewportLayout): void {
+    this.element.classList.toggle("horizontally-scrollable", layout.maximumScrollPosition.left > 0);
+    this.element.classList.toggle("vertically-scrollable", layout.maximumScrollPosition.top > 0);
     this.element.style.setProperty(
       "--alpha-editor-gutter-width",
       `${this.gutterWidth}px`,
