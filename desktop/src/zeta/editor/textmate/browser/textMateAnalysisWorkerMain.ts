@@ -12,6 +12,8 @@ import { createDedicatedWorkerLanguagePort } from "../../alpha/browser/dedicated
 import { createTextMateAnalysisModule } from "../common/textMateAnalysisModule.js";
 import { TextMateGrammarCatalogStore } from "../common/textMateGrammarCatalogStore.js";
 import { TextMateGrammarCatalogWireServer } from "../common/textMateGrammarCatalogWire.js";
+import { TextMateScopeThemeModel } from "../common/textMateScopeTheme.js";
+import { TextMateScopeThemeWireServer } from "../common/textMateScopeThemeWire.js";
 import { createBrowserTextMateTokenizationService } from "./browserTextMateTokenization.js";
 
 const resources = new DisposableStore();
@@ -24,10 +26,14 @@ resources.add(modules.register({
   load: () => [createLanguageLexicalAnalysisProvider({ languageConfigurations })],
 }));
 const grammarCatalog = resources.add(new TextMateGrammarCatalogStore());
-const textMateTokenization = resources.add(createBrowserTextMateTokenizationService(grammarCatalog));
+const scopeTheme = resources.add(new TextMateScopeThemeModel());
+const textMateTokenization = resources.add(createBrowserTextMateTokenizationService(grammarCatalog, {
+  scopeResolver: scopes => scopeTheme.resolve(scopes),
+}));
 resources.add(modules.register(createTextMateAnalysisModule(textMateTokenization)));
 const moduleHost = resources.add(new LanguageAnalysisProviderModuleHost(modules, registry));
 const port = createDedicatedWorkerLanguagePort();
 resources.add(new LanguageWorkerWireServer(port, languageAnalysisWireCodec, new LanguageAnalysisProviderWorker(registry)));
 resources.add(new LanguageAnalysisProviderModuleWireServer(port, modules, moduleHost));
 resources.add(new TextMateGrammarCatalogWireServer(port, grammarCatalog));
+resources.add(new TextMateScopeThemeWireServer(port, scopeTheme, () => textMateTokenization.invalidateTokenCaches()));

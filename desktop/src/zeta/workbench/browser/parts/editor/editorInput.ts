@@ -10,6 +10,8 @@ export interface EditorInput {
   readonly resource: URI;
   readonly contentType?: string;
   readonly label?: string;
+  /** Requests a non-mutating editor instance while preserving selection and navigation. */
+  readonly readOnly?: boolean;
   /**
    * Optional in-memory bootstrap text used until the document service owns
    * loading and saving. Editor panes must treat this as an initial snapshot,

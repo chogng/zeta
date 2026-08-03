@@ -76,6 +76,11 @@ export class TextDecorationCollection<TMetadata> extends DisposableOwner {
     return this.entries.size;
   }
 
+  get textModel(): TextModel {
+    this.ensureAlive();
+    return this.model;
+  }
+
   get decorations(): readonly TextDecorationSnapshot<TMetadata>[] {
     this.ensureAlive();
     return this.createSnapshot();

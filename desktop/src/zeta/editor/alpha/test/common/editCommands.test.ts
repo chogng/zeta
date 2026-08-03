@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createBackspaceCommand, createCutCommand, createDeleteForwardCommand, createDistributedPasteTextCommand, createPasteTextCommand, createTypeTextCommand } from "../../common/editCommands.js";
+import { createBackspaceCommand, createCutCommand, createDeleteForwardCommand, createDeleteToLineEndCommand, createDeleteToLineStartCommand, createDeleteWordBackwardCommand, createDeleteWordForwardCommand, createDistributedPasteTextCommand, createPasteTextCommand, createTypeTextCommand } from "../../common/editCommands.js";
 import { EditorSelectionController } from "../../common/editorSelectionController.js";
 import { TextSelection, TextSelectionSet } from "../../common/selection.js";
 import { getSelectionTexts } from "../../common/selectionText.js";
@@ -104,6 +104,45 @@ test("Forward Delete removes graphemes and line breaks", () => {
   }, {
     text: "abcd",
     selection: caret(0, 2),
+  });
+});
+
+test("Word deletion uses shared editor word boundaries and coalesces by direction", () => {
+  using model = new TextModel("alpha beta gamma");
+  using controller = new EditorSelectionController(model, TextSelectionSet.single(caret(0, 10)));
+
+  controller.execute(createDeleteWordBackwardCommand(model, controller.selections));
+  controller.execute(createDeleteWordBackwardCommand(model, controller.selections));
+  assert.equal(model.getText(), " gamma");
+  assert.deepEqual(controller.selections.primary, caret(0, 0));
+  controller.undo();
+  assert.equal(model.getText(), "alpha beta gamma");
+
+  controller.setSelections(TextSelectionSet.single(caret(0, 0)));
+  controller.execute(createDeleteWordForwardCommand(model, controller.selections));
+  assert.equal(model.getText(), "beta gamma");
+});
+
+test("Line-boundary deletion is isolated, multi-cursor aware, and preserves selected ranges", () => {
+  using model = new TextModel("alpha\nbeta");
+  using controller = new EditorSelectionController(model, TextSelectionSet.withPrimary([
+    caret(0, 3),
+    caret(1, 1),
+  ], 1));
+
+  controller.execute(createDeleteToLineStartCommand(model, controller.selections));
+  assert.deepEqual({ text: model.getText(), selections: controller.selections }, {
+    text: "ha\neta",
+    selections: TextSelectionSet.withPrimary([caret(0, 0), caret(1, 0)], 1),
+  });
+  controller.undo();
+  assert.equal(model.getText(), "alpha\nbeta");
+
+  controller.setSelections(TextSelectionSet.single(TextSelection.from(TextPosition.at(0, 1), TextPosition.at(1, 2))));
+  controller.execute(createDeleteToLineEndCommand(model, controller.selections));
+  assert.deepEqual({ text: model.getText(), selection: controller.selections.primary }, {
+    text: "ata",
+    selection: caret(0, 1),
   });
 });
 

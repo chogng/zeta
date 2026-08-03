@@ -36,6 +36,7 @@ export function createLanguageLexicalLineScanner(languageId: string, configurati
       keywords: ECMASCRIPT_KEYWORDS,
       stringQuotes: ["'", "\""],
       multilineStringQuote: "`",
+      regularExpressionSyntax: "ecmascript",
     });
   }
   if (JSON_LANGUAGE_IDS.has(languageId)) {
@@ -52,6 +53,8 @@ export function createLanguageLexicalLineScanner(languageId: string, configurati
       brackets: configuration.brackets,
       keywords: RUST_KEYWORDS,
       stringQuotes: ["\""],
+      rawStringPrefixes: ["br", "r"],
+      characterLiteralQuote: "'",
     });
   }
   return new LanguageLexicalLineScanner({

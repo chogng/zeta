@@ -5,8 +5,7 @@ import { AlphaDecorationPresentation, createAlphaDecorationSource, type AlphaDec
 /**
  * Creates Alpha's underline projection for caller-owned language diagnostics.
  *
- * Information and Hint remain in common state but have no underline until the
- * component owns dedicated presentations and semantic theme tokens.
+ * Every normalized severity maps to one component-owned underline presentation.
  */
 export function createAlphaLanguageDiagnosticSource(collection: TextDecorationCollection<LanguageDiagnostic>): AlphaDecorationSource {
   return createAlphaDecorationSource(
@@ -14,7 +13,13 @@ export function createAlphaLanguageDiagnosticSource(collection: TextDecorationCo
     decoration => resolveAlphaLanguageDiagnosticPresentation(
       decoration.metadata.severity,
     ),
+    decoration => diagnosticHoverText(decoration.metadata),
   );
+}
+
+function diagnosticHoverText(diagnostic: LanguageDiagnostic): string {
+  const prefix = [diagnostic.source, diagnostic.code].filter(value => value !== undefined).join(" ");
+  return prefix.length === 0 ? diagnostic.message : `${prefix}: ${diagnostic.message}`;
 }
 
 export function resolveAlphaLanguageDiagnosticPresentation(severity: LanguageDiagnosticSeverity): AlphaDecorationPresentation | undefined {
@@ -24,8 +29,9 @@ export function resolveAlphaLanguageDiagnosticPresentation(severity: LanguageDia
     case LanguageDiagnosticSeverity.Warning:
       return AlphaDecorationPresentation.WarningUnderline;
     case LanguageDiagnosticSeverity.Information:
+      return AlphaDecorationPresentation.InformationUnderline;
     case LanguageDiagnosticSeverity.Hint:
-      return undefined;
+      return AlphaDecorationPresentation.HintUnderline;
     default:
       throw new TypeError(`Unknown language diagnostic severity '${severity}'`);
   }

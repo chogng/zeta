@@ -22,6 +22,7 @@ test("TextDecorationCollection owns stable IDs and opaque metadata", () => {
   using listener = decorations.onDidChange(
     event => reasons.push(event.reason),
   );
+  assert.equal(decorations.textModel, model);
 
   const id = decorations.add({
     range: range(1, 3),

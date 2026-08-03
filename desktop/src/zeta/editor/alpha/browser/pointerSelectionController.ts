@@ -2,6 +2,7 @@ import { addDisposableListener } from "../../../base/browser/dom.js";
 import { getWindow } from "../../../base/browser/window.js";
 import { DisposableOwner, ResettableDisposableGroup } from "../../../base/common/lifecycle.js";
 import { type EditorSelectionController } from "../common/editorSelectionController.js";
+import { createEditorColumnSelectionSet } from "../common/columnSelection.js";
 import { SelectionDirection, TextSelection, TextSelectionSet } from "../common/selection.js";
 import { TextPosition, TextRange } from "../common/text.js";
 import { type TextModel } from "../common/textModel.js";
@@ -18,13 +19,16 @@ enum PointerSelectionKind {
   WholeLine = "wholeLine",
   ExtendToWord = "extendToWord",
   ExtendToLine = "extendToLine",
+  Column = "column",
 }
 
 interface ActivePointerSelection {
   readonly kind: PointerSelectionKind;
   readonly pointerId: number | undefined;
   readonly anchor: TrackedRange;
+  readonly columnFallbackAnchor: TrackedRange | undefined;
   readonly additionalSelections: AdditionalPointerSelections | undefined;
+  columnMoved: boolean;
 }
 
 interface TrackedPointerSelection {
@@ -40,6 +44,8 @@ interface AdditionalPointerSelections {
 
 export interface AlphaPointerSelectionControllerOptions {
   readonly multiCursorModifier?: AlphaPointerMultiCursorModifier;
+  /** Resolves the current language-specific word pattern for double-click selection. */
+  readonly wordPattern?: () => RegExp | undefined;
 }
 
 /**
@@ -52,6 +58,7 @@ export class AlphaPointerSelectionController extends DisposableOwner {
   private readonly dragListeners =
     this.own(new ResettableDisposableGroup());
   private readonly multiCursorModifier: AlphaPointerMultiCursorModifier;
+  private readonly wordPattern: (() => RegExp | undefined) | undefined;
   private activeSelection: ActivePointerSelection | undefined;
   private autoScroller: AlphaPointerAutoScroller | undefined;
 
@@ -65,6 +72,10 @@ export class AlphaPointerSelectionController extends DisposableOwner {
       this.multiCursorModifier = readAlphaPointerMultiCursorModifier(
         options.multiCursorModifier,
       );
+      if (options.wordPattern !== undefined && typeof options.wordPattern !== "function") {
+        throw new TypeError("Alpha pointer word pattern resolver must be a function");
+      }
+      this.wordPattern = options.wordPattern;
     } catch (error) {
       this.dispose();
       throw error;
@@ -80,11 +91,12 @@ export class AlphaPointerSelectionController extends DisposableOwner {
       "pointerdown",
       event => this.beginPointerSelection(event),
     ));
+    this.own(addDisposableListener(viewport.element, "contextmenu", event => this.handleContextMenu(event)));
     this.defer(() => this.stopPointerSelection());
   }
 
   private beginPointerSelection(event: PointerEvent): void {
-    if (event.button !== 0) return;
+    if (event.defaultPrevented || event.button !== 0) return;
     const hitTarget = this.viewport.getTargetAtClientPoint(event);
     if (!hitTarget) return;
     event.preventDefault();
@@ -100,10 +112,13 @@ export class AlphaPointerSelectionController extends DisposableOwner {
         hitTarget,
         pointerId,
         event.shiftKey,
+        event.altKey && event.shiftKey && hitTarget.kind !== AlphaEditorHitTargetKind.Gutter,
         readClickCount(event),
         addSelection,
       );
-      this.applyHitTarget(hitTarget);
+      if (this.activeSelection.kind !== PointerSelectionKind.Column) {
+        this.applyHitTarget(hitTarget);
+      }
       this.capturePointer(pointerId);
 
       const targetWindow = getWindow(this.viewport.element);
@@ -141,16 +156,28 @@ export class AlphaPointerSelectionController extends DisposableOwner {
     }
   }
 
+  private handleContextMenu(event: MouseEvent): void {
+    const hitTarget = this.viewport.getTargetAtClientPoint(event);
+    if (!hitTarget) return;
+    this.viewport.element.focus({ preventScroll: true });
+    if (isPositionInSelections(hitTarget.position, this.selectionController.selections)) return;
+    this.selectionController.setSelections(TextSelectionSet.single(TextSelection.collapsedAt(hitTarget.position)));
+  }
+
   private createActiveSelection(
     hitTarget: AlphaEditorHitTarget,
     pointerId: number | undefined,
     extend: boolean,
+    column: boolean,
     clickCount: number,
     addSelection: boolean,
   ): ActivePointerSelection {
     let kind: PointerSelectionKind;
     let anchorRange: TextRange;
-    if (hitTarget.kind === AlphaEditorHitTargetKind.Gutter) {
+    if (column && clickCount === 1) {
+      kind = PointerSelectionKind.Column;
+      anchorRange = TextRange.emptyAt(hitTarget.position);
+    } else if (hitTarget.kind === AlphaEditorHitTargetKind.Gutter) {
       if (extend) {
         kind = PointerSelectionKind.ExtendToLine;
         anchorRange = TextRange.emptyAt(
@@ -182,10 +209,7 @@ export class AlphaPointerSelectionController extends DisposableOwner {
         );
       } else {
         kind = PointerSelectionKind.Word;
-        anchorRange = getWordSelectionRange(
-          this.viewport.textModel,
-          hitTarget.position,
-        );
+        anchorRange = getWordSelectionRange(this.viewport.textModel, hitTarget.position, this.wordPattern?.());
       }
     } else {
       kind = PointerSelectionKind.Character;
@@ -202,14 +226,22 @@ export class AlphaPointerSelectionController extends DisposableOwner {
       this.viewport.textModel,
       anchorRange,
       hitTarget,
+      this.wordPattern?.(),
     );
     return {
       kind,
       pointerId,
       anchor,
+      columnFallbackAnchor: kind === PointerSelectionKind.Column
+        ? this.dragListeners.add(this.viewport.textModel.trackRange(
+          TextRange.emptyAt(this.selectionController.selections.primary.anchor),
+          TrackedRangeStickiness.NeverGrowsAtEdges,
+        ))
+        : undefined,
       additionalSelections: addSelection
         ? this.trackAdditionalSelections(initialSelection)
         : undefined,
+      columnMoved: false,
     };
   }
 
@@ -234,14 +266,26 @@ export class AlphaPointerSelectionController extends DisposableOwner {
   private updatePointerSelection(event: PointerEvent): void {
     if (!this.accepts(event)) return;
     const hitTarget = this.viewport.getNearestTargetAtClientPoint(event);
-    if (hitTarget) this.applyHitTarget(hitTarget);
+    if (hitTarget) {
+      if (this.activeSelection?.kind === PointerSelectionKind.Column) {
+        this.activeSelection.columnMoved = true;
+      }
+      this.applyHitTarget(hitTarget);
+    }
     this.autoScroller?.updatePointer(event);
   }
 
   private finishPointerSelection(event: PointerEvent): void {
     if (!this.accepts(event)) return;
     const hitTarget = this.viewport.getNearestTargetAtClientPoint(event);
-    if (hitTarget) this.applyHitTarget(hitTarget);
+    if (hitTarget) {
+      const active = this.activeSelection;
+      if (active?.kind === PointerSelectionKind.Column && !active.columnMoved) {
+        this.applyColumnFallback(active, hitTarget);
+      } else {
+        this.applyHitTarget(hitTarget);
+      }
+    }
     this.stopPointerSelection();
   }
 
@@ -254,11 +298,20 @@ export class AlphaPointerSelectionController extends DisposableOwner {
     const active = this.activeSelection;
     if (!active) return;
     const anchorRange = active.anchor.range;
+    if (active.kind === PointerSelectionKind.Column) {
+      this.selectionController.setSelections(createEditorColumnSelectionSet(
+        this.viewport.textModel,
+        anchorRange.start,
+        hitTarget.position,
+      ));
+      return;
+    }
     const selection = pointerSelectionForTarget(
       active.kind,
       this.viewport.textModel,
       anchorRange,
       hitTarget,
+      this.wordPattern?.(),
     );
     const additional = active.additionalSelections;
     if (!additional) {
@@ -270,6 +323,14 @@ export class AlphaPointerSelectionController extends DisposableOwner {
       base,
       selection,
       additional.toggleCandidateIndex,
+    ));
+  }
+
+  private applyColumnFallback(active: ActivePointerSelection, hitTarget: AlphaEditorHitTarget): void {
+    const anchor = active.columnFallbackAnchor?.range.start;
+    if (!anchor) return;
+    this.selectionController.setSelections(TextSelectionSet.single(
+      TextSelection.from(anchor, hitTarget.position),
     ));
   }
 
@@ -307,13 +368,19 @@ export class AlphaPointerSelectionController extends DisposableOwner {
   }
 }
 
-function pointerSelectionForTarget(kind: PointerSelectionKind, model: TextModel, anchorRange: TextRange, hitTarget: AlphaEditorHitTarget): TextSelection {
+/** Returns whether a context-menu point belongs to existing selected content. */
+export function isPositionInSelections(position: TextPosition, selections: TextSelectionSet): boolean {
+  return selections.selections.some(selection => !selection.collapsed && position.compareTo(selection.range.start) >= 0 && position.compareTo(selection.range.end) < 0);
+}
+
+function pointerSelectionForTarget(kind: PointerSelectionKind, model: TextModel, anchorRange: TextRange, hitTarget: AlphaEditorHitTarget, wordPattern: RegExp | undefined): TextSelection {
   const anchor = anchorRange.start;
   if (kind === PointerSelectionKind.Character) {
     return TextSelection.from(anchor, hitTarget.position);
   }
+  if (kind === PointerSelectionKind.Column) return TextSelection.collapsedAt(anchor);
   if (kind === PointerSelectionKind.Word) {
-    return wordSelection(model, anchorRange, hitTarget.position);
+    return wordSelection(model, anchorRange, hitTarget.position, wordPattern);
   }
   if (kind === PointerSelectionKind.WholeLine) {
     return wholeLineSelection(
@@ -323,7 +390,7 @@ function pointerSelectionForTarget(kind: PointerSelectionKind, model: TextModel,
     );
   }
   if (kind === PointerSelectionKind.ExtendToWord) {
-    return extendSelectionToWord(model, anchor, hitTarget.position);
+    return extendSelectionToWord(model, anchor, hitTarget.position, wordPattern);
   }
   return extendSelectionToLine(model, anchor, hitTarget.position.lineIndex);
 }
@@ -340,15 +407,15 @@ function trackedSelectionSet(additional: AdditionalPointerSelections): TextSelec
   );
 }
 
-function wordSelection(model: TextModel, anchorRange: TextRange, activePosition: TextPosition): TextSelection {
-  const activeRange = getWordSelectionRange(model, activePosition);
+function wordSelection(model: TextModel, anchorRange: TextRange, activePosition: TextPosition, wordPattern: RegExp | undefined): TextSelection {
+  const activeRange = getWordSelectionRange(model, activePosition, wordPattern);
   return activeRange.start.compareTo(anchorRange.start) < 0
     ? TextSelection.from(anchorRange.end, activeRange.start)
     : TextSelection.from(anchorRange.start, activeRange.end);
 }
 
-function extendSelectionToWord(model: TextModel, anchor: TextPosition, activePosition: TextPosition): TextSelection {
-  const activeRange = getWordSelectionRange(model, activePosition);
+function extendSelectionToWord(model: TextModel, anchor: TextPosition, activePosition: TextPosition, wordPattern: RegExp | undefined): TextSelection {
+  const activeRange = getWordSelectionRange(model, activePosition, wordPattern);
   const active = activeRange.start.compareTo(anchor) < 0
     ? activeRange.start
     : activeRange.end;

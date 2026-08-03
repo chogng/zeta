@@ -2,8 +2,10 @@
 
 `editor/textmate` adapts TextMate grammars to Alpha's versioned Analysis
 provider contract. It is an editor-domain adapter, not part of `base`, and it
-does not own workspace files, extension manifests, themes, documents, or the
-Alpha view. Its browser boundary owns only explicitly bundled grammar assets.
+does not own workspace files, extension manifests, product color tokens,
+documents, or the Alpha view. It does own the serializable scope-to-semantic
+theme projection needed inside its Worker. Its browser boundary owns only
+explicitly bundled grammar assets and Worker composition.
 
 ## Ownership
 
@@ -14,13 +16,13 @@ Alpha view. Its browser boundary owns only explicitly bundled grammar assets.
 | Atomic Worker catalog state and side-channel transport | `TextMateGrammarCatalogStore` / catalog wire | ✅ |
 | TextMate runtime and incremental line-state cache | `TextMateTokenizationService` | ✅ |
 | Scope-to-Alpha token vocabulary mapping | `TextMateScopeResolver` | ✅, replaceable |
+| Revisioned selector rules and Worker theme transport | `TextMateScopeThemeModel` / scope-theme wire | ✅ |
 | Alpha Analysis provider/module adaptation | `createTextMateAnalysisProvider` / `createTextMateAnalysisModule` | ✅ |
 | Catalog-gated Analysis Worker composition | `TextMateAnalysisModuleWorkerClient` / `browser/textMateAnalysisWorkerMain.ts` | ✅ |
 | Browser Worker Oniguruma WASM loading | `browser/textMateOniguruma.ts` | ✅ |
 | Grammar contribution-to-catalog lifecycle | `TextMateGrammarService` | ✅ |
-| Product-bundled JSON/JSONC grammar resources | `BrowserTextMateGrammarService` | 部分具备 |
+| Product-bundled JSON/JSONC grammar resources and caller-resolved session contributions | `BrowserTextMateGrammarService` / `BrowserTextMateAnalysisWorkerSupport` | 部分具备; extension resource discovery remains outside this adapter |
 | External extension-manifest loading | future extension composition root | 尚未完成 |
-| Theme-specific TextMate selector resolution | theme adapter above this module | 尚未完成 |
 
 `editor/textmate/common` may depend on Alpha's public Analysis and text
 contracts because it adapts into that domain. Alpha and `base` must not import
@@ -60,9 +62,8 @@ catalog already used by a Worker.
 and JSONC grammars through Vite raw resources. Those files stay under the
 TextMate browser boundary and are transferred as catalog content; neither
 common code nor the dedicated Worker reads product or workspace files.
-Alpha now prefers App Server tree-sitter tokens for JSON/JSONC, so these
-grammars remain the failure fallback and compatibility reference rather than
-the normal token path.
+Alpha's product browser session selects this dedicated TextMate Worker for
+JSON/JSONC. Unsupported languages still fall back to Alpha's lexical provider.
 
 The product Alpha session currently owns one
 `BrowserTextMateAnalysisWorkerSupport`, so its catalog and Analysis Worker
@@ -87,8 +88,14 @@ still own their dedicated Analysis Workers.
 
 The default resolver maps conventional comment, string, regexp, number,
 operator, keyword, function, type, parameter, variable, tag, property,
-constant, punctuation, and invalid scopes. A product theme or language adapter
-may inject a stricter resolver without changing the tokenizer.
+constant, punctuation, and invalid scopes. `TextMateScopeThemeModel` adds
+ordered, serializable selectors with overrides limited to Alpha's stable
+semantic token-type and modifier vocabulary. It
+supports comma unions, outer-to-inner scope sequences, segment wildcards, and
+scope exclusions. Last matching rule wins before the stable fallback resolver.
+The renderer mirrors each revision through `TextMateScopeThemeWireClient`; the
+Worker atomically replaces its model, drops cached token styles, and performs
+the next analysis with the new rules.
 
 TextMate uses `tokenPriority: 100`; Alpha's deterministic lexical fallback uses
 the default priority `0`. The TextMate provider intentionally declares `*` and
@@ -106,10 +113,10 @@ before swapping the Worker-side store. Stale or malformed revisions poison the
 catalog client and invalidate that Worker so Alpha's coordinator can rebuild it
 from the catalog source's current revision.
 
-`TextMateAnalysisModuleWorkerClient` serializes catalog updates and gates every
-Analysis request on the latest scheduled revision. The dedicated browser Worker
+`TextMateAnalysisModuleWorkerClient` serializes catalog and scope-theme updates
+and gates every Analysis request on the latest scheduled revisions. The dedicated browser Worker
 activates both `textmate.grammars` and `alpha.lexical`; it owns the catalog
-store, TextMate service, Oniguruma runtime, provider registries, and all three
+store, scope-theme model, TextMate service, Oniguruma runtime, provider registries, and all four
 wire servers. A replacement Worker accepts the source's current revision even
 when its revision is greater than one.
 
@@ -148,13 +155,12 @@ lane contract.
 - VS Code JSON and JSONC grammars are bundled; TypeScript, JavaScript, embedded
   grammars, injections, and external extension contributions are not yet
   included;
-- theme selector matching, embedded-language identity, token-type overrides,
-  balanced-bracket selectors, and semantic modifiers are not projected yet;
+- embedded-language identity and balanced-bracket selectors are not projected;
 - the cache aggregates a complete renderer token array after line reuse;
 - `BrowserTextMateAnalysisWorkerSupport` owns the built-in catalog and matching
   Worker factory; `createBrowserAlphaEditorSession` selects it for product
   Alpha panes;
-- Alpha sessions schedule a new analysis request when the catalog changes;
+- Alpha sessions schedule a new analysis request when the catalog or scope theme changes;
   other consumers must still make that scheduling decision explicitly.
 
 Tests under `test/common` load the real `vscode-oniguruma` WASM binary and a
@@ -162,7 +168,7 @@ real TextMate grammar. They cover registry revisions, injections, cross-line
 strings, scope mapping, one-line suffix reuse, multiline convergence,
 same-version grammar replacement, cancellation, ownership, malformed loaders,
 provider priority/fallback, catalog materialization, atomic replacement,
-structured-clone wire updates, stale-client poisoning, dynamic Worker catalog
-changes, and end-to-end Alpha Analysis requests. A standalone Vite build checks
+structured-clone catalog/theme updates, stale-client poisoning, dynamic Worker
+catalog/theme changes, and end-to-end Alpha Analysis requests. A standalone Vite build checks
 the complete browser Worker and emitted WASM asset. The real bundled JSON
 grammar is also tokenized through the common service in the Node test realm.

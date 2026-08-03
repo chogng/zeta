@@ -3,7 +3,9 @@ import { DisposableOwner } from "../../../base/common/lifecycle.js";
 import { EditorCommandHistoryMode, type EditorEditCommand, type EditorSelectionController } from "./editorSelectionController.js";
 import { type VersionedLanguageResult } from "./languageRequestCoordinator.js";
 import { type VersionedLanguageResultStore } from "./languageResultStore.js";
-import { normalizeLanguageCompletionItemDetails, type LanguageCompletionItem, type LanguageCompletionItemDetails, type LanguageCompletionItemResolver, type LanguageCompletionResolveRequest, type LanguageCompletionResult } from "./languageCompletions.js";
+import { assertLanguageCompletionCommitCharacter, LanguageCompletionInsertTextFormat, normalizeLanguageCompletionItemDetails, type LanguageCompletionItem, type LanguageCompletionItemDetails, type LanguageCompletionItemResolver, type LanguageCompletionResolveRequest, type LanguageCompletionResult } from "./languageCompletions.js";
+import { parseLanguageCompletionSnippet, type LanguageCompletionSnippet, type LanguageCompletionSnippetVariableResolver } from "./languageCompletionSnippet.js";
+import { LanguageCompletionSnippetSession } from "./languageCompletionSnippetSession.js";
 import { normalizeTextLineEndings, type TextPosition } from "./text.js";
 import { type TextModel } from "./textModel.js";
 
@@ -43,6 +45,8 @@ export interface LanguageCompletionSessionChange {
 export interface LanguageCompletionSessionOptions {
   readonly resolver?: LanguageCompletionItemResolver;
   readonly onResolveError?: (error: unknown) => void;
+  /** Editor-context variables made available to accepted completion snippets. */
+  readonly snippetVariables?: LanguageCompletionSnippetVariableResolver;
 }
 
 /**
@@ -56,7 +60,9 @@ export class LanguageCompletionSessionController extends DisposableOwner {
   private currentState: LanguageCompletionSessionState | undefined;
   private readonly resolver: LanguageCompletionItemResolver | undefined;
   private readonly onResolveError: (error: unknown) => void;
+  private readonly snippetVariables: LanguageCompletionSnippetVariableResolver | undefined;
   private resolveController: AbortController | undefined;
+  private snippetSession: LanguageCompletionSnippetSession | undefined;
   private accepting = false;
   private disposed = false;
 
@@ -78,8 +84,12 @@ export class LanguageCompletionSessionController extends DisposableOwner {
       if (options.onResolveError !== undefined && typeof options.onResolveError !== "function") {
         throw new TypeError("Language completion resolve error handler must be a function");
       }
+      if (options.snippetVariables !== undefined && typeof options.snippetVariables.resolveVariable !== "function") {
+        throw new TypeError("Language completion snippet variables require a resolver");
+      }
       this.resolver = options.resolver;
       this.onResolveError = options.onResolveError ?? reportResolveError;
+      this.snippetVariables = options.snippetVariables;
       this.currentState = this.createState(store.result);
       this.own(store.onDidChange(change => {
         if (!this.accepting) this.replaceState(change.result, LanguageCompletionSessionChangeReason.Store);
@@ -89,6 +99,8 @@ export class LanguageCompletionSessionController extends DisposableOwner {
       }));
       this.defer(() => {
         this.cancelResolution("sessionDisposed");
+        this.snippetSession?.dispose();
+        this.snippetSession = undefined;
         const hadState = this.currentState !== undefined;
         this.currentState = undefined;
         if (hadState) this.fire(LanguageCompletionSessionChangeReason.Cancelled);
@@ -145,13 +157,25 @@ export class LanguageCompletionSessionController extends DisposableOwner {
   }
 
   acceptSelected(): boolean {
+    return this.acceptSelectedWithCommitCharacter();
+  }
+
+  /** Accepts the focused item and writes its declared commit character in the same undo step. */
+  acceptSelectedWithCommitCharacter(commitCharacter?: string): boolean {
     this.ensureAlive();
     const state = this.currentState;
     if (!state || !this.selectionMatches(state.position)) return false;
+    if (commitCharacter !== undefined) {
+      assertLanguageCompletionCommitCharacter(commitCharacter);
+      if (!state.selectedItem.commitCharacters?.includes(commitCharacter)) return false;
+    }
+    const insertion = resolveLanguageCompletionInsertion(state.selectedItem, commitCharacter, this.textModel, this.snippetVariables);
     const command = createLanguageCompletionAcceptCommand(
       this.textModel,
       this.selectionController,
       state.selectedItem,
+      commitCharacter,
+      this.snippetVariables,
     );
     this.accepting = true;
     try {
@@ -162,7 +186,56 @@ export class LanguageCompletionSessionController extends DisposableOwner {
       throw error;
     }
     this.accepting = false;
+    if (insertion.snippet && insertion.snippet.placeholderGroups.length > 0) {
+      this.snippetSession?.dispose();
+      this.snippetSession = new LanguageCompletionSnippetSession(
+        this.textModel,
+        this.selectionController,
+        insertion.resultStartOffset,
+        insertion.snippet,
+        insertion.text.length,
+      );
+    }
     this.close(LanguageCompletionSessionChangeReason.Accepted);
+    return true;
+  }
+
+  /** Advances an active accepted-snippet tabstop sequence, if any. */
+  selectNextSnippetPlaceholder(): boolean {
+    this.ensureAlive();
+    const session = this.snippetSession;
+    if (!session) return false;
+    const handled = session.selectNext();
+    if (session.isDisposed) this.snippetSession = undefined;
+    return handled;
+  }
+
+  /** Moves backwards through an active accepted-snippet tabstop sequence. */
+  selectPreviousSnippetPlaceholder(): boolean {
+    this.ensureAlive();
+    const session = this.snippetSession;
+    if (!session) return false;
+    return session.selectPrevious();
+  }
+
+  /** Selects the next value of the active accepted-snippet choice tabstop. */
+  selectNextSnippetChoice(): boolean {
+    this.ensureAlive();
+    return this.snippetSession?.selectNextChoice() ?? false;
+  }
+
+  /** Selects the previous value of the active accepted-snippet choice tabstop. */
+  selectPreviousSnippetChoice(): boolean {
+    this.ensureAlive();
+    return this.snippetSession?.selectPreviousChoice() ?? false;
+  }
+
+  /** Stops tabstop navigation while preserving the expanded snippet text. */
+  cancelSnippetPlaceholderNavigation(): boolean {
+    this.ensureAlive();
+    if (!this.snippetSession) return false;
+    this.snippetSession.dispose();
+    this.snippetSession = undefined;
     return true;
   }
 
@@ -274,7 +347,7 @@ export class LanguageCompletionSessionController extends DisposableOwner {
   }
 }
 
-export function createLanguageCompletionAcceptCommand(model: TextModel, selectionController: EditorSelectionController, item: LanguageCompletionItem): EditorEditCommand {
+export function createLanguageCompletionAcceptCommand(model: TextModel, selectionController: EditorSelectionController, item: LanguageCompletionItem, commitCharacter?: string, snippetVariables?: LanguageCompletionSnippetVariableResolver): EditorEditCommand {
   if (model !== selectionController.textModel) {
     throw new TypeError("Language completion command and selection controller must share one text model");
   }
@@ -286,18 +359,47 @@ export function createLanguageCompletionAcceptCommand(model: TextModel, selectio
   if (item.range.start.compareTo(position) > 0 || item.range.end.compareTo(position) < 0) {
     throw new RangeError("Language completion item range must contain the active position");
   }
-  const insertText = normalizeTextLineEndings(item.insertText);
-  const caretOffset = model.offsetAt(item.range.start) + insertText.length;
+  if (commitCharacter !== undefined) {
+    assertLanguageCompletionCommitCharacter(commitCharacter);
+    if (!item.commitCharacters?.includes(commitCharacter)) {
+      throw new RangeError("Language completion item does not declare this commit character");
+    }
+  }
+  const insertion = resolveLanguageCompletionInsertion(item, commitCharacter, model, snippetVariables);
+  const insertText = insertion.text;
+  const additionalTextEdits = item.additionalTextEdits ?? [];
+  const selectionsAfter = insertion.snippet?.placeholderGroups[0]?.placeholders.map(placeholder => ({
+    anchorOffset: insertion.resultStartOffset + placeholder.startOffset,
+    activeOffset: insertion.resultStartOffset + placeholder.endOffset,
+  })) ?? [{ anchorOffset: insertion.resultStartOffset + insertText.length, activeOffset: insertion.resultStartOffset + insertText.length }];
   return Object.freeze({
-    edits: Object.freeze([{ range: item.range, text: insertText }]),
-    selectionsAfter: Object.freeze([{
-      anchorOffset: caretOffset,
-      activeOffset: caretOffset,
-    }]),
+    edits: Object.freeze([{ range: item.range, text: insertText }, ...additionalTextEdits]),
+    selectionsAfter: Object.freeze(selectionsAfter),
     primarySelectionIndex: 0,
     historyMode: EditorCommandHistoryMode.Isolated,
   });
 }
+
+interface LanguageCompletionInsertion {
+  readonly text: string;
+  readonly snippet: LanguageCompletionSnippet | undefined;
+  readonly resultStartOffset: number;
+}
+
+function resolveLanguageCompletionInsertion(item: LanguageCompletionItem, commitCharacter: string | undefined, model?: TextModel, snippetVariables?: LanguageCompletionSnippetVariableResolver): LanguageCompletionInsertion {
+  const snippet = item.insertTextFormat === LanguageCompletionInsertTextFormat.Snippet
+    ? parseLanguageCompletionSnippet(normalizeTextLineEndings(item.insertText), { variables: snippetVariables })
+    : undefined;
+  const text = (snippet?.text ?? normalizeTextLineEndings(item.insertText)) + (commitCharacter ?? "");
+  const primaryStartOffset = model?.offsetAt(item.range.start) ?? 0;
+  const offsetDelta = model
+    ? (item.additionalTextEdits ?? []).reduce((delta, edit) => edit.range.end.compareTo(item.range.start) < 0
+      ? delta + edit.text.length - (model.offsetAt(edit.range.end) - model.offsetAt(edit.range.start))
+      : delta, 0)
+    : 0;
+  return Object.freeze({ text, snippet, resultStartOffset: primaryStartOffset + offsetDelta });
+}
+
 
 function createStateSnapshot(state: LanguageCompletionSessionState, selectedIndex: number, resolverAvailable: boolean): LanguageCompletionSessionState {
   const selectedItem = state.items[selectedIndex]!;

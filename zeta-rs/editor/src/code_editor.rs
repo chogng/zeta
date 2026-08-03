@@ -79,6 +79,7 @@ fn paint_cell_run(
 
 mod analysis;
 mod auto_pairs;
+mod core_transaction;
 mod decorations;
 mod diagnostics;
 mod document;
@@ -109,6 +110,19 @@ pub struct CodeEditorPosition {
 pub struct CodeEditorSelection {
     pub start: CodeEditorPosition,
     pub end: CodeEditorPosition,
+}
+
+/// Rejection reported when a shared document-core transaction cannot be projected by Native.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CodeEditorCoreTransactionError {
+    Core(zeta_editor_core::EditorCoreEditError),
+    MultipleSelectionsUnsupported,
+}
+
+impl From<zeta_editor_core::EditorCoreEditError> for CodeEditorCoreTransactionError {
+    fn from(error: zeta_editor_core::EditorCoreEditError) -> Self {
+        Self::Core(error)
+    }
 }
 
 /// Active platform preedit projected at the committed caret.
@@ -804,3 +818,7 @@ impl Component for CodeEditor<'_> {
 #[cfg(test)]
 #[path = "code_editor_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "code_editor_core_conformance_tests.rs"]
+mod core_conformance_tests;

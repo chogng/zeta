@@ -1,4 +1,5 @@
 import { VersionedLanguageResultStore } from "./languageResultStore.js";
+import { parseLanguageCompletionSnippet } from "./languageCompletionSnippet.js";
 import { normalizeTextLineEndings, TextPosition, TextRange, type TextSnapshot } from "./text.js";
 import { type TextModel } from "./textModel.js";
 
@@ -24,6 +25,12 @@ export enum LanguageCompletionItemKind {
   TypeParameter = "typeParameter",
 }
 
+/** Selects whether completion insertion text is literal text or Alpha snippet syntax. */
+export enum LanguageCompletionInsertTextFormat {
+  PlainText = "plainText",
+  Snippet = "snippet",
+}
+
 export interface LanguageCompletionItem {
   readonly providerId: string;
   readonly id: string;
@@ -31,12 +38,23 @@ export interface LanguageCompletionItem {
   readonly kind: LanguageCompletionItemKind;
   readonly range: TextRange;
   readonly insertText: string;
+  readonly insertTextFormat?: LanguageCompletionInsertTextFormat;
   readonly detail?: string;
   readonly documentation?: string;
   readonly filterText?: string;
   readonly sortText?: string;
   readonly preselect?: boolean;
+  /** Characters that atomically accept this item before being inserted. */
+  readonly commitCharacters?: readonly string[];
+  /** Additional non-overlapping edits applied with the primary completion replacement. */
+  readonly additionalTextEdits?: readonly LanguageCompletionTextEdit[];
   readonly hasDeferredDetails?: boolean;
+}
+
+/** One extra document replacement attached to a completion item. */
+export interface LanguageCompletionTextEdit {
+  readonly range: TextRange;
+  readonly text: string;
 }
 
 export interface LanguageCompletionResult {
@@ -68,6 +86,7 @@ export function createLanguageCompletionStore(model: TextModel): VersionedLangua
     value,
     position => model.offsetAt(position),
     (position, range) => assertModelCompletionRange(model, position, range),
+    range => assertModelTextEditRange(model, range),
   ));
 }
 
@@ -83,6 +102,7 @@ export function createLanguageCompletionSnapshotNormalizer(snapshot: TextSnapsho
     value,
     position => assertSnapshotPosition(lines, position),
     (position, range) => assertSnapshotCompletionRange(lines, position, range),
+    range => assertSnapshotTextEditRange(lines, range),
   );
 }
 
@@ -125,6 +145,7 @@ function normalizeLanguageCompletionResult(
   value: LanguageCompletionResult,
   validatePosition: (position: TextPosition) => void,
   validateRange: (position: TextPosition, range: TextRange) => void,
+  validateAdditionalRange: (range: TextRange) => void,
 ): LanguageCompletionResult {
   if (typeof value !== "object" || value === null || !Array.isArray(value.items)) {
     throw new TypeError("Language completion result must contain an items array");
@@ -157,6 +178,14 @@ function normalizeLanguageCompletionResult(
     if (typeof item.insertText !== "string") {
       throw new TypeError("Language completion insertText must be a string");
     }
+    if (item.insertTextFormat !== undefined && !Object.values(LanguageCompletionInsertTextFormat).includes(item.insertTextFormat)) {
+      throw new TypeError(`Unknown language completion insert text format '${item.insertTextFormat}'`);
+    }
+    if (item.insertTextFormat === LanguageCompletionInsertTextFormat.Snippet) {
+      parseLanguageCompletionSnippet(item.insertText, {
+        allowUnresolvedVariables: true,
+      });
+    }
     assertOptionalText(item.detail, "Language completion item detail");
     assertOptionalText(item.documentation, "Language completion item documentation");
     assertOptionalText(item.filterText, "Language completion item filterText");
@@ -164,6 +193,12 @@ function normalizeLanguageCompletionResult(
     if (item.preselect !== undefined && typeof item.preselect !== "boolean") {
       throw new TypeError("Language completion item preselect must be a boolean");
     }
+    const commitCharacters = normalizeCommitCharacters(item.commitCharacters);
+    const additionalTextEdits = normalizeAdditionalTextEdits(
+      item.additionalTextEdits,
+      item.range,
+      validateAdditionalRange,
+    );
     if (item.hasDeferredDetails !== undefined && typeof item.hasDeferredDetails !== "boolean") {
       throw new TypeError("Language completion item hasDeferredDetails must be a boolean");
     }
@@ -180,11 +215,14 @@ function normalizeLanguageCompletionResult(
       kind: item.kind,
       range: item.range,
       insertText: normalizeTextLineEndings(item.insertText),
+      ...(item.insertTextFormat === undefined ? {} : { insertTextFormat: item.insertTextFormat }),
       ...(item.detail === undefined ? {} : { detail: item.detail }),
       ...(item.documentation === undefined ? {} : { documentation: item.documentation }),
       ...(item.filterText === undefined ? {} : { filterText: item.filterText }),
       ...(item.sortText === undefined ? {} : { sortText: item.sortText }),
       ...(item.preselect === undefined ? {} : { preselect: item.preselect }),
+      ...(commitCharacters === undefined ? {} : { commitCharacters }),
+      ...(additionalTextEdits === undefined ? {} : { additionalTextEdits }),
       ...(item.hasDeferredDetails === undefined ? {} : { hasDeferredDetails: item.hasDeferredDetails }),
     });
   });
@@ -231,6 +269,22 @@ function assertSnapshotCompletionRange(lines: readonly string[], position: TextP
   }
 }
 
+function assertModelTextEditRange(model: TextModel, range: TextRange): void {
+  if (!(range instanceof TextRange)) {
+    throw new TypeError("Language completion additional edit range must be a TextRange");
+  }
+  model.offsetAt(range.start);
+  model.offsetAt(range.end);
+}
+
+function assertSnapshotTextEditRange(lines: readonly string[], range: TextRange): void {
+  if (!(range instanceof TextRange)) {
+    throw new TypeError("Language completion additional edit range must be a TextRange");
+  }
+  assertSnapshotPosition(lines, range.start);
+  assertSnapshotPosition(lines, range.end);
+}
+
 function assertSnapshotPosition(lines: readonly string[], position: TextPosition): void {
   if (!(position instanceof TextPosition)) {
     throw new TypeError("Language completion position must be a TextPosition");
@@ -245,6 +299,63 @@ function assertSnapshotPosition(lines: readonly string[], position: TextPosition
 
 function assertOptionalText(value: string | undefined, owner: string): void {
   if (value !== undefined) assertNonEmptyText(value, owner);
+}
+
+/** Validates one completion commit character using the same grapheme contract as browser input. */
+export function assertLanguageCompletionCommitCharacter(value: unknown): asserts value is string {
+  if (typeof value !== "string" || value === "\n" || value === "\r" || [...value].length !== 1) {
+    throw new TypeError("Language completion commit character must be one non-line-break grapheme");
+  }
+}
+
+function normalizeCommitCharacters(value: unknown): readonly string[] | undefined {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value)) throw new TypeError("Language completion commit characters must be an array");
+  const characters = value.map(character => {
+    assertLanguageCompletionCommitCharacter(character);
+    return character;
+  });
+  if (new Set(characters).size !== characters.length) {
+    throw new RangeError("Language completion commit characters must be unique");
+  }
+  return Object.freeze(characters);
+}
+
+function normalizeAdditionalTextEdits(value: unknown, primaryRange: TextRange, validateRange: (range: TextRange) => void): readonly LanguageCompletionTextEdit[] | undefined {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value)) throw new TypeError("Language completion additional text edits must be an array");
+  const edits = value.map(edit => {
+    if (typeof edit !== "object" || edit === null || Array.isArray(edit)) {
+      throw new TypeError("Language completion additional text edit must be an object");
+    }
+    const record = edit as Record<string, unknown>;
+    if (Object.keys(record).some(key => key !== "range" && key !== "text")) {
+      throw new TypeError("Language completion additional text edit contains unsupported fields");
+    }
+    if (!(record.range instanceof TextRange)) {
+      throw new TypeError("Language completion additional edit range must be a TextRange");
+    }
+    validateRange(record.range);
+    if (typeof record.text !== "string") {
+      throw new TypeError("Language completion additional edit text must be a string");
+    }
+    return Object.freeze({ range: record.range, text: normalizeTextLineEndings(record.text) });
+  });
+  assertNonOverlappingCompletionEditRanges(primaryRange, edits);
+  return Object.freeze(edits);
+}
+
+function assertNonOverlappingCompletionEditRanges(primaryRange: TextRange, edits: readonly LanguageCompletionTextEdit[]): void {
+  const ranges = [primaryRange, ...edits.map(edit => edit.range)].sort((left, right) =>
+    left.start.compareTo(right.start) || left.end.compareTo(right.end)
+  );
+  for (let index = 1; index < ranges.length; index += 1) {
+    const previous = ranges[index - 1]!;
+    const current = ranges[index]!;
+    if (current.start.compareTo(previous.end) <= 0) {
+      throw new RangeError("Language completion primary and additional edit ranges must not overlap or touch");
+    }
+  }
 }
 
 function assertIdentifier(value: unknown, owner: string): asserts value is string {

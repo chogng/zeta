@@ -1,0 +1,88 @@
+.zeta-alpha-editor-find-widget {
+  position: absolute;
+  z-index: 7;
+  display: none;
+  box-sizing: border-box;
+  min-width: 0;
+  padding: 6px;
+  color: var(--zeta-editor-foreground);
+  white-space: normal;
+  background: var(--zeta-dialog-background);
+  border: 1px solid var(--zeta-widget-border);
+  border-radius: 4px;
+  box-shadow: 0 4px 12px var(--zeta-widget-shadow);
+}
+
+.zeta-alpha-editor-find-widget.visible {
+  display: grid;
+  gap: 5px;
+}
+
+.zeta-alpha-editor-find-row,
+.zeta-alpha-editor-replace-row {
+  display: grid;
+  grid-template-columns: 24px minmax(80px, 1fr) auto repeat(7, 24px);
+  gap: 3px;
+  align-items: center;
+}
+
+.zeta-alpha-editor-replace-row {
+  grid-template-columns: 24px minmax(80px, 1fr) auto auto;
+}
+
+.zeta-alpha-editor-find-input {
+  box-sizing: border-box;
+  min-width: 0;
+  height: 24px;
+  padding: 2px 6px;
+  color: var(--zeta-input-foreground);
+  font: inherit;
+  background: var(--zeta-input-background);
+  border: 1px solid var(--zeta-input-border);
+  outline: none;
+}
+
+.zeta-alpha-editor-find-input:focus {
+  border-color: var(--zeta-focus-border);
+}
+
+.zeta-alpha-editor-find-input.invalid {
+  border-color: var(--zeta-error-foreground);
+}
+
+.zeta-alpha-editor-find-result {
+  min-width: 60px;
+  overflow: hidden;
+  color: var(--zeta-description-foreground);
+  font-size: 11px;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.zeta-alpha-editor-find-button {
+  box-sizing: border-box;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 5px;
+  color: var(--zeta-button-foreground);
+  font: inherit;
+  line-height: 22px;
+  background: transparent;
+  border: 0;
+  border-radius: 3px;
+}
+
+.zeta-alpha-editor-find-button:hover,
+.zeta-alpha-editor-find-button.checked {
+  background: var(--zeta-button-hover-background);
+}
+
+.zeta-alpha-editor-find-button:focus-visible {
+  outline: 1px solid var(--zeta-focus-border);
+  outline-offset: -1px;
+}
+
+.zeta-alpha-editor-find-replace-toggle {
+  font-size: 16px;
+}

@@ -10,16 +10,25 @@ import { EditorPaneVisibility } from "../../../workbench/browser/parts/editor/ed
 import { ALPHA_EDITOR_ID, alphaLanguageForInput } from "../common/alphaEditorInput.js";
 import { AlphaEditorSession, type AlphaEditorSessionOptions } from "./alphaEditorSession.js";
 import { AlphaTextModels, type AlphaTextModelService } from "./alphaTextModelService.js";
+import { type AlphaEditorTextDirection } from "./alphaEditorViewport.js";
+import { type AlphaEditorLineWrapping } from "./visualLineProjection.js";
 
 export interface AlphaEditorPaneSession extends IDisposable {
   layout(dimension: IDimension): void;
   focus(): void;
   getValue(): string;
+  readonly isDirty?: boolean;
+  readonly hasExternalChange?: boolean;
+  save?(): Promise<void>;
+  revert?(): Promise<void>;
 }
 
 export interface AlphaEditorPaneOptions {
   readonly modelService?: AlphaTextModelService;
   readonly createSession?: (options: AlphaEditorSessionOptions) => AlphaEditorPaneSession;
+  readonly lineWrapping?: AlphaEditorLineWrapping;
+  /** Browser paragraph direction forwarded to every created Alpha session. */
+  readonly textDirection?: AlphaEditorTextDirection;
 }
 
 /** Workbench pane that composes Alpha's native model, input, view, and language services. */
@@ -31,7 +40,7 @@ export class AlphaEditorPane extends DisposableOwner implements IEditorPane {
   private container: HTMLDivElement | undefined;
   private dimension: IDimension = { width: 0, height: 0 };
 
-  constructor(private readonly textFiles: ITextFileService, options: AlphaEditorPaneOptions = {}) {
+  constructor(private readonly textFiles: ITextFileService, private readonly options: AlphaEditorPaneOptions = {}) {
     super();
     if (!textFiles || typeof textFiles.resolve !== "function") {
       this.dispose();
@@ -65,6 +74,10 @@ export class AlphaEditorPane extends DisposableOwner implements IEditorPane {
         input,
         languageId: alphaLanguageForInput(input),
         modelReference,
+        lineWrapping: this.options.lineWrapping,
+        textDirection: this.options.textDirection,
+        onSave: () => modelReference.save(this.textFiles, new AbortController().signal),
+        onRevert: () => modelReference.revert(this.textFiles, new AbortController().signal),
       });
       throwIfCancelled(signal, "Alpha editor input loading was cancelled");
     } catch (error) {
@@ -100,6 +113,22 @@ export class AlphaEditorPane extends DisposableOwner implements IEditorPane {
 
   getValue(): string {
     return this.sessions.value?.getValue() ?? "";
+  }
+
+  get isDirty(): boolean {
+    return this.sessions.value?.isDirty ?? false;
+  }
+
+  get hasExternalChange(): boolean {
+    return this.sessions.value?.hasExternalChange ?? false;
+  }
+
+  async save(): Promise<void> {
+    await this.sessions.value?.save?.();
+  }
+
+  async revert(): Promise<void> {
+    await this.sessions.value?.revert?.();
   }
 
   private requireContainer(): HTMLDivElement {

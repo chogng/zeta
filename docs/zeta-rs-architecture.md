@@ -48,6 +48,7 @@ zeta-rs/
 ├── terminal-detection/   # host terminal identity/color capability 与 background fallback interpretation
 ├── theme/                # shared manifest/user-theme resolver 与 device-local bounded loader
 ├── editor/               # Native CodeEditor/DiffEditor/MultiDiffEditor presentation；不拥有文件或产品宿主
+├── editor-core/          # 纯 Rust text transaction / selection / history；不拥有 presentation 或 transport
 ├── text-file/            # UTF-8 文件保存基线、磁盘版本与外部变化冲突；不拥有 editor 或 I/O
 ├── markdown/             # bounded CommonMark/GFM parsing、layout 与 Native presentation
 ├── lsp/                  # LSP stdio lifecycle、request pairing、document sync 与 server events
@@ -130,6 +131,14 @@ syntax lifecycle/projection、普通文档结构折叠、viewport soft wrap 与 
 `zeta-ui`、`zeta-diff` 和 `zeta-syntax`，但不依赖 `zeta-native`，也不拥有文件 Tab、平台事件、EditorHost 或
 TUI presentation。当前 API、接入义务和限制见
 [`editor/README.md`](../zeta-rs/editor/README.md)。
+
+`zeta-editor-core` 当前拥有不依赖 renderer 或 transport 的纯 Rust document transaction vertical
+slice：UTF-16 selection、revision-bound atomic multi-edit、bounded undo/redo 和 snapshot。Native
+`CodeEditorDocument` 是当前真实消费者，以 persistent core 持有 committed text/history/revision，Native text
+projection 仅供行索引、syntax、folding 与绘制使用。Zeta Alpha 是独立的 TypeScript Browser editor，拥有自己的
+PieceTree、transaction、history、selection 和 tracked ranges；它只异步消费 Rust file/language/workspace service，
+不通过 WASM 或 App Server shadow document 调用 `zeta-editor-core`。跨运行时边界见
+[`editor-core.md`](editor-core.md)。
 
 `zeta-text-file` 当前拥有与编辑器实现无关的 UTF-8 文件生命周期：保存文本基线、磁盘版本、
 只读状态、dirty/reload/conflict 分类、乐观保存 payload 与待处理外部 snapshot。它不读取或写入

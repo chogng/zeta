@@ -1,7 +1,6 @@
+import type { Event } from "../../../base/common/event.js";
 import type { URI } from "../../../base/common/uri.js";
-import {
-  createServiceIdentifier,
-} from "../../instantiation/common/instantiation.js";
+import { createServiceIdentifier } from "../../instantiation/common/instantiation.js";
 
 /** Stable file kind used by Workbench consumers independently of wire DTOs. */
 export enum FileKind {
@@ -27,11 +26,18 @@ export interface IFileEntry {
   readonly kind: FileKind;
 }
 
-/** Workspace-scoped file reads available to Workbench features. */
+/** Coarse invalidation reported after workspace files may have changed on disk. */
+export interface IFileChangeEvent {
+  readonly resources: readonly URI[] | undefined;
+}
+
+/** Workspace-scoped file operations available to Workbench features. */
 export interface IFileService {
+  readonly onDidChangeFiles: Event<IFileChangeEvent>;
   stat(resource: URI): Promise<IFileStat>;
   readDirectory(resource: URI): Promise<readonly IFileEntry[]>;
   readFile(resource: URI): Promise<string>;
+  writeFile(resource: URI, content: string): Promise<IFileStat>;
 }
 
 export const IFileService =

@@ -147,6 +147,13 @@ export class PieceTreeTextBuffer {
   }
 
   compactIfNeeded(): boolean {
+    if (!this.needsCompaction()) return false;
+    this.compact();
+    return true;
+  }
+
+  /** Reports whether retaining obsolete piece buffers exceeds the maintenance budget. */
+  needsCompaction(): boolean {
     const statistics = this.getStatistics();
     const fragmented = statistics.pieceCount > MAXIMUM_PIECE_COUNT;
     const disproportionatelyRetained =
@@ -157,15 +164,7 @@ export class PieceTreeTextBuffer {
     const absolutelyRetained =
       statistics.reclaimableTextUnits >=
         MAXIMUM_RECLAIMABLE_TEXT_UNITS;
-    if (
-      !fragmented &&
-      !disproportionatelyRetained &&
-      !absolutelyRetained
-    ) {
-      return false;
-    }
-    this.compact();
-    return true;
+    return fragmented || disproportionatelyRetained || absolutelyRetained;
   }
 
   compact(): void {

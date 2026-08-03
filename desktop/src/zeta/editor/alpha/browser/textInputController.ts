@@ -1,6 +1,6 @@
 import { addDisposableListener, stopEvent } from "../../../base/browser/dom.js";
 import { DisposableOwner } from "../../../base/common/lifecycle.js";
-import { createBackspaceCommand, createDeleteForwardCommand, createTypeTextCommand } from "../common/editCommands.js";
+import { createBackspaceCommand, createDeleteForwardCommand, createDeleteToLineEndCommand, createDeleteToLineStartCommand, createDeleteWordBackwardCommand, createDeleteWordForwardCommand, createTypeTextCommand } from "../common/editCommands.js";
 import { resolveEditorIndentationOptions, type EditorIndentationOptions, type ResolvedEditorIndentationOptions } from "../common/editorIndentation.js";
 import { type EditorEditCommand, type EditorSelectionController } from "../common/editorSelectionController.js";
 import { LanguageAutoClosingTracker } from "../common/languageAutoClosingTracker.js";
@@ -12,9 +12,12 @@ import { assertLanguageId } from "../common/languageId.js";
 import { createLanguageEnterCommand } from "../common/languageEnter.js";
 import { LanguageLexicalContextIndex, type LanguageLexicalContextSource } from "../common/languageLexicalContext.js";
 import { createLanguagePairBackspaceCommand, createLanguagePairTypeCommand, type LanguagePairTypeCommand } from "../common/languagePairEditing.js";
+import { createOvertypeTextCommand } from "../common/overtype.js";
 import { type TextModelChange } from "../common/text.js";
+import { TextSelection, TextSelectionSet } from "../common/selection.js";
 import { type AlphaEditorViewport } from "./alphaEditorViewport.js";
 import { AlphaClipboardController, type AlphaClipboardControllerOptions } from "./clipboardController.js";
+import { AlphaUriListPasteProvider } from "./clipboardPasteProvider.js";
 import { AlphaCompletionWidget } from "./completionWidget.js";
 import { AlphaCompositionController } from "./compositionController.js";
 
@@ -56,7 +59,11 @@ export class AlphaTextInputController extends DisposableOwner {
   private readonly indentation: ResolvedEditorIndentationOptions;
   private readonly languageLexicalContext: LanguageLexicalContextSource | undefined;
   private readonly autoClosingTracker: LanguageAutoClosingTracker | undefined;
+  private completionRequest: AbortController | undefined;
   private completionIsIncomplete = false;
+  private overtype = false;
+  private accessibleInputSyncScheduled = false;
+  private disposed = false;
 
   constructor(
     private readonly viewport: AlphaEditorViewport,
@@ -135,10 +142,15 @@ export class AlphaTextInputController extends DisposableOwner {
     this.element.className = "zeta-alpha-editor-input";
     this.element.tabIndex = -1;
     this.element.spellcheck = false;
+    this.element.readOnly = selectionController.readOnly;
     this.element.wrap = "off";
+    this.element.dir = viewport.editorTextDirection;
     this.element.autocomplete = "off";
     this.element.setAttribute("autocapitalize", "off");
     this.element.setAttribute("aria-label", options.ariaLabel ?? "Alpha editor input");
+    this.element.setAttribute("aria-multiline", "true");
+    this.element.setAttribute("aria-roledescription", "code editor");
+    this.element.setAttribute("aria-readonly", String(selectionController.readOnly));
     this.completionWidget = this.completionSession
       ? this.own(new AlphaCompletionWidget(
         this.element,
@@ -156,11 +168,18 @@ export class AlphaTextInputController extends DisposableOwner {
       this.element,
       viewport,
       selectionController,
-      options.clipboard,
+      {
+        ...options.clipboard,
+        isEditingAllowed: () => !this.compositionController.composing && (options.clipboard?.isEditingAllowed?.() ?? true),
+        pasteProviders: [AlphaUriListPasteProvider, ...(options.clipboard?.pasteProviders ?? [])],
+      },
     ));
     viewport.element.append(this.element);
     this.defer(() => {
+      this.disposed = true;
+      this.cancelCompletionRequest();
       viewport.element.classList.remove("input-focused");
+      viewport.element.classList.remove("overtype");
       this.element.remove();
     });
 
@@ -169,20 +188,23 @@ export class AlphaTextInputController extends DisposableOwner {
     }));
     this.own(addDisposableListener(this.element, "focus", () => {
       viewport.element.classList.add("input-focused");
+      this.synchronizeAccessibleInput();
     }));
     this.own(addDisposableListener(this.element, "blur", () => {
       viewport.element.classList.remove("input-focused");
+      this.resetInput();
     }));
     this.own(addDisposableListener<InputEvent>(
       this.element,
       "beforeinput",
       event => this.handleBeforeInput(event),
     ));
+    this.own(addDisposableListener(this.element, "select", () => this.acceptAccessibleSelection()));
     this.own(addDisposableListener<InputEvent>(
       this.element,
       "input",
       event => {
-        if (!event.isComposing) this.resetInput();
+        if (!event.isComposing || !this.compositionController.composing) this.resetInput();
       },
     ));
     this.own(addDisposableListener(
@@ -190,14 +212,27 @@ export class AlphaTextInputController extends DisposableOwner {
       "keydown",
       event => this.handleKeydown(event),
     ));
+    this.own(viewport.textModel.onDidChange(() => this.scheduleAccessibleInputSynchronization()));
+    this.own(selectionController.onDidChange(() => this.scheduleAccessibleInputSynchronization()));
   }
 
   focus(): void {
     this.element.focus({ preventScroll: true });
   }
 
+  get overtyping(): boolean {
+    return this.overtype;
+  }
+
+  /** Toggles this editor instance's transient overtype input mode. */
+  toggleOvertype(): boolean {
+    this.overtype = !this.overtype;
+    this.viewport.element.classList.toggle("overtype", this.overtype);
+    return this.overtype;
+  }
+
   private handleBeforeInput(event: InputEvent): void {
-    if (event.defaultPrevented || event.isComposing) return;
+    if (event.defaultPrevented || (event.isComposing && this.compositionController.composing)) return;
     const refreshIncomplete = this.readCompletionIsIncomplete();
     let insertedText: string | undefined;
     let command: EditorEditCommand | undefined;
@@ -206,6 +241,13 @@ export class AlphaTextInputController extends DisposableOwner {
       case "insertText":
       case "insertReplacementText":
         if (!event.data) return;
+        if (this.completionSession?.acceptSelectedWithCommitCharacter(event.data)) {
+          stopEvent(event);
+          this.resetInput();
+          this.revealPrimary();
+          this.requestAfterInsert(event.data, false);
+          return;
+        }
         {
           pairCommand = this.language
             ? createLanguagePairTypeCommand(this.viewport.textModel, this.selectionController.selections, event.data, this.readLanguageConfiguration(), {
@@ -214,11 +256,9 @@ export class AlphaTextInputController extends DisposableOwner {
             })
             : undefined;
           insertedText = pairCommand?.didInsertText === false ? undefined : event.data;
-          command = pairCommand?.command ?? createTypeTextCommand(
-            this.viewport.textModel,
-            this.selectionController.selections,
-            event.data,
-          );
+          command = pairCommand?.command ?? (this.overtype
+            ? createOvertypeTextCommand(this.viewport.textModel, this.selectionController.selections, event.data)
+            : createTypeTextCommand(this.viewport.textModel, this.selectionController.selections, event.data));
         }
         break;
       case "insertLineBreak":
@@ -240,6 +280,32 @@ export class AlphaTextInputController extends DisposableOwner {
         break;
       case "deleteContentForward":
         command = createDeleteForwardCommand(
+          this.viewport.textModel,
+          this.selectionController.selections,
+        );
+        break;
+      case "deleteWordBackward":
+        command = createDeleteWordBackwardCommand(
+          this.viewport.textModel,
+          this.selectionController.selections,
+          this.currentWordPattern,
+        );
+        break;
+      case "deleteWordForward":
+        command = createDeleteWordForwardCommand(
+          this.viewport.textModel,
+          this.selectionController.selections,
+          this.currentWordPattern,
+        );
+        break;
+      case "deleteSoftLineBackward":
+        command = createDeleteToLineStartCommand(
+          this.viewport.textModel,
+          this.selectionController.selections,
+        );
+        break;
+      case "deleteSoftLineForward":
+        command = createDeleteToLineEndCommand(
           this.viewport.textModel,
           this.selectionController.selections,
         );
@@ -273,6 +339,11 @@ export class AlphaTextInputController extends DisposableOwner {
   }
 
   private handleKeydown(event: KeyboardEvent): void {
+    if (!event.defaultPrevented && !event.isComposing && event.key === "Insert" && !event.shiftKey && !event.ctrlKey && !event.altKey && !event.metaKey) {
+      stopEvent(event);
+      this.toggleOvertype();
+      return;
+    }
     if (
       !event.defaultPrevented &&
       !event.isComposing &&
@@ -287,6 +358,48 @@ export class AlphaTextInputController extends DisposableOwner {
       return;
     }
     if (
+      !event.defaultPrevented &&
+      !event.isComposing &&
+      event.altKey &&
+      !event.shiftKey &&
+      !event.ctrlKey &&
+      !event.metaKey &&
+      (event.key === "ArrowDown" || event.key === "ArrowUp") &&
+      (event.key === "ArrowDown"
+        ? this.completionSession?.selectNextSnippetChoice()
+        : this.completionSession?.selectPreviousSnippetChoice())
+    ) {
+      stopEvent(event);
+      return;
+    }
+    if (
+      !event.defaultPrevented &&
+      !event.isComposing &&
+      event.key === "Escape" &&
+      !event.shiftKey &&
+      !event.ctrlKey &&
+      !event.altKey &&
+      !event.metaKey &&
+      this.completionSession?.cancelSnippetPlaceholderNavigation()
+    ) {
+      stopEvent(event);
+      return;
+    }
+    if (
+      !event.defaultPrevented &&
+      !event.isComposing &&
+      event.key === "Tab" &&
+      !event.ctrlKey &&
+      !event.altKey &&
+      !event.metaKey &&
+      (event.shiftKey
+        ? this.completionSession?.selectPreviousSnippetPlaceholder()
+        : this.completionSession?.selectNextSnippetPlaceholder())
+    ) {
+      stopEvent(event);
+      return;
+    }
+    if (
       event.defaultPrevented ||
       event.isComposing ||
       event.key !== "Tab" ||
@@ -297,6 +410,7 @@ export class AlphaTextInputController extends DisposableOwner {
     ) {
       return;
     }
+    if (this.selectionController.selections.selections.some(selection => !selection.collapsed)) return;
     stopEvent(event);
     this.execute(createTypeTextCommand(
       this.viewport.textModel,
@@ -321,6 +435,65 @@ export class AlphaTextInputController extends DisposableOwner {
     this.element.value = "";
   }
 
+  private synchronizeAccessibleInput(): void {
+    if (this.disposed || this.compositionController.composing || this.element.ownerDocument.activeElement !== this.element) return;
+    const model = this.viewport.textModel;
+    const selection = this.selectionController.selections.primary;
+    this.updateAccessibleSelectionDescription();
+    const text = model.getText();
+    if (this.element.value !== text) this.element.value = text;
+    const start = model.offsetAt(selection.range.start);
+    const end = model.offsetAt(selection.range.end);
+    this.element.setSelectionRange(
+      start,
+      end,
+      selection.direction === "backward" ? "backward" : "forward",
+    );
+  }
+
+  private updateAccessibleSelectionDescription(): void {
+    const selections = this.selectionController.selections;
+    if (selections.selections.length === 1) {
+      this.element.removeAttribute("aria-description");
+      return;
+    }
+    const primary = selections.primary.active;
+    this.element.setAttribute(
+      "aria-description",
+      `${selections.selections.length} selections. Primary at line ${primary.lineIndex + 1}, column ${primary.columnIndex + 1}.`,
+    );
+  }
+
+  private scheduleAccessibleInputSynchronization(): void {
+    if (this.accessibleInputSyncScheduled) return;
+    this.accessibleInputSyncScheduled = true;
+    queueMicrotask(() => {
+      this.accessibleInputSyncScheduled = false;
+      this.synchronizeAccessibleInput();
+    });
+  }
+
+  private acceptAccessibleSelection(): void {
+    if (this.compositionController.composing || this.element.ownerDocument.activeElement !== this.element) return;
+    const model = this.viewport.textModel;
+    const startOffset = this.element.selectionStart;
+    const endOffset = this.element.selectionEnd;
+    const anchorOffset = this.element.selectionDirection === "backward" ? endOffset : startOffset;
+    const activeOffset = this.element.selectionDirection === "backward" ? startOffset : endOffset;
+    const current = this.selectionController.selections.primary;
+    if (
+      model.offsetAt(current.anchor) === anchorOffset &&
+      model.offsetAt(current.active) === activeOffset
+    ) {
+      return;
+    }
+    this.selectionController.setSelections(TextSelectionSet.single(TextSelection.from(
+      model.positionAt(anchorOffset),
+      model.positionAt(activeOffset),
+    )));
+    this.viewport.revealPosition(this.selectionController.selections.primary.active);
+  }
+
   private requestAfterInsert(insertedText: string, refreshIncomplete: boolean): void {
     const requests = this.completionRequests;
     if (!requests) return;
@@ -332,12 +505,15 @@ export class AlphaTextInputController extends DisposableOwner {
       }
       const position = selections.primary.active;
       const modelVersion = this.viewport.textModel.version;
+      const request = this.beginCompletionRequest();
       void requests.service.requestTriggerCharacter(
         requests.languageId,
         position,
         insertedText,
+        { signal: request.signal },
       ).then(outcome => {
         if (
+          !request.signal.aborted &&
           outcome === undefined &&
           refreshIncomplete &&
           this.viewport.textModel.version === modelVersion &&
@@ -347,7 +523,9 @@ export class AlphaTextInputController extends DisposableOwner {
         ) {
           this.requestCompletion(createLanguageCompletionIncompleteRefreshContext());
         }
-      }).catch(error => this.reportCompletionRequestError(error));
+      }).catch(error => {
+        if (!request.signal.aborted) this.reportCompletionRequestError(error);
+      }).finally(() => this.releaseCompletionRequest(request));
       return;
     }
     if (refreshIncomplete) {
@@ -363,15 +541,36 @@ export class AlphaTextInputController extends DisposableOwner {
       this.completionSession?.cancel();
       return;
     }
+    const request = this.beginCompletionRequest();
     try {
       void requests.service.request(
         requests.languageId,
         selections.primary.active,
         context,
-      ).catch(error => this.reportCompletionRequestError(error));
+        { signal: request.signal },
+      ).catch(error => {
+        if (!request.signal.aborted) this.reportCompletionRequestError(error);
+      }).finally(() => this.releaseCompletionRequest(request));
     } catch (error) {
-      this.reportCompletionRequestError(error);
+      this.releaseCompletionRequest(request);
+      if (!request.signal.aborted) this.reportCompletionRequestError(error);
     }
+  }
+
+  private beginCompletionRequest(): AbortController {
+    this.cancelCompletionRequest();
+    const request = new AbortController();
+    this.completionRequest = request;
+    return request;
+  }
+
+  private cancelCompletionRequest(): void {
+    this.completionRequest?.abort();
+    this.completionRequest = undefined;
+  }
+
+  private releaseCompletionRequest(request: AbortController): void {
+    if (this.completionRequest === request) this.completionRequest = undefined;
   }
 
   private readCompletionIsIncomplete(): boolean {
@@ -388,6 +587,10 @@ export class AlphaTextInputController extends DisposableOwner {
 
   private readLanguageConfiguration(): ResolvedLanguageConfiguration {
     return this.language!.configurations.getLanguageConfiguration(this.language!.languageId);
+  }
+
+  private get currentWordPattern(): RegExp | undefined {
+    return this.language ? this.readLanguageConfiguration().wordPattern : undefined;
   }
 
   private reportCompletionRequestError(error: unknown): void {

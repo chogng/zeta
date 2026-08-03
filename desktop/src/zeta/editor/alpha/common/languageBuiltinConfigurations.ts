@@ -1,5 +1,5 @@
 import { DisposableStore, type IDisposable } from "../../../base/common/lifecycle.js";
-import { DEFAULT_LANGUAGE_AUTO_CLOSE_BEFORE, LanguageConfigurationRegistry, LanguageIndentAction, type LanguageAutoClosingPair, type LanguageAutoClosingTokenContext, type LanguageCharacterPair, type LanguageConfiguration, type LanguageConfigurationSource, type LanguageIndentationRules, type LanguageOnEnterRule, type ResolvedLanguageConfiguration } from "./languageConfiguration.js";
+import { DEFAULT_LANGUAGE_AUTO_CLOSE_BEFORE, LanguageConfigurationRegistry, LanguageIndentAction, type LanguageAutoClosingPair, type LanguageAutoClosingTokenContext, type LanguageCharacterPair, type LanguageConfiguration, type LanguageConfigurationSource, type LanguageFoldingMarkers, type LanguageIndentationRules, type LanguageOnEnterRule, type ResolvedLanguageConfiguration } from "./languageConfiguration.js";
 import { assertLanguageId } from "./languageId.js";
 
 export const ALPHA_BUILTIN_LANGUAGE_IDS = Object.freeze([
@@ -50,6 +50,10 @@ const RUST_INDENTATION_RULES: LanguageIndentationRules = Object.freeze({
   decreaseIndentPattern: /^\s*[\}\]\)].*$/,
   increaseIndentPattern: /^.*(\{[^}]*|\([^)]*|\[[^\]]*)$/,
 });
+const LINE_COMMENT_REGION_MARKERS: LanguageFoldingMarkers = Object.freeze({
+  start: /^\s*\/\/\s*#?region\b/iu,
+  end: /^\s*\/\/\s*#?endregion\b/iu,
+});
 const ECMASCRIPT_ON_ENTER_RULES: readonly LanguageOnEnterRule[] = Object.freeze([
   onEnter(/^\s*\/\*\*(?!\/)([^\*]|\*(?!\/))*$/, LanguageIndentAction.IndentOutdent, { afterText: /^\s*\*\/$/, appendText: " * " }),
   onEnter(/^\s*\/\*\*(?!\/)([^\*]|\*(?!\/))*$/, LanguageIndentAction.None, { appendText: " * " }),
@@ -67,6 +71,7 @@ const RUST_ON_ENTER_RULES: readonly LanguageOnEnterRule[] = Object.freeze([
   onEnter(/^\s*\/\/.*$/, LanguageIndentAction.None, { appendText: "// " }),
   ...ECMASCRIPT_ON_ENTER_RULES,
 ]);
+const PROGRAMMING_WORD_PATTERN = /[$\p{ID_Start}_][$\p{ID_Continue}]*/u;
 
 interface BuiltinOnEnterOptions {
   readonly afterText?: RegExp;
@@ -84,13 +89,16 @@ const ECMASCRIPT_CONFIGURATION: LanguageConfiguration = Object.freeze({
   autoClosingPairs: ECMASCRIPT_PAIRS,
   surroundingPairs: ECMASCRIPT_SURROUNDING_PAIRS,
   indentationRules: ECMASCRIPT_INDENTATION_RULES,
+  foldingMarkers: LINE_COMMENT_REGION_MARKERS,
   onEnterRules: ECMASCRIPT_ON_ENTER_RULES,
+  wordPattern: PROGRAMMING_WORD_PATTERN,
 });
 const JSON_CONFIGURATION: LanguageConfiguration = Object.freeze({
   brackets: JSON_BRACKETS,
   autoClosingPairs: JSON_PAIRS,
   surroundingPairs: JSON_SURROUNDING_PAIRS,
   indentationRules: JSON_INDENTATION_RULES,
+  wordPattern: PROGRAMMING_WORD_PATTERN,
 });
 const JSONC_CONFIGURATION: LanguageConfiguration = Object.freeze({
   comments: Object.freeze({
@@ -101,7 +109,9 @@ const JSONC_CONFIGURATION: LanguageConfiguration = Object.freeze({
   autoClosingPairs: JSON_PAIRS,
   surroundingPairs: JSON_SURROUNDING_PAIRS,
   indentationRules: JSON_INDENTATION_RULES,
+  foldingMarkers: LINE_COMMENT_REGION_MARKERS,
   onEnterRules: JSONC_ON_ENTER_RULES,
+  wordPattern: PROGRAMMING_WORD_PATTERN,
 });
 const RUST_CONFIGURATION: LanguageConfiguration = Object.freeze({
   comments: Object.freeze({
@@ -112,7 +122,9 @@ const RUST_CONFIGURATION: LanguageConfiguration = Object.freeze({
   autoClosingPairs: RUST_PAIRS,
   surroundingPairs: RUST_SURROUNDING_PAIRS,
   indentationRules: RUST_INDENTATION_RULES,
+  foldingMarkers: LINE_COMMENT_REGION_MARKERS,
   onEnterRules: RUST_ON_ENTER_RULES,
+  wordPattern: PROGRAMMING_WORD_PATTERN,
 });
 
 /** Registers Alpha's built-in editing rules into one caller-owned realm. */
@@ -165,7 +177,15 @@ function resolved(languageId: string, configuration: LanguageConfiguration): Res
     surroundingPairs: configuration.surroundingPairs ?? Object.freeze((configuration.autoClosingPairs ?? configuration.brackets ?? []).map(value => pair(value.open, value.close))),
     autoCloseBefore: configuration.autoCloseBefore ?? DEFAULT_LANGUAGE_AUTO_CLOSE_BEFORE,
     ...(configuration.indentationRules ? { indentationRules: copyIndentationRules(configuration.indentationRules) } : {}),
+    ...(configuration.foldingMarkers ? { foldingMarkers: copyFoldingMarkers(configuration.foldingMarkers) } : {}),
     onEnterRules: Object.freeze((configuration.onEnterRules ?? []).map(copyOnEnterRule)),
+  });
+}
+
+function copyFoldingMarkers(markers: LanguageFoldingMarkers): LanguageFoldingMarkers {
+  return Object.freeze({
+    start: copyPattern(markers.start),
+    end: copyPattern(markers.end),
   });
 }
 

@@ -3,6 +3,7 @@ import test from "node:test";
 import { JSDOM } from "jsdom";
 import { type AlphaTextMeasurer } from "../../browser/fontMetrics.js";
 import { EditorSelectionController } from "../../common/editorSelectionController.js";
+import { EditorFoldingModel } from "../../common/folding.js";
 import { TextSelection, TextSelectionSet } from "../../common/selection.js";
 import { TextPosition, TextRange } from "../../common/text.js";
 import { TextModel } from "../../common/textModel.js";
@@ -24,6 +25,15 @@ for (const [name, value] of Object.entries({
 
 const { AlphaEditorViewport } = await import(
   "../../browser/alphaEditorViewport.js"
+);
+const { AlphaEditorMinimap } = await import(
+  "../../browser/alphaEditorViewport.js"
+);
+const { AlphaEditorTextDirection } = await import(
+  "../../browser/alphaEditorViewport.js"
+);
+const { AlphaEditorLineWrapping } = await import(
+  "../../browser/visualLineProjection.js"
 );
 
 test("AlphaEditorViewport projects the initial virtual line window", () => {
@@ -74,6 +84,227 @@ test("AlphaEditorViewport projects the initial virtual line window", () => {
   dom.window.close();
 });
 
+test("AlphaEditorViewport gives browser text shaping an explicit paragraph direction", () => {
+  const dom = new JSDOM("<!doctype html><body><main></main></body>");
+  const container = requiredElement(dom.window.document, "main");
+  using model = new TextModel("שלום alpha");
+  using viewport = new AlphaEditorViewport({
+    container,
+    model,
+    lineHeight: 20,
+    textMeasurer: fixedTextMeasurer(),
+    textDirection: AlphaEditorTextDirection.RightToLeft,
+  });
+  viewport.layout({ width: 300, height: 40 });
+
+  assert.equal(viewport.editorTextDirection, AlphaEditorTextDirection.RightToLeft);
+  assert.equal(viewport.element.dir, "rtl");
+  assert.equal(viewport.element.classList.contains("zeta-alpha-editor-direction-rtl"), true);
+  assert.equal(lineText(requiredLine(viewport.element, 0)).dir, "rtl");
+  dom.window.close();
+});
+
+test("AlphaEditorViewport uses browser range geometry for RTL selections and carets", () => {
+  const dom = new JSDOM("<!doctype html><body><main></main></body>");
+  const container = requiredElement(dom.window.document, "main");
+  using model = new TextModel("abc אבג");
+  using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
+  using viewport = new AlphaEditorViewport({
+    container,
+    model,
+    lineHeight: 20,
+    textMeasurer: fixedTextMeasurer(),
+    selectionController: selections,
+    textDirection: AlphaEditorTextDirection.RightToLeft,
+  });
+  viewport.layout({ width: 300, height: 40 });
+  const line = requiredLine(viewport.element, 0);
+  Object.defineProperty(line, "getBoundingClientRect", {
+    configurable: true,
+    value: () => testRectangle(100, 0, 300),
+  });
+  const createRange = dom.window.document.createRange.bind(dom.window.document);
+  Object.defineProperty(dom.window.document, "createRange", {
+    configurable: true,
+    value: () => {
+      const range = createRange();
+      Object.defineProperty(range, "getClientRects", {
+        configurable: true,
+        value: () => [testRectangle(150, 0, 20), testRectangle(120, 0, 15)],
+      });
+      Object.defineProperty(range, "getBoundingClientRect", {
+        configurable: true,
+        value: () => testRectangle(135, 0, 0),
+      });
+      return range;
+    },
+  });
+  selections.setSelections(TextSelectionSet.single(TextSelection.from(TextPosition.at(0, 0), TextPosition.at(0, 3))));
+
+  const selectionElements = [...line.querySelectorAll<HTMLElement>(".zeta-alpha-editor-selection")];
+  assert.deepEqual(selectionElements.map(element => ({ left: element.style.left, width: element.style.width })), [
+    { left: "50px", width: "20px" },
+    { left: "20px", width: "15px" },
+  ]);
+  assert.equal(requiredElement<HTMLElement>(line, ".zeta-alpha-editor-caret").style.left, "35px");
+  assert.equal(viewport.getPositionContentCoordinates(TextPosition.at(0, 3)).left, 35);
+  dom.window.close();
+});
+
+test("AlphaEditorViewport resolves RTL pointer hits from the browser caret position", () => {
+  const dom = new JSDOM("<!doctype html><body><main></main></body>");
+  const container = requiredElement(dom.window.document, "main");
+  using model = new TextModel("abc אבג");
+  using viewport = new AlphaEditorViewport({
+    container,
+    model,
+    lineHeight: 20,
+    textMeasurer: fixedTextMeasurer(),
+    textDirection: AlphaEditorTextDirection.RightToLeft,
+  });
+  viewport.layout({ width: 300, height: 40 });
+  const text = lineText(requiredLine(viewport.element, 0));
+  assert.ok(text.firstChild);
+  Object.defineProperty(dom.window.document, "caretPositionFromPoint", {
+    configurable: true,
+    value: () => ({ offsetNode: text.firstChild, offset: 5 }),
+  });
+
+  assert.deepEqual(viewport.getTargetAtClientPoint({ clientX: 170, clientY: 10 }), {
+    kind: "text",
+    position: TextPosition.at(0, 5),
+  });
+  dom.window.close();
+});
+
+test("AlphaEditorViewport announces cursor and selection changes through its live region", () => {
+  const dom = new JSDOM("<!doctype html><body><main></main></body>");
+  const container = requiredElement(dom.window.document, "main");
+  using model = new TextModel("alpha\nbeta");
+  using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
+  using viewport = new AlphaEditorViewport({ container, model, lineHeight: 20, textMeasurer: fixedTextMeasurer(), selectionController: selections });
+
+  const status = requiredElement(viewport.element, ".zeta-alpha-editor-accessibility-status");
+  assert.equal(status.getAttribute("aria-live"), "polite");
+  assert.equal(status.textContent, "Line 1, column 1");
+  selections.setSelections(TextSelectionSet.single(TextSelection.from(TextPosition.at(1, 1), TextPosition.at(1, 4))));
+  assert.equal(status.textContent, "Line 2, column 5, 3 characters selected");
+  selections.setSelections(TextSelectionSet.withPrimary([
+    TextSelection.collapsedAt(TextPosition.at(0, 2)),
+    TextSelection.from(TextPosition.at(1, 0), TextPosition.at(1, 2)),
+  ], 1));
+  assert.equal(status.textContent, "2 selections, 2 characters selected; primary at Line 2, column 3");
+  dom.window.close();
+});
+
+test("AlphaEditorViewport accepts explicit accessibility status announcements", () => {
+  const dom = new JSDOM("<!doctype html><body><main></main></body>");
+  const container = requiredElement(dom.window.document, "main");
+  using model = new TextModel("alpha");
+  using viewport = new AlphaEditorViewport({ container, model, lineHeight: 20, textMeasurer: fixedTextMeasurer() });
+
+  viewport.announceAccessibilityStatus("  Saved  ");
+  assert.equal(requiredElement(viewport.element, ".zeta-alpha-editor-accessibility-status").textContent, "Saved");
+  assert.throws(() => viewport.announceAccessibilityStatus("  "), /non-empty string/);
+  dom.window.close();
+});
+
+test("AlphaEditorViewport projects indentation guides for visible logical rows only", () => {
+  const dom = new JSDOM("<!doctype html><body><main></main></body>");
+  const container = requiredElement(dom.window.document, "main");
+  using model = new TextModel("    alpha\n  beta");
+  using viewport = new AlphaEditorViewport({
+    container,
+    model,
+    lineHeight: 20,
+    textMeasurer: fixedTextMeasurer(10),
+    indentation: { tabSize: 2 },
+  });
+  viewport.layout({ width: 300, height: 40 });
+  const firstGuides = requiredLine(viewport.element, 0).querySelectorAll<HTMLElement>(".zeta-alpha-editor-indent-guide");
+  assert.deepEqual([...firstGuides].map(guide => ({ level: guide.dataset.indentLevel, left: guide.style.left })), [
+    { level: "1", left: "57px" },
+    { level: "2", left: "77px" },
+  ]);
+  assert.equal(requiredLine(viewport.element, 1).querySelectorAll(".zeta-alpha-editor-indent-guide").length, 1);
+  dom.window.close();
+});
+
+test("AlphaEditorViewport renders a bounded minimap and maps a primary click to document scroll", () => {
+  const dom = new JSDOM("<!doctype html><body><main></main></body>");
+  const container = requiredElement(dom.window.document, "main");
+  using model = new TextModel(lines(200).join("\n"));
+  using viewport = new AlphaEditorViewport({
+    container,
+    model,
+    lineHeight: 20,
+    textMeasurer: fixedTextMeasurer(),
+    minimap: AlphaEditorMinimap.On,
+  });
+  viewport.layout({ width: 300, height: 100 });
+  const minimap = requiredElement<HTMLElement>(viewport.element, ".zeta-alpha-editor-minimap");
+  assert.equal(minimap.hidden, false);
+  assert.equal(minimap.querySelectorAll(".zeta-alpha-editor-minimap-row").length, 160);
+  const overview = requiredElement<HTMLElement>(viewport.element, ".zeta-alpha-editor-overview-ruler");
+  assert.equal(overview.style.left, "234px");
+
+  minimap.dispatchEvent(new dom.window.MouseEvent("pointerdown", {
+    bubbles: true,
+    cancelable: true,
+    button: 0,
+    clientY: 75,
+  }));
+  assert.equal(viewport.viewportLayout.scrollPosition.top, 2925);
+  assert.equal(requiredElement<HTMLElement>(minimap, ".zeta-alpha-editor-minimap-viewport").style.top, "73.125%");
+
+  dom.window.document.dispatchEvent(new dom.window.MouseEvent("pointermove", {
+    bubbles: true,
+    cancelable: true,
+    clientY: 100,
+  }));
+  assert.equal(viewport.viewportLayout.scrollPosition.top, 3900);
+  assert.equal(minimap.classList.contains("dragging"), true);
+  dom.window.document.dispatchEvent(new dom.window.MouseEvent("pointerup", { bubbles: true }));
+  assert.equal(minimap.classList.contains("dragging"), false);
+  dom.window.document.dispatchEvent(new dom.window.MouseEvent("pointermove", {
+    bubbles: true,
+    cancelable: true,
+    clientY: 0,
+  }));
+  assert.equal(viewport.viewportLayout.scrollPosition.top, 3900);
+
+  dom.window.close();
+});
+
+test("AlphaEditorViewport keeps minimaps out of embedded presentations", () => {
+  const dom = new JSDOM("<!doctype html><body><main></main></body>");
+  const container = requiredElement(dom.window.document, "main");
+  using model = new TextModel("alpha");
+  using viewport = new AlphaEditorViewport({
+    container,
+    model,
+    lineHeight: 20,
+    textMeasurer: fixedTextMeasurer(),
+    presentation: "embedded",
+  });
+  assert.equal(requiredElement<HTMLElement>(viewport.element, ".zeta-alpha-editor-minimap").hidden, true);
+  dom.window.close();
+});
+
+test("AlphaEditorViewport rejects an unknown minimap mode", () => {
+  const dom = new JSDOM("<!doctype html><body><main></main></body>");
+  const container = requiredElement(dom.window.document, "main");
+  using model = new TextModel("alpha");
+  assert.throws(() => new AlphaEditorViewport({
+    container,
+    model,
+    lineHeight: 20,
+    textMeasurer: fixedTextMeasurer(),
+    minimap: "invalid" as never,
+  }), /Unknown Alpha editor minimap mode/);
+  dom.window.close();
+});
+
 test("Scrolling virtualizes rows while preserving overlapping DOM identity", () => {
   const dom = new JSDOM("<!doctype html><body><main></main></body>");
   const container = requiredElement(dom.window.document, "main");
@@ -108,6 +339,116 @@ test("Scrolling virtualizes rows while preserving overlapping DOM identity", () 
   });
   assert.equal(requiredLine(viewport.element, 20), line20);
   assert.equal(viewport.element.querySelector('[data-line-index="18"]'), null);
+
+  dom.window.close();
+});
+
+test("Soft wrapping virtualizes visual rows and maps DOM coordinates back to logical text", () => {
+  const dom = new JSDOM("<!doctype html><body><main></main></body>");
+  const container = requiredElement(dom.window.document, "main");
+  using model = new TextModel("abcdef\ngh");
+  using viewport = new AlphaEditorViewport({
+    container,
+    model,
+    lineHeight: 20,
+    textMeasurer: fixedTextMeasurer(10, 24),
+    lineWrapping: AlphaEditorLineWrapping.On,
+  });
+
+  viewport.layout({ width: 70, height: 40 });
+
+  assert.equal(viewport.viewportLayout.contentSize.height, 80);
+  assert.equal(viewport.viewportLayout.maximumScrollPosition.left, 0);
+  assert.deepEqual(
+    lineElements(viewport.element).map(line => ({
+      lineIndex: line.dataset.lineIndex,
+      logicalLineIndex: line.dataset.logicalLineIndex,
+      number: lineNumber(line).textContent,
+      text: lineText(line).textContent,
+    })),
+    [{
+      lineIndex: "0",
+      logicalLineIndex: "0",
+      number: "1",
+      text: "ab",
+    }, {
+      lineIndex: "1",
+      logicalLineIndex: "0",
+      number: "",
+      text: "cd",
+    }, {
+      lineIndex: "2",
+      logicalLineIndex: "0",
+      number: "",
+      text: "ef",
+    }, {
+      lineIndex: "3",
+      logicalLineIndex: "1",
+      number: "2",
+      text: "gh",
+    }],
+  );
+  assert.deepEqual(
+    viewport.getPositionContentCoordinates(TextPosition.at(0, 3)),
+    { left: 48, top: 20, height: 20 },
+  );
+  assert.deepEqual(viewport.getTargetAtClientPoint({ clientX: 50, clientY: 25 }), {
+    kind: "text",
+    position: TextPosition.at(0, 3),
+  });
+
+  viewport.layout({ width: 90, height: 40 });
+
+  assert.equal(viewport.viewportLayout.contentSize.height, 60);
+  assert.deepEqual(
+    lineElements(viewport.element).map(line => lineText(line).textContent),
+    ["abcd", "ef", "gh"],
+  );
+
+  dom.window.close();
+});
+
+test("Folding model removes folded physical rows from the viewport projection", () => {
+  const dom = new JSDOM("<!doctype html><body><main></main></body>");
+  const container = requiredElement(dom.window.document, "main");
+  using model = new TextModel("header\nbody\nend\nafter");
+  using folding = new EditorFoldingModel(model);
+  folding.setRanges([{ startLineIndex: 0, endLineIndex: 2 }]);
+  using viewport = new AlphaEditorViewport({
+    container,
+    model,
+    lineHeight: 20,
+    textMeasurer: fixedTextMeasurer(),
+    foldingModel: folding,
+  });
+  viewport.layout({ width: 300, height: 20 });
+  const initialToggle = requiredElement<HTMLButtonElement>(viewport.element, ".zeta-alpha-editor-fold-toggle");
+  assert.equal(initialToggle.getAttribute("aria-expanded"), "true");
+  assert.equal(initialToggle.textContent, "⌄");
+  folding.setContainingLineCollapsed(0, true);
+
+  assert.equal(viewport.viewportLayout.contentSize.height, 40);
+  assert.deepEqual(lineElements(viewport.element).map(line => ({
+    logicalLineIndex: line.dataset.logicalLineIndex,
+    number: lineNumber(line).textContent,
+    text: lineText(line).textContent,
+  })), [{
+    logicalLineIndex: "0",
+    number: "1",
+    text: "header",
+  }, {
+    logicalLineIndex: "3",
+    number: "4",
+    text: "after",
+  }]);
+  assert.deepEqual(viewport.getPositionContentCoordinates(TextPosition.at(1, 0)), {
+    left: 36,
+    top: 0,
+    height: 20,
+  });
+  const collapsedToggle = requiredElement<HTMLButtonElement>(viewport.element, ".zeta-alpha-editor-fold-toggle");
+  assert.equal(collapsedToggle.getAttribute("aria-expanded"), "false");
+  assert.equal(collapsedToggle.textContent, "›");
 
   dom.window.close();
 });
@@ -235,6 +576,7 @@ test("Selection controller projects gutter state, ranges, and carets", () => {
       .classList.contains("active"),
     true,
   );
+  assert.equal(requiredLine(viewport.element, 1).classList.contains("active"), true);
 
   model.applyEdits([{
     range: TextRange.emptyAt(TextPosition.at(0, 0)),
@@ -420,6 +762,10 @@ function lineNumber(line: Element | undefined): HTMLSpanElement {
 
 function lines(count: number): string[] {
   return Array.from({ length: count }, (_, index) => `line ${index}`);
+}
+
+function testRectangle(left: number, top: number, width: number): DOMRect {
+  return { left, top, width, height: 20, right: left + width, bottom: top + 20, x: left, y: top, toJSON: () => ({}) } as DOMRect;
 }
 
 function fixedTextMeasurer(

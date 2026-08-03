@@ -390,11 +390,14 @@ function createProviderResolveItem(item: LanguageCompletionItem, resolveData: un
     kind: item.kind,
     range: item.range,
     insertText: item.insertText,
+    ...(item.insertTextFormat === undefined ? {} : { insertTextFormat: item.insertTextFormat }),
     ...(item.detail === undefined ? {} : { detail: item.detail }),
     ...(item.documentation === undefined ? {} : { documentation: item.documentation }),
     ...(item.filterText === undefined ? {} : { filterText: item.filterText }),
     ...(item.sortText === undefined ? {} : { sortText: item.sortText }),
     ...(item.preselect === undefined ? {} : { preselect: item.preselect }),
+    ...(item.commitCharacters === undefined ? {} : { commitCharacters: item.commitCharacters }),
+    ...(item.additionalTextEdits === undefined ? {} : { additionalTextEdits: item.additionalTextEdits }),
     ...(resolveData === undefined ? {} : { resolveData: structuredClone(resolveData) }),
   });
 }
@@ -407,11 +410,14 @@ function createCompletionResultItem(provider: RegisteredLanguageCompletionProvid
     kind: item.kind,
     range: item.range,
     insertText: item.insertText,
+    ...(item.insertTextFormat === undefined ? {} : { insertTextFormat: item.insertTextFormat }),
     ...(item.detail === undefined ? {} : { detail: item.detail }),
     ...(item.documentation === undefined ? {} : { documentation: item.documentation }),
     ...(item.filterText === undefined ? {} : { filterText: item.filterText }),
     ...(item.sortText === undefined ? {} : { sortText: item.sortText }),
     ...(item.preselect === undefined ? {} : { preselect: item.preselect }),
+    ...(item.commitCharacters === undefined ? {} : { commitCharacters: item.commitCharacters }),
+    ...(item.additionalTextEdits === undefined ? {} : { additionalTextEdits: item.additionalTextEdits }),
     ...(provider.resolveCompletionItem === undefined ? {} : { hasDeferredDetails: true }),
   };
 }

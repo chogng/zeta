@@ -3,6 +3,16 @@
 use std::fmt;
 use std::ops::Range;
 
+use zeta_editor_core::EditorCoreDocument;
+use zeta_editor_core::EditorCoreDocumentSnapshot;
+use zeta_editor_core::EditorCoreHistoryLimit;
+pub use zeta_editor_core::EditorCoreRevision as CodeEditorRevision;
+use zeta_editor_core::EditorCoreSelection;
+use zeta_editor_core::EditorCoreSelectionSet;
+use zeta_editor_core::EditorCoreTextEdit;
+use zeta_editor_core::EditorCoreTextRange;
+use zeta_editor_core::EditorCoreTransaction;
+use zeta_editor_core::EditorCoreUtf16Offset;
 use zeta_ui::TextInputCompositionCursor;
 
 use super::CodeEditorComposition;
@@ -21,23 +31,7 @@ use super::auto_pairs::CodeEditorAutoPairTracker;
 use super::folding::CodeEditorFoldingProjection;
 use super::folding_sources::derived_folding_ranges;
 
-pub(super) const HISTORY_LIMIT: usize = 100;
-
-/// Monotonic revision of committed CodeEditor text.
-#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
-pub struct CodeEditorRevision(u64);
-
-impl CodeEditorRevision {
-    pub const INITIAL: Self = Self(1);
-
-    pub const fn value(self) -> u64 {
-        self.0
-    }
-
-    fn next(self) -> Self {
-        Self(self.0.saturating_add(1))
-    }
-}
+const HISTORY_LIMIT: usize = 100;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(super) struct Composition {
@@ -45,15 +39,9 @@ pub(super) struct Composition {
     pub(super) cursor: TextInputCompositionCursor,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub(super) struct DocumentSnapshot {
-    text: String,
-    anchor: usize,
-    cursor: usize,
-}
-
 /// Owned text snapshot projected as numbered CodeEditor rows.
 pub struct CodeEditorDocument {
+    pub(super) core: EditorCoreDocument,
     pub(super) text: String,
     pub(super) line_ranges: Vec<Range<usize>>,
     pub(super) anchor: usize,
@@ -61,31 +49,26 @@ pub struct CodeEditorDocument {
     pub(super) preferred_column: Option<usize>,
     pub(super) composition: Option<Composition>,
     pub(super) auto_pairs: CodeEditorAutoPairTracker,
-    pub(super) undo: Vec<DocumentSnapshot>,
-    pub(super) redo: Vec<DocumentSnapshot>,
     pub(super) syntax_tokens: Vec<Vec<CodeEditorSyntaxToken>>,
     pub(super) syntax_folding_ranges: Vec<CodeEditorFoldingRange>,
     pub(super) manual_folding_ranges: Vec<CodeEditorFoldingRange>,
     pub(super) folding: CodeEditorFoldingProjection,
     pub(super) analysis: CodeEditorAnalysis,
     pub(super) indentation: CodeEditorIndentation,
-    pub(super) revision: CodeEditorRevision,
 }
 
 impl Clone for CodeEditorDocument {
     fn clone(&self) -> Self {
         let mut clone = Self::from_text_with_language(&self.text, self.language());
+        clone.core = self.core.clone();
         clone.anchor = self.anchor;
         clone.cursor = self.cursor;
         clone.preferred_column = self.preferred_column;
         clone.composition = self.composition.clone();
-        clone.undo = self.undo.clone();
-        clone.redo = self.redo.clone();
         clone.syntax_folding_ranges = self.syntax_folding_ranges.clone();
         clone.manual_folding_ranges = self.manual_folding_ranges.clone();
         clone.folding = self.folding.clone();
         clone.indentation = self.indentation.clone();
-        clone.revision = self.revision;
         clone
     }
 }
@@ -100,15 +83,13 @@ impl fmt::Debug for CodeEditorDocument {
             .field("cursor", &self.cursor)
             .field("preferred_column", &self.preferred_column)
             .field("composition", &self.composition)
-            .field("undo", &self.undo)
-            .field("redo", &self.redo)
             .field("syntax_tokens", &self.syntax_tokens)
             .field("syntax_folding_ranges", &self.syntax_folding_ranges)
             .field("manual_folding_ranges", &self.manual_folding_ranges)
             .field("folding", &self.folding)
             .field("language", &self.language())
             .field("indentation", &self.indentation)
-            .field("revision", &self.revision)
+            .field("revision", &self.core.revision())
             .finish()
     }
 }
@@ -121,15 +102,13 @@ impl PartialEq for CodeEditorDocument {
             && self.cursor == other.cursor
             && self.preferred_column == other.preferred_column
             && self.composition == other.composition
-            && self.undo == other.undo
-            && self.redo == other.redo
             && self.syntax_tokens == other.syntax_tokens
             && self.syntax_folding_ranges == other.syntax_folding_ranges
             && self.manual_folding_ranges == other.manual_folding_ranges
             && self.folding == other.folding
             && self.language() == other.language()
             && self.indentation == other.indentation
-            && self.revision == other.revision
+            && self.core == other.core
     }
 }
 
@@ -147,23 +126,25 @@ impl CodeEditorDocument {
     }
 
     pub fn from_text_with_language(text: impl Into<String>, language: CodeEditorLanguage) -> Self {
+        let text = text.into();
         let mut document = Self {
-            text: text.into(),
+            core: EditorCoreDocument::with_history_limit(
+                text.clone(),
+                EditorCoreHistoryLimit::new(HISTORY_LIMIT),
+            ),
+            text,
             line_ranges: Vec::new(),
             anchor: 0,
             cursor: 0,
             preferred_column: None,
             composition: None,
             auto_pairs: CodeEditorAutoPairTracker::default(),
-            undo: Vec::new(),
-            redo: Vec::new(),
             syntax_tokens: Vec::new(),
             syntax_folding_ranges: Vec::new(),
             manual_folding_ranges: Vec::new(),
             folding: CodeEditorFoldingProjection::default(),
             analysis: CodeEditorAnalysis::default(),
             indentation: CodeEditorIndentation::default(),
-            revision: CodeEditorRevision::INITIAL,
         };
         document.analysis.set_language(language);
         document.reindex_lines();
@@ -179,12 +160,15 @@ impl CodeEditorDocument {
         self.composition = None;
         self.auto_pairs.clear();
         self.manual_folding_ranges.clear();
-        self.undo.clear();
-        self.redo.clear();
         self.folding.clear_state(0);
         self.reindex_lines();
         self.refresh_syntax();
-        self.advance_revision();
+        let selections = EditorCoreSelectionSet::single(EditorCoreSelection::collapsed_at(
+            EditorCoreUtf16Offset::ZERO,
+        ));
+        self.core
+            .replace_text(self.text.clone(), selections)
+            .expect("a Native document reset always supplies a valid collapsed selection");
     }
 
     pub fn text(&self) -> &str {
@@ -200,7 +184,7 @@ impl CodeEditorDocument {
     }
 
     pub const fn revision(&self) -> CodeEditorRevision {
-        self.revision
+        self.core.revision()
     }
 
     pub fn selected_text(&self) -> Option<&str> {
@@ -377,25 +361,65 @@ impl CodeEditorDocument {
         }
     }
 
-    pub(super) fn snapshot(&self) -> DocumentSnapshot {
-        DocumentSnapshot {
-            text: self.text.clone(),
-            anchor: self.anchor,
-            cursor: self.cursor,
-        }
+    pub(super) fn synchronize_core_selection(&mut self) {
+        let transaction =
+            EditorCoreTransaction::new(self.core.revision(), Vec::new(), self.core_selection_set());
+        self.core
+            .apply_transaction(transaction)
+            .expect("Native selection offsets always remain valid UTF-8 boundaries");
     }
 
-    pub(super) fn restore(&mut self, snapshot: DocumentSnapshot) {
-        self.text = snapshot.text;
-        self.anchor = snapshot.anchor;
-        self.cursor = snapshot.cursor;
+    pub(super) fn commit_native_text_mutation(&mut self) {
+        let range = EditorCoreTextRange::new(
+            EditorCoreUtf16Offset::ZERO,
+            EditorCoreUtf16Offset::at_byte_offset(self.core.text(), self.core.text().len())
+                .expect("a string end is always a UTF-8 boundary"),
+        )
+        .expect("the complete document range is ordered");
+        let transaction = EditorCoreTransaction::new(
+            self.core.revision(),
+            vec![EditorCoreTextEdit::new(range, self.text.clone())],
+            self.core_selection_set(),
+        );
+        let snapshot = self
+            .core
+            .apply_transaction(transaction)
+            .expect("Native mutations maintain valid text and selection boundaries");
+        debug_assert_eq!(snapshot.text(), self.text);
+    }
+
+    pub(super) fn adopt_core_snapshot(&mut self, snapshot: &EditorCoreDocumentSnapshot) {
+        let selection = snapshot.selections().selections()[0];
+        let anchor = selection
+            .anchor()
+            .byte_offset_in(snapshot.text())
+            .expect("core snapshots contain valid UTF-16 selection offsets");
+        let cursor = selection
+            .active()
+            .byte_offset_in(snapshot.text())
+            .expect("core snapshots contain valid UTF-16 selection offsets");
+        let text_changed = self.text != snapshot.text();
+        self.text = snapshot.text().to_owned();
+        self.anchor = anchor;
+        self.cursor = cursor;
         self.preferred_column = None;
         self.composition = None;
+        if !text_changed {
+            return;
+        }
         self.auto_pairs.clear();
         self.manual_folding_ranges.clear();
         self.reindex_lines();
         self.refresh_syntax();
-        self.advance_revision();
+    }
+
+    fn core_selection_set(&self) -> EditorCoreSelectionSet {
+        EditorCoreSelectionSet::single(EditorCoreSelection::new(
+            EditorCoreUtf16Offset::at_byte_offset(&self.text, self.anchor)
+                .expect("Native selection anchors are valid UTF-8 boundaries"),
+            EditorCoreUtf16Offset::at_byte_offset(&self.text, self.cursor)
+                .expect("Native selection cursors are valid UTF-8 boundaries"),
+        ))
     }
 
     pub(super) fn current_line_range(&self) -> Range<usize> {
@@ -460,10 +484,6 @@ impl CodeEditorDocument {
         for start_row in hidden_by {
             self.folding.expand(start_row, self.line_ranges.len());
         }
-    }
-
-    pub(super) fn advance_revision(&mut self) {
-        self.revision = self.revision.next();
     }
 }
 

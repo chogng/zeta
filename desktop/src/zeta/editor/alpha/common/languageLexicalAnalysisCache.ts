@@ -206,7 +206,7 @@ function aggregateResults(lineResults: readonly LanguageLexicalLineResult[]): { 
     }
   }
   if (multiline) {
-    diagnostics.push(diagnostic(TextRange.from(multiline.position, TextPosition.at(multiline.position.lineIndex, multiline.endColumn)), LanguageDiagnosticSeverity.Warning, multiline.kind === "blockComment" ? "Unterminated block comment" : "Unterminated template literal"));
+    diagnostics.push(diagnostic(TextRange.from(multiline.position, TextPosition.at(multiline.position.lineIndex, multiline.endColumn)), LanguageDiagnosticSeverity.Warning, unterminatedMultilineMessage(multiline.kind)));
   }
   for (const opener of brackets) {
     diagnostics.push(diagnostic(TextRange.from(opener.position, TextPosition.at(opener.position.lineIndex, opener.endColumn)), LanguageDiagnosticSeverity.Warning, `Unclosed bracket '${opener.token}'`));
@@ -215,6 +215,12 @@ function aggregateResults(lineResults: readonly LanguageLexicalLineResult[]): { 
     tokens: Object.freeze({ tokens: Object.freeze(tokens) }),
     diagnostics: Object.freeze({ diagnostics: Object.freeze(diagnostics) }),
   };
+}
+
+function unterminatedMultilineMessage(kind: LanguageLexicalMultilineEvent["lexicalKind"]): string {
+  if (kind === "blockComment") return "Unterminated block comment";
+  if (kind === "multilineString") return "Unterminated template literal";
+  return "Unterminated raw string literal";
 }
 
 const defaultConfigurationSource = createAlphaBuiltinLanguageConfigurationSource();

@@ -15,6 +15,12 @@ export interface AlphaRangeRectangle<T> {
   readonly width: number;
 }
 
+/** Controls whether a zero-length range produces a visible geometry rectangle. */
+export enum AlphaEmptyRangeRendering {
+  Ignore = "ignore",
+  RenderAsSpace = "render-as-space",
+}
+
 /** @internal */
 export function createAlphaRangeRectangles<T>(
   model: TextModel,
@@ -22,11 +28,23 @@ export function createAlphaRangeRectangles<T>(
   renderLines: EditorLineRange,
   textLeft: number,
   measurer: AlphaTextMeasurer,
+  emptyRangeRendering = AlphaEmptyRangeRendering.Ignore,
 ): readonly AlphaRangeRectangle<T>[] {
   const rectangles: AlphaRangeRectangle<T>[] = [];
   const newlineWidth = measurer.measureLineWidth(" ");
 
   for (const entry of entries) {
+    if (entry.range.empty && emptyRangeRendering === AlphaEmptyRangeRendering.RenderAsSpace) {
+      const lineIndex = entry.range.start.lineIndex;
+      if (!containsLine(renderLines, lineIndex)) continue;
+      rectangles.push(Object.freeze({
+        value: entry.value,
+        lineIndex,
+        left: textLeft + prefixWidth(model, lineIndex, entry.range.start.columnIndex, measurer),
+        width: Math.max(1, newlineWidth),
+      }));
+      continue;
+    }
     if (entry.range.empty) continue;
     for (
       let lineIndex = entry.range.start.lineIndex;

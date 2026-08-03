@@ -8,17 +8,28 @@ canonical in [`docs/editor-architecture.md`](../../../../../../docs/editor-archi
 
 | Concern | Owner | Status |
 | --- | --- | --- |
-| Workspace resource reads | `IFileService` | ✅ |
+| Workspace resource reads and atomic writes | `IFileService` | ✅ |
 | Bootstrap-text versus file-system resolution | `ITextFileService.resolve` | ✅ |
+| Text save transport and cancellation | `ITextFileService.save` | ✅ |
 | Alpha URI-to-`TextModel` references | `AlphaTextModelService` | ✅, editor-owned |
 | Monaco URI-to-model references | `monacoModelService` | ✅, transition adapter-owned |
-| Dirty state, save/revert and conflict resolution | future TextFile model layer | 尚未完成 |
-| Encoding and external line-ending preservation | future TextFile model layer | 尚未完成 |
+| Alpha dirty state, snapshot saves and explicit reverts | `AlphaTextModelService` | ✅, Alpha-owned |
+| Alpha CRLF/LF source-line-ending preservation | `AlphaTextModelService` | ✅, Alpha-owned |
+| Workspace external-change invalidation, clean reload, and dirty-model conflict state | `IFileService` → `ITextFileService` → `AlphaTextModelService` | ✅, transport notification plus Alpha-owned policy |
+| Alpha pre-write external-change conflict detection | `AlphaTextModelService` | ✅, Alpha-owned defense in depth |
+| Atomic expected-revision writes and recovery | future TextFile model layer | 尚未完成 |
+| Encoding and mixed line-ending preservation | future TextFile model layer | 尚未完成 |
 
 `TextFileService.resolve` validates one `TextFileResolveRequest`, observes
 cancellation, returns `bootstrapText` without touching the file system, and
 otherwise delegates exactly one read to `IFileService.readFile`. The result
 records whether its content came from `Bootstrap` or `FileSystem`.
+`TextFileService.save` validates one `TextFileSaveRequest`, observes
+cancellation, and delegates exactly one atomic write to `IFileService.writeFile`.
+`ITextFileService.onDidChangeFiles` forwards coarse App Server filesystem
+invalidations without introducing a live document cache. A concrete editor
+decides whether a clean model may reload or a dirty model must retain local
+text and report a conflict.
 
 This service deliberately does not cache live models. Alpha and Monaco have
 different transaction and undo semantics, so each editor domain owns its model
@@ -32,24 +43,28 @@ it as `ITextFileService`, and injects it through `EditorPaneCreationOptions`.
 Alpha, Monaco, and ProseMirror contributions reject construction when that
 service is absent.
 
-Cancellation before resolution or while awaiting the file read rejects without
-publishing content. File-service errors pass through unchanged. A non-text
-file-service result is rejected before it can enter an editor model.
+Cancellation before resolution or save, or while awaiting the underlying I/O,
+rejects without publishing a result. File-service errors pass through
+unchanged. A non-text file-service result is rejected before it can enter an
+editor model.
 
-Adding model caches, dirty flags, write APIs, backup recovery, or conflict
-policy directly to `ExplorerViewPane`, `TextModel`, or a concrete editor pane
-would signal architectural drift. Those capabilities require an explicit
-TextFile model contract here and matching host write/durability support.
+Adding model caches, dirty flags, backup recovery, or conflict policy directly
+to `ExplorerViewPane`, `TextModel`, or a concrete editor pane would signal
+architectural drift. Alpha currently keeps baseline comparison and its
+transaction semantics in `AlphaTextModelService`; a cross-editor document
+model is required before those semantics can move into this service.
 
 ## Tests and modification impact
 
 `test/common/text-file-service.test.ts` covers bootstrap precedence, file
 delegation, cancellation, validation, and failure propagation.
-`../../../contrib/files/test/browser/explorer-view.test.ts` verifies that Explorer does not read file
+`../../../platform/files/test/browser/file-service.test.ts` covers App Server
+invalidation projection.
+`../../contrib/files/test/browser/explorer-view.test.ts` verifies that Explorer does not read file
 content. Alpha model and pane tests cover shared model references, edit
 preservation, cancellation, and session disposal.
 
-Changing resolution precedence or cancellation semantics requires updating all
-three suites plus `docs/editor-architecture.md`. Adding persistence requires
-separate save/revert/conflict tests; it must not be represented as an extension
-of the read-only result type.
+Changing resolution, save, or cancellation semantics requires updating all
+three suites plus `docs/editor-architecture.md`. Expected-revision persistence
+still requires separate conflict tests; it must not be represented as an
+extension of the current transport-only result type.

@@ -194,11 +194,11 @@ impl CodeEditorDocument {
     }
 
     pub fn can_undo(&self) -> bool {
-        !self.undo.is_empty()
+        self.core.can_undo()
     }
 
     pub fn can_redo(&self) -> bool {
-        !self.redo.is_empty()
+        self.core.can_redo()
     }
 
     fn insert(&mut self, text: &str) {
@@ -540,27 +540,21 @@ impl CodeEditorDocument {
     }
 
     pub(super) fn checkpoint(&mut self) {
-        if self.undo.len() == super::document::HISTORY_LIMIT {
-            self.undo.remove(0);
-        }
-        self.undo.push(self.snapshot());
-        self.redo.clear();
+        self.synchronize_core_selection();
     }
 
     fn undo(&mut self) {
-        let Some(snapshot) = self.undo.pop() else {
+        let Some(snapshot) = self.core.undo() else {
             return;
         };
-        self.redo.push(self.snapshot());
-        self.restore(snapshot);
+        self.adopt_core_snapshot(&snapshot);
     }
 
     fn redo(&mut self) {
-        let Some(snapshot) = self.redo.pop() else {
+        let Some(snapshot) = self.core.redo() else {
             return;
         };
-        self.undo.push(self.snapshot());
-        self.restore(snapshot);
+        self.adopt_core_snapshot(&snapshot);
     }
 
     pub(super) fn after_edit(&mut self) {
@@ -568,7 +562,7 @@ impl CodeEditorDocument {
         self.manual_folding_ranges.clear();
         self.reindex_lines();
         self.refresh_syntax();
-        self.advance_revision();
+        self.commit_native_text_mutation();
     }
 
     fn move_cursor(&mut self, cursor: usize, mode: CodeEditorSelectionMode) {

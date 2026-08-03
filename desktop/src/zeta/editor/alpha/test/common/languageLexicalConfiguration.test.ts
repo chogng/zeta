@@ -68,6 +68,32 @@ test("Rust lexical analysis recognizes Rust comments, keywords, strings, and str
   assert.deepEqual(diagnostics?.diagnostics, []);
 });
 
+test("Rust lexical analysis recognizes hash-delimited raw strings and character literals", async () => {
+  using model = new TextModel("let raw = r##\"{\ninside } \"##;\nlet character = '\\n';\nlet lifetime = 'a;");
+  const provider = createLanguageLexicalAnalysisProvider();
+  const snapshot = model.createSnapshot();
+
+  assert.deepEqual(
+    await tokenTypes(provider, request(1, "rust", snapshot)),
+    ["keyword", "variable", "operator", "string", "string", "keyword", "variable", "operator", "string", "keyword", "variable", "operator", "variable"],
+  );
+  const diagnostics = await provider.provideDiagnostics!(request(2, "rust", snapshot), new AbortController().signal);
+  assert.deepEqual(diagnostics?.diagnostics, []);
+});
+
+test("ECMAScript lexical analysis recognizes regular expressions without mistaking division for a literal", async () => {
+  using model = new TextModel("const matcher = /\\{(?<name>[a-z]+)\\}/giu;\nconst ratio = total / count;\nreturn /[{}]/.test(value);");
+  const provider = createLanguageLexicalAnalysisProvider();
+  const snapshot = model.createSnapshot();
+
+  assert.deepEqual(
+    await tokenTypes(provider, request(1, "typescript", snapshot)),
+    ["keyword", "variable", "operator", "regexp", "keyword", "variable", "operator", "variable", "operator", "variable", "keyword", "regexp", "variable", "variable"],
+  );
+  const diagnostics = await provider.provideDiagnostics!(request(2, "typescript", snapshot), new AbortController().signal);
+  assert.deepEqual(diagnostics?.diagnostics, []);
+});
+
 function request(requestId: number, languageId: string, snapshot: ReturnType<TextModel["createSnapshot"]>): LanguageAnalysisProviderRequest {
   return Object.freeze({ requestId, languageId, snapshot });
 }

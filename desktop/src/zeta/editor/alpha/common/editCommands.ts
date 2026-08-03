@@ -1,6 +1,7 @@
 import { EditorEmptySelectionClipboardPolicy, getEditorClipboardEntries } from "./clipboard.js";
+import { EditorCursorNavigationCommand, EditorCursorNavigationMode, navigateEditorCursors } from "./cursorNavigation.js";
 import { EditorCommandHistoryMode, type EditorEditCommand, type TextSelectionOffsets } from "./editorSelectionController.js";
-import { type TextSelectionSet } from "./selection.js";
+import { TextSelectionSet } from "./selection.js";
 import { normalizeTextLineEndings, TextPosition, TextRange, type TextEdit } from "./text.js";
 import { type TextModel } from "./textModel.js";
 import { getTextGraphemeBoundaries } from "./textSegmentation.js";
@@ -236,6 +237,26 @@ export function createDeleteForwardCommand(model: TextModel, selections: TextSel
   );
 }
 
+/** Deletes each selection or the preceding editor word segment. */
+export function createDeleteWordBackwardCommand(model: TextModel, selections: TextSelectionSet, wordPattern?: RegExp): EditorEditCommand {
+  return createDeleteWordCommand(model, selections, EditorCursorNavigationCommand.WordLeft, EditorCommandHistoryMode.CoalesceBackspace, wordPattern);
+}
+
+/** Deletes each selection or the following editor word segment. */
+export function createDeleteWordForwardCommand(model: TextModel, selections: TextSelectionSet, wordPattern?: RegExp): EditorEditCommand {
+  return createDeleteWordCommand(model, selections, EditorCursorNavigationCommand.WordRight, EditorCommandHistoryMode.CoalesceDelete, wordPattern);
+}
+
+/** Deletes each selection or the text from its cursor back to the physical line start. */
+export function createDeleteToLineStartCommand(model: TextModel, selections: TextSelectionSet): EditorEditCommand {
+  return createDeleteToLineBoundaryCommand(model, selections, "start");
+}
+
+/** Deletes each selection or the text from its cursor through the physical line end. */
+export function createDeleteToLineEndCommand(model: TextModel, selections: TextSelectionSet): EditorEditCommand {
+  return createDeleteToLineBoundaryCommand(model, selections, "end");
+}
+
 /** Builds one validated multi-selection command from pre-change replacement scripts. */
 export function createSelectionEditCommand(model: TextModel, selections: TextSelectionSet, edits: readonly EditorSelectionEdit[], historyMode: EditorCommandHistoryMode): EditorEditCommand {
   if (!Array.isArray(edits) || edits.length !== selections.selections.length) {
@@ -305,6 +326,48 @@ function buildSelectionEditCommand(
     primarySelectionIndex: normalizedSelections.primaryIndex,
     historyMode,
   };
+}
+
+function createDeleteWordCommand(model: TextModel, selections: TextSelectionSet, navigation: EditorCursorNavigationCommand, historyMode: EditorCommandHistoryMode, wordPattern: RegExp | undefined): EditorEditCommand {
+  return buildSelectionEditCommand(
+    model,
+    selections,
+    selections.selections.map((selection, selectionIndex) => {
+      const range = selection.collapsed
+        ? navigateEditorCursors(model, TextSelectionSet.single(selection), {
+          command: navigation,
+          mode: EditorCursorNavigationMode.Extend,
+          ...(wordPattern ? { wordPattern } : {}),
+        }).selections.primary.range
+        : selection.range;
+      return replacement(model, selectionIndex, range, "", 0);
+    }),
+    historyMode,
+  );
+}
+
+function createDeleteToLineBoundaryCommand(model: TextModel, selections: TextSelectionSet, boundary: "start" | "end"): EditorEditCommand {
+  return createSelectionEditCommand(
+    model,
+    selections,
+    selections.selections.map(selection => {
+      const range = selection.collapsed
+        ? boundary === "start"
+          ? TextRange.from(TextPosition.at(selection.active.lineIndex, 0), selection.active)
+          : TextRange.from(selection.active, TextPosition.at(
+            selection.active.lineIndex,
+            model.getLineContent(selection.active.lineIndex).length,
+          ))
+        : selection.range;
+      return {
+        range,
+        text: "",
+        anchorOffsetInText: 0,
+        activeOffsetInText: 0,
+      };
+    }),
+    EditorCommandHistoryMode.Isolated,
+  );
 }
 
 function normalizeSelectionsAfter(selections: readonly TextSelectionOffsets[], primaryIndex: number): {

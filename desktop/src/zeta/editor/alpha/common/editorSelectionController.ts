@@ -22,6 +22,10 @@ export interface EditorEditCommand {
 
 export interface EditorSelectionControllerOptions {
   readonly selectionHistoryLimit?: number;
+  /** Limits reversible cursor-only operations independently from text undo history. */
+  readonly cursorHistoryLimit?: number;
+  /** Prevents this editor instance from committing text commands while preserving navigation and selection. */
+  readonly readOnly?: boolean;
 }
 
 export enum EditorSelectionChangeReason {
@@ -31,6 +35,8 @@ export enum EditorSelectionChangeReason {
   Redo = "redo",
   ModelChange = "modelChange",
   HistoryCancellation = "historyCancellation",
+  CursorOperation = "cursorOperation",
+  CursorUndo = "cursorUndo",
 }
 
 export enum EditorCommandHistoryMode {
@@ -63,6 +69,19 @@ interface ActiveComposition {
   valid: boolean;
 }
 
+const DEFAULT_CURSOR_HISTORY_LIMIT = 100;
+
+function readReadOnly(value: boolean | undefined): boolean {
+  if (value !== undefined && typeof value !== "boolean") throw new TypeError("Editor read-only mode must be boolean");
+  return value ?? false;
+}
+
+function readCursorHistoryLimit(value: number | undefined): number {
+  const limit = value ?? DEFAULT_CURSOR_HISTORY_LIMIT;
+  if (!Number.isSafeInteger(limit) || limit < 0) throw new RangeError("Cursor history limit must be a non-negative safe integer");
+  return limit;
+}
+
 /**
  * Per-editor selection state for one shared `TextModel`.
  *
@@ -78,6 +97,9 @@ export class EditorSelectionController extends DisposableOwner {
     new Map<number, SelectionHistoryEntry>();
   private readonly selectionHistoryOrder: number[] = [];
   private readonly selectionHistoryLimit: number;
+  private readonly cursorHistory: TextSelectionSet[] = [];
+  private readonly cursorHistoryLimit: number;
+  private readonly readOnlyMode: boolean;
   private trackedSelections: TrackedSelection[] = [];
   private currentSelections: TextSelectionSet;
   private activeHistoryGroup: TextEditHistoryGroup | undefined;
@@ -98,6 +120,8 @@ export class EditorSelectionController extends DisposableOwner {
     this.selectionHistoryLimit = readSelectionHistoryLimit(
       options.selectionHistoryLimit,
     );
+    this.cursorHistoryLimit = readCursorHistoryLimit(options.cursorHistoryLimit);
+    this.readOnlyMode = readReadOnly(options.readOnly);
     this.currentSelections = initialSelections;
     try {
       this.installSelections(initialSelections);
@@ -107,6 +131,7 @@ export class EditorSelectionController extends DisposableOwner {
         this.trackedSelections = [];
         this.selectionHistory.clear();
         this.selectionHistoryOrder.length = 0;
+        this.cursorHistory.length = 0;
         if (this.activeComposition) {
           this.activeComposition.valid = false;
           this.activeComposition = undefined;
@@ -128,14 +153,42 @@ export class EditorSelectionController extends DisposableOwner {
     return this.model;
   }
 
+  /** Whether this editor instance may submit document-changing commands. */
+  get readOnly(): boolean {
+    this.ensureAlive();
+    return this.readOnlyMode;
+  }
+
   setSelections(selections: TextSelectionSet): void {
     this.ensureAlive();
     this.assertNoActiveComposition("set selections");
     this.breakHistoryGroup();
+    this.cursorHistory.length = 0;
     this.installSelections(
       selections,
       EditorSelectionChangeReason.Explicit,
     );
+  }
+
+  /** Records one cursor-only selection transition that `undoCursorOperation` may restore. */
+  setCursorSelections(selections: TextSelectionSet): void {
+    this.ensureAlive();
+    this.assertNoActiveComposition("set cursor selections");
+    this.breakHistoryGroup();
+    if (selectionSetsEqual(this.currentSelections, selections)) return;
+    this.rememberCursorSelections(this.currentSelections);
+    this.installSelections(selections, EditorSelectionChangeReason.CursorOperation);
+  }
+
+  /** Restores the preceding cursor-only selection state without changing document undo history. */
+  undoCursorOperation(): boolean {
+    this.ensureAlive();
+    this.assertNoActiveComposition("undo cursor operation");
+    this.breakHistoryGroup();
+    const previous = this.cursorHistory.pop();
+    if (!previous) return false;
+    this.installSelections(previous, EditorSelectionChangeReason.CursorUndo);
+    return true;
   }
 
   /** Ends command coalescing without creating an empty history entry. */
@@ -148,6 +201,8 @@ export class EditorSelectionController extends DisposableOwner {
   execute(command: EditorEditCommand): TextModelChange | undefined {
     this.ensureAlive();
     this.assertNoActiveComposition("execute a command");
+    if (this.readOnlyMode) return undefined;
+    this.cursorHistory.length = 0;
     const historyGroup = this.historyGroupFor(command.historyMode);
     return this.executeCommand(
       command,
@@ -159,6 +214,7 @@ export class EditorSelectionController extends DisposableOwner {
   beginComposition(): EditorCompositionSession {
     this.ensureAlive();
     this.assertNoActiveComposition("begin another composition");
+    if (this.readOnlyMode) throw new Error("Cannot begin composition in a read-only editor");
     if (!IME.enabled) {
       throw new Error("IME composition is currently disabled");
     }
@@ -168,6 +224,7 @@ export class EditorSelectionController extends DisposableOwner {
       );
     }
     this.breakHistoryGroup();
+    this.cursorHistory.length = 0;
     const initialSelections = this.currentSelections;
     const initialRange = initialSelections.primary.range;
     const startOffset = this.model.offsetAt(initialRange.start);
@@ -301,6 +358,8 @@ export class EditorSelectionController extends DisposableOwner {
   undo(): TextModelChange | undefined {
     this.ensureAlive();
     this.assertNoActiveComposition("undo");
+    if (this.readOnlyMode) return undefined;
+    this.cursorHistory.length = 0;
     this.breakHistoryGroup();
     return this.model.undo();
   }
@@ -308,6 +367,8 @@ export class EditorSelectionController extends DisposableOwner {
   redo(): TextModelChange | undefined {
     this.ensureAlive();
     this.assertNoActiveComposition("redo");
+    if (this.readOnlyMode) return undefined;
+    this.cursorHistory.length = 0;
     this.breakHistoryGroup();
     return this.model.redo();
   }
@@ -315,6 +376,7 @@ export class EditorSelectionController extends DisposableOwner {
   private acceptModelChange(change: TextModelChange): void {
     if (this.executingCommand) return;
     this.breakHistoryGroup();
+    this.cursorHistory.length = 0;
     this.invalidateActiveComposition();
     const history = this.selectionHistory.get(change.transactionId);
     if (history && change.reason === TextModelChangeReason.Undo) {
@@ -418,6 +480,12 @@ export class EditorSelectionController extends DisposableOwner {
       const oldest = this.selectionHistoryOrder.shift();
       if (oldest !== undefined) this.selectionHistory.delete(oldest);
     }
+  }
+
+  private rememberCursorSelections(selections: TextSelectionSet): void {
+    if (this.cursorHistoryLimit === 0) return;
+    this.cursorHistory.push(selections);
+    while (this.cursorHistory.length > this.cursorHistoryLimit) this.cursorHistory.shift();
   }
 
   private forgetSelectionHistory(transactionId: number): void {

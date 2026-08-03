@@ -90,11 +90,13 @@ export class AlphaCompositionController extends DisposableOwner {
     if (event.defaultPrevented || this.activeComposition) return;
     if (
       !IME.enabled ||
+      this.selectionController.readOnly ||
       this.selectionController.selections.selections.length !== 1
     ) {
       event.preventDefault();
       return;
     }
+    this.element.value = "";
     const startPosition = this.selectionController.selections.primary.range.start;
     const session = this.selectionController.beginComposition();
     this.activeComposition = {

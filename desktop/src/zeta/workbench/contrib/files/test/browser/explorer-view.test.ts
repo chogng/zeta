@@ -17,6 +17,10 @@ test("ExplorerViewPane renders, expands, and opens workspace files", async () =>
   const directoryReads: string[] = [];
   let openedInput: EditorInput | undefined;
   const fileService: IFileService = {
+    onDidChangeFiles: () => ({
+      dispose() {},
+      [Symbol.dispose]() {},
+    }),
     stat: async (resource) => ({
       resource,
       kind: FileKind.Directory,
@@ -55,6 +59,9 @@ test("ExplorerViewPane renders, expands, and opens workspace files", async () =>
     },
     readFile: async () => {
       throw new Error("Explorer must delegate file content resolution to the selected editor");
+    },
+    writeFile: async () => {
+      throw new Error("Explorer must delegate file writes to the selected editor");
     },
   };
   using workspaceContextService = new WorkspaceContextService({

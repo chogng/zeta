@@ -120,7 +120,14 @@ test("EditorPart passes the Workbench text-file service to pane factories", asyn
   const dom = new JSDOM("<!doctype html><body></body>");
   const registry = new EditorPaneRegistry();
   const textFileService = {
+    onDidChangeFiles: () => ({
+      dispose() {},
+      [Symbol.dispose]() {},
+    }),
     resolve: async () => {
+      throw new Error("not used");
+    },
+    save: async () => {
       throw new Error("not used");
     },
   };

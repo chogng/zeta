@@ -77,11 +77,17 @@ function encodeItem(item: LanguageCompletionItem): unknown {
       end: encodePosition(item.range.end),
     }),
     insertText: item.insertText,
+    ...(item.insertTextFormat === undefined ? {} : { insertTextFormat: item.insertTextFormat }),
     ...(item.detail === undefined ? {} : { detail: item.detail }),
     ...(item.documentation === undefined ? {} : { documentation: item.documentation }),
     ...(item.filterText === undefined ? {} : { filterText: item.filterText }),
     ...(item.sortText === undefined ? {} : { sortText: item.sortText }),
     ...(item.preselect === undefined ? {} : { preselect: item.preselect }),
+    ...(item.commitCharacters === undefined ? {} : { commitCharacters: item.commitCharacters }),
+    ...(item.additionalTextEdits === undefined ? {} : { additionalTextEdits: item.additionalTextEdits.map(edit => Object.freeze({
+      range: Object.freeze({ start: encodePosition(edit.range.start), end: encodePosition(edit.range.end) }),
+      text: edit.text,
+    })) }),
     ...(item.hasDeferredDetails === undefined ? {} : { hasDeferredDetails: item.hasDeferredDetails }),
   });
 }
@@ -94,6 +100,8 @@ function decodeItem(value: unknown): LanguageCompletionItem {
   const documentation = decodeOptionalString(value.documentation, "Completion wire item documentation");
   const filterText = decodeOptionalString(value.filterText, "Completion wire item filter text");
   const sortText = decodeOptionalString(value.sortText, "Completion wire item sort text");
+  const commitCharacters = decodeOptionalCommitCharacters(value.commitCharacters);
+  const additionalTextEdits = decodeOptionalAdditionalTextEdits(value.additionalTextEdits);
   if (value.preselect !== undefined && typeof value.preselect !== "boolean") {
     throw new TypeError("Completion wire item preselect must be a boolean");
   }
@@ -110,13 +118,38 @@ function decodeItem(value: unknown): LanguageCompletionItem {
       decodePosition(range.end, "Completion wire item range end"),
     ),
     insertText: decodeString(value.insertText, "Completion wire item insertion text"),
+    ...(value.insertTextFormat === undefined ? {} : { insertTextFormat: decodeString(value.insertTextFormat, "Completion wire item insert text format") as LanguageCompletionItem["insertTextFormat"] }),
     ...(detail === undefined ? {} : { detail }),
     ...(documentation === undefined ? {} : { documentation }),
     ...(filterText === undefined ? {} : { filterText }),
     ...(sortText === undefined ? {} : { sortText }),
     ...(value.preselect === undefined ? {} : { preselect: value.preselect }),
+    ...(commitCharacters === undefined ? {} : { commitCharacters }),
+    ...(additionalTextEdits === undefined ? {} : { additionalTextEdits }),
     ...(value.hasDeferredDetails === undefined ? {} : { hasDeferredDetails: value.hasDeferredDetails }),
   };
+}
+
+function decodeOptionalCommitCharacters(value: unknown): readonly string[] | undefined {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value)) throw new TypeError("Completion wire item commit characters must be an array");
+  return value.map(character => decodeString(character, "Completion wire item commit character"));
+}
+
+function decodeOptionalAdditionalTextEdits(value: unknown): readonly { readonly range: TextRange; readonly text: string }[] | undefined {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value)) throw new TypeError("Completion wire item additional text edits must be an array");
+  return value.map(edit => {
+    assertRecord(edit, "Completion wire additional text edit");
+    assertRecord(edit.range, "Completion wire additional text edit range");
+    return {
+      range: TextRange.from(
+        decodePosition(edit.range.start, "Completion wire additional text edit range start"),
+        decodePosition(edit.range.end, "Completion wire additional text edit range end"),
+      ),
+      text: decodeString(edit.text, "Completion wire additional text edit text"),
+    };
+  });
 }
 
 function encodeContext(context: LanguageCompletionContext): unknown {

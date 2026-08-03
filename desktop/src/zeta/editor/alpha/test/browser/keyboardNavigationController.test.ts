@@ -105,6 +105,7 @@ for (const [name, value] of Object.entries({
 
 const { AlphaEditorViewport } = await import("../../browser/alphaEditorViewport.js");
 const { AlphaKeyboardNavigationController } = await import("../../browser/keyboardNavigationController.js");
+const { AlphaEditorLineWrapping } = await import("../../browser/visualLineProjection.js");
 
 test("Keyboard controller retains columns, routes multi-selection, and reveals primary", () => {
   const dom = new JSDOM("<!doctype html><body><main></main></body>");
@@ -210,6 +211,56 @@ test("Keyboard controller retains columns, routes multi-selection, and reveals p
   const disposedSelections = selections.selections;
   viewport.element.dispatchEvent(keyboardEvent(dom.window, "ArrowDown"));
   assert.equal(selections.selections, disposedSelections);
+
+  dom.window.close();
+});
+
+test("Keyboard controller moves by measured visual rows when soft wrapping is enabled", () => {
+  const dom = new JSDOM("<!doctype html><body><main></main></body>");
+  const container = dom.window.document.querySelector("main");
+  assert.ok(container);
+  using model = new TextModel("abcdef\nghij");
+  using selections = new EditorSelectionController(
+    model,
+    TextSelectionSet.single(caret(0, 1)),
+  );
+  using viewport = new AlphaEditorViewport({
+    container,
+    model,
+    lineHeight: 20,
+    textMeasurer: new FixedTextMeasurer(),
+    selectionController: selections,
+    lineWrapping: AlphaEditorLineWrapping.On,
+  });
+  viewport.layout({ width: 70, height: 40 });
+  using keyboard = new AlphaKeyboardNavigationController(
+    viewport,
+    selections,
+    { operatingSystem: OperatingSystem.Windows },
+  );
+
+  viewport.element.dispatchEvent(keyboardEvent(dom.window, "ArrowDown"));
+  assert.deepEqual(selections.selections.primary, caret(0, 3));
+  viewport.element.dispatchEvent(keyboardEvent(dom.window, "ArrowDown"));
+  assert.deepEqual(selections.selections.primary, caret(0, 5));
+  viewport.element.dispatchEvent(keyboardEvent(dom.window, "ArrowDown"));
+  assert.deepEqual(selections.selections.primary, caret(1, 1));
+  viewport.element.dispatchEvent(keyboardEvent(dom.window, "ArrowUp"));
+  assert.deepEqual(selections.selections.primary, caret(0, 5));
+
+  selections.setSelections(TextSelectionSet.single(caret(0, 1)));
+  viewport.element.dispatchEvent(keyboardEvent(dom.window, "PageDown"));
+  assert.deepEqual(selections.selections.primary, caret(0, 5));
+  selections.setSelections(TextSelectionSet.single(caret(0, 1)));
+  viewport.element.dispatchEvent(keyboardEvent(
+    dom.window,
+    "ArrowDown",
+    { shiftKey: true },
+  ));
+  assert.deepEqual(
+    selections.selections.primary,
+    TextSelection.from(TextPosition.at(0, 1), TextPosition.at(0, 3)),
+  );
 
   dom.window.close();
 });

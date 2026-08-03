@@ -4,6 +4,7 @@ import { JSDOM } from "jsdom";
 import { URI } from "../../../../base/common/uri.js";
 import { TextFileContentSource, type ITextFileService, type ResolvedTextFileContent, type TextFileResolveRequest } from "../../../../workbench/services/textfile/common/textFileService.js";
 import { EditorPaneVisibility } from "../../../../workbench/browser/parts/editor/editorPane.js";
+import { TextPosition, TextRange } from "../../common/text.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
@@ -20,6 +21,7 @@ for (const [name, value] of Object.entries({
 
 const { AlphaEditorPane } = await import("../../browser/alphaEditorPane.js");
 const { AlphaTextModelService } = await import("../../browser/alphaTextModelService.js");
+const { AlphaEditorTextDirection } = await import("../../browser/alphaEditorViewport.js");
 
 test.after(() => browserEnvironment.window.close());
 
@@ -28,7 +30,7 @@ test("Alpha editor pane loads, lays out, focuses, hides, and clears one native s
   dom.window.HTMLCanvasElement.prototype.getContext = () => null;
   const parent = dom.window.document.querySelector<HTMLElement>("main")!;
   using models = new AlphaTextModelService();
-  const pane = new AlphaEditorPane(new ImmediateTextFiles("from disk"), { modelService: models });
+  const pane = new AlphaEditorPane(new ImmediateTextFiles("from disk"), { modelService: models, textDirection: AlphaEditorTextDirection.RightToLeft });
   pane.create(parent);
   pane.layout({ width: 640, height: 480 });
   await pane.setInput({
@@ -40,8 +42,10 @@ test("Alpha editor pane loads, lays out, focuses, hides, and clears one native s
   assert.equal(pane.getValue(), "const alpha = 1;");
   assert.equal(parent.querySelectorAll(".zeta-alpha-editor-pane").length, 1);
   assert.equal(parent.querySelectorAll(".zeta-alpha-editor").length, 1);
+  assert.equal(parent.querySelector<HTMLElement>(".zeta-alpha-editor")?.dir, "rtl");
   pane.focus();
   assert.equal(dom.window.document.activeElement?.classList.contains("zeta-alpha-editor-input"), true);
+  assert.equal((dom.window.document.activeElement as HTMLTextAreaElement).dir, "rtl");
   pane.setVisible(EditorPaneVisibility.Hidden);
   assert.equal((parent.firstElementChild as HTMLElement).hidden, true);
   pane.setVisible(EditorPaneVisibility.Visible);
@@ -61,7 +65,7 @@ test("Alpha editor pane releases a load cancelled before content resolution", as
   const parent = dom.window.document.querySelector<HTMLElement>("main")!;
   using models = new AlphaTextModelService();
   const pending = deferred<ResolvedTextFileContent>();
-  const pane = new AlphaEditorPane({ resolve: () => pending.promise }, { modelService: models });
+  const pane = new AlphaEditorPane({ onDidChangeFiles: inertFileChanges, resolve: () => pending.promise, save: async () => {} }, { modelService: models });
   pane.create(parent);
   const controller = new AbortController();
   const opening = pane.setInput({ resource: URI.file("C:\\project\\slow.ts") }, controller.signal);
@@ -78,8 +82,46 @@ test("Alpha editor pane releases a load cancelled before content resolution", as
   dom.window.close();
 });
 
+test("Alpha editor pane saves and reverts its shared model reference", async () => {
+  const dom = new JSDOM("<!doctype html><body><main></main></body>");
+  dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+  const parent = dom.window.document.querySelector<HTMLElement>("main")!;
+  using models = new AlphaTextModelService();
+  const textFiles = new ImmediateTextFiles("from disk");
+  const resource = URI.file("C:\\project\\main.ts");
+  const reference = await models.acquire({ resource }, textFiles, new AbortController().signal);
+  const pane = new AlphaEditorPane(textFiles, { modelService: models });
+  pane.create(parent);
+  await pane.setInput({ resource, label: "main.ts" }, new AbortController().signal);
+
+  reference.model.applyEdits([{
+    range: TextRange.from(TextPosition.at(0, 0), TextPosition.at(0, 4)),
+    text: "saved",
+  }]);
+  assert.equal(pane.isDirty, true);
+  await pane.save();
+  assert.deepEqual(textFiles.savedTexts, ["saved disk"]);
+  assert.equal(pane.isDirty, false);
+
+  reference.model.applyEdits([{
+    range: TextRange.emptyAt(TextPosition.at(0, 5)),
+    text: " locally",
+  }]);
+  textFiles.setText("from disk");
+  await pane.revert();
+  assert.equal(pane.getValue(), "from disk");
+  assert.equal(pane.isDirty, false);
+
+  reference.dispose();
+  pane.dispose();
+  dom.window.close();
+});
+
 class ImmediateTextFiles implements ITextFileService {
-  constructor(private readonly text: string) {}
+  readonly savedTexts: string[] = [];
+  readonly onDidChangeFiles = inertFileChanges;
+
+  constructor(private text: string) {}
 
   async resolve(request: TextFileResolveRequest): Promise<ResolvedTextFileContent> {
     return {
@@ -88,6 +130,22 @@ class ImmediateTextFiles implements ITextFileService {
       source: request.bootstrapText === undefined ? TextFileContentSource.FileSystem : TextFileContentSource.Bootstrap,
     };
   }
+
+  async save(request: { readonly text: string }): Promise<void> {
+    this.savedTexts.push(request.text);
+    this.text = request.text;
+  }
+
+  setText(text: string): void {
+    this.text = text;
+  }
+}
+
+function inertFileChanges() {
+  return {
+    dispose() {},
+    [Symbol.dispose]() {},
+  };
 }
 
 function deferred<T>(): { readonly promise: Promise<T>; readonly resolve: (value: T) => void } {

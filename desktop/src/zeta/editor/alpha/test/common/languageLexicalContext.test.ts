@@ -118,3 +118,30 @@ test("Lexical context distinguishes line-comment and closed block-comment ends",
   assert.equal(context.getTokenTypeAt(TextPosition.at(0, 8)), "comment");
   assert.equal(context.getTokenTypeAt(TextPosition.at(1, 11)), undefined);
 });
+
+test("Rust raw strings do not contribute structural brackets", () => {
+  using model = new TextModel("let raw = r#\"{\n} \"#;\n{");
+  using configurations = new LanguageConfigurationRegistry();
+  using language = configurations.register("rust", {
+    brackets: [{ open: "{", close: "}" }],
+  });
+  using context = new LanguageLexicalContextIndex(model, "rust", configurations);
+
+  assert.equal(context.getStructuralLineContent(0), "let raw = r#\"");
+  assert.equal(context.getStructuralLineContent(1), " \"#;");
+  assert.equal(context.getStructuralLineContent(2), "{");
+  assert.equal(context.getTokenTypeAt(TextPosition.at(1, 1)), "string");
+});
+
+test("ECMAScript regular-expression literals do not contribute structural brackets", () => {
+  using model = new TextModel("const matcher = /[{]/;\n{");
+  using configurations = new LanguageConfigurationRegistry();
+  using language = configurations.register("typescript", {
+    brackets: [{ open: "{", close: "}" }],
+  });
+  using context = new LanguageLexicalContextIndex(model, "typescript", configurations);
+
+  assert.equal(context.getStructuralLineContent(0), "const matcher = /[]/;");
+  assert.equal(context.getTokenTypeAt(TextPosition.at(0, 17)), "regexp");
+  assert.equal(context.getStructuralLineContent(1), "{");
+});

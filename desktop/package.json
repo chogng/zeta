@@ -45,6 +45,7 @@
     "build:renderer:complete": "cross-env ZETA_PRODUCT=complete pnpm run build:renderer",
     "build:rust": "cargo build --manifest-path ../zeta-rs/Cargo.toml -p zeta-cli",
     "benchmark:alpha": "tsc -p tsconfig.test.json && node dist/test/src/zeta/editor/alpha/benchmark/pieceTreeTextBuffer.benchmark.js",
+    "benchmark:alpha:check": "ALPHA_ENFORCE_PERFORMANCE_BUDGETS=1 pnpm benchmark:alpha",
     "test:main": "pnpm run test:scripts && pnpm run test:unit",
     "test:scripts": "node --test scripts/prepare-dev-package.test.mjs scripts/sync-product-icons.test.mjs scripts/web-app-server-vite-plugin.test.mjs scripts/workbench-entry-vite-plugin.test.mjs",
     "test:unit": "node -e \"require('node:fs').rmSync('dist/test', { recursive: true, force: true })\" && tsc -p tsconfig.test.json && node test/unit/run.mjs",

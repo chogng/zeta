@@ -15,6 +15,7 @@ test("Completion stores normalize immutable current-version results", () => {
     sortText: "001",
     preselect: true,
     insertText: "const\r\n",
+    commitCharacters: [".", "("],
   });
   assert.equal(store.accept({
     requestId: 1,
@@ -33,6 +34,8 @@ test("Completion stores normalize immutable current-version results", () => {
   assert.equal(result.items[0]!.label, "const");
   assert.equal(result.items[0]!.insertText, "const\n");
   assert.equal(result.items[0]!.preselect, true);
+  assert.deepEqual(result.items[0]!.commitCharacters, [".", "("]);
+  assert.equal(Object.isFrozen(result.items[0]!.commitCharacters), true);
   assert.equal(result.isIncomplete, true);
   assert.equal(Object.isFrozen(result), true);
   assert.equal(Object.isFrozen(result.items), true);
@@ -63,6 +66,8 @@ test("Completion normalization rejects ambiguous items atomically", () => {
       completion("two", "two", 0, 3, { preselect: true }),
     ],
     [completion(" spaced ", "spaced", 0, 3)],
+    [completion("duplicate-commit", "duplicate-commit", 0, 3, { commitCharacters: [".", "."] })],
+    [completion("invalid-commit", "invalid-commit", 0, 3, { commitCharacters: ["two"] })],
   ];
 
   for (const [index, items] of cases.entries()) {
@@ -91,6 +96,42 @@ test("Completion stores invalidate results on model edits", () => {
   }]);
 
   assert.equal(store.result, undefined);
+});
+
+test("Completion stores normalize immutable non-overlapping additional text edits", () => {
+  using model = new TextModel("xcon");
+  using store = createLanguageCompletionStore(model);
+  assert.equal(store.accept({
+    requestId: 1,
+    textModel: model,
+    modelVersion: model.version,
+    value: {
+      position: TextPosition.at(0, 4),
+      items: [{
+        ...completion("console", "console", 1, 4),
+        additionalTextEdits: [{ range: TextRange.emptyAt(TextPosition.at(0, 0)), text: "import " }],
+      }],
+      isIncomplete: false,
+    },
+  }), LanguageResultAcceptance.Applied);
+  const edits = store.result!.value.items[0]!.additionalTextEdits!;
+  assert.deepEqual(edits, [{ range: TextRange.emptyAt(TextPosition.at(0, 0)), text: "import " }]);
+  assert.equal(Object.isFrozen(edits), true);
+  assert.equal(Object.isFrozen(edits[0]), true);
+
+  assert.throws(() => store.accept({
+    requestId: 2,
+    textModel: model,
+    modelVersion: model.version,
+    value: {
+      position: TextPosition.at(0, 4),
+      items: [{
+        ...completion("overlap", "overlap", 1, 4),
+        additionalTextEdits: [{ range: TextRange.from(TextPosition.at(0, 0), TextPosition.at(0, 2)), text: "" }],
+      }],
+      isIncomplete: false,
+    },
+  }), /must not overlap or touch/);
 });
 
 test("Snapshot completion normalization indexes captured text once", () => {
@@ -143,6 +184,7 @@ interface CompletionOverrides {
   readonly filterText?: string;
   readonly sortText?: string;
   readonly preselect?: boolean;
+  readonly commitCharacters?: readonly string[];
   readonly insertText?: string;
   readonly range?: TextRange;
   readonly kind?: LanguageCompletionItemKind;
@@ -164,5 +206,6 @@ function completion(id: string, label: string, startColumn: number, endColumn: n
     ...(overrides.filterText === undefined ? {} : { filterText: overrides.filterText }),
     ...(overrides.sortText === undefined ? {} : { sortText: overrides.sortText }),
     ...(overrides.preselect === undefined ? {} : { preselect: overrides.preselect }),
+    ...(overrides.commitCharacters === undefined ? {} : { commitCharacters: overrides.commitCharacters }),
   };
 }

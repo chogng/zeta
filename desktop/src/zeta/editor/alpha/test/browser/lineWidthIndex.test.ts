@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { toDisposable } from "../../../../base/common/lifecycle.js";
 import { type AlphaTextMeasurer } from "../../browser/fontMetrics.js";
 import { AlphaLineWidthIndex } from "../../browser/lineWidthIndex.js";
 import { TextRange } from "../../common/text.js";
@@ -33,6 +34,76 @@ test("AlphaLineWidthIndex matches full scans across random transactions", () => 
     );
   }
 });
+
+test("AlphaLineWidthIndex refines large initial scans without blocking construction", () => {
+  const scheduler = new ManualMeasurementScheduler();
+  const measurer = new WeightedTextMeasurer();
+  using model = new TextModel("a\nbbbbbbbb\ncccccccccc\nddddddddddd");
+  using index = new AlphaLineWidthIndex(model, measurer, {
+    initialMeasurement: {
+      initialLineCount: 1,
+      linesPerSlice: 2,
+      schedule: callback => scheduler.schedule(callback),
+    },
+  });
+  const maxima: number[] = [];
+  using listener = index.onDidChange(() => maxima.push(index.maximumLineWidth));
+
+  assert.equal(index.maximumLineWidth, 7);
+  assert.equal(index.complete, false);
+  scheduler.runNext();
+  assert.equal(index.maximumLineWidth, 20);
+  assert.equal(index.complete, false);
+  scheduler.runNext();
+  assert.equal(index.maximumLineWidth, 33);
+  assert.equal(index.complete, true);
+  assert.deepEqual(maxima, [20, 33]);
+});
+
+test("AlphaLineWidthIndex restarts an incomplete scan after an edit", () => {
+  const scheduler = new ManualMeasurementScheduler();
+  const measurer = new WeightedTextMeasurer();
+  using model = new TextModel("a\nbbbbbbbb\ncccccccccc\nddddddddddd");
+  using index = new AlphaLineWidthIndex(model, measurer, {
+    initialMeasurement: {
+      initialLineCount: 1,
+      linesPerSlice: 1,
+      schedule: callback => scheduler.schedule(callback),
+    },
+  });
+  using listener = model.onDidChange(change => index.applyModelChange(change));
+
+  model.applyEdits([{
+    range: TextRange.from(model.positionAt(0), model.positionAt(1)),
+    text: "xxxxxxxx",
+  }]);
+  scheduler.runAll();
+
+  assert.equal(index.complete, true);
+  assert.equal(index.maximumLineWidth, fullScanMaximum(model, measurer));
+});
+
+class ManualMeasurementScheduler {
+  private readonly pending: { readonly callback: () => void; cancelled: boolean }[] = [];
+
+  schedule(callback: () => void) {
+    const entry = { callback, cancelled: false };
+    this.pending.push(entry);
+    return toDisposable(() => {
+      entry.cancelled = true;
+    });
+  }
+
+  runNext(): void {
+    const entry = this.pending.shift();
+    if (!entry) throw new Error("Expected one scheduled measurement slice");
+    if (!entry.cancelled) entry.callback();
+  }
+
+  runAll(): void {
+    while (this.pending.length > 0) this.runNext();
+  }
+}
 
 class WeightedTextMeasurer implements AlphaTextMeasurer {
   readonly horizontalPadding = 0;

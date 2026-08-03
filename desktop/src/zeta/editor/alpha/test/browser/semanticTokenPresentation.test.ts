@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { AlphaSemanticTokenPresentation, createAlphaSemanticTokenSource, projectAlphaSemanticTokenLine, resolveAlphaSemanticTokenPresentation, type AlphaResolvedSemanticToken } from "../../browser/semanticTokenPresentation.js";
+import { AlphaSemanticTokenModifier, AlphaSemanticTokenPresentation, createAlphaSemanticTokenSource, projectAlphaSemanticTokenLine, resolveAlphaSemanticTokenModifiers, resolveAlphaSemanticTokenPresentation, type AlphaResolvedSemanticToken } from "../../browser/semanticTokenPresentation.js";
 import { LanguageResultAcceptance } from "../../common/languageResultStore.js";
 import { LanguageTokenLineIndex } from "../../common/languageTokenLineIndex.js";
 import { createLanguageTokenStore, type LanguageToken } from "../../common/languageResults.js";
@@ -12,6 +12,27 @@ test("Default resolver maps only Alpha's explicit semantic vocabulary", () => {
   assert.equal(resolveAlphaSemanticTokenPresentation(token(0, 0, 1, "keyword")), AlphaSemanticTokenPresentation.Keyword);
   assert.equal(resolveAlphaSemanticTokenPresentation(token(0, 0, 1, "method")), AlphaSemanticTokenPresentation.Function);
   assert.equal(resolveAlphaSemanticTokenPresentation(token(0, 0, 1, "plugin-controlled-class")), undefined);
+});
+
+test("Semantic token modifiers use Alpha's closed presentation vocabulary", () => {
+  assert.deepEqual(
+    resolveAlphaSemanticTokenModifiers(token(0, 0, 1, "variable", ["declaration", "readonly", "unknown-plugin-modifier", "definition"])),
+    [AlphaSemanticTokenModifier.Declaration, AlphaSemanticTokenModifier.Readonly],
+  );
+
+  const dom = new JSDOM("<!doctype html><body><code></code></body>");
+  const element = requiredElement<HTMLElement>(dom.window.document, "code");
+  projectAlphaSemanticTokenLine(element, "name", [presented(
+    0,
+    4,
+    AlphaSemanticTokenPresentation.Variable,
+    [AlphaSemanticTokenModifier.Declaration, AlphaSemanticTokenModifier.Readonly],
+  )]);
+  const rendered = requiredElement<HTMLElement>(element, ".zeta-alpha-editor-token");
+  assert.equal(rendered.classList.contains(AlphaSemanticTokenModifier.Declaration), true);
+  assert.equal(rendered.classList.contains(AlphaSemanticTokenModifier.Readonly), true);
+  assert.equal(rendered.textContent, "name");
+  dom.window.close();
 });
 
 test("Semantic token source resolves immutable named lines without owning common state", () => {
@@ -82,6 +103,18 @@ test("Semantic line projection is HTML-safe and preserves exact text", () => {
   dom.window.close();
 });
 
+test("Semantic line projection composes lexical bracket colors without changing token text", () => {
+  const dom = new JSDOM("<!doctype html><body><code></code></body>");
+  const element = requiredElement<HTMLElement>(dom.window.document, "code");
+  projectAlphaSemanticTokenLine(element, "fn(a)", [presented(0, 2, AlphaSemanticTokenPresentation.Function)], [
+    { startColumn: 2, endColumn: 3, level: 1 },
+    { startColumn: 4, endColumn: 5, level: 1 },
+  ]);
+  assert.equal(element.textContent, "fn(a)");
+  assert.deepEqual([...element.querySelectorAll(".zeta-alpha-editor-bracket-level-1")].map(entry => entry.textContent), ["(", ")"]);
+  dom.window.close();
+});
+
 test("Invalid semantic line input fails before replacing existing DOM", () => {
   const dom = new JSDOM("<!doctype html><body><code><b>stable</b></code></body>");
   const element = requiredElement<HTMLElement>(dom.window.document, "code");
@@ -101,19 +134,19 @@ test("Invalid semantic line input fails before replacing existing DOM", () => {
   dom.window.close();
 });
 
-function token(lineIndex: number, startColumn: number, endColumn: number, tokenType: string): LanguageToken {
+function token(lineIndex: number, startColumn: number, endColumn: number, tokenType: string, modifiers: readonly string[] = []): LanguageToken {
   return {
     range: TextRange.from(
       TextPosition.at(lineIndex, startColumn),
       TextPosition.at(lineIndex, endColumn),
     ),
     tokenType,
-    modifiers: [],
+    modifiers,
   };
 }
 
-function presented(startColumn: number, endColumn: number, presentation: AlphaSemanticTokenPresentation): AlphaResolvedSemanticToken {
-  return { startColumn, endColumn, presentation };
+function presented(startColumn: number, endColumn: number, presentation: AlphaSemanticTokenPresentation, modifiers?: readonly AlphaSemanticTokenModifier[]): AlphaResolvedSemanticToken {
+  return { startColumn, endColumn, presentation, ...(modifiers ? { modifiers } : {}) };
 }
 
 function requiredElement<T extends Element>(root: ParentNode, selector: string): T {

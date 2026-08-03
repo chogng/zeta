@@ -1,9 +1,9 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
-import { EditorSelectionController } from "../../common/editorSelectionController.js";
+import { EditorCommandHistoryMode, EditorSelectionController } from "../../common/editorSelectionController.js";
 import { LanguageCompletionDetailsStatus, LanguageCompletionSessionChangeReason, LanguageCompletionSessionController } from "../../common/languageCompletionSession.js";
 import { LanguageResultAcceptance } from "../../common/languageResultStore.js";
-import { LanguageCompletionItemKind, createLanguageCompletionStore, type LanguageCompletionItem, type LanguageCompletionItemDetails, type LanguageCompletionItemResolver, type LanguageCompletionResolveRequest } from "../../common/languageCompletions.js";
+import { LanguageCompletionInsertTextFormat, LanguageCompletionItemKind, createLanguageCompletionStore, type LanguageCompletionItem, type LanguageCompletionItemDetails, type LanguageCompletionItemResolver, type LanguageCompletionResolveRequest } from "../../common/languageCompletions.js";
 import { TextSelection, TextSelectionSet } from "../../common/selection.js";
 import { TextPosition, TextRange } from "../../common/text.js";
 import { TextModel } from "../../common/textModel.js";
@@ -84,6 +84,198 @@ test("Accepting a completion is one isolated selection-aware undo step", () => {
   selections.undo();
   assert.equal(model.getText(), "con tail");
   assert.equal(selections.selections.primary.active.compareTo(TextPosition.at(0, 3)), 0);
+});
+
+test("A declared commit character accepts completion and text as one isolated undo step", () => {
+  using model = new TextModel("con tail");
+  using selections = controllerAt(model, TextPosition.at(0, 3));
+  using store = createLanguageCompletionStore(model);
+  using session = new LanguageCompletionSessionController(store, selections);
+  accept(store, model, 1, [{
+    ...completion("console", "console", false, TextRange.from(TextPosition.at(0, 0), TextPosition.at(0, 3))),
+    commitCharacters: ["."],
+  }]);
+
+  assert.equal(session.acceptSelectedWithCommitCharacter("."), true);
+  assert.equal(model.getText(), "console. tail");
+  assert.equal(selections.selections.primary.active.compareTo(TextPosition.at(0, 8)), 0);
+  selections.undo();
+  assert.equal(model.getText(), "con tail");
+  assert.equal(selections.selections.primary.active.compareTo(TextPosition.at(0, 3)), 0);
+});
+
+test("Completion acceptance applies additional edits and maps the caret through preceding changes", () => {
+  using model = new TextModel("xcon");
+  using selections = controllerAt(model, TextPosition.at(0, 4));
+  using store = createLanguageCompletionStore(model);
+  using session = new LanguageCompletionSessionController(store, selections);
+  assert.equal(store.accept({
+    requestId: 1,
+    textModel: model,
+    modelVersion: model.version,
+    value: {
+      position: TextPosition.at(0, 4),
+      items: [{
+        ...completion("console", "console", false, TextRange.from(TextPosition.at(0, 1), TextPosition.at(0, 4))),
+        additionalTextEdits: [{ range: TextRange.emptyAt(TextPosition.at(0, 0)), text: "import " }],
+      }],
+      isIncomplete: false,
+    },
+  }), LanguageResultAcceptance.Applied);
+
+  assert.equal(session.acceptSelected(), true);
+  assert.equal(model.getText(), "import xconsole");
+  assert.equal(selections.selections.primary.active.compareTo(TextPosition.at(0, 15)), 0);
+  selections.undo();
+  assert.equal(model.getText(), "xcon");
+  assert.equal(selections.selections.primary.active.compareTo(TextPosition.at(0, 4)), 0);
+});
+
+test("Completion snippets select grouped tabstops and leave them without changing text", () => {
+  using model = new TextModel("fn");
+  using selections = controllerAt(model, TextPosition.at(0, 2));
+  using store = createLanguageCompletionStore(model);
+  using session = new LanguageCompletionSessionController(store, selections);
+  assert.equal(store.accept({
+    requestId: 1,
+    textModel: model,
+    modelVersion: model.version,
+    value: {
+      position: TextPosition.at(0, 2),
+      items: [{
+        ...completion("function", "function", false, TextRange.from(TextPosition.at(0, 0), TextPosition.at(0, 2))),
+        insertText: "function ${1:name}(${2:value}) { $0 }",
+        insertTextFormat: LanguageCompletionInsertTextFormat.Snippet,
+      }],
+      isIncomplete: false,
+    },
+  }), LanguageResultAcceptance.Applied);
+
+  assert.equal(session.acceptSelected(), true);
+  assert.equal(model.getText(), "function name(value) {  }");
+  assert.deepEqual(selections.selections.primary.range, TextRange.from(TextPosition.at(0, 9), TextPosition.at(0, 13)));
+  assert.equal(session.selectNextSnippetPlaceholder(), true);
+  assert.deepEqual(selections.selections.primary.range, TextRange.from(TextPosition.at(0, 14), TextPosition.at(0, 19)));
+  assert.equal(session.selectNextSnippetPlaceholder(), true);
+  assert.deepEqual(selections.selections.primary, TextSelection.collapsedAt(TextPosition.at(0, 23)));
+  assert.equal(session.selectPreviousSnippetPlaceholder(), true);
+  assert.deepEqual(selections.selections.primary.range, TextRange.from(TextPosition.at(0, 14), TextPosition.at(0, 19)));
+  assert.equal(session.cancelSnippetPlaceholderNavigation(), true);
+  assert.equal(session.selectNextSnippetPlaceholder(), false);
+  assert.equal(model.getText(), "function name(value) {  }");
+});
+
+test("Completion snippets cycle choice tabstops and replace every mirror atomically", () => {
+  using model = new TextModel("x");
+  using selections = controllerAt(model, TextPosition.at(0, 1));
+  using store = createLanguageCompletionStore(model);
+  using session = new LanguageCompletionSessionController(store, selections);
+  assert.equal(store.accept({
+    requestId: 1,
+    textModel: model,
+    modelVersion: model.version,
+    value: {
+      position: TextPosition.at(0, 1),
+      items: [{
+        ...completion("choice", "choice", false, TextRange.from(TextPosition.at(0, 0), TextPosition.at(0, 1))),
+        insertText: "${1|a,long|}-$1$0",
+        insertTextFormat: LanguageCompletionInsertTextFormat.Snippet,
+      }],
+      isIncomplete: false,
+    },
+  }), LanguageResultAcceptance.Applied);
+
+  assert.equal(session.acceptSelected(), true);
+  assert.equal(model.getText(), "a-a");
+  assert.equal(session.selectNextSnippetChoice(), true);
+  assert.equal(model.getText(), "long-long");
+  assert.deepEqual(selections.selections, TextSelectionSet.withPrimary([
+    TextSelection.from(TextPosition.at(0, 0), TextPosition.at(0, 4)),
+    TextSelection.from(TextPosition.at(0, 5), TextPosition.at(0, 9)),
+  ], 0));
+  assert.equal(session.selectPreviousSnippetChoice(), true);
+  assert.equal(model.getText(), "a-a");
+  selections.undo();
+  assert.equal(model.getText(), "long-long");
+  selections.undo();
+  assert.equal(model.getText(), "a-a");
+});
+
+test("Completion snippets refresh tabstop transforms when navigation leaves a source group", () => {
+  using model = new TextModel("x");
+  using selections = controllerAt(model, TextPosition.at(0, 1));
+  using store = createLanguageCompletionStore(model);
+  using session = new LanguageCompletionSessionController(store, selections);
+  assert.equal(store.accept({
+    requestId: 1,
+    textModel: model,
+    modelVersion: model.version,
+    value: {
+      position: TextPosition.at(0, 1),
+      items: [{
+        ...completion("transform", "transform", false, TextRange.from(TextPosition.at(0, 0), TextPosition.at(0, 1))),
+        insertText: "${1:name} => ${1/(.*)/${1:/upcase}/}$0",
+        insertTextFormat: LanguageCompletionInsertTextFormat.Snippet,
+      }],
+      isIncomplete: false,
+    },
+  }), LanguageResultAcceptance.Applied);
+
+  assert.equal(session.acceptSelected(), true);
+  assert.equal(model.getText(), "name => NAME");
+  selections.execute({
+    edits: [{ range: TextRange.from(TextPosition.at(0, 0), TextPosition.at(0, 4)), text: "next" }],
+    selectionsAfter: [{ anchorOffset: 4, activeOffset: 4 }],
+    primarySelectionIndex: 0,
+    historyMode: EditorCommandHistoryMode.Isolated,
+  });
+  assert.equal(model.getText(), "next => NAME");
+  assert.equal(session.selectNextSnippetPlaceholder(), true);
+  assert.equal(model.getText(), "next => NEXT");
+});
+
+test("Completion snippets resolve caller-provided editor variables on acceptance", () => {
+  using model = new TextModel("f");
+  using selections = controllerAt(model, TextPosition.at(0, 1));
+  using store = createLanguageCompletionStore(model);
+  using session = new LanguageCompletionSessionController(store, selections, {
+    snippetVariables: {
+      resolveVariable(name): string | undefined {
+        return name === "TM_FILENAME_BASE" ? "main" : undefined;
+      },
+    },
+  });
+  assert.equal(store.accept({
+    requestId: 1,
+    textModel: model,
+    modelVersion: model.version,
+    value: {
+      position: TextPosition.at(0, 1),
+      items: [{
+        ...completion("file", "file", false, TextRange.from(TextPosition.at(0, 0), TextPosition.at(0, 1))),
+        insertText: "${1:$TM_FILENAME_BASE}.test",
+        insertTextFormat: LanguageCompletionInsertTextFormat.Snippet,
+      }],
+      isIncomplete: false,
+    },
+  }), LanguageResultAcceptance.Applied);
+
+  assert.equal(session.acceptSelected(), true);
+  assert.equal(model.getText(), "main.test");
+  assert.deepEqual(selections.selections.primary.range, TextRange.from(TextPosition.at(0, 0), TextPosition.at(0, 4)));
+});
+
+test("Completion commit characters reject undeclared or multi-grapheme input without changing state", () => {
+  using model = new TextModel("con");
+  using selections = controllerAt(model, TextPosition.at(0, 3));
+  using store = createLanguageCompletionStore(model);
+  using session = new LanguageCompletionSessionController(store, selections);
+  accept(store, model, 1, [{ ...completion("console", "console"), commitCharacters: ["."] }]);
+
+  assert.equal(session.acceptSelectedWithCommitCharacter("("), false);
+  assert.equal(model.getText(), "con");
+  assert.throws(() => session.acceptSelectedWithCommitCharacter("ab"), /one non-line-break grapheme/);
+  assert.equal(model.getText(), "con");
 });
 
 test("Selection changes and explicit cancellation close only the local session", () => {

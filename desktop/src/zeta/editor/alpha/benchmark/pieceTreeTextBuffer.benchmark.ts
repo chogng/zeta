@@ -6,6 +6,19 @@ interface BenchmarkResult {
   readonly milliseconds: number;
 }
 
+interface BenchmarkBudget {
+  readonly workload: string;
+  readonly maximumMilliseconds: number;
+}
+
+const budgets: readonly BenchmarkBudget[] = [
+  { workload: "construct 2 MiB document", maximumMilliseconds: 1_000 },
+  { workload: "10k scattered replacements", maximumMilliseconds: 5_000 },
+  { workload: "100k coordinate round trips", maximumMilliseconds: 2_500 },
+  { workload: "snapshot and 10k range reads", maximumMilliseconds: 2_500 },
+  { workload: "compact 2 MiB churn buffer", maximumMilliseconds: 1_000 },
+];
+
 const results: BenchmarkResult[] = [];
 const initialText = "const value = 1234567890;\n".repeat(80_000);
 let buffer = new PieceTreeTextBuffer("");
@@ -66,6 +79,15 @@ console.log({
   churnRetainedBeforeCompaction: retainedBeforeCompaction,
   churnAfterCompaction: churnBuffer.getStatistics(),
 });
+console.log(JSON.stringify({ results, budgets }, undefined, 2));
+if (process.env.ALPHA_ENFORCE_PERFORMANCE_BUDGETS === "1") {
+  for (const result of results) {
+    const budget = budgets.find(candidate => candidate.workload === result.workload)!;
+    if (result.milliseconds > budget.maximumMilliseconds) {
+      throw new Error(`${result.workload} exceeded its ${budget.maximumMilliseconds}ms budget (${result.milliseconds}ms)`);
+    }
+  }
+}
 
 function measure(workload: string, run: () => void): void {
   const start = performance.now();

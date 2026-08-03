@@ -28,6 +28,7 @@ export interface EditorViewportLayout {
 
 export enum EditorViewportChangeReason {
   Model = "model",
+  LineProjection = "lineProjection",
   ViewportSize = "viewportSize",
   ContentWidth = "contentWidth",
   LineHeight = "lineHeight",
@@ -43,6 +44,13 @@ export interface EditorViewportChange {
 export interface EditorViewportOptions {
   readonly lineHeight: number;
   readonly overscanLineCount?: number;
+  readonly lineSource?: EditorViewportLineSource;
+}
+
+/** Supplies the fixed-height row count that a viewport virtualizes. */
+export interface EditorViewportLineSource {
+  readonly lineCount: number;
+  readonly onDidChange: Event<void>;
 }
 
 /**
@@ -55,6 +63,7 @@ export class EditorViewportModel extends DisposableOwner {
   private readonly changeEmitter =
     this.own(new Emitter<EditorViewportChange>());
   private readonly overscanLineCount: number;
+  private readonly lineSource: EditorViewportLineSource;
   private viewportSize: ISize = Object.freeze({ width: 0, height: 0 });
   private measuredContentWidth = 0;
   private requestedScrollPosition: EditorScrollPosition =
@@ -76,12 +85,19 @@ export class EditorViewportModel extends DisposableOwner {
     );
     model.version;
     super();
+    this.lineSource = options.lineSource ?? createModelLineSource(model);
+    validateLineSource(this.lineSource);
     this.currentLineHeight = lineHeight;
     this.overscanLineCount = overscanLineCount;
     this.currentLayout = this.createLayout();
     this.own(model.onDidChange(change => {
       this.publish(EditorViewportChangeReason.Model, change);
     }));
+    if (options.lineSource) {
+      this.own(this.lineSource.onDidChange(() => {
+        this.publish(EditorViewportChangeReason.LineProjection);
+      }));
+    }
   }
 
   get layout(): EditorViewportLayout {
@@ -149,6 +165,8 @@ export class EditorViewportModel extends DisposableOwner {
   }
 
   private createLayout(): EditorViewportLayout {
+    const lineCount = this.lineSource.lineCount;
+    validateLineCount(lineCount);
     const contentSize = Object.freeze({
       width: Math.max(
         this.viewportSize.width,
@@ -156,7 +174,7 @@ export class EditorViewportModel extends DisposableOwner {
       ),
       height: Math.max(
         this.viewportSize.height,
-        this.model.lineCount * this.currentLineHeight,
+        lineCount * this.currentLineHeight,
       ),
     });
     const maximumScrollPosition = Object.freeze({
@@ -176,7 +194,7 @@ export class EditorViewportModel extends DisposableOwner {
       ),
     });
     const visibleLines = visibleLineRange(
-      this.model.lineCount,
+      lineCount,
       this.currentLineHeight,
       this.viewportSize.height,
       scrollPosition.top,
@@ -191,7 +209,7 @@ export class EditorViewportModel extends DisposableOwner {
           visibleLines.startLineIndex - this.overscanLineCount,
         ),
         endLineIndexExclusive: Math.min(
-          this.model.lineCount,
+          lineCount,
           visibleLines.endLineIndexExclusive +
             this.overscanLineCount,
         ),
@@ -326,4 +344,26 @@ function lineRangesEqual(
 ): boolean {
   return left.startLineIndex === right.startLineIndex &&
     left.endLineIndexExclusive === right.endLineIndexExclusive;
+}
+
+function createModelLineSource(model: TextModel): EditorViewportLineSource {
+  return Object.freeze({
+    get lineCount(): number {
+      return model.lineCount;
+    },
+    onDidChange: (listener: () => void) => model.onDidChange(() => listener()),
+  });
+}
+
+function validateLineSource(source: EditorViewportLineSource): void {
+  if (!source || typeof source !== "object" || typeof source.onDidChange !== "function") {
+    throw new TypeError("Editor viewport line source must expose a line count and change event");
+  }
+  validateLineCount(source.lineCount);
+}
+
+function validateLineCount(lineCount: number): void {
+  if (!Number.isSafeInteger(lineCount) || lineCount < 1) {
+    throw new RangeError("Editor viewport line count must be a positive safe integer");
+  }
 }

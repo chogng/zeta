@@ -1,4 +1,5 @@
 import "./style.js";
+import type { FsChanged } from "../../../../generated/app-server/types.js";
 import { setHoverDelegate } from "../../base/browser/ui/hover/hoverDelegate.js";
 import {
   type IDisposable,
@@ -253,7 +254,17 @@ export class Workbench extends DisposableOwner {
     const fileService = new BrowserFileService({
       api: api.fs,
       workspaceContextService: workspaceContext,
+      onDidChange: listener => {
+        const subscription = api.events.subscribe(event => {
+          if (event.method === "fs/changed") listener(event.params as FsChanged);
+        });
+        return {
+          dispose: () => subscription.dispose(),
+          [Symbol.dispose]: () => subscription.dispose(),
+        };
+      },
     });
+    this.own(fileService);
     services.set(IFileService, fileService);
     const textFileService = new TextFileService(fileService);
     services.set(ITextFileService, textFileService);

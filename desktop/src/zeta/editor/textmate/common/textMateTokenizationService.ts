@@ -129,6 +129,12 @@ export class TextMateTokenizationService implements Disposable {
     for (const cache of this.currentState?.caches.values() ?? []) cache.synchronizeDocument(synchronization);
   }
 
+  /** Discards semantic styles while retaining loaded grammars after a scope-theme replacement. */
+  invalidateTokenCaches(): void {
+    this.ensureAlive();
+    this.currentState?.caches.clear();
+  }
+
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;

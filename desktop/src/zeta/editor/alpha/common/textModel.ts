@@ -1,5 +1,5 @@
 import { Emitter, type Event } from "../../../base/common/event.js";
-import { DisposableOwner } from "../../../base/common/lifecycle.js";
+import { DisposableOwner, DisposableSlot, type IDisposable } from "../../../base/common/lifecycle.js";
 import { canCoalesceHistoryEdits, canReplaceHistoryEdits, coalesceHistoryUndoEdits, normalizeInverseEdits, replaceHistoryUndoEdits, type OffsetTextEdit } from "./historyCoalescing.js";
 import { PieceTreeTextBuffer } from "./pieceTreeTextBuffer.js";
 import { normalizeTextLineEndings, TextEditHistoryGroup, TextEditHistoryMergeMode, TextModelChangeReason, TextPosition, TextRange, type TextEdit, type TextModelChange, type TextModelContentChange, type TextSnapshot } from "./text.js";
@@ -23,8 +23,18 @@ export interface TextModelHistoryLimit {
   readonly textUnits?: number;
 }
 
+/** Schedules cancellable TextModel maintenance outside the edit transaction. */
+export type TextModelMaintenanceScheduler = (callback: () => void) => IDisposable;
+
+/** Controls how one TextModel runs optional storage maintenance. */
+export interface TextModelMaintenanceOptions {
+  readonly schedule: TextModelMaintenanceScheduler;
+}
+
 export interface TextModelOptions {
   readonly historyLimit?: TextModelHistoryLimit;
+  /** Product-owned scheduling for non-semantic piece-tree maintenance. */
+  readonly maintenance?: TextModelMaintenanceOptions;
 }
 
 export interface TextEditOptions {
@@ -49,6 +59,8 @@ export class TextModel extends DisposableOwner {
     offset => this.positionAt(offset),
   ));
   private readonly history: TextModelHistory;
+  private readonly maintenance: TextModelMaintenanceOptions | undefined;
+  private readonly pendingMaintenance = this.own(new DisposableSlot<IDisposable>());
   private buffer: PieceTreeTextBuffer;
   private nextTransactionId = 1;
   private _version = 1;
@@ -68,6 +80,7 @@ export class TextModel extends DisposableOwner {
       DEFAULT_HISTORY_TEXT_UNITS,
       "historyLimit.textUnits",
     );
+    this.maintenance = readMaintenanceOptions(options.maintenance);
     this.history = new TextModelHistory(
       historyTransactionLimit,
       historyTextUnitLimit,
@@ -382,7 +395,7 @@ export class TextModel extends DisposableOwner {
       );
     }
     this.trackedRanges.acceptChanges(changes);
-    this.buffer.compactIfNeeded();
+    this.scheduleMaintenance();
 
     this._version += 1;
     const change = Object.freeze<TextModelChange>({
@@ -395,6 +408,36 @@ export class TextModel extends DisposableOwner {
       change,
       inverseEdits: normalizeInverseEdits(inverseEdits),
     };
+  }
+
+  private scheduleMaintenance(): void {
+    if (!this.buffer.needsCompaction()) return;
+    const maintenance = this.maintenance;
+    if (!maintenance) {
+      this.buffer.compact();
+      return;
+    }
+    if (this.pendingMaintenance.value) return;
+    let pending: IDisposable;
+    let ranSynchronously = false;
+    try {
+      pending = maintenance.schedule(() => {
+        ranSynchronously = true;
+        this.pendingMaintenance.clear();
+        if (!this.disposed) this.buffer.compactIfNeeded();
+      });
+      if (!pending || typeof pending.dispose !== "function") {
+        throw new TypeError("TextModel maintenance scheduler must return a disposable");
+      }
+    } catch {
+      this.buffer.compact();
+      return;
+    }
+    if (ranSynchronously) {
+      pending.dispose();
+      return;
+    }
+    this.pendingMaintenance.replace(pending);
   }
 
   private prepareEdits(edits: readonly OffsetEdit[]): PreparedEdit[] {
@@ -483,4 +526,12 @@ function readHistoryLimit(
     throw new RangeError(`${name} must be a non-negative safe integer`);
   }
   return resolved;
+}
+
+function readMaintenanceOptions(value: TextModelMaintenanceOptions | undefined): TextModelMaintenanceOptions | undefined {
+  if (value === undefined) return undefined;
+  if (!value || typeof value.schedule !== "function") {
+    throw new TypeError("TextModel maintenance requires a scheduler");
+  }
+  return Object.freeze({ schedule: value.schedule });
 }

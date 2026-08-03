@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { Emitter, type Event } from "../../../../base/common/event.js";
 import { TextRange } from "../../common/text.js";
 import { TextModel } from "../../common/textModel.js";
-import { EditorViewportChangeReason, EditorViewportModel } from "../../common/viewport.js";
+import { EditorViewportChangeReason, EditorViewportModel, type EditorViewportLineSource } from "../../common/viewport.js";
 
 test("EditorViewportModel calculates visible and overscan line ranges", () => {
   using model = new TextModel(lines(100));
@@ -180,6 +181,33 @@ test("Same-line model changes still advance the viewport model version", () => {
   });
 });
 
+test("Viewport virtualizes a caller-owned visual-line source", () => {
+  using model = new TextModel("one\ntwo");
+  using visualLines = new MutableLineSource(5);
+  using viewport = new EditorViewportModel(model, {
+    lineHeight: 10,
+    lineSource: visualLines,
+  });
+  viewport.setViewportSize({ width: 100, height: 20 });
+  viewport.setScrollPosition({ left: 0, top: 30 });
+  const reasons: EditorViewportChangeReason[] = [];
+  using listener = viewport.onDidChange(change => reasons.push(change.reason));
+
+  visualLines.setLineCount(8);
+
+  assert.deepEqual({
+    contentHeight: viewport.layout.contentSize.height,
+    scrollTop: viewport.layout.scrollPosition.top,
+    visibleLines: viewport.layout.visibleLines,
+    reasons,
+  }, {
+    contentHeight: 80,
+    scrollTop: 30,
+    visibleLines: { startLineIndex: 3, endLineIndexExclusive: 5 },
+    reasons: [EditorViewportChangeReason.LineProjection],
+  });
+});
+
 test("Zero-sized viewports render no lines and setters suppress no-ops", () => {
   using model = new TextModel("");
   using viewport = new EditorViewportModel(model, {
@@ -289,4 +317,28 @@ test("Viewport disposal releases its listener without owning the model", () => {
 function lines(count: number): string {
   return Array.from({ length: count }, (_, index) =>
     `line ${index}`).join("\n");
+}
+
+class MutableLineSource implements EditorViewportLineSource, Disposable {
+  private readonly changeEmitter = new Emitter<void>();
+  private _lineCount: number;
+
+  constructor(lineCount: number) {
+    this._lineCount = lineCount;
+  }
+
+  get lineCount(): number {
+    return this._lineCount;
+  }
+
+  readonly onDidChange: Event<void> = this.changeEmitter.event;
+
+  setLineCount(lineCount: number): void {
+    this._lineCount = lineCount;
+    this.changeEmitter.fire();
+  }
+
+  [Symbol.dispose](): void {
+    this.changeEmitter.dispose();
+  }
 }

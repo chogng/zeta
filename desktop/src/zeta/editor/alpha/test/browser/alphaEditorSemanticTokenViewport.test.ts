@@ -25,6 +25,7 @@ for (const [name, value] of Object.entries({
 }
 
 const { AlphaEditorViewport } = await import("../../browser/alphaEditorViewport.js");
+const { AlphaEditorLineWrapping } = await import("../../browser/visualLineProjection.js");
 
 test("Viewport projects tokens only for virtualized lines and preserves overlapping rows", () => {
   const dom = new JSDOM("<!doctype html><body><main></main></body>");
@@ -99,6 +100,37 @@ test("Same-version token replacement rerenders visible text and model edits clea
   assert.equal(store.result, undefined);
   assert.equal(textElement.textContent, "X<tag> value");
   assert.equal(textElement.querySelector(".zeta-alpha-editor-token"), null);
+  dom.window.close();
+});
+
+test("Viewport clips semantic token spans to every soft-wrapped text fragment", () => {
+  const dom = new JSDOM("<!doctype html><body><main></main></body>");
+  const container = requiredElement<HTMLElement>(dom.window.document, "main");
+  using model = new TextModel("abcdef");
+  using store = createLanguageTokenStore(model);
+  acceptTokens(store, model, 1, [token(0, 1, 5, "keyword")]);
+  using index = new LanguageTokenLineIndex(store);
+  using viewport = new AlphaEditorViewport({
+    container,
+    model,
+    lineHeight: 20,
+    textMeasurer: new FixedTextMeasurer(),
+    semanticTokenSource: createAlphaSemanticTokenSource(index),
+    lineWrapping: AlphaEditorLineWrapping.On,
+  });
+  viewport.layout({ width: 70, height: 60 });
+
+  assert.deepEqual(lineTokenFragments(viewport.element), [{
+    lineIndex: "0",
+    text: "b",
+  }, {
+    lineIndex: "1",
+    text: "cd",
+  }, {
+    lineIndex: "2",
+    text: "e",
+  }]);
+
   dom.window.close();
 });
 
@@ -203,6 +235,13 @@ function renderedTokenLines(root: ParentNode): string[] {
   return [...root.querySelectorAll(".zeta-alpha-editor-token")].map(element => (
     (element.parentElement?.parentElement as HTMLElement).dataset.lineIndex!
   ));
+}
+
+function lineTokenFragments(root: ParentNode): { readonly lineIndex: string | undefined; readonly text: string | null }[] {
+  return [...root.querySelectorAll<HTMLElement>(".zeta-alpha-editor-token")].map(element => ({
+    lineIndex: element.parentElement?.parentElement?.dataset.lineIndex,
+    text: element.textContent,
+  }));
 }
 
 function requiredLine(root: ParentNode, lineIndex: number): HTMLElement {

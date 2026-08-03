@@ -285,6 +285,53 @@ test("Pointer and viewport selection wiring rejects different text models", () =
   dom.window.close();
 });
 
+test("Alt+Shift pointer drag creates a front-end column selection", () => {
+  const dom = new JSDOM("<!doctype html><body><main></main></body>");
+  const container = dom.window.document.querySelector("main");
+  assert.ok(container);
+  using model = new TextModel("abcdef\nab\n12345\nxy");
+  using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
+  using viewport = new AlphaEditorViewport({
+    container,
+    model,
+    lineHeight: 20,
+    textMeasurer: new FixedTextMeasurer(),
+    selectionController: selections,
+  });
+  viewport.layout({ width: 200, height: 80 });
+  viewport.element.getBoundingClientRect = () => editorBounds();
+  const captured = new Set<number>();
+  viewport.element.setPointerCapture = pointerId => captured.add(pointerId);
+  viewport.element.hasPointerCapture = pointerId => captured.has(pointerId);
+  viewport.element.releasePointerCapture = pointerId => captured.delete(pointerId);
+  using pointer = new AlphaPointerSelectionController(viewport, selections);
+
+  viewport.element.dispatchEvent(pointerEvent(dom.window, "pointerdown", 172, 115, {
+    pointerId: 19,
+    altKey: true,
+    shiftKey: true,
+  }));
+  dom.window.dispatchEvent(pointerEvent(dom.window, "pointermove", 202, 55, {
+    pointerId: 19,
+    altKey: true,
+    shiftKey: true,
+  }));
+  dom.window.dispatchEvent(pointerEvent(dom.window, "pointerup", 202, 55, {
+    pointerId: 19,
+    altKey: true,
+    shiftKey: true,
+  }));
+
+  assert.deepEqual(selections.selections, TextSelectionSet.withPrimary([
+    TextSelection.from(TextPosition.at(0, 2), TextPosition.at(0, 6)),
+    TextSelection.from(TextPosition.at(1, 2), TextPosition.at(1, 2)),
+    TextSelection.from(TextPosition.at(2, 2), TextPosition.at(2, 5)),
+    TextSelection.from(TextPosition.at(3, 2), TextPosition.at(3, 2)),
+  ], 0));
+  assert.deepEqual([...captured], []);
+  dom.window.close();
+});
+
 test("Pointer drag anchor tracks model edits and window blur ends capture", () => {
   const dom = new JSDOM("<!doctype html><body><main></main></body>");
   const container = dom.window.document.querySelector("main");
@@ -358,6 +405,7 @@ test("Pointer drag anchor tracks model edits and window blur ends capture", () =
 
 interface PointerEventOptions {
   readonly pointerId: number;
+  readonly altKey?: boolean;
   readonly shiftKey?: boolean;
 }
 
@@ -375,6 +423,7 @@ function pointerEvent(
     buttons: type === "pointerup" || type === "pointercancel" ? 0 : 1,
     clientX,
     clientY,
+    altKey: options.altKey,
     shiftKey: options.shiftKey,
   });
   Object.defineProperty(event, "pointerId", {

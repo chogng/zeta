@@ -5,7 +5,7 @@ import { type AlphaTextMeasurer } from "../../browser/fontMetrics.js";
 import { EditorSelectionController } from "../../common/editorSelectionController.js";
 import { LanguageCompletionDetailsStatus, LanguageCompletionSessionController, type LanguageCompletionSessionOptions } from "../../common/languageCompletionSession.js";
 import { LanguageResultAcceptance } from "../../common/languageResultStore.js";
-import { LanguageCompletionItemKind, createLanguageCompletionStore, type LanguageCompletionItem } from "../../common/languageCompletions.js";
+import { LanguageCompletionInsertTextFormat, LanguageCompletionItemKind, createLanguageCompletionStore, type LanguageCompletionItem } from "../../common/languageCompletions.js";
 import { TextSelection, TextSelectionSet } from "../../common/selection.js";
 import { TextPosition, TextRange } from "../../common/text.js";
 import { TextModel } from "../../common/textModel.js";
@@ -103,6 +103,85 @@ test("Completion keyboard navigation accepts one item before ordinary input rout
 
   fixture.selections.undo();
   assert.equal(fixture.model.getText(), "con");
+});
+
+test("Typing a declared completion commit character accepts it atomically before normal input", () => {
+  const fixture = createFixture("con");
+  using resources = fixture;
+  accept(fixture.store, fixture.model, 1, [{
+    ...completion("console", "console", LanguageCompletionItemKind.Variable),
+    commitCharacters: ["."],
+  }]);
+
+  const commit = beforeInput(fixture.dom.window, ".");
+  fixture.input.element.dispatchEvent(commit);
+
+  assert.equal(commit.defaultPrevented, true);
+  assert.equal(fixture.model.getText(), "console.");
+  assert.equal(fixture.selections.selections.primary.active.compareTo(TextPosition.at(0, 8)), 0);
+  assert.equal(fixture.input.completionWidget!.visible, false);
+  fixture.selections.undo();
+  assert.equal(fixture.model.getText(), "con");
+});
+
+test("Completion snippets route Tab, Shift+Tab, and Escape through Alpha placeholder navigation", () => {
+  const fixture = createFixture("fn");
+  using resources = fixture;
+  fixture.selections.setSelections(TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 2))));
+  assert.equal(fixture.store.accept({
+    requestId: 1,
+    textModel: fixture.model,
+    modelVersion: fixture.model.version,
+    value: {
+      position: TextPosition.at(0, 2),
+      items: [{
+        ...completion("function", "function", LanguageCompletionItemKind.Function),
+        range: TextRange.from(TextPosition.at(0, 0), TextPosition.at(0, 2)),
+        insertText: "function ${1:name}(${2:value}) { $0 }",
+        insertTextFormat: LanguageCompletionInsertTextFormat.Snippet,
+      }],
+      isIncomplete: false,
+    },
+  }), LanguageResultAcceptance.Applied);
+  fixture.input.element.dispatchEvent(keyboardEvent(fixture.dom.window, "Enter"));
+  assert.equal(fixture.model.getText(), "function name(value) {  }");
+
+  const next = keyboardEvent(fixture.dom.window, "Tab");
+  fixture.input.element.dispatchEvent(next);
+  assert.equal(next.defaultPrevented, true);
+  assert.deepEqual(fixture.selections.selections.primary.range, TextRange.from(TextPosition.at(0, 14), TextPosition.at(0, 19)));
+  const previous = keyboardEvent(fixture.dom.window, "Tab", true);
+  fixture.input.element.dispatchEvent(previous);
+  assert.equal(previous.defaultPrevented, true);
+  assert.deepEqual(fixture.selections.selections.primary.range, TextRange.from(TextPosition.at(0, 9), TextPosition.at(0, 13)));
+  const escape = keyboardEvent(fixture.dom.window, "Escape");
+  fixture.input.element.dispatchEvent(escape);
+  assert.equal(escape.defaultPrevented, true);
+  const ordinaryTab = keyboardEvent(fixture.dom.window, "Tab");
+  fixture.input.element.dispatchEvent(ordinaryTab);
+  assert.equal(ordinaryTab.defaultPrevented, false);
+  assert.equal(fixture.model.getText(), "function name(value) {  }");
+});
+
+test("Completion snippets cycle choice tabstops through Alt+Arrow", () => {
+  const fixture = createFixture("con");
+  using resources = fixture;
+  accept(fixture.store, fixture.model, 1, [{
+    ...completion("choice", "choice", LanguageCompletionItemKind.Value),
+    insertText: "${1|one,two|}=$1",
+    insertTextFormat: LanguageCompletionInsertTextFormat.Snippet,
+  }]);
+
+  fixture.input.element.dispatchEvent(keyboardEvent(fixture.dom.window, "Enter"));
+  assert.equal(fixture.model.getText(), "one=one");
+  const next = keyboardEvent(fixture.dom.window, "ArrowDown", false, { altKey: true });
+  fixture.input.element.dispatchEvent(next);
+  assert.equal(next.defaultPrevented, true);
+  assert.equal(fixture.model.getText(), "two=two");
+  const previous = keyboardEvent(fixture.dom.window, "ArrowUp", false, { altKey: true });
+  fixture.input.element.dispatchEvent(previous);
+  assert.equal(previous.defaultPrevented, true);
+  assert.equal(fixture.model.getText(), "one=one");
 });
 
 test("Escape cancels locally while clicking accepts the selected option", () => {
@@ -304,11 +383,13 @@ function controllerAt(model: TextModel, position: TextPosition): EditorSelection
   );
 }
 
-function keyboardEvent(targetWindow: typeof browserEnvironment.window, key: string): KeyboardEvent {
+function keyboardEvent(targetWindow: typeof browserEnvironment.window, key: string, shiftKey = false, options: KeyboardEventInit = {}): KeyboardEvent {
   return new targetWindow.KeyboardEvent("keydown", {
     bubbles: true,
     cancelable: true,
+    ...options,
     key,
+    shiftKey,
   }) as unknown as KeyboardEvent;
 }
 
@@ -318,6 +399,15 @@ function mouseEvent(targetWindow: typeof browserEnvironment.window, type: string
     cancelable: true,
     button: 0,
   }) as unknown as MouseEvent;
+}
+
+function beforeInput(targetWindow: typeof browserEnvironment.window, data: string): InputEvent {
+  return new targetWindow.InputEvent("beforeinput", {
+    bubbles: true,
+    cancelable: true,
+    data,
+    inputType: "insertText",
+  }) as unknown as InputEvent;
 }
 
 function requiredElement<T extends Element = HTMLElement>(root: ParentNode, selector: string): T {

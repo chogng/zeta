@@ -1,0 +1,47 @@
+.zeta-alpha-editor-goto-line-widget {
+  position: absolute;
+  z-index: 7;
+  display: none;
+  grid-template-columns: minmax(120px, 1fr) auto;
+  gap: 6px;
+  align-items: center;
+  box-sizing: border-box;
+  padding: 6px;
+  color: var(--zeta-editor-foreground);
+  background: var(--zeta-dialog-background);
+  border: 1px solid var(--zeta-widget-border);
+  border-radius: 4px;
+  box-shadow: 0 4px 12px var(--zeta-widget-shadow);
+}
+
+.zeta-alpha-editor-goto-line-widget.visible {
+  display: grid;
+}
+
+.zeta-alpha-editor-goto-line-input {
+  box-sizing: border-box;
+  min-width: 0;
+  height: 24px;
+  padding: 2px 6px;
+  color: var(--zeta-input-foreground);
+  font: inherit;
+  background: var(--zeta-input-background);
+  border: 1px solid var(--zeta-input-border);
+  outline: none;
+}
+
+.zeta-alpha-editor-goto-line-input:focus {
+  border-color: var(--zeta-focus-border);
+}
+
+.zeta-alpha-editor-goto-line-input.invalid {
+  border-color: var(--zeta-error-foreground);
+}
+
+.zeta-alpha-editor-goto-line-status {
+  overflow: hidden;
+  color: var(--zeta-description-foreground);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

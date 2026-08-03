@@ -1,0 +1,83 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { JSDOM } from "jsdom";
+import { TextRange } from "../../common/text.js";
+import { TextModel } from "../../common/textModel.js";
+
+const browserEnvironment = new JSDOM("<!doctype html><body></body>");
+for (const [name, value] of Object.entries({
+  window: browserEnvironment.window,
+  document: browserEnvironment.window.document,
+  Node: browserEnvironment.window.Node,
+  Element: browserEnvironment.window.Element,
+  HTMLElement: browserEnvironment.window.HTMLElement,
+  Event: browserEnvironment.window.Event,
+})) {
+  Object.defineProperty(globalThis, name, { configurable: true, value });
+}
+
+const { AlphaDiffEditor } = await import("../../browser/alphaDiffEditor.js");
+
+test("AlphaDiffEditor presents side-by-side changed lines and inline ranges", () => {
+  const dom = new JSDOM("<!doctype html><body><main></main></body>");
+  const container = requiredElement<HTMLElement>(dom.window.document, "main");
+  using original = new TextModel("same\nold value\nremoved\ntail");
+  using modified = new TextModel("same\nnew value\nadded\ntail");
+  using editor = new AlphaDiffEditor({ container, original, modified, lineHeight: 20 });
+  editor.layout({ width: 400, height: 80 });
+
+  const rows = [...editor.element.querySelectorAll<HTMLElement>(".zeta-alpha-diff-row")];
+  assert.equal(rows.length, 4);
+  assert.equal(rows[0]?.classList.contains("unchanged"), true);
+  assert.equal(rows[1]?.classList.contains("modified"), true);
+  assert.equal(rows[1]?.querySelector(".zeta-alpha-diff-cell.original")?.textContent, "2old value");
+  assert.equal(rows[1]?.querySelector(".zeta-alpha-diff-cell.modified")?.textContent, "2new value");
+  assert.equal(rows[1]?.querySelectorAll(".zeta-alpha-diff-inline.removed").length, 1);
+  assert.equal(rows[1]?.querySelectorAll(".zeta-alpha-diff-inline.added").length, 1);
+  assert.equal(editor.diff.approximate, false);
+  assert.equal(editor.nextChange(), 1);
+  assert.equal(editor.currentChangeRow, 1);
+  assert.equal(editor.element.querySelector(".zeta-alpha-diff-row.active")?.classList.contains("modified"), true);
+  assert.equal(editor.previousChange(), 2);
+  const next = new dom.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "F7" });
+  editor.element.dispatchEvent(next);
+  assert.equal(next.defaultPrevented, true);
+  assert.equal(editor.currentChangeRow, 1);
+  assert.match(editor.element.querySelector(".zeta-alpha-diff-editor-accessibility-status")?.textContent ?? "", /Change 1 of 2/);
+  dom.window.close();
+});
+
+test("AlphaDiffEditor refreshes on either source model and virtualizes diff rows", () => {
+  const dom = new JSDOM("<!doctype html><body><main></main></body>");
+  const container = requiredElement<HTMLElement>(dom.window.document, "main");
+  using original = new TextModel(lines("old", 100));
+  using modified = new TextModel(lines("new", 100));
+  using editor = new AlphaDiffEditor({ container, original, modified, lineHeight: 20, overscanRowCount: 1 });
+  editor.layout({ width: 400, height: 40 });
+
+  assert.equal(editor.element.querySelectorAll(".zeta-alpha-diff-row").length, 3);
+  editor.revealModifiedLine(80);
+  const firstVisibleRow = editor.element.querySelector<HTMLElement>(".zeta-alpha-diff-row");
+  assert.equal(firstVisibleRow?.style.height, "20px");
+  assert.ok(editor.element.scrollTop > 0);
+
+  modified.applyEdits([{
+    range: TextRange.from(modified.positionAt(0), modified.positionAt(modified.getText().length)),
+    text: "same",
+  }]);
+  assert.equal(editor.diff.rows.length, 100);
+  editor.element.scrollTop = 0;
+  editor.element.dispatchEvent(new dom.window.Event("scroll"));
+  assert.equal(editor.element.querySelector(".zeta-alpha-diff-row")?.classList.contains("modified"), true);
+  dom.window.close();
+});
+
+function lines(prefix: string, count: number): string {
+  return Array.from({ length: count }, (_, index) => `${prefix} ${index}`).join("\n");
+}
+
+function requiredElement<T extends Element>(ownerDocument: Document, selector: string): T {
+  const element = ownerDocument.querySelector<T>(selector);
+  if (!element) throw new Error(`Missing ${selector}`);
+  return element;
+}

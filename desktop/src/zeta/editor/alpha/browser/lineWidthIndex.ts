@@ -1,3 +1,5 @@
+import { Emitter, type Event } from "../../../base/common/event.js";
+import { DisposableOwner, DisposableSlot, type IDisposable } from "../../../base/common/lifecycle.js";
 import { type TextModelChange } from "../common/text.js";
 import { type TextModel } from "../common/textModel.js";
 import { type AlphaTextMeasurer } from "./fontMetrics.js";
@@ -12,24 +14,74 @@ interface MeasuredLineGroup extends AffectedLineGroup {
   readonly newWidths: readonly number[];
 }
 
+/** Schedules a later, cancellable portion of an initial line-width scan. */
+export type AlphaLineWidthMeasurementScheduler = (callback: () => void) => IDisposable;
+
+/**
+ * Controls a non-blocking initial width scan for a large, non-wrapped model.
+ *
+ * The synchronous first slice supplies a deterministic lower bound immediately.
+ * Later slices monotonically refine it, and `onDidChange` fires whenever that
+ * bound changes or the scan has to restart after an edit.
+ */
+export interface AlphaLineWidthInitialMeasurementOptions {
+  readonly initialLineCount?: number;
+  readonly linesPerSlice?: number;
+  readonly schedule: AlphaLineWidthMeasurementScheduler;
+}
+
+export interface AlphaLineWidthIndexOptions {
+  readonly initialMeasurement?: AlphaLineWidthInitialMeasurementOptions;
+}
+
+interface ResolvedInitialMeasurement {
+  readonly initialLineCount: number;
+  readonly linesPerSlice: number;
+  readonly schedule: AlphaLineWidthMeasurementScheduler;
+}
+
 /** @internal */
-export class AlphaLineWidthIndex {
+export class AlphaLineWidthIndex extends DisposableOwner {
   private widths: number[] = [];
   private readonly widthCounts = new Map<number, number>();
+  private readonly changeEmitter = this.own(new Emitter<void>());
+  private readonly pendingMeasurement = this.own(new DisposableSlot<IDisposable>());
+  private readonly initialMeasurement: ResolvedInitialMeasurement | undefined;
   private maximumWidth = 0;
+  private nextLineIndex = 0;
+  private scanVersion = 0;
 
   constructor(
     private readonly model: TextModel,
     private readonly measurer: AlphaTextMeasurer,
+    options: AlphaLineWidthIndexOptions = {},
   ) {
-    this.rebuild();
+    super();
+    this.initialMeasurement = readInitialMeasurement(options.initialMeasurement);
+    if (this.initialMeasurement) this.startInitialMeasurement();
+    else this.rebuild();
   }
+
+  readonly onDidChange: Event<void> = this.changeEmitter.event;
 
   get maximumLineWidth(): number {
     return this.maximumWidth;
   }
 
+  /** Whether every current model line has been included in the width index. */
+  get complete(): boolean {
+    return this.nextLineIndex >= this.model.lineCount;
+  }
+
+  /** Rebuilds with this index's configured initial-measurement policy. */
+  refresh(): void {
+    if (this.initialMeasurement) this.startInitialMeasurement();
+    else this.rebuild();
+  }
+
   rebuild(): void {
+    this.pendingMeasurement.clear();
+    const previousMaximum = this.maximumWidth;
     this.widths = [];
     this.widthCounts.clear();
     this.maximumWidth = 0;
@@ -38,9 +90,17 @@ export class AlphaLineWidthIndex {
       this.widths.push(width);
       this.addWidth(width);
     }
+    this.nextLineIndex = this.model.lineCount;
+    this.scanVersion = this.model.version;
+    if (this.maximumWidth !== previousMaximum) this.changeEmitter.fire();
   }
 
   applyModelChange(change: TextModelChange): void {
+    if (this.initialMeasurement && !this.complete) {
+      this.startInitialMeasurement();
+      return;
+    }
+    const previousMaximum = this.maximumWidth;
     const groups = groupAffectedLines(change);
     let cumulativeLineDelta = 0;
     const measured: MeasuredLineGroup[] = [];
@@ -82,6 +142,49 @@ export class AlphaLineWidthIndex {
         this.maximumWidth = Math.max(this.maximumWidth, width);
       }
     }
+    this.nextLineIndex = this.model.lineCount;
+    this.scanVersion = this.model.version;
+    if (this.maximumWidth !== previousMaximum) this.changeEmitter.fire();
+  }
+
+  private startInitialMeasurement(): void {
+    const options = this.initialMeasurement;
+    if (!options) return;
+    const previousMaximum = this.maximumWidth;
+    this.pendingMeasurement.clear();
+    this.widths = [];
+    this.widthCounts.clear();
+    this.maximumWidth = 0;
+    this.nextLineIndex = 0;
+    this.scanVersion = this.model.version;
+    this.measureNextSlice(options.initialLineCount);
+    if (this.maximumWidth !== previousMaximum) this.changeEmitter.fire();
+    this.scheduleNextSlice();
+  }
+
+  private scheduleNextSlice(): void {
+    const options = this.initialMeasurement;
+    if (!options || this.complete) return;
+    this.pendingMeasurement.replace(options.schedule(() => {
+      this.pendingMeasurement.clear();
+      if (this.scanVersion !== this.model.version) {
+        this.startInitialMeasurement();
+        return;
+      }
+      const previousMaximum = this.maximumWidth;
+      this.measureNextSlice(options.linesPerSlice);
+      if (this.maximumWidth !== previousMaximum) this.changeEmitter.fire();
+      this.scheduleNextSlice();
+    }));
+  }
+
+  private measureNextSlice(lineCount: number): void {
+    const endLineIndex = Math.min(this.model.lineCount, this.nextLineIndex + lineCount);
+    for (; this.nextLineIndex < endLineIndex; this.nextLineIndex += 1) {
+      const width = this.measure(this.nextLineIndex);
+      this.widths.push(width);
+      this.addWidth(width);
+    }
   }
 
   private measure(lineIndex: number): number {
@@ -107,6 +210,22 @@ export class AlphaLineWidthIndex {
     if (count === 1) this.widthCounts.delete(width);
     else this.widthCounts.set(width, count - 1);
   }
+}
+
+function readInitialMeasurement(value: AlphaLineWidthInitialMeasurementOptions | undefined): ResolvedInitialMeasurement | undefined {
+  if (value === undefined) return undefined;
+  if (!value || typeof value.schedule !== "function") {
+    throw new TypeError("Alpha initial line measurement requires a scheduler");
+  }
+  const initialLineCount = value.initialLineCount ?? 512;
+  const linesPerSlice = value.linesPerSlice ?? initialLineCount;
+  if (!Number.isSafeInteger(initialLineCount) || initialLineCount <= 0) {
+    throw new RangeError("Alpha initial line measurement count must be a positive safe integer");
+  }
+  if (!Number.isSafeInteger(linesPerSlice) || linesPerSlice <= 0) {
+    throw new RangeError("Alpha line measurement slice size must be a positive safe integer");
+  }
+  return Object.freeze({ initialLineCount, linesPerSlice, schedule: value.schedule });
 }
 
 function groupAffectedLines(

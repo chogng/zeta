@@ -1,7 +1,7 @@
 import { type LanguageCharacterPair, type ResolvedLanguageCommentConfiguration } from "./languageConfiguration.js";
 import { LanguageDiagnosticSeverity } from "./languageResults.js";
 
-export type LanguageLexicalState = "normal" | "blockComment" | "multilineString";
+export type LanguageLexicalState = "normal" | "blockComment" | "multilineString" | `rawString:${number}`;
 
 export interface LanguageLexicalTokenSpan {
   readonly startColumn: number;
@@ -49,6 +49,12 @@ export interface LanguageLexicalScannerConfiguration {
   readonly keywords: readonly string[];
   readonly stringQuotes: readonly string[];
   readonly multilineStringQuote?: string;
+  /** Prefixes which open hash-delimited raw strings, for example Rust's `r` and `br`. */
+  readonly rawStringPrefixes?: readonly string[];
+  /** Quote used for self-contained character literals. Invalid or unterminated input remains ordinary source text. */
+  readonly characterLiteralQuote?: string;
+  /** Recognizes one-line regular-expression literals for the named syntax profile. */
+  readonly regularExpressionSyntax?: "ecmascript";
 }
 
 interface CompiledBracket {
@@ -63,6 +69,9 @@ export class LanguageLexicalLineScanner {
   private readonly keywords: ReadonlySet<string>;
   private readonly stringQuotes: ReadonlySet<string>;
   private readonly multilineStringQuote: string | undefined;
+  private readonly rawStringPrefixes: readonly string[];
+  private readonly characterLiteralQuote: string | undefined;
+  private readonly regularExpressionSyntax: "ecmascript" | undefined;
   private readonly brackets: readonly CompiledBracket[];
 
   constructor(configuration: LanguageLexicalScannerConfiguration) {
@@ -75,6 +84,13 @@ export class LanguageLexicalLineScanner {
     this.multilineStringQuote = configuration.multilineStringQuote === undefined
       ? undefined
       : normalizeQuote(configuration.multilineStringQuote, "Language lexical multiline string quote");
+    this.rawStringPrefixes = Object.freeze([...normalizeTokens(configuration.rawStringPrefixes ?? [], "Language lexical raw string prefix")].sort((left, right) => right.length - left.length));
+    this.characterLiteralQuote = configuration.characterLiteralQuote === undefined
+      ? undefined
+      : normalizeQuote(configuration.characterLiteralQuote, "Language lexical character literal quote");
+    this.regularExpressionSyntax = configuration.regularExpressionSyntax === undefined
+      ? undefined
+      : normalizeRegularExpressionSyntax(configuration.regularExpressionSyntax);
     this.brackets = compileBrackets(configuration.brackets);
   }
 
@@ -113,6 +129,18 @@ export class LanguageLexicalLineScanner {
         }
         continue;
       }
+      if (isRawStringState(state)) {
+        const closingDelimiter = rawStringClosingDelimiter(state);
+        const end = line.indexOf(closingDelimiter, column);
+        const endColumn = end < 0 ? line.length : end + closingDelimiter.length;
+        pushToken(tokens, column, endColumn, "string");
+        column = endColumn;
+        if (end >= 0) {
+          events.push(multilineEvent("close", state, end, endColumn));
+          state = "normal";
+        }
+        continue;
+      }
       const character = line[column]!;
       if (isWhitespace(character)) {
         column += 1;
@@ -131,6 +159,26 @@ export class LanguageLexicalLineScanner {
         if (end < 0) {
           events.push(multilineEvent("open", "blockComment", column, column + blockComment.open.length));
           state = "blockComment";
+        }
+        column = endColumn;
+        continue;
+      }
+      if (this.regularExpressionSyntax === "ecmascript" && character === "/" && canStartEcmascriptRegularExpression(line, column)) {
+        const endColumn = findEcmascriptRegularExpressionEnd(line, column);
+        if (endColumn !== undefined) {
+          pushToken(tokens, column, endColumn, "regexp");
+          column = endColumn;
+          continue;
+        }
+      }
+      const rawString = this.findRawStringOpening(line, column);
+      if (rawString) {
+        const end = line.indexOf(rawString.closingDelimiter, column + rawString.openingLength);
+        const endColumn = end < 0 ? line.length : end + rawString.closingDelimiter.length;
+        pushToken(tokens, column, endColumn, "string");
+        if (end < 0) {
+          events.push(multilineEvent("open", rawString.state, column, column + rawString.openingLength));
+          state = rawString.state;
         }
         column = endColumn;
         continue;
@@ -162,6 +210,14 @@ export class LanguageLexicalLineScanner {
         }
         column = endColumn;
         continue;
+      }
+      if (this.characterLiteralQuote === character) {
+        const endColumn = findCharacterLiteralEnd(line, column, character);
+        if (endColumn !== undefined) {
+          pushToken(tokens, column, endColumn, "string");
+          column = endColumn;
+          continue;
+        }
       }
       if (isDigit(character)) {
         const end = scanNumber(line, column);
@@ -205,6 +261,29 @@ export class LanguageLexicalLineScanner {
       events: Object.freeze(events),
     });
   }
+
+  private findRawStringOpening(line: string, column: number): RawStringOpening | undefined {
+    for (const prefix of this.rawStringPrefixes) {
+      if (!line.startsWith(prefix, column)) continue;
+      let delimiterColumn = column + prefix.length;
+      while (line[delimiterColumn] === "#") delimiterColumn += 1;
+      if (line[delimiterColumn] !== "\"") continue;
+      const hashCount = delimiterColumn - column - prefix.length;
+      const state = rawStringState(hashCount);
+      return Object.freeze({
+        state,
+        openingLength: delimiterColumn - column + 1,
+        closingDelimiter: rawStringClosingDelimiter(state),
+      });
+    }
+    return undefined;
+  }
+}
+
+interface RawStringOpening {
+  readonly state: Extract<LanguageLexicalState, `rawString:${number}`>;
+  readonly openingLength: number;
+  readonly closingDelimiter: string;
 }
 
 const IDENTIFIER_START = /[\p{ID_Start}_$]/u;
@@ -235,6 +314,11 @@ function normalizeQuote(quote: string, owner: string): string {
   return quote;
 }
 
+function normalizeRegularExpressionSyntax(value: unknown): "ecmascript" {
+  if (value !== "ecmascript") throw new TypeError("Unknown language lexical regular-expression syntax");
+  return value;
+}
+
 function compileBrackets(pairs: readonly LanguageCharacterPair[]): readonly CompiledBracket[] {
   if (!Array.isArray(pairs)) throw new TypeError("Language lexical brackets must be an array");
   const result: CompiledBracket[] = [];
@@ -261,9 +345,24 @@ function multilineEvent(action: LanguageLexicalMultilineEvent["action"], lexical
 }
 
 function assertLexicalState(value: unknown): asserts value is LanguageLexicalState {
-  if (value !== "normal" && value !== "blockComment" && value !== "multilineString") {
+  if (value !== "normal" && value !== "blockComment" && value !== "multilineString" && !isRawStringState(value)) {
     throw new TypeError(`Unknown language lexical state '${String(value)}'`);
   }
+}
+
+function rawStringState(hashCount: number): Extract<LanguageLexicalState, `rawString:${number}`> {
+  return `rawString:${hashCount}`;
+}
+
+function isRawStringState(value: unknown): value is Extract<LanguageLexicalState, `rawString:${number}`> {
+  if (typeof value !== "string") return false;
+  const match = /^rawString:(\d+)$/.exec(value);
+  return match !== null && Number.isSafeInteger(Number(match[1]));
+}
+
+function rawStringClosingDelimiter(state: Extract<LanguageLexicalState, `rawString:${number}`>): string {
+  const hashCount = Number(state.slice("rawString:".length));
+  return `\"${"#".repeat(hashCount)}`;
 }
 
 function scanIdentifier(line: string, start: number): number {
@@ -313,6 +412,64 @@ function findQuote(line: string, start: number, quote: string): number {
   }
   return -1;
 }
+
+function findCharacterLiteralEnd(line: string, start: number, quote: string): number | undefined {
+  let column = start + quote.length;
+  if (column >= line.length) return undefined;
+  if (line[column] === "\\") {
+    column += 1;
+    if (line[column] === "u" && line[column + 1] === "{") {
+      const close = line.indexOf("}", column + 2);
+      if (close < 0 || close === column + 2) return undefined;
+      column = close + 1;
+    } else {
+      if (column >= line.length) return undefined;
+      column += readCodePoint(line, column).length;
+    }
+  } else {
+    column += readCodePoint(line, column).length;
+  }
+  return line.startsWith(quote, column) ? column + quote.length : undefined;
+}
+
+function canStartEcmascriptRegularExpression(line: string, column: number): boolean {
+  let previous = column - 1;
+  while (previous >= 0 && isWhitespace(line[previous]!)) previous -= 1;
+  if (previous < 0) return true;
+  if ("([{=,:;!&|?+-*%^~<>".includes(line[previous]!)) return true;
+  if (!/[A-Za-z_$]/.test(line[previous]!)) return false;
+  let start = previous;
+  while (start > 0 && /[A-Za-z0-9_$]/.test(line[start - 1]!)) start -= 1;
+  return ECMASCRIPT_REGEX_PREFIX_KEYWORDS.has(line.slice(start, previous + 1));
+}
+
+function findEcmascriptRegularExpressionEnd(line: string, start: number): number | undefined {
+  let characterClass = false;
+  for (let column = start + 1; column < line.length; column += 1) {
+    const character = line[column]!;
+    if (character === "\\") {
+      column += 1;
+      continue;
+    }
+    if (character === "[") {
+      characterClass = true;
+      continue;
+    }
+    if (character === "]") {
+      characterClass = false;
+      continue;
+    }
+    if (character !== "/" || characterClass) continue;
+    let end = column + 1;
+    while (end < line.length && /[A-Za-z]/.test(line[end]!)) end += 1;
+    return end;
+  }
+  return undefined;
+}
+
+const ECMASCRIPT_REGEX_PREFIX_KEYWORDS = new Set([
+  "await", "case", "delete", "do", "else", "in", "instanceof", "new", "of", "return", "throw", "typeof", "void", "yield",
+]);
 
 function readCodePoint(text: string, column: number): { readonly value: string; readonly length: number } {
   const value = String.fromCodePoint(text.codePointAt(column)!);

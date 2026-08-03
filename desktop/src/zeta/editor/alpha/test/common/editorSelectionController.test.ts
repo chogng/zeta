@@ -70,6 +70,59 @@ test("EditorSelectionController restores command selections", () => {
   });
 });
 
+test("Read-only editor instances preserve selection while rejecting document commands", () => {
+  using model = new TextModel("abc");
+  using controller = new EditorSelectionController(model, single(0, 0), { readOnly: true });
+
+  const command = {
+    edits: [{ range: range(0, 0), text: "X" }],
+    selectionsAfter: [{ anchorOffset: 1, activeOffset: 1 }],
+    primarySelectionIndex: 0,
+  };
+  assert.equal(controller.readOnly, true);
+  assert.equal(controller.execute(command), undefined);
+  assert.equal(model.getText(), "abc");
+  assert.deepEqual(controller.selections, single(0, 0));
+  controller.setSelections(single(2, 2));
+  assert.deepEqual(controller.selections, single(2, 2));
+  assert.equal(controller.undo(), undefined);
+  assert.equal(controller.redo(), undefined);
+  assert.throws(() => controller.beginComposition(), /read-only/);
+});
+
+test("Cursor-only selection history restores multi-cursor operations without changing document undo", () => {
+  using model = new TextModel("abc");
+  using controller = new EditorSelectionController(model, single(0, 0), { cursorHistoryLimit: 1 });
+  const reasons: EditorSelectionChangeReason[] = [];
+  using listener = controller.onDidChange(event => reasons.push(event.reason));
+  const first = TextSelectionSet.withPrimary([
+    TextSelection.collapsedAt(position(0, 0)),
+    TextSelection.collapsedAt(position(0, 1)),
+  ], 1);
+  const second = TextSelectionSet.withPrimary([
+    TextSelection.collapsedAt(position(0, 0)),
+    TextSelection.collapsedAt(position(0, 1)),
+    TextSelection.collapsedAt(position(0, 2)),
+  ], 2);
+
+  controller.setCursorSelections(first);
+  controller.setCursorSelections(second);
+  assert.equal(controller.undoCursorOperation(), true);
+  assert.deepEqual(controller.selections, first);
+  assert.equal(controller.undoCursorOperation(), false);
+  controller.setCursorSelections(second);
+  controller.setSelections(single(2, 2));
+  assert.equal(controller.undoCursorOperation(), false);
+  assert.equal(model.version, 1);
+  assert.deepEqual(reasons, [
+    EditorSelectionChangeReason.CursorOperation,
+    EditorSelectionChangeReason.CursorOperation,
+    EditorSelectionChangeReason.CursorUndo,
+    EditorSelectionChangeReason.CursorOperation,
+    EditorSelectionChangeReason.Explicit,
+  ]);
+});
+
 test("EditorSelectionController maps external model edits", () => {
   using model = new TextModel("abc");
   using controller = new EditorSelectionController(

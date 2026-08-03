@@ -1,0 +1,95 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { parseLanguageCompletionSnippet } from "../../common/languageCompletionSnippet.js";
+
+test("Completion snippets expand tabstops, defaults, mirrors, nesting, and final cursor order", () => {
+  const snippet = parseLanguageCompletionSnippet("fn ${1:name}(${2:${1}}) { $0 }");
+  assert.equal(snippet.text, "fn name(name) {  }");
+  assert.deepEqual(snippet.placeholderGroups, [
+    {
+      index: 1,
+      placeholders: [{ startOffset: 3, endOffset: 7 }, { startOffset: 8, endOffset: 12 }],
+    },
+    { index: 2, placeholders: [{ startOffset: 8, endOffset: 12 }] },
+    { index: 0, placeholders: [{ startOffset: 16, endOffset: 16 }] },
+  ]);
+});
+
+test("Completion snippets preserve explicit escapes and reject unsupported syntax", () => {
+  assert.deepEqual(parseLanguageCompletionSnippet("\\$${1:ok}\\}\\\\"), {
+    text: "$ok}\\",
+    placeholderGroups: [{ index: 1, placeholders: [{ startOffset: 1, endOffset: 3 }] }],
+  });
+  for (const source of ["$TM_FILENAME", "${name}", "${1", "${1|one,two}", "${1|one\\x|}", "\\x"]) {
+    assert.throws(() => parseLanguageCompletionSnippet(source));
+  }
+});
+
+test("Completion snippets parse escaped choices and preserve them for mirrored tabstops", () => {
+  const snippet = parseLanguageCompletionSnippet("${1|one,two\\,three,\\|four|} = $1");
+  assert.deepEqual(snippet, {
+    text: "one = one",
+    placeholderGroups: [{
+      index: 1,
+      choices: ["one", "two,three", "|four"],
+      placeholders: [
+        { startOffset: 0, endOffset: 3, choices: ["one", "two,three", "|four"] },
+        { startOffset: 6, endOffset: 9, choices: ["one", "two,three", "|four"] },
+      ],
+    }],
+  });
+});
+
+test("Completion snippets resolve explicit variables and retain defaults for unknown names", () => {
+  const snippet = parseLanguageCompletionSnippet("$TM_FILENAME:${MISSING:fallback}", {
+    variables: {
+      resolveVariable(name): string | undefined {
+        return name === "TM_FILENAME" ? "main.ts" : undefined;
+      },
+    },
+  });
+  assert.deepEqual(snippet, {
+    text: "main.ts:fallback",
+    placeholderGroups: [],
+  });
+  assert.throws(() => parseLanguageCompletionSnippet("$MISSING", {
+    variables: { resolveVariable: () => undefined },
+  }), /has no value/);
+});
+
+test("Completion snippets apply deterministic tabstop and variable transforms during expansion", () => {
+  const tabstop = parseLanguageCompletionSnippet("${1:warp drive} => ${1/(.*)/${1:/pascalcase}/}");
+  assert.deepEqual(tabstop, {
+    text: "warp drive => WarpDrive",
+    placeholderGroups: [{ index: 1, placeholders: [{ startOffset: 0, endOffset: 10 }] }],
+    transforms: [{
+      index: 1,
+      startOffset: 14,
+      endOffset: 23,
+      transform: { pattern: "(.*)", format: "${1:/pascalcase}", options: "" },
+    }],
+  });
+  const variable = parseLanguageCompletionSnippet("${TM_FILENAME/(.*)\\.tsx?/${1:/upcase}/}", {
+    variables: { resolveVariable: () => "main.ts" },
+  });
+  assert.deepEqual(variable, { text: "MAIN", placeholderGroups: [] });
+  const global = parseLanguageCompletionSnippet("${1:already_word} ${1/(_)/${1:+-}/g}");
+  assert.deepEqual(global, {
+    text: "already_word already-word",
+    placeholderGroups: [{ index: 1, placeholders: [{ startOffset: 0, endOffset: 12 }] }],
+    transforms: [{
+      index: 1,
+      startOffset: 13,
+      endOffset: 25,
+      transform: { pattern: "(_)", format: "${1:+-}", options: "g" },
+    }],
+  });
+});
+
+test("Completion snippets reject malformed transform syntax before acceptance", () => {
+  for (const source of ["${1/[/x/}", "${1/a/x/z}", "${TM_FILENAME/a/x/"]) {
+    assert.throws(() => parseLanguageCompletionSnippet(source, {
+      variables: { resolveVariable: () => "value" },
+    }));
+  }
+});

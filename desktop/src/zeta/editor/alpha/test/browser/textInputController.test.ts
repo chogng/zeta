@@ -42,7 +42,7 @@ for (const [name, value] of Object.entries({
   });
 }
 
-const { AlphaEditorViewport } = await import("../../browser/alphaEditorViewport.js");
+const { AlphaEditorTextDirection, AlphaEditorViewport } = await import("../../browser/alphaEditorViewport.js");
 const { AlphaKeyboardNavigationController } = await import("../../browser/keyboardNavigationController.js");
 const { AlphaTextInputController } = await import("../../browser/textInputController.js");
 
@@ -176,6 +176,140 @@ test("Textarea routes navigation, typing, history, deletion, and Tab", () => {
   input.element.dispatchEvent(beforeInput(dom.window, "insertText", "Z"));
   assert.equal(model.getText(), disposedText);
 
+  dom.window.close();
+});
+
+test("Textarea routes browser soft-line deletion through Alpha commands", () => {
+  const dom = new JSDOM("<!doctype html><body><main></main></body>");
+  const container = dom.window.document.querySelector("main");
+  assert.ok(container);
+  using model = new TextModel("alpha\nbeta");
+  using selections = new EditorSelectionController(model, TextSelectionSet.single(caret(0, 3)));
+  using viewport = new AlphaEditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
+  using input = new AlphaTextInputController(viewport, selections);
+
+  const backward = beforeInput(dom.window, "deleteSoftLineBackward");
+  input.element.dispatchEvent(backward);
+  assert.equal(backward.defaultPrevented, true);
+  assert.equal(model.getText(), "ha\nbeta");
+  selections.setSelections(TextSelectionSet.single(caret(1, 1)));
+  input.element.dispatchEvent(beforeInput(dom.window, "deleteSoftLineForward"));
+  assert.equal(model.getText(), "ha\nb");
+
+  dom.window.close();
+});
+
+test("Textarea accepts an isolated composing dead-key commit without a composition session", () => {
+  const dom = new JSDOM("<!doctype html><body><main></main></body>");
+  const container = dom.window.document.querySelector("main");
+  assert.ok(container);
+  using model = new TextModel("e");
+  using selections = new EditorSelectionController(model, TextSelectionSet.single(caret(0, 1)));
+  using viewport = new AlphaEditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
+  using input = new AlphaTextInputController(viewport, selections);
+
+  const commit = beforeInput(dom.window, "insertText", "́", true);
+  input.element.dispatchEvent(commit);
+  assert.equal(commit.defaultPrevented, true);
+  assert.equal(model.getText(), "é");
+  input.element.value = "é";
+  input.element.dispatchEvent(new dom.window.InputEvent("input", {
+    bubbles: true,
+    inputType: "insertText",
+    data: "́",
+    isComposing: true,
+  }));
+  assert.equal(input.element.value, "");
+  dom.window.close();
+});
+
+test("Textarea mirrors the focused document and primary selection for assistive technology", async () => {
+  const dom = new JSDOM("<!doctype html><body><main></main></body>");
+  const container = dom.window.document.querySelector("main");
+  assert.ok(container);
+  using model = new TextModel("alpha\nbeta");
+  using selections = new EditorSelectionController(model, TextSelectionSet.single(caret(0, 2)));
+  using viewport = new AlphaEditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
+  using input = new AlphaTextInputController(viewport, selections, { ariaLabel: "Source file" });
+
+  input.focus();
+  assert.equal(input.element.getAttribute("aria-roledescription"), "code editor");
+  assert.equal(input.element.getAttribute("aria-multiline"), "true");
+  assert.equal(input.element.value, "alpha\nbeta");
+  assert.equal(input.element.selectionStart, 2);
+  assert.equal(input.element.selectionEnd, 2);
+
+  selections.setSelections(TextSelectionSet.single(TextSelection.from(TextPosition.at(1, 3), TextPosition.at(1, 1))));
+  await Promise.resolve();
+  assert.equal(input.element.selectionStart, 7);
+  assert.equal(input.element.selectionEnd, 9);
+  assert.equal(input.element.selectionDirection, "backward");
+
+  selections.setSelections(TextSelectionSet.withPrimary([
+    caret(0, 0),
+    caret(1, 2),
+  ], 1));
+  await Promise.resolve();
+  assert.equal(input.element.getAttribute("aria-description"), "2 selections. Primary at line 2, column 3.");
+
+  input.element.setSelectionRange(1, 4, "forward");
+  input.element.dispatchEvent(new dom.window.Event("select"));
+  assert.deepEqual(selections.selections, TextSelectionSet.single(TextSelection.from(TextPosition.at(0, 1), TextPosition.at(0, 4))));
+
+  model.applyEdits([{
+    range: TextRange.emptyAt(TextPosition.at(0, 5)),
+    text: "!",
+  }]);
+  await Promise.resolve();
+  assert.equal(input.element.value, "alpha!\nbeta");
+
+  input.element.blur();
+  assert.equal(input.element.value, "");
+  dom.window.close();
+});
+
+test("Textarea inherits the viewport direction for macOS accessibility text services", () => {
+  const dom = new JSDOM("<!doctype html><body><main></main></body>");
+  const container = dom.window.document.querySelector("main");
+  assert.ok(container);
+  using model = new TextModel("שלום");
+  using selections = new EditorSelectionController(model, TextSelectionSet.single(caret(0, 0)));
+  using viewport = new AlphaEditorViewport({
+    container,
+    model,
+    lineHeight: 20,
+    textMeasurer: new FixedTextMeasurer(),
+    selectionController: selections,
+    textDirection: AlphaEditorTextDirection.RightToLeft,
+  });
+  using input = new AlphaTextInputController(viewport, selections);
+
+  assert.equal(input.element.dir, "rtl");
+  dom.window.close();
+});
+
+test("Textarea toggles transient overtype mode for ordinary input", () => {
+  const dom = new JSDOM("<!doctype html><body><main></main></body>");
+  const container = dom.window.document.querySelector("main");
+  assert.ok(container);
+  using model = new TextModel("a😊bc");
+  using selections = new EditorSelectionController(model, TextSelectionSet.single(caret(0, 1)));
+  using viewport = new AlphaEditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
+  using input = new AlphaTextInputController(viewport, selections);
+
+  const enable = keyboardEvent(dom.window, "Insert");
+  input.element.dispatchEvent(enable);
+  assert.equal(enable.defaultPrevented, true);
+  assert.equal(input.overtyping, true);
+  assert.equal(viewport.element.classList.contains("overtype"), true);
+  input.element.dispatchEvent(beforeInput(dom.window, "insertText", "X"));
+  assert.equal(model.getText(), "aXbc");
+  assert.deepEqual(selections.selections.primary, caret(0, 2));
+
+  input.element.dispatchEvent(keyboardEvent(dom.window, "Insert"));
+  assert.equal(input.overtyping, false);
+  input.element.dispatchEvent(beforeInput(dom.window, "insertText", "Y"));
+  assert.equal(model.getText(), "aXYbc");
   dom.window.close();
 });
 

@@ -53,8 +53,27 @@ test("TextFileService preserves file-system failures", async () => {
   );
 });
 
+test("TextFileService writes text and observes cancellation", async () => {
+  const files = new TestFileService("workspace");
+  const service = new TextFileService(files);
+  const resource = URI.file("C:\\project\\main.ts");
+
+  await service.save({ resource, text: "saved" }, new AbortController().signal);
+  assert.deepEqual(files.writes, [{ resource, text: "saved" }]);
+
+  const cancelled = new AbortController();
+  cancelled.abort("closed");
+  await assert.rejects(service.save({ resource, text: "ignored" }, cancelled.signal), error => (error as Error).name === "CancellationError");
+  assert.equal(files.writes.length, 1);
+});
+
 class TestFileService implements IFileService {
   readCount = 0;
+  readonly writes: { resource: URI; text: string }[] = [];
+  readonly onDidChangeFiles = () => ({
+    dispose() {},
+    [Symbol.dispose]() {},
+  });
 
   constructor(private readonly content: string | Promise<string>) {}
 
@@ -75,6 +94,17 @@ class TestFileService implements IFileService {
   async readFile() {
     this.readCount += 1;
     return await this.content;
+  }
+
+  async writeFile(resource: URI, content: string) {
+    this.writes.push({ resource, text: content });
+    return {
+      resource,
+      kind: FileKind.File,
+      sizeBytes: content.length,
+      readonly: false,
+      modifiedAtMillis: undefined,
+    };
   }
 }
 

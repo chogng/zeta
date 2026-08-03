@@ -14,14 +14,18 @@ or Alpha models.
 `BrowserTextMateGrammarService` is the separate product-resource boundary. It
 registers the bundled VS Code JSON and JSONC raw grammar assets with the common
 `TextMateGrammarService`; common code sees loaders and catalog content only.
-External extension manifests and resources remain future composition-root
-work. `BrowserTextMateAnalysisWorkerSupport` owns this built-in catalog
-service and exposes the matching dedicated Worker factory as one disposable
-unit for a future Alpha editor pane.
+`BrowserTextMateAnalysisWorkerSupport` additionally accepts caller-owned
+`TextMateGrammarDefinition` contributions plus an optional caller-owned
+`TextMateScopeThemeSource`, and registers them into that session before any
+Worker is created. Later selector revisions are mirrored into the existing
+Worker. Extension
+manifest discovery and resource
+resolution remain a future composition-root concern: callers supply resolved
+loaders rather than granting the Worker file or extension-host access.
 
 `textMateAnalysisWorkerMain.ts` is the complete dedicated Worker composition:
-it owns TextMate and lexical fallback modules, the grammar catalog store, the
-Analysis/module/catalog wire servers, and the Oniguruma-backed tokenization
+it owns TextMate and lexical fallback modules, the grammar catalog and scope-theme
+stores, the Analysis/module/catalog/theme wire servers, and the Oniguruma-backed tokenization
 service. `createTextMateAnalysisWorkerFactory` creates the matching renderer
-client and gates requests on the latest catalog revision supplied by the
-caller-owned source.
+client and gates requests on the latest catalog and scope-theme revisions supplied
+by the caller-owned sources.

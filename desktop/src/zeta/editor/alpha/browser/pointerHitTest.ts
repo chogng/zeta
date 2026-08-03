@@ -1,5 +1,6 @@
 import { TextPosition } from "../common/text.js";
 import { type TextModel } from "../common/textModel.js";
+import { type EditorVisualLineProjection } from "../common/visualLineProjection.js";
 import { getTextGraphemeBoundaries } from "../common/textSegmentation.js";
 import { type EditorScrollPosition } from "../common/viewport.js";
 import { type AlphaTextMeasurer } from "./fontMetrics.js";
@@ -92,6 +93,49 @@ export function hitTestAlphaEditorPoint(
     AlphaEditorHitTargetKind.Text,
     lineIndex,
     nearestCursorColumn(line, textOffset, measurer),
+  );
+}
+
+/** @internal */
+export function hitTestAlphaVisualEditorPoint(model: TextModel, projection: EditorVisualLineProjection, layout: AlphaHitTestLayout, point: AlphaViewportPoint, metrics: AlphaHitTestMetrics, measurer: AlphaTextMeasurer): AlphaEditorHitTarget | undefined {
+  validatePoint(point);
+  validateLayout(layout);
+  validateMetrics(metrics);
+  if (projection.modelVersion !== model.version) {
+    throw new Error("Alpha visual hit testing requires the current text model projection");
+  }
+  if (
+    point.left < 0 ||
+    point.top < 0 ||
+    point.left >= layout.viewportSize.width ||
+    point.top >= layout.viewportSize.height
+  ) {
+    return undefined;
+  }
+  const contentTop = point.top + layout.scrollPosition.top;
+  const visualLineIndex = Math.floor(contentTop / layout.lineHeight);
+  if (visualLineIndex >= projection.visualLineCount) {
+    const logicalLineIndex = model.lineCount - 1;
+    return target(AlphaEditorHitTargetKind.AfterLines, logicalLineIndex, model.getLineContent(logicalLineIndex).length);
+  }
+  const visualLine = projection.lineAt(visualLineIndex)!;
+  if (point.left < metrics.gutterWidth) {
+    return target(AlphaEditorHitTargetKind.Gutter, visualLine.logicalLineIndex, 0);
+  }
+  const fullLine = model.getLineContent(visualLine.logicalLineIndex);
+  const text = fullLine.slice(visualLine.startColumn, visualLine.endColumn);
+  const textOffset = point.left + layout.scrollPosition.left - metrics.textLeft;
+  if (textOffset < 0 || text.length === 0) {
+    return target(AlphaEditorHitTargetKind.EmptyContent, visualLine.logicalLineIndex, visualLine.startColumn);
+  }
+  const lineWidth = measurer.measureLineWidth(text);
+  if (textOffset >= lineWidth) {
+    return target(AlphaEditorHitTargetKind.EmptyContent, visualLine.logicalLineIndex, visualLine.endColumn);
+  }
+  return target(
+    AlphaEditorHitTargetKind.Text,
+    visualLine.logicalLineIndex,
+    visualLine.startColumn + nearestCursorColumn(text, textOffset, measurer),
   );
 }
 

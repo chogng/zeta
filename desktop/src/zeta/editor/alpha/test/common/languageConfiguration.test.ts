@@ -54,6 +54,20 @@ test("Language configuration contributions may explicitly clear inherited fields
   assert.deepEqual(registry.getLanguageConfiguration("json").brackets, [{ open: "{", close: "}" }]);
 });
 
+test("Language word patterns compose, clone, and clear with language ownership", () => {
+  using registry = new LanguageConfigurationRegistry();
+  const source = /[A-Za-z:]+/gi;
+  using base = registry.register("rust", { wordPattern: source });
+  const resolved = registry.getLanguageConfiguration("rust").wordPattern!;
+  assert.equal(resolved.source, source.source);
+  assert.equal(resolved.flags, source.flags);
+  assert.notEqual(resolved, source);
+  using clear = registry.register("rust", { wordPattern: null }, { priority: 1 });
+  assert.equal(registry.getLanguageConfiguration("rust").wordPattern, undefined);
+  clear.dispose();
+  assert.equal(registry.getLanguageConfiguration("rust").wordPattern?.source, source.source);
+});
+
 test("Language configuration validation is atomic and identities stay language-owned", () => {
   using registry = new LanguageConfigurationRegistry();
   const initial = registry.getLanguageConfiguration("plaintext");
@@ -146,9 +160,10 @@ test("Auto-closing token exclusions are immutable and validate their closed voca
   }), /must be unique/);
 });
 
-test("Indentation and on-enter rules compose, clone, clear, and restore atomically", () => {
+test("Indentation, folding, and on-enter rules compose, clone, clear, and restore atomically", () => {
   using registry = new LanguageConfigurationRegistry();
   const increase = /\{$/g;
+  const regionStart = /^\s*\/\/\s*#region\b/giu;
   using base = registry.register("demo", {
     indentationRules: {
       increaseIndentPattern: increase,
@@ -162,6 +177,10 @@ test("Indentation and on-enter rules compose, clone, clear, and restore atomical
         appendText: " * ",
       },
     }],
+    foldingMarkers: {
+      start: regionStart,
+      end: /^\s*\/\/\s*#endregion\b/iu,
+    },
   });
   const resolved = registry.getLanguageConfiguration("demo");
   assert.notEqual(resolved.indentationRules?.increaseIndentPattern, increase);
@@ -169,23 +188,35 @@ test("Indentation and on-enter rules compose, clone, clear, and restore atomical
   assert.equal(Object.isFrozen(resolved.indentationRules?.increaseIndentPattern), true);
   assert.equal(Object.isFrozen(resolved.onEnterRules), true);
   assert.equal(Object.isFrozen(resolved.onEnterRules[0]?.action), true);
+  assert.notEqual(resolved.foldingMarkers?.start, regionStart);
+  assert.equal(resolved.foldingMarkers?.start.source, "^\\s*\\/\\/\\s*#region\\b");
+  assert.equal(Object.isFrozen(resolved.foldingMarkers?.start), true);
 
   const clearing = registry.register("demo", {
     indentationRules: null,
+    foldingMarkers: null,
     onEnterRules: null,
   }, { priority: 1 });
   assert.equal(registry.getLanguageConfiguration("demo").indentationRules, undefined);
+  assert.equal(registry.getLanguageConfiguration("demo").foldingMarkers, undefined);
   assert.deepEqual(registry.getLanguageConfiguration("demo").onEnterRules, []);
 
   clearing.dispose();
   assert.equal(registry.getLanguageConfiguration("demo").indentationRules?.increaseIndentPattern.source, "\\{$");
+  assert.equal(registry.getLanguageConfiguration("demo").foldingMarkers?.start.source, "^\\s*\\/\\/\\s*#region\\b");
   assert.equal(registry.getLanguageConfiguration("demo").onEnterRules.length, 1);
 });
 
-test("Indentation and on-enter configuration rejects ambiguous values before registration", () => {
+test("Indentation, folding, and on-enter configuration rejects invalid values before registration", () => {
   using registry = new LanguageConfigurationRegistry();
   const initial = registry.getLanguageConfiguration("demo");
 
+  assert.throws(() => registry.register("demo", {
+    foldingMarkers: {
+      start: "region" as unknown as RegExp,
+      end: /endregion/,
+    },
+  }), /RegExp/);
   assert.throws(() => registry.register("demo", {
     indentationRules: {
       increaseIndentPattern: "{" as unknown as RegExp,
@@ -214,7 +245,7 @@ test("Indentation and on-enter configuration rejects ambiguous values before reg
   assert.equal(registry.getLanguageConfiguration("demo"), initial);
 });
 
-test("Isolated built-in sources expose immutable Enter and indentation rules", () => {
+test("Isolated built-in sources expose immutable Enter, indentation, and folding rules", () => {
   const source = createAlphaBuiltinLanguageConfigurationSource();
   const typescript = source.getLanguageConfiguration("typescript");
   const json = source.getLanguageConfiguration("json");
@@ -225,6 +256,8 @@ test("Isolated built-in sources expose immutable Enter and indentation rules", (
   assert.equal(Object.isFrozen(typescript.indentationRules.increaseIndentPattern), true);
   assert.equal(Object.isFrozen(typescript.onEnterRules), true);
   assert.equal(Object.isFrozen(typescript.onEnterRules[0]?.beforeText), true);
+  assert.ok(typescript.foldingMarkers);
+  assert.equal(Object.isFrozen(typescript.foldingMarkers?.start), true);
   assert.deepEqual(typescript.autoClosingPairs.find(pair => pair.open === "'")?.notIn, ["string", "comment"]);
   assert.equal("notIn" in typescript.surroundingPairs.find(pair => pair.open === "'")!, false);
   assert.equal(json.onEnterRules.length, 0);

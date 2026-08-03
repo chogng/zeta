@@ -16,10 +16,28 @@ export enum AlphaSemanticTokenPresentation {
   Operator = "token-operator",
 }
 
+/** Fixed browser presentation modifiers recognized from LSP semantic-token data. */
+export enum AlphaSemanticTokenModifier {
+  Declaration = "token-modifier-declaration",
+  Readonly = "token-modifier-readonly",
+  Static = "token-modifier-static",
+  Deprecated = "token-modifier-deprecated",
+  Abstract = "token-modifier-abstract",
+  Async = "token-modifier-async",
+}
+
 export interface AlphaResolvedSemanticToken {
   readonly startColumn: number;
   readonly endColumn: number;
   readonly presentation: AlphaSemanticTokenPresentation;
+  /** Stable browser-only modifiers; unknown backend modifiers are excluded. */
+  readonly modifiers?: readonly AlphaSemanticTokenModifier[];
+}
+
+export interface AlphaBracketColorizationSpan {
+  readonly startColumn: number;
+  readonly endColumn: number;
+  readonly level: number;
 }
 
 export interface AlphaSemanticTokenLine {
@@ -96,33 +114,51 @@ export function projectAlphaSemanticTokenLine(
   element: HTMLElement,
   lineText: string,
   tokens: readonly AlphaResolvedSemanticToken[],
+  brackets: readonly AlphaBracketColorizationSpan[] = [],
 ): void {
   validateLineTokens(lineText, tokens);
-  if (tokens.length === 0) {
+  validateBracketColorizations(lineText, brackets);
+  if (tokens.length === 0 && brackets.length === 0) {
     element.textContent = lineText;
     return;
   }
   const ownerDocument = element.ownerDocument;
   const fragment = ownerDocument.createDocumentFragment();
-  let column = 0;
-  for (const token of tokens) {
-    if (column < token.startColumn) {
-      fragment.append(ownerDocument.createTextNode(lineText.slice(column, token.startColumn)));
+  const boundaries = [...new Set([0, lineText.length, ...tokens.flatMap(token => [token.startColumn, token.endColumn]), ...brackets.flatMap(bracket => [bracket.startColumn, bracket.endColumn])])].sort((left, right) => left - right);
+  for (let index = 0; index + 1 < boundaries.length; index += 1) {
+    const startColumn = boundaries[index]!;
+    const endColumn = boundaries[index + 1]!;
+    const token = tokens.find(candidate => candidate.startColumn <= startColumn && candidate.endColumn >= endColumn);
+    const bracket = brackets.find(candidate => candidate.startColumn <= startColumn && candidate.endColumn >= endColumn);
+    if (!token && !bracket) {
+      fragment.append(ownerDocument.createTextNode(lineText.slice(startColumn, endColumn)));
+      continue;
     }
     const tokenElement = ownerDocument.createElement("span");
     tokenElement.className = "zeta-alpha-editor-token";
-    tokenElement.classList.add(token.presentation);
-    tokenElement.textContent = lineText.slice(token.startColumn, token.endColumn);
+    if (token) tokenElement.classList.add(token.presentation);
+    for (const modifier of token?.modifiers ?? []) tokenElement.classList.add(modifier);
+    if (bracket) tokenElement.classList.add(`zeta-alpha-editor-bracket-level-${bracket.level}`);
+    tokenElement.textContent = lineText.slice(startColumn, endColumn);
     fragment.append(tokenElement);
-    column = token.endColumn;
-  }
-  if (column < lineText.length) {
-    fragment.append(ownerDocument.createTextNode(lineText.slice(column)));
   }
   if (fragment.textContent !== lineText) {
     throw new Error("Alpha semantic token projection changed line text");
   }
   reset(element, fragment);
+}
+
+function validateBracketColorizations(lineText: string, brackets: readonly AlphaBracketColorizationSpan[]): void {
+  let previousEnd = 0;
+  for (const bracket of brackets) {
+    if (!Number.isSafeInteger(bracket.startColumn) || !Number.isSafeInteger(bracket.endColumn) || bracket.startColumn < previousEnd || bracket.endColumn <= bracket.startColumn || bracket.endColumn > lineText.length) {
+      throw new RangeError("Alpha bracket colorizations must be sorted, non-overlapping source ranges");
+    }
+    if (!Number.isSafeInteger(bracket.level) || bracket.level < 1 || bracket.level > 6) {
+      throw new RangeError("Alpha bracket colorization level must be between 1 and 6");
+    }
+    previousEnd = bracket.endColumn;
+  }
 }
 
 /** Captures and validates one source before a viewport replaces its snapshot. */
@@ -139,6 +175,7 @@ export function snapshotAlphaSemanticTokenLines(source: AlphaSemanticTokenSource
       startColumn: token.startColumn,
       endColumn: token.endColumn,
       presentation: token.presentation,
+      ...(token.modifiers && token.modifiers.length > 0 ? { modifiers: Object.freeze([...token.modifiers]) } : {}),
     })));
     validateLineTokens(source.textModel.getLineContent(line.lineIndex), tokens);
     result.set(line.lineIndex, tokens);
@@ -150,6 +187,7 @@ function validateLineTokens(lineText: string, tokens: readonly AlphaResolvedSema
   let previousEnd = 0;
   for (const token of tokens) {
     validatePresentation(token.presentation);
+    validateModifiers(token.modifiers);
     if (!Number.isSafeInteger(token.startColumn) || !Number.isSafeInteger(token.endColumn)) {
       throw new RangeError("Alpha semantic token columns must be safe integers");
     }
@@ -169,17 +207,43 @@ function validatePresentation(presentation: AlphaSemanticTokenPresentation): voi
   }
 }
 
+function validateModifiers(modifiers: readonly AlphaSemanticTokenModifier[] | undefined): void {
+  if (modifiers === undefined) return;
+  if (new Set(modifiers).size !== modifiers.length || modifiers.some(modifier => !Object.values(AlphaSemanticTokenModifier).includes(modifier))) {
+    throw new TypeError("Unknown or duplicate Alpha semantic token modifier");
+  }
+}
+
 function resolveLineTokens(tokens: readonly LanguageToken[], resolvePresentation: AlphaSemanticTokenResolver): readonly AlphaResolvedSemanticToken[] {
   const resolved: AlphaResolvedSemanticToken[] = [];
   for (const token of tokens) {
     const presentation = resolvePresentation(token);
     if (presentation === undefined) continue;
     validatePresentation(presentation);
+    const modifiers = resolveAlphaSemanticTokenModifiers(token);
     resolved.push(Object.freeze({
       startColumn: token.range.start.columnIndex,
       endColumn: token.range.end.columnIndex,
       presentation,
+      ...(modifiers.length > 0 ? { modifiers } : {}),
     }));
   }
   return Object.freeze(resolved);
+}
+
+/** Maps standard LSP modifier names to Alpha's closed browser presentation set. */
+export function resolveAlphaSemanticTokenModifiers(token: LanguageToken): readonly AlphaSemanticTokenModifier[] {
+  const resolved = new Set<AlphaSemanticTokenModifier>();
+  for (const modifier of token.modifiers) {
+    switch (modifier) {
+      case "declaration":
+      case "definition": resolved.add(AlphaSemanticTokenModifier.Declaration); break;
+      case "readonly": resolved.add(AlphaSemanticTokenModifier.Readonly); break;
+      case "static": resolved.add(AlphaSemanticTokenModifier.Static); break;
+      case "deprecated": resolved.add(AlphaSemanticTokenModifier.Deprecated); break;
+      case "abstract": resolved.add(AlphaSemanticTokenModifier.Abstract); break;
+      case "async": resolved.add(AlphaSemanticTokenModifier.Async); break;
+    }
+  }
+  return Object.freeze([...resolved]);
 }

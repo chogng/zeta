@@ -27,8 +27,11 @@ for (const [name, value] of Object.entries({
   });
 }
 
-const { AlphaEditorViewport } = await import(
+const { AlphaEditorTextDirection, AlphaEditorViewport } = await import(
   "../../browser/alphaEditorViewport.js"
+);
+const { AlphaEditorLineWrapping } = await import(
+  "../../browser/visualLineProjection.js"
 );
 
 test("Decoration sources project, update, and follow tracked model ranges", () => {
@@ -97,6 +100,17 @@ test("Decoration sources project, update, and follow tracked model ranges", () =
     left: "38px",
     width: "20px",
   }]);
+  const errorMarker = requiredElement<HTMLElement>(
+    requiredElement<HTMLElement>(viewport.element, '.zeta-alpha-editor-line[data-logical-line-index="2"]'),
+    ".zeta-alpha-editor-diagnostic-marker",
+  );
+  assert.equal(errorMarker.hidden, false);
+  assert.equal(errorMarker.classList.contains("error"), true);
+  const errorOverview = requiredElement<HTMLElement>(viewport.element, ".zeta-alpha-editor-overview-marker");
+  assert.equal(errorOverview.classList.contains(AlphaDecorationPresentation.ErrorUnderline), true);
+  const errorMinimap = requiredElement<HTMLElement>(viewport.element, ".zeta-alpha-editor-minimap-diagnostic-marker");
+  assert.equal(errorMinimap.classList.contains(AlphaDecorationPresentation.ErrorUnderline), true);
+  assert.equal(errorMinimap.style.top, "66.66666666666666%");
 
   diagnostics.update(diagnosticId, {
     range: TextRange.from(TextPosition.at(1, 1), TextPosition.at(1, 3)),
@@ -114,6 +128,17 @@ test("Decoration sources project, update, and follow tracked model ranges", () =
   assert.equal(warning.parentElement?.parentElement?.dataset.lineIndex, "1");
   assert.equal(warning.style.left, "48px");
   assert.equal(warning.style.width, "20px");
+  const warningMarker = requiredElement<HTMLElement>(
+    requiredElement<HTMLElement>(viewport.element, '.zeta-alpha-editor-line[data-logical-line-index="1"]'),
+    ".zeta-alpha-editor-diagnostic-marker",
+  );
+  assert.equal(warningMarker.hidden, false);
+  assert.equal(warningMarker.classList.contains("warning"), true);
+  const warningOverview = requiredElement<HTMLElement>(viewport.element, ".zeta-alpha-editor-overview-marker");
+  assert.equal(warningOverview.classList.contains(AlphaDecorationPresentation.WarningUnderline), true);
+  const warningMinimap = requiredElement<HTMLElement>(viewport.element, ".zeta-alpha-editor-minimap-diagnostic-marker");
+  assert.equal(warningMinimap.classList.contains(AlphaDecorationPresentation.WarningUnderline), true);
+  assert.equal(warningMinimap.style.top, "33.33333333333333%");
   assert.equal(matchResolutionCount, 1);
 
   model.applyEdits([{
@@ -134,6 +159,99 @@ test("Decoration sources project, update, and follow tracked model ranges", () =
   viewport.dispose();
   assert.equal(matches.size, 1);
   assert.equal(diagnostics.size, 1);
+
+  dom.window.close();
+});
+
+test("Decoration overlays use browser range rectangles for RTL text", () => {
+  const dom = new JSDOM("<!doctype html><body><main></main></body>");
+  const container = requiredElement(dom.window.document, "main");
+  using model = new TextModel("abc אבג");
+  using decorations = new TextDecorationCollection<void>(model);
+  const id = decorations.add({
+    range: TextRange.from(TextPosition.at(0, 0), TextPosition.at(0, 3)),
+    stickiness: TrackedRangeStickiness.NeverGrowsAtEdges,
+    metadata: undefined,
+  });
+  const viewport = new AlphaEditorViewport({
+    container,
+    model,
+    lineHeight: 20,
+    textMeasurer: new FixedTextMeasurer(),
+    textDirection: AlphaEditorTextDirection.RightToLeft,
+    decorationSources: [createAlphaDecorationSource(decorations, () => AlphaDecorationPresentation.SearchMatch)],
+  });
+  viewport.layout({ width: 200, height: 40 });
+  const line = requiredElement<HTMLElement>(viewport.element, ".zeta-alpha-editor-line");
+  Object.defineProperty(line, "getBoundingClientRect", {
+    configurable: true,
+    value: () => testRectangle(100, 0, 200),
+  });
+  const createRange = dom.window.document.createRange.bind(dom.window.document);
+  Object.defineProperty(dom.window.document, "createRange", {
+    configurable: true,
+    value: () => {
+      const range = createRange();
+      Object.defineProperty(range, "getClientRects", {
+        configurable: true,
+        value: () => [testRectangle(150, 0, 20), testRectangle(120, 0, 15)],
+      });
+      return range;
+    },
+  });
+  decorations.update(id, {
+    range: TextRange.from(TextPosition.at(0, 0), TextPosition.at(0, 3)),
+    stickiness: TrackedRangeStickiness.NeverGrowsAtEdges,
+    metadata: undefined,
+  });
+
+  assert.deepEqual(decorationElements(viewport.element).map(element => ({ left: element.style.left, width: element.style.width })), [
+    { left: "50px", width: "20px" },
+    { left: "20px", width: "15px" },
+  ]);
+  dom.window.close();
+});
+
+test("Decoration overlays split at soft-wrapped visual line boundaries", () => {
+  const dom = new JSDOM("<!doctype html><body><main></main></body>");
+  const container = requiredElement(dom.window.document, "main");
+  using model = new TextModel("abcdef");
+  using decorations = new TextDecorationCollection<void>(model);
+  decorations.add({
+    range: TextRange.from(TextPosition.at(0, 1), TextPosition.at(0, 5)),
+    stickiness: TrackedRangeStickiness.NeverGrowsAtEdges,
+    metadata: undefined,
+  });
+  using viewport = new AlphaEditorViewport({
+    container,
+    model,
+    lineHeight: 20,
+    textMeasurer: new FixedTextMeasurer(),
+    decorationSources: [createAlphaDecorationSource(
+      decorations,
+      () => AlphaDecorationPresentation.SearchMatch,
+    )],
+    lineWrapping: AlphaEditorLineWrapping.On,
+  });
+  viewport.layout({ width: 70, height: 60 });
+
+  assert.deepEqual(decorationElements(viewport.element).map(element => ({
+    lineIndex: element.parentElement?.parentElement?.dataset.lineIndex,
+    left: element.style.left,
+    width: element.style.width,
+  })), [{
+    lineIndex: "0",
+    left: "48px",
+    width: "10px",
+  }, {
+    lineIndex: "1",
+    left: "38px",
+    width: "20px",
+  }, {
+    lineIndex: "2",
+    left: "38px",
+    width: "10px",
+  }]);
 
   dom.window.close();
 });
@@ -163,6 +281,8 @@ test("Versioned diagnostics project named severity underlines and invalidate", (
           range: TextRange.from(TextPosition.at(0, 1), TextPosition.at(0, 3)),
           severity: LanguageDiagnosticSeverity.Error,
           message: "error",
+          source: "alpha.lexical",
+          code: "E100",
         },
         {
           range: TextRange.from(TextPosition.at(1, 0), TextPosition.at(1, 2)),
@@ -186,22 +306,33 @@ test("Versioned diagnostics project named severity underlines and invalidate", (
   assert.deepEqual(decorationElements(viewport.element).map(element => ({
     presentation: element.classList[1],
     lineIndex: element.parentElement?.parentElement?.dataset.lineIndex,
+    title: element.title,
   })), [{
     presentation: AlphaDecorationPresentation.ErrorUnderline,
     lineIndex: "0",
+    title: "alpha.lexical E100: error",
   }, {
     presentation: AlphaDecorationPresentation.WarningUnderline,
     lineIndex: "1",
+    title: "warning",
+  }, {
+    presentation: AlphaDecorationPresentation.InformationUnderline,
+    lineIndex: "2",
+    title: "information",
+  }, {
+    presentation: AlphaDecorationPresentation.HintUnderline,
+    lineIndex: "3",
+    title: "hint",
   }]);
   assert.equal(
     resolveAlphaLanguageDiagnosticPresentation(
       LanguageDiagnosticSeverity.Information,
     ),
-    undefined,
+    AlphaDecorationPresentation.InformationUnderline,
   );
   assert.equal(
     resolveAlphaLanguageDiagnosticPresentation(LanguageDiagnosticSeverity.Hint),
-    undefined,
+    AlphaDecorationPresentation.HintUnderline,
   );
   assert.throws(
     () => resolveAlphaLanguageDiagnosticPresentation(
@@ -247,6 +378,10 @@ function decorationElements(container: ParentNode): HTMLElement[] {
   return [...container.querySelectorAll<HTMLElement>(
     ".zeta-alpha-editor-decoration",
   )];
+}
+
+function testRectangle(left: number, top: number, width: number): DOMRect {
+  return { left, top, width, height: 20, right: left + width, bottom: top + 20, x: left, y: top, toJSON: () => ({}) } as DOMRect;
 }
 
 class FixedTextMeasurer implements AlphaTextMeasurer {

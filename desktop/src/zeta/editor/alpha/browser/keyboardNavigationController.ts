@@ -5,9 +5,13 @@ import { operatingSystem, OperatingSystem } from "../../../base/common/platform.
 import { EditorCursorNavigationCommand, EditorCursorNavigationMode, navigateEditorCursors } from "../common/cursorNavigation.js";
 import { type EditorSelectionController } from "../common/editorSelectionController.js";
 import { type AlphaEditorViewport } from "./alphaEditorViewport.js";
+import { AlphaEditorLineWrapping } from "./visualLineProjection.js";
+import { navigateAlphaVisualCursors } from "./visualCursorNavigation.js";
 
 export interface AlphaKeyboardNavigationControllerOptions {
   readonly operatingSystem?: OperatingSystem;
+  /** Resolves the active language word matcher for word navigation. */
+  readonly wordPattern?: () => RegExp | undefined;
 }
 
 export interface AlphaKeyboardNavigationCommand {
@@ -20,7 +24,9 @@ export interface AlphaKeyboardNavigationCommand {
  */
 export class AlphaKeyboardNavigationController extends DisposableOwner {
   private readonly targetOperatingSystem: OperatingSystem;
+  private readonly wordPattern: (() => RegExp | undefined) | undefined;
   private preferredColumns: readonly number[] | undefined;
+  private preferredVisualHorizontalOffsets: readonly number[] | undefined;
   private applyingNavigation = false;
 
   constructor(
@@ -33,6 +39,10 @@ export class AlphaKeyboardNavigationController extends DisposableOwner {
       this.targetOperatingSystem = readOperatingSystem(
         options.operatingSystem,
       );
+      if (options.wordPattern !== undefined && typeof options.wordPattern !== "function") {
+        throw new TypeError("Alpha keyboard word pattern resolver must be a function");
+      }
+      this.wordPattern = options.wordPattern;
     } catch (error) {
       this.dispose();
       throw error;
@@ -49,7 +59,10 @@ export class AlphaKeyboardNavigationController extends DisposableOwner {
       event => this.handleKeydown(event),
     ));
     this.own(selectionController.onDidChange(() => {
-      if (!this.applyingNavigation) this.preferredColumns = undefined;
+      if (!this.applyingNavigation) {
+        this.preferredColumns = undefined;
+        this.preferredVisualHorizontalOffsets = undefined;
+      }
     }));
   }
 
@@ -63,30 +76,63 @@ export class AlphaKeyboardNavigationController extends DisposableOwner {
     if (!navigation) return;
     event.stop();
     const layout = this.viewport.viewportLayout;
-    const result = navigateEditorCursors(
-      this.viewport.textModel,
-      this.selectionController.selections,
-      {
-        ...navigation,
-        pageLineCount: Math.max(
-          1,
-          Math.floor(
-            layout.viewportSize.height /
-            layout.lineHeight,
-          ),
-        ),
-        preferredColumns: this.preferredColumns,
-      },
+    const pageLineCount = Math.max(
+      1,
+      Math.floor(layout.viewportSize.height / layout.lineHeight),
     );
+    const visualCommand = isVisualVerticalCommand(navigation.command)
+      ? navigation.command
+      : undefined;
+    const result = this.viewport.lineWrapping === AlphaEditorLineWrapping.On &&
+      visualCommand !== undefined
+      ? navigateAlphaVisualCursors(
+        this.viewport.textModel,
+        this.viewport.getVisualLineProjection(),
+        this.selectionController.selections,
+        {
+          command: visualCommand,
+          mode: navigation.mode,
+          pageLineCount,
+          preferredHorizontalOffsets: this.preferredVisualHorizontalOffsets,
+        },
+        text => this.viewport.measureTextWidth(text),
+        {
+          getHorizontalOffset: position => this.viewport.getVisualHorizontalOffset(position),
+          getNearestPosition: (visualLineIndex, horizontalOffset) => this.viewport.getNearestPositionAtVisualHorizontalOffset(visualLineIndex, horizontalOffset),
+        },
+      )
+      : navigateEditorCursors(
+        this.viewport.textModel,
+        this.selectionController.selections,
+        {
+          ...navigation,
+          pageLineCount,
+          ...(this.wordPattern ? { wordPattern: this.wordPattern() } : {}),
+          preferredColumns: this.preferredColumns,
+        },
+      );
     this.applyingNavigation = true;
     try {
       this.selectionController.setSelections(result.selections);
     } finally {
       this.applyingNavigation = false;
     }
-    this.preferredColumns = result.preferredColumns;
+    if ("preferredHorizontalOffsets" in result) {
+      this.preferredColumns = undefined;
+      this.preferredVisualHorizontalOffsets = result.preferredHorizontalOffsets;
+    } else {
+      this.preferredColumns = result.preferredColumns;
+      this.preferredVisualHorizontalOffsets = undefined;
+    }
     this.viewport.revealPosition(result.selections.primary.active);
   }
+}
+
+function isVisualVerticalCommand(command: EditorCursorNavigationCommand): command is EditorCursorNavigationCommand.LineUp | EditorCursorNavigationCommand.LineDown | EditorCursorNavigationCommand.PageUp | EditorCursorNavigationCommand.PageDown {
+  return command === EditorCursorNavigationCommand.LineUp ||
+    command === EditorCursorNavigationCommand.LineDown ||
+    command === EditorCursorNavigationCommand.PageUp ||
+    command === EditorCursorNavigationCommand.PageDown;
 }
 
 export function resolveAlphaKeyboardNavigation(event: Pick<StandardKeyboardEvent, "key" | "ctrlKey" | "shiftKey" | "altKey" | "metaKey" | "altGraphKey" | "isComposing">, targetOperatingSystem: OperatingSystem): AlphaKeyboardNavigationCommand | undefined {

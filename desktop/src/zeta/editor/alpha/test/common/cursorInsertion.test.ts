@@ -1,0 +1,50 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { addAdjacentLineCursors, addCursorsToSelectedLineEnds, EditorCursorInsertionDirection } from "../../common/cursorInsertion.js";
+import { TextSelection, TextSelectionSet } from "../../common/selection.js";
+import { TextPosition } from "../../common/text.js";
+import { TextModel } from "../../common/textModel.js";
+
+test("Adjacent cursor insertion adds clamped carets and preserves existing selection state", () => {
+  using model = new TextModel("zero\nx\nthree");
+  let selections = TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(1, 1)));
+
+  selections = addAdjacentLineCursors(model, selections, EditorCursorInsertionDirection.Below);
+  assert.deepEqual(selections, TextSelectionSet.withPrimary([
+    TextSelection.collapsedAt(TextPosition.at(1, 1)),
+    TextSelection.collapsedAt(TextPosition.at(2, 1)),
+  ], 1));
+  selections = addAdjacentLineCursors(model, selections, EditorCursorInsertionDirection.Above);
+  assert.deepEqual(selections, TextSelectionSet.withPrimary([
+    TextSelection.collapsedAt(TextPosition.at(1, 1)),
+    TextSelection.collapsedAt(TextPosition.at(2, 1)),
+    TextSelection.collapsedAt(TextPosition.at(0, 1)),
+  ], 2));
+});
+
+test("Adjacent cursor insertion rejects duplicate or overlapping carets and validates direction", () => {
+  using model = new TextModel("zero\none\ntwo");
+  const selections = TextSelectionSet.single(TextSelection.from(TextPosition.at(0, 0), TextPosition.at(2, 3)));
+  assert.equal(addAdjacentLineCursors(model, selections, EditorCursorInsertionDirection.Below), selections);
+  assert.throws(() => addAdjacentLineCursors(
+    model,
+    selections,
+    "sideways" as EditorCursorInsertionDirection,
+  ), /Unknown editor cursor insertion direction/);
+});
+
+test("Line-end cursor insertion follows selected physical lines and keeps the primary source first", () => {
+  using model = new TextModel("zero\none\ntwo\nthree");
+  const selections = TextSelectionSet.withPrimary([
+    TextSelection.from(TextPosition.at(0, 1), TextPosition.at(2, 0)),
+    TextSelection.from(TextPosition.at(2, 0), TextPosition.at(3, 2)),
+  ], 1);
+  assert.deepEqual(addCursorsToSelectedLineEnds(model, selections), TextSelectionSet.withPrimary([
+    TextSelection.collapsedAt(TextPosition.at(0, 4)),
+    TextSelection.collapsedAt(TextPosition.at(1, 3)),
+    TextSelection.collapsedAt(TextPosition.at(2, 3)),
+    TextSelection.collapsedAt(TextPosition.at(3, 2)),
+  ], 2));
+  const collapsed = TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0)));
+  assert.equal(addCursorsToSelectedLineEnds(model, collapsed), collapsed);
+});

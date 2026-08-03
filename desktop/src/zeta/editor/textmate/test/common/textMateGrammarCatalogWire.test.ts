@@ -20,6 +20,8 @@ import { materializeTextMateGrammarCatalog, TextMateGrammarCatalogModel, type Te
 import { TextMateGrammarCatalogStore } from "../../common/textMateGrammarCatalogStore.js";
 import { TextMateGrammarCatalogWireClient, TextMateGrammarCatalogWireServer } from "../../common/textMateGrammarCatalogWire.js";
 import { TextMateGrammarRegistry } from "../../common/textMateGrammarRegistry.js";
+import { TextMateScopeThemeModel } from "../../common/textMateScopeTheme.js";
+import { TextMateScopeThemeWireServer } from "../../common/textMateScopeThemeWire.js";
 import { TextMateTokenizationService } from "../../common/textMateTokenizationService.js";
 
 const onigurumaRuntime = (onigurumaNamespace as unknown as { readonly default?: typeof onigurumaNamespace }).default ?? onigurumaNamespace;
@@ -149,6 +151,45 @@ test("Catalog-gated module Worker selects TextMate and falls back dynamically", 
   assert.equal(analysis.tokens.result!.value.tokens[0]!.tokenType, "string");
   const catalogRequests = clientPort.sentMessages.filter(message => (message as { protocol?: string }).protocol === "zeta.textmate.grammar-catalog");
   assert.equal(catalogRequests.length, 2);
+});
+
+test("Scope themes cross the Analysis Worker boundary and invalidate cached token styles", async () => {
+  using resources = new DisposableStore();
+  const providers = resources.add(new LanguageAnalysisProviderRegistry());
+  const modules = resources.add(new LanguageAnalysisProviderModuleRegistry());
+  const grammarStore = resources.add(new TextMateGrammarCatalogStore());
+  const workerThemes = resources.add(new TextMateScopeThemeModel());
+  const tokenization = resources.add(new TextMateTokenizationService(grammarStore, onigLib, {
+    scopeResolver: scopes => workerThemes.resolve(scopes),
+  }));
+  resources.add(modules.register(createTextMateAnalysisModule(tokenization)));
+  const host = resources.add(new LanguageAnalysisProviderModuleHost(modules, providers));
+  const [clientPort, serverPort] = createPortPair();
+  resources.add(new LanguageWorkerWireServer(serverPort, languageAnalysisWireCodec, new LanguageAnalysisProviderWorker(providers)));
+  resources.add(new LanguageAnalysisProviderModuleWireServer(serverPort, modules, host));
+  resources.add(new TextMateGrammarCatalogWireServer(serverPort, grammarStore));
+  resources.add(new TextMateScopeThemeWireServer(serverPort, workerThemes, () => tokenization.invalidateTokenCaches()));
+  const catalogs = resources.add(new TextMateGrammarCatalogModel(grammarCatalog(1)));
+  const themes = resources.add(new TextMateScopeThemeModel());
+  const worker = resources.add(new TextMateAnalysisModuleWorkerClient(clientPort, catalogs, {
+    requiredProviderModules: ["textmate.grammars"],
+    scopeTheme: themes,
+  }));
+  const localProviders = resources.add(new LanguageAnalysisProviderRegistry());
+  const model = resources.add(new TextModel("if"));
+  const analysis = resources.add(new LanguageAnalysisService(model, localProviders, { workerFactory: () => worker }));
+
+  assert.equal((await analysis.requestTokens("demo")).status, LanguageRequestStatus.Applied);
+  assert.equal(analysis.tokens.result!.value.tokens[0]!.tokenType, "keyword");
+
+  themes.replace({ revision: 1, rules: [{ selector: "keyword.control.demo", tokenType: "keyword", modifiers: ["declaration"] }] });
+  assert.equal((await analysis.requestTokens("demo")).status, LanguageRequestStatus.Applied);
+  assert.deepEqual(analysis.tokens.result!.value.tokens[0], {
+    range: TextRange.from(TextPosition.at(0, 0), TextPosition.at(0, 2)),
+    tokenType: "keyword",
+    modifiers: ["declaration"],
+  });
+  assert.equal(clientPort.sentMessages.filter(message => (message as { protocol?: string }).protocol === "zeta.textmate.scope-theme").length, 1);
 });
 
 interface MemoryWirePort extends LanguageWorkerWireClientPort {

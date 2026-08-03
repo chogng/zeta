@@ -45,6 +45,18 @@ export interface LanguageIndentationRules {
   readonly unIndentedLinePattern?: RegExp | null;
 }
 
+/**
+ * Language-owned markers for named fold regions such as `// #region`.
+ *
+ * Both patterns are matched against the complete physical line. Contributions
+ * should include their comment delimiter so ordinary source text cannot create
+ * a fold by merely containing a marker name.
+ */
+export interface LanguageFoldingMarkers {
+  readonly start: RegExp;
+  readonly end: RegExp;
+}
+
 /** DOM-free editing rules contributed for one language. */
 export interface LanguageConfiguration {
   readonly comments?: LanguageCommentConfiguration | null;
@@ -53,7 +65,10 @@ export interface LanguageConfiguration {
   readonly surroundingPairs?: readonly LanguageCharacterPair[] | null;
   readonly autoCloseBefore?: string | null;
   readonly indentationRules?: LanguageIndentationRules | null;
+  readonly foldingMarkers?: LanguageFoldingMarkers | null;
   readonly onEnterRules?: readonly LanguageOnEnterRule[] | null;
+  /** Optional language-specific word matcher for editor selection gestures. */
+  readonly wordPattern?: RegExp | null;
 }
 
 export interface ResolvedLanguageCommentConfiguration {
@@ -71,7 +86,9 @@ export interface ResolvedLanguageConfiguration {
   readonly surroundingPairs: readonly LanguageCharacterPair[];
   readonly autoCloseBefore: string;
   readonly indentationRules?: LanguageIndentationRules;
+  readonly foldingMarkers?: LanguageFoldingMarkers;
   readonly onEnterRules: readonly LanguageOnEnterRule[];
+  readonly wordPattern?: RegExp;
 }
 
 export interface LanguageConfigurationRegistrationOptions {
@@ -105,7 +122,9 @@ interface NormalizedLanguageConfiguration {
   readonly surroundingPairs?: readonly LanguageCharacterPair[] | null;
   readonly autoCloseBefore?: string | null;
   readonly indentationRules?: LanguageIndentationRules | null;
+  readonly foldingMarkers?: LanguageFoldingMarkers | null;
   readonly onEnterRules?: readonly LanguageOnEnterRule[] | null;
+  readonly wordPattern?: RegExp | null;
 }
 
 export const DEFAULT_LANGUAGE_AUTO_CLOSE_BEFORE = "\"'`;:.,=}])> \n\t";
@@ -186,7 +205,10 @@ function normalizeLanguageConfiguration(configuration: LanguageConfiguration): N
   const surroundingPairs = normalizePairs(configuration.surroundingPairs, "Language surrounding");
   const autoCloseBefore = normalizeAutoCloseBefore(configuration.autoCloseBefore);
   const indentationRules = normalizeIndentationRules(configuration.indentationRules);
+  const foldingMarkers = normalizeFoldingMarkers(configuration.foldingMarkers);
   const onEnterRules = normalizeOnEnterRules(configuration.onEnterRules);
+  const wordPattern = configuration.wordPattern === undefined ? undefined
+    : configuration.wordPattern === null ? null : normalizePattern(configuration.wordPattern, "Language word pattern");
   return Object.freeze({
     ...(comments === undefined ? {} : { comments }),
     ...(brackets === undefined ? {} : { brackets }),
@@ -194,7 +216,18 @@ function normalizeLanguageConfiguration(configuration: LanguageConfiguration): N
     ...(surroundingPairs === undefined ? {} : { surroundingPairs }),
     ...(autoCloseBefore === undefined ? {} : { autoCloseBefore }),
     ...(indentationRules === undefined ? {} : { indentationRules }),
+    ...(foldingMarkers === undefined ? {} : { foldingMarkers }),
     ...(onEnterRules === undefined ? {} : { onEnterRules }),
+    ...(wordPattern === undefined ? {} : { wordPattern }),
+  });
+}
+
+function normalizeFoldingMarkers(markers: LanguageConfiguration["foldingMarkers"]): LanguageFoldingMarkers | null | undefined {
+  if (markers === undefined || markers === null) return markers;
+  if (typeof markers !== "object") throw new TypeError("Language folding markers must be an object");
+  return Object.freeze({
+    start: normalizePattern(markers.start, "Language folding start marker"),
+    end: normalizePattern(markers.end, "Language folding end marker"),
   });
 }
 
@@ -356,7 +389,9 @@ function resolveLanguageConfiguration(languageId: string, revision: number, cont
   let surroundingPairs: readonly LanguageCharacterPair[] | undefined;
   let autoCloseBefore: string | undefined;
   let indentationRules: LanguageIndentationRules | undefined;
+  let foldingMarkers: LanguageFoldingMarkers | undefined;
   let onEnterRules: readonly LanguageOnEnterRule[] = Object.freeze([]);
+  let wordPattern: RegExp | undefined;
   const ordered = [...contributions].sort((left, right) => left.priority - right.priority || left.order - right.order);
   for (const contribution of ordered) {
     const configuration = contribution.configuration;
@@ -372,7 +407,9 @@ function resolveLanguageConfiguration(languageId: string, revision: number, cont
     if (configuration.surroundingPairs !== undefined) surroundingPairs = configuration.surroundingPairs ?? Object.freeze([]);
     if (configuration.autoCloseBefore !== undefined) autoCloseBefore = configuration.autoCloseBefore ?? "";
     if (configuration.indentationRules !== undefined) indentationRules = configuration.indentationRules ?? undefined;
+    if (configuration.foldingMarkers !== undefined) foldingMarkers = configuration.foldingMarkers ?? undefined;
     if (configuration.onEnterRules !== undefined) onEnterRules = configuration.onEnterRules ?? Object.freeze([]);
+    if (configuration.wordPattern !== undefined) wordPattern = configuration.wordPattern ?? undefined;
   }
   const resolvedAutoClosingPairs = autoClosingPairs ?? brackets;
   const resolvedSurroundingPairs = surroundingPairs ?? Object.freeze(resolvedAutoClosingPairs.map(pair => Object.freeze({
@@ -391,6 +428,8 @@ function resolveLanguageConfiguration(languageId: string, revision: number, cont
     surroundingPairs: resolvedSurroundingPairs,
     autoCloseBefore: autoCloseBefore ?? DEFAULT_LANGUAGE_AUTO_CLOSE_BEFORE,
     ...(indentationRules === undefined ? {} : { indentationRules }),
+    ...(foldingMarkers === undefined ? {} : { foldingMarkers }),
     onEnterRules,
+    ...(wordPattern === undefined ? {} : { wordPattern }),
   });
 }

@@ -109,6 +109,31 @@ test("Decoration geometry clips lines and rejects unknown presentations", () => 
   assert.throws(() => invalid.decorations, /Unknown Alpha decoration/);
 });
 
+test("Decoration geometry presents an empty diagnostic at its text position", () => {
+  using model = new TextModel("abcd\nefgh");
+  using collection = new TextDecorationCollection<AlphaDecorationPresentation>(model);
+  const id = collection.add({
+    range: TextRange.emptyAt(TextPosition.at(1, 2)),
+    stickiness: TrackedRangeStickiness.NeverGrowsAtEdges,
+    metadata: AlphaDecorationPresentation.HintUnderline,
+  });
+  const source = createAlphaDecorationSource(collection, decoration => decoration.metadata);
+
+  assert.deepEqual(createAlphaDecorationRectangles(
+    model,
+    source.decorations,
+    { startLineIndex: 0, endLineIndexExclusive: 2 },
+    38,
+    new FixedTextMeasurer(),
+  ), [{
+    id,
+    presentation: AlphaDecorationPresentation.HintUnderline,
+    lineIndex: 1,
+    left: 58,
+    width: 10,
+  }]);
+});
+
 interface DecorationMetadata {
   readonly presentation?: AlphaDecorationPresentation;
 }

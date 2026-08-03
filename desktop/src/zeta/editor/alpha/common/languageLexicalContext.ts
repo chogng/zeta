@@ -2,7 +2,7 @@ import { DisposableOwner } from "../../../base/common/lifecycle.js";
 import { type LanguageConfigurationSource, type ResolvedLanguageConfiguration } from "./languageConfiguration.js";
 import { assertLanguageId } from "./languageId.js";
 import { createLanguageLexicalLineScanner } from "./languageLexicalConfiguration.js";
-import { type LanguageLexicalLineResult, type LanguageLexicalLineScanner, type LanguageLexicalState } from "./languageLexicalLineScanner.js";
+import { type LanguageLexicalBracketEvent, type LanguageLexicalLineResult, type LanguageLexicalLineScanner, type LanguageLexicalState } from "./languageLexicalLineScanner.js";
 import { type TextModelChange, type TextPosition } from "./text.js";
 import { type TextModel } from "./textModel.js";
 
@@ -13,13 +13,18 @@ export interface LanguageLexicalContextSource {
   getTokenTypeAt(position: TextPosition): string | undefined;
 }
 
+/** Extends lexical context with bracket events whose columns remain in source text coordinates. */
+export interface LanguageStructuralBracketSource extends LanguageLexicalContextSource {
+  getStructuralBracketEvents(lineIndex: number): readonly LanguageLexicalBracketEvent[];
+}
+
 /**
  * Synchronous lexical context for one model/language identity.
  *
  * The index borrows its model and configuration source. It scans lazily to the
  * requested line and invalidates the affected suffix after model changes.
  */
-export class LanguageLexicalContextIndex extends DisposableOwner implements LanguageLexicalContextSource {
+export class LanguageLexicalContextIndex extends DisposableOwner implements LanguageStructuralBracketSource {
   private configuration: ResolvedLanguageConfiguration | undefined;
   private scanner: LanguageLexicalLineScanner | undefined;
   private bracketTokens: readonly string[] = Object.freeze([]);
@@ -58,7 +63,7 @@ export class LanguageLexicalContextIndex extends DisposableOwner implements Lang
       const tokenEnd = Math.min(resolvedEnd, token.endColumn);
       if (column < tokenStart) content += line.slice(column, tokenStart);
       const tokenText = line.slice(tokenStart, tokenEnd);
-      content += token.tokenType === "string" || token.tokenType === "comment"
+      content += token.tokenType === "string" || token.tokenType === "comment" || token.tokenType === "regexp"
         ? removeTokens(tokenText, this.bracketTokens)
         : tokenText;
       column = tokenEnd;
@@ -76,7 +81,7 @@ export class LanguageLexicalContextIndex extends DisposableOwner implements Lang
     const containing = result.tokens.find(token => token.startColumn <= position.columnIndex && position.columnIndex < token.endColumn);
     if (containing) return containing.tokenType;
     if (position.columnIndex === line.length && result.outputState === "blockComment") return "comment";
-    if (position.columnIndex === line.length && result.outputState === "multilineString") return "string";
+    if (position.columnIndex === line.length && result.outputState !== "normal" && result.outputState !== "blockComment") return "string";
     const last = result.tokens.at(-1);
     if (position.columnIndex !== line.length || last?.endColumn !== line.length) return undefined;
     const lineComment = this.configuration!.comments.lineComment;
@@ -87,6 +92,12 @@ export class LanguageLexicalContextIndex extends DisposableOwner implements Lang
       return "string";
     }
     return undefined;
+  }
+
+  getStructuralBracketEvents(lineIndex: number): readonly LanguageLexicalBracketEvent[] {
+    this.ensureAlive();
+    assertLineIndex(this.textModel, lineIndex);
+    return Object.freeze(this.ensureLine(lineIndex).events.flatMap(event => event.kind === "bracket" ? [event] : []));
   }
 
   private ensureLine(lineIndex: number): LanguageLexicalLineResult {

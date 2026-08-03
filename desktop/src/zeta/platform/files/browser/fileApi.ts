@@ -8,6 +8,7 @@ export function createDisconnectedFileApi(unavailable: UnavailableOperation): IF
     getMetadata: () => unavailable("fs.getMetadata"),
     readDirectory: () => unavailable("fs.readDirectory"),
     readFile: () => unavailable("fs.readFile"),
+    writeFile: () => unavailable("fs.writeFile"),
   };
 }
 
@@ -16,5 +17,6 @@ export function createViteDevFileApi(connection: ViteDevAppServerConnection): IF
     getMetadata: (params) => viteDevRequest(connection, "fs/getMetadata", params),
     readDirectory: (params) => viteDevRequest(connection, "fs/readDirectory", params),
     readFile: (params) => viteDevRequest(connection, "fs/readFile", params),
+    writeFile: (params) => viteDevRequest(connection, "fs/writeFile", params),
   };
 }

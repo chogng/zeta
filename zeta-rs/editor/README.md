@@ -5,7 +5,8 @@
 > [`docs/zeta-rs-architecture.md`](../../docs/zeta-rs-architecture.md)；`zeta-diff` 算法契约见
 > [`diff/README.md`](../diff/README.md)；异步结构分析与 revision binding 见
 > [`docs/syntax-analysis.md`](../../docs/syntax-analysis.md)；文件保存基线与冲突状态由
-> [`zeta-text-file`](../text-file/README.md) 独立拥有。
+> [`zeta-text-file`](../text-file/README.md) 独立拥有。共享 Rust document core 与跨运行时迁移边界见
+> [`docs/editor-core.md`](../../docs/editor-core.md)。
 
 `zeta-editor` 拥有 Native UI 使用的多行代码编辑模型、caret/selection、键盘命令、有界
 undo/redo、IME composition、语法 token、结构折叠、viewport soft wrap、代码行与视口绘制，以及由两个代码视口组成的并排差异
@@ -20,8 +21,8 @@ undo/redo、IME composition、语法 token、结构折叠、viewport soft wrap�
 | `CodeEditor` | public | 绘制可见代码行、caret/selection、preedit、syntax token、gutter 与 fold control；拥有 fold-control geometry 和 hit test，`within_viewport` 限制嵌入式宿主实际投影的行 |
 | `CodeEditorPresentation` | public | 选择带 document chrome 的普通编辑器或隐藏 gutter 的 compact 嵌入式编辑器 |
 | `CodeEditorLineWrapping` / `CodeEditorNavigation` | public | 选择不换行或 viewport soft wrap，并把 presentation 解析出的显示列宽和可见行容量交给 document 的上下键与翻页导航 |
-| `CodeEditorDocument` | public | 保存文本、语言、行 range、selection、composition、editor-local syntax snapshot、fold state/visible-row projection 与 undo/redo；所有文本 mutation 自动同步分析 |
-| `CodeEditorRevision` | public | 为宿主提供与文本 mutation 绑定的单调 revision；navigation 不推进，insert/replace/undo/redo 推进；不暴露私有 tree-sitter revision |
+| `CodeEditorDocument` | public | 拥有 Native 的语言、行 range、composition、syntax snapshot、fold/visible-row projection；committed text、selection、revision 与 undo/redo 委托 persistent `zeta-editor-core`，同步 text projection 仅供 Native 计算/绘制 |
+| `CodeEditorRevision` | public | `zeta-editor-core::EditorCoreRevision` 的 Native 名称；为宿主提供与文本 mutation 绑定的单调 revision，navigation 不推进，insert/replace/undo/redo 推进 |
 | `CodeEditorFoldingRange` / `CodeEditorFoldState` | public | 表达零基 source-row 结构范围及每个 document 实例独立的展开状态；start row 保留可见 |
 | `CodeEditorFoldControl` | public | 发布当前帧可见 gutter control 的 editor-owned range、state 与命中 bounds |
 | `CodeEditorCommand` | public | 表达插入、自动缩进换行、indent/outdent、语言声明的行注释、行复制/移动/删除空行/合并/插入/行尾空白清理/排序/反转/去重、Unicode navigation、选择、删除与 undo/redo |
@@ -76,7 +77,8 @@ CodeEditorDocument::apply
 ├─ CodeEditorCommand
 ├─ grapheme / CRLF boundary navigation
 ├─ selection replacement
-├─ checkpoint → bounded undo / redo
+├─ checkpoint → core selection synchronization
+├─ committed mutation → core bounded undo / redo + revision
 └─ reindex_lines → CodeEditorAnalysis::synchronize
    └─ SyntaxDocument incremental edit
       ├─ token → line-relative CodeEditorSyntaxToken
@@ -141,8 +143,8 @@ Unified projection 以 `DiffDocument::hunks` 的间隙作为可折叠区间，�
 ## 执行、失败与宿主义务
 
 `CodeEditor`、`DiffEditor` 和 `MultiDiffEditor` 构造与绘制没有 I/O 或独立 error channel。编辑命令以 Unicode
-grapheme boundary 修改 committed text；CRLF 在删除时作为一个换行边界处理。history 最多保留
-100 个完整 snapshot，新编辑会清空 redo；当前不合并连续输入。IME preedit 与 committed text
+grapheme boundary 修改 committed text；CRLF 在删除时作为一个换行边界处理。`zeta-editor-core` 为 Native
+保留最多 100 个完整 snapshot，新编辑会清空 redo；当前不合并连续输入。IME preedit 与 committed text
 分离，只有 Commit 建立一个可撤销 checkpoint，Cancel 不修改文档。`CodeEditor::caret_bounds`
 向平台宿主提供候选框锚点，`text_position_at` 与 `CodeEditorDocument::move_to` /
 `set_selection` 支持指针选择。`CodeEditorPresentation::Compact` 只改变共享组件拥有的

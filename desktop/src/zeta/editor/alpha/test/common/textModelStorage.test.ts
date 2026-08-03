@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { toDisposable } from "../../../../base/common/lifecycle.js";
 import { TextRange } from "../../common/text.js";
 import { TextModel } from "../../common/textModel.js";
 
@@ -167,4 +168,66 @@ test("TextModel compaction remains transparent to snapshots and history", () => 
     snapshotVersion: 2,
     snapshotText: insertedText,
   });
+});
+
+test("TextModel defers reclaiming piece-tree storage through product-owned maintenance", () => {
+  const scheduled: (() => void)[] = [];
+  const model = new TextModel("", {
+    maintenance: {
+      schedule: callback => {
+        scheduled.push(callback);
+        return toDisposable(() => {
+          const index = scheduled.indexOf(callback);
+          if (index >= 0) scheduled.splice(index, 1);
+        });
+      },
+    },
+  });
+  const insertedText = "0123456789".repeat(10_000);
+  const retainedText = insertedText.slice(-10_000);
+  model.applyEdits([{
+    range: TextRange.emptyAt(model.positionAt(0)),
+    text: insertedText,
+  }]);
+  const snapshot = model.createSnapshot();
+  model.applyEdits([{
+    range: TextRange.from(model.positionAt(0), model.positionAt(insertedText.length - retainedText.length)),
+    text: "",
+  }]);
+
+  assert.equal(scheduled.length, 1);
+  assert.equal(model.getText(), retainedText);
+  assert.equal(snapshot.getText(), insertedText);
+  const maintenance = scheduled.shift();
+  assert.ok(maintenance);
+  maintenance();
+  assert.equal(model.getText(), retainedText);
+  model.undo();
+  assert.equal(model.getText(), insertedText);
+  model.dispose();
+});
+
+test("TextModel cancels queued maintenance when disposed", () => {
+  const scheduled: (() => void)[] = [];
+  const model = new TextModel("", {
+    maintenance: {
+      schedule: callback => {
+        scheduled.push(callback);
+        return toDisposable(() => {
+          const index = scheduled.indexOf(callback);
+          if (index >= 0) scheduled.splice(index, 1);
+        });
+      },
+    },
+  });
+  const insertedText = "0123456789".repeat(10_000);
+  model.applyEdits([{ range: TextRange.emptyAt(model.positionAt(0)), text: insertedText }]);
+  model.applyEdits([{
+    range: TextRange.from(model.positionAt(0), model.positionAt(90_000)),
+    text: "",
+  }]);
+
+  assert.equal(scheduled.length, 1);
+  model.dispose();
+  assert.equal(scheduled.length, 0);
 });

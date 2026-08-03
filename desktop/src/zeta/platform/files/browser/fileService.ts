@@ -1,6 +1,9 @@
-import type { FsFileType, FsGetMetadataParams, FsGetMetadataResult, FsReadDirectoryParams, FsReadDirectoryResult, FsReadFileParams, FsReadFileResult } from "../../../../../generated/app-server/types.js";
+import type { FsFileType, FsGetMetadataParams, FsGetMetadataResult, FsReadDirectoryParams, FsReadDirectoryResult, FsReadFileParams, FsReadFileResult, FsWriteFileParams, FsWriteFileResult } from "../../../../../generated/app-server/types.js";
+import type { FsChanged } from "../../../../../generated/app-server/types.js";
+import { Emitter, type Event } from "../../../base/common/event.js";
+import { DisposableOwner } from "../../../base/common/lifecycle.js";
 import { URI } from "../../../base/common/uri.js";
-import { FileKind, type IFileEntry, type IFileService, type IFileStat } from "../common/files.js";
+import { FileKind, type IFileChangeEvent, type IFileEntry, type IFileService, type IFileStat } from "../common/files.js";
 import type { IWorkspaceContextService } from "../../workspace/common/workspace.js";
 
 /** Narrow App Server surface consumed by the browser file-service adapter. */
@@ -8,23 +11,30 @@ export interface IFileSystemApi {
   getMetadata(params: FsGetMetadataParams): Promise<FsGetMetadataResult>;
   readDirectory(params: FsReadDirectoryParams): Promise<FsReadDirectoryResult>;
   readFile(params: FsReadFileParams): Promise<FsReadFileResult>;
+  writeFile(params: FsWriteFileParams): Promise<FsWriteFileResult>;
 }
 
 export interface BrowserFileServiceOptions {
   readonly api: IFileSystemApi;
   readonly workspaceContextService: IWorkspaceContextService;
+  readonly onDidChange?: Event<FsChanged>;
 }
 
 /**
  * Maps workspace resource URIs to the App Server's root-relative filesystem protocol.
  */
-export class BrowserFileService implements IFileService {
+export class BrowserFileService extends DisposableOwner implements IFileService {
   private readonly api: IFileSystemApi;
   private readonly workspaceContextService: IWorkspaceContextService;
+  private readonly fileChanges = this.own(new Emitter<IFileChangeEvent>());
+
+  readonly onDidChangeFiles = this.fileChanges.event;
 
   constructor(options: BrowserFileServiceOptions) {
+    super();
     this.api = options.api;
     this.workspaceContextService = options.workspaceContextService;
+    if (options.onDidChange) this.own(options.onDidChange(change => this.acceptFileChange(change)));
   }
 
   async stat(resource: URI): Promise<IFileStat> {
@@ -58,6 +68,20 @@ export class BrowserFileService implements IFileService {
     return result.content;
   }
 
+  async writeFile(resource: URI, content: string): Promise<IFileStat> {
+    const result = await this.api.writeFile({
+      path: this.relativePath(resource),
+      content,
+    });
+    return {
+      resource,
+      kind: fileKind(result.metadata.fileType),
+      sizeBytes: result.metadata.sizeBytes,
+      readonly: result.metadata.readonly,
+      modifiedAtMillis: result.metadata.modifiedAtMillis ?? undefined,
+    };
+  }
+
   private relativePath(resource: URI): string {
     const folders = this.workspaceContextService.getWorkspace().folders;
     if (folders.length !== 1) {
@@ -66,6 +90,26 @@ export class BrowserFileService implements IFileService {
       );
     }
     return workspaceRelativePath(folders[0].uri, resource);
+  }
+
+  private acceptFileChange(change: FsChanged): void {
+    if (change.type === "rescanRequired") {
+      this.fileChanges.fire(Object.freeze({ resources: undefined }));
+      return;
+    }
+    const folders = this.workspaceContextService.getWorkspace().folders;
+    if (folders.length !== 1) {
+      this.fileChanges.fire(Object.freeze({ resources: undefined }));
+      return;
+    }
+    const resources = change.paths.map(path => resourceFromWorkspacePath(folders[0].uri, path));
+    if (resources.some(resource => resource === undefined)) {
+      this.fileChanges.fire(Object.freeze({ resources: undefined }));
+      return;
+    }
+    const unique = new Map<string, URI>();
+    for (const resource of resources) unique.set(resource!.toString(), resource!);
+    this.fileChanges.fire(Object.freeze({ resources: Object.freeze([...unique.values()]) }));
   }
 }
 
@@ -107,6 +151,13 @@ function childResource(parent: URI, name: string): URI {
     ? parent.path.slice(0, -1)
     : parent.path;
   return parent.withPath(`${base}/${encodeURIComponent(name)}`);
+}
+
+function resourceFromWorkspacePath(root: URI, path: string): URI | undefined {
+  const segments = path.replaceAll("\\", "/").split("/");
+  if (segments.length === 0 || segments.some(segment => segment.length === 0 || segment === "." || segment === "..")) return undefined;
+  const rootPath = root.path.endsWith("/") ? root.path.slice(0, -1) : root.path;
+  return root.withPath(`${rootPath}/${segments.map(encodeURIComponent).join("/")}`);
 }
 
 function fileKind(fileType: FsFileType): FileKind {

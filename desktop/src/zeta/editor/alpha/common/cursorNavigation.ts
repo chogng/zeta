@@ -1,7 +1,8 @@
 import { TextSelection, TextSelectionSet } from "./selection.js";
 import { TextPosition } from "./text.js";
 import { type TextModel } from "./textModel.js";
-import { getTextGraphemeBoundaries, getTextWordSegments } from "./textSegmentation.js";
+import { getTextGraphemeBoundaries } from "./textSegmentation.js";
+import { getTextWordRanges } from "./wordBoundary.js";
 
 export enum EditorCursorNavigationCommand {
   CharacterLeft = "characterLeft",
@@ -28,6 +29,7 @@ export interface EditorCursorNavigationRequest {
   readonly mode: EditorCursorNavigationMode;
   readonly pageLineCount?: number;
   readonly preferredColumns?: readonly number[];
+  readonly wordPattern?: RegExp;
 }
 
 export interface EditorCursorNavigationResult {
@@ -55,6 +57,7 @@ export function navigateEditorCursors(model: TextModel, selections: TextSelectio
       request.pageLineCount ?? 1,
       preferredColumns?.[index],
       request.mode,
+      request.wordPattern,
     );
     return request.mode === EditorCursorNavigationMode.Extend
       ? TextSelection.from(selection.anchor, target)
@@ -74,6 +77,7 @@ function navigationTarget(
   pageLineCount: number,
   preferredColumn: number | undefined,
   mode: EditorCursorNavigationMode,
+  wordPattern: RegExp | undefined,
 ): TextPosition {
   if (
     mode === EditorCursorNavigationMode.Move &&
@@ -100,9 +104,9 @@ function navigationTarget(
     case EditorCursorNavigationCommand.CharacterRight:
       return nextCharacter(model, active);
     case EditorCursorNavigationCommand.WordLeft:
-      return previousWord(model, active);
+      return previousWord(model, active, wordPattern);
     case EditorCursorNavigationCommand.WordRight:
-      return nextWord(model, active);
+      return nextWord(model, active, wordPattern);
     case EditorCursorNavigationCommand.LineUp:
       return verticalTarget(model, active, -1, preferredColumn);
     case EditorCursorNavigationCommand.LineDown:
@@ -161,15 +165,15 @@ function nextCharacter(model: TextModel, position: TextPosition): TextPosition {
   );
 }
 
-function previousWord(model: TextModel, position: TextPosition): TextPosition {
+function previousWord(model: TextModel, position: TextPosition, wordPattern: RegExp | undefined): TextPosition {
   for (let lineIndex = position.lineIndex; lineIndex >= 0; lineIndex -= 1) {
     const limit = lineIndex === position.lineIndex
       ? position.columnIndex
       : Number.POSITIVE_INFINITY;
-    const segments = getTextWordSegments(model.getLineContent(lineIndex));
+    const segments = getTextWordRanges(model.getLineContent(lineIndex), wordPattern);
     for (let index = segments.length - 1; index >= 0; index -= 1) {
       const segment = segments[index]!;
-      if (segment.wordLike && segment.start < limit) {
+      if (segment.start < limit) {
         return TextPosition.at(lineIndex, segment.start);
       }
     }
@@ -177,7 +181,7 @@ function previousWord(model: TextModel, position: TextPosition): TextPosition {
   return TextPosition.at(0, 0);
 }
 
-function nextWord(model: TextModel, position: TextPosition): TextPosition {
+function nextWord(model: TextModel, position: TextPosition, wordPattern: RegExp | undefined): TextPosition {
   for (
     let lineIndex = position.lineIndex;
     lineIndex < model.lineCount;
@@ -186,8 +190,8 @@ function nextWord(model: TextModel, position: TextPosition): TextPosition {
     const limit = lineIndex === position.lineIndex
       ? position.columnIndex
       : -1;
-    for (const segment of getTextWordSegments(model.getLineContent(lineIndex))) {
-      if (segment.wordLike && segment.start > limit) {
+    for (const segment of getTextWordRanges(model.getLineContent(lineIndex), wordPattern)) {
+      if (segment.start > limit) {
         return TextPosition.at(lineIndex, segment.start);
       }
     }

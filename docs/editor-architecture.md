@@ -17,14 +17,14 @@ Alpha 是 Zeta 从底层向上自建、并由产品默认选择的编辑器栈�
 | 层 | 当前状态 | 责任 |
 | --- | --- | --- |
 | `editor/alpha/common` | 内核、基础 viewport 与版本语言状态已具备 | 文本坐标、事务、Piece Tree、版本快照、有界历史、压实、Unicode segment、光标导航、纯 viewport 状态、语言分析 lane/result store、completion provider registry/host/wire codec、增量 Worker 文档镜像、增量词法分析、取消、过期结果拒绝与 worker 生命周期 |
-| `editor/alpha/browser` | viewport、selection、基础文本、clipboard、桌面式 IME、基础 diagnostic、semantic token 与 completion widget/trigger/Worker factory 已具备 | 虚拟行 DOM、viewport、增量行宽、gutter、selection/caret、decoration、Error/Warning diagnostic underline、版本化 semantic-token 行投影、completion list/accept/invoke/trigger/incomplete refresh/module Worker、pointer selection、autoscroll、多光标、键盘导航、普通 textarea 编辑、选区 clipboard、composition 基线与 provisional underline；移动端/平台 IME 差异、富 clipboard 和 accessibility 尚未完成 |
-| `editor/textmate` | 部分具备 | grammar revision registry、真实 TextMate/Oniguruma runtime、增量行状态缓存、Alpha provider/module adapter、版本化 catalog wire 与独立 browser Worker 已完成；产品 grammar resource/extension 接线与主题 selector 尚未完成 |
-| Document service | 尚未完成 | URI 身份、加载、保存、dirty、冲突、外部变更和行尾持久化 |
+| `editor/alpha/browser` | viewport、selection、基础文本、clipboard、桌面式 IME、四级 diagnostic、semantic token、completion widget/trigger/Worker factory 与 side-by-side diff view 已具备 | 虚拟行 DOM、viewport、增量行宽与初始换行测量、gutter、selection/caret、decoration、Error/Warning/Information/Hint underline、每行最高严重级别 diagnostic gutter marker、版本化 semantic-token 行投影、completion list/accept/invoke/trigger/incomplete refresh/module Worker、pointer selection、Alt+Shift 列选择、autoscroll、多光标、键盘导航、普通 textarea 编辑、event/Async rich clipboard 安全 HTML 读写、单个显式文本文件 clipboard paste/drop、前端本地 MIME paste provider 与 `text/uri-list`、macOS desktop composition/VoiceOver DOM contract、composition 基线与 provisional underline、`AlphaDiffEditorInput`/Pane 承载的只读虚拟化 side-by-side line diff；`EditorInput.readOnly` 在 common 提交闸门阻止文档修改；移动端不在 Alpha 桌面范围，Windows 辅助技术验收另行进行 |
+| `editor/textmate` | 部分具备 | grammar revision registry、真实 TextMate/Oniguruma runtime、增量行状态缓存、Alpha provider/module adapter、版本化 catalog/theme wire 与独立 browser Worker、JSON/JSONC 资源、caller-resolved session contribution 与声明式 scope-theme selector 已完成；extension resource discovery 尚未完成 |
+| Document service | 部分具备 | `IFileService` 将 App Server `fs/changed` 映射为工作区失效事件，`ITextFileService` 转发；Alpha 模型服务提供 dirty、快照保存、显式 revert、CRLF/LF 保留、干净模型重载与脏模型外改状态；URI revision/CAS、恢复仍未完成 |
 | Selection/decorations | 基础具备 | selection、实例控制器、tracked range、decoration collection |
-| Language model | 部分具备 | 版本化请求、取消、过期拒绝、worker 重建、token/diagnostic/completion store、analysis/completion provider host、catalog/module activation/resolve/incremental multi-lane wire、增量词法分析、session/accept、semantic-token 行索引/DOM 投影及 Error/Warning projection 已完成；rich diagnostic、AST 与语言服务器级增量分析尚未完成 |
-| Browser view | 部分具备 | common viewport、虚拟行 DOM、字体行宽、gutter、selection/caret、基础 decoration、hit-test 与 active-position reveal 已完成；富交互与主题细化尚未完成 |
-| Input controller | 部分具备 | IME 内核事务、pointer selection、键盘导航、textarea 编辑、completion 键盘/鼠标接受、Ctrl+Space invoke、trigger character 与 incomplete refresh、选区与空选区整行 copy/cut/paste、基础 composition DOM event 已完成；Android/macOS 特化、富 clipboard 和 drag/drop 尚未接入 |
-| Accessibility | 尚未完成 | screen reader 文本、ARIA、辅助输入和高对比度语义 |
+| Language model | 部分具备 | 版本化请求、取消、过期拒绝、worker 重建、token/diagnostic/completion store、analysis/completion provider host、catalog/module activation/resolve/incremental multi-lane wire、增量词法分析、session/accept、semantic-token 行索引/DOM 投影、六级 lexical bracket colorization 及四级 diagnostic underline/native message tooltip 已完成；rich diagnostic、AST 与语言服务器级增量分析尚未完成 |
+| Browser view | 部分具备 | common viewport、虚拟行 DOM、字体行宽、gutter、selection/caret、基础 decoration、hit-test、active-position reveal、至多 160 行的有界 density minimap（WebGL 优先、DOM 回退、click/drag scroll）、diagnostic severity marker、可见行缩进参考线已完成；富交互与主题细化尚未完成 |
+| Input controller | 部分具备 | IME 内核事务、pointer selection、Alt+Shift 列选择、键盘导航、textarea 编辑、completion 键盘/鼠标接受、Ctrl+Space invoke、trigger character 与 incomplete refresh、plain/syntax-marked safe HTML 选区与空选区整行 copy/cut/paste、单个显式文本文件 clipboard paste/drop、前端本地 MIME paste provider 与内置 `text/uri-list`、基础 composition DOM event 已完成；Android/macOS 特化仍未完成 |
+| Accessibility | 部分具备 | editor label、聚焦 textarea 的文本/主选区镜像、multi-selection `aria-description`、completion/listbox ARIA、dialog state 与 cursor/selection/save live-region announcements、forced-colors focus/selection/caret/diagnostic 语义已具备；完整 screen-reader navigation 与平台辅助输入仍待真实平台验证 |
 | Monaco adapter | 兼容 | 保留显式选择的既有编辑能力，不定义 Alpha contract |
 | Workbench Editor Part | 已有独立实现 | tabs、pane 生命周期、可见性和产品 contribution |
 
@@ -70,13 +70,15 @@ editor/
 当前产品普通文本走以下路径：
 
 ```text
-EditorInput → ITextFileService
+EditorInput → ITextFileService.resolve
         ↓
 AlphaTextModelService → Alpha TextModel
         ↓
 Alpha language session → Analysis/completion workers
         ↓
 Alpha viewport / input
+        ↓ Ctrl/Cmd+S
+ITextFileService.save → IFileService.writeFile → App Server
 ```
 
 Monaco 仍可通过显式 `preferredEditorId` 打开，但不与 Alpha model 双向绑定，避免两个 undo
@@ -239,8 +241,9 @@ render range，文档收缩则把 common 与 DOM 的滚动坐标一并约束回�
 
 该组件复用 `base/browser/dom`、`base/browser/geometry` 和
 `base/common/lifecycle`，内部 DOM 与 focus 样式由组件自己的 CSS 拥有。
-Workbench host 只能负责根节点外部尺寸，不能穿透覆盖行节点。当前仍是固定
-行高只读 renderer；软换行、输入与完整 accessibility 尚未实现。
+Workbench host 只能负责根节点外部尺寸，不能穿透覆盖行节点。当时它只是固定
+行高只读 renderer；后续 Current 18、20、26 与 33 已分别补齐输入、clipboard、
+soft wrap 与基础 accessibility projection。
 
 ### Current 8：字体度量与增量横向宽度
 
@@ -250,15 +253,13 @@ tab size 和左右 padding。普通文本段由 Canvas 按当前字体 shaping �
 font-size 派生的 fallback advance；测试和未来专用字体引擎通过小型
 `AlphaTextMeasurer` contract 注入。
 
-`AlphaLineWidthIndex` 首次同步扫描所有行，之后按 `TextModelChange` 的旧行
-范围合并同一行多处编辑，只重测事务影响的新行组。宽度计数集合维护当前
-最大值，最长行缩短时无需全文重测即可收缩 content width 并夹紧横向滚动。
-字体加载完成或显式 `refreshFontMetrics()` 会重建全部宽度，因为此时每个
-缓存值都可能失效。随机差分测试覆盖 400 次多区间事务、换行变化和
-undo/redo，并与逐次全文扫描结果比较。
-
-当前首次扫描仍是同步的；超大文档需要评估分片或 idle 调度，但不能以牺牲
-最终横向宽度正确性为代价。
+`AlphaLineWidthIndex` 首先同步测量一个有界行片段，之后通过可取消的 idle
+切片完成其余非换行行；未测量期间最大值只作为下界，完成后恢复精确值。稳定
+后它按 `TextModelChange` 的旧行范围合并同一行多处编辑，只重测事务影响的新
+行组。宽度计数集合维护当前最大值，最长行缩短时无需全文重测即可收缩 content
+width 并夹紧横向滚动。字体加载完成或显式 `refreshFontMetrics()` 会以同一策略
+重建，因为此时每个缓存值都可能失效。随机差分测试覆盖 400 次多区间事务、
+换行变化和 undo/redo，并与逐次全文扫描结果比较。
 
 ### Current 9：Gutter 与 selection/caret projection
 
@@ -286,7 +287,7 @@ composition 见 Current 18。caret blink 与完整 screen-reader contract 仍未
 
 `createAlphaDecorationSource<TMetadata>` 把一个调用方持有的
 `TextDecorationCollection` 适配为 browser presentation。resolver 显式选择
-`SearchMatch`、`ErrorUnderline`、`WarningUnderline` 或不投影；因此 common
+`SearchMatch`、四种 diagnostic underline 或不投影；因此 common
 metadata 继续 opaque，browser 也不接受任意 caller CSS class。对应 CSS 由
 Alpha component 自己拥有，并消费已有 search、error、warning 语义 token。
 
@@ -297,13 +298,16 @@ collection 的 content/range event 会同步重建可见 decoration；文本事�
 tracked range 后，DOM 继续使用同一 decoration ID。
 
 每个 source 的 resolved snapshot 会缓存到下一次 collection event，因此滚动
-不会重复调用 caller metadata resolver。当前每次 layout 仍会扫描全部 resolved
-decoration 以完成 clipping；大规模 diagnostics/search 集合接入产品前需要
-增加按行范围查询的索引。
+不会重复调用 caller metadata resolver。`AlphaDecorationLineIndex` 将这些 snapshot
+建为按 logical-line interval 查询的不可变树；layout 仅取与当前 rendered logical
+span 相交的 decoration 后再做 visual clipping。索引不拥有 collection、metadata
+resolver 或 geometry，仅消除滚动期间对完整诊断/search 集合的重复扫描。
 
 Viewport 只拥有 source event registration，销毁时不销毁 source、collection
-或共享 `TextModel`。当前 presentation 尚不包含 hover、glyph margin、
-minimap/overview ruler 或诊断版本拒绝；这些不能从已有矩形投影推断为完成。
+或共享 `TextModel`。`AlphaDiagnosticHoverController` 只消费 marker 当前的
+诊断文本并在 scroll 时关闭；`AlphaEditorViewport` 的 overview ruler 与 document
+minimap 都聚合每行最高 severity，且不在滚动时重扫 diagnostics。当前 presentation 还不包含
+诊断版本拒绝；这些不能从已有矩形投影推断为完成。
 
 ### Current 11：Pointer hit testing
 
@@ -320,9 +324,13 @@ scroll，返回 `Gutter`、`Text`、`EmptyContent` 或 `AfterLines`。每个结�
 空行、行前 padding、行尾外侧和最后一行下方拥有显式 target kind，不要求
 调用方从 column 猜测语义。
 
-当前 hit-test 仍基于单向、固定行高、无 soft-wrap 的文本度量。BiDi、inline
-advance decoration 和 DOM caret-range fallback 尚未完成；pointer selection
-policy 见 Current 12。
+固定行高、无 layout 的测试环境和普通 LTR 文本继续使用 `AlphaTextMeasurer`。
+当 viewport 为 `auto`/`rtl` 且浏览器提供布局时，`domTextGeometry.ts` 把跨
+semantic-token span 的 UTF-16 offset 映射到 DOM `Range`：selection/caret、
+decoration、composition anchor、pointer hit-test 与 wrapped vertical navigation
+均改用浏览器视觉坐标。缺少 Range layout 时确定性回退到度量路径。inline advance
+decoration 与原生 browser-driven wrapping 尚未完成；pointer selection policy 见
+Current 12。
 
 ### Current 12：Pointer selection controller
 
@@ -347,8 +355,9 @@ blur、dispose 或初始化失败都会释放这些临时资源。Viewport、poi
 
 该 adapter 不拥有 Viewport、selection controller 或 `TextModel`，也不执行
 文本事务。拖出 viewport 的滚动策略见 Current 13，多光标策略见 Current 14。
-当前尚未实现 touch 特化和右键 selection policy，
-因此仍不是完整 mouse input stack。
+右键 context menu 发生在现有 selection 内时保留 selection，否则先将 primary
+selection 折叠到命中位置再交给宿主菜单。touch 特化仍未实现，因此尚不是完整
+pointer input stack。
 
 ### Current 13：Pointer drag autoscroll
 
@@ -384,7 +393,8 @@ range，避免后续文本命令生成重叠 edit。
 活动 gesture 为原 selection 集合单独创建 temporary tracked ranges，而不是
 保存裸值。因此同步模型事务、autoscroll 和重复 pointermove 后仍保持原顺序、
 方向与 primary 身份。pointerup、cancel、blur、dispose 或新 gesture 会连同
-active anchor 一起释放这些临时所有权。column selection、box selection 和
+active anchor 一起释放这些临时所有权。Alt+Shift primary drag 已生成 common
+multi-selection 的列选择，不依赖浏览器 DOM selection；box selection 的虚拟空白与
 touch 多点手势仍未实现。
 
 ### Current 15：Keyboard cursor navigation
@@ -449,10 +459,12 @@ offset，并使用 `Isolated` history，确保 paste/cut 不会与前后的连�
 合成一个 undo step。
 
 `AlphaClipboardController` 由 textarea input controller 组合持有并监听原生
-copy/cut/paste。copy 写入可移植的 `text/plain`；Alpha 自身的多 selection
-复制额外写入版本化 `application/x-zeta-alpha-editor` 元数据。粘贴时，合法且
-数量匹配的元数据逐 selection 分发；外部纯文本或无效元数据则把同一文本
-应用到每个 selection。所有输入最终仍经过 common command 和权威
+copy/cut/paste。copy 写入可移植的 `text/plain`、转义后的预格式化 `text/html`；
+Alpha 自身的多 selection 复制额外写入版本化 `application/x-zeta-alpha-editor`
+元数据。粘贴时，合法且数量匹配的元数据逐 selection 分发；外部纯文本或无效
+元数据则把同一文本应用到每个 selection。没有 `text/plain` 的外部 HTML 会在
+inert template 中转换为确定性文本，脚本、样式和 noscript 内容不进入 model。
+所有输入最终仍经过 common command 和权威
 `TextModel`，成功 cut/paste 后清空 textarea 并 reveal primary。
 
 clipboard 输出的换行约定由显式 `AlphaClipboardLineEnding` 控制，默认按宿主
@@ -460,9 +472,13 @@ Windows 选择 CRLF，其余平台选择 LF；进入 model 时仍统一规范化
 拒绝自定义 MIME 时保留 plain text，不影响跨应用复制。空 selection 的显式
 策略和整行 round-trip 见 Current 20。
 
-当前尚未实现 HTML/syntax clipboard、文件 paste、异步 Clipboard API、
-paste provider 或 IME 活跃期间的 clipboard 协调。这些限制不能由基础
-plain-text 路径推断为完整 clipboard 支持。
+当前已有前端本地 `AlphaClipboardPasteProvider`：它只能读取事件期捕获的不可变
+文本 MIME 快照，按声明顺序执行，并且异步结果必须仍匹配原 model version 与
+selection 才能提交。内置 `text/uri-list` provider 会忽略注释行。异步 Clipboard
+在原生 event 没有文本、metadata、受支持文件或匹配 provider 时，于同一用户手势先读取
+rich `text/plain`/`text/html`，再回退 `readText()`；延迟、拒绝、空值或 stale 结果都不能
+修改 model。若 copy/cut event 缺少 `clipboardData`，Async writer 写入同一 portable
+plain/HTML payload，且 cut 仅在写入成功后提交；这些路径不绕开 common command。
 
 ### Current 18：Textarea composition adapter
 
@@ -489,7 +505,7 @@ content-coordinate anchor。DOM 通过稳定的 `.composing` 和 `.ime-input`
 当前实现面向提供完整 `CompositionEvent.data` 的桌面式事件流。Android
 通常需要从 textarea 前后状态推导 replacement，macOS 长按可能把前一个字符
 带入 composition；iOS 的额外空 end、dead key、IME clause segmentation、
-多 selection IME、候选窗越界回退和活跃 composition 中的 clipboard 仍需
+多 selection IME、候选窗越界回退和更复杂的 composition clipboard UX 仍需
 独立适配与真实平台验证。活跃 session 收到空 end 会提交空 provisional text，
 因此可表达删除原 selection；Escape/blur 才是明确 cancel。已经关闭 session
 后的额外 end 被忽略，iOS 若在仍活跃时发出伪空 end，平台 adapter 必须提供
@@ -537,9 +553,12 @@ paste mode。全部 payload 为 `Line` 且目标 selection 都 collapsed 时，
 普通逐 selection paste，避免 line mode 隐式绕过目标范围。
 
 plain-text 输出会连续拼接 line entries，避免每个自带 LF 的行之间出现额外
-空行；跨平台输出仍由 `AlphaClipboardLineEnding` 转换。当前还没有
-copy-with-syntax、language mode metadata、文件/URI clipboard、paste provider
-或系统 clipboard service fallback。
+空行；跨平台输出仍由 `AlphaClipboardLineEnding` 转换。当前已经有
+copy-with-syntax、单个用户提供文本文件、内置 `text/uri-list` 与可注册的本地
+MIME paste provider。若原生 paste event 没有可用文本、metadata、受支持文件或
+provider，浏览器层在同一用户手势内先读取 rich Async Clipboard，再回退 plain text；
+其异步结果仍必须通过 captured model revision 与完整 selection set 的闸门。copy/cut
+event 没有 `clipboardData` 时，Async writer 输出等价的 plain/HTML payload，cut 等待成功。
 
 ### Current 21：Versioned language request boundary
 
@@ -608,12 +627,15 @@ token/diagnostic worker wire schema 仍未完成。
 同一事务时已经没有旧 range，因此不会先发一次虚假的 `Range` movement 再
 清空。测试明确证明 model version 2 只出现一个空 `Content` event。
 
-browser 的 `createAlphaLanguageDiagnosticSource` 显式把 Error 映射为
-`ErrorUnderline`、Warning 映射为 `WarningUnderline`，继续消费 Alpha component
-已有的 error/warning theme token 和 CSS。Information/Hint 保留在 common
-metadata 中并返回无 presentation；在专属 hover、glyph margin、overview ruler
-和 Information/Hint theme token 注册前，不用错误颜色冒充它们。Viewport 只拥有 source
-event registration，不拥有 bridge、collection、store 或 model。
+browser 的 `createAlphaLanguageDiagnosticSource` 为 Error、Warning、Information
+和 Hint 映射命名 underline，并继续消费 Alpha component 的 severity theme token 和
+CSS。Viewport 还会在每个可见 logical line 的首个 visual row 放置该行最高严重级别的
+gutter marker；`AlphaDiagnosticHoverController` 会把该 marker 的当前文本呈现为
+component-owned rich hover，并在 scroll 时关闭。Viewport 的非交互 overview ruler
+聚合每行最高 severity，且不改变 content hit-test。它不是可操作 glyph margin。
+Viewport 只拥有 source event registration，不拥有 bridge、collection、store 或 model。
+F8/Shift+F8 的 diagnostic navigation 会在选择目标后通过同一 viewport live region
+宣读 severity、source/code（若有）和 message，不依赖视觉 hover。
 
 当前 whole-result replacement 会重新分配 decoration ID；若后续 hover/action
 需要跨同版本 refresh 保持身份，必须增加明确的 diagnostic identity/reconcile
@@ -682,9 +704,14 @@ Enter/Tab 接受，Escape 本地取消；活跃 session 才截获这些键，其
 `textContent`，kind 只映射命名 enum，CSS 由 widget 自己拥有并仅消费现有
 theme tokens。
 
-当前结果协议和接受链路已具备；provider 生产和触发链见 Current 26。
-lazy resolve/documentation、snippet 语法、additional edits、commit character
-尚未完成；completion Worker wire transport 见 Current 27。
+当前结果协议和接受链路已具备：deferred resolve/documentation、commit character、
+non-overlapping additional edits，以及 `$n`/`${n}`/`${n:default}`/`${n|a,b|}` snippet
+tabstop 会话，都通过同一 item contract、Worker transport 与 isolated undo 交付。
+choice 的镜像 occurrence 通过 `Alt+↑/↓` 原子循环替换；session 为 `${TM_FILENAME}`、
+`${TM_FILENAME_BASE}`、`${TM_DIRECTORY}` 与 `${TM_FILEPATH}` 注入 editor input
+变量，未知变量必须有显式 default。transform 仍不在 Alpha 当前受支持 grammar，
+不能被静默降级。provider 生产和触发链见 Current 26；completion Worker wire
+transport 见 Current 27。
 
 ### Current 26：Completion provider registry、host 与触发链
 
@@ -893,9 +920,10 @@ Worker failure 由 coordinator 在下一请求重建。
 browser 的 `createAlphaAnalysisWorkerFactory` 创建独立 Vite module Worker。
 completion 与 analysis 共用抽取后的 browser/dedicated Worker port adapter，
 但 provider host、协议 client 和 failure domain 独立。Worker entry 注册
-`alpha.lexical` baseline provider，为 TypeScript/JavaScript/JSON 提供确定性的
-comment/string/number/identifier/keyword/operator token，以及未终止
-string/template/comment 和 bracket balance diagnostic。它不是 parser 或语言
+`alpha.lexical` baseline provider，为 TypeScript/JavaScript/JSON 以及 Rust 提供确定性的
+comment/string/number/identifier/keyword/operator token；Rust profile 还识别 ordinary/raw string
+和 character literal，以及未终止 string/template/comment/raw string 和 bracket balance
+diagnostic。它不是 parser 或语言
 服务器；在 Current 32 边界内每条 lane 仍完整扫描 captured snapshot，只有文档
 transport 已经增量化。产品 composition root 尚未选择该 factory。
 
@@ -910,7 +938,7 @@ transport 已经增量化。产品 composition root 尚未选择该 factory。
 
 `alpha.lexical` 现在由一个 token 与 diagnostic lane 共享的版本缓存计算结果。
 逐行扫描只保存相对列范围、括号/诊断事件和显式
-`normal`、`blockComment`、`template` 输入输出状态。事务更新先复用文本相同的
+`normal`、`blockComment`、`multilineString` 与带 delimiter hash 数的 Rust `rawString` 输入输出状态。事务更新先复用文本相同的
 前缀，再从首个变化行向后传播状态；进入相同文本后缀且输入状态与旧缓存一致时，
 剩余行整体复用。行号发生移动时，相对结果在聚合阶段重新绑定当前 snapshot，
 因此不会保留旧版本绝对坐标。
@@ -1006,10 +1034,10 @@ token 数组；若要进一步消除 renderer 端整数组分配，需要后续�
 | 能力 | 所有者 | 当前状态 |
 | --- | --- | --- |
 | event、lifecycle、URI、resource collection | `base` | ✅ 复用现有领域无关基座；禁止 editor 反向依赖 |
-| 原始资源 I/O | `platform/files` | 部分具备；`IFileService` 当前只读 |
-| load、dirty、save/revert、冲突与共享文档引用 | `workbench/services/textfile/common` | 尚未完成；由首个真实 file-backed Alpha consumer 建立 contract |
+| 原始资源 I/O 与粗粒度失效 | `platform/files` | ✅ App Server-backed UTF-8 read/write 与 `fs/changed` projection |
+| load/save 传输、共享文档引用与 Alpha dirty/revert/conflict policy | `workbench/services/textfile/common` / `AlphaTextModelService` | ✅ 首个 file-backed Alpha consumer 已建立；CAS、备份恢复仍未完成 |
 | 文本事务、selection、decoration、language result | `editor/alpha/common` | ✅ editor 领域所有权 |
-| TextMate grammar/runtime 与 token provider | 独立 `editor/textmate` adapter | 部分具备；Current 43 已完成 runtime/provider/browser WASM seam，产品 grammar resource 接线仍待完成 |
+| TextMate grammar/runtime 与 token provider | 独立 `editor/textmate` adapter | 部分具备；runtime/provider/browser WASM、产品 JSON/JSONC 资源与 caller-resolved session contribution 已完成，extension resource discovery 仍待完成 |
 
 因此 Current 36 不为 token delta 新造 service，也不提前创建没有保存、冲突或 grammar
 consumer 的空壳 service。Current 43 在 Analysis provider 成为真实 consumer 后才抽取
@@ -1044,8 +1072,9 @@ module 协议。
 这条 module seam 是 `editor/textmate` adapter 的接入点。Current 37 落地时
 TextMate grammar、scope 解析和 runtime 依赖尚未实现；Current 43 已在 Alpha/`base`
 之外建立该 adapter，但产品 grammar resource 接线仍未完成。同样，
-`workbench/services/textfile/common` 仍等待首个真实 file-backed Alpha consumer
-定义 dirty、save/revert、冲突和共享模型引用契约。
+`workbench/services/textfile/common` 已由 Alpha、Monaco、ProseMirror 与 Explorer 的
+共享 loading/save 边界证明需要。它只转发 I/O 与粗粒度 invalidation；Alpha 保持 dirty、
+revert、共享模型引用和外改 policy，不能反向塞入 `TextModel` 或 `base`。
 
 ### Current 38：语言配置基座与 lexical cache 身份
 
@@ -1058,9 +1087,10 @@ revision。`languageId.ts` 统一 concrete language ID 与 `*` provider selector
 这些都是 editor 领域身份，不能下沉到 `base`。
 
 Analysis Worker realm 在加载 `alpha.lexical` module 前建立并拥有该 registry，注册
-ECMAScript、JSON 与 JSONC 的内置配置，再把配置 source 注入 lexical provider。
+ECMAScript、JSON、JSONC 与 Rust 的内置配置，再把配置 source 注入 lexical provider。
 scanner 被编译为 `LanguageLexicalLineScanner`，comments、任意长度 bracket token、
-keyword 与 string profile 均由明确的语言配置/lexical profile 提供，不再依赖文件级
+keyword、ordinary string、ECMAScript regular-expression、hash-delimited raw string 与 character-literal profile 均由明确的
+语言配置/lexical profile 提供，不再依赖文件级
 全局常量。
 
 此前 `LanguageLexicalAnalysisCache` 只以 model version 判断命中；同一快照先按
@@ -1074,11 +1104,11 @@ token/diagnostic 两条 lane 共享扫描结果。配置 revision 改变时，�
 registry 独立生命周期、同版本跨语言隔离、JSON/JSONC 差异、配置变更后的 cache
 替换，以及既有 1,000 行增量扫描与随机编辑 oracle。
 
-该 registry 是原生输入的 bracket/comment command 与 `editor/textmate` adapter
+该 registry 是原生输入的 bracket/comment command、wordPattern 与 `editor/textmate` adapter
 可共同消费的 Alpha common 基座。Current 38 落地时尚未加入 indentation、on-enter
 或 word-pattern 字段；Current 41 在 Enter command 成为真实消费者后加入前两者。
-word-pattern 仍未实现；TextMate grammar runtime 与 scope tokenization 由 Current 43
-在独立 adapter 中补齐。
+word-pattern 现已驱动 browser pointer、键盘导航、按词删除与 occurrence；TextMate
+grammar runtime 与 scope tokenization 由 Current 43 在独立 adapter 中补齐。
 
 ### Current 39：语言配对输入事务
 
@@ -1179,7 +1209,7 @@ revision。
 | Tabs/Spaces/tabSize | Alpha editor instance | 值对象即可，尚不需要 service |
 | indentation/on-enter language rules | `LanguageConfigurationRegistry` | ✅ 已有多个 input/Worker composition root |
 | 持久化 editor setting | future Workbench settings service | 尚未完成；未来只映射为实例 options |
-| TextFile save/dirty/conflict | `workbench/services/textfile` | 尚未完成；不与 Enter command 耦合 |
+| TextFile resolve/save 与 invalidation；Alpha dirty/conflict | `workbench/services/textfile` / `AlphaTextModelService` | ✅，不与 Enter command 耦合；CAS/恢复仍待独立 document contract |
 | TextMate grammar/runtime | `editor/textmate` adapter | Current 43 部分具备；不得进入 Enter 或 `base` |
 
 Current 41 初始 matcher 使用 model 原始行文本，尚未像 VS Code 的
@@ -1210,7 +1240,7 @@ configuration source，不拥有两者。
 `IndentationLineProcessor` 边界一致，它只删除这些 token span 内由当前 language
 配置声明的 bracket token，保留引号、comment marker、普通文字与 whitespace。这样
 `/** ... */`、line-comment continuation 等显式 on-enter rule 仍能匹配，同时 `"{"`、
-`// {` 和跨行 block comment 内的括号不会触发 Indent/IndentOutdent。
+`// {`、`/[{]/` 和跨行 block comment 内的括号不会触发 Indent/IndentOutdent。
 
 `LanguageAutoClosingPair` 同时新增冻结的 `notIn`。当前 closed vocabulary 是
 `string | comment`，因为 baseline scanner 只对这两类上下文提供可靠结构边界。
@@ -1226,9 +1256,9 @@ overtype 仍先由 `LanguageAutoClosingTracker` 决定，不会被 `notIn` 破�
 | lifecycle/event primitives | `base/common` | ✅ 复用 |
 | lexical/token semantics | `base` | ❌ 禁止下沉 |
 
-当前 baseline 尚不识别 JavaScript regular-expression literal、embedded language、
-template interpolation 中重新进入代码的区域，也没有 suffix-state convergence 优化。
-这些是明确的下一阶段，而不是当前能力。测试已覆盖 partial slice、string、closed 与
+当前 ECMAScript baseline 能识别一行 regular-expression literal，并区分除法；它仍不识别
+embedded language、template interpolation 中重新进入代码的区域，也没有 suffix-state
+convergence 优化。这些是明确的下一阶段，而不是当前能力。测试已覆盖 partial slice、string、closed 与
 unterminated string boundary、line/block comment、多行状态、外部编辑、configuration
 revision、销毁、跨 model/language 拒绝、Enter、auto-closing `notIn` 与 browser
 路由。
@@ -1257,8 +1287,10 @@ version 未变化，也建立新的 runtime generation；旧 generation 只在�
 
 scope mapping 是显式可替换的 `TextMateScopeResolver`。默认 resolver 只投影稳定的
 comment/string/regexp/number/operator/keyword/function/type/parameter/variable/tag/
-property/constant/punctuation/invalid vocabulary，不假装已实现 theme selector 或
-semantic modifier。`createTextMateAnalysisProvider` 把结果转为 Alpha
+property/constant/punctuation/invalid vocabulary。`TextMateScopeThemeModel` 现在提供
+可 structured-clone 的 revisioned selector rule，覆盖 token type 和 modifier；Renderer
+通过独立 theme wire 更新 Worker，Worker 清空仅样式 cache 后由下一请求重算。embedded
+language identity 仍未实现。`createTextMateAnalysisProvider` 把结果转为 Alpha
 `LanguageTokenResult`，`createTextMateAnalysisModule` 再接入现有 module activation
 协议。
 
@@ -1280,17 +1312,20 @@ namespace/default 两种形式；该差异不泄漏给调用方。
 | Alpha provider/module integration | `editor/textmate/common` | ✅ |
 | Oniguruma WASM URL/fetch | `editor/textmate/browser` | ✅ |
 | baseline structural diagnostics | `alpha.lexical` | ✅，继续独立 |
-| grammar resource/extension manifest loading | product extension/resource layer | 尚未完成 |
-| theme selector、embedded language 与 modifier projection | TextMate/theme adapter | 尚未完成 |
-| URI、文件保存、dirty/conflict | platform/textfile | ❌，不得混入 TextMate |
+| grammar resource/extension manifest loading | product extension/resource layer | caller-resolved session contributions 已具备；manifest discovery 尚未完成 |
+| scope-theme selector、token type 与 modifier projection | TextMate/theme adapter | ✅；embedded language 仍未完成 |
+| URI、文件保存、dirty/conflict | platform/textfile / `AlphaTextModelService` | ✅，不得混入 TextMate；CAS/恢复仍独立演进 |
 
 真实 WASM 测试覆盖跨行 string/comment state、单行编辑只重扫一行、多行状态变化扫描到
 suffix convergence、同 model version grammar revision 替换、scope validation、
 cancellation、独立生命周期，以及经过 `LanguageAnalysisService` application gate 的
 provider priority。独立 Vite entry build 证明 browser WASM adapter 可被 Worker
-打包。Current 44 已补充完整的独立 TextMate Analysis Worker，但产品 Workbench 尚未
-提供 grammar resource catalog 或选择该 factory，因此仍不能描述为“产品已启用
-TextMate 高亮”。
+打包。`createBrowserAlphaEditorSession` owns
+`BrowserTextMateAnalysisWorkerSupport` for product Alpha panes and subscribes
+to catalog/theme revisions before scheduling a replacement analysis request.
+This proves bundled JSON/JSONC and caller-resolved session contributions are
+active in the product path; extension manifest/resource discovery remains a
+separate composition-root concern.
 
 ### Current 44：版本化 grammar catalog 与动态 token fallback
 
@@ -1350,9 +1385,10 @@ stale revision poison client，以及 registry snapshot 到 wire catalog 的 mat
 独立 Vite build 同时产出 TextMate Worker chunk 与 466,610-byte Oniguruma WASM。
 
 Current 44 落地时还缺真实 grammar resource owner 和产品层消费者。Current 45 已补入
-首批内置 grammar 与 catalog service；Workbench 选择 Alpha pane、外部 extension resource
-以及 catalog 变化后的 model token request 调度仍未完成。catalog change 本身不隐式遍历
-或重算所有文档，这个调度责任不得偷偷进入通用 catalog model。
+首批内置 grammar 与 catalog service；`createBrowserAlphaEditorSession` 选择
+Alpha pane 的 Worker factory 并调度 catalog 变化后的 model token request。外部
+extension resource discovery 仍未完成。catalog change 本身不隐式遍历或重算所有
+文档，这个调度责任不得偷偷进入通用 catalog model。
 
 ### Current 45：TextMate grammar service 与首批真实资源
 
@@ -1368,8 +1404,8 @@ Current 45 建立了独立的 editor-domain 服务边界：
 | grammar contribution、异步装载和 catalog 发布 | `TextMateGrammarService` | ✅ `editor/textmate/common` |
 | 产品内置 grammar asset import | `BrowserTextMateGrammarService` | ✅ `editor/textmate/browser` |
 | catalog 传输和 tokenization | TextMate dedicated Worker | ✅ 继续无文件权限 |
-| extension manifest 与外部 grammar resource | future extension layer | 尚未完成 |
-| TextFile dirty/save/conflict | future textfile service | 尚未完成，未与 grammar service 混合 |
+| extension manifest 与外部 grammar resource | future extension layer | caller-resolved session contribution ✅；manifest/resource discovery 尚未完成 |
+| TextFile resolve/save/invalidation；Alpha dirty/save/revert/conflict | `textfile` / `AlphaTextModelService` | ✅，未与 grammar service 混合；CAS/恢复仍未完成 |
 
 `TextMateGrammarService` 拥有 registration 和 `TextMateGrammarCatalogModel`。每次贡献变化
 都会捕获 immutable registry snapshot；较新 revision 会取消较旧 materialization，只有最新且
@@ -1412,7 +1448,7 @@ Alpha 已从独立内核演进为真实 `IEditorPane`，但仍保持“Workbench
 | Alpha DOM、selection、input 与 language session | `AlphaEditorSession` | ✅ per-pane ownership |
 | JSON/JSONC TextMate 与 Analysis Worker | `createBrowserAlphaEditorSession` | ✅ 产品 Alpha pane 已选择 |
 | Completion Worker | `createBrowserAlphaEditorSession` | ✅ 产品 Alpha pane 已选择 |
-| dirty、save/revert、encoding 与冲突 | future TextFile model layer | 尚未完成 |
+| dirty、save/revert、CRLF/LF、粗粒度外改重载与冲突状态 | `AlphaTextModelService` | ✅；编码、CAS、备份恢复仍未完成 |
 
 打开资源时，`ExplorerViewPane` 只提交 `{ resource, label }`；它不再预读文件或伪造
 `initialText`。`EditorPart` 选定 descriptor 后把 `ITextFileService` 注入 pane。
@@ -1420,6 +1456,11 @@ Alpha pane 先通过 `AlphaTextModelService.acquire` 获取引用：已有资源
 新资源才调用 TextFile resolve。最后一个引用释放时模型销毁。Monaco 使用相同内容
 服务但保留自己的临时模型池；ProseMirror 也通过同一服务解析内容。TextFile service
 不吸收任何编辑器的 transaction、undo 或 selection 类型。
+
+`TextModel` 本身只接受一个领域无关的可取消 maintenance scheduler；没有注入时保持
+同步压缩默认行为。浏览器 `AlphaTextModelService` 为文件模型注入 idle scheduler，
+所以达到 piece-tree 回收阈值不会把 O(document length) 压缩塞进一次编辑事务；调度
+任务在模型关闭时取消，快照、history 与 `TextModel.version` 不因维护而改变。
 
 产品 Alpha session 组合 `BrowserTextMateAnalysisWorkerSupport` 与 Completion Worker。
 它等待初始 grammar catalog，再发 token/diagnostic 请求；catalog revision 变化会触发
@@ -1436,23 +1477,24 @@ Alpha 内部契约见
 共享 `ITextMateGrammarService`；每个文档的 Analysis Worker 仍由其 model coordinator
 独立拥有，避免故障域和增量 mirror 互相污染。
 
-本阶段明确没有把 TextFile、TextMate 或 document identity 下沉到 `base`。当 host
-协议具备写入、备份与冲突信息后，dirty/save/revert 才能作为新的 TextFile model
-合同演进；当前只读 resolve 不能被描述为完整文档服务。
+本阶段明确没有把 TextFile、TextMate 或 document identity 下沉到 `base`。当前 host
+已具备原子写入与粗粒度变更通知，Alpha 因而拥有 dirty/save/revert 和外改 policy；
+expected-revision write、备份与编码恢复仍需作为新的 cross-editor document contract
+演进，不能把现有 pre-write baseline check 描述为 CAS。
 
 ### Proposed 3：语言边界
 
 在 Current 21–36 的请求、结果、基础 diagnostic、semantic-token 与
-completion provider/accept/wire 之上定义 rich diagnostic identity/hover/glyph、
-语言专用增量语法/语义分析。
+completion provider/accept/wire 之上定义 rich diagnostic identity、
+actionable glyph 与语言专用增量语法/语义分析。
 所有结果必须继续绑定请求时的 model version，不得绕过同步 application gate。
 
 ### Proposed 4：原生 view 与输入
 
 在现有虚拟行、字体度量、gutter、selection/caret、基础 decoration、
 hit-test、pointer selection、keyboard navigation、普通 textarea 编辑、
-基础 clipboard 与桌面式 composition 之上补齐 Android/macOS/iOS IME
-差异和 clause presentation，并扩展 rich/file clipboard；富
+基础 clipboard 与桌面式 composition 之上补齐 Android/iOS IME
+差异、macOS clause presentation 与跨平台辅助技术验收；富
 decoration 与 versioned language result 沿 language boundary 演进。
 每增加一种输入路径，都必须生成同一种 Zeta transaction。
 

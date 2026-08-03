@@ -3,6 +3,8 @@
 > 本文拥有文本内核的实现和修改契约。跨 editor、document、language、
 > browser view、Workbench 与退场中的 Monaco adapter 边界见
 > [`docs/editor-architecture.md`](../../../../../docs/editor-architecture.md)。
+> Rust document-core 的跨运行时分层与迁移阶段见
+> [`docs/editor-core.md`](../../../../../docs/editor-core.md)。
 
 Alpha owns the editor-domain primitives and is the product's default plain-text
 editor. Its common text model remains independent of Monaco, ProseMirror, the DOM,
@@ -38,17 +40,22 @@ class:
 | Concern | Owner | Current decision |
 | --- | --- | --- |
 | Events, lifecycle, URI identity, resource collections | `base/common` | Reuse existing primitives; editor semantics must not flow back into base |
-| Raw resource I/O | `platform/files` | `IFileService` currently owns read-only workspace access; write capabilities belong here when the host protocol supports them |
-| Text resource loading and bootstrap resolution | `workbench/services/textfile/common` | ✅ `ITextFileService`; dirty state, save/revert and conflicts remain unfinished |
+| Raw resource I/O | `platform/files` | `IFileService` owns workspace reads and App-Server-backed atomic UTF-8 writes |
+| Text resource loading and save transport | `workbench/services/textfile/common` | ✅ `ITextFileService.resolve/save`; it deliberately does not own a live editor model |
 | Syntax token production | Alpha analysis providers | ✅ JSON/JSONC use the editor-local TextMate worker; Rust uses the editor-local lexical Worker; no App Server syntax transport exists |
-| Shared URI-to-Alpha-model references | `AlphaTextModelService` | ✅ editor-owned; the TextFile service does not absorb Alpha transaction semantics |
-| Text transactions, selections, decorations and versioned language results | `editor/alpha/common` | Canonical editor-domain state; no URI, persistence or Workbench tab dependency |
+| Shared URI-to-Alpha-model references, saved baseline and dirty state | `AlphaTextModelService` | ✅ editor-owned; Alpha owns LF-normalized baseline comparison, serialized snapshot saves and explicit reverts |
+| Text transactions, history, selections, decorations and versioned language results | `editor/alpha/common` | ✅ Alpha's synchronous TypeScript authority; no Rust/WASM shadow document |
+| Rust file/language/workspace capability | frontend domain services over App Server | Asynchronous, revision-bound results only; never the keystroke hot path |
 | Language identities and composable editing rules | `editor/alpha/common` | `LanguageConfigurationRegistry`; comments/brackets/pairs are editor-domain contracts, not generic base primitives |
-| TextMate grammar loading and token production | `editor/textmate` adapter over Alpha analysis providers | 部分具备; JSON/JSONC product resources and the Alpha product pane are wired, while extension grammars and theme selectors remain unfinished |
+| TextMate grammar loading and token production | `editor/textmate` adapter over Alpha analysis providers | 部分具备; JSON/JSONC resources, caller-owned session grammar contributions, and serializable scope-theme selector rules are wired; extension-resource discovery remains unfinished |
 
 The current `textfile` contract was extracted only after Alpha, Monaco,
-ProseMirror, and Explorer established a real shared loading boundary. It stays
-read-only until durability and conflict consumers establish those contracts.
+ProseMirror, and Explorer established a real shared loading boundary. It now
+owns transport-only resolve/save operations; Alpha's baseline, dirty state and
+transaction semantics remain editor-owned. `fs/changed` invalidation is
+forwarded through this boundary: Alpha reloads a clean shared model and marks
+a dirty model externally changed while retaining its local edits.
+Expected-revision writes remain a future document-layer contract.
 The TextMate service was extracted only after Alpha's Analysis provider/module
 path became its real consumer. Conversely, file loading or grammar-runtime imports appearing inside
 `TextModel`, `LanguageTokenLineIndex`, or Alpha browser components are an
@@ -67,14 +74,38 @@ architectural drift signal and require extraction at that point.
 | Adjacent piece coalescing | ✅ | `PieceTreeTextBuffer.mergeCoalescing` |
 | Immutable versioned snapshots | ✅ | `TextModel.createSnapshot` |
 | Transaction and text-unit history limits | ✅ | `TextModel` history policy |
-| Snapshot-safe buffer compaction | ✅ | `PieceTreeTextBuffer.compactIfNeeded` |
+| Snapshot-safe buffer compaction | ✅ | `PieceTreeTextBuffer.compactIfNeeded` / browser-owned `TextModel.maintenance` |
 | Repeatable storage benchmark | ✅ | `benchmark/pieceTreeTextBuffer.benchmark.ts` |
-| Tracked performance budgets | 尚未完成 | Future CI/performance policy |
+| Tracked storage performance budgets | ✅, opt-in CI gate | `benchmark/pieceTreeTextBuffer.benchmark.ts` |
+| Literal/regex document search, Unicode whole-word and wrap-next | ✅ | `common/textModelSearch.ts` |
+| Capture-aware replacement commands and isolated undo | ✅ | `common/textSearchCommands.ts` |
+| Find/replace widget, selection scope, shortcuts, navigation and match decoration | ✅ | `browser/AlphaFindController` |
+| Go to line/column/offset input and preview | ✅ | `common/gotoLocation.ts` / `AlphaGotoLineController` |
 | Direction-aware selection and multi-selection values | ✅ | `common/selection.ts` |
+| Alt+Shift rectangular column selection | ✅ | `common/columnSelection.ts` / `AlphaPointerSelectionController` |
 | Unicode-safe word-selection segments | ✅ | `common/wordBoundary.ts` |
 | Shared grapheme and word segmentation | ✅ | `common/textSegmentation.ts` |
 | Multi-selection cursor navigation commands | ✅ | `common/cursorNavigation.ts` |
 | Multi-selection type, Backspace, and Delete commands | ✅ | `common/editCommands.ts` |
+| Grapheme-safe transient overtype input | ✅ | `common/overtype.ts` / `AlphaTextInputController` |
+| Shared-boundary word deletion commands | ✅ | `common/editCommands.ts` / `AlphaTextInputController` |
+| Browser soft-line deletion to start/end | ✅ | `common/editCommands.ts` / `AlphaTextInputController` |
+| Multi-selection line indent and outdent | ✅ | `common/lineIndentCommands.ts` |
+| Language-aware toggle line comment | ✅ | `common/lineCommentCommands.ts` / `AlphaLineCommentController` |
+| Language-aware toggle block comment | ✅ | `common/blockCommentCommands.ts` / `AlphaBlockCommentController` |
+| Insert, delete, duplicate, and move line groups | ✅ | `common/lineOperations.ts` / `AlphaLineOperationsController` |
+| Join selected lines with whitespace normalization | ✅ | `common/lineJoin.ts` / `AlphaLineJoinController` |
+| Grapheme-safe character transpose | ✅ | `common/transpose.ts` / `AlphaTransposeController` |
+| Add/Select exact text occurrences | ✅ | `common/occurrenceSelection.ts` / `AlphaOccurrenceSelectionController` |
+| Current word/selection occurrence highlight | ✅ | `common/occurrenceHighlights.ts` / `AlphaOccurrenceHighlightController` |
+| Platform-aware adjacent and selected-line-end cursors | ✅ | `common/cursorInsertion.ts` / `AlphaMultiCursorController` |
+| Cursor-only undo after multi-cursor and occurrence operations | ✅ | `EditorSelectionController` / `AlphaCursorUndoController` |
+| Repeated physical-line selection expansion | ✅ | `common/lineSelection.ts` / `AlphaEditingCommandController` |
+| Lexically filtered current bracket-pair highlighting | ✅ | `LanguageBracketMatcher` / `AlphaBracketMatchController` |
+| Lexical nested bracket colorization | ✅ | `LanguageBracketColorizationIndex` / `AlphaBracketColorizationSource` |
+| Go to/select configured matching brackets | ✅ | `common/bracketNavigation.ts` / `AlphaBracketNavigationController` |
+| Remove configured matching bracket pairs | ✅ | `common/bracketEditing.ts` / `AlphaBracketEditingController` |
+| Select-all and line-indentation shortcuts | ✅ | `browser/AlphaEditingCommandController` |
 | Transaction-aware tracked ranges | ✅ | `TextModel.trackRange` |
 | Per-editor live selection state | ✅ | `EditorSelectionController` |
 | Selection-aware command undo and redo | ✅ | `EditorSelectionController.execute` |
@@ -85,8 +116,9 @@ architectural drift signal and require extraction at that point.
 | Versioned cancellable language request gate | ✅ | `LanguageRequestCoordinator` |
 | Versioned token and diagnostic result stores | ✅ | `VersionedLanguageResultStore` / `languageResults.ts` |
 | Versioned diagnostic decoration bridge | ✅ | `LanguageDiagnosticDecorationBridge` |
-| Diagnostic browser presentation | 部分具备 | Error/Warning underline; Information/Hint retained |
-| Semantic-token line index and browser projection | ✅ | `LanguageTokenLineIndex` / `createAlphaSemanticTokenSource` |
+| Diagnostic browser presentation | ✅ | Error/Warning/Information/Hint underlines, rich gutter hover, overview ruler, and highest-severity gutter marker |
+| Next/previous diagnostic navigation and live announcement | ✅ | `AlphaDiagnosticNavigationController` (F8 / Shift+F8) |
+| Semantic-token line index, closed modifier styling, and browser projection | ✅ | `LanguageTokenLineIndex` / `createAlphaSemanticTokenSource` |
 | Confirmed-delta token line reuse and visible-line resolution | ✅ | `LanguageTokenLineIndex` / `AlphaSemanticTokenSource.getLineTokens` |
 | Multi-splice analysis delta and relative suffix payload reuse | ✅ | `languageAnalysisItemDelta.ts` / `LanguageTokenLineIndex` |
 | Shared token/diagnostic Worker transport | ✅ | `LanguageAnalysisService` / `languageAnalysisWireCodec` / `createAlphaAnalysisWorkerFactory` |
@@ -96,8 +128,9 @@ architectural drift signal and require extraction at that point.
 | Versioned language-isolated lexical line cache | ✅ | `LanguageLexicalAnalysisCache` / `LanguageLexicalLineScanner` |
 | Shared language provider-module lifecycle | ✅ | `LanguageProviderModuleRegistry` / `LanguageProviderModuleHost` / generic module wire |
 | Analysis provider-module activation barrier | ✅ | `LanguageAnalysisModuleWorkerClient` / `alpha.lexical` |
-| TextMate grammar provider and Worker seam | 部分具备 | `editor/textmate`; JSON/JSONC product resources, catalog transport and Alpha pane Worker selection are active |
+| TextMate grammar provider and Worker seam | 部分具备 | `editor/textmate`; JSON/JSONC resources, explicit session grammar contributions, catalog transport and Alpha pane Worker selection are active |
 | Versioned completion result, session, and widget | ✅ | `languageCompletions.ts` / `LanguageCompletionSessionController` / `AlphaCompletionWidget` |
+| Completion snippet tabstops, variables, choices, and navigation-refreshed regex transforms | ✅ | `languageCompletionSnippet.ts` / `languageCompletionSnippetTransform.ts` |
 | Completion provider registry, host, and input triggers | ✅ | `LanguageCompletionProviderRegistry` / `LanguageCompletionService` / `AlphaTextInputController` |
 | Completion Worker wire and lexical provider | ✅ | `LanguageWorkerWireClient` / `languageCompletionWireCodec` / `createAlphaCompletionWorkerFactory` / `alpha.word` |
 | Incremental Worker document mirror | ✅ | `LanguageWorkerModelSynchronizer` / `LanguageWorkerDocumentMirror` / wire protocol v4 |
@@ -105,33 +138,64 @@ architectural drift signal and require extraction at that point.
 | Named Worker provider-module activation | ✅ | `LanguageCompletionProviderModuleRegistry` / `LanguageCompletionProviderModuleHost` / module wire protocol |
 | Deferred completion details and resolve wire | ✅ | `LanguageCompletionItemResolver` / `LanguageCompletionResolveWireClient` / session details state |
 | Per-editor auto-closing provenance | ✅ | `LanguageAutoClosingTracker` / `languagePairEditing.ts` |
-| Fixed-line-height viewport, scrolling, and overscan | ✅ | `EditorViewportModel` |
+| Fixed-height visual-row viewport, scrolling, and overscan | ✅ | `EditorViewportModel` / `EditorViewportLineSource` |
+| Measured grapheme-safe soft wrapping and visual-row mapping | ✅ | `AlphaVisualLineProjection` / `EditorVisualLineProjection` |
+| Bounded document minimap, GPU density projection with DOM fallback, click/drag scroll navigation | ✅ | `minimapProjection.ts` / `AlphaGpuMinimapRenderer` / `AlphaMinimapNavigationController` / `AlphaEditorViewport` |
+| Bounded line diff with grapheme-safe inline ranges and virtualized side-by-side review view | ✅ | `common/lineDiff.ts` / `browser/AlphaDiffEditor` |
+| Workbench original/modified diff input and pane lifecycle | ✅ | `AlphaDiffEditorInput` / `AlphaDiffEditorPane` |
+| Visible-line indentation guides | ✅ | `indentationGuides.ts` / `AlphaEditorViewport` |
+| Indentation/lexical/named-region/manual folding, visible-row projection, gutter toggle, recursive/level fold chords, collapse-all and expand-all | ✅ | `computeEditorLanguageFoldingRanges` / `LanguageConfiguration.foldingMarkers` / `EditorFoldingModel` / `AlphaFoldedVisualLineProjection` / `AlphaFoldingController` |
+| Transient Alt+Z word-wrap toggle | ✅ | `AlphaEditorViewport` / `AlphaWordWrapController` |
 | Read-only virtual line DOM projection | ✅ | `browser/AlphaEditorViewport` |
 | Computed-font measurement and incremental line widths | ✅ | `AlphaDomTextMeasurer` / `AlphaLineWidthIndex` |
 | Virtual line-number gutter | ✅ | `browser/AlphaEditorViewport` |
 | Multi-selection and caret geometry/DOM projection | ✅ | `createAlphaSelectionGeometry` / `AlphaEditorViewport` |
+| Focused caret blinking with reduced-motion fallback | ✅ | `media/alphaEditorViewport.css` |
 | Pointer client-coordinate hit testing | ✅ | `hitTestAlphaEditorPoint` / `getTargetAtClientPoint` |
 | Pointer character/word/line click and drag selection | ✅ | `AlphaPointerSelectionController` |
+| Context-menu selection preservation | ✅ | `AlphaPointerSelectionController` |
 | Pointer drag autoscroll | ✅ | `AlphaPointerAutoScroller` |
 | Configurable modifier-based pointer multi-cursor | ✅ | `pointerMultiCursor.ts` |
-| Platform-aware keyboard navigation and reveal | ✅ | `AlphaKeyboardNavigationController` |
+| Platform-aware physical/visual-row keyboard navigation and reveal | ✅ | `AlphaKeyboardNavigationController` / `navigateAlphaVisualCursors` |
 | Hidden textarea ordinary text editing and history | ✅ | `AlphaTextInputController` |
+| Per-input read-only edit gate with selection/navigation retained | ✅ | `EditorSelectionController` / `EditorInput.readOnly` |
 | Language-aware auto-close, surround, overtype, and paired Backspace | ✅ | `languagePairEditing.ts` / `AlphaTextInputControllerOptions.language` |
 | Language-aware Enter and editor-owned indentation | ✅ | `languageEnter.ts` / `editorIndentation.ts` |
 | Synchronous lexical input context and auto-closing `notIn` | ✅ | `LanguageLexicalContextIndex` / `LanguageLexicalContextSource` |
-| Plain-text selection copy, cut, and paste | ✅ | `AlphaClipboardController` |
+| Plain-text and syntax-marked safe HTML selection copy, cut, and paste, including Async Clipboard fallback | ✅ | `AlphaClipboardController` / `clipboardRichText.ts` / `syntaxClipboardHtml.ts` |
+| User-supplied single-text-file clipboard paste | ✅ | `AlphaClipboardController` / `textFileTransfer.ts` |
+| Local declared MIME paste providers and `text/uri-list` paste | ✅ | `clipboardPasteProvider.ts` / `AlphaClipboardController` |
 | Empty-selection whole-line copy, cut, and paste | ✅ | `common/clipboard.ts` / `AlphaClipboardController` |
+| Plain-text and user-supplied single-text-file drop at the viewport hit target | ✅ | `AlphaTextDropController` / `textFileTransfer.ts` |
 | Desktop-style textarea composition and candidate anchor | ✅ | `AlphaCompositionController` |
 | Tracked multi-line composition underline | ✅ | `EditorCompositionSession.currentRange` / `AlphaEditorViewport` |
-| Platform IME variants, rich clipboard, and complete accessibility | 尚未完成 | Future browser view/input |
+| Focused accessible text/primary-selection mirror, multi-selection description, status announcements, and forced-colors semantics | ✅ | `AlphaTextInputController` / `AlphaEditorViewport` / `AlphaSaveController` |
+| macOS desktop IME/VoiceOver DOM contract | ✅ | `AlphaCompositionController` / `AlphaTextInputController`; empirical VoiceOver walkthrough remains a release verification task |
+| Mobile IME variants and cross-platform assistive-technology acceptance | 不在 Alpha 桌面完成范围 | Mobile is explicitly out of scope; Windows validation is separate release verification |
 | File and bootstrap loading | ✅ | `ITextFileService` / `AlphaTextModelService` |
-| Dirty state, saving, revert and conflicts | 尚未完成 | Future TextFile model contract and host write support |
+| Dirty state and serialized snapshot saving | ✅ | `AlphaTextModelService` / `AlphaSaveController` |
+| Explicit file-system revert | ✅ | `AlphaTextModelReference.revert` / `AlphaEditorPane.revert` |
+| CRLF/LF source line-ending preservation on save | ✅ | `AlphaTextModelService` |
+| Workspace external-change invalidation, clean reload, and dirty-model conflict state | ✅ | `IFileService.onDidChangeFiles` / `AlphaTextModelService` |
+| Pre-write external-change conflict detection | ✅, defense in depth | `AlphaTextModelService` |
+| Atomic expected-revision writes and backup recovery | 尚未完成 | Future document-layer contract |
 
 `TextPosition` names both indices explicitly and counts UTF-16 code units so
 conversion to JavaScript strings and browser selections is deterministic.
 `TextRange` is ordered and end-exclusive. Input text normalizes CRLF, CR,
 Unicode line separator, and paragraph separator to LF before it enters the
-model; persistence will eventually own the external line-ending convention.
+model. Alpha records whether loaded or reverted content uses CRLF and restores
+that convention on save; all other input is written as LF. Mixed line endings
+and encoding policy remain document-layer concerns. Coarse workspace change
+events reload clean Alpha models; dirty models retain local content, expose
+`hasExternalChange`, announce the conflict to assistive technology, and keep
+the save-time baseline check as a second defense.
+
+When focused, `AlphaTextInputController` mirrors the normalized model into its
+native textarea with the primary selection's offsets and direction. Native
+selection changes then update Alpha's primary selection if they truly differ;
+ordinary programmatic synchronization leaves multi-cursor state intact. The
+mirror is intentionally suspended during IME composition and released on blur.
 
 Each `applyEdits` call is one transaction. All ranges refer to the document
 before that transaction, input ordering has no effect, and overlap is rejected
@@ -163,6 +227,25 @@ Compaction joins the current text into a new immutable original buffer and
 resets the add buffer. It does not increment the version, emit an event, or
 change history. Existing snapshots keep references to their captured source
 strings and remain readable.
+
+`findTextMatches` scans one immutable model snapshot and returns model-versioned,
+UTF-16 ranges with numbered and named regular-expression captures. Literal and
+regular-expression modes share case and Unicode whole-word policy; invalid
+expressions fail before projection. `textSearchCommands.ts` rejects stale
+matches, expands regular-expression replacement references, and creates single
+or replace-all edits as isolated selection-aware undo transactions.
+
+`AlphaFindController` owns only the browser dialog, Ctrl/Cmd+F and replace
+shortcuts, match navigation, and the caller-owned search-decoration projection.
+It captures a non-empty opening selection as a `NeverGrowsAtEdges` tracked
+scope. The Find in Selection control and Alt+L apply that same scope to both
+navigation and replace-all, even after navigation changes the visible editor
+selection. The model and edit semantics stay in `common/`; the viewport only
+renders the named `SearchMatch` presentation. Its component DOM states project
+`.visible` and `.checked` alongside ARIA state, and `media/findWidget.css` owns
+their visual rules. Search remains bounded to 999 projected matches while
+replace-all accepts up to the common search limit of 100,000 matches in one
+transaction.
 
 `LanguageRequestCoordinator` captures one of these snapshots per request. Work
 in the same named lane is latest-wins, while independent lanes may share one
@@ -208,10 +291,11 @@ later requests reference it, while model transactions send one incremental
 sync shared by both lanes.
 
 Browser sessions create their analysis worker directly from the editor-local provider factory.
-JSON/JSONC use the bundled TextMate grammars; Rust uses Alpha's deterministic lexical Worker for
-comments, strings, keywords, operators, brackets, and structural diagnostics. Workbench, Renderer
-API and App Server do not expose a syntax service. Rust raw strings, character-literal distinction,
-macro-aware tokens, and parser-grade syntax require a future provider behind the same Alpha
+JSON/JSONC use the bundled TextMate grammars; TypeScript/JavaScript and Rust use Alpha's deterministic
+lexical Worker. The ECMAScript profile recognizes comments, strings, one-line regular-expression
+literals, keywords, operators, brackets, and structural diagnostics; Rust adds hash-delimited raw
+strings and character literals. Workbench, Renderer API and App Server do not expose a syntax service.
+Rust macro-aware tokens and parser-grade syntax require a future provider behind the same Alpha
 provider/Worker boundary; parser transport remains private to the editor implementation. Monaco has
 no ownership in this path and receives no parallel syntax integration.
 
@@ -473,8 +557,9 @@ original text leaves no empty undo step.
 Ordinary editor commands, selection changes, undo, and redo are rejected while
 the session is active. A direct external model edit invalidates the session
 before another composition update can mutate text. The browser
-`compositionstart`/`compositionupdate`/`compositionend` adapter is not yet
-implemented, and core composition currently requires exactly one selection.
+`compositionstart`/`compositionupdate`/`compositionend` adapter maps the
+browser sequence to that session, while core composition still requires exactly
+one selection.
 
 `TextDecorationCollection<TMetadata>` gives one feature owner an independent
 set of decorations over a shared model. IDs are monotonic and unique within the
@@ -505,12 +590,17 @@ model listener, resize observer, and scroll listener, but never owns the shared
 `AlphaDomTextMeasurer` reads the line layer's computed font, letter spacing,
 tab size, and horizontal padding. Canvas measures shaped text segments and
 font fallback; tab characters advance to measured space-based stops.
-`AlphaLineWidthIndex` performs one initial line scan, then maps each
-`TextModelChange` from old affected line groups to their new model ranges.
-Only those groups are remeasured. A counted width set keeps the authoritative
-maximum for the active measurer and clamps horizontal scrolling when the
-longest line shrinks. Font changes rebuild all widths through
-`refreshFontMetrics`; browser font-loading completion invokes the same path.
+`AlphaLineWidthIndex` takes one bounded synchronous first slice for an Alpha
+viewport, then refines remaining non-wrapped line widths in cancellable idle
+slices. The measured maximum is an explicit lower bound until that scan
+completes; it is never presented as an exact full-model value. An edit during a
+pending scan cancels the old generation and restarts against the new model
+version. Once complete, each `TextModelChange` maps old affected line groups to
+their new model ranges and only those groups are remeasured. A counted width set
+keeps the authoritative maximum for the active measurer and clamps horizontal
+scrolling when the longest line shrinks. Font changes restart the configured
+measurement policy through `refreshFontMetrics`; browser font-loading completion
+invokes the same path.
 
 Each rendered row now contains a sticky line-number gutter, text, and a
 component-owned overlay. The gutter width is measured from the current
@@ -540,19 +630,44 @@ replacement, clear, and model invalidation become atomic collection
 replacement; the bridge never owns the store or model. Because the store's
 model listener predates the bridge-owned collection, a text transaction clears
 diagnostics before tracked ranges can emit a misleading movement event.
-`createAlphaLanguageDiagnosticSource` maps Error and Warning to the existing
-named underline presentations. Information and Hint remain available as
-metadata but are deliberately omitted until Alpha owns dedicated hover, glyph,
-or overview-ruler presentations and semantic theme tokens.
+`createAlphaLanguageDiagnosticSource` maps every normalized severity to a
+named underline presentation and a diagnostic hover message. Error and Warning use
+their severity tokens; Information uses the focus token and Hint uses the
+description token with a dotted underline. The viewport projects the highest
+severity on each visible logical line as a gutter marker and joins that line's
+messages in `AlphaDiagnosticHoverController`'s component-owned rich hover.
+Overview-ruler presentation remains a separate browser extension.
 
 Selection and decoration ranges share `createAlphaRangeRectangles`; prefix
 measurement, end-exclusive multi-line ranges, selected newline cells, and
 render-range clipping therefore cannot drift between the two projections.
-The diagnostic adapter does not yet add hover messages, glyph-margin icons,
-minimap/overview-ruler marks, Information/Hint presentation, or arbitrary
-caller CSS classes. Geometry clipping still scans every resolved decoration
-on each layout; large collections need a line-range index before product
-adoption.
+The diagnostic adapter does not add arbitrary caller CSS classes. Browser
+projection uses `AlphaDecorationLineIndex` to resolve only decorations that can
+intersect the rendered logical-line span; it does not rescan the full
+collection on every scroll.
+
+`AlphaEditorViewport` additionally owns a document-view minimap. It compresses
+the model into at most 160 sampled, non-whitespace density rows and redraws only
+after a model revision; it does not create a second model, retain source text,
+or rerun semantic analysis. On browsers with WebGL, `AlphaGpuMinimapRenderer`
+draws only those density rectangles at device resolution; WebGL absence or context
+loss restores the DOM row projection. A primary pointer press maps a proportional
+location to the existing viewport scroll position, and dragging continues to map
+pointer movement from the owner document until the pointer ends. Existing diagnostic decorations are
+condensed into named severity markers through the same snapshot used by the
+overview ruler; syntax colors and arbitrary decoration markers remain outside
+the minimap contract.
+
+Visible rows also receive component-owned indentation guides. The browser
+projection derives complete visual indentation units from leading spaces/tabs
+using the configured editor tab size, then positions the guides with the same
+text measurer used by caret and selection geometry. Wrapped continuation rows
+do not duplicate guides; no source text or indentation state is retained
+outside the visible DOM projection.
+
+`AlphaEditorViewport` announces a single caret/selection precisely, while a
+multi-selection update reports the number of cursors or total selected characters
+and the primary position through the same atomic live region.
 
 `AlphaEditorViewport.getTargetAtClientPoint` accepts the `clientX/clientY`
 shape shared by browser pointer events and returns a `Gutter`, `Text`,
@@ -566,9 +681,19 @@ Horizontal hit testing compares the pointer with adjacent caret midpoints using
 the active `AlphaTextMeasurer`. Grapheme segmentation prevents emoji and
 combining sequences from producing accidental UTF-16-interior carets; the
 fallback preserves Unicode code-point boundaries. Tabs therefore use the same
-stops as width, selection, and decoration geometry. BiDi layout, soft wrapping,
-inline decorations that alter advance width, and browser-native caret-range
-fallback remain future view work.
+stops as width, selection, and decoration geometry. Measured soft wrapping maps
+each grapheme-safe visual fragment through hit testing, selection, decorations,
+semantic tokens, scroll virtualization, and vertical navigation. The viewport
+now exposes an explicit browser paragraph-direction input (`auto`, `ltr`, or
+`rtl`) and applies it to both rendered text and its accessible textarea, so
+Chromium owns Unicode shaping instead of `TextModel`. `domTextGeometry.ts`
+maps Alpha's UTF-16 source offsets across semantic-token spans to browser
+`Range` rectangles and caret positions. In automatic/RTL direction, rendered
+selection/caret, decorations, composition anchors, pointer hit testing, and
+wrapped vertical cursor movement use that geometry when the browser supplies
+layout; a deterministic text-measurer fallback preserves non-layout realms.
+Inline decorations that alter advance width and native browser-driven wrapping
+remain future view work.
 
 `AlphaPointerSelectionController` consumes hit targets without moving pointer
 policy into the Viewport. A primary click replaces the selection with one
@@ -578,6 +703,24 @@ the LF boundary when one exists; upward gutter drags remain backward
 selections. Browser double-click detail selects and drags complete word
 segments; triple-click detail reuses complete-line drag semantics. Shift keeps
 the prior primary anchor while extending to the target word or line boundary.
+For a context-menu gesture, a hit inside an existing non-empty selection keeps
+that selection; another hit replaces it with one caret. The controller leaves
+menu composition and display to its host.
+
+`LanguageBracketColorizationIndex` consumes the same lexical structural-bracket
+events as matching, caches nesting state by line, and produces one of six closed
+color levels for matched pairs. `AlphaBracketColorizationSource` supplies only
+the visible line spans to `AlphaEditorViewport`; the renderer composes them with
+semantic-token spans without changing source text. Brackets in strings and
+comments never enter the index, unmatched closers remain uncolored, and a model
+transaction invalidates the cached nesting before the next projection.
+
+Alt+Shift primary drags create a rectangular column selection through
+`createEditorColumnSelectionSet`. The common mapper owns one directional
+selection per physical line and makes the active line primary. Columns clamp at
+each line end instead of inventing virtual whitespace, so short rows remain in
+the operation as collapsed selections. This is browser input policy over the
+same multi-selection state and does not use DOM selection or change the model.
 
 `AlphaPointerSelectionControllerOptions.multiCursorModifier` explicitly chooses
 `Alt` by default or `ControlOrMeta`. The configured modifier without Shift
@@ -630,16 +773,78 @@ lifecycle and do not change common-layer selection ownership.
 
 `AlphaKeyboardNavigationController` maps local keydown events to those common
 commands with explicit Windows/Linux or macOS semantics. Shift extends;
-Ctrl/Option word navigation and platform document/line boundary chords remain
-separate. AltGraph, composition events, unknown chords, and events already
+Ctrl/Option word navigation and platform document/line boundary chords are
+handled with their platform-specific modifiers. AltGraph, composition events, unknown chords, and events already
 handled above the component are ignored. Page distance comes from the current
 fixed-line-height viewport. Successful navigation calls
 `AlphaEditorViewport.revealPosition`, which uses measured prefix and line
 geometry to keep the primary active position visible. Text insertion, deletion,
 clipboard, and composition DOM events remain outside this controller.
 
-`createTypeTextCommand`, `createBackspaceCommand`, and
-`createDeleteForwardCommand` turn one immutable selection set into a canonical
+`AlphaLineCommentController` handles Ctrl/Cmd+`/` only when the active language
+configuration declares a line-comment token. The common command toggles the
+union of selected physical lines after their indentation, ignores blank rows
+when deciding whether a mixed selection should remove comments, and maps every
+selection through one isolated undo transaction. Languages without a line rule
+leave the browser shortcut untouched. Block comments use their own range-based
+command because their selection semantics differ from physical-line toggling.
+
+`AlphaBlockCommentController` handles Shift+Alt+A when the resolved language
+configuration declares a block-comment pair. Each non-overlapping selected
+range is wrapped or unwrapped in one isolated transaction; collapsed cursors
+insert a pair and remain inside it. The common command preserves directional
+selections and rejects ambiguous overlapping selections before mutation.
+
+`AlphaLineOperationsController` maps Ctrl/Cmd+Enter and Ctrl/Cmd+Shift+Enter
+to insert blank lines after/before selected physical-line groups,
+Ctrl/Cmd+Shift+K to delete them, Shift+Alt+ArrowUp/ArrowDown to duplicate
+them, and Alt+ArrowUp/ArrowDown to move them. `lineOperations.ts` computes all
+edits against one pre-change snapshot, keeps the document non-empty after
+deleting its only line, and routes each operation through an isolated
+selection-aware undo step.
+
+`AlphaOccurrenceSelectionController` maps Ctrl/Cmd+D to select a cursor word
+or add the next exact occurrence, and Ctrl/Cmd+Shift+L to select every exact
+occurrence. The common selector owns Unicode-safe source-word selection,
+wraparound, de-duplication, selection ordering, and primary-selection choice;
+the browser adapter only routes chords and reveals the new primary cursor.
+
+`AlphaMultiCursorController` maps VS Code-compatible add-cursor chords to
+logical physical lines: Ctrl+Alt+Arrow on Windows, Cmd+Alt+Arrow on macOS, and
+Ctrl+Shift+Alt+Arrow on Linux. The Linux chord deliberately uses VS Code's
+secondary binding so Shift+Alt+Arrow remains available for line duplication.
+`cursorInsertion.ts` preserves current selections, clamps columns on shorter
+rows, and prevents new carets from duplicating or overlapping them.
+It also maps Shift+Alt+I to replace non-empty selected rows with their line-end
+carets, including the selected endpoint only when it is not at a following line
+start.
+
+`AlphaEditingCommandController` also maps Ctrl/Cmd+L to the same repeated line
+selection model as VS Code: it normalizes a selection to the first line start,
+extends through one more physical row each time, and includes a non-final line
+break by ending at the next line start.
+
+`LanguageBracketMatcher` incrementally scans configured brackets with the same
+lexical rules that exclude strings and comments from structural editing. It
+matches nested pairs in a bounded line window and invalidates cached suffixes
+after text or configuration changes. `AlphaBracketMatchController` observes
+collapsed selections and renders the two current ranges as named
+`BracketMatch` decorations; non-collapsed selections intentionally clear the
+highlight.
+
+`AlphaBracketNavigationController` maps Ctrl/Cmd+Shift+`\\` to go to each
+cursor's lexically valid matching bracket. `bracketNavigation.ts` also exposes
+the selection transformation for command routing: it selects from the opening
+token through the closing token without changing text or recreating lexical
+state.
+
+`AlphaBracketEditingController` maps Ctrl/Cmd+Alt+Backspace to remove distinct
+matched pairs around collapsed cursors in one isolated transaction. It
+canonicalizes post-edit duplicate carets and rejects non-cursor or lexically
+invalid bracket candidates without changing the document.
+
+`createTypeTextCommand`, `createBackspaceCommand`, `createDeleteForwardCommand`,
+and soft line-boundary deletion commands turn one immutable selection set into a canonical
 multi-edit command. Typed text is LF-normalized before result offsets are
 calculated. Collapsed deletions remove a complete grapheme or the adjacent line
 break; selected ranges are deleted directly. Overlap is rejected before model
@@ -680,18 +885,25 @@ canonical result for the selected style. `LanguageLexicalContextSource`
 optionally supplies processed line slices; `LanguageLexicalContextIndex` is
 the default synchronous source. It lazily reuses
 `LanguageLexicalLineScanner`, removes configured bracket tokens only inside
-string/comment spans, and invalidates the affected cached suffix after edits.
+string/comment/ECMAScript regular-expression spans, and invalidates the affected cached suffix after edits.
 Configuration identity changes rebuild its scanner.
 
+`LanguageConfiguration.wordPattern` is an optional immutable RegExp contribution.
+Its current resolved value drives pointer word selection, Ctrl/Option word
+navigation, word deletion, cursor-originated occurrence selection, and
+occurrence highlighting. Explicit text selections retain literal occurrence
+semantics. Unconfigured languages continue to use shared Unicode segmentation.
+
 `LanguageAutoClosingPair.notIn` currently has the closed `string | comment`
-vocabulary supported by that baseline scanner. Pair input consults the same
-source before auto-closing, while trusted closer overtype remains governed by
-`LanguageAutoClosingTracker`. Regular-expression literals, embedded-language
-regions, and template interpolation are not yet distinct lexical contexts.
+vocabulary supported by the configuration contract. Pair input consults the
+same source before auto-closing, while trusted closer overtype remains governed
+by `LanguageAutoClosingTracker`. ECMAScript regular-expression literals are
+separate structural contexts; embedded-language regions and template
+interpolation are not yet distinct lexical contexts.
 
 `AlphaTextInputController` owns a hidden textarea and redirects viewport focus
 to it. Non-composition `beforeinput` events route ordinary text, replacement
-text, Enter, Backspace, Delete, undo, and redo through the common command
+text, Enter, Backspace, Delete, soft-line deletion, undo, and redo through the common command
 boundary; an unmodified Tab inserts `\t`. Successful changes reveal the
 primary active position. The stable `.input-focused` root class exposes focus
 state to component-owned CSS. Composition and clipboard events are delegated
@@ -719,11 +931,28 @@ language configuration registry.
 `createCutCommand` build isolated selection-aware transactions. Paste and cut
 therefore remain separate undo steps instead of joining adjacent typing.
 
-`AlphaClipboardController` writes portable `text/plain` plus versioned Alpha
-metadata for multi-selection distribution. Matching Alpha metadata pastes one
-text per selection; external text and invalid metadata paste the same text at
-every selection. Clipboard output uses an explicit platform line-ending policy
-and model input remains LF-normalized.
+`AlphaClipboardController` writes portable `text/plain`, safe preformatted
+`text/html`, and versioned Alpha metadata for multi-selection distribution.
+When a current `AlphaSemanticTokenSource` is present, its closed presentation
+vocabulary and resolved browser theme colors annotate the HTML copy only;
+plain text remains authoritative and unavailable/stale tokens produce escaped
+preformatted HTML. Matching Alpha metadata pastes one text per selection;
+external text and invalid metadata paste the same text at every selection. When
+`text/plain` is absent, the browser adapter extracts deterministic text from
+inert HTML without rendering it or accepting script/style content. Clipboard
+output uses an explicit platform line-ending policy and model input remains
+LF-normalized.
+
+If no text representation is available, Alpha may asynchronously read one
+clipboard `File` that has a textual MIME type or known text extension and is at
+most 5 MiB. It never opens a file-system path. The result must retain the
+captured model version and all selection anchor/active positions before it can
+be submitted as an isolated paste command; otherwise it is discarded.
+
+`EditorInput.readOnly` configures one non-mutating Alpha editor instance. The
+instance still owns selection, navigation, copy, rendering, and external model
+observation, while `EditorSelectionController` rejects execute/undo/redo and
+composition entry before any browser command can reach `TextModel`.
 
 `EditorEmptySelectionClipboardPolicy.Line` is the browser default;
 `Ignore` explicitly retains native empty-copy behavior.
@@ -734,8 +963,21 @@ source caret through the resulting deletion. Version 2 Alpha metadata records
 line paste mode. `createLinePasteCommand` inserts at target line starts,
 preserves original columns, and groups multiple target carets on one line into
 one ordered insertion. Mixed modes safely fall back to ordinary selection
-paste. Rich HTML, files, async clipboard access, paste providers, and active
-composition coordination remain unimplemented.
+paste. User-provided single text files may also be pasted or dropped under the
+same bounded asynchronous contract. `AlphaClipboardPasteProvider` accepts only
+an immutable event-time textual MIME snapshot; it is frontend-local, evaluates
+providers in explicit order, and discards asynchronous output when the captured
+model version or selections no longer match. `AlphaUriListPasteProvider` is the
+built-in `text/uri-list` adapter and excludes comment lines. When a native
+paste event provides neither text nor Alpha metadata, a recognized text file,
+or a matching local provider, `AlphaClipboardController` invokes the browser
+Async Clipboard rich reader before its plain-text fallback within that paste
+gesture. Its result uses the same captured model version and selection gate,
+so delayed, denied, empty, or stale reads cannot mutate the document. If a
+copy/cut event has no event-owned `clipboardData`, the corresponding Async
+writer exports the same `text/plain` and safe `text/html` payload; a cut waits
+for a successful write before changing the model. Mutable clipboard commands
+remain rejected while an IME composition is active.
 
 `AlphaCompositionController` maps a desktop-style
 `compositionstart/update/end` sequence to one `EditorCompositionSession`.
@@ -751,8 +993,9 @@ stable `.composing` and `.ime-input` classes, and positions the textarea from
 `AlphaEditorViewport.getPositionContentCoordinates`. This anchors the native
 candidate window to the measured caret across layout changes. Android
 replacement deduction, macOS long-press behavior, iOS empty-end anomalies,
-dead keys, clause segmentation, and multi-selection IME remain future platform
-adapters. An active empty end commits deletion; Escape/blur are explicit
+clause segmentation, and multi-selection IME remain future platform adapters.
+An isolated desktop dead-key commit that is marked composing without a matching
+composition session safely follows the ordinary text path. An active empty end commits deletion; Escape/blur are explicit
 cancellation signals, while an extra end after closure is ignored.
 
 `EditorCompositionSession.currentRange` exposes the provisional model range
@@ -779,6 +1022,9 @@ commitOffsetEdits
 PieceTreeTextBuffer.replace
   splits/coalesces pieces and updates subtree length/line/piece counts
           ↓
+TextModel.scheduleMaintenance
+  uses the product scheduler when one is supplied; otherwise compacts synchronously
+          ↓
 PieceTreeTextBuffer.compactIfNeeded
   reclaims dead source storage without changing model semantics
           ↓
@@ -786,7 +1032,7 @@ commitOffsetEdits
   increments version, emits TextModelChange
           ↓
 TextModelHistory
-  owns undo/redo stacks, budgets, and protected revisions
+  owns undo/redo stacks, budgets, grouping, and protected revisions
 
 TextModel.trackRange
           ↓
@@ -1066,24 +1312,23 @@ immutable source segments, history collections are bounded by transaction and
 stored-text budgets, and threshold-driven compaction reclaims dead current
 storage.
 
-Compaction is currently synchronous and joins the live document, so it is an
-O(document length) maintenance operation. Snapshots intentionally retain their
-captured source strings until the snapshot itself becomes unreachable; those
-external retained sources are not included in `getStatistics`. Before native
-view adoption, benchmarks need tracked budgets and compaction may need
-incremental scheduling for very large documents.
+`TextModel` keeps synchronous compaction as its framework-neutral default.
+Alpha's browser `AlphaTextModelService` supplies a cancellable idle scheduler,
+so its file-backed models never join an edit transaction solely to reclaim
+piece-tree storage. One idle callback still compacts the live tree as an
+O(document length) operation. Snapshots intentionally retain their captured
+source strings until the snapshot itself becomes unreachable; those external
+retained sources are not included in `getStatistics`. Truly incremental copying
+remains a future optimization for unusually large documents.
 
 The next implementation stages are:
 
-1. tracked performance budgets and incremental compaction evaluation;
-2. chunked initial line measurement evaluation for very large documents;
-3. Android/macOS/iOS composition variants, dead keys, and clause projection;
-4. rich/file clipboard and paste-provider evaluation;
-5. product TextMate grammar/resource composition, semantic-token modifier
-   styling, and richer diagnostic presentation;
-6. accessibility, decoration hover, and overview-ruler projection;
-7. BiDi, wrapping, and inline-advance layout evaluation;
-8. migrate remaining Monaco-only tools through Alpha's public contracts, then
+1. incremental piece-tree compaction for unusually large documents; Alpha browser models already defer whole-tree maintenance, while non-wrapped line-width and initial wrapped-line measurement yield after a bounded first slice;
+2. composition clause projection work; mobile remains out of scope;
+3. TextMate extension-resource discovery; serializable scope-theme selector composition is complete;
+4. desktop platform acceptance verification (macOS VoiceOver, then Windows); mobile remains out of scope;
+5. parser-grade folding ranges, inline-advance layout evaluation, native browser-driven wrapping, and continuous updates for transformed snippet mirrors while typing;
+6. migrate remaining Monaco-only tools through Alpha's public contracts, then
    remove the retired Monaco editor without importing its ownership into Alpha.
 
 Tests under `test/common/` cover normalization, coordinates, atomic edits, failure

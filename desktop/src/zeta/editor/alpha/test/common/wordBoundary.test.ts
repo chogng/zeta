@@ -42,6 +42,13 @@ test("Word selection preserves Unicode boundaries and empty lines", () => {
   );
 });
 
+test("Word selection honors a language word pattern before generic segmentation", () => {
+  using model = new TextModel("crate::item-name");
+  const pattern = /[A-Za-z:]+/;
+  assert.deepEqual(getWordSelectionRange(model, TextPosition.at(0, 7), pattern), range(0, 0, 11));
+  assert.deepEqual(getWordSelectionRange(model, TextPosition.at(0, 12), pattern), range(0, 12, 16));
+});
+
 test("Word selection rejects positions outside the model", () => {
   using model = new TextModel("alpha");
 

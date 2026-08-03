@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { Emitter } from "../../../../base/common/event.js";
 import { URI } from "../../../../base/common/uri.js";
 import { BrowserFileService, workspaceRelativePath } from "../../../../platform/files/browser/fileService.js";
 import { FileKind } from "../../../../platform/files/common/files.js";
+import type { FsChanged } from "../../../../../../generated/app-server/types.js";
 import type { IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
 import { WorkspaceContextService } from "../../../../workbench/services/workspaces/browser/workspaceContextService.js";
 
@@ -45,6 +47,18 @@ test("BrowserFileService maps wire entries back to resource URIs", async () => {
         assert.equal(path, "src/main.ts");
         return { content: "export {};" };
       },
+      writeFile: async ({ path, content }) => {
+        assert.equal(path, "src/main.ts");
+        assert.equal(content, "export const saved = true;");
+        return {
+          metadata: {
+            fileType: "file",
+            sizeBytes: content.length,
+            readonly: false,
+            modifiedAtMillis: 123,
+          },
+        };
+      },
     },
   });
 
@@ -61,4 +75,41 @@ test("BrowserFileService maps wire entries back to resource URIs", async () => {
     await service.readFile(URI.file("C:\\project\\src\\main.ts")),
     "export {};",
   );
+  assert.deepEqual(
+    await service.writeFile(URI.file("C:\\project\\src\\main.ts"), "export const saved = true;"),
+    {
+      resource: URI.file("C:\\project\\src\\main.ts"),
+      kind: FileKind.File,
+      sizeBytes: 26,
+      readonly: false,
+      modifiedAtMillis: 123,
+    },
+  );
 });
+
+test("BrowserFileService maps App Server invalidations to workspace resources", () => {
+  const root = URI.file("C:\\project");
+  using workspaceContextService: IWorkspaceContextService = new WorkspaceContextService({ id: "workspace", uri: root });
+  using changes = new Emitter<FsChanged>();
+  using service = new BrowserFileService({
+    workspaceContextService,
+    api: unavailableFileApi(),
+    onDidChange: changes.event,
+  });
+  const observed: (readonly URI[] | undefined)[] = [];
+  using listener = service.onDidChangeFiles(event => observed.push(event.resources));
+
+  changes.fire({ type: "pathsChanged", paths: ["src/main.ts", "src/main.ts", "README.md"] });
+  changes.fire({ type: "rescanRequired" });
+
+  assert.deepEqual(observed, [[URI.file("C:\\project\\src\\main.ts"), URI.file("C:\\project\\README.md")], undefined]);
+});
+
+function unavailableFileApi() {
+  return {
+    getMetadata: async () => { throw new Error("unavailable"); },
+    readDirectory: async () => { throw new Error("unavailable"); },
+    readFile: async () => { throw new Error("unavailable"); },
+    writeFile: async () => { throw new Error("unavailable"); },
+  };
+}
