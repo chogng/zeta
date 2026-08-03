@@ -1,40 +1,38 @@
-import { test as base, type ElectronApplication, type Page } from "@playwright/test";
+import { test as base, type ElectronApplication } from "@playwright/test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { launchElectron } from "./electron.js";
 import type { PlaywrightDriver } from "./playwrightDriver.js";
+import type { Workbench } from "./workbench.js";
 
 interface ElectronFixtures {
   readonly application: ElectronApplication;
   readonly driver: PlaywrightDriver;
-  readonly workbenchPage: Page;
+  readonly workbench: Workbench;
 }
 
 export const test = base.extend<ElectronFixtures>({
-  application: async ({}, use) => {
+  driver: async ({}, use) => {
     const userDataDirectory = await mkdtemp(join(tmpdir(), "zeta-playwright-"));
-    const { application } = await launchElectron({ userDataDirectory });
+    const { application, driver } = await launchElectron({ userDataDirectory });
     try {
-      await use(application);
+      await use(driver);
     } finally {
       await application.close().catch(() => undefined);
       await rm(userDataDirectory, { force: true, recursive: true });
     }
   },
-  driver: async ({ application }, use) => {
-    const page = application.windows()[0] ?? await application.waitForEvent("window", { timeout: 30_000 });
-    const { PlaywrightDriver } = await import("./playwrightDriver.js");
-    const driver = new PlaywrightDriver(application, page);
-    await driver.waitForWorkbench();
-    await use(driver);
+  application: async ({ driver }, use) => {
+    await use(driver.application);
   },
-  workbenchPage: async ({ driver }, use, testInfo) => {
-    const page = driver.currentPage;
+  workbench: async ({ driver }, use, testInfo) => {
+    const workbench = driver.workbench;
+    const page = workbench.page;
     const pageErrors: string[] = [];
     page.on("pageerror", error => pageErrors.push(error.stack ?? error.message));
     await page.context().tracing.start({ screenshots: true, snapshots: true, sources: true });
-    await use(page);
+    await use(workbench);
 
     const failed = testInfo.status !== testInfo.expectedStatus;
     if (failed && !page.isClosed()) {

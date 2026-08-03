@@ -1,4 +1,5 @@
 import type { ElectronApplication, Page } from "@playwright/test";
+import { Workbench } from "./workbench.js";
 
 export interface WindowSize {
   readonly width: number;
@@ -7,14 +8,13 @@ export interface WindowSize {
 
 /** Small workbench-facing driver shared by Electron end-to-end tests. */
 export class PlaywrightDriver {
-  constructor(
-    private readonly application: ElectronApplication,
-    readonly currentPage: Page,
-  ) {}
+  readonly workbench: Workbench;
 
-  async waitForWorkbench(): Promise<void> {
-    await this.currentPage.locator(".zeta-workbench").waitFor({ state: "visible" });
-    await this.currentPage.locator(".zeta-workbench-editor .zeta-editor-group").waitFor({ state: "visible" });
+  constructor(
+    readonly application: ElectronApplication,
+    readonly currentPage: Page,
+  ) {
+    this.workbench = new Workbench(currentPage);
   }
 
   async setWindowSize(size: WindowSize): Promise<void> {
@@ -27,5 +27,6 @@ export class PlaywrightDriver {
       requestedSize => window.innerWidth === requestedSize.width && window.innerHeight === requestedSize.height,
       size,
     );
+    await this.workbench.waitForUiIdle();
   }
 }

@@ -34,6 +34,6 @@ export async function launchElectron(options: ElectronLaunchOptions): Promise<El
   });
   const page = application.windows()[0] ?? await application.waitForEvent("window", { timeout: 30_000 });
   const driver = new PlaywrightDriver(application, page);
-  await driver.waitForWorkbench();
+  await driver.workbench.waitForReady();
   return { application, driver };
 }
