@@ -1,9 +1,9 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
-import { LanguageCompletionProviderRegistry, createLanguageCompletionInvokeContext, type LanguageCompletionProvider } from "../../common/languageCompletionProviders.js";
-import { LanguageCompletionService } from "../../common/languageCompletionService.js";
-import { LanguageCompletionItemKind, type LanguageCompletionResolveRequest } from "../../common/languageCompletions.js";
-import { LanguageRequestStatus } from "../../common/languageRequestCoordinator.js";
+import { LanguageCompletionProviderRegistry, createLanguageCompletionInvokeContext, type LanguageCompletionProvider } from "../../language/common/languageCompletionProviders.js";
+import { LanguageCompletionService } from "../../language/common/languageCompletionService.js";
+import { LanguageCompletionItemKind, type LanguageCompletionResolveRequest } from "../../language/common/languageCompletions.js";
+import { LanguageRequestStatus } from "../../language/common/languageRequestCoordinator.js";
 import { TextPosition, TextRange } from "../../common/text.js";
 import { TextModel } from "../../common/textModel.js";
 

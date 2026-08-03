@@ -1,12 +1,12 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
-import { languageAnalysisWireCodec } from "../../common/languageAnalysisWire.js";
-import { LANGUAGE_TOKEN_LANE, type LanguageAnalysisResult } from "../../common/languageAnalysisService.js";
-import { LanguageLexicalAnalysisCache } from "../../common/languageLexicalAnalysisCache.js";
-import { LanguageResultAcceptance, LanguageResultStoreChangeReason } from "../../common/languageResultStore.js";
-import { LanguageTokenLineIndex } from "../../common/languageTokenLineIndex.js";
-import { attachLanguageTokenResultDelta, createLanguageTokenSnapshotNormalizer, createLanguageTokenStore, type LanguageToken } from "../../common/languageResults.js";
-import { type LanguageWorkerWireResultState } from "../../common/languageWorkerWireProtocol.js";
+import { languageAnalysisWireCodec } from "../../language/common/languageAnalysisWire.js";
+import { LANGUAGE_TOKEN_LANE, type LanguageAnalysisResult } from "../../language/common/languageAnalysisService.js";
+import { LanguageLexicalAnalysisCache } from "../../language/common/languageLexicalAnalysisCache.js";
+import { LanguageResultAcceptance, LanguageResultStoreChangeReason } from "../../language/common/languageResultStore.js";
+import { LanguageTokenLineIndex } from "../../language/common/languageTokenLineIndex.js";
+import { attachLanguageTokenResultDelta, createLanguageTokenSnapshotNormalizer, createLanguageTokenStore, type LanguageToken } from "../../language/common/languageResults.js";
+import { type LanguageWorkerWireResultState } from "../../language/common/languageWorkerWireProtocol.js";
 import { TextPosition, TextRange } from "../../common/text.js";
 import { TextModel } from "../../common/textModel.js";
 

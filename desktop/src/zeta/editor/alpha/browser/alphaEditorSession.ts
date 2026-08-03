@@ -8,15 +8,15 @@ import { CodeEditorWidget } from "./widget/codeEditor/codeEditorWidget.js";
 import { type AlphaEditorTextDirection, type AlphaEditorViewport } from "./alphaEditorViewport.js";
 import { AlphaDecorationPresentation, createAlphaDecorationSource } from "./decorationPresentation.js";
 import { AlphaCursorUndoController } from "./cursorUndoController.js";
-import { AlphaDiagnosticNavigationController } from "./diagnosticNavigationController.js";
-import { AlphaDiagnosticHoverController } from "./diagnosticHoverController.js";
-import { AlphaBracketMatchController } from "./bracketMatchController.js";
-import { AlphaBracketColorizationSource } from "./bracketColorizationPresentation.js";
-import { AlphaBracketEditingController } from "./bracketEditingController.js";
-import { AlphaBracketNavigationController } from "./bracketNavigationController.js";
+import { AlphaDiagnosticNavigationController } from "../language/browser/diagnosticNavigationController.js";
+import { AlphaDiagnosticHoverController } from "../language/browser/diagnosticHoverController.js";
+import { AlphaBracketMatchController } from "../language/browser/bracketMatchController.js";
+import { AlphaBracketColorizationSource } from "../language/browser/bracketColorizationPresentation.js";
+import { AlphaBracketEditingController } from "../language/browser/bracketEditingController.js";
+import { AlphaBracketNavigationController } from "../language/browser/bracketNavigationController.js";
 import { AlphaBlockCommentController } from "./blockCommentController.js";
 import { AlphaEditingCommandController } from "./editingCommandController.js";
-import { AlphaFoldingController } from "./foldingController.js";
+import { AlphaFoldingController } from "../language/browser/foldingController.js";
 import { AlphaFindController } from "./findController.js";
 import { AlphaGotoLineController } from "./gotoLineController.js";
 import { AlphaLineCommentController } from "./lineCommentController.js";
@@ -25,31 +25,28 @@ import { AlphaLineOperationsController } from "./lineOperationsController.js";
 import { AlphaMultiCursorController } from "./multiCursorController.js";
 import { AlphaOccurrenceSelectionController } from "./occurrenceSelectionController.js";
 import { AlphaOccurrenceHighlightController } from "./occurrenceHighlightController.js";
-import { createAlphaLanguageDiagnosticSource } from "./languageDiagnosticPresentation.js";
+import { createAlphaLanguageDiagnosticSource } from "../language/browser/languageDiagnosticPresentation.js";
 import { AlphaSaveController } from "./saveController.js";
-import { createAlphaSemanticTokenSource } from "./semanticTokenPresentation.js";
+import { createAlphaSemanticTokenSource } from "../language/browser/semanticTokenPresentation.js";
 import { type AlphaTextInputController } from "./textInputController.js";
 import { AlphaTransposeController } from "./transposeController.js";
 import { AlphaWordWrapController } from "./wordWrapController.js";
 import { type AlphaEditorLineWrapping } from "./visualLineProjection.js";
-import { LanguageAnalysisProviderRegistry } from "../common/languageAnalysisProviders.js";
-import { LanguageAnalysisService, type LanguageAnalysisWorkerFactory } from "../common/languageAnalysisService.js";
-import { registerAlphaBuiltinLanguageConfigurations } from "../common/languageBuiltinConfigurations.js";
-import { LanguageCompletionProviderRegistry } from "../common/languageCompletionProviders.js";
-import { LanguageCompletionService, type LanguageCompletionWorkerFactory } from "../common/languageCompletionService.js";
-import { LanguageCompletionSessionController } from "../common/languageCompletionSession.js";
-import { LanguageConfigurationRegistry } from "../common/languageConfiguration.js";
-import { LanguageBracketMatcher } from "../common/languageBracketMatcher.js";
-import { LanguageBracketColorizationIndex } from "../common/languageBracketColorization.js";
-import { LanguageLexicalContextIndex } from "../common/languageLexicalContext.js";
-import { LanguageDiagnosticDecorationBridge } from "../common/languageDiagnosticDecorations.js";
-import { createLanguageLexicalAnalysisProvider } from "../common/languageLexicalAnalysisProvider.js";
-import { LanguageTokenLineIndex } from "../common/languageTokenLineIndex.js";
-import { createLanguageWordCompletionProvider } from "../common/languageWordCompletionProvider.js";
+import { type LanguageAnalysisService, type LanguageAnalysisWorkerFactory } from "../language/common/languageAnalysisService.js";
+import { LanguageCompletionSessionController } from "../language/common/languageCompletionSession.js";
+import { type LanguageCompletionWorkerFactory } from "../language/common/languageCompletionService.js";
+import { LanguageFeaturesService, type ILanguageFeaturesService } from "../../../workbench/services/language/common/languageFeaturesService.js";
+import { LanguageBracketMatcher } from "../language/common/languageBracketMatcher.js";
+import { LanguageBracketColorizationIndex } from "../language/common/languageBracketColorization.js";
+import { LanguageLexicalContextIndex } from "../language/common/languageLexicalContext.js";
+import { LanguageDiagnosticDecorationBridge } from "../language/common/languageDiagnosticDecorations.js";
+import { createLanguageLexicalAnalysisProvider } from "../language/common/languageLexicalAnalysisProvider.js";
+import { LanguageTokenLineIndex } from "../language/common/languageTokenLineIndex.js";
+import { createLanguageWordCompletionProvider } from "../language/common/languageWordCompletionProvider.js";
 import { EditorSelectionController } from "../common/editorSelectionController.js";
-import { EditorFoldingModel } from "../common/folding.js";
+import { EditorFoldingModel } from "../language/common/folding.js";
 import { computeEditorIndentFoldingRanges } from "../common/indentFolding.js";
-import { computeEditorLanguageFoldingRanges, mergeEditorFoldingRanges } from "../common/languageFolding.js";
+import { computeEditorLanguageFoldingRanges, mergeEditorFoldingRanges } from "../language/common/languageFolding.js";
 import { type EditorIndentationOptions } from "../common/editorIndentation.js";
 import { TextDecorationCollection } from "../common/decoration.js";
 import { TextSelection, TextSelectionSet } from "../common/selection.js";
@@ -59,6 +56,8 @@ export interface AlphaEditorSessionOptions {
   readonly container: HTMLElement;
   readonly input: EditorInput;
   readonly languageId: string;
+  /** Optional shared language registrations and providers for this editor host. */
+  readonly languageFeaturesService?: ILanguageFeaturesService;
   readonly modelReference: AlphaTextModelReference;
   readonly analysisWorkerFactory?: LanguageAnalysisWorkerFactory;
   readonly completionWorkerFactory?: LanguageCompletionWorkerFactory;
@@ -106,8 +105,8 @@ export class AlphaEditorSession extends DisposableOwner {
       if (options.languageSupport) this.own(options.languageSupport);
       const modelReference = this.modelReference = this.own(options.modelReference);
       const model = modelReference.model;
-      const configurations = this.own(new LanguageConfigurationRegistry());
-      this.own(registerAlphaBuiltinLanguageConfigurations(configurations));
+      const languageFeaturesService = options.languageFeaturesService ?? this.own(new LanguageFeaturesService());
+      const configurations = languageFeaturesService.configurations;
       this.selections = this.own(new EditorSelectionController(
         model,
         TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))),
@@ -121,11 +120,7 @@ export class AlphaEditorSession extends DisposableOwner {
       updateFolding();
       this.own(model.onDidChange(updateFolding));
 
-      const analysisProviders = this.own(new LanguageAnalysisProviderRegistry());
-      if (!options.analysisWorkerFactory) {
-        this.own(analysisProviders.register(createLanguageLexicalAnalysisProvider({ languageConfigurations: configurations })));
-      }
-      this.analysis = this.own(new LanguageAnalysisService(model, analysisProviders, {
+      this.analysis = this.own(languageFeaturesService.createAnalysisService(model, {
         ...(options.analysisWorkerFactory ? { workerFactory: options.analysisWorkerFactory } : {}),
       }));
       const tokenLines = this.own(new LanguageTokenLineIndex(this.analysis.tokens));
@@ -137,11 +132,7 @@ export class AlphaEditorSession extends DisposableOwner {
       const lexicalContext = this.own(new LanguageLexicalContextIndex(model, this.languageId, configurations));
       const bracketColorizations = this.own(new LanguageBracketColorizationIndex(model, lexicalContext));
 
-      const completionProviders = this.own(new LanguageCompletionProviderRegistry());
-      if (!options.completionWorkerFactory) {
-        this.own(completionProviders.register(createLanguageWordCompletionProvider()));
-      }
-      const completions = this.own(new LanguageCompletionService(model, completionProviders, {
+      const completions = this.own(languageFeaturesService.createCompletionService(model, {
         ...(options.completionWorkerFactory ? { workerFactory: options.completionWorkerFactory } : {}),
       }));
       const completionSession = this.own(new LanguageCompletionSessionController(

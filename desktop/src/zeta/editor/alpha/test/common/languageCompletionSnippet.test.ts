@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { parseLanguageCompletionSnippet } from "../../common/languageCompletionSnippet.js";
+import { parseLanguageCompletionSnippet } from "../../language/common/languageCompletionSnippet.js";
 
 test("Completion snippets expand tabstops, defaults, mirrors, nesting, and final cursor order", () => {
   const snippet = parseLanguageCompletionSnippet("fn ${1:name}(${2:${1}}) { $0 }");

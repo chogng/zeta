@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { LanguageBracketColorizationIndex } from "../../common/languageBracketColorization.js";
-import { LanguageConfigurationRegistry } from "../../common/languageConfiguration.js";
-import { LanguageLexicalContextIndex } from "../../common/languageLexicalContext.js";
+import { LanguageBracketColorizationIndex } from "../../language/common/languageBracketColorization.js";
+import { LanguageConfigurationRegistry } from "../../language/common/languageConfiguration.js";
+import { LanguageLexicalContextIndex } from "../../language/common/languageLexicalContext.js";
 import { TextRange } from "../../common/text.js";
 import { TextModel } from "../../common/textModel.js";
 

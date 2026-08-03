@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { AlphaDecorationPresentation, createAlphaDecorationSource } from "../../browser/decorationPresentation.js";
-import { AlphaDiagnosticHoverController } from "../../browser/diagnosticHoverController.js";
+import { AlphaDiagnosticHoverController } from "../../language/browser/diagnosticHoverController.js";
 import { type AlphaTextMeasurer } from "../../browser/fontMetrics.js";
 import { TextDecorationCollection } from "../../common/decoration.js";
 import { TextPosition, TextRange } from "../../common/text.js";

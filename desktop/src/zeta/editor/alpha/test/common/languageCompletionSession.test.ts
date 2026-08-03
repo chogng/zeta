@@ -1,9 +1,9 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
 import { EditorCommandHistoryMode, EditorSelectionController } from "../../common/editorSelectionController.js";
-import { LanguageCompletionDetailsStatus, LanguageCompletionSessionChangeReason, LanguageCompletionSessionController } from "../../common/languageCompletionSession.js";
-import { LanguageResultAcceptance } from "../../common/languageResultStore.js";
-import { LanguageCompletionInsertTextFormat, LanguageCompletionItemKind, createLanguageCompletionStore, type LanguageCompletionItem, type LanguageCompletionItemDetails, type LanguageCompletionItemResolver, type LanguageCompletionResolveRequest } from "../../common/languageCompletions.js";
+import { LanguageCompletionDetailsStatus, LanguageCompletionSessionChangeReason, LanguageCompletionSessionController } from "../../language/common/languageCompletionSession.js";
+import { LanguageResultAcceptance } from "../../language/common/languageResultStore.js";
+import { LanguageCompletionInsertTextFormat, LanguageCompletionItemKind, createLanguageCompletionStore, type LanguageCompletionItem, type LanguageCompletionItemDetails, type LanguageCompletionItemResolver, type LanguageCompletionResolveRequest } from "../../language/common/languageCompletions.js";
 import { TextSelection, TextSelectionSet } from "../../common/selection.js";
 import { TextPosition, TextRange } from "../../common/text.js";
 import { TextModel } from "../../common/textModel.js";

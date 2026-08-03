@@ -3,7 +3,7 @@ import test from "node:test";
 import { JSDOM } from "jsdom";
 import { type AlphaTextMeasurer } from "../../browser/fontMetrics.js";
 import { EditorSelectionController } from "../../common/editorSelectionController.js";
-import { EditorFoldingModel } from "../../common/folding.js";
+import { EditorFoldingModel } from "../../language/common/folding.js";
 import { TextSelection, TextSelectionSet } from "../../common/selection.js";
 import { TextPosition, TextRange } from "../../common/text.js";
 import { TextModel } from "../../common/textModel.js";

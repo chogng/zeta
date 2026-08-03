@@ -1,7 +1,7 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
-import { LanguageResultAcceptance } from "../../common/languageResultStore.js";
-import { LanguageCompletionItemKind, createLanguageCompletionSnapshotNormalizer, createLanguageCompletionStore, type LanguageCompletionItem } from "../../common/languageCompletions.js";
+import { LanguageResultAcceptance } from "../../language/common/languageResultStore.js";
+import { LanguageCompletionItemKind, createLanguageCompletionSnapshotNormalizer, createLanguageCompletionStore, type LanguageCompletionItem } from "../../language/common/languageCompletions.js";
 import { TextPosition, TextRange, type TextSnapshot } from "../../common/text.js";
 import { TextModel } from "../../common/textModel.js";
 

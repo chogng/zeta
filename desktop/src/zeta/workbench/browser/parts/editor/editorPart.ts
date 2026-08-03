@@ -7,6 +7,8 @@ import type { IConfigurationService } from "../../../../platform/configuration/c
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
 import type { IKeybindingService } from "../../../../platform/keybinding/common/keybinding.js";
 import { type ITextFileService } from "../../../services/textfile/common/textFileService.js";
+import { type ITextMateService } from "../../../services/textMate/common/textMateService.js";
+import { type ILanguageFeaturesService } from "../../../services/language/common/languageFeaturesService.js";
 import { WorkbenchPart } from "../../part.js";
 import { EditorGroup, type EditorGroupOptions, type IEditorGroup } from "./editorGroup.js";
 import { EditorTabDragAndDropController, type EditorTabDropEvent } from "./editorTabDragAndDrop.js";
@@ -44,6 +46,8 @@ export interface IEditorPartOptions {
   readonly configurationService?: IConfigurationService;
   readonly keybindingService?: IKeybindingService;
   readonly textFileService?: ITextFileService;
+  readonly textMateService?: ITextMateService;
+  readonly languageFeaturesService?: ILanguageFeaturesService;
   readonly registry?: EditorPaneRegistry;
   readonly titleActions?: {
     readonly menuService: IMenuService;
@@ -75,6 +79,8 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
       configurationService: options.configurationService,
       keybindingService: options.keybindingService,
       textFileService: options.textFileService,
+      textMateService: options.textMateService,
+      languageFeaturesService: options.languageFeaturesService,
       titleActions: options.titleActions,
     };
     this.tabDragAndDrop = new EditorTabDragAndDropController((event) => {

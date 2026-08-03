@@ -1,7 +1,7 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
-import { createLanguageCompletionInvokeContext, type LanguageCompletionProviderRequest } from "../../common/languageCompletionProviders.js";
-import { createLanguageWordCompletionProvider } from "../../common/languageWordCompletionProvider.js";
+import { createLanguageCompletionInvokeContext, type LanguageCompletionProviderRequest } from "../../language/common/languageCompletionProviders.js";
+import { createLanguageWordCompletionProvider } from "../../language/common/languageWordCompletionProvider.js";
 import { TextPosition } from "../../common/text.js";
 import { TextModel } from "../../common/textModel.js";
 

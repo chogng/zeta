@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { LanguageBracketMatcher } from "../../common/languageBracketMatcher.js";
-import { LanguageConfigurationRegistry } from "../../common/languageConfiguration.js";
+import { LanguageBracketMatcher } from "../../language/common/languageBracketMatcher.js";
+import { LanguageConfigurationRegistry } from "../../language/common/languageConfiguration.js";
 import { TextPosition, TextRange } from "../../common/text.js";
 import { TextModel } from "../../common/textModel.js";
 

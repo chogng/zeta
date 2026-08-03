@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createRemoveMatchingBracketsCommand } from "../../common/bracketEditing.js";
+import { createRemoveMatchingBracketsCommand } from "../../language/common/bracketEditing.js";
 import { EditorSelectionController } from "../../common/editorSelectionController.js";
-import { LanguageConfigurationRegistry } from "../../common/languageConfiguration.js";
-import { LanguageBracketMatcher } from "../../common/languageBracketMatcher.js";
+import { LanguageConfigurationRegistry } from "../../language/common/languageConfiguration.js";
+import { LanguageBracketMatcher } from "../../language/common/languageBracketMatcher.js";
 import { TextSelection, TextSelectionSet } from "../../common/selection.js";
 import { TextPosition } from "../../common/text.js";
 import { TextModel } from "../../common/textModel.js";

@@ -4,6 +4,11 @@ This directory owns Alpha's native browser projection of contracts from
 `../common/`. It may import `base/common`, `base/browser`, and `alpha/common`.
 Neither `alpha/common` nor `base` may import this layer.
 
+Language presentation is an optional consumer of this layer and lives in
+`../language/browser`. `AlphaEditorSession` composes it through
+`ILanguageFeaturesService`; the code editor widget and text model do not import
+language providers, grammars, diagnostics, or completion services.
+
 Browser-owned responsibilities include:
 
 - viewport observation and DOM virtualization;
@@ -389,8 +394,9 @@ provider lifecycles remain independent. After each mirror sync, the common Worke
 `alpha.lexical`'s shared versioned line cache before the next ordered request,
 so token and diagnostic lanes consume one incrementally computed analysis.
 The browser adapter does not own lexical state or scan policy.
-`createBrowserAlphaEditorSession` selects the TextMate analysis factory, waits
-for its grammar catalog, and schedules new analysis when the catalog changes.
+`createBrowserAlphaEditorSession` consumes the Workbench `ITextMateService`,
+waits for its grammar catalog, and schedules new analysis when the catalog
+changes.
 
 Selection and decoration projection share `createAlphaRangeRectangles`, so
 end-exclusive ranges, selected line breaks, prefix measurement, and render-line

@@ -1,10 +1,10 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
-import { EditorFoldingRangeSource } from "../../common/folding.js";
+import { EditorFoldingRangeSource } from "../../language/common/folding.js";
 import { computeEditorIndentFoldingRanges } from "../../common/indentFolding.js";
-import { registerAlphaBuiltinLanguageConfigurations } from "../../common/languageBuiltinConfigurations.js";
-import { LanguageConfigurationRegistry } from "../../common/languageConfiguration.js";
-import { computeEditorLanguageFoldingRanges, mergeEditorFoldingRanges } from "../../common/languageFolding.js";
+import { registerAlphaBuiltinLanguageConfigurations } from "../../language/common/languageBuiltinConfigurations.js";
+import { LanguageConfigurationRegistry } from "../../language/common/languageConfiguration.js";
+import { computeEditorLanguageFoldingRanges, mergeEditorFoldingRanges } from "../../language/common/languageFolding.js";
 import { TextModel } from "../../common/textModel.js";
 
 test("Language folding follows lexical braces, brackets, and block comments", () => {

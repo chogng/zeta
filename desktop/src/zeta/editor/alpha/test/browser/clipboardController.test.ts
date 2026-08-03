@@ -112,7 +112,7 @@ for (const [name, value] of Object.entries({
 const { AlphaEditorViewport } = await import("../../browser/alphaEditorViewport.js");
 const { ALPHA_EDITOR_CLIPBOARD_MIME, ALPHA_EDITOR_HTML_CLIPBOARD_MIME, AlphaClipboardLineEnding } = await import("../../browser/clipboardController.js");
 const { EditorClipboardPasteMode, EditorEmptySelectionClipboardPolicy } = await import("../../common/clipboard.js");
-const { AlphaSemanticTokenPresentation } = await import("../../browser/semanticTokenPresentation.js");
+const { AlphaSemanticTokenPresentation } = await import("../../language/browser/semanticTokenPresentation.js");
 const { AlphaTextInputController } = await import("../../browser/textInputController.js");
 
 test("Clipboard copies, distributes paste, cuts, and restores isolated history", () => {

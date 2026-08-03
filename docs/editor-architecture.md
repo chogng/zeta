@@ -18,7 +18,7 @@ Alpha 是 Zeta 从底层向上自建、并由产品默认选择的编辑器栈�
 | --- | --- | --- |
 | `editor/alpha/common` | 内核、基础 viewport 与版本语言状态已具备 | 文本坐标、事务、Piece Tree、版本快照、有界历史、压实、Unicode segment、光标导航、纯 viewport 状态、语言分析 lane/result store、completion provider registry/host/wire codec、增量 Worker 文档镜像、增量词法分析、取消、过期结果拒绝与 worker 生命周期 |
 | `editor/alpha/browser` | viewport、selection、基础文本、clipboard、桌面式 IME、四级 diagnostic、semantic token、completion widget/trigger/Worker factory 与 side-by-side diff view 已具备 | 虚拟行 DOM、viewport、增量行宽与初始换行测量、gutter、selection/caret、decoration、Error/Warning/Information/Hint underline、每行最高严重级别 diagnostic gutter marker、版本化 semantic-token 行投影、completion list/accept/invoke/trigger/incomplete refresh/module Worker、pointer selection、Alt+Shift 列选择、autoscroll、多光标、键盘导航、普通 textarea 编辑、event/Async rich clipboard 安全 HTML 读写、单个显式文本文件 clipboard paste/drop、前端本地 MIME paste provider 与 `text/uri-list`、macOS desktop composition/VoiceOver DOM contract、composition 基线与 provisional underline、`AlphaDiffEditorInput`/Pane 承载的只读虚拟化 side-by-side line diff；`EditorInput.readOnly` 在 common 提交闸门阻止文档修改；移动端不在 Alpha 桌面范围，Windows 辅助技术验收另行进行 |
-| `editor/textmate` | 部分具备 | grammar revision registry、真实 TextMate/Oniguruma runtime、增量行状态缓存、Alpha provider/module adapter、版本化 catalog/theme wire 与独立 browser Worker、JSON/JSONC 资源、caller-resolved session contribution 与声明式 scope-theme selector 已完成；extension resource discovery 尚未完成 |
+| `workbench/services/textMate` | 部分具备 | grammar revision registry、真实 TextMate/Oniguruma runtime、增量行状态缓存、Alpha provider/module adapter、版本化 catalog/theme wire 与独立 browser Worker、JSON/JSONC 资源、caller-resolved session contribution 与声明式 scope-theme selector 已完成；extension resource discovery 尚未完成 |
 | Document service | 部分具备 | `IFileService` 将 App Server `fs/changed` 映射为工作区失效事件，`ITextFileService` 转发；Alpha 模型服务提供 dirty、快照保存、显式 revert、CRLF/LF 保留、干净模型重载与脏模型外改状态；URI revision/CAS、恢复仍未完成 |
 | Selection/decorations | 基础具备 | selection、实例控制器、tracked range、decoration collection |
 | Language model | 部分具备 | 版本化请求、取消、过期拒绝、worker 重建、token/diagnostic/completion store、analysis/completion provider host、catalog/module activation/resolve/incremental multi-lane wire、增量词法分析、session/accept、semantic-token 行索引/DOM 投影、六级 lexical bracket colorization 及四级 diagnostic underline/native message tooltip 已完成；rich diagnostic、AST 与语言服务器级增量分析尚未完成 |
@@ -1037,7 +1037,7 @@ token 数组；若要进一步消除 renderer 端整数组分配，需要后续�
 | 原始资源 I/O 与粗粒度失效 | `platform/files` | ✅ App Server-backed UTF-8 read/write 与 `fs/changed` projection |
 | load/save 传输、共享文档引用与 Alpha dirty/revert/conflict policy | `workbench/services/textfile/common` / `AlphaTextModelService` | ✅ 首个 file-backed Alpha consumer 已建立；CAS、备份恢复仍未完成 |
 | 文本事务、selection、decoration、language result | `editor/alpha/common` | ✅ editor 领域所有权 |
-| TextMate grammar/runtime 与 token provider | 独立 `editor/textmate` adapter | 部分具备；runtime/provider/browser WASM、产品 JSON/JSONC 资源与 caller-resolved session contribution 已完成，extension resource discovery 仍待完成 |
+| TextMate grammar/runtime 与 token provider | 独立 `workbench/services/textMate` adapter | 部分具备；runtime/provider/browser WASM、产品 JSON/JSONC 资源与 caller-resolved session contribution 已完成，extension resource discovery 仍待完成 |
 
 因此 Current 36 不为 token delta 新造 service，也不提前创建没有保存、冲突或 grammar
 consumer 的空壳 service。Current 43 在 Analysis provider 成为真实 consumer 后才抽取
@@ -1069,7 +1069,7 @@ Analysis Worker entry 不再直接把 lexical provider 无条件注册进 provid
 首请求、批量注册回滚、确认基线转发、失败后的 Worker 重建，并继续回归 Completion
 module 协议。
 
-这条 module seam 是 `editor/textmate` adapter 的接入点。Current 37 落地时
+这条 module seam 是 `workbench/services/textMate` adapter 的接入点。Current 37 落地时
 TextMate grammar、scope 解析和 runtime 依赖尚未实现；Current 43 已在 Alpha/`base`
 之外建立该 adapter，但产品 grammar resource 接线仍未完成。同样，
 `workbench/services/textfile/common` 已由 Alpha、Monaco、ProseMirror 与 Explorer 的
@@ -1104,7 +1104,7 @@ token/diagnostic 两条 lane 共享扫描结果。配置 revision 改变时，�
 registry 独立生命周期、同版本跨语言隔离、JSON/JSONC 差异、配置变更后的 cache
 替换，以及既有 1,000 行增量扫描与随机编辑 oracle。
 
-该 registry 是原生输入的 bracket/comment command、wordPattern 与 `editor/textmate` adapter
+该 registry 是原生输入的 bracket/comment command、wordPattern 与 `workbench/services/textMate` adapter
 可共同消费的 Alpha common 基座。Current 38 落地时尚未加入 indentation、on-enter
 或 word-pattern 字段；Current 41 在 Enter command 成为真实消费者后加入前两者。
 word-pattern 现已驱动 browser pointer、键盘导航、按词删除与 occurrence；TextMate
@@ -1210,7 +1210,7 @@ revision。
 | indentation/on-enter language rules | `LanguageConfigurationRegistry` | ✅ 已有多个 input/Worker composition root |
 | 持久化 editor setting | future Workbench settings service | 尚未完成；未来只映射为实例 options |
 | TextFile resolve/save 与 invalidation；Alpha dirty/conflict | `workbench/services/textfile` / `AlphaTextModelService` | ✅，不与 Enter command 耦合；CAS/恢复仍待独立 document contract |
-| TextMate grammar/runtime | `editor/textmate` adapter | Current 43 部分具备；不得进入 Enter 或 `base` |
+| TextMate grammar/runtime | `workbench/services/textMate` adapter | Current 43 部分具备；不得进入 Enter 或 `base` |
 
 Current 41 初始 matcher 使用 model 原始行文本，尚未像 VS Code 的
 `IndentationContextProcessor` 一样移除 string/comment token 中的 bracket-looking
@@ -1267,7 +1267,7 @@ revision、销毁、跨 model/language 拒绝、Enter、auto-closing `notIn` 与
 
 TextMate grammar 已经出现真实消费者：Alpha Analysis provider/module seam 可以接收比
 baseline lexical scanner 更高保真的 token provider。因此 runtime 不进入
-`editor/alpha`，而是建立单向依赖 `editor/textmate → editor/alpha/common →
+`editor/alpha`，而是建立单向依赖 `workbench/services/textMate → editor/alpha/common →
 base/common`。`base` 不认识 grammar、scope、language ID 或 token provider；
 Alpha 也不 import `vscode-textmate`、`vscode-oniguruma` 或 WASM。
 
@@ -1307,10 +1307,10 @@ namespace/default 两种形式；该差异不泄漏给调用方。
 
 | 能力 | 所有者 | 当前状态 |
 | --- | --- | --- |
-| grammar identity、revision、injection graph | `editor/textmate/common` | ✅ |
+| grammar identity、revision、injection graph | `workbench/services/textMate/common` | ✅ |
 | TextMate runtime 与 incremental state | `TextMateTokenizationService` | ✅ |
-| Alpha provider/module integration | `editor/textmate/common` | ✅ |
-| Oniguruma WASM URL/fetch | `editor/textmate/browser` | ✅ |
+| Alpha provider/module integration | `workbench/services/textMate/common` | ✅ |
+| Oniguruma WASM URL/fetch | `workbench/services/textMate/browser` | ✅ |
 | baseline structural diagnostics | `alpha.lexical` | ✅，继续独立 |
 | grammar resource/extension manifest loading | product extension/resource layer | caller-resolved session contributions 已具备；manifest discovery 尚未完成 |
 | scope-theme selector、token type 与 modifier projection | TextMate/theme adapter | ✅；embedded language 仍未完成 |
@@ -1320,8 +1320,7 @@ namespace/default 两种形式；该差异不泄漏给调用方。
 suffix convergence、同 model version grammar revision 替换、scope validation、
 cancellation、独立生命周期，以及经过 `LanguageAnalysisService` application gate 的
 provider priority。独立 Vite entry build 证明 browser WASM adapter 可被 Worker
-打包。`createBrowserAlphaEditorSession` owns
-`BrowserTextMateAnalysisWorkerSupport` for product Alpha panes and subscribes
+打包。`createBrowserAlphaEditorSession` consumes the Workbench `ITextMateService`/`BrowserTextMateService` for product Alpha panes and subscribes
 to catalog/theme revisions before scheduling a replacement analysis request.
 This proves bundled JSON/JSONC and caller-resolved session contributions are
 active in the product path; extension manifest/resource discovery remains a
@@ -1374,7 +1373,7 @@ revision。`textMateAnalysisWorkerMain.ts` 是独立 composition root，拥有�
 | grammar catalog replacement | TextMate catalog wire/store |
 | TextMate provider/runtime | `textmate.grammars` / `TextMateTokenizationService` |
 | deterministic fallback/diagnostics | `alpha.lexical` |
-| WASM fetch/init | `editor/textmate/browser` |
+| WASM fetch/init | `workbench/services/textMate/browser` |
 
 这种组合保持依赖为 `textmate/browser → textmate/common → alpha/common → base`；
 Alpha 原有 Worker 不 import TextMate，`base` 也不增加任何 editor identity。
@@ -1401,8 +1400,8 @@ Current 45 建立了独立的 editor-domain 服务边界：
 | --- | --- | --- |
 | URI、事件、取消与生命周期原语 | `base/common` | ✅ 复用，保持领域无关 |
 | 工作区用户文件读取 | `platform/files` | ✅ 合同不变 |
-| grammar contribution、异步装载和 catalog 发布 | `TextMateGrammarService` | ✅ `editor/textmate/common` |
-| 产品内置 grammar asset import | `BrowserTextMateGrammarService` | ✅ `editor/textmate/browser` |
+| grammar contribution、异步装载和 catalog 发布 | `TextMateGrammarService` | ✅ `workbench/services/textMate/common` |
+| 产品内置 grammar asset import | `BrowserTextMateGrammarService` | ✅ `workbench/services/textMate/browser` |
 | catalog 传输和 tokenization | TextMate dedicated Worker | ✅ 继续无文件权限 |
 | extension manifest 与外部 grammar resource | future extension layer | caller-resolved session contribution ✅；manifest/resource discovery 尚未完成 |
 | TextFile resolve/save/invalidation；Alpha dirty/save/revert/conflict | `textfile` / `AlphaTextModelService` | ✅，未与 grammar service 混合；CAS/恢复仍未完成 |
@@ -1419,7 +1418,7 @@ Current 45 建立了独立的 editor-domain 服务边界：
 `common` 不 import raw asset，Worker 不访问文件系统，`base` 不识别 grammar、scope 或
 language identity。
 
-`BrowserTextMateAnalysisWorkerSupport` 把内置 grammar service 和
+`BrowserTextMateService` 把内置 grammar service 和
 `createTextMateAnalysisWorkerFactory` 组合为一个可销毁的产品接入单元。Current 45
 落地时 Workbench 尚无 Alpha `EditorPane`，因此当时未选择该 support，也未在 catalog
 revision 变化时为打开文档请求重分析；Current 46 已补齐这两个真实消费者。
@@ -1448,7 +1447,7 @@ Alpha 已从独立内核演进为真实 `IEditorPane`，但仍保持“Workbench
 | Alpha viewport、native input、基础键盘/指针与 text drop | `CodeEditorWidget` | ✅ document session 与 embedded widget 共用的浏览器编辑表面 |
 | Alpha language、folding、diagnostic、save 与文档命令组合 | `AlphaEditorSession` | ✅ per-pane integration ownership |
 | original/modified 版本 gate、diff result 与前端计算取消 | `DiffModel` / `IDiffComputationService` | ✅ common model；browser Worker 为当前实现 |
-| JSON/JSONC TextMate 与 Analysis Worker | `createBrowserAlphaEditorSession` | ✅ 产品 Alpha pane 已选择 |
+| JSON/JSONC TextMate 与 Analysis Worker | `workbench/services/textMate` (`ITextMateService`) | ✅ 产品 Alpha pane 已选择 |
 | Completion Worker | `createBrowserAlphaEditorSession` | ✅ 产品 Alpha pane 已选择 |
 | dirty、save/revert、CRLF/LF、粗粒度外改重载与冲突状态 | `AlphaTextModelService` | ✅；编码、CAS、备份恢复仍未完成 |
 
@@ -1464,7 +1463,7 @@ Alpha pane 先通过 `AlphaTextModelService.acquire` 获取引用：已有资源
 所以达到 piece-tree 回收阈值不会把 O(document length) 压缩塞进一次编辑事务；调度
 任务在模型关闭时取消，快照、history 与 `TextModel.version` 不因维护而改变。
 
-产品 Alpha session 组合 `BrowserTextMateAnalysisWorkerSupport` 与 Completion Worker。
+产品 Alpha session 组合 `BrowserTextMateService` 与 Completion Worker。
 它等待初始 grammar catalog，再发 token/diagnostic 请求；catalog revision 变化会触发
 当前文档重新分析。直接构造的 Alpha session 仍使用本地 lexical/word provider，方便
 独立嵌入和确定性测试。详细 TextFile 实现契约见

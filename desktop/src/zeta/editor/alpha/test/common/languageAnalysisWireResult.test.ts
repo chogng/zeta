@@ -1,9 +1,9 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
-import { languageAnalysisWireCodec } from "../../common/languageAnalysisWire.js";
-import { LANGUAGE_DIAGNOSTIC_LANE, LANGUAGE_TOKEN_LANE, type LanguageAnalysisLane, type LanguageAnalysisResult } from "../../common/languageAnalysisService.js";
-import { LanguageLexicalAnalysisCache } from "../../common/languageLexicalAnalysisCache.js";
-import { type LanguageWorkerWireResultState } from "../../common/languageWorkerWireProtocol.js";
+import { languageAnalysisWireCodec } from "../../language/common/languageAnalysisWire.js";
+import { LANGUAGE_DIAGNOSTIC_LANE, LANGUAGE_TOKEN_LANE, type LanguageAnalysisLane, type LanguageAnalysisResult } from "../../language/common/languageAnalysisService.js";
+import { LanguageLexicalAnalysisCache } from "../../language/common/languageLexicalAnalysisCache.js";
+import { type LanguageWorkerWireResultState } from "../../language/common/languageWorkerWireProtocol.js";
 import { TextPosition, TextRange, type TextSnapshot } from "../../common/text.js";
 import { TextModel } from "../../common/textModel.js";
 

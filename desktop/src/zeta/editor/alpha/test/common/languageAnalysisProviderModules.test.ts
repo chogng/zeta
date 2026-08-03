@@ -1,7 +1,7 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
-import { LanguageAnalysisProviderRegistry, type LanguageAnalysisProvider } from "../../common/languageAnalysisProviders.js";
-import { LanguageAnalysisProviderModuleHost, LanguageAnalysisProviderModuleRegistry, LanguageAnalysisProviderModuleState } from "../../common/languageAnalysisProviderModules.js";
+import { LanguageAnalysisProviderRegistry, type LanguageAnalysisProvider } from "../../language/common/languageAnalysisProviders.js";
+import { LanguageAnalysisProviderModuleHost, LanguageAnalysisProviderModuleRegistry, LanguageAnalysisProviderModuleState } from "../../language/common/languageAnalysisProviderModules.js";
 
 test("Analysis provider module activation installs and removes one provider batch", async () => {
   using providers = new LanguageAnalysisProviderRegistry();

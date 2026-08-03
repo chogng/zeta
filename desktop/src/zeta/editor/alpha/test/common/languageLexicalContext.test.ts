@@ -1,7 +1,7 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
-import { LanguageConfigurationRegistry } from "../../common/languageConfiguration.js";
-import { LanguageLexicalContextIndex } from "../../common/languageLexicalContext.js";
+import { LanguageConfigurationRegistry } from "../../language/common/languageConfiguration.js";
+import { LanguageLexicalContextIndex } from "../../language/common/languageLexicalContext.js";
 import { TextPosition, TextRange } from "../../common/text.js";
 import { TextModel } from "../../common/textModel.js";
 

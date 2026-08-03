@@ -1,6 +1,6 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
-import { LanguageWorkerDocumentMirror } from "../../common/languageWorkerDocumentMirror.js";
+import { LanguageWorkerDocumentMirror } from "../../language/common/languageWorkerDocumentMirror.js";
 import { TextPosition, TextRange } from "../../common/text.js";
 import { TextModel } from "../../common/textModel.js";
 

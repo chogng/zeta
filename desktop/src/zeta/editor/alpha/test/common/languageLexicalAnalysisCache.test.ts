@@ -1,6 +1,6 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
-import { LanguageLexicalAnalysisCache, type LanguageLexicalCacheUpdate } from "../../common/languageLexicalAnalysisCache.js";
+import { LanguageLexicalAnalysisCache, type LanguageLexicalCacheUpdate } from "../../language/common/languageLexicalAnalysisCache.js";
 import { TextRange } from "../../common/text.js";
 import { TextModel } from "../../common/textModel.js";
 

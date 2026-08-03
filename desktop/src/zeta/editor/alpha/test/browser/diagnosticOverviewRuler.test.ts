@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { AlphaDecorationPresentation, type AlphaResolvedDecoration } from "../../browser/decorationPresentation.js";
-import { createAlphaDiagnosticOverviewMarkers } from "../../browser/diagnosticOverviewRuler.js";
+import { createAlphaDiagnosticOverviewMarkers } from "../../language/browser/diagnosticOverviewRuler.js";
 import { TextPosition, TextRange } from "../../common/text.js";
 
 function diagnostic(startLineIndex: number, endLineIndex: number, presentation: AlphaDecorationPresentation, hoverText: string): AlphaResolvedDecoration {

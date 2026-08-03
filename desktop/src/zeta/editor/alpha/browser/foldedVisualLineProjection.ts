@@ -1,6 +1,6 @@
 import { Emitter, type Event } from "../../../base/common/event.js";
 import { DisposableOwner } from "../../../base/common/lifecycle.js";
-import { EditorFoldingModel } from "../common/folding.js";
+import { EditorFoldingModel } from "../language/common/folding.js";
 import { EditorVisualLineProjection } from "../common/visualLineProjection.js";
 import { type EditorViewportLineSource } from "../common/viewport.js";
 import { AlphaVisualLineProjection } from "./visualLineProjection.js";
