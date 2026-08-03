@@ -6,7 +6,7 @@ import { runWhenWindowIdle } from "../../../base/browser/scheduler.js";
 import { type EditorInput } from "../../../workbench/browser/parts/editor/editorInput.js";
 import { type ITextFileService } from "../../../workbench/services/textfile/common/textFileService.js";
 import { type IFileChangeEvent } from "../../../platform/files/common/files.js";
-import { normalizeTextLineEndings, TextRange } from "../common/text.js";
+import { normalizeTextLineEndings } from "../common/text.js";
 import { TextModel, type TextModelMaintenanceOptions } from "../common/textModel.js";
 
 interface AlphaTextModelEntry {
@@ -219,11 +219,7 @@ export class AlphaTextModelService implements IDisposable {
   private applyFileContent(entry: AlphaTextModelEntry, text: string): void {
     entry.savedText = normalizeTextLineEndings(text);
     entry.lineEnding = detectExternalLineEnding(text);
-    const snapshot = entry.model.createSnapshot();
-    entry.model.applyEdits([{
-      range: TextRange.from(entry.model.positionAt(0), entry.model.positionAt(snapshot.length)),
-      text,
-    }]);
+    entry.model.reset(text);
     this.refreshDirty(entry);
   }
 

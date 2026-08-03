@@ -2,10 +2,7 @@ import "./alphaChatInputEditor.css";
 import { addDisposableListener, stopEvent } from "../../../../../base/browser/dom.js";
 import { Emitter, type Event } from "../../../../../base/common/event.js";
 import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
-import { AlphaEditorViewport } from "../../../../../editor/alpha/browser/alphaEditorViewport.js";
-import { AlphaKeyboardNavigationController } from "../../../../../editor/alpha/browser/keyboardNavigationController.js";
-import { AlphaPointerSelectionController } from "../../../../../editor/alpha/browser/pointerSelectionController.js";
-import { AlphaTextInputController } from "../../../../../editor/alpha/browser/textInputController.js";
+import { CodeEditorWidget } from "../../../../../editor/alpha/browser/widget/codeEditor/codeEditorWidget.js";
 import { EditorSelectionController } from "../../../../../editor/alpha/common/editorSelectionController.js";
 import { LanguageCompletionService } from "../../../../../editor/alpha/common/languageCompletionService.js";
 import { LanguageCompletionProviderRegistry } from "../../../../../editor/alpha/common/languageCompletionProviders.js";
@@ -26,8 +23,7 @@ export class AlphaChatInputEditor extends DisposableOwner implements IChatInputE
   readonly element: HTMLDivElement;
   private readonly model = this.own(new TextModel());
   private readonly selections = this.own(new EditorSelectionController(this.model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0)))));
-  private readonly viewport: AlphaEditorViewport;
-  private readonly input: AlphaTextInputController;
+  private readonly editor: CodeEditorWidget;
   private readonly placeholder: HTMLDivElement;
   private readonly _onDidChange = this.own(new Emitter<string>());
   private readonly _onDidSubmit = this.own(new Emitter<void>());
@@ -45,27 +41,26 @@ export class AlphaChatInputEditor extends DisposableOwner implements IChatInputE
     this.own(providers.register(createAlphaChatCommandCompletionProvider(options.slashCommands)));
     const completions = this.own(new LanguageCompletionService(this.model, providers));
     const completionSession = this.own(new LanguageCompletionSessionController(completions.results, this.selections, { resolver: completions }));
-    this.viewport = this.own(new AlphaEditorViewport({
+    this.editor = this.own(new CodeEditorWidget({
       container: this.element,
       model: this.model,
       lineHeight: CHAT_INPUT_LINE_HEIGHT,
       ariaLabel: options.ariaLabel,
       selectionController: this.selections,
-      presentation: "embedded",
-    }));
-    this.input = this.own(new AlphaTextInputController(this.viewport, this.selections, {
-      ariaLabel: options.ariaLabel,
-      completion: {
-        session: completionSession,
-        requests: {
-          service: completions,
-          languageId: CHAT_INPUT_LANGUAGE_ID,
+      viewport: {
+        presentation: "embedded",
+      },
+      textInput: {
+        completion: {
+          session: completionSession,
+          requests: {
+            service: completions,
+            languageId: CHAT_INPUT_LANGUAGE_ID,
+          },
         },
       },
     }));
-    this.own(new AlphaKeyboardNavigationController(this.viewport, this.selections));
-    this.own(new AlphaPointerSelectionController(this.viewport, this.selections));
-    const completionWidget = this.input.completionWidget;
+    const completionWidget = this.editor.textInput.completionWidget;
     if (completionWidget) this.element.append(completionWidget.element);
     this.placeholder = options.container.ownerDocument.createElement("div");
     this.placeholder.className = "zeta-alpha-chat-input-placeholder";
@@ -73,11 +68,11 @@ export class AlphaChatInputEditor extends DisposableOwner implements IChatInputE
     this.placeholder.setAttribute("aria-hidden", "true");
     this.element.append(this.placeholder);
     this.own(this.model.onDidChange(() => {
-      this.placeholder.hidden = this.model.getText().length > 0;
+      this.placeholder.hidden = this.model.length > 0;
       this.syncHeight();
       this._onDidChange.fire(this.value);
     }));
-    this.own(addDisposableListener(this.input.element, "keydown", event => {
+    this.own(addDisposableListener(this.editor.textInput.element, "keydown", event => {
       if (event.defaultPrevented || event.isComposing || event.key !== "Enter" || event.shiftKey) return;
       stopEvent(event);
       this._onDidSubmit.fire();
@@ -92,18 +87,18 @@ export class AlphaChatInputEditor extends DisposableOwner implements IChatInputE
 
   set value(value: string) {
     if (this.model.getText() === value) return;
-    const range = TextRange.from(TextPosition.at(0, 0), this.model.positionAt(this.model.getText().length));
+    const range = TextRange.from(TextPosition.at(0, 0), this.model.positionAt(this.model.length));
     this.model.applyEdits([{ range, text: value }]);
-    const end = this.model.positionAt(value.length);
+    const end = this.model.positionAt(this.model.length);
     this.selections.setSelections(TextSelectionSet.single(TextSelection.collapsedAt(end)));
   }
 
   focus(): void {
-    this.input.focus();
+    this.editor.focus();
   }
 
   layout(): void {
-    this.viewport.layout({ width: Math.max(0, this.element.clientWidth), height: this.height });
+    this.editor.layout({ width: Math.max(0, this.element.clientWidth), height: this.height });
   }
 
   private syncHeight(): void {

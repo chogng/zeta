@@ -69,6 +69,8 @@ test("Alpha text model references track dirty content, save snapshots, and expli
   textFiles.setText("external\r\ncontent");
   await reference.revert(textFiles, new AbortController().signal);
   assert.equal(reference.model.getText(), "external\ncontent");
+  assert.equal(reference.model.canUndo, false);
+  assert.equal(reference.model.canRedo, false);
   assert.equal(reference.isDirty, false);
   assert.equal(dirtyChanges, 4);
 });

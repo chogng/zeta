@@ -4,7 +4,8 @@ import { type Event } from "../../../base/common/event.js";
 import { DisposableOwner, type IDisposable } from "../../../base/common/lifecycle.js";
 import { type EditorInput } from "../../../workbench/browser/parts/editor/editorInput.js";
 import { type AlphaTextModelReference } from "./alphaTextModelService.js";
-import { AlphaEditorViewport, type AlphaEditorTextDirection } from "./alphaEditorViewport.js";
+import { CodeEditorWidget } from "./widget/codeEditor/codeEditorWidget.js";
+import { type AlphaEditorTextDirection, type AlphaEditorViewport } from "./alphaEditorViewport.js";
 import { AlphaDecorationPresentation, createAlphaDecorationSource } from "./decorationPresentation.js";
 import { AlphaCursorUndoController } from "./cursorUndoController.js";
 import { AlphaDiagnosticNavigationController } from "./diagnosticNavigationController.js";
@@ -18,7 +19,6 @@ import { AlphaEditingCommandController } from "./editingCommandController.js";
 import { AlphaFoldingController } from "./foldingController.js";
 import { AlphaFindController } from "./findController.js";
 import { AlphaGotoLineController } from "./gotoLineController.js";
-import { AlphaKeyboardNavigationController } from "./keyboardNavigationController.js";
 import { AlphaLineCommentController } from "./lineCommentController.js";
 import { AlphaLineJoinController } from "./lineJoinController.js";
 import { AlphaLineOperationsController } from "./lineOperationsController.js";
@@ -26,11 +26,9 @@ import { AlphaMultiCursorController } from "./multiCursorController.js";
 import { AlphaOccurrenceSelectionController } from "./occurrenceSelectionController.js";
 import { AlphaOccurrenceHighlightController } from "./occurrenceHighlightController.js";
 import { createAlphaLanguageDiagnosticSource } from "./languageDiagnosticPresentation.js";
-import { AlphaPointerSelectionController } from "./pointerSelectionController.js";
 import { AlphaSaveController } from "./saveController.js";
 import { createAlphaSemanticTokenSource } from "./semanticTokenPresentation.js";
-import { AlphaTextInputController } from "./textInputController.js";
-import { AlphaTextDropController } from "./textDropController.js";
+import { type AlphaTextInputController } from "./textInputController.js";
 import { AlphaTransposeController } from "./transposeController.js";
 import { AlphaWordWrapController } from "./wordWrapController.js";
 import { type AlphaEditorLineWrapping } from "./visualLineProjection.js";
@@ -79,6 +77,7 @@ export interface AlphaEditorSessionOptions {
 
 /** Owns all per-pane state projected over one shared Alpha text model reference. */
 export class AlphaEditorSession extends DisposableOwner {
+  readonly codeEditor: CodeEditorWidget;
   readonly viewport: AlphaEditorViewport;
   readonly selections: EditorSelectionController;
   readonly textInput: AlphaTextInputController;
@@ -155,48 +154,58 @@ export class AlphaEditorSession extends DisposableOwner {
         },
       ));
       const semanticTokens = createAlphaSemanticTokenSource(tokenLines);
+      const ariaLabel = editorLabel(options.input);
 
-      this.viewport = this.own(new AlphaEditorViewport({
+      this.codeEditor = this.own(new CodeEditorWidget({
         container: options.container,
         model,
         lineHeight: 20,
-        ariaLabel: editorLabel(options.input),
         selectionController: this.selections,
-        foldingModel: folding,
-        decorationSources: [
-          createAlphaLanguageDiagnosticSource(diagnostics.decorations),
-          createAlphaDecorationSource(searchDecorations, () => AlphaDecorationPresentation.SearchMatch),
-          createAlphaDecorationSource(occurrenceDecorations, () => AlphaDecorationPresentation.OccurrenceHighlight),
-          createAlphaDecorationSource(bracketDecorations, () => AlphaDecorationPresentation.BracketMatch),
-        ],
-        semanticTokenSource: semanticTokens,
-        bracketColorizationSource: new AlphaBracketColorizationSource(bracketColorizations),
-        lineWrapping: options.lineWrapping,
-        textDirection: options.textDirection,
-        indentation: options.indentation,
+        ariaLabel,
+        viewport: {
+          foldingModel: folding,
+          decorationSources: [
+            createAlphaLanguageDiagnosticSource(diagnostics.decorations),
+            createAlphaDecorationSource(searchDecorations, () => AlphaDecorationPresentation.SearchMatch),
+            createAlphaDecorationSource(occurrenceDecorations, () => AlphaDecorationPresentation.OccurrenceHighlight),
+            createAlphaDecorationSource(bracketDecorations, () => AlphaDecorationPresentation.BracketMatch),
+          ],
+          semanticTokenSource: semanticTokens,
+          bracketColorizationSource: new AlphaBracketColorizationSource(bracketColorizations),
+          lineWrapping: options.lineWrapping,
+          textDirection: options.textDirection,
+          indentation: options.indentation,
+        },
+        textInput: {
+          clipboard: { semanticTokens },
+          language: {
+            languageId: this.languageId,
+            configurations,
+            lexicalContext,
+          },
+          completion: {
+            session: completionSession,
+            requests: {
+              service: completions,
+              languageId: this.languageId,
+              onRequestError: this.onLanguageError,
+            },
+          },
+          indentation: options.indentation,
+        },
+        keyboardNavigation: {
+          wordPattern: () => configurations.getLanguageConfiguration(this.languageId).wordPattern,
+        },
+        pointerSelection: {
+          wordPattern: () => configurations.getLanguageConfiguration(this.languageId).wordPattern,
+        },
       }));
+      this.viewport = this.codeEditor.viewport;
+      this.textInput = this.codeEditor.textInput;
       this.own(modelReference.onDidChangeExternalChange(() => {
         if (modelReference.hasExternalChange) {
           this.viewport.announceAccessibilityStatus("File changed on disk. Local edits are preserved.");
         }
-      }));
-      this.textInput = this.own(new AlphaTextInputController(this.viewport, this.selections, {
-        ariaLabel: editorLabel(options.input),
-        clipboard: { semanticTokens },
-        language: {
-          languageId: this.languageId,
-          configurations,
-          lexicalContext,
-        },
-        completion: {
-          session: completionSession,
-          requests: {
-            service: completions,
-            languageId: this.languageId,
-            onRequestError: this.onLanguageError,
-          },
-        },
-        indentation: options.indentation,
       }));
       if (this.onSave) this.own(new AlphaSaveController(this.textInput.element, {
         save: this.onSave,
@@ -235,13 +244,6 @@ export class AlphaEditorSession extends DisposableOwner {
       this.own(new AlphaOccurrenceHighlightController(this.selections, occurrenceDecorations, {
         wordPattern: () => configurations.getLanguageConfiguration(this.languageId).wordPattern,
       }));
-      this.own(new AlphaKeyboardNavigationController(this.viewport, this.selections, {
-        wordPattern: () => configurations.getLanguageConfiguration(this.languageId).wordPattern,
-      }));
-      this.own(new AlphaPointerSelectionController(this.viewport, this.selections, {
-        wordPattern: () => configurations.getLanguageConfiguration(this.languageId).wordPattern,
-      }));
-      this.own(new AlphaTextDropController(this.viewport, this.selections));
       this.own(model.onDidChange(() => this.scheduleAnalysis()));
       if (options.onDidChangeLanguageSupport) {
         this.own(options.onDidChangeLanguageSupport(() => this.scheduleAnalysis()));
@@ -258,14 +260,11 @@ export class AlphaEditorSession extends DisposableOwner {
   }
 
   layout(dimension: IDimension): void {
-    this.viewport.layout({
-      width: Math.max(0, dimension.width),
-      height: Math.max(0, dimension.height),
-    });
+    this.codeEditor.layout(dimension);
   }
 
   focus(): void {
-    this.textInput.focus();
+    this.codeEditor.focus();
   }
 
   getValue(): string {

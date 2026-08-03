@@ -83,6 +83,7 @@ export enum TextEditHistoryMergeMode {
 /** The operation that committed one text-model version. */
 export enum TextModelChangeReason {
   Edit = "edit",
+  Reset = "reset",
   Undo = "undo",
   Redo = "redo",
   HistoryCancellation = "historyCancellation",

@@ -378,6 +378,10 @@ export class EditorSelectionController extends DisposableOwner {
     this.breakHistoryGroup();
     this.cursorHistory.length = 0;
     this.invalidateActiveComposition();
+    if (change.reason === TextModelChangeReason.Reset) {
+      this.selectionHistory.clear();
+      this.selectionHistoryOrder.length = 0;
+    }
     const history = this.selectionHistory.get(change.transactionId);
     if (history && change.reason === TextModelChangeReason.Undo) {
       this.installSelections(

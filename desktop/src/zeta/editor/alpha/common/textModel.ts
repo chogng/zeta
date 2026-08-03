@@ -105,6 +105,11 @@ export class TextModel extends DisposableOwner {
     return this.buffer.lineCount;
   }
 
+  get length(): number {
+    this.ensureAlive();
+    return this.buffer.length;
+  }
+
   get canUndo(): boolean {
     this.ensureAlive();
     return this.history.canUndo;
@@ -147,6 +152,11 @@ export class TextModel extends DisposableOwner {
   getLineContent(lineIndex: number): string {
     this.ensureAlive();
     return this.buffer.getLineContent(lineIndex);
+  }
+
+  getLineLength(lineIndex: number): number {
+    this.ensureAlive();
+    return this.buffer.getLineLength(lineIndex);
   }
 
   offsetAt(position: TextPosition): number {
@@ -286,6 +296,23 @@ export class TextModel extends DisposableOwner {
         options.historyGroup,
       );
     }
+    this.changeEmitter.fire(result.change);
+    return result.change;
+  }
+
+  /** Clears edit history and replaces changed content as a non-undoable document reset. */
+  reset(text: string): TextModelChange | undefined {
+    this.ensureAlive();
+    if (typeof text !== "string") {
+      throw new TypeError("TextModel reset text must be a string");
+    }
+    const result = this.commitOffsetEdits([{
+      startOffset: 0,
+      endOffset: this.buffer.length,
+      text: normalizeTextLineEndings(text),
+    }], { reason: TextModelChangeReason.Reset });
+    this.history.reset();
+    if (!result) return undefined;
     this.changeEmitter.fire(result.change);
     return result.change;
   }

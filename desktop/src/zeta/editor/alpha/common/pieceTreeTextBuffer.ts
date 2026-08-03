@@ -91,6 +91,11 @@ export class PieceTreeTextBuffer {
     return this.getTextInRange(startOffset, this.lineEndOffset(lineIndex));
   }
 
+  getLineLength(lineIndex: number): number {
+    this.assertLineIndex(lineIndex);
+    return this.lineEndOffset(lineIndex) - this.lineStartOffset(lineIndex);
+  }
+
   offsetAt(lineIndex: number, columnIndex: number): number {
     this.assertLineIndex(lineIndex);
     assertSafeIndex(columnIndex, "columnIndex");

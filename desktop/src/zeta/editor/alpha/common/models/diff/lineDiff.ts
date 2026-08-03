@@ -1,33 +1,33 @@
-import { getTextGraphemeBoundaries } from "./textSegmentation.js";
+import { getTextGraphemeBoundaries } from "../../textSegmentation.js";
 
-export enum AlphaLineDiffKind {
+export enum LineDiffKind {
   Unchanged = "unchanged",
   Modified = "modified",
   Removed = "removed",
   Added = "added",
 }
 
-export interface AlphaDiffRange {
+export interface DiffRange {
   readonly startColumn: number;
   readonly endColumn: number;
 }
 
-/** One aligned visual row in a side-by-side Alpha line diff. */
-export interface AlphaLineDiffRow {
-  readonly kind: AlphaLineDiffKind;
+/** One aligned visual row in a side-by-side line diff. */
+export interface LineDiffRow {
+  readonly kind: LineDiffKind;
   readonly originalLineIndex?: number;
   readonly modifiedLineIndex?: number;
-  readonly originalChanges: readonly AlphaDiffRange[];
-  readonly modifiedChanges: readonly AlphaDiffRange[];
+  readonly originalChanges: readonly DiffRange[];
+  readonly modifiedChanges: readonly DiffRange[];
 }
 
-export interface AlphaLineDiff {
-  readonly rows: readonly AlphaLineDiffRow[];
+export interface LineDiff {
+  readonly rows: readonly LineDiffRow[];
   /** True only when the bounded exact algorithm had to retain a coarse hunk. */
   readonly approximate: boolean;
 }
 
-export interface AlphaLineDiffOptions {
+export interface LineDiffOptions {
   /** Maximum path exploration work before the model produces one conservative hunk. */
   readonly maximumComputationSteps?: number;
 }
@@ -61,13 +61,13 @@ const DEFAULT_MAXIMUM_COMPUTATION_STEPS = 2_000_000;
  * work budget, the result is conservative rather than pretending unrelated
  * lines are equal.
  */
-export function computeAlphaLineDiff(originalText: string, modifiedText: string, options: AlphaLineDiffOptions = {}): AlphaLineDiff {
+export function computeLineDiff(originalText: string, modifiedText: string, options: LineDiffOptions = {}): LineDiff {
   if (typeof originalText !== "string" || typeof modifiedText !== "string") {
-    throw new TypeError("Alpha line diff requires string inputs");
+    throw new TypeError("Line diff requires string inputs");
   }
   const maximumComputationSteps = options.maximumComputationSteps ?? DEFAULT_MAXIMUM_COMPUTATION_STEPS;
   if (!Number.isSafeInteger(maximumComputationSteps) || maximumComputationSteps <= 0) {
-    throw new RangeError("Alpha line diff computation budget must be a positive safe integer");
+    throw new RangeError("Line diff computation budget must be a positive safe integer");
   }
   const originalLines = originalText.split("\n");
   const modifiedLines = modifiedText.split("\n");
@@ -120,7 +120,7 @@ function computeEdits(originalLines: readonly string[], modifiedLines: readonly 
     trace.push(captureVector(next, offset, distance));
     vector = next;
   }
-  throw new Error("Alpha line diff did not find an edit path");
+  throw new Error("Line diff did not find an edit path");
 }
 
 function backtrack(trace: readonly DiffVectorSnapshot[], originalLines: readonly string[], modifiedLines: readonly string[]): readonly Edit[] {
@@ -182,12 +182,12 @@ function vectorValue(snapshot: DiffVectorSnapshot, diagonal: number): number {
   return value === undefined ? -1 : value;
 }
 
-function createRows(edits: readonly Edit[], originalLines: readonly string[], modifiedLines: readonly string[]): readonly AlphaLineDiffRow[] {
-  const rows: AlphaLineDiffRow[] = [];
+function createRows(edits: readonly Edit[], originalLines: readonly string[], modifiedLines: readonly string[]): readonly LineDiffRow[] {
+  const rows: LineDiffRow[] = [];
   for (let index = 0; index < edits.length;) {
     const edit = edits[index]!;
     if (edit.kind === "equal") {
-      rows.push(row(AlphaLineDiffKind.Unchanged, edit.originalLineIndex, edit.modifiedLineIndex));
+      rows.push(row(LineDiffKind.Unchanged, edit.originalLineIndex, edit.modifiedLineIndex));
       index += 1;
       continue;
     }
@@ -204,35 +204,35 @@ function createRows(edits: readonly Edit[], originalLines: readonly string[], mo
       const removed = removals[changedIndex]!;
       const added = additions[changedIndex]!;
       const ranges = inlineDiffRanges(originalLines[removed.originalLineIndex]!, modifiedLines[added.modifiedLineIndex]!);
-      rows.push(row(AlphaLineDiffKind.Modified, removed.originalLineIndex, added.modifiedLineIndex, ranges.original, ranges.modified));
+      rows.push(row(LineDiffKind.Modified, removed.originalLineIndex, added.modifiedLineIndex, ranges.original, ranges.modified));
     }
     for (let changedIndex = alignedCount; changedIndex < removals.length; changedIndex += 1) {
-      rows.push(row(AlphaLineDiffKind.Removed, removals[changedIndex]!.originalLineIndex));
+      rows.push(row(LineDiffKind.Removed, removals[changedIndex]!.originalLineIndex));
     }
     for (let changedIndex = alignedCount; changedIndex < additions.length; changedIndex += 1) {
-      rows.push(row(AlphaLineDiffKind.Added, undefined, additions[changedIndex]!.modifiedLineIndex));
+      rows.push(row(LineDiffKind.Added, undefined, additions[changedIndex]!.modifiedLineIndex));
     }
   }
   return rows;
 }
 
-function coarseDiff(originalLines: readonly string[], modifiedLines: readonly string[]): AlphaLineDiff {
-  const rows: AlphaLineDiffRow[] = [];
+function coarseDiff(originalLines: readonly string[], modifiedLines: readonly string[]): LineDiff {
+  const rows: LineDiffRow[] = [];
   const alignedCount = Math.min(originalLines.length, modifiedLines.length);
   for (let index = 0; index < alignedCount; index += 1) {
     const ranges = inlineDiffRanges(originalLines[index]!, modifiedLines[index]!);
-    rows.push(row(AlphaLineDiffKind.Modified, index, index, ranges.original, ranges.modified));
+    rows.push(row(LineDiffKind.Modified, index, index, ranges.original, ranges.modified));
   }
   for (let index = alignedCount; index < originalLines.length; index += 1) {
-    rows.push(row(AlphaLineDiffKind.Removed, index));
+    rows.push(row(LineDiffKind.Removed, index));
   }
   for (let index = alignedCount; index < modifiedLines.length; index += 1) {
-    rows.push(row(AlphaLineDiffKind.Added, undefined, index));
+    rows.push(row(LineDiffKind.Added, undefined, index));
   }
   return Object.freeze({ rows: Object.freeze(rows), approximate: true });
 }
 
-function row(kind: AlphaLineDiffKind, originalLineIndex?: number, modifiedLineIndex?: number, originalChanges: readonly AlphaDiffRange[] = [], modifiedChanges: readonly AlphaDiffRange[] = []): AlphaLineDiffRow {
+function row(kind: LineDiffKind, originalLineIndex?: number, modifiedLineIndex?: number, originalChanges: readonly DiffRange[] = [], modifiedChanges: readonly DiffRange[] = []): LineDiffRow {
   return Object.freeze({
     kind,
     ...(originalLineIndex === undefined ? {} : { originalLineIndex }),
@@ -242,7 +242,7 @@ function row(kind: AlphaLineDiffKind, originalLineIndex?: number, modifiedLineIn
   });
 }
 
-function inlineDiffRanges(original: string, modified: string): { readonly original: readonly AlphaDiffRange[]; readonly modified: readonly AlphaDiffRange[] } {
+function inlineDiffRanges(original: string, modified: string): { readonly original: readonly DiffRange[]; readonly modified: readonly DiffRange[] } {
   const originalBoundaries = getTextGraphemeBoundaries(original);
   const modifiedBoundaries = getTextGraphemeBoundaries(modified);
   let commonPrefixLength = 0;

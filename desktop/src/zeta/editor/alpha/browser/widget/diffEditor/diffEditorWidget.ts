@@ -1,58 +1,52 @@
-import "./media/alphaDiffEditor.css";
-import { addDisposableListener, reset, stopEvent } from "../../../base/browser/dom.js";
-import { getClientArea, type IDimension } from "../../../base/browser/geometry.js";
-import { getWindow } from "../../../base/browser/window.js";
-import { DisposableOwner } from "../../../base/common/lifecycle.js";
-import { AlphaLineDiffKind, computeAlphaLineDiff, type AlphaDiffRange, type AlphaLineDiff, type AlphaLineDiffOptions, type AlphaLineDiffRow } from "../common/lineDiff.js";
-import { type TextModel } from "../common/textModel.js";
+import "./diffEditorWidget.css";
+import { addDisposableListener, reset, stopEvent } from "../../../../../base/browser/dom.js";
+import { getClientArea, type IDimension } from "../../../../../base/browser/geometry.js";
+import { getWindow } from "../../../../../base/browser/window.js";
+import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
+import { DiffModel } from "../../../common/models/diff/diffModel.js";
+import { LineDiffKind, type DiffRange, type LineDiff, type LineDiffRow } from "../../../common/models/diff/lineDiff.js";
 
 const DEFAULT_LINE_HEIGHT = 20;
 const DEFAULT_OVERSCAN_ROW_COUNT = 8;
 
-export interface AlphaDiffEditorOptions {
+export interface DiffEditorWidgetOptions {
   readonly container: HTMLElement;
-  readonly original: TextModel;
-  readonly modified: TextModel;
+  readonly model: DiffModel;
   readonly lineHeight?: number;
   readonly overscanRowCount?: number;
-  readonly diff?: AlphaLineDiffOptions;
   readonly originalAriaLabel?: string;
   readonly modifiedAriaLabel?: string;
 }
 
 /**
- * Read-only, virtualized side-by-side presentation of two Alpha text models.
+ * Read-only, virtualized side-by-side presentation of one DiffModel.
  *
- * The common line-diff model owns correspondence and inline change ranges.
- * This browser component owns only scroll geometry and DOM projection; it never
- * owns either source model or its content lifecycle.
+ * The common model owns source versions, computation, correspondence, and
+ * inline change ranges. This browser component owns only scroll geometry and
+ * DOM projection; it never owns source text or diff computation.
  */
-export class AlphaDiffEditor extends DisposableOwner {
+export class DiffEditorWidget extends DisposableOwner {
   readonly element: HTMLDivElement;
   private readonly contentElement: HTMLDivElement;
   private readonly rowsElement: HTMLDivElement;
   private readonly accessibilityStatusElement: HTMLDivElement;
-  private readonly original: TextModel;
-  private readonly modified: TextModel;
+  private readonly model: DiffModel;
   private readonly lineHeight: number;
   private readonly overscanRowCount: number;
-  private readonly diffOptions: AlphaLineDiffOptions;
-  private currentDiff: AlphaLineDiff;
+  private currentDiff: LineDiff | undefined;
   private renderedStartRow = -1;
   private renderedEndRow = -1;
   private viewportHeight = 0;
   private activeChangeRow = -1;
 
-  constructor(options: AlphaDiffEditorOptions) {
+  constructor(options: DiffEditorWidgetOptions) {
     super();
     validateOptions(options);
     const ownerDocument = options.container.ownerDocument;
-    this.original = options.original;
-    this.modified = options.modified;
+    this.model = options.model;
     this.lineHeight = options.lineHeight ?? DEFAULT_LINE_HEIGHT;
     this.overscanRowCount = options.overscanRowCount ?? DEFAULT_OVERSCAN_ROW_COUNT;
-    this.diffOptions = options.diff ?? {};
-    this.currentDiff = this.computeDiff();
+    this.currentDiff = this.model.diff;
     this.element = ownerDocument.createElement("div");
     this.contentElement = ownerDocument.createElement("div");
     this.rowsElement = ownerDocument.createElement("div");
@@ -60,7 +54,7 @@ export class AlphaDiffEditor extends DisposableOwner {
     this.element.className = "zeta-alpha-diff-editor";
     this.element.tabIndex = 0;
     this.element.setAttribute("role", "region");
-    this.element.setAttribute("aria-label", `Alpha side-by-side diff editor. Original: ${options.originalAriaLabel ?? "Original"}. Modified: ${options.modifiedAriaLabel ?? "Modified"}.`);
+    this.element.setAttribute("aria-label", `Side-by-side diff editor. Original: ${options.originalAriaLabel ?? "Original"}. Modified: ${options.modifiedAriaLabel ?? "Modified"}.`);
     this.contentElement.className = "zeta-alpha-diff-editor-content";
     this.rowsElement.className = "zeta-alpha-diff-editor-rows";
     this.accessibilityStatusElement.className = "zeta-alpha-diff-editor-accessibility-status";
@@ -72,8 +66,7 @@ export class AlphaDiffEditor extends DisposableOwner {
     this.defer(() => this.element.remove());
     this.own(addDisposableListener(this.element, "scroll", () => this.project()));
     this.own(addDisposableListener(this.element, "keydown", event => this.handleKeydown(event)));
-    this.own(this.original.onDidChange(() => this.refresh()));
-    this.own(this.modified.onDidChange(() => this.refresh()));
+    this.own(this.model.onDidChange(() => this.refresh()));
     const ResizeObserverConstructor = ownerDocument.defaultView?.ResizeObserver;
     if (ResizeObserverConstructor) {
       const observer = new ResizeObserverConstructor(([entry]) => {
@@ -85,7 +78,7 @@ export class AlphaDiffEditor extends DisposableOwner {
     this.layout(getClientArea(this.element));
   }
 
-  get diff(): AlphaLineDiff {
+  get diff(): LineDiff | undefined {
     return this.currentDiff;
   }
 
@@ -96,17 +89,22 @@ export class AlphaDiffEditor extends DisposableOwner {
 
   layout(size: IDimension = getClientArea(this.element)): void {
     if (!Number.isFinite(size.width) || size.width < 0 || !Number.isFinite(size.height) || size.height < 0) {
-      throw new RangeError("Alpha diff editor layout size must be finite and non-negative");
+      throw new RangeError("Diff editor widget layout size must be finite and non-negative");
     }
     this.viewportHeight = size.height;
     this.project(true);
   }
 
-  refresh(): void {
-    this.currentDiff = this.computeDiff();
+  private refresh(): void {
+    this.currentDiff = this.model.diff;
     this.renderedStartRow = -1;
     this.renderedEndRow = -1;
     this.activeChangeRow = -1;
+    this.accessibilityStatusElement.textContent = this.model.state.kind === "loading"
+      ? "Computing differences"
+      : this.model.state.kind === "error"
+        ? `Could not compute differences: ${this.model.state.error.message}`
+        : "";
     this.project(true);
   }
 
@@ -128,21 +126,24 @@ export class AlphaDiffEditor extends DisposableOwner {
     return this.selectRelativeChange(-1);
   }
 
-  private computeDiff(): AlphaLineDiff {
-    return computeAlphaLineDiff(this.original.getText(), this.modified.getText(), this.diffOptions);
-  }
-
   private revealLine(side: "originalLineIndex" | "modifiedLineIndex", lineIndex: number): void {
     if (!Number.isSafeInteger(lineIndex) || lineIndex < 0) {
       throw new RangeError("Alpha diff line index must be a non-negative safe integer");
     }
-    const rowIndex = this.currentDiff.rows.findIndex(row => row[side] === lineIndex);
+    const diff = this.currentDiff;
+    if (!diff) throw new Error("Diff results are not ready");
+    const rowIndex = diff.rows.findIndex(row => row[side] === lineIndex);
     if (rowIndex < 0) throw new RangeError("Alpha diff line index is outside its source model");
     this.revealRow(rowIndex);
   }
 
   private selectRelativeChange(delta: -1 | 1): number | undefined {
-    const changedRows = this.currentDiff.rows.flatMap((row, index) => row.kind === AlphaLineDiffKind.Unchanged ? [] : [index]);
+    const diff = this.currentDiff;
+    if (!diff) {
+      this.accessibilityStatusElement.textContent = "Computing differences";
+      return undefined;
+    }
+    const changedRows = diff.rows.flatMap((row, index) => row.kind === LineDiffKind.Unchanged ? [] : [index]);
     if (changedRows.length === 0) {
       this.accessibilityStatusElement.textContent = "No differences";
       return undefined;
@@ -154,7 +155,7 @@ export class AlphaDiffEditor extends DisposableOwner {
     const rowIndex = changedRows[selectedIndex]!;
     this.activeChangeRow = rowIndex;
     this.revealRow(rowIndex);
-    const row = this.currentDiff.rows[rowIndex]!;
+    const row = diff.rows[rowIndex]!;
     this.accessibilityStatusElement.textContent = `Change ${selectedIndex + 1} of ${changedRows.length}, ${diffRowLocation(row)}`;
     return rowIndex;
   }
@@ -176,7 +177,7 @@ export class AlphaDiffEditor extends DisposableOwner {
   }
 
   private project(force = false): void {
-    const rows = this.currentDiff.rows;
+    const rows = this.currentDiff?.rows ?? [];
     this.contentElement.style.height = `${rows.length * this.lineHeight}px`;
     const visibleRowCount = Math.ceil(this.viewportHeight / this.lineHeight);
     const firstVisibleRow = Math.floor(this.element.scrollTop / this.lineHeight);
@@ -186,7 +187,7 @@ export class AlphaDiffEditor extends DisposableOwner {
     const fragment = this.element.ownerDocument.createDocumentFragment();
     for (let rowIndex = startRow; rowIndex < endRow; rowIndex += 1) {
       const row = rows[rowIndex]!;
-      fragment.append(createDiffRow(this.element.ownerDocument, row, this.original, this.modified, this.lineHeight, rowIndex === this.activeChangeRow));
+      fragment.append(createDiffRow(this.element.ownerDocument, row, this.model.original, this.model.modified, this.lineHeight, rowIndex === this.activeChangeRow));
     }
     this.rowsElement.style.transform = `translate3d(0, ${startRow * this.lineHeight}px, 0)`;
     reset(this.rowsElement, fragment);
@@ -195,7 +196,7 @@ export class AlphaDiffEditor extends DisposableOwner {
   }
 }
 
-function createDiffRow(ownerDocument: Document, row: AlphaLineDiffRow, original: TextModel, modified: TextModel, lineHeight: number, active: boolean): HTMLDivElement {
+function createDiffRow(ownerDocument: Document, row: LineDiffRow, original: DiffModel["original"], modified: DiffModel["modified"], lineHeight: number, active: boolean): HTMLDivElement {
   const element = ownerDocument.createElement("div");
   element.className = `zeta-alpha-diff-row ${row.kind}`;
   element.classList.toggle("active", active);
@@ -208,13 +209,13 @@ function createDiffRow(ownerDocument: Document, row: AlphaLineDiffRow, original:
   return element;
 }
 
-function diffRowLocation(row: AlphaLineDiffRow): string {
+function diffRowLocation(row: LineDiffRow): string {
   const original = row.originalLineIndex === undefined ? "no original line" : `original line ${row.originalLineIndex + 1}`;
   const modified = row.modifiedLineIndex === undefined ? "no modified line" : `modified line ${row.modifiedLineIndex + 1}`;
   return `${original}, ${modified}`;
 }
 
-function createDiffCell(ownerDocument: Document, side: "original" | "modified", kind: AlphaLineDiffKind, lineIndex: number | undefined, text: string | undefined, changes: readonly AlphaDiffRange[]): HTMLDivElement {
+function createDiffCell(ownerDocument: Document, side: "original" | "modified", kind: LineDiffKind, lineIndex: number | undefined, text: string | undefined, changes: readonly DiffRange[]): HTMLDivElement {
   const cell = ownerDocument.createElement("div");
   cell.className = `zeta-alpha-diff-cell ${side}`;
   const number = ownerDocument.createElement("span");
@@ -225,16 +226,16 @@ function createDiffCell(ownerDocument: Document, side: "original" | "modified", 
   if (text === undefined) {
     cell.classList.add("missing");
   } else {
-    projectDiffText(ownerDocument, content, text, changes, side === "original" ? AlphaLineDiffKind.Removed : AlphaLineDiffKind.Added);
-    if (kind === AlphaLineDiffKind.Modified) cell.classList.add(side === "original" ? "removed" : "added");
-    else if (kind === AlphaLineDiffKind.Removed && side === "original") cell.classList.add("removed");
-    else if (kind === AlphaLineDiffKind.Added && side === "modified") cell.classList.add("added");
+    projectDiffText(ownerDocument, content, text, changes, side === "original" ? LineDiffKind.Removed : LineDiffKind.Added);
+    if (kind === LineDiffKind.Modified) cell.classList.add(side === "original" ? "removed" : "added");
+    else if (kind === LineDiffKind.Removed && side === "original") cell.classList.add("removed");
+    else if (kind === LineDiffKind.Added && side === "modified") cell.classList.add("added");
   }
   cell.append(number, content);
   return cell;
 }
 
-function projectDiffText(ownerDocument: Document, target: HTMLElement, text: string, changes: readonly AlphaDiffRange[], changedKind: AlphaLineDiffKind): void {
+function projectDiffText(ownerDocument: Document, target: HTMLElement, text: string, changes: readonly DiffRange[], changedKind: LineDiffKind): void {
   const fragment = ownerDocument.createDocumentFragment();
   let previousEnd = 0;
   for (const change of changes) {
@@ -249,19 +250,19 @@ function projectDiffText(ownerDocument: Document, target: HTMLElement, text: str
   reset(target, fragment);
 }
 
-function validateOptions(options: AlphaDiffEditorOptions): void {
+function validateOptions(options: DiffEditorWidgetOptions): void {
   if (!options || typeof options !== "object" || !isHtmlElement(options.container)) {
-    throw new TypeError("Alpha diff editor requires a browser container");
+    throw new TypeError("Diff editor widget requires a browser container");
   }
-  if (!options.original || !options.modified || typeof options.original.getText !== "function" || typeof options.modified.getText !== "function") {
-    throw new TypeError("Alpha diff editor requires original and modified text models");
+  if (!options.model || typeof options.model !== "object") {
+    throw new TypeError("Diff editor widget requires a diff model");
   }
   const lineHeight = options.lineHeight ?? DEFAULT_LINE_HEIGHT;
   const overscanRowCount = options.overscanRowCount ?? DEFAULT_OVERSCAN_ROW_COUNT;
-  if (!Number.isFinite(lineHeight) || lineHeight <= 0) throw new RangeError("Alpha diff editor line height must be positive and finite");
-  if (!Number.isSafeInteger(overscanRowCount) || overscanRowCount < 0) throw new RangeError("Alpha diff editor overscan row count must be a non-negative safe integer");
+  if (!Number.isFinite(lineHeight) || lineHeight <= 0) throw new RangeError("Diff editor widget line height must be positive and finite");
+  if (!Number.isSafeInteger(overscanRowCount) || overscanRowCount < 0) throw new RangeError("Diff editor widget overscan row count must be a non-negative safe integer");
   const ownerWindow = getWindow(options.container);
-  if (options.container.ownerDocument.defaultView !== ownerWindow) throw new Error("Alpha diff editor container must belong to its owner window");
+  if (options.container.ownerDocument.defaultView !== ownerWindow) throw new Error("Diff editor widget container must belong to its owner window");
 }
 
 function isHtmlElement(value: unknown): value is HTMLElement {

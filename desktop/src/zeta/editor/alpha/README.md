@@ -67,7 +67,9 @@ architectural drift signal and require extraction at that point.
 | --- | --- | --- |
 | Zero-based text positions and end-exclusive ranges | ✅ | `common/text.ts` |
 | LF-normalized text and line lookup | ✅ | `TextModel` |
+| Allocation-free document and line lengths | ✅ | `TextModel.length` / `getLineLength` |
 | Atomic non-overlapping edit transactions | ✅ | `TextModel.applyEdits` |
+| Non-undoable document reset for reload/revert | ✅ | `TextModel.reset` / `TextModelChangeReason.Reset` |
 | Monotonic versions and synchronous change events | ✅ | `TextModel.commitOffsetEdits` |
 | Transaction-level undo and redo | ✅ | `TextModel.undo` / `redo` |
 | Piece-tree storage and incremental line counts | ✅ | `PieceTreeTextBuffer` |
@@ -141,12 +143,14 @@ architectural drift signal and require extraction at that point.
 | Fixed-height visual-row viewport, scrolling, and overscan | ✅ | `EditorViewportModel` / `EditorViewportLineSource` |
 | Measured grapheme-safe soft wrapping and visual-row mapping | ✅ | `AlphaVisualLineProjection` / `EditorVisualLineProjection` |
 | Bounded document minimap, GPU density projection with DOM fallback, click/drag scroll navigation | ✅ | `minimapProjection.ts` / `AlphaGpuMinimapRenderer` / `AlphaMinimapNavigationController` / `AlphaEditorViewport` |
-| Bounded line diff with grapheme-safe inline ranges and virtualized side-by-side review view | ✅ | `common/lineDiff.ts` / `browser/AlphaDiffEditor` |
+| Version-pinned, cancellable front-end diff model with grapheme-safe inline ranges | ✅ | `common/models/diff/DiffModel` / `IDiffComputationService` / `browser/diff/BrowserDiffComputationService` |
+| Virtualized side-by-side review view | ✅ | `browser/widget/diffEditor/DiffEditorWidget` |
 | Workbench original/modified diff input and pane lifecycle | ✅ | `AlphaDiffEditorInput` / `AlphaDiffEditorPane` |
 | Visible-line indentation guides | ✅ | `indentationGuides.ts` / `AlphaEditorViewport` |
 | Indentation/lexical/named-region/manual folding, visible-row projection, gutter toggle, recursive/level fold chords, collapse-all and expand-all | ✅ | `computeEditorLanguageFoldingRanges` / `LanguageConfiguration.foldingMarkers` / `EditorFoldingModel` / `AlphaFoldedVisualLineProjection` / `AlphaFoldingController` |
 | Transient Alt+Z word-wrap toggle | ✅ | `AlphaEditorViewport` / `AlphaWordWrapController` |
 | Read-only virtual line DOM projection | ✅ | `browser/AlphaEditorViewport` |
+| Canonical browser CodeEditor composition | ✅ | `browser/widget/codeEditor/CodeEditorWidget`; owns viewport, native input, keyboard/pointer navigation, and text drop while model and selections remain caller-owned |
 | Computed-font measurement and incremental line widths | ✅ | `AlphaDomTextMeasurer` / `AlphaLineWidthIndex` |
 | Virtual line-number gutter | ✅ | `browser/AlphaEditorViewport` |
 | Multi-selection and caret geometry/DOM projection | ✅ | `createAlphaSelectionGeometry` / `AlphaEditorViewport` |

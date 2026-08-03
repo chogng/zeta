@@ -1,45 +1,45 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { AlphaLineDiffKind, computeAlphaLineDiff } from "../../common/lineDiff.js";
+import { LineDiffKind, computeLineDiff } from "../../../../common/models/diff/lineDiff.js";
 
 test("Alpha line diff aligns equal, modified, removed, and added rows", () => {
-  const diff = computeAlphaLineDiff(
+  const diff = computeLineDiff(
     "same\nold value\nremoved\ntail",
     "same\nnew value\nadded\ntail",
   );
 
   assert.equal(diff.approximate, false);
   assert.deepEqual(diff.rows, [
-    row(AlphaLineDiffKind.Unchanged, 0, 0),
-    row(AlphaLineDiffKind.Modified, 1, 1, [{ startColumn: 0, endColumn: 3 }], [{ startColumn: 0, endColumn: 3 }]),
-    row(AlphaLineDiffKind.Modified, 2, 2, [{ startColumn: 0, endColumn: 5 }], [{ startColumn: 0, endColumn: 3 }]),
-    row(AlphaLineDiffKind.Unchanged, 3, 3),
+    row(LineDiffKind.Unchanged, 0, 0),
+    row(LineDiffKind.Modified, 1, 1, [{ startColumn: 0, endColumn: 3 }], [{ startColumn: 0, endColumn: 3 }]),
+    row(LineDiffKind.Modified, 2, 2, [{ startColumn: 0, endColumn: 5 }], [{ startColumn: 0, endColumn: 3 }]),
+    row(LineDiffKind.Unchanged, 3, 3),
   ]);
 });
 
 test("Alpha line diff preserves moved insertions and deletions as aligned gaps", () => {
-  const diff = computeAlphaLineDiff("one\nthree", "one\ntwo\nthree");
+  const diff = computeLineDiff("one\nthree", "one\ntwo\nthree");
   assert.deepEqual(diff.rows, [
-    row(AlphaLineDiffKind.Unchanged, 0, 0),
-    row(AlphaLineDiffKind.Added, undefined, 1),
-    row(AlphaLineDiffKind.Unchanged, 1, 2),
+    row(LineDiffKind.Unchanged, 0, 0),
+    row(LineDiffKind.Added, undefined, 1),
+    row(LineDiffKind.Unchanged, 1, 2),
   ]);
 });
 
 test("Alpha line diff marks surrogate-pair changes without splitting a grapheme", () => {
-  const diff = computeAlphaLineDiff("before 🙂 after", "before 🙃 after");
+  const diff = computeLineDiff("before 🙂 after", "before 🙃 after");
   assert.deepEqual(diff.rows, [
-    row(AlphaLineDiffKind.Modified, 0, 0, [{ startColumn: 7, endColumn: 9 }], [{ startColumn: 7, endColumn: 9 }]),
+    row(LineDiffKind.Modified, 0, 0, [{ startColumn: 7, endColumn: 9 }], [{ startColumn: 7, endColumn: 9 }]),
   ]);
 });
 
 test("Alpha line diff uses a conservative bounded fallback", () => {
-  const diff = computeAlphaLineDiff("a\nb\nc", "x\ny\nz", { maximumComputationSteps: 1 });
+  const diff = computeLineDiff("a\nb\nc", "x\ny\nz", { maximumComputationSteps: 1 });
   assert.equal(diff.approximate, true);
   assert.deepEqual(diff.rows.map(row => row.kind), [
-    AlphaLineDiffKind.Modified,
-    AlphaLineDiffKind.Modified,
-    AlphaLineDiffKind.Modified,
+    LineDiffKind.Modified,
+    LineDiffKind.Modified,
+    LineDiffKind.Modified,
   ]);
 });
 
@@ -48,18 +48,18 @@ test("Alpha line diff preserves every source line and never marks unequal lines 
   for (let iteration = 0; iteration < 500; iteration += 1) {
     const originalLines = randomLines(random);
     const modifiedLines = randomLines(random);
-    const diff = computeAlphaLineDiff(originalLines.join("\n"), modifiedLines.join("\n"), { maximumComputationSteps: 100_000 });
+    const diff = computeLineDiff(originalLines.join("\n"), modifiedLines.join("\n"), { maximumComputationSteps: 100_000 });
     assert.equal(diff.approximate, false, `unexpected bounded fallback at ${iteration}`);
     assert.deepEqual(diff.rows.flatMap(row => row.originalLineIndex === undefined ? [] : [row.originalLineIndex]), Array.from({ length: originalLines.length }, (_, index) => index));
     assert.deepEqual(diff.rows.flatMap(row => row.modifiedLineIndex === undefined ? [] : [row.modifiedLineIndex]), Array.from({ length: modifiedLines.length }, (_, index) => index));
     for (const row of diff.rows) {
-      if (row.kind !== AlphaLineDiffKind.Unchanged) continue;
+      if (row.kind !== LineDiffKind.Unchanged) continue;
       assert.equal(originalLines[row.originalLineIndex!], modifiedLines[row.modifiedLineIndex!], `unequal lines were marked unchanged at ${iteration}`);
     }
   }
 });
 
-function row(kind: AlphaLineDiffKind, originalLineIndex?: number, modifiedLineIndex?: number, originalChanges: readonly unknown[] = [], modifiedChanges: readonly unknown[] = []) {
+function row(kind: LineDiffKind, originalLineIndex?: number, modifiedLineIndex?: number, originalChanges: readonly unknown[] = [], modifiedChanges: readonly unknown[] = []) {
   return {
     kind,
     ...(originalLineIndex === undefined ? {} : { originalLineIndex }),

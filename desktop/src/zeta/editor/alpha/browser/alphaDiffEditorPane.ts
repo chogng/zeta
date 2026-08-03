@@ -8,7 +8,9 @@ import { EditorPaneVisibility } from "../../../workbench/browser/parts/editor/ed
 import { type EditorInput } from "../../../workbench/browser/parts/editor/editorInput.js";
 import { type ITextFileService } from "../../../workbench/services/textfile/common/textFileService.js";
 import { isAlphaDiffEditorInput, ALPHA_DIFF_EDITOR_ID } from "../common/alphaDiffEditorInput.js";
-import { AlphaDiffEditor } from "./alphaDiffEditor.js";
+import { DiffModel } from "../common/models/diff/diffModel.js";
+import { BrowserDiffComputationService } from "./diff/browserDiffComputationService.js";
+import { DiffEditorWidget } from "./widget/diffEditor/diffEditorWidget.js";
 import { AlphaTextModels, type AlphaTextModelReference, type AlphaTextModelService } from "./alphaTextModelService.js";
 
 export interface AlphaDiffEditorPaneOptions {
@@ -97,16 +99,21 @@ export class AlphaDiffEditorPane extends DisposableOwner implements IEditorPane 
 }
 
 class AlphaDiffEditorPaneSession extends DisposableOwner {
-  readonly editor: AlphaDiffEditor;
+  readonly editor: DiffEditorWidget;
 
   constructor(container: HTMLElement, original: AlphaTextModelReference, modified: AlphaTextModelReference, originalLabel: string | undefined, modifiedLabel: string | undefined) {
     super();
     this.own(original);
     this.own(modified);
-    this.editor = this.own(new AlphaDiffEditor({
-      container,
+    const computationService = this.own(new BrowserDiffComputationService());
+    const model = this.own(new DiffModel({
       original: original.model,
       modified: modified.model,
+      computationService,
+    }));
+    this.editor = this.own(new DiffEditorWidget({
+      container,
+      model,
       originalAriaLabel: originalLabel,
       modifiedAriaLabel: modifiedLabel,
     }));

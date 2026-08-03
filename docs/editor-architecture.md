@@ -1445,7 +1445,9 @@ Alpha 已从独立内核演进为真实 `IEditorPane`，但仍保持“Workbench
 | 工作区原始文件读取 | `platform/files` | ✅ |
 | file/bootstrap 内容决策 | `ITextFileService` | ✅ Workbench service |
 | URI 到 Alpha `TextModel` 的共享引用 | `AlphaTextModelService` | ✅ editor-owned |
-| Alpha DOM、selection、input 与 language session | `AlphaEditorSession` | ✅ per-pane ownership |
+| Alpha viewport、native input、基础键盘/指针与 text drop | `CodeEditorWidget` | ✅ document session 与 embedded widget 共用的浏览器编辑表面 |
+| Alpha language、folding、diagnostic、save 与文档命令组合 | `AlphaEditorSession` | ✅ per-pane integration ownership |
+| original/modified 版本 gate、diff result 与前端计算取消 | `DiffModel` / `IDiffComputationService` | ✅ common model；browser Worker 为当前实现 |
 | JSON/JSONC TextMate 与 Analysis Worker | `createBrowserAlphaEditorSession` | ✅ 产品 Alpha pane 已选择 |
 | Completion Worker | `createBrowserAlphaEditorSession` | ✅ 产品 Alpha pane 已选择 |
 | dirty、save/revert、CRLF/LF、粗粒度外改重载与冲突状态 | `AlphaTextModelService` | ✅；编码、CAS、备份恢复仍未完成 |

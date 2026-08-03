@@ -137,11 +137,15 @@ export class TextModelHistory {
     this.clear(this.redoStack);
   }
 
-  dispose(): void {
+  reset(): void {
     this.undoStack.length = 0;
     this.redoStack.length = 0;
     this.historyTextUnits = 0;
     this.protectedGroup = undefined;
+  }
+
+  dispose(): void {
+    this.reset();
   }
 
   private push(

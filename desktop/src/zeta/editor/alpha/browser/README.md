@@ -38,6 +38,14 @@ must not import them or expose their types through Zeta contracts.
 
 ## Current implementation
 
+`CodeEditorWidget` is the canonical browser editing surface consumed by document sessions and
+embedded widgets. It owns one `AlphaEditorViewport`, one `AlphaTextInputController`, keyboard and
+pointer navigation, and text-drop adaptation. Its caller retains the shared `TextModel` and the
+editor-local `EditorSelectionController`, so disposing a widget never disposes document state and
+multiple editors may safely project the same model. `AlphaEditorSession` adds language, folding,
+diagnostic, save, and command controllers around this surface; product widgets must consume the
+CodeEditorWidget rather than assembling viewport and native-input internals themselves.
+
 `AlphaEditorViewport` is the first native browser projection. It consumes
 `EditorViewportModel`, creates one component-owned scroll surface, and renders
 only the overscanned line range. Overlapping lines retain their DOM identity
@@ -45,17 +53,20 @@ while scrolling. A new model version updates visible row text synchronously,
 and a shrinking document clamps both the common viewport state and native DOM
 scroll coordinates.
 
-`AlphaDiffEditor` is a separate read-only review projection rather than two
-independently scrolling editor instances. `common/lineDiff.ts` owns its bounded
-Myers line correspondence and grapheme-safe inline change ranges; this browser
-layer owns one virtualized scroll surface and side-by-side DOM rows. Original
-and modified `TextModel` values remain caller-owned. Source edits recompute the
-diff, and an exceeded work budget is exposed as an explicit conservative
-approximation instead of incorrectly marking unmatched lines equal. Editing,
-selection history, syntax analysis, and model persistence stay with ordinary
-Alpha editor sessions. `nextChange`/`previousChange` and F7/Shift+F7 wrap over
-changed rows, add the component-owned `.active` state, and announce the
-original/modified location through the diff view's live region.
+`DiffEditorWidget` is a separate read-only review projection rather than two
+independently scrolling editor instances. Its caller owns a `DiffModel`, which
+observes caller-owned original and modified `TextModel` values and accepts only
+results pinned to their current versions. `BrowserDiffComputationService` runs
+the bounded Myers computation and grapheme-safe inline ranges in a dedicated
+module Worker; cancelling a stale request terminates that worker, and its next
+source version receives a fresh one. The widget owns one virtualized scroll
+surface and side-by-side DOM rows, but owns neither text nor computation.
+An exceeded work budget remains an explicit conservative approximation instead
+of incorrectly marking unmatched lines equal. Editing, selection history,
+syntax analysis, and model persistence stay with ordinary Alpha editor
+sessions. `nextChange`/`previousChange` and F7/Shift+F7 wrap over changed rows,
+add the component-owned `.active` state, and announce the original/modified
+location through the diff view's live region.
 `AlphaDiffEditorInput` gives the Workbench one synthetic tab resource while
 retaining two ordinary caller-owned text-resource inputs. `AlphaDiffEditorPane`
 acquires and releases both `AlphaTextModelReference` values, then hosts this

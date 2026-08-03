@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { TextRange } from "../../common/text.js";
-import { TextModel } from "../../common/textModel.js";
+import { TextRange } from "../../../common/text.js";
+import { TextModel } from "../../../common/textModel.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
@@ -16,14 +16,19 @@ for (const [name, value] of Object.entries({
   Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { AlphaDiffEditor } = await import("../../browser/alphaDiffEditor.js");
+const { DiffEditorWidget } = await import("../../../browser/widget/diffEditor/diffEditorWidget.js");
+const { DiffModel } = await import("../../../common/models/diff/diffModel.js");
+const { InlineDiffComputationService } = await import("../../../common/models/diff/inlineDiffComputationService.js");
 
-test("AlphaDiffEditor presents side-by-side changed lines and inline ranges", () => {
+test("DiffEditorWidget presents side-by-side changed lines and inline ranges", async () => {
   const dom = new JSDOM("<!doctype html><body><main></main></body>");
   const container = requiredElement<HTMLElement>(dom.window.document, "main");
   using original = new TextModel("same\nold value\nremoved\ntail");
   using modified = new TextModel("same\nnew value\nadded\ntail");
-  using editor = new AlphaDiffEditor({ container, original, modified, lineHeight: 20 });
+  using computationService = new InlineDiffComputationService();
+  using model = new DiffModel({ original, modified, computationService });
+  await waitForReady(model);
+  using editor = new DiffEditorWidget({ container, model, lineHeight: 20 });
   editor.layout({ width: 400, height: 80 });
 
   const rows = [...editor.element.querySelectorAll<HTMLElement>(".zeta-alpha-diff-row")];
@@ -34,7 +39,7 @@ test("AlphaDiffEditor presents side-by-side changed lines and inline ranges", ()
   assert.equal(rows[1]?.querySelector(".zeta-alpha-diff-cell.modified")?.textContent, "2new value");
   assert.equal(rows[1]?.querySelectorAll(".zeta-alpha-diff-inline.removed").length, 1);
   assert.equal(rows[1]?.querySelectorAll(".zeta-alpha-diff-inline.added").length, 1);
-  assert.equal(editor.diff.approximate, false);
+  assert.equal(editor.diff?.approximate, false);
   assert.equal(editor.nextChange(), 1);
   assert.equal(editor.currentChangeRow, 1);
   assert.equal(editor.element.querySelector(".zeta-alpha-diff-row.active")?.classList.contains("modified"), true);
@@ -47,12 +52,15 @@ test("AlphaDiffEditor presents side-by-side changed lines and inline ranges", ()
   dom.window.close();
 });
 
-test("AlphaDiffEditor refreshes on either source model and virtualizes diff rows", () => {
+test("DiffEditorWidget refreshes on either source model and virtualizes diff rows", async () => {
   const dom = new JSDOM("<!doctype html><body><main></main></body>");
   const container = requiredElement<HTMLElement>(dom.window.document, "main");
   using original = new TextModel(lines("old", 100));
   using modified = new TextModel(lines("new", 100));
-  using editor = new AlphaDiffEditor({ container, original, modified, lineHeight: 20, overscanRowCount: 1 });
+  using computationService = new InlineDiffComputationService();
+  using model = new DiffModel({ original, modified, computationService });
+  await waitForReady(model);
+  using editor = new DiffEditorWidget({ container, model, lineHeight: 20, overscanRowCount: 1 });
   editor.layout({ width: 400, height: 40 });
 
   assert.equal(editor.element.querySelectorAll(".zeta-alpha-diff-row").length, 3);
@@ -65,7 +73,8 @@ test("AlphaDiffEditor refreshes on either source model and virtualizes diff rows
     range: TextRange.from(modified.positionAt(0), modified.positionAt(modified.getText().length)),
     text: "same",
   }]);
-  assert.equal(editor.diff.rows.length, 100);
+  await waitForReady(model);
+  assert.equal(editor.diff?.rows.length, 100);
   editor.element.scrollTop = 0;
   editor.element.dispatchEvent(new dom.window.Event("scroll"));
   assert.equal(editor.element.querySelector(".zeta-alpha-diff-row")?.classList.contains("modified"), true);
@@ -80,4 +89,16 @@ function requiredElement<T extends Element>(ownerDocument: Document, selector: s
   const element = ownerDocument.querySelector<T>(selector);
   if (!element) throw new Error(`Missing ${selector}`);
   return element;
+}
+
+function waitForReady(model: InstanceType<typeof DiffModel>): Promise<void> {
+  if (model.state.kind === "ready") return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const listener = model.onDidChange(state => {
+      if (state.kind === "loading") return;
+      listener.dispose();
+      if (state.kind === "error") reject(state.error);
+      else resolve();
+    });
+  });
 }

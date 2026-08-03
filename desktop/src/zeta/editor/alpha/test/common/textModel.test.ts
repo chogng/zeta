@@ -34,6 +34,43 @@ test("TextModel normalizes line endings and maps UTF-16 positions", () => {
   });
 });
 
+test("TextModel exposes allocation-free document and line lengths", () => {
+  using model = new TextModel("alpha\n😀");
+
+  assert.equal(model.length, 8);
+  assert.equal(model.getLineLength(0), 5);
+  assert.equal(model.getLineLength(1), 2);
+  assert.throws(() => model.getLineLength(2), /lineIndex/);
+});
+
+test("TextModel reset replaces content and clears undo and redo history", () => {
+  using model = new TextModel("initial");
+  const snapshot = model.createSnapshot();
+  const events: unknown[] = [];
+  using listener = model.onDidChange(change => events.push(change));
+  model.applyEdits([{ range: range(0, 0, 0, 7), text: "edited" }]);
+  model.undo();
+
+  const reset = model.reset("next\r\nline");
+
+  assert.ok(reset);
+  assert.equal(model.getText(), "next\nline");
+  assert.equal(model.length, 9);
+  assert.equal(model.canUndo, false);
+  assert.equal(model.canRedo, false);
+  assert.equal(model.undo(), undefined);
+  assert.equal(model.redo(), undefined);
+  assert.equal(snapshot.getText(), "initial");
+  assert.equal(reset.reason, TextModelChangeReason.Reset);
+  assert.equal(reset.changes.length, 1);
+  assert.equal(events.length, 3);
+
+  const sameTextReset = model.reset("next\nline");
+  assert.equal(sameTextReset, undefined);
+  assert.equal(model.version, reset.version);
+  assert.equal(events.length, 3);
+});
+
 test("TextModel applies unordered edits against one atomic snapshot", () => {
   using model = new TextModel("alpha\nbeta\ngamma");
   const events: unknown[] = [];
