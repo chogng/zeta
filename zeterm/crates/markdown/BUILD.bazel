@@ -1,7 +1,0 @@
-load("//zeterm:defs.bzl", "zeterm_rust_library")
-
-zeterm_rust_library(
-    name = "markdown",
-    crate_name = "zeta_markdown",
-    package_name = "zeterm/crates/markdown",
-)

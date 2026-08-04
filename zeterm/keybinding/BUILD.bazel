@@ -1,0 +1,7 @@
+load("//zeterm:defs.bzl", "zeterm_rust_library")
+
+zeterm_rust_library(
+    name = "keybinding",
+    crate_name = "zeta_keybinding",
+    package_name = "zeterm/keybinding",
+)

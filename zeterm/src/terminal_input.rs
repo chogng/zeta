@@ -60,7 +60,7 @@ impl NativeApp {
                 ComposerMode::Shell => "shell",
             },
         });
-        match self.keybindings.resolve(&event, self.modifiers, context) {
+        match self.keybindings.resolve(&event, self.modifiers, &context) {
             NativeKeybindingResolution::Command(command) => {
                 self.execute_native_command(command);
                 self.sync_input_focus();

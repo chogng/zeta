@@ -71,9 +71,9 @@ Rust consumes the same source artwork through:
 ```text
 resources/icons/*.svg
   -> scripts/sync-rust-icons.mjs
-  -> zeterm/crates/icons/src/generated.rs
+  -> zeterm/icons/src/generated.rs
   -> private artwork bindings
-  -> zeterm/crates/icons/src/library.rs
+  -> zeterm/icons/src/library.rs
   -> stable zeta-icons semantic library
   -> zeta-ui renderer and components
 ```
@@ -83,6 +83,6 @@ icon; `node scripts/sync-rust-icons.mjs --check` verifies that the checked-in
 output is current. The generated Rust source is checked in so Cargo and Bazel
 builds remain hermetic. Generated artwork is crate-private: resource filenames
 do not automatically become public icon IDs. Add or change public semantics in
-`zeterm/crates/icons/src/library.rs`. `zeta-icons` classifies fixed non-symbolic colors
+`zeterm/icons/src/library.rs`. `zeta-icons` classifies fixed non-symbolic colors
 as multicolor; `zeta-ui` preserves those colors in an sRGB atlas while routing
 black symbolic coverage through the caller-tinted mask atlas.

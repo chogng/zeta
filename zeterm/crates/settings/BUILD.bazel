@@ -1,7 +1,0 @@
-load("//zeterm:defs.bzl", "zeterm_rust_library")
-
-zeterm_rust_library(
-    name = "settings",
-    crate_name = "zeta_settings",
-    package_name = "zeterm/crates/settings",
-)

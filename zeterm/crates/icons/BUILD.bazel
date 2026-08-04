@@ -1,8 +1,0 @@
-load("//zeterm:defs.bzl", "zeterm_rust_library")
-
-zeterm_rust_library(
-    name = "icons",
-    crate_name = "zeta_icons",
-    package_name = "zeterm/crates/icons",
-    data = ["//resources/icons:product-icons"],
-)

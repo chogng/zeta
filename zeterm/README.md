@@ -1,15 +1,15 @@
 # `zeterm`
 
 > Native 文本输入的跨 crate canonical ownership 见
-> [`docs/native-text-input.md`](../docs/native-text-input.md)；Agent-first 产品结构见
-> [`docs/native-agent-console.md`](../docs/native-agent-console.md)。Terminal compatibility
-> 细节见 [`docs/native-terminal-ui.md`](../docs/native-terminal-ui.md)；本 README 只拥有 native
+> [`docs/native-text-input.md`](docs/native-text-input.md)；Agent-first 产品结构见
+> [`docs/native-agent-console.md`](docs/native-agent-console.md)。Terminal compatibility
+> 细节见 [`docs/native-terminal-ui.md`](docs/native-terminal-ui.md)；本 README 只拥有 native
 > host 当前源码路径和接入义务。Terminal grid 与 BlockList 的实现契约见
 > [`zeta-terminal` README](../zeta-rs/terminal/README.md)；CodeEditor/DiffEditor presentation 契约见
-> [`zeta-editor` README](crates/editor/README.md)；文件保存基线与冲突状态契约见
+> [`zeta-editor` README](editor/README.md)；文件保存基线与冲突状态契约见
 > [`zeta-text-file` README](../zeta-rs/text-file/README.md)。
 > UI 到 GPU 的 canonical 边界见
-> [`docs/rendering-architecture.md`](../docs/rendering-architecture.md)。
+> [`docs/rendering-architecture.md`](docs/rendering-architecture.md)。
 
 `zeterm` 是与 `zeta` Electron Desktop 和 `zeta code` TUI 同级的纯 Rust Desktop 产品入口，
 在发布边界导出为 `zeterm`。三条产品线的宿主边界见
@@ -48,14 +48,14 @@ bazel test //zeterm:zeterm_ci
 调用 `scripts/release_zeterm_package.sh`；该入口完成签名和验签后才留下 `verified` artifact。
 
 package staging 只生成 unsigned artifact 和 binary digest；签名、平台验证与发布顺序见
-[`zeterm` release graph](../docs/zeterm-release-graph.md)。
+[`zeterm` release graph](docs/zeterm-release-graph.md)。
 
 ## 宿主边界与 frame ownership
 
 `zeterm` 是产品宿主，不是第二个 UI framework。它保留窗口、平台事件、产品状态映射、App Server
 适配、command 执行以及具体 Shell/Composer/Inspector Part 的组合；通用 layout、scene、inspection、
 interaction、animation、deadline 和 retained lifecycle 由 `zui` canonical owner 提供。跨 crate 的
-阶段、弃用范围和删除条件见 [`docs/zeterm-app-migration-plan.md`](../docs/zeterm-app-migration-plan.md)。
+阶段、弃用范围和删除条件见 [`docs/zeterm-app-migration-plan.md`](docs/zeterm-app-migration-plan.md)。
 
 | 边界 | Native 当前状态 | 维护规则 |
 | --- | --- | --- |
@@ -86,12 +86,12 @@ composition API 已删除，后续不得在 Native 宿主重新引入平行输�
 | Terminal Pane Tree、Session binding 与 active Pane | 后续 native Terminal Workspace model | 尚未完成 |
 | Sessions preferred width、显隐与当前 drag snapshot | `session_sidebar::SessionSidebarState` | ✅ |
 | Agent Sidebar 显隐、preferred width 与 resize gesture | `agent_sidebar::AgentSidebarState` / `zeta-ui::Sash` | ✅；宽度限制为 240–560px，不拥有内部 Pane 内容 |
-| Agent Sidebar 导航与各功能 Pane 的布局 | [`zeta-agent-sidebar`](crates/agent-sidebar/README.md) 的 `AgentSidebarNavigation` / `files::FilesLayout` / `scm::ScmLayout` | 委托；zeterm 只提供主题投影、workspace 快照与 shell slot |
-| Files 层级树与模糊搜索 | [`zeta-agent-sidebar`](crates/agent-sidebar/README.md) 的 `files::FilesState` / `files::FilesPane` / `zeta-ui::TreeView` / `ListView` / `zeta-file-search` | ✅；目录懒加载、稳定 mounted-node ID、展开/收起和 24px 虚拟行已接入；zeterm 只适配 App Server 目录 DTO 并执行打开/加载动作 |
+| Agent Sidebar 导航与各功能 Pane 的布局 | [`zeta-agent-sidebar`](agent-sidebar/README.md) 的 `AgentSidebarNavigation` / `files::FilesLayout` / `scm::ScmLayout` | 委托；zeterm 只提供主题投影、workspace 快照与 shell slot |
+| Files 层级树与模糊搜索 | [`zeta-agent-sidebar`](agent-sidebar/README.md) 的 `files::FilesState` / `files::FilesPane` / `zeta-ui::TreeView` / `ListView` / `zeta-file-search` | ✅；目录懒加载、稳定 mounted-node ID、展开/收起和 24px 虚拟行已接入；zeterm 只适配 App Server 目录 DTO 并执行打开/加载动作 |
 | UTF-8 文件保存 baseline、磁盘版本与外部变化冲突 | `zeta-text-file::TextFileLifecycle` | 委托；Native 只提供当前 editor text 与 I/O adapter |
 | 语言服务 composition、持久化设置、文档/请求 freshness 与 presentation | `language_service_host::NativeLanguageService` / `language_server_settings_model::LanguageServerSettingsState` / `file_editor_language_features` / `zeta-language-service` | ✅；Rust/JSON/Shell 独立设置与 runtime state，diagnostics，latest-only pointer hover，Ctrl/Cmd+Space completion popup/安全 edit 接受和 F12 definition navigation 已接入；文件读取仍通过 App Server authority |
 | 文件 Tab、active document、关闭决策与 presentation | `file_editor_host::FileEditorHost` / `file_editor_pane::FileEditorPane` / `file_editor_input::FileEditorInputState` | ✅；Explorer activation 已通过 typed `fs/readFile`/metadata 打开 language-aware document，Cmd/Ctrl+S 使用版本 preflight 和 `fs/writeFile`，中心 Editor Surface 已接通 tabs、关闭确认、外部重载/显式乐观覆盖、find/replace、自动缩进、soft wrap、focus、keyboard、IME、pointer、clipboard 与 visual-row viewport |
-| Changed-file collection、整体滚动与每文件 diff 视口 | [`zeta-agent-sidebar`](crates/agent-sidebar/README.md) 的 `ScmState` / `EditorPaneState` / `zeta-ui::ScrollState` | 委托；zeterm 只把 Git 投影映射为 `ScmDiff` 并执行刷新动作 |
+| Changed-file collection、整体滚动与每文件 diff 视口 | [`zeta-agent-sidebar`](agent-sidebar/README.md) 的 `ScmState` / `EditorPaneState` / `zeta-ui::ScrollState` | 委托；zeterm 只把 Git 投影映射为 `ScmDiff` 并执行刷新动作 |
 | Titlebar 背景、窗口拖拽区、语言服务器设置入口与左右侧栏开关 | `titlebar::Titlebar` | ✅；不绘制可见窗口标题 |
 | Top Bar 左右 sidebar toggle `ActionBar` | `titlebar::Titlebar` | ✅ |
 | 原生窗口控件占位 | `zeta-winit::WindowControlInsets` | 委托；Titlebar 只增加自身内容间距 |
@@ -110,9 +110,9 @@ composition API 已删除，后续不得在 Native 宿主重新引入平行输�
 | 稳定控件身份与 shell action 映射 | `shell_interaction` | ✅ |
 | 稳定 product command identity 与唯一执行入口 | `commands::NativeCommand` / `NativeApp::execute_native_command` | ✅；pointer、menu 与 shortcut 汇合到同一 executor |
 | 平台按键转换、Chord 生命周期与当前 context | `keybindings::NativeKeybindings` | ✅；1.5 秒超时，失焦或 IME 事件取消 |
-| 用户快捷键资源、验证与热更新 | `keybindings_resource::KeybindingsResource` | ✅；读取 `<ZETA_PROFILE_ROOT>/keybindings.json`，坏更新保留上一份有效规则 |
-| 快捷键模型、设置、录制与 Chord 提示 | [`zeta-keybinding`](crates/keybinding/README.md) | 委托；zeterm 提供命令行、事件 adapter 与保存接线 |
-| 平台无关快捷键模型、规则顺序与冲突解析 | [`zeta-keybinding`](crates/keybinding/README.md) | 委托 |
+| 用户快捷键资源、验证与热更新 | `zeta-keybindings-host::KeybindingsResource` | ✅；读取 `<ZETA_PROFILE_ROOT>/keybindings.json`，坏更新保留上一份有效规则 |
+| 快捷键模型、设置、录制与 Chord 提示 | [`zeta-keybinding`](keybinding/README.md) | 委托；zeterm 提供命令行、事件 adapter 与保存接线 |
+| 平台无关快捷键模型、规则顺序与冲突解析 | [`zeta-keybinding`](keybinding/README.md) | 委托 |
 | 命中、hover/press/capture、focus、键盘导航、cursor 与 accessibility semantics | `zui` | 委托 |
 | accessibility semantics → 平台屏幕阅读器 | 尚无 native adapter | 尚未完成 |
 | Transparent native chrome 与窗口拖动 adapter | `zeta-winit` | 委托 |
@@ -190,7 +190,7 @@ authority。下表把仍保留的历史 shell vocabulary 映射到当前产品�
 | multi-session projection / switching | 当前只有一个真实 Session Tab | 多会话入口 | 尚未完成 |
 
 CodeEditor/DiffEditor/MultiDiffEditor 的实现 ownership、`DiffSideRows` 投影、显示列 contract、
-测试和当前限制由 [`zeta-editor` README](crates/editor/README.md) 维护。zeterm 负责 changed-file
+测试和当前限制由 [`zeta-editor` README](editor/README.md) 维护。zeterm 负责 changed-file
 collection、文件 identity、整体滚动位置和每文件 `DiffEditorState`；MultiDiffEditor 只借用这些
 快照完成多文件组合。Native 不能复制代码行或 diff decoration 绘制。当前 Git binding 跳过
 binary、非 UTF-8 与单侧超过 2 MiB 的文件；index-only 对比仍是后续接线。
@@ -499,7 +499,7 @@ Sessions 搜索区域当前真实链路
 是 `SessionSidebar → SessionSidebarToolbar → SearchBox → InputBox`；不存在单独的 Header 组件。
 
 `zui` 的 crate-level 实现契约见
-[`zui/README.md`](crates/zui/README.md)。后续 file tree、tabs、chat 和 editor
+[`zui/README.md`](zui/README.md)。后续 file tree、tabs、chat 和 editor
 首次接入时，应由各自 presentation owner 分配稳定
 `ElementId`、注册父子节点、role/label/bounds、focus policy 与 activation intent。动态行或 tab
 必须在仍表示同一对象时保持 identity；domain selection、document model、chat turn 或 filesystem

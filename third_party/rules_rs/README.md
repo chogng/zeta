@@ -6,7 +6,7 @@ The repository pins `rules_rs 0.0.96` through the archive override in the root
 when the archive override bypasses the Bazel Central Registry patch set.
 
 The Cargo graph intentionally has one root workspace. `rules_rs` therefore sees
-`zeterm`, `zeterm/crates/*`, and `zeta-rs/*` in one `cargo metadata` result. Zeterm-owned
+`zeterm`, its direct child crates, and `zeta-rs/*` in one `cargo metadata` result. Zeterm-owned
 and shared crates resolve to the same `@crates` hub; no cross-workspace metadata
 bridge or duplicate product hub is required.
 

@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 
 const repositoryDirectory = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const iconDirectory = resolve(repositoryDirectory, "resources/icons");
-const outputFile = resolve(repositoryDirectory, "zeterm/crates/icons/src/generated.rs");
+const outputFile = resolve(repositoryDirectory, "zeterm/icons/src/generated.rs");
 const iconFilePattern = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*\.svg$/;
 const unsafeSvgPattern = /<(?:script|foreignObject)\b|\son[a-z]+\s*=|(?:href|xlink:href)\s*=/i;
 const paintAttributePattern = /\b(?:fill|stroke)="([^"]+)"/g;

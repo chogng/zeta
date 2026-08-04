@@ -85,7 +85,7 @@ fn user_blocker_consumes_an_otherwise_unmatched_key() {
     assert_eq!(
         keybindings.resolve_stroke_at(
             &stroke("x"),
-            NativeKeybindingContext::direct_terminal(),
+            &NativeKeybindingContext::direct_terminal(),
             Instant::now(),
         ),
         NativeKeybindingResolution::Consumed
@@ -117,13 +117,13 @@ fn invalid_hot_update_preserves_the_previous_complete_rule_set() {
         KeybindingsResourcePoll::Updated
     );
     assert_eq!(
-        keybindings.resolve_stroke_at(&stroke("k"), NativeKeybindingContext::text_input(), now),
+        keybindings.resolve_stroke_at(&stroke("k"), &NativeKeybindingContext::text_input(), now),
         NativeKeybindingResolution::Consumed
     );
     assert_eq!(
         keybindings.resolve_stroke_at(
             &stroke("c"),
-            NativeKeybindingContext::text_input(),
+            &NativeKeybindingContext::text_input(),
             now + Duration::from_millis(10)
         ),
         NativeKeybindingResolution::Command(NativeCommand::ToggleSessionSidebar)
@@ -138,7 +138,7 @@ fn invalid_hot_update_preserves_the_previous_complete_rule_set() {
     assert_eq!(
         keybindings.resolve_stroke_at(
             &stroke("k"),
-            NativeKeybindingContext::text_input(),
+            &NativeKeybindingContext::text_input(),
             now + Duration::from_secs(2)
         ),
         NativeKeybindingResolution::Consumed

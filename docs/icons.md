@@ -3,7 +3,7 @@
 > 状态：Current。
 > 本文拥有跨 Desktop、Rust native 与 renderer 的 product-icon ownership。Canonical SVG
 > 文件操作见 [`resources/README.md`](../resources/README.md)，Rust API 与生成路径见
-> [`zeta-icons`](../zeterm/crates/icons/README.md)。
+> [`zeta-icons`](../zeterm/icons/README.md)。
 
 ## 快速理解
 

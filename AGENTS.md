@@ -17,7 +17,7 @@
 - `zeta-rs/` is the shared Rust backend boundary. Shared protocol, App Server, domain, storage,
   execution, terminal semantics, and other backend-neutral crates belong there; product hosts do not.
 - `zeterm/` owns the native `zeterm` product, including `zui`, `zeta-ui`, renderer, `wgpu`, and
-  `winit` under `zeterm/crates`.
+  `winit` as direct child crates.
 - `zeta-code/` owns the `zeta code` product host: `zeta-cli` and `zeta-tui`. Do not add TUI
   presentation, raw-mode lifecycle, Ratatui interaction, or CLI product composition to `zeta-rs/`.
 - All three boundaries may remain members of the single root Cargo workspace; workspace membership

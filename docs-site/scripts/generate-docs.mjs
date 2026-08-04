@@ -33,16 +33,26 @@ const groups = [
       "search",
       "syntax-analysis",
       "lsp",
-      "rendering-architecture",
       "editor-architecture",
       "editor-core",
-      "native-text-input",
-      "native-terminal-ui",
-      "native-agent-console",
       "pdf",
       "typst",
       "chat-session-inspector",
       "tui",
+    ],
+  },
+  {
+    label: "zeterm 产品",
+    files: [
+      "zeterm/README",
+      "zeterm/native-agent-console",
+      "zeterm/native-terminal-ui",
+      "zeterm/native-text-input",
+      "zeterm/rendering-architecture",
+      "zeterm/ui-component-migration-plan",
+      "zeterm/native-deprecation-plan",
+      "zeterm/zeterm-app-migration-plan",
+      "zeterm/zeterm-release-graph",
     ],
   },
   {
@@ -108,22 +118,19 @@ const groups = [
     label: "计划与迁移",
     files: [
       "zeta-code-architecture-codex-style-v2",
-      "native-deprecation-plan",
-      "ui-component-migration-plan",
-      "zeterm-app-migration-plan",
-      "zeterm-release-graph",
     ],
   },
 ];
 
-function walkReadmes(directory) {
+function walkReadmes(directory, ignoredDirectories = new Set()) {
   const results = [];
   for (const entry of readdirSync(directory)) {
     if (entry === "target" || entry === "node_modules" || entry.startsWith(".")) continue;
     const path = join(directory, entry);
     const stats = statSync(path);
     if (stats.isDirectory()) {
-      results.push(...walkReadmes(path));
+      if (ignoredDirectories.has(entry)) continue;
+      results.push(...walkReadmes(path, ignoredDirectories));
     } else if (entry === "README.md") {
       results.push(path);
     }
@@ -205,24 +212,29 @@ function parseDocument(path, slug, group) {
   };
 }
 
-const docFiles = readdirSync(docsDirectory)
-  .filter((name) => name.endsWith(".md"))
-  .map((name) => join(docsDirectory, name));
+const systemDocRoots = [
+  { directory: docsDirectory, prefix: "" },
+  { directory: join(repositoryRoot, "zeterm", "docs"), prefix: "zeterm/" },
+];
+const systemDocEntries = systemDocRoots.flatMap(({ directory, prefix }) =>
+  readdirSync(directory)
+    .filter((name) => name.endsWith(".md"))
+    .map((name) => ({ path: join(directory, name), slug: `${prefix}${basename(name, ".md")}` })),
+);
 const groupBySlug = new Map(groups.flatMap((group) => group.files.map((slug) => [slug, group.label])));
 const knownSlugs = new Set(groupBySlug.keys());
-const ungrouped = docFiles.map((path) => basename(path, ".md")).filter((slug) => !knownSlugs.has(slug)).sort();
+const ungrouped = systemDocEntries.map(({ slug }) => slug).filter((slug) => !knownSlugs.has(slug)).sort();
 if (ungrouped.length) groups.push({ label: "其他系统文档", files: ungrouped });
 
-const systemDocs = docFiles.map((path) => {
-  const slug = basename(path, ".md");
-  return parseDocument(path, slug, groupBySlug.get(slug) ?? "其他系统文档");
-});
+const systemDocs = systemDocEntries.map(({ path, slug }) =>
+  parseDocument(path, slug, groupBySlug.get(slug) ?? "其他系统文档"),
+);
 
 const crateRoots = [
-  { directory: join(repositoryRoot, "zeta-rs"), prefix: "" },
-  { directory: join(repositoryRoot, "zeterm", "crates"), prefix: "zeterm/" },
+  { directory: join(repositoryRoot, "zeta-rs"), prefix: "", ignoredDirectories: [] },
+  { directory: join(repositoryRoot, "zeterm"), prefix: "zeterm/", ignoredDirectories: ["docs"] },
 ];
-const crateDocs = crateRoots.flatMap(({ directory, prefix }) => walkReadmes(directory)
+const crateDocs = crateRoots.flatMap(({ directory, prefix, ignoredDirectories }) => walkReadmes(directory, new Set(ignoredDirectories))
   .map((path) => {
     const cratePath = relative(directory, dirname(path)).replaceAll("\\", "/");
     return parseDocument(path, `crates/${prefix}${cratePath}`, "Crate 实现参考");

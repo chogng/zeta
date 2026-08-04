@@ -1,0 +1,20 @@
+[package]
+name = "zeta-keybindings-host"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[lib]
+doctest = false
+name = "zeta_keybindings_host"
+path = "src/lib.rs"
+
+[dependencies]
+serde_json = { workspace = true }
+zeta-keybinding = { workspace = true }
+zeta-utils-path = { workspace = true }
+zeta-winit = { workspace = true }
+
+[lints]
+workspace = true

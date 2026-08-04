@@ -1,0 +1,8 @@
+load("//zeterm:defs.bzl", "zeterm_rust_library")
+
+zeterm_rust_library(
+    name = "wgpu",
+    crate_name = "zeta_wgpu",
+    data = glob(["src/**/*.wgsl"]),
+    package_name = "zeterm/wgpu",
+)

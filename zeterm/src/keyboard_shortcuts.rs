@@ -4,14 +4,14 @@ use zeta_keybinding::{
     KeyboardShortcutRow, KeyboardShortcutsIds,
     KeyboardShortcutsState as GenericKeyboardShortcutsState,
 };
+use zeta_keybindings_host::recording_chord;
 use zeta_winit::{ElementState, Key, KeyEvent, NamedKey};
 use zui::ElementId;
 
 use crate::NativeApp;
 use crate::commands::NativeCommand;
-use crate::keybinding_input::recording_chord;
+use crate::keybindings::KeybindingsResourcePoll;
 use crate::keybindings::NativeKeybindings;
-use crate::keybindings_resource::KeybindingsResourcePoll;
 use crate::shell_interaction::WINDOW;
 
 const SHORTCUT_SCOPE: u32 = 3;

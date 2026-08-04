@@ -29,7 +29,7 @@ fn product_composition_uses_scene_draw_component() {
 
 #[test]
 fn zui_contract_does_not_depend_on_a_gpu_backend_or_component_crate() {
-    let workspace = Path::new(env!("CARGO_MANIFEST_DIR")).join("crates");
+    let workspace = Path::new(env!("CARGO_MANIFEST_DIR"));
     let zui_root = workspace.join("zui");
     let manifest =
         fs::read_to_string(zui_root.join("Cargo.toml")).expect("zui manifest should be readable");
@@ -62,7 +62,7 @@ fn zui_contract_does_not_depend_on_a_gpu_backend_or_component_crate() {
 
 #[test]
 fn component_and_renderer_crates_depend_on_zui_in_the_forward_direction() {
-    let workspace = Path::new(env!("CARGO_MANIFEST_DIR")).join("crates");
+    let workspace = Path::new(env!("CARGO_MANIFEST_DIR"));
     for crate_name in ["ui", "renderer", "wgpu"] {
         let manifest = fs::read_to_string(workspace.join(crate_name).join("Cargo.toml"))
             .unwrap_or_else(|error| panic!("could not read {crate_name} manifest: {error}"));
@@ -87,7 +87,7 @@ fn component_and_renderer_crates_depend_on_zui_in_the_forward_direction() {
 
 #[test]
 fn component_crate_remains_graphics_backend_neutral() {
-    let workspace = Path::new(env!("CARGO_MANIFEST_DIR")).join("crates");
+    let workspace = Path::new(env!("CARGO_MANIFEST_DIR"));
     let ui_root = workspace.join("ui");
     let manifest =
         fs::read_to_string(ui_root.join("Cargo.toml")).expect("ui manifest should be readable");
@@ -117,7 +117,7 @@ fn component_crate_remains_graphics_backend_neutral() {
 
 #[test]
 fn gpu_backend_does_not_own_interaction_or_accessibility_frames() {
-    let workspace = Path::new(env!("CARGO_MANIFEST_DIR")).join("crates");
+    let workspace = Path::new(env!("CARGO_MANIFEST_DIR"));
     let backend_root = workspace.join("wgpu");
     let manifest = fs::read_to_string(backend_root.join("Cargo.toml"))
         .expect("zeta-wgpu manifest should be readable");
@@ -211,7 +211,7 @@ fn production_components_do_not_reintroduce_manual_component_inspection() {
 #[test]
 fn production_composition_does_not_register_inspection_nodes_directly() {
     let workspace_root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let registration_owner = workspace_root.join("crates/zui/src/presentation/scene.rs");
+    let registration_owner = workspace_root.join("zui/src/presentation/scene.rs");
     let mut violations = Vec::new();
     for crate_root in workspace_crate_roots(workspace_root) {
         visit_rust_sources(&crate_root.join("src"), &mut |path, source| {
@@ -262,7 +262,7 @@ fn visit_rust_sources(root: &Path, visitor: &mut impl FnMut(&Path, &str)) {
 fn workspace_crate_roots(workspace_root: &Path) -> Vec<PathBuf> {
     let mut roots = vec![workspace_root.to_path_buf()];
     roots.extend(
-        fs::read_dir(workspace_root.join("crates"))
+        fs::read_dir(workspace_root)
             .expect("Rust workspace directory")
             .map(|entry| entry.expect("Rust workspace entry").path())
             .filter(|path| path.join("Cargo.toml").is_file() && path.join("src").is_dir())

@@ -66,17 +66,18 @@ members = [
     "zeta-rs/zeta-api",
     "zeta-rs/zeta-client",
     "zeterm",
-    "zeterm/crates/agent-sidebar",
-    "zeterm/crates/editor",
-    "zeterm/crates/icons",
-    "zeterm/crates/keybinding",
-    "zeterm/crates/markdown",
-    "zeterm/crates/renderer",
-    "zeterm/crates/settings",
-    "zeterm/crates/ui",
-    "zeterm/crates/wgpu",
-    "zeterm/crates/winit",
-    "zeterm/crates/zui",
+    "zeterm/agent-sidebar",
+    "zeterm/editor",
+    "zeterm/icons",
+    "zeterm/keybinding",
+    "zeterm/markdown",
+    "zeterm/native-keybindings",
+    "zeterm/renderer",
+    "zeterm/settings",
+    "zeterm/ui",
+    "zeterm/wgpu",
+    "zeterm/winit",
+    "zeterm/zui",
 ]
 default-members = ["zeterm"]
 resolver = "3"
@@ -161,7 +162,7 @@ windows-sys = "0.59"
 zeroize = "1"
 zeta-add-dir = { path = "zeta-rs/add-dir" }
 zeta-agent-import = { path = "zeta-rs/agent-import" }
-zeta-agent-sidebar = { path = "zeterm/crates/agent-sidebar" }
+zeta-agent-sidebar = { path = "zeterm/agent-sidebar" }
 zeta-app-server = { path = "zeta-rs/app-server" }
 zeta-app-server-client = { path = "zeta-rs/app-server-client" }
 zeta-app-server-protocol = { path = "zeta-rs/app-server-protocol" }
@@ -175,10 +176,10 @@ zeta-client = { path = "zeta-rs/zeta-client" }
 zeta-config = { path = "zeta-rs/config" }
 zeta-core = { path = "zeta-rs/core" }
 zeta-diff = { path = "zeta-rs/diff" }
-zeta-editor = { path = "zeterm/crates/editor" }
+zeta-editor = { path = "zeterm/editor" }
 zeta-editor-core = { path = "zeta-rs/editor-core" }
 zeta-exec = { path = "zeta-rs/exec" }
-zeta-icons = { path = "zeterm/crates/icons" }
+zeta-icons = { path = "zeterm/icons" }
 zeta-file-icons = { path = "zeta-rs/file-icons" }
 zeta-file-identity = { path = "zeta-rs/file-identity" }
 zeta-file-search = { path = "zeta-rs/file-search" }
@@ -188,13 +189,14 @@ zeta-file-watcher = { path = "zeta-rs/file-watcher" }
 zeta-git = { path = "zeta-rs/git" }
 zeta-http-client = { path = "zeta-rs/http-client" }
 zeta-install-context = { path = "zeta-rs/install-context" }
-zeta-keybinding = { path = "zeterm/crates/keybinding" }
+zeta-keybinding = { path = "zeterm/keybinding" }
+zeta-keybindings-host = { path = "zeterm/native-keybindings" }
 zeta-language-server-catalog = { path = "zeta-rs/language-server-catalog" }
 zeta-language-server-distribution = { path = "zeta-rs/language-server-distribution" }
 zeta-language-service = { path = "zeta-rs/language-service" }
 zeta-linux-sandbox = { path = "zeta-rs/linux-sandbox" }
 zeta-lsp = { path = "zeta-rs/lsp" }
-zeta-markdown = { path = "zeterm/crates/markdown" }
+zeta-markdown = { path = "zeterm/markdown" }
 zeta-mcp = { path = "zeta-rs/mcp" }
 zeta-mcp-server = { path = "zeta-rs/mcp-server" }
 zeta-model-provider = { path = "zeta-rs/model-provider" }
@@ -203,7 +205,7 @@ zeta-policy = { path = "zeta-rs/policy" }
 zeta-plugins = { path = "zeta-rs/plugins" }
 zeta-prompts = { path = "zeta-rs/prompts" }
 zeta-protocol = { path = "zeta-rs/protocol" }
-zeta-renderer = { path = "zeterm/crates/renderer" }
+zeta-renderer = { path = "zeterm/renderer" }
 zeta-rollout = { path = "zeta-rs/rollout" }
 zeta-rollout-trace = { path = "zeta-rs/rollout-trace" }
 zeta-rmcp-client = { path = "zeta-rs/rmcp-client" }
@@ -211,7 +213,7 @@ zeta-sandboxing = { path = "zeta-rs/sandboxing" }
 zeta-search = { path = "zeta-rs/search" }
 zeta-secrets = { path = "zeta-rs/secrets" }
 zeta-session-store = { path = "zeta-rs/session-store" }
-zeta-settings = { path = "zeterm/crates/settings" }
+zeta-settings = { path = "zeterm/settings" }
 zeta-shell-command = { path = "zeta-rs/shell-command" }
 zeta-slash-commands = { path = "zeta-rs/slash-commands" }
 zeta-skills = { path = "zeta-rs/skills" }
@@ -224,17 +226,17 @@ zeta-theme = { path = "zeta-rs/theme" }
 zeta-thread-store = { path = "zeta-rs/thread-store" }
 zeta-tools = { path = "zeta-rs/tools" }
 zeta-tui = { path = "zeta-code/tui" }
-zeta-ui = { path = "zeterm/crates/ui" }
+zeta-ui = { path = "zeterm/ui" }
 zeta-utils-path = { path = "zeta-rs/utils/path-utils" }
 zeta-utils-path-uri = { path = "zeta-rs/utils/path-uri" }
 zeta-pdf = { path = "zeta-rs/utils/pdf" }
 zeta-typst = { path = "zeta-rs/utils/typst" }
 zeta-utils-pty = { path = "zeta-rs/utils/pty" }
-zeta-wgpu = { path = "zeterm/crates/wgpu" }
+zeta-wgpu = { path = "zeterm/wgpu" }
 zeta-windows-sandbox = { path = "zeta-rs/windows-sandbox-rs" }
-zeta-winit = { path = "zeterm/crates/winit" }
+zeta-winit = { path = "zeterm/winit" }
 zeta-workspace = { path = "zeta-rs/workspace" }
-zui = { path = "zeterm/crates/zui" }
+zui = { path = "zeterm/zui" }
 
 [profile.dev]
 # Keep line tables and backtraces without generating full variable debug information.

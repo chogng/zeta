@@ -23,6 +23,7 @@ zeta-file-search = { workspace = true }
 zeta-icons = { workspace = true }
 zeta-install-context = { workspace = true }
 zeta-keybinding = { workspace = true }
+zeta-keybindings-host = { workspace = true }
 zeta-language-server-catalog = { workspace = true }
 zeta-language-service = { workspace = true }
 zeta-protocol = { workspace = true }

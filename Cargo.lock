@@ -8056,6 +8056,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "zeta-keybindings-host"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "zeta-keybinding",
+ "zeta-utils-path",
+ "zeta-winit",
+]
+
+[[package]]
 name = "zeta-language-server-catalog"
 version = "0.1.0"
 dependencies = [
@@ -8557,6 +8567,7 @@ dependencies = [
  "zeta-icons",
  "zeta-install-context",
  "zeta-keybinding",
+ "zeta-keybindings-host",
  "zeta-language-server-catalog",
  "zeta-language-service",
  "zeta-protocol",

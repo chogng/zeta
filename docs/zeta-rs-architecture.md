@@ -49,7 +49,7 @@ zeta-rs/
 ├── theme/                # shared manifest/user-theme resolver 与 device-local bounded loader
 ├── editor-core/          # 纯 Rust text transaction / selection / history；不拥有 presentation 或 transport
 ├── text-file/            # UTF-8 文件保存基线、磁盘版本与外部变化冲突；不拥有 editor 或 I/O
-├── markdown/             # shared bounded CommonMark/GFM parsing；presentation 位于 zeterm/crates
+├── markdown/             # shared bounded CommonMark/GFM parsing；presentation 位于 zeterm/
 ├── lsp/                  # LSP stdio lifecycle、request pairing、document sync 与 server events
 ├── language-server-catalog/ # 内置 server、可信 executable resolution 与 availability；不启动进程
 ├── language-server-distribution/ # verified package staging 与 side-by-side install storage
@@ -81,7 +81,7 @@ zeta-rs/
 ```
 
 产品宿主不属于共享后端：`zeterm` 的 `zui`、`zeta-ui`、renderer、`wgpu` 和 `winit` 位于
-`zeterm/crates`；`zeta-code` 的 `zeta-cli` 与 `zeta-tui` 位于 `zeta-code/`。它们仍加入同一个
+`zeterm/` 的直接子 crate；`zeta-code` 的 `zeta-cli` 与 `zeta-tui` 位于 `zeta-code/`。它们仍加入同一个
 根 Cargo workspace，但 ownership 由物理目录和依赖方向表达。
 
 当前 `exec/` 仍实现 process `ToolExecutor`。它迁移为 `tool-executor/` 后，`exec/` 名称用于
@@ -126,7 +126,7 @@ syntax lifecycle/projection、普通文档结构折叠、viewport soft wrap 与 
 多个文件 section 的 MultiDiffEditor；它依赖
 `zeta-ui`、`zeta-diff` 和 `zeta-syntax`，但不依赖 `zeterm/zeterm`，也不拥有文件 Tab、平台事件、EditorHost 或
 TUI presentation。当前 API、接入义务和限制见
-[`editor/README.md`](../zeterm/crates/editor/README.md)。
+[`editor/README.md`](../zeterm/editor/README.md)。
 
 `zeta-editor-core` 当前拥有不依赖 renderer 或 transport 的纯 Rust document transaction vertical
 slice：UTF-16 selection、revision-bound atomic multi-edit、bounded undo/redo 和 snapshot。`zeterm/zeterm`
@@ -148,7 +148,7 @@ Native 拥有关闭确认和 reload/conflict 操作条，而显式覆盖请求�
 `zeta-markdown` 当前拥有有资源上限的 CommonMark/GFM parsing、只读文档 snapshot、富文本与
 block layout 和 zeterm presentation，并消费 `zeta-ui::ScrollState`；它依赖 `zeta-ui`，但不依赖
 `zeterm/zeterm`，也不拥有消息 identity、网络图片、链接激活、平台输入或持久化。当前 API、
-信任边界和限制见 [`markdown/README.md`](../zeterm/crates/markdown/README.md)。
+信任边界和限制见 [`markdown/README.md`](../zeterm/markdown/README.md)。
 
 `zeta-lsp` 当前拥有单语言服务器的 stdio/async transport、initialize gate、typed request
 pairing、deadline cancellation、文档同步版本、push diagnostics 与规范关闭；宿主路由层另外
@@ -197,7 +197,7 @@ paint/hit/track-page/thumb-drag geometry，以及 hover/active/fade deadline。M
 wgpu，`zeta-ui` 只向下依赖 `zui`；`zeterm/zeterm` 只保存
 `dyn Renderer`，当前具体类型只在 composition-root adapter 中选择。Native 的 interaction 与
 accessibility frame 不进入 renderer。完整所有权、后端替换路径和架构约束见
-[`rendering-architecture.md`](rendering-architecture.md)。
+[`zeterm/docs/rendering-architecture.md`](../zeterm/docs/rendering-architecture.md)。
 
 Direct-provider credential ownership 由 [`model-provider.md`](model-provider.md) 维护；通用 secret
 persistence 由 [`secrets.md`](secrets.md) 维护；interactive login control plane 由

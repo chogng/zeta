@@ -4,7 +4,7 @@
 > Electron Desktop 的构建变体与静态入口见 [`product-editions.md`](product-editions.md)；
 > 具体实现分别见 [`zeta-cli-architecture.md`](zeta-cli-architecture.md)、
 > [`zeta-desktop-architecture.md`](zeta-desktop-architecture.md)、[`tui.md`](tui.md) 和
-> [`native-terminal-ui.md`](native-terminal-ui.md)。
+> [`zeterm/docs/native-terminal-ui.md`](../zeterm/docs/native-terminal-ui.md)。
 
 ## 快速理解
 

@@ -15,7 +15,7 @@ The Rust workspace lives in [`zeta-rs`](zeta-rs); Electron is a separate client 
 The native terminal product is distributed as **`zeterm`**. The product host lives under
 [`zeterm`](zeterm), while shared Rust implementation remains under [`zeta-rs`](zeta-rs). The naming
 rule and terminal-first product structure are documented in
-[`docs/native-terminal-ui.md`](docs/native-terminal-ui.md).
+[`zeterm/docs/native-terminal-ui.md`](zeterm/docs/native-terminal-ui.md).
 
 Team responsibilities and integration contracts are documented separately:
 

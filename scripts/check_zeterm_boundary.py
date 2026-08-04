@@ -9,17 +9,18 @@ from pathlib import Path
 
 EXPECTED_ZETERM_MEMBERS = {
     "zeterm",
-    "zeterm/crates/agent-sidebar",
-    "zeterm/crates/editor",
-    "zeterm/crates/icons",
-    "zeterm/crates/keybinding",
-    "zeterm/crates/markdown",
-    "zeterm/crates/renderer",
-    "zeterm/crates/settings",
-    "zeterm/crates/ui",
-    "zeterm/crates/wgpu",
-    "zeterm/crates/winit",
-    "zeterm/crates/zui",
+    "zeterm/agent-sidebar",
+    "zeterm/editor",
+    "zeterm/icons",
+    "zeterm/keybinding",
+    "zeterm/markdown",
+    "zeterm/native-keybindings",
+    "zeterm/renderer",
+    "zeterm/settings",
+    "zeterm/ui",
+    "zeterm/wgpu",
+    "zeterm/winit",
+    "zeterm/zui",
 }
 
 RETIRED_PRODUCT_PATHS = {

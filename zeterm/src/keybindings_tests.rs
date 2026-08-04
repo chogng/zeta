@@ -15,21 +15,21 @@ fn text_inputs_use_portable_copy_and_paste() {
     assert_eq!(
         bindings.resolve_stroke(
             &stroke("c", Modifiers::none().with_control()),
-            NativeKeybindingContext::text_input(),
+            &NativeKeybindingContext::text_input(),
         ),
         NativeKeybindingResolution::Command(NativeCommand::Copy)
     );
     assert_eq!(
         bindings.resolve_stroke(
             &stroke("v", Modifiers::none().with_control()),
-            NativeKeybindingContext::text_input(),
+            &NativeKeybindingContext::text_input(),
         ),
         NativeKeybindingResolution::Command(NativeCommand::Paste)
     );
     assert_eq!(
         bindings.resolve_stroke(
             &stroke("c", Modifiers::none().with_control().with_shift()),
-            NativeKeybindingContext::text_input(),
+            &NativeKeybindingContext::text_input(),
         ),
         NativeKeybindingResolution::Command(NativeCommand::Copy)
     );
@@ -42,7 +42,7 @@ fn workspace_save_is_available_independently_from_the_focused_surface() {
     assert_eq!(
         bindings.resolve_stroke(
             &stroke("s", Modifiers::none().with_control()),
-            NativeKeybindingContext::direct_terminal(),
+            &NativeKeybindingContext::direct_terminal(),
         ),
         NativeKeybindingResolution::Command(NativeCommand::Save)
     );
@@ -55,14 +55,14 @@ fn direct_terminal_preserves_unshifted_control_keys() {
     assert_eq!(
         bindings.resolve_stroke(
             &stroke("c", Modifiers::none().with_control()),
-            NativeKeybindingContext::direct_terminal(),
+            &NativeKeybindingContext::direct_terminal(),
         ),
         NativeKeybindingResolution::NoMatch
     );
     assert_eq!(
         bindings.resolve_stroke(
             &stroke("c", Modifiers::none().with_control().with_shift()),
-            NativeKeybindingContext::direct_terminal(),
+            &NativeKeybindingContext::direct_terminal(),
         ),
         NativeKeybindingResolution::Command(NativeCommand::Copy)
     );
@@ -75,7 +75,7 @@ fn macos_direct_terminal_uses_command_modifier() {
     assert_eq!(
         bindings.resolve_stroke(
             &stroke("c", Modifiers::none().with_meta()),
-            NativeKeybindingContext::direct_terminal(),
+            &NativeKeybindingContext::direct_terminal(),
         ),
         NativeKeybindingResolution::Command(NativeCommand::Copy)
     );
@@ -95,7 +95,7 @@ fn chord_completes_or_expires_as_one_consumed_interaction() {
     assert_eq!(
         bindings.resolve_stroke_at(
             &stroke("k", Modifiers::none().with_control()),
-            NativeKeybindingContext::text_input(),
+            &NativeKeybindingContext::text_input(),
             now,
         ),
         NativeKeybindingResolution::Consumed
@@ -103,7 +103,7 @@ fn chord_completes_or_expires_as_one_consumed_interaction() {
     assert_eq!(
         bindings.resolve_stroke_at(
             &stroke("c", Modifiers::none().with_control()),
-            NativeKeybindingContext::text_input(),
+            &NativeKeybindingContext::text_input(),
             now + Duration::from_millis(100),
         ),
         NativeKeybindingResolution::Command(NativeCommand::ToggleSessionSidebar)
@@ -112,7 +112,7 @@ fn chord_completes_or_expires_as_one_consumed_interaction() {
     assert_eq!(
         bindings.resolve_stroke_at(
             &stroke("k", Modifiers::none().with_control()),
-            NativeKeybindingContext::text_input(),
+            &NativeKeybindingContext::text_input(),
             now + Duration::from_secs(1),
         ),
         NativeKeybindingResolution::Consumed
@@ -123,7 +123,7 @@ fn chord_completes_or_expires_as_one_consumed_interaction() {
     assert_eq!(
         bindings.resolve_stroke_at(
             &stroke("k", Modifiers::none().with_control()),
-            NativeKeybindingContext::text_input(),
+            &NativeKeybindingContext::text_input(),
             now + Duration::from_secs(4),
         ),
         NativeKeybindingResolution::Consumed
@@ -131,7 +131,7 @@ fn chord_completes_or_expires_as_one_consumed_interaction() {
     assert_eq!(
         bindings.resolve_stroke_at(
             &stroke("x", Modifiers::none().with_control()),
-            NativeKeybindingContext::text_input(),
+            &NativeKeybindingContext::text_input(),
             now + Duration::from_millis(4_100),
         ),
         NativeKeybindingResolution::Consumed
@@ -155,7 +155,7 @@ fn native_context_exposes_boolean_and_string_facts_to_when_expressions() {
             "agentSurfaceVisible && composerMode == 'agent' && !fileSearchVisible".to_owned(),
         ),
     }]);
-    let context = NativeKeybindingContext::from_facts(NativeKeybindingFacts {
+    let context = &NativeKeybindingContext::from_facts(NativeKeybindingFacts {
         direct_terminal: false,
         terminal_surface_visible: false,
         session_sidebar_visible: false,

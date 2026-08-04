@@ -365,9 +365,11 @@ function walkReadmes(directory) {
 }
 
 function sourceDocuments() {
-  const systemDocs = readdirSync(join(repositoryRoot, "docs"))
-    .filter((entry) => entry.endsWith(".md"))
-    .map((entry) => join(repositoryRoot, "docs", entry));
+  const systemDocs = [join(repositoryRoot, "docs"), join(repositoryRoot, "zeterm", "docs")].flatMap((directory) =>
+    readdirSync(directory)
+      .filter((entry) => entry.endsWith(".md"))
+      .map((entry) => join(directory, entry)),
+  );
   return [...systemDocs, ...walkReadmes(join(repositoryRoot, "zeta-rs"))];
 }
 

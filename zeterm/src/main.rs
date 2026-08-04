@@ -8,7 +8,7 @@ use agent_sidebar_workspace::AgentSidebarWorkspace;
 use file_editor_host::FileEditorHost;
 use file_editor_input::FileEditorInputState;
 use git_branch_context_menu::GitBranchContextMenuState;
-use keybindings_resource::{KeybindingsResource, KeybindingsResourcePoll};
+use keybindings::{KeybindingsResource, KeybindingsResourcePoll};
 use keyboard_shortcuts::KeyboardShortcutsState;
 use language_server_settings::LanguageServerSettingsState;
 use layout_inspector::LayoutInspector;
@@ -72,9 +72,7 @@ mod git_branch_context_menu;
 mod git_branch_context_menu_input;
 mod input_context_toolbar;
 mod input_method;
-mod keybinding_input;
 mod keybindings;
-mod keybindings_resource;
 mod keyboard_shortcuts;
 mod language_server_settings;
 mod language_server_settings_input;
@@ -185,9 +183,10 @@ impl NativeApp {
         let workspace_context = WorkspaceContext::capture_current();
         let agent_sidebar_workspace = AgentSidebarWorkspace::new(&workspace_context);
         let mut keybindings = keybindings::NativeKeybindings::default();
-        let mut keybindings_resource = KeybindingsResource::for_workspace(
-            workspace_context.working_directory(),
+        let mut keybindings_resource = KeybindingsResource::new(
+            zeta_app_server_client::local_profile_root().join("keybindings.json"),
             zeta_keybinding::HostPlatform::current(),
+            Instant::now(),
         );
         if let KeybindingsResourcePoll::Rejected(error) =
             keybindings_resource.poll(Instant::now(), &mut keybindings)
