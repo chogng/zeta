@@ -1,25 +1,37 @@
-import { test as base, type ElectronApplication } from "@playwright/test";
+import { test as base } from "@playwright/test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { type AppServerTestMode, launchElectron } from "./electron.js";
-import type { PlaywrightDriver } from "./playwrightDriver.js";
+import { launchBrowser } from "./playwrightBrowser.js";
+import { launchElectron } from "./playwrightElectron.js";
+import type { PlaywrightApplication, PlaywrightDriver } from "./playwrightDriver.js";
+import { playwrightTargetForProject, type PlaywrightTarget } from "./testTarget.js";
 import type { Workbench } from "./workbench.js";
 
-interface ElectronFixtures {
-  readonly appServerMode: AppServerTestMode;
-  readonly application: ElectronApplication;
+interface PlaywrightFixtures {
+  readonly target: PlaywrightTarget;
+  readonly application: PlaywrightApplication;
   readonly driver: PlaywrightDriver;
   readonly workbench: Workbench;
 }
 
-export const test = base.extend<ElectronFixtures>({
-  appServerMode: async ({}, use, testInfo) => {
-    await use(appServerModeForProject(testInfo.project.name));
+export const test = base.extend<PlaywrightFixtures>({
+  target: async ({ baseURL }, use, testInfo) => {
+    await use(playwrightTargetForProject(testInfo.project.name, baseURL));
   },
-  driver: async ({ appServerMode }, use) => {
+  driver: async ({ target }, use) => {
+    if (target.kind === "browser") {
+      const { application, driver } = await launchBrowser(target);
+      try {
+        await use(driver);
+      } finally {
+        await application.close().catch(() => undefined);
+      }
+      return;
+    }
+
     const userDataDirectory = await mkdtemp(join(tmpdir(), "zeta-playwright-"));
-    const { application, driver } = await launchElectron({ appServerMode, userDataDirectory });
+    const { application, driver } = await launchElectron({ appServerMode: target.appServerMode, userDataDirectory });
     try {
       await use(driver);
     } finally {
@@ -58,14 +70,3 @@ export const test = base.extend<ElectronFixtures>({
 });
 
 export { expect } from "@playwright/test";
-
-function appServerModeForProject(projectName: string): AppServerTestMode {
-  switch (projectName) {
-    case "ui":
-      return "disabled";
-    case "desktop":
-      return "required";
-    default:
-      throw new Error(`Unsupported Playwright project: ${projectName}`);
-  }
-}

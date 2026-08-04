@@ -8,10 +8,10 @@
 | --- | --- |
 | `browser/alphaEditorSession.ts` | 一个编辑器实例的唯一装配点；创建 model reference、selection、folding、analysis/token、completion、viewport、input 和 contrib controllers。 |
 | `browser/alphaEditorPane.ts` | Workbench pane 生命周期；只把 host 的 resource/model contract 传给 session，不实现编辑语义。 |
-| `browser/alphaEditorInput.ts` | Workbench `EditorInput` 匹配和语言 identity adapter；不进入同步 model/core。 |
-| `browser/alphaDiffEditorInput.ts` | Workbench 双资源 diff input 和 synthetic tab identity；不创建 diff model，也不计算 diff。 |
+| `browser/editorInput.ts` | Workbench `EditorInput` 匹配和语言 identity adapter；不进入同步 model/core。 |
+| `browser/diffEditorInput.ts` | Workbench 双资源 diff input 和 synthetic tab identity；不创建 diff model，也不计算 diff。 |
 | `browser/browserAlphaEditorSession.ts` | TextMate grammar readiness、analysis Worker 和 completion Worker 的 browser adapter。 |
-| `contrib/alphaEditor.contribution.ts` | 注册 Alpha code/diff pane，并强制注入 Workbench text-file 与 Rust diff adapter；生产环境不提供 fallback。 |
+| `contrib/editor.contribution.ts` | 注册 Alpha code/diff pane，并强制注入 Workbench text-file 与 Rust diff adapter；生产环境不提供 fallback。 |
 | `browser/widget/codeEditor/codeEditorWidget.ts` | 组合 viewport、输入、键盘导航、pointer selection 和 text drop；不拥有语言功能。 |
 | `browser/widget/diffEditor/diffEditorWidget.ts` | 消费 `common/diff/diffModel.ts` 的只读 side-by-side projection；不计算 diff。 |
 

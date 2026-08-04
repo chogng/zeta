@@ -1,12 +1,9 @@
-import { _electron, type ElectronApplication } from "@playwright/test";
 import { createRequire } from "node:module";
 import { resolve } from "node:path";
-import { PlaywrightDriver } from "./playwrightDriver.js";
+import type { AppServerTestMode } from "./testTarget.js";
 
 const desktopDirectory = resolve(import.meta.dirname, "../..");
 const require = createRequire(import.meta.url);
-
-export type AppServerTestMode = "disabled" | "required";
 
 export interface ElectronLaunchOptions {
   readonly appServerMode: AppServerTestMode;
@@ -14,13 +11,15 @@ export interface ElectronLaunchOptions {
   readonly product?: "academic" | "code" | "complete";
 }
 
-export interface ElectronLaunchResult {
-  readonly application: ElectronApplication;
-  readonly driver: PlaywrightDriver;
+export interface ElectronConfiguration {
+  readonly executablePath: string;
+  readonly args: readonly string[];
+  readonly cwd: string;
+  readonly env: Readonly<Record<string, string>>;
 }
 
-/** Launches the built Zeta Desktop application with an isolated test profile. */
-export async function launchElectron(options: ElectronLaunchOptions): Promise<ElectronLaunchResult> {
+/** Resolves the Electron executable, arguments, and environment for a test run. */
+export function resolveElectronConfiguration(options: ElectronLaunchOptions): ElectronConfiguration {
   const environment = Object.fromEntries(
     Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined),
   );
@@ -32,15 +31,10 @@ export async function launchElectron(options: ElectronLaunchOptions): Promise<El
   environment.ZETA_PRODUCT = options.product ?? "code";
   delete environment.ELECTRON_RUN_AS_NODE;
 
-  const application = await _electron.launch({
+  return {
     executablePath: require("electron") as string,
     args: [desktopDirectory, `--user-data-dir=${options.userDataDirectory}`],
     cwd: desktopDirectory,
     env: environment,
-    timeout: 30_000,
-  });
-  const page = application.windows()[0] ?? await application.waitForEvent("window", { timeout: 30_000 });
-  const driver = new PlaywrightDriver(application, page);
-  await driver.workbench.waitForReady();
-  return { application, driver };
+  };
 }

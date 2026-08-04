@@ -22,7 +22,7 @@ for (const [name, value] of Object.entries({
 const { AlphaDiffEditorPane } = await import("../../browser/alphaDiffEditorPane.js");
 const { BrowserTextModelService } = await import("../../browser/services/browserTextModelService.js");
 const { BrowserTextResourceStore } = await import("../../browser/services/browserTextResourceStore.js");
-const { createAlphaDiffEditorInput } = await import("../../browser/alphaDiffEditorInput.js");
+const { createAlphaDiffEditorInput } = await import("../../browser/diffEditorInput.js");
 
 test("Alpha diff pane rejects a missing Rust diff computation service", () => {
   assert.throws(() => new AlphaDiffEditorPane(new BrowserTextResourceStore(new BootstrapTextFiles()), undefined as never), /requires the Rust diff computation service/);

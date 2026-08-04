@@ -8,7 +8,7 @@ import { type ILanguageFeaturesService } from "../common/services/languageServic
 import { type EditorInput } from "../../../workbench/browser/parts/editor/editorInput.js";
 import { type IEditorPane } from "../../../workbench/browser/parts/editor/editorPane.js";
 import { EditorPaneVisibility } from "../../../workbench/browser/parts/editor/editorPane.js";
-import { ALPHA_EDITOR_ID, alphaLanguageForInput } from "./alphaEditorInput.js";
+import { ALPHA_EDITOR_ID, alphaLanguageForInput } from "./editorInput.js";
 import { type ITextResourceStore } from "../common/services/textResourceStore.js";
 import { AlphaEditorSession, type AlphaEditorSessionOptions } from "./alphaEditorSession.js";
 import { type ITextModelService } from "../common/services/textModelService.js";

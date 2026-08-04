@@ -414,7 +414,7 @@ TextModelReference
   → bracket/comment/lines/find/quickAccess/hover/format/rename/readOnly/save
 ```
 
-`browser/browserAlphaEditorSession.ts` 只提供 TextMate grammar readiness、analysis Worker 和 completion Worker；它不能把 Workbench 类型传入 `common`。`contrib/alphaEditor.contribution.ts` 只负责 pane 注册和强制 adapter 注入。新 contribution 若需要跨宿主能力，必须先扩展 `common/services` contract，再在这里装配 browser adapter。
+`browser/browserAlphaEditorSession.ts` 只提供 TextMate grammar readiness、analysis Worker 和 completion Worker；它不能把 Workbench 类型传入 `common`。`contrib/editor.contribution.ts` 只负责 pane 注册和强制 adapter 注入。新 contribution 若需要跨宿主能力，必须先扩展 `common/services` contract，再在这里装配 browser adapter。
 
 ### 5.3 当前仍保留的宿主边界
 

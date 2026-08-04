@@ -6,7 +6,7 @@ import { assertDefined } from "../../../base/common/types.js";
 import { type IEditorPane } from "../../../workbench/browser/parts/editor/editorPane.js";
 import { EditorPaneVisibility } from "../../../workbench/browser/parts/editor/editorPane.js";
 import { type EditorInput } from "../../../workbench/browser/parts/editor/editorInput.js";
-import { isAlphaDiffEditorInput, ALPHA_DIFF_EDITOR_ID } from "./alphaDiffEditorInput.js";
+import { isAlphaDiffEditorInput, ALPHA_DIFF_EDITOR_ID } from "./diffEditorInput.js";
 import { type ITextResourceStore } from "../common/services/textResourceStore.js";
 import { DiffModel } from "../common/diff/diffModel.js";
 import { type IDiffComputationService } from "../common/diff/diffComputationService.js";

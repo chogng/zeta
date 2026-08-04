@@ -3,8 +3,8 @@ import test from "node:test";
 import { URI } from "../../../../base/common/uri.js";
 import { ACADEMIC_DOCUMENT_CONTENT_TYPE } from "../../../../product/common/documentTypes.js";
 import { EditorPaneMatch } from "../../../../workbench/browser/parts/editor/editorPane.js";
-import { ALPHA_DIFF_EDITOR_ID, createAlphaDiffEditorInput, matchAlphaDiffEditor } from "../../browser/alphaDiffEditorInput.js";
-import { ALPHA_EDITOR_ID, alphaLanguageForInput, matchAlphaEditor } from "../../browser/alphaEditorInput.js";
+import { ALPHA_DIFF_EDITOR_ID, createAlphaDiffEditorInput, matchAlphaDiffEditor } from "../../browser/diffEditorInput.js";
+import { ALPHA_EDITOR_ID, alphaLanguageForInput, matchAlphaEditor } from "../../browser/editorInput.js";
 
 test("Alpha is the default text editor with canonical language IDs", () => {
   assert.equal(ALPHA_EDITOR_ID, "zeta.editor.alpha");

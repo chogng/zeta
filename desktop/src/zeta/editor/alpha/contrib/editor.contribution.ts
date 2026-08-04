@@ -5,8 +5,8 @@ import { AlphaEditorPane } from "../browser/alphaEditorPane.js";
 import { createBrowserAlphaEditorSession } from "../browser/browserAlphaEditorSession.js";
 import { getBrowserTextModelService } from "../browser/services/browserTextModelService.js";
 import { getBrowserTextResourceStore } from "../browser/services/browserTextResourceStore.js";
-import { ALPHA_DIFF_EDITOR_ID, matchAlphaDiffEditor } from "../browser/alphaDiffEditorInput.js";
-import { ALPHA_EDITOR_ID, matchAlphaEditor } from "../browser/alphaEditorInput.js";
+import { ALPHA_DIFF_EDITOR_ID, matchAlphaDiffEditor } from "../browser/diffEditorInput.js";
+import { ALPHA_EDITOR_ID, matchAlphaEditor } from "../browser/editorInput.js";
 
 registerEditorPane({
   id: ALPHA_EDITOR_ID,
