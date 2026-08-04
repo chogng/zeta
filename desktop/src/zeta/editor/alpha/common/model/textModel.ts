@@ -1,9 +1,9 @@
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { DisposableOwner, DisposableSlot, type IDisposable } from "../../../../base/common/lifecycle.js";
 import { canCoalesceHistoryEdits, canReplaceHistoryEdits, coalesceHistoryUndoEdits, normalizeInverseEdits, replaceHistoryUndoEdits, type OffsetTextEdit } from "./historyCoalescing.js";
-import { PieceTreeTextBuffer } from "./pieceTreeTextBuffer.js";
+import { PieceTreeTextBuffer } from "./pieceTreeTextBuffer/pieceTreeTextBuffer.js";
 import { normalizeTextLineEndings, TextEditHistoryGroup, TextEditHistoryMergeMode, TextModelChangeReason, TextPosition, TextRange, TextLength, type ISingleEditOperation, type TextEdit, type TextModelChange, type TextModelContentChange, type TextSnapshot } from "../core/text.js";
-import { TextModelHistory, type TextModelHistoryEntry } from "./textModelHistory.js";
+import { TextModelHistory, type TextModelHistoryEntry } from "./editStack.js";
 import { TrackedRangeCollection, type TrackedRange, type TrackedRangeStickiness } from "./trackedRange.js";
 
 interface OffsetEdit extends OffsetTextEdit {}

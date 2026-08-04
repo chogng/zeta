@@ -1,4 +1,4 @@
-import { PieceBuffer, PieceNode, canCoalesce, coalescePieces, createPiece, lowerBound, nodeLength, nodeLineFeeds, nodePieces, removeLeftmost, removeRightmost, slicePiece, updateNode, type Piece } from "./pieceTreeNode.js";
+import { PieceBuffer, PieceNode, canCoalesce, coalescePieces, createPiece, lowerBound, nodeLength, nodeLineFeeds, nodePieces, removeLeftmost, removeRightmost, slicePiece, updateNode, type Piece } from "./pieceTreeBase.js";
 import { createTextBufferSnapshot, type TextBufferSnapshot, type TextBufferSnapshotSegment } from "./pieceTreeSnapshot.js";
 
 export interface PieceTreeTextBufferStatistics {

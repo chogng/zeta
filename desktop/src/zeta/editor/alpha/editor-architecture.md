@@ -84,16 +84,61 @@ VS Code 的官方源码组织说明了这些 editor 边界：`vs/editor` 不应�
 | 目标文件 | 职责 | 关键 owner |
 | --- | --- | --- |
 | `common/model/textModel.ts` | 文本内容、版本、事务、变化事件和 snapshot | `TextModel` |
-| `common/model/pieceTreeTextBuffer.ts` | Piece Tree 的文本和行索引存储 | `PieceTreeTextBuffer` |
-| `common/model/pieceTreeNode.ts` | Piece Tree 节点、旋转、合并和范围统计 | `PieceNode` |
-| `common/model/pieceTreeSnapshot.ts` | 不可变 snapshot segment 读取 | `TextBufferSnapshot` |
-| `common/model/textModelHistory.ts` | undo/redo、事务边界和历史预算 | `TextModelHistory` |
+| `common/model/pieceTreeTextBuffer/pieceTreeTextBuffer.ts` | Piece Tree 的文本和行索引存储 | `PieceTreeTextBuffer` |
+| `common/model/pieceTreeTextBuffer/pieceTreeBase.ts` | Piece Tree 节点、旋转、合并和范围统计 | `PieceNode` |
+| `common/model/pieceTreeTextBuffer/pieceTreeSnapshot.ts` | 不可变 snapshot segment 读取 | `TextBufferSnapshot` |
+| `common/model/editStack.ts` | undo/redo、事务边界和历史预算 | `TextModelHistory` |
 | `common/model/historyCoalescing.ts` | 输入历史合并和逆操作规范化 | history helpers |
 | `common/model/textModelSearch.ts` | literal/regex/whole-word 文档搜索 | search functions |
 | `common/model/trackedRange.ts` | edit 后的 range 映射和 stickiness | `TrackedRange` |
 | `common/model/decorationCollection.ts` | 稳定 decoration ID、metadata 和 collection event | `TextDecorationCollection` |
 
 `model` 允许依赖 `core`、`base/common/event` 和 `base/common/lifecycle`。它不得依赖 `ITextFileService`、DOM、language provider、Rust DTO 或任何 view presentation。
+
+#### 2.2.1 与 VS Code `common/model` 的基线对照
+
+当前 `../vscode/src/vs/editor/common/model` 基线包含 43 个文件。Alpha 不把这棵目录
+当作需要逐文件复制的运行时依赖，而是把它作为能力索引和命名基线。下面按职责族合并
+文件；“当前（职责迁移）”表示能力已经存在，但 canonical owner 不在同一个相对路径；
+“部分具备”只表示原基线中的部分语义或性能特征尚未覆盖。
+
+| VS Code model 基线 | Alpha canonical owner | 状态 | 对齐结论 |
+| --- | --- | --- | --- |
+| `textModel.ts` | `common/model/textModel.ts` | 当前 | 文本、版本、原子 transaction、snapshot、同步 change event 和文档 history 由 Alpha 自己定义；不引入 VS Code public model 类型。 |
+| `pieceTreeTextBuffer/pieceTreeBase.ts`、`rbTreeBase.ts` | `common/model/pieceTreeTextBuffer/pieceTreeBase.ts` | 当前（文件名对齐） | Alpha 使用确定性 treap，而不是 VS Code 的 red-black tree；文件名用于对照，底层树算法仍由 Alpha 自己实现。 |
+| `pieceTreeTextBuffer/pieceTreeTextBuffer.ts` | `common/model/pieceTreeTextBuffer/pieceTreeTextBuffer.ts` | 当前（文件名对齐） | replace、行计数、snapshot 和阈值驱动的 compaction 已由 Alpha storage owner 承担。 |
+| `pieceTreeTextBuffer/pieceTreeTextBufferBuilder.ts` | 暂无直接 owner | 尚未采用 | 当前 `TextModel` 从规范化字符串构造；只有资源读取契约引入 streaming/builder 后，才建立对应 Alpha contract。 |
+| `textModelSearch.ts` | `common/model/textModelSearch.ts` | 当前 | literal、regex、whole-word、wrap 和 version-pinned search 保持在 model query 层。 |
+| `editStack.ts` | `common/model/editStack.ts`、`historyCoalescing.ts` | 当前（文件名对齐） | 文档 undo/redo、typing merge 和 history budget 属于 Alpha model；editor-instance selection undo 仍在 cursor/contrib。 |
+| `intervalTree.ts` | `common/model/trackedRange.ts`、`decorationCollection.ts` | 部分具备 | tracked range 和 decoration 的语义契约已具备；当前索引是 collection 内的 `Map`，尚未提供 interval-tree 级别的大量 range 更新性能。 |
+| `decorationProvider.ts` | `common/model/decorationCollection.ts`、`browser/view/*` | 当前（职责迁移） | model 只保存 range 和 caller metadata；CSS、severity、geometry 和 DOM presentation 留在对应 view/feature owner。 |
+| `guidesTextModelPart.ts` | `contrib/folding/*`、`contrib/indentation/*` | 当前（职责迁移） | guides、folding ranges 和 hidden-line projection 是 feature/view-model 能力，不进入通用 TextModel part。 |
+| `indentationGuesser.ts` | `common/core/misc/indentation.ts`、`contrib/indentation/*` | 当前（职责迁移） | 纯缩进算法和 editor presentation 分开；不为 VS Code 文件名建立空 model helper。 |
+| `mirrorTextModel.ts` | `common/languages/languageWorkerDocumentMirror.ts` | 当前（职责迁移） | Worker mirror 是语言运行时边界，不是同步 TextModel 的第二个 owner。 |
+| `fixedArray.ts`、`prefixSumComputer.ts`、`textModelStringEdit.ts`、`textModelText.ts`、`utils.ts` | `common/core/{edits,ranges,text,*}`、`common/tokens/*` | 当前（职责迁移） | 纯算法按调用者职责进入 core/text/ranges/tokens；Alpha 不保留泛化的 model utility bucket。 |
+| `textModelPart.ts` | `contrib/tokenization/common/tokenizationTextModelPart.ts`、`common/languages/*` 等显式 feature contract | 当前（职责迁移） | Alpha 不建立一个拥有所有 model part 生命周期的通用基类；各 feature 明确拥有自己的 state、listener 和 dispose。 |
+| `textModelTokens.ts` | `common/tokens/*`、`contrib/tokenization/*`、`common/languages/analysis/*` | 部分具备 | 版本化 token result、按行 sparse index 和 tokenization model-part contract 已具备；VS Code 的全部 background tokenizer/state backend 尚未一一覆盖。 |
+| `tokens/{abstractSyntaxTokenBackend,annotations,tokenizationFontDecorationsProvider,tokenizationTextModelPart,tokenizerSyntaxTokenBackend}.ts` | `common/tokens/*`、`contrib/tokenization/*`、TextMate/analysis adapters | 部分具备 | token 生产由 Alpha language/provider contract 决定；不得为了文件对齐把 Workbench tokenizer 或第三方 runtime 直接放进 model。 |
+| `tokens/treeSitter/*` | 暂无 Alpha canonical owner | 尚未完成 | parser/AST 级 token backend 仍是后续 provider 能力；在 contract 确定前不复制 Tree-sitter 内部实现。 |
+| `bracketPairsTextModelPart/*` | `contrib/bracketMatching/common/*`、`common/languages/languageLexical*`、对应 browser presentation | 当前（职责迁移） | lexical bracket matching、colorization、navigation、pair editing 已有独立 feature owner；Alpha 当前没有 model-resident incremental bracket-pair tree。 |
+
+这张表的用途是保持“可搜索的语义对齐”，不是承诺 Alpha 复刻 VS Code 的内部数据结构。
+因此，VS Code 新增文件时，先判断它属于现有 Alpha owner、需要新增后端无关 contract、
+还是明确不属于 Alpha；不能仅因基线出现同名文件就在 `common/model` 增加副本。
+
+#### 2.2.2 Model 能力审计结论
+
+| 审计项 | 当前判断 | 下一步 |
+| --- | --- | --- |
+| 文本存储、transaction、version、snapshot、undo/redo、search | ✅ 当前 | 继续以 `TextModel.commitOffsetEdits` 和 `PieceTreeTextBuffer` 为唯一同步 mutation/storage boundary。 |
+| tracked range / decoration 的大规模更新 | 部分具备 | 先补可重复 benchmark，测量大量 range、multi-splice transaction 和 decoration churn；只有实际预算不足时，才在 `common/model` 内引入私有 interval index。 |
+| bracket-pair 增量结构 | 部分具备 | 当前 lexical feature 已满足基础行为；如需大文件或 parser-grade parity，先定义增量失效和 snapshot contract，再决定是否新增 model backend。 |
+| tokenization / semantic token state | 部分具备 | 保持 `common/tokens`、`contrib/tokenization` 和 language worker 的分层；Tree-sitter/AST 只作为明确 provider 方案推进。 |
+| streaming/builder 输入 | 尚未采用 | 当前字符串 resolve contract 不需要它；资源层改为流式读取前，不新增 `pieceTreeTextBufferBuilder.ts`。 |
+
+当前最明确的架构结论是：目录层面已经按 VS Code 语义可检索地对齐；剩余工作是
+range 索引、增量 bracket/token backend 和 parser-grade provider 的能力审计，而不是
+同步两棵源码目录。
 
 ### 2.3 `common/cursor`
 
@@ -333,8 +378,8 @@ contrib/<feature>/
 | core/ranges | `common/core/ranges/*.ts` | line/column/offset/range mapping | 不读取 DOM 坐标 |
 | core/misc | `common/core/misc/{eolCounter,indentation,rgba,textModelDefaults}.ts` | 通用 EOL、缩进、颜色和文本默认值 | 不新增目录 barrel；使用直接文件路径 |
 | model | `common/model/textModel.ts` | Piece Tree 之上的同步文档权威：文本、版本、事务、snapshot、undo/redo、change event | 所有输入 edit 先在这里一次性提交；不得等待异步服务 |
-| model/storage | `common/model/{pieceTreeTextBuffer,pieceTreeNode,pieceTreeSnapshot}.ts` | Piece Tree、节点统计、snapshot segment 读取 | 存储优化不能改变 model 的 version/change contract |
-| model/history | `common/model/{textModelHistory,historyCoalescing}.ts` | 事务级历史、输入合并、undo/redo budget | 光标历史不放这里，光标历史属于 cursor |
+| model/storage | `common/model/pieceTreeTextBuffer/{pieceTreeTextBuffer,pieceTreeBase,pieceTreeSnapshot}.ts` | Piece Tree、节点统计、snapshot segment 读取 | 存储优化不能改变 model 的 version/change contract |
+| model/history | `common/model/{editStack,historyCoalescing}.ts` | 事务级历史、输入合并、undo/redo budget | 光标历史不放这里，光标历史属于 cursor |
 | model/query | `common/model/textModelSearch.ts` | literal、regex、whole-word 和 wrap search | 结果必须绑定当前 model version |
 | model/range | `common/model/{trackedRange,decoration}.ts` | tracked range stickiness、decoration collection 和 model change 映射 | 不解释 CSS，不知道语言 severity |
 | cursor | `common/cursor/editorSelectionController.ts` | editor instance 的 selection、composition、cursor-only history 和 `EditorEditCommand` 执行 | 不注册 DOM listener 或 Workbench command |

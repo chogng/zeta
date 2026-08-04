@@ -33,8 +33,8 @@
 | 文件 | 职责 |
 | --- | --- |
 | `textModel.ts` | Piece Tree 之上的同步文档权威：文本、版本、原子 transaction、history、snapshot、change event。 |
-| `pieceTreeTextBuffer.ts` / `pieceTreeNode.ts` / `pieceTreeSnapshot.ts` | 文本存储、节点统计和 snapshot segment 读取；不改变 `TextModel` contract。 |
-| `textModelHistory.ts` / `historyCoalescing.ts` | 文档 undo/redo、typing merge 和 history budget。 |
+| `pieceTreeTextBuffer/{pieceTreeTextBuffer,pieceTreeBase,pieceTreeSnapshot}.ts` | 文本存储、节点统计和 snapshot segment 读取；不改变 `TextModel` contract。 |
+| `editStack.ts` / `historyCoalescing.ts` | 文档 undo/redo、typing merge 和 history budget。 |
 | `textModelSearch.ts` | literal、regex、whole-word、wrap 和 version-pinned search。 |
 | `trackedRange.ts` / `decorationCollection.ts` | tracked range stickiness、decoration owner 和 model change 映射；不包含 CSS/severity。 |
 

@@ -1,4 +1,4 @@
-import { PieceTreeTextBuffer } from "../../common/model/pieceTreeTextBuffer.js";
+import { PieceTreeTextBuffer } from "../../common/model/pieceTreeTextBuffer/pieceTreeTextBuffer.js";
 import { normalizeTextLineEndings, type TextSnapshot } from "../../common/core/text.js";
 
 export interface LanguageWorkerDocumentChange {

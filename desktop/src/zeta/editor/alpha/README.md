@@ -1265,7 +1265,7 @@ EditorCompositionSession.currentRange + tracked Viewport range
 event, and history consistency. `PieceTreeTextBuffer` is the private storage
 boundary; it references immutable original/add buffers through a deterministic
 treap whose nodes cache character, line-feed, and piece totals.
-`pieceTreeNode.ts` owns node invariants, while `pieceTreeSnapshot.ts` owns
+`pieceTreeBase.ts` owns node invariants, while `pieceTreeSnapshot.ts` owns
 immutable segment capture and offset reads. `OffsetEdit` remains private so
 storage offsets cannot leak into the public position-based API.
 

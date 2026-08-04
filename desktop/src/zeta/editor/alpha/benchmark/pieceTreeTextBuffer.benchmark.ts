@@ -1,5 +1,5 @@
 import { performance } from "node:perf_hooks";
-import { PieceTreeTextBuffer } from "../common/model/pieceTreeTextBuffer.js";
+import { PieceTreeTextBuffer } from "../common/model/pieceTreeTextBuffer/pieceTreeTextBuffer.js";
 
 interface BenchmarkResult {
   readonly workload: string;
