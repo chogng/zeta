@@ -1,0 +1,12 @@
+[package]
+name = "zeta-commands"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[lib]
+doctest = false
+
+[lints]
+workspace = true

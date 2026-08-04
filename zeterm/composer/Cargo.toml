@@ -1,0 +1,18 @@
+[package]
+name = "zeta-composer"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[lib]
+doctest = false
+name = "zeta_composer"
+path = "src/lib.rs"
+
+[dependencies]
+zeta-ui = { workspace = true }
+zui = { workspace = true }
+
+[lints]
+workspace = true

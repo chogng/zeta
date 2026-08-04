@@ -326,7 +326,7 @@ Registry/generator 实现见
 - method dispatch；registry 已声明 Session/Thread serialization scope，但当前同步 server 尚未
   接入 per-scope scheduler；
 - connection subscription cursor；
-- `session/update` / `thread/update`；
+- `session/update` / `session/thread/update`；
 - Resource ownership；
 - Core error 到 stable RPC error 的映射。
 
@@ -375,7 +375,7 @@ process executor。完整架构见 [`exec.md`](exec.md)。
 
 底层 process execution 从当前同名 crate 迁移为 `zeta-tool-executor`。未来
 `zeta-exec-server` 只负责远程 process/PTY/filesystem execution，不能接收 Agent
-`turn/start`。Remote Agent scheduling 与 remote process execution 使用不同 protocol、
+`session/request`。Remote Agent scheduling 与 remote process execution 使用不同 protocol、
 identity、lease 和 disconnect 语义。
 
 ## 11. 验证

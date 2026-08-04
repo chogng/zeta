@@ -129,7 +129,7 @@ process lifecycle 和 sandbox authority 会混在同一 crate。
 - 同时等待 request completion、App Server event、cancel 和 shutdown；
 - 把 canonical update 映射为 human/JSONL/scheduler event；
 - headless approval 行为；
-- Ctrl-C 与 scheduler cancellation 到 `turn/interrupt` 的映射；
+- Ctrl-C 与 scheduler cancellation 到 `session/request` `InterruptTurn` 的映射；
 - terminal Turn status 到 `ExecOutcome`、退出码和 scheduler status 的映射；
 - run-once 与长期 worker 的应用级生命周期。
 
@@ -383,7 +383,7 @@ Core tool port → zeta-exec-server client → remote zeta-exec-server
 | Agent scheduling | scheduler + App Server | Job/Session/Thread/Turn | durable recovery/reschedule |
 | Process execution | executor connection | process/filesystem request | terminate, resume or report unknown by exec protocol |
 
-`zeta-exec-server` 不得接受 `turn/start`，`zeta-exec` scheduler adapter 不得提供裸
+`zeta-exec-server` 不得接受 Agent `session/request`，`zeta-exec` scheduler adapter 不得提供裸
 `process/start` 旁路。
 
 ## 11. 工作进程隔离与并发
@@ -424,7 +424,7 @@ RunOnce Ctrl-C：
 
 ```text
 signal
-  → turn/interrupt with stable CommandId
+  → session/request { type: interruptTurn } with stable CommandId
   → wait terminal update within deadline
   → unsubscribe
   → AppServerSession.shutdown()
@@ -436,7 +436,7 @@ Worker Job cancellation：
 ```text
 scheduler cancel(JobId, AttemptId, fencing token)
   → validate current attempt
-  → turn/interrupt
+  → session/request { type: interruptTurn }
   → publish terminal Job event
   → keep worker/App Server alive for other jobs
 ```
@@ -531,7 +531,7 @@ zeta-scheduler-protocol
 - JSONL stdout 永远是合法机器事件；
 - terminal outcome 只来自 canonical Turn status；
 - connection 断开不会伪造 Turn failure；
-- Ctrl-C 和 remote cancel 都发送 typed `turn/interrupt`；
+- Ctrl-C 和 remote cancel 都发送 typed `session/request` `InterruptTurn`；
 - headless approval 不会永久等待不存在的 UI；
 - durable gap 可通过 read/subscribe 恢复；
 - Job/Attempt/Command/request/sequence identity 有独立 contract tests；

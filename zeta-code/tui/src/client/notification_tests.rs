@@ -33,7 +33,7 @@ fn thread_update_preserves_typed_scope_and_sequence() {
         },
     };
     let Some(ClientEvent::ThreadUpdated(update)) = map_event(AppServerEvent::Notification(
-        ServerNotification::ThreadUpdate(Box::new(update)),
+        ServerNotification::SessionThreadUpdate(Box::new(update)),
     )) else {
         panic!("typed Thread update should be preserved");
     };

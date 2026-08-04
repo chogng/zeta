@@ -90,7 +90,7 @@ enum ComposerSubmission {
 
 Agent mode 通过 `session/request` 的 `StartTurn` operation 提交。Shell mode 通过同一 Session
 request 的 `StartShellTurn` operation 提交；
-不得增加 `turn/start(..., false)` 一类模糊参数，也不得根据文本是否像命令来猜 mode。
+不得增加 `session/request` 中 `StartTurn` 一类模糊参数，也不得根据文本是否像命令来猜 mode。
 
 Composer 使用 `CodeEditorPresentation::Compact`：保留多行文档、selection、undo/redo 和 IME，
 隐藏文件编辑器的 header、行号与 marker gutter。内容从紧凑基线自动增长，最多显示八行，超过后

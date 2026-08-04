@@ -54,7 +54,8 @@ fn session_owned_thread_subscription_follows_session_lifecycle() {
 
     broker.publish_thread(&thread_id, &[thread_update(&session_id, &thread_id, 1)]);
     assert_eq!(queue.len(), 1);
-    queue.drain();
+    let notifications = queue.drain();
+    assert_eq!(notifications[0]["method"], "session/thread/update");
 
     broker.unsubscribe_session(1, &session_id);
     broker.publish_thread(&thread_id, &[thread_update(&session_id, &thread_id, 2)]);
@@ -62,19 +63,20 @@ fn session_owned_thread_subscription_follows_session_lifecycle() {
 }
 
 #[test]
-fn explicit_thread_subscription_survives_session_unsubscribe() {
+fn session_thread_subscription_can_be_removed_independently() {
     let broker = UpdateBroker::default();
     let queue = NotificationQueue::default();
     let session_id = SessionId::new("session_1").expect("test ID is non-empty");
     let thread_id = ThreadId::new("thread_1").expect("test ID is non-empty");
     broker.register(1, &queue);
-    broker.subscribe_session(1, session_id.clone(), 0);
     broker.subscribe_session_thread(1, session_id.clone(), thread_id.clone(), 0);
-    broker.subscribe_thread(1, thread_id.clone(), 0);
-
-    broker.unsubscribe_session(1, &session_id);
     broker.publish_thread(&thread_id, &[thread_update(&session_id, &thread_id, 1)]);
     assert_eq!(queue.len(), 1);
+    queue.drain();
+
+    broker.unsubscribe_session_thread(1, &session_id, &thread_id);
+    broker.publish_thread(&thread_id, &[thread_update(&session_id, &thread_id, 2)]);
+    assert_eq!(queue.len(), 0);
 }
 
 fn update(session_id: &SessionId, sequence: u64) -> SessionUpdateEnvelope {

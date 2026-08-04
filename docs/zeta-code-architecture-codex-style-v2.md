@@ -191,7 +191,7 @@ Session 不代理子 Thread 的执行，也不在每个 Thread event 上递增 S
 Thread 是独立执行与恢复 aggregate：
 
 - `ThreadCreated` 固定不可变 `sessionId`；
-- `turn/start` acceptance、user items 与 started facts 原子提交；
+- `session/request` StartTurn acceptance、user items 与 started facts 原子提交；
 - final agent item 与 completed fact 原子提交；
 - tool call 与 tool result 都是 durable ThreadItem；
 - interrupt 与 failure 通过 typed event 收敛；
@@ -219,7 +219,7 @@ App Server 是 `Session → Thread → Turn → ThreadItem` 产品能力的唯�
 - Thread read/subscribe；
 - Turn start/interrupt；
 - Config 与 Resource；
-- `session/update` / `thread/update`。
+- `session/update` / `session/thread/update`。
 
 App Server connection state 只保存 request ID、subscription cursor、resource ownership 与
 transport state；它不是产品 Session，也不能成为 Core 领域状态的第二份 authority。

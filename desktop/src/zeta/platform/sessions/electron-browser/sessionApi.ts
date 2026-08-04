@@ -1,4 +1,4 @@
-import type { ModelListResult, SessionListResult, SessionResult, SessionSubscribeResult, SessionThreadResult, ThreadReadResult, ThreadSubscribeResult, TurnInteractionResolveResult, TurnInterruptResult, TurnStartResult } from "../../../../../generated/app-server/types.js";
+import type { ModelListResult, SessionListResult, SessionResult, SessionSubscribeResult, SessionThreadReadResult, SessionThreadResult, SessionThreadSubscribeResult, TurnInteractionResolveResult, TurnInterruptResult, TurnStartResult } from "../../../../../generated/app-server/types.js";
 import { invoke } from "../../ipc/electron-browser/rendererIpc.js";
 import type { IModelApi, ISessionApi, IThreadApi, ITurnApi } from "../common/sessionApi.js";
 
@@ -25,8 +25,8 @@ export function createModelApi(): IModelApi {
 
 export function createThreadApi(): IThreadApi {
   return {
-    read: (params) => invoke<ThreadReadResult>("zeta:thread:read", params),
-    subscribe: (params) => invoke<ThreadSubscribeResult>("zeta:thread:subscribe", params),
+    read: (params) => invoke<SessionThreadReadResult>("zeta:thread:read", params),
+    subscribe: (params) => invoke<SessionThreadSubscribeResult>("zeta:thread:subscribe", params),
     unsubscribe: (params) => invoke<void>("zeta:thread:unsubscribe", params),
   };
 }

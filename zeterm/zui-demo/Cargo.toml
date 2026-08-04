@@ -1,0 +1,18 @@
+[package]
+name = "zui-demo"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "zui-demo"
+path = "src/main.rs"
+
+[dependencies]
+zeta-renderer = { workspace = true }
+zeta-ui = { workspace = true }
+zui = { workspace = true }
+
+[lints]
+workspace = true

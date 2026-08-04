@@ -42,9 +42,9 @@ Tool、approval policy 或 persistence。
   revision-checked `skill/enablement/set` 切换所选 Skill，`skills/changed` 会刷新仍在前台的页面；
   该页面不把 enablement 冒充为正文 activation；
 - `/rewind` 或主界面 500 ms 内连续按两次 Esc 打开可搜索的历史消息 checkpoint Pane；Enter
-  调用 typed `session/thread/rewind`，创建具有 Rewind lineage 的子 Thread，只导入所选消息之前的
+  通过 typed `session/request` 的 `RewindThread` operation，创建具有 Rewind lineage 的子 Thread，只导入所选消息之前的
   terminal Turns。原 Thread 保持不变，TUI 切换订阅并以 `/rewind <turn-id>` 记录结果；
-- Session/Thread 命令调用 typed create/list/read/fork API 并切换当前 Thread context；配置命令调用
+- Session/Thread 命令调用 typed `session/request`、`session/thread/read`、list API 并切换当前 Thread context；配置命令调用
   `config/read`，`/model` 使用 expected revision 更新 preferred model；
 - 启动时读取 client 保存的 `initialize.slashCommands` snapshot，通过
   [`zeta-slash-commands`](../../zeta-rs/slash-commands/README.md) 与 built-ins 做防冲突合并；
@@ -52,10 +52,10 @@ Tool、approval policy 或 persistence。
   input 提交；slash popup 不清空或铺设独立背景，透明继承当前 TUI 主题 surface，选中项使用候选 highlight 色粗体且不添加行首标记；
 - Enter 按 composer 顺序提交由 text/image items 组成的 Turn；
 - 启动及 `/new`、`/fork`、`/resume`、`/rewind` 后维护 active Thread subscription；typed update 按
-  Session/Thread scope 和 durable sequence 过滤，并通过 `thread/read` 触发权威 snapshot
+  Session/Thread scope 和 durable sequence 过滤，并通过 `session/thread/read` 触发权威 snapshot
   resync，不在 TUI 内复制 Thread reducer；
 - `AppServerEvents` 与 terminal input 由独立 event source 主动唤醒单写者 loop；active Turn
-  不再使用 25 ms `thread/read` polling fallback；
+  不再使用 25 ms `session/thread/read` polling fallback；
 - 以无外框 transcript 显示 latest completed Agent message、友好 failure、interruption 与
   waiting/cancelling state；
 - 顶部显示低干扰的运行状态；composer 上方右对齐显示 preferred model 与 workspace，并按宽度
@@ -183,7 +183,7 @@ src/
 | `App::quit_or_interrupt` | private | active state interrupt；idle/error quit | Cancelling 不重复发送 interrupt |
 | `client::EventPump` | crate-private | 独立等待 terminal input、Unix termination signal 与 `AppServerEvents`，把三者汇入单写者 loop | 不应用 UI state、不执行领域 request |
 | `client::map_event` / `ClientEvent` | crate-private | 把共享 connection event 映射为 skills changed、Thread update 与 connection failure | 不保存 transport、不应用 projection |
-| `ThreadSubscription` | crate-private | 维护 active Thread scope 与最后确认的 snapshot sequence；新 update 只请求 snapshot resync | 不应用 `ThreadEvent` reducer、不保存 transient projection |
+| `ThreadSubscription` | crate-private | 维护 active Session/Thread scope 与最后确认的 snapshot sequence；新 update 只请求 snapshot resync | 不应用 `ThreadEvent` reducer、不保存 transient projection |
 | `InteractionPane` | crate-private | 保留 composer、拥有 temporary view stack，并把 key/paste 路由到 active view 或 composer | 不保存 Plugin/Session 等产品 feature 状态 |
 | `components::selection::SelectionViewState` | crate-private | 可配置 tabs/search/titled preview、Space search mode、过滤索引、候选 presentation highlight、选择与循环导航 | 不执行 action、不依赖产品 ID 或 App Server |
 | `components::selection::draw` | crate-private | generic title/tabs/search/items、可配置间距的水平分隔 preview、caption/footer Ratatui surface | 只读 selection state、不解释产品 action |
@@ -198,8 +198,8 @@ src/
 | `SlashCommandInvocation` | crate-private | command identity、trimmed display arguments 与有序 text/image argument items | 不执行 RPC |
 | `features::sessions::ActiveConversation` | crate-private | 当前 Session/Thread identity、sequence 与 typed create/fork/resume/rewind lifecycle | 不解析 composer text、不更新 `App`、不拥有 App Server |
 | `TextArea` | private | UTF-8 buffer、byte-safe cursor、原子元素 insert/delete/movement；Vim 的扩展 owner | 不保存 paste payload，不解释 Enter submission 或 slash command |
-| `features::thread::submit_prompt` | private | 从显式 `ThreadRequestScope` build typed `TurnStartParams` 并返回 typed result | 不引用或更新 `App`、不手写 method string/JSON |
-| `app::event_loop::refresh_turn` | private | `thread/read`、校验 scope、更新 local sequence 并协调 active Turn mapping | 不 drain notification；snapshot 是 authoritative UI source |
+| `features::thread::submit_prompt` | private | 从显式 `ThreadRequestScope` build typed `session/request` `StartTurn` operation 并返回 typed result | 不引用或更新 `App`、不手写 method string/JSON |
+| `app::event_loop::refresh_turn` | private | `session/thread/read`、校验 scope、更新 local sequence 并协调 active Turn mapping | 不 drain notification；snapshot 是 authoritative UI source |
 | `features::thread::interrupt_turn` | private | 从显式 scope 执行 typed Turn interrupt 并返回结果 | 不引用或更新 `App` |
 | `app::apply_active_turn_snapshot` | crate-private | canonical Turn presentation outcome → `AppEvent` | 不从 log/text 猜 terminal state |
 | `present_turn_error` | private | stable Turn error code → user-facing recovery message | 不显示 Rust Debug/provider secret |
@@ -221,8 +221,9 @@ src/
 run(session, options)
 ├─ session.client → cloneable typed request handle
 ├─ session.take_events → single-consumer AppServerEvents
-├─ client.create_session / create_session_thread
-├─ client.subscribe_thread → ThreadSubscription + initial canonical snapshot
+├─ client.create_session / client.request_session(CreateThread)
+├─ client.subscribe_session → Session snapshot + child projections
+├─ client.subscribe_session_thread → ThreadSubscription + initial canonical snapshot
 ├─ TerminalSession::open
 ├─ EventPump::start → terminal source + App Server source
 ├─ FileSearchManager::new
@@ -235,7 +236,7 @@ run(session, options)
    ├─ App::mention_query → FileSearchManager::{update_query,stop}
    ├─ FileSearchManager::poll → AppEvent::FileSearchSnapshotReceived → App::update
    ├─ skills changed → skills refresh
-   ├─ newer active Thread update → one thread/read snapshot resync
+   ├─ newer active Thread update → one session/thread/read snapshot resync
    ├─ TerminalSession::draw → app::frame::draw
    └─ terminal event
       ├─ key → App::handle_key
@@ -260,7 +261,7 @@ Session create 和 Thread create 使用独立 `CommandId`。Turn start/interrupt
 `thread_sequence` 作为 expected sequence；client error 会进入 visible error message/status，不退出
 terminal session。
 
-创建后通过 `thread/read`/`thread/subscribe` 返回的 canonical snapshot 设置 initial sequence，
+创建后通过 `session/thread/read`/`session/thread/subscribe` 返回的 canonical snapshot 设置 initial sequence，
 不存在硬编码的初始 sequence。切换 active Thread 时先更换 subscription，再以返回 snapshot
 替换 presentation projection。
 
@@ -344,7 +345,7 @@ transcript；UI 只取最后一个 Agent message。
 
 `refresh_turn` 每次成功 read 都用 snapshot sequence 覆盖 local expected sequence。
 `client::map_event` 保留 typed `ThreadUpdateEnvelope`；`ThreadSubscription` 验证 active
-Session/Thread scope，并在 durable sequence 新于最后确认 snapshot 时触发一次 `thread/read`。
+Session/Thread scope，并在 durable sequence 新于最后确认 snapshot 时触发一次 `session/thread/read`。
 重复、旧 scope update 不覆盖当前 state。当前 transient delta 不进入本地 reducer；snapshot
 read 只由新 durable update 或显式 interrupt/resync 触发。
 

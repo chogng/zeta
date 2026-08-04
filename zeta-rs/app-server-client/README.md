@@ -11,17 +11,18 @@ composition、connection 创建、正式 initialize/schema gate、request driver
 notification pump 与显式 shutdown。Consumer 不直接拥有 `AppServer` 或
 `ConnectionState`。
 
-兼容 API `AppServerClient<T>`、`InProcessTransport`、`start_in_process_client` 和
-`drain_notifications` 仍供 MCP adapter、rust-app 和 contract tests 使用；它们不是新交互
-consumer 的启动入口。
+同步适配面 `AppServerClient<T>`、`InProcessTransport`、`start_in_process_client` 和
+`drain_notifications` 仍供 MCP adapter、rust-app 与 contract tests 使用；它们不是新交互
+consumer 的启动入口。新的 CLI/TUI 交互统一通过 `AppServerSession` 获取 request handle
+与独立 event stream。
 
-| 能力 | Owned session | Legacy client |
+| 能力 | Owned session | Synchronous adapter |
 | --- | --- | --- |
 | ready initialize/schema gate | ✅ `start_embedded` | `start_in_process_client` 时具备 |
 | cloneable request handle | ✅ | 仅 `T: Clone` 时可克隆 |
-| 独立 wakeable event stream | ✅ | ❌，只能 drain |
+| 独立 wakeable event stream | ✅ | ❌，通过 `drain_notifications` 读取 |
 | 空闲/长 Turn notification | ✅ | 需要 consumer polling |
-| 显式 connection shutdown/task join | ✅ | ❌ |
+| 显式 connection shutdown/task join | ✅ | 由 host 管理 |
 | remote backend | 尚未完成 | ❌ |
 
 ## 公共契约
@@ -35,8 +36,8 @@ consumer 的启动入口。
 | `AppServerEvents::{recv,recv_timeout,try_recv}` | 接收 typed notification 与最终 connection close event |
 | `AppServerEvent::Notification` | 已由 client boundary 解码的 `ServerNotification` |
 | `AppServerEvent::ConnectionClosed` | 明确的 shutdown、driver stop 或 protocol failure |
-| `AppServerClient<T>` | legacy typed JSON-RPC client；method 与 DTO source 仍来自 protocol crate |
-| `AppServerClient::request_session` | Session aggregate 的 canonical typed mutation request；旧独立 mutation methods 仅作兼容 |
+| `AppServerClient<T>` | typed JSON-RPC client；method 与 DTO source 仍来自 protocol crate |
+| `AppServerClient::request_session` | Session aggregate 的 canonical typed mutation request；所有 Session mutation 统一由此进入 |
 
 正常入口示意（`options`/`params` 由 host 与 protocol DTO 构造）：
 
@@ -60,12 +61,12 @@ Notification 不依附 request completion；consumer 不得对 session handle �
 | 文件 | 当前 owner |
 | --- | --- |
 | `src/session.rs` | owned session、session transport、request/event threads、shutdown 与 connection lifecycle |
-| `src/in_process.rs` | embedded composition 与 legacy initialized connection |
+| `src/in_process.rs` | embedded composition 与 initialized connection |
 | `src/profile.rs` | `ZETA_PROFILE_ROOT` 与 host-wide default profile state path |
 | `src/lib.rs` | generic typed JSON-RPC methods、request ID/result pairing 与 public exports |
 | `src/notification.rs` | wire notification method 到 `ServerNotification` 的 typed decode |
 | `src/session_tests.rs` | owned lifecycle、idle wakeup、clone identity 与 shutdown contract |
-| `src/client_tests.rs` | legacy JSON-RPC、schema、Skill catalog/watcher compatibility contract |
+| `src/client_tests.rs` | JSON-RPC pairing、schema、Session contract、Skill catalog/watcher contract |
 
 ## 执行路径
 
@@ -117,11 +118,11 @@ Connection driver 在 request response completion 发送之前持有 delivery ba
 - `session::pump_notifications` 唯一解码 session outbound notification；
 - `server::update_broker::NotificationQueue`（App Server crate）拥有 wake/close queue primitive；
 - `AppServerClient::call` 拥有 request ID、JSON-RPC pairing 与 typed result decode；
-- `in_process::initialize_client` 只服务 legacy startup。
+- `in_process::initialize_client` 只服务 embedded startup。
 
 以下变化表示 architecture drift，需要同步系统文档与测试：
 
-- TUI/CLI 恢复调用 `start_in_process_client` 或 `drain_notifications`；
+- CLI/TUI 恢复调用 `start_in_process_client` 或 `drain_notifications`；
 - consumer 直接创建 `AppServer`/`ConnectionState`；
 - notification 再次只在 request 后被 drain；
 - session lifetime 由最后一个 client clone 的 drop 决定；
@@ -147,5 +148,5 @@ cargo test --manifest-path Cargo.toml -p zeta-cli
 ```
 
 Session tests覆盖空闲连接 notification、Turn completion event、显式 shutdown、最终
-`ConnectionClosed` 与 surviving clone rejection。Legacy contract tests继续覆盖 JSON-RPC
-pairing、schema gate、Skill watcher 和同步兼容面。
+`ConnectionClosed` 与 surviving clone rejection。Contract tests继续覆盖 JSON-RPC pairing、schema gate、
+canonical Session mutation、Skill watcher 和同步 client surface。

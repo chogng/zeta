@@ -1,0 +1,7 @@
+load("//zeterm:defs.bzl", "zeterm_rust_library")
+
+zeterm_rust_library(
+    name = "composer",
+    crate_name = "zeta_composer",
+    package_name = "zeterm/composer",
+)

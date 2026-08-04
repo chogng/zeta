@@ -1,6 +1,8 @@
-import { APP_SERVER_METHODS, type SessionCommandParams, type SessionCreateParams, type SessionModelSetParams, type SessionReadParams, type SessionSubscribeParams, type SessionThreadArchiveParams, type SessionThreadCreateParams, type SessionThreadForkParams, type SessionUnsubscribeParams, type ThreadReadParams, type ThreadSubscribeParams, type ThreadUnsubscribeParams, type TurnInteractionResolveParams, type TurnInterruptParams, type TurnStartParams } from "../../../../../generated/app-server/types.js";
+import { APP_SERVER_METHODS, type SessionCreateParams, type SessionReadParams, type SessionSubscribeParams, type SessionThreadReadParams, type SessionThreadSubscribeParams, type SessionThreadUnsubscribeParams, type SessionUnsubscribeParams } from "../../../../../generated/app-server/types.js";
 import type { AppServerSupervisor } from "../../app-server/electron-main/app-server-supervisor.js";
 import { boolean, nonEmptyString, nonNegativeInteger, record, string, stringEnum } from "../../ipc/electron-main/ipcValidation.js";
+import { sessionRequest, sessionResult, sessionThreadResult, turnInteractionResolveResult, turnInterruptResult, turnStartResult } from "../common/sessionApi.js";
+import type { SessionMutationParams, SessionOperationInput } from "../common/sessionApi.js";
 import type { IpcRoute } from "../../ipc/electron-main/trustedIpcRouter.js";
 
 /** Exact-shape IPC routes for Session, Thread, Turn, and model operations. */
@@ -34,37 +36,37 @@ export function sessionIpcRoutes(supervisor: AppServerSupervisor): readonly IpcR
     route({
       channel: "zeta:session:thread:create",
       validate: sessionThreadCreateParams,
-      invoke: (params) => supervisor.request(APP_SERVER_METHODS["session/thread/create"], params),
+      invoke: (params) => supervisor.request(APP_SERVER_METHODS["session/request"], sessionRequest(params, { type: "createThread", title: params.title })).then(sessionThreadResult),
     }),
     route({
       channel: "zeta:session:thread:fork",
       validate: sessionThreadForkParams,
-      invoke: (params) => supervisor.request(APP_SERVER_METHODS["session/thread/fork"], params),
+      invoke: (params) => supervisor.request(APP_SERVER_METHODS["session/request"], sessionRequest(params, { type: "forkThread", parentThreadId: params.parentThreadId, title: params.title })).then(sessionThreadResult),
     }),
     route({
       channel: "zeta:session:thread:archive",
       validate: sessionThreadArchiveParams,
-      invoke: (params) => supervisor.request(APP_SERVER_METHODS["session/thread/archive"], params),
+      invoke: (params) => supervisor.request(APP_SERVER_METHODS["session/request"], sessionRequest(params, { type: "archiveThread", threadId: params.threadId })).then(sessionResult),
     }),
     route({
       channel: "zeta:session:complete",
       validate: sessionCommandParams,
-      invoke: (params) => supervisor.request(APP_SERVER_METHODS["session/complete"], params),
+      invoke: (params) => supervisor.request(APP_SERVER_METHODS["session/request"], sessionRequest(params, { type: "complete" })).then(sessionResult),
     }),
     route({
       channel: "zeta:session:archive",
       validate: sessionCommandParams,
-      invoke: (params) => supervisor.request(APP_SERVER_METHODS["session/archive"], params),
+      invoke: (params) => supervisor.request(APP_SERVER_METHODS["session/request"], sessionRequest(params, { type: "archive" })).then(sessionResult),
     }),
     route({
       channel: "zeta:session:stop",
       validate: sessionCommandParams,
-      invoke: (params) => supervisor.request(APP_SERVER_METHODS["session/stop"], params),
+      invoke: (params) => supervisor.request(APP_SERVER_METHODS["session/request"], sessionRequest(params, { type: "stop" })).then(sessionResult),
     }),
     route({
       channel: "zeta:session:model:set",
       validate: sessionModelSetParams,
-      invoke: (params) => supervisor.request(APP_SERVER_METHODS["session/model/set"], params),
+      invoke: (params) => supervisor.request(APP_SERVER_METHODS["session/request"], sessionRequest(params, { type: "setModel", model: params.model })).then(sessionResult),
     }),
     route({
       channel: "zeta:model:list",
@@ -74,32 +76,32 @@ export function sessionIpcRoutes(supervisor: AppServerSupervisor): readonly IpcR
     route({
       channel: "zeta:thread:read",
       validate: threadReadParams,
-      invoke: (params) => supervisor.request(APP_SERVER_METHODS["thread/read"], params),
+      invoke: (params) => supervisor.request(APP_SERVER_METHODS["session/thread/read"], params),
     }),
     route({
       channel: "zeta:thread:subscribe",
       validate: threadSubscribeParams,
-      invoke: (params) => supervisor.request(APP_SERVER_METHODS["thread/subscribe"], params),
+      invoke: (params) => supervisor.request(APP_SERVER_METHODS["session/thread/subscribe"], params),
     }),
     route({
       channel: "zeta:thread:unsubscribe",
       validate: threadUnsubscribeParams,
-      invoke: (params) => supervisor.request(APP_SERVER_METHODS["thread/unsubscribe"], params),
+      invoke: (params) => supervisor.request(APP_SERVER_METHODS["session/thread/unsubscribe"], params),
     }),
     route({
       channel: "zeta:turn:start",
       validate: turnStartParams,
-      invoke: (params) => supervisor.request(APP_SERVER_METHODS["turn/start"], params),
+      invoke: (params) => supervisor.request(APP_SERVER_METHODS["session/request"], sessionRequest({ commandId: params.commandId, sessionId: params.sessionId, expectedSequence: params.expectedSequence }, { type: "startTurn", threadId: params.threadId, input: params.input })).then(turnStartResult),
     }),
     route({
       channel: "zeta:turn:interrupt",
       validate: turnInterruptParams,
-      invoke: (params) => supervisor.request(APP_SERVER_METHODS["turn/interrupt"], params),
+      invoke: (params) => supervisor.request(APP_SERVER_METHODS["session/request"], sessionRequest(params, { type: "interruptTurn", threadId: params.threadId, turnId: params.turnId })).then(turnInterruptResult),
     }),
     route({
       channel: "zeta:turn:interaction:resolve",
       validate: turnInteractionResolveParams,
-      invoke: (params) => supervisor.request(APP_SERVER_METHODS["turn/interaction/resolve"], params),
+      invoke: (params) => supervisor.request(APP_SERVER_METHODS["session/request"], sessionRequest(params, { type: "resolveInteraction", threadId: params.threadId, turnId: params.turnId, requestId: params.requestId, response: params.response })).then(turnInteractionResolveResult),
     }),
   ];
 }
@@ -142,7 +144,7 @@ function sessionUnsubscribeParams(value: unknown): SessionUnsubscribeParams {
   return sessionReadParams(value);
 }
 
-function sessionCommandParams(value: unknown): SessionCommandParams {
+function sessionCommandParams(value: unknown): SessionMutationParams {
   const params = record(value, ["commandId", "sessionId", "expectedSequence"]);
   return {
     commandId: nonEmptyString(params.commandId, "commandId"),
@@ -151,7 +153,7 @@ function sessionCommandParams(value: unknown): SessionCommandParams {
   };
 }
 
-function sessionModelSetParams(value: unknown): SessionModelSetParams {
+function sessionModelSetParams(value: unknown): SessionOperationInput<"setModel"> {
   const params = record(value, ["commandId", "sessionId", "expectedSequence", "model"]);
   const model = record(params.model, ["provider", "model"]);
   return {
@@ -165,7 +167,7 @@ function sessionModelSetParams(value: unknown): SessionModelSetParams {
   };
 }
 
-function sessionThreadCreateParams(value: unknown): SessionThreadCreateParams {
+function sessionThreadCreateParams(value: unknown): SessionOperationInput<"createThread"> {
   const params = record(value, ["commandId", "sessionId", "expectedSequence", "title"]);
   return {
     commandId: nonEmptyString(params.commandId, "commandId"),
@@ -175,7 +177,7 @@ function sessionThreadCreateParams(value: unknown): SessionThreadCreateParams {
   };
 }
 
-function sessionThreadForkParams(value: unknown): SessionThreadForkParams {
+function sessionThreadForkParams(value: unknown): SessionOperationInput<"forkThread"> {
   const params = record(value, ["commandId", "sessionId", "expectedSequence", "parentThreadId", "title"]);
   return {
     commandId: nonEmptyString(params.commandId, "commandId"),
@@ -186,7 +188,7 @@ function sessionThreadForkParams(value: unknown): SessionThreadForkParams {
   };
 }
 
-function sessionThreadArchiveParams(value: unknown): SessionThreadArchiveParams {
+function sessionThreadArchiveParams(value: unknown): SessionOperationInput<"archiveThread"> {
   const params = record(value, ["commandId", "sessionId", "expectedSequence", "threadId"]);
   return {
     commandId: nonEmptyString(params.commandId, "commandId"),
@@ -196,24 +198,28 @@ function sessionThreadArchiveParams(value: unknown): SessionThreadArchiveParams 
   };
 }
 
-function threadReadParams(value: unknown): ThreadReadParams {
-  const params = record(value, ["threadId"]);
-  return { threadId: nonEmptyString(params.threadId, "threadId") };
+function threadReadParams(value: unknown): SessionThreadReadParams {
+  const params = record(value, ["sessionId", "threadId"]);
+  return {
+    sessionId: nonEmptyString(params.sessionId, "sessionId"),
+    threadId: nonEmptyString(params.threadId, "threadId"),
+  };
 }
 
-function threadSubscribeParams(value: unknown): ThreadSubscribeParams {
-  const params = record(value, ["threadId", "afterSequence"]);
+function threadSubscribeParams(value: unknown): SessionThreadSubscribeParams {
+  const params = record(value, ["sessionId", "threadId", "afterSequence"]);
   return {
+    sessionId: nonEmptyString(params.sessionId, "sessionId"),
     threadId: nonEmptyString(params.threadId, "threadId"),
     afterSequence: nonNegativeInteger(params.afterSequence, "afterSequence"),
   };
 }
 
-function threadUnsubscribeParams(value: unknown): ThreadUnsubscribeParams {
+function threadUnsubscribeParams(value: unknown): SessionThreadUnsubscribeParams {
   return threadReadParams(value);
 }
 
-function turnStartParams(value: unknown): TurnStartParams {
+function turnStartParams(value: unknown): SessionOperationInput<"startTurn"> {
   const params = record(value, ["commandId", "sessionId", "threadId", "expectedSequence", "input"]);
   if (!Array.isArray(params.input) || params.input.length === 0) {
     throw new Error("input must be a non-empty array");
@@ -231,7 +237,7 @@ function turnStartParams(value: unknown): TurnStartParams {
   };
 }
 
-function turnInterruptParams(value: unknown): TurnInterruptParams {
+function turnInterruptParams(value: unknown): SessionOperationInput<"interruptTurn"> {
   const params = record(value, ["commandId", "sessionId", "threadId", "turnId", "expectedSequence"]);
   return {
     commandId: nonEmptyString(params.commandId, "commandId"),
@@ -242,7 +248,7 @@ function turnInterruptParams(value: unknown): TurnInterruptParams {
   };
 }
 
-function turnInteractionResolveParams(value: unknown): TurnInteractionResolveParams {
+function turnInteractionResolveParams(value: unknown): SessionOperationInput<"resolveInteraction"> {
   const params = record(value, ["commandId", "sessionId", "threadId", "turnId", "requestId", "expectedSequence", "response"]);
   return {
     commandId: nonEmptyString(params.commandId, "commandId"),
@@ -255,7 +261,7 @@ function turnInteractionResolveParams(value: unknown): TurnInteractionResolvePar
   };
 }
 
-function agentResponse(value: unknown): TurnInteractionResolveParams["response"] {
+function agentResponse(value: unknown): SessionOperationInput<"resolveInteraction">["response"] {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     throw new Error("response must be an object");
   }

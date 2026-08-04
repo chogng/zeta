@@ -245,5 +245,5 @@ CLI 新需求不得通过直接依赖内部 crate 临时解决；先补产品 AP
 - CLI 和 Desktop 对相同请求得到相同 DTO 与错误语义；
 - CLI crate 不直接依赖 Core、Storage、Tool Executor、Sandbox 或 Model Provider；
 - JSON/JSONL stdout 无日志污染；
-- Ctrl-C 发出 `turn/interrupt` 并等待终态；
+- Ctrl-C 发出 `session/request` `InterruptTurn` 并等待终态；
 - TTY、pipe、重定向和非交互环境均有测试。

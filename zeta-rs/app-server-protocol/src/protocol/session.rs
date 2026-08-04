@@ -44,15 +44,6 @@ pub struct SessionUnsubscribeParams {
     pub session_id: SessionId,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
-#[serde(rename_all = "camelCase")]
-pub struct SessionCommandParams {
-    pub command_id: CommandId,
-    pub session_id: SessionId,
-    #[ts(type = "number")]
-    pub expected_sequence: u64,
-}
-
 /// A typed mutation submitted against one Session aggregate.
 ///
 /// Child Thread identifiers are selectors inside the Session boundary. Product hosts submit
@@ -120,54 +111,24 @@ pub struct SessionRequestParams {
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
-pub struct SessionModelSetParams {
-    pub command_id: CommandId,
+pub struct SessionThreadReadParams {
     pub session_id: SessionId,
-    #[ts(type = "number")]
-    pub expected_sequence: u64,
-    pub model: ModelRef,
+    pub thread_id: ThreadId,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
-pub struct SessionThreadCreateParams {
-    pub command_id: CommandId,
+pub struct SessionThreadSubscribeParams {
     pub session_id: SessionId,
+    pub thread_id: ThreadId,
     #[ts(type = "number")]
-    pub expected_sequence: u64,
-    pub title: String,
+    pub after_sequence: u64,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
-pub struct SessionThreadForkParams {
-    pub command_id: CommandId,
+pub struct SessionThreadUnsubscribeParams {
     pub session_id: SessionId,
-    #[ts(type = "number")]
-    pub expected_sequence: u64,
-    pub parent_thread_id: ThreadId,
-    pub title: String,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
-#[serde(rename_all = "camelCase")]
-pub struct SessionThreadRewindParams {
-    pub command_id: CommandId,
-    pub session_id: SessionId,
-    #[ts(type = "number")]
-    pub expected_sequence: u64,
-    pub parent_thread_id: ThreadId,
-    pub before_turn_id: TurnId,
-    pub title: String,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
-#[serde(rename_all = "camelCase")]
-pub struct SessionThreadArchiveParams {
-    pub command_id: CommandId,
-    pub session_id: SessionId,
-    #[ts(type = "number")]
-    pub expected_sequence: u64,
     pub thread_id: ThreadId,
 }
 
@@ -205,6 +166,19 @@ pub struct SessionSubscribeResult {
 pub struct SessionThreadResult {
     pub session: Session,
     pub thread_id: ThreadId,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionThreadReadResult {
+    pub thread: Thread,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionThreadSubscribeResult {
+    pub thread: Thread,
+    pub updates: Vec<ThreadUpdateEnvelope>,
 }
 
 /// Typed result returned by the canonical Session aggregate mutation endpoint.

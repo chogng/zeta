@@ -415,40 +415,12 @@ impl AppServer {
             Some(ClientMethod::SessionUnsubscribe) => {
                 self.session_unsubscribe(connection, &request.params)
             }
-            Some(ClientMethod::SessionThreadCreate) => {
-                self.session_thread_create(connection, &request.params)
+            Some(ClientMethod::SessionThreadRead) => self.session_thread_read(&request.params),
+            Some(ClientMethod::SessionThreadSubscribe) => {
+                self.session_thread_subscribe(connection, &request.params)
             }
-            Some(ClientMethod::SessionThreadFork) => {
-                self.session_thread_fork(connection, &request.params)
-            }
-            Some(ClientMethod::SessionThreadRewind) => {
-                self.session_thread_rewind(connection, &request.params)
-            }
-            Some(ClientMethod::SessionThreadArchive) => {
-                self.session_thread_archive(connection, &request.params)
-            }
-            Some(ClientMethod::SessionComplete) => {
-                self.session_complete(connection, &request.params)
-            }
-            Some(ClientMethod::SessionArchive) => self.session_archive(connection, &request.params),
-            Some(ClientMethod::SessionStop) => self.session_stop(connection, &request.params),
-            Some(ClientMethod::SessionModelSet) => {
-                self.session_model_set(connection, &request.params)
-            }
-            Some(ClientMethod::ThreadRead) => self.thread_read(&request.params),
-            Some(ClientMethod::ThreadSubscribe) => {
-                self.thread_subscribe(connection, &request.params)
-            }
-            Some(ClientMethod::ThreadUnsubscribe) => {
-                self.thread_unsubscribe(connection, &request.params)
-            }
-            Some(ClientMethod::TurnStart) => self.turn_start(connection, &request.params),
-            Some(ClientMethod::ShellTurnStart) => {
-                self.shell_turn_start(connection, &request.params)
-            }
-            Some(ClientMethod::TurnInterrupt) => self.turn_interrupt(connection, &request.params),
-            Some(ClientMethod::TurnInteractionResolve) => {
-                self.turn_interaction_resolve(connection, &request.params)
+            Some(ClientMethod::SessionThreadUnsubscribe) => {
+                self.session_thread_unsubscribe(connection, &request.params)
             }
             Some(ClientMethod::TypstCompile) => self.typst_compile(connection, &request.params),
             Some(ClientMethod::ConfigRead) => self.config_read(),

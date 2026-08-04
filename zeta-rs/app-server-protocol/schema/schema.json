@@ -525,10 +525,10 @@
           "properties": {
             "method": {
               "type": "string",
-              "const": "session/thread/create"
+              "const": "session/thread/read"
             },
             "params": {
-              "$ref": "#/$defs/SessionThreadCreateParams"
+              "$ref": "#/$defs/SessionThreadReadParams"
             }
           },
           "required": [
@@ -541,10 +541,10 @@
           "properties": {
             "method": {
               "type": "string",
-              "const": "session/thread/fork"
+              "const": "session/thread/subscribe"
             },
             "params": {
-              "$ref": "#/$defs/SessionThreadForkParams"
+              "$ref": "#/$defs/SessionThreadSubscribeParams"
             }
           },
           "required": [
@@ -557,138 +557,10 @@
           "properties": {
             "method": {
               "type": "string",
-              "const": "session/thread/rewind"
+              "const": "session/thread/unsubscribe"
             },
             "params": {
-              "$ref": "#/$defs/SessionThreadRewindParams"
-            }
-          },
-          "required": [
-            "method",
-            "params"
-          ]
-        },
-        {
-          "type": "object",
-          "properties": {
-            "method": {
-              "type": "string",
-              "const": "session/thread/archive"
-            },
-            "params": {
-              "$ref": "#/$defs/SessionThreadArchiveParams"
-            }
-          },
-          "required": [
-            "method",
-            "params"
-          ]
-        },
-        {
-          "type": "object",
-          "properties": {
-            "method": {
-              "type": "string",
-              "const": "session/complete"
-            },
-            "params": {
-              "$ref": "#/$defs/SessionCommandParams"
-            }
-          },
-          "required": [
-            "method",
-            "params"
-          ]
-        },
-        {
-          "type": "object",
-          "properties": {
-            "method": {
-              "type": "string",
-              "const": "session/archive"
-            },
-            "params": {
-              "$ref": "#/$defs/SessionCommandParams"
-            }
-          },
-          "required": [
-            "method",
-            "params"
-          ]
-        },
-        {
-          "type": "object",
-          "properties": {
-            "method": {
-              "type": "string",
-              "const": "session/stop"
-            },
-            "params": {
-              "$ref": "#/$defs/SessionCommandParams"
-            }
-          },
-          "required": [
-            "method",
-            "params"
-          ]
-        },
-        {
-          "type": "object",
-          "properties": {
-            "method": {
-              "type": "string",
-              "const": "session/model/set"
-            },
-            "params": {
-              "$ref": "#/$defs/SessionModelSetParams"
-            }
-          },
-          "required": [
-            "method",
-            "params"
-          ]
-        },
-        {
-          "type": "object",
-          "properties": {
-            "method": {
-              "type": "string",
-              "const": "thread/read"
-            },
-            "params": {
-              "$ref": "#/$defs/ThreadReadParams"
-            }
-          },
-          "required": [
-            "method",
-            "params"
-          ]
-        },
-        {
-          "type": "object",
-          "properties": {
-            "method": {
-              "type": "string",
-              "const": "thread/subscribe"
-            },
-            "params": {
-              "$ref": "#/$defs/ThreadSubscribeParams"
-            }
-          },
-          "required": [
-            "method",
-            "params"
-          ]
-        },
-        {
-          "type": "object",
-          "properties": {
-            "method": {
-              "type": "string",
-              "const": "thread/unsubscribe"
-            },
-            "params": {
-              "$ref": "#/$defs/ThreadUnsubscribeParams"
+              "$ref": "#/$defs/SessionThreadUnsubscribeParams"
             }
           },
           "required": [
@@ -1057,70 +929,6 @@
             },
             "params": {
               "$ref": "#/$defs/ExtensionResourceOpenParams"
-            }
-          },
-          "required": [
-            "method",
-            "params"
-          ]
-        },
-        {
-          "type": "object",
-          "properties": {
-            "method": {
-              "type": "string",
-              "const": "turn/start"
-            },
-            "params": {
-              "$ref": "#/$defs/TurnStartParams"
-            }
-          },
-          "required": [
-            "method",
-            "params"
-          ]
-        },
-        {
-          "type": "object",
-          "properties": {
-            "method": {
-              "type": "string",
-              "const": "turn/shell/start"
-            },
-            "params": {
-              "$ref": "#/$defs/ShellTurnStartParams"
-            }
-          },
-          "required": [
-            "method",
-            "params"
-          ]
-        },
-        {
-          "type": "object",
-          "properties": {
-            "method": {
-              "type": "string",
-              "const": "turn/interrupt"
-            },
-            "params": {
-              "$ref": "#/$defs/TurnInterruptParams"
-            }
-          },
-          "required": [
-            "method",
-            "params"
-          ]
-        },
-        {
-          "type": "object",
-          "properties": {
-            "method": {
-              "type": "string",
-              "const": "turn/interaction/resolve"
-            },
-            "params": {
-              "$ref": "#/$defs/TurnInteractionResolveParams"
             }
           },
           "required": [
@@ -1745,10 +1553,10 @@
           "properties": {
             "method": {
               "type": "string",
-              "const": "session/thread/create"
+              "const": "session/thread/read"
             },
             "result": {
-              "$ref": "#/$defs/SessionThreadResult"
+              "$ref": "#/$defs/SessionThreadReadResult"
             }
           },
           "required": [
@@ -1761,10 +1569,10 @@
           "properties": {
             "method": {
               "type": "string",
-              "const": "session/thread/fork"
+              "const": "session/thread/subscribe"
             },
             "result": {
-              "$ref": "#/$defs/SessionThreadResult"
+              "$ref": "#/$defs/SessionThreadSubscribeResult"
             }
           },
           "required": [
@@ -1777,135 +1585,7 @@
           "properties": {
             "method": {
               "type": "string",
-              "const": "session/thread/rewind"
-            },
-            "result": {
-              "$ref": "#/$defs/SessionThreadResult"
-            }
-          },
-          "required": [
-            "method",
-            "result"
-          ]
-        },
-        {
-          "type": "object",
-          "properties": {
-            "method": {
-              "type": "string",
-              "const": "session/thread/archive"
-            },
-            "result": {
-              "$ref": "#/$defs/SessionResult"
-            }
-          },
-          "required": [
-            "method",
-            "result"
-          ]
-        },
-        {
-          "type": "object",
-          "properties": {
-            "method": {
-              "type": "string",
-              "const": "session/complete"
-            },
-            "result": {
-              "$ref": "#/$defs/SessionResult"
-            }
-          },
-          "required": [
-            "method",
-            "result"
-          ]
-        },
-        {
-          "type": "object",
-          "properties": {
-            "method": {
-              "type": "string",
-              "const": "session/archive"
-            },
-            "result": {
-              "$ref": "#/$defs/SessionResult"
-            }
-          },
-          "required": [
-            "method",
-            "result"
-          ]
-        },
-        {
-          "type": "object",
-          "properties": {
-            "method": {
-              "type": "string",
-              "const": "session/stop"
-            },
-            "result": {
-              "$ref": "#/$defs/SessionResult"
-            }
-          },
-          "required": [
-            "method",
-            "result"
-          ]
-        },
-        {
-          "type": "object",
-          "properties": {
-            "method": {
-              "type": "string",
-              "const": "session/model/set"
-            },
-            "result": {
-              "$ref": "#/$defs/SessionResult"
-            }
-          },
-          "required": [
-            "method",
-            "result"
-          ]
-        },
-        {
-          "type": "object",
-          "properties": {
-            "method": {
-              "type": "string",
-              "const": "thread/read"
-            },
-            "result": {
-              "$ref": "#/$defs/ThreadReadResult"
-            }
-          },
-          "required": [
-            "method",
-            "result"
-          ]
-        },
-        {
-          "type": "object",
-          "properties": {
-            "method": {
-              "type": "string",
-              "const": "thread/subscribe"
-            },
-            "result": {
-              "$ref": "#/$defs/ThreadSubscribeResult"
-            }
-          },
-          "required": [
-            "method",
-            "result"
-          ]
-        },
-        {
-          "type": "object",
-          "properties": {
-            "method": {
-              "type": "string",
-              "const": "thread/unsubscribe"
+              "const": "session/thread/unsubscribe"
             },
             "result": {
               "type": "null"
@@ -2277,70 +1957,6 @@
             },
             "result": {
               "$ref": "#/$defs/ExtensionResourceOpenResult"
-            }
-          },
-          "required": [
-            "method",
-            "result"
-          ]
-        },
-        {
-          "type": "object",
-          "properties": {
-            "method": {
-              "type": "string",
-              "const": "turn/start"
-            },
-            "result": {
-              "$ref": "#/$defs/TurnStartResult"
-            }
-          },
-          "required": [
-            "method",
-            "result"
-          ]
-        },
-        {
-          "type": "object",
-          "properties": {
-            "method": {
-              "type": "string",
-              "const": "turn/shell/start"
-            },
-            "result": {
-              "$ref": "#/$defs/TurnStartResult"
-            }
-          },
-          "required": [
-            "method",
-            "result"
-          ]
-        },
-        {
-          "type": "object",
-          "properties": {
-            "method": {
-              "type": "string",
-              "const": "turn/interrupt"
-            },
-            "result": {
-              "$ref": "#/$defs/TurnInterruptResult"
-            }
-          },
-          "required": [
-            "method",
-            "result"
-          ]
-        },
-        {
-          "type": "object",
-          "properties": {
-            "method": {
-              "type": "string",
-              "const": "turn/interaction/resolve"
-            },
-            "result": {
-              "$ref": "#/$defs/TurnInteractionResolveResult"
             }
           },
           "required": [
@@ -5347,7 +4963,7 @@
           "properties": {
             "method": {
               "type": "string",
-              "const": "thread/update"
+              "const": "session/thread/update"
             },
             "params": {
               "$ref": "#/$defs/ThreadUpdateEnvelope"
@@ -5465,27 +5081,6 @@
         "status",
         "sequence",
         "threads"
-      ]
-    },
-    "SessionCommandParams": {
-      "type": "object",
-      "properties": {
-        "commandId": {
-          "$ref": "#/$defs/CommandId"
-        },
-        "expectedSequence": {
-          "type": "integer",
-          "format": "uint64",
-          "minimum": 0
-        },
-        "sessionId": {
-          "$ref": "#/$defs/SessionId"
-        }
-      },
-      "required": [
-        "commandId",
-        "sessionId",
-        "expectedSequence"
       ]
     },
     "SessionCreateParams": {
@@ -5671,31 +5266,6 @@
       },
       "required": [
         "sessions"
-      ]
-    },
-    "SessionModelSetParams": {
-      "type": "object",
-      "properties": {
-        "commandId": {
-          "$ref": "#/$defs/CommandId"
-        },
-        "expectedSequence": {
-          "type": "integer",
-          "format": "uint64",
-          "minimum": 0
-        },
-        "model": {
-          "$ref": "#/$defs/ModelRef"
-        },
-        "sessionId": {
-          "$ref": "#/$defs/SessionId"
-        }
-      },
-      "required": [
-        "commandId",
-        "sessionId",
-        "expectedSequence",
-        "model"
       ]
     },
     "SessionReadParams": {
@@ -6131,85 +5701,6 @@
         "status"
       ]
     },
-    "SessionThreadArchiveParams": {
-      "type": "object",
-      "properties": {
-        "commandId": {
-          "$ref": "#/$defs/CommandId"
-        },
-        "expectedSequence": {
-          "type": "integer",
-          "format": "uint64",
-          "minimum": 0
-        },
-        "sessionId": {
-          "$ref": "#/$defs/SessionId"
-        },
-        "threadId": {
-          "$ref": "#/$defs/ThreadId"
-        }
-      },
-      "required": [
-        "commandId",
-        "sessionId",
-        "expectedSequence",
-        "threadId"
-      ]
-    },
-    "SessionThreadCreateParams": {
-      "type": "object",
-      "properties": {
-        "commandId": {
-          "$ref": "#/$defs/CommandId"
-        },
-        "expectedSequence": {
-          "type": "integer",
-          "format": "uint64",
-          "minimum": 0
-        },
-        "sessionId": {
-          "$ref": "#/$defs/SessionId"
-        },
-        "title": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "commandId",
-        "sessionId",
-        "expectedSequence",
-        "title"
-      ]
-    },
-    "SessionThreadForkParams": {
-      "type": "object",
-      "properties": {
-        "commandId": {
-          "$ref": "#/$defs/CommandId"
-        },
-        "expectedSequence": {
-          "type": "integer",
-          "format": "uint64",
-          "minimum": 0
-        },
-        "parentThreadId": {
-          "$ref": "#/$defs/ThreadId"
-        },
-        "sessionId": {
-          "$ref": "#/$defs/SessionId"
-        },
-        "title": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "commandId",
-        "sessionId",
-        "expectedSequence",
-        "parentThreadId",
-        "title"
-      ]
-    },
     "SessionThreadProjection": {
       "description": "A child Thread snapshot and its committed gap carried by the Session subscription.",
       "type": "object",
@@ -6229,6 +5720,32 @@
         "updates"
       ]
     },
+    "SessionThreadReadParams": {
+      "type": "object",
+      "properties": {
+        "sessionId": {
+          "$ref": "#/$defs/SessionId"
+        },
+        "threadId": {
+          "$ref": "#/$defs/ThreadId"
+        }
+      },
+      "required": [
+        "sessionId",
+        "threadId"
+      ]
+    },
+    "SessionThreadReadResult": {
+      "type": "object",
+      "properties": {
+        "thread": {
+          "$ref": "#/$defs/Thread"
+        }
+      },
+      "required": [
+        "thread"
+      ]
+    },
     "SessionThreadResult": {
       "type": "object",
       "properties": {
@@ -6244,39 +5761,6 @@
         "threadId"
       ]
     },
-    "SessionThreadRewindParams": {
-      "type": "object",
-      "properties": {
-        "beforeTurnId": {
-          "$ref": "#/$defs/TurnId"
-        },
-        "commandId": {
-          "$ref": "#/$defs/CommandId"
-        },
-        "expectedSequence": {
-          "type": "integer",
-          "format": "uint64",
-          "minimum": 0
-        },
-        "parentThreadId": {
-          "$ref": "#/$defs/ThreadId"
-        },
-        "sessionId": {
-          "$ref": "#/$defs/SessionId"
-        },
-        "title": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "commandId",
-        "sessionId",
-        "expectedSequence",
-        "parentThreadId",
-        "beforeTurnId",
-        "title"
-      ]
-    },
     "SessionThreadStatus": {
       "description": "Session-owned lifecycle for one Thread membership.",
       "type": "string",
@@ -6284,6 +5768,60 @@
         "creating",
         "active",
         "archived"
+      ]
+    },
+    "SessionThreadSubscribeParams": {
+      "type": "object",
+      "properties": {
+        "afterSequence": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "sessionId": {
+          "$ref": "#/$defs/SessionId"
+        },
+        "threadId": {
+          "$ref": "#/$defs/ThreadId"
+        }
+      },
+      "required": [
+        "sessionId",
+        "threadId",
+        "afterSequence"
+      ]
+    },
+    "SessionThreadSubscribeResult": {
+      "type": "object",
+      "properties": {
+        "thread": {
+          "$ref": "#/$defs/Thread"
+        },
+        "updates": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ThreadUpdateEnvelope"
+          }
+        }
+      },
+      "required": [
+        "thread",
+        "updates"
+      ]
+    },
+    "SessionThreadUnsubscribeParams": {
+      "type": "object",
+      "properties": {
+        "sessionId": {
+          "$ref": "#/$defs/SessionId"
+        },
+        "threadId": {
+          "$ref": "#/$defs/ThreadId"
+        }
+      },
+      "required": [
+        "sessionId",
+        "threadId"
       ]
     },
     "SessionUnsubscribeParams": {
@@ -6336,39 +5874,6 @@
         "sessionId",
         "durableSequence",
         "update"
-      ]
-    },
-    "ShellTurnStartParams": {
-      "type": "object",
-      "properties": {
-        "command": {
-          "type": "string"
-        },
-        "commandId": {
-          "$ref": "#/$defs/CommandId"
-        },
-        "expectedSequence": {
-          "type": "integer",
-          "format": "uint64",
-          "minimum": 0
-        },
-        "sessionId": {
-          "$ref": "#/$defs/SessionId"
-        },
-        "threadId": {
-          "$ref": "#/$defs/ThreadId"
-        },
-        "workingDirectory": {
-          "type": "string",
-          "default": "."
-        }
-      },
-      "required": [
-        "commandId",
-        "sessionId",
-        "threadId",
-        "expectedSequence",
-        "command"
       ]
     },
     "SkillCatalogReloadDto": {
@@ -7771,79 +7276,11 @@
         }
       ]
     },
-    "ThreadReadParams": {
-      "type": "object",
-      "properties": {
-        "threadId": {
-          "$ref": "#/$defs/ThreadId"
-        }
-      },
-      "required": [
-        "threadId"
-      ]
-    },
-    "ThreadReadResult": {
-      "type": "object",
-      "properties": {
-        "thread": {
-          "$ref": "#/$defs/Thread"
-        }
-      },
-      "required": [
-        "thread"
-      ]
-    },
     "ThreadStatus": {
       "type": "string",
       "enum": [
         "active",
         "archived"
-      ]
-    },
-    "ThreadSubscribeParams": {
-      "type": "object",
-      "properties": {
-        "afterSequence": {
-          "type": "integer",
-          "format": "uint64",
-          "minimum": 0
-        },
-        "threadId": {
-          "$ref": "#/$defs/ThreadId"
-        }
-      },
-      "required": [
-        "threadId",
-        "afterSequence"
-      ]
-    },
-    "ThreadSubscribeResult": {
-      "type": "object",
-      "properties": {
-        "thread": {
-          "$ref": "#/$defs/Thread"
-        },
-        "updates": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/ThreadUpdateEnvelope"
-          }
-        }
-      },
-      "required": [
-        "thread",
-        "updates"
-      ]
-    },
-    "ThreadUnsubscribeParams": {
-      "type": "object",
-      "properties": {
-        "threadId": {
-          "$ref": "#/$defs/ThreadId"
-        }
-      },
-      "required": [
-        "threadId"
       ]
     },
     "ThreadUpdate": {
@@ -8177,43 +7614,6 @@
         "request"
       ]
     },
-    "TurnInteractionResolveParams": {
-      "type": "object",
-      "properties": {
-        "commandId": {
-          "$ref": "#/$defs/CommandId"
-        },
-        "expectedSequence": {
-          "type": "integer",
-          "format": "uint64",
-          "minimum": 0
-        },
-        "requestId": {
-          "$ref": "#/$defs/RequestId"
-        },
-        "response": {
-          "$ref": "#/$defs/AgentResponse"
-        },
-        "sessionId": {
-          "$ref": "#/$defs/SessionId"
-        },
-        "threadId": {
-          "$ref": "#/$defs/ThreadId"
-        },
-        "turnId": {
-          "$ref": "#/$defs/TurnId"
-        }
-      },
-      "required": [
-        "commandId",
-        "sessionId",
-        "threadId",
-        "turnId",
-        "requestId",
-        "expectedSequence",
-        "response"
-      ]
-    },
     "TurnInteractionResolveResult": {
       "type": "object",
       "properties": {
@@ -8227,35 +7627,6 @@
         "sequence"
       ]
     },
-    "TurnInterruptParams": {
-      "type": "object",
-      "properties": {
-        "commandId": {
-          "$ref": "#/$defs/CommandId"
-        },
-        "expectedSequence": {
-          "type": "integer",
-          "format": "uint64",
-          "minimum": 0
-        },
-        "sessionId": {
-          "$ref": "#/$defs/SessionId"
-        },
-        "threadId": {
-          "$ref": "#/$defs/ThreadId"
-        },
-        "turnId": {
-          "$ref": "#/$defs/TurnId"
-        }
-      },
-      "required": [
-        "commandId",
-        "sessionId",
-        "threadId",
-        "turnId",
-        "expectedSequence"
-      ]
-    },
     "TurnInterruptResult": {
       "type": "object",
       "properties": {
@@ -8267,39 +7638,6 @@
       },
       "required": [
         "sequence"
-      ]
-    },
-    "TurnStartParams": {
-      "type": "object",
-      "properties": {
-        "commandId": {
-          "$ref": "#/$defs/CommandId"
-        },
-        "expectedSequence": {
-          "type": "integer",
-          "format": "uint64",
-          "minimum": 0
-        },
-        "input": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/InputItem"
-          },
-          "minItems": 1
-        },
-        "sessionId": {
-          "$ref": "#/$defs/SessionId"
-        },
-        "threadId": {
-          "$ref": "#/$defs/ThreadId"
-        }
-      },
-      "required": [
-        "commandId",
-        "sessionId",
-        "threadId",
-        "expectedSequence",
-        "input"
       ]
     },
     "TurnStartResult": {

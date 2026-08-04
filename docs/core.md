@@ -451,7 +451,7 @@ Core shutdown source
 当前单 Agent execution 的实际链路已经闭合：
 
 ```text
-turn/interrupt
+session/request { type: interruptTurn }
 → ThreadExecutionMailboxes::cancel(exact ThreadId + TurnId)
 → TurnExecutor-owned CancellationToken
 ├─ ModelService → ModelInvoker → OperationClient

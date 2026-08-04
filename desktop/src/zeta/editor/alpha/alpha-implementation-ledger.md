@@ -158,7 +158,7 @@ Rust App Server -> browser adapter -> Alpha async service contract
 ## 6. 当前验证清单
 
 - Alpha 目录没有 `index.ts` barrel。
-- Renderer TypeScript 检查已经通过 Alpha 新增代码；当前仓库仍有与本次 editor 无关的 app-server `session/stop` protocol drift，以及已有 session `rewind` 类型错误。
+- Renderer TypeScript 检查已经通过 Alpha 新增代码；App Server Session mutation 已统一走 canonical `session/request`，Thread 读取与订阅使用 Session-scoped RPC。
 - 每个新增 common feature 至少有可独立运行的纯函数边界；已补 smart-select、Unicode highlighter、sticky-scroll 和 tokenization model-part tests。
 - 新增 UI style 由对应 feature 的 `browser/media/*.css` 持有；Workbench host 不通过深层 selector 覆盖 editor internals。
 - Rust diff 仍是生产强依赖：`browser/services/rustDiffComputationService.ts` 缺少 App Server transport 时显式失败，不存在 production fallback。

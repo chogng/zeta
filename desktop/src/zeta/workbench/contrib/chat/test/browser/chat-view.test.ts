@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import type { ModelRef, ServerNotification, Session, SessionCommandParams, SessionCreateParams, SessionModelSetParams, SessionThreadCreateParams, Thread, TurnStartParams } from "../../../../../../../generated/app-server/types.js";
+import type { ModelRef, ServerNotification, SessionCreateParams, Thread } from "../../../../../../../generated/app-server/types.js";
+import type { SessionMutationParams, SessionOperationInput } from "../../../../../platform/sessions/common/sessionApi.js";
 import type { IRendererHost } from "../../../../../platform/renderer/common/rendererHost.js";
 import type { IAction } from "../../../../../base/common/actions.js";
 import { Emitter } from "../../../../../base/common/event.js";
@@ -22,7 +23,7 @@ import { ISettingsService } from "../../../../../workbench/services/preferences/
 import { IWorkbenchLayoutService, type WorkbenchPartId, type WorkbenchPartVisibilityChangeEvent } from "../../../../../workbench/services/layout/browser/layoutService.js";
 import { ChatService } from "../../../../../workbench/services/chat/browser/chatService.js";
 import { WorkbenchSessionService } from "../../../../../workbench/services/sessions/browser/sessionService.js";
-import { IWorkbenchSessionService } from "../../../../../workbench/services/sessions/common/sessionService.js";
+import { IWorkbenchSessionService, type Session } from "../../../../../workbench/services/sessions/common/sessionService.js";
 import { IViewsService, ViewsService } from "../../../../../workbench/services/views/browser/viewsService.js";
 import { ContextKeyService, IContextKeyService } from "../../../../../platform/contextkey/common/contextkey.js";
 import { ViewDescriptorService } from "../../../../../workbench/services/views/common/viewDescriptorService.js";
@@ -927,7 +928,7 @@ test("ChatPaneModel layers transient deltas over canonical Thread state", async 
 
   await model.initialize();
   fake.emit({
-    method: "thread/update",
+    method: "session/thread/update",
     params: {
       sessionId: "session-1",
       threadId: "thread-1",
@@ -949,7 +950,7 @@ test("ChatPaneModel layers transient deltas over canonical Thread state", async 
     },
   });
   fake.emit({
-    method: "thread/update",
+    method: "session/thread/update",
     params: {
       sessionId: "session-1",
       threadId: "thread-1",
@@ -972,7 +973,7 @@ test("ChatPaneModel layers transient deltas over canonical Thread state", async 
 
   currentThread = thread("Hello");
   fake.emit({
-    method: "thread/update",
+    method: "session/thread/update",
     params: {
       sessionId: "session-1",
       threadId: "thread-1",
@@ -1031,21 +1032,21 @@ function testLayoutService(auxiliaryBarVisible = true): IWorkbenchLayoutService 
 
 function fakeApi(options: FakeOptions = {}): {
   readonly api: IRendererHost;
-  readonly archiveRequests: readonly SessionCommandParams[];
-  readonly stopRequests: readonly SessionCommandParams[];
+  readonly archiveRequests: readonly SessionMutationParams[];
+  readonly stopRequests: readonly SessionMutationParams[];
   readonly createSessionRequests: readonly SessionCreateParams[];
-  readonly createThreadRequests: readonly SessionThreadCreateParams[];
-  readonly setModelRequests: readonly SessionModelSetParams[];
-  readonly turnStartRequests: readonly TurnStartParams[];
+  readonly createThreadRequests: readonly SessionOperationInput<"createThread">[];
+  readonly setModelRequests: readonly SessionOperationInput<"setModel">[];
+  readonly turnStartRequests: readonly SessionOperationInput<"startTurn">[];
   readonly emit: (notification: ServerNotification) => void;
 } {
   const listeners = new Set<(notification: ServerNotification) => void>();
-  const archiveRequests: SessionCommandParams[] = [];
-  const stopRequests: SessionCommandParams[] = [];
+  const archiveRequests: SessionMutationParams[] = [];
+  const stopRequests: SessionMutationParams[] = [];
   const createSessionRequests: SessionCreateParams[] = [];
-  const createThreadRequests: SessionThreadCreateParams[] = [];
-  const setModelRequests: SessionModelSetParams[] = [];
-  const turnStartRequests: TurnStartParams[] = [];
+  const createThreadRequests: SessionOperationInput<"createThread">[] = [];
+  const setModelRequests: SessionOperationInput<"setModel">[] = [];
+  const turnStartRequests: SessionOperationInput<"startTurn">[] = [];
   const currentThread = () => options.thread?.() ?? thread();
   const api = {
     appServer: {
@@ -1060,14 +1061,14 @@ function fakeApi(options: FakeOptions = {}): {
         if (options.createSessionError) throw options.createSessionError;
         return { session: options.createSession ?? session("created") };
       },
-      createThread: async (params: SessionThreadCreateParams) => {
+      createThread: async (params: SessionOperationInput<"createThread">) => {
         createThreadRequests.push(params);
         return options.createThread ?? {
           session: session("created", "created-thread"),
           threadId: "created-thread",
         };
       },
-      archive: async (params: SessionCommandParams) => {
+      archive: async (params: SessionMutationParams) => {
         archiveRequests.push(params);
         const archived = options.sessions?.find(
           ({ sessionId }) => sessionId === params.sessionId,
@@ -1080,7 +1081,7 @@ function fakeApi(options: FakeOptions = {}): {
           },
         };
       },
-      stop: async (params: SessionCommandParams) => {
+      stop: async (params: SessionMutationParams) => {
         stopRequests.push(params);
         const stopped = options.sessions?.find(
           ({ sessionId }) => sessionId === params.sessionId,
@@ -1093,7 +1094,7 @@ function fakeApi(options: FakeOptions = {}): {
           },
         };
       },
-      setModel: async (params: SessionModelSetParams) => {
+      setModel: async (params: SessionOperationInput<"setModel">) => {
         setModelRequests.push(params);
         const current = options.sessions?.find(({ sessionId }) => sessionId === params.sessionId) ?? session(params.sessionId);
         return { session: { ...current, model: params.model, sequence: current.sequence + 1 } };
@@ -1111,7 +1112,7 @@ function fakeApi(options: FakeOptions = {}): {
       unsubscribe: async () => undefined,
     },
     turn: {
-      start: async (params: TurnStartParams) => {
+      start: async (params: SessionOperationInput<"startTurn">) => {
         turnStartRequests.push(params);
         return { turnId: "turn-started", sequence: 2 };
       },

@@ -130,7 +130,6 @@ struct Subscriber {
 #[derive(Default)]
 struct ThreadSubscription {
     sequence: u64,
-    explicit: bool,
     session_owners: BTreeSet<SessionId>,
 }
 
@@ -174,18 +173,8 @@ impl UpdateBroker {
             subscriber.sessions.remove(session_id);
             subscriber.threads.retain(|_, subscription| {
                 subscription.session_owners.remove(session_id);
-                subscription.explicit || !subscription.session_owners.is_empty()
+                !subscription.session_owners.is_empty()
             });
-        }
-    }
-
-    pub(super) fn subscribe_thread(&self, connection_id: u64, thread_id: ThreadId, sequence: u64) {
-        if let Ok(mut subscribers) = self.subscribers.lock()
-            && let Some(subscriber) = subscribers.get_mut(&connection_id)
-        {
-            let subscription = subscriber.threads.entry(thread_id).or_default();
-            subscription.sequence = subscription.sequence.max(sequence);
-            subscription.explicit = true;
         }
     }
 
@@ -199,23 +188,23 @@ impl UpdateBroker {
         if let Ok(mut subscribers) = self.subscribers.lock()
             && let Some(subscriber) = subscribers.get_mut(&connection_id)
         {
-            let session_is_subscribed = subscriber.sessions.contains_key(&session_id);
             let subscription = subscriber.threads.entry(thread_id).or_default();
             subscription.sequence = subscription.sequence.max(sequence);
-            if session_is_subscribed {
-                subscription.session_owners.insert(session_id);
-            } else {
-                subscription.explicit = true;
-            }
+            subscription.session_owners.insert(session_id);
         }
     }
 
-    pub(super) fn unsubscribe_thread(&self, connection_id: u64, thread_id: &ThreadId) {
+    pub(super) fn unsubscribe_session_thread(
+        &self,
+        connection_id: u64,
+        session_id: &SessionId,
+        thread_id: &ThreadId,
+    ) {
         if let Ok(mut subscribers) = self.subscribers.lock()
             && let Some(subscriber) = subscribers.get_mut(&connection_id)
         {
             if let Some(subscription) = subscriber.threads.get_mut(thread_id) {
-                subscription.explicit = false;
+                subscription.session_owners.remove(session_id);
                 if subscription.session_owners.is_empty() {
                     subscriber.threads.remove(thread_id);
                 }
@@ -262,9 +251,9 @@ impl UpdateBroker {
                         if let Some(subscription) = subscriber.threads.get_mut(thread_id) {
                             subscription.session_owners.remove(session_id);
                         }
-                        subscriber.threads.retain(|_, subscription| {
-                            subscription.explicit || !subscription.session_owners.is_empty()
-                        });
+                        subscriber
+                            .threads
+                            .retain(|_, subscription| !subscription.session_owners.is_empty());
                     }
                     _ => {}
                 }
@@ -300,15 +289,17 @@ impl UpdateBroker {
             let Some(subscription) = subscriber.threads.get_mut(thread_id) else {
                 return true;
             };
-            let pending = updates
+            let session_pending = updates
                 .iter()
                 .filter(|update| update.durable_sequence > subscription.sequence)
-                .map(|update| notification(ServerNotificationMethod::ThreadUpdate, update))
+                .map(|update| notification(ServerNotificationMethod::SessionThreadUpdate, update))
                 .collect::<Vec<_>>();
             if let Some(last) = updates.last() {
                 subscription.sequence = subscription.sequence.max(last.durable_sequence);
             }
-            queue.extend(pending);
+            if !subscription.session_owners.is_empty() {
+                queue.extend(session_pending);
+            }
             true
         });
     }
@@ -419,10 +410,15 @@ impl UpdateBroker {
             else {
                 return false;
             };
-            if !subscriber.threads.contains_key(&update.thread_id) {
+            let Some(subscription) = subscriber.threads.get(&update.thread_id) else {
                 return true;
+            };
+            if !subscription.session_owners.is_empty() {
+                queue.push(notification(
+                    ServerNotificationMethod::SessionThreadUpdate,
+                    update,
+                ));
             }
-            queue.push(notification(ServerNotificationMethod::ThreadUpdate, update));
             true
         });
     }

@@ -174,6 +174,7 @@ impl ActiveConversation {
         if arguments.is_empty() {
             app.update(AppEvent::RewindViewOpened(rewind::load_selection(
                 client,
+                self.session_id(),
                 self.thread_id(),
             )?));
             return Ok(());

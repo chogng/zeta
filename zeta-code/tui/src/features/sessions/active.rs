@@ -5,10 +5,11 @@ use zeta_app_server_client::ClientError;
 use zeta_app_server_client::JsonRpcTransport;
 use zeta_app_server_protocol::protocol::session::SessionCreateParams;
 use zeta_app_server_protocol::protocol::session::SessionReadParams;
-use zeta_app_server_protocol::protocol::session::SessionThreadCreateParams;
-use zeta_app_server_protocol::protocol::session::SessionThreadForkParams;
-use zeta_app_server_protocol::protocol::session::SessionThreadRewindParams;
-use zeta_app_server_protocol::protocol::thread::ThreadReadParams;
+use zeta_app_server_protocol::protocol::session::SessionRequest;
+use zeta_app_server_protocol::protocol::session::SessionRequestParams;
+use zeta_app_server_protocol::protocol::session::SessionRequestResult;
+use zeta_app_server_protocol::protocol::session::SessionThreadReadParams;
+use zeta_app_server_protocol::protocol::session::SessionThreadResult;
 use zeta_protocol::Session;
 use zeta_protocol::SessionId;
 use zeta_protocol::SessionThreadStatus;
@@ -114,15 +115,20 @@ impl ActiveConversation {
         } else {
             arguments.to_owned()
         };
-        let result = client.fork_session_thread(SessionThreadForkParams {
-            command_id: new_command_id("fork"),
-            session_id: self.session.session_id.clone(),
-            expected_sequence: self.session.sequence,
-            parent_thread_id: self.thread_id.clone(),
-            title,
-        })?;
+        let result = client
+            .request_session(SessionRequestParams {
+                command_id: new_command_id("fork"),
+                session_id: self.session.session_id.clone(),
+                expected_sequence: self.session.sequence,
+                request: SessionRequest::ForkThread {
+                    parent_thread_id: self.thread_id.clone(),
+                    title,
+                },
+            })
+            .and_then(expect_thread_result)?;
         let snapshot = client
-            .read_thread(ThreadReadParams {
+            .read_session_thread(SessionThreadReadParams {
+                session_id: result.session.session_id.clone(),
                 thread_id: result.thread_id.clone(),
             })?
             .thread;
@@ -146,16 +152,21 @@ impl ActiveConversation {
         T: JsonRpcTransport,
     {
         let title = format!("Rewind of {}", self.session.title);
-        let result = client.rewind_session_thread(SessionThreadRewindParams {
-            command_id: new_command_id("rewind"),
-            session_id: self.session.session_id.clone(),
-            expected_sequence: self.session.sequence,
-            parent_thread_id: self.thread_id.clone(),
-            before_turn_id,
-            title,
-        })?;
+        let result = client
+            .request_session(SessionRequestParams {
+                command_id: new_command_id("rewind"),
+                session_id: self.session.session_id.clone(),
+                expected_sequence: self.session.sequence,
+                request: SessionRequest::RewindThread {
+                    parent_thread_id: self.thread_id.clone(),
+                    before_turn_id,
+                    title,
+                },
+            })
+            .and_then(expect_thread_result)?;
         let snapshot = client
-            .read_thread(ThreadReadParams {
+            .read_session_thread(SessionThreadReadParams {
+                session_id: result.session.session_id.clone(),
                 thread_id: result.thread_id.clone(),
             })?
             .thread;
@@ -215,7 +226,8 @@ impl ActiveConversation {
                 ))
             })?;
         let snapshot = client
-            .read_thread(ThreadReadParams {
+            .read_session_thread(SessionThreadReadParams {
+                session_id: session.session_id.clone(),
                 thread_id: thread_id.clone(),
             })?
             .thread;
@@ -244,14 +256,17 @@ where
         command_id: new_command_id("session"),
         title: title.clone(),
     })?;
-    let thread = client.create_session_thread(SessionThreadCreateParams {
-        command_id: new_command_id("thread"),
-        session_id: session.session.session_id.clone(),
-        expected_sequence: session.session.sequence,
-        title,
-    })?;
+    let thread = client
+        .request_session(SessionRequestParams {
+            command_id: new_command_id("thread"),
+            session_id: session.session.session_id.clone(),
+            expected_sequence: session.session.sequence,
+            request: SessionRequest::CreateThread { title },
+        })
+        .and_then(expect_thread_result)?;
     let snapshot = client
-        .read_thread(ThreadReadParams {
+        .read_session_thread(SessionThreadReadParams {
+            session_id: thread.session.session_id.clone(),
             thread_id: thread.thread_id.clone(),
         })?
         .thread;
@@ -263,6 +278,15 @@ where
         },
         snapshot,
     ))
+}
+
+fn expect_thread_result(result: SessionRequestResult) -> Result<SessionThreadResult, ClientError> {
+    match result {
+        SessionRequestResult::Thread(result) => Ok(result),
+        other => Err(ClientError::Protocol(format!(
+            "session request returned {other:?} for a Thread operation"
+        ))),
+    }
 }
 
 #[derive(Debug)]

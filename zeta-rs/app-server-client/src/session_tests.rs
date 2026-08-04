@@ -3,9 +3,10 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use zeta_app_server_protocol::protocol::common::{ClientCapabilities, ClientInfo};
 use zeta_app_server_protocol::protocol::session::{
-    SessionCreateParams, SessionSubscribeParams, SessionThreadCreateParams,
+    SessionCreateParams, SessionRequest, SessionRequestParams, SessionRequestResult,
+    SessionSubscribeParams,
 };
-use zeta_app_server_protocol::protocol::turn::{InputItem, TurnStartParams};
+use zeta_app_server_protocol::protocol::turn::InputItem;
 use zeta_async_utils::CancellationToken;
 use zeta_core::{
     CoreError, InMemorySessionStore, InMemoryThreadStore, ModelService, SessionCoordinator,
@@ -37,13 +38,18 @@ fn embedded_session_delivers_idle_notifications_without_a_polling_request() {
         })
         .unwrap();
     let created_thread = client
-        .create_session_thread(SessionThreadCreateParams {
+        .request_session(SessionRequestParams {
             command_id: command_id("thread"),
             session_id: created_session.session.session_id.clone(),
             expected_sequence: created_session.session.sequence,
-            title: "thread".into(),
+            request: SessionRequest::CreateThread {
+                title: "thread".into(),
+            },
         })
         .unwrap();
+    let SessionRequestResult::Thread(created_thread) = created_thread else {
+        panic!("Session request did not return a Thread result");
+    };
     client
         .subscribe_session(SessionSubscribeParams {
             session_id: created_session.session.session_id.clone(),
@@ -51,14 +57,16 @@ fn embedded_session_delivers_idle_notifications_without_a_polling_request() {
         })
         .unwrap();
     client
-        .start_turn(TurnStartParams {
+        .request_session(SessionRequestParams {
             command_id: command_id("turn"),
             session_id: created_session.session.session_id,
-            thread_id: created_thread.thread_id,
             expected_sequence: 1,
-            input: vec![InputItem::Text {
-                text: "hello".into(),
-            }],
+            request: SessionRequest::StartTurn {
+                thread_id: created_thread.thread_id,
+                input: vec![InputItem::Text {
+                    text: "hello".into(),
+                }],
+            },
         })
         .unwrap();
 
@@ -67,7 +75,7 @@ fn embedded_session_delivers_idle_notifications_without_a_polling_request() {
         let remaining = deadline.saturating_duration_since(Instant::now());
         assert!(!remaining.is_zero(), "completion notification timed out");
         let event = events.recv_timeout(remaining).expect("event arrives");
-        if let AppServerEvent::Notification(ServerNotification::ThreadUpdate(update)) = event
+        if let AppServerEvent::Notification(ServerNotification::SessionThreadUpdate(update)) = event
             && matches!(
                 update.update,
                 ThreadUpdate::Committed {

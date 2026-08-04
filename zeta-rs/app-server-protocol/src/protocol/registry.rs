@@ -59,11 +59,11 @@ use crate::protocol::search::{
     WorkspaceSearchReadResult, WorkspaceSearchStartParams, WorkspaceSearchStartResult,
 };
 use crate::protocol::session::{
-    SessionCommandParams, SessionCreateParams, SessionListResult, SessionModelSetParams,
-    SessionReadParams, SessionRequest, SessionRequestParams, SessionRequestResult, SessionResult,
-    SessionSubscribeParams, SessionSubscribeResult, SessionThreadArchiveParams,
-    SessionThreadCreateParams, SessionThreadForkParams, SessionThreadResult,
-    SessionThreadRewindParams, SessionUnsubscribeParams,
+    SessionCreateParams, SessionListResult, SessionReadParams, SessionRequest,
+    SessionRequestParams, SessionRequestResult, SessionResult, SessionSubscribeParams,
+    SessionSubscribeResult, SessionThreadProjection, SessionThreadReadParams,
+    SessionThreadReadResult, SessionThreadResult, SessionThreadSubscribeParams,
+    SessionThreadSubscribeResult, SessionThreadUnsubscribeParams, SessionUnsubscribeParams,
 };
 use crate::protocol::skills::{
     SkillCatalogReloadDto, SkillCompatibilityDto, SkillDiagnosticCodeDto, SkillDiagnosticDto,
@@ -77,13 +77,8 @@ use crate::protocol::terminal::{
     TerminalProfileSelection, TerminalReadParams, TerminalReadResult, TerminalResizeParams,
     TerminalWriteParams,
 };
-use crate::protocol::thread::{
-    ThreadReadParams, ThreadReadResult, ThreadSubscribeParams, ThreadSubscribeResult,
-    ThreadUnsubscribeParams,
-};
 use crate::protocol::turn::{
-    InputItem, ShellTurnStartParams, TurnInteractionResolveParams, TurnInteractionResolveResult,
-    TurnInterruptParams, TurnInterruptResult, TurnStartParams, TurnStartResult,
+    InputItem, TurnInteractionResolveResult, TurnInterruptResult, TurnStartResult,
 };
 use crate::protocol::workspace::{WorkspaceSwitchParams, WorkspaceSwitchResult};
 use schemars::JsonSchema;
@@ -109,8 +104,6 @@ pub enum SerializationScopeDefinition {
     GlobalSharedRead,
     SessionExclusive,
     SessionSharedRead,
-    ThreadExclusive,
-    ThreadSharedRead,
     ResourceExclusive,
 }
 
@@ -270,58 +263,18 @@ client_methods! {
         response: (),
         serialization: None,
     },
-    SessionThreadCreate => "session/thread/create" {
-        params: SessionThreadCreateParams,
-        response: SessionThreadResult,
-        serialization: SessionExclusive,
+    SessionThreadRead => "session/thread/read" {
+        params: SessionThreadReadParams,
+        response: SessionThreadReadResult,
+        serialization: SessionSharedRead,
     },
-    SessionThreadFork => "session/thread/fork" {
-        params: SessionThreadForkParams,
-        response: SessionThreadResult,
-        serialization: SessionExclusive,
+    SessionThreadSubscribe => "session/thread/subscribe" {
+        params: SessionThreadSubscribeParams,
+        response: SessionThreadSubscribeResult,
+        serialization: SessionSharedRead,
     },
-    SessionThreadRewind => "session/thread/rewind" {
-        params: SessionThreadRewindParams,
-        response: SessionThreadResult,
-        serialization: SessionExclusive,
-    },
-    SessionThreadArchive => "session/thread/archive" {
-        params: SessionThreadArchiveParams,
-        response: SessionResult,
-        serialization: SessionExclusive,
-    },
-    SessionComplete => "session/complete" {
-        params: SessionCommandParams,
-        response: SessionResult,
-        serialization: SessionExclusive,
-    },
-    SessionArchive => "session/archive" {
-        params: SessionCommandParams,
-        response: SessionResult,
-        serialization: SessionExclusive,
-    },
-    SessionStop => "session/stop" {
-        params: SessionCommandParams,
-        response: SessionResult,
-        serialization: SessionExclusive,
-    },
-    SessionModelSet => "session/model/set" {
-        params: SessionModelSetParams,
-        response: SessionResult,
-        serialization: SessionExclusive,
-    },
-    ThreadRead => "thread/read" {
-        params: ThreadReadParams,
-        response: ThreadReadResult,
-        serialization: ThreadSharedRead,
-    },
-    ThreadSubscribe => "thread/subscribe" {
-        params: ThreadSubscribeParams,
-        response: ThreadSubscribeResult,
-        serialization: ThreadSharedRead,
-    },
-    ThreadUnsubscribe => "thread/unsubscribe" {
-        params: ThreadUnsubscribeParams,
+    SessionThreadUnsubscribe => "session/thread/unsubscribe" {
+        params: SessionThreadUnsubscribeParams,
         response: (),
         serialization: None,
     },
@@ -439,26 +392,6 @@ client_methods! {
         params: ExtensionResourceOpenParams,
         response: ExtensionResourceOpenResult,
         serialization: ResourceExclusive,
-    },
-    TurnStart => "turn/start" {
-        params: TurnStartParams,
-        response: TurnStartResult,
-        serialization: ThreadExclusive,
-    },
-    ShellTurnStart => "turn/shell/start" {
-        params: ShellTurnStartParams,
-        response: TurnStartResult,
-        serialization: ThreadExclusive,
-    },
-    TurnInterrupt => "turn/interrupt" {
-        params: TurnInterruptParams,
-        response: TurnInterruptResult,
-        serialization: ThreadExclusive,
-    },
-    TurnInteractionResolve => "turn/interaction/resolve" {
-        params: TurnInteractionResolveParams,
-        response: TurnInteractionResolveResult,
-        serialization: ThreadExclusive,
     },
     TypstCompile => "document/typst/compile" {
         params: TypstCompileParams,
@@ -666,7 +599,7 @@ server_notifications! {
     SessionUpdate => "session/update" {
         params: SessionUpdateEnvelope,
     },
-    ThreadUpdate => "thread/update" {
+    SessionThreadUpdate => "session/thread/update" {
         params: ThreadUpdateEnvelope,
     },
     ConfigChanged => "config/changed" {
@@ -791,18 +724,18 @@ typescript_bindings! {
     SessionReadParams,
     SessionSubscribeParams,
     SessionUnsubscribeParams,
-    SessionCommandParams,
     SessionRequest,
     SessionRequestParams,
     SessionRequestResult,
-    SessionModelSetParams,
-    SessionThreadCreateParams,
-    SessionThreadForkParams,
-    SessionThreadRewindParams,
-    SessionThreadArchiveParams,
+    SessionThreadReadParams,
+    SessionThreadReadResult,
+    SessionThreadSubscribeParams,
+    SessionThreadSubscribeResult,
+    SessionThreadUnsubscribeParams,
     SessionResult,
     SessionListResult,
     SessionSubscribeResult,
+    SessionThreadProjection,
     SessionThreadResult,
     ModelCatalogEntry,
     ModelListResult,
@@ -847,18 +780,9 @@ typescript_bindings! {
     ItemDelta,
     ThreadUpdate,
     ThreadUpdateEnvelope,
-    ThreadReadParams,
-    ThreadSubscribeParams,
-    ThreadUnsubscribeParams,
-    ThreadReadResult,
-    ThreadSubscribeResult,
     InputItem,
-    ShellTurnStartParams,
-    TurnStartParams,
     TurnStartResult,
-    TurnInterruptParams,
     TurnInterruptResult,
-    TurnInteractionResolveParams,
     TurnInteractionResolveResult,
     TypstCompileParams,
     TypstCompileResult,

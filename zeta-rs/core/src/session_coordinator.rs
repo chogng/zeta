@@ -143,7 +143,7 @@ impl SessionCoordinator {
     /// Starts a model Turn only while the owning Session and membership are active.
     ///
     /// The Session lock is held across validation and the child mutation so an App Server
-    /// `session/stop` cannot commit after this check and still accept a new Turn.
+    /// The canonical Session stop operation cannot commit after this check and still accept a new Turn.
     pub fn start_turn(
         &self,
         session_id: &SessionId,
@@ -397,7 +397,7 @@ impl SessionCoordinator {
     /// retry after a partial failure safe and allowing recovery to finish the cancellation pass.
     ///
     /// This is an internal Core execution action. The App Server owns the external
-    /// `session/stop` mapping (for example, a frontend Tab close); no canonical stop command is
+    /// lifecycle mapping (for example, a frontend Tab close); no canonical stop command is
     /// added to `zeta-protocol`.
     pub fn stop(
         &self,

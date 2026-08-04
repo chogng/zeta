@@ -33,7 +33,7 @@ JSONL / in-process caller
    ├─ reloadable MCP Tool generation → zeta-mcp
    ├─ SkillRuntime → zeta-skills + zeta-file-watcher
    ├─ connection-owned ResourceStore
-   └─ UpdateBroker → session/update, thread/update, config/changed, skills/changed, git/statusChanged, fs/changed
+   └─ UpdateBroker → session/update, session/thread/update, config/changed, skills/changed, git/statusChanged, fs/changed
 ```
 
 App Server connection 不是 product Session。关闭 connection 只失去 connection-local subscription、
@@ -51,7 +51,7 @@ request-ID set、notification queue 与 resource ownership；Session/Thread dura
 | `AppServer::connection_notifications` | 返回可阻塞等待、主动唤醒的 connection outbound source |
 | `AppServer::close_connection` | 注销 subscription、关闭 notification source，并释放 Resource/Terminal/Syntax owner |
 | `AppServer::handle_json` | 处理一个 JSON-RPC request string |
-| `AppServer::drain_notifications` | legacy/JSONL caller 取出该 connection 的 serialized notifications |
+| `AppServer::drain_notifications` | JSONL 与同步适配 caller 取出该 connection 的 serialized notifications |
 | `AppServer::{serve_stdio,serve_jsonl}` | 同步 JSON Lines service loop |
 | `AppServer::create_resource` | 创建 5 分钟 TTL 的 connection-owned resource |
 | `AppServer::with_config_store` | 开启 config/provider/MCP/Skill RPC |
@@ -82,7 +82,7 @@ in-process 路径都会使用同一个启动时解析结果：
 `RipgrepExecutable` 验证并组合成 Tool service。
 
 Tab 关闭的停止语义属于本层适配，而不是 `zeta-protocol` 的新 command：前端通过
-`session/stop` 请求到达 `AppServer::session_stop`，后者调用 Core 的
+`session/request` 的 `Stop` operation 到达 Session mutation dispatcher，后者调用 Core 的
 `SessionCoordinator::stop`，再从 durable gap 发布 Session 和 child Thread updates。单纯
 `AppServer::close_connection` 只释放 connection-owned delivery/resource state，不停止产品
 Session。
@@ -123,8 +123,7 @@ src/
 | Symbol | 可见性 | 当前职责 | 方向约束 |
 | --- | --- | --- | --- |
 | `AppServer::dispatch` | private | initialization gate 后对 `ClientMethod` exhaustive dispatch | method string lookup只来自 protocol registry |
-| `AppServer::session_stop` | `pub(super)` | 解码适配层 `session/stop`，保存 child Thread cursors，调用 Core 停止编排并发布 durable gaps | 不在 App Server reducer 或 `zeta-protocol` 中定义 Stop command |
-| `AppServer::turn_start` / `AppServer::shell_turn_start` | `pub(super)` | 解析 Session 模型后通过 `SessionCoordinator` 的 Session-aware start gate 接受 Turn | 不直接绕过 Session lifecycle 调用低层 Thread start |
+| `AppServer::session_request` | `pub(super)` | 解码 canonical `session/request`，按 typed operation 调用 Session/Thread/Turn helper 并发布 durable gaps | 不在 App Server reducer 或 `zeta-protocol` 中复制 mutation model |
 | `decode<T>` | crate-private | params JSON → typed DTO，统一 InvalidParams | operation 不手读 arbitrary fields |
 | `result<T>` | crate-private | typed result → JSON，统一 serialization failure | external result shape 由 protocol DTO 决定 |
 | `core_error` | crate-private | Core error → stable App Server error | 不回传 internal error string |
@@ -220,7 +219,7 @@ snapshot；单个 connection 生命周期中不会因 host 后续状态变化而
 典型 create path：
 
 ```text
-session/thread/create
+session/request { type: createThread }
 ├─ SessionCoordinator::create_thread
 ├─ subscribe caller to new Thread
 ├─ notify_session_updates(previous session sequence)
@@ -228,22 +227,23 @@ session/thread/create
 └─ return current Session + ThreadId
 ```
 
-`session/thread/rewind` 是非破坏性回退：`SessionCoordinator::rewind_thread` 记录包含 source Thread、
+`session/request { type: rewindThread }` 是非破坏性回退：`SessionCoordinator::rewind_thread` 记录包含 source Thread、
 source sequence 与 excluded Turn 的 Rewind lineage，再让 `ThreadController::create_rewound_thread`
 向新 Thread 写入单个 `HistoryImported` durable event。该事件只携带 checkpoint 之前的 terminal
 Turns；source Thread 及其后续历史不被改写。调用方随后订阅新 Thread，旧 Thread 仍可审计和恢复。
 
 `session/subscribe(afterSequence)` 是产品宿主使用的 aggregate port：它返回 Session snapshot、Session
-durable gap 和每个 child Thread 的 projection，并在同一 connection 上建立 child update delivery。
+durable gap 和每个 child Thread 的 projection，并在同一 connection 上建立
+`session/thread/update` child update delivery。
 `session/request` 是产品 mutation 的 canonical aggregate port：它携带一个 `CommandId`、Session
 sequence 和 typed `SessionRequest`，统一路由 Session lifecycle、child Thread lifecycle、Turn
 start/interrupt 与 interaction resolve，并以 tagged `SessionRequestResult` 返回对应结果。
-现有 `session/thread/*`、`session/model/set`、`session/complete` 以及 `turn/*` 方法暂时保留为
-兼容入口；新产品功能应优先接入 `session/request`。
-`thread/subscribe(afterSequence)` 仍保留为低层兼容 contract，但 `zeterm` 不直接调用它。两类订阅
-都是 connection-local delivery state；真实 gap 来自 coordinator/store。
+旧的独立 Session/Thread/Turn mutation methods 已从 registry 和 dispatcher 删除；所有 mutation
+都通过 `session/request`。Thread snapshot 和 gap 使用带 Session scope 的
+`session/thread/read` / `session/thread/subscribe`。这些订阅都是 connection-local delivery state；
+真实 gap 来自 coordinator/store。
 
-`turn/start`：
+`session/request::StartTurn`：
 
 1. 校验 Thread 属于 supplied Session；
 2. 校验 Session 仍为 active；
@@ -252,11 +252,12 @@ start/interrupt 与 interaction resolve，并以 tagged `SessionRequestResult` �
 5. replay 时读取既有 Turn，terminal failure/interruption 不伪装成 success；
 6. 新 start 发布 durable update 后调用 `TurnExecutor::start`。
 
-`model/list` 由 `ModelCatalog` 投影当前已配置 provider 的可选模型；`session/model/set`
+`model/list` 由 `ModelCatalog` 投影当前已配置 provider 的可选模型；`session/request::SetModel`
 先通过同一 catalog 校验，再提交 Session command。全局 `preferredModel` 只作为新 Session
 和历史无模型 Session 的默认值，不承担当前 Session 的模型切换。
 
-`turn/interaction/resolve` 使用 exact durable `RequestId`。当 response 是 Tool Call 对应的 approval，
+`session/request::ResolveInteraction` 使用 exact durable
+`RequestId`。当 response 是 Tool Call 对应的 approval，
 且 Core 确实产生 `Resolved` disposition，App Server 再启动 executor 恢复 Tool path。这个判断依赖
 pending interaction 的 item binding，不能简化为“所有 approval 都 restart”。
 同一路径同时恢复执行前 approval 与带结构化 `sandboxDenial` 的 sandbox escalation approval；
@@ -280,8 +281,8 @@ transient Thread update
 ```
 
 `NotificationQueue::{push,extend}` 在空 queue 获得新值时唤醒 listener；
-`AppServer::close_connection` 显式 unregister subscriber 并唤醒 blocked listener。Legacy
-connection 若未显式 close，最后一个 strong owner drop 后 broker 仍会在下一次 publish 时通过
+`AppServer::close_connection` 显式 unregister subscriber 并唤醒 blocked listener。Connection
+若未显式 close，最后一个 strong owner drop 后 broker 仍会在下一次 publish 时通过
 `Weak::upgrade` 失败清除 subscriber。目前没有 queue length/backpressure limit，slow consumer
 可能积累内存，这是当前限制。
 

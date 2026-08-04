@@ -1,0 +1,8 @@
+load("//zeterm:defs.bzl", "zeterm_rust_binary")
+
+zeterm_rust_binary(
+    name = "zui_demo",
+    crate_name = "zui_demo",
+    crate_root = "src/main.rs",
+    package_name = "zeterm/zui-demo",
+)

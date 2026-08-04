@@ -18,7 +18,7 @@ export type ChatPaneSelection =
 /**
  * Projection of one Chat tab, before or after it acquires a durable Thread.
  *
- * Canonical committed state is refreshed from `thread/read`. Transient item
+ * Canonical committed state is refreshed from `session/thread/read`. Transient item
  * updates are layered by Item ID and discarded once the committed snapshot
  * contains the same item.
  */
@@ -55,8 +55,8 @@ export class ChatPaneModel extends DisposableOwner {
     this.defer(() => {
       this.disposed = true;
       this.generation++;
-      const threadId = this.threadId;
-      if (threadId) void this.chatService.unsubscribeThread(threadId);
+      const active = this.activeSession;
+      if (active) void this.chatService.unsubscribeThread(active.session.sessionId, active.threadId);
       this.transientItems.clear();
       this.resetStreamCursor();
     });
@@ -140,7 +140,7 @@ export class ChatPaneModel extends DisposableOwner {
       return;
     }
     if (previousThreadId !== active.threadId) {
-      void this.chatService.unsubscribeThread(previousThreadId);
+      void this.chatService.unsubscribeThread(current.session.sessionId, previousThreadId);
     }
     await this.subscribe(active);
   }
@@ -282,10 +282,10 @@ export class ChatPaneModel extends DisposableOwner {
     this.resetStreamCursor();
     this.setState("loading");
     if (oldThreadId && oldThreadId !== active.threadId) {
-      void this.chatService.unsubscribeThread(oldThreadId);
+      void this.chatService.unsubscribeThread(active.session.sessionId, oldThreadId);
     }
     try {
-      const result = await this.chatService.subscribeThread(active.threadId, 0);
+      const result = await this.chatService.subscribeThread(active.session.sessionId, active.threadId, 0);
       if (this.disposed || generation !== this.generation) return;
       this._thread = result.thread;
       this.discardCommittedTransientItems();
@@ -408,7 +408,7 @@ export class ChatPaneModel extends DisposableOwner {
     const threadId = active.threadId;
     const generation = this.generation;
     try {
-      const thread = await this.chatService.readThread(threadId);
+      const thread = await this.chatService.readThread(active.session.sessionId, threadId);
       if (
         this.disposed ||
         generation !== this.generation ||

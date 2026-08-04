@@ -15,7 +15,7 @@ pub(crate) fn map_event(event: AppServerEvent) -> Option<ClientEvent> {
         AppServerEvent::Notification(ServerNotification::SkillsChanged(_)) => {
             Some(ClientEvent::SkillsChanged)
         }
-        AppServerEvent::Notification(ServerNotification::ThreadUpdate(update)) => {
+        AppServerEvent::Notification(ServerNotification::SessionThreadUpdate(update)) => {
             Some(ClientEvent::ThreadUpdated(update))
         }
         AppServerEvent::Notification(

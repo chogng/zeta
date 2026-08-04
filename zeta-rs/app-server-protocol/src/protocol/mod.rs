@@ -18,6 +18,5 @@ pub mod session;
 pub mod skills;
 pub mod slash_commands;
 pub mod terminal;
-pub mod thread;
 pub mod turn;
 pub mod workspace;

@@ -258,11 +258,11 @@ turn/steer { command_id, expected_sequence, turn_id, input: Vec<UserInput> }
   snapshot——所缺的只是 `ThreadCommand::SteerTurn` 命令 + App Server method（protocol
   变更，归入阶段 A 的同批 schema 同步）；
 - 模型调用进行中：消息落盘等待，本次响应返回并处理完工具后，下一次调用可见；不自动
-  interrupt。客户端可提供"打断并说"= `turn/interrupt` + 新 `turn/start`；
+  interrupt。客户端可提供"打断并说"= `session/request` InterruptTurn + 新 StartTurn；
 - WaitingForApproval 期间：允许 steer，恢复执行后可见；
 - Cancelling/终态：拒绝（稳定错误），客户端引导开新 Turn；
 - 多条 steer 按提交顺序进入历史；append-only，缓存友好；
-- Turn 处于 Idle（无运行 Turn）时 steer 无意义：返回错误，客户端用 `turn/start`。
+- Turn 处于 Idle（无运行 Turn）时 steer 无意义：返回错误，客户端用 `session/request` StartTurn。
 
 ## 9. 上下文裁剪
 
@@ -356,7 +356,7 @@ instructions（环境快照在此刷新）
 
 ## 12. Skills 与 slash commands
 
-- **slash commands**（`zeta-rs/slash-commands` 已有 catalog）：在 `turn/start` 之前由
+- **slash commands**（`zeta-rs/slash-commands` 已有 catalog）：在 `session/request` StartTurn 之前由
   App Server 展开，展开后的正文作为 durable UserMessage 进入 Turn 输入；消息内保留
   `<command-name>` 标注供模型识别来源。不在模型侧解析斜杠语法。
 - **Skills**（`zeta-rs/skills` 已有 runtime；发现/信任归 [`skills.md`](skills.md)）：

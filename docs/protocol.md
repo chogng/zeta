@@ -180,8 +180,8 @@ Command 表达产品意图，不代表已经发生，也不能直接写入 proje
 `CommandId` 用于 retry-safe typed identity。`expectedSequence` 用于 optimistic
 concurrency。JSON-RPC request ID 不得替代 CommandId。
 
-前端关闭 Tab 不会扩展这组 canonical command。它是 App Server 适配层的产品动作：外部
-`session/stop` 由适配层映射到 Core 的内部停止编排，持久化既有的 Session archive fact，并协调
+前端关闭 Tab 不会扩展这组 canonical command。它是 App Server 的产品动作：外部通过
+`session/request` 的 `Stop` operation 映射到 Core 的内部停止编排，持久化既有的 Session archive fact，并协调
 中断其 child Thread 中的活动 Turn。这样 UI 的 Tab/session 语义不会泄漏进 `zeta-protocol`；连接
 断开也不会被解释成产品 Session 停止。
 
@@ -294,7 +294,7 @@ delivery assignment；断开时只能重新选择并重投递，或追加 `Inter
 reason: OwnerDisconnected }`，不得让 durable Turn 永远停在 waiting。deadline 同样是 durable
 absolute instant，但 timer 和超时 policy 属于执行控制层。
 
-当前已完成 canonical contract、Core reducer/recovery、以及 `turn/interaction/resolve` 的 typed
+当前已完成 canonical contract、Core reducer/recovery、以及 `session/request` 的 `ResolveInteraction` typed
 App Server command；完整的 Agent loop、connection owner selection、主动 delivery 与 deadline
 timer 尚未实现。因此这不是完整的 Server → Client request service。
 
@@ -551,7 +551,7 @@ zeta-rs/protocol/
 | Session/Thread 独立 sequence | 已完成 | model、store 和 fork lineage 已覆盖 |
 | durable Event 与 live Update 分离 | 基础完成 | store 类型只能接受 durable event |
 | typed Session/Thread command | 基础完成 | Core receipt 已使用；无消费者的 shared envelope 已删除 |
-| Tab 关闭到 Session 停止 | 已完成 | Chat 前端 → App Server `session/stop` → Core 内部停止编排；连接断开不触发停止 |
+| Tab 关闭到 Session 停止 | 已完成 | Chat 前端 → App Server `session/request` Stop → Core 内部停止编排；连接断开不触发停止 |
 | ThreadItem durable transcript | 基础完成 | text/image message、reasoning、plan、tool item 可重建 |
 | transient Item streaming | 类型已定义 | 当前没有完整异步 model stream producer |
 | Agent request/response | 基础完成 | durable request/resolve/cancel、deadline value、request correlation 和 typed resolve 已实现；owner delivery/timer 未实现 |
@@ -592,7 +592,7 @@ zeta-rs/protocol/
   `TurnInteraction` snapshot；
 - 已让 waiting Turn status 可由 durable event 重建，recovery 保留仍可行动的 wait；
 - 已接通带 `RequestId` 的 `ResolveUserInput` / `ResolveDynamicTool` 与
-  `turn/interaction/resolve`；
+  `session/request` 的 `ResolveInteraction`；
 - 仍需 Agent 执行层把 request 产生、owner selection、主动 delivery、timeout 与 disconnect
   policy 组成真实的 Server → Client vertical slice；
 - 保证 Agent request 与 Thread command 不混为一类。

@@ -94,12 +94,12 @@ run_stdio 或 run_http
 → 创建按主体隔离的 AppServerAgentService
 → McpServer::handle_message
 → tools/call
-→ session/create 或已授权的 thread/read
-→ 启动时调用 session/thread/create
-→ thread/subscribe + turn/start
-→ 有界 thread/read 轮询和通知排空
+→ session/create 或已授权的 session/thread/read
+→ 启动时通过 session/request { type: createThread }
+→ session/thread/subscribe + session/request { type: startTurn }
+→ 有界 session/thread/read 轮询和通知排空
 → progress 和可选 elicitation/create
-→ 接受后调用 turn/interaction/resolve
+→ 接受后调用 session/request { type: resolveInteraction }
 → 有界 MCP CallToolResult
 ```
 
@@ -152,7 +152,7 @@ store tables 中。SQLite 支持同一 profile 的多 connection 原子提交，
 
 只有初始化后的客户端声明支持表单询问时，批准和用户输入请求才映射为 MCP
 `elicitation/create`。接受的响应会转换回精确的类型化 App Server 请求身份，并通过
-`turn/interaction/resolve` 发送。拒绝、取消或客户端不支持时返回阻塞的工具结果，绝不自动
+`session/request` 的 `ResolveInteraction` 发送。拒绝、取消或客户端不支持时返回阻塞的工具结果，绝不自动
 批准。看起来在索要凭据或其他敏感值的用户输入问题不会通过表单询问发送。动态工具定义的交互
 类型尚未投影。
 
@@ -194,8 +194,9 @@ cargo clippy -p zeta-mcp-server --all-targets -- -D warnings
 
 当前扩展点与限制：
 
-- 仍使用同步 App Server 请求和有界 Thread 轮询/排空；计划中的自有异步
-  `AppServerSession` 将提供通用独立事件驱动；
+- 仍使用同步 App Server 请求和有界 Thread 轮询/排空；共享
+  `AppServerSession` 已由 `zeta-app-server-client` 提供并服务 CLI/TUI，MCP adapter 的 event-driven
+  迁移尚未完成；
 - 不支持资源、提示词、根目录、采样或 MCP task 能力；
 - 超大输出没有产物引用；
 - 不支持动态工具交互投影；

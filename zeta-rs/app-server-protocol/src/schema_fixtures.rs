@@ -25,12 +25,33 @@ fn registry_method_and_notification_names_are_unique() {
     assert_eq!(methods.len(), CLIENT_METHODS.len());
     assert_eq!(notifications.len(), SERVER_NOTIFICATIONS.len());
     assert!(methods.contains("initialize"));
+    assert!(methods.contains("session/request"));
     assert!(methods.contains("session/create"));
-    assert!(methods.contains("session/thread/fork"));
-    assert!(methods.contains("session/thread/rewind"));
-    assert!(methods.contains("turn/start"));
-    assert!(methods.contains("turn/shell/start"));
-    assert!(methods.contains("turn/interaction/resolve"));
+    assert!(methods.contains("session/thread/read"));
+    assert!(methods.contains("session/thread/subscribe"));
+    assert!(methods.contains("session/thread/unsubscribe"));
+    for obsolete in [
+        "session/thread/create",
+        "session/thread/fork",
+        "session/thread/rewind",
+        "session/thread/archive",
+        "session/complete",
+        "session/archive",
+        "session/stop",
+        "session/model/set",
+        "thread/read",
+        "thread/subscribe",
+        "thread/unsubscribe",
+        "turn/start",
+        "turn/shell/start",
+        "turn/interrupt",
+        "turn/interaction/resolve",
+    ] {
+        assert!(
+            !methods.contains(obsolete),
+            "obsolete method remains registered: {obsolete}"
+        );
+    }
     assert!(methods.contains("document/typst/compile"));
     assert!(methods.contains("fs/getMetadata"));
     assert!(methods.contains("fs/readDirectory"));
@@ -59,7 +80,8 @@ fn registry_method_and_notification_names_are_unique() {
     assert!(methods.contains("plugin/request/upsert"));
     assert!(methods.contains("hook/upsert"));
     assert!(notifications.contains("session/update"));
-    assert!(notifications.contains("thread/update"));
+    assert!(notifications.contains("session/thread/update"));
+    assert!(!notifications.contains("thread/update"));
     assert!(notifications.contains("git/statusChanged"));
     assert!(notifications.contains("fs/changed"));
 }
@@ -125,7 +147,7 @@ fn rpc_envelopes_preserve_json_rpc_2_shape() {
         serde_json::json!({}),
     );
     let notification = JsonRpcNotification::new(
-        "thread/update".into(),
+        "session/thread/update".into(),
         serde_json::json!({
             "sessionId": "session-1",
             "threadId": "thread-1",
@@ -155,7 +177,7 @@ fn rpc_envelopes_preserve_json_rpc_2_shape() {
         serde_json::to_value(notification).unwrap(),
         serde_json::json!({
             "jsonrpc": "2.0",
-            "method": "thread/update",
+            "method": "session/thread/update",
             "params": {
                 "sessionId": "session-1",
                 "threadId": "thread-1",
@@ -236,15 +258,25 @@ fn dto_driven_typescript_preserves_model_ref_and_patch_shape() {
     ));
     assert!(typescript.contains("export const APP_SERVER_METHODS:"));
     assert!(typescript.contains(r#""session/create": { method: "session/create" }"#));
-    assert!(typescript.contains(r#""turn/start": { method: "turn/start" }"#));
-    assert!(typescript.contains(r#""turn/shell/start": { method: "turn/shell/start" }"#));
+    assert!(typescript.contains(r#""session/request": { method: "session/request" }"#));
+    assert!(typescript.contains(r#""session/thread/read": { method: "session/thread/read" }"#));
+    assert!(
+        typescript
+            .contains(r#""session/thread/subscribe": { method: "session/thread/subscribe" }"#)
+    );
+    assert!(
+        typescript
+            .contains(r#""session/thread/unsubscribe": { method: "session/thread/unsubscribe" }"#)
+    );
+    assert!(!typescript.contains(r#""turn/start": { method: "turn/start" }"#));
+    assert!(!typescript.contains(r#""turn/shell/start": { method: "turn/shell/start" }"#));
     assert!(typescript.contains(
         r#"export type InputItem = { "type": "text", text: string, } | { "type": "image", url: string, };"#
     ));
     assert!(!typescript.contains("InputItemKind"));
     assert!(typescript.contains(r#"{ "type": "userImage""#));
     assert!(
-        typescript
+        !typescript
             .contains(r#""turn/interaction/resolve": { method: "turn/interaction/resolve" }"#)
     );
     assert!(
@@ -315,7 +347,7 @@ fn dto_driven_schema_contains_registered_rpc_envelopes() {
     assert_eq!(definitions["SessionId"]["minLength"], 1);
     assert_eq!(definitions["CommandId"]["minLength"], 1);
     assert_eq!(
-        definitions["TurnStartParams"]["properties"]["input"]["minItems"],
+        definitions["SessionRequest"]["oneOf"][8]["properties"]["input"]["minItems"],
         1
     );
     assert_eq!(

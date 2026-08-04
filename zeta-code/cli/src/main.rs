@@ -13,9 +13,11 @@ use zeta_app_server_client::InProcessClientOptions;
 use zeta_app_server_client::ServerNotification;
 use zeta_app_server_client::local_profile_root;
 use zeta_app_server_protocol::protocol::common::ClientInfo;
-use zeta_app_server_protocol::protocol::session::{SessionCreateParams, SessionThreadCreateParams};
-use zeta_app_server_protocol::protocol::thread::{ThreadReadParams, ThreadSubscribeParams};
-use zeta_app_server_protocol::protocol::turn::{InputItem, TurnStartParams};
+use zeta_app_server_protocol::protocol::session::{
+    SessionCreateParams, SessionRequest, SessionRequestParams, SessionRequestResult,
+    SessionThreadReadParams, SessionThreadSubscribeParams,
+};
+use zeta_app_server_protocol::protocol::turn::InputItem;
 use zeta_protocol::{CommandId, ThreadItem, TurnStatus};
 
 fn main() {
@@ -153,16 +155,22 @@ fn run_prompt_in_session(
         })
         .map_err(|error| error.to_string())?;
     let thread = client
-        .create_session_thread(SessionThreadCreateParams {
+        .request_session(SessionRequestParams {
             command_id: CommandId::new(request_key("thread"))
                 .expect("generated command ID is non-empty"),
             session_id: session.session.session_id.clone(),
             expected_sequence: session.session.sequence,
-            title: title.into(),
+            request: SessionRequest::CreateThread {
+                title: title.into(),
+            },
         })
         .map_err(|error| error.to_string())?;
+    let SessionRequestResult::Thread(thread) = thread else {
+        return Err("app server returned a non-Thread result for CreateThread".into());
+    };
     client
-        .subscribe_thread(ThreadSubscribeParams {
+        .subscribe_session_thread(SessionThreadSubscribeParams {
+            session_id: session.session.session_id.clone(),
             thread_id: thread.thread_id.clone(),
             after_sequence: 0,
         })
@@ -170,16 +178,21 @@ fn run_prompt_in_session(
     let events = app_server
         .take_events()
         .map_err(|error| error.to_string())?;
-    client
-        .start_turn(TurnStartParams {
+    let SessionRequestResult::Turn(_) = client
+        .request_session(SessionRequestParams {
             command_id: CommandId::new(request_key("turn"))
                 .expect("generated command ID is non-empty"),
-            session_id: session.session.session_id,
-            thread_id: thread.thread_id.clone(),
+            session_id: session.session.session_id.clone(),
             expected_sequence: 1,
-            input: vec![InputItem::Text { text: prompt }],
+            request: SessionRequest::StartTurn {
+                thread_id: thread.thread_id.clone(),
+                input: vec![InputItem::Text { text: prompt }],
+            },
         })
-        .map_err(|error| error.to_string())?;
+        .map_err(|error| error.to_string())?
+    else {
+        return Err("app server returned a non-Turn result for StartTurn".into());
+    };
     let deadline = Instant::now() + Duration::from_secs(60);
     loop {
         let remaining = deadline.saturating_duration_since(Instant::now());
@@ -190,7 +203,7 @@ fn run_prompt_in_session(
             .recv_timeout(remaining)
             .map_err(|error| format!("could not receive App Server progress: {error}"))?;
         match event {
-            AppServerEvent::Notification(ServerNotification::ThreadUpdate(update))
+            AppServerEvent::Notification(ServerNotification::SessionThreadUpdate(update))
                 if update.thread_id == thread.thread_id => {}
             AppServerEvent::ConnectionClosed(reason) => {
                 return Err(format!("App Server connection closed: {reason:?}"));
@@ -198,7 +211,8 @@ fn run_prompt_in_session(
             AppServerEvent::Notification(_) => continue,
         }
         let snapshot = client
-            .read_thread(ThreadReadParams {
+            .read_session_thread(SessionThreadReadParams {
+                session_id: session.session.session_id.clone(),
                 thread_id: thread.thread_id.clone(),
             })
             .map_err(|error| error.to_string())?;

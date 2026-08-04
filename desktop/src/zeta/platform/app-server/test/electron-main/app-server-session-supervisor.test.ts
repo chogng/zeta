@@ -229,15 +229,18 @@ test("crash rejects an unknown-outcome side effect without replaying it", async 
   const supervisor = new AppServerSupervisor(supervisorOptions(children));
   await supervisor.start();
 
-  const turn = supervisor.request(APP_SERVER_METHODS["turn/start"], {
+  const turn = supervisor.request(APP_SERVER_METHODS["session/request"], {
     commandId: "one",
     sessionId: "session_1",
-    threadId: "thread_1",
     expectedSequence: 1,
-    input: [{ type: "text", text: "hello" }],
+    request: {
+      type: "startTurn",
+      threadId: "thread_1",
+      input: [{ type: "text", text: "hello" }],
+    },
   });
   await new Promise<void>((resolve) => setImmediate(resolve));
-  assert.equal(children[0].requests.at(-1)?.method, "turn/start");
+  assert.equal(children[0].requests.at(-1)?.method, "session/request");
   const restarted = new Promise<void>((resolve) => {
     const dispose = supervisor.onStateChange((state) => {
       if (state === "ready" && children.length === 2) {

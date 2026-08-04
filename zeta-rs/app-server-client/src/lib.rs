@@ -38,22 +38,13 @@ use zeta_app_server_protocol::protocol::search::{
     WorkspaceSearchStartParams, WorkspaceSearchStartResult,
 };
 use zeta_app_server_protocol::protocol::session::{
-    SessionCommandParams, SessionCreateParams, SessionListResult, SessionModelSetParams,
-    SessionReadParams, SessionRequestParams, SessionRequestResult, SessionResult,
-    SessionSubscribeParams, SessionSubscribeResult, SessionThreadArchiveParams,
-    SessionThreadCreateParams, SessionThreadForkParams, SessionThreadResult,
-    SessionThreadRewindParams, SessionUnsubscribeParams,
+    SessionCreateParams, SessionListResult, SessionReadParams, SessionRequestParams,
+    SessionRequestResult, SessionResult, SessionSubscribeParams, SessionSubscribeResult,
+    SessionThreadReadParams, SessionThreadReadResult, SessionThreadSubscribeParams,
+    SessionThreadSubscribeResult, SessionThreadUnsubscribeParams, SessionUnsubscribeParams,
 };
 use zeta_app_server_protocol::protocol::skills::{
     SkillListParams, SkillListResult, SkillSetEnablementParams,
-};
-use zeta_app_server_protocol::protocol::thread::{
-    ThreadReadParams, ThreadReadResult, ThreadSubscribeParams, ThreadSubscribeResult,
-    ThreadUnsubscribeParams,
-};
-use zeta_app_server_protocol::protocol::turn::{
-    ShellTurnStartParams, TurnInteractionResolveParams, TurnInteractionResolveResult,
-    TurnInterruptParams, TurnInterruptResult, TurnStartParams, TurnStartResult,
 };
 use zeta_app_server_protocol::protocol::workspace::{WorkspaceSwitchParams, WorkspaceSwitchResult};
 use zeta_app_server_protocol::rpc::{JsonRpcId, JsonRpcRequest, JsonRpcResponse};
@@ -209,13 +200,6 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
         self.call(ClientMethod::SessionList, EmptyParams {})
     }
 
-    pub fn set_session_model(
-        &mut self,
-        params: SessionModelSetParams,
-    ) -> Result<SessionResult, ClientError> {
-        self.call(ClientMethod::SessionModelSet, params)
-    }
-
     pub fn subscribe_session(
         &mut self,
         params: SessionSubscribeParams,
@@ -238,74 +222,25 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
         self.call(ClientMethod::SessionUnsubscribe, params)
     }
 
-    pub fn create_session_thread(
+    pub fn read_session_thread(
         &mut self,
-        params: SessionThreadCreateParams,
-    ) -> Result<SessionThreadResult, ClientError> {
-        self.call(ClientMethod::SessionThreadCreate, params)
+        params: SessionThreadReadParams,
+    ) -> Result<SessionThreadReadResult, ClientError> {
+        self.call(ClientMethod::SessionThreadRead, params)
     }
 
-    pub fn fork_session_thread(
+    pub fn subscribe_session_thread(
         &mut self,
-        params: SessionThreadForkParams,
-    ) -> Result<SessionThreadResult, ClientError> {
-        self.call(ClientMethod::SessionThreadFork, params)
+        params: SessionThreadSubscribeParams,
+    ) -> Result<SessionThreadSubscribeResult, ClientError> {
+        self.call(ClientMethod::SessionThreadSubscribe, params)
     }
 
-    pub fn rewind_session_thread(
+    pub fn unsubscribe_session_thread(
         &mut self,
-        params: SessionThreadRewindParams,
-    ) -> Result<SessionThreadResult, ClientError> {
-        self.call(ClientMethod::SessionThreadRewind, params)
-    }
-
-    pub fn archive_session_thread(
-        &mut self,
-        params: SessionThreadArchiveParams,
-    ) -> Result<SessionResult, ClientError> {
-        self.call(ClientMethod::SessionThreadArchive, params)
-    }
-
-    pub fn complete_session(
-        &mut self,
-        params: SessionCommandParams,
-    ) -> Result<SessionResult, ClientError> {
-        self.call(ClientMethod::SessionComplete, params)
-    }
-
-    pub fn archive_session(
-        &mut self,
-        params: SessionCommandParams,
-    ) -> Result<SessionResult, ClientError> {
-        self.call(ClientMethod::SessionArchive, params)
-    }
-
-    pub fn stop_session(
-        &mut self,
-        params: SessionCommandParams,
-    ) -> Result<SessionResult, ClientError> {
-        self.call(ClientMethod::SessionStop, params)
-    }
-
-    pub fn read_thread(
-        &mut self,
-        params: ThreadReadParams,
-    ) -> Result<ThreadReadResult, ClientError> {
-        self.call(ClientMethod::ThreadRead, params)
-    }
-
-    pub fn subscribe_thread(
-        &mut self,
-        params: ThreadSubscribeParams,
-    ) -> Result<ThreadSubscribeResult, ClientError> {
-        self.call(ClientMethod::ThreadSubscribe, params)
-    }
-
-    pub fn unsubscribe_thread(
-        &mut self,
-        params: ThreadUnsubscribeParams,
+        params: SessionThreadUnsubscribeParams,
     ) -> Result<(), ClientError> {
-        self.call(ClientMethod::ThreadUnsubscribe, params)
+        self.call(ClientMethod::SessionThreadUnsubscribe, params)
     }
 
     pub fn read_config(&mut self) -> Result<ConfigReadResult, ClientError> {
@@ -402,31 +337,6 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
         params: SkillSetEnablementParams,
     ) -> Result<ConfigCommandResult, ClientError> {
         self.call(ClientMethod::SkillSetEnablement, params)
-    }
-
-    pub fn start_turn(&mut self, params: TurnStartParams) -> Result<TurnStartResult, ClientError> {
-        self.call(ClientMethod::TurnStart, params)
-    }
-
-    pub fn start_shell_turn(
-        &mut self,
-        params: ShellTurnStartParams,
-    ) -> Result<TurnStartResult, ClientError> {
-        self.call(ClientMethod::ShellTurnStart, params)
-    }
-
-    pub fn interrupt_turn(
-        &mut self,
-        params: TurnInterruptParams,
-    ) -> Result<TurnInterruptResult, ClientError> {
-        self.call(ClientMethod::TurnInterrupt, params)
-    }
-
-    pub fn resolve_turn_interaction(
-        &mut self,
-        params: TurnInteractionResolveParams,
-    ) -> Result<TurnInteractionResolveResult, ClientError> {
-        self.call(ClientMethod::TurnInteractionResolve, params)
     }
 
     pub fn compile_typst(

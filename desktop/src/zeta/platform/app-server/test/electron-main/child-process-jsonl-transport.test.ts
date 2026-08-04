@@ -134,7 +134,7 @@ test("pairs typed requests and preserves remote error details", async () => {
   const child = new FakeChildProcess();
   const peer = new JsonRpcPeer(child as unknown as ChildProcessWithoutNullStreams);
   const firstFrame = once(child.stdin, "data");
-  const read = peer.request(APP_SERVER_METHODS["thread/read"], { threadId: "thread_1" });
+  const read = peer.request(APP_SERVER_METHODS["session/thread/read"], { sessionId: "session_1", threadId: "thread_1" });
   const [{ id }] = (await firstFrame).map((chunk) =>
     JSON.parse((chunk as Buffer).toString("utf8")),
   );
@@ -167,8 +167,8 @@ test("times out locally and ignores the retired request's late response", async 
   const peer = new JsonRpcPeer(child as unknown as ChildProcessWithoutNullStreams);
   const firstFrame = once(child.stdin, "data");
   const timedOut = peer.request(
-    APP_SERVER_METHODS["thread/read"],
-    { threadId: "slow" },
+    APP_SERVER_METHODS["session/thread/read"],
+    { sessionId: "session_1", threadId: "slow" },
     { timeoutMs: 5 },
   );
   const [{ id }] = (await firstFrame).map((chunk) =>
@@ -201,14 +201,14 @@ test("cancels requests and enforces the pending request bound", async () => {
   const cancellation = new AbortController();
   const requestFrame = once(child.stdin, "data");
   const first = peer.request(
-    APP_SERVER_METHODS["thread/read"],
-    { threadId: "thread_1" },
+    APP_SERVER_METHODS["session/thread/read"],
+    { sessionId: "session_1", threadId: "thread_1" },
     { signal: cancellation.signal },
   );
   const [requestChunk] = await requestFrame;
   const requestId = JSON.parse((requestChunk as Buffer).toString("utf8")).id;
   await assert.rejects(
-    peer.request(APP_SERVER_METHODS["thread/read"], { threadId: "thread_2" }),
+    peer.request(APP_SERVER_METHODS["session/thread/read"], { sessionId: "session_1", threadId: "thread_2" }),
     /pending request limit/,
   );
 
@@ -235,17 +235,17 @@ test("isolates notification listeners", async () => {
   const child = new FakeChildProcess();
   const peer = new JsonRpcPeer(child as unknown as ChildProcessWithoutNullStreams);
   let observed = "";
-  peer.onNotification(APP_SERVER_NOTIFICATIONS["thread/update"], () => {
+  peer.onNotification(APP_SERVER_NOTIFICATIONS["session/thread/update"], () => {
     throw new Error("presentation listener failed");
   });
-  peer.onNotification(APP_SERVER_NOTIFICATIONS["thread/update"], (params) => {
+  peer.onNotification(APP_SERVER_NOTIFICATIONS["session/thread/update"], (params) => {
     observed = params.threadId;
   });
 
   child.stdout.write(
     `${JSON.stringify({
       jsonrpc: "2.0",
-      method: "thread/update",
+      method: "session/thread/update",
       params: {
         sessionId: "session_1",
         threadId: "thread_7",

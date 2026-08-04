@@ -412,9 +412,9 @@ zeta-app-server-client
 `execute(method: &str, ...)`。
 
 具体领域请求不汇总成 `ClientOperation` 大枚举。`features/thread/request.rs`、
-`features/config/request.rs` 等模块直接调用 `AppServerClient` 已有 typed method，并把完成结果
-转换为自己的 feature event；`client/` 只提供执行与投递机制，不再次包装 `read_config`、
-`start_turn` 等领域接口。
+`features/config/request.rs` 等模块直接调用 `AppServerClient` 的 typed method，并把完成结果
+转换为自己的 feature event；Session/Thread/Turn mutation 统一使用 `request_session`，
+`client/` 只提供执行与投递机制，不复制 App Server 的领域 contract。
 
 一次逻辑写操作在超时或响应丢失后重试时必须复用原 `CommandId` 和 exact typed payload。
 用户再次点击或再次提交是新命令，必须生成新 ID。`expectedSequence` 来自目标 aggregate
@@ -565,7 +565,7 @@ I/O 和 crossterm 生命周期的所有权。
 启动中途任一步失败，也必须回滚之前成功启用的能力。
 
 `terminal/` 不知道产品 Session、Thread、Turn、feature 或 App Server。它可以产生
-`TerminalEvent`，但不能发送 `turn/start`、打开 approval popup 或根据 Agent 状态决定文案。
+`TerminalEvent`，但不能发送 Agent `session/request`、打开 approval popup 或根据 Agent 状态决定文案。
 
 ## 11. `features/`：Zeta 功能的垂直切片
 
@@ -935,9 +935,9 @@ lib_tests.rs
   `client/notification.rs` 把共享 connection event 映射成 typed `ClientEvent`，保留
   `skills/changed`、`ThreadUpdateEnvelope` 和 connection failure；
 - `features/thread/ThreadSubscription` 在启动和 active Thread 切换时调用 typed
-  `thread/subscribe`/`thread/unsubscribe`，验证 Session/Thread scope，并用最后确认的 snapshot
+  `session/thread/subscribe`/`session/thread/unsubscribe`，验证 Session/Thread scope，并用最后确认的 snapshot
   sequence 丢弃重复或旧 scope update；
-- newer durable sequence（包括 gap）只触发 `thread/read` resync；TUI 不执行 `ThreadEvent`
+- newer durable sequence（包括 gap）只触发 `session/thread/read` resync；TUI 不执行 `ThreadEvent`
   reducer。`refresh_turn` 不再二次 drain notification，因此不会吞掉订阅事件；
 - `features/thread/ThreadFeatureState` 已成为 active Thread snapshot 与当前 transcript projection
   的唯一 TUI owner；本地 optimistic user message、notice 与 failure 也通过 feature event
@@ -990,7 +990,7 @@ lib_tests.rs
 - bracketed paste 使用独立事件路径；超过 1000 个 Unicode scalar value 的内容由 `PendingPastes`
   绑定到 `TextArea` 原子占位符，并在提交前展开；
 - 粘贴 PNG/JPEG/GIF/WEBP 本地文件路径会由 `Attachments` 立即读取并绑定为 `[Image #N]`
-  原子占位符；提交保持 text/image 顺序并通过 typed `turn/start` 进入 durable Thread history；
+  原子占位符；提交保持 text/image 顺序并通过 typed `session/request` 进入 durable Thread history；
 - `Ctrl-V` 产生独立 `AppCommand::ReadClipboardImage`，由 `host/clipboard.rs` 读取文件列表
   或 RGBA 位图、编码 PNG，并复用 `Attachments` 的校验、占位符与结构化提交；
 - event loop 持有的 `FileSearchManager` 通过 `zeta-file-search::PathSearchHandle` 在后台增量
@@ -1094,7 +1094,7 @@ README 中记录。
 
 ### 阶段二：订阅与恢复
 
-1. 使用 `session/subscribe` 和 `thread/subscribe`；（active Thread 为 Current；Session 页面未开始）
+1. 使用 `session/subscribe` 和 `session/thread/subscribe`；（active Thread 为 Current；Session 页面未开始）
 2. 实现 durable gap、duplicate、aggregate mismatch 和 resync；（active Thread snapshot
    resync 为 Current；reconnect/runtime 切换尚未完成）
 3. 实现 transient cursor 和 committed Item 替换；
@@ -1233,7 +1233,7 @@ metadata-only 诊断与包含测试 fixture 的受控 trace。
 - sequence gap、runtime 切换和未知 update 会触发 resync，而不是猜测状态；
 - `expectedSequence` 来自正确 aggregate，逻辑重试复用原 `CommandId`；
 - transcript 展示完整 typed Turn/ThreadItem lifecycle；
-- Ctrl-C 在 Turn 运行时优先发出 `turn/interrupt`，空闲时才退出；
+- Ctrl-C 在 Turn 运行时优先发出 `session/request` 的 `InterruptTurn`，空闲时才退出；
 - terminal 在正常退出、错误、panic 和 Unix termination signal 路径均可恢复；
 - feature 只通过 owner crate 的 public interface 或已接受的 App Server contract 工作；
 - UI 原语、terminal 基础设施和 host adapter 不依赖产品状态；

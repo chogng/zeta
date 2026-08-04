@@ -370,7 +370,7 @@ button / menu / shortcut
 ```
 
 Renderer 不复制 Rust 状态机。遇到 durable `sequence` 或 `streamCursor` 空洞时，停止合并
-当前实体，并通过 `session/subscribe` 或 `thread/subscribe` 获取权威 snapshot + gap。
+当前实体，并通过 `session/subscribe` 或带 Session scope 的 `session/thread/subscribe` 获取权威 snapshot + gap。
 
 ### 6.1 Editor 宿主
 

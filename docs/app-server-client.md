@@ -56,8 +56,8 @@ zeta-tui ──┘             │
 
 当前 `zeta-cli` 的交互式和无界面提示词路径已经使用自有
 `AppServerSession`、可克隆请求句柄、独立 `AppServerEvents` 与显式关闭。
-`zeta-mcp-server` 为兼容其既有 per-session adapter，仍使用 legacy 同步 client 和 bounded
-polling/drain；该兼容入口不再是通用 consumer 的目标架构。
+`zeta-mcp-server` 的 per-session adapter 当前使用同步 client 和 bounded polling/drain；这是
+MCP 外层生命周期的实现选择，不改变 App Server 的 canonical request contract。
 
 ## 2. 抽象单位：一个运行中的 App Server Session
 
@@ -241,8 +241,8 @@ Embedded hot path 推荐使用 protocol-owned typed request enum：
 enum ClientRequest {
     Initialize(InitializeParams),
     SessionCreate(SessionCreateParams),
-    ThreadSubscribe(ThreadSubscribeParams),
-    TurnStart(TurnStartParams),
+    SessionRequest(SessionRequestParams),
+    SessionThreadSubscribe(SessionThreadSubscribeParams),
     // generated/registered remaining methods
 }
 ```
@@ -295,7 +295,7 @@ pub enum AppServerEvent {
 }
 ```
 
-当前 App Server API 包含 `session/update`、`thread/update` 与 metadata-only
+当前 App Server API 包含 `session/update`、`session/thread/update` 与 metadata-only
 `skills/changed` notification，均由 `ServerNotification` typed enum 表达。`ServerRequest`
 是 approval/user-input 等双向交互落地后的目标 variant；`Lagged`/`Desynced` 是 bounded data
 plane 的目标 lifecycle event，在 protocol/queue contract 实现前不能提前声称可用。
@@ -303,7 +303,7 @@ plane 的目标 lifecycle event，在 protocol/queue contract 实现前不能提
 事件 driver 负责：
 
 - 在没有新 request 时仍持续接收 notification；
-- 解码 `session/update` 与 `thread/update`；
+- 解码 `session/update` 与 `session/thread/update`；
 - 保留 durable sequence 与 transient stream cursor；
 - 保证同一 request 的 response 先于它产生的 causal notification 交付；
 - 已知 notification 在 remote decode 或 typed validation 失败时关闭 connection 并报告
@@ -367,8 +367,8 @@ source；client event pump 与 request driver 独立，因此空闲连接和长 
 7. join 所有由 session 启动的后台 task；
 8. 返回 shutdown 期间发生的错误。
 
-关闭 connection 不等于 `turn/interrupt`。若产品要求退出前中断某个 Turn，`zeta-exec` 或 TUI
-必须先发送 typed `turn/interrupt` 并等待所需终态，再调用 session shutdown。Client session
+关闭 connection 不等于 `session/request` 的 `InterruptTurn`。若产品要求退出前中断某个 Turn，
+`zeta-exec` 或 TUI 必须先发送 typed `session/request` 并等待所需终态，再调用 session shutdown。Client session
 不能猜测要中断哪个 Thread/Turn。
 
 `Drop` 只能做 best-effort cancellation，不能替代显式 shutdown，因为 `Drop` 无法可靠等待
@@ -394,7 +394,7 @@ source；client event pump 与 request driver 独立，因此空闲连接和长 
 2. 从 client handle 发送 Session/Thread/Turn typed request；
 3. 同时消费 request result 与 `AppServerEvents`；
 4. 根据 canonical Turn terminal update 产生 human/JSON/JSONL 输出和退出码；
-5. Ctrl-C 时按产品策略发送 `turn/interrupt`；
+5. Ctrl-C 时按产品策略发送 `session/request` 的 `InterruptTurn`；
 6. 最后显式 shutdown session。
 
 它不自行创建 App Server、初始化 connection 或实现 notification pump。
@@ -443,11 +443,11 @@ TUI 不再接收一个同步 `&mut AppServerClient<T>`，也不调用 `drain_not
 - typed `list_skills` / `set_skill_enablement` method；
 - known notification typed decode，包括 `skills/changed`。
 
-保留的兼容面与剩余工作：
+同步适配面与剩余工作：
 
 | 边界 | 状态 |
 | --- | --- |
-| `start_in_process_client` / generic `AppServerClient<T>` | legacy MCP、rust-app 与 contract tests 仍可用；TUI/CLI 不再依赖 drain |
+| `start_in_process_client` / generic `AppServerClient<T>` | MCP、rust-app 与 contract tests 的同步适配面；TUI/CLI 不再依赖 drain |
 | typed method 同步等待 completion | request driver 独立，但异常缓慢 request 的 UI completion dispatch 仍需迁移 |
 | event channel 当前无界 | durable notification 不会静默丢失；按 aggregate bounded data plane 与 `Lagged` policy 尚未落地 |
 | remote backend | 尚未实现；不能声称 reconnect/subscription restoration |

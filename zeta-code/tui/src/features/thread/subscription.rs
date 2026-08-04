@@ -1,9 +1,9 @@
 use zeta_app_server_client::AppServerClient;
 use zeta_app_server_client::ClientError;
 use zeta_app_server_client::JsonRpcTransport;
-use zeta_app_server_protocol::protocol::thread::ThreadReadParams;
-use zeta_app_server_protocol::protocol::thread::ThreadSubscribeParams;
-use zeta_app_server_protocol::protocol::thread::ThreadUnsubscribeParams;
+use zeta_app_server_protocol::protocol::session::SessionThreadReadParams;
+use zeta_app_server_protocol::protocol::session::SessionThreadSubscribeParams;
+use zeta_app_server_protocol::protocol::session::SessionThreadUnsubscribeParams;
 use zeta_protocol::SessionId;
 use zeta_protocol::Thread;
 use zeta_protocol::ThreadId;
@@ -39,7 +39,8 @@ impl ThreadSubscription {
     where
         T: JsonRpcTransport,
     {
-        let result = client.subscribe_thread(ThreadSubscribeParams {
+        let result = client.subscribe_session_thread(SessionThreadSubscribeParams {
+            session_id: session_id.clone(),
             thread_id: thread_id.clone(),
             after_sequence: 0,
         })?;
@@ -52,7 +53,8 @@ impl ThreadSubscription {
             .any(|update| update.durable_sequence > result.thread.sequence)
         {
             client
-                .read_thread(ThreadReadParams {
+                .read_session_thread(SessionThreadReadParams {
+                    session_id: session_id.clone(),
                     thread_id: thread_id.clone(),
                 })?
                 .thread
@@ -75,7 +77,8 @@ impl ThreadSubscription {
     {
         if self.session_id == *session_id && self.thread_id == *thread_id {
             let snapshot = client
-                .read_thread(ThreadReadParams {
+                .read_session_thread(SessionThreadReadParams {
+                    session_id: session_id.clone(),
                     thread_id: thread_id.clone(),
                 })
                 .map(|result| result.thread)?;
@@ -87,7 +90,8 @@ impl ThreadSubscription {
         let previous_thread_id = self.thread_id.clone();
         let (next, snapshot) = Self::start(client, session_id, thread_id)?;
         *self = next;
-        let cleanup = client.unsubscribe_thread(ThreadUnsubscribeParams {
+        let cleanup = client.unsubscribe_session_thread(SessionThreadUnsubscribeParams {
+            session_id: self.session_id.clone(),
             thread_id: previous_thread_id,
         });
         match cleanup {

@@ -329,7 +329,7 @@ Watcher backend 无法启动时不会阻止 App Server 启动，调用方仍可�
 
 ### 8.1 显式选择
 
-用户通过 Skill picker、slash mention 或 `turn/start` typed input 选择 exact `SkillRef`。显式选择：
+用户通过 Skill picker、slash mention 或 `session/request` `StartTurn` typed input 选择 exact `SkillRef`。显式选择：
 
 - 优先于自动匹配；
 - 仍要通过 enablement、availability、compatibility 和 trust policy；
@@ -616,7 +616,7 @@ stored identity/digest；重新执行必须重新授权/解析，不能假定旧
 | `skill/read` | 读取 entry metadata/diagnostics，不默认返回完整 body |
 | `skill/content/read` | 通过 Resource/分块读取受控内容 |
 | `skill/reload` | 显式使 source stale 并触发 rescan |
-| `turn/start` Skill input | 选择 exact `SkillRef` |
+| `session/request` StartTurn Skill input | 选择 exact `SkillRef` |
 
 Skill install/remove 不属于 Skill manager：
 

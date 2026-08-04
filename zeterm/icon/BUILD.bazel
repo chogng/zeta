@@ -1,0 +1,7 @@
+load("//zeterm:defs.bzl", "zeterm_rust_library")
+
+zeterm_rust_library(
+    name = "icon",
+    crate_name = "zeta_icon",
+    package_name = "zeterm/icon",
+)

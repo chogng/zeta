@@ -440,7 +440,7 @@ fn drive_agent_session(
                     active.session_sequence = active.session_sequence.max(update.durable_sequence);
                 }
             }
-            Ok(AppServerEvent::Notification(ServerNotification::ThreadUpdate(update))) => {
+            Ok(AppServerEvent::Notification(ServerNotification::SessionThreadUpdate(update))) => {
                 if update.thread_id == active.thread_id {
                     active.sequence = active.sequence.max(update.durable_sequence);
                     send_event(event_proxy, AgentSessionEvent::Update(update))?;

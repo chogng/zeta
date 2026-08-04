@@ -4,11 +4,11 @@ use crate::components::composer::ComposerSubmission;
 use zeta_app_server_client::AppServerClient;
 use zeta_app_server_client::ClientError;
 use zeta_app_server_client::JsonRpcTransport;
-use zeta_app_server_protocol::protocol::thread::ThreadReadParams;
+use zeta_app_server_protocol::protocol::session::{
+    SessionRequest, SessionRequestParams, SessionRequestResult, SessionThreadReadParams,
+};
 use zeta_app_server_protocol::protocol::turn::InputItem;
-use zeta_app_server_protocol::protocol::turn::TurnInterruptParams;
 use zeta_app_server_protocol::protocol::turn::TurnInterruptResult;
-use zeta_app_server_protocol::protocol::turn::TurnStartParams;
 use zeta_app_server_protocol::protocol::turn::TurnStartResult;
 use zeta_protocol::SessionId;
 use zeta_protocol::Thread;
@@ -44,31 +44,40 @@ pub(crate) fn submit_prompt<T>(
 where
     T: JsonRpcTransport,
 {
-    client.start_turn(TurnStartParams {
+    match client.request_session(SessionRequestParams {
         command_id: new_command_id("turn"),
         session_id: scope.session_id,
-        thread_id: scope.thread_id,
         expected_sequence: scope.expected_sequence,
-        input: submission
-            .input
-            .into_iter()
-            .map(|input| match input {
-                ComposerInput::Text(text) => InputItem::Text { text },
-                ComposerInput::Image { url } => InputItem::Image { url },
-            })
-            .collect(),
-    })
+        request: SessionRequest::StartTurn {
+            thread_id: scope.thread_id,
+            input: submission
+                .input
+                .into_iter()
+                .map(|input| match input {
+                    ComposerInput::Text(text) => InputItem::Text { text },
+                    ComposerInput::Image { url } => InputItem::Image { url },
+                })
+                .collect(),
+        },
+    })? {
+        SessionRequestResult::Turn(result) => Ok(result),
+        other => Err(ClientError::Protocol(format!(
+            "session request returned {other:?} for StartTurn"
+        ))),
+    }
 }
 
 pub(crate) fn read_thread<T>(
     client: &mut AppServerClient<T>,
+    session_id: &SessionId,
     thread_id: &ThreadId,
 ) -> Result<Thread, ClientError>
 where
     T: JsonRpcTransport,
 {
     client
-        .read_thread(ThreadReadParams {
+        .read_session_thread(SessionThreadReadParams {
+            session_id: session_id.clone(),
             thread_id: thread_id.clone(),
         })
         .map(|result| result.thread)
@@ -82,11 +91,18 @@ pub(crate) fn interrupt_turn<T>(
 where
     T: JsonRpcTransport,
 {
-    client.interrupt_turn(TurnInterruptParams {
+    match client.request_session(SessionRequestParams {
         command_id: new_command_id("interrupt"),
         session_id: scope.session_id,
-        thread_id: scope.thread_id,
-        turn_id: turn_id.clone(),
         expected_sequence: scope.expected_sequence,
-    })
+        request: SessionRequest::InterruptTurn {
+            thread_id: scope.thread_id,
+            turn_id: turn_id.clone(),
+        },
+    })? {
+        SessionRequestResult::TurnInterrupt(result) => Ok(result),
+        other => Err(ClientError::Protocol(format!(
+            "session request returned {other:?} for InterruptTurn"
+        ))),
+    }
 }

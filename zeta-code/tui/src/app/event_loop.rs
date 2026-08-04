@@ -208,7 +208,11 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                         Err(error) => app.update(AppEvent::FailureReported(error)),
                     },
                     AppCommand::OpenRewindPane => {
-                        match rewind::load_selection(&mut client, conversation.thread_id()) {
+                        match rewind::load_selection(
+                            &mut client,
+                            conversation.session_id(),
+                            conversation.thread_id(),
+                        ) {
                             Ok(view) => app.update(AppEvent::RewindViewOpened(view)),
                             Err(error) => app.update(AppEvent::FailureReported(error.to_string())),
                         }
@@ -418,13 +422,13 @@ fn refresh_turn<T>(
 where
     T: JsonRpcTransport,
 {
-    match read_thread(client, conversation.thread_id()) {
+    match read_thread(client, conversation.session_id(), conversation.thread_id()) {
         Ok(snapshot) => {
             if snapshot.session_id != *conversation.session_id()
                 || snapshot.thread_id != *conversation.thread_id()
             {
                 app.update(AppEvent::FailureReported(format!(
-                    "thread/read returned snapshot for {}/{}; expected {}/{}",
+                    "session/thread/read returned snapshot for {}/{}; expected {}/{}",
                     snapshot.session_id,
                     snapshot.thread_id,
                     conversation.session_id(),

@@ -102,9 +102,9 @@ export interface IChatService {
   readonly onDidBecomeReady: Event<void>;
   listModels(): Promise<readonly ModelCatalogEntry[]>;
   listSlashCommands(): Promise<readonly SlashCommandDefinition[]>;
-  readThread(threadId: ThreadId): Promise<Thread>;
-  subscribeThread(threadId: ThreadId, afterSequence: number): Promise<ThreadSubscription>;
-  unsubscribeThread(threadId: ThreadId): Promise<void>;
+  readThread(sessionId: SessionId, threadId: ThreadId): Promise<Thread>;
+  subscribeThread(sessionId: SessionId, threadId: ThreadId, afterSequence: number): Promise<ThreadSubscription>;
+  unsubscribeThread(sessionId: SessionId, threadId: ThreadId): Promise<void>;
   startTurn(options: StartTurnOptions): Promise<void>;
   interruptTurn(options: InterruptTurnOptions): Promise<void>;
   resolveInteraction(options: ResolveInteractionOptions): Promise<void>;

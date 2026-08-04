@@ -11,15 +11,17 @@ use zeta_app_server_protocol::protocol::fs::{
     FsFileType, FsGetMetadataParams, FsReadDirectoryParams, FsReadFileParams, FsWriteFileParams,
 };
 use zeta_app_server_protocol::protocol::initialize::InitializeParams;
-use zeta_app_server_protocol::protocol::session::{SessionCreateParams, SessionThreadCreateParams};
+use zeta_app_server_protocol::protocol::session::{
+    SessionCreateParams, SessionRequest, SessionRequestParams, SessionRequestResult,
+    SessionThreadReadParams,
+};
 use zeta_app_server_protocol::protocol::skills::{
     SkillCatalogReloadDto, SkillEnablementDto, SkillListParams, SkillSetEnablementParams,
 };
 use zeta_app_server_protocol::protocol::slash_commands::{
     SlashCommandArgumentModeDto, SlashCommandDefinition,
 };
-use zeta_app_server_protocol::protocol::thread::ThreadReadParams;
-use zeta_app_server_protocol::protocol::turn::{InputItem, TurnStartParams};
+use zeta_app_server_protocol::protocol::turn::InputItem;
 use zeta_app_server_protocol::schema_hash;
 use zeta_async_utils::CancellationToken;
 use zeta_core::{
@@ -164,33 +166,46 @@ fn in_process_client_uses_session_first_contract_and_canonical_updates() {
         })
         .expect("Session is created");
     let thread = client
-        .create_session_thread(SessionThreadCreateParams {
+        .request_session(SessionRequestParams {
             command_id: CommandId::new("thread-one").expect("test ID is non-empty"),
             session_id: session.session.session_id.clone(),
             expected_sequence: session.session.sequence,
-            title: "root".into(),
+            request: SessionRequest::CreateThread {
+                title: "root".into(),
+            },
         })
         .expect("Thread is created");
+    let thread = match thread {
+        SessionRequestResult::Thread(thread) => thread,
+        result => panic!("unexpected create-thread result: {result:?}"),
+    };
     let turn = client
-        .start_turn(TurnStartParams {
+        .request_session(SessionRequestParams {
             command_id: CommandId::new("turn-one").expect("test ID is non-empty"),
-            session_id: session.session.session_id,
-            thread_id: thread.thread_id.clone(),
+            session_id: session.session.session_id.clone(),
             expected_sequence: 1,
-            input: vec![
-                InputItem::Text {
-                    text: "hello".into(),
-                },
-                InputItem::Image {
-                    url: "data:image/png;base64,iVBORw0KGgpwYXlsb2Fk".into(),
-                },
-            ],
+            request: SessionRequest::StartTurn {
+                thread_id: thread.thread_id.clone(),
+                input: vec![
+                    InputItem::Text {
+                        text: "hello".into(),
+                    },
+                    InputItem::Image {
+                        url: "data:image/png;base64,iVBORw0KGgpwYXlsb2Fk".into(),
+                    },
+                ],
+            },
         })
         .expect("Turn starts");
+    let turn = match turn {
+        SessionRequestResult::Turn(turn) => turn,
+        result => panic!("unexpected start-turn result: {result:?}"),
+    };
     let deadline = Instant::now() + Duration::from_secs(1);
     let snapshot = loop {
         let snapshot = client
-            .read_thread(ThreadReadParams {
+            .read_session_thread(SessionThreadReadParams {
+                session_id: session.session.session_id.clone(),
                 thread_id: thread.thread_id.clone(),
             })
             .expect("Thread remains readable");
@@ -204,7 +219,7 @@ fn in_process_client_uses_session_first_contract_and_canonical_updates() {
     let output = notifications
         .iter()
         .find_map(|notification| match notification {
-            ServerNotification::ThreadUpdate(update) => match &update.update {
+            ServerNotification::SessionThreadUpdate(update) => match &update.update {
                 ThreadUpdate::Committed {
                     event:
                         ThreadEvent::ItemCompleted {

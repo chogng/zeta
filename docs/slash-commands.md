@@ -28,7 +28,7 @@ App Server composition
   → renderer projection
   → activation
       local  → client product command
-      server → unchanged /name text in turn/start.input
+      server → unchanged /name text in session/request StartTurn.input
 ```
 
 `SlashCommandDefinition` 是三端唯一的 Slash Command model。`origin`、Workbench `actionId` 和 TUI

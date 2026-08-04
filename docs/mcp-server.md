@@ -87,10 +87,10 @@ transport 本身不创造 parent/child 语义。
 - approval/user-input 到 MCP `elicitation/create` 的映射，以及 exact typed interaction resolve；
 - bearer authentication、Origin 校验、MCP session/protocol header、DELETE termination、
   SSE Tool call response 和连接数限制；
-- deadline/EOF/client cancellation 到精确 `turn/interrupt` 的传播、unknown-outcome grace，
+- deadline/EOF/client cancellation 到精确 `session/request` `InterruptTurn` 的传播、unknown-outcome grace，
   以及 client-cancelled request response suppression；
 - protocol、真实 in-process App Server、binary stdio restart 和 HTTP socket/SSE tests；
-- App Server 已提供 `session/create`、`session/thread/create`、`turn/start`、subscription 和
+- App Server 已提供 `session/create`、`session/request`、带 Session scope 的 Thread subscription 和
   canonical Session/Thread updates；
 - `zeta-app-server-client` 已有 typed methods、schema hash 校验和 embedded
   `InProcessTransport`；
@@ -100,10 +100,11 @@ transport 本身不创造 parent/child 语义。
 
 当前缺口：
 
-- 当前 `InProcessTransport` 仍以同步 `round_trip` 和 request 后 `drain_notifications` 工作，
-  MCP adapter 通过 Thread subscription + bounded polling/drain 转发进度与 interaction，但还
-  不是通用、独立、可唤醒的 event driver；
-- 目标 `AppServerSession`、可克隆 request handle、独立 event stream 和显式 shutdown 尚未完成；
+- MCP adapter 当前仍通过 `InProcessTransport` 的同步 `round_trip` 与 request 后
+  `drain_notifications` 工作，以 Thread subscription + bounded polling/drain 转发进度与
+  interaction；
+- 通用 `AppServerSession`、可克隆 request handle、独立 event stream 和显式 shutdown 已由
+  `zeta-app-server-client` 提供并被 CLI/TUI 使用，MCP adapter 尚未迁移到该 event driver；
 - `MultiAgentCoordinator` 和 remote Agent adapter 仍是 Proposed；
 - dynamic Tool interaction、artifact reference 和命名 execution profile 尚未完成；
 - HTTP 尚无 independent GET SSE、`Last-Event-ID` redelivery、OAuth、multi-tenant workspace
@@ -232,10 +233,10 @@ MCP tools/call(zeta)
 → validate schema, caller scope, invocation identity and limits
 → start initialized in-process App Server client
 → session/create
-→ session/thread/create
-→ thread/subscribe
-→ turn/start
-→ bounded thread/read polling + notification drain
+→ session/request { type: createThread }
+→ session/thread/subscribe
+→ session/request { type: startTurn }
+→ bounded session/thread/read polling + notification drain
 → project bounded progress
 → forward approval/user input through elicitation/create when needed
 → resolve exact interaction identity
@@ -245,7 +246,7 @@ MCP tools/call(zeta)
 
 这是 Current subscription + bounded polling/drain 路径。它可在 Turn 运行期间投影增量
 progress 和 interaction，但 correctness 仍以 App Server durable snapshot/update 和最终 result
-为准。目标独立 event driver 将替换轮询，而不改变 authority。
+为准。MCP 后续可迁移到已经存在的 `AppServerSession` event driver，而不改变 authority。
 
 ### 7.2 继续（Continue）
 
@@ -253,7 +254,7 @@ progress 和 interaction，但 correctness 仍以 App Server durable snapshot/up
 MCP tools/call(zeta-reply)
 → authenticate caller-to-thread binding
 → validate thread is eligible for another Turn
-→ turn/start
+→ session/request { type: startTurn }
 → poll the exact Thread/Turn snapshot
 → return exact Turn result
 ```
@@ -267,7 +268,7 @@ MCP cancel notification 必须映射到该 MCP request 对应的精确 Turn/oper
 HTTP disconnect 不自动证明 Turn cancelled：
 
 - server 发出 best-effort cancellation；
-- 当前 adapter 调用精确 `turn/interrupt`，并给 canonical terminal state 两秒 grace；
+- 当前 adapter 调用精确 `session/request` `InterruptTurn`，并给 canonical terminal state 两秒 grace；
 - client 发送 `notifications/cancelled` 后，server 不再发送该 request 的 JSON-RPC response；
 - 若连接已无法接收结果，持久状态仍由 App Server/Core 决定；
 - 同一 principal 使用原 invocation identity 可在新 connection/process replay 或 resume；
@@ -383,16 +384,16 @@ MCP server runtime。
 
 状态：部分具备。
 
-- 完成 owned async `AppServerSession`、request handle、event stream 和 explicit shutdown；
+- [x] 完成 owned async `AppServerSession`、request handle、event stream 和 explicit shutdown；
 - 固定 MCP revision、tool schema、invocation identity 和 error/result fixture；
 - 使用 fake App Server session 覆盖 start、event、terminal、cancel 和 duplicate；
 - 明确 external invocation provenance，不与 `AgentSpawn` 混用。
 
 完成条件：adapter 不依赖同步 `drain_notifications`，重复 start 不会创建第二个任务。
 
-当前已完成 tool schema、invocation identity、error/result、duplicate 和 cancel fixture；owned
-async `AppServerSession` 与独立 event stream 尚未完成。MCP adapter 当前用 subscription +
-bounded polling/drain 提供实时能力，仍应迁移到该通用 session。
+当前已完成 tool schema、invocation identity、error/result、duplicate 和 cancel fixture，以及
+共享的 owned async `AppServerSession` 与独立 event stream。MCP adapter 当前仍用 subscription +
+bounded polling/drain 提供实时能力，迁移到该通用 session 是后续适配工作。
 
 ### 阶段 MS1：stdio `zeta` 纵向切片
 

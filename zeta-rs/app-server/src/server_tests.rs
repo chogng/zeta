@@ -140,12 +140,12 @@ fn create_thread(
         serde_json::json!({
             "jsonrpc":"2.0",
             "id":request_id,
-            "method":"session/thread/create",
+            "method":"session/request",
             "params":{
                 "commandId":command_id,
                 "sessionId":session_id,
                 "expectedSequence":expected_sequence,
-                "title":"root"
+                "request":{"type":"createThread","title":"root"}
             }
         }),
     )
@@ -551,10 +551,10 @@ fn session_first_flow_exposes_canonical_session_and_thread_models() {
     let session_id = session["result"]["session"]["sessionId"].as_str().unwrap();
     assert_eq!(session["result"]["session"]["sequence"], 1);
     let thread = create_thread(&server, &mut connection, 3, "create-thread", session_id, 1);
-    let thread_id = thread["result"]["threadId"].as_str().unwrap();
+    let thread_id = thread["result"]["value"]["threadId"].as_str().unwrap();
 
     assert_eq!(
-        thread["result"]["session"]["threads"][0]["status"],
+        thread["result"]["value"]["session"]["threads"][0]["status"],
         "active"
     );
     let read = call(
@@ -563,8 +563,8 @@ fn session_first_flow_exposes_canonical_session_and_thread_models() {
         serde_json::json!({
             "jsonrpc":"2.0",
             "id":4,
-            "method":"thread/read",
-            "params":{"threadId":thread_id}
+            "method":"session/thread/read",
+            "params":{"sessionId":session_id,"threadId":thread_id}
         }),
     );
     assert_eq!(read["result"]["thread"]["sessionId"], session_id);
@@ -579,7 +579,7 @@ fn session_stop_archives_the_session_and_blocks_new_turns() {
     let session = create_session(&server, &mut connection, 2, "create-session");
     let session_id = session["result"]["session"]["sessionId"].as_str().unwrap();
     let thread = create_thread(&server, &mut connection, 3, "create-thread", session_id, 1);
-    let thread_id = thread["result"]["threadId"].as_str().unwrap();
+    let thread_id = thread["result"]["value"]["threadId"].as_str().unwrap();
 
     let stopped = call(
         &server,
@@ -587,15 +587,16 @@ fn session_stop_archives_the_session_and_blocks_new_turns() {
         serde_json::json!({
             "jsonrpc":"2.0",
             "id":4,
-            "method":"session/stop",
+            "method":"session/request",
             "params":{
                 "commandId":"stop-session",
                 "sessionId":session_id,
-                "expectedSequence":3
+                "expectedSequence":3,
+                "request":{"type":"stop"}
             }
         }),
     );
-    assert_eq!(stopped["result"]["session"]["status"], "archived");
+    assert_eq!(stopped["result"]["value"]["session"]["status"], "archived");
 
     let rejected = call(
         &server,
@@ -603,13 +604,12 @@ fn session_stop_archives_the_session_and_blocks_new_turns() {
         serde_json::json!({
             "jsonrpc":"2.0",
             "id":5,
-            "method":"turn/start",
+            "method":"session/request",
             "params":{
                 "commandId":"turn-after-stop",
                 "sessionId":session_id,
-                "threadId":thread_id,
                 "expectedSequence":1,
-                "input":[{"type":"text","text":"after stop"}]
+                "request":{"type":"startTurn","threadId":thread_id,"input":[{"type":"text","text":"after stop"}]}
             }
         }),
     );
@@ -656,17 +656,17 @@ fn model_selection_is_catalog_backed_and_session_scoped() {
         serde_json::json!({
             "jsonrpc":"2.0",
             "id":5,
-            "method":"session/model/set",
+            "method":"session/request",
             "params":{
                 "commandId":"set-first-model",
                 "sessionId":first_id,
                 "expectedSequence":1,
-                "model":{"provider":"openai","model":"gpt-alternate"}
+                "request":{"type":"setModel","model":{"provider":"openai","model":"gpt-alternate"}}
             }
         }),
     );
     assert_eq!(
-        changed["result"]["session"]["model"]["model"],
+        changed["result"]["value"]["session"]["model"]["model"],
         "gpt-alternate"
     );
     let unchanged = call(
@@ -717,30 +717,29 @@ fn fork_freezes_parent_thread_sequence_in_session_lineage() {
     let session = create_session(&server, &mut connection, 2, "session");
     let session_id = session["result"]["session"]["sessionId"].as_str().unwrap();
     let root = create_thread(&server, &mut connection, 3, "root", session_id, 1);
-    let root_id = root["result"]["threadId"].as_str().unwrap();
+    let root_id = root["result"]["value"]["threadId"].as_str().unwrap();
     let fork = call(
         &server,
         &mut connection,
         serde_json::json!({
             "jsonrpc":"2.0",
             "id":4,
-            "method":"session/thread/fork",
+            "method":"session/request",
             "params":{
                 "commandId":"fork",
                 "sessionId":session_id,
                 "expectedSequence":3,
-                "parentThreadId":root_id,
-                "title":"branch"
+                "request":{"type":"forkThread","parentThreadId":root_id,"title":"branch"}
             }
         }),
     );
 
     assert_eq!(
-        fork["result"]["session"]["threads"][1]["origin"]["type"],
+        fork["result"]["value"]["session"]["threads"][1]["origin"]["type"],
         "fork"
     );
     assert_eq!(
-        fork["result"]["session"]["threads"][1]["origin"]["parentSequence"],
+        fork["result"]["value"]["session"]["threads"][1]["origin"]["parentSequence"],
         1
     );
 }
@@ -753,16 +752,17 @@ fn rewind_endpoint_imports_only_history_before_the_selected_turn() {
     let session = create_session(&server, &mut connection, 2, "session");
     let session_id = session["result"]["session"]["sessionId"].as_str().unwrap();
     let root = create_thread(&server, &mut connection, 3, "root", session_id, 1);
-    let root_id = root["result"]["threadId"].as_str().unwrap();
+    let root_id = root["result"]["value"]["threadId"].as_str().unwrap();
 
     let first = call(
         &server,
         &mut connection,
         serde_json::json!({
-            "jsonrpc":"2.0","id":4,"method":"turn/start",
+            "jsonrpc":"2.0","id":4,"method":"session/request",
             "params":{
-                "commandId":"turn-first","sessionId":session_id,"threadId":root_id,
-                "expectedSequence":1,"input":[{"type":"text","text":"first"}]
+                "commandId":"turn-first","sessionId":session_id,
+                "expectedSequence":1,
+                "request":{"type":"startTurn","threadId":root_id,"input":[{"type":"text","text":"first"}]}
             }
         }),
     );
@@ -771,18 +771,18 @@ fn rewind_endpoint_imports_only_history_before_the_selected_turn() {
         &server,
         &mut connection,
         serde_json::json!({
-            "jsonrpc":"2.0","id":5,"method":"thread/read","params":{"threadId":root_id}
+            "jsonrpc":"2.0","id":5,"method":"session/thread/read","params":{"sessionId":session_id,"threadId":root_id}
         }),
     );
     let second = call(
         &server,
         &mut connection,
         serde_json::json!({
-            "jsonrpc":"2.0","id":6,"method":"turn/start",
+            "jsonrpc":"2.0","id":6,"method":"session/request",
             "params":{
-                "commandId":"turn-second","sessionId":session_id,"threadId":root_id,
+                "commandId":"turn-second","sessionId":session_id,
                 "expectedSequence":after_first["result"]["thread"]["sequence"],
-                "input":[{"type":"text","text":"second"}]
+                "request":{"type":"startTurn","threadId":root_id,"input":[{"type":"text","text":"second"}]}
             }
         }),
     );
@@ -791,20 +791,19 @@ fn rewind_endpoint_imports_only_history_before_the_selected_turn() {
         &server,
         &mut connection,
         serde_json::json!({
-            "jsonrpc":"2.0","id":7,"method":"session/thread/rewind",
+            "jsonrpc":"2.0","id":7,"method":"session/request",
             "params":{
                 "commandId":"rewind","sessionId":session_id,"expectedSequence":3,
-                "parentThreadId":root_id,"beforeTurnId":second["result"]["turnId"],
-                "title":"rewound"
+                "request":{"type":"rewindThread","parentThreadId":root_id,"beforeTurnId":second["result"]["value"]["turnId"],"title":"rewound"}
             }
         }),
     );
-    let child_id = rewound["result"]["threadId"].as_str().unwrap();
+    let child_id = rewound["result"]["value"]["threadId"].as_str().unwrap();
     let child = call(
         &server,
         &mut connection,
         serde_json::json!({
-            "jsonrpc":"2.0","id":8,"method":"thread/read","params":{"threadId":child_id}
+            "jsonrpc":"2.0","id":8,"method":"session/thread/read","params":{"sessionId":session_id,"threadId":child_id}
         }),
     );
 
@@ -814,10 +813,10 @@ fn rewind_endpoint_imports_only_history_before_the_selected_turn() {
     );
     assert_eq!(
         child["result"]["thread"]["turns"][0]["turnId"],
-        first["result"]["turnId"]
+        first["result"]["value"]["turnId"]
     );
     assert_eq!(
-        rewound["result"]["session"]["threads"][1]["origin"]["type"],
+        rewound["result"]["value"]["session"]["threads"][1]["origin"]["type"],
         "rewind"
     );
 }
@@ -904,15 +903,15 @@ fn shell_turn_runs_without_a_model_and_publishes_typed_output() {
     let session = create_session(&server, &mut connection, 2, "session");
     let session_id = session["result"]["session"]["sessionId"].as_str().unwrap();
     let thread = create_thread(&server, &mut connection, 3, "thread", session_id, 1);
-    let thread_id = thread["result"]["threadId"].as_str().unwrap();
+    let thread_id = thread["result"]["value"]["threadId"].as_str().unwrap();
     call(
         &server,
         &mut connection,
         serde_json::json!({
             "jsonrpc":"2.0",
             "id":4,
-            "method":"thread/subscribe",
-            "params":{"threadId":thread_id,"afterSequence":1}
+            "method":"session/thread/subscribe",
+            "params":{"sessionId":session_id,"threadId":thread_id,"afterSequence":1}
         }),
     );
 
@@ -922,19 +921,17 @@ fn shell_turn_runs_without_a_model_and_publishes_typed_output() {
         serde_json::json!({
             "jsonrpc":"2.0",
             "id":5,
-            "method":"turn/shell/start",
+            "method":"session/request",
             "params":{
                 "commandId":"shell-turn",
                 "sessionId":session_id,
-                "threadId":thread_id,
                 "expectedSequence":1,
-                "command":"printf shell output",
-                "workingDirectory":"."
+                "request":{"type":"startShellTurn","threadId":thread_id,"command":"printf shell output","workingDirectory":"."}
             }
         }),
     );
 
-    assert!(response["result"]["turnId"].is_string());
+    assert!(response["result"]["value"]["turnId"].is_string());
     wait_for_latest_turn(&server, thread_id, TurnStatus::Completed);
     assert_eq!(model.calls.load(Ordering::Relaxed), 0);
     let snapshot = server
@@ -1002,30 +999,32 @@ fn completed_turn_replays_without_invoking_the_model_twice() {
     let session = create_session(&server, &mut connection, 2, "session");
     let session_id = session["result"]["session"]["sessionId"].as_str().unwrap();
     let thread = create_thread(&server, &mut connection, 3, "thread", session_id, 1);
-    let thread_id = thread["result"]["threadId"].as_str().unwrap();
+    let thread_id = thread["result"]["value"]["threadId"].as_str().unwrap();
     let request = |id| {
         serde_json::json!({
             "jsonrpc":"2.0",
             "id":id,
-            "method":"turn/start",
+            "method":"session/request",
             "params":{
                 "commandId":"turn",
                 "sessionId":session_id,
-                "threadId":thread_id,
                 "expectedSequence":1,
-                "input":[{"type":"text","text":"hello"}]
+                "request":{"type":"startTurn","threadId":thread_id,"input":[{"type":"text","text":"hello"}]}
             }
         })
     };
     let first = call(&server, &mut connection, request(4));
     let replayed = call(&server, &mut connection, request(5));
 
-    assert_eq!(first["result"]["turnId"], replayed["result"]["turnId"]);
+    assert_eq!(
+        first["result"]["value"]["turnId"],
+        replayed["result"]["value"]["turnId"]
+    );
     wait_for_latest_turn(&server, thread_id, TurnStatus::Completed);
     assert_eq!(model.calls.load(Ordering::Relaxed), 1);
     let notifications = server.drain_notifications(&mut connection);
     assert!(notifications.iter().any(|notification| {
-        notification.contains("\"method\":\"thread/update\"")
+        notification.contains("\"method\":\"session/thread/update\"")
             && notification.contains("\"agentMessage\"")
     }));
 }
@@ -1088,7 +1087,7 @@ fn updates_are_broadcast_to_other_subscribed_connections() {
     let session = create_session(&server, &mut writer, 2, "session");
     let session_id = session["result"]["session"]["sessionId"].as_str().unwrap();
     let thread = create_thread(&server, &mut writer, 3, "thread", session_id, 1);
-    let thread_id = thread["result"]["threadId"].as_str().unwrap();
+    let thread_id = thread["result"]["value"]["threadId"].as_str().unwrap();
 
     let mut observer = server.connection();
     initialize(&server, &mut observer);
@@ -1108,13 +1107,12 @@ fn updates_are_broadcast_to_other_subscribed_connections() {
         &server,
         &mut writer,
         serde_json::json!({
-            "jsonrpc":"2.0","id":4,"method":"session/thread/fork",
+            "jsonrpc":"2.0","id":4,"method":"session/request",
             "params":{
                 "commandId":"fork",
                 "sessionId":session_id,
                 "expectedSequence":3,
-                "parentThreadId":thread_id,
-                "title":"branch"
+                "request":{"type":"forkThread","parentThreadId":thread_id,"title":"branch"}
             }
         }),
     );
@@ -1122,13 +1120,12 @@ fn updates_are_broadcast_to_other_subscribed_connections() {
         &server,
         &mut writer,
         serde_json::json!({
-            "jsonrpc":"2.0","id":5,"method":"turn/start",
+            "jsonrpc":"2.0","id":5,"method":"session/request",
             "params":{
                 "commandId":"turn",
                 "sessionId":session_id,
-                "threadId":thread_id,
                 "expectedSequence":1,
-                "input":[{"type":"text","text":"hello"}]
+                "request":{"type":"startTurn","threadId":thread_id,"input":[{"type":"text","text":"hello"}]}
             }
         }),
     );
@@ -1141,10 +1138,10 @@ fn updates_are_broadcast_to_other_subscribed_connections() {
             .any(|value| value.contains("\"method\":\"session/update\""))
     );
     assert!(notifications.iter().any(|value| {
-        value.contains("\"method\":\"thread/update\"") && value.contains("\"agentMessage\"")
+        value.contains("\"method\":\"session/thread/update\"") && value.contains("\"agentMessage\"")
     }));
     assert!(notifications.iter().any(|value| {
-        value.contains("\"method\":\"thread/update\"")
+        value.contains("\"method\":\"session/thread/update\"")
             && value.contains("\"itemDelta\"")
             && value.contains("\"streamCursor\"")
     }));
@@ -1158,7 +1155,7 @@ fn subscribe_returns_durable_gap_for_reconnect() {
     let session = create_session(&server, &mut first_connection, 2, "session");
     let session_id = session["result"]["session"]["sessionId"].as_str().unwrap();
     let thread = create_thread(&server, &mut first_connection, 3, "thread", session_id, 1);
-    let thread_id = thread["result"]["threadId"].as_str().unwrap();
+    let thread_id = thread["result"]["value"]["threadId"].as_str().unwrap();
 
     let mut reconnected = server.connection();
     initialize(&server, &mut reconnected);
@@ -1168,8 +1165,8 @@ fn subscribe_returns_durable_gap_for_reconnect() {
         serde_json::json!({
             "jsonrpc":"2.0",
             "id":2,
-            "method":"thread/subscribe",
-            "params":{"threadId":thread_id,"afterSequence":0}
+            "method":"session/thread/subscribe",
+            "params":{"sessionId":session_id,"threadId":thread_id,"afterSequence":0}
         }),
     );
     assert_eq!(replay["result"]["updates"][0]["durableSequence"], 1);
@@ -1501,7 +1498,7 @@ fn interaction_resolution_uses_the_durable_request_identity() {
     let session = create_session(&server, &mut connection, 2, "session");
     let session_id = session["result"]["session"]["sessionId"].as_str().unwrap();
     let thread = create_thread(&server, &mut connection, 3, "thread", session_id, 1);
-    let thread_id = thread["result"]["threadId"].as_str().unwrap();
+    let thread_id = thread["result"]["value"]["threadId"].as_str().unwrap();
     let thread_id = zeta_protocol::ThreadId::new(thread_id).unwrap();
     let session_id = zeta_protocol::SessionId::new(session_id).unwrap();
     let started = server
@@ -1544,20 +1541,17 @@ fn interaction_resolution_uses_the_durable_request_identity() {
         serde_json::json!({
             "jsonrpc":"2.0",
             "id":4,
-            "method":"turn/interaction/resolve",
+            "method":"session/request",
             "params":{
                 "commandId":"resolve-input-1",
                 "sessionId":session_id,
-                "threadId":thread_id,
-                "turnId":started.turn_id,
-                "requestId":"input-1",
                 "expectedSequence":5,
-                "response":{"type":"userInput", "response":{"answers":{}}}
+                "request":{"type":"resolveInteraction","threadId":thread_id,"turnId":started.turn_id,"requestId":"input-1","response":{"type":"userInput", "response":{"answers":{}}}}
             }
         }),
     );
 
-    assert_eq!(resolved["result"]["sequence"], 6);
+    assert_eq!(resolved["result"]["value"]["sequence"], 6);
     let snapshot = server.sessions().threads().read_thread(&thread_id).unwrap();
     assert_eq!(snapshot.turns[0].status, zeta_core::TurnStatus::Running);
     assert!(snapshot.turns[0].pending_interaction.is_none());
@@ -1571,7 +1565,7 @@ fn approval_interaction_resolves_through_the_typed_app_server_contract() {
     let session = create_session(&server, &mut connection, 2, "session");
     let session_id = session["result"]["session"]["sessionId"].as_str().unwrap();
     let thread = create_thread(&server, &mut connection, 3, "thread", session_id, 1);
-    let thread_id = thread["result"]["threadId"].as_str().unwrap();
+    let thread_id = thread["result"]["value"]["threadId"].as_str().unwrap();
     let thread_id = zeta_protocol::ThreadId::new(thread_id).unwrap();
     let session_id = zeta_protocol::SessionId::new(session_id).unwrap();
     let started = server
@@ -1621,23 +1615,20 @@ fn approval_interaction_resolves_through_the_typed_app_server_contract() {
         serde_json::json!({
             "jsonrpc":"2.0",
             "id":4,
-            "method":"turn/interaction/resolve",
+            "method":"session/request",
             "params":{
                 "commandId":"resolve-approval-1",
                 "sessionId":session_id,
-                "threadId":thread_id,
-                "turnId":started.turn_id,
-                "requestId":"approval-1",
                 "expectedSequence":5,
-                "response":{
+                "request":{"type":"resolveInteraction","threadId":thread_id,"turnId":started.turn_id,"requestId":"approval-1","response":{
                     "type":"approval",
                     "response":{"decision":"approveOnce"}
-                }
+                }}
             }
         }),
     );
 
-    assert_eq!(resolved["result"]["sequence"], 6);
+    assert_eq!(resolved["result"]["value"]["sequence"], 6);
     let events = server
         .sessions()
         .threads()

@@ -18,11 +18,11 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 use zeta_app_server_client::{AppServerClient, JsonRpcTransport};
-use zeta_app_server_protocol::protocol::session::{SessionCreateParams, SessionThreadCreateParams};
-use zeta_app_server_protocol::protocol::thread::{ThreadReadParams, ThreadSubscribeParams};
-use zeta_app_server_protocol::protocol::turn::{
-    InputItem, TurnInteractionResolveParams, TurnInterruptParams, TurnStartParams,
+use zeta_app_server_protocol::protocol::session::{
+    SessionCreateParams, SessionRequest, SessionRequestParams, SessionRequestResult,
+    SessionThreadReadParams, SessionThreadResult, SessionThreadSubscribeParams,
 };
+use zeta_app_server_protocol::protocol::turn::InputItem;
 use zeta_protocol::{
     AgentRequestEnvelope, CommandId, SessionId, ThreadId, ThreadUpdateEnvelope, TurnId,
 };
@@ -167,6 +167,40 @@ struct TurnWait<'a> {
     events: &'a dyn AgentEvents,
 }
 
+fn expect_thread_result(
+    result: SessionRequestResult,
+) -> Result<SessionThreadResult, AgentCallError> {
+    match result {
+        SessionRequestResult::Thread(result) => Ok(result),
+        other => Err(AgentCallError::AppServer(format!(
+            "session request returned {other:?} for CreateThread"
+        ))),
+    }
+}
+
+fn expect_turn_result(
+    result: SessionRequestResult,
+) -> Result<zeta_app_server_protocol::protocol::turn::TurnStartResult, AgentCallError> {
+    match result {
+        SessionRequestResult::Turn(result) => Ok(result),
+        other => Err(AgentCallError::AppServer(format!(
+            "session request returned {other:?} for StartTurn"
+        ))),
+    }
+}
+
+fn expect_interaction_result(
+    result: SessionRequestResult,
+) -> Result<zeta_app_server_protocol::protocol::turn::TurnInteractionResolveResult, AgentCallError>
+{
+    match result {
+        SessionRequestResult::Interaction(result) => Ok(result),
+        other => Err(AgentCallError::AppServer(format!(
+            "session request returned {other:?} for ResolveInteraction"
+        ))),
+    }
+}
+
 impl<T: JsonRpcTransport + Send> AppServerAgentService<T> {
     #[cfg(test)]
     pub(crate) fn new(client: AppServerClient<T>, limits: RuntimeLimits) -> Self {
@@ -211,14 +245,18 @@ impl<T: JsonRpcTransport + Send> AppServerAgentService<T> {
         })?;
         let session_id = session.session.session_id.clone();
         let thread_command = command_id(&self.principal, &request.invocation_id, "thread")?;
-        let thread = self.with_client(|client| {
-            client.create_session_thread(SessionThreadCreateParams {
-                command_id: thread_command,
-                session_id: session_id.clone(),
-                expected_sequence: session.session.sequence,
-                title: "MCP Agent".into(),
+        let thread = self
+            .with_client(|client| {
+                client.request_session(SessionRequestParams {
+                    command_id: thread_command,
+                    session_id: session_id.clone(),
+                    expected_sequence: session.session.sequence,
+                    request: SessionRequest::CreateThread {
+                        title: "MCP Agent".into(),
+                    },
+                })
             })
-        })?;
+            .and_then(expect_thread_result)?;
         self.receipts.bind_thread(
             &self.principal,
             thread.thread_id.clone(),
@@ -272,25 +310,30 @@ impl<T: JsonRpcTransport + Send> AppServerAgentService<T> {
             cancellation,
             events,
         } = call;
-        let before = self.read_thread(thread_id)?;
+        let before = self.read_thread(session_id, thread_id)?;
         let subscription = self.with_client(|client| {
-            client.subscribe_thread(ThreadSubscribeParams {
+            client.subscribe_session_thread(SessionThreadSubscribeParams {
+                session_id: session_id.clone(),
                 thread_id: thread_id.clone(),
                 after_sequence: 0,
             })
         })?;
         let turn_command = command_id(&self.principal, invocation_id, "turn")?;
-        let started = self.with_client(|client| {
-            client.start_turn(TurnStartParams {
-                command_id: turn_command,
-                session_id: session_id.clone(),
-                thread_id: thread_id.clone(),
-                expected_sequence: before.thread.sequence,
-                input: vec![InputItem::Text {
-                    text: prompt.to_string(),
-                }],
+        let started = self
+            .with_client(|client| {
+                client.request_session(SessionRequestParams {
+                    command_id: turn_command,
+                    session_id: session_id.clone(),
+                    expected_sequence: before.thread.sequence,
+                    request: SessionRequest::StartTurn {
+                        thread_id: thread_id.clone(),
+                        input: vec![InputItem::Text {
+                            text: prompt.to_string(),
+                        }],
+                    },
+                })
             })
-        })?;
+            .and_then(expect_turn_result)?;
         self.wait_for_turn(
             TurnWait {
                 invocation_id,
@@ -322,7 +365,7 @@ impl<T: JsonRpcTransport + Send> AppServerAgentService<T> {
         let deadline = Instant::now() + timeout;
         let mut cancellation_deadline = None;
         loop {
-            let (snapshot, notifications) = self.read_thread_and_updates(thread_id)?;
+            let (snapshot, notifications) = self.read_thread_and_updates(session_id, thread_id)?;
             updates.extend(notifications);
             let turn = snapshot
                 .thread
@@ -350,23 +393,27 @@ impl<T: JsonRpcTransport + Send> AppServerAgentService<T> {
                         if let InteractionResolution::Respond(response) =
                             events.resolve_interaction(&envelope)
                         {
-                            let expected_sequence = self.read_thread(thread_id)?.thread.sequence;
+                            let expected_sequence =
+                                self.read_thread(session_id, thread_id)?.thread.sequence;
                             let interaction_command = interaction_command_id(
                                 &self.principal,
                                 invocation_id,
                                 &interaction.request_id,
                             )?;
                             self.with_client(|client| {
-                                client.resolve_turn_interaction(TurnInteractionResolveParams {
+                                client.request_session(SessionRequestParams {
                                     command_id: interaction_command,
                                     session_id: session_id.clone(),
-                                    thread_id: thread_id.clone(),
-                                    turn_id: turn_id.clone(),
-                                    request_id: interaction.request_id,
                                     expected_sequence,
-                                    response,
+                                    request: SessionRequest::ResolveInteraction {
+                                        thread_id: thread_id.clone(),
+                                        turn_id: turn_id.clone(),
+                                        request_id: interaction.request_id,
+                                        response,
+                                    },
                                 })
-                            })?;
+                            })
+                            .and_then(expect_interaction_result)?;
                             interaction_resolved = true;
                             break;
                         }
@@ -388,12 +435,14 @@ impl<T: JsonRpcTransport + Send> AppServerAgentService<T> {
             if should_cancel && cancellation_deadline.is_none() {
                 let cancel_command = command_id(&self.principal, invocation_id, "cancel")?;
                 let _ = self.with_client(|client| {
-                    client.interrupt_turn(TurnInterruptParams {
+                    client.request_session(SessionRequestParams {
                         command_id: cancel_command,
                         session_id: session_id.clone(),
-                        thread_id: thread_id.clone(),
-                        turn_id: turn_id.clone(),
                         expected_sequence: snapshot.thread.sequence,
+                        request: SessionRequest::InterruptTurn {
+                            thread_id: thread_id.clone(),
+                            turn_id: turn_id.clone(),
+                        },
                     })
                 });
                 cancellation_deadline = Some(Instant::now() + CANCELLATION_GRACE);
@@ -414,10 +463,13 @@ impl<T: JsonRpcTransport + Send> AppServerAgentService<T> {
 
     fn read_thread(
         &self,
+        session_id: &SessionId,
         thread_id: &ThreadId,
-    ) -> Result<zeta_app_server_protocol::protocol::thread::ThreadReadResult, AgentCallError> {
+    ) -> Result<zeta_app_server_protocol::protocol::session::SessionThreadReadResult, AgentCallError>
+    {
         self.with_client(|client| {
-            client.read_thread(ThreadReadParams {
+            client.read_session_thread(SessionThreadReadParams {
+                session_id: session_id.clone(),
                 thread_id: thread_id.clone(),
             })
         })
@@ -425,10 +477,11 @@ impl<T: JsonRpcTransport + Send> AppServerAgentService<T> {
 
     fn read_thread_and_updates(
         &self,
+        session_id: &SessionId,
         thread_id: &ThreadId,
     ) -> Result<
         (
-            zeta_app_server_protocol::protocol::thread::ThreadReadResult,
+            zeta_app_server_protocol::protocol::session::SessionThreadReadResult,
             Vec<ThreadUpdateEnvelope>,
         ),
         AgentCallError,
@@ -438,7 +491,8 @@ impl<T: JsonRpcTransport + Send> AppServerAgentService<T> {
             .lock()
             .map_err(|_| lock_error("App Server client"))?;
         let snapshot = client
-            .read_thread(ThreadReadParams {
+            .read_session_thread(SessionThreadReadParams {
+                session_id: session_id.clone(),
                 thread_id: thread_id.clone(),
             })
             .map_err(|error| AgentCallError::AppServer(error.to_string()))?;
@@ -447,7 +501,7 @@ impl<T: JsonRpcTransport + Send> AppServerAgentService<T> {
             .map_err(|error| AgentCallError::AppServer(error.to_string()))?
             .into_iter()
             .filter_map(|notification| match notification {
-                zeta_app_server_client::ServerNotification::ThreadUpdate(update)
+                zeta_app_server_client::ServerNotification::SessionThreadUpdate(update)
                     if &update.thread_id == thread_id =>
                 {
                     Some(*update)

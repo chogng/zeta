@@ -12,7 +12,7 @@ use zeta_app_server_protocol::protocol::registry::{
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ServerNotification {
     SessionUpdate(SessionUpdateEnvelope),
-    ThreadUpdate(Box<ThreadUpdateEnvelope>),
+    SessionThreadUpdate(Box<ThreadUpdateEnvelope>),
     ConfigChanged(ConfigChanged),
     SkillsChanged(SkillsChanged),
     GitStatusChanged(GitStatusChanged),
@@ -33,9 +33,9 @@ pub(crate) fn decode(raw: &str) -> Result<ServerNotification, ClientError> {
         Some(ServerNotificationMethod::SessionUpdate) => {
             decode_params(envelope.params).map(ServerNotification::SessionUpdate)
         }
-        Some(ServerNotificationMethod::ThreadUpdate) => decode_params(envelope.params)
+        Some(ServerNotificationMethod::SessionThreadUpdate) => decode_params(envelope.params)
             .map(Box::new)
-            .map(ServerNotification::ThreadUpdate),
+            .map(ServerNotification::SessionThreadUpdate),
         Some(ServerNotificationMethod::ConfigChanged) => {
             decode_params(envelope.params).map(ServerNotification::ConfigChanged)
         }

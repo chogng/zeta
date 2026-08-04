@@ -41,7 +41,7 @@ Context 和 Artifacts。无论增加多少功能，Inspector 都只跟随当前
 | Renderer 的职责 | 可丢弃、可重建的 Plan 视图投影 |
 | 第一阶段数据入口 | `ThreadUpdate::PlanUpdated` contract；production emitter 尚未接通 |
 | 第一阶段恢复限制 | 重连或重新选择后无法从 snapshot 恢复结构化 Plan |
-| 生产完整形态 | `thread/read` 必须返回可恢复的结构化 Plan |
+| 生产完整形态 | `session/thread/read` 必须返回可恢复的结构化 Plan |
 | Inspector 对 Plan 的修改 | 第一阶段只读；不直接勾选或静默改变步骤 |
 | 订阅策略 | Transcript 与 Inspector 共享已有 Thread projection，不建立第二条独立订阅 |
 | 窄宽度行为 | 抽屉/覆盖层；不得把 Chat 正文压缩到不可用宽度 |
@@ -98,7 +98,7 @@ Session Inspector 不负责：
 | `ThreadUpdate::PlanUpdated` 类型与 broker routing | ✅ | transient；尚未发现 production producer |
 | `ChatPaneModel` 接收 `planUpdated` | 部分具备 | 当前分支明确忽略该 update |
 | Chat transcript 渲染 Plan item | ✅ | 收到 item 时渲染 Markdown，不提供结构化步骤投影 |
-| 结构化 Plan 从 `thread/read` 恢复 | ❌ | `Thread` / `Turn` snapshot 当前没有该字段 |
+| 结构化 Plan 从 `session/thread/read` 恢复 | ❌ | `Thread` / `Turn` snapshot 当前没有该字段 |
 
 因此，“把 Plan 放进 Inspector”已有协议和 Renderer 切入点，但 P1 仍需接通真实
 `planUpdated` producer。即使完成实时 vertical slice，也不能把它描述为跨重启、重连或重新
@@ -314,7 +314,7 @@ Turn {
 实现评审确定，但必须满足：
 
 1. event 足以从空状态重建 `Turn.plan`；
-2. `thread/read` 和 `thread/subscribe` snapshot 返回同一结构化 Plan；
+2. `session/thread/read` 和 `session/thread/subscribe` snapshot 返回同一结构化 Plan；
 3. `planUpdated` 可以继续作为低延迟 preview，但不能成为唯一恢复来源；
 4. preview 被 committed state 覆盖，而不是覆盖 committed state；
 5. Plan 归属 `TurnId`，不提升为 Session 级全局状态；
@@ -457,7 +457,7 @@ Threads 进入 Inspector 后仍是当前 Session 内的 Thread topology，不是
 1. Protocol/Core 接受 durable Turn Plan contract；
 2. App Server schema 与生成 TypeScript 同步更新；
 3. reducer/store/recovery 证明 event 可重建 `Turn.plan`；
-4. `thread/read` / subscribe snapshot 返回结构化 Plan；
+4. `session/thread/read` / subscribe snapshot 返回结构化 Plan；
 5. Desktop projection 先应用 snapshot，再接受 transient preview；
 6. 增加 Rust contract/store/recovery 与 Desktop reconnect 测试。
 

@@ -9,7 +9,10 @@ export interface ModelRef {
   readonly model: string;
 }
 
-export type ThreadOrigin = { readonly type: "root" } | { readonly type: "fork"; readonly parentThreadId: ThreadId; readonly parentSequence: number };
+export type ThreadOrigin =
+  | { readonly type: "root" }
+  | { readonly type: "fork"; readonly parentThreadId: ThreadId; readonly parentSequence: number }
+  | { readonly type: "rewind"; readonly parentThreadId: ThreadId; readonly parentSequence: number; readonly beforeTurnId: string };
 export type SessionThreadStatus = "creating" | "active" | "archived";
 
 export interface SessionThread {

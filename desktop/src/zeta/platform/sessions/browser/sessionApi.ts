@@ -1,6 +1,7 @@
 import type { ViteDevAppServerConnection } from "../../app-server/browser/viteDevConnection.js";
 import { viteDevRequest, voidResult } from "../../app-server/browser/viteDevRequest.js";
 import type { UnavailableOperation } from "../../renderer/browser/disconnectedHost.js";
+import { sessionRequest, sessionResult, sessionThreadResult, turnInteractionResolveResult, turnInterruptResult, turnStartResult } from "../common/sessionApi.js";
 import type { IModelApi, ISessionApi, IThreadApi, ITurnApi } from "../common/sessionApi.js";
 
 export function createDisconnectedSessionApi(unavailable: UnavailableOperation): ISessionApi {
@@ -47,13 +48,13 @@ export function createViteDevSessionApi(connection: ViteDevAppServerConnection):
     list: () => viteDevRequest(connection, "session/list", {}),
     subscribe: (params) => viteDevRequest(connection, "session/subscribe", params),
     unsubscribe: (params) => voidResult(viteDevRequest(connection, "session/unsubscribe", params)),
-    createThread: (params) => viteDevRequest(connection, "session/thread/create", params),
-    forkThread: (params) => viteDevRequest(connection, "session/thread/fork", params),
-    archiveThread: (params) => viteDevRequest(connection, "session/thread/archive", params),
-    complete: (params) => viteDevRequest(connection, "session/complete", params),
-    archive: (params) => viteDevRequest(connection, "session/archive", params),
-    stop: (params) => viteDevRequest(connection, "session/stop", params),
-    setModel: (params) => viteDevRequest(connection, "session/model/set", params),
+    createThread: (params) => viteDevRequest(connection, "session/request", sessionRequest(params, { type: "createThread", title: params.title })).then(sessionThreadResult),
+    forkThread: (params) => viteDevRequest(connection, "session/request", sessionRequest(params, { type: "forkThread", parentThreadId: params.parentThreadId, title: params.title })).then(sessionThreadResult),
+    archiveThread: (params) => viteDevRequest(connection, "session/request", sessionRequest(params, { type: "archiveThread", threadId: params.threadId })).then(sessionResult),
+    complete: (params) => viteDevRequest(connection, "session/request", sessionRequest(params, { type: "complete" })).then(sessionResult),
+    archive: (params) => viteDevRequest(connection, "session/request", sessionRequest(params, { type: "archive" })).then(sessionResult),
+    stop: (params) => viteDevRequest(connection, "session/request", sessionRequest(params, { type: "stop" })).then(sessionResult),
+    setModel: (params) => viteDevRequest(connection, "session/request", sessionRequest(params, { type: "setModel", model: params.model })).then(sessionResult),
   };
 }
 
@@ -63,16 +64,16 @@ export function createViteDevModelApi(connection: ViteDevAppServerConnection): I
 
 export function createViteDevThreadApi(connection: ViteDevAppServerConnection): IThreadApi {
   return {
-    read: (params) => viteDevRequest(connection, "thread/read", params),
-    subscribe: (params) => viteDevRequest(connection, "thread/subscribe", params),
-    unsubscribe: (params) => voidResult(viteDevRequest(connection, "thread/unsubscribe", params)),
+    read: (params) => viteDevRequest(connection, "session/thread/read", params),
+    subscribe: (params) => viteDevRequest(connection, "session/thread/subscribe", params),
+    unsubscribe: (params) => voidResult(viteDevRequest(connection, "session/thread/unsubscribe", params)),
   };
 }
 
 export function createViteDevTurnApi(connection: ViteDevAppServerConnection): ITurnApi {
   return {
-    start: (params) => viteDevRequest(connection, "turn/start", params),
-    interrupt: (params) => viteDevRequest(connection, "turn/interrupt", params),
-    resolveInteraction: (params) => viteDevRequest(connection, "turn/interaction/resolve", params),
+    start: (params) => viteDevRequest(connection, "session/request", sessionRequest({ commandId: params.commandId, sessionId: params.sessionId, expectedSequence: params.expectedSequence }, { type: "startTurn", threadId: params.threadId, input: params.input })).then(turnStartResult),
+    interrupt: (params) => viteDevRequest(connection, "session/request", sessionRequest(params, { type: "interruptTurn", threadId: params.threadId, turnId: params.turnId })).then(turnInterruptResult),
+    resolveInteraction: (params) => viteDevRequest(connection, "session/request", sessionRequest(params, { type: "resolveInteraction", threadId: params.threadId, turnId: params.turnId, requestId: params.requestId, response: params.response })).then(turnInteractionResolveResult),
   };
 }

@@ -48,7 +48,7 @@ lastUpdated: YYYY-MM-DD
 
 | Method | Direction | Consumers | Side effect | Idempotent | Capability | Summary |
 |---|---|---|---:|---:|---|---|
-| `session/thread/create` | Client → Server | Desktop, CLI | yes | required | sessions | 创建 Thread |
+| `session/request` (`createThread`) | Client → Server | Desktop, CLI | yes | required | sessions | 创建 Thread |
 | `browser/observe` | Server → Client | Desktop host | no | n/a | browser | 观察目标 |
 
 Direction 只能使用：
@@ -97,15 +97,18 @@ transport 不支持该能力，必须通过 initialize capability 明确声明�
 {
   "jsonrpc": "2.0",
   "id": 42,
-  "method": "turn/start",
+  "method": "session/request",
   "params": {
     "commandId": "command_01...",
     "sessionId": "session_123",
-    "threadId": "thread_123",
     "expectedSequence": 17,
-    "input": [
-      { "type": "text", "text": "分析当前网页" }
-    ]
+    "request": {
+      "type": "startTurn",
+      "threadId": "thread_123",
+      "input": [
+        { "type": "text", "text": "分析当前网页" }
+      ]
+    }
   }
 }
 ```

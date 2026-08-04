@@ -4,6 +4,7 @@ import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { createUuid } from "../../../../base/common/uuid.js";
 import type { IAppServerApi, IServerEventApi } from "../../../../platform/app-server/common/appServerApi.js";
 import type { IModelApi, IThreadApi, ITurnApi } from "../../../../platform/sessions/common/sessionApi.js";
+import type { SessionId, ThreadId } from "../../sessions/common/sessionService.js";
 import type { IChatService, InterruptTurnOptions, ModelCatalogEntry, ResolveInteractionOptions, SlashCommandDefinition, StartTurnOptions, Thread, ThreadSubscription, ThreadUpdateEnvelope } from "../common/chatService.js";
 
 export interface ChatServiceOptions {
@@ -25,7 +26,7 @@ export class ChatService extends DisposableOwner implements IChatService {
   constructor(private readonly options: ChatServiceOptions) {
     super();
     const events = options.eventApi.subscribe((event) => {
-      if (event.method === "thread/update") this._onDidUpdateThread.fire(toThreadUpdate(event.params));
+      if (event.method === "session/thread/update") this._onDidUpdateThread.fire(toThreadUpdate(event.params));
     });
     this.defer(() => events.dispose());
     const connection = options.appServerApi.onConnectionState((state) => {
@@ -44,17 +45,17 @@ export class ChatService extends DisposableOwner implements IChatService {
     return commands.map((command) => ({ ...command }));
   }
 
-  async readThread(threadId: string): Promise<Thread> {
-    return toThread((await this.options.threadApi.read({ threadId })).thread);
+  async readThread(sessionId: SessionId, threadId: ThreadId): Promise<Thread> {
+    return toThread((await this.options.threadApi.read({ sessionId, threadId })).thread);
   }
 
-  async subscribeThread(threadId: string, afterSequence: number): Promise<ThreadSubscription> {
-    const result = await this.options.threadApi.subscribe({ threadId, afterSequence });
+  async subscribeThread(sessionId: SessionId, threadId: ThreadId, afterSequence: number): Promise<ThreadSubscription> {
+    const result = await this.options.threadApi.subscribe({ sessionId, threadId, afterSequence });
     return { thread: toThread(result.thread), updates: result.updates.map(toThreadUpdate) };
   }
 
-  unsubscribeThread(threadId: string): Promise<void> {
-    return this.options.threadApi.unsubscribe({ threadId });
+  unsubscribeThread(sessionId: SessionId, threadId: ThreadId): Promise<void> {
+    return this.options.threadApi.unsubscribe({ sessionId, threadId });
   }
 
   async startTurn(options: StartTurnOptions): Promise<void> {

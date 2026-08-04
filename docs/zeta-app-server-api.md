@@ -33,7 +33,7 @@ Session、Thread、Turn 和更新流，不建立第二套领域模型。
 | 客户端需求 | 使用方式 | 关键保证 |
 | --- | --- | --- |
 | 创建一次工作 | 创建 Session，再创建 Thread 并启动 Turn | 产品身份与持久化语义来自统一协议 |
-| 关闭一个 Session Tab | 前端通过 App Server 适配层调用 `session/stop` | 持久化停止 Session，并中断其所有活动子 Turn；仅断开连接不会停止 Session |
+| 关闭一个 Session Tab | 前端通过 `session/request` 提交 `request.type = stop` | 持久化停止 Session，并中断其所有活动子 Turn；仅断开连接不会停止 Session |
 | 持续显示执行进度 | 订阅 Thread 更新并按序列消费 | 发现缺口时重新读取快照，不猜测丢失状态 |
 | 修改配置或资源 | 调用类型化方法并携带命令身份 | 重复命令可重放结果，冲突载荷会被拒绝 |
 | 响应批准或用户输入 | 回复等待中的类型化请求 | 回复绑定精确请求和当前 Thread |
@@ -157,7 +157,7 @@ notification contract，不能拥有隐藏业务接口。JSONL/stdio、WebSocket
 schema hash 不一致时客户端必须拒绝继续运行。
 `slashCommands` 每项的 `name` 只能使用 lowercase ASCII letters、digits 与 interior hyphens，
 description 不能为空，同一 snapshot 中 name 必须唯一。该 snapshot 负责 discoverability 与
-inline argument parsing；提交仍通过 `turn/start.input`，并保留 `/name`、text/image 顺序。
+inline argument parsing；提交仍通过 `session/request` 的 `StartTurn.input`，并保留 `/name`、text/image 顺序。
 校验、local/server 合并与 Rust client 交互状态的 canonical owner 是
 [`zeta-slash-commands`](../zeta-rs/slash-commands/README.md)；App Server 只组合并发布 server snapshot。
 三种 client surface 的合并、执行与渲染边界见 [`slash-commands.md`](slash-commands.md)。
@@ -172,20 +172,11 @@ inline argument parsing；提交仍通过 `turn/start.input`，并保留 `/name`
 | `session/subscribe` | connection | Session snapshot + `afterSequence` 之后的 durable gap + child Thread projections |
 | `session/request` | Session | canonical typed mutation request；覆盖 Session、child Thread 与 Turn 操作 |
 | `session/unsubscribe` | connection | 删除订阅 |
-| `session/thread/create` | Session + new Thread | 创建 root Thread |
-| `session/thread/fork` | Session + new Thread | 从固定 parent sequence 创建分支 |
-| `session/thread/archive` | Session | archive membership |
-| `session/complete` | Session | 完成任务 |
-| `session/archive` | Session | archive 任务 |
-| `session/stop` | Session + child Threads | 适配层停止 Session：archive Session 并中断所有非终态 child Turn |
-| `session/model/set` | Session | 持久化当前 Session 的模型选择 |
+| `session/request` | Session | 通过 tagged request 完成 Session、child Thread 和 Turn mutation |
 | `model/list` | global model catalog | 列出当前已配置 provider 可选择的模型 |
-| `thread/read` | Thread | 读取 canonical snapshot |
-| `thread/subscribe` | connection | snapshot + `afterSequence` 之后的 durable gap |
-| `thread/unsubscribe` | connection | 删除订阅 |
-| `turn/start` | Session gate + Thread | Session active 时接受并执行 Turn |
-| `turn/interrupt` | Thread | 中断非终态 Turn |
-| `turn/interaction/resolve` | Thread | 用 exact request identity 解决一个 outstanding interaction |
+| `session/thread/read` | Session + Thread | 读取 canonical Thread snapshot |
+| `session/thread/subscribe` | Session + Thread + connection | snapshot + `afterSequence` 之后的 durable gap |
+| `session/thread/unsubscribe` | Session + Thread + connection | 删除 child Thread 订阅 |
 | `config/read` | config | 读取配置 |
 | `config/update` | config | typed command 更新配置 |
 | `languageServer/configure` / `languageServer/remove` | config | revision-safe 修改或恢复 language-server mode/path preference |
@@ -347,12 +338,12 @@ spawn 前执行 `env_clear`，所以 PTY 看不到最终 map 之外的 App Serve
 
 ```json
 {
-  "method": "session/thread/create",
+  "method": "session/request",
   "params": {
     "commandId": "command_thread_1",
     "sessionId": "session_1",
     "expectedSequence": 1,
-    "title": "Main"
+    "request": { "type": "createThread", "title": "Main" }
   }
 }
 ```
@@ -367,25 +358,21 @@ spawn 前执行 `env_clear`，所以 PTY 看不到最终 map 之外的 App Serve
 
 ### 分叉 Thread
 
-`session/thread/fork` 比 create 多一个 `parentThreadId`。Server 在执行命令时读取父 Thread 的
-当前 sequence，并把它持久化进 `ThreadOrigin::Fork`。Fork 只复制 lineage 起点；它不让两个
-Thread 共享后续 sequence。
+`session/request` 的 `request.type = forkThread` 比 create 多一个 `parentThreadId`。Server 在执行
+命令时读取父 Thread 的当前 sequence，并把它持久化进 `ThreadOrigin::Fork`。Fork 只复制 lineage
+起点；它不让两个 Thread 共享后续 sequence。
 
 ### 生命周期
 
-`session/thread/archive`、`session/complete`、`session/archive` 和 `session/stop` 都要求
-`commandId`、`sessionId` 与 `expectedSequence`。Archived Session 不允许再修改。
-
-`session/stop` 是 App Server 的适配层入口，不是 `zeta-protocol` 的 canonical
-`SessionCommand`。前端关闭一个 Tab 时调用这个入口；App Server 将它交给 Core 的内部停止编排，
-先 durable archive Session，再中断该 Session 下所有活动 child Turn。Core 的 Session 状态会阻止
-并发的 `turn/start` 继续接受新 Turn，子 Thread 的中断仍通过各自 Thread update 发布。连接断开只
-释放订阅、请求和资源 ownership，不隐式触发 `session/stop`。
+`session/request` 的所有 mutation 都要求 `commandId`、`sessionId` 与 `expectedSequence`。
+`request.type` 明确选择 `archiveThread`、`complete`、`archive` 或 `stop`；Archived Session 不允许
+再修改。停止请求会先 durable archive Session，再中断该 Session 下所有活动 child Turn。连接断开
+只释放订阅、请求和资源 ownership，不隐式触发停止。
 
 ### 会话模型
 
-`session/model/set` 使用 `commandId`、`sessionId`、`expectedSequence` 和 provider-scoped
-`ModelRef`。选择结果写入 Session event stream，只影响该 Session。`turn/start` 将 Session
+`session/request::SetModel` 使用 `commandId`、`sessionId`、`expectedSequence` 和 provider-scoped
+`ModelRef`。选择结果写入 Session event stream，只影响该 Session。`session/request::StartTurn` 将 Session
 当前模型复制到新 Turn；后续 Session 或全局配置变化不会改变已经启动的 Turn。
 
 `model/list` 只返回 App Server 当前已配置 provider 的静态目录。远端账号 entitlement 和模型
@@ -393,7 +380,7 @@ Thread 共享后续 sequence。
 
 ## 7. Thread 与 Turn
 
-`thread/read` 返回：
+`session/thread/read` 返回：
 
 ```text
 Thread {
@@ -410,18 +397,21 @@ Thread {
 错误。`pendingInteraction` 不含 interaction payload；完整请求只能通过 owner-directed delivery
 获得。客户端不得从日志文本或瞬态 delta 推断权威终态。
 
-`turn/start` 参数：
+`session/request` 的 `StartTurn` 参数：
 
 ```json
 {
   "commandId": "command_turn_1",
   "sessionId": "session_1",
-  "threadId": "thread_1",
   "expectedSequence": 1,
-  "input": [
-    { "type": "text", "text": "Describe this image" },
-    { "type": "image", "url": "data:image/png;base64,..." }
-  ]
+  "request": {
+    "type": "startTurn",
+    "threadId": "thread_1",
+    "input": [
+      { "type": "text", "text": "Describe this image" },
+      { "type": "image", "url": "data:image/png;base64,..." }
+    ]
+  }
 }
 ```
 
@@ -434,10 +424,10 @@ PNG/JPEG/GIF/WEBP base64 data URL。App Server 不接受本地路径；客户端
 规范化本地文件。Core 会重新校验 MIME、签名、base64 和 16 MiB decoded-size 上限，并把图片
 作为 durable `UserImage` 保存。
 
-`turn/interrupt` 同样携带 `commandId`、Session/Thread/Turn identity 与
+`session/request` 的 `InterruptTurn` 同样携带 `commandId`、Session/Thread/Turn identity 与
 `expectedSequence`，成功返回新的 Thread sequence。
 
-`turn/interaction/resolve` 携带同样的 aggregate identity、`commandId`、`expectedSequence`，
+`session/request` 的 `ResolveInteraction` 携带同样的 aggregate identity、`commandId`、`expectedSequence`，
 以及 outstanding interaction 的 `requestId` 和 typed response。它只接受该 Turn 当前 pending
 interaction 的同一 request kind；相同 `commandId + typed payload` 会重放原结果，错误的
 `requestId` 或 response kind 会被拒绝。该 method 解决已 durable 的 interaction，不用于创建
@@ -451,7 +441,7 @@ interaction 的同一 request kind；相同 `commandId + typed payload` 会重�
 当前有六个 notification method：
 
 - `session/update`，payload 为 `SessionUpdateEnvelope`；
-- `thread/update`，payload 为 `ThreadUpdateEnvelope`；
+- `session/thread/update`，payload 为 Session subscription 的 `ThreadUpdateEnvelope`；
 - `config/changed`，payload 为已提交的 Config `revision` 与 `generation`；
 - `skills/changed`，payload 为新的 catalog `generation`；
 - `git/statusChanged`，payload 为新的 workspace Git status；
@@ -465,16 +455,20 @@ durable update 使用 `durableSequence`。Thread 的低延迟非 durable update 
 - streamInstanceId 变化时客户端丢弃旧瞬态 cursor，并以 durable snapshot/gap 重新同步。
 
 `session/request` 是产品 mutation 的 canonical aggregate port。请求固定携带 `commandId`、
-`sessionId`、`expectedSequence` 和 tagged `request` operation；结果通过 tagged
-`SessionRequestResult` 区分 Session、child Thread 和 Turn 返回值。旧的 `session/thread/*`、
-`session/model/set` 与 `turn/*` 方法暂时保留为兼容入口，新功能不应继续增加这些平行入口。
+`sessionId`、`expectedSequence` 和 tagged `request` operation；其中 `expectedSequence` 对 Session
+操作指向 Session，对 child Thread/Turn 操作指向 request 选择的 child Thread。结果通过 tagged
+`SessionRequestResult` 区分 Session、child Thread 和 Turn 返回值。旧的独立 Session/Thread/Turn
+mutation 方法不在 registry 中；客户端不得重新引入平行入口。
+
+Session subscription 和显式 `session/thread/subscribe` 都使用同一个 `session/thread/update`
+notification；通知 payload 始终带有 Session/Thread scope。
 
 `session/subscribe` 原子建立 Session subscription，并返回当前 Session snapshot、Session 的
 committed update gap，以及每个 child Thread 的 `SessionThreadProjection` snapshot/gap；同一
 connection 会接收这些 child Thread 的实时 update。产品宿主应先应用 aggregate snapshot/gap，再
 接收实时 notification；发现 durable 空洞时重新执行 `session/subscribe`。
-`thread/subscribe` 仍是低层兼容 contract，供需要单独读取一个 Thread 的客户端使用；它不是
-`zeterm` 的 application boundary。
+需要单独读取一个 Thread 的客户端使用 `session/thread/read` 和
+`session/thread/subscribe`，并始终携带 `sessionId`；这保证了 Thread scope 在协议边界被验证。
 
 ## 9. 配置与资源
 

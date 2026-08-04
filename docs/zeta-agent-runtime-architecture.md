@@ -96,7 +96,7 @@
 | 模型选择冻结（`TurnAccepted` 携带 model） | 已实现 | `core/src/thread_controller.rs` |
 | `ContextAssembler`（`ThreadSnapshot` → `ModelRequest`，过渡 API） | 已实现（过渡） | `core/src/context/assembler.rs` |
 | `ModelService` / `ModelStreamSink` 契约 | 已实现（同步桥接：默认 stream 只回放 final response） | `core/src/services.rs` |
-| 取消链路 turn/interrupt → mailbox cancel → token → model/tool | 已实现 | [`core.md`](core.md) §7.3 |
+| 取消链路 session/request InterruptTurn → mailbox cancel → token → model/tool | 已实现 | [`core.md`](core.md) §7.3 |
 | App Server 可唤醒 outbound 通知源（`ConnectionNotifications`） | 部分 | `app-server/src/server.rs`；stdio 主循环仍在每个请求处理后才 drain |
 
 ### 2.2 设计面（本计划的工作对象）
@@ -223,11 +223,11 @@ per-connection reader thread        per-connection writer thread
 ```
 
 需要区分的四种终止语义保持原设计：`$/cancelRequest`（取消一个 RPC handler 等待）、
-`turn/interrupt`（durable Turn 推向 Interrupted）、connection close（清理 connection-owned
+`session/request` 的 `InterruptTurn`（durable Turn 推向 Interrupted）、connection close（清理 connection-owned
 资源并唤醒 writer 退出）、server shutdown（带 deadline 的全局 graceful stop）。
 
 Desktop Renderer 不持有 raw peer；由单一 projection service 消费 notification，检测 durable
-sequence / stream cursor gap，并通过 `session/subscribe` / `thread/subscribe` 的
+sequence / stream cursor gap，并通过 `session/subscribe` / `session/thread/subscribe` 的
 snapshot + gap 重建。
 
 ### 4.3 R3：上下文系统裁剪落地
