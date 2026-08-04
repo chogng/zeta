@@ -1,2 +1,5 @@
 # Keep generated design-token artifacts byte-stable across platforms.
 /resources/design-tokens/* text eol=lf
+
+# Keep product icon sources canonical across platforms.
+/resources/icons/*.svg text eol=lf
