@@ -59,6 +59,7 @@ pub(crate) mod artwork {
     pub(crate) const DATABASE_FLAT: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/database-flat.svg"));
     pub(crate) const DIAGNOSTICS: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/diagnostics.svg"));
     pub(crate) const DIFF: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/diff.svg"));
+    pub(crate) const DISCARD: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/discard.svg"));
     pub(crate) const DOCX: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/docx.svg"));
     pub(crate) const DOCX_BLUE: IconDefinition = IconDefinition::multicolor(include_bytes!("../../../resources/icons/docx-blue.svg"));
     pub(crate) const DOCX_FILLED: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/docx-filled.svg"));
@@ -98,6 +99,7 @@ pub(crate) mod artwork {
     pub(crate) const LAYOUT_PANEL: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/layout-panel.svg"));
     pub(crate) const LAYOUT_PANEL_OFF: IconDefinition = IconDefinition::multicolor(include_bytes!("../../../resources/icons/layout-panel-off.svg"));
     pub(crate) const LAYOUT_SIDEBAR_LEFT: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/layout-sidebar-left.svg"));
+    pub(crate) const LAYOUT_SIDEBAR_LEFT_OFF: IconDefinition = IconDefinition::multicolor(include_bytes!("../../../resources/icons/layout-sidebar-left-off.svg"));
     pub(crate) const LAYOUT_SIDEBAR_LEFT_OFF_EMPTY: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/layout-sidebar-left-off-empty.svg"));
     pub(crate) const LAYOUT_SIDEBAR_RIGHT: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/layout-sidebar-right.svg"));
     pub(crate) const LAYOUT_SIDEBAR_RIGHT_OFF: IconDefinition = IconDefinition::multicolor(include_bytes!("../../../resources/icons/layout-sidebar-right-off.svg"));
@@ -135,6 +137,9 @@ pub(crate) mod artwork {
     pub(crate) const REFRESH: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/refresh.svg"));
     pub(crate) const REMOVE: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/remove.svg"));
     pub(crate) const REMOVE_SMALL: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/remove-small.svg"));
+    pub(crate) const REPO_FETCH: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/repo-fetch.svg"));
+    pub(crate) const REPO_PULL: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/repo-pull.svg"));
+    pub(crate) const REPO_PUSH: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/repo-push.svg"));
     pub(crate) const RSS: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/rss.svg"));
     pub(crate) const SANDBOX: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/sandbox.svg"));
     pub(crate) const SAVE: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/save.svg"));
@@ -151,6 +156,7 @@ pub(crate) mod artwork {
     pub(crate) const SUMMARY: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/summary.svg"));
     pub(crate) const SYNC: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/sync.svg"));
     pub(crate) const TABLE: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/table.svg"));
+    pub(crate) const TARGET: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/target.svg"));
     pub(crate) const TERMINAL: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/terminal.svg"));
     pub(crate) const TERMINAL_CMD: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/terminal-cmd.svg"));
     pub(crate) const TERMINAL_GIT_BASH: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/terminal-git-bash.svg"));
@@ -227,6 +233,7 @@ pub(crate) const ALL_ARTWORK: &[(&str, IconDefinition)] = &[
     ("database-flat", artwork::DATABASE_FLAT),
     ("diagnostics", artwork::DIAGNOSTICS),
     ("diff", artwork::DIFF),
+    ("discard", artwork::DISCARD),
     ("docx", artwork::DOCX),
     ("docx-blue", artwork::DOCX_BLUE),
     ("docx-filled", artwork::DOCX_FILLED),
@@ -266,6 +273,7 @@ pub(crate) const ALL_ARTWORK: &[(&str, IconDefinition)] = &[
     ("layout-panel", artwork::LAYOUT_PANEL),
     ("layout-panel-off", artwork::LAYOUT_PANEL_OFF),
     ("layout-sidebar-left", artwork::LAYOUT_SIDEBAR_LEFT),
+    ("layout-sidebar-left-off", artwork::LAYOUT_SIDEBAR_LEFT_OFF),
     ("layout-sidebar-left-off-empty", artwork::LAYOUT_SIDEBAR_LEFT_OFF_EMPTY),
     ("layout-sidebar-right", artwork::LAYOUT_SIDEBAR_RIGHT),
     ("layout-sidebar-right-off", artwork::LAYOUT_SIDEBAR_RIGHT_OFF),
@@ -303,6 +311,9 @@ pub(crate) const ALL_ARTWORK: &[(&str, IconDefinition)] = &[
     ("refresh", artwork::REFRESH),
     ("remove", artwork::REMOVE),
     ("remove-small", artwork::REMOVE_SMALL),
+    ("repo-fetch", artwork::REPO_FETCH),
+    ("repo-pull", artwork::REPO_PULL),
+    ("repo-push", artwork::REPO_PUSH),
     ("rss", artwork::RSS),
     ("sandbox", artwork::SANDBOX),
     ("save", artwork::SAVE),
@@ -319,6 +330,7 @@ pub(crate) const ALL_ARTWORK: &[(&str, IconDefinition)] = &[
     ("summary", artwork::SUMMARY),
     ("sync", artwork::SYNC),
     ("table", artwork::TABLE),
+    ("target", artwork::TARGET),
     ("terminal", artwork::TERMINAL),
     ("terminal-cmd", artwork::TERMINAL_CMD),
     ("terminal-git-bash", artwork::TERMINAL_GIT_BASH),

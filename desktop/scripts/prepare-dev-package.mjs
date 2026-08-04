@@ -314,7 +314,7 @@ async function copyBuiltinSkills(destination) {
 }
 
 async function copyBuiltinExtensions(destination) {
-  const source = join(repositoryRoot, "resources", "extensions");
+  const source = join(repositoryRoot, "extensions");
   const entries = (await readdir(source, { withFileTypes: true })).filter(
     (entry) => entry.name !== "README.md" && entry.name !== "BUILD.bazel",
   );

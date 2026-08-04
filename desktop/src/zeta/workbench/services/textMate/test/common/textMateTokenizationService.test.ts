@@ -76,7 +76,7 @@ test("TextMate tokenization uses real Oniguruma scopes across lines", async () =
 });
 
 test("vendored VS Code JSON grammar tokenizes through the common service", async () => {
-  const content = await readFile(resolve("../resources/extensions/json/syntaxes/JSON.tmLanguage.json"), "utf8");
+  const content = await readFile(resolve("../extensions/json/syntaxes/JSON.tmLanguage.json"), "utf8");
   using registry = new TextMateGrammarRegistry();
   using registration = registry.register({
     languageId: "json",

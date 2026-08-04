@@ -445,7 +445,7 @@ fn resolve_extension_roots(profile_root: &std::path::Path) -> Vec<ExtensionRoot>
 }
 
 fn development_extension_root() -> Option<PathBuf> {
-    let candidate = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../resources/extensions");
+    let candidate = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../extensions");
     candidate.is_dir().then_some(candidate)
 }
 

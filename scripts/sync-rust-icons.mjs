@@ -1,5 +1,5 @@
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
-import { basename, dirname, extname, resolve } from "node:path";
+import { basename, dirname, extname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repositoryDirectory = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -75,9 +75,10 @@ export async function syncRustIcons(options = {}) {
     const resourceName = basename(fileName, ".svg");
     const name = rustConstantName(fileName);
     const rendering = renderingConstructor(svg);
+    const includePath = relative(dirname(destination), resolve(sourceDirectory, fileName)).replaceAll("\\", "/");
     artwork.push({ name, resourceName });
     constants.push(
-      `    pub(crate) const ${name}: IconDefinition = IconDefinition::${rendering}(include_bytes!("../../../../resources/icons/${fileName}"));`,
+      `    pub(crate) const ${name}: IconDefinition = IconDefinition::${rendering}(include_bytes!("${includePath}"));`,
     );
   }
 

@@ -24,7 +24,7 @@ belong to the extension resource layer.
 | Browser Worker Oniguruma WASM loading | `browser/textMateOniguruma.ts` | ✅ |
 | Grammar contribution-to-catalog lifecycle | `TextMateGrammarService` | ✅ |
 | Workbench service composition and lifecycle | `ITextMateService` / `BrowserTextMateService` | ✅ |
-| Declarative language, configuration, snippet, grammar, and theme resources | `resources/extensions` / `AppServerExtensionService` | 部分具备：manifest projection is active; theme activation is separate |
+| Declarative language, configuration, snippet, grammar, and theme resources | `extensions` / `AppServerExtensionService` | 部分具备：manifest projection is active; theme activation is separate |
 | External extension-manifest loading | `AppServerExtensionService` | Static declarative contributions only; extension JavaScript is never executed |
 
 `workbench/services/textMate/common` may depend on Alpha's public Analysis and text
@@ -62,7 +62,7 @@ revision; `onDidFailCatalog` reports a failed revision without corrupting the
 catalog already used by a Worker.
 
 The JSON and JSONC grammars are shipped as the declarative `json` package under
-`resources/extensions`. Rust discovers
+`extensions`. Rust discovers
 the package and serves its bounded grammar resources through the extension API;
 the browser TextMate service only receives validated loaders. Neither common code
 nor the dedicated Worker reads product or workspace files. Workbench constructs one
