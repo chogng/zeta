@@ -1,8 +1,9 @@
 use crate::NativeApp;
 use crate::shell_interaction::AGENT_SIDEBAR_RESIZE_HANDLE;
 use crate::shell_scene::agent_sidebar_resize_snapshot_for_viewport;
+use zeta_layout::SidebarLayoutSpec;
+use zeta_layout::SidebarVisibility;
 use zeta_ui::Point;
-use zeta_ui::SplitViewPane;
 use zeta_ui::SplitViewResizeSnapshot;
 use zeta_winit::ElementState;
 use zui::DispatchInvalidation;
@@ -61,6 +62,23 @@ impl AgentSidebarState {
         matches!(self.visibility, AgentSidebarVisibility::Expanded)
     }
 
+    /// Projects product visibility and persisted sizing into the host-neutral workspace layout
+    /// contract. The layout crate owns pane geometry; this adapter owns product state.
+    pub(crate) const fn layout_spec(self) -> SidebarLayoutSpec {
+        let visibility = if self.is_expanded() {
+            SidebarVisibility::Expanded
+        } else {
+            SidebarVisibility::Collapsed
+        };
+        SidebarLayoutSpec::new(
+            visibility,
+            self.preferred_width,
+            MINIMUM_WIDTH,
+            MAXIMUM_WIDTH,
+            MINIMUM_MAIN_WIDTH,
+        )
+    }
+
     pub(crate) const fn is_resizing(self) -> bool {
         self.resize.is_some()
     }
@@ -75,27 +93,6 @@ impl AgentSidebarState {
 
     pub(crate) fn expand(&mut self) {
         self.visibility = AgentSidebarVisibility::Expanded;
-    }
-
-    pub(crate) fn is_visible_for(self, available_width: f32) -> bool {
-        self.is_expanded() && available_width >= MINIMUM_WIDTH + MINIMUM_MAIN_WIDTH
-    }
-
-    pub(crate) const fn preferred_width(self) -> f32 {
-        self.preferred_width
-    }
-
-    pub(crate) const fn minimum_main_width(self) -> f32 {
-        MINIMUM_MAIN_WIDTH
-    }
-
-    pub(crate) fn pane_sizing(self, available_width: f32) -> SplitViewPane {
-        let sidebar = SplitViewPane::new(self.preferred_width, MINIMUM_WIDTH, MAXIMUM_WIDTH);
-        if self.is_visible_for(available_width) {
-            sidebar
-        } else {
-            sidebar.hidden()
-        }
     }
 
     pub(crate) fn start_resizing(

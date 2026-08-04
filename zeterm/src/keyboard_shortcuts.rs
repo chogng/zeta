@@ -9,16 +9,16 @@ use zeta_winit::{ElementState, Key, KeyEvent, NamedKey};
 use zui::ElementId;
 
 use crate::NativeApp;
-use crate::commands::NativeCommand;
 use crate::keybindings::KeybindingsResourcePoll;
 use crate::keybindings::NativeKeybindings;
 use crate::shell_interaction::WINDOW;
+use zeta_commands::ZetermCommandId;
 
 const SHORTCUT_SCOPE: u32 = 3;
 pub(crate) const KEYBOARD_SHORTCUTS: ElementId = ElementId::scoped(SHORTCUT_SCOPE, 1);
 const KEYBOARD_SHORTCUTS_CLOSE: ElementId = ElementId::scoped(SHORTCUT_SCOPE, 2);
 
-pub(crate) type KeyboardShortcutsState = GenericKeyboardShortcutsState<NativeCommand>;
+pub(crate) type KeyboardShortcutsState = GenericKeyboardShortcutsState<ZetermCommandId>;
 
 pub(crate) const fn keyboard_shortcuts_ids() -> KeyboardShortcutsIds {
     KeyboardShortcutsIds::new(WINDOW, KEYBOARD_SHORTCUTS, KEYBOARD_SHORTCUTS_CLOSE)
@@ -26,8 +26,8 @@ pub(crate) const fn keyboard_shortcuts_ids() -> KeyboardShortcutsIds {
 
 pub(crate) fn keyboard_shortcut_rows(
     keybindings: &NativeKeybindings,
-) -> Vec<KeyboardShortcutRow<'_, NativeCommand>> {
-    NativeCommand::BINDABLE
+) -> Vec<KeyboardShortcutRow<'_, ZetermCommandId>> {
+    ZetermCommandId::BINDABLE
         .into_iter()
         .map(|command| {
             KeyboardShortcutRow::new(
@@ -40,16 +40,16 @@ pub(crate) fn keyboard_shortcut_rows(
         .collect()
 }
 
-pub(super) fn row_element(command: NativeCommand) -> ElementId {
-    let index = NativeCommand::BINDABLE
+pub(super) fn row_element(command: ZetermCommandId) -> ElementId {
+    let index = ZetermCommandId::BINDABLE
         .into_iter()
         .position(|candidate| candidate == command)
         .expect("bindable command must have a stable row");
     ElementId::scoped(SHORTCUT_SCOPE, 10 + index as u32)
 }
 
-fn command_for_row(id: ElementId) -> Option<NativeCommand> {
-    NativeCommand::BINDABLE
+fn command_for_row(id: ElementId) -> Option<ZetermCommandId> {
+    ZetermCommandId::BINDABLE
         .into_iter()
         .find(|command| row_element(*command) == id)
 }

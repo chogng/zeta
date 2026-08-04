@@ -116,7 +116,7 @@ Session Navigation 当前使用可折叠、可通过右边界 Sash 调整宽度�
 | 无边框下拉 surface、可选 header、纵向 item geometry 与默认选择 | `zeta-ui::Dropdown` | 组合 ContextView/ActionBar；不拥有产品查询、选择 identity、关闭或 command |
 | 柔和阴影、2px menu padding、4px radius、纵向 item geometry 与默认选择 | `zeta-ui::ContextMenu` | 组合 ContextView/ActionBar；不拥有 Session identity、关闭或 command |
 | Session Tab 右键菜单生命周期与 command identity | `zeterm/src/session_context_menu` | 保存目标、锚点与恢复焦点；菜单关闭后不保留第二份 Session 状态 |
-| Product command identity 与执行 | `zeterm/src/commands` | pointer、menu 和 shortcut 只提供入口，业务行为汇合到同一 `NativeCommand` executor |
+| Product command identity 与注册式执行 | [`zeta-commands`](../commands/README.md) / `zeterm/src/command_dispatch` | pointer、menu 和 shortcut 只提供入口，业务行为汇合到同一 `CommandRequest`，再由宿主注册的 handler 执行 |
 | 平台无关按键、规则顺序与冲突解析 | [`zeta-keybinding`](../keybinding/README.md) | 不读取 winit event、focus、terminal state 或用户配置，不执行产品 command |
 | winit 按键转换、Native context 与 Chord 生命周期 | `zeterm/src/keybindings` | 内建 Copy/Paste；1.5 秒超时，失焦或 IME 取消；保持 alternate terminal Control 序列透传 |
 | Native 用户快捷键资源 | `zeterm/src/keybindings_resource` | 读取 `<ZETA_PROFILE_ROOT>/keybindings.json`；完整校验成功才替换，坏更新保留上一份规则 |
@@ -148,13 +148,13 @@ Session、Thread、Turn、PTY process 和 durable output 必须来自对应 runt
 | `session_tab_list::SessionTabList` | 组合 `zeta-ui::TabList` 的无边框 4px 圆角 surface；自身绘制与两行信息块等高的白色状态容器及会话名/工作区截断文字，并注册 Session Tab 语义 | 通用 TabList 已支持 6px 间隔的多项布局；多 Session projection/switching 尚未接入 |
 | `session_context_menu::SessionContextMenu` | 右键当前真实 Session Tab 后，用通用 `ContextMenu` 基座绘制 Pin、Close、Rename、Fork；基座提供 renderer 柔和阴影、2px padding 与 4px radius，默认选择 Pin；菜单子树打开时成为 modal interaction scope，hover 同步 roving focus 并在移出后保留最后一项，同时支持菜单外点击、Escape、上下键、Tab、Enter/Space 与焦点恢复 | 下层控件在菜单打开期间不接收 pointer、focus 或 activation；四项已映射为稳定 product action，单 Session runtime 尚不执行真实 pin/close/rename/fork transition |
 | `ShellLayout` | 组合扁平 titlebar、可选 Sessions sidebar，并把剩余区域交给 `TerminalWorkspaceLayout` | primary screen 窗口外层布局 |
-| `TerminalWorkspaceLayout` / `zui::GridLayout` | 把活动 Terminal 与可选 Agent Sidebar 投影为递归 Grid Leaf；alternate screen 使用完整活动 Terminal Leaf | Agent Sidebar 已接入；多 Terminal Pane runtime 尚未完成 |
+| `zeta-layout::TerminalWorkspaceLayout` / `zui::GridLayout` | 把活动 Terminal 与可选 Agent Sidebar 投影为递归 Grid Leaf；alternate screen 使用完整活动 Terminal Leaf | Agent Sidebar 已接入；多 Terminal Pane runtime 尚未完成 |
 | `SessionSidebarState` / `Sash` | 保存 preferred width 和 drag-start snapshot；从同一 track 生成 8px 命中区与 2px hover/active feedback | 侧栏宽度限制为 160–480px，并始终为 main Pane 保留至少 240px |
 | `AgentSidebarState` / `Sash` | 保存右栏显隐、preferred width 与 drag-start snapshot；从同一 track 生成 8px 命中区和 2px hover/active feedback | 宽度限制为 240–560px，并始终为 main Pane 保留至少 240px；内部内容由 `zeta-agent-sidebar::AgentSidebar` 拥有 |
 | `zeta-agent-sidebar::AgentSidebarNavigation` | 跨功能 Changes/Files ActionBar 与导航语义 | 不拥有 Files/SCM 功能布局 |
 | `zeta-agent-sidebar::files::FilesLayout` / `FilesToolbar` / `FilesPane` / `zeta-file-search` | Files 自己拥有 36px 功能 toolbar、根目录文件树与工作区路径模糊匹配结果 | Search 输入已接键盘、剪贴板和 IME；目录展开、滚动和文件打开动作已由 Native adapter 接线 |
 | `zeta-agent-sidebar::scm::ScmLayout` / `EditorPaneState` / `zeta-editor::MultiDiffEditor` | SCM 自己拥有 Changes toolbar slot 与整体纵向视口；Native 将 `zeta-git` snapshot 映射为 `ScmDiff` | 启动、Refresh 与 command completion 更新；binary、非 UTF-8 或单侧超过 2 MiB 的文件跳过 |
-| `commands::NativeCommand` / `keybindings::NativeKeybindings` / `keybindings_resource::KeybindingsResource` / `keyboard_shortcuts` | pointer/menu 与标准化键盘事件汇合到同一 command executor；resolver 支持 `when`、Builtin/User precedence、blocker 和最多四段 Chord；资源轮询外部编辑，设置录制采用原子写入 | ✅；内建 Copy/Paste、1.5 秒 Chord timeout、失焦/IME 取消、冲突诊断、Chord 提示与设置 UI 已实现 |
+| `zeta-commands::{ZetermCommandId, CommandRequest, CommandRegistry}` / `keybindings::NativeKeybindings` / `keybindings_resource::KeybindingsResource` / `keyboard_shortcuts` | pointer/menu 与标准化键盘事件汇合到同一 command request，再由宿主注册的 handler 执行；resolver 支持 `when`、Builtin/User precedence、blocker 和最多四段 Chord；资源轮询外部编辑，设置录制采用原子写入 | ✅；内建 Copy/Paste、1.5 秒 Chord timeout、失焦/IME 取消、冲突诊断、Chord 提示与设置 UI 已实现 |
 | `TerminalCore` / `TerminalGrid` | 增量解析 ANSI，维护 cell、cursor、wrap、erase 与基础 SGR | 当前最小 terminal emulator core |
 | Unicode terminal text | CJK 按双 cell 保存；组合符、ZWJ Emoji 与 flag 序列保留在 leading cell；renderer 使用系统 outline fallback | macOS 已规避不可栅格化的 `GB18030 Bitmap`；复杂 BiDi 行级布局尚未完成 |
 | primary/alternate screen | 解析 `47/1047/1048/1049`，切换 active grid，并在 resize 时同步两块 grid | 已实现基础 buffer lifecycle |

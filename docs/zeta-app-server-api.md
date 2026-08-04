@@ -169,7 +169,8 @@ inline argument parsing；提交仍通过 `turn/start.input`，并保留 `/name`
 | `session/create` | new Session | 创建任务 |
 | `session/read` | Session | 读取 canonical snapshot |
 | `session/list` | global | 列出 Session |
-| `session/subscribe` | connection | snapshot + `afterSequence` 之后的 durable gap |
+| `session/subscribe` | connection | Session snapshot + `afterSequence` 之后的 durable gap + child Thread projections |
+| `session/request` | Session | canonical typed mutation request；覆盖 Session、child Thread 与 Turn 操作 |
 | `session/unsubscribe` | connection | 删除订阅 |
 | `session/thread/create` | Session + new Thread | 创建 root Thread |
 | `session/thread/fork` | Session + new Thread | 从固定 parent sequence 创建分支 |
@@ -463,9 +464,17 @@ durable update 使用 `durableSequence`。Thread 的低延迟非 durable update 
 - stream cursor 只用于检测当前 runtime 的瞬态 update 空洞；
 - streamInstanceId 变化时客户端丢弃旧瞬态 cursor，并以 durable snapshot/gap 重新同步。
 
-`session/subscribe` 与 `thread/subscribe` 原子建立订阅并返回当前 snapshot 以及
-`afterSequence` 之后的 committed update gap。客户端应先应用 snapshot/gap，再接收实时
-notification；发现 durable 空洞时重新 subscribe。
+`session/request` 是产品 mutation 的 canonical aggregate port。请求固定携带 `commandId`、
+`sessionId`、`expectedSequence` 和 tagged `request` operation；结果通过 tagged
+`SessionRequestResult` 区分 Session、child Thread 和 Turn 返回值。旧的 `session/thread/*`、
+`session/model/set` 与 `turn/*` 方法暂时保留为兼容入口，新功能不应继续增加这些平行入口。
+
+`session/subscribe` 原子建立 Session subscription，并返回当前 Session snapshot、Session 的
+committed update gap，以及每个 child Thread 的 `SessionThreadProjection` snapshot/gap；同一
+connection 会接收这些 child Thread 的实时 update。产品宿主应先应用 aggregate snapshot/gap，再
+接收实时 notification；发现 durable 空洞时重新执行 `session/subscribe`。
+`thread/subscribe` 仍是低层兼容 contract，供需要单独读取一个 Thread 的客户端使用；它不是
+`zeterm` 的 application boundary。
 
 ## 9. 配置与资源
 

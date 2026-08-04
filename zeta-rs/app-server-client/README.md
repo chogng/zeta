@@ -36,6 +36,7 @@ consumer 的启动入口。
 | `AppServerEvent::Notification` | 已由 client boundary 解码的 `ServerNotification` |
 | `AppServerEvent::ConnectionClosed` | 明确的 shutdown、driver stop 或 protocol failure |
 | `AppServerClient<T>` | legacy typed JSON-RPC client；method 与 DTO source 仍来自 protocol crate |
+| `AppServerClient::request_session` | Session aggregate 的 canonical typed mutation request；旧独立 mutation methods 仅作兼容 |
 
 正常入口示意（`options`/`params` 由 host 与 protocol DTO 构造）：
 
@@ -44,7 +45,7 @@ let mut session = AppServerSession::start_embedded(options)?;
 let mut client = session.client();
 let events = session.take_events()?;
 
-let result = client.start_turn(params)?;
+let result = client.request_session(params)?;
 let event = events.recv();
 
 session.shutdown()?;

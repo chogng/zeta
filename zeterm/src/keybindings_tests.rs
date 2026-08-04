@@ -2,8 +2,8 @@ use super::{
     NativeBindingCondition, NativeKeybindingContext, NativeKeybindingFacts,
     NativeKeybindingResolution, NativeKeybindings, NativeUserBinding, NativeUserBindingTarget,
 };
-use crate::commands::NativeCommand;
 use std::time::{Duration, Instant};
+use zeta_commands::ZetermCommandId;
 use zeta_keybinding::{
     ContextExpression, HostPlatform, KeyStroke, LogicalKey, Modifiers, parse_key_sequence,
 };
@@ -17,21 +17,21 @@ fn text_inputs_use_portable_copy_and_paste() {
             &stroke("c", Modifiers::none().with_control()),
             &NativeKeybindingContext::text_input(),
         ),
-        NativeKeybindingResolution::Command(NativeCommand::Copy)
+        NativeKeybindingResolution::Command(ZetermCommandId::Copy)
     );
     assert_eq!(
         bindings.resolve_stroke(
             &stroke("v", Modifiers::none().with_control()),
             &NativeKeybindingContext::text_input(),
         ),
-        NativeKeybindingResolution::Command(NativeCommand::Paste)
+        NativeKeybindingResolution::Command(ZetermCommandId::Paste)
     );
     assert_eq!(
         bindings.resolve_stroke(
             &stroke("c", Modifiers::none().with_control().with_shift()),
             &NativeKeybindingContext::text_input(),
         ),
-        NativeKeybindingResolution::Command(NativeCommand::Copy)
+        NativeKeybindingResolution::Command(ZetermCommandId::Copy)
     );
 }
 
@@ -44,7 +44,7 @@ fn workspace_save_is_available_independently_from_the_focused_surface() {
             &stroke("s", Modifiers::none().with_control()),
             &NativeKeybindingContext::direct_terminal(),
         ),
-        NativeKeybindingResolution::Command(NativeCommand::Save)
+        NativeKeybindingResolution::Command(ZetermCommandId::Save)
     );
 }
 
@@ -64,7 +64,7 @@ fn direct_terminal_preserves_unshifted_control_keys() {
             &stroke("c", Modifiers::none().with_control().with_shift()),
             &NativeKeybindingContext::direct_terminal(),
         ),
-        NativeKeybindingResolution::Command(NativeCommand::Copy)
+        NativeKeybindingResolution::Command(ZetermCommandId::Copy)
     );
 }
 
@@ -77,7 +77,7 @@ fn macos_direct_terminal_uses_command_modifier() {
             &stroke("c", Modifiers::none().with_meta()),
             &NativeKeybindingContext::direct_terminal(),
         ),
-        NativeKeybindingResolution::Command(NativeCommand::Copy)
+        NativeKeybindingResolution::Command(ZetermCommandId::Copy)
     );
 }
 
@@ -86,7 +86,7 @@ fn chord_completes_or_expires_as_one_consumed_interaction() {
     let mut bindings = NativeKeybindings::for_platform(HostPlatform::Linux);
     bindings.replace_user_bindings(vec![NativeUserBinding {
         keybinding: parse_key_sequence("ctrl+k ctrl+c").expect("chord"),
-        target: NativeUserBindingTarget::Command(NativeCommand::ToggleSessionSidebar),
+        target: NativeUserBindingTarget::Command(ZetermCommandId::ToggleSessionSidebar),
         when: NativeBindingCondition::Always,
         when_source: None,
     }]);
@@ -106,7 +106,7 @@ fn chord_completes_or_expires_as_one_consumed_interaction() {
             &NativeKeybindingContext::text_input(),
             now + Duration::from_millis(100),
         ),
-        NativeKeybindingResolution::Command(NativeCommand::ToggleSessionSidebar)
+        NativeKeybindingResolution::Command(ZetermCommandId::ToggleSessionSidebar)
     );
 
     assert_eq!(
@@ -144,7 +144,7 @@ fn native_context_exposes_boolean_and_string_facts_to_when_expressions() {
     let mut bindings = NativeKeybindings::for_platform(HostPlatform::Linux);
     bindings.replace_user_bindings(vec![NativeUserBinding {
         keybinding: parse_key_sequence("ctrl+k").expect("binding"),
-        target: NativeUserBindingTarget::Command(NativeCommand::ToggleSessionSidebar),
+        target: NativeUserBindingTarget::Command(ZetermCommandId::ToggleSessionSidebar),
         when: NativeBindingCondition::Expression(
             ContextExpression::parse(
                 "agentSurfaceVisible && composerMode == 'agent' && !fileSearchVisible",
@@ -170,7 +170,7 @@ fn native_context_exposes_boolean_and_string_facts_to_when_expressions() {
             context,
             Instant::now(),
         ),
-        NativeKeybindingResolution::Command(NativeCommand::ToggleSessionSidebar)
+        NativeKeybindingResolution::Command(ZetermCommandId::ToggleSessionSidebar)
     );
 }
 

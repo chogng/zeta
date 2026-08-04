@@ -14,7 +14,12 @@
 | Agent-first 产品结构与 Thread/Composer 语义 | [`native-agent-console.md`](native-agent-console.md) | `zeterm` 产品宿主 + App Server contract |
 | Terminal Surface、PTY、grid 与兼容性 | [`native-terminal-ui.md`](native-terminal-ui.md) | `zeta-terminal` + `zeterm` terminal host |
 | 键盘、IME、caret 与输入路由 | [`native-text-input.md`](native-text-input.md) | `zui` / `zeta-ui` / `zeta-winit` / `zeterm` adapter |
+| 稳定产品命令身份、请求与注册式执行 | [`native-terminal-ui.md`](native-terminal-ui.md) + [`zeta-commands`](../commands/README.md) | `ZetermCommandId` + `CommandRequest` + `CommandRegistry` |
 | UI scene 到 GPU 的依赖方向 | [`rendering-architecture.md`](rendering-architecture.md) | `zui` → `zeta-renderer` → `zeta-wgpu` |
+| 通用 icon asset 与产品 icon catalog 的边界 | [`rendering-architecture.md`](rendering-architecture.md) + [`zeta-icon`](../icon/README.md) | `zeta-icon` contract + optional `zeta-icons` catalog |
+| zeterm 产品 pane topology 与 sidebar geometry | [`zeta-layout`](../layout/README.md) | `zeta-layout` + host state adapter |
+| Composer panel 与 interaction list geometry | [`zeta-composer`](../composer/README.md) | `zeta-composer` + Native state/scene adapter |
+| 通用 UI 脱离产品宿主的最小验证 | [`zui-demo`](../zui-demo/README.md) | `zui` / `zeta-ui` / `zeta-renderer` |
 | Native UI 组件和宿主迁移边界 | [`ui-component-migration-plan.md`](ui-component-migration-plan.md) | zeterm-owned UI crates |
 | 从旧 Native workspace 的迁移状态 | [`zeterm-app-migration-plan.md`](zeterm-app-migration-plan.md) | `zeterm/` + root Cargo workspace |
 | Native 弃用与长期 owner | [`native-deprecation-plan.md`](native-deprecation-plan.md) | `zui` / `zeta-ui` / `zeterm` host boundary |

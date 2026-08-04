@@ -62,7 +62,7 @@ impl NativeApp {
         });
         match self.keybindings.resolve(&event, self.modifiers, &context) {
             NativeKeybindingResolution::Command(command) => {
-                self.execute_native_command(command);
+                self.dispatch_command(command.into());
                 self.sync_input_focus();
                 self.rebuild_presentation();
                 self.request_redraw();
@@ -374,9 +374,9 @@ impl NativeApp {
         }) else {
             return;
         };
-        let viewport = crate::composer_panel::interaction_list_bounds(interaction_bounds);
-        let content = crate::composer_panel::interaction_content_size(viewport, view.items().len());
-        let Some(command) = crate::composer_panel::interaction_selection_scroll_command(
+        let viewport = zeta_composer::interaction_list_bounds(interaction_bounds);
+        let content = zeta_composer::interaction_content_size(viewport, view.items().len());
+        let Some(command) = zeta_composer::interaction_selection_scroll_command(
             view.selected(),
             view.items().len(),
             content.width,

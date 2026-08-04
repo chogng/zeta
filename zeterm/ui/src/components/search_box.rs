@@ -1,23 +1,23 @@
-use zeta_icons::icons;
-
 use crate::{
-    Color, Component, ComponentElement, Element, InputBox, InputBoxState, InputBoxStyle, PaintIcon,
-    Rect, TextInput, TextInputLayoutEngine, UiScene,
+    Color, Component, ComponentElement, Element, Icon, InputBox, InputBoxState, InputBoxStyle,
+    PaintIcon, Rect, TextInput, TextInputLayoutEngine, UiScene,
 };
 
 /// Presentation contract for a search box composed from an [`InputBox`].
 #[derive(Clone, Debug, PartialEq)]
 pub struct SearchBoxStyle {
     input_box: InputBoxStyle,
+    icon: Icon,
     icon_color: Color,
     icon_size: f32,
     icon_gap: f32,
 }
 
 impl SearchBoxStyle {
-    pub const fn new(input_box: InputBoxStyle, icon_color: Color) -> Self {
+    pub const fn new(input_box: InputBoxStyle, icon: Icon, icon_color: Color) -> Self {
         Self {
             input_box,
+            icon,
             icon_color,
             icon_size: 14.0,
             icon_gap: 6.0,
@@ -44,6 +44,7 @@ pub struct SearchBox {
     bounds: Rect,
     input_box: InputBox,
     icon_bounds: Rect,
+    icon: Icon,
     icon_color: Color,
 }
 
@@ -82,6 +83,7 @@ impl SearchBox {
             bounds,
             input_box,
             icon_bounds,
+            icon: style.icon,
             icon_color: style.icon_color,
         }
     }
@@ -102,11 +104,7 @@ impl Component for SearchBox {
 
     fn paint(&self, scene: &mut UiScene) {
         scene.draw_component(&self.input_box);
-        scene.draw_icon(PaintIcon::new(
-            icons::SEARCH,
-            self.icon_bounds,
-            self.icon_color,
-        ));
+        scene.draw_icon(PaintIcon::new(self.icon, self.icon_bounds, self.icon_color));
     }
 }
 

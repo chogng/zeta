@@ -1,10 +1,10 @@
 use super::{
     KeybindingsResource, KeybindingsResourcePoll, binding_diagnostics, compile_user_bindings,
 };
-use crate::commands::NativeCommand;
 use crate::keybindings::{NativeKeybindingContext, NativeKeybindingResolution, NativeKeybindings};
 use std::fs;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use zeta_commands::ZetermCommandId;
 use zeta_keybinding::{HostPlatform, KeyStroke, LogicalKey, Modifiers, parse_key_sequence};
 
 #[test]
@@ -126,7 +126,7 @@ fn invalid_hot_update_preserves_the_previous_complete_rule_set() {
             &NativeKeybindingContext::text_input(),
             now + Duration::from_millis(10)
         ),
-        NativeKeybindingResolution::Command(NativeCommand::ToggleSessionSidebar)
+        NativeKeybindingResolution::Command(ZetermCommandId::ToggleSessionSidebar)
     );
 
     fs::write(&path, b"{").expect("write invalid resource");
@@ -162,7 +162,7 @@ fn recorder_update_atomically_replaces_the_commands_user_rule() {
     let sequence = parse_key_sequence("primary+k primary+b").expect("recorded shortcut");
 
     resource
-        .update_command_binding(NativeCommand::ToggleSessionSidebar, &sequence, now)
+        .update_command_binding(ZetermCommandId::ToggleSessionSidebar, &sequence, now)
         .expect("save recording");
 
     let value: serde_json::Value =

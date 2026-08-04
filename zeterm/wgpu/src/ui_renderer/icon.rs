@@ -5,7 +5,7 @@ use std::ops::Range;
 use bytemuck::{Pod, Zeroable};
 use resvg::tiny_skia::{Pixmap, Transform};
 use resvg::usvg;
-use zeta_icons::{Icon, IconRendering};
+use zeta_icon::{Icon, IconRendering};
 
 use zui::{PaintIcon, Rect, UiScene};
 

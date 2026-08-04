@@ -1,7 +1,7 @@
 use super::LayoutInspector;
-use crate::root_layout::{InspectorPane, RootLayout};
 use crate::shell_scene::LogicalViewport;
 use zeta_icons::icons;
+use zeta_layout::{InspectorPane, RootLayout};
 use zeta_ui::{Color, CornerRadii, Edges, Element, InspectionNode, Point, Rect, UiScene};
 
 #[test]

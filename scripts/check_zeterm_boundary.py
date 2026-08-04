@@ -10,9 +10,13 @@ from pathlib import Path
 EXPECTED_ZETERM_MEMBERS = {
     "zeterm",
     "zeterm/agent-sidebar",
+    "zeterm/commands",
+    "zeterm/composer",
     "zeterm/editor",
+    "zeterm/icon",
     "zeterm/icons",
     "zeterm/keybinding",
+    "zeterm/layout",
     "zeterm/markdown",
     "zeterm/native-keybindings",
     "zeterm/renderer",
@@ -21,6 +25,7 @@ EXPECTED_ZETERM_MEMBERS = {
     "zeterm/wgpu",
     "zeterm/winit",
     "zeterm/zui",
+    "zeterm/zui-demo",
 }
 
 RETIRED_PRODUCT_PATHS = {

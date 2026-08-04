@@ -60,9 +60,10 @@ use crate::protocol::search::{
 };
 use crate::protocol::session::{
     SessionCommandParams, SessionCreateParams, SessionListResult, SessionModelSetParams,
-    SessionReadParams, SessionResult, SessionSubscribeParams, SessionSubscribeResult,
-    SessionThreadArchiveParams, SessionThreadCreateParams, SessionThreadForkParams,
-    SessionThreadResult, SessionThreadRewindParams, SessionUnsubscribeParams,
+    SessionReadParams, SessionRequest, SessionRequestParams, SessionRequestResult, SessionResult,
+    SessionSubscribeParams, SessionSubscribeResult, SessionThreadArchiveParams,
+    SessionThreadCreateParams, SessionThreadForkParams, SessionThreadResult,
+    SessionThreadRewindParams, SessionUnsubscribeParams,
 };
 use crate::protocol::skills::{
     SkillCatalogReloadDto, SkillCompatibilityDto, SkillDiagnosticCodeDto, SkillDiagnosticDto,
@@ -258,6 +259,11 @@ client_methods! {
         params: SessionSubscribeParams,
         response: SessionSubscribeResult,
         serialization: SessionSharedRead,
+    },
+    SessionRequest => "session/request" {
+        params: SessionRequestParams,
+        response: SessionRequestResult,
+        serialization: SessionExclusive,
     },
     SessionUnsubscribe => "session/unsubscribe" {
         params: SessionUnsubscribeParams,
@@ -786,6 +792,9 @@ typescript_bindings! {
     SessionSubscribeParams,
     SessionUnsubscribeParams,
     SessionCommandParams,
+    SessionRequest,
+    SessionRequestParams,
+    SessionRequestResult,
     SessionModelSetParams,
     SessionThreadCreateParams,
     SessionThreadForkParams,

@@ -493,6 +493,22 @@
           "properties": {
             "method": {
               "type": "string",
+              "const": "session/request"
+            },
+            "params": {
+              "$ref": "#/$defs/SessionRequestParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
               "const": "session/unsubscribe"
             },
             "params": {
@@ -1685,6 +1701,22 @@
             },
             "result": {
               "$ref": "#/$defs/SessionSubscribeResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "session/request"
+            },
+            "result": {
+              "$ref": "#/$defs/SessionRequestResult"
             }
           },
           "required": [
@@ -5677,6 +5709,346 @@
         "sessionId"
       ]
     },
+    "SessionRequest": {
+      "description": "A typed mutation submitted against one Session aggregate.\n\nChild Thread identifiers are selectors inside the Session boundary. Product hosts submit\nthese operations through `session/request`; App Server owns the internal Thread routing.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "complete"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "archive"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "stop"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "model": {
+              "$ref": "#/$defs/ModelRef"
+            },
+            "type": {
+              "type": "string",
+              "const": "setModel"
+            }
+          },
+          "required": [
+            "type",
+            "model"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "title": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "createThread"
+            }
+          },
+          "required": [
+            "type",
+            "title"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "parentThreadId": {
+              "$ref": "#/$defs/ThreadId"
+            },
+            "title": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "forkThread"
+            }
+          },
+          "required": [
+            "type",
+            "parentThreadId",
+            "title"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "beforeTurnId": {
+              "$ref": "#/$defs/TurnId"
+            },
+            "parentThreadId": {
+              "$ref": "#/$defs/ThreadId"
+            },
+            "title": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "rewindThread"
+            }
+          },
+          "required": [
+            "type",
+            "parentThreadId",
+            "beforeTurnId",
+            "title"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "threadId": {
+              "$ref": "#/$defs/ThreadId"
+            },
+            "type": {
+              "type": "string",
+              "const": "archiveThread"
+            }
+          },
+          "required": [
+            "type",
+            "threadId"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "input": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/InputItem"
+              },
+              "minItems": 1
+            },
+            "threadId": {
+              "$ref": "#/$defs/ThreadId"
+            },
+            "type": {
+              "type": "string",
+              "const": "startTurn"
+            }
+          },
+          "required": [
+            "type",
+            "threadId",
+            "input"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "command": {
+              "type": "string"
+            },
+            "threadId": {
+              "$ref": "#/$defs/ThreadId"
+            },
+            "type": {
+              "type": "string",
+              "const": "startShellTurn"
+            },
+            "workingDirectory": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "threadId",
+            "command",
+            "workingDirectory"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "threadId": {
+              "$ref": "#/$defs/ThreadId"
+            },
+            "turnId": {
+              "$ref": "#/$defs/TurnId"
+            },
+            "type": {
+              "type": "string",
+              "const": "interruptTurn"
+            }
+          },
+          "required": [
+            "type",
+            "threadId",
+            "turnId"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "requestId": {
+              "$ref": "#/$defs/RequestId"
+            },
+            "response": {
+              "$ref": "#/$defs/AgentResponse"
+            },
+            "threadId": {
+              "$ref": "#/$defs/ThreadId"
+            },
+            "turnId": {
+              "$ref": "#/$defs/TurnId"
+            },
+            "type": {
+              "type": "string",
+              "const": "resolveInteraction"
+            }
+          },
+          "required": [
+            "type",
+            "threadId",
+            "turnId",
+            "requestId",
+            "response"
+          ]
+        }
+      ]
+    },
+    "SessionRequestParams": {
+      "description": "The canonical Session aggregate mutation request.",
+      "type": "object",
+      "properties": {
+        "commandId": {
+          "$ref": "#/$defs/CommandId"
+        },
+        "expectedSequence": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "request": {
+          "$ref": "#/$defs/SessionRequest"
+        },
+        "sessionId": {
+          "$ref": "#/$defs/SessionId"
+        }
+      },
+      "required": [
+        "commandId",
+        "sessionId",
+        "expectedSequence",
+        "request"
+      ]
+    },
+    "SessionRequestResult": {
+      "description": "Typed result returned by the canonical Session aggregate mutation endpoint.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "session"
+            },
+            "value": {
+              "$ref": "#/$defs/SessionResult"
+            }
+          },
+          "required": [
+            "type",
+            "value"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "thread"
+            },
+            "value": {
+              "$ref": "#/$defs/SessionThreadResult"
+            }
+          },
+          "required": [
+            "type",
+            "value"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "turn"
+            },
+            "value": {
+              "$ref": "#/$defs/TurnStartResult"
+            }
+          },
+          "required": [
+            "type",
+            "value"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "turnInterrupt"
+            },
+            "value": {
+              "$ref": "#/$defs/TurnInterruptResult"
+            }
+          },
+          "required": [
+            "type",
+            "value"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "interaction"
+            },
+            "value": {
+              "$ref": "#/$defs/TurnInteractionResolveResult"
+            }
+          },
+          "required": [
+            "type",
+            "value"
+          ]
+        }
+      ]
+    },
     "SessionResult": {
       "type": "object",
       "properties": {
@@ -5714,10 +6086,17 @@
       ]
     },
     "SessionSubscribeResult": {
+      "description": "The aggregate Session port returned to product hosts.",
       "type": "object",
       "properties": {
         "session": {
           "$ref": "#/$defs/Session"
+        },
+        "threadProjections": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SessionThreadProjection"
+          }
         },
         "updates": {
           "type": "array",
@@ -5728,7 +6107,8 @@
       },
       "required": [
         "session",
-        "updates"
+        "updates",
+        "threadProjections"
       ]
     },
     "SessionThread": {
@@ -5828,6 +6208,25 @@
         "expectedSequence",
         "parentThreadId",
         "title"
+      ]
+    },
+    "SessionThreadProjection": {
+      "description": "A child Thread snapshot and its committed gap carried by the Session subscription.",
+      "type": "object",
+      "properties": {
+        "thread": {
+          "$ref": "#/$defs/Thread"
+        },
+        "updates": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ThreadUpdateEnvelope"
+          }
+        }
+      },
+      "required": [
+        "thread",
+        "updates"
       ]
     },
     "SessionThreadResult": {

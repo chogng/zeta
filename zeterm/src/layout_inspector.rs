@@ -2,8 +2,8 @@ use zeta_ui::{Border, Color, CornerRadii, InspectionNode, PaintRect, Point, Rect
 use zeta_winit::{ElementState, Key, KeyEvent, LogicalSize, ModifiersState, MouseButton, NamedKey};
 
 use crate::NativeApp;
-use crate::root_layout::RootLayout;
 use crate::shell_scene::LogicalViewport;
+use zeta_layout::RootLayout;
 
 mod inspector_content;
 mod inspector_toolbar;

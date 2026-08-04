@@ -10,5 +10,8 @@ doctest = false
 name = "zeta_icons"
 path = "src/lib.rs"
 
+[dependencies]
+zeta-icon = { workspace = true }
+
 [lints]
 workspace = true

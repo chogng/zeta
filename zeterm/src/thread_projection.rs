@@ -15,8 +15,9 @@ pub(crate) enum ThreadProjectionUpdate {
 
 /// Rebuildable native projection of one canonical Agent Thread.
 ///
-/// Durable state always comes from `thread/read` or `thread/subscribe`. This projection only owns
-/// transient streaming text and presentation ordering between authoritative snapshots.
+/// Durable state is supplied by the App Server session adapter's authoritative snapshot/update
+/// handoff. This projection only owns transient streaming text and presentation ordering between
+/// authoritative snapshots; it is not a Thread transport or reducer.
 #[derive(Default)]
 pub(crate) struct ThreadProjection {
     thread: Option<Thread>,

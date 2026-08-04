@@ -39,9 +39,10 @@ use zeta_app_server_protocol::protocol::search::{
 };
 use zeta_app_server_protocol::protocol::session::{
     SessionCommandParams, SessionCreateParams, SessionListResult, SessionModelSetParams,
-    SessionReadParams, SessionResult, SessionSubscribeParams, SessionSubscribeResult,
-    SessionThreadArchiveParams, SessionThreadCreateParams, SessionThreadForkParams,
-    SessionThreadResult, SessionThreadRewindParams, SessionUnsubscribeParams,
+    SessionReadParams, SessionRequestParams, SessionRequestResult, SessionResult,
+    SessionSubscribeParams, SessionSubscribeResult, SessionThreadArchiveParams,
+    SessionThreadCreateParams, SessionThreadForkParams, SessionThreadResult,
+    SessionThreadRewindParams, SessionUnsubscribeParams,
 };
 use zeta_app_server_protocol::protocol::skills::{
     SkillListParams, SkillListResult, SkillSetEnablementParams,
@@ -220,6 +221,14 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
         params: SessionSubscribeParams,
     ) -> Result<SessionSubscribeResult, ClientError> {
         self.call(ClientMethod::SessionSubscribe, params)
+    }
+
+    /// Sends the canonical typed mutation request scoped to one product Session.
+    pub fn request_session(
+        &mut self,
+        params: SessionRequestParams,
+    ) -> Result<SessionRequestResult, ClientError> {
+        self.call(ClientMethod::SessionRequest, params)
     }
 
     pub fn unsubscribe_session(

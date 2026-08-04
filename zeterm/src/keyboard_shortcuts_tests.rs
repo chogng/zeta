@@ -1,7 +1,7 @@
 use super::{KeyboardShortcutsState, keyboard_shortcut_rows, keyboard_shortcuts_ids, row_element};
-use crate::commands::NativeCommand;
 use crate::keybindings::NativeKeybindings;
 use std::time::{Duration, Instant};
+use zeta_commands::ZetermCommandId;
 use zeta_keybinding::{
     Chord, HostPlatform, KeyboardShortcuts, ShortcutModifiers, paint_chord_hint,
     serialize_key_sequence,
@@ -14,7 +14,7 @@ fn recording_collects_chords_and_commits_after_the_quiet_period() {
     let now = Instant::now();
     let mut state = KeyboardShortcutsState::default();
     state.toggle();
-    state.start_recording(NativeCommand::ToggleSessionSidebar);
+    state.start_recording(ZetermCommandId::ToggleSessionSidebar);
     state.record(
         Chord::logical("k", ShortcutModifiers::primary()).expect("first chord"),
         now,
@@ -28,7 +28,7 @@ fn recording_collects_chords_and_commits_after_the_quiet_period() {
     let commit = state
         .advance(now + Duration::from_millis(1_200))
         .expect("completed recording");
-    assert_eq!(commit.command, NativeCommand::ToggleSessionSidebar);
+    assert_eq!(commit.command, ZetermCommandId::ToggleSessionSidebar);
     assert_eq!(
         serialize_key_sequence(&commit.keybinding),
         "primary+k primary+b"
@@ -37,13 +37,13 @@ fn recording_collects_chords_and_commits_after_the_quiet_period() {
 
 #[test]
 fn every_bindable_command_has_a_distinct_stable_row() {
-    let mut ids = NativeCommand::BINDABLE
+    let mut ids = ZetermCommandId::BINDABLE
         .into_iter()
         .map(row_element)
         .collect::<Vec<_>>();
     ids.sort_unstable();
     ids.dedup();
-    assert_eq!(ids.len(), NativeCommand::BINDABLE.len());
+    assert_eq!(ids.len(), ZetermCommandId::BINDABLE.len());
 }
 
 #[test]
@@ -76,7 +76,7 @@ fn visible_settings_are_modal_and_paint_keycaps_for_defaults() {
     assert!(
         frame
             .interaction()
-            .node(row_element(NativeCommand::Copy))
+            .node(row_element(ZetermCommandId::Copy))
             .is_some()
     );
     let primary = if HostPlatform::current() == HostPlatform::MacOs {

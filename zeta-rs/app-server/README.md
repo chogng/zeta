@@ -233,9 +233,15 @@ source sequence 与 excluded Turn 的 Rewind lineage，再让 `ThreadController:
 向新 Thread 写入单个 `HistoryImported` durable event。该事件只携带 checkpoint 之前的 terminal
 Turns；source Thread 及其后续历史不被改写。调用方随后订阅新 Thread，旧 Thread 仍可审计和恢复。
 
-`session/subscribe(afterSequence)` 与 `thread/subscribe(afterSequence)` 先读取 snapshot + durable gap，
-再把 broker cursor 放到当前 aggregate sequence。订阅是 connection-local delivery state；真实 gap
-来自 coordinator/store。
+`session/subscribe(afterSequence)` 是产品宿主使用的 aggregate port：它返回 Session snapshot、Session
+durable gap 和每个 child Thread 的 projection，并在同一 connection 上建立 child update delivery。
+`session/request` 是产品 mutation 的 canonical aggregate port：它携带一个 `CommandId`、Session
+sequence 和 typed `SessionRequest`，统一路由 Session lifecycle、child Thread lifecycle、Turn
+start/interrupt 与 interaction resolve，并以 tagged `SessionRequestResult` 返回对应结果。
+现有 `session/thread/*`、`session/model/set`、`session/complete` 以及 `turn/*` 方法暂时保留为
+兼容入口；新产品功能应优先接入 `session/request`。
+`thread/subscribe(afterSequence)` 仍保留为低层兼容 contract，但 `zeterm` 不直接调用它。两类订阅
+都是 connection-local delivery state；真实 gap 来自 coordinator/store。
 
 `turn/start`：
 

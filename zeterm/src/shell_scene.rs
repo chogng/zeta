@@ -17,9 +17,7 @@ use crate::agent_sidebar_workspace::AgentSidebarWorkspace;
 use crate::composer_editor::ComposerEditor;
 use crate::composer_interaction::ComposerInteractionModel;
 use crate::composer_interaction_pane::ComposerInteractionPaneState;
-use crate::composer_panel::{
-    ComposerPanelLayout, ComposerPanelView, draw_composer_panel, interaction_preferred_height,
-};
+use crate::composer_panel::{ComposerPanelView, draw_composer_panel};
 use crate::file_editor_host::FileEditorHost;
 use crate::file_editor_pane::{FileEditorPane, FileEditorPrompt};
 use crate::file_editor_search::FileEditorSearchState;
@@ -45,7 +43,6 @@ use crate::shell_style::ShellPalette;
 use crate::terminal_blocks::{TerminalBlockLineKind, project_block_lines};
 use crate::terminal_output_scroll_view::TerminalOutputScrollView;
 use crate::terminal_selection::{TerminalSelectionRange, paint_terminal_selection};
-use crate::terminal_workspace_layout::TerminalWorkspaceLayout;
 use crate::thread_projection::ThreadProjection;
 use crate::thread_timeline::ThreadTimeline;
 use crate::titlebar::{TITLEBAR_HEIGHT, Titlebar};
@@ -58,7 +55,9 @@ use zeta_agent_sidebar::FilesLayout;
 use zeta_agent_sidebar::FilesPane;
 use zeta_agent_sidebar::FilesToolbar;
 use zeta_agent_sidebar::ScmLayout;
+use zeta_composer::ComposerPanelLayout;
 use zeta_editor::CodeEditorStyle;
+use zeta_layout::TerminalWorkspaceLayout;
 use zeta_settings::SettingsPage;
 use zeta_settings::SettingsPageActionAvailability;
 use zeta_winit::WindowControlInsets;
@@ -72,25 +71,7 @@ const TERMINAL_LINE_HEIGHT: f32 = 18.0;
 const TERMINAL_PADDING: f32 = 24.0;
 const COMPOSER_HEIGHT: f32 = 44.0;
 
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub(crate) struct LogicalViewport {
-    pub width: f32,
-    pub height: f32,
-}
-
-impl LogicalViewport {
-    pub(crate) fn from_physical(width: u32, height: u32, scale_factor: f64) -> Self {
-        let scale_factor = if scale_factor.is_finite() && scale_factor > 0.0 {
-            scale_factor as f32
-        } else {
-            1.0
-        };
-        Self {
-            width: width as f32 / scale_factor,
-            height: height as f32 / scale_factor,
-        }
-    }
-}
+pub(crate) use zeta_layout::LogicalViewport;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct ShellLayout {
@@ -161,11 +142,12 @@ impl ShellLayout {
             .pane_bounds(1)
             .expect("Sessions split must retain its main pane");
         let session_sidebar_sash_track = body_split.sash(0).map(|sash| sash.track_bounds());
-        let terminal_workspace = TerminalWorkspaceLayout::for_bounds(remaining, agent_sidebar);
+        let terminal_workspace =
+            TerminalWorkspaceLayout::for_bounds(remaining, agent_sidebar.layout_spec());
         let main = terminal_workspace.active_pane_bounds();
-        let agent_sidebar = terminal_workspace.agent_sidebar_bounds();
-        let agent_sidebar_sash_track = terminal_workspace.agent_sidebar_sash_track();
-        let agent_sidebar_resize_snapshot = terminal_workspace.agent_sidebar_resize_snapshot();
+        let agent_sidebar = terminal_workspace.sidebar_bounds();
+        let agent_sidebar_sash_track = terminal_workspace.sidebar_sash_track();
+        let agent_sidebar_resize_snapshot = terminal_workspace.sidebar_resize_snapshot();
         let composer_panel = ComposerPanelLayout::for_main(
             main,
             preferred_composer_height.max(COMPOSER_HEIGHT),
@@ -407,7 +389,9 @@ fn build_shell_presentation_with_bindings(
         model.session_sidebar,
         model.agent_sidebar,
         model.composer.preferred_height(),
-        interaction_preferred_height(model.composer_interaction.view()),
+        model.composer_interaction.view().map_or(0.0, |view| {
+            zeta_composer::interaction_preferred_height(view.items().len())
+        }),
     ) else {
         draw_compact_scene(frame.scene_mut(), viewport, palette);
         return ShellPresentation {

@@ -1,9 +1,8 @@
-use zeta_icons::Icon;
-
 use crate::{
     Color, Component, ComponentElement, ComputedElement, Element, ElementLength, PaintRect, Point,
     Rect, Size, UiScene,
 };
+use zui::Icon;
 
 use super::{Button, ButtonSelection, ButtonState, ButtonStyle};
 

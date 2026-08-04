@@ -7898,6 +7898,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "zeta-commands"
+version = "0.1.0"
+
+[[package]]
+name = "zeta-composer"
+version = "0.1.0"
+dependencies = [
+ "zeta-ui",
+ "zui",
+]
+
+[[package]]
 name = "zeta-config"
 version = "0.1.0"
 dependencies = [
@@ -8052,8 +8064,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "zeta-icon"
+version = "0.1.0"
+
+[[package]]
 name = "zeta-icons"
 version = "0.1.0"
+dependencies = [
+ "zeta-icon",
+]
 
 [[package]]
 name = "zeta-install-context"
@@ -8109,6 +8128,13 @@ dependencies = [
  "url",
  "zeta-language-server-catalog",
  "zeta-lsp",
+]
+
+[[package]]
+name = "zeta-layout"
+version = "0.1.0"
+dependencies = [
+ "zui",
 ]
 
 [[package]]
@@ -8471,7 +8497,6 @@ dependencies = [
 name = "zeta-ui"
 version = "0.1.0"
 dependencies = [
- "zeta-icons",
  "zui",
 ]
 
@@ -8526,6 +8551,7 @@ dependencies = [
  "resvg",
  "thiserror 2.0.19",
  "wgpu",
+ "zeta-icon",
  "zeta-icons",
  "zeta-renderer",
  "zeta-winit",
@@ -8573,6 +8599,8 @@ dependencies = [
  "zeta-agent-sidebar",
  "zeta-app-server-client",
  "zeta-app-server-protocol",
+ "zeta-commands",
+ "zeta-composer",
  "zeta-diff",
  "zeta-editor",
  "zeta-file-search",
@@ -8582,6 +8610,7 @@ dependencies = [
  "zeta-keybindings-host",
  "zeta-language-server-catalog",
  "zeta-language-service",
+ "zeta-layout",
  "zeta-protocol",
  "zeta-renderer",
  "zeta-settings",
@@ -8617,7 +8646,16 @@ dependencies = [
  "sys-locale",
  "thiserror 2.0.19",
  "unicode-segmentation",
- "zeta-icons",
+ "zeta-icon",
+]
+
+[[package]]
+name = "zui-demo"
+version = "0.1.0"
+dependencies = [
+ "zeta-renderer",
+ "zeta-ui",
+ "zui",
 ]
 
 [[package]]

@@ -6,6 +6,7 @@ use zeta_editor::{
     CodeEditorTokenRole, DiffEditorPalette, DiffEditorStyle, MultiDiffEditorPalette,
     MultiDiffEditorStyle,
 };
+use zeta_icons::icons;
 use zeta_settings::SettingsPageStyle;
 use zeta_theme::{ThemeError, ThemeSnapshot, tokens};
 use zeta_ui::ActionBarSeparatorStyle;
@@ -183,7 +184,7 @@ impl ShellPalette {
         .with_selection_color(self.terminal_selection)
         .with_caret_color(self.accent)
         .with_preedit_underline_color(self.accent);
-        SearchBoxStyle::new(input_box, self.text_muted).with_icon_size(18.0)
+        SearchBoxStyle::new(input_box, icons::SEARCH, self.text_muted).with_icon_size(18.0)
     }
 
     pub(crate) fn settings_page_style(self) -> SettingsPageStyle {
@@ -247,7 +248,7 @@ impl ShellPalette {
             self.border,
             self.text,
             self.accent,
-            SearchBoxStyle::new(search_input, self.text_muted).with_icon_size(16.0),
+            SearchBoxStyle::new(search_input, icons::SEARCH, self.text_muted).with_icon_size(16.0),
             nav_button,
             close_button,
             action_bar,

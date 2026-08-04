@@ -82,13 +82,21 @@ zeta-rs/app-server-protocol/
 | `SERVER_NOTIFICATIONS` | notification name 与 params type |
 | `SerializationScopeDefinition` | dispatcher serialization requirement |
 
-方法注册表当前覆盖初始化、Session 生命周期/订阅（包括适配层 `session/stop`）、Thread 读取/订阅、Session 模型选择、
+方法注册表当前覆盖初始化、Session 生命周期/聚合订阅（包括适配层 `session/stop`）、Thread 读取/低层订阅、Session 模型选择、
 模型目录、配置/供应商/MCP/Skill/Plugin request/Hook declaration 修改、Turn
 start/interrupt/interaction resolve 与 Resource
 metadata/read/release、filesystem metadata/read/write，以及 workspace search start/read/cancel。
 Notification 包含 `session/update`、`thread/update`、`skills/changed`、`git/statusChanged` 与
 `fs/changed`；Terminal 当前使用 profile/list 与 create/write/resize/read/close 的有界 pull
 contract，不伪装成主动 notification stream。
+
+`SessionSubscribeResult` 是产品宿主的 aggregate port：`session/subscribe` 返回 Session snapshot、
+Session durable gap 和 `SessionThreadProjection` 列表；App Server 同时为这些 child Thread 建立
+connection-local update delivery。`ThreadSubscribeResult` 仍属于低层兼容 contract，产品宿主不应
+为了读取一个 Session 的 transcript 再直接调用 `thread/subscribe`。
+`SessionRequestParams` / `SessionRequest` 是 mutation 的 canonical Session contract：公共请求统一
+携带 `CommandId`、Session sequence 和 typed operation，结果通过 `SessionRequestResult` 的 tagged
+union 返回。旧的独立 Session/Turn methods 目前只承担兼容职责。
 Git 注册 `git/status`、`git/textDiff`、`git/branch/list` query，以及
 branch/switch、stage/unstage/discardWorktree/commit/fetch/pull/push global-exclusive mutation；
 status 带 revision 和 repository-relative `workspacePath`，投影变化通过 `git/statusChanged` 发送

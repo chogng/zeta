@@ -2,8 +2,9 @@ use super::*;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use zeta_app_server_protocol::protocol::common::{ClientCapabilities, ClientInfo};
-use zeta_app_server_protocol::protocol::session::{SessionCreateParams, SessionThreadCreateParams};
-use zeta_app_server_protocol::protocol::thread::ThreadSubscribeParams;
+use zeta_app_server_protocol::protocol::session::{
+    SessionCreateParams, SessionSubscribeParams, SessionThreadCreateParams,
+};
 use zeta_app_server_protocol::protocol::turn::{InputItem, TurnStartParams};
 use zeta_async_utils::CancellationToken;
 use zeta_core::{
@@ -44,8 +45,8 @@ fn embedded_session_delivers_idle_notifications_without_a_polling_request() {
         })
         .unwrap();
     client
-        .subscribe_thread(ThreadSubscribeParams {
-            thread_id: created_thread.thread_id.clone(),
+        .subscribe_session(SessionSubscribeParams {
+            session_id: created_session.session.session_id.clone(),
             after_sequence: 0,
         })
         .unwrap();

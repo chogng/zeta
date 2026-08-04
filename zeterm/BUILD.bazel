@@ -23,9 +23,12 @@ filegroup(
         "//:Cargo.lock",
         "//:Cargo.toml",
         "//zeterm/agent-sidebar:agent-sidebar_sources",
+        "//zeterm/commands:commands_sources",
+        "//zeterm/composer:composer_sources",
         "//zeterm/editor:editor_sources",
         "//zeterm/icons:icons_sources",
         "//zeterm/keybinding:keybinding_sources",
+        "//zeterm/layout:layout_sources",
         "//zeterm/markdown:markdown_sources",
         "//zeterm/native-keybindings:native-keybindings_sources",
         "//zeterm/renderer:renderer_sources",
@@ -34,6 +37,7 @@ filegroup(
         "//zeterm/wgpu:wgpu_sources",
         "//zeterm/winit:winit_sources",
         "//zeterm/zui:zui_sources",
+        "//zeterm/zui-demo:zui_demo_sources",
     ],
 )
 

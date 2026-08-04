@@ -1031,6 +1031,56 @@ fn completed_turn_replays_without_invoking_the_model_twice() {
 }
 
 #[test]
+fn session_request_routes_typed_mutations_through_the_session_boundary() {
+    let server = server();
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+    let session = create_session(&server, &mut connection, 2, "session");
+    let session_id = session["result"]["session"]["sessionId"].as_str().unwrap();
+
+    let thread = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":3,
+            "method":"session/request",
+            "params":{
+                "commandId":"create-thread",
+                "sessionId":session_id,
+                "expectedSequence":1,
+                "request":{"type":"createThread","title":"thread"}
+            }
+        }),
+    );
+    assert_eq!(thread["result"]["type"], "thread");
+    let thread_id = thread["result"]["value"]["threadId"].as_str().unwrap();
+
+    let turn = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":4,
+            "method":"session/request",
+            "params":{
+                "commandId":"start-turn",
+                "sessionId":session_id,
+                "expectedSequence":1,
+                "request":{
+                    "type":"startTurn",
+                    "threadId":thread_id,
+                    "input":[{"type":"text","text":"hello"}]
+                }
+            }
+        }),
+    );
+    assert_eq!(turn["result"]["type"], "turn");
+    assert!(turn["result"]["value"]["turnId"].is_string());
+    wait_for_latest_turn(&server, thread_id, TurnStatus::Completed);
+}
+
+#[test]
 fn updates_are_broadcast_to_other_subscribed_connections() {
     let server = server();
     let mut writer = server.connection();
@@ -1042,7 +1092,7 @@ fn updates_are_broadcast_to_other_subscribed_connections() {
 
     let mut observer = server.connection();
     initialize(&server, &mut observer);
-    call(
+    let session_subscription = call(
         &server,
         &mut observer,
         serde_json::json!({
@@ -1050,13 +1100,9 @@ fn updates_are_broadcast_to_other_subscribed_connections() {
             "params":{"sessionId":session_id,"afterSequence":3}
         }),
     );
-    call(
-        &server,
-        &mut observer,
-        serde_json::json!({
-            "jsonrpc":"2.0","id":3,"method":"thread/subscribe",
-            "params":{"threadId":thread_id,"afterSequence":1}
-        }),
+    assert_eq!(
+        session_subscription["result"]["threadProjections"][0]["thread"]["threadId"],
+        thread_id
     );
     call(
         &server,

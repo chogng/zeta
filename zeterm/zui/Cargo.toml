@@ -15,7 +15,7 @@ cosmic-text = { workspace = true }
 sys-locale = { workspace = true }
 thiserror = { workspace = true }
 unicode-segmentation = { workspace = true }
-zeta-icons = { workspace = true }
+zeta-icon = { workspace = true }
 
 [lints]
 workspace = true

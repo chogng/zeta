@@ -68,9 +68,13 @@ members = [
     "zeta-rs/zeta-client",
     "zeterm",
     "zeterm/agent-sidebar",
+    "zeterm/commands",
+    "zeterm/composer",
     "zeterm/editor",
+    "zeterm/icon",
     "zeterm/icons",
     "zeterm/keybinding",
+    "zeterm/layout",
     "zeterm/markdown",
     "zeterm/native-keybindings",
     "zeterm/renderer",
@@ -79,6 +83,7 @@ members = [
     "zeterm/wgpu",
     "zeterm/winit",
     "zeterm/zui",
+    "zeterm/zui-demo",
 ]
 default-members = ["zeterm"]
 resolver = "3"
@@ -164,6 +169,7 @@ zeroize = "1"
 zeta-add-dir = { path = "zeta-rs/add-dir" }
 zeta-agent-import = { path = "zeta-rs/agent-import" }
 zeta-agent-sidebar = { path = "zeterm/agent-sidebar" }
+zeta-commands = { path = "zeterm/commands" }
 zeta-app-server = { path = "zeta-rs/app-server" }
 zeta-app-server-client = { path = "zeta-rs/app-server-client" }
 zeta-app-server-protocol = { path = "zeta-rs/app-server-protocol" }
@@ -182,6 +188,7 @@ zeta-editor-core = { path = "zeta-rs/editor-core" }
 zeta-exec = { path = "zeta-rs/exec" }
 zeta-extensions = { path = "zeta-rs/extensions" }
 zeta-icons = { path = "zeterm/icons" }
+zeta-icon = { path = "zeterm/icon" }
 zeta-file-icons = { path = "zeta-rs/file-icons" }
 zeta-file-identity = { path = "zeta-rs/file-identity" }
 zeta-file-search = { path = "zeta-rs/file-search" }
@@ -192,6 +199,8 @@ zeta-git = { path = "zeta-rs/git" }
 zeta-http-client = { path = "zeta-rs/http-client" }
 zeta-install-context = { path = "zeta-rs/install-context" }
 zeta-keybinding = { path = "zeterm/keybinding" }
+zeta-composer = { path = "zeterm/composer" }
+zeta-layout = { path = "zeterm/layout" }
 zeta-keybindings-host = { path = "zeterm/native-keybindings" }
 zeta-language-server-catalog = { path = "zeta-rs/language-server-catalog" }
 zeta-language-server-distribution = { path = "zeta-rs/language-server-distribution" }

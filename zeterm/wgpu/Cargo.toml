@@ -17,10 +17,13 @@ pollster = { workspace = true }
 resvg = { workspace = true }
 thiserror = { workspace = true }
 wgpu = { workspace = true }
-zeta-icons = { workspace = true }
+zeta-icon = { workspace = true }
 zeta-renderer = { workspace = true }
 zeta-winit = { workspace = true }
 zui = { workspace = true }
+
+[dev-dependencies]
+zeta-icons = { workspace = true }
 
 [lints]
 workspace = true

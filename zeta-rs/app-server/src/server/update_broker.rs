@@ -1,6 +1,7 @@
 use serde::Serialize;
 use serde_json::Value;
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::sync::{Arc, Condvar, Mutex, Weak};
 use zeta_app_server_protocol::protocol::config::ConfigChanged;
 use zeta_app_server_protocol::protocol::fs::FsChanged;
@@ -9,9 +10,13 @@ use zeta_app_server_protocol::protocol::registry::ServerNotificationMethod;
 use zeta_app_server_protocol::protocol::skills::SkillsChanged;
 use zeta_app_server_protocol::rpc::JsonRpcNotification;
 use zeta_config::ConfigChange;
-use zeta_protocol::{
-    SessionId, SessionUpdateEnvelope, ThreadId, ThreadUpdate, ThreadUpdateEnvelope,
-};
+use zeta_protocol::SessionEvent;
+use zeta_protocol::SessionId;
+use zeta_protocol::SessionUpdate;
+use zeta_protocol::SessionUpdateEnvelope;
+use zeta_protocol::ThreadId;
+use zeta_protocol::ThreadUpdate;
+use zeta_protocol::ThreadUpdateEnvelope;
 
 #[derive(Clone, Debug, Default)]
 pub(super) struct NotificationQueue {
@@ -119,7 +124,14 @@ pub(super) struct UpdateBroker {
 struct Subscriber {
     queue: Weak<NotificationQueueInner>,
     sessions: BTreeMap<SessionId, u64>,
-    threads: BTreeMap<ThreadId, u64>,
+    threads: BTreeMap<ThreadId, ThreadSubscription>,
+}
+
+#[derive(Default)]
+struct ThreadSubscription {
+    sequence: u64,
+    explicit: bool,
+    session_owners: BTreeSet<SessionId>,
 }
 
 impl UpdateBroker {
@@ -160,6 +172,10 @@ impl UpdateBroker {
             && let Some(subscriber) = subscribers.get_mut(&connection_id)
         {
             subscriber.sessions.remove(session_id);
+            subscriber.threads.retain(|_, subscription| {
+                subscription.session_owners.remove(session_id);
+                subscription.explicit || !subscription.session_owners.is_empty()
+            });
         }
     }
 
@@ -167,7 +183,30 @@ impl UpdateBroker {
         if let Ok(mut subscribers) = self.subscribers.lock()
             && let Some(subscriber) = subscribers.get_mut(&connection_id)
         {
-            subscriber.threads.insert(thread_id, sequence);
+            let subscription = subscriber.threads.entry(thread_id).or_default();
+            subscription.sequence = subscription.sequence.max(sequence);
+            subscription.explicit = true;
+        }
+    }
+
+    pub(super) fn subscribe_session_thread(
+        &self,
+        connection_id: u64,
+        session_id: SessionId,
+        thread_id: ThreadId,
+        sequence: u64,
+    ) {
+        if let Ok(mut subscribers) = self.subscribers.lock()
+            && let Some(subscriber) = subscribers.get_mut(&connection_id)
+        {
+            let session_is_subscribed = subscriber.sessions.contains_key(&session_id);
+            let subscription = subscriber.threads.entry(thread_id).or_default();
+            subscription.sequence = subscription.sequence.max(sequence);
+            if session_is_subscribed {
+                subscription.session_owners.insert(session_id);
+            } else {
+                subscription.explicit = true;
+            }
         }
     }
 
@@ -175,7 +214,12 @@ impl UpdateBroker {
         if let Ok(mut subscribers) = self.subscribers.lock()
             && let Some(subscriber) = subscribers.get_mut(&connection_id)
         {
-            subscriber.threads.remove(thread_id);
+            if let Some(subscription) = subscriber.threads.get_mut(thread_id) {
+                subscription.explicit = false;
+                if subscription.session_owners.is_empty() {
+                    subscriber.threads.remove(thread_id);
+                }
+            }
         }
     }
 
@@ -195,6 +239,36 @@ impl UpdateBroker {
             else {
                 return false;
             };
+            for update in updates {
+                let SessionUpdate::Committed { event } = &update.update;
+                match event {
+                    SessionEvent::ThreadCreationPlanned { thread, .. } => {
+                        subscribe_session_thread_locked(
+                            subscriber,
+                            session_id,
+                            thread.thread_id.clone(),
+                            0,
+                        );
+                    }
+                    SessionEvent::ThreadAttached { thread_id, .. } => {
+                        subscribe_session_thread_locked(
+                            subscriber,
+                            session_id,
+                            thread_id.clone(),
+                            0,
+                        );
+                    }
+                    SessionEvent::ThreadArchived { thread_id, .. } => {
+                        if let Some(subscription) = subscriber.threads.get_mut(thread_id) {
+                            subscription.session_owners.remove(session_id);
+                        }
+                        subscriber.threads.retain(|_, subscription| {
+                            subscription.explicit || !subscription.session_owners.is_empty()
+                        });
+                    }
+                    _ => {}
+                }
+            }
             let Some(cursor) = subscriber.sessions.get_mut(session_id) else {
                 return true;
             };
@@ -223,16 +297,16 @@ impl UpdateBroker {
             else {
                 return false;
             };
-            let Some(cursor) = subscriber.threads.get_mut(thread_id) else {
+            let Some(subscription) = subscriber.threads.get_mut(thread_id) else {
                 return true;
             };
             let pending = updates
                 .iter()
-                .filter(|update| update.durable_sequence > *cursor)
+                .filter(|update| update.durable_sequence > subscription.sequence)
                 .map(|update| notification(ServerNotificationMethod::ThreadUpdate, update))
                 .collect::<Vec<_>>();
             if let Some(last) = updates.last() {
-                *cursor = (*cursor).max(last.durable_sequence);
+                subscription.sequence = subscription.sequence.max(last.durable_sequence);
             }
             queue.extend(pending);
             true
@@ -352,6 +426,20 @@ impl UpdateBroker {
             true
         });
     }
+}
+
+fn subscribe_session_thread_locked(
+    subscriber: &mut Subscriber,
+    session_id: &SessionId,
+    thread_id: ThreadId,
+    sequence: u64,
+) {
+    if !subscriber.sessions.contains_key(session_id) {
+        return;
+    }
+    let subscription = subscriber.threads.entry(thread_id).or_default();
+    subscription.sequence = subscription.sequence.max(sequence);
+    subscription.session_owners.insert(session_id.clone());
 }
 
 fn notification<T: Serialize>(method: ServerNotificationMethod, params: &T) -> Value {

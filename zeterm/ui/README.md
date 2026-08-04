@@ -33,7 +33,7 @@ GPU pipeline、atlas、shader 和 surface 全部委托给 renderer backend。
 | 无边框、无外层 padding 的锚定下拉项布局、可选 header 与默认选择 | `zeta-ui::Dropdown` | ✅；可滚动项复用 ListView 可见范围投影，选中 identity、header 内容、关闭与 command 归 host |
 | Icon+text label 的内部布局 | `zeta-ui::IconLabel` | ✅ |
 | 单个按键与多段快捷键的 keycap 几何和绘制 | `zeta-ui::Keycap` / `KeycapSequence` | ✅；按键语义与平台 label 归 caller |
-| Semantic icon identity、SVG definition 与 rendering mode | `zeta-icons` | 委托 |
+| Renderer-independent icon identity、SVG definition 与 rendering mode | `zeta-icon` | 委托 |
 | 非 component 单行编辑基座与 shaping | `zui::{TextInput,TextInputLayoutEngine}` | 委托 |
 | Input-box chrome、状态与 scene composition | `InputBox` | ✅ |
 | 带左侧语义图标的单行搜索框 composition | `SearchBox` | ✅；过滤策略与输入状态仍归 host |
@@ -51,15 +51,16 @@ zeta-ui → zui
 product host → zeta-renderer → zui
 product host → selected backend → zeta-renderer + zui
 
-zeta-ui → zeta-icons
-zui → cosmic-text / zeta-icons
+zeta-ui → zui → zeta-icon
+product catalog → zeta-icon
 zui(macOS font catalog) → coretext-rs → CoreText
 
 zeta-ui -X→ wgpu / Metal / Vulkan / zeta-winit
 zeta-ui -X→ App Server / workspace / product state
 ```
 
-如果本 crate 开始拥有 scene primitive、font adapter、GPU API、窗口、workspace 或产品 reducer，
+`zeta-icons` 是可选的产品语义目录；组件只接收 caller 提供的 `zeta-icon::Icon`，因此本 crate
+不需要依赖 zeterm 的产品 artwork。若本 crate 开始拥有 scene primitive、font adapter、GPU API、窗口、workspace 或产品 reducer，
 说明 ownership 已经漂移。基础 framework 的内部符号、验证与扩展点以 `zui/README.md` 为准。
 
 ## 2. 文件与接口地图

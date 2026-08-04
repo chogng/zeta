@@ -411,6 +411,7 @@ impl AppServer {
             Some(ClientMethod::SessionSubscribe) => {
                 self.session_subscribe(connection, &request.params)
             }
+            Some(ClientMethod::SessionRequest) => self.session_request(connection, &request.params),
             Some(ClientMethod::SessionUnsubscribe) => {
                 self.session_unsubscribe(connection, &request.params)
             }

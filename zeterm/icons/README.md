@@ -4,7 +4,8 @@
 > contract。跨客户端 ownership 由 [`docs/icons.md`](../../docs/icons.md) 定义；canonical
 > artwork 操作由 [`resources/README.md`](../../resources/README.md) 定义。
 
-`zeta-icons` 是 renderer-independent 资源 crate。它把稳定的语义 icon library 与可替换的
+`zeta-icons` 是可选的 product semantic catalog crate。通用 renderer-independent icon asset
+contract 由 [`zeta-icon`](../icon/README.md) 拥有；本 crate 把稳定的语义 icon library 与可替换的
 `resources/icons/*.svg` artwork 分层，并明确区分 `IconRendering::Symbolic` 与
 `IconRendering::Multicolor`。它不依赖 `zeta-ui`，也不拥有布局、主题颜色、GPU atlas、
 rasterization 或 component。
@@ -13,9 +14,7 @@ rasterization 或 component。
 
 | Symbol | 可见性 | 精确职责 |
 | --- | --- | --- |
-| `IconId` | public | 稳定的 semantic icon identity |
-| `IconDefinition` | public | 保存静态 SVG bytes 与 rendering contract |
-| `IconRendering` | public | 区分 caller-tinted symbolic 与保留固定颜色的 multicolor artwork |
+| `zeta-icon::{IconId, IconDefinition, IconRendering, Icon}` | re-export | 通用 icon asset contract；canonical owner 是 `zeta-icon` |
 | `library::icons` | private module、显式 re-export | 手工维护稳定的 `icons::*` typed semantic constants |
 | `library::ALL_ICONS` | private module、显式 re-export | 按 semantic ID 排序的公共 library catalog |
 | `icon_by_id` | public | 只解析已登记的 semantic ID，不解析 artwork filename |
@@ -31,7 +30,7 @@ resources/icons/*.svg
   → syncRustIcons
   → generated::artwork
   → library::icons
-  → Icon / icon_by_id
+  → zeta-icon::Icon / icon_by_id
   → zeta-ui
 ```
 

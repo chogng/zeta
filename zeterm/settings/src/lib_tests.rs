@@ -1,3 +1,4 @@
+use zeta_icons::icons;
 use zeta_ui::ActionBarStyle;
 use zeta_ui::ButtonBackgrounds;
 use zeta_ui::ButtonStyle;
@@ -49,7 +50,7 @@ fn style() -> SettingsPageStyle {
         border,
         text,
         Color::rgb(15, 110, 96),
-        SearchBoxStyle::new(input, text_muted),
+        SearchBoxStyle::new(input, icons::SEARCH, text_muted),
         nav,
         close,
         ActionBarStyle::new(action, zeta_ui::Size::new(100.0, 32.0)),

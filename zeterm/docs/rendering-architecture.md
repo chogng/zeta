@@ -4,7 +4,8 @@
 > 本文拥有组件到图形后端之间的跨 crate 边界与替换规则。具体接口和实现细节分别见
 > [`zui`](../zui/README.md)、[`zeta-ui`](../ui/README.md)、
 > [`zeta-renderer`](../renderer/README.md) 与
-> [`zeta-wgpu`](../wgpu/README.md)。
+> [`zeta-wgpu`](../wgpu/README.md)。通用图标资产契约见 [`zeta-icon`](../icon/README.md)，
+> 产品语义目录见 [`zeta-icons`](../icons/README.md)。
 
 ## 快速理解
 
@@ -22,7 +23,9 @@
 ```mermaid
 flowchart LR
     C["Component / product composition"] --> E["zui Element / ComputedElement"]
+    C --> I["zeta-icon asset"]
     E --> S["zui::UiScene"]
+    I --> S
     S --> R["zeta-renderer::Renderer"]
     R --> W["zeta-wgpu::WgpuRenderer"]
     R -. "可替换" .-> M["future Metal backend"]
@@ -35,6 +38,7 @@ flowchart LR
 | --- | --- | --- |
 | Component / product | 状态、声明式 Element、primitive 顺序、clip 与 overlay | GPU handle、shader、backend feature、手写检查元数据 |
 | `zui` | Element layout、immutable scene contract、logical coordinates、paint semantics、inspection 与有序 `SceneBatch` | 具体组件、`wgpu::*` 或其他图形 API |
+| `zeta-icon` | renderer-independent icon identity、SVG definition 与 symbolic/multicolor rendering mode | 产品语义目录、布局、GPU atlas |
 | `zeta-ui` | 基于 `zui` 的 Button、ActionBar、TabList、ContextView 等可复用组件 | scene/backend ownership、产品状态 |
 | `zeta-renderer` | target size、frame outcome、统一 backend error 与执行接口 | surface、window、pipeline、atlas |
 | backend crate | physical conversion、batch execution、resource cache、shader、submit、present | 产品状态、组件 layout、输入路由 |
@@ -70,6 +74,7 @@ host boundary 已删除；剩余 retained cleanup 和发布边界见
 ## 长期不变量
 
 - `zui` 不直接依赖或引用任何组件 crate、窗口系统或具体 GPU API；
+- `zui` 通过 `zeta-icon` 消费通用图标资产契约，不依赖 `zeta-icons` 产品目录；
 - `zeta-ui` 只依赖 `zui`，不拥有 scene/backend contract；
 - Component 只能产生 scene primitive，不接受 backend context；
 - backend 不重新解释产品布局、组件身份或交互状态；
@@ -88,7 +93,8 @@ input/accessibility ownership 漂入 backend。Rust 类型系统则保证 Native
 
 当前已完成 scene/backend 分离、ordered scene batching、presentation/interaction 与 GPU execution
 分离、`Renderer` trait、wgpu adapter、Native trait-object ownership，以及 rect/image/icon/text
-pipeline 从 `zui` 向 `zeta-wgpu` 的迁移。`zeta-ui` 当前兼容 re-export `zui` API，便于产品组件
+pipeline 从 `zui` 向 `zeta-wgpu` 的迁移；通用 icon contract 已下沉到 `zeta-icon`，并有
+`zui-demo` 作为无产品状态的宿主 smoke test。`zeta-ui` 当前兼容 re-export `zui` API，便于产品组件
 逐步迁移 import；renderer、dispatch 与 backend 已直接依赖 `zui`。尚未实现 backend capability
 negotiation、运行时热切换、raw Metal/Vulkan backend 或跨 backend golden-image 一致性测试。
 

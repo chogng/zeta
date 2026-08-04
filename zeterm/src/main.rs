@@ -13,15 +13,13 @@ use keyboard_shortcuts::KeyboardShortcutsState;
 use language_server_settings::LanguageServerSettingsState;
 use layout_inspector::LayoutInspector;
 use native_event::NativeEvent;
-use root_layout::{InspectorPane, RootLayout};
 use session_context_menu::SessionContextMenuState;
 use session_search::SessionSearch;
 use session_sidebar::SessionSidebarState;
 use shell_interaction::{COMPOSER, FILE_EDITOR_DOCUMENT};
 use shell_scene::{
-    LogicalViewport, ShellPresentation, ShellPresentationModel,
-    build_shell_presentation_with_animation_bindings, rebuild_shell_fragment,
-    rebuild_shell_overlays, terminal_grid_size_for_viewport,
+    ShellPresentation, ShellPresentationModel, build_shell_presentation_with_animation_bindings,
+    rebuild_shell_fragment, rebuild_shell_overlays, terminal_grid_size_for_viewport,
 };
 use shell_style::{SHELL_PALETTE, ShellPalette, code_editor_style};
 use terminal_pointer::TerminalPointer;
@@ -35,6 +33,7 @@ use workspace_path_picker::WorkspacePathPickerState;
 use workspace_surface::WorkspaceSurface;
 use zeta_agent_sidebar::AgentSidebarAction;
 use zeta_editor::CodeEditorStyle;
+use zeta_layout::{InspectorPane, LogicalViewport, RootLayout};
 use zeta_renderer::{RenderOutcome, RenderTargetSize, Renderer};
 use zeta_terminal::{BlockStatus, ScreenBuffer};
 use zeta_theme::{ColorScheme, ThemeLoadOptions, ThemeLoader, ThemeSurface, default_device_root};
@@ -52,7 +51,7 @@ mod agent_composer;
 mod agent_session;
 mod agent_sidebar;
 mod agent_sidebar_workspace;
-mod commands;
+mod command_dispatch;
 #[cfg(test)]
 #[path = "component_composition_tests.rs"]
 mod component_composition_tests;
@@ -80,7 +79,6 @@ mod language_service_host;
 mod layout_inspector;
 mod native_event;
 mod renderer_backend;
-mod root_layout;
 mod session_context_menu;
 mod session_search;
 mod session_sidebar;
@@ -97,7 +95,6 @@ mod terminal_projection;
 mod terminal_scrollback;
 mod terminal_selection;
 mod terminal_session;
-mod terminal_workspace_layout;
 mod thread_projection;
 mod thread_timeline;
 mod thread_timeline_scroll;
@@ -160,6 +157,7 @@ struct NativeApp {
     code_editor_style: CodeEditorStyle,
     event_proxy: zeta_winit::EventLoopProxy<NativeEvent>,
     cursor_position: Option<Point>,
+    command_registry: command_dispatch::NativeCommandRegistry,
     terminal_pointer: TerminalPointer,
     terminal_scroll: TerminalScroll,
     terminal_selection: TerminalSelection,
@@ -232,6 +230,7 @@ impl NativeApp {
             code_editor_style: CodeEditorStyle::light(),
             event_proxy,
             cursor_position: None,
+            command_registry: command_dispatch::builtin_command_registry(),
             terminal_pointer: TerminalPointer::default(),
             terminal_scroll: TerminalScroll::default(),
             terminal_selection: TerminalSelection::default(),
@@ -725,8 +724,8 @@ impl NativeApp {
         if self.activate_workspace_path_picker_element(id) {
             return;
         }
-        if let Some(command) = commands::command_for_element(id) {
-            self.execute_native_command(command);
+        if let Some(request) = command_dispatch::command_request_for_element(id) {
+            self.dispatch_command(request);
         }
     }
 

@@ -1,8 +1,7 @@
-use zeta_icons::Icon;
-
 use crate::{
     Component, ComponentElement, Element, PaintIcon, Point, Rect, TextBlock, TextStyle, UiScene,
 };
+use zui::Icon;
 
 /// Presentation metrics for an icon followed by a single text label.
 #[derive(Clone, Debug, PartialEq)]

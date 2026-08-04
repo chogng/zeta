@@ -19,7 +19,11 @@
 并在单个原生窗口中绘制 Agent ThreadTimeline 与固定底部 Agent/Shell Composer。
 启动时 `zeta-theme` 从共享 design-token manifest、`zeterm` 默认主题入口与 device-local 用户主题生成不可变 snapshot；
 `shell_style` 将其适配为 Shell、CodeEditor、MultiDiffEditor、scrollbar 与 terminal ANSI palette。
-`ShellLayout` 仍只拥有区域背景、边界和外部几何，组件内部视觉继续由组件 style contract 拥有。
+`zeta-layout` 拥有 Root/Inspector/Terminal Workspace 的 pane topology；`zeta-composer` 拥有 Composer
+panel 与 interaction list 的纯几何；`ShellLayout` 和 `composer_panel` 仍只拥有剩余 Shell/Composer
+product composition 的区域背景、边界、绘制与状态接线，组件内部视觉继续由组件 style contract 拥有。
+窗口级产品 pane topology 已抽到 [`zeta-layout`](layout/README.md)；通用框架可脱离产品运行的
+最小链路由 [`zui-demo`](zui-demo/README.md) 持续验证。
 
 ## 构建与发布边界
 
@@ -78,7 +82,7 @@ composition API 已删除，后续不得在 Native 宿主重新引入平行输�
 | 后端无关 render、resize、scale 与 frame outcome | `zeta-renderer::Renderer` | 委托；`NativeApp` 只保存 trait object |
 | GPU surface、pipeline、atlas、shader、present 与 retry | `zeta-wgpu` | 委托；仅 `renderer_backend` 知道具体 backend 类型 |
 | Element、Rect/image/icon/text scene、检查快照与字体测量 | `zui` | 委托；不接触组件或 GPU API |
-| Shell product layout 与 scene composition | `shell_scene` / `composer_panel` | ✅；Composer Panel 展开时向上压缩 ThreadTimeline；interaction/frame runtime 委托 `zui` |
+| Shell product layout 与 scene composition | `zeta-layout` + `zeta-composer` + `shell_scene` / `composer_panel` | 部分抽取；`zeta-layout` 拥有 root/workspace pane geometry，`zeta-composer` 拥有 Composer 几何，Native 仍拥有状态与 scene composition |
 | Native frame assembly | `ShellPresentation::frame` | ✅；由单一 `zui::UiFrame<InteractionFrame>` owner 管理 |
 | 原生布局检查模式、pointer 拦截与 highlight overlay | `layout_inspector::LayoutInspector` / `NativeApp` | ✅；Inspector Panel 是根 Grid leaf，只有产品节点高亮进入 overlay |
 | Sessions/Main 单轴约束与 Sash presentation geometry | `zui::SplitViewLayout` / `zeta-ui::Sash` | 委托 |
@@ -108,7 +112,7 @@ composition API 已删除，后续不得在 Native 宿主重新引入平行输�
 | 共享主题加载与平台中立 snapshot | [`zeta-theme`](../zeta-rs/theme/README.md) | 委托；选择数据化 `zeterm` 默认入口，并与 Desktop/TUI 消费同一 manifest 和用户主题 JSON |
 | Native Shell/CodeEditor/Diff/Terminal 主题投影 | `shell_style::ShellPalette` 与命名 component palette | ✅；启动时加载一次，失败回退内置浅色 palette |
 | 稳定控件身份与 shell action 映射 | `shell_interaction` | ✅ |
-| 稳定 product command identity 与唯一执行入口 | `commands::NativeCommand` / `NativeApp::execute_native_command` | ✅；pointer、menu 与 shortcut 汇合到同一 executor |
+| 稳定 product command identity、request 与注册式执行入口 | `zeta-commands::{ZetermCommandId, CommandRequest, CommandRegistry}` / `NativeApp::dispatch_command` | ✅；pointer、menu 与 shortcut 汇合到宿主注册的 handler |
 | 平台按键转换、Chord 生命周期与当前 context | `keybindings::NativeKeybindings` | ✅；1.5 秒超时，失焦或 IME 事件取消 |
 | 用户快捷键资源、验证与热更新 | `zeta-keybindings-host::KeybindingsResource` | ✅；读取 `<ZETA_PROFILE_ROOT>/keybindings.json`，坏更新保留上一份有效规则 |
 | 快捷键模型、设置、录制与 Chord 提示 | [`zeta-keybinding`](keybinding/README.md) | 委托；zeterm 提供命令行、事件 adapter 与保存接线 |
@@ -119,9 +123,10 @@ composition API 已删除，后续不得在 Native 宿主重新引入平行输�
 | ANSI parser、terminal grid 与 BlockList | `zeta-terminal::TerminalCore` | 委托 |
 | 默认 shell PTY、output/exit event、write 与 resize | `terminal_session::TerminalSession` | ✅ |
 | Agent ThreadTimeline + fixed Agent/Shell Composer | `shell_scene` / `thread_timeline` / `composer_panel` / `agent_composer` | ✅ |
-| Composer 信息栏、可展开交互 Pane 与子 View | `composer_panel` / `composer_interaction::ComposerInteractionModel` / `composer_interaction_pane::ComposerInteractionPaneState` / `zeta-ui::{ScrollView,ListView}` | ✅；Pane 只宿主 active View 并保留 viewport offset，通用 UI 基座负责裁剪、滚动与可见范围；Slash core 不拥有 renderer scroll，Native 当前提供 Slash 与 `/model` View |
-| App Server Session/Thread projection 与 stream-gap recovery | `agent_session` / `thread_projection` | ✅ |
-| durable direct Shell Turn | App Server `turn/shell/start` / Core `StartShellTurn` | ✅ |
+| Composer 面板几何、信息栏与可展开交互 Pane 的位置 | [`zeta-composer`](composer/README.md) / `composer_panel` / `shell_scene` | ✅；`zeta-composer` 只解析 panel、固定行、interaction bounds 与 list scroll geometry，Native 负责状态、绘制和 scene 接线 |
+| Composer active View 与滚动状态 | `composer_interaction::ComposerInteractionModel` / `composer_interaction_pane::ComposerInteractionPaneState` / `zeta-ui::{ScrollView,ListView}` | ✅；Pane 只宿主 active View 并保留 viewport offset，通用 UI 基座负责裁剪、滚动与可见范围；Slash core 不拥有 renderer scroll，Native 当前提供 Slash 与 `/model` View |
+| App Server Session adapter 与 transient Thread projection / stream-gap recovery | `agent_session` / `thread_projection` | ✅；Thread 只作为 App Server 内部状态的 Native projection，不形成独立 crate |
+| durable direct Shell Turn | App Server `session/request::StartShellTurn` / Core `StartShellTurn` | ✅ |
 | 独立交互式 Terminal Surface | `workspace_surface` / `terminal_session` / `terminal_input` | ✅；`Cmd/Ctrl+J` 切换 |
 | Composer/File Editor/Session Search/File Search/Workspace Path Search/Git Branch Search IME target、事件转换、启停、composition lifecycle 与候选框同步 | `input_method` | ✅ |
 | Bottom Widget 底部的 Local/cwd/branch/Changes context toolbar | `input_context_toolbar::InputContextToolbar` / `workspace_path_picker` / `git_branch_context_menu` / `workspace_context::WorkspaceContext` | ✅；cwd 复用带 Search Box header 的 `Dropdown`，branch 复用带同类 header 的 `ContextMenu`，分别切换工作区投影和本地分支；Changes 显示 changed path 数与文本 `+addition -deletion`，点击后刷新并展开 Changes Pane |
@@ -133,7 +138,7 @@ composition API 已删除，后续不得在 Native 宿主重新引入平行输�
 | system clipboard copy/paste 与 bracketed-paste routing | `terminal_selection` / `terminal_input` | ✅ |
 | OSC title → Terminal Surface / native window title | `TerminalCore::title` / `NativeWindow::set_title` | ✅；后台 terminal title 不覆盖 Agent Session title |
 | 完整 TUI compatibility | 尚无完整 owner | 尚未完成 |
-| App Server session 与 durable product state projection | `agent_session` / `thread_projection` | ✅ |
+| App Server session 与 durable product state projection | `agent_session` / `thread_projection` | ✅；Session 是 Native 对外接触的 application boundary |
 
 依赖方向：
 
@@ -144,6 +149,7 @@ zeterm → zeta-winit
                         → zeta-winit
                         → zui
             → zeta-ui → zui
+            → zeta-commands
             → zeta-keybinding
             → zeta-app-server-client
             → zeta-protocol
@@ -170,13 +176,13 @@ authority。下表把仍保留的历史 shell vocabulary 映射到当前产品�
 | 当前源码 | 当前能力 | 目标产品语义 | 状态 |
 | --- | --- | --- | --- |
 | `titlebar::Titlebar` | 窗口拖拽区和左右 sidebar toggle `ActionBar`；不绘制标题文案 | Top Bar | ✅ |
-| `root_layout::RootLayout` | 用 `GridLayout` 解析固定 Product leaf 与可选 Inspector leaf | Native window 根布局 | ✅；窗口扩展后 Inspector 获得独立 360px sibling leaf，Product bounds 不变 |
+| `zeta_layout::RootLayout` | 用 `GridLayout` 解析固定 Product leaf 与可选 Inspector leaf | Native window 根布局 | ✅；窗口扩展后 Inspector 获得独立 360px sibling leaf，Product bounds 不变 |
 | `ShellLayout` | 组合 titlebar、可选 Sessions sidebar，并把剩余区域交给 `TerminalWorkspaceLayout` | Top Bar 与 Workspace 外部布局 | ✅；Sessions 使用外层单轴 split |
-| `terminal_workspace_layout::TerminalWorkspaceLayout` | 用 `GridLayout` 投影活动终端与可选 Agent Sidebar Leaf bounds | Workspace Pane geometry adapter | ✅；尚无多 Terminal Pane Tree 或多 Session binding |
-| `commands` / `keybindings` / `keybindings_resource` / `keyboard_shortcuts` | 把 pointer/menu 的 `ElementId` 与标准化键盘事件映射到同一 `NativeCommand` executor；向 `zeta-keybinding` 提供命令行、稳定 identity 和保存 adapter | Product command 与快捷键输入层 | ✅；支持完整 `when` 表达式、冲突/错误诊断、最多四段 Chord 与 keycap UI |
+| `zeta_layout::TerminalWorkspaceLayout` | 用 `GridLayout` 投影活动终端与可选 Agent Sidebar Leaf bounds | Workspace Pane geometry adapter | ✅；尚无多 Terminal Pane Tree 或多 Session binding |
+| `zeta-commands` / `command_dispatch` / `keybindings` / `keybindings_resource` / `keyboard_shortcuts` | 把 pointer/menu 的 `ElementId` 与标准化键盘事件映射到同一 `CommandRequest`，再交给 `CommandRegistry` 的宿主 handler；向 `zeta-keybinding` 提供命令行、稳定 identity 和保存 adapter | Product command 与快捷键输入层 | ✅；支持完整 `when` 表达式、冲突/错误诊断、最多四段 Chord 与 keycap UI |
 | `shell_scene` / `thread_timeline` | Agent Surface 绘制 canonical Thread items；Terminal Surface 绘制活动 grid | Agent Workspace / Terminal compatibility | ✅ |
 | `layout_inspector` | `Cmd/Ctrl+Shift+I` 开关检查面板，面板 cursor action 显式开关选取，点击锁定最深检查节点，Escape 先停止选取再关闭 | Native UI layout inspection | ✅；原生窗口向右扩展独立层级面板，自动显示 ancestor、authored row/column/width/height、computed size/padding/gap/radius、layer 与源码位置 |
-| `composer_editor` / `agent_composer` / `composer_interaction` / `composer_interaction_pane` / `composer_panel` / `terminal_input` | Compact `CodeEditor` 共享 Agent/Shell 多行文档；宿主切换 `CodeEditorLanguage`，Shell parser/revision/token 由 editor 内部拥有；active View model 接管方向键、Enter、Tab、Escape，Pane state 与 zeta-ui list 基座接管滚动；Terminal Surface direct input | Agent Composer、Slash/模型选择与 explicit Shell Turn | ✅ |
+| `composer_editor` / `agent_composer` / `composer_interaction` / `composer_interaction_pane` / `composer_panel` / `terminal_input` | Compact `CodeEditor` 共享 Agent/Shell 多行文档；宿主切换 `CodeEditorLanguage`，Shell parser/revision/token 由 editor 内部拥有；active View model 接管方向键、Enter、Tab、Escape，`zeta-composer` 提供 panel/list geometry，Pane state 与 zeta-ui list 基座接管滚动；Terminal Surface direct input | Agent Composer、Slash/模型选择与 explicit Shell Turn | ✅ |
 | `input_context_toolbar` / `workspace_path_picker` / `git_branch_context_menu` | `ActionBar` 排列 mode、Local、cwd、branch 与 `Changes files • +additions -deletions`；cwd 组合 `Dropdown`，branch 组合 `ContextMenu`，两者均使用各自通用 header slot | Composer context toolbar | ✅；两个浮层第一行均默认聚焦 Search Box；目录或分支切换后替换 Files 根、文件搜索索引和 Git/Changes projection；Changes action 刷新 Git projection、展开右栏并选择 Changes Pane |
 | `session_tab_list` | 组合 `zeta-ui::TabList` 投影当前真实 PTY Session；自身拥有白色状态容器、会话名和工作区两行截断信息，以及纵向 TabList/selected Tab 语义 | 多会话导航 | 通用 TabList 已支持 6px 间隔的多项布局；runtime 仍只有单 Session |
 | `session_sidebar_toolbar` / `session_search` | 整行组合 `SearchBox` 与右侧 `ActionBar`；按 session name 执行大小写不敏感过滤，并把 Add 暴露为稳定 action | Session 搜索与新建入口 | 搜索已接通；真实新建 tab 等待多会话 runtime |
@@ -216,7 +222,7 @@ main
       → resize / scale-factor update → rebuild scene
           → TerminalSession::resize → TerminalCore + PTY
       → AgentSessionEvent::Snapshot/Update → ThreadProjection → ThreadTimeline
-          → committed update / stream gap → thread/subscribe refresh
+          → committed update / stream gap → session/subscribe refresh
           → transient Agent/Tool delta → rebuild scene
       → TerminalSessionEvent::Output → TerminalCore::process_output → rebuild scene
           → terminal query → take_reply_bytes → TerminalSession::send_input → PTY
@@ -226,14 +232,14 @@ main
       → Agent Surface wheel → ThreadTimelineScroll → redraw
       → keyboard → NativeKeybindings → zeta-keybinding::KeybindingResolver
           → PendingChord → 1.5s deadline；失焦、超时或 IME 清空
-          → NativeCommand → focused input / product executor / PTY
+          → CommandRequest → CommandRegistry handler / focused input / PTY
           → NoMatch → focused control navigation/editing → Terminal Surface PTY fallback
       → about_to_wait → KeybindingsResource 轮询 `<ZETA_PROFILE_ROOT>/keybindings.json`
           → 完整验证成功 → 原子替换 Builtin + User 规则
           → 读取或解析失败 → 保留上一份完整规则并输出诊断
       → input_method → IME preedit/commit/cancel → AgentComposer
-          → Agent Enter → App Server turn/start
-          → Shell Enter → App Server turn/shell/start
+          → Agent Enter → App Server session/request::StartTurn
+          → Shell Enter → App Server session/request::StartShellTurn
           → composer caret bounds → native IME candidate area
       → pointer → zui::UiDispatch
           → InteractionFrame reverse-order hit-test
@@ -261,7 +267,7 @@ main
           → AgentSidebarNavigation → Changes / Files selection
               → FilesLayout → FilesToolbar + 根目录树 / 模糊路径匹配结果
               → ScmLayout → MultiDiffEditor → visible file sections → DiffEditor
-      → TerminalWorkspaceLayout
+      → zeta_layout::TerminalWorkspaceLayout
           → GridLayout → active terminal + optional Agent Sidebar leaf bounds
           → terminal rows/columns → TerminalSession resize
       → Tab / Shift+Tab / Arrow keys → unified focus navigation
@@ -285,7 +291,7 @@ cargo run --manifest-path Cargo.toml -p zeterm
 ```
 
 `shell_scene::ShellLayout` 把 titlebar 下方 body 先交给 Sessions/Main 横向
-`SplitViewLayout`，再把剩余区域交给 `terminal_workspace_layout::TerminalWorkspaceLayout`；
+`SplitViewLayout`，再把剩余区域交给 `zeta_layout::TerminalWorkspaceLayout`；
 后者通过 `GridLayout` 同时投影活动 Terminal Leaf 和可选的右侧 Agent Sidebar Leaf。当前活动
 Terminal Leaf 再分成上方 output viewport 与固定底部 composer；alternate screen 临时使用完整
 活动 Terminal Leaf。
@@ -332,14 +338,15 @@ presentation 时从 `NativeWindow::window_control_insets` 读取 host chrome 占
 内容间距。窗口控件宽度和所在边不能进入 `ActionBar` 或 `zeta-ui`。
 `shell_interaction` 只声明产品稳定 `ElementId` 并把 context action 映射回产品命令；实际
 sidebar state 由 `session_sidebar` 定义并由 `NativeApp` 保存，它不保存 hover 或 focus。
-`commands::command_for_element` 和 `NativeKeybindings` 分别把 pointer/menu entry point 与
-标准化键盘事件映射到 `NativeCommand`；`NativeApp::execute_native_command` 是唯一产品执行
-入口。`KeybindingsResource` 每秒检查 `<ZETA_PROFILE_ROOT>/keybindings.json`，只在完整资源通过
+`command_dispatch::command_request_for_element` 和 `NativeKeybindings` 分别把 pointer/menu entry
+point 与标准化键盘事件映射到 `CommandRequest`；`NativeApp` 启动时通过
+`command_dispatch::builtin_command_registry` 注册完整产品命令目录，`NativeApp::dispatch_command`
+从注册表取出 handler，是唯一产品执行入口。`KeybindingsResource` 每秒检查 `<ZETA_PROFILE_ROOT>/keybindings.json`，只在完整资源通过
 大小、字段、按键、条件和命令校验后替换 User 规则；内容无效时保留上一份有效规则并把诊断
 显示在快捷键设置页。`zeta-keybinding::KeyboardShortcutsState` 录制最多四段按键，暂停一秒后
 把 commit 交回 Native 资源层原子写入；设置浮层、深灰 keycap 与 Chord 提示也由同一快捷键
 crate 拥有。Native 的 `keyboard_shortcuts` 只分配产品 `ElementId`、投影
-`NativeCommand` 行并连接保存结果。
+`ZetermCommandId` 行并连接保存结果。
 `zeta-keybinding` 解析平台无关按键和 `when` 表达式，不读取 focus、不执行命令，也不拥有
 Chord timer。
 `session_context_menu` 用 `SessionContextMenuState` 保存当前目标、锚点和待恢复焦点，用
@@ -380,8 +387,8 @@ command dispatch 或 accessibility ownership。新增组件组合必须使用 `U
 `layout_inspector::LayoutInspector` 是独立的检查工具 presentation state。`Cmd/Ctrl+Shift+I` 开启后，
 Native 先保存当前产品 content width，再通过 `NativeWindow::request_inner_logical_size` 向右扩展
 `360px`；Shell、Terminal grid 与产品 hit testing 继续使用保存的 content viewport，因此检查面板不会
-挤压或重排被观察布局。`root_layout::RootLayout` 把保存的 Product viewport 和新增宽度交给
-`GridLayout`，解析为两个真实 sibling leaf；`InspectorPanel` 在 Inspector leaf 的 layer 0 内组合
+挤压或重排被观察布局。`zeta_layout::RootLayout` 把保存的 Product viewport 和新增宽度交给
+`GridLayout` 解析为两个真实 sibling leaf；`InspectorPanel` 在 Inspector leaf 的 layer 0 内组合
 `InspectorToolbar` 与 `InspectorContent`，不再作为 scene overlay。Toolbar 与产品 Titlebar 同高，左侧
 cursor action 显式开关选取，右侧 close action 关闭面板并恢复原窗口宽度；Content 只拥有层级行、
 指标与节点切换。面板打开时默认不进入选取状态，产品 content 继续接收正常 pointer、keyboard 和
@@ -414,14 +421,14 @@ viewport offset，`zeta-ui::ScrollView` / `ListView` 统一处理 content geomet
 选择和 dismiss 委托给 `zeta-slash-commands`，滚动由 Native renderer 保留。当前输入 `/` 时由共享
 状态提供 active View 并按初始化快照过滤命令；选择 `/model` 后压入模型列表。Escape 从子 View
 返回上一层，在根 View 时使 Pane 收起。
-`composer_panel::ComposerPanelLayout` 组合“交互区 → 信息栏 → editor → toolbar”；信息栏固定显示
+`zeta_composer::ComposerPanelLayout` 组合“交互区 → 信息栏 → editor → toolbar”；信息栏固定显示
 当前 mode 的提示，toolbar 固定在底部。交互区出现时只增加底部 Panel 高度并向上压缩
 ThreadTimeline，信息栏、editor 与 toolbar 的位置保持不变。模型列表来自 typed
-`model/list`，选择结果通过 `session/model/set` 写入当前 Session；UI 不复制模型目录或伪造
+`model/list`，选择结果通过 `session/request::SetModel` 写入当前 Session；UI 不复制模型目录或伪造
 Session model。
 `terminal_input` 把普通 key 和 paste 路由到 Composer；临时 View 可见时优先消费方向键、Enter、
-Tab 和 Escape；否则 Enter 分别提交 `turn/start` 或
-`turn/shell/start`，Shift+Enter 插入换行。Composer 从紧凑基线自动增长到八行，之后由
+Tab 和 Escape；否则 Enter 分别提交 `session/request::StartTurn` 或
+`session/request::StartShellTurn`，Shift+Enter 插入换行。Composer 从紧凑基线自动增长到八行，之后由
 viewport 跟随 caret。Terminal Surface 的输入经过
 `TerminalCore::encode_key/encode_paste` 直接写入 PTY。`input_method` 单独把 IME 路由到当前
 `InputMethodTarget`：Agent Surface candidate area 跟随 composer caret，Editor Surface 跟随 active

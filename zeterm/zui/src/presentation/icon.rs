@@ -1,6 +1,5 @@
-use zeta_icons::Icon;
-
 use crate::foundation::Color;
+use crate::foundation::Icon;
 use crate::foundation::Rect;
 
 /// A caller-colored semantic icon placed in logical UI coordinates.

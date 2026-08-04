@@ -17,14 +17,14 @@ use zeta_keybindings_host::UserBinding;
 #[cfg(test)]
 use zeta_keybindings_host::UserBindingTarget;
 
-use crate::commands::NativeCommand;
+use zeta_commands::ZetermCommandId;
 
 pub(crate) type NativeKeybindings = Keybindings<NativeKeybindingCatalog>;
-pub(crate) type NativeKeybindingResolution = KeybindingResolution<NativeCommand>;
+pub(crate) type NativeKeybindingResolution = KeybindingResolution<ZetermCommandId>;
 #[cfg(test)]
 pub(crate) type NativeUserBinding = UserBinding<NativeKeybindingCatalog>;
 #[cfg(test)]
-pub(crate) type NativeUserBindingTarget = UserBindingTarget<NativeCommand>;
+pub(crate) type NativeUserBindingTarget = UserBindingTarget<ZetermCommandId>;
 pub(crate) type KeybindingsResource =
     zeta_keybindings_host::KeybindingsResource<NativeKeybindingCatalog>;
 
@@ -126,7 +126,7 @@ pub(super) enum NativeBindingCondition {
 pub(crate) struct NativeKeybindingCatalog;
 
 impl KeybindingCatalog for NativeKeybindingCatalog {
-    type Command = NativeCommand;
+    type Command = ZetermCommandId;
     type Condition = NativeBindingCondition;
     type Context = NativeKeybindingContext;
 
@@ -143,7 +143,7 @@ impl KeybindingCatalog for NativeKeybindingCatalog {
     }
 
     fn command_from_id(id: &str) -> Option<Self::Command> {
-        NativeCommand::bindable_from_id(id)
+        ZetermCommandId::bindable_from_id(id)
     }
 
     fn parse_condition(source: Option<&str>) -> Result<Self::Condition, String> {
@@ -180,44 +180,51 @@ fn condition_matches(
     }
 }
 
-fn default_keybinding(command: NativeCommand) -> Option<&'static KeySequence> {
+fn default_keybinding(command: ZetermCommandId) -> Option<&'static KeySequence> {
     static TOGGLE_TERMINAL: OnceLock<KeySequence> = OnceLock::new();
     static COPY: OnceLock<KeySequence> = OnceLock::new();
     static PASTE: OnceLock<KeySequence> = OnceLock::new();
     static SAVE: OnceLock<KeySequence> = OnceLock::new();
     match command {
-        NativeCommand::ToggleTerminalSurface => Some(TOGGLE_TERMINAL.get_or_init(|| {
+        ZetermCommandId::ToggleTerminalSurface => Some(TOGGLE_TERMINAL.get_or_init(|| {
             KeySequence::single(
                 Chord::logical("j", ShortcutModifiers::primary()).expect("builtin key"),
             )
         })),
-        NativeCommand::OpenKeyboardShortcuts => Some(static_keyboard_shortcuts_binding()),
-        NativeCommand::Copy => Some(COPY.get_or_init(|| {
+        ZetermCommandId::OpenKeyboardShortcuts => Some(static_keyboard_shortcuts_binding()),
+        ZetermCommandId::Copy => Some(COPY.get_or_init(|| {
             KeySequence::single(
                 Chord::logical("c", ShortcutModifiers::primary()).expect("builtin key"),
             )
         })),
-        NativeCommand::Paste => Some(PASTE.get_or_init(|| {
+        ZetermCommandId::Paste => Some(PASTE.get_or_init(|| {
             KeySequence::single(
                 Chord::logical("v", ShortcutModifiers::primary()).expect("builtin key"),
             )
         })),
-        NativeCommand::Save => Some(SAVE.get_or_init(|| {
+        ZetermCommandId::Save => Some(SAVE.get_or_init(|| {
             KeySequence::single(
                 Chord::logical("s", ShortcutModifiers::primary()).expect("builtin key"),
             )
         })),
-        NativeCommand::ToggleComposerMode
-        | NativeCommand::OpenLanguageServerSettings
-        | NativeCommand::ToggleSessionSidebar
-        | NativeCommand::ToggleAgentSidebar
-        | NativeCommand::ActivateSessionTab
-        | NativeCommand::AddSession
-        | NativeCommand::SelectAgentPane(_)
-        | NativeCommand::RefreshFiles
-        | NativeCommand::ToggleFileSearch
-        | NativeCommand::SessionContextMenu(_)
-        | NativeCommand::Context(_) => None,
+        ZetermCommandId::ToggleComposerMode
+        | ZetermCommandId::OpenLanguageServerSettings
+        | ZetermCommandId::ToggleSessionSidebar
+        | ZetermCommandId::ToggleAgentSidebar
+        | ZetermCommandId::ActivateSessionTab
+        | ZetermCommandId::AddSession
+        | ZetermCommandId::ShowAgentChanges
+        | ZetermCommandId::ShowAgentFiles
+        | ZetermCommandId::RefreshAgentFiles
+        | ZetermCommandId::ToggleAgentFileSearch
+        | ZetermCommandId::PinSession
+        | ZetermCommandId::CloseSession
+        | ZetermCommandId::RenameSession
+        | ZetermCommandId::ForkSession
+        | ZetermCommandId::PickExecutionLocation
+        | ZetermCommandId::PickWorkingDirectory
+        | ZetermCommandId::PickGitBranch
+        | ZetermCommandId::ShowWorkspaceDiff => None,
     }
 }
 
@@ -228,20 +235,20 @@ fn static_keyboard_shortcuts_binding() -> &'static KeySequence {
     })
 }
 
-fn builtin_bindings(platform: HostPlatform) -> BindingSet<NativeBindingCondition, NativeCommand> {
+fn builtin_bindings(platform: HostPlatform) -> BindingSet<NativeBindingCondition, ZetermCommandId> {
     let mut bindings = BindingSet::default();
     register(
         &mut bindings,
         "j",
         ShortcutModifiers::primary(),
-        NativeCommand::ToggleTerminalSurface,
+        ZetermCommandId::ToggleTerminalSurface,
         NativeBindingCondition::Always,
     );
     register(
         &mut bindings,
         ",",
         ShortcutModifiers::primary(),
-        NativeCommand::OpenKeyboardShortcuts,
+        ZetermCommandId::OpenKeyboardShortcuts,
         NativeBindingCondition::Always,
     );
     register_text_input_clipboard(&mut bindings);
@@ -249,46 +256,48 @@ fn builtin_bindings(platform: HostPlatform) -> BindingSet<NativeBindingCondition
         &mut bindings,
         "s",
         ShortcutModifiers::primary(),
-        NativeCommand::Save,
+        ZetermCommandId::Save,
         NativeBindingCondition::Always,
     );
     register_direct_terminal_clipboard(&mut bindings, platform);
     bindings
 }
 
-fn register_text_input_clipboard(bindings: &mut BindingSet<NativeBindingCondition, NativeCommand>) {
+fn register_text_input_clipboard(
+    bindings: &mut BindingSet<NativeBindingCondition, ZetermCommandId>,
+) {
     register(
         bindings,
         "c",
         ShortcutModifiers::primary(),
-        NativeCommand::Copy,
+        ZetermCommandId::Copy,
         NativeBindingCondition::TextInput,
     );
     register(
         bindings,
         "v",
         ShortcutModifiers::primary(),
-        NativeCommand::Paste,
+        ZetermCommandId::Paste,
         NativeBindingCondition::TextInput,
     );
     register(
         bindings,
         "c",
         ShortcutModifiers::primary().with_shift(),
-        NativeCommand::Copy,
+        ZetermCommandId::Copy,
         NativeBindingCondition::TextInput,
     );
     register(
         bindings,
         "v",
         ShortcutModifiers::primary().with_shift(),
-        NativeCommand::Paste,
+        ZetermCommandId::Paste,
         NativeBindingCondition::TextInput,
     );
 }
 
 fn register_direct_terminal_clipboard(
-    bindings: &mut BindingSet<NativeBindingCondition, NativeCommand>,
+    bindings: &mut BindingSet<NativeBindingCondition, ZetermCommandId>,
     platform: HostPlatform,
 ) {
     let modifiers = if platform == HostPlatform::MacOs {
@@ -300,23 +309,23 @@ fn register_direct_terminal_clipboard(
         bindings,
         "c",
         modifiers,
-        NativeCommand::Copy,
+        ZetermCommandId::Copy,
         NativeBindingCondition::DirectTerminal,
     );
     register(
         bindings,
         "v",
         modifiers,
-        NativeCommand::Paste,
+        ZetermCommandId::Paste,
         NativeBindingCondition::DirectTerminal,
     );
 }
 
 fn register(
-    bindings: &mut BindingSet<NativeBindingCondition, NativeCommand>,
+    bindings: &mut BindingSet<NativeBindingCondition, ZetermCommandId>,
     key: &str,
     modifiers: ShortcutModifiers,
-    command: NativeCommand,
+    command: ZetermCommandId,
     condition: NativeBindingCondition,
 ) {
     let chord = Chord::logical(key, modifiers).expect("builtin shortcut key must be valid");

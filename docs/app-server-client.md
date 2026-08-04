@@ -255,7 +255,7 @@ result/error envelope 和 notification contract。JSON/JSONL/WebSocket backend �
 公共接口仍然是类型化方法：
 
 ```rust
-let result = client.start_turn(TurnStartParams { /* ... */ })?;
+let result = client.request_session(SessionRequestParams { /* ... */ })?;
 ```
 
 调用方不拼 method string、不处理 JSON-RPC request ID，也不直接操作 request channel。

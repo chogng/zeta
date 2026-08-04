@@ -1,4 +1,4 @@
-use zeta_icons::{Icon, IconDefinition, IconId};
+use zui::{Icon, IconDefinition, IconId};
 
 use super::{Button, ButtonBackgrounds, ButtonSelection, ButtonState, ButtonStyle};
 use crate::{Border, Color, CornerRadii, Edges, FontWeight, Rect, TextStyle, UiScene};

@@ -1,9 +1,15 @@
-use zeta_icons::icons;
-
 use super::{
     ActionBar, ActionBarButton, ActionBarItem, ActionBarOrientation, ActionBarSeparatorStyle,
     ActionBarStyle,
 };
+use zui::{Icon, IconDefinition, IconId};
+
+const TEST_ICON: Icon = Icon::new(
+    IconId::new("action"),
+    IconDefinition::symbolic(
+        br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><rect x="3" y="3" width="10" height="10"/></svg>"#,
+    ),
+);
 use crate::{
     ButtonBackgrounds, ButtonSelection, ButtonState, ButtonStyle, Color, Component, Edges, Point,
     Rect, Size, TextStyle, UiScene,
@@ -40,7 +46,7 @@ fn horizontal_action_bar_owns_button_and_separator_geometry() {
         ActionBarOrientation::Horizontal,
         vec![
             ActionBarItem::Button(ActionBarButton::icon(
-                icons::FILES,
+                TEST_ICON,
                 "Files",
                 ButtonState::Resting,
             )),
@@ -71,12 +77,12 @@ fn action_bar_paints_button_variants_and_noninteractive_separator() {
         ActionBarOrientation::Horizontal,
         vec![
             ActionBarItem::Button(
-                ActionBarButton::icon(icons::FILES, "Files", ButtonState::Resting)
+                ActionBarButton::icon(TEST_ICON, "Files", ButtonState::Resting)
                     .with_selection(ButtonSelection::Selected),
             ),
             ActionBarItem::Separator,
             ActionBarItem::Button(ActionBarButton::icon_and_label(
-                icons::ADD,
+                TEST_ICON,
                 "Add",
                 ButtonState::Disabled,
             )),

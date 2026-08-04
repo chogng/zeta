@@ -163,8 +163,8 @@ impl NativeApp {
             .view()
             .map(|view| view.items().len())
             .unwrap_or(0);
-        let viewport = crate::composer_panel::interaction_list_bounds(interaction_bounds);
-        let content = crate::composer_panel::interaction_content_size(viewport, item_count);
+        let viewport = zeta_composer::interaction_list_bounds(interaction_bounds);
+        let content = zeta_composer::interaction_content_size(viewport, item_count);
         if self.composer_interaction_pane.apply_scroll(
             composer_interaction_scroll_command(delta),
             viewport.size,
@@ -262,7 +262,7 @@ impl NativeApp {
 fn composer_interaction_scroll_command(delta: MouseScrollDelta) -> ScrollCommand {
     let pixels = match delta {
         MouseScrollDelta::LineDelta(_, vertical) => {
-            vertical * LINES_PER_WHEEL_STEP * crate::composer_panel::INTERACTION_ROW_HEIGHT
+            vertical * LINES_PER_WHEEL_STEP * zeta_composer::INTERACTION_ROW_HEIGHT
         }
         MouseScrollDelta::PixelDelta(position) => position.y as f32,
     };

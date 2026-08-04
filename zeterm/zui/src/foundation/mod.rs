@@ -3,6 +3,7 @@
 mod animation;
 mod color;
 mod geometry;
+mod icon;
 mod identity;
 mod interaction;
 mod scheduling;
@@ -18,6 +19,10 @@ pub use geometry::Edges;
 pub use geometry::Point;
 pub use geometry::Rect;
 pub use geometry::Size;
+pub use icon::Icon;
+pub use icon::IconDefinition;
+pub use icon::IconId;
+pub use icon::IconRendering;
 pub use identity::ElementId;
 pub use interaction::AccessibilityExpansion;
 pub use interaction::AccessibilityRole;

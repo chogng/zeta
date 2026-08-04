@@ -23,11 +23,11 @@ use zeta_app_server_protocol::protocol::git::{
 };
 use zeta_app_server_protocol::protocol::model::ModelCatalogEntry;
 use zeta_app_server_protocol::protocol::session::{
-    SessionCreateParams, SessionModelSetParams, SessionThreadCreateParams,
+    SessionCreateParams, SessionRequest, SessionRequestParams, SessionRequestResult,
+    SessionSubscribeParams, SessionSubscribeResult, SessionThreadProjection,
 };
 use zeta_app_server_protocol::protocol::slash_commands::SlashCommandDefinition;
-use zeta_app_server_protocol::protocol::thread::{ThreadSubscribeParams, ThreadSubscribeResult};
-use zeta_app_server_protocol::protocol::turn::{InputItem, ShellTurnStartParams, TurnStartParams};
+use zeta_app_server_protocol::protocol::turn::InputItem;
 use zeta_app_server_protocol::protocol::workspace::WorkspaceSwitchParams;
 use zeta_protocol::{
     ModelRef, Session, SessionId, SessionStatus, SessionThreadStatus, Thread, ThreadId,
@@ -324,8 +324,8 @@ fn run_agent_session_inner(
     let events = session
         .take_events()
         .map_err(|error| anyhow!(error.to_string()))?;
-    let mut active = ensure_active_thread(&mut client, workspace_root)?;
-    publish_subscription(event_proxy, &active.subscription)?;
+    let mut active = ensure_active_session(&mut client, workspace_root)?;
+    publish_subscription(event_proxy, &active.subscription, &active.thread_id)?;
 
     let loop_result = drive_agent_session(event_proxy, commands, &events, &mut client, &mut active);
     session
@@ -339,7 +339,7 @@ fn drive_agent_session(
     commands: &Receiver<AgentSessionCommand>,
     events: &AppServerEvents,
     client: &mut AppServerRequestHandle,
-    active: &mut ActiveThread,
+    active: &mut ActiveSession,
 ) -> Result<()> {
     loop {
         loop {
@@ -354,8 +354,14 @@ fn drive_agent_session(
                     select_model(client, active, model)?;
                 }
                 Ok(AgentSessionCommand::Refresh) => {
-                    active.subscription = subscribe_thread(client, &active.thread_id)?;
-                    publish_subscription(event_proxy, &active.subscription)?;
+                    active.subscription =
+                        subscribe_session(client, &active.session_id, active.session_sequence)?;
+                    active.session_sequence = active.subscription.session.sequence;
+                    active.sequence =
+                        active_thread_projection(&active.subscription, &active.thread_id)?
+                            .thread
+                            .sequence;
+                    publish_subscription(event_proxy, &active.subscription, &active.thread_id)?;
                 }
                 Ok(AgentSessionCommand::RefreshGit) => {
                     if let Err(error) = publish_git_projection(event_proxy, client) {
@@ -429,6 +435,11 @@ fn drive_agent_session(
         }
 
         match events.recv_timeout(EVENT_POLL_INTERVAL) {
+            Ok(AppServerEvent::Notification(ServerNotification::SessionUpdate(update))) => {
+                if update.session_id == active.session_id {
+                    active.session_sequence = active.session_sequence.max(update.durable_sequence);
+                }
+            }
             Ok(AppServerEvent::Notification(ServerNotification::ThreadUpdate(update))) => {
                 if update.thread_id == active.thread_id {
                     active.sequence = active.sequence.max(update.durable_sequence);
@@ -521,18 +532,18 @@ fn client_error(error: ClientError) -> anyhow::Error {
     anyhow!(error.to_string())
 }
 
-struct ActiveThread {
+struct ActiveSession {
     session_id: SessionId,
     session_sequence: u64,
     thread_id: ThreadId,
     sequence: u64,
-    subscription: ThreadSubscribeResult,
+    subscription: SessionSubscribeResult,
 }
 
-fn ensure_active_thread(
+fn ensure_active_session(
     client: &mut AppServerRequestHandle,
     workspace_root: &Path,
-) -> Result<ActiveThread> {
+) -> Result<ActiveSession> {
     let sessions = client
         .list_sessions()
         .map_err(|error| anyhow!(error.to_string()))?
@@ -545,12 +556,13 @@ fn ensure_active_thread(
         None => create_session(client, workspace_root)?,
     };
     let (session, thread_id) = ensure_session_thread(client, session, workspace_root)?;
-    let subscription = subscribe_thread(client, &thread_id)?;
-    Ok(ActiveThread {
-        session_id: session.session_id,
-        session_sequence: session.sequence,
+    let subscription = subscribe_session(client, &session.session_id, 0)?;
+    let thread = active_thread_projection(&subscription, &thread_id)?;
+    Ok(ActiveSession {
+        session_id: subscription.session.session_id.clone(),
+        session_sequence: subscription.session.sequence,
         thread_id,
-        sequence: subscription.thread.sequence,
+        sequence: thread.thread.sequence,
         subscription,
     })
 }
@@ -577,38 +589,59 @@ fn ensure_session_thread(
     {
         return Ok((session.clone(), thread.thread_id.clone()));
     }
-    client
-        .create_session_thread(SessionThreadCreateParams {
+    let result = client
+        .request_session(SessionRequestParams {
             command_id: next_command_id("thread"),
             session_id: session.session_id,
             expected_sequence: session.sequence,
-            title: workspace_title(workspace_root),
+            request: SessionRequest::CreateThread {
+                title: workspace_title(workspace_root),
+            },
         })
-        .map(|result| (result.session, result.thread_id))
+        .map_err(|error| anyhow!(error.to_string()))?;
+    let SessionRequestResult::Thread(result) = result else {
+        return Err(anyhow!(
+            "Session request returned an unexpected Thread result"
+        ));
+    };
+    Ok((result.session, result.thread_id))
+}
+
+fn subscribe_session(
+    client: &mut AppServerRequestHandle,
+    session_id: &SessionId,
+    after_sequence: u64,
+) -> Result<SessionSubscribeResult> {
+    client
+        .subscribe_session(SessionSubscribeParams {
+            session_id: session_id.clone(),
+            after_sequence,
+        })
         .map_err(|error| anyhow!(error.to_string()))
 }
 
-fn subscribe_thread(
-    client: &mut AppServerRequestHandle,
+fn active_thread_projection<'a>(
+    subscription: &'a SessionSubscribeResult,
     thread_id: &ThreadId,
-) -> Result<ThreadSubscribeResult> {
-    client
-        .subscribe_thread(ThreadSubscribeParams {
-            thread_id: thread_id.clone(),
-            after_sequence: 0,
-        })
-        .map_err(|error| anyhow!(error.to_string()))
+) -> Result<&'a SessionThreadProjection> {
+    subscription
+        .thread_projections
+        .iter()
+        .find(|projection| &projection.thread.thread_id == thread_id)
+        .ok_or_else(|| anyhow!("Session subscription did not include active Thread"))
 }
 
 fn publish_subscription(
     event_proxy: &EventLoopProxy<NativeEvent>,
-    subscription: &ThreadSubscribeResult,
+    subscription: &SessionSubscribeResult,
+    thread_id: &ThreadId,
 ) -> Result<()> {
+    let thread = active_thread_projection(subscription, thread_id)?;
     send_event(
         event_proxy,
-        AgentSessionEvent::Snapshot(subscription.thread.clone()),
+        AgentSessionEvent::Snapshot(thread.thread.clone()),
     )?;
-    for update in &subscription.updates {
+    for update in &thread.updates {
         send_event(
             event_proxy,
             AgentSessionEvent::Update(Box::new(update.clone())),
@@ -619,60 +652,79 @@ fn publish_subscription(
 
 fn submit_agent_message(
     client: &mut AppServerRequestHandle,
-    active: &mut ActiveThread,
+    active: &mut ActiveSession,
     text: String,
 ) -> Result<()> {
     if text.trim().is_empty() {
         return Ok(());
     }
     let result = client
-        .start_turn(TurnStartParams {
+        .request_session(SessionRequestParams {
             command_id: next_command_id("turn"),
             session_id: active.session_id.clone(),
-            thread_id: active.thread_id.clone(),
             expected_sequence: active.sequence,
-            input: vec![InputItem::Text { text }],
+            request: SessionRequest::StartTurn {
+                thread_id: active.thread_id.clone(),
+                input: vec![InputItem::Text { text }],
+            },
         })
         .map_err(|error| anyhow!(error.to_string()))?;
+    let SessionRequestResult::Turn(result) = result else {
+        return Err(anyhow!(
+            "Session request returned an unexpected Turn result"
+        ));
+    };
     active.sequence = result.sequence;
     Ok(())
 }
 
 fn submit_shell_command(
     client: &mut AppServerRequestHandle,
-    active: &mut ActiveThread,
+    active: &mut ActiveSession,
     command: String,
 ) -> Result<()> {
     if command.trim().is_empty() {
         return Ok(());
     }
     let result = client
-        .start_shell_turn(ShellTurnStartParams {
+        .request_session(SessionRequestParams {
             command_id: next_command_id("shell-turn"),
             session_id: active.session_id.clone(),
-            thread_id: active.thread_id.clone(),
             expected_sequence: active.sequence,
-            command,
-            working_directory: ".".into(),
+            request: SessionRequest::StartShellTurn {
+                thread_id: active.thread_id.clone(),
+                command,
+                working_directory: ".".into(),
+            },
         })
         .map_err(|error| anyhow!(error.to_string()))?;
+    let SessionRequestResult::Turn(result) = result else {
+        return Err(anyhow!(
+            "Session request returned an unexpected Turn result"
+        ));
+    };
     active.sequence = result.sequence;
     Ok(())
 }
 
 fn select_model(
     client: &mut AppServerRequestHandle,
-    active: &mut ActiveThread,
+    active: &mut ActiveSession,
     model: ModelRef,
 ) -> Result<()> {
     let result = client
-        .set_session_model(SessionModelSetParams {
+        .request_session(SessionRequestParams {
             command_id: next_command_id("model"),
             session_id: active.session_id.clone(),
             expected_sequence: active.session_sequence,
-            model,
+            request: SessionRequest::SetModel { model },
         })
         .map_err(|error| anyhow!(error.to_string()))?;
+    let SessionRequestResult::Session(result) = result else {
+        return Err(anyhow!(
+            "Session request returned an unexpected Session result"
+        ));
+    };
     active.session_sequence = result.session.sequence;
     Ok(())
 }

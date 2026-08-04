@@ -1,5 +1,7 @@
 use super::{AppServer, ConnectionState, RpcError, core_error, decode, result};
 use base64::Engine;
+use serde::Serialize;
+use serde::de::DeserializeOwned;
 use serde_json::Value;
 use std::time::Duration;
 use zeta_app_server_protocol::protocol::common::{SchemaHash, ServerInfo};
@@ -18,8 +20,9 @@ use zeta_app_server_protocol::protocol::resources::{
 };
 use zeta_app_server_protocol::protocol::session::{
     SessionCommandParams, SessionCreateParams, SessionListResult, SessionModelSetParams,
-    SessionReadParams, SessionResult, SessionSubscribeParams, SessionSubscribeResult,
-    SessionThreadArchiveParams, SessionThreadCreateParams, SessionThreadForkParams,
+    SessionReadParams, SessionRequest, SessionRequestParams, SessionRequestResult, SessionResult,
+    SessionSubscribeParams, SessionSubscribeResult, SessionThreadArchiveParams,
+    SessionThreadCreateParams, SessionThreadForkParams, SessionThreadProjection,
     SessionThreadResult, SessionThreadRewindParams, SessionUnsubscribeParams,
 };
 use zeta_app_server_protocol::protocol::thread::{
@@ -192,14 +195,43 @@ impl AppServer {
             .sessions
             .session_updates_after(&params.session_id, params.after_sequence)
             .map_err(core_error)?;
+        let thread_projections = session
+            .threads
+            .iter()
+            .map(|membership| {
+                let thread = self
+                    .sessions
+                    .threads()
+                    .read_thread(&membership.membership.thread_id)
+                    .map_err(core_error)?;
+                let updates = self
+                    .sessions
+                    .threads()
+                    .thread_updates_after(&membership.membership.thread_id, 0)
+                    .map_err(core_error)?;
+                Ok(SessionThreadProjection {
+                    thread: thread.public_thread(),
+                    updates,
+                })
+            })
+            .collect::<Result<Vec<_>, RpcError>>()?;
         self.updates.subscribe_session(
             connection.connection_id,
-            params.session_id,
+            params.session_id.clone(),
             session.sequence,
         );
+        for projection in &thread_projections {
+            self.updates.subscribe_session_thread(
+                connection.connection_id,
+                params.session_id.clone(),
+                projection.thread.thread_id.clone(),
+                projection.thread.sequence,
+            );
+        }
         result(&SessionSubscribeResult {
             session: session.public_session(),
             updates,
+            thread_projections,
         })
     }
 
@@ -212,6 +244,178 @@ impl AppServer {
         self.updates
             .unsubscribe_session(connection.connection_id, &params.session_id);
         Ok(Value::Null)
+    }
+
+    /// Routes the canonical Session aggregate mutation request to the existing typed handlers.
+    ///
+    /// The individual RPC methods remain as compatibility entry points while product hosts move
+    /// to this Session boundary. Thread controllers are intentionally reached only after the
+    /// request has been decoded and scoped to its parent Session.
+    pub(super) fn session_request(
+        &self,
+        connection: &mut ConnectionState,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        let SessionRequestParams {
+            command_id,
+            session_id,
+            expected_sequence,
+            request,
+        } = decode(params)?;
+        let common = || SessionCommandParams {
+            command_id: command_id.clone(),
+            session_id: session_id.clone(),
+            expected_sequence,
+        };
+
+        match request {
+            SessionRequest::Complete => session_request_result(
+                self.session_complete(connection, &request_value(&common())?)?,
+                SessionRequestResult::Session,
+            ),
+            SessionRequest::Archive => session_request_result(
+                self.session_archive(connection, &request_value(&common())?)?,
+                SessionRequestResult::Session,
+            ),
+            SessionRequest::Stop => session_request_result(
+                self.session_stop(connection, &request_value(&common())?)?,
+                SessionRequestResult::Session,
+            ),
+            SessionRequest::SetModel { model } => session_request_result(
+                self.session_model_set(
+                    connection,
+                    &request_value(&SessionModelSetParams {
+                        command_id,
+                        session_id,
+                        expected_sequence,
+                        model,
+                    })?,
+                )?,
+                SessionRequestResult::Session,
+            ),
+            SessionRequest::CreateThread { title } => session_request_result(
+                self.session_thread_create(
+                    connection,
+                    &request_value(&SessionThreadCreateParams {
+                        command_id,
+                        session_id,
+                        expected_sequence,
+                        title,
+                    })?,
+                )?,
+                SessionRequestResult::Thread,
+            ),
+            SessionRequest::ForkThread {
+                parent_thread_id,
+                title,
+            } => session_request_result(
+                self.session_thread_fork(
+                    connection,
+                    &request_value(&SessionThreadForkParams {
+                        command_id,
+                        session_id,
+                        expected_sequence,
+                        parent_thread_id,
+                        title,
+                    })?,
+                )?,
+                SessionRequestResult::Thread,
+            ),
+            SessionRequest::RewindThread {
+                parent_thread_id,
+                before_turn_id,
+                title,
+            } => session_request_result(
+                self.session_thread_rewind(
+                    connection,
+                    &request_value(&SessionThreadRewindParams {
+                        command_id,
+                        session_id,
+                        expected_sequence,
+                        parent_thread_id,
+                        before_turn_id,
+                        title,
+                    })?,
+                )?,
+                SessionRequestResult::Thread,
+            ),
+            SessionRequest::ArchiveThread { thread_id } => session_request_result(
+                self.session_thread_archive(
+                    connection,
+                    &request_value(&SessionThreadArchiveParams {
+                        command_id,
+                        session_id,
+                        expected_sequence,
+                        thread_id,
+                    })?,
+                )?,
+                SessionRequestResult::Session,
+            ),
+            SessionRequest::StartTurn { thread_id, input } => session_request_result(
+                self.turn_start(
+                    connection,
+                    &request_value(&TurnStartParams {
+                        command_id,
+                        session_id,
+                        thread_id,
+                        expected_sequence,
+                        input,
+                    })?,
+                )?,
+                SessionRequestResult::Turn,
+            ),
+            SessionRequest::StartShellTurn {
+                thread_id,
+                command,
+                working_directory,
+            } => session_request_result(
+                self.shell_turn_start(
+                    connection,
+                    &request_value(&ShellTurnStartParams {
+                        command_id,
+                        session_id,
+                        thread_id,
+                        expected_sequence,
+                        command,
+                        working_directory,
+                    })?,
+                )?,
+                SessionRequestResult::Turn,
+            ),
+            SessionRequest::InterruptTurn { thread_id, turn_id } => session_request_result(
+                self.turn_interrupt(
+                    connection,
+                    &request_value(&TurnInterruptParams {
+                        command_id,
+                        session_id,
+                        thread_id,
+                        turn_id,
+                        expected_sequence,
+                    })?,
+                )?,
+                SessionRequestResult::TurnInterrupt,
+            ),
+            SessionRequest::ResolveInteraction {
+                thread_id,
+                turn_id,
+                request_id,
+                response,
+            } => session_request_result(
+                self.turn_interaction_resolve(
+                    connection,
+                    &request_value(&TurnInteractionResolveParams {
+                        command_id,
+                        session_id,
+                        thread_id,
+                        turn_id,
+                        request_id,
+                        expected_sequence,
+                        response,
+                    })?,
+                )?,
+                SessionRequestResult::Interaction,
+            ),
+        }
     }
 
     pub(super) fn session_thread_create(
@@ -230,8 +434,12 @@ impl AppServer {
                 title: params.title,
             })
             .map_err(core_error)?;
-        self.updates
-            .subscribe_thread(connection.connection_id, created.thread_id.clone(), 0);
+        self.updates.subscribe_session_thread(
+            connection.connection_id,
+            params.session_id.clone(),
+            created.thread_id.clone(),
+            0,
+        );
         self.notify_session_updates(&params.session_id, previous_sequence)?;
         self.notify_thread_updates(&created.thread_id, 0)?;
         result(&SessionThreadResult {
@@ -261,8 +469,12 @@ impl AppServer {
                 title: params.title,
             })
             .map_err(core_error)?;
-        self.updates
-            .subscribe_thread(connection.connection_id, forked.thread_id.clone(), 0);
+        self.updates.subscribe_session_thread(
+            connection.connection_id,
+            params.session_id.clone(),
+            forked.thread_id.clone(),
+            0,
+        );
         self.notify_session_updates(&params.session_id, previous_sequence)?;
         self.notify_thread_updates(&forked.thread_id, 0)?;
         result(&SessionThreadResult {
@@ -293,8 +505,12 @@ impl AppServer {
                 title: params.title,
             })
             .map_err(core_error)?;
-        self.updates
-            .subscribe_thread(connection.connection_id, rewound.thread_id.clone(), 0);
+        self.updates.subscribe_session_thread(
+            connection.connection_id,
+            params.session_id.clone(),
+            rewound.thread_id.clone(),
+            0,
+        );
         self.notify_session_updates(&params.session_id, previous_sequence)?;
         self.notify_thread_updates(&rewound.thread_id, 0)?;
         result(&SessionThreadResult {
@@ -889,6 +1105,20 @@ impl AppServer {
         self.updates.publish_thread(thread_id, &updates);
         Ok(())
     }
+}
+
+fn request_value<T: Serialize>(value: &T) -> Result<Value, RpcError> {
+    serde_json::to_value(value)
+        .map_err(|_| RpcError::new(-32000, AppServerErrorName::InternalError))
+}
+
+fn session_request_result<T: DeserializeOwned>(
+    value: Value,
+    wrap: fn(T) -> SessionRequestResult,
+) -> Result<Value, RpcError> {
+    let value = serde_json::from_value(value)
+        .map_err(|_| RpcError::new(-32000, AppServerErrorName::InternalError))?;
+    result(&wrap(value))
 }
 
 pub(super) fn resource_rpc_error(error: crate::resource_store::ResourceError) -> RpcError {

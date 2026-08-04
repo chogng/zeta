@@ -1,4 +1,4 @@
-use zeta_icons::{Icon, IconDefinition, IconId};
+use zeta_icon::{Icon, IconDefinition, IconId};
 
 use super::SceneBatch;
 use super::TextBlock;

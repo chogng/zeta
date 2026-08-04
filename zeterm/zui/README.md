@@ -17,6 +17,7 @@
 | Element row/column、fixed/fill、padding、gap 与 radius | `zui` | ✅ |
 | `ComputedElement` 与每帧 `InspectionFrame` | `zui` | ✅ |
 | geometry、paint/image/icon/text scene primitive | `zui` | ✅ |
+| Renderer-independent icon asset contract | `zeta-icon`（由 `zui` facade re-export） | 委托 |
 | Scene 稳定前缀 checkpoint 与 volatile fragment 原地替换 | `zui` | ✅；host 决定 retained boundary |
 | Retained fragment lifecycle、animation cleanup 与 deadline report | `zui::RetainedRuntime` / `zui::RetainedFragmentRegistry` | ✅；host 应用 scene/interaction cleanup |
 | Backend-neutral scalar animation、stable property key、deadline 与 advance contract | `zui::AnimationRegistry` / `zui::ScalarAnimation` | ✅；host 提供时间、调度唤醒和重绘 |
@@ -26,7 +27,7 @@
 | 命中、pointer capture、focus、键盘导航、cursor 与 accessibility snapshot | `zui` | ✅ |
 | 平台事件转换、cursor/accessibility 发布与产品命令映射 | product host / platform adapter | 委托 |
 
-允许的依赖方向是 `zeta-ui → zui`、`zeta-renderer → zui` 和
+允许的依赖方向是 `zeta-ui → zui → zeta-icon`、`zeta-renderer → zui` 和
 `backend → zeta-renderer + zui`。`zui` 不得依赖这些上层 crate。出现 `wgpu::*`、产品 identity、
 组件样式或 host reducer，意味着 ownership 已经漂移。
 

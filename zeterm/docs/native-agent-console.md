@@ -41,9 +41,9 @@ compatibility 的程序进入独立 TerminalPane。
 | Native 产品根 | `AgentWorkspace` + `ThreadTimeline` | ✅ |
 | Composer | `AgentComposer` 显式 Agent/Shell mode | ✅ |
 | Composer 可展开交互 Pane | 展示当前 View；Slash 状态委托 `zeta-slash-commands`，Native 拥有 `/model` 子 View 和 WGPU row projection | ✅ |
-| Agent authority | App Server Session/Thread subscription + gap resubscribe | ✅ |
+| Agent authority | App Server `session/subscribe` aggregate snapshot/update + gap resubscribe | ✅ |
 | Agent Tool Call | durable ToolCall/ToolResult → CommandCard | ✅ |
-| 用户直接 Shell | `turn/shell/start` → model-free durable Shell Turn | ✅ |
+| 用户直接 Shell | `session/request` → `StartShellTurn` → model-free durable Shell Turn | ✅ |
 | 流式 Agent text | transient Item delta + durable final item | ✅ |
 | 流式 Tool output | typed stdout/stderr delta + durable final ToolResult | 部分具备；local adapter 当前在捕获完成时发布分流 delta |
 | 交互式 terminal | 独立 `WorkspaceSurface::Terminal`，`Cmd/Ctrl+J` 切换 | ✅；当前为全主区域 Surface |
@@ -59,12 +59,13 @@ Thread transcript。
 | transient Agent/Tool delta | App Server update stream | 检测 stream cursor gap；gap 后重新订阅 |
 | Timeline scroll、selection、collapse | Native presentation | 可丢弃、可从 snapshot 重建 |
 | Composer text、mode、IME 与 caret | Native `ComposerEditor` + `zeta-editor::CodeEditorDocument` | mode 明确，不猜测输入内容 |
-| Composer 信息栏 | Native `composer_panel` | 固定在输入框上方，展示当前 mode 的提示信息 |
-| Composer 交互 Pane 宿主 | Native `composer_panel` + `ComposerInteractionPaneState` + `zeta-ui::{ScrollView,ListView}` | 只放置 active View、保留 viewport offset，并委托通用 UI 基座完成裁剪、滚动与可见范围；不解释 Slash、Model 或 Plan |
+| Composer 面板与 interaction list geometry | [`zeta-composer`](../composer/README.md) | 只消费 logical bounds、preferred heights 与 item count，返回 panel、固定行、list viewport 和 selection scroll geometry |
+| Composer 信息栏 | Native `composer_panel` | 消费 `zeta-composer` 返回的 info-bar bounds，展示当前 mode 的提示信息 |
+| Composer 交互 Pane 宿主 | Native `composer_panel` + `ComposerInteractionPaneState` + `zeta-ui::{ScrollView,ListView}` | 只放置 active View、保留 viewport offset，并委托 `zeta-composer` 与通用 UI 基座完成 geometry、裁剪、滚动与可见范围；不解释 Slash、Model 或 Plan |
 | Composer active View model | Native `ComposerInteractionModel` | 当前实现选择 Slash Command / Model Picker View；不拥有 Pane 几何与滚动 |
 | Slash Command interaction model | `zeta-slash-commands::SlashCommandsState` | 消费初始化命令快照，拥有 query、selection、dismiss 与 completion；滚动属于各 renderer |
 | Composer Changes 文件数与增删行 | `zeta-git::GitTextDiffSnapshot` | 只过滤工作区范围并展示；点击后刷新并展开 Changes Pane |
-| Agent submission | `turn/start` | 提交 UserInput 并消费 canonical result |
+| Agent submission | `session/request` → `StartTurn` | 提交 UserInput 并消费 canonical result |
 | 用户直接 Shell submission | Shell Turn contract | 经过同一 policy、approval、sandbox 与 durable commit |
 | Agent-managed Tool execution | Core Tool scheduler | 只投影 ToolCall/ToolResult |
 | Terminal grid、alternate screen 与 direct input | `zeta-terminal` + TerminalPane host | 不反推 Agent/Turn 状态 |
@@ -87,7 +88,8 @@ enum ComposerSubmission {
 }
 ```
 
-Agent mode 调用 `turn/start`。Shell mode 调用独立、self-documenting 的 Shell Turn method；
+Agent mode 通过 `session/request` 的 `StartTurn` operation 提交。Shell mode 通过同一 Session
+request 的 `StartShellTurn` operation 提交；
 不得增加 `turn/start(..., false)` 一类模糊参数，也不得根据文本是否像命令来猜 mode。
 
 Composer 使用 `CodeEditorPresentation::Compact`：保留多行文档、selection、undo/redo 和 IME，
@@ -96,7 +98,8 @@ Composer 使用 `CodeEditorPresentation::Compact`：保留多行文档、selecti
 在首行/末行边界使用 Up/Down 浏览已提交命令，并在返回末端时恢复尚未提交的 draft。该行为属于
 `AgentComposer`，不属于通用 `CodeEditor`。
 
-Composer Panel 的固定顺序是“信息栏 → 输入框 → 底部 toolbar”；信息栏用于显示 `/ for commands`
+`zeta-composer::ComposerPanelLayout` 定义 Composer Panel 的固定顺序“信息栏 → 输入框 → 底部 toolbar”；
+信息栏用于显示 `/ for commands`
 等上下文提示。其上方的 Composer Interaction Pane 是可展开、可收起的 View 宿主：Panel 只为它
 分配位置，`ComposerInteractionPaneState` 只保留 offset，`zeta-ui::ScrollView` / `ListView` 只根据
 viewport 与 content geometry 完成裁剪、滚动、scrollbar 和可见范围投影。三者都不解释挂载的是
@@ -116,8 +119,10 @@ Agent 后续可以从 Thread context 看见这些事实。
 
 ## 投影与恢复
 
-Native 首次选择 Thread 时调用 `thread/subscribe`，按顺序应用 snapshot、durable gap 与实时
-notification。Native 不实现第二份 Thread reducer：
+Native 首次选择 Session 时调用 `session/subscribe`。App Server 在这个 Session port 内装配
+Session snapshot、durable gap、child Thread projection 和 connection-local live update；Native
+只选择 active Thread 并应用 projection，不直接访问 Thread subscription endpoint，也不实现第二份
+Thread reducer：
 
 - durable update 到达后，以 canonical snapshot/gap 推进 projection；
 - transient `ItemStarted` / `ItemDelta` 只改善低延迟展示；

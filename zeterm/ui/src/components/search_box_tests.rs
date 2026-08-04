@@ -3,7 +3,14 @@ use crate::{
     CaretVisibility, Color, Component, InputBoxState, InputBoxStateColors, InputBoxStyle, Rect,
     TextInput, TextInputLayoutEngine, TextStyle, UiScene,
 };
-use zeta_icons::icons;
+use zui::{Icon, IconDefinition, IconId};
+
+const TEST_ICON: Icon = Icon::new(
+    IconId::new("search"),
+    IconDefinition::symbolic(
+        br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><circle cx="7" cy="7" r="5"/><path d="m10.5 10.5 4 4"/></svg>"#,
+    ),
+);
 
 #[test]
 fn search_box_reuses_input_box_chrome_and_reserves_leading_icon_space() {
@@ -23,7 +30,7 @@ fn search_box_reuses_input_box_chrome_and_reserves_leading_icon_space() {
         bounds,
         "Search sessions...",
         InputBoxState::Focused(CaretVisibility::Visible),
-        SearchBoxStyle::new(input_style, Color::rgb(90, 90, 90)),
+        SearchBoxStyle::new(input_style, TEST_ICON, Color::rgb(90, 90, 90)),
         &TextInput::new(),
         &mut engine,
     );
@@ -32,7 +39,7 @@ fn search_box_reuses_input_box_chrome_and_reserves_leading_icon_space() {
     search_box.paint(&mut scene);
 
     assert_eq!(scene.rects()[0].bounds(), bounds);
-    assert_eq!(scene.icons()[0].icon(), icons::SEARCH);
+    assert_eq!(scene.icons()[0].icon(), TEST_ICON);
     assert_eq!(
         scene.icons()[0].bounds(),
         Rect::from_xywh(18.0, 27.0, 14.0, 14.0)
