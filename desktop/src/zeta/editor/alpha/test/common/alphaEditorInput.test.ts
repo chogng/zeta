@@ -11,6 +11,8 @@ test("Alpha is the default text editor with canonical language IDs", () => {
   assert.equal(matchAlphaEditor({ resource: URI.file("C:\\project\\view.tsx") }), EditorPaneMatch.Default);
   assert.equal(alphaLanguageForInput({ resource: URI.file("C:\\project\\view.tsx") }), "typescriptreact");
   assert.equal(alphaLanguageForInput({ resource: URI.file("C:\\project\\settings.jsonc") }), "jsonc");
+  assert.equal(matchAlphaEditor({ resource: URI.parse("untitled:/Untitled-1") }), EditorPaneMatch.Default);
+  assert.equal(alphaLanguageForInput({ resource: URI.parse("untitled:/Untitled-1"), languageId: "typescript" }), "typescript");
   assert.equal(matchAlphaEditor({ resource: URI.file("C:\\project\\binary.bin") }), EditorPaneMatch.None);
 });
 

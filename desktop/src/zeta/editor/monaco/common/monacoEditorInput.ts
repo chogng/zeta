@@ -26,7 +26,7 @@ export function matchMonacoEditor(input: EditorInput): EditorPaneMatch {
 
 /** Resolves a stable Monaco language identifier from content metadata. */
 export function monacoLanguageForInput(input: EditorInput): string {
-  const languageId = resolveTextResourceLanguageId(input);
+  const languageId = input.languageId ?? resolveTextResourceLanguageId(input);
   if (languageId === "typescriptreact") return "typescript";
   if (languageId === "javascriptreact") return "javascript";
   return languageId;

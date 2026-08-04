@@ -1,5 +1,6 @@
 import "./media/editorpart.css";
 import type { IContextMenuProvider } from "../../../../base/browser/contextmenu.js";
+import type { URI } from "../../../../base/common/uri.js";
 import { Dimension, type IDimension } from "../../../../base/browser/geometry.js";
 import { SplitView, type ISplitViewView } from "../../../../base/browser/ui/splitview/splitview.js";
 import type { IMenuService } from "../../../../platform/actions/common/menuService.js";
@@ -57,6 +58,7 @@ export interface IEditorPartOptions {
     readonly menuService: IMenuService;
     readonly contextMenuProvider: IContextMenuProvider;
   };
+  readonly saveAsResource?: (defaultName: string) => Promise<URI | undefined>;
 }
 
 /** Owns EditorGroup layout and delegates editor behavior to the active group. */
@@ -67,6 +69,7 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
   private _activeGroup: EditorGroup;
   private readonly tabDragAndDrop: EditorTabDragAndDropController;
   private dimension = Dimension.Zero;
+  private readonly saveAsResource: ((defaultName: string) => Promise<URI | undefined>) | undefined;
 
   override get minimumWidth(): number { return 120; }
   override get minimumHeight(): number { return 119; }
@@ -88,7 +91,11 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
       languageResolver: options.languageResolver,
       diffApi: options.diffApi,
       titleActions: options.titleActions,
+      ...(options.saveAsResource ? {
+        onSave: (group: IEditorGroup, input: EditorInput, pane: IEditorPane) => this.saveEditor(group, input, pane),
+      } : {}),
     };
+    this.saveAsResource = options.saveAsResource;
     this.tabDragAndDrop = new EditorTabDragAndDropController((event) => {
       this.dropEditor(event);
     });
@@ -196,6 +203,20 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
     this._activeGroup.focus();
   }
 
+  private async saveEditor(group: IEditorGroup, input: EditorInput, pane: IEditorPane): Promise<boolean> {
+    if (input.resource.scheme !== "untitled") throw new Error("Save As is only available for untitled editors");
+    if (!this.saveAsResource) throw new Error("Editor Save As is unavailable in this host");
+    if (!pane.saveAs) throw new Error("The active editor cannot save this document");
+    const target = await this.saveAsResource(editorInputLabel(input));
+    if (!target) return false;
+    await pane.saveAs(target);
+    await group.replaceEditor(input, {
+      resource: target,
+      label: editorInputLabel({ resource: target }),
+    });
+    return true;
+  }
+
   private createGroup(): EditorGroupHost {
     let group: EditorGroup;
     group = this.own(new EditorGroup({
@@ -234,6 +255,13 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
         console.error("Failed to move Editor tab", error);
       });
   }
+}
+
+function editorInputLabel(input: Pick<EditorInput, "resource" | "label">): string {
+  if (input.label?.trim()) return input.label;
+  const path = decodeURIComponent(input.resource.path).replace(/\/+$/, "");
+  const separator = path.lastIndexOf("/");
+  return path.slice(separator + 1) || input.resource.toString();
 }
 
 interface EditorGroupHost {

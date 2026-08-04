@@ -1,13 +1,26 @@
+import type { DisposableHandle } from "../../ipc/common/ipc.js";
+
 export const NATIVE_HOST_TOGGLE_DEVELOPER_TOOLS_CHANNEL =
   "zeta:native-host:toggle-developer-tools";
 export const NATIVE_HOST_OPEN_FOLDER_CHANNEL =
   "zeta:native-host:open-folder";
 export const NATIVE_HOST_SET_WINDOW_THEME_CHANNEL =
   "zeta:native-host:set-window-theme";
+export const NATIVE_HOST_SAVE_FILE_CHANNEL =
+  "zeta:native-host:save-file";
+export const NATIVE_HOST_GET_ACCESSIBILITY_SUPPORT_CHANNEL =
+  "zeta:native-host:get-accessibility-support";
+export const NATIVE_HOST_ACCESSIBILITY_SUPPORT_CHANGED_CHANNEL =
+  "zeta:native-host:accessibility-support-changed";
 
 export interface INativeWindowTheme {
   readonly backgroundColor: string;
   readonly symbolColor: string;
+}
+
+/** Native save-dialog defaults supplied by a renderer Workbench. */
+export interface INativeSaveFileOptions {
+  readonly defaultName?: string;
 }
 
 /** Window-scoped native capabilities exposed to an Electron renderer. */
@@ -15,6 +28,9 @@ export interface INativeHostApi {
   openFolder(): Promise<void>;
   setWindowTheme(theme: INativeWindowTheme): Promise<void>;
   toggleDeveloperTools(): Promise<void>;
+  saveFile(options?: INativeSaveFileOptions): Promise<string | undefined>;
+  isAccessibilitySupportEnabled(): Promise<boolean>;
+  onDidChangeAccessibilitySupport(listener: (enabled: boolean) => void): DisposableHandle;
 }
 
 export function validateOpenFolder(value: unknown): undefined {
@@ -29,6 +45,38 @@ export function validateToggleDeveloperTools(value: unknown): undefined {
     throw new Error("toggle developer tools does not accept parameters");
   }
   return undefined;
+}
+
+export function validateAccessibilitySupportRead(value: unknown): undefined {
+  if (value !== undefined) {
+    throw new Error("accessibility support read does not accept parameters");
+  }
+  return undefined;
+}
+
+export function validateSaveFileOptions(value: unknown): INativeSaveFileOptions {
+  if (value === undefined) return {};
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new Error("save file options must be an object");
+  }
+  const candidate = value as Record<string, unknown>;
+  const keys = Object.keys(candidate).sort();
+  if (keys.length > 1 || (keys.length === 1 && keys[0] !== "defaultName")) {
+    throw new Error("save file options contain unknown fields");
+  }
+  if (candidate.defaultName !== undefined && (typeof candidate.defaultName !== "string" || candidate.defaultName.trim().length === 0)) {
+    throw new Error("save file default name must be a non-empty string");
+  }
+  return {
+    ...(candidate.defaultName === undefined ? {} : { defaultName: candidate.defaultName }),
+  };
+}
+
+export function validateAccessibilitySupport(value: unknown): boolean {
+  if (typeof value !== "boolean") {
+    throw new Error("accessibility support must be a boolean");
+  }
+  return value;
 }
 
 export function validateNativeWindowTheme(value: unknown): INativeWindowTheme {

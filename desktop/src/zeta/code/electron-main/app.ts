@@ -78,6 +78,7 @@ import {
 import {
   nativeHostIpcRoutes,
 } from "../../platform/native/electron-main/nativeHostIpc.js";
+import { NATIVE_HOST_ACCESSIBILITY_SUPPORT_CHANGED_CHANNEL } from "../../platform/native/common/nativeHost.js";
 import { searchIpcRoutes } from "../../platform/search/electron-main/searchIpcRoutes.js";
 import { sessionIpcRoutes } from "../../platform/sessions/electron-main/sessionIpcRoutes.js";
 import {
@@ -148,9 +149,11 @@ export class ZetaApplication extends DisposableOwner {
 
     app.on("before-quit", this.onBeforeQuit);
     app.on("will-quit", this.onWillQuit);
+    app.on("accessibility-support-changed", this.onAccessibilitySupportChanged);
     this.defer(() => {
       app.removeListener("before-quit", this.onBeforeQuit);
       app.removeListener("will-quit", this.onWillQuit);
+      app.removeListener("accessibility-support-changed", this.onAccessibilitySupportChanged);
     });
   }
 
@@ -235,7 +238,9 @@ export class ZetaApplication extends DisposableOwner {
   ): Promise<IAnyWorkspaceIdentifier> {
     try {
       return await workspaces.resolveStartupWorkspace({
-        arguments: process.argv.slice(app.isPackaged ? 1 : 2),
+        arguments: process.argv
+          .slice(app.isPackaged ? 1 : 2)
+          .filter((argument) => argument !== app.getAppPath()),
         cwd: process.cwd(),
       });
     } catch (error) {
@@ -425,6 +430,14 @@ export class ZetaApplication extends DisposableOwner {
             throw workspaceTransitionError(transition.failure);
           }
         },
+        saveFile: async (options) => {
+          const result = await dialog.showSaveDialog(window, {
+            title: "Save File",
+            ...(options.defaultName ? { defaultPath: options.defaultName } : {}),
+          });
+          return result.canceled || !result.filePath ? undefined : result.filePath;
+        },
+        isAccessibilitySupportEnabled: () => app.isAccessibilitySupportEnabled(),
         setWindowTheme: ({ backgroundColor, symbolColor }) => {
           if (process.platform === "win32" || process.platform === "linux") {
             window.setTitleBarOverlay({ color: backgroundColor, symbolColor, height: 35 });
@@ -527,6 +540,15 @@ export class ZetaApplication extends DisposableOwner {
         app.quit();
       }
     })();
+  };
+
+  private readonly onAccessibilitySupportChanged = (
+    _event: ElectronEvent,
+    enabled: boolean,
+  ): void => {
+    const window = this.mainWindow;
+    if (!window || window.isDestroyed()) return;
+    window.webContents.send(NATIVE_HOST_ACCESSIBILITY_SUPPORT_CHANGED_CHANNEL, enabled);
   };
 
   private readonly onWillQuit = (): void => {

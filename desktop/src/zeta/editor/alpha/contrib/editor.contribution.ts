@@ -20,6 +20,7 @@ registerEditorPane({
       createSession: createBrowserAlphaEditorSession,
       textMateService: options.textMateService,
       languageFeaturesService: options.languageFeaturesService,
+      onSave: options.onSave,
     });
   },
 });

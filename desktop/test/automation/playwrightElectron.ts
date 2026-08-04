@@ -11,7 +11,6 @@ export interface ElectronLaunchResult {
 export async function launchElectron(options: ElectronLaunchOptions): Promise<ElectronLaunchResult> {
   const configuration = resolveElectronConfiguration(options);
   const application = await _electron.launch({
-    executablePath: configuration.executablePath,
     args: [...configuration.args],
     cwd: configuration.cwd,
     env: configuration.env,

@@ -9,7 +9,10 @@ import { assertDefined } from "../../base/common/types.js";
 import type {
   ProductConfiguration,
 } from "../../product/common/product.js";
+import { URI } from "../../base/common/uri.js";
 import type { AppServerConnectionState } from "../../platform/app-server/common/appServerApi.js";
+import { AccessibilityService } from "../../platform/accessibility/browser/accessibilityService.js";
+import { IAccessibilityService } from "../../platform/accessibility/common/accessibility.js";
 import type { IRendererHost } from "../../platform/renderer/common/rendererHost.js";
 import type {
   INativeHostApi,
@@ -181,6 +184,10 @@ import { GitService } from "../services/git/browser/gitService.js";
 import { IGitService } from "../services/git/common/gitService.js";
 import { ChatService } from "../services/chat/browser/chatService.js";
 import { IChatService } from "../services/chat/common/chatService.js";
+import { AccessibleViewInformationService, IAccessibleViewInformationService } from "../services/accessibility/common/accessibleViewInformationService.js";
+import { NativeAccessibilityService } from "../services/accessibility/electron-browser/accessibilityService.js";
+import { BrowserUntitledTextEditorService } from "../services/untitled/browser/browserUntitledTextEditorService.js";
+import { IUntitledTextEditorService } from "../services/untitled/common/untitledTextEditorService.js";
 
 /** Host-specific inputs required to construct a workbench. */
 export interface IStartWorkbenchOptions {
@@ -273,6 +280,8 @@ export class Workbench extends DisposableOwner {
     services.set(IFileService, fileService);
     const textFileService = new TextFileService(fileService);
     services.set(ITextFileService, textFileService);
+    const untitledTextEditorService = this.own(new BrowserUntitledTextEditorService());
+    services.set(IUntitledTextEditorService, untitledTextEditorService);
     const textMateService = this.own(new BrowserTextMateService());
     services.set(ITextMateService, textMateService);
     const languageFeaturesService = this.own(new LanguageFeaturesService());
@@ -315,6 +324,7 @@ export class Workbench extends DisposableOwner {
     this.workbenchWindow = workbenchWindow;
     this.storage = storage;
     services.set(IStorageService, storage);
+    services.set(IAccessibleViewInformationService, this.own(new AccessibleViewInformationService(storage)));
     const themeService = this.own(new ThemeService(
       resolveWorkbenchColorTheme(
         configuration.getValue(WorkbenchConfiguration.colorTheme),
@@ -364,6 +374,21 @@ export class Workbench extends DisposableOwner {
     services.set(ICommandService, commands);
     const contextKeys = this.own(new ContextKeyService());
     services.set(IContextKeyService, contextKeys);
+    const accessibilityService = this.own(nativeHostApi
+      ? new NativeAccessibilityService({
+        ownerDocument,
+        root: workbenchRoot,
+        contextKeyService: contextKeys,
+        configurationService: configuration,
+        nativeHostApi,
+      })
+      : new AccessibilityService({
+        ownerDocument,
+        root: workbenchRoot,
+        contextKeyService: contextKeys,
+        configurationService: configuration,
+      }));
+    services.set(IAccessibilityService, accessibilityService);
     this.own(bindWorkbenchContextKeys(contextKeys, workspaceContext));
     const viewDescriptors = this.own(new ViewDescriptorService({
       contextKeyService: contextKeys,
@@ -457,6 +482,12 @@ export class Workbench extends DisposableOwner {
       languageFeaturesService,
       languageResolver: languageFeaturesService,
       diffApi: api.diff,
+      saveAsResource: nativeHostApi
+        ? async (defaultName) => {
+          const filePath = await nativeHostApi.saveFile({ defaultName });
+          return filePath ? URI.file(filePath) : undefined;
+        }
+        : undefined,
       titleActions: {
         menuService: menus,
         contextMenuProvider: contextMenus,

@@ -13,7 +13,9 @@ import {
   ServiceCollection,
 } from "../../../../platform/instantiation/common/instantiation.js";
 import {
+  NATIVE_HOST_GET_ACCESSIBILITY_SUPPORT_CHANNEL,
   NATIVE_HOST_OPEN_FOLDER_CHANNEL,
+  NATIVE_HOST_SAVE_FILE_CHANNEL,
   NATIVE_HOST_SET_WINDOW_THEME_CHANNEL,
   NATIVE_HOST_TOGGLE_DEVELOPER_TOOLS_CHANNEL,
 } from "../../../../platform/native/common/nativeHost.js";
@@ -36,11 +38,17 @@ import { IWorkspaceOpenService } from "../../../../workbench/services/workspaces
 test("native host routes validate folder opening and developer tools", async () => {
   let folderOpens = 0;
   let toggles = 0;
+  let savedFileOptions: unknown;
   const windowThemes: unknown[] = [];
   const routes = nativeHostIpcRoutes({
     openFolder: async () => {
       folderOpens += 1;
     },
+    saveFile: async (options) => {
+      savedFileOptions = options;
+      return "C:\\project\\draft.txt";
+    },
+    isAccessibilitySupportEnabled: () => false,
     setWindowTheme: (theme) => {
       windowThemes.push(theme);
     },
@@ -51,6 +59,9 @@ test("native host routes validate folder opening and developer tools", async () 
   const openFolder = routes.find(
     ({ channel }) => channel === NATIVE_HOST_OPEN_FOLDER_CHANNEL,
   );
+  const accessibilitySupport = routes.find(
+    ({ channel }) => channel === NATIVE_HOST_GET_ACCESSIBILITY_SUPPORT_CHANNEL,
+  );
   const toggleDeveloperTools = routes.find(
     ({ channel }) =>
       channel === NATIVE_HOST_TOGGLE_DEVELOPER_TOOLS_CHANNEL,
@@ -59,8 +70,13 @@ test("native host routes validate folder opening and developer tools", async () 
     ({ channel }) => channel === NATIVE_HOST_SET_WINDOW_THEME_CHANNEL,
   );
   assert.ok(openFolder);
+  const saveFile = routes.find(
+    ({ channel }) => channel === NATIVE_HOST_SAVE_FILE_CHANNEL,
+  );
+  assert.ok(accessibilitySupport);
   assert.ok(setWindowTheme);
   assert.ok(toggleDeveloperTools);
+  assert.ok(saveFile);
 
   assert.throws(
     () => openFolder.validate(null),
@@ -68,6 +84,18 @@ test("native host routes validate folder opening and developer tools", async () 
   );
   await openFolder.invoke(openFolder.validate(undefined));
   assert.equal(folderOpens, 1);
+  assert.throws(
+    () => saveFile.validate({ defaultName: "" }),
+    /default name must be a non-empty string/,
+  );
+  const validatedSaveFile = saveFile.validate({ defaultName: "Untitled-1" });
+  assert.equal(await saveFile.invoke(validatedSaveFile), "C:\\project\\draft.txt");
+  assert.deepEqual(savedFileOptions, { defaultName: "Untitled-1" });
+  assert.throws(
+    () => accessibilitySupport.validate(null),
+    /does not accept parameters/,
+  );
+  assert.equal(accessibilitySupport.invoke(accessibilitySupport.validate(undefined)), false);
   assert.throws(
     () => setWindowTheme.validate({ backgroundColor: "white", symbolColor: "#000000" }),
     /backgroundColor must be an opaque hexadecimal color/,
@@ -96,6 +124,9 @@ test("desktop commands are available from the command palette", async () => {
   let toggles = 0;
   services.set(INativeHostService, {
     openFolder: async () => {},
+    saveFile: async () => undefined,
+    isAccessibilitySupportEnabled: async () => false,
+    onDidChangeAccessibilitySupport: () => ({ dispose() {} }),
     setWindowTheme: async () => {},
     async toggleDeveloperTools() {
       toggles += 1;

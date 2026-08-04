@@ -6,12 +6,14 @@ import { launchBrowser } from "./playwrightBrowser.js";
 import { launchElectron } from "./playwrightElectron.js";
 import type { PlaywrightApplication, PlaywrightDriver } from "./playwrightDriver.js";
 import { playwrightTargetForProject, type PlaywrightTarget } from "./testTarget.js";
+import { createTestWorkspace, disposeTestWorkspace, type TestWorkspace } from "./testWorkspace.js";
 import type { Workbench } from "./workbench.js";
 
 interface PlaywrightFixtures {
   readonly target: PlaywrightTarget;
   readonly application: PlaywrightApplication;
   readonly driver: PlaywrightDriver;
+  readonly testWorkspace: TestWorkspace;
   readonly workbench: Workbench;
 }
 
@@ -19,7 +21,15 @@ export const test = base.extend<PlaywrightFixtures>({
   target: async ({ baseURL }, use, testInfo) => {
     await use(playwrightTargetForProject(testInfo.project.name, baseURL));
   },
-  driver: async ({ target }, use) => {
+  testWorkspace: async ({}, use) => {
+    const workspace = await createTestWorkspace();
+    try {
+      await use(workspace);
+    } finally {
+      await disposeTestWorkspace(workspace);
+    }
+  },
+  driver: async ({ target, testWorkspace }, use) => {
     if (target.kind === "browser") {
       const { application, driver } = await launchBrowser(target);
       try {
@@ -31,7 +41,11 @@ export const test = base.extend<PlaywrightFixtures>({
     }
 
     const userDataDirectory = await mkdtemp(join(tmpdir(), "zeta-playwright-"));
-    const { application, driver } = await launchElectron({ appServerMode: target.appServerMode, userDataDirectory });
+    const { application, driver } = await launchElectron({
+      appServerMode: target.appServerMode,
+      userDataDirectory,
+      workspaceDirectory: testWorkspace.directory,
+    });
     try {
       await use(driver);
     } finally {

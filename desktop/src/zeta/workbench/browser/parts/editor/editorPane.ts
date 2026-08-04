@@ -4,6 +4,7 @@ import type {
 import type {
   IDisposable,
 } from "../../../../base/common/lifecycle.js";
+import type { URI } from "../../../../base/common/uri.js";
 import type {
   IConfigurationService,
 } from "../../../../platform/configuration/common/configuration.js";
@@ -35,6 +36,8 @@ export interface IEditorPane extends IDisposable {
   layout(dimension: IDimension): void;
   setVisible(visibility: EditorPaneVisibility): void;
   focus(): void;
+  /** Serializes and persists the active document to a new resource when supported. */
+  saveAs?(resource: URI): Promise<void>;
 }
 
 export interface EditorPaneCreationOptions {
@@ -44,6 +47,7 @@ export interface EditorPaneCreationOptions {
   readonly textMateService?: ITextMateService;
   readonly languageFeaturesService?: ILanguageFeaturesService;
   readonly diffApi?: IDiffApi;
+  readonly onSave?: () => Promise<void | boolean>;
 }
 
 export enum EditorPaneMatch {

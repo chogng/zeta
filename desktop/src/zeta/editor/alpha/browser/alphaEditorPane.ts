@@ -3,6 +3,7 @@ import { type IDimension } from "../../../base/browser/geometry.js";
 import { throwIfCancelled } from "../../../base/common/cancellation.js";
 import { DisposableOwner, DisposableSlot, type IDisposable } from "../../../base/common/lifecycle.js";
 import { assertDefined } from "../../../base/common/types.js";
+import type { URI } from "../../../base/common/uri.js";
 import { type ITextMateService } from "../../../workbench/services/textMate/common/textMateService.js";
 import { type ILanguageFeaturesService } from "../common/services/languageService.js";
 import { type EditorInput } from "../../../workbench/browser/parts/editor/editorInput.js";
@@ -44,6 +45,7 @@ export interface AlphaEditorPaneOptions {
   readonly placeholder?: string;
   readonly showUnicodeHighlights?: boolean;
   readonly fontZoom?: AlphaEditorSessionOptions["fontZoom"];
+  readonly onSave?: () => Promise<void | boolean>;
 }
 
 /** Workbench pane that composes Alpha's native model, input, view, and language services. */
@@ -103,7 +105,9 @@ export class AlphaEditorPane extends DisposableOwner implements IEditorPane {
         placeholder: this.options.placeholder,
         showUnicodeHighlights: this.options.showUnicodeHighlights,
         fontZoom: this.options.fontZoom,
-        onSave: () => modelReference.save(new AbortController().signal),
+        onSave: input.resource.scheme === "untitled"
+          ? this.options.onSave
+          : () => modelReference.save(new AbortController().signal),
         onRevert: () => modelReference.revert(new AbortController().signal),
       });
       throwIfCancelled(signal, "Alpha editor input loading was cancelled");
@@ -140,6 +144,10 @@ export class AlphaEditorPane extends DisposableOwner implements IEditorPane {
 
   getValue(): string {
     return this.sessions.value?.getValue() ?? "";
+  }
+
+  async saveAs(resource: URI): Promise<void> {
+    await this.resourceStore.save({ resource, text: this.getValue() }, new AbortController().signal);
   }
 
   get isDirty(): boolean {

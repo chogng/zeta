@@ -1,9 +1,11 @@
 import { ConfigurationsRegistry } from "../../platform/configuration/common/configurationRegistry.js";
+import { AccessibilityConfiguration } from "../../platform/accessibility/common/accessibility.js";
 import "../../platform/theme/common/themeConfiguration.js";
 import { defaultWorkbenchColorThemePreference, SystemColorThemePreference, WorkbenchThemesRegistry } from "./theme.js";
 
 /** Typed configuration keys owned by the workbench layer. */
 export const WorkbenchConfiguration = Object.freeze({
+  ...AccessibilityConfiguration,
   colorTheme: ConfigurationsRegistry.registerConfiguration<string>({
     key: "workbench.colorTheme",
     defaultValue: defaultWorkbenchColorThemePreference,

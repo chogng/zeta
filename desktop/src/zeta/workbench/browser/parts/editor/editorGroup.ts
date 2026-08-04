@@ -32,6 +32,7 @@ export interface IEditorGroup {
   ): Promise<IEditorPane>;
   activateEditor(input: EditorInput): IEditorPane;
   closeEditor(input: EditorInput): void;
+  replaceEditor(input: EditorInput, replacement: EditorInput): Promise<void>;
   setContent(content: Element): void;
   layout(dimension: IDimension): void;
   focus(): void;
@@ -48,6 +49,7 @@ export interface EditorGroupOptions {
   readonly languageFeaturesService?: ILanguageFeaturesService;
   readonly languageResolver?: TextResourceLanguageResolver;
   readonly diffApi?: IDiffApi;
+  readonly onSave?: (group: IEditorGroup, input: EditorInput, pane: IEditorPane) => Promise<boolean>;
   readonly titleActions?: EditorTitleActions;
   readonly onDidActivate?: () => void;
   readonly dragAndDrop?: IEditorTabDragAndDrop;
@@ -74,6 +76,7 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
   private readonly languageFeaturesService: ILanguageFeaturesService | undefined;
   private readonly languageResolver: TextResourceLanguageResolver | undefined;
   private readonly diffApi: IDiffApi | undefined;
+  private readonly onSave: ((group: IEditorGroup, input: EditorInput, pane: IEditorPane) => Promise<boolean>) | undefined;
   private readonly titleControl: EditorTitleControl;
   private readonly watermarkElement: HTMLElement;
   private readonly entries: EditorGroupEntry[] = [];
@@ -92,6 +95,7 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
     this.languageFeaturesService = options.languageFeaturesService;
     this.languageResolver = options.languageResolver;
     this.diffApi = options.diffApi;
+    this.onSave = options.onSave;
     this.element = options.ownerDocument.createElement("section");
     this.element.className = "zeta-editor-group";
     this.element.setAttribute("aria-label", "Editor group");
@@ -191,6 +195,7 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
       return existing.paneInstance.pane;
     }
 
+    let createdPane: IEditorPane | undefined;
     const pane = descriptor.create({
       ownerDocument: this.element.ownerDocument,
       configurationService: this.configurationService,
@@ -198,7 +203,14 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
       textMateService: this.textMateService,
       languageFeaturesService: this.languageFeaturesService,
       diffApi: this.diffApi,
+      ...(this.onSave ? {
+        onSave: () => {
+          if (!createdPane) return Promise.reject(new Error("Editor save is unavailable"));
+          return this.onSave!(this, input, createdPane);
+        },
+      } : {}),
     });
+    createdPane = pane;
     if (pane.id !== descriptor.id) {
       pane.dispose();
       throw new TypeError(
@@ -281,6 +293,15 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
     }
     this.renderContent();
     this.renderChrome();
+  }
+
+  async replaceEditor(input: EditorInput, replacement: EditorInput): Promise<void> {
+    const index = this.entries.findIndex(
+      (candidate) => editorInputKey(candidate.input) === editorInputKey(input),
+    );
+    if (index < 0) throw new RangeError(`Editor is not open in this group: ${input.resource}`);
+    await this.openEditor(replacement, { index });
+    this.closeEditor(input);
   }
 
   getEditorInsertionIndex(target: EditorInput | undefined, position: EditorTabDropPosition): number {

@@ -99,7 +99,7 @@ export interface AlphaEditorSessionOptions {
   readonly whenLanguageSupportReady?: () => Promise<unknown>;
   readonly onLanguageError?: (error: unknown) => void;
   readonly onSaveError?: (error: unknown) => void;
-  readonly onSave?: () => Promise<void>;
+  readonly onSave?: () => Promise<void | boolean>;
   readonly onRevert?: () => Promise<void>;
   readonly indentation?: EditorIndentationOptions;
   readonly lineWrapping?: AlphaEditorLineWrapping;
@@ -131,7 +131,7 @@ export class AlphaEditorSession extends DisposableOwner {
   private readonly onLanguageError: (error: unknown) => void;
   private readonly onSaveError: (error: unknown) => void;
   private readonly modelReference: TextModelReference;
-  private readonly onSave: (() => Promise<void>) | undefined;
+  private readonly onSave: (() => Promise<void | boolean>) | undefined;
   private readonly onRevert: (() => Promise<void>) | undefined;
   private readonly beforeSave: (() => void) | undefined;
   private analysisGeneration = 0;

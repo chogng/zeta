@@ -210,3 +210,16 @@ button, input, select, textarea { font: inherit; }
   color: var(--zeta-selection-foreground);
   background: var(--zeta-selection-background);
 }
+
+.zeta-workbench.zeta-reduce-motion *,
+.zeta-workbench.zeta-reduce-motion *::before,
+.zeta-workbench.zeta-reduce-motion *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  scroll-behavior: auto !important;
+  transition-duration: 0.01ms !important;
+}
+
+.zeta-workbench.zeta-underline-links a {
+  text-decoration-line: underline;
+}
