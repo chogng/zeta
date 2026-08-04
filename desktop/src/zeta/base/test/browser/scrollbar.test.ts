@@ -64,6 +64,36 @@ test("ScrollableElement exposes a persistent directional content container", () 
   dom.window.close();
 });
 
+test("ScrollableElement reveals a descendant at the nearest horizontal edge", () => {
+  const dom = new JSDOM("<!doctype html><body></body>");
+  const scrollable = new ScrollableElement({
+    ownerDocument: dom.window.document,
+    direction: "horizontal",
+  });
+  const item = dom.window.document.createElement("span");
+  scrollable.append(item);
+  dom.window.document.body.append(scrollable.element);
+  scrollable.reveal(item);
+  installMetrics(scrollable.scrollableElement, {
+    width: 100,
+    height: 50,
+    scrollWidth: 300,
+    scrollHeight: 50,
+  });
+  scrollable.scrollableElement.getBoundingClientRect = () => rect(0, 0, 100, 50);
+  item.getBoundingClientRect = () => rect(150, 0, 200, 20);
+  scrollable.layout();
+
+  assert.equal(scrollable.state.left, 100);
+  assert.equal(scrollable.state.top, 0);
+  assert.throws(
+    () => scrollable.reveal(dom.window.document.createElement("span")),
+    /only reveal its descendants/,
+  );
+  scrollable.dispose();
+  dom.window.close();
+});
+
 test("Scrollbar owns two-axis state, elements, visibility, and ARIA", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
   const scrollbar = new Scrollbar({
@@ -285,6 +315,53 @@ test("Scrollbar supports keyboard, track clicks, and thumb dragging", () => {
   dom.window.close();
 });
 
+test("Horizontal scrollbar supports keyboard, track clicks, and thumb dragging", () => {
+  const dom = new JSDOM("<!doctype html><body></body>");
+  const scrollbar = new Scrollbar({
+    ownerDocument: dom.window.document,
+    direction: "horizontal",
+    horizontal: "visible",
+  });
+  dom.window.document.body.append(scrollbar.element);
+  const viewport = requireElement(
+    scrollbar.element,
+    ".zeta-scrollbar-viewport",
+  );
+  installMetrics(viewport, {
+    width: 200,
+    height: 100,
+    scrollWidth: 600,
+    scrollHeight: 100,
+  });
+  scrollbar.layout();
+  const horizontal = requireElement(
+    scrollbar.element,
+    ".zeta-scrollbar-track-horizontal",
+  );
+  const thumb = requireElement(horizontal, ".zeta-scrollbar-thumb");
+  horizontal.getBoundingClientRect = () => rect(0, 90, 200, 100);
+
+  horizontal.dispatchEvent(new dom.window.KeyboardEvent("keydown", {
+    bubbles: true,
+    cancelable: true,
+    key: "ArrowRight",
+  }));
+  assert.equal(scrollbar.state.left, 40);
+
+  horizontal.dispatchEvent(horizontalPointerEvent(dom.window, "pointerdown", 150));
+  assert.equal(Math.round(scrollbar.state.left), 350);
+
+  scrollbar.scrollTo(0, 0);
+  thumb.dispatchEvent(horizontalPointerEvent(dom.window, "pointerdown", 0));
+  dom.window.dispatchEvent(horizontalPointerEvent(dom.window, "pointermove", 25));
+  dom.window.dispatchEvent(horizontalPointerEvent(dom.window, "pointerup", 25));
+  assert.equal(Math.round(scrollbar.state.left), 75);
+  assert.equal(horizontal.dataset.active, undefined);
+
+  scrollbar.dispose();
+  dom.window.close();
+});
+
 test("Scrollbar can always consume wheel input", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
   const scrollbar = new Scrollbar({
@@ -372,4 +449,32 @@ function pointerEvent(
     cancelable: true,
     clientY,
   }) as unknown as PointerEvent;
+}
+
+function horizontalPointerEvent(
+  targetWindow: typeof browserEnvironment.window,
+  type: string,
+  clientX: number,
+): PointerEvent {
+  return new targetWindow.MouseEvent(type, {
+    bubbles: true,
+    button: 0,
+    buttons: type === "pointerup" ? 0 : 1,
+    cancelable: true,
+    clientX,
+  }) as unknown as PointerEvent;
+}
+
+function rect(left: number, top: number, right: number, bottom: number): DOMRect {
+  return {
+    left,
+    top,
+    right,
+    bottom,
+    x: left,
+    y: top,
+    width: right - left,
+    height: bottom - top,
+    toJSON: () => ({}),
+  } as DOMRect;
 }

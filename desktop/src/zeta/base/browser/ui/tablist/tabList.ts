@@ -166,5 +166,10 @@ export class TabList<T> extends DisposableOwner {
     ]);
     if (selectedId !== undefined) this.actionBar.setTabStop(selectedId);
     this.scrollable.layout();
+    if (selectedId !== undefined) {
+      const selectedTab = [...this.actionBar.element.querySelectorAll<HTMLElement>(".zeta-tab")]
+        .find((element) => element.dataset.actionId === selectedId);
+      if (selectedTab) this.scrollable.reveal(selectedTab);
+    }
   }
 }

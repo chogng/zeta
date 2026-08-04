@@ -75,6 +75,7 @@
 
 .zeta-scrollbar-track[data-visibility="auto"] {
   opacity: 0;
+  pointer-events: none;
 }
 
 .zeta-scrollbar:hover >
@@ -85,6 +86,11 @@
   .zeta-scrollbar-track[data-visibility="auto"],
 .zeta-scrollbar-track[data-active="true"] {
   opacity: 1;
+  pointer-events: auto;
+}
+
+.zeta-scrollbar-track[aria-disabled="true"] {
+  pointer-events: none;
 }
 
 .zeta-scrollbar-thumb {

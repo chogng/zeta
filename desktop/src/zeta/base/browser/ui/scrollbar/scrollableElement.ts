@@ -75,6 +75,7 @@ export class ScrollableElement extends DisposableOwner {
   private readonly onScrollOption: ((position: ScrollPosition) => void) | undefined;
   private readonly onDidScrollEmitter: Emitter<ScrollableScrollEvent>;
   private _state = initialState;
+  private pendingReveal: Element | undefined;
   private scrollActivityTimer: number | undefined;
 
   constructor(options: ScrollableElementOptions = {}) {
@@ -137,6 +138,7 @@ export class ScrollableElement extends DisposableOwner {
     );
 
     this.defer(() => {
+      this.pendingReveal = undefined;
       const timer = this.scrollActivityTimer;
       if (timer !== undefined) ownerWindow(element).clearTimeout(timer);
       element.remove();
@@ -215,6 +217,7 @@ export class ScrollableElement extends DisposableOwner {
       maximumLeft,
       maximumTop,
     });
+    this.applyPendingReveal();
   }
 
   scrollTo(left: number, top: number): void {
@@ -226,6 +229,54 @@ export class ScrollableElement extends DisposableOwner {
       this._state.left + deltaLeft,
       this._state.top + deltaTop,
     );
+  }
+
+  /** Reveals a descendant at the nearest visible edge on the enabled axes. */
+  reveal(element: Element): void {
+    if (!this.contentElement.contains(element)) {
+      throw new RangeError("ScrollableElement can only reveal its descendants");
+    }
+    this.pendingReveal = element;
+    this.layout();
+  }
+
+  private applyPendingReveal(): void {
+    const element = this.pendingReveal;
+    if (!element) return;
+    if (!this.contentElement.contains(element)) {
+      this.pendingReveal = undefined;
+      return;
+    }
+    if (
+      (this.options.direction !== "vertical" && this._state.width <= 0) ||
+      (this.options.direction !== "horizontal" && this._state.height <= 0)
+    ) return;
+    this.pendingReveal = undefined;
+    const viewportBounds = this.scrollableElement.getBoundingClientRect();
+    const elementBounds = element.getBoundingClientRect();
+    let left = this._state.left;
+    let top = this._state.top;
+    if (this.options.direction !== "vertical") {
+      const viewportLeft = viewportBounds.left;
+      const viewportRight = viewportBounds.left + this._state.width -
+        (this.vertical.rendered ? this.options.scrollbarSize : 0);
+      if (elementBounds.left < viewportLeft) {
+        left += elementBounds.left - viewportLeft;
+      } else if (elementBounds.right > viewportRight) {
+        left += elementBounds.right - viewportRight;
+      }
+    }
+    if (this.options.direction !== "horizontal") {
+      const viewportTop = viewportBounds.top;
+      const viewportBottom = viewportBounds.top + this._state.height -
+        (this.horizontal.rendered ? this.options.scrollbarSize : 0);
+      if (elementBounds.top < viewportTop) {
+        top += elementBounds.top - viewportTop;
+      } else if (elementBounds.bottom > viewportBottom) {
+        top += elementBounds.bottom - viewportBottom;
+      }
+    }
+    this.setScrollPosition(left, top);
   }
 
   private handleNativeScroll(): void {

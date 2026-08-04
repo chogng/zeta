@@ -87,6 +87,39 @@ test("TabList exposes its ActionBar edge treatment as a presentation", () => {
   dom.window.close();
 });
 
+test("TabList reveals the selected tab when horizontal content overflows", () => {
+  const dom = new JSDOM("<!doctype html><body></body>");
+  const tabList = new TabList({
+    ownerDocument: dom.window.document,
+    ariaLabel: "Overflowing tabs",
+    onActivate: () => undefined,
+  });
+  dom.window.document.body.append(tabList.element);
+  const viewport = tabList.element.querySelector<HTMLElement>(
+    ".zeta-scrollbar-viewport",
+  );
+  assert.ok(viewport);
+  installMetrics(viewport, {
+    width: 100,
+    height: 24,
+    scrollWidth: 300,
+    scrollHeight: 24,
+  });
+  viewport.getBoundingClientRect = () => rect(0, 0, 100, 24);
+  const originalGetBoundingClientRect =
+    dom.window.HTMLElement.prototype.getBoundingClientRect;
+  dom.window.HTMLElement.prototype.getBoundingClientRect = function (): DOMRect {
+    if (this.classList.contains("zeta-tab")) return rect(150, 0, 200, 24);
+    return originalGetBoundingClientRect.call(this);
+  };
+
+  tabList.setTabs([tab("first"), tab("second")], "second");
+
+  assert.equal(viewport.scrollLeft, 100);
+  tabList.dispose();
+  dom.window.close();
+});
+
 test("TabList can opt its items into native drag-source presentation", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
   const tabList = new TabList({
@@ -274,4 +307,47 @@ function dragEvent(targetWindow: { readonly Event: typeof Event }, type: string,
   const event = new targetWindow.Event(type, { bubbles: true, cancelable: true }) as DragEvent;
   Object.defineProperty(event, "clientX", { value: clientX });
   return event;
+}
+
+function installMetrics(
+  viewport: HTMLElement,
+  metrics: {
+    readonly width: number;
+    readonly height: number;
+    readonly scrollWidth: number;
+    readonly scrollHeight: number;
+  },
+): void {
+  Object.defineProperties(viewport, {
+    clientWidth: {
+      configurable: true,
+      get: () => metrics.width,
+    },
+    clientHeight: {
+      configurable: true,
+      get: () => metrics.height,
+    },
+    scrollWidth: {
+      configurable: true,
+      get: () => metrics.scrollWidth,
+    },
+    scrollHeight: {
+      configurable: true,
+      get: () => metrics.scrollHeight,
+    },
+  });
+}
+
+function rect(left: number, top: number, right: number, bottom: number): DOMRect {
+  return {
+    left,
+    top,
+    right,
+    bottom,
+    x: left,
+    y: top,
+    width: right - left,
+    height: bottom - top,
+    toJSON: () => ({}),
+  } as DOMRect;
 }
