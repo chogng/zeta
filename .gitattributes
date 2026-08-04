@@ -1,0 +1,2 @@
+# Keep generated design-token artifacts byte-stable across platforms.
+/resources/design-tokens/* text eol=lf
