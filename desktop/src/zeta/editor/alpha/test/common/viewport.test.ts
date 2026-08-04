@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { Emitter, type Event } from "../../../../base/common/event.js";
-import { TextRange } from "../../common/text.js";
-import { TextModel } from "../../common/textModel.js";
-import { EditorViewportChangeReason, EditorViewportModel, type EditorViewportLineSource } from "../../common/viewport.js";
+import { TextRange } from "../../common/core/text.js";
+import { TextModel } from "../../common/model/textModel.js";
+import { EditorViewportChangeReason, EditorViewportModel, type EditorViewportLineSource } from "../../common/viewLayout/editorViewportModel.js";
 
 test("EditorViewportModel calculates visible and overscan line ranges", () => {
   using model = new TextModel(lines(100));

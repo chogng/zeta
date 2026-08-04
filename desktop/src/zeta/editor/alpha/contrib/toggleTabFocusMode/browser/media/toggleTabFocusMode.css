@@ -1,0 +1,7 @@
+.zeta-alpha-editor.tab-focus-mode {
+  border-top: 2px solid var(--zeta-focus-border);
+}
+
+.zeta-alpha-editor.tab-focus-mode-active {
+  border-top-color: var(--zeta-editor-foreground);
+}

@@ -2,15 +2,15 @@ import { strict as assert } from "node:assert";
 import test from "node:test";
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { DisposableOwner, DisposableStore } from "../../../../base/common/lifecycle.js";
-import { createLanguageCompletionInvokeContext, LanguageCompletionProviderRegistry, type LanguageCompletionRequest } from "../../language/common/languageCompletionProviders.js";
-import { LANGUAGE_COMPLETION_LANE, LanguageCompletionProviderWorker, LanguageCompletionService, type LanguageCompletionWorker } from "../../language/common/languageCompletionService.js";
-import { languageCompletionWireCodec } from "../../language/common/languageCompletionWire.js";
-import { LanguageCompletionItemKind } from "../../language/common/languageCompletions.js";
-import { createLanguageWordCompletionProvider } from "../../language/common/languageWordCompletionProvider.js";
-import { LanguageWorkerRemoteError, LanguageWorkerWireClient, LanguageWorkerWireServer, type LanguageWorkerWireClientPort } from "../../language/common/languageWorkerWire.js";
-import { LanguageRequestStatus, type LanguageWorkerRequest } from "../../language/common/languageRequestCoordinator.js";
-import { TextPosition, TextRange } from "../../common/text.js";
-import { TextModel } from "../../common/textModel.js";
+import { createLanguageCompletionInvokeContext, LanguageCompletionProviderRegistry, type LanguageCompletionRequest } from "../../common/languages/completion/languageCompletionProviders.js";
+import { LANGUAGE_COMPLETION_LANE, LanguageCompletionProviderWorker, LanguageCompletionService, type LanguageCompletionWorker } from "../../common/languages/completion/languageCompletionService.js";
+import { languageCompletionWireCodec } from "../../common/languages/completion/languageCompletionWire.js";
+import { LanguageCompletionItemKind } from "../../common/languages/completion/languageCompletions.js";
+import { createLanguageWordCompletionProvider } from "../../common/languages/completion/languageWordCompletionProvider.js";
+import { LanguageWorkerRemoteError, LanguageWorkerWireClient, LanguageWorkerWireServer, type LanguageWorkerWireClientPort } from "../../common/languages/languageWorkerWire.js";
+import { LanguageRequestStatus, type LanguageWorkerRequest } from "../../common/languages/languageRequestCoordinator.js";
+import { TextPosition, TextRange } from "../../common/core/text.js";
+import { TextModel } from "../../common/model/textModel.js";
 
 test("Completion service crosses a structured-clone worker boundary", async () => {
   const text = "console\nconst connection = con";
@@ -35,7 +35,7 @@ test("Completion service crosses a structured-clone worker boundary", async () =
   assert.equal(outcome.status, LanguageRequestStatus.Applied);
   const result = service.results.result!.value;
   assert.deepEqual(result.items.map(item => item.label), ["connection", "console", "const"]);
-  assert.equal(result.items.every(item => item.providerId === "alpha.word"), true);
+  assert.equal(result.items.every(item => item.providerId === "language.word"), true);
   assert.equal(result.position instanceof TextPosition, true);
   assert.equal(result.items[0]!.range instanceof TextRange, true);
   assert.deepEqual(result.items[0]!.range, TextRange.from(
@@ -202,7 +202,7 @@ test("Wire rejects inconsistent snapshots and unsupported protocol responses", a
   using server = new LanguageWorkerWireServer(serverPort, languageCompletionWireCodec, worker);
   const response = nextMessage(requester);
   requester.send({
-    protocol: "zeta.alpha.language-worker",
+    protocol: "zeta.language-worker",
     version: 4,
     kind: "request",
     requestId: 1,
@@ -219,7 +219,7 @@ test("Wire rejects inconsistent snapshots and unsupported protocol responses", a
   using model = new TextModel("value");
   const pending = client.run(request(model, 1), new AbortController().signal);
   peerPort.send({
-    protocol: "zeta.alpha.language-worker",
+    protocol: "zeta.language-worker",
     version: 5,
     kind: "result",
     requestId: 1,
@@ -243,7 +243,7 @@ test("Invalid incremental synchronization drops the mirror and poisons its clien
   await client.run(request(model, 1), new AbortController().signal);
 
   clientPort.send({
-    protocol: "zeta.alpha.language-worker",
+    protocol: "zeta.language-worker",
     version: 4,
     kind: "sync",
     previousVersion: 1,

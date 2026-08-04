@@ -1,11 +1,11 @@
 import { raceCancellation } from "../../../../base/common/cancellation.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
-import { LanguageAnalysisModuleWorkerClient } from "../../../../editor/alpha/language/common/languageAnalysisModuleWorkerClient.js";
-import { type LanguageAnalysisRequest } from "../../../../editor/alpha/language/common/languageAnalysisProviders.js";
-import { type LanguageAnalysisLane, type LanguageAnalysisResult, type LanguageAnalysisWorker } from "../../../../editor/alpha/language/common/languageAnalysisService.js";
-import { type LanguageWorkerModelSynchronizer, type LanguageWorkerRequest, type LanguageWorkerResultDisposition, type LanguageWorkerResultSettler } from "../../../../editor/alpha/language/common/languageRequestCoordinator.js";
-import { type LanguageWorkerWireClientPort } from "../../../../editor/alpha/language/common/languageWorkerWire.js";
-import { type TextModelChange } from "../../../../editor/alpha/common/text.js";
+import { LanguageAnalysisModuleWorkerClient } from "../../../../editor/alpha/common/languages/analysis/languageAnalysisModuleWorkerClient.js";
+import { type LanguageAnalysisRequest } from "../../../../editor/alpha/common/languages/analysis/languageAnalysisProviders.js";
+import { type LanguageAnalysisLane, type LanguageAnalysisResult, type LanguageAnalysisWorker } from "../../../../editor/alpha/common/languages/analysis/languageAnalysisService.js";
+import { type LanguageWorkerModelSynchronizer, type LanguageWorkerRequest, type LanguageWorkerResultDisposition, type LanguageWorkerResultSettler } from "../../../../editor/alpha/common/languages/languageRequestCoordinator.js";
+import { type LanguageWorkerWireClientPort } from "../../../../editor/alpha/common/languages/languageWorkerWire.js";
+import { type TextModelChange } from "../../../../editor/alpha/common/core/text.js";
 import { type TextMateGrammarCatalog, type TextMateGrammarCatalogSource } from "./textMateGrammarCatalog.js";
 import { TextMateGrammarCatalogWireClient } from "./textMateGrammarCatalogWire.js";
 import { type TextMateScopeTheme, type TextMateScopeThemeSource } from "./textMateScopeTheme.js";

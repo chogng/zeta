@@ -1,6 +1,6 @@
 import { type IDisposable } from "../../../../base/common/lifecycle.js";
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
-import { type LanguageAnalysisWorkerFactory } from "../../../../editor/alpha/language/common/languageAnalysisService.js";
+import { type LanguageAnalysisWorkerFactory } from "../../../../editor/alpha/common/languages/analysis/languageAnalysisService.js";
 import { type ITextMateGrammarService } from "./textMateGrammarService.js";
 import { type TextMateScopeThemeSource } from "./textMateScopeTheme.js";
 

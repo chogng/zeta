@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { TextPosition } from "../../common/text.js";
-import { TextModel } from "../../common/textModel.js";
-import { parseAlphaGotoLocation } from "../../common/gotoLocation.js";
+import { TextPosition } from "../../common/core/text.js";
+import { TextModel } from "../../common/model/textModel.js";
+import { parseAlphaGotoLocation } from "../../common/commands/gotoLocation.js";
 
 test("Go to Line parses one-based line and column inputs with clamping", () => {
   using model = new TextModel("zero\none\ntwo");

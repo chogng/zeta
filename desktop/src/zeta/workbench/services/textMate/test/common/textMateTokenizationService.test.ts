@@ -4,11 +4,11 @@ import { resolve } from "node:path";
 import test from "node:test";
 import * as onigurumaNamespace from "vscode-oniguruma";
 import { type IOnigLib } from "vscode-textmate";
-import { LanguageAnalysisProviderRegistry } from "../../../../../editor/alpha/language/common/languageAnalysisProviders.js";
-import { LanguageAnalysisService } from "../../../../../editor/alpha/language/common/languageAnalysisService.js";
-import { LanguageRequestStatus } from "../../../../../editor/alpha/language/common/languageRequestCoordinator.js";
-import { TextPosition, TextRange } from "../../../../../editor/alpha/common/text.js";
-import { TextModel } from "../../../../../editor/alpha/common/textModel.js";
+import { LanguageAnalysisProviderRegistry } from "../../../../../editor/alpha/common/languages/analysis/languageAnalysisProviders.js";
+import { LanguageAnalysisService } from "../../../../../editor/alpha/common/languages/analysis/languageAnalysisService.js";
+import { LanguageRequestStatus } from "../../../../../editor/alpha/common/languages/languageRequestCoordinator.js";
+import { TextPosition, TextRange } from "../../../../../editor/alpha/common/core/text.js";
+import { TextModel } from "../../../../../editor/alpha/common/model/textModel.js";
 import { createTextMateAnalysisProvider, TEXTMATE_ANALYSIS_PROVIDER_ID } from "../../common/textMateAnalysisProvider.js";
 import { createTextMateAnalysisModule, TEXTMATE_ANALYSIS_MODULE_ID } from "../../common/textMateAnalysisModule.js";
 import { TextMateGrammarRegistry } from "../../common/textMateGrammarRegistry.js";
@@ -76,7 +76,7 @@ test("TextMate tokenization uses real Oniguruma scopes across lines", async () =
 });
 
 test("vendored VS Code JSON grammar tokenizes through the common service", async () => {
-  const content = await readFile(resolve("src/zeta/workbench/services/textMate/browser/grammars/JSON.tmLanguage.json"), "utf8");
+  const content = await readFile(resolve("../resources/extensions/json/syntaxes/JSON.tmLanguage.json"), "utf8");
   using registry = new TextMateGrammarRegistry();
   using registration = registry.register({
     languageId: "json",
@@ -92,6 +92,28 @@ test("vendored VS Code JSON grammar tokenizes through the common service", async
   assert.equal(tokenTypes.includes("string"), true);
   assert.equal(tokenTypes.includes("constant"), true);
   assert.equal(tokenTypes.includes("number"), true);
+});
+
+test("TextMate grammar metadata reaches runtime configuration and token projection", async () => {
+  using registry = new TextMateGrammarRegistry();
+  using registration = registry.register({
+    languageId: "demo",
+    scopeName: "source.demo",
+    embeddedLanguages: { "meta.embedded.demo": "javascript" },
+    tokenTypes: { "variable.other.demo": "string" },
+    balancedBracketScopes: ["*"],
+    unbalancedBracketScopes: ["string.quoted"],
+    loadGrammar: () => demoGrammar(),
+  });
+  const definition = registry.currentSnapshot.getDefinitionForLanguage("demo")!;
+  assert.deepEqual(definition.embeddedLanguages, { "meta.embedded.demo": "javascript" });
+  assert.deepEqual(definition.tokenTypes, { "variable.other.demo": "string" });
+  assert.deepEqual(definition.balancedBracketScopes, ["*"]);
+  assert.deepEqual(definition.unbalancedBracketScopes, ["string.quoted"]);
+  using tokenization = new TextMateTokenizationService(registry, onigLib);
+  using model = new TextModel("value");
+
+  assert.equal((await tokenization.tokenize("demo", model.createSnapshot(), new AbortController().signal))!.tokens[0]!.tokenType, "string");
 });
 
 test("TextMate runtime loads registered injection grammars", async () => {

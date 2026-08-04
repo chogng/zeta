@@ -1,11 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { type DiffComputationRequest, type IDiffComputationService } from "../../../../common/models/diff/diffComputationService.js";
-import { DiffModel } from "../../../../common/models/diff/diffModel.js";
-import { InlineDiffComputationService } from "../../../../common/models/diff/inlineDiffComputationService.js";
-import { computeLineDiff, type LineDiff } from "../../../../common/models/diff/lineDiff.js";
-import { TextPosition, TextRange } from "../../../../common/text.js";
-import { TextModel } from "../../../../common/textModel.js";
+import { type DiffComputationRequest, type IDiffComputationService } from "../../../../common/diff/diffComputationService.js";
+import { DiffModel } from "../../../../common/diff/diffModel.js";
+import { LineDiffKind, type LineDiff } from "../../../../common/diff/lineDiff.js";
+import { TextPosition, TextRange } from "../../../../common/core/text.js";
+import { TextModel } from "../../../../common/model/textModel.js";
 
 test("DiffModel publishes only version-pinned computation results", async () => {
   using original = new TextModel("before");
@@ -21,11 +20,11 @@ test("DiffModel publishes only version-pinned computation results", async () => 
   }]);
   const second = computationService.takeRequest();
   assert.equal(first.signal.aborted, true);
-  first.resolve(computeLineDiff(first.request.original.text, first.request.modified.text));
+  first.resolve(createModifiedDiff());
   await Promise.resolve();
   assert.equal(model.state.kind, "loading");
 
-  second.resolve(computeLineDiff(second.request.original.text, second.request.modified.text));
+  second.resolve(createModifiedDiff());
   await waitForReady(model);
   const readyState = model.state;
   assert.equal(readyState.kind, "ready");
@@ -35,17 +34,17 @@ test("DiffModel publishes only version-pinned computation results", async () => 
   assert.equal(model.diff?.rows[0]?.kind, "modified");
 });
 
-test("DiffModel exposes an inline computation result without owning its sources", async () => {
+test("DiffModel exposes a computation result without owning its sources", async () => {
   using original = new TextModel("same\nold");
   using modified = new TextModel("same\nnew");
-  using computationService = new InlineDiffComputationService();
+  using computationService = new ResolvedDiffComputationService();
   using model = new DiffModel({ original, modified, computationService });
 
   await waitForReady(model);
 
   assert.equal(model.original, original);
   assert.equal(model.modified, modified);
-  assert.equal(model.diff?.rows.length, 2);
+  assert.equal(model.diff?.rows.length, 1);
   model.dispose();
   assert.equal(original.getText(), "same\nold");
   assert.equal(modified.getText(), "same\nnew");
@@ -75,6 +74,39 @@ class ControlledDiffComputationService implements IDiffComputationService {
   [Symbol.dispose](): void {
     this.dispose();
   }
+}
+
+class ResolvedDiffComputationService implements IDiffComputationService {
+  compute(_request: DiffComputationRequest, signal: AbortSignal): Promise<LineDiff> {
+    signal.throwIfAborted();
+    return Promise.resolve(createModifiedDiff());
+  }
+
+  dispose(): void {}
+
+  [Symbol.dispose](): void {
+    this.dispose();
+  }
+}
+
+function createModifiedDiff(): LineDiff {
+  return Object.freeze({
+    rows: Object.freeze([Object.freeze({
+      kind: LineDiffKind.Modified,
+      originalLineIndex: 0,
+      modifiedLineIndex: 0,
+      originalChanges: Object.freeze([]),
+      modifiedChanges: Object.freeze([]),
+    })]),
+    hunks: Object.freeze([Object.freeze({
+      rowStart: 0,
+      rowEnd: 1,
+      originalStartLineIndex: 0,
+      originalLineCount: 1,
+      modifiedStartLineIndex: 0,
+      modifiedLineCount: 1,
+    })]),
+  });
 }
 
 function waitForReady(model: DiffModel): Promise<void> {

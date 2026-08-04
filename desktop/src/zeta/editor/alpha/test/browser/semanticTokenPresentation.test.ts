@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { AlphaSemanticTokenModifier, AlphaSemanticTokenPresentation, createAlphaSemanticTokenSource, projectAlphaSemanticTokenLine, resolveAlphaSemanticTokenModifiers, resolveAlphaSemanticTokenPresentation, type AlphaResolvedSemanticToken } from "../../language/browser/semanticTokenPresentation.js";
-import { LanguageResultAcceptance } from "../../language/common/languageResultStore.js";
-import { LanguageTokenLineIndex } from "../../language/common/languageTokenLineIndex.js";
-import { createLanguageTokenStore, type LanguageToken } from "../../language/common/languageResults.js";
-import { TextPosition, TextRange } from "../../common/text.js";
-import { TextModel } from "../../common/textModel.js";
+import { AlphaSemanticTokenModifier, AlphaSemanticTokenPresentation, createAlphaSemanticTokenSource, projectAlphaSemanticTokenLine, resolveAlphaSemanticTokenModifiers, resolveAlphaSemanticTokenPresentation, type AlphaResolvedSemanticToken } from "../../browser/view/semanticTokenPresentation.js";
+import { LanguageResultAcceptance } from "../../common/languages/languageResultStore.js";
+import { LanguageTokenLineIndex } from "../../common/tokens/languageTokenLineIndex.js";
+import { createLanguageTokenStore, type LanguageToken } from "../../common/languages/languageResults.js";
+import { TextPosition, TextRange } from "../../common/core/text.js";
+import { TextModel } from "../../common/model/textModel.js";
 
 test("Default resolver maps only Alpha's explicit semantic vocabulary", () => {
   assert.equal(resolveAlphaSemanticTokenPresentation(token(0, 0, 1, "keyword")), AlphaSemanticTokenPresentation.Keyword);

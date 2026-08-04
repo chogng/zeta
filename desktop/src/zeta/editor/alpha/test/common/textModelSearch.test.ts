@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { TextPosition } from "../../common/text.js";
-import { TextRange } from "../../common/text.js";
-import { TextModel } from "../../common/textModel.js";
-import { findNextTextMatch } from "../../common/textModelSearch.js";
-import { findTextMatches } from "../../common/textModelSearch.js";
-import { TextSearchPatternKind } from "../../common/textModelSearch.js";
-import { TextSearchQueryError } from "../../common/textModelSearch.js";
+import { TextPosition } from "../../common/core/text.js";
+import { TextRange } from "../../common/core/text.js";
+import { TextModel } from "../../common/model/textModel.js";
+import { findNextTextMatch } from "../../common/model/textModelSearch.js";
+import { findTextMatches } from "../../common/model/textModelSearch.js";
+import { TextSearchPatternKind } from "../../common/model/textModelSearch.js";
+import { TextSearchQueryError } from "../../common/model/textModelSearch.js";
 
 test("literal search is case-insensitive by default and preserves UTF-16 ranges", () => {
   using model = new TextModel("Alpha 😀 alpha\nALPHA");

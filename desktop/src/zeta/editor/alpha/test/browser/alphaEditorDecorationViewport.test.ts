@@ -1,16 +1,16 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { AlphaDecorationPresentation, createAlphaDecorationSource } from "../../browser/decorationPresentation.js";
-import { type AlphaTextMeasurer } from "../../browser/fontMetrics.js";
-import { createAlphaLanguageDiagnosticSource, resolveAlphaLanguageDiagnosticPresentation } from "../../language/browser/languageDiagnosticPresentation.js";
-import { TextDecorationCollection } from "../../common/decoration.js";
-import { LanguageDiagnosticDecorationBridge } from "../../language/common/languageDiagnosticDecorations.js";
-import { LanguageResultAcceptance } from "../../language/common/languageResultStore.js";
-import { LanguageDiagnosticSeverity, createLanguageDiagnosticStore } from "../../language/common/languageResults.js";
-import { TextPosition, TextRange } from "../../common/text.js";
-import { TextModel } from "../../common/textModel.js";
-import { TrackedRangeStickiness } from "../../common/trackedRange.js";
+import { AlphaDecorationPresentation, createAlphaDecorationSource } from "../../browser/view/decorationPresentation.js";
+import { type AlphaTextMeasurer } from "../../browser/view/fontMetrics.js";
+import { createAlphaLanguageDiagnosticSource, resolveAlphaLanguageDiagnosticPresentation } from "../../contrib/gotoError/browser/languageDiagnosticPresentation.js";
+import { TextDecorationCollection } from "../../common/model/decorationCollection.js";
+import { LanguageDiagnosticDecorationBridge } from "../../contrib/gotoError/common/diagnosticDecorations.js";
+import { LanguageResultAcceptance } from "../../common/languages/languageResultStore.js";
+import { LanguageDiagnosticSeverity, createLanguageDiagnosticStore } from "../../common/languages/languageResults.js";
+import { TextPosition, TextRange } from "../../common/core/text.js";
+import { TextModel } from "../../common/model/textModel.js";
+import { TrackedRangeStickiness } from "../../common/model/trackedRange.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
@@ -28,10 +28,10 @@ for (const [name, value] of Object.entries({
 }
 
 const { AlphaEditorTextDirection, AlphaEditorViewport } = await import(
-  "../../browser/alphaEditorViewport.js"
+  "../../browser/view/editorViewport.js"
 );
 const { AlphaEditorLineWrapping } = await import(
-  "../../browser/visualLineProjection.js"
+  "../../browser/view/visualLineProjection.js"
 );
 
 test("Decoration sources project, update, and follow tracked model ranges", () => {
@@ -281,7 +281,7 @@ test("Versioned diagnostics project named severity underlines and invalidate", (
           range: TextRange.from(TextPosition.at(0, 1), TextPosition.at(0, 3)),
           severity: LanguageDiagnosticSeverity.Error,
           message: "error",
-          source: "alpha.lexical",
+          source: "language.lexical",
           code: "E100",
         },
         {
@@ -310,7 +310,7 @@ test("Versioned diagnostics project named severity underlines and invalidate", (
   })), [{
     presentation: AlphaDecorationPresentation.ErrorUnderline,
     lineIndex: "0",
-    title: "alpha.lexical E100: error",
+    title: "language.lexical E100: error",
   }, {
     presentation: AlphaDecorationPresentation.WarningUnderline,
     lineIndex: "1",

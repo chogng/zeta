@@ -7780,6 +7780,8 @@ dependencies = [
  "zeta-auto-review",
  "zeta-config",
  "zeta-core",
+ "zeta-diff",
+ "zeta-extensions",
  "zeta-file-system",
  "zeta-file-watcher",
  "zeta-git",
@@ -7961,6 +7963,16 @@ dependencies = [
  "zeta-protocol",
  "zeta-sandboxing",
  "zeta-workspace",
+]
+
+[[package]]
+name = "zeta-extensions"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
 ]
 
 [[package]]

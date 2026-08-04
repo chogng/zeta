@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { PieceTreeTextBuffer } from "../../common/pieceTreeTextBuffer.js";
+import { PieceTreeTextBuffer } from "../../common/model/pieceTreeTextBuffer.js";
 
 test("PieceTreeTextBuffer matches a string oracle across random edits", () => {
   const random = createRandom(0x71ece);

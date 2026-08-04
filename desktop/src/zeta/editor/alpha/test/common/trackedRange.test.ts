@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { TextPosition, TextRange } from "../../common/text.js";
-import { TextModel } from "../../common/textModel.js";
-import { TrackedRangeStickiness, type TrackedRange } from "../../common/trackedRange.js";
+import { TextPosition, TextRange } from "../../common/core/text.js";
+import { TextModel } from "../../common/model/textModel.js";
+import { TrackedRangeStickiness, type TrackedRange } from "../../common/model/trackedRange.js";
 
 const position = TextPosition.at;
 const range = (

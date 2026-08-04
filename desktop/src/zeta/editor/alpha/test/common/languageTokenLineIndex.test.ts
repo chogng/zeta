@@ -1,14 +1,14 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
-import { languageAnalysisWireCodec } from "../../language/common/languageAnalysisWire.js";
-import { LANGUAGE_TOKEN_LANE, type LanguageAnalysisResult } from "../../language/common/languageAnalysisService.js";
-import { LanguageLexicalAnalysisCache } from "../../language/common/languageLexicalAnalysisCache.js";
-import { LanguageResultAcceptance, LanguageResultStoreChangeReason } from "../../language/common/languageResultStore.js";
-import { LanguageTokenLineIndex } from "../../language/common/languageTokenLineIndex.js";
-import { attachLanguageTokenResultDelta, createLanguageTokenSnapshotNormalizer, createLanguageTokenStore, type LanguageToken } from "../../language/common/languageResults.js";
-import { type LanguageWorkerWireResultState } from "../../language/common/languageWorkerWireProtocol.js";
-import { TextPosition, TextRange } from "../../common/text.js";
-import { TextModel } from "../../common/textModel.js";
+import { languageAnalysisWireCodec } from "../../common/languages/analysis/languageAnalysisWire.js";
+import { LANGUAGE_TOKEN_LANE, type LanguageAnalysisResult } from "../../common/languages/analysis/languageAnalysisService.js";
+import { LanguageLexicalAnalysisCache } from "../../common/languages/languageLexicalAnalysisCache.js";
+import { LanguageResultAcceptance, LanguageResultStoreChangeReason } from "../../common/languages/languageResultStore.js";
+import { LanguageTokenLineIndex } from "../../common/tokens/languageTokenLineIndex.js";
+import { attachLanguageTokenResultDelta, createLanguageTokenSnapshotNormalizer, createLanguageTokenStore, type LanguageToken } from "../../common/languages/languageResults.js";
+import { type LanguageWorkerWireResultState } from "../../common/languages/languageWorkerWireProtocol.js";
+import { TextPosition, TextRange } from "../../common/core/text.js";
+import { TextModel } from "../../common/model/textModel.js";
 
 test("Token line index groups sparse lines and answers constant-time line queries", () => {
   using model = new TextModel("const one = 1;\n\nreturn one;");

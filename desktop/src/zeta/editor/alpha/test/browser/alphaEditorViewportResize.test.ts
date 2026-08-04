@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { TextModel } from "../../common/textModel.js";
+import { TextModel } from "../../common/model/textModel.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
@@ -15,7 +15,7 @@ for (const [name, value] of Object.entries({
   Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { AlphaEditorViewport } = await import("../../browser/alphaEditorViewport.js");
+const { AlphaEditorViewport } = await import("../../browser/view/editorViewport.js");
 
 test.after(() => browserEnvironment.window.close());
 

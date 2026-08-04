@@ -23,6 +23,8 @@ zeta-async-utils = { workspace = true }
 zeta-auto-review = { workspace = true }
 zeta-config = { workspace = true }
 zeta-core = { workspace = true }
+zeta-diff = { workspace = true }
+zeta-extensions = { workspace = true }
 zeta-file-system = { workspace = true }
 zeta-file-watcher = { workspace = true }
 zeta-git = { workspace = true }

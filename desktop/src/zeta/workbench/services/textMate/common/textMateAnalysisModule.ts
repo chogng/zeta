@@ -1,4 +1,4 @@
-import { type LanguageAnalysisProviderModule } from "../../../../editor/alpha/language/common/languageAnalysisProviderModules.js";
+import { type LanguageAnalysisProviderModule } from "../../../../editor/alpha/common/languages/analysis/languageAnalysisProviderModules.js";
 import { createTextMateAnalysisProvider } from "./textMateAnalysisProvider.js";
 import { TextMateTokenizationService } from "./textMateTokenizationService.js";
 

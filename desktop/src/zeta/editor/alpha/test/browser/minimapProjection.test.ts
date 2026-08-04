@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createAlphaMinimapRows } from "../../browser/minimapProjection.js";
+import { createAlphaMinimapRows } from "../../browser/view/minimapProjection.js";
 
 test("Minimap compacts a document into bounded sampled density rows", () => {
   const lines = ["short", "", "very long source line", "middle", "", "tail"];

@@ -274,10 +274,10 @@ async function copyExecutable(source, destination, isWindows) {
   }
 }
 
-async function copyRegularTree(source, destination) {
+async function copyRegularTree(source, destination, kind) {
   const sourceMetadata = await lstat(source);
   if (!sourceMetadata.isDirectory() || sourceMetadata.isSymbolicLink()) {
-    throw new Error(`Built-in Skill source is not a real directory: ${source}`);
+    throw new Error(`Built-in ${kind} source is not a real directory: ${source}`);
   }
   await mkdir(destination);
   for (const entry of await readdir(source, { withFileTypes: true })) {
@@ -285,14 +285,14 @@ async function copyRegularTree(source, destination) {
     const destinationPath = join(destination, entry.name);
     const metadata = await lstat(sourcePath);
     if (metadata.isSymbolicLink()) {
-      throw new Error(`Built-in Skill asset is a symbolic link: ${sourcePath}`);
+      throw new Error(`Built-in ${kind} asset is a symbolic link: ${sourcePath}`);
     }
     if (metadata.isDirectory()) {
-      await copyRegularTree(sourcePath, destinationPath);
+      await copyRegularTree(sourcePath, destinationPath, kind);
     } else if (metadata.isFile() && metadata.nlink === 1) {
       await copyFile(sourcePath, destinationPath);
     } else {
-      throw new Error(`Built-in Skill asset is not a regular unlinked file: ${sourcePath}`);
+      throw new Error(`Built-in ${kind} asset is not a regular unlinked file: ${sourcePath}`);
     }
   }
 }
@@ -309,12 +309,27 @@ async function copyBuiltinSkills(destination) {
       throw new Error(`Invalid built-in Skill directory: ${entry.name}`);
     }
     await stat(join(source, entry.name, "SKILL.md"));
-    await copyRegularTree(join(source, entry.name), join(destination, entry.name));
+    await copyRegularTree(join(source, entry.name), join(destination, entry.name), "Skill");
+  }
+}
+
+async function copyBuiltinExtensions(destination) {
+  const source = join(repositoryRoot, "resources", "extensions");
+  const entries = (await readdir(source, { withFileTypes: true })).filter(
+    (entry) => entry.name !== "README.md" && entry.name !== "BUILD.bazel",
+  );
+  await mkdir(destination, { recursive: true });
+  for (const entry of entries) {
+    if (!entry.isDirectory()) {
+      throw new Error(`Invalid built-in extension package: ${entry.name}`);
+    }
+    await stat(join(source, entry.name, "package.json"));
+    await copyRegularTree(join(source, entry.name), join(destination, entry.name), "extension package");
   }
 }
 
 async function workspaceVersion() {
-  const manifest = await readFile(join(rustWorkspace, "Cargo.toml"), "utf8");
+  const manifest = await readFile(join(repositoryRoot, "Cargo.toml"), "utf8");
   const workspacePackage = manifest.match(/\[workspace\.package\]([\s\S]*?)(?:\n\[|$)/)?.[1];
   const version = workspacePackage?.match(/^\s*version\s*=\s*"([^"]+)"/m)?.[1];
   if (!version) {
@@ -335,6 +350,7 @@ export async function assemblePackage(staging, target, platform, executables, ri
   await mkdir(pathDirectory, { recursive: true });
   await mkdir(ripgrepLicenseDirectory, { recursive: true });
   await copyBuiltinSkills(join(resourcesDirectory, "skills"));
+  await copyBuiltinExtensions(join(resourcesDirectory, "extensions"));
   await copyExecutable(executables.zeta, join(binDirectory, zetaName), isWindows);
   await copyExecutable(ripgrep.executable, join(pathDirectory, rgName), isWindows);
   for (const name of ["LICENSE-MIT", "UNLICENSE"]) {
@@ -406,6 +422,13 @@ async function validatePackage(packageRoot, platform) {
   if (platform === "linux") {
     await requireFile(join(packageRoot, "zeta-resources", "bwrap"));
     await requireFile(join(packageRoot, "zeta-resources", "licenses", "bubblewrap", "COPYING"));
+  }
+  const extensionEntries = await readdir(join(packageRoot, "zeta-resources", "extensions"), { withFileTypes: true });
+  for (const extensionEntry of extensionEntries) {
+    if (!extensionEntry.isDirectory()) {
+      throw new Error(`Package contains an invalid built-in extension entry: ${extensionEntry.name}`);
+    }
+    await requireFile(join(packageRoot, "zeta-resources", "extensions", extensionEntry.name, "package.json"));
   }
   const skillNames = await readdir(join(packageRoot, "zeta-resources", "skills"));
   if (skillNames.length === 0) {

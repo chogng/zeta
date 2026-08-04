@@ -4,7 +4,7 @@ import { JSDOM } from "jsdom";
 import { URI } from "../../../../base/common/uri.js";
 import { TextFileContentSource, type ITextFileService, type ResolvedTextFileContent, type TextFileResolveRequest } from "../../../../workbench/services/textfile/common/textFileService.js";
 import { EditorPaneVisibility } from "../../../../workbench/browser/parts/editor/editorPane.js";
-import { TextPosition, TextRange } from "../../common/text.js";
+import { TextPosition, TextRange } from "../../common/core/text.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
@@ -20,8 +20,9 @@ for (const [name, value] of Object.entries({
 }
 
 const { AlphaEditorPane } = await import("../../browser/alphaEditorPane.js");
-const { AlphaTextModelService } = await import("../../browser/alphaTextModelService.js");
-const { AlphaEditorTextDirection } = await import("../../browser/alphaEditorViewport.js");
+const { BrowserTextModelService } = await import("../../browser/services/browserTextModelService.js");
+const { BrowserTextResourceStore } = await import("../../browser/services/browserTextResourceStore.js");
+const { AlphaEditorTextDirection } = await import("../../browser/view/editorViewport.js");
 
 test.after(() => browserEnvironment.window.close());
 
@@ -29,8 +30,10 @@ test("Alpha editor pane loads, lays out, focuses, hides, and clears one native s
   const dom = new JSDOM("<!doctype html><body><main></main></body>");
   dom.window.HTMLCanvasElement.prototype.getContext = () => null;
   const parent = dom.window.document.querySelector<HTMLElement>("main")!;
-  using models = new AlphaTextModelService();
-  const pane = new AlphaEditorPane(new ImmediateTextFiles("from disk"), { modelService: models, textDirection: AlphaEditorTextDirection.RightToLeft });
+  const textFiles = new ImmediateTextFiles("from disk");
+  const resourceStore = new BrowserTextResourceStore(textFiles);
+  using models = new BrowserTextModelService(resourceStore);
+  const pane = new AlphaEditorPane(resourceStore, { modelService: models, textDirection: AlphaEditorTextDirection.RightToLeft });
   pane.create(parent);
   pane.layout({ width: 640, height: 480 });
   await pane.setInput({
@@ -63,9 +66,11 @@ test("Alpha editor pane releases a load cancelled before content resolution", as
   const dom = new JSDOM("<!doctype html><body><main></main></body>");
   dom.window.HTMLCanvasElement.prototype.getContext = () => null;
   const parent = dom.window.document.querySelector<HTMLElement>("main")!;
-  using models = new AlphaTextModelService();
   const pending = deferred<ResolvedTextFileContent>();
-  const pane = new AlphaEditorPane({ onDidChangeFiles: inertFileChanges, resolve: () => pending.promise, save: async () => {} }, { modelService: models });
+  const textFiles = { onDidChangeFiles: inertFileChanges, resolve: () => pending.promise, save: async () => {} };
+  const resourceStore = new BrowserTextResourceStore(textFiles);
+  using models = new BrowserTextModelService(resourceStore);
+  const pane = new AlphaEditorPane(resourceStore, { modelService: models });
   pane.create(parent);
   const controller = new AbortController();
   const opening = pane.setInput({ resource: URI.file("C:\\project\\slow.ts") }, controller.signal);
@@ -86,11 +91,12 @@ test("Alpha editor pane saves and reverts its shared model reference", async () 
   const dom = new JSDOM("<!doctype html><body><main></main></body>");
   dom.window.HTMLCanvasElement.prototype.getContext = () => null;
   const parent = dom.window.document.querySelector<HTMLElement>("main")!;
-  using models = new AlphaTextModelService();
   const textFiles = new ImmediateTextFiles("from disk");
+  const resourceStore = new BrowserTextResourceStore(textFiles);
+  using models = new BrowserTextModelService(resourceStore);
   const resource = URI.file("C:\\project\\main.ts");
-  const reference = await models.acquire({ resource }, textFiles, new AbortController().signal);
-  const pane = new AlphaEditorPane(textFiles, { modelService: models });
+  const reference = await models.acquire({ resource }, new AbortController().signal);
+  const pane = new AlphaEditorPane(resourceStore, { modelService: models });
   pane.create(parent);
   await pane.setInput({ resource, label: "main.ts" }, new AbortController().signal);
 

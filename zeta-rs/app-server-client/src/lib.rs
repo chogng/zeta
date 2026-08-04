@@ -16,6 +16,8 @@ use zeta_app_server_protocol::protocol::config::{
     McpServerUpsertParams, ProviderConfigureParams, ProviderRemoveParams, SkillSourceAddParams,
     SkillSourceRemoveParams, SkillSourceSetEnablementParams,
 };
+use zeta_app_server_protocol::protocol::diff::DiffComputeParams;
+use zeta_app_server_protocol::protocol::diff::DiffComputeResult;
 use zeta_app_server_protocol::protocol::document::{TypstCompileParams, TypstCompileResult};
 use zeta_app_server_protocol::protocol::fs::{
     FsGetMetadataParams, FsGetMetadataResult, FsReadDirectoryParams, FsReadDirectoryResult,
@@ -168,6 +170,13 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
 
     pub fn git_text_diff(&mut self) -> Result<GitTextDiffResult, ClientError> {
         self.call(ClientMethod::GitTextDiff, EmptyParams {})
+    }
+
+    pub fn compute_diff(
+        &mut self,
+        params: DiffComputeParams,
+    ) -> Result<DiffComputeResult, ClientError> {
+        self.call(ClientMethod::DiffCompute, params)
     }
 
     pub fn list_git_branches(&mut self) -> Result<GitBranchListResult, ClientError> {

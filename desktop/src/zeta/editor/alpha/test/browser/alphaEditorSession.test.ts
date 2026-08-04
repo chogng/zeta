@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { URI } from "../../../../base/common/uri.js";
-import { type AlphaTextModelReference } from "../../browser/alphaTextModelService.js";
-import { TextModel } from "../../common/textModel.js";
+import { type TextModelReference } from "../../common/services/textModelService.js";
+import { TextModel } from "../../common/model/textModel.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
@@ -165,7 +165,7 @@ test("Alpha editor session announces save completion and forwards failures", asy
   dom.window.close();
 });
 
-function modelReference(resource: URI, model: TextModel): AlphaTextModelReference {
+function modelReference(resource: URI, model: TextModel): TextModelReference {
   let disposed = false;
   const dispose = (): void => {
     if (disposed) return;

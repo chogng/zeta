@@ -502,3 +502,10 @@ local tool 的参数白名单、discovery、取消与输出限制由
 image result 的原生 Core content path；MCP image 暂时编码进 bounded JSON text result。演进这些
 能力时应保留 protocol registry唯一性、Core/store authority、snapshot + durable gap 和
 per-invocation config safe point。
+
+## Static extension resources
+
+The reusable filesystem catalog is owned by [`zeta-extensions`](../extensions/README.md).
+This crate only resolves host roots, adapts catalog values to protocol DTOs, and stores opened
+bytes in the connection-owned `ResourceStore`. `zeterm` should depend on `zeta-extensions`
+directly; it should not depend on App Server or desktop transport code.

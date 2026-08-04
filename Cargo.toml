@@ -14,6 +14,7 @@ members = [
     "zeta-rs/config",
     "zeta-rs/core",
     "zeta-rs/diff",
+    "zeta-rs/extensions",
     "zeta-rs/editor-core",
     "zeta-rs/secrets",
     "zeta-rs/exec",
@@ -179,6 +180,7 @@ zeta-diff = { path = "zeta-rs/diff" }
 zeta-editor = { path = "zeterm/editor" }
 zeta-editor-core = { path = "zeta-rs/editor-core" }
 zeta-exec = { path = "zeta-rs/exec" }
+zeta-extensions = { path = "zeta-rs/extensions" }
 zeta-icons = { path = "zeterm/icons" }
 zeta-file-icons = { path = "zeta-rs/file-icons" }
 zeta-file-identity = { path = "zeta-rs/file-identity" }

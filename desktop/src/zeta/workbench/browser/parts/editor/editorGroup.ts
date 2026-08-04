@@ -8,7 +8,9 @@ import type { IConfigurationService } from "../../../../platform/configuration/c
 import { type ITextFileService } from "../../../services/textfile/common/textFileService.js";
 import { type ITextMateService } from "../../../services/textMate/common/textMateService.js";
 import { type ILanguageFeaturesService } from "../../../services/language/common/languageFeaturesService.js";
+import type { IDiffApi } from "../../../../platform/diff/common/diffApi.js";
 import type { EditorInput, EditorOpenOptions } from "./editorInput.js";
+import type { TextResourceLanguageResolver } from "../../../../editor/common/textResourceLanguage.js";
 import { type IEditorPane, EditorPaneVisibility } from "./editorPane.js";
 import { extractExternalEditorInputs } from "./editorDropData.js";
 import { EditorPaneRegistry } from "./editorRegistry.js";
@@ -44,6 +46,8 @@ export interface EditorGroupOptions {
   readonly textFileService?: ITextFileService;
   readonly textMateService?: ITextMateService;
   readonly languageFeaturesService?: ILanguageFeaturesService;
+  readonly languageResolver?: TextResourceLanguageResolver;
+  readonly diffApi?: IDiffApi;
   readonly titleActions?: EditorTitleActions;
   readonly onDidActivate?: () => void;
   readonly dragAndDrop?: IEditorTabDragAndDrop;
@@ -68,6 +72,8 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
   private readonly textFileService: ITextFileService | undefined;
   private readonly textMateService: ITextMateService | undefined;
   private readonly languageFeaturesService: ILanguageFeaturesService | undefined;
+  private readonly languageResolver: TextResourceLanguageResolver | undefined;
+  private readonly diffApi: IDiffApi | undefined;
   private readonly titleControl: EditorTitleControl;
   private readonly watermarkElement: HTMLElement;
   private readonly entries: EditorGroupEntry[] = [];
@@ -84,6 +90,8 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
     this.textFileService = options.textFileService;
     this.textMateService = options.textMateService;
     this.languageFeaturesService = options.languageFeaturesService;
+    this.languageResolver = options.languageResolver;
+    this.diffApi = options.diffApi;
     this.element = options.ownerDocument.createElement("section");
     this.element.className = "zeta-editor-group";
     this.element.setAttribute("aria-label", "Editor group");
@@ -171,7 +179,10 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
   ): Promise<IEditorPane> {
     const sequence = ++this.openSequence;
     this.cancelPendingOpen();
-    const descriptor = this.registry.resolve(input, options);
+    const matchInput = this.languageResolver
+      ? { ...input, languageId: this.languageResolver.resolveLanguageId({ resource: input.resource, ...(input.contentType === undefined ? {} : { contentType: input.contentType }) }) }
+      : input;
+    const descriptor = this.registry.resolve(matchInput, options);
     const existing = this.entry(input);
     if (existing?.paneInstance.pane.id === descriptor.id) {
       existing.input = input;
@@ -186,6 +197,7 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
       textFileService: this.textFileService,
       textMateService: this.textMateService,
       languageFeaturesService: this.languageFeaturesService,
+      diffApi: this.diffApi,
     });
     if (pane.id !== descriptor.id) {
       pane.dispose();

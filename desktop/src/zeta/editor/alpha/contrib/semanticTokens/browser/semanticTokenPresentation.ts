@@ -1,0 +1,2 @@
+export { AlphaSemanticTokenModifier, AlphaSemanticTokenPresentation, createAlphaSemanticTokenSource, projectAlphaSemanticTokenLine, resolveAlphaSemanticTokenModifiers, resolveAlphaSemanticTokenPresentation, snapshotAlphaSemanticTokenLines } from "../../../browser/view/semanticTokenPresentation.js";
+export type { AlphaBracketColorizationSpan, AlphaResolvedSemanticToken, AlphaSemanticTokenLine, AlphaSemanticTokenResolver, AlphaSemanticTokenSource } from "../../../browser/view/semanticTokenPresentation.js";

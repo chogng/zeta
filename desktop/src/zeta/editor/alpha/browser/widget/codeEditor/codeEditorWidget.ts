@@ -1,12 +1,12 @@
 import { getClientArea, type IDimension } from "../../../../../base/browser/geometry.js";
 import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
-import { type EditorSelectionController } from "../../../common/editorSelectionController.js";
-import { type TextModel } from "../../../common/textModel.js";
-import { AlphaEditorViewport, type AlphaEditorViewportOptions } from "../../alphaEditorViewport.js";
-import { AlphaKeyboardNavigationController, type AlphaKeyboardNavigationControllerOptions } from "../../keyboardNavigationController.js";
-import { AlphaPointerSelectionController, type AlphaPointerSelectionControllerOptions } from "../../pointerSelectionController.js";
-import { AlphaTextInputController, type AlphaTextInputControllerOptions } from "../../textInputController.js";
-import { AlphaTextDropController } from "../../textDropController.js";
+import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
+import { type TextModel } from "../../../common/model/textModel.js";
+import { AlphaEditorViewport, type AlphaEditorViewportOptions } from "../../view/editorViewport.js";
+import { AlphaKeyboardNavigationController, type AlphaKeyboardNavigationControllerOptions } from "../../input/keyboardNavigationController.js";
+import { AlphaPointerSelectionController, type AlphaPointerSelectionControllerOptions } from "../../../contrib/dnd/browser/dndController.js";
+import { AlphaTextInputController, type AlphaTextInputControllerOptions } from "../../input/textInputController.js";
+import { AlphaTextDropController } from "../../../contrib/dropOrPasteInto/browser/textDropController.js";
 
 export type CodeEditorWidgetViewportOptions = Omit<AlphaEditorViewportOptions, "container" | "model" | "lineHeight" | "ariaLabel" | "selectionController">;
 

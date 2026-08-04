@@ -1,9 +1,9 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
-import { createLanguageCompletionInvokeContext, type LanguageCompletionProviderRequest } from "../../language/common/languageCompletionProviders.js";
-import { createLanguageWordCompletionProvider } from "../../language/common/languageWordCompletionProvider.js";
-import { TextPosition } from "../../common/text.js";
-import { TextModel } from "../../common/textModel.js";
+import { createLanguageCompletionInvokeContext, type LanguageCompletionProviderRequest } from "../../common/languages/completion/languageCompletionProviders.js";
+import { createLanguageWordCompletionProvider } from "../../common/languages/completion/languageWordCompletionProvider.js";
+import { TextPosition } from "../../common/core/text.js";
+import { TextModel } from "../../common/model/textModel.js";
 
 test("Word completion is deterministic, bounded, and snapshot-local", async () => {
   using model = new TextModel("alpine alpha alphabet al");

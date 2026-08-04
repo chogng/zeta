@@ -1,5 +1,7 @@
 import type { IAppServerApi, IResourceApi, IServerEventApi } from "../../app-server/common/appServerApi.js";
+import type { IExtensionApi } from "../../extensions/common/extensionApi.js";
 import type { IFileApi } from "../../files/common/fileApi.js";
+import type { IDiffApi } from "../../diff/common/diffApi.js";
 import type { IGitApi } from "../../git/common/gitApi.js";
 import type { IWorkspaceSearchApi } from "../../search/common/searchApi.js";
 import type { IModelApi, ISessionApi, IThreadApi, ITurnApi } from "../../sessions/common/sessionApi.js";
@@ -15,7 +17,9 @@ export interface IRendererHost {
   readonly turn: ITurnApi;
   readonly typst: ITypstApi;
   readonly resource: IResourceApi;
+  readonly extensions: IExtensionApi;
   readonly fs: IFileApi;
+  readonly diff: IDiffApi;
   readonly git: IGitApi;
   readonly workspaceSearch: IWorkspaceSearchApi;
   readonly terminal: ITerminalProcessService;

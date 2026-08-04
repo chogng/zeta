@@ -1,9 +1,9 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
-import { LanguageResultAcceptance } from "../../language/common/languageResultStore.js";
-import { LanguageCompletionItemKind, createLanguageCompletionSnapshotNormalizer, createLanguageCompletionStore, type LanguageCompletionItem } from "../../language/common/languageCompletions.js";
-import { TextPosition, TextRange, type TextSnapshot } from "../../common/text.js";
-import { TextModel } from "../../common/textModel.js";
+import { LanguageResultAcceptance } from "../../common/languages/languageResultStore.js";
+import { LanguageCompletionItemKind, createLanguageCompletionSnapshotNormalizer, createLanguageCompletionStore, type LanguageCompletionItem } from "../../common/languages/completion/languageCompletions.js";
+import { TextPosition, TextRange, type TextSnapshot } from "../../common/core/text.js";
+import { TextModel } from "../../common/model/textModel.js";
 
 test("Completion stores normalize immutable current-version results", () => {
   using model = new TextModel("con");

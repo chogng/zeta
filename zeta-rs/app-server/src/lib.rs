@@ -22,6 +22,7 @@ pub use review::{ProviderReviewModel, ReviewModelResolutionError, ReviewModelRes
 pub use server::AppServer;
 pub use server::ConnectionNotifications;
 pub use server::ConnectionState;
+pub use zeta_extensions::{ExtensionRoot, ExtensionRootKind};
 pub use zeta_slash_commands::{SlashCommandCatalog, SlashCommandCatalogError};
 
 #[cfg(test)]

@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { IME } from "../../../../base/common/ime.js";
-import { EditorSelectionController } from "../../common/editorSelectionController.js";
-import { TextSelection, TextSelectionSet } from "../../common/selection.js";
-import { TextModelChangeReason, TextPosition, TextRange } from "../../common/text.js";
-import { TextModel } from "../../common/textModel.js";
+import { EditorSelectionController } from "../../common/cursor/editorSelectionController.js";
+import { TextSelection, TextSelectionSet } from "../../common/core/selection.js";
+import { TextModelChangeReason, TextPosition, TextRange } from "../../common/core/text.js";
+import { TextModel } from "../../common/model/textModel.js";
 
 const position = TextPosition.at;
 const range = (

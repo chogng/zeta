@@ -1,12 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { type AlphaTextMeasurer } from "../../browser/fontMetrics.js";
-import { EditorIndentationKind } from "../../common/editorIndentation.js";
-import { EditorSelectionController } from "../../common/editorSelectionController.js";
-import { TextSelection, TextSelectionSet } from "../../common/selection.js";
-import { TextPosition } from "../../common/text.js";
-import { TextModel } from "../../common/textModel.js";
+import { type AlphaTextMeasurer } from "../../browser/view/fontMetrics.js";
+import { EditorSelectionController } from "../../common/cursor/editorSelectionController.js";
+import { TextSelection, TextSelectionSet } from "../../common/core/selection.js";
+import { TextPosition } from "../../common/core/text.js";
+import { TextModel } from "../../common/model/textModel.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
@@ -21,13 +20,13 @@ for (const [name, value] of Object.entries({
   Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { AlphaEditorViewport } = await import("../../browser/alphaEditorViewport.js");
+const { AlphaEditorViewport } = await import("../../browser/view/editorViewport.js");
 const { AlphaEditingCommandController } = await import("../../browser/editingCommandController.js");
-const { AlphaTextInputController } = await import("../../browser/textInputController.js");
+const { AlphaTextInputController } = await import("../../browser/input/textInputController.js");
 
 test.after(() => browserEnvironment.window.close());
 
-test("editing shortcuts select all and indent selected physical lines", () => {
+test("editing shortcuts select all", () => {
   const dom = new JSDOM("<!doctype html><body><main></main></body>");
   const container = dom.window.document.querySelector<HTMLElement>("main")!;
   using model = new TextModel("one\n  two\nthree");
@@ -41,24 +40,13 @@ test("editing shortcuts select all and indent selected physical lines", () => {
   });
   viewport.layout({ width: 400, height: 100 });
   using input = new AlphaTextInputController(viewport, selections);
-  using commands = new AlphaEditingCommandController(input.element, viewport, selections, {
-    indentation: { kind: EditorIndentationKind.Spaces, tabSize: 2 },
-  });
+  using commands = new AlphaEditingCommandController(input.element, viewport, selections);
 
   const selectAll = keyboardEvent(dom.window, "a", { metaKey: true });
   input.element.dispatchEvent(selectAll);
   assert.equal(selectAll.defaultPrevented, true);
   assert.deepEqual(selections.selections.primary.range.end, TextPosition.at(2, 5));
 
-  const indent = keyboardEvent(dom.window, "Tab");
-  input.element.dispatchEvent(indent);
-  assert.equal(indent.defaultPrevented, true);
-  assert.equal(model.getText(), "  one\n    two\n  three");
-
-  const outdent = keyboardEvent(dom.window, "Tab", { shiftKey: true });
-  input.element.dispatchEvent(outdent);
-  assert.equal(outdent.defaultPrevented, true);
-  assert.equal(model.getText(), "one\n  two\nthree");
   dom.window.close();
 });
 
@@ -97,9 +85,6 @@ test("editing shortcuts reject dependencies from different text models", () => {
   });
   const input = dom.window.document.createElement("textarea") as unknown as HTMLTextAreaElement;
   assert.throws(() => new AlphaEditingCommandController(input, viewport, otherSelections), /must share one text model/);
-  assert.throws(() => new AlphaEditingCommandController(input, viewport, selections, {
-    indentation: { tabSize: 0 },
-  }), /tab size/);
   dom.window.close();
 });
 

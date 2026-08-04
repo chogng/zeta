@@ -2,15 +2,15 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { OperatingSystem } from "../../../../base/common/platform.js";
-import { type AlphaTextMeasurer } from "../../browser/fontMetrics.js";
-import { EditorIndentationKind } from "../../common/editorIndentation.js";
-import { EditorSelectionController } from "../../common/editorSelectionController.js";
-import { registerAlphaBuiltinLanguageConfigurations } from "../../language/common/languageBuiltinConfigurations.js";
-import { LanguageConfigurationRegistry, LanguageIndentAction } from "../../language/common/languageConfiguration.js";
-import { LanguageLexicalContextIndex } from "../../language/common/languageLexicalContext.js";
-import { TextSelection, TextSelectionSet } from "../../common/selection.js";
-import { TextPosition, TextRange } from "../../common/text.js";
-import { TextModel } from "../../common/textModel.js";
+import { type AlphaTextMeasurer } from "../../browser/view/fontMetrics.js";
+import { EditorIndentationKind } from "../../contrib/indentation/common/indentation.js";
+import { EditorSelectionController } from "../../common/cursor/editorSelectionController.js";
+import { registerBuiltinLanguageConfigurations } from "../../common/languages/languageBuiltinConfigurations.js";
+import { LanguageConfigurationRegistry, LanguageIndentAction } from "../../common/languages/languageConfiguration.js";
+import { LanguageLexicalContextIndex } from "../../common/languages/languageLexicalContext.js";
+import { TextSelection, TextSelectionSet } from "../../common/core/selection.js";
+import { TextPosition, TextRange } from "../../common/core/text.js";
+import { TextModel } from "../../common/model/textModel.js";
 
 class FixedTextMeasurer implements AlphaTextMeasurer {
   readonly horizontalPadding = 24;
@@ -42,9 +42,9 @@ for (const [name, value] of Object.entries({
   });
 }
 
-const { AlphaEditorTextDirection, AlphaEditorViewport } = await import("../../browser/alphaEditorViewport.js");
-const { AlphaKeyboardNavigationController } = await import("../../browser/keyboardNavigationController.js");
-const { AlphaTextInputController } = await import("../../browser/textInputController.js");
+const { AlphaEditorTextDirection, AlphaEditorViewport } = await import("../../browser/view/editorViewport.js");
+const { AlphaKeyboardNavigationController } = await import("../../browser/input/keyboardNavigationController.js");
+const { AlphaTextInputController } = await import("../../browser/input/textInputController.js");
 
 test("Textarea routes navigation, typing, history, deletion, and Tab", () => {
   const dom = new JSDOM("<!doctype html><body><main></main></body>");
@@ -376,7 +376,7 @@ test("Textarea applies current language pair configuration through editor comman
   using model = new TextModel("item");
   using selections = new EditorSelectionController(model, TextSelectionSet.single(caret(0, 4)));
   using configurations = new LanguageConfigurationRegistry();
-  using builtins = registerAlphaBuiltinLanguageConfigurations(configurations);
+  using builtins = registerBuiltinLanguageConfigurations(configurations);
   using viewport = new AlphaEditorViewport({
     container,
     model,
@@ -430,7 +430,7 @@ test("Textarea does not trust matching pairs that it did not auto-close", () => 
   using model = new TextModel("()");
   using selections = new EditorSelectionController(model, TextSelectionSet.single(caret(0, 1)));
   using configurations = new LanguageConfigurationRegistry();
-  using builtins = registerAlphaBuiltinLanguageConfigurations(configurations);
+  using builtins = registerBuiltinLanguageConfigurations(configurations);
   using viewport = new AlphaEditorViewport({
     container,
     model,
@@ -464,7 +464,7 @@ test("Textarea applies current on-enter rules with editor-owned indentation", ()
   using model = new TextModel("{}");
   using selections = new EditorSelectionController(model, TextSelectionSet.single(caret(0, 1)));
   using configurations = new LanguageConfigurationRegistry();
-  using builtins = registerAlphaBuiltinLanguageConfigurations(configurations);
+  using builtins = registerBuiltinLanguageConfigurations(configurations);
   using viewport = new AlphaEditorViewport({
     container,
     model,
@@ -515,7 +515,7 @@ test("Textarea Enter ignores structural brackets inside lexical string tokens", 
   using model = new TextModel("const value = \"{\"");
   using selections = new EditorSelectionController(model, TextSelectionSet.single(caret(0, model.getText().length)));
   using configurations = new LanguageConfigurationRegistry();
-  using builtins = registerAlphaBuiltinLanguageConfigurations(configurations);
+  using builtins = registerBuiltinLanguageConfigurations(configurations);
   using viewport = new AlphaEditorViewport({
     container,
     model,
@@ -548,7 +548,7 @@ test("Textarea respects auto-closing notIn inside lexical string tokens", () => 
   using model = new TextModel("\"value \"");
   using selections = new EditorSelectionController(model, TextSelectionSet.single(caret(0, 7)));
   using configurations = new LanguageConfigurationRegistry();
-  using builtins = registerAlphaBuiltinLanguageConfigurations(configurations);
+  using builtins = registerBuiltinLanguageConfigurations(configurations);
   using viewport = new AlphaEditorViewport({
     container,
     model,

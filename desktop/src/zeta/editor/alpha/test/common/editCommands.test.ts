@@ -1,11 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createBackspaceCommand, createCutCommand, createDeleteForwardCommand, createDeleteToLineEndCommand, createDeleteToLineStartCommand, createDeleteWordBackwardCommand, createDeleteWordForwardCommand, createDistributedPasteTextCommand, createPasteTextCommand, createTypeTextCommand } from "../../common/editCommands.js";
-import { EditorSelectionController } from "../../common/editorSelectionController.js";
-import { TextSelection, TextSelectionSet } from "../../common/selection.js";
-import { getSelectionTexts } from "../../common/selectionText.js";
-import { TextPosition } from "../../common/text.js";
-import { TextModel } from "../../common/textModel.js";
+import { createBackspaceCommand, createCutCommand, createDeleteForwardCommand, createDeleteToLineEndCommand, createDeleteToLineStartCommand } from "../../common/cursor/cursorDeleteOperations.js";
+import { createDeleteWordBackwardCommand, createDeleteWordForwardCommand } from "../../common/cursor/cursorWordOperations.js";
+import { createDistributedPasteTextCommand, createPasteTextCommand, createTypeTextCommand } from "../../common/cursor/cursorTypeOperations.js";
+import { EditorSelectionController } from "../../common/cursor/editorSelectionController.js";
+import { TextSelection, TextSelectionSet } from "../../common/core/selection.js";
+import { getSelectionTexts } from "../../common/commands/selectionText.js";
+import { TextPosition } from "../../common/core/text.js";
+import { TextModel } from "../../common/model/textModel.js";
 
 test("Typing replaces multiple selections and coalesces with following text", () => {
   using model = new TextModel("abcd efgh");

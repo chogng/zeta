@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { TextPosition } from "../../common/text.js";
-import { TextModel } from "../../common/textModel.js";
-import { EditorVisualLineProjection } from "../../common/visualLineProjection.js";
+import { TextPosition } from "../../common/core/text.js";
+import { TextModel } from "../../common/model/textModel.js";
+import { EditorVisualLineProjection } from "../../common/viewModel/modelLineProjection.js";
 
 test("visual line projection maps logical rows, UTF-16 columns, and empty lines", () => {
   using model = new TextModel("ab😀cd\n\nxyz");

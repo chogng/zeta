@@ -1,0 +1,21 @@
+.zeta-alpha-diff-editor-breadcrumbs {
+  position: absolute;
+  top: 4px;
+  right: 8px;
+  z-index: 3;
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  background: color-mix(in srgb, var(--zeta-editor-background) 92%, transparent);
+  border: 1px solid var(--zeta-widget-border);
+  border-radius: 3px;
+}
+
+.zeta-alpha-diff-editor-breadcrumb {
+  min-width: 24px;
+  color: var(--zeta-description-foreground);
+  font-size: 11px;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+}

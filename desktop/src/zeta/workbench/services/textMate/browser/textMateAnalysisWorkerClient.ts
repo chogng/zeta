@@ -1,5 +1,5 @@
-import { type LanguageAnalysisWorkerFactory } from "../../../../editor/alpha/language/common/languageAnalysisService.js";
-import { BrowserLanguageWorkerPort } from "../../../../editor/alpha/language/browser/browserLanguageWorkerPort.js";
+import { type LanguageAnalysisWorkerFactory } from "../../../../editor/alpha/common/languages/analysis/languageAnalysisService.js";
+import { BrowserLanguageWorkerPort } from "../../../../editor/alpha/browser/language/browserLanguageWorkerPort.js";
 import { TextMateAnalysisModuleWorkerClient } from "../common/textMateAnalysisModuleWorkerClient.js";
 import { type TextMateGrammarCatalogSource } from "../common/textMateGrammarCatalog.js";
 import { type TextMateScopeThemeSource } from "../common/textMateScopeTheme.js";
@@ -19,7 +19,7 @@ export function createTextMateAnalysisWorkerFactory(catalogs: TextMateGrammarCat
     )),
     catalogs,
     {
-      requiredProviderModules: ["textmate.grammars", "alpha.lexical"],
+      requiredProviderModules: ["textmate.grammars", "language.lexical"],
       ...(scopeTheme === undefined ? {} : { scopeTheme }),
     },
   );

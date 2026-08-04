@@ -91,6 +91,29 @@ class PackageTests(unittest.TestCase):
                     / "SKILL.md"
                 ).read_text(encoding="utf-8"),
             )
+            self.assertTrue(
+                (output / "zeta-resources" / "extensions").is_dir()
+            )
+            self.assertEqual(
+                [
+                    path.name
+                    for path in sorted(
+                        (output / "zeta-resources" / "extensions").iterdir(),
+                        key=lambda path: path.name,
+                    )
+                ],
+                ["json"],
+            )
+            self.assertIn(
+                '"name": "json"',
+                (
+                    output
+                    / "zeta-resources"
+                    / "extensions"
+                    / "json"
+                    / "package.json"
+                ).read_text(encoding="utf-8"),
+            )
             metadata = json.loads(
                 (output / "zeta-package.json").read_text(encoding="utf-8")
             )

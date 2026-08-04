@@ -174,6 +174,8 @@ import { ITerminalService } from "../services/terminal/common/terminal.js";
 import { ITextFileService, TextFileService } from "../services/textfile/common/textFileService.js";
 import { ITextMateService } from "../services/textMate/common/textMateService.js";
 import { BrowserTextMateService } from "../services/textMate/browser/browserTextMateService.js";
+import { AppServerExtensionService } from "../services/extensions/browser/appServerExtensionService.js";
+import { IExtensionService } from "../services/extensions/common/extensionService.js";
 import { ILanguageFeaturesService, LanguageFeaturesService } from "../services/language/common/languageFeaturesService.js";
 import { GitService } from "../services/git/browser/gitService.js";
 import { IGitService } from "../services/git/common/gitService.js";
@@ -275,6 +277,9 @@ export class Workbench extends DisposableOwner {
     services.set(ITextMateService, textMateService);
     const languageFeaturesService = this.own(new LanguageFeaturesService());
     services.set(ILanguageFeaturesService, languageFeaturesService);
+    const extensionService = this.own(new AppServerExtensionService({ api: api.extensions, textMateService, languageFeaturesService }));
+    services.set(IExtensionService, extensionService);
+    void extensionService.start().catch(error => console.error("Declarative extension activation failed", error));
     services.set(
       IWorkspaceSearchService,
       new BrowserWorkspaceSearchService(api.workspaceSearch),
@@ -450,6 +455,8 @@ export class Workbench extends DisposableOwner {
       textFileService,
       textMateService,
       languageFeaturesService,
+      languageResolver: languageFeaturesService,
+      diffApi: api.diff,
       titleActions: {
         menuService: menus,
         contextMenuProvider: contextMenus,

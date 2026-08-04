@@ -5,6 +5,10 @@ export interface TextResourceLanguageInput {
   readonly contentType?: string;
 }
 
+export interface TextResourceLanguageResolver {
+  resolveLanguageId(input: TextResourceLanguageInput): string | undefined;
+}
+
 const CONTENT_TYPE_LANGUAGES = new Map<string, string>([
   ["application/json", "json"],
   ["application/javascript", "javascript"],
@@ -45,15 +49,17 @@ const EXTENSION_LANGUAGES = new Map<string, string>([
 ]);
 
 /** Returns whether an input carries an explicit text or known source-language hint. */
-export function isTextResourceLanguageInput(input: TextResourceLanguageInput): boolean {
+export function isTextResourceLanguageInput(input: TextResourceLanguageInput, resolver?: TextResourceLanguageResolver): boolean {
   return input.contentType?.startsWith("text/") === true ||
     CONTENT_TYPE_LANGUAGES.has(input.contentType ?? "") ||
+    resolver?.resolveLanguageId(input) !== undefined ||
     languageFromPath(input.resource.path) !== undefined;
 }
 
 /** Resolves the canonical editor language identity for one text resource. */
-export function resolveTextResourceLanguageId(input: TextResourceLanguageInput): string {
+export function resolveTextResourceLanguageId(input: TextResourceLanguageInput, resolver?: TextResourceLanguageResolver): string {
   return CONTENT_TYPE_LANGUAGES.get(input.contentType ?? "") ??
+    resolver?.resolveLanguageId(input) ??
     languageFromPath(input.resource.path) ??
     "plaintext";
 }

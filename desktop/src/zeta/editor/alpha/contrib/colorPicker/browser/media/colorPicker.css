@@ -1,0 +1,9 @@
+.zeta-alpha-editor-color-picker {
+  position: absolute;
+  z-index: 9;
+  padding: 4px;
+  background: var(--zeta-dialog-background);
+  border: 1px solid var(--zeta-widget-border);
+  border-radius: 3px;
+  box-shadow: 0 4px 12px var(--zeta-widget-shadow);
+}

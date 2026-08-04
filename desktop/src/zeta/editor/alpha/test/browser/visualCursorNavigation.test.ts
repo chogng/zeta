@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { navigateAlphaVisualCursors } from "../../browser/visualCursorNavigation.js";
-import { EditorCursorNavigationCommand, EditorCursorNavigationMode } from "../../common/cursorNavigation.js";
-import { TextSelection, TextSelectionSet } from "../../common/selection.js";
-import { TextPosition, TextRange } from "../../common/text.js";
-import { TextModel } from "../../common/textModel.js";
-import { EditorVisualLineProjection } from "../../common/visualLineProjection.js";
+import { navigateAlphaVisualCursors } from "../../browser/view/visualCursorNavigation.js";
+import { EditorCursorNavigationCommand, EditorCursorNavigationMode } from "../../common/cursor/cursorNavigation.js";
+import { TextSelection, TextSelectionSet } from "../../common/core/selection.js";
+import { TextPosition, TextRange } from "../../common/core/text.js";
+import { TextModel } from "../../common/model/textModel.js";
+import { EditorVisualLineProjection } from "../../common/viewModel/modelLineProjection.js";
 
 test("Visual cursor navigation preserves measured horizontal intent across wrapped rows", () => {
   using model = new TextModel("abcdef\na😀bc");

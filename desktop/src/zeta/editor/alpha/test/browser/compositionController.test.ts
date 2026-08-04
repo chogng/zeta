@@ -2,11 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { IME } from "../../../../base/common/ime.js";
-import { type AlphaTextMeasurer } from "../../browser/fontMetrics.js";
-import { EditorSelectionController } from "../../common/editorSelectionController.js";
-import { TextSelection, TextSelectionSet } from "../../common/selection.js";
-import { TextPosition, TextRange } from "../../common/text.js";
-import { TextModel } from "../../common/textModel.js";
+import { type AlphaTextMeasurer } from "../../browser/view/fontMetrics.js";
+import { EditorSelectionController } from "../../common/cursor/editorSelectionController.js";
+import { TextSelection, TextSelectionSet } from "../../common/core/selection.js";
+import { TextPosition, TextRange } from "../../common/core/text.js";
+import { TextModel } from "../../common/model/textModel.js";
 
 class FixedTextMeasurer implements AlphaTextMeasurer {
   readonly horizontalPadding = 24;
@@ -39,8 +39,8 @@ for (const [name, value] of Object.entries({
   });
 }
 
-const { AlphaEditorViewport } = await import("../../browser/alphaEditorViewport.js");
-const { AlphaTextInputController } = await import("../../browser/textInputController.js");
+const { AlphaEditorViewport } = await import("../../browser/view/editorViewport.js");
+const { AlphaTextInputController } = await import("../../browser/input/textInputController.js");
 
 test("Textarea composition commits one revision and positions the IME input", () => {
   const dom = new JSDOM("<!doctype html><body><main></main></body>");

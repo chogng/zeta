@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { AlphaDecorationLineIndex } from "../../browser/decorationLineIndex.js";
-import { AlphaDecorationPresentation, type AlphaResolvedDecoration } from "../../browser/decorationPresentation.js";
-import { type TextDecorationId } from "../../common/decoration.js";
-import { TextPosition, TextRange } from "../../common/text.js";
+import { AlphaDecorationLineIndex } from "../../browser/view/decorationLineIndex.js";
+import { AlphaDecorationPresentation, type AlphaResolvedDecoration } from "../../browser/view/decorationPresentation.js";
+import { type TextDecorationId } from "../../common/model/decorationCollection.js";
+import { TextPosition, TextRange } from "../../common/core/text.js";
 
 test("Decoration line index resolves visible intervals and preserves source order", () => {
   const index = new AlphaDecorationLineIndex([

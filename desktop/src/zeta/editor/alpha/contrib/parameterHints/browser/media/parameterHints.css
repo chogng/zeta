@@ -1,0 +1,15 @@
+.zeta-alpha-editor-parameter-hints {
+  position: absolute;
+  z-index: 8;
+  max-width: min(480px, calc(100% - 16px));
+  padding: 6px 8px;
+  color: var(--zeta-editor-foreground);
+  background: var(--zeta-editor-hover-background, var(--zeta-editor-background));
+  border: 1px solid var(--zeta-editor-border);
+  border-radius: 4px;
+  box-shadow: 0 4px 14px rgb(0 0 0 / 24%);
+}
+
+.zeta-alpha-editor-parameter-hints-signature.active {
+  font-weight: 600;
+}

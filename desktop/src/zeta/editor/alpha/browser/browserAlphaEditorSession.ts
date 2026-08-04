@@ -6,7 +6,7 @@ import { type TextMateGrammarDefinition } from "../../../workbench/services/text
 import { type ITextMateService } from "../../../workbench/services/textMate/common/textMateService.js";
 import { type TextMateScopeThemeSource } from "../../../workbench/services/textMate/common/textMateScopeTheme.js";
 import { AlphaEditorSession, type AlphaEditorSessionOptions } from "./alphaEditorSession.js";
-import { createAlphaCompletionWorkerFactory } from "../language/browser/languageCompletionWorkerClient.js";
+import { createCompletionWorkerFactory } from "../browser/language/languageCompletionWorkerClient.js";
 
 /** Creates Alpha's product browser session with Workbench TextMate and Alpha completion workers. */
 export interface BrowserAlphaEditorSessionOptions extends AlphaEditorSessionOptions {
@@ -32,7 +32,7 @@ export function createBrowserAlphaEditorSession(options: BrowserAlphaEditorSessi
     return new AlphaEditorSession({
       ...options,
       analysisWorkerFactory: textMateService.analysisWorkerFactory,
-      completionWorkerFactory: createAlphaCompletionWorkerFactory(),
+      completionWorkerFactory: createCompletionWorkerFactory(),
       ...(ownsTextMateService ? { languageSupport: textMateService } : {}),
       onDidChangeLanguageSupport,
       whenLanguageSupportReady: () => textMateService.grammars.whenReady(),

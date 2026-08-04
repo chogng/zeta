@@ -2,8 +2,10 @@
 
 pub mod common;
 pub mod config;
+pub mod diff;
 pub mod document;
 pub mod error;
+pub mod extensions;
 pub mod fs;
 pub mod git;
 pub mod initialize;

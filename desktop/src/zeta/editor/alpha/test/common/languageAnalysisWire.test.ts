@@ -2,15 +2,15 @@ import { strict as assert } from "node:assert";
 import test from "node:test";
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { DisposableOwner, DisposableStore } from "../../../../base/common/lifecycle.js";
-import { LanguageAnalysisProviderRegistry, type LanguageAnalysisRequest } from "../../language/common/languageAnalysisProviders.js";
-import { LANGUAGE_TOKEN_LANE, LanguageAnalysisProviderWorker, LanguageAnalysisService, type LanguageAnalysisLane, type LanguageAnalysisResult, type LanguageAnalysisWorker } from "../../language/common/languageAnalysisService.js";
-import { languageAnalysisWireCodec } from "../../language/common/languageAnalysisWire.js";
-import { type LanguageLexicalCacheUpdate } from "../../language/common/languageLexicalAnalysisCache.js";
-import { createLanguageLexicalAnalysisProvider } from "../../language/common/languageLexicalAnalysisProvider.js";
-import { LanguageRequestCoordinator, LanguageRequestStatus, LanguageWorkerResultDisposition, type LanguageWorkerRequest } from "../../language/common/languageRequestCoordinator.js";
-import { LanguageWorkerWireClient, LanguageWorkerWireServer, type LanguageWorkerWireClientPort } from "../../language/common/languageWorkerWire.js";
-import { TextPosition, TextRange } from "../../common/text.js";
-import { TextModel } from "../../common/textModel.js";
+import { LanguageAnalysisProviderRegistry, type LanguageAnalysisRequest } from "../../common/languages/analysis/languageAnalysisProviders.js";
+import { LANGUAGE_TOKEN_LANE, LanguageAnalysisProviderWorker, LanguageAnalysisService, type LanguageAnalysisLane, type LanguageAnalysisResult, type LanguageAnalysisWorker } from "../../common/languages/analysis/languageAnalysisService.js";
+import { languageAnalysisWireCodec } from "../../common/languages/analysis/languageAnalysisWire.js";
+import { type LanguageLexicalCacheUpdate } from "../../common/languages/languageLexicalAnalysisCache.js";
+import { createLanguageLexicalAnalysisProvider } from "../../common/languages/languageLexicalAnalysisProvider.js";
+import { LanguageRequestCoordinator, LanguageRequestStatus, LanguageWorkerResultDisposition, type LanguageWorkerRequest } from "../../common/languages/languageRequestCoordinator.js";
+import { LanguageWorkerWireClient, LanguageWorkerWireServer, type LanguageWorkerWireClientPort } from "../../common/languages/languageWorkerWire.js";
+import { TextPosition, TextRange } from "../../common/core/text.js";
+import { TextModel } from "../../common/model/textModel.js";
 
 test("Token and diagnostic lanes share one structured-clone incremental document mirror", async () => {
   using model = new TextModel("const value = 1;");
@@ -88,7 +88,7 @@ test("Analysis wire rejects malformed lane DTOs in the client realm", async () =
   }, new AbortController().signal);
   await turn();
   serverPort.send({
-    protocol: "zeta.alpha.language-worker",
+    protocol: "zeta.language-worker",
     version: 4,
     kind: "result",
     requestId: 1,
@@ -160,7 +160,7 @@ test("Analysis wire falls back to full when the client missed the server result 
   client.settleResult(1, LanguageWorkerResultDisposition.Applied);
   const snapshot = model.createSnapshot();
   clientPort.send({
-    protocol: "zeta.alpha.language-worker",
+    protocol: "zeta.language-worker",
     version: 4,
     kind: "request",
     requestId: 2,

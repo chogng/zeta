@@ -58,7 +58,7 @@ export class TextMateScopeThemeModel extends DisposableOwner implements TextMate
     this.changeEmitter.fire(normalized);
   }
 
-  /** Resolves current rules first and preserves Alpha's stable fallback vocabulary. */
+  /** Resolves current rules first and preserves the stable fallback vocabulary. */
   resolve(scopes: readonly string[]): TextMateResolvedTokenStyle | undefined {
     this.ensureAlive();
     return this.resolver(scopes);
@@ -107,10 +107,10 @@ const MAX_SELECTOR_LENGTH = 512;
 const MAX_TOKEN_TYPE_LENGTH = 128;
 const MAX_MODIFIER_COUNT = 32;
 const EMPTY_MODIFIERS: readonly string[] = Object.freeze([]);
-const ALPHA_TOKEN_TYPES = new Set([
+const SUPPORTED_TOKEN_TYPES = new Set([
   "comment", "keyword", "modifier", "string", "number", "regexp", "class", "enum", "interface", "namespace", "struct", "type", "typeParameter", "function", "method", "enumMember", "event", "parameter", "property", "variable", "operator",
 ]);
-const ALPHA_TOKEN_MODIFIERS = new Set(["declaration", "definition", "readonly", "static", "deprecated", "abstract", "async"]);
+const SUPPORTED_TOKEN_MODIFIERS = new Set(["declaration", "definition", "readonly", "static", "deprecated", "abstract", "async"]);
 
 function normalizeRule(value: TextMateScopeThemeRule): TextMateScopeThemeRule {
   if (typeof value !== "object" || value === null) throw new TypeError("TextMate scope theme rule must be an object");
@@ -133,13 +133,13 @@ function normalizeModifiers(value: readonly string[]): readonly string[] {
 
 function normalizeTokenType(value: unknown): string {
   const tokenType = normalizeText(value, "TextMate scope theme token type", MAX_TOKEN_TYPE_LENGTH);
-  if (!ALPHA_TOKEN_TYPES.has(tokenType)) throw new TypeError(`Unsupported Alpha semantic token type '${tokenType}'`);
+  if (!SUPPORTED_TOKEN_TYPES.has(tokenType)) throw new TypeError(`Unsupported semantic token type '${tokenType}'`);
   return tokenType;
 }
 
 function normalizeModifier(value: unknown): string {
   const modifier = normalizeText(value, "TextMate scope theme modifier", MAX_TOKEN_TYPE_LENGTH);
-  if (!ALPHA_TOKEN_MODIFIERS.has(modifier)) throw new TypeError(`Unsupported Alpha semantic token modifier '${modifier}'`);
+  if (!SUPPORTED_TOKEN_MODIFIERS.has(modifier)) throw new TypeError(`Unsupported semantic token modifier '${modifier}'`);
   return modifier;
 }
 

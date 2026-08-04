@@ -1,0 +1,9 @@
+.zeta-alpha-editor-symbol-icon {
+  display: inline-block;
+  width: 18px;
+  margin-right: 2px;
+  color: var(--zeta-description-foreground);
+  font-size: 11px;
+  text-align: center;
+  user-select: none;
+}

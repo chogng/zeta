@@ -270,6 +270,7 @@
         "GitUnavailable",
         "GitNotRepository",
         "GitOperationFailed",
+        "DiffOperationFailed",
         "SearchUnavailable",
         "SearchNotFound",
         "SearchNotOwner",
@@ -287,7 +288,12 @@
         "WorkspaceSwitchUnavailable",
         "WorkspaceSwitchBusy",
         "WorkspaceSwitchFailed",
-        "WorkspaceTrustRequired"
+        "WorkspaceTrustRequired",
+        "ExtensionsUnavailable",
+        "ExtensionNotFound",
+        "ExtensionResourceNotFound",
+        "ExtensionResourceInvalidPath",
+        "ExtensionOperationFailed"
       ]
     },
     "ApprovalReviewModelSelectionDto": {
@@ -1015,6 +1021,38 @@
           "properties": {
             "method": {
               "type": "string",
+              "const": "extensions/list"
+            },
+            "params": {
+              "$ref": "#/$defs/ExtensionListParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "extensions/resource/open"
+            },
+            "params": {
+              "$ref": "#/$defs/ExtensionResourceOpenParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
               "const": "turn/start"
             },
             "params": {
@@ -1179,6 +1217,22 @@
             },
             "params": {
               "$ref": "#/$defs/FsReadFileParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "diff/compute"
+            },
+            "params": {
+              "$ref": "#/$defs/DiffComputeParams"
             }
           },
           "required": [
@@ -2171,6 +2225,38 @@
           "properties": {
             "method": {
               "type": "string",
+              "const": "extensions/list"
+            },
+            "result": {
+              "$ref": "#/$defs/ExtensionListResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "extensions/resource/open"
+            },
+            "result": {
+              "$ref": "#/$defs/ExtensionResourceOpenResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
               "const": "turn/start"
             },
             "result": {
@@ -2335,6 +2421,22 @@
             },
             "result": {
               "$ref": "#/$defs/FsReadFileResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "diff/compute"
+            },
+            "result": {
+              "$ref": "#/$defs/DiffComputeResult"
             }
           },
           "required": [
@@ -2866,6 +2968,174 @@
         "expectedRevision"
       ]
     },
+    "DiffComputeParams": {
+      "description": "Inputs for one presentation-independent comparison of two text snapshots.",
+      "type": "object",
+      "properties": {
+        "modified": {
+          "type": "string",
+          "maxLength": 524288
+        },
+        "original": {
+          "type": "string",
+          "maxLength": 524288
+        }
+      },
+      "required": [
+        "original",
+        "modified"
+      ]
+    },
+    "DiffComputeResult": {
+      "description": "Canonical Rust diff data projected for a frontend line model.",
+      "type": "object",
+      "properties": {
+        "hunks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DiffHunkDto"
+          }
+        },
+        "modifiedLineCount": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "originalLineCount": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "rows": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DiffComputeRowDto"
+          }
+        }
+      },
+      "required": [
+        "rows",
+        "hunks",
+        "originalLineCount",
+        "modifiedLineCount"
+      ]
+    },
+    "DiffComputeRowDto": {
+      "description": "One aligned diff row in the frontend's zero-based line coordinate system.",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/DiffRowKindDto"
+        },
+        "modifiedChanges": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DiffRangeDto"
+          }
+        },
+        "modifiedLineIndex": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0
+        },
+        "originalChanges": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DiffRangeDto"
+          }
+        },
+        "originalLineIndex": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "kind",
+        "originalChanges",
+        "modifiedChanges"
+      ]
+    },
+    "DiffHunkDto": {
+      "description": "One bounded hunk range in the returned row projection.",
+      "type": "object",
+      "properties": {
+        "modifiedLineCount": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "modifiedStartLineIndex": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "originalLineCount": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "originalStartLineIndex": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "rowEnd": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "rowStart": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "rowStart",
+        "rowEnd",
+        "originalStartLineIndex",
+        "originalLineCount",
+        "modifiedStartLineIndex",
+        "modifiedLineCount"
+      ]
+    },
+    "DiffRangeDto": {
+      "description": "One changed inline region expressed in Alpha's zero-based UTF-16 columns.",
+      "type": "object",
+      "properties": {
+        "endColumn": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "startColumn": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "startColumn",
+        "endColumn"
+      ]
+    },
+    "DiffRowKindDto": {
+      "description": "The semantic kind of one aligned original/modified row.",
+      "type": "string",
+      "enum": [
+        "context",
+        "added",
+        "removed",
+        "modified"
+      ]
+    },
     "DynamicToolCall": {
       "type": "object",
       "properties": {
@@ -2944,6 +3214,157 @@
     "EmptyParams": {
       "type": "object",
       "additionalProperties": false
+    },
+    "ExtensionCatalogReloadDto": {
+      "type": "string",
+      "enum": [
+        "cached",
+        "refresh"
+      ]
+    },
+    "ExtensionDiagnosticCodeDto": {
+      "type": "string",
+      "enum": [
+        "sourceUnavailable",
+        "invalidManifest",
+        "duplicateExtension",
+        "pathEscapesRoot",
+        "resourceNotFound",
+        "resourceTooLarge"
+      ]
+    },
+    "ExtensionDiagnosticDto": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "$ref": "#/$defs/ExtensionDiagnosticCodeDto"
+        },
+        "message": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        },
+        "subject": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "source",
+        "code",
+        "message"
+      ]
+    },
+    "ExtensionDto": {
+      "type": "object",
+      "properties": {
+        "displayName": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "manifestJson": {
+          "type": "string"
+        },
+        "manifestSha256": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "publisher": {
+          "type": "string"
+        },
+        "sourceKind": {
+          "$ref": "#/$defs/ExtensionSourceKindDto"
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "publisher",
+        "version",
+        "displayName",
+        "sourceKind",
+        "manifestJson",
+        "manifestSha256"
+      ]
+    },
+    "ExtensionListParams": {
+      "type": "object",
+      "properties": {
+        "reload": {
+          "$ref": "#/$defs/ExtensionCatalogReloadDto",
+          "default": "cached"
+        }
+      }
+    },
+    "ExtensionListResult": {
+      "type": "object",
+      "properties": {
+        "diagnostics": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ExtensionDiagnosticDto"
+          }
+        },
+        "extensions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ExtensionDto"
+          }
+        },
+        "generation": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "generation",
+        "extensions",
+        "diagnostics"
+      ]
+    },
+    "ExtensionResourceOpenParams": {
+      "type": "object",
+      "properties": {
+        "extensionId": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "extensionId",
+        "path"
+      ]
+    },
+    "ExtensionResourceOpenResult": {
+      "type": "object",
+      "properties": {
+        "resource": {
+          "$ref": "#/$defs/ResourceMetadataResult"
+        }
+      },
+      "required": [
+        "resource"
+      ]
+    },
+    "ExtensionSourceKindDto": {
+      "type": "string",
+      "enum": [
+        "builtIn",
+        "user"
+      ]
     },
     "FsChanged": {
       "description": "Coarse workspace filesystem invalidation published by `fs/changed`.",
@@ -4808,6 +5229,9 @@
     "ServerCapabilities": {
       "type": "object",
       "properties": {
+        "extensions": {
+          "type": "boolean"
+        },
         "fileSystem": {
           "type": "boolean"
         },
@@ -4849,7 +5273,8 @@
         "workspaceSearch",
         "terminal",
         "typst",
-        "updateReplay"
+        "updateReplay",
+        "extensions"
       ]
     },
     "ServerInfo": {

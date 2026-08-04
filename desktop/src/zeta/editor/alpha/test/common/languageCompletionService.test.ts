@@ -1,14 +1,14 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
-import { EditorSelectionController } from "../../common/editorSelectionController.js";
-import { LanguageCompletionSessionController } from "../../language/common/languageCompletionSession.js";
-import { LanguageCompletionService } from "../../language/common/languageCompletionService.js";
-import { LanguageCompletionProviderRegistry, LanguageCompletionTriggerKind, createLanguageCompletionIncompleteRefreshContext, createLanguageCompletionInvokeContext, createLanguageCompletionTriggerCharacterContext, type LanguageCompletionContext, type LanguageCompletionProvider, type LanguageCompletionProviderItem, type LanguageCompletionProviderRequest, type LanguageCompletionProviderResult } from "../../language/common/languageCompletionProviders.js";
-import { LanguageRequestCancellationReason, LanguageRequestStatus } from "../../language/common/languageRequestCoordinator.js";
-import { LanguageCompletionItemKind } from "../../language/common/languageCompletions.js";
-import { TextSelection, TextSelectionSet } from "../../common/selection.js";
-import { TextPosition, TextRange } from "../../common/text.js";
-import { TextModel } from "../../common/textModel.js";
+import { EditorSelectionController } from "../../common/cursor/editorSelectionController.js";
+import { LanguageCompletionSessionController } from "../../contrib/suggest/common/suggestModel.js";
+import { LanguageCompletionService } from "../../common/languages/completion/languageCompletionService.js";
+import { LanguageCompletionProviderRegistry, LanguageCompletionTriggerKind, createLanguageCompletionIncompleteRefreshContext, createLanguageCompletionInvokeContext, createLanguageCompletionTriggerCharacterContext, type LanguageCompletionContext, type LanguageCompletionProvider, type LanguageCompletionProviderItem, type LanguageCompletionProviderRequest, type LanguageCompletionProviderResult } from "../../common/languages/completion/languageCompletionProviders.js";
+import { LanguageRequestCancellationReason, LanguageRequestStatus } from "../../common/languages/languageRequestCoordinator.js";
+import { LanguageCompletionItemKind } from "../../common/languages/completion/languageCompletions.js";
+import { TextSelection, TextSelectionSet } from "../../common/core/selection.js";
+import { TextPosition, TextRange } from "../../common/core/text.js";
+import { TextModel } from "../../common/model/textModel.js";
 
 test("Completion service runs providers concurrently and merges deterministically", async () => {
   using registry = new LanguageCompletionProviderRegistry();

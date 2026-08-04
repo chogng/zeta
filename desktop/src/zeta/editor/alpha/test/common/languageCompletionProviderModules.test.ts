@@ -1,7 +1,7 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
-import { LanguageCompletionProviderRegistry, createLanguageCompletionInvokeContext, type LanguageCompletionProvider } from "../../language/common/languageCompletionProviders.js";
-import { LanguageCompletionProviderModuleHost, LanguageCompletionProviderModuleRegistry, LanguageCompletionProviderModuleState, normalizeLanguageCompletionProviderModuleCatalog } from "../../language/common/languageCompletionProviderModules.js";
+import { LanguageCompletionProviderRegistry, createLanguageCompletionInvokeContext, type LanguageCompletionProvider } from "../../common/languages/completion/languageCompletionProviders.js";
+import { LanguageCompletionProviderModuleHost, LanguageCompletionProviderModuleRegistry, LanguageCompletionProviderModuleState, normalizeLanguageCompletionProviderModuleCatalog } from "../../common/languages/completion/languageCompletionProviderModules.js";
 
 test("Provider module activation registers and removes one atomic provider batch", async () => {
   using providers = new LanguageCompletionProviderRegistry();
@@ -33,18 +33,18 @@ test("Concurrent activation serializes one module load", async () => {
   using modules = new LanguageCompletionProviderModuleRegistry();
   let loads = 0;
   using registration = modules.register({
-    id: "alpha.word",
+    id: "language.word",
     load: async () => {
       loads += 1;
       await new Promise<void>(resolve => setImmediate(resolve));
-      return [provider("alpha.word")];
+      return [provider("language.word")];
     },
   });
   using host = new LanguageCompletionProviderModuleHost(modules, providers);
 
   const [first, second] = await Promise.all([
-    host.setActivation("alpha.word", LanguageCompletionProviderModuleState.Active),
-    host.setActivation("alpha.word", LanguageCompletionProviderModuleState.Active),
+    host.setActivation("language.word", LanguageCompletionProviderModuleState.Active),
+    host.setActivation("language.word", LanguageCompletionProviderModuleState.Active),
   ]);
 
   assert.equal(loads, 1);
@@ -87,11 +87,11 @@ test("Removing a module releases its active providers", async () => {
   using providers = new LanguageCompletionProviderRegistry();
   using modules = new LanguageCompletionProviderModuleRegistry();
   const registration = modules.register({
-    id: "alpha.word",
-    load: () => [provider("alpha.word")],
+    id: "language.word",
+    load: () => [provider("language.word")],
   });
   using host = new LanguageCompletionProviderModuleHost(modules, providers);
-  await host.setActivation("alpha.word", LanguageCompletionProviderModuleState.Active);
+  await host.setActivation("language.word", LanguageCompletionProviderModuleState.Active);
 
   registration.dispose();
 
@@ -102,11 +102,11 @@ test("Disposing a module registry releases active providers through its final ca
   using providers = new LanguageCompletionProviderRegistry();
   const modules = new LanguageCompletionProviderModuleRegistry();
   using registration = modules.register({
-    id: "alpha.word",
-    load: () => [provider("alpha.word")],
+    id: "language.word",
+    load: () => [provider("language.word")],
   });
   using host = new LanguageCompletionProviderModuleHost(modules, providers);
-  await host.setActivation("alpha.word", LanguageCompletionProviderModuleState.Active);
+  await host.setActivation("language.word", LanguageCompletionProviderModuleState.Active);
 
   modules.dispose();
 
@@ -117,12 +117,12 @@ test("Provider module catalogs are immutable, revisioned, and unambiguous", () =
   using modules = new LanguageCompletionProviderModuleRegistry();
   const revisions: number[] = [];
   using listener = modules.onDidChangeModuleCatalog(catalog => revisions.push(catalog.revision));
-  using first = modules.register({ id: "alpha.word", load: () => [provider("alpha.word")] });
+  using first = modules.register({ id: "language.word", load: () => [provider("language.word")] });
   const second = modules.register({ id: "alpha.typescript", load: () => [provider("alpha.typescript")] });
   second.dispose();
 
   assert.deepEqual(revisions, [1, 2, 3]);
-  assert.deepEqual(modules.moduleCatalog.modules.map(module => module.id), ["alpha.word"]);
+  assert.deepEqual(modules.moduleCatalog.modules.map(module => module.id), ["language.word"]);
   assert.equal(Object.isFrozen(modules.moduleCatalog), true);
   assert.throws(() => normalizeLanguageCompletionProviderModuleCatalog({
     revision: 1,

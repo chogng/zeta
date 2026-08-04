@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { addAdjacentLineCursors, addCursorsToSelectedLineEnds, EditorCursorInsertionDirection } from "../../common/cursorInsertion.js";
-import { TextSelection, TextSelectionSet } from "../../common/selection.js";
-import { TextPosition } from "../../common/text.js";
-import { TextModel } from "../../common/textModel.js";
+import { addAdjacentLineCursors, addCursorsToSelectedLineEnds, EditorCursorInsertionDirection } from "../../common/cursor/cursorInsertion.js";
+import { TextSelection, TextSelectionSet } from "../../common/core/selection.js";
+import { TextPosition } from "../../common/core/text.js";
+import { TextModel } from "../../common/model/textModel.js";
 
 test("Adjacent cursor insertion adds clamped carets and preserves existing selection state", () => {
   using model = new TextModel("zero\nx\nthree");

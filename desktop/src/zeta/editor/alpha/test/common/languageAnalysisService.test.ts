@@ -1,13 +1,13 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
 import { DisposableStore } from "../../../../base/common/lifecycle.js";
-import { LanguageAnalysisProviderRegistry, type LanguageAnalysisProvider } from "../../language/common/languageAnalysisProviders.js";
-import { LANGUAGE_ANALYSIS_SYNCHRONIZATION, LANGUAGE_DIAGNOSTIC_LANE, LANGUAGE_TOKEN_LANE, LanguageAnalysisProviderWorker, LanguageAnalysisService } from "../../language/common/languageAnalysisService.js";
-import { createLanguageLexicalAnalysisProvider } from "../../language/common/languageLexicalAnalysisProvider.js";
-import { LanguageRequestCancellationReason, LanguageRequestStatus } from "../../language/common/languageRequestCoordinator.js";
-import { LanguageDiagnosticSeverity, type LanguageDiagnosticResult, type LanguageTokenResult } from "../../language/common/languageResults.js";
-import { TextPosition, TextRange } from "../../common/text.js";
-import { TextModel } from "../../common/textModel.js";
+import { LanguageAnalysisProviderRegistry, type LanguageAnalysisProvider } from "../../common/languages/analysis/languageAnalysisProviders.js";
+import { LANGUAGE_ANALYSIS_SYNCHRONIZATION, LANGUAGE_DIAGNOSTIC_LANE, LANGUAGE_TOKEN_LANE, LanguageAnalysisProviderWorker, LanguageAnalysisService } from "../../common/languages/analysis/languageAnalysisService.js";
+import { createLanguageLexicalAnalysisProvider } from "../../common/languages/languageLexicalAnalysisProvider.js";
+import { LanguageRequestCancellationReason, LanguageRequestStatus } from "../../common/languages/languageRequestCoordinator.js";
+import { LanguageDiagnosticSeverity, type LanguageDiagnosticResult, type LanguageTokenResult } from "../../common/languages/languageResults.js";
+import { TextPosition, TextRange } from "../../common/core/text.js";
+import { TextModel } from "../../common/model/textModel.js";
 
 test("Analysis service selects one token provider and merges diagnostic providers", async () => {
   using model = new TextModel("value");

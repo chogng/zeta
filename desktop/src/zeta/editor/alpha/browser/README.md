@@ -5,7 +5,7 @@ This directory owns Alpha's native browser projection of contracts from
 Neither `alpha/common` nor `base` may import this layer.
 
 Language presentation is an optional consumer of this layer and lives in
-`../language/browser`. `AlphaEditorSession` composes it through
+`./view`, `./input`, and feature-owned `../contrib/*/browser` directories. `AlphaEditorSession` composes it through
 `ILanguageFeaturesService`; the code editor widget and text model do not import
 language providers, grammars, diagnostics, or completion services.
 
@@ -61,20 +61,20 @@ scroll coordinates.
 `DiffEditorWidget` is a separate read-only review projection rather than two
 independently scrolling editor instances. Its caller owns a `DiffModel`, which
 observes caller-owned original and modified `TextModel` values and accepts only
-results pinned to their current versions. `BrowserDiffComputationService` runs
-the bounded Myers computation and grapheme-safe inline ranges in a dedicated
-module Worker; cancelling a stale request terminates that worker, and its next
-source version receives a fresh one. The widget owns one virtualized scroll
-surface and side-by-side DOM rows, but owns neither text nor computation.
-An exceeded work budget remains an explicit conservative approximation instead
-of incorrectly marking unmatched lines equal. Editing, selection history,
+results pinned to their current versions. Electron/Web App Server hosts use
+`RustDiffComputationService`, which adapts the bounded Rust Myers projection,
+hunk ranges, and grapheme-safe inline ranges to Alpha's UTF-16 model. A host
+without the Rust diff transport fails explicitly when it tries to construct
+the Alpha diff pane. The widget owns one virtualized scroll surface and
+side-by-side DOM rows, but owns neither text nor computation. Editing,
+selection history,
 syntax analysis, and model persistence stay with ordinary Alpha editor
 sessions. `nextChange`/`previousChange` and F7/Shift+F7 wrap over changed rows,
 add the component-owned `.active` state, and announce the original/modified
 location through the diff view's live region.
 `AlphaDiffEditorInput` gives the Workbench one synthetic tab resource while
 retaining two ordinary caller-owned text-resource inputs. `AlphaDiffEditorPane`
-acquires and releases both `AlphaTextModelReference` values, then hosts this
+acquires and releases both `TextModelReference` values, then hosts this
 view; it neither turns the synthetic URI into a text model nor owns either
 model's save/revert lifecycle.
 
@@ -96,7 +96,8 @@ analysis result. Arbitrary caller decoration markers and syntax-color minimaps
 remain outside this browser contract.
 
 `AlphaEditorViewport` also projects indentation guides only for visible first
-fragments of logical lines. `createAlphaIndentationGuides` identifies complete
+fragments of logical lines. `contrib/indentation/browser/indentation.ts`
+identifies complete
 visual indentation units from leading tabs/spaces, while `AlphaTextMeasurer`
 places each guide at the same coordinate system as carets and selections.
 Continuation fragments never duplicate a guide, and scrolling does not retain
@@ -118,14 +119,21 @@ keyboard navigation all use the same version-bound projection. `TextModel`
 remains the only document authority; projection rebuilds never create a shadow
 model or alter history.
 
-`EditorFoldingModel` owns tracked physical-line fold regions. Alpha supplies
+Code folding is an editor contribution under `../contrib/folding/browser`,
+following VS Code's `editor/contrib/folding/browser` boundary. The common
+visual projection accepts a feature-neutral `EditorLineVisibilitySource`; the
+browser `AlphaVisibleLineProjection` composes that source with soft wrapping.
+The folding contribution owns range data, fold state, hidden-line derivation,
+commands, and folding presentation styles. `EditorFoldingModel` owns tracked
+physical-line fold regions. Alpha supplies
 both indentation-derived ranges and synchronous lexical ranges for `{}`, `[]`,
 cross-line block comments, and configured named regions; their deterministic
 merge keeps only nested or disjoint spans. User-created manual ranges persist
 through provider refreshes. Language providers can later replace only their
-ranges without taking ownership of fold state. Its
-`AlphaFoldedVisualLineProjection` filters wrapped rows after the base visual
-projection and retains a header-row anchor for temporarily hidden selections.
+ranges without taking ownership of fold state. `EditorHiddenRangeModel` derives
+hidden physical lines from collapsed regions; the generic visible-line
+projection filters wrapped rows and retains a header-row anchor for temporarily
+hidden selections.
 `AlphaFoldingController` maps Ctrl+Shift+`[` / `]` on Windows and Linux and
 Cmd+Option+`[` / `]` on macOS, while gutter controls use the same model. A
 collapse relocates active cursors hidden by that range to its header, before
@@ -229,7 +237,7 @@ The input controller owns the browser widget but not the common session,
 service, registry, result store, selection controller, or model. Session
 disposal hides the widget; widget disposal restores prior textarea ARIA
 attributes. Visual geometry and interaction state live in
-`media/completionWidget.css` and consume existing dialog, list-selection,
+`../contrib/suggest/browser/media/completionWidget.css` and consume existing dialog, list-selection,
 foreground, border, and shadow theme tokens.
 
 `AlphaFindController` owns the per-session find/replace dialog and keyboard
@@ -262,9 +270,9 @@ pair. Its common command handles range wrapping, pair removal, collapsed
 cursor placement, selection mapping, and undo; the browser adapter only
 filters the platform chord and reveals the resulting primary cursor.
 
-`AlphaLineOperationsController` handles Ctrl/Cmd+Enter,
+`AlphaLineOperationsController` under `../contrib/linesOperations/browser` handles Ctrl/Cmd+Enter,
 Ctrl/Cmd+Shift+Enter, Ctrl/Cmd+Shift+K, Shift+Alt+ArrowUp/ArrowDown, and
-Alt+ArrowUp/ArrowDown without browser-native text mutation. Its common
+Alt+ArrowUp/ArrowDown without browser-native text mutation. Its line-operation
 commands insert, delete, duplicate, or move the union of selected physical
 lines in one selection-aware transaction, then the adapter reveals the
 resulting primary cursor.
@@ -277,7 +285,7 @@ one isolated undo transaction. The browser adapter owns only chord filtering
 and reveal.
 
 `AlphaTransposeController` maps VS Code's macOS Ctrl+T chord to
-`common/transpose.ts`. It swaps complete graphemes rather than UTF-16 code
+`common/cursor/cursorTranspose.ts`. It swaps complete graphemes rather than UTF-16 code
 units, supports a line break at a physical-line start, excludes range
 selections, and resolves overlapping multi-cursor edits before the one
 isolated transaction.
@@ -326,11 +334,11 @@ common transaction that removes distinct valid bracket tokens. It never mutates
 the hidden textarea directly and only consumes the chord if a bracket pair can
 be removed.
 
-`createAlphaCompletionWorkerFactory` is the browser-owned bridge from the
+`createCompletionWorkerFactory` is the browser-owned bridge from the
 common language wire protocol to a real module `Worker`. Each factory result
 owns the DOM Worker adapter and terminates its Worker on disposal. The Worker
 entry owns its remote provider registry, named module registry, module host,
-and wire servers. The browser requires the `alpha.word` module; the client
+and wire servers. The browser requires the `language.word` module; the client
 waits for its activation before sending the first completion request. Passing the factory through
 `LanguageCompletionService.workerFactory` is explicit—the service's default
 remains the in-process provider host. `createBrowserAlphaEditorSession`
@@ -378,12 +386,12 @@ projects `.resolving` with `aria-busy`, then renders resolved documentation
 through text nodes; resolve failure leaves the candidate list and acceptance
 identity intact.
 
-`createAlphaAnalysisWorkerFactory` is the browser-owned bridge for the shared
+`createAnalysisWorkerFactory` is the browser-owned bridge for the shared
 token/diagnostic Worker. Both lanes use one `BrowserLanguageWorkerPort`, one
 incremental document mirror, and strict lane-aware result codecs. Completion
 and analysis Workers reuse the same component-owned browser and dedicated
 Worker port adapters, while retaining independent provider hosts and failure
-domains. The Worker entry publishes `alpha.lexical` as a named Analysis
+domains. The Worker entry publishes `language.lexical` as a named Analysis
 provider module. `LanguageAnalysisModuleWorkerClient` waits for its catalog and
 successful activation before the first token or diagnostic request crosses the
 shared port; module failure invalidates the prewarmed Worker so the service can
@@ -391,7 +399,7 @@ rebuild it on the next request. The Worker realm also owns one
 `LanguageConfigurationRegistry` and registers the built-in ECMAScript, JSON,
 and JSONC comments/brackets before loading that module. Configuration and
 provider lifecycles remain independent. After each mirror sync, the common Worker host updates
-`alpha.lexical`'s shared versioned line cache before the next ordered request,
+`language.lexical`'s shared versioned line cache before the next ordered request,
 so token and diagnostic lanes consume one incrementally computed analysis.
 The browser adapter does not own lexical state or scan policy.
 `createBrowserAlphaEditorSession` consumes the Workbench `ITextMateService`,
@@ -507,7 +515,8 @@ through `createLanguageEnterCommand`. Optional top-level `indentation` selects
 tabs or spaces plus tab size for this editor instance; it is resolved before
 the controller acquires DOM or tracker resources. Enter rules are fetched on
 every event, so contribution priority and disposal take effect immediately.
-The browser owns neither indentation policy nor rule matching.
+The indentation contribution owns editor indentation policy; the language
+contribution owns rule matching.
 
 The session also derives folding from the same resolved configuration. Structural
 brackets and multi-line comments remain lexical folds; `foldingMarkers` adds
@@ -517,15 +526,18 @@ configuration, so browser code only projects and toggles the resulting folding
 model; a contribution must include its comment delimiter to avoid treating
 ordinary source text as a region.
 
-`AlphaEditingCommandController` owns editor-wide Select All plus selected-line
-Tab and Shift+Tab routing. The corresponding transformation remains DOM-free in
-`common/lineIndentCommands.ts`, deduplicates physical lines across selections,
-maps directional selection endpoints through the transaction, and shares the
-same indentation options as `AlphaTextInputController`. Collapsed Tab remains
-ordinary text input. Word-deletion `beforeinput` types similarly route to
-`common/editCommands.ts` and reuse the canonical cursor word segmentation.
+`AlphaEditingCommandController` owns editor-wide Select All and repeated
+physical-line selection. `AlphaLineOperationsController` under
+`../contrib/linesOperations/browser` also owns selected-line Tab and Shift+Tab routing.
+The corresponding transformation remains DOM-free in
+`../contrib/linesOperations/browser/lineIndentCommands.ts`, deduplicates physical
+lines across selections, maps directional selection endpoints through the
+transaction, and shares the same indentation options as
+`AlphaTextInputController`. Collapsed Tab remains ordinary text input.
+Word-deletion `beforeinput` types similarly route to
+`common/cursor/cursorWordOperations.ts` and reuse the canonical cursor word segmentation.
 Ctrl/Cmd+L expands each selection through one more physical line using the
-DOM-free `common/lineSelection.ts` model; repeated use includes each non-final
+DOM-free `../contrib/lineSelection/browser/lineSelection.ts` model; repeated use includes each non-final
 line break and retains the primary selection identity.
 
 `language.lexicalContext` may inject a caller-owned synchronous context source

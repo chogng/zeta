@@ -1,12 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { type AlphaTextMeasurer } from "../../browser/fontMetrics.js";
-import { EditorSelectionController } from "../../common/editorSelectionController.js";
-import { EditorFoldingModel } from "../../language/common/folding.js";
-import { TextSelection, TextSelectionSet } from "../../common/selection.js";
-import { TextPosition, TextRange } from "../../common/text.js";
-import { TextModel } from "../../common/textModel.js";
+import { type AlphaTextMeasurer } from "../../browser/view/fontMetrics.js";
+import { EditorSelectionController } from "../../common/cursor/editorSelectionController.js";
+import { EditorFoldingModel } from "../../contrib/folding/browser/foldingModel.js";
+import { EditorHiddenRangeModel } from "../../contrib/folding/browser/hiddenRangeModel.js";
+import { TextSelection, TextSelectionSet } from "../../common/core/selection.js";
+import { TextPosition, TextRange } from "../../common/core/text.js";
+import { TextModel } from "../../common/model/textModel.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
@@ -24,16 +25,16 @@ for (const [name, value] of Object.entries({
 }
 
 const { AlphaEditorViewport } = await import(
-  "../../browser/alphaEditorViewport.js"
+  "../../browser/view/editorViewport.js"
 );
 const { AlphaEditorMinimap } = await import(
-  "../../browser/alphaEditorViewport.js"
+  "../../browser/view/editorViewport.js"
 );
 const { AlphaEditorTextDirection } = await import(
-  "../../browser/alphaEditorViewport.js"
+  "../../browser/view/editorViewport.js"
 );
 const { AlphaEditorLineWrapping } = await import(
-  "../../browser/visualLineProjection.js"
+  "../../browser/view/visualLineProjection.js"
 );
 
 test("AlphaEditorViewport projects the initial virtual line window", () => {
@@ -413,6 +414,7 @@ test("Folding model removes folded physical rows from the viewport projection", 
   const container = requiredElement(dom.window.document, "main");
   using model = new TextModel("header\nbody\nend\nafter");
   using folding = new EditorFoldingModel(model);
+  using hiddenRanges = new EditorHiddenRangeModel(model, folding);
   folding.setRanges([{ startLineIndex: 0, endLineIndex: 2 }]);
   using viewport = new AlphaEditorViewport({
     container,
@@ -420,6 +422,7 @@ test("Folding model removes folded physical rows from the viewport projection", 
     lineHeight: 20,
     textMeasurer: fixedTextMeasurer(),
     foldingModel: folding,
+    hiddenRangeModel: hiddenRanges,
   });
   viewport.layout({ width: 300, height: 20 });
   const initialToggle = requiredElement<HTMLButtonElement>(viewport.element, ".zeta-alpha-editor-fold-toggle");

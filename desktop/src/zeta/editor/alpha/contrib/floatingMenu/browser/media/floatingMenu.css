@@ -1,0 +1,11 @@
+.zeta-alpha-editor-floating-menu {
+  position: absolute;
+  z-index: 9;
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  background: var(--zeta-dialog-background);
+  border: 1px solid var(--zeta-widget-border);
+  border-radius: 3px;
+  box-shadow: 0 4px 12px var(--zeta-widget-shadow);
+}

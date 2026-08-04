@@ -9,10 +9,12 @@ import type { IKeybindingService } from "../../../../platform/keybinding/common/
 import { type ITextFileService } from "../../../services/textfile/common/textFileService.js";
 import { type ITextMateService } from "../../../services/textMate/common/textMateService.js";
 import { type ILanguageFeaturesService } from "../../../services/language/common/languageFeaturesService.js";
+import type { IDiffApi } from "../../../../platform/diff/common/diffApi.js";
 import { WorkbenchPart } from "../../part.js";
 import { EditorGroup, type EditorGroupOptions, type IEditorGroup } from "./editorGroup.js";
 import { EditorTabDragAndDropController, type EditorTabDropEvent } from "./editorTabDragAndDrop.js";
 import type { EditorInput, EditorOpenOptions } from "./editorInput.js";
+import type { TextResourceLanguageResolver } from "../../../../editor/common/textResourceLanguage.js";
 import type { IEditorPane } from "./editorPane.js";
 import { EditorPaneRegistry, EditorPanes } from "./editorRegistry.js";
 
@@ -48,6 +50,8 @@ export interface IEditorPartOptions {
   readonly textFileService?: ITextFileService;
   readonly textMateService?: ITextMateService;
   readonly languageFeaturesService?: ILanguageFeaturesService;
+  readonly languageResolver?: TextResourceLanguageResolver;
+  readonly diffApi?: IDiffApi;
   readonly registry?: EditorPaneRegistry;
   readonly titleActions?: {
     readonly menuService: IMenuService;
@@ -81,6 +85,8 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
       textFileService: options.textFileService,
       textMateService: options.textMateService,
       languageFeaturesService: options.languageFeaturesService,
+      languageResolver: options.languageResolver,
+      diffApi: options.diffApi,
       titleActions: options.titleActions,
     };
     this.tabDragAndDrop = new EditorTabDragAndDropController((event) => {

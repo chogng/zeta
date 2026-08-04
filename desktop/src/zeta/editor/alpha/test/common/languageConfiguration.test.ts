@@ -1,7 +1,7 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
-import { createAlphaBuiltinLanguageConfigurationSource } from "../../language/common/languageBuiltinConfigurations.js";
-import { LanguageConfigurationRegistry, LanguageIndentAction } from "../../language/common/languageConfiguration.js";
+import { createBuiltinLanguageConfigurationSource } from "../../common/languages/languageBuiltinConfigurations.js";
+import { LanguageConfigurationRegistry, LanguageIndentAction } from "../../common/languages/languageConfiguration.js";
 
 test("Language configurations compose by field, priority, and registration order", () => {
   using registry = new LanguageConfigurationRegistry();
@@ -246,7 +246,7 @@ test("Indentation, folding, and on-enter configuration rejects invalid values be
 });
 
 test("Isolated built-in sources expose immutable Enter, indentation, and folding rules", () => {
-  const source = createAlphaBuiltinLanguageConfigurationSource();
+  const source = createBuiltinLanguageConfigurationSource();
   const typescript = source.getLanguageConfiguration("typescript");
   const json = source.getLanguageConfiguration("json");
 

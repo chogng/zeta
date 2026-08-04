@@ -3,6 +3,7 @@
 > 本文是跨 editor、document、language、browser view、Workbench 和过渡
 > adapter 的 canonical 架构文档。文本内核的具体实现与修改契约见
 > [`desktop/src/zeta/editor/alpha/README.md`](../desktop/src/zeta/editor/alpha/README.md)。
+> Alpha editor 的文件级架构、VS Code `contrib` 全量迁移清单和目标文件名见 [`desktop/src/zeta/editor/alpha/editor-architecture.md`](../desktop/src/zeta/editor/alpha/editor-architecture.md)。
 
 ## 决策摘要
 
@@ -1322,9 +1323,9 @@ cancellation、独立生命周期，以及经过 `LanguageAnalysisService` appli
 provider priority。独立 Vite entry build 证明 browser WASM adapter 可被 Worker
 打包。`createBrowserAlphaEditorSession` consumes the Workbench `ITextMateService`/`BrowserTextMateService` for product Alpha panes and subscribes
 to catalog/theme revisions before scheduling a replacement analysis request.
-This proves bundled JSON/JSONC and caller-resolved session contributions are
-active in the product path; extension manifest/resource discovery remains a
-separate composition-root concern.
+This proves extension-packaged JSON/JSONC and caller-resolved session contributions
+are active in the product path; Rust owns extension manifest/resource discovery and
+the Workbench composition root projects those contributions into TextMate.
 
 ### Current 44：版本化 grammar catalog 与动态 token fallback
 

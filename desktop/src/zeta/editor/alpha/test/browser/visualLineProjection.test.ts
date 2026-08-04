@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { toDisposable } from "../../../../base/common/lifecycle.js";
-import { AlphaEditorLineWrapping, AlphaVisualLineProjection } from "../../browser/visualLineProjection.js";
-import { type AlphaTextMeasurer } from "../../browser/fontMetrics.js";
-import { TextModel } from "../../common/textModel.js";
-import { TextPosition, TextRange } from "../../common/text.js";
+import { AlphaEditorLineWrapping, AlphaVisualLineProjection } from "../../browser/view/visualLineProjection.js";
+import { type AlphaTextMeasurer } from "../../browser/view/fontMetrics.js";
+import { TextModel } from "../../common/model/textModel.js";
+import { TextPosition, TextRange } from "../../common/core/text.js";
 
 test("browser visual-line projection wraps at grapheme boundaries and rebuilds after edits", () => {
   using model = new TextModel("ab😀cd\nxyz");

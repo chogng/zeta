@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { EditorCursorNavigationCommand, EditorCursorNavigationMode, navigateEditorCursors, type EditorCursorNavigationResult } from "../../common/cursorNavigation.js";
-import { TextSelection, TextSelectionSet } from "../../common/selection.js";
-import { TextPosition } from "../../common/text.js";
-import { TextModel } from "../../common/textModel.js";
+import { EditorCursorNavigationCommand, EditorCursorNavigationMode, navigateEditorCursors, type EditorCursorNavigationResult } from "../../common/cursor/cursorNavigation.js";
+import { TextSelection, TextSelectionSet } from "../../common/core/selection.js";
+import { TextPosition } from "../../common/core/text.js";
+import { TextModel } from "../../common/model/textModel.js";
 
 test("Character navigation preserves graphemes and crosses line boundaries", () => {
   using model = new TextModel("a😀b\nx");

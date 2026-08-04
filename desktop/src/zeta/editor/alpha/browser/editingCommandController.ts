@@ -1,36 +1,21 @@
 import { addDisposableListener, stopEvent } from "../../../base/browser/dom.js";
 import { DisposableOwner } from "../../../base/common/lifecycle.js";
-import { resolveEditorIndentationOptions, type EditorIndentationOptions, type ResolvedEditorIndentationOptions } from "../common/editorIndentation.js";
-import { type EditorSelectionController } from "../common/editorSelectionController.js";
-import { createLineIndentCommand, EditorLineIndentDirection } from "../common/lineIndentCommands.js";
-import { expandLineSelections } from "../common/lineSelection.js";
-import { TextSelection, TextSelectionSet } from "../common/selection.js";
-import { type AlphaEditorViewport } from "./alphaEditorViewport.js";
+import { type EditorSelectionController } from "../common/cursor/editorSelectionController.js";
+import { expandLineSelections } from "../contrib/lineSelection/browser/lineSelection.js";
+import { TextSelection, TextSelectionSet } from "../common/core/selection.js";
+import { type AlphaEditorViewport } from "./view/editorViewport.js";
 
-export interface AlphaEditingCommandControllerOptions {
-  readonly indentation?: EditorIndentationOptions;
-}
-
-/** Routes synchronous document-wide and indentation shortcuts into Alpha common commands. */
+/** Routes synchronous document-wide editing shortcuts into Alpha commands. */
 export class AlphaEditingCommandController extends DisposableOwner {
-  private readonly indentation: ResolvedEditorIndentationOptions;
-
   constructor(
     input: HTMLTextAreaElement,
     private readonly viewport: AlphaEditorViewport,
     private readonly selections: EditorSelectionController,
-    options: AlphaEditingCommandControllerOptions = {},
   ) {
     super();
     if (viewport.textModel !== selections.textModel) {
       this.dispose();
       throw new TypeError("Alpha editing command dependencies must share one text model");
-    }
-    try {
-      this.indentation = resolveEditorIndentationOptions(options.indentation);
-    } catch (error) {
-      this.dispose();
-      throw error;
     }
     this.own(addDisposableListener(input, "keydown", event => this.handleKeydown(event)));
   }
@@ -51,16 +36,5 @@ export class AlphaEditingCommandController extends DisposableOwner {
       this.viewport.revealPosition(next.primary.active);
       return;
     }
-    if (event.key !== "Tab" || event.ctrlKey || event.altKey || event.metaKey) return;
-    const hasRange = this.selections.selections.selections.some(selection => !selection.collapsed);
-    if (!event.shiftKey && !hasRange) return;
-    stopEvent(event);
-    this.selections.execute(createLineIndentCommand(
-      this.viewport.textModel,
-      this.selections.selections,
-      event.shiftKey ? EditorLineIndentDirection.Outdent : EditorLineIndentDirection.Indent,
-      this.indentation,
-    ));
-    this.viewport.revealPosition(this.selections.selections.primary.active);
   }
 }

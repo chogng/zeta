@@ -3,8 +3,10 @@ import { sandboxProcess } from "../../../base/parts/sandbox/electron-browser/glo
 import { createAppServerApi, createResourceApi, createServerEventApi } from "../../app-server/electron-browser/appServerApi.js";
 import { createBrowserViewApi } from "../../browser/electron-browser/browserViewApi.js";
 import { createConfigurationApi } from "../../configuration/electron-browser/configurationApi.js";
+import { createElectronExtensionApi } from "../../extensions/electron-browser/extensionApi.js";
 import { createNativeContextMenuApi } from "../../contextview/electron-browser/contextMenuApi.js";
 import { createFileApi } from "../../files/electron-browser/fileApi.js";
+import { createDiffApi } from "../../diff/electron-browser/diffApi.js";
 import { createGitApi } from "../../git/electron-browser/gitApi.js";
 import { createKeybindingsResourceApi } from "../../keybinding/electron-browser/keybindingsResourceApi.js";
 import { createNativeMenubarApi } from "../../menubar/electron-browser/nativeMenubarApi.js";
@@ -20,6 +22,7 @@ import { createNativeHostApi } from "./nativeHostApi.js";
 /** Composes Electron renderer capabilities from domain-owned IPC adapters. */
 export function createElectronRendererApi(): ZetaElectronRendererApi {
   const appServer = createAppServerApi();
+  const resource = createResourceApi();
   return {
     environment: {
       runtime: "electron",
@@ -33,8 +36,10 @@ export function createElectronRendererApi(): ZetaElectronRendererApi {
     thread: createThreadApi(),
     turn: createTurnApi(),
     typst: createTypstApi(),
-    resource: createResourceApi(),
+    resource,
+    extensions: createElectronExtensionApi(resource),
     fs: createFileApi(),
+    diff: createDiffApi(),
     git: createGitApi(),
     workspaceSearch: createWorkspaceSearchApi(),
     terminal: new ElectronTerminalProcessService(appServer),

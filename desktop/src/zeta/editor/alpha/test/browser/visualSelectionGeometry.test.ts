@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { TextSelection, TextSelectionSet } from "../../common/selection.js";
-import { TextPosition, TextRange } from "../../common/text.js";
-import { TextModel } from "../../common/textModel.js";
-import { EditorVisualLineProjection } from "../../common/visualLineProjection.js";
-import { createAlphaVisualRangeRectangles } from "../../browser/visualRangeGeometry.js";
-import { createAlphaVisualSelectionGeometry } from "../../browser/visualSelectionGeometry.js";
-import { type AlphaTextMeasurer } from "../../browser/fontMetrics.js";
+import { TextSelection, TextSelectionSet } from "../../common/core/selection.js";
+import { TextPosition, TextRange } from "../../common/core/text.js";
+import { TextModel } from "../../common/model/textModel.js";
+import { EditorVisualLineProjection } from "../../common/viewModel/modelLineProjection.js";
+import { createAlphaVisualRangeRectangles } from "../../browser/view/visualRangeGeometry.js";
+import { createAlphaVisualSelectionGeometry } from "../../browser/view/visualSelectionGeometry.js";
+import { type AlphaTextMeasurer } from "../../browser/view/fontMetrics.js";
 
 test("visual selection geometry splits one logical range across wrapped fragments", () => {
   using model = new TextModel("abcdef\ngh");

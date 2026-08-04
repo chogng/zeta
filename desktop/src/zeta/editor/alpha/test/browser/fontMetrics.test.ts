@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { AlphaDomTextMeasurer } from "../../browser/fontMetrics.js";
+import { AlphaDomTextMeasurer } from "../../browser/view/fontMetrics.js";
 
 test("AlphaDomTextMeasurer resolves computed spacing and tab stops", () => {
   const dom = new JSDOM("<!doctype html><body><div></div></body>");

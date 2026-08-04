@@ -44,6 +44,7 @@ def build_package_directory(
         binary_directory = staging / "bin"
         path_directory = staging / "zeta-path"
         skills_directory = staging / "zeta-resources" / "skills"
+        extensions_directory = staging / "zeta-resources" / "extensions"
         license_directory = staging / "zeta-resources" / "licenses" / "ripgrep"
         binary_directory.mkdir()
         path_directory.mkdir()
@@ -51,6 +52,10 @@ def build_package_directory(
         copy_builtin_skills(
             repository_root / "zeta-rs" / "skills" / "assets",
             skills_directory,
+        )
+        copy_builtin_extensions(
+            repository_root / "resources" / "extensions",
+            extensions_directory,
         )
 
         copy_executable(
@@ -192,6 +197,7 @@ def validate_package_directory(package: Path, spec: TargetSpec) -> None:
         if not license_path.is_file():
             raise RuntimeError("Missing ripgrep license: {}".format(license_path))
     validate_builtin_skills(package / "zeta-resources" / "skills")
+    validate_builtin_extensions(package / "zeta-resources" / "extensions")
     if spec.is_linux:
         bubblewrap = package / "zeta-resources" / "bwrap"
         if not bubblewrap.is_file() or not is_executable(bubblewrap):
@@ -246,23 +252,57 @@ def copy_builtin_skills(source: Path, destination: Path) -> None:
         copy_regular_tree(skill_directory, destination / skill_directory.name)
 
 
-def copy_regular_tree(source: Path, destination: Path) -> None:
+def copy_builtin_extensions(source: Path, destination: Path) -> None:
+    if source.is_symlink() or not source.is_dir():
+        raise RuntimeError(
+            "Built-in extension source is not a real directory: {}".format(source)
+        )
+    extension_entries = [
+        child
+        for child in sorted(source.iterdir(), key=lambda path: path.name)
+        if child.name not in ("README.md", "BUILD.bazel")
+    ]
+    destination.mkdir(parents=True)
+    for extension_directory in extension_entries:
+        if extension_directory.is_symlink() or not extension_directory.is_dir():
+            raise RuntimeError(
+                "Invalid built-in extension package: {}".format(extension_directory)
+            )
+        manifest = extension_directory / "package.json"
+        if manifest.is_symlink() or not manifest.is_file():
+            raise RuntimeError(
+                "Built-in extension is missing package.json: {}".format(
+                    extension_directory
+                )
+            )
+        copy_regular_tree(
+            extension_directory,
+            destination / extension_directory.name,
+            "extension package",
+        )
+
+
+def copy_regular_tree(source: Path, destination: Path, kind: str = "Skill") -> None:
     destination.mkdir()
     for child in sorted(source.iterdir(), key=lambda path: path.name):
         metadata = child.lstat()
         target = destination / child.name
         if child.is_symlink():
-            raise RuntimeError("Built-in Skill asset is a symbolic link: {}".format(child))
+            raise RuntimeError(
+                "Built-in {} asset is a symbolic link: {}".format(kind, child)
+            )
         if stat.S_ISDIR(metadata.st_mode):
-            copy_regular_tree(child, target)
+            copy_regular_tree(child, target, kind)
         elif stat.S_ISREG(metadata.st_mode):
             if metadata.st_nlink > 1:
-                raise RuntimeError("Built-in Skill asset is a hard link: {}".format(child))
+                raise RuntimeError(
+                    "Built-in {} asset is a hard link: {}".format(kind, child)
+                )
             shutil.copyfile(child, target)
         else:
             raise RuntimeError(
-                "Built-in Skill asset is not a regular file or directory: {}".format(
-                    child
+                "Built-in {} asset is not a regular file or directory: {}".format(
+                    kind, child
                 )
             )
 
@@ -283,6 +323,24 @@ def validate_builtin_skills(skills_directory: Path) -> None:
             raise RuntimeError(
                 "Package contains an invalid built-in Skill: {}".format(
                     skill_directory
+                )
+            )
+
+
+def validate_builtin_extensions(extensions_directory: Path) -> None:
+    if extensions_directory.is_symlink() or not extensions_directory.is_dir():
+        raise RuntimeError("Package is missing built-in extensions")
+    for extension_directory in sorted(
+        extensions_directory.iterdir(), key=lambda path: path.name
+    ):
+        if (
+            extension_directory.is_symlink()
+            or not extension_directory.is_dir()
+            or not (extension_directory / "package.json").is_file()
+        ):
+            raise RuntimeError(
+                "Package contains an invalid built-in extension: {}".format(
+                    extension_directory
                 )
             )
 

@@ -1,10 +1,10 @@
-import { type LanguageWorkerDocumentSynchronization } from "../../../../editor/alpha/language/common/languageWorkerDocumentMirror.js";
-import { type LanguageToken, type LanguageTokenResult } from "../../../../editor/alpha/language/common/languageResults.js";
-import { TextPosition, TextRange, type TextSnapshot } from "../../../../editor/alpha/common/text.js";
+import { type LanguageWorkerDocumentSynchronization } from "../../../../editor/alpha/common/languages/languageWorkerDocumentMirror.js";
+import { type LanguageToken, type LanguageTokenResult } from "../../../../editor/alpha/common/languages/languageResults.js";
+import { TextPosition, TextRange, type TextSnapshot } from "../../../../editor/alpha/common/core/text.js";
 import { defaultTextMateScopeResolver, type TextMateResolvedTokenStyle, type TextMateScopeResolver } from "./textMateScopeResolver.js";
-import { type TextMateGrammarContent, type TextMateGrammarRegistrySnapshot } from "./textMateGrammarRegistry.js";
+import { type TextMateGrammarContent, type RegisteredTextMateGrammarDefinition, type TextMateGrammarRegistrySnapshot, type TextMateGrammarTokenType } from "./textMateGrammarRegistry.js";
 import * as textMateNamespace from "vscode-textmate";
-import { type IGrammar, type IOnigLib, type IRawGrammar, type Registry as TextMateRegistry, type StateStack } from "vscode-textmate";
+import { type IGrammar, type IGrammarConfiguration, type IOnigLib, type IRawGrammar, type Registry as TextMateRegistry, type StateStack } from "vscode-textmate";
 
 const textMateRuntime = (textMateNamespace as unknown as { readonly default?: typeof textMateNamespace }).default ?? textMateNamespace;
 const { INITIAL, Registry, parseRawGrammar } = textMateRuntime;
@@ -50,6 +50,7 @@ interface TextMateDocumentAnalysis {
 interface TextMateRuntimeState {
   readonly snapshot: TextMateGrammarRegistrySnapshot;
   readonly registry: TextMateRegistry;
+  readonly languageNumbers: ReadonlyMap<string, number>;
   readonly grammars: Map<string, Promise<IGrammar | undefined>>;
   readonly caches: Map<string, TextMateTokenizationCache>;
   users: number;
@@ -112,7 +113,7 @@ export class TextMateTokenizationService implements Disposable {
       if (!grammar) throw new ReferenceError(`TextMate grammar '${definition.scopeName}' could not be loaded`);
       let cache = state.caches.get(languageId);
       if (!cache) {
-        cache = new TextMateTokenizationCache(languageId, grammar, this.lineTimeLimitMilliseconds, this.scopeResolver, this.onDidUpdateCache);
+        cache = new TextMateTokenizationCache(languageId, grammar, this.lineTimeLimitMilliseconds, createGrammarScopeResolver(definition, grammarSnapshot, this.scopeResolver), this.onDidUpdateCache);
         state.caches.set(languageId, cache);
       }
       return cache.getTokens(snapshot, signal);
@@ -178,7 +179,12 @@ export class TextMateTokenizationService implements Disposable {
   private getGrammar(state: TextMateRuntimeState, scopeName: string): Promise<IGrammar | undefined> {
     let grammar = state.grammars.get(scopeName);
     if (!grammar) {
-      grammar = state.registry.loadGrammar(scopeName).then(value => value ?? undefined);
+      const definition = state.snapshot.getDefinitionForScope(scopeName);
+      if (!definition?.languageId) return Promise.resolve(undefined);
+      const configuration = createGrammarConfiguration(state.snapshot, definition, state.languageNumbers);
+      const languageNumber = state.languageNumbers.get(definition.languageId);
+      if (languageNumber === undefined) return Promise.resolve(undefined);
+      grammar = state.registry.loadGrammarWithConfiguration(scopeName, languageNumber, configuration).then(value => value ?? undefined);
       state.grammars.set(scopeName, grammar);
     }
     return grammar;
@@ -249,15 +255,105 @@ function createRuntimeState(snapshot: TextMateGrammarRegistrySnapshot, onigLib: 
     loadGrammar: async scopeName => {
       const definition = snapshot.getDefinitionForScope(scopeName);
       if (!definition) return undefined;
-      return normalizeRawGrammar(await definition.loadGrammar(), definition.scopeName);
+      return normalizeRawGrammar(await definition.loadGrammar(), definition.scopeName, definition.filePath);
     },
     getInjections: scopeName => [...snapshot.getInjections(scopeName)],
   });
-  return { snapshot, registry, grammars: new Map(), caches: new Map(), users: 0, retired: false };
+  const languageNumbers = new Map<string, number>();
+  for (const definition of snapshot.grammars) {
+    if (definition.languageId) addLanguageNumber(languageNumbers, definition.languageId);
+    for (const languageId of Object.values(definition.embeddedLanguages ?? {})) addLanguageNumber(languageNumbers, languageId);
+  }
+  return { snapshot, registry, languageNumbers, grammars: new Map(), caches: new Map(), users: 0, retired: false };
 }
 
-function normalizeRawGrammar(content: TextMateGrammarContent, scopeName: string): IRawGrammar {
-  const grammar = typeof content === "string" ? parseRawGrammar(content, `${scopeName}.tmLanguage.json`) : content;
+function addLanguageNumber(languageNumbers: Map<string, number>, languageId: string): void {
+  if (languageNumbers.has(languageId)) return;
+  languageNumbers.set(languageId, languageNumbers.size + 1);
+}
+
+function createGrammarConfiguration(snapshot: TextMateGrammarRegistrySnapshot, definition: RegisteredTextMateGrammarDefinition, languageNumbers: ReadonlyMap<string, number>): IGrammarConfiguration {
+  const tokenTypes: Record<string, number> = {};
+  const embeddedLanguages: Record<string, number> = {};
+  for (const candidate of [definition, ...snapshot.getInjections(definition.scopeName).map(scope => snapshot.getDefinitionForScope(scope)).filter((value): value is RegisteredTextMateGrammarDefinition => value !== undefined)]) {
+    for (const [scope, tokenType] of Object.entries(candidate.tokenTypes ?? {})) tokenTypes[scope] = standardTokenType(tokenType);
+    for (const [scope, languageId] of Object.entries(candidate.embeddedLanguages ?? {})) {
+      const languageNumber = languageNumbers.get(languageId);
+      if (languageNumber !== undefined) embeddedLanguages[scope] = languageNumber;
+    }
+  }
+  return {
+    embeddedLanguages,
+    tokenTypes,
+    balancedBracketSelectors: [...(definition.balancedBracketScopes ?? ["*"])],
+    unbalancedBracketSelectors: [...(definition.unbalancedBracketScopes ?? [])],
+  };
+}
+
+function standardTokenType(value: TextMateGrammarTokenType): number {
+  switch (value) {
+    case "comment": return 1;
+    case "string": return 2;
+    case "regex": return 3;
+    case "other": return 0;
+  }
+}
+
+function createGrammarScopeResolver(definition: RegisteredTextMateGrammarDefinition, snapshot: TextMateGrammarRegistrySnapshot, fallback: TextMateScopeResolver): TextMateScopeResolver {
+  const tokenTypes = new Map<string, TextMateGrammarTokenType>();
+  for (const candidate of [definition, ...snapshot.getInjections(definition.scopeName).map(scope => snapshot.getDefinitionForScope(scope)).filter((value): value is RegisteredTextMateGrammarDefinition => value !== undefined)]) {
+    for (const [scope, tokenType] of Object.entries(candidate.tokenTypes ?? {})) tokenTypes.set(scope, tokenType);
+  }
+  return scopes => {
+    const override = resolveTokenTypeOverride(scopes, tokenTypes);
+    if (override === undefined) return fallback(scopes);
+    if (override === "other") return fallback(scopes);
+    return Object.freeze({ tokenType: override, modifiers: EMPTY_MODIFIERS });
+  };
+}
+
+function resolveTokenTypeOverride(scopes: readonly string[], tokenTypes: ReadonlyMap<string, TextMateGrammarTokenType>): string | undefined {
+  let best: { readonly selector: string; readonly tokenType: TextMateGrammarTokenType } | undefined;
+  for (const [selector, tokenType] of tokenTypes) {
+    if (!matchesScopeSelector(selector, scopes)) continue;
+    if (!best || selector.length > best.selector.length) best = { selector, tokenType };
+  }
+  if (!best) return undefined;
+  switch (best.tokenType) {
+    case "comment": return "comment";
+    case "string": return "string";
+    case "regex": return "regexp";
+    case "other": return "other";
+  }
+}
+
+function matchesScopeSelector(selector: string, scopes: readonly string[]): boolean {
+  const clauses = selector.split(/\s+/u).filter(clause => clause.length > 0);
+  if (clauses.length === 0) return false;
+  let scopeIndex = 0;
+  for (const clause of clauses) {
+    const matchIndex = scopes.findIndex((scope, index) => index >= scopeIndex && matchesScope(clause, scope));
+    if (matchIndex < 0) return false;
+    scopeIndex = matchIndex + 1;
+  }
+  return true;
+}
+
+function matchesScope(selector: string, scope: string): boolean {
+  if (selector === "*") return true;
+  if (!selector.includes("*")) return scope === selector || scope.startsWith(`${selector}.`);
+  const expression = selector.split("*").map(escapeRegularExpression).join("[^.]*");
+  return new RegExp(`^${expression}(?:\\.|$)`, "u").test(scope);
+}
+
+function escapeRegularExpression(value: string): string {
+  return value.replace(/[|\\{}()[\]^$+?.]/gu, "\\$&");
+}
+
+const EMPTY_MODIFIERS: readonly string[] = Object.freeze([]);
+
+function normalizeRawGrammar(content: TextMateGrammarContent, scopeName: string, filePath = `${scopeName}.tmLanguage.json`): IRawGrammar {
+  const grammar = typeof content === "string" ? parseRawGrammar(content, filePath) : content;
   if (typeof grammar !== "object" || grammar === null || grammar.scopeName !== scopeName) {
     throw new TypeError(`TextMate grammar '${scopeName}' returned a different root scope`);
   }

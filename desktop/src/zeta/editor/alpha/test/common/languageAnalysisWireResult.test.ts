@@ -1,11 +1,11 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
-import { languageAnalysisWireCodec } from "../../language/common/languageAnalysisWire.js";
-import { LANGUAGE_DIAGNOSTIC_LANE, LANGUAGE_TOKEN_LANE, type LanguageAnalysisLane, type LanguageAnalysisResult } from "../../language/common/languageAnalysisService.js";
-import { LanguageLexicalAnalysisCache } from "../../language/common/languageLexicalAnalysisCache.js";
-import { type LanguageWorkerWireResultState } from "../../language/common/languageWorkerWireProtocol.js";
-import { TextPosition, TextRange, type TextSnapshot } from "../../common/text.js";
-import { TextModel } from "../../common/textModel.js";
+import { languageAnalysisWireCodec } from "../../common/languages/analysis/languageAnalysisWire.js";
+import { LANGUAGE_DIAGNOSTIC_LANE, LANGUAGE_TOKEN_LANE, type LanguageAnalysisLane, type LanguageAnalysisResult } from "../../common/languages/analysis/languageAnalysisService.js";
+import { LanguageLexicalAnalysisCache } from "../../common/languages/languageLexicalAnalysisCache.js";
+import { type LanguageWorkerWireResultState } from "../../common/languages/languageWorkerWireProtocol.js";
+import { TextPosition, TextRange, type TextSnapshot } from "../../common/core/text.js";
+import { TextModel } from "../../common/model/textModel.js";
 
 test("Analysis wire deltas stay equal to full results across random edits", () => {
   using model = new TextModel("const value = `start\nmiddle\nend`;\nif (value) {\n  return 1;\n}");

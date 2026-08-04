@@ -1,0 +1,44 @@
+import "./media/peekView.css";
+import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
+import { type TextPosition } from "../../../common/core/text.js";
+import { type AlphaEditorViewport } from "../../../browser/view/editorViewport.js";
+
+/** A lifecycle-safe preview surface anchored to an editor position. */
+export class AlphaPeekViewWidget extends DisposableOwner {
+  readonly element: HTMLElement;
+  private readonly body: HTMLDivElement;
+
+  constructor(private readonly viewport: AlphaEditorViewport, anchor: TextPosition, title = "Preview") {
+    super();
+    viewport.textModel.offsetAt(anchor);
+    const document = viewport.element.ownerDocument;
+    this.element = document.createElement("section");
+    this.element.className = "zeta-alpha-editor-peek-view";
+    this.element.hidden = true;
+    const header = document.createElement("header");
+    header.className = "zeta-alpha-editor-peek-view-header";
+    header.textContent = title;
+    this.body = document.createElement("div");
+    this.body.className = "zeta-alpha-editor-peek-view-body";
+    this.element.append(header, this.body);
+    viewport.element.append(this.element);
+    this.defer(() => this.element.remove());
+    this.own(viewport.onDidChangeLayout(() => this.position(anchor)));
+    this.position(anchor);
+  }
+
+  setBody(content: Node): void { this.body.replaceChildren(content); }
+  show(): void { this.element.hidden = false; this.position(); }
+  hide(): void { this.element.hidden = true; }
+
+  private position(anchor = this.anchor): void {
+    if (!anchor) return;
+    const coordinates = this.viewport.getPositionContentCoordinates(anchor);
+    const scroll = this.viewport.viewportLayout.scrollPosition;
+    this.element.style.left = `${Math.max(4, coordinates.left - scroll.left)}px`;
+    this.element.style.top = `${Math.max(4, coordinates.top - scroll.top + coordinates.height + 4)}px`;
+    this.anchor = anchor;
+  }
+
+  private anchor: TextPosition | undefined;
+}

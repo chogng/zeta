@@ -1,8 +1,8 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
-import { LanguageWorkerDocumentMirror } from "../../language/common/languageWorkerDocumentMirror.js";
-import { TextPosition, TextRange } from "../../common/text.js";
-import { TextModel } from "../../common/textModel.js";
+import { LanguageWorkerDocumentMirror } from "../../common/languages/languageWorkerDocumentMirror.js";
+import { TextPosition, TextRange } from "../../common/core/text.js";
+import { TextModel } from "../../common/model/textModel.js";
 
 test("Worker document mirror applies model transactions through its Piece Tree", () => {
   using model = new TextModel("abc\ndef");

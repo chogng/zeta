@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { toDisposable } from "../../../../base/common/lifecycle.js";
-import { TextRange } from "../../common/text.js";
-import { TextModel } from "../../common/textModel.js";
+import { TextRange } from "../../common/core/text.js";
+import { TextModel } from "../../common/model/textModel.js";
 
 test("TextModel snapshots remain immutable across edits and disposal", () => {
   const model = new TextModel("alpha\nbeta");

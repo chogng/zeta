@@ -6,7 +6,8 @@ part of `base`, and it
 does not own workspace files, extension manifests, product color tokens,
 documents, or the Alpha view. It does own the serializable scope-to-semantic
 theme projection needed inside its Worker. Its browser boundary owns only
-explicitly bundled grammar assets and Worker composition.
+caller-supplied grammar loaders and Worker composition; extension package files
+belong to the extension resource layer.
 
 ## Ownership
 
@@ -23,8 +24,8 @@ explicitly bundled grammar assets and Worker composition.
 | Browser Worker Oniguruma WASM loading | `browser/textMateOniguruma.ts` | ✅ |
 | Grammar contribution-to-catalog lifecycle | `TextMateGrammarService` | ✅ |
 | Workbench service composition and lifecycle | `ITextMateService` / `BrowserTextMateService` | ✅ |
-| Product-bundled JSON/JSONC grammar resources and caller-resolved contributions | `BrowserTextMateGrammarService` / `BrowserTextMateService` | 部分具备; extension resource discovery remains outside this adapter |
-| External extension-manifest loading | future extension composition root | 尚未完成 |
+| Declarative language, configuration, snippet, grammar, and theme resources | `resources/extensions` / `AppServerExtensionService` | 部分具备：manifest projection is active; theme activation is separate |
+| External extension-manifest loading | `AppServerExtensionService` | Static declarative contributions only; extension JavaScript is never executed |
 
 `workbench/services/textMate/common` may depend on Alpha's public Analysis and text
 contracts because it adapts into that domain. Alpha and `base` must not import
@@ -60,15 +61,17 @@ complete catalog, and preserves the last good revision when a loader fails.
 revision; `onDidFailCatalog` reports a failed revision without corrupting the
 catalog already used by a Worker.
 
-`BrowserTextMateGrammarService` currently contributes the real VS Code JSON
-and JSONC grammars through Vite raw resources. Those files stay under the
-TextMate browser boundary and are transferred as catalog content; neither
-common code nor the dedicated Worker reads product or workspace files.
-Workbench constructs one `BrowserTextMateService`, registers it as
-`ITextMateService`, and passes it to Alpha panes. The service owns the shared
-grammar catalog and scope theme; each Alpha session creates and disposes only
-its dedicated TextMate Analysis Worker. Unsupported languages still fall back
-to Alpha's lexical provider.
+The JSON and JSONC grammars are shipped as the declarative `json` package under
+`resources/extensions`. Rust discovers
+the package and serves its bounded grammar resources through the extension API;
+the browser TextMate service only receives validated loaders. Neither common code
+nor the dedicated Worker reads product or workspace files. Workbench constructs one
+`BrowserTextMateService`, registers it as
+`ITextMateService`, and passes it to Alpha panes. `AppServerExtensionService`
+then projects Rust-discovered static grammar contributions into the same
+registry. The service owns the shared grammar catalog and scope theme; each
+Alpha session creates and disposes only its dedicated TextMate Analysis Worker.
+Unsupported languages still fall back to Alpha's lexical provider.
 
 Direct `createBrowserAlphaEditorSession` callers may omit the service and get a
 private `BrowserTextMateService`; that compatibility path is session-owned and
@@ -114,7 +117,7 @@ from the catalog source's current revision.
 
 `TextMateAnalysisModuleWorkerClient` serializes catalog and scope-theme updates
 and gates every Analysis request on the latest scheduled revisions. The dedicated browser Worker
-activates both `textmate.grammars` and `alpha.lexical`; it owns the catalog
+activates both `textmate.grammars` and `language.lexical`; it owns the catalog
 store, scope-theme model, TextMate service, Oniguruma runtime, provider registries, and all four
 wire servers. A replacement Worker accepts the source's current revision even
 when its revision is greater than one.
@@ -151,13 +154,23 @@ lane contract.
 
 ## Current limitations
 
-- VS Code JSON and JSONC grammars are bundled; TypeScript, JavaScript, embedded
-  grammars, injections, and external extension contributions are not yet
-  included;
-- embedded-language identity and balanced-bracket selectors are not projected;
+- The bundled pack includes CSS, HTML, JavaScript, JSON/JSONC, Markdown, Python, Rust, Shell,
+  SQL, TypeScript, XML, YAML, and four self-contained default themes. Rust still owns discovery
+  and bounded resource reads; this adapter does not scan arbitrary directories;
+- `embeddedLanguages`, `tokenTypes`, `balancedBracketScopes`, and
+  `unbalancedBracketScopes` are validated and transported into the `vscode-textmate` runtime.
+  `tokenTypes` also projects to Alpha semantic token types. Embedded-language ranges and bracket
+  balance are not yet fields on Alpha's public `LanguageToken` result;
+- extension `themes` are parsed into a versioned catalog. Their VS Code color-token overrides and
+  token-color rules are not yet compiled into a selectable Workbench `IColorTheme` or a complete
+  platform color-theme selection flow;
+- `configurationDefaults`, `semanticTokenScopes`, extension JavaScript, and LSP declarations are
+  intentionally ignored by this declarative loader. LSP providers must enter through the separate
+  Alpha language-provider contract;
 - the cache aggregates a complete renderer token array after line reuse;
-- `BrowserTextMateService` owns the built-in catalog and matching Worker
-  factory; Workbench injects it into product Alpha panes;
+- `BrowserTextMateService` owns the grammar registry and matching Worker
+  factory; `AppServerExtensionService` supplies declarative package loaders and
+  Workbench injects the service into product Alpha panes;
 - Alpha sessions schedule a new analysis request when the catalog or scope theme changes;
   other consumers must still make that scheduling decision explicitly.
 

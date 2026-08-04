@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { EditorSelectionController } from "../../common/editorSelectionController.js";
-import { createOvertypeTextCommand } from "../../common/overtype.js";
-import { TextSelection, TextSelectionSet } from "../../common/selection.js";
-import { TextPosition } from "../../common/text.js";
-import { TextModel } from "../../common/textModel.js";
+import { EditorSelectionController } from "../../common/cursor/editorSelectionController.js";
+import { createOvertypeTextCommand } from "../../common/cursor/cursorOvertype.js";
+import { TextSelection, TextSelectionSet } from "../../common/core/selection.js";
+import { TextPosition } from "../../common/core/text.js";
+import { TextModel } from "../../common/model/textModel.js";
 
 test("Overtype replaces complete following graphemes and stops at physical line ends", () => {
   using model = new TextModel("a😊b\ncd");

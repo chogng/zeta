@@ -1,0 +1,40 @@
+.zeta-alpha-editor-goto-symbol {
+  position: absolute;
+  z-index: 9;
+  width: min(480px, calc(100% - 16px));
+  padding: 5px;
+  background: var(--zeta-editor-widget-background, var(--zeta-editor-background));
+  border: 1px solid var(--zeta-editor-widget-border, var(--zeta-editor-border));
+  border-radius: 4px;
+  box-shadow: 0 4px 14px rgb(0 0 0 / 24%);
+}
+
+.zeta-alpha-editor-goto-symbol-input {
+  box-sizing: border-box;
+  width: 100%;
+  color: var(--zeta-editor-foreground);
+  background: var(--zeta-editor-input-background, var(--zeta-editor-background));
+  border: 1px solid var(--zeta-editor-border);
+}
+
+.zeta-alpha-editor-goto-symbol-list {
+  max-height: 260px;
+  margin-top: 4px;
+  overflow: auto;
+}
+
+.zeta-alpha-editor-goto-symbol-item {
+  display: block;
+  width: 100%;
+  padding: 4px 6px;
+  color: var(--zeta-editor-foreground);
+  text-align: left;
+  background: transparent;
+  border: 0;
+}
+
+.zeta-alpha-editor-goto-symbol-item:hover,
+.zeta-alpha-editor-goto-symbol-item:focus-visible {
+  background: var(--zeta-editor-list-hover-background, rgb(127 127 127 / 18%));
+  outline: none;
+}

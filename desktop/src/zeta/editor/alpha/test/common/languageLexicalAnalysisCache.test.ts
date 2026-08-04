@@ -1,8 +1,8 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
-import { LanguageLexicalAnalysisCache, type LanguageLexicalCacheUpdate } from "../../language/common/languageLexicalAnalysisCache.js";
-import { TextRange } from "../../common/text.js";
-import { TextModel } from "../../common/textModel.js";
+import { LanguageLexicalAnalysisCache, type LanguageLexicalCacheUpdate } from "../../common/languages/languageLexicalAnalysisCache.js";
+import { TextRange } from "../../common/core/text.js";
+import { TextModel } from "../../common/model/textModel.js";
 
 test("Lexical token and diagnostic lanes share one versioned cache", () => {
   using model = new TextModel("const first = 1;\nconst second = 2;\nreturn first + second;");

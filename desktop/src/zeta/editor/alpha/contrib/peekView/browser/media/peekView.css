@@ -1,0 +1,23 @@
+.zeta-alpha-editor-peek-view {
+  position: absolute;
+  right: 8px;
+  left: 8px;
+  z-index: 9;
+  box-sizing: border-box;
+  max-height: 45%;
+  overflow: auto;
+  background: var(--zeta-editor-background);
+  border: 1px solid var(--zeta-widget-border);
+  box-shadow: 0 6px 18px var(--zeta-widget-shadow);
+}
+
+.zeta-alpha-editor-peek-view-header {
+  padding: 4px 8px;
+  color: var(--zeta-description-foreground);
+  font-size: 11px;
+  border-bottom: 1px solid var(--zeta-widget-border);
+}
+
+.zeta-alpha-editor-peek-view-body {
+  padding: 8px;
+}

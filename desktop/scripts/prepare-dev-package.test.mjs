@@ -107,6 +107,9 @@ test("assembles and validates the canonical Windows development layout", async (
     assert.equal(metadata.target, "x86_64-pc-windows-msvc");
     assert.equal(await readFile(join(staging, "zeta-path", "rg.exe"), "utf8"), "ripgrep");
     assert.equal(await readFile(join(staging, "zeta-resources", "zeta-command-runner.exe"), "utf8"), "runner");
+    const extensionPackages = (await readdir(join(staging, "zeta-resources", "extensions"))).sort();
+    assert.deepEqual(extensionPackages, ["css", "html", "javascript", "json", "markdown-basics", "python", "rust", "shellscript", "sql", "theme-defaults", "typescript-basics", "xml", "yaml"]);
+    assert.match(await readFile(join(staging, "zeta-resources", "extensions", "json", "package.json"), "utf8"), /"name": "json"/);
   } finally {
     await rm(root, { force: true, recursive: true });
   }

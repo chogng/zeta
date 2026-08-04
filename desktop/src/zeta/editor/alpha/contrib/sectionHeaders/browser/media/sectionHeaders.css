@@ -1,0 +1,7 @@
+.zeta-alpha-editor-line.section-header .zeta-alpha-editor-line-text {
+  font-weight: 600;
+}
+
+.zeta-alpha-editor-line.section-header {
+  border-top: 1px solid color-mix(in srgb, var(--zeta-widget-border) 45%, transparent);
+}

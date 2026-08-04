@@ -1,5 +1,5 @@
-import { type LanguageAnalysisProvider, type LanguageAnalysisProviderRequest } from "../../../../editor/alpha/language/common/languageAnalysisProviders.js";
-import { type LanguageWorkerDocumentSynchronization } from "../../../../editor/alpha/language/common/languageWorkerDocumentMirror.js";
+import { type LanguageAnalysisProvider, type LanguageAnalysisProviderRequest } from "../../../../editor/alpha/common/languages/analysis/languageAnalysisProviders.js";
+import { type LanguageWorkerDocumentSynchronization } from "../../../../editor/alpha/common/languages/languageWorkerDocumentMirror.js";
 import { TextMateTokenizationService } from "./textMateTokenizationService.js";
 
 export const TEXTMATE_ANALYSIS_PROVIDER_ID = "textmate.grammar";

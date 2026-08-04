@@ -1,21 +1,21 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
-import { LanguageAnalysisProviderRegistry, type LanguageAnalysisProvider } from "../../language/common/languageAnalysisProviders.js";
-import { LanguageAnalysisProviderModuleHost, LanguageAnalysisProviderModuleRegistry, LanguageAnalysisProviderModuleState } from "../../language/common/languageAnalysisProviderModules.js";
+import { LanguageAnalysisProviderRegistry, type LanguageAnalysisProvider } from "../../common/languages/analysis/languageAnalysisProviders.js";
+import { LanguageAnalysisProviderModuleHost, LanguageAnalysisProviderModuleRegistry, LanguageAnalysisProviderModuleState } from "../../common/languages/analysis/languageAnalysisProviderModules.js";
 
 test("Analysis provider module activation installs and removes one provider batch", async () => {
   using providers = new LanguageAnalysisProviderRegistry();
   using modules = new LanguageAnalysisProviderModuleRegistry();
   using registration = modules.register({
-    id: "alpha.lexical",
+    id: "language.lexical",
     load: () => [tokenProvider("alpha.tokens"), diagnosticProvider("alpha.diagnostics")],
   });
   using host = new LanguageAnalysisProviderModuleHost(modules, providers);
 
-  assert.equal((await host.setActivation("alpha.lexical", LanguageAnalysisProviderModuleState.Active)).changed, true);
+  assert.equal((await host.setActivation("language.lexical", LanguageAnalysisProviderModuleState.Active)).changed, true);
   assert.equal(providers.getTokenProvider("typescript")?.id, "alpha.tokens");
   assert.deepEqual(providers.getDiagnosticProviders("typescript").map(provider => provider.id), ["alpha.diagnostics"]);
-  assert.equal((await host.setActivation("alpha.lexical", LanguageAnalysisProviderModuleState.Inactive)).changed, true);
+  assert.equal((await host.setActivation("language.lexical", LanguageAnalysisProviderModuleState.Inactive)).changed, true);
   assert.equal(providers.getTokenProvider("typescript"), undefined);
   assert.deepEqual(providers.getDiagnosticProviders("typescript"), []);
 });

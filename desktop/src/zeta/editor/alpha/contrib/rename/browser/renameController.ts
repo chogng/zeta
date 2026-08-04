@@ -1,0 +1,106 @@
+import "./media/rename.css";
+import { addDisposableListener, stopEvent } from "../../../../../base/browser/dom.js";
+import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
+import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
+import { createEditorEditCommand } from "../../../common/commands/editorCommand.js";
+import { type AlphaEditorViewport } from "../../../browser/view/editorViewport.js";
+import { type RenameService } from "../common/rename.js";
+
+/** Owns the local rename input and applies provider edits through the cursor command contract. */
+export class AlphaRenameController extends DisposableOwner {
+  private readonly element: HTMLDivElement;
+  private readonly input: HTMLInputElement;
+  private readonly status: HTMLSpanElement;
+  private request: AbortController | undefined;
+
+  constructor(private readonly editorInput: HTMLTextAreaElement, private readonly viewport: AlphaEditorViewport, private readonly selections: EditorSelectionController, private readonly service: RenameService, private readonly languageId: string, private readonly onError: (error: unknown) => void = error => console.error("Alpha rename failed", error)) {
+    super();
+    if (viewport.textModel !== selections.textModel) throw new TypeError("Alpha rename dependencies must share one text model");
+    const ownerDocument = viewport.element.ownerDocument;
+    this.element = ownerDocument.createElement("div");
+    this.element.className = "zeta-alpha-editor-rename";
+    this.element.hidden = true;
+    this.input = ownerDocument.createElement("input");
+    this.input.className = "zeta-alpha-editor-rename-input";
+    this.input.type = "text";
+    this.input.setAttribute("aria-label", "New symbol name");
+    this.status = ownerDocument.createElement("span");
+    this.status.className = "zeta-alpha-editor-rename-status";
+    this.status.setAttribute("aria-live", "polite");
+    this.element.append(this.input, this.status);
+    viewport.element.append(this.element);
+    this.defer(() => this.element.remove());
+    this.own(addDisposableListener(editorInput, "keydown", event => {
+      if (event.defaultPrevented || event.isComposing || event.altKey || event.ctrlKey || event.metaKey || event.key !== "F2") return;
+      stopEvent(event);
+      void this.open();
+    }));
+    this.own(addDisposableListener(this.element, "keydown", event => this.handleWidgetKeydown(event)));
+  }
+
+  private async open(): Promise<void> {
+    this.cancelRequest();
+    const request = this.request = new AbortController();
+    try {
+      const active = this.selections.selections.primary.active;
+      const preparation = await this.service.prepareRename(this.languageId, active, request.signal);
+      if (request.signal.aborted) return;
+      if (!preparation) {
+        this.viewport.announceAccessibilityStatus("Rename is not available at this position.");
+        return;
+      }
+      this.element.hidden = false;
+      this.status.textContent = preparation.placeholder;
+      this.input.value = preparation.placeholder;
+      const coordinates = this.viewport.getPositionContentCoordinates(preparation.range.start);
+      this.element.style.left = `${Math.max(8, coordinates.left - this.viewport.viewportLayout.scrollPosition.left)}px`;
+      this.element.style.top = `${Math.max(8, coordinates.top - this.viewport.viewportLayout.scrollPosition.top + coordinates.height + 4)}px`;
+      this.input.focus({ preventScroll: true });
+      this.input.select();
+    } catch (error) {
+      if (!request.signal.aborted) this.onError(error);
+    }
+  }
+
+  private handleWidgetKeydown(event: KeyboardEvent): void {
+    if (event.defaultPrevented || event.isComposing) return;
+    if (event.key === "Escape") {
+      stopEvent(event);
+      this.close();
+      return;
+    }
+    if (event.key !== "Enter" || event.ctrlKey || event.metaKey || event.altKey) return;
+    stopEvent(event);
+    void this.commit();
+  }
+
+  private async commit(): Promise<void> {
+    const newName = this.input.value.trim();
+    if (newName.length === 0) {
+      this.status.textContent = "Name cannot be empty";
+      return;
+    }
+    const request = this.request = new AbortController();
+    try {
+      const active = this.selections.selections.primary.active;
+      const edit = await this.service.provideRenameEdits(this.languageId, active, newName, request.signal);
+      if (request.signal.aborted) return;
+      const command = createEditorEditCommand(this.viewport.textModel, this.selections.selections, edit.edits);
+      if (command) this.selections.execute(command);
+      this.close();
+    } catch (error) {
+      if (!request.signal.aborted) this.onError(error);
+    }
+  }
+
+  private close(): void {
+    this.cancelRequest();
+    this.element.hidden = true;
+    this.editorInput.focus({ preventScroll: true });
+  }
+
+  private cancelRequest(): void {
+    this.request?.abort();
+    this.request = undefined;
+  }
+}

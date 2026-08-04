@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { TextRange } from "../../common/text.js";
-import { TextModel } from "../../common/textModel.js";
+import { TextRange } from "../../common/core/text.js";
+import { TextModel } from "../../common/model/textModel.js";
 
 test("TextModel replays deterministic history across changing line maps", () => {
   using model = new TextModel("seed\ntext");

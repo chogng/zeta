@@ -11,12 +11,12 @@ canonical in [`docs/editor-architecture.md`](../../../../../../docs/editor-archi
 | Workspace resource reads and atomic writes | `IFileService` | ✅ |
 | Bootstrap-text versus file-system resolution | `ITextFileService.resolve` | ✅ |
 | Text save transport and cancellation | `ITextFileService.save` | ✅ |
-| Alpha URI-to-`TextModel` references | `AlphaTextModelService` | ✅, editor-owned |
+| URI-to-`TextModel` references | `ITextModelService` | ✅, editor-owned |
 | Monaco URI-to-model references | `monacoModelService` | ✅, transition adapter-owned |
-| Alpha dirty state, snapshot saves and explicit reverts | `AlphaTextModelService` | ✅, Alpha-owned |
-| Alpha CRLF/LF source-line-ending preservation | `AlphaTextModelService` | ✅, Alpha-owned |
-| Workspace external-change invalidation, clean reload, and dirty-model conflict state | `IFileService` → `ITextFileService` → `AlphaTextModelService` | ✅, transport notification plus Alpha-owned policy |
-| Alpha pre-write external-change conflict detection | `AlphaTextModelService` | ✅, Alpha-owned defense in depth |
+| Dirty state, snapshot saves and explicit reverts | `ITextModelService` | ✅, editor-owned |
+| CRLF/LF source-line-ending preservation | `ITextModelService` | ✅, editor-owned |
+| Workspace external-change invalidation, clean reload, and dirty-model conflict state | `IFileService` → `ITextFileService` → `ITextModelService` | ✅, transport notification plus editor-owned policy |
+| Pre-write external-change conflict detection | `ITextModelService` | ✅, editor-owned defense in depth |
 | Atomic expected-revision writes and recovery | future TextFile model layer | 尚未完成 |
 | Encoding and mixed line-ending preservation | future TextFile model layer | 尚未完成 |
 
@@ -51,7 +51,7 @@ editor model.
 Adding model caches, dirty flags, backup recovery, or conflict policy directly
 to `ExplorerViewPane`, `TextModel`, or a concrete editor pane would signal
 architectural drift. Alpha currently keeps baseline comparison and its
-transaction semantics in `AlphaTextModelService`; a cross-editor document
+transaction semantics in `BrowserTextModelService`; a cross-editor document
 model is required before those semantics can move into this service.
 
 ## Tests and modification impact

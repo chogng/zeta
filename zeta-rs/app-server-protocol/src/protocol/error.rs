@@ -24,6 +24,7 @@ pub enum AppServerErrorName {
     GitUnavailable,
     GitNotRepository,
     GitOperationFailed,
+    DiffOperationFailed,
     SearchUnavailable,
     SearchNotFound,
     SearchNotOwner,
@@ -42,6 +43,11 @@ pub enum AppServerErrorName {
     WorkspaceSwitchBusy,
     WorkspaceSwitchFailed,
     WorkspaceTrustRequired,
+    ExtensionsUnavailable,
+    ExtensionNotFound,
+    ExtensionResourceNotFound,
+    ExtensionResourceInvalidPath,
+    ExtensionOperationFailed,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

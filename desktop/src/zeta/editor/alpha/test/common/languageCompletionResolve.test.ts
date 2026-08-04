@@ -1,11 +1,11 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
-import { LanguageCompletionProviderRegistry, createLanguageCompletionInvokeContext, type LanguageCompletionProvider } from "../../language/common/languageCompletionProviders.js";
-import { LanguageCompletionService } from "../../language/common/languageCompletionService.js";
-import { LanguageCompletionItemKind, type LanguageCompletionResolveRequest } from "../../language/common/languageCompletions.js";
-import { LanguageRequestStatus } from "../../language/common/languageRequestCoordinator.js";
-import { TextPosition, TextRange } from "../../common/text.js";
-import { TextModel } from "../../common/textModel.js";
+import { LanguageCompletionProviderRegistry, createLanguageCompletionInvokeContext, type LanguageCompletionProvider } from "../../common/languages/completion/languageCompletionProviders.js";
+import { LanguageCompletionService } from "../../common/languages/completion/languageCompletionService.js";
+import { LanguageCompletionItemKind, type LanguageCompletionResolveRequest } from "../../common/languages/completion/languageCompletions.js";
+import { LanguageRequestStatus } from "../../common/languages/languageRequestCoordinator.js";
+import { TextPosition, TextRange } from "../../common/core/text.js";
+import { TextModel } from "../../common/model/textModel.js";
 
 test("Completion service resolves deferred details against the exact provider item", async () => {
   using model = new TextModel("con");

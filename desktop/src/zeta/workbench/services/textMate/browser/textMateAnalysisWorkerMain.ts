@@ -1,14 +1,14 @@
 import { DisposableStore } from "../../../../base/common/lifecycle.js";
-import { LanguageAnalysisProviderModuleHost, LanguageAnalysisProviderModuleRegistry } from "../../../../editor/alpha/language/common/languageAnalysisProviderModules.js";
-import { LanguageAnalysisProviderModuleWireServer } from "../../../../editor/alpha/language/common/languageAnalysisProviderModuleWire.js";
-import { LanguageAnalysisProviderRegistry } from "../../../../editor/alpha/language/common/languageAnalysisProviders.js";
-import { LanguageAnalysisProviderWorker } from "../../../../editor/alpha/language/common/languageAnalysisService.js";
-import { languageAnalysisWireCodec } from "../../../../editor/alpha/language/common/languageAnalysisWire.js";
-import { registerAlphaBuiltinLanguageConfigurations } from "../../../../editor/alpha/language/common/languageBuiltinConfigurations.js";
-import { LanguageConfigurationRegistry } from "../../../../editor/alpha/language/common/languageConfiguration.js";
-import { createLanguageLexicalAnalysisProvider } from "../../../../editor/alpha/language/common/languageLexicalAnalysisProvider.js";
-import { LanguageWorkerWireServer } from "../../../../editor/alpha/language/common/languageWorkerWire.js";
-import { createDedicatedWorkerLanguagePort } from "../../../../editor/alpha/language/browser/dedicatedWorkerLanguagePort.js";
+import { LanguageAnalysisProviderModuleHost, LanguageAnalysisProviderModuleRegistry } from "../../../../editor/alpha/common/languages/analysis/languageAnalysisProviderModules.js";
+import { LanguageAnalysisProviderModuleWireServer } from "../../../../editor/alpha/common/languages/analysis/languageAnalysisProviderModuleWire.js";
+import { LanguageAnalysisProviderRegistry } from "../../../../editor/alpha/common/languages/analysis/languageAnalysisProviders.js";
+import { LanguageAnalysisProviderWorker } from "../../../../editor/alpha/common/languages/analysis/languageAnalysisService.js";
+import { languageAnalysisWireCodec } from "../../../../editor/alpha/common/languages/analysis/languageAnalysisWire.js";
+import { registerBuiltinLanguageConfigurations } from "../../../../editor/alpha/common/languages/languageBuiltinConfigurations.js";
+import { LanguageConfigurationRegistry } from "../../../../editor/alpha/common/languages/languageConfiguration.js";
+import { createLanguageLexicalAnalysisProvider } from "../../../../editor/alpha/common/languages/languageLexicalAnalysisProvider.js";
+import { LanguageWorkerWireServer } from "../../../../editor/alpha/common/languages/languageWorkerWire.js";
+import { createDedicatedWorkerLanguagePort } from "../../../../editor/alpha/browser/language/dedicatedWorkerLanguagePort.js";
 import { createTextMateAnalysisModule } from "../common/textMateAnalysisModule.js";
 import { TextMateGrammarCatalogStore } from "../common/textMateGrammarCatalogStore.js";
 import { TextMateGrammarCatalogWireServer } from "../common/textMateGrammarCatalogWire.js";
@@ -20,9 +20,9 @@ const resources = new DisposableStore();
 const registry = resources.add(new LanguageAnalysisProviderRegistry());
 const modules = resources.add(new LanguageAnalysisProviderModuleRegistry());
 const languageConfigurations = resources.add(new LanguageConfigurationRegistry());
-resources.add(registerAlphaBuiltinLanguageConfigurations(languageConfigurations));
+resources.add(registerBuiltinLanguageConfigurations(languageConfigurations));
 resources.add(modules.register({
-  id: "alpha.lexical",
+  id: "language.lexical",
   load: () => [createLanguageLexicalAnalysisProvider({ languageConfigurations })],
 }));
 const grammarCatalog = resources.add(new TextMateGrammarCatalogStore());

@@ -3,13 +3,13 @@ import { addDisposableListener, stopEvent } from "../../../../../base/browser/do
 import { Emitter, type Event } from "../../../../../base/common/event.js";
 import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
 import { CodeEditorWidget } from "../../../../../editor/alpha/browser/widget/codeEditor/codeEditorWidget.js";
-import { EditorSelectionController } from "../../../../../editor/alpha/common/editorSelectionController.js";
-import { LanguageCompletionService } from "../../../../../editor/alpha/language/common/languageCompletionService.js";
-import { LanguageCompletionProviderRegistry } from "../../../../../editor/alpha/language/common/languageCompletionProviders.js";
-import { LanguageCompletionSessionController } from "../../../../../editor/alpha/language/common/languageCompletionSession.js";
-import { TextSelection, TextSelectionSet } from "../../../../../editor/alpha/common/selection.js";
-import { TextPosition, TextRange } from "../../../../../editor/alpha/common/text.js";
-import { TextModel } from "../../../../../editor/alpha/common/textModel.js";
+import { EditorSelectionController } from "../../../../../editor/alpha/common/cursor/editorSelectionController.js";
+import { LanguageCompletionService } from "../../../../../editor/alpha/common/languages/completion/languageCompletionService.js";
+import { LanguageCompletionProviderRegistry } from "../../../../../editor/alpha/common/languages/completion/languageCompletionProviders.js";
+import { LanguageCompletionSessionController } from "../../../../../editor/alpha/contrib/suggest/common/suggestModel.js";
+import { TextSelection, TextSelectionSet } from "../../../../../editor/alpha/common/core/selection.js";
+import { TextPosition, TextRange } from "../../../../../editor/alpha/common/core/text.js";
+import { TextModel } from "../../../../../editor/alpha/common/model/textModel.js";
 import { type ChatInputEditorOptions, type IChatInputEditor } from "./chatInputEditor.js";
 import { CHAT_INPUT_LANGUAGE_ID, createAlphaChatCommandCompletionProvider } from "./alphaChatCommandCompletion.js";
 

@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { AlphaDecorationPresentation, createAlphaDecorationRectangles, createAlphaDecorationSource } from "../../browser/decorationPresentation.js";
-import { type AlphaTextMeasurer } from "../../browser/fontMetrics.js";
-import { TextDecorationCollection } from "../../common/decoration.js";
-import { TextPosition, TextRange } from "../../common/text.js";
-import { TextModel } from "../../common/textModel.js";
-import { TrackedRangeStickiness } from "../../common/trackedRange.js";
+import { AlphaDecorationPresentation, createAlphaDecorationRectangles, createAlphaDecorationSource } from "../../browser/view/decorationPresentation.js";
+import { type AlphaTextMeasurer } from "../../browser/view/fontMetrics.js";
+import { TextDecorationCollection } from "../../common/model/decorationCollection.js";
+import { TextPosition, TextRange } from "../../common/core/text.js";
+import { TextModel } from "../../common/model/textModel.js";
+import { TrackedRangeStickiness } from "../../common/model/trackedRange.js";
 
 test("Decoration source resolves opaque metadata without owning the collection", () => {
   using model = new TextModel("abcd\nefgh\nij");

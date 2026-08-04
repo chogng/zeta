@@ -1,10 +1,10 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
-import { LanguageRequestCoordinator, LanguageRequestStatus, type LanguageWorker, type LanguageWorkerRequest } from "../../language/common/languageRequestCoordinator.js";
-import { LanguageResultAcceptance, LanguageResultStoreChangeReason, VersionedLanguageResultStore } from "../../language/common/languageResultStore.js";
-import { LanguageDiagnosticSeverity, createLanguageDiagnosticStore, createLanguageTokenStore, type LanguageDiagnosticResult, type LanguageTokenResult } from "../../language/common/languageResults.js";
-import { TextPosition, TextRange } from "../../common/text.js";
-import { TextModel } from "../../common/textModel.js";
+import { LanguageRequestCoordinator, LanguageRequestStatus, type LanguageWorker, type LanguageWorkerRequest } from "../../common/languages/languageRequestCoordinator.js";
+import { LanguageResultAcceptance, LanguageResultStoreChangeReason, VersionedLanguageResultStore } from "../../common/languages/languageResultStore.js";
+import { LanguageDiagnosticSeverity, createLanguageDiagnosticStore, createLanguageTokenStore, type LanguageDiagnosticResult, type LanguageTokenResult } from "../../common/languages/languageResults.js";
+import { TextPosition, TextRange } from "../../common/core/text.js";
+import { TextModel } from "../../common/model/textModel.js";
 
 const position = TextPosition.at;
 const range = (lineIndex: number, startColumn: number, endColumn: number): TextRange => TextRange.from(

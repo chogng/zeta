@@ -63,6 +63,11 @@ impl AppServer {
         }
         connection.initialized = true;
         let (file_system, git, workspace_search, terminal) = self.workspace_features();
+        let extensions = self
+            .extensions
+            .lock()
+            .map(|catalog| catalog.is_available())
+            .unwrap_or(false);
         result(&InitializeResult {
             server_info: ServerInfo {
                 name: "zeta-app-server".into(),
@@ -80,6 +85,7 @@ impl AppServer {
                 terminal,
                 typst: true,
                 update_replay: true,
+                extensions,
             },
             slash_commands: self.slash_commands.commands().to_vec(),
         })
@@ -885,7 +891,7 @@ impl AppServer {
     }
 }
 
-fn resource_rpc_error(error: crate::resource_store::ResourceError) -> RpcError {
+pub(super) fn resource_rpc_error(error: crate::resource_store::ResourceError) -> RpcError {
     use crate::resource_store::ResourceError;
     RpcError::new(
         -32020,

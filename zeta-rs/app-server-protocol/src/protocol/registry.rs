@@ -15,11 +15,26 @@ use crate::protocol::config::{
     SkillSourceAddParams, SkillSourceConfigDto, SkillSourceEnablementDto, SkillSourceRemoveParams,
     SkillSourceSetEnablementParams,
 };
+use crate::protocol::diff::DiffComputeParams;
+use crate::protocol::diff::DiffComputeResult;
+use crate::protocol::diff::DiffComputeRowDto;
+use crate::protocol::diff::DiffHunkDto;
+use crate::protocol::diff::DiffRangeDto;
+use crate::protocol::diff::DiffRowKindDto;
 use crate::protocol::document::{
     TypstCompileParams, TypstCompileResult, TypstDiagnosticDto, TypstDiagnosticSeverityDto,
     TypstSourceRangeDto,
 };
 use crate::protocol::error::{AppServerError, AppServerErrorName};
+use crate::protocol::extensions::ExtensionCatalogReloadDto;
+use crate::protocol::extensions::ExtensionDiagnosticCodeDto;
+use crate::protocol::extensions::ExtensionDiagnosticDto;
+use crate::protocol::extensions::ExtensionDto;
+use crate::protocol::extensions::ExtensionListParams;
+use crate::protocol::extensions::ExtensionListResult;
+use crate::protocol::extensions::ExtensionResourceOpenParams;
+use crate::protocol::extensions::ExtensionResourceOpenResult;
+use crate::protocol::extensions::ExtensionSourceKindDto;
 use crate::protocol::fs::{
     FsChanged, FsFileType, FsGetMetadataParams, FsGetMetadataResult, FsReadDirectoryEntry,
     FsReadDirectoryParams, FsReadDirectoryResult, FsReadFileParams, FsReadFileResult,
@@ -409,6 +424,16 @@ client_methods! {
         response: ConfigCommandResult,
         serialization: GlobalExclusive,
     },
+    ExtensionList => "extensions/list" {
+        params: ExtensionListParams,
+        response: ExtensionListResult,
+        serialization: GlobalSharedRead,
+    },
+    ExtensionResourceOpen => "extensions/resource/open" {
+        params: ExtensionResourceOpenParams,
+        response: ExtensionResourceOpenResult,
+        serialization: ResourceExclusive,
+    },
     TurnStart => "turn/start" {
         params: TurnStartParams,
         response: TurnStartResult,
@@ -462,6 +487,11 @@ client_methods! {
     FsReadFile => "fs/readFile" {
         params: FsReadFileParams,
         response: FsReadFileResult,
+        serialization: GlobalSharedRead,
+    },
+    DiffCompute => "diff/compute" {
+        params: DiffComputeParams,
+        response: DiffComputeResult,
         serialization: GlobalSharedRead,
     },
     FsWriteFile => "fs/writeFile" {
@@ -727,6 +757,15 @@ typescript_bindings! {
     SkillListResult,
     SkillSetEnablementParams,
     SkillsChanged,
+    ExtensionCatalogReloadDto,
+    ExtensionSourceKindDto,
+    ExtensionDiagnosticCodeDto,
+    ExtensionDto,
+    ExtensionDiagnosticDto,
+    ExtensionListParams,
+    ExtensionListResult,
+    ExtensionResourceOpenParams,
+    ExtensionResourceOpenResult,
     SlashCommandArgumentModeDto,
     SlashCommandDefinition,
     ServerCapabilities,
@@ -830,6 +869,12 @@ typescript_bindings! {
     FsReadDirectoryResult,
     FsReadFileParams,
     FsReadFileResult,
+    DiffComputeParams,
+    DiffRowKindDto,
+    DiffRangeDto,
+    DiffComputeRowDto,
+    DiffHunkDto,
+    DiffComputeResult,
     FsWriteFileParams,
     FsWriteFileResult,
     FsChanged,

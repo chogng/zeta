@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { TextPosition } from "../../common/text.js";
-import { TextModel } from "../../common/textModel.js";
-import { EditorVisualLineProjection } from "../../common/visualLineProjection.js";
-import { hitTestAlphaVisualEditorPoint, AlphaEditorHitTargetKind } from "../../browser/pointerHitTest.js";
-import { type AlphaTextMeasurer } from "../../browser/fontMetrics.js";
+import { TextPosition } from "../../common/core/text.js";
+import { TextModel } from "../../common/model/textModel.js";
+import { EditorVisualLineProjection } from "../../common/viewModel/modelLineProjection.js";
+import { hitTestAlphaVisualEditorPoint, AlphaEditorHitTargetKind } from "../../browser/view/pointerHitTest.js";
+import { type AlphaTextMeasurer } from "../../browser/view/fontMetrics.js";
 
 test("visual hit testing maps wrapped visual coordinates back to logical UTF-16 positions", () => {
   using model = new TextModel("abcdef\ngh");

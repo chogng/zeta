@@ -2,24 +2,24 @@ import { strict as assert } from "node:assert";
 import test from "node:test";
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { DisposableOwner, DisposableStore } from "../../../../base/common/lifecycle.js";
-import { LanguageAnalysisModuleWorkerClient } from "../../language/common/languageAnalysisModuleWorkerClient.js";
-import { LanguageAnalysisProviderRegistry } from "../../language/common/languageAnalysisProviders.js";
-import { LanguageAnalysisProviderModuleHost, LanguageAnalysisProviderModuleRegistry } from "../../language/common/languageAnalysisProviderModules.js";
-import { LanguageAnalysisProviderModuleWireServer } from "../../language/common/languageAnalysisProviderModuleWire.js";
-import { LANGUAGE_TOKEN_LANE, LanguageAnalysisProviderWorker, LanguageAnalysisService } from "../../language/common/languageAnalysisService.js";
-import { languageAnalysisWireCodec } from "../../language/common/languageAnalysisWire.js";
-import { createLanguageLexicalAnalysisProvider } from "../../language/common/languageLexicalAnalysisProvider.js";
-import { LanguageRequestStatus } from "../../language/common/languageRequestCoordinator.js";
-import { LanguageWorkerWireServer, type LanguageWorkerWireClientPort } from "../../language/common/languageWorkerWire.js";
-import { TextPosition, TextRange } from "../../common/text.js";
-import { TextModel } from "../../common/textModel.js";
+import { LanguageAnalysisModuleWorkerClient } from "../../common/languages/analysis/languageAnalysisModuleWorkerClient.js";
+import { LanguageAnalysisProviderRegistry } from "../../common/languages/analysis/languageAnalysisProviders.js";
+import { LanguageAnalysisProviderModuleHost, LanguageAnalysisProviderModuleRegistry } from "../../common/languages/analysis/languageAnalysisProviderModules.js";
+import { LanguageAnalysisProviderModuleWireServer } from "../../common/languages/analysis/languageAnalysisProviderModuleWire.js";
+import { LANGUAGE_TOKEN_LANE, LanguageAnalysisProviderWorker, LanguageAnalysisService } from "../../common/languages/analysis/languageAnalysisService.js";
+import { languageAnalysisWireCodec } from "../../common/languages/analysis/languageAnalysisWire.js";
+import { createLanguageLexicalAnalysisProvider } from "../../common/languages/languageLexicalAnalysisProvider.js";
+import { LanguageRequestStatus } from "../../common/languages/languageRequestCoordinator.js";
+import { LanguageWorkerWireServer, type LanguageWorkerWireClientPort } from "../../common/languages/languageWorkerWire.js";
+import { TextPosition, TextRange } from "../../common/core/text.js";
+import { TextModel } from "../../common/model/textModel.js";
 
 test("Required Analysis modules activate before the first request and preserve confirmed result bases", async () => {
   using model = new TextModel("const value = 1;");
   using providers = new LanguageAnalysisProviderRegistry();
   using modules = new LanguageAnalysisProviderModuleRegistry();
   using moduleRegistration = modules.register({
-    id: "alpha.lexical",
+    id: "language.lexical",
     load: async () => {
       await new Promise<void>(resolve => setImmediate(resolve));
       return [createLanguageLexicalAnalysisProvider()];
@@ -32,15 +32,15 @@ test("Required Analysis modules activate before the first request and preserve c
   using localProviders = new LanguageAnalysisProviderRegistry();
   using service = new LanguageAnalysisService(model, localProviders, {
     workerFactory: () => new LanguageAnalysisModuleWorkerClient(clientPort, {
-      requiredProviderModules: ["alpha.lexical"],
+      requiredProviderModules: ["language.lexical"],
     }),
   });
 
   assert.equal((await service.requestTokens("typescript")).status, LanguageRequestStatus.Applied);
   assert.deepEqual(service.tokens.result!.value.tokens.map(token => token.tokenType), ["keyword", "variable", "operator", "number"]);
   const firstMessages = clientPort.sentMessages as WireMessage[];
-  const activationIndex = firstMessages.findIndex(message => message.protocol === "zeta.alpha.analysis-provider-modules" && message.kind === "setActivation");
-  const requestIndex = firstMessages.findIndex(message => message.protocol === "zeta.alpha.language-worker" && message.kind === "request");
+  const activationIndex = firstMessages.findIndex(message => message.protocol === "zeta.language.analysis-provider-modules" && message.kind === "setActivation");
+  const requestIndex = firstMessages.findIndex(message => message.protocol === "zeta.language-worker" && message.kind === "request");
   assert.equal(activationIndex >= 0, true);
   assert.equal(requestIndex > activationIndex, true);
 
@@ -49,7 +49,7 @@ test("Required Analysis modules activate before the first request and preserve c
     text: "\nreturn value;",
   }]);
   assert.equal((await service.requestTokens("typescript")).status, LanguageRequestStatus.Applied);
-  const requests = (clientPort.sentMessages as WireMessage[]).filter(message => message.protocol === "zeta.alpha.language-worker" && message.kind === "request");
+  const requests = (clientPort.sentMessages as WireMessage[]).filter(message => message.protocol === "zeta.language-worker" && message.kind === "request");
   assert.equal(requests[0]!.lane, LANGUAGE_TOKEN_LANE);
   assert.equal(requests[0]!.resultBaseRequestId, undefined);
   assert.equal(requests[1]!.resultBaseRequestId, 1);
@@ -66,7 +66,7 @@ test("Required Analysis module failure discards the Worker before the next reque
       const providers = workerResources.add(new LanguageAnalysisProviderRegistry());
       const modules = workerResources.add(new LanguageAnalysisProviderModuleRegistry());
       workerResources.add(modules.register({
-        id: "alpha.lexical",
+        id: "language.lexical",
         load: () => {
           if (workerCount === 1) throw new Error("analysis module failed");
           return [createLanguageLexicalAnalysisProvider()];
@@ -77,7 +77,7 @@ test("Required Analysis module failure discards the Worker before the next reque
       workerResources.add(new LanguageWorkerWireServer(serverPort, languageAnalysisWireCodec, new LanguageAnalysisProviderWorker(providers)));
       workerResources.add(new LanguageAnalysisProviderModuleWireServer(serverPort, modules, host));
       return new LanguageAnalysisModuleWorkerClient(clientPort, {
-        requiredProviderModules: ["alpha.lexical"],
+        requiredProviderModules: ["language.lexical"],
       });
     },
   });

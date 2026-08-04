@@ -1,0 +1,37 @@
+# Alpha editor core
+
+`core/` is Alpha's DOM-free editor algebra. It is the TypeScript equivalent of
+the operational part of VS Code's `src/vs/editor/common/core`, adapted to
+Zeta's explicit zero-based UTF-16 coordinates and LF-normalized text contract.
+The directory is intentionally broad: cursor math, text coordinates, edit
+composition, line edits, and small geometry/value helpers all need to agree on
+one coordinate model.
+
+| Area | Canonical modules | Responsibility |
+| --- | --- | --- |
+| Coordinates | `position.ts`, `range.ts`, `selection.ts`, `cursorColumns.ts` | Positions, ranges, selections, visible/indent columns |
+| Ranges | `ranges/offsetRange.ts`, `lineRange.ts`, `columnRange.ts`, `rangeMapping.ts`, `rangeSingleLine.ts` | Offset, line, column, and source-to-modified mappings |
+| Text coordinates | `text/textLength.ts`, `positionToOffset*.ts`, `abstractText.ts`, `getPositionOffsetTransformerFromTextModel.ts` | UTF-16 offset/position conversion and detached text views |
+| Edit algebra | `edits/edit.ts`, `arrayEdit.ts`, `lengthEdit.ts`, `lineEdit.ts`, `stringEdit.ts`, `textEdit.ts` | Normalize, compose, inverse, rebase, map, and apply edits |
+| Edit operations | `editOperation.ts`, `textChange.ts` | Single operations, compact offset changes, change compression/serialization |
+| Text helpers | `characterClassifier.ts`, `wordCharacterClassifier.ts`, `wordHelper.ts`, `stringBuilder.ts` | Word boundaries, classifiers, UTF-16 assembly |
+| Geometry/misc | `2d/*`, `misc/*` | DOM-free points, sizes, rectangles, EOL, indentation, RGBA, model defaults |
+
+The implementation deliberately does not copy VS Code's
+`editorColorRegistry.ts`. Editor colors are presentation/theme registration,
+and Zeta's ownership rule places them under
+`platform/theme/common/colors/editorColors.ts`, not in the editor's core.
+This is an ownership boundary, not a missing capability.
+
+The parent `common/` layer owns the mutable `TextModel`, piece-tree storage,
+tracked ranges, decorations, command planning, and history implementation.
+`core/` defines the values and algebra those owners consume; it does not own
+the mutable document or undo stack. Browser projection, language services,
+workbench state, and file transport may depend on `core/`, while `core/` must
+not depend on any of them.
+
+`text.ts` is the stable text primitive barrel retained for existing Alpha
+callers. The core has no directory `index.ts` barrels: new code imports the
+focused module that owns the value or operation it consumes. This keeps module
+boundaries explicit and avoids making a broad aggregate dependency part of the
+editor contract.

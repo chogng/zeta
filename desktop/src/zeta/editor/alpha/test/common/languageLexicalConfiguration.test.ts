@@ -1,15 +1,15 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
-import { registerAlphaBuiltinLanguageConfigurations } from "../../language/common/languageBuiltinConfigurations.js";
-import { LanguageConfigurationRegistry } from "../../language/common/languageConfiguration.js";
-import { type LanguageAnalysisProviderRequest } from "../../language/common/languageAnalysisProviders.js";
-import { createLanguageLexicalAnalysisProvider } from "../../language/common/languageLexicalAnalysisProvider.js";
-import { TextModel } from "../../common/textModel.js";
+import { registerBuiltinLanguageConfigurations } from "../../common/languages/languageBuiltinConfigurations.js";
+import { LanguageConfigurationRegistry } from "../../common/languages/languageConfiguration.js";
+import { type LanguageAnalysisProviderRequest } from "../../common/languages/analysis/languageAnalysisProviders.js";
+import { createLanguageLexicalAnalysisProvider } from "../../common/languages/languageLexicalAnalysisProvider.js";
+import { TextModel } from "../../common/model/textModel.js";
 
 test("Lexical caches remain isolated by language identity at one model version", async () => {
   using model = new TextModel("// comment\n`value`");
   using configurations = new LanguageConfigurationRegistry();
-  using builtins = registerAlphaBuiltinLanguageConfigurations(configurations);
+  using builtins = registerBuiltinLanguageConfigurations(configurations);
   const provider = createLanguageLexicalAnalysisProvider({ languageConfigurations: configurations });
   const snapshot = model.createSnapshot();
 
@@ -22,7 +22,7 @@ test("Lexical caches remain isolated by language identity at one model version",
 test("A language configuration revision replaces same-version lexical state", async () => {
   using model = new TextModel("# comment\n<% value");
   using configurations = new LanguageConfigurationRegistry();
-  using builtins = registerAlphaBuiltinLanguageConfigurations(configurations);
+  using builtins = registerBuiltinLanguageConfigurations(configurations);
   const provider = createLanguageLexicalAnalysisProvider({ languageConfigurations: configurations });
   const snapshot = model.createSnapshot();
 
@@ -39,7 +39,7 @@ test("A language configuration revision replaces same-version lexical state", as
 
 test("Built-in lexical configuration registrations release without owning the registry", () => {
   using configurations = new LanguageConfigurationRegistry();
-  const registrations = registerAlphaBuiltinLanguageConfigurations(configurations);
+  const registrations = registerBuiltinLanguageConfigurations(configurations);
 
   assert.equal(configurations.getLanguageConfiguration("typescript").comments.lineComment, "//");
   assert.equal(configurations.getLanguageConfiguration("json").comments.lineComment, undefined);

@@ -2,15 +2,15 @@ import { strict as assert } from "node:assert";
 import test from "node:test";
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { DisposableOwner, DisposableStore } from "../../../../base/common/lifecycle.js";
-import { LanguageCompletionCatalogWirePublisher, LanguageCompletionCatalogWorkerClient } from "../../language/common/languageCompletionCatalogWire.js";
-import { createLanguageCompletionInvokeContext, LanguageCompletionProviderRegistry, type LanguageCompletionProvider, type LanguageCompletionProviderCatalog } from "../../language/common/languageCompletionProviders.js";
-import { LanguageCompletionProviderWorker, LanguageCompletionService, type LanguageCompletionWorker } from "../../language/common/languageCompletionService.js";
-import { languageCompletionWireCodec } from "../../language/common/languageCompletionWire.js";
-import { LanguageCompletionItemKind } from "../../language/common/languageCompletions.js";
-import { LanguageRequestStatus } from "../../language/common/languageRequestCoordinator.js";
-import { LanguageWorkerWireServer, type LanguageWorkerWireClientPort } from "../../language/common/languageWorkerWire.js";
-import { TextPosition, TextRange } from "../../common/text.js";
-import { TextModel } from "../../common/textModel.js";
+import { LanguageCompletionCatalogWirePublisher, LanguageCompletionCatalogWorkerClient } from "../../common/languages/completion/languageCompletionCatalogWire.js";
+import { createLanguageCompletionInvokeContext, LanguageCompletionProviderRegistry, type LanguageCompletionProvider, type LanguageCompletionProviderCatalog } from "../../common/languages/completion/languageCompletionProviders.js";
+import { LanguageCompletionProviderWorker, LanguageCompletionService, type LanguageCompletionWorker } from "../../common/languages/completion/languageCompletionService.js";
+import { languageCompletionWireCodec } from "../../common/languages/completion/languageCompletionWire.js";
+import { LanguageCompletionItemKind } from "../../common/languages/completion/languageCompletions.js";
+import { LanguageRequestStatus } from "../../common/languages/languageRequestCoordinator.js";
+import { LanguageWorkerWireServer, type LanguageWorkerWireClientPort } from "../../common/languages/languageWorkerWire.js";
+import { TextPosition, TextRange } from "../../common/core/text.js";
+import { TextModel } from "../../common/model/textModel.js";
 
 test("Remote provider catalog drives trigger routing without renderer providers", async () => {
   using model = new TextModel("object.");
@@ -45,7 +45,7 @@ test("Catalog client waits for the first snapshot and rejects stale revisions", 
   using client = new LanguageCompletionCatalogWorkerClient(clientPort);
   const ready = client.waitForProviderCatalog();
   serverPort.send({
-    protocol: "zeta.alpha.completion-provider-catalog",
+    protocol: "zeta.language.completion-provider-catalog",
     version: 1,
     kind: "catalog",
     catalog: { revision: 1, providers: [] },
@@ -53,7 +53,7 @@ test("Catalog client waits for the first snapshot and rejects stale revisions", 
   assert.equal((await ready).revision, 1);
 
   serverPort.send({
-    protocol: "zeta.alpha.completion-provider-catalog",
+    protocol: "zeta.language.completion-provider-catalog",
     version: 1,
     kind: "catalog",
     catalog: { revision: 1, providers: [] },

@@ -71,6 +71,7 @@ class ProtocolChildProcess extends EventEmitter {
             terminal: true,
             typst: true,
             updateReplay: true,
+            extensions: true,
           },
           slashCommands: [{ name: "diagnose", description: "Inspect workspace", argumentMode: "optional" }],
         });

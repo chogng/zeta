@@ -60,6 +60,11 @@ function createRuntime(catalog: TextMateGrammarCatalog): GrammarCatalogRuntime {
         scopeName: grammar.scopeName,
         ...(grammar.languageId === undefined ? {} : { languageId: grammar.languageId }),
         injectTo: grammar.injectTo,
+        ...(grammar.embeddedLanguages === undefined ? {} : { embeddedLanguages: grammar.embeddedLanguages }),
+        ...(grammar.tokenTypes === undefined ? {} : { tokenTypes: grammar.tokenTypes }),
+        ...(grammar.balancedBracketScopes === undefined ? {} : { balancedBracketScopes: grammar.balancedBracketScopes }),
+        ...(grammar.unbalancedBracketScopes === undefined ? {} : { unbalancedBracketScopes: grammar.unbalancedBracketScopes }),
+        filePath: grammar.filePath,
         loadGrammar: () => grammar.content,
       }));
     }

@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { type AlphaTextMeasurer } from "../../browser/fontMetrics.js";
-import { AlphaSemanticTokenPresentation, createAlphaSemanticTokenSource } from "../../language/browser/semanticTokenPresentation.js";
-import { LanguageResultAcceptance } from "../../language/common/languageResultStore.js";
-import { LanguageTokenLineIndex } from "../../language/common/languageTokenLineIndex.js";
-import { createLanguageTokenStore, type LanguageToken } from "../../language/common/languageResults.js";
-import { TextPosition, TextRange } from "../../common/text.js";
-import { TextModel } from "../../common/textModel.js";
+import { type AlphaTextMeasurer } from "../../browser/view/fontMetrics.js";
+import { AlphaSemanticTokenPresentation, createAlphaSemanticTokenSource } from "../../browser/view/semanticTokenPresentation.js";
+import { LanguageResultAcceptance } from "../../common/languages/languageResultStore.js";
+import { LanguageTokenLineIndex } from "../../common/tokens/languageTokenLineIndex.js";
+import { createLanguageTokenStore, type LanguageToken } from "../../common/languages/languageResults.js";
+import { TextPosition, TextRange } from "../../common/core/text.js";
+import { TextModel } from "../../common/model/textModel.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
@@ -24,8 +24,8 @@ for (const [name, value] of Object.entries({
   });
 }
 
-const { AlphaEditorViewport } = await import("../../browser/alphaEditorViewport.js");
-const { AlphaEditorLineWrapping } = await import("../../browser/visualLineProjection.js");
+const { AlphaEditorViewport } = await import("../../browser/view/editorViewport.js");
+const { AlphaEditorLineWrapping } = await import("../../browser/view/visualLineProjection.js");
 
 test("Viewport projects tokens only for virtualized lines and preserves overlapping rows", () => {
   const dom = new JSDOM("<!doctype html><body><main></main></body>");

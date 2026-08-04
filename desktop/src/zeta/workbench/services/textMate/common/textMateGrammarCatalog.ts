@@ -1,13 +1,18 @@
 import { raceCancellation } from "../../../../base/common/cancellation.js";
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
-import { assertLanguageId } from "../../../../editor/alpha/language/common/languageId.js";
-import { type TextMateGrammarRegistrySnapshot } from "./textMateGrammarRegistry.js";
+import { assertLanguageId } from "../../../../editor/alpha/common/languages/languageId.js";
+import { type TextMateGrammarRegistrySnapshot, type TextMateGrammarTokenType } from "./textMateGrammarRegistry.js";
 
 export interface TextMateGrammarCatalogEntry {
   readonly scopeName: string;
   readonly languageId?: string;
   readonly injectTo: readonly string[];
+  readonly embeddedLanguages?: Readonly<Record<string, string>>;
+  readonly tokenTypes?: Readonly<Record<string, TextMateGrammarTokenType>>;
+  readonly balancedBracketScopes?: readonly string[];
+  readonly unbalancedBracketScopes?: readonly string[];
+  readonly filePath?: string;
   readonly content: string;
 }
 
@@ -96,6 +101,11 @@ export function normalizeTextMateGrammarCatalog(value: TextMateGrammarCatalog): 
     if (new Set(injectTo).size !== injectTo.length) {
       throw new RangeError("TextMate grammar catalog injection targets must be unique");
     }
+    const embeddedLanguages = grammar.embeddedLanguages === undefined ? undefined : normalizeEmbeddedLanguages(grammar.embeddedLanguages);
+    const tokenTypes = grammar.tokenTypes === undefined ? undefined : normalizeTokenTypes(grammar.tokenTypes);
+    const balancedBracketScopes = grammar.balancedBracketScopes === undefined ? undefined : normalizeBracketScopes(grammar.balancedBracketScopes, "balanced bracket scopes");
+    const unbalancedBracketScopes = grammar.unbalancedBracketScopes === undefined ? undefined : normalizeBracketScopes(grammar.unbalancedBracketScopes, "unbalanced bracket scopes");
+    const filePath = grammar.filePath === undefined ? undefined : normalizeGrammarFilePath(grammar.filePath);
     if (typeof grammar.content !== "string" || grammar.content.length === 0) {
       throw new TypeError("TextMate grammar catalog content must not be empty");
     }
@@ -110,6 +120,11 @@ export function normalizeTextMateGrammarCatalog(value: TextMateGrammarCatalog): 
       scopeName: grammar.scopeName,
       ...(grammar.languageId === undefined ? {} : { languageId: grammar.languageId }),
       injectTo: Object.freeze(injectTo),
+      ...(embeddedLanguages === undefined ? {} : { embeddedLanguages }),
+      ...(tokenTypes === undefined ? {} : { tokenTypes }),
+      ...(balancedBracketScopes === undefined ? {} : { balancedBracketScopes }),
+      ...(unbalancedBracketScopes === undefined ? {} : { unbalancedBracketScopes }),
+      ...(filePath === undefined ? {} : { filePath }),
       content: grammar.content,
     });
   });
@@ -135,6 +150,11 @@ export async function materializeTextMateGrammarCatalog(snapshot: TextMateGramma
       scopeName: definition.scopeName,
       ...(definition.languageId === undefined ? {} : { languageId: definition.languageId }),
       injectTo: definition.injectTo,
+      ...(definition.embeddedLanguages === undefined ? {} : { embeddedLanguages: definition.embeddedLanguages }),
+      ...(definition.tokenTypes === undefined ? {} : { tokenTypes: definition.tokenTypes }),
+      ...(definition.balancedBracketScopes === undefined ? {} : { balancedBracketScopes: definition.balancedBracketScopes }),
+      ...(definition.unbalancedBracketScopes === undefined ? {} : { unbalancedBracketScopes: definition.unbalancedBracketScopes }),
+      filePath: definition.filePath,
       content,
     };
   }));
@@ -155,4 +175,55 @@ function assertScopeName(value: unknown, owner: string): asserts value is string
   if (typeof value !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._+-]*$/.test(value)) {
     throw new TypeError(`${owner} is invalid`);
   }
+}
+
+function normalizeGrammarFilePath(value: unknown): string {
+  if (typeof value !== "string" || value.length === 0 || value.length > 1024 || value.includes("\\") || value.startsWith("/") || value.split("/").some(segment => segment.length === 0 || segment === "." || segment === "..")) {
+    throw new TypeError("TextMate grammar catalog file path must be a safe relative path");
+  }
+  return value;
+}
+
+function normalizeEmbeddedLanguages(value: Readonly<Record<string, string>>): Readonly<Record<string, string>> {
+  const entries = normalizeRecord(value, "TextMate embedded languages");
+  return Object.freeze(Object.fromEntries(entries.map(([scope, languageId]) => {
+    assertScopeName(scope, "TextMate embedded language scope");
+    assertLanguageId(languageId);
+    return [scope, languageId];
+  })));
+}
+
+function normalizeTokenTypes(value: Readonly<Record<string, TextMateGrammarTokenType>>): Readonly<Record<string, TextMateGrammarTokenType>> {
+  const entries = normalizeRecord(value, "TextMate token types");
+  return Object.freeze(Object.fromEntries(entries.map(([scope, tokenType]) => {
+    assertScopeSelector(scope, "TextMate token type scope");
+    if (tokenType !== "string" && tokenType !== "other" && tokenType !== "comment" && tokenType !== "regex") {
+      throw new TypeError(`TextMate token type '${String(tokenType)}' is invalid`);
+    }
+    return [scope, tokenType as TextMateGrammarTokenType] as const;
+  })) as Readonly<Record<string, TextMateGrammarTokenType>>);
+}
+
+function normalizeBracketScopes(value: readonly string[], owner: string): readonly string[] {
+  if (!Array.isArray(value)) throw new TypeError(`TextMate ${owner} must be an array`);
+  const scopes = value.map(scope => {
+    if (typeof scope !== "string" || scope.length === 0 || scope.length > 256 || /[\r\n\s]/u.test(scope) || !/^[A-Za-z0-9*][A-Za-z0-9._+*?-]*$/u.test(scope)) {
+      throw new TypeError(`TextMate ${owner} contain invalid scope selectors`);
+    }
+    return scope;
+  });
+  if (new Set(scopes).size !== scopes.length) throw new RangeError(`TextMate ${owner} must be unique`);
+  return Object.freeze(scopes);
+}
+
+function normalizeRecord(value: unknown, owner: string): readonly (readonly [string, unknown])[] {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) throw new TypeError(`${owner} must be an object map`);
+  return Object.entries(value as Record<string, unknown>);
+}
+
+function assertScopeSelector(value: string, owner: string): string {
+  if (typeof value !== "string" || value.length === 0 || value.length > 512 || /[\r\n]/u.test(value) || value.trim() !== value) {
+    throw new TypeError(`${owner} must be a valid TextMate scope selector`);
+  }
+  return value;
 }

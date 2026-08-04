@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { TextMateScopeThemeModel, createTextMateScopeThemeResolver, matchesTextMateScopeSelector, normalizeTextMateScopeTheme } from "../../common/textMateScopeTheme.js";
 
-test("Scope themes apply last matching rules before Alpha's stable fallback", () => {
+test("Scope themes apply last matching rules before the stable fallback", () => {
   const resolver = createTextMateScopeThemeResolver({
     revision: 1,
     rules: [
@@ -38,6 +38,6 @@ test("Scope theme models clone revisions, publish replacements, and reject inval
 
   assert.throws(() => normalizeTextMateScopeTheme({ revision: 2, rules: [{ selector: "", tokenType: "comment" }] }), /selector/);
   assert.throws(() => normalizeTextMateScopeTheme({ revision: 2, rules: [{ selector: "comment", tokenType: "comment", modifiers: ["deprecated", "deprecated"] }] }), /unique/);
-  assert.throws(() => normalizeTextMateScopeTheme({ revision: 2, rules: [{ selector: "comment", tokenType: "remark" }] }), /Unsupported Alpha semantic token type/);
+  assert.throws(() => normalizeTextMateScopeTheme({ revision: 2, rules: [{ selector: "comment", tokenType: "remark" }] }), /Unsupported semantic token type/);
   assert.equal(themes.currentTheme.revision, 1);
 });

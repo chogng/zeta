@@ -11,6 +11,7 @@ import { type ITextFileService } from "../../../services/textfile/common/textFil
 import { type ITextMateService } from "../../../services/textMate/common/textMateService.js";
 import { type ILanguageFeaturesService } from "../../../services/language/common/languageFeaturesService.js";
 import type { EditorInput } from "./editorInput.js";
+import type { IDiffApi } from "../../../../platform/diff/common/diffApi.js";
 
 export enum EditorPaneVisibility {
   Hidden,
@@ -42,6 +43,7 @@ export interface EditorPaneCreationOptions {
   readonly textFileService?: ITextFileService;
   readonly textMateService?: ITextMateService;
   readonly languageFeaturesService?: ILanguageFeaturesService;
+  readonly diffApi?: IDiffApi;
 }
 
 export enum EditorPaneMatch {

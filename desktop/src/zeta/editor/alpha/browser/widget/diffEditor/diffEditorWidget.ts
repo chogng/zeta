@@ -3,8 +3,8 @@ import { addDisposableListener, reset, stopEvent } from "../../../../../base/bro
 import { getClientArea, type IDimension } from "../../../../../base/browser/geometry.js";
 import { getWindow } from "../../../../../base/browser/window.js";
 import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
-import { DiffModel } from "../../../common/models/diff/diffModel.js";
-import { LineDiffKind, type DiffRange, type LineDiff, type LineDiffRow } from "../../../common/models/diff/lineDiff.js";
+import { DiffModel } from "../../../common/diff/diffModel.js";
+import { LineDiffKind, type DiffRange, type LineDiff, type LineDiffRow } from "../../../common/diff/lineDiff.js";
 
 const DEFAULT_LINE_HEIGHT = 20;
 const DEFAULT_OVERSCAN_ROW_COUNT = 8;

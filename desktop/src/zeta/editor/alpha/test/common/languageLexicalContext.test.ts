@@ -1,9 +1,9 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
-import { LanguageConfigurationRegistry } from "../../language/common/languageConfiguration.js";
-import { LanguageLexicalContextIndex } from "../../language/common/languageLexicalContext.js";
-import { TextPosition, TextRange } from "../../common/text.js";
-import { TextModel } from "../../common/textModel.js";
+import { LanguageConfigurationRegistry } from "../../common/languages/languageConfiguration.js";
+import { LanguageLexicalContextIndex } from "../../common/languages/languageLexicalContext.js";
+import { TextPosition, TextRange } from "../../common/core/text.js";
+import { TextModel } from "../../common/model/textModel.js";
 
 test("Lexical context removes only structural brackets inside strings and comments", () => {
   using model = new TextModel("const code = { value: \"}\" }; // {\n/* {\nstill }\n*/ const after = {};");

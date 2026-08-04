@@ -3,6 +3,7 @@ import { DisposableOwner } from "../../../base/common/lifecycle.js";
 
 export interface AlphaSaveControllerOptions {
   readonly save: () => Promise<void>;
+  readonly beforeSave?: () => void | Promise<void>;
   readonly onSaveSuccess?: () => void;
   readonly onSaveError?: (error: unknown) => void;
 }
@@ -10,6 +11,7 @@ export interface AlphaSaveControllerOptions {
 /** Routes the focused editor's standard save shortcut without overlapping writes. */
 export class AlphaSaveController extends DisposableOwner {
   private readonly save: () => Promise<void>;
+  private readonly beforeSave: () => void | Promise<void>;
   private readonly onSaveSuccess: () => void;
   private readonly onSaveError: (error: unknown) => void;
   private saving = false;
@@ -21,6 +23,7 @@ export class AlphaSaveController extends DisposableOwner {
       throw new TypeError("Alpha save controller requires a save operation");
     }
     this.save = options.save;
+    this.beforeSave = options.beforeSave ?? (() => {});
     this.onSaveSuccess = options.onSaveSuccess ?? (() => {});
     this.onSaveError = options.onSaveError ?? reportSaveError;
     this.own(addDisposableListener(input, "keydown", event => this.handleKeydown(event)));
@@ -32,7 +35,9 @@ export class AlphaSaveController extends DisposableOwner {
     stopEvent(event);
     if (this.saving) return;
     this.saving = true;
-    void this.save()
+    void Promise.resolve()
+      .then(() => this.beforeSave())
+      .then(() => this.save())
       .then(() => this.onSaveSuccess())
       .catch(error => this.onSaveError(error))
       .finally(() => {

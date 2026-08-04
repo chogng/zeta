@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { type AlphaTextMeasurer } from "../../browser/fontMetrics.js";
-import { AlphaEditorHitTargetKind, hitTestAlphaEditorPoint } from "../../browser/pointerHitTest.js";
-import { TextPosition } from "../../common/text.js";
-import { TextModel } from "../../common/textModel.js";
+import { type AlphaTextMeasurer } from "../../browser/view/fontMetrics.js";
+import { AlphaEditorHitTargetKind, hitTestAlphaEditorPoint } from "../../browser/view/pointerHitTest.js";
+import { TextPosition } from "../../common/core/text.js";
+import { TextModel } from "../../common/model/textModel.js";
 
 class FixedTextMeasurer implements AlphaTextMeasurer {
   readonly horizontalPadding = 24;
@@ -142,7 +142,7 @@ for (const [name, value] of Object.entries({
 }
 
 const { AlphaEditorViewport } = await import(
-  "../../browser/alphaEditorViewport.js"
+  "../../browser/view/editorViewport.js"
 );
 
 test("Viewport maps client coordinates through its bounds and scroll state", () => {

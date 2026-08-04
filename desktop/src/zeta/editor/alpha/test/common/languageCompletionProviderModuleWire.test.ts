@@ -2,25 +2,25 @@ import { strict as assert } from "node:assert";
 import test from "node:test";
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { DisposableOwner, DisposableStore } from "../../../../base/common/lifecycle.js";
-import { LanguageCompletionCatalogWirePublisher, LanguageCompletionCatalogWorkerClient } from "../../language/common/languageCompletionCatalogWire.js";
-import { createLanguageCompletionInvokeContext, LanguageCompletionProviderRegistry, type LanguageCompletionProvider } from "../../language/common/languageCompletionProviders.js";
-import { LanguageCompletionProviderModuleHost, LanguageCompletionProviderModuleRegistry, LanguageCompletionProviderModuleState } from "../../language/common/languageCompletionProviderModules.js";
-import { LanguageCompletionProviderModuleWireClient, LanguageCompletionProviderModuleWireServer } from "../../language/common/languageCompletionProviderModuleWire.js";
-import { LanguageCompletionResolveWireClient, LanguageCompletionResolveWireServer } from "../../language/common/languageCompletionResolveWire.js";
-import { LANGUAGE_COMPLETION_LANE, LanguageCompletionProviderWorker, LanguageCompletionService } from "../../language/common/languageCompletionService.js";
-import { languageCompletionWireCodec } from "../../language/common/languageCompletionWire.js";
-import { LanguageCompletionItemKind } from "../../language/common/languageCompletions.js";
-import { createLanguageWordCompletionProvider } from "../../language/common/languageWordCompletionProvider.js";
-import { LanguageWorkerWireServer, type LanguageWorkerWireClientPort } from "../../language/common/languageWorkerWire.js";
-import { LanguageRequestStatus } from "../../language/common/languageRequestCoordinator.js";
-import { TextPosition, TextRange } from "../../common/text.js";
-import { TextModel } from "../../common/textModel.js";
+import { LanguageCompletionCatalogWirePublisher, LanguageCompletionCatalogWorkerClient } from "../../common/languages/completion/languageCompletionCatalogWire.js";
+import { createLanguageCompletionInvokeContext, LanguageCompletionProviderRegistry, type LanguageCompletionProvider } from "../../common/languages/completion/languageCompletionProviders.js";
+import { LanguageCompletionProviderModuleHost, LanguageCompletionProviderModuleRegistry, LanguageCompletionProviderModuleState } from "../../common/languages/completion/languageCompletionProviderModules.js";
+import { LanguageCompletionProviderModuleWireClient, LanguageCompletionProviderModuleWireServer } from "../../common/languages/completion/languageCompletionProviderModuleWire.js";
+import { LanguageCompletionResolveWireClient, LanguageCompletionResolveWireServer } from "../../common/languages/completion/languageCompletionResolveWire.js";
+import { LANGUAGE_COMPLETION_LANE, LanguageCompletionProviderWorker, LanguageCompletionService } from "../../common/languages/completion/languageCompletionService.js";
+import { languageCompletionWireCodec } from "../../common/languages/completion/languageCompletionWire.js";
+import { LanguageCompletionItemKind } from "../../common/languages/completion/languageCompletions.js";
+import { createLanguageWordCompletionProvider } from "../../common/languages/completion/languageWordCompletionProvider.js";
+import { LanguageWorkerWireServer, type LanguageWorkerWireClientPort } from "../../common/languages/languageWorkerWire.js";
+import { LanguageRequestStatus } from "../../common/languages/languageRequestCoordinator.js";
+import { TextPosition, TextRange } from "../../common/core/text.js";
+import { TextModel } from "../../common/model/textModel.js";
 
 test("Module wire publishes availability and controls Worker-local providers", async () => {
   using providers = new LanguageCompletionProviderRegistry();
   using modules = new LanguageCompletionProviderModuleRegistry();
   using moduleRegistration = modules.register({
-    id: "alpha.word",
+    id: "language.word",
     load: () => [createLanguageWordCompletionProvider()],
   });
   using host = new LanguageCompletionProviderModuleHost(modules, providers);
@@ -31,10 +31,10 @@ test("Module wire publishes availability and controls Worker-local providers", a
     throw error;
   });
 
-  assert.deepEqual((await client.waitForModuleCatalog()).modules.map(module => module.id), ["alpha.word"]);
-  assert.equal((await client.setProviderModuleActivation("alpha.word", LanguageCompletionProviderModuleState.Active)).changed, true);
-  assert.deepEqual(providers.providerCatalog.providers.map(provider => provider.id), ["alpha.word"]);
-  assert.equal((await client.setProviderModuleActivation("alpha.word", LanguageCompletionProviderModuleState.Inactive)).changed, true);
+  assert.deepEqual((await client.waitForModuleCatalog()).modules.map(module => module.id), ["language.word"]);
+  assert.equal((await client.setProviderModuleActivation("language.word", LanguageCompletionProviderModuleState.Active)).changed, true);
+  assert.deepEqual(providers.providerCatalog.providers.map(provider => provider.id), ["language.word"]);
+  assert.equal((await client.setProviderModuleActivation("language.word", LanguageCompletionProviderModuleState.Inactive)).changed, true);
   assert.deepEqual(providers.providerCatalog.providers, []);
   await assert.rejects(
     client.setProviderModuleActivation("alpha.missing", LanguageCompletionProviderModuleState.Active),
@@ -65,7 +65,7 @@ test("Required modules activate before the first completion request crosses the 
   using providers = new LanguageCompletionProviderRegistry();
   using modules = new LanguageCompletionProviderModuleRegistry();
   using moduleRegistration = modules.register({
-    id: "alpha.word",
+    id: "language.word",
     load: async () => {
       await new Promise<void>(resolve => setImmediate(resolve));
       return [createLanguageWordCompletionProvider()];
@@ -77,7 +77,7 @@ test("Required modules activate before the first completion request crosses the 
   using catalogPublisher = new LanguageCompletionCatalogWirePublisher(serverPort, providers);
   using moduleServer = new LanguageCompletionProviderModuleWireServer(serverPort, modules, host);
   using client = new LanguageCompletionCatalogWorkerClient(clientPort, {
-    requiredProviderModules: ["alpha.word"],
+    requiredProviderModules: ["language.word"],
   });
   const snapshot = model.createSnapshot();
   const request = Object.freeze({
@@ -94,10 +94,10 @@ test("Required modules activate before the first completion request crosses the 
   const result = await client.run(request, new AbortController().signal);
 
   assert.deepEqual(result.items.map(item => item.label), ["connection", "console", "const"]);
-  assert.deepEqual(client.providerCatalog.providers.map(provider => provider.id), ["alpha.word"]);
+  assert.deepEqual(client.providerCatalog.providers.map(provider => provider.id), ["language.word"]);
   const messages = clientPort.sentMessages as Array<{ readonly protocol?: string; readonly kind?: string }>;
-  const activationIndex = messages.findIndex(message => message.protocol === "zeta.alpha.completion-provider-modules" && message.kind === "setActivation");
-  const requestIndex = messages.findIndex(message => message.protocol === "zeta.alpha.language-worker" && message.kind === "request");
+  const activationIndex = messages.findIndex(message => message.protocol === "zeta.language.completion-provider-modules" && message.kind === "setActivation");
+  const requestIndex = messages.findIndex(message => message.protocol === "zeta.language-worker" && message.kind === "request");
   assert.equal(activationIndex >= 0, true);
   assert.equal(requestIndex > activationIndex, true);
 });
@@ -196,7 +196,7 @@ test("Deferred completion details and cancellation cross the shared Worker port"
     { documentation: "Remote docs for console" },
   );
   assert.equal(clientPort.sentMessages.some(message => (
-    (message as { readonly protocol?: string }).protocol === "zeta.alpha.completion-resolve"
+    (message as { readonly protocol?: string }).protocol === "zeta.language.completion-resolve"
   )), true);
 
   blockResolution = true;
@@ -225,7 +225,7 @@ test("Malformed resolve responses reject pending work and invalidate the shared 
   const pending = client.resolveCompletionItem(target, new AbortController().signal);
   await new Promise<void>(resolve => setImmediate(resolve));
   serverPort.send({
-    protocol: "zeta.alpha.completion-resolve",
+    protocol: "zeta.language.completion-resolve",
     version: 1,
     kind: "result",
     requestId: 1,
@@ -243,7 +243,7 @@ test("Malformed resolve responses reject pending work and invalidate the shared 
 
 function moduleCatalogMessage(revision: number): unknown {
   return {
-    protocol: "zeta.alpha.completion-provider-modules",
+    protocol: "zeta.language.completion-provider-modules",
     version: 1,
     kind: "catalog",
     catalog: { revision, modules: [] },

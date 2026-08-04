@@ -9,6 +9,8 @@ import type { URI } from "../../../../base/common/uri.js";
 export interface EditorInput {
   readonly resource: URI;
   readonly contentType?: string;
+  /** Resolved only by the editor host for dynamic language-package matching. */
+  readonly languageId?: string;
   readonly label?: string;
   /** Requests a non-mutating editor instance while preserving selection and navigation. */
   readonly readOnly?: boolean;

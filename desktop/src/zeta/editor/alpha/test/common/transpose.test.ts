@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { EditorSelectionController } from "../../common/editorSelectionController.js";
-import { TextSelection, TextSelectionSet } from "../../common/selection.js";
-import { TextPosition } from "../../common/text.js";
-import { TextModel } from "../../common/textModel.js";
-import { createTransposeCharactersCommand } from "../../common/transpose.js";
+import { EditorSelectionController } from "../../common/cursor/editorSelectionController.js";
+import { TextSelection, TextSelectionSet } from "../../common/core/selection.js";
+import { TextPosition } from "../../common/core/text.js";
+import { TextModel } from "../../common/model/textModel.js";
+import { createTransposeCharactersCommand } from "../../common/cursor/cursorTranspose.js";
 
 test("Transpose swaps complete graphemes for multiple carets and undoes atomically", () => {
   using model = new TextModel("a😊b\néx");

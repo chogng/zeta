@@ -1,8 +1,8 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
-import { LanguageRequestCancellationReason, LanguageRequestCoordinator, LanguageRequestStatus, LanguageWorkerResultDisposition, type LanguageWorker, type LanguageWorkerRequest, type LanguageWorkerResultSettler, type VersionedLanguageResult } from "../../language/common/languageRequestCoordinator.js";
-import { TextPosition, TextRange, type TextModelChange } from "../../common/text.js";
-import { TextModel } from "../../common/textModel.js";
+import { LanguageRequestCancellationReason, LanguageRequestCoordinator, LanguageRequestStatus, LanguageWorkerResultDisposition, type LanguageWorker, type LanguageWorkerRequest, type LanguageWorkerResultSettler, type VersionedLanguageResult } from "../../common/languages/languageRequestCoordinator.js";
+import { TextPosition, TextRange, type TextModelChange } from "../../common/core/text.js";
+import { TextModel } from "../../common/model/textModel.js";
 
 type TestLane = "diagnostics" | "tokens";
 

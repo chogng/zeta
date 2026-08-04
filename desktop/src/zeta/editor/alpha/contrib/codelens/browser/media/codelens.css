@@ -1,0 +1,14 @@
+.zeta-alpha-editor-codelens {
+  position: absolute;
+  z-index: 5;
+  max-width: calc(100% - 8px);
+  overflow: hidden;
+  color: var(--zeta-description-foreground);
+  font: inherit;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+}

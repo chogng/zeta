@@ -20,13 +20,17 @@ use zeta_core::{
     CoreError, ModelService, PolicyService, SessionCoordinator, ThreadUpdateSink, ToolService,
     TurnExecutor,
 };
+use zeta_extensions::ExtensionCatalog;
+use zeta_extensions::ExtensionRoot;
 use zeta_file_system::WorkspaceFileSystem;
 use zeta_protocol::ThreadUpdateEnvelope;
 use zeta_typst::TypstCompiler;
 
 mod config_operations;
 mod config_runtime;
+mod diff_operations;
 mod extension_config_operations;
+mod extension_operations;
 mod fs_operations;
 mod fs_watcher;
 mod git_operations;
@@ -52,6 +56,7 @@ pub struct AppServer {
     model_catalog: Arc<dyn ModelCatalog>,
     next_connection_id: AtomicU64,
     pub(super) resources: Mutex<ResourceStore>,
+    pub(super) extensions: Mutex<ExtensionCatalog>,
     pub(super) config: Option<Arc<ConfigStore>>,
     pub(super) workspace_authority_gate: Arc<Mutex<()>>,
     workspace_runtime: Arc<RwLock<WorkspaceRuntime>>,
@@ -115,6 +120,7 @@ impl AppServer {
             model_catalog: unavailable_model_catalog(),
             next_connection_id: AtomicU64::new(1),
             resources: Mutex::new(ResourceStore::default()),
+            extensions: Mutex::new(ExtensionCatalog::default()),
             config: None,
             workspace_authority_gate: Arc::new(Mutex::new(())),
             workspace_runtime: Arc::new(RwLock::new(WorkspaceRuntime::empty(turn_executor))),
@@ -188,6 +194,11 @@ impl AppServer {
 
     pub fn with_file_system(mut self, file_system: Arc<dyn WorkspaceFileSystem>) -> Self {
         self.workspace_runtime_mut().file_system = Some(file_system);
+        self
+    }
+
+    pub fn with_extension_roots(mut self, roots: Vec<ExtensionRoot>) -> Self {
+        self.extensions = Mutex::new(ExtensionCatalog::new(roots));
         self
     }
 
@@ -470,6 +481,10 @@ impl AppServer {
             Some(ClientMethod::HookSetEnablement) => self.hook_set_enablement(&request.params),
             Some(ClientMethod::SkillList) => self.skill_list(&request.params),
             Some(ClientMethod::SkillSetEnablement) => self.skill_set_enablement(&request.params),
+            Some(ClientMethod::ExtensionList) => self.extension_list(&request.params),
+            Some(ClientMethod::ExtensionResourceOpen) => {
+                self.extension_resource_open(connection, &request.params)
+            }
             Some(ClientMethod::ResourceMetadata) => {
                 self.resource_metadata(connection, &request.params)
             }
@@ -480,6 +495,7 @@ impl AppServer {
             Some(ClientMethod::FsGetMetadata) => self.fs_get_metadata(&request.params),
             Some(ClientMethod::FsReadDirectory) => self.fs_read_directory(&request.params),
             Some(ClientMethod::FsReadFile) => self.fs_read_file(&request.params),
+            Some(ClientMethod::DiffCompute) => self.diff_compute(&request.params),
             Some(ClientMethod::FsWriteFile) => self.fs_write_file(&request.params),
             Some(ClientMethod::GitStatus) => self.git_status(),
             Some(ClientMethod::GitTextDiff) => self.git_text_diff(),

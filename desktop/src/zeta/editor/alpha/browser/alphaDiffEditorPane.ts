@@ -6,32 +6,42 @@ import { assertDefined } from "../../../base/common/types.js";
 import { type IEditorPane } from "../../../workbench/browser/parts/editor/editorPane.js";
 import { EditorPaneVisibility } from "../../../workbench/browser/parts/editor/editorPane.js";
 import { type EditorInput } from "../../../workbench/browser/parts/editor/editorInput.js";
-import { type ITextFileService } from "../../../workbench/services/textfile/common/textFileService.js";
-import { isAlphaDiffEditorInput, ALPHA_DIFF_EDITOR_ID } from "../common/alphaDiffEditorInput.js";
-import { DiffModel } from "../common/models/diff/diffModel.js";
-import { BrowserDiffComputationService } from "./diff/browserDiffComputationService.js";
+import { isAlphaDiffEditorInput, ALPHA_DIFF_EDITOR_ID } from "./alphaDiffEditorInput.js";
+import { type ITextResourceStore } from "../common/services/textResourceStore.js";
+import { DiffModel } from "../common/diff/diffModel.js";
+import { type IDiffComputationService } from "../common/diff/diffComputationService.js";
 import { DiffEditorWidget } from "./widget/diffEditor/diffEditorWidget.js";
-import { AlphaTextModels, type AlphaTextModelReference, type AlphaTextModelService } from "./alphaTextModelService.js";
+import { type TextModelReference, type ITextModelService } from "../common/services/textModelService.js";
+import { AlphaDiffEditorBreadcrumbsController } from "../contrib/diffEditorBreadcrumbs/browser/diffEditorBreadcrumbs.js";
 
 export interface AlphaDiffEditorPaneOptions {
-  readonly modelService?: AlphaTextModelService;
+  readonly modelService: ITextModelService;
+  readonly createComputationService: () => IDiffComputationService;
 }
 
 /** Workbench pane that acquires two Alpha text references for a read-only comparison. */
 export class AlphaDiffEditorPane extends DisposableOwner implements IEditorPane {
   readonly id = ALPHA_DIFF_EDITOR_ID;
   private readonly session = this.own(new DisposableSlot<AlphaDiffEditorPaneSession>());
-  private readonly modelService: AlphaTextModelService;
+  private readonly modelService: ITextModelService;
   private container: HTMLDivElement | undefined;
   private dimension: IDimension = { width: 0, height: 0 };
 
-  constructor(private readonly textFiles: ITextFileService, options: AlphaDiffEditorPaneOptions = {}) {
+  constructor(private readonly resourceStore: ITextResourceStore, private readonly options: AlphaDiffEditorPaneOptions) {
     super();
-    if (!textFiles || typeof textFiles.resolve !== "function") {
+    if (!resourceStore || typeof resourceStore.resolve !== "function") {
       this.dispose();
-      throw new TypeError("Alpha diff editor pane requires a text file service");
+      throw new TypeError("Alpha diff editor pane requires an Alpha text resource store");
     }
-    this.modelService = options.modelService ?? AlphaTextModels;
+    if (!options || typeof options !== "object" || typeof options.createComputationService !== "function") {
+      this.dispose();
+      throw new TypeError("Alpha diff editor pane requires the Rust diff computation service");
+    }
+    if (!options.modelService || typeof options.modelService.acquire !== "function") {
+      this.dispose();
+      throw new TypeError("Alpha diff editor pane requires an Alpha text model service");
+    }
+    this.modelService = options.modelService;
   }
 
   create(parent: HTMLElement): void {
@@ -52,14 +62,14 @@ export class AlphaDiffEditorPane extends DisposableOwner implements IEditorPane 
     }
     const container = this.requireContainer();
     throwIfCancelled(signal, "Alpha diff editor input loading was cancelled");
-    const original = await this.modelService.acquire(input.original, this.textFiles, signal);
-    let modified: AlphaTextModelReference | undefined;
+    const original = await this.modelService.acquire(input.original, signal);
+    let modified: TextModelReference | undefined;
     let next: AlphaDiffEditorPaneSession | undefined;
     try {
       throwIfCancelled(signal, "Alpha diff editor input loading was cancelled");
-      modified = await this.modelService.acquire(input.modified, this.textFiles, signal);
+      modified = await this.modelService.acquire(input.modified, signal);
       throwIfCancelled(signal, "Alpha diff editor input loading was cancelled");
-      next = new AlphaDiffEditorPaneSession(container, original, modified, input.original.label, input.modified.label);
+      next = new AlphaDiffEditorPaneSession(container, original, modified, input.original.label, input.modified.label, this.options.createComputationService);
       throwIfCancelled(signal, "Alpha diff editor input loading was cancelled");
     } catch (error) {
       next?.dispose();
@@ -101,11 +111,15 @@ export class AlphaDiffEditorPane extends DisposableOwner implements IEditorPane 
 class AlphaDiffEditorPaneSession extends DisposableOwner {
   readonly editor: DiffEditorWidget;
 
-  constructor(container: HTMLElement, original: AlphaTextModelReference, modified: AlphaTextModelReference, originalLabel: string | undefined, modifiedLabel: string | undefined) {
+  constructor(container: HTMLElement, original: TextModelReference, modified: TextModelReference, originalLabel: string | undefined, modifiedLabel: string | undefined, createComputationService: () => IDiffComputationService) {
     super();
     this.own(original);
     this.own(modified);
-    const computationService = this.own(new BrowserDiffComputationService());
+    const computationService = createComputationService();
+    if (!computationService || typeof computationService.compute !== "function") {
+      throw new TypeError("Alpha diff editor pane factory returned an invalid Rust diff computation service");
+    }
+    this.own(computationService);
     const model = this.own(new DiffModel({
       original: original.model,
       modified: modified.model,
@@ -117,6 +131,7 @@ class AlphaDiffEditorPaneSession extends DisposableOwner {
       originalAriaLabel: originalLabel,
       modifiedAriaLabel: modifiedLabel,
     }));
+    this.own(new AlphaDiffEditorBreadcrumbsController(this.editor, model));
   }
 
   layout(dimension: IDimension): void {

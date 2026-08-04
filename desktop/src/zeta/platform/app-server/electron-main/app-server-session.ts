@@ -196,6 +196,7 @@ function validateInitializeResult(value: InitializeResult): void {
     typeof value.capabilities.terminal !== "boolean" ||
     typeof value.capabilities.typst !== "boolean" ||
     typeof value.capabilities.updateReplay !== "boolean" ||
+    typeof value.capabilities.extensions !== "boolean" ||
     !Array.isArray(value.slashCommands) ||
     value.slashCommands.some(command => !command || typeof command.name !== "string" || typeof command.description !== "string" || (command.argumentMode !== "none" && command.argumentMode !== "optional"))
   ) {

@@ -20,6 +20,7 @@ use zeta_config::{
     WorkspaceId, resolve_scoped_config,
 };
 use zeta_core::{CoreError, HarnessInstructions, ModelSelection, ModelService};
+use zeta_extensions::ExtensionRoot;
 use zeta_install_context::InstallContext;
 use zeta_model_provider::{
     ModelInvoker, ModelProvider, ModelProviderRuntime, ModelRuntimeRequest, UnavailableModel,
@@ -272,10 +273,12 @@ pub fn open_local_app_server(
         config: Arc::clone(&config),
     });
     let built_in_skill_root = resolve_built_in_skill_root(options.built_in_skills);
+    let extension_roots = resolve_extension_roots(&options.profile_root);
     let mut server = AppServer::new(sessions, model.clone())
         .with_model_catalog(model)
         .with_config_store(Arc::clone(&config))
         .with_slash_command_catalog(options.slash_commands)
+        .with_extension_roots(extension_roots)
         .with_skill_runtime(built_in_skill_root, skill_config)
         .map_err(OpenAppServerError)?;
     let mcp = compose_mcp_tools(&runtime_config, user_config.generation)
@@ -428,6 +431,22 @@ fn resolve_built_in_skill_root(selection: BuiltInSkillRoot) -> BuiltInSkillSourc
             .map(BuiltInSkillSource::Root)
             .unwrap_or(BuiltInSkillSource::Missing),
     }
+}
+
+fn resolve_extension_roots(profile_root: &std::path::Path) -> Vec<ExtensionRoot> {
+    let mut roots = vec![ExtensionRoot::user(profile_root.join("extensions"))];
+    if let Some(root) = InstallContext::current()
+        .bundled_resource_directory("extensions")
+        .or_else(development_extension_root)
+    {
+        roots.push(ExtensionRoot::built_in(root));
+    }
+    roots
+}
+
+fn development_extension_root() -> Option<PathBuf> {
+    let candidate = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../resources/extensions");
+    candidate.is_dir().then_some(candidate)
 }
 
 fn development_built_in_skill_root() -> Option<PathBuf> {
