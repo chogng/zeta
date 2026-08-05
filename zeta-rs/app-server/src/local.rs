@@ -19,7 +19,14 @@ use zeta_config::{
     WorkspaceConfigInput, WorkspaceConfigRevision, WorkspaceConfigScope, WorkspaceConfigStore,
     WorkspaceId, resolve_scoped_config,
 };
-use zeta_core::{CoreError, HarnessInstructions, ModelSelection, ModelService};
+use zeta_core::CoreError;
+use zeta_core::HarnessInstructions;
+use zeta_core::InMemorySessionStore;
+use zeta_core::InMemoryThreadStore;
+use zeta_core::ModelSelection;
+use zeta_core::ModelService;
+use zeta_core::SessionCoordinator;
+use zeta_core::ThreadController;
 use zeta_extensions::ExtensionRoot;
 use zeta_install_context::InstallContext;
 use zeta_model_provider::{
@@ -144,7 +151,7 @@ fn platform_name() -> &'static str {
     }
 }
 
-/// Filesystem locations needed to open one persistent local App Server.
+/// Filesystem and runtime inputs needed to open one local App Server.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct LocalAppServerOptions {
     pub profile_root: PathBuf,
@@ -152,6 +159,7 @@ pub struct LocalAppServerOptions {
     pub slash_commands: SlashCommandCatalog,
     pub workspace_root: Option<PathBuf>,
     pub built_in_skills: BuiltInSkillRoot,
+    pub session_state_mode: SessionStateMode,
 }
 
 impl LocalAppServerOptions {
@@ -162,6 +170,7 @@ impl LocalAppServerOptions {
             slash_commands: SlashCommandCatalog::default(),
             workspace_root: None,
             built_in_skills: BuiltInSkillRoot::AutoDetect,
+            session_state_mode: SessionStateMode::Durable,
         }
     }
 
@@ -190,6 +199,22 @@ impl LocalAppServerOptions {
         self.built_in_skills = BuiltInSkillRoot::Unavailable;
         self
     }
+
+    /// Selects whether Session and Thread event history is recovered from profile storage.
+    pub fn with_session_state_mode(mut self, mode: SessionStateMode) -> Self {
+        self.session_state_mode = mode;
+        self
+    }
+}
+
+/// Selects the lifecycle of Session and Thread state in a local App Server.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum SessionStateMode {
+    /// Recover and append Session and Thread event history in profile SQLite storage.
+    #[default]
+    Durable,
+    /// Keep Session and Thread state in memory for this App Server process only.
+    Ephemeral,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -236,15 +261,29 @@ pub fn open_local_app_server(
     {
         options.workspace = Some(default_workspace_config(workspace_root)?);
     }
-    let repository = LocalStateRepository::open(&options.profile_root).map_err(open_error)?;
+    let (database_path, sessions) = match options.session_state_mode {
+        SessionStateMode::Durable => {
+            let repository =
+                LocalStateRepository::open(&options.profile_root).map_err(open_error)?;
+            let database_path = repository.database_path().to_path_buf();
+            let sessions = repository.recover_coordinator().map_err(open_error)?;
+            (database_path, sessions)
+        }
+        SessionStateMode::Ephemeral => {
+            let threads = Arc::new(ThreadController::with_store(Arc::new(
+                InMemoryThreadStore::default(),
+            )));
+            let sessions = Arc::new(SessionCoordinator::with_store(
+                Arc::new(InMemorySessionStore::default()),
+                threads,
+            ));
+            (options.profile_root.join("state.sqlite3"), sessions)
+        }
+    };
     let config = Arc::new(
-        ConfigStore::open_with_paths(
-            repository.database_path(),
-            options.profile_root.join("config.toml"),
-        )
-        .map_err(|error| OpenAppServerError(error.0))?,
+        ConfigStore::open_with_paths(database_path, options.profile_root.join("config.toml"))
+            .map_err(|error| OpenAppServerError(error.0))?,
     );
-    let sessions = repository.recover_coordinator().map_err(open_error)?;
     let user_config = config
         .read_snapshot()
         .map_err(|error| OpenAppServerError(error.0))?;

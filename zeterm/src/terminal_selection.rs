@@ -156,8 +156,7 @@ impl NativeApp {
         state: ElementState,
     ) -> bool {
         let active_screen = self
-            .terminal
-            .as_ref()
+            .active_terminal()
             .map(|terminal| terminal.core().active_screen())
             .unwrap_or_default();
         let previous = self.terminal_selection.range();
@@ -172,7 +171,7 @@ impl NativeApp {
     }
 
     pub(super) fn copy_terminal_selection(&mut self) -> bool {
-        let Some(terminal) = self.terminal.as_ref() else {
+        let Some(terminal) = self.active_terminal() else {
             return false;
         };
         let lines = visible_text_lines(

@@ -87,11 +87,12 @@ impl ThreadSubscription {
             return Ok(ThreadSwitch::Complete { snapshot });
         }
 
+        let previous_session_id = self.session_id.clone();
         let previous_thread_id = self.thread_id.clone();
         let (next, snapshot) = Self::start(client, session_id, thread_id)?;
         *self = next;
         let cleanup = client.unsubscribe_session_thread(SessionThreadUnsubscribeParams {
-            session_id: self.session_id.clone(),
+            session_id: previous_session_id,
             thread_id: previous_thread_id,
         });
         match cleanup {

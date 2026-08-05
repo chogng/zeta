@@ -1,6 +1,21 @@
 use super::{MINIMUM_MAIN_WIDTH, SessionSidebarState};
 
 #[test]
+fn sidebar_is_expanded_by_default_and_can_still_be_collapsed() {
+    let mut sidebar = SessionSidebarState::default();
+
+    assert!(sidebar.is_expanded());
+    assert_eq!(sidebar.visible_width(1_000.0), Some(200.0));
+
+    sidebar.toggle();
+    assert!(!sidebar.is_expanded());
+    assert_eq!(sidebar.visible_width(1_000.0), None);
+
+    sidebar.toggle();
+    assert!(sidebar.is_expanded());
+}
+
+#[test]
 fn expanded_sidebar_uses_its_default_width() {
     let sidebar = SessionSidebarState::expanded();
 

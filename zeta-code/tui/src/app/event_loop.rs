@@ -268,6 +268,28 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                             Ok(ResumeOutcome::Changed(change)) => {
                                 app.update(AppEvent::SelectionViewClosed);
                                 app.update(AppEvent::ThreadSnapshotReceived(change.snapshot));
+                                active_turn = None;
+                                match thread_subscription.switch(
+                                    &mut client,
+                                    conversation.session_id(),
+                                    conversation.thread_id(),
+                                ) {
+                                    Ok(ThreadSwitch::Complete { snapshot }) => {
+                                        conversation.set_thread_sequence(snapshot.sequence);
+                                        app.update(AppEvent::ThreadSnapshotReceived(snapshot));
+                                    }
+                                    Ok(ThreadSwitch::StaleSubscription { snapshot, error }) => {
+                                        conversation.set_thread_sequence(snapshot.sequence);
+                                        app.update(AppEvent::ThreadSnapshotReceived(snapshot));
+                                        app.update(AppEvent::FailureReported(format!(
+                                            "resumed Thread, but could not unsubscribe the previous \
+                                             Thread: {error}"
+                                        )));
+                                    }
+                                    Err(error) => {
+                                        app.update(AppEvent::FailureReported(error.to_string()));
+                                    }
+                                }
                                 app.update(AppEvent::CommandCompleted {
                                     command,
                                     result: change.notice,

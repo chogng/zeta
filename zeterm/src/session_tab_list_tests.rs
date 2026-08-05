@@ -1,12 +1,57 @@
-use super::{SessionTab, SessionTabList};
-use crate::shell_interaction::{ACTIVE_SESSION_TAB, SESSION_TAB_LIST};
+use super::{SessionTab, SessionTabList, SessionTabUpsert, upsert_session_tab};
+use crate::shell_interaction::{ACTIVE_SESSION_TAB, SESSION_TAB_LIST, session_tab_id};
 use crate::shell_style::SHELL_PALETTE;
+use zeta_protocol::{Session, SessionId, SessionStatus};
 use zeta_ui::{Color, Component, CornerRadii, FontWeight, Point, Rect, UiScene};
 use zui::{
     AccessibilityRole, AccessibilitySelection, ElementId, InteractionFrame, UiDispatch, UiFrame,
+    UiIntent,
 };
 
 const SECOND_SESSION_TAB: ElementId = ElementId::scoped(1, 16);
+
+fn session(id: &str, title: &str) -> Session {
+    Session {
+        session_id: SessionId::new(id).unwrap(),
+        title: title.to_owned(),
+        status: SessionStatus::Active,
+        model: None,
+        sequence: 1,
+        threads: Vec::new(),
+    }
+}
+
+#[test]
+fn add_session_snapshots_create_independent_tabs_and_select_the_newest() {
+    let first = session("session-1", "First terminal");
+    let second = session("session-2", "Second terminal");
+    let mut tabs = Vec::new();
+    let mut selected = ACTIVE_SESSION_TAB;
+
+    assert_eq!(
+        upsert_session_tab(&mut tabs, &mut selected, &first, "~/first"),
+        SessionTabUpsert::Added(ACTIVE_SESSION_TAB)
+    );
+    assert_eq!(
+        upsert_session_tab(&mut tabs, &mut selected, &second, "~/second"),
+        SessionTabUpsert::Added(session_tab_id(1))
+    );
+    assert_eq!(tabs.len(), 2);
+    assert_eq!(selected, session_tab_id(1));
+    assert_eq!(tabs[0].session_id(), &first.session_id);
+    assert_eq!(tabs[1].session_id(), &second.session_id);
+    assert_ne!(tabs[0].id(), tabs[1].id());
+
+    let mut renamed_first = first.clone();
+    renamed_first.title = "First terminal renamed".to_owned();
+    assert_eq!(
+        upsert_session_tab(&mut tabs, &mut selected, &renamed_first, "~/first"),
+        SessionTabUpsert::Updated(ACTIVE_SESSION_TAB)
+    );
+    assert_eq!(tabs.len(), 2);
+    assert_eq!(selected, ACTIVE_SESSION_TAB);
+    assert_eq!(tabs[0].title(), "First terminal renamed");
+}
 
 #[test]
 fn session_tabs_render_status_and_two_line_information_with_selected_semantics() {
@@ -129,4 +174,30 @@ fn hovering_an_unselected_tab_uses_the_same_light_gray_highlight() {
     hovered.paint(&mut scene);
 
     assert_eq!(scene.rects()[1].fill(), SHELL_PALETTE.session_tab_highlight);
+}
+
+#[test]
+fn clicking_an_unselected_tab_emits_its_stable_activation_intent() {
+    let mut dispatch = UiDispatch::default();
+    let tabs = [
+        SessionTab::new(ACTIVE_SESSION_TAB, "zeterm", "~/Desktop/zeta", "Active"),
+        SessionTab::new(SECOND_SESSION_TAB, "Second", "~/Desktop/second", "Active"),
+    ];
+    let list = SessionTabList::new(
+        Rect::from_xywh(0.0, 36.0, 220.0, 664.0),
+        &tabs,
+        ACTIVE_SESSION_TAB,
+        SHELL_PALETTE,
+        &dispatch,
+    );
+    let mut frame = UiFrame::<InteractionFrame>::new(SHELL_PALETTE.background);
+    frame.draw_component(&list);
+    let second_bounds = list.tab_list().tab_bounds(1).unwrap();
+    let point = Point::new(second_bounds.origin.x + 2.0, second_bounds.origin.y + 2.0);
+
+    dispatch.pointer_moved(point, frame.interaction());
+    dispatch.press_primary(frame.interaction());
+    let outcome = dispatch.release_primary(point, frame.interaction());
+
+    assert_eq!(outcome.intent, Some(UiIntent::Activate(SECOND_SESSION_TAB)));
 }

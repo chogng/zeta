@@ -42,7 +42,7 @@ struct SessionSidebarResize {
 impl Default for SessionSidebarState {
     fn default() -> Self {
         Self {
-            visibility: SessionSidebarVisibility::Collapsed,
+            visibility: SessionSidebarVisibility::Expanded,
             preferred_width: DEFAULT_WIDTH,
             resize: None,
         }
@@ -54,6 +54,15 @@ impl SessionSidebarState {
     pub(crate) const fn expanded() -> Self {
         Self {
             visibility: SessionSidebarVisibility::Expanded,
+            preferred_width: DEFAULT_WIDTH,
+            resize: None,
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) const fn collapsed() -> Self {
+        Self {
+            visibility: SessionSidebarVisibility::Collapsed,
             preferred_width: DEFAULT_WIDTH,
             resize: None,
         }

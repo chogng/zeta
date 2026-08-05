@@ -66,7 +66,7 @@ fn agent_sidebar_outer_border_is_owned_by_native_shell() {
 }
 
 fn presentation(terminal: Option<&TerminalCore>, scroll_offset: usize) -> ShellPresentation {
-    presentation_with_sidebar(terminal, scroll_offset, SessionSidebarState::default())
+    presentation_with_sidebar(terminal, scroll_offset, SessionSidebarState::collapsed())
 }
 
 fn presentation_with_sidebar(
@@ -166,6 +166,8 @@ fn presentation_with_workspace(
             composer_interaction_pane: &composer_interaction_pane,
             composer_mode: ComposerMode::Agent,
             session_search: &session_search,
+            session_tabs: &[],
+            selected_session_tab: ACTIVE_SESSION_TAB,
             caret_visibility: CaretVisibility::Visible,
             dispatch,
             session_sidebar,
@@ -216,6 +218,8 @@ fn presentation_with_workspace(
             composer_interaction_pane: &composer_interaction_pane,
             composer_mode: ComposerMode::Agent,
             session_search: &session_search,
+            session_tabs: &[],
+            selected_session_tab: ACTIVE_SESSION_TAB,
             caret_visibility: CaretVisibility::Visible,
             dispatch,
             session_sidebar,
@@ -253,7 +257,7 @@ fn expanded_agent_sidebar_file_row_hover_rebuilds_with_the_hover_background() {
     let initial = presentation_with_workspace(
         None,
         0,
-        SessionSidebarState::default(),
+        SessionSidebarState::collapsed(),
         AgentSidebarState::expanded(),
         SessionContextMenuState::default(),
         &workspace,
@@ -280,7 +284,7 @@ fn expanded_agent_sidebar_file_row_hover_rebuilds_with_the_hover_background() {
     let hovered = presentation_with_workspace(
         None,
         0,
-        SessionSidebarState::default(),
+        SessionSidebarState::collapsed(),
         AgentSidebarState::expanded(),
         SessionContextMenuState::default(),
         &workspace,
@@ -298,7 +302,7 @@ fn expanded_agent_sidebar_file_row_hover_rebuilds_with_the_hover_background() {
 fn primary_layout_keeps_output_above_a_bottom_composer() {
     let layout = ShellLayout::for_viewport(
         viewport(),
-        SessionSidebarState::default(),
+        SessionSidebarState::collapsed(),
         AgentSidebarState::default(),
     )
     .unwrap();
@@ -363,9 +367,11 @@ fn editor_surface_mounts_the_active_file_without_agent_composer_or_timeline() {
             composer_interaction_pane: &composer_interaction_pane,
             composer_mode: ComposerMode::Agent,
             session_search: &session_search,
+            session_tabs: &[],
+            selected_session_tab: ACTIVE_SESSION_TAB,
             caret_visibility: CaretVisibility::Visible,
             dispatch: &dispatch,
-            session_sidebar: SessionSidebarState::default(),
+            session_sidebar: SessionSidebarState::collapsed(),
             agent_sidebar: AgentSidebarState::default(),
             agent_sidebar_workspace: &agent_sidebar_workspace,
             session_context_menu: SessionContextMenuState::default(),
@@ -409,7 +415,7 @@ fn editor_surface_mounts_the_active_file_without_agent_composer_or_timeline() {
 fn multiline_composer_grows_upward_between_info_bar_and_bottom_toolbar() {
     let layout = ShellLayout::for_viewport_with_composer_height(
         viewport(),
-        SessionSidebarState::default(),
+        SessionSidebarState::collapsed(),
         AgentSidebarState::default(),
         160.0,
     )
@@ -432,7 +438,7 @@ fn multiline_composer_grows_upward_between_info_bar_and_bottom_toolbar() {
 fn primary_presentation_uses_a_flat_light_surface() {
     let layout = ShellLayout::for_viewport(
         viewport(),
-        SessionSidebarState::default(),
+        SessionSidebarState::collapsed(),
         AgentSidebarState::default(),
     )
     .unwrap();
@@ -624,6 +630,8 @@ fn session_search_filters_tabs_by_session_name() {
             composer_interaction_pane: &ComposerInteractionPaneState::default(),
             composer_mode: ComposerMode::Agent,
             session_search: &session_search,
+            session_tabs: &[],
+            selected_session_tab: ACTIVE_SESSION_TAB,
             caret_visibility: CaretVisibility::Visible,
             dispatch: &dispatch,
             session_sidebar: SessionSidebarState::expanded(),
@@ -662,12 +670,12 @@ fn session_search_filters_tabs_by_session_name() {
 fn expanded_agent_sidebar_defaults_to_the_files_pane_with_navigation_and_actions() {
     let agent_sidebar = AgentSidebarState::expanded();
     let layout =
-        ShellLayout::for_viewport(viewport(), SessionSidebarState::default(), agent_sidebar)
+        ShellLayout::for_viewport(viewport(), SessionSidebarState::collapsed(), agent_sidebar)
             .unwrap();
     let presentation = presentation_with_sidebars_and_menu(
         None,
         0,
-        SessionSidebarState::default(),
+        SessionSidebarState::collapsed(),
         agent_sidebar,
         SessionContextMenuState::default(),
     );
@@ -780,7 +788,7 @@ fn expanded_agent_sidebar_defaults_to_the_files_pane_with_navigation_and_actions
         terminal_grid_size_for_viewport(
             viewport(),
             ScreenBuffer::Primary,
-            SessionSidebarState::default(),
+            SessionSidebarState::collapsed(),
             agent_sidebar,
         )
         .cols(),
@@ -826,9 +834,11 @@ fn changes_switch_mounts_workspace_diffs_in_the_multi_diff_editor_without_files_
             composer_interaction_pane: &ComposerInteractionPaneState::default(),
             composer_mode: ComposerMode::Agent,
             session_search: &session_search,
+            session_tabs: &[],
+            selected_session_tab: ACTIVE_SESSION_TAB,
             caret_visibility: CaretVisibility::Visible,
             dispatch: &dispatch,
-            session_sidebar: SessionSidebarState::default(),
+            session_sidebar: SessionSidebarState::collapsed(),
             agent_sidebar: AgentSidebarState::expanded(),
             agent_sidebar_workspace: &agent_workspace,
             session_context_menu: SessionContextMenuState::default(),
@@ -1044,9 +1054,11 @@ fn overlay_rebuild_restores_the_retained_base_scene_and_interactions() {
         composer_interaction_pane: &composer_interaction_pane,
         composer_mode: ComposerMode::Agent,
         session_search: &session_search,
+        session_tabs: &[],
+        selected_session_tab: ACTIVE_SESSION_TAB,
         caret_visibility: CaretVisibility::Visible,
         dispatch: &dispatch,
-        session_sidebar: SessionSidebarState::default(),
+        session_sidebar: SessionSidebarState::collapsed(),
         agent_sidebar: AgentSidebarState::default(),
         agent_sidebar_workspace: &agent_sidebar_workspace,
         session_context_menu: SessionContextMenuState::default(),
@@ -1207,9 +1219,11 @@ fn compact_viewport_uses_bounded_fallback_scene() {
             composer_interaction_pane: &ComposerInteractionPaneState::default(),
             composer_mode: ComposerMode::Agent,
             session_search: &session_search,
+            session_tabs: &[],
+            selected_session_tab: ACTIVE_SESSION_TAB,
             caret_visibility: CaretVisibility::Visible,
             dispatch: &dispatch,
-            session_sidebar: SessionSidebarState::default(),
+            session_sidebar: SessionSidebarState::collapsed(),
             agent_sidebar: AgentSidebarState::default(),
             agent_sidebar_workspace: &agent_sidebar_workspace,
             session_context_menu: SessionContextMenuState::default(),
@@ -1236,13 +1250,13 @@ fn primary_reserves_rows_for_composer_while_alternate_screen_uses_full_height() 
     let primary = terminal_grid_size_for_viewport(
         viewport(),
         ScreenBuffer::Primary,
-        SessionSidebarState::default(),
+        SessionSidebarState::collapsed(),
         AgentSidebarState::default(),
     );
     let alternate = terminal_grid_size_for_viewport(
         viewport(),
         ScreenBuffer::Alternate,
-        SessionSidebarState::default(),
+        SessionSidebarState::collapsed(),
         AgentSidebarState::default(),
     );
 
@@ -1255,7 +1269,7 @@ fn primary_pointer_coordinates_are_limited_to_the_output_region() {
     let first = terminal_mouse_position_for_viewport(
         viewport(),
         ScreenBuffer::Primary,
-        SessionSidebarState::default(),
+        SessionSidebarState::collapsed(),
         AgentSidebarState::default(),
         Point::new(24.0, 60.0),
     )
@@ -1263,7 +1277,7 @@ fn primary_pointer_coordinates_are_limited_to_the_output_region() {
     let composer = terminal_mouse_position_for_viewport(
         viewport(),
         ScreenBuffer::Primary,
-        SessionSidebarState::default(),
+        SessionSidebarState::collapsed(),
         AgentSidebarState::default(),
         Point::new(40.0, 640.0),
     );
@@ -1318,7 +1332,7 @@ fn primary_ime_candidate_position_comes_from_the_bottom_composer() {
     let terminal = TerminalCore::new(GridSize::new(29, 119));
     let layout = ShellLayout::for_viewport(
         viewport(),
-        SessionSidebarState::default(),
+        SessionSidebarState::collapsed(),
         AgentSidebarState::default(),
     )
     .unwrap();

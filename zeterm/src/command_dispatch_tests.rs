@@ -3,7 +3,7 @@ use zeta_commands::ZetermCommandId;
 use super::builtin_command_registry;
 use super::command_request_for_element;
 use crate::shell_interaction::{
-    AGENT_FILES, AGENT_FILES_REFRESH, CONTEXT_DIFF, CONTEXT_WORKING_DIRECTORY,
+    ADD_SESSION, AGENT_FILES, AGENT_FILES_REFRESH, CONTEXT_DIFF, CONTEXT_WORKING_DIRECTORY,
     SESSION_SIDEBAR_TOGGLE,
 };
 
@@ -12,6 +12,10 @@ fn element_entry_points_map_to_stable_product_commands() {
     assert_eq!(
         command_request_for_element(SESSION_SIDEBAR_TOGGLE).map(|request| request.command_id()),
         Some(ZetermCommandId::ToggleSessionSidebar)
+    );
+    assert_eq!(
+        command_request_for_element(ADD_SESSION).map(|request| request.command_id()),
+        Some(ZetermCommandId::AddSession)
     );
     assert_eq!(
         command_request_for_element(AGENT_FILES).map(|request| request.command_id()),

@@ -60,6 +60,7 @@ pub use session::{
     AppServerEvent, AppServerEvents, AppServerRequestHandle, AppServerSession,
     ConnectionCloseReason, ShutdownError, TakeEventsError,
 };
+pub use zeta_app_server::SessionStateMode;
 
 /// Exchanges one complete JSON-RPC request with a connected app-server transport.
 ///

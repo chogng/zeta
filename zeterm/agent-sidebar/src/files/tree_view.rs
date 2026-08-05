@@ -5,10 +5,11 @@ use zeta_ui::Component;
 use zeta_ui::ComponentContext;
 use zeta_ui::ComponentElement;
 use zeta_ui::Element;
+use zeta_ui::IconLabel;
+use zeta_ui::IconLabelStyle;
 use zeta_ui::PaintIcon;
 use zeta_ui::PaintRect;
 use zeta_ui::Rect;
-use zeta_ui::TextBlock;
 use zeta_ui::TextStyle;
 use zeta_ui::TreeItemExpansion;
 use zeta_ui::TreeItemLayout;
@@ -28,6 +29,7 @@ use zui::UiDispatch;
 
 use super::FILE_LIST_ROW_HEIGHT;
 use super::FilesState;
+use super::file_icon::icon_for_tree_item;
 use super::pane::EXPLORER_PANE;
 use super::pane::FilesPaneStyle;
 use super::pane::HORIZONTAL_PADDING;
@@ -226,33 +228,7 @@ impl Component for FilesTreeItem<'_> {
             ));
         }
 
-        let content = self.layout.content_bounds();
-        let icon_bounds = Rect::from_xywh(
-            content.origin.x,
-            content.origin.y + (FILE_LIST_ROW_HEIGHT - ICON_SIZE) * 0.5,
-            ICON_SIZE,
-            ICON_SIZE,
-        );
-        if self.layout.item().expansion().is_branch() {
-            scene.draw_component(&FilesTreeIcon::new(
-                icon_bounds,
-                icons::FILES,
-                self.style.text_muted,
-            ));
-        }
-
-        let text_x = icon_bounds.right() + 6.0;
-        let text_bounds = Rect::from_xywh(
-            text_x,
-            content.origin.y + 4.0,
-            (self.layout.bounds().right() - text_x - HORIZONTAL_PADDING).max(1.0),
-            18.0,
-        );
-        scene.draw_component(&FilesTreeLabel::new(
-            text_bounds,
-            self.label,
-            self.style.text,
-        ));
+        scene.draw_component(&file_label(self.layout, self.label, self.style));
     }
 
     fn compose(&self, context: &mut ComponentContext<'_, '_>, _element: &ComputedElement) {
@@ -276,33 +252,7 @@ impl Component for FilesTreeItem<'_> {
             ));
         }
 
-        let content = self.layout.content_bounds();
-        let icon_bounds = Rect::from_xywh(
-            content.origin.x,
-            content.origin.y + (FILE_LIST_ROW_HEIGHT - ICON_SIZE) * 0.5,
-            ICON_SIZE,
-            ICON_SIZE,
-        );
-        if self.layout.item().expansion().is_branch() {
-            context.draw_component(&FilesTreeIcon::new(
-                icon_bounds,
-                icons::FILES,
-                self.style.text_muted,
-            ));
-        }
-
-        let text_x = icon_bounds.right() + 6.0;
-        let text_bounds = Rect::from_xywh(
-            text_x,
-            content.origin.y + 4.0,
-            (self.layout.bounds().right() - text_x - HORIZONTAL_PADDING).max(1.0),
-            18.0,
-        );
-        context.draw_component(&FilesTreeLabel::new(
-            text_bounds,
-            self.label,
-            self.style.text,
-        ));
+        context.draw_component(&file_label(self.layout, self.label, self.style));
     }
 }
 
@@ -332,65 +282,23 @@ impl Component for FilesTreeDisclosure {
     }
 }
 
-struct FilesTreeIcon {
-    bounds: Rect,
-    icon: Icon,
-    color: Color,
-}
-
-impl FilesTreeIcon {
-    const fn new(bounds: Rect, icon: Icon, color: Color) -> Self {
-        Self {
-            bounds,
-            icon,
-            color,
-        }
-    }
-}
-
-impl Component for FilesTreeIcon {
-    fn element(&self) -> ComponentElement {
-        Element::leaf("FilesTreeIcon")
-            .in_bounds(self.bounds)
-            .with_inspection_label(self.icon.id().as_str())
-    }
-
-    fn paint(&self, scene: &mut UiScene) {
-        scene.draw_icon(PaintIcon::new(self.icon, self.bounds, self.color));
-    }
-}
-
-struct FilesTreeLabel<'a> {
-    bounds: Rect,
-    label: &'a str,
-    color: Color,
-}
-
-impl<'a> FilesTreeLabel<'a> {
-    const fn new(bounds: Rect, label: &'a str, color: Color) -> Self {
-        Self {
-            bounds,
-            label,
-            color,
-        }
-    }
-}
-
-impl Component for FilesTreeLabel<'_> {
-    fn element(&self) -> ComponentElement {
-        Element::leaf("FilesTreeLabel")
-            .in_bounds(self.bounds)
-            .with_inspection_label(self.label)
-    }
-
-    fn paint(&self, scene: &mut UiScene) {
-        scene.draw_text(TextBlock::new(
-            self.label,
-            self.bounds.origin,
-            self.bounds.size,
-            TextStyle::new(12.0, self.color).with_line_height(18.0),
-        ));
-    }
+fn file_label(layout: TreeItemLayout, label: &str, style: &FilesPaneStyle) -> IconLabel {
+    let content = layout.content_bounds();
+    let bounds = Rect::from_xywh(
+        content.origin.x,
+        content.origin.y,
+        (content.size.width - HORIZONTAL_PADDING).max(1.0),
+        content.size.height,
+    );
+    IconLabel::new(
+        bounds,
+        icon_for_tree_item(layout.item().expansion()),
+        label,
+        IconLabelStyle::new(TextStyle::new(12.0, style.text).with_line_height(16.0))
+            .with_icon_size(ICON_SIZE)
+            .with_icon_color(style.text_muted)
+            .with_content_gap(6.0),
+    )
 }
 
 pub(super) fn file_row_state(selected: bool, hovered: bool) -> FileRowState {

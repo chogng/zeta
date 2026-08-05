@@ -1,12 +1,14 @@
 use crate::{
-    Component, ComponentElement, Element, PaintIcon, Point, Rect, TextBlock, TextStyle, UiScene,
+    Color, Component, ComponentElement, Element, PaintIcon, Point, Rect, TextBlock, TextStyle,
+    UiScene,
 };
 use zui::Icon;
 
-/// Presentation metrics for an icon followed by a single text label.
+/// Presentation metrics and colors for an icon followed by a single text label.
 #[derive(Clone, Debug, PartialEq)]
 pub struct IconLabelStyle {
     text_style: TextStyle,
+    icon_color: Color,
     icon_size: f32,
     content_gap: f32,
 }
@@ -14,6 +16,7 @@ pub struct IconLabelStyle {
 impl IconLabelStyle {
     pub fn new(text_style: TextStyle) -> Self {
         Self {
+            icon_color: text_style.color(),
             text_style,
             icon_size: 16.0,
             content_gap: 4.0,
@@ -22,6 +25,12 @@ impl IconLabelStyle {
 
     pub const fn with_icon_size(mut self, icon_size: f32) -> Self {
         self.icon_size = icon_size;
+        self
+    }
+
+    /// Overrides the icon tint without changing the label text color.
+    pub const fn with_icon_color(mut self, icon_color: Color) -> Self {
+        self.icon_color = icon_color;
         self
     }
 
@@ -57,7 +66,9 @@ impl IconLabel {
 
 impl Component for IconLabel {
     fn element(&self) -> ComponentElement {
-        Element::leaf("IconLabel").in_bounds(self.bounds)
+        Element::leaf("IconLabel")
+            .in_bounds(self.bounds)
+            .with_inspection_label(&self.label)
     }
 
     fn paint(&self, scene: &mut UiScene) {
@@ -75,7 +86,7 @@ impl Component for IconLabel {
             scene.draw_icon(PaintIcon::new(
                 self.icon,
                 Rect::from_xywh(self.bounds.origin.x, icon_y, icon_size, icon_size),
-                self.style.text_style.color(),
+                self.style.icon_color,
             ));
         }
 

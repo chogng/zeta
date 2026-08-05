@@ -2,7 +2,7 @@ use super::{
     ADD_SESSION, AGENT_CHANGES, AGENT_FILES, AgentSidebarPaneAction, CONTEXT_DIFF,
     CONTEXT_GIT_BRANCH, CONTEXT_LOCATION, CONTEXT_WORKING_DIRECTORY, ContextAction,
     SESSION_CONTEXT_MENU, SESSION_SEARCH_INPUT, SESSION_SIDEBAR_ACTION_BAR,
-    SESSION_SIDEBAR_TOOLBAR, SessionContextMenuAction,
+    SESSION_SIDEBAR_TOOLBAR, SessionContextMenuAction, session_tab_id, session_tab_index,
 };
 
 #[test]
@@ -58,6 +58,19 @@ fn sessions_toolbar_elements_have_stable_unique_identities() {
             .len(),
         4
     );
+}
+
+#[test]
+fn session_tab_identities_are_unique_and_round_trip_to_their_indices() {
+    let ids = (0..4).map(session_tab_id).collect::<Vec<_>>();
+
+    assert_eq!(
+        ids.iter().collect::<std::collections::HashSet<_>>().len(),
+        4
+    );
+    for (index, id) in ids.into_iter().enumerate() {
+        assert_eq!(session_tab_index(id, 0..4), Some(index));
+    }
 }
 
 #[test]

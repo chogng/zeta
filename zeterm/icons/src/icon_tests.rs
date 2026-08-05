@@ -13,6 +13,7 @@ fn semantic_library_is_sorted_and_has_unique_ids() {
 #[test]
 fn catalog_resolves_semantic_ids_without_exposing_filenames() {
     assert_eq!(icon_by_id("files"), Some(icons::FILES));
+    assert_eq!(icon_by_id("file-text"), Some(icons::FILE_TEXT));
     assert_eq!(icon_by_id("git-branch"), Some(icons::GIT_BRANCH));
     assert_eq!(
         icon_by_id("working-directory"),

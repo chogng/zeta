@@ -51,6 +51,10 @@ compatibility 的程序进入独立 TerminalPane。
 `BlockList` 只保留为 terminal compatibility model，不再绘制 Agent 主界面，也不拥有 Agent
 Thread transcript。
 
+`zeterm` 的 embedded App Server 在 `agent_session` 中显式选择 `SessionStateMode::Ephemeral`：
+当前进程内仍使用同一 Session/Thread/Core contract，但 Session、Thread 和用户消息不会从共享
+profile SQLite 恢复或写入。`zeta-cli`/TUI 的默认 durable composition 不因此改变。
+
 ## 所有权
 
 | 状态或能力 | Owner | Native 义务 |
@@ -159,4 +163,4 @@ Terminal 激活后 keyboard/IME/paste 可直接编码到 PTY。后台 PTY 的 al
 | Agent message | ThreadTimeline 基本文本布局 | Markdown block、selection、折叠与虚拟化 |
 | Interaction UI | durable approval 已可恢复 | Timeline 内 approval card 与响应控件 |
 | Composer interaction | Slash Command 与模型选择 View 栈已接入 | 继续增加只消费 typed catalog 的命令专属 View |
-| Session UI | 使用一条 active App Server Session/Thread | 多 Session/Thread 选择、创建与恢复 |
+| Session UI | 通过 App Server Session/Thread snapshot 创建、投影并切换多个 Session Tab | 独立的 Session action mutation、跨窗口恢复与每个 tab 的完整本地 presentation state |

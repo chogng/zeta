@@ -16,6 +16,7 @@ use native_event::NativeEvent;
 use session_context_menu::SessionContextMenuState;
 use session_search::SessionSearch;
 use session_sidebar::SessionSidebarState;
+use session_tab_list::SessionTabState;
 use shell_interaction::{COMPOSER, FILE_EDITOR_DOCUMENT};
 use shell_scene::{
     ShellPresentation, ShellPresentationModel, build_shell_presentation_with_animation_bindings,
@@ -25,7 +26,8 @@ use shell_style::{SHELL_PALETTE, ShellPalette, code_editor_style};
 use terminal_pointer::TerminalPointer;
 use terminal_scrollback::TerminalScroll;
 use terminal_selection::TerminalSelection;
-use terminal_session::TerminalSession;
+use terminal_session::{TerminalSession, TerminalSessionEvent, TerminalSessionKey};
+use terminal_workspace::{TerminalReadyOutcome, TerminalWorkspace};
 use thread_projection::ThreadProjection;
 use thread_timeline_scroll::ThreadTimelineScroll;
 use workspace_context::WorkspaceContext;
@@ -34,8 +36,9 @@ use workspace_surface::WorkspaceSurface;
 use zeta_agent_sidebar::AgentSidebarAction;
 use zeta_editor::CodeEditorStyle;
 use zeta_layout::{InspectorPane, LogicalViewport, RootLayout};
+use zeta_protocol::SessionId;
 use zeta_renderer::{RenderOutcome, RenderTargetSize, Renderer};
-use zeta_terminal::{BlockStatus, ScreenBuffer};
+use zeta_terminal::{BlockStatus, GridSize, ScreenBuffer};
 use zeta_theme::{ColorScheme, ThemeLoadOptions, ThemeLoader, ThemeSurface, default_device_root};
 use zeta_ui::{CaretBlinkAdvance, CaretBlinkController, Point, TextInputLayoutEngine};
 use zeta_winit::{
@@ -83,6 +86,7 @@ mod session_context_menu;
 mod session_search;
 mod session_sidebar;
 mod session_sidebar_toolbar;
+mod session_switch_trace;
 mod session_tab_list;
 mod shell_interaction;
 mod shell_scene;
@@ -95,6 +99,7 @@ mod terminal_projection;
 mod terminal_scrollback;
 mod terminal_selection;
 mod terminal_session;
+mod terminal_workspace;
 mod thread_projection;
 mod thread_timeline;
 mod thread_timeline_scroll;
@@ -139,6 +144,8 @@ struct NativeApp {
     language_service: language_service_host::NativeLanguageService,
     session_sidebar: SessionSidebarState,
     session_search: SessionSearch,
+    session_tabs: Vec<SessionTabState>,
+    selected_session_tab: ElementId,
     session_context_menu: SessionContextMenuState,
     git_branch_context_menu: GitBranchContextMenuState,
     workspace_path_picker: WorkspacePathPickerState,
@@ -147,7 +154,7 @@ struct NativeApp {
     thread_projection: ThreadProjection,
     thread_timeline_scroll: ThreadTimelineScroll,
     workspace_surface: WorkspaceSurface,
-    terminal: Option<TerminalSession>,
+    terminal_workspace: TerminalWorkspace,
     workspace_context: WorkspaceContext,
     composer: AgentComposer,
     composer_interaction: composer_interaction::ComposerInteractionModel,
@@ -211,6 +218,8 @@ impl NativeApp {
             file_editor_host: FileEditorHost::default(),
             session_sidebar: SessionSidebarState::default(),
             session_search: SessionSearch::default(),
+            session_tabs: Vec::new(),
+            selected_session_tab: shell_interaction::ACTIVE_SESSION_TAB,
             session_context_menu: SessionContextMenuState::default(),
             git_branch_context_menu: GitBranchContextMenuState::default(),
             workspace_path_picker: WorkspacePathPickerState::default(),
@@ -219,7 +228,7 @@ impl NativeApp {
             thread_projection: ThreadProjection::default(),
             thread_timeline_scroll: ThreadTimelineScroll::default(),
             workspace_surface: WorkspaceSurface::default(),
-            terminal: None,
+            terminal_workspace: TerminalWorkspace::new(event_proxy.clone()),
             composer,
             workspace_context,
             composer_interaction: composer_interaction::ComposerInteractionModel::new(),
@@ -284,6 +293,7 @@ impl NativeApp {
     }
 
     fn redraw(&mut self, event_loop: &ActiveEventLoop) {
+        let _trace = session_switch_trace::Span::frame("redraw");
         let now = Instant::now();
         let retained_report = self.retained_runtime.advance(now);
         let mut retained_cleanup_failed = false;
@@ -324,6 +334,7 @@ impl NativeApp {
         let Some(renderer) = self.renderer.as_mut() else {
             return;
         };
+        let _render_trace = session_switch_trace::Span::frame("renderer.render_scene");
         match renderer.render_scene(presentation.scene()) {
             Ok(RenderOutcome::Presented | RenderOutcome::Skipped) => {}
             Ok(RenderOutcome::Retry) => self.request_redraw(),
@@ -352,7 +363,66 @@ impl NativeApp {
         }
     }
 
+    fn terminal_size(&self) -> GridSize {
+        terminal_grid_size_for_viewport(
+            self.logical_viewport(),
+            self.active_screen(),
+            self.session_sidebar,
+            self.agent_sidebar,
+        )
+    }
+
+    pub(crate) fn ensure_terminal_for_session(&mut self, session_id: &SessionId) -> bool {
+        match self
+            .terminal_workspace
+            .ensure_for_session(session_id, self.terminal_size())
+        {
+            Ok(()) => true,
+            Err(error) => {
+                eprintln!("could not start terminal for session: {error}");
+                false
+            }
+        }
+    }
+
+    pub(crate) fn activate_terminal_for_session(&mut self, session_id: &SessionId) -> bool {
+        if !self.terminal_workspace.activate_for_session(session_id) {
+            return false;
+        }
+        self.terminal_scroll.reset();
+        self.terminal_selection.clear();
+        self.terminal_pointer.cancel();
+        if let Some(window) = self.window.as_ref()
+            && let Some(terminal) = self.active_terminal()
+        {
+            window.set_title(terminal.core().title().unwrap_or(PRODUCT_DISPLAY_NAME));
+        }
+        true
+    }
+
+    fn update_terminal_status(&mut self, key: TerminalSessionKey, status: &str) {
+        let Some(session_id) = self.terminal_workspace.session_id_for_key(key) else {
+            return;
+        };
+        if let Some(tab) = self
+            .session_tabs
+            .iter_mut()
+            .find(|tab| tab.session_id() == &session_id)
+        {
+            tab.update_status(status);
+        }
+    }
+
+    pub(crate) fn active_terminal(&self) -> Option<&TerminalSession> {
+        self.terminal_workspace.active()
+    }
+
+    pub(crate) fn active_terminal_mut(&mut self) -> Option<&mut TerminalSession> {
+        self.terminal_workspace.active_mut()
+    }
+
     fn rebuild_presentation(&mut self) {
+        let _trace = session_switch_trace::Span::new(None, "rebuild_presentation");
         let window_viewport = self.window_viewport();
         let viewport = self.logical_viewport();
         let root_layout = RootLayout::for_viewports(
@@ -371,12 +441,7 @@ impl NativeApp {
             self.session_sidebar,
             self.agent_sidebar,
         );
-        if let Some(terminal) = self.terminal.as_mut()
-            && terminal.core().grid().size() != terminal_size
-            && let Err(error) = terminal.resize(terminal_size)
-        {
-            eprintln!("could not resize terminal: {error}");
-        }
+        self.terminal_workspace.resize_all(terminal_size);
         let scroll_limit = self.terminal_scroll_limit();
         self.terminal_scroll.clamp(scroll_limit);
         let window_control_insets = self
@@ -652,6 +717,7 @@ impl NativeApp {
     fn apply_dispatch_outcome(&mut self, outcome: DispatchOutcome) {
         let activation = matches!(outcome.intent, Some(UiIntent::Activate(_)));
         if let Some(intent) = outcome.intent {
+            session_switch_trace::event(None, "ui-intent", format_args!("intent={intent:?}"));
             match intent {
                 UiIntent::StartWindowDrag(_) => {
                     if let Some(window) = self.window.as_ref()
@@ -722,6 +788,18 @@ impl NativeApp {
             return;
         }
         if self.activate_workspace_path_picker_element(id) {
+            return;
+        }
+        if let Some(index) = shell_interaction::session_tab_index(id, 0..self.session_tabs.len()) {
+            session_switch_trace::event(
+                None,
+                "session-tab-hit",
+                format_args!(
+                    "element={id:?} index={index} tab_count={}",
+                    self.session_tabs.len()
+                ),
+            );
+            self.activate_session_tab(index);
             return;
         }
         if let Some(request) = command_dispatch::command_request_for_element(id) {
@@ -928,7 +1006,7 @@ fn with_shell_presentation_model<R>(
     let NativeApp {
         palette,
         retained_runtime,
-        terminal,
+        terminal_workspace,
         terminal_scroll,
         terminal_selection,
         workspace_surface,
@@ -939,6 +1017,8 @@ fn with_shell_presentation_model<R>(
         composer_interaction,
         composer_interaction_pane,
         session_search,
+        session_tabs,
+        selected_session_tab,
         caret_blink,
         ui_dispatch,
         session_sidebar,
@@ -968,7 +1048,7 @@ fn with_shell_presentation_model<R>(
     operation(
         ShellPresentationModel {
             palette: *palette,
-            terminal: terminal.as_ref().map(TerminalSession::core),
+            terminal: terminal_workspace.active().map(TerminalSession::core),
             terminal_scroll_offset: terminal_scroll.offset(),
             terminal_scrollbar_presentation: terminal_scroll.scrollbar_presentation(),
             terminal_selection: terminal_selection.range(),
@@ -989,6 +1069,8 @@ fn with_shell_presentation_model<R>(
             composer_interaction_pane,
             composer_mode: composer.mode(),
             session_search,
+            session_tabs,
+            selected_session_tab: *selected_session_tab,
             caret_visibility: caret_blink.visibility(),
             dispatch: ui_dispatch,
             session_sidebar: *session_sidebar,
@@ -1008,6 +1090,85 @@ fn with_shell_presentation_model<R>(
         text_layout,
         retained_runtime.animation_registry_mut(),
     )
+}
+
+fn handle_terminal_event(
+    app: &mut NativeApp,
+    key: TerminalSessionKey,
+    event: TerminalSessionEvent,
+) {
+    let terminal_exited = matches!(&event, TerminalSessionEvent::Exited(_));
+    if app.terminal_workspace.is_pending(key) {
+        app.terminal_workspace.buffer_event_if_pending(key, event);
+        session_switch_trace::event(None, "terminal-event-buffered", format_args!("key={key:?}"));
+        return;
+    }
+    if app.terminal_workspace.active_key() != Some(key) {
+        {
+            let Some(terminal) = app.terminal_workspace.inactive_mut(key) else {
+                return;
+            };
+            if let Err(error) = terminal.handle_event(event) {
+                eprintln!("could not reply to inactive terminal query: {error}");
+            }
+        }
+        if terminal_exited {
+            app.update_terminal_status(key, "Exited");
+            app.rebuild_presentation_on_next_redraw();
+        }
+        return;
+    }
+
+    let previous_scroll_limit = app.terminal_scroll_limit();
+    let previous_block_status = app
+        .active_terminal()
+        .and_then(|terminal| terminal.core().block_list().blocks().last())
+        .map(|block| block.status());
+    let (active_screen, title) = if let Some(terminal) = app.active_terminal_mut() {
+        if let Err(error) = terminal.handle_event(event) {
+            eprintln!("could not reply to terminal query: {error}");
+        }
+        (
+            terminal.core().active_screen(),
+            terminal
+                .core()
+                .title()
+                .unwrap_or(PRODUCT_DISPLAY_NAME)
+                .to_owned(),
+        )
+    } else {
+        return;
+    };
+    if let Some(window) = app.window.as_ref() {
+        window.set_title(&title);
+    }
+    if terminal_exited {
+        app.update_terminal_status(key, "Exited");
+    }
+    let current_block_status = app
+        .active_terminal()
+        .and_then(|terminal| terminal.core().block_list().blocks().last())
+        .map(|block| block.status());
+    if previous_block_status == Some(BlockStatus::Running)
+        && current_block_status != Some(BlockStatus::Running)
+    {
+        if let Some(session) = app.agent_session.as_ref()
+            && let Err(error) = session.refresh_git()
+        {
+            eprintln!("could not refresh Git projection: {error}");
+        }
+        app.refresh_files_from_app_server();
+    }
+    if active_screen == ScreenBuffer::Alternate || app.terminal_scroll.offset() == 0 {
+        app.terminal_selection.clear();
+    }
+    let scroll_limit = app.terminal_scroll_limit();
+    app.terminal_scroll.preserve_view_after_growth(
+        scroll_limit.saturating_sub(previous_scroll_limit),
+        scroll_limit,
+    );
+    app.sync_input_focus();
+    app.rebuild_presentation_on_next_redraw();
 }
 
 impl ApplicationHandler<NativeEvent> for NativeApp {
@@ -1051,13 +1212,10 @@ impl ApplicationHandler<NativeEvent> for NativeApp {
             self.session_sidebar,
             self.agent_sidebar,
         );
-        self.terminal = match TerminalSession::spawn(terminal_size, self.event_proxy.clone()) {
-            Ok(terminal) => Some(terminal),
-            Err(error) => {
-                self.fail(event_loop, error);
-                return;
-            }
-        };
+        if let Err(error) = self.terminal_workspace.spawn_initial(terminal_size) {
+            self.fail(event_loop, error);
+            return;
+        }
         self.agent_session = match AgentSession::spawn(
             self.event_proxy.clone(),
             self.workspace_context.working_directory().to_path_buf(),
@@ -1187,7 +1345,7 @@ impl ApplicationHandler<NativeEvent> for NativeApp {
     }
 
     fn user_event(&mut self, _event_loop: &ActiveEventLoop, event: NativeEvent) {
-        let event = match event {
+        match event {
             NativeEvent::Agent(event) => {
                 self.handle_agent_session_event(event);
                 return;
@@ -1207,51 +1365,52 @@ impl ApplicationHandler<NativeEvent> for NativeApp {
                 self.request_redraw();
                 return;
             }
-            NativeEvent::Terminal(event) => event,
-        };
-        let previous_scroll_limit = self.terminal_scroll_limit();
-        let previous_block_status = self
-            .terminal
-            .as_ref()
-            .and_then(|terminal| terminal.core().block_list().blocks().last())
-            .map(|block| block.status());
-        let active_screen = if let Some(terminal) = self.terminal.as_mut() {
-            if let Err(error) = terminal.handle_event(event) {
-                eprintln!("could not reply to terminal query: {error}");
+            NativeEvent::Terminal(event) => {
+                handle_terminal_event(self, event.key, event.event);
+                return;
             }
-            if let Some(window) = self.window.as_ref() {
-                window.set_title(terminal.core().title().unwrap_or(PRODUCT_DISPLAY_NAME));
+            NativeEvent::TerminalReady(ready) => {
+                match self.terminal_workspace.handle_ready(ready) {
+                    TerminalReadyOutcome::Active {
+                        key,
+                        buffered_events,
+                    } => {
+                        if buffered_events.is_empty() {
+                            self.rebuild_presentation_on_next_redraw();
+                        } else {
+                            for event in buffered_events {
+                                handle_terminal_event(self, key, event);
+                            }
+                        }
+                    }
+                    TerminalReadyOutcome::Inactive {
+                        key,
+                        buffered_events,
+                    } => {
+                        for event in buffered_events {
+                            handle_terminal_event(self, key, event);
+                        }
+                    }
+                    TerminalReadyOutcome::Failed { key, error } => {
+                        session_switch_trace::event(
+                            None,
+                            "terminal-ready-failed",
+                            format_args!("key={key:?} error={error}"),
+                        );
+                        eprintln!("could not create terminal runtime: {error}");
+                        self.rebuild_presentation_on_next_redraw();
+                    }
+                    TerminalReadyOutcome::Ignored { key } => {
+                        session_switch_trace::event(
+                            None,
+                            "terminal-ready-ignored",
+                            format_args!("key={key:?}"),
+                        );
+                    }
+                }
+                return;
             }
-            terminal.core().active_screen()
-        } else {
-            return;
-        };
-        let current_block_status = self
-            .terminal
-            .as_ref()
-            .and_then(|terminal| terminal.core().block_list().blocks().last())
-            .map(|block| block.status());
-        if previous_block_status == Some(BlockStatus::Running)
-            && current_block_status != Some(BlockStatus::Running)
-        {
-            if let Some(session) = self.agent_session.as_ref()
-                && let Err(error) = session.refresh_git()
-            {
-                eprintln!("could not refresh Git projection: {error}");
-            }
-            self.refresh_files_from_app_server();
         }
-        if active_screen == ScreenBuffer::Alternate || self.terminal_scroll.offset() == 0 {
-            self.terminal_selection.clear();
-        }
-        let scroll_limit = self.terminal_scroll_limit();
-        self.terminal_scroll.preserve_view_after_growth(
-            scroll_limit.saturating_sub(previous_scroll_limit),
-            scroll_limit,
-        );
-        self.sync_input_focus();
-        self.rebuild_presentation();
-        self.request_redraw();
     }
 
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
