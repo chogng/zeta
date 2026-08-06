@@ -37,8 +37,10 @@ JSONL / in-process caller
 ```
 
 App Server connection 不是 product Session。关闭 connection 只失去 connection-local subscription、
-request-ID set、notification queue 与 resource ownership；Session/Thread durable state 由 Core/store
-继续拥有。
+request-ID set、notification queue 与 resource ownership。默认的 `SessionStateMode::Durable` 由
+Core/store 继续拥有 Session/Thread durable state；需要进程内生命周期的 host 可以显式选择
+`SessionStateMode::Ephemeral`，此时 coordinator 使用 in-memory stores，Session/Thread 与用户消息
+不会从 profile SQLite 恢复或写入。ConfigStore 仍可按 profile 保存普通配置。
 
 ## 公共契约
 
@@ -61,8 +63,9 @@ request-ID set、notification queue 与 resource ownership；Session/Thread dura
 | `AppServer::with_git_root` | 冻结 workspace root，开启 Git status/mutation、watcher 与 revision notification |
 | `AppServer::with_workspace_search` | 注入 workspace root 与冻结的 ripgrep executable，构造外部内容搜索服务 |
 | `AppServer::with_tool_service` | 安装同一 server 内所有 Turn 使用的 Core Tool/Policy ports |
-| `open_local_app_server` | 打开 profile SQLite/config、恢复 coordinator、组合 provider-backed model |
-| `LocalAppServerOptions` | user profile root + optional config/runtime Workspace + validated slash catalog + built-in Skill root selection |
+| `open_local_app_server` | 按 SessionStateMode 选择 durable/in-memory coordinator，打开 config 并组合 provider-backed model |
+| `LocalAppServerOptions` | user profile root + SessionStateMode + optional config/runtime Workspace + validated slash catalog + built-in Skill root selection |
+| `SessionStateMode` | 明确选择 profile SQLite durable history 或 process-local ephemeral Session/Thread state |
 | `BuiltInSkillRoot` | auto-detected release root、explicit test/host root 或 unavailable 的自解释选择 |
 | `zeta_slash_commands::SlashCommandCatalog` | 委托共享 crate 校验动态命令并冻结 server-advertised snapshot；App Server 只拥有 composition |
 | `ReviewModelResolver` | 从 frozen config snapshot 选择 review-only model |
@@ -105,7 +108,7 @@ src/
 │       ├── search_operations.rs   # search RPC decode、ownership 与稳定错误映射
 │       ├── terminal_operations.rs # terminal RPC decode、ownership 与稳定错误映射
 │       └── update_broker.rs       # per-connection subscription/cursor/fanout
-├── local.rs                       # persistent local composition + model safe point
+├── local.rs                       # local composition, session backend selection + model safe point
 ├── local_tools.rs                 # frozen rg registry + Core Tool/Policy adapters
 ├── mcp_runtime.rs                 # continuously driven Tokio worker + synchronous Core bridge
 ├── mcp_tools.rs                   # Config materialization + MCP Tool/Policy adapters
@@ -291,10 +294,14 @@ transient Thread update
 `open_local_app_server` 的顺序：
 
 ```text
-LocalStateRepository::open(profile_root)
-├─ SqliteSessionStore(profile_root/state.sqlite3)
-├─ SqliteThreadStore(profile_root/state.sqlite3)
-└─ recover_coordinator
+SessionStateMode::Durable
+└─ LocalStateRepository::open(profile_root)
+   ├─ SqliteSessionStore(profile_root/state.sqlite3)
+   ├─ SqliteThreadStore(profile_root/state.sqlite3)
+   └─ recover_coordinator
+
+SessionStateMode::Ephemeral
+└─ SessionCoordinator::with_store(InMemorySessionStore, ThreadController::with_store(InMemoryThreadStore))
 
 ConfigStore::open_with_paths(profile_root/state.sqlite3, profile_root/config.toml)
 └─ read_snapshot preflight

@@ -33,7 +33,7 @@ use crate::session_context_menu::{SessionContextMenu, SessionContextMenuState};
 use crate::session_search::SessionSearch;
 use crate::session_sidebar::SessionSidebarState;
 use crate::session_sidebar_toolbar::SessionSidebarToolbar;
-use crate::session_tab_list::{SessionTab, SessionTabList};
+use crate::session_tab_list::{SessionTab, SessionTabList, SessionTabState};
 use crate::shell_interaction::{
     ACTIVE_SESSION_TAB, AGENT_FILE_SEARCH_INPUT, AGENT_SIDEBAR, AGENT_SIDEBAR_RESIZE_HANDLE,
     AGENT_SIDEBAR_TOOLBAR, FILE_EDITOR_DOCUMENT, MAIN_SURFACE, SESSION_SEARCH_INPUT,
@@ -291,6 +291,8 @@ pub(crate) struct ShellPresentationModel<'a> {
     pub(crate) composer_interaction_pane: &'a ComposerInteractionPaneState,
     pub(crate) composer_mode: ComposerMode,
     pub(crate) session_search: &'a SessionSearch,
+    pub(crate) session_tabs: &'a [SessionTabState],
+    pub(crate) selected_session_tab: ElementId,
     pub(crate) caret_visibility: CaretVisibility,
     pub(crate) dispatch: &'a UiDispatch,
     pub(crate) session_sidebar: SessionSidebarState,
@@ -314,6 +316,8 @@ struct SessionSidebarView<'a> {
     title: &'a str,
     context: &'a WorkspaceContext,
     search: &'a SessionSearch,
+    tabs: &'a [SessionTabState],
+    selected_tab: ElementId,
     caret_visibility: CaretVisibility,
     dispatch: &'a UiDispatch,
 }
@@ -436,6 +440,8 @@ fn build_shell_presentation_with_bindings(
                     title,
                     context: model.workspace_context,
                     search: model.session_search,
+                    tabs: model.session_tabs,
+                    selected_tab: model.selected_session_tab,
                     caret_visibility: model.caret_visibility,
                     dispatch: model.dispatch,
                 },
@@ -961,23 +967,36 @@ fn draw_session_sidebar(
         );
         let search_caret = toolbar.search_caret_bounds();
         context.draw_component(&toolbar);
-        let tabs = view
-            .search
-            .matches_session_name(view.title)
-            .then(|| {
-                SessionTab::new(
-                    ACTIVE_SESSION_TAB,
-                    view.title,
-                    view.context.working_directory_label(),
-                    "Active",
-                )
-            })
-            .into_iter()
-            .collect::<Vec<_>>();
+        let tabs = if view.tabs.is_empty() {
+            view.search
+                .matches_session_name(view.title)
+                .then(|| {
+                    SessionTab::new(
+                        ACTIVE_SESSION_TAB,
+                        view.title,
+                        view.context.working_directory_label(),
+                        "Active",
+                    )
+                })
+                .into_iter()
+                .collect::<Vec<_>>()
+        } else {
+            view.tabs
+                .iter()
+                .filter(|tab| view.search.matches_session_name(tab.title()))
+                .map(|tab| {
+                    SessionTab::new(tab.id(), tab.title(), tab.workspace(), tab.status_label())
+                })
+                .collect::<Vec<_>>()
+        };
         let tab_list = SessionTabList::new(
             SessionSidebarToolbar::content_bounds(bounds),
             &tabs,
-            ACTIVE_SESSION_TAB,
+            if view.tabs.is_empty() {
+                ACTIVE_SESSION_TAB
+            } else {
+                view.selected_tab
+            },
             palette,
             view.dispatch,
         );

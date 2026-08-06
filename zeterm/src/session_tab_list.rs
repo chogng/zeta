@@ -1,3 +1,5 @@
+use zeta_protocol::Session;
+use zeta_protocol::SessionId;
 use zeta_ui::{
     Color, Component, ComponentContext, ComponentElement, ComputedElement, CornerRadii, Element,
     FontWeight, InteractionRegion, PaintRect, Rect, Size, Tab, TabBackgrounds, TabList,
@@ -9,7 +11,7 @@ use zui::{
     NavigationAxis, NavigationGroupId, NodeAction, UiDispatch, UiNode,
 };
 
-use crate::shell_interaction::{SESSION_SIDEBAR, SESSION_TAB_LIST};
+use crate::shell_interaction::{SESSION_SIDEBAR, SESSION_TAB_LIST, session_tab_id};
 use crate::shell_style::ShellPalette;
 
 const TAB_HEIGHT: f32 = 52.0;
@@ -24,6 +26,112 @@ pub(crate) struct SessionTab<'a> {
     name: &'a str,
     workspace: &'a str,
     status_label: &'a str,
+}
+
+/// Product-owned presentation record for one App Server session tab.
+///
+/// The record keeps only the tab identity and labels needed by the shell projection. Session
+/// lifecycle and Thread state remain owned by the App Server session adapter.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct SessionTabState {
+    id: ElementId,
+    session_id: SessionId,
+    title: String,
+    workspace: String,
+    status_label: String,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum SessionTabUpsert {
+    Added(ElementId),
+    Updated(ElementId),
+}
+
+impl SessionTabState {
+    pub(crate) fn new(
+        id: ElementId,
+        session_id: SessionId,
+        title: impl Into<String>,
+        workspace: impl Into<String>,
+        status_label: impl Into<String>,
+    ) -> Self {
+        Self {
+            id,
+            session_id,
+            title: title.into(),
+            workspace: workspace.into(),
+            status_label: status_label.into(),
+        }
+    }
+
+    pub(crate) const fn id(&self) -> ElementId {
+        self.id
+    }
+
+    pub(crate) fn session_id(&self) -> &SessionId {
+        &self.session_id
+    }
+
+    pub(crate) fn title(&self) -> &str {
+        &self.title
+    }
+
+    pub(crate) fn workspace(&self) -> &str {
+        &self.workspace
+    }
+
+    pub(crate) fn status_label(&self) -> &str {
+        &self.status_label
+    }
+
+    pub(crate) fn update_labels(
+        &mut self,
+        title: impl Into<String>,
+        workspace: impl Into<String>,
+        status_label: impl Into<String>,
+    ) {
+        self.title = title.into();
+        self.workspace = workspace.into();
+        self.status_label = status_label.into();
+    }
+
+    pub(crate) fn update_status(&mut self, status_label: impl Into<String>) {
+        self.status_label = status_label.into();
+    }
+}
+
+/// Adds or updates the product-owned tab projection for one authoritative App Server Session.
+///
+/// The selected tab is updated together with the projection because a Session snapshot is only
+/// published after the Agent worker has made that Session the active subscription. Terminal pane
+/// allocation remains owned by [`crate::terminal_workspace::TerminalWorkspace`], so this helper
+/// only establishes the stable UI identity that the pane can bind to.
+pub(crate) fn upsert_session_tab(
+    tabs: &mut Vec<SessionTabState>,
+    selected: &mut ElementId,
+    session: &Session,
+    workspace: &str,
+) -> SessionTabUpsert {
+    if let Some(tab) = tabs
+        .iter_mut()
+        .find(|tab| tab.session_id() == &session.session_id)
+    {
+        let tab_id = tab.id();
+        tab.update_labels(session.title.clone(), workspace, "Active");
+        *selected = tab_id;
+        return SessionTabUpsert::Updated(tab_id);
+    }
+
+    let tab_id = session_tab_id(tabs.len());
+    tabs.push(SessionTabState::new(
+        tab_id,
+        session.session_id.clone(),
+        session.title.clone(),
+        workspace,
+        "Active",
+    ));
+    *selected = tab_id;
+    SessionTabUpsert::Added(tab_id)
 }
 
 impl<'a> SessionTab<'a> {

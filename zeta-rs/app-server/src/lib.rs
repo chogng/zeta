@@ -17,7 +17,9 @@ mod tool_composition;
 
 pub use local::OpenAppServerError;
 pub use local::open_local_app_server;
-pub use local::{BuiltInSkillRoot, LocalAppServerOptions, LocalWorkspaceConfigOptions};
+pub use local::{
+    BuiltInSkillRoot, LocalAppServerOptions, LocalWorkspaceConfigOptions, SessionStateMode,
+};
 pub use review::{ProviderReviewModel, ReviewModelResolutionError, ReviewModelResolver};
 pub use server::AppServer;
 pub use server::ConnectionNotifications;

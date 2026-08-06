@@ -4,6 +4,7 @@ use zeta_commands::ZetermCommandId;
 use zui::ElementId;
 
 use crate::NativeApp;
+use crate::session_switch_trace;
 use crate::shell_interaction::{
     self, AgentSidebarPaneAction, ContextAction, SessionContextMenuAction,
 };
@@ -257,6 +258,11 @@ fn execute_open_language_server_settings(app: &mut NativeApp, _request: &Command
 
 fn execute_toggle_session_sidebar(app: &mut NativeApp, _request: &CommandRequest) {
     app.session_sidebar.toggle();
+    session_switch_trace::event(
+        None,
+        "session-sidebar-toggle",
+        format_args!("expanded={}", app.session_sidebar.is_expanded()),
+    );
 }
 
 fn execute_toggle_agent_sidebar(app: &mut NativeApp, _request: &CommandRequest) {
@@ -264,13 +270,12 @@ fn execute_toggle_agent_sidebar(app: &mut NativeApp, _request: &CommandRequest) 
 }
 
 fn execute_activate_session_tab(_app: &mut NativeApp, _request: &CommandRequest) {
-    // Activating another tab requires the future multi-Session runtime to own distinct PTYs and
-    // active state.
+    // Concrete tab clicks are handled by NativeApp::activate_shell_element before generic command
+    // dispatch because CommandRequest does not carry the clicked tab index.
 }
 
-fn execute_add_session(_app: &mut NativeApp, _request: &CommandRequest) {
-    // Creating another tab requires the future multi-Session runtime to own distinct PTYs and
-    // active state.
+fn execute_add_session(app: &mut NativeApp, _request: &CommandRequest) {
+    app.add_session();
 }
 
 fn execute_show_agent_changes(app: &mut NativeApp, _request: &CommandRequest) {

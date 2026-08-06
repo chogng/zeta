@@ -63,6 +63,14 @@
 
 ## Tests
 
+### zeterm command-line testing
+
+- `zeterm` 的功能、交互、session/tab、terminal pane、PTY 生命周期和性能回归测试必须以命令行可执行的测试为准；不得使用截图、图像快照或像素比对作为通过/失败依据。
+- 优先为状态机、command dispatch、semantic element identity、事件流、projection、PTY I/O 和 pane 生命周期建立 Rust 单元测试或集成测试；测试应断言状态、事件、时序、输出和耗时等可观测结果，而不是屏幕像素。
+- 需要验证运行中的 zeterm 时，使用 `cargo run -p zeterm` 或构建后的二进制配合命令行 trace；可使用 `ZETERM_SESSION_TRACE=1`，必要时再使用 `ZETERM_SESSION_TRACE_FRAMES=1` 观察 session 切换、terminal ready、重建和渲染耗时。
+- GUI 手工操作只能作为补充验收，不能替代命令行回归测试；不能可靠注入到 `wgpu` canvas 的鼠标坐标、截图或图像结果不得被报告为测试通过。
+- 新增 UI 测试时，应先提取可在无窗口环境运行的纯逻辑或语义事件测试；不要为了截图测试引入显示器、窗口或图像基线依赖。
+
 ### Test module organization
 
 - When adding a new test module, define its contents in a separate sibling file rather than inline in the implementation file.

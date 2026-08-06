@@ -7,7 +7,7 @@ use zui::{AccessibilityRole, InteractionFrame, UiDispatch, UiFrame};
 #[test]
 fn toolbar_fills_the_sidebar_row_with_search_and_add_action() {
     let sidebar_bounds = Rect::from_xywh(0.0, 32.0, 220.0, 668.0);
-    let dispatch = UiDispatch::default();
+    let mut dispatch = UiDispatch::default();
     let mut text_layout = TextInputLayoutEngine::new();
     let toolbar = SessionSidebarToolbar::new(
         sidebar_bounds,
@@ -75,5 +75,15 @@ fn toolbar_fills_the_sidebar_row_with_search_and_add_action() {
             .unwrap()
             .role,
         AccessibilityRole::Toolbar
+    );
+
+    let add_session_point = Point::new(196.0, 50.0);
+    dispatch.pointer_moved(add_session_point, frame.interaction());
+    dispatch.press_primary(frame.interaction());
+    assert_eq!(
+        dispatch
+            .release_primary(add_session_point, frame.interaction())
+            .intent,
+        Some(zui::UiIntent::Activate(ADD_SESSION))
     );
 }

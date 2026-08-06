@@ -20,6 +20,7 @@ use zui::ElementId;
 
 use crate::AgentSidebarAction;
 
+mod file_icon;
 mod file_tree;
 mod layout;
 mod pane;

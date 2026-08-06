@@ -72,6 +72,7 @@ const FILE_EDITOR_FIND_NEXT: ElementId = ElementId::scoped(FILE_EDITOR_ACTION_SC
 const FILE_EDITOR_REPLACE_CURRENT: ElementId = ElementId::scoped(FILE_EDITOR_ACTION_SCOPE, 9);
 const FILE_EDITOR_REPLACE_ALL: ElementId = ElementId::scoped(FILE_EDITOR_ACTION_SCOPE, 10);
 const FILE_EDITOR_CLOSE_SEARCH: ElementId = ElementId::scoped(FILE_EDITOR_ACTION_SCOPE, 11);
+const FIRST_SESSION_TAB: u32 = 52;
 const FIRST_COMPOSER_INTERACTION_ITEM: u32 = 100;
 const FIRST_FILE_EDITOR_TAB: u32 = 200;
 const FIRST_FILE_EDITOR_FOLD: u32 = 1_000;
@@ -90,6 +91,17 @@ pub(crate) fn composer_interaction_item_index(
     mut visible_range: Range<usize>,
 ) -> Option<usize> {
     visible_range.find(|index| composer_interaction_item_id(*index) == id)
+}
+
+pub(crate) fn session_tab_id(index: usize) -> ElementId {
+    if index == 0 {
+        return ACTIVE_SESSION_TAB;
+    }
+    dynamic_element_id(FIRST_SESSION_TAB, index - 1, "session tab")
+}
+
+pub(crate) fn session_tab_index(id: ElementId, mut mounted: Range<usize>) -> Option<usize> {
+    mounted.find(|index| session_tab_id(*index) == id)
 }
 
 pub(crate) fn file_editor_tab_id(index: usize) -> ElementId {

@@ -1,4 +1,10 @@
 use super::ThreadSubscription;
+use std::collections::VecDeque;
+use std::sync::Arc;
+use std::sync::Mutex;
+use zeta_app_server_client::AppServerClient;
+use zeta_app_server_client::ClientError;
+use zeta_app_server_client::JsonRpcTransport;
 use zeta_protocol::SessionId;
 use zeta_protocol::Thread;
 use zeta_protocol::ThreadEvent;
@@ -6,6 +12,24 @@ use zeta_protocol::ThreadId;
 use zeta_protocol::ThreadStatus;
 use zeta_protocol::ThreadUpdate;
 use zeta_protocol::ThreadUpdateEnvelope;
+
+#[derive(Clone)]
+struct RecordingTransport {
+    responses: VecDeque<String>,
+    requests: Arc<Mutex<Vec<serde_json::Value>>>,
+}
+
+impl JsonRpcTransport for RecordingTransport {
+    fn round_trip(&mut self, request: &str) -> Result<String, ClientError> {
+        self.requests
+            .lock()
+            .expect("request log is not poisoned")
+            .push(serde_json::from_str(request).expect("request is valid JSON"));
+        self.responses
+            .pop_front()
+            .ok_or_else(|| ClientError::Transport("no response".into()))
+    }
+}
 
 #[test]
 fn newer_update_for_active_scope_requests_snapshot() {
@@ -40,6 +64,39 @@ fn confirming_a_new_snapshot_suppresses_buffered_duplicates() {
 
     assert!(!subscription.requires_snapshot(&update("session-1", "thread-1", 6)));
     assert!(subscription.requires_snapshot(&update("session-1", "thread-1", 8)));
+}
+
+#[test]
+fn switching_threads_unsubscribes_the_previous_session_and_thread() {
+    let previous = thread("session-1", "thread-1", 4);
+    let next = thread("session-2", "thread-2", 7);
+    let requests = Arc::new(Mutex::new(Vec::new()));
+    let mut client = AppServerClient::new(RecordingTransport {
+        responses: VecDeque::from([
+            serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": 1,
+                "result": { "thread": next, "updates": [] }
+            })
+            .to_string(),
+            serde_json::json!({ "jsonrpc": "2.0", "id": 2, "result": null }).to_string(),
+        ]),
+        requests: Arc::clone(&requests),
+    });
+    let mut subscription = ThreadSubscription::from_snapshot(&previous);
+
+    subscription
+        .switch(
+            &mut client,
+            &SessionId::new("session-2").unwrap(),
+            &ThreadId::new("thread-2").unwrap(),
+        )
+        .expect("thread switch should succeed");
+
+    let requests = requests.lock().expect("request log is not poisoned");
+    assert_eq!(requests[1]["method"], "session/thread/unsubscribe");
+    assert_eq!(requests[1]["params"]["sessionId"], "session-1");
+    assert_eq!(requests[1]["params"]["threadId"], "thread-1");
 }
 
 fn thread(session_id: &str, thread_id: &str, sequence: u64) -> Thread {

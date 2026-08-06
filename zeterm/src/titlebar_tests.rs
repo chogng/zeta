@@ -17,7 +17,7 @@ fn titlebar_places_actions_after_native_window_controls_and_component_gap() {
     let titlebar = Titlebar::new(
         Rect::from_xywh(0.0, 0.0, 1000.0, 32.0),
         SHELL_PALETTE,
-        SessionSidebarState::default(),
+        SessionSidebarState::collapsed(),
         AgentSidebarState::default(),
         WindowControlInsets::from_logical_sides(70.0, 110.0),
         &dispatch,

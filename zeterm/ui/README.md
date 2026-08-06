@@ -140,6 +140,7 @@ host
           │   └─ Separator → rect primitive
           ├─ TabList → Tab bounds → state/selection surface rect
           ├─ Button state/style → IconLabel → icon/text primitives
+          ├─ Files row presentation → IconLabel → icon/text primitives
           ├─ zui::AnimationBinding → Switch progress → track/thumb rect primitives
           └─ InputBox → rect/text primitives
   → UiScene::draw_rect / UiScene::draw_image / UiScene::draw_icon / UiScene::draw_text
@@ -194,7 +195,9 @@ radius 与 Element 声明位置写入检查快照。Caller 必须使用 `UiScene
 由它在当前 nested clip 内自动注册 inspection parent 并同步 paint；这不引入 retained component
 instance、隐式 identity 或 lifecycle。`Button` 拥有 control 内部 padding 和 state-specific
 background selection，并把 icon/text placement 委托给 `IconLabel`；`Button::icon` 保留不参与
-绘制的 accessible label，供 host 的后续 accessibility adapter 使用。Caller 必须显式提供
+绘制的 accessible label，供 host 的后续 accessibility adapter 使用。Files pane 同样把文件行
+的 icon/text 几何委托给 `IconLabel`，但由 product host 先选择具体 semantic file icon。Caller
+必须显式提供
 `ButtonState`、`ButtonStyle`、bounds 与具体 content constructor。`ButtonState::Focused`
 让 host 明确投影键盘 focus，不让组件自行监听键盘；selected presentation 通过
 `ButtonSelection` 独立投影。

@@ -343,6 +343,61 @@ fn shared_embedded_host_opens_independent_initialized_connections() {
 }
 
 #[test]
+fn ephemeral_session_state_ignores_and_does_not_append_durable_history() {
+    let state_root = unique_directory("ephemeral-session-state");
+    let mut durable = start_in_process_client(InProcessClientOptions::new(
+        &state_root,
+        ClientInfo {
+            name: "durable-seed".into(),
+            version: "1".into(),
+        },
+    ))
+    .unwrap();
+    durable
+        .create_session(SessionCreateParams {
+            command_id: CommandId::new("durable-seed-session").unwrap(),
+            title: "durable seed".into(),
+        })
+        .unwrap();
+    drop(durable);
+
+    let mut ephemeral = start_in_process_client(
+        InProcessClientOptions::new(
+            &state_root,
+            ClientInfo {
+                name: "ephemeral".into(),
+                version: "1".into(),
+            },
+        )
+        .with_session_state_mode(SessionStateMode::Ephemeral),
+    )
+    .unwrap();
+    assert!(ephemeral.list_sessions().unwrap().sessions.is_empty());
+    ephemeral
+        .create_session(SessionCreateParams {
+            command_id: CommandId::new("ephemeral-session").unwrap(),
+            title: "ephemeral session".into(),
+        })
+        .unwrap();
+    drop(ephemeral);
+
+    let mut durable_again = start_in_process_client(InProcessClientOptions::new(
+        &state_root,
+        ClientInfo {
+            name: "durable-check".into(),
+            version: "1".into(),
+        },
+    ))
+    .unwrap();
+    let sessions = durable_again.list_sessions().unwrap().sessions;
+    assert_eq!(sessions.len(), 1);
+    assert_eq!(sessions[0].title, "durable seed");
+
+    drop(durable_again);
+    let _ = fs::remove_dir_all(state_root);
+}
+
+#[test]
 fn embedded_skill_catalog_lists_built_ins_and_persists_enablement() {
     let state_root = unique_directory("skills-state");
     let skills_root = unique_directory("skills-root");

@@ -7,6 +7,7 @@ use zeta_app_server::AppServer;
 use zeta_app_server::BuiltInSkillRoot;
 use zeta_app_server::ConnectionState;
 use zeta_app_server::LocalAppServerOptions;
+use zeta_app_server::SessionStateMode;
 use zeta_app_server::SlashCommandCatalog;
 use zeta_app_server::open_local_app_server;
 use zeta_app_server_protocol::protocol::common::{ClientCapabilities, ClientInfo};
@@ -22,6 +23,7 @@ pub struct InProcessClientOptions {
     pub capabilities: ClientCapabilities,
     pub slash_commands: SlashCommandCatalog,
     pub built_in_skills: BuiltInSkillRoot,
+    pub session_state_mode: SessionStateMode,
 }
 
 impl InProcessClientOptions {
@@ -33,6 +35,7 @@ impl InProcessClientOptions {
             capabilities: ClientCapabilities::default(),
             slash_commands: SlashCommandCatalog::default(),
             built_in_skills: BuiltInSkillRoot::AutoDetect,
+            session_state_mode: SessionStateMode::Durable,
         }
     }
 
@@ -59,6 +62,12 @@ impl InProcessClientOptions {
 
     pub fn without_built_in_skills(mut self) -> Self {
         self.built_in_skills = BuiltInSkillRoot::Unavailable;
+        self
+    }
+
+    /// Selects whether Session and Thread event history is recovered from profile storage.
+    pub fn with_session_state_mode(mut self, mode: SessionStateMode) -> Self {
+        self.session_state_mode = mode;
         self
     }
 }
@@ -136,6 +145,7 @@ pub fn open_in_process_app_server(
     options: InProcessClientOptions,
 ) -> Result<InProcessAppServer, ClientError> {
     let mut server_options = LocalAppServerOptions::new(options.profile_root)
+        .with_session_state_mode(options.session_state_mode)
         .with_slash_command_catalog(options.slash_commands);
     server_options.built_in_skills = options.built_in_skills;
     if let Some(workspace_root) = options.workspace_root {

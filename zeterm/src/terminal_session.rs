@@ -9,13 +9,49 @@ use zeta_winit::EventLoopProxy;
 
 use crate::PRODUCT_DISPLAY_NAME;
 use crate::native_event::NativeEvent;
+use crate::session_switch_trace;
 
 const SHELL_BOOTSTRAP_MARKER: &[u8] = b"\x1b]9;zeterm-ready\x07";
+
+/// Process-local identity for one native PTY runtime.
+///
+/// App Server `SessionId` values are assigned asynchronously, while the first PTY is spawned
+/// during native window startup. The host binds this identity to an App Server Session when its
+/// first authoritative snapshot arrives.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub(crate) struct TerminalSessionKey(u64);
+
+impl TerminalSessionKey {
+    pub(crate) const fn new(value: u64) -> Self {
+        Self(value)
+    }
+}
 
 #[derive(Debug)]
 pub(crate) enum TerminalSessionEvent {
     Output(Vec<u8>),
     Exited(i32),
+}
+
+pub(crate) struct TerminalSessionEventEnvelope {
+    pub(crate) key: TerminalSessionKey,
+    pub(crate) event: TerminalSessionEvent,
+}
+
+impl TerminalSessionEventEnvelope {
+    pub(crate) const fn new(key: TerminalSessionKey, event: TerminalSessionEvent) -> Self {
+        Self { key, event }
+    }
+}
+
+/// Result posted to the native event loop after a terminal runtime has been created off-thread.
+///
+/// PTY creation can involve synchronous platform calls such as `openpty` and child-process
+/// startup. The event loop must receive the completed runtime instead of waiting for those calls
+/// while handling a tab click or the initial window lifecycle.
+pub(crate) struct TerminalSessionReady {
+    pub(crate) key: TerminalSessionKey,
+    pub(crate) result: std::result::Result<TerminalSession, String>,
 }
 
 impl TerminalSessionEvent {
@@ -41,7 +77,46 @@ impl Drop for TerminalSession {
 }
 
 impl TerminalSession {
-    pub(crate) fn spawn(size: GridSize, event_proxy: EventLoopProxy<NativeEvent>) -> Result<Self> {
+    /// Creates one terminal runtime on a short-lived worker and posts its result to the native
+    /// event loop. The worker owns the potentially blocking PTY setup; the event loop only adopts
+    /// the finished `TerminalSession` when it receives `TerminalSessionReady`.
+    pub(crate) fn spawn_async(
+        key: TerminalSessionKey,
+        size: GridSize,
+        event_proxy: EventLoopProxy<NativeEvent>,
+    ) -> Result<()> {
+        session_switch_trace::event(
+            None,
+            "terminal-spawn-queued",
+            format_args!("key={key:?} rows={} cols={}", size.rows(), size.cols()),
+        );
+        std::thread::Builder::new()
+            .name("zeterm-terminal-spawn".to_owned())
+            .spawn(move || {
+                session_switch_trace::event(
+                    None,
+                    "terminal-spawn-start",
+                    format_args!("key={key:?}"),
+                );
+                let result = Self::spawn(key, size, event_proxy.clone())
+                    .map_err(|error| format!("{error:#}"));
+                session_switch_trace::event(
+                    None,
+                    "terminal-spawn-finished",
+                    format_args!("key={key:?} success={}", result.is_ok()),
+                );
+                let _ = event_proxy.send_event(TerminalSessionReady { key, result }.into());
+            })
+            .context("could not start terminal spawn worker")?;
+        Ok(())
+    }
+
+    pub(crate) fn spawn(
+        key: TerminalSessionKey,
+        size: GridSize,
+        event_proxy: EventLoopProxy<NativeEvent>,
+    ) -> Result<Self> {
+        let _trace = session_switch_trace::Span::new(None, "terminal-session-spawn");
         let runtime = tokio::runtime::Builder::new_multi_thread()
             .worker_threads(2)
             .enable_all()
@@ -70,6 +145,7 @@ impl TerminalSession {
         let process = spawn_event_forwarders(
             &runtime,
             spawned,
+            key,
             event_proxy,
             bootstrap.as_ref().map(|bootstrap| bootstrap.marker),
         );
@@ -125,6 +201,7 @@ impl TerminalSession {
 fn spawn_event_forwarders(
     runtime: &Runtime,
     spawned: SpawnedProcess,
+    key: TerminalSessionKey,
     event_proxy: EventLoopProxy<NativeEvent>,
     suppress_until: Option<&'static [u8]>,
 ) -> Arc<ProcessHandle> {
@@ -147,7 +224,13 @@ fn spawn_event_forwarders(
                             continue;
                         };
                         if event_proxy
-                            .send_event(TerminalSessionEvent::Output(output).into())
+                            .send_event(
+                                TerminalSessionEventEnvelope::new(
+                                    key,
+                                    TerminalSessionEvent::Output(output),
+                                )
+                                .into(),
+                            )
                             .is_err()
                         {
                             return;
@@ -164,7 +247,13 @@ fn spawn_event_forwarders(
                             continue;
                         };
                         if event_proxy
-                            .send_event(TerminalSessionEvent::Output(output).into())
+                            .send_event(
+                                TerminalSessionEventEnvelope::new(
+                                    key,
+                                    TerminalSessionEvent::Output(output),
+                                )
+                                .into(),
+                            )
                             .is_err()
                         {
                             return;
@@ -175,7 +264,9 @@ fn spawn_event_forwarders(
             }
         };
         event_process.release_pty_handles_after_exit();
-        let _ = event_proxy.send_event(TerminalSessionEvent::Exited(exit_code).into());
+        let _ = event_proxy.send_event(
+            TerminalSessionEventEnvelope::new(key, TerminalSessionEvent::Exited(exit_code)).into(),
+        );
     });
     process
 }

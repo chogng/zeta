@@ -32,6 +32,7 @@ pub mod icons {
     pub const DIFF: Icon = Icon::new(IconId::new("diff"), artwork::GIT);
     pub const DROPDOWN_INDICATOR: Icon = Icon::new(IconId::new("dropdown-indicator"), artwork::CHEVRON_DOWN);
     pub const ELLIPSIS: Icon = Icon::new(IconId::new("ellipsis"), artwork::ELLIPSIS);
+    pub const FILE_TEXT: Icon = Icon::new(IconId::new("file-text"), artwork::FILE_TEXT);
     pub const FILES: Icon = Icon::new(IconId::new("files"), artwork::FILES);
     pub const GEAR: Icon = Icon::new(IconId::new("gear"), artwork::GEAR);
     pub const GIT_BRANCH: Icon = Icon::new(IconId::new("git-branch"), artwork::GIT_BRANCH);
@@ -79,6 +80,7 @@ pub const ALL_ICONS: &[Icon] = &[
     icons::DIFF,
     icons::DROPDOWN_INDICATOR,
     icons::ELLIPSIS,
+    icons::FILE_TEXT,
     icons::FILES,
     icons::GEAR,
     icons::GIT_BRANCH,

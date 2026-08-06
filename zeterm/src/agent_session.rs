@@ -7,7 +7,7 @@ use std::time::Duration;
 use anyhow::{Context, Result, anyhow};
 use zeta_app_server_client::{
     AppServerEvent, AppServerEvents, AppServerRequestHandle, AppServerSession, ClientError,
-    InProcessClientOptions, ServerNotification, local_profile_root,
+    InProcessClientOptions, ServerNotification, SessionStateMode, local_profile_root,
 };
 use zeta_app_server_protocol::protocol::common::{ClientInfo, CommandId};
 use zeta_app_server_protocol::protocol::config::{
@@ -23,8 +23,9 @@ use zeta_app_server_protocol::protocol::git::{
 };
 use zeta_app_server_protocol::protocol::model::ModelCatalogEntry;
 use zeta_app_server_protocol::protocol::session::{
-    SessionCreateParams, SessionRequest, SessionRequestParams, SessionRequestResult,
-    SessionSubscribeParams, SessionSubscribeResult, SessionThreadProjection,
+    SessionCreateParams, SessionReadParams, SessionRequest, SessionRequestParams,
+    SessionRequestResult, SessionSubscribeParams, SessionSubscribeResult, SessionThreadProjection,
+    SessionUnsubscribeParams,
 };
 use zeta_app_server_protocol::protocol::slash_commands::SlashCommandDefinition;
 use zeta_app_server_protocol::protocol::turn::InputItem;
@@ -40,6 +41,9 @@ use zeta_winit::EventLoopProxy;
 
 use crate::NativeApp;
 use crate::native_event::NativeEvent;
+use crate::session_switch_trace::{self, SwitchId};
+use crate::session_tab_list::SessionTabUpsert;
+use crate::session_tab_list::upsert_session_tab as project_session_tab;
 use crate::thread_projection::ThreadProjectionUpdate;
 
 const COMMAND_QUEUE_CAPACITY: usize = 32;
@@ -53,7 +57,11 @@ pub(crate) enum AgentSessionEvent {
         models: Vec<ModelCatalogEntry>,
     },
     Configuration(ConfigReadResult),
-    Snapshot(Thread),
+    Snapshot {
+        session: Session,
+        thread: Thread,
+        switch_id: Option<SwitchId>,
+    },
     Update(Box<ThreadUpdateEnvelope>),
     GitProjection(Option<GitTextDiffResult>),
     FilesChanged(FsChanged),
@@ -62,6 +70,11 @@ pub(crate) enum AgentSessionEvent {
 }
 
 enum AgentSessionCommand {
+    CreateSession,
+    ActivateSession {
+        session_id: SessionId,
+        switch_id: SwitchId,
+    },
     SubmitAgentMessage(String),
     SubmitShellCommand(String),
     SelectModel(ModelRef),
@@ -132,6 +145,25 @@ impl AgentSession {
         self.commands
             .try_send(AgentSessionCommand::SubmitAgentMessage(text))
             .context("Agent submission queue is unavailable")
+    }
+
+    pub(crate) fn create_session(&self) -> Result<()> {
+        self.commands
+            .try_send(AgentSessionCommand::CreateSession)
+            .context("Agent session creation queue is unavailable")
+    }
+
+    pub(crate) fn activate_session(
+        &self,
+        session_id: SessionId,
+        switch_id: SwitchId,
+    ) -> Result<()> {
+        self.commands
+            .try_send(AgentSessionCommand::ActivateSession {
+                session_id,
+                switch_id,
+            })
+            .context("Agent session activation queue is unavailable")
     }
 
     pub(crate) fn submit_shell_command(&self, command: String) -> Result<()> {
@@ -299,6 +331,7 @@ fn run_agent_session_inner(
                 version: env!("CARGO_PKG_VERSION").into(),
             },
         )
+        .with_session_state_mode(SessionStateMode::Ephemeral)
         .with_workspace_root(workspace_root),
     )
     .map_err(|error| anyhow!(error.to_string()))?;
@@ -325,9 +358,16 @@ fn run_agent_session_inner(
         .take_events()
         .map_err(|error| anyhow!(error.to_string()))?;
     let mut active = ensure_active_session(&mut client, workspace_root)?;
-    publish_subscription(event_proxy, &active.subscription, &active.thread_id)?;
+    publish_subscription(event_proxy, &active.subscription, &active.thread_id, None)?;
 
-    let loop_result = drive_agent_session(event_proxy, commands, &events, &mut client, &mut active);
+    let loop_result = drive_agent_session(
+        event_proxy,
+        commands,
+        &events,
+        &mut client,
+        &mut active,
+        workspace_root,
+    );
     session
         .shutdown()
         .map_err(|error| anyhow!(error.to_string()))?;
@@ -340,10 +380,95 @@ fn drive_agent_session(
     events: &AppServerEvents,
     client: &mut AppServerRequestHandle,
     active: &mut ActiveSession,
+    workspace_root: &Path,
 ) -> Result<()> {
     loop {
         loop {
             match commands.try_recv() {
+                Ok(AgentSessionCommand::CreateSession) => {
+                    session_switch_trace::event(
+                        None,
+                        "worker-create-session-start",
+                        format_args!("workspace={}", workspace_root.display()),
+                    );
+                    match create_active_session(client, workspace_root) {
+                        Ok(next) => {
+                            session_switch_trace::event(
+                                None,
+                                "worker-session-created",
+                                format_args!(
+                                    "session_id={} thread_id={}",
+                                    next.session_id, next.thread_id
+                                ),
+                            );
+                            let previous_session_id = active.session_id.clone();
+                            if let Err(error) =
+                                client.unsubscribe_session(SessionUnsubscribeParams {
+                                    session_id: previous_session_id,
+                                })
+                            {
+                                send_event(
+                                    event_proxy,
+                                    AgentSessionEvent::Error(error.to_string()),
+                                )?;
+                            }
+                            *active = next;
+                            publish_subscription(
+                                event_proxy,
+                                &active.subscription,
+                                &active.thread_id,
+                                None,
+                            )?;
+                        }
+                        Err(error) => {
+                            send_event(event_proxy, AgentSessionEvent::Error(error.to_string()))?;
+                        }
+                    }
+                }
+                Ok(AgentSessionCommand::ActivateSession {
+                    session_id,
+                    switch_id,
+                }) => {
+                    let _trace = session_switch_trace::Span::new(
+                        Some(switch_id),
+                        "app-server-activate-session",
+                    );
+                    session_switch_trace::event(
+                        Some(switch_id),
+                        "worker-activation-start",
+                        format_args!("session_id={session_id}"),
+                    );
+                    match activate_session(client, session_id, workspace_root) {
+                        Ok(next) => {
+                            let previous_session_id = active.session_id.clone();
+                            if let Err(error) =
+                                client.unsubscribe_session(SessionUnsubscribeParams {
+                                    session_id: previous_session_id,
+                                })
+                            {
+                                send_event(
+                                    event_proxy,
+                                    AgentSessionEvent::Error(error.to_string()),
+                                )?;
+                            }
+                            *active = next;
+                            publish_subscription(
+                                event_proxy,
+                                &active.subscription,
+                                &active.thread_id,
+                                Some(switch_id),
+                            )?;
+                        }
+                        Err(error) => {
+                            session_switch_trace::event(
+                                Some(switch_id),
+                                "worker-activation-error",
+                                format_args!("error={error}"),
+                            );
+                            send_event(event_proxy, AgentSessionEvent::Error(error.to_string()))?;
+                        }
+                    }
+                }
                 Ok(AgentSessionCommand::SubmitAgentMessage(text)) => {
                     submit_agent_message(client, active, text)?;
                 }
@@ -361,7 +486,12 @@ fn drive_agent_session(
                         active_thread_projection(&active.subscription, &active.thread_id)?
                             .thread
                             .sequence;
-                    publish_subscription(event_proxy, &active.subscription, &active.thread_id)?;
+                    publish_subscription(
+                        event_proxy,
+                        &active.subscription,
+                        &active.thread_id,
+                        None,
+                    )?;
                 }
                 Ok(AgentSessionCommand::RefreshGit) => {
                     if let Err(error) = publish_git_projection(event_proxy, client) {
@@ -548,6 +678,18 @@ fn ensure_active_session(
         .list_sessions()
         .map_err(|error| anyhow!(error.to_string()))?
         .sessions;
+    session_switch_trace::event(
+        None,
+        "session-catalog",
+        format_args!(
+            "total={} active={}",
+            sessions.len(),
+            sessions
+                .iter()
+                .filter(|session| session.status == SessionStatus::Active)
+                .count()
+        ),
+    );
     let session = match sessions
         .into_iter()
         .find(|session| session.status == SessionStatus::Active)
@@ -555,6 +697,37 @@ fn ensure_active_session(
         Some(session) => session,
         None => create_session(client, workspace_root)?,
     };
+    initialize_session(client, session, workspace_root)
+}
+
+fn create_active_session(
+    client: &mut AppServerRequestHandle,
+    workspace_root: &Path,
+) -> Result<ActiveSession> {
+    let session = create_session(client, workspace_root)?;
+    initialize_session(client, session, workspace_root)
+}
+
+fn activate_session(
+    client: &mut AppServerRequestHandle,
+    session_id: SessionId,
+    workspace_root: &Path,
+) -> Result<ActiveSession> {
+    let session = client
+        .read_session(SessionReadParams { session_id })
+        .map_err(|error| anyhow!(error.to_string()))?
+        .session;
+    if session.status != SessionStatus::Active {
+        return Err(anyhow!("cannot activate a non-active session"));
+    }
+    initialize_session(client, session, workspace_root)
+}
+
+fn initialize_session(
+    client: &mut AppServerRequestHandle,
+    session: Session,
+    workspace_root: &Path,
+) -> Result<ActiveSession> {
     let (session, thread_id) = ensure_session_thread(client, session, workspace_root)?;
     let subscription = subscribe_session(client, &session.session_id, 0)?;
     let thread = active_thread_projection(&subscription, &thread_id)?;
@@ -635,19 +808,40 @@ fn publish_subscription(
     event_proxy: &EventLoopProxy<NativeEvent>,
     subscription: &SessionSubscribeResult,
     thread_id: &ThreadId,
+    switch_id: Option<SwitchId>,
 ) -> Result<()> {
-    let thread = active_thread_projection(subscription, thread_id)?;
     send_event(
         event_proxy,
-        AgentSessionEvent::Snapshot(thread.thread.clone()),
-    )?;
-    for update in &thread.updates {
-        send_event(
-            event_proxy,
-            AgentSessionEvent::Update(Box::new(update.clone())),
-        )?;
-    }
-    Ok(())
+        snapshot_event_from_subscription(subscription, thread_id, switch_id)?,
+    )
+}
+
+fn snapshot_event_from_subscription(
+    subscription: &SessionSubscribeResult,
+    thread_id: &ThreadId,
+    switch_id: Option<SwitchId>,
+) -> Result<AgentSessionEvent> {
+    let thread = active_thread_projection(subscription, thread_id)?;
+    session_switch_trace::event(
+        switch_id,
+        "subscription-ready",
+        format_args!(
+            "session_id={} thread_id={} updates={} thread_sequence={}",
+            subscription.session.session_id,
+            thread_id,
+            thread.updates.len(),
+            thread.thread.sequence
+        ),
+    );
+    // `thread.thread` is already the authoritative snapshot at the latest durable sequence.
+    // `thread.updates` is replay history from sequence zero, not new streaming state. Forwarding
+    // it after the snapshot would make the final committed update request another refresh, which
+    // would publish the same snapshot and replay again during Session Tab activation.
+    Ok(AgentSessionEvent::Snapshot {
+        session: subscription.session.clone(),
+        thread: thread.thread.clone(),
+        switch_id,
+    })
 }
 
 fn submit_agent_message(
@@ -811,6 +1005,116 @@ fn workspace_title(workspace_root: &Path) -> String {
 }
 
 impl NativeApp {
+    pub(crate) fn add_session(&mut self) {
+        let Some(session) = self.agent_session.as_ref() else {
+            eprintln!("could not create session: App Server session is unavailable");
+            return;
+        };
+        session_switch_trace::event(
+            None,
+            "session-create-request",
+            format_args!("source=add-session"),
+        );
+        if let Err(error) = session.create_session() {
+            eprintln!("could not create session: {error}");
+        }
+    }
+
+    pub(crate) fn activate_session_tab(&mut self, index: usize) {
+        let switch_id = session_switch_trace::SwitchId::next();
+        let Some(tab) = self.session_tabs.get(index) else {
+            session_switch_trace::event(
+                Some(switch_id),
+                "activation-rejected",
+                format_args!("reason=missing-tab index={index}"),
+            );
+            return;
+        };
+        let tab_id = tab.id();
+        let session_id = tab.session_id().clone();
+        session_switch_trace::event(
+            Some(switch_id),
+            "activation-request",
+            format_args!("index={index} tab_id={tab_id:?} session_id={session_id}"),
+        );
+        if tab_id == self.selected_session_tab {
+            session_switch_trace::event(
+                Some(switch_id),
+                "activation-rejected",
+                format_args!("reason=already-selected"),
+            );
+            return;
+        }
+        let ensured = {
+            let _trace = session_switch_trace::Span::new(Some(switch_id), "ensure-terminal");
+            self.ensure_terminal_for_session(&session_id)
+        };
+        if !ensured {
+            session_switch_trace::event(
+                Some(switch_id),
+                "activation-rejected",
+                format_args!("reason=terminal-ensure-failed"),
+            );
+            return;
+        }
+        let Some(session) = self.agent_session.as_ref() else {
+            session_switch_trace::event(
+                Some(switch_id),
+                "activation-rejected",
+                format_args!("reason=agent-session-unavailable"),
+            );
+            return;
+        };
+        if let Err(error) = session.activate_session(session_id.clone(), switch_id) {
+            session_switch_trace::event(
+                Some(switch_id),
+                "activation-rejected",
+                format_args!("reason=agent-command-queue error={error}"),
+            );
+            eprintln!("could not activate session: {error}");
+            return;
+        }
+        self.selected_session_tab = tab_id;
+        let terminal_activated = self.activate_terminal_for_session(&session_id);
+        session_switch_trace::event(
+            Some(switch_id),
+            "local-terminal-activation",
+            format_args!("success={terminal_activated}"),
+        );
+        {
+            let _trace = session_switch_trace::Span::new(Some(switch_id), "local-ui-invalidation");
+            self.rebuild_presentation_on_next_redraw();
+        }
+        session_switch_trace::event(
+            Some(switch_id),
+            "local-activation-visible",
+            format_args!("selected_tab={tab_id:?}"),
+        );
+    }
+
+    fn upsert_session_tab(&mut self, session: &Session) {
+        let workspace = self.workspace_context.working_directory_label().to_owned();
+        let result = project_session_tab(
+            &mut self.session_tabs,
+            &mut self.selected_session_tab,
+            session,
+            &workspace,
+        );
+        let (label, tab_id) = match result {
+            SessionTabUpsert::Added(tab_id) => ("session-tab-added", tab_id),
+            SessionTabUpsert::Updated(tab_id) => ("session-tab-updated", tab_id),
+        };
+        session_switch_trace::event(
+            None,
+            label,
+            format_args!(
+                "session_id={} tab_id={tab_id:?} tab_count={}",
+                session.session_id,
+                self.session_tabs.len()
+            ),
+        );
+    }
+
     pub(crate) fn handle_agent_session_event(&mut self, event: AgentSessionEvent) {
         let previous_line_count = crate::thread_timeline::line_count(&self.thread_projection);
         let workspace_may_have_changed = matches!(
@@ -843,7 +1147,22 @@ impl NativeApp {
                 self.language_service
                     .apply_configuration(&configuration, &self.file_editor_host);
             }
-            AgentSessionEvent::Snapshot(thread) => {
+            AgentSessionEvent::Snapshot {
+                session,
+                thread,
+                switch_id,
+            } => {
+                session_switch_trace::event(
+                    switch_id,
+                    "snapshot-received",
+                    format_args!(
+                        "session_id={} thread_id={}",
+                        session.session_id, thread.thread_id
+                    ),
+                );
+                self.upsert_session_tab(&session);
+                self.ensure_terminal_for_session(&session.session_id);
+                self.activate_terminal_for_session(&session.session_id);
                 self.thread_projection.replace_snapshot(thread);
             }
             AgentSessionEvent::Update(update) => {
@@ -882,8 +1201,7 @@ impl NativeApp {
         self.thread_timeline_scroll
             .preserve_view_after_growth(line_count.saturating_sub(previous_line_count), limit);
         self.thread_timeline_scroll.clamp(limit);
-        self.rebuild_presentation();
-        self.request_redraw();
+        self.rebuild_presentation_on_next_redraw();
     }
 }
 

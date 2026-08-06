@@ -292,7 +292,7 @@ impl NativeApp {
     }
 
     fn direct_terminal_keyboard_input(&mut self, event: &KeyEvent) {
-        let Some(terminal) = self.terminal.as_ref() else {
+        let Some(terminal) = self.active_terminal() else {
             return;
         };
         let input = encode_key_event(terminal.core(), event, self.modifiers);
@@ -413,7 +413,7 @@ impl NativeApp {
     }
 
     pub(super) fn paste_into_terminal(&mut self) -> bool {
-        let Some(terminal) = self.terminal.as_ref() else {
+        let Some(terminal) = self.active_terminal() else {
             return false;
         };
         let text = match read_clipboard_text() {
@@ -463,7 +463,7 @@ impl NativeApp {
         if input.is_empty() {
             return;
         }
-        if let Some(terminal) = self.terminal.as_mut()
+        if let Some(terminal) = self.active_terminal_mut()
             && let Err(error) = terminal.send_input(input)
         {
             eprintln!("{error_context}: {error}");

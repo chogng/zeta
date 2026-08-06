@@ -107,18 +107,19 @@ impl NativeApp {
         let position = self
             .cursor_position
             .and_then(|point| self.terminal_mouse_position(point));
-        let captured = if let Some(terminal) = self.terminal.as_mut() {
-            match self
-                .terminal_pointer
-                .route_wheel(terminal, position, delta, self.modifiers)
-            {
+        let modifiers = self.modifiers;
+        let mut terminal_pointer = std::mem::take(&mut self.terminal_pointer);
+        let captured = self.active_terminal_mut().map(|terminal| {
+            match terminal_pointer.route_wheel(terminal, position, delta, modifiers) {
                 Ok(captured) => captured,
                 Err(error) => {
                     eprintln!("could not send terminal pointer input: {error}");
                     true
                 }
             }
-        } else {
+        });
+        self.terminal_pointer = terminal_pointer;
+        let Some(captured) = captured else {
             return;
         };
         if captured || position.is_none() {
@@ -247,8 +248,7 @@ impl NativeApp {
     }
 
     pub(super) fn terminal_scroll_limit(&self) -> usize {
-        self.terminal
-            .as_ref()
+        self.active_terminal()
             .map(|terminal| {
                 scroll_limit(
                     terminal.core(),

@@ -8470,6 +8470,7 @@ dependencies = [
  "image",
  "ratatui",
  "rustix 1.1.4",
+ "serde_json",
  "signal-hook",
  "strum 0.27.2",
  "strum_macros 0.27.2",

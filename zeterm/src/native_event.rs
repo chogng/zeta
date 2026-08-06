@@ -1,10 +1,11 @@
 use crate::agent_session::AgentSessionEvent;
-use crate::terminal_session::TerminalSessionEvent;
+use crate::terminal_session::{TerminalSessionEventEnvelope, TerminalSessionReady};
 use zeta_language_service::LanguageServiceEvent;
 
 pub(crate) enum NativeEvent {
     Agent(AgentSessionEvent),
-    Terminal(TerminalSessionEvent),
+    Terminal(TerminalSessionEventEnvelope),
+    TerminalReady(TerminalSessionReady),
     LanguageService(LanguageServiceEvent),
 }
 
@@ -14,9 +15,15 @@ impl From<AgentSessionEvent> for NativeEvent {
     }
 }
 
-impl From<TerminalSessionEvent> for NativeEvent {
-    fn from(event: TerminalSessionEvent) -> Self {
+impl From<TerminalSessionEventEnvelope> for NativeEvent {
+    fn from(event: TerminalSessionEventEnvelope) -> Self {
         Self::Terminal(event)
+    }
+}
+
+impl From<TerminalSessionReady> for NativeEvent {
+    fn from(event: TerminalSessionReady) -> Self {
+        Self::TerminalReady(event)
     }
 }
 

@@ -172,13 +172,16 @@ impl NativeApp {
         &mut self,
         position: Option<TerminalMousePosition>,
     ) -> bool {
-        let Some(terminal) = self.terminal.as_mut() else {
+        let modifiers = self.modifiers;
+        let mut terminal_pointer = std::mem::take(&mut self.terminal_pointer);
+        let result = self
+            .active_terminal_mut()
+            .map(|terminal| terminal_pointer.route_moved(terminal, position, modifiers));
+        self.terminal_pointer = terminal_pointer;
+        let Some(result) = result else {
             return false;
         };
-        match self
-            .terminal_pointer
-            .route_moved(terminal, position, self.modifiers)
-        {
+        match result {
             Ok(captured) => captured,
             Err(error) => {
                 eprintln!("could not send terminal pointer input: {error}");
@@ -193,13 +196,16 @@ impl NativeApp {
         button: MouseButton,
         state: ElementState,
     ) -> bool {
-        let Some(terminal) = self.terminal.as_mut() else {
+        let modifiers = self.modifiers;
+        let mut terminal_pointer = std::mem::take(&mut self.terminal_pointer);
+        let result = self.active_terminal_mut().map(|terminal| {
+            terminal_pointer.route_button(terminal, position, button, state, modifiers)
+        });
+        self.terminal_pointer = terminal_pointer;
+        let Some(result) = result else {
             return false;
         };
-        match self
-            .terminal_pointer
-            .route_button(terminal, position, button, state, self.modifiers)
-        {
+        match result {
             Ok(captured) => captured,
             Err(error) => {
                 eprintln!("could not send terminal pointer input: {error}");

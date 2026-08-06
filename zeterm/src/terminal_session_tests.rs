@@ -1,5 +1,16 @@
-use super::{BootstrapOutputFilter, SHELL_BOOTSTRAP_MARKER, TerminalSessionEvent, shell_bootstrap};
+use super::{
+    BootstrapOutputFilter, SHELL_BOOTSTRAP_MARKER, TerminalSessionEvent,
+    TerminalSessionEventEnvelope, TerminalSessionKey, shell_bootstrap,
+};
 use zeta_terminal::{GridSize, TerminalCore};
+
+#[test]
+fn terminal_events_keep_their_native_session_identity() {
+    let key = TerminalSessionKey::new(7);
+    let envelope = TerminalSessionEventEnvelope::new(key, TerminalSessionEvent::Output(vec![1]));
+
+    assert_eq!(envelope.key, key);
+}
 
 #[test]
 fn terminal_events_update_grid_blocks_and_exit_state() {
@@ -101,4 +112,78 @@ fn pty_output_feeds_the_terminal_core() {
             .iter()
             .any(|line| line.text().contains("pty-ready"))
     );
+}
+
+#[cfg(unix)]
+#[test]
+fn two_pty_processes_can_back_independent_terminal_panes() {
+    use std::collections::HashMap;
+
+    use zeta_utils_pty::{SpawnedProcess, TerminalSize, spawn_pty_process};
+
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(2)
+        .enable_all()
+        .build()
+        .unwrap();
+    let cwd = std::env::current_dir().unwrap();
+    let environment = std::env::vars().collect::<HashMap<_, _>>();
+    let first = runtime
+        .block_on(spawn_pty_process(
+            "/bin/sh",
+            &["-c".to_string(), "printf 'pane-one\\n'".to_string()],
+            &cwd,
+            &environment,
+            &None,
+            TerminalSize { rows: 4, cols: 32 },
+            &[],
+        ))
+        .unwrap();
+    let second = runtime
+        .block_on(spawn_pty_process(
+            "/bin/sh",
+            &["-c".to_string(), "printf 'pane-two\\n'".to_string()],
+            &cwd,
+            &environment,
+            &None,
+            TerminalSize { rows: 4, cols: 32 },
+            &[],
+        ))
+        .unwrap();
+
+    let SpawnedProcess {
+        session: first_session,
+        stdout_rx: mut first_stdout,
+        stderr_rx: _,
+        exit_rx: first_exit,
+    } = first;
+    let SpawnedProcess {
+        session: second_session,
+        stdout_rx: mut second_stdout,
+        stderr_rx: _,
+        exit_rx: second_exit,
+    } = second;
+    assert_eq!(runtime.block_on(first_exit).unwrap(), 0);
+    assert_eq!(runtime.block_on(second_exit).unwrap(), 0);
+    first_session.release_pty_handles_after_exit();
+    second_session.release_pty_handles_after_exit();
+    let first_output = runtime.block_on(async move {
+        let mut output = Vec::new();
+        while let Some(chunk) = first_stdout.recv().await {
+            output.extend(chunk);
+        }
+        output
+    });
+    let second_output = runtime.block_on(async move {
+        let mut output = Vec::new();
+        while let Some(chunk) = second_stdout.recv().await {
+            output.extend(chunk);
+        }
+        output
+    });
+
+    assert!(String::from_utf8_lossy(&first_output).contains("pane-one"));
+    assert!(String::from_utf8_lossy(&second_output).contains("pane-two"));
+    assert!(!String::from_utf8_lossy(&first_output).contains("pane-two"));
+    assert!(!String::from_utf8_lossy(&second_output).contains("pane-one"));
 }

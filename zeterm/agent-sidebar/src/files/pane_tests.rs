@@ -126,8 +126,7 @@ fn file_tree_exposes_nested_component_inspection_nodes() {
             "ScrollView",
             "FilesTreeItem",
             "FilesTreeDisclosure",
-            "FilesTreeIcon",
-            "FilesTreeLabel",
+            "IconLabel",
         ]
     );
 
@@ -153,8 +152,8 @@ fn file_tree_exposes_nested_component_inspection_nodes() {
         .inspection()
         .nodes()
         .iter()
-        .find(|node| node.name() == "FilesTreeLabel")
-        .expect("tree label inspection node");
+        .find(|node| node.name() == "IconLabel")
+        .expect("file icon label inspection node");
     assert_eq!(label.label(), Some("src"));
 }
 

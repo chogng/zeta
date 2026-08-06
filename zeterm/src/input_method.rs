@@ -196,7 +196,7 @@ impl NativeApp {
                 self.file_editor_changed();
             }
             InputMethodTarget::TerminalGrid => {
-                let Some(terminal) = self.terminal.as_ref() else {
+                let Some(terminal) = self.active_terminal() else {
                     return;
                 };
                 let input = encode_terminal_ime_event(terminal.core(), &event);

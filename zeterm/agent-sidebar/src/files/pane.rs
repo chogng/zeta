@@ -1,11 +1,12 @@
 use zeta_ui::{
-    Component, ComponentContext, ComponentElement, Element, ListView, PaintRect, Rect, TextBlock,
-    TextStyle, UiScene,
+    Component, ComponentContext, ComponentElement, Element, IconLabel, IconLabelStyle, ListView,
+    PaintRect, Rect, TextBlock, TextStyle, UiScene,
 };
 use zui::{AccessibilityRole, ComputedElement, UiDispatch, UiNode};
 
 use super::FILE_LIST_ROW_HEIGHT;
 use super::FilesState;
+use super::file_icon::icon_for_search_result;
 use super::tree_view::FileRowState;
 use super::tree_view::FilesTreeView;
 use super::tree_view::draw_row_background;
@@ -226,6 +227,10 @@ impl Component for FilesSearchResult<'_> {
     fn paint(&self, scene: &mut UiScene) {
         draw_search_row(scene, self.bounds, &self.label, self.style, self.state);
     }
+
+    fn compose(&self, context: &mut ComponentContext<'_, '_>, _element: &ComputedElement) {
+        draw_search_row_in_context(context, self.bounds, &self.label, self.style, self.state);
+    }
 }
 
 fn draw_search_row(
@@ -236,16 +241,36 @@ fn draw_search_row(
     state: FileRowState,
 ) {
     draw_row_background(scene, bounds, style, state);
-    let text_x = bounds.origin.x + HORIZONTAL_PADDING + ICON_SIZE + 6.0;
-    scene.draw_text(TextBlock::new(
+    scene.draw_component(&search_result_label(bounds, label, style));
+}
+
+fn draw_search_row_in_context(
+    context: &mut ComponentContext<'_, '_>,
+    bounds: Rect,
+    label: &str,
+    style: &FilesPaneStyle,
+    state: FileRowState,
+) {
+    draw_row_background(context.scene_mut(), bounds, style, state);
+    context.draw_component(&search_result_label(bounds, label, style));
+}
+
+fn search_result_label(bounds: Rect, label: &str, style: &FilesPaneStyle) -> IconLabel {
+    let content = Rect::from_xywh(
+        bounds.origin.x + HORIZONTAL_PADDING,
+        bounds.origin.y,
+        (bounds.size.width - HORIZONTAL_PADDING * 2.0).max(1.0),
+        bounds.size.height,
+    );
+    IconLabel::new(
+        content,
+        icon_for_search_result(),
         label,
-        zeta_ui::Point::new(text_x, bounds.origin.y + 4.0),
-        zeta_ui::Size::new(
-            (bounds.right() - text_x - HORIZONTAL_PADDING).max(1.0),
-            18.0,
-        ),
-        TextStyle::new(12.0, style.text).with_line_height(18.0),
-    ));
+        IconLabelStyle::new(TextStyle::new(12.0, style.text).with_line_height(16.0))
+            .with_icon_size(ICON_SIZE)
+            .with_icon_color(style.text_muted)
+            .with_content_gap(6.0),
+    )
 }
 
 fn search_result_element_id(index: usize) -> zui::ElementId {

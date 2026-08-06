@@ -16,6 +16,10 @@ notification pump 与显式 shutdown。Consumer 不直接拥有 `AppServer` 或
 consumer 的启动入口。新的 CLI/TUI 交互统一通过 `AppServerSession` 获取 request handle
 与独立 event stream。
 
+`InProcessClientOptions` 默认选择 `SessionStateMode::Durable`。需要进程内生命周期的 host
+必须显式调用 `with_session_state_mode(SessionStateMode::Ephemeral)`；该模式只替换
+Session/Thread coordinator 的存储，不改变 Config、Workspace、Tool 或 protocol contract。
+
 | 能力 | Owned session | Synchronous adapter |
 | --- | --- | --- |
 | ready initialize/schema gate | ✅ `start_embedded` | `start_in_process_client` 时具备 |
@@ -37,6 +41,7 @@ consumer 的启动入口。新的 CLI/TUI 交互统一通过 `AppServerSession` 
 | `AppServerEvent::Notification` | 已由 client boundary 解码的 `ServerNotification` |
 | `AppServerEvent::ConnectionClosed` | 明确的 shutdown、driver stop 或 protocol failure |
 | `AppServerClient<T>` | typed JSON-RPC client；method 与 DTO source 仍来自 protocol crate |
+| `InProcessClientOptions::with_session_state_mode` | 明确选择 profile durable history 或 process-local ephemeral Session/Thread state |
 | `AppServerClient::request_session` | Session aggregate 的 canonical typed mutation request；所有 Session mutation 统一由此进入 |
 
 正常入口示意（`options`/`params` 由 host 与 protocol DTO 构造）：
