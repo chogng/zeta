@@ -1,0 +1,256 @@
+.zeta-document-block-toolbar {
+  box-sizing: border-box;
+  display: flex;
+  gap: 4px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--zeta-border);
+  background: var(--zeta-editor-background);
+}
+
+.zeta-document-block-toolbar-button {
+  padding: 3px 8px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+}
+
+.zeta-document-block-toolbar-button:hover { background: var(--zeta-toolbar-hover-background); }
+.zeta-document-block-toolbar-button.checked {
+  border-color: var(--zeta-border);
+  background: var(--zeta-action-bar-toggled-background);
+}
+
+.zeta-text-editor-widget-layout {
+  box-sizing: border-box;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+}
+
+.zeta-document-outline {
+  box-sizing: border-box;
+  flex: 0 0 240px;
+  overflow: auto;
+  border-inline-end: 1px solid var(--zeta-border);
+  color: var(--zeta-editor-foreground);
+  background: var(--zeta-editor-background);
+}
+
+.zeta-document-outline-title {
+  padding: 12px 14px 8px;
+  color: var(--zeta-editor-foreground);
+  font-size: 0.85em;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.zeta-document-outline-list {
+  margin: 0;
+  padding: 0 0 12px;
+  list-style: none;
+}
+
+.zeta-document-outline-entry {
+  box-sizing: border-box;
+  display: block;
+  width: 100%;
+  padding-block: 5px;
+  padding-inline-end: 8px;
+  overflow: hidden;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  text-align: start;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.zeta-document-outline-entry:hover,
+.zeta-document-outline-entry:focus-visible {
+  outline: 0;
+  background: var(--zeta-toolbar-hover-background);
+}
+
+.zeta-text-editor-widget-pane {
+  box-sizing: border-box;
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+  overflow: auto;
+  padding: 32px 48px 96px;
+  color: var(--zeta-editor-foreground);
+  background: var(--zeta-editor-background);
+}
+
+.zeta-document-paragraph,
+.zeta-document-heading,
+.zeta-document-text-block,
+.zeta-document-blockquote,
+.zeta-document-list,
+.zeta-document-block {
+  max-width: 860px;
+  margin: 0 auto 12px;
+}
+
+.zeta-document-heading[data-level="1"] { font-size: 2em; }
+.zeta-document-heading[data-level="2"] { font-size: 1.5em; }
+.zeta-document-heading[data-level="3"] { font-size: 1.25em; }
+
+.zeta-academic-title,
+.zeta-academic-abstract,
+.zeta-academic-section {
+  max-width: 860px;
+  margin: 0 auto 20px;
+}
+
+.zeta-academic-title {
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--zeta-border);
+}
+
+.zeta-academic-abstract {
+  padding: 12px 16px;
+  border-left: 3px solid var(--zeta-border);
+}
+
+.zeta-academic-section {
+  margin-bottom: 28px;
+}
+
+.zeta-document-text-input {
+  box-sizing: border-box;
+  display: block;
+  width: 100%;
+  min-height: 28px;
+  padding: 2px 0;
+  resize: none;
+  border: 0;
+  outline: 0;
+  overflow: hidden;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  line-height: 1.6;
+}
+
+.zeta-document-rich-text-input {
+  box-sizing: border-box;
+  min-height: 28px;
+  padding: 2px 0;
+  outline: 0;
+  white-space: pre-wrap;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  line-height: 1.6;
+}
+
+.zeta-document-inline-run { white-space: pre-wrap; }
+.zeta-document-inline-image {
+  max-width: 100%;
+  vertical-align: middle;
+  cursor: pointer;
+}
+.zeta-document-inline-image.zeta-document-inline-node-selected {
+  outline: 2px solid var(--zeta-focus-border);
+  outline-offset: 2px;
+}
+.zeta-document-inline-node {
+  display: inline-block;
+  margin: 0 2px;
+  padding: 0 4px;
+  border: 1px solid var(--zeta-border);
+  border-radius: 3px;
+  background: var(--zeta-toolbar-hover-background);
+  cursor: pointer;
+}
+.zeta-document-inline-node.zeta-document-inline-node-selected {
+  outline: 2px solid var(--zeta-focus-border);
+  outline-offset: 1px;
+}
+.zeta-citation {
+  display: inline-block;
+  margin-inline: 2px;
+  padding-inline: 3px;
+  color: var(--zeta-accent-foreground);
+  cursor: pointer;
+  font-size: 0.9em;
+}
+.zeta-citation-unresolved {
+  text-decoration: underline wavy;
+  text-decoration-color: var(--zeta-error-foreground);
+}
+.zeta-citation.zeta-document-inline-node-selected {
+  outline: 2px solid var(--zeta-focus-border);
+  outline-offset: 1px;
+}
+.zeta-citation-bibliography {
+  margin-top: 24px;
+  padding-top: 12px;
+  border-top: 1px solid var(--zeta-border);
+}
+.zeta-citation-reference {
+  margin: 6px 0;
+}
+.zeta-document-mark-strong { font-weight: 700; }
+.zeta-document-mark-em { font-style: italic; }
+.zeta-document-mark-code {
+  padding: 0 2px;
+  border-radius: 3px;
+  background: var(--zeta-text-code-block-background);
+  font-family: var(--zeta-font-family-monospace);
+}
+.zeta-document-mark-link {
+  color: var(--zeta-accent-foreground);
+  text-decoration: underline;
+}
+
+.zeta-document-text-block {
+  padding: 12px 16px;
+  border: 1px solid var(--zeta-border);
+  border-radius: 6px;
+  background: var(--zeta-text-code-block-background);
+  font-family: var(--zeta-font-family-monospace);
+}
+
+.zeta-document-text-block .zeta-alpha-editor-pane {
+  height: 180px;
+  min-height: 120px;
+}
+
+.zeta-document-blockquote {
+  padding-left: 16px;
+  border-left: 3px solid var(--zeta-border);
+}
+
+.zeta-document-list {
+  padding-left: 32px;
+}
+
+.zeta-document-list-item {
+  margin-bottom: 8px;
+}
+
+.zeta-document-table {
+  width: min(100%, 860px);
+  margin: 0 auto 12px;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.zeta-document-table-cell {
+  min-width: 120px;
+  padding: 8px;
+  border: 1px solid var(--zeta-border);
+  vertical-align: top;
+}
+
+.zeta-document-table-cell > .zeta-document-paragraph,
+.zeta-document-table-cell > .zeta-document-heading {
+  margin-bottom: 0;
+}

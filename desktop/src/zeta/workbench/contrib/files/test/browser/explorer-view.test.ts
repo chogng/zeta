@@ -82,6 +82,7 @@ test("ExplorerViewPane renders, expands, and opens workspace files", async () =>
       throw new Error("No active editor");
     },
     closeEditor() {},
+    async saveActiveEditor() {},
     setContent() {},
     async splitActiveGroupHorizontal() {},
     layout() {},

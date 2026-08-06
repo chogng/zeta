@@ -1,4 +1,4 @@
-# Alpha Editor：内核所有权与分阶段演进
+# Alpha / Gama Editor：内核所有权与分阶段演进
 
 > 本文是跨 editor、document、language、browser view、Workbench 和过渡
 > adapter 的 canonical 架构文档。文本内核的具体实现与修改契约见
@@ -10,6 +10,10 @@
 Alpha 是 Zeta 从底层向上自建、并由产品默认选择的编辑器栈。legacy editor runtime 不再是产品模型或公共
 接口的定义者，只保留为显式选择的兼容 editor 和工具能力参照。
 
+Gama 是 Alpha 的 sibling editor，而不是 Alpha 的模式或嵌入文档模型。`editor/` 根目录只包含
+`alpha/` 与 `gama/`；两者均按 VS Code `src/vs/editor` 的实际子目录组织：`editor.api.ts`、`editor.all.ts`、`editor.main.ts`、`common/{core,model,commands,services,...}`、`browser/{widget,services,...}`、`contrib/<feature>/{common,browser}` 与 `test/{common,browser}`。`editor.api.ts` 是 DOM-free 程序化模型 API，`editor.all.ts` 是 product entry 使用的 contribution bundle，`editor.main.ts` 组合 all + api；只有存在真实 worker runtime 的 editor 才提供 `editor.worker.start.ts`。产品入口静态选择对应 bundle 与对应 Workbench session。Gama 复用 Alpha 的 `editorInput → EditorPane → EditorSession → Browser*ModelService → widget` 骨架：Gama common 拥有结构化文档树和事务，`GamaEditorPane` 宿主 `GamaEditorSession`，`BrowserDocumentModelService` 创建 document reference。`TextEditorWidget` 只在 Gama `textBlock` 内通过 `IEmbeddedTextEditor` 投影 Alpha 的 `CodeEditorWidget`。Gama 的 `textBlock` 对应 Alpha `codeBlock` 的位置，但仍是带语言属性的普通文本节点；Alpha 不反向依赖 Gama。
+其具体契约见 [`desktop/src/zeta/editor/gama/README.md`](../desktop/src/zeta/editor/gama/README.md)。
+
 这不是一次性重写。每一阶段必须先形成可独立测试的 Zeta contract，再
 让上层依赖它，最后才能删除 legacy editor runtime 中对应的所有权。
 
@@ -19,6 +23,8 @@ Alpha 是 Zeta 从底层向上自建、并由产品默认选择的编辑器栈�
 | --- | --- | --- |
 | `editor/alpha/common` | 内核、基础 viewport 与版本语言状态已具备 | 文本坐标、事务、Piece Tree、版本快照、有界历史、压实、Unicode segment、光标导航、纯 viewport 状态、语言分析 lane/result store、completion provider registry/host/wire codec、增量 Worker 文档镜像、增量词法分析、取消、过期结果拒绝与 worker 生命周期 |
 | `editor/alpha/browser` | viewport、selection、基础文本、clipboard、桌面式 IME、四级 diagnostic、semantic token、completion widget/trigger/Worker factory 与 side-by-side diff view 已具备 | 虚拟行 DOM、viewport、增量行宽与初始换行测量、gutter、selection/caret、decoration、Error/Warning/Information/Hint underline、每行最高严重级别 diagnostic gutter marker、版本化 semantic-token 行投影、completion list/accept/invoke/trigger/incomplete refresh/module Worker、pointer selection、Alt+Shift 列选择、autoscroll、多光标、键盘导航、普通 textarea 编辑、event/Async rich clipboard 安全 HTML 读写、单个显式文本文件 clipboard paste/drop、前端本地 MIME paste provider 与 `text/uri-list`、macOS desktop composition/VoiceOver DOM contract、composition 基线与 provisional underline、`AlphaDiffEditorInput`/Pane 承载的只读虚拟化 side-by-side line diff；`EditorInput.readOnly` 在 common 提交闸门阻止文档修改；移动端不在 Alpha 桌面范围，Windows 辅助技术验收另行进行 |
+| `editor/gama/common` | 结构化文档内核已具备 | DOM-free `DocumentModel`、schema、selection、transaction、history、serialization、plugins 与 `IDocumentModelService` contract；不得引用 Alpha、Workbench 或 Electron |
+| `editor/gama/browser` | pane/session/model-service/widget 分层已具备 | `GamaEditorPane` 负责 Workbench lifecycle，`GamaEditorSession` 负责结构化 DOM/input，`BrowserDocumentModelService` 负责 document reference/working copy，`TextEditorWidget` 仅负责一个 `textBlock` 的 Alpha line-editor projection |
 | `workbench/services/textMate` | 部分具备 | grammar revision registry、真实 TextMate/Oniguruma runtime、增量行状态缓存、Alpha provider/module adapter、版本化 catalog/theme wire 与独立 browser Worker、JSON/JSONC 资源、caller-resolved session contribution 与声明式 scope-theme selector 已完成；extension resource discovery 尚未完成 |
 | Document service | 部分具备 | `IFileService` 将 App Server `fs/changed` 映射为工作区失效事件，`ITextFileService` 转发；Alpha 模型服务提供 dirty、快照保存、显式 revert、CRLF/LF 保留、干净模型重载与脏模型外改状态；URI revision/CAS、恢复仍未完成 |
 | Selection/decorations | 基础具备 | selection、实例控制器、tracked range、decoration collection |
@@ -50,11 +56,16 @@ decoration 等身份只能由 `editor` 领域定义，不得为了复用而下�
 
 ```text
 editor/
-  alpha/
-    common/        DOM-free canonical contracts and implementation
-    browser/       native DOM, input, viewport, measurement, accessibility
-    test/common/   common-layer tests
-    benchmark/     non-gating kernel benchmarks
+  alpha/            # Monaco/VS Code-aligned line editor
+    common/{core,model,commands,...}
+    browser/{view,widget,services,...}
+    contrib/<feature>/{common,browser}
+    test/{common,browser}
+  gama/            # ProseMirror-aligned structured editor
+    common/{core,model,commands,services}
+    browser/{editorInput,gamaEditorPane,gamaEditorSession,widget,services}
+    contrib/<feature>/{common,browser}
+    test/{common,browser}
 ```
 
 当前 `editor/alpha/common` 已直接复用 `base/common/event`、
@@ -1071,7 +1082,7 @@ module 协议。
 这条 module seam 是 `workbench/services/textMate` adapter 的接入点。Current 37 落地时
 TextMate grammar、scope 解析和 runtime 依赖尚未实现；Current 43 已在 Alpha/`base`
 之外建立该 adapter，但产品 grammar resource 接线仍未完成。同样，
-`workbench/services/textfile/common` 已由 Alpha、Alpha、Gamma 与 Explorer 的
+`workbench/services/textfile/common` 已由 Alpha、Gama 与 Explorer 的
 共享 loading/save 边界证明需要。它只转发 I/O 与粗粒度 invalidation；Alpha 保持 dirty、
 revert、共享模型引用和外改 policy，不能反向塞入 `TextModel` 或 `base`。
 
@@ -1454,7 +1465,7 @@ Alpha 已从独立内核演进为真实 `IEditorPane`，但仍保持“Workbench
 `initialText`。`EditorPart` 选定 descriptor 后把 `ITextFileService` 注入 pane。
 Alpha pane 先通过 `AlphaTextModelService.acquire` 获取引用：已有资源模型保持权威，
 新资源才调用 TextFile resolve。最后一个引用释放时模型销毁。legacy editor runtime 使用相同内容
-服务但保留自己的临时模型池；Gamma 也通过同一服务解析内容。TextFile service
+服务但保留自己的临时模型池；Gama 也通过同一服务解析内容。TextFile service
 不吸收任何编辑器的 transaction、undo 或 selection 类型。
 
 `TextModel` 本身只接受一个领域无关的可取消 maintenance scheduler；没有注入时保持

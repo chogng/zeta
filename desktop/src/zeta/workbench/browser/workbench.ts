@@ -194,10 +194,12 @@ import { BrowserUntitledTextEditorService } from "../services/untitled/browser/b
 import { IUntitledTextEditorService } from "../services/untitled/common/untitledTextEditorService.js";
 import { BrowserWorkingCopyService } from "../services/workingCopy/browser/browserWorkingCopyService.js";
 import { IWorkingCopyService } from "../services/workingCopy/common/workingCopyService.js";
+import { createWorkbenchSession, type WorkbenchSession } from "./workbenchSession.js";
 
 /** Host-specific inputs required to construct a workbench. */
 export interface IStartWorkbenchOptions {
   readonly product: ProductConfiguration;
+  readonly session: WorkbenchSession;
   readonly api: IRendererHost;
   readonly container: HTMLElement | null;
   readonly workspace: IAnyWorkspaceIdentifier;
@@ -212,6 +214,7 @@ export interface IStartWorkbenchOptions {
 /** Starts the browser workbench and binds its commands to the initial UI. */
 export function startWorkbench({
   product,
+  session,
   api,
   container,
   workspace,
@@ -224,6 +227,7 @@ export function startWorkbench({
 }: IStartWorkbenchOptions): Workbench {
   return new Workbench(
     product,
+    session,
     api,
     container ?? document.body,
     workspace,
@@ -238,6 +242,7 @@ export function startWorkbench({
 
 /** Owns the renderer workbench, its parts, commands, and runtime layout. */
 export class Workbench extends DisposableOwner {
+  readonly session: WorkbenchSession;
   private readonly workspaceContext: WorkspaceContextService;
   private readonly storage: BrowserStorageService;
   private readonly editor: EditorPart;
@@ -246,6 +251,7 @@ export class Workbench extends DisposableOwner {
 
   constructor(
     product: ProductConfiguration,
+    session: WorkbenchSession,
     api: IRendererHost,
     workbenchRoot: HTMLElement,
     workspace: IAnyWorkspaceIdentifier,
@@ -257,6 +263,8 @@ export class Workbench extends DisposableOwner {
     createTitlebarPart: TitlebarPartFactory,
   ) {
     super();
+    const normalizedSession = createWorkbenchSession(session);
+    this.session = normalizedSession;
     const services = new ServiceCollection();
     const instantiationService = new InstantiationService(services);
     if (nativeHostApi) {
@@ -517,6 +525,7 @@ export class Workbench extends DisposableOwner {
     const sidebarCompositeDescriptor = requiredViewContainer(
       viewDescriptors,
       ViewContainerLocation.Sidebar,
+      normalizedSession.composition.sidebar,
     );
     const openSidebarComposite = (
       compositeId: string,
@@ -580,6 +589,7 @@ export class Workbench extends DisposableOwner {
     const panelCompositeDescriptor = requiredViewContainer(
       viewDescriptors,
       ViewContainerLocation.Panel,
+      normalizedSession.composition.panel,
     );
     const openPanelComposite = (
       compositeId: string,
@@ -616,6 +626,7 @@ export class Workbench extends DisposableOwner {
     const auxiliaryViewContainer = requiredViewContainer(
       viewDescriptors,
       ViewContainerLocation.AuxiliaryBar,
+      normalizedSession.composition.auxiliarybar,
     );
     const statusbar = this.own(new StatusbarPart(
       statusbarService,
@@ -633,6 +644,7 @@ export class Workbench extends DisposableOwner {
     ]);
     const layout = this.own(new WorkbenchLayout(workbenchRoot, parts, {
       initialDimension: layoutService.mainContainerDimension,
+      session: normalizedSession,
       storageService: storage,
     }));
     workbenchLayout = layout;
@@ -640,18 +652,36 @@ export class Workbench extends DisposableOwner {
     this.own(bindResizableLayout(layoutService.onDidLayoutMainContainer, layout));
     // Fixed Panel and Auxiliary Bar views may depend on the host layout during construction.
     openPanelComposite(panelCompositeDescriptor.id);
-    const auxiliaryPaneComposite = new PaneComposite({
-      viewContainer: auxiliaryViewContainer,
-      model: viewDescriptors.getViewContainerModel(auxiliaryViewContainer.id),
-      instantiationService,
-      contextKeyService: contextKeys,
-      ownerDocument,
-      paneHeaders: "hidden",
-      paneLayout: "fill",
-    });
-    auxiliarybar.addComposite(auxiliaryPaneComposite);
-    auxiliarybar.showComposite(auxiliaryViewContainer.id);
-    auxiliarybar.setActiveComposite(auxiliaryViewContainer.id);
+    const openAuxiliaryComposite = (compositeId: string): PaneComposite => {
+      const viewContainer = viewDescriptors
+        .getViewContainers(ViewContainerLocation.AuxiliaryBar)
+        .find((candidate) => candidate.id === compositeId);
+      if (!viewContainer) {
+        throw new Error(
+          `Auxiliary Bar Composite is not registered: ${compositeId}`,
+        );
+      }
+      if (!auxiliarybar.getComposite(viewContainer.id)) {
+        auxiliarybar.addComposite(new PaneComposite({
+          viewContainer,
+          model: viewDescriptors.getViewContainerModel(viewContainer.id),
+          instantiationService,
+          contextKeyService: contextKeys,
+          ownerDocument,
+          paneHeaders: "hidden",
+          paneLayout: "fill",
+        }));
+      }
+      auxiliarybar.showComposite(viewContainer.id);
+      auxiliarybar.setActiveComposite(viewContainer.id);
+      const composite = auxiliarybar.getComposite(viewContainer.id);
+      assertDefined(composite, `Auxiliary Bar Composite is not available: ${viewContainer.id}`);
+      return composite;
+    };
+    openAuxiliaryComposite(auxiliaryViewContainer.id);
+    if (normalizedSession.layout.agentSidebar.visible) {
+      openAgentSidebarComposite(normalizedSession.composition.agentSidebar);
+    }
     services.set(IViewsService, new ViewsService({
       viewDescriptorService: viewDescriptors,
       openViewContainer: (container) => {
@@ -661,9 +691,7 @@ export class Workbench extends DisposableOwner {
             return openSidebarComposite(container.id);
           case ViewContainerLocation.AuxiliaryBar:
             layout.showPart("auxiliarybar");
-            return container.id === auxiliaryViewContainer.id
-              ? auxiliaryPaneComposite
-              : undefined;
+            return openAuxiliaryComposite(container.id);
           case ViewContainerLocation.AgentSidebar:
             layout.showPart("agentSidebar");
             return openAgentSidebarComposite(container.id);
@@ -730,11 +758,14 @@ export class Workbench extends DisposableOwner {
 function requiredViewContainer(
   service: IViewDescriptorService,
   location: ViewContainerLocation,
+  containerId: string,
 ) {
-  const container = service.getDefaultViewContainer(location);
+  const container = service
+    .getViewContainers(location)
+    .find((candidate) => candidate.id === containerId);
   if (!container) {
     throw new Error(
-      `No default view container is registered for ${location}`,
+      `Workbench session references an unavailable ${location} view container: ${containerId}`,
     );
   }
   return container;

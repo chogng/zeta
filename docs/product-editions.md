@@ -58,32 +58,39 @@ Renderer 产品目录，并从该目录与入口名确定产品身份。
   导入产品入口前设置 `globalThis.zetaWebWorkbenchHost`，提供真实 `ZetaRendererApi`、
   workspace 和可选容器。
 - 三个 Electron 构建变体使用独立 HTML 标题、`ProductConfiguration` 和 Renderer 输出目录。
-- 各 `workbench-*.ts` 直接导入自身需要的编辑器 contribution，不额外拆分产品级
-  `workbench-*.contribution.ts` 文件。
+- 各 `workbench-*.ts` 直接导入自身需要的 `editor/*/editor.all.ts`，不额外拆分产品级
+  `workbench-*.contribution.ts` 文件；`editor.all.ts` 只负责 browser contribution，`editor.api.ts`
+  是程序化模型接口，`editor.main.ts` 组合二者，`editor.worker.start.ts` 仅在该 editor 真有 worker runtime 时存在。
 - 共享 `EditorPart` 已通过 `EditorInput`、`IEditorPane` 和 `EditorPaneRegistry` 提供真实的编辑器
   宿主边界，包括资源匹配、显式 “Open With”、异步切换取消、布局、可见性、聚焦与释放。
 - Default Zeta entry 已从产品入口注册 Alpha pane；Alpha 是普通源码和纯文本资源的默认行编辑器。
-- Academic 已从产品入口注册 Gamma pane；它拥有结构化文档 schema、事务、历史、序列化、布局和释放。
+- Academic 已从产品入口注册 Gama pane（browser widget 为 `TextEditorWidget`）；它拥有结构化文档 schema、事务、历史、序列化、布局和释放。
+- `sessions/browser/*WorkbenchSession.ts` 为 Code、Academic、Complete 分别提供初始 Workbench
+  布局 profile；共享 Workbench 只消费通用 profile 契约，并按产品/工作区恢复用户已保存的尺寸和显隐。
 - Main、Preload 和 App Server 当前由三个 Electron 构建变体共享，尚未按变体裁剪原生能力或 Rust feature。
 - 未注入 Web host 的 Browser 页面使用显式 disconnected renderer API：页面和 Workbench
   可以运行，连接状态为 `stopped`，所有 App Server 产品操作以
   `WebAppServerUnavailableError` 失败。当前 Rust App Server 只监听 `stdio://`，尚无浏览器可
   直连的 HTTP/WebSocket transport。
 
-因此，Renderer 构建产物和编辑器依赖已经按产品入口分流。Complete 静态组合 Alpha 与 Gamma；
-Academic 专有内容类型和 `.zeta-paper`、`.zeta-academic` 默认由 Gamma 打开，普通源码及
+因此，Renderer 构建产物和编辑器依赖已经按产品入口分流。Complete 静态组合 Alpha 与 Gama；
+Academic 专有内容类型和 `.zeta-paper`、`.zeta-academic` 默认由 Gama 打开，普通源码及
 Markdown 默认由 Alpha 打开。
+
+Workbench session profile 与实时聊天 session 是两层不同的概念：前者只决定产品入口的初始
+Workbench 组成，后者由 `IWorkbenchSessionService` 管理当前 thread、transcript 和服务端
+lifecycle。`SessionsPart` 是可选的状态投影，不拥有 Workbench 布局拓扑。
 
 ## 编辑器装配契约
 
-`workbench-code.ts` 引入 `editor/alpha/contrib`；
-`workbench-academic.ts` 只能引入 `editor/gamma/contrib`。共享 Workbench 不得
-直接依赖任一编辑器。`workbench-complete.ts` 静态导入这两个 contribution，获得两个编辑器：
+`workbench-code.ts` 引入 `editor/alpha/editor.all` 与 `codeWorkbenchSession`；
+`workbench-academic.ts` 引入 `editor/gama/editor.all` 与 `academicWorkbenchSession`。共享 Workbench 不得
+直接依赖任一编辑器。`workbench-complete.ts` 静态导入两个 editor bundle 与 `completeWorkbenchSession`：
 
 ```text
 Code       → Alpha descriptor
-Academic   → Gamma descriptor
-Complete   → Alpha + Gamma descriptors
+Academic   → Gama descriptor
+Complete   → Alpha + Gama descriptors
                          ↓
                  EditorPaneRegistry
                          ↓
@@ -104,11 +111,10 @@ model contract 的职责，不能由 pane 私自发明。
 
 ## 扩展点
 
-新增 Default Zeta 或 Academic 专属功能时，应分别从 `workbench-code.ts` 或
-`workbench-academic.ts` 导入。Complete 入口显式导入两类 contribution，获得这些功能。
+新增 editor browser contribution 时，应从它所属 editor 的 `editor.all.ts` 引入；产品入口只选择
+`editor.all.ts` 与对应 Workbench session。Complete 入口显式选择两个 editor bundle，获得两类功能。
 
-Alpha 与 Gamma 的模型、插件与 browser runtime 分别归 `editor/alpha`、
-`editor/gamma` 子系统所有；产品 contribution 只选择是否装配，不能持有编辑器实现。
+Alpha 与 Gama 的模型、插件与 browser runtime 分别归 `editor/alpha`、`editor/gama` 子系统所有；产品 contribution 只选择是否装配，不能持有编辑器实现。
 共享 `workbench` 同样不得直接依赖具体编辑器。
 `EditorInput.initialText` 是 `ITextFileService` 优先使用的内存启动快照，不拥有保存语义。
 

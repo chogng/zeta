@@ -11,7 +11,7 @@ import { type ILanguageFeaturesService } from "../../../services/language/common
 import type { IWorkingCopyService } from "../../../services/workingCopy/common/workingCopyService.js";
 import type { IDiffApi } from "../../../../platform/diff/common/diffApi.js";
 import type { EditorInput, EditorOpenOptions } from "./editorInput.js";
-import type { TextResourceLanguageResolver } from "../../../../editor/common/textResourceLanguage.js";
+import type { TextResourceLanguageResolver } from "../../../../platform/language/common/textResourceLanguage.js";
 import { type IEditorPane, EditorPaneVisibility } from "./editorPane.js";
 import { extractExternalEditorInputs } from "./editorDropData.js";
 import { EditorPaneRegistry } from "./editorRegistry.js";

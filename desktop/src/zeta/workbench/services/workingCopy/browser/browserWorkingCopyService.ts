@@ -3,7 +3,7 @@ import { DisposableOwner, toDisposable } from "../../../../base/common/lifecycle
 import { type URI } from "../../../../base/common/uri.js";
 import { type IWorkingCopy, type IWorkingCopyService } from "../common/workingCopyService.js";
 
-/** Browser registry for Alpha, Gamma, and future editor-domain working copies. */
+/** Browser registry for Alpha, Gama, and future editor-domain working copies. */
 export class BrowserWorkingCopyService extends DisposableOwner implements IWorkingCopyService {
   private readonly copies = new Map<string, Set<IWorkingCopy>>();
   private readonly _onDidRegister = this.own(new Emitter<IWorkingCopy>());

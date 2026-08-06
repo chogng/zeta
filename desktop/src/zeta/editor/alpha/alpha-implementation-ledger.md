@@ -11,6 +11,10 @@
 | `browser/editorInput.ts` | Workbench `EditorInput` 匹配和语言 identity adapter；不进入同步 model/core。 |
 | `browser/diffEditorInput.ts` | Workbench 双资源 diff input 和 synthetic tab identity；不创建 diff model，也不计算 diff。 |
 | `browser/browserAlphaEditorSession.ts` | TextMate grammar readiness、analysis Worker 和 completion Worker 的 browser adapter。 |
+| `editor.api.ts` | DOM-free 的 Alpha text-model 程序化 API；不加载 Workbench、DOM 或 contribution。 |
+| `editor.all.ts` | Alpha 对产品入口公开的 contribution bundle；加载 editor browser contribution。 |
+| `editor.main.ts` | 完整 Alpha 入口；组合 `editor.all.ts` 与 `editor.api.ts`。 |
+| `editor.worker.start.ts` | Alpha dedicated language worker 的统一启动协议；analysis 与 completion worker 使用它建立 canonical wire port。 |
 | `contrib/editor.contribution.ts` | 注册 Alpha code/diff pane，并强制注入 Workbench text-file 与 Rust diff adapter；生产环境不提供 fallback。 |
 | `browser/widget/codeEditor/codeEditorWidget.ts` | 组合 viewport、输入、键盘导航、pointer selection 和 text drop；不拥有语言功能。 |
 | `browser/widget/diffEditor/diffEditorWidget.ts` | 消费 `common/diff/diffModel.ts` 的只读 side-by-side projection；不计算 diff。 |

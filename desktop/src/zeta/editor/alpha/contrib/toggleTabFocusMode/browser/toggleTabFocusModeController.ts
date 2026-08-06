@@ -33,7 +33,6 @@ export class AlphaToggleTabFocusModeController extends DisposableOwner {
 
   private updateState(): void {
     this.viewport.element.classList.toggle("tab-focus-mode", this.enabled);
-    this.viewport.element.setAttribute("aria-pressed", String(this.enabled));
     this.viewport.element.dataset.tabFocusMode = String(this.enabled);
   }
 }

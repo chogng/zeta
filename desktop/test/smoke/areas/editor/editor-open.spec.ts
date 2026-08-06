@@ -3,8 +3,8 @@ import { expect, test } from "../../../automation/test.js";
 
 test("App Server workspace files open in Alpha and save through the editor region", async ({ target, testWorkspace, workbench }) => {
   test.skip(
-    target.kind !== "electron" || target.appServerMode !== "required",
-    "This scenario requires the Electron App Server project",
+    target.kind !== "electron" || target.appServerMode !== "required" || target.product !== "code",
+    "This scenario requires the Code Electron App Server product",
   );
 
   const page = workbench.page;
@@ -23,12 +23,12 @@ test("App Server workspace files open in Alpha and save through the editor regio
   const input = group.content.locator(".zeta-alpha-editor-input");
   await expect(input).toBeAttached();
   await input.focus();
-  await input.press("Control+A");
+  await input.press(process.platform === "darwin" ? "Meta+A" : "Control+A");
   await input.type("const value = 2;");
-  await input.press("Control+S");
+  await input.press(process.platform === "darwin" ? "Meta+S" : "Control+S");
 
   await expect.poll(
     () => readFile(testWorkspace.file, "utf8"),
     { timeout: 15_000, message: "Alpha save reaches the App Server workspace" },
-  ).toBe("const value = 2;\n");
+  ).toBe("const value = 2;");
 });

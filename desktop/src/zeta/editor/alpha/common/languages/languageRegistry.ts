@@ -1,7 +1,7 @@
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { DisposableOwner, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
 import { assertLanguageId } from "./languageId.js";
-import type { TextResourceLanguageInput } from "../../../common/textResourceLanguage.js";
+import type { TextResourceLanguageInput } from "../../../../platform/language/common/textResourceLanguage.js";
 
 /** Declarative identity and file-association metadata for one editor language. */
 export interface LanguageDescription {

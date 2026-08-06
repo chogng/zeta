@@ -6,7 +6,7 @@ import { type AlphaTextMeasurer } from "../../browser/view/fontMetrics.js";
 import { EditorFoldingModel } from "../../contrib/folding/browser/foldingModel.js";
 import { EditorHiddenRangeModel } from "../../contrib/folding/browser/hiddenRangeModel.js";
 import { TextModel } from "../../common/model/textModel.js";
-import { TextPosition } from "../../common/core/text.js";
+import { TextPosition, TextRange } from "../../common/core/text.js";
 
 test("Visible visual-line projection removes hidden bodies while preserving wrapped header rows", () => {
   using model = new TextModel("header\ninside\nend\nlast");
@@ -36,6 +36,23 @@ test("Visible visual-line projection removes hidden bodies while preserving wrap
   assert.equal(projection.lineSource.lineCount, 5);
   assert.equal(projection.projection.visualLineIndexAt(TextPosition.at(1, 3)), 2);
   assert.equal(projection.projection.lineAt(2)?.logicalLineIndex, 0);
+});
+
+test("Visible visual-line projection refreshes the source before collapsed ranges observe a shrinking model", () => {
+  using model = new TextModel("header\ninside\nend");
+  using folding = new EditorFoldingModel(model);
+  using hiddenRanges = new EditorHiddenRangeModel(model, folding);
+  using wrapping = new AlphaVisualLineProjection(model, new FixedTextMeasurer());
+  using projection = new AlphaVisibleLineProjection(wrapping, hiddenRanges);
+  folding.setRanges([{ startLineIndex: 0, endLineIndex: 2, collapsed: true }]);
+
+  assert.doesNotThrow(() => model.applyEdits([{
+    range: TextRange.from(TextPosition.at(0, 0), model.positionAt(model.length)),
+    text: "x",
+  }]));
+  assert.equal(projection.projection.logicalLineCount, 1);
+  assert.equal(projection.projection.lines.length, 1);
+  assert.equal(projection.projection.lineAt(0)?.logicalLineIndex, 0);
 });
 
 class FixedTextMeasurer implements AlphaTextMeasurer {

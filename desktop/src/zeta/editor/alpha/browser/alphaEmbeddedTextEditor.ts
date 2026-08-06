@@ -9,13 +9,13 @@ import { BrowserTextModelService } from "./services/browserTextModelService.js";
 import { AlphaEditorPane } from "./alphaEditorPane.js";
 import { AlphaEditorSession } from "./alphaEditorSession.js";
 
-/** Options shared by Alpha instances embedded in Gamma blocks. */
+/** Options shared by Alpha CodeEditorWidget projections mounted in TextEditorWidget textBlock nodes. */
 export interface AlphaEmbeddedTextEditorFactoryOptions {
   readonly textMateService?: ITextMateService;
   readonly languageFeaturesService?: ILanguageFeaturesService;
 }
 
-/** Creates Alpha line editors for structured-editor code blocks. */
+/** Creates Alpha line editors for TextEditorWidget textBlock projections. */
 export class AlphaEmbeddedTextEditorFactory implements IEmbeddedTextEditorFactory {
   constructor(private readonly options: AlphaEmbeddedTextEditorFactoryOptions = {}) {}
 

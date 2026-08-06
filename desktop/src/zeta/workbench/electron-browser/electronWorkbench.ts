@@ -20,10 +20,12 @@ import {
   createElectronWorkbenchContextMenuService,
 } from "../services/contextmenu/electron-browser/contextMenuService.js";
 import { loadUserThemes } from "./userThemes.js";
+import type { WorkbenchSession } from "../browser/workbenchSession.js";
 
 /** Starts one Electron renderer for the selected product edition. */
 export async function startElectronWorkbench(
   product: ProductConfiguration,
+  session: WorkbenchSession,
 ): Promise<void> {
   installBaseUiStyles();
   const disposableTracker = import.meta.env.DEV
@@ -36,6 +38,7 @@ export async function startElectronWorkbench(
   const userThemes = await loadUserThemes(api.userThemes);
   const workbench = startWorkbench({
     product,
+    session,
     api,
     container: document.querySelector<HTMLElement>("#app"),
     workspace: parseWorkspaceIdentifier(await api.workspace.getWorkspace()),

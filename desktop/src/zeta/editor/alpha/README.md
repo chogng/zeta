@@ -24,7 +24,7 @@ canonical Zeta line-oriented text-model contract.
 | `browser/` | `base/common`, `base/browser`, `alpha/common`, `alpha/contrib` | DOM projection, textarea/input events, viewport observation, font measurement, accessibility, and browser adapters |
 | `contrib/folding/browser/` | `base/common`, `base/browser`, `alpha/common`, `alpha/browser/view` | Code-folding range providers, tracked fold state, fold commands, gutter presentation, and folded visual-row projection |
 | `common/languages` + `common/tokens` | `base/common`, `alpha/common/core`, `alpha/common/model` | Alpha language configuration, provider contracts, analysis/completion wire, versioned results, token index and lexical editing; no DOM or Workbench |
-| `../gamma/` | Gamma's structured-document contracts and browser host | Structured-editor integration only; Gamma does not depend on Alpha's text model |
+| `../gama/` | Gama structured-document contracts and browser host | Structured-editor integration only; Gama does not depend on Alpha's text model |
 | Workbench contributions | editor public contracts and platform services | Pane registration, product composition, and document/workspace wiring |
 
 The dependency direction is intentionally one-way: editor layers should reuse
@@ -65,7 +65,7 @@ class:
 | Language identities and composable editing rules | `editor/alpha/common` | `LanguageConfigurationRegistry`; comments/brackets/pairs are editor-domain contracts, not generic base primitives |
 | TextMate grammar loading and token production | `workbench/services/textMate` adapter over Alpha analysis providers | 部分具备; bundled language grammars, file associations, language configuration, snippets, static discovery, and serializable scope-theme rules are wired; theme activation and full embedded-language/bracket-result projection remain open |
 
-The current `textfile` contract was extracted only after Alpha, Gamma, and
+The current `textfile` contract was extracted only after Alpha, Gama, and
 Explorer established a real shared loading boundary. It now
 owns transport-only resolve/save operations; Alpha's baseline, dirty state and
 transaction semantics remain editor-owned. `fs/changed` invalidation is

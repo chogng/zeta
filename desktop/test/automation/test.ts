@@ -43,6 +43,7 @@ export const test = base.extend<PlaywrightFixtures>({
     const userDataDirectory = await mkdtemp(join(tmpdir(), "zeta-playwright-"));
     const { application, driver } = await launchElectron({
       appServerMode: target.appServerMode,
+      product: target.product,
       userDataDirectory,
       workspaceDirectory: testWorkspace.directory,
     });

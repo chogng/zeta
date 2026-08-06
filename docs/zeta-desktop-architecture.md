@@ -463,15 +463,16 @@ base 能力不引用 Part、ViewContainer 或其他 Workbench domain。
 
 `workbench/services/layout/browser/layoutService.ts` 拥有面向 contribution 的窗口级布局
 契约、Part identity 和 service identifier。`workbench/browser/layout.ts` 是具体实现，
-拥有合法的 Workbench 拓扑和初始化策略；默认 Sidebar、Auxiliary Bar、Panel 尺寸分别由
-该实现内的静态常量控制，其中 Auxiliary Bar 默认宽度为 260px。窗口变化由高优先级
-Editor 区域吸收，Part 即使隐藏也保持挂载，尺寸查询返回其可恢复尺寸。
+拥有合法的 Workbench 拓扑和初始化策略；产品入口通过
+`workbench/browser/workbenchSession.ts` 提供初始 Sidebar、Auxiliary Bar、Agent Sidebar 和
+Panel profile，Workbench 不反向导入产品 contribution。窗口变化由高优先级 Editor 区域吸收，
+Part 即使隐藏也保持挂载，尺寸查询返回其可恢复尺寸。
 
 当前可变尺寸和显隐快照是具体 `WorkbenchLayout` 的私有实现关注点，不是 Layout Service
 契约，也不存在独立的 `layoutState` service。状态流为：
 
 ```text
-Layout static defaults
+Product session profile defaults
   → initialization state
   → Profile/Workspace scoped stored values
   → SerializableGrid runtime

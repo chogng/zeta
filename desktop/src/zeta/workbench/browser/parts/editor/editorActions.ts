@@ -56,3 +56,30 @@ registerAction2(class NewUntitledTextEditorAction extends Action2 {
     }).then(() => undefined);
   }
 });
+
+/** Saves the active pane through the Workbench-owned editor lifecycle. */
+export const SaveActiveEditorCommandId =
+  "workbench.action.files.save";
+
+registerAction2(class SaveActiveEditorAction extends Action2 {
+  constructor() {
+    super({
+      id: SaveActiveEditorCommandId,
+      title: "Save",
+      tooltip: "Save",
+      f1: true,
+      menu: {
+        id: MenuId.MenubarFileMenu,
+        group: "1_file",
+        order: 1,
+      },
+      keybinding: {
+        primary: Keybinding.single(logicalKey("s", { primaryKey: true })),
+      },
+    });
+  }
+
+  override run(accessor: ServicesAccessor): Promise<void> {
+    return accessor.get(IEditorPart).saveActiveEditor();
+  }
+});

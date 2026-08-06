@@ -179,6 +179,28 @@ test("Textarea routes navigation, typing, history, deletion, and Tab", () => {
   dom.window.close();
 });
 
+test("Textarea keyboard fallback routes undo and redo without browser history input events", () => {
+  const dom = new JSDOM("<!doctype html><body><main></main></body>");
+  const container = dom.window.document.querySelector("main");
+  assert.ok(container);
+  using model = new TextModel("value");
+  using selections = new EditorSelectionController(model, TextSelectionSet.single(caret(0, 5)));
+  using viewport = new AlphaEditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
+  using input = new AlphaTextInputController(viewport, selections);
+
+  input.element.dispatchEvent(beforeInput(dom.window, "insertText", "!"));
+  const undo = keyboardEvent(dom.window, "z", { ctrlKey: true });
+  input.element.dispatchEvent(undo);
+  assert.equal(undo.defaultPrevented, true);
+  assert.equal(model.getText(), "value");
+
+  const redo = keyboardEvent(dom.window, "z", { ctrlKey: true, shiftKey: true });
+  input.element.dispatchEvent(redo);
+  assert.equal(redo.defaultPrevented, true);
+  assert.equal(model.getText(), "value!");
+  dom.window.close();
+});
+
 test("Textarea routes browser soft-line deletion through Alpha commands", () => {
   const dom = new JSDOM("<!doctype html><body><main></main></body>");
   const container = dom.window.document.querySelector("main");
@@ -588,11 +610,13 @@ function beforeInput(
 function keyboardEvent(
   targetWindow: typeof browserEnvironment.window,
   key: string,
+  options: KeyboardEventInit = {},
 ): KeyboardEvent {
   return new targetWindow.KeyboardEvent("keydown", {
     bubbles: true,
     cancelable: true,
     key,
+    ...options,
   }) as unknown as KeyboardEvent;
 }
 

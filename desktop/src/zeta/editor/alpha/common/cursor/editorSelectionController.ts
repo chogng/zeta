@@ -303,6 +303,8 @@ export class EditorSelectionController extends DisposableOwner {
       this.invalidateActiveComposition();
       this.refreshTrackedSelections(
         EditorSelectionChangeReason.ModelChange,
+        true,
+        true,
       );
       return change;
     }
@@ -358,7 +360,13 @@ export class EditorSelectionController extends DisposableOwner {
   }
 
   private acceptModelChange(change: TextModelChange): void {
-    if (this.executingCommand) return;
+    if (this.executingCommand) {
+      this.refreshTrackedSelections(
+        EditorSelectionChangeReason.ModelChange,
+        false,
+      );
+      return;
+    }
     this.breakHistoryGroup();
     this.cursorHistory.length = 0;
     this.invalidateActiveComposition();
@@ -426,6 +434,8 @@ export class EditorSelectionController extends DisposableOwner {
 
   private refreshTrackedSelections(
     reason: EditorSelectionChangeReason,
+    notify = true,
+    forceNotify = false,
   ): void {
     const selections = TextSelectionSet.withPrimary(
       this.trackedSelections.map(tracked => {
@@ -438,7 +448,7 @@ export class EditorSelectionController extends DisposableOwner {
     );
     const previous = this.currentSelections;
     this.currentSelections = selections;
-    if (!selectionSetsEqual(previous, selections)) {
+    if (notify && (forceNotify || !selectionSetsEqual(previous, selections))) {
       this.changeEmitter.fire(Object.freeze({
         selections,
         reason,

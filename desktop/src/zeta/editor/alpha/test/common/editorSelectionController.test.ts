@@ -149,6 +149,35 @@ test("EditorSelectionController maps external model edits", () => {
   });
 });
 
+test("EditorSelectionController projects tracked selections before downstream command listeners", () => {
+  using model = new TextModel("const value = 1;\n");
+  using controller = new EditorSelectionController(
+    model,
+    TextSelectionSet.single(TextSelection.from(
+      TextPosition.at(0, 0),
+      model.positionAt(model.length),
+    )),
+  );
+  const observed: TextSelection[] = [];
+  using listener = model.onDidChange(() => {
+    const selection = controller.selections.primary;
+    assert.doesNotThrow(() => {
+      model.offsetAt(selection.anchor);
+      model.offsetAt(selection.active);
+    });
+    observed.push(selection);
+  });
+
+  controller.execute({
+    edits: [{ range: TextRange.from(TextPosition.at(0, 0), model.positionAt(model.length)), text: "x" }],
+    selectionsAfter: [{ anchorOffset: 1, activeOffset: 1 }],
+    primarySelectionIndex: 0,
+  });
+
+  assert.deepEqual(observed, [TextSelection.from(TextPosition.at(0, 0), TextPosition.at(0, 1))]);
+  assert.deepEqual(controller.selections, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 1))));
+});
+
 test("EditorSelectionController releases tracked ranges without taking their model ownership", () => {
   const tracker = new DisposableTracker();
   {

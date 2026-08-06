@@ -315,15 +315,11 @@ export class AlphaTextInputController extends DisposableOwner {
         break;
       case "historyUndo":
         stopEvent(event);
-        this.resetInput();
-        this.selectionController.undo();
-        this.revealPrimary();
+        this.undo();
         return;
       case "historyRedo":
         stopEvent(event);
-        this.resetInput();
-        this.selectionController.redo();
-        this.revealPrimary();
+        this.redo();
         return;
       default:
         return;
@@ -342,6 +338,18 @@ export class AlphaTextInputController extends DisposableOwner {
   }
 
   private handleKeydown(event: KeyboardEvent): void {
+    if (!event.defaultPrevented && !event.isComposing && !event.getModifierState("AltGraph")) {
+      if (isUndoKeybinding(event)) {
+        stopEvent(event);
+        this.undo();
+        return;
+      }
+      if (isRedoKeybinding(event)) {
+        stopEvent(event);
+        this.redo();
+        return;
+      }
+    }
     if (!event.defaultPrevented && !event.isComposing && event.key === "Insert" && !event.shiftKey && !event.ctrlKey && !event.altKey && !event.metaKey) {
       stopEvent(event);
       this.toggleOvertype();
@@ -426,6 +434,18 @@ export class AlphaTextInputController extends DisposableOwner {
     const change = this.selectionController.execute(command);
     this.revealPrimary();
     return change;
+  }
+
+  private undo(): void {
+    this.resetInput();
+    this.selectionController.undo();
+    this.revealPrimary();
+  }
+
+  private redo(): void {
+    this.resetInput();
+    this.selectionController.redo();
+    this.revealPrimary();
   }
 
   private revealPrimary(): void {
@@ -605,4 +625,18 @@ export class AlphaTextInputController extends DisposableOwner {
       console.error("Alpha completion request and error handler both failed", new AggregateError([error, reportingError]));
     }
   }
+}
+
+function isUndoKeybinding(event: Pick<KeyboardEvent, "key" | "ctrlKey" | "shiftKey" | "altKey" | "metaKey">): boolean {
+  return hasPrimaryModifier(event) && !event.shiftKey && event.key.toLowerCase() === "z";
+}
+
+function isRedoKeybinding(event: Pick<KeyboardEvent, "key" | "ctrlKey" | "shiftKey" | "altKey" | "metaKey">): boolean {
+  if (!hasPrimaryModifier(event)) return false;
+  const key = event.key.toLowerCase();
+  return (key === "z" && event.shiftKey) || (key === "y" && !event.shiftKey);
+}
+
+function hasPrimaryModifier(event: Pick<KeyboardEvent, "ctrlKey" | "altKey" | "metaKey">): boolean {
+  return !event.altKey && event.ctrlKey !== event.metaKey;
 }

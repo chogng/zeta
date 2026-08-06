@@ -15,7 +15,7 @@ import { WorkbenchPart } from "../../part.js";
 import { EditorGroup, type EditorGroupOptions, type IEditorGroup } from "./editorGroup.js";
 import { EditorTabDragAndDropController, type EditorTabDropEvent } from "./editorTabDragAndDrop.js";
 import type { EditorInput, EditorOpenOptions } from "./editorInput.js";
-import type { TextResourceLanguageResolver } from "../../../../editor/common/textResourceLanguage.js";
+import type { TextResourceLanguageResolver } from "../../../../platform/language/common/textResourceLanguage.js";
 import type { IWorkingCopyService } from "../../../services/workingCopy/common/workingCopyService.js";
 import type { IEditorPane } from "./editorPane.js";
 import { EditorPaneRegistry, EditorPanes } from "./editorRegistry.js";
@@ -36,6 +36,7 @@ export interface IEditorPart {
   ): Promise<IEditorPane>;
   activateEditor(input: EditorInput): IEditorPane;
   closeEditor(input: EditorInput): void;
+  saveActiveEditor(): Promise<void>;
   setContent(content: Element): void;
   splitActiveGroupHorizontal(): Promise<void>;
   layout(dimension: IDimension): void;
@@ -156,6 +157,10 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 
   closeEditor(input: EditorInput): void {
     this._activeGroup.closeEditor(input);
+  }
+
+  async saveActiveEditor(): Promise<void> {
+    await this.activePane?.save?.();
   }
 
   setContent(content: Element): void {

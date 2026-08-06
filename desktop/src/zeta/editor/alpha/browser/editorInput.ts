@@ -1,7 +1,7 @@
 import { ACADEMIC_DOCUMENT_CONTENT_TYPE } from "../../../product/common/documentTypes.js";
 import { type EditorInput } from "../../../workbench/browser/parts/editor/editorInput.js";
 import { EditorPaneMatch } from "../../../workbench/browser/parts/editor/editorPane.js";
-import { isTextResourceLanguageInput, resolveTextResourceLanguageId, type TextResourceLanguageResolver } from "../../common/textResourceLanguage.js";
+import { isTextResourceLanguageInput, resolveTextResourceLanguageId, type TextResourceLanguageResolver } from "../../../platform/language/common/textResourceLanguage.js";
 import { isAlphaDiffEditorInput } from "./diffEditorInput.js";
 
 export const ALPHA_EDITOR_ID = "zeta.editor.alpha";

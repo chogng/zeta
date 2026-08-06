@@ -40,6 +40,8 @@ export interface IEditorPane extends IDisposable {
   layout(dimension: IDimension): void;
   setVisible(visibility: EditorPaneVisibility): void;
   focus(): void;
+  /** Persists the active editor's current resource when that editor is writable. */
+  save?(): Promise<void>;
   /** Serializes and persists the active document to a new resource when supported. */
   saveAs?(resource: URI): Promise<void>;
 }

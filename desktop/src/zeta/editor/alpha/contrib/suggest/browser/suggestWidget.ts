@@ -14,7 +14,7 @@ export class AlphaCompletionWidget extends DisposableOwner {
   private readonly widgetId: string;
   private readonly previousAriaAutocomplete: string | null;
   private readonly previousAriaControls: string | null;
-  private readonly previousAriaExpanded: string | null;
+  private readonly previousAriaHasPopup: string | null;
   private readonly previousAriaActiveDescendant: string | null;
 
   constructor(
@@ -38,7 +38,7 @@ export class AlphaCompletionWidget extends DisposableOwner {
     this.widgetId = `zeta-alpha-completion-${nextCompletionWidgetId++}`;
     this.previousAriaAutocomplete = inputElement.getAttribute("aria-autocomplete");
     this.previousAriaControls = inputElement.getAttribute("aria-controls");
-    this.previousAriaExpanded = inputElement.getAttribute("aria-expanded");
+    this.previousAriaHasPopup = inputElement.getAttribute("aria-haspopup");
     this.previousAriaActiveDescendant = inputElement.getAttribute("aria-activedescendant");
     const ownerDocument = viewport.element.ownerDocument;
     this.element = ownerDocument.createElement("div");
@@ -46,15 +46,15 @@ export class AlphaCompletionWidget extends DisposableOwner {
     this.element.className = "zeta-alpha-editor-completion";
     this.element.setAttribute("role", "listbox");
     this.element.hidden = true;
-    inputElement.setAttribute("aria-autocomplete", "list");
+    inputElement.setAttribute("aria-autocomplete", "none");
     inputElement.setAttribute("aria-controls", this.widgetId);
-    inputElement.setAttribute("aria-expanded", "false");
+    inputElement.setAttribute("aria-haspopup", "listbox");
     viewport.element.append(this.element);
     this.defer(() => {
       this.element.remove();
       restoreAttribute(inputElement, "aria-autocomplete", this.previousAriaAutocomplete);
       restoreAttribute(inputElement, "aria-controls", this.previousAriaControls);
-      restoreAttribute(inputElement, "aria-expanded", this.previousAriaExpanded);
+      restoreAttribute(inputElement, "aria-haspopup", this.previousAriaHasPopup);
       restoreAttribute(inputElement, "aria-activedescendant", this.previousAriaActiveDescendant);
     });
     this.own(session.onDidChange(() => this.render()));
@@ -125,7 +125,7 @@ export class AlphaCompletionWidget extends DisposableOwner {
       reset(this.element);
       this.element.classList.remove("visible");
       this.element.hidden = true;
-      this.inputElement.setAttribute("aria-expanded", "false");
+      this.inputElement.setAttribute("aria-autocomplete", "none");
       this.inputElement.removeAttribute("aria-activedescendant");
       return;
     }
@@ -166,7 +166,7 @@ export class AlphaCompletionWidget extends DisposableOwner {
     reset(this.element, fragment);
     this.element.hidden = false;
     this.element.classList.add("visible");
-    this.inputElement.setAttribute("aria-expanded", "true");
+    this.inputElement.setAttribute("aria-autocomplete", "list");
     this.inputElement.setAttribute("aria-activedescendant", `${this.widgetId}-option-${state.selectedIndex}`);
     this.position(state);
   }

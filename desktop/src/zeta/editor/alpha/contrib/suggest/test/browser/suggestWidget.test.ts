@@ -61,7 +61,7 @@ test("Completion widget projects named options, focus, ARIA, and content coordin
   assert.equal(widget.element.style.left, "68px");
   assert.equal(widget.element.style.top, "20px");
   assert.equal(input.element.getAttribute("aria-autocomplete"), "list");
-  assert.equal(input.element.getAttribute("aria-expanded"), "true");
+  assert.equal(input.element.getAttribute("aria-haspopup"), "listbox");
   assert.equal(input.element.getAttribute("aria-controls"), widget.element.id);
   assert.equal(input.element.getAttribute("aria-activedescendant"), options[1]!.id);
   assert.deepEqual(options.map(option => ({
@@ -98,7 +98,7 @@ test("Completion keyboard navigation accepts one item before ordinary input rout
   assert.equal(fixture.model.getText(), "console");
   assert.equal(fixture.selections.selections.primary.active.compareTo(TextPosition.at(0, 7)), 0);
   assert.equal(fixture.input.completionWidget!.visible, false);
-  assert.equal(fixture.input.element.getAttribute("aria-expanded"), "false");
+  assert.equal(fixture.input.element.getAttribute("aria-autocomplete"), "none");
   assert.equal(fixture.dom.window.document.activeElement, fixture.input.element);
 
   fixture.selections.undo();
@@ -235,7 +235,7 @@ test("Completion widget validates ownership and restores input ARIA on disposal"
   const input = new AlphaTextInputController(viewport, selections, {
     completion: { session },
   });
-  assert.equal(input.element.getAttribute("aria-autocomplete"), "list");
+  assert.equal(input.element.getAttribute("aria-autocomplete"), "none");
   input.dispose();
   assert.equal(input.element.getAttribute("aria-autocomplete"), null);
   assert.equal(input.element.getAttribute("aria-controls"), null);
@@ -258,7 +258,7 @@ test("Disposing the common session immediately hides a surviving widget", () => 
   fixture.session.dispose();
 
   assert.equal(fixture.input.completionWidget!.visible, false);
-  assert.equal(fixture.input.element.getAttribute("aria-expanded"), "false");
+  assert.equal(fixture.input.element.getAttribute("aria-autocomplete"), "none");
   const down = keyboardEvent(fixture.dom.window, "ArrowDown");
   fixture.input.element.dispatchEvent(down);
   assert.equal(down.defaultPrevented, false);

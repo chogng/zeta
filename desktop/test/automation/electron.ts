@@ -1,5 +1,5 @@
 import { resolve } from "node:path";
-import type { AppServerTestMode } from "./testTarget.js";
+import type { AppServerTestMode, DesktopProduct } from "./testTarget.js";
 
 const desktopDirectory = resolve(import.meta.dirname, "../..");
 
@@ -7,7 +7,7 @@ export interface ElectronLaunchOptions {
   readonly appServerMode: AppServerTestMode;
   readonly userDataDirectory: string;
   readonly workspaceDirectory?: string;
-  readonly product?: "academic" | "code" | "complete";
+  readonly product?: DesktopProduct;
 }
 
 export interface ElectronConfiguration {

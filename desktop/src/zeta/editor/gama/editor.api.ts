@@ -1,0 +1,23 @@
+/** Stable DOM-free Gama API for programmatic structured-document consumers. */
+export { DocumentModel } from "./common/model/documentModel.js";
+export type { DocumentChange } from "./common/model/documentModel.js";
+export type { DocumentModelOptions } from "./common/model/documentModel.js";
+export { createDocumentNode } from "./common/model/document.js";
+export { createDocumentRoot } from "./common/model/document.js";
+export { createTextNode } from "./common/model/document.js";
+export type { DocumentAttributes } from "./common/model/document.js";
+export type { DocumentMark } from "./common/model/document.js";
+export type { DocumentNode } from "./common/model/document.js";
+export type { DocumentNodeId } from "./common/model/document.js";
+export { createDefaultDocumentSchema } from "./common/model/documentSchema.js";
+export { DocumentSchema } from "./common/model/documentSchema.js";
+export type { DocumentSchemaOptions } from "./common/model/documentSchema.js";
+export { DocumentTransaction } from "./common/model/documentTransaction.js";
+export type { DocumentStep } from "./common/model/documentTransaction.js";
+export { DocumentSerializationError } from "./common/model/documentSerialization.js";
+export { deserializeDocument } from "./common/model/documentSerialization.js";
+export { serializeDocument } from "./common/model/documentSerialization.js";
+export { allSelection } from "./common/core/documentSelection.js";
+export { nodeSelection } from "./common/core/documentSelection.js";
+export { textSelection } from "./common/core/documentSelection.js";
+export type { DocumentSelection } from "./common/core/documentSelection.js";

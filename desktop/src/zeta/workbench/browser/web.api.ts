@@ -3,6 +3,7 @@ import type { IRendererHost } from "../../platform/renderer/common/rendererHost.
 import type {
   IAnyWorkspaceIdentifier,
 } from "../../platform/workspace/common/workspace.js";
+import type { WorkbenchSession } from "./workbenchSession.js";
 
 /**
  * Capabilities and identity supplied by an embedding Web application.
@@ -19,6 +20,7 @@ export interface IWebWorkbenchHost {
 /** Inputs used to create one browser-hosted Workbench instance. */
 export interface IWebWorkbenchConstructionOptions {
   readonly api: IRendererHost;
+  readonly session: WorkbenchSession;
   readonly workspace?: IAnyWorkspaceIdentifier;
   readonly container: HTMLElement | null;
 }

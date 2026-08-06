@@ -5,7 +5,8 @@ import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repositoryRoot = resolve(import.meta.dirname, "..", "..");
-const rustWorkspace = join(repositoryRoot, "zeta-rs");
+const cargoWorkspace = repositoryRoot;
+const sharedRustSource = join(repositoryRoot, "zeta-rs");
 const outputDirectory = join(repositoryRoot, "desktop", ".tmp", "zeta-package");
 const ripgrepLockPath = join(repositoryRoot, "third_party", "ripgrep", "runtime-lock.json");
 const ripgrepCacheRoot = join(repositoryRoot, "third_party", ".cache", "ripgrep");
@@ -162,7 +163,7 @@ function cargoBuild(target, packageName, binaryArgs, environment = process.env) 
   run("cargo", [
     "build",
     "--manifest-path",
-    join(rustWorkspace, "Cargo.toml"),
+    join(cargoWorkspace, "Cargo.toml"),
     "--package",
     packageName,
     ...binaryArgs,
@@ -171,13 +172,13 @@ function cargoBuild(target, packageName, binaryArgs, environment = process.env) 
     "--target",
     target,
     "--target-dir",
-    join(rustWorkspace, "target"),
+    join(cargoWorkspace, "target"),
   ], { env: environment });
 }
 
 async function buildFirstPartyExecutables(target, platform) {
   cargoBuild(target, "zeta-cli", ["--bin", "zeta"]);
-  const debugDirectory = join(rustWorkspace, "target", target, "debug");
+  const debugDirectory = join(cargoWorkspace, "target", target, "debug");
   const executables = {
     zeta: join(debugDirectory, platform === "win32" ? "zeta.exe" : "zeta"),
   };
@@ -298,7 +299,7 @@ async function copyRegularTree(source, destination, kind) {
 }
 
 async function copyBuiltinSkills(destination) {
-  const source = join(rustWorkspace, "skills", "assets");
+  const source = join(sharedRustSource, "skills", "assets");
   const entries = (await readdir(source, { withFileTypes: true })).filter((entry) => entry.name !== "BUILD.bazel");
   if (entries.length === 0) {
     throw new Error("Built-in Skill source is empty");

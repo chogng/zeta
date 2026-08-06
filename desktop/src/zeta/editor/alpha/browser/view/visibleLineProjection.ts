@@ -47,7 +47,7 @@ export class AlphaVisibleLineProjection extends DisposableOwner {
   }
 
   private createProjection(): EditorVisualLineProjection {
-    const source = this.source.projection;
+    const source = this.source.ensureCurrent();
     const visibleLogicalLines = this.visibleLogicalLines(source.logicalLineCount);
     const lines = source.lines.filter(line => visibleLogicalLines[line.logicalLineIndex]);
     const anchors = createVisualLineAnchors(source, visibleLogicalLines, lines);

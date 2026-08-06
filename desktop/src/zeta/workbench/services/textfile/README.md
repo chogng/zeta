@@ -12,8 +12,8 @@ canonical in [`docs/editor-architecture.md`](../../../../../../docs/editor-archi
 | Bootstrap-text versus file-system resolution | `ITextFileService.resolve` | ✅ |
 | Text save transport and cancellation | `ITextFileService.save` | ✅ |
 | URI-to-`TextModel` references | `ITextModelService` | ✅, editor-owned |
-| Editor model references | Alpha and Gamma model services | ✅, editor-domain-owned |
-| Format-specific dirty state, snapshot saves and explicit reverts | Alpha/Gamma model services | ✅, editor-domain-owned |
+| Editor model references | Alpha and Gama model services | ✅, editor-domain-owned |
+| Format-specific dirty state, snapshot saves and explicit reverts | Alpha/Gama model services | ✅, editor-domain-owned |
 | Shared working-copy lifecycle and resource indexing | `IWorkingCopyService` | ✅, Workbench-owned contract, editor-owned implementation |
 | CRLF/LF source-line-ending preservation | `ITextModelService` | ✅, editor-owned |
 | Workspace external-change invalidation, clean reload, and dirty-model conflict state | `IFileService` → `ITextFileService` → `ITextModelService` | ✅, transport notification plus editor-owned policy |
@@ -32,7 +32,7 @@ invalidations without introducing a live document cache. A concrete editor
 decides whether a clean model may reload or a dirty model must retain local
 text and report a conflict.
 
-This service deliberately does not cache live models. Alpha and Gamma have
+This service deliberately does not cache live models. Alpha and Gama have
 different transaction and undo semantics, so each editor domain owns its model
 identity and reference lifetime. `IWorkingCopyService` indexes the resulting
 format-specific working copies without owning their models. `ExplorerViewPane`
@@ -44,7 +44,7 @@ Workbench lifecycle.
 
 `Workbench` constructs `TextFileService` after `BrowserFileService`, registers
 it as `ITextFileService`, and injects it through `EditorPaneCreationOptions`.
-Alpha and Gamma contributions reject construction when that service is absent.
+Alpha and Gama contributions reject construction when that service is absent.
 
 Cancellation before resolution or save, or while awaiting the underlying I/O,
 rejects without publishing a result. File-service errors pass through
@@ -54,7 +54,7 @@ editor model.
 Adding model caches, backup recovery, or conflict policy directly to
 `ExplorerViewPane` would signal architectural drift. Dirty state and conflict
 policy remain in the editor-domain adapters (`BrowserTextModelService` for
-Alpha and `DocumentWorkingCopy` for Gamma); the shared working-copy contract
+Alpha and `DocumentWorkingCopy` for Gama); the shared working-copy contract
 exposes their common lifecycle without requiring a cross-editor document model.
 
 ## Tests and modification impact

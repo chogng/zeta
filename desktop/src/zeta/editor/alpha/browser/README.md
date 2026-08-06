@@ -38,8 +38,7 @@ Workbench parts may host the browser editor and own its external box, but must
 not reach through its component internals. Visual rules follow
 [`docs/ui-styling-ownership.md`](../../../../../../docs/ui-styling-ownership.md).
 
-Gamma is a sibling structured-editor domain. Alpha browser code must not import
-Gamma or expose its document types through the line-editor contracts.
+Gama is a sibling structured-editor domain. Alpha browser code must not import Gama or expose its document types through the line-editor contracts.
 
 ## Current implementation
 

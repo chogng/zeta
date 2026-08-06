@@ -77,20 +77,20 @@ test("editor registry resolves defaults and explicit Open With choices", () => {
     ".ts",
     () => new TestEditorPane("zeta.editor.alpha"),
   );
-  const documentEditor = descriptor(
-    "zeta.editor.document",
+  const textEditorWidget = descriptor(
+    "zeta.editor.textEditorWidget",
     ".md",
-    () => new TestEditorPane("zeta.editor.document"),
+    () => new TestEditorPane("zeta.editor.textEditorWidget"),
   );
   const alphaRegistration = registry.register(alpha);
-  const documentRegistration = registry.register(documentEditor);
+  const textEditorWidgetRegistration = registry.register(textEditorWidget);
 
   const typescript = input("C:\\project\\main.ts");
   const markdown = input("C:\\project\\paper.md");
   assert.equal(registry.resolve(typescript), alpha);
-  assert.equal(registry.resolve(markdown), documentEditor);
+  assert.equal(registry.resolve(markdown), textEditorWidget);
   assert.deepEqual(registry.getEditors(markdown), [
-    documentEditor,
+    textEditorWidget,
     alpha,
   ]);
   assert.equal(
@@ -110,7 +110,7 @@ test("editor registry resolves defaults and explicit Open With choices", () => {
     /already registered/,
   );
 
-  documentRegistration.dispose();
+  textEditorWidgetRegistration.dispose();
   assert.equal(registry.resolve(markdown), alpha);
   alphaRegistration.dispose();
   assert.throws(() => registry.resolve(markdown), /No editor can open/);
@@ -179,7 +179,7 @@ test("EditorPart shows command shortcuts until an editor opens", async () => {
 
   assert.match(
     editor.element.textContent ?? "",
-    /Open Editor.*Ctrl\+O/,
+    /Open Editor.*(?:Ctrl\+|⌘)O/,
   );
   await editor.openEditor(input("C:\\project\\main.ts"));
   assert.equal(
@@ -195,6 +195,25 @@ test("EditorPart shows command shortcuts until an editor opens", async () => {
   dom.window.close();
 });
 
+test("EditorPart saves the active pane through the editor contract", async () => {
+  const dom = new JSDOM("<!doctype html><body></body>");
+  const registry = new EditorPaneRegistry();
+  const pane = new TestEditorPane("zeta.editor.save-test");
+  registry.register(descriptor(
+    "zeta.editor.save-test",
+    ".save",
+    () => pane,
+  ));
+  const editor = new EditorPart(dom.window.document, { registry });
+
+  await editor.openEditor(input("C:\\project\\document.save"));
+  await editor.saveActiveEditor();
+
+  assert.equal(pane.saveCount, 1);
+  editor.dispose();
+  dom.window.close();
+});
+
 test("EditorPart retains tabs and switches loaded panes", async () => {
   const dom = new JSDOM("<!doctype html><body></body>");
   const registry = new EditorPaneRegistry();
@@ -205,9 +224,9 @@ test("EditorPart retains tabs and switches loaded panes", async () => {
     () => trackPane(panes, "zeta.editor.alpha"),
   ));
   registry.register(descriptor(
-    "zeta.editor.document",
+    "zeta.editor.textEditorWidget",
     ".md",
-    () => trackPane(panes, "zeta.editor.document"),
+    () => trackPane(panes, "zeta.editor.textEditorWidget"),
   ));
   const editor = new EditorPart(dom.window.document, { registry });
   dom.window.document.body.append(editor.element);
@@ -267,15 +286,15 @@ test("EditorPart retains tabs and switches loaded panes", async () => {
   assert.equal(panes[0]?.focusCount, 1);
 
   const markdown = input("C:\\project\\paper.md");
-  const documentPane = await editor.openEditor(markdown);
-  assert.equal(editor.activePane, documentPane);
+  const textEditorWidgetPane = await editor.openEditor(markdown);
+  assert.equal(editor.activePane, textEditorWidgetPane);
   assert.equal(editor.activeInput, markdown);
   assert.deepEqual(editor.activeGroup.inputs, [typescript, markdown]);
   assert.equal(
     editor.element.querySelector(
       ".zeta-editor-pane-host:not([hidden])",
     )?.textContent,
-    "zeta.editor.document",
+    "zeta.editor.textEditorWidget",
   );
   assert.equal(panes[0]?.disposed, false);
   assert.deepEqual(panes[0]?.visibilities.slice(-1), [
@@ -303,7 +322,7 @@ test("EditorPart retains tabs and switches loaded panes", async () => {
   )?.click();
   assert.equal(panes[0]?.disposed, true);
   assert.equal(editor.activeInput, markdown);
-  assert.equal(editor.activePane, documentPane);
+  assert.equal(editor.activePane, textEditorWidgetPane);
   assert.deepEqual(editor.activeGroup.inputs, [markdown]);
   assert.equal(
     editor.element.querySelectorAll("[role='tab']").length,
@@ -490,6 +509,7 @@ class TestEditorPane extends DisposableOwner implements IEditorPane {
   inputSignal: AbortSignal | undefined;
   dimension: IDimension | undefined;
   focusCount = 0;
+  saveCount = 0;
   disposed = false;
 
   constructor(readonly id: string) {
@@ -529,6 +549,10 @@ class TestEditorPane extends DisposableOwner implements IEditorPane {
 
   focus(): void {
     this.focusCount += 1;
+  }
+
+  async save(): Promise<void> {
+    this.saveCount += 1;
   }
 }
 

@@ -4,9 +4,9 @@ import { JSDOM } from "jsdom";
 import { AlphaDecorationPresentation, createAlphaDecorationSource } from "../../../../browser/view/decorationPresentation.js";
 import { type AlphaTextMeasurer } from "../../../../browser/view/fontMetrics.js";
 import { TextDecorationCollection } from "../../../../common/model/decorationCollection.js";
-import { EditorSelectionController } from "../../../../common/cursor/editorSelectionController.js";
+import { EditorCommandHistoryMode, EditorSelectionController } from "../../../../common/cursor/editorSelectionController.js";
 import { TextSelection, TextSelectionSet } from "../../../../common/core/selection.js";
-import { TextPosition } from "../../../../common/core/text.js";
+import { TextPosition, TextRange } from "../../../../common/core/text.js";
 import { TextModel } from "../../../../common/model/textModel.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
@@ -49,6 +49,25 @@ test("Occurrence highlight controller projects and clears current-word decoratio
   assert.equal(decorations.size, 0);
   assert.equal(viewport.element.querySelectorAll(".occurrence-highlight").length, 0);
   dom.window.close();
+});
+
+test("Occurrence highlight controller ignores the transient pre-command selection during replacement", () => {
+  using model = new TextModel("const paper = 1;");
+  using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.from(
+    TextPosition.at(0, 0),
+    TextPosition.at(0, model.getLineLength(0)),
+  )));
+  using decorations = new TextDecorationCollection<void>(model);
+  using controller = new AlphaOccurrenceHighlightController(selections, decorations);
+
+  assert.doesNotThrow(() => selections.execute({
+    edits: [{ range: TextRange.from(TextPosition.at(0, 0), TextPosition.at(0, model.getLineLength(0))), text: "x" }],
+    selectionsAfter: [{ anchorOffset: 1, activeOffset: 1 }],
+    primarySelectionIndex: 0,
+    historyMode: EditorCommandHistoryMode.Isolated,
+  }));
+  assert.equal(model.getText(), "x");
+  assert.deepEqual(selections.selections.primary, TextSelection.collapsedAt(TextPosition.at(0, 1)));
 });
 
 class FixedTextMeasurer implements AlphaTextMeasurer {

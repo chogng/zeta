@@ -5,11 +5,12 @@ import type {
 import { WorkbenchPart } from "../../../workbench/browser/part.js";
 
 /**
- * Prototype surface for the Sessions-specific workbench.
+ * Optional runtime status surface for the Sessions product layer.
  *
- * The regular Workbench does not mount this Part. The Sessions product layer
- * owns its future layout and can evolve this placeholder into the full
- * multi-session interface without adding a Session leaf beside EditorPart.
+ * The regular Workbench does not mount this Part. Product-specific initial
+ * Workbench composition is declared by the WorkbenchSession profiles; this
+ * Part remains an optional session/thread status projection rather than a
+ * second layout owner.
  */
 export class SessionsPart extends WorkbenchPart {
   private readonly label: HTMLSpanElement;

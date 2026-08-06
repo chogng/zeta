@@ -8,7 +8,7 @@ import { LanguageCompletionService, type LanguageCompletionWorkerFactory } from 
 import { LanguageConfigurationRegistry, type LanguageConfiguration, type LanguageConfigurationRegistrationOptions, type LanguageConfigurationSource } from "../languages/languageConfiguration.js";
 import { registerBuiltinLanguageDescriptions } from "../languages/languageBuiltinDescriptions.js";
 import { LanguageRegistry, type LanguageDescription, type LanguageRegistrationOptions } from "../languages/languageRegistry.js";
-import type { TextResourceLanguageInput } from "../../../common/textResourceLanguage.js";
+import type { TextResourceLanguageInput } from "../../../../platform/language/common/textResourceLanguage.js";
 import { createLanguageLexicalAnalysisProvider } from "../languages/languageLexicalAnalysisProvider.js";
 import { createLanguageWordCompletionProvider } from "../languages/completion/languageWordCompletionProvider.js";
 import { CodeActionService, type LanguageCodeActionProvider } from "../../contrib/codeAction/common/codeAction.js";

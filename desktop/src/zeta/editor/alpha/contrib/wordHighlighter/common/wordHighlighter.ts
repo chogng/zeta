@@ -27,6 +27,7 @@ export function getOccurrenceHighlightRanges(model: TextModel, selections: TextS
 
 function readOccurrenceSource(model: TextModel, selections: TextSelectionSet, wordPattern: RegExp | undefined): { readonly text: string; readonly wholeWord: boolean } | undefined {
   const selection = selections.primary;
+  if (!selectionFitsModel(model, selection.range)) return undefined;
   if (!selection.collapsed) {
     if (selection.range.start.lineIndex !== selection.range.end.lineIndex) return undefined;
     const text = model.getTextInRange(selection.range);
@@ -39,6 +40,25 @@ function readOccurrenceSource(model: TextModel, selections: TextSelectionSet, wo
   );
   if (!segment?.wordLike) return undefined;
   return Object.freeze({ text: model.getTextInRange(range), wholeWord: true });
+}
+
+/**
+ * A model event can reach a presentation listener before its selection owner
+ * installs the command's post-edit selection. Treat that transient snapshot as
+ * having no occurrence source; the following selection event recomputes it.
+ */
+function selectionFitsModel(model: TextModel, range: TextRange): boolean {
+  return positionFitsModel(model, range.start.lineIndex, range.start.columnIndex) &&
+    positionFitsModel(model, range.end.lineIndex, range.end.columnIndex);
+}
+
+function positionFitsModel(model: TextModel, lineIndex: number, columnIndex: number): boolean {
+  return Number.isSafeInteger(lineIndex) &&
+    Number.isSafeInteger(columnIndex) &&
+    lineIndex >= 0 &&
+    columnIndex >= 0 &&
+    lineIndex < model.lineCount &&
+    columnIndex <= model.getLineLength(lineIndex);
 }
 
 function isPatternWord(model: TextModel, range: TextRange, wordPattern: RegExp): boolean {
