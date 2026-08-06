@@ -5,17 +5,16 @@
 > 按 feature 逐文件阅读当前实现见 [`alpha-implementation-ledger.md`](./alpha-implementation-ledger.md)。
 
 > 本文拥有文本内核的实现和修改契约。跨 editor、document、language、
-> browser view、Workbench 与退场中的 Monaco adapter 边界见
+> browser view、Workbench 与编辑器边界见
 > [`docs/editor-architecture.md`](../../../../../docs/editor-architecture.md)。
 > Rust document-core 的跨运行时分层与迁移阶段见
 > [`docs/editor-core.md`](../../../../../docs/editor-core.md)。
 
 Alpha owns the editor-domain primitives and is the product's default plain-text
-editor. Its common text model remains independent of Monaco, ProseMirror, the DOM,
+editor. Its common text model remains independent of external editor runtimes, the DOM,
 workbench tabs, files, persistence, and external language runtimes; browser composition
-consumes platform capabilities only through named service contracts. Monaco is being
-retired, receives no new product capability, and must not define the canonical Zeta
-text-model contract.
+consumes platform capabilities only through named service contracts. Alpha defines the
+canonical Zeta line-oriented text-model contract.
 
 ## Runtime layering and base dependencies
 
@@ -25,7 +24,7 @@ text-model contract.
 | `browser/` | `base/common`, `base/browser`, `alpha/common`, `alpha/contrib` | DOM projection, textarea/input events, viewport observation, font measurement, accessibility, and browser adapters |
 | `contrib/folding/browser/` | `base/common`, `base/browser`, `alpha/common`, `alpha/browser/view` | Code-folding range providers, tracked fold state, fold commands, gutter presentation, and folded visual-row projection |
 | `common/languages` + `common/tokens` | `base/common`, `alpha/common/core`, `alpha/common/model` | Alpha language configuration, provider contracts, analysis/completion wire, versioned results, token index and lexical editing; no DOM or Workbench |
-| `../monaco/`, `../prosemirror/` | their adapter dependencies plus stable Alpha contracts | Retirement/migration integration only; no new product ownership |
+| `../gamma/` | Gamma's structured-document contracts and browser host | Structured-editor integration only; Gamma does not depend on Alpha's text model |
 | Workbench contributions | editor public contracts and platform services | Pane registration, product composition, and document/workspace wiring |
 
 The dependency direction is intentionally one-way: editor layers should reuse
@@ -60,13 +59,14 @@ class:
 | Text resource loading and save transport | `workbench/services/textfile/common` | ✅ `ITextFileService.resolve/save`; it deliberately does not own a live editor model |
 | Syntax token production | `workbench/services/textMate` and Alpha analysis providers | ✅ Bundled language packages are declarative resources loaded through the Workbench TextMate service; Rust owns discovery/resource transport and Alpha owns tokenization |
 | Shared URI-to-Alpha-model references, saved baseline and dirty state | `ITextModelService` | ✅ editor-owned; Alpha owns LF-normalized baseline comparison, serialized snapshot saves and explicit reverts |
+| Shared Workbench persistence lifecycle | `IWorkingCopyService` + `AlphaEditorWorkingCopy` | ✅ Workbench indexes the copy; Alpha retains model, line-ending, and conflict semantics |
 | Text transactions, history, selections, decorations and versioned language results | `editor/alpha/common` | ✅ Alpha's synchronous TypeScript authority; no Rust/WASM shadow document |
 | Rust file/language/workspace capability | frontend domain services over App Server | Asynchronous, revision-bound results only; never the keystroke hot path |
 | Language identities and composable editing rules | `editor/alpha/common` | `LanguageConfigurationRegistry`; comments/brackets/pairs are editor-domain contracts, not generic base primitives |
 | TextMate grammar loading and token production | `workbench/services/textMate` adapter over Alpha analysis providers | 部分具备; bundled language grammars, file associations, language configuration, snippets, static discovery, and serializable scope-theme rules are wired; theme activation and full embedded-language/bracket-result projection remain open |
 
-The current `textfile` contract was extracted only after Alpha, Monaco,
-ProseMirror, and Explorer established a real shared loading boundary. It now
+The current `textfile` contract was extracted only after Alpha, Gamma, and
+Explorer established a real shared loading boundary. It now
 owns transport-only resolve/save operations; Alpha's baseline, dirty state and
 transaction semantics remain editor-owned. `fs/changed` invalidation is
 forwarded through this boundary: Alpha reloads a clean shared model and marks
@@ -316,7 +316,7 @@ Bundled language packages use declarative TextMate grammars where a grammar is p
 deterministic lexical provider remains the editor-owned baseline for unsupported or unavailable
 grammar roots. Workbench, Renderer API and App Server do not expose a syntax service. Rust
 macro-aware tokens and parser-grade syntax require a future provider behind the same Alpha
-provider/Worker boundary; parser transport remains private to the editor implementation. Monaco has
+provider/Worker boundary; parser transport remains private to the editor implementation. legacy editor runtime has
 no ownership in this path and receives no parallel syntax integration.
 
 `LanguageAnalysisProviderRegistry` selects the first matching token provider
@@ -1348,8 +1348,8 @@ The next implementation stages are:
 3. TextMate extension-resource discovery; serializable scope-theme selector composition is complete;
 4. desktop platform acceptance verification (macOS VoiceOver, then Windows); mobile remains out of scope;
 5. parser-grade folding ranges, inline-advance layout evaluation, native browser-driven wrapping, and continuous updates for transformed snippet mirrors while typing;
-6. migrate remaining Monaco-only tools through Alpha's public contracts, then
-   remove the retired Monaco editor without importing its ownership into Alpha.
+6. migrate remaining legacy editor runtime-only tools through Alpha's public contracts, then
+   remove the retired legacy editor runtime editor without importing its ownership into Alpha.
 
 Tests under `test/common/` cover normalization, coordinates, atomic edits, failure
 atomicity, events, disposal, immutable snapshots, history budgets,

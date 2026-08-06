@@ -76,6 +76,7 @@ export class Sash extends DisposableOwner {
   readonly element: HTMLDivElement;
   private startListeners = new Set<() => void>();
   private changeListeners = new Set<(event: SashDragEvent) => void>();
+  private resetListeners = new Set<() => void>();
   private endListeners = new Set<() => void>();
   private readonly dragListeners: ResettableDisposableGroup;
   private readonly hoverTimer: DisposableSlot<IDisposable>;
@@ -103,6 +104,7 @@ export class Sash extends DisposableOwner {
     this.own(toDisposable(() => {
       this.startListeners.clear();
       this.changeListeners.clear();
+      this.resetListeners.clear();
       this.endListeners.clear();
     }));
     this.own(addDisposableListener(element, "pointerdown", (event: PointerEvent) =>
@@ -117,6 +119,9 @@ export class Sash extends DisposableOwner {
     this.own(addDisposableListener(element, "pointerleave", () =>
       this.endHover(),
     ));
+    this.own(addDisposableListener(element, "dblclick", () =>
+      this.fire(this.resetListeners),
+    ));
   }
 
   onDidStart(listener: () => void): IDisposable {
@@ -129,9 +134,19 @@ export class Sash extends DisposableOwner {
     return toDisposable(() => this.changeListeners.delete(listener));
   }
 
+  onDidReset(listener: () => void): IDisposable {
+    this.resetListeners.add(listener);
+    return toDisposable(() => this.resetListeners.delete(listener));
+  }
+
   onDidEnd(listener: () => void): IDisposable {
     this.endListeners.add(listener);
     return toDisposable(() => this.endListeners.delete(listener));
+  }
+
+  clearSashHoverState(): void {
+    this.hoverTimer.clear();
+    this.element.classList.remove("zeta-sash-hover");
   }
 
   private beginDrag(event: PointerEvent): void {

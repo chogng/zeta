@@ -110,7 +110,7 @@ conformance fixture 保持语义一致。跨产品边界见 [`slash-commands.md`
 
 `zeta-syntax` 当前拥有 Rust、JSON、JSONC 与 Shell 文档的有界增量 tree-sitter parse、revision binding，以及
 syntax token、folding range、document symbol 和 parse diagnostic snapshot。它不读取文件、
-不监听 workspace、不保存符号索引，也不依赖 Monaco、`zeta-editor` 或 `zeta-lsp`。它是
+不监听 workspace、不保存符号索引，也不依赖 legacy editor runtime、`zeta-editor` 或 `zeta-lsp`。它是
 Rust `zeta-editor` 内部组合的底层分析 crate，不是 App Server 产品 API。跨编辑器
 所有权与演进阶段见 [`syntax-analysis.md`](syntax-analysis.md)，当前 API 和修改路径见
 [`syntax/README.md`](../zeta-rs/syntax/README.md)。

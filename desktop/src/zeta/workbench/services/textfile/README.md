@@ -12,8 +12,9 @@ canonical in [`docs/editor-architecture.md`](../../../../../../docs/editor-archi
 | Bootstrap-text versus file-system resolution | `ITextFileService.resolve` | ✅ |
 | Text save transport and cancellation | `ITextFileService.save` | ✅ |
 | URI-to-`TextModel` references | `ITextModelService` | ✅, editor-owned |
-| Monaco URI-to-model references | `monacoModelService` | ✅, transition adapter-owned |
-| Dirty state, snapshot saves and explicit reverts | `ITextModelService` | ✅, editor-owned |
+| Editor model references | Alpha and Gamma model services | ✅, editor-domain-owned |
+| Format-specific dirty state, snapshot saves and explicit reverts | Alpha/Gamma model services | ✅, editor-domain-owned |
+| Shared working-copy lifecycle and resource indexing | `IWorkingCopyService` | ✅, Workbench-owned contract, editor-owned implementation |
 | CRLF/LF source-line-ending preservation | `ITextModelService` | ✅, editor-owned |
 | Workspace external-change invalidation, clean reload, and dirty-model conflict state | `IFileService` → `ITextFileService` → `ITextModelService` | ✅, transport notification plus editor-owned policy |
 | Pre-write external-change conflict detection | `ITextModelService` | ✅, editor-owned defense in depth |
@@ -31,28 +32,30 @@ invalidations without introducing a live document cache. A concrete editor
 decides whether a clean model may reload or a dirty model must retain local
 text and report a conflict.
 
-This service deliberately does not cache live models. Alpha and Monaco have
+This service deliberately does not cache live models. Alpha and Gamma have
 different transaction and undo semantics, so each editor domain owns its model
-identity and reference lifetime. `ExplorerViewPane` passes only a resource and
-label to `EditorPart`; the selected pane resolves content through this service.
+identity and reference lifetime. `IWorkingCopyService` indexes the resulting
+format-specific working copies without owning their models. `ExplorerViewPane`
+passes only a resource and label to `EditorPart`; the selected pane resolves
+content through this service and registers its working copy with the shared
+Workbench lifecycle.
 
 ## Ownership and failure semantics
 
 `Workbench` constructs `TextFileService` after `BrowserFileService`, registers
 it as `ITextFileService`, and injects it through `EditorPaneCreationOptions`.
-Alpha, Monaco, and ProseMirror contributions reject construction when that
-service is absent.
+Alpha and Gamma contributions reject construction when that service is absent.
 
 Cancellation before resolution or save, or while awaiting the underlying I/O,
 rejects without publishing a result. File-service errors pass through
 unchanged. A non-text file-service result is rejected before it can enter an
 editor model.
 
-Adding model caches, dirty flags, backup recovery, or conflict policy directly
-to `ExplorerViewPane`, `TextModel`, or a concrete editor pane would signal
-architectural drift. Alpha currently keeps baseline comparison and its
-transaction semantics in `BrowserTextModelService`; a cross-editor document
-model is required before those semantics can move into this service.
+Adding model caches, backup recovery, or conflict policy directly to
+`ExplorerViewPane` would signal architectural drift. Dirty state and conflict
+policy remain in the editor-domain adapters (`BrowserTextModelService` for
+Alpha and `DocumentWorkingCopy` for Gamma); the shared working-copy contract
+exposes their common lifecycle without requiring a cross-editor document model.
 
 ## Tests and modification impact
 
@@ -62,7 +65,8 @@ delegation, cancellation, validation, and failure propagation.
 invalidation projection.
 `../../contrib/files/test/browser/explorer-view.test.ts` verifies that Explorer does not read file
 content. Alpha model and pane tests cover shared model references, edit
-preservation, cancellation, and session disposal.
+preservation, cancellation, and session disposal. The working-copy service
+test covers registration, lookup, and unregistration.
 
 Changing resolution, save, or cancellation semantics requires updating all
 three suites plus `docs/editor-architecture.md`. Expected-revision persistence

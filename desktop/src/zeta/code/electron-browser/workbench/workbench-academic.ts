@@ -1,5 +1,5 @@
 import "../../../workbench/workbench.desktop.main.js";
-import "../../../editor/prosemirror/contrib/proseMirrorEditor.contribution.js";
+import "../../../editor/gamma/contrib/editor.contribution.js";
 import {
   AcademicProduct,
 } from "../../../product/common/product.js";

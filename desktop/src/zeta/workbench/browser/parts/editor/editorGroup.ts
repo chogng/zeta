@@ -8,6 +8,7 @@ import type { IConfigurationService } from "../../../../platform/configuration/c
 import { type ITextFileService } from "../../../services/textfile/common/textFileService.js";
 import { type ITextMateService } from "../../../services/textMate/common/textMateService.js";
 import { type ILanguageFeaturesService } from "../../../services/language/common/languageFeaturesService.js";
+import type { IWorkingCopyService } from "../../../services/workingCopy/common/workingCopyService.js";
 import type { IDiffApi } from "../../../../platform/diff/common/diffApi.js";
 import type { EditorInput, EditorOpenOptions } from "./editorInput.js";
 import type { TextResourceLanguageResolver } from "../../../../editor/common/textResourceLanguage.js";
@@ -49,6 +50,7 @@ export interface EditorGroupOptions {
   readonly languageFeaturesService?: ILanguageFeaturesService;
   readonly languageResolver?: TextResourceLanguageResolver;
   readonly diffApi?: IDiffApi;
+  readonly workingCopyService?: IWorkingCopyService;
   readonly onSave?: (group: IEditorGroup, input: EditorInput, pane: IEditorPane) => Promise<boolean>;
   readonly titleActions?: EditorTitleActions;
   readonly onDidActivate?: () => void;
@@ -76,6 +78,7 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
   private readonly languageFeaturesService: ILanguageFeaturesService | undefined;
   private readonly languageResolver: TextResourceLanguageResolver | undefined;
   private readonly diffApi: IDiffApi | undefined;
+  private readonly workingCopyService: IWorkingCopyService | undefined;
   private readonly onSave: ((group: IEditorGroup, input: EditorInput, pane: IEditorPane) => Promise<boolean>) | undefined;
   private readonly titleControl: EditorTitleControl;
   private readonly watermarkElement: HTMLElement;
@@ -95,6 +98,7 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
     this.languageFeaturesService = options.languageFeaturesService;
     this.languageResolver = options.languageResolver;
     this.diffApi = options.diffApi;
+    this.workingCopyService = options.workingCopyService;
     this.onSave = options.onSave;
     this.element = options.ownerDocument.createElement("section");
     this.element.className = "zeta-editor-group";
@@ -198,11 +202,13 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
     let createdPane: IEditorPane | undefined;
     const pane = descriptor.create({
       ownerDocument: this.element.ownerDocument,
+      input,
       configurationService: this.configurationService,
       textFileService: this.textFileService,
       textMateService: this.textMateService,
       languageFeaturesService: this.languageFeaturesService,
       diffApi: this.diffApi,
+      workingCopyService: this.workingCopyService,
       ...(this.onSave ? {
         onSave: () => {
           if (!createdPane) return Promise.reject(new Error("Editor save is unavailable"));

@@ -15,7 +15,7 @@ Slash Commands 是一个无渲染产品能力，不是 TUI feature，也不是�
 | --- | --- | --- | --- |
 | TUI | built-ins + initialize snapshot | 直接使用 `zeta-slash-commands` | Ratatui popup |
 | Native zeta-ui | local `/model` + initialize snapshot | 直接使用 `zeta-slash-commands`；Native 另拥有 model picker | WGPU composer interaction rows |
-| Desktop Chat | Workbench actions + initialize snapshot | canonical generated `SlashCommandDefinition` + separate action binding | Alpha completion widget；textarea/Monaco 可复用同一 catalog |
+| Desktop Chat | Workbench actions + initialize snapshot | canonical generated `SlashCommandDefinition` + separate action binding | Alpha completion widget；textarea/legacy editor runtime 可复用同一 catalog |
 
 ## 所有权与执行
 

@@ -10,7 +10,7 @@ test("CSS consumes registered design tokens and isolates intentional color sampl
     sizes: Array<{ cssVariable: string }>;
   };
   const registered = new Set([...manifest.colors, ...manifest.sizes].map(({ cssVariable }) => cssVariable));
-  const platformVariables = new Set(["--zeta-font-family", "--zeta-font-family-monospace"]);
+  const platformVariables = new Set(["--zeta-font-family", "--zeta-font-family-monospace", "--zeta-context-view-layer", "--zeta-z-index-context-view", "--zeta-z-index-quick-input", "--zeta-z-index-sash"]);
   const intentionalColorFiles = new Set([
     "base/browser/ui/icon/icon.css",
   ]);

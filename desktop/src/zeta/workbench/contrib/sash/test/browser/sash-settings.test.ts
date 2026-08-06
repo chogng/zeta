@@ -21,12 +21,14 @@ for (const [name, value] of Object.entries({
 
 const { ServiceCollection } = await import("../../../../../platform/instantiation/common/instantiation.js");
 const { IConfigurationService } = await import("../../../../../platform/configuration/common/configuration.js");
+const { ILayoutService } = await import("../../../../../platform/layout/common/layoutService.js");
 const { WorkbenchContributionsRegistry, WorkbenchPhase } = await import("../../../../../workbench/common/contributions.js");
-const { IWorkbenchWindowService } = await import("../../../../../workbench/browser/window.js");
 const { SashConfiguration } = await import("../../../../../workbench/contrib/sash/common/sash.js");
 const { SashSettingsController } = await import("../../../../../workbench/contrib/sash/browser/sash.js");
 const { WorkbenchConfigurationService } = await import("../../../../../workbench/services/configuration/browser/configurationService.js");
 await import("../../../../../workbench/contrib/sash/browser/sash.contribution.js");
+
+type LayoutService = import("../../../../../platform/layout/common/layoutService.js").ILayoutService;
 
 test("Sash configuration validates its public range", () => {
   assert.equal(SashConfiguration.size.defaultValue, 4);
@@ -73,7 +75,7 @@ test("Sash contribution starts after restoration", () => {
   using configuration = new WorkbenchConfigurationService();
   const services = new ServiceCollection();
   services.set(IConfigurationService, configuration);
-  services.set(IWorkbenchWindowService, { root });
+  services.set(ILayoutService, { mainContainer: root } as LayoutService);
 
   using host = WorkbenchContributionsRegistry.createHost(services);
   host.advance(WorkbenchPhase.BlockRestore);

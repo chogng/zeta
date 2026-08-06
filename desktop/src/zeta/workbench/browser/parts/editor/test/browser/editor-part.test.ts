@@ -72,32 +72,32 @@ test.after(() => browserEnvironment.window.close());
 
 test("editor registry resolves defaults and explicit Open With choices", () => {
   const registry = new EditorPaneRegistry();
-  const monaco = descriptor(
-    "zeta.editor.monaco",
+  const alpha = descriptor(
+    "zeta.editor.alpha",
     ".ts",
-    () => new TestEditorPane("zeta.editor.monaco"),
+    () => new TestEditorPane("zeta.editor.alpha"),
   );
-  const prosemirror = descriptor(
-    "zeta.editor.prosemirror",
+  const documentEditor = descriptor(
+    "zeta.editor.document",
     ".md",
-    () => new TestEditorPane("zeta.editor.prosemirror"),
+    () => new TestEditorPane("zeta.editor.document"),
   );
-  const monacoRegistration = registry.register(monaco);
-  const prosemirrorRegistration = registry.register(prosemirror);
+  const alphaRegistration = registry.register(alpha);
+  const documentRegistration = registry.register(documentEditor);
 
   const typescript = input("C:\\project\\main.ts");
   const markdown = input("C:\\project\\paper.md");
-  assert.equal(registry.resolve(typescript), monaco);
-  assert.equal(registry.resolve(markdown), prosemirror);
+  assert.equal(registry.resolve(typescript), alpha);
+  assert.equal(registry.resolve(markdown), documentEditor);
   assert.deepEqual(registry.getEditors(markdown), [
-    prosemirror,
-    monaco,
+    documentEditor,
+    alpha,
   ]);
   assert.equal(
     registry.resolve(markdown, {
-      preferredEditorId: "zeta.editor.monaco",
+      preferredEditorId: "zeta.editor.alpha",
     }),
-    monaco,
+    alpha,
   );
   assert.throws(
     () => registry.resolve(markdown, {
@@ -106,13 +106,13 @@ test("editor registry resolves defaults and explicit Open With choices", () => {
     /Unknown editor pane/,
   );
   assert.throws(
-    () => registry.register(monaco),
+    () => registry.register(alpha),
     /already registered/,
   );
 
-  prosemirrorRegistration.dispose();
-  assert.equal(registry.resolve(markdown), monaco);
-  monacoRegistration.dispose();
+  documentRegistration.dispose();
+  assert.equal(registry.resolve(markdown), alpha);
+  alphaRegistration.dispose();
   assert.throws(() => registry.resolve(markdown), /No editor can open/);
 });
 
@@ -157,9 +157,9 @@ test("EditorPart shows command shortcuts until an editor opens", async () => {
   const dom = new JSDOM("<!doctype html><body></body>");
   const registry = new EditorPaneRegistry();
   registry.register(descriptor(
-    "zeta.editor.monaco",
+    "zeta.editor.alpha",
     ".ts",
-    () => new TestEditorPane("zeta.editor.monaco"),
+    () => new TestEditorPane("zeta.editor.alpha"),
   ));
   const keybindings = new TestKeybindingService();
   keybindings.set(
@@ -200,30 +200,30 @@ test("EditorPart retains tabs and switches loaded panes", async () => {
   const registry = new EditorPaneRegistry();
   const panes: TestEditorPane[] = [];
   registry.register(descriptor(
-    "zeta.editor.monaco",
+    "zeta.editor.alpha",
     ".ts",
-    () => trackPane(panes, "zeta.editor.monaco"),
+    () => trackPane(panes, "zeta.editor.alpha"),
   ));
   registry.register(descriptor(
-    "zeta.editor.prosemirror",
+    "zeta.editor.document",
     ".md",
-    () => trackPane(panes, "zeta.editor.prosemirror"),
+    () => trackPane(panes, "zeta.editor.document"),
   ));
   const editor = new EditorPart(dom.window.document, { registry });
   dom.window.document.body.append(editor.element);
 
   const typescript = input("C:\\project\\main.ts");
-  const monaco = await editor.openEditor(typescript);
+  const alphaPane = await editor.openEditor(typescript);
   assert.equal(editor.groups.length, 1);
   assert.equal(editor.activeGroup, editor.groups[0]);
-  assert.equal(editor.activePane, monaco);
+  assert.equal(editor.activePane, alphaPane);
   assert.equal(editor.activeInput, typescript);
   assert.deepEqual(editor.activeGroup.inputs, [typescript]);
   assert.equal(
     editor.element.querySelector(
       ".zeta-editor-pane-host:not([hidden])",
     )?.textContent,
-    "zeta.editor.monaco",
+    "zeta.editor.alpha",
   );
   assert.deepEqual(panes[0]?.visibilities, [
     EditorPaneVisibility.Hidden,
@@ -267,15 +267,15 @@ test("EditorPart retains tabs and switches loaded panes", async () => {
   assert.equal(panes[0]?.focusCount, 1);
 
   const markdown = input("C:\\project\\paper.md");
-  const prosemirror = await editor.openEditor(markdown);
-  assert.equal(editor.activePane, prosemirror);
+  const documentPane = await editor.openEditor(markdown);
+  assert.equal(editor.activePane, documentPane);
   assert.equal(editor.activeInput, markdown);
   assert.deepEqual(editor.activeGroup.inputs, [typescript, markdown]);
   assert.equal(
     editor.element.querySelector(
       ".zeta-editor-pane-host:not([hidden])",
     )?.textContent,
-    "zeta.editor.prosemirror",
+    "zeta.editor.document",
   );
   assert.equal(panes[0]?.disposed, false);
   assert.deepEqual(panes[0]?.visibilities.slice(-1), [
@@ -291,7 +291,7 @@ test("EditorPart retains tabs and switches loaded panes", async () => {
 
   tabs[0]?.click();
   assert.equal(editor.activeInput, typescript);
-  assert.equal(editor.activePane, monaco);
+  assert.equal(editor.activePane, alphaPane);
   assert.equal(panes[0]?.focusCount, 2);
   assert.deepEqual(
     [...editor.element.querySelectorAll<HTMLElement>("[role='tab']")]
@@ -303,7 +303,7 @@ test("EditorPart retains tabs and switches loaded panes", async () => {
   )?.click();
   assert.equal(panes[0]?.disposed, true);
   assert.equal(editor.activeInput, markdown);
-  assert.equal(editor.activePane, prosemirror);
+  assert.equal(editor.activePane, documentPane);
   assert.deepEqual(editor.activeGroup.inputs, [markdown]);
   assert.equal(
     editor.element.querySelectorAll("[role='tab']").length,
@@ -338,9 +338,9 @@ test("Editor title toolbar splits the active group and owns More Actions", async
   const registry = new EditorPaneRegistry();
   const panes: TestEditorPane[] = [];
   registry.register(descriptor(
-    "zeta.editor.monaco",
+    "zeta.editor.alpha",
     ".ts",
-    () => trackPane(panes, "zeta.editor.monaco"),
+    () => trackPane(panes, "zeta.editor.alpha"),
   ));
   const services = new ServiceCollection();
   using contextKeys = new ContextKeyService();

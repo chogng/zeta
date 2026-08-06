@@ -4,7 +4,7 @@
 
 .zeta-quick-input-host {
   position: absolute;
-  z-index: 1000;
+  z-index: var(--zeta-z-index-quick-input, 2600);
   display: flex;
   align-items: flex-start;
   justify-content: center;

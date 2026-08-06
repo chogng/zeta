@@ -102,7 +102,7 @@ stopped 状态。
 
 三个 Browser HTML 入口现在会直接启动对应产品 Workbench。`workbench/browser/web.factory.ts`
 拥有自动启动与 `pagehide` 释放，`web.api.ts` 定义 embedder 输入，产品入口仍只选择自身的
-Monaco/ProseMirror contribution。
+Alpha/Gamma contribution。
 
 Renderer 控件、Workbench Part 与 CSS 状态的 canonical 所有权规范见
 [`docs/ui-styling-ownership.md`](../docs/ui-styling-ownership.md)。
@@ -187,8 +187,8 @@ opaque-origin sandbox iframe。解析器输出不能直接写入 DOM 或 iframe�
 
 Workbench 静态装配按 host 分层：`workbench.common.main.ts` 加载 Browser 与 Electron
 共享的 contribution，`workbench.web.main.ts` 与 `workbench.desktop.main.ts` 只加载各自
-host 的 adapter 和 contribution。三个产品入口在 host main 之外继续独立选择 Monaco、
-ProseMirror 或两者；新增功能时不得从共享 `Workbench` 构造实现反向导入产品或 host 入口。
+host 的 adapter 和 contribution。三个产品入口在 host main 之外继续独立选择 legacy editor runtime、
+Gamma 或两者；新增功能时不得从共享 `Workbench` 构造实现反向导入产品或 host 入口。
 
 当前链接只允许 HTTP、HTTPS 和页内 fragment，并交由宿主处理；图片只允许内嵌的 PNG、
 JPEG、GIF 与 WebP。语法高亮、Markdown 插件、Mermaid、KaTeX 和工作区相对资源映射尚未实现。

@@ -5,7 +5,7 @@ import { DisposableOwner, type IDisposable } from "../../../base/common/lifecycl
 import { type EditorInput } from "../../../workbench/browser/parts/editor/editorInput.js";
 import { type TextModelReference } from "../common/services/textModelService.js";
 import { CodeEditorWidget } from "./widget/codeEditor/codeEditorWidget.js";
-import { type AlphaEditorTextDirection, type AlphaEditorViewport } from "./view/editorViewport.js";
+import { type AlphaEditorTextDirection, type AlphaEditorViewport, type AlphaEditorViewportPresentation } from "./view/editorViewport.js";
 import { AlphaDecorationPresentation, createAlphaDecorationSource } from "./view/decorationPresentation.js";
 import { AlphaCursorUndoController } from "../contrib/cursorUndo/browser/cursorUndoController.js";
 import { AlphaDiagnosticNavigationController } from "../contrib/gotoError/browser/gotoError.js";
@@ -107,6 +107,7 @@ export interface AlphaEditorSessionOptions {
   readonly insertFinalNewLine?: boolean;
   /** Browser paragraph direction for this editor session's DOM projection. */
   readonly textDirection?: AlphaEditorTextDirection;
+  readonly presentation?: AlphaEditorViewportPresentation;
   /** Host-owned link opening callback; Alpha never opens external targets directly. */
   readonly onOpenLink?: (target: string) => void | Promise<void>;
   /** Host-owned context-menu composition; Alpha supplies only editor hit-test data. */
@@ -120,6 +121,7 @@ export interface AlphaEditorSessionOptions {
 
 /** Owns all per-pane state projected over one shared Alpha text model reference. */
 export class AlphaEditorSession extends DisposableOwner {
+  readonly onDidChange: Event<void>;
   readonly codeEditor: CodeEditorWidget;
   readonly viewport: AlphaEditorViewport;
   readonly selections: EditorSelectionController;
@@ -150,6 +152,7 @@ export class AlphaEditorSession extends DisposableOwner {
       if (options.languageSupport) this.own(options.languageSupport);
       const modelReference = this.modelReference = this.own(options.modelReference);
       const model = modelReference.model;
+      this.onDidChange = listener => model.onDidChange(() => listener());
       const languageFeaturesService = options.languageFeaturesService ?? this.own(new LanguageFeaturesService());
       const configurations = languageFeaturesService.configurations;
       this.selections = this.own(new EditorSelectionController(
@@ -235,6 +238,7 @@ export class AlphaEditorSession extends DisposableOwner {
           bracketColorizationSource: new AlphaBracketColorizationSource(bracketColorizations),
           lineWrapping: options.lineWrapping,
           textDirection: options.textDirection,
+          presentation: options.presentation,
           indentation: options.indentation,
         },
         textInput: {
@@ -362,6 +366,11 @@ export class AlphaEditorSession extends DisposableOwner {
 
   getValue(): string {
     return this.viewport.textModel.getText();
+  }
+
+  setValue(value: string): void {
+    if (this.getValue() === value) return;
+    this.modelReference.model.reset(value);
   }
 
   get isDirty(): boolean {

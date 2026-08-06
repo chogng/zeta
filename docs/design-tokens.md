@@ -80,7 +80,7 @@ flowchart LR
 - Native shell、composer、terminal ANSI、scrollbar 和 multi-diff editor 已由共享 snapshot 构造组件 palette；没有宿主 selector 或 parser 固定色。
 - TUI chrome 只消费 accent、chrome、error/success/warning、muted 和 highlight；Theme Pane preview
   额外消费有限的 syntax/diff 子集，并按 TrueColor、ANSI-256、ANSI-16、Monochrome 确定性降级。
-- Desktop Terminal 使用完整 terminal 前景、背景、光标和 ANSI 16 色 token；Monaco 仅保留迁移期兼容同步，Alpha 是默认文本编辑器。
+- Desktop Terminal 使用完整 terminal 前景、背景、光标和 ANSI 16 色 token；legacy editor runtime 仅保留迁移期兼容同步，Alpha 是默认文本编辑器。
 - Electron renderer 通过受校验的 window-theme IPC 将标题栏背景和按钮颜色投影到主进程；Terminal canvas 使用当前编辑器背景，不依赖 xterm 黑色回退。
 - Desktop 与 Rust resolver 共同执行 `theme-conformance.json`，防止 alias、变换、量化或兼容映射发生跨语言漂移。
 

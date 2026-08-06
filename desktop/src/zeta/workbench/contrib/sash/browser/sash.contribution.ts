@@ -1,6 +1,6 @@
 import { IConfigurationService } from "../../../../platform/configuration/common/configuration.js";
+import { ILayoutService } from "../../../../platform/layout/common/layoutService.js";
 import { registerWorkbenchContribution, WorkbenchPhase } from "../../../common/contributions.js";
-import { IWorkbenchWindowService } from "../../../browser/window.js";
 import { SashSettingsController } from "./sash.js";
 
 registerWorkbenchContribution(
@@ -8,6 +8,6 @@ registerWorkbenchContribution(
   WorkbenchPhase.AfterRestored,
   (accessor) => new SashSettingsController(
     accessor.get(IConfigurationService),
-    accessor.get(IWorkbenchWindowService).root,
+    accessor.get(ILayoutService).mainContainer,
   ),
 );

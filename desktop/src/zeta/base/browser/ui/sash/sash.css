@@ -1,6 +1,6 @@
 .zeta-sash {
   position: absolute;
-  z-index: 2;
+  z-index: var(--zeta-z-index-sash, 35);
   touch-action: none;
   user-select: none;
 }

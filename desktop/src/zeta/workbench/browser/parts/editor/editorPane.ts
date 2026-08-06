@@ -13,6 +13,8 @@ import { type ITextMateService } from "../../../services/textMate/common/textMat
 import { type ILanguageFeaturesService } from "../../../services/language/common/languageFeaturesService.js";
 import type { EditorInput } from "./editorInput.js";
 import type { IDiffApi } from "../../../../platform/diff/common/diffApi.js";
+import type { IEmbeddedTextEditorFactory } from "./embeddedTextEditor.js";
+import type { IWorkingCopyService, IWorkingCopy } from "../../../services/workingCopy/common/workingCopyService.js";
 
 export enum EditorPaneVisibility {
   Hidden,
@@ -29,6 +31,8 @@ export enum EditorPaneVisibility {
  */
 export interface IEditorPane extends IDisposable {
   readonly id: string;
+  /** Optional format-specific document exposed through the shared Workbench lifecycle. */
+  readonly workingCopy?: IWorkingCopy;
 
   create(parent: HTMLElement): void;
   setInput(input: EditorInput, signal: AbortSignal): Promise<void>;
@@ -42,11 +46,15 @@ export interface IEditorPane extends IDisposable {
 
 export interface EditorPaneCreationOptions {
   readonly ownerDocument: Document;
+  /** The input used to choose a profile-specific pane implementation. */
+  readonly input?: EditorInput;
   readonly configurationService?: IConfigurationService;
   readonly textFileService?: ITextFileService;
   readonly textMateService?: ITextMateService;
   readonly languageFeaturesService?: ILanguageFeaturesService;
   readonly diffApi?: IDiffApi;
+  readonly embeddedTextEditorFactory?: IEmbeddedTextEditorFactory;
+  readonly workingCopyService?: IWorkingCopyService;
   readonly onSave?: () => Promise<void | boolean>;
 }
 

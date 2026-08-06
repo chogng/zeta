@@ -7,7 +7,7 @@
 `zeta-syntax` 对宿主提供有界、增量、与 presentation 无关的源码结构分析。当前实现支持 Rust、
 JSON、JSONC 和 Shell，使用 tree-sitter 保存每个打开文档的增量 parse tree，并为精确的 host revision 派生 syntax
 tokens、folding ranges、document symbols 和 parse diagnostics。它不读取文件、不监听 workspace、
-不持久化索引、不启动语言服务器，也不依赖 Monaco、`zeta-editor`、Native paint types 或 App
+不持久化索引、不启动语言服务器，也不依赖 legacy editor runtime、`zeta-editor`、Native paint types 或 App
 Server DTO。
 
 ## 所有权与公共接口

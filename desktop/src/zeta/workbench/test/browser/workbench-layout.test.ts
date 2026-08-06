@@ -27,6 +27,7 @@ for (const [name, value] of Object.entries({
 }
 
 const { Dimension } = await import("../../../base/browser/geometry.js");
+const { bindResizableLayout } = await import("../../../base/browser/ui/resizable/resizable.js");
 const { lxiconsLibrary } = await import("../../../base/common/lxiconsLibrary.js");
 const { WillSaveStateReason } = await import("../../../platform/storage/common/storage.js");
 const { MenuId } = await import(
@@ -38,6 +39,7 @@ const { MenuService } = await import(
 const {
   WorkbenchLayout,
 } = await import("../../../workbench/browser/layout.js");
+const { BrowserLayoutService } = await import("../../../platform/layout/browser/layoutService.js");
 const { IWorkbenchLayoutService, workbenchPartIds } = await import("../../../workbench/services/layout/browser/layoutService.js");
 const { BrowserStorageService } = await import("../../../workbench/services/storage/browser/storageService.js");
 const {
@@ -135,6 +137,7 @@ class TestPart extends WorkbenchPart {
 function createLayoutHarness(
   ownerDocument: Document,
   options: WorkbenchLayoutOptions = {},
+  existingContainer?: HTMLElement,
 ): {
   readonly disposables: DisposableStore;
   readonly container: HTMLElement;
@@ -142,7 +145,7 @@ function createLayoutHarness(
   readonly layout: WorkbenchLayoutInstance;
 } {
   const disposables = new DisposableStore();
-  const container = ownerDocument.createElement("main");
+  const container = existingContainer ?? ownerDocument.createElement("main");
   ownerDocument.body.append(container);
   disposables.defer(() => container.remove());
 
@@ -255,6 +258,27 @@ test("Workbench layout hides and restores Parts with context keys", () => {
   assert.equal(contextKeys.getValue("sideBarVisible"), true);
   assert.equal(editorFrame?.style.paddingLeft, "3px");
   assert.equal(editorFrame?.style.paddingRight, "8px");
+
+  harness.disposables.dispose();
+  dom.window.close();
+});
+
+test("platform layout service drives Workbench Part geometry", () => {
+  const dom = new JSDOM("<!doctype html><body></body>");
+  const container = dom.window.document.createElement("main");
+  const layoutService = new BrowserLayoutService({ root: container });
+  const harness = createLayoutHarness(dom.window.document, {
+    initialDimension: layoutService.mainContainerDimension,
+  }, container);
+  harness.disposables.add(layoutService);
+  harness.disposables.add(bindResizableLayout(layoutService.onDidLayoutMainContainer, harness.layout));
+
+  layoutService.layout(new Dimension(1_200, 800));
+
+  assert.deepEqual(layoutService.mainContainerDimension, new Dimension(1_200, 800));
+  assert.equal(harness.layout.getPartSize("titlebar").height, 35);
+  assert.equal(harness.layout.getPartSize("statusbar").height, 35);
+  assert.ok(harness.editor.element.isConnected);
 
   harness.disposables.dispose();
   dom.window.close();

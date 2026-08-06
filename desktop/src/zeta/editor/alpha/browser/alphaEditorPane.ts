@@ -12,9 +12,10 @@ import { EditorPaneVisibility } from "../../../workbench/browser/parts/editor/ed
 import { ALPHA_EDITOR_ID, alphaLanguageForInput } from "./editorInput.js";
 import { type ITextResourceStore } from "../common/services/textResourceStore.js";
 import { AlphaEditorSession, type AlphaEditorSessionOptions } from "./alphaEditorSession.js";
-import { type ITextModelService } from "../common/services/textModelService.js";
+import { type ITextModelService, type TextModelReference } from "../common/services/textModelService.js";
 import { type AlphaEditorTextDirection } from "./view/editorViewport.js";
 import { type AlphaEditorLineWrapping } from "./view/visualLineProjection.js";
+import { type IWorkingCopy, type IWorkingCopyService } from "../../../workbench/services/workingCopy/common/workingCopyService.js";
 
 export interface AlphaEditorPaneSession extends IDisposable {
   layout(dimension: IDimension): void;
@@ -33,6 +34,7 @@ export interface AlphaEditorPaneSessionOptions extends AlphaEditorSessionOptions
 
 export interface AlphaEditorPaneOptions {
   readonly modelService: ITextModelService;
+  readonly workingCopyService?: IWorkingCopyService;
   readonly createSession?: (options: AlphaEditorPaneSessionOptions) => AlphaEditorPaneSession;
   readonly textMateService?: ITextMateService;
   readonly languageFeaturesService?: ILanguageFeaturesService;
@@ -52,10 +54,15 @@ export interface AlphaEditorPaneOptions {
 export class AlphaEditorPane extends DisposableOwner implements IEditorPane {
   readonly id = ALPHA_EDITOR_ID;
   private readonly sessions = this.own(new DisposableSlot<AlphaEditorPaneSession>());
+  private readonly workingCopySlot = this.own(new DisposableSlot<IWorkingCopy>());
   private readonly modelService: ITextModelService;
   private readonly createSession: (options: AlphaEditorPaneSessionOptions) => AlphaEditorPaneSession;
   private container: HTMLDivElement | undefined;
   private dimension: IDimension = { width: 0, height: 0 };
+
+  get workingCopy(): IWorkingCopy | undefined {
+    return this.workingCopySlot.value;
+  }
 
   constructor(private readonly resourceStore: ITextResourceStore, private readonly options: AlphaEditorPaneOptions) {
     super();
@@ -116,11 +123,20 @@ export class AlphaEditorPane extends DisposableOwner implements IEditorPane {
       if (!session) modelReference.dispose();
       throw error;
     }
+    this.workingCopySlot.clear();
     this.sessions.replace(session);
+    this.workingCopySlot.replace(new AlphaEditorWorkingCopy(
+      modelReference,
+      this.resourceStore,
+      input.resource,
+      this.options.workingCopyService,
+      input.resource.scheme === "untitled" ? this.options.onSave : undefined,
+    ));
     session.layout(this.dimension);
   }
 
   clearInput(): void {
+    this.workingCopySlot.clear();
     this.sessions.clear();
   }
 
@@ -147,6 +163,11 @@ export class AlphaEditorPane extends DisposableOwner implements IEditorPane {
   }
 
   async saveAs(resource: URI): Promise<void> {
+    const workingCopy = this.workingCopy;
+    if (workingCopy) {
+      await workingCopy.saveAs(resource, new AbortController().signal);
+      return;
+    }
     await this.resourceStore.save({ resource, text: this.getValue() }, new AbortController().signal);
   }
 
@@ -169,5 +190,53 @@ export class AlphaEditorPane extends DisposableOwner implements IEditorPane {
   private requireContainer(): HTMLDivElement {
     assertDefined(this.container, new ReferenceError("AlphaEditorPane has not been created"));
     return this.container;
+  }
+}
+
+class AlphaEditorWorkingCopy extends DisposableOwner implements IWorkingCopy {
+  readonly resource: URI;
+  readonly onDidChangeDirty: IWorkingCopy["onDidChangeDirty"];
+  readonly onDidChangeExternalChange: IWorkingCopy["onDidChangeExternalChange"];
+
+  constructor(
+    private readonly reference: TextModelReference,
+    private readonly resourceStore: ITextResourceStore,
+    resource: URI,
+    workingCopyService: IWorkingCopyService | undefined,
+    private readonly saveUntitled: (() => Promise<void | boolean>) | undefined,
+  ) {
+    super();
+    this.resource = resource;
+    this.onDidChangeDirty = reference.onDidChangeDirty;
+    this.onDidChangeExternalChange = reference.onDidChangeExternalChange;
+    if (workingCopyService) this.own(workingCopyService.register(this));
+  }
+
+  get isDirty(): boolean {
+    return this.reference.isDirty;
+  }
+
+  get hasExternalChange(): boolean {
+    return this.reference.hasExternalChange;
+  }
+
+  save(signal: AbortSignal): Promise<void> {
+    throwIfCancelled(signal, "Alpha working-copy save was cancelled");
+    if (this.resource.scheme === "untitled") return this.saveUntitledDocument();
+    return this.reference.save(signal);
+  }
+
+  saveAs(resource: URI, signal: AbortSignal): Promise<void> {
+    return this.resourceStore.save({ resource, text: this.reference.model.getText() }, signal);
+  }
+
+  revert(signal: AbortSignal): Promise<void> {
+    return this.reference.revert(signal);
+  }
+
+  private async saveUntitledDocument(): Promise<void> {
+    const result = await this.saveUntitled?.();
+    if (result === false) return;
+    if (!this.saveUntitled) throw new Error("Untitled Alpha editor has no save handler");
   }
 }

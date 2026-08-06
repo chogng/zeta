@@ -1,0 +1,1552 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { JSDOM } from "jsdom";
+import { type IDimension } from "../../../../base/browser/geometry.js";
+import { Emitter } from "../../../../base/common/event.js";
+import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { URI } from "../../../../base/common/uri.js";
+import type { IFileChangeEvent } from "../../../../platform/files/common/files.js";
+import type { ITextFileService, ResolvedTextFileContent, TextFileResolveRequest, TextFileSaveRequest } from "../../../../workbench/services/textfile/common/textFileService.js";
+import { DOCUMENT_EDITOR_ID } from "../../browser/documentEditorInput.js";
+import { DocumentEditorPane } from "../../browser/documentEditorPane.js";
+import { nodeViews as profileNodeViews } from "../../academic/browser/nodeViews.js";
+import { inlineNodeViews as citationInlineNodeViews, nodeViews as citationNodeViews } from "../../contrib/citation/browser/nodeViews.js";
+import { citationToolbarActions } from "../../contrib/citation/browser/toolbarAction.js";
+import { createReferenceIndexPlugin } from "../../contrib/citation/common/references.js";
+import { createAcademicDocumentSchema, createEmptyAcademicDocument } from "../../academic/common/schema.js";
+import type { EmbeddedTextEditorOptions, IEmbeddedTextEditor, IEmbeddedTextEditorFactory } from "../../../../workbench/browser/parts/editor/embeddedTextEditor.js";
+import { createDocumentDecoration, DocumentDecorationSet } from "../../common/decoration.js";
+import { createDocumentPlugin, DocumentPluginKey } from "../../common/plugin.js";
+import { DOCUMENT_FRAGMENT_CLIPBOARD_MIME, serializeDocument } from "../../common/serialization.js";
+import { createDefaultDocumentSchema } from "../../common/schema.js";
+
+test("DocumentEditorPane migrates plain text and edits a structured paragraph", async () => {
+  const environment = new JSDOM("<!doctype html><body></body>");
+  const files = new MemoryTextFiles("Title\nBody");
+  const parent = environment.window.document.createElement("main");
+  environment.window.document.body.append(parent);
+  using pane = new DocumentEditorPane(files);
+  pane.create(parent);
+
+  await pane.setInput({
+    resource: URI.file("C:\\project\\paper.zeta-academic"),
+    contentType: "application/vnd.zeta.academic-document+json",
+    label: "paper",
+  }, new AbortController().signal);
+
+  assert.equal(pane.id, DOCUMENT_EDITOR_ID);
+  assert.equal(parent.querySelectorAll("textarea").length, 2);
+  const first = parent.querySelector<HTMLTextAreaElement>("textarea");
+  assert.ok(first);
+  first.value = "Edited title";
+  first.dispatchEvent(new environment.window.Event("input", { bubbles: true }));
+  assert.equal(pane.getDocument().content[0]?.content[0]?.text, "Edited title");
+  assert.equal(pane.isDirty, true);
+
+  await pane.save();
+  assert.equal(pane.isDirty, false);
+  assert.match(files.lastSavedText, /zeta\.document/);
+  environment.window.close();
+});
+
+test("DocumentWorkingCopy clears dirty state after an untitled save succeeds", async () => {
+  const environment = new JSDOM("<!doctype html><body></body>");
+  let saveCalls = 0;
+  const parent = environment.window.document.createElement("main");
+  const pane = new DocumentEditorPane(new MemoryTextFiles(""), { onSave: async () => { saveCalls += 1; } });
+  pane.create(parent);
+  await pane.setInput({ resource: URI.parse("untitled:academic/draft"), initialText: "Draft" }, new AbortController().signal);
+  const textarea = parent.querySelector<HTMLTextAreaElement>("textarea.zeta-document-text-input");
+  assert.ok(textarea);
+  textarea.value = "Changed";
+  textarea.dispatchEvent(new environment.window.Event("input", { bubbles: true }));
+  assert.equal(pane.isDirty, true);
+  await pane.save();
+  assert.equal(saveCalls, 1);
+  assert.equal(pane.isDirty, false);
+  pane.dispose();
+  environment.window.close();
+});
+
+test("DocumentEditorPane routes block keyboard commands through Gamma", async () => {
+  const environment = new JSDOM("<!doctype html><body></body>");
+  const files = new MemoryTextFiles("Hello\nWorld\nGamma");
+  const parent = environment.window.document.createElement("main");
+  environment.window.document.body.append(parent);
+  using pane = new DocumentEditorPane(files);
+  pane.create(parent);
+  await pane.setInput({ resource: URI.file("C:\\project\\paper.zeta-academic") }, new AbortController().signal);
+
+  const textareas = (): HTMLTextAreaElement[] => Array.from(parent.querySelectorAll<HTMLTextAreaElement>("textarea.zeta-document-text-input"));
+  const blockTexts = (): string[] => pane.getDocument().content.map(block => block.content.find(child => child.text !== undefined)?.text ?? "");
+  const dispatchKey = (textarea: HTMLTextAreaElement, key: string, modifiers: KeyboardEventInit = {}): KeyboardEvent => {
+    const event = new environment.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key, ...modifiers });
+    textarea.dispatchEvent(event);
+    return event;
+  };
+
+  let fields = textareas();
+  assert.equal(fields.length, 3);
+  fields[0]!.focus();
+  fields[0]!.setSelectionRange(2, 2);
+  assert.equal(dispatchKey(fields[0]!, "Enter").defaultPrevented, true);
+  assert.deepEqual(blockTexts(), ["He", "llo", "World", "Gamma"]);
+  fields = textareas();
+  assert.equal(environment.window.document.activeElement, fields[1]);
+  assert.equal(fields[1]!.selectionStart, 0);
+
+  fields[1]!.focus();
+  fields[1]!.setSelectionRange(fields[1]!.value.length, fields[1]!.value.length);
+  assert.equal(dispatchKey(fields[1]!, "Delete").defaultPrevented, true);
+  assert.deepEqual(blockTexts(), ["He", "lloWorld", "Gamma"]);
+
+  fields = textareas();
+  fields[1]!.focus();
+  fields[1]!.setSelectionRange(0, 0);
+  assert.equal(dispatchKey(fields[1]!, "Backspace").defaultPrevented, true);
+  assert.deepEqual(blockTexts(), ["HelloWorld", "Gamma"]);
+
+  fields = textareas();
+  fields[0]!.focus();
+  assert.equal(dispatchKey(fields[0]!, "Enter", { ctrlKey: true }).defaultPrevented, true);
+  assert.deepEqual(blockTexts(), ["HelloWorld", "", "Gamma"]);
+  fields = textareas();
+  assert.equal(environment.window.document.activeElement, fields[1]);
+
+  assert.equal(dispatchKey(fields[1]!, "ArrowDown", { altKey: true }).defaultPrevented, true);
+  assert.deepEqual(blockTexts(), ["HelloWorld", "Gamma", ""]);
+  fields = textareas();
+  assert.equal(environment.window.document.activeElement, fields[2]);
+  assert.equal(dispatchKey(fields[2]!, "ArrowUp", { altKey: true }).defaultPrevented, true);
+  assert.deepEqual(blockTexts(), ["HelloWorld", "", "Gamma"]);
+  environment.window.close();
+});
+
+test("DocumentEditorPane projects plugin decorations onto rich text runs", async () => {
+  const environment = new JSDOM("<!doctype html><body></body>");
+  const files = new MemoryTextFiles("Hello");
+  const parent = environment.window.document.createElement("main");
+  environment.window.document.body.append(parent);
+  const key = new DocumentPluginKey<DocumentDecorationSet>("search");
+  const plugin = createDocumentPlugin(key, {
+    init: context => {
+      const textNode = context.document.content[0]?.content.find(child => child.text !== undefined);
+      if (!textNode) throw new Error("Expected a migrated text node");
+      return new DocumentDecorationSet([createDocumentDecoration({ id: "search-hit", from: { nodeId: textNode.id, offset: 1 }, to: { nodeId: textNode.id, offset: 4 }, className: "search-hit", attrs: { "data-source": "test" } })]);
+    },
+    apply: (value, context) => value.map(context.previousDocument, context.schema, context.transaction),
+  }, { decorations: state => state });
+  using pane = new DocumentEditorPane(files, { plugins: [plugin] });
+  pane.create(parent);
+  await pane.setInput({ resource: URI.file("C:\\project\\paper.zeta-academic") }, new AbortController().signal);
+
+  const editor = parent.querySelector<HTMLDivElement>(".zeta-document-rich-text-input");
+  const hit = editor?.querySelector<HTMLElement>(".search-hit");
+  assert.ok(editor);
+  assert.ok(hit);
+  assert.equal(hit.textContent, "ell");
+  assert.equal(hit.dataset.textNodeId, pane.getDocument().content[0]?.content[0]?.id);
+  assert.equal(hit.dataset.decorationIds, "search-hit");
+  assert.equal(hit.dataset.source, "test");
+  environment.window.close();
+});
+
+test("DocumentEditorPane commits textarea composition as one Gamma transaction", async () => {
+  const environment = new JSDOM("<!doctype html><body></body>");
+  const files = new MemoryTextFiles("Hello");
+  const parent = environment.window.document.createElement("main");
+  environment.window.document.body.append(parent);
+  using pane = new DocumentEditorPane(files);
+  pane.create(parent);
+  await pane.setInput({ resource: URI.file("C:\\project\\paper.zeta-academic") }, new AbortController().signal);
+
+  const textarea = parent.querySelector<HTMLTextAreaElement>("textarea.zeta-document-text-input");
+  assert.ok(textarea);
+  textarea.focus();
+  textarea.setSelectionRange(5, 5);
+  textarea.dispatchEvent(new environment.window.Event("select", { bubbles: true }));
+  textarea.dispatchEvent(new environment.window.Event("compositionstart", { bubbles: true }));
+  textarea.value = "Hello世";
+  textarea.dispatchEvent(new environment.window.Event("input", { bubbles: true }));
+  const compositionEnd = new environment.window.Event("compositionend", { bubbles: true });
+  Object.defineProperty(compositionEnd, "data", { value: "世" });
+  textarea.dispatchEvent(compositionEnd);
+
+  assert.equal(pane.getDocument().content[0]?.content[0]?.text, "Hello世");
+  const undo = new environment.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "z", ctrlKey: true });
+  parent.querySelector<HTMLTextAreaElement>("textarea.zeta-document-text-input")?.dispatchEvent(undo);
+  assert.equal(undo.defaultPrevented, true);
+  assert.equal(pane.getDocument().content[0]?.content[0]?.text, "Hello");
+  environment.window.close();
+});
+
+test("DocumentEditorPane accepts a schema and custom node view without changing Gamma common nodes", async () => {
+  const environment = new JSDOM("<!doctype html><body></body>");
+  const schema = createDefaultDocumentSchema();
+  const paragraph = schema.createNode("paragraph", { id: "custom-paragraph", content: [schema.createText("Inside callout", { id: "custom-text" })] });
+  const document = schema.createDocument([schema.createNode("blockquote", { id: "custom-callout", content: [paragraph] })], "custom-document");
+  const parent = environment.window.document.createElement("main");
+  environment.window.document.body.append(parent);
+  let updates = 0;
+  let disposals = 0;
+  using pane = new DocumentEditorPane(new MemoryTextFiles(""), {
+    schema,
+    nodeViews: {
+      blockquote: ({ previousElement, renderChildren }) => {
+        const element = previousElement ?? parent.ownerDocument.createElement("aside");
+        element.className = "custom-callout-view";
+        renderChildren(element);
+        return {
+          element,
+          update: ({ renderChildren: updateChildren }) => {
+            updates += 1;
+            updateChildren(element);
+            return true;
+          },
+          dispose: () => disposals += 1,
+        };
+      },
+    },
+  });
+  pane.create(parent);
+  await pane.setInput({ resource: URI.file("C:\\project\\paper.zeta-academic"), initialText: serializeDocument(document, schema) }, new AbortController().signal);
+
+  const callout = parent.querySelector<HTMLElement>("aside.custom-callout-view");
+  assert.ok(callout);
+  assert.equal(callout.dataset.nodeId, "custom-callout");
+  assert.equal(callout.querySelector<HTMLTextAreaElement>("textarea")?.value, "Inside callout");
+  assert.equal(pane.getDocument().content[0]?.type, "blockquote");
+  const textarea = callout.querySelector<HTMLTextAreaElement>("textarea");
+  assert.ok(textarea);
+  textarea.value = "Updated callout";
+  textarea.dispatchEvent(new environment.window.Event("input", { bubbles: true }));
+  assert.equal(updates, 1);
+  assert.equal(pane.getDocument().content[0]?.content[0]?.content[0]?.text, "Updated callout");
+  pane.clearInput();
+  assert.equal(disposals, 1);
+  environment.window.close();
+});
+
+test("DocumentEditorPane projects Academic wrappers while editing Gamma child blocks", async () => {
+  const environment = new JSDOM("<!doctype html><body></body>");
+  const schema = createAcademicDocumentSchema();
+  const document = schema.createDocument([
+    schema.createNode("title", { id: "academic-title", content: [schema.createNode("heading", { id: "title-heading", content: [schema.createText("Paper title", { id: "title-text" })] })] }),
+    schema.createNode("abstract", { id: "academic-abstract", content: [schema.createNode("paragraph", { id: "abstract-paragraph", content: [schema.createText("Summary", { id: "abstract-text" })] })] }),
+    schema.createNode("section", { id: "academic-section", content: [schema.createNode("heading", { id: "section-heading", content: [schema.createText("Introduction", { id: "section-title-text" })] }), schema.createNode("paragraph", { id: "section-paragraph", content: [schema.createText("Body", { id: "section-body-text" })] })] }),
+  ], "academic-document");
+  const parent = environment.window.document.createElement("main");
+  environment.window.document.body.append(parent);
+  using pane = new DocumentEditorPane(new MemoryTextFiles(""), { schema, nodeViews: profileNodeViews, outlineNavigator: true });
+  pane.create(parent);
+  await pane.setInput({ resource: URI.file("C:\\project\\paper.zeta-academic"), initialText: serializeDocument(document, schema) }, new AbortController().signal);
+
+  const title = parent.querySelector<HTMLElement>("header.zeta-academic-title");
+  const abstract = parent.querySelector<HTMLElement>("section.zeta-academic-abstract");
+  const section = parent.querySelector<HTMLElement>("section.zeta-academic-section");
+  assert.ok(title);
+  assert.ok(abstract);
+  assert.ok(section);
+  assert.equal(title.dataset.nodeId, "academic-title");
+  assert.equal(title.getAttribute("aria-label"), "Document title");
+  assert.equal(abstract.dataset.academicRole, "abstract");
+  assert.equal(section.dataset.academicRole, "section");
+  assert.equal(parent.querySelectorAll("textarea.zeta-document-text-input").length, 4);
+  assert.deepEqual(pane.getOutline().map(entry => ({ nodeId: entry.nodeId, title: entry.title, depth: entry.depth })), [
+    { nodeId: "title-heading", title: "Paper title", depth: 0 },
+    { nodeId: "section-heading", title: "Introduction", depth: 0 },
+  ]);
+  const outlineEntries = parent.querySelectorAll<HTMLButtonElement>(".zeta-document-outline-entry");
+  assert.deepEqual([...outlineEntries].map(entry => entry.textContent), ["Paper title", "Introduction"]);
+  outlineEntries[1]!.click();
+  const sectionInput = section.querySelector<HTMLTextAreaElement>("textarea.zeta-document-text-input");
+  assert.ok(sectionInput);
+  assert.equal(environment.window.document.activeElement, sectionInput);
+  assert.equal(sectionInput.selectionStart, 0);
+
+  const titleInput = title.querySelector<HTMLTextAreaElement>("textarea.zeta-document-text-input");
+  assert.ok(titleInput);
+  titleInput.value = "Updated title";
+  titleInput.dispatchEvent(new environment.window.Event("input", { bubbles: true }));
+  assert.equal(pane.getDocument().content[0]?.content[0]?.content[0]?.text, "Updated title");
+  assert.ok(parent.querySelector("header.zeta-academic-title"));
+  pane.clearInput();
+  assert.equal(parent.querySelector<HTMLElement>(".zeta-document-outline")?.hidden, true);
+  environment.window.close();
+});
+
+test("DocumentEditorPane renders and deletes Academic citation inline nodes", async () => {
+  const environment = new JSDOM("<!doctype html><body></body>");
+  const schema = createAcademicDocumentSchema();
+  const citation = schema.createNode("citation", { id: "browser-citation", attrs: { key: "smith-2024", label: "[Smith 2024]" } });
+  const paragraph = schema.createNode("paragraph", { id: "citation-paragraph", content: [schema.createText("See ", { id: "citation-before" }), citation, schema.createText(" for details", { id: "citation-after" })] });
+  const document = schema.createDocument([schema.createNode("title", { id: "citation-title", content: [schema.createNode("heading", { id: "citation-title-heading", content: [schema.createText("Citations", { id: "citation-title-text" })] })] }), schema.createNode("abstract", { id: "citation-abstract", content: [schema.createNode("paragraph", { id: "citation-abstract-paragraph" })] }), schema.createNode("section", { id: "citation-section", content: [schema.createNode("heading", { id: "citation-section-heading", content: [schema.createText("References", { id: "citation-section-text" })] }), paragraph] })], "citation-document");
+  const parent = environment.window.document.createElement("main");
+  environment.window.document.body.append(parent);
+  using pane = new DocumentEditorPane(new MemoryTextFiles(""), { schema, nodeViews: profileNodeViews, inlineNodeViews: citationInlineNodeViews });
+  pane.create(parent);
+  await pane.setInput({ resource: URI.file("C:\\project\\citations.zeta-academic"), initialText: serializeDocument(document, schema) }, new AbortController().signal);
+
+  const citationElement = parent.querySelector<HTMLElement>(".zeta-citation");
+  const editor = parent.querySelector<HTMLDivElement>(".zeta-document-rich-text-input[data-block-id='citation-paragraph']");
+  assert.ok(citationElement);
+  assert.ok(editor);
+  assert.equal(citationElement.textContent, "[Smith 2024]");
+  assert.equal(citationElement.dataset.citationKey, "smith-2024");
+  citationElement.click();
+  assert.equal(citationElement.classList.contains("zeta-document-inline-node-selected"), true);
+
+  const deletion = new environment.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Backspace" });
+  editor.dispatchEvent(deletion);
+  assert.equal(deletion.defaultPrevented, true);
+  assert.equal(pane.getDocument().content.some(node => node.type === "section" && node.content.some(child => child.content.some(inline => inline.type === "citation"))), false);
+  assert.equal(parent.querySelector(".zeta-citation"), null);
+  environment.window.close();
+});
+
+test("DocumentEditorPane exposes Academic citation insertion as a toolbar action", async () => {
+  const environment = new JSDOM("<!doctype html><body></body>");
+  const prompts = ["smith-2024", "[Smith 2024]"];
+  Object.defineProperty(environment.window, "prompt", { configurable: true, value: () => prompts.shift() ?? null });
+  const schema = createAcademicDocumentSchema();
+  const paragraph = schema.createNode("paragraph", { id: "toolbar-paragraph", content: [schema.createText("See", { id: "toolbar-text" })] });
+  const document = schema.createDocument([paragraph], "toolbar-document");
+  const parent = environment.window.document.createElement("main");
+  environment.window.document.body.append(parent);
+  using pane = new DocumentEditorPane(new MemoryTextFiles(""), { schema, nodeViews: profileNodeViews, inlineNodeViews: citationInlineNodeViews, toolbarActions: citationToolbarActions });
+  pane.create(parent);
+  await pane.setInput({ resource: URI.file("C:\\project\\toolbar.zeta-academic"), initialText: serializeDocument(document, schema) }, new AbortController().signal);
+
+  const textarea = parent.querySelector<HTMLTextAreaElement>("textarea[data-block-id='toolbar-paragraph']");
+  const citationButton = parent.querySelector<HTMLButtonElement>("button[data-block-type='citation']");
+  assert.ok(textarea);
+  assert.ok(citationButton);
+  textarea.focus();
+  textarea.setSelectionRange(3, 3);
+  textarea.dispatchEvent(new environment.window.Event("select", { bubbles: true }));
+  citationButton.click();
+  const inserted = pane.getDocument().content[0]?.content.find(node => node.type === "citation");
+  assert.equal(inserted?.attrs.key, "smith-2024");
+  assert.equal(inserted?.attrs.label, "[Smith 2024]");
+  environment.window.close();
+});
+
+test("DocumentEditorPane renders resolved citations and bibliography references", async () => {
+  const environment = new JSDOM("<!doctype html><body></body>");
+  const schema = createAcademicDocumentSchema();
+  const citation = schema.createNode("citation", { id: "resolved-citation", attrs: { key: "smith-2024" } });
+  const paragraph = schema.createNode("paragraph", { id: "resolved-paragraph", content: [schema.createText("See "), citation] });
+  const reference = schema.createNode("reference", { id: "resolved-reference", attrs: { key: "smith-2024" }, content: [schema.createNode("paragraph", { id: "resolved-reference-paragraph", content: [schema.createText("Smith, 2024")] })] });
+  const document = schema.createDocument([
+    schema.createNode("title", { content: [schema.createNode("heading", { content: [schema.createText("Citations")] })] }),
+    schema.createNode("abstract", { content: [schema.createNode("paragraph")] }),
+    schema.createNode("section", { content: [schema.createNode("heading", { content: [schema.createText("Body")] }), paragraph] }),
+    schema.createNode("bibliography", { content: [reference] }),
+  ], "resolved-document");
+  const parent = environment.window.document.createElement("main");
+  environment.window.document.body.append(parent);
+  using pane = new DocumentEditorPane(new MemoryTextFiles(""), { schema, nodeViews: { ...profileNodeViews, ...citationNodeViews }, inlineNodeViews: citationInlineNodeViews, plugins: [createReferenceIndexPlugin()] });
+  pane.create(parent);
+  await pane.setInput({ resource: URI.file("C:\\project\\resolved.zeta-academic"), initialText: serializeDocument(document, schema) }, new AbortController().signal);
+
+  const citationElement = parent.querySelector<HTMLElement>(".zeta-citation");
+  const referenceElement = parent.querySelector<HTMLElement>(".zeta-citation-reference");
+  assert.ok(citationElement);
+  assert.ok(referenceElement);
+  assert.equal(citationElement.textContent, "[1]");
+  assert.equal(citationElement.dataset.citationOrdinal, "1");
+  assert.equal(citationElement.classList.contains("zeta-citation-unresolved"), false);
+  assert.equal(referenceElement.dataset.referenceKey, "smith-2024");
+  environment.window.close();
+});
+
+test("DocumentEditorPane exposes reference insertion as a citation toolbar action", async () => {
+  const environment = new JSDOM("<!doctype html><body></body>");
+  const prompts = ["smith-2024", "Smith, 2024"];
+  Object.defineProperty(environment.window, "prompt", { configurable: true, value: () => prompts.shift() ?? null });
+  const schema = createAcademicDocumentSchema();
+  const paragraph = schema.createNode("paragraph", { id: "reference-toolbar-paragraph", content: [schema.createText("Body")] });
+  const document = schema.createDocument([paragraph], "reference-toolbar-document");
+  const parent = environment.window.document.createElement("main");
+  environment.window.document.body.append(parent);
+  using pane = new DocumentEditorPane(new MemoryTextFiles(""), { schema, nodeViews: { ...profileNodeViews, ...citationNodeViews }, inlineNodeViews: citationInlineNodeViews, toolbarActions: citationToolbarActions });
+  pane.create(parent);
+  await pane.setInput({ resource: URI.file("C:\\project\\reference-toolbar.zeta-academic"), initialText: serializeDocument(document, schema) }, new AbortController().signal);
+
+  const textarea = parent.querySelector<HTMLTextAreaElement>("textarea[data-block-id='reference-toolbar-paragraph']");
+  const referenceButton = parent.querySelector<HTMLButtonElement>("button[data-block-type='reference']");
+  assert.ok(textarea);
+  assert.ok(referenceButton);
+  textarea.focus();
+  referenceButton.click();
+  const bibliography = pane.getDocument().content.find(node => node.type === "bibliography");
+  assert.ok(bibliography);
+  assert.equal(bibliography.content[0]?.attrs.key, "smith-2024");
+  assert.equal(bibliography.content[0]?.content[0]?.content[0]?.text, "Smith, 2024");
+  environment.window.close();
+});
+
+test("DocumentEditorPane uses the Academic empty document through revert", async () => {
+  const environment = new JSDOM("<!doctype html><body></body>");
+  const schema = createAcademicDocumentSchema();
+  const parent = environment.window.document.createElement("main");
+  environment.window.document.body.append(parent);
+  using pane = new DocumentEditorPane(new MemoryTextFiles(""), {
+    schema,
+    createEmptyDocument: () => createEmptyAcademicDocument(schema),
+    nodeViews: profileNodeViews,
+  });
+  pane.create(parent);
+  await pane.setInput({ resource: URI.file("C:\\project\\empty.zeta-academic") }, new AbortController().signal);
+
+  assert.deepEqual(pane.getDocument().content.map(node => node.type), ["title", "abstract"]);
+  assert.ok(parent.querySelector("header.zeta-academic-title"));
+  assert.ok(parent.querySelector("section.zeta-academic-abstract"));
+  assert.equal(parent.querySelectorAll("textarea.zeta-document-text-input").length, 2);
+
+  const titleInput = parent.querySelector<HTMLTextAreaElement>("header.zeta-academic-title textarea.zeta-document-text-input");
+  assert.ok(titleInput);
+  titleInput.value = "Temporary title";
+  titleInput.dispatchEvent(new environment.window.Event("input", { bubbles: true }));
+  assert.equal(pane.isDirty, true);
+
+  await pane.revert();
+  assert.deepEqual(pane.getDocument().content.map(node => node.type), ["title", "abstract"]);
+  assert.equal(parent.querySelector<HTMLTextAreaElement>("header.zeta-academic-title textarea.zeta-document-text-input")?.value, "");
+  assert.equal(pane.isDirty, false);
+  environment.window.close();
+});
+
+test("DocumentEditorPane projects read-only inputs without accepting model mutations", async () => {
+  const environment = new JSDOM("<!doctype html><body></body>");
+  const parent = environment.window.document.createElement("main");
+  const pane = new DocumentEditorPane(new MemoryTextFiles("Hello"));
+  pane.create(parent);
+  await pane.setInput({ resource: URI.file("C:\\project\\paper.zeta-academic"), readOnly: true }, new AbortController().signal);
+
+  const textarea = parent.querySelector<HTMLTextAreaElement>("textarea.zeta-document-text-input");
+  assert.ok(textarea);
+  assert.equal(textarea.readOnly, true);
+  assert.equal(textarea.getAttribute("aria-readonly"), "true");
+  assert.equal([...parent.querySelectorAll<HTMLButtonElement>(".zeta-document-block-toolbar-button")].every(button => button.disabled), true);
+  textarea.value = "Rejected";
+  textarea.dispatchEvent(new environment.window.Event("input", { bubbles: true }));
+  assert.equal(pane.getDocument().content[0]?.content[0]?.text, "Hello");
+  const enter = new environment.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Enter" });
+  textarea.dispatchEvent(enter);
+  assert.equal(enter.defaultPrevented, false);
+  pane.dispose();
+  environment.window.close();
+});
+
+test("DocumentEditorPane routes text undo and redo through Gamma history", async () => {
+  const environment = new JSDOM("<!doctype html><body></body>");
+  const files = new MemoryTextFiles("Hello");
+  const parent = environment.window.document.createElement("main");
+  environment.window.document.body.append(parent);
+  using pane = new DocumentEditorPane(files);
+  pane.create(parent);
+  await pane.setInput({ resource: URI.file("C:\\project\\paper.zeta-academic") }, new AbortController().signal);
+
+  const textareas = (): HTMLTextAreaElement[] => Array.from(parent.querySelectorAll<HTMLTextAreaElement>("textarea.zeta-document-text-input"));
+  const dispatchKey = (textarea: HTMLTextAreaElement, key: string, modifiers: KeyboardEventInit = {}): KeyboardEvent => {
+    const event = new environment.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key, ...modifiers });
+    textarea.dispatchEvent(event);
+    return event;
+  };
+
+  let fields = textareas();
+  fields[0]!.focus();
+  fields[0]!.setSelectionRange(2, 2);
+  assert.equal(dispatchKey(fields[0]!, "Enter").defaultPrevented, true);
+  assert.equal(textareas().length, 2);
+
+  fields = textareas();
+  const undo = dispatchKey(fields[1]!, "z", { ctrlKey: true });
+  assert.equal(undo.defaultPrevented, true);
+  assert.equal(textareas().length, 1);
+  assert.equal(environment.window.document.activeElement, textareas()[0]);
+
+  const redo = dispatchKey(textareas()[0]!, "z", { ctrlKey: true, shiftKey: true });
+  assert.equal(redo.defaultPrevented, true);
+  assert.equal(textareas().length, 2);
+  assert.equal(environment.window.document.activeElement, textareas()[1]);
+  assert.equal(textareas()[1]!.selectionStart, 0);
+  environment.window.close();
+});
+
+test("DocumentEditorPane creates a hard break with Shift+Enter", async () => {
+  const environment = new JSDOM("<!doctype html><body></body>");
+  const files = new MemoryTextFiles("Hello");
+  const parent = environment.window.document.createElement("main");
+  environment.window.document.body.append(parent);
+  using pane = new DocumentEditorPane(files);
+  pane.create(parent);
+  await pane.setInput({ resource: URI.file("C:\\project\\paper.zeta-academic") }, new AbortController().signal);
+
+  const textarea = parent.querySelector<HTMLTextAreaElement>("textarea.zeta-document-text-input");
+  assert.ok(textarea);
+  textarea.focus();
+  textarea.setSelectionRange(2, 2);
+  const event = new environment.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Enter", shiftKey: true });
+  textarea.dispatchEvent(event);
+  assert.equal(event.defaultPrevented, true);
+  assert.deepEqual(pane.getDocument().content[0]?.content.map(node => node.type), ["text", "hardBreak", "text"]);
+  assert.deepEqual(pane.getDocument().content[0]?.content.filter(node => node.text !== undefined).map(node => node.text), ["He", "llo"]);
+  assert.ok(parent.querySelector(".zeta-document-rich-text-input br"));
+  environment.window.close();
+});
+
+test("DocumentEditorPane deletes a selection spanning a hard break", async () => {
+  const environment = new JSDOM("<!doctype html><body></body>");
+  const files = new MemoryTextFiles(JSON.stringify({
+    format: "zeta.document",
+    version: 1,
+    document: {
+      id: "document-1",
+      type: "doc",
+      attrs: {},
+      content: [{
+        id: "paragraph-1",
+        type: "paragraph",
+        attrs: {},
+        content: [
+          { id: "text-1", type: "text", attrs: {}, content: [], marks: [], text: "Hello" },
+          { id: "break-1", type: "hardBreak", attrs: {}, content: [], marks: [] },
+          { id: "text-2", type: "text", attrs: {}, content: [], marks: [], text: "world" },
+        ],
+        marks: [],
+      }],
+      marks: [],
+    },
+  }));
+  const parent = environment.window.document.createElement("main");
+  environment.window.document.body.append(parent);
+  using pane = new DocumentEditorPane(files);
+  pane.create(parent);
+  await pane.setInput({ resource: URI.file("C:\\project\\paper.zeta-academic") }, new AbortController().signal);
+
+  const editor = parent.querySelector<HTMLDivElement>(".zeta-document-rich-text-input");
+  assert.ok(editor);
+  const runs = Array.from(editor.querySelectorAll<HTMLElement>("[data-text-node-id]"));
+  const selection = environment.window.document.getSelection();
+  const range = environment.window.document.createRange();
+  range.setStart(runs[0]!.firstChild!, 2);
+  range.setEnd(runs[1]!.firstChild!, 3);
+  selection?.removeAllRanges();
+  selection?.addRange(range);
+  const event = new environment.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Backspace" });
+  editor.dispatchEvent(event);
+  assert.equal(event.defaultPrevented, true);
+  assert.deepEqual(pane.getDocument().content[0]?.content.map(node => node.type), ["text", "text"]);
+  assert.deepEqual(pane.getDocument().content[0]?.content.map(node => node.text), ["He", "ld"]);
+  environment.window.close();
+});
+
+test("DocumentEditorPane renders semantic lists and splits list items", async () => {
+  const environment = new JSDOM("<!doctype html><body></body>");
+  const files = new MemoryTextFiles(JSON.stringify({
+    format: "zeta.document",
+    version: 1,
+    document: {
+      id: "document-1",
+      type: "doc",
+      attrs: {},
+      content: [{
+        id: "list-1",
+        type: "bulletList",
+        attrs: {},
+        content: [{
+          id: "item-1",
+          type: "listItem",
+          attrs: {},
+          content: [{
+            id: "paragraph-1",
+            type: "paragraph",
+            attrs: {},
+            content: [{ id: "text-1", type: "text", attrs: {}, content: [], marks: [], text: "oneTwo" }],
+            marks: [],
+          }],
+          marks: [],
+        }],
+        marks: [],
+      }],
+      marks: [],
+    },
+  }));
+  const parent = environment.window.document.createElement("main");
+  environment.window.document.body.append(parent);
+  using pane = new DocumentEditorPane(files);
+  pane.create(parent);
+  await pane.setInput({ resource: URI.file("C:\\project\\paper.zeta-academic") }, new AbortController().signal);
+
+  assert.equal(parent.querySelectorAll("ul").length, 1);
+  assert.equal(parent.querySelectorAll("ul > li").length, 1);
+  const textarea = parent.querySelector<HTMLTextAreaElement>("textarea.zeta-document-text-input");
+  assert.ok(textarea);
+  textarea.focus();
+  textarea.setSelectionRange(3, 3);
+  const event = new environment.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Enter" });
+  textarea.dispatchEvent(event);
+
+  assert.equal(event.defaultPrevented, true);
+  assert.equal(parent.querySelectorAll("ul > li").length, 2);
+  assert.deepEqual(pane.getDocument().content[0]?.content.map(item => item.content[0]?.content[0]?.text), ["one", "Two"]);
+  environment.window.close();
+});
+
+test("DocumentEditorPane indents and outdents list items with Tab", async () => {
+  const environment = new JSDOM("<!doctype html><body></body>");
+  const files = new MemoryTextFiles(JSON.stringify({
+    format: "zeta.document",
+    version: 1,
+    document: {
+      id: "document-1",
+      type: "doc",
+      attrs: {},
+      content: [{
+        id: "list-1",
+        type: "bulletList",
+        attrs: {},
+        content: [
+          { id: "item-1", type: "listItem", attrs: {}, content: [{ id: "paragraph-1", type: "paragraph", attrs: {}, content: [{ id: "text-1", type: "text", attrs: {}, content: [], marks: [], text: "one" }], marks: [] }], marks: [] },
+          { id: "item-2", type: "listItem", attrs: {}, content: [{ id: "paragraph-2", type: "paragraph", attrs: {}, content: [{ id: "text-2", type: "text", attrs: {}, content: [], marks: [], text: "two" }], marks: [] }], marks: [] },
+        ],
+        marks: [],
+      }],
+      marks: [],
+    },
+  }));
+  const parent = environment.window.document.createElement("main");
+  environment.window.document.body.append(parent);
+  using pane = new DocumentEditorPane(files);
+  pane.create(parent);
+  await pane.setInput({ resource: URI.file("C:\\project\\paper.zeta-academic") }, new AbortController().signal);
+
+  let textareas = Array.from(parent.querySelectorAll<HTMLTextAreaElement>("textarea.zeta-document-text-input"));
+  textareas[1]!.focus();
+  const indent = new environment.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Tab" });
+  textareas[1]!.dispatchEvent(indent);
+  assert.equal(indent.defaultPrevented, true);
+  assert.equal(parent.querySelector("ul")?.children.length, 1);
+  assert.equal(parent.querySelectorAll("ul ul > li").length, 1);
+
+  textareas = Array.from(parent.querySelectorAll<HTMLTextAreaElement>("textarea.zeta-document-text-input"));
+  const outdent = new environment.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Tab", shiftKey: true });
+  textareas[1]!.dispatchEvent(outdent);
+  assert.equal(outdent.defaultPrevented, true);
+  assert.equal(parent.querySelector("ul")?.children.length, 2);
+  assert.equal(parent.querySelectorAll("ul ul").length, 0);
+  environment.window.close();
+});
+
+test("DocumentEditorPane exits an empty list item on the second Enter", async () => {
+  const environment = new JSDOM("<!doctype html><body></body>");
+  const files = new MemoryTextFiles(JSON.stringify({
+    format: "zeta.document",
+    version: 1,
+    document: {
+      id: "document-1",
+      type: "doc",
+      attrs: {},
+      content: [{ id: "list-1", type: "bulletList", attrs: {}, content: [{ id: "item-1", type: "listItem", attrs: {}, content: [{ id: "paragraph-1", type: "paragraph", attrs: {}, content: [], marks: [] }], marks: [] }], marks: [] }],
+      marks: [],
+    },
+  }));
+  const parent = environment.window.document.createElement("main");
+  environment.window.document.body.append(parent);
+  using pane = new DocumentEditorPane(files);
+  pane.create(parent);
+  await pane.setInput({ resource: URI.file("C:\\project\\paper.zeta-academic") }, new AbortController().signal);
+
+  const textarea = parent.querySelector<HTMLTextAreaElement>("textarea.zeta-document-text-input");
+  assert.ok(textarea);
+  textarea.focus();
+  const event = new environment.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Enter" });
+  textarea.dispatchEvent(event);
+  assert.equal(event.defaultPrevented, true);
+  assert.equal(parent.querySelector("ul"), null);
+  assert.equal(pane.getDocument().content[0]?.type, "paragraph");
+  environment.window.close();
+});
+
+test("DocumentEditorPane exposes a block toolbar for block and list formats", async () => {
+  const environment = new JSDOM("<!doctype html><body></body>");
+  const files = new MemoryTextFiles("Hello");
+  const parent = environment.window.document.createElement("main");
+  environment.window.document.body.append(parent);
+  using pane = new DocumentEditorPane(files);
+  pane.create(parent);
+  await pane.setInput({ resource: URI.file("C:\\project\\paper.zeta-academic") }, new AbortController().signal);
+
+  const toolbar = parent.querySelector<HTMLDivElement>(".zeta-document-block-toolbar");
+  const textarea = parent.querySelector<HTMLTextAreaElement>("textarea.zeta-document-text-input");
+  assert.ok(toolbar);
+  assert.ok(textarea);
+  assert.equal(toolbar.hidden, false);
+  textarea.focus();
+  toolbar.querySelector<HTMLButtonElement>("button[data-block-type='heading']")?.click();
+  assert.equal(pane.getDocument().content[0]?.type, "heading");
+  assert.ok(parent.querySelector("h2"));
+  assert.equal(toolbar.querySelector("button[data-block-type='heading']")?.classList.contains("checked"), true);
+
+  toolbar.querySelector<HTMLButtonElement>("button[data-block-type='bulletList']")?.click();
+  assert.equal(pane.getDocument().content[0]?.type, "bulletList");
+  assert.equal(parent.querySelectorAll("ul > li").length, 1);
+  toolbar.querySelector<HTMLButtonElement>("button[data-block-type='orderedList']")?.click();
+  assert.equal(pane.getDocument().content[0]?.type, "orderedList");
+  assert.equal(parent.querySelectorAll("ol > li").length, 1);
+  assert.equal(toolbar.querySelector("button[data-block-type='orderedList']")?.classList.contains("checked"), true);
+
+  toolbar.querySelector<HTMLButtonElement>("button[data-block-type='paragraph']")?.click();
+  assert.equal(pane.getDocument().content[0]?.content[0]?.content[0]?.type, "paragraph");
+  toolbar.querySelector<HTMLButtonElement>("button[data-block-type='table']")?.click();
+  assert.equal(parent.querySelectorAll("table").length, 1);
+  assert.equal(parent.querySelectorAll("table td").length, 4);
+  environment.window.close();
+});
+
+test("DocumentEditorPane toggles blockquotes and inserts horizontal rules", async () => {
+  const environment = new JSDOM("<!doctype html><body></body>");
+  const files = new MemoryTextFiles("Quoted");
+  const parent = environment.window.document.createElement("main");
+  environment.window.document.body.append(parent);
+  using pane = new DocumentEditorPane(files);
+  pane.create(parent);
+  await pane.setInput({ resource: URI.file("C:\\project\\paper.zeta-academic") }, new AbortController().signal);
+
+  const toolbar = parent.querySelector<HTMLDivElement>(".zeta-document-block-toolbar");
+  const textarea = parent.querySelector<HTMLTextAreaElement>("textarea.zeta-document-text-input");
+  assert.ok(toolbar);
+  assert.ok(textarea);
+  textarea.focus();
+  toolbar.querySelector<HTMLButtonElement>("button[data-block-type='blockquote']")?.click();
+  assert.equal(parent.querySelectorAll("blockquote").length, 1);
+  assert.equal(toolbar.querySelector("button[data-block-type='blockquote']")?.classList.contains("checked"), true);
+
+  toolbar.querySelector<HTMLButtonElement>("button[data-block-type='blockquote']")?.click();
+  assert.equal(parent.querySelectorAll("blockquote").length, 0);
+  assert.equal(toolbar.querySelector("button[data-block-type='blockquote']")?.classList.contains("checked"), false);
+
+  toolbar.querySelector<HTMLButtonElement>("button[data-block-type='horizontalRule']")?.click();
+  assert.equal(parent.querySelectorAll("hr.zeta-document-horizontal-rule").length, 1);
+  assert.deepEqual(pane.getDocument().content.map(node => node.type), ["paragraph", "horizontalRule"]);
+  environment.window.close();
+});
+
+test("DocumentEditorPane navigates table cells with Tab and exposes row and column operations", async () => {
+  const environment = new JSDOM("<!doctype html><body></body>");
+  const files = new MemoryTextFiles("Hello");
+  const parent = environment.window.document.createElement("main");
+  environment.window.document.body.append(parent);
+  using pane = new DocumentEditorPane(files);
+  pane.create(parent);
+  await pane.setInput({ resource: URI.file("C:\\project\\paper.zeta-academic") }, new AbortController().signal);
+
+  const toolbar = parent.querySelector<HTMLDivElement>(".zeta-document-block-toolbar");
+  const source = parent.querySelector<HTMLTextAreaElement>("textarea.zeta-document-text-input");
+  assert.ok(toolbar);
+  assert.ok(source);
+  source.focus();
+  toolbar.querySelector<HTMLButtonElement>("button[data-block-type='table']")?.click();
+
+  let cells = Array.from(parent.querySelectorAll<HTMLTextAreaElement>("table td textarea"));
+  assert.equal(cells.length, 4);
+  cells[0]!.focus();
+  const next = new environment.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Tab" });
+  cells[0]!.dispatchEvent(next);
+  assert.equal(next.defaultPrevented, true);
+  assert.equal(environment.window.document.activeElement, cells[1]);
+
+  const previous = new environment.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Tab", shiftKey: true });
+  cells[1]!.dispatchEvent(previous);
+  assert.equal(previous.defaultPrevented, true);
+  assert.equal(environment.window.document.activeElement, cells[0]);
+
+  cells = Array.from(parent.querySelectorAll<HTMLTextAreaElement>("table td textarea"));
+  cells.at(-1)!.focus();
+  const appendRow = new environment.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Tab" });
+  cells.at(-1)!.dispatchEvent(appendRow);
+  assert.equal(appendRow.defaultPrevented, true);
+  assert.equal(parent.querySelectorAll("table td").length, 6);
+  assert.equal(environment.window.document.activeElement, parent.querySelectorAll<HTMLTextAreaElement>("table td textarea")[4]);
+
+  toolbar.querySelector<HTMLButtonElement>("button[data-block-type='insertTableRow']")?.click();
+  assert.equal(parent.querySelectorAll("table td").length, 8);
+  toolbar.querySelector<HTMLButtonElement>("button[data-block-type='insertTableColumn']")?.click();
+  assert.equal(parent.querySelectorAll("table td").length, 12);
+  toolbar.querySelector<HTMLButtonElement>("button[data-block-type='deleteTableColumn']")?.click();
+  assert.equal(parent.querySelectorAll("table td").length, 8);
+  toolbar.querySelector<HTMLButtonElement>("button[data-block-type='deleteTableRow']")?.click();
+  assert.equal(parent.querySelectorAll("table td").length, 6);
+  const activeCell = environment.window.document.activeElement as HTMLTextAreaElement;
+  const undo = new environment.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "z", ctrlKey: true });
+  activeCell.dispatchEvent(undo);
+  assert.equal(undo.defaultPrevented, true);
+  assert.equal(parent.querySelectorAll("table td").length, 8);
+  const redo = new environment.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "y", ctrlKey: true });
+  (environment.window.document.activeElement as HTMLTextAreaElement).dispatchEvent(redo);
+  assert.equal(redo.defaultPrevented, true);
+  assert.equal(parent.querySelectorAll("table td").length, 6);
+  environment.window.close();
+});
+
+test("DocumentEditorPane renders inline image nodes in the rich surface", async () => {
+  const environment = new JSDOM("<!doctype html><body></body>");
+  const files = new MemoryTextFiles(JSON.stringify({
+    format: "zeta.document",
+    version: 1,
+    document: {
+      id: "document-1",
+      type: "doc",
+      attrs: {},
+      content: [{
+        id: "paragraph-1",
+        type: "paragraph",
+        attrs: {},
+        content: [
+          { id: "text-1", type: "text", attrs: {}, content: [], marks: [], text: "Before" },
+          { id: "image-1", type: "image", attrs: { src: "https://example.test/image.png", alt: "Example" }, content: [], marks: [] },
+        ],
+        marks: [],
+      }],
+      marks: [],
+    },
+  }));
+  const parent = environment.window.document.createElement("main");
+  environment.window.document.body.append(parent);
+  using pane = new DocumentEditorPane(files);
+  pane.create(parent);
+  await pane.setInput({ resource: URI.file("C:\\project\\paper.zeta-academic") }, new AbortController().signal);
+
+  const image = parent.querySelector<HTMLImageElement>(".zeta-document-rich-text-input img");
+  assert.ok(image);
+  assert.equal(image.src, "https://example.test/image.png");
+  assert.equal(image.alt, "Example");
+  image.click();
+  assert.equal(image.classList.contains("zeta-document-inline-node-selected"), true);
+  const rich = parent.querySelector<HTMLDivElement>(".zeta-document-rich-text-input");
+  assert.ok(rich);
+  const remove = new environment.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Delete" });
+  rich.dispatchEvent(remove);
+  assert.equal(remove.defaultPrevented, true);
+  assert.equal(pane.getDocument().content[0]?.content.some(node => node.type === "image"), false);
+  const undo = new environment.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "z", ctrlKey: true });
+  rich.dispatchEvent(undo);
+  assert.equal(undo.defaultPrevented, true);
+  const restoredImage = parent.querySelector<HTMLImageElement>(".zeta-document-rich-text-input img");
+  assert.ok(restoredImage);
+  assert.equal(restoredImage.classList.contains("zeta-document-inline-node-selected"), true);
+  environment.window.close();
+});
+
+test("DocumentEditorPane turns an image clipboard paste into an image node", async () => {
+  const environment = new JSDOM("<!doctype html><body></body>");
+  const files = new MemoryTextFiles("Before");
+  const parent = environment.window.document.createElement("main");
+  environment.window.document.body.append(parent);
+  using pane = new DocumentEditorPane(files);
+  pane.create(parent);
+  await pane.setInput({ resource: URI.file("C:\\project\\paper.zeta-academic") }, new AbortController().signal);
+
+  const textarea = parent.querySelector<HTMLTextAreaElement>("textarea.zeta-document-text-input");
+  assert.ok(textarea);
+  textarea.focus();
+  textarea.setSelectionRange(3, 3);
+  const imageFile = new environment.window.File(["image-bytes"], "pasted.png", { type: "image/png" });
+  const paste = new environment.window.Event("paste", { bubbles: true, cancelable: true });
+  Object.defineProperty(paste, "clipboardData", { value: { files: [imageFile], items: [] } });
+  textarea.dispatchEvent(paste);
+  await waitFor(() => pane.getDocument().content[0]?.content[1]?.type === "image");
+
+  assert.equal(paste.defaultPrevented, true);
+  assert.equal(pane.getDocument().content[0]?.content[1]?.type, "image");
+  assert.match(String(pane.getDocument().content[0]?.content[1]?.attrs.src), /^data:image\/png;base64,/);
+  environment.window.close();
+});
+
+test("DocumentEditorPane inserts a pasted image at a rich-text selection", async () => {
+  const environment = new JSDOM("<!doctype html><body></body>");
+  const files = new MemoryTextFiles(JSON.stringify({
+    format: "zeta.document",
+    version: 1,
+    document: {
+      id: "document-1",
+      type: "doc",
+      attrs: {},
+      content: [{
+        id: "paragraph-1",
+        type: "paragraph",
+        attrs: {},
+        content: [
+          { id: "text-1", type: "text", attrs: {}, content: [], marks: [], text: "Hello" },
+          { id: "text-2", type: "text", attrs: {}, content: [], marks: [{ type: "strong", attrs: {} }], text: " world" },
+        ],
+        marks: [],
+      }],
+      marks: [],
+    },
+  }));
+  const parent = environment.window.document.createElement("main");
+  environment.window.document.body.append(parent);
+  using pane = new DocumentEditorPane(files);
+  pane.create(parent);
+  await pane.setInput({ resource: URI.file("C:\\project\\paper.zeta-academic") }, new AbortController().signal);
+
+  const editor = parent.querySelector<HTMLDivElement>(".zeta-document-rich-text-input");
+  assert.ok(editor);
+  const run = editor.querySelector<HTMLElement>("[data-text-node-id='text-1']");
+  assert.ok(run?.firstChild);
+  const selection = environment.window.document.getSelection();
+  const range = environment.window.document.createRange();
+  range.setStart(run.firstChild, 2);
+  range.collapse(true);
+  selection?.removeAllRanges();
+  selection?.addRange(range);
+  const imageFile = new environment.window.File(["image-bytes"], "rich-paste.png", { type: "image/png" });
+  const paste = new environment.window.Event("paste", { bubbles: true, cancelable: true });
+  Object.defineProperty(paste, "clipboardData", { value: { files: [imageFile], items: [] } });
+  editor.dispatchEvent(paste);
+  await waitFor(() => pane.getDocument().content[0]?.content.some(node => node.type === "image") === true);
+
+  assert.equal(paste.defaultPrevented, true);
+  assert.deepEqual(pane.getDocument().content[0]?.content.map(node => node.type), ["text", "image", "text", "text"]);
+  assert.deepEqual(pane.getDocument().content[0]?.content.filter(node => node.text !== undefined).map(node => node.text), ["He", "llo", " world"]);
+  assert.equal(pane.getDocument().content[0]?.content.at(-1)?.marks[0]?.type, "strong");
+  const undo = new environment.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "z", ctrlKey: true });
+  editor.dispatchEvent(undo);
+  assert.equal(undo.defaultPrevented, true);
+  assert.equal(pane.getDocument().content[0]?.content.some(node => node.type === "image"), false);
+  const redo = new environment.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "z", ctrlKey: true, shiftKey: true });
+  editor.dispatchEvent(redo);
+  assert.equal(redo.defaultPrevented, true);
+  assert.equal(pane.getDocument().content[0]?.content.some(node => node.type === "image"), true);
+  const suffixRun = editor.querySelectorAll<HTMLElement>("[data-text-node-id]")[1];
+  assert.ok(suffixRun?.firstChild);
+  const suffixSelection = environment.window.document.getSelection();
+  const suffixRange = environment.window.document.createRange();
+  suffixRange.setStart(suffixRun.firstChild, 0);
+  suffixRange.collapse(true);
+  suffixSelection?.removeAllRanges();
+  suffixSelection?.addRange(suffixRange);
+  const backspace = new environment.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Backspace" });
+  editor.dispatchEvent(backspace);
+  assert.equal(backspace.defaultPrevented, true);
+  assert.equal(pane.getDocument().content[0]?.content.some(node => node.type === "image"), false);
+  environment.window.close();
+});
+
+test("DocumentEditorPane renders and edits marked inline runs", async () => {
+  const environment = new JSDOM("<!doctype html><body></body>");
+  const files = new MemoryTextFiles(JSON.stringify({
+    format: "zeta.document",
+    version: 1,
+    document: {
+      id: "document-1",
+      type: "doc",
+      attrs: {},
+      content: [{
+        id: "paragraph-1",
+        type: "paragraph",
+        attrs: {},
+        content: [
+          { id: "text-1", type: "text", attrs: {}, content: [], marks: [], text: "H" },
+          { id: "text-2", type: "text", attrs: {}, content: [], marks: [{ type: "strong", attrs: {} }], text: "ell" },
+          { id: "text-3", type: "text", attrs: {}, content: [], marks: [], text: "o" },
+        ],
+        marks: [],
+      }],
+      marks: [],
+    },
+  }));
+  const parent = environment.window.document.createElement("main");
+  environment.window.document.body.append(parent);
+  using pane = new DocumentEditorPane(files);
+  pane.create(parent);
+  await pane.setInput({ resource: URI.file("C:\\project\\paper.zeta-academic") }, new AbortController().signal);
+
+  const rich = parent.querySelector<HTMLDivElement>(".zeta-document-rich-text-input");
+  assert.ok(rich);
+  let runs = Array.from(rich.querySelectorAll<HTMLElement>("[data-text-node-id]"));
+  assert.deepEqual(runs.map(run => run.textContent), ["H", "ell", "o"]);
+  assert.equal(runs[1]?.classList.contains("zeta-document-mark-strong"), true);
+
+  runs[1]!.textContent = "ELl";
+  runs[1]!.dispatchEvent(new environment.window.Event("input", { bubbles: true }));
+  assert.equal(pane.getDocument().content[0]?.content[1]?.text, "ELl");
+  assert.equal(pane.getDocument().content[0]?.content[1]?.marks[0]?.type, "strong");
+
+  runs = Array.from(rich.querySelectorAll<HTMLElement>("[data-text-node-id]"));
+  const selection = environment.window.document.getSelection();
+  const range = environment.window.document.createRange();
+  range.setStart(runs[0]!.firstChild!, 0);
+  range.setEnd(runs[2]!.firstChild!, 1);
+  selection?.removeAllRanges();
+  selection?.addRange(range);
+  const event = new environment.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "b", ctrlKey: true });
+  rich.dispatchEvent(event);
+  assert.equal(event.defaultPrevented, true);
+  assert.deepEqual(pane.getDocument().content[0]?.content.map(node => node.marks.map(mark => mark.type)), [["strong"], ["strong"], ["strong"]]);
+
+  runs = Array.from(rich.querySelectorAll<HTMLElement>("[data-text-node-id]"));
+  range.setStart(runs[0]!.firstChild!, 0);
+  range.setEnd(runs[2]!.firstChild!, 1);
+  selection?.removeAllRanges();
+  selection?.addRange(range);
+  rich.dispatchEvent(new environment.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "b", ctrlKey: true }));
+  assert.deepEqual(pane.getDocument().content[0]?.content.map(node => node.marks), [[], [], []]);
+
+  runs = Array.from(rich.querySelectorAll<HTMLElement>("[data-text-node-id]"));
+  range.setStart(runs[0]!.firstChild!, 1);
+  range.setEnd(runs[2]!.firstChild!, 0);
+  selection?.removeAllRanges();
+  selection?.addRange(range);
+  const beforeInput = new environment.window.InputEvent("beforeinput", { bubbles: true, cancelable: true, inputType: "insertText", data: "X" });
+  rich.dispatchEvent(beforeInput);
+  assert.equal(beforeInput.defaultPrevented, true);
+  assert.deepEqual(pane.getDocument().content[0]?.content.map(node => node.text), ["H", "X", "o"]);
+  environment.window.close();
+});
+
+test("DocumentEditorPane carries collapsed mark toggles into later input", async () => {
+  const environment = new JSDOM("<!doctype html><body></body>");
+  const parent = environment.window.document.createElement("main");
+  environment.window.document.body.append(parent);
+  using pane = new DocumentEditorPane(new MemoryTextFiles("Hello"));
+  pane.create(parent);
+  await pane.setInput({ resource: URI.file("C:\\project\\paper.zeta-academic") }, new AbortController().signal);
+
+  const textarea = parent.querySelector<HTMLTextAreaElement>("textarea.zeta-document-text-input");
+  assert.ok(textarea);
+  textarea.focus();
+  textarea.setSelectionRange(5, 5);
+  textarea.dispatchEvent(new environment.window.Event("select", { bubbles: true }));
+  const toggle = new environment.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "b", ctrlKey: true });
+  textarea.dispatchEvent(toggle);
+  assert.equal(toggle.defaultPrevented, true);
+
+  textarea.value = "Hello!";
+  textarea.dispatchEvent(new environment.window.Event("input", { bubbles: true }));
+  let rich = parent.querySelector<HTMLDivElement>(".zeta-document-rich-text-input");
+  assert.ok(rich);
+  assert.equal(pane.getDocument().content[0]?.content[0]?.text, "Hello!");
+  assert.deepEqual(pane.getDocument().content[0]?.content[0]?.marks, [{ type: "strong", attrs: {} }]);
+
+  const run = rich.querySelector<HTMLElement>("[data-text-node-id]");
+  assert.ok(run?.firstChild);
+  const domSelection = environment.window.document.getSelection();
+  const range = environment.window.document.createRange();
+  range.setStart(run.firstChild, run.textContent?.length ?? 0);
+  range.collapse(true);
+  domSelection?.removeAllRanges();
+  domSelection?.addRange(range);
+  rich.dispatchEvent(new environment.window.Event("focus", { bubbles: true }));
+  const off = new environment.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "b", ctrlKey: true });
+  rich.dispatchEvent(off);
+  assert.equal(off.defaultPrevented, true);
+
+  const beforeInput = new environment.window.InputEvent("beforeinput", { bubbles: true, cancelable: true, inputType: "insertText", data: "?" });
+  rich.dispatchEvent(beforeInput);
+  assert.equal(beforeInput.defaultPrevented, true);
+  assert.equal(pane.getDocument().content[0]?.content[0]?.text, "Hello!?");
+  assert.deepEqual(pane.getDocument().content[0]?.content[0]?.marks, []);
+  environment.window.close();
+});
+
+test("DocumentEditorPane applies, updates, and removes link marks", async () => {
+  const environment = new JSDOM("<!doctype html><body></body>");
+  let promptValue = " https://example.test ";
+  Object.defineProperty(environment.window, "prompt", { configurable: true, value: () => promptValue });
+  const files = new MemoryTextFiles(JSON.stringify({
+    format: "zeta.document",
+    version: 1,
+    document: {
+      id: "document-1",
+      type: "doc",
+      attrs: {},
+      content: [{
+        id: "paragraph-1",
+        type: "paragraph",
+        attrs: {},
+        content: [
+          { id: "text-1", type: "text", attrs: {}, content: [], marks: [], text: "Hello" },
+          { id: "text-2", type: "text", attrs: {}, content: [], marks: [{ type: "strong", attrs: {} }], text: " world" },
+        ],
+        marks: [],
+      }],
+      marks: [],
+    },
+  }));
+  const parent = environment.window.document.createElement("main");
+  environment.window.document.body.append(parent);
+  using pane = new DocumentEditorPane(files);
+  pane.create(parent);
+  await pane.setInput({ resource: URI.file("C:\\project\\paper.zeta-academic") }, new AbortController().signal);
+
+  const rich = parent.querySelector<HTMLDivElement>(".zeta-document-rich-text-input");
+  assert.ok(rich);
+  rich.focus();
+  const select = (startRunIndex: number, startOffset: number, endRunIndex: number, endOffset: number): void => {
+    const runs = Array.from(rich.querySelectorAll<HTMLElement>("[data-text-node-id]"));
+    const selection = environment.window.document.getSelection();
+    const range = environment.window.document.createRange();
+    range.setStart(runs[startRunIndex]!.firstChild!, startOffset);
+    range.setEnd(runs[endRunIndex]!.firstChild!, endOffset);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    rich.dispatchEvent(new environment.window.Event("mouseup", { bubbles: true }));
+  };
+
+  select(0, 1, 1, 6);
+  parent.querySelector<HTMLButtonElement>("button[data-block-type='link']")?.click();
+  assert.deepEqual(pane.getDocument().content[0]?.content.map(node => node.marks.map(mark => mark.type)), [[], ["link"], ["strong", "link"]]);
+  let links = Array.from(rich.querySelectorAll<HTMLAnchorElement>("a.zeta-document-inline-run"));
+  assert.deepEqual(links.map(link => link.getAttribute("href")), ["https://example.test", "https://example.test"]);
+  assert.equal(parent.querySelector("button[data-block-type='link']")?.classList.contains("checked"), true);
+
+  promptValue = "https://updated.test";
+  select(1, 0, 2, 6);
+  const shortcut = new environment.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "k", ctrlKey: true });
+  rich.dispatchEvent(shortcut);
+  assert.equal(shortcut.defaultPrevented, true);
+  links = Array.from(rich.querySelectorAll<HTMLAnchorElement>("a.zeta-document-inline-run"));
+  assert.deepEqual(links.map(link => link.getAttribute("href")), ["https://updated.test", "https://updated.test"]);
+
+  select(1, 0, 2, 6);
+  parent.querySelector<HTMLButtonElement>("button[data-block-type='unlink']")?.click();
+  assert.equal(rich.querySelectorAll("a.zeta-document-inline-run").length, 0);
+  assert.deepEqual(pane.getDocument().content[0]?.content.map(node => node.marks.map(mark => mark.type)), [[], [], ["strong"]]);
+  environment.window.close();
+});
+
+test("DocumentEditorPane routes rich-text copy and cut through Gamma", async () => {
+  const environment = new JSDOM("<!doctype html><body></body>");
+  const files = new MemoryTextFiles(JSON.stringify({
+    format: "zeta.document",
+    version: 1,
+    document: {
+      id: "document-1",
+      type: "doc",
+      attrs: {},
+      content: [{
+        id: "paragraph-1",
+        type: "paragraph",
+        attrs: {},
+        content: [
+          { id: "text-1", type: "text", attrs: {}, content: [], marks: [], text: "Hello" },
+          { id: "text-2", type: "text", attrs: {}, content: [], marks: [{ type: "strong", attrs: {} }], text: " world" },
+        ],
+        marks: [],
+      }],
+      marks: [],
+    },
+  }));
+  const parent = environment.window.document.createElement("main");
+  environment.window.document.body.append(parent);
+  using pane = new DocumentEditorPane(files);
+  pane.create(parent);
+  await pane.setInput({ resource: URI.file("C:\\project\\paper.zeta-academic") }, new AbortController().signal);
+
+  const rich = parent.querySelector<HTMLDivElement>(".zeta-document-rich-text-input");
+  assert.ok(rich);
+  const runs = Array.from(rich.querySelectorAll<HTMLElement>("[data-text-node-id]"));
+  const selection = environment.window.document.getSelection();
+  const range = environment.window.document.createRange();
+  range.setStart(runs[0]!.firstChild!, 0);
+  range.setEnd(runs[1]!.firstChild!, runs[1]!.textContent!.length);
+  selection?.removeAllRanges();
+  selection?.addRange(range);
+  environment.window.document.dispatchEvent(new environment.window.Event("selectionchange"));
+
+  const clipboardValues = new Map<string, string>();
+  const clipboardData = { setData: (type: string, value: string) => clipboardValues.set(type, value) } as unknown as DataTransfer;
+  const copy = new environment.window.Event("copy", { bubbles: true, cancelable: true });
+  Object.defineProperty(copy, "clipboardData", { value: clipboardData });
+  rich.dispatchEvent(copy);
+  assert.equal(copy.defaultPrevented, true);
+  assert.equal(clipboardValues.get("text/plain"), "Hello world");
+  const encodedFragment = clipboardValues.get(DOCUMENT_FRAGMENT_CLIPBOARD_MIME);
+  assert.ok(encodedFragment);
+  assert.equal(pane.getDocument().content[0]?.content.length, 2);
+
+  const pasteSelection = environment.window.document.getSelection();
+  const pasteRange = environment.window.document.createRange();
+  pasteRange.setStart(runs[1]!.firstChild!, runs[1]!.textContent!.length);
+  pasteRange.collapse(true);
+  pasteSelection?.removeAllRanges();
+  pasteSelection?.addRange(pasteRange);
+  environment.window.document.dispatchEvent(new environment.window.Event("selectionchange"));
+  const pasteData = {
+    files: [],
+    items: [],
+    getData: (type: string) => type === DOCUMENT_FRAGMENT_CLIPBOARD_MIME ? encodedFragment : "",
+  } as unknown as DataTransfer;
+  const paste = new environment.window.Event("paste", { bubbles: true, cancelable: true });
+  Object.defineProperty(paste, "clipboardData", { value: pasteData });
+  rich.dispatchEvent(paste);
+  assert.equal(paste.defaultPrevented, true);
+  assert.deepEqual(pane.getDocument().content[0]?.content.filter(node => node.text !== undefined).map(node => node.text), ["Hello", " world", "Hello", " world"]);
+
+  const updatedRich = parent.querySelector<HTMLDivElement>(".zeta-document-rich-text-input");
+  assert.ok(updatedRich);
+  const updatedRuns = Array.from(updatedRich.querySelectorAll<HTMLElement>("[data-text-node-id]"));
+  const cutSelection = environment.window.document.getSelection();
+  const cutRange = environment.window.document.createRange();
+  cutRange.setStart(updatedRuns[0]!.firstChild!, 0);
+  cutRange.setEnd(updatedRuns.at(-1)!.firstChild!, updatedRuns.at(-1)!.textContent!.length);
+  cutSelection?.removeAllRanges();
+  cutSelection?.addRange(cutRange);
+  environment.window.document.dispatchEvent(new environment.window.Event("selectionchange"));
+  const cut = new environment.window.Event("cut", { bubbles: true, cancelable: true });
+  Object.defineProperty(cut, "clipboardData", { value: clipboardData });
+  updatedRich.dispatchEvent(cut);
+  assert.equal(cut.defaultPrevented, true);
+  assert.equal(pane.getDocument().content[0]?.content.length, 0);
+  environment.window.close();
+});
+
+test("DocumentEditorPane handles whole-document select all, copy, and cut", async () => {
+  const environment = new JSDOM("<!doctype html><body></body>");
+  const files = new MemoryTextFiles(JSON.stringify({
+    format: "zeta.document",
+    version: 1,
+    document: {
+      id: "document-1",
+      type: "doc",
+      attrs: {},
+      content: [
+        {
+          id: "paragraph-1",
+          type: "paragraph",
+          attrs: {},
+          content: [{ id: "text-1", type: "text", attrs: {}, content: [], marks: [{ type: "strong", attrs: {} }], text: "First" }],
+          marks: [],
+        },
+        {
+          id: "paragraph-2",
+          type: "paragraph",
+          attrs: {},
+          content: [{ id: "text-2", type: "text", attrs: {}, content: [], marks: [{ type: "em", attrs: {} }], text: "Second" }],
+          marks: [],
+        },
+      ],
+      marks: [],
+    },
+  }));
+  const parent = environment.window.document.createElement("main");
+  environment.window.document.body.append(parent);
+  using pane = new DocumentEditorPane(files);
+  pane.create(parent);
+  await pane.setInput({ resource: URI.file("C:\\project\\paper.zeta-academic") }, new AbortController().signal);
+
+  const rich = parent.querySelector<HTMLDivElement>(".zeta-document-rich-text-input");
+  assert.ok(rich);
+  const selectAll = new environment.window.KeyboardEvent("keydown", { key: "a", ctrlKey: true, bubbles: true, cancelable: true });
+  rich.dispatchEvent(selectAll);
+  assert.equal(selectAll.defaultPrevented, true);
+
+  const clipboardValues = new Map<string, string>();
+  const clipboardData = { setData: (type: string, value: string) => clipboardValues.set(type, value) } as unknown as DataTransfer;
+  const copy = new environment.window.Event("copy", { bubbles: true, cancelable: true });
+  Object.defineProperty(copy, "clipboardData", { value: clipboardData });
+  rich.dispatchEvent(copy);
+  assert.equal(copy.defaultPrevented, true);
+  assert.equal(clipboardValues.get("text/plain"), "First\nSecond");
+  assert.ok(clipboardValues.get(DOCUMENT_FRAGMENT_CLIPBOARD_MIME));
+
+  const cut = new environment.window.Event("cut", { bubbles: true, cancelable: true });
+  Object.defineProperty(cut, "clipboardData", { value: clipboardData });
+  rich.dispatchEvent(cut);
+  assert.equal(cut.defaultPrevented, true);
+  assert.deepEqual(pane.getDocument().content.map(node => node.type), ["paragraph"]);
+  assert.equal(pane.getDocument().content[0]?.content.length, 0);
+  environment.window.close();
+});
+
+test("DocumentEditorPane replaces a rich-text selection spanning sibling blocks", async () => {
+  const environment = new JSDOM("<!doctype html><body></body>");
+  const files = new MemoryTextFiles(JSON.stringify({
+    format: "zeta.document",
+    version: 1,
+    document: {
+      id: "document-1",
+      type: "doc",
+      attrs: {},
+      content: [
+        {
+          id: "paragraph-1",
+          type: "paragraph",
+          attrs: {},
+          content: [
+            { id: "text-1", type: "text", attrs: {}, content: [], marks: [], text: "First" },
+            { id: "break-1", type: "hardBreak", attrs: {}, content: [], marks: [] },
+          ],
+          marks: [],
+        },
+        {
+          id: "paragraph-2",
+          type: "paragraph",
+          attrs: {},
+          content: [
+            { id: "text-2", type: "text", attrs: {}, content: [], marks: [], text: "Second" },
+            { id: "break-2", type: "hardBreak", attrs: {}, content: [], marks: [] },
+          ],
+          marks: [],
+        },
+      ],
+      marks: [],
+    },
+  }));
+  const parent = environment.window.document.createElement("main");
+  environment.window.document.body.append(parent);
+  using pane = new DocumentEditorPane(files);
+  pane.create(parent);
+  await pane.setInput({ resource: URI.file("C:\\project\\paper.zeta-academic") }, new AbortController().signal);
+
+  const editors = Array.from(parent.querySelectorAll<HTMLDivElement>(".zeta-document-rich-text-input"));
+  assert.equal(editors.length, 2);
+  const startRun = editors[0]!.querySelector<HTMLElement>("[data-text-node-id='text-1']");
+  const endRun = editors[1]!.querySelector<HTMLElement>("[data-text-node-id='text-2']");
+  assert.ok(startRun);
+  assert.ok(endRun);
+  editors[0]!.focus();
+  const domSelection = environment.window.document.getSelection();
+  const range = environment.window.document.createRange();
+  range.setStart(startRun.firstChild!, 2);
+  range.setEnd(endRun.firstChild!, 3);
+  domSelection?.removeAllRanges();
+  domSelection?.addRange(range);
+  environment.window.document.dispatchEvent(new environment.window.Event("selectionchange"));
+
+  const beforeInput = new environment.window.InputEvent("beforeinput", { bubbles: true, cancelable: true, inputType: "deleteContentBackward" });
+  editors[0]!.dispatchEvent(beforeInput);
+  assert.equal(beforeInput.defaultPrevented, true);
+  assert.deepEqual(pane.getDocument().content.map(node => node.id), ["paragraph-1"]);
+  assert.deepEqual(pane.getDocument().content[0]?.content.map(node => node.text ?? node.type), ["Fi", "ond", "hardBreak"]);
+
+  const undo = new environment.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "z", ctrlKey: true });
+  (parent.querySelector<HTMLDivElement>(".zeta-document-rich-text-input") as HTMLDivElement).dispatchEvent(undo);
+  assert.equal(undo.defaultPrevented, true);
+  assert.deepEqual(pane.getDocument().content.map(node => node.id), ["paragraph-1", "paragraph-2"]);
+
+  const paste = new environment.window.InputEvent("beforeinput", { bubbles: true, cancelable: true, inputType: "insertFromPaste", data: "A\nB" });
+  (parent.querySelector<HTMLDivElement>(".zeta-document-rich-text-input") as HTMLDivElement).dispatchEvent(paste);
+  assert.equal(paste.defaultPrevented, true);
+  assert.deepEqual(pane.getDocument().content.map(node => node.content.filter(child => child.text !== undefined).map(child => child.text).join("")), ["FiA", "Bond"]);
+  environment.window.close();
+});
+
+test("DocumentEditorPane pastes multiline text as structured blocks", async () => {
+  const environment = new JSDOM("<!doctype html><body></body>");
+  const files = new MemoryTextFiles(JSON.stringify({
+    format: "zeta.document",
+    version: 1,
+    document: {
+      id: "document-1",
+      type: "doc",
+      attrs: {},
+      content: [{
+        id: "paragraph-1",
+        type: "paragraph",
+        attrs: {},
+        content: [
+          { id: "text-1", type: "text", attrs: {}, content: [], marks: [], text: "H" },
+          { id: "text-2", type: "text", attrs: {}, content: [], marks: [], text: "ell" },
+          { id: "text-3", type: "text", attrs: {}, content: [], marks: [], text: "o" },
+        ],
+        marks: [],
+      }],
+      marks: [],
+    },
+  }));
+  const parent = environment.window.document.createElement("main");
+  environment.window.document.body.append(parent);
+  using pane = new DocumentEditorPane(files);
+  pane.create(parent);
+  await pane.setInput({ resource: URI.file("C:\\project\\paper.zeta-academic") }, new AbortController().signal);
+
+  const editor = parent.querySelector<HTMLDivElement>(".zeta-document-rich-text-input");
+  assert.ok(editor);
+  const runs = Array.from(editor.querySelectorAll<HTMLElement>("[data-text-node-id]"));
+  const selection = environment.window.document.getSelection();
+  const range = environment.window.document.createRange();
+  range.setStart(runs[0]!.firstChild!, 1);
+  range.setEnd(runs[2]!.firstChild!, 0);
+  selection?.removeAllRanges();
+  selection?.addRange(range);
+  const event = new environment.window.InputEvent("beforeinput", { bubbles: true, cancelable: true, inputType: "insertFromPaste", data: "A\nB" });
+  editor.dispatchEvent(event);
+
+  assert.equal(event.defaultPrevented, true);
+  assert.deepEqual(pane.getDocument().content.map(block => block.content.map(child => child.text ?? "").join("")), ["HA", "Bo"]);
+  assert.equal(pane.getDocument().content.length, 2);
+  environment.window.close();
+});
+
+test("DocumentEditorPane restores serialized blocks and releases its model", async () => {
+  const environment = new JSDOM("<!doctype html><body></body>");
+  const files = new MemoryTextFiles(JSON.stringify({
+    format: "zeta.document",
+    version: 1,
+    document: {
+      id: "document-1",
+      type: "doc",
+      attrs: {},
+      content: [
+        {
+          id: "code-1",
+          type: "codeBlock",
+          attrs: { language: "typescript" },
+          content: [{ id: "code-text-1", type: "text", attrs: {}, content: [], marks: [], text: "const value = 1;" }],
+          marks: [],
+        },
+      ],
+      marks: [],
+    },
+  }));
+  const parent = environment.window.document.createElement("main");
+  using pane = new DocumentEditorPane(files);
+  pane.create(parent);
+  await pane.setInput({ resource: URI.file("C:\\project\\paper.zeta-academic") }, new AbortController().signal);
+
+  assert.equal(parent.querySelector("[data-editor-kind='code-block']")?.textContent, "");
+  assert.equal(parent.querySelector<HTMLTextAreaElement>("textarea")?.value, "const value = 1;");
+  pane.clearInput();
+  assert.throws(() => pane.getDocument(), /no active model/);
+  environment.window.close();
+});
+
+test("DocumentEditorPane delegates code blocks to an embedded line editor", async () => {
+  const environment = new JSDOM("<!doctype html><body></body>");
+  const files = new MemoryTextFiles(JSON.stringify({
+    format: "zeta.document",
+    version: 1,
+    document: {
+      id: "document-1",
+      type: "doc",
+      attrs: {},
+      content: [{
+        id: "code-1",
+        type: "codeBlock",
+        attrs: { language: "typescript" },
+        content: [{ id: "code-text-1", type: "text", attrs: {}, content: [], marks: [], text: "const value = 1;" }],
+        marks: [],
+      }],
+      marks: [],
+    },
+  }));
+  const factory = new FakeEmbeddedTextEditorFactory();
+  const parent = environment.window.document.createElement("main");
+  using pane = new DocumentEditorPane(files, { embeddedTextEditorFactory: factory });
+  pane.create(parent);
+  await pane.setInput({ resource: URI.file("C:\\project\\paper.zeta-academic") }, new AbortController().signal);
+
+  assert.equal(factory.editors.length, 1);
+  assert.equal(factory.editors[0]?.options.languageId, "typescript");
+  factory.editors[0]?.emitChange("const value = 2;");
+  assert.equal(pane.getDocument().content[0]?.content[0]?.text, "const value = 2;");
+  assert.equal(factory.editors.length, 1);
+  environment.window.close();
+});
+
+test("AlphaEmbeddedTextEditorFactory creates a line editor surface", async () => {
+  const environment = new JSDOM("<!doctype html><body></body>");
+  const parent = environment.window.document.createElement("main");
+  const previousWindow = (globalThis as typeof globalThis & { window?: Window }).window;
+  const previousDocument = (globalThis as typeof globalThis & { document?: Document }).document;
+  const previousNode = (globalThis as typeof globalThis & { Node?: typeof Node }).Node;
+  Object.defineProperty(globalThis, "window", { configurable: true, value: environment.window });
+  Object.defineProperty(globalThis, "document", { configurable: true, value: environment.window.document });
+  Object.defineProperty(globalThis, "Node", { configurable: true, value: environment.window.Node });
+  try {
+    const { AlphaEmbeddedTextEditorFactory } = await import("../../../alpha/browser/alphaEmbeddedTextEditor.js");
+    using editor = new AlphaEmbeddedTextEditorFactory().create({
+      resource: URI.parse("untitled:test/code"),
+      label: "code",
+      languageId: "typescript",
+      initialText: "const value = 1;",
+    });
+    editor.create(parent);
+    await new Promise(resolve => setTimeout(resolve, 25));
+    assert.ok(parent.querySelector(".zeta-alpha-editor"));
+    assert.equal(editor.getValue(), "const value = 1;");
+  } finally {
+    Object.defineProperty(globalThis, "window", { configurable: true, value: previousWindow });
+    Object.defineProperty(globalThis, "document", { configurable: true, value: previousDocument });
+    Object.defineProperty(globalThis, "Node", { configurable: true, value: previousNode });
+  }
+  environment.window.close();
+});
+
+async function waitFor(predicate: () => boolean, timeout = 500): Promise<void> {
+  const deadline = Date.now() + timeout;
+  while (!predicate()) {
+    if (Date.now() >= deadline) throw new Error("Timed out waiting for Gamma browser state");
+    await new Promise(resolve => setTimeout(resolve, 1));
+  }
+}
+
+class MemoryTextFiles implements ITextFileService {
+  readonly onDidChangeFiles = (_listener: (event: IFileChangeEvent) => void) => ({
+    dispose(): void {},
+    [Symbol.dispose](): void {},
+  });
+  lastSavedText = "";
+
+  constructor(private text: string) {}
+
+  async resolve(request: TextFileResolveRequest, _signal: AbortSignal): Promise<ResolvedTextFileContent> {
+    return { resource: request.resource, text: request.bootstrapText ?? this.text, source: "fileSystem" as ResolvedTextFileContent["source"] };
+  }
+
+  async save(request: TextFileSaveRequest, _signal: AbortSignal): Promise<void> {
+    this.lastSavedText = request.text;
+    this.text = request.text;
+  }
+}
+
+class FakeEmbeddedTextEditorFactory implements IEmbeddedTextEditorFactory {
+  readonly editors: FakeEmbeddedTextEditor[] = [];
+
+  create(options: EmbeddedTextEditorOptions): IEmbeddedTextEditor {
+    const editor = new FakeEmbeddedTextEditor(options);
+    this.editors.push(editor);
+    return editor;
+  }
+}
+
+class FakeEmbeddedTextEditor extends DisposableOwner implements IEmbeddedTextEditor {
+  private readonly changeEmitter = this.own(new Emitter<string>());
+  readonly onDidChange = this.changeEmitter.event;
+  private value: string;
+  readonly options: EmbeddedTextEditorOptions;
+
+  constructor(options: EmbeddedTextEditorOptions) {
+    super();
+    this.options = options;
+    this.value = options.initialText;
+  }
+
+  create(parent: HTMLElement): void {
+    const element = parent.ownerDocument.createElement("textarea");
+    element.value = this.value;
+    parent.append(element);
+  }
+
+  setValue(value: string): void {
+    this.value = value;
+  }
+
+  getValue(): string {
+    return this.value;
+  }
+
+  layout(_dimension: IDimension): void {}
+
+  focus(): void {}
+
+  emitChange(value: string): void {
+    this.value = value;
+    this.changeEmitter.fire(value);
+  }
+}

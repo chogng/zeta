@@ -1,7 +1,10 @@
 .zeta-context-view {
   position: fixed;
   box-sizing: border-box;
-  z-index: 1000;
+  z-index: calc(
+    var(--zeta-z-index-context-view, 2500) +
+    var(--zeta-context-view-layer, 0)
+  );
   max-width: calc(100vw - 8px);
   max-height: calc(100vh - 8px);
 }

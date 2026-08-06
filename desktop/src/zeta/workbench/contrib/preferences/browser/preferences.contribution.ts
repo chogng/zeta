@@ -3,9 +3,9 @@ import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
 import { Action2, MenuId, registerAction2 } from "../../../../platform/actions/common/actions.js";
 import { IConfigurationService } from "../../../../platform/configuration/common/configuration.js";
 import { IDialogService } from "../../../../platform/dialogs/common/dialogs.js";
+import { ILayoutService } from "../../../../platform/layout/common/layoutService.js";
 import type { ServicesAccessor } from "../../../../platform/instantiation/common/instantiation.js";
 import { IThemeService } from "../../../../platform/theme/common/themeService.js";
-import { IWorkbenchWindowService } from "../../../browser/window.js";
 import { registerWorkbenchContribution, WorkbenchPhase } from "../../../common/contributions.js";
 import { IUserThemeService } from "../../../common/userThemes.js";
 import { ISettingsService } from "../../../services/preferences/common/settings.js";
@@ -51,7 +51,7 @@ registerWorkbenchContribution(
   WorkbenchPhase.BlockStartup,
   (accessor) => new SettingsEditorContribution({
     configurationService: accessor.get(IConfigurationService),
-    container: accessor.get(IWorkbenchWindowService).root,
+    container: accessor.get(ILayoutService).mainContainer,
     dialogService: accessor.get(IDialogService),
     settingsService: accessor.get(ISettingsService),
     themeService: accessor.get(IThemeService),

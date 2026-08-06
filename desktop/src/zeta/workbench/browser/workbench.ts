@@ -1,6 +1,7 @@
 import "./style.js";
 import type { FsChanged } from "../../../../generated/app-server/types.js";
 import { setHoverDelegate } from "../../base/browser/ui/hover/hoverDelegate.js";
+import { bindResizableLayout } from "../../base/browser/ui/resizable/resizable.js";
 import {
   type IDisposable,
   DisposableOwner,
@@ -37,6 +38,9 @@ import {
   IConfigurationService,
 } from "../../platform/configuration/common/configuration.js";
 import { IStorageService, WillSaveStateReason } from "../../platform/storage/common/storage.js";
+import { BrowserLayoutService } from "../../platform/layout/browser/layoutService.js";
+import { ILayoutService } from "../../platform/layout/common/layoutService.js";
+import "../../platform/layout/browser/zIndexRegistry.js";
 import {
   IContextMenuService,
 } from "../../platform/contextview/browser/contextMenu.js";
@@ -188,6 +192,8 @@ import { AccessibleViewInformationService, IAccessibleViewInformationService } f
 import { NativeAccessibilityService } from "../services/accessibility/electron-browser/accessibilityService.js";
 import { BrowserUntitledTextEditorService } from "../services/untitled/browser/browserUntitledTextEditorService.js";
 import { IUntitledTextEditorService } from "../services/untitled/common/untitledTextEditorService.js";
+import { BrowserWorkingCopyService } from "../services/workingCopy/browser/browserWorkingCopyService.js";
+import { IWorkingCopyService } from "../services/workingCopy/common/workingCopyService.js";
 
 /** Host-specific inputs required to construct a workbench. */
 export interface IStartWorkbenchOptions {
@@ -282,6 +288,8 @@ export class Workbench extends DisposableOwner {
     services.set(ITextFileService, textFileService);
     const untitledTextEditorService = this.own(new BrowserUntitledTextEditorService());
     services.set(IUntitledTextEditorService, untitledTextEditorService);
+    const workingCopyService = this.own(new BrowserWorkingCopyService());
+    services.set(IWorkingCopyService, workingCopyService);
     const textMateService = this.own(new BrowserTextMateService());
     services.set(ITextMateService, textMateService);
     const languageFeaturesService = this.own(new LanguageFeaturesService());
@@ -307,6 +315,16 @@ export class Workbench extends DisposableOwner {
     }));
     services.set(IWorkbenchWindowService, workbenchWindow);
     const ownerDocument = workbenchWindow.ownerDocument;
+    let workbenchLayout: WorkbenchLayout | undefined;
+    const layoutService = this.own(new BrowserLayoutService({
+      root: workbenchRoot,
+      getContainerOffset: () => workbenchLayout?.mainContainerOffset ?? {
+        top: 0,
+        quickInputTop: 0,
+      },
+      focus: () => this.editor.focus(),
+    }));
+    services.set(ILayoutService, layoutService);
 
     const configuration = this.own(new WorkbenchConfigurationService({
       api: configurationApi,
@@ -423,12 +441,13 @@ export class Workbench extends DisposableOwner {
     const menus = new MenuService(commands, contextKeys);
     services.set(IMenuService, menus);
     const contextViews = this.own(
-      new BrowserContextViewService(workbenchRoot),
+      new BrowserContextViewService(layoutService.activeContainer, layoutService),
     );
     services.set(IContextViewService, contextViews);
     const quickInput = this.own(new WorkbenchQuickInputService({
-      container: workbenchRoot,
+      container: layoutService.activeContainer,
       contextKeyService: contextKeys,
+      layoutService,
     }));
     services.set(IQuickInputService, quickInput);
     const settings = this.own(new SettingsService());
@@ -482,6 +501,7 @@ export class Workbench extends DisposableOwner {
       languageFeaturesService,
       languageResolver: languageFeaturesService,
       diffApi: api.diff,
+      workingCopyService,
       saveAsResource: nativeHostApi
         ? async (defaultName) => {
           const filePath = await nativeHostApi.saveFile({ defaultName });
@@ -612,9 +632,12 @@ export class Workbench extends DisposableOwner {
       ["panel", panel],
     ]);
     const layout = this.own(new WorkbenchLayout(workbenchRoot, parts, {
+      initialDimension: layoutService.mainContainerDimension,
       storageService: storage,
     }));
+    workbenchLayout = layout;
     services.set(IWorkbenchLayoutService, layout);
+    this.own(bindResizableLayout(layoutService.onDidLayoutMainContainer, layout));
     // Fixed Panel and Auxiliary Bar views may depend on the host layout during construction.
     openPanelComposite(panelCompositeDescriptor.id);
     const auxiliaryPaneComposite = new PaneComposite({
@@ -671,7 +694,7 @@ export class Workbench extends DisposableOwner {
     ));
     void sessionService.initialize();
     contributions.advance(WorkbenchPhase.BlockRestore);
-    layout.layout();
+    layoutService.layout();
     contributions.advance(WorkbenchPhase.AfterRestored);
     const eventuallyTimer = globalThis.setTimeout(
       () => contributions.advance(WorkbenchPhase.Eventually),

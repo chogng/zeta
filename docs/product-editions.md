@@ -62,29 +62,28 @@ Renderer 产品目录，并从该目录与入口名确定产品身份。
   `workbench-*.contribution.ts` 文件。
 - 共享 `EditorPart` 已通过 `EditorInput`、`IEditorPane` 和 `EditorPaneRegistry` 提供真实的编辑器
   宿主边界，包括资源匹配、显式 “Open With”、异步切换取消、布局、可见性、聚焦与释放。
-- Default Zeta entry 已从产品入口注册 Monaco default pane 与 Alpha optional pane。Monaco 保持默认打开，
-  Alpha 可通过 `preferredEditorId` 显式选择。
-- Academic 已从产品入口注册 ProseMirror pane；它拥有基础论文 schema、历史、快捷键、布局和释放。
+- Default Zeta entry 已从产品入口注册 Alpha pane；Alpha 是普通源码和纯文本资源的默认行编辑器。
+- Academic 已从产品入口注册 Gamma pane；它拥有结构化文档 schema、事务、历史、序列化、布局和释放。
 - Main、Preload 和 App Server 当前由三个 Electron 构建变体共享，尚未按变体裁剪原生能力或 Rust feature。
 - 未注入 Web host 的 Browser 页面使用显式 disconnected renderer API：页面和 Workbench
   可以运行，连接状态为 `stopped`，所有 App Server 产品操作以
   `WebAppServerUnavailableError` 失败。当前 Rust App Server 只监听 `stdio://`，尚无浏览器可
   直连的 HTTP/WebSocket transport。
 
-因此，Renderer 构建产物和编辑器依赖已经按产品入口分流。Complete 静态组合三套编辑器；
-Academic 专有内容类型和 `.zeta-paper`、`.zeta-academic` 默认由 ProseMirror 打开，普通源码及
-Markdown 默认由 Monaco 打开。
+因此，Renderer 构建产物和编辑器依赖已经按产品入口分流。Complete 静态组合 Alpha 与 Gamma；
+Academic 专有内容类型和 `.zeta-paper`、`.zeta-academic` 默认由 Gamma 打开，普通源码及
+Markdown 默认由 Alpha 打开。
 
 ## 编辑器装配契约
 
-`workbench-code.ts` 引入 `editor/alpha/contrib` 和 `editor/monaco/contrib`；
-`workbench-academic.ts` 只能引入 `editor/prosemirror/contrib`。共享 Workbench 不得
-直接依赖任一编辑器。`workbench-complete.ts` 静态导入这三个 contribution，获得三个编辑器：
+`workbench-code.ts` 引入 `editor/alpha/contrib`；
+`workbench-academic.ts` 只能引入 `editor/gamma/contrib`。共享 Workbench 不得
+直接依赖任一编辑器。`workbench-complete.ts` 静态导入这两个 contribution，获得两个编辑器：
 
 ```text
-Code       → Alpha optional descriptor + Monaco default descriptor
-Academic   → ProseMirror descriptor
-Complete   → Alpha optional + Monaco default + ProseMirror descriptors
+Code       → Alpha descriptor
+Academic   → Gamma descriptor
+Complete   → Alpha + Gamma descriptors
                          ↓
                  EditorPaneRegistry
                          ↓
@@ -108,9 +107,9 @@ model contract 的职责，不能由 pane 私自发明。
 新增 Default Zeta 或 Academic 专属功能时，应分别从 `workbench-code.ts` 或
 `workbench-academic.ts` 导入。Complete 入口显式导入两类 contribution，获得这些功能。
 
-Alpha、Monaco 和 ProseMirror 的模型、插件与 worker 分别归 `editor/alpha`、
-`editor/monaco` 和 `editor/prosemirror` 子系统所有；产品 contribution 只选择是否装配，
-不能持有编辑器实现。共享 `workbench` 同样不得直接依赖具体编辑器。
+Alpha 与 Gamma 的模型、插件与 browser runtime 分别归 `editor/alpha`、
+`editor/gamma` 子系统所有；产品 contribution 只选择是否装配，不能持有编辑器实现。
+共享 `workbench` 同样不得直接依赖具体编辑器。
 `EditorInput.initialText` 是 `ITextFileService` 优先使用的内存启动快照，不拥有保存语义。
 
 ## 构建与验证

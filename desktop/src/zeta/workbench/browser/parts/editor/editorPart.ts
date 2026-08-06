@@ -16,6 +16,7 @@ import { EditorGroup, type EditorGroupOptions, type IEditorGroup } from "./edito
 import { EditorTabDragAndDropController, type EditorTabDropEvent } from "./editorTabDragAndDrop.js";
 import type { EditorInput, EditorOpenOptions } from "./editorInput.js";
 import type { TextResourceLanguageResolver } from "../../../../editor/common/textResourceLanguage.js";
+import type { IWorkingCopyService } from "../../../services/workingCopy/common/workingCopyService.js";
 import type { IEditorPane } from "./editorPane.js";
 import { EditorPaneRegistry, EditorPanes } from "./editorRegistry.js";
 
@@ -53,6 +54,7 @@ export interface IEditorPartOptions {
   readonly languageFeaturesService?: ILanguageFeaturesService;
   readonly languageResolver?: TextResourceLanguageResolver;
   readonly diffApi?: IDiffApi;
+  readonly workingCopyService?: IWorkingCopyService;
   readonly registry?: EditorPaneRegistry;
   readonly titleActions?: {
     readonly menuService: IMenuService;
@@ -90,6 +92,7 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
       languageFeaturesService: options.languageFeaturesService,
       languageResolver: options.languageResolver,
       diffApi: options.diffApi,
+      workingCopyService: options.workingCopyService,
       titleActions: options.titleActions,
       ...(options.saveAsResource ? {
         onSave: (group: IEditorGroup, input: EditorInput, pane: IEditorPane) => this.saveEditor(group, input, pane),

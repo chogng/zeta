@@ -1,1 +1,5 @@
-.zeta-resizable { min-width: 40px; min-height: 40px; }
+.zeta-resizable {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+}

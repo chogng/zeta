@@ -1,0 +1,36 @@
+import { type Event } from "../../../../base/common/event.js";
+import { type IDisposable } from "../../../../base/common/lifecycle.js";
+import { type URI } from "../../../../base/common/uri.js";
+import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
+
+/**
+ * Format-neutral persistence lifecycle exposed by an editor domain to the Workbench.
+ *
+ * The implementation owns its document model and serialization policy. The Workbench
+ * uses this contract for dirty state, save/revert commands, and resource coordination.
+ */
+export interface IWorkingCopy extends IDisposable {
+  readonly resource: URI;
+  readonly isDirty: boolean;
+  readonly hasExternalChange: boolean;
+  readonly onDidChangeDirty: Event<void>;
+  readonly onDidChangeExternalChange: Event<void>;
+  save(signal: AbortSignal): Promise<void>;
+  saveAs(resource: URI, signal: AbortSignal): Promise<void>;
+  revert(signal: AbortSignal): Promise<void>;
+}
+
+/**
+ * Registry for active editor-domain working copies.
+ *
+ * Registration does not transfer ownership: the editor pane still disposes the
+ * working copy, while the service only indexes it for Workbench coordination.
+ */
+export interface IWorkingCopyService extends IDisposable {
+  readonly onDidRegister: Event<IWorkingCopy>;
+  readonly onDidUnregister: Event<IWorkingCopy>;
+  register(workingCopy: IWorkingCopy): IDisposable;
+  get(resource: URI): readonly IWorkingCopy[];
+}
+
+export const IWorkingCopyService = createServiceIdentifier<IWorkingCopyService>("workingCopyService");

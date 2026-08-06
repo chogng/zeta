@@ -110,7 +110,10 @@ export class ContextView
     this.element.replaceChildren(options.content);
     this.element.className =
       `zeta-context-view zeta-context-view-${options.presentation ?? "default"}`;
-    this.element.style.zIndex = String(1000 + (options.layer ?? 0));
+    this.element.style.setProperty(
+      "--zeta-context-view-layer",
+      String(options.layer ?? 0),
+    );
     this.element.style.visibility = "hidden";
     this.element.hidden = false;
     this.layout();
@@ -237,6 +240,7 @@ export class ContextView
     this.visibleListeners.clear();
     this.element.hidden = true;
     this.element.replaceChildren();
+    this.element.style.removeProperty("--zeta-context-view-layer");
     const restoreFocusTo = this.restoreFocusTo;
     this.restoreFocusTo = undefined;
     try {

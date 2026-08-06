@@ -42,7 +42,7 @@ flowchart LR
     Server --> Runtime
     Runtime --> Service
     Service --> Host
-    Host --> Editor["zeta-editor / Monaco presentation"]
+    Host --> Editor["zeta-editor / legacy editor runtime presentation"]
 ```
 
 ## 1. 一次操作
@@ -85,7 +85,7 @@ Git object identity 或 durable product sequence。
 
 `zeta-editor` 保持纯 presentation，不依赖 catalog、`zeta-lsp` 或协调层。Native host 组合 catalog、
 editor 和 `zeta-language-service`，只在 adapter 中转换文档与事件；
-Desktop 的 Monaco host 可以消费相同系统语义，但不需要复用 Native paint types。App Server 只有
+Desktop 的 legacy editor runtime host 可以消费相同系统语义，但不需要复用 Native paint types。App Server 只有
 在出现远程语言服务器、共享 workspace authority 或第二个进程消费者后才应增加 LSP method；
 当前不能为了形式统一把高频 editor-local request 绕进 App Server。
 

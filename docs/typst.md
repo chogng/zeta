@@ -17,8 +17,8 @@ Zeta 将 Typst 0.15.1 作为 Rust 库嵌入，不调用系统安装的 `typst` �
 内存中的 Typst 源码字符串转换为当前连接拥有的 PDF 资源。这样既能让 Agent 编辑文本表示并
 生成排版后的论文，也不需要授予渲染进程或编译器访问宿主路径的权限。
 
-这项能力补充而不取代 Academic 编辑器。ProseMirror 拥有结构化论文编辑和 Agent 可见的文档
-状态；确定性序列化器负责把该状态转换为 Typst 源码；Typst 只负责排版和 PDF 输出。Monaco
+这项能力补充而不取代 Academic 编辑器。Gamma 拥有结构化论文编辑和 Agent 可见的文档
+状态；确定性序列化器负责把该状态转换为 Typst 源码；Typst 只负责排版和 PDF 输出。legacy editor runtime
 仍然是 Code 产品的编辑器，不属于这条论文处理路径。
 
 | 想完成什么 | 当前能力 | 当前限制 |
@@ -37,12 +37,12 @@ Zeta 将 Typst 0.15.1 作为 Rust 库嵌入，不调用系统安装的 `typst` �
 | `zeta-app-server-protocol` | `document/typst/compile` 数据结构与能力协商 |
 | `zeta-app-server` | 请求分发和当前连接拥有的 PDF 资源创建 |
 | Desktop Main/Preload | 精确 IPC 校验和类型化能力桥接 |
-| Academic Workbench 贡献 | ProseMirror 编辑器；未来的 Typst 序列化、诊断、预览和保存/导出 |
+| Academic Workbench 贡献 | Gamma 编辑器；未来的 Typst 序列化、诊断、预览和保存/导出 |
 
 计划中的 Academic 渲染流程如下；序列化器和预览尚未实现：
 
 ```text
-Academic ProseMirror 文档
+Academic Gamma 文档
 → 确定性 Typst 序列化器
 → Typst 源码字符串
 → 沙箱化 Preload API：typst.compile
@@ -82,20 +82,20 @@ Academic ProseMirror 文档
 - 使用内置字体把 Typst 编译为 PDF；
 - 类型化 App Server 方法、能力、诊断和生成产物；
 - Desktop Preload API 以及资源元数据、读取和释放接口；
-- Academic ProseMirror 编辑器面板和产品级注册；
+- Academic Gamma 编辑器面板和产品级注册；
 - 上游 Typst 与内置字体许可证声明；
 - PDF 输出、诊断、所有权和宿主文件访问拒绝的单元及集成测试。
 
 当前限制：
 
 - 不支持多文件项目、图片、参考文献、包导入、系统字体、增量编译、取消或强制 CPU 截止时间；
-- 尚无 ProseMirror 到 Typst 的序列化器、诊断投影或 PDF 预览贡献；
+- 尚无 Gamma 到 Typst 的序列化器、诊断投影或 PDF 预览贡献；
 - 调用方显式读取并持久化前，输出只是临时资源；
 - 编译当前同步执行，方法被声明为全局独占。
 
 ## 分阶段演进
 
-近期计划先实现确定性的 ProseMirror 到 Typst 序列化器，再把诊断投影回结构化文档，并预览
+近期计划先实现确定性的 Gamma 到 Typst 序列化器，再把诊断投影回结构化文档，并预览
 返回的 PDF。
 
 多文件论文后续应使用有大小限制、不可变的内存文件映射。参考文献和图片只能通过显式资源类型、

@@ -18,6 +18,7 @@ import type {
   IContextKey,
   IContextKeyService,
 } from "../../../../platform/contextkey/common/contextkey.js";
+import type { ILayoutService } from "../../../../platform/layout/common/layoutService.js";
 import {
   InQuickInputContext,
 } from "../../../browser/quickaccess.js";
@@ -25,6 +26,7 @@ import {
 export interface WorkbenchQuickInputServiceOptions {
   readonly container: HTMLElement;
   readonly contextKeyService: IContextKeyService;
+  readonly layoutService?: ILayoutService;
 }
 
 /** Window-scoped host shared by every short-lived Quick Input controller. */
@@ -34,19 +36,26 @@ export class WorkbenchQuickInputService
   private readonly host: HTMLDivElement;
   private readonly ownerDocument: Document;
   private readonly inQuickInput: IContextKey<boolean>;
+  private readonly layoutService: ILayoutService | undefined;
   private readonly quickPicks = new Set<IBrowserQuickPickHost>();
   private active: IBrowserQuickPickHost | undefined;
   private focusToRestore: HTMLElement | undefined;
 
   constructor(options: WorkbenchQuickInputServiceOptions) {
     super();
-    this.ownerDocument = options.container.ownerDocument;
+    const container = options.layoutService?.activeContainer ?? options.container;
+    this.ownerDocument = container.ownerDocument;
+    this.layoutService = options.layoutService;
     this.inQuickInput =
       InQuickInputContext.bindTo(options.contextKeyService);
     this.host = this.ownerDocument.createElement("div");
     this.host.className = "zeta-quick-input-host";
     this.host.hidden = true;
-    options.container.append(this.host);
+    container.append(this.host);
+    this.updateLayout();
+    if (this.layoutService) {
+      this.own(this.layoutService.onDidLayoutActiveContainer(() => this.updateLayout()));
+    }
 
     this.own(addDisposableListener(
       this.host,
@@ -110,5 +119,10 @@ export class WorkbenchQuickInputService
     const focusToRestore = this.focusToRestore;
     this.focusToRestore = undefined;
     if (focusToRestore?.isConnected) focusToRestore.focus();
+  }
+
+  private updateLayout(): void {
+    const quickInputTop = this.layoutService?.activeContainerOffset.quickInputTop ?? 0;
+    this.host.style.paddingTop = `${quickInputTop + 8}px`;
   }
 }

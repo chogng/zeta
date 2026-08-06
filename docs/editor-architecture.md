@@ -7,11 +7,11 @@
 
 ## 决策摘要
 
-Alpha 是 Zeta 从底层向上自建、并由产品默认选择的编辑器栈。Monaco 不再是产品模型或公共
+Alpha 是 Zeta 从底层向上自建、并由产品默认选择的编辑器栈。legacy editor runtime 不再是产品模型或公共
 接口的定义者，只保留为显式选择的兼容 editor 和工具能力参照。
 
 这不是一次性重写。每一阶段必须先形成可独立测试的 Zeta contract，再
-让上层依赖它，最后才能删除 Monaco 中对应的所有权。
+让上层依赖它，最后才能删除 legacy editor runtime 中对应的所有权。
 
 ## 所有权
 
@@ -26,7 +26,7 @@ Alpha 是 Zeta 从底层向上自建、并由产品默认选择的编辑器栈�
 | Browser view | 部分具备 | common viewport、虚拟行 DOM、字体行宽、gutter、selection/caret、基础 decoration、hit-test、active-position reveal、至多 160 行的有界 density minimap（WebGL 优先、DOM 回退、click/drag scroll）、diagnostic severity marker、可见行缩进参考线已完成；富交互与主题细化尚未完成 |
 | Input controller | 部分具备 | IME 内核事务、pointer selection、Alt+Shift 列选择、键盘导航、textarea 编辑、completion 键盘/鼠标接受、Ctrl+Space invoke、trigger character 与 incomplete refresh、plain/syntax-marked safe HTML 选区与空选区整行 copy/cut/paste、单个显式文本文件 clipboard paste/drop、前端本地 MIME paste provider 与内置 `text/uri-list`、基础 composition DOM event 已完成；Android/macOS 特化仍未完成 |
 | Accessibility | 部分具备 | editor label、聚焦 textarea 的文本/主选区镜像、multi-selection `aria-description`、completion/listbox ARIA、dialog state 与 cursor/selection/save live-region announcements、forced-colors focus/selection/caret/diagnostic 语义已具备；完整 screen-reader navigation 与平台辅助输入仍待真实平台验证 |
-| Monaco adapter | 兼容 | 保留显式选择的既有编辑能力，不定义 Alpha contract |
+| legacy editor runtime adapter | 兼容 | 保留显式选择的既有编辑能力，不定义 Alpha contract |
 | Workbench Editor Part | 已有独立实现 | tabs、pane 生命周期、可见性和产品 contribution |
 
 `src/zeta/base` 继续保持领域无关。编辑器位置、文档版本、selection 和
@@ -55,8 +55,6 @@ editor/
     browser/       native DOM, input, viewport, measurement, accessibility
     test/common/   common-layer tests
     benchmark/     non-gating kernel benchmarks
-  monaco/        transition adapter
-  prosemirror/   transition adapter
 ```
 
 当前 `editor/alpha/common` 已直接复用 `base/common/event`、
@@ -82,7 +80,7 @@ Alpha viewport / input
 ITextFileService.save → IFileService.writeFile → App Server
 ```
 
-Monaco 仍可通过显式 `preferredEditorId` 打开，但不与 Alpha model 双向绑定，避免两个 undo
+legacy editor runtime 仍可通过显式 `preferredEditorId` 打开，但不与 Alpha model 双向绑定，避免两个 undo
 stack、两个版本序列和不明确的事务边界。
 
 ## 目标数据流
@@ -101,8 +99,8 @@ Viewport + Layout model
 Input controller ←──────→ Native DOM renderer
 ```
 
-Monaco compatibility editor 不在 Alpha 目标数据流内。仍需保留的工具能力必须通过 Alpha 的
-公开 contract 实现；Monaco 不能持有 Alpha 的权威版本、dirty state 或产品持久化语义。
+legacy editor runtime compatibility editor 不在 Alpha 目标数据流内。仍需保留的工具能力必须通过 Alpha 的
+公开 contract 实现；legacy editor runtime 不能持有 Alpha 的权威版本、dirty state 或产品持久化语义。
 
 ## 长期不变量
 
@@ -114,7 +112,7 @@ Monaco compatibility editor 不在 Alpha 目标数据流内。仍需保留的工
 - IME composition 在提交前不是普通编辑事务，取消 composition 不得污染
   history。
 - accessibility 是 view/input contract 的组成部分，不是渲染完成后的补丁。
-- Monaco 特有类型不得越过 adapter 进入 Alpha editor、document 或
+- legacy editor runtime 特有类型不得越过 adapter 进入 Alpha editor、document 或
   Workbench 公共接口。
 
 ## 分阶段实施
@@ -1073,7 +1071,7 @@ module 协议。
 这条 module seam 是 `workbench/services/textMate` adapter 的接入点。Current 37 落地时
 TextMate grammar、scope 解析和 runtime 依赖尚未实现；Current 43 已在 Alpha/`base`
 之外建立该 adapter，但产品 grammar resource 接线仍未完成。同样，
-`workbench/services/textfile/common` 已由 Alpha、Monaco、ProseMirror 与 Explorer 的
+`workbench/services/textfile/common` 已由 Alpha、Alpha、Gamma 与 Explorer 的
 共享 loading/save 边界证明需要。它只转发 I/O 与粗粒度 invalidation；Alpha 保持 dirty、
 revert、共享模型引用和外改 policy，不能反向塞入 `TextModel` 或 `base`。
 
@@ -1432,12 +1430,12 @@ revision 变化时为打开文档请求重分析；Current 46 已补齐这两个
 
 Alpha 已从独立内核演进为真实 `IEditorPane`，但仍保持“Workbench 负责资源与宿主、
 编辑器域负责模型和交互语义”的单向依赖。Code 与 Complete 产品注册 Alpha 为
-普通文本的 `Default` editor；Monaco 保留为 `Optional` compatibility editor，并可通过显式
+普通文本的 `Default` editor；legacy editor runtime 保留为 `Optional` compatibility editor，并可通过显式
 `preferredEditorId` 选择。
 
 `IEditorPart.openEditor` 是产品调用面，`EditorPaneRegistry` 是实现选择边界，`IEditorPane` 是
 被选实现的生命周期 contract。产品调用方不选择 parser、analysis service 或 transport；descriptor
-可以把 Alpha、Monaco 或后续实现绑定到同一资源输入，App Server 不知道最终选择了哪个 editor。
+可以把 Alpha、legacy editor runtime 或后续实现绑定到同一资源输入，App Server 不知道最终选择了哪个 editor。
 
 | 能力 | 当前所有者 | 状态 |
 | --- | --- | --- |
@@ -1455,8 +1453,8 @@ Alpha 已从独立内核演进为真实 `IEditorPane`，但仍保持“Workbench
 打开资源时，`ExplorerViewPane` 只提交 `{ resource, label }`；它不再预读文件或伪造
 `initialText`。`EditorPart` 选定 descriptor 后把 `ITextFileService` 注入 pane。
 Alpha pane 先通过 `AlphaTextModelService.acquire` 获取引用：已有资源模型保持权威，
-新资源才调用 TextFile resolve。最后一个引用释放时模型销毁。Monaco 使用相同内容
-服务但保留自己的临时模型池；ProseMirror 也通过同一服务解析内容。TextFile service
+新资源才调用 TextFile resolve。最后一个引用释放时模型销毁。legacy editor runtime 使用相同内容
+服务但保留自己的临时模型池；Gamma 也通过同一服务解析内容。TextFile service
 不吸收任何编辑器的 transaction、undo 或 selection 类型。
 
 `TextModel` 本身只接受一个领域无关的可取消 maintenance scheduler；没有注入时保持
@@ -1500,10 +1498,10 @@ hit-test、pointer selection、keyboard navigation、普通 textarea 编辑、
 decoration 与 versioned language result 沿 language boundary 演进。
 每增加一种输入路径，都必须生成同一种 Zeta transaction。
 
-### Potential：移除 Monaco
+### Potential：移除 legacy editor runtime
 
 只有原生 renderer、输入、accessibility、language projection 和 diff
-达到产品要求后才删除 Monaco。删除是能力完成的结果，不是单独里程碑。
+达到产品要求后才删除 legacy editor runtime。删除是能力完成的结果，不是单独里程碑。
 
 ## 评估与迁移门槛
 
@@ -1516,4 +1514,4 @@ decoration 与 versioned language result 沿 language boundary 演进。
 | Input | 主流 IME、clipboard、dead key、组合取消和浏览器差异 |
 | Accessibility | screen reader 导航、ARIA、键盘完整操作和高对比度 |
 
-Monaco 对应层只能在这些证据通过后从“委托”改为“已由 Zeta 拥有”。
+legacy editor runtime 对应层只能在这些证据通过后从“委托”改为“已由 Zeta 拥有”。
