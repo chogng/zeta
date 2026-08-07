@@ -10,6 +10,7 @@ import { createDisconnectedWorkspaceSearchApi } from "../../search/browser/searc
 import { createDisconnectedModelApi, createDisconnectedSessionApi, createDisconnectedThreadApi, createDisconnectedTurnApi } from "../../sessions/browser/sessionApi.js";
 import { DisconnectedTerminalProcessService } from "../../terminal/browser/disconnectedTerminalProcessService.js";
 import { createDisconnectedTypstApi } from "../../typst/browser/typstApi.js";
+import { createDisconnectedDocumentCollaborationApi } from "../../collaboration/browser/documentCollaborationApi.js";
 
 export { WebAppServerUnavailableError };
 
@@ -23,6 +24,7 @@ export function createDisconnectedRendererApi(): IRendererHost {
     thread: createDisconnectedThreadApi(unavailableOperation),
     turn: createDisconnectedTurnApi(unavailableOperation),
     typst: createDisconnectedTypstApi(unavailableOperation),
+    documentCollaboration: createDisconnectedDocumentCollaborationApi(unavailableOperation),
     resource: createDisconnectedResourceApi(unavailableOperation),
     extensions: createDisconnectedExtensionApi(unavailableOperation),
     fs: createDisconnectedFileApi(unavailableOperation),

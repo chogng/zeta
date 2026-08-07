@@ -34,6 +34,9 @@ editor/gama/
     editorWidget.ts                 # structured editor + DOM projection
     services/
       browserDocumentModelService # runtime document reference factory
+      documentCollaborationService # local/remote collaboration routing seam
+      appServerDocumentCollaborationService # local App Server adapter
+      remoteDocumentCollaborationService # authenticated remote HTTP adapter
       documentWorkingCopy         # persistence / dirty / external-change adapter
       editorProfile           # profile → pane options
     widget/
@@ -42,8 +45,9 @@ editor/gama/
     media/editorWidget.css
   contrib/
     academic/{common,browser}     # schema、node views、pane contribution
+    clipboard/browser             # external HTML → validated document fragment
     citation/{common,browser}
-    collaboration/common
+    collaboration/{common,browser} # rebase/session/controller + toolbar contribution
   test/{common,browser}
 ```
 
@@ -59,6 +63,11 @@ editor/gama/
 | `browser/editorWidget` | Gama common、document-model service、DOM、embedded-editor contract | 一个 document reference 的 node/mark projection、input、outline 与 focus；不得注册产品 pane |
 | `browser/widget/textEditorWidget` | `IEmbeddedTextEditorFactory` | 一个 `textBlock` 的 Alpha line-editor wrapper；不得创建/保存整个 Gama document |
 | `contrib/formatting/browser` | Gama browser、base toolbar | Word-like formatting toolbar；只通过 Gama editor command/selection seam 工作，不依赖 Workbench 或产品 composition |
+| `contrib/collaboration/common` | Gama common、Gama collaboration service contract | canonical/in-flight/buffered state、rebase、model controller 与 transport-neutral connection；不依赖 DOM、Workbench、Electron 或 App Server DTO |
+| `contrib/collaboration/browser` | Gama browser、base toolbar | create/join/leave toolbar and status projection；只调用 `EditorWidget` 的 collaboration seam，不拥有 transaction、room ordering 或 transport |
+| `browser/services/appServerDocumentCollaborationService` | Gama service contract、platform collaboration API | App Server DTO/notification adapter；不得把 protocol names or generated DTOs leak into Gama common or widget |
+| `browser/services/remoteDocumentCollaborationService` | Gama service contract、Fetch | authenticated remote HTTP/long-poll adapter；只在 runtime module 中持有 transport DTO，remote URL/token 不得进入 document/model |
+| `browser/services/documentCollaborationService` | Gama service contract、transport adapters | composition-local router；按显式 target 选择 local App Server 或 remote transport，不得把这项选择下沉到 common/model |
 | `contrib/<feature>/common` | Gama common | feature 的 schema、commands、collaboration data |
 | `contrib/<feature>/browser` | Gama browser、feature common、Workbench composition contracts | node views、toolbar、profile 与该 feature 的 pane registration |
 

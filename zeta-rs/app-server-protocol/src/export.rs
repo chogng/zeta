@@ -108,7 +108,13 @@ pub fn typescript() -> String {
         ));
     }
     output.push_str("};\n");
-    output
+    let mut normalized = output
+        .lines()
+        .map(str::trim_end)
+        .collect::<Vec<_>>()
+        .join("\n");
+    normalized.push('\n');
+    normalized
 }
 
 pub fn json_schema() -> String {

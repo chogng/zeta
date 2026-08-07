@@ -11,6 +11,13 @@ const RUST_SOURCE: &str = r#"mod engine {
 }
 "#;
 
+const TYPESCRIPT_SOURCE: &str = r#"export class Editor {
+    render(value: string): string {
+        return value.toUpperCase();
+    }
+}
+"#;
+
 #[test]
 fn json_snapshot_contains_structural_tokens_and_folds() {
     let document = SyntaxDocument::open(
@@ -90,6 +97,57 @@ fn shell_snapshot_highlights_command_operators_variables_and_comments() {
     assert!(highlighted.contains(&("echo", SyntaxTokenKind::Function)));
     assert!(highlighted.contains(&("# restart zeterm", SyntaxTokenKind::Comment)));
     assert_eq!(SyntaxLanguage::Shell.id(), "shell");
+}
+
+#[test]
+fn ecmascript_snapshots_support_javascript_typescript_and_tsx() {
+    let javascript = SyntaxDocument::open(
+        SyntaxLanguage::Javascript,
+        DocumentRevision::new(8),
+        "export function render(value) { return value + 1; }\n",
+    )
+    .expect("JavaScript grammar should load")
+    .snapshot();
+    let typescript = SyntaxDocument::open(
+        SyntaxLanguage::Typescript,
+        DocumentRevision::new(9),
+        TYPESCRIPT_SOURCE,
+    )
+    .expect("TypeScript grammar should load")
+    .snapshot();
+    let tsx = SyntaxDocument::open(
+        SyntaxLanguage::Typescriptreact,
+        DocumentRevision::new(10),
+        "export const App = () => <main>Hello</main>;\n",
+    )
+    .expect("TSX grammar should load")
+    .snapshot();
+
+    assert!(!javascript.has_errors());
+    assert!(!typescript.has_errors());
+    assert!(!tsx.has_errors());
+    assert!(
+        javascript
+            .tokens()
+            .iter()
+            .any(|token| token.kind == SyntaxTokenKind::Function)
+    );
+    assert!(
+        typescript
+            .tokens()
+            .iter()
+            .any(|token| token.kind == SyntaxTokenKind::Type)
+    );
+    assert!(
+        typescript
+            .folding_ranges()
+            .iter()
+            .any(|range| range.range.start.row < range.range.end.row)
+    );
+    assert_eq!(SyntaxLanguage::Javascript.id(), "javascript");
+    assert_eq!(SyntaxLanguage::Javascriptreact.id(), "javascriptreact");
+    assert_eq!(SyntaxLanguage::Typescript.id(), "typescript");
+    assert_eq!(SyntaxLanguage::Typescriptreact.id(), "typescriptreact");
 }
 
 #[test]

@@ -26,7 +26,7 @@ const { EditorTextDirection } = await import("../../browser/view/editorViewport.
 
 test.after(() => browserEnvironment.window.close());
 
-test("Alpha editor pane loads, lays out, focuses, hides, and clears one native session", async () => {
+test("Alpha editor pane loads, lays out, focuses, hides, and clears one editor part", async () => {
   const dom = new JSDOM("<!doctype html><body><main></main></body>");
   dom.window.HTMLCanvasElement.prototype.getContext = () => null;
   const parent = dom.window.document.querySelector<HTMLElement>("main")!;

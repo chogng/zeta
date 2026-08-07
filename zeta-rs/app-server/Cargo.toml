@@ -21,6 +21,7 @@ zeta-app-server-protocol = { workspace = true }
 zeta-app-server-transport = { workspace = true }
 zeta-async-utils = { workspace = true }
 zeta-auto-review = { workspace = true }
+zeta-collaboration = { workspace = true }
 zeta-config = { workspace = true }
 zeta-core = { workspace = true }
 zeta-diff = { workspace = true }

@@ -8,6 +8,7 @@ import type { IWorkspaceSearchApi } from "../../search/common/searchApi.js";
 import type { IModelApi, ISessionApi, IThreadApi, ITurnApi } from "../../sessions/common/sessionApi.js";
 import type { ITerminalProcessService } from "../../terminal/common/terminalProcessService.js";
 import type { ITypstApi } from "../../typst/common/typstApi.js";
+import type { IDocumentCollaborationApi } from "../../collaboration/common/documentCollaborationApi.js";
 
 /** Transport-neutral capability set supplied by a renderer host at startup. */
 export interface IRendererHost {
@@ -17,6 +18,7 @@ export interface IRendererHost {
   readonly thread: IThreadApi;
   readonly turn: ITurnApi;
   readonly typst: ITypstApi;
+  readonly documentCollaboration: IDocumentCollaborationApi;
   readonly resource: IResourceApi;
   readonly extensions: IExtensionApi;
   readonly fs: IFileApi;

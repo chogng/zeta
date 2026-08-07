@@ -30,7 +30,8 @@ test("Alpha synchronous layers do not import Workbench, Electron, or generated D
 
 test("Alpha implementation ledger names the active browser and service owners", () => {
   const requiredFiles = [
-    "browser/editorSession.ts",
+    "browser/editorPart.ts",
+    "browser/browserEditorPart.ts",
     "browser/view/editorViewport.ts",
     "browser/input/textInputController.ts",
     "browser/services/rustDiffComputationService.ts",
@@ -50,6 +51,8 @@ test("Alpha implementation ledger names the active browser and service owners", 
   for (const file of requiredFiles) assert.equal(statSafe(join(alphaRoot, file)), true, file);
 
   const removedLegacyNames = [
+    "browser/editorSession.ts",
+    "browser/browserEditorSession.ts",
     "common/model/decoration.ts",
     "contrib/gotoError/browser/gotoErrorController.ts",
     "contrib/indentation/browser/indentationGuides.ts",

@@ -70,10 +70,10 @@ nor the dedicated Worker reads product or workspace files. Workbench constructs 
 `ITextMateService`, and passes it to Alpha panes. `AppServerExtensionService`
 then projects Rust-discovered static grammar contributions into the same
 registry. The service owns the shared grammar catalog and scope theme; each
-Alpha session creates and disposes only its dedicated TextMate Syntax Worker.
+Alpha editor part creates and disposes only its dedicated TextMate Syntax Worker.
 Unsupported languages still fall back to Alpha's lexical provider.
 
-Direct `createBrowserAlphaEditorSession` callers may omit the service and get a
+Direct `createBrowserEditorPart` callers may omit the service and get a
 private `BrowserTextMateService`; that compatibility path is session-owned and
 does not change Workbench ownership.
 
@@ -171,7 +171,7 @@ lane contract.
 - `BrowserTextMateService` owns the grammar registry and matching Worker
   factory; `AppServerExtensionService` supplies declarative package loaders and
   Workbench injects the service into product Alpha panes;
-- Alpha sessions schedule a new syntax request when the catalog or scope theme changes;
+- Alpha editor parts schedule a new syntax request when the catalog or scope theme changes;
   other consumers must still make that scheduling decision explicitly.
 
 Tests under `test/common` load the real `vscode-oniguruma` WASM binary and a

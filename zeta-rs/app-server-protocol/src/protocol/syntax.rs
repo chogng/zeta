@@ -7,10 +7,14 @@ use ts_rs::TS;
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub enum SyntaxLanguageDto {
+    Javascript,
+    Javascriptreact,
     Json,
     Jsonc,
     Rust,
     Shell,
+    Typescript,
+    Typescriptreact,
 }
 
 /// One zero-based UTF-16 position, matching Alpha's text-model coordinate system.

@@ -73,10 +73,23 @@ The current core provides:
   survive remote changes, text offsets and sibling indices are shifted, local
   selections are remapped, and steps whose targets were remotely deleted are
   reported as dropped;
-- `DocumentCollaborationSession` keeps canonical and optimistic snapshots
-  separate, accumulates pending local steps into a replayable update, validates
-  document versions, and exposes remote/acknowledgement changes through a
-  disposable event boundary;
+- server-ordered collaboration rooms: the process-local App Server and the
+  independently hosted durable collaboration server share one ordering,
+  bounded-replay, snapshot-resync, and exact-submit-retry contract; room IDs
+  are opaque random capability identifiers for explicit sharing;
+- `DocumentCollaborationSession` keeps canonical, in-flight, and later local
+  buffered snapshots separate. A submit contains only the exact in-flight
+  transaction's resulting snapshot; typing never waits for I/O or leaks later
+  local edits into an earlier server version;
+- `DocumentCollaborationController` binds that state machine to one
+  `DocumentModel`, applies ordered remote updates/rebases, and stops on a
+  snapshot resync that would discard local intent;
+- `IDocumentCollaborationService` is the Gama-owned transport seam;
+  `DocumentCollaborationService` routes an explicit target to either the
+  process-local `AppServerDocumentCollaborationService` or the authenticated
+  long-polling `RemoteDocumentCollaborationService`. The separate toolbar
+  contribution owns only the create/join/leave affordance and keeps a remote
+  endpoint/token in memory rather than in the document model;
 - versioned collaboration envelopes in `envelopeSerialization.ts` wrap the
   existing transaction envelope and validate client, sequence, base-version,
   and server-version fields before a transport adapter accepts them;
@@ -194,13 +207,15 @@ transaction dependencies, and exposes dropped steps when a remote deletion
 removes their target. The primitive deliberately does not choose server order,
 provide client-id tie breaking, or implement a complete OT/CRDT session;
 `DocumentCollaborationSession` provides the common-layer boundary: it owns the
-canonical version, an optimistic document, a cumulative pending transaction,
-and explicit remote/acknowledgement envelopes. `envelopeSerialization.ts`
-wraps those fields around the existing transaction serialization protocol. A
-browser or transport adapter can consume its `onDidChange` event and send the
-validated envelope. It still does not choose server order or implement
-client-id conflict arbitration, and `DocumentModel.dispatchRemote` remains a
-low-level API that expects an already-transformed transaction.
+canonical version, exact in-flight update, and later optimistic buffer.
+`DocumentCollaborationController` consumes a connection from
+`IDocumentCollaborationService`, so neither the document model nor the widget
+knows App Server request names or notifications. `envelopeSerialization.ts`
+wraps update fields around the existing transaction serialization protocol.
+The selected collaboration authority, either the App Server for one local
+process or `zeta-collaboration-server` for a remote room, chooses room order
+and assigns versions; `DocumentModel.dispatchRemote` remains a low-level API
+that expects an already-transformed transaction.
 
 EditorWidget plugins are common-layer state extensions, not browser contributions.
 `DocumentPluginState.apply` receives immutable before/after document snapshots,
@@ -220,3 +235,17 @@ sets and selection mapping; views do not recompute ranges from DOM offsets.
 Absolute positions are a common coordinate protocol only; identity-based
 `DocumentPoint` remains the durable selection/decoration anchor so replacing a
 node can still map or drop ranges without relying on DOM lifetime.
+
+## Current limitations and intentional boundaries
+
+| Area | Status | Current boundary |
+| --- | --- | --- |
+| Cross-device durable collaboration | ✅ 当前 | `zeta-collaboration-server` owns an authenticated, CORS-restricted, SQLite-backed remote room authority. Gama connects through the remote service using an explicit server origin and bearer token; it does not need an App Server or a session. Long-poll transport retries transient network/5xx failures from its last confirmed version; authentication, authorization, schema, and room errors remain explicit. The deployer must run one host behind TLS and configure the renderer origin. |
+| Collaboration authorization and semantic server validation | 部分具备 | The remote host requires one deployment-scoped bearer token and room IDs are unguessable. It bounds/parses JSON and enforces schema compatibility IDs, while Gama clients validate actual document/transaction schemas. Per-user identities, per-room ACLs, token rotation, audit policy, and a Rust implementation of each Gama schema are not yet present. |
+| Presence, remote selections, and shared undo | 尚未完成 | The ordered document-update protocol intentionally carries only transactions and snapshots. Presence/cursors need a separate ephemeral notification contract; shared undo needs a per-author history/rebase policy rather than reusing local `DocumentModel` undo. |
+| Rich content pasted from other applications | ✅ 当前 | `contrib/clipboard/browser/htmlDocumentFragment.ts` converts a restricted HTML vocabulary into a schema-validated fragment; scripts, event attributes, unsafe URLs, styles, and unknown DOM state never enter the document model. |
+| Browser worker | Non-goal currently | The structured model, transaction mapping, and current browser projection have no worker consumer. Add `editor.worker.start.ts` only with a real collaboration or layout protocol. |
+
+These are not gaps in the `DocumentModel` transaction boundary. They require a
+product-level protocol or security policy, so they must not be filled by adding
+DOM parsing, transport ownership, or session orchestration to `gama/common`.

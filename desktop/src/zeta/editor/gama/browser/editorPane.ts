@@ -34,7 +34,8 @@ export class EditorPane extends DisposableOwner implements IEditorPane {
   constructor(textFiles: ITextFileService, options: EditorPaneOptions = {}) {
     super();
     const modelService = this.own(new BrowserDocumentModelService(textFiles, options.workingCopyService));
-    this.editor = this.own(new EditorWidget(modelService, options));
+    const collaborationService = options.documentCollaborationService ? this.own(options.documentCollaborationService) : undefined;
+    this.editor = this.own(new EditorWidget(modelService, { ...options, ...(collaborationService ? { documentCollaborationService: collaborationService } : {}) }));
   }
 
   create(parent: HTMLElement): void {

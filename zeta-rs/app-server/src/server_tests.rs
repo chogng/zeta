@@ -108,6 +108,80 @@ fn initialize(server: &AppServer, connection: &mut ConnectionState) {
     assert_eq!(response["result"]["capabilities"]["updateReplay"], true);
 }
 
+#[test]
+fn document_collaboration_orders_updates_and_returns_rebase_history() {
+    let server = server();
+    let mut first = server.connection();
+    let mut second = server.connection();
+    initialize(&server, &mut first);
+    initialize(&server, &mut second);
+    let document = r#"{"format":"zeta.document","version":1,"document":{"type":"document"}}"#;
+    let opened = call(
+        &server,
+        &mut first,
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":2,
+            "method":"document/collaboration/open",
+            "params":{"clientId":"client-a","schemaId":"gama-v1","document":document}
+        }),
+    );
+    let room_id = opened["result"]["snapshot"]["roomId"]
+        .as_str()
+        .expect("opening a room must return its identifier")
+        .to_string();
+    assert_eq!(room_id.len(), "gama-".len() + 32);
+    assert!(room_id.starts_with("gama-"));
+    assert!(
+        room_id["gama-".len()..]
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit())
+    );
+    assert_eq!(opened["result"]["snapshot"]["version"], 0);
+    let joined = call(
+        &server,
+        &mut second,
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":2,
+            "method":"document/collaboration/open",
+            "params":{"roomId":room_id,"clientId":"client-b","schemaId":"gama-v1","document":"{}"}
+        }),
+    );
+    assert_eq!(joined["result"]["snapshot"]["document"], document);
+    let accepted = call(
+        &server,
+        &mut first,
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":3,
+            "method":"document/collaboration/submit",
+            "params":{"roomId":room_id,"clientId":"client-a","sequence":1,"baseVersion":0,"transaction":"{\"steps\":[]}","document":"{\"format\":\"zeta.document\",\"version\":1,\"document\":{\"type\":\"document\",\"content\":[]}}"}
+        }),
+    );
+    assert_eq!(accepted["result"]["status"], "accepted");
+    assert_eq!(accepted["result"]["update"]["version"], 1);
+    let notifications = server.drain_notifications(&mut second);
+    assert!(
+        notifications
+            .iter()
+            .any(|notification| notification.contains("document/collaboration/update"))
+    );
+    let conflict = call(
+        &server,
+        &mut second,
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":3,
+            "method":"document/collaboration/submit",
+            "params":{"roomId":room_id,"clientId":"client-b","sequence":1,"baseVersion":0,"transaction":"{\"steps\":[]}","document":"{}"}
+        }),
+    );
+    assert_eq!(conflict["result"]["status"], "conflict");
+    assert_eq!(conflict["result"]["updates"][0]["clientId"], "client-a");
+    assert_eq!(conflict["result"]["updates"][0]["version"], 1);
+}
+
 fn create_session(
     server: &AppServer,
     connection: &mut ConnectionState,

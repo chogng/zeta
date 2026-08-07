@@ -100,7 +100,7 @@ export class RustSyntaxWorker implements SyntaxWorker, LanguageWorkerModelSynchr
 /** Supplies parser-derived declarations only after registered richer symbol providers decline. */
 export class RustSyntaxDocumentSymbolProvider implements LanguageDocumentSymbolProvider {
   readonly providerId = "zeta.rustSyntax";
-  readonly languageIds = Object.freeze(["json", "jsonc", "rust", "shell"]);
+  readonly languageIds = Object.freeze(["javascript", "javascriptreact", "json", "jsonc", "rust", "shell", "typescript", "typescriptreact"]);
 
   constructor(private readonly facts: RustSyntaxFactsService) {}
 
@@ -111,12 +111,16 @@ export class RustSyntaxDocumentSymbolProvider implements LanguageDocumentSymbolP
   }
 }
 
-export function syntaxLanguageForAlphaLanguage(languageId: string): "json" | "jsonc" | "rust" | "shell" | undefined {
+export function syntaxLanguageForAlphaLanguage(languageId: string): "javascript" | "javascriptreact" | "json" | "jsonc" | "rust" | "shell" | "typescript" | "typescriptreact" | undefined {
   switch (languageId) {
+    case "javascript": return "javascript";
+    case "javascriptreact": return "javascriptreact";
     case "json": return "json";
     case "jsonc": return "jsonc";
     case "rust": return "rust";
     case "shell": return "shell";
+    case "typescript": return "typescript";
+    case "typescriptreact": return "typescriptreact";
     default: return undefined;
   }
 }

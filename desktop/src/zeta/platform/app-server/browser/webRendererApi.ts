@@ -10,6 +10,7 @@ import { createViteDevWorkspaceSearchApi } from "../../search/browser/searchApi.
 import { createViteDevModelApi, createViteDevSessionApi, createViteDevThreadApi, createViteDevTurnApi } from "../../sessions/browser/sessionApi.js";
 import { ViteDevTerminalProcessService } from "../../terminal/browser/viteDevTerminalProcessService.js";
 import { createViteDevTypstApi } from "../../typst/browser/typstApi.js";
+import { createViteDevDocumentCollaborationApi } from "../../collaboration/browser/documentCollaborationApi.js";
 
 export interface ConnectedWebRendererApi {
   readonly api: IRendererHost;
@@ -43,6 +44,7 @@ function createRendererHost(connection: ViteDevAppServerConnection): IRendererHo
     thread: createViteDevThreadApi(connection),
     turn: createViteDevTurnApi(connection),
     typst: createViteDevTypstApi(connection),
+    documentCollaboration: createViteDevDocumentCollaborationApi(connection),
     resource,
     extensions: createViteDevExtensionApi(connection, resource),
     fs: createViteDevFileApi(connection),

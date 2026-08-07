@@ -38,22 +38,25 @@ test("Gama collaboration session keeps canonical and optimistic snapshots separa
   assert.equal(remote.pending?.steps[0]?.kind === "replaceText" ? remote.pending.steps[0].from : -1, 2);
   assert.equal(session.version, 2);
 
+  const retransmitted = session.takeNextSubmission();
+  assert.equal(retransmitted?.sequence, 2);
+  assert.equal(retransmitted?.baseVersion, 2);
   const acknowledgement = session.acknowledge({
     clientId: "client-a",
-    sequence: 1,
+    sequence: 2,
     baseVersion: 2,
     version: 3,
-    transaction: remote.pending!,
+    transaction: retransmitted!.transaction,
   });
   assert.equal(acknowledgement.kind, "acknowledged");
   assert.equal(session.document.content[0]?.content[0]?.text, "RHLello");
   assert.equal(session.canonicalDocument.content[0]?.content[0]?.text, "RHLello");
   assert.equal(session.pending, undefined);
   assert.equal(session.version, 3);
-  assert.deepEqual(kinds, ["local", "remote", "acknowledged"]);
+  assert.deepEqual(kinds, ["local", "remote", "local", "acknowledged"]);
 });
 
-test("Gama collaboration session emits cumulative pending updates", () => {
+test("Gama collaboration session buffers typing while one ordered update is in flight", () => {
   const schema = createDefaultDocumentSchema();
   using session = new DocumentCollaborationSession({ schema, document: createDocument(schema), clientId: "client-a" });
 
@@ -61,10 +64,15 @@ test("Gama collaboration session emits cumulative pending updates", () => {
   const second = session.dispatchLocal(new DocumentTransaction().replaceText("text-1", 1, 1, "B"));
 
   assert.equal(first?.sequence, 1);
-  assert.equal(second?.sequence, 2);
-  assert.equal(second?.transaction.steps.length, 2);
+  assert.equal(second, undefined);
   assert.equal(session.document.content[0]?.content[0]?.text, "ABHello");
-  assert.equal(session.pendingSequence, 2);
+  assert.equal(session.pendingSequence, 1);
+  session.acknowledge({ clientId: "client-a", sequence: 1, baseVersion: 0, version: 1, transaction: first!.transaction });
+  const next = session.takeNextSubmission();
+  assert.equal(next?.sequence, 2);
+  assert.equal(next?.baseVersion, 1);
+  assert.equal(next?.transaction.steps.length, 1);
+  assert.equal(session.document.content[0]?.content[0]?.text, "ABHello");
 });
 
 test("Gama collaboration envelopes round-trip local and remote transaction versions", () => {
@@ -104,7 +112,7 @@ test("Gama collaboration session reports dropped pending steps after remote dele
   using session = new DocumentCollaborationSession({ schema, document, clientId: "client-a" });
   session.dispatchLocal(new DocumentTransaction().setNodeAttributes("paragraph-2", { alignment: "center" }));
 
-  const change = session.receiveRemote({ clientId: "client-b", sequence: 1, baseVersion: 1, version: 2, transaction: new DocumentTransaction().deleteNode("paragraph-2") });
+  const change = session.receiveRemote({ clientId: "client-b", sequence: 1, baseVersion: 0, version: 1, transaction: new DocumentTransaction().deleteNode("paragraph-2") });
 
   assert.equal(change.droppedSteps.length, 1);
   assert.equal(session.pending, undefined);

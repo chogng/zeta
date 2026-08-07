@@ -24,6 +24,7 @@ pub struct InitializeResult {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ServerCapabilities {
+    pub document_collaboration: bool,
     pub sessions: bool,
     pub threads: bool,
     pub turns: bool,

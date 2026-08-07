@@ -119,7 +119,7 @@ VS Code 的官方源码组织说明了这些 editor 边界：`vs/editor` 不应�
 | `textModelPart.ts` | `contrib/tokenization/common/tokenizationTextModelPart.ts`、`common/languages/*` 等显式 feature contract | 当前（职责迁移） | Alpha 不建立一个拥有所有 model part 生命周期的通用基类；各 feature 明确拥有自己的 state、listener 和 dispose。 |
 | `textModelTokens.ts` | `common/tokens/*`、`contrib/tokenization/*`、`common/languages/syntax/*` | 部分具备 | 版本化 token result、按行 sparse index 和 tokenization model-part contract 已具备；VS Code 的全部 background tokenizer/state backend 尚未一一覆盖。 |
 | `tokens/{abstractSyntaxTokenBackend,annotations,tokenizationFontDecorationsProvider,tokenizationTextModelPart,tokenizerSyntaxTokenBackend}.ts` | `common/tokens/*`、`contrib/tokenization/*`、TextMate/syntax adapters | 部分具备 | token 生产由 Alpha language/provider contract 决定；不得为了文件对齐把 Workbench tokenizer 或第三方 runtime 直接放进 model。 |
-| `tokens/treeSitter/*` | `zeta-rs/syntax`、`platform/syntax`、`browser/services/rustSyntaxFactsService.ts` | 部分具备 | Rust owns bounded Tree-sitter parsing and UTF-16 DTO projection; Alpha consumes revision-bound token, diagnostic, symbol, and folding facts for JSON, JSONC, Rust, and Shell through existing result stores and contribs. Broader language coverage remains future work. |
+| `tokens/treeSitter/*` | `zeta-rs/syntax`、`platform/syntax`、`browser/services/rustSyntaxFactsService.ts` | 部分具备 | Rust owns bounded Tree-sitter parsing and UTF-16 DTO projection; Alpha consumes revision-bound token, diagnostic, symbol, and folding facts for JavaScript/JSX, TypeScript/TSX, JSON, JSONC, Rust, and Shell through existing result stores and contribs. Broader language coverage remains future work. |
 | `bracketPairsTextModelPart/*` | `contrib/bracketMatching/common/*`、`common/languages/languageLexical*`、对应 browser presentation | 当前（职责迁移） | lexical bracket matching、colorization、navigation、pair editing 已有独立 feature owner；Alpha 当前没有 model-resident incremental bracket-pair tree。 |
 
 这张表的用途是保持“可搜索的语义对齐”，不是承诺 Alpha 复刻 VS Code 的内部数据结构。
@@ -131,7 +131,7 @@ VS Code 的官方源码组织说明了这些 editor 边界：`vs/editor` 不应�
 | 审计项 | 当前判断 | 下一步 |
 | --- | --- | --- |
 | 文本存储、transaction、version、snapshot、undo/redo、search | ✅ 当前 | 继续以 `TextModel.commitOffsetEdits` 和 `PieceTreeTextBuffer` 为唯一同步 mutation/storage boundary。 |
-| tracked range / decoration 的大规模更新 | 部分具备 | 先补可重复 benchmark，测量大量 range、multi-splice transaction 和 decoration churn；只有实际预算不足时，才在 `common/model` 内引入私有 interval index。 |
+| tracked range / decoration 的大规模更新 | 部分具备 | 当前以语义/正确性测试守住 mapping；仅在真实产品性能预算失守时，用可复现的产品负载采样定位瓶颈，再在 `common/model` 内引入私有 interval index。 |
 | bracket-pair 增量结构 | 部分具备 | 当前 lexical feature 已满足基础行为；如需大文件或 parser-grade parity，先定义增量失效和 snapshot contract，再决定是否新增 model backend。 |
 | tokenization / semantic token state | 部分具备 | 保持 `common/tokens`、`contrib/tokenization` 和 language worker 的分层；Tree-sitter/AST 只作为明确 provider 方案推进。 |
 | streaming/builder 输入 | 尚未采用 | 当前字符串 resolve contract 不需要它；资源层改为流式读取前，不新增 `pieceTreeTextBufferBuilder.ts`。 |
@@ -319,7 +319,7 @@ contrib/<feature>/
 
 | VS Code contrib | Alpha 目标文件 | 当前 Alpha 映射 | 状态 | 职责边界 |
 | --- | --- | --- | --- | --- |
-| `editorState` | `contrib/editorState/common/editorState.ts`、`browser/editorStateController.ts` | `contrib/editorState/{common,browser}/*`、session 装配 | Current | editor focus、model、selection、scroll 的可观察状态 |
+| `editorState` | `contrib/editorState/common/editorState.ts`、`browser/editorStateController.ts` | `contrib/editorState/{common,browser}/*`、part 装配 | Current | editor focus、model、selection、scroll 的可观察状态 |
 | `contextmenu` | `contrib/contextmenu/browser/contextMenuController.ts` | `contrib/contextmenu/browser/contextMenuController.ts`；host callback 可选 | Partial | context menu action 组合；不定义 command 语义 |
 | `diffEditorBreadcrumbs` | `contrib/diffEditorBreadcrumbs/browser/diffEditorBreadcrumbs.ts` | Rust diff model + `DiffEditorPane` 装配 | Current | diff editor 当前 hunk/文件导航，不参与 diff 计算 |
 | `floatingMenu` | `contrib/floatingMenu/browser/floatingMenuController.ts` | `contrib/floatingMenu/browser/floatingMenuController.ts`；宿主按 action 注入 | Current | selection/hover anchor 的 transient menu |
@@ -329,13 +329,13 @@ contrib/<feature>/
 | `middleScroll` | `contrib/middleScroll/browser/middleScrollController.ts` | `contrib/middleScroll/browser/middleScrollController.ts` | Current | middle-button scroll，不污染普通 pointer selection |
 | `quickAccess` | `contrib/quickAccess/browser/quickAccessController.ts` | 同名 contrib；当前实现 Go to Line/Column | Current | editor-local quick access；Workbench global quick open 不归 Alpha |
 | `peekView` | `contrib/peekView/browser/peekViewWidget.ts` | `contrib/peekView/browser/peekViewWidget.ts`；宿主按需创建 | Current | anchored preview surface 和生命周期 |
-| `placeholderText` | `contrib/placeholderText/browser/placeholderTextController.ts` | `contrib/placeholderText/browser/placeholderTextController.ts`；session 可选装配 | Current | empty model 的 presentation placeholder |
+| `placeholderText` | `contrib/placeholderText/browser/placeholderTextController.ts` | `contrib/placeholderText/browser/placeholderTextController.ts`；part 可选装配 | Current | empty model 的 presentation placeholder |
 | `readOnlyMessage` | `contrib/readOnlyMessage/browser/readOnlyMessageController.ts` | 同名 contrib | Current | 用户可见的 readonly feedback，不参与权限判定 |
 | `sectionHeaders` | `contrib/sectionHeaders/browser/sectionHeadersController.ts` | `contrib/sectionHeaders/browser/sectionHeadersController.ts` | Current | folding/outline section header presentation |
 | `stickyScroll` | `contrib/stickyScroll/common/stickyScrollModel.ts`、`browser/stickyScrollController.ts` | `contrib/stickyScroll/{common,browser}/*` | Current | visible hierarchy 的 sticky projection |
 | `symbolIcons` | `contrib/symbolIcons/browser/symbolIconsController.ts` | `contrib/symbolIcons/browser/symbolIconsController.ts` | Current | symbol kind 到 icon presentation |
 | `toggleTabFocusMode` | `contrib/toggleTabFocusMode/browser/toggleTabFocusModeController.ts` | `contrib/toggleTabFocusMode/browser/toggleTabFocusModeController.ts` | Current | Tab focus mode 的 input routing，不改变 model |
-| `unicodeHighlighter` | `contrib/unicodeHighlighter/common/unicodeHighlighter.ts`、`browser/unicodeHighlighterController.ts` | `contrib/unicodeHighlighter/{common,browser}/*`；session 默认装配 | Current | confusable/invisible Unicode decoration |
+| `unicodeHighlighter` | `contrib/unicodeHighlighter/common/unicodeHighlighter.ts`、`browser/unicodeHighlighterController.ts` | `contrib/unicodeHighlighter/{common,browser}/*`；part 默认装配 | Current | confusable/invisible Unicode decoration |
 | `unusualLineTerminators` | `contrib/unusualLineTerminators/common/unusualLineTerminators.ts`、`browser/unusualLineTerminatorsController.ts` | `contrib/unusualLineTerminators/{common,browser}/*` | Current | 诊断原始 line terminator，不改变 model contract |
 | `message` | `contrib/message/browser/messageController.ts` | `contrib/message/browser/messageController.ts` | Current | editor-local transient message，不替代 Workbench notification |
 | `inlineProgress` | `contrib/inlineProgress/browser/inlineProgressController.ts` | `contrib/inlineProgress/browser/inlineProgressController.ts` | Current | provider request 的 inline progress presentation |
@@ -411,8 +411,8 @@ producer, synchronization, and presentation owners stay separate:
 | Parser-derived tokens, diagnostics, symbols, and fold ranges | `zeta-rs/app-server` `syntax/analyze` | bounded revision-bound UTF-16 DTOs | DOM, editor state, decorations, or worker lifecycle |
 | Snapshot synchronization, provider priority/fallback, result freshness, and wire deltas | Alpha `common/languages/syntax/*` | `SyntaxService`, `SyntaxWorker`, `SyntaxProvider` | parser implementation, App Server transport, or product file access |
 | TextMate grammar tokenization | `workbench/services/textMate` | `TextMateSyntaxWorker` contributes a high-priority `SyntaxProvider` | document model, diagnostics UI, or App Server syntax facts |
-| Token spans, markers, symbol navigation, and folding presentation | Alpha `common/tokens` plus the matching `contrib` | versioned stores consumed by the respective contrib | parser state or cross-editor session state |
-| Structured-document editing | Gama | `textBlock` may use Alpha only through `IEmbeddedTextEditor` | Alpha syntax runtime, TextMate worker, or Code session state |
+| Token spans, markers, symbol navigation, and folding presentation | Alpha `common/tokens` plus the matching `contrib` | versioned stores consumed by the respective contrib | parser state or cross-editor part state |
+| Structured-document editing | Gama | `textBlock` may use Alpha only through `IEmbeddedTextEditor` | Alpha syntax runtime, TextMate worker, or code-editor part state |
 
 The Rust adapter is optional and bounded. Unsupported languages and oversized
 documents fall back to the frontend provider chain; a failed Rust request does
@@ -420,9 +420,9 @@ not make the token or diagnostic stores publish a stale result. This keeps
 interactive UI work in Alpha while moving parser-grade, backend-neutral facts
 to `zeta-rs`.
 
-### 5.2 当前已装配的 Alpha session
+### 5.2 当前已装配的 Alpha editor part
 
-`browser/editorSession.ts` 是单个 editor instance 的装配入口，顺序固定为：
+`browser/editorPart.ts` 是单个 editor instance 的装配入口，顺序固定为：
 
 ```text
 TextModelReference
@@ -434,7 +434,7 @@ TextModelReference
   → bracket/comment/lines/find/quickAccess/hover/format/rename/readOnly/save
 ```
 
-`browser/browserEditorSession.ts` 只提供 TextMate grammar readiness、syntax Worker 和 completion Worker；它不能把 Workbench 类型传入 `common`。`contrib/editor.contribution.ts` 只负责 pane 注册和强制 adapter 注入；根级 `editor.all.ts` 是产品入口导入的公开 contribution bundle。新 contribution 若需要跨宿主能力，必须先扩展 `common/services` contract，再在这里装配 browser adapter。
+`browser/browserEditorPart.ts` 只提供 TextMate grammar readiness、syntax Worker 和 completion Worker；它不能把 Workbench 类型传入 `common`。`contrib/editor.contribution.ts` 只负责 pane 注册和强制 adapter 注入；根级 `editor.all.ts` 是产品入口导入的公开 contribution bundle。新 contribution 若需要跨宿主能力，必须先扩展 `common/services` contract，再在这里装配 browser adapter。
 
 ### 5.3 当前仍保留的宿主边界
 
@@ -509,8 +509,8 @@ Current：本文、`README.md` 和 `docs/editor-architecture.md` 共同描述 Al
 优先级：
 
 - P0：bracketMatching、suggest、snippet、gotoError、readOnlyMessage。
-- P1：hover、documentSymbols、gotoSymbol、links、format、rename、codeAction、inlayHints。common contract、browser controller 和 session 装配已完成；外部打开/产品 action 通过 host callback 保持边界。
-- P2：inlineCompletions、parameterHints、linkedEditing、codelens、colorPicker。common contract、browser controller 和 session 装配已完成。
+- P1：hover、documentSymbols、gotoSymbol、links、format、rename、codeAction、inlayHints。common contract、browser controller 和 part 装配已完成；外部打开/产品 action 通过 host callback 保持边界。
+- P2：inlineCompletions、parameterHints、linkedEditing、codelens、colorPicker。common contract、browser controller 和 part 装配已完成。
 - P3：peekView、stickyScroll、sectionHeaders、quickAccess、zoneWidget、floatingMenu、fontZoom、unicodeHighlighter。editor-local surface/controller 已完成；宿主按需注入具体内容或 action。
 
 P2/P3 功能必须先有稳定的 language/service contract；不能为了填满 contrib 目录而建立空壳 controller。

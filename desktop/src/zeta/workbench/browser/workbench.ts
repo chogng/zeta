@@ -510,6 +510,8 @@ export class Workbench extends DisposableOwner {
       languageResolver: languageFeaturesService,
       diffApi: api.diff,
       syntaxApi: api.syntax,
+      documentCollaborationApi: api.documentCollaboration,
+      serverEvents: api.events,
       workingCopyService,
       saveAsResource: nativeHostApi
         ? async (defaultName) => {

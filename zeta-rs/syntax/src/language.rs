@@ -2,10 +2,12 @@ use tree_sitter::{Language, Parser, Query};
 
 use crate::SyntaxError;
 
+mod javascript;
 mod json;
 mod jsonc;
 mod rust;
 mod shell;
+mod typescript;
 
 /// Source language selected for syntax analysis.
 ///
@@ -14,19 +16,27 @@ mod shell;
 /// supply arbitrary query source or native grammar pointers.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum SyntaxLanguage {
+    Javascript,
+    Javascriptreact,
     Json,
     Jsonc,
     Rust,
     Shell,
+    Typescript,
+    Typescriptreact,
 }
 
 impl SyntaxLanguage {
     pub const fn id(self) -> &'static str {
         match self {
+            Self::Javascript => "javascript",
+            Self::Javascriptreact => "javascriptreact",
             Self::Json => "json",
             Self::Jsonc => "jsonc",
             Self::Rust => "rust",
             Self::Shell => "shell",
+            Self::Typescript => "typescript",
+            Self::Typescriptreact => "typescriptreact",
         }
     }
 }
@@ -68,10 +78,13 @@ struct LanguageDefinition {
 
 fn definition(syntax_language: SyntaxLanguage) -> LanguageDefinition {
     match syntax_language {
+        SyntaxLanguage::Javascript | SyntaxLanguage::Javascriptreact => javascript::definition(),
         SyntaxLanguage::Json => json::definition(),
         SyntaxLanguage::Jsonc => jsonc::definition(),
         SyntaxLanguage::Rust => rust::definition(),
         SyntaxLanguage::Shell => shell::definition(),
+        SyntaxLanguage::Typescript => typescript::definition(false),
+        SyntaxLanguage::Typescriptreact => typescript::definition(true),
     }
 }
 

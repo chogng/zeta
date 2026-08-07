@@ -6,6 +6,8 @@ members = [
     "zeta-rs/app-server-client",
     "zeta-rs/app-server-protocol",
     "zeta-rs/app-server-transport",
+    "zeta-rs/collaboration",
+    "zeta-rs/collaboration-server",
     "zeta-rs/apply-patch",
     "zeta-rs/async-utils",
     "zeta-rs/auto-review",
@@ -154,8 +156,10 @@ tempfile = "3"
 toml = "0.9"
 tree-sitter = "0.26.11"
 tree-sitter-bash = "0.25.1"
+tree-sitter-javascript = "0.25.0"
 tree-sitter-json = "0.24.8"
 tree-sitter-rust = "0.24.2"
+tree-sitter-typescript = "0.23.2"
 unicode-segmentation = "1"
 unicode-width = "0.2"
 url = "2"
@@ -174,6 +178,8 @@ zeta-app-server = { path = "zeta-rs/app-server" }
 zeta-app-server-client = { path = "zeta-rs/app-server-client" }
 zeta-app-server-protocol = { path = "zeta-rs/app-server-protocol" }
 zeta-app-server-transport = { path = "zeta-rs/app-server-transport" }
+zeta-collaboration = { path = "zeta-rs/collaboration" }
+zeta-collaboration-server = { path = "zeta-rs/collaboration-server" }
 zeta-apply-patch = { path = "zeta-rs/apply-patch" }
 zeta-async-utils = { path = "zeta-rs/async-utils" }
 zeta-auto-review = { path = "zeta-rs/auto-review" }

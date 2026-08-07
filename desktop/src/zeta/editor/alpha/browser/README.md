@@ -5,7 +5,7 @@ This directory owns Alpha's native browser projection of contracts from
 Neither `alpha/common` nor `base` may import this layer.
 
 Language presentation is an optional consumer of this layer and lives in
-`./view`, `./input`, and feature-owned `../contrib/*/browser` directories. `EditorSession` composes it through
+`./view`, `./input`, and feature-owned `../contrib/*/browser` directories. `EditorPart` composes it through
 `ILanguageFeaturesService`; the code editor widget and text model do not import
 language providers, grammars, diagnostics, or completion services.
 
@@ -42,11 +42,11 @@ Gama is a sibling structured-editor domain. Alpha browser code must not import G
 
 ## Current implementation
 
-`CodeEditorWidget` is the canonical browser editing surface consumed by document sessions and
+`CodeEditorWidget` is the canonical browser editing surface consumed by editor parts and
 embedded widgets. It owns one `EditorViewport`, one `TextInputController`, keyboard and
 pointer navigation, and text-drop adaptation. Its caller retains the shared `TextModel` and the
 editor-local `EditorSelectionController`, so disposing a widget never disposes document state and
-multiple editors may safely project the same model. `EditorSession` adds language, folding,
+multiple editors may safely project the same model. `EditorPart` adds language, folding,
 diagnostic, save, and command controllers around this surface; product widgets must consume the
 CodeEditorWidget rather than assembling viewport and native-input internals themselves.
 
@@ -68,7 +68,7 @@ the Alpha diff pane. The widget owns one virtualized scroll surface and
 side-by-side DOM rows, but owns neither text nor computation. Editing,
 selection history,
 syntax processing, and model persistence stay with ordinary Alpha editor
-sessions. `nextChange`/`previousChange` and F7/Shift+F7 wrap over changed rows,
+parts. `nextChange`/`previousChange` and F7/Shift+F7 wrap over changed rows,
 add the component-owned `.active` state, and announce the original/modified
 location through the diff view's live region.
 `DiffEditorInput` gives the Workbench one synthetic tab resource while
@@ -340,7 +340,7 @@ entry owns its remote provider registry, named module registry, module host,
 and wire servers. The browser requires the `language.word` module; the client
 waits for its activation before sending the first completion request. Passing the factory through
 `LanguageCompletionService.workerFactory` is explicit—the service's default
-remains the in-process provider host. `createBrowserAlphaEditorSession`
+remains the in-process provider host. `createBrowserEditorPart`
 activates this Worker path for product Alpha panes.
 
 The wire carries only versioned plain DTOs. Completion positions and ranges are
@@ -401,7 +401,7 @@ provider lifecycles remain independent. After each mirror sync, the common Worke
 `language.lexical`'s shared versioned line cache before the next ordered request,
 so token and diagnostic lanes consume one incrementally computed syntax result.
 The browser adapter does not own lexical state or scan policy.
-`createBrowserAlphaEditorSession` consumes the Workbench `ITextMateService`,
+`createBrowserEditorPart` consumes the Workbench `ITextMateService`,
 waits for its grammar catalog, and schedules new syntax work when the catalog
 changes.
 

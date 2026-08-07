@@ -26,6 +26,8 @@ use zeta_file_system::WorkspaceFileSystem;
 use zeta_protocol::ThreadUpdateEnvelope;
 use zeta_typst::TypstCompiler;
 
+mod collaboration_operations;
+mod collaboration_runtime;
 mod config_operations;
 mod config_runtime;
 mod diff_operations;
@@ -57,6 +59,7 @@ pub struct AppServer {
     model_catalog: Arc<dyn ModelCatalog>,
     next_connection_id: AtomicU64,
     pub(super) resources: Mutex<ResourceStore>,
+    pub(super) collaboration: Mutex<collaboration_runtime::DocumentCollaborationStore>,
     pub(super) extensions: Mutex<ExtensionCatalog>,
     pub(super) config: Option<Arc<ConfigStore>>,
     pub(super) workspace_authority_gate: Arc<Mutex<()>>,
@@ -121,6 +124,7 @@ impl AppServer {
             model_catalog: unavailable_model_catalog(),
             next_connection_id: AtomicU64::new(1),
             resources: Mutex::new(ResourceStore::default()),
+            collaboration: Mutex::new(collaboration_runtime::DocumentCollaborationStore::default()),
             extensions: Mutex::new(ExtensionCatalog::default()),
             config: None,
             workspace_authority_gate: Arc::new(Mutex::new(())),
@@ -406,6 +410,12 @@ impl AppServer {
         match client_method(&request.method) {
             Some(ClientMethod::Initialize) => unreachable!("initialize handled before gate"),
             Some(ClientMethod::WorkspaceSwitch) => self.workspace_switch(&request.params),
+            Some(ClientMethod::DocumentCollaborationOpen) => {
+                self.document_collaboration_open(connection, &request.params)
+            }
+            Some(ClientMethod::DocumentCollaborationSubmit) => {
+                self.document_collaboration_submit(&request.params)
+            }
             Some(ClientMethod::SessionCreate) => self.session_create(connection, &request.params),
             Some(ClientMethod::SessionRead) => self.session_read(&request.params),
             Some(ClientMethod::SessionList) => self.session_list(),

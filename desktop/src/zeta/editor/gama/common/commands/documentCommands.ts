@@ -671,7 +671,6 @@ export function createInsertFragmentCommand(schema: DocumentSchema, document: Do
   if (!range) return undefined;
   const pastedBlocks = fragment.content.map(node => cloneNodeWithFreshIds(schema, node));
   if (pastedBlocks.length === 1 && isTextBlock(pastedBlocks[0]!)) return createReplaceInlineSelectionCommand(schema, document, blockId, selection, pastedBlocks[0]!.content);
-  if (pastedBlocks.some(node => !isTextBlock(node))) return undefined;
   if (!schema.canContainChild(parent.type, location.node.type) || pastedBlocks.some(node => !schema.canContainChild(parent.type, node.type))) return undefined;
   const startNode = location.node.content[range.startIndex]!;
   const endNode = location.node.content[range.endIndex]!;
@@ -679,15 +678,29 @@ export function createInsertFragmentCommand(schema: DocumentSchema, document: Do
   const after = [...location.node.content.slice(range.endIndex + 1)];
   if (range.start.offset > 0) before.push(schema.createText(startNode.text!.slice(0, range.start.offset), { id: startNode.id, marks: startNode.marks }));
   if (range.end.offset < endNode.text!.length) after.unshift(schema.createText(endNode.text!.slice(range.end.offset), { id: range.startIndex === range.endIndex ? undefined : endNode.id, marks: endNode.marks }));
-  const first = schema.createNode(location.node.type, { attrs: location.node.attrs, content: [...before, ...pastedBlocks[0]!.content] });
-  const lastIndex = pastedBlocks.length - 1;
-  const blocks = [first, ...pastedBlocks.slice(1, lastIndex), schema.createNode(pastedBlocks[lastIndex]!.type, { attrs: pastedBlocks[lastIndex]!.attrs, content: [...pastedBlocks[lastIndex]!.content, ...after] })];
+  if (pastedBlocks.every(isTextBlock)) {
+    const first = schema.createNode(location.node.type, { attrs: location.node.attrs, content: [...before, ...pastedBlocks[0]!.content] });
+    const lastIndex = pastedBlocks.length - 1;
+    const blocks = [first, ...pastedBlocks.slice(1, lastIndex), schema.createNode(pastedBlocks[lastIndex]!.type, { attrs: pastedBlocks[lastIndex]!.attrs, content: [...pastedBlocks[lastIndex]!.content, ...after] })];
+    let transaction = new DocumentTransaction();
+    for (const child of location.node.content) transaction = transaction.deleteNode(child.id);
+    for (let index = 0; index < first.content.length; index += 1) transaction = transaction.insertNode(blockId, index, first.content[index]!);
+    for (let index = 1; index < blocks.length; index += 1) transaction = transaction.insertNode(parent.id, location.index + index, blocks[index]!);
+    const focusBlock = blocks.at(-1)!;
+    const focusNode = lastTextNode(focusBlock.content) ?? firstTextNode(focusBlock.content);
+    const point = focusNode ? { nodeId: focusNode.id, offset: focusNode.text!.length } : undefined;
+    if (point) transaction = transaction.withSelection(textSelection(point));
+    return { transaction, focus: { blockId: focusBlock.id, ...(point ? { point } : {}) } };
+  }
+  const prefix = before.length > 0 ? schema.createNode(location.node.type, { attrs: location.node.attrs, content: before }) : undefined;
+  const suffix = after.length > 0 ? schema.createNode(location.node.type, { attrs: location.node.attrs, content: after }) : undefined;
+  const blocks = [...(prefix ? [prefix] : []), ...pastedBlocks, ...(suffix ? [suffix] : [])];
+  if (blocks.length === 0) return undefined;
   let transaction = new DocumentTransaction();
-  for (const child of location.node.content) transaction = transaction.deleteNode(child.id);
-  for (let index = 0; index < first.content.length; index += 1) transaction = transaction.insertNode(blockId, index, first.content[index]!);
-  for (let index = 1; index < blocks.length; index += 1) transaction = transaction.insertNode(parent.id, location.index + index, blocks[index]!);
+  transaction = transaction.deleteNode(location.node.id);
+  for (let index = 0; index < blocks.length; index += 1) transaction = transaction.insertNode(parent.id, location.index + index, blocks[index]!);
   const focusBlock = blocks.at(-1)!;
-  const focusNode = lastTextNode(focusBlock.content) ?? firstTextNode(focusBlock.content);
+  const focusNode = lastTextNodeDeep(focusBlock) ?? firstTextNodeDeep(focusBlock);
   const point = focusNode ? { nodeId: focusNode.id, offset: focusNode.text!.length } : undefined;
   if (point) transaction = transaction.withSelection(textSelection(point));
   return { transaction, focus: { blockId: focusBlock.id, ...(point ? { point } : {}) } };
@@ -926,6 +939,24 @@ function firstTextNode(content: readonly DocumentNode[]): DocumentNode | undefin
 
 function lastTextNode(content: readonly DocumentNode[]): DocumentNode | undefined {
   return [...content].reverse().find(child => child.text !== undefined);
+}
+
+function firstTextNodeDeep(node: DocumentNode): DocumentNode | undefined {
+  if (node.text !== undefined) return node;
+  for (const child of node.content) {
+    const text = firstTextNodeDeep(child);
+    if (text) return text;
+  }
+  return undefined;
+}
+
+function lastTextNodeDeep(node: DocumentNode): DocumentNode | undefined {
+  if (node.text !== undefined) return node;
+  for (let index = node.content.length - 1; index >= 0; index -= 1) {
+    const text = lastTextNodeDeep(node.content[index]!);
+    if (text) return text;
+  }
+  return undefined;
 }
 
 function marksEqual(left: DocumentNode["marks"], right: DocumentNode["marks"]): boolean {

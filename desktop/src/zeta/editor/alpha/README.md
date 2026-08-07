@@ -42,7 +42,7 @@ Language capability is deliberately outside Alpha's core ownership. The
 `common/services/languageService.ts` (Workbench's
 `workbench/services/language/common/languageFeaturesService.ts` is only a DI wrapper)
 owns shared language registrations and creates caller-owned per-document syntax
-and completion services. `EditorSession` may use the default implementation
+and completion services. `EditorPart` may use the default implementation
 or receive a host-provided service; it does not own a language runtime, grammar,
 or provider registry. This is the replacement seam for an extension host, LSP, or
 Rust-backed provider.
@@ -58,7 +58,7 @@ class:
 | Raw resource I/O | `platform/files` | `IFileService` owns workspace reads and App-Server-backed atomic UTF-8 writes |
 | Text resource loading and save transport | `workbench/services/textfile/common` | ✅ `ITextFileService.resolve/save`; it deliberately does not own a live editor model |
 | Syntax token production | `workbench/services/textMate` and Alpha syntax providers | ✅ Bundled language packages are declarative resources loaded through the Workbench TextMate service; Alpha owns the displayed token result and its versioned stores |
-| Parser-derived syntax facts | `zeta-rs/syntax` via `platform/syntax` | ✅ Rust owns bounded parse/tree traversal and UTF-16 projection; Alpha consumes revision-bound tokens, parser diagnostics, document symbols, and folding for JSON, JSONC, Rust, and Shell while other languages retain TextMate/lexical/indent fallback |
+| Parser-derived syntax facts | `zeta-rs/syntax` via `platform/syntax` | ✅ Rust owns bounded parse/tree traversal and UTF-16 projection; Alpha consumes revision-bound tokens, parser diagnostics, document symbols, and folding for JavaScript/JSX, TypeScript/TSX, JSON, JSONC, Rust, and Shell while other languages retain TextMate/lexical/indent fallback |
 | Shared URI-to-Alpha-model references, saved baseline and dirty state | `ITextModelService` | ✅ editor-owned; Alpha owns LF-normalized baseline comparison, serialized snapshot saves and explicit reverts |
 | Shared Workbench persistence lifecycle | `IWorkingCopyService` + `EditorWorkingCopy` | ✅ Workbench indexes the copy; Alpha retains model, line-ending, and conflict semantics |
 | Text transactions, history, selections, decorations and versioned language results | `editor/alpha/common` | ✅ Alpha's synchronous TypeScript authority; no Rust/WASM shadow document |
@@ -146,7 +146,7 @@ architectural drift signal and require extraction at that point.
 | Versioned language-isolated lexical line cache | ✅ | `LanguageLexicalSyntaxCache` / `LanguageLexicalLineScanner` |
 | Shared language provider-module lifecycle | ✅ | `LanguageProviderModuleRegistry` / `LanguageProviderModuleHost` / generic module wire |
 | Syntax provider-module activation barrier | ✅ | `SyntaxModuleWorkerClient` / `language.lexical` |
-| TextMate grammar provider and Worker seam | 部分具备 | `workbench/services/textMate`; JSON/JSONC extension resources, explicit session grammar contributions, catalog transport and Alpha pane Worker selection are active |
+| TextMate grammar provider and Worker seam | 部分具备 | `workbench/services/textMate`; JSON/JSONC extension resources, explicit host grammar contributions, catalog transport and Alpha pane Worker selection are active |
 | Versioned completion result, session, and widget | ✅ | `languageCompletions.ts` / `LanguageCompletionSessionController` / `CompletionWidget` |
 | Completion snippet tabstops, variables, choices, and navigation-refreshed regex transforms | ✅ | `languageCompletionSnippet.ts` / `languageCompletionSnippetTransform.ts` |
 | Completion provider registry, host, and input triggers | ✅ | `LanguageCompletionProviderRegistry` / `LanguageCompletionService` / `TextInputController` |
@@ -163,7 +163,7 @@ architectural drift signal and require extraction at that point.
 | Virtualized side-by-side review view | ✅ | `browser/widget/diffEditor/DiffEditorWidget` |
 | Workbench original/modified diff input and pane lifecycle | ✅ | `DiffEditorInput` / `DiffEditorPane` |
 | Visible-line indentation guides | ✅ | `contrib/indentation/browser/indentation.ts` / `EditorViewport` |
-| Parser/indentation/lexical/named-region/manual folding, visible-row projection, gutter toggle, recursive/level fold chords, collapse-all and expand-all | ✅ | `browser/services/rustSyntaxFoldingService.ts` adds revision-bound parser folds for JSON, JSONC, Rust, and Shell; `contrib/folding/browser/{foldingRanges,syntaxRangeProvider,indentRangeProvider,foldingModel,hiddenRangeModel,foldingDecorations,folding}` retains lexical, marker, indentation, and manual fallback |
+| Parser/indentation/lexical/named-region/manual folding, visible-row projection, gutter toggle, recursive/level fold chords, collapse-all and expand-all | ✅ | `browser/services/rustSyntaxFoldingService.ts` adds revision-bound parser folds for JavaScript/JSX, TypeScript/TSX, JSON, JSONC, Rust, and Shell; `contrib/folding/browser/{foldingRanges,syntaxRangeProvider,indentRangeProvider,foldingModel,hiddenRangeModel,foldingDecorations,folding}` retains lexical, marker, indentation, and manual fallback |
 | Transient Alt+Z word-wrap toggle | ✅ | `EditorViewport` / `WordWrapController` |
 | Read-only virtual line DOM projection | ✅ | `browser/EditorViewport` |
 | Canonical browser CodeEditor composition | ✅ | `browser/widget/codeEditor/CodeEditorWidget`; owns viewport, native input, keyboard/pointer navigation, and text drop while model and selections remain caller-owned |
@@ -310,12 +310,12 @@ ordered request initializes the mirror with a full snapshot; the peer lane and
 later requests reference it, while model transactions send one incremental
 sync shared by both lanes.
 
-Browser sessions create their syntax worker directly from the editor-local provider factory.
+Browser editor parts create their syntax worker directly from the editor-local provider factory.
 Bundled language packages use declarative TextMate grammars where a grammar is present; Alpha's
 deterministic lexical provider remains the editor-owned baseline for unsupported or unavailable
 grammar roots. `platform/syntax` exposes a separate, bounded App Server syntax capability.
 `RustSyntaxFactsService` shares one current revision request between parser folding, the token and
-diagnostic lanes, and document-symbol fallback providers. JSON, JSONC, Rust, and Shell therefore
+diagnostic lanes, and document-symbol fallback providers. JavaScript/JSX, TypeScript/TSX, JSON, JSONC, Rust, and Shell therefore
 gain parser-grade folding, syntax token presentation, parser diagnostics, and Ctrl/Cmd+Shift+O
 symbols. The wrapper keeps Alpha's version gate and result stores authoritative; unsupported or
 oversized documents delegate to the existing Worker/TextMate/lexical path, while registered richer
@@ -469,8 +469,8 @@ deterministic, bounded `language.word` lexical provider is available through the
 named `language.word` module and is activated by the browser client handshake,
 rather than being registered unconditionally. The service defaults to the
 in-process host, so a caller must deliberately opt into the Worker factory.
-`createBrowserAlphaEditorSession` makes that selection for product Alpha panes
-while direct/test sessions retain the local provider.
+`createBrowserEditorPart` makes that selection for product Alpha panes while
+direct/test editor parts retain the local provider.
 
 After the first full snapshot, `LanguageWorkerWireClient` implements
 `LanguageWorkerModelSynchronizer`. The coordinator cancels old-version work
@@ -1351,7 +1351,7 @@ The next implementation stages are:
 2. composition clause projection work; mobile remains out of scope;
 3. TextMate extension-resource discovery; serializable scope-theme selector composition is complete;
 4. desktop platform acceptance verification (macOS VoiceOver, then Windows); mobile remains out of scope;
-5. extend parser-grade syntax coverage beyond JSON, JSONC, Rust, and Shell; inline-advance layout, native browser-driven wrapping, and continuous updates for transformed snippet mirrors while typing remain separate work;
+5. extend parser-grade syntax coverage beyond JavaScript/JSX, TypeScript/TSX, JSON, JSONC, Rust, and Shell; inline-advance layout, native browser-driven wrapping, and continuous updates for transformed snippet mirrors while typing remain separate work;
 6. migrate remaining legacy editor runtime-only tools through Alpha's public contracts, then
    remove the retired legacy editor runtime editor without importing its ownership into Alpha.
 

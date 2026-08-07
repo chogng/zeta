@@ -7,7 +7,7 @@ import { type ILanguageFeaturesService } from "../common/services/languageServic
 import { type TextResourceChangeEvent, type TextResourceContent, type TextResourceResolveRequest, type TextResourceSaveRequest, type ITextResourceStore } from "../common/services/textResourceStore.js";
 import { BrowserTextModelService } from "./services/browserTextModelService.js";
 import { EditorPane } from "./editorPane.js";
-import { EditorSession } from "./editorSession.js";
+import { EditorPart } from "./editorPart.js";
 
 /** Options shared by Alpha CodeEditorWidget projections mounted in TextEditorWidget textBlock nodes. */
 export interface EmbeddedTextEditorFactoryOptions {
@@ -31,7 +31,7 @@ class EmbeddedTextEditor extends DisposableOwner implements IEmbeddedTextEditor 
   private readonly modelService: BrowserTextModelService;
   private readonly pane: EditorPane;
   private readonly input: EmbeddedTextEditorInput;
-  private session: EditorSession | undefined;
+  private editorPart: EditorPart | undefined;
   private parent: HTMLElement | undefined;
   private pendingValue: string;
   private started = false;
@@ -52,14 +52,14 @@ class EmbeddedTextEditor extends DisposableOwner implements IEmbeddedTextEditor 
       modelService: this.modelService,
       textMateService: factoryOptions.textMateService,
       languageFeaturesService: factoryOptions.languageFeaturesService,
-      createSession: sessionOptions => {
-        const session = new EditorSession({ ...sessionOptions, presentation: "embedded" });
-        this.session = session;
-        this.own(session.onDidChange(() => {
-          this.pendingValue = session.getValue();
+      createPart: partOptions => {
+        const editorPart = new EditorPart({ ...partOptions, presentation: "embedded" });
+        this.editorPart = editorPart;
+        this.own(editorPart.onDidChange(() => {
+          this.pendingValue = editorPart.getValue();
           this.changeEmitter.fire(this.pendingValue);
         }));
-        return session;
+        return editorPart;
       },
     }));
   }
@@ -78,11 +78,11 @@ class EmbeddedTextEditor extends DisposableOwner implements IEmbeddedTextEditor 
 
   setValue(value: string): void {
     this.pendingValue = value;
-    this.session?.setValue(value);
+    this.editorPart?.setValue(value);
   }
 
   getValue(): string {
-    return this.session?.getValue() ?? this.pendingValue;
+    return this.editorPart?.getValue() ?? this.pendingValue;
   }
 
   layout(dimension: IDimension): void {

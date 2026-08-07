@@ -3,6 +3,7 @@ use serde_json::Value;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::sync::{Arc, Condvar, Mutex, Weak};
+use zeta_app_server_protocol::protocol::collaboration::DocumentCollaborationUpdate;
 use zeta_app_server_protocol::protocol::config::ConfigChanged;
 use zeta_app_server_protocol::protocol::fs::FsChanged;
 use zeta_app_server_protocol::protocol::git::{GitStatusChanged, GitStatusResult};
@@ -123,6 +124,7 @@ pub(super) struct UpdateBroker {
 
 struct Subscriber {
     queue: Weak<NotificationQueueInner>,
+    collaboration_rooms: BTreeSet<String>,
     sessions: BTreeMap<SessionId, u64>,
     threads: BTreeMap<ThreadId, ThreadSubscription>,
 }
@@ -140,6 +142,7 @@ impl UpdateBroker {
                 connection_id,
                 Subscriber {
                     queue: queue.downgrade(),
+                    collaboration_rooms: BTreeSet::new(),
                     sessions: BTreeMap::new(),
                     threads: BTreeMap::new(),
                 },
@@ -176,6 +179,36 @@ impl UpdateBroker {
                 !subscription.session_owners.is_empty()
             });
         }
+    }
+
+    pub(super) fn subscribe_document_collaboration(&self, connection_id: u64, room_id: String) {
+        if let Ok(mut subscribers) = self.subscribers.lock()
+            && let Some(subscriber) = subscribers.get_mut(&connection_id)
+        {
+            subscriber.collaboration_rooms.insert(room_id);
+        }
+    }
+
+    pub(super) fn publish_document_collaboration(&self, update: DocumentCollaborationUpdate) {
+        let Ok(mut subscribers) = self.subscribers.lock() else {
+            return;
+        };
+        subscribers.retain(|_, subscriber| {
+            let Some(queue) = subscriber
+                .queue
+                .upgrade()
+                .map(NotificationQueue::from_inner)
+            else {
+                return false;
+            };
+            if subscriber.collaboration_rooms.contains(&update.room_id) {
+                queue.push(notification(
+                    ServerNotificationMethod::DocumentCollaborationUpdate,
+                    &update,
+                ));
+            }
+            true
+        });
     }
 
     pub(super) fn subscribe_session_thread(

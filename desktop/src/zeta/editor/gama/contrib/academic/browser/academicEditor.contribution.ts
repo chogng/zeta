@@ -2,6 +2,8 @@ import { registerEditorPane } from "../../../../../workbench/browser/parts/edito
 import { EmbeddedTextEditorFactory } from "../../../../alpha/browser/embeddedTextEditor.js";
 import { EditorPane } from "../../../browser/editorPane.js";
 import { createGamaEditorPaneOptions, findGamaEditorProfile, matchGamaEditorProfiles } from "../../../browser/services/editorProfile.js";
+import { AppServerDocumentCollaborationService } from "../../../browser/services/appServerDocumentCollaborationService.js";
+import { DocumentCollaborationService } from "../../../browser/services/documentCollaborationService.js";
 import { academicProfile } from "./profile.js";
 
 const profiles = [academicProfile] as const;
@@ -16,6 +18,10 @@ for (const profile of profiles) {
       if (!options.input) throw new Error("Gama editor requires its Workbench input during construction");
       const selectedProfile = findGamaEditorProfile(options.input, [profile]);
       if (!selectedProfile) throw new Error("Gama editor has no profile for " + options.input.resource.toString());
+      const appServerDocumentCollaborationService = options.documentCollaborationApi && options.serverEvents
+        ? new AppServerDocumentCollaborationService(options.documentCollaborationApi, options.serverEvents)
+        : undefined;
+      const documentCollaborationService = new DocumentCollaborationService(appServerDocumentCollaborationService);
       const paneOptions = createGamaEditorPaneOptions(selectedProfile, {
         onSave: options.onSave,
         workingCopyService: options.workingCopyService,
@@ -23,6 +29,7 @@ for (const profile of profiles) {
           textMateService: options.textMateService,
           languageFeaturesService: options.languageFeaturesService,
         }),
+        documentCollaborationService,
       });
       return new EditorPane(options.textFileService, paneOptions);
     },

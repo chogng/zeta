@@ -2,17 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { URI } from "../../../../base/common/uri.js";
-import { TextFileContentSource, type ITextFileService, type ResolvedTextFileContent, type TextFileResolveRequest } from "../../../../workbench/services/textfile/common/textFileService.js";
+import { type TextModelReference } from "../../common/services/textModelService.js";
+import { TextModel } from "../../common/model/textModel.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
-browserEnvironment.window.HTMLCanvasElement.prototype.getContext = () => null;
-class NoopWorker {
-  addEventListener(): void {}
-  removeEventListener(): void {}
-  postMessage(): void {}
-  terminate(): void {}
-}
-
 for (const [name, value] of Object.entries({
   window: browserEnvironment.window,
   document: browserEnvironment.window.document,
@@ -21,87 +14,196 @@ for (const [name, value] of Object.entries({
   HTMLElement: browserEnvironment.window.HTMLElement,
   Event: browserEnvironment.window.Event,
   InputEvent: browserEnvironment.window.InputEvent,
-  KeyboardEvent: browserEnvironment.window.KeyboardEvent,
-  MouseEvent: browserEnvironment.window.MouseEvent,
-  Worker: NoopWorker,
 })) {
   Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { EditorPart } = await import("../../../../workbench/browser/parts/editor/editorPart.js");
-const { EditorPanes } = await import("../../../../workbench/browser/parts/editor/editorRegistry.js");
-const { EditorPane } = await import("../../browser/editorPane.js");
-const { ALPHA_EDITOR_ID } = await import("../../browser/editorInput.js");
-await import("../../contrib/editor.contribution.js");
+const { EditorPart } = await import("../../browser/editorPart.js");
 
 test.after(() => browserEnvironment.window.close());
 
-test("EditorPart opens a real Alpha pane and saves its edited model", async () => {
-  const document = browserEnvironment.window.document;
-  const textFiles = new InMemoryTextFiles("const alpha = 1;");
-  const editor = new EditorPart(document, { textFileService: textFiles });
-  document.body.append(editor.element);
-  editor.layout({ width: 800, height: 600 });
+test("Alpha editor part composes native input, local language syntax, and presentation", async () => {
+  const dom = new JSDOM("<!doctype html><body><main></main></body>");
+  dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+  const container = dom.window.document.querySelector<HTMLElement>("main")!;
+  const model = new TextModel("{\"name\": \"alpha\"");
+  const reference = modelReference(URI.file("C:\\project\\settings.json"), model);
+  const errors: unknown[] = [];
+  const editorPart = new EditorPart({
+    container,
+    input: {
+      resource: reference.resource,
+      label: "settings.json",
+    },
+    languageId: "json",
+    modelReference: reference,
+    onLanguageError: error => errors.push(error),
+  });
+  editorPart.layout({ width: 500, height: 240 });
+  await waitFor(() => container.querySelectorAll(".zeta-alpha-editor-token.token-string").length > 0);
+  await waitFor(() => container.querySelectorAll(".zeta-alpha-editor-decoration.warning-underline").length > 0);
 
-  try {
-    const input = {
-      resource: URI.file("C:\\project\\main.ts"),
-      label: "main.ts",
-      languageId: "typescript",
-    };
-    assert.equal(EditorPanes.resolve(input).id, ALPHA_EDITOR_ID);
+  assert.equal(container.querySelectorAll(".zeta-alpha-editor").length, 1);
+  assert.equal(container.querySelectorAll(".zeta-alpha-editor-input").length, 1);
+  assert.equal(container.querySelectorAll(".zeta-alpha-editor-token.token-string").length > 0, true);
+  assert.equal(container.querySelectorAll(".zeta-alpha-editor-bracket-level-1").length > 0, true);
+  assert.equal(container.querySelectorAll(".zeta-alpha-editor-decoration.warning-underline").length > 0, true);
+  assert.deepEqual(errors, []);
 
-    const pane = await editor.openEditor(input);
-    const alphaPane = pane as InstanceType<typeof EditorPane>;
+  editorPart.textInput.element.dispatchEvent(new dom.window.InputEvent("beforeinput", {
+    bubbles: true,
+    cancelable: true,
+    data: "x",
+    inputType: "insertText",
+  }));
+  assert.equal(editorPart.getValue().startsWith("x{"), true);
 
-    assert.equal(pane.id, ALPHA_EDITOR_ID);
-    assert.equal(editor.activePane, pane);
-    assert.equal(pane instanceof EditorPane, true);
-    assert.ok(document.querySelector(".zeta-alpha-editor"));
-    const textInput = document.querySelector<HTMLTextAreaElement>(".zeta-alpha-editor-input");
-    assert.ok(textInput);
-
-    pane.focus();
-    textInput.dispatchEvent(new browserEnvironment.window.InputEvent("beforeinput", {
-      bubbles: true,
-      cancelable: true,
-      data: "x",
-      inputType: "insertText",
-    }));
-    assert.equal(alphaPane.getValue(), "xconst alpha = 1;");
-
-    await alphaPane.save();
-    assert.deepEqual(textFiles.savedTexts, ["xconst alpha = 1;"]);
-  } finally {
-    editor.dispose();
-  }
+  editorPart.dispose();
+  await Promise.resolve();
+  await Promise.resolve();
+  assert.deepEqual(errors, []);
+  assert.equal(container.children.length, 0);
+  assert.throws(() => model.getText(), /disposed/);
+  dom.window.close();
 });
 
-class InMemoryTextFiles implements ITextFileService {
-  readonly savedTexts: string[] = [];
-  readonly onDidChangeFiles = inertFileChanges;
+test("Alpha editor part derives indentation folds and projects their gutter controls", () => {
+  const dom = new JSDOM("<!doctype html><body><main></main></body>");
+  dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+  const container = dom.window.document.querySelector<HTMLElement>("main")!;
+  const model = new TextModel("root\n  child\nafter");
+  const reference = modelReference(URI.file("C:\\project\\fold.txt"), model);
+  const editorPart = new EditorPart({
+    container,
+    input: {
+      resource: reference.resource,
+      label: "fold.txt",
+    },
+    languageId: "plaintext",
+    modelReference: reference,
+  });
+  editorPart.layout({ width: 500, height: 120 });
 
-  constructor(private text: string) {}
+  const foldToggle = container.querySelector<HTMLButtonElement>(".zeta-alpha-editor-fold-toggle");
+  assert.ok(foldToggle);
+  foldToggle.dispatchEvent(new dom.window.MouseEvent("pointerdown", { bubbles: true, cancelable: true }));
+  assert.deepEqual([...container.querySelectorAll<HTMLElement>(".zeta-alpha-editor-line")].map(line => line.dataset.logicalLineIndex), ["0", "2"]);
 
-  async resolve(request: TextFileResolveRequest): Promise<ResolvedTextFileContent> {
-    return {
-      resource: request.resource,
-      text: request.bootstrapText ?? this.text,
-      source: request.bootstrapText === undefined
-        ? TextFileContentSource.FileSystem
-        : TextFileContentSource.Bootstrap,
-    };
-  }
+  editorPart.dispose();
+  dom.window.close();
+});
 
-  async save(request: { readonly text: string }): Promise<void> {
-    this.savedTexts.push(request.text);
-    this.text = request.text;
-  }
+test("Alpha editor part honors a read-only input without disabling selection infrastructure", () => {
+  const dom = new JSDOM("<!doctype html><body><main></main></body>");
+  dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+  const container = dom.window.document.querySelector<HTMLElement>("main")!;
+  const model = new TextModel("alpha");
+  const reference = modelReference(URI.file("C:\\project\\preview.txt"), model);
+  const editorPart = new EditorPart({
+    container,
+    input: { resource: reference.resource, label: "preview.txt", readOnly: true },
+    languageId: "plaintext",
+    modelReference: reference,
+  });
+
+  const input = editorPart.textInput.element;
+  assert.equal(input.readOnly, true);
+  assert.equal(input.getAttribute("aria-readonly"), "true");
+  const edit = new dom.window.InputEvent("beforeinput", {
+    bubbles: true,
+    cancelable: true,
+    data: "x",
+    inputType: "insertText",
+  });
+  input.dispatchEvent(edit);
+  assert.equal(edit.defaultPrevented, true);
+  assert.equal(editorPart.getValue(), "alpha");
+  editorPart.selections.setSelections(editorPart.selections.selections);
+
+  editorPart.dispose();
+  dom.window.close();
+});
+
+test("Alpha editor part announces save completion and forwards failures", async () => {
+  const dom = new JSDOM("<!doctype html><body><main></main></body>");
+  dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+  const container = dom.window.document.querySelector<HTMLElement>("main")!;
+  const model = new TextModel("alpha");
+  const reference = modelReference(URI.file("C:\\project\\save.txt"), model);
+  const errors: unknown[] = [];
+  let fail = false;
+  const editorPart = new EditorPart({
+    container,
+    input: { resource: reference.resource, label: "save.txt" },
+    languageId: "plaintext",
+    modelReference: reference,
+    onSave: async () => {
+      if (fail) throw new Error("conflict");
+    },
+    onSaveError: error => errors.push(error),
+  });
+
+  editorPart.textInput.element.dispatchEvent(new dom.window.KeyboardEvent("keydown", {
+    bubbles: true,
+    cancelable: true,
+    ctrlKey: true,
+    key: "s",
+  }));
+  await waitFor(() => container.querySelector(".zeta-alpha-editor-accessibility-status")?.textContent === "Saved");
+
+  fail = true;
+  editorPart.textInput.element.dispatchEvent(new dom.window.KeyboardEvent("keydown", {
+    bubbles: true,
+    cancelable: true,
+    ctrlKey: true,
+    key: "s",
+  }));
+  await waitFor(() => container.querySelector(".zeta-alpha-editor-accessibility-status")?.textContent === "Save failed: conflict");
+  assert.equal(errors.length, 1);
+
+  editorPart.dispose();
+  dom.window.close();
+});
+
+function modelReference(resource: URI, model: TextModel): TextModelReference {
+  let disposed = false;
+  const dispose = (): void => {
+    if (disposed) return;
+    disposed = true;
+    model.dispose();
+  };
+  return {
+    resource,
+    model,
+    get isDirty(): boolean {
+      return false;
+    },
+    onDidChangeDirty: () => ({
+      dispose() {},
+      [Symbol.dispose]() {},
+    }),
+    get hasExternalChange(): boolean {
+      return false;
+    },
+    onDidChangeExternalChange: () => ({
+      dispose() {},
+      [Symbol.dispose]() {},
+    }),
+    async save(): Promise<void> {},
+    async revert(): Promise<void> {},
+    dispose,
+    [Symbol.dispose]: dispose,
+  };
 }
 
-function inertFileChanges() {
-  return {
-    dispose() {},
-    [Symbol.dispose]() {},
-  };
+function nextTask(): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, 0));
+}
+
+async function waitFor(predicate: () => boolean): Promise<void> {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    if (predicate()) return;
+    await nextTask();
+  }
+  assert.fail("Timed out waiting for Alpha editor projection");
 }

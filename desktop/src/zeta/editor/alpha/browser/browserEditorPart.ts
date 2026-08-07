@@ -5,21 +5,21 @@ import { type TextMateGrammarCatalog } from "../../../workbench/services/textMat
 import { type TextMateGrammarDefinition } from "../../../workbench/services/textMate/common/textMateGrammarRegistry.js";
 import { type ITextMateService } from "../../../workbench/services/textMate/common/textMateService.js";
 import { type TextMateScopeThemeSource } from "../../../workbench/services/textMate/common/textMateScopeTheme.js";
-import { EditorSession, type EditorSessionOptions } from "./editorSession.js";
+import { EditorPart, type EditorPartOptions } from "./editorPart.js";
 import { createCompletionWorkerFactory } from "../browser/language/languageCompletionWorkerClient.js";
 
-/** Creates Alpha's product browser session with Workbench TextMate and Alpha completion workers. */
-export interface BrowserAlphaEditorSessionOptions extends EditorSessionOptions {
+/** Creates the product browser editor part with Workbench TextMate and completion workers. */
+export interface BrowserEditorPartOptions extends EditorPartOptions {
   /** Shared Workbench TextMate service. Direct callers may omit it to get a private browser service. */
   readonly textMateService?: ITextMateService;
-  /** Product or extension grammar contributions owned by this browser session. */
+  /** Product or extension grammar contributions owned by this browser editor part. */
   readonly textMateGrammars?: readonly TextMateGrammarDefinition[];
-  /** Caller-owned serializable scope theme; later revisions reanalyze this session. */
+  /** Caller-owned serializable scope theme; later revisions reanalyze this editor part. */
   readonly textMateScopeTheme?: TextMateScopeThemeSource;
 }
 
-/** Creates Alpha's product browser session with Workbench TextMate and Alpha completion workers. */
-export function createBrowserAlphaEditorSession(options: BrowserAlphaEditorSessionOptions): EditorSession {
+/** Creates the product browser editor part with Workbench TextMate and completion workers. */
+export function createBrowserEditorPart(options: BrowserEditorPartOptions): EditorPart {
   const textMateService = options.textMateService ?? new BrowserTextMateService(options.textMateGrammars, options.textMateScopeTheme);
   const ownsTextMateService = options.textMateService === undefined;
   const onDidChangeLanguageSupport: Event<void> = listener => {
@@ -29,7 +29,7 @@ export function createBrowserAlphaEditorSession(options: BrowserAlphaEditorSessi
     return subscriptions;
   };
   try {
-    return new EditorSession({
+    return new EditorPart({
       ...options,
       syntaxWorkerFactory: textMateService.syntaxWorkerFactory,
       completionWorkerFactory: createCompletionWorkerFactory(),

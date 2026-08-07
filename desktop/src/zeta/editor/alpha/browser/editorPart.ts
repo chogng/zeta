@@ -88,7 +88,7 @@ import { CodeLensController, type ExecuteCodeLensCommand } from "../contrib/code
 import { RustSyntaxWorker, RustSyntaxDocumentSymbolProvider, RustSyntaxFactsService } from "./services/rustSyntaxFactsService.js";
 import { RustSyntaxFoldingService } from "./services/rustSyntaxFoldingService.js";
 
-export interface EditorSessionOptions {
+export interface EditorPartOptions {
   readonly container: HTMLElement;
   readonly input: EditorInput;
   readonly languageId: string;
@@ -110,7 +110,7 @@ export interface EditorSessionOptions {
   readonly lineWrapping?: EditorLineWrapping;
   /** Applies a single LF at the save boundary when the document has content and no final LF. */
   readonly insertFinalNewLine?: boolean;
-  /** Browser paragraph direction for this editor session's DOM projection. */
+  /** Browser paragraph direction for this editor part's DOM projection. */
   readonly textDirection?: EditorTextDirection;
   readonly presentation?: EditorViewportPresentation;
   /** Host-owned link opening callback; Alpha never opens external targets directly. */
@@ -125,7 +125,7 @@ export interface EditorSessionOptions {
 }
 
 /** Owns all per-pane state projected over one shared Alpha text model reference. */
-export class EditorSession extends DisposableOwner {
+export class EditorPart extends DisposableOwner {
   readonly onDidChange: Event<void>;
   readonly codeEditor: CodeEditorWidget;
   readonly viewport: EditorViewport;
@@ -144,7 +144,7 @@ export class EditorSession extends DisposableOwner {
   private syntaxGeneration = 0;
   private disposed = false;
 
-  constructor(options: EditorSessionOptions) {
+  constructor(options: EditorPartOptions) {
     super();
     try {
       validateOptions(options);
@@ -430,9 +430,9 @@ export class EditorSession extends DisposableOwner {
   }
 }
 
-function validateOptions(options: EditorSessionOptions): void {
+function validateOptions(options: EditorPartOptions): void {
   if (!options || typeof options !== "object" || !options.container || !options.modelReference) {
-    throw new TypeError("Alpha editor session requires a container and model reference");
+    throw new TypeError("Alpha editor part requires a container and model reference");
   }
   if (options.input?.readOnly !== undefined && typeof options.input.readOnly !== "boolean") {
     throw new TypeError("Alpha editor input read-only mode must be boolean");

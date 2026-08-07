@@ -41,10 +41,14 @@ impl AppServer {
 
 fn syntax_language(language: SyntaxLanguageDto) -> SyntaxLanguage {
     match language {
+        SyntaxLanguageDto::Javascript => SyntaxLanguage::Javascript,
+        SyntaxLanguageDto::Javascriptreact => SyntaxLanguage::Javascriptreact,
         SyntaxLanguageDto::Json => SyntaxLanguage::Json,
         SyntaxLanguageDto::Jsonc => SyntaxLanguage::Jsonc,
         SyntaxLanguageDto::Rust => SyntaxLanguage::Rust,
         SyntaxLanguageDto::Shell => SyntaxLanguage::Shell,
+        SyntaxLanguageDto::Typescript => SyntaxLanguage::Typescript,
+        SyntaxLanguageDto::Typescriptreact => SyntaxLanguage::Typescriptreact,
     }
 }
 

@@ -1,6 +1,6 @@
 import { URI } from "../../src/zeta/base/common/uri.js";
 import { EditorPane } from "../../src/zeta/editor/alpha/browser/editorPane.js";
-import { createBrowserAlphaEditorSession } from "../../src/zeta/editor/alpha/browser/browserEditorSession.js";
+import { createBrowserEditorPart } from "../../src/zeta/editor/alpha/browser/browserEditorPart.js";
 import { BrowserTextModelService } from "../../src/zeta/editor/alpha/browser/services/browserTextModelService.js";
 import { BrowserTextResourceStore } from "../../src/zeta/editor/alpha/browser/services/browserTextResourceStore.js";
 import { TextModel } from "../../src/zeta/editor/alpha/editor.main.js";
@@ -29,7 +29,7 @@ const models = new BrowserTextModelService(resourceStore);
 let syntaxAnalysisCount = 0;
 const pane = new EditorPane(resourceStore, {
   modelService: models,
-  createSession: createBrowserAlphaEditorSession,
+  createPart: createBrowserEditorPart,
   syntaxApi: {
     analyze: async params => {
       syntaxAnalysisCount += 1;

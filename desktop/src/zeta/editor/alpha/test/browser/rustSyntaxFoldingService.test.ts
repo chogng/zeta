@@ -20,8 +20,12 @@ test("Rust syntax folding projects matching parser revisions", () => {
   }]);
 });
 
-test("Rust syntax folding rejects stale revisions and maps only supported Alpha languages", () => {
+test("Rust syntax folding rejects stale revisions and maps every parser-backed Alpha language", () => {
   assert.deepEqual(projectRustSyntaxFoldingRanges({ revision: 2, foldingRanges: [] }, 3), []);
+  assert.equal(syntaxLanguageForAlphaLanguage("javascript"), "javascript");
+  assert.equal(syntaxLanguageForAlphaLanguage("javascriptreact"), "javascriptreact");
   assert.equal(syntaxLanguageForAlphaLanguage("rust"), "rust");
-  assert.equal(syntaxLanguageForAlphaLanguage("typescript"), undefined);
+  assert.equal(syntaxLanguageForAlphaLanguage("typescript"), "typescript");
+  assert.equal(syntaxLanguageForAlphaLanguage("typescriptreact"), "typescriptreact");
+  assert.equal(syntaxLanguageForAlphaLanguage("markdown"), undefined);
 });

@@ -22,10 +22,15 @@ import { allSelection, nodeSelection, textSelection, type DocumentSelection, typ
 import { DocumentTransaction } from "../common/model/documentTransaction.js";
 import { DocumentOutlineNavigator } from "./widget/documentOutlineNavigator.js";
 import { FormattingContribution, type FormattingDocumentAction } from "../contrib/formatting/browser/formattingContribution.js";
+import { CollaborationContribution } from "../contrib/collaboration/browser/collaborationContribution.js";
+import { DocumentCollaborationController } from "../contrib/collaboration/common/controller.js";
+import { createDocumentFragmentFromHtml } from "../contrib/clipboard/browser/htmlDocumentFragment.js";
 import { TextEditorWidget } from "./widget/textEditorWidget.js";
 import type { IWorkingCopy } from "../../../workbench/services/workingCopy/common/workingCopyService.js";
 import type { IDocumentModelService } from "../common/services/documentModelService.js";
 import type { DocumentModelReference } from "../common/services/documentModelService.js";
+import type { IDocumentCollaborationService } from "../common/services/documentCollaborationService.js";
+import type { DocumentCollaborationTarget } from "../common/services/documentCollaborationService.js";
 
 export interface EditorWidgetOptions {
   readonly onSave?: () => Promise<void | boolean>;
@@ -43,6 +48,10 @@ export interface EditorWidgetOptions {
   /** Adds profile-owned commands to the shared block toolbar. */
   readonly toolbarActions?: readonly EditorToolbarAction[];
   readonly nodeViews?: Readonly<Record<string, NodeViewFactory>>;
+  /** Optional room transport exposed through Gama's separate collaboration contribution. */
+  readonly documentCollaborationService?: IDocumentCollaborationService;
+  /** Stable server-side schema compatibility identity for this Gama profile. */
+  readonly collaborationSchemaId?: string;
 }
 
 export interface NodeViewContext {
@@ -112,16 +121,20 @@ export class EditorWidget extends DisposableOwner {
 
   private readonly modelReferenceSlot = this.own(new DisposableSlot<DocumentModelReference>());
   private readonly modelChangeListenerSlot = this.own(new DisposableSlot<IDisposable>());
+  private readonly collaborationControllerSlot = this.own(new DisposableSlot<DocumentCollaborationController>());
+  private readonly collaborationStateListenerSlot = this.own(new DisposableSlot<IDisposable>());
   private readonly schema: DocumentSchema;
   private readonly embeddedEditors = new Map<string, TextEditorWidget>();
   private readonly nodeViewSlots = new Map<string, { readonly type: string; readonly view: NodeView }>();
   private container: HTMLDivElement | undefined;
   private layoutContainer: HTMLDivElement | undefined;
   private formattingContribution: FormattingContribution | undefined;
+  private collaborationContribution: CollaborationContribution | undefined;
   private outlineNavigator: DocumentOutlineNavigator | undefined;
   private input: EditorInput | undefined;
   private activeBlockId: string | undefined;
   private composition: DocumentComposition | undefined;
+  private collaborationStart: AbortController | undefined;
   private updatingEmbeddedTextBlockModel: DocumentModel | undefined;
   private dimension: IDimension = { width: 0, height: 0 };
 
@@ -136,12 +149,18 @@ export class EditorWidget extends DisposableOwner {
       throw new TypeError("Gama editor requires a document model service");
     }
     this.schema = options.schema ?? createDefaultDocumentSchema();
+    this.defer(() => this.cancelCollaborationStart());
     this.defer(() => this.disposeEmbeddedEditors());
     this.defer(() => this.disposeNodeViews());
   }
 
   create(parent: HTMLElement): void {
     if (this.container) throw new ReferenceError("Gama editor has already been created");
+    const collaborationContribution = this.own(new CollaborationContribution({
+      ownerDocument: parent.ownerDocument,
+      onStart: (roomId, target) => this.startCollaboration(roomId, target),
+      onStop: () => this.stopCollaboration(),
+    }));
     const formattingContribution = this.own(new FormattingContribution({
       ownerDocument: parent.ownerDocument,
       documentActions: [...DEFAULT_DOCUMENT_ACTIONS, ...(this.options.toolbarActions?.map(action => ({ id: action.id, label: action.label })) ?? [])],
@@ -157,7 +176,9 @@ export class EditorWidget extends DisposableOwner {
     const outlineNavigator = this.options.outlineNavigator ? new DocumentOutlineNavigator({ ownerDocument: parent.ownerDocument, onSelect: nodeId => this.revealOutlineNode(nodeId) }) : undefined;
     if (outlineNavigator) layoutContainer.append(outlineNavigator.element);
     layoutContainer.append(container);
-    parent.append(formattingContribution.element, layoutContainer);
+    parent.append(collaborationContribution.element, formattingContribution.element, layoutContainer);
+    collaborationContribution.setState(this.options.documentCollaborationService ? "inactive" : "unavailable");
+    this.collaborationContribution = collaborationContribution;
     this.formattingContribution = formattingContribution;
     this.container = container;
     this.layoutContainer = layoutContainer;
@@ -167,6 +188,8 @@ export class EditorWidget extends DisposableOwner {
     this.defer(() => {
       parent.ownerDocument.removeEventListener("selectionchange", onSelectionChange);
       outlineNavigator?.dispose();
+      collaborationContribution.element.remove();
+      this.collaborationContribution = undefined;
       formattingContribution.element.remove();
       this.formattingContribution = undefined;
       this.layoutContainer = undefined;
@@ -178,6 +201,7 @@ export class EditorWidget extends DisposableOwner {
 
   async setInput(input: EditorInput, signal: AbortSignal): Promise<void> {
     const container = this.requireContainer();
+    this.cancelCollaborationStart();
     throwIfCancelled(signal, "Gama editor input loading was cancelled");
     const modelReference = await this.modelService.acquire({
       resource: input.resource,
@@ -192,6 +216,8 @@ export class EditorWidget extends DisposableOwner {
       throwIfCancelled(signal, "Gama editor input loading was cancelled");
     }
     const model = modelReference.model;
+    this.collaborationStateListenerSlot.clear();
+    this.collaborationControllerSlot.clear();
     this.modelChangeListenerSlot.clear();
     this.modelReferenceSlot.replace(modelReference);
     this.modelChangeListenerSlot.replace(model.onDidChange(() => {
@@ -202,11 +228,18 @@ export class EditorWidget extends DisposableOwner {
     this.disposeEmbeddedEditors();
     container.replaceChildren();
     if (this.formattingContribution) this.formattingContribution.element.hidden = false;
+    if (this.collaborationContribution) {
+      this.collaborationContribution.element.hidden = false;
+      this.collaborationContribution.setState(this.options.documentCollaborationService ? "inactive" : "unavailable");
+    }
     this.render();
   }
 
   clearInput(): void {
     this.composition = undefined;
+    this.cancelCollaborationStart();
+    this.collaborationStateListenerSlot.clear();
+    this.collaborationControllerSlot.clear();
     this.modelChangeListenerSlot.clear();
     this.modelReferenceSlot.clear();
     this.disposeEmbeddedEditors();
@@ -215,6 +248,7 @@ export class EditorWidget extends DisposableOwner {
     this.activeBlockId = undefined;
     this.outlineNavigator?.setOutline([]);
     if (this.formattingContribution) this.formattingContribution.element.hidden = true;
+    if (this.collaborationContribution) this.collaborationContribution.element.hidden = true;
     this.container?.replaceChildren();
   }
 
@@ -751,6 +785,16 @@ export class EditorWidget extends DisposableOwner {
         return;
       }
     }
+    const externalHtml = event.clipboardData?.getData("text/html");
+    if (externalHtml && selection) {
+      const fragment = createDocumentFragmentFromHtml(this.requireContainer().ownerDocument, model.schema, externalHtml);
+      const command = fragment ? createInsertFragmentCommand(model.schema, model.document, blockId, selection, fragment) : undefined;
+      if (command) {
+        event.preventDefault();
+        this.dispatchCommand(model, command);
+        return;
+      }
+    }
     if (model.selection?.kind !== "all") return;
     const text = event.clipboardData?.getData("text/plain") ?? "";
     const command = createPasteTextCommand(model.schema, model.document, blockId, model.selection, text);
@@ -773,19 +817,31 @@ export class EditorWidget extends DisposableOwner {
       return;
     }
     if (!blockId) return;
+    const selection = model.selection?.kind === "all" ? model.selection : readDocumentTextSelection(this.requireContainer(), true)?.selection;
     const encodedFragment = event.clipboardData?.getData(DOCUMENT_FRAGMENT_CLIPBOARD_MIME);
-    if (!encodedFragment) return;
     let fragment;
-    try {
-      fragment = deserializeDocumentFragment(encodedFragment, model.schema);
-    } catch {
+    if (encodedFragment) {
+      try {
+        fragment = deserializeDocumentFragment(encodedFragment, model.schema);
+      } catch {
+        fragment = undefined;
+      }
+    }
+    if (!fragment) {
+      const externalHtml = event.clipboardData?.getData("text/html");
+      if (externalHtml) fragment = createDocumentFragmentFromHtml(this.requireContainer().ownerDocument, model.schema, externalHtml);
+    }
+    const command = selection && fragment ? createInsertFragmentCommand(model.schema, model.document, blockId, selection, fragment) : undefined;
+    if (command) {
+      event.preventDefault();
+      this.dispatchCommand(model, command);
       return;
     }
-    const selection = model.selection?.kind === "all" ? model.selection : readDocumentTextSelection(this.requireContainer(), true)?.selection;
-    const command = selection ? createInsertFragmentCommand(model.schema, model.document, blockId, selection, fragment) : undefined;
-    if (!command) return;
+    const text = event.clipboardData?.getData("text/plain") ?? "";
+    const textCommand = selection ? createPasteTextCommand(model.schema, model.document, blockId, selection, text, documentInsertionMarks(model, selection)) : undefined;
+    if (!textCommand) return;
     event.preventDefault();
-    this.dispatchCommand(model, command);
+    this.dispatchCommand(model, textCommand);
   }
 
   private handleRichTextClipboard(event: ClipboardEvent, model: DocumentModel, cut: boolean): void {
@@ -1369,6 +1425,53 @@ export class EditorWidget extends DisposableOwner {
     return model;
   }
 
+  private async startCollaboration(roomId: string | undefined, target: DocumentCollaborationTarget): Promise<string> {
+    const service = this.options.documentCollaborationService;
+    if (!service) throw new Error("Gama collaboration is unavailable in this renderer");
+    const model = this.requireModel();
+    const input = this.requireInput();
+    this.cancelCollaborationStart();
+    this.collaborationStateListenerSlot.clear();
+    this.collaborationControllerSlot.clear();
+    const start = new AbortController();
+    this.collaborationStart = start;
+    try {
+      const connection = await service.open({
+        ...(roomId === undefined ? {} : { roomId }),
+        clientId: createCollaborationClientId(input.resource),
+        schemaId: this.options.collaborationSchemaId ?? "gama-default-v1",
+        schema: model.schema,
+        document: model.document,
+        target,
+      }, start.signal);
+      if (start.signal.aborted || this.modelReferenceSlot.value?.model !== model) {
+        connection.dispose();
+        throw new Error("Opening a Gama collaboration room was cancelled");
+      }
+      const controller = new DocumentCollaborationController(model, connection);
+      this.collaborationControllerSlot.replace(controller);
+      this.collaborationStateListenerSlot.replace(controller.onDidChangeState(change => {
+        if (this.collaborationControllerSlot.value !== controller) return;
+        this.collaborationContribution?.setState(change.state, { roomId: change.roomId, ...(change.message === undefined ? {} : { message: change.message }) });
+      }));
+      return controller.roomId;
+    } finally {
+      if (this.collaborationStart === start) this.collaborationStart = undefined;
+    }
+  }
+
+  private stopCollaboration(): void {
+    this.cancelCollaborationStart();
+    this.collaborationStateListenerSlot.clear();
+    this.collaborationControllerSlot.clear();
+    this.collaborationContribution?.setState(this.options.documentCollaborationService ? "inactive" : "unavailable");
+  }
+
+  private cancelCollaborationStart(): void {
+    this.collaborationStart?.abort();
+    this.collaborationStart = undefined;
+  }
+
   private requireWorkingCopy(): IWorkingCopy {
     const workingCopy = this.modelReferenceSlot.value;
     assertDefined(workingCopy, new ReferenceError("Document editor pane has no active working copy"));
@@ -1392,6 +1495,13 @@ function createFallbackInlineNode(ownerDocument: Document, node: DocumentNode): 
   const label = node.attrs.label;
   element.textContent = typeof label === "string" && label.length > 0 ? label : `[${node.type}]`;
   return element;
+}
+
+function createCollaborationClientId(resource: URI): string {
+  const identifier = globalThis.crypto?.randomUUID?.();
+  if (identifier) return `gama-${identifier}`;
+  const suffix = `${Date.now().toString(36)}${Math.random().toString(36).replace(/[^a-z0-9]/g, "")}`;
+  return `gama-${resource.path.length.toString(36)}-${suffix}`;
 }
 
 function editableBlockAriaLabel(node: DocumentNode): string {

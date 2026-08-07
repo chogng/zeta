@@ -430,6 +430,38 @@
           "properties": {
             "method": {
               "type": "string",
+              "const": "document/collaboration/open"
+            },
+            "params": {
+              "$ref": "#/$defs/DocumentCollaborationOpenParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "document/collaboration/submit"
+            },
+            "params": {
+              "$ref": "#/$defs/DocumentCollaborationSubmitParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
               "const": "session/create"
             },
             "params": {
@@ -1462,6 +1494,38 @@
             },
             "result": {
               "$ref": "#/$defs/WorkspaceSwitchResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "document/collaboration/open"
+            },
+            "result": {
+              "$ref": "#/$defs/DocumentCollaborationOpenResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "document/collaboration/submit"
+            },
+            "result": {
+              "$ref": "#/$defs/DocumentCollaborationSubmitResult"
             }
           },
           "required": [
@@ -2815,6 +2879,214 @@
         "added",
         "removed",
         "modified"
+      ]
+    },
+    "DocumentCollaborationOpenParams": {
+      "description": "Opens one shared structured-document room or joins an existing room.",
+      "type": "object",
+      "properties": {
+        "clientId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "document": {
+          "description": "Serialized, schema-validated document supplied only when creating a room.",
+          "type": "string",
+          "minLength": 1
+        },
+        "roomId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "schemaId": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "clientId",
+        "schemaId",
+        "document"
+      ]
+    },
+    "DocumentCollaborationOpenResult": {
+      "description": "Result of opening a shared structured-document room.",
+      "type": "object",
+      "properties": {
+        "clientId": {
+          "type": "string"
+        },
+        "schemaId": {
+          "type": "string"
+        },
+        "snapshot": {
+          "$ref": "#/$defs/DocumentCollaborationSnapshot"
+        }
+      },
+      "required": [
+        "clientId",
+        "schemaId",
+        "snapshot"
+      ]
+    },
+    "DocumentCollaborationSnapshot": {
+      "description": "Versioned canonical document snapshot returned while opening or resynchronizing a room.",
+      "type": "object",
+      "properties": {
+        "document": {
+          "type": "string"
+        },
+        "roomId": {
+          "type": "string"
+        },
+        "version": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "roomId",
+        "version",
+        "document"
+      ]
+    },
+    "DocumentCollaborationSubmitParams": {
+      "description": "Submits one optimistic local transaction alongside its resulting document snapshot.",
+      "type": "object",
+      "properties": {
+        "baseVersion": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "clientId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "document": {
+          "description": "Serialized, schema-validated document after applying `transaction` optimistically.",
+          "type": "string",
+          "minLength": 1
+        },
+        "roomId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sequence": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "transaction": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "roomId",
+        "clientId",
+        "sequence",
+        "baseVersion",
+        "transaction",
+        "document"
+      ]
+    },
+    "DocumentCollaborationSubmitResult": {
+      "description": "Server outcome for an optimistic document submission.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string",
+              "const": "accepted"
+            },
+            "update": {
+              "$ref": "#/$defs/DocumentCollaborationUpdate"
+            }
+          },
+          "required": [
+            "status",
+            "update"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string",
+              "const": "conflict"
+            },
+            "updates": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/DocumentCollaborationUpdate"
+              }
+            }
+          },
+          "required": [
+            "status",
+            "updates"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "snapshot": {
+              "$ref": "#/$defs/DocumentCollaborationSnapshot"
+            },
+            "status": {
+              "type": "string",
+              "const": "resync"
+            }
+          },
+          "required": [
+            "status",
+            "snapshot"
+          ]
+        }
+      ]
+    },
+    "DocumentCollaborationUpdate": {
+      "description": "One server-ordered opaque Gama transaction.",
+      "type": "object",
+      "properties": {
+        "baseVersion": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "clientId": {
+          "type": "string"
+        },
+        "roomId": {
+          "type": "string"
+        },
+        "sequence": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "transaction": {
+          "description": "Serialized Gama transaction. The renderer validates it against its schema before use.",
+          "type": "string"
+        },
+        "version": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "roomId",
+        "clientId",
+        "sequence",
+        "baseVersion",
+        "version",
+        "transaction"
       ]
     },
     "DynamicToolCall": {
@@ -4910,6 +5182,9 @@
     "ServerCapabilities": {
       "type": "object",
       "properties": {
+        "documentCollaboration": {
+          "type": "boolean"
+        },
         "extensions": {
           "type": "boolean"
         },
@@ -4945,6 +5220,7 @@
         }
       },
       "required": [
+        "documentCollaboration",
         "sessions",
         "threads",
         "turns",
@@ -4975,6 +5251,22 @@
     },
     "ServerNotificationSchema": {
       "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "document/collaboration/update"
+            },
+            "params": {
+              "$ref": "#/$defs/DocumentCollaborationUpdate"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
         {
           "type": "object",
           "properties": {
@@ -6419,10 +6711,14 @@
       "description": "Grammar supported by the authoritative syntax-analysis service.",
       "type": "string",
       "enum": [
+        "javascript",
+        "javascriptreact",
         "json",
         "jsonc",
         "rust",
-        "shell"
+        "shell",
+        "typescript",
+        "typescriptreact"
       ]
     },
     "SyntaxPositionDto": {

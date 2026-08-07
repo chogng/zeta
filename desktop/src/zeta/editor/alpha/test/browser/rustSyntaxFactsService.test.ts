@@ -93,7 +93,7 @@ test("Rust syntax facts leave unsupported languages and oversized documents to A
   const result = await worker.run({
     requestId: 1,
     lane: "tokens",
-    payload: { languageId: "typescript" },
+    payload: { languageId: "markdown" },
     snapshot: model.createSnapshot(),
   }, new AbortController().signal);
 

@@ -72,6 +72,20 @@ test("Gama public distribution persists selected font, size, and emphasis format
   await expect(bold).toHaveAttribute("aria-pressed", "true");
 });
 
+test("Gama exposes collaboration as a separate toolbar contribution", async ({ page }) => {
+  await page.goto("/gama.html");
+  await page.evaluate(() => {
+    const responses = ["", "gama-browser-room"];
+    window.prompt = () => responses.shift() ?? null;
+  });
+  const toolbar = page.locator("#gama-structured .zeta-document-collaboration-toolbar");
+  const start = toolbar.locator("[data-action-id='startCollaboration'] button");
+  await expect(toolbar).toHaveAttribute("data-state", "inactive");
+  await start.click();
+  await expect(toolbar).toHaveAttribute("data-state", "connected");
+  await expect(toolbar.locator(".zeta-document-collaboration-status")).toHaveText("Room: gama-browser-room");
+});
+
 test("Gama public distribution has the structured-editor accessibility contract", async ({ page }) => {
   await page.goto("/gama.html");
   const toolbar = page.locator("#gama-structured .zeta-structured-format-toolbar");

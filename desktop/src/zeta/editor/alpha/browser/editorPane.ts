@@ -11,14 +11,14 @@ import { type IEditorPane } from "../../../workbench/browser/parts/editor/editor
 import { EditorPaneVisibility } from "../../../workbench/browser/parts/editor/editorPane.js";
 import { ALPHA_EDITOR_ID, alphaLanguageForInput } from "./editorInput.js";
 import { type ITextResourceStore } from "../common/services/textResourceStore.js";
-import { EditorSession, type EditorSessionOptions } from "./editorSession.js";
+import { EditorPart, type EditorPartOptions } from "./editorPart.js";
 import { type ITextModelService, type TextModelReference } from "../common/services/textModelService.js";
 import { type EditorTextDirection } from "./view/editorViewport.js";
 import { type EditorLineWrapping } from "./view/visualLineProjection.js";
 import { type IWorkingCopy, type IWorkingCopyService } from "../../../workbench/services/workingCopy/common/workingCopyService.js";
 import { type ISyntaxApi } from "../../../platform/syntax/common/syntaxApi.js";
 
-export interface EditorPaneSession extends IDisposable {
+export interface EditorPanePart extends IDisposable {
   layout(dimension: IDimension): void;
   focus(): void;
   getValue(): string;
@@ -28,7 +28,7 @@ export interface EditorPaneSession extends IDisposable {
   revert?(): Promise<void>;
 }
 
-export interface EditorPaneSessionOptions extends EditorSessionOptions {
+export interface EditorPanePartOptions extends EditorPartOptions {
   readonly textMateService?: ITextMateService;
   readonly languageFeaturesService?: ILanguageFeaturesService;
   readonly syntaxApi?: ISyntaxApi;
@@ -37,29 +37,29 @@ export interface EditorPaneSessionOptions extends EditorSessionOptions {
 export interface EditorPaneOptions {
   readonly modelService: ITextModelService;
   readonly workingCopyService?: IWorkingCopyService;
-  readonly createSession?: (options: EditorPaneSessionOptions) => EditorPaneSession;
+  readonly createPart?: (options: EditorPanePartOptions) => EditorPanePart;
   readonly textMateService?: ITextMateService;
   readonly languageFeaturesService?: ILanguageFeaturesService;
   readonly syntaxApi?: ISyntaxApi;
   readonly lineWrapping?: EditorLineWrapping;
-  /** Browser paragraph direction forwarded to every created Alpha session. */
+  /** Browser paragraph direction forwarded to every created editor part. */
   readonly textDirection?: EditorTextDirection;
   readonly onOpenLink?: (target: string) => void | Promise<void>;
-  readonly onShowContextMenu?: EditorSessionOptions["onShowContextMenu"];
-  readonly onExecuteEditorCommand?: EditorSessionOptions["onExecuteEditorCommand"];
+  readonly onShowContextMenu?: EditorPartOptions["onShowContextMenu"];
+  readonly onExecuteEditorCommand?: EditorPartOptions["onExecuteEditorCommand"];
   readonly placeholder?: string;
   readonly showUnicodeHighlights?: boolean;
-  readonly fontZoom?: EditorSessionOptions["fontZoom"];
+  readonly fontZoom?: EditorPartOptions["fontZoom"];
   readonly onSave?: () => Promise<void | boolean>;
 }
 
 /** Workbench pane that composes Alpha's native model, input, view, and language services. */
 export class EditorPane extends DisposableOwner implements IEditorPane {
   readonly id = ALPHA_EDITOR_ID;
-  private readonly sessions = this.own(new DisposableSlot<EditorPaneSession>());
+  private readonly part = this.own(new DisposableSlot<EditorPanePart>());
   private readonly workingCopySlot = this.own(new DisposableSlot<IWorkingCopy>());
   private readonly modelService: ITextModelService;
-  private readonly createSession: (options: EditorPaneSessionOptions) => EditorPaneSession;
+  private readonly createPart: (options: EditorPanePartOptions) => EditorPanePart;
   private container: HTMLDivElement | undefined;
   private dimension: IDimension = { width: 0, height: 0 };
 
@@ -78,7 +78,7 @@ export class EditorPane extends DisposableOwner implements IEditorPane {
       throw new TypeError("Alpha editor pane requires an Alpha text model service");
     }
     this.modelService = options.modelService;
-    this.createSession = options.createSession ?? (sessionOptions => new EditorSession(sessionOptions));
+    this.createPart = options.createPart ?? (partOptions => new EditorPart(partOptions));
   }
 
   create(parent: HTMLElement): void {
@@ -97,10 +97,10 @@ export class EditorPane extends DisposableOwner implements IEditorPane {
     const container = this.requireContainer();
     throwIfCancelled(signal, "Alpha editor input loading was cancelled");
     const modelReference = await this.modelService.acquire(input, signal);
-    let session: EditorPaneSession | undefined;
+    let part: EditorPanePart | undefined;
     try {
       throwIfCancelled(signal, "Alpha editor input loading was cancelled");
-      session = this.createSession({
+      part = this.createPart({
         container,
         input,
         languageId: alphaLanguageForInput(input, this.options.languageFeaturesService),
@@ -123,12 +123,12 @@ export class EditorPane extends DisposableOwner implements IEditorPane {
       });
       throwIfCancelled(signal, "Alpha editor input loading was cancelled");
     } catch (error) {
-      session?.dispose();
-      if (!session) modelReference.dispose();
+      part?.dispose();
+      if (!part) modelReference.dispose();
       throw error;
     }
     this.workingCopySlot.clear();
-    this.sessions.replace(session);
+    this.part.replace(part);
     this.workingCopySlot.replace(new EditorWorkingCopy(
       modelReference,
       this.resourceStore,
@@ -136,12 +136,12 @@ export class EditorPane extends DisposableOwner implements IEditorPane {
       this.options.workingCopyService,
       input.resource.scheme === "untitled" ? this.options.onSave : undefined,
     ));
-    session.layout(this.dimension);
+    part.layout(this.dimension);
   }
 
   clearInput(): void {
     this.workingCopySlot.clear();
-    this.sessions.clear();
+    this.part.clear();
   }
 
   layout(dimension: IDimension): void {
@@ -149,21 +149,21 @@ export class EditorPane extends DisposableOwner implements IEditorPane {
       width: Math.max(0, dimension.width),
       height: Math.max(0, dimension.height),
     };
-    this.sessions.value?.layout(this.dimension);
+    this.part.value?.layout(this.dimension);
   }
 
   setVisible(visibility: EditorPaneVisibility): void {
     if (!this.container) return;
     this.container.hidden = visibility === EditorPaneVisibility.Hidden;
-    if (visibility === EditorPaneVisibility.Visible) this.sessions.value?.layout(this.dimension);
+    if (visibility === EditorPaneVisibility.Visible) this.part.value?.layout(this.dimension);
   }
 
   focus(): void {
-    this.sessions.value?.focus();
+    this.part.value?.focus();
   }
 
   getValue(): string {
-    return this.sessions.value?.getValue() ?? "";
+    return this.part.value?.getValue() ?? "";
   }
 
   async saveAs(resource: URI): Promise<void> {
@@ -176,19 +176,19 @@ export class EditorPane extends DisposableOwner implements IEditorPane {
   }
 
   get isDirty(): boolean {
-    return this.sessions.value?.isDirty ?? false;
+    return this.part.value?.isDirty ?? false;
   }
 
   get hasExternalChange(): boolean {
-    return this.sessions.value?.hasExternalChange ?? false;
+    return this.part.value?.hasExternalChange ?? false;
   }
 
   async save(): Promise<void> {
-    await this.sessions.value?.save?.();
+    await this.part.value?.save?.();
   }
 
   async revert(): Promise<void> {
-    await this.sessions.value?.revert?.();
+    await this.part.value?.revert?.();
   }
 
   private requireContainer(): HTMLDivElement {

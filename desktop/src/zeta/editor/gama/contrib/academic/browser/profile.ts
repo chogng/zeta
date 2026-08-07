@@ -12,6 +12,7 @@ export const academicProfile: EditorProfile = Object.freeze({
   id: "academic",
   editorId: GAMA_EDITOR_ID,
   editorName: "Structured Editor",
+  collaborationSchemaId: "gama-academic-v1",
   input: Object.freeze({
     contentTypes: [ACADEMIC_DOCUMENT_CONTENT_TYPE],
     extensions: [".zeta-academic", ".zeta-paper"],

@@ -2,7 +2,7 @@ import { registerEditorPane } from "../../../workbench/browser/parts/editor/edit
 import { DiffEditorPane } from "../browser/diffEditorPane.js";
 import { RustDiffComputationService } from "../browser/services/rustDiffComputationService.js";
 import { EditorPane } from "../browser/editorPane.js";
-import { createBrowserAlphaEditorSession } from "../browser/browserEditorSession.js";
+import { createBrowserEditorPart } from "../browser/browserEditorPart.js";
 import { getBrowserTextModelService } from "../browser/services/browserTextModelService.js";
 import { getBrowserTextResourceStore } from "../browser/services/browserTextResourceStore.js";
 import { ALPHA_DIFF_EDITOR_ID, matchAlphaDiffEditor } from "../browser/diffEditorInput.js";
@@ -17,7 +17,7 @@ registerEditorPane({
     const resourceStore = getBrowserTextResourceStore(options.textFileService);
     return new EditorPane(resourceStore, {
       modelService: getBrowserTextModelService(resourceStore),
-      createSession: createBrowserAlphaEditorSession,
+      createPart: createBrowserEditorPart,
       textMateService: options.textMateService,
       languageFeaturesService: options.languageFeaturesService,
       syntaxApi: options.syntaxApi,

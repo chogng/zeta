@@ -1,3 +1,9 @@
+use crate::protocol::collaboration::DocumentCollaborationOpenParams;
+use crate::protocol::collaboration::DocumentCollaborationOpenResult;
+use crate::protocol::collaboration::DocumentCollaborationSnapshot;
+use crate::protocol::collaboration::DocumentCollaborationSubmitParams;
+use crate::protocol::collaboration::DocumentCollaborationSubmitResult;
+use crate::protocol::collaboration::DocumentCollaborationUpdate;
 use crate::protocol::common::{
     BrowserCapability, ClientCapabilities, ClientInfo, CommandId, EmptyParams, ItemId, RequestId,
     SchemaHash, ServerInfo, SessionId, StreamInstanceId, ThreadId, ToolCallId, ToolName, TurnId,
@@ -243,6 +249,16 @@ client_methods! {
     WorkspaceSwitch => "workspace/switch" {
         params: WorkspaceSwitchParams,
         response: WorkspaceSwitchResult,
+        serialization: GlobalExclusive,
+    },
+    DocumentCollaborationOpen => "document/collaboration/open" {
+        params: DocumentCollaborationOpenParams,
+        response: DocumentCollaborationOpenResult,
+        serialization: GlobalExclusive,
+    },
+    DocumentCollaborationSubmit => "document/collaboration/submit" {
+        params: DocumentCollaborationSubmitParams,
+        response: DocumentCollaborationSubmitResult,
         serialization: GlobalExclusive,
     },
     SessionCreate => "session/create" {
@@ -613,6 +629,9 @@ macro_rules! server_notifications {
 }
 
 server_notifications! {
+    DocumentCollaborationUpdate => "document/collaboration/update" {
+        params: DocumentCollaborationUpdate,
+    },
     SessionUpdate => "session/update" {
         params: SessionUpdateEnvelope,
     },
@@ -660,6 +679,12 @@ typescript_bindings! {
     BrowserCapability,
     ClientCapabilities,
     ServerInfo,
+    DocumentCollaborationOpenParams,
+    DocumentCollaborationSnapshot,
+    DocumentCollaborationOpenResult,
+    DocumentCollaborationUpdate,
+    DocumentCollaborationSubmitParams,
+    DocumentCollaborationSubmitResult,
     ModelRefDto,
     ApprovalReviewModelSelectionDto,
     ProviderConfigDto,

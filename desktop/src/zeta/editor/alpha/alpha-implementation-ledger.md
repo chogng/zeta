@@ -6,11 +6,11 @@
 
 | 入口 | 职责 |
 | --- | --- |
-| `browser/editorSession.ts` | 一个编辑器实例的唯一装配点；创建 model reference、selection、folding、syntax/token、completion、viewport、input 和 contrib controllers。 |
-| `browser/editorPane.ts` | Workbench pane 生命周期；只把 host 的 resource/model contract 传给 session，不实现编辑语义。 |
+| `browser/editorPart.ts` | 一个编辑器实例的唯一装配点；创建 model reference、selection、folding、syntax/token、completion、viewport、input 和 contrib controllers。 |
+| `browser/editorPane.ts` | Workbench pane 生命周期；只把 host 的 resource/model contract 传给 part，不实现编辑语义。 |
 | `browser/editorInput.ts` | Workbench `EditorInput` 匹配和语言 identity adapter；不进入同步 model/core。 |
 | `browser/diffEditorInput.ts` | Workbench 双资源 diff input 和 synthetic tab identity；不创建 diff model，也不计算 diff。 |
-| `browser/browserEditorSession.ts` | TextMate grammar readiness、syntax Worker 和 completion Worker 的 browser adapter。 |
+| `browser/browserEditorPart.ts` | TextMate grammar readiness、syntax Worker 和 completion Worker 的 browser adapter。 |
 | `editor.api.ts` | DOM-free 的 Alpha text-model 程序化 API；不加载 Workbench、DOM 或 contribution。 |
 | `editor.all.ts` | Alpha 对产品入口公开的 contribution bundle；加载 editor browser contribution。 |
 | `editor.main.ts` | 完整 Alpha 入口；组合 `editor.all.ts` 与 `editor.api.ts`。 |
@@ -126,7 +126,7 @@
 | `unicodeHighlighter` / `unusualLineTerminators` | 各 feature 的 common/browser 文件 | invisible/bidi/confusable 和非标准 separator decoration；不修改 canonical LF model。 |
 | `message` / `inlineProgress` | 各 feature 的 browser 文件 | editor-local transient status/progress，不替代 Workbench notification。 |
 
-## 5. session 装配顺序和依赖方向
+## 5. part 装配顺序和依赖方向
 
 ```text
 TextModelReference

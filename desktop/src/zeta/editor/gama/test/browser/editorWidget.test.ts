@@ -1265,6 +1265,67 @@ test("Gama routes rich-text copy and cut through Gama", async () => {
   environment.window.close();
 });
 
+test("Gama pastes external HTML through a schema-valid structured fragment", async () => {
+  const environment = new JSDOM("<!doctype html><body></body>");
+  const files = new MemoryTextFiles(JSON.stringify({
+    format: "zeta.document",
+    version: 1,
+    document: {
+      id: "document-1",
+      type: "doc",
+      attrs: {},
+      content: [{
+        id: "paragraph-1",
+        type: "paragraph",
+        attrs: {},
+        content: [
+          { id: "text-1", type: "text", attrs: {}, content: [], marks: [], text: "Start" },
+          { id: "text-2", type: "text", attrs: {}, content: [], marks: [{ type: "strong", attrs: {} }], text: "End" },
+        ],
+        marks: [],
+      }],
+      marks: [],
+    },
+  }));
+  const parent = environment.window.document.createElement("main");
+  environment.window.document.body.append(parent);
+  using pane = new EditorPane(files);
+  pane.create(parent);
+  await pane.setInput({ resource: URI.file("C:\\project\\paper.zeta-academic") }, new AbortController().signal);
+
+  const rich = parent.querySelector<HTMLDivElement>(".zeta-document-rich-text-input");
+  const firstRun = rich?.querySelector<HTMLElement>("[data-text-node-id='text-1']");
+  assert.ok(rich);
+  assert.ok(firstRun);
+  const selection = environment.window.document.getSelection();
+  const range = environment.window.document.createRange();
+  range.setStart(firstRun.firstChild!, firstRun.textContent!.length);
+  range.collapse(true);
+  selection?.removeAllRanges();
+  selection?.addRange(range);
+  environment.window.document.dispatchEvent(new environment.window.Event("selectionchange"));
+
+  const clipboardData = {
+    files: [],
+    items: [],
+    getData: (type: string) => type === "text/html"
+      ? "<h2>Imported</h2><ul><li><strong>Listed</strong></li></ul><table><tr><td>Cell</td></tr></table>"
+      : type === "text/plain" ? "Imported\nListed\nCell" : "",
+  } as unknown as DataTransfer;
+  const paste = new environment.window.Event("paste", { bubbles: true, cancelable: true });
+  Object.defineProperty(paste, "clipboardData", { value: clipboardData });
+  rich.dispatchEvent(paste);
+
+  assert.equal(paste.defaultPrevented, true);
+  assert.deepEqual(pane.getDocument().content.map(node => node.type), ["paragraph", "heading", "bulletList", "table", "paragraph"]);
+  assert.equal(pane.getDocument().content[0]?.content[0]?.text, "Start");
+  assert.equal(pane.getDocument().content[1]?.content[0]?.text, "Imported");
+  assert.equal(pane.getDocument().content[2]?.content[0]?.content[0]?.content[0]?.text, "Listed");
+  assert.equal(pane.getDocument().content[3]?.content[0]?.content[0]?.content[0]?.content[0]?.text, "Cell");
+  assert.equal(pane.getDocument().content[4]?.content[0]?.text, "End");
+  environment.window.close();
+});
+
 test("Gama handles whole-document select all, copy, and cut", async () => {
   const environment = new JSDOM("<!doctype html><body></body>");
   const files = new MemoryTextFiles(JSON.stringify({

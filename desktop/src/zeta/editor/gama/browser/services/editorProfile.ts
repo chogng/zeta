@@ -7,6 +7,7 @@ import { EditorPaneMatch } from "../../../../workbench/browser/parts/editor/edit
 import type { EditorWidgetOptions } from "../editorWidget.js";
 import type { EditorPaneOptions } from "../editorPane.js";
 import { matchGamaEditor, type EditorInputMatcher } from "../editorInput.js";
+import type { IDocumentCollaborationService } from "../../common/services/documentCollaborationService.js";
 
 /** Product-neutral schema and browser composition for one Gama document kind. */
 export interface EditorProfile {
@@ -22,12 +23,15 @@ export interface EditorProfile {
   readonly inlineNodeViews?: EditorWidgetOptions["inlineNodeViews"];
   readonly toolbarActions?: EditorWidgetOptions["toolbarActions"];
   readonly createPlugins?: () => readonly DocumentPlugin<unknown>[];
+  /** Stable compatibility ID for documents that join the same collaboration room. */
+  readonly collaborationSchemaId?: string;
 }
 
 export interface EditorRuntimeOptions {
   readonly onSave?: EditorWidgetOptions["onSave"];
   readonly embeddedTextEditorFactory?: EditorWidgetOptions["embeddedTextEditorFactory"];
   readonly workingCopyService?: EditorPaneOptions["workingCopyService"];
+  readonly documentCollaborationService?: IDocumentCollaborationService;
 }
 
 /** Selects the first profile that claims one Workbench input. */
@@ -53,5 +57,6 @@ export function createGamaEditorPaneOptions(profile: EditorProfile, runtime: Edi
     ...(profile.inlineNodeViews === undefined ? {} : { inlineNodeViews: profile.inlineNodeViews }),
     ...(profile.toolbarActions === undefined ? {} : { toolbarActions: profile.toolbarActions }),
     ...(profile.createPlugins === undefined ? {} : { plugins: profile.createPlugins() }),
+    ...(profile.collaborationSchemaId === undefined ? {} : { collaborationSchemaId: profile.collaborationSchemaId }),
   };
 }

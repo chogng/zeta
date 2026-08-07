@@ -35,7 +35,13 @@ test("Gama follows VS Code editor common/browser/contrib ownership", () => {
     "browser/services/editorProfile.ts",
     "browser/widget/textEditorWidget.ts",
     "browser/media/editorWidget.css",
+    "contrib/clipboard/browser/htmlDocumentFragment.ts",
     "contrib/formatting/browser/formattingContribution.ts",
+    "contrib/collaboration/common/session.ts",
+    "contrib/collaboration/common/controller.ts",
+    "contrib/collaboration/browser/collaborationContribution.ts",
+    "common/services/documentCollaborationService.ts",
+    "browser/services/appServerDocumentCollaborationService.ts",
     "contrib/academic/browser/profile.ts",
     "contrib/academic/browser/academicEditor.contribution.ts",
   ]) assert.equal(statSafe(join(gamaRoot, file)), true, file);
@@ -67,6 +73,12 @@ test("Gama keeps textBlock semantics and uses Alpha only through the embedded-ed
   assert.match(editor, /new TextEditorWidget\(/u);
   assert.doesNotMatch(widget, /editor\/alpha\/browser\/embeddedTextEditor/u);
   assert.match(formatting, /new ToolBar\(/u);
+  const collaborationService = readFileSync(join(gamaRoot, "common/services/documentCollaborationService.ts"), "utf8");
+  const collaborationWidget = readFileSync(join(gamaRoot, "browser/editorWidget.ts"), "utf8");
+  assert.match(collaborationService, /export interface IDocumentCollaborationService/u);
+  assert.doesNotMatch(collaborationService, /from\s+["'][^"']*(?:platform|workbench|electron|generated)[^"']*["']/u);
+  assert.match(collaborationWidget, /CollaborationContribution/u);
+  assert.doesNotMatch(collaborationWidget, /AppServerDocumentCollaborationService/u);
   assert.doesNotMatch(editor, /Session/u);
   assert.match(editorAll, /academicEditor\.contribution/u);
 });

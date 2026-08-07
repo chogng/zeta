@@ -11,6 +11,8 @@ import { type ILanguageFeaturesService } from "../../../services/language/common
 import type { IWorkingCopyService } from "../../../services/workingCopy/common/workingCopyService.js";
 import type { IDiffApi } from "../../../../platform/diff/common/diffApi.js";
 import type { ISyntaxApi } from "../../../../platform/syntax/common/syntaxApi.js";
+import type { IDocumentCollaborationApi } from "../../../../platform/collaboration/common/documentCollaborationApi.js";
+import type { IServerEventApi } from "../../../../platform/app-server/common/appServerApi.js";
 import type { EditorInput, EditorOpenOptions } from "./editorInput.js";
 import type { TextResourceLanguageResolver } from "../../../../platform/language/common/textResourceLanguage.js";
 import { type IEditorPane, EditorPaneVisibility } from "./editorPane.js";
@@ -52,6 +54,8 @@ export interface EditorGroupOptions {
   readonly languageResolver?: TextResourceLanguageResolver;
   readonly diffApi?: IDiffApi;
   readonly syntaxApi?: ISyntaxApi;
+  readonly documentCollaborationApi?: IDocumentCollaborationApi;
+  readonly serverEvents?: IServerEventApi;
   readonly workingCopyService?: IWorkingCopyService;
   readonly onSave?: (group: IEditorGroup, input: EditorInput, pane: IEditorPane) => Promise<boolean>;
   readonly titleActions?: EditorTitleActions;
@@ -81,6 +85,8 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
   private readonly languageResolver: TextResourceLanguageResolver | undefined;
   private readonly diffApi: IDiffApi | undefined;
   private readonly syntaxApi: ISyntaxApi | undefined;
+  private readonly documentCollaborationApi: IDocumentCollaborationApi | undefined;
+  private readonly serverEvents: IServerEventApi | undefined;
   private readonly workingCopyService: IWorkingCopyService | undefined;
   private readonly onSave: ((group: IEditorGroup, input: EditorInput, pane: IEditorPane) => Promise<boolean>) | undefined;
   private readonly titleControl: EditorTitleControl;
@@ -102,6 +108,8 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
     this.languageResolver = options.languageResolver;
     this.diffApi = options.diffApi;
     this.syntaxApi = options.syntaxApi;
+    this.documentCollaborationApi = options.documentCollaborationApi;
+    this.serverEvents = options.serverEvents;
     this.workingCopyService = options.workingCopyService;
     this.onSave = options.onSave;
     this.element = options.ownerDocument.createElement("section");
@@ -213,6 +221,8 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
       languageFeaturesService: this.languageFeaturesService,
       diffApi: this.diffApi,
       syntaxApi: this.syntaxApi,
+      documentCollaborationApi: this.documentCollaborationApi,
+      serverEvents: this.serverEvents,
       workingCopyService: this.workingCopyService,
       ...(this.onSave ? {
         onSave: () => {

@@ -12,6 +12,8 @@ import { type ITextMateService } from "../../../services/textMate/common/textMat
 import { type ILanguageFeaturesService } from "../../../services/language/common/languageFeaturesService.js";
 import type { IDiffApi } from "../../../../platform/diff/common/diffApi.js";
 import type { ISyntaxApi } from "../../../../platform/syntax/common/syntaxApi.js";
+import type { IDocumentCollaborationApi } from "../../../../platform/collaboration/common/documentCollaborationApi.js";
+import type { IServerEventApi } from "../../../../platform/app-server/common/appServerApi.js";
 import { WorkbenchPart } from "../../part.js";
 import { EditorGroup, type EditorGroupOptions, type IEditorGroup } from "./editorGroup.js";
 import { EditorTabDragAndDropController, type EditorTabDropEvent } from "./editorTabDragAndDrop.js";
@@ -57,6 +59,8 @@ export interface IEditorPartOptions {
   readonly languageResolver?: TextResourceLanguageResolver;
   readonly diffApi?: IDiffApi;
   readonly syntaxApi?: ISyntaxApi;
+  readonly documentCollaborationApi?: IDocumentCollaborationApi;
+  readonly serverEvents?: IServerEventApi;
   readonly workingCopyService?: IWorkingCopyService;
   readonly registry?: EditorPaneRegistry;
   readonly titleActions?: {
@@ -96,6 +100,8 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
       languageResolver: options.languageResolver,
       diffApi: options.diffApi,
       syntaxApi: options.syntaxApi,
+      documentCollaborationApi: options.documentCollaborationApi,
+      serverEvents: options.serverEvents,
       workingCopyService: options.workingCopyService,
       titleActions: options.titleActions,
       ...(options.saveAsResource ? {

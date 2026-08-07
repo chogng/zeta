@@ -1,4 +1,6 @@
 use super::project;
+use super::syntax_language;
+use zeta_app_server_protocol::protocol::syntax::SyntaxLanguageDto;
 use zeta_app_server_protocol::protocol::syntax::SyntaxTokenKindDto;
 use zeta_syntax::DocumentRevision;
 use zeta_syntax::SyntaxDocument;
@@ -27,5 +29,25 @@ fn projects_syntax_ranges_as_utf16_positions() {
             .folding_ranges
             .iter()
             .any(|range| { range.range.start.line_index == 1 && range.range.end.line_index == 2 })
+    );
+}
+
+#[test]
+fn maps_ecmascript_protocol_languages_to_the_authoritative_grammars() {
+    assert_eq!(
+        syntax_language(SyntaxLanguageDto::Javascript),
+        SyntaxLanguage::Javascript
+    );
+    assert_eq!(
+        syntax_language(SyntaxLanguageDto::Javascriptreact),
+        SyntaxLanguage::Javascriptreact
+    );
+    assert_eq!(
+        syntax_language(SyntaxLanguageDto::Typescript),
+        SyntaxLanguage::Typescript
+    );
+    assert_eq!(
+        syntax_language(SyntaxLanguageDto::Typescriptreact),
+        SyntaxLanguage::Typescriptreact
     );
 }

@@ -4,7 +4,7 @@ import { nonNegativeInteger, record, string } from "../../ipc/electron-main/ipcV
 import type { IpcRoute } from "../../ipc/electron-main/trustedIpcRouter.js";
 
 const MAX_SYNTAX_INPUT_BYTES = 4 * 1024 * 1024;
-const SUPPORTED_LANGUAGES = new Set(["json", "jsonc", "rust", "shell"]);
+const SUPPORTED_LANGUAGES = new Set(["javascript", "javascriptreact", "json", "jsonc", "rust", "shell", "typescript", "typescriptreact"]);
 
 /** Exact-shape IPC route for the Rust-backed source syntax projection. */
 export function syntaxIpcRoutes(supervisor: AppServerSupervisor): readonly IpcRoute<unknown, unknown>[] {
@@ -27,7 +27,7 @@ function syntaxAnalyzeParams(value: unknown): SyntaxAnalyzeParams {
   const params = record(value, ["language", "revision", "text"]);
   const language = string(params.language, "language");
   if (!SUPPORTED_LANGUAGES.has(language)) {
-    throw new Error("language must be one of json, jsonc, rust, or shell");
+    throw new Error("language must be one of javascript, javascriptreact, json, jsonc, rust, shell, typescript, or typescriptreact");
   }
   const text = string(params.text, "text");
   if (new TextEncoder().encode(text).byteLength > MAX_SYNTAX_INPUT_BYTES) {

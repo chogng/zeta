@@ -387,11 +387,18 @@ fn is_foldable(kind: &str) -> bool {
         kind,
         "block"
             | "array"
+            | "class_body"
             | "declaration_list"
             | "enum_variant_list"
+            | "enum_body"
             | "field_declaration_list"
+            | "interface_body"
+            | "jsx_element"
             | "match_block"
             | "object"
+            | "object_type"
+            | "statement_block"
+            | "switch_body"
             | "token_tree"
             | "use_list"
     )

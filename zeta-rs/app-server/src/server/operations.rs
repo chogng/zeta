@@ -83,6 +83,7 @@ impl AppServer {
             },
             schema_hash: SchemaHash(schema_hash()),
             capabilities: ServerCapabilities {
+                document_collaboration: true,
                 sessions: true,
                 threads: true,
                 turns: true,
