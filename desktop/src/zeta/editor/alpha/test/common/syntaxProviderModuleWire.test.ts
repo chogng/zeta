@@ -2,36 +2,36 @@ import { strict as assert } from "node:assert";
 import test from "node:test";
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { DisposableOwner, DisposableStore } from "../../../../base/common/lifecycle.js";
-import { LanguageAnalysisModuleWorkerClient } from "../../common/languages/analysis/languageAnalysisModuleWorkerClient.js";
-import { LanguageAnalysisProviderRegistry } from "../../common/languages/analysis/languageAnalysisProviders.js";
-import { LanguageAnalysisProviderModuleHost, LanguageAnalysisProviderModuleRegistry } from "../../common/languages/analysis/languageAnalysisProviderModules.js";
-import { LanguageAnalysisProviderModuleWireServer } from "../../common/languages/analysis/languageAnalysisProviderModuleWire.js";
-import { LANGUAGE_TOKEN_LANE, LanguageAnalysisProviderWorker, LanguageAnalysisService } from "../../common/languages/analysis/languageAnalysisService.js";
-import { languageAnalysisWireCodec } from "../../common/languages/analysis/languageAnalysisWire.js";
-import { createLanguageLexicalAnalysisProvider } from "../../common/languages/languageLexicalAnalysisProvider.js";
+import { SyntaxModuleWorkerClient } from "../../common/languages/syntax/syntaxModuleWorkerClient.js";
+import { SyntaxProviderRegistry } from "../../common/languages/syntax/syntaxProviders.js";
+import { SyntaxProviderModuleHost, SyntaxProviderModuleRegistry } from "../../common/languages/syntax/syntaxProviderModules.js";
+import { SyntaxProviderModuleWireServer } from "../../common/languages/syntax/syntaxProviderModuleWire.js";
+import { SYNTAX_TOKEN_LANE, SyntaxProviderWorker, SyntaxService } from "../../common/languages/syntax/syntaxService.js";
+import { syntaxWireCodec } from "../../common/languages/syntax/syntaxWire.js";
+import { createLanguageLexicalSyntaxProvider } from "../../common/languages/languageLexicalSyntaxProvider.js";
 import { LanguageRequestStatus } from "../../common/languages/languageRequestCoordinator.js";
 import { LanguageWorkerWireServer, type LanguageWorkerWireClientPort } from "../../common/languages/languageWorkerWire.js";
 import { TextPosition, TextRange } from "../../common/core/text.js";
 import { TextModel } from "../../common/model/textModel.js";
 
-test("Required Analysis modules activate before the first request and preserve confirmed result bases", async () => {
+test("Required Syntax modules activate before the first request and preserve confirmed result bases", async () => {
   using model = new TextModel("const value = 1;");
-  using providers = new LanguageAnalysisProviderRegistry();
-  using modules = new LanguageAnalysisProviderModuleRegistry();
+  using providers = new SyntaxProviderRegistry();
+  using modules = new SyntaxProviderModuleRegistry();
   using moduleRegistration = modules.register({
     id: "language.lexical",
     load: async () => {
       await new Promise<void>(resolve => setImmediate(resolve));
-      return [createLanguageLexicalAnalysisProvider()];
+      return [createLanguageLexicalSyntaxProvider()];
     },
   });
-  using host = new LanguageAnalysisProviderModuleHost(modules, providers);
+  using host = new SyntaxProviderModuleHost(modules, providers);
   const [clientPort, serverPort] = createPortPair();
-  using workerServer = new LanguageWorkerWireServer(serverPort, languageAnalysisWireCodec, new LanguageAnalysisProviderWorker(providers));
-  using moduleServer = new LanguageAnalysisProviderModuleWireServer(serverPort, modules, host);
-  using localProviders = new LanguageAnalysisProviderRegistry();
-  using service = new LanguageAnalysisService(model, localProviders, {
-    workerFactory: () => new LanguageAnalysisModuleWorkerClient(clientPort, {
+  using workerServer = new LanguageWorkerWireServer(serverPort, syntaxWireCodec, new SyntaxProviderWorker(providers));
+  using moduleServer = new SyntaxProviderModuleWireServer(serverPort, modules, host);
+  using localProviders = new SyntaxProviderRegistry();
+  using service = new SyntaxService(model, localProviders, {
+    workerFactory: () => new SyntaxModuleWorkerClient(clientPort, {
       requiredProviderModules: ["language.lexical"],
     }),
   });
@@ -39,7 +39,7 @@ test("Required Analysis modules activate before the first request and preserve c
   assert.equal((await service.requestTokens("typescript")).status, LanguageRequestStatus.Applied);
   assert.deepEqual(service.tokens.result!.value.tokens.map(token => token.tokenType), ["keyword", "variable", "operator", "number"]);
   const firstMessages = clientPort.sentMessages as WireMessage[];
-  const activationIndex = firstMessages.findIndex(message => message.protocol === "zeta.language.analysis-provider-modules" && message.kind === "setActivation");
+  const activationIndex = firstMessages.findIndex(message => message.protocol === "zeta.syntax.provider-modules" && message.kind === "setActivation");
   const requestIndex = firstMessages.findIndex(message => message.protocol === "zeta.language-worker" && message.kind === "request");
   assert.equal(activationIndex >= 0, true);
   assert.equal(requestIndex > activationIndex, true);
@@ -50,39 +50,39 @@ test("Required Analysis modules activate before the first request and preserve c
   }]);
   assert.equal((await service.requestTokens("typescript")).status, LanguageRequestStatus.Applied);
   const requests = (clientPort.sentMessages as WireMessage[]).filter(message => message.protocol === "zeta.language-worker" && message.kind === "request");
-  assert.equal(requests[0]!.lane, LANGUAGE_TOKEN_LANE);
+  assert.equal(requests[0]!.lane, SYNTAX_TOKEN_LANE);
   assert.equal(requests[0]!.resultBaseRequestId, undefined);
   assert.equal(requests[1]!.resultBaseRequestId, 1);
 });
 
-test("Required Analysis module failure discards the Worker before the next request", async () => {
+test("Required Syntax module failure discards the Worker before the next request", async () => {
   using model = new TextModel("const value = 1;");
-  using localProviders = new LanguageAnalysisProviderRegistry();
+  using localProviders = new SyntaxProviderRegistry();
   using workerResources = new DisposableStore();
   let workerCount = 0;
-  using service = new LanguageAnalysisService(model, localProviders, {
+  using service = new SyntaxService(model, localProviders, {
     workerFactory: () => {
       workerCount += 1;
-      const providers = workerResources.add(new LanguageAnalysisProviderRegistry());
-      const modules = workerResources.add(new LanguageAnalysisProviderModuleRegistry());
+      const providers = workerResources.add(new SyntaxProviderRegistry());
+      const modules = workerResources.add(new SyntaxProviderModuleRegistry());
       workerResources.add(modules.register({
         id: "language.lexical",
         load: () => {
-          if (workerCount === 1) throw new Error("analysis module failed");
-          return [createLanguageLexicalAnalysisProvider()];
+          if (workerCount === 1) throw new Error("syntax module failed");
+          return [createLanguageLexicalSyntaxProvider()];
         },
       }));
-      const host = workerResources.add(new LanguageAnalysisProviderModuleHost(modules, providers));
+      const host = workerResources.add(new SyntaxProviderModuleHost(modules, providers));
       const [clientPort, serverPort] = createPortPair();
-      workerResources.add(new LanguageWorkerWireServer(serverPort, languageAnalysisWireCodec, new LanguageAnalysisProviderWorker(providers)));
-      workerResources.add(new LanguageAnalysisProviderModuleWireServer(serverPort, modules, host));
-      return new LanguageAnalysisModuleWorkerClient(clientPort, {
+      workerResources.add(new LanguageWorkerWireServer(serverPort, syntaxWireCodec, new SyntaxProviderWorker(providers)));
+      workerResources.add(new SyntaxProviderModuleWireServer(serverPort, modules, host));
+      return new SyntaxModuleWorkerClient(clientPort, {
         requiredProviderModules: ["language.lexical"],
       });
     },
   });
 
-  await assert.rejects(service.requestTokens("typescript"), /analysis module failed/);
+  await assert.rejects(service.requestTokens("typescript"), /syntax module failed/);
   const outcome = await service.requestTokens("typescript");
 
   assert.equal(outcome.status, LanguageRequestStatus.Applied);
@@ -97,18 +97,18 @@ interface WireMessage {
   readonly resultBaseRequestId?: number;
 }
 
-function createPortPair(): readonly [MemoryAnalysisModulePort, MemoryAnalysisModulePort] {
-  const first = new MemoryAnalysisModulePort();
-  const second = new MemoryAnalysisModulePort();
+function createPortPair(): readonly [MemorySyntaxModulePort, MemorySyntaxModulePort] {
+  const first = new MemorySyntaxModulePort();
+  const second = new MemorySyntaxModulePort();
   first.connect(second);
   second.connect(first);
   return [first, second];
 }
 
-class MemoryAnalysisModulePort extends DisposableOwner implements LanguageWorkerWireClientPort {
+class MemorySyntaxModulePort extends DisposableOwner implements LanguageWorkerWireClientPort {
   private readonly messageEmitter = this.own(new Emitter<unknown>());
   private readonly failureEmitter = this.own(new Emitter<unknown>());
-  private peer: MemoryAnalysisModulePort | undefined;
+  private peer: MemorySyntaxModulePort | undefined;
   private disposed = false;
 
   readonly sentMessages: unknown[] = [];
@@ -123,13 +123,13 @@ class MemoryAnalysisModulePort extends DisposableOwner implements LanguageWorker
     });
   }
 
-  connect(peer: MemoryAnalysisModulePort): void {
+  connect(peer: MemorySyntaxModulePort): void {
     this.peer = peer;
   }
 
   send(message: unknown): void {
     if (this.disposed || !this.peer) {
-      throw new ReferenceError("Memory analysis module port is unavailable");
+      throw new ReferenceError("Memory syntax module port is unavailable");
     }
     const peer = this.peer;
     const cloned = structuredClone(message);

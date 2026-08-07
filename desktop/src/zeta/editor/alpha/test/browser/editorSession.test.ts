@@ -22,7 +22,7 @@ const { EditorSession } = await import("../../browser/editorSession.js");
 
 test.after(() => browserEnvironment.window.close());
 
-test("Alpha editor session composes native input, local language analysis, and presentation", async () => {
+test("Alpha editor session composes native input, local language syntax, and presentation", async () => {
   const dom = new JSDOM("<!doctype html><body><main></main></body>");
   dom.window.HTMLCanvasElement.prototype.getContext = () => null;
   const container = dom.window.document.querySelector<HTMLElement>("main")!;

@@ -25,7 +25,7 @@ test("public editor entrypoints retain distinct API, contribution, main, and wor
   const alphaWorker = readFileSync(join(alpha, "editor.worker.start.ts"), "utf8");
   const gamaApi = readFileSync(join(gama, "editor.api.ts"), "utf8");
   const gamaMain = readFileSync(join(gama, "editor.main.ts"), "utf8");
-  const analysisWorker = readFileSync(join(alpha, "browser/language/languageAnalysisWorkerMain.ts"), "utf8");
+  const analysisWorker = readFileSync(join(alpha, "browser/language/syntaxWorkerMain.ts"), "utf8");
   const completionWorker = readFileSync(join(alpha, "browser/language/languageCompletionWorkerMain.ts"), "utf8");
   assert.match(alphaApi, /TextModel/u);
   assert.doesNotMatch(alphaApi, /workbench|browser|contrib/u);

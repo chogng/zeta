@@ -57,6 +57,11 @@ test("Alpha implementation ledger names the active browser and service owners", 
   for (const file of removedLegacyNames) assert.equal(statSafe(join(alphaRoot, file)), false, file);
 });
 
+test("Alpha PieceTree tests follow VS Code's common model layout", () => {
+  assert.equal(statSafe(join(alphaRoot, "test/common/model/pieceTreeTextBuffer/pieceTreeTextBuffer.test.ts")), true);
+  assert.equal(statSafe(join(alphaRoot, "test/common/pieceTreeTextBuffer.test.ts")), false);
+});
+
 function collectFiles(directory: string): string[] {
   const result: string[] = [];
   for (const entry of readdirSync(directory, { withFileTypes: true })) {

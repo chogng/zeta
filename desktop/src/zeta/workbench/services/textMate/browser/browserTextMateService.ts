@@ -1,16 +1,16 @@
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
-import { type LanguageAnalysisWorkerFactory } from "../../../../editor/alpha/common/languages/analysis/languageAnalysisService.js";
+import { type SyntaxWorkerFactory } from "../../../../editor/alpha/common/languages/syntax/syntaxService.js";
 import { type ITextMateService } from "../common/textMateService.js";
 import { type TextMateGrammarDefinition } from "../common/textMateGrammarRegistry.js";
 import { TextMateScopeThemeModel, type TextMateScopeThemeSource } from "../common/textMateScopeTheme.js";
 import { BrowserTextMateGrammarService } from "./browserTextMateGrammarService.js";
-import { createTextMateAnalysisWorkerFactory } from "./textMateAnalysisWorkerClient.js";
+import { createTextMateSyntaxWorkerFactory } from "./textMateSyntaxWorkerClient.js";
 
 /** Browser implementation of the Workbench TextMate service. */
 export class BrowserTextMateService extends DisposableOwner implements ITextMateService {
   readonly grammars = this.own(new BrowserTextMateGrammarService());
   readonly scopeTheme: TextMateScopeThemeSource;
-  readonly analysisWorkerFactory: LanguageAnalysisWorkerFactory;
+  readonly syntaxWorkerFactory: SyntaxWorkerFactory;
 
   constructor(contributions: readonly TextMateGrammarDefinition[] = [], scopeTheme?: TextMateScopeThemeSource) {
     super();
@@ -23,7 +23,7 @@ export class BrowserTextMateService extends DisposableOwner implements ITextMate
         throw new TypeError("Browser TextMate scope theme must be a theme source");
       }
       this.scopeTheme = scopeTheme ?? this.own(new TextMateScopeThemeModel());
-      this.analysisWorkerFactory = createTextMateAnalysisWorkerFactory(this.grammars, this.scopeTheme);
+      this.syntaxWorkerFactory = createTextMateSyntaxWorkerFactory(this.grammars, this.scopeTheme);
       for (const contribution of contributions) this.grammars.registerGrammar(contribution);
     } catch (error) {
       this.dispose();

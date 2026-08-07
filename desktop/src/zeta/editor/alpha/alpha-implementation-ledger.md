@@ -6,15 +6,15 @@
 
 | 入口 | 职责 |
 | --- | --- |
-| `browser/editorSession.ts` | 一个编辑器实例的唯一装配点；创建 model reference、selection、folding、analysis/token、completion、viewport、input 和 contrib controllers。 |
+| `browser/editorSession.ts` | 一个编辑器实例的唯一装配点；创建 model reference、selection、folding、syntax/token、completion、viewport、input 和 contrib controllers。 |
 | `browser/editorPane.ts` | Workbench pane 生命周期；只把 host 的 resource/model contract 传给 session，不实现编辑语义。 |
 | `browser/editorInput.ts` | Workbench `EditorInput` 匹配和语言 identity adapter；不进入同步 model/core。 |
 | `browser/diffEditorInput.ts` | Workbench 双资源 diff input 和 synthetic tab identity；不创建 diff model，也不计算 diff。 |
-| `browser/browserEditorSession.ts` | TextMate grammar readiness、analysis Worker 和 completion Worker 的 browser adapter。 |
+| `browser/browserEditorSession.ts` | TextMate grammar readiness、syntax Worker 和 completion Worker 的 browser adapter。 |
 | `editor.api.ts` | DOM-free 的 Alpha text-model 程序化 API；不加载 Workbench、DOM 或 contribution。 |
 | `editor.all.ts` | Alpha 对产品入口公开的 contribution bundle；加载 editor browser contribution。 |
 | `editor.main.ts` | 完整 Alpha 入口；组合 `editor.all.ts` 与 `editor.api.ts`。 |
-| `editor.worker.start.ts` | Alpha dedicated language worker 的统一启动协议；analysis 与 completion worker 使用它建立 canonical wire port。 |
+| `editor.worker.start.ts` | Alpha dedicated language worker 的统一启动协议；syntax 与 completion worker 使用它建立 canonical wire port。 |
 | `contrib/editor.contribution.ts` | 注册 Alpha code/diff pane，并强制注入 Workbench text-file 与 Rust diff adapter；生产环境不提供 fallback。 |
 | `browser/widget/codeEditor/codeEditorWidget.ts` | 组合 viewport、输入、键盘导航、pointer selection 和 text drop；不拥有语言功能。 |
 | `browser/widget/diffEditor/diffEditorWidget.ts` | 消费 `common/diff/diffModel.ts` 的只读 side-by-side projection；不计算 diff。 |
@@ -37,7 +37,7 @@
 | 文件 | 职责 |
 | --- | --- |
 | `textModel.ts` | Piece Tree 之上的同步文档权威：文本、版本、原子 transaction、history、snapshot、change event。 |
-| `pieceTreeTextBuffer/{pieceTreeTextBuffer,pieceTreeBase,pieceTreeSnapshot}.ts` | 文本存储、节点统计和 snapshot segment 读取；不改变 `TextModel` contract。 |
+| `pieceTreeTextBuffer/{pieceTreeTextBuffer,pieceTreeBase,pieceTreeSnapshot}.ts` | 文本存储、节点统计和 snapshot segment 读取；不改变 `TextModel` contract。正确性测试位于 `test/common/model/pieceTreeTextBuffer/pieceTreeTextBuffer.test.ts`。 |
 | `editStack.ts` / `historyCoalescing.ts` | 文档 undo/redo、typing merge 和 history budget。 |
 | `textModelSearch.ts` | literal、regex、whole-word、wrap 和 version-pinned search。 |
 | `trackedRange.ts` / `decorationCollection.ts` | tracked range stickiness、decoration owner 和 model change 映射；不包含 CSS/severity。 |
@@ -61,7 +61,7 @@
 | owner | canonical 文件 | 责任 |
 | --- | --- | --- |
 | language base | `common/languages/languageConfiguration.ts`、`languageId.ts`、`languageLexical*.ts` | language configuration、lexical context 和纯 provider module contract。 |
-| analysis | `common/languages/analysis/*.ts` | token/diagnostic lane、Worker wire、request freshness、delta 和 result acceptance。 |
+| syntax | `common/languages/syntax/*.ts` | token/diagnostic lane、Worker wire、request freshness、delta 和 result acceptance。 |
 | completion | `common/languages/completion/*.ts` | completion catalog、resolve wire、completion result、word provider。 |
 | results | `common/languages/languageResults.ts`、`languageResultStore.ts`、`languageRequestCoordinator.ts` | diagnostic value、versioned store 和 stale-result gate。 |
 | token | `common/tokens/languageTokens.ts`、`languageTokenLineIndex.ts` | token value/delta/normalization 和 sparse line index。 |
@@ -132,7 +132,7 @@
 TextModelReference
   -> EditorSelectionController
   -> FoldingModel / HiddenRangeModel
-  -> LanguageAnalysisService
+  -> SyntaxService
   -> TokenizationTextModelPart / SemanticTokens
   -> Language completion + snippet session
   -> CodeEditorWidget(view + input)

@@ -1,13 +1,13 @@
-import { LANGUAGE_TOKEN_LANE, type LanguageAnalysisLane } from "./languageAnalysisService.js";
+import { SYNTAX_TOKEN_LANE, type SyntaxLane } from "./syntaxService.js";
 import { type LanguageDiagnostic, type LanguageToken } from "../languageResults.js";
 import { type TextRange, type TextSnapshot } from "../../../common/core/text.js";
 
-export type LanguageAnalysisItem = LanguageToken | LanguageDiagnostic;
+export type SyntaxItem = LanguageToken | LanguageDiagnostic;
 
-export interface LanguageAnalysisItemSplice {
+export interface SyntaxItemSplice {
   readonly startItemIndex: number;
   readonly deleteItemCount: number;
-  readonly items: readonly LanguageAnalysisItem[];
+  readonly items: readonly SyntaxItem[];
   readonly lineDeltaBefore: number;
   readonly lineDeltaAfter: number;
 }
@@ -21,7 +21,7 @@ interface LineRun extends LinePair {
   readonly lineCount: number;
 }
 
-export function createLanguageAnalysisItemSplices(lane: LanguageAnalysisLane, previous: readonly LanguageAnalysisItem[], current: readonly LanguageAnalysisItem[], previousSnapshot: TextSnapshot, currentSnapshot: TextSnapshot): readonly LanguageAnalysisItemSplice[] {
+export function createSyntaxItemSplices(lane: SyntaxLane, previous: readonly SyntaxItem[], current: readonly SyntaxItem[], previousSnapshot: TextSnapshot, currentSnapshot: TextSnapshot): readonly SyntaxItemSplice[] {
   const previousLines = previousSnapshot.getText().split("\n");
   const currentLines = currentSnapshot.getText().split("\n");
   const previousBounds = createLineItemBounds(previous, previousLines.length);
@@ -30,7 +30,7 @@ export function createLanguageAnalysisItemSplices(lane: LanguageAnalysisLane, pr
     return Object.freeze([createSingleSplice(lane, previous, current, currentSnapshot.lineCount - previousSnapshot.lineCount)]);
   }
   const runs = createStableLineRuns(lane, previous, current, previousLines, currentLines, previousBounds, currentBounds);
-  const splices: LanguageAnalysisItemSplice[] = [];
+  const splices: SyntaxItemSplice[] = [];
   let previousItemIndex = 0;
   let currentItemIndex = 0;
   let lineDelta = 0;
@@ -47,9 +47,9 @@ export function createLanguageAnalysisItemSplices(lane: LanguageAnalysisLane, pr
   return Object.freeze(splices);
 }
 
-export function languageAnalysisItemsEqual(lane: LanguageAnalysisLane, current: LanguageAnalysisItem, previous: LanguageAnalysisItem, lineDelta: number): boolean {
+export function syntaxItemsEqual(lane: SyntaxLane, current: SyntaxItem, previous: SyntaxItem, lineDelta: number): boolean {
   if (!rangesEqual(current.range, previous.range, lineDelta)) return false;
-  if (lane === LANGUAGE_TOKEN_LANE) {
+  if (lane === SYNTAX_TOKEN_LANE) {
     const currentToken = current as LanguageToken;
     const previousToken = previous as LanguageToken;
     return currentToken.tokenType === previousToken.tokenType && arraysEqual(currentToken.modifiers, previousToken.modifiers);
@@ -62,7 +62,7 @@ export function languageAnalysisItemsEqual(lane: LanguageAnalysisLane, current: 
     currentDiagnostic.source === previousDiagnostic.source;
 }
 
-function createStableLineRuns(lane: LanguageAnalysisLane, previousItems: readonly LanguageAnalysisItem[], currentItems: readonly LanguageAnalysisItem[], previousLines: readonly string[], currentLines: readonly string[], previousBounds: readonly number[], currentBounds: readonly number[]): readonly LineRun[] {
+function createStableLineRuns(lane: SyntaxLane, previousItems: readonly SyntaxItem[], currentItems: readonly SyntaxItem[], previousLines: readonly string[], currentLines: readonly string[], previousBounds: readonly number[], currentBounds: readonly number[]): readonly LineRun[] {
   const pairs = createStableLinePairs(previousLines, currentLines).filter(pair => lineItemsEqual(
     lane,
     previousItems.slice(previousBounds[pair.previousLineIndex], previousBounds[pair.previousLineIndex + 1]),
@@ -121,7 +121,7 @@ function createStableLinePairs(previous: readonly string[], current: readonly st
   return Object.freeze([...pairs.values()].sort(comparePairs));
 }
 
-function appendSplice(splices: LanguageAnalysisItemSplice[], current: readonly LanguageAnalysisItem[], previousStart: number, previousEnd: number, currentStart: number, currentEnd: number, lineDeltaBefore: number, lineDeltaAfter: number): void {
+function appendSplice(splices: SyntaxItemSplice[], current: readonly SyntaxItem[], previousStart: number, previousEnd: number, currentStart: number, currentEnd: number, lineDeltaBefore: number, lineDeltaAfter: number): void {
   if (previousStart === previousEnd && currentStart === currentEnd && lineDeltaBefore === lineDeltaAfter) return;
   splices.push(Object.freeze({
     startItemIndex: previousStart,
@@ -132,12 +132,12 @@ function appendSplice(splices: LanguageAnalysisItemSplice[], current: readonly L
   }));
 }
 
-function createSingleSplice(lane: LanguageAnalysisLane, previous: readonly LanguageAnalysisItem[], current: readonly LanguageAnalysisItem[], lineDelta: number): LanguageAnalysisItemSplice {
+function createSingleSplice(lane: SyntaxLane, previous: readonly SyntaxItem[], current: readonly SyntaxItem[], lineDelta: number): SyntaxItemSplice {
   const limit = Math.min(previous.length, current.length);
   let prefixLength = 0;
-  while (prefixLength < limit && languageAnalysisItemsEqual(lane, current[prefixLength]!, previous[prefixLength]!, 0)) prefixLength += 1;
+  while (prefixLength < limit && syntaxItemsEqual(lane, current[prefixLength]!, previous[prefixLength]!, 0)) prefixLength += 1;
   let suffixLength = 0;
-  while (suffixLength < limit - prefixLength && languageAnalysisItemsEqual(lane, current[current.length - suffixLength - 1]!, previous[previous.length - suffixLength - 1]!, lineDelta)) suffixLength += 1;
+  while (suffixLength < limit - prefixLength && syntaxItemsEqual(lane, current[current.length - suffixLength - 1]!, previous[previous.length - suffixLength - 1]!, lineDelta)) suffixLength += 1;
   return Object.freeze({
     startItemIndex: prefixLength,
     deleteItemCount: previous.length - prefixLength - suffixLength,
@@ -147,7 +147,7 @@ function createSingleSplice(lane: LanguageAnalysisLane, previous: readonly Langu
   });
 }
 
-function createLineItemBounds(items: readonly LanguageAnalysisItem[], lineCount: number): readonly number[] | undefined {
+function createLineItemBounds(items: readonly SyntaxItem[], lineCount: number): readonly number[] | undefined {
   const bounds = new Array<number>(lineCount + 1);
   let itemIndex = 0;
   for (let lineIndex = 0; lineIndex < lineCount; lineIndex += 1) {
@@ -161,8 +161,8 @@ function createLineItemBounds(items: readonly LanguageAnalysisItem[], lineCount:
   return itemIndex === items.length ? Object.freeze(bounds) : undefined;
 }
 
-function lineItemsEqual(lane: LanguageAnalysisLane, previous: readonly LanguageAnalysisItem[], current: readonly LanguageAnalysisItem[], lineDelta: number): boolean {
-  return previous.length === current.length && previous.every((item, index) => languageAnalysisItemsEqual(lane, current[index]!, item, lineDelta));
+function lineItemsEqual(lane: SyntaxLane, previous: readonly SyntaxItem[], current: readonly SyntaxItem[], lineDelta: number): boolean {
+  return previous.length === current.length && previous.every((item, index) => syntaxItemsEqual(lane, current[index]!, item, lineDelta));
 }
 
 function uniqueLineIndexes(lines: readonly string[], start: number, end: number): ReadonlyMap<string, number> {

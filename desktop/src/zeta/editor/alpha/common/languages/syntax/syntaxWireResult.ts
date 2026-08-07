@@ -1,17 +1,17 @@
-import { LANGUAGE_DIAGNOSTIC_LANE, LANGUAGE_TOKEN_LANE, type LanguageAnalysisLane, type LanguageAnalysisResult } from "./languageAnalysisService.js";
-import { createLanguageAnalysisItemSplices, type LanguageAnalysisItem } from "./languageAnalysisItemDelta.js";
+import { SYNTAX_DIAGNOSTIC_LANE, SYNTAX_TOKEN_LANE, type SyntaxLane, type SyntaxResult } from "./syntaxService.js";
+import { createSyntaxItemSplices, type SyntaxItem } from "./syntaxItemDelta.js";
 import { attachLanguageTokenResultDelta, createLanguageDiagnosticSnapshotNormalizer, createLanguageTokenSnapshotNormalizer, type LanguageDiagnostic, type LanguageDiagnosticCode, type LanguageDiagnosticResult, type LanguageToken, type LanguageTokenResult } from "../languageResults.js";
 import { type LanguageWorkerWireResultState } from "../languageWorkerWireProtocol.js";
 import { TextPosition, TextRange, type TextSnapshot } from "../../../common/core/text.js";
 
-export function encodeLanguageAnalysisWireResult(lane: LanguageAnalysisLane, result: LanguageAnalysisResult, snapshot: TextSnapshot, base: LanguageWorkerWireResultState<LanguageAnalysisResult> | undefined): unknown {
+export function encodeSyntaxWireResult(lane: SyntaxLane, result: SyntaxResult, snapshot: TextSnapshot, base: LanguageWorkerWireResultState<SyntaxResult> | undefined): unknown {
   assertResultLane(lane, result);
-  const items = lane === LANGUAGE_TOKEN_LANE
+  const items = lane === SYNTAX_TOKEN_LANE
     ? (result.value as LanguageTokenResult).tokens
     : (result.value as LanguageDiagnosticResult).diagnostics;
   const baseItems = readBaseItems(lane, base);
   if (!base || !baseItems) return encodeFull(lane, items);
-  const splices = createLanguageAnalysisItemSplices(lane, baseItems, items, base.snapshot, snapshot);
+  const splices = createSyntaxItemSplices(lane, baseItems, items, base.snapshot, snapshot);
   const insertedItemCount = splices.reduce((count, splice) => count + splice.items.length, 0);
   if (insertedItemCount >= items.length) return encodeFull(lane, items);
   return Object.freeze({
@@ -26,45 +26,45 @@ export function encodeLanguageAnalysisWireResult(lane: LanguageAnalysisLane, res
   });
 }
 
-export function decodeLanguageAnalysisWireResult(lane: LanguageAnalysisLane, value: unknown, snapshot: TextSnapshot, base: LanguageWorkerWireResultState<LanguageAnalysisResult> | undefined): LanguageAnalysisResult {
-  assertRecord(value, "Language analysis wire result");
+export function decodeSyntaxWireResult(lane: SyntaxLane, value: unknown, snapshot: TextSnapshot, base: LanguageWorkerWireResultState<SyntaxResult> | undefined): SyntaxResult {
+  assertRecord(value, "Syntax wire result");
   if (value.kind === "full") {
-    if (!Array.isArray(value.items)) throw new TypeError("Full language analysis wire result must contain items");
+    if (!Array.isArray(value.items)) throw new TypeError("Full syntax wire result must contain items");
     return resultFromItems(lane, value.items.map(item => decodeItem(lane, item)), snapshot);
   }
   if (value.kind !== "delta") {
-    throw new TypeError(`Unknown language analysis wire result kind '${String(value.kind)}'`);
+    throw new TypeError(`Unknown syntax wire result kind '${String(value.kind)}'`);
   }
   if (!Array.isArray(value.splices)) {
-    throw new TypeError("Language analysis delta must contain splices");
+    throw new TypeError("Syntax delta must contain splices");
   }
-  const baseRequestId = decodePositiveSafeInteger(value.baseRequestId, "Language analysis delta base request ID");
+  const baseRequestId = decodePositiveSafeInteger(value.baseRequestId, "Syntax delta base request ID");
   if (!base || base.requestId !== baseRequestId) {
-    throw new Error("Language analysis delta base result is unavailable");
+    throw new Error("Syntax delta base result is unavailable");
   }
   const baseItems = readBaseItems(lane, base);
   if (!baseItems) {
-    throw new Error("Language analysis delta base lane does not match");
+    throw new Error("Syntax delta base lane does not match");
   }
-  const items: LanguageAnalysisItem[] = [];
+  const items: SyntaxItem[] = [];
   const tokenSplices = [];
   let baseItemIndex = 0;
   let lineDelta = 0;
   for (const encodedSplice of value.splices) {
-    assertRecord(encodedSplice, "Language analysis delta splice");
+    assertRecord(encodedSplice, "Syntax delta splice");
     if (!Array.isArray(encodedSplice.items)) {
-      throw new TypeError("Language analysis delta splice must contain items");
+      throw new TypeError("Syntax delta splice must contain items");
     }
-    const startItemIndex = decodeNonNegativeSafeInteger(encodedSplice.startItemIndex, "Language analysis delta start item index");
-    const deleteItemCount = decodeNonNegativeSafeInteger(encodedSplice.deleteItemCount, "Language analysis delta delete item count");
+    const startItemIndex = decodeNonNegativeSafeInteger(encodedSplice.startItemIndex, "Syntax delta start item index");
+    const deleteItemCount = decodeNonNegativeSafeInteger(encodedSplice.deleteItemCount, "Syntax delta delete item count");
     if (startItemIndex < baseItemIndex || startItemIndex > baseItems.length || deleteItemCount > baseItems.length - startItemIndex) {
-      throw new RangeError("Language analysis delta splices must be ordered, non-overlapping, and inside their base result");
+      throw new RangeError("Syntax delta splices must be ordered, non-overlapping, and inside their base result");
     }
     for (const item of baseItems.slice(baseItemIndex, startItemIndex)) items.push(shiftItem(lane, item, lineDelta));
     const inserted = encodedSplice.items.map(item => decodeItem(lane, item));
     const resultStartItemIndex = items.length;
     items.push(...inserted);
-    const nextLineDelta = decodeSafeInteger(encodedSplice.lineDelta, "Language analysis delta line shift");
+    const nextLineDelta = decodeSafeInteger(encodedSplice.lineDelta, "Syntax delta line shift");
     tokenSplices.push(Object.freeze({
       baseStartItemIndex: startItemIndex,
       baseDeleteItemCount: deleteItemCount,
@@ -77,11 +77,11 @@ export function decodeLanguageAnalysisWireResult(lane: LanguageAnalysisLane, val
     lineDelta = nextLineDelta;
   }
   if (lineDelta !== snapshot.lineCount - base.snapshot.lineCount) {
-    throw new Error("Language analysis delta final line shift does not match its snapshots");
+    throw new Error("Syntax delta final line shift does not match its snapshots");
   }
   for (const item of baseItems.slice(baseItemIndex)) items.push(shiftItem(lane, item, lineDelta));
   const result = resultFromItems(lane, items, snapshot);
-  if (result.lane === LANGUAGE_TOKEN_LANE) {
+  if (result.lane === SYNTAX_TOKEN_LANE) {
     attachLanguageTokenResultDelta(result.value, {
       baseRequestId,
       splices: tokenSplices,
@@ -90,36 +90,36 @@ export function decodeLanguageAnalysisWireResult(lane: LanguageAnalysisLane, val
   return result;
 }
 
-type AnalysisItem = LanguageAnalysisItem;
+type SyntaxWireItem = SyntaxItem;
 
-function encodeFull(lane: LanguageAnalysisLane, items: readonly AnalysisItem[]): unknown {
+function encodeFull(lane: SyntaxLane, items: readonly SyntaxWireItem[]): unknown {
   return Object.freeze({
     kind: "full",
     items: Object.freeze(items.map(item => encodeItem(lane, item))),
   });
 }
 
-function readBaseItems(lane: LanguageAnalysisLane, base: LanguageWorkerWireResultState<LanguageAnalysisResult> | undefined): readonly AnalysisItem[] | undefined {
+function readBaseItems(lane: SyntaxLane, base: LanguageWorkerWireResultState<SyntaxResult> | undefined): readonly SyntaxWireItem[] | undefined {
   if (!base || base.result.lane !== lane) return undefined;
-  return lane === LANGUAGE_TOKEN_LANE
+  return lane === SYNTAX_TOKEN_LANE
     ? (base.result.value as LanguageTokenResult).tokens
     : (base.result.value as LanguageDiagnosticResult).diagnostics;
 }
 
-function resultFromItems(lane: LanguageAnalysisLane, items: readonly AnalysisItem[], snapshot: TextSnapshot): LanguageAnalysisResult {
-  return lane === LANGUAGE_TOKEN_LANE
+function resultFromItems(lane: SyntaxLane, items: readonly SyntaxWireItem[], snapshot: TextSnapshot): SyntaxResult {
+  return lane === SYNTAX_TOKEN_LANE
     ? Object.freeze({
-      lane: LANGUAGE_TOKEN_LANE,
+      lane: SYNTAX_TOKEN_LANE,
       value: createLanguageTokenSnapshotNormalizer(snapshot)({ tokens: items as readonly LanguageToken[] }),
     })
     : Object.freeze({
-      lane: LANGUAGE_DIAGNOSTIC_LANE,
+      lane: SYNTAX_DIAGNOSTIC_LANE,
       value: createLanguageDiagnosticSnapshotNormalizer(snapshot)({ diagnostics: items as readonly LanguageDiagnostic[] }),
     });
 }
 
-function encodeItem(lane: LanguageAnalysisLane, item: AnalysisItem): unknown {
-  if (lane === LANGUAGE_TOKEN_LANE) {
+function encodeItem(lane: SyntaxLane, item: SyntaxWireItem): unknown {
+  if (lane === SYNTAX_TOKEN_LANE) {
     const token = item as LanguageToken;
     return Object.freeze({
       range: encodeRange(token.range, "Language token wire range"),
@@ -137,9 +137,9 @@ function encodeItem(lane: LanguageAnalysisLane, item: AnalysisItem): unknown {
   });
 }
 
-function decodeItem(lane: LanguageAnalysisLane, value: unknown): AnalysisItem {
-  assertRecord(value, lane === LANGUAGE_TOKEN_LANE ? "Language token wire token" : "Language diagnostic wire diagnostic");
-  if (lane === LANGUAGE_TOKEN_LANE) {
+function decodeItem(lane: SyntaxLane, value: unknown): SyntaxWireItem {
+  assertRecord(value, lane === SYNTAX_TOKEN_LANE ? "Language token wire token" : "Language diagnostic wire diagnostic");
+  if (lane === SYNTAX_TOKEN_LANE) {
     if (!Array.isArray(value.modifiers)) {
       throw new TypeError("Language token wire modifiers must be an array");
     }
@@ -160,12 +160,12 @@ function decodeItem(lane: LanguageAnalysisLane, value: unknown): AnalysisItem {
   };
 }
 
-function shiftItem(lane: LanguageAnalysisLane, item: AnalysisItem, lineDelta: number): AnalysisItem {
+function shiftItem(lane: SyntaxLane, item: SyntaxWireItem, lineDelta: number): SyntaxWireItem {
   const range = TextRange.from(
     TextPosition.at(item.range.start.lineIndex + lineDelta, item.range.start.columnIndex),
     TextPosition.at(item.range.end.lineIndex + lineDelta, item.range.end.columnIndex),
   );
-  return lane === LANGUAGE_TOKEN_LANE
+  return lane === SYNTAX_TOKEN_LANE
     ? { ...(item as LanguageToken), range }
     : { ...(item as LanguageDiagnostic), range };
 }
@@ -194,8 +194,8 @@ function decodeDiagnosticCode(value: unknown): LanguageDiagnosticCode | undefine
   throw new TypeError("Language diagnostic wire code must be a finite number or string");
 }
 
-function assertResultLane(lane: LanguageAnalysisLane, result: LanguageAnalysisResult): void {
-  if (!result || result.lane !== lane) throw new TypeError(`Language analysis wire result does not match lane '${lane}'`);
+function assertResultLane(lane: SyntaxLane, result: SyntaxResult): void {
+  if (!result || result.lane !== lane) throw new TypeError(`Syntax wire result does not match lane '${lane}'`);
 }
 
 function decodeString(value: unknown, owner: string): string {

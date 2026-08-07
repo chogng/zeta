@@ -4,13 +4,13 @@ import { resolve } from "node:path";
 import test from "node:test";
 import * as onigurumaNamespace from "vscode-oniguruma";
 import { type IOnigLib } from "vscode-textmate";
-import { LanguageAnalysisProviderRegistry } from "../../../../../editor/alpha/common/languages/analysis/languageAnalysisProviders.js";
-import { LanguageAnalysisService } from "../../../../../editor/alpha/common/languages/analysis/languageAnalysisService.js";
+import { SyntaxProviderRegistry } from "../../../../../editor/alpha/common/languages/syntax/syntaxProviders.js";
+import { SyntaxService } from "../../../../../editor/alpha/common/languages/syntax/syntaxService.js";
 import { LanguageRequestStatus } from "../../../../../editor/alpha/common/languages/languageRequestCoordinator.js";
 import { TextPosition, TextRange } from "../../../../../editor/alpha/common/core/text.js";
 import { TextModel } from "../../../../../editor/alpha/common/model/textModel.js";
-import { createTextMateAnalysisProvider, TEXTMATE_ANALYSIS_PROVIDER_ID } from "../../common/textMateAnalysisProvider.js";
-import { createTextMateAnalysisModule, TEXTMATE_ANALYSIS_MODULE_ID } from "../../common/textMateAnalysisModule.js";
+import { createTextMateSyntaxProvider, TEXTMATE_SYNTAX_PROVIDER_ID } from "../../common/textMateSyntaxProvider.js";
+import { createTextMateSyntaxModule, TEXTMATE_SYNTAX_MODULE_ID } from "../../common/textMateSyntaxModule.js";
 import { TextMateGrammarRegistry } from "../../common/textMateGrammarRegistry.js";
 import { TextMateTokenizationService, type TextMateTokenizationCacheUpdate } from "../../common/textMateTokenizationService.js";
 
@@ -177,10 +177,10 @@ test("TextMate grammar revisions replace same-version runtime state", async () =
   assert.equal((await tokenization.tokenize("demo", model.createSnapshot(), signal))!.tokens[0]!.tokenType, "string");
 });
 
-test("TextMate Analysis provider overrides lexical fallback by explicit priority", async () => {
+test("TextMate Syntax provider overrides lexical fallback by explicit priority", async () => {
   using grammars = grammarRegistry();
   using tokenization = new TextMateTokenizationService(grammars, onigLib);
-  using providers = new LanguageAnalysisProviderRegistry();
+  using providers = new SyntaxProviderRegistry();
   using fallback = providers.register({
     id: "fallback.lexical",
     languageIds: ["demo"],
@@ -190,16 +190,16 @@ test("TextMate Analysis provider overrides lexical fallback by explicit priority
       modifiers: [],
     }] }),
   });
-  using textmate = providers.register(createTextMateAnalysisProvider(tokenization));
+  using textmate = providers.register(createTextMateSyntaxProvider(tokenization));
   using model = new TextModel("if");
-  using analysis = new LanguageAnalysisService(model, providers);
+  using syntax = new SyntaxService(model, providers);
 
-  const outcome = await analysis.requestTokens("demo");
+  const outcome = await syntax.requestTokens("demo");
 
   assert.equal(outcome.status, LanguageRequestStatus.Applied);
-  assert.equal(providers.getTokenProvider("demo")?.id, TEXTMATE_ANALYSIS_PROVIDER_ID);
-  assert.equal(analysis.tokens.result!.value.tokens[0]!.tokenType, "keyword");
-  assert.equal(createTextMateAnalysisModule(tokenization).id, TEXTMATE_ANALYSIS_MODULE_ID);
+  assert.equal(providers.getTokenProvider("demo")?.id, TEXTMATE_SYNTAX_PROVIDER_ID);
+  assert.equal(syntax.tokens.result!.value.tokens[0]!.tokenType, "keyword");
+  assert.equal(createTextMateSyntaxModule(tokenization).id, TEXTMATE_SYNTAX_MODULE_ID);
 });
 
 test("TextMate rejects mismatched grammars, cancellation, and use after disposal", async () => {

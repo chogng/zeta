@@ -23,7 +23,7 @@ canonical Zeta line-oriented text-model contract.
 | `common/` | `base/common` | DOM-free editor identities, text, history, selection, decoration, composition transactions, and pure layout/view-model math |
 | `browser/` | `base/common`, `base/browser`, `alpha/common`, `alpha/contrib` | DOM projection, textarea/input events, viewport observation, font measurement, accessibility, and browser adapters |
 | `contrib/folding/browser/` | `base/common`, `base/browser`, `alpha/common`, `alpha/browser/view` | Code-folding range providers, tracked fold state, fold commands, gutter presentation, and folded visual-row projection |
-| `common/languages` + `common/tokens` | `base/common`, `alpha/common/core`, `alpha/common/model` | Alpha language configuration, provider contracts, analysis/completion wire, versioned results, token index and lexical editing; no DOM or Workbench |
+| `common/languages` + `common/tokens` | `base/common`, `alpha/common/core`, `alpha/common/model` | Alpha language configuration, provider contracts, syntax/completion wire, versioned results, token index and lexical editing; no DOM or Workbench |
 | `../gama/` | Gama structured-document contracts and browser host | Structured-editor integration only; Gama does not depend on Alpha's text model |
 | Workbench contributions | editor public contracts and platform services | Pane registration, product composition, and document/workspace wiring |
 
@@ -41,7 +41,7 @@ Language capability is deliberately outside Alpha's core ownership. The
 `ILanguageFeaturesService` contract in
 `common/services/languageService.ts` (Workbench's
 `workbench/services/language/common/languageFeaturesService.ts` is only a DI wrapper)
-owns shared language registrations and creates caller-owned per-document analysis
+owns shared language registrations and creates caller-owned per-document syntax
 and completion services. `EditorSession` may use the default implementation
 or receive a host-provided service; it does not own a language runtime, grammar,
 or provider registry. This is the replacement seam for an extension host, LSP, or
@@ -57,14 +57,14 @@ class:
 | Events, lifecycle, URI identity, resource collections | `base/common` | Reuse existing primitives; editor semantics must not flow back into base |
 | Raw resource I/O | `platform/files` | `IFileService` owns workspace reads and App-Server-backed atomic UTF-8 writes |
 | Text resource loading and save transport | `workbench/services/textfile/common` | ✅ `ITextFileService.resolve/save`; it deliberately does not own a live editor model |
-| Syntax token production | `workbench/services/textMate` and Alpha analysis providers | ✅ Bundled language packages are declarative resources loaded through the Workbench TextMate service; Alpha owns the displayed token result and its versioned stores |
+| Syntax token production | `workbench/services/textMate` and Alpha syntax providers | ✅ Bundled language packages are declarative resources loaded through the Workbench TextMate service; Alpha owns the displayed token result and its versioned stores |
 | Parser-derived syntax facts | `zeta-rs/syntax` via `platform/syntax` | ✅ Rust owns bounded parse/tree traversal and UTF-16 projection; Alpha consumes revision-bound tokens, parser diagnostics, document symbols, and folding for JSON, JSONC, Rust, and Shell while other languages retain TextMate/lexical/indent fallback |
 | Shared URI-to-Alpha-model references, saved baseline and dirty state | `ITextModelService` | ✅ editor-owned; Alpha owns LF-normalized baseline comparison, serialized snapshot saves and explicit reverts |
 | Shared Workbench persistence lifecycle | `IWorkingCopyService` + `EditorWorkingCopy` | ✅ Workbench indexes the copy; Alpha retains model, line-ending, and conflict semantics |
 | Text transactions, history, selections, decorations and versioned language results | `editor/alpha/common` | ✅ Alpha's synchronous TypeScript authority; no Rust/WASM shadow document |
 | Rust file/language/workspace capability | frontend domain services over App Server | Asynchronous, revision-bound results only; never the keystroke hot path |
 | Language identities and composable editing rules | `editor/alpha/common` | `LanguageConfigurationRegistry`; comments/brackets/pairs are editor-domain contracts, not generic base primitives |
-| TextMate grammar loading and token production | `workbench/services/textMate` adapter over Alpha analysis providers | 部分具备; bundled language grammars, file associations, language configuration, snippets, static discovery, and serializable scope-theme rules are wired; theme activation and full embedded-language/bracket-result projection remain open |
+| TextMate grammar loading and token production | `workbench/services/textMate` adapter over Alpha syntax providers | 部分具备; bundled language grammars, file associations, language configuration, snippets, static discovery, and serializable scope-theme rules are wired; theme activation and full embedded-language/bracket-result projection remain open |
 
 The current `textfile` contract was extracted only after Alpha, Gama, and
 Explorer established a real shared loading boundary. It now
@@ -73,7 +73,7 @@ transaction semantics remain editor-owned. `fs/changed` invalidation is
 forwarded through this boundary: Alpha reloads a clean shared model and marks
 a dirty model externally changed while retaining its local edits.
 Expected-revision writes remain a future document-layer contract.
-The TextMate service was extracted only after Alpha's Analysis provider/module
+The TextMate service was extracted only after Alpha's Syntax provider/module
 path became its real consumer. Conversely, file loading or grammar-runtime imports appearing inside
 `TextModel`, `LanguageTokenLineIndex`, or Alpha browser components are an
 architectural drift signal and require extraction at that point.
@@ -95,8 +95,6 @@ architectural drift signal and require extraction at that point.
 | Immutable versioned snapshots | ✅ | `TextModel.createSnapshot` |
 | Transaction and text-unit history limits | ✅ | `TextModel` history policy |
 | Snapshot-safe buffer compaction | ✅ | `PieceTreeTextBuffer.compactIfNeeded` / browser-owned `TextModel.maintenance` |
-| Repeatable storage benchmark | ✅ | `benchmark/pieceTreeTextBuffer.benchmark.ts` |
-| Tracked storage performance budgets | ✅, opt-in CI gate | `benchmark/pieceTreeTextBuffer.benchmark.ts` |
 | Literal/regex document search, Unicode whole-word and wrap-next | ✅ | `common/model/textModelSearch.ts` |
 | Capture-aware replacement commands and isolated undo | ✅ | `common/commands/textSearchCommands.ts` |
 | Find/replace widget, selection scope, shortcuts, navigation and match decoration | ✅ | `browser/FindController` |
@@ -140,14 +138,14 @@ architectural drift signal and require extraction at that point.
 | Next/previous diagnostic navigation and live announcement | ✅ | `DiagnosticNavigationController` (F8 / Shift+F8) |
 | Semantic-token line index, closed modifier styling, and browser projection | ✅ | `LanguageTokenLineIndex` / `createAlphaSemanticTokenSource` |
 | Confirmed-delta token line reuse and visible-line resolution | ✅ | `LanguageTokenLineIndex` / `SemanticTokenSource.getLineTokens` |
-| Multi-splice analysis delta and relative suffix payload reuse | ✅ | `languageAnalysisItemDelta.ts` / `LanguageTokenLineIndex` |
-| Shared token/diagnostic Worker transport | ✅ | `LanguageAnalysisService` / `languageAnalysisWireCodec` / `createAnalysisWorkerFactory` |
-| Incremental analysis result transport | ✅ | `languageAnalysisWireCodec` / wire protocol v4 |
-| Baseline lexical tokens and structural diagnostics | ✅ | `createLanguageLexicalAnalysisProvider` |
+| Multi-splice syntax delta and relative suffix payload reuse | ✅ | `syntaxItemDelta.ts` / `LanguageTokenLineIndex` |
+| Shared token/diagnostic Worker transport | ✅ | `SyntaxService` / `syntaxWireCodec` / `createSyntaxWorkerFactory` |
+| Incremental syntax result transport | ✅ | `syntaxWireCodec` / wire protocol v4 |
+| Baseline lexical tokens and structural diagnostics | ✅ | `createLanguageLexicalSyntaxProvider` |
 | Composable language editing configuration | ✅ | `LanguageConfigurationRegistry` |
-| Versioned language-isolated lexical line cache | ✅ | `LanguageLexicalAnalysisCache` / `LanguageLexicalLineScanner` |
+| Versioned language-isolated lexical line cache | ✅ | `LanguageLexicalSyntaxCache` / `LanguageLexicalLineScanner` |
 | Shared language provider-module lifecycle | ✅ | `LanguageProviderModuleRegistry` / `LanguageProviderModuleHost` / generic module wire |
-| Analysis provider-module activation barrier | ✅ | `LanguageAnalysisModuleWorkerClient` / `language.lexical` |
+| Syntax provider-module activation barrier | ✅ | `SyntaxModuleWorkerClient` / `language.lexical` |
 | TextMate grammar provider and Worker seam | 部分具备 | `workbench/services/textMate`; JSON/JSONC extension resources, explicit session grammar contributions, catalog transport and Alpha pane Worker selection are active |
 | Versioned completion result, session, and widget | ✅ | `languageCompletions.ts` / `LanguageCompletionSessionController` / `CompletionWidget` |
 | Completion snippet tabstops, variables, choices, and navigation-refreshed regex transforms | ✅ | `languageCompletionSnippet.ts` / `languageCompletionSnippetTransform.ts` |
@@ -305,17 +303,17 @@ is segmented exclusively with text nodes and named spans, with exact source
 text verified before replacement. Semantic colors are registered through the
 platform theme registry rather than defined in core or raw CSS.
 
-`LanguageAnalysisService` owns token and diagnostic result stores plus one
+`SyntaxService` owns token and diagnostic result stores plus one
 multi-lane request coordinator. Token and diagnostic requests are independently
 latest-wins and may run concurrently over one Worker/document mirror. The first
 ordered request initializes the mirror with a full snapshot; the peer lane and
 later requests reference it, while model transactions send one incremental
 sync shared by both lanes.
 
-Browser sessions create their analysis worker directly from the editor-local provider factory.
+Browser sessions create their syntax worker directly from the editor-local provider factory.
 Bundled language packages use declarative TextMate grammars where a grammar is present; Alpha's
 deterministic lexical provider remains the editor-owned baseline for unsupported or unavailable
-grammar roots. `platform/syntax` exposes a separate, bounded App Server analysis capability.
+grammar roots. `platform/syntax` exposes a separate, bounded App Server syntax capability.
 `RustSyntaxFactsService` shares one current revision request between parser folding, the token and
 diagnostic lanes, and document-symbol fallback providers. JSON, JSONC, Rust, and Shell therefore
 gain parser-grade folding, syntax token presentation, parser diagnostics, and Ctrl/Cmd+Shift+O
@@ -325,33 +323,33 @@ symbol providers take precedence over parser symbols. Rust remains outside text 
 selection, input, and rendering ownership. The legacy editor runtime has no ownership in this path
 and receives no parallel syntax integration.
 
-`LanguageAnalysisProviderRegistry` selects the first matching token provider
+`SyntaxProviderRegistry` selects the first matching token provider
 and all matching diagnostic providers in registration order. Provider failures
 are reported and isolated: a failed token provider yields an empty token batch,
 while healthy diagnostic batches still merge. Both provider output and remote
 DTOs are normalized against the captured snapshot before they can reach the
 versioned stores.
 
-`createAnalysisWorkerFactory` owns a real Vite module Worker using the
-strict multi-lane `languageAnalysisWireCodec`. Its Worker entry publishes an
-`language.lexical` provider module, while `LanguageAnalysisModuleWorkerClient`
-waits for catalog discovery and activation before releasing the first analysis
+`createSyntaxWorkerFactory` owns a real Vite module Worker using the
+strict multi-lane `syntaxWireCodec`. Its Worker entry publishes an
+`language.lexical` provider module, while `SyntaxModuleWorkerClient`
+waits for catalog discovery and activation before releasing the first syntax result
 request. The module loads a deterministic TypeScript/JavaScript/JSON baseline
 for comments, strings, numbers, identifiers, keywords, operators, unterminated
 literals, and bracket balance.
 
-Completion and analysis share `LanguageProviderModuleRegistry`,
+Completion and syntax share `LanguageProviderModuleRegistry`,
 `LanguageProviderModuleHost`, catalog normalization, required-module
 activation, and the generic module wire state machine. These contracts remain
 in `alpha/common`: they encode language-provider ownership and therefore do
-not belong in domain-neutral `base`. Their Completion and Analysis files are
+not belong in domain-neutral `base`. Their Completion and Syntax files are
 typed façades that retain protocol and provider boundaries. Waiting for a
 promise with a caller-owned `AbortSignal` is genuinely cross-domain, so that
 mechanism is reused as `base/common/cancellation.raceCancellation`.
 
 `LanguageWorkerWireServer` calls a
 `LanguageWorkerDocumentSynchronizationObserver` only after its Piece Tree
-mirror has atomically accepted an ordered transaction. The analysis provider
+mirror has atomically accepted an ordered transaction. The syntax provider
 host forwards the new immutable snapshot to registered document synchronizers;
 one synchronizer failure is reported as `synchronization` and does not block
 healthy request lanes.
@@ -385,7 +383,7 @@ type checker, or language-server analysis graph.
 
 Wire protocol v4 retains the per-lane result baseline without assuming that a sent
 response was received. A codec declares either the `stateless` or
-`confirmedBase` result protocol; completion uses the former and analysis the
+`confirmedBase` result protocol; completion uses the former and syntax the
 latter. A decoded confirmed-base result is staged until
 `LanguageRequestCoordinator` reports `Applied` after the renderer application
 callback. Cancelled, stale, or application-failed results are discarded.
@@ -396,12 +394,12 @@ last state has that exact ID. A missing response, cancellation race, stale
 request, or replaced Worker therefore produces a full result instead of an
 unusable delta.
 
-`createLanguageAnalysisItemSplices` compares exact snapshot lines and normalized
+`createSyntaxItemSplices` compares exact snapshot lines and normalized
 items, retains ordered stable runs, and emits disjoint splices in base-item
 coordinates. Each splice carries the cumulative line shift after its changed
 region, allowing unchanged middle and suffix runs to move independently.
-`encodeLanguageAnalysisWireResult` binds the splice list to `baseRequestId`;
-`decodeLanguageAnalysisWireResult` checks ordering, overlap, base bounds, final
+`encodeSyntaxWireResult` binds the splice list to `baseRequestId`;
+`decodeSyntaxWireResult` checks ordering, overlap, base bounds, final
 line shift, lane, final ranges, token ordering, and diagnostic metadata before
 publishing a reconstructed realm-local result. A delta is used only when it
 transfers fewer items than a full result.
@@ -1372,9 +1370,7 @@ converged inverse normalization, history-budget accounting, stable undo
 identity, selection restoration, and multi-cursor offset shifts. Composition
 tests cover revision updates, commit, cancellation, selection restoration,
 zero history budgets, no-op revisions, external invalidation, and ownership
-validation. Run `pnpm benchmark:alpha` for the non-gating 2 MiB
-construction, scattered-edit, coordinate, snapshot-read, and churn-compaction
-baseline.
+validation.
 
 Language request tests cover immutable captured snapshots, worker reuse,
 same-lane supersession, cross-lane concurrency, model-version cancellation,
@@ -1411,7 +1407,7 @@ Lexical-cache tests prove same-version token/diagnostic sharing, one-line
 rescanning in a 1,000-line document, multiline-state convergence, isolated
 provider synchronization failure, eager Worker-sync cache updates, and 120
 deterministic random edits against a fresh full-scan oracle.
-Analysis-delta tests prove request-ID base binding, strict malformed-delta
+Syntax-delta tests prove request-ID base binding, strict malformed-delta
 rejection, missed-response full fallback, full fallback when a splice cannot
 reduce transfer, 100 random token/diagnostic round trips, repeated disjoint
 multi-splice transactions, two distant bounded edits, and a bounded four-item
@@ -1430,7 +1426,7 @@ initial readiness, dynamic remote registration, trigger routing with an empty
 renderer registry, stale-revision poisoning, catalog clearing on failure, and
 Worker/catalog reconstruction on the next trigger.
 Provider-module tests additionally prove shared generic lifecycle behavior,
-atomic Analysis provider batches, rollback on collisions, required Analysis
+atomic Syntax provider batches, rollback on collisions, required Syntax
 activation before the first request, renderer-confirmed result-base forwarding,
 and Worker reconstruction after required-module load failure.
 Language-configuration tests prove priority/order composition, field clearing,
@@ -1457,7 +1453,7 @@ invalidation, configuration recompilation, injected ownership validation,
 auto-closing `notIn`, and browser input routing.
 TextMate adapter tests load real Oniguruma WASM and cover grammar snapshots,
 injections, cross-line scopes, incremental state convergence, same-version
-grammar revisions, Analysis provider priority, cancellation, and lifecycle
+grammar revisions, Syntax provider priority, cancellation, and lifecycle
 ownership.
 
 Viewport tests cover visible and overscanned line ranges, horizontal and

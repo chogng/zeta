@@ -1,35 +1,35 @@
-import { LanguageLexicalAnalysisCache, type LanguageLexicalCacheUpdateObserver } from "./languageLexicalAnalysisCache.js";
-import { type LanguageAnalysisProvider, type LanguageAnalysisProviderRequest } from "./analysis/languageAnalysisProviders.js";
+import { LanguageLexicalSyntaxCache, type LanguageLexicalCacheUpdateObserver } from "./languageLexicalSyntaxCache.js";
+import { type SyntaxProvider, type SyntaxProviderRequest } from "./syntax/syntaxProviders.js";
 import { BUILTIN_LANGUAGE_IDS, createBuiltinLanguageConfigurationSource } from "./languageBuiltinConfigurations.js";
 import { type LanguageConfigurationSource, type ResolvedLanguageConfiguration } from "./languageConfiguration.js";
 import { createLanguageLexicalLineScanner } from "./languageLexicalConfiguration.js";
 import { type LanguageWorkerDocumentSynchronization } from "./languageWorkerDocumentMirror.js";
 
-export interface LanguageLexicalAnalysisProviderOptions {
+export interface LanguageLexicalSyntaxProviderOptions {
   readonly onDidUpdateCache?: LanguageLexicalCacheUpdateObserver;
   readonly languageConfigurations?: LanguageConfigurationSource;
 }
 
 interface LanguageCacheEntry {
   readonly configuration: ResolvedLanguageConfiguration;
-  readonly cache: LanguageLexicalAnalysisCache;
+  readonly cache: LanguageLexicalSyntaxCache;
 }
 
 /** Creates the incremental deterministic baseline tokenizer and structural diagnostics. */
-export function createLanguageLexicalAnalysisProvider(options: LanguageLexicalAnalysisProviderOptions = {}): LanguageAnalysisProvider {
+export function createLanguageLexicalSyntaxProvider(options: LanguageLexicalSyntaxProviderOptions = {}): SyntaxProvider {
   if (typeof options !== "object" || options === null) {
-    throw new TypeError("Language lexical analysis provider options must be an object");
+    throw new TypeError("Language lexical syntax provider options must be an object");
   }
   const languageConfigurations = options.languageConfigurations ?? createBuiltinLanguageConfigurationSource();
   if (!languageConfigurations || typeof languageConfigurations.getLanguageConfiguration !== "function") {
-    throw new TypeError("Language lexical analysis provider requires a language configuration source");
+    throw new TypeError("Language lexical syntax provider requires a language configuration source");
   }
   const caches = new Map<string, LanguageCacheEntry>();
-  const getCache = (languageId: string): LanguageLexicalAnalysisCache => {
+  const getCache = (languageId: string): LanguageLexicalSyntaxCache => {
     const configuration = languageConfigurations.getLanguageConfiguration(languageId);
     const current = caches.get(languageId);
     if (current?.configuration === configuration) return current.cache;
-    const cache = new LanguageLexicalAnalysisCache({
+    const cache = new LanguageLexicalSyntaxCache({
       scanner: createLanguageLexicalLineScanner(languageId, configuration),
       onDidUpdate: options.onDidUpdateCache,
     });
@@ -39,8 +39,8 @@ export function createLanguageLexicalAnalysisProvider(options: LanguageLexicalAn
   return Object.freeze({
     id: "language.lexical",
     languageIds: BUILTIN_LANGUAGE_IDS,
-    provideTokens: (request: LanguageAnalysisProviderRequest, signal: AbortSignal) => getCache(request.languageId).getTokens(request.snapshot, signal),
-    provideDiagnostics: (request: LanguageAnalysisProviderRequest, signal: AbortSignal) => getCache(request.languageId).getDiagnostics(request.snapshot, signal),
+    provideTokens: (request: SyntaxProviderRequest, signal: AbortSignal) => getCache(request.languageId).getTokens(request.snapshot, signal),
+    provideDiagnostics: (request: SyntaxProviderRequest, signal: AbortSignal) => getCache(request.languageId).getDiagnostics(request.snapshot, signal),
     synchronizeDocument: (synchronization: LanguageWorkerDocumentSynchronization) => {
       for (const entry of caches.values()) entry.cache.synchronizeDocument(synchronization);
     },

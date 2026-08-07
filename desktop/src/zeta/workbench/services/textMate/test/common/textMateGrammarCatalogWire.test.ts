@@ -5,17 +5,17 @@ import * as onigurumaNamespace from "vscode-oniguruma";
 import { type IOnigLib } from "vscode-textmate";
 import { Emitter, type Event } from "../../../../../base/common/event.js";
 import { DisposableOwner, DisposableStore } from "../../../../../base/common/lifecycle.js";
-import { LanguageAnalysisProviderModuleHost, LanguageAnalysisProviderModuleRegistry } from "../../../../../editor/alpha/common/languages/analysis/languageAnalysisProviderModules.js";
-import { LanguageAnalysisProviderModuleWireServer } from "../../../../../editor/alpha/common/languages/analysis/languageAnalysisProviderModuleWire.js";
-import { LanguageAnalysisProviderRegistry, type LanguageAnalysisProviderRequest } from "../../../../../editor/alpha/common/languages/analysis/languageAnalysisProviders.js";
-import { LanguageAnalysisProviderWorker, LanguageAnalysisService } from "../../../../../editor/alpha/common/languages/analysis/languageAnalysisService.js";
-import { languageAnalysisWireCodec } from "../../../../../editor/alpha/common/languages/analysis/languageAnalysisWire.js";
+import { SyntaxProviderModuleHost, SyntaxProviderModuleRegistry } from "../../../../../editor/alpha/common/languages/syntax/syntaxProviderModules.js";
+import { SyntaxProviderModuleWireServer } from "../../../../../editor/alpha/common/languages/syntax/syntaxProviderModuleWire.js";
+import { SyntaxProviderRegistry, type SyntaxProviderRequest } from "../../../../../editor/alpha/common/languages/syntax/syntaxProviders.js";
+import { SyntaxProviderWorker, SyntaxService } from "../../../../../editor/alpha/common/languages/syntax/syntaxService.js";
+import { syntaxWireCodec } from "../../../../../editor/alpha/common/languages/syntax/syntaxWire.js";
 import { LanguageRequestStatus } from "../../../../../editor/alpha/common/languages/languageRequestCoordinator.js";
 import { LanguageWorkerWireServer, type LanguageWorkerWireClientPort } from "../../../../../editor/alpha/common/languages/languageWorkerWire.js";
 import { TextPosition, TextRange } from "../../../../../editor/alpha/common/core/text.js";
 import { TextModel } from "../../../../../editor/alpha/common/model/textModel.js";
-import { createTextMateAnalysisModule } from "../../common/textMateAnalysisModule.js";
-import { TextMateAnalysisModuleWorkerClient } from "../../common/textMateAnalysisModuleWorkerClient.js";
+import { createTextMateSyntaxModule } from "../../common/textMateSyntaxModule.js";
+import { TextMateSyntaxModuleWorkerClient } from "../../common/textMateSyntaxModuleWorkerClient.js";
 import { materializeTextMateGrammarCatalog, TextMateGrammarCatalogModel, type TextMateGrammarCatalog } from "../../common/textMateGrammarCatalog.js";
 import { TextMateGrammarCatalogStore } from "../../common/textMateGrammarCatalogStore.js";
 import { TextMateGrammarCatalogWireClient, TextMateGrammarCatalogWireServer } from "../../common/textMateGrammarCatalogWire.js";
@@ -109,17 +109,17 @@ test("Grammar catalog wire clones catalogs and poisons stale clients", async () 
 
 test("Catalog-gated module Worker selects TextMate and falls back dynamically", async () => {
   using resources = new DisposableStore();
-  const providers = resources.add(new LanguageAnalysisProviderRegistry());
-  const modules = resources.add(new LanguageAnalysisProviderModuleRegistry());
+  const providers = resources.add(new SyntaxProviderRegistry());
+  const modules = resources.add(new SyntaxProviderModuleRegistry());
   const grammarStore = resources.add(new TextMateGrammarCatalogStore());
   const tokenization = resources.add(new TextMateTokenizationService(grammarStore, onigLib));
-  resources.add(modules.register(createTextMateAnalysisModule(tokenization)));
+  resources.add(modules.register(createTextMateSyntaxModule(tokenization)));
   resources.add(modules.register({
     id: "test.fallback",
     load: () => [{
       id: "test.fallback",
       languageIds: ["*"],
-      provideTokens: (request: LanguageAnalysisProviderRequest) => ({
+      provideTokens: (request: SyntaxProviderRequest) => ({
         tokens: [{
           range: TextRange.from(TextPosition.at(0, 0), TextPosition.at(0, request.snapshot.getText().length)),
           tokenType: "fallback",
@@ -128,63 +128,63 @@ test("Catalog-gated module Worker selects TextMate and falls back dynamically", 
       }),
     }],
   }));
-  const host = resources.add(new LanguageAnalysisProviderModuleHost(modules, providers));
+  const host = resources.add(new SyntaxProviderModuleHost(modules, providers));
   const [clientPort, serverPort] = createPortPair();
-  resources.add(new LanguageWorkerWireServer(serverPort, languageAnalysisWireCodec, new LanguageAnalysisProviderWorker(providers)));
-  resources.add(new LanguageAnalysisProviderModuleWireServer(serverPort, modules, host));
+  resources.add(new LanguageWorkerWireServer(serverPort, syntaxWireCodec, new SyntaxProviderWorker(providers)));
+  resources.add(new SyntaxProviderModuleWireServer(serverPort, modules, host));
   resources.add(new TextMateGrammarCatalogWireServer(serverPort, grammarStore));
   const catalogs = resources.add(new TextMateGrammarCatalogModel(grammarCatalog(1, "keyword.control.demo")));
-  const worker = resources.add(new TextMateAnalysisModuleWorkerClient(clientPort, catalogs, {
+  const worker = resources.add(new TextMateSyntaxModuleWorkerClient(clientPort, catalogs, {
     requiredProviderModules: ["textmate.grammars", "test.fallback"],
   }));
-  const localProviders = resources.add(new LanguageAnalysisProviderRegistry());
+  const localProviders = resources.add(new SyntaxProviderRegistry());
   const model = resources.add(new TextModel("if"));
-  const analysis = resources.add(new LanguageAnalysisService(model, localProviders, { workerFactory: () => worker }));
+  const syntax = resources.add(new SyntaxService(model, localProviders, { workerFactory: () => worker }));
 
-  assert.equal((await analysis.requestTokens("demo")).status, LanguageRequestStatus.Applied);
-  assert.equal(analysis.tokens.result!.value.tokens[0]!.tokenType, "keyword");
-  assert.equal((await analysis.requestTokens("plain")).status, LanguageRequestStatus.Applied);
-  assert.equal(analysis.tokens.result!.value.tokens[0]!.tokenType, "fallback");
+  assert.equal((await syntax.requestTokens("demo")).status, LanguageRequestStatus.Applied);
+  assert.equal(syntax.tokens.result!.value.tokens[0]!.tokenType, "keyword");
+  assert.equal((await syntax.requestTokens("plain")).status, LanguageRequestStatus.Applied);
+  assert.equal(syntax.tokens.result!.value.tokens[0]!.tokenType, "fallback");
 
   catalogs.replace(grammarCatalog(2, "string.quoted.demo"));
-  assert.equal((await analysis.requestTokens("demo")).status, LanguageRequestStatus.Applied);
-  assert.equal(analysis.tokens.result!.value.tokens[0]!.tokenType, "string");
+  assert.equal((await syntax.requestTokens("demo")).status, LanguageRequestStatus.Applied);
+  assert.equal(syntax.tokens.result!.value.tokens[0]!.tokenType, "string");
   const catalogRequests = clientPort.sentMessages.filter(message => (message as { protocol?: string }).protocol === "zeta.textmate.grammar-catalog");
   assert.equal(catalogRequests.length, 2);
 });
 
-test("Scope themes cross the Analysis Worker boundary and invalidate cached token styles", async () => {
+test("Scope themes cross the Syntax Worker boundary and invalidate cached token styles", async () => {
   using resources = new DisposableStore();
-  const providers = resources.add(new LanguageAnalysisProviderRegistry());
-  const modules = resources.add(new LanguageAnalysisProviderModuleRegistry());
+  const providers = resources.add(new SyntaxProviderRegistry());
+  const modules = resources.add(new SyntaxProviderModuleRegistry());
   const grammarStore = resources.add(new TextMateGrammarCatalogStore());
   const workerThemes = resources.add(new TextMateScopeThemeModel());
   const tokenization = resources.add(new TextMateTokenizationService(grammarStore, onigLib, {
     scopeResolver: scopes => workerThemes.resolve(scopes),
   }));
-  resources.add(modules.register(createTextMateAnalysisModule(tokenization)));
-  const host = resources.add(new LanguageAnalysisProviderModuleHost(modules, providers));
+  resources.add(modules.register(createTextMateSyntaxModule(tokenization)));
+  const host = resources.add(new SyntaxProviderModuleHost(modules, providers));
   const [clientPort, serverPort] = createPortPair();
-  resources.add(new LanguageWorkerWireServer(serverPort, languageAnalysisWireCodec, new LanguageAnalysisProviderWorker(providers)));
-  resources.add(new LanguageAnalysisProviderModuleWireServer(serverPort, modules, host));
+  resources.add(new LanguageWorkerWireServer(serverPort, syntaxWireCodec, new SyntaxProviderWorker(providers)));
+  resources.add(new SyntaxProviderModuleWireServer(serverPort, modules, host));
   resources.add(new TextMateGrammarCatalogWireServer(serverPort, grammarStore));
   resources.add(new TextMateScopeThemeWireServer(serverPort, workerThemes, () => tokenization.invalidateTokenCaches()));
   const catalogs = resources.add(new TextMateGrammarCatalogModel(grammarCatalog(1)));
   const themes = resources.add(new TextMateScopeThemeModel());
-  const worker = resources.add(new TextMateAnalysisModuleWorkerClient(clientPort, catalogs, {
+  const worker = resources.add(new TextMateSyntaxModuleWorkerClient(clientPort, catalogs, {
     requiredProviderModules: ["textmate.grammars"],
     scopeTheme: themes,
   }));
-  const localProviders = resources.add(new LanguageAnalysisProviderRegistry());
+  const localProviders = resources.add(new SyntaxProviderRegistry());
   const model = resources.add(new TextModel("if"));
-  const analysis = resources.add(new LanguageAnalysisService(model, localProviders, { workerFactory: () => worker }));
+  const syntax = resources.add(new SyntaxService(model, localProviders, { workerFactory: () => worker }));
 
-  assert.equal((await analysis.requestTokens("demo")).status, LanguageRequestStatus.Applied);
-  assert.equal(analysis.tokens.result!.value.tokens[0]!.tokenType, "keyword");
+  assert.equal((await syntax.requestTokens("demo")).status, LanguageRequestStatus.Applied);
+  assert.equal(syntax.tokens.result!.value.tokens[0]!.tokenType, "keyword");
 
   themes.replace({ revision: 1, rules: [{ selector: "keyword.control.demo", tokenType: "keyword", modifiers: ["declaration"] }] });
-  assert.equal((await analysis.requestTokens("demo")).status, LanguageRequestStatus.Applied);
-  assert.deepEqual(analysis.tokens.result!.value.tokens[0], {
+  assert.equal((await syntax.requestTokens("demo")).status, LanguageRequestStatus.Applied);
+  assert.deepEqual(syntax.tokens.result!.value.tokens[0], {
     range: TextRange.from(TextPosition.at(0, 0), TextPosition.at(0, 2)),
     tokenType: "keyword",
     modifiers: ["declaration"],

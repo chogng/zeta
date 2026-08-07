@@ -1,8 +1,8 @@
 import { raceCancellation } from "../../../../base/common/cancellation.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
-import { LanguageAnalysisModuleWorkerClient } from "../../../../editor/alpha/common/languages/analysis/languageAnalysisModuleWorkerClient.js";
-import { type LanguageAnalysisRequest } from "../../../../editor/alpha/common/languages/analysis/languageAnalysisProviders.js";
-import { type LanguageAnalysisLane, type LanguageAnalysisResult, type LanguageAnalysisWorker } from "../../../../editor/alpha/common/languages/analysis/languageAnalysisService.js";
+import { SyntaxModuleWorkerClient } from "../../../../editor/alpha/common/languages/syntax/syntaxModuleWorkerClient.js";
+import { type SyntaxRequest } from "../../../../editor/alpha/common/languages/syntax/syntaxProviders.js";
+import { type SyntaxLane, type SyntaxResult, type SyntaxWorker } from "../../../../editor/alpha/common/languages/syntax/syntaxService.js";
 import { type LanguageWorkerModelSynchronizer, type LanguageWorkerRequest, type LanguageWorkerResultDisposition, type LanguageWorkerResultSettler } from "../../../../editor/alpha/common/languages/languageRequestCoordinator.js";
 import { type LanguageWorkerWireClientPort } from "../../../../editor/alpha/common/languages/languageWorkerWire.js";
 import { type TextModelChange } from "../../../../editor/alpha/common/core/text.js";
@@ -11,15 +11,15 @@ import { TextMateGrammarCatalogWireClient } from "./textMateGrammarCatalogWire.j
 import { type TextMateScopeTheme, type TextMateScopeThemeSource } from "./textMateScopeTheme.js";
 import { TextMateScopeThemeWireClient } from "./textMateScopeThemeWire.js";
 
-export interface TextMateAnalysisModuleWorkerClientOptions {
+export interface TextMateSyntaxModuleWorkerClientOptions {
   readonly requiredProviderModules?: readonly string[];
   /** Optional renderer-owned semantic scope theme mirrored into this Worker. */
   readonly scopeTheme?: TextMateScopeThemeSource;
 }
 
-/** Analysis Worker client gated by the latest renderer-owned grammar catalog. */
-export class TextMateAnalysisModuleWorkerClient extends DisposableOwner implements LanguageAnalysisWorker, LanguageWorkerModelSynchronizer, LanguageWorkerResultSettler {
-  private readonly worker: LanguageAnalysisModuleWorkerClient;
+/** Syntax Worker client gated by the latest renderer-owned grammar catalog. */
+export class TextMateSyntaxModuleWorkerClient extends DisposableOwner implements SyntaxWorker, LanguageWorkerModelSynchronizer, LanguageWorkerResultSettler {
+  private readonly worker: SyntaxModuleWorkerClient;
   private readonly catalogClient: TextMateGrammarCatalogWireClient;
   private readonly themeClient: TextMateScopeThemeWireClient | undefined;
   private catalogTail: Promise<void>;
@@ -28,16 +28,16 @@ export class TextMateAnalysisModuleWorkerClient extends DisposableOwner implemen
   constructor(
     port: LanguageWorkerWireClientPort,
     catalogs: TextMateGrammarCatalogSource,
-    options: TextMateAnalysisModuleWorkerClientOptions = {},
+    options: TextMateSyntaxModuleWorkerClientOptions = {},
   ) {
     super();
     if (!catalogs || typeof catalogs !== "object" || typeof catalogs.onDidChangeCatalog !== "function" || !("currentCatalog" in catalogs)) {
-      throw new TypeError("TextMate Analysis Worker client requires a grammar catalog source");
+      throw new TypeError("TextMate Syntax Worker client requires a grammar catalog source");
     }
-    this.worker = this.own(new LanguageAnalysisModuleWorkerClient(port, options));
+    this.worker = this.own(new SyntaxModuleWorkerClient(port, options));
     this.catalogClient = this.own(new TextMateGrammarCatalogWireClient(port, error => this.worker.invalidate(error)));
     if (options.scopeTheme !== undefined && (!options.scopeTheme || typeof options.scopeTheme !== "object" || typeof options.scopeTheme.onDidChangeTheme !== "function" || !("currentTheme" in options.scopeTheme))) {
-      throw new TypeError("TextMate Analysis Worker scope theme must be a theme source");
+      throw new TypeError("TextMate Syntax Worker scope theme must be a theme source");
     }
     this.themeClient = options.scopeTheme === undefined
       ? undefined
@@ -57,7 +57,7 @@ export class TextMateAnalysisModuleWorkerClient extends DisposableOwner implemen
     }
   }
 
-  async run(request: LanguageWorkerRequest<LanguageAnalysisLane, LanguageAnalysisRequest>, signal: AbortSignal): Promise<LanguageAnalysisResult> {
+  async run(request: LanguageWorkerRequest<SyntaxLane, SyntaxRequest>, signal: AbortSignal): Promise<SyntaxResult> {
     await this.waitForCurrentCatalog(signal);
     return this.worker.run(request, signal);
   }

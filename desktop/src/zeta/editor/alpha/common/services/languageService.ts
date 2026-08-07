@@ -1,15 +1,15 @@
 import { DisposableOwner, type IDisposable } from "../../../../base/common/lifecycle.js";
 import { type TextModel } from "../model/textModel.js";
 import { registerBuiltinLanguageConfigurations } from "../languages/languageBuiltinConfigurations.js";
-import { LanguageAnalysisProviderRegistry, type LanguageAnalysisProvider } from "../languages/analysis/languageAnalysisProviders.js";
-import { LanguageAnalysisService, type LanguageAnalysisWorkerDecorator, type LanguageAnalysisWorkerFactory } from "../languages/analysis/languageAnalysisService.js";
+import { SyntaxProviderRegistry, type SyntaxProvider } from "../languages/syntax/syntaxProviders.js";
+import { SyntaxService, type SyntaxWorkerDecorator, type SyntaxWorkerFactory } from "../languages/syntax/syntaxService.js";
 import { LanguageCompletionProviderRegistry, type LanguageCompletionProvider } from "../languages/completion/languageCompletionProviders.js";
 import { LanguageCompletionService, type LanguageCompletionWorkerFactory } from "../languages/completion/languageCompletionService.js";
 import { LanguageConfigurationRegistry, type LanguageConfiguration, type LanguageConfigurationRegistrationOptions, type LanguageConfigurationSource } from "../languages/languageConfiguration.js";
 import { registerBuiltinLanguageDescriptions } from "../languages/languageBuiltinDescriptions.js";
 import { LanguageRegistry, type LanguageDescription, type LanguageRegistrationOptions } from "../languages/languageRegistry.js";
 import type { TextResourceLanguageInput } from "../../../../platform/language/common/textResourceLanguage.js";
-import { createLanguageLexicalAnalysisProvider } from "../languages/languageLexicalAnalysisProvider.js";
+import { createLanguageLexicalSyntaxProvider } from "../languages/languageLexicalSyntaxProvider.js";
 import { createLanguageWordCompletionProvider } from "../languages/completion/languageWordCompletionProvider.js";
 import { CodeActionService, type LanguageCodeActionProvider } from "../../contrib/codeAction/common/codeAction.js";
 import { CodeLensService, type LanguageCodeLensProvider } from "../../contrib/codelens/common/codelens.js";
@@ -33,7 +33,7 @@ export interface ILanguageFeaturesService extends IDisposable {
   registerLanguage(description: LanguageDescription, options?: LanguageRegistrationOptions): IDisposable;
   resolveLanguageId(input: TextResourceLanguageInput): string | undefined;
   registerLanguageConfiguration(languageId: string, configuration: LanguageConfiguration, options?: LanguageConfigurationRegistrationOptions): IDisposable;
-  registerAnalysisProvider(provider: LanguageAnalysisProvider): IDisposable;
+  registerSyntaxProvider(provider: SyntaxProvider): IDisposable;
   registerCompletionProvider(provider: LanguageCompletionProvider): IDisposable;
   registerCodeActionProvider(provider: LanguageCodeActionProvider): IDisposable;
   registerCodeLensProvider(provider: LanguageCodeLensProvider): IDisposable;
@@ -47,7 +47,7 @@ export interface ILanguageFeaturesService extends IDisposable {
   registerParameterHintsProvider(provider: LanguageParameterHintsProvider): IDisposable;
   registerRenameProvider(provider: LanguageRenameProvider): IDisposable;
   registerColorProvider(provider: LanguageColorProvider): IDisposable;
-  createAnalysisService(model: TextModel, options?: LanguageAnalysisFeaturesOptions): LanguageAnalysisService;
+  createSyntaxService(model: TextModel, options?: SyntaxFeaturesOptions): SyntaxService;
   createCompletionService(model: TextModel, options?: LanguageCompletionFeaturesOptions): LanguageCompletionService;
   createCodeActionService(model: TextModel): CodeActionService;
   createCodeLensService(model: TextModel): CodeLensService;
@@ -64,9 +64,9 @@ export interface ILanguageFeaturesService extends IDisposable {
   createColorService(model: TextModel): ColorService;
 }
 
-export interface LanguageAnalysisFeaturesOptions {
-  readonly workerFactory?: LanguageAnalysisWorkerFactory;
-  readonly workerDecorator?: LanguageAnalysisWorkerDecorator;
+export interface SyntaxFeaturesOptions {
+  readonly workerFactory?: SyntaxWorkerFactory;
+  readonly workerDecorator?: SyntaxWorkerDecorator;
 }
 
 export interface LanguageCompletionFeaturesOptions {
@@ -77,7 +77,7 @@ export interface LanguageCompletionFeaturesOptions {
 export class LanguageFeaturesService extends DisposableOwner implements ILanguageFeaturesService {
   readonly languages: LanguageRegistry;
   readonly configurations: LanguageConfigurationRegistry;
-  private readonly analysisProviders: LanguageAnalysisProviderRegistry;
+  private readonly syntaxProviders: SyntaxProviderRegistry;
   private readonly completionProviders: LanguageCompletionProviderRegistry;
   private readonly codeActionProviders: LanguageFeatureProviderRegistry<LanguageCodeActionProvider>;
   private readonly codeLensProviders: LanguageFeatureProviderRegistry<LanguageCodeLensProvider>;
@@ -98,8 +98,8 @@ export class LanguageFeaturesService extends DisposableOwner implements ILanguag
     this.own(registerBuiltinLanguageDescriptions(this.languages));
     this.configurations = this.own(new LanguageConfigurationRegistry());
     this.own(registerBuiltinLanguageConfigurations(this.configurations));
-    this.analysisProviders = this.own(new LanguageAnalysisProviderRegistry());
-    this.own(this.analysisProviders.register(createLanguageLexicalAnalysisProvider({ languageConfigurations: this.configurations })));
+    this.syntaxProviders = this.own(new SyntaxProviderRegistry());
+    this.own(this.syntaxProviders.register(createLanguageLexicalSyntaxProvider({ languageConfigurations: this.configurations })));
     this.completionProviders = this.own(new LanguageCompletionProviderRegistry());
     this.own(this.completionProviders.register(createLanguageWordCompletionProvider()));
     this.codeActionProviders = this.own(new LanguageFeatureProviderRegistry());
@@ -128,8 +128,8 @@ export class LanguageFeaturesService extends DisposableOwner implements ILanguag
     return this.configurations.register(languageId, configuration, options);
   }
 
-  registerAnalysisProvider(provider: LanguageAnalysisProvider): IDisposable {
-    return this.analysisProviders.register(provider);
+  registerSyntaxProvider(provider: SyntaxProvider): IDisposable {
+    return this.syntaxProviders.register(provider);
   }
 
   registerCompletionProvider(provider: LanguageCompletionProvider): IDisposable {
@@ -184,8 +184,8 @@ export class LanguageFeaturesService extends DisposableOwner implements ILanguag
     return this.colorProviders.register(provider);
   }
 
-  createAnalysisService(model: TextModel, options: LanguageAnalysisFeaturesOptions = {}): LanguageAnalysisService {
-    return new LanguageAnalysisService(model, this.analysisProviders, {
+  createSyntaxService(model: TextModel, options: SyntaxFeaturesOptions = {}): SyntaxService {
+    return new SyntaxService(model, this.syntaxProviders, {
       ...(options.workerFactory ? { workerFactory: options.workerFactory } : {}),
       ...(options.workerDecorator ? { workerDecorator: options.workerDecorator } : {}),
     });

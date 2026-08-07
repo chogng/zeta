@@ -14,12 +14,12 @@ export interface LanguageLexicalCacheUpdate {
 
 export type LanguageLexicalCacheUpdateObserver = (update: LanguageLexicalCacheUpdate) => void;
 
-export interface LanguageLexicalAnalysisCacheOptions {
+export interface LanguageLexicalSyntaxCacheOptions {
   readonly scanner?: LanguageLexicalLineScanner;
   readonly onDidUpdate?: LanguageLexicalCacheUpdateObserver;
 }
 
-interface LanguageLexicalDocumentAnalysis {
+interface LanguageLexicalDocumentSyntax {
   readonly version: number;
   readonly lines: readonly string[];
   readonly lineResults: readonly LanguageLexicalLineResult[];
@@ -34,13 +34,13 @@ interface OpenPosition {
   readonly endColumn: number;
 }
 
-/** Versioned line cache shared by lexical token and diagnostic lanes. */
-export class LanguageLexicalAnalysisCache {
-  private analysis: LanguageLexicalDocumentAnalysis | undefined;
+/** Versioned line cache shared by lexical token and diagnostic syntax lanes. */
+export class LanguageLexicalSyntaxCache {
+  private syntax: LanguageLexicalDocumentSyntax | undefined;
   private readonly scanner: LanguageLexicalLineScanner;
   private readonly onDidUpdate: LanguageLexicalCacheUpdateObserver | undefined;
 
-  constructor(options: LanguageLexicalAnalysisCacheOptions = {}) {
+  constructor(options: LanguageLexicalSyntaxCacheOptions = {}) {
     if (typeof options !== "object" || options === null) {
       throw new TypeError("Language lexical cache options must be an object");
     }
@@ -66,33 +66,33 @@ export class LanguageLexicalAnalysisCache {
     if (synchronization.snapshot.version !== synchronization.modelVersion) {
       throw new Error("Language lexical synchronization snapshot version is inconsistent");
     }
-    if (!this.analysis) return;
-    if (this.analysis.version !== synchronization.previousVersion) {
-      this.analysis = undefined;
+    if (!this.syntax) return;
+    if (this.syntax.version !== synchronization.previousVersion) {
+      this.syntax = undefined;
       return;
     }
-    this.analysis = this.update(synchronization.snapshot, undefined, "incremental");
+    this.syntax = this.update(synchronization.snapshot, undefined, "incremental");
   }
 
-  private ensure(snapshot: TextSnapshot, signal: AbortSignal): LanguageLexicalDocumentAnalysis {
-    if (this.analysis?.version === snapshot.version) return this.analysis;
-    const kind = this.analysis ? "incremental" : "full";
-    this.analysis = this.update(snapshot, signal, kind);
-    return this.analysis;
+  private ensure(snapshot: TextSnapshot, signal: AbortSignal): LanguageLexicalDocumentSyntax {
+    if (this.syntax?.version === snapshot.version) return this.syntax;
+    const kind = this.syntax ? "incremental" : "full";
+    this.syntax = this.update(snapshot, signal, kind);
+    return this.syntax;
   }
 
-  private update(snapshot: TextSnapshot, signal: AbortSignal | undefined, kind: LanguageLexicalCacheUpdate["kind"]): LanguageLexicalDocumentAnalysis {
+  private update(snapshot: TextSnapshot, signal: AbortSignal | undefined, kind: LanguageLexicalCacheUpdate["kind"]): LanguageLexicalDocumentSyntax {
     const text = snapshot.getText();
     const lines = Object.freeze(text.split("\n"));
     if (text.length !== snapshot.length || lines.length !== snapshot.lineCount) {
       throw new Error("Language lexical snapshot metadata is inconsistent");
     }
-    const previous = kind === "incremental" ? this.analysis : undefined;
+    const previous = kind === "incremental" ? this.syntax : undefined;
     const scanned = previous
       ? updateLines(this.scanner, previous.lines, previous.lineResults, lines, signal)
       : scanAllLines(this.scanner, lines, signal);
     const results = aggregateResults(scanned.lineResults);
-    const analysis = Object.freeze({
+    const syntax = Object.freeze({
       version: snapshot.version,
       lines,
       lineResults: scanned.lineResults,
@@ -105,7 +105,7 @@ export class LanguageLexicalAnalysisCache {
       scannedLineCount: scanned.scannedLineCount,
       reusedLineCount: lines.length - scanned.scannedLineCount,
     }));
-    return analysis;
+    return syntax;
   }
 }
 

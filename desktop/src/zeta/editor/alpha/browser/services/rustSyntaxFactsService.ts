@@ -4,8 +4,8 @@ import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import type { ISyntaxApi } from "../../../../platform/syntax/common/syntaxApi.js";
 import { type LanguageDocumentSymbol, type LanguageDocumentSymbolProvider } from "../../contrib/documentSymbols/common/documentSymbols.js";
 import { TextPosition, TextRange, type TextSnapshot } from "../../common/core/text.js";
-import type { LanguageAnalysisRequest } from "../../common/languages/analysis/languageAnalysisProviders.js";
-import { LANGUAGE_DIAGNOSTIC_LANE, LANGUAGE_TOKEN_LANE, type LanguageAnalysisResult, type LanguageAnalysisWorker } from "../../common/languages/analysis/languageAnalysisService.js";
+import type { SyntaxRequest } from "../../common/languages/syntax/syntaxProviders.js";
+import { SYNTAX_DIAGNOSTIC_LANE, SYNTAX_TOKEN_LANE, type SyntaxResult, type SyntaxWorker } from "../../common/languages/syntax/syntaxService.js";
 import { LanguageDiagnosticSeverity, type LanguageDiagnosticResult, type LanguageToken, type LanguageTokenResult } from "../../common/languages/languageResults.js";
 import { type LanguageWorkerModelSynchronizer, type LanguageWorkerRequest, type LanguageWorkerResultDisposition, type LanguageWorkerResultSettler } from "../../common/languages/languageRequestCoordinator.js";
 
@@ -50,7 +50,7 @@ export class RustSyntaxFactsService extends DisposableOwner {
         if (this.cached === cached) this.cached = undefined;
       });
     }
-    const result = await raceCancellation(cached.promise, signal, "Rust syntax analysis was cancelled");
+    const result = await raceCancellation(cached.promise, signal, "Rust syntax request was cancelled");
     if (result.revision !== snapshot.version) {
       throw new Error("Rust syntax result does not match the requested Alpha model revision");
     }
@@ -63,18 +63,18 @@ export class RustSyntaxFactsService extends DisposableOwner {
 }
 
 /** Runs parser facts through Alpha's existing token and diagnostic result gates. */
-export class RustSyntaxAnalysisWorker implements LanguageAnalysisWorker, LanguageWorkerModelSynchronizer, LanguageWorkerResultSettler {
-  constructor(private readonly facts: RustSyntaxFactsService, private readonly fallback: LanguageAnalysisWorker) {}
+export class RustSyntaxWorker implements SyntaxWorker, LanguageWorkerModelSynchronizer, LanguageWorkerResultSettler {
+  constructor(private readonly facts: RustSyntaxFactsService, private readonly fallback: SyntaxWorker) {}
 
-  async run(request: LanguageWorkerRequest<typeof LANGUAGE_TOKEN_LANE | typeof LANGUAGE_DIAGNOSTIC_LANE, LanguageAnalysisRequest>, signal: AbortSignal): Promise<LanguageAnalysisResult> {
+  async run(request: LanguageWorkerRequest<typeof SYNTAX_TOKEN_LANE | typeof SYNTAX_DIAGNOSTIC_LANE, SyntaxRequest>, signal: AbortSignal): Promise<SyntaxResult> {
     const result = await this.facts.analyze(request.payload.languageId, request.snapshot, signal);
     if (!result) return this.fallback.run(request, signal);
     signal.throwIfAborted();
     switch (request.lane) {
-      case LANGUAGE_TOKEN_LANE:
-        return Object.freeze({ lane: LANGUAGE_TOKEN_LANE, value: projectRustSyntaxTokens(result, request.snapshot) });
-      case LANGUAGE_DIAGNOSTIC_LANE:
-        return Object.freeze({ lane: LANGUAGE_DIAGNOSTIC_LANE, value: projectRustSyntaxDiagnostics(result, request.snapshot) });
+      case SYNTAX_TOKEN_LANE:
+        return Object.freeze({ lane: SYNTAX_TOKEN_LANE, value: projectRustSyntaxTokens(result, request.snapshot) });
+      case SYNTAX_DIAGNOSTIC_LANE:
+        return Object.freeze({ lane: SYNTAX_DIAGNOSTIC_LANE, value: projectRustSyntaxDiagnostics(result, request.snapshot) });
     }
   }
 

@@ -1,12 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { PieceTreeTextBuffer } from "../../common/model/pieceTreeTextBuffer/pieceTreeTextBuffer.js";
+import { PieceNode } from "../../../../common/model/pieceTreeTextBuffer/pieceTreeBase.js";
+import { PieceTreeTextBuffer } from "../../../../common/model/pieceTreeTextBuffer/pieceTreeTextBuffer.js";
 
-test("PieceTreeTextBuffer matches a string oracle across random edits", () => {
+test("PieceTreeTextBuffer matches a string oracle and treap invariants across deterministic edits", () => {
   const random = createRandom(0x71ece);
   const buffer = new PieceTreeTextBuffer("seed\n😀text");
   let oracle = "seed\n😀text";
   const insertions = ["", "a", "XYZ", "\n", "x\ny", "😀"];
+  assertTreeInvariants(buffer);
 
   for (let iteration = 0; iteration < 1_000; iteration += 1) {
     const startOffset = integer(random, oracle.length + 1);
@@ -14,6 +16,7 @@ test("PieceTreeTextBuffer matches a string oracle across random edits", () => {
       integer(random, oracle.length - startOffset + 1);
     const insertedText = insertions[integer(random, insertions.length)];
     buffer.replace(startOffset, endOffset, insertedText);
+    assertTreeInvariants(buffer);
     oracle =
       oracle.slice(0, startOffset) +
       insertedText +
@@ -58,6 +61,7 @@ test("PieceTreeTextBuffer coalesces contiguous source pieces", () => {
   const typed = new PieceTreeTextBuffer("");
   for (const character of "continuous") {
     typed.replace(typed.length, typed.length, character);
+    assertTreeInvariants(typed);
   }
   assert.deepEqual({
     text: typed.getText(),
@@ -69,8 +73,10 @@ test("PieceTreeTextBuffer coalesces contiguous source pieces", () => {
 
   const restoredOriginal = new PieceTreeTextBuffer("abcdef");
   restoredOriginal.replace(3, 3, "X");
+  assertTreeInvariants(restoredOriginal);
   assert.equal(restoredOriginal.pieceCount, 3);
   restoredOriginal.replace(3, 4, "");
+  assertTreeInvariants(restoredOriginal);
   assert.deepEqual({
     text: restoredOriginal.getText(),
     pieceCount: restoredOriginal.pieceCount,
@@ -85,11 +91,14 @@ test("PieceTreeTextBuffer compaction preserves captured sources", () => {
   const retainedText = insertedText.slice(-10_000);
   const buffer = new PieceTreeTextBuffer("");
   buffer.replace(0, 0, insertedText);
+  assertTreeInvariants(buffer);
   const snapshot = buffer.createSnapshot();
   buffer.replace(0, insertedText.length - retainedText.length, "");
+  assertTreeInvariants(buffer);
 
   const before = buffer.getStatistics();
   assert.equal(buffer.compactIfNeeded(), true);
+  assertTreeInvariants(buffer);
   const after = buffer.getStatistics();
 
   assert.deepEqual({
@@ -119,6 +128,43 @@ test("PieceTreeTextBuffer compaction preserves captured sources", () => {
     secondCompaction: false,
   });
 });
+
+function assertTreeInvariants(buffer: PieceTreeTextBuffer): void {
+  const aggregate = assertNode((buffer as unknown as PieceTreeTextBufferInternals).root);
+  assert.deepEqual(aggregate, {
+    length: buffer.length,
+    lineFeeds: buffer.lineCount - 1,
+    pieces: buffer.pieceCount,
+  });
+}
+
+function assertNode(node: PieceNode | undefined): TreeAggregate {
+  if (!node) return { length: 0, lineFeeds: 0, pieces: 0 };
+  const left = assertNode(node.left);
+  const right = assertNode(node.right);
+  if (node.left) assert.ok(node.priority <= node.left.priority, "treap priority must be a min-heap");
+  if (node.right) assert.ok(node.priority <= node.right.priority, "treap priority must be a min-heap");
+  assert.ok(node.piece.length > 0, "piece-tree nodes must not retain empty pieces");
+  const aggregate = {
+    length: left.length + node.piece.length + right.length,
+    lineFeeds: left.lineFeeds + node.piece.lineFeedOffsets.length + right.lineFeeds,
+    pieces: left.pieces + 1 + right.pieces,
+  };
+  assert.equal(node.totalLength, aggregate.length, "node text-length aggregate must match its subtree");
+  assert.equal(node.totalLineFeeds, aggregate.lineFeeds, "node line-feed aggregate must match its subtree");
+  assert.equal(node.totalPieces, aggregate.pieces, "node piece-count aggregate must match its subtree");
+  return aggregate;
+}
+
+interface PieceTreeTextBufferInternals {
+  readonly root: PieceNode | undefined;
+}
+
+interface TreeAggregate {
+  readonly length: number;
+  readonly lineFeeds: number;
+  readonly pieces: number;
+}
 
 function positionAt(
   text: string,

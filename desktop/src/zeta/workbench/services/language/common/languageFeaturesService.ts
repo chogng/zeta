@@ -6,7 +6,7 @@ export interface ILanguageFeaturesService extends EditorLanguageFeaturesServiceC
 
 export const ILanguageFeaturesService = createServiceIdentifier<ILanguageFeaturesService>("languageFeaturesService");
 
-export type { LanguageAnalysisFeaturesOptions, LanguageCompletionFeaturesOptions } from "../../../../editor/alpha/common/services/languageService.js";
+export type { SyntaxFeaturesOptions, LanguageCompletionFeaturesOptions } from "../../../../editor/alpha/common/services/languageService.js";
 
 /** Adapts the editor language runtime to Workbench service registration. */
 export class LanguageFeaturesService extends EditorLanguageFeaturesService implements ILanguageFeaturesService {}

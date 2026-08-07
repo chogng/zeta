@@ -1,17 +1,17 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
 import { DisposableStore } from "../../../../base/common/lifecycle.js";
-import { LanguageAnalysisProviderRegistry, type LanguageAnalysisProvider } from "../../common/languages/analysis/languageAnalysisProviders.js";
-import { LANGUAGE_ANALYSIS_SYNCHRONIZATION, LANGUAGE_DIAGNOSTIC_LANE, LANGUAGE_TOKEN_LANE, LanguageAnalysisProviderWorker, LanguageAnalysisService } from "../../common/languages/analysis/languageAnalysisService.js";
-import { createLanguageLexicalAnalysisProvider } from "../../common/languages/languageLexicalAnalysisProvider.js";
+import { SyntaxProviderRegistry, type SyntaxProvider } from "../../common/languages/syntax/syntaxProviders.js";
+import { SYNTAX_SYNCHRONIZATION, SYNTAX_DIAGNOSTIC_LANE, SYNTAX_TOKEN_LANE, SyntaxProviderWorker, SyntaxService } from "../../common/languages/syntax/syntaxService.js";
+import { createLanguageLexicalSyntaxProvider } from "../../common/languages/languageLexicalSyntaxProvider.js";
 import { LanguageRequestCancellationReason, LanguageRequestStatus } from "../../common/languages/languageRequestCoordinator.js";
 import { LanguageDiagnosticSeverity, type LanguageDiagnosticResult, type LanguageTokenResult } from "../../common/languages/languageResults.js";
 import { TextPosition, TextRange } from "../../common/core/text.js";
 import { TextModel } from "../../common/model/textModel.js";
 
-test("Analysis service selects one token provider and merges diagnostic providers", async () => {
+test("Syntax service selects one token provider and merges diagnostic providers", async () => {
   using model = new TextModel("value");
-  using registry = new LanguageAnalysisProviderRegistry();
+  using registry = new SyntaxProviderRegistry();
   let ignoredTokenCalls = 0;
   using first = registry.register(provider("first", {
     tokens: () => tokenResult("variable"),
@@ -24,7 +24,7 @@ test("Analysis service selects one token provider and merges diagnostic provider
     },
     diagnostics: () => diagnosticResult("second"),
   }));
-  using service = new LanguageAnalysisService(model, registry);
+  using service = new SyntaxService(model, registry);
 
   const outcomes = await service.requestAll("typescript");
 
@@ -37,7 +37,7 @@ test("Analysis service selects one token provider and merges diagnostic provider
 
 test("Token and diagnostic lanes run concurrently while each lane remains latest-wins", async () => {
   using model = new TextModel("value");
-  using registry = new LanguageAnalysisProviderRegistry();
+  using registry = new SyntaxProviderRegistry();
   const tokenRuns: Array<Deferred<LanguageTokenResult>> = [];
   const diagnosticRun = new Deferred<LanguageDiagnosticResult>();
   using registration = registry.register(provider("controlled", {
@@ -49,7 +49,7 @@ test("Token and diagnostic lanes run concurrently while each lane remains latest
     },
     diagnostics: () => diagnosticRun.promise,
   }));
-  using service = new LanguageAnalysisService(model, registry);
+  using service = new SyntaxService(model, registry);
 
   const firstTokens = service.requestTokens("typescript");
   const diagnostics = service.requestDiagnostics("typescript");
@@ -71,9 +71,9 @@ test("Token and diagnostic lanes run concurrently while each lane remains latest
   assert.equal(service.diagnostics.result!.value.diagnostics[0]!.message, "healthy");
 });
 
-test("Analysis provider failures are isolated by lane and provider", async () => {
+test("Syntax provider failures are isolated by lane and provider", async () => {
   using model = new TextModel("value");
-  using registry = new LanguageAnalysisProviderRegistry();
+  using registry = new SyntaxProviderRegistry();
   const errors: Array<{ readonly providerId: string; readonly lane: string; readonly error: unknown }> = [];
   using broken = registry.register(provider("broken", {
     tokens: () => {
@@ -86,7 +86,7 @@ test("Analysis provider failures are isolated by lane and provider", async () =>
   using healthy = registry.register(provider("healthy", {
     diagnostics: () => diagnosticResult("healthy diagnostic"),
   }));
-  using service = new LanguageAnalysisService(model, registry, {
+  using service = new SyntaxService(model, registry, {
     onProviderError: (providerId, lane, error) => errors.push({ providerId, lane, error }),
   });
 
@@ -96,14 +96,14 @@ test("Analysis provider failures are isolated by lane and provider", async () =>
   assert.deepEqual(service.tokens.result!.value.tokens, []);
   assert.deepEqual(service.diagnostics.result!.value.diagnostics.map(diagnostic => diagnostic.message), ["healthy diagnostic"]);
   assert.deepEqual(errors.map(error => [error.providerId, error.lane]), [
-    ["broken", LANGUAGE_TOKEN_LANE],
-    ["broken", LANGUAGE_DIAGNOSTIC_LANE],
+    ["broken", SYNTAX_TOKEN_LANE],
+    ["broken", SYNTAX_DIAGNOSTIC_LANE],
   ]);
 });
 
-test("Analysis provider synchronization failures do not block healthy request lanes", async () => {
+test("Syntax provider synchronization failures do not block healthy request lanes", async () => {
   using model = new TextModel("value");
-  using registry = new LanguageAnalysisProviderRegistry();
+  using registry = new SyntaxProviderRegistry();
   const errors: Array<{ readonly providerId: string; readonly operation: string }> = [];
   using registration = registry.register({
     id: "sync-failure",
@@ -113,7 +113,7 @@ test("Analysis provider synchronization failures do not block healthy request la
       throw new Error("sync failed");
     },
   });
-  using worker = new LanguageAnalysisProviderWorker(registry, (providerId, operation) => errors.push({ providerId, operation }));
+  using worker = new SyntaxProviderWorker(registry, (providerId, operation) => errors.push({ providerId, operation }));
   const previousVersion = model.version;
   model.applyEdits([{
     range: TextRange.emptyAt(TextPosition.at(0, 5)),
@@ -128,28 +128,28 @@ test("Analysis provider synchronization failures do not block healthy request la
 
   const result = await worker.run({
     requestId: 1,
-    lane: LANGUAGE_DIAGNOSTIC_LANE,
+    lane: SYNTAX_DIAGNOSTIC_LANE,
     payload: { languageId: "typescript" },
     snapshot: model.createSnapshot(),
   }, new AbortController().signal);
 
-  assert.deepEqual(errors, [{ providerId: "sync-failure", operation: LANGUAGE_ANALYSIS_SYNCHRONIZATION }]);
-  assert.equal(result.lane, LANGUAGE_DIAGNOSTIC_LANE);
+  assert.deepEqual(errors, [{ providerId: "sync-failure", operation: SYNTAX_SYNCHRONIZATION }]);
+  assert.equal(result.lane, SYNTAX_DIAGNOSTIC_LANE);
   assert.deepEqual(result.value.diagnostics.map(diagnostic => diagnostic.message), ["healthy after sync"]);
 });
 
-test("Model changes cancel both analysis lanes before either store can publish stale ranges", async () => {
+test("Model changes cancel both syntax lanes before either store can publish stale ranges", async () => {
   using model = new TextModel("value");
-  using registry = new LanguageAnalysisProviderRegistry();
+  using registry = new SyntaxProviderRegistry();
   const started: string[] = [];
   using registration = registry.register(provider("slow", {
-    tokens: (_request, signal) => pendingUntilAbort(signal, () => started.push(LANGUAGE_TOKEN_LANE)),
-    diagnostics: (_request, signal) => pendingUntilAbort(signal, () => started.push(LANGUAGE_DIAGNOSTIC_LANE)),
+    tokens: (_request, signal) => pendingUntilAbort(signal, () => started.push(SYNTAX_TOKEN_LANE)),
+    diagnostics: (_request, signal) => pendingUntilAbort(signal, () => started.push(SYNTAX_DIAGNOSTIC_LANE)),
   }));
-  using service = new LanguageAnalysisService(model, registry);
+  using service = new SyntaxService(model, registry);
   const pending = service.requestAll("typescript");
   await turn();
-  assert.deepEqual(started, [LANGUAGE_TOKEN_LANE, LANGUAGE_DIAGNOSTIC_LANE]);
+  assert.deepEqual(started, [SYNTAX_TOKEN_LANE, SYNTAX_DIAGNOSTIC_LANE]);
 
   model.applyEdits([{
     range: TextRange.emptyAt(TextPosition.at(0, 5)),
@@ -165,11 +165,11 @@ test("Model changes cancel both analysis lanes before either store can publish s
   assert.equal(service.diagnostics.result, undefined);
 });
 
-test("Lexical analysis provider emits deterministic baseline tokens and bracket diagnostics", async () => {
+test("Lexical syntax provider emits deterministic baseline tokens and bracket diagnostics", async () => {
   using model = new TextModel("const value = 1 + 2;\nif (value] {");
-  using registry = new LanguageAnalysisProviderRegistry();
-  using registration = registry.register(createLanguageLexicalAnalysisProvider());
-  using service = new LanguageAnalysisService(model, registry);
+  using registry = new SyntaxProviderRegistry();
+  using registration = registry.register(createLanguageLexicalSyntaxProvider());
+  using service = new SyntaxService(model, registry);
 
   await service.requestAll("typescript");
 
@@ -195,8 +195,8 @@ test("Lexical analysis provider emits deterministic baseline tokens and bracket 
   ]);
 });
 
-test("Analysis registry validates batches and releases providers independently", () => {
-  using registry = new LanguageAnalysisProviderRegistry();
+test("Syntax registry validates batches and releases providers independently", () => {
+  using registry = new SyntaxProviderRegistry();
   const registration = registry.register(provider("one", {
     tokens: () => tokenResult("variable"),
   }));
@@ -216,8 +216,8 @@ test("Analysis registry validates batches and releases providers independently",
   assert.equal(registry.getTokenProvider("typescript"), undefined);
 });
 
-test("Analysis registry selects the highest token priority and keeps stable ties", () => {
-  using registry = new LanguageAnalysisProviderRegistry();
+test("Syntax registry selects the highest token priority and keeps stable ties", () => {
+  using registry = new SyntaxProviderRegistry();
   using registrations = new DisposableStore();
   registrations.add(registry.register({ ...provider("baseline", { tokens: () => tokenResult("variable") }), tokenPriority: -10 }));
   registrations.add(registry.register({ ...provider("preferred", { tokens: () => tokenResult("type") }), tokenPriority: 100 }));
@@ -230,7 +230,7 @@ test("Analysis registry selects the highest token priority and keeps stable ties
 
 test("Token providers fall through undefined and isolated failures by priority", async () => {
   using model = new TextModel("value");
-  using registry = new LanguageAnalysisProviderRegistry();
+  using registry = new SyntaxProviderRegistry();
   const calls: string[] = [];
   const errors: string[] = [];
   using registrations = new DisposableStore();
@@ -255,7 +255,7 @@ test("Token providers fall through undefined and isolated failures by priority",
     } }),
     tokenPriority: 50,
   }));
-  using service = new LanguageAnalysisService(model, registry, {
+  using service = new SyntaxService(model, registry, {
     onProviderError: providerId => errors.push(providerId),
   });
 
@@ -268,10 +268,10 @@ test("Token providers fall through undefined and isolated failures by priority",
 function provider(
   id: string,
   capabilities: {
-    readonly tokens?: NonNullable<LanguageAnalysisProvider["provideTokens"]>;
-    readonly diagnostics?: NonNullable<LanguageAnalysisProvider["provideDiagnostics"]>;
+    readonly tokens?: NonNullable<SyntaxProvider["provideTokens"]>;
+    readonly diagnostics?: NonNullable<SyntaxProvider["provideDiagnostics"]>;
   },
-): LanguageAnalysisProvider {
+): SyntaxProvider {
   return {
     id,
     languageIds: ["typescript"],
@@ -308,7 +308,7 @@ function turn(): Promise<void> {
 function pendingUntilAbort<T>(signal: AbortSignal, onStart: () => void): Promise<T> {
   onStart();
   return new Promise((_resolve, reject) => {
-    signal.addEventListener("abort", () => reject(new Error("analysis cancelled")), { once: true });
+    signal.addEventListener("abort", () => reject(new Error("syntax cancelled")), { once: true });
   });
 }
 

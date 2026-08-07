@@ -14,7 +14,7 @@ export function matchAlphaEditor(input: EditorInput): EditorPaneMatch {
   return input.languageId !== undefined || isTextResourceLanguageInput(input) ? EditorPaneMatch.Default : EditorPaneMatch.None;
 }
 
-/** Resolves the language identity shared by Alpha input, Analysis, and completion. */
+/** Resolves the language identity shared by Alpha input, syntax, and completion. */
 export function alphaLanguageForInput(input: EditorInput, resolver?: TextResourceLanguageResolver): string {
   return input.languageId ?? resolveTextResourceLanguageId(input, resolver);
 }

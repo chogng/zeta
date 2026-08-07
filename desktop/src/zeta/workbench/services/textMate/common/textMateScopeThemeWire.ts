@@ -23,7 +23,7 @@ interface PendingRequest {
   readonly reject: (error: unknown) => void;
 }
 
-/** Renderer-side scope-theme transport sharing an Analysis Worker port. */
+/** Renderer-side scope-theme transport sharing an Syntax Worker port. */
 export class TextMateScopeThemeWireClient extends DisposableOwner {
   private readonly pending = new Map<number, PendingRequest>();
   private nextRequestId = 1;
@@ -93,7 +93,7 @@ export class TextMateScopeThemeWireClient extends DisposableOwner {
   }
 }
 
-/** Worker-side atomic scope-theme receiver sharing an Analysis Worker port. */
+/** Worker-side atomic scope-theme receiver sharing an Syntax Worker port. */
 export class TextMateScopeThemeWireServer extends DisposableOwner {
   constructor(private readonly port: LanguageWorkerWirePort, private readonly themes: TextMateScopeThemeModel, private readonly onDidReplace?: () => void) {
     super();

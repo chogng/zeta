@@ -2,10 +2,10 @@
 
 `workbench/services/language` owns the shared language-provider composition used
 by editor products. `LanguageFeaturesService` owns the registration lifecycle for
-language configuration, analysis providers, and completion providers, then
+language configuration, syntax providers, and completion providers, then
 creates caller-owned per-document language services.
 
-`registerLanguageConfiguration`, `registerAnalysisProvider`, and
+`registerLanguageConfiguration`, `registerSyntaxProvider`, and
 `registerCompletionProvider` are the composition seam for extension-host, LSP,
 or Rust-backed adapters. Registrations are disposable and remain independent of
 per-document service lifetimes.

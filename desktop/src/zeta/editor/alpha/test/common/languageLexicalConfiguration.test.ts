@@ -2,15 +2,15 @@ import { strict as assert } from "node:assert";
 import test from "node:test";
 import { registerBuiltinLanguageConfigurations } from "../../common/languages/languageBuiltinConfigurations.js";
 import { LanguageConfigurationRegistry } from "../../common/languages/languageConfiguration.js";
-import { type LanguageAnalysisProviderRequest } from "../../common/languages/analysis/languageAnalysisProviders.js";
-import { createLanguageLexicalAnalysisProvider } from "../../common/languages/languageLexicalAnalysisProvider.js";
+import { type SyntaxProviderRequest } from "../../common/languages/syntax/syntaxProviders.js";
+import { createLanguageLexicalSyntaxProvider } from "../../common/languages/languageLexicalSyntaxProvider.js";
 import { TextModel } from "../../common/model/textModel.js";
 
 test("Lexical caches remain isolated by language identity at one model version", async () => {
   using model = new TextModel("// comment\n`value`");
   using configurations = new LanguageConfigurationRegistry();
   using builtins = registerBuiltinLanguageConfigurations(configurations);
-  const provider = createLanguageLexicalAnalysisProvider({ languageConfigurations: configurations });
+  const provider = createLanguageLexicalSyntaxProvider({ languageConfigurations: configurations });
   const snapshot = model.createSnapshot();
 
   assert.deepEqual(await tokenTypes(provider, request(1, "typescript", snapshot)), ["comment", "string"]);
@@ -23,7 +23,7 @@ test("A language configuration revision replaces same-version lexical state", as
   using model = new TextModel("# comment\n<% value");
   using configurations = new LanguageConfigurationRegistry();
   using builtins = registerBuiltinLanguageConfigurations(configurations);
-  const provider = createLanguageLexicalAnalysisProvider({ languageConfigurations: configurations });
+  const provider = createLanguageLexicalSyntaxProvider({ languageConfigurations: configurations });
   const snapshot = model.createSnapshot();
 
   assert.deepEqual(await tokenTypes(provider, request(1, "json", snapshot)), ["variable", "operator", "variable"]);
@@ -57,7 +57,7 @@ test("Built-in lexical configuration registrations release without owning the re
 
 test("Rust lexical analysis recognizes Rust comments, keywords, strings, and structural diagnostics", async () => {
   using model = new TextModel("/// docs\nfn main() { let value = \"ok\"; }");
-  const provider = createLanguageLexicalAnalysisProvider();
+  const provider = createLanguageLexicalSyntaxProvider();
   const snapshot = model.createSnapshot();
 
   assert.deepEqual(
@@ -70,7 +70,7 @@ test("Rust lexical analysis recognizes Rust comments, keywords, strings, and str
 
 test("Rust lexical analysis recognizes hash-delimited raw strings and character literals", async () => {
   using model = new TextModel("let raw = r##\"{\ninside } \"##;\nlet character = '\\n';\nlet lifetime = 'a;");
-  const provider = createLanguageLexicalAnalysisProvider();
+  const provider = createLanguageLexicalSyntaxProvider();
   const snapshot = model.createSnapshot();
 
   assert.deepEqual(
@@ -83,7 +83,7 @@ test("Rust lexical analysis recognizes hash-delimited raw strings and character 
 
 test("ECMAScript lexical analysis recognizes regular expressions without mistaking division for a literal", async () => {
   using model = new TextModel("const matcher = /\\{(?<name>[a-z]+)\\}/giu;\nconst ratio = total / count;\nreturn /[{}]/.test(value);");
-  const provider = createLanguageLexicalAnalysisProvider();
+  const provider = createLanguageLexicalSyntaxProvider();
   const snapshot = model.createSnapshot();
 
   assert.deepEqual(
@@ -94,11 +94,11 @@ test("ECMAScript lexical analysis recognizes regular expressions without mistaki
   assert.deepEqual(diagnostics?.diagnostics, []);
 });
 
-function request(requestId: number, languageId: string, snapshot: ReturnType<TextModel["createSnapshot"]>): LanguageAnalysisProviderRequest {
+function request(requestId: number, languageId: string, snapshot: ReturnType<TextModel["createSnapshot"]>): SyntaxProviderRequest {
   return Object.freeze({ requestId, languageId, snapshot });
 }
 
-async function tokenTypes(provider: ReturnType<typeof createLanguageLexicalAnalysisProvider>, analysisRequest: LanguageAnalysisProviderRequest): Promise<readonly string[]> {
+async function tokenTypes(provider: ReturnType<typeof createLanguageLexicalSyntaxProvider>, analysisRequest: SyntaxProviderRequest): Promise<readonly string[]> {
   const result = await provider.provideTokens!(analysisRequest, new AbortController().signal);
   return result?.tokens.map(token => token.tokenType) ?? [];
 }

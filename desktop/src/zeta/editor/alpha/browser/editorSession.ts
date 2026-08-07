@@ -46,7 +46,7 @@ import { WordWrapController } from "../contrib/wordWrap/browser/wordWrapControll
 import { ReadOnlyMessageController } from "../contrib/readOnlyMessage/browser/readOnlyMessageController.js";
 import { InsertFinalNewLineController } from "../contrib/insertFinalNewLine/browser/insertFinalNewLineController.js";
 import { type EditorLineWrapping } from "./view/visualLineProjection.js";
-import { type LanguageAnalysisService, type LanguageAnalysisWorkerFactory } from "../common/languages/analysis/languageAnalysisService.js";
+import { type SyntaxService, type SyntaxWorkerFactory } from "../common/languages/syntax/syntaxService.js";
 import { LanguageCompletionSessionController } from "../contrib/suggest/common/suggestModel.js";
 import { type LanguageCompletionWorkerFactory } from "../common/languages/completion/languageCompletionService.js";
 import { LanguageFeaturesService, type ILanguageFeaturesService } from "../common/services/languageService.js";
@@ -85,7 +85,7 @@ import { InlineProgressController } from "../contrib/inlineProgress/browser/inli
 import { ColorPickerController } from "../contrib/colorPicker/browser/colorPickerController.js";
 import { LinkedEditingController } from "../contrib/linkedEditing/browser/linkedEditingController.js";
 import { CodeLensController, type ExecuteCodeLensCommand } from "../contrib/codelens/browser/codelensController.js";
-import { RustSyntaxAnalysisWorker, RustSyntaxDocumentSymbolProvider, RustSyntaxFactsService } from "./services/rustSyntaxFactsService.js";
+import { RustSyntaxWorker, RustSyntaxDocumentSymbolProvider, RustSyntaxFactsService } from "./services/rustSyntaxFactsService.js";
 import { RustSyntaxFoldingService } from "./services/rustSyntaxFoldingService.js";
 
 export interface EditorSessionOptions {
@@ -94,10 +94,10 @@ export interface EditorSessionOptions {
   readonly languageId: string;
   /** Optional shared language registrations and providers for this editor host. */
   readonly languageFeaturesService?: ILanguageFeaturesService;
-  /** Optional Rust-backed syntax analysis used for parser-grade fold ranges. */
+  /** Optional Rust-backed syntax facts used for parser-grade fold ranges. */
   readonly syntaxApi?: ISyntaxApi;
   readonly modelReference: TextModelReference;
-  readonly analysisWorkerFactory?: LanguageAnalysisWorkerFactory;
+  readonly syntaxWorkerFactory?: SyntaxWorkerFactory;
   readonly completionWorkerFactory?: LanguageCompletionWorkerFactory;
   readonly languageSupport?: IDisposable;
   readonly onDidChangeLanguageSupport?: Event<void>;
@@ -132,7 +132,7 @@ export class EditorSession extends DisposableOwner {
   readonly selections: EditorSelectionController;
   readonly textInput: TextInputController;
   readonly find: FindController;
-  private readonly analysis: LanguageAnalysisService;
+  private readonly syntax: SyntaxService;
   private readonly languageId: string;
   private readonly whenLanguageSupportReady: () => Promise<unknown>;
   private readonly onLanguageError: (error: unknown) => void;
@@ -141,7 +141,7 @@ export class EditorSession extends DisposableOwner {
   private readonly onSave: (() => Promise<void | boolean>) | undefined;
   private readonly onRevert: (() => Promise<void>) | undefined;
   private readonly beforeSave: (() => void) | undefined;
-  private analysisGeneration = 0;
+  private syntaxGeneration = 0;
   private disposed = false;
 
   constructor(options: EditorSessionOptions) {
@@ -188,13 +188,13 @@ export class EditorSession extends DisposableOwner {
       updateFolding();
       this.own(model.onDidChange(updateFolding));
 
-      this.analysis = this.own(languageFeaturesService.createAnalysisService(model, {
-        ...(options.analysisWorkerFactory ? { workerFactory: options.analysisWorkerFactory } : {}),
-        ...(rustSyntaxFacts ? { workerDecorator: fallback => new RustSyntaxAnalysisWorker(rustSyntaxFacts, fallback) } : {}),
+      this.syntax = this.own(languageFeaturesService.createSyntaxService(model, {
+        ...(options.syntaxWorkerFactory ? { workerFactory: options.syntaxWorkerFactory } : {}),
+        ...(rustSyntaxFacts ? { workerDecorator: fallback => new RustSyntaxWorker(rustSyntaxFacts, fallback) } : {}),
       }));
-      const tokenLines = new LanguageTokenLineIndex(this.analysis.tokens);
+      const tokenLines = new LanguageTokenLineIndex(this.syntax.tokens);
       const tokenization = this.own(new TokenizationTextModelPart(tokenLines));
-      const diagnostics = this.own(new LanguageDiagnosticDecorationBridge(this.analysis.diagnostics));
+      const diagnostics = this.own(new LanguageDiagnosticDecorationBridge(this.syntax.diagnostics));
       const searchDecorations = this.own(new TextDecorationCollection<void>(model));
       const occurrenceDecorations = this.own(new TextDecorationCollection<void>(model));
       const bracketDecorations = this.own(new TextDecorationCollection<void>(model));
@@ -362,15 +362,15 @@ export class EditorSession extends DisposableOwner {
       this.own(new OccurrenceHighlightController(this.selections, occurrenceDecorations, {
         wordPattern: () => configurations.getLanguageConfiguration(this.languageId).wordPattern,
       }));
-      this.own(model.onDidChange(() => this.scheduleAnalysis()));
+      this.own(model.onDidChange(() => this.scheduleSyntax()));
       if (options.onDidChangeLanguageSupport) {
-        this.own(options.onDidChangeLanguageSupport(() => this.scheduleAnalysis()));
+        this.own(options.onDidChangeLanguageSupport(() => this.scheduleSyntax()));
       }
       this.defer(() => {
         this.disposed = true;
-        this.analysisGeneration += 1;
+        this.syntaxGeneration += 1;
       });
-      this.scheduleAnalysis();
+      this.scheduleSyntax();
     } catch (error) {
       this.dispose();
       throw error;
@@ -411,20 +411,20 @@ export class EditorSession extends DisposableOwner {
     await this.onRevert?.();
   }
 
-  private scheduleAnalysis(): void {
-    const generation = ++this.analysisGeneration;
+  private scheduleSyntax(): void {
+    const generation = ++this.syntaxGeneration;
     queueMicrotask(() => {
-      void this.runAnalysis(generation);
+      void this.runSyntax(generation);
     });
   }
 
-  private async runAnalysis(generation: number): Promise<void> {
+  private async runSyntax(generation: number): Promise<void> {
     try {
       await this.whenLanguageSupportReady();
-      if (this.disposed || generation !== this.analysisGeneration) return;
-      await this.analysis.requestAll(this.languageId);
+      if (this.disposed || generation !== this.syntaxGeneration) return;
+      await this.syntax.requestAll(this.languageId);
     } catch (error) {
-      if (this.disposed || generation !== this.analysisGeneration || isCancellationError(error) || isAbortError(error)) return;
+      if (this.disposed || generation !== this.syntaxGeneration || isCancellationError(error) || isAbortError(error)) return;
       this.onLanguageError(error);
     }
   }

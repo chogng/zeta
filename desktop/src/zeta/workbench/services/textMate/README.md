@@ -1,6 +1,6 @@
 # Zeta TextMate adapter
 
-`workbench/services/textMate` adapts TextMate grammars to Alpha's versioned Analysis
+`workbench/services/textMate` adapts TextMate grammars to Alpha's versioned Syntax
 provider contract. It is a Workbench service adapter for the Alpha product, not
 part of `base`, and it
 does not own workspace files, extension manifests, product color tokens,
@@ -19,15 +19,15 @@ belong to the extension resource layer.
 | TextMate runtime and incremental line-state cache | `TextMateTokenizationService` | ✅ |
 | Scope-to-Alpha token vocabulary mapping | `TextMateScopeResolver` | ✅, replaceable |
 | Revisioned selector rules and Worker theme transport | `TextMateScopeThemeModel` / scope-theme wire | ✅ |
-| Alpha Analysis provider/module adaptation | `createTextMateAnalysisProvider` / `createTextMateAnalysisModule` | ✅ |
-| Catalog-gated Analysis Worker composition | `TextMateAnalysisModuleWorkerClient` / `browser/textMateAnalysisWorkerMain.ts` | ✅ |
+| Alpha Syntax provider/module adaptation | `createTextMateSyntaxProvider` / `createTextMateSyntaxModule` | ✅ |
+| Catalog-gated Syntax Worker composition | `TextMateSyntaxModuleWorkerClient` / `browser/textMateSyntaxWorkerMain.ts` | ✅ |
 | Browser Worker Oniguruma WASM loading | `browser/textMateOniguruma.ts` | ✅ |
 | Grammar contribution-to-catalog lifecycle | `TextMateGrammarService` | ✅ |
 | Workbench service composition and lifecycle | `ITextMateService` / `BrowserTextMateService` | ✅ |
 | Declarative language, configuration, snippet, grammar, and theme resources | `extensions` / `AppServerExtensionService` | 部分具备：manifest projection is active; theme activation is separate |
 | External extension-manifest loading | `AppServerExtensionService` | Static declarative contributions only; extension JavaScript is never executed |
 
-`workbench/services/textMate/common` may depend on Alpha's public Analysis and text
+`workbench/services/textMate/common` may depend on Alpha's public Syntax and text
 contracts because it adapts into that domain. Alpha and `base` must not import
 TextMate runtime types. `workbench/services/textMate/browser` is the only layer that knows
 the `onig.wasm` asset URL or uses `fetch`.
@@ -70,7 +70,7 @@ nor the dedicated Worker reads product or workspace files. Workbench constructs 
 `ITextMateService`, and passes it to Alpha panes. `AppServerExtensionService`
 then projects Rust-discovered static grammar contributions into the same
 registry. The service owns the shared grammar catalog and scope theme; each
-Alpha session creates and disposes only its dedicated TextMate Analysis Worker.
+Alpha session creates and disposes only its dedicated TextMate Syntax Worker.
 Unsupported languages still fall back to Alpha's lexical provider.
 
 Direct `createBrowserAlphaEditorSession` callers may omit the service and get a
@@ -85,7 +85,7 @@ does not change Workbench ownership.
 3. Lines tokenize in order with immutable `StateStack` input/output state.
 4. The scope resolver maps named scopes to Alpha token types.
 5. Relative line tokens aggregate into an immutable `LanguageTokenResult`.
-6. `createTextMateAnalysisProvider` publishes the result through Alpha's
+6. `createTextMateSyntaxProvider` publishes the result through Alpha's
    request-version and application gates.
 
 The default resolver maps conventional comment, string, regexp, number,
@@ -97,7 +97,7 @@ supports comma unions, outer-to-inner scope sequences, segment wildcards, and
 scope exclusions. Last matching rule wins before the stable fallback resolver.
 The renderer mirrors each revision through `TextMateScopeThemeWireClient`; the
 Worker atomically replaces its model, drops cached token styles, and performs
-the next analysis with the new rules.
+the next syntax request with the new rules.
 
 TextMate uses `tokenPriority: 100`; Alpha's deterministic lexical fallback uses
 the default priority `0`. The TextMate provider intentionally declares `*` and
@@ -109,14 +109,14 @@ Equal priorities preserve registration order.
 ## Worker catalog path
 
 `TextMateGrammarCatalogWireClient` sends complete validated catalog revisions
-over the same structural port used by Alpha's Analysis and provider-module
+over the same structural port used by Alpha's Syntax and provider-module
 protocols. `TextMateGrammarCatalogWireServer` atomically builds a new registry
 before swapping the Worker-side store. Stale or malformed revisions poison the
 catalog client and invalidate that Worker so Alpha's coordinator can rebuild it
 from the catalog source's current revision.
 
-`TextMateAnalysisModuleWorkerClient` serializes catalog and scope-theme updates
-and gates every Analysis request on the latest scheduled revisions. The dedicated browser Worker
+`TextMateSyntaxModuleWorkerClient` serializes catalog and scope-theme updates
+and gates every Syntax request on the latest scheduled revisions. The dedicated browser Worker
 activates both `textmate.grammars` and `language.lexical`; it owns the catalog
 store, scope-theme model, TextMate service, Oniguruma runtime, provider registries, and all four
 wire servers. A replacement Worker accepts the source's current revision even
@@ -124,7 +124,7 @@ when its revision is greater than one.
 
 ## Incremental state
 
-The service owns one latest document analysis per loaded language. It compares
+The service owns one latest tokenization document per loaded language. It compares
 old and new line arrays, reuses the unchanged prefix, and rescans from the first
 changed line until an unchanged suffix line has the same TextMate input
 `StateStack`. The remaining suffix is then reused without tokenization.
@@ -148,7 +148,7 @@ requests therefore cannot reuse state produced by an older grammar revision.
 - service disposal does not dispose the caller's grammar registry or
   Oniguruma promise.
 
-Alpha's Analysis host isolates provider failure and keeps its versioned store
+Alpha's Syntax host isolates provider failure and keeps its versioned store
 unchanged or publishes the host's empty fallback according to the existing
 lane contract.
 
@@ -171,7 +171,7 @@ lane contract.
 - `BrowserTextMateService` owns the grammar registry and matching Worker
   factory; `AppServerExtensionService` supplies declarative package loaders and
   Workbench injects the service into product Alpha panes;
-- Alpha sessions schedule a new analysis request when the catalog or scope theme changes;
+- Alpha sessions schedule a new syntax request when the catalog or scope theme changes;
   other consumers must still make that scheduling decision explicitly.
 
 Tests under `test/common` load the real `vscode-oniguruma` WASM binary and a
@@ -180,6 +180,6 @@ strings, scope mapping, one-line suffix reuse, multiline convergence,
 same-version grammar replacement, cancellation, ownership, malformed loaders,
 provider priority/fallback, catalog materialization, atomic replacement,
 structured-clone catalog/theme updates, stale-client poisoning, dynamic Worker
-catalog/theme changes, and end-to-end Alpha Analysis requests. A standalone Vite build checks
+catalog/theme changes, and end-to-end Alpha Syntax requests. A standalone Vite build checks
 the complete browser Worker and emitted WASM asset. The real bundled JSON
 grammar is also tokenized through the common service in the Node test realm.

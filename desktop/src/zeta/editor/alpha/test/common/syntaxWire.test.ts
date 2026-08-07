@@ -2,11 +2,11 @@ import { strict as assert } from "node:assert";
 import test from "node:test";
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { DisposableOwner, DisposableStore } from "../../../../base/common/lifecycle.js";
-import { LanguageAnalysisProviderRegistry, type LanguageAnalysisRequest } from "../../common/languages/analysis/languageAnalysisProviders.js";
-import { LANGUAGE_TOKEN_LANE, LanguageAnalysisProviderWorker, LanguageAnalysisService, type LanguageAnalysisLane, type LanguageAnalysisResult, type LanguageAnalysisWorker } from "../../common/languages/analysis/languageAnalysisService.js";
-import { languageAnalysisWireCodec } from "../../common/languages/analysis/languageAnalysisWire.js";
-import { type LanguageLexicalCacheUpdate } from "../../common/languages/languageLexicalAnalysisCache.js";
-import { createLanguageLexicalAnalysisProvider } from "../../common/languages/languageLexicalAnalysisProvider.js";
+import { SyntaxProviderRegistry, type SyntaxRequest } from "../../common/languages/syntax/syntaxProviders.js";
+import { SYNTAX_TOKEN_LANE, SyntaxProviderWorker, SyntaxService, type SyntaxLane, type SyntaxResult, type SyntaxWorker } from "../../common/languages/syntax/syntaxService.js";
+import { syntaxWireCodec } from "../../common/languages/syntax/syntaxWire.js";
+import { type LanguageLexicalCacheUpdate } from "../../common/languages/languageLexicalSyntaxCache.js";
+import { createLanguageLexicalSyntaxProvider } from "../../common/languages/languageLexicalSyntaxProvider.js";
 import { LanguageRequestCoordinator, LanguageRequestStatus, LanguageWorkerResultDisposition, type LanguageWorkerRequest } from "../../common/languages/languageRequestCoordinator.js";
 import { LanguageWorkerWireClient, LanguageWorkerWireServer, type LanguageWorkerWireClientPort } from "../../common/languages/languageWorkerWire.js";
 import { TextPosition, TextRange } from "../../common/core/text.js";
@@ -14,20 +14,20 @@ import { TextModel } from "../../common/model/textModel.js";
 
 test("Token and diagnostic lanes share one structured-clone incremental document mirror", async () => {
   using model = new TextModel("const value = 1;");
-  using localRegistry = new LanguageAnalysisProviderRegistry();
-  using remoteRegistry = new LanguageAnalysisProviderRegistry();
+  using localRegistry = new SyntaxProviderRegistry();
+  using remoteRegistry = new SyntaxProviderRegistry();
   const cacheUpdates: LanguageLexicalCacheUpdate[] = [];
-  using registration = remoteRegistry.register(createLanguageLexicalAnalysisProvider({
+  using registration = remoteRegistry.register(createLanguageLexicalSyntaxProvider({
     onDidUpdateCache: update => cacheUpdates.push(update),
   }));
   const [clientPort, serverPort] = createPortPair();
   using server = new LanguageWorkerWireServer(
     serverPort,
-    languageAnalysisWireCodec,
-    new LanguageAnalysisProviderWorker(remoteRegistry),
+    syntaxWireCodec,
+    new SyntaxProviderWorker(remoteRegistry),
   );
-  using service = new LanguageAnalysisService(model, localRegistry, {
-    workerFactory: () => new LanguageWorkerWireClient(clientPort, languageAnalysisWireCodec),
+  using service = new SyntaxService(model, localRegistry, {
+    workerFactory: () => new LanguageWorkerWireClient(clientPort, syntaxWireCodec),
   });
 
   const outcomes = await service.requestAll("typescript");
@@ -75,14 +75,14 @@ test("Token and diagnostic lanes share one structured-clone incremental document
   assert.equal(cacheUpdates.length, 2);
 });
 
-test("Analysis wire rejects malformed lane DTOs in the client realm", async () => {
+test("Syntax wire rejects malformed lane DTOs in the client realm", async () => {
   using model = new TextModel("value");
   const [clientPort, serverPort] = createPortPair();
   using serverEndpoint = serverPort;
-  using client = new LanguageWorkerWireClient(clientPort, languageAnalysisWireCodec);
+  using client = new LanguageWorkerWireClient(clientPort, syntaxWireCodec);
   const pending = client.run({
     requestId: 1,
-    lane: LANGUAGE_TOKEN_LANE,
+    lane: SYNTAX_TOKEN_LANE,
     snapshot: model.createSnapshot(),
     payload: { languageId: "typescript" },
   }, new AbortController().signal);
@@ -115,26 +115,26 @@ test("Analysis wire rejects malformed lane DTOs in the client realm", async () =
   await assert.rejects(pending, /sorted and non-overlapping/);
 });
 
-test("Analysis service replaces a failed wire Worker on the next request", async () => {
+test("Syntax service replaces a failed wire Worker on the next request", async () => {
   using model = new TextModel("const value = 1;");
-  using localRegistry = new LanguageAnalysisProviderRegistry();
-  using remoteRegistry = new LanguageAnalysisProviderRegistry();
-  using registration = remoteRegistry.register(createLanguageLexicalAnalysisProvider());
+  using localRegistry = new SyntaxProviderRegistry();
+  using remoteRegistry = new SyntaxProviderRegistry();
+  using registration = remoteRegistry.register(createLanguageLexicalSyntaxProvider());
   using workerResources = new DisposableStore();
   let workerCount = 0;
-  using service = new LanguageAnalysisService(model, localRegistry, {
+  using service = new SyntaxService(model, localRegistry, {
     workerFactory: () => {
       workerCount += 1;
       const [clientPort, serverPort] = createPortPair();
-      const worker: LanguageAnalysisWorker = workerCount === 1
-        ? new FailingAnalysisWorker()
-        : new LanguageAnalysisProviderWorker(remoteRegistry);
-      workerResources.add(new LanguageWorkerWireServer(serverPort, languageAnalysisWireCodec, worker));
-      return new LanguageWorkerWireClient(clientPort, languageAnalysisWireCodec);
+      const worker: SyntaxWorker = workerCount === 1
+        ? new FailingSyntaxWorker()
+        : new SyntaxProviderWorker(remoteRegistry);
+      workerResources.add(new LanguageWorkerWireServer(serverPort, syntaxWireCodec, worker));
+      return new LanguageWorkerWireClient(clientPort, syntaxWireCodec);
     },
   });
 
-  await assert.rejects(service.requestTokens("typescript"), /analysis worker failed/);
+  await assert.rejects(service.requestTokens("typescript"), /syntax worker failed/);
   const outcome = await service.requestTokens("typescript");
 
   assert.equal(outcome.status, LanguageRequestStatus.Applied);
@@ -142,17 +142,17 @@ test("Analysis service replaces a failed wire Worker on the next request", async
   assert.equal(service.tokens.result!.value.tokens[0]!.tokenType, "keyword");
 });
 
-test("Analysis wire falls back to full when the client missed the server result base", async () => {
+test("Syntax wire falls back to full when the client missed the server result base", async () => {
   using model = new TextModel("const value = 1;");
-  using registry = new LanguageAnalysisProviderRegistry();
-  using registration = registry.register(createLanguageLexicalAnalysisProvider());
+  using registry = new SyntaxProviderRegistry();
+  using registration = registry.register(createLanguageLexicalSyntaxProvider());
   const [clientPort, serverPort] = createPortPair();
-  using server = new LanguageWorkerWireServer(serverPort, languageAnalysisWireCodec, new LanguageAnalysisProviderWorker(registry));
-  using client = new LanguageWorkerWireClient(clientPort, languageAnalysisWireCodec);
+  using server = new LanguageWorkerWireServer(serverPort, syntaxWireCodec, new SyntaxProviderWorker(registry));
+  using client = new LanguageWorkerWireClient(clientPort, syntaxWireCodec);
   const signal = new AbortController().signal;
-  const request = (requestId: number): LanguageWorkerRequest<LanguageAnalysisLane, LanguageAnalysisRequest> => ({
+  const request = (requestId: number): LanguageWorkerRequest<SyntaxLane, SyntaxRequest> => ({
     requestId,
-    lane: LANGUAGE_TOKEN_LANE,
+    lane: SYNTAX_TOKEN_LANE,
     snapshot: model.createSnapshot(),
     payload: { languageId: "typescript" },
   });
@@ -164,7 +164,7 @@ test("Analysis wire falls back to full when the client missed the server result 
     version: 4,
     kind: "request",
     requestId: 2,
-    lane: LANGUAGE_TOKEN_LANE,
+    lane: SYNTAX_TOKEN_LANE,
     resultBaseRequestId: 1,
     snapshot: {
       kind: "reference",
@@ -179,27 +179,27 @@ test("Analysis wire falls back to full when the client missed the server result 
 
   const result = await client.run(request(3), signal);
 
-  assert.equal(result.lane, LANGUAGE_TOKEN_LANE);
+  assert.equal(result.lane, SYNTAX_TOKEN_LANE);
   const thirdRequest = (clientPort.sentMessages as WireMessage[]).find(message => message.requestId === 3);
   assert.equal(thirdRequest?.resultBaseRequestId, 1);
   const thirdResponse = (serverPort.sentMessages as WireMessage[]).find(message => message.requestId === 3);
   assert.equal(thirdResponse?.result?.kind, "full");
 });
 
-test("Analysis wire does not confirm a result rejected by renderer application", async () => {
+test("Syntax wire does not confirm a result rejected by renderer application", async () => {
   using model = new TextModel("const value = 1;");
-  using registry = new LanguageAnalysisProviderRegistry();
-  using registration = registry.register(createLanguageLexicalAnalysisProvider());
+  using registry = new SyntaxProviderRegistry();
+  using registration = registry.register(createLanguageLexicalSyntaxProvider());
   const [clientPort, serverPort] = createPortPair();
-  using server = new LanguageWorkerWireServer(serverPort, languageAnalysisWireCodec, new LanguageAnalysisProviderWorker(registry));
-  const client = new LanguageWorkerWireClient(clientPort, languageAnalysisWireCodec);
-  using coordinator = new LanguageRequestCoordinator<LanguageAnalysisLane, LanguageAnalysisRequest, LanguageAnalysisResult>(model, () => client);
+  using server = new LanguageWorkerWireServer(serverPort, syntaxWireCodec, new SyntaxProviderWorker(registry));
+  const client = new LanguageWorkerWireClient(clientPort, syntaxWireCodec);
+  using coordinator = new LanguageRequestCoordinator<SyntaxLane, SyntaxRequest, SyntaxResult>(model, () => client);
   const applicationFailure = new Error("renderer rejected result");
 
-  await assert.rejects(coordinator.runLatest(LANGUAGE_TOKEN_LANE, { languageId: "typescript" }, () => {
+  await assert.rejects(coordinator.runLatest(SYNTAX_TOKEN_LANE, { languageId: "typescript" }, () => {
     throw applicationFailure;
   }), applicationFailure);
-  assert.equal((await coordinator.runLatest(LANGUAGE_TOKEN_LANE, { languageId: "typescript" }, () => undefined)).status, LanguageRequestStatus.Applied);
+  assert.equal((await coordinator.runLatest(SYNTAX_TOKEN_LANE, { languageId: "typescript" }, () => undefined)).status, LanguageRequestStatus.Applied);
 
   const requests = (clientPort.sentMessages as WireMessage[]).filter(message => message.kind === "request");
   assert.equal(requests[0]!.resultBaseRequestId, undefined);
@@ -227,18 +227,18 @@ interface WireMessage {
   };
 }
 
-function createPortPair(): readonly [MemoryAnalysisPort, MemoryAnalysisPort] {
-  const first = new MemoryAnalysisPort();
-  const second = new MemoryAnalysisPort();
+function createPortPair(): readonly [MemorySyntaxPort, MemorySyntaxPort] {
+  const first = new MemorySyntaxPort();
+  const second = new MemorySyntaxPort();
   first.connect(second);
   second.connect(first);
   return [first, second];
 }
 
-class MemoryAnalysisPort extends DisposableOwner implements LanguageWorkerWireClientPort {
+class MemorySyntaxPort extends DisposableOwner implements LanguageWorkerWireClientPort {
   private readonly messageEmitter = this.own(new Emitter<unknown>());
   private readonly failureEmitter = this.own(new Emitter<unknown>());
-  private peer: MemoryAnalysisPort | undefined;
+  private peer: MemorySyntaxPort | undefined;
   private disposed = false;
 
   readonly sentMessages: unknown[] = [];
@@ -253,13 +253,13 @@ class MemoryAnalysisPort extends DisposableOwner implements LanguageWorkerWireCl
     });
   }
 
-  connect(peer: MemoryAnalysisPort): void {
+  connect(peer: MemorySyntaxPort): void {
     this.peer = peer;
   }
 
   send(message: unknown): void {
     if (this.disposed || !this.peer) {
-      throw new ReferenceError("Memory analysis port is unavailable");
+      throw new ReferenceError("Memory syntax port is unavailable");
     }
     const peer = this.peer;
     const cloned = structuredClone(message);
@@ -270,9 +270,9 @@ class MemoryAnalysisPort extends DisposableOwner implements LanguageWorkerWireCl
   }
 }
 
-class FailingAnalysisWorker extends DisposableOwner implements LanguageAnalysisWorker {
-  async run(_request: LanguageWorkerRequest<LanguageAnalysisLane, LanguageAnalysisRequest>): Promise<LanguageAnalysisResult> {
-    throw new Error("analysis worker failed");
+class FailingSyntaxWorker extends DisposableOwner implements SyntaxWorker {
+  async run(_request: LanguageWorkerRequest<SyntaxLane, SyntaxRequest>): Promise<SyntaxResult> {
+    throw new Error("syntax worker failed");
   }
 }
 

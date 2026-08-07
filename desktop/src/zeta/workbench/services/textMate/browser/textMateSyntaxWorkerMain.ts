@@ -1,15 +1,15 @@
 import { DisposableStore } from "../../../../base/common/lifecycle.js";
-import { LanguageAnalysisProviderModuleHost, LanguageAnalysisProviderModuleRegistry } from "../../../../editor/alpha/common/languages/analysis/languageAnalysisProviderModules.js";
-import { LanguageAnalysisProviderModuleWireServer } from "../../../../editor/alpha/common/languages/analysis/languageAnalysisProviderModuleWire.js";
-import { LanguageAnalysisProviderRegistry } from "../../../../editor/alpha/common/languages/analysis/languageAnalysisProviders.js";
-import { LanguageAnalysisProviderWorker } from "../../../../editor/alpha/common/languages/analysis/languageAnalysisService.js";
-import { languageAnalysisWireCodec } from "../../../../editor/alpha/common/languages/analysis/languageAnalysisWire.js";
+import { SyntaxProviderModuleHost, SyntaxProviderModuleRegistry } from "../../../../editor/alpha/common/languages/syntax/syntaxProviderModules.js";
+import { SyntaxProviderModuleWireServer } from "../../../../editor/alpha/common/languages/syntax/syntaxProviderModuleWire.js";
+import { SyntaxProviderRegistry } from "../../../../editor/alpha/common/languages/syntax/syntaxProviders.js";
+import { SyntaxProviderWorker } from "../../../../editor/alpha/common/languages/syntax/syntaxService.js";
+import { syntaxWireCodec } from "../../../../editor/alpha/common/languages/syntax/syntaxWire.js";
 import { registerBuiltinLanguageConfigurations } from "../../../../editor/alpha/common/languages/languageBuiltinConfigurations.js";
 import { LanguageConfigurationRegistry } from "../../../../editor/alpha/common/languages/languageConfiguration.js";
-import { createLanguageLexicalAnalysisProvider } from "../../../../editor/alpha/common/languages/languageLexicalAnalysisProvider.js";
+import { createLanguageLexicalSyntaxProvider } from "../../../../editor/alpha/common/languages/languageLexicalSyntaxProvider.js";
 import { LanguageWorkerWireServer } from "../../../../editor/alpha/common/languages/languageWorkerWire.js";
 import { createDedicatedWorkerLanguagePort } from "../../../../editor/alpha/browser/language/dedicatedWorkerLanguagePort.js";
-import { createTextMateAnalysisModule } from "../common/textMateAnalysisModule.js";
+import { createTextMateSyntaxModule } from "../common/textMateSyntaxModule.js";
 import { TextMateGrammarCatalogStore } from "../common/textMateGrammarCatalogStore.js";
 import { TextMateGrammarCatalogWireServer } from "../common/textMateGrammarCatalogWire.js";
 import { TextMateScopeThemeModel } from "../common/textMateScopeTheme.js";
@@ -17,23 +17,23 @@ import { TextMateScopeThemeWireServer } from "../common/textMateScopeThemeWire.j
 import { createBrowserTextMateTokenizationService } from "./browserTextMateTokenization.js";
 
 const resources = new DisposableStore();
-const registry = resources.add(new LanguageAnalysisProviderRegistry());
-const modules = resources.add(new LanguageAnalysisProviderModuleRegistry());
+const registry = resources.add(new SyntaxProviderRegistry());
+const modules = resources.add(new SyntaxProviderModuleRegistry());
 const languageConfigurations = resources.add(new LanguageConfigurationRegistry());
 resources.add(registerBuiltinLanguageConfigurations(languageConfigurations));
 resources.add(modules.register({
   id: "language.lexical",
-  load: () => [createLanguageLexicalAnalysisProvider({ languageConfigurations })],
+  load: () => [createLanguageLexicalSyntaxProvider({ languageConfigurations })],
 }));
 const grammarCatalog = resources.add(new TextMateGrammarCatalogStore());
 const scopeTheme = resources.add(new TextMateScopeThemeModel());
 const textMateTokenization = resources.add(createBrowserTextMateTokenizationService(grammarCatalog, {
   scopeResolver: scopes => scopeTheme.resolve(scopes),
 }));
-resources.add(modules.register(createTextMateAnalysisModule(textMateTokenization)));
-const moduleHost = resources.add(new LanguageAnalysisProviderModuleHost(modules, registry));
+resources.add(modules.register(createTextMateSyntaxModule(textMateTokenization)));
+const moduleHost = resources.add(new SyntaxProviderModuleHost(modules, registry));
 const port = createDedicatedWorkerLanguagePort();
-resources.add(new LanguageWorkerWireServer(port, languageAnalysisWireCodec, new LanguageAnalysisProviderWorker(registry)));
-resources.add(new LanguageAnalysisProviderModuleWireServer(port, modules, moduleHost));
+resources.add(new LanguageWorkerWireServer(port, syntaxWireCodec, new SyntaxProviderWorker(registry)));
+resources.add(new SyntaxProviderModuleWireServer(port, modules, moduleHost));
 resources.add(new TextMateGrammarCatalogWireServer(port, grammarCatalog));
 resources.add(new TextMateScopeThemeWireServer(port, scopeTheme, () => textMateTokenization.invalidateTokenCaches()));

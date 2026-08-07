@@ -1,13 +1,13 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
-import { LanguageLexicalAnalysisCache, type LanguageLexicalCacheUpdate } from "../../common/languages/languageLexicalAnalysisCache.js";
+import { LanguageLexicalSyntaxCache, type LanguageLexicalCacheUpdate } from "../../common/languages/languageLexicalSyntaxCache.js";
 import { TextRange } from "../../common/core/text.js";
 import { TextModel } from "../../common/model/textModel.js";
 
 test("Lexical token and diagnostic lanes share one versioned cache", () => {
   using model = new TextModel("const first = 1;\nconst second = 2;\nreturn first + second;");
   const updates: LanguageLexicalCacheUpdate[] = [];
-  const cache = new LanguageLexicalAnalysisCache({ onDidUpdate: update => updates.push(update) });
+  const cache = new LanguageLexicalSyntaxCache({ onDidUpdate: update => updates.push(update) });
   const signal = new AbortController().signal;
 
   cache.getTokens(model.createSnapshot(), signal);
@@ -38,7 +38,7 @@ test("Lexical token and diagnostic lanes share one versioned cache", () => {
 test("Lexical multiline state propagates only until the cached suffix converges", () => {
   using model = new TextModel("let value = 1;\ninside\n*/ const after = 2;\nreturn after;");
   const updates: LanguageLexicalCacheUpdate[] = [];
-  const cache = new LanguageLexicalAnalysisCache({ onDidUpdate: update => updates.push(update) });
+  const cache = new LanguageLexicalSyntaxCache({ onDidUpdate: update => updates.push(update) });
   const signal = new AbortController().signal;
   cache.getTokens(model.createSnapshot(), signal);
 
@@ -64,7 +64,7 @@ test("Lexical incremental analysis respects a large-document scan budget", () =>
   const lines = Array.from({ length: 1_000 }, (_, index) => `const value${index} = ${index};`);
   using model = new TextModel(lines.join("\n"));
   const updates: LanguageLexicalCacheUpdate[] = [];
-  const cache = new LanguageLexicalAnalysisCache({ onDidUpdate: update => updates.push(update) });
+  const cache = new LanguageLexicalSyntaxCache({ onDidUpdate: update => updates.push(update) });
   const signal = new AbortController().signal;
   cache.getTokens(model.createSnapshot(), signal);
 
@@ -82,7 +82,7 @@ test("Lexical incremental analysis respects a large-document scan budget", () =>
 
 test("Lexical incremental results stay equal to a fresh full-scan oracle", () => {
   using model = new TextModel("const value = `start\nmiddle\nend`;\nif (value) {\n  return 1;\n}");
-  const cache = new LanguageLexicalAnalysisCache();
+  const cache = new LanguageLexicalSyntaxCache();
   const signal = new AbortController().signal;
   let seed = 0x5eed1234;
   const insertions = ["x", " ", "\n", "/*", "*/", "`", "'", "(", ")", "const"];
@@ -99,7 +99,7 @@ test("Lexical incremental results stay equal to a fresh full-scan oracle", () =>
     const snapshot = model.createSnapshot();
     const incrementalTokens = cache.getTokens(snapshot, signal);
     const incrementalDiagnostics = cache.getDiagnostics(snapshot, signal);
-    const oracle = new LanguageLexicalAnalysisCache();
+    const oracle = new LanguageLexicalSyntaxCache();
     assert.deepEqual(serializeTokens(incrementalTokens.tokens), serializeTokens(oracle.getTokens(snapshot, signal).tokens));
     assert.deepEqual(serializeDiagnostics(incrementalDiagnostics.diagnostics), serializeDiagnostics(oracle.getDiagnostics(snapshot, signal).diagnostics));
   }
@@ -110,7 +110,7 @@ test("Lexical incremental results stay equal to a fresh full-scan oracle", () =>
   }
 });
 
-function serializeTokens(tokens: ReturnType<LanguageLexicalAnalysisCache["getTokens"]>["tokens"]): readonly unknown[] {
+function serializeTokens(tokens: ReturnType<LanguageLexicalSyntaxCache["getTokens"]>["tokens"]): readonly unknown[] {
   return tokens.map(token => [
     token.range.start.lineIndex,
     token.range.start.columnIndex,
@@ -121,7 +121,7 @@ function serializeTokens(tokens: ReturnType<LanguageLexicalAnalysisCache["getTok
   ]);
 }
 
-function serializeDiagnostics(diagnostics: ReturnType<LanguageLexicalAnalysisCache["getDiagnostics"]>["diagnostics"]): readonly unknown[] {
+function serializeDiagnostics(diagnostics: ReturnType<LanguageLexicalSyntaxCache["getDiagnostics"]>["diagnostics"]): readonly unknown[] {
   return diagnostics.map(diagnostic => [
     diagnostic.range.start.lineIndex,
     diagnostic.range.start.columnIndex,

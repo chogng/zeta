@@ -4,36 +4,36 @@ import { type LanguageDiagnosticResult, type LanguageTokenResult } from "../lang
 import { type LanguageWorkerDocumentSynchronization } from "../languageWorkerDocumentMirror.js";
 import { type TextSnapshot } from "../../../common/core/text.js";
 
-export interface LanguageAnalysisRequest {
+export interface SyntaxRequest {
   readonly languageId: string;
 }
 
-export interface LanguageAnalysisProviderRequest extends LanguageAnalysisRequest {
+export interface SyntaxProviderRequest extends SyntaxRequest {
   readonly requestId: number;
   readonly snapshot: TextSnapshot;
 }
 
-export interface LanguageAnalysisProvider {
+export interface SyntaxProvider {
   readonly id: string;
   readonly languageIds: readonly string[];
   readonly tokenPriority?: number;
-  provideTokens?(request: LanguageAnalysisProviderRequest, signal: AbortSignal): LanguageTokenResult | undefined | PromiseLike<LanguageTokenResult | undefined>;
-  provideDiagnostics?(request: LanguageAnalysisProviderRequest, signal: AbortSignal): LanguageDiagnosticResult | undefined | PromiseLike<LanguageDiagnosticResult | undefined>;
+  provideTokens?(request: SyntaxProviderRequest, signal: AbortSignal): LanguageTokenResult | undefined | PromiseLike<LanguageTokenResult | undefined>;
+  provideDiagnostics?(request: SyntaxProviderRequest, signal: AbortSignal): LanguageDiagnosticResult | undefined | PromiseLike<LanguageDiagnosticResult | undefined>;
   synchronizeDocument?(synchronization: LanguageWorkerDocumentSynchronization): void;
 }
 
-export interface RegisteredLanguageAnalysisProvider {
+export interface RegisteredSyntaxProvider {
   readonly id: string;
   readonly languageIds: readonly string[];
   readonly tokenPriority: number;
-  readonly provideTokens?: NonNullable<LanguageAnalysisProvider["provideTokens"]>;
-  readonly provideDiagnostics?: NonNullable<LanguageAnalysisProvider["provideDiagnostics"]>;
-  readonly synchronizeDocument?: NonNullable<LanguageAnalysisProvider["synchronizeDocument"]>;
+  readonly provideTokens?: NonNullable<SyntaxProvider["provideTokens"]>;
+  readonly provideDiagnostics?: NonNullable<SyntaxProvider["provideDiagnostics"]>;
+  readonly synchronizeDocument?: NonNullable<SyntaxProvider["synchronizeDocument"]>;
 }
 
 /** Caller-owned registry for snapshot tokenization and diagnostic providers. */
-export class LanguageAnalysisProviderRegistry extends DisposableOwner {
-  private readonly providers = new Map<string, RegisteredLanguageAnalysisProvider>();
+export class SyntaxProviderRegistry extends DisposableOwner {
+  private readonly providers = new Map<string, RegisteredSyntaxProvider>();
   private disposed = false;
 
   constructor() {
@@ -44,20 +44,20 @@ export class LanguageAnalysisProviderRegistry extends DisposableOwner {
     });
   }
 
-  register(provider: LanguageAnalysisProvider): IDisposable {
+  register(provider: SyntaxProvider): IDisposable {
     return this.registerMany([provider]);
   }
 
-  registerMany(providers: readonly LanguageAnalysisProvider[]): IDisposable {
+  registerMany(providers: readonly SyntaxProvider[]): IDisposable {
     this.ensureAlive();
     if (!Array.isArray(providers) || providers.length === 0) {
-      throw new TypeError("Language analysis provider batch must not be empty");
+      throw new TypeError("Syntax provider batch must not be empty");
     }
     const registered = providers.map(normalizeProvider);
     const identities = new Set<string>();
     for (const provider of registered) {
       if (identities.has(provider.id) || this.providers.has(provider.id)) {
-        throw new RangeError(`Language analysis provider '${provider.id}' is already registered`);
+        throw new RangeError(`Syntax provider '${provider.id}' is already registered`);
       }
       identities.add(provider.id);
     }
@@ -69,14 +69,14 @@ export class LanguageAnalysisProviderRegistry extends DisposableOwner {
     });
   }
 
-  getTokenProvider(languageId: string): RegisteredLanguageAnalysisProvider | undefined {
+  getTokenProvider(languageId: string): RegisteredSyntaxProvider | undefined {
     return this.getTokenProviders(languageId)[0];
   }
 
-  getTokenProviders(languageId: string): readonly RegisteredLanguageAnalysisProvider[] {
+  getTokenProviders(languageId: string): readonly RegisteredSyntaxProvider[] {
     this.ensureAlive();
     assertLanguageId(languageId);
-    const selected: RegisteredLanguageAnalysisProvider[] = [];
+    const selected: RegisteredSyntaxProvider[] = [];
     for (const provider of this.providers.values()) {
       if (!provider.provideTokens || !matchesLanguage(provider, languageId)) continue;
       const index = selected.findIndex(candidate => provider.tokenPriority > candidate.tokenPriority);
@@ -86,60 +86,60 @@ export class LanguageAnalysisProviderRegistry extends DisposableOwner {
     return Object.freeze(selected);
   }
 
-  getDiagnosticProviders(languageId: string): readonly RegisteredLanguageAnalysisProvider[] {
+  getDiagnosticProviders(languageId: string): readonly RegisteredSyntaxProvider[] {
     this.ensureAlive();
     assertLanguageId(languageId);
     return Object.freeze([...this.providers.values()].filter(provider => provider.provideDiagnostics && matchesLanguage(provider, languageId)));
   }
 
-  getDocumentSynchronizers(): readonly RegisteredLanguageAnalysisProvider[] {
+  getDocumentSynchronizers(): readonly RegisteredSyntaxProvider[] {
     this.ensureAlive();
     return Object.freeze([...this.providers.values()].filter(provider => provider.synchronizeDocument));
   }
 
   private ensureAlive(): void {
     if (this.disposed) {
-      throw new ReferenceError("LanguageAnalysisProviderRegistry is already disposed");
+      throw new ReferenceError("SyntaxProviderRegistry is already disposed");
     }
   }
 }
 
-export function assertLanguageAnalysisRequest(request: LanguageAnalysisRequest): void {
+export function assertSyntaxRequest(request: SyntaxRequest): void {
   if (typeof request !== "object" || request === null) {
-    throw new TypeError("Language analysis request must be an object");
+    throw new TypeError("Syntax request must be an object");
   }
   assertLanguageId(request.languageId);
 }
 
-function normalizeProvider(provider: LanguageAnalysisProvider): RegisteredLanguageAnalysisProvider {
+function normalizeProvider(provider: SyntaxProvider): RegisteredSyntaxProvider {
   if (typeof provider !== "object" || provider === null) {
-    throw new TypeError("Language analysis provider must be an object");
+    throw new TypeError("Syntax provider must be an object");
   }
-  assertIdentifier(provider.id, "Language analysis provider ID");
+  assertIdentifier(provider.id, "Syntax provider ID");
   if (!Array.isArray(provider.languageIds) || provider.languageIds.length === 0) {
-    throw new TypeError("Language analysis provider must declare language IDs");
+    throw new TypeError("Syntax provider must declare language IDs");
   }
   const languageIds = provider.languageIds.map(languageId => {
     assertLanguageSelector(languageId);
     return languageId;
   });
   if (new Set(languageIds).size !== languageIds.length) {
-    throw new RangeError("Language analysis provider language IDs must be unique");
+    throw new RangeError("Syntax provider language IDs must be unique");
   }
   if (provider.provideTokens !== undefined && typeof provider.provideTokens !== "function") {
-    throw new TypeError("Language analysis provider provideTokens must be a function");
+    throw new TypeError("Syntax provider provideTokens must be a function");
   }
   if (provider.tokenPriority !== undefined && (!Number.isSafeInteger(provider.tokenPriority) || !provider.provideTokens)) {
-    throw new TypeError("Language analysis provider token priority requires a token provider and must be a safe integer");
+    throw new TypeError("Syntax provider token priority requires a token provider and must be a safe integer");
   }
   if (provider.provideDiagnostics !== undefined && typeof provider.provideDiagnostics !== "function") {
-    throw new TypeError("Language analysis provider provideDiagnostics must be a function");
+    throw new TypeError("Syntax provider provideDiagnostics must be a function");
   }
   if (provider.synchronizeDocument !== undefined && typeof provider.synchronizeDocument !== "function") {
-    throw new TypeError("Language analysis provider synchronizeDocument must be a function");
+    throw new TypeError("Syntax provider synchronizeDocument must be a function");
   }
   if (!provider.provideTokens && !provider.provideDiagnostics) {
-    throw new TypeError("Language analysis provider must implement tokens or diagnostics");
+    throw new TypeError("Syntax provider must implement tokens or diagnostics");
   }
   return Object.freeze({
     id: provider.id,
@@ -151,7 +151,7 @@ function normalizeProvider(provider: LanguageAnalysisProvider): RegisteredLangua
   });
 }
 
-function matchesLanguage(provider: RegisteredLanguageAnalysisProvider, languageId: string): boolean {
+function matchesLanguage(provider: RegisteredSyntaxProvider, languageId: string): boolean {
   return provider.languageIds.includes("*") || provider.languageIds.includes(languageId);
 }
 

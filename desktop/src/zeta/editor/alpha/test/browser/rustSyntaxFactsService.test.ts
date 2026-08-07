@@ -3,10 +3,10 @@ import test from "node:test";
 import { DocumentSymbolService, type LanguageDocumentSymbolProvider } from "../../contrib/documentSymbols/common/documentSymbols.js";
 import { TextPosition, TextRange } from "../../common/core/text.js";
 import { TextModel } from "../../common/model/textModel.js";
-import { LanguageAnalysisProviderRegistry } from "../../common/languages/analysis/languageAnalysisProviders.js";
-import { LanguageAnalysisService, type LanguageAnalysisWorker } from "../../common/languages/analysis/languageAnalysisService.js";
+import { SyntaxProviderRegistry } from "../../common/languages/syntax/syntaxProviders.js";
+import { SyntaxService, type SyntaxWorker } from "../../common/languages/syntax/syntaxService.js";
 import { LanguageFeatureProviderRegistry } from "../../common/languages/languageFeatureRegistry.js";
-import { RustSyntaxAnalysisWorker, RustSyntaxDocumentSymbolProvider, RustSyntaxFactsService } from "../../browser/services/rustSyntaxFactsService.js";
+import { RustSyntaxWorker, RustSyntaxDocumentSymbolProvider, RustSyntaxFactsService } from "../../browser/services/rustSyntaxFactsService.js";
 
 test("Rust syntax facts feed Alpha token, diagnostic, and document-symbol services from one revision request", async () => {
   using model = new TextModel("fn main() {\n  /* hi\n  */\n}\n");
@@ -36,20 +36,20 @@ test("Rust syntax facts feed Alpha token, diagnostic, and document-symbol servic
       };
     },
   });
-  using analysisProviders = new LanguageAnalysisProviderRegistry();
-  using analysis = new LanguageAnalysisService(model, analysisProviders, {
-    workerDecorator: fallback => new RustSyntaxAnalysisWorker(facts, fallback),
+  using syntaxProviders = new SyntaxProviderRegistry();
+  using syntax = new SyntaxService(model, syntaxProviders, {
+    workerDecorator: fallback => new RustSyntaxWorker(facts, fallback),
   });
   using symbolProviders = new LanguageFeatureProviderRegistry<LanguageDocumentSymbolProvider>();
   using symbols = new DocumentSymbolService(model, symbolProviders, {
     fallbackProviders: [new RustSyntaxDocumentSymbolProvider(facts)],
   });
 
-  await analysis.requestAll("rust");
+  await syntax.requestAll("rust");
   const documentSymbols = await symbols.provideDocumentSymbols("rust");
 
   assert.equal(calls, 1);
-  assert.deepEqual(analysis.tokens.result!.value.tokens.map(token => [
+  assert.deepEqual(syntax.tokens.result!.value.tokens.map(token => [
     token.range.start.lineIndex,
     token.range.start.columnIndex,
     token.range.end.lineIndex,
@@ -61,7 +61,7 @@ test("Rust syntax facts feed Alpha token, diagnostic, and document-symbol servic
     [1, 2, 1, 7, "comment"],
     [2, 0, 2, 4, "comment"],
   ]);
-  assert.deepEqual(analysis.diagnostics.result!.value.diagnostics.map(diagnostic => [diagnostic.code, diagnostic.message, diagnostic.source]), [
+  assert.deepEqual(syntax.diagnostics.result!.value.diagnostics.map(diagnostic => [diagnostic.code, diagnostic.message, diagnostic.source]), [
     ["syntax-missing", "Missing required syntax", "zeta-syntax"],
   ]);
   assert.deepEqual(documentSymbols.map(symbol => [symbol.name, symbol.kind, symbol.selectionRange.start.lineIndex, symbol.selectionRange.start.columnIndex]), [
@@ -79,7 +79,7 @@ test("Rust syntax facts leave unsupported languages and oversized documents to A
       throw new Error("Unsupported languages and oversized documents must not call the syntax endpoint");
     },
   });
-  const fallback: LanguageAnalysisWorker = {
+  const fallback: SyntaxWorker = {
     run: async request => {
       fallbackCalls += 1;
       return request.lane === "tokens"
@@ -89,7 +89,7 @@ test("Rust syntax facts leave unsupported languages and oversized documents to A
     dispose() {},
     [Symbol.dispose]() {},
   };
-  using worker = new RustSyntaxAnalysisWorker(facts, fallback);
+  using worker = new RustSyntaxWorker(facts, fallback);
   const result = await worker.run({
     requestId: 1,
     lane: "tokens",

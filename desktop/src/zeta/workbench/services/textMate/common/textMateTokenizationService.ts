@@ -40,7 +40,7 @@ interface TextMateLineResult {
   readonly tokens: readonly TextMateRelativeToken[];
 }
 
-interface TextMateDocumentAnalysis {
+interface TextMateTokenizationDocument {
   readonly version: number;
   readonly lines: readonly string[];
   readonly lineResults: readonly TextMateLineResult[];
@@ -57,7 +57,7 @@ interface TextMateRuntimeState {
   retired: boolean;
 }
 
-/** Owns TextMate runtimes and incremental token state for one Analysis document. */
+/** Owns TextMate runtimes and incremental token state for one tokenization document. */
 export class TextMateTokenizationService implements Disposable {
   private readonly lineTimeLimitMilliseconds: number;
   private readonly scopeResolver: TextMateScopeResolver;
@@ -196,7 +196,7 @@ export class TextMateTokenizationService implements Disposable {
 }
 
 class TextMateTokenizationCache {
-  private analysis: TextMateDocumentAnalysis | undefined;
+  private syntax: TextMateTokenizationDocument | undefined;
 
   constructor(
     private readonly languageId: string,
@@ -207,32 +207,32 @@ class TextMateTokenizationCache {
   ) {}
 
   getTokens(snapshot: TextSnapshot, signal: AbortSignal): LanguageTokenResult {
-    if (this.analysis?.version === snapshot.version) return this.analysis.tokens;
-    const kind = this.analysis ? "incremental" : "full";
-    this.analysis = this.update(snapshot, signal, kind);
-    return this.analysis.tokens;
+    if (this.syntax?.version === snapshot.version) return this.syntax.tokens;
+    const kind = this.syntax ? "incremental" : "full";
+    this.syntax = this.update(snapshot, signal, kind);
+    return this.syntax.tokens;
   }
 
   synchronizeDocument(synchronization: LanguageWorkerDocumentSynchronization): void {
-    if (!this.analysis) return;
-    if (this.analysis.version !== synchronization.previousVersion) {
-      this.analysis = undefined;
+    if (!this.syntax) return;
+    if (this.syntax.version !== synchronization.previousVersion) {
+      this.syntax = undefined;
       return;
     }
-    this.analysis = this.update(synchronization.snapshot, undefined, "incremental");
+    this.syntax = this.update(synchronization.snapshot, undefined, "incremental");
   }
 
-  private update(snapshot: TextSnapshot, signal: AbortSignal | undefined, kind: TextMateTokenizationCacheUpdate["kind"]): TextMateDocumentAnalysis {
+  private update(snapshot: TextSnapshot, signal: AbortSignal | undefined, kind: TextMateTokenizationCacheUpdate["kind"]): TextMateTokenizationDocument {
     const text = snapshot.getText();
     const lines = Object.freeze(text.split("\n"));
     if (text.length !== snapshot.length || lines.length !== snapshot.lineCount) {
       throw new Error("TextMate snapshot metadata is inconsistent");
     }
-    const previous = kind === "incremental" ? this.analysis : undefined;
+    const previous = kind === "incremental" ? this.syntax : undefined;
     const scanned = previous
       ? updateLines(this.grammar, previous.lines, previous.lineResults, lines, this.lineTimeLimitMilliseconds, this.scopeResolver, signal)
       : scanAllLines(this.grammar, lines, this.lineTimeLimitMilliseconds, this.scopeResolver, signal);
-    const analysis = Object.freeze({
+    const syntax = Object.freeze({
       version: snapshot.version,
       lines,
       lineResults: scanned.lineResults,
@@ -245,7 +245,7 @@ class TextMateTokenizationCache {
       scannedLineCount: scanned.scannedLineCount,
       reusedLineCount: lines.length - scanned.scannedLineCount,
     }));
-    return analysis;
+    return syntax;
   }
 }
 

@@ -27,7 +27,7 @@ interface PendingRequest {
   readonly reject: (error: unknown) => void;
 }
 
-/** Renderer-side grammar catalog transport sharing an Analysis Worker port. */
+/** Renderer-side grammar catalog transport sharing an Syntax Worker port. */
 export class TextMateGrammarCatalogWireClient extends DisposableOwner {
   private readonly pending = new Map<number, PendingRequest>();
   private nextRequestId = 1;
@@ -113,7 +113,7 @@ export class TextMateGrammarCatalogWireClient extends DisposableOwner {
   }
 }
 
-/** Worker-side atomic catalog receiver sharing the Analysis Worker port. */
+/** Worker-side atomic catalog receiver sharing the Syntax Worker port. */
 export class TextMateGrammarCatalogWireServer extends DisposableOwner {
   constructor(
     private readonly port: LanguageWorkerWirePort,

@@ -31,7 +31,7 @@ export function createBrowserAlphaEditorSession(options: BrowserAlphaEditorSessi
   try {
     return new EditorSession({
       ...options,
-      analysisWorkerFactory: textMateService.analysisWorkerFactory,
+      syntaxWorkerFactory: textMateService.syntaxWorkerFactory,
       completionWorkerFactory: createCompletionWorkerFactory(),
       ...(ownsTextMateService ? { languageSupport: textMateService } : {}),
       onDidChangeLanguageSupport,

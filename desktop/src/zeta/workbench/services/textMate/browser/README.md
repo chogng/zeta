@@ -21,9 +21,9 @@ extension grammars. It resolves manifest-relative paths through `IExtensionApi`,
 supplies loaders to the common grammar service, and never grants the Worker
 filesystem or extension-host access.
 
-`textMateAnalysisWorkerMain.ts` is the complete dedicated Worker composition:
+`textMateSyntaxWorkerMain.ts` is the complete dedicated Worker composition:
 it owns TextMate and lexical fallback modules, the grammar catalog and scope-theme
-stores, the Analysis/module/catalog/theme wire servers, and the Oniguruma-backed tokenization
-service. `createTextMateAnalysisWorkerFactory` creates the matching renderer
+stores, the Syntax/module/catalog/theme wire servers, and the Oniguruma-backed tokenization
+service. `createTextMateSyntaxWorkerFactory` creates the matching renderer
 client and gates requests on the latest catalog and scope-theme revisions supplied
 by the caller-owned sources.

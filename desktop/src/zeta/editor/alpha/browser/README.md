@@ -67,7 +67,7 @@ without the Rust diff transport fails explicitly when it tries to construct
 the Alpha diff pane. The widget owns one virtualized scroll surface and
 side-by-side DOM rows, but owns neither text nor computation. Editing,
 selection history,
-syntax analysis, and model persistence stay with ordinary Alpha editor
+syntax processing, and model persistence stay with ordinary Alpha editor
 sessions. `nextChange`/`previousChange` and F7/Shift+F7 wrap over changed rows,
 add the component-owned `.active` state, and announce the original/modified
 location through the diff view's live region.
@@ -91,7 +91,7 @@ selection, semantic-token, or Rust-service ownership.
 document minimap by reusing the existing decoration snapshot and overview-ruler
 aggregation. They carry only a closed named severity and proportional line
 span; minimap projection never retains diagnostic text, source text, or an
-analysis result. Arbitrary caller decoration markers and syntax-color minimaps
+syntax result. Arbitrary caller decoration markers and syntax-color minimaps
 remain outside this browser contract.
 
 `EditorViewport` also projects indentation guides only for visible first
@@ -358,7 +358,7 @@ poisons the client. Immutable Piece Tree snapshots keep cancelled old-version
 provider work isolated from later synchronization.
 
 Protocol v4 additionally carries the client-confirmed per-lane result request
-ID. Analysis responses may use validated ordered item splices with independent
+ID. Syntax responses may use validated ordered item splices with independent
 line shifts; completion remains a full result codec. Result delta state belongs
 to the common wire client/server, not the browser port adapters.
 
@@ -385,13 +385,13 @@ projects `.resolving` with `aria-busy`, then renders resolved documentation
 through text nodes; resolve failure leaves the candidate list and acceptance
 identity intact.
 
-`createAnalysisWorkerFactory` is the browser-owned bridge for the shared
+`createSyntaxWorkerFactory` is the browser-owned bridge for the shared
 token/diagnostic Worker. Both lanes use one `BrowserLanguageWorkerPort`, one
 incremental document mirror, and strict lane-aware result codecs. Completion
-and analysis Workers reuse the same component-owned browser and dedicated
+and syntax Workers reuse the same component-owned browser and dedicated
 Worker port adapters, while retaining independent provider hosts and failure
-domains. The Worker entry publishes `language.lexical` as a named Analysis
-provider module. `LanguageAnalysisModuleWorkerClient` waits for its catalog and
+domains. The Worker entry publishes `language.lexical` as a named Syntax
+provider module. `SyntaxModuleWorkerClient` waits for its catalog and
 successful activation before the first token or diagnostic request crosses the
 shared port; module failure invalidates the prewarmed Worker so the service can
 rebuild it on the next request. The Worker realm also owns one
@@ -399,10 +399,10 @@ rebuild it on the next request. The Worker realm also owns one
 and JSONC comments/brackets before loading that module. Configuration and
 provider lifecycles remain independent. After each mirror sync, the common Worker host updates
 `language.lexical`'s shared versioned line cache before the next ordered request,
-so token and diagnostic lanes consume one incrementally computed analysis.
+so token and diagnostic lanes consume one incrementally computed syntax result.
 The browser adapter does not own lexical state or scan policy.
 `createBrowserAlphaEditorSession` consumes the Workbench `ITextMateService`,
-waits for its grammar catalog, and schedules new analysis when the catalog
+waits for its grammar catalog, and schedules new syntax work when the catalog
 changes.
 
 Selection and decoration projection share `createAlphaRangeRectangles`, so
@@ -659,7 +659,7 @@ DOM contract uses one accessible textarea for IME and VoiceOver, sharing its
 explicit `dir` with the rendered projection.
 `SemanticTokenModifier` maps only standard declaration/readonly/static/
 deprecated/abstract/async names to component-owned classes; unknown provider
-strings are intentionally excluded from DOM projection. Analysis result deltas and relative token-line
+strings are intentionally excluded from DOM projection. Syntax result deltas and relative token-line
 payload reuse are common-layer capabilities; this browser layer consumes only
 the current visible-line query and does not own their persistence policy.
 Visible clipping uses `DecorationLineIndex` to resolve only decorations whose logical-line

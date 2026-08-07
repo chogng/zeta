@@ -117,8 +117,8 @@ VS Code 的官方源码组织说明了这些 editor 边界：`vs/editor` 不应�
 | `mirrorTextModel.ts` | `common/languages/languageWorkerDocumentMirror.ts` | 当前（职责迁移） | Worker mirror 是语言运行时边界，不是同步 TextModel 的第二个 owner。 |
 | `fixedArray.ts`、`prefixSumComputer.ts`、`textModelStringEdit.ts`、`textModelText.ts`、`utils.ts` | `common/core/{edits,ranges,text,*}`、`common/tokens/*` | 当前（职责迁移） | 纯算法按调用者职责进入 core/text/ranges/tokens；Alpha 不保留泛化的 model utility bucket。 |
 | `textModelPart.ts` | `contrib/tokenization/common/tokenizationTextModelPart.ts`、`common/languages/*` 等显式 feature contract | 当前（职责迁移） | Alpha 不建立一个拥有所有 model part 生命周期的通用基类；各 feature 明确拥有自己的 state、listener 和 dispose。 |
-| `textModelTokens.ts` | `common/tokens/*`、`contrib/tokenization/*`、`common/languages/analysis/*` | 部分具备 | 版本化 token result、按行 sparse index 和 tokenization model-part contract 已具备；VS Code 的全部 background tokenizer/state backend 尚未一一覆盖。 |
-| `tokens/{abstractSyntaxTokenBackend,annotations,tokenizationFontDecorationsProvider,tokenizationTextModelPart,tokenizerSyntaxTokenBackend}.ts` | `common/tokens/*`、`contrib/tokenization/*`、TextMate/analysis adapters | 部分具备 | token 生产由 Alpha language/provider contract 决定；不得为了文件对齐把 Workbench tokenizer 或第三方 runtime 直接放进 model。 |
+| `textModelTokens.ts` | `common/tokens/*`、`contrib/tokenization/*`、`common/languages/syntax/*` | 部分具备 | 版本化 token result、按行 sparse index 和 tokenization model-part contract 已具备；VS Code 的全部 background tokenizer/state backend 尚未一一覆盖。 |
+| `tokens/{abstractSyntaxTokenBackend,annotations,tokenizationFontDecorationsProvider,tokenizationTextModelPart,tokenizerSyntaxTokenBackend}.ts` | `common/tokens/*`、`contrib/tokenization/*`、TextMate/syntax adapters | 部分具备 | token 生产由 Alpha language/provider contract 决定；不得为了文件对齐把 Workbench tokenizer 或第三方 runtime 直接放进 model。 |
 | `tokens/treeSitter/*` | `zeta-rs/syntax`、`platform/syntax`、`browser/services/rustSyntaxFactsService.ts` | 部分具备 | Rust owns bounded Tree-sitter parsing and UTF-16 DTO projection; Alpha consumes revision-bound token, diagnostic, symbol, and folding facts for JSON, JSONC, Rust, and Shell through existing result stores and contribs. Broader language coverage remains future work. |
 | `bracketPairsTextModelPart/*` | `contrib/bracketMatching/common/*`、`common/languages/languageLexical*`、对应 browser presentation | 当前（职责迁移） | lexical bracket matching、colorization、navigation、pair editing 已有独立 feature owner；Alpha 当前没有 model-resident incremental bracket-pair tree。 |
 
@@ -221,7 +221,7 @@ Alpha 已将原来的 `common/view` 拆成 `viewLayout` 与 `viewModel`；后续
 | `language/common/languageResults.ts` | `common/languages/languageResults.ts` + `common/tokens/languageTokens.ts` | request/result/diagnostic 属于 language；token value 与 line index 属于 tokens |
 | `language/common/languageResultStore.ts` | `common/languages/languageResultStore.ts` | 版本化结果 store |
 | `language/common/languageRequestCoordinator.ts` | `common/languages/languageRequestCoordinator.ts` | cancellation、request identity、stale result gate |
-| `language/common/languageAnalysis*` | `common/languages/analysis/*` | provider、wire、delta、snapshot normalizer；Current |
+| `language/common/syntax*` | `common/languages/syntax/*` | provider、wire、delta、snapshot normalizer；Current |
 | `language/common/languageCompletion*` | `common/languages/completion/*` | completion provider/session/wire；Current |
 | `language/common/languageTokenLineIndex.ts` | `common/tokens/languageTokenLineIndex.ts` | token line query和增量 index |
 | `language/browser/*Worker*` | `browser/language/*Worker*` | browser Worker lifecycle 和 port adapter |
@@ -296,7 +296,7 @@ contrib/<feature>/
 | `bracketMatching` | `contrib/bracketMatching/common/*`、`browser/*` | 同名 contrib | Current | lexical bracket matching、pair editing、enter、colorization 和 marker presentation |
 | `folding` | `contrib/folding/browser/foldingModel.ts`、`foldingRanges.ts`、`hiddenRangeModel.ts` | 同名 contrib | Current | ranges、hidden lines、tracked fold state 和 gutter |
 | `semanticTokens` | `contrib/semanticTokens/common/semanticTokens.ts`、`browser/semanticTokenPresentation.ts` | `contrib/semanticTokens/common/semanticTokens.ts`、`browser/semanticTokenPresentation.ts` | Current | token result、line index、version gate 和 renderer projection |
-| `tokenization` | `contrib/tokenization/common/tokenizationTextModelPart.ts`、`browser/tokenizationController.ts` | `contrib/tokenization/{common,browser}/*`、Alpha analysis/TextMate adapters | Current | token production、line state 和 token invalidation |
+| `tokenization` | `contrib/tokenization/common/tokenizationTextModelPart.ts`、`browser/tokenizationController.ts` | `contrib/tokenization/{common,browser}/*`、Alpha syntax/TextMate adapters | Current | token production、line state 和 token invalidation |
 | `wordHighlighter` | `contrib/wordHighlighter/common/wordHighlighter.ts`、`browser/wordHighlighterController.ts` | 同名 contrib | Current | word occurrence query、decoration owner 和 presentation |
 | `find` | `contrib/find/browser/findController.ts`、`common/model/textModelSearch.ts` | 同名 contrib + model search | Current | search model、find widget、replace、selection scope |
 | `gotoError` | `contrib/gotoError/common/diagnosticDecorations.ts`、`browser/gotoError.ts`、`browser/diagnosticOverviewRuler.ts`、`browser/languageDiagnosticPresentation.ts` | 同名 contrib | Current | diagnostic decoration、navigation、overview、severity ordering |
@@ -361,7 +361,7 @@ contrib/<feature>/
 | `browser/lineJoinController.ts` | `contrib/linesOperations/browser/lineJoinController.ts` | line operation contribution | Current |
 | `browser/occurrenceHighlightController.ts` | `contrib/wordHighlighter/browser/wordHighlighterController.ts` | occurrence presentation迁移 | Current |
 | `browser/occurrenceSelectionController.ts` | `contrib/multicursor/browser/occurrenceSelectionController.ts` | selection feature迁移 | Current |
-| `language/common/*` | `common/languages/*`、`common/tokens/*` | analysis/completion/token拆分 | Current |
+| `language/common/*` | `common/languages/*`、`common/tokens/*` | syntax/completion/token拆分 | Current |
 | `language/browser/*` | `browser/language/*` | Worker 和浏览器 adapter 归位 | Current |
 | `browser/diff/rustDiffComputationService.ts` | `browser/services/rustDiffComputationService.ts` | runtime adapter 归服务层 | Current |
 | `browser/browserTextModelService.ts` | `browser/services/browserTextModelService.ts` | 与 resource store 一起归位 | Current |
@@ -388,7 +388,7 @@ contrib/<feature>/
 | viewLayout | `common/viewLayout/editorViewportModel.ts` | scroll、visible logical lines、overscan、layout change | 只消费 line source；不引入 DOM |
 | viewModel | `common/viewModel/modelLineProjection.ts` | logical line 到 visual line 的纯投影 | folding 通过输入 contract 注入，不能依赖 folding controller |
 | languages/base | `common/languages/{languageConfiguration,languageId,languageLexical*,languageProviderModules}.ts` | language ID/configuration、词法上下文、provider module 生命周期 | 只保留语言无关的 common contract |
-| languages/analysis | `common/languages/analysis/*.ts` | token/diagnostic provider registry、worker wire、request coordinator、delta 和 result freshness | result 先经过版本 gate，再交给 tokens/diagnostics |
+| languages/syntax | `common/languages/syntax/*.ts` | token/diagnostic provider registry、worker wire、request coordinator、delta 和 result freshness | result 先经过版本 gate，再交给 tokens/diagnostics |
 | languages/completion | `common/languages/completion/*.ts` | completion provider、catalog/resolve wire、completion result 和 word provider | snippet 实现位于 `contrib/snippet/common`，completion 只消费 parser contract |
 | languages/results | `common/languages/{languageResults,languageResultStore,languageRequestCoordinator}.ts` | diagnostic 结果、版本化 store、request identity/stale result gate | token value 已从这里迁到 `common/tokens` |
 | tokens | `common/tokens/{languageTokens,languageTokenLineIndex}.ts` | token value、delta、normalizer、按行索引 | 不渲染 CSS；presentation 由 browser/view 负责 |
@@ -400,6 +400,26 @@ contrib/<feature>/
 | contrib/language UX | `contrib/{bracketMatching,folding,gotoError,hover,suggest,snippet,format,rename}/` | 语言驱动的编辑、诊断、hover、completion、format 和 rename | provider contract 在 common；DOM/widget 在 browser |
 | contrib/query contracts | `contrib/{documentSymbols,gotoSymbol,links,codeAction,inlayHints,inlineCompletions,parameterHints,linkedEditing,codelens}/common/` | provider request/result、版本 freshness、resolve 和 edit contract | 没有浏览器 UI 时仍必须保持可测试的 common contract；不得创建空 controller |
 
+### 5.1.1 Rust syntax facts and frontend syntax runtime
+
+`syntax` is deliberately not a generic language-processing subsystem. It is the
+runtime boundary for parser/grammar-derived token and diagnostic facts. Its
+producer, synchronization, and presentation owners stay separate:
+
+| Responsibility | Canonical owner | Contract | Must not own |
+| --- | --- | --- | --- |
+| Parser-derived tokens, diagnostics, symbols, and fold ranges | `zeta-rs/app-server` `syntax/analyze` | bounded revision-bound UTF-16 DTOs | DOM, editor state, decorations, or worker lifecycle |
+| Snapshot synchronization, provider priority/fallback, result freshness, and wire deltas | Alpha `common/languages/syntax/*` | `SyntaxService`, `SyntaxWorker`, `SyntaxProvider` | parser implementation, App Server transport, or product file access |
+| TextMate grammar tokenization | `workbench/services/textMate` | `TextMateSyntaxWorker` contributes a high-priority `SyntaxProvider` | document model, diagnostics UI, or App Server syntax facts |
+| Token spans, markers, symbol navigation, and folding presentation | Alpha `common/tokens` plus the matching `contrib` | versioned stores consumed by the respective contrib | parser state or cross-editor session state |
+| Structured-document editing | Gama | `textBlock` may use Alpha only through `IEmbeddedTextEditor` | Alpha syntax runtime, TextMate worker, or Code session state |
+
+The Rust adapter is optional and bounded. Unsupported languages and oversized
+documents fall back to the frontend provider chain; a failed Rust request does
+not make the token or diagnostic stores publish a stale result. This keeps
+interactive UI work in Alpha while moving parser-grade, backend-neutral facts
+to `zeta-rs`.
+
 ### 5.2 当前已装配的 Alpha session
 
 `browser/editorSession.ts` 是单个 editor instance 的装配入口，顺序固定为：
@@ -408,13 +428,13 @@ contrib/<feature>/
 TextModelReference
   → EditorSelectionController
   → folding/hidden ranges
-  → analysis/tokens/diagnostics
+  → syntax/tokens/diagnostics
   → completion/suggest/snippet
   → CodeEditorWidget(view + input)
   → bracket/comment/lines/find/quickAccess/hover/format/rename/readOnly/save
 ```
 
-`browser/browserEditorSession.ts` 只提供 TextMate grammar readiness、analysis Worker 和 completion Worker；它不能把 Workbench 类型传入 `common`。`contrib/editor.contribution.ts` 只负责 pane 注册和强制 adapter 注入；根级 `editor.all.ts` 是产品入口导入的公开 contribution bundle。新 contribution 若需要跨宿主能力，必须先扩展 `common/services` contract，再在这里装配 browser adapter。
+`browser/browserEditorSession.ts` 只提供 TextMate grammar readiness、syntax Worker 和 completion Worker；它不能把 Workbench 类型传入 `common`。`contrib/editor.contribution.ts` 只负责 pane 注册和强制 adapter 注入；根级 `editor.all.ts` 是产品入口导入的公开 contribution bundle。新 contribution 若需要跨宿主能力，必须先扩展 `common/services` contract，再在这里装配 browser adapter。
 
 ### 5.3 当前仍保留的宿主边界
 

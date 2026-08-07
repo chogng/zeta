@@ -5,7 +5,7 @@ import { type TextSnapshot } from "../../common/core/text.js";
 import { type TextModel } from "../../common/model/textModel.js";
 import { RustSyntaxFactsService, syntaxLanguageForAlphaLanguage } from "./rustSyntaxFactsService.js";
 
-/** Keeps Alpha's parser-derived folding ranges synchronized with one Rust analysis endpoint. */
+/** Keeps Alpha's parser-derived folding ranges synchronized with the Rust syntax endpoint. */
 export class RustSyntaxFoldingService extends DisposableOwner {
   private readonly supported: boolean;
   private generation = 0;

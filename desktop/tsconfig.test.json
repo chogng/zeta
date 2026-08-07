@@ -10,7 +10,6 @@
     "src/zeta/base/common/**/*.ts",
     "src/zeta/base/parts/contextmenu/common/**/*.ts",
     "src/zeta/**/test/**/*.ts",
-    "src/zeta/editor/alpha/benchmark/**/*.ts",
     "src/zeta/editor/*/common/**/*.ts",
     "src/zeta/platform/action/common/**/*.ts",
     "src/zeta/platform/actions/common/**/*.ts",
